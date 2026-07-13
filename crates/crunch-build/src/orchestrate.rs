@@ -87,6 +87,17 @@ fn push_unique_store_paths(
     }
 }
 
+fn derivation_uses_mutable_workspace(derivation: &Derivation) -> Result<bool, Error> {
+    let Some(raw) = derivation.environment.get(crate::build_request::WORKSPACE_POLICY_ENV) else {
+        return Ok(false);
+    };
+    let policy: crate::WorkspacePolicy = serde_json::from_slice(raw.as_ref())
+        .map_err(|error| Error::Store(format!("invalid stateful workspace policy: {error}")))?;
+    crate::validate_workspace_policy(&policy)
+        .map_err(|reason| Error::Store(format!("invalid stateful workspace policy: {}", reason.as_str())))?;
+    Ok(policy.mode == crate::WorkspaceMode::MutableSession)
+}
+
 /// The result of building a single derivation.
 #[derive(Debug, Clone)]
 pub struct BuildOutcome {
@@ -405,8 +416,10 @@ where BServ: BuildService + 'static
         let drv_name = drv_path.name().to_string();
         let derivation_ref = derivation.as_ref();
 
-        // 1. Cache check
-        if let Some(cached_hit) = self.check_cache(drv_path, derivation_ref, is_root).await? {
+        // 1. Strong shared cache lookup. Mutable-history executions are
+        // practical-only and must never satisfy this claim boundary.
+        let mutable_workspace = derivation_uses_mutable_workspace(derivation_ref)?;
+        if !mutable_workspace && let Some(cached_hit) = self.check_cache(drv_path, derivation_ref, is_root).await? {
             self.record_cached_output_paths(drv_path, derivation_ref, &cached_hit.infos, known_paths)?;
             info!(drv = %drv_name, "all outputs cached, skipping build");
             return Ok(PrepareResult::Done(BuildOutcome {
@@ -1545,6 +1558,15 @@ mod tests {
         input_drvs: &[(StorePath<String>, &str)],
         kp: &mut crate::registry::DerivationRegistry,
     ) -> (StorePath<String>, Derivation) {
+        build_and_register_with_workspace(name, input_drvs, kp, None)
+    }
+
+    fn build_and_register_with_workspace(
+        name: &str,
+        input_drvs: &[(StorePath<String>, &str)],
+        kp: &mut crate::registry::DerivationRegistry,
+        workspace_policy_json: Option<String>,
+    ) -> (StorePath<String>, Derivation) {
         let mut outputs = BTreeMap::new();
         outputs.insert("out".to_string(), nix_compat::derivation::Output {
             path: None,
@@ -1555,6 +1577,9 @@ mod tests {
         environment.insert("system".to_string(), "x86_64-linux".into());
         environment.insert("builder".to_string(), "/bin/sh".into());
         environment.insert("out".to_string(), "".into());
+        if let Some(policy) = workspace_policy_json {
+            environment.insert(crate::build_request::WORKSPACE_POLICY_ENV.to_string(), policy.into());
+        }
 
         let mut input_derivations = BTreeMap::new();
         for (dp, on) in input_drvs {
@@ -1815,6 +1840,57 @@ mod tests {
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 0, "should NOT call do_build for cached output");
+    }
+
+    #[tokio::test]
+    async fn mutable_workspace_bypasses_strong_shared_cache_lookup() {
+        use snix_store::pathinfoservice::PathInfoService;
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let pis = test_pis();
+        let policy = crate::WorkspacePolicy {
+            mode: crate::WorkspaceMode::MutableSession,
+            workspace_id: Some("cargo-cache".to_string()),
+            ..crate::WorkspacePolicy::default()
+        };
+        let mut registry = DerivationRegistry::default();
+        let (drv_path, drv) = build_and_register_with_workspace(
+            "mutable-cached-test",
+            &[],
+            &mut registry,
+            Some(serde_json::to_string(&policy).unwrap()),
+        );
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let node = put_blob(&bs, b"strong cache candidate").await;
+        pis.put(PathInfo {
+            store_path: out_path.clone(),
+            node,
+            references: Vec::new(),
+            nar_size: 0,
+            nar_sha256: [0u8; 32],
+            signatures: Vec::new(),
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        })
+        .await
+        .unwrap();
+        let mut builder = Builder::new(
+            bs,
+            ds,
+            mock,
+            pis,
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let outcome = builder.build(&drv_path, &mut registry).await.unwrap();
+        assert!(!outcome.cached);
+        assert_eq!(calls.lock().unwrap().len(), 1);
     }
 
     #[tokio::test]

@@ -17,6 +17,8 @@ use serde::de::value::MapAccessDeserializer;
 
 use crate::nickel_string::NickelString;
 
+pub const WORKSPACE_POLICY_ENV: &str = "__MANTLE_STATEFUL_WORKSPACE_POLICY";
+
 /// Deserialize a field that may be a Nickel enum tag or a plain string.
 fn deserialize_nickel_string<'de, D: serde::Deserializer<'de>>(d: D) -> Result<String, D::Error> {
     NickelString::deserialize(d).map(|s| s.0)
@@ -42,6 +44,67 @@ pub struct CrunchDerivation {
     pub provenance: Option<Claims>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceConfig {
+    pub schema: String,
+    #[serde(deserialize_with = "deserialize_nickel_string")]
+    pub mode: String,
+    #[serde(deserialize_with = "deserialize_nickel_string")]
+    pub fallback: String,
+    pub workspace_id: Option<String>,
+    pub snapshot_ref: Option<String>,
+    pub guest_path: String,
+    pub compatibility: WorkspaceCompatibilityConfig,
+    pub quota: WorkspaceQuotaConfig,
+    pub retention: WorkspaceRetentionConfig,
+    pub scrub: WorkspaceScrubConfig,
+    pub snapshot: WorkspaceSnapshotConfig,
+    pub clean_rebuild: WorkspaceCleanRebuildConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceCompatibilityConfig {
+    pub authority_class: String,
+    pub action_class: String,
+    pub toolchain_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceQuotaConfig {
+    pub bytes_max: u64,
+    pub files_max: u32,
+    pub snapshots_max: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceRetentionConfig {
+    pub workspace_count_max: u32,
+    pub idle_generations_max: u64,
+    pub age_generations_max: u64,
+    pub quarantine_count_max: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceScrubConfig {
+    pub sensitive_paths: Vec<String>,
+    pub secret_markers: Vec<String>,
+    pub scan_depth_max: u32,
+    pub path_bytes_max: u32,
+    pub reject_host_paths: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceSnapshotConfig {
+    pub enabled: bool,
+    pub require_clean_scrub: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceCleanRebuildConfig {
+    pub enabled: bool,
+    pub require_declared_inputs: bool,
+}
+
 #[derive(Deserialize)]
 struct RawCrunchDerivation {
     name: String,
@@ -55,6 +118,7 @@ struct RawCrunchDerivation {
     fixed_output: Option<FixedOutput>,
     addressing_mode: Option<NickelString>,
     provenance: Option<Claims>,
+    workspace: Option<WorkspaceConfig>,
 }
 
 impl<'de> Deserialize<'de> for CrunchDerivation {
@@ -64,6 +128,13 @@ impl<'de> Deserialize<'de> for CrunchDerivation {
         let outputs = raw.outputs.unwrap_or_else(default_outputs);
         let dynamic_plan_outputs = raw.dynamic_plan_outputs.unwrap_or_else(Vec::new);
         validate_dynamic_plan_outputs(&outputs, &dynamic_plan_outputs).map_err(de::Error::custom)?;
+        let mut env = raw.env.unwrap_or_else(HashMap::new);
+        if let Some(workspace) = raw.workspace {
+            let encoded = serde_json::to_string(&workspace).map_err(de::Error::custom)?;
+            if env.insert(WORKSPACE_POLICY_ENV.to_string(), encoded).is_some() {
+                return Err(de::Error::custom("reserved workspace policy environment key is set"));
+            }
+        }
         Ok(Self {
             name: raw.name,
             builder: raw.builder,
@@ -71,7 +142,7 @@ impl<'de> Deserialize<'de> for CrunchDerivation {
             args: raw.args.unwrap_or_else(Vec::new),
             outputs,
             dynamic_plan_outputs,
-            env: raw.env.unwrap_or_else(HashMap::new),
+            env,
             inputs: raw.inputs.unwrap_or_else(Vec::new),
             fixed_output: raw.fixed_output,
             addressing_mode: raw.addressing_mode.map(|value| value.0).unwrap_or_else(default_addressing_mode),

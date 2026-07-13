@@ -55,6 +55,9 @@ pub enum ValidateBuildRequestError {
 
     #[error("additional_files not sorted")]
     AdditionalFilesNotSorted,
+
+    #[error("invalid stateful workspace request")]
+    InvalidStatefulWorkspace,
 }
 
 /// Errors that occur during the validation of [BuildResult] messages.
@@ -127,6 +130,98 @@ fn path_to_string(path: &Path) -> String {
     path.to_str().expect("Snix Bug: unable to convert Path to String").to_string()
 }
 
+fn workspace_to_proto(
+    workspace: crate::buildservice::StatefulWorkspaceRequest,
+) -> build_request::StatefulWorkspaceRequest {
+    let mode = match workspace.mode {
+        crate::buildservice::StatefulWorkspaceMode::None => "none",
+        crate::buildservice::StatefulWorkspaceMode::ImmutableSnapshot => "immutable-snapshot",
+        crate::buildservice::StatefulWorkspaceMode::MutableSession => "mutable-session",
+    };
+    build_request::StatefulWorkspaceRequest {
+        mode: mode.to_string(),
+        workspace_id: workspace.workspace_id,
+        guest_path: path_to_string(&workspace.guest_path),
+        snapshot_input_name: workspace.snapshot_input_name.as_deref().map(path_to_string),
+        compatibility_digest_blake3: workspace.compatibility_digest_blake3,
+        toolchain_refs: workspace.toolchain_refs,
+        quota_bytes_max: workspace.quota_bytes_max,
+        quota_files_max: workspace.quota_files_max,
+        quota_snapshots_max: workspace.quota_snapshots_max,
+        retention_class: workspace.retention_class,
+        retention_workspace_count_max: workspace.retention_workspace_count_max,
+        retention_idle_generations_max: workspace.retention_idle_generations_max,
+        retention_age_generations_max: workspace.retention_age_generations_max,
+        retention_quarantine_count_max: workspace.retention_quarantine_count_max,
+        generation: workspace.generation,
+        lease: workspace.lease.map(|lease| build_request::StatefulWorkspaceLeaseBinding {
+            worker_id: lease.worker_id,
+            authority_class: lease.authority_class,
+            job_id: lease.job_id,
+            attempt_id: lease.attempt_id,
+            fence_generation: lease.fence_generation,
+        }),
+        sensitive_paths: workspace.sensitive_paths,
+        secret_markers: workspace.secret_markers,
+        scan_depth_max: workspace.scan_depth_max,
+        path_bytes_max: workspace.path_bytes_max,
+        snapshot_enabled: workspace.snapshot_enabled,
+        clean_rebuild_enabled: workspace.clean_rebuild_enabled,
+        clean_rebuild_require_declared_inputs: workspace.clean_rebuild_require_declared_inputs,
+    }
+}
+
+fn workspace_from_proto(
+    workspace: build_request::StatefulWorkspaceRequest,
+) -> Result<crate::buildservice::StatefulWorkspaceRequest, ValidateBuildRequestError> {
+    let mode = match workspace.mode.as_str() {
+        "none" => crate::buildservice::StatefulWorkspaceMode::None,
+        "immutable-snapshot" => crate::buildservice::StatefulWorkspaceMode::ImmutableSnapshot,
+        "mutable-session" => crate::buildservice::StatefulWorkspaceMode::MutableSession,
+        _ => return Err(ValidateBuildRequestError::InvalidStatefulWorkspace),
+    };
+    let guest_path = PathBuf::from(workspace.guest_path);
+    if !is_clean_absolute_path(&guest_path) {
+        return Err(ValidateBuildRequestError::InvalidStatefulWorkspace);
+    }
+    let snapshot_input_name = workspace.snapshot_input_name.map(PathBuf::from);
+    if snapshot_input_name.as_ref().is_some_and(|path| !is_clean_relative_path(path)) {
+        return Err(ValidateBuildRequestError::InvalidStatefulWorkspace);
+    }
+    Ok(crate::buildservice::StatefulWorkspaceRequest {
+        mode,
+        workspace_id: workspace.workspace_id,
+        guest_path,
+        snapshot_input_name,
+        compatibility_digest_blake3: workspace.compatibility_digest_blake3,
+        toolchain_refs: workspace.toolchain_refs,
+        quota_bytes_max: workspace.quota_bytes_max,
+        quota_files_max: workspace.quota_files_max,
+        quota_snapshots_max: workspace.quota_snapshots_max,
+        retention_class: workspace.retention_class,
+        retention_workspace_count_max: workspace.retention_workspace_count_max,
+        retention_idle_generations_max: workspace.retention_idle_generations_max,
+        retention_age_generations_max: workspace.retention_age_generations_max,
+        retention_quarantine_count_max: workspace.retention_quarantine_count_max,
+        generation: workspace.generation,
+        lease: workspace.lease.map(|lease| crate::buildservice::StatefulWorkspaceLeaseBinding {
+            worker_id: lease.worker_id,
+            authority_class: lease.authority_class,
+            job_id: lease.job_id,
+            attempt_id: lease.attempt_id,
+            fence_generation: lease.fence_generation,
+        }),
+        sensitive_paths: workspace.sensitive_paths,
+        secret_markers: workspace.secret_markers,
+        scan_depth_max: workspace.scan_depth_max,
+        path_bytes_max: workspace.path_bytes_max,
+        snapshot_enabled: workspace.snapshot_enabled,
+        clean_rebuild_enabled: workspace.clean_rebuild_enabled,
+        clean_rebuild_require_declared_inputs: workspace.clean_rebuild_require_declared_inputs,
+        runtime_host_path: None,
+    })
+}
+
 impl From<crate::buildservice::BuildRequest> for BuildRequest {
     fn from(value: crate::buildservice::BuildRequest) -> Self {
         let constraints = if value.constraints.is_empty() {
@@ -162,6 +257,7 @@ impl From<crate::buildservice::BuildRequest> for BuildRequest {
             constraints,
             additional_files: value.additional_files.into_iter().map(Into::into).collect(),
             refscan_needles: value.refscan_needles,
+            workspace: value.workspace.map(workspace_to_proto),
         }
     }
 }
@@ -256,6 +352,7 @@ impl TryFrom<BuildRequest> for crate::buildservice::BuildRequest {
             constraints,
             additional_files: value.additional_files.into_iter().map(Into::into).collect(),
             refscan_needles: value.refscan_needles,
+            workspace: value.workspace.map(workspace_from_proto).transpose()?,
         })
     }
 }
@@ -397,6 +494,8 @@ mod tests {
     use super::is_clean_path;
     use super::is_clean_relative_path;
 
+    const TEST_DIGEST_HEX_LENGTH: usize = 64;
+
     #[rstest]
     #[case::fail_trailing_slash("foo/bar/", false)]
     #[case::fail_dotdot("foo/../bar", false)]
@@ -409,6 +508,54 @@ mod tests {
     #[case::ok_absolute2("/foo/bar", true)]
     fn test_is_clean_path(#[case] s: &str, #[case] expected: bool) {
         assert_eq!(is_clean_path(s), expected);
+    }
+
+    #[test]
+    fn workspace_transport_omits_runtime_host_path_and_round_trips_declared_fields() {
+        let runtime_host_path = std::path::PathBuf::from("/private/worker/state");
+        let internal = crate::buildservice::BuildRequest {
+            workspace: Some(crate::buildservice::StatefulWorkspaceRequest {
+                mode: crate::buildservice::StatefulWorkspaceMode::MutableSession,
+                workspace_id: Some("cargo-cache".to_string()),
+                guest_path: "/build/.mantle-workspace".into(),
+                snapshot_input_name: None,
+                compatibility_digest_blake3: "a".repeat(TEST_DIGEST_HEX_LENGTH),
+                toolchain_refs: vec!["mantle-object://blake3/rust".to_string()],
+                quota_bytes_max: 1,
+                quota_files_max: 1,
+                quota_snapshots_max: 1,
+                retention_class: "recent".to_string(),
+                retention_workspace_count_max: 1,
+                retention_idle_generations_max: 1,
+                retention_age_generations_max: 1,
+                retention_quarantine_count_max: 1,
+                generation: 1,
+                lease: Some(crate::buildservice::StatefulWorkspaceLeaseBinding {
+                    worker_id: "worker-a".to_string(),
+                    authority_class: "tenant-a".to_string(),
+                    job_id: "job-a".to_string(),
+                    attempt_id: "attempt-a".to_string(),
+                    fence_generation: 1,
+                }),
+                sensitive_paths: Vec::new(),
+                secret_markers: Vec::new(),
+                scan_depth_max: 1,
+                path_bytes_max: 1,
+                snapshot_enabled: false,
+                clean_rebuild_enabled: false,
+                clean_rebuild_require_declared_inputs: true,
+                runtime_host_path: Some(runtime_host_path.clone()),
+            }),
+            ..Default::default()
+        };
+        let proto: super::BuildRequest = internal.into();
+        let encoded = serde_json::to_string(&proto).unwrap();
+        assert!(!encoded.contains(runtime_host_path.to_str().unwrap()));
+        let round_trip = crate::buildservice::BuildRequest::try_from(proto).unwrap();
+        let workspace = round_trip.workspace.unwrap();
+        assert_eq!(workspace.mode, crate::buildservice::StatefulWorkspaceMode::MutableSession);
+        assert_eq!(workspace.workspace_id.as_deref(), Some("cargo-cache"));
+        assert_eq!(workspace.runtime_host_path, None);
     }
 
     #[rstest]

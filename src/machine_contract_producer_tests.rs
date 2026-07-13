@@ -119,6 +119,7 @@ fn doctor_and_build_reports_serialize_to_registered_positive_fixtures() {
         hermeticity_audit_events: Vec::new(),
         build_environment_reports: Vec::new(),
         network_policy_reports: Vec::new(),
+        workspace_reports: Vec::new(),
         native_dynamic_plans: Vec::new(),
         scheduler_priority_decisions: vec![scheduler_fixture_decision()],
         remote_telemetry_events: Vec::new(),

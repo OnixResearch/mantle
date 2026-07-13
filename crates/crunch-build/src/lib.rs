@@ -34,8 +34,11 @@ pub mod signing;
 pub(crate) mod test_support;
 pub mod worker;
 pub mod workspace;
+pub mod workspace_shell;
 
 pub use build_request::BuildRequestEnvelope;
+pub use build_request::WORKSPACE_LEASE_ENV;
+pub use build_request::WORKSPACE_POLICY_ENV;
 pub use build_request::derivation_to_build_request;
 pub use dispatch_build_service::DispatchBuildService;
 pub use distributed::LocalBuildServiceRealizer;
@@ -148,3 +151,4 @@ pub use worker::NativeDynamicPlanReport;
 pub use worker::Worker;
 pub use worker::WorkerResult;
 pub use workspace::*;
+pub use workspace_shell::*;

@@ -38,7 +38,7 @@ mantle --json build hello.ncl
 `mantle --json build` writes a stable `crunch-build-report-v1` JSON
 object to stdout. It includes per-root outcomes, cache hits, failure
 records, output paths, hermeticity audit data, `network_policy_reports`,
-`cargo_build_evidence[]`, `cargo_build_evidence_diagnostics[]`,
+`workspace_reports`, `cargo_build_evidence[]`, `cargo_build_evidence_diagnostics[]`,
 `ast_grep_structural_evidence[]`, `ast_grep_structural_evidence_diagnostics[]`,
 and per-output `artifact_attestation` references (`logical_path` + sidecar
 `path`) so tests and operators can assert on structured data instead of scraping
@@ -63,6 +63,11 @@ Human output reports same facts inline on cached outputs, for example:
 Remote build data uses receiver-driven bounded chunks, durable fenced resume,
 and ordinary output admission. See [Resumable remote transfer](docs/remote-transfer.md)
 for policy, checkpoint, fallback, completion, and non-claim semantics.
+
+Retained tool caches are explicit, bounded, fenced, and claim-downgraded. See
+[Stateful tool workspaces](docs/stateful-workspaces.md) for Nickel policy,
+local and remote lifecycle rules, quarantine/retention behavior, and clean
+comparison evidence.
 
 ### Machine artifact contracts
 

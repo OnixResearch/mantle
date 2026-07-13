@@ -9,6 +9,7 @@
 use crunch_build::distributed::RemoteAttemptRetryPolicy;
 use crunch_build::distributed::RemoteTransferPolicy;
 use serde::Deserialize;
+use serde::Serialize;
 
 use crate::remote_telemetry_export::RemoteTelemetryExportConfig;
 use crate::remote_telemetry_export::validate_remote_telemetry_export_config;
@@ -63,6 +64,97 @@ pub enum RemoteFallbackPolicy {
     TrustedOnly,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteWorkspaceMode {
+    #[default]
+    None,
+    ImmutableSnapshot,
+    MutableSession,
+}
+
+impl RemoteWorkspaceMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::ImmutableSnapshot => "immutable-snapshot",
+            Self::MutableSession => "mutable-session",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteWorkspacePolicy {
+    #[serde(default = "default_workspace_modes")]
+    pub modes: Vec<RemoteWorkspaceMode>,
+    #[serde(default = "default_workspace_authority")]
+    pub authority_class: String,
+    #[serde(default = "default_workspace_guest_paths")]
+    pub guest_paths: Vec<String>,
+    #[serde(default = "default_workspace_count")]
+    pub workspace_count_max: u32,
+    #[serde(default = "default_workspace_bytes")]
+    pub bytes_max: u64,
+    #[serde(default = "default_workspace_files")]
+    pub files_max: u32,
+    #[serde(default = "default_workspace_snapshots")]
+    pub snapshots_max: u32,
+    #[serde(default = "default_workspace_idle")]
+    pub idle_generations_max: u64,
+    #[serde(default = "default_workspace_age")]
+    pub age_generations_max: u64,
+    #[serde(default = "default_workspace_quarantine")]
+    pub quarantine_count_max: u32,
+}
+
+impl Default for RemoteWorkspacePolicy {
+    fn default() -> Self {
+        Self {
+            modes: default_workspace_modes(),
+            authority_class: default_workspace_authority(),
+            guest_paths: default_workspace_guest_paths(),
+            workspace_count_max: default_workspace_count(),
+            bytes_max: default_workspace_bytes(),
+            files_max: default_workspace_files(),
+            snapshots_max: default_workspace_snapshots(),
+            idle_generations_max: default_workspace_idle(),
+            age_generations_max: default_workspace_age(),
+            quarantine_count_max: default_workspace_quarantine(),
+        }
+    }
+}
+
+fn default_workspace_modes() -> Vec<RemoteWorkspaceMode> {
+    vec![RemoteWorkspaceMode::None]
+}
+fn default_workspace_authority() -> String {
+    "local-default".to_string()
+}
+fn default_workspace_guest_paths() -> Vec<String> {
+    vec![crunch_build::DEFAULT_WORKSPACE_GUEST_PATH.to_string()]
+}
+fn default_workspace_count() -> u32 {
+    crunch_build::DEFAULT_WORKSPACE_COUNT_MAX
+}
+fn default_workspace_bytes() -> u64 {
+    crunch_build::DEFAULT_WORKSPACE_BYTES_MAX
+}
+fn default_workspace_files() -> u32 {
+    crunch_build::DEFAULT_WORKSPACE_FILES_MAX
+}
+fn default_workspace_snapshots() -> u32 {
+    crunch_build::DEFAULT_WORKSPACE_SNAPSHOTS_MAX
+}
+fn default_workspace_idle() -> u64 {
+    crunch_build::DEFAULT_WORKSPACE_IDLE_GENERATIONS_MAX
+}
+fn default_workspace_age() -> u64 {
+    crunch_build::DEFAULT_WORKSPACE_AGE_GENERATIONS_MAX
+}
+fn default_workspace_quarantine() -> u32 {
+    crunch_build::DEFAULT_WORKSPACE_QUARANTINE_COUNT_MAX
+}
+
 /// Capability profile for a remote builder.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct RemoteCapabilityProfile {
@@ -88,6 +180,8 @@ pub struct RemoteCapabilityProfile {
     pub retry_policy: RemoteAttemptRetryPolicy,
     #[serde(default)]
     pub transfer_policy: RemoteTransferPolicy,
+    #[serde(default)]
+    pub workspace_policy: RemoteWorkspacePolicy,
 }
 
 fn default_sandbox_mode() -> RemoteSandboxMode {
@@ -126,6 +220,7 @@ impl Default for RemoteCapabilityProfile {
             max_build_time_secs: DEFAULT_REMOTE_MAX_BUILD_TIME_SECS,
             retry_policy: RemoteAttemptRetryPolicy::default(),
             transfer_policy: RemoteTransferPolicy::default(),
+            workspace_policy: RemoteWorkspacePolicy::default(),
         }
     }
 }
@@ -246,6 +341,8 @@ impl RemoteBuildFarmConfig {
                 endpoint.profile.transfer_policy.validate().map_err(|reason| {
                     format!("endpoint '{}' transfer policy: {}", endpoint.endpoint_id, reason.as_str())
                 })?;
+                validate_remote_workspace_policy(&endpoint.profile.workspace_policy)
+                    .map_err(|reason| format!("endpoint '{}' workspace policy: {reason}", endpoint.endpoint_id))?;
             }
             // Check for duplicate endpoint IDs within a pool.
             let mut seen = std::collections::BTreeSet::new();
@@ -266,6 +363,35 @@ impl RemoteBuildFarmConfig {
         }
         Ok(())
     }
+}
+
+pub(crate) fn validate_remote_workspace_policy(policy: &RemoteWorkspacePolicy) -> Result<(), String> {
+    if policy.modes.is_empty() || policy.authority_class.is_empty() || policy.guest_paths.is_empty() {
+        return Err("modes, authority_class, and guest_paths must be non-empty".to_string());
+    }
+    let mode_count = policy.modes.iter().copied().collect::<std::collections::BTreeSet<_>>().len();
+    let guest_count = policy.guest_paths.iter().collect::<std::collections::BTreeSet<_>>().len();
+    if mode_count != policy.modes.len() || guest_count != policy.guest_paths.len() {
+        return Err("workspace modes and guest paths must be unique".to_string());
+    }
+    if policy
+        .guest_paths
+        .iter()
+        .any(|path| !path.starts_with("/build/") || path.contains("/../") || path.ends_with("/.."))
+    {
+        return Err("workspace guest paths must be clean paths beneath /build".to_string());
+    }
+    let nonzero = policy.workspace_count_max > 0
+        && policy.bytes_max > 0
+        && policy.files_max > 0
+        && policy.snapshots_max > 0
+        && policy.idle_generations_max > 0
+        && policy.age_generations_max > 0
+        && policy.quarantine_count_max > 0;
+    if !nonzero {
+        return Err("workspace quotas and retention limits must be positive".to_string());
+    }
+    Ok(())
 }
 
 impl Default for RemoteBuildFarmConfig {
@@ -325,6 +451,7 @@ mod tests {
                             attempt_timeout_secs: SAMPLE_MAX_BUILD_TIME_SECS,
                         },
                         transfer_policy: RemoteTransferPolicy::default(),
+                        workspace_policy: RemoteWorkspacePolicy::default(),
                     },
                 }],
                 fallback_policy: RemoteFallbackPolicy::Always,
@@ -768,6 +895,49 @@ let remote = import "remote-builders.ncl" in
 
         assert!(error.contains("resource-quantity-zero"));
         assert!(error.contains("builder-01"));
+    }
+
+    #[test]
+    fn nickel_workspace_registration_round_trips_and_defaults_are_fail_closed() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("workspace-remote.ncl");
+        std::fs::write(
+            &path,
+            r#"
+let remote = import "remote-builders.ncl" in
+{
+  pools = [({
+    pool_id = "workspace-pool",
+    endpoints = [{
+      endpoint_id = "workspace-worker",
+      profile.workspace_policy = {
+        modes = ['none, 'immutable-snapshot, 'mutable-session],
+        authority_class = "tenant-a",
+        guest_paths = ["/build/.mantle-workspace"],
+      },
+    }],
+  } | remote.RemoteBuilderPool)],
+}
+"#,
+        )
+        .unwrap();
+        let imports = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+        let config: RemoteBuildFarmConfig = crunch_eval::evaluate_and_deserialize(&path, &imports).unwrap();
+        let policy = &config.pools[0].endpoints[0].profile.workspace_policy;
+        assert!(policy.modes.contains(&RemoteWorkspaceMode::MutableSession));
+        assert_eq!(policy.authority_class, "tenant-a");
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn workspace_registration_rejects_duplicate_modes_and_zero_quota() {
+        let mut config = sample_config();
+        let policy = &mut config.pools[0].endpoints[0].profile.workspace_policy;
+        policy.modes = vec![RemoteWorkspaceMode::MutableSession, RemoteWorkspaceMode::MutableSession];
+        policy.bytes_max = 0;
+        let error = config.validate().unwrap_err();
+        assert!(error.contains("workspace policy"));
+        assert!(error.contains("unique") || error.contains("positive"));
     }
 
     #[test]

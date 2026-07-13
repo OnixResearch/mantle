@@ -36,6 +36,7 @@ pub struct BuildJsonReport {
     pub hermeticity_audit_events: Vec<BuildJsonHermeticityAuditEvent>,
     pub build_environment_reports: Vec<BuildJsonEnvironmentReport>,
     pub network_policy_reports: Vec<BuildJsonNetworkPolicyReport>,
+    pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
     pub native_dynamic_plans: Vec<BuildJsonNativeDynamicPlan>,
     pub scheduler_priority_decisions: Vec<crunch_pipeline::PriorityDecisionEvidence>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -385,6 +386,7 @@ fn build_json_report(
         .collect();
     let build_environment_reports = build_environment_reports(result);
     let network_policy_reports = build_network_policy_reports(result);
+    let workspace_reports = result.workspace_reports.clone();
     let native_dynamic_plans = build_native_dynamic_plan_reports(result, &config.store_dir);
     let scheduler_priority_decisions = result.priority_decisions.clone();
     let remote_telemetry_events = result
@@ -404,6 +406,7 @@ fn build_json_report(
         hermeticity_audit_events,
         build_environment_reports,
         network_policy_reports,
+        workspace_reports,
         native_dynamic_plans,
         scheduler_priority_decisions,
         remote_telemetry_events,
@@ -956,6 +959,7 @@ mod tests {
     const SENSITIVE_PRIORITY_GOAL: &str = "/private/report-secret/root.drv";
     const SAMPLE_PRIORITY_EPOCH: u32 = 1;
     const SAMPLE_PRIORITY_PATH_NODES: u32 = 2;
+    const TEST_WORKSPACE_DIGEST_HEX_LENGTH: usize = 64;
 
     fn sample_priority_decision() -> crunch_pipeline::PriorityDecisionEvidence {
         let policy = crunch_build::SchedulingPolicy::default();
@@ -1081,6 +1085,7 @@ mod tests {
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
+            workspace_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };
@@ -1143,6 +1148,7 @@ mod tests {
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
+            workspace_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };
@@ -1259,6 +1265,25 @@ mod tests {
                 fixed_output: None,
                 diagnostic: None,
             }],
+            workspace_reports: vec![crunch_build::WorkspaceExecutionReport {
+                schema: crunch_build::WORKSPACE_EXECUTION_REPORT_SCHEMA.to_string(),
+                mode: crunch_build::WorkspaceMode::MutableSession,
+                workspace_id: Some("cargo-cache".to_string()),
+                guest_path: crunch_build::DEFAULT_WORKSPACE_GUEST_PATH.to_string(),
+                compatibility_digest_blake3: "a".repeat(TEST_WORKSPACE_DIGEST_HEX_LENGTH),
+                warm_state_used: true,
+                claim_class: crunch_build::WorkspaceClaimClass::PracticalMutableHistory,
+                shared_action_publish_allowed: false,
+                strong_shared_reuse_allowed: false,
+                original_execution_hermetic: false,
+                clean_comparison_performed: true,
+                clean_comparison_matched: true,
+                warm_output_set_digest_blake3: Some("warm-digest".to_string()),
+                clean_output_set_digest_blake3: Some("warm-digest".to_string()),
+                cleanup: crunch_build::WorkspaceCleanupDisposition::Released,
+                cleanup_reason: crunch_build::WorkspaceReasonCode::Accepted,
+                snapshot_ref: None,
+            }],
             native_dynamic_plans: vec![crunch_build::NativeDynamicPlanReport {
                 mode: "native".to_string(),
                 producer_key: drv_key_for(&config.store_dir, &drv_path),
@@ -1299,6 +1324,12 @@ mod tests {
         assert_eq!(report.network_policy_reports[0].action_name, "demo");
         assert_eq!(report.network_policy_reports[0].mode, "offline");
         assert_eq!(report.network_policy_reports[0].result, "denied");
+        assert_eq!(report.workspace_reports.len(), 1);
+        assert_eq!(report.workspace_reports[0].mode, crunch_build::WorkspaceMode::MutableSession);
+        assert!(report.workspace_reports[0].warm_state_used);
+        assert!(!report.workspace_reports[0].shared_action_publish_allowed);
+        assert!(!report.workspace_reports[0].original_execution_hermetic);
+        assert!(report.workspace_reports[0].clean_comparison_matched);
         assert_eq!(report.native_dynamic_plans.len(), 1);
         assert_eq!(report.native_dynamic_plans[0].mode, "native");
         assert_eq!(report.native_dynamic_plans[0].output_name, "plan");
@@ -1416,6 +1447,7 @@ mod tests {
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
+            workspace_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };
@@ -1817,6 +1849,7 @@ mod tests {
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
+            workspace_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };
@@ -1956,6 +1989,7 @@ mod tests {
             )],
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
+            workspace_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };
@@ -1990,6 +2024,7 @@ mod tests {
                 }],
                 "build_environment_reports": [],
                 "network_policy_reports": [],
+                "workspace_reports": [],
                 "native_dynamic_plans": [],
                 "scheduler_priority_decisions": [],
                 "frontend_artifact_attestations": [],

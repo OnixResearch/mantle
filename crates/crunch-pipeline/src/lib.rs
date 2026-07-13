@@ -24,19 +24,19 @@ use crunch_build::EvalMessage;
 use crunch_build::FailedGoal;
 use crunch_build::FetchBuildService;
 use crunch_build::FetchSourceOverride;
-use crunch_build::LocalBuildServiceRealizer;
-use crunch_build::RemoteBuildFallbackPolicy;
-use crunch_build::RemoteFirstBuildService;
 pub use crunch_build::FixedOutputNetworkDeclaration;
 pub use crunch_build::HermeticityAuditEvent;
 pub use crunch_build::HermeticityAuditKind;
 pub use crunch_build::HermeticityMode;
 use crunch_build::KeyPair;
+use crunch_build::LocalBuildServiceRealizer;
 use crunch_build::NativeDynamicPlanReport;
 pub use crunch_build::PriorityCandidateEvidence;
 pub use crunch_build::PriorityDecisionEvidence;
-pub use crunch_build::SchedulingPolicy;
+use crunch_build::RemoteBuildFallbackPolicy;
+use crunch_build::RemoteFirstBuildService;
 pub use crunch_build::SEARCH_PATH_DIGEST_ALGORITHM;
+pub use crunch_build::SchedulingPolicy;
 use crunch_build::Worker;
 use crunch_eval::session::RootForceExecutionPolicy;
 use crunch_glue::ConversionCache;
@@ -90,6 +90,7 @@ pub struct PipelineResult {
     pub hermeticity_audit_events: Vec<HermeticityAuditEvent>,
     pub build_environment_reports: Vec<BuildEnvironmentReport>,
     pub network_policy_reports: Vec<BuildNetworkPolicyReport>,
+    pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
     pub native_dynamic_plans: Vec<NativeDynamicPlanReport>,
     pub priority_decisions: Vec<PriorityDecisionEvidence>,
 }
@@ -252,12 +253,12 @@ async fn build_linux(
     );
     let remote_bwrap = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
     let remote_realizer = LocalBuildServiceRealizer::new(remote_bwrap, profile);
-    let sandbox_service = RemoteFirstBuildService::new(
-        remote_realizer,
-        local_bwrap,
-        RemoteBuildFallbackPolicy::OnRemoteFailure,
-    );
-    let build_service = DispatchBuildService::new(fetch_service, sandbox_service);
+    let sandbox_service =
+        RemoteFirstBuildService::new(remote_realizer, local_bwrap, RemoteBuildFallbackPolicy::OnRemoteFailure);
+    let dispatch = DispatchBuildService::new(fetch_service, sandbox_service);
+    let workspace_reports = crunch_build::WorkspaceReportCollector::default();
+    let build_service =
+        crunch_build::StatefulWorkspaceBuildService::new(dispatch, store.state_dir(), workspace_reports.clone());
     let mut builder = Builder::with_state_dir(
         blob_service,
         directory_service,
@@ -317,6 +318,7 @@ async fn build_linux(
         hermeticity_audit_events,
         build_environment_reports,
         network_policy_reports,
+        workspace_reports: workspace_reports.take(),
         native_dynamic_plans: worker_result.native_dynamic_plans,
         priority_decisions: worker_result.priority_decisions,
     })
@@ -522,6 +524,7 @@ fn build_preflight_failure(
         hermeticity_audit_events: Vec::new(),
         build_environment_reports: Vec::new(),
         network_policy_reports: Vec::new(),
+        workspace_reports: Vec::new(),
         native_dynamic_plans: Vec::new(),
         priority_decisions: Vec::new(),
     })

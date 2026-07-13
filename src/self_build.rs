@@ -3395,6 +3395,7 @@ mod tests {
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
+            workspace_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };
@@ -3436,6 +3437,7 @@ mod tests {
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
+            workspace_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };

@@ -1,6 +1,7 @@
 use std::ffi::OsString;
 use std::fs;
 use std::io::ErrorKind;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Output;
@@ -262,6 +263,33 @@ fn annotate_bwrap_spawn_error(program: &OsString, error: std::io::Error) -> std:
     )
 }
 
+fn append_prevalidated_mount_args<'a>(
+    args: &mut Vec<OsString>,
+    mounts: impl IntoIterator<Item = &'a crate::sandbox::SandboxMount>,
+) -> std::io::Result<()> {
+    for mount in mounts {
+        if !mount.host_path.is_absolute() || !mount.guest_path.is_absolute() {
+            return Err(std::io::Error::other("sandbox mount paths must be absolute"));
+        }
+        if mount
+            .guest_path
+            .components()
+            .any(|component| matches!(component, Component::CurDir | Component::ParentDir))
+        {
+            return Err(std::io::Error::other("sandbox guest mount path must be clean"));
+        }
+        let bind_flag = if mount.read_only { "--ro-bind" } else { "--bind" };
+        args.extend([
+            "--dir".into(),
+            mount.guest_path.clone().into(),
+            bind_flag.into(),
+            mount.host_path.clone().into(),
+            mount.guest_path.clone().into(),
+        ]);
+    }
+    Ok(())
+}
+
 impl Bwrap {
     // TODO(#132): support streaming std{err,out}
     /// Run the sandbox and return the result.
@@ -327,6 +355,7 @@ impl Bwrap {
                 ]);
             }
         }
+        append_prevalidated_mount_args(&mut args, spec.mounts())?;
         args.extend(["--chdir".into(), Path::new("/").join(spec.sandbox_workdir()).into()]);
 
         if let Some(shell) = spec.provide_shell() {

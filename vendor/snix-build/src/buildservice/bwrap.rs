@@ -28,6 +28,7 @@ use crate::buildservice::BuildOutput;
 use crate::buildservice::BuildRequest;
 use crate::buildservice::BuildResult;
 use crate::bwrap::Bwrap;
+use crate::sandbox::SandboxMount;
 use crate::sandbox::SandboxSpec;
 /// Compile-time default for the sandbox shell.
 const SANDBOX_SHELL_PLACEHOLDER: &str = "/bin/sh";
@@ -109,6 +110,45 @@ fn find_busybox_static_in_dir(store_dir: &Path) -> Option<PathBuf> {
         }
     }
     None
+}
+
+fn workspace_mounts(
+    host_workdir: &Path,
+    request: Option<&crate::buildservice::StatefulWorkspaceRequest>,
+) -> std::io::Result<Vec<SandboxMount>> {
+    let Some(request) = request else {
+        return Ok(Vec::new());
+    };
+    let mount = match request.mode {
+        crate::buildservice::StatefulWorkspaceMode::None => return Ok(Vec::new()),
+        crate::buildservice::StatefulWorkspaceMode::ImmutableSnapshot => {
+            let input_name = request
+                .snapshot_input_name
+                .as_ref()
+                .ok_or_else(|| std::io::Error::other("immutable workspace snapshot input is missing"))?;
+            if input_name.is_absolute()
+                || input_name.components().any(|component| {
+                    matches!(component, std::path::Component::CurDir | std::path::Component::ParentDir)
+                })
+            {
+                return Err(std::io::Error::other("immutable workspace snapshot input must be a clean relative path"));
+            }
+            SandboxMount {
+                host_path: host_workdir.join("host_inputs_dir").join(input_name),
+                guest_path: request.guest_path.clone(),
+                read_only: true,
+            }
+        }
+        crate::buildservice::StatefulWorkspaceMode::MutableSession => SandboxMount {
+            host_path: request
+                .runtime_host_path
+                .clone()
+                .ok_or_else(|| std::io::Error::other("mutable workspace host path was not resolved by the shell"))?,
+            guest_path: request.guest_path.clone(),
+            read_only: false,
+        },
+    };
+    Ok(vec![mount])
 }
 
 fn should_materialize_inputs_fallback(error: &std::io::Error) -> bool {
@@ -284,6 +324,7 @@ where
 
         let blob_service = self.blob_service.clone();
         let directory_service = self.directory_service.clone();
+        let workspace_mounts = workspace_mounts(sandbox_dir.path(), request.workspace.as_ref())?;
 
         let spec = SandboxSpec::builder()
             .host_workdir(sandbox_dir.path().to_path_buf())
@@ -292,6 +333,7 @@ where
             .command(request.command_args)
             .env_vars(request.environment_vars)
             .additional_files(request.additional_files)
+            .mounts(workspace_mounts)
             .with_inputs(request.inputs_dir, move |path| {
                 let root_nodes = request.inputs.clone();
                 let fs = snix_castore::fs::SnixStoreFs::new(
@@ -421,6 +463,8 @@ mod tests {
 
     use super::*;
 
+    const TEST_DIGEST_HEX_LENGTH: usize = 64;
+
     fn tmp_ds() -> RedbDirectoryService {
         RedbDirectoryService::new_temporary("snix-build-bwrap-tests".to_string(), RedbDirectoryServiceConfig::default())
             .unwrap()
@@ -506,6 +550,58 @@ mod tests {
         let wrong_kind =
             std::io::Error::new(ErrorKind::PermissionDenied, "Unexpected exit code when running fusermount: Some(1)");
         assert!(!should_materialize_inputs_fallback(&wrong_kind));
+    }
+
+    fn workspace_request(
+        mode: crate::buildservice::StatefulWorkspaceMode,
+    ) -> crate::buildservice::StatefulWorkspaceRequest {
+        crate::buildservice::StatefulWorkspaceRequest {
+            mode,
+            workspace_id: Some("cargo-cache".to_string()),
+            guest_path: PathBuf::from("/build/.mantle-workspace"),
+            snapshot_input_name: Some(PathBuf::from("snapshot-root")),
+            compatibility_digest_blake3: "a".repeat(TEST_DIGEST_HEX_LENGTH),
+            toolchain_refs: Vec::new(),
+            quota_bytes_max: 1,
+            quota_files_max: 1,
+            quota_snapshots_max: 1,
+            retention_class: "recent".to_string(),
+            retention_workspace_count_max: 1,
+            retention_idle_generations_max: 1,
+            retention_age_generations_max: 1,
+            retention_quarantine_count_max: 1,
+            generation: 1,
+            lease: None,
+            sensitive_paths: Vec::new(),
+            secret_markers: Vec::new(),
+            scan_depth_max: 1,
+            path_bytes_max: 1,
+            snapshot_enabled: false,
+            clean_rebuild_enabled: false,
+            clean_rebuild_require_declared_inputs: true,
+            runtime_host_path: None,
+        }
+    }
+
+    #[test]
+    fn workspace_mounts_are_mode_specific_and_host_paths_stay_runtime_only() {
+        let host = Path::new("/private/workdir");
+        let immutable = workspace_mounts(
+            host,
+            Some(&workspace_request(crate::buildservice::StatefulWorkspaceMode::ImmutableSnapshot)),
+        )
+        .unwrap();
+        assert_eq!(immutable[0].host_path, host.join("host_inputs_dir/snapshot-root"));
+        assert!(immutable[0].read_only);
+        assert_eq!(immutable[0].guest_path, PathBuf::from("/build/.mantle-workspace"));
+
+        let mut mutable = workspace_request(crate::buildservice::StatefulWorkspaceMode::MutableSession);
+        mutable.runtime_host_path = Some(PathBuf::from("/private/state/cargo-cache"));
+        let mutable_mounts = workspace_mounts(host, Some(&mutable)).unwrap();
+        assert_eq!(mutable_mounts[0].host_path, PathBuf::from("/private/state/cargo-cache"));
+        assert!(!mutable_mounts[0].read_only);
+        mutable.runtime_host_path = None;
+        assert!(workspace_mounts(host, Some(&mutable)).is_err());
     }
 
     #[tokio::test]

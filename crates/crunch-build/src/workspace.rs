@@ -7,7 +7,6 @@
 //! r[impl build_correctness.mutable_workspace_claim_boundary]
 //! r[impl remote_builds.stateful_workspace_leases]
 
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::Component;
 use std::path::Path;
@@ -1400,11 +1399,11 @@ mod tests {
             .next
             .unwrap();
         let mut cases = Vec::new();
-        let mut stale = lease_request(WorkspaceLeaseOperation::Renew, "attempt-old", 1);
+        let mut stale = lease_request(WorkspaceLeaseOperation::Renew, "attempt-new", 1);
         stale.owner.worker_id = active.owner.as_ref().unwrap().worker_id.clone();
         stale.owner.authority_class = active.owner.as_ref().unwrap().authority_class.clone();
         stale.owner.job_id = active.owner.as_ref().unwrap().job_id.clone();
-        cases.push((stale, WorkspaceReasonCode::AttemptMismatch));
+        cases.push((stale, WorkspaceReasonCode::StaleFence));
         let mut foreign_worker = lease_request(WorkspaceLeaseOperation::Acquire, "attempt-new", 2);
         foreign_worker.owner.worker_id = "worker-b".to_string();
         cases.push((foreign_worker, WorkspaceReasonCode::WorkerMismatch));
@@ -1420,6 +1419,19 @@ mod tests {
             assert_eq!(plan.reason, expected);
             assert_eq!(plan.next.as_ref(), Some(&active));
         }
+
+        let mut wrong_action = lease_request(WorkspaceLeaseOperation::Acquire, "attempt-new", 2);
+        wrong_action.compatibility_digest_blake3 = digest('b');
+        assert_eq!(
+            plan_workspace_lease(Some(&active), &wrong_action).reason,
+            WorkspaceReasonCode::CompatibilityMismatch
+        );
+        let mut wrong_toolchain = lease_request(WorkspaceLeaseOperation::Acquire, "attempt-new", 2);
+        wrong_toolchain.toolchain_refs = vec!["mantle-object://blake3/other".to_string()];
+        assert_eq!(
+            plan_workspace_lease(Some(&active), &wrong_toolchain).reason,
+            WorkspaceReasonCode::ToolchainMismatch
+        );
     }
 
     #[test]

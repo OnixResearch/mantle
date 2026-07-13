@@ -168,6 +168,28 @@ let RemoteRetryPolicy = {
     | default = DefaultRemoteAttemptTimeoutSecs,
 } in
 
+let RemoteWorkspacePolicy = {
+  modes
+    | doc "Workspace modes this endpoint admits; mutable-session must be explicitly listed"
+    | Array [| 'none, 'immutable-snapshot, 'mutable-session |]
+    | default = ['none],
+  authority_class
+    | doc "Authority partition used in workspace compatibility and lease checks"
+    | String
+    | default = "local-default",
+  guest_paths
+    | doc "Stable guest mount paths admitted by this endpoint"
+    | Array String
+    | default = ["/build/.mantle-workspace"],
+  workspace_count_max | Number | default = 64,
+  bytes_max | Number | default = 4294967296,
+  files_max | Number | default = 100000,
+  snapshots_max | Number | default = 8,
+  idle_generations_max | Number | default = 16,
+  age_generations_max | Number | default = 256,
+  quarantine_count_max | Number | default = 16,
+} in
+
 let RemoteCapabilityProfile = {
   system
     | doc "Target system triple"
@@ -208,6 +230,10 @@ let RemoteCapabilityProfile = {
   transfer_policy
     | doc "Bounded resumable transfer, receiver credit, checkpoint, and replay policy"
     | RemoteTransferPolicy
+    | default = {},
+  workspace_policy
+    | doc "Explicit workspace registration, compatibility, quota, and retention policy"
+    | RemoteWorkspacePolicy
     | default = {},
 } in
 

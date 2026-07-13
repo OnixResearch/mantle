@@ -15,6 +15,7 @@
   "hermeticity_audit_events": [],
   "build_environment_reports": [],
   "network_policy_reports": [],
+  "workspace_reports": [],
   "native_dynamic_plans": [],
   "scheduler_priority_decisions": [
     {

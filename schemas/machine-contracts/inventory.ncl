@@ -187,11 +187,11 @@ let Registry = {
       ],
       "freshness_strategy"= "BLAKE3 binds the full report projection and all directly serialized owner modules",
       "freshness"= {
-        "schema_blake3"= "e9ee0d612157c2672c15a7efeb81206262f5c4b8ab2c3f4058fca2042db48ec5",
-        "contract_blake3"= "febfe4aabac9b0ed73bfee1cb6b8175533543cbba3d7f2a366dccf90326e8d1f",
+        "schema_blake3"= "25f50fa3294c66f8191b70b42ba9446fa1d3058c7ae630025aebd07aaf192e75",
+        "contract_blake3"= "39d90100d5cf0268dd3a8514b719ab13296361d88c7312a60c5e30f36659099d",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
-        "fixture_set_blake3"= "d32ab77ccaf0ab455d66c07aebadfba96f0c4c54b64800ebebdbcdeb799cc969",
-        "producer_identity_blake3"= "e963cfd74ee8d64daee5855463fb3c278824ae1947bb33b12027e6614393c2a9",
+        "fixture_set_blake3"= "805f1b747e533a0a802bd2c10e749b2bceba95dd9704de1c967a5446bf3feadc",
+        "producer_identity_blake3"= "dae63b9500471a7caa3e55a417fcd272197422ee28dd452cb1642c2ed6523c79",
         "consumer_policy_blake3"= "d4d7d58e21738c707f6071b435807382c28939a76da4cbb88e9c32c6b80af72b"
       },
       "non_claims"= [

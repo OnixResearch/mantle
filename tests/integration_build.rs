@@ -15,6 +15,111 @@ use crunch_glue::ConversionCache;
 use crunch_glue::CrunchDerivation;
 use crunch_glue::Input;
 
+#[test]
+fn typed_nickel_workspace_policy_matches_rust_and_rejects_invalid_bounds() {
+    let temp = tempfile::tempdir().unwrap();
+    let valid = temp.path().join("workspace-valid.ncl");
+    std::fs::write(
+        &valid,
+        r#"
+let Derivation = import "derivation.ncl" in
+({
+  name = "workspace-parity",
+  builder = "/bin/sh",
+  workspace = {
+    mode = 'mutable-session,
+    workspace_id = "cargo-cache",
+    compatibility = {
+      authority_class = "tenant-a",
+      action_class = "cargo-build",
+      toolchain_refs = ["mantle-object://blake3/rust"],
+    },
+  },
+} | Derivation)
+"#,
+    )
+    .unwrap();
+    let imports = stdlib_import_path();
+    let derivation: CrunchDerivation = crunch_eval::evaluate_and_deserialize(&valid, &imports).unwrap();
+    let encoded = derivation.env.get(crunch_glue::WORKSPACE_POLICY_ENV).unwrap();
+    let policy: crunch_build::WorkspacePolicy = serde_json::from_str(encoded).unwrap();
+    assert_eq!(policy.mode, crunch_build::WorkspaceMode::MutableSession);
+    assert_eq!(policy.workspace_id.as_deref(), Some("cargo-cache"));
+    assert!(crunch_build::validate_workspace_policy(&policy).is_ok());
+
+    let invalid = temp.path().join("workspace-invalid.ncl");
+    std::fs::write(
+        &invalid,
+        r#"
+let Derivation = import "derivation.ncl" in
+({ name = "bad-workspace", builder = "/bin/sh", workspace.quota.bytes_max = 0 } | Derivation)
+"#,
+    )
+    .unwrap();
+    let error = crunch_eval::evaluate_and_deserialize::<CrunchDerivation>(&invalid, &imports).unwrap_err();
+    assert!(error.to_string().contains("positive bounded workspace number"));
+}
+
+#[test]
+fn workspace_action_identity_uses_snapshot_ref_but_clean_derivation_drops_mutable_identity() {
+    const TEST_DIGEST_HEX_LENGTH: usize = 64;
+
+    fn base() -> CrunchDerivation {
+        CrunchDerivation {
+            name: "workspace-identity".to_string(),
+            builder: "/bin/sh".to_string(),
+            system: "x86_64-linux".to_string(),
+            args: vec!["-c".to_string(), "true".to_string()],
+            outputs: vec!["out".to_string()],
+            dynamic_plan_outputs: Vec::new(),
+            env: HashMap::new(),
+            inputs: Vec::new(),
+            fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
+            provenance: None,
+        }
+    }
+    fn path_for(derivation: &CrunchDerivation) -> nix_compat::store_path::StorePath<String> {
+        let mut cache = ConversionCache::new("/mantle/store");
+        crunch_glue::convert(derivation, &mut cache).unwrap().0
+    }
+    let clean = base();
+    let clean_path = path_for(&clean);
+    let mut snapshot_a = clean.clone();
+    let mut policy = crunch_build::WorkspacePolicy {
+        mode: crunch_build::WorkspaceMode::ImmutableSnapshot,
+        snapshot_ref: Some(format!(
+            "{}{}",
+            crunch_build::WORKSPACE_SNAPSHOT_REF_PREFIX,
+            "a".repeat(TEST_DIGEST_HEX_LENGTH)
+        )),
+        ..crunch_build::WorkspacePolicy::default()
+    };
+    snapshot_a
+        .env
+        .insert(crunch_glue::WORKSPACE_POLICY_ENV.to_string(), serde_json::to_string(&policy).unwrap());
+    let snapshot_a_path = path_for(&snapshot_a);
+    policy.snapshot_ref =
+        Some(format!("{}{}", crunch_build::WORKSPACE_SNAPSHOT_REF_PREFIX, "b".repeat(TEST_DIGEST_HEX_LENGTH)));
+    let mut snapshot_b = clean.clone();
+    snapshot_b
+        .env
+        .insert(crunch_glue::WORKSPACE_POLICY_ENV.to_string(), serde_json::to_string(&policy).unwrap());
+    assert_ne!(snapshot_a_path, path_for(&snapshot_b));
+
+    let mut mutable = clean.clone();
+    let mutable_policy = crunch_build::WorkspacePolicy {
+        mode: crunch_build::WorkspaceMode::MutableSession,
+        workspace_id: Some("cargo-cache".to_string()),
+        ..crunch_build::WorkspacePolicy::default()
+    };
+    mutable
+        .env
+        .insert(crunch_glue::WORKSPACE_POLICY_ENV.to_string(), serde_json::to_string(&mutable_policy).unwrap());
+    assert_ne!(path_for(&mutable), clean_path);
+    assert_eq!(path_for(&clean), clean_path);
+}
+
 fn test_keypair() -> crunch_build::KeyPair {
     crunch_build::load_keypair(
         "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",

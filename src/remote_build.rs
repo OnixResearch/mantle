@@ -220,6 +220,8 @@ pub struct RemoteHello {
     pub version: u32,
     pub endpoint_id: String,
     pub capabilities: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_policy: Option<crate::remote_farm_config::RemoteWorkspacePolicy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -403,6 +405,8 @@ impl RemoteBuildExecutor for RemoteFixtureExecutor {
 
 #[derive(Clone)]
 pub struct RemoteLocalBuildExecutor {
+    pub endpoint_id: String,
+    pub coordinator_state_dir: PathBuf,
     pub state_dir: PathBuf,
     pub output_dir: PathBuf,
     pub store_prefix: String,
@@ -1390,6 +1394,8 @@ pub struct RemoteWorkerRegistration {
     pub resource_inventory: Option<RemoteWorkerResourceInventory>,
     pub output_signing_key_ids: Vec<String>,
     pub resumable_jobs: Vec<RemoteWorkerResumeSummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_policy: Option<crate::remote_farm_config::RemoteWorkspacePolicy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1451,6 +1457,10 @@ pub struct RemoteCoordinatorState {
     pub resource_leases: BTreeMap<String, RemoteResourceLease>,
     #[serde(default)]
     pub verified_locality_observations: BTreeMap<String, RemoteVerifiedLocalitySummary>,
+    #[serde(default)]
+    pub workspace_registrations: BTreeMap<String, crate::remote_farm_config::RemoteWorkspacePolicy>,
+    #[serde(default)]
+    pub workspace_leases: BTreeMap<String, crunch_build::WorkspaceLeaseRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub legacy_log_migration: Option<RemoteLegacyLogMigrationSummary>,
     /// When set, mutations auto-save to this directory for durability.
@@ -1470,6 +1480,8 @@ impl Default for RemoteCoordinatorState {
             live_output_claims: BTreeMap::new(),
             resource_leases: BTreeMap::new(),
             verified_locality_observations: BTreeMap::new(),
+            workspace_registrations: BTreeMap::new(),
+            workspace_leases: BTreeMap::new(),
             legacy_log_migration: None,
             state_dir: None,
             allow_volatile_test_state: cfg!(test),
@@ -1595,6 +1607,10 @@ pub struct RemoteWorkerStatus {
     pub resource_remaining: Option<RemoteResourceAvailability>,
     pub output_signing_key_count: u32,
     pub resumable_job_count: u32,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub workspace_modes: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_authority_class: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1716,6 +1732,11 @@ pub fn validate_hello(
     }
     if hello.capabilities.len() > MAX_REMOTE_CAPABILITIES {
         return ProtocolDecision::Reject(format!("capability count exceeds {MAX_REMOTE_CAPABILITIES}"));
+    }
+    if let Some(policy) = hello.workspace_policy.as_ref()
+        && let Err(reason) = crate::remote_farm_config::validate_remote_workspace_policy(policy)
+    {
+        return ProtocolDecision::Reject(format!("invalid workspace registration: {reason}"));
     }
     let accepted_capabilities = hello
         .capabilities
@@ -2214,6 +2235,7 @@ async fn execute_remote_local_build_linux(
     let _mutation_guard = crunch_store::StoreMutationGuard::acquire_wait(&executor.state_dir)
         .map_err(|err| format!("remote-local-executor-mutation-lock: {err}"))?;
     let (drv_path, mut known_paths) = local_derivation_registry(request, plan)?;
+    let workspace_lease = acquire_remote_execution_workspace(executor, request, &drv_path, &mut known_paths)?;
     let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: executor.state_dir.clone(),
         output_dir: executor.output_dir.clone(),
@@ -2233,7 +2255,10 @@ async fn execute_remote_local_build_linux(
     std::fs::create_dir_all(&workdir).map_err(|err| format!("remote-local-executor-workdir: {err}"))?;
     let bwrap_service = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
     let fetch_service = crunch_build::FetchBuildService::new(blob_service.clone(), directory_service.clone());
-    let build_service = crunch_build::DispatchBuildService::new(fetch_service, bwrap_service);
+    let dispatch = crunch_build::DispatchBuildService::new(fetch_service, bwrap_service);
+    let workspace_reports = crunch_build::WorkspaceReportCollector::default();
+    let build_service =
+        crunch_build::StatefulWorkspaceBuildService::new(dispatch, &executor.state_dir, workspace_reports);
     let mut builder = crunch_build::Builder::with_state_dir(
         blob_service,
         directory_service,
@@ -2249,11 +2274,94 @@ async fn execute_remote_local_build_linux(
         executor.verbose,
     );
     builder.set_root_retention_source(Some(crunch_store::GcRootSource::Build));
-    let outcome = builder
-        .build(&drv_path, &mut known_paths)
-        .await
-        .map_err(|err| format!("remote-local-executor-build: {err}"))?;
+    let build_result = builder.build(&drv_path, &mut known_paths).await;
+    release_remote_execution_workspace(executor, workspace_lease)?;
+    let outcome = build_result.map_err(|err| format!("remote-local-executor-build: {err}"))?;
     remote_execution_outcome_from_build_outcome(request, plan, &outcome)
+}
+
+fn acquire_remote_execution_workspace(
+    executor: &RemoteLocalBuildExecutor,
+    request: &ConcreteBuildRequest,
+    drv_path: &StorePath<String>,
+    registry: &mut crunch_build::DerivationRegistry,
+) -> Result<Option<crunch_build::WorkspaceLeaseRequest>, String> {
+    let drv_abs = drv_path.to_absolute_path_with_prefix(&request.store_prefix);
+    let entry = registry
+        .get_by_drv_path_mut(&drv_abs)
+        .ok_or_else(|| "remote-workspace-registry-entry-missing".to_string())?;
+    let Some(raw_policy) = entry.derivation.environment.get(crunch_build::WORKSPACE_POLICY_ENV) else {
+        return Ok(None);
+    };
+    let policy: crunch_build::WorkspacePolicy = serde_json::from_slice(raw_policy.as_ref())
+        .map_err(|error| format!("remote-workspace-policy-invalid: {error}"))?;
+    crunch_build::validate_workspace_policy(&policy)
+        .map_err(|reason| format!("remote-workspace-policy-invalid: {}", reason.as_str()))?;
+    if policy.mode != crunch_build::WorkspaceMode::MutableSession {
+        return Ok(None);
+    }
+    let binding = request
+        .production_attempt
+        .as_ref()
+        .ok_or_else(|| "remote-workspace-production-attempt-missing".to_string())?;
+    validate_current_production_attempt(&executor.coordinator_state_dir, binding)?;
+    let mut state = load_coordinator_state(&executor.coordinator_state_dir).map_err(|error| error.to_string())?;
+    let registration = state
+        .workspace_registrations
+        .get(&executor.endpoint_id)
+        .ok_or_else(|| "remote worker has no workspace registration".to_string())?;
+    let owner = crunch_build::WorkspaceLeaseOwner {
+        worker_id: executor.endpoint_id.clone(),
+        authority_class: registration.authority_class.clone(),
+        job_id: binding.job_id.as_str().to_string(),
+        attempt_id: binding.attempt_id.as_str().to_string(),
+        fence_generation: binding.fence_generation.get(),
+    };
+    let lease_request = crunch_build::WorkspaceLeaseRequest {
+        workspace_id: policy.workspace_id.clone().ok_or_else(|| "remote workspace id missing".to_string())?,
+        compatibility_digest_blake3: crunch_build::derive_workspace_compatibility_digest(&policy.compatibility)
+            .map_err(|reason| reason.as_str().to_string())?,
+        toolchain_refs: policy.compatibility.toolchain_refs.clone(),
+        guest_path: policy.guest_path.clone(),
+        quota: policy.quota.clone(),
+        retention_class: "declared".to_string(),
+        generation: binding.fence_generation.get(),
+        owner,
+        operation: crunch_build::WorkspaceLeaseOperation::Acquire,
+    };
+    let plan = apply_remote_workspace_lease(&mut state, &executor.endpoint_id, &lease_request)?;
+    if plan.disposition != crunch_build::WorkspaceLeaseDisposition::Accepted {
+        return Err(format!("remote workspace lease rejected: {}", plan.reason.as_str()));
+    }
+    let lease_binding = snix_build::buildservice::StatefulWorkspaceLeaseBinding {
+        worker_id: lease_request.owner.worker_id.clone(),
+        authority_class: lease_request.owner.authority_class.clone(),
+        job_id: lease_request.owner.job_id.clone(),
+        attempt_id: lease_request.owner.attempt_id.clone(),
+        fence_generation: lease_request.owner.fence_generation,
+    };
+    let derivation = std::sync::Arc::make_mut(&mut entry.derivation);
+    derivation.environment.insert(
+        crunch_build::WORKSPACE_LEASE_ENV.to_string(),
+        serde_json::to_vec(&lease_binding).map_err(|error| error.to_string())?.into(),
+    );
+    Ok(Some(lease_request))
+}
+
+fn release_remote_execution_workspace(
+    executor: &RemoteLocalBuildExecutor,
+    request: Option<crunch_build::WorkspaceLeaseRequest>,
+) -> Result<(), String> {
+    let Some(mut request) = request else {
+        return Ok(());
+    };
+    request.operation = crunch_build::WorkspaceLeaseOperation::Release;
+    let mut state = load_coordinator_state(&executor.coordinator_state_dir).map_err(|error| error.to_string())?;
+    let plan = apply_remote_workspace_lease(&mut state, &executor.endpoint_id, &request)?;
+    if plan.disposition != crunch_build::WorkspaceLeaseDisposition::Accepted {
+        return Err(format!("remote workspace release rejected: {}", plan.reason.as_str()));
+    }
+    Ok(())
 }
 
 fn local_derivation_registry(
@@ -4112,6 +4220,12 @@ pub fn apply_worker_registration(
     let mut candidate = state.clone();
     let endpoint_id = registration.endpoint_id.clone();
     let worker_generation = registration.worker_generation;
+    if let Some(policy) = registration.workspace_policy.as_ref() {
+        crate::remote_farm_config::validate_remote_workspace_policy(policy)?;
+        candidate.workspace_registrations.insert(endpoint_id.clone(), policy.clone());
+    } else {
+        candidate.workspace_registrations.remove(&endpoint_id);
+    }
     candidate.workers.insert(endpoint_id.clone(), registration);
     candidate.verified_locality_observations.retain(|_, summary| {
         summary.worker_endpoint_id != endpoint_id || summary.worker_generation == worker_generation
@@ -4211,6 +4325,7 @@ pub fn admit_remote_production_dispatch(
         resource_inventory,
         output_signing_key_ids: trusted_output_keys.to_vec(),
         resumable_jobs: Vec::new(),
+        workspace_policy: state.workspace_registrations.get(endpoint_id).cloned(),
     };
     apply_worker_registration(state, registration)?;
     let coordinator_request = RemoteCoordinatorBuildRequest {
@@ -4756,17 +4871,56 @@ fn validate_worker_resume_claim(
     Ok(())
 }
 
+fn coordinator_request_uses_mutable_workspace(request: &RemoteCoordinatorBuildRequest) -> Result<bool, String> {
+    match &request.request.payload {
+        RemoteConcreteBuildPayload::Derivation { drv_json, .. } => {
+            let derivation: crunch_glue::CrunchDerivation = serde_json::from_str(drv_json)
+                .map_err(|error| format!("remote-workspace-derivation-invalid: {error}"))?;
+            let Some(policy_json) = derivation.env.get(crunch_glue::WORKSPACE_POLICY_ENV) else {
+                return Ok(false);
+            };
+            let policy: crunch_build::WorkspacePolicy = serde_json::from_str(policy_json)
+                .map_err(|error| format!("remote-workspace-policy-invalid: {error}"))?;
+            crunch_build::validate_workspace_policy(&policy)
+                .map_err(|reason| format!("remote-workspace-policy-invalid: {}", reason.as_str()))?;
+            Ok(policy.mode == crunch_build::WorkspaceMode::MutableSession)
+        }
+        RemoteConcreteBuildPayload::Action { spec_json, .. } => {
+            let value: serde_json::Value =
+                serde_json::from_str(spec_json).map_err(|error| format!("remote-workspace-action-invalid: {error}"))?;
+            Ok(value.pointer("/workspace/mode").and_then(serde_json::Value::as_str) == Some("mutable-session"))
+        }
+    }
+}
+
+fn mutable_workspace_job_key(shared_key: &str, request_id: &str, assignment_nonce: &RemoteAssignmentNonce) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, "domain", "mantle-mutable-workspace-job-v1");
+    hash_labeled_str(&mut hasher, "shared-key-non-claim", shared_key);
+    hash_labeled_str(&mut hasher, "request-id", request_id);
+    hash_labeled_str(&mut hasher, "assignment-nonce", assignment_nonce.as_str());
+    hasher.finalize().to_hex().to_string()
+}
+
 fn plan_coordinator_dispatch(
     state: &RemoteCoordinatorState,
     request: &RemoteCoordinatorBuildRequest,
     assignment_nonce: &RemoteAssignmentNonce,
 ) -> Result<RemoteCoordinatorDispatchDecision, String> {
-    let normalized_key = normalized_remote_build_key(request)?;
-    if let Some(reason) = conflicting_live_output_claim(state, request, &normalized_key) {
-        return Ok(RemoteCoordinatorDispatchDecision::Reject { reason });
-    }
-    if let Some(decision) = existing_job_decision(state, &normalized_key) {
-        return Ok(decision);
+    let shared_key = normalized_remote_build_key(request)?;
+    let mutable_workspace = coordinator_request_uses_mutable_workspace(request)?;
+    let normalized_key = if mutable_workspace {
+        mutable_workspace_job_key(&shared_key, &request.request.request_id, assignment_nonce)
+    } else {
+        shared_key
+    };
+    if !mutable_workspace {
+        if let Some(reason) = conflicting_live_output_claim(state, request, &normalized_key) {
+            return Ok(RemoteCoordinatorDispatchDecision::Reject { reason });
+        }
+        if let Some(decision) = existing_job_decision(state, &normalized_key) {
+            return Ok(decision);
+        }
     }
     let Some(worker) = select_coordinator_worker(state, request)? else {
         return Ok(no_worker_dispatch_decision(state, request));
@@ -4881,7 +5035,11 @@ fn queued_job_summary(
         normalized_build_key: normalized_key.to_string(),
         assigned_worker_endpoint_id: Some(worker_endpoint_id.to_string()),
         phase: RemoteCoordinatorJobPhase::Queued,
-        live_output_claims: request.live_output_claims.clone(),
+        live_output_claims: if coordinator_request_uses_mutable_workspace(request)? {
+            Vec::new()
+        } else {
+            request.live_output_claims.clone()
+        },
         result_available: false,
         lost_phase: None,
         immutable_log: None,
@@ -5471,6 +5629,128 @@ fn validate_verified_locality_summary(summary: &RemoteVerifiedLocalitySummary) -
     Ok(())
 }
 
+pub fn register_remote_workspace_policy(
+    state: &mut RemoteCoordinatorState,
+    endpoint_id: &str,
+    policy: crate::remote_farm_config::RemoteWorkspacePolicy,
+) -> Result<(), String> {
+    if endpoint_id.is_empty() || !state.workers.contains_key(endpoint_id) {
+        return Err("workspace registration requires a known worker endpoint".to_string());
+    }
+    crate::remote_farm_config::validate_remote_workspace_policy(&policy)?;
+    let mut candidate = state.clone();
+    candidate.workspace_registrations.insert(endpoint_id.to_string(), policy);
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
+    Ok(())
+}
+
+pub fn apply_remote_workspace_lease(
+    state: &mut RemoteCoordinatorState,
+    endpoint_id: &str,
+    request: &crunch_build::WorkspaceLeaseRequest,
+) -> Result<crunch_build::WorkspaceLeasePlan, String> {
+    let registration = state
+        .workspace_registrations
+        .get(endpoint_id)
+        .ok_or_else(|| "remote worker has no workspace registration".to_string())?;
+    validate_registered_workspace_request(endpoint_id, registration, request)?;
+    let current = state.workspace_leases.get(&request.workspace_id);
+    let plan = crunch_build::plan_workspace_lease(current, request);
+    if plan.disposition != crunch_build::WorkspaceLeaseDisposition::Accepted {
+        return Ok(plan);
+    }
+    let mut candidate = state.clone();
+    candidate
+        .workspace_leases
+        .insert(request.workspace_id.clone(), plan.next.clone().expect("accepted workspace lease has next state"));
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
+    Ok(plan)
+}
+
+pub fn bind_and_acquire_remote_workspace(
+    state: &mut RemoteCoordinatorState,
+    job_id: &RemoteJobId,
+    request: &mut snix_build::buildservice::StatefulWorkspaceRequest,
+) -> Result<crunch_build::WorkspaceLeasePlan, String> {
+    if request.mode != snix_build::buildservice::StatefulWorkspaceMode::MutableSession {
+        return Err("remote workspace binding requires mutable-session mode".to_string());
+    }
+    let job = state.jobs.get(job_id).ok_or_else(|| "remote workspace job is unknown".to_string())?;
+    let worker_id = job
+        .assigned_worker_endpoint_id
+        .clone()
+        .ok_or_else(|| "remote workspace job has no assigned worker".to_string())?;
+    let attempt = job
+        .current_attempt
+        .clone()
+        .ok_or_else(|| "remote workspace job has no current attempt".to_string())?;
+    let authority_class = state
+        .workspace_registrations
+        .get(&worker_id)
+        .ok_or_else(|| "remote worker has no workspace registration".to_string())?
+        .authority_class
+        .clone();
+    request.generation = attempt.fence_generation.get();
+    request.lease = Some(snix_build::buildservice::StatefulWorkspaceLeaseBinding {
+        worker_id: worker_id.clone(),
+        authority_class,
+        job_id: job_id.as_str().to_string(),
+        attempt_id: attempt.attempt_id.as_str().to_string(),
+        fence_generation: attempt.fence_generation.get(),
+    });
+    let lease = request.lease.as_ref().expect("lease binding was assigned");
+    let core_request = crunch_build::WorkspaceLeaseRequest {
+        workspace_id: request.workspace_id.clone().ok_or_else(|| "workspace id missing".to_string())?,
+        compatibility_digest_blake3: request.compatibility_digest_blake3.clone(),
+        toolchain_refs: request.toolchain_refs.clone(),
+        guest_path: request.guest_path.display().to_string(),
+        quota: crunch_build::WorkspaceQuotaPolicy {
+            bytes_max: request.quota_bytes_max,
+            files_max: request.quota_files_max,
+            snapshots_max: request.quota_snapshots_max,
+        },
+        retention_class: request.retention_class.clone(),
+        generation: request.generation,
+        owner: crunch_build::WorkspaceLeaseOwner {
+            worker_id: lease.worker_id.clone(),
+            authority_class: lease.authority_class.clone(),
+            job_id: lease.job_id.clone(),
+            attempt_id: lease.attempt_id.clone(),
+            fence_generation: lease.fence_generation,
+        },
+        operation: crunch_build::WorkspaceLeaseOperation::Acquire,
+    };
+    apply_remote_workspace_lease(state, &worker_id, &core_request)
+}
+
+fn validate_registered_workspace_request(
+    endpoint_id: &str,
+    policy: &crate::remote_farm_config::RemoteWorkspacePolicy,
+    request: &crunch_build::WorkspaceLeaseRequest,
+) -> Result<(), String> {
+    if !policy.modes.contains(&crate::remote_farm_config::RemoteWorkspaceMode::MutableSession) {
+        return Err("remote worker does not admit mutable-session workspaces".to_string());
+    }
+    if request.owner.worker_id != endpoint_id {
+        return Err(crunch_build::WorkspaceReasonCode::WorkerMismatch.as_str().to_string());
+    }
+    if request.owner.authority_class != policy.authority_class {
+        return Err(crunch_build::WorkspaceReasonCode::AuthorityMismatch.as_str().to_string());
+    }
+    if !policy.guest_paths.contains(&request.guest_path) {
+        return Err(crunch_build::WorkspaceReasonCode::GuestPathInvalid.as_str().to_string());
+    }
+    let within_quota = request.quota.bytes_max <= policy.bytes_max
+        && request.quota.files_max <= policy.files_max
+        && request.quota.snapshots_max <= policy.snapshots_max;
+    if !within_quota {
+        return Err(crunch_build::WorkspaceReasonCode::QuotaExceeded.as_str().to_string());
+    }
+    Ok(())
+}
+
 fn persist_coordinator_candidate(state: &RemoteCoordinatorState) -> Result<(), String> {
     validate_coordinator_resource_state(state)?;
     let Some(state_dir) = state.state_dir.as_deref() else {
@@ -5832,6 +6112,15 @@ fn remote_worker_status(
         resource_remaining,
         output_signing_key_count: bounded_runtime_count_u32(worker.output_signing_key_ids.len())?,
         resumable_job_count: bounded_runtime_count_u32(worker.resumable_jobs.len())?,
+        workspace_modes: worker
+            .workspace_policy
+            .as_ref()
+            .map(|policy| policy.modes.iter().map(|mode| mode.as_str().to_string()).collect())
+            .unwrap_or_default(),
+        workspace_authority_class: worker
+            .workspace_policy
+            .as_ref()
+            .map(|policy| bounded_untrusted_text(&policy.authority_class)),
     })
 }
 
@@ -7161,6 +7450,7 @@ fn remote_loopback_client_for_request(
             version: REMOTE_PROTOCOL_VERSION,
             endpoint_id: options.builder.endpoint_id.clone(),
             capabilities: options.transfer_capabilities.as_capability_labels(),
+            workspace_policy: None,
         },
         auth: TicketAuthRequest {
             ticket_id: options.ticket.ticket_id.clone(),
@@ -9463,8 +9753,10 @@ pub fn cmd_remote(
 
 fn remote_serve_executor(
     executor: crate::RemoteServeExecutor,
+    endpoint_id: &str,
     fixture_signing_key_id: String,
     output_dir: &Path,
+    coordinator_state_dir: &Path,
     state_dir: &Path,
     store_prefix: &str,
 ) -> Result<(String, Option<RemoteLocalBuildExecutor>), RunError> {
@@ -9474,6 +9766,8 @@ fn remote_serve_executor(
             let keypair = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir, false)?;
             let trusted_keys = vec![keypair.verifying_key.clone()];
             let local = RemoteLocalBuildExecutor {
+                endpoint_id: endpoint_id.to_string(),
+                coordinator_state_dir: coordinator_state_dir.to_path_buf(),
                 state_dir: state_dir.to_path_buf(),
                 output_dir: output_dir.to_path_buf(),
                 store_prefix: store_prefix.to_string(),
@@ -9811,8 +10105,15 @@ fn cmd_remote_serve(
         }
         crate::RemoteServeBinding::StdioOnce => {
             let mut state = load_ticket_state(state_dir)?;
-            let (builder_signing_key_id, local_executor) =
-                remote_serve_executor(executor, signing_key_id, output_dir, execution_state_dir, store_prefix)?;
+            let (builder_signing_key_id, local_executor) = remote_serve_executor(
+                executor,
+                &endpoint_id,
+                signing_key_id,
+                output_dir,
+                state_dir,
+                execution_state_dir,
+                store_prefix,
+            )?;
             let builder = RemoteLoopbackBuilder {
                 endpoint_id,
                 store_prefix: store_prefix.to_string(),
@@ -10719,6 +11020,7 @@ mod tests {
             version: REMOTE_PROTOCOL_VERSION,
             endpoint_id: "builder-1".to_string(),
             capabilities: vec!["delta".to_string(), "full".to_string()],
+            workspace_policy: None,
         };
         let decision = validate_hello(&hello, "builder-1", &["delta".to_string()]);
         assert!(matches!(decision, ProtocolDecision::Proceed(_)));
@@ -10731,6 +11033,7 @@ mod tests {
             version: REMOTE_PROTOCOL_VERSION,
             endpoint_id: "builder-1".to_string(),
             capabilities: Vec::new(),
+            workspace_policy: None,
         };
         let decision = validate_hello(&hello, "builder-1", &[]);
         assert!(matches!(decision, ProtocolDecision::Reject(reason) if reason.contains("unsupported ALPN")));
@@ -14010,6 +14313,7 @@ mod tests {
             version: REMOTE_PROTOCOL_VERSION,
             endpoint_id: "builder-1".to_string(),
             capabilities: vec!["delta".to_string(), "full".to_string()],
+            workspace_policy: None,
         }
     }
 
@@ -14221,8 +14525,10 @@ mod tests {
 
     fn fixture_local_build_executor() -> RemoteLocalBuildExecutor {
         RemoteLocalBuildExecutor {
-            state_dir: PathBuf::from("/tmp/mantle-remote-build-test-state"),
-            output_dir: PathBuf::from("/tmp/mantle-remote-build-test-store"),
+            endpoint_id: "builder-1".to_string(),
+            coordinator_state_dir: std::env::temp_dir().join("mantle-remote-build-test-coordinator-state"),
+            state_dir: std::env::temp_dir().join("mantle-remote-build-test-state"),
+            output_dir: std::env::temp_dir().join("mantle-remote-build-test-store"),
             store_prefix: "/mantle/store".to_string(),
             keypair: fixture_keypair(),
             trusted_keys: Vec::new(),
@@ -14369,6 +14675,7 @@ mod tests {
             resource_inventory: None,
             output_signing_key_ids: vec!["builder-key".to_string()],
             resumable_jobs: Vec::new(),
+            workspace_policy: None,
         }
     }
 
@@ -14500,6 +14807,156 @@ mod tests {
         );
         coordinator_status_snapshot("builder-1", DEFAULT_REMOTE_CONCURRENCY, &state, &[], &[fixture_ticket()])
             .expect("operator rail status renders")
+    }
+
+    #[test]
+    fn remote_workspace_registration_and_fenced_lease_survive_restart() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
+        let registration = crate::remote_farm_config::RemoteWorkspacePolicy {
+            modes: vec![
+                crate::remote_farm_config::RemoteWorkspaceMode::None,
+                crate::remote_farm_config::RemoteWorkspaceMode::MutableSession,
+            ],
+            authority_class: "tenant-a".to_string(),
+            ..crate::remote_farm_config::RemoteWorkspacePolicy::default()
+        };
+        let mut worker = fixture_worker_registration();
+        worker.workspace_policy = Some(registration);
+        apply_worker_registration(&mut state, worker).unwrap();
+        let status = remote_worker_status(&state.workers["builder-1"]).unwrap();
+        assert!(status.workspace_modes.contains(&"mutable-session".to_string()));
+        assert_eq!(status.workspace_authority_class.as_deref(), Some("tenant-a"));
+        let request = crunch_build::WorkspaceLeaseRequest {
+            workspace_id: "cargo-cache".to_string(),
+            compatibility_digest_blake3: "a".repeat(BLAKE3_HEX_LENGTH_CHARS),
+            toolchain_refs: vec!["mantle-object://blake3/rust".to_string()],
+            guest_path: crunch_build::DEFAULT_WORKSPACE_GUEST_PATH.to_string(),
+            quota: crunch_build::WorkspaceQuotaPolicy::default(),
+            retention_class: "recent".to_string(),
+            generation: 1,
+            owner: crunch_build::WorkspaceLeaseOwner {
+                worker_id: "builder-1".to_string(),
+                authority_class: "tenant-a".to_string(),
+                job_id: "job-a".to_string(),
+                attempt_id: "attempt-a".to_string(),
+                fence_generation: 2,
+            },
+            operation: crunch_build::WorkspaceLeaseOperation::Acquire,
+        };
+        let acquired = apply_remote_workspace_lease(&mut state, "builder-1", &request).unwrap();
+        assert_eq!(acquired.disposition, crunch_build::WorkspaceLeaseDisposition::Accepted);
+        let mut restarted = load_coordinator_state(temp.path()).unwrap();
+        assert_eq!(restarted.workspace_leases["cargo-cache"].owner.as_ref().unwrap().attempt_id, "attempt-a");
+        let mut stale = request.clone();
+        stale.owner.fence_generation = 1;
+        stale.operation = crunch_build::WorkspaceLeaseOperation::Renew;
+        let before = restarted.clone();
+        let rejected = apply_remote_workspace_lease(&mut restarted, "builder-1", &stale).unwrap();
+        assert_eq!(rejected.disposition, crunch_build::WorkspaceLeaseDisposition::Rejected);
+        assert_eq!(restarted, before);
+    }
+
+    #[test]
+    fn remote_workspace_binding_uses_current_job_attempt_and_fence() {
+        let mut state = RemoteCoordinatorState::default();
+        let policy = crate::remote_farm_config::RemoteWorkspacePolicy {
+            modes: vec![crate::remote_farm_config::RemoteWorkspaceMode::MutableSession],
+            authority_class: "tenant-a".to_string(),
+            ..crate::remote_farm_config::RemoteWorkspacePolicy::default()
+        };
+        let mut worker = fixture_worker_registration();
+        worker.workspace_policy = Some(policy);
+        apply_worker_registration(&mut state, worker).unwrap();
+        let decision = admit_fixture_dispatch(&mut state, &fixture_coordinator_request()).unwrap();
+        let RemoteCoordinatorDispatchDecision::Dispatch {
+            job_id,
+            attempt_id,
+            fence_generation,
+            ..
+        } = decision
+        else {
+            panic!("fixture dispatch expected");
+        };
+        let mut workspace = snix_build::buildservice::StatefulWorkspaceRequest {
+            mode: snix_build::buildservice::StatefulWorkspaceMode::MutableSession,
+            workspace_id: Some("cargo-cache-bound".to_string()),
+            guest_path: crunch_build::DEFAULT_WORKSPACE_GUEST_PATH.into(),
+            snapshot_input_name: None,
+            compatibility_digest_blake3: "b".repeat(BLAKE3_HEX_LENGTH_CHARS),
+            toolchain_refs: Vec::new(),
+            quota_bytes_max: crunch_build::DEFAULT_WORKSPACE_BYTES_MAX,
+            quota_files_max: crunch_build::DEFAULT_WORKSPACE_FILES_MAX,
+            quota_snapshots_max: crunch_build::DEFAULT_WORKSPACE_SNAPSHOTS_MAX,
+            retention_class: "recent".to_string(),
+            retention_workspace_count_max: crunch_build::DEFAULT_WORKSPACE_COUNT_MAX,
+            retention_idle_generations_max: crunch_build::DEFAULT_WORKSPACE_IDLE_GENERATIONS_MAX,
+            retention_age_generations_max: crunch_build::DEFAULT_WORKSPACE_AGE_GENERATIONS_MAX,
+            retention_quarantine_count_max: crunch_build::DEFAULT_WORKSPACE_QUARANTINE_COUNT_MAX,
+            generation: 1,
+            lease: None,
+            sensitive_paths: Vec::new(),
+            secret_markers: Vec::new(),
+            scan_depth_max: crunch_build::DEFAULT_WORKSPACE_SCAN_DEPTH_MAX,
+            path_bytes_max: crunch_build::DEFAULT_WORKSPACE_PATH_BYTES_MAX,
+            snapshot_enabled: false,
+            clean_rebuild_enabled: false,
+            clean_rebuild_require_declared_inputs: true,
+            runtime_host_path: None,
+        };
+        let plan = bind_and_acquire_remote_workspace(&mut state, &job_id, &mut workspace).unwrap();
+        assert_eq!(plan.disposition, crunch_build::WorkspaceLeaseDisposition::Accepted);
+        let lease = workspace.lease.unwrap();
+        assert_eq!(lease.worker_id, "builder-1");
+        assert_eq!(lease.job_id, job_id.as_str());
+        assert_eq!(lease.attempt_id, attempt_id.as_str());
+        assert_eq!(lease.fence_generation, fence_generation.get());
+    }
+
+    #[test]
+    fn mutable_workspace_jobs_never_attach_or_publish_live_output_claims() {
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).unwrap();
+        let mut request = fixture_coordinator_request();
+        let RemoteConcreteBuildPayload::Action { spec_json, .. } = &mut request.request.payload else {
+            panic!("fixture action expected");
+        };
+        let mut spec: serde_json::Value = serde_json::from_str(spec_json).unwrap();
+        spec["workspace"] = serde_json::json!({"mode": "mutable-session"});
+        *spec_json = serde_json::to_string(&spec).unwrap();
+        let first = admit_coordinator_dispatch_with_nonce(
+            &mut state,
+            &request,
+            RemoteAttemptRetryPolicy::default(),
+            fixture_retry_time(),
+            fixture_assignment_nonce("mutable-first"),
+        )
+        .unwrap();
+        let second = plan_coordinator_dispatch(&state, &request, &fixture_assignment_nonce("mutable-second")).unwrap();
+        let RemoteCoordinatorDispatchDecision::Dispatch {
+            normalized_build_key: first_key,
+            ..
+        } = first
+        else {
+            panic!("first mutable request dispatches");
+        };
+        assert!(!matches!(
+            second,
+            RemoteCoordinatorDispatchDecision::AttachExisting { .. }
+                | RemoteCoordinatorDispatchDecision::RedeliverResult { .. }
+        ));
+        let shared_key = normalized_remote_build_key(&request).unwrap();
+        let second_key = mutable_workspace_job_key(
+            &shared_key,
+            &request.request.request_id,
+            &fixture_assignment_nonce("mutable-second"),
+        );
+        assert_ne!(first_key, second_key);
+        assert!(state.live_output_claims.is_empty());
+        assert!(state.jobs.values().all(|job| job.live_output_claims.is_empty()));
     }
 
     fn fixture_remote_operator_coordinator_request(client: &RemoteLoopbackClient) -> RemoteCoordinatorBuildRequest {

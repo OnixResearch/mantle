@@ -19,6 +19,9 @@ use nix_compat::store_path::hash_placeholder;
 use snix_build::buildservice::BuildConstraints;
 use snix_build::buildservice::BuildRequest;
 use snix_build::buildservice::EnvVar;
+use snix_build::buildservice::StatefulWorkspaceLeaseBinding;
+use snix_build::buildservice::StatefulWorkspaceMode;
+use snix_build::buildservice::StatefulWorkspaceRequest;
 use snix_castore::Node;
 
 use crate::BuildEnvironmentReport;
@@ -35,6 +38,12 @@ use crate::registry::DerivationRegistry;
 /// scripts that expect them.
 const SANDBOX_PATH_NOT_SET: &str = "/path-not-set";
 const PATH_VARIABLE: &str = "PATH";
+pub const WORKSPACE_POLICY_ENV: &str = "__MANTLE_STATEFUL_WORKSPACE_POLICY";
+pub const WORKSPACE_LEASE_ENV: &str = "__MANTLE_STATEFUL_WORKSPACE_LEASE";
+const LOCAL_WORKSPACE_WORKER_ID: &str = "local-worker";
+const LOCAL_WORKSPACE_ATTEMPT_ID: &str = "local-attempt";
+const INITIAL_WORKSPACE_GENERATION: u64 = 1;
+const INITIAL_WORKSPACE_FENCE_GENERATION: u64 = 1;
 const PATH_ENTRY_SEPARATOR: char = ':';
 const STORE_PATH_HASH_CHARS: usize = 32;
 const STORE_COMPONENT_NAME_SEPARATOR_CHARS: usize = 1;
@@ -113,19 +122,119 @@ pub fn derivation_to_build_request(
 ) -> Result<BuildRequestEnvelope, crate::Error> {
     let normalized = normalize_build_environment(derivation, store_dir, hermeticity_mode)?;
     let network_policy = plan_network_policy(derivation, CompatibilityNetworkPolicy::DenyAll)?;
-    let build_request = build_request_from_environment(
+    let workspace = workspace_request_from_derivation(derivation)?;
+    let mut build_request = build_request_from_environment(
         derivation,
         inputs,
         store_dir,
         normalized.environment_vars,
         network_policy.allow_network,
     )?;
+    build_request.workspace = workspace;
     Ok(BuildRequestEnvelope {
         build_request,
         audit_events: normalized.audit_events,
         build_environment_report: normalized.report,
         network_policy_report: network_policy.report,
     })
+}
+
+fn workspace_request_from_derivation(
+    derivation: &Derivation,
+) -> Result<Option<StatefulWorkspaceRequest>, crate::Error> {
+    let Some(raw) = derivation.environment.get(WORKSPACE_POLICY_ENV) else {
+        return Ok(None);
+    };
+    let policy: crate::WorkspacePolicy = serde_json::from_slice(raw.as_ref())
+        .map_err(|error| crate::Error::Store(format!("invalid stateful workspace policy: {error}")))?;
+    crate::validate_workspace_policy(&policy)
+        .map_err(|reason| crate::Error::Store(format!("invalid stateful workspace policy: {}", reason.as_str())))?;
+    let compatibility_digest_blake3 = crate::derive_workspace_compatibility_digest(&policy.compatibility)
+        .map_err(|reason| crate::Error::Store(format!("invalid workspace compatibility facts: {}", reason.as_str())))?;
+    let mode = match policy.mode {
+        crate::WorkspaceMode::None => StatefulWorkspaceMode::None,
+        crate::WorkspaceMode::ImmutableSnapshot => StatefulWorkspaceMode::ImmutableSnapshot,
+        crate::WorkspaceMode::MutableSession => StatefulWorkspaceMode::MutableSession,
+    };
+    let snapshot_input_name = policy.snapshot_ref.as_deref().map(snapshot_input_name).transpose()?;
+    let action_name = environment_policy::action_name_from_environment(&derivation.environment);
+    let declared_lease = derivation
+        .environment
+        .get(WORKSPACE_LEASE_ENV)
+        .map(|raw| serde_json::from_slice::<StatefulWorkspaceLeaseBinding>(raw.as_ref()))
+        .transpose()
+        .map_err(|error| crate::Error::Store(format!("invalid stateful workspace lease: {error}")))?;
+    let lease = if mode == StatefulWorkspaceMode::MutableSession {
+        Some(declared_lease.unwrap_or_else(|| StatefulWorkspaceLeaseBinding {
+            worker_id: LOCAL_WORKSPACE_WORKER_ID.to_string(),
+            authority_class: policy.compatibility.authority_class.clone(),
+            job_id: sanitize_workspace_identity(&action_name),
+            attempt_id: LOCAL_WORKSPACE_ATTEMPT_ID.to_string(),
+            fence_generation: INITIAL_WORKSPACE_FENCE_GENERATION,
+        }))
+    } else {
+        if declared_lease.is_some() {
+            return Err(crate::Error::Store(
+                "stateful workspace lease is only valid for mutable-session mode".to_string(),
+            ));
+        }
+        None
+    };
+    Ok(Some(StatefulWorkspaceRequest {
+        mode,
+        workspace_id: policy.workspace_id,
+        guest_path: PathBuf::from(policy.guest_path),
+        snapshot_input_name,
+        compatibility_digest_blake3,
+        toolchain_refs: policy.compatibility.toolchain_refs,
+        quota_bytes_max: policy.quota.bytes_max,
+        quota_files_max: policy.quota.files_max,
+        quota_snapshots_max: policy.quota.snapshots_max,
+        retention_class: "declared".to_string(),
+        retention_workspace_count_max: policy.retention.workspace_count_max,
+        retention_idle_generations_max: policy.retention.idle_generations_max,
+        retention_age_generations_max: policy.retention.age_generations_max,
+        retention_quarantine_count_max: policy.retention.quarantine_count_max,
+        generation: lease.as_ref().map(|binding| binding.fence_generation).unwrap_or(INITIAL_WORKSPACE_GENERATION),
+        lease,
+        sensitive_paths: policy.scrub.sensitive_paths,
+        secret_markers: policy.scrub.secret_markers,
+        scan_depth_max: policy.scrub.scan_depth_max,
+        path_bytes_max: policy.scrub.path_bytes_max,
+        snapshot_enabled: policy.snapshot.enabled,
+        clean_rebuild_enabled: policy.clean_rebuild.enabled,
+        clean_rebuild_require_declared_inputs: policy.clean_rebuild.require_declared_inputs,
+        runtime_host_path: None,
+    }))
+}
+
+fn snapshot_input_name(value: &str) -> Result<PathBuf, crate::Error> {
+    let path = PathBuf::from(value);
+    if let Some(name) = path.file_name() {
+        return Ok(PathBuf::from(name));
+    }
+    let digest = value
+        .strip_prefix(crate::WORKSPACE_SNAPSHOT_REF_PREFIX)
+        .ok_or_else(|| crate::Error::Store("workspace snapshot ref has no declared input name".to_string()))?;
+    Ok(PathBuf::from(digest))
+}
+
+fn sanitize_workspace_identity(value: &str) -> String {
+    let mut normalized = value
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.') {
+                char::from(byte)
+            } else {
+                '-'
+            }
+        })
+        .take(crate::MAX_WORKSPACE_ID_BYTES)
+        .collect::<String>();
+    if normalized.is_empty() {
+        normalized.push_str("action");
+    }
+    normalized
 }
 
 pub fn normalize_build_environment(
@@ -197,6 +306,7 @@ pub(crate) fn build_request_from_environment(
         scratch_paths: vec!["build".into(), store_dir[1..].into()],
         additional_files: vec![],
         refscan_needles,
+        workspace: None,
     })
 }
 
@@ -236,6 +346,9 @@ fn overlay_derivation_environment(
     assert!(!environment_vars.is_empty(), "sandbox env must be pre-populated");
     let mut audit_events = Vec::with_capacity(derivation.environment.len());
     for (key, value) in &derivation.environment {
+        if key == WORKSPACE_POLICY_ENV || key == WORKSPACE_LEASE_ENV {
+            continue;
+        }
         reject_denied_strict_environment_key(derivation, hermeticity_mode, environment_vars.len(), key)?;
         let replaced = replace_placeholders_bstr(value, &derivation.outputs);
         if let Some(sandbox_value) = environment_vars.get(key)
@@ -1408,5 +1521,45 @@ mod tests {
             expected_relative,
             "BuildRequest.outputs[0] must match the derivation's computed output path"
         );
+    }
+
+    #[test]
+    fn declared_mutable_workspace_becomes_runtime_request_without_environment_leak() {
+        let mut drv = test_derivation();
+        let policy = crate::WorkspacePolicy {
+            mode: crate::WorkspaceMode::MutableSession,
+            workspace_id: Some("cargo-cache".to_string()),
+            compatibility: crate::WorkspaceCompatibilityFacts {
+                authority_class: "tenant-a".to_string(),
+                action_class: "cargo-build".to_string(),
+                toolchain_refs: vec!["mantle-object://blake3/rust".to_string()],
+            },
+            snapshot: crate::WorkspaceSnapshotPolicy {
+                enabled: true,
+                require_clean_scrub: true,
+            },
+            ..crate::WorkspacePolicy::default()
+        };
+        drv.environment
+            .insert(WORKSPACE_POLICY_ENV.to_string(), serde_json::to_vec(&policy).unwrap().into());
+        let request = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
+        let workspace = request.workspace.unwrap();
+        assert_eq!(workspace.mode, StatefulWorkspaceMode::MutableSession);
+        assert_eq!(workspace.workspace_id.as_deref(), Some("cargo-cache"));
+        assert!(workspace.lease.is_some());
+        assert!(request.environment_vars.iter().all(|item| item.key != WORKSPACE_POLICY_ENV));
+    }
+
+    #[test]
+    fn invalid_workspace_policy_fails_closed() {
+        let mut drv = test_derivation();
+        drv.environment
+            .insert(WORKSPACE_POLICY_ENV.to_string(), br#"{"schema":"unknown","mode":"ambient"}"#.to_vec().into());
+        let error =
+            derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical).unwrap_err();
+        assert!(error.to_string().contains("invalid stateful workspace policy"));
+        assert!(!error.to_string().contains("runtime_host_path"));
     }
 }

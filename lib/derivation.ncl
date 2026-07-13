@@ -8,6 +8,49 @@
 
 let { Name, System, Input, Sandbox, .. } = import "contracts.ncl" in
 let { FixedOutput } = import "fixed_output.ncl" in
+let PositiveNumber = std.contract.from_validator (fun value =>
+  if std.is_number value && value > 0 then 'Ok
+  else 'Error { message = "expected a positive bounded workspace number" }
+) in
+let Workspace = {
+  schema | String | default = "mantle-stateful-workspace-policy-v1",
+  mode | [| 'none, 'immutable-snapshot, 'mutable-session |] | default = 'none,
+  fallback | [| 'fail, 'to-none |] | default = 'fail,
+  workspace_id | String | optional,
+  snapshot_ref | String | optional,
+  guest_path | String | default = "/build/.mantle-workspace",
+  compatibility | {
+    authority_class | String | default = "local-default",
+    action_class | String | default = "default",
+    toolchain_refs | Array String | default = [],
+  } | default = {},
+  quota | {
+    bytes_max | PositiveNumber | default = 4294967296,
+    files_max | PositiveNumber | default = 100000,
+    snapshots_max | PositiveNumber | default = 8,
+  } | default = {},
+  retention | {
+    workspace_count_max | PositiveNumber | default = 64,
+    idle_generations_max | PositiveNumber | default = 16,
+    age_generations_max | PositiveNumber | default = 256,
+    quarantine_count_max | PositiveNumber | default = 16,
+  } | default = {},
+  scrub | {
+    sensitive_paths | Array String | default = [".netrc", ".npmrc", ".pypirc"],
+    secret_markers | Array String | default = ["authorization", "bearer ", "credential", "password", "private-key", "secret", "token="],
+    scan_depth_max | PositiveNumber | default = 128,
+    path_bytes_max | PositiveNumber | default = 4096,
+    reject_host_paths | Bool | default = true,
+  } | default = {},
+  snapshot | {
+    enabled | Bool | default = false,
+    require_clean_scrub | Bool | default = true,
+  } | default = {},
+  clean_rebuild | {
+    enabled | Bool | default = false,
+    require_declared_inputs | Bool | default = true,
+  } | default = {},
+} in
 
 {
   name | Name
@@ -51,4 +94,8 @@ let { FixedOutput } = import "fixed_output.ncl" in
   sandbox | Sandbox
     | doc "Sandbox preference. Build execution ships only for 'native today; 'oci and 'wasm stay reserved for future backends."
     | default = 'native,
+
+  workspace | Workspace
+    | doc "Explicit retained-tool workspace policy. Mutable sessions are practical-only and never publish strong shared action results."
+    | optional,
 }

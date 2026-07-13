@@ -93,6 +93,59 @@ pub struct BuildRequest {
     /// every input store path and output store path. The latter is necessary to scan
     /// for references between multi-output derivations.
     pub refscan_needles: Vec<String>,
+    /// Optional declared retained-tool workspace mount. Host storage paths are
+    /// runtime-only and are never serialized into action or transport identity.
+    pub workspace: Option<StatefulWorkspaceRequest>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StatefulWorkspaceMode {
+    #[default]
+    None,
+    ImmutableSnapshot,
+    MutableSession,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct StatefulWorkspaceLeaseBinding {
+    pub worker_id: String,
+    pub authority_class: String,
+    pub job_id: String,
+    pub attempt_id: String,
+    pub fence_generation: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct StatefulWorkspaceRequest {
+    pub mode: StatefulWorkspaceMode,
+    pub workspace_id: Option<String>,
+    pub guest_path: PathBuf,
+    /// Root name beneath the declared castore input directory for immutable snapshots.
+    pub snapshot_input_name: Option<PathBuf>,
+    pub compatibility_digest_blake3: String,
+    pub toolchain_refs: Vec<String>,
+    pub quota_bytes_max: u64,
+    pub quota_files_max: u32,
+    pub quota_snapshots_max: u32,
+    pub retention_class: String,
+    pub retention_workspace_count_max: u32,
+    pub retention_idle_generations_max: u64,
+    pub retention_age_generations_max: u64,
+    pub retention_quarantine_count_max: u32,
+    pub generation: u64,
+    pub lease: Option<StatefulWorkspaceLeaseBinding>,
+    pub sensitive_paths: Vec<String>,
+    pub secret_markers: Vec<String>,
+    pub scan_depth_max: u32,
+    pub path_bytes_max: u32,
+    pub snapshot_enabled: bool,
+    pub clean_rebuild_enabled: bool,
+    pub clean_rebuild_require_declared_inputs: bool,
+    /// Resolved by the local imperative shell after lease/containment checks.
+    /// This value is deliberately absent from serialized requests.
+    #[serde(skip, default)]
+    pub runtime_host_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

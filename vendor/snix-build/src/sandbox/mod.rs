@@ -6,6 +6,13 @@ use typed_builder::TypedBuilder;
 use crate::buildservice::AdditionalFile;
 use crate::buildservice::EnvVar;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SandboxMount {
+    pub host_path: PathBuf,
+    pub guest_path: PathBuf,
+    pub read_only: bool,
+}
+
 /// A sandbox builder.
 ///
 /// Its API is tailored to the needs of Snix builds, namely running sandboxed commands
@@ -87,6 +94,11 @@ pub struct SandboxSpec {
     #[builder(default)]
     provide_shell: Option<PathBuf>,
 
+    /// Explicit prevalidated host mounts. Host paths are shell facts and are
+    /// never part of serialized build-request identity.
+    #[builder(default, setter(into))]
+    mounts: Vec<SandboxMount>,
+
     /// Whether to allow network access inside the sandbox.
     #[builder(default)]
     allow_network: bool,
@@ -123,6 +135,10 @@ impl SandboxSpec {
 
     pub fn allow_network(&self) -> bool {
         self.allow_network
+    }
+
+    pub fn mounts(&self) -> impl IntoIterator<Item = &SandboxMount> {
+        &self.mounts
     }
 
     pub fn inputs_provider(&self) -> &InputsProvider {
