@@ -472,7 +472,7 @@ pub fn plan_remote_resource_lease_resize(
         .collect::<Vec<_>>();
     let mut plan = plan_remote_resource_reservation(scope.clone(), inventory, requirements, &others)?;
     plan.reason_code = RemoteResourceReasonCode::LeaseResized;
-    debug_assert_ne!(plan.lease.requirement_digest_blake3.is_empty(), true);
+    debug_assert!(!plan.lease.requirement_digest_blake3.is_empty());
     debug_assert_eq!(others.len().saturating_add(1), active_leases.len());
     Ok(plan)
 }
