@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
 use crunch_wasm_component_core::Blake3Identity;
+use crunch_wasm_component_core::ComponentBuildReport;
 use crunch_wasm_component_core::ComponentManifest;
 use crunch_wasm_component_core::GeneratedInputCandidate;
+use crunch_wasm_component_core::MaterializationBundle;
 use crunch_wasm_component_core::PackageMaterialization;
 use serde::Deserialize;
 use serde::Serialize;
@@ -33,6 +35,7 @@ pub struct ComponentPipelineRequest {
     pub generated_inputs: Vec<GeneratedInputCandidate>,
     pub toolchain_manifest: String,
     pub source_root: String,
+    pub wit_relative_path: String,
     pub package_materializations: Vec<PackageMaterialization>,
     pub cargo_component_relative_path: String,
     pub composition_dependencies: Vec<CompositionDependency>,
@@ -89,6 +92,7 @@ pub struct ToolExecutionReceipt {
     pub program: String,
     pub program_blake3: Blake3Identity,
     pub args: Vec<String>,
+    pub read_only_inputs: Vec<String>,
     pub network_admitted: bool,
     pub status: String,
     pub stdout_blake3: Blake3Identity,
@@ -112,6 +116,8 @@ pub struct PipelineExecutionReport {
     pub stage_receipts: Vec<ToolExecutionReceipt>,
     pub artifacts: Vec<PipelineArtifact>,
     pub blockers: Vec<PipelineBlocker>,
+    pub component_report: Option<ComponentBuildReport>,
+    pub materialization_bundle: Option<MaterializationBundle>,
     pub final_status: String,
     pub report_blake3: Blake3Identity,
     pub non_claims: Vec<String>,

@@ -1,11 +1,16 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::fs::File;
 use std::io::Read;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::process::Stdio;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use crunch_wasm_component_core::Blake3Identity;
 use serde_json::Value;
@@ -16,13 +21,21 @@ use crate::model::TOOLCHAIN_MANIFEST_SCHEMA;
 use crate::model::ToolRecord;
 use crate::model::ToolchainManifest;
 use crate::model::VerifiedToolchain;
+use crate::process::ToolLimits;
+use crate::process::configure_process_group;
+use crate::process::join_drain;
+use crate::process::spawn_drain;
+use crate::process::wait_bounded;
 
 const HASH_BUFFER_CAPACITY_BYTES: usize = 64 * 1024;
 const MAX_TOOL_BINARY_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_TOOLCHAIN_MANIFEST_BYTES: u64 = 1024 * 1024;
 const MAX_VERSION_OUTPUT_BYTES: usize = 16 * 1024;
+const VERSION_PROBE_TIMEOUT_MS: u64 = 10 * 1000;
+const COHORT_CANONICAL_TERMINATOR: u8 = b'\n';
 
 pub fn verify_toolchain_manifest(path: &Path) -> Result<VerifiedToolchain, Error> {
-    let bytes = fs::read(path).map_err(|error| Error::io("reading toolchain manifest", path, error))?;
+    let bytes = read_regular_file_bounded(path, MAX_TOOLCHAIN_MANIFEST_BYTES, "toolchain manifest")?;
     let manifest: ToolchainManifest = serde_json::from_slice(&bytes)
         .map_err(|error| Error::Invalid(format!("parsing toolchain manifest {}: {error}", path.display())))?;
     validate_manifest_shape(&manifest)?;
@@ -43,8 +56,10 @@ impl VerifiedToolchain {
             .find(|record| record.name == name)
             .ok_or_else(|| Error::Invalid(format!("toolchain manifest is missing `{name}`")))?;
         let path = self.root.join(&record.path);
-        if !path.is_file() {
-            return Err(Error::Invalid(format!("tool `{name}` is missing at {}", path.display())));
+        reject_symlink_components(&path)?;
+        let metadata = fs::symlink_metadata(&path).map_err(|error| Error::io("reading tool metadata", &path, error))?;
+        if !metadata.file_type().is_file() {
+            return Err(Error::Invalid(format!("tool `{name}` is not a no-follow regular file at {}", path.display())));
         }
         debug_assert!(path.is_absolute());
         debug_assert!(!record.path.is_empty());
@@ -86,7 +101,7 @@ fn validate_manifest_shape(manifest: &ToolchainManifest) -> Result<(), Error> {
     Ok(())
 }
 
-fn tool_record_index<'a>(tools: &'a [ToolRecord]) -> Result<BTreeMap<&'a str, &'a ToolRecord>, Error> {
+fn tool_record_index(tools: &[ToolRecord]) -> Result<BTreeMap<&str, &ToolRecord>, Error> {
     let mut records = BTreeMap::new();
     for record in tools {
         if record.name.is_empty() || record.version.is_empty() || record.version_output.is_empty() {
@@ -108,12 +123,12 @@ fn verify_cohort_identity(bytes: &[u8], manifest: &ToolchainManifest) -> Result<
     let object = value
         .as_object_mut()
         .ok_or_else(|| Error::Invalid("toolchain manifest must be a JSON object".to_string()))?;
-    let removed = object.remove("cohort_identity_blake3");
-    if removed.is_none() {
+    if object.remove("cohort_identity_blake3").is_none() {
         return Err(Error::Invalid("toolchain manifest omits cohort identity".to_string()));
     }
-    let canonical = serde_json::to_vec(&value)
+    let mut canonical = serde_json::to_vec(&value)
         .map_err(|error| Error::Invalid(format!("serializing toolchain identity input: {error}")))?;
+    canonical.push(COHORT_CANONICAL_TERMINATOR);
     let measured = Blake3Identity::from_slice(&canonical);
     if measured != manifest.cohort_identity_blake3 {
         return Err(Error::Invalid("toolchain cohort identity does not match canonical manifest fields".to_string()));
@@ -144,11 +159,19 @@ fn verify_tools(root: &Path, tools: &[ToolRecord]) -> Result<(), Error> {
 }
 
 pub(crate) fn hash_file_bounded(path: &Path) -> Result<Blake3Identity, Error> {
-    let metadata = fs::metadata(path).map_err(|error| Error::io("reading file metadata", path, error))?;
+    reject_symlink_components(path)?;
+    let link_metadata =
+        fs::symlink_metadata(path).map_err(|error| Error::io("reading no-follow file metadata", path, error))?;
+    if !link_metadata.file_type().is_file() {
+        return Err(Error::Invalid(format!("file {} is not a no-follow regular file", path.display())));
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true).custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
+    let mut file = options.open(path).map_err(|error| Error::io("opening no-follow file for hashing", path, error))?;
+    let metadata = file.metadata().map_err(|error| Error::io("reading opened file metadata", path, error))?;
     if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_TOOL_BINARY_BYTES {
         return Err(Error::Invalid(format!("file {} has unsupported size {}", path.display(), metadata.len())));
     }
-    let mut file = File::open(path).map_err(|error| Error::io("opening file for hashing", path, error))?;
     let mut hasher = blake3::Hasher::new();
     let mut buffer = vec![0_u8; HASH_BUFFER_CAPACITY_BYTES];
     let mut bytes_read = 0_u64;
@@ -167,26 +190,97 @@ pub(crate) fn hash_file_bounded(path: &Path) -> Result<Blake3Identity, Error> {
         }
         hasher.update(&buffer[..count]);
     }
-    debug_assert_eq!(bytes_read, metadata.len());
+    let final_size = file.metadata().map_err(|error| Error::io("remeasuring hashed file", path, error))?.len();
+    if bytes_read != metadata.len() || final_size != metadata.len() {
+        return Err(Error::Io(format!("file size changed while hashing: {}", path.display())));
+    }
+    debug_assert_eq!(bytes_read, final_size);
     debug_assert!(bytes_read > 0);
     Blake3Identity::parse(hasher.finalize().to_hex().to_string())
         .map_err(|error| Error::Invalid(format!("encoding BLAKE3 for {}: {error}", path.display())))
 }
 
+fn read_regular_file_bounded(path: &Path, max_bytes: u64, label: &str) -> Result<Vec<u8>, Error> {
+    reject_symlink_components(path)?;
+    let link_metadata =
+        fs::symlink_metadata(path).map_err(|error| Error::io(&format!("reading {label} metadata"), path, error))?;
+    if !link_metadata.file_type().is_file() || link_metadata.len() == 0 || link_metadata.len() > max_bytes {
+        return Err(Error::Invalid(format!("{label} is not a bounded no-follow regular file: {}", path.display())));
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true).custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
+    let mut file = options.open(path).map_err(|error| Error::io(&format!("opening {label} no-follow"), path, error))?;
+    let initial_size = file
+        .metadata()
+        .map_err(|error| Error::io(&format!("reading opened {label} metadata"), path, error))?
+        .len();
+    if initial_size == 0 || initial_size > max_bytes {
+        return Err(Error::Invalid(format!("{label} exceeds its byte bound: {}", path.display())));
+    }
+    let capacity = usize::try_from(initial_size).map_err(|_| Error::Invalid(format!("{label} size exceeds usize")))?;
+    let mut bytes = Vec::with_capacity(capacity);
+    let mut buffer = vec![0_u8; HASH_BUFFER_CAPACITY_BYTES];
+    loop {
+        let count = file
+            .read(&mut buffer)
+            .map_err(|error| Error::io(&format!("reading bounded {label}"), path, error))?;
+        if count == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&buffer[..count]);
+        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > max_bytes {
+            return Err(Error::Invalid(format!("{label} exceeded its byte bound while reading: {}", path.display())));
+        }
+    }
+    let final_size = file.metadata().map_err(|error| Error::io(&format!("remeasuring {label}"), path, error))?.len();
+    let bytes_len = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    if bytes_len != initial_size || final_size != initial_size {
+        return Err(Error::Io(format!("{label} size changed while reading: {}", path.display())));
+    }
+    debug_assert_eq!(bytes_len, final_size);
+    debug_assert!(bytes_len <= max_bytes);
+    Ok(bytes)
+}
+
 fn read_version_output(path: &Path) -> Result<String, Error> {
-    let output = Command::new(path)
-        .arg("--version")
-        .env_clear()
-        .output()
-        .map_err(|error| Error::io("executing tool version probe", path, error))?;
-    if !output.status.success() {
+    read_version_output_with_limits(path, ToolLimits {
+        timeout_ms: VERSION_PROBE_TIMEOUT_MS,
+        output_bytes: u64::try_from(MAX_VERSION_OUTPUT_BYTES).unwrap_or(u64::MAX),
+    })
+}
+
+fn read_version_output_with_limits(path: &Path, limits: ToolLimits) -> Result<String, Error> {
+    reject_symlink_components(path)?;
+    let metadata =
+        fs::symlink_metadata(path).map_err(|error| Error::io("reading version probe metadata", path, error))?;
+    if !metadata.file_type().is_file() {
+        return Err(Error::Invalid(format!("tool version probe is not a no-follow regular file: {}", path.display())));
+    }
+    let mut command = Command::new(path);
+    command.arg("--version").env_clear().stdout(Stdio::piped()).stderr(Stdio::piped());
+    configure_process_group(&mut command)?;
+    let mut child = command.spawn().map_err(|error| Error::io("executing bounded tool version probe", path, error))?;
+    let stdout = child.stdout.take().ok_or_else(|| Error::Tool("version stdout pipe unavailable".to_string()))?;
+    let stderr = child.stderr.take().ok_or_else(|| Error::Tool("version stderr pipe unavailable".to_string()))?;
+    let output_limit_hit = Arc::new(AtomicBool::new(false));
+    let output_bytes_observed = Arc::new(AtomicU64::new(0));
+    let stdout_thread =
+        spawn_drain(stdout, limits.output_bytes, Arc::clone(&output_limit_hit), Arc::clone(&output_bytes_observed));
+    let stderr_thread =
+        spawn_drain(stderr, limits.output_bytes, Arc::clone(&output_limit_hit), Arc::clone(&output_bytes_observed));
+    let mut outcome = wait_bounded(&mut child, "tool-version", limits.timeout_ms, &output_limit_hit)?;
+    let mut bytes = join_drain(stdout_thread, "version stdout")?;
+    let stderr = join_drain(stderr_thread, "version stderr")?;
+    if output_limit_hit.load(Ordering::Acquire) {
+        outcome.failure = Some("output-limit-exceeded");
+    }
+    if let Some(failure) = outcome.failure {
+        return Err(Error::Invalid(format!("tool version probe {failure} for {}", path.display())));
+    }
+    if !outcome.status.success() {
         return Err(Error::Invalid(format!("tool version probe failed for {}", path.display())));
     }
-    let mut bytes = output.stdout;
-    bytes.extend_from_slice(&output.stderr);
-    if bytes.len() > MAX_VERSION_OUTPUT_BYTES {
-        return Err(Error::Invalid(format!("tool version output exceeded bound for {}", path.display())));
-    }
+    bytes.extend_from_slice(&stderr);
     let output = String::from_utf8(bytes).map_err(|error| {
         Error::Invalid(format!("tool version output was not UTF-8 for {}: {error}", path.display()))
     })?;
@@ -209,8 +303,37 @@ fn toolchain_root(manifest_path: &Path) -> Result<PathBuf, Error> {
     Ok(root.to_path_buf())
 }
 
+fn reject_symlink_components(path: &Path) -> Result<(), Error> {
+    let mut cursor = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::RootDir | Component::Prefix(_) => cursor.push(component.as_os_str()),
+            Component::Normal(part) => {
+                cursor.push(part);
+                if fs::symlink_metadata(&cursor).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+                    return Err(Error::Invalid(format!(
+                        "symlink file component is not admitted: {}",
+                        cursor.display()
+                    )));
+                }
+            }
+            Component::CurDir | Component::ParentDir => {
+                return Err(Error::Invalid(format!(
+                    "non-canonical toolchain path is not admitted: {}",
+                    path.display()
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn safe_relative_path(path: &Path) -> bool {
     !path.as_os_str().is_empty()
         && !path.is_absolute()
         && path.components().all(|component| matches!(component, Component::Normal(_)))
 }
+
+#[cfg(all(test, unix))]
+#[path = "toolchain_tests.rs"]
+mod tests;

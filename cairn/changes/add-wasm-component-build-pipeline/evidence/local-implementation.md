@@ -249,29 +249,84 @@ receipt_hash=3a0704340c1372945afe3a2277bc3702ee2ae404422c4ba62693a7a5e942ad22
 issues=[] valid=true verdict=PASS
 ```
 
+## Production execution checkpoint — 2026-07-12
+
+All Cargo commands below used `TMPDIR=/tmp/mantle-wasm-production-tmp`,
+`CARGO_TARGET_DIR=/tmp/mantle-wasm-production-target`, the pinned Rust/clang/mold
+and OpenSSL development environment, and `SNIX_BUILD_SANDBOX_SHELL=/bin/sh`.
+The CLI fixture additionally used
+`MANTLE_WASM_COMPONENT_TOOLCHAIN=/nix/store/dyp444vl42jc33wh2sl9qbhc39051gy8-mantle-wasm-component-toolchain-v1`.
+
+```text
+$ cargo test -p crunch-wasm-component --offline -- --nocapture
+running 11 tests
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+$ cargo clippy -p crunch-wasm-component --all-targets --offline -- -D warnings
+(exit 0)
+
+$ cargo test -p crunch-wasm-component-core --offline -- --nocapture
+running 33 tests
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+$ cargo test -p mantle --test stdlib_tests wasm_component --offline -- --nocapture
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out
+
+$ cargo test -p mantle --test wasm_component_cli --offline -- --nocapture
+running 2 tests
+test production_cli_executes_pinned_pipeline_and_persists_octet_blocker ... ok
+test production_cli_fails_closed_on_identity_interface_composition_and_runtime_drift ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+$ nix build .#checks.x86_64-linux.wasm-component-toolchain-identity --no-link -L
+(exit 0; no stdout/stderr)
+
+$ nix build .#checks.x86_64-linux.wasm-component-toolchain-compatibility --no-link -L
+(exit 0; no stdout/stderr)
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy cairn-policy/generated/cairn-policy.json
+{
+  "change_issues": [],
+  "changes": 6,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 32,
+  "valid": true
+}
+```
+
+The positive CLI test exercised the checked local `wkg.lock`, pinned `wkg`,
+`wit-bindgen`, offline Cargo `wasm32-wasip2`, build-local wasm-tools validation,
+WAC composition, WASI-Virt, remaining-import inspection, and Wasmtime smoke
+execution. It persisted only the bounded report and validated portable artifacts,
+then stopped nonzero at `octet-wasm-artifact-rail-unavailable`; it emitted no
+materialization bundle. The negative matrix rejected tool/package identity drift,
+incomplete composition bindings, remaining-import drift, and runtime-output
+drift. The post-review adapter rerun also covered no-follow checked-lock reads,
+bounded process output/time/descendant termination, and no-replace publication.
+
 ## Portfolio-search registry
 
 | Family | Mechanism | Evidence | State | Exact blocker / next check |
 |---|---|---|---|---|
-| typed-config-core | Nickel contracts plus no-std deterministic Rust core | 30 core tests, 27 stdlib tests, wasm check, Clippy, Tiger Style | validated for tasks 1-2 | None inside the declared pure/config slice |
-| packaged-tool-cohort | Independently packaged component tools | Local package metadata exposed some independent versions, but no complete compatible cohort | blocked | Establish one source/pin set including WASI-Virt and wasm-component-ld, then run cohort fixtures |
-| registry-and-build-shell | Explicit wkg fetch followed by offline compilation/WAC/WASI-Virt execution | No locally executed resolver, immutable package fetch, component compile, composition, or virtualization artifact | blocked | Provide/package the complete cohort, then prove local-registry positive and stale/tampered negative fixtures |
-| independent-artifact-rail | Invoke Octet over exact portable bytes | Core binds exact report/profile/cohort identities without interpreting findings | blocked | Verify Octet's concrete artifact-rail CLI/API and run it on a cohort-built portable artifact |
-| transform-and-native-shell | Execute Wizer and Wasmtime | Pure drift/ambient/target/config admission is tested | blocked | Run repeated clean Wizer and target-matrix Wasmtime fixtures with exact remeasurement |
-
-Exploration used the repository, authoritative wasm-pkg-tools and WAC READMEs,
-local package metadata, one advisory VibeThinker audit, and deterministic local
-checks. The advisory audit agreed tasks 1-2 are locally supported; its suggested
-non-repository `nix test -a ...` commands were not treated as evidence.
+| typed-config-core | Nickel contracts plus no-std deterministic Rust core | 33 core tests and five focused stdlib tests | validated for tasks 1-2 | None inside the declared pure/config slice |
+| packaged-tool-cohort | One Nix-owned physical executable cohort with manifest/tool BLAKE3 identities | Identity and Rust 1.90.0/WASI 0.2.3 compatibility checks plus CLI preflight | validated for task 4 | Re-run compatibility fixtures on any cohort member/configuration change |
+| registry-and-build-shell | Checked local wkg resolution followed by network-denied Cargo/WAC/WASI-Virt execution | Positive CLI artifacts/receipts and negative tool/package/composition/import cases | validated for tasks 3, 5, and 6 | Live OCI resolution remains deliberately unadmitted in this local-only shell |
+| independent-artifact-rail | Invoke Octet over exact portable bytes | The pipeline fails closed with the authoritative Octet blocker | blocked | Canonical Octet has no implemented Wasm artifact rail CLI/package |
+| component-transform | Apply Wizer to Component Model bytes | Wizer 10.0.0 accepts core modules, not components | blocked | No unsafe core-module fallback is admitted |
+| native-precompile-and-bundle | Wasmtime AOT plus consumer materialization handoff | Pure admission contracts exist; no production AOT or complete bundle was emitted | blocked | Implement exact precompile receipts only after Octet admission, then emit/reverify the complete bundle |
 
 ## Remaining blocker and non-claims
 
-Tasks 3-15 remain unchecked because their completion requires one or more of:
-network-admitted `wkg` resolution, a checked real lock/materialization fixture,
-a proven compatibility cohort, component compilation, WAC/WASI-Virt execution,
-wasm-tools and Octet execution, repeated Wizer output, Wasmtime precompile
-output, materialization-bundle persistence, or build/release evidence
-integration. Independent package availability is not compatibility evidence,
-and a pure admission DTO is not tool-execution evidence.
+All tasks from the combined validation/Octet task onward remain unchecked. Build-local wasm-tools validation executed, but the
+combined validation task cannot complete without Octet over the same bytes.
+Wizer component transformation, Wasmtime AOT/precompile, final materialization
+bundle creation, release/attestation integration, the full negative fixture
+matrix, and final lifecycle gates remain unproven. Wasmtime smoke execution is
+not AOT evidence, runtime authority, behavioral correctness, or release
+eligibility.
 
 No accepted spec was synced and the change was not archived.

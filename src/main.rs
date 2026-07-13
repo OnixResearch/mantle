@@ -88,6 +88,7 @@ mod structured_refactor;
 mod transcript_cmd;
 mod vendor_source_manifest;
 mod verification_gauntlet_cmd;
+mod wasm_component_cmd;
 mod witness_handoff;
 mod witness_rebuild;
 
@@ -264,6 +265,12 @@ enum Command {
         /// Offer bounded delta transfer with full-NAR streaming fallback to the remote builder.
         #[arg(long)]
         remote_delta: bool,
+    },
+
+    /// Build a portable WebAssembly component through the pinned production cohort.
+    WasmComponent {
+        #[command(subcommand)]
+        action: WasmComponentAction,
     },
 
     /// Run no-mutate operator preflight checks for a workflow profile
@@ -798,6 +805,27 @@ enum Command {
         /// Arguments to pass to the executable (after --)
         #[arg(last = true)]
         run_args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum WasmComponentAction {
+    /// Evaluate a typed Nickel request and execute every available component stage.
+    Build {
+        /// Typed Nickel expression producing a ComponentPipelineRequest.
+        request: PathBuf,
+
+        /// New output directory for portable artifacts and the execution report.
+        #[arg(long)]
+        out: PathBuf,
+
+        /// Additional Nickel import path; repeatable.
+        #[arg(long = "import-path", short = 'I')]
+        import_paths: Vec<PathBuf>,
+
+        /// Scratch parent; must equal the output parent for atomic publication.
+        #[arg(long)]
+        scratch_parent: Option<PathBuf>,
     },
 }
 
@@ -2403,6 +2431,7 @@ fn emit_runtime_fingerprint(args: &Args, ctx: &RunContext) -> Result<(), RunErro
 fn command_label(command: &Command) -> &'static str {
     match command {
         Command::Build { .. } => "build",
+        Command::WasmComponent { .. } => "wasm-component.build",
         Command::Doctor { .. } => "doctor",
         Command::Import { .. } => "import",
         Command::Filegen { action } => filegen_command_label(action),
@@ -2739,6 +2768,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             evaluator_version,
         ),
         Command::Build { .. } => run_build_from_command(ctx, &args.command),
+        Command::WasmComponent { action } => run_wasm_component_command(ctx, action),
         Command::Bootstrap { .. } => run_bootstrap_from_command(ctx, &args.command),
         Command::Release { action } => run_release_command(ctx, action.clone()),
         Command::Log { query, list } => log_cmd::cmd_log(query.as_deref(), *list),
@@ -2775,6 +2805,23 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Shell { .. } => run_shell_from_command(ctx, &args.command),
         Command::Develop { .. } => run_develop_from_command(ctx, &args.command),
         Command::Run { .. } => run_run_from_command(ctx, &args.command),
+    }
+}
+
+fn run_wasm_component_command(ctx: &RunContext, action: &WasmComponentAction) -> Result<(), RunError> {
+    match action {
+        WasmComponentAction::Build {
+            request,
+            out,
+            import_paths,
+            scratch_parent,
+        } => wasm_component_cmd::cmd_wasm_component_build(wasm_component_cmd::WasmComponentBuildOptions {
+            request_path: request,
+            import_paths,
+            output_dir: out,
+            scratch_parent: scratch_parent.as_deref(),
+            json: ctx.json,
+        }),
     }
 }
 
