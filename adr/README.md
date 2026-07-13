@@ -30,3 +30,4 @@ compatibility surface, crate name, or historical decision.
 | [0021](0021-publish-release-bundles-with-an-atomic-no-clobber-commit.md) | Publish release bundles with an atomic no-clobber commit | Accepted |
 | [0022](0022-bound-kernelscript-as-planning-only-experiment.md) | Bound KernelScript as a planning-only experiment | Proposed |
 | [0023](0023-require-content-bound-release-rebuild-authority.md) | Require content-bound authority for release rebuild proofs | Accepted |
+| [0024](0024-separate-action-results-from-cas-and-execution.md) | Separate shared action results from CAS and execution | Proposed |
