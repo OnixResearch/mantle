@@ -14,6 +14,8 @@ use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::process::ExitStatus;
+use std::time::Duration;
 
 use crate::rust_bootstrap_patch_plan::RustBootstrapPatchCapabilities;
 use crate::rust_bootstrap_patch_plan::RustBootstrapPatchOperation;
@@ -51,6 +53,8 @@ use crate::source_toolchain_closure::ToolchainSourceKind;
 pub(crate) const RUST_SOURCE_PROVIDER_BLOCKED_REASON: &str = "source-built Rust provider materialization is not implemented: Mantle has no receipt-bound Rust-from-source bootstrap that can build rustc/cargo/rustlib without prebuilt Rust";
 
 const DIRECTORY_DIGEST_MAX_ENTRIES: usize = 1_000_000;
+const GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS: u32 = 4;
+const GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS: u64 = 5;
 const ELF_MAGIC: [u8; ELF_MAGIC_LEN] = [0x7f, b'E', b'L', b'F'];
 const ELF_MAGIC_LEN: usize = 4;
 const RUST_SOURCE_PROVIDER_PLAN_FILE: &str = "rust-source-plan.ncl";
@@ -3194,6 +3198,54 @@ fn write_rustc_final_sources_manifest(
     write_json_pretty(&boundary.sources_manifest_path, &manifest, "rustc final sources manifest")
 }
 
+fn should_retry_generated_script_launch(error: &std::io::Error, attempt: u32) -> bool {
+    debug_assert!(attempt > 0);
+    debug_assert!(attempt <= GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS);
+    if attempt >= GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        error.raw_os_error() == Some(libc::ETXTBSY)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = error;
+        false
+    }
+}
+
+fn run_generated_script_with_log(script_path: &Path, log_path: &Path) -> Result<ExitStatus, RustSourceProviderError> {
+    debug_assert!(GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS > 1);
+    debug_assert!(GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS > 0);
+    if script_path == log_path {
+        return Err(RustSourceProviderError::Build("generated script path and build log path must differ".to_string()));
+    }
+    let log = File::create(log_path)
+        .map_err(|err| RustSourceProviderError::Build(format!("create {}: {err}", log_path.display())))?;
+    for attempt in 1..=GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS {
+        let stdout = log
+            .try_clone()
+            .map_err(|err| RustSourceProviderError::Build(format!("clone {}: {err}", log_path.display())))?;
+        let stderr = log
+            .try_clone()
+            .map_err(|err| RustSourceProviderError::Build(format!("clone {}: {err}", log_path.display())))?;
+        match Command::new(script_path).stdout(stdout).stderr(stderr).status() {
+            Ok(status) => return Ok(status),
+            Err(error) if should_retry_generated_script_launch(&error, attempt) => {
+                std::thread::sleep(Duration::from_millis(GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS));
+            }
+            Err(error) => {
+                return Err(RustSourceProviderError::Build(format!("launch {}: {error}", script_path.display())));
+            }
+        }
+    }
+    Err(RustSourceProviderError::Build(format!(
+        "launch {} exhausted bounded retry attempts",
+        script_path.display()
+    )))
+}
+
 fn run_rustc_stage1_build(
     boundary: &RustSourceProviderRustcStage1Boundary,
     verbose: bool,
@@ -3204,16 +3256,7 @@ fn run_rustc_stage1_build(
         eprintln!("  rustc_stage1_build_script: {}", boundary.script_path.display());
         eprintln!("  rustc_stage1_build_log: {}", boundary.build_log_path.display());
     }
-    let log = File::create(&boundary.build_log_path).map_err(|err| {
-        RustSourceProviderError::Build(format!("create {}: {err}", boundary.build_log_path.display()))
-    })?;
-    let status = Command::new(&boundary.script_path)
-        .stdout(log.try_clone().map_err(|err| {
-            RustSourceProviderError::Build(format!("clone {}: {err}", boundary.build_log_path.display()))
-        })?)
-        .stderr(log)
-        .status()
-        .map_err(|err| RustSourceProviderError::Build(format!("launch {}: {err}", boundary.script_path.display())))?;
+    let status = run_generated_script_with_log(&boundary.script_path, &boundary.build_log_path)?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
             .map(|bytes| bounded_output_text(&bytes))
@@ -3260,16 +3303,7 @@ fn run_rustc_final_build(
         eprintln!("  rustc_final_build_script: {}", boundary.script_path.display());
         eprintln!("  rustc_final_build_log: {}", boundary.build_log_path.display());
     }
-    let log = File::create(&boundary.build_log_path).map_err(|err| {
-        RustSourceProviderError::Build(format!("create {}: {err}", boundary.build_log_path.display()))
-    })?;
-    let status = Command::new(&boundary.script_path)
-        .stdout(log.try_clone().map_err(|err| {
-            RustSourceProviderError::Build(format!("clone {}: {err}", boundary.build_log_path.display()))
-        })?)
-        .stderr(log)
-        .status()
-        .map_err(|err| RustSourceProviderError::Build(format!("launch {}: {err}", boundary.script_path.display())))?;
+    let status = run_generated_script_with_log(&boundary.script_path, &boundary.build_log_path)?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
             .map(|bytes| bounded_output_text(&bytes))
@@ -4202,16 +4236,7 @@ fn run_first_stage_build(
         eprintln!("  first_stage_build_script: {}", boundary.script_path.display());
         eprintln!("  first_stage_build_log: {}", boundary.build_log_path.display());
     }
-    let log = File::create(&boundary.build_log_path).map_err(|err| {
-        RustSourceProviderError::Build(format!("create {}: {err}", boundary.build_log_path.display()))
-    })?;
-    let status = Command::new(&boundary.script_path)
-        .stdout(log.try_clone().map_err(|err| {
-            RustSourceProviderError::Build(format!("clone {}: {err}", boundary.build_log_path.display()))
-        })?)
-        .stderr(log)
-        .status()
-        .map_err(|err| RustSourceProviderError::Build(format!("launch {}: {err}", boundary.script_path.display())))?;
+    let status = run_generated_script_with_log(&boundary.script_path, &boundary.build_log_path)?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
             .map(|bytes| bounded_output_text(&bytes))
@@ -7044,6 +7069,17 @@ mod tests {
     const RUST_BOOTSTRAP_PATCH_PLAN_MIN_OPERATIONS: usize = 6;
     #[cfg(unix)]
     const EXECUTABLE_MODE: u32 = 0o755;
+
+    #[cfg(unix)]
+    #[test]
+    fn generated_script_launch_retry_is_bounded_and_etxtbsy_only() {
+        let transient = std::io::Error::from_raw_os_error(libc::ETXTBSY);
+        let permanent = std::io::Error::from_raw_os_error(libc::EACCES);
+
+        assert!(should_retry_generated_script_launch(&transient, 1));
+        assert!(!should_retry_generated_script_launch(&transient, GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS));
+        assert!(!should_retry_generated_script_launch(&permanent, 1));
+    }
 
     #[test]
     fn downstream_native_consumers_do_not_branch_on_rust_bootstrap_internals() {

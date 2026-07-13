@@ -1224,7 +1224,15 @@ pub fn open_remote_transfer_authority_file(path: &Path) -> Result<File, String> 
 
 #[derive(Debug)]
 struct RemoteTransferSessionLock {
-    _file: File,
+    file: File,
+}
+
+impl Drop for RemoteTransferSessionLock {
+    fn drop(&mut self) {
+        // Closing alone is insufficient when a concurrent fork briefly inherits
+        // this open file description before exec closes its O_CLOEXEC copy.
+        let _ = FileExt::unlock(&self.file);
+    }
 }
 
 fn acquire_remote_transfer_session_lock(
@@ -1242,7 +1250,7 @@ fn acquire_remote_transfer_session_lock(
     }
     assert!(metadata.is_file());
     assert_eq!(path.parent(), Some(lock_dir.as_path()));
-    Ok(RemoteTransferSessionLock { _file: file })
+    Ok(RemoteTransferSessionLock { file })
 }
 
 fn open_or_create_regular_lock_no_follow(path: &Path) -> Result<File, String> {
@@ -2128,6 +2136,22 @@ mod tests {
         assert!(error.starts_with("remote-transfer-session-lock-busy:"));
         assert!(!receiver.exists());
         drop(guard);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn session_lock_drop_unlocks_even_when_a_fork_like_descriptor_survives() {
+        let root = tempfile::tempdir().unwrap();
+        let prepared = prepared_fixture(root.path());
+        let state_dir = root.path().join("state");
+        let scope = remote_transfer_scope(&prepared.manifest);
+        let guard = acquire_remote_transfer_session_lock(&state_dir, &scope.session_id).unwrap();
+        let inherited_descriptor = guard.file.try_clone().unwrap();
+        assert!(inherited_descriptor.metadata().unwrap().is_file());
+
+        drop(guard);
+        let reacquired = acquire_remote_transfer_session_lock(&state_dir, &scope.session_id).unwrap();
+        assert!(reacquired.file.metadata().unwrap().is_file());
     }
 
     #[test]
