@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+  "crates/crunch-action-result-core",
   "crates/crunch-eval",
   "crates/crunch-glue",
   "crates/crunch-store",
@@ -36,6 +37,7 @@ license = "AGPL-3.0-or-later"
 [workspace.metadata.tigerstyle]
 default_scope = [
   "-p", "mantle",
+  "-p", "crunch-action-result-core",
   "-p", "crunch-attestation",
   "-p", "crunch-attestation-core",
   "-p", "crunch-build",
