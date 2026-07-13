@@ -8297,6 +8297,8 @@ mod tests {
             contains_raw_frontend_eval: true,
             payload: fixture_payload(),
             expected_outputs: fixture_expected_outputs(),
+            production_attempt: None,
+            transfer_policy: None,
         };
         assert!(validate_concrete_request(&request, &ticket).is_err());
         redeem_after_queue(&mut ticket, false).unwrap();
@@ -8355,6 +8357,8 @@ mod tests {
             contains_raw_frontend_eval: false,
             payload: fixture_payload(),
             expected_outputs: fixture_expected_outputs(),
+            production_attempt: None,
+            transfer_policy: None,
         };
         validate_concrete_request(&request, &ticket).unwrap();
         redeem_after_queue(&mut ticket, true).unwrap();
@@ -8684,6 +8688,7 @@ mod tests {
             args: vec!["-c".to_string(), format!("sleep {SLEEP_TEST_SECS}")],
             input_frames: Vec::new(),
             timeout_secs: TIMEOUT_TEST_SECS,
+            production_transfer: None,
         };
         let err = run_stdio_remote_child(&command).expect_err("sleeping child times out");
         let rendered = err.to_string();
@@ -9061,6 +9066,7 @@ mod tests {
             args: Vec::new(),
             input_frames: remote_client_request_frames(&client),
             timeout_secs: DEFAULT_REMOTE_STDIO_TIMEOUT_SECS,
+            production_transfer: None,
         };
 
         populate_remote_input_upload_artifacts_from_store(&client_store, &mut command, &client.request)
@@ -9114,6 +9120,7 @@ mod tests {
             args: Vec::new(),
             input_frames: remote_client_request_frames(&client),
             timeout_secs: DEFAULT_REMOTE_STDIO_TIMEOUT_SECS,
+            production_transfer: None,
         };
 
         populate_remote_input_upload_artifacts_from_store_or_source_state(
@@ -9302,6 +9309,7 @@ mod tests {
             args: Vec::new(),
             input_frames: remote_client_request_frames(&client),
             timeout_secs: DEFAULT_REMOTE_STDIO_TIMEOUT_SECS,
+            production_transfer: None,
         };
         populate_remote_input_upload_artifacts_from_store(&client_store, &mut command, &client.request)
             .await
@@ -9656,6 +9664,7 @@ mod tests {
                     refs: vec!["input-a".to_string()],
                     byte_count: 1,
                     artifacts: Vec::new(),
+                    streamed: false,
                 },
             }),
             (RemoteFrameDirection::BuilderToClient, RemoteFrame::BuildQueued {
@@ -11048,6 +11057,7 @@ mod tests {
             store_prefix: "/mantle/store".to_string(),
             outputs: vec![output],
             transfer_artifacts,
+            streamed_manifest: None,
             transfer,
         }
     }
@@ -11169,6 +11179,8 @@ mod tests {
             contains_raw_frontend_eval: false,
             payload: fixture_payload(),
             expected_outputs: fixture_expected_outputs(),
+            production_attempt: None,
+            transfer_policy: None,
         }
     }
 
