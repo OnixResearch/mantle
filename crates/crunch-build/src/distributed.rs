@@ -11,9 +11,11 @@ use serde::Serialize;
 
 mod remote_attempt;
 mod remote_attempt_log;
+mod remote_telemetry;
 mod remote_transfer;
 pub use remote_attempt::*;
 pub use remote_attempt_log::*;
+pub use remote_telemetry::*;
 pub use remote_transfer::*;
 
 use crate::scheduling::ContentLocalityClass;
