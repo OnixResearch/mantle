@@ -9,6 +9,7 @@ use serde_json::Value;
 const INVENTORY_PATH: &str = "schemas/machine-contracts/inventory.ncl";
 const CONTRACTED_SURFACE_COUNT: u32 = 16;
 const UTF8_EXACT_BYTES: u32 = 4;
+const CONTRACT_EVALUATION_STACK_BYTES: usize = 32 * 1024 * 1024;
 
 #[derive(Debug, Deserialize)]
 struct RegistryProjection {
@@ -141,6 +142,15 @@ fn shared_oci_identity_predicates_are_callable_and_fail_closed() {
 
 #[test]
 fn generated_contracts_accept_positive_and_reject_adversarial_fixtures() {
+    let evaluator = std::thread::Builder::new()
+        .name("machine-contract-evaluator".to_string())
+        .stack_size(CONTRACT_EVALUATION_STACK_BYTES)
+        .spawn(run_generated_contract_fixture_checks)
+        .expect("spawn bounded-stack contract evaluator");
+    evaluator.join().expect("contract evaluator must not panic");
+}
+
+fn run_generated_contract_fixture_checks() {
     let registry = load_registry();
     for surface in registry.surfaces.into_iter().filter(|surface| surface.class == "contracted") {
         let contract = repository_root().join(&surface.artifacts.generated_contract);
