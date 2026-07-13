@@ -14827,7 +14827,7 @@ mod tests {
         let mut worker = fixture_worker_registration();
         worker.workspace_policy = Some(registration);
         apply_worker_registration(&mut state, worker).unwrap();
-        let status = remote_worker_status(&state.workers["builder-1"]).unwrap();
+        let status = remote_worker_status(&state, &state.workers["builder-1"]).unwrap();
         assert!(status.workspace_modes.contains(&"mutable-session".to_string()));
         assert_eq!(status.workspace_authority_class.as_deref(), Some("tenant-a"));
         let request = crunch_build::WorkspaceLeaseRequest {
@@ -14858,6 +14858,24 @@ mod tests {
         let rejected = apply_remote_workspace_lease(&mut restarted, "builder-1", &stale).unwrap();
         assert_eq!(rejected.disposition, crunch_build::WorkspaceLeaseDisposition::Rejected);
         assert_eq!(restarted, before);
+    }
+
+    #[test]
+    fn worker_reregistration_without_workspace_policy_revokes_stale_authority() {
+        let mut state = RemoteCoordinatorState::default();
+        let mut admitted = fixture_worker_registration();
+        admitted.workspace_policy = Some(crate::remote_farm_config::RemoteWorkspacePolicy {
+            modes: vec![crate::remote_farm_config::RemoteWorkspaceMode::MutableSession],
+            authority_class: "tenant-a".to_string(),
+            ..crate::remote_farm_config::RemoteWorkspacePolicy::default()
+        });
+        apply_worker_registration(&mut state, admitted).unwrap();
+        assert!(state.workspace_registrations.contains_key("builder-1"));
+
+        apply_worker_registration(&mut state, fixture_worker_registration()).unwrap();
+
+        assert!(!state.workspace_registrations.contains_key("builder-1"));
+        assert!(state.workers["builder-1"].workspace_policy.is_none());
     }
 
     #[test]
