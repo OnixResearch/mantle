@@ -74,6 +74,8 @@ scheduling_policy: 3 passed; 0 failed
 format: PASS
 ```
 
+Pueue task `2991` reran the focused stale-locality negative and the complete `remote_build::tests` suite after final durable-generation validation; the focused test passed and the complete suite again reported `123 passed; 0 failed`.
+
 The suites include both positive and negative cases for every changed boundary: valid reserve/release/replay, every individual and aggregate capacity blocker, zero/oversized/duplicate/mismatched shapes, arithmetic safety, stale mutation, snapshot corruption, active and terminal restart recovery, receiver full/partial/missing facts, wrong scope/generation/unverified hints, hard-blocker precedence, stable worker ordering, starvation authority, concurrent coordinator locking, registration shrink, worker-generation rollover, all terminal release causes, scheduling-only identity invariance, semantic identity change, and Nickel type/runtime parity.
 
 ### Lint evidence and bounded blocker

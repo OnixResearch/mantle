@@ -5361,10 +5361,12 @@ fn validate_coordinator_resource_state(state: &RemoteCoordinatorState) -> Result
         validate_job_resource_linkage(state, job)?;
         if let Some(locality) = &job.locality {
             validate_verified_locality_summary(locality)?;
+            validate_locality_worker_binding(state, locality)?;
         }
     }
     for locality in state.verified_locality_observations.values() {
         validate_verified_locality_summary(locality)?;
+        validate_locality_worker_binding(state, locality)?;
     }
     debug_assert_eq!(leases.len(), state.resource_leases.len());
     debug_assert!(state.verified_locality_observations.len() <= MAX_REMOTE_LOCALITY_OBSERVATIONS);
@@ -5414,6 +5416,23 @@ fn validate_job_resource_linkage(
     }
     debug_assert_eq!(lease.lease_id_blake3, lease_id);
     debug_assert!(job.resource_requirements.is_some());
+    Ok(())
+}
+
+fn validate_locality_worker_binding(
+    state: &RemoteCoordinatorState,
+    summary: &RemoteVerifiedLocalitySummary,
+) -> Result<(), String> {
+    let current_generation = state
+        .workers
+        .get(&summary.worker_endpoint_id)
+        .map(|worker| worker.worker_generation)
+        .ok_or_else(|| RemoteLocalityReasonCode::WorkerGenerationStale.as_str().to_string())?;
+    if current_generation != summary.worker_generation {
+        return Err(RemoteLocalityReasonCode::WorkerGenerationStale.as_str().to_string());
+    }
+    debug_assert!(current_generation > 0);
+    debug_assert!(!summary.worker_endpoint_id.is_empty());
     Ok(())
 }
 
@@ -12442,6 +12461,11 @@ mod tests {
         apply_worker_registration(&mut state, local).expect("new worker generation registers");
         let stale = plan_coordinator_dispatch(&state, &request, &fixture_assignment_nonce("locality-stale"))
             .expect("stale locality placement plans");
+        assert!(state.verified_locality_observations.is_empty());
+        let stale_key = verified_locality_observation_key(&summary);
+        state.verified_locality_observations.insert(stale_key, summary.clone());
+        let stale_status = coordinator_status_snapshot("a-worker", DEFAULT_REMOTE_CONCURRENCY, &state, &[], &[])
+            .expect_err("stale durable locality cannot be reported as current");
 
         assert_eq!(summary.content_locality, crunch_build::ContentLocalityClass::FullyPresent);
         assert_eq!(summary.transfer_cost, crunch_build::TransferCostClass::None);
@@ -12451,7 +12475,7 @@ mod tests {
         assert!(
             matches!(blocked, RemoteCoordinatorDispatchDecision::Dispatch { worker_endpoint_id, .. } if worker_endpoint_id == "a-worker")
         );
-        assert!(state.verified_locality_observations.is_empty());
+        assert_eq!(stale_status, RemoteLocalityReasonCode::WorkerGenerationStale.as_str());
         assert!(
             matches!(stale, RemoteCoordinatorDispatchDecision::Dispatch { worker_endpoint_id, .. } if worker_endpoint_id == "a-worker")
         );
