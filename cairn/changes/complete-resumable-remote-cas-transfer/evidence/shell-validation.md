@@ -11,7 +11,8 @@ Date: 2026-07-12
 - Upload and download use the same receiver-demanded quota/credit path. `lib/remote-builders.ncl` now exports typed endpoint `transfer_policy`; `src/remote_farm_config.rs` deserializes and validates the same `RemoteTransferPolicy` used by the runtime shell.
 - Runtime streaming reports can only be constructed from a completed `RemoteTransferShellReport`. Capability negotiation alone no longer causes `plan_output_transfer()` to claim streaming.
 - The bounded shell exposes deterministic delta-to-full-NAR fallback reasons and keeps transfer completion separate from caller-supplied admission facts.
-- **Production blocker:** repository call-graph inspection after integration found no non-test caller from the production remote client/server path into `prepare_remote_transfer`, `execute_prepared_remote_transfer`, `write_remote_transfer_data_chunk`, or `receive_remote_transfer_data_chunk`. `src/remote_build.rs::RemoteOutputTransferArtifact::payload` remains a whole `Vec<u8>`, `build_remote_response()` still emits `OutputTransferArtifact` frames carrying those bytes, and `extract_output_import_frames()` still consumes them. The shell evidence below is therefore a reusable implementation slice, not production-path completion evidence.
+- The production stdio/ssh-stdio state machine now carries bounded transfer manifests, receiver demand, one-chunk credits, data frames, acknowledgements, and completion around the existing build request/result control frames. Production NARs and PathInfo are spooled to files and ingested through ordinary signed output admission; whole inline payloads remain bounded fixture/bootstrap compatibility only.
+- Production dispatch holds an exclusive coordinator mutation guard across the fenced transfer/admission operation, validates the current attempt before and after durable writes and before completion, and invalidates stale attempt-scoped receiver/checkpoint facts before acknowledgement. Authority-bearing checkpoint, lock, chunk, artifact, temp, and parent-sync paths reject symlink/non-regular races and cap checkpoint reads at the hard limit plus one byte.
 
 ## Focused evidence
 
@@ -45,8 +46,14 @@ test result: ok. 104 passed; 0 failed; 0 ignored; 0 measured; 1282 filtered out;
 
 This confirms the compatibility full-NAR/delta fallback, ordinary input/output digest checks, remote output admission, durable coordinator fencing, and operator stdio rail remain intact.
 
+## Production path evidence
+
+Pueue task 1017 ran `remote_build::tests::`, `remote_transfer::tests::`, and the initial `remote_transfer_production` target in one isolated `&&`-chained packet. It reported 109 remote-build tests, 17 transfer-shell tests plus two successful subprocess legs, and 3 production integration tests, all passing. Those production tests prove multi-chunk upload/download interruption and missing-only restart, output reused-byte accounting, ordinary store admission, and fail-closed upload quota.
+
+Pueue task 1140 then ran current `crunch-store --lib`, `crunch-delta --lib`, and five production integration tests. The 199, 36, and 5 tests all passed. The added public `--remote-delta` rail proves stable `delta-unavailable` fallback to full-NAR bounded chunks and ordinary admission; the added 8 MiB rail proves more than 100 acknowledged chunks before byte-identical admission. Task 1166 independently reran those packages together with all 109 remote-build tests. Exact commands and result lines are in `evidence/final-validation.md`.
+
 ## Non-claims
 
-- Transfer completion does not claim output admission; every runtime report sets `output_admission_claimed = false`.
-- Production still uses whole-payload output DTOs; they are not yet confined to a compatibility-only capability and do not prove streaming.
+- Transfer completion does not itself claim output admission; production admission is a later ordinary signed PathInfo/store step asserted separately by the integration tests.
+- `delta-unavailable` is an honest fallback reason: the test proves both peers advertise delta but no production delta runtime is bound, so it does not claim a delta hit.
 - Kani harness execution remains unclaimed because `cargo-kani` was unavailable; source harness evidence remains in `evidence/core-validation.md`.

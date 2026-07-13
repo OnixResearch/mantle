@@ -31,3 +31,53 @@ The active Cairn change `complete-resumable-remote-cas-transfer` owns the implem
 ## Next action
 
 Replace whole production payload frames with the bounded receiver-driven transfer path, preserve ordinary output admission and fallback, then append current interruption/resume, stale-fence, tamper, quota, backpressure, large-output, and lifecycle evidence before making a completion claim.
+
+## Task 1017 production checkpoint (historical)
+
+### Question
+
+Do the implementation commits through `a6a8d615` and pueue task 1017 supersede the original production-streaming blocker?
+
+### Inspected evidence
+
+- Task 1017 passed 109 `remote_build::tests::`, 17 `remote_transfer::tests::` plus two subprocess legs, and 3 `remote_transfer_production` tests.
+- The production tests interrupt and resume multi-chunk input and output transfers across fresh client/server processes, inspect durable checkpoints, assert output reused bytes, compare imported output bytes, and reject an upload quota before checkpoint/admission.
+- The focused fence/security tests reject stale post-write/final-chunk state before acknowledgement or completion, reject stale input before source disclosure, reject excess credit with zero disclosure, and fail closed on hostile authority-state paths.
+
+### Decision
+
+Yes for the bounded production streaming replacement and interrupted production resume tasks: their previous blocker is superseded, and those task boxes may be checked. At task 1017 time, no broad completion claim followed because that packet did not yet prove production delta fallback, current store/delta package reruns, a production-scale 8 MiB rail, or Kani execution. The later fallback/scale checkpoint below supersedes those three production blockers while retaining the Kani non-claim.
+
+### Owner
+
+The active change remains the owner until the exact unchecked fallback and final validation tasks are proven.
+
+### Next action
+
+Exercise delta-unavailable and delta-failure fallback through the production interactive path, rerun the current store/delta and production-scale large-output rails, then reassess the final completion task. Do not sync or archive before those requirements are proven.
+
+## Fallback and scale checkpoint
+
+### Question
+
+Do the public capability, fallback, package, and 8 MiB results close the remaining production-transfer blockers?
+
+### Inspected evidence
+
+- Public `mantle build --remote-delta` maps to typed delta/full/streaming client capabilities; the production server advertises the same bounded set.
+- Pueue task 1140 passed 199 `crunch-store` library tests, 36 `crunch-delta` library tests, and 5 production integration tests.
+- The production fallback test observes `mode = "full"` plus `fallback_reason = "delta-unavailable"`, verifies multiple bounded chunks, and reaches ordinary admission without claiming delta reuse.
+- The production-scale test transfers and admits a byte-identical 8 MiB output through more than 100 acknowledged chunks.
+- Pueue task 1166 independently passed current store, delta, 109 remote-build, and five production integration tests.
+
+### Decision
+
+Yes. The exact production fallback and scale blockers are proven. Pueue task 1196 then reported valid Cairn validation and PASS proposal, design, and tasks receipts, so the fallback and final validation tasks may both be checked without broadening the Kani non-claim.
+
+### Owner
+
+The active change owns the final lifecycle gate packet. No sync/archive action is authorized in this session.
+
+### Next action
+
+Commit the lifecycle evidence and checked task markers. Do not sync or archive the active change in this session.

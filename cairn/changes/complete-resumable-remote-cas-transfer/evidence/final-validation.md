@@ -53,13 +53,85 @@ The final tasks receipt reported `"issues": []`, `"valid": true`, and `"verdict"
 - Task 745 exposed an existing `crunch-store::completeness` global-marker race under parallel libtest (`198 passed; 1 failed`). The full package had passed inside task 735; task 753 reran all 199 tests serialized and passed. No transfer implementation code or store test was changed to hide the race.
 - `cargo-kani` is unavailable. Kani source harnesses exist, but execution remains explicitly unclaimed.
 
-## Completion boundary
+## Task 735 completion boundary (historical)
 
-This packet proves the focused transfer core/shell, store, delta, existing remote-build behavior, bounded child-process 8 MiB shell rail, formatting, diff hygiene, typed Nickel policy, and current Cairn validation/gates. It does not sync or archive the change, push commits, claim Kani execution, or collapse transfer completion into output admission.
+That packet proved the focused transfer core/shell, store, delta, existing remote-build behavior, bounded child-process 8 MiB shell rail, formatting, diff hygiene, typed Nickel policy, and then-current Cairn validation/gates. It did not sync or archive the change, claim Kani execution, or collapse transfer completion into output admission.
 
-A post-integration adversarial call-graph audit found that this packet does **not** satisfy `r[verification_evidence.production_transfer_completion_claim]`: the 8 MiB child-process rail calls `execute_prepared_remote_transfer` directly, while production `src/remote_build.rs` continues to emit and consume `RemoteOutputTransferArtifact { payload: Vec<u8> }` through `OutputTransferArtifact` frames. Searches for `execute_prepared_remote_transfer`, `write_remote_transfer_data_chunk`, and `receive_remote_transfer_data_chunk` found no production remote client/server caller. Production streaming/resume therefore remains incomplete and unproven; the production replacement, production fallback/admission composition, production interruption test, and final completion task are unchecked.
+At that point, an adversarial call-graph audit correctly found that the packet did **not** satisfy `r[verification_evidence.production_transfer_completion_claim]`: the 8 MiB child-process rail called `execute_prepared_remote_transfer` directly while the production framed path still used whole payload vectors. The later task 1017 evidence below supersedes that production-path blocker, but not the still-unproven production delta fallback or final broad completion rail.
 
-## Post-completion Cairn packet
+## Production integration evidence (pueue task 1017)
+
+Task 1017 created its isolated TMPDIR first and ran this exact `&&`-chained packet after commits through `a6a8d615`:
+
+```text
+cargo test -p mantle --bin mantle remote_build::tests:: -- --nocapture
+cargo test -p mantle --bin mantle remote_transfer::tests:: -- --nocapture
+cargo test -p mantle --test remote_transfer_production -- --nocapture
+```
+
+The full pueue log reported:
+
+```text
+running 109 tests
+test result: ok. 109 passed; 0 failed; 0 ignored; 0 measured; 1318 filtered out; finished in 1.01s
+running 17 tests
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1426 filtered out; finished in 0.01s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1426 filtered out; finished in 0.15s
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 1410 filtered out; finished in 0.22s
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s
+```
+
+The three production multi-process tests prove:
+
+- a production output transfer is interrupted after a durable bounded chunk, restarts from durable coordinator/receiver state, reports reused bytes, sends the missing remainder, and imports byte-identical output through ordinary signed PathInfo/store admission;
+- a production input upload crosses multiple chunks, is interrupted after a durable acknowledgement, restarts from the same checkpoint, transfers the missing remainder, and still reaches ordinary output admission; and
+- a ticket upload quota rejects before any transfer checkpoint or output admission.
+
+The 109 remote-build tests additionally cover pre/post-write fence validation, stale-final-chunk invalidation before acknowledgement/completion, stale input cutoff before source disclosure, excess-credit rejection with zero disclosure, bounded child-timeout return/classification, and ordinary streamed admission. The 17 transfer-shell tests and their two subprocess legs cover resumable/security behavior including tampered receiver facts and no-follow authority-state handling.
+
+This evidence checks the production streaming replacement and production interruption/resume tasks. At task 1017 time it did **not** yet prove production fallback, current store/delta package rails, a production-scale 8 MiB transfer, or Kani.
+
+## Production fallback, scale, and current package evidence
+
+Pueue task 1140 ran the public production capability path plus current package rails:
+
+```text
+cargo test -p crunch-store --lib -- --nocapture
+cargo test -p crunch-delta --lib -- --nocapture
+cargo test -p mantle --test remote_transfer_production -- --nocapture
+
+running 199 tests
+test result: ok. 199 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+running 36 tests
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.29s
+```
+
+Pueue task 1166 independently reran serialized `crunch-store --lib`, `crunch-delta --lib --tests`, all 109 `remote_build::tests::`, and the five production tests. It reported 199, 36, 109, and 5 passing tests respectively, with zero failures.
+
+The two added production rails prove:
+
+- the release-reachable public `mantle build --remote-delta` option offers delta/full/streaming capabilities while the production server offers the same set; because no production delta runtime is bound, negotiation deterministically reports `mode = "full"` and `fallback_reason = "delta-unavailable"`, then streams the full NAR in multiple bounded chunks and reaches ordinary signed PathInfo/store admission; and
+- an 8 MiB output crosses more than 100 receiver-acknowledged chunks, reports streaming with no fallback, imports through ordinary admission, and is byte-identical to the requested source.
+
+This proves the production fallback and production-scale rails without claiming a delta hit. Pueue task 1185 then passed focused Rustfmt checks for `src/main.rs` (without cascading into child modules) and `tests/remote_transfer_production.rs`, followed by `git diff --check`. Kani execution remains unclaimed and is not part of the final task's exact command list.
+
+## Current lifecycle packet
+
+Pueue task 1196 ran current Cairn validation and the proposal, design, and tasks gates without sync or archive. The exact receipts were:
+
+```text
+validate: "specs_validated": 32, "valid": true
+proposal: "receipt_hash": "3f502f1b7a0d7b8792d8b634b48f2780339186f284d98b7d570b03e0fbbe63c8", "valid": true, "verdict": "PASS"
+design: "receipt_hash": "70b00cb759b2b7fcc021018105ebedac0d1a9e784bf38dd506967479101d8f1e", "valid": true, "verdict": "PASS"
+tasks: "receipt_hash": "77d6f451bd5f449d95c421b293aebe5826fd3369636233afab852f6f5c34f40f", "valid": true, "verdict": "PASS"
+```
+
+Together with tasks 1017, 1140, 1166, and 1185, this satisfies the exact final validation task. After checking that final marker, pueue task 1208 reran the tasks gate and reported `"issues": []`, `"receipt_hash": "5c1b10c1730ae5047f398f2f97330def4b4d5fdf8f1617d4b63d6a8d6046d384"`, `"valid": true`, and `"verdict": "PASS"`. No command in this packet synchronized specs or archived the active change.
+
+## Historical post-completion Cairn packet
 
 After checking the final task marker, pueue task 755 reran the same canonical-path `validate` plus proposal/design/tasks gate chain against the current tree. The final tasks receipt reported:
 
