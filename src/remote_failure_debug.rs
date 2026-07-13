@@ -1258,6 +1258,8 @@ mod tests {
             }],
             production_attempt: None,
             transfer_policy: None,
+            resource_requirements: None,
+            locality_scope: None,
             failure_debug_policy: RemoteFailureDebugPolicy::default(),
             failure_replay: None,
         }

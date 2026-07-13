@@ -3983,10 +3983,18 @@ async fn run_remote_failure_debug_replay_async(
     let mut coordinator = remote_build::load_coordinator_state(state_dir)?;
     let mut dispatch =
         remote_build::plan_remote_stdio_replay_dispatch(request, &options).map_err(RunError::Internal)?;
+    let replay_worker = coordinator
+        .workers
+        .get(&options.builder.endpoint_id)
+        .cloned()
+        .ok_or_else(|| RunError::Internal("remote failure replay worker registration missing".to_string()))?;
     let attempt = remote_build::admit_remote_production_dispatch(
         &mut coordinator,
         &dispatch.client.request,
         &options.builder.endpoint_id,
+        replay_worker.worker_generation,
+        replay_worker.concurrency,
+        replay_worker.resource_inventory,
         &dispatch.client.trusted_output_keys,
         options.now_unix_s,
     )
