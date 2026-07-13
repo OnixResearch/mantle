@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    onix-nixpkgs.url = "github:NixOS/nixpkgs/6201e203d09599479a3b3450ed24fa81537ebc4e";
     crane.url = "github:ipetkov/crane";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
@@ -22,6 +23,7 @@
     {
       self,
       nixpkgs,
+      onix-nixpkgs,
       crane,
       rust-overlay,
       flake-utils,
@@ -35,6 +37,15 @@
           inherit system;
           overlays = [ (import rust-overlay) ];
         };
+        onixPkgs = import onix-nixpkgs { inherit system; };
+        kernelscriptExperiment =
+          if system == "x86_64-linux" then
+            import ./nix/kernelscript-experiment.nix {
+              inherit onixPkgs;
+              sourceRoot = ./.;
+            }
+          else
+            null;
 
         rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
@@ -259,6 +270,13 @@
           ast-grep-package-identity = astGrepPackageIdentity;
           mantle-transcript-quality = mantleTranscriptQuality;
           release-nix-witness-quality = releaseNixWitnessQuality;
+        }
+        // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          kernelscript-compiler = kernelscriptExperiment.compiler;
+          kernelscript-production = kernelscriptExperiment.artifacts;
+          kernelscript-production-cohort = kernelscriptExperiment.cohort;
+          kernelscript-production-shell = kernelscriptExperiment.productionShell;
+          kernelscript-production-runtime-check = kernelscriptExperiment.runtimeCheck;
         };
 
         apps = {
@@ -318,6 +336,9 @@
           fmt = craneLib.cargoFmt {
             inherit src;
           };
+        }
+        // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          kernelscript-production = kernelscriptExperiment.structuralCheck;
         };
 
         devShells.default = craneLib.devShell {
