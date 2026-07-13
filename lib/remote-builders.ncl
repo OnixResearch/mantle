@@ -52,6 +52,13 @@ let DefaultTransferControlBytes = 1048576 in
 let DefaultTelemetryEventCapacity = 1024 in
 let DefaultTelemetryBatchSize = 128 in
 let DefaultOtlpTimeoutMs = 2000 in
+let DefaultFailureDebugMetadataBytes = 1048576 in
+let DefaultFailureDebugObjectBytes = 67108864 in
+let DefaultFailureDebugRetentionSecs = 604800 in
+let DefaultFailureCaptureFiles = 32 in
+let DefaultFailureCaptureTotalBytes = 16777216 in
+let DefaultFailureCaptureFileBytes = 8388608 in
+let DefaultFailureCaptureDepth = 16 in
 
 let RemoteTelemetryPolicy = {
   event_capacity
@@ -101,6 +108,39 @@ let RemoteTraceContext = {
     | doc "Opt in to bounded W3C TRACEPARENT/TRACESTATE propagation for diagnostics only"
     | Bool
     | default = false,
+} in
+
+let RemoteFailureCapturePolicy = {
+  enabled
+    | doc "Opt in to allowlisted failed-sandbox regular-file capture before cleanup"
+    | Bool
+    | default = false,
+  allowed_relative_paths
+    | doc "Exact normalized relative sandbox paths allowed for capture"
+    | Array String
+    | default = [],
+  sensitivity
+    | [| 'public-diagnostic, 'restricted-diagnostic |]
+    | default = 'restricted-diagnostic,
+  file_count_max | Number | default = DefaultFailureCaptureFiles,
+  total_bytes_max | Number | default = DefaultFailureCaptureTotalBytes,
+  file_bytes_max | Number | default = DefaultFailureCaptureFileBytes,
+  depth_max | Number | default = DefaultFailureCaptureDepth,
+  failure_mode
+    | [| 'diagnostic-only |]
+    | default = 'diagnostic-only,
+} in
+
+let RemoteFailureDebugPolicy = {
+  policy_name | String | default = "mantle-remote-failure-debug-default-v1",
+  metadata_bytes_max | Number | default = DefaultFailureDebugMetadataBytes,
+  object_bytes_max | Number | default = DefaultFailureDebugObjectBytes,
+  retention_secs | Number | default = DefaultFailureDebugRetentionSecs,
+  replay_enabled
+    | doc "Allow explicit replay planning and execution; replay always receives new authority"
+    | Bool
+    | default = false,
+  capture | RemoteFailureCapturePolicy | default = {},
 } in
 
 let RemoteTransferPolicy = {
@@ -302,6 +342,10 @@ let RemoteBuilderPoolContract = {
   ResourceRequirements = RemoteResourceRequirements,
   LocalityPolicy = RemoteLocalityPolicy,
 
+  RemoteFailureDebug
+    | doc "Bounded disabled-by-default remote failure capture and replay configuration."
+    = RemoteFailureDebugPolicy,
+
   pools
     | doc "List of configured remote builder pools."
     | Array RemoteBuilderPoolContract
@@ -315,5 +359,10 @@ let RemoteBuilderPoolContract = {
   trace_context
     | doc "Disabled-by-default W3C diagnostic trace propagation; never authoritative."
     | RemoteTraceContext
+    | default = {},
+
+  failure_debug
+    | doc "Bounded remote-failure bundle, capture, retention, and replay policy; payload capture and replay are disabled by default."
+    | RemoteFailureDebugPolicy
     | default = {},
 }

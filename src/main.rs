@@ -67,6 +67,7 @@ mod release_tree_copy;
 mod remote_attempt_log_store;
 #[allow(dead_code)]
 mod remote_build;
+mod remote_failure_debug;
 mod remote_farm_config;
 mod remote_telemetry_export;
 mod remote_trace_context;

@@ -7,6 +7,7 @@
 //! r[impl remote_builds.production_operator_configuration]
 
 use crunch_build::distributed::RemoteAttemptRetryPolicy;
+use crunch_build::distributed::RemoteFailureDebugPolicy;
 use crunch_build::distributed::RemoteTransferPolicy;
 use serde::Deserialize;
 use serde::Serialize;
@@ -297,6 +298,8 @@ pub struct RemoteBuildFarmConfig {
     pub telemetry: RemoteTelemetryExportConfig,
     #[serde(default)]
     pub trace_context: RemoteTraceContextConfig,
+    #[serde(default)]
+    pub failure_debug: RemoteFailureDebugPolicy,
 }
 
 impl RemoteBuildFarmConfig {
@@ -354,6 +357,9 @@ impl RemoteBuildFarmConfig {
         }
         validate_remote_telemetry_export_config(&self.telemetry)
             .map_err(|reason| format!("remote telemetry configuration: {reason}"))?;
+        self.failure_debug
+            .validate()
+            .map_err(|reason| format!("remote failure debug configuration: {}", reason.as_str()))?;
         // Check for duplicate pool IDs.
         let mut seen_pools = std::collections::BTreeSet::new();
         for pool in &self.pools {
@@ -400,6 +406,7 @@ impl Default for RemoteBuildFarmConfig {
             pools: Vec::new(),
             telemetry: RemoteTelemetryExportConfig::default(),
             trace_context: RemoteTraceContextConfig::default(),
+            failure_debug: RemoteFailureDebugPolicy::default(),
         }
     }
 }
@@ -467,6 +474,7 @@ mod tests {
             }],
             telemetry: RemoteTelemetryExportConfig::default(),
             trace_context: RemoteTraceContextConfig::default(),
+            failure_debug: RemoteFailureDebugPolicy::default(),
         }
     }
 
@@ -747,6 +755,68 @@ let remote = import "remote-builders.ncl" in
     }
 
     #[test]
+    fn nickel_failure_debug_contract_round_trips_explicit_bounded_policy() {
+        let temp = tempfile::tempdir().expect("temporary failure debug config dir");
+        let config_path = temp.path().join("remote-failure-debug.ncl");
+        std::fs::write(
+            &config_path,
+            r#"
+let remote = import "remote-builders.ncl" in
+{
+  pools = [],
+  failure_debug = ({
+    replay_enabled = true,
+    retention_secs = 3600,
+    capture = {
+      enabled = true,
+      allowed_relative_paths = ["build/trace.json"],
+      sensitivity = 'restricted-diagnostic,
+      file_count_max = 2,
+      total_bytes_max = 4096,
+      file_bytes_max = 2048,
+      depth_max = 4,
+      failure_mode = 'diagnostic-only,
+    },
+  } | remote.RemoteFailureDebug),
+}
+"#,
+        )
+        .expect("Nickel failure debug config writes");
+        let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+        let config: RemoteBuildFarmConfig = crunch_eval::evaluate_and_deserialize(&config_path, &import_paths)
+            .expect("typed Nickel failure debug policy evaluates");
+
+        assert!(config.validate().is_ok());
+        assert!(config.failure_debug.replay_enabled);
+        assert!(config.failure_debug.capture.enabled);
+        assert_eq!(config.failure_debug.capture.allowed_relative_paths, vec!["build/trace.json"]);
+        assert_eq!(config.failure_debug.capture.file_count_max, 2);
+    }
+
+    #[test]
+    fn nickel_failure_debug_contract_rejects_type_mismatch() {
+        let temp = tempfile::tempdir().expect("temporary invalid failure debug config dir");
+        let config_path = temp.path().join("invalid-remote-failure-debug.ncl");
+        std::fs::write(
+            &config_path,
+            r#"
+let remote = import "remote-builders.ncl" in
+{
+  pools = [],
+  failure_debug = ({ capture.total_bytes_max = "unbounded" } | remote.RemoteFailureDebug),
+}
+"#,
+        )
+        .expect("invalid Nickel failure debug config writes");
+        let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+        let error = crunch_eval::evaluate_and_deserialize::<RemoteBuildFarmConfig>(&config_path, &import_paths)
+            .expect_err("typed Nickel failure debug policy rejects string byte budget");
+
+        assert!(error.to_string().contains("contract"));
+        assert!(error.to_string().contains("total_bytes_max"));
+    }
+
+    #[test]
     fn config_defaults_are_safe() {
         // A pool with minimal fields should get safe defaults.
         let json = r#"{
@@ -767,6 +837,8 @@ let remote = import "remote-builders.ncl" in
         assert_eq!(endpoint.profile.max_concurrency, DEFAULT_REMOTE_MAX_CONCURRENCY);
         assert_eq!(endpoint.profile.retry_policy, RemoteAttemptRetryPolicy::default());
         assert_eq!(endpoint.profile.transfer_policy, RemoteTransferPolicy::default());
+        assert!(!config.failure_debug.capture.enabled);
+        assert!(!config.failure_debug.replay_enabled);
     }
 
     #[test]
