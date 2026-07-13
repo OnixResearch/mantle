@@ -33,6 +33,7 @@ pub mod signing;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod worker;
+pub mod workspace;
 
 pub use build_request::BuildRequestEnvelope;
 pub use build_request::derivation_to_build_request;
@@ -146,3 +147,4 @@ pub use worker::FailedGoal;
 pub use worker::NativeDynamicPlanReport;
 pub use worker::Worker;
 pub use worker::WorkerResult;
+pub use workspace::*;
