@@ -1,3 +1,4 @@
+use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::String;
 use alloc::string::ToString;
@@ -119,6 +120,26 @@ fn virtualization_config() -> VirtualizationConfig {
     }
 }
 
+fn wizer_config() -> WizerConfig {
+    WizerConfig {
+        mode: WizerMode::Deterministic,
+        initialization_entrypoint: Some(String::from("wizer.initialize")),
+        deterministic_virtual_imports: vec![String::from("virtual:random")],
+        linker_split: Some(WizerLinkerSplitConfig {
+            linker: String::from("wasm-component-ld"),
+            linker_args: vec![String::from("--skip-wit-component")],
+            compile_environment: BTreeMap::from([
+                (String::from("CARGO_TARGET_WASM32_WASIP2_LINKER"), String::from("wasm-component-ld")),
+                (String::from("RUSTFLAGS"), String::from("-C link-arg=--skip-wit-component")),
+            ]),
+        }),
+        componentization: Some(WizerComponentizationConfig {
+            tool: String::from("wasm-tools"),
+            args: Vec::new(),
+        }),
+    }
+}
+
 fn manifest() -> ComponentManifest {
     ComponentManifest {
         schema: String::from(COMPONENT_MANIFEST_SCHEMA),
@@ -166,11 +187,7 @@ fn manifest() -> ComponentManifest {
             octet_artifact_profile_identity_blake3: blake3('f'),
             expected_runtime_profile_identity_blake3: blake3('0'),
         },
-        wizer: WizerConfig {
-            mode: WizerMode::Deterministic,
-            initialization_entrypoint: Some(String::from("wizer.initialize")),
-            deterministic_virtual_imports: vec![String::from("virtual:random")],
-        },
+        wizer: wizer_config(),
         aot: AotConfig {
             mode: AotMode::TrustedNative,
             target: Some(String::from("x86_64-linux")),
@@ -294,6 +311,23 @@ fn manifest_rejects_unmapped_registry_and_incomplete_optional_stages() {
     assert!(validation.blockers.iter().any(|item| item.code == "unmapped-package-registry"));
     assert!(validation.blockers.iter().any(|item| item.code == "missing-wizer-entrypoint"));
     assert!(validation.blockers.iter().any(|item| item.code == "incomplete-aot-configuration"));
+}
+
+#[test]
+fn manifest_rejects_wizer_compile_environment_and_componentization_drift() {
+    let mut invalid = manifest();
+    invalid
+        .wizer
+        .linker_split
+        .as_mut()
+        .unwrap()
+        .compile_environment
+        .insert(String::from("AMBIENT_STATE"), String::from("forbidden"));
+    invalid.wizer.componentization.as_mut().unwrap().args.push(String::from("--skip-validation"));
+    let validation = validate_manifest(invalid);
+
+    assert!(validation.blockers.iter().any(|item| item.code == "invalid-wizer-linker-split"));
+    assert!(validation.blockers.iter().any(|item| item.code == "invalid-wizer-componentization"));
 }
 
 #[test]
@@ -487,10 +521,16 @@ fn deterministic_wizer_outputs_are_admitted() {
     let output = object("wizer-output.wasm", 'a');
     let result = admit_transform(TransformAdmissionRequest {
         mode: WizerMode::Deterministic,
-        input: object("component.wasm", '3'),
+        input: object("core.wasm", '3'),
         first_output: output.clone(),
         repeated_output: Some(output),
+        componentized_output: object("component.wasm", 'd'),
         cohort_blake3: blake3('b'),
+        configuration_blake3: blake3('c'),
+        compilation_receipt_blake3: blake3('d'),
+        first_transform_receipt_blake3: blake3('e'),
+        repeated_transform_receipt_blake3: Some(blake3('f')),
+        componentization_receipt_blake3: blake3('1'),
         initialization_entrypoint: String::from("wizer.initialize"),
         virtual_imports: vec![TransformImportFact {
             name: String::from("virtual:random"),
@@ -510,10 +550,16 @@ fn deterministic_wizer_outputs_are_admitted() {
 fn wizer_drift_and_ambient_state_are_denied() {
     let result = admit_transform(TransformAdmissionRequest {
         mode: WizerMode::Deterministic,
-        input: object("component.wasm", '3'),
+        input: object("core.wasm", '3'),
         first_output: object("first.wasm", 'a'),
         repeated_output: Some(object("second.wasm", 'b')),
+        componentized_output: object("component.wasm", 'd'),
         cohort_blake3: blake3('c'),
+        configuration_blake3: blake3('d'),
+        compilation_receipt_blake3: blake3('e'),
+        first_transform_receipt_blake3: blake3('f'),
+        repeated_transform_receipt_blake3: Some(blake3('1')),
+        componentization_receipt_blake3: blake3('2'),
         initialization_entrypoint: String::from("wizer.initialize"),
         virtual_imports: Vec::new(),
         ambient_observations: vec![String::from("clock")],

@@ -86,7 +86,13 @@ pub struct TransformAdmissionRequest {
     pub input: StoreObject,
     pub first_output: StoreObject,
     pub repeated_output: Option<StoreObject>,
+    pub componentized_output: StoreObject,
     pub cohort_blake3: Blake3Identity,
+    pub configuration_blake3: Blake3Identity,
+    pub compilation_receipt_blake3: Blake3Identity,
+    pub first_transform_receipt_blake3: Blake3Identity,
+    pub repeated_transform_receipt_blake3: Option<Blake3Identity>,
+    pub componentization_receipt_blake3: Blake3Identity,
     pub initialization_entrypoint: String,
     pub virtual_imports: Vec<TransformImportFact>,
     pub ambient_observations: Vec<String>,
@@ -95,9 +101,16 @@ pub struct TransformAdmissionRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransformAdmission {
     pub schema: String,
-    pub input_blake3: Blake3Identity,
+    pub input: StoreObject,
     pub output: StoreObject,
+    pub repeated_output: Option<StoreObject>,
+    pub componentized_output: StoreObject,
     pub cohort_blake3: Blake3Identity,
+    pub configuration_blake3: Blake3Identity,
+    pub compilation_receipt_blake3: Blake3Identity,
+    pub first_transform_receipt_blake3: Blake3Identity,
+    pub repeated_transform_receipt_blake3: Option<Blake3Identity>,
+    pub componentization_receipt_blake3: Blake3Identity,
     pub deterministic_outputs_match: bool,
     pub eligible_for_bundle: bool,
     pub receipt_blake3: Blake3Identity,
@@ -238,9 +251,16 @@ pub fn admit_transform(request: TransformAdmissionRequest) -> TransformAdmission
     TransformAdmissionResult {
         admission: Some(TransformAdmission {
             schema: String::from(WIZER_ADMISSION_SCHEMA),
-            input_blake3: request.input.digest_blake3,
+            input: request.input,
             output: request.first_output,
+            repeated_output: request.repeated_output,
+            componentized_output: request.componentized_output,
             cohort_blake3: request.cohort_blake3,
+            configuration_blake3: request.configuration_blake3,
+            compilation_receipt_blake3: request.compilation_receipt_blake3,
+            first_transform_receipt_blake3: request.first_transform_receipt_blake3,
+            repeated_transform_receipt_blake3: request.repeated_transform_receipt_blake3,
+            componentization_receipt_blake3: request.componentization_receipt_blake3,
             deterministic_outputs_match: is_deterministic_output_match,
             eligible_for_bundle: is_eligible_for_bundle,
             receipt_blake3: receipt_identity,
@@ -356,11 +376,23 @@ fn validate_transform_request(request: &TransformAdmissionRequest, blockers: &mu
             "Wizer transform requires an explicit initialization entrypoint",
         ));
     }
-    if request.input.size_bytes == 0 || request.first_output.size_bytes == 0 {
+    if request.input.size_bytes == 0
+        || request.first_output.size_bytes == 0
+        || request.componentized_output.size_bytes == 0
+    {
         blockers.push(blocker(
             "empty-wizer-artifact",
             "wizer",
-            "Wizer input and output must be identified non-empty artifacts",
+            "Wizer core input/output and re-componentized output must be identified non-empty artifacts",
+        ));
+    }
+    let has_repeated_output = request.repeated_output.is_some();
+    let has_repeated_receipt = request.repeated_transform_receipt_blake3.is_some();
+    if has_repeated_output != has_repeated_receipt {
+        blockers.push(blocker(
+            "incomplete-wizer-repeat-receipt",
+            "wizer",
+            "repeated Wizer output and execution receipt must be present together",
         ));
     }
     if is_count_above_bound(request.ambient_observations.len(), MAX_AMBIENT_OBSERVATIONS)
@@ -390,7 +422,10 @@ fn validate_transform_request(request: &TransformAdmissionRequest, blockers: &mu
 
 fn repeated_output_matches(request: &TransformAdmissionRequest) -> bool {
     match &request.repeated_output {
-        Some(repeated) => repeated.digest_blake3 == request.first_output.digest_blake3,
+        Some(repeated) => {
+            repeated.digest_blake3 == request.first_output.digest_blake3
+                && repeated.size_bytes == request.first_output.size_bytes
+        }
         None => request.mode != WizerMode::Deterministic,
     }
 }

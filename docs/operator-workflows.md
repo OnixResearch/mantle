@@ -361,11 +361,21 @@ the attestation and release binding.
 output is validated again and is the only portable object admitted to Octet,
 Wasmtime smoke validation, optional AOT, and release binding. A Wasmtime
 precompile remains target/CPU/configuration-bound trusted native output; it does
-not replace the portable component. The pinned linker can expose a core module
-with `--skip-wit-component`, but the current request and evidence contracts do
-not identify that linker split, the core object, or the later componentization
-configuration. Enabled Wizer configuration is therefore blocked with
-`wizer-pre-component-core-module-required` and records no transformed artifact.
+not replace the portable component.
+
+When Wizer is enabled, the request must identify Cargo's pre-component core
+module, the exact `wasm-component-ld --skip-wit-component` linker split and
+compile environment, the Wizer initializer, a denied import set, and the pinned
+`wasm-tools component new` configuration. Non-empty virtual-import declarations
+fail closed until explicit receipt-bound stub modules are supported. Mantle
+validates the core module, runs Wizer twice from clean output paths, and
+requires equal BLAKE3 digests and sizes before re-componentizing. Compilation,
+both Wizer runs, and
+componentization retain receipt-bound environments and subordinate tool
+identities. The core and transformed-core artifacts remain explicitly distinct
+from the later Component Model artifact; only the latter proceeds through
+component validation, composition, virtualization, normalization, Octet, and
+consumer remeasurement.
 
 All outputs retain the non-claims `not-component-behavior-correctness`,
 `not-runtime-authority`, `not-runtime-sandboxing`, `not-release-eligibility`,

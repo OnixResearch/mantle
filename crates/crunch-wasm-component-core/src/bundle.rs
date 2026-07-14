@@ -336,18 +336,32 @@ fn validate_non_claims(non_claims: &[String], blockers: &mut Vec<ComponentBlocke
 fn validate_optional_outputs(request: &MaterializationBundleRequest, blockers: &mut Vec<ComponentBlocker>) {
     let blocker_count_before = blockers.len();
     if let Some(wizer) = &request.wizer {
-        if !wizer.eligible_for_bundle || wizer.output.digest_blake3 != request.final_portable.digest_blake3 {
+        if !wizer.eligible_for_bundle || !wizer.deterministic_outputs_match || wizer.repeated_output.is_none() {
             blockers.push(blocker(
                 "ineligible-wizer-bundle-output",
                 "wizer",
-                "bundle Wizer output must be deterministic-eligible and match final portable bytes",
+                "bundle Wizer core output must be deterministic-eligible with a rehashable repeated output",
             ));
         }
-        if !request.stage_receipts.iter().any(|receipt| receipt.kind == ComponentStageKind::Wizer) {
+        let has_wizer_stage = request.stage_receipts.iter().any(|receipt| {
+            receipt.kind == ComponentStageKind::Wizer && receipt.artifact.as_ref() == Some(&wizer.output)
+        });
+        if !has_wizer_stage {
             blockers.push(blocker(
                 "missing-wizer-stage-receipt",
                 "wizer",
-                "bundle carrying Wizer output must include its stage receipt",
+                "bundle carrying Wizer output must include its exact core-output stage receipt",
+            ));
+        }
+        let has_componentization_stage = request.stage_receipts.iter().any(|receipt| {
+            receipt.kind == ComponentStageKind::Componentization
+                && receipt.artifact.as_ref() == Some(&wizer.componentized_output)
+        });
+        if !has_componentization_stage {
+            blockers.push(blocker(
+                "missing-wizer-componentization-receipt",
+                "componentization",
+                "bundle carrying Wizer output must include its exact re-componentization stage receipt",
             ));
         }
     }
@@ -447,6 +461,7 @@ fn stage_label(kind: ComponentStageKind) -> String {
         ComponentStageKind::Lock => "lock",
         ComponentStageKind::BindingGeneration => "binding-generation",
         ComponentStageKind::Compilation => "compilation",
+        ComponentStageKind::Componentization => "componentization",
         ComponentStageKind::Composition => "composition",
         ComponentStageKind::Virtualization => "virtualization",
         ComponentStageKind::MetadataNormalization => "metadata-normalization",

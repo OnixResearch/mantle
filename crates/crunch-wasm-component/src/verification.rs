@@ -23,12 +23,14 @@ const COMPONENT_RELEASE_BINDING_ROLE: &str = "component-release-binding";
 
 pub fn verify_pipeline_execution_report_files(report: &PipelineExecutionReport) -> Result<(), Error> {
     verify_report_identity(report)?;
+    verify_tool_receipts(&report.stage_receipts)?;
     verify_published_artifacts(&report.artifacts)?;
     let bundle = report
         .materialization_bundle
         .as_ref()
         .ok_or_else(|| Error::Invalid("successful component report omitted its materialization bundle".to_string()))?;
     verify_materialization_bundle_files(bundle)?;
+    verify_wizer_receipt_bindings(report, bundle)?;
     verify_evidence_sidecars(report, bundle)?;
     debug_assert_eq!(report.final_status, "succeeded");
     debug_assert!(report.blockers.is_empty());
@@ -62,6 +64,25 @@ fn verify_report_identity(report: &PipelineExecutionReport) -> Result<(), Error>
     Ok(())
 }
 
+fn verify_tool_receipts(receipts: &[crate::ToolExecutionReceipt]) -> Result<(), Error> {
+    for receipt in receipts {
+        crate::process::verify_tool_receipt(receipt)?;
+        let program_path = Path::new(&receipt.program);
+        if crate::toolchain::hash_file_bounded(program_path)? != receipt.program_blake3 {
+            return Err(Error::Invalid(format!("tool program bytes drifted: {}", receipt.program)));
+        }
+        for dependency in &receipt.tool_dependencies {
+            let dependency_path = Path::new(&dependency.path);
+            if crate::toolchain::hash_file_bounded(dependency_path)? != dependency.digest_blake3 {
+                return Err(Error::Invalid(format!("tool dependency bytes drifted: {}", dependency.path)));
+            }
+        }
+    }
+    debug_assert!(receipts.iter().all(|receipt| !receipt.stage_key.is_empty()));
+    debug_assert!(receipts.iter().all(|receipt| !receipt.network_admitted));
+    Ok(())
+}
+
 fn verify_published_artifacts(artifacts: &[PipelineArtifact]) -> Result<(), Error> {
     let mut unique = BTreeMap::new();
     for artifact in artifacts {
@@ -87,6 +108,107 @@ fn verify_published_artifacts(artifacts: &[PipelineArtifact]) -> Result<(), Erro
     }
     debug_assert!(!unique.is_empty());
     debug_assert!(unique.values().all(|artifact| artifact.size_bytes > 0));
+    Ok(())
+}
+
+fn verify_wizer_receipt_bindings(
+    report: &PipelineExecutionReport,
+    bundle: &MaterializationBundle,
+) -> Result<(), Error> {
+    let Some(wizer) = &bundle.wizer else {
+        return Ok(());
+    };
+    let compilation = receipt_by_identity(report, &wizer.compilation_receipt_blake3)?;
+    let first = receipt_by_identity(report, &wizer.first_transform_receipt_blake3)?;
+    let repeated_identity = wizer
+        .repeated_transform_receipt_blake3
+        .as_ref()
+        .ok_or_else(|| Error::Invalid("deterministic Wizer admission omitted its repeated receipt".to_string()))?;
+    let repeated = receipt_by_identity(report, repeated_identity)?;
+    let componentization = receipt_by_identity(report, &wizer.componentization_receipt_blake3)?;
+    verify_receipt_output(compilation, &wizer.input)?;
+    verify_receipt_output(first, &wizer.output)?;
+    let repeated_output = wizer
+        .repeated_output
+        .as_ref()
+        .ok_or_else(|| Error::Invalid("deterministic Wizer admission omitted its repeated output".to_string()))?;
+    verify_receipt_output(repeated, repeated_output)?;
+    verify_receipt_output(componentization, &wizer.componentized_output)?;
+    verify_wizer_compile_environment(compilation)?;
+    verify_wizer_environment(first)?;
+    verify_wizer_environment(repeated)?;
+    debug_assert_eq!(first.output_blake3, repeated.output_blake3);
+    debug_assert_eq!(componentization.output_blake3.as_ref(), Some(&wizer.componentized_output.digest_blake3));
+    Ok(())
+}
+
+fn receipt_by_identity<'a>(
+    report: &'a PipelineExecutionReport,
+    identity: &Blake3Identity,
+) -> Result<&'a crate::ToolExecutionReceipt, Error> {
+    let matches: Vec<&crate::ToolExecutionReceipt> =
+        report.stage_receipts.iter().filter(|receipt| &receipt.receipt_blake3 == identity).collect();
+    if matches.len() != 1 {
+        return Err(Error::Invalid("Wizer admission receipt identity is missing or ambiguous".to_string()));
+    }
+    debug_assert_eq!(matches.len(), 1);
+    debug_assert_eq!(&matches[0].receipt_blake3, identity);
+    Ok(matches[0])
+}
+
+fn verify_receipt_output(receipt: &crate::ToolExecutionReceipt, object: &StoreObject) -> Result<(), Error> {
+    if receipt.output_blake3.as_ref() != Some(&object.digest_blake3) {
+        return Err(Error::Invalid(format!("tool receipt output differs for `{}`", receipt.stage_key)));
+    }
+    debug_assert_eq!(receipt.output_blake3.as_ref(), Some(&object.digest_blake3));
+    debug_assert!(object.size_bytes > 0);
+    Ok(())
+}
+
+fn verify_wizer_compile_environment(receipt: &crate::ToolExecutionReceipt) -> Result<(), Error> {
+    let linker = receipt
+        .tool_dependencies
+        .iter()
+        .find(|dependency| dependency.name == "wasm-component-ld")
+        .ok_or_else(|| Error::Invalid("compilation receipt omitted wasm-component-ld identity".to_string()))?;
+    let linker_env = receipt.environment.get("CARGO_TARGET_WASM32_WASIP2_LINKER");
+    let rustflags = receipt.environment.get("RUSTFLAGS");
+    if linker_env.map(String::as_str) != Some(linker.path.as_str()) {
+        return Err(Error::Invalid("compilation receipt linker environment drifted".to_string()));
+    }
+    if rustflags.map(String::as_str) != Some("-C link-arg=--skip-wit-component") {
+        return Err(Error::Invalid("compilation receipt linker split flags drifted".to_string()));
+    }
+    debug_assert_eq!(linker_env.map(String::as_str), Some(linker.path.as_str()));
+    debug_assert!(receipt.tool_dependencies.iter().any(|dependency| dependency.name == "rustc"));
+    Ok(())
+}
+
+fn verify_wizer_environment(receipt: &crate::ToolExecutionReceipt) -> Result<(), Error> {
+    let allowed = [
+        "HOME",
+        "CARGO_HOME",
+        "CARGO_TARGET_DIR",
+        "CARGO_NET_OFFLINE",
+        "RUSTC",
+        "WKG_CONFIG_FILE",
+        "WKG_CACHE_DIR",
+    ];
+    let has_ambient_key = receipt.environment.keys().any(|key| !allowed.contains(&key.as_str()));
+    let has_wasi_allowance = receipt.args.iter().any(|arg| arg == "--allow-wasi");
+    let has_inherit_env_disabled = receipt.args.iter().any(|arg| arg == "--inherit-env=false");
+    let has_inherit_stdio_disabled = receipt.args.iter().any(|arg| arg == "--inherit-stdio=false");
+    if has_ambient_key {
+        return Err(Error::Invalid("Wizer receipt carries an undeclared environment key".to_string()));
+    }
+    if has_wasi_allowance {
+        return Err(Error::Invalid("Wizer receipt admits ambient WASI calls".to_string()));
+    }
+    if !has_inherit_env_disabled || !has_inherit_stdio_disabled {
+        return Err(Error::Invalid("Wizer receipt does not disable inherited process state".to_string()));
+    }
+    debug_assert!(!has_ambient_key);
+    debug_assert!(!has_wasi_allowance);
     Ok(())
 }
 

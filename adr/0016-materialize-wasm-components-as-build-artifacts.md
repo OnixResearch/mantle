@@ -48,15 +48,18 @@ WASI-Virt, Wizer, and Wasmtime form one compatibility cohort. Any member,
 target, feature, or configuration change changes the BLAKE3 cohort identity and
 invalidates cohort-bound outputs until the relevant fixtures rerun.
 
-Optional Wizer output remains portable but must bind deterministic virtual
-inputs and repeated-output evidence when deterministic eligibility is claimed.
-Wizer accepts core modules rather than Component Model binaries. Although the
-pinned linker can expose its pre-component module with `--skip-wit-component`,
-this pipeline does not yet declare or attest that linker split, core object, or
-componentization configuration. It therefore denies Wizer execution and records
-no transformed artifact instead of introducing an unbound intermediate or
-mislabeling component bytes. Optional Wasmtime precompile output is
-target-specific trusted native code, not
+Optional Wizer execution operates only on an explicitly identified
+pre-component core module. The linker split, exact compile environment,
+subordinate `rustc` and `wasm-component-ld` identities, denied import set, two
+clean Wizer invocations, and later pinned `wasm-tools component new`
+configuration are receipt-bound. Non-empty virtual-import declarations remain
+fail-closed until explicit receipt-bound stub modules exist. Mantle requires the
+two transformed core outputs to have equal BLAKE3 identities and sizes before
+componentization. Core
+module, transformed core module, and Component Model output classes remain
+distinct: Mantle never labels component bytes as direct Wizer output.
+
+Optional Wasmtime precompile output is target-specific trusted native code, not
 portable validated Wasm. Consumers receive one versioned materialization bundle
 whose exact objects and BLAKE3 identities can be remeasured. Later Valence or
 Cairn admission evidence may refer to that bundle but cannot enter its canonical

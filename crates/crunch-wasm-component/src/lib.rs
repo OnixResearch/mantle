@@ -1,3 +1,6 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+
 mod aot;
 mod error;
 mod files;
@@ -11,6 +14,7 @@ mod reporting;
 mod stages;
 mod toolchain;
 mod verification;
+mod wizer;
 
 pub use error::Error;
 pub use files::copy_source_tree;

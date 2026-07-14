@@ -47,13 +47,22 @@ pub(crate) struct ValidationStage<'a> {
     pub stage_key: &'a str,
     pub artifact_path: &'a Path,
     pub artifact: &'a StoreObject,
+    pub claim: BoundedComponentClaim,
 }
 
 pub(crate) struct StageInvocation<'a> {
     pub stage_key: &'a str,
     pub tool_name: &'a str,
     pub args: Vec<String>,
+    pub environment_overrides: BTreeMap<String, String>,
+    pub tool_dependencies: Vec<String>,
     pub output_path: Option<PathBuf>,
+}
+
+pub(crate) struct ExecutedArtifact {
+    pub path: PathBuf,
+    pub object: StoreObject,
+    pub receipt_blake3: crunch_wasm_component_core::Blake3Identity,
 }
 
 pub(crate) fn create_workspace(
@@ -134,6 +143,8 @@ pub(crate) fn run_wkg_stage(
         stage_key: "package-resolution",
         tool_name: "wkg",
         args,
+        environment_overrides: BTreeMap::new(),
+        tool_dependencies: Vec::new(),
         output_path: None,
     })?;
     state.add_receipt(run.receipt.clone())?;
@@ -182,6 +193,8 @@ pub(crate) fn run_binding_stage(
         stage_key: "binding-generation",
         tool_name: "wit-bindgen",
         args,
+        environment_overrides: BTreeMap::new(),
+        tool_dependencies: Vec::new(),
         output_path: None,
     })?;
     state.add_receipt(run.receipt.clone())?;
@@ -205,7 +218,7 @@ pub(crate) fn run_compilation_stage(
     prepared: &PreparedPipeline,
     workspace: &StageWorkspace,
     state: &mut ExecutionState,
-) -> Result<Option<(PathBuf, StoreObject)>, Error> {
+) -> Result<Option<ExecutedArtifact>, Error> {
     debug_assert!(workspace.root.is_absolute());
     debug_assert!(!prepared.request.manifest.implementation.package.is_empty());
     let mut args = vec!["build".to_string(), "--locked".to_string(), "--offline".to_string()];
@@ -224,17 +237,20 @@ pub(crate) fn run_compilation_stage(
             prepared.request.manifest.implementation.features.join(","),
         ]);
     }
-    let component = workspace.root.join("target").join(&prepared.request.cargo_component_relative_path);
-    let component_parent = component
+    let (relative_output, environment_overrides) = compilation_options(prepared)?;
+    let compiled = workspace.root.join("target").join(relative_output);
+    let compiled_parent = compiled
         .parent()
-        .ok_or_else(|| Error::Invalid("compiled component output has no parent directory".to_string()))?;
-    fs::create_dir_all(component_parent)
-        .map_err(|error| Error::io("creating compiled component output parent", component_parent, error))?;
+        .ok_or_else(|| Error::Invalid("compiled Wasm output has no parent directory".to_string()))?;
+    fs::create_dir_all(compiled_parent)
+        .map_err(|error| Error::io("creating compiled Wasm output parent", compiled_parent, error))?;
     let run = invoke(prepared, workspace, StageInvocation {
         stage_key: "compilation",
         tool_name: "cargo",
         args,
-        output_path: Some(component.clone()),
+        environment_overrides,
+        tool_dependencies: vec!["rustc".to_string(), "wasm-component-ld".to_string()],
+        output_path: Some(compiled.clone()),
     })?;
     state.add_receipt(run.receipt.clone())?;
     if !run.success {
@@ -249,7 +265,12 @@ pub(crate) fn run_compilation_stage(
         state.block("component-compilation-failed", "compilation", stderr_summary(&run.stderr));
         return Ok(None);
     }
-    let object = measure_artifact(&component, "compiled.wasm", workspace)?;
+    let published_name = if prepared.request.manifest.wizer.mode == crunch_wasm_component_core::WizerMode::Disabled {
+        "compiled.wasm"
+    } else {
+        "compiled-core.wasm"
+    };
+    let object = measure_artifact(&compiled, published_name, workspace)?;
     state.push_stage(
         "compilation",
         ComponentStageKind::Compilation,
@@ -258,7 +279,35 @@ pub(crate) fn run_compilation_stage(
             BoundedComponentClaim::ExactInputIdentities,
         ]),
     )?;
-    Ok(Some((component, object)))
+    Ok(Some(ExecutedArtifact {
+        path: compiled,
+        object,
+        receipt_blake3: run.receipt.receipt_blake3,
+    }))
+}
+
+fn compilation_options(prepared: &PreparedPipeline) -> Result<(&str, BTreeMap<String, String>), Error> {
+    if prepared.request.manifest.wizer.mode == crunch_wasm_component_core::WizerMode::Disabled {
+        return Ok((&prepared.request.cargo_component_relative_path, BTreeMap::new()));
+    }
+    let relative_output = prepared
+        .request
+        .cargo_core_module_relative_path
+        .as_deref()
+        .ok_or_else(|| Error::Invalid("enabled Wizer request omitted its core-module output".to_string()))?;
+    let linker = prepared
+        .request
+        .manifest
+        .wizer
+        .linker_split
+        .as_ref()
+        .ok_or_else(|| Error::Invalid("validated Wizer request omitted its linker split".to_string()))?;
+    let mut environment = linker.compile_environment.clone();
+    let linker_path = prepared.toolchain.tool_path(&linker.linker)?.display().to_string();
+    environment.insert("CARGO_TARGET_WASM32_WASIP2_LINKER".to_string(), linker_path);
+    debug_assert!(environment.contains_key("RUSTFLAGS"));
+    debug_assert!(environment.contains_key("CARGO_TARGET_WASM32_WASIP2_LINKER"));
+    Ok((relative_output, environment))
 }
 
 pub(crate) fn run_composition_stage(
@@ -283,6 +332,8 @@ pub(crate) fn run_composition_stage(
         stage_key: "composition",
         tool_name: "wac",
         args,
+        environment_overrides: BTreeMap::new(),
+        tool_dependencies: Vec::new(),
         output_path: Some(output.clone()),
     })?;
     state.add_receipt(run.receipt.clone())?;
@@ -321,6 +372,8 @@ pub(crate) fn run_validation_stage(
         stage_key: validation.stage_key,
         tool_name: "wasm-tools",
         args,
+        environment_overrides: BTreeMap::new(),
+        tool_dependencies: Vec::new(),
         output_path: None,
     })?;
     let validation_receipt_identity = run.receipt.receipt_blake3.clone();
@@ -334,7 +387,7 @@ pub(crate) fn run_validation_stage(
             Some(prepared.toolchain.tool_digest("wasm-tools")?),
             None,
             if run.success {
-                vec![BoundedComponentClaim::PortableBytesValidated]
+                vec![validation.claim]
             } else {
                 Vec::new()
             },
@@ -369,32 +422,15 @@ pub(crate) fn run_virtualization_stage(
         return Ok(None);
     };
     if input_imports.is_empty() {
-        let validation = validate_remaining_imports(plan.clone(), input_imports);
-        if !validation.matches_plan {
-            for blocker in validation.blockers {
-                state.block(&blocker.code, "virtualization", blocker.message);
-            }
-            return Ok(None);
-        }
-        copy_regular_file_new(composed_path, &output, "import-free virtualization output")?;
-        let object = measure_artifact(&output, "virtualized.wasm", workspace)?;
-        state.push_stage(
-            "virtualization",
-            ComponentStageKind::Virtualization,
-            ComponentStageStatus::Succeeded,
-            StageEvidence::new(Some(object.clone()), None, Some(plan.identity_blake3), vec![
-                BoundedComponentClaim::DenyAllVirtualizationPlanned,
-            ]),
-        )?;
-        debug_assert!(output.is_file());
-        debug_assert_eq!(object.digest_blake3, hash_file_bounded(composed_path)?);
-        return Ok(Some((output, object)));
+        return copy_import_free_virtualization(workspace, state, plan, composed_path, output);
     }
     let args = virtualization_args(&plan, composed_path, &output)?;
     let run = invoke(prepared, workspace, StageInvocation {
         stage_key: "virtualization",
         tool_name: "wasi-virt",
         args,
+        environment_overrides: BTreeMap::new(),
+        tool_dependencies: Vec::new(),
         output_path: Some(output.clone()),
     })?;
     state.add_receipt(run.receipt.clone())?;
@@ -428,6 +464,37 @@ pub(crate) fn run_virtualization_stage(
             vec![BoundedComponentClaim::DenyAllVirtualizationPlanned],
         ),
     )?;
+    debug_assert!(output.is_file());
+    debug_assert!(object.size_bytes > 0);
+    Ok(Some((output, object)))
+}
+
+fn copy_import_free_virtualization(
+    workspace: &StageWorkspace,
+    state: &mut ExecutionState,
+    plan: VirtualizationPlan,
+    composed_path: &Path,
+    output: PathBuf,
+) -> Result<Option<(PathBuf, StoreObject)>, Error> {
+    let validation = validate_remaining_imports(plan.clone(), Vec::new());
+    if !validation.matches_plan {
+        for blocker in validation.blockers {
+            state.block(&blocker.code, "virtualization", blocker.message);
+        }
+        return Ok(None);
+    }
+    copy_regular_file_new(composed_path, &output, "import-free virtualization output")?;
+    let object = measure_artifact(&output, "virtualized.wasm", workspace)?;
+    state.push_stage(
+        "virtualization",
+        ComponentStageKind::Virtualization,
+        ComponentStageStatus::Succeeded,
+        StageEvidence::new(Some(object.clone()), None, Some(plan.identity_blake3), vec![
+            BoundedComponentClaim::DenyAllVirtualizationPlanned,
+        ]),
+    )?;
+    debug_assert!(output.is_file());
+    debug_assert_eq!(object.digest_blake3, hash_file_bounded(composed_path)?);
     Ok(Some((output, object)))
 }
 
@@ -448,6 +515,8 @@ pub(crate) fn run_metadata_normalization_stage(
         stage_key: "metadata-normalization",
         tool_name: "wasm-tools",
         args,
+        environment_overrides: BTreeMap::new(),
+        tool_dependencies: Vec::new(),
         output_path: Some(output.clone()),
     })?;
     state.add_receipt(run.receipt)?;
@@ -495,6 +564,8 @@ pub(crate) fn run_runtime_smoke(
         stage_key: "runtime-smoke",
         tool_name: "wasmtime",
         args,
+        environment_overrides: BTreeMap::new(),
+        tool_dependencies: Vec::new(),
         output_path: None,
     })?;
     state.add_receipt(run.receipt.clone())?;
@@ -571,6 +642,8 @@ fn read_component_imports(
         stage_key,
         tool_name: "wasm-tools",
         args,
+        environment_overrides: BTreeMap::new(),
+        tool_dependencies: Vec::new(),
         output_path: None,
     })?;
     state.add_receipt(run.receipt.clone())?;
@@ -717,17 +790,34 @@ pub(crate) fn invoke(
     workspace: &StageWorkspace,
     invocation: StageInvocation<'_>,
 ) -> Result<crate::ToolRun, Error> {
+    let environment =
+        merge_tool_environment(tool_environment(&prepared.toolchain, workspace)?, invocation.environment_overrides)?;
     run_offline_tool(&prepared.toolchain, ToolInvocation {
         stage_key: invocation.stage_key.to_string(),
         tool_name: invocation.tool_name.to_string(),
         args: invocation.args,
         cwd: workspace.source.clone(),
         work_root: workspace.root.clone(),
-        env: tool_environment(&prepared.toolchain, workspace)?,
+        env: environment,
+        tool_dependencies: invocation.tool_dependencies,
         read_only_inputs: read_only_inputs(prepared),
         output_path: invocation.output_path,
         limits: crate::ToolLimits::default(),
     })
+}
+
+fn merge_tool_environment(
+    mut base: BTreeMap<String, String>,
+    overrides: BTreeMap<String, String>,
+) -> Result<BTreeMap<String, String>, Error> {
+    for (key, value) in overrides {
+        if base.insert(key.clone(), value).is_some() {
+            return Err(Error::Invalid(format!("tool environment override duplicates `{key}`")));
+        }
+    }
+    debug_assert!(base.contains_key("HOME"));
+    debug_assert!(base.contains_key("CARGO_TARGET_DIR"));
+    Ok(base)
 }
 
 fn read_only_inputs(prepared: &PreparedPipeline) -> Vec<PathBuf> {

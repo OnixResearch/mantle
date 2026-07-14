@@ -24,18 +24,39 @@ const TEST_TIMEOUT_MS: u64 = 250;
 const TEST_OUTPUT_BYTES: u64 = 1024;
 const OVERSIZED_ARGUMENT_BYTES: usize = 16 * 1024 + 1;
 const OVERSIZED_ENV_VALUE_BYTES: usize = 64 * 1024 + 1;
+const FAILURE_EXIT_CODE: u8 = 7;
 
 #[test]
 fn offline_tool_emits_bound_success_receipt() {
     let fixture = Fixture::new(&find_program("echo"));
-    let run = run_offline_tool(&fixture.toolchain, fixture.invocation(vec!["receipt-ok".to_string()]))
-        .expect("bounded echo invocation succeeds");
+    let mut invocation = fixture.invocation(vec!["receipt-ok".to_string()]);
+    invocation.env.insert("FIXTURE_MODE".to_string(), "bounded".to_string());
+    invocation.tool_dependencies.push("runner".to_string());
+    let run = run_offline_tool(&fixture.toolchain, invocation).expect("bounded echo invocation succeeds");
 
     assert!(run.success, "{run:#?}");
     assert_eq!(run.stdout, b"receipt-ok\n");
     assert_eq!(run.receipt.status, "succeeded");
     assert_eq!(run.receipt.stdout_blake3, Blake3Identity::from_slice(b"receipt-ok\n"));
+    assert_eq!(run.receipt.environment.get("FIXTURE_MODE").map(String::as_str), Some("bounded"));
+    assert_eq!(run.receipt.tool_dependencies.len(), 1);
+    assert_eq!(run.receipt.tool_dependencies[0].name, "runner");
     assert!(!fixture.root.path().join(".mantle-tool-logs").exists());
+}
+
+#[test]
+fn offline_tool_preserves_failed_child_diagnostic_before_output_hashing() {
+    let fixture = Fixture::new(&find_program("sh"));
+    let output = fixture.work.join("partial.wasm");
+    let script = format!(": > {}; echo authoritative-child-diagnostic >&2; exit {FAILURE_EXIT_CODE}", output.display());
+    let mut invocation = fixture.invocation(vec!["-c".to_string(), script]);
+    invocation.output_path = Some(output);
+    let run = run_offline_tool(&fixture.toolchain, invocation).expect("failed child produces a bounded receipt");
+
+    assert!(!run.success);
+    assert_eq!(run.receipt.status, "failed");
+    assert_eq!(run.receipt.output_blake3, None);
+    assert!(String::from_utf8_lossy(&run.stderr).contains("authoritative-child-diagnostic"));
 }
 
 #[test]
@@ -123,6 +144,12 @@ fn offline_tool_rejects_symlink_cwd_and_argument_environment_bounds() {
     oversized_env.env.insert("OVERSIZED".to_string(), "v".repeat(OVERSIZED_ENV_VALUE_BYTES));
     let error = run_offline_tool(&fixture.toolchain, oversized_env).expect_err("oversized env must fail");
     assert!(error.to_string().contains("environment key/value exceeds"));
+
+    let mut duplicate_dependency = fixture.invocation(Vec::new());
+    duplicate_dependency.tool_dependencies = vec!["runner".to_string(), "runner".to_string()];
+    let error = run_offline_tool(&fixture.toolchain, duplicate_dependency)
+        .expect_err("duplicate subordinate tool identities must fail");
+    assert!(error.to_string().contains("tool dependency names must be unique"));
 }
 
 struct Fixture {
@@ -172,6 +199,7 @@ impl Fixture {
             cwd: self.work.clone(),
             work_root: self.root.path().to_path_buf(),
             env: BTreeMap::new(),
+            tool_dependencies: Vec::new(),
             read_only_inputs: Vec::new(),
             output_path: None,
             limits: ToolLimits::default(),

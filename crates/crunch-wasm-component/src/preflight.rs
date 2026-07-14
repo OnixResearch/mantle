@@ -9,6 +9,7 @@ use crunch_wasm_component_core::LockValidationRequest;
 use crunch_wasm_component_core::SourceAcquisitionPlan;
 use crunch_wasm_component_core::ToolCohort;
 use crunch_wasm_component_core::ToolIdentity;
+use crunch_wasm_component_core::WizerMode;
 use crunch_wasm_component_core::WkgLock;
 use crunch_wasm_component_core::finalize_generated_inputs;
 use crunch_wasm_component_core::plan_source_acquisition;
@@ -36,6 +37,7 @@ pub(crate) struct PreparedPipeline {
     pub request_blake3: Blake3Identity,
     pub manifest_blake3: Blake3Identity,
     pub wit_profile_blake3: Blake3Identity,
+    pub wizer_configuration_blake3: Option<Blake3Identity>,
     pub aot_configuration_blake3: Option<Blake3Identity>,
     pub toolchain: VerifiedToolchain,
     pub generated_plan: GeneratedInputPlan,
@@ -59,6 +61,7 @@ pub(crate) fn prepare_pipeline(request: ComponentPipelineRequest) -> Result<Prep
         .manifest_identity_blake3
         .ok_or_else(|| Error::Invalid("validated component manifest omitted its identity".to_string()))?;
     let wit_profile_blake3 = identity(&request.manifest.wit, "WIT profile")?;
+    let wizer_configuration_blake3 = validate_wizer_configuration(&request)?;
     let aot_configuration_blake3 = validate_aot_configuration(&request)?;
     let generated = finalize_generated_inputs(request.generated_inputs.clone());
     let generated_plan = generated.plan.ok_or_else(|| core_blockers("generated-inputs", &generated.blockers))?;
@@ -87,6 +90,7 @@ pub(crate) fn prepare_pipeline(request: ComponentPipelineRequest) -> Result<Prep
         request_blake3,
         manifest_blake3,
         wit_profile_blake3,
+        wizer_configuration_blake3,
         aot_configuration_blake3,
         toolchain,
         generated_plan,
@@ -116,6 +120,9 @@ fn validate_request_shape(request: &ComponentPipelineRequest) -> Result<(), Erro
     ] {
         validate_relative_path(Path::new(relative))?;
     }
+    if let Some(core_module) = &request.cargo_core_module_relative_path {
+        validate_relative_path(Path::new(core_module))?;
+    }
     if request.expected_runtime_stdout.len() > MAX_RUNTIME_STDOUT_BYTES {
         return Err(Error::Invalid("expected runtime stdout exceeds one MiB".to_string()));
     }
@@ -132,6 +139,29 @@ fn validate_request_shape(request: &ComponentPipelineRequest) -> Result<(), Erro
     debug_assert!(!request.wit_relative_path.is_empty());
     debug_assert!(request.runtime_invoke.as_ref().is_none_or(|invoke| !invoke.starts_with('-')));
     Ok(())
+}
+
+fn validate_wizer_configuration(request: &ComponentPipelineRequest) -> Result<Option<Blake3Identity>, Error> {
+    let is_disabled = request.manifest.wizer.mode == WizerMode::Disabled;
+    if is_disabled {
+        if request.cargo_core_module_relative_path.is_some() {
+            return Err(Error::Invalid("disabled Wizer request must not declare a core-module output".to_string()));
+        }
+        return Ok(None);
+    }
+    if request.cargo_core_module_relative_path.is_none() {
+        return Err(Error::Invalid("enabled Wizer request requires a core-module output".to_string()));
+    }
+    if !request.manifest.wizer.deterministic_virtual_imports.is_empty() {
+        return Err(Error::Blocked(
+            "Wizer virtual imports require explicit receipt-bound stub modules; none are admitted by this profile"
+                .to_string(),
+        ));
+    }
+    let configuration = identity(&request.manifest.wizer, "Wizer configuration")?;
+    debug_assert!(!is_disabled);
+    debug_assert!(request.cargo_core_module_relative_path.is_some());
+    Ok(Some(configuration))
 }
 
 fn validate_octet_profile(request: &ComponentPipelineRequest, toolchain: &VerifiedToolchain) -> Result<(), Error> {

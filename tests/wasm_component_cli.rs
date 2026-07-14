@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -14,6 +15,7 @@ use crunch_wasm_component::ToolchainManifest;
 use crunch_wasm_component_core::AotConfig;
 use crunch_wasm_component_core::AotMode;
 use crunch_wasm_component_core::Blake3Identity;
+use crunch_wasm_component_core::BoundedComponentClaim;
 use crunch_wasm_component_core::ComponentManifest;
 use crunch_wasm_component_core::Composition;
 use crunch_wasm_component_core::CompositionNode;
@@ -39,7 +41,9 @@ use crunch_wasm_component_core::VirtualizationMode;
 use crunch_wasm_component_core::VirtualizationRule;
 use crunch_wasm_component_core::WasiSubsystem;
 use crunch_wasm_component_core::WitSelection;
+use crunch_wasm_component_core::WizerComponentizationConfig;
 use crunch_wasm_component_core::WizerConfig;
+use crunch_wasm_component_core::WizerLinkerSplitConfig;
 use crunch_wasm_component_core::WizerMode;
 use sha2::Digest;
 use sha2::Sha256;
@@ -47,7 +51,7 @@ use sha2::Sha256;
 const PACKAGE_VERSION: &str = "0.1.0";
 const EXPECTED_STDOUT: &str = "42\n";
 const TOOLCHAIN_ENV: &str = "MANTLE_WASM_COMPONENT_TOOLCHAIN";
-const REQUIRED_RECEIPT_TOOL_COUNT: usize = 7;
+const REQUIRED_RECEIPT_TOOL_COUNT: usize = 8;
 
 struct CliFixture {
     _temp: tempfile::TempDir,
@@ -124,14 +128,25 @@ fn production_cli_executes_pinned_pipeline_and_publishes_rehashable_component_ev
     assert_eq!(report.final_status, "succeeded");
     assert!(report.blockers.is_empty());
     let bundle = report.materialization_bundle.as_ref().expect("materialization bundle");
-    assert!(report.component_report.is_some());
+    assert!(bundle.wizer.as_ref().is_some_and(|wizer| wizer.deterministic_outputs_match));
+    let component_report = report.component_report.as_ref().expect("component report");
+    let compiled_validation = component_report
+        .nodes
+        .iter()
+        .find(|node| node.stage_key == "compiled-validation")
+        .expect("compiled validation node");
+    assert_eq!(compiled_validation.claims, vec![BoundedComponentClaim::CoreModuleValidated]);
+    assert!(!compiled_validation.claims.contains(&BoundedComponentClaim::PortableBytesValidated));
     assert!(report.component_attestation.is_some());
     assert!(report.release_binding.as_ref().is_some_and(|binding| !binding.release_eligible));
     assert!(output.join("execution-report.json").is_file());
     assert!(output.join("materialization-bundle.json").is_file());
     assert!(output.join("component-attestation.json").is_file());
     assert!(output.join("component-release-binding.json").is_file());
-    assert!(output.join("artifacts/compiled.wasm").is_file());
+    assert!(output.join("artifacts/compiled-core.wasm").is_file());
+    assert!(output.join("artifacts/wizer-first-core.wasm").is_file());
+    assert!(output.join("artifacts/wizer-repeated-core.wasm").is_file());
+    assert!(output.join("artifacts/componentized.wasm").is_file());
     assert!(output.join("artifacts/composed.wasm").is_file());
     assert!(output.join("artifacts/virtualized.wasm").is_file());
     assert!(output.join("artifacts/normalized.wasm").is_file());
@@ -228,24 +243,50 @@ fn production_cli_fails_closed_on_identity_interface_composition_and_runtime_dri
     let report = report_from_output(&output);
     assert!(report.blockers.iter().any(|blocker| blocker.code == "wasmtime-stdout-mismatch"));
 
-    let mut wizer_without_core_handoff = fixture.request.clone();
-    wizer_without_core_handoff.manifest.wizer = WizerConfig {
-        mode: WizerMode::Deterministic,
-        initialization_entrypoint: Some("wizer.initialize".to_string()),
-        deterministic_virtual_imports: Vec::new(),
-    };
-    let (output, _) = fixture.run(&wizer_without_core_handoff, "wizer-without-core-handoff");
-    let report = report_from_output(&output);
-    assert!(report.blockers.iter().any(|blocker| blocker.code == "wizer-pre-component-core-module-required"));
-    let wizer = report
-        .component_report
+    let mut compile_environment_drift = fixture.request.clone();
+    compile_environment_drift
+        .manifest
+        .wizer
+        .linker_split
+        .as_mut()
         .unwrap()
-        .nodes
-        .into_iter()
-        .find(|node| node.kind == crunch_wasm_component_core::ComponentStageKind::Wizer)
-        .unwrap();
-    assert_eq!(wizer.status, crunch_wasm_component_core::ComponentStageStatus::Denied);
-    assert!(wizer.artifact.is_none(), "Component Model bytes must not be labeled as Wizer output");
+        .compile_environment
+        .insert("RUSTFLAGS".to_string(), "-C opt-level=1".to_string());
+    let (output, evidence) = fixture.run(&compile_environment_drift, "wizer-compile-environment-drift");
+    assert_preflight_rejected(&output, &evidence, "invalid-wizer-linker-split");
+
+    let mut ambient_compile_state = fixture.request.clone();
+    ambient_compile_state
+        .manifest
+        .wizer
+        .linker_split
+        .as_mut()
+        .unwrap()
+        .compile_environment
+        .insert("AMBIENT_STATE".to_string(), "forbidden".to_string());
+    let (output, evidence) = fixture.run(&ambient_compile_state, "wizer-ambient-compile-state");
+    assert_preflight_rejected(&output, &evidence, "invalid-wizer-linker-split");
+
+    let mut unsupported_virtual_import = fixture.request.clone();
+    unsupported_virtual_import
+        .manifest
+        .wizer
+        .deterministic_virtual_imports
+        .push("virtual:clock".to_string());
+    let (output, evidence) = fixture.run(&unsupported_virtual_import, "wizer-virtual-import");
+    assert_preflight_rejected(&output, &evidence, "Wizer virtual imports require explicit receipt-bound stub modules");
+
+    let mut componentization_drift = fixture.request.clone();
+    componentization_drift
+        .manifest
+        .wizer
+        .componentization
+        .as_mut()
+        .unwrap()
+        .args
+        .push("--skip-validation".to_string());
+    let (output, evidence) = fixture.run(&componentization_drift, "wizer-componentization-drift");
+    assert_preflight_rejected(&output, &evidence, "invalid-wizer-componentization");
 }
 
 fn report_from_output(output: &std::process::Output) -> PipelineExecutionReport {
@@ -310,7 +351,7 @@ fn create_source(toolchain: &Path, source: &Path) {
     fs::write(&bindings_path, bindings).unwrap();
     fs::write(
         source.join("src/lib.rs"),
-        "#![no_std]\nmod app;\nstruct Component;\nimpl app::Guest for Component { fn run() -> u32 { 42 } }\napp::export!(Component with_types_in app);\n#[panic_handler]\nfn panic(_: &core::panic::PanicInfo<'_>) -> ! { loop {} }\n",
+        "#![no_std]\nmod app;\nstruct Component;\nimpl app::Guest for Component { fn run() -> u32 { 42 } }\napp::export!(Component with_types_in app);\n#[unsafe(export_name = \"wizer.initialize\")]\npub extern \"C\" fn wizer_initialize() {}\n#[panic_handler]\nfn panic(_: &core::panic::PanicInfo<'_>) -> ! { loop {} }\n",
     )
     .unwrap();
 }
@@ -472,9 +513,21 @@ fn request(
                 expected_runtime_profile_identity_blake3: runtime_profile,
             },
             wizer: WizerConfig {
-                mode: WizerMode::Disabled,
-                initialization_entrypoint: None,
+                mode: WizerMode::Deterministic,
+                initialization_entrypoint: Some("wizer.initialize".to_string()),
                 deterministic_virtual_imports: Vec::new(),
+                linker_split: Some(WizerLinkerSplitConfig {
+                    linker: "wasm-component-ld".to_string(),
+                    linker_args: vec!["--skip-wit-component".to_string()],
+                    compile_environment: BTreeMap::from([
+                        ("CARGO_TARGET_WASM32_WASIP2_LINKER".to_string(), "wasm-component-ld".to_string()),
+                        ("RUSTFLAGS".to_string(), "-C link-arg=--skip-wit-component".to_string()),
+                    ]),
+                }),
+                componentization: Some(WizerComponentizationConfig {
+                    tool: "wasm-tools".to_string(),
+                    args: Vec::new(),
+                }),
             },
             aot: AotConfig {
                 mode: AotMode::Disabled,
@@ -507,6 +560,7 @@ fn request(
             object: package_object,
         }],
         cargo_component_relative_path: "wasm32-wasip2/release/mantle_wasm_production_fixture.wasm".to_string(),
+        cargo_core_module_relative_path: Some("wasm32-wasip2/release/mantle_wasm_production_fixture.wasm".to_string()),
         composition_dependencies: vec![CompositionDependency {
             package: "root:component".to_string(),
             source: CompositionDependencySource::CompiledComponent,
@@ -627,6 +681,7 @@ fn assert_required_tools_executed(report: &PipelineExecutionReport) {
         "wkg",
         "wit-bindgen",
         "cargo",
+        "wizer",
         "wac",
         "wasm-tools",
         "wasmtime",
@@ -639,10 +694,15 @@ fn assert_required_tools_executed(report: &PipelineExecutionReport) {
             "missing production receipt for {tool}"
         );
     }
-    assert!(
-        report
-            .stage_receipts
-            .iter()
-            .all(|receipt| !receipt.read_only_inputs.is_empty() || receipt.program.ends_with("/bin/cargo"))
+    let compilation = report.stage_receipts.iter().find(|receipt| receipt.stage_key == "compilation").unwrap();
+    assert_eq!(
+        compilation.environment.get("RUSTFLAGS").map(String::as_str),
+        Some("-C link-arg=--skip-wit-component")
     );
+    assert!(compilation.tool_dependencies.iter().any(|dependency| dependency.name == "wasm-component-ld"));
+    assert!(report.stage_receipts.iter().all(|receipt| {
+        !receipt.read_only_inputs.is_empty()
+            || receipt.program.ends_with("/bin/cargo")
+            || receipt.program.ends_with("/bin/wizer")
+    }));
 }

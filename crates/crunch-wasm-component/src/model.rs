@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use crunch_wasm_component_core::Blake3Identity;
@@ -49,6 +50,7 @@ pub struct ComponentPipelineRequest {
     pub wit_relative_path: String,
     pub package_materializations: Vec<PackageMaterialization>,
     pub cargo_component_relative_path: String,
+    pub cargo_core_module_relative_path: Option<String>,
     pub composition_dependencies: Vec<CompositionDependency>,
     pub package_resolution_network: bool,
     pub runtime_invoke: Option<String>,
@@ -112,12 +114,21 @@ pub struct VerifiedToolchain {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReceiptToolDependency {
+    pub name: String,
+    pub path: String,
+    pub digest_blake3: Blake3Identity,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolExecutionReceipt {
     pub schema: String,
     pub stage_key: String,
     pub program: String,
     pub program_blake3: Blake3Identity,
     pub args: Vec<String>,
+    pub environment: BTreeMap<String, String>,
+    pub tool_dependencies: Vec<ReceiptToolDependency>,
     pub read_only_inputs: Vec<String>,
     pub network_admitted: bool,
     pub status: String,

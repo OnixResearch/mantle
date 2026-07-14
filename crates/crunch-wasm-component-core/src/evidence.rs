@@ -154,6 +154,12 @@ fn validate_request(request: &ComponentEvidenceRequest) -> Vec<ComponentBlocker>
     validate_materialization_stage(request, &mut blockers);
     validate_optional_stage(request, ComponentStageKind::Aot, request.bundle.aot.is_some(), &mut blockers);
     validate_optional_stage(request, ComponentStageKind::Wizer, request.bundle.wizer.is_some(), &mut blockers);
+    validate_optional_stage(
+        request,
+        ComponentStageKind::Componentization,
+        request.bundle.wizer.is_some(),
+        &mut blockers,
+    );
     debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
     debug_assert!(blockers.iter().all(|item| !item.message.is_empty()));
     blockers
@@ -330,6 +336,7 @@ fn stage_label(kind: ComponentStageKind) -> String {
         ComponentStageKind::Lock => "lock",
         ComponentStageKind::BindingGeneration => "binding-generation",
         ComponentStageKind::Compilation => "compilation",
+        ComponentStageKind::Componentization => "componentization",
         ComponentStageKind::Composition => "composition",
         ComponentStageKind::Virtualization => "virtualization",
         ComponentStageKind::MetadataNormalization => "metadata-normalization",

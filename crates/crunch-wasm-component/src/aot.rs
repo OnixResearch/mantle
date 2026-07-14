@@ -54,6 +54,8 @@ pub(crate) fn run_aot_stage(
         stage_key: "aot",
         tool_name: "wasmtime",
         args,
+        environment_overrides: std::collections::BTreeMap::new(),
+        tool_dependencies: Vec::new(),
         output_path: Some(output.clone()),
     })?;
     state.add_receipt(run.receipt)?;

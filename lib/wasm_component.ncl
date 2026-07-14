@@ -66,6 +66,8 @@ let OutputClass = [|
   'runtime-profile,
   'wit-package,
   'generated-bindings,
+  'core-module,
+  'transformed-core-module,
   'portable-component,
   'validated-portable-component,
   'transformed-portable-component,
@@ -195,10 +197,28 @@ let ValidationProfiles = {
   expected_runtime_profile_identity_blake3 | Blake3Hex,
 } in
 
+let WizerCompileEnvironment = {
+  RUSTFLAGS | String,
+  CARGO_TARGET_WASM32_WASIP2_LINKER | String,
+} in
+
+let WizerLinkerSplit = {
+  linker | NonEmptyString,
+  linker_args | Array NonEmptyString,
+  compile_environment | WizerCompileEnvironment,
+} in
+
+let WizerComponentization = {
+  tool | NonEmptyString,
+  args | Array String | default = [],
+} in
+
 let Wizer = {
   mode | WizerMode | default = 'disabled,
   initialization_entrypoint | String | optional,
   deterministic_virtual_imports | Array String | default = [],
+  linker_split | WizerLinkerSplit | optional,
+  componentization | WizerComponentization | optional,
 } in
 
 let Aot = {
@@ -314,6 +334,7 @@ let command_plan = fun component_manifest => {
     defaults = "deny-all",
     rules = component_manifest.virtualization.rules,
   },
+  wizer = component_manifest.wizer,
 } in
 
 let runtime_profile = fun manifest => {
@@ -370,6 +391,9 @@ let composition_contract = Composition in
 let virtualization_contract = Virtualization in
 let wasi_subsystem_contract = WasiSubsystem in
 let validation_profiles_contract = ValidationProfiles in
+let wizer_compile_environment_contract = WizerCompileEnvironment in
+let wizer_linker_split_contract = WizerLinkerSplit in
+let wizer_componentization_contract = WizerComponentization in
 let wizer_contract = Wizer in
 let aot_contract = Aot in
 let output_class_contract = OutputClass in
@@ -394,6 +418,9 @@ let component_export_request_contract = ComponentExportRequest in
   Virtualization = virtualization_contract,
   WasiSubsystem = wasi_subsystem_contract,
   ValidationProfiles = validation_profiles_contract,
+  WizerCompileEnvironment = wizer_compile_environment_contract,
+  WizerLinkerSplit = wizer_linker_split_contract,
+  WizerComponentization = wizer_componentization_contract,
   Wizer = wizer_contract,
   Aot = aot_contract,
   OutputClass = output_class_contract,

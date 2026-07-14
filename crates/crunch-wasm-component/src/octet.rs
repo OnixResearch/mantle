@@ -144,6 +144,8 @@ pub(crate) fn run_octet_validation(
         stage_key: "octet-validation",
         tool_name: "cargo-octet",
         args,
+        environment_overrides: std::collections::BTreeMap::new(),
+        tool_dependencies: Vec::new(),
         output_path: None,
     })?;
     state.add_receipt(collect.receipt)?;
@@ -273,6 +275,8 @@ fn verify_octet_bundle(
         stage_key: "octet-artifact-verification",
         tool_name: "cargo-octet",
         args,
+        environment_overrides: std::collections::BTreeMap::new(),
+        tool_dependencies: Vec::new(),
         output_path: None,
     })?;
     state.add_receipt(run.receipt)?;

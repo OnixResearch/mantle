@@ -44,6 +44,13 @@ const MAX_OPTIONAL_STAGE_INPUTS: u32 = 256;
 const MAX_COMPONENT_STRING_BYTES: u32 = 4096;
 const CREDENTIAL_HANDLE_PREFIX: &str = "secret://";
 const EXACT_REQUIREMENT_PREFIX: char = '=';
+const WIZER_LINKER: &str = "wasm-component-ld";
+const WIZER_COMPONENTIZER: &str = "wasm-tools";
+const WIZER_LINKER_ARG: &str = "--skip-wit-component";
+const WIZER_RUSTFLAGS_KEY: &str = "RUSTFLAGS";
+const WIZER_RUSTFLAGS_VALUE: &str = "-C link-arg=--skip-wit-component";
+const WIZER_LINKER_ENV_KEY: &str = "CARGO_TARGET_WASM32_WASIP2_LINKER";
+const WIZER_COMPILE_ENVIRONMENT_ENTRY_COUNT: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManifestValidation {
@@ -435,15 +442,7 @@ fn validate_outputs(manifest: &ComponentManifest, blockers: &mut Vec<ComponentBl
 
 fn validate_optional_stage_config(manifest: &ComponentManifest, blockers: &mut Vec<ComponentBlocker>) {
     let blocker_count_before = blockers.len();
-    if manifest.wizer.mode == WizerMode::Deterministic
-        && manifest.wizer.initialization_entrypoint.as_ref().is_none_or(|entrypoint| entrypoint.is_empty())
-    {
-        blockers.push(blocker(
-            "missing-wizer-entrypoint",
-            "wizer",
-            "deterministic Wizer configuration requires an initialization entrypoint",
-        ));
-    }
+    validate_wizer_stage_config(manifest, blockers);
     validate_optional_stage_sets(manifest, blockers);
     if manifest.aot.mode == AotMode::TrustedNative
         && (manifest.aot.target.as_ref().is_none_or(|target| target.is_empty())
@@ -457,6 +456,81 @@ fn validate_optional_stage_config(manifest: &ComponentManifest, blockers: &mut V
     }
     debug_assert!(blockers.len() >= blocker_count_before);
     debug_assert!(blockers.iter().skip(blocker_count_before).all(|item| !item.code.is_empty()));
+}
+
+fn validate_wizer_stage_config(manifest: &ComponentManifest, blockers: &mut Vec<ComponentBlocker>) {
+    let is_disabled = manifest.wizer.mode == WizerMode::Disabled;
+    if is_disabled {
+        if manifest.wizer.linker_split.is_some() || manifest.wizer.componentization.is_some() {
+            blockers.push(blocker(
+                "disabled-wizer-stage-config",
+                "wizer",
+                "disabled Wizer configuration must not declare linker or componentization stages",
+            ));
+        }
+        return;
+    }
+    if manifest.wizer.initialization_entrypoint.as_ref().is_none_or(|entrypoint| entrypoint.is_empty()) {
+        blockers.push(blocker(
+            "missing-wizer-entrypoint",
+            "wizer",
+            "enabled Wizer configuration requires an initialization entrypoint",
+        ));
+    }
+    validate_wizer_linker_split(manifest, blockers);
+    validate_wizer_componentization(manifest, blockers);
+    debug_assert!(!is_disabled);
+    debug_assert!(manifest.wizer.mode != WizerMode::Disabled);
+}
+
+fn validate_wizer_linker_split(manifest: &ComponentManifest, blockers: &mut Vec<ComponentBlocker>) {
+    let Some(linker) = &manifest.wizer.linker_split else {
+        blockers.push(blocker(
+            "missing-wizer-linker-split",
+            "wizer.linker-split",
+            "enabled Wizer requires an explicit wasm-component-ld core-module split",
+        ));
+        return;
+    };
+    let has_linker = linker.linker == WIZER_LINKER;
+    let has_split_arg = linker.linker_args.as_slice() == [WIZER_LINKER_ARG];
+    let has_rustflags = linker
+        .compile_environment
+        .get(WIZER_RUSTFLAGS_KEY)
+        .is_some_and(|value| value == WIZER_RUSTFLAGS_VALUE);
+    let has_linker_env =
+        linker.compile_environment.get(WIZER_LINKER_ENV_KEY).is_some_and(|value| value == WIZER_LINKER);
+    let has_exact_environment =
+        linker.compile_environment.len() == WIZER_COMPILE_ENVIRONMENT_ENTRY_COUNT && has_rustflags && has_linker_env;
+    if !has_linker || !has_split_arg || !has_exact_environment {
+        blockers.push(blocker(
+            "invalid-wizer-linker-split",
+            "wizer.linker-split",
+            "Wizer linker split must bind the pinned linker, skip-wit-component argument, and exact compile environment",
+        ));
+    }
+    debug_assert!(!linker.linker.is_empty());
+    debug_assert!(!linker.linker_args.is_empty());
+}
+
+fn validate_wizer_componentization(manifest: &ComponentManifest, blockers: &mut Vec<ComponentBlocker>) {
+    let Some(componentization) = &manifest.wizer.componentization else {
+        blockers.push(blocker(
+            "missing-wizer-componentization",
+            "wizer.componentization",
+            "enabled Wizer requires an explicit re-componentization stage",
+        ));
+        return;
+    };
+    if componentization.tool != WIZER_COMPONENTIZER || !componentization.args.is_empty() {
+        blockers.push(blocker(
+            "invalid-wizer-componentization",
+            "wizer.componentization",
+            "bounded Wizer re-componentization requires pinned wasm-tools with no implicit options",
+        ));
+    }
+    debug_assert!(!componentization.tool.is_empty());
+    debug_assert!(componentization.args.is_empty() || componentization.tool == WIZER_COMPONENTIZER);
 }
 
 fn validate_optional_stage_sets(manifest: &ComponentManifest, blockers: &mut Vec<ComponentBlocker>) {

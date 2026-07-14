@@ -31,6 +31,7 @@ pub enum ComponentStageKind {
     Lock,
     BindingGeneration,
     Compilation,
+    Componentization,
     Composition,
     Virtualization,
     MetadataNormalization,
@@ -55,6 +56,7 @@ pub enum ComponentStageStatus {
 #[serde(rename_all = "kebab-case")]
 pub enum BoundedComponentClaim {
     ExactInputIdentities,
+    CoreModuleValidated,
     PortableBytesValidated,
     OctetReportBound,
     DenyAllVirtualizationPlanned,

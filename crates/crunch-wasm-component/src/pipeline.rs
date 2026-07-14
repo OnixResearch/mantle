@@ -3,12 +3,13 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crunch_wasm_component_core::AotMode;
+use crunch_wasm_component_core::BoundedComponentClaim;
 use crunch_wasm_component_core::BuildValidationBinding;
 use crunch_wasm_component_core::ComponentStageKind;
 use crunch_wasm_component_core::ComponentStageStatus;
 use crunch_wasm_component_core::PortableAdmissionRequest;
 use crunch_wasm_component_core::StoreObject;
-use crunch_wasm_component_core::WizerMode;
+use crunch_wasm_component_core::TransformAdmission;
 use crunch_wasm_component_core::bind_portable_admission;
 use crunch_wasm_component_core::cohort_identity;
 
@@ -17,6 +18,7 @@ use crate::Error;
 use crate::PipelineExecutionReport;
 use crate::PipelinePaths;
 use crate::aot::run_aot_stage;
+use crate::materialization::MaterializationOptions;
 use crate::materialization::materialize_bundle;
 use crate::octet::run_octet_validation;
 use crate::preflight::PreparedPipeline;
@@ -24,6 +26,7 @@ use crate::preflight::prepare_pipeline;
 use crate::reporting::ExecutionState;
 use crate::reporting::StageEvidence;
 use crate::reporting::finish_execution;
+use crate::stages::ExecutedArtifact;
 use crate::stages::StageWorkspace;
 use crate::stages::ValidationStage;
 use crate::stages::create_workspace;
@@ -37,6 +40,7 @@ use crate::stages::run_validation_stage;
 use crate::stages::run_virtualization_stage;
 use crate::stages::run_wkg_stage;
 use crate::stages::stage_source_and_inputs;
+use crate::wizer::run_wizer_pipeline;
 
 pub fn run_component_pipeline(
     request: ComponentPipelineRequest,
@@ -95,7 +99,11 @@ fn execute_available_pipeline(
         add_not_run_bundle(state)?;
         return Ok(());
     };
-    let Some(composed) = compose_and_validate(prepared, workspace, state, &compiled.path)? else {
+    let Some(wizer) = run_wizer_pipeline(prepared, workspace, state, compiled)? else {
+        add_not_run_bundle(state)?;
+        return Ok(());
+    };
+    let Some(composed) = compose_and_validate(prepared, workspace, state, &wizer.component.path)? else {
         add_not_run_bundle(state)?;
         return Ok(());
     };
@@ -111,33 +119,48 @@ fn execute_available_pipeline(
         add_not_run_bundle(state)?;
         return Ok(());
     }
-    if !record_wizer_boundary(prepared, state)? {
-        add_not_run_bundle(state)?;
-        return Ok(());
-    }
-    admit_and_materialize(prepared, workspace, state, portable)
+    admit_and_materialize(prepared, workspace, state, portable, wizer.admission)
 }
 
 fn compile_and_validate(
     prepared: &PreparedPipeline,
     workspace: &StageWorkspace,
     state: &mut ExecutionState,
-) -> Result<Option<StageArtifact>, Error> {
-    let Some((path, object)) = run_compilation_stage(prepared, workspace, state)? else {
+) -> Result<Option<ExecutedArtifact>, Error> {
+    let Some(compiled) = run_compilation_stage(prepared, workspace, state)? else {
         return Ok(None);
+    };
+    let is_core_module = prepared.request.cargo_core_module_relative_path.is_some();
+    let validation_claim = if is_core_module {
+        BoundedComponentClaim::CoreModuleValidated
+    } else {
+        BoundedComponentClaim::PortableBytesValidated
     };
     if run_validation_stage(prepared, workspace, state, ValidationStage {
         stage_key: "compiled-validation",
-        artifact_path: &path,
-        artifact: &object,
+        artifact_path: &compiled.path,
+        artifact: &compiled.object,
+        claim: validation_claim,
     })?
     .is_none()
     {
         return Ok(None);
     }
-    publish_validated_artifact(&path, "compiled.wasm", &object, workspace)?;
-    state.add_artifact("compiled-component", &object)?;
-    Ok(Some(StageArtifact { path, object }))
+    let published_name = if is_core_module {
+        "compiled-core.wasm"
+    } else {
+        "compiled.wasm"
+    };
+    let artifact_role = if is_core_module {
+        "compiled-core-module"
+    } else {
+        "compiled-component"
+    };
+    publish_validated_artifact(&compiled.path, published_name, &compiled.object, workspace)?;
+    state.add_artifact(artifact_role, &compiled.object)?;
+    debug_assert!(compiled.path.is_file());
+    debug_assert_eq!(is_core_module, published_name == "compiled-core.wasm");
+    Ok(Some(compiled))
 }
 
 fn compose_and_validate(
@@ -153,6 +176,7 @@ fn compose_and_validate(
         stage_key: "composed-validation",
         artifact_path: &path,
         artifact: &object,
+        claim: BoundedComponentClaim::PortableBytesValidated,
     })?
     .is_none()
     {
@@ -176,6 +200,7 @@ fn virtualize_and_validate(
         stage_key: "virtualized-validation",
         artifact_path: &path,
         artifact: &object,
+        claim: BoundedComponentClaim::PortableBytesValidated,
     })?
     .is_none()
     {
@@ -192,6 +217,8 @@ fn normalize_and_validate(
     state: &mut ExecutionState,
     virtualized_path: &Path,
 ) -> Result<Option<PortableOutput>, Error> {
+    debug_assert!(virtualized_path.is_absolute());
+    debug_assert!(virtualized_path.is_file());
     let Some((path, object)) = run_metadata_normalization_stage(prepared, workspace, state, virtualized_path)? else {
         return Ok(None);
     };
@@ -199,6 +226,7 @@ fn normalize_and_validate(
         stage_key: "portable-validation",
         artifact_path: &path,
         artifact: &object,
+        claim: BoundedComponentClaim::PortableBytesValidated,
     })?
     else {
         return Ok(None);
@@ -211,35 +239,12 @@ fn normalize_and_validate(
     }))
 }
 
-fn record_wizer_boundary(prepared: &PreparedPipeline, state: &mut ExecutionState) -> Result<bool, Error> {
-    let is_disabled = prepared.request.manifest.wizer.mode == WizerMode::Disabled;
-    if !is_disabled {
-        state.block(
-            "wizer-pre-component-core-module-required",
-            "wizer",
-            "wasm-component-ld can expose a core module only by changing the declared compile/componentization stage graph; this pipeline does not attest that split and will not mislabel Component Model bytes as Wizer-transformed",
-        );
-    }
-    state.push_stage(
-        "wizer",
-        ComponentStageKind::Wizer,
-        if is_disabled {
-            ComponentStageStatus::NotRun
-        } else {
-            ComponentStageStatus::Denied
-        },
-        StageEvidence::new(None, Some(prepared.toolchain.tool_digest("wizer")?), None, Vec::new()),
-    )?;
-    debug_assert_eq!(is_disabled, prepared.request.manifest.wizer.mode == WizerMode::Disabled);
-    debug_assert!(state.stage_inputs.last().is_some_and(|stage| stage.stage_key == "wizer"));
-    Ok(is_disabled)
-}
-
 fn admit_and_materialize(
     prepared: &PreparedPipeline,
     workspace: &StageWorkspace,
     state: &mut ExecutionState,
     portable: PortableOutput,
+    wizer: Option<TransformAdmission>,
 ) -> Result<(), Error> {
     let Some(octet) = run_octet_validation(prepared, workspace, state, &portable.stage.path, &portable.stage.object)?
     else {
@@ -267,7 +272,11 @@ fn admit_and_materialize(
         add_not_run_bundle(state)?;
         return Ok(());
     }
-    materialize_bundle(prepared, workspace, state, &portable.stage.object, aot)?;
+    materialize_bundle(prepared, workspace, state, MaterializationOptions {
+        final_portable: &portable.stage.object,
+        wizer,
+        aot,
+    })?;
     Ok(())
 }
 

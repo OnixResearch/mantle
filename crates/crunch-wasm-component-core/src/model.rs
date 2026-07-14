@@ -1,3 +1,4 @@
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -209,10 +210,25 @@ pub enum WizerMode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WizerLinkerSplitConfig {
+    pub linker: String,
+    pub linker_args: Vec<String>,
+    pub compile_environment: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WizerComponentizationConfig {
+    pub tool: String,
+    pub args: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WizerConfig {
     pub mode: WizerMode,
     pub initialization_entrypoint: Option<String>,
     pub deterministic_virtual_imports: Vec<String>,
+    pub linker_split: Option<WizerLinkerSplitConfig>,
+    pub componentization: Option<WizerComponentizationConfig>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -238,6 +254,8 @@ pub enum OutputClass {
     RuntimeProfile,
     WitPackage,
     GeneratedBindings,
+    CoreModule,
+    TransformedCoreModule,
     PortableComponent,
     ValidatedPortableComponent,
     TransformedPortableComponent,

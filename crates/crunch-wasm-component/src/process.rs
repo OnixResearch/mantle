@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::io::Read;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
@@ -20,11 +21,12 @@ use crunch_wasm_component_core::Blake3Identity;
 use serde::Serialize;
 
 use crate::Error;
+use crate::model::ReceiptToolDependency;
 use crate::model::ToolExecutionReceipt;
 use crate::model::VerifiedToolchain;
 use crate::toolchain::hash_file_bounded;
 
-const TOOL_RECEIPT_SCHEMA: &str = "mantle-wasm-component-tool-execution-receipt-v1";
+const TOOL_RECEIPT_SCHEMA: &str = "mantle-wasm-component-tool-execution-receipt-v2";
 const MAX_TOOL_ARGS: usize = 256;
 const MAX_TOOL_ARG_BYTES: usize = 16 * 1024;
 const MAX_TOOL_ARG_TOTAL_BYTES: usize = 1024 * 1024;
@@ -34,12 +36,15 @@ const MAX_TOOL_ENV_VALUE_BYTES: usize = 64 * 1024;
 const MAX_TOOL_ENV_TOTAL_BYTES: usize = 1024 * 1024;
 const MAX_TOOL_READ_ONLY_INPUTS: usize = 128;
 const MAX_TOOL_READ_ONLY_PATH_BYTES: usize = 16 * 1024;
-const DEFAULT_TOOL_OUTPUT_BYTES: u64 = 16 * 1024 * 1024;
-const MAX_TOOL_OUTPUT_BYTES: u64 = 64 * 1024 * 1024;
-const DEFAULT_TOOL_TIMEOUT_MS: u64 = 300 * 1000;
-const MAX_TOOL_TIMEOUT_MS: u64 = 30 * 60 * 1000;
+const MAX_TOOL_DEPENDENCIES: usize = 16;
+const DEFAULT_TOOL_OUTPUT_BYTES: u64 = 16_777_216;
+const MAX_TOOL_OUTPUT_BYTES: u64 = 67_108_864;
+const DEFAULT_TOOL_TIMEOUT_MS: u64 = 300_000;
+const MAX_TOOL_TIMEOUT_MS: u64 = 1_800_000;
 const TOOL_POLL_INTERVAL_MS: u64 = 20;
-const DRAIN_BUFFER_BYTES: usize = 64 * 1024;
+const DRAIN_BUFFER_BYTES: usize = 65_536;
+const DRAIN_EOF_PROBE_READS: u64 = 1;
+const WAIT_EXTRA_POLLS: u64 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ToolLimits {
@@ -64,6 +69,7 @@ pub struct ToolInvocation {
     pub cwd: PathBuf,
     pub work_root: PathBuf,
     pub env: BTreeMap<String, String>,
+    pub tool_dependencies: Vec<String>,
     pub read_only_inputs: Vec<PathBuf>,
     pub output_path: Option<PathBuf>,
     pub limits: ToolLimits,
@@ -84,11 +90,24 @@ struct ToolReceiptIdentityInput {
     program: String,
     program_blake3: Blake3Identity,
     args: Vec<String>,
+    environment: BTreeMap<String, String>,
+    tool_dependencies: Vec<ReceiptToolDependency>,
     read_only_inputs: Vec<String>,
     network_admitted: bool,
     status: String,
     stdout_blake3: Blake3Identity,
     stderr_blake3: Blake3Identity,
+    output_blake3: Option<Blake3Identity>,
+}
+
+struct ReceiptBuildInput<'a> {
+    invocation: &'a ToolInvocation,
+    program: PathBuf,
+    program_blake3: Blake3Identity,
+    tool_dependencies: Vec<ReceiptToolDependency>,
+    status: &'a str,
+    stdout: &'a [u8],
+    stderr: &'a [u8],
     output_blake3: Option<Blake3Identity>,
 }
 
@@ -104,63 +123,91 @@ pub(crate) struct WaitOutcome {
     pub(crate) failure: Option<&'static str>,
 }
 
+struct SupervisedOutput {
+    outcome: WaitOutcome,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
 pub fn run_offline_tool(toolchain: &VerifiedToolchain, invocation: ToolInvocation) -> Result<ToolRun, Error> {
     let paths = validate_invocation(&invocation)?;
     let program = toolchain.tool_path(&invocation.tool_name)?;
     let program_blake3 = toolchain.tool_digest(&invocation.tool_name)?;
+    let tool_dependencies = resolve_tool_dependencies(toolchain, &invocation.tool_dependencies)?;
     let bwrap = toolchain.tool_path("bwrap")?;
     let mut command = sandbox_command(&bwrap, &program, toolchain, &invocation, &paths)?;
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
     configure_process_group(&mut command)?;
     let mut child = command.spawn().map_err(|error| Error::io("spawning sandboxed tool", &program, error))?;
-    let stdout = child.stdout.take().ok_or_else(|| Error::Tool("tool stdout pipe was unavailable".to_string()))?;
-    let stderr = child.stderr.take().ok_or_else(|| Error::Tool("tool stderr pipe was unavailable".to_string()))?;
-    let output_limit_hit = Arc::new(AtomicBool::new(false));
-    let output_bytes_observed = Arc::new(AtomicU64::new(0));
-    let stdout_thread = spawn_drain(
-        stdout,
-        invocation.limits.output_bytes,
-        Arc::clone(&output_limit_hit),
-        Arc::clone(&output_bytes_observed),
-    );
-    let stderr_thread = spawn_drain(
-        stderr,
-        invocation.limits.output_bytes,
-        Arc::clone(&output_limit_hit),
-        Arc::clone(&output_bytes_observed),
-    );
-    let mut outcome = wait_bounded(&mut child, &invocation.stage_key, invocation.limits.timeout_ms, &output_limit_hit)?;
-    let stdout = join_drain(stdout_thread, "stdout")?;
-    let mut stderr = join_drain(stderr_thread, "stderr")?;
-    if output_limit_hit.load(Ordering::Acquire) {
-        outcome.failure = Some("output-limit-exceeded");
-    }
-    if let Some(failure) = outcome.failure {
-        stderr.extend_from_slice(format!("\nmantle-process-boundary: {failure}\n").as_bytes());
-    }
-    let output_blake3 = paths
-        .output_path
-        .as_deref()
-        .filter(|path| std::fs::symlink_metadata(path).is_ok())
-        .map(hash_file_bounded)
-        .transpose()?;
-    let status_label = outcome.failure.unwrap_or_else(|| {
-        if outcome.status.success() {
+    let output = supervise_child(&mut child, &invocation)?;
+    let is_success = output.outcome.failure.is_none() && output.outcome.status.success();
+    let output_blake3 = if is_success {
+        paths.output_path.as_deref().map(hash_file_bounded).transpose()?
+    } else {
+        None
+    };
+    let status_label = output.outcome.failure.unwrap_or_else(|| {
+        if output.outcome.status.success() {
             "succeeded"
         } else {
             "failed"
         }
     });
-    let receipt = build_receipt(&invocation, program, program_blake3, status_label, &stdout, &stderr, output_blake3)?;
-    let success = outcome.failure.is_none() && outcome.status.success();
-    debug_assert_eq!(success, receipt.status == "succeeded");
-    debug_assert!(stdout.len() <= usize::try_from(invocation.limits.output_bytes).unwrap_or(usize::MAX));
+    let receipt = build_receipt(ReceiptBuildInput {
+        invocation: &invocation,
+        program,
+        program_blake3,
+        tool_dependencies,
+        status: status_label,
+        stdout: &output.stdout,
+        stderr: &output.stderr,
+        output_blake3,
+    })?;
+    let output_limit_bytes = usize::try_from(invocation.limits.output_bytes)
+        .map_err(|_| Error::Invalid("tool output bound exceeds usize".to_string()))?;
+    debug_assert_eq!(is_success, receipt.status == "succeeded");
+    debug_assert!(output.stdout.len() <= output_limit_bytes);
     Ok(ToolRun {
         receipt,
+        stdout: output.stdout,
+        stderr: output.stderr,
+        success: is_success,
+    })
+}
+
+fn supervise_child(child: &mut std::process::Child, invocation: &ToolInvocation) -> Result<SupervisedOutput, Error> {
+    let stdout = child.stdout.take().ok_or_else(|| Error::Tool("tool stdout pipe was unavailable".to_string()))?;
+    let stderr = child.stderr.take().ok_or_else(|| Error::Tool("tool stderr pipe was unavailable".to_string()))?;
+    let has_output_overflow = Arc::new(AtomicBool::new(false));
+    let output_bytes_observed = Arc::new(AtomicU64::new(0));
+    let stdout_thread = spawn_drain(
+        stdout,
+        invocation.limits.output_bytes,
+        Arc::clone(&has_output_overflow),
+        Arc::clone(&output_bytes_observed),
+    );
+    let stderr_thread = spawn_drain(
+        stderr,
+        invocation.limits.output_bytes,
+        Arc::clone(&has_output_overflow),
+        Arc::clone(&output_bytes_observed),
+    );
+    let mut outcome = wait_bounded(child, &invocation.stage_key, invocation.limits.timeout_ms, &has_output_overflow)?;
+    let stdout = join_drain(stdout_thread, "stdout")?;
+    let mut stderr = join_drain(stderr_thread, "stderr")?;
+    if has_output_overflow.load(Ordering::Acquire) {
+        outcome.failure = Some("output-limit-exceeded");
+    }
+    if let Some(failure) = outcome.failure {
+        stderr.extend_from_slice(format!("\nmantle-process-boundary: {failure}\n").as_bytes());
+    }
+    debug_assert!(stdout.len() <= usize::try_from(invocation.limits.output_bytes).unwrap_or_default());
+    debug_assert!(outcome.failure.is_none() || !stderr.is_empty());
+    Ok(SupervisedOutput {
+        outcome,
         stdout,
         stderr,
-        success,
     })
 }
 
@@ -184,6 +231,31 @@ fn validate_invocation(invocation: &ToolInvocation) -> Result<ValidatedInvocatio
         read_only_inputs,
         output_path,
     })
+}
+
+fn resolve_tool_dependencies(
+    toolchain: &VerifiedToolchain,
+    dependency_names: &[String],
+) -> Result<Vec<ReceiptToolDependency>, Error> {
+    if dependency_names.len() > MAX_TOOL_DEPENDENCIES {
+        return Err(Error::Invalid(format!("tool invocation exceeds {MAX_TOOL_DEPENDENCIES} tool dependencies")));
+    }
+    let mut names = BTreeSet::new();
+    let mut dependencies = Vec::with_capacity(dependency_names.len());
+    for name in dependency_names {
+        if name.is_empty() || !names.insert(name.clone()) {
+            return Err(Error::Invalid("tool dependency names must be unique and non-empty".to_string()));
+        }
+        dependencies.push(ReceiptToolDependency {
+            name: name.clone(),
+            path: toolchain.tool_path(name)?.display().to_string(),
+            digest_blake3: toolchain.tool_digest(name)?,
+        });
+    }
+    dependencies.sort_by(|left, right| left.name.cmp(&right.name));
+    debug_assert_eq!(dependencies.len(), names.len());
+    debug_assert!(dependencies.len() <= MAX_TOOL_DEPENDENCIES);
+    Ok(dependencies)
 }
 
 fn validate_arguments(args: &[String]) -> Result<(), Error> {
@@ -332,6 +404,8 @@ fn reject_symlink_components(path: &Path) -> Result<(), Error> {
             }
         }
     }
+    debug_assert!(path.components().all(|component| !matches!(component, Component::CurDir | Component::ParentDir)));
+    debug_assert!(cursor.as_os_str().is_empty() || !cursor.to_string_lossy().contains("/../"));
     Ok(())
 }
 
@@ -392,11 +466,17 @@ fn append_sandbox_parent_dirs(command: &mut Command, work_root: &Path, read_only
 }
 
 fn validate_env_key(key: &str) -> Result<(), Error> {
-    let valid =
+    let is_valid =
         !key.is_empty() && key.bytes().all(|byte| byte == b'_' || byte.is_ascii_uppercase() || byte.is_ascii_digit());
-    if !valid || key.contains("TOKEN") || key.contains("SECRET") || key.contains("PASSWORD") {
+    let is_sensitive = key.contains("TOKEN") || key.contains("SECRET") || key.contains("PASSWORD");
+    if !is_valid {
         return Err(Error::Invalid(format!("tool environment key `{key}` is not admitted")));
     }
+    if is_sensitive {
+        return Err(Error::Invalid(format!("sensitive tool environment key `{key}` is not admitted")));
+    }
+    debug_assert!(!key.is_empty());
+    debug_assert!(!is_sensitive);
     Ok(())
 }
 
@@ -436,26 +516,34 @@ fn drain_bounded<R: Read>(
     limit_hit: &AtomicBool,
     total_observed: &AtomicU64,
 ) -> std::io::Result<Vec<u8>> {
-    let capacity = usize::try_from(output_bytes).unwrap_or(usize::MAX).min(DRAIN_BUFFER_BYTES);
-    let mut retained = Vec::with_capacity(capacity);
+    let output_capacity_bytes =
+        usize::try_from(output_bytes).map_err(|_| std::io::Error::other("tool output bound exceeds usize"))?;
+    let retained_capacity_bytes = output_capacity_bytes.min(DRAIN_BUFFER_BYTES);
+    let iteration_count_max = output_bytes.saturating_add(DRAIN_EOF_PROBE_READS);
+    let mut retained = Vec::with_capacity(retained_capacity_bytes);
     let mut buffer = vec![0_u8; DRAIN_BUFFER_BYTES];
-    loop {
-        let count = reader.read(&mut buffer)?;
-        if count == 0 {
-            break;
+    for _ in 0..iteration_count_max {
+        let count_bytes = reader.read(&mut buffer)?;
+        if count_bytes == 0 {
+            debug_assert!(retained.len() <= output_capacity_bytes);
+            debug_assert!(total_observed.load(Ordering::Acquire) >= u64::try_from(retained.len()).unwrap_or_default());
+            return Ok(retained);
         }
-        let count_u64 = u64::try_from(count).unwrap_or(u64::MAX);
-        let prior = total_observed.fetch_add(count_u64, Ordering::AcqRel);
-        let observed = prior.saturating_add(count_u64);
-        if observed > output_bytes {
+        let count_bytes_u64 =
+            u64::try_from(count_bytes).map_err(|_| std::io::Error::other("tool stream read size exceeds u64"))?;
+        let prior_bytes = total_observed.fetch_add(count_bytes_u64, Ordering::AcqRel);
+        let observed_bytes = prior_bytes.saturating_add(count_bytes_u64);
+        if observed_bytes > output_bytes {
             limit_hit.store(true, Ordering::Release);
         }
-        let remaining = usize::try_from(output_bytes.saturating_sub(prior)).unwrap_or(usize::MAX);
-        let retained_count = count.min(remaining);
-        retained.extend_from_slice(&buffer[..retained_count]);
+        let remaining_bytes = usize::try_from(output_bytes.saturating_sub(prior_bytes))
+            .map_err(|_| std::io::Error::other("tool stream remainder exceeds usize"))?;
+        let retained_count_bytes = count_bytes.min(remaining_bytes);
+        retained.extend_from_slice(&buffer[..retained_count_bytes]);
     }
-    debug_assert!(retained.len() <= usize::try_from(output_bytes).unwrap_or(usize::MAX));
-    debug_assert!(total_observed.load(Ordering::Acquire) >= u64::try_from(retained.len()).unwrap_or(u64::MAX));
+    limit_hit.store(true, Ordering::Release);
+    debug_assert!(retained.len() <= output_capacity_bytes);
+    debug_assert!(limit_hit.load(Ordering::Acquire));
     Ok(retained)
 }
 
@@ -463,11 +551,13 @@ pub(crate) fn wait_bounded(
     child: &mut std::process::Child,
     stage_key: &str,
     timeout_ms: u64,
-    output_limit_hit: &AtomicBool,
+    has_output_overflow: &AtomicBool,
 ) -> Result<WaitOutcome, Error> {
-    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
-    loop {
-        if output_limit_hit.load(Ordering::Acquire) {
+    let deadline = shell_deadline(timeout_ms);
+    let poll_count_max =
+        timeout_ms.checked_div(TOOL_POLL_INTERVAL_MS).unwrap_or_default().saturating_add(WAIT_EXTRA_POLLS);
+    for _ in 0..poll_count_max {
+        if has_output_overflow.load(Ordering::Acquire) {
             let status = terminate_process_tree(child, stage_key)?;
             return Ok(WaitOutcome {
                 status,
@@ -479,7 +569,7 @@ pub(crate) fn wait_bounded(
         {
             return Ok(WaitOutcome { status, failure: None });
         }
-        if Instant::now() >= deadline {
+        if shell_deadline_reached(deadline) {
             let status = terminate_process_tree(child, stage_key)?;
             return Ok(WaitOutcome {
                 status,
@@ -488,6 +578,30 @@ pub(crate) fn wait_bounded(
         }
         thread::sleep(Duration::from_millis(TOOL_POLL_INTERVAL_MS));
     }
+    let status = terminate_process_tree(child, stage_key)?;
+    debug_assert!(timeout_ms > 0);
+    debug_assert!(poll_count_max >= WAIT_EXTRA_POLLS);
+    Ok(WaitOutcome {
+        status,
+        failure: Some("timeout-exceeded"),
+    })
+}
+
+#[allow(
+    tigerstyle::ambient_clock,
+    tigerstyle::contradictory_time,
+    reason = "imperative process supervisor reads one bounded deadline"
+)]
+fn shell_deadline(timeout_ms: u64) -> Instant {
+    Instant::now() + Duration::from_millis(timeout_ms)
+}
+
+#[allow(
+    tigerstyle::ambient_clock,
+    reason = "imperative process supervisor checks its bounded deadline"
+)]
+fn shell_deadline_reached(deadline: Instant) -> bool {
+    Instant::now() >= deadline
 }
 
 #[cfg(unix)]
@@ -498,7 +612,11 @@ fn terminate_process_tree(child: &mut std::process::Child, stage_key: &str) -> R
     unsafe {
         libc::kill(-process_group, libc::SIGKILL);
     }
-    let _ = child.kill();
+    if let Err(error) = child.kill()
+        && error.kind() != std::io::ErrorKind::InvalidInput
+    {
+        return Err(Error::Tool(format!("killing stage `{stage_key}`: {error}")));
+    }
     child
         .wait()
         .map_err(|error| Error::Tool(format!("reaping terminated stage `{stage_key}`: {error}")))
@@ -516,45 +634,79 @@ pub(crate) fn join_drain(handle: thread::JoinHandle<std::io::Result<Vec<u8>>>, s
         .map_err(|error| Error::Tool(format!("draining tool {stream}: {error}")))
 }
 
-fn build_receipt(
-    invocation: &ToolInvocation,
-    program: PathBuf,
-    program_blake3: Blake3Identity,
-    status: &str,
-    stdout: &[u8],
-    stderr: &[u8],
-    output_blake3: Option<Blake3Identity>,
-) -> Result<ToolExecutionReceipt, Error> {
-    let input = ToolReceiptIdentityInput {
+fn build_receipt(input: ReceiptBuildInput<'_>) -> Result<ToolExecutionReceipt, Error> {
+    let receipt_input = ToolReceiptIdentityInput {
         schema: TOOL_RECEIPT_SCHEMA.to_string(),
-        stage_key: invocation.stage_key.clone(),
-        program: program.display().to_string(),
-        program_blake3: program_blake3.clone(),
-        args: invocation.args.clone(),
-        read_only_inputs: invocation.read_only_inputs.iter().map(|path| path.display().to_string()).collect(),
+        stage_key: input.invocation.stage_key.clone(),
+        program: input.program.display().to_string(),
+        program_blake3: input.program_blake3.clone(),
+        args: input.invocation.args.clone(),
+        environment: input.invocation.env.clone(),
+        tool_dependencies: input.tool_dependencies.clone(),
+        read_only_inputs: input.invocation.read_only_inputs.iter().map(|path| path.display().to_string()).collect(),
         network_admitted: false,
-        status: status.to_string(),
-        stdout_blake3: Blake3Identity::from_slice(stdout),
-        stderr_blake3: Blake3Identity::from_slice(stderr),
-        output_blake3: output_blake3.clone(),
+        status: input.status.to_string(),
+        stdout_blake3: Blake3Identity::from_slice(input.stdout),
+        stderr_blake3: Blake3Identity::from_slice(input.stderr),
+        output_blake3: input.output_blake3.clone(),
     };
-    let canonical = serde_json::to_vec(&input)
-        .map_err(|error| Error::Invalid(format!("serializing tool receipt identity input: {error}")))?;
-    let receipt_blake3 = Blake3Identity::from_slice(&canonical);
-    debug_assert!(!canonical.is_empty());
+    let receipt_blake3 = tool_receipt_identity(&receipt_input)?;
+    debug_assert!(!receipt_input.stage_key.is_empty());
     debug_assert!(!receipt_blake3.clone().into_hex().is_empty());
     Ok(ToolExecutionReceipt {
-        schema: TOOL_RECEIPT_SCHEMA.to_string(),
-        stage_key: invocation.stage_key.clone(),
-        program: program.display().to_string(),
-        program_blake3,
-        args: invocation.args.clone(),
-        read_only_inputs: invocation.read_only_inputs.iter().map(|path| path.display().to_string()).collect(),
-        network_admitted: false,
-        status: status.to_string(),
-        stdout_blake3: Blake3Identity::from_slice(stdout),
-        stderr_blake3: Blake3Identity::from_slice(stderr),
-        output_blake3,
+        schema: receipt_input.schema,
+        stage_key: receipt_input.stage_key,
+        program: receipt_input.program,
+        program_blake3: input.program_blake3,
+        args: receipt_input.args,
+        environment: receipt_input.environment,
+        tool_dependencies: receipt_input.tool_dependencies,
+        read_only_inputs: receipt_input.read_only_inputs,
+        network_admitted: receipt_input.network_admitted,
+        status: receipt_input.status,
+        stdout_blake3: receipt_input.stdout_blake3,
+        stderr_blake3: receipt_input.stderr_blake3,
+        output_blake3: input.output_blake3,
         receipt_blake3,
     })
+}
+
+fn tool_receipt_identity(input: &ToolReceiptIdentityInput) -> Result<Blake3Identity, Error> {
+    let canonical = serde_json::to_vec(input)
+        .map_err(|error| Error::Invalid(format!("serializing tool receipt identity input: {error}")))?;
+    if canonical.is_empty() {
+        return Err(Error::Invalid("tool receipt identity input is empty".to_string()));
+    }
+    let identity = Blake3Identity::from_slice(&canonical);
+    debug_assert!(!canonical.is_empty());
+    debug_assert!(!identity.clone().into_hex().is_empty());
+    Ok(identity)
+}
+
+pub(crate) fn verify_tool_receipt(receipt: &ToolExecutionReceipt) -> Result<(), Error> {
+    if receipt.schema != TOOL_RECEIPT_SCHEMA {
+        return Err(Error::Invalid("tool receipt schema is unsupported".to_string()));
+    }
+    let input = ToolReceiptIdentityInput {
+        schema: receipt.schema.clone(),
+        stage_key: receipt.stage_key.clone(),
+        program: receipt.program.clone(),
+        program_blake3: receipt.program_blake3.clone(),
+        args: receipt.args.clone(),
+        environment: receipt.environment.clone(),
+        tool_dependencies: receipt.tool_dependencies.clone(),
+        read_only_inputs: receipt.read_only_inputs.clone(),
+        network_admitted: receipt.network_admitted,
+        status: receipt.status.clone(),
+        stdout_blake3: receipt.stdout_blake3.clone(),
+        stderr_blake3: receipt.stderr_blake3.clone(),
+        output_blake3: receipt.output_blake3.clone(),
+    };
+    let observed = tool_receipt_identity(&input)?;
+    if observed != receipt.receipt_blake3 {
+        return Err(Error::Invalid(format!("tool receipt identity drifted for `{}`", receipt.stage_key)));
+    }
+    debug_assert_eq!(observed, receipt.receipt_blake3);
+    debug_assert!(!receipt.stage_key.is_empty());
+    Ok(())
 }

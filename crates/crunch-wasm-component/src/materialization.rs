@@ -12,6 +12,7 @@ use crunch_wasm_component_core::MaterializationBundleRequest;
 use crunch_wasm_component_core::PackageMaterialization;
 use crunch_wasm_component_core::StageReceiptReference;
 use crunch_wasm_component_core::StoreObject;
+use crunch_wasm_component_core::TransformAdmission;
 use crunch_wasm_component_core::build_materialization_bundle;
 use crunch_wasm_component_core::stage_report_identity;
 use crunch_wasm_component_core::verify_materialization_bundle;
@@ -31,16 +32,22 @@ const MATERIALIZATION_BUNDLE_FILE: &str = "materialization-bundle.json";
 const MAX_STAGE_KEY_BYTES: usize = 128;
 const OBJECTS_PER_STAGE_MAX: usize = 2;
 const REQUIRED_TOP_LEVEL_OBJECTS: usize = 3;
+const WIZER_OBJECTS_MAX: usize = 4;
+
+pub(crate) struct MaterializationOptions<'a> {
+    pub final_portable: &'a StoreObject,
+    pub wizer: Option<TransformAdmission>,
+    pub aot: Option<AotAdmission>,
+}
 
 pub(crate) fn materialize_bundle(
     prepared: &PreparedPipeline,
     workspace: &StageWorkspace,
     state: &mut ExecutionState,
-    final_portable: &StoreObject,
-    aot: Option<AotAdmission>,
+    options: MaterializationOptions<'_>,
 ) -> Result<MaterializationBundle, Error> {
     let inputs = publish_bundle_inputs(prepared, workspace)?;
-    let stage_receipts = publish_stage_receipts(state, workspace, &inputs, final_portable)?;
+    let stage_receipts = publish_stage_receipts(state, workspace, &inputs, options.final_portable)?;
     let result = build_materialization_bundle(MaterializationBundleRequest {
         name: prepared.request.manifest.name.clone(),
         manifest_blake3: prepared.manifest_blake3.clone(),
@@ -49,7 +56,7 @@ pub(crate) fn materialize_bundle(
         package_inputs: inputs.packages,
         source_closure: inputs.source,
         lock: inputs.lock,
-        final_portable: final_portable.clone(),
+        final_portable: options.final_portable.clone(),
         expected_octet_profile_blake3: prepared.toolchain.manifest.octet.profile_identity_blake3.clone(),
         expected_runtime_profile_blake3: prepared
             .request
@@ -58,8 +65,8 @@ pub(crate) fn materialize_bundle(
             .expected_runtime_profile_identity_blake3
             .clone(),
         stage_receipts,
-        wizer: None,
-        aot,
+        wizer: options.wizer,
+        aot: options.aot,
         non_claims: prepared.request.manifest.non_claims.clone(),
     });
     let Some(bundle) = result.bundle else {
@@ -89,7 +96,7 @@ pub(crate) fn materialize_bundle(
     )?;
     state.set_materialization_bundle(bundle.clone(), bundle_object)?;
     debug_assert!(workspace.publication_root.join(MATERIALIZATION_BUNDLE_FILE).is_file());
-    debug_assert_eq!(bundle.final_portable, *final_portable);
+    debug_assert_eq!(bundle.final_portable, *options.final_portable);
     Ok(bundle)
 }
 
@@ -246,7 +253,8 @@ where F: FnMut(&StoreObject) -> Result<PathBuf, Error> {
 fn bundle_objects(bundle: &MaterializationBundle) -> Vec<StoreObject> {
     let stage_object_count_max = bundle.stage_receipts.len().saturating_mul(OBJECTS_PER_STAGE_MAX);
     let input_object_count = bundle.wit_inputs.len().saturating_add(bundle.package_inputs.len());
-    let optional_object_count = usize::from(bundle.wizer.is_some()).saturating_add(usize::from(bundle.aot.is_some()));
+    let wizer_object_count = usize::from(bundle.wizer.is_some()).saturating_mul(WIZER_OBJECTS_MAX);
+    let optional_object_count = wizer_object_count.saturating_add(usize::from(bundle.aot.is_some()));
     let object_count_max = input_object_count
         .saturating_add(stage_object_count_max)
         .saturating_add(optional_object_count)
@@ -266,7 +274,14 @@ fn bundle_objects(bundle: &MaterializationBundle) -> Vec<StoreObject> {
         }
     }
     if let Some(wizer) = &bundle.wizer {
-        objects.push(wizer.output.clone());
+        objects.extend([
+            wizer.input.clone(),
+            wizer.output.clone(),
+            wizer.componentized_output.clone(),
+        ]);
+        if let Some(repeated) = &wizer.repeated_output {
+            objects.push(repeated.clone());
+        }
     }
     if let Some(aot) = &bundle.aot {
         objects.push(aot.output.clone());

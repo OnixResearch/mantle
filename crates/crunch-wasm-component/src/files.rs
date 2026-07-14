@@ -19,8 +19,10 @@ use crate::Error;
 
 const MAX_TREE_ENTRIES: u32 = 10_000;
 const MAX_TREE_DEPTH: u32 = 64;
-const MAX_TREE_BYTES: u64 = 512 * 1024 * 1024;
-const HASH_BUFFER_CAPACITY_BYTES: usize = 64 * 1024;
+const MAX_TREE_BYTES: u64 = 536_870_912;
+const HASH_BUFFER_CAPACITY_BYTES: usize = 65_536;
+const HASH_BUFFER_CAPACITY_BYTES_U64: u64 = 65_536;
+const READ_EOF_PROBE_ITERATIONS: u64 = 1;
 
 pub fn copy_source_tree(source: &Path, destination: &Path) -> Result<StoreObject, Error> {
     validate_source_root(source, destination)?;
@@ -52,12 +54,12 @@ pub fn copy_source_tree(source: &Path, destination: &Path) -> Result<StoreObject
             if file_type.is_dir() {
                 fs::create_dir(&destination_path)
                     .map_err(|error| Error::io("creating source directory", &destination_path, error))?;
-                hash_record(&mut hasher, b"dir\0", &child_relative, 0_u64);
+                hash_record(&mut hasher, b"dir\0", &child_relative, 0_u64)?;
                 queue.push_back((child_relative, depth.saturating_add(1)));
             } else if file_type.is_file() {
-                let file_size = copy_file_hashed(&entry.path(), &destination_path, &child_relative, &mut hasher)?;
+                let file_size_bytes = copy_file_hashed(&entry.path(), &destination_path, &child_relative, &mut hasher)?;
                 byte_count = byte_count
-                    .checked_add(file_size)
+                    .checked_add(file_size_bytes)
                     .ok_or_else(|| Error::Invalid("source byte count overflowed u64".to_string()))?;
                 if byte_count > MAX_TREE_BYTES {
                     return Err(Error::Invalid(format!("source tree exceeds {MAX_TREE_BYTES} bytes")));
@@ -108,28 +110,39 @@ pub fn sha256_file(path: &Path) -> Result<OciSha256Digest, Error> {
 
 pub(crate) fn read_source_file_bounded(path: &Path, max_bytes: u64, label: &str) -> Result<Vec<u8>, Error> {
     let (mut file, metadata) = open_regular_source(path, max_bytes, label)?;
-    let capacity =
-        usize::try_from(metadata.len()).map_err(|_| Error::Invalid(format!("{label} size exceeds usize")))?;
-    let mut bytes = Vec::with_capacity(capacity);
+    let initial_size_bytes = metadata.len();
+    let capacity_bytes =
+        usize::try_from(initial_size_bytes).map_err(|_| Error::Invalid(format!("{label} size exceeds usize")))?;
+    let mut bytes = Vec::with_capacity(capacity_bytes);
     let mut buffer = vec![0_u8; HASH_BUFFER_CAPACITY_BYTES];
-    loop {
-        let count = file.read(&mut buffer).map_err(|error| Error::io(&format!("reading {label}"), path, error))?;
-        if count == 0 {
-            break;
+    let iteration_count_max = read_iteration_count(initial_size_bytes);
+    for _ in 0..iteration_count_max {
+        let count_bytes =
+            file.read(&mut buffer).map_err(|error| Error::io(&format!("reading {label}"), path, error))?;
+        if count_bytes == 0 {
+            let final_size_bytes =
+                file.metadata().map_err(|error| Error::io(&format!("remeasuring {label}"), path, error))?.len();
+            let bytes_read =
+                u64::try_from(bytes.len()).map_err(|_| Error::Invalid(format!("{label} bytes read exceeds u64")))?;
+            if bytes_read != initial_size_bytes || final_size_bytes != initial_size_bytes {
+                return Err(Error::Io(format!("{label} size changed while reading: {}", path.display())));
+            }
+            debug_assert_eq!(bytes_read, final_size_bytes);
+            debug_assert!(bytes_read <= max_bytes);
+            return Ok(bytes);
         }
-        bytes.extend_from_slice(&buffer[..count]);
-        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > max_bytes {
+        bytes.extend_from_slice(&buffer[..count_bytes]);
+        let bytes_read =
+            u64::try_from(bytes.len()).map_err(|_| Error::Invalid(format!("{label} bytes read exceeds u64")))?;
+        if bytes_read > max_bytes {
             return Err(Error::Invalid(format!("{label} exceeded {max_bytes} bytes while reading")));
         }
     }
-    let final_size = file.metadata().map_err(|error| Error::io(&format!("remeasuring {label}"), path, error))?.len();
-    let bytes_read = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
-    if bytes_read != metadata.len() || final_size != metadata.len() {
-        return Err(Error::Io(format!("{label} size changed while reading: {}", path.display())));
-    }
-    debug_assert_eq!(bytes_read, final_size);
-    debug_assert!(bytes_read <= max_bytes);
-    Ok(bytes)
+    Err(Error::Io(format!("{label} did not reach EOF within its byte bound: {}", path.display())))
+}
+
+fn read_iteration_count(size_bytes: u64) -> u64 {
+    size_bytes.div_ceil(HASH_BUFFER_CAPACITY_BYTES_U64).saturating_add(READ_EOF_PROBE_ITERATIONS)
 }
 
 pub(crate) fn copy_regular_file_new(source: &Path, destination: &Path, label: &str) -> Result<u64, Error> {
@@ -139,45 +152,81 @@ pub(crate) fn copy_regular_file_new(source: &Path, destination: &Path, label: &s
         .write(true)
         .open(destination)
         .map_err(|error| Error::io(&format!("creating {label} copy"), destination, error))?;
-    let result = copy_open_regular_file(&mut input, &mut output, metadata.len(), source, destination, label);
-    if result.is_err() {
-        drop(output);
-        let _ = fs::remove_file(destination);
+    let options = CopyOpenFileOptions {
+        initial_size_bytes: metadata.len(),
+        source,
+        destination,
+        label,
+    };
+    match copy_open_regular_file(&mut input, &mut output, options) {
+        Ok(copied_bytes) => {
+            debug_assert!(destination.is_file());
+            debug_assert!(copied_bytes > 0);
+            Ok(copied_bytes)
+        }
+        Err(original) => {
+            drop(output);
+            cleanup_partial_copy(destination, original)
+        }
     }
-    debug_assert!(result.is_err() || destination.is_file());
-    result
 }
 
-fn copy_open_regular_file(
-    input: &mut File,
-    output: &mut File,
-    initial_size: u64,
-    source: &Path,
-    destination: &Path,
-    label: &str,
-) -> Result<u64, Error> {
+struct CopyOpenFileOptions<'a> {
+    initial_size_bytes: u64,
+    source: &'a Path,
+    destination: &'a Path,
+    label: &'a str,
+}
+
+fn copy_open_regular_file(input: &mut File, output: &mut File, options: CopyOpenFileOptions<'_>) -> Result<u64, Error> {
     let mut buffer = vec![0_u8; HASH_BUFFER_CAPACITY_BYTES];
-    let mut copied = 0_u64;
-    loop {
-        let count = input.read(&mut buffer).map_err(|error| Error::io(&format!("reading {label}"), source, error))?;
-        if count == 0 {
-            break;
+    let mut copied_bytes = 0_u64;
+    let iteration_count_max = read_iteration_count(options.initial_size_bytes);
+    for _ in 0..iteration_count_max {
+        let count_bytes = input
+            .read(&mut buffer)
+            .map_err(|error| Error::io(&format!("reading {}", options.label), options.source, error))?;
+        if count_bytes == 0 {
+            let final_size_bytes = input
+                .metadata()
+                .map_err(|error| Error::io(&format!("remeasuring {}", options.label), options.source, error))?
+                .len();
+            if copied_bytes != options.initial_size_bytes || final_size_bytes != options.initial_size_bytes {
+                return Err(Error::Io(format!(
+                    "{} changed while copying: {}",
+                    options.label,
+                    options.source.display()
+                )));
+            }
+            output
+                .sync_all()
+                .map_err(|error| Error::io(&format!("syncing {}", options.label), options.destination, error))?;
+            debug_assert_eq!(copied_bytes, final_size_bytes);
+            debug_assert!(copied_bytes > 0);
+            return Ok(copied_bytes);
         }
         output
-            .write_all(&buffer[..count])
-            .map_err(|error| Error::io(&format!("writing {label}"), destination, error))?;
-        copied = copied
-            .checked_add(u64::try_from(count).unwrap_or(u64::MAX))
-            .ok_or_else(|| Error::Invalid(format!("{label} byte count overflowed u64")))?;
+            .write_all(&buffer[..count_bytes])
+            .map_err(|error| Error::io(&format!("writing {}", options.label), options.destination, error))?;
+        let count_bytes_u64 = u64::try_from(count_bytes)
+            .map_err(|_| Error::Invalid(format!("{} read size exceeds u64", options.label)))?;
+        copied_bytes = copied_bytes
+            .checked_add(count_bytes_u64)
+            .ok_or_else(|| Error::Invalid(format!("{} byte count overflowed u64", options.label)))?;
     }
-    let final_size = input.metadata().map_err(|error| Error::io(&format!("remeasuring {label}"), source, error))?.len();
-    if copied != initial_size || final_size != initial_size {
-        return Err(Error::Io(format!("{label} changed while copying: {}", source.display())));
+    Err(Error::Io(format!(
+        "{} did not reach EOF within its byte bound: {}",
+        options.label,
+        options.source.display()
+    )))
+}
+
+fn cleanup_partial_copy(destination: &Path, original: Error) -> Result<u64, Error> {
+    match fs::remove_file(destination) {
+        Ok(()) => Err(original),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Err(original),
+        Err(error) => Err(Error::Io(format!("{original}; removing partial copy {}: {error}", destination.display()))),
     }
-    output.sync_all().map_err(|error| Error::io(&format!("syncing {label}"), destination, error))?;
-    debug_assert_eq!(copied, final_size);
-    debug_assert!(copied > 0);
-    Ok(copied)
 }
 
 pub(crate) fn package_file_measurement(path: &Path) -> Result<(Blake3Identity, OciSha256Digest, u64), Error> {
@@ -189,29 +238,37 @@ pub(crate) fn package_file_measurement(path: &Path) -> Result<(Blake3Identity, O
     let mut blake3 = blake3::Hasher::new();
     let mut buffer = vec![0_u8; HASH_BUFFER_CAPACITY_BYTES];
     let mut byte_count = 0_u64;
-    loop {
-        let count = file.read(&mut buffer).map_err(|error| Error::io("hashing package file", path, error))?;
-        if count == 0 {
+    let iteration_count_max = read_iteration_count(metadata.len());
+    let mut has_reached_eof = false;
+    for _ in 0..iteration_count_max {
+        let count_bytes = file.read(&mut buffer).map_err(|error| Error::io("hashing package file", path, error))?;
+        if count_bytes == 0 {
+            has_reached_eof = true;
             break;
         }
+        let count_bytes_u64 =
+            u64::try_from(count_bytes).map_err(|_| Error::Invalid("package read size exceeds u64".to_string()))?;
         byte_count = byte_count
-            .checked_add(u64::try_from(count).unwrap_or(u64::MAX))
+            .checked_add(count_bytes_u64)
             .ok_or_else(|| Error::Invalid("package byte count overflowed u64".to_string()))?;
         if byte_count > MAX_TREE_BYTES {
             return Err(Error::Invalid(format!("package exceeds {MAX_TREE_BYTES} bytes")));
         }
-        sha256.update(&buffer[..count]);
-        blake3.update(&buffer[..count]);
+        sha256.update(&buffer[..count_bytes]);
+        blake3.update(&buffer[..count_bytes]);
     }
-    let final_size = file.metadata().map_err(|error| Error::io("remeasuring package file", path, error))?.len();
-    if byte_count != metadata.len() || final_size != metadata.len() {
+    if !has_reached_eof {
+        return Err(Error::Io(format!("package did not reach EOF within its byte bound: {}", path.display())));
+    }
+    let final_size_bytes = file.metadata().map_err(|error| Error::io("remeasuring package file", path, error))?.len();
+    if byte_count != metadata.len() || final_size_bytes != metadata.len() {
         return Err(Error::Io(format!("package file size changed while hashing: {}", path.display())));
     }
     let sha256 = OciSha256Digest::parse(format!("sha256:{:x}", sha256.finalize()))
         .map_err(|error| Error::Invalid(format!("encoding package SHA-256: {error}")))?;
     let blake3 = Blake3Identity::parse(blake3::Hasher::finalize(&blake3).to_hex().to_string())
         .map_err(|error| Error::Invalid(format!("encoding package BLAKE3: {error}")))?;
-    debug_assert_eq!(byte_count, final_size);
+    debug_assert_eq!(byte_count, final_size_bytes);
     debug_assert!(byte_count > 0);
     Ok((blake3, sha256, byte_count))
 }
@@ -234,34 +291,38 @@ fn copy_file_hashed(
     hasher: &mut blake3::Hasher,
 ) -> Result<u64, Error> {
     let (mut input, metadata) = open_regular_source(source, MAX_TREE_BYTES, "source file")?;
-    hash_record(hasher, b"file\0", relative, metadata.len());
+    hash_record(hasher, b"file\0", relative, metadata.len())?;
     let mut output = fs::OpenOptions::new()
         .create_new(true)
         .write(true)
         .open(destination)
         .map_err(|error| Error::io("creating source copy", destination, error))?;
     let mut buffer = vec![0_u8; HASH_BUFFER_CAPACITY_BYTES];
-    let mut copied = 0_u64;
-    loop {
-        let count = input.read(&mut buffer).map_err(|error| Error::io("reading source file", source, error))?;
-        if count == 0 {
-            break;
+    let mut copied_bytes = 0_u64;
+    let iteration_count_max = read_iteration_count(metadata.len());
+    for _ in 0..iteration_count_max {
+        let count_bytes = input.read(&mut buffer).map_err(|error| Error::io("reading source file", source, error))?;
+        if count_bytes == 0 {
+            let final_size_bytes =
+                input.metadata().map_err(|error| Error::io("remeasuring source file", source, error))?.len();
+            if copied_bytes != metadata.len() || final_size_bytes != metadata.len() {
+                return Err(Error::Io(format!("source changed while copying: {}", source.display())));
+            }
+            debug_assert_eq!(copied_bytes, metadata.len());
+            debug_assert!(destination.is_file());
+            return Ok(copied_bytes);
         }
         output
-            .write_all(&buffer[..count])
+            .write_all(&buffer[..count_bytes])
             .map_err(|error| Error::io("writing source copy", destination, error))?;
-        hasher.update(&buffer[..count]);
-        copied = copied
-            .checked_add(u64::try_from(count).unwrap_or(u64::MAX))
+        hasher.update(&buffer[..count_bytes]);
+        let count_bytes_u64 =
+            u64::try_from(count_bytes).map_err(|_| Error::Invalid("source read size exceeds u64".to_string()))?;
+        copied_bytes = copied_bytes
+            .checked_add(count_bytes_u64)
             .ok_or_else(|| Error::Invalid("copied byte count overflowed u64".to_string()))?;
     }
-    let final_size = input.metadata().map_err(|error| Error::io("remeasuring source file", source, error))?.len();
-    if copied != metadata.len() || final_size != metadata.len() {
-        return Err(Error::Io(format!("source changed while copying: {}", source.display())));
-    }
-    debug_assert_eq!(copied, metadata.len());
-    debug_assert!(destination.is_file());
-    Ok(copied)
+    Err(Error::Io(format!("source did not reach EOF within its byte bound: {}", source.display())))
 }
 
 fn open_regular_source(path: &Path, max_bytes: u64, label: &str) -> Result<(File, fs::Metadata), Error> {
@@ -304,16 +365,22 @@ fn reject_symlink_components(path: &Path) -> Result<(), Error> {
             }
         }
     }
+    debug_assert!(path.components().all(|component| !matches!(component, Component::CurDir | Component::ParentDir)));
+    debug_assert!(cursor.as_os_str().is_empty() || !cursor.to_string_lossy().contains("/../"));
     Ok(())
 }
 
-fn hash_record(hasher: &mut blake3::Hasher, tag: &[u8], path: &Path, size: u64) {
+fn hash_record(hasher: &mut blake3::Hasher, tag: &[u8], path: &Path, size_bytes: u64) -> Result<(), Error> {
     let path = path.to_string_lossy();
-    let path_len = u64::try_from(path.len()).unwrap_or(u64::MAX);
+    let path_length_bytes =
+        u64::try_from(path.len()).map_err(|_| Error::Invalid("source path length exceeds u64".to_string()))?;
     hasher.update(tag);
-    hasher.update(&path_len.to_le_bytes());
+    hasher.update(&path_length_bytes.to_le_bytes());
     hasher.update(path.as_bytes());
-    hasher.update(&size.to_le_bytes());
+    hasher.update(&size_bytes.to_le_bytes());
+    debug_assert_eq!(path_length_bytes, u64::try_from(path.len()).unwrap_or_default());
+    debug_assert!(!tag.is_empty());
+    Ok(())
 }
 
 fn read_entries_sorted(path: &Path) -> Result<Vec<fs::DirEntry>, Error> {
@@ -327,14 +394,17 @@ fn read_entries_sorted(path: &Path) -> Result<Vec<fs::DirEntry>, Error> {
 
 fn validate_source_root(source: &Path, destination: &Path) -> Result<(), Error> {
     reject_symlink_components(source)?;
-    if !source.is_absolute() || !source.is_dir() || !destination.is_absolute() || destination.exists() {
-        return Err(Error::Invalid(
-            "source copy requires an absolute directory and a new absolute destination".to_string(),
-        ));
+    if !source.is_absolute() || !source.is_dir() {
+        return Err(Error::Invalid("source copy requires an absolute source directory".to_string()));
+    }
+    if !destination.is_absolute() || destination.exists() {
+        return Err(Error::Invalid("source copy requires a new absolute destination".to_string()));
     }
     if destination.starts_with(source) || source.starts_with(destination) {
         return Err(Error::Invalid("source and destination trees must not contain each other".to_string()));
     }
+    debug_assert!(source.is_absolute());
+    debug_assert!(destination.is_absolute());
     Ok(())
 }
 
