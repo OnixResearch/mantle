@@ -27,6 +27,7 @@ pub const REQUIRED_ISOLATION_CHECKS: &[&str] = &[
     "denies-undeclared-host-access",
     "denies-host-network-by-default",
     "denies-main-output-and-proof-store-reuse",
+    "denies-clock-syscalls",
 ];
 const REQUIRED_PERTURBATIONS: &[&str] = &[
     "HOME",
@@ -1365,9 +1366,13 @@ mod tests {
 
     #[test]
     fn deterministic_release_claim_rejects_missing_isolation_check() {
-        let mut evidence = isolation_evidence();
-        evidence.checks.retain(|check| check != "denies-host-network-by-default");
-        let err = deterministic_release_claim_eligible(&[digest(1)], &[receipt()], Some(&evidence)).unwrap_err();
-        assert!(err.to_string().contains("missing required check denies-host-network-by-default"));
+        for missing_check in ["denies-host-network-by-default", "denies-clock-syscalls"] {
+            let mut evidence = isolation_evidence();
+            evidence.checks.retain(|check| check != missing_check);
+            let err = deterministic_release_claim_eligible(&[digest(1)], &[receipt()], Some(&evidence)).unwrap_err();
+
+            assert!(err.to_string().contains(&format!("missing required check {missing_check}")));
+            assert!(!evidence.checks.iter().any(|check| check == missing_check));
+        }
     }
 }

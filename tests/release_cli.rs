@@ -2028,6 +2028,13 @@ while [ "$#" -gt 0 ]; do
       exit 125
       ;;
     --unshare-all|--die-with-parent|--new-session|--clearenv) shift ;;
+    --seccomp)
+      if [ ! -s "/proc/self/fd/$2" ]; then
+        printf 'fake bwrap received empty or unreadable seccomp fd: %s\n' "$2" >&2
+        exit 125
+      fi
+      shift 2
+      ;;
     --ro-bind|--bind)
       if [ -n "${MANTLE_FAKE_BWRAP_FORBIDDEN_BIND:-}" ] && { [ "$2" = "$MANTLE_FAKE_BWRAP_FORBIDDEN_BIND" ] || [ "$3" = "$MANTLE_FAKE_BWRAP_FORBIDDEN_BIND" ]; }; then
         printf 'fake bwrap denied forbidden bind: %s\n' "$MANTLE_FAKE_BWRAP_FORBIDDEN_BIND" >&2
@@ -3213,6 +3220,7 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     assert_eq!(
         isolation_evidence["checks"],
         serde_json::json!([
+            "denies-clock-syscalls",
             "denies-host-network-by-default",
             "denies-main-output-and-proof-store-reuse",
             "denies-undeclared-host-access"
@@ -3248,6 +3256,7 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     let transcript = std::fs::read_to_string(&fake_bwrap_transcript).unwrap();
     assert!(transcript.contains("--unshare-all"));
     assert!(transcript.contains("--clearenv"));
+    assert!(transcript.contains("--seccomp"));
     assert!(!transcript.contains("--share-net"));
     assert!(!transcript.contains(&rebuild_output_dir.display().to_string()));
     assert!(!transcript.contains(&bundle_dir.display().to_string()));

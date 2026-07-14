@@ -171,3 +171,59 @@ Tiger Style consumer check with 418 violations across multiple first-party
 crates. No lint level, package scope, or Tiger Style revision was weakened.
 See `bootstrap-blocker-inventory-closeout.md` for commands, bounded claims, and
 the closeout decision.
+
+## Strict clock-syscall enforcement repair
+
+On 2026-07-14 a follow-up audit found that deterministic release runs declared
+clock-free observed effects but only normalized `SOURCE_DATE_EPOCH` and timezone
+inputs. The proof sandbox now loads a BLAKE3-identified classic-BPF policy
+through bubblewrap's inherited `--seccomp` file descriptor. The policy returns
+`EPERM` for the bounded Linux clock, timer, and interval-timer syscall set and
+allows unrelated syscalls. Filter construction is a deterministic core;
+temporary-file creation, descriptor inheritance, and process launch remain in
+the shell. The profile identity and isolation check set bind the enforced
+policy before pass evidence is emitted.
+
+Pre-change baselines:
+
+```text
+$ cargo test -p mantle --bin mantle release_reproducibility::tests::
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1477 filtered out
+
+$ cargo test -p crunch-release-core
+test result: ok. 207 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+Focused post-change evidence:
+
+```text
+$ MANTLE_TEST_REAL_BWRAP=/nix/store/g7svy17fhkg2cq3q4lfzzc0mmsl3d8hq-bubblewrap-0.11.2/bin/bwrap \
+    cargo test -p mantle --bin mantle 'proof_clock_seccomp::' -- --nocapture
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1489 filtered out
+
+$ cargo test -p mantle --test release_cli \
+    release_reproduce_writes_deterministic_proof_from_repeated_clean_runs \
+    -- --exact --nocapture
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 139 filtered out
+
+$ cargo test -p crunch-release-core
+test result: ok. 207 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+$ cargo test -p mantle --bin mantle 'release_reproducibility::tests::'
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1482 filtered out
+
+$ cargo -Zscript scripts/check-real-release-determinism-receipt.rs --self-test
+real release determinism receipt checker self-test passed
+
+$ rustfmt --check --edition 2024 <changed Rust files> && git diff --check
+PASS
+```
+
+The kernel subprocess fixture proves a raw `clock_gettime` syscall receives
+`EPERM` while `getpid` remains allowed. The real-bubblewrap fixture proves that
+the exact generated policy survives descriptor inheritance and is applied to
+the sandbox child. The production CLI fixture proves repeated clean runs still
+produce a strict self-rebuild match and now carry `denies-clock-syscalls`
+isolation evidence. This is bounded syscall-enforcement evidence; it does not
+claim interception of non-syscall hardware or vDSO time sources, compiler
+correctness, or universal reproducibility.

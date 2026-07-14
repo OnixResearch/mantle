@@ -47,6 +47,9 @@ use crunch_release_core::validate_release_reproducibility_report_artifact_names;
 use crunch_release_core::validate_release_reproducibility_report_linkage;
 
 use crate::errors::RunError;
+use crate::proof_clock_seccomp::ProofClockSeccompFilter;
+use crate::proof_clock_seccomp::prepare_proof_clock_seccomp_filter;
+use crate::proof_clock_seccomp::proof_clock_filter_identity;
 use crate::rebuild_authority::PreparedRebuildAuthority;
 use crate::rebuild_authority::RebuildRunPaths;
 use crate::rebuild_authority::prepare_rebuild_authority;
@@ -77,6 +80,7 @@ const PROOF_SOURCE_DATE_EPOCH: &str = "1";
 const PROOF_MODELED_RANDOMNESS: &str = "no-modeled-random-seed";
 const PROOF_OUTPUT_ORDERING: &str = "lexicographic-output-processing";
 const PROOF_SANDBOX_UMASK_TEXT: &str = "0022";
+const PROOF_CLOCK_SYSCALL_ENFORCEMENT: &str = "bwrap-seccomp-errno-eperm";
 const PROOF_NORMALIZATION_CONTROL_COUNT: usize = 8;
 #[cfg(unix)]
 const PROOF_SANDBOX_UMASK: libc::mode_t = 0o022;
@@ -109,6 +113,7 @@ struct ProofSandboxProfile {
     executor: PathBuf,
     executor_version: String,
     network_policy: String,
+    clock_syscall_policy_identity: String,
     descriptor_blake3: String,
     authority_plan_blake3: String,
     command_path: PathBuf,
@@ -127,6 +132,8 @@ impl ProofSandboxProfile {
             format!("executor_path={}", self.executor.display()),
             format!("executor_version={}", self.executor_version),
             format!("network={}", self.network_policy),
+            format!("clock_syscall_enforcement={PROOF_CLOCK_SYSCALL_ENFORCEMENT}"),
+            format!("clock_syscall_policy_identity={}", self.clock_syscall_policy_identity),
             "release_bundle_authority=absent".to_string(),
             format!("rebuild_descriptor_blake3={}", self.descriptor_blake3),
             format!("rebuild_authority_plan_blake3={}", self.authority_plan_blake3),
@@ -211,6 +218,11 @@ struct ComparisonCounts {
     matched_count: u32,
     mismatched_count: u32,
     missing_count: u32,
+}
+
+struct PreparedRebuildCommand {
+    command: ProcessCommand,
+    _clock_filter: Option<ProofClockSeccompFilter>,
 }
 
 pub(crate) fn reproduce_release_artifacts(
@@ -421,7 +433,7 @@ fn run_rebuild_command(
     prepared_rebuild: Option<&PreparedRebuildAuthority>,
     sandbox_profile: Option<&ProofSandboxProfile>,
 ) -> Result<(), RunError> {
-    let mut command = if let Some(profile) = sandbox_profile {
+    let mut prepared_command = if let Some(profile) = sandbox_profile {
         let prepared_rebuild = prepared_rebuild.ok_or_else(|| {
             RunError::Internal("deterministic proof sandbox requires prepared rebuild authority".to_string())
         })?;
@@ -438,9 +450,12 @@ fn run_rebuild_command(
         if let Some(store_dir) = deterministic_store_dir {
             command.env(DETERMINISTIC_PROOF_STORE_DIR_ENV, store_dir);
         }
-        command
+        PreparedRebuildCommand {
+            command,
+            _clock_filter: None,
+        }
     };
-    let output = command.output().map_err(|err| {
+    let output = prepared_command.command.output().map_err(|err| {
         RunError::Internal(format!(
             "running release reproducibility command {}: {err}",
             request.rebuild_command.display()
@@ -744,6 +759,8 @@ fn proof_sandbox_profile(
         executor,
         executor_version,
         network_policy: "none".to_string(),
+        clock_syscall_policy_identity: proof_clock_filter_identity()
+            .map_err(|err| RunError::Internal(format!("preparing deterministic proof clock syscall policy: {err}")))?,
         descriptor_blake3: prepared_rebuild.descriptor_blake3.clone(),
         authority_plan_blake3: prepared_rebuild.authority_plan_blake3.clone(),
         command_path: prepared_rebuild.command_path.clone(),
@@ -765,10 +782,18 @@ fn sandboxed_rebuild_command(
     deterministic_store_dir: Option<&Path>,
     prepared_rebuild: &PreparedRebuildAuthority,
     profile: &ProofSandboxProfile,
-) -> Result<ProcessCommand, RunError> {
+) -> Result<PreparedRebuildCommand, RunError> {
     let store_dir = deterministic_store_dir.ok_or_else(|| {
         RunError::Internal("deterministic proof sandbox requires a proof store directory".to_string())
     })?;
+    let clock_filter = prepare_proof_clock_seccomp_filter()
+        .map_err(|err| RunError::Internal(format!("preparing deterministic proof clock syscall filter: {err}")))?;
+    if clock_filter.identity() != profile.clock_syscall_policy_identity {
+        return Err(RunError::Internal(
+            "deterministic proof clock syscall filter identity changed after profile construction".to_string(),
+        ));
+    }
+    let clock_filter_fd = clock_filter.fd();
     let mut command = ProcessCommand::new(&profile.executor);
     configure_executor_environment(&mut command);
     command
@@ -776,6 +801,8 @@ fn sandboxed_rebuild_command(
         .arg("--die-with-parent")
         .arg("--new-session")
         .arg("--clearenv")
+        .arg("--seccomp")
+        .arg(clock_filter_fd.to_string())
         .arg("--tmpfs")
         .arg(PROOF_SANDBOX_TEMP_ROOT);
     let mut parent_paths = prepared_rebuild.read_only_paths.iter().map(PathBuf::as_path).collect::<Vec<_>>();
@@ -788,12 +815,16 @@ fn sandboxed_rebuild_command(
     command.arg("--bind").arg(output_dir).arg(output_dir).arg("--bind").arg(store_dir).arg(store_dir);
     append_rebuild_sandbox_environment(&mut command, release_id, profile, output_dir, store_dir);
     configure_sandbox_umask(&mut command);
+    clock_filter.configure_inheritance(&mut command);
     command
         .arg("--chdir")
         .arg(PROOF_SANDBOX_TEMP_ROOT)
         .arg(&prepared_rebuild.command_path)
         .args(&prepared_rebuild.command_args);
-    Ok(command)
+    Ok(PreparedRebuildCommand {
+        command,
+        _clock_filter: Some(clock_filter),
+    })
 }
 
 fn configure_executor_environment(command: &mut ProcessCommand) {
@@ -1506,6 +1537,7 @@ mod tests {
             executor: PathBuf::from("bwrap"),
             executor_version: "test".to_string(),
             network_policy: "none".to_string(),
+            clock_syscall_policy_identity: "mantle-clock-syscall-deny-v1:test".to_string(),
             descriptor_blake3: sample_digest(1),
             authority_plan_blake3: sample_digest(2),
             command_path: PathBuf::from("/inputs/executable"),
@@ -1523,7 +1555,14 @@ mod tests {
             &profile.store_dir,
         );
         let args = command.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect::<Vec<_>>();
+        let profile_facts = profile.canonical_facts();
 
+        assert!(profile_facts.iter().any(|fact| fact == "clock_syscall_enforcement=bwrap-seccomp-errno-eperm"));
+        assert!(
+            profile_facts
+                .iter()
+                .any(|fact| fact == "clock_syscall_policy_identity=mantle-clock-syscall-deny-v1:test")
+        );
         for (name, value) in PROOF_SANDBOX_FIXED_ENV {
             assert!(
                 args.windows(BWRAP_SETENV_ARGUMENT_COUNT).any(|window| window == ["--setenv", *name, *value]),
@@ -1632,6 +1671,7 @@ mod tests {
         assert_eq!(run.sandbox_profile_identity, "mantle-proof-sandbox-v1:test");
         assert_eq!(run.output_digests[0].digest_blake3, sample_digest(1));
         assert_eq!(run.perturbation_case, "baseline-clean-env");
+        assert!(run.hermeticity_audit_events.is_empty());
     }
 
     #[test]

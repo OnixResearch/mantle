@@ -58,6 +58,7 @@ const SELF_HOSTING_PROOF_SCHEMA: &str = "mantle-self-hosting-proof-v2";
 const EXPECTED_PROOF_RUNS: usize = 2;
 const HEX64_LEN: usize = 64;
 const REQUIRED_SANDBOX_CHECKS: &[&str] = &[
+    "denies-clock-syscalls",
     "denies-host-network-by-default",
     "denies-main-output-and-proof-store-reuse",
     "denies-undeclared-host-access",
