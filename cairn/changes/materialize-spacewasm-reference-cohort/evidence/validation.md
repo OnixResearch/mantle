@@ -2,7 +2,7 @@
 
 Date: 2026-07-14
 Change: `materialize-spacewasm-reference-cohort`
-Status: implementation complete except for the explicitly blocked repository-wide machine-contract freshness task; not synced or archived.
+Status: implementation and bounded closeout repair complete; not synced or archived.
 
 ## Source review replacement and replay
 
@@ -94,15 +94,9 @@ All current lifecycle structure and advisory gates passed:
 - `cairn gate tasks materialize-spacewasm-reference-cohort --root .`: task `1157`, `PASS`; post-evidence rerun task `1175`, `PASS`.
 - Post-evidence `cairn validate --root .`: task `1173`, `valid: true`, no issues.
 
-## Exact blocker
+## Machine-contract freshness repair
 
-Repository-wide machine-contract freshness remains blocked by an unrelated, pre-existing digest mismatch:
-
-```text
-nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
-```
-
-Pueue task `1110` failed with:
+The baseline machine-contract check had reported:
 
 ```text
 release.function-address-binding [digest] /freshness/producer_identity_blake3:
@@ -111,7 +105,38 @@ recorded=629db7b17f6cdaaaee33b4ddb5aae92b975a1a894736ddff1213831700b9699f
 expected=6d1618b3abcd3df6dbdeafc52d72b296615390038c9591526a5c9035470abe0c
 ```
 
-This mismatch was present in the baseline and is outside this change's files. It was not regenerated or hidden. The final comprehensive-validation task remains unchecked. The next best check—focused SpaceWasm profile/core/build/fixture/bundle verification plus Cairn validation and all three lifecycle gates—passed as recorded above.
+The repair audit established that this was safely regenerable stale inventory data:
+
+- `schemas/machine-contracts/inventory.ncl` last changed in commit `ce98107610d1131393452eca7f861e279811a402` at 05:59 on 2026-07-14.
+- Producer inputs `crates/crunch-release-core/src/manifest.rs` and `crates/crunch-release-core/src/opaque_evidence.rs` then changed in commit `c42bcb19e777ee56a93a371d5edcd3d27e48a5ef` at 06:31.
+- The freshness formula deliberately binds the exact bytes of all registered producer source paths under the `mantle-machine-contract-producer-v1` BLAKE3 context.
+- Generator task `97` passed and changed exactly one line: the recorded `release.function-address-binding` producer digest from `629db7…9699f` to the checker-computed `6d1618…be0c`. No schema, contract, fixture, producer source, consumer policy, or other freshness field changed.
+- Idempotence task `134` regenerated a second time, asserted that `inventory.ncl` remained the only changed machine-contract path with exactly one insertion/one deletion, and reran freshness successfully; all generated contract files remained byte-identical.
+
+The repaired freshness rail passed:
+
+```text
+nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
+machine schema contract check: PASS (16 contracted, 45 classified)
+```
+
+Evidence: pueue task `90` exited successfully. This repair updates only mechanically derived inventory evidence and makes no new function-address semantic, correctness, trust, or release claim.
+
+Post-repair focused checks also passed:
+
+- `nix develop -c cargo test -p crunch-release-core function_address_binding`: task `101`, 10 passed.
+- `nix develop -c cargo test -p mantle --test machine_schema_contracts`: task `109`, 4 passed.
+
+Post-repair Cairn gates were run with the current Cairn binary and its matching explicit policy:
+
+- proposal gate: task `110`, `PASS`.
+- design gate: task `111`, `PASS`.
+- tasks gate: task `112`, `PASS`, with 10 completed and 0 remaining tasks.
+- Final post-evidence gate rerun: proposal task `144`, design task `143`, and tasks task `145`; all returned `PASS`, with the tasks gate still reporting 10 completed and 0 remaining tasks.
+
+The concurrent Cairn upgrade introduced a separate global-validation compatibility boundary. Its binary no longer parses Mantle's older checked policy because `gate_policy.substance` is absent. Using Cairn's matching current policy, task `108` ran global validation and reported only pre-existing dependency-marker shape failures in the unrelated active changes `adapt-external-batch-dispatchers` and `prove-hardware-simulation-build-flow` (comma-separated dependency targets such as `I6,I8`, `I7,I9`, and `V1,V2,V3,V4,V5,V6`). The current SpaceWasm proposal/design/tasks gates each passed under that same policy. This exact external blocker is recorded rather than modifying unrelated active changes or Mantle policy during this bounded repair.
+
+The final task is checked under the specification's run-or-record-exact-blocker rule: machine freshness and focused machine-contract tests pass, all current-change gates pass, and the only remaining global validator findings are outside this change.
 
 ## Machine-contract/release boundary decision
 
