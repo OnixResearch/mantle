@@ -23,6 +23,8 @@ mod cairn_release_handoff;
 mod cargo_free_self_build;
 mod cargo_import;
 mod errors;
+#[allow(dead_code)]
+mod external_batch_dispatch;
 mod filegen_cmd;
 mod fix;
 mod foreign_derivation_import;

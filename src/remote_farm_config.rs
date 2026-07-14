@@ -25,6 +25,15 @@ const DEFAULT_REMOTE_SYSTEM: &str = "x86_64-linux";
 const DEFAULT_REMOTE_MAX_CONCURRENCY: u32 = 1;
 const DEFAULT_REMOTE_MAX_UPLOAD_BYTES: u64 = 1_073_741_824;
 const DEFAULT_REMOTE_MAX_BUILD_TIME_SECS: u64 = 3_600;
+const MAX_REMOTE_BATCH_DISPATCHERS: usize = 128;
+const MAX_REMOTE_BATCH_COMMAND_ARGS: usize = 128;
+const MAX_REMOTE_BATCH_ARGUMENT_BYTES: usize = 4_096;
+const MAX_REMOTE_BATCH_OUTPUT_BYTES: u64 = 1_048_576;
+const MAX_REMOTE_BATCH_TIMEOUT_SECS: u64 = 604_800;
+const MAX_REMOTE_BATCH_RECONCILE_ATTEMPTS: u32 = 1_024;
+const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
+const FORBIDDEN_REMOTE_BATCH_SECRET_MARKERS: [&str; 6] =
+    ["credential", "password", "private-key", "secret", "ticket", "token="];
 
 /// Transport binding for a remote builder endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
@@ -290,11 +299,47 @@ fn default_fallback_policy() -> RemoteFallbackPolicy {
     RemoteFallbackPolicy::TrustedOnly
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteBatchDispatcherAdapter {
+    DirectProcessV1,
+    SlurmCliV1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[derive(Default)]
+pub struct RemoteBatchDispatcherCommandProfile {
+    pub program: std::path::PathBuf,
+    pub expected_digest_blake3: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    pub timeout_secs: u64,
+    pub stdout_limit_bytes: u64,
+    pub stderr_limit_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct RemoteBatchDispatcherProfile {
+    pub instance_id: String,
+    pub generation: u64,
+    pub adapter: RemoteBatchDispatcherAdapter,
+    pub submit: RemoteBatchDispatcherCommandProfile,
+    pub observe: RemoteBatchDispatcherCommandProfile,
+    pub cancel: RemoteBatchDispatcherCommandProfile,
+    pub reconcile: RemoteBatchDispatcherCommandProfile,
+    pub worker_program: std::path::PathBuf,
+    #[serde(default)]
+    pub worker_args: Vec<String>,
+    pub startup_timeout_secs: u64,
+    pub terminal_timeout_secs: u64,
+    pub max_reconcile_attempts: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Default)]
 pub struct RemoteBuildFarmConfig {
     #[serde(default)]
     pub pools: Vec<RemoteBuilderPool>,
+    #[serde(default)]
+    pub dispatchers: Vec<RemoteBatchDispatcherProfile>,
     #[serde(default)]
     pub telemetry: RemoteTelemetryExportConfig,
     #[serde(default)]
@@ -315,6 +360,13 @@ impl RemoteBuildFarmConfig {
         if self.pools.len() > Self::MAX_POOLS {
             return Err(format!("too many remote builder pools: {} > {}", self.pools.len(), Self::MAX_POOLS));
         }
+        if self.dispatchers.len() > MAX_REMOTE_BATCH_DISPATCHERS {
+            return Err(format!(
+                "too many remote batch dispatchers: {} > {MAX_REMOTE_BATCH_DISPATCHERS}",
+                self.dispatchers.len()
+            ));
+        }
+        validate_remote_batch_dispatchers(&self.dispatchers)?;
         for pool in &self.pools {
             if pool.endpoints.len() > Self::MAX_ENDPOINTS_PER_POOL {
                 return Err(format!(
@@ -372,6 +424,120 @@ impl RemoteBuildFarmConfig {
     }
 }
 
+pub(crate) const fn remote_batch_command_arg_limit() -> usize {
+    MAX_REMOTE_BATCH_COMMAND_ARGS
+}
+
+fn validate_remote_batch_dispatchers(dispatchers: &[RemoteBatchDispatcherProfile]) -> Result<(), String> {
+    let mut instance_ids = std::collections::BTreeSet::new();
+    for dispatcher in dispatchers {
+        validate_remote_batch_identifier("instance", &dispatcher.instance_id)?;
+        if !instance_ids.insert(dispatcher.instance_id.clone()) {
+            return Err(format!("duplicate remote batch dispatcher instance id {:?}", dispatcher.instance_id));
+        }
+        if dispatcher.generation == 0 {
+            return Err(format!("remote batch dispatcher {:?} generation must be positive", dispatcher.instance_id));
+        }
+        validate_remote_batch_command(&dispatcher.instance_id, "submit", &dispatcher.submit)?;
+        validate_remote_batch_command(&dispatcher.instance_id, "observe", &dispatcher.observe)?;
+        validate_remote_batch_command(&dispatcher.instance_id, "cancel", &dispatcher.cancel)?;
+        validate_remote_batch_command(&dispatcher.instance_id, "reconcile", &dispatcher.reconcile)?;
+        validate_absolute_program(&dispatcher.instance_id, "worker", &dispatcher.worker_program)?;
+        validate_remote_batch_args(&dispatcher.instance_id, "worker", &dispatcher.worker_args)?;
+        validate_remote_batch_secret_free_args(&dispatcher.instance_id, "worker", &dispatcher.worker_args)?;
+        validate_remote_batch_limits(dispatcher)?;
+    }
+    Ok(())
+}
+
+fn validate_remote_batch_command(
+    instance_id: &str,
+    operation: &str,
+    command: &RemoteBatchDispatcherCommandProfile,
+) -> Result<(), String> {
+    validate_absolute_program(instance_id, operation, &command.program)?;
+    validate_blake3_digest(
+        &format!("remote batch dispatcher {instance_id:?} {operation} executable"),
+        &command.expected_digest_blake3,
+    )?;
+    validate_remote_batch_args(instance_id, operation, &command.args)?;
+    validate_remote_batch_secret_free_args(instance_id, operation, &command.args)?;
+    if command.timeout_secs == 0 || command.timeout_secs > MAX_REMOTE_BATCH_TIMEOUT_SECS {
+        return Err(format!("remote batch dispatcher {instance_id:?} {operation} timeout is invalid"));
+    }
+    if command.stdout_limit_bytes == 0 || command.stdout_limit_bytes > MAX_REMOTE_BATCH_OUTPUT_BYTES {
+        return Err(format!("remote batch dispatcher {instance_id:?} {operation} stdout limit is invalid"));
+    }
+    if command.stderr_limit_bytes == 0 || command.stderr_limit_bytes > MAX_REMOTE_BATCH_OUTPUT_BYTES {
+        return Err(format!("remote batch dispatcher {instance_id:?} {operation} stderr limit is invalid"));
+    }
+    Ok(())
+}
+
+fn validate_absolute_program(instance_id: &str, operation: &str, program: &std::path::Path) -> Result<(), String> {
+    if !program.is_absolute() {
+        return Err(format!("remote batch dispatcher {instance_id:?} {operation} program must be absolute"));
+    }
+    if program.as_os_str().is_empty() {
+        return Err(format!("remote batch dispatcher {instance_id:?} {operation} program is empty"));
+    }
+    Ok(())
+}
+
+fn validate_remote_batch_args(instance_id: &str, operation: &str, args: &[String]) -> Result<(), String> {
+    if args.len() > MAX_REMOTE_BATCH_COMMAND_ARGS {
+        return Err(format!(
+            "remote batch dispatcher {instance_id:?} {operation} argument count exceeds {MAX_REMOTE_BATCH_COMMAND_ARGS}"
+        ));
+    }
+    for arg in args {
+        if arg.len() > MAX_REMOTE_BATCH_ARGUMENT_BYTES || arg.chars().any(char::is_control) {
+            return Err(format!("remote batch dispatcher {instance_id:?} {operation} argument is invalid"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_remote_batch_secret_free_args(instance_id: &str, operation: &str, args: &[String]) -> Result<(), String> {
+    for arg in args {
+        let normalized = arg.to_ascii_lowercase();
+        if FORBIDDEN_REMOTE_BATCH_SECRET_MARKERS.iter().any(|marker| normalized.contains(marker)) {
+            return Err(format!("remote batch dispatcher {instance_id:?} {operation} arguments may not embed secrets"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_remote_batch_limits(dispatcher: &RemoteBatchDispatcherProfile) -> Result<(), String> {
+    if dispatcher.startup_timeout_secs == 0 || dispatcher.startup_timeout_secs > MAX_REMOTE_BATCH_TIMEOUT_SECS {
+        return Err(format!("remote batch dispatcher {:?} startup timeout is invalid", dispatcher.instance_id));
+    }
+    if dispatcher.terminal_timeout_secs == 0 || dispatcher.terminal_timeout_secs > MAX_REMOTE_BATCH_TIMEOUT_SECS {
+        return Err(format!("remote batch dispatcher {:?} terminal timeout is invalid", dispatcher.instance_id));
+    }
+    if dispatcher.max_reconcile_attempts == 0 || dispatcher.max_reconcile_attempts > MAX_REMOTE_BATCH_RECONCILE_ATTEMPTS
+    {
+        return Err(format!("remote batch dispatcher {:?} reconcile attempt limit is invalid", dispatcher.instance_id));
+    }
+    Ok(())
+}
+
+fn validate_remote_batch_identifier(label: &str, value: &str) -> Result<(), String> {
+    if value.is_empty() || value.len() > MAX_REMOTE_BATCH_ARGUMENT_BYTES || value.chars().any(char::is_control) {
+        return Err(format!("remote batch dispatcher {label} is invalid"));
+    }
+    Ok(())
+}
+
+fn validate_blake3_digest(label: &str, value: &str) -> Result<(), String> {
+    let valid = value.len() == BLAKE3_HEX_LENGTH_CHARS
+        && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
+    if !valid {
+        return Err(format!("{label} digest is not lowercase BLAKE3 hex"));
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_remote_workspace_policy(policy: &RemoteWorkspacePolicy) -> Result<(), String> {
     if policy.modes.is_empty() || policy.authority_class.is_empty() || policy.guest_paths.is_empty() {
         return Err("modes, authority_class, and guest_paths must be non-empty".to_string());
@@ -425,6 +591,31 @@ mod tests {
     const SAMPLE_MAX_ATTEMPTS: u32 = 4;
     const SAMPLE_RETRY_DELAY_SECS: u64 = 10;
 
+    fn sample_dispatcher(adapter: RemoteBatchDispatcherAdapter) -> RemoteBatchDispatcherProfile {
+        let command = RemoteBatchDispatcherCommandProfile {
+            program: std::path::PathBuf::from("/bin/true"),
+            expected_digest_blake3: blake3::hash(b"fixture-executable").to_hex().to_string(),
+            args: vec!["--fixture".to_string()],
+            timeout_secs: SAMPLE_RETRY_DELAY_SECS,
+            stdout_limit_bytes: MAX_REMOTE_BATCH_OUTPUT_BYTES,
+            stderr_limit_bytes: MAX_REMOTE_BATCH_OUTPUT_BYTES,
+        };
+        RemoteBatchDispatcherProfile {
+            instance_id: "dispatcher-1".to_string(),
+            generation: 1,
+            adapter,
+            submit: command.clone(),
+            observe: command.clone(),
+            cancel: command.clone(),
+            reconcile: command,
+            worker_program: std::path::PathBuf::from("/bin/true"),
+            worker_args: vec!["remote".to_string(), "serve".to_string()],
+            startup_timeout_secs: SAMPLE_RETRY_DELAY_SECS,
+            terminal_timeout_secs: SAMPLE_MAX_BUILD_TIME_SECS,
+            max_reconcile_attempts: SAMPLE_MAX_ATTEMPTS,
+        }
+    }
+
     fn sample_config() -> RemoteBuildFarmConfig {
         RemoteBuildFarmConfig {
             pools: vec![RemoteBuilderPool {
@@ -462,6 +653,7 @@ mod tests {
                     trusted_public_keys: Vec::new(),
                 }],
             }],
+            dispatchers: vec![sample_dispatcher(RemoteBatchDispatcherAdapter::DirectProcessV1)],
             telemetry: RemoteTelemetryExportConfig::default(),
             trace_context: RemoteTraceContextConfig::default(),
             failure_debug: RemoteFailureDebugPolicy::default(),
@@ -472,6 +664,42 @@ mod tests {
     fn valid_config_passes_validation() {
         let config = sample_config();
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn batch_dispatcher_profiles_accept_supported_adapters() {
+        let mut config = sample_config();
+        config.dispatchers.push(sample_dispatcher(RemoteBatchDispatcherAdapter::SlurmCliV1));
+        config.dispatchers[1].instance_id = "slurm-1".to_string();
+
+        assert!(config.validate().is_ok());
+        assert_eq!(config.dispatchers.len(), 2);
+    }
+
+    #[test]
+    fn batch_dispatcher_profiles_reject_secret_args_and_bad_digests() {
+        let mut secret = sample_config();
+        secret.dispatchers[0].worker_args.push("--ticket=do-not-store".to_string());
+        let secret_error = secret.validate().expect_err("secret-bearing worker args rejected");
+        let mut digest = sample_config();
+        digest.dispatchers[0].submit.expected_digest_blake3 = "sha256-is-not-accepted".to_string();
+        let digest_error = digest.validate().expect_err("non-BLAKE3 executable identity rejected");
+
+        assert!(secret_error.contains("may not embed secrets"));
+        assert!(digest_error.contains("not lowercase BLAKE3 hex"));
+    }
+
+    #[test]
+    fn batch_dispatcher_profiles_reject_relative_programs_and_duplicate_instances() {
+        let mut relative = sample_config();
+        relative.dispatchers[0].observe.program = std::path::PathBuf::from("squeue");
+        let relative_error = relative.validate().expect_err("relative dispatcher path rejected");
+        let mut duplicate = sample_config();
+        duplicate.dispatchers.push(duplicate.dispatchers[0].clone());
+        let duplicate_error = duplicate.validate().expect_err("duplicate dispatcher instance rejected");
+
+        assert!(relative_error.contains("program must be absolute"));
+        assert!(duplicate_error.contains("duplicate remote batch dispatcher"));
     }
 
     #[test]

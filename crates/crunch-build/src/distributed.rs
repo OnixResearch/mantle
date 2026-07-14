@@ -9,12 +9,14 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use serde::Serialize;
 
+mod external_batch;
 mod remote_attempt;
 mod remote_attempt_log;
 mod remote_failure_debug;
 mod remote_resources;
 mod remote_telemetry;
 mod remote_transfer;
+pub use external_batch::*;
 pub use remote_attempt::*;
 pub use remote_attempt_log::*;
 pub use remote_failure_debug::*;

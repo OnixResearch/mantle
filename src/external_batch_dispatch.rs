@@ -1,0 +1,715 @@
+//! Confined imperative-shell adapters for external batch allocation.
+//!
+//! The pure protocol and reconciliation logic lives in
+//! `crunch_build::distributed`. This module verifies configured executables,
+//! runs them without a shell or inherited environment, enforces bounded I/O and
+//! deadlines, and translates direct JSON or Slurm CLI output into the canonical
+//! protocol.
+//!
+//! r[impl remote_builds.external_batch_confined_execution]
+//! r[impl remote_builds.external_batch_slurm_adapter]
+
+use std::io::Read;
+use std::io::Write;
+use std::path::Path;
+use std::process::Child;
+use std::process::Command;
+use std::process::Stdio;
+use std::thread;
+use std::time::Duration;
+use std::time::Instant;
+
+use crunch_build::distributed::EXTERNAL_BATCH_PROTOCOL_SCHEMA;
+use crunch_build::distributed::ExternalBatchJobState;
+use crunch_build::distributed::ExternalBatchOperation;
+use crunch_build::distributed::ExternalBatchOperationKind;
+use crunch_build::distributed::ExternalBatchOperationResponse;
+use crunch_build::distributed::MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES;
+use crunch_build::distributed::RemoteNamedResourceQuantity;
+use crunch_build::distributed::validate_external_batch_response;
+
+use crate::remote_farm_config::RemoteBatchDispatcherAdapter;
+use crate::remote_farm_config::RemoteBatchDispatcherCommandProfile;
+use crate::remote_farm_config::RemoteBatchDispatcherProfile;
+
+const EXECUTABLE_DIGEST_BUFFER_BYTES: usize = 65_536;
+const PROCESS_OUTPUT_BUFFER_BYTES: usize = 8_192;
+const PROCESS_POLL_INTERVAL_MS: u64 = 10;
+const PROCESS_TEARDOWN_TIMEOUT_SECS: u64 = 5;
+const SLURM_MEMORY_SUFFIX: &str = "B";
+const SLURM_STATE_PENDING: [&str; 3] = ["CONFIGURING", "PD", "PENDING"];
+const SLURM_STATE_RUNNING: [&str; 3] = ["COMPLETING", "R", "RUNNING"];
+const SLURM_STATE_SUCCEEDED: [&str; 2] = ["CD", "COMPLETED"];
+const SLURM_STATE_CANCELLED: [&str; 2] = ["CA", "CANCELLED"];
+const SLURM_STATE_FAILED: [&str; 7] = ["F", "FAILED", "NODE_FAIL", "NF", "OOM", "OUT_OF_MEMORY", "TIMEOUT"];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ConfinedProcessOutput {
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+pub trait ExternalBatchDispatcher {
+    fn submit(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String>;
+
+    fn observe(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String>;
+
+    fn cancel(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String>;
+
+    fn reconcile(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String>;
+}
+
+pub enum ConfiguredExternalBatchDispatcher<'a> {
+    Direct(DirectProcessBatchDispatcher<'a>),
+    Slurm(SlurmCliBatchDispatcher<'a>),
+}
+
+impl<'a> ConfiguredExternalBatchDispatcher<'a> {
+    pub fn new(profile: &'a RemoteBatchDispatcherProfile) -> Self {
+        match profile.adapter {
+            RemoteBatchDispatcherAdapter::DirectProcessV1 => Self::Direct(DirectProcessBatchDispatcher { profile }),
+            RemoteBatchDispatcherAdapter::SlurmCliV1 => Self::Slurm(SlurmCliBatchDispatcher { profile }),
+        }
+    }
+}
+
+impl ExternalBatchDispatcher for ConfiguredExternalBatchDispatcher<'_> {
+    fn submit(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        match self {
+            Self::Direct(adapter) => adapter.submit(operation, observed_unix_s),
+            Self::Slurm(adapter) => adapter.submit(operation, observed_unix_s),
+        }
+    }
+
+    fn observe(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        match self {
+            Self::Direct(adapter) => adapter.observe(operation, observed_unix_s),
+            Self::Slurm(adapter) => adapter.observe(operation, observed_unix_s),
+        }
+    }
+
+    fn cancel(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        match self {
+            Self::Direct(adapter) => adapter.cancel(operation, observed_unix_s),
+            Self::Slurm(adapter) => adapter.cancel(operation, observed_unix_s),
+        }
+    }
+
+    fn reconcile(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        match self {
+            Self::Direct(adapter) => adapter.reconcile(operation, observed_unix_s),
+            Self::Slurm(adapter) => adapter.reconcile(operation, observed_unix_s),
+        }
+    }
+}
+
+pub struct DirectProcessBatchDispatcher<'a> {
+    profile: &'a RemoteBatchDispatcherProfile,
+}
+
+impl ExternalBatchDispatcher for DirectProcessBatchDispatcher<'_> {
+    fn submit(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        self.run(ExternalBatchOperationKind::Submit, &self.profile.submit, operation, observed_unix_s)
+    }
+
+    fn observe(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        self.run(ExternalBatchOperationKind::Observe, &self.profile.observe, operation, observed_unix_s)
+    }
+
+    fn cancel(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        self.run(ExternalBatchOperationKind::Cancel, &self.profile.cancel, operation, observed_unix_s)
+    }
+
+    fn reconcile(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        self.run(ExternalBatchOperationKind::Reconcile, &self.profile.reconcile, operation, observed_unix_s)
+    }
+}
+
+impl DirectProcessBatchDispatcher<'_> {
+    fn run(
+        &self,
+        expected_kind: ExternalBatchOperationKind,
+        command: &RemoteBatchDispatcherCommandProfile,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        validate_operation_kind(expected_kind, operation)?;
+        validate_observation_time(observed_unix_s)?;
+        let stdin = serde_json::to_vec(operation)
+            .map_err(|error| format!("external-batch-request-serialize-failed: {error}"))?;
+        let output = run_confined_process(command, &command.args, &stdin)?;
+        let response: ExternalBatchOperationResponse = serde_json::from_slice(&output.stdout)
+            .map_err(|_| "external-batch-direct-response-malformed".to_string())?;
+        validate_external_batch_response(operation, &response)?;
+        if response.observed_unix_s != observed_unix_s {
+            return Err("external-batch-direct-observation-time-mismatch".to_string());
+        }
+        assert_eq!(response.operation, expected_kind);
+        assert!(response.observed_unix_s > 0);
+        Ok(response)
+    }
+}
+
+pub struct SlurmCliBatchDispatcher<'a> {
+    profile: &'a RemoteBatchDispatcherProfile,
+}
+
+impl ExternalBatchDispatcher for SlurmCliBatchDispatcher<'_> {
+    fn submit(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        validate_operation_kind(ExternalBatchOperationKind::Submit, operation)?;
+        validate_observation_time(observed_unix_s)?;
+        let args = slurm_submit_args(self.profile, operation)?;
+        let output = run_confined_process(&self.profile.submit, &args, &[])?;
+        let external_job_id = parse_slurm_submit_job_id(&output.stdout)?;
+        response_for_slurm(
+            operation,
+            ExternalBatchJobState::Submitted,
+            Some(external_job_id),
+            "slurm-submit-accepted",
+            observed_unix_s,
+        )
+    }
+
+    fn observe(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        self.run_observation(ExternalBatchOperationKind::Observe, &self.profile.observe, operation, observed_unix_s)
+    }
+
+    fn cancel(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        validate_operation_kind(ExternalBatchOperationKind::Cancel, operation)?;
+        validate_observation_time(observed_unix_s)?;
+        let external_job_id = required_external_job_id(operation)?;
+        let mut args = self.profile.cancel.args.clone();
+        args.push(external_job_id.to_string());
+        run_confined_process(&self.profile.cancel, &args, &[])?;
+        response_for_slurm(
+            operation,
+            ExternalBatchJobState::Cancelled,
+            Some(external_job_id.to_string()),
+            "slurm-cancel-accepted",
+            observed_unix_s,
+        )
+    }
+
+    fn reconcile(
+        &self,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        self.run_observation(ExternalBatchOperationKind::Reconcile, &self.profile.reconcile, operation, observed_unix_s)
+    }
+}
+
+impl SlurmCliBatchDispatcher<'_> {
+    fn run_observation(
+        &self,
+        expected_kind: ExternalBatchOperationKind,
+        command: &RemoteBatchDispatcherCommandProfile,
+        operation: &ExternalBatchOperation,
+        observed_unix_s: u64,
+    ) -> Result<ExternalBatchOperationResponse, String> {
+        validate_operation_kind(expected_kind, operation)?;
+        validate_observation_time(observed_unix_s)?;
+        let external_job_id = required_external_job_id(operation)?;
+        let mut args = command.args.clone();
+        args.extend([
+            "--noheader".to_string(),
+            "--format=%T".to_string(),
+            "--jobs".to_string(),
+        ]);
+        args.push(external_job_id.to_string());
+        let output = run_confined_process(command, &args, &[])?;
+        let state = parse_slurm_job_state(&output.stdout)?;
+        response_for_slurm(operation, state, Some(external_job_id.to_string()), "slurm-state-observed", observed_unix_s)
+    }
+}
+
+fn run_confined_process(
+    profile: &RemoteBatchDispatcherCommandProfile,
+    args: &[String],
+    stdin: &[u8],
+) -> Result<ConfinedProcessOutput, String> {
+    verify_executable_digest(&profile.program, &profile.expected_digest_blake3)?;
+    let mut child = spawn_confined_process(profile, args)?;
+    let child_stdin = child.stdin.take().ok_or_else(|| "external-batch-stdin-pipe-missing".to_string())?;
+    let stdin_payload = stdin.to_vec();
+    let stdin_writer = thread::spawn(move || write_child_stdin(child_stdin, &stdin_payload));
+    let stdout = child.stdout.take().ok_or_else(|| "external-batch-stdout-pipe-missing".to_string())?;
+    let stderr = child.stderr.take().ok_or_else(|| "external-batch-stderr-pipe-missing".to_string())?;
+    let stdout_limit = bounded_output_limit(profile.stdout_limit_bytes)?;
+    let stderr_limit = bounded_output_limit(profile.stderr_limit_bytes)?;
+    let stdout_reader = thread::spawn(move || read_bounded_output(stdout, stdout_limit));
+    let stderr_reader = thread::spawn(move || read_bounded_output(stderr, stderr_limit));
+    let status = wait_for_child(&mut child, profile.timeout_secs)?;
+    join_stdin_writer(stdin_writer)?;
+    let stdout = join_output_reader(stdout_reader, "stdout")?;
+    let stderr = join_output_reader(stderr_reader, "stderr")?;
+    if !status.success() {
+        return Err("external-batch-process-exit-failed".to_string());
+    }
+    assert!(stdout.len() <= stdout_limit);
+    assert!(stderr.len() <= stderr_limit);
+    Ok(ConfinedProcessOutput { stdout, stderr })
+}
+
+fn verify_executable_digest(program: &Path, expected_digest_blake3: &str) -> Result<(), String> {
+    let mut file = std::fs::File::open(program).map_err(|_| "external-batch-executable-open-failed".to_string())?;
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = [0_u8; EXECUTABLE_DIGEST_BUFFER_BYTES];
+    loop {
+        let read = file.read(&mut buffer).map_err(|_| "external-batch-executable-read-failed".to_string())?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    let observed = hasher.finalize().to_hex().to_string();
+    if observed != expected_digest_blake3 {
+        return Err("external-batch-executable-digest-mismatch".to_string());
+    }
+    assert_eq!(observed.len(), expected_digest_blake3.len());
+    assert!(!observed.is_empty());
+    Ok(())
+}
+
+fn spawn_confined_process(profile: &RemoteBatchDispatcherCommandProfile, args: &[String]) -> Result<Child, String> {
+    let mut command = Command::new(&profile.program);
+    command.args(args).env_clear().stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    command.spawn().map_err(|_| "external-batch-process-spawn-failed".to_string())
+}
+
+fn write_child_stdin(mut child_stdin: std::process::ChildStdin, stdin: &[u8]) -> Result<(), String> {
+    child_stdin.write_all(stdin).map_err(|_| "external-batch-stdin-write-failed".to_string())?;
+    child_stdin.flush().map_err(|_| "external-batch-stdin-flush-failed".to_string())?;
+    Ok(())
+}
+
+fn join_stdin_writer(writer: thread::JoinHandle<Result<(), String>>) -> Result<(), String> {
+    writer.join().map_err(|_| "external-batch-stdin-writer-panicked".to_string())?
+}
+
+fn wait_for_child(child: &mut Child, timeout_secs: u64) -> Result<std::process::ExitStatus, String> {
+    let timeout = Duration::from_secs(timeout_secs);
+    let deadline = Instant::now().checked_add(timeout).ok_or_else(|| "external-batch-timeout-overflow".to_string())?;
+    loop {
+        if let Some(status) = child.try_wait().map_err(|_| "external-batch-process-wait-failed".to_string())? {
+            return Ok(status);
+        }
+        if Instant::now() >= deadline {
+            terminate_child(child)?;
+            return Err("external-batch-process-timeout".to_string());
+        }
+        thread::sleep(Duration::from_millis(PROCESS_POLL_INTERVAL_MS));
+    }
+}
+
+fn terminate_child(child: &mut Child) -> Result<(), String> {
+    child.kill().map_err(|_| "external-batch-process-kill-failed".to_string())?;
+    let teardown_deadline = Instant::now()
+        .checked_add(Duration::from_secs(PROCESS_TEARDOWN_TIMEOUT_SECS))
+        .ok_or_else(|| "external-batch-teardown-timeout-overflow".to_string())?;
+    loop {
+        if child.try_wait().map_err(|_| "external-batch-process-reap-failed".to_string())?.is_some() {
+            return Ok(());
+        }
+        if Instant::now() >= teardown_deadline {
+            return Err("external-batch-process-teardown-timeout".to_string());
+        }
+        thread::sleep(Duration::from_millis(PROCESS_POLL_INTERVAL_MS));
+    }
+}
+
+fn read_bounded_output(mut reader: impl Read, limit_bytes: usize) -> Result<Vec<u8>, String> {
+    let mut output = Vec::new();
+    let mut buffer = [0_u8; PROCESS_OUTPUT_BUFFER_BYTES];
+    loop {
+        let read = reader.read(&mut buffer).map_err(|_| "external-batch-process-output-read-failed".to_string())?;
+        if read == 0 {
+            break;
+        }
+        let next_len =
+            output.len().checked_add(read).ok_or_else(|| "external-batch-process-output-overflow".to_string())?;
+        if next_len > limit_bytes {
+            return Err("external-batch-process-output-limit-exceeded".to_string());
+        }
+        output.extend_from_slice(&buffer[..read]);
+    }
+    Ok(output)
+}
+
+fn join_output_reader(reader: thread::JoinHandle<Result<Vec<u8>, String>>, stream: &str) -> Result<Vec<u8>, String> {
+    reader.join().map_err(|_| format!("external-batch-{stream}-reader-panicked"))?
+}
+
+fn bounded_output_limit(limit_bytes: u64) -> Result<usize, String> {
+    usize::try_from(limit_bytes).map_err(|_| "external-batch-output-limit-overflow".to_string())
+}
+
+fn slurm_submit_args(
+    profile: &RemoteBatchDispatcherProfile,
+    operation: &ExternalBatchOperation,
+) -> Result<Vec<String>, String> {
+    let mut args = profile.submit.args.clone();
+    args.push("--parsable".to_string());
+    args.push(format!("--comment={}", operation.dispatch_id_blake3));
+    args.push(format!("--cpus-per-task={}", operation.resources.cpu_units));
+    args.push(format!("--mem={}{}", operation.resources.memory_bytes, SLURM_MEMORY_SUFFIX));
+    args.push(format!("--tmp={}", operation.resources.scratch_bytes));
+    append_slurm_named_resources(&mut args, "--gres", &operation.resources.accelerators);
+    append_slurm_named_resources(&mut args, "--licenses", &operation.resources.named_tokens);
+    args.push("--".to_string());
+    args.push(profile.worker_program.display().to_string());
+    args.extend(profile.worker_args.iter().cloned());
+    args.extend([
+        "--mantle-external-dispatch-id".to_string(),
+        operation.dispatch_id_blake3.clone(),
+        "--mantle-worker-endpoint".to_string(),
+        operation.expected_worker_endpoint_id.clone(),
+        "--mantle-worker-generation".to_string(),
+        operation.dispatcher_generation.to_string(),
+        "--mantle-fence-generation".to_string(),
+        operation.fence_generation.get().to_string(),
+    ]);
+    if args.len() > crate::remote_farm_config::remote_batch_command_arg_limit() {
+        return Err("external-batch-slurm-argument-limit-exceeded".to_string());
+    }
+    assert!(args.iter().any(|arg| arg == "--parsable"));
+    assert!(args.iter().any(|arg| arg == "--"));
+    Ok(args)
+}
+
+fn append_slurm_named_resources(args: &mut Vec<String>, flag: &str, resources: &[RemoteNamedResourceQuantity]) {
+    for resource in resources {
+        args.push(format!("{flag}={}:{}", resource.name, resource.quantity));
+    }
+}
+
+fn parse_slurm_submit_job_id(stdout: &[u8]) -> Result<String, String> {
+    let text = std::str::from_utf8(stdout).map_err(|_| "external-batch-slurm-submit-non-utf8".to_string())?;
+    let first_line = text.lines().next().unwrap_or_default().trim();
+    let external_job_id = first_line.split(';').next().unwrap_or_default();
+    validate_slurm_job_id(external_job_id)?;
+    Ok(external_job_id.to_string())
+}
+
+fn parse_slurm_job_state(stdout: &[u8]) -> Result<ExternalBatchJobState, String> {
+    let text = std::str::from_utf8(stdout).map_err(|_| "external-batch-slurm-state-non-utf8".to_string())?;
+    let state = text.lines().next().unwrap_or_default().trim().to_ascii_uppercase();
+    if state.is_empty() {
+        return Ok(ExternalBatchJobState::Unknown);
+    }
+    if SLURM_STATE_PENDING.contains(&state.as_str()) {
+        return Ok(ExternalBatchJobState::Pending);
+    }
+    if SLURM_STATE_RUNNING.contains(&state.as_str()) {
+        return Ok(ExternalBatchJobState::Running);
+    }
+    if SLURM_STATE_SUCCEEDED.contains(&state.as_str()) {
+        return Ok(ExternalBatchJobState::Succeeded);
+    }
+    if SLURM_STATE_CANCELLED.contains(&state.as_str()) {
+        return Ok(ExternalBatchJobState::Cancelled);
+    }
+    if SLURM_STATE_FAILED.contains(&state.as_str()) {
+        return Ok(ExternalBatchJobState::Failed);
+    }
+    Err("external-batch-slurm-state-malformed".to_string())
+}
+
+fn validate_slurm_job_id(external_job_id: &str) -> Result<(), String> {
+    if external_job_id.is_empty() || external_job_id.len() > MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES {
+        return Err("external-batch-slurm-job-id-length-invalid".to_string());
+    }
+    let valid = external_job_id
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'));
+    if !valid {
+        return Err("external-batch-slurm-job-id-invalid".to_string());
+    }
+    Ok(())
+}
+
+fn required_external_job_id(operation: &ExternalBatchOperation) -> Result<&str, String> {
+    operation
+        .external_job_id
+        .as_deref()
+        .ok_or_else(|| "external-batch-external-job-id-missing".to_string())
+}
+
+fn response_for_slurm(
+    operation: &ExternalBatchOperation,
+    state: ExternalBatchJobState,
+    external_job_id: Option<String>,
+    reason_code: &str,
+    observed_unix_s: u64,
+) -> Result<ExternalBatchOperationResponse, String> {
+    let response = ExternalBatchOperationResponse {
+        schema: EXTERNAL_BATCH_PROTOCOL_SCHEMA.to_string(),
+        operation: operation.operation,
+        operation_id_blake3: operation.operation_id_blake3.clone(),
+        dispatch_id_blake3: operation.dispatch_id_blake3.clone(),
+        adapter_instance_id: operation.adapter_instance_id.clone(),
+        dispatcher_generation: operation.dispatcher_generation,
+        job_id: operation.job_id.clone(),
+        attempt_id: operation.attempt_id.clone(),
+        fence_generation: operation.fence_generation,
+        state,
+        external_job_id,
+        reason_code: reason_code.to_string(),
+        observed_unix_s,
+    };
+    validate_external_batch_response(operation, &response)?;
+    assert_eq!(response.operation_id_blake3, operation.operation_id_blake3);
+    assert_eq!(response.dispatch_id_blake3, operation.dispatch_id_blake3);
+    Ok(response)
+}
+
+fn validate_operation_kind(
+    expected: ExternalBatchOperationKind,
+    operation: &ExternalBatchOperation,
+) -> Result<(), String> {
+    if operation.operation != expected {
+        return Err("external-batch-operation-kind-mismatch".to_string());
+    }
+    Ok(())
+}
+
+fn validate_observation_time(observed_unix_s: u64) -> Result<(), String> {
+    if observed_unix_s == 0 {
+        return Err("external-batch-observation-time-zero".to_string());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use crunch_build::distributed::ExternalBatchLimits;
+    use crunch_build::distributed::ExternalBatchOperationInput;
+    use crunch_build::distributed::RemoteAttemptId;
+    use crunch_build::distributed::RemoteFenceGeneration;
+    use crunch_build::distributed::RemoteJobId;
+    use crunch_build::distributed::RemoteResourceRequirements;
+    use crunch_build::distributed::RemoteResourceVector;
+    use crunch_build::distributed::plan_external_batch_operation;
+
+    use super::*;
+
+    const TEST_MEMORY_BYTES: u64 = 4_294_967_296;
+    const TEST_SCRATCH_BYTES: u64 = 8_589_934_592;
+    const TEST_TIMEOUT_SECS: u64 = 10;
+    const TEST_OUTPUT_LIMIT_BYTES: u64 = 4_096;
+    const TEST_RECONCILE_ATTEMPTS: u32 = 3;
+    const TEST_OBSERVED_UNIX_S: u64 = 1_700_000_000;
+
+    fn fixture_operation(kind: ExternalBatchOperationKind, external_job_id: Option<&str>) -> ExternalBatchOperation {
+        plan_external_batch_operation(ExternalBatchOperationInput {
+            kind,
+            adapter_instance_id: "slurm-fixture".to_string(),
+            dispatcher_generation: 1,
+            normalized_build_key: blake3::hash(b"build").to_hex().to_string(),
+            job_id: RemoteJobId::new("job-1").expect("fixture job id"),
+            attempt_id: RemoteAttemptId::new("attempt-1").expect("fixture attempt id"),
+            fence_generation: RemoteFenceGeneration::INITIAL,
+            expected_worker_endpoint_id: "worker-batch-1".to_string(),
+            resource_requirements: RemoteResourceRequirements {
+                quantities: RemoteResourceVector {
+                    cpu_units: 2,
+                    memory_bytes: TEST_MEMORY_BYTES,
+                    scratch_bytes: TEST_SCRATCH_BYTES,
+                    accelerators: vec![RemoteNamedResourceQuantity {
+                        name: "nvidia-sm90".to_string(),
+                        quantity: 1,
+                    }],
+                    named_tokens: vec![RemoteNamedResourceQuantity {
+                        name: "linker-seat".to_string(),
+                        quantity: 1,
+                    }],
+                },
+                semantic_accelerator_classes: vec!["nvidia-sm90".to_string()],
+            },
+            limits: ExternalBatchLimits {
+                startup_timeout_secs: TEST_TIMEOUT_SECS,
+                terminal_timeout_secs: TEST_TIMEOUT_SECS,
+                max_reconcile_attempts: TEST_RECONCILE_ATTEMPTS,
+            },
+            external_job_id: external_job_id.map(str::to_string),
+        })
+        .expect("fixture operation plans")
+    }
+
+    fn fake_slurm_profile(script: &Path) -> RemoteBatchDispatcherProfile {
+        let command = |operation: &str| RemoteBatchDispatcherCommandProfile {
+            program: script.to_path_buf(),
+            expected_digest_blake3: executable_digest(script),
+            args: vec![operation.to_string()],
+            timeout_secs: TEST_TIMEOUT_SECS,
+            stdout_limit_bytes: TEST_OUTPUT_LIMIT_BYTES,
+            stderr_limit_bytes: TEST_OUTPUT_LIMIT_BYTES,
+        };
+        RemoteBatchDispatcherProfile {
+            instance_id: "slurm-fixture".to_string(),
+            generation: 1,
+            adapter: RemoteBatchDispatcherAdapter::SlurmCliV1,
+            submit: command("submit"),
+            observe: command("observe"),
+            cancel: command("cancel"),
+            reconcile: command("reconcile"),
+            worker_program: Path::new("/bin/true").to_path_buf(),
+            worker_args: vec!["remote".to_string(), "serve".to_string()],
+            startup_timeout_secs: TEST_TIMEOUT_SECS,
+            terminal_timeout_secs: TEST_TIMEOUT_SECS,
+            max_reconcile_attempts: TEST_RECONCILE_ATTEMPTS,
+        }
+    }
+
+    fn write_fake_slurm(temp: &tempfile::TempDir) -> std::path::PathBuf {
+        let script = temp.path().join("fake-slurm");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\noperation=$1\ncase \"$operation\" in\n  submit) printf '4242;fixture\\n' ;;\n  observe|reconcile) printf 'RUNNING\\n' ;;\n  cancel) exit 0 ;;\n  malformed) printf 'NOT_A_SLURM_STATE\\n' ;;\n  flood) i=0; while [ \"$i\" -lt 8192 ]; do printf x; i=$((i + 1)); done ;;\n  *) exit 64 ;;\nesac\n",
+        )
+        .expect("fake Slurm fixture writes");
+        let mut permissions = std::fs::metadata(&script).expect("fixture metadata reads").permissions();
+        permissions.set_mode(0o700);
+        std::fs::set_permissions(&script, permissions).expect("fixture mode applies");
+        script
+    }
+
+    fn executable_digest(path: &Path) -> String {
+        blake3::hash(&std::fs::read(path).expect("fixture executable reads")).to_hex().to_string()
+    }
+
+    #[test]
+    fn slurm_adapter_submits_observes_reconciles_and_cancels_fake_cli() {
+        let temp = tempfile::tempdir().expect("temporary fake Slurm dir");
+        let script = write_fake_slurm(&temp);
+        let profile = fake_slurm_profile(&script);
+        let adapter = SlurmCliBatchDispatcher { profile: &profile };
+        let submit = adapter
+            .submit(&fixture_operation(ExternalBatchOperationKind::Submit, None), TEST_OBSERVED_UNIX_S)
+            .expect("fake Slurm submit succeeds");
+        let observe = adapter
+            .observe(&fixture_operation(ExternalBatchOperationKind::Observe, Some("4242")), TEST_OBSERVED_UNIX_S)
+            .expect("fake Slurm observe succeeds");
+        let reconcile = adapter
+            .reconcile(&fixture_operation(ExternalBatchOperationKind::Reconcile, Some("4242")), TEST_OBSERVED_UNIX_S)
+            .expect("fake Slurm reconcile succeeds");
+        let cancel = adapter
+            .cancel(&fixture_operation(ExternalBatchOperationKind::Cancel, Some("4242")), TEST_OBSERVED_UNIX_S)
+            .expect("fake Slurm cancel succeeds");
+
+        assert_eq!(submit.external_job_id.as_deref(), Some("4242"));
+        assert_eq!(observe.state, ExternalBatchJobState::Running);
+        assert_eq!(reconcile.state, ExternalBatchJobState::Running);
+        assert_eq!(cancel.state, ExternalBatchJobState::Cancelled);
+    }
+
+    #[test]
+    fn confined_process_rejects_digest_swap_and_output_flood() {
+        let temp = tempfile::tempdir().expect("temporary fake Slurm dir");
+        let script = write_fake_slurm(&temp);
+        let mut swapped = fake_slurm_profile(&script);
+        swapped.submit.expected_digest_blake3 = blake3::hash(b"different executable").to_hex().to_string();
+        let digest_error = SlurmCliBatchDispatcher { profile: &swapped }
+            .submit(&fixture_operation(ExternalBatchOperationKind::Submit, None), TEST_OBSERVED_UNIX_S)
+            .expect_err("digest mismatch rejects execution");
+        let mut flooded = fake_slurm_profile(&script);
+        flooded.observe.args = vec!["flood".to_string()];
+        flooded.observe.stdout_limit_bytes = 32;
+        let flood_error = SlurmCliBatchDispatcher { profile: &flooded }
+            .observe(&fixture_operation(ExternalBatchOperationKind::Observe, Some("4242")), TEST_OBSERVED_UNIX_S)
+            .expect_err("bounded output rejects flood");
+
+        assert_eq!(digest_error, "external-batch-executable-digest-mismatch");
+        assert_eq!(flood_error, "external-batch-process-output-limit-exceeded");
+    }
+
+    #[test]
+    fn slurm_adapter_rejects_malformed_state_without_leaking_output() {
+        let temp = tempfile::tempdir().expect("temporary fake Slurm dir");
+        let script = write_fake_slurm(&temp);
+        let mut profile = fake_slurm_profile(&script);
+        profile.observe.args = vec!["malformed".to_string()];
+        let error = SlurmCliBatchDispatcher { profile: &profile }
+            .observe(&fixture_operation(ExternalBatchOperationKind::Observe, Some("4242")), TEST_OBSERVED_UNIX_S)
+            .expect_err("malformed scheduler state rejected");
+
+        assert_eq!(error, "external-batch-slurm-state-malformed");
+        assert!(!error.contains("NOT_A_SLURM_STATE"));
+    }
+
+    #[test]
+    fn slurm_resource_projection_is_provider_specific_only_at_adapter_boundary() {
+        let temp = tempfile::tempdir().expect("temporary fake Slurm dir");
+        let script = write_fake_slurm(&temp);
+        let profile = fake_slurm_profile(&script);
+        let operation = fixture_operation(ExternalBatchOperationKind::Submit, None);
+        let args = slurm_submit_args(&profile, &operation).expect("Slurm arguments project");
+
+        assert!(args.iter().any(|arg| arg == "--cpus-per-task=2"));
+        assert!(args.iter().any(|arg| arg == "--gres=nvidia-sm90:1"));
+        assert!(args.iter().any(|arg| arg == "--licenses=linker-seat:1"));
+        assert!(!args.iter().any(|arg| arg.contains("credential")));
+    }
+}

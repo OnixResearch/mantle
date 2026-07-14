@@ -312,6 +312,35 @@ let PublisherProfile = {
     | default = [],
 } in
 
+let BatchDispatcherCommand = {
+  program
+    | doc "Absolute executable path; the adapter verifies its BLAKE3 digest before every operation"
+    | String,
+  expected_digest_blake3 | String,
+  args
+    | doc "Bounded static arguments; credentials and policy secrets are forbidden"
+    | Array String
+    | default = [],
+  timeout_secs | Number,
+  stdout_limit_bytes | Number,
+  stderr_limit_bytes | Number,
+} in
+
+let BatchDispatcherProfile = {
+  instance_id | String,
+  generation | Number,
+  adapter | [| 'direct-process-v1, 'slurm-cli-v1 |],
+  submit | BatchDispatcherCommand,
+  observe | BatchDispatcherCommand,
+  cancel | BatchDispatcherCommand,
+  reconcile | BatchDispatcherCommand,
+  worker_program | String,
+  worker_args | Array String | default = [],
+  startup_timeout_secs | Number,
+  terminal_timeout_secs | Number,
+  max_reconcile_attempts | Number,
+} in
+
 let RemoteBuilderPoolContract = {
   pool_id
     | doc "Unique pool identifier"
@@ -346,9 +375,18 @@ let RemoteBuilderPoolContract = {
     | doc "Bounded disabled-by-default remote failure capture and replay configuration."
     = RemoteFailureDebugPolicy,
 
+  BatchDispatcher
+    | doc "Typed confined external allocation dispatcher profile."
+    = BatchDispatcherProfile,
+
   pools
     | doc "List of configured remote builder pools."
     | Array RemoteBuilderPoolContract
+    | default = [],
+
+  dispatchers
+    | doc "Bounded external allocation dispatchers; empty disables external batch scheduling."
+    | Array BatchDispatcherProfile
     | default = [],
 
   telemetry
