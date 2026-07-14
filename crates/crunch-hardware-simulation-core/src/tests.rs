@@ -189,6 +189,13 @@ fn plan_request() -> HardwarePlanRequest {
         cxx_executable: format!("{STORE_B}/bin/clang++"),
         linker_executable: format!("{STORE_C}/bin/ld.lld"),
         runtime_support_path: String::from(STORE_D),
+        tool_closure_paths: vec![
+            String::from(STORE_A),
+            String::from(STORE_B),
+            String::from(STORE_C),
+            String::from(STORE_D),
+            String::from(STORE_E),
+        ],
         compile_flags: vec![String::from("-std=c++17"), String::from("-O1")],
         link_flags: vec![String::from("-pthread")],
         generated_units: generated_units(),
@@ -323,6 +330,17 @@ fn plan_has_independent_compile_units_one_link_and_parameterized_smoke_roots() {
     assert_eq!(plan.action_graph.len(), EXPECTED_ACTION_COUNT);
     assert_eq!(plan.plan.roots, vec!["smoke.one-plus-two", "smoke.zero-plus-zero"]);
     assert!(plan.plan.units.iter().all(|unit| unit.derivation.addressing_mode == AddressingMode::InputAddressed));
+    assert!(
+        plan.plan
+            .units
+            .iter()
+            .flat_map(|unit| &unit.derivation.inputs)
+            .filter_map(|input| match input {
+                DynamicInput::StorePath { path } => Some(path),
+                _ => None,
+            })
+            .all(|path| path.matches('/').count() == 3)
+    );
 }
 
 #[test]
@@ -374,7 +392,7 @@ fn smoke_result_requires_verdict_exit_refs_logs_and_observation_agreement() {
 fn selective_invalidation_and_four_run_evidence_are_count_based_not_elapsed_promises() {
     let plan = build_hardware_plan(plan_request()).unwrap();
     let selected_ref = validated_profile().selected_source_refs[0].clone();
-    let invalidated = invalidated_actions(&plan.action_graph, &[selected_ref.clone()]).unwrap();
+    let invalidated = invalidated_actions(&plan.action_graph, core::slice::from_ref(&selected_ref)).unwrap();
     let all_actions = plan.action_graph.iter().map(|node| node.action_ref.clone()).collect::<Vec<_>>();
     let fresh = run_evidence(RunClass::Fresh, &plan.action_graph, &all_actions, &[], &all_actions, 0, 0);
     let selected = run_evidence(
@@ -404,7 +422,7 @@ fn evidence_rejects_partial_counts_unrelated_invalidation_and_elapsed_gates() {
     let plan = build_hardware_plan(plan_request()).unwrap();
     let selected_ref = validated_profile().selected_source_refs[0].clone();
     let all_actions = plan.action_graph.iter().map(|node| node.action_ref.clone()).collect::<Vec<_>>();
-    let invalidated = invalidated_actions(&plan.action_graph, &[selected_ref.clone()]).unwrap();
+    let invalidated = invalidated_actions(&plan.action_graph, core::slice::from_ref(&selected_ref)).unwrap();
     let fresh = run_evidence(RunClass::Fresh, &plan.action_graph, &all_actions, &[], &all_actions, 0, 0);
     let selected = run_evidence(
         RunClass::SelectedSourceChange,

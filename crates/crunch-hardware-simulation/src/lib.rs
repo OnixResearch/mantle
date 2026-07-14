@@ -29,6 +29,7 @@ pub const DEFAULT_MAX_LOG_BYTES: u64 = 65_536;
 pub const DEFAULT_ACTION_TIMEOUT_MS: u64 = 120_000;
 
 const PROCESS_POLL_INTERVAL_MS: u64 = 10;
+const MAX_READ_ONLY_BINDINGS: u32 = 64;
 const GIT_AUTHOR_NAME: &str = "Mantle Fixture";
 const GIT_AUTHOR_EMAIL: &str = "mantle-fixture@example.invalid";
 const GIT_TIMESTAMP: &str = "2000-01-01T00:00:00Z";
@@ -107,12 +108,19 @@ pub struct ToolCohortObservation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadOnlyBinding {
+    pub source: PathBuf,
+    pub guest: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StrictActionRequest {
     pub bwrap: PathBuf,
     pub executable: PathBuf,
     pub args: Vec<String>,
     pub env: BTreeMap<String, String>,
     pub read_only_paths: Vec<PathBuf>,
+    pub read_only_bindings: Vec<ReadOnlyBinding>,
     pub writable_root: PathBuf,
     pub timeout_ms: u64,
     pub max_log_bytes: u64,
@@ -310,11 +318,33 @@ fn validate_action_request(request: &StrictActionRequest) -> Result<(), ShellErr
     if request.read_only_paths.is_empty() {
         return Err(ShellError::Invalid(String::from("strict-action-read-closure-empty")));
     }
+    validate_read_only_bindings(&request.read_only_bindings)?;
     if !request.writable_root.is_absolute() {
         return Err(ShellError::Invalid(String::from("strict-action-writable-root-not-absolute")));
     }
     debug_assert!(request.timeout_ms > 0);
     debug_assert!(request.max_log_bytes > 0);
+    Ok(())
+}
+
+fn validate_read_only_bindings(bindings: &[ReadOnlyBinding]) -> Result<(), ShellError> {
+    let binding_count = u32::try_from(bindings.len()).unwrap_or(u32::MAX);
+    if binding_count > MAX_READ_ONLY_BINDINGS {
+        return Err(ShellError::Invalid(String::from("strict-action-binding-count-exceeded")));
+    }
+    for binding in bindings {
+        if !binding.source.is_absolute() || !binding.source.is_file() {
+            return Err(ShellError::Invalid(String::from("strict-action-binding-source-invalid")));
+        }
+        if !binding.guest.is_absolute() || !binding.guest.starts_with("/bin/") {
+            return Err(ShellError::Invalid(String::from("strict-action-binding-guest-invalid")));
+        }
+        if binding.guest.components().any(|component| matches!(component, std::path::Component::ParentDir)) {
+            return Err(ShellError::Invalid(String::from("strict-action-binding-guest-invalid")));
+        }
+    }
+    debug_assert!(binding_count <= MAX_READ_ONLY_BINDINGS);
+    debug_assert!(bindings.iter().all(|binding| binding.source.is_absolute()));
     Ok(())
 }
 
@@ -337,6 +367,8 @@ fn strict_bwrap_command(request: &StrictActionRequest) -> Result<Command, ShellE
         "--dir",
         "/nix/store",
         "--dir",
+        "/bin",
+        "--dir",
         "/build",
         "--chdir",
         "/build",
@@ -344,7 +376,12 @@ fn strict_bwrap_command(request: &StrictActionRequest) -> Result<Command, ShellE
     for path in canonical_paths(request.read_only_paths.clone())? {
         command.arg("--ro-bind").arg(&path).arg(&path);
     }
-    command.arg("--bind").arg(&request.writable_root).arg(&request.writable_root);
+    for binding in &request.read_only_bindings {
+        let source = fs::canonicalize(&binding.source)
+            .map_err(|error| io_error("canonicalizing strict action binding", &binding.source, error))?;
+        command.arg("--ro-bind").arg(source).arg(&binding.guest);
+    }
+    command.arg("--bind").arg(&request.writable_root).arg("/build");
     for (key, value) in &request.env {
         command.arg("--setenv").arg(key).arg(value);
     }
@@ -386,7 +423,7 @@ fn run_git(git: &Path, repository: &Path, args: &[&str]) -> Result<(), ShellErro
         });
     }
     debug_assert!(output.status.success());
-    debug_assert!(output.stderr.len() <= usize::MAX);
+    debug_assert!(output.stderr.is_empty());
     Ok(())
 }
 

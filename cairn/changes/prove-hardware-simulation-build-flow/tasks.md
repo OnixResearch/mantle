@@ -1,9 +1,9 @@
 ## Implementation
 
-- [ ] [serial] I1 Inventory generic source-fetch, strict-sandbox, dynamic-plan, build-report, action-receipt, shared-result, examples-catalog, and benchmark seams; record the exact HDL/core ownership boundary and tool-seed assumptions. r[hardware_simulation_builds.frontend_boundary]
-- [ ] [depends:I1] I2 Add example-owned typed Nickel hardware profile contracts and pure validation for source packages, tops, source sets, exact tool cohort, generation options, compile/link bounds, smoke cases, outputs, and non-claims. r[hardware_simulation_builds.typed_profile]
-- [ ] [depends:I2] I3 Add positive and unrelated test-owned local git IP/VIP fixtures with pinned revisions/digests and sentinels proving only the selected reachable source closure is acquired. r[hardware_simulation_builds.demand_driven_sources]
-- [ ] [depends:I2] I4 Materialize one exact Verilator/C++/linker cohort as declared store inputs, bind its BLAKE3 profile identity, and label any Nix-produced seed boundary without ambient executable fallback. r[hardware_simulation_builds.pinned_tool_cohort]
+- [x] [serial] I1 Inventory generic source-fetch, strict-sandbox, dynamic-plan, build-report, action-receipt, shared-result, examples-catalog, and benchmark seams; record the exact HDL/core ownership boundary and tool-seed assumptions. r[hardware_simulation_builds.frontend_boundary]
+- [x] [depends:I1] I2 Add example-owned typed Nickel hardware profile contracts and pure validation for source packages, tops, source sets, exact tool cohort, generation options, compile/link bounds, smoke cases, outputs, and non-claims. r[hardware_simulation_builds.typed_profile]
+- [x] [depends:I2] I3 Add positive and unrelated test-owned local git IP/VIP fixtures with pinned revisions/digests and sentinels proving only the selected reachable source closure is acquired. r[hardware_simulation_builds.demand_driven_sources]
+- [x] [depends:I2] I4 Materialize one exact Verilator/C++/linker cohort as declared store inputs, bind its BLAKE3 profile identity, and label any Nix-produced seed boundary without ambient executable fallback. r[hardware_simulation_builds.pinned_tool_cohort]
 - [ ] [depends:I3] [depends:I4] I5 Implement the sandboxed SystemVerilog generation action and bounded declared `mantle-plan-v1` output for generated translation units. r[hardware_simulation_builds.staged_action_graph]
 - [ ] [depends:I5] I6 Build generated translation units as independent compile units, link one simulator root, and preserve exact source/tool/generation parent refs in reports and attestations. r[hardware_simulation_builds.staged_action_graph]
 - [ ] [depends:I6] I7 Add separate parameterized smoke actions and fixture-owned `mantle-hardware-smoke-result-v1` artifacts with verdict/exit agreement, bounded log refs, action/simulator/profile refs, and explicit non-claims. r[hardware_simulation_builds.smoke_results]
@@ -13,7 +13,7 @@
 
 ## Verification
 
-- [ ] [depends:I3] V1 Positive and negative: build one selected source closure and prove the unrelated IP/VIP fixture is never fetched or realized; reject revision/digest drift and undeclared source edges. r[hardware_simulation_builds.demand_driven_sources]
+- [x] [depends:I3] V1 Positive and negative: build one selected source closure and prove the unrelated IP/VIP fixture is never fetched or realized; reject revision/digest drift and undeclared source edges. r[hardware_simulation_builds.demand_driven_sources]
 - [ ] [depends:I5] V2 Positive and negative: accept a bounded generated compile plan; reject undeclared outputs, escaping paths, duplicate units, missing generated files, unsupported commands, and unit/count/byte overflow before scheduling. r[hardware_simulation_builds.staged_action_graph]
 - [ ] [depends:I7] V3 Positive and negative: run passing smoke vectors and a deliberately wrong C++ reference model; require verdict/exit agreement and prove failures publish neither passing result artifacts nor successful action results. r[hardware_simulation_builds.smoke_results]
 - [ ] [depends:I8] V4 Positive and negative: prove a clean client reuses a fully admitted compile/smoke result without executor calls; reject stale action/tool/source refs, incomplete objects, bad signatures, and conflicting outputs. r[hardware_simulation_builds.shared_reuse]

@@ -143,6 +143,7 @@ fn strict_action_uses_exact_executable_and_bounded_logs() {
         args: Vec::new(),
         env: BTreeMap::new(),
         read_only_paths: vec![temp.path().to_path_buf()],
+        read_only_bindings: Vec::new(),
         writable_root: writable,
         timeout_ms: TEST_TIMEOUT_MS,
         max_log_bytes: TEST_LOG_BOUND,
@@ -166,6 +167,7 @@ fn strict_action_rejects_relative_fallback_and_times_out() {
         args: Vec::new(),
         env: BTreeMap::new(),
         read_only_paths: vec![temp.path().to_path_buf()],
+        read_only_bindings: Vec::new(),
         writable_root: temp.path().join("relative-work"),
         timeout_ms: TEST_TIMEOUT_MS,
         max_log_bytes: TEST_LOG_BOUND,
@@ -176,12 +178,25 @@ fn strict_action_rejects_relative_fallback_and_times_out() {
         args: Vec::new(),
         env: BTreeMap::new(),
         read_only_paths: vec![temp.path().to_path_buf()],
+        read_only_bindings: Vec::new(),
         writable_root: temp.path().join("timed-work"),
         timeout_ms: TEST_SHORT_TIMEOUT_MS,
         max_log_bytes: TEST_LOG_BOUND,
     };
 
+    let mut invalid_binding = timed.clone();
+    invalid_binding.read_only_bindings.push(ReadOnlyBinding {
+        source: invalid_binding.executable.clone(),
+        guest: PathBuf::from("bin/sh"),
+    });
+
     assert!(run_strict_action(relative).unwrap_err().to_string().contains("executable-not-absolute"));
+    assert!(
+        run_strict_action(invalid_binding)
+            .unwrap_err()
+            .to_string()
+            .contains("strict-action-binding-guest-invalid")
+    );
     let timeout_result = run_strict_action(timed);
     assert!(matches!(timeout_result, Err(ShellError::Timeout { .. })), "{timeout_result:?}");
 }

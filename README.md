@@ -729,6 +729,11 @@ undeclared plan-looking outputs are ignored by native plan scanning, and `.drv`
 discovery must be treated as compatibility behavior rather than Mantle's core
 dynamic-plan interface.
 
+The [hardware simulation reference slice](docs/hardware-simulation.md) exercises
+typed frontend-owned semantics against this generic boundary and records the
+current capability-gated end-to-end blocker without adding HDL-specific worker
+logic.
+
 ## Crate Layout
 
 | Crate | Role |
@@ -737,6 +742,8 @@ dynamic-plan interface.
 | `crunch-eval` | Nickel evaluation, stdlib embedding |
 | `crunch-glue` | `CrunchDerivation` → `nix_compat::Derivation`, ConversionCache |
 | `crunch-build` | `Derivation` → `BuildRequest`, goal scheduler, build orchestration, fetchers |
+| `crunch-hardware-simulation-core` | `no_std` typed hardware profile, plan, smoke, and evidence logic |
+| `crunch-hardware-simulation` | bounded std adapter for fixture Git, tool observation, and strict sandbox actions |
 | `crunch-pipeline` | eval → deserialize → convert → build wiring |
 | `crunch-project` | Project manifest, lockfile, refresh, stale detection, upgrade |
 | `crunch-store` | Store export, closure resolution, StoreHandle, signing, query |

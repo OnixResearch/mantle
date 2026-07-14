@@ -42,6 +42,7 @@ const LINK_UNIT_ID: &str = "link.simulator";
 const OUTPUT_NAME: &str = "out";
 const SHELL_COMMAND_FLAG: &str = "-c";
 const MAX_ENV_KEY_BYTES: u32 = 128;
+const MAX_TOOL_CLOSURE_PATHS: u32 = 256;
 const MAX_VALIDATION_DIAGNOSTICS: usize = 128;
 
 pub fn build_hardware_plan(request: HardwarePlanRequest) -> Result<HardwarePlan, Vec<String>> {
@@ -132,7 +133,7 @@ pub fn validate_generated_files(plan: &MantlePlanV1, observed_relative_paths: Ve
     diagnostics.sort();
     diagnostics.dedup();
     debug_assert!(diagnostics.iter().all(|diagnostic| !diagnostic.is_empty()));
-    debug_assert!(observed.len() <= usize::MAX);
+    debug_assert!(diagnostics.len() <= plan.units.len());
     diagnostics
 }
 
@@ -153,6 +154,7 @@ fn validate_request(request: &HardwarePlanRequest) -> Vec<String> {
     ] {
         push_result(&mut diagnostics, validate_store_path(path, "tool-path"));
     }
+    validate_tool_closure(request, &mut diagnostics);
     validate_plan_count(
         request.generated_units.len(),
         request.bounds.max_generated_units,
@@ -225,23 +227,17 @@ fn build_compile_units(
                 (String::from("SOURCE_RELATIVE_PATH"), source.relative_path.clone()),
             ])
             .collect();
+        let mut inputs = vec![DynamicInput::Source {
+            source: String::from(GENERATED_SOURCE_ID),
+        }];
+        inputs.extend(tool_closure_inputs(request));
         units.push(dynamic_unit(
             &unit_id,
             &format!("hardware-{}", sanitize_name(&source.id)),
             &request.shell_builder,
             vec![String::from(SHELL_COMMAND_FLAG), command],
             env,
-            vec![
-                DynamicInput::Source {
-                    source: String::from(GENERATED_SOURCE_ID),
-                },
-                DynamicInput::StorePath {
-                    path: request.cxx_executable.clone(),
-                },
-                DynamicInput::StorePath {
-                    path: request.runtime_support_path.clone(),
-                },
-            ],
+            inputs,
         ));
         action_graph.push(ActionNode {
             action_ref,
@@ -268,7 +264,7 @@ fn build_link_unit(
         .collect::<Vec<_>>();
     let direct = canonical_refs(vec![request.profile_ref.clone(), request.cohort_ref.clone()]);
     let action_ref = action_ref(ActionStage::Link, LINK_UNIT_ID, &direct, &compile_actions)?;
-    let mut inputs = Vec::with_capacity(compile_units.len().saturating_add(2));
+    let mut inputs = Vec::with_capacity(compile_units.len().saturating_add(request.tool_closure_paths.len()));
     let mut env = common_env(request, &action_ref);
     let mut object_variables = Vec::with_capacity(compile_units.len());
     for (index, unit) in compile_units.iter().enumerate() {
@@ -280,12 +276,7 @@ fn build_link_unit(
             output: String::from(OUTPUT_NAME),
         });
     }
-    inputs.push(DynamicInput::StorePath {
-        path: request.cxx_executable.clone(),
-    });
-    inputs.push(DynamicInput::StorePath {
-        path: request.linker_executable.clone(),
-    });
+    inputs.extend(tool_closure_inputs(request));
     let command = link_command(request, &object_variables);
     let unit = dynamic_unit(
         LINK_UNIT_ID,
@@ -334,16 +325,18 @@ fn build_smoke_units(
             (String::from("SMOKE_INPUT"), case.input.clone()),
             (String::from("SMOKE_EXPECTED"), case.expected.clone()),
         ]);
+        let mut inputs = vec![DynamicInput::UnitOutput {
+            unit: link_unit.id.clone(),
+            output: String::from(OUTPUT_NAME),
+        }];
+        inputs.extend(tool_closure_inputs(request));
         let unit = dynamic_unit(
             &unit_id,
             &format!("hardware-smoke-{}", sanitize_name(&case.id)),
             &request.shell_builder,
             vec![String::from(SHELL_COMMAND_FLAG), smoke_command()],
             env,
-            vec![DynamicInput::UnitOutput {
-                unit: link_unit.id.clone(),
-                output: String::from(OUTPUT_NAME),
-            }],
+            inputs,
         );
         units.push(unit);
         action_graph.push(ActionNode {
@@ -593,6 +586,59 @@ fn canonical_refs(values: Vec<String>) -> Vec<String> {
     values.into_iter().collect::<BTreeSet<_>>().into_iter().collect()
 }
 
+fn validate_tool_closure(request: &HardwarePlanRequest, diagnostics: &mut Vec<String>) {
+    validate_plan_count(request.tool_closure_paths.len(), MAX_TOOL_CLOSURE_PATHS, "tool-closure-path", diagnostics);
+    let roots = request.tool_closure_paths.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    if roots.len() != request.tool_closure_paths.len() {
+        diagnostics.push(String::from("tool-closure-path-duplicate"));
+    }
+    for path in &request.tool_closure_paths {
+        push_result(diagnostics, validate_store_path(path, "tool-closure-path"));
+        if store_root(path).as_deref() != Ok(path.as_str()) {
+            diagnostics.push(String::from("tool-closure-path-not-root"));
+        }
+    }
+    for executable in [
+        &request.shell_builder,
+        &request.cxx_executable,
+        &request.linker_executable,
+        &request.runtime_support_path,
+    ] {
+        if let Ok(root) = store_root(executable)
+            && !roots.contains(root.as_str())
+        {
+            diagnostics.push(String::from("tool-closure-required-root-missing"));
+        }
+    }
+    debug_assert!(diagnostics.iter().all(|diagnostic| !diagnostic.is_empty()));
+    debug_assert!(roots.len() <= request.tool_closure_paths.len());
+}
+
+fn tool_closure_inputs(request: &HardwarePlanRequest) -> Vec<DynamicInput> {
+    let inputs = request
+        .tool_closure_paths
+        .iter()
+        .cloned()
+        .map(|path| DynamicInput::StorePath { path })
+        .collect::<Vec<_>>();
+    debug_assert_eq!(inputs.len(), request.tool_closure_paths.len());
+    debug_assert!(!inputs.is_empty());
+    inputs
+}
+
+fn store_root(path: &str) -> Result<String, Vec<String>> {
+    const STORE_PREFIX: &str = "/nix/store/";
+    let component = path
+        .strip_prefix(STORE_PREFIX)
+        .and_then(|suffix| suffix.split('/').next())
+        .filter(|component| !component.is_empty())
+        .ok_or_else(|| vec![String::from("tool-store-root-invalid")])?;
+    let root = format!("{STORE_PREFIX}{component}");
+    debug_assert!(path.starts_with(&root));
+    debug_assert_eq!(root.matches('/').count(), 3);
+    Ok(root)
+}
+
 fn compile_unit_id(id: &str) -> String {
     format!("compile.{id}")
 }
@@ -602,7 +648,7 @@ fn smoke_unit_id(id: &str) -> String {
 }
 
 fn sanitize_name(value: &str) -> String {
-    value.replace('.', "-").replace('_', "-")
+    value.replace(['.', '_'], "-")
 }
 
 fn push_result(diagnostics: &mut Vec<String>, result: Result<(), String>) {

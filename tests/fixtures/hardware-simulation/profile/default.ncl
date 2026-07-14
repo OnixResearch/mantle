@@ -45,7 +45,7 @@ let Contracts = import "contracts.ncl" in
   targets = [
     {
       id = "tiny-adder-smoke",
-      top_module = "tiny_adder_tb",
+      top_module = "tiny_adder",
       source_packages = ["selected-vip"],
       source_files = [
         "selected-ip/rtl/tiny_adder.sv",
@@ -58,7 +58,7 @@ let Contracts = import "contracts.ncl" in
 
   tool_cohort = {
     schema = "mantle-hardware-tool-cohort-v1",
-    identity_blake3 = "e4bb4bbd1f4c1826012736e2782e910e6f264e516d396ea6e0fb5ddebfe58dec",
+    identity_blake3 = "672eb14a9e5494aba76794c35013b656b9d8525d15107ed8ac5f63b0ac78609c",
     seed_boundary = "nix-produced-open-source-tool-cohort",
     system = "x86_64-linux",
     members = [
@@ -96,25 +96,25 @@ let Contracts = import "contracts.ncl" in
       },
       {
         role = "shell",
-        package = "bash",
-        version = "5.3p9",
-        store_path = "/nix/store/sfvyavxai6qvzmv9p9x6mp4wwdz4v41m-bash-interactive-5.3p9",
-        executable = "bin/bash",
-        binary_blake3 = "c00bd6f79907184e7929a3a903247d87be92a233d6de7754a636edeaf784492f",
+        package = "busybox-static",
+        version = "1.37.0",
+        store_path = "/nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0",
+        executable = "bin/sh",
+        binary_blake3 = "ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc",
       },
     ],
-    closure_paths_blake3 = "892fd0af35662d6d934cda0d5872fa0c1c5fc94016eabc1a6df6f7919978ee42",
+    closure_paths_blake3 = "32e93e2530eb0b3afcf3fd7062c1543441e02b5ba027a161e76631dcf31f31ed",
   },
 
   generation = {
     language = "systemverilog",
     trace = false,
     optimization = "O1",
-    output_prefix = "Vtiny_adder_tb",
+    output_prefix = "Vtiny_adder",
     extra_args = ["--cc", "--exe"],
   },
   compile_flags = ["-std=c++17", "-O1"],
-  link_flags = ["-pthread", "-fuse-ld=lld"],
+  link_flags = ["-pthread"],
   smoke_cases = [
     { id = "zero-plus-zero", input = "0,0", expected = "0", max_log_bytes = 4096 },
     { id = "one-plus-two", input = "1,2", expected = "3", max_log_bytes = 4096 },

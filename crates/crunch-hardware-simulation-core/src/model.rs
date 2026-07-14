@@ -181,6 +181,7 @@ pub struct HardwarePlanRequest {
     pub cxx_executable: String,
     pub linker_executable: String,
     pub runtime_support_path: String,
+    pub tool_closure_paths: Vec<String>,
     pub compile_flags: Vec<String>,
     pub link_flags: Vec<String>,
     pub generated_units: Vec<GeneratedTranslationUnit>,
