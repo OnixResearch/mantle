@@ -195,6 +195,17 @@ cairn gate tasks prove-hardware-simulation-build-flow --root .
 
 The local built Cairn binary was used because the sibling Cairn flake remains affected by mutable path-input evaluation. The change was not synced or archived.
 
+## Integrated main validation
+
+After integration, the focused hardware core/shell and generic action-result,
+build, store, machine-contract, example-build, formatting, and lifecycle rails
+passed again. The all-examples inventory test alone reported the preserved
+pre-existing untracked user file `examples/cowsay.ncl` as uncatalogued. The
+clean tracked implementation worktree passed that same inventory test with ten
+passing cases. The user file was not modified, deleted, or catalogued because
+committing a catalog entry for an untracked file would make the tracked tree
+depend on data it does not own.
+
 ## Known unrelated limitation and non-claims
 
 The pinned toolchain still lacks `wasm32-unknown-unknown`; no wasm validation is claimed. Broad validation still includes the pre-existing `benchmark_runtime_boundary_stays_out_of_library_path` failure caused by a Cargo dev-dependency layout assertion; this change does not weaken or relabel that failure.
