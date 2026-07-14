@@ -1,0 +1,9 @@
+{
+  "cargo_lock_blake3": "4e6a07910125d4c921a62cec03d8bc9acb3bf341ebd1a11999df08d6c6c5c5f1",
+  "lock_format": "cargo-lock-v4",
+  "package_count": 53,
+  "resolution": "all packages and registry checksums are authoritative in the checked Cargo.lock",
+  "schema": "mantle-spacewasm-dependency-manifest-v1",
+  "source_path": "source/Cargo.lock",
+  "source_revision": "e24cf09355a90497148eb5029fdb8e3400bd63e3"
+}

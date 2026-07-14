@@ -1,0 +1,57 @@
+{
+  "default_allow_memory_grow": false,
+  "denied_or_unimplemented_proposals": [
+    "bulk-memory",
+    "component-model",
+    "custom-page-sizes",
+    "memory64",
+    "multi-memory",
+    "multi-value",
+    "non-trapping-float-to-int",
+    "sign-extension-ops",
+    "threads",
+    "wit",
+    "wasi"
+  ],
+  "external_runtime_configuration": [
+    "allocator pages",
+    "code pages",
+    "control frames",
+    "fuel or instruction budget",
+    "host import implementations",
+    "stack depth"
+  ],
+  "maximum_function_index": 65535,
+  "maximum_function_parameter_words": 255,
+  "maximum_linear_memory_pages": 65536,
+  "maximum_local_words_per_function": 65535,
+  "module_kind": "module",
+  "non_claims": [
+    "The projection records a bounded source review and does not prove SpaceWasm runtime behavior",
+    "Static artifact limits do not prove configured allocator, code-page, control-frame, fuel, host-import, or stack capacity",
+    "The upstream Git revision uses Git SHA-1 for interoperability; Octet uses BLAKE3 for the derived cohort identity"
+  ],
+  "observed_discrepancies": [
+    "REQUIREMENTS.md allows selected post-MVP proposals in principle while README.md and the reviewed opcode decoder expose only Wasm 1.0 plus mutable globals",
+    "README.md describes spacewasm-check as not yet developed"
+  ],
+  "reviewed_paths": [
+    "Cargo.lock",
+    "README.md",
+    "REQUIREMENTS.md",
+    "src/SPEC.md",
+    "src/code.rs",
+    "src/compiler.rs",
+    "src/opcode.rs",
+    "src/types.rs"
+  ],
+  "runtime_id": "nasa-spacewasm",
+  "schema_version": "octet-spacewasm-support-projection/v1",
+  "source_lock_identity": "b3:4e6a07910125d4c921a62cec03d8bc9acb3bf341ebd1a11999df08d6c6c5c5f1",
+  "source_repository": "https://github.com/nasa/spacewasm",
+  "source_revision": "e24cf09355a90497148eb5029fdb8e3400bd63e3",
+  "supported_proposals": [
+    "wasm1",
+    "mutable-globals"
+  ]
+}

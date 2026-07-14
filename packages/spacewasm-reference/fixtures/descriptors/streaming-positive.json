@@ -1,0 +1,12 @@
+{
+  "artifact_blake3": "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde",
+  "artifact_path": "fixtures/wasm/streaming-positive.wasm",
+  "expected_code": "stream-finished",
+  "expected_status": "passed",
+  "fixture_class": "streaming-positive",
+  "fixture_id": "streaming-positive",
+  "generator": "one-byte-chunk-plan-over-exact-mvp-bytes",
+  "generator_input_blake3": "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde",
+  "generator_input_path": "fixtures/wasm/mvp-positive.wasm",
+  "schema": "mantle-spacewasm-fixture-descriptor-v1"
+}

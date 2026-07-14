@@ -1492,6 +1492,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-spacewasm"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "crunch-spacewasm-core",
+ "libc",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "crunch-spacewasm-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "crunch-store"
 version = "0.1.0"
 dependencies = [

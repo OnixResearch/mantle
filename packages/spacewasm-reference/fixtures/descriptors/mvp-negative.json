@@ -1,0 +1,12 @@
+{
+  "artifact_blake3": "a65dcf6433860fed3ae87310f5f01cf5d3abb75f5275112b7131f44e165ba6df",
+  "artifact_path": "fixtures/wasm/mvp-negative.wasm",
+  "expected_code": "malformed-magic",
+  "expected_status": "passed",
+  "fixture_class": "mvp-negative",
+  "fixture_id": "mvp-negative",
+  "generator": "replace-first-byte-with-0x02",
+  "generator_input_blake3": "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde",
+  "generator_input_path": "fixtures/wasm/mvp-positive.wasm",
+  "schema": "mantle-spacewasm-fixture-descriptor-v1"
+}

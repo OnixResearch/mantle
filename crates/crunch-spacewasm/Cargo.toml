@@ -1,0 +1,19 @@
+[package]
+name = "crunch-spacewasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mantle-spacewasm-reference"
+path = "src/main.rs"
+
+[dependencies]
+blake3 = "=1.8.2"
+crunch-spacewasm-core = { path = "../crunch-spacewasm-core" }
+libc = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+tempfile = "3"

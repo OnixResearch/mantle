@@ -1,0 +1,12 @@
+{
+  "artifact_blake3": "94a979b596cf073331cf2954de8c15fb504749758c464d0201ae799a451e02dc",
+  "artifact_path": "fixtures/wasm/streaming-negative.wasm",
+  "expected_code": "stream-unexpected-eof",
+  "expected_status": "passed",
+  "fixture_class": "streaming-negative",
+  "fixture_id": "streaming-negative",
+  "generator": "retain-first-six-bytes",
+  "generator_input_blake3": "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde",
+  "generator_input_path": "fixtures/wasm/mvp-positive.wasm",
+  "schema": "mantle-spacewasm-fixture-descriptor-v1"
+}

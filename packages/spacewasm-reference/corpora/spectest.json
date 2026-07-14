@@ -1,0 +1,17 @@
+{
+  "canonical_archive_blake3": "28517a91554199363e9f2ada3cf18a00b29b519f0ef3147b3f3a85a46cd3a7e7",
+  "canonical_archive_format": "gnu-tar-sort-name-owner-0-group-0-mtime-1",
+  "corpus_id": "upstream-spectest",
+  "expected_status": "passed",
+  "file_count": 75,
+  "license_blake3": "764c683a438c586c1759fc3931fa0b0c178feca6f8104ee709cd73712c12abdb",
+  "license_path": "licenses/wasmedge-spectest-MIT.txt",
+  "license_revision": "c56b98839b236bb2dba4bb71733c08f2af0e1155",
+  "license_source": "https://github.com/WasmEdge/wasmedge-spectest",
+  "provenance": "SpaceWasm credits WasmEdge/wasmedge-spectest as the curated WebAssembly 1.0 MVP corpus; exact corpus bytes remain bound to the SpaceWasm source archive",
+  "role": "upstream-spectest",
+  "schema": "mantle-spacewasm-corpus-descriptor-v1",
+  "source_archive_blake3": "0db57636fb83a8c47f0c55601236cab648dd5edfdd2567cae0619aa74b8c4da3",
+  "source_path": "tests/core",
+  "source_revision": "e24cf09355a90497148eb5029fdb8e3400bd63e3"
+}

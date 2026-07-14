@@ -1,0 +1,310 @@
+{
+  "bounds": {
+    "max_bundle_member_bytes": 536870912,
+    "max_bundle_members": 512,
+    "max_bundle_total_bytes": 2147483648,
+    "max_collection_items": 128,
+    "max_parent_edges": 2048,
+    "max_profile_text_bytes": 262144
+  },
+  "checks": [
+    {
+      "check_id": "host-library-build",
+      "expected_status": "passed"
+    },
+    {
+      "check_id": "wasm-library-build",
+      "expected_status": "passed"
+    },
+    {
+      "check_id": "host-diagnostic-runner-build",
+      "expected_status": "passed"
+    },
+    {
+      "check_id": "upstream-unit-tests",
+      "expected_status": "passed"
+    },
+    {
+      "check_id": "upstream-spectest-address",
+      "expected_status": "passed"
+    },
+    {
+      "check_id": "fixture-replay",
+      "expected_status": "passed"
+    },
+    {
+      "check_id": "full-spectest-suite",
+      "expected_status": "skipped"
+    },
+    {
+      "check_id": "spacewasm-check",
+      "expected_status": "unavailable"
+    },
+    {
+      "check_id": "continuous-fuzzing",
+      "expected_status": "unavailable"
+    },
+    {
+      "check_id": "post-mvp-feature-build",
+      "expected_status": "unsupported"
+    }
+  ],
+  "corpora": [
+    {
+      "corpus_id": "upstream-spectest",
+      "descriptor_blake3": "5138df4c6702c8bbccedffdf17a83e092658625ed8a9a5364d5422e454aa6ffc",
+      "descriptor_path": "corpora/spectest.json",
+      "expected_status": "passed",
+      "license_path": "licenses/wasmedge-spectest-MIT.txt",
+      "provenance": "SpaceWasm source archive at the selected revision, curated from WasmEdge/wasmedge-spectest",
+      "role": "upstream-spectest",
+      "source_path": "tests/core"
+    },
+    {
+      "corpus_id": "upstream-fuzz",
+      "descriptor_blake3": "3fa7449e505a2fd685337a31a7b8be6b0c9afa89508ee4b31842c82a533644d8",
+      "descriptor_path": "corpora/fuzz.json",
+      "expected_status": "skipped",
+      "license_path": "LICENSE",
+      "provenance": "NASA SpaceWasm source archive at the selected revision",
+      "role": "upstream-fuzz",
+      "source_path": "fuzz/fuzz_targets"
+    }
+  ],
+  "fixtures": [
+    {
+      "artifact_blake3": "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde",
+      "artifact_path": "fixtures/wasm/mvp-positive.wasm",
+      "class": "mvp-positive",
+      "descriptor_blake3": "6e2008fc3abaf41ec2af9c2d9e824829aa11d2d8b1b394cb9b40a8edb5b67af8",
+      "descriptor_path": "fixtures/descriptors/mvp-positive.json",
+      "expected_code": "finished",
+      "expected_status": "passed",
+      "fixture_id": "mvp-positive",
+      "generator_input_blake3": "95a86baa63e72211ccbe0d812937694e78a4b4d5e1fa616567d5c31335d80177"
+    },
+    {
+      "artifact_blake3": "a65dcf6433860fed3ae87310f5f01cf5d3abb75f5275112b7131f44e165ba6df",
+      "artifact_path": "fixtures/wasm/mvp-negative.wasm",
+      "class": "mvp-negative",
+      "descriptor_blake3": "bd8294c8c3bfbe78c0957d50c326ad25283729493234c7f3d3588e36efbb4485",
+      "descriptor_path": "fixtures/descriptors/mvp-negative.json",
+      "expected_code": "malformed-magic",
+      "expected_status": "passed",
+      "fixture_id": "mvp-negative",
+      "generator_input_blake3": "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde"
+    },
+    {
+      "artifact_blake3": "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde",
+      "artifact_path": "fixtures/wasm/streaming-positive.wasm",
+      "class": "streaming-positive",
+      "descriptor_blake3": "a1756e64451488a3b58c1055e3ac28e4154c5f60ef921966d3f88bef82f588ed",
+      "descriptor_path": "fixtures/descriptors/streaming-positive.json",
+      "expected_code": "stream-finished",
+      "expected_status": "passed",
+      "fixture_id": "streaming-positive",
+      "generator_input_blake3": "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde"
+    },
+    {
+      "artifact_blake3": "94a979b596cf073331cf2954de8c15fb504749758c464d0201ae799a451e02dc",
+      "artifact_path": "fixtures/wasm/streaming-negative.wasm",
+      "class": "streaming-negative",
+      "descriptor_blake3": "fd9809a13bb0cdc2c61c45ab84bdcb65f3b0af9bf0a802a35bf37bfda2ecf966",
+      "descriptor_path": "fixtures/descriptors/streaming-negative.json",
+      "expected_code": "stream-unexpected-eof",
+      "expected_status": "passed",
+      "fixture_id": "streaming-negative",
+      "generator_input_blake3": "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde"
+    },
+    {
+      "artifact_blake3": "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde",
+      "artifact_path": "fixtures/wasm/allocation-failure.wasm",
+      "class": "allocation-failure",
+      "descriptor_blake3": "8af948702be742eafcac1e6ca8a4a234e6a80ad27e3918c1f6fa97221854eaa1",
+      "descriptor_path": "fixtures/descriptors/allocation-failure.json",
+      "expected_code": "allocation-failed-without-panic",
+      "expected_status": "passed",
+      "fixture_id": "allocation-failure",
+      "generator_input_blake3": "95a86baa63e72211ccbe0d812937694e78a4b4d5e1fa616567d5c31335d80177"
+    },
+    {
+      "artifact_blake3": "57a9e00325ec098e2ca8f7b7deb5b9659ccdcbce84d862ef60ea5f16e05e1624",
+      "artifact_path": "fixtures/wasm/unsupported-bulk-memory.wasm",
+      "class": "unsupported-feature",
+      "descriptor_blake3": "a350734b0166cce06244c1eaf9f3f4713ad02edbda2f7a63517e38f1d8f3283e",
+      "descriptor_path": "fixtures/descriptors/unsupported-feature.json",
+      "expected_code": "unsupported-bulk-memory",
+      "expected_status": "passed",
+      "fixture_id": "unsupported-feature",
+      "generator_input_blake3": "be296033d6d2328e2ead458a66e2aefe76fee7c3a8b8dbca3315bcc0522fa91c"
+    },
+    {
+      "artifact_blake3": "8dadfe79ddcae5a3c738f1ad24e812a2beb9a95c88702b4bad896fa1c8332c0a",
+      "artifact_path": "fixtures/wasm/trap-unreachable.wasm",
+      "class": "trap",
+      "descriptor_blake3": "30ca5786c9b5654017d979efc50100435ebaeaf2bfb588f06b838fe5d49836fd",
+      "descriptor_path": "fixtures/descriptors/trap.json",
+      "expected_code": "trap-unreachable",
+      "expected_status": "passed",
+      "fixture_id": "trap",
+      "generator_input_blake3": "b28ed13daf132eaf5259e1499276bd46c3cf85add27402d89bff854701caf71d"
+    },
+    {
+      "artifact_blake3": "3abd1aeeb22b89a284cc1a510d6f872a2a60f0bd61d43b640e1d0260d315eecb",
+      "artifact_path": "fixtures/wasm/out-of-fuel.wasm",
+      "class": "out-of-fuel",
+      "descriptor_blake3": "a3a1cfbcaf18ffab731bd2f6711982144ff4df03a70e331c7ea184788592310d",
+      "descriptor_path": "fixtures/descriptors/out-of-fuel.json",
+      "expected_code": "out-of-fuel",
+      "expected_status": "passed",
+      "fixture_id": "out-of-fuel",
+      "generator_input_blake3": "129fa3bd5c3590311cffe329576b37344c0168c2943170c41e000a921d80a083"
+    }
+  ],
+  "non_claims": [
+    "not-spacewasm-correctness",
+    "not-memory-safety",
+    "not-webassembly-conformance",
+    "not-flight-qualification",
+    "not-sandbox-effectiveness",
+    "not-consumer-runtime-admission",
+    "not-production-readiness",
+    "not-release-eligibility"
+  ],
+  "profile_id": "nasa-spacewasm-e24cf093-reference-v1",
+  "profile_update": {
+    "previous_review_revision": "30cd6e9b91f84a39278edcb5d66514b773011ccc",
+    "reason": "Update the proposal review commit to Octet's currently reviewed spacewasm-mvp cohort and replay every declared build, fixture, corpus, and bundle check.",
+    "replay_evidence_id": "spacewasm-e24-complete-fixture-replay-v1",
+    "replay_required": true,
+    "selected_revision": "e24cf09355a90497148eb5029fdb8e3400bd63e3"
+  },
+  "requested_features": [
+    "wasm1",
+    "mutable-globals"
+  ],
+  "retention": {
+    "binaries": true,
+    "dependency_closure": true,
+    "fixtures": true,
+    "licenses_and_notices": true,
+    "non_claims": true,
+    "reports": true,
+    "source_archive": true,
+    "toolchain": true
+  },
+  "runner": {
+    "default_fuel": 1024,
+    "max_code_pages": 64,
+    "max_control_frames": 64,
+    "max_input_bytes": 1048576,
+    "max_stack_words": 1024,
+    "max_stream_chunks": 4096,
+    "runner_id": "mantle-spacewasm-diagnostic-runner-v1"
+  },
+  "schema": "mantle-spacewasm-reference-profile-v1",
+  "source": {
+    "archive_blake3": "0db57636fb83a8c47f0c55601236cab648dd5edfdd2567cae0619aa74b8c4da3",
+    "archive_sha256_sri": "sha256-iNgipIlAPOJU38oOqvqxXQF15FJ0ooN3rH5DzHiKOTU=",
+    "archive_url": "https://github.com/nasa/spacewasm/archive/e24cf09355a90497148eb5029fdb8e3400bd63e3.tar.gz",
+    "cargo_lock_blake3": "4e6a07910125d4c921a62cec03d8bc9acb3bf341ebd1a11999df08d6c6c5c5f1",
+    "dependency_manifest_blake3": "d9f51122ebe3fbac4b9e0f05795f64ce83cd41baad27e66cf9d42c52cb5b5d06",
+    "dependency_package_count": 53,
+    "license_members": [
+      "LICENSE",
+      "licenses/wasmedge-spectest-MIT.txt"
+    ],
+    "notice_members": [
+      "NOTICE"
+    ],
+    "octet_support_projection_blake3": "7f3c40650c576bf9340d07df5371da28fad42ef4937d1d9ce9c2c8bc80a5b638",
+    "repository": "https://github.com/nasa/spacewasm",
+    "revision": "e24cf09355a90497148eb5029fdb8e3400bd63e3"
+  },
+  "support_matrix": [
+    {
+      "feature": "wasm1",
+      "status": "supported"
+    },
+    {
+      "feature": "mutable-globals",
+      "status": "supported"
+    },
+    {
+      "feature": "custom-page-sizes",
+      "status": "planned"
+    },
+    {
+      "feature": "bulk-memory",
+      "status": "planned"
+    },
+    {
+      "feature": "sign-extension-ops",
+      "status": "planned"
+    },
+    {
+      "feature": "non-trapping-float-to-int",
+      "status": "planned"
+    },
+    {
+      "feature": "multi-value",
+      "status": "unreviewed"
+    },
+    {
+      "feature": "multi-memory",
+      "status": "unreviewed"
+    },
+    {
+      "feature": "component-model",
+      "status": "unsupported"
+    },
+    {
+      "feature": "memory64",
+      "status": "unsupported"
+    },
+    {
+      "feature": "threads",
+      "status": "unsupported"
+    },
+    {
+      "feature": "wit",
+      "status": "unsupported"
+    },
+    {
+      "feature": "wasi",
+      "status": "unsupported"
+    }
+  ],
+  "targets": [
+    {
+      "features": [
+        "default-features-disabled"
+      ],
+      "pointer_width_bits": 64,
+      "role": "host-library",
+      "triple": "x86_64-unknown-linux-gnu"
+    },
+    {
+      "features": [
+        "default-features-disabled"
+      ],
+      "pointer_width_bits": 32,
+      "role": "wasm-library",
+      "triple": "wasm32-unknown-unknown"
+    },
+    {
+      "features": [
+        "default-features-disabled"
+      ],
+      "pointer_width_bits": 64,
+      "role": "host-diagnostic-runner",
+      "triple": "x86_64-unknown-linux-gnu"
+    }
+  ],
+  "toolchain": {
+    "host_triple": "x86_64-unknown-linux-gnu",
+    "rust_channel": "stable",
+    "rust_version": "1.91.1",
+    "wasm_triple": "wasm32-unknown-unknown"
+  }
+}

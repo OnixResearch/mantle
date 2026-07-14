@@ -1,0 +1,12 @@
+{
+  "artifact_blake3": "8dadfe79ddcae5a3c738f1ad24e812a2beb9a95c88702b4bad896fa1c8332c0a",
+  "artifact_path": "fixtures/wasm/trap-unreachable.wasm",
+  "expected_code": "trap-unreachable",
+  "expected_status": "passed",
+  "fixture_class": "trap",
+  "fixture_id": "trap",
+  "generator": "wasm-tools-parse",
+  "generator_input_blake3": "b28ed13daf132eaf5259e1499276bd46c3cf85add27402d89bff854701caf71d",
+  "generator_input_path": "fixtures/wat/trap-unreachable.wat",
+  "schema": "mantle-spacewasm-fixture-descriptor-v1"
+}

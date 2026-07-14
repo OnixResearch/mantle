@@ -1,0 +1,13 @@
+{
+  "non_claims": [
+    "not-spacewasm-correctness",
+    "not-memory-safety",
+    "not-webassembly-conformance",
+    "not-flight-qualification",
+    "not-sandbox-effectiveness",
+    "not-consumer-runtime-admission",
+    "not-production-readiness",
+    "not-release-eligibility"
+  ],
+  "schema": "mantle-spacewasm-non-claims-v1"
+}

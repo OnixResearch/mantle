@@ -1,0 +1,12 @@
+{
+  "artifact_blake3": "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde",
+  "artifact_path": "fixtures/wasm/mvp-positive.wasm",
+  "expected_code": "finished",
+  "expected_status": "passed",
+  "fixture_class": "mvp-positive",
+  "fixture_id": "mvp-positive",
+  "generator": "wasm-tools-parse",
+  "generator_input_blake3": "95a86baa63e72211ccbe0d812937694e78a4b4d5e1fa616567d5c31335d80177",
+  "generator_input_path": "fixtures/wat/mvp-positive.wat",
+  "schema": "mantle-spacewasm-fixture-descriptor-v1"
+}

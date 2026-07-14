@@ -1,0 +1,15 @@
+{
+  "canonical_archive_blake3": "d723096088d5828861b41182ef5f0a2573e9aa992df6075a8a68219eb3459a8a",
+  "canonical_archive_format": "gnu-tar-sort-name-owner-0-group-0-mtime-1",
+  "continuous_fuzzing_status": "unavailable",
+  "corpus_id": "upstream-fuzz",
+  "expected_status": "skipped",
+  "file_count": 2,
+  "license_path": "LICENSE",
+  "provenance": "NASA SpaceWasm source archive fuzz targets; no continuous fuzzing run is synthesized",
+  "role": "upstream-fuzz",
+  "schema": "mantle-spacewasm-corpus-descriptor-v1",
+  "source_archive_blake3": "0db57636fb83a8c47f0c55601236cab648dd5edfdd2567cae0619aa74b8c4da3",
+  "source_path": "fuzz/fuzz_targets",
+  "source_revision": "e24cf09355a90497148eb5029fdb8e3400bd63e3"
+}
