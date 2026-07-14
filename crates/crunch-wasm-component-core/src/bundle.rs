@@ -42,6 +42,7 @@ pub struct StageReceiptReference {
     pub stage_key: String,
     pub kind: ComponentStageKind,
     pub receipt_blake3: Blake3Identity,
+    pub receipt: StoreObject,
     pub artifact: Option<StoreObject>,
 }
 
@@ -271,6 +272,14 @@ fn validate_stage_receipts(request: &MaterializationBundleRequest, blockers: &mu
                 "duplicate-bundle-stage-receipt",
                 &receipt.stage_key,
                 "bundle stage receipt identities must be unique",
+            ));
+        }
+        validate_store_object(&receipt.receipt, &receipt.stage_key, blockers);
+        if receipt.receipt.digest_blake3 != receipt.receipt_blake3 {
+            blockers.push(blocker(
+                "bundle-stage-receipt-object-mismatch",
+                &receipt.stage_key,
+                "stage receipt object bytes do not match the declared receipt identity",
             ));
         }
         kinds.insert(receipt.kind);

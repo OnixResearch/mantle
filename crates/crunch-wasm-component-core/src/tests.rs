@@ -538,17 +538,23 @@ fn exact_aot_receipt_is_admitted_as_trusted_native() {
             cpu_features: vec![String::from("sse2")],
             wasmtime_configuration_blake3: blake3('a'),
             cohort_blake3: blake3('b'),
+            wit_profile_blake3: blake3('c'),
+            build_inputs_blake3: blake3('d'),
         },
         expected_target: String::from("x86_64-linux"),
         expected_cpu_features: vec![String::from("sse2")],
         expected_wasmtime_configuration_blake3: blake3('a'),
         expected_cohort_blake3: blake3('b'),
+        expected_wit_profile_blake3: blake3('c'),
+        expected_build_inputs_blake3: blake3('d'),
     });
     let admission = result.admission.unwrap();
 
     assert!(result.blockers.is_empty());
     assert_eq!(admission.trust_class, AOT_TRUST_CLASS);
     assert_eq!(admission.schema, AOT_ADMISSION_SCHEMA);
+    assert_eq!(admission.wit_profile_blake3, blake3('c'));
+    assert_eq!(admission.build_inputs_blake3, blake3('d'));
 }
 
 #[test]
@@ -564,16 +570,21 @@ fn cross_target_or_tampered_aot_receipt_is_denied() {
             cpu_features: vec![String::from("neon")],
             wasmtime_configuration_blake3: blake3('a'),
             cohort_blake3: blake3('b'),
+            wit_profile_blake3: blake3('c'),
+            build_inputs_blake3: blake3('d'),
         },
         expected_target: String::from("x86_64-linux"),
         expected_cpu_features: vec![String::from("sse2")],
         expected_wasmtime_configuration_blake3: blake3('a'),
         expected_cohort_blake3: blake3('b'),
+        expected_wit_profile_blake3: blake3('e'),
+        expected_build_inputs_blake3: blake3('f'),
     });
 
     assert!(result.admission.is_none());
     assert!(result.blockers.iter().any(|item| item.code == "aot-source-mismatch"));
     assert!(result.blockers.iter().any(|item| item.code == "aot-target-mismatch"));
+    assert!(result.blockers.iter().any(|item| item.code == "aot-configuration-mismatch"));
 }
 
 fn generated_candidates() -> Vec<GeneratedInputCandidate> {
@@ -798,6 +809,7 @@ fn required_bundle_receipts(final_portable: &StoreObject) -> Vec<StageReceiptRef
             stage_key: String::from(stage_key),
             kind,
             receipt_blake3: blake3(seed),
+            receipt: object(&format!("{stage_key}.receipt.json"), seed),
             artifact: matches!(
                 kind,
                 ComponentStageKind::Compilation
@@ -861,10 +873,78 @@ fn materialization_bundle_rejects_missing_stage_and_stale_identity() {
 #[test]
 fn materialization_bundle_stage_kind_rejects_post_materialization_authority() {
     let parsed: Result<StageReceiptReference, _> = serde_json::from_str(
-        r#"{"stage_key":"cairn","kind":"cairn-acceptance","receipt_blake3":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","artifact":null}"#,
+        r#"{"stage_key":"cairn","kind":"cairn-acceptance","receipt_blake3":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","receipt":{"logical_path":"/mantle/store/fixture-receipt","digest_blake3":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size_bytes":1},"artifact":null}"#,
     );
     let accepted: Result<ComponentStageKind, _> = serde_json::from_str("\"octet-validation\"");
 
     assert!(parsed.is_err());
     assert_eq!(accepted.unwrap(), ComponentStageKind::OctetValidation);
+}
+
+fn component_evidence_request() -> ComponentEvidenceRequest {
+    let bundle = build_materialization_bundle(materialization_bundle_request()).bundle.unwrap();
+    let octet_report = object("octet-report.json", '8');
+    let octet_input = StageReportInput {
+        stage_key: String::from("octet-validation"),
+        kind: ComponentStageKind::OctetValidation,
+        status: ComponentStageStatus::Succeeded,
+        parents: Vec::new(),
+        artifact: Some(octet_report.clone()),
+        tool_identity_blake3: Some(blake3('7')),
+        profile_identity_blake3: Some(bundle.expected_octet_profile_blake3.clone()),
+        claims: vec![BoundedComponentClaim::OctetReportBound],
+        non_claims: report_non_claims(),
+    };
+    let octet_identity = stage_report_identity(octet_input.clone()).unwrap();
+    let bundle_object = object("materialization-bundle.json", '6');
+    let materialization_input = StageReportInput {
+        stage_key: String::from("materialization-bundle"),
+        kind: ComponentStageKind::MaterializationBundle,
+        status: ComponentStageStatus::Succeeded,
+        parents: vec![octet_identity],
+        artifact: Some(bundle_object.clone()),
+        tool_identity_blake3: None,
+        profile_identity_blake3: Some(bundle.bundle_identity_blake3.clone()),
+        claims: vec![BoundedComponentClaim::MaterializationObjectsRehashable],
+        non_claims: report_non_claims(),
+    };
+    let report = build_component_report(vec![octet_input, materialization_input], report_non_claims())
+        .report
+        .unwrap();
+    ComponentEvidenceRequest {
+        bundle,
+        bundle_object,
+        report,
+        octet_profile_blake3: blake3('f'),
+        octet_cohort_blake3: blake3('7'),
+        octet_report,
+    }
+}
+
+#[test]
+fn component_attestation_and_release_binding_follow_verified_stage_graph() {
+    let result = build_component_evidence(component_evidence_request());
+    let attestation = result.artifact_attestation.unwrap();
+    let release = result.release_binding.unwrap();
+
+    assert!(result.blockers.is_empty());
+    assert_eq!(attestation.schema, COMPONENT_ARTIFACT_ATTESTATION_SCHEMA);
+    assert_eq!(release.schema, COMPONENT_RELEASE_BINDING_SCHEMA);
+    assert_eq!(release.artifact_attestation_blake3, attestation.attestation_blake3);
+    assert!(!release.release_eligible);
+}
+
+#[test]
+fn component_evidence_rejects_swapped_bundle_object_and_stale_report_identity() {
+    let mut swapped = component_evidence_request();
+    swapped.bundle_object = object("swapped-bundle.json", '5');
+    let swapped_result = build_component_evidence(swapped);
+    let mut stale = component_evidence_request().report;
+    stale.report_identity_blake3 = blake3('4');
+    let stale_result = verify_component_report(stale);
+
+    assert!(swapped_result.artifact_attestation.is_none());
+    assert!(swapped_result.blockers.iter().any(|item| item.code == "component-attestation-bundle-mismatch"));
+    assert!(stale_result.report.is_none());
+    assert!(stale_result.blockers.iter().any(|item| item.code == "component-report-identity-mismatch"));
 }

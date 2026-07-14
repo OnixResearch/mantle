@@ -117,6 +117,8 @@ pub struct AotReceipt {
     pub cpu_features: Vec<String>,
     pub wasmtime_configuration_blake3: Blake3Identity,
     pub cohort_blake3: Blake3Identity,
+    pub wit_profile_blake3: Blake3Identity,
+    pub build_inputs_blake3: Blake3Identity,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -128,6 +130,8 @@ pub struct AotAdmissionRequest {
     pub expected_cpu_features: Vec<String>,
     pub expected_wasmtime_configuration_blake3: Blake3Identity,
     pub expected_cohort_blake3: Blake3Identity,
+    pub expected_wit_profile_blake3: Blake3Identity,
+    pub expected_build_inputs_blake3: Blake3Identity,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -138,6 +142,10 @@ pub struct AotAdmission {
     pub target: String,
     pub cpu_features: Vec<String>,
     pub trust_class: String,
+    pub wasmtime_configuration_blake3: Blake3Identity,
+    pub cohort_blake3: Blake3Identity,
+    pub wit_profile_blake3: Blake3Identity,
+    pub build_inputs_blake3: Blake3Identity,
     pub receipt_blake3: Blake3Identity,
 }
 
@@ -282,6 +290,10 @@ pub fn admit_aot(mut request: AotAdmissionRequest) -> AotAdmissionResult {
             target: request.receipt.target,
             cpu_features: request.receipt.cpu_features,
             trust_class: String::from(AOT_TRUST_CLASS),
+            wasmtime_configuration_blake3: request.receipt.wasmtime_configuration_blake3,
+            cohort_blake3: request.receipt.cohort_blake3,
+            wit_profile_blake3: request.receipt.wit_profile_blake3,
+            build_inputs_blake3: request.receipt.build_inputs_blake3,
             receipt_blake3: receipt_identity,
         }),
         blockers: Vec::new(),
@@ -415,11 +427,13 @@ fn validate_aot_request(request: &AotAdmissionRequest, blockers: &mut Vec<Compon
     }
     if request.receipt.wasmtime_configuration_blake3 != request.expected_wasmtime_configuration_blake3
         || request.receipt.cohort_blake3 != request.expected_cohort_blake3
+        || request.receipt.wit_profile_blake3 != request.expected_wit_profile_blake3
+        || request.receipt.build_inputs_blake3 != request.expected_build_inputs_blake3
     {
         blockers.push(blocker(
             "aot-configuration-mismatch",
             "aot-receipt",
-            "Wasmtime configuration or cohort identity differs from the expected release configuration",
+            "Wasmtime configuration, cohort, WIT profile, or build inputs differ from the expected release configuration",
         ));
     }
     if request.receipt.output.size_bytes == 0 || !request.receipt.output.logical_path.starts_with('/') {

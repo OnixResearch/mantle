@@ -118,6 +118,46 @@ pub fn stage_report_identity(mut input: StageReportInput) -> Result<Blake3Identi
     Ok(identity)
 }
 
+pub fn verify_component_report(report: ComponentBuildReport) -> ComponentBuildReportResult {
+    if report.schema != COMPONENT_BUILD_REPORT_SCHEMA {
+        return ComponentBuildReportResult {
+            report: None,
+            blockers: vec![blocker(
+                "unsupported-component-report-schema",
+                "component-report",
+                "component build report schema is unsupported",
+            )],
+        };
+    }
+    let expected_identity = report.report_identity_blake3.clone();
+    let expected_node_identities: Vec<Blake3Identity> =
+        report.nodes.iter().map(|node| node.identity_blake3.clone()).collect();
+    let inputs = report.nodes.into_iter().map(stage_input_from_node).collect();
+    let rebuilt = build_component_report(inputs, report.non_claims);
+    let Some(rebuilt_report) = rebuilt.report else {
+        return rebuilt;
+    };
+    let rebuilt_node_identities: Vec<Blake3Identity> =
+        rebuilt_report.nodes.iter().map(|node| node.identity_blake3.clone()).collect();
+    if rebuilt_report.report_identity_blake3 != expected_identity || rebuilt_node_identities != expected_node_identities
+    {
+        return ComponentBuildReportResult {
+            report: None,
+            blockers: vec![blocker(
+                "component-report-identity-mismatch",
+                "component-report",
+                "component report or stage identities do not match canonical fields",
+            )],
+        };
+    }
+    debug_assert_eq!(rebuilt_report.report_identity_blake3, expected_identity);
+    debug_assert_eq!(rebuilt_node_identities, expected_node_identities);
+    ComponentBuildReportResult {
+        report: Some(rebuilt_report),
+        blockers: Vec::new(),
+    }
+}
+
 pub fn build_component_report(
     inputs: Vec<StageReportInput>,
     mut non_claims: Vec<String>,
@@ -289,6 +329,20 @@ fn validate_global_non_claims(non_claims: &[String], blockers: &mut Vec<Componen
                 "component report omits a required build-only non-claim",
             ));
         }
+    }
+}
+
+fn stage_input_from_node(node: StageReportNode) -> StageReportInput {
+    StageReportInput {
+        stage_key: node.stage_key,
+        kind: node.kind,
+        status: node.status,
+        parents: node.parents,
+        artifact: node.artifact,
+        tool_identity_blake3: node.tool_identity_blake3,
+        profile_identity_blake3: node.profile_identity_blake3,
+        claims: node.claims,
+        non_claims: node.non_claims,
     }
 }
 
