@@ -4,7 +4,17 @@
 use std::fmt;
 
 /// Identifies which store layer produced or served a given artifact.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    serde::Serialize,
+    serde::Deserialize
+)]
 #[serde(rename_all = "snake_case")]
 pub enum StoreLayer {
     /// Served from the writable overlay (local store).
@@ -44,15 +54,24 @@ pub struct Layered<T> {
 
 impl<T> Layered<T> {
     pub fn overlay(value: T) -> Self {
-        Self { value, layer: StoreLayer::Overlay }
+        Self {
+            value,
+            layer: StoreLayer::Overlay,
+        }
     }
 
     pub fn base(value: T) -> Self {
-        Self { value, layer: StoreLayer::Base }
+        Self {
+            value,
+            layer: StoreLayer::Base,
+        }
     }
 
     pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Layered<U> {
-        Layered { value: f(self.value), layer: self.layer }
+        Layered {
+            value: f(self.value),
+            layer: self.layer,
+        }
     }
 }
 

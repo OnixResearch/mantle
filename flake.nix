@@ -60,6 +60,9 @@
         };
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+        cargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+        firstPartyCargoScope =
+          pkgs.lib.concatStringsSep " " cargoManifest.workspace.metadata.tigerstyle.default_scope;
 
         # Common source filtering. The Rust workspace embeds Nickel stdlib files
         # from ./lib with include_str!, bootstrap tests read checked Nickel
@@ -574,6 +577,7 @@
           # Format check
           fmt = craneLib.cargoFmt {
             inherit src;
+            cargoExtraArgs = firstPartyCargoScope;
           };
         }
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {

@@ -25,10 +25,8 @@ use sha2::Digest;
 use tempfile::TempDir;
 
 const TRUST_PROOF_SCHEMA: &str = "mantle-trust-policy-rail-evidence-v1";
-const NON_CLAIM_HASH_ONLY: &str =
-    "a hash-only input is content integrity, not signer trust or upstream authenticity";
-const NON_CLAIM_TRUST: &str =
-    "trust policy evidence proves the configured verifier bound a source digest; it does not prove build success or release reproducibility";
+const NON_CLAIM_HASH_ONLY: &str = "a hash-only input is content integrity, not signer trust or upstream authenticity";
+const NON_CLAIM_TRUST: &str = "trust policy evidence proves the configured verifier bound a source digest; it does not prove build success or release reproducibility";
 const TRUST_TEST_KEYPAIR: &str =
     "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 
@@ -63,20 +61,15 @@ fn quoted(value: &str) -> String {
 
 /// Write a signature for a trust-policy fixture, returning the trusted public key string.
 fn write_trust_signature(root: &Path, hash: &str) -> String {
-    let (signing_key, verifying_key) =
-        nix_compat::narinfo::parse_keypair(TRUST_TEST_KEYPAIR).expect("keypair parses");
+    let (signing_key, verifying_key) = nix_compat::narinfo::parse_keypair(TRUST_TEST_KEYPAIR).expect("keypair parses");
     let subject = TrustSubject::input("pkg".to_string());
-    let payload =
-        trust_signature_payload(&subject, TrustDigestBinding::ContentHash, &HashAlgo::Sha256, hash);
+    let payload = trust_signature_payload(&subject, TrustDigestBinding::ContentHash, &HashAlgo::Sha256, hash);
     let signature = signing_key.sign(payload.as_bytes()).to_owned().to_string();
     fs::write(root.join("pkg.sig"), signature).unwrap();
     verifying_key.to_string()
 }
 
-fn write_trust_evidence_json(
-    dir: &Path,
-    decisions: &[(&str, &str, &str)],
-) -> Vec<u8> {
+fn write_trust_evidence_json(dir: &Path, decisions: &[(&str, &str, &str)]) -> Vec<u8> {
     let record = serde_json::json!({
         "schema": TRUST_PROOF_SCHEMA,
         "rail_version": "1",
@@ -136,7 +129,10 @@ fn trust_policy_offline_rail_trusted_refresh_accepted() {
     let mut lock = Lockfile::new();
     lock.inputs.insert("pkg".into(), LockEntry {
         kind: LockedKind::File { url: source_url },
-        hash: LockedHash { algo: HashAlgo::Sha256, value: "sha256-old=".to_string() },
+        hash: LockedHash {
+            algo: HashAlgo::Sha256,
+            value: "sha256-old=".to_string(),
+        },
         patches: vec![],
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
@@ -160,9 +156,13 @@ fn trust_policy_offline_rail_trusted_refresh_accepted() {
     let parsed: serde_json::Value = serde_json::from_slice(&evidence).unwrap();
     assert_eq!(parsed["schema"], TRUST_PROOF_SCHEMA);
     assert!(parsed["per_input_decisions"][0]["status"].as_str().unwrap() == "accepted");
-    assert!(parsed["non_claims"].as_array().unwrap().iter().any(|c| {
-        c.as_str().unwrap().contains("hash-only input is content integrity")
-    }));
+    assert!(
+        parsed["non_claims"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| { c.as_str().unwrap().contains("hash-only input is content integrity") })
+    );
 }
 
 /// V2 (negative): missing signature blocks refresh.
@@ -253,7 +253,10 @@ fn trust_policy_offline_rail_untrusted_key_blocks() {
     let mut lock = Lockfile::new();
     lock.inputs.insert("pkg".into(), LockEntry {
         kind: LockedKind::File { url: source_url },
-        hash: LockedHash { algo: HashAlgo::Sha256, value: "sha256-old=".to_string() },
+        hash: LockedHash {
+            algo: HashAlgo::Sha256,
+            value: "sha256-old=".to_string(),
+        },
         patches: vec![],
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
@@ -271,18 +274,26 @@ fn trust_policy_offline_rail_untrusted_key_blocks() {
     }
 
     let evidence = write_trust_evidence_json(dir.path(), &[("pkg", "rejected", "untrusted key")]);
-    assert!(serde_json::from_slice::<serde_json::Value>(&evidence).unwrap()["per_input_decisions"][0]["status"] == "rejected");
+    assert!(
+        serde_json::from_slice::<serde_json::Value>(&evidence).unwrap()["per_input_decisions"][0]["status"]
+            == "rejected"
+    );
 }
 
 /// V3: hash-only input is reported as content-integrity-only, not signed evidence.
 #[test]
 fn trust_policy_offline_rail_hash_only_is_content_integrity() {
     let dir = TempDir::new().unwrap();
-    let evidence = write_trust_evidence_json(dir.path(), &[("pkg", "content-integrity-only", "no trust policy declared")]);
+    let evidence =
+        write_trust_evidence_json(dir.path(), &[("pkg", "content-integrity-only", "no trust policy declared")]);
     let parsed: serde_json::Value = serde_json::from_slice(&evidence).unwrap();
-    assert!(parsed["non_claims"].as_array().unwrap().iter().any(|c| {
-        c.as_str().unwrap().contains("hash-only input is content integrity")
-    }));
+    assert!(
+        parsed["non_claims"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| { c.as_str().unwrap().contains("hash-only input is content integrity") })
+    );
     // No key material in evidence
     let serialized = serde_json::to_string(&parsed).unwrap();
     assert!(!serialized.contains("cCta2MEs"), "evidence must not expose private key material");

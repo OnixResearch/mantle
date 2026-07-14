@@ -41,7 +41,7 @@
       "purpose_marker": "Spike proof: create an i386 Mes runtime/header layout for tcc26 -> tcc27.",
       "checked_markers": [
         "intentionally a sibling diagnostic derivation",
-        "records the first concrete blocker"
+        "no-libc i386 TinyCC 0.9.26 handoff and emits the validated Mes runtime plus"
       ]
     },
     {
@@ -49,7 +49,7 @@
       "purpose_marker": "Spike proof: try the i386 live-bootstrap sequence tcc-0.9.26 -> tcc-0.9.27 -> make-3.82.",
       "checked_markers": [
         "intentionally a sibling diagnostic derivation",
-        "records the first concrete blocker"
+        "i386 Mes runtime and TinyCC 0.9.27 object handoff, then records the first"
       ]
     },
     {
@@ -57,7 +57,7 @@
       "purpose_marker": "Diagnostic: reproduce GCC 4.0.4 c-parse TinyCC boundary.",
       "checked_markers": [
         "intentionally stops at c-parse.o",
-        "diag: reproduce focused c-parse boundary",
+        "diag: patch generated auto-host.h ssize_t seam and run focused c-parse boundary",
         "make_cparse_plain_exact_with_compiler"
       ]
     }

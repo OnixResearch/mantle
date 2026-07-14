@@ -161,21 +161,11 @@ let mpc_src = crunch.fetchTarball {
           find "$root" -exec touch -t "$DETERMINISTIC_TOUCH_STAMP" {} + 2>/dev/null || true
       }
 
-      normalize_generated_manpages() {
-        man_dir="$out/share/man/man1"
-        if [ ! -d "$man_dir" ]; then
-          return 0
-        fi
-        for page in "$man_dir"/*.1; do
-          if [ ! -f "$page" ]; then
-            continue
-          fi
-          page_name="$(basename "$page")"
-          $BB cat > "$page" << MANPAGEEOF
-Mantle bootstrap GCC manpage placeholder: $page_name
-MANPAGEEOF
-          deterministic_touch "$page"
-        done
+      remove_generated_manpages() {
+        # Generated documentation is outside the bootstrap compiler contract.
+        # Exclude it rather than replacing nondeterministic pages with content
+        # that could be mistaken for real GCC documentation.
+        $BB rm -rf "$out/share/man"
       }
 
       # egrep/fgrep wrappers. Must use /tmp/tools/sh as interpreter.
@@ -396,7 +386,7 @@ WRAPEOF
       "$MAKE" install SHELL="$DASH" MAKEINFO=true MISSING=true ARFLAGS="$ARFLAGS" \
         2>&1 || { dump_gcc_failure_logs install; exit 1; }
 
-      normalize_generated_manpages
+      remove_generated_manpages
       normalize_output_metadata "$out"
       mkdir -p "$out/share/mantle"
       cat > "$out/share/mantle/bootstrap-determinism.json" << DETERMINISMEOF

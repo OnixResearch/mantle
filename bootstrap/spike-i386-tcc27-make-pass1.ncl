@@ -1,13 +1,15 @@
 # Spike proof: try the i386 live-bootstrap sequence tcc-0.9.26 -> tcc-0.9.27 -> make-3.82.
 #
 # This is intentionally a sibling diagnostic derivation. It imports the proven
-# no-libc i386 TinyCC 0.9.26 handoff and records the first concrete blocker
-# before any production make-tcc routing changes.
+# i386 Mes runtime and TinyCC 0.9.27 object handoff, then records the first
+# concrete link or GNU Make blocker without changing production make-tcc
+# routing.
 
 let crunch = import "lib.ncl" in
 
 let stage0 = import "stage0-posix.ncl" in
 let tcc26_i386 = import "spike-i386-tinycc26-cross-smoke.ncl" in
+let mes_runtime = import "spike-i386-mes-runtime-layout.ncl" in
 
 let tcc27_src = crunch.fetchTarball {
   url = "https://download-mirror.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2",
@@ -40,8 +42,11 @@ let make_src = crunch.fetchTarball {
 
       STAGE0=$(find_input stage0-posix)
       TCC26=$(find_input spike-i386-tinycc26-cross-smoke)
+      MES_RUNTIME=$(find_input spike-i386-mes-runtime-layout)
       TCC27_SRC=$(find_input tcc-0.9.27-src)
       MAKE_SRC=$(find_input make-3.82-src)
+      RUNTIME="$MES_RUNTIME/share/spike-i386-mes-runtime-layout/runtime"
+      RUNTIME_SUMMARY="$MES_RUNTIME/share/spike-i386-mes-runtime-layout/summary.txt"
       export PATH="$TCC26/bin:$STAGE0/bin:$PATH"
 
       WORK=/tmp/spike-i386-tcc27-make-pass1
@@ -74,9 +79,25 @@ let make_src = crunch.fetchTarball {
           echo "status=blocked"
           echo "blocked_step=$step"
           echo "blocked_rc=$rc"
-          echo "note=The proven tcc26-i386 predecessor is no-libc; a full tcc27/make pass requires confirming or creating an i386 Mes runtime layout."
+          echo "note=The validated i386 Mes runtime handoff was consumed; this is the first remaining tcc27 or GNU Make blocker."
         } > "$out/share/spike-i386-tcc27-make-pass1/summary.txt"
       }
+
+      validate_runtime_handoff() {
+        $BB grep -qx 'status=object-emission-success' "$RUNTIME_SUMMARY" &&
+        $BB grep -qx 'runtime_libtcc1_object=real' "$RUNTIME_SUMMARY" &&
+        $BB grep -qx 'runtime_libtcc1_archive=real' "$RUNTIME_SUMMARY" &&
+        $BB grep -qx 'runtime_libc_archive=real' "$RUNTIME_SUMMARY" &&
+        test -f "$RUNTIME/lib/mes/crt1.o" &&
+        test -f "$RUNTIME/lib/mes/libc.a" &&
+        test -f "$RUNTIME/lib/mes/tcc/libtcc1.a" &&
+        test -f "$RUNTIME/include/mes/include/stdio.h"
+      }
+
+      if ! run_step runtime_handoff_validate validate_runtime_handoff; then
+        note_blocker runtime_handoff_validate
+        exit 0
+      fi
 
       echo 'i386-tcc27-make: predecessor version' >&2
       run_step tcc26_version tcc26-i386 -version
@@ -98,6 +119,10 @@ let make_src = crunch.fetchTarball {
       $BB sed -i '/if (ph->p_offset == 0) {/,/                    }/s/ph->p_paddr = ph->p_vaddr;/ph->p_paddr = ph->p_vaddr;\
                         if (s1->text_addr == 0x80100000)\
                             ph->p_paddr = ph->p_paddr - 0x80000000;/' tccelf.c
+      # live-bootstrap tcc-0.9.27/pass1 check-reloc-null patch.
+      $BB sed -i '/static void fill_local_got_entries(TCCState \*s1)/,/for_each_elem(s1->got->reloc, 0, rel, ElfW_Rel) {/s/    ElfW_Rel \*rel;/    ElfW_Rel *rel;\
+    if (!s1->got->reloc)\
+        return;/' tccelf.c
       $BB sed -i 's/size = size \* 2;/size = size + size;/g' tccpp.c tccelf.c
       $BB sed -i 's/nb_alloc = nb \* 2;/nb_alloc = nb + nb;/' libtcc.c
       $BB sed -i 's/next->size \* 2/next->size + next->size/' tccpp.c
@@ -110,6 +135,21 @@ let make_src = crunch.fetchTarball {
         } else {\
             strcpy(buf, paths[i]); strcat(buf, "/"); strcat(buf, filename);\
         }' libtcc.c
+      $BB sed -i '/ST_FUNC int tcc_add_crt(TCCState \*s, const char \*filename)/,/^}/c\
+ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
+{\
+    char buf[1024];\
+    int i;\
+    if (!strcmp(filename, "crti.o") || !strcmp(filename, "crtn.o"))\
+        return 0;\
+    for (i = 0; i < s->nb_crt_paths; i++) {\
+        strcpy(buf, s->crt_paths[i]); strcat(buf, "/"); strcat(buf, filename);\
+        if (tcc_add_file_internal(s, buf, AFF_TYPE_BIN) == 0)\
+            return 0;\
+    }\
+    tcc_error_noabort("file '\''%s'\'' not found", filename);\
+    return 0;\
+}' libtcc.c
       $BB sed -i '/vsnprintf(buf + len/s|.*|    strcat(buf, fmt);|' libtcc.c
       $BB sed -i '/default case: stderr/{n;n;n;n;s|.*|        fputs(buf, stderr); fputs("\\n", stderr);|;}' libtcc.c
       $BB sed -i '/default case: stderr/,/fflush(stderr)/s|^[[:space:]]*fprintf(stderr, .*|        fputs(buf, stderr); fputs("\\n", stderr);|' libtcc.c
@@ -119,15 +159,25 @@ let make_src = crunch.fetchTarball {
       $BB sed -i 's|snprintf(buf, sizeof(buf), "__stop_%s", s->name);|strcpy(buf, "__stop_"); strcat(buf, s->name);|' tccelf.c
       $BB sed -i 's|snprintf(sym_start, sizeof(sym_start), "__%s_start", section_name + 1);|strcpy(sym_start, "__"); strcat(sym_start, section_name + 1); strcat(sym_start, "_start");|' tccelf.c
       $BB sed -i 's|snprintf(sym_end, sizeof(sym_end), "__%s_end", section_name + 1);|strcpy(sym_end, "__"); strcat(sym_end, section_name + 1); strcat(sym_end, "_end");|' tccelf.c
+      $BB awk '/tcc_error_noabort\("undefined symbol/ { print "                fputs(\"undefined symbol \", stderr); fputs(name, stderr); fputs(\"\\\\n\", stderr); s1->nb_errors++;"; next } { print }' tccelf.c > tccelf.c.new
+      $BB mv tccelf.c.new tccelf.c
+      $BB awk 'done == 0 && $0 == "#if defined TCC_IS_NATIVE_387" { print "#if 0 /* CRUNCH: tcc26-i386 crashes compiling native x87 long-double initializer path */"; done = 1; next } { print }' tccgen.c > tccgen.c.new
+      $BB mv tccgen.c.new tccgen.c
 
-      # First prove the predecessor can at least parse/compile 0.9.27 to an i386 object.
-      if ! run_step tcc27_compile_object tcc26-i386 -c -o tcc27.o -I . -D BOOTSTRAP=1 -D HAVE_FLOAT=1 -D HAVE_BITFIELD=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"/no-runtime/tcc\" -D CONFIG_TCC_CRTPREFIX=\"/no-runtime\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"/no-runtime:/no-runtime/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"/no-runtime/include\" -D TCC_LIBGCC=\"/no-runtime/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c; then
+      # Reproduce the validated real-runtime object handoff with stable provider paths.
+      if ! run_step tcc27_compile_object tcc26-i386 -c -I . -I "$RUNTIME/include/mes/include" -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_CRTPREFIX=\"$RUNTIME/lib/mes\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"$RUNTIME/lib/mes:$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"$RUNTIME/include/mes/include\" -D TCC_LIBGCC=\"$RUNTIME/lib/mes/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c -o tcc27.o; then
         cd "$WORK"
         note_blocker tcc27_compile_object
         exit 0
       fi
+      TCC27_OBJECT="$WORK/tcc-0.9.27/tcc27.o"
+      if ! run_step tcc27_object_exists test -f "$TCC27_OBJECT"; then
+        cd "$WORK"
+        note_blocker tcc27_object_exists
+        exit 0
+      fi
 
-      if ! run_step tcc27_link tcc26-i386 -static -o tcc27-i386 -I . -D BOOTSTRAP=1 -D HAVE_FLOAT=1 -D HAVE_BITFIELD=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"/no-runtime/tcc\" -D CONFIG_TCC_CRTPREFIX=\"/no-runtime\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"/no-runtime:/no-runtime/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"/no-runtime/include\" -D TCC_LIBGCC=\"/no-runtime/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c; then
+      if ! run_step tcc27_link tcc26-i386 -nostdlib -static -o tcc27-i386 "$RUNTIME/lib/mes/crt1.o" "$TCC27_OBJECT" "$RUNTIME/lib/mes/tcc/libtcc1.a" "$RUNTIME/lib/mes/libc.a"; then
         cd "$WORK"
         note_blocker tcc27_link
         exit 0
@@ -157,5 +207,5 @@ let make_src = crunch.fetchTarball {
       printf 'status=partial\nblocked_step=make_full_smoke_not_yet_implemented\n' > "$out/share/spike-i386-tcc27-make-pass1/summary.txt"
     "%,
   ],
-  inputs = [stage0, tcc26_i386, tcc27_src, make_src],
+  inputs = [stage0, tcc26_i386, mes_runtime, tcc27_src, make_src],
 } | crunch.Derivation

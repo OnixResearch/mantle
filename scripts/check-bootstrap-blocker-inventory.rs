@@ -448,7 +448,7 @@ fn run_self_tests() -> Result<(), String> {
         return Err("self-test expected gcc-4.0 native boundary bridge-output suppression".to_string());
     }
     if evidence.gcc40_placeholder_inventory_checked
-        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1373, MARKERS[0], &evidence).is_none()
+        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1385, MARKERS[0], &evidence).is_none()
     {
         return Err("self-test expected checked gcc-4.0 pass1 marker suppression".to_string());
     }
@@ -464,12 +464,12 @@ fn run_self_tests() -> Result<(), String> {
         return Err("self-test expected gcc-4.0 native cc1 build-frontier receipt suppression".to_string());
     }
     if evidence.gcc40_native_cc1_build_frontier_checked
-        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1201, MARKERS[1], &evidence).is_none()
+        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1206, MARKERS[1], &evidence).is_none()
     {
         return Err("self-test expected gcc-4.0 native cc1 source-frontier suppression".to_string());
     }
     if evidence.gcc40_native_cc1_build_frontier_checked
-        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1593, MARKERS[0], &evidence).is_none()
+        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1610, MARKERS[0], &evidence).is_none()
     {
         return Err("self-test expected gcc-4.0 native cc1 pass1 bridge suppression".to_string());
     }
@@ -480,7 +480,7 @@ fn run_self_tests() -> Result<(), String> {
         return Err("self-test expected gcc-4.0 native boundary bridge-output suppression".to_string());
     }
     if evidence.gcc40_native_boundary_checked
-        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1103, MARKERS[0], &evidence).is_none()
+        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1195, MARKERS[0], &evidence).is_none()
     {
         return Err("self-test expected gcc-4.0 native frontier source-marker suppression".to_string());
     }
@@ -815,10 +815,10 @@ fn checked_gcc40_placeholder_inventory() -> bool {
         "\"derivation\": \"bootstrap/gcc-4.0.ncl\"",
         "\"status\": \"inventory-only\"",
         "\"marker_count\": 4",
-        "\"line\": 1373",
-        "\"line\": 1548",
-        "\"line\": 1563",
-        "\"line\": 1707",
+        "\"line\": 1385",
+        "\"line\": 1565",
+        "\"line\": 1580",
+        "\"line\": 1724",
         "\"classification\": \"checked placeholder/frontier marker debt\"",
         "inventory only; does not prove native GCC 4.0 correctness",
     ])
@@ -1167,6 +1167,9 @@ fn checked_diagnostic_derivation_boundary_inventory() -> bool {
         "\"derivation\": \"bootstrap/diag-gcc40-c-parse-boundary.ncl\"",
         "\"derivation\": \"bootstrap/spike-i386-mes-runtime-layout.ncl\"",
         "\"derivation\": \"bootstrap/spike-i386-tcc27-make-pass1.ncl\"",
+        "no-libc i386 TinyCC 0.9.26 handoff and emits the validated Mes runtime plus",
+        "i386 Mes runtime and TinyCC 0.9.27 object handoff, then records the first",
+        "diag: patch generated auto-host.h ssize_t seam and run focused c-parse boundary",
         "diagnostic metadata classification only",
     ])
     .is_some()
@@ -1189,16 +1192,18 @@ fn checked_diagnostic_derivation_boundary_inventory() -> bool {
         && checked_source_file("bootstrap/diag-gcc40-c-parse-boundary.ncl", &[
             "Diagnostic: reproduce GCC 4.0.4 c-parse TinyCC boundary",
             "intentionally stops at c-parse.o",
-            "diag: reproduce focused c-parse boundary",
+            "diag: patch generated auto-host.h ssize_t seam and run focused c-parse boundary",
             "make_cparse_plain_exact_with_compiler",
         ])
         && checked_source_file("bootstrap/spike-i386-mes-runtime-layout.ncl", &[
             "Spike proof: create an i386 Mes runtime/header layout",
             "intentionally a sibling diagnostic derivation",
+            "no-libc i386 TinyCC 0.9.26 handoff and emits the validated Mes runtime plus",
         ])
         && checked_source_file("bootstrap/spike-i386-tcc27-make-pass1.ncl", &[
             "Spike proof: try the i386 live-bootstrap sequence",
             "intentionally a sibling diagnostic derivation",
+            "i386 Mes runtime and TinyCC 0.9.27 object handoff, then records the first",
         ])
 }
 
@@ -1222,7 +1227,7 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
     if marker.id == "bridge-output"
         && path_s.ends_with("bootstrap/gcc-4.0.ncl")
         && evidence.gcc40_placeholder_inventory_checked
-        && matches!(line, 1373 | 1548 | 1563 | 1707)
+        && matches!(line, 1385 | 1565 | 1580 | 1724)
     {
         return Some("gcc-4.0 pass1 marker is covered by the checked placeholder inventory receipt");
     }
@@ -1237,7 +1242,7 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
     if matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
         && path_s.ends_with("bootstrap/gcc-4.0.ncl")
         && evidence.gcc40_native_cc1_build_frontier_checked
-        && matches!(line, 1201 | 1234 | 1245 | 1247 | 1277 | 1279 | 1373 | 1511 | 1548 | 1563 | 1593 | 1707)
+        && matches!(line, 1206 | 1239 | 1250 | 1252 | 1282 | 1284 | 1385 | 1528 | 1565 | 1580 | 1610 | 1724)
     {
         return Some(
             "gcc-4.0 native cc1 source frontier is covered by checked build-frontier metadata and remains partial",
@@ -1467,7 +1472,7 @@ fn is_tcc_musl_source_normalization_note(path: &str, line: usize) -> bool {
 }
 
 fn is_gcc40_native_frontier_marker(line: usize) -> bool {
-    matches!(line, 1103 | 1114 | 1147 | 1158 | 1160 | 1190 | 1192 | 1391 | 1473)
+    matches!(line, 1195 | 1206 | 1239 | 1250 | 1252 | 1282 | 1284)
 }
 
 fn is_gcc40_mechanical_bridge_identifier(line: usize) -> bool {

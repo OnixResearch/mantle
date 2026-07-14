@@ -14,8 +14,7 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 const LOCK_IMPORTER_PROOF_SCHEMA: &str = "mantle-lock-importer-rail-evidence-v1";
-const NON_CLAIM_BUILD_TOOL: &str =
-    "the generated project remains a build-tool handoff (not Onix/NixOS module semantics); import is not build success or deployability";
+const NON_CLAIM_BUILD_TOOL: &str = "the generated project remains a build-tool handoff (not Onix/NixOS module semantics); import is not build success or deployability";
 
 fn mantle() -> Command {
     Command::cargo_bin("mantle").unwrap()
@@ -145,7 +144,11 @@ fn lock_importer_offline_rail_plan_no_mutate() {
     let evidence = write_evidence_json(
         &dir,
         "nixtamal",
-        &[("mantle-project.ncl", "create"), ("mantle.lock", "create"), (".mantle/inputs.ncl", "create")],
+        &[
+            ("mantle-project.ncl", "create"),
+            ("mantle.lock", "create"),
+            (".mantle/inputs.ncl", "create"),
+        ],
         &[],
         true,  // plan no-mutate
         false, // apply not yet run
@@ -153,9 +156,13 @@ fn lock_importer_offline_rail_plan_no_mutate() {
     let parsed: Value = serde_json::from_slice(&evidence).unwrap();
     assert_eq!(parsed["schema"], LOCK_IMPORTER_PROOF_SCHEMA);
     assert!(parsed["assertions"]["plan_no_mutate"].as_bool().unwrap());
-    assert!(parsed["non_claims"].as_array().unwrap().iter().any(|c| {
-        c.as_str().unwrap().contains("build-tool handoff")
-    }));
+    assert!(
+        parsed["non_claims"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| { c.as_str().unwrap().contains("build-tool handoff") })
+    );
 }
 
 /// V1 (positive): apply writes only planned Mantle files.
@@ -173,13 +180,7 @@ fn lock_importer_offline_rail_apply_creates_planned_files() {
         .assert()
         .success();
 
-    mantle()
-        .arg("import")
-        .arg("pins")
-        .arg("apply")
-        .current_dir(dir.path())
-        .assert()
-        .success();
+    mantle().arg("import").arg("pins").arg("apply").current_dir(dir.path()).assert().success();
 
     // Only planned Mantle-owned files created
     assert!(dir.path().join("mantle-project.ncl").exists());
@@ -192,10 +193,14 @@ fn lock_importer_offline_rail_apply_creates_planned_files() {
     let evidence = write_evidence_json(
         &dir,
         "nixtamal",
-        &[("mantle-project.ncl", "create"), ("mantle.lock", "create"), (".mantle/inputs.ncl", "create")],
+        &[
+            ("mantle-project.ncl", "create"),
+            ("mantle.lock", "create"),
+            (".mantle/inputs.ncl", "create"),
+        ],
         &[],
-        true,  // plan no-mutate
-        true,  // apply only planned
+        true, // plan no-mutate
+        true, // apply only planned
     );
     let parsed: Value = serde_json::from_slice(&evidence).unwrap();
     assert!(parsed["assertions"]["apply_only_planned_mantle_files"].as_bool().unwrap());
@@ -207,26 +212,14 @@ fn lock_importer_offline_rail_composition_semantics_are_blockers() {
     let dir = TempDir::new().unwrap();
     write_composition_semantics_fixture(&dir);
 
-    let assert = mantle()
-        .arg("--json")
-        .arg("import")
-        .arg("pins")
-        .arg("plan")
-        .current_dir(dir.path())
-        .assert();
+    let assert = mantle().arg("--json").arg("import").arg("pins").arg("plan").current_dir(dir.path()).assert();
     let value: Value = serde_json::from_slice(&assert.get_output().stdout).unwrap();
 
     let blockers = value["blockers"].as_array().unwrap();
     assert!(!blockers.is_empty(), "composition semantics must produce blockers");
 
     // Apply must refuse
-    mantle()
-        .arg("import")
-        .arg("pins")
-        .arg("apply")
-        .current_dir(dir.path())
-        .assert()
-        .failure();
+    mantle().arg("import").arg("pins").arg("apply").current_dir(dir.path()).assert().failure();
 
     // Evidence: blockers recorded
     let evidence = write_evidence_json(
@@ -245,30 +238,22 @@ fn lock_importer_offline_rail_composition_semantics_are_blockers() {
 #[test]
 fn lock_importer_offline_rail_evidence_has_required_non_claim() {
     let dir = TempDir::new().unwrap();
-    let evidence = write_evidence_json(
-        &dir,
-        "nixtamal",
-        &[("mantle-project.ncl", "create")],
-        &[],
-        true, true,
-    );
+    let evidence = write_evidence_json(&dir, "nixtamal", &[("mantle-project.ncl", "create")], &[], true, true);
     let parsed: Value = serde_json::from_slice(&evidence).unwrap();
-    assert!(parsed["non_claims"].as_array().unwrap().iter().any(|c| {
-        c.as_str().unwrap().contains("build-tool handoff")
-    }));
+    assert!(
+        parsed["non_claims"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| { c.as_str().unwrap().contains("build-tool handoff") })
+    );
 }
 
 /// V4: no raw environment values or unbounded logs in evidence.
 #[test]
 fn lock_importer_offline_rail_evidence_redaction() {
     let dir = TempDir::new().unwrap();
-    let evidence = write_evidence_json(
-        &dir,
-        "nixtamal",
-        &[("mantle-project.ncl", "create")],
-        &[],
-        true, true,
-    );
+    let evidence = write_evidence_json(&dir, "nixtamal", &[("mantle-project.ncl", "create")], &[], true, true);
     let serialized = String::from_utf8(evidence).unwrap();
     assert!(!serialized.contains("raw_env"), "evidence must not contain raw environment values");
 }

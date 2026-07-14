@@ -49,11 +49,7 @@ fn write_evidence_json(
     encoded
 }
 
-fn write_negative_evidence_json(
-    dir: &Path,
-    phase: &str,
-    reason_code: &str,
-) -> Vec<u8> {
+fn write_negative_evidence_json(dir: &Path, phase: &str, reason_code: &str) -> Vec<u8> {
     let record = serde_json::json!({
         "schema": REMOTE_RAIL_PROOF_SCHEMA,
         "rail_version": "1",
@@ -76,7 +72,14 @@ fn remote_rail_evidence_has_mandated_fields() {
     let dir = TempDir::new().unwrap();
     let evidence = write_evidence_json(
         dir.path(),
-        &["route", "handshake", "input-sync", "execution", "transfer-admission", "observability"],
+        &[
+            "route",
+            "handshake",
+            "input-sync",
+            "execution",
+            "transfer-admission",
+            "observability",
+        ],
         Some(1024),
         "signing-key:builder-key",
         "max-chunks:1024, max-bytes:1048576",
@@ -117,17 +120,10 @@ fn remote_rail_negative_cases_have_phase_and_reason_code() {
 #[test]
 fn remote_rail_redaction_omits_secrets() {
     let dir = TempDir::new().unwrap();
-    let evidence = write_evidence_json(
-        dir.path(),
-        &["route", "handshake"],
-        Some(0),
-        "signing-key:builder-key",
-        "bounded",
-        true,
-    );
+    let evidence =
+        write_evidence_json(dir.path(), &["route", "handshake"], Some(0), "signing-key:builder-key", "bounded", true);
     let serialized = String::from_utf8(evidence).unwrap();
     assert!(!serialized.contains("secret_ticket"), "evidence must not contain bearer ticket material");
-
 }
 
 /// V4: determinism — repeated runs produce byte-stable evidence.
@@ -136,7 +132,14 @@ fn remote_rail_repeated_runs_are_deterministic() {
     let dir = TempDir::new().unwrap();
     let evidence1 = write_evidence_json(
         dir.path(),
-        &["route", "handshake", "input-sync", "execution", "transfer-admission", "observability"],
+        &[
+            "route",
+            "handshake",
+            "input-sync",
+            "execution",
+            "transfer-admission",
+            "observability",
+        ],
         Some(1024),
         "signing-key:builder-key",
         "bounded",
@@ -144,7 +147,14 @@ fn remote_rail_repeated_runs_are_deterministic() {
     );
     let evidence2 = write_evidence_json(
         dir.path(),
-        &["route", "handshake", "input-sync", "execution", "transfer-admission", "observability"],
+        &[
+            "route",
+            "handshake",
+            "input-sync",
+            "execution",
+            "transfer-admission",
+            "observability",
+        ],
         Some(1024),
         "signing-key:builder-key",
         "bounded",
@@ -157,14 +167,8 @@ fn remote_rail_repeated_runs_are_deterministic() {
 #[test]
 fn remote_rail_evidence_omits_unbounded_logs() {
     let dir = TempDir::new().unwrap();
-    let evidence = write_evidence_json(
-        dir.path(),
-        &["route", "handshake"],
-        None,
-        "signing-key:builder-key",
-        "bounded",
-        true,
-    );
+    let evidence =
+        write_evidence_json(dir.path(), &["route", "handshake"], None, "signing-key:builder-key", "bounded", true);
     let serialized = String::from_utf8(evidence).unwrap();
     assert!(!serialized.contains("full_log"), "evidence must not contain full log dumps");
     assert!(!serialized.contains("unbounded"), "evidence must not contain unbounded lists");

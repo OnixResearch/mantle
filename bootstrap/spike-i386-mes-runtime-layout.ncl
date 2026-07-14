@@ -1,8 +1,9 @@
 # Spike proof: create an i386 Mes runtime/header layout for tcc26 -> tcc27.
 #
 # This is intentionally a sibling diagnostic derivation. It imports the proven
-# no-libc i386 TinyCC 0.9.26 handoff and records the first concrete blocker
-# before any production make-tcc routing changes.
+# no-libc i386 TinyCC 0.9.26 handoff and emits the validated Mes runtime plus
+# TinyCC 0.9.27 object handoff consumed by the next diagnostic stage. It does
+# not change production make-tcc routing.
 
 let crunch = import "lib.ncl" in
 
@@ -72,6 +73,10 @@ let tcc27_src = crunch.fetchTarball {
         [ -f "$WORK/libtcc1.o" ] && $BB cp "$WORK/libtcc1.o" "$out/share/spike-i386-mes-runtime-layout/artifacts/libtcc1.o" || true
         [ -f "$RUNTIME/lib/mes/libc.a" ] && $BB cp "$RUNTIME/lib/mes/libc.a" "$out/share/spike-i386-mes-runtime-layout/artifacts/libc.a" || true
         [ -f "$RUNTIME/lib/mes/crt1.o" ] && $BB cp "$RUNTIME/lib/mes/crt1.o" "$out/share/spike-i386-mes-runtime-layout/artifacts/crt1.o" || true
+        if [ -d "$RUNTIME" ]; then
+          $BB rm -rf "$out/share/spike-i386-mes-runtime-layout/runtime"
+          $BB cp -r "$RUNTIME" "$out/share/spike-i386-mes-runtime-layout/runtime"
+        fi
       }
 
       rc_signal() {

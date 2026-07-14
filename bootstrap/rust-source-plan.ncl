@@ -1,11 +1,12 @@
-# Typed bootstrap route for a future receipt-bound Rust-from-source provider.
+# Typed bootstrap route for the receipt-bound Rust-from-source provider.
 #
 # This is not a provider output and does not satisfy
-# `mantle-rust-source-provider-v1` by itself. It captures the first
-# Mantle-owned route selected for implementation: mrustc builds a seed
-# Rust compiler from source, then successive Rust source releases build the
-# final compiler/sysroot closure. The executable provider remains blocked
-# until these stages are implemented as Mantle derivations with receipts.
+# `mantle-rust-source-provider-v1` by itself. It captures the implemented
+# Mantle-owned route: mrustc builds a seed Rust compiler from source, then
+# successive Rust source releases build the final compiler/sysroot closure.
+# `mantle bootstrap rust-source-provider` executes the route; the archived
+# `source-built-rust-seed-closure` receipts, not this plan, are the authority
+# for materialization, smoke, self-build, and fixed-point claims.
 
 let Source = {
   id | String,

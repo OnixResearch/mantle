@@ -154,3 +154,20 @@ identities fail focused core and production-path tests.
 The status `archive-authentication-prerequisite-bound-v1` remains bounded:
 Mantle does not independently re-run producer signatures or claim Cairn,
 producer, source, build, or release correctness.
+
+## Bootstrap inventory closeout rerun
+
+On 2026-07-14 the bootstrap inventory blocker was repaired without removing
+fail-closed diagnostic behavior or changing the clean-gate requirement. The
+enforced local rail and the Nix check now report 0 findings, 434
+evidence-backed suppressions, and 0 promotion claims. The corrected first-party
+Nix format check also passes, and a fresh `bootstrap/gcc.ncl` validation passes
+all warmups, the build, and host-leakage scanning after generated manpage
+placeholders were removed from the bootstrap output contract.
+
+The mandatory flake task remains blocked at the next independent frontier:
+both exact and bounded `nix flake check` stop at the explicitly deny-level
+Tiger Style consumer check with 418 violations across multiple first-party
+crates. No lint level, package scope, or Tiger Style revision was weakened.
+See `bootstrap-blocker-inventory-closeout.md` for commands, bounded claims, and
+the closeout decision.
