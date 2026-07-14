@@ -1,0 +1,40 @@
+=== hardware-core ===
+command: nix --option secret-key-files '' develop -c cargo test -q -p crunch-hardware-simulation-core --lib
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+=== hardware-shell ===
+command: nix --option secret-key-files '' develop -c cargo test -q -p crunch-hardware-simulation --lib
+running 8 tests
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+=== examples-inventory ===
+command: nix --option secret-key-files '' develop -c cargo test -q -p mantle --test examples_inventory
+running 10 tests
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+=== action-result-core ===
+command: nix --option secret-key-files '' develop -c cargo test -q -p crunch-action-result-core --lib
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+=== build-action-result ===
+command: nix --option secret-key-files '' develop -c cargo test -q -p crunch-build --lib action_result
+running 8 tests
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 602 filtered out; finished in 0.07s
+
+=== build-native-dynamic ===
+command: nix --option secret-key-files '' develop -c cargo test -q -p crunch-build --lib native_dynamic
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 601 filtered out; finished in 0.03s
+
+=== store-action-result ===
+command: nix --option secret-key-files '' develop -c cargo test -q -p crunch-store --lib action_result
+running 15 tests
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 199 filtered out; finished in 0.12s
+
+=== machine-contract ===
+command: nix --option secret-key-files '' develop -c cargo test -q -p mantle --bin mantle machine_contract
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 1483 filtered out; finished in 0.00s
+

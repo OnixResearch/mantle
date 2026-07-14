@@ -53,23 +53,45 @@ nix --option secret-key-files '' develop -c \
 
 The output is ordinary `mantle-plan-v1` JSON. A producer derivation declares that file as a `dynamic_plan_output`; `mantle build` then validates and executes the compile/link/smoke graph through the generic worker.
 
-## Real-tool evidence
+## Real-tool and four-run evidence
 
-The 2026-07-14 capability run used fresh state under `/home/brittonr/.local/state/mantle-hardware-proof-20260714-fresh` and proved:
+The 2026-07-14 capability runs used the baseline state at `/home/brittonr/.local/state/mantle-hardware-proof-20260714-fresh` and a separate clean-client state at `/home/brittonr/.local/state/mantle-hardware-proof-20260714-full-shared`. They proved:
 
 - deterministic strict-sandbox Verilator generation: 16 normalized files, 190,187 bytes, BLAKE3 `dc3f36f05ec76104bc500f00764b06345df810bd8c76bb99dc776da11fbac552`;
 - generic plan digest `b1e30af6fd30c080a993e3d4505cd602bc962c484764ad4e3aa5591f82c202df`, with nine independent compile units, one link unit, two smoke units, and three dynamic roots;
 - all compile units, the explicit simulator link root, and both parameterized smoke roots completed in the native strict sandbox;
 - `mantle-hardware-smoke-result-v1` outputs for `0,0 -> 0` and `1,2 -> 3`, each with exit code zero, empty bounded stderr, typed profile/cohort/source/action/simulator refs, and explicit non-claims;
-- selected-source revision `48c284fac87a9350de026902e134c16b6a66711c` changed the selected source, generated-source, profile, plan, compile, link, and smoke identities and rebuilt the graph;
-- an unrelated-source change left the selected plan digest unchanged and caused zero worker executions: all producer, compile, link, and smoke outputs were accepted from the local cache;
+- selected-source revision `48c284fac87a9350de026902e134c16b6a66711c` changed the selected source, generated-source, profile, plan, compile, link, and smoke identities and executed all thirteen actions;
+- an unrelated-source change left the selected profile and plan identities unchanged, admitted all thirteen local shared results, and caused zero executor calls;
+- a clean HTTP client admitted all thirteen signed shared results, transferred 791,928 logical NAR bytes, and made zero executor calls; an immediate repeat transferred zero bytes and reused the same 791,928 logical NAR bytes locally;
 - wrong-reference revision `d2cc93ee610863e22c73d4a1579f43d36501f006` built and linked but both smoke roots failed with exit code 4 and `reference mismatch`; no successful smoke output or smoke action-result publication was emitted.
 
-The bounded report, receipt, action-result, attestation, log, and smoke-result paths are enumerated in `cairn/changes/prove-hardware-simulation-build-flow/evidence/final-lifecycle.md`.
+The typed four-run bundle is `cairn/changes/prove-hardware-simulation-build-flow/evidence/hardware-evidence.json`, with evidence ref `mantle-hardware-evidence://blake3/9c581d319c676243a347de04a9da02d3b4f09540fadfa74f0cd4304268adba94`. It records exact generation/compile/link/smoke requested, executed, reused, and invalidated counts. Elapsed time is absent from the bundle and is not a correctness or performance gate.
 
-## Remaining blocker
+The bounded report, receipt, action-result, attestation, log, smoke-result, and report-digest evidence is enumerated in `cairn/changes/prove-hardware-simulation-build-flow/evidence/final-lifecycle.md`.
 
-A clean-client, full-shared hardware hit is not claimed. The current input-addressed hardware graph is admitted by the ordinary local PathInfo cache before action-result discovery can select a shared result. A manually copied result index without PathInfo, receipt, policy, and reference-scan evidence failed closed, as designed. Generic HTTP action-result tests prove zero-executor clean-client reuse, rejection, conflict, and publication semantics, but that is not promoted to hardware-specific full-shared evidence. Tasks requiring that exact hardware proof remain unchecked.
+## Clean-client shared-result procedure
+
+The publisher must export the complete generic cache surface, not only an action-result index:
+
+1. signed action-result indexes and canonical records;
+2. signed PathInfo plus the referenced NAR/object closure;
+3. matching execution receipt, sandbox-policy identity, and reference-scan facts;
+4. the trusted public key used to verify action-result and PathInfo signatures.
+
+The client uses fresh physical store/state/temp directories and passes both a substituter trust query and `--trusted-public-keys`. The proof command shape is:
+
+```sh
+TMPDIR="$fresh_tmp" CRUNCH_NO_FUSE=1 SNIX_BUILD_BWRAP="$declared_bwrap" \
+  mantle build --verbose --log-level info --json \
+  --store "$fresh_store" \
+  --state-dir "$fresh_state" \
+  --substituters "$cache_url" \
+  --trusted-public-keys "$trusted_key" \
+  --nix-compat -j 4 hardware-producer.ncl
+```
+
+Generic admission runs before ordinary PathInfo cache fallback. This is necessary for input-addressed outputs to carry shared-result evidence, but it adds no HDL-specific branch. Each accepted report records `selected_source_class = "http"`, the trusted signer, one admitted candidate, the selected result ref, and logical NAR transfer evidence. Missing trust caused action-result rejection and executor fallback; copied indexes without PathInfo/object/receipt/policy/reference-scan facts failed closed. Focused negative tests retain stale action/tool/source refs, incomplete objects, bad signatures, conflicting output sets, poisoned indexes, interrupted publication, and failed-build non-publication cases.
 
 ## Non-claims
 

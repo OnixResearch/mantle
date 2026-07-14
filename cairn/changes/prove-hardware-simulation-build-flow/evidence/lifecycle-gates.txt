@@ -1,0 +1,84 @@
+command: cairn validate --root .
+{
+  "change_issues": [],
+  "changes": 7,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 30,
+  "valid": true
+}
+
+command: cairn tracey coverage --root .
+traceability coverage ok: 140/140 referenced (profile mantle-default)
+
+command: cairn gate proposal prove-hardware-simulation-build-flow --root .
+{
+  "change": "prove-hardware-simulation-build-flow",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "fec9e1b83a63bb43f0cab4cd002decb185ab1c38a985b5f747075c3c77b69618",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "12161af7d397eee17edb30562be4d89f7d26578cc052b40ef561ffa384842871",
+  "receipt_hash": "360fba5b3f20c9bd5d904d97b54f487b66914006bca038735861338bc367c0d0",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+command: cairn gate design prove-hardware-simulation-build-flow --root .
+{
+  "change": "prove-hardware-simulation-build-flow",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "4b9a570248065030b7c191cc5bfc63a113be00338132e7a978fbd11513fe8a7d",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "12161af7d397eee17edb30562be4d89f7d26578cc052b40ef561ffa384842871",
+  "receipt_hash": "91c7dcbb3a42a9b82f056393dca96a76a301667b10f5c0c0867af3e6d28195e0",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+command: cairn gate tasks prove-hardware-simulation-build-flow --root .
+{
+  "change": "prove-hardware-simulation-build-flow",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "363b51ea9fede6b34236615082c6b446b5d7640d05f77a9456ae8a6bdaa330ca",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "12161af7d397eee17edb30562be4d89f7d26578cc052b40ef561ffa384842871",
+  "receipt_hash": "2924e0b10bf377df4cdb58543b5e36c49ea9c007dbc91876ceb773652ab10c65",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+
