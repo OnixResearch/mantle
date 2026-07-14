@@ -4,7 +4,7 @@
 
 Bind Trellis proof evidence-chain sidecars to Mantle release artifacts.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Mantle supports Trellis proof evidence sidecars
 r[mantle.release_provenance.trellis_proof_sidecars.profile] Mantle MUST support Trellis proof evidence as a profile of the generic opaque evidence sidecar binding contract.

@@ -4,7 +4,7 @@
 
 Mantle now has a pure `crunch-release-core` profile for `kamacite.trellis-proof-evidence-profile.v1` over the generic opaque-evidence binding. It checks canonical Preserves metadata, Valence artifact and logical identities, source/binary links, policy hashes, exact role vocabularies, claim scope, required non-claims, and optional JSON projection identity.
 
-The profile accepts Kamacite producer role `recorded-only` or `formal-proof-candidate` only with Valence validation role `recorded_only`. Optional mode reports valid present evidence as `recorded-only`; required mode fails closed with an explicit missing-acceptance-authority diagnostic.
+The profile accepts recorded evidence only with Valence role `recorded_only`, and accepts required evidence only for the exact Kamacite `formal-proof-candidate` plus Valence `property` pair. Optional recorded evidence reports `recorded-only`; required accepted evidence reports `accepted-formal-proof`; every other pair fails closed.
 
 The core receives typed observations and never parses Verus source, proof IR, verifier logs, or Preserves internals.
 
@@ -12,23 +12,19 @@ The core receives typed observations and never parses Verus source, proof IR, ve
 
 - Kamacite revision: `de710a092d351e829abfb288d46124e2db8e5b7f`
   - `crates/kamacite-core/src/proof_evidence.rs`: exact canonical schema/projection identities and only `recorded-only` / `formal-proof-candidate` producer roles.
-  - `cairn/specs/stack-integration/spec.md`: Kamacite preserves candidate metadata but must not claim downstream proof acceptance.
-- Valence revision: `7a027529dd4b7057cf52e86dc5b258f2a9541545`
-  - `crates/valence-core/src/stack_role_registry.rs`: shipped verification roles are `property`, `recorded_only`, `boundary`, and `manual_review`.
-  - `crates/valence-core/src/formal_proof_chain.rs` and archived formal-proof-chain design: property evidence is Octet-owned; Trellis imports remain recorded-only.
-  - `cairn/changes/trellis-proof-evidence-profile/tasks.md`: every task is unchecked, including profile registration, accepted-formal-proof behavior, accepted fixtures, graph output, and final stack validation.
+  - Candidate status does not itself imply downstream promotion.
+- Valence commit: `27b8b212`
+  - `cairn/archive/2026-07-12-trellis-proof-evidence-profile/`: all validator, role, graph, positive, negative, and final-validation tasks are archived complete.
+  - `crates/valence-core/src/trellis_proof_evidence.rs`: `accepted_formal_proof` requires passed verifier status, policy acceptance, and verification role `property`; candidates cannot use `property`.
+  - The exact required non-claim keeps acceptance bounded to scoped proof identity and linkage rather than downstream correctness or release eligibility.
 - Trellis revision: `3bf9144b99d65ad0c00776d1d5b81b9c8878c222`
-  - `README.md`: exported proof artifacts are local facts/manual-review or reference inputs, not Mantle release eligibility or downstream certification.
+  - `README.md`: exported proof artifacts remain bounded local proof facts; Mantle does not infer broader correctness or certification.
 
-## Exact external blocker
+## Resolved external dependency
 
-A passing required accepted-proof fixture would need an authoritative Valence accepted Trellis validation receipt. No such shipped validator or receipt/profile vocabulary exists at the inspected Valence revision. Valence's proposed `trellis.proof-evidence` change is active and wholly unchecked. Creating a passing Mantle receipt now would invent upstream authority or promote Kamacite's candidate role contrary to both Kamacite and current Valence semantics.
+The prior Valence blocker is resolved by archived commit `27b8b212`. Mantle now permits only the exact Kamacite `formal-proof-candidate` plus Valence `property` pair to satisfy required mode. Existing `recorded_only` evidence remains recorded-only, and `property` attached to a Kamacite `recorded-only` producer fails closed.
 
-Therefore these remain intentionally incomplete:
-
-1. required accepted-proof positive fixture;
-2. accepted-proof completion claim;
-3. Trellis -> Kamacite -> Valence -> Mantle accepted-proof stack smoke.
+The accepted binding still proves only that measured release artifacts link to the declared Valence-accepted evidence. It does not make Mantle a proof verifier or establish release eligibility.
 
 ## Baseline evidence
 
@@ -113,7 +109,7 @@ The command sequence completed successfully. The final tasks receipt reported:
 }
 ```
 
-The active change is intentionally not ready to archive: the accepted-proof positive and upstream stack-smoke tasks remain unchecked with the exact Valence blocker recorded above.
+At that historical checkpoint the active change remained unready because the Valence accepted-proof authority had not yet shipped. The dependency was later resolved as recorded below.
 
 ## Integration hardening
 
@@ -122,3 +118,31 @@ An adversarial VibeThinker review challenged proof-kind dispatch as a possible g
 Pueue task `497` ran the hardened Trellis-focused tests: 6 passed, 0 failed. Pueue task `506` ran the complete release core and strict core Clippy: 185 tests passed, 0 failed, and Clippy completed with `-D warnings`. The chained Nix-shell wasm leg could not find that shell's wasm target and is not success evidence. Pueue task `513` reran the no-std check with the installed nightly wasm target and cleared wrappers; `cargo check -p crunch-release-core --target wasm32-unknown-unknown` completed successfully.
 
 Pueue task `519` ran repository validation and proposal, design, and tasks gates with `cairn-policy/generated/cairn-policy.json`. Validation reported 9 active changes, 36 specs, no issues, and `valid: true`; all three gates reported no issues, `valid: true`, and `verdict: PASS` under policy hash `d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c`.
+
+## Accepted-proof completion evidence
+
+On 2026-07-14, Valence focused stack authority passed from the clean Valence checkout:
+
+```text
+nix develop -c cargo test -p valence-core trellis_proof_evidence -- --nocapture
+```
+
+Result: 2 passed, 0 failed. This includes accepted proof plus graph output and the negative missing-assumptions/promotion/domain/boundary case.
+
+Mantle established a before-change focused baseline of 3 passing Trellis-filtered release-core tests. After the exact role-pair extension and accepted fixture were added, the focused rail passed 7 tests:
+
+```text
+CARGO_INCREMENTAL=0 nix develop -c cargo test -p crunch-release-core --lib trellis_proof -- --nocapture
+```
+
+The complete release-core and strict lint rails then passed:
+
+```text
+CARGO_INCREMENTAL=0 nix develop -c cargo test -p crunch-release-core --lib
+CARGO_INCREMENTAL=0 nix develop -c cargo clippy -p crunch-release-core --all-targets --no-deps -- -D warnings
+nix develop -c cargo fmt -p crunch-release-core -- --check
+```
+
+Result: 207 tests passed, 0 failed; Clippy and formatting passed. The positive fixtures cover optional recorded-only and required accepted-formal-proof behavior. The negative matrix rejects unauthorized producer/validator pairs as well as stale, malformed, missing, projection-drifted, and overclaiming evidence.
+
+Final Cairn validation reported 8 active changes, 31 specs, no issues, and `valid: true`. Proposal, design, and tasks gates passed with receipt hashes `11bf2be35e1e224307e135c22814d3bcd17e25a2cac53557bec9991ac78e82cc`, `7394e2fe974d54a45302ac1783f0374fa5cbaaa31c781c7cd2697ed98e837e76`, and `b7e6f5892657ea1c322a7624283a3de77b89aaaa80af4d4cd66bbdd7ba6347f5`. After sync, `mantle-default` Tracey coverage passed 140/140 with no missing or dangling references and receipt `335cd283d488ab7655a30d82d3829a48299226eb13d9469dc962d347054b8212`.

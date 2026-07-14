@@ -64,6 +64,7 @@ pub const KAMACITE_TRELLIS_PROOF_JSON_PROJECTION_SCHEMA: &str =
     "kamacite.trellis-proof-evidence-profile.v1.compat-json";
 pub const TRELLIS_PROOF_KAMACITE_ROLE_RECORDED_ONLY: &str = "recorded-only";
 pub const TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE: &str = "formal-proof-candidate";
+pub const TRELLIS_PROOF_VALENCE_ROLE_PROPERTY: &str = "property";
 pub const TRELLIS_PROOF_VALENCE_ROLE_RECORDED_ONLY: &str = "recorded_only";
 pub const TRELLIS_PROOF_REFERENCE_ONLY_NON_CLAIM: &str =
     "Trellis proof evidence is reference input only and does not establish Mantle release eligibility";
@@ -506,23 +507,20 @@ fn validate_trellis_proof_roles(roles: Option<&OpaqueEvidenceProfileRoles>, diag
         diagnostics.push("binding.profile_roles is required for Trellis proof evidence".to_string());
         return;
     };
-    if !matches!(
-        roles.producer_role.as_str(),
-        TRELLIS_PROOF_KAMACITE_ROLE_RECORDED_ONLY | TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE
-    ) {
+    let role_pair_is_supported = matches!(
+        (roles.producer_role.as_str(), roles.validation_role.as_str()),
+        (
+            TRELLIS_PROOF_KAMACITE_ROLE_RECORDED_ONLY | TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE,
+            TRELLIS_PROOF_VALENCE_ROLE_RECORDED_ONLY,
+        ) | (TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE, TRELLIS_PROOF_VALENCE_ROLE_PROPERTY,)
+    );
+    if !role_pair_is_supported {
         diagnostics.push(format!(
-            "binding.profile_roles.producer_role is unsupported for Trellis proof evidence: {}",
-            roles.producer_role
+            "binding.profile_roles pair is unsupported for Trellis proof evidence: producer={}, validation={}",
+            roles.producer_role, roles.validation_role
         ));
     }
-    push_literal_diagnostic(
-        LiteralDiagnosticField {
-            actual: &roles.validation_role,
-            expected: TRELLIS_PROOF_VALENCE_ROLE_RECORDED_ONLY,
-            field_name: "binding.profile_roles.validation_role",
-        },
-        diagnostics,
-    );
+    debug_assert!(role_pair_is_supported || !diagnostics.is_empty());
 }
 
 fn validate_trellis_identity_domains(binding: &OpaqueEvidenceSidecarBinding, diagnostics: &mut Vec<String>) {

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR 0021](0021-accept-valence-authorized-trellis-proof-evidence.md) after Valence archived its accepted Trellis proof profile.
 
 ## Context
 
@@ -54,5 +54,6 @@ Rejected because payload semantics belong to Trellis, Kamacite, and Valence. Man
 - Mantle can package and validate recorded-only Trellis linkage without claiming proof acceptance.
 - A Kamacite formal-proof candidate remains visible but counts only as recorded-only in Mantle.
 - Accepted-proof positive validation and end-to-end stack smoke remain blocked on Valence's unfinished profile.
-- Future accepted support requires authoritative Valence role/schema/receipt semantics plus positive and adversarial upstream evidence, followed by explicit Mantle profile evolution.
+- Valence commit `27b8b212` later supplied the accepted role semantics and adversarial evidence required by this decision.
+- ADR 0021 extends admission with the exact Kamacite `formal-proof-candidate` and Valence `property` pair without reinterpreting `recorded_only`.
 - JSON interoperability remains optional and subordinate to canonical Preserves identity.

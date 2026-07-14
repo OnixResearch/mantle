@@ -9,16 +9,20 @@ use crate::manifest::ReleaseEvidenceManifest;
 use crate::opaque_evidence::OPAQUE_EVIDENCE_KIND_PROOF;
 use crate::opaque_evidence::OpaqueEvidenceCompatibilityProjection;
 use crate::opaque_evidence::OpaqueEvidenceSidecarBinding;
+use crate::opaque_evidence::TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE;
 use crate::opaque_evidence::TRELLIS_PROOF_PROFILE_VERSION;
+use crate::opaque_evidence::TRELLIS_PROOF_VALENCE_ROLE_PROPERTY;
 use crate::opaque_evidence::opaque_evidence_sidecar_binding_diagnostics;
 
 pub const TRELLIS_PROOF_MODE_OPTIONAL: &str = "optional";
 pub const TRELLIS_PROOF_MODE_REQUIRED: &str = "required";
 pub const TRELLIS_PROOF_DISPOSITION_ABSENT: &str = "absent";
+pub const TRELLIS_PROOF_DISPOSITION_ACCEPTED_FORMAL_PROOF: &str = "accepted-formal-proof";
 pub const TRELLIS_PROOF_DISPOSITION_RECORDED_ONLY: &str = "recorded-only";
 pub const TRELLIS_PROOF_DISPOSITION_INVALID: &str = "invalid";
 pub const TRELLIS_PROOF_RELEASE_BOUNDARY: &str = "Mantle validates bounded Trellis proof artifact identities and release linkage only; canonical Preserves bytes remain opaque, Kamacite owns producer roles, Valence owns proof acceptance, and Cairn owns lifecycle readiness";
-pub const TRELLIS_PROOF_ACCEPTANCE_AUTHORITY_BLOCKER: &str = "required Trellis proof evidence needs an upstream accepted-validation role; the registered profile supports Valence recorded_only validation only";
+pub const TRELLIS_PROOF_ACCEPTANCE_AUTHORITY_BLOCKER: &str =
+    "required Trellis proof evidence needs the exact Kamacite formal-proof-candidate and Valence property role pair";
 pub const MAX_TRELLIS_PROOF_DIAGNOSTICS_COUNT: u32 = 32;
 const DUPLICATE_DETECTION_COUNT: usize = 2;
 
@@ -74,10 +78,18 @@ pub fn evaluate_trellis_proof_release_evidence(
         &manifest.external_evidence,
     ));
     validate_observations(&binding.binding, observations, &mut diagnostics);
-    if required {
+    if required && !binding_has_accepted_authority(&binding.binding) {
         diagnostics.push(TRELLIS_PROOF_ACCEPTANCE_AUTHORITY_BLOCKER.to_string());
     }
     finish_verification(mode, required, Some(&binding.binding), diagnostics)
+}
+
+// r[impl mantle.release_provenance.trellis_proof_sidecars.positive]
+fn binding_has_accepted_authority(binding: &OpaqueEvidenceSidecarBinding) -> bool {
+    binding.profile_roles.as_ref().is_some_and(|roles| {
+        roles.producer_role == TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE
+            && roles.validation_role == TRELLIS_PROOF_VALENCE_ROLE_PROPERTY
+    })
 }
 
 fn matching_profile_bindings(
@@ -230,6 +242,8 @@ fn finish_verification(
     let roles = binding.and_then(|value| value.profile_roles.as_ref());
     let disposition = if valid && binding.is_none() {
         TRELLIS_PROOF_DISPOSITION_ABSENT
+    } else if valid && binding.is_some_and(binding_has_accepted_authority) {
+        TRELLIS_PROOF_DISPOSITION_ACCEPTED_FORMAL_PROOF
     } else if valid {
         TRELLIS_PROOF_DISPOSITION_RECORDED_ONLY
     } else {

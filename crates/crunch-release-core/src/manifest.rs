@@ -2169,9 +2169,11 @@ mod tests {
     use super::*;
     use crate::opaque_evidence::MAX_TRELLIS_PROOF_PRESERVES_SIDECAR_BYTES;
     use crate::opaque_evidence::TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE;
+    use crate::opaque_evidence::TRELLIS_PROOF_VALENCE_ROLE_PROPERTY;
     use crate::opaque_evidence::TRELLIS_PROOF_VALENCE_ROLE_RECORDED_ONLY;
     use crate::trellis_proof_binding::TRELLIS_PROOF_ACCEPTANCE_AUTHORITY_BLOCKER;
     use crate::trellis_proof_binding::TRELLIS_PROOF_DISPOSITION_ABSENT;
+    use crate::trellis_proof_binding::TRELLIS_PROOF_DISPOSITION_ACCEPTED_FORMAL_PROOF;
     use crate::trellis_proof_binding::TRELLIS_PROOF_DISPOSITION_INVALID;
     use crate::trellis_proof_binding::TRELLIS_PROOF_DISPOSITION_RECORDED_ONLY;
     use crate::trellis_proof_binding::TRELLIS_PROOF_MODE_OPTIONAL;
@@ -2603,9 +2605,19 @@ mod tests {
         .expect("parse registered Trellis proof binding fixture")
     }
 
+    fn sample_accepted_trellis_proof_binding() -> OpaqueEvidenceSidecarBinding {
+        serde_json::from_str(include_str!(
+            "../../../tests/fixtures/trellis-proof-release-sidecars/binding.required-accepted-formal-proof.valid.json"
+        ))
+        .expect("parse accepted Trellis proof binding fixture")
+    }
+
     fn sample_trellis_proof_manifest() -> ReleaseEvidenceManifest {
+        sample_trellis_proof_manifest_with_binding(sample_trellis_proof_binding())
+    }
+
+    fn sample_trellis_proof_manifest_with_binding(binding: OpaqueEvidenceSidecarBinding) -> ReleaseEvidenceManifest {
         let mut manifest = sample_manifest();
-        let binding = sample_trellis_proof_binding();
         manifest.external_evidence = trellis_external_evidence(&binding);
         manifest.opaque_evidence_sidecar_bindings =
             vec![opaque_evidence_sidecar_binding_receipt(binding).expect("valid Trellis proof binding")];
@@ -4133,7 +4145,23 @@ mod tests {
     }
 
     #[test]
-    fn trellis_formal_proof_candidate_remains_recorded_only_in_mantle() {
+    fn trellis_proof_required_accepted_formal_proof_fixture_passes() {
+        let manifest = sample_trellis_proof_manifest_with_binding(sample_accepted_trellis_proof_binding());
+        let observations = sample_trellis_observations(&manifest.opaque_evidence_sidecar_bindings[0].binding);
+
+        let canonical = canonical_release_evidence_manifest(manifest.clone()).expect("canonical Trellis manifest");
+        let verification =
+            evaluate_trellis_proof_release_evidence(&manifest, TRELLIS_PROOF_MODE_REQUIRED, Some(&observations));
+
+        assert!(!canonical.is_empty());
+        assert!(verification.valid, "{:?}", verification.diagnostics);
+        assert_eq!(verification.disposition, TRELLIS_PROOF_DISPOSITION_ACCEPTED_FORMAL_PROOF);
+        assert_eq!(verification.producer_role.as_deref(), Some(TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE));
+        assert_eq!(verification.validation_role.as_deref(), Some(TRELLIS_PROOF_VALENCE_ROLE_PROPERTY));
+    }
+
+    #[test]
+    fn trellis_proof_formal_candidate_remains_recorded_only_in_mantle() {
         let mut manifest = sample_trellis_proof_manifest();
         let mut binding = manifest.opaque_evidence_sidecar_bindings[0].binding.clone();
         binding.profile_roles.as_mut().expect("fixture roles").producer_role =
@@ -4151,7 +4179,7 @@ mod tests {
     }
 
     #[test]
-    fn trellis_optional_mode_accepts_absence_without_observations() {
+    fn trellis_proof_optional_mode_accepts_absence_without_observations() {
         let verification =
             evaluate_trellis_proof_release_evidence(&sample_manifest(), TRELLIS_PROOF_MODE_OPTIONAL, None);
 
@@ -4161,7 +4189,7 @@ mod tests {
     }
 
     #[test]
-    fn trellis_required_mode_fails_closed_without_accepted_upstream_authority() {
+    fn trellis_proof_required_mode_fails_closed_without_accepted_upstream_authority() {
         let manifest = sample_trellis_proof_manifest();
         let observations = sample_trellis_observations(&manifest.opaque_evidence_sidecar_bindings[0].binding);
 

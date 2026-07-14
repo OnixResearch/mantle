@@ -65,11 +65,11 @@
   },
   {
     "name": "unauthorized-property-promotion",
-    "expected": "binding.profile_roles.validation_role must be recorded_only"
+    "expected": "binding.profile_roles pair is unsupported for Trellis proof evidence"
   },
   {
     "name": "producer-role-domain-substitution",
-    "expected": "binding.profile_roles.producer_role is unsupported"
+    "expected": "binding.profile_roles pair is unsupported for Trellis proof evidence"
   },
   {
     "name": "oversized-preserves-envelope",

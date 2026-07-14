@@ -149,6 +149,19 @@
 // r[verify mantle.release_provenance.opaque_evidence_sidecar_binding.validation]
 // r[verify mantle.release_provenance.opaque_evidence_sidecar_binding.negative]
 
+// Trellis proof release sidecars.
+// Implementation and tests: `crates/crunch-release-core/src/opaque_evidence.rs`,
+// `crates/crunch-release-core/src/trellis_proof_binding.rs`,
+// `crates/crunch-release-core/src/manifest.rs`, and the positive/negative fixtures.
+// Validation: `cairn/archive/2026-07-14-trellis-proof-release-sidecars/evidence/implementation.md`
+// and Valence archived authority commit `27b8b212`.
+// r[impl mantle.release_provenance.trellis_proof_sidecars.profile]
+// r[verify mantle.release_provenance.trellis_proof_sidecars.positive]
+// r[impl mantle.release_provenance.trellis_proof_sidecars.links]
+// r[verify mantle.release_provenance.trellis_proof_sidecars.negative]
+// r[impl mantle.release_provenance.trellis_proof_sidecars.opaque]
+// r[verify mantle.release_provenance.trellis_proof_sidecars.validation]
+
 // Final release-verification decision.
 // Implementation and tests: `crates/crunch-release-core/src/verification_decision.rs`,
 // `src/release_cmd.rs`, and `tests/release_cli.rs`.
