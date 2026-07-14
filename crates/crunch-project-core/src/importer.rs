@@ -761,15 +761,13 @@ fn validate_file_conflicts(
         .map(|file| (file.path.as_str(), file.content.as_str()))
         .collect::<BTreeMap<_, _>>();
     for operation in operations {
-        if let Some(content) = existing.get(operation.path.as_str()) {
-            if *content != operation.content {
-                blockers.push(blocker(
-                    "existing-file-conflict",
-                    &operation.path,
-                    "existing file differs from import plan",
-                ));
-            }
+        let Some(content) = existing.get(operation.path.as_str()) else {
+            continue;
+        };
+        if *content == operation.content {
+            continue;
         }
+        blockers.push(blocker("existing-file-conflict", &operation.path, "existing file differs from import plan"));
     }
 }
 

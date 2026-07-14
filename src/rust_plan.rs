@@ -2111,7 +2111,7 @@ fn native_path_cargo_package_from_manifest(
     let source_root = manifest_path.parent().ok_or_else(|| {
         RunError::Internal(format!("Cargo-free manifest path has no parent: {}", manifest_path.display()))
     })?;
-    let native_targets = native_targets_for_manifest(source_root, &package.name, &version, &edition, &manifest)
+    let native_targets = native_targets_for_manifest(source_root, &package.name, &version, &edition, manifest)
         .map_err(|blocker| {
             RunError::Internal(format!("Cargo-free native target planning failed: {}", blocker.message))
         })?;
@@ -4391,14 +4391,14 @@ fn native_lockfile_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeMa
         }
     };
     for package in facts.packages {
-        if let Some(source) = package.source.as_deref() {
-            if !lock_source_supported(source) {
-                blockers.push(native_manifest_lock_blocker(
-                    &input.path,
-                    "unsupported-lockfile-source",
-                    &format!("lock package `{}` uses unsupported source `{source}`", package.name),
-                ));
-            }
+        if let Some(source) = package.source.as_deref()
+            && !lock_source_supported(source)
+        {
+            blockers.push(native_manifest_lock_blocker(
+                &input.path,
+                "unsupported-lockfile-source",
+                &format!("lock package `{}` uses unsupported source `{source}`", package.name),
+            ));
         }
         for dependency in package.dependencies {
             if dependency.name.is_empty() {
@@ -4887,14 +4887,14 @@ fn native_target_cfg_dependencies(
             if manifest_path.is_none() && dependency_optional(value) {
                 dependency_selected = false;
             }
-            if let Some(path) = &manifest_path {
-                if !path.is_file() {
-                    return Err(native_blocker(
-                        package_id.clone(),
-                        "missing-target-cfg-dependency-manifest",
-                        &format!("target cfg dependency `{name}` manifest {} is not readable", path.display()),
-                    ));
-                }
+            if let Some(path) = &manifest_path
+                && !path.is_file()
+            {
+                return Err(native_blocker(
+                    package_id.clone(),
+                    "missing-target-cfg-dependency-manifest",
+                    &format!("target cfg dependency `{name}` manifest {} is not readable", path.display()),
+                ));
             }
             let normalized_manifest_path = manifest_path.as_ref().map(|path| normalize_path_string(path));
             cfg_facts.push(NativeTargetCfgDependencySummary {
@@ -4912,13 +4912,11 @@ fn native_target_cfg_dependencies(
                 manifest_path: normalized_manifest_path.clone(),
                 blocker_class: None,
             });
-            if dependency_selected {
-                if let Some(path) = normalized_manifest_path {
-                    selected_dependencies.push(NativePathDependencySummary {
-                        name: name.clone(),
-                        manifest_path: path,
-                    });
-                }
+            if dependency_selected && let Some(path) = normalized_manifest_path {
+                selected_dependencies.push(NativePathDependencySummary {
+                    name: name.clone(),
+                    manifest_path: path,
+                });
             }
         }
     }
@@ -5546,10 +5544,10 @@ fn git_source_identity_matches(source: &NativeGitSourceSummary, selector: &GitDe
     if source.name != selector.package_name {
         return false;
     }
-    if let Some(package_version) = selector.package_version {
-        if source.version != package_version {
-            return false;
-        }
+    if let Some(package_version) = selector.package_version
+        && source.version != package_version
+    {
+        return false;
     }
     normalized_git_source_url(&source.source) == Some(selector.normalized_url)
 }
@@ -5643,7 +5641,7 @@ fn native_selected_features(
 }
 
 fn resolve_native_features(request: NativeFeatureResolutionRequest) -> NativeFeatureResolution {
-    debug_assert!(!(request.all_features && !request.explicit_features.is_empty()));
+    debug_assert!(!request.all_features || request.explicit_features.is_empty());
     let mut selected_features = BTreeSet::<String>::new();
     let mut activated_optional_dependencies = BTreeSet::<String>::new();
     let mut dependency_feature_edges = BTreeSet::<NativeDependencyFeatureEdge>::new();
@@ -6110,15 +6108,15 @@ fn native_unit_dependency_artifacts_from_package_target(
     target: &NativeTargetPlanningSummary,
     mut dependency_artifacts: Vec<RustDependencyArtifact>,
 ) -> Vec<RustDependencyArtifact> {
-    if target.kind == "bin" {
-        if let Some(lib_target) = package.targets.iter().find(|candidate| candidate.kind == "lib") {
-            dependency_artifacts.push(RustDependencyArtifact {
-                package_id: package.package_id.clone(),
-                name: lib_target.crate_name.clone(),
-                producer_unit_id: None,
-                artifact: format!("artifact:{}:{}", package.package_id, lib_target.crate_name),
-            });
-        }
+    if target.kind == "bin"
+        && let Some(lib_target) = package.targets.iter().find(|candidate| candidate.kind == "lib")
+    {
+        dependency_artifacts.push(RustDependencyArtifact {
+            package_id: package.package_id.clone(),
+            name: lib_target.crate_name.clone(),
+            producer_unit_id: None,
+            artifact: format!("artifact:{}:{}", package.package_id, lib_target.crate_name),
+        });
     }
     dependency_artifacts.sort();
     dependency_artifacts.dedup();
@@ -6598,7 +6596,6 @@ fn summarize_native_host_unit_graph_planning(
                     .get(&host_unit_key(&package.package_id, &target.name, &target.kind))
                     .into_iter()
                     .flatten()
-                    .cloned()
                     .map(move |selected| RustHostArtifact {
                         package_id: package.package_id.clone(),
                         target_name: target.name.clone(),
@@ -6713,7 +6710,7 @@ fn summarize_native_host_unit_graph_planning(
                 source_path: target.source_path.clone(),
                 edition: target.edition.clone(),
                 selected_features: package.selected_features.clone(),
-                crate_types: normalized_crate_types(&[target.kind.clone()], &target.kind),
+                crate_types: normalized_crate_types(std::slice::from_ref(&target.kind), &target.kind),
                 mode: "build".to_string(),
                 profile: options.profile.clone(),
                 source_digest: source_digest.clone(),
@@ -7852,11 +7849,11 @@ fn native_unit_derivation(
     append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
     append_rustc_feature_cfg_args(&mut args, &unit.selected_features);
     append_cap_lints_args(&mut args, &unit.package_id, source_closure);
-    if unit.target_kind == "bin" {
-        if let Some(linker) = resolve_tool_path("cc") {
-            args.push("-C".to_string());
-            args.push(rustc_linker_arg(&linker, options));
-        }
+    if unit.target_kind == "bin"
+        && let Some(linker) = resolve_tool_path("cc")
+    {
+        args.push("-C".to_string());
+        args.push(rustc_linker_arg(&linker, options));
     }
     for dependency in &unit.dependency_artifacts {
         args.push("--extern".to_string());
@@ -8137,10 +8134,10 @@ fn target_lib_unit_id_for_dependency(
     target_libs_by_unit_id: &BTreeMap<String, RustUnitDerivationSummary>,
     target_libs_by_package: &BTreeMap<String, String>,
 ) -> Option<String> {
-    if let Some(producer_unit_id) = &dependency.producer_unit_id {
-        if target_libs_by_unit_id.contains_key(producer_unit_id) {
-            return Some(producer_unit_id.clone());
-        }
+    if let Some(producer_unit_id) = &dependency.producer_unit_id
+        && target_libs_by_unit_id.contains_key(producer_unit_id)
+    {
+        return Some(producer_unit_id.clone());
     }
     target_libs_by_package.get(&dependency.package_id).cloned()
 }
@@ -8478,11 +8475,11 @@ fn summarize_unit_derivation(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
-    if is_host_target_kind(&target_kind) || target_kind == "bin" {
-        if let Some(linker) = resolve_tool_path("cc") {
-            args.push("-C".to_string());
-            args.push(rustc_linker_arg(&linker, options));
-        }
+    if (is_host_target_kind(&target_kind) || target_kind == "bin")
+        && let Some(linker) = resolve_tool_path("cc")
+    {
+        args.push("-C".to_string());
+        args.push(rustc_linker_arg(&linker, options));
     }
     let rustc_metadata_hash = rustc_unit_metadata_disambiguator(
         &package_id,
@@ -8581,9 +8578,7 @@ fn classify_supported_cargo_target_kind(kinds: &[String], crate_types: &[String]
     let lib_shaped_kind = kinds.iter().any(|kind| kind == "lib" || kind == "rlib");
     let classified = if kinds.iter().any(|kind| kind == "custom-build") {
         Some("custom-build")
-    } else if kinds.iter().any(|kind| kind == "proc-macro") {
-        Some("proc-macro")
-    } else if proc_macro_crate_type && lib_shaped_kind {
+    } else if kinds.iter().any(|kind| kind == "proc-macro") || (proc_macro_crate_type && lib_shaped_kind) {
         Some("proc-macro")
     } else if lib_shaped_kind {
         Some("lib")
@@ -9424,12 +9419,11 @@ pub(crate) fn execute_rust_target_unit_topology(
                 Err(blocker) => return target_topology_receipt("blocked", executions, Some(blocker)),
             }
         };
-        if !unit.dependency_artifacts.is_empty() {
-            if let Err(blocker) =
+        if !unit.dependency_artifacts.is_empty()
+            && let Err(blocker) =
                 append_selected_dependency_search_paths(&mut executable_unit, graph, &produced_artifacts)
-            {
-                return target_topology_receipt("blocked", executions, Some(blocker));
-            }
+        {
+            return target_topology_receipt("blocked", executions, Some(blocker));
         }
         let receipt = execute_rust_unit(&executable_unit, options)?;
         if receipt.execution_status != "success" {
@@ -10018,12 +10012,11 @@ pub(crate) fn execute_rust_unit_topology(
                     }
                 }
             }
-            if !unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty() {
-                if let Err(blocker) =
+            if (!unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty())
+                && let Err(blocker) =
                     append_selected_dependency_search_paths(&mut executable_unit, graph, &produced_dependency_artifacts)
-                {
-                    return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                }
+            {
+                return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
             }
             let receipt = execute_rust_unit(&executable_unit, options)?;
             if receipt.execution_status != "success" {
@@ -10066,12 +10059,11 @@ pub(crate) fn execute_rust_unit_topology(
                     }
                 }
             }
-            if !unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty() {
-                if let Err(blocker) =
+            if (!unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty())
+                && let Err(blocker) =
                     append_selected_dependency_search_paths(&mut executable_unit, graph, &produced_dependency_artifacts)
-                {
-                    return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                }
+            {
+                return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
             }
             executable_unit =
                 match bind_all_build_script_metadata_with_index(&executable_unit, &produced_build_script_metadata) {
@@ -10148,12 +10140,11 @@ pub(crate) fn execute_rust_unit_topology(
                     }
                 }
             }
-            if !unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty() {
-                if let Err(blocker) =
+            if (!unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty())
+                && let Err(blocker) =
                     append_selected_dependency_search_paths(&mut executable_unit, graph, &produced_dependency_artifacts)
-                {
-                    return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                }
+            {
+                return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
             }
             let receipt = execute_rust_unit(&executable_unit, options)?;
             if receipt.execution_status != "success" {
@@ -11609,10 +11600,10 @@ fn selected_dependency_search_artifacts(
             continue;
         };
         for host_artifact in &producer.consumed_host_artifacts {
-            if host_artifact.target_kind == "proc-macro" {
-                if let Some(path) = select_produced_host_search_artifact(unit, host_artifact, produced_artifacts)? {
-                    paths.insert(path);
-                }
+            if host_artifact.target_kind == "proc-macro"
+                && let Some(path) = select_produced_host_search_artifact(unit, host_artifact, produced_artifacts)?
+            {
+                paths.insert(path);
             }
         }
         for dependency in &producer.dependency_artifacts {
@@ -12151,10 +12142,10 @@ fn rust_topology_child_env(
     inherited_compile_env: &BTreeMap<String, OsString>,
 ) -> BTreeMap<String, OsString> {
     let mut env = BTreeMap::new();
-    if let Some(path) = inherited_path {
-        if !path.is_empty() {
-            env.insert(RUST_TOPOLOGY_TOOL_PATH_ENV.to_string(), path);
-        }
+    if let Some(path) = inherited_path
+        && !path.is_empty()
+    {
+        env.insert(RUST_TOPOLOGY_TOOL_PATH_ENV.to_string(), path);
     }
     for (key, value) in inherited_compile_env {
         debug_assert!(RUST_TOPOLOGY_COMPILE_ENV_ALLOWLIST.contains(&key.as_str()));
@@ -12988,19 +12979,17 @@ fn validate_compiler_policy_manifest(
             "compiler-policy provider manifest was produced for a different rustc -vV identity",
         )?));
     }
-    if let Some(expected_rustc_digest) = &manifest.compatible_rustc.executable_blake3 {
-        if let Some(actual_rustc_digest) = readable_path_digest(rustc)? {
-            if normalize_compiler_policy_digest(expected_rustc_digest).as_deref() != Some(actual_rustc_digest.as_str())
-            {
-                return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
-                    mode,
-                    manifest,
-                    Some(manifest_digest.to_string()),
-                    "compiler-policy-toolchain-mismatch",
-                    "compiler-policy provider manifest rustc executable digest does not match selected rustc",
-                )?));
-            }
-        }
+    if let Some(expected_rustc_digest) = &manifest.compatible_rustc.executable_blake3
+        && let Some(actual_rustc_digest) = readable_path_digest(rustc)?
+        && normalize_compiler_policy_digest(expected_rustc_digest).as_deref() != Some(actual_rustc_digest.as_str())
+    {
+        return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
+            mode,
+            manifest,
+            Some(manifest_digest.to_string()),
+            "compiler-policy-toolchain-mismatch",
+            "compiler-policy provider manifest rustc executable digest does not match selected rustc",
+        )?));
     }
     let driver_digest = match verify_compiler_policy_artifact("driver", &manifest.driver) {
         Ok(digest) => digest,
@@ -13756,7 +13745,7 @@ fn produced_host_artifact_path(
         class: "missing-produced-host-artifact".to_string(),
         message: format!("host unit {} did not emit a matching artifact", unit.unit_id),
     });
-    Ok(artifact.map_err(|blocker| blocker))
+    Ok(artifact)
 }
 
 fn produced_library_artifact_path(
@@ -13783,7 +13772,7 @@ fn produced_library_artifact_path(
             class: "missing-produced-dependency-artifact".to_string(),
             message: format!("producer unit {} did not emit a matching .rlib artifact", unit.unit_id),
         });
-    Ok(artifact.map_err(|blocker| blocker))
+    Ok(artifact)
 }
 
 fn bind_dependency_artifact(
@@ -14812,6 +14801,7 @@ fn normalize_path_string(path: &Path) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::cloned_ref_to_slice_refs)]
 mod tests {
     use std::ffi::OsStr;
     #[cfg(unix)]
@@ -15786,7 +15776,7 @@ mod tests {
         ));
         assert_eq!(
             derivation.derivation.env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).unwrap(),
-            &format!("{DETERMINISTIC_RELEASE_SOURCE_PREFIX}")
+            DETERMINISTIC_RELEASE_SOURCE_PREFIX
         );
         assert_eq!(
             derivation.derivation.env.get(SNIX_BUILD_SANDBOX_SHELL_ENV).unwrap(),

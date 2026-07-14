@@ -7,6 +7,10 @@ license.workspace = true
 [features]
 experimental-vectorcdc = ["snix-castore/experimental-vectorcdc"]
 
+[[example]]
+name = "vectorcdc_candidate_compare"
+required-features = ["experimental-vectorcdc"]
+
 [dependencies]
 async-trait = "0.1"
 blake3 = "=1.8.2"

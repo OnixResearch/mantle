@@ -473,7 +473,7 @@ fn json_output_slice(output: &str) -> &str {
         .unwrap_or(trimmed)
 }
 
-fn json_path_string<'a>(value: &'a serde_json::Value, path: &str) -> Option<String> {
+fn json_path_string(value: &serde_json::Value, path: &str) -> Option<String> {
     let mut current = value;
     for part in path.split('.') {
         current = current.get(part)?;

@@ -54,7 +54,7 @@ impl HttpFixtureServer {
         for entry in std::fs::read_dir(cache_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "narinfo") {
+            if path.extension().is_some_and(|ext| ext == "narinfo") {
                 routes.insert(format!("/{}", entry.file_name().to_string_lossy()), HttpFixtureResponse::Fixed {
                     status_line: "HTTP/1.1 200 OK".to_string(),
                     headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
@@ -860,7 +860,7 @@ fn smoke_build_then_push_narinfo_and_nar_match() {
     let narinfo_entries: Vec<_> = std::fs::read_dir(&cache)
         .unwrap()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map_or(false, |ext| ext == "narinfo"))
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "narinfo"))
         .collect();
     assert!(!narinfo_entries.is_empty(), "cache dir should contain at least one .narinfo file",);
 

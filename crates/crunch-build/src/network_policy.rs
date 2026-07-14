@@ -63,7 +63,7 @@ pub struct NetworkPolicyDenied {
     pub action_name: String,
     pub capability: Option<String>,
     pub diagnostic: String,
-    pub report: BuildNetworkPolicyReport,
+    pub report: Box<BuildNetworkPolicyReport>,
 }
 
 pub fn plan_network_policy(
@@ -240,7 +240,7 @@ fn denied_with_scope(
         action_name: action_name.clone(),
         capability: capability.clone(),
         diagnostic: diagnostic.to_string(),
-        report: BuildNetworkPolicyReport {
+        report: Box::new(BuildNetworkPolicyReport {
             action_name,
             mode: NETWORK_MODE_COMPATIBILITY_CAPABILITY.to_string(),
             result: NETWORK_RESULT_BLOCKED.to_string(),
@@ -249,7 +249,7 @@ fn denied_with_scope(
             audit_class,
             fixed_output: None,
             diagnostic: Some(diagnostic.to_string()),
-        },
+        }),
     }
 }
 

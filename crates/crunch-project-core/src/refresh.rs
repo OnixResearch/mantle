@@ -55,6 +55,8 @@ pub struct StaleReport {
     pub failed: Vec<RefreshFailure>,
 }
 
+// Preserve the allocation-free public result shape used by no-std consumers.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum RefreshOutcome {
     Updated(ResolvedInput),
@@ -65,6 +67,8 @@ pub enum RefreshOutcome {
     Failed { name: String, reason: String },
 }
 
+// Preserve the allocation-free public result shape used by no-std consumers.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResolvedInputState {
     Resolved(ResolvedInput),
@@ -95,6 +99,8 @@ pub struct PatchResolutionPlanRequest {
     pub outcomes: Vec<RefreshOutcome>,
 }
 
+// Preserve the allocation-free public result shape used by no-std consumers.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum PatchResolution {
     Resolved { name: String, patch: LockedPatch },

@@ -26,6 +26,17 @@ pub const MAX_COMMAND_EXIT_STATUS: i32 = 255;
 pub const MAX_COMMAND_TIMEOUT_MS: u32 = 3_600_000;
 pub const MAX_COMMAND_OUTPUT_BYTES: u32 = 1_048_576;
 
+const _: () = {
+    assert!(MAX_COMMAND_ARG_COUNT > 0);
+    assert!(MAX_COMMAND_OUTPUT_BYTES >= MAX_FRESHNESS_VALUE_BYTES);
+    assert!(MAX_FRESHNESS_VALUE_BYTES > 0);
+    assert!(MAX_FRESHNESS_DIAGNOSTIC_BYTES > 0);
+    assert!(MAX_FRESHNESS_REFRESH_INPUTS >= crate::MAX_INPUTS);
+    assert!(MAX_FRESHNESS_INPUT_NAME_BYTES > 0);
+    assert!(MAX_FRESHNESS_TEMPLATE_BYTES > 0);
+    assert!(MAX_FRESHNESS_RENDERED_TEMPLATE_BYTES > 0);
+};
+
 const BLAKE3_DIGEST_PREFIX: &str = "blake3:";
 const TEMPLATE_OPEN: &str = "{{";
 const TEMPLATE_CLOSE: &str = "}}";
@@ -227,8 +238,6 @@ impl fmt::Display for FreshnessError {
 }
 
 pub fn validate_freshness_probe(probe: FreshnessProbe) -> Result<FreshnessProbeValidation, FreshnessError> {
-    assert!(MAX_COMMAND_ARG_COUNT > 0, "command probes need a nonzero argument limit");
-    assert!(MAX_COMMAND_OUTPUT_BYTES >= MAX_FRESHNESS_VALUE_BYTES, "command output bound must cover value bound");
     let validation = FreshnessProbeValidation {
         version: FRESHNESS_PROBE_VERSION,
         kind: probe_kind(&probe),
@@ -254,8 +263,6 @@ pub fn validate_freshness_probe(probe: FreshnessProbe) -> Result<FreshnessProbeV
 pub fn normalize_freshness_observation(
     request: FreshnessObservationRequest,
 ) -> Result<FreshnessObservation, FreshnessError> {
-    assert!(MAX_FRESHNESS_VALUE_BYTES > 0, "freshness values must have a nonzero bound");
-    assert!(MAX_FRESHNESS_DIAGNOSTIC_BYTES > 0, "freshness diagnostics must have a nonzero bound");
     validate_version(request.version)?;
     validate_input_name(&request.input_name)?;
     let diagnostic = bounded_diagnostic(request.diagnostic);
@@ -275,11 +282,6 @@ pub fn normalize_freshness_observation(
 }
 
 pub fn plan_freshness_refresh(request: FreshnessRefreshPlanRequest) -> Result<Vec<FreshnessDecision>, FreshnessError> {
-    assert!(
-        MAX_FRESHNESS_REFRESH_INPUTS >= crate::MAX_INPUTS,
-        "freshness planning must cover manifest input limit"
-    );
-    assert!(MAX_FRESHNESS_INPUT_NAME_BYTES > 0, "input names must have a nonzero bound");
     if request.declared_inputs.len() as u64 > MAX_FRESHNESS_REFRESH_INPUTS as u64 {
         return Err(error(FreshnessErrorKind::InvalidProbe, "too many freshness inputs"));
     }
@@ -294,8 +296,6 @@ pub fn plan_freshness_refresh(request: FreshnessRefreshPlanRequest) -> Result<Ve
 }
 
 pub fn render_freshness_template(request: FreshnessTemplateRequest) -> Result<String, FreshnessError> {
-    assert!(MAX_FRESHNESS_TEMPLATE_BYTES > 0, "templates must have a nonzero bound");
-    assert!(MAX_FRESHNESS_RENDERED_TEMPLATE_BYTES > 0, "rendered templates must have a nonzero bound");
     validate_input_name(&request.input_name)?;
     if request.input_name != request.observation.input_name {
         return Err(error(FreshnessErrorKind::UnknownInput, "template input name does not match observation"));

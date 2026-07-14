@@ -33,6 +33,12 @@ pub struct CompletenessMarkerStore {
     markers: Mutex<HashSet<B3Digest>>,
 }
 
+impl Default for CompletenessMarkerStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CompletenessMarkerStore {
     pub fn new() -> Self {
         Self {
@@ -62,8 +68,7 @@ impl CompletenessMarkerStore {
 }
 
 /// Global completeness marker store shared across all StoreHandles.
-pub static GLOBAL_COMPLETENESS_MARKERS: LazyLock<CompletenessMarkerStore> =
-    LazyLock::new(|| CompletenessMarkerStore::new());
+pub static GLOBAL_COMPLETENESS_MARKERS: LazyLock<CompletenessMarkerStore> = LazyLock::new(CompletenessMarkerStore::new);
 
 /// Recursively check that a node's full castore tree is present.
 ///
@@ -279,10 +284,6 @@ mod tests {
             Self {
                 dirs: Mutex::new(HashMap::new()),
             }
-        }
-
-        fn put_sync(&self, digest: B3Digest, dir: Directory) {
-            self.dirs.lock().unwrap().insert(digest, dir);
         }
     }
 

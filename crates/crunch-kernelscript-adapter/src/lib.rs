@@ -671,7 +671,8 @@ fn hash_open_file(
     debug_assert!(total_bytes > 0);
     debug_assert!(total_bytes <= maximum_bytes);
     Ok(FileMeasurement {
-        blake3: Blake3Digest::parse(blake3_hasher.finalize().to_hex().to_string()).expect("BLAKE3 emits lowercase hex"),
+        blake3: Blake3Digest::parse(blake3::Hasher::finalize(&blake3_hasher).to_hex().to_string())
+            .expect("BLAKE3 emits lowercase hex"),
         sha256,
         size_bytes: total_bytes,
     })

@@ -846,13 +846,13 @@ fn require_observed_input_declared(
             format!("host-tool-leakage: {:?} uses undeclared path {}", input.role, input.execution_path),
         ));
     };
-    if let Some(digest) = &input.content_digest_blake3 {
-        if member.content_digest_blake3 != *digest {
-            return Err(error(
-                ToolchainClosureErrorKind::HostToolLeakage,
-                format!("host-tool-leakage: {:?} digest mismatch for {}", input.role, input.execution_path),
-            ));
-        }
+    if let Some(digest) = &input.content_digest_blake3
+        && member.content_digest_blake3 != *digest
+    {
+        return Err(error(
+            ToolchainClosureErrorKind::HostToolLeakage,
+            format!("host-tool-leakage: {:?} digest mismatch for {}", input.role, input.execution_path),
+        ));
     }
     Ok(())
 }

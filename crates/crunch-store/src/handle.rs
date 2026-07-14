@@ -63,12 +63,8 @@ use crate::attestation::persist_artifact_attestation;
 use crate::completeness::recursive_castore_completeness;
 use crate::export::export_castore_to_disk;
 use crate::gc;
-use crate::layer::StoreLayer;
 use crate::metadata_cache::AdvisoryMetadataCache;
-use crate::metadata_cache::MetadataCacheKey;
 use crate::metadata_cache::MetadataClass;
-use crate::metadata_cache::MetadataSchemaVersion;
-use crate::metadata_cache::MetadataValidity;
 use crate::metadata_cache::RefreshPolicy;
 use crate::metadata_cache::build_metadata_cache_key;
 use crate::metadata_cache::check_metadata_validity;
@@ -421,8 +417,8 @@ pub struct StoreHandle {
     blob_service: Arc<dyn BlobService>,
     directory_service: Arc<dyn DirectoryService>,
     pathinfo_service: Arc<dyn PathInfoService>,
-    /// Underlying overlay pathinfo service (unwrapped), used for writes.
-    /// Same as pathinfo_service when not in overlay mode.
+    /// Raw overlay pathinfo service used by composition boundary tests.
+    #[cfg(test)]
     overlay_pathinfo: Arc<dyn PathInfoService>,
     remote_pathinfo: Option<Arc<dyn PathInfoService>>,
     remote_cache_urls: Vec<Url>,
@@ -537,6 +533,7 @@ impl StoreHandle {
             blob_service,
             directory_service,
             pathinfo_service: pathinfo_service.clone(),
+            #[cfg(test)]
             overlay_pathinfo: pathinfo_service,
             remote_pathinfo,
             remote_cache_urls,
@@ -651,6 +648,7 @@ impl StoreHandle {
         };
 
         // PathInfo: Cache with read_only_far=true
+        #[cfg(test)]
         let overlay_pathinfo_for_writes = overlay_pathinfo.clone();
         let combined_pathinfo: Arc<dyn PathInfoService> = if base_pathinfo_services.len() == 1 {
             let base = base_pathinfo_services.into_iter().next().unwrap();
@@ -727,6 +725,7 @@ impl StoreHandle {
             blob_service: combined_blob,
             directory_service: combined_directory,
             pathinfo_service: combined_pathinfo,
+            #[cfg(test)]
             overlay_pathinfo: overlay_pathinfo_for_writes,
             remote_pathinfo,
             remote_cache_urls,
@@ -761,6 +760,7 @@ impl StoreHandle {
             blob_service: services.blob_service,
             directory_service: services.directory_service,
             pathinfo_service: services.pathinfo_service.clone(),
+            #[cfg(test)]
             overlay_pathinfo: services.pathinfo_service.clone(),
             remote_pathinfo: services.remote_pathinfo,
             remote_cache_urls: Vec::new(),
@@ -2241,7 +2241,9 @@ impl StoreHandle {
     /// - Fresh Narinfo entry → proceed, preserving metadata_reused flag.
     /// - Fresh NegativeMiss entry → skip (return None without network call).
     /// - No entry (or stale/expired) → normal live probe.
+    ///
     /// Records the result (hit or miss) in the cache after completing.
+    ///
     /// r[impl cache_substitution.remote_metadata_cache]
     async fn try_substitute_remote_fetch(
         &mut self,
@@ -3373,23 +3375,6 @@ mod tests {
             ca: None,
         };
         handle.pathinfo_service.put(path_info.clone()).await.unwrap();
-
-        // Derivation with expected output path.
-        let drv_path = test_output("complete-check.drv", 41);
-        let mut outputs = std::collections::BTreeMap::new();
-        outputs.insert("out".to_string(), nix_compat::derivation::Output {
-            path: Some(output_path.clone()),
-            ca_hash: None,
-        });
-        let derivation = Derivation {
-            arguments: vec![],
-            builder: "/bin/sh".to_string(),
-            environment: std::collections::BTreeMap::new(),
-            input_derivations: std::collections::BTreeMap::new(),
-            input_sources: std::collections::BTreeSet::new(),
-            outputs,
-            system: "x86_64-linux".to_string(),
-        };
 
         // Phase 1: directory exists but child blob is NOT in blob service.
         // The root directory WAS put, but the child blob was not.
@@ -5218,7 +5203,7 @@ mod tests {
 
     /// Create a real filesystem-based base store populated with a blob,
     /// directory, and a signed PathInfo for a symlink output.
-    async fn create_base_store(base_dir: &Path, store_dir: &str, output_path: &StorePath<String>) -> PathInfo {
+    async fn create_base_store(base_dir: &Path, _store_dir: &str, output_path: &StorePath<String>) -> PathInfo {
         use snix_castore::directoryservice::RedbDirectoryServiceConfig;
         use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
@@ -5278,7 +5263,7 @@ mod tests {
         let output_path = test_output("base-read-through", 1);
 
         // Populate base with a signed PathInfo.
-        let base_path_info = create_base_store(base_dir.path(), store_dir, &output_path).await;
+        let _base_path_info = create_base_store(base_dir.path(), store_dir, &output_path).await;
 
         // Open overlay over base.
         let mut handle = create_overlay_handle(overlay_dir.path(), base_dir.path(), store_dir).await;

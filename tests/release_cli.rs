@@ -1491,7 +1491,7 @@ fn release_create_rejects_git_source_url_without_commit() {
     let binary_path = temp.path().join("mantle-bin");
     write_file(&binary_path, b"crunch-binary");
     let proof_dir = temp.path().join("proof-input");
-    write_full_proof_bundle(&proof_dir, &blake3::hash(b"crunch-binary").to_hex().to_string(), &sample_digest(9));
+    write_full_proof_bundle(&proof_dir, blake3::hash(b"crunch-binary").to_hex().as_ref(), &sample_digest(9));
 
     crunch()
         .current_dir(temp.path())
@@ -1519,7 +1519,7 @@ fn release_create_rejects_conflicting_source_acquisition_flags() {
     let binary_path = temp.path().join("mantle-bin");
     write_file(&binary_path, b"crunch-binary");
     let proof_dir = temp.path().join("proof-input");
-    write_full_proof_bundle(&proof_dir, &blake3::hash(b"crunch-binary").to_hex().to_string(), &sample_digest(9));
+    write_full_proof_bundle(&proof_dir, blake3::hash(b"crunch-binary").to_hex().as_ref(), &sample_digest(9));
     let commit = git_stdout(temp.path(), &["rev-parse", "HEAD"]);
 
     crunch()
@@ -1718,7 +1718,7 @@ fn build_matching_agreement_report(
             witness_identity: witness_identity.to_string(),
             signer_key_name: witness_keypair.verifying_key.name().to_string(),
             witness_digest_blake3: witness.canonical_digest().unwrap(),
-            release_attestation_digest_blake3: witness.release_attestation_digest_blake3.clone(),
+            release_attestation_digest_blake3: witness.release_attestation_digest_blake3,
             signature_valid: true,
             digest_match: true,
             independence_domain: witness_identity.to_string(),

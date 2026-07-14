@@ -497,7 +497,7 @@ fn validate_plan_graph(plan: &DynamicPlanV1) -> Result<(), DynamicPlanError> {
     Ok(())
 }
 
-fn collect_source_ids<'a>(sources: &'a [DeclaredSourceInput]) -> Result<BTreeSet<&'a str>, DynamicPlanError> {
+fn collect_source_ids(sources: &[DeclaredSourceInput]) -> Result<BTreeSet<&str>, DynamicPlanError> {
     let mut source_ids = BTreeSet::new();
     for source in sources {
         if !source_ids.insert(source.id.as_str()) {
@@ -508,9 +508,7 @@ fn collect_source_ids<'a>(sources: &'a [DeclaredSourceInput]) -> Result<BTreeSet
     Ok(source_ids)
 }
 
-fn collect_unit_outputs<'a>(
-    units: &'a [DynamicUnit],
-) -> Result<BTreeMap<&'a str, BTreeSet<&'a str>>, DynamicPlanError> {
+fn collect_unit_outputs(units: &[DynamicUnit]) -> Result<BTreeMap<&str, BTreeSet<&str>>, DynamicPlanError> {
     let mut unit_outputs = BTreeMap::new();
     for unit in units {
         let output_names = unit.derivation.outputs.iter().map(String::as_str).collect::<BTreeSet<_>>();
@@ -606,7 +604,7 @@ fn validate_unit_dependency_cycles(units: &[DynamicUnit]) -> Result<(), DynamicP
     Ok(())
 }
 
-fn build_unit_dependency_sets<'a>(units: &'a [DynamicUnit]) -> BTreeMap<&'a str, BTreeSet<&'a str>> {
+fn build_unit_dependency_sets(units: &[DynamicUnit]) -> BTreeMap<&str, BTreeSet<&str>> {
     let mut dependencies_by_unit = BTreeMap::new();
     for unit in units {
         let mut dependencies = BTreeSet::new();

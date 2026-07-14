@@ -291,6 +291,7 @@ fn default_fallback_policy() -> RemoteFallbackPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Default)]
 pub struct RemoteBuildFarmConfig {
     #[serde(default)]
     pub pools: Vec<RemoteBuilderPool>,
@@ -398,17 +399,6 @@ pub(crate) fn validate_remote_workspace_policy(policy: &RemoteWorkspacePolicy) -
         return Err("workspace quotas and retention limits must be positive".to_string());
     }
     Ok(())
-}
-
-impl Default for RemoteBuildFarmConfig {
-    fn default() -> Self {
-        Self {
-            pools: Vec::new(),
-            telemetry: RemoteTelemetryExportConfig::default(),
-            trace_context: RemoteTraceContextConfig::default(),
-            failure_debug: RemoteFailureDebugPolicy::default(),
-        }
-    }
 }
 
 pub fn load_remote_build_farm_config(path: &std::path::Path) -> Result<RemoteBuildFarmConfig, String> {

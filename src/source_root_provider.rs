@@ -21,6 +21,8 @@ const FETCH_TIMEOUT_SECS: u64 = 600;
 const FETCH_MAX_BYTES: u64 = 512 * 1024 * 1024;
 const FETCH_MAX_RETRIES: u32 = 3;
 const FETCH_RETRY_BASE_DELAY_MS: u64 = 2000;
+const MIN_PARALLELISM_JOBS: u32 = 1;
+const MAX_PARALLELISM_JOBS: u32 = 32;
 const BUILD_PHASE_COUNT: u32 = 5;
 const MAKEINFO_ENV: &str = "MAKEINFO";
 const MAKEINFO_DISABLED: &str = "true";
@@ -441,7 +443,10 @@ fn reject_declared_patches(manifest: &SourceRootManifest) -> Result<(), Material
 }
 
 fn available_parallelism() -> u32 {
-    std::thread::available_parallelism().map(|n| n.get() as u32).unwrap_or(1).min(32).max(1)
+    std::thread::available_parallelism()
+        .map(|count| count.get() as u32)
+        .unwrap_or(MIN_PARALLELISM_JOBS)
+        .clamp(MIN_PARALLELISM_JOBS, MAX_PARALLELISM_JOBS)
 }
 
 pub(crate) fn host_compiler_available_for_source_root() -> bool {
@@ -467,16 +472,16 @@ fn find_host_cc() -> Result<HostCompiler, MaterializationError> {
     }
 
     // Scan nix store directly as fallback.
-    if candidates.is_empty() {
-        if let Ok(entries) = fs::read_dir("/nix/store") {
-            for entry in entries.flatten() {
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if name_str.contains("gcc-wrapper") && !name_str.contains("-man") {
-                    let p = entry.path().join("bin/gcc");
-                    if p.is_file() {
-                        candidates.push(p);
-                    }
+    if candidates.is_empty()
+        && let Ok(entries) = fs::read_dir("/nix/store")
+    {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if name_str.contains("gcc-wrapper") && !name_str.contains("-man") {
+                let p = entry.path().join("bin/gcc");
+                if p.is_file() {
+                    candidates.push(p);
                 }
             }
         }
@@ -577,12 +582,12 @@ fn build_clean_provider_path(cc_dir: Option<&Path>) -> String {
         }
     }
     // Include make if on PATH but not already included.
-    if let Some(make_path) = which_cmd("make") {
-        if let Some(make_dir) = make_path.parent() {
-            let s = make_dir.display().to_string();
-            if !dirs.iter().any(|existing| existing == &s) {
-                dirs.push(s);
-            }
+    if let Some(make_path) = which_cmd("make")
+        && let Some(make_dir) = make_path.parent()
+    {
+        let s = make_dir.display().to_string();
+        if !dirs.iter().any(|existing| existing == &s) {
+            dirs.push(s);
         }
     }
     dirs.join(":")
@@ -950,10 +955,11 @@ fn find_file_recursive(dir: &Path, name: &str) -> Option<PathBuf> {
             if path.is_file() && entry.file_name().to_string_lossy() == name {
                 return Some(path);
             }
-            if path.is_dir() && !path.is_symlink() {
-                if let Some(found) = walk(&path, name, depth + 1) {
-                    return Some(found);
-                }
+            if path.is_dir()
+                && !path.is_symlink()
+                && let Some(found) = walk(&path, name, depth + 1)
+            {
+                return Some(found);
             }
         }
         None
@@ -1050,12 +1056,11 @@ fn collect_elf_deps(
             if let Ok(out) = Command::new("readelf").args(["-d", &path.display().to_string()]).output() {
                 let stdout = String::from_utf8_lossy(&out.stdout);
                 for line in stdout.lines() {
-                    if line.contains("(NEEDED)") {
-                        if let Some(start) = line.find('[') {
-                            if let Some(end) = line.rfind(']') {
-                                needed_libs.insert(line[start + 1..end].to_string());
-                            }
-                        }
+                    if line.contains("(NEEDED)")
+                        && let Some(start) = line.find('[')
+                        && let Some(end) = line.rfind(']')
+                    {
+                        needed_libs.insert(line[start + 1..end].to_string());
                     }
                 }
             }
@@ -1184,13 +1189,13 @@ fn is_retained_unprefixed_tool(name: &str) -> bool {
 }
 
 fn copy_file_or_link(src: &Path, dst: &Path) -> Result<(), MaterializationError> {
-    if let Ok(target) = fs::read_link(src) {
-        if target.is_relative() {
-            std::os::unix::fs::symlink(&target, dst).map_err(|e| {
-                MaterializationError::Normalize(format!("symlink {} -> {}: {e}", dst.display(), target.display()))
-            })?;
-            return Ok(());
-        }
+    if let Ok(target) = fs::read_link(src)
+        && target.is_relative()
+    {
+        std::os::unix::fs::symlink(&target, dst).map_err(|e| {
+            MaterializationError::Normalize(format!("symlink {} -> {}: {e}", dst.display(), target.display()))
+        })?;
+        return Ok(());
     }
     fs::copy(src, dst)
         .map_err(|e| MaterializationError::Normalize(format!("copy {} -> {}: {e}", src.display(), dst.display())))?;
@@ -1550,8 +1555,8 @@ mod tests {
     #[test]
     fn available_parallelism_returns_bounded_value() {
         let jobs = available_parallelism();
-        assert!(jobs >= 1);
-        assert!(jobs <= 32);
+        assert!(jobs >= MIN_PARALLELISM_JOBS);
+        assert!(jobs <= MAX_PARALLELISM_JOBS);
     }
 
     #[test]
@@ -1560,7 +1565,7 @@ mod tests {
             ["tar.gz", "tar.xz", "tar.bz2", "tar", "tgz", "txz", "tbz2"]
                 .iter()
                 .filter(|k| matches!(
-                    k.as_ref(),
+                    **k,
                     "tar.gz"
                         | "tar.gzip"
                         | "tgz"

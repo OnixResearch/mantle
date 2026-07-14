@@ -13,12 +13,6 @@ use crunch_release_core::ExternalEvidence;
 #[cfg(test)]
 pub(crate) use crunch_release_core::FULL_SELF_HOSTING_PROOF_SCHEMA;
 use crunch_release_core::KANI_EVIDENCE_CLAIM_SCOPE;
-use crunch_release_core::KANI_NON_CLAIM_RELEASE_ELIGIBILITY;
-use crunch_release_core::KANI_NON_CLAIM_SEMANTICS;
-use crunch_release_core::KANI_NON_CLAIM_VERIFIER_SOUNDNESS;
-use crunch_release_core::KANI_NON_CLAIM_WHOLE_PROGRAM;
-use crunch_release_core::KANI_RECEIPT_EVIDENCE_ROLE;
-use crunch_release_core::KANI_SOLVER_KIND_CBMC_DEFAULT;
 use crunch_release_core::KANI_TOOLCHAIN_EVIDENCE_SCHEMA;
 use crunch_release_core::KANI_VALENCE_SEMANTIC_ROLE;
 use crunch_release_core::KaniSolverIdentity;
@@ -1001,13 +995,13 @@ fn validate_create_request(request: &ReleaseBundleCreateRequest) -> Result<(), R
             return Err(RunError::Internal(format!("release evidence binary is missing: {}", binary_path.display())));
         }
     }
-    if let Some(report_path) = &request.reproducibility_report_path {
-        if !report_path.is_file() {
-            return Err(RunError::Internal(format!(
-                "release evidence reproducibility report is missing: {}",
-                report_path.display()
-            )));
-        }
+    if let Some(report_path) = &request.reproducibility_report_path
+        && !report_path.is_file()
+    {
+        return Err(RunError::Internal(format!(
+            "release evidence reproducibility report is missing: {}",
+            report_path.display()
+        )));
     }
     for evidence in &request.external_evidence {
         validate_external_evidence_request(evidence)?;
@@ -1018,13 +1012,13 @@ fn validate_create_request(request: &ReleaseBundleCreateRequest) -> Result<(), R
     if let Some(stack_provenance) = &request.stack_provenance {
         validate_stack_provenance_create_request(stack_provenance)?;
     }
-    if let Some(descriptor) = &request.cairn_handoff_descriptor_path {
-        if !descriptor.is_file() {
-            return Err(RunError::Internal(format!(
-                "release evidence Cairn handoff descriptor is missing: {}",
-                descriptor.display()
-            )));
-        }
+    if let Some(descriptor) = &request.cairn_handoff_descriptor_path
+        && !descriptor.is_file()
+    {
+        return Err(RunError::Internal(format!(
+            "release evidence Cairn handoff descriptor is missing: {}",
+            descriptor.display()
+        )));
     }
     Ok(())
 }
@@ -1042,13 +1036,13 @@ fn validate_stack_provenance_create_request(request: &StackProvenanceCreateReque
             request.valence_receipt_path.display()
         )));
     }
-    if let Some(binary_path) = &request.binary_path {
-        if !binary_path.is_file() {
-            return Err(RunError::Internal(format!(
-                "release evidence stack provenance binary is missing: {}",
-                binary_path.display()
-            )));
-        }
+    if let Some(binary_path) = &request.binary_path
+        && !binary_path.is_file()
+    {
+        return Err(RunError::Internal(format!(
+            "release evidence stack provenance binary is missing: {}",
+            binary_path.display()
+        )));
     }
     Ok(())
 }
@@ -1113,10 +1107,10 @@ fn validate_source_acquisition_request(request: &ReleaseBundleCreateRequest) -> 
             "release evidence Git source metadata conflicts with external source acquisition URL".to_string(),
         ));
     }
-    if let Some(url) = &request.source_acquisition_url {
-        if url.trim().is_empty() {
-            return Err(RunError::Internal("release evidence source acquisition URL must not be empty".to_string()));
-        }
+    if let Some(url) = &request.source_acquisition_url
+        && url.trim().is_empty()
+    {
+        return Err(RunError::Internal("release evidence source acquisition URL must not be empty".to_string()));
     }
     if let Some(git_source) = &request.git_source {
         validate_git_source_create_request(git_source)?;
@@ -1664,6 +1658,12 @@ fn path_to_forward_slash_string(path: &Path) -> Result<String, RunError> {
 
 #[cfg(test)]
 mod tests {
+    use crunch_release_core::KANI_NON_CLAIM_RELEASE_ELIGIBILITY;
+    use crunch_release_core::KANI_NON_CLAIM_SEMANTICS;
+    use crunch_release_core::KANI_NON_CLAIM_VERIFIER_SOUNDNESS;
+    use crunch_release_core::KANI_NON_CLAIM_WHOLE_PROGRAM;
+    use crunch_release_core::KANI_RECEIPT_EVIDENCE_ROLE;
+    use crunch_release_core::KANI_SOLVER_KIND_CBMC_DEFAULT;
     use serde_json::json;
 
     use super::*;
@@ -1989,10 +1989,10 @@ mod tests {
             phase: PublicationShellPhase,
             context: &PublicationShellContext<'_>,
         ) -> Result<(), RunError> {
-            if phase == PublicationShellPhase::StageCreated {
-                if let Some(source) = &self.mutate_source_after_plan {
-                    std::fs::write(source, b"source-changed-after-plan").unwrap();
-                }
+            if phase == PublicationShellPhase::StageCreated
+                && let Some(source) = &self.mutate_source_after_plan
+            {
+                std::fs::write(source, b"source-changed-after-plan").unwrap();
             }
             if phase == PublicationShellPhase::ManifestWritten && self.corrupt_before_verification {
                 std::fs::write(context.stage_path.join(TEST_BUNDLED_BINARY_RELATIVE_PATH), b"tampered-stage").unwrap();

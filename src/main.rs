@@ -2,6 +2,7 @@
 // machine-artifact-public: eval.raw-json-output
 #![register_tool(tigerstyle)]
 mod artifact_cmd;
+#[allow(clippy::large_enum_variant, clippy::result_large_err)]
 mod ast_grep_evidence;
 mod attest_cmd;
 mod bootstrap;
@@ -14,7 +15,9 @@ mod build_correctness;
 mod build_failure;
 mod build_log;
 mod build_plan;
+#[allow(clippy::large_enum_variant)]
 mod build_report;
+#[allow(dead_code)]
 mod cache_substitution;
 mod cairn_release_handoff;
 mod cargo_free_self_build;
@@ -23,6 +26,7 @@ mod errors;
 mod filegen_cmd;
 mod fix;
 mod foreign_derivation_import;
+#[allow(clippy::result_large_err, clippy::too_many_arguments)]
 mod foreign_import_cmd;
 mod frontend_artifact_export;
 mod frontend_artifact_spec;
@@ -35,8 +39,11 @@ mod log_cmd;
 mod machine_contract_producer_tests;
 mod native_toolchain_closure;
 mod nickel_export;
+#[allow(dead_code, clippy::type_complexity)]
 mod nix_evidence_core;
+#[allow(dead_code)]
 mod nix_free_demo_bundle;
+#[allow(clippy::large_enum_variant)]
 mod nix_free_demo_cmd;
 mod oci_projection;
 mod oci_projection_shell;
@@ -44,7 +51,9 @@ mod oci_projection_shell;
 mod offline_cargo;
 mod operator_diagnostics;
 mod pin_import;
+#[allow(dead_code)]
 mod portable_receipt;
+#[allow(dead_code, clippy::type_complexity)]
 mod preserves_release_carrier;
 mod project_build;
 mod project_cmd;
@@ -53,29 +62,37 @@ mod project_resolve;
 mod protected_exec;
 #[allow(dead_code)]
 mod protected_exec_seccomp;
+#[allow(dead_code)]
 mod realization_routing;
 mod rebuild_authority;
 mod release_attestation;
+#[allow(dead_code)]
 mod release_capability;
 mod release_cmd;
+#[allow(dead_code)]
 mod release_evidence;
 mod release_nix_witness;
 mod release_publication;
+#[allow(dead_code)]
 mod release_reproducibility;
 mod release_source;
 mod release_tree_copy;
-mod remote_attempt_log_store;
 #[allow(dead_code)]
+mod remote_attempt_log_store;
+#[allow(dead_code, clippy::large_enum_variant)]
 mod remote_build;
 mod remote_failure_debug;
 mod remote_farm_config;
 mod remote_telemetry_export;
 mod remote_trace_context;
+#[allow(dead_code, clippy::large_enum_variant)]
 mod remote_transfer;
 mod rust_bootstrap_patch_plan;
+#[allow(dead_code, clippy::result_large_err, clippy::too_many_arguments)]
 mod rust_plan;
-#[allow(dead_code)]
+#[allow(dead_code, clippy::large_enum_variant, clippy::result_large_err)]
 mod rust_source_provider;
+#[allow(dead_code, clippy::type_complexity)]
 mod rustc_dev_guide;
 mod self_build;
 #[allow(dead_code)]
@@ -88,6 +105,7 @@ mod source_toolchain_closure;
 mod store_cmd;
 mod structured_refactor;
 mod transcript_cmd;
+#[allow(dead_code, clippy::type_complexity)]
 mod vendor_source_manifest;
 mod verification_gauntlet_cmd;
 mod wasm_component_cmd;
@@ -186,6 +204,7 @@ struct Args {
     command: Command,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Debug)]
 enum Command {
     /// Evaluate and build derivation(s).
@@ -1136,6 +1155,7 @@ enum BootstrapAction {
     },
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Debug, Clone)]
 pub enum ReleaseAction {
     /// Create a release evidence bundle from local artifacts
@@ -2874,7 +2894,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
                 &builder_args,
                 &trusted_builder_keys,
                 remote_build_time_secs,
-                &ctx,
+                ctx,
             ),
             other => remote_build::cmd_remote(other, &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json),
         },
@@ -3417,6 +3437,7 @@ fn select_hermeticity_mode(strict_hermetic: bool, impure: bool) -> Result<crunch
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_build_command(
     ctx: &RunContext,
     file: Option<&PathBuf>,
@@ -4178,6 +4199,7 @@ struct RemoteWorkerFailureDebugReport {
     cleanup_status_code: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct RemoteFailureObservabilityOutcome {
     immutable_log: Result<remote_build::RemoteAttemptLogControlSummary, String>,
@@ -6435,9 +6457,9 @@ mod tests {
     const TEST_REMOTE_STATUS_CONCURRENCY: u32 = 2;
     const TEST_REMOTE_STATUS_CONCURRENCY_TEXT: &str = "2";
     const CLI_PARSE_TEST_STACK_BYTES: usize = 8_388_608;
+    const _: () = assert!(CLI_PARSE_TEST_STACK_BYTES > 0);
 
     fn parse_args_with_cli_test_stack(args: Vec<&'static str>) -> Result<Args, String> {
-        debug_assert!(CLI_PARSE_TEST_STACK_BYTES > 0);
         debug_assert!(!args.is_empty());
         std::thread::Builder::new()
             .stack_size(CLI_PARSE_TEST_STACK_BYTES)

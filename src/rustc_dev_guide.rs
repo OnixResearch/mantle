@@ -135,7 +135,7 @@ fn validate_references(references: &[RustcGuideReference], diagnostics: &mut Vec
 
 fn validate_pinned_revision(revision: &str, diagnostics: &mut Vec<String>) {
     push_nonempty(revision, "reference.pinned_revision", diagnostics);
-    if MOVING_REVISIONS.iter().any(|moving| revision == *moving) {
+    if MOVING_REVISIONS.contains(&revision) {
         diagnostics.push(format!("reference.pinned_revision uses moving revision: {revision}"));
     }
 }

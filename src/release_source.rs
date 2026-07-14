@@ -142,10 +142,10 @@ fn verify_git_ref_commit(
 
 fn git_ref_resolution_candidates(git_ref: &str, policy_label: &str) -> Vec<String> {
     let mut candidates = vec![git_ref.to_string()];
-    if policy_label == "ref" {
-        if let Some(branch_name) = git_ref.strip_prefix(GIT_HEAD_REF_PREFIX) {
-            candidates.push(format!("{GIT_REMOTE_ORIGIN_REF_PREFIX}{branch_name}"));
-        }
+    if policy_label == "ref"
+        && let Some(branch_name) = git_ref.strip_prefix(GIT_HEAD_REF_PREFIX)
+    {
+        candidates.push(format!("{GIT_REMOTE_ORIGIN_REF_PREFIX}{branch_name}"));
     }
     candidates
 }

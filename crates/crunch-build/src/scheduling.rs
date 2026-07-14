@@ -1908,17 +1908,21 @@ mod tests {
 
     #[test]
     fn invalid_policy_rejects_duplicate_fields_and_bad_thresholds() {
-        let mut duplicate = SchedulingPolicy::default();
-        duplicate.preference_order = vec![
-            PreferenceField::KnownGraph,
-            PreferenceField::KnownGraph,
-            PreferenceField::ResourceFit,
-        ];
+        let duplicate = SchedulingPolicy {
+            preference_order: vec![
+                PreferenceField::KnownGraph,
+                PreferenceField::KnownGraph,
+                PreferenceField::ResourceFit,
+            ],
+            ..SchedulingPolicy::default()
+        };
         let mut thresholds = SchedulingPolicy::default();
         thresholds.protected_after_epochs = thresholds.aged_after_epochs;
         let raw_private_policy_id = "/private/token=policy-secret";
-        let mut private_policy = SchedulingPolicy::default();
-        private_policy.policy_id = raw_private_policy_id.to_string();
+        let private_policy = SchedulingPolicy {
+            policy_id: raw_private_policy_id.to_string(),
+            ..SchedulingPolicy::default()
+        };
         let private_policy_diagnostic = private_policy.validate().unwrap_err().to_string();
         let mut unknown_field = serde_json::to_value(SchedulingPolicy::default()).unwrap();
         unknown_field
@@ -2432,12 +2436,14 @@ mod tests {
 
     #[test]
     fn configured_preference_order_changes_named_field_precedence() {
-        let mut policy = SchedulingPolicy::default();
-        policy.preference_order = vec![
-            PreferenceField::ResourceFit,
-            PreferenceField::KnownGraph,
-            PreferenceField::LocalityTransfer,
-        ];
+        let policy = SchedulingPolicy {
+            preference_order: vec![
+                PreferenceField::ResourceFit,
+                PreferenceField::KnownGraph,
+                PreferenceField::LocalityTransfer,
+            ],
+            ..SchedulingPolicy::default()
+        };
         let pressures = BTreeMap::from([
             ("resource".to_string(), pressure(TEST_ROOT_PRESSURE_LOW, TEST_ROOT_PRESSURE_LOW)),
             ("path".to_string(), pressure(TEST_LONG_PATH_NODES, TEST_ROOT_PRESSURE_HIGH)),
@@ -2694,7 +2700,7 @@ mod tests {
     #[test]
     fn priority_fixture_improves_first_dispatch_pressure_relative_to_fifo() {
         let policy = SchedulingPolicy::default();
-        let fifo = vec!["short".to_string(), "shared".to_string()];
+        let fifo = ["short".to_string(), "shared".to_string()];
         let pressures = BTreeMap::from([
             ("short".to_string(), pressure(TEST_ROOT_PRESSURE_LOW, TEST_ROOT_PRESSURE_LOW)),
             ("shared".to_string(), pressure(TEST_LONG_PATH_NODES, TEST_ROOT_PRESSURE_HIGH)),

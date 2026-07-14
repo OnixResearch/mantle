@@ -138,10 +138,10 @@ pub fn export_frontend_artifact(request: &FrontendArtifactExportRequest<'_>) -> 
     let mut diagnostics = validate_frontend_artifact_export_preflight(&request.preflight);
     validate_content(request, &mut diagnostics);
 
-    if diagnostics.is_empty() {
-        if let (Some(attestation), Some(content)) = (request.preflight.attestation, request.content) {
-            return report(Some(receipt_from_validated(request, attestation, content)), diagnostics);
-        }
+    if diagnostics.is_empty()
+        && let (Some(attestation), Some(content)) = (request.preflight.attestation, request.content)
+    {
+        return report(Some(receipt_from_validated(request, attestation, content)), diagnostics);
     }
 
     report(None, diagnostics)
@@ -166,7 +166,7 @@ fn validate_request_shape(
             "frontend artifact export requires a mantle:// artifact ref",
         ));
     }
-    if !request.supported_destination_modes.iter().any(|mode| *mode == request.destination_mode) {
+    if !request.supported_destination_modes.contains(&request.destination_mode) {
         diagnostics.push(diagnostic(
             FRONTEND_ARTIFACT_EXPORT_DIAG_UNSUPPORTED_DESTINATION_MODE,
             "destination_mode",

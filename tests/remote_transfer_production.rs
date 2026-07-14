@@ -315,8 +315,7 @@ fn failed_remote_sandbox_captures_allowlisted_artifact_before_cleanup_without_ch
     assert_eq!(captured_bytes, CAPTURED_TRACE.as_bytes());
     let all_bundle_bytes = snapshot_file_tree(captured_bundle)
         .keys()
-        .map(|relative| fs::read(captured_bundle.join(relative)).unwrap())
-        .flatten()
+        .flat_map(|relative| fs::read(captured_bundle.join(relative)).unwrap())
         .collect::<Vec<_>>();
     assert!(!String::from_utf8_lossy(&all_bundle_bytes).contains(DISALLOWED_TRACE));
     let inspect = Command::new(env!("CARGO_BIN_EXE_mantle"))
@@ -668,7 +667,7 @@ fn transfer_checkpoints(state_dir: &Path) -> Vec<CheckpointSummary> {
             continue;
         };
         for entry in entries.filter_map(Result::ok) {
-            if !entry.path().extension().is_some_and(|extension| extension == "json") {
+            if entry.path().extension().is_none_or(|extension| extension != "json") {
                 continue;
             }
             checkpoints.push(read_checkpoint_summary(&entry.path()));

@@ -19,7 +19,7 @@ const NON_CLAIM: &str = "this rail proves fixture composition only; not producti
 fn write_evidence_json(
     dir: &Path,
     composition_phases: &[&str],
-    upload_summary: Option<u64>,
+    _upload_summary: Option<u64>,
     trust_basis: &str,
     log_status_bounds: &str,
     redaction_applied: bool,
@@ -75,7 +75,7 @@ fn write_negative_evidence_json(
 fn remote_rail_evidence_has_mandated_fields() {
     let dir = TempDir::new().unwrap();
     let evidence = write_evidence_json(
-        &dir.path(),
+        dir.path(),
         &["route", "handshake", "input-sync", "execution", "transfer-admission", "observability"],
         Some(1024),
         "signing-key:builder-key",
@@ -96,19 +96,19 @@ fn remote_rail_negative_cases_have_phase_and_reason_code() {
     let dir = TempDir::new().unwrap();
 
     // Negative case: no output trust
-    let evidence = write_negative_evidence_json(&dir.path(), "transfer-admission", "no-output-trust");
+    let evidence = write_negative_evidence_json(dir.path(), "transfer-admission", "no-output-trust");
     let parsed: Value = serde_json::from_slice(&evidence).unwrap();
     assert_eq!(parsed["composition"][0]["phase"], "transfer-admission");
     assert_eq!(parsed["composition"][0]["reason_code"], "no-output-trust");
 
     // Negative case: unframed stdout
-    let evidence2 = write_negative_evidence_json(&dir.path(), "handshake", "unframed-stdout");
+    let evidence2 = write_negative_evidence_json(dir.path(), "handshake", "unframed-stdout");
     let parsed2: Value = serde_json::from_slice(&evidence2).unwrap();
     assert_eq!(parsed2["composition"][0]["phase"], "handshake");
     assert_eq!(parsed2["composition"][0]["reason_code"], "unframed-stdout");
 
     // Negative case: quota overflow
-    let evidence3 = write_negative_evidence_json(&dir.path(), "input-sync", "upload-quota-overflow");
+    let evidence3 = write_negative_evidence_json(dir.path(), "input-sync", "upload-quota-overflow");
     let parsed3: Value = serde_json::from_slice(&evidence3).unwrap();
     assert_eq!(parsed3["composition"][0]["reason_code"], "upload-quota-overflow");
 }
@@ -118,7 +118,7 @@ fn remote_rail_negative_cases_have_phase_and_reason_code() {
 fn remote_rail_redaction_omits_secrets() {
     let dir = TempDir::new().unwrap();
     let evidence = write_evidence_json(
-        &dir.path(),
+        dir.path(),
         &["route", "handshake"],
         Some(0),
         "signing-key:builder-key",
@@ -135,7 +135,7 @@ fn remote_rail_redaction_omits_secrets() {
 fn remote_rail_repeated_runs_are_deterministic() {
     let dir = TempDir::new().unwrap();
     let evidence1 = write_evidence_json(
-        &dir.path(),
+        dir.path(),
         &["route", "handshake", "input-sync", "execution", "transfer-admission", "observability"],
         Some(1024),
         "signing-key:builder-key",
@@ -143,7 +143,7 @@ fn remote_rail_repeated_runs_are_deterministic() {
         true,
     );
     let evidence2 = write_evidence_json(
-        &dir.path(),
+        dir.path(),
         &["route", "handshake", "input-sync", "execution", "transfer-admission", "observability"],
         Some(1024),
         "signing-key:builder-key",
@@ -158,7 +158,7 @@ fn remote_rail_repeated_runs_are_deterministic() {
 fn remote_rail_evidence_omits_unbounded_logs() {
     let dir = TempDir::new().unwrap();
     let evidence = write_evidence_json(
-        &dir.path(),
+        dir.path(),
         &["route", "handshake"],
         None,
         "signing-key:builder-key",

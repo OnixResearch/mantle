@@ -238,13 +238,13 @@ fn finalize_and_register(
 
     let aterm_bytes = nix_drv.to_aterm_bytes();
     let aterm_hash = *blake3::hash(&aterm_bytes).as_bytes();
-    if let Some(existing) = known_paths.get_by_aterm_hash(&aterm_hash) {
-        if existing.dynamic_plan_outputs != drv.dynamic_plan_outputs {
-            return Err(Error::InvalidDynamicPlanOutputs(format!(
-                "conflicting dynamic_plan_outputs for derivation '{}'",
-                drv.name
-            )));
-        }
+    if let Some(existing) = known_paths.get_by_aterm_hash(&aterm_hash)
+        && existing.dynamic_plan_outputs != drv.dynamic_plan_outputs
+    {
+        return Err(Error::InvalidDynamicPlanOutputs(format!(
+            "conflicting dynamic_plan_outputs for derivation '{}'",
+            drv.name
+        )));
     }
 
     known_paths.insert_ca(crate::conversion_cache::InsertCaEntry {

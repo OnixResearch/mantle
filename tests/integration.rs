@@ -72,7 +72,7 @@ impl HttpFixtureServer {
         for entry in std::fs::read_dir(cache_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "narinfo") {
+            if path.extension().is_some_and(|ext| ext == "narinfo") {
                 routes.insert(format!("/{}", entry.file_name().to_string_lossy()), HttpFixtureResponse::Fixed {
                     status_line: "HTTP/1.1 200 OK".to_string(),
                     headers: vec![("Content-Type".to_string(), "text/plain".to_string())],

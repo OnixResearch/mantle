@@ -7,12 +7,15 @@
 //! r[project_workflows.freshness_probe_proof_rail]
 
 use std::fs;
-use std::io::{Read, Write};
+use std::io::Read;
+use std::io::Write;
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
 
@@ -26,7 +29,6 @@ use crunch_project::generate_inputs_ncl;
 use nix_compat::nixhash::NixHash;
 use sha2::Digest;
 use tempfile::TempDir;
-use tempfile::tempdir;
 
 const COMMAND_TIMEOUT_MS: u32 = 100;
 const COMMAND_OUTPUT_LIMIT_BYTES: u32 = 8;
@@ -128,27 +130,6 @@ fn spawn_http_probe_server(body: &'static str) -> HttpProbeServer {
     }
 }
 
-fn run_git(dir: &Path, args: &[&str]) -> String {
-    let output = std::process::Command::new("git").args(args).current_dir(dir).output().unwrap();
-    assert!(output.status.success(), "git {:?} failed: {}", args, String::from_utf8_lossy(&output.stderr));
-    String::from_utf8_lossy(&output.stdout).trim().to_string()
-}
-
-fn create_git_repo(_parent: &Path) -> (TempDir, String) {
-    let tmp = tempdir().unwrap();
-    let repo = tmp.path().join("repo");
-    fs::create_dir_all(&repo).unwrap();
-    run_git(&repo, &["init"]);
-    run_git(&repo, &["branch", "-M", "main"]);
-    run_git(&repo, &["config", "user.email", "test@example.com"]);
-    run_git(&repo, &["config", "user.name", "Test User"]);
-    fs::write(repo.join("hello.txt"), "hello from git\n").unwrap();
-    run_git(&repo, &["add", "."]);
-    run_git(&repo, &["commit", "-m", "initial"]);
-    let rev = run_git(&repo, &["rev-parse", "HEAD"]);
-    (tmp, rev)
-}
-
 fn write_evidence_json(
     dir: &Path,
     schema: &str,
@@ -159,7 +140,6 @@ fn write_evidence_json(
     check_no_network: bool,
     has_evidence_redaction: bool,
 ) -> Vec<u8> {
-    use std::collections::BTreeMap;
     let mut inputs = serde_json::Map::new();
     for (name, status, kind) in per_input_status {
         let mut input = serde_json::Map::new();
@@ -250,8 +230,13 @@ fn freshness_offline_rail_composes_full_workflow() {
     );
     let mut lock = Lockfile::new();
     lock.inputs.insert("local-pkg".into(), LockEntry {
-        kind: LockedKind::File { url: source_url.clone() },
-        hash: LockedHash { algo: HashAlgo::Sha256, value: flat_sha256_sri(b"old\n") },
+        kind: LockedKind::File {
+            url: source_url.clone(),
+        },
+        hash: LockedHash {
+            algo: HashAlgo::Sha256,
+            value: flat_sha256_sri(b"old\n"),
+        },
         patches: vec![],
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
@@ -259,8 +244,13 @@ fn freshness_offline_rail_composes_full_workflow() {
         trust: None,
     });
     lock.inputs.insert("git-pkg".into(), LockEntry {
-        kind: LockedKind::File { url: source_url.clone() },
-        hash: LockedHash { algo: HashAlgo::Sha256, value: flat_sha256_sri(b"old\n") },
+        kind: LockedKind::File {
+            url: source_url.clone(),
+        },
+        hash: LockedHash {
+            algo: HashAlgo::Sha256,
+            value: flat_sha256_sri(b"old\n"),
+        },
         patches: vec![],
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
@@ -268,8 +258,13 @@ fn freshness_offline_rail_composes_full_workflow() {
         trust: None,
     });
     lock.inputs.insert("cmd-pkg".into(), LockEntry {
-        kind: LockedKind::File { url: source_url.clone() },
-        hash: LockedHash { algo: HashAlgo::Sha256, value: flat_sha256_sri(b"old\n") },
+        kind: LockedKind::File {
+            url: source_url.clone(),
+        },
+        hash: LockedHash {
+            algo: HashAlgo::Sha256,
+            value: flat_sha256_sri(b"old\n"),
+        },
         patches: vec![],
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
@@ -301,7 +296,11 @@ fn freshness_offline_rail_composes_full_workflow() {
     // Step 2: refresh local-pkg only
     let _refresh_assert = crunch().arg("refresh").arg("local-pkg").current_dir(dir.path()).assert().success();
     let refreshed = read_lock(dir.path());
-    assert_eq!(refreshed.inputs["local-pkg"].hash.value, flat_sha256_sri(b"current\n"), "local-pkg hash must match current source");
+    assert_eq!(
+        refreshed.inputs["local-pkg"].hash.value,
+        flat_sha256_sri(b"current\n"),
+        "local-pkg hash must match current source"
+    );
     // git-pkg and cmd-pkg should remain unchanged
     assert_eq!(refreshed.inputs["git-pkg"].hash.value, flat_sha256_sri(b"old\n"), "git-pkg must remain unchanged");
     assert_eq!(refreshed.inputs["cmd-pkg"].hash.value, flat_sha256_sri(b"old\n"), "cmd-pkg must remain unchanged");
@@ -309,7 +308,7 @@ fn freshness_offline_rail_composes_full_workflow() {
     // Step 3: check — no-network, should pass after refresh
     // After successful refresh, check should pass with local-freshness only inputs up to date
     let check_assert = crunch().arg("check").current_dir(dir.path()).assert();
-    let check_stdout = String::from_utf8_lossy(&check_assert.get_output().stdout);
+    let _check_stdout = String::from_utf8_lossy(&check_assert.get_output().stdout);
     // check may report soundness issues for network-required probes
     let check_ok = check_assert.get_output().status.success();
     if !check_ok {
@@ -326,11 +325,15 @@ fn freshness_offline_rail_composes_full_workflow() {
             ("git-pkg", "network-required", "git-ref"),
             ("cmd-pkg", "unchanged", "command"),
         ],
-        &[("local-file".into(), "blake3...".into()), ("git-ref".into(), "blake3...".into()), ("command".into(), "blake3...".into())],
-        true,  // list-stale no-mutate
-        true,  // refresh selected-stale only
-        true,  // check no-network
-        true,  // evidence redaction applied
+        &[
+            ("local-file".into(), "blake3...".into()),
+            ("git-ref".into(), "blake3...".into()),
+            ("command".into(), "blake3...".into()),
+        ],
+        true, // list-stale no-mutate
+        true, // refresh selected-stale only
+        true, // check no-network
+        true, // evidence redaction applied
     );
 
     // Assert evidence shape
@@ -383,7 +386,10 @@ fn freshness_offline_rail_network_probe_reported_as_network_required() {
         FRESHNESS_PROOF_SCHEMA,
         &[("pkg", "network-required", "http-text")],
         &[("http-text".into(), "blake3...".into())],
-        true, false, false, true,
+        true,
+        false,
+        false,
+        true,
     );
     let parsed: serde_json::Value = serde_json::from_slice(&evidence).unwrap();
     assert_eq!(parsed["per_input_classification"]["pkg"]["status"], "network-required");
@@ -447,7 +453,10 @@ fn freshness_offline_rail_evidence_has_required_fields() {
         FRESHNESS_PROOF_SCHEMA,
         &[("pkg", "stale", "local-file")],
         &[("local-file".into(), "blake3:abc".into())],
-        true, true, true, true,
+        true,
+        true,
+        true,
+        true,
     );
     let parsed: serde_json::Value = serde_json::from_slice(&evidence).unwrap();
     assert_eq!(parsed["schema"], FRESHNESS_PROOF_SCHEMA);
@@ -468,14 +477,20 @@ fn freshness_offline_rail_repeated_runs_are_deterministic() {
         FRESHNESS_PROOF_SCHEMA,
         &[("pkg", "stale", "local-file")],
         &[("local-file".into(), "blake3:abc".into())],
-        true, true, true, true,
+        true,
+        true,
+        true,
+        true,
     );
     let evidence2 = write_evidence_json(
         dir.path(),
         FRESHNESS_PROOF_SCHEMA,
         &[("pkg", "stale", "local-file")],
         &[("local-file".into(), "blake3:abc".into())],
-        true, true, true, true,
+        true,
+        true,
+        true,
+        true,
     );
     assert_eq!(evidence1, evidence2, "repeated evidence must be byte-stable");
 }

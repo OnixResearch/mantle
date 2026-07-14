@@ -574,10 +574,10 @@ async fn cmd_store_pull(
         return Err(RunError::Internal(detail.to_string()));
     }
 
-    if let crunch_store::PullSource::Directory(source_dir) = &pull_source {
-        if !source_dir.exists() {
-            return Err(RunError::Internal(format!("pull source directory does not exist: {}", source_dir.display())));
-        }
+    if let crunch_store::PullSource::Directory(source_dir) = &pull_source
+        && !source_dir.exists()
+    {
+        return Err(RunError::Internal(format!("pull source directory does not exist: {}", source_dir.display())));
     }
 
     // Resolve trusted keys: explicit CLI keys + store-configured keys.

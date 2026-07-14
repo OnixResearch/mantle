@@ -813,13 +813,13 @@ fn validate_fixed_point_stage_receipt(
         blockers.push(format!("{stage_name} receipt missing unit executions"));
         return;
     };
-    if let Some(expected_unit_count) = expected_unit_count {
-        if units.len() as u64 != expected_unit_count {
-            blockers.push(format!(
-                "{stage_name} receipt unit count {} does not match summary unit count {expected_unit_count}",
-                units.len()
-            ));
-        }
+    if let Some(expected_unit_count) = expected_unit_count
+        && units.len() as u64 != expected_unit_count
+    {
+        blockers.push(format!(
+            "{stage_name} receipt unit count {} does not match summary unit count {expected_unit_count}",
+            units.len()
+        ));
     }
     if units.iter().any(|unit| optional_str(unit, "/execution_status") != Some(SUCCESS_STATUS)) {
         blockers.push(format!("{stage_name} receipt contains non-success unit executions"));
@@ -908,19 +908,17 @@ fn proof_path_from_meta(
     label: &str,
     blockers: &mut Vec<String>,
 ) -> Option<PathBuf> {
-    let Some(meta) = meta else {
-        return None;
-    };
+    let meta = meta?;
     let Some(raw) = optional_str(meta, pointer) else {
         blockers.push(format!("fixed-point meta missing {label} path at {pointer}"));
         return None;
     };
     let path = Path::new(raw);
     if path.is_absolute() {
-        if let Some(local_path) = copied_proof_path(proof_dir, meta, path) {
-            if local_path.exists() {
-                return Some(local_path);
-            }
+        if let Some(local_path) = copied_proof_path(proof_dir, meta, path)
+            && local_path.exists()
+        {
+            return Some(local_path);
         }
         return Some(path.to_path_buf());
     }
@@ -1555,6 +1553,7 @@ fn run_rust_plan_child(
     })
 }
 
+#[cfg(test)]
 fn child_blocker(status_code: Option<i32>, execution_status: &str, cargo_marker_absent: bool) -> Option<String> {
     child_blocker_with_diagnostic(status_code, execution_status, cargo_marker_absent, None).0
 }
@@ -1911,10 +1910,10 @@ fn fixed_point_stage_with_artifact(
     policy_digest_blake3: Option<&str>,
     c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> Result<FixedPointStageRun, RunError> {
-    if let Some(produced) = produced.as_ref() {
-        if produced.smoke_status_code != SUCCESS_EXIT_CODE {
-            blocker = Some(format!("smoke check exited with {}", produced.smoke_status_code));
-        }
+    if let Some(produced) = produced.as_ref()
+        && produced.smoke_status_code != SUCCESS_EXIT_CODE
+    {
+        blocker = Some(format!("smoke check exited with {}", produced.smoke_status_code));
     }
     if blocker.is_some() && produced.is_none() {
         write_blocked_fixed_point_smoke_outputs(stage, blocker.as_deref().unwrap_or("blocked before binary"))?;
@@ -2258,10 +2257,10 @@ fn print_fixed_point_summary(summary: &FixedPointSummary, json_mode: bool, bundl
     if let Some(digest) = &summary.stage1.binary_blake3 {
         println!("stage1_binary_blake3: {digest}");
     }
-    if let Some(stage2) = &summary.stage2 {
-        if let Some(digest) = &stage2.binary_blake3 {
-            println!("stage2_binary_blake3: {digest}");
-        }
+    if let Some(stage2) = &summary.stage2
+        && let Some(digest) = &stage2.binary_blake3
+    {
+        println!("stage2_binary_blake3: {digest}");
     }
     println!("hermeticity_mode: {}", summary.hermeticity_mode);
     println!("strict_proof_admission: {}", summary.proof_eligibility.admitted);

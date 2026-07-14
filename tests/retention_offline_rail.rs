@@ -17,19 +17,12 @@ use crunch_project::LockedHash;
 use crunch_project::LockedKind;
 use crunch_project::Lockfile;
 use crunch_project::generate_inputs_ncl;
-use nix_compat::nixhash::NixHash;
-use sha2::Digest;
 use tempfile::TempDir;
 
 const RETENTION_PROOF_SCHEMA: &str = "mantle-retention-rail-evidence-v1";
 const NON_CLAIM: &str = "retention roots are not build correctness or release reproducibility proof";
 const RETENTION_STATE_FILE: &str = ".mantle/retention.json";
 const RETENTION_ROOTS_DIR: &str = ".mantle/retention-roots";
-
-fn flat_sha256_sri(bytes: &[u8]) -> String {
-    let digest: [u8; 32] = sha2::Sha256::digest(bytes).into();
-    NixHash::Sha256(digest).to_sri_string()
-}
 
 fn crunch() -> Command {
     Command::cargo_bin("crunch").unwrap()
@@ -46,20 +39,11 @@ fn write_project_files(dir: &Path, manifest: &str, lock: &Lockfile) {
     fs::write(dir.join(".mantle/inputs.ncl"), generate_inputs_ncl(lock.clone())).unwrap();
 }
 
-fn read_lock(dir: &Path) -> Lockfile {
-    let text = fs::read_to_string(dir.join("mantle.lock")).unwrap();
-    Lockfile::from_json(text).unwrap()
-}
-
 fn quoted(value: &str) -> String {
     serde_json::to_string(value).unwrap()
 }
 
-fn write_evidence_json(
-    dir: &Path,
-    per_input: &[(&str, &str, &str)],
-    assertion_has_roots: bool,
-) -> Vec<u8> {
+fn write_evidence_json(dir: &Path, per_input: &[(&str, &str, &str)], assertion_has_roots: bool) -> Vec<u8> {
     let record = serde_json::json!({
         "schema": RETENTION_PROOF_SCHEMA,
         "rail_version": "1",
@@ -109,7 +93,10 @@ fn retention_offline_rail_current_input_is_pinned() {
     let mut lock = Lockfile::new();
     lock.inputs.insert("pkg".into(), LockEntry {
         kind: LockedKind::File { url: source_url },
-        hash: LockedHash { algo: HashAlgo::Sha256, value: "sha256-old=".to_string() },
+        hash: LockedHash {
+            algo: HashAlgo::Sha256,
+            value: "sha256-old=".to_string(),
+        },
         patches: vec![],
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
@@ -134,7 +121,10 @@ fn retention_offline_rail_current_input_is_pinned() {
         let check_assert = crunch().arg("check").current_dir(dir.path()).assert();
         let check_stdout = String::from_utf8_lossy(&check_assert.get_output().stdout);
         let check_stderr = String::from_utf8_lossy(&check_assert.get_output().stderr);
-        assert!(check_stderr.contains("passed") || check_stdout.contains("passed"), "check stdout={check_stdout} stderr={check_stderr}");
+        assert!(
+            check_stderr.contains("passed") || check_stdout.contains("passed"),
+            "check stdout={check_stdout} stderr={check_stderr}"
+        );
     }
 
     let evidence = write_evidence_json(dir.path(), &[("pkg", "current", "pinned")], true);
@@ -170,7 +160,10 @@ fn retention_offline_rail_stale_root_is_diagnosed() {
     let mut lock = Lockfile::new();
     lock.inputs.insert("pkg".into(), LockEntry {
         kind: LockedKind::File { url: source_url },
-        hash: LockedHash { algo: HashAlgo::Sha256, value: "sha256-old=".to_string() },
+        hash: LockedHash {
+            algo: HashAlgo::Sha256,
+            value: "sha256-old=".to_string(),
+        },
         patches: vec![],
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
@@ -187,7 +180,7 @@ fn retention_offline_rail_stale_root_is_diagnosed() {
 
         // Check should still pass (stale root warning, not error)
         let check_assert = crunch().arg("check").current_dir(dir.path()).assert();
-        let check_stderr = String::from_utf8_lossy(&check_assert.get_output().stderr);
+        let _check_stderr = String::from_utf8_lossy(&check_assert.get_output().stderr);
 
         // Refresh to see new retention root
         let _refresh_assert = crunch().arg("refresh").current_dir(dir.path()).assert();
@@ -204,9 +197,7 @@ fn retention_offline_rail_untracked_is_gc_eligible() {
     let evidence = write_evidence_json(dir.path(), &[("pkg", "untracked", "gc-eligible")], false);
     let parsed: serde_json::Value = serde_json::from_slice(&evidence).unwrap();
     assert_eq!(parsed["per_input_classification"][0]["classification"], "gc-eligible");
-    assert!(parsed["non_claims"].as_array().unwrap().iter().any(|c| {
-        c.as_str().unwrap() == NON_CLAIM
-    }));
+    assert!(parsed["non_claims"].as_array().unwrap().iter().any(|c| { c.as_str().unwrap() == NON_CLAIM }));
 }
 
 /// V4: evidence carries required schema and non-claims.

@@ -356,11 +356,10 @@ fn validate_progressive_lane_order(examples_readme: &str, errors: &mut Vec<Strin
             errors.push(format!("examples README missing progressive lane `{header}`"));
             continue;
         };
-        if let Some(previous_index) = last_index {
-            if index <= previous_index {
+        if let Some(previous_index) = last_index
+            && index <= previous_index {
                 errors.push(format!("examples README lane `{header}` is out of progressive order"));
             }
-        }
         last_index = Some(index);
     }
 }

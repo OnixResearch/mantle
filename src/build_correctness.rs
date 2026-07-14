@@ -492,7 +492,7 @@ fn sandbox_report(
 
 pub(crate) fn validate_reference_scan(
     input: ReferenceScanInput,
-) -> Result<OutputReferenceScanReport, OutputReferenceScanReport> {
+) -> Result<OutputReferenceScanReport, Box<OutputReferenceScanReport>> {
     let diagnostics = reference_scan_diagnostics(&input);
     let accepted_refs = accepted_reference_values(&input.observations);
     let status = if diagnostics.is_empty() { "accepted" } else { "rejected" };
@@ -500,7 +500,7 @@ pub(crate) fn validate_reference_scan(
     if report.diagnostics.is_empty() {
         Ok(report)
     } else {
-        Err(report)
+        Err(Box::new(report))
     }
 }
 
@@ -540,10 +540,10 @@ fn scan_one_reference<'a>(
     if observation.ref_value.contains(PLAINTEXT_SECRET_MARKER) || observation.view.contains(PLAINTEXT_SECRET_MARKER) {
         diagnostics.push("plaintext-secret-bytes".to_string());
     }
-    if let Some(previous_ref) = view_to_ref.insert(&observation.view, &observation.ref_value) {
-        if previous_ref != &observation.ref_value {
-            diagnostics.push(format!("duplicate-conflicting-view:{}", observation.view));
-        }
+    if let Some(previous_ref) = view_to_ref.insert(&observation.view, &observation.ref_value)
+        && previous_ref != &observation.ref_value
+    {
+        diagnostics.push(format!("duplicate-conflicting-view:{}", observation.view));
     }
 }
 

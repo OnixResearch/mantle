@@ -166,14 +166,12 @@ pub fn sanitize_cache_identity(raw_url: &str) -> Option<String> {
         }
         return Some(format!("file://{path}"));
     }
-    if parsed.host_str().is_none() {
-        return None;
-    }
+    parsed.host_str()?;
     let mut sanitized = parsed.clone();
     sanitized.set_query(None);
     sanitized.set_fragment(None);
-    sanitized.set_username("");
-    sanitized.set_password(None);
+    sanitized.set_username("").ok()?;
+    sanitized.set_password(None).ok()?;
     let port = sanitized.port().map(|p| format!(":{p}")).unwrap_or_default();
     let path = sanitized.path();
     if path == "/" {
@@ -191,7 +189,6 @@ pub fn split_substituter_urls(input: &str) -> Vec<String> {
 }
 
 /// Check whether two candidates share the same identity but different trust material.
-
 pub fn candidates_have_trust_conflict(a: &CacheCandidate, b: &CacheCandidate) -> bool {
     a.cache_identity == b.cache_identity && a.trust_policy_digest != b.trust_policy_digest
 }
@@ -245,20 +242,9 @@ impl std::error::Error for CacheCandidateError {}
 // Pure core types live in crunch-store. Re-export for callers of
 // cache_substitution.
 
-pub use crunch_store::metadata_cache::AdmissionSummary;
-pub use crunch_store::metadata_cache::DEFAULT_METADATA_TTL_SECS;
-pub use crunch_store::metadata_cache::MAX_METADATA_CACHE_ENTRIES;
-pub use crunch_store::metadata_cache::MetadataCacheEntry;
 pub use crunch_store::metadata_cache::MetadataCacheKey;
 pub use crunch_store::metadata_cache::MetadataClass;
-pub use crunch_store::metadata_cache::MetadataSchemaVersion;
-pub use crunch_store::metadata_cache::MetadataValidity;
-pub use crunch_store::metadata_cache::NEGATIVE_MISS_TTL_SECS;
-pub use crunch_store::metadata_cache::RefreshPolicy;
 pub use crunch_store::metadata_cache::build_metadata_cache_key;
-pub use crunch_store::metadata_cache::check_metadata_validity;
-pub use crunch_store::metadata_cache::metadata_ttl_for_class;
-pub use crunch_store::metadata_cache::new_metadata_entry;
 
 /// Convenience wrapper: build a [`MetadataCacheKey`] from a [`CacheCandidate`].
 pub fn build_metadata_cache_key_from_candidate(
@@ -277,10 +263,21 @@ pub fn build_metadata_cache_key_from_candidate(
 
 #[cfg(test)]
 mod tests {
+    use crunch_store::metadata_cache::AdmissionSummary;
+    use crunch_store::metadata_cache::DEFAULT_METADATA_TTL_SECS;
+    use crunch_store::metadata_cache::MetadataSchemaVersion;
+    use crunch_store::metadata_cache::MetadataValidity;
+    use crunch_store::metadata_cache::NEGATIVE_MISS_TTL_SECS;
+    use crunch_store::metadata_cache::RefreshPolicy;
+    use crunch_store::metadata_cache::check_metadata_validity;
+    use crunch_store::metadata_cache::metadata_ttl_for_class;
+    use crunch_store::metadata_cache::new_metadata_entry;
+
     use super::*;
 
     const VALID_DIGEST: &str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
     const STORE_PREFIX: &str = "/mantle/store";
+    const _: () = assert!(NEGATIVE_MISS_TTL_SECS < DEFAULT_METADATA_TTL_SECS);
 
     fn candidate(identity: &str, priority: u32) -> CacheCandidate {
         CacheCandidate {
@@ -514,7 +511,6 @@ mod tests {
     fn metadata_ttl_negative_miss_is_shorter() {
         assert_eq!(metadata_ttl_for_class(MetadataClass::NegativeMiss), NEGATIVE_MISS_TTL_SECS);
         assert_eq!(metadata_ttl_for_class(MetadataClass::Narinfo), DEFAULT_METADATA_TTL_SECS);
-        assert!(NEGATIVE_MISS_TTL_SECS < DEFAULT_METADATA_TTL_SECS);
     }
 
     #[test]

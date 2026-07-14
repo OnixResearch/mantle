@@ -7,9 +7,14 @@ use crunch_eval::session::RootForceExecutionPolicy;
 use crunch_glue::CrunchDerivation;
 
 const REPEAT_COUNT: u32 = 10;
+const MIN_REPEAT_COUNT: u32 = 3;
 const ROOT_COUNT_EXPECTED: usize = 16;
 const MAX_CONCURRENCY: u32 = 4;
+const MIN_CONCURRENCY: u32 = 1;
 const FIXTURE_PATH: &str = "tests/fixtures/wide_package_set.ncl";
+
+const _: () = assert!(REPEAT_COUNT >= MIN_REPEAT_COUNT);
+const _: () = assert!(MAX_CONCURRENCY >= MIN_CONCURRENCY);
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -39,8 +44,6 @@ fn benchmark_policy(policy: RootForceExecutionPolicy) -> Result<u128, Box<dyn st
     let mut samples_ns = Vec::with_capacity(REPEAT_COUNT as usize);
     let fixture_path = fixture_path();
     let import_paths = import_paths();
-    assert!(REPEAT_COUNT >= 3, "repeat count must be at least 3");
-    assert!(MAX_CONCURRENCY >= 1, "max concurrency must be at least 1");
 
     for _sample_index in 0..REPEAT_COUNT {
         let start = Instant::now();

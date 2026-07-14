@@ -1378,6 +1378,7 @@ fn render_exit_status(output: &Output) -> String {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_audit_meta(
     plan: &WitnessRebuildPlan,
     workflow_driver_path: &Path,
@@ -1536,12 +1537,11 @@ fn expected_output_diagnostics(expected_outputs: &[ExpectedRebuiltOutput]) -> Ve
 
 fn collect_available_proof_digest_diagnostics(plan: &WitnessRebuildPlan) -> Vec<WitnessAvailableProofDigest> {
     let mut candidates = Vec::with_capacity(PROOF_BINARY_CANDIDATE_LIMIT);
-    if let Ok(proof_manifest) = load_proof_bundle_manifest(&plan.scratch_layout.proof_bundle_dir) {
-        if let Ok(mut proof_candidates) =
+    if let Ok(proof_manifest) = load_proof_bundle_manifest(&plan.scratch_layout.proof_bundle_dir)
+        && let Ok(mut proof_candidates) =
             collect_rebuilt_output_candidates(&plan.scratch_layout.proof_bundle_dir, &proof_manifest)
-        {
-            candidates.append(&mut proof_candidates);
-        }
+    {
+        candidates.append(&mut proof_candidates);
     }
     let mut provider_candidates = Vec::with_capacity(PROOF_BINARY_CANDIDATE_LIMIT);
     if collect_provider_fixed_point_candidates(

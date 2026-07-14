@@ -989,7 +989,7 @@ fn record_from_spec(spec: &ReceiptRecordSpec) -> ReceiptRecord {
 }
 
 fn normalize_receipt_records(mut records: Vec<ReceiptRecord>) -> Result<Vec<ReceiptRecord>, RunError> {
-    records.sort_by(|left, right| record_total_key(left).cmp(&record_total_key(right)));
+    records.sort_by_key(record_total_key);
     let mut normalized = Vec::with_capacity(records.len());
     let mut exact_seen = BTreeSet::new();
     for record in records {
@@ -1000,7 +1000,7 @@ fn normalize_receipt_records(mut records: Vec<ReceiptRecord>) -> Result<Vec<Rece
         }
     }
     reject_duplicate_records(&normalized)?;
-    normalized.sort_by(|left, right| record_key(left).cmp(&record_key(right)));
+    normalized.sort_by_key(record_key);
     Ok(normalized)
 }
 

@@ -613,7 +613,7 @@ fn classify_agreement_witness(
         witness_identity: witness.attestation.witness_identity.clone(),
         signer_key_name,
         witness_digest_blake3: witness_digest,
-        release_attestation_digest_blake3: witness.attestation.release_attestation_digest_blake3.clone(),
+        release_attestation_digest_blake3: witness.attestation.release_attestation_digest_blake3,
         signature_valid,
         digest_match,
         independence_domain,

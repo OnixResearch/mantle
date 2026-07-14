@@ -32,7 +32,6 @@ pub use crunch_build::distributed::RemoteAttemptLogCurrentAttemptFacts;
 pub use crunch_build::distributed::RemoteAttemptLogDigest;
 pub use crunch_build::distributed::RemoteAttemptLogManifest;
 pub use crunch_build::distributed::RemoteAttemptLogPolicy;
-pub use crunch_build::distributed::RemoteAttemptLogReasonCode;
 pub use crunch_build::distributed::RemoteAttemptLogReplayPlan;
 pub use crunch_build::distributed::RemoteAttemptLogReplayRequest;
 pub use crunch_build::distributed::RemoteAttemptLogScope;
@@ -49,15 +48,12 @@ pub use crunch_build::distributed::RemoteJobId;
 pub use crunch_build::distributed::RemoteLocalityProbeObservation;
 pub use crunch_build::distributed::RemoteLocalityReasonCode;
 pub use crunch_build::distributed::RemoteLocalityScope;
-pub use crunch_build::distributed::RemoteNamedResourceQuantity;
 pub use crunch_build::distributed::RemotePayloadDigest;
 pub use crunch_build::distributed::RemoteResourceAvailability;
 pub use crunch_build::distributed::RemoteResourceLease;
 pub use crunch_build::distributed::RemoteResourceLeaseScope;
-pub use crunch_build::distributed::RemoteResourceReasonCode;
 use crunch_build::distributed::RemoteResourceRecoveryDisposition;
 pub use crunch_build::distributed::RemoteResourceRequirements;
-use crunch_build::distributed::RemoteResourceVector;
 use crunch_build::distributed::RemoteTelemetryBuffer;
 use crunch_build::distributed::RemoteTelemetryCapabilityClass;
 use crunch_build::distributed::RemoteTelemetryCategory;
@@ -1965,10 +1961,10 @@ fn validate_expected_outputs(outputs: &[RemoteExpectedOutput], store_prefix: &st
         if !names.insert(output.name.as_str()) {
             return Err("remote-expected-output-name-duplicate".to_string());
         }
-        if let Some(logical_path) = &output.logical_path {
-            if logical_path.is_empty() || !logical_path.starts_with(store_prefix) {
-                return Err("remote-expected-output-store-prefix-mismatch".to_string());
-            }
+        if let Some(logical_path) = &output.logical_path
+            && (logical_path.is_empty() || !logical_path.starts_with(store_prefix))
+        {
+            return Err("remote-expected-output-store-prefix-mismatch".to_string());
         }
     }
     Ok(())
@@ -2253,7 +2249,7 @@ fn execute_remote_local_build(
             .enable_all()
             .build()
             .map_err(|err| format!("remote-local-executor-runtime: {err}"))?;
-        return rt.block_on(execute_remote_local_build_linux(executor, request, plan, input_upload));
+        rt.block_on(execute_remote_local_build_linux(executor, request, plan, input_upload))
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -2637,10 +2633,10 @@ fn remote_execution_output_from_pathinfo(
     nar_payload: Option<Vec<u8>>,
 ) -> Result<RemoteExecutionOutput, String> {
     let logical_path = path_info.store_path.to_absolute_path_with_prefix(store_prefix);
-    if let Some(expected_logical_path) = &expected.logical_path {
-        if &logical_path != expected_logical_path {
-            return Err("remote-local-executor-output-path-mismatch".to_string());
-        }
+    if let Some(expected_logical_path) = &expected.logical_path
+        && &logical_path != expected_logical_path
+    {
+        return Err("remote-local-executor-output-path-mismatch".to_string());
     }
     let content_digest_blake3 = remote_pathinfo_node_digest_blake3(path_info)?;
     let artifact_attestation_digest_blake3 =
@@ -4225,13 +4221,14 @@ impl OutputKeyRef {
 }
 
 fn parse_output_key_ref(value: &str) -> OutputKeyRef {
-    if let Some((name, material)) = value.split_once(':') {
-        if !name.is_empty() && !material.is_empty() {
-            return OutputKeyRef {
-                name: name.to_string(),
-                key_material_digest_blake3: Some(blake3::hash(material.as_bytes()).to_hex().to_string()),
-            };
-        }
+    if let Some((name, material)) = value.split_once(':')
+        && !name.is_empty()
+        && !material.is_empty()
+    {
+        return OutputKeyRef {
+            name: name.to_string(),
+            key_material_digest_blake3: Some(blake3::hash(material.as_bytes()).to_hex().to_string()),
+        };
     }
     OutputKeyRef {
         name: value.to_string(),
@@ -4354,10 +4351,10 @@ pub fn validate_coordinator_build_request(
     if let Some(requirements) = &request.resource_requirements {
         canonical_remote_resource_requirements(requirements).map_err(|reason| reason.as_str().to_string())?;
     }
-    if let Some(scope) = &request.locality_scope {
-        if !is_blake3_hex_digest(&scope.manifest_digest_blake3) || !is_blake3_hex_digest(&scope.policy_digest_blake3) {
-            return Err("remote-coordinator-locality-scope-invalid".to_string());
-        }
+    if let Some(scope) = &request.locality_scope
+        && (!is_blake3_hex_digest(&scope.manifest_digest_blake3) || !is_blake3_hex_digest(&scope.policy_digest_blake3))
+    {
+        return Err("remote-coordinator-locality-scope-invalid".to_string());
     }
     if request.request.upload_bytes > MAX_REMOTE_UPLOAD_BYTES {
         return Err("remote-coordinator-upload-byte-limit-exceeded".to_string());
@@ -6904,7 +6901,7 @@ fn send_prepared_remote_transfer_with_observer(
         return Err("remote-transfer-completion-manifest-mismatch".to_string());
     }
     validate_fence()?;
-    let completed_bytes = report.transferred_bytes.checked_add(report.reused_bytes).unwrap_or(u64::MAX);
+    let completed_bytes = report.transferred_bytes.saturating_add(report.reused_bytes);
     if completed_bytes > 0 {
         observe(RemoteProductionTelemetryFact::TransferCompleted {
             bytes: completed_bytes,
@@ -7044,7 +7041,7 @@ fn record_transfer_completion(
     mode: RemoteTransferMode,
     fallback_reason: Option<&str>,
 ) {
-    let bytes = report.transferred_bytes.checked_add(report.reused_bytes).unwrap_or(u64::MAX);
+    let bytes = report.transferred_bytes.saturating_add(report.reused_bytes);
     if report.disposition == crate::remote_transfer::RemoteTransferShellDisposition::AlreadyPresent {
         record_production_fact(telemetry, policy, RemoteProductionTelemetryFact::TransferCutoff { accepted: true });
     }
@@ -7357,10 +7354,9 @@ fn run_production_stdio_remote_child(
         }
         if let Some(status) = child.try_wait().map_err(|err| {
             RunError::Internal(format!("polling stdio remote child {}: {err}", command.program.display()))
-        })? {
-            if !status.success() {
-                break Err("stdio-child-exit-failed".to_string());
-            }
+        })? && !status.success()
+        {
+            break Err("stdio-child-exit-failed".to_string());
         }
         if Instant::now() >= deadline {
             terminate_remote_child_tree(&mut child)?;
@@ -8506,15 +8502,11 @@ fn extract_streaming_output_frames<'a>(
     let mut done = false;
     for frame in frames {
         match frame {
-            RemoteFrame::BuildFinished { result: value } => {
-                if result.replace(value).is_some() {
-                    return Err("duplicate-build-finished-frame".to_string());
-                }
+            RemoteFrame::BuildFinished { result: value } if result.replace(value).is_some() => {
+                return Err("duplicate-build-finished-frame".to_string());
             }
-            RemoteFrame::OutputTransferDone { report } => {
-                if transfer.replace(report).is_some() {
-                    return Err("duplicate-output-transfer-frame".to_string());
-                }
+            RemoteFrame::OutputTransferDone { report } if transfer.replace(report).is_some() => {
+                return Err("duplicate-output-transfer-frame".to_string());
             }
             RemoteFrame::Done { request_id: value } => {
                 if value != request_id || done {
@@ -9318,10 +9310,8 @@ fn extract_output_import_frames<'a>(
     let mut done_seen = false;
     for frame in frames {
         match frame {
-            RemoteFrame::BuildFinished { result: finished } => {
-                if result.replace(finished).is_some() {
-                    return Err("duplicate-build-finished-frame".to_string());
-                }
+            RemoteFrame::BuildFinished { result: finished } if result.replace(finished).is_some() => {
+                return Err("duplicate-build-finished-frame".to_string());
             }
             RemoteFrame::OutputTransferArtifact { artifact } => {
                 if result.is_none() {
@@ -10551,6 +10541,11 @@ fn print_json_or_human(value: &impl Serialize, json_output: bool) -> Result<(), 
 
 #[cfg(test)]
 mod tests {
+    use crunch_build::distributed::RemoteAttemptLogReasonCode;
+    use crunch_build::distributed::RemoteNamedResourceQuantity;
+    use crunch_build::distributed::RemoteResourceReasonCode;
+    use crunch_build::distributed::RemoteResourceVector;
+
     use super::*;
 
     const CUSTOM_REMOTE_OUTPUT_BYTES: u64 = 777;
@@ -10938,7 +10933,7 @@ mod tests {
     fn stale_input_attempt_stops_before_source_read_or_data_disclosure() {
         let root = tempfile::tempdir().unwrap();
         let prepared = interactive_transfer_fixture(&root.path().join("spool"));
-        let mut receiver =
+        let receiver =
             interactive_receive_session(&prepared, &root.path().join("state"), &root.path().join("receiver"));
         let demand = RemoteTransferDemandFrame {
             direction: crate::remote_transfer::RemoteTransferDirection::Upload,
@@ -11370,7 +11365,7 @@ mod tests {
         // V12: a concrete build request from an external CI system passes
         // validation when it contains a valid derivation payload.
         // r[verify remote_builds.production_ci_build_separation]
-        let mut ticket = fixture_ticket();
+        let ticket = fixture_ticket();
         let request = ConcreteBuildRequest {
             request_id: "ci-job-42".to_string(),
             contains_raw_frontend_eval: false,
@@ -13568,8 +13563,10 @@ mod tests {
 
     #[test]
     fn coordinator_unconfigured_persistence_exposes_no_assignment_or_claim() {
-        let mut state = RemoteCoordinatorState::default();
-        state.allow_volatile_test_state = false;
+        let mut state = RemoteCoordinatorState {
+            allow_volatile_test_state: false,
+            ..RemoteCoordinatorState::default()
+        };
         let worker = fixture_worker_registration();
         state.workers.insert(worker.endpoint_id.clone(), worker);
         let request = fixture_coordinator_request();
@@ -14000,7 +13997,7 @@ mod tests {
         let request = fixture_coordinator_request();
         admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
         let ticket = fixture_ticket();
-        let snapshot = coordinator_status_snapshot("coordinator-1", 1, &state, &[], &[ticket.clone()])
+        let snapshot = coordinator_status_snapshot("coordinator-1", 1, &state, &[], std::slice::from_ref(&ticket))
             .expect("status snapshot renders");
         let rendered = serde_json::to_string(&snapshot).expect("status serializes");
 
@@ -14500,10 +14497,10 @@ mod tests {
     }
 
     fn corrupt_first_transfer_artifact_payload(response: &mut RemoteBuilderFrameResponse) {
-        if let Some(artifact) = response.transfer_artifacts.first_mut() {
-            if let Some(byte) = artifact.payload.first_mut() {
-                *byte = CORRUPTED_TRANSFER_PAYLOAD_BYTE;
-            }
+        if let Some(artifact) = response.transfer_artifacts.first_mut()
+            && let Some(byte) = artifact.payload.first_mut()
+        {
+            *byte = CORRUPTED_TRANSFER_PAYLOAD_BYTE;
         }
         for frame in &mut response.response_frames {
             if let RemoteFrame::OutputTransferArtifact { artifact } = frame {

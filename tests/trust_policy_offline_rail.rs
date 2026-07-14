@@ -12,13 +12,11 @@ use std::path::Path;
 
 use assert_cmd::Command;
 use crunch_project::HashAlgo;
-use crunch_project::InputTrustPolicy;
 use crunch_project::LockEntry;
 use crunch_project::LockedHash;
 use crunch_project::LockedKind;
 use crunch_project::Lockfile;
 use crunch_project::TrustDigestBinding;
-use crunch_project::TrustSignatureRef;
 use crunch_project::TrustSubject;
 use crunch_project::generate_inputs_ncl;
 use crunch_project::trust_signature_payload;
@@ -150,7 +148,7 @@ fn trust_policy_offline_rail_trusted_refresh_accepted() {
     // Refresh trusted input
     let assert = crunch().arg("refresh").current_dir(dir.path()).assert();
     let output = assert.get_output();
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let _stderr = String::from_utf8_lossy(&output.stderr);
 
     // If binary isn't available (pre-existing build error), we still emit evidence
     if output.status.success() {

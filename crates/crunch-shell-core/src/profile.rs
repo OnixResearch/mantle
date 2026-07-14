@@ -283,14 +283,14 @@ fn validate_path_entries(profile: &ShellProfileDeclaration) -> Vec<ShellProfileD
 
 fn validate_hook(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagnostic> {
     let mut diagnostics = Vec::new();
-    if let Some(hook) = &profile.hook {
-        if hook.len() > MAX_PROFILE_HOOK_BYTES {
-            diagnostics.push(diagnostic(
-                "hook-too-large",
-                Some(profile.name.clone()),
-                format!("shell profile hook exceeds {MAX_PROFILE_HOOK_BYTES} bytes"),
-            ));
-        }
+    if let Some(hook) = &profile.hook
+        && hook.len() > MAX_PROFILE_HOOK_BYTES
+    {
+        diagnostics.push(diagnostic(
+            "hook-too-large",
+            Some(profile.name.clone()),
+            format!("shell profile hook exceeds {MAX_PROFILE_HOOK_BYTES} bytes"),
+        ));
     }
     diagnostics
 }

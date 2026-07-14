@@ -268,9 +268,9 @@ fn resolve_witness_source_directory(source: &Path) -> Result<PathBuf, RunError> 
 
 fn collect_witness_json_paths(witness_dir: &Path) -> Result<Vec<PathBuf>, RunError> {
     let mut json_paths = Vec::new();
-    let mut entries = std::fs::read_dir(witness_dir)
+    let entries = std::fs::read_dir(witness_dir)
         .map_err(|err| RunError::Internal(format!("reading {}: {err}", witness_dir.display())))?;
-    while let Some(entry_result) = entries.next() {
+    for entry_result in entries {
         let entry = entry_result
             .map_err(|err| RunError::Internal(format!("reading {} entry: {err}", witness_dir.display())))?;
         let path = entry.path();

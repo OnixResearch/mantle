@@ -191,23 +191,12 @@ impl RemoteTelemetryPolicy {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteTelemetryBuffer {
     pub events: Vec<RemoteTelemetryEvent>,
     pub accepted_events: u64,
     pub dropped_events: u64,
     pub last_drop_reason: Option<RemoteTelemetryReasonCode>,
-}
-
-impl Default for RemoteTelemetryBuffer {
-    fn default() -> Self {
-        Self {
-            events: Vec::new(),
-            accepted_events: 0,
-            dropped_events: 0,
-            last_drop_reason: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -147,12 +147,10 @@ async fn export_file_to_disk(
     let mut file = std::fs::File::create(&temp_dest).map_err(|e| format!("creating {temp_dest}: {e}"))?;
     let mut buf = vec![0u8; EXPORT_READ_BUFFER_BYTES];
     let mut written_bytes: u64 = 0;
-    let mut saw_eof = false;
     let mut hasher = blake3::Hasher::new();
     loop {
         let n = reader.read(&mut buf).await.map_err(|e| format!("reading blob: {e}"))?;
         if n == 0 {
-            saw_eof = true;
             break;
         }
         hasher.update(&buf[..n]);
@@ -171,11 +169,6 @@ async fn export_file_to_disk(
             ));
         }
         std::io::Write::write_all(&mut file, &buf[..n]).map_err(|e| format!("writing {temp_dest}: {e}"))?;
-    }
-    if !saw_eof {
-        drop(file);
-        let _ = std::fs::remove_file(&temp_dest);
-        return Err(format!("blob {digest} did not reach EOF while exporting {dest}"));
     }
     let observed_digest = snix_castore::B3Digest::from(hasher.finalize().as_bytes());
     if written_bytes != expected_size {

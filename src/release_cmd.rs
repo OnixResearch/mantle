@@ -1616,10 +1616,10 @@ fn cmd_release_reproduce(
     if let Some(profiles) = &summary.deterministic_proof_sandbox_profiles {
         println!("deterministic proof sandbox profiles: {}", profiles.join(","));
     }
-    if let Some(blockers) = &summary.deterministic_proof_blockers {
-        if !blockers.is_empty() {
-            println!("deterministic proof blockers: {}", blockers.join("; "));
-        }
+    if let Some(blockers) = &summary.deterministic_proof_blockers
+        && !blockers.is_empty()
+    {
+        println!("deterministic proof blockers: {}", blockers.join("; "));
     }
     Ok(())
 }

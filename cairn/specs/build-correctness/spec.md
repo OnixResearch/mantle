@@ -350,3 +350,114 @@ r[mantle.build_correctness.release_determinism.authority_plan.test]
 - GIVEN in-memory published target identities, candidate input observations, run roots, and policy
 - WHEN the authority planner evaluates them
 - THEN it MUST deterministically return an allowed plan or ordered blockers without reading files, environment state, clocks, networks, or processes.
+
+### Requirement: Shared action results are immutable content-bound records
+r[build_correctness.shared_action_result_records]
+
+Mantle MUST represent a publishable action result as a versioned immutable record binding the requested action ref, ordered output declarations and object refs, PathInfo refs, action receipt ref, required reference-scan and sandbox/network-policy evidence, producer identity and policy, signatures, publication-policy identity, and bounded non-claims. Mantle-owned record identity MUST use domain-separated BLAKE3. A local derivation-to-output mapping, mutable index row, object-presence fact, or execution success alone MUST NOT constitute an action-result record.
+
+#### Scenario: Admitted result becomes publishable
+
+- GIVEN an action completed and all declared outputs, objects, PathInfo, receipts, scans, policies, and required signatures passed ordinary admission
+- WHEN Mantle constructs the action-result record
+- THEN it MUST bind those canonical facts to one immutable record ref
+- AND the record MAY be published only after every referenced required artifact is durable.
+
+#### Scenario: Incomplete local mapping is not promoted
+
+- GIVEN a local CA derivation mapping names an output path but lacks a complete admitted action receipt, object closure, required signatures, or policy evidence
+- WHEN Mantle evaluates it for shared publication
+- THEN Mantle MUST reject or retain it as a local advisory hint
+- AND it MUST NOT publish or report it as a shared admitted action result.
+
+#### Scenario: Record identity is deterministic
+
+- GIVEN two result records contain equivalent canonical facts in different map, output, signature, or reference traversal orders
+- WHEN Mantle canonicalizes them
+- THEN both MUST produce the same action-result ref
+- AND host paths, publication time, transport order, and mutable index position MUST NOT affect that ref.
+
+### Requirement: Shared action-result admission fails closed
+r[build_correctness.shared_action_result_admission]
+
+Mantle MUST treat shared action-result lookup as advisory discovery and MUST admit a candidate only after validating its action ref, output declarations and object refs, object completeness, PathInfo, receipt linkage, signatures, producer policy, sandbox/network policy, reference-scan policy, and requested claim strength. If multiple otherwise admissible candidates for one action ref name differing output object sets, strong reuse MUST fail with bounded conflict evidence rather than select by arrival, source order, or last writer.
+
+#### Scenario: Matching shared result avoids execution
+
+- GIVEN a discovered candidate matches the requested action and every required trust, policy, object, receipt, and scan fact
+- WHEN Mantle plans reuse
+- THEN it MAY admit the candidate outputs without rerunning the action
+- AND the report MUST identify the selected result ref, trust basis, and discovery source.
+
+#### Scenario: Poisoned candidate is rejected
+
+- GIVEN a candidate has a stale action ref, altered output ref, incomplete object tree, missing or invalid signature, unsupported producer, mismatched policy, malformed receipt linkage, or path-only identity
+- WHEN Mantle evaluates reuse
+- THEN it MUST reject the candidate with deterministic diagnostics
+- AND it MUST NOT mutate admitted store state or report a cache hit from that candidate.
+
+#### Scenario: Conflicting admitted results expose nondeterminism
+
+- GIVEN two candidates for the same action ref each pass individual shape and trust checks but name different output object sets
+- WHEN strong reuse admission compares the candidate set
+- THEN Mantle MUST reject automatic strong reuse with `conflicting-action-results`
+- AND bounded evidence MUST identify candidate refs and output-set digests without selecting by source order.
+
+### Requirement: Stateful workspace execution modes are explicit
+r[build_correctness.stateful_workspace_modes]
+
+Mantle MUST require an explicit workspace mode when retained tool state is available. `none` MUST use no retained workspace state; `immutable-snapshot` MUST use declared read-only content-addressed snapshot objects that participate in action identity; and `mutable-session` MUST use a bounded leased writable workspace whose compatibility and authority are validated before sandbox start. Mantle MUST NOT silently fall back from one mode to another.
+
+#### Scenario: Immutable snapshot is a declared input
+
+- GIVEN an action declares a compatible immutable workspace snapshot by canonical object ref and stable guest mount path
+- WHEN Mantle constructs and executes the action
+- THEN the snapshot ref and mount declaration MUST participate in action identity and ordinary input admission
+- AND host storage paths or prior mutable workspace identity MUST NOT affect that identity.
+
+#### Scenario: Mutable workspace requires compatible lease
+
+- GIVEN an action requests mutable-session mode
+- WHEN Mantle validates the workspace
+- THEN worker, authority class, action compatibility, toolchain refs, guest path, current job/attempt/fence, and quota policy MUST match
+- AND any mismatch MUST reject workspace reuse before sandbox execution.
+
+#### Scenario: Mode fallback is not implicit
+
+- GIVEN the requested snapshot is missing or the mutable workspace is unavailable, quarantined, stale, or over quota
+- WHEN Mantle plans execution
+- THEN it MUST fail or choose another mode only under an explicit configured fallback
+- AND the report MUST identify the actual mode and fallback reason.
+
+### Requirement: Mutable workspace execution has a narrower claim boundary
+r[build_correctness.mutable_workspace_claim_boundary]
+
+Mantle MUST classify mutable-session workspace content as execution history rather than a declared immutable action input. An execution that reads mutable workspace state MUST NOT by itself publish or satisfy a strong shared action result. A separate clean execution from equivalent declared inputs MAY provide comparison evidence when its admitted output object set matches, but it MUST NOT retroactively relabel the original mutable execution as hermetic.
+
+#### Scenario: Warm build reports narrower evidence
+
+- GIVEN a build reads a compatible mutable leased workspace and produces outputs that pass ordinary content and output admission
+- WHEN Mantle reports the result
+- THEN it MAY report successful practical execution and admitted output objects
+- AND it MUST state that mutable workspace history prevents strong hermetic shared-reuse admission from that run alone.
+
+#### Scenario: Mutable result is excluded from shared action cache
+
+- GIVEN an action result was produced using mutable-session mode without accepted clean-rebuild comparison evidence
+- WHEN Mantle considers shared action-result publication or strong reuse
+- THEN it MUST reject that candidate with a stable mutable-state reason
+- AND it MUST NOT treat matching output content alone as proof that workspace history was irrelevant.
+
+#### Scenario: Clean comparison records equivalence narrowly
+
+- GIVEN a separate `none` or declared immutable-snapshot rebuild uses equivalent declared action inputs and produces the same admitted output object set as a warm build
+- WHEN Mantle evaluates comparison evidence
+- THEN it MAY record output-set agreement bound to both executions
+- AND it MUST NOT claim general tool-cache correctness, future determinism, or hermeticity of the original warm execution.
+
+#### Scenario: Sensitive or escaping state is quarantined
+
+- GIVEN a workspace contains policy-defined secret material, host-path leakage, path traversal, escaping symlinks, incompatible ownership, or content that cannot be scrubbed within bounds
+- WHEN Mantle prepares reuse or snapshotting
+- THEN it MUST reject and quarantine the workspace before another action reads it
+- AND no shared snapshot or action result may reference the rejected state.

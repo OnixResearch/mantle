@@ -55,6 +55,8 @@ pub(crate) const RUST_SOURCE_PROVIDER_BLOCKED_REASON: &str = "source-built Rust 
 const DIRECTORY_DIGEST_MAX_ENTRIES: usize = 1_000_000;
 const GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS: u32 = 4;
 const GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS: u64 = 5;
+const _: () = assert!(GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS > 1);
+const _: () = assert!(GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS > 0);
 const ELF_MAGIC: [u8; ELF_MAGIC_LEN] = [0x7f, b'E', b'L', b'F'];
 const ELF_MAGIC_LEN: usize = 4;
 const RUST_SOURCE_PROVIDER_PLAN_FILE: &str = "rust-source-plan.ncl";
@@ -2084,7 +2086,7 @@ fn push_generated_rustc_source_build_script(
     script.push_str("  printf '%s\\n' 'x.py is not executable and python3 is unavailable' >&2\n");
     script.push_str("  exit ");
     script.push_str(&RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE.to_string());
-    script.push_str("\n");
+    script.push('\n');
     script.push_str("fi\n");
     script.push_str("MANTLE_RUST_SOURCE_GENERATED_SCRIPT\n");
     Ok(())
@@ -2222,7 +2224,7 @@ fn push_rustc_source_musl_rustc_private_tool_sysroot_patch(script: &mut String) 
     script.push_str(&format!("if [ \"$MANTLE_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
     script.push_str("  printf '%s\\n' ");
     script.push_str(&shell_quote(RUSTC_SOURCE_TOOL_BUILD_RLIB_SYSROOT_MARKER));
-    script.push_str("\n");
+    script.push('\n');
     script.push_str("  tool_build_source=\"$MANTLE_RUST_SOURCE/");
     script.push_str(RUSTC_SOURCE_TOOL_BUILD_SOURCE);
     script.push_str("\"\n");
@@ -2442,10 +2444,10 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str(":-}\n");
     script.push_str("MANTLE_TARGET_MUSL_MACHINE_ALIASES=");
     script.push_str(&shell_quote(&musl_target_machine_aliases_shell_words()));
-    script.push_str("\n");
+    script.push('\n');
     script.push_str("MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT=");
     script.push_str(&shell_quote(FIRST_STAGE_SOURCE_ROOT_MUSL_PREFIX));
-    script.push_str("\n");
+    script.push('\n');
     push_rustc_source_target_toolchain_root_preference(script);
     script.push_str("if [ -z \"$");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
@@ -2522,14 +2524,14 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str("=\n");
     script.push_str("  if [ -f \"$target_wrapper_root/");
     script.push_str(FIRST_STAGE_TARGET_NIX_SUPPORT_DIR);
-    script.push_str("/");
+    script.push('/');
     script.push_str(FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE);
     script.push_str("\" ]; then\n");
     script.push_str("    IFS= read -r ");
     script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
     script.push_str(" < \"$target_wrapper_root/");
     script.push_str(FIRST_STAGE_TARGET_NIX_SUPPORT_DIR);
-    script.push_str("/");
+    script.push('/');
     script.push_str(FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE);
     script.push_str("\" || true\n");
     script.push_str("  fi\n");
@@ -2560,13 +2562,13 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str("    PATH=\"$target_alias_dir:$target_tool_dir:$PATH\"\n");
     script.push_str("    export ");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
-    script.push_str(" ");
+    script.push(' ');
     script.push_str(RUSTC_SOURCE_TARGET_CXX_VAR);
-    script.push_str(" ");
+    script.push(' ');
     script.push_str(RUSTC_SOURCE_TARGET_AR_VAR);
-    script.push_str(" ");
+    script.push(' ');
     script.push_str(RUSTC_SOURCE_TARGET_RANLIB_VAR);
-    script.push_str(" ");
+    script.push(' ');
     script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
     script.push_str(" PATH\n");
     script.push_str("    printf '%s\\n' \"using Rust bootstrap target linker wrapper: $target_alias_dir/cc -> $target_cc_path; runtime CRT/unwind dir: $target_runtime_dir\"\n");
@@ -2616,12 +2618,12 @@ fn push_rustc_source_target_linker_wrapper(script: &mut String) {
     script.push_str("    target_orig_cc_root=\"$target_wrapper_root\"\n");
     script.push_str("    if [ -f \"$target_wrapper_root/");
     script.push_str(FIRST_STAGE_TARGET_NIX_SUPPORT_DIR);
-    script.push_str("/");
+    script.push('/');
     script.push_str(FIRST_STAGE_TARGET_NIX_ORIG_CC_FILE);
     script.push_str("\" ]; then\n");
     script.push_str("      IFS= read -r target_orig_cc_root < \"$target_wrapper_root/");
     script.push_str(FIRST_STAGE_TARGET_NIX_SUPPORT_DIR);
-    script.push_str("/");
+    script.push('/');
     script.push_str(FIRST_STAGE_TARGET_NIX_ORIG_CC_FILE);
     script.push_str("\" || true\n");
     script.push_str("    fi\n");
@@ -3216,8 +3218,6 @@ fn should_retry_generated_script_launch(error: &std::io::Error, attempt: u32) ->
 }
 
 fn run_generated_script_with_log(script_path: &Path, log_path: &Path) -> Result<ExitStatus, RustSourceProviderError> {
-    debug_assert!(GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS > 1);
-    debug_assert!(GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS > 0);
     if script_path == log_path {
         return Err(RustSourceProviderError::Build("generated script path and build log path must differ".to_string()));
     }
@@ -7064,6 +7064,8 @@ mod tests {
     const SOURCE_ARCHIVE_FILE_MODE: u32 = 0o644;
     const SOURCE_ARCHIVE_EXECUTABLE_FILE_MODE: u32 = 0o755;
     const OBSERVED_RUST_190_SOURCE_TREE_ENTRIES: usize = 279_266;
+    const _: () = assert!(DIRECTORY_DIGEST_MAX_ENTRIES > OBSERVED_RUST_190_SOURCE_TREE_ENTRIES);
+    const _: () = assert!(OBSERVED_RUST_190_SOURCE_TREE_ENTRIES > 0);
     const SHA256_HEX_CHAR_COUNT: usize = 64;
     const FIRST_STAGE_PATCH_PLAN_MIN_OPERATIONS: usize = 9;
     const RUST_BOOTSTRAP_PATCH_PLAN_MIN_OPERATIONS: usize = 6;
@@ -7175,12 +7177,6 @@ mod tests {
         assert!(machine_aliases.contains("x86_64-linux-musl"));
         assert!(!candidates.iter().any(|candidate| candidate == "cc"));
         assert!(!words.contains(" ld "));
-    }
-
-    #[test]
-    fn directory_digest_entry_limit_covers_observed_rust_source_tree() {
-        assert!(DIRECTORY_DIGEST_MAX_ENTRIES > OBSERVED_RUST_190_SOURCE_TREE_ENTRIES);
-        assert!(OBSERVED_RUST_190_SOURCE_TREE_ENTRIES > 0);
     }
 
     #[test]

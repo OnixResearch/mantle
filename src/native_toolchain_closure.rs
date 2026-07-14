@@ -331,10 +331,11 @@ fn metadata_triple_matches(metadata: &ProviderMetadataSummary, role: NativeRootR
 fn advertised_triples(metadata: &ProviderMetadataSummary) -> Vec<String> {
     let mut triples = Vec::new();
     for candidate in [&metadata.host_triple, &metadata.target_triple, &metadata.target] {
-        if let Some(triple) = candidate.as_deref() {
-            if !triple.trim().is_empty() && !triples.iter().any(|existing| existing == triple) {
-                triples.push(triple.to_string());
-            }
+        if let Some(triple) = candidate.as_deref()
+            && !triple.trim().is_empty()
+            && !triples.iter().any(|existing| existing == triple)
+        {
+            triples.push(triple.to_string());
         }
     }
     triples

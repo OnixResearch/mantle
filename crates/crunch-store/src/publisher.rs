@@ -8,7 +8,7 @@
 //! r[impl remote_builds.production_verified_publication]
 
 use std::fmt;
-use std::sync::Arc;
+#[cfg(test)]
 use std::sync::Mutex;
 
 use async_trait::async_trait;
@@ -44,12 +44,21 @@ impl Publisher for NoopPublisher {
 
 /// A publisher that records every PathInfo it receives and optionally
 /// fails on request. Used for testing publication hooks.
+#[cfg(test)]
 #[derive(Debug)]
 pub struct RecordingPublisher {
     calls: Mutex<Vec<String>>,
     fail_on_next: Mutex<bool>,
 }
 
+#[cfg(test)]
+impl Default for RecordingPublisher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
 impl RecordingPublisher {
     pub fn new() -> Self {
         Self {
@@ -71,6 +80,7 @@ impl RecordingPublisher {
     }
 }
 
+#[cfg(test)]
 #[async_trait]
 impl Publisher for RecordingPublisher {
     async fn publish(&self, path_info: &PathInfo) -> Result<(), String> {

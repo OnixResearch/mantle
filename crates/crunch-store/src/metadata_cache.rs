@@ -192,11 +192,7 @@ pub fn metadata_ttl_for_class(class: MetadataClass) -> u64 {
 }
 
 /// Create a fresh [`MetadataCacheEntry`] at the given time.
-pub fn new_metadata_entry(
-    key: MetadataCacheKey,
-    now_secs: u64,
-    detail: String,
-) -> MetadataCacheEntry {
+pub fn new_metadata_entry(key: MetadataCacheKey, now_secs: u64, detail: String) -> MetadataCacheEntry {
     let ttl = metadata_ttl_for_class(key.metadata_class);
     MetadataCacheEntry {
         key,
@@ -227,10 +223,7 @@ impl AdmissionSummary {
         }
     }
 
-    pub fn with_reused_metadata(
-        reason: &str,
-        validity: MetadataValidity,
-    ) -> Self {
+    pub fn with_reused_metadata(reason: &str, validity: MetadataValidity) -> Self {
         Self {
             reason: reason.to_string(),
             metadata_reused: true,
@@ -297,13 +290,11 @@ impl AdvisoryMetadataCache {
             entries.truncate(self.max_entries);
         }
         let path = Self::file_path(state_dir);
-        std::fs::create_dir_all(state_dir)
-            .map_err(|err| format!("creating {}: {err}", state_dir.display()))?;
-        let json = serde_json::to_vec_pretty(&entries)
-            .map_err(|err| format!("serializing {}: {err}", path.display()))?;
+        std::fs::create_dir_all(state_dir).map_err(|err| format!("creating {}: {err}", state_dir.display()))?;
+        let json =
+            serde_json::to_vec_pretty(&entries).map_err(|err| format!("serializing {}: {err}", path.display()))?;
         let tmp_path = state_dir.join(format!("{}.tmp", METADATA_CACHE_FILENAME));
-        std::fs::write(&tmp_path, json)
-            .map_err(|err| format!("writing {}: {err}", tmp_path.display()))?;
+        std::fs::write(&tmp_path, json).map_err(|err| format!("writing {}: {err}", tmp_path.display()))?;
         std::fs::rename(&tmp_path, &path)
             .map_err(|err| format!("renaming {} -> {}: {err}", tmp_path.display(), path.display()))?;
         Ok(())
@@ -372,16 +363,10 @@ mod tests {
     const STORE_PREFIX: &str = "/mantle/store";
 
     fn sample_key(class: MetadataClass) -> MetadataCacheKey {
-        build_metadata_cache_key(
-            "https://cache.example.com",
-            VALID_DIGEST,
-            STORE_PREFIX,
-            "digest-hex",
-            class,
-        )
+        build_metadata_cache_key("https://cache.example.com", VALID_DIGEST, STORE_PREFIX, "digest-hex", class)
     }
 
-    fn sample_entry(key: MetadataCacheKey, created: u64, ttl: u64) -> MetadataCacheEntry {
+    fn sample_entry(key: MetadataCacheKey, created: u64) -> MetadataCacheEntry {
         new_metadata_entry(key, created, "sample detail".to_string())
     }
 
@@ -397,7 +382,7 @@ mod tests {
     fn put_and_get_roundtrip() {
         let state_dir = tempfile::tempdir().unwrap();
         let mut cache = AdvisoryMetadataCache::load(state_dir.path());
-        let entry = sample_entry(sample_key(MetadataClass::Narinfo), 1000, 900);
+        let entry = sample_entry(sample_key(MetadataClass::Narinfo), 1000);
         let key = entry.key.clone();
 
         cache.put(entry);
@@ -412,7 +397,7 @@ mod tests {
     fn remove_removes_existing_entry() {
         let state_dir = tempfile::tempdir().unwrap();
         let mut cache = AdvisoryMetadataCache::load(state_dir.path());
-        let entry = sample_entry(sample_key(MetadataClass::NegativeMiss), 1000, 300);
+        let entry = sample_entry(sample_key(MetadataClass::NegativeMiss), 1000);
         let key = entry.key.clone();
 
         cache.put(entry);
@@ -436,7 +421,7 @@ mod tests {
         let mut cache = AdvisoryMetadataCache::load(state_dir.path());
 
         let fresh_key = sample_key(MetadataClass::Narinfo);
-        let mut fresh = sample_entry(fresh_key, 1000, 900);
+        let mut fresh = sample_entry(fresh_key, 1000);
         // Make this entry have a very long TTL
         fresh.expires_at_secs = 10_000;
 
@@ -445,10 +430,10 @@ mod tests {
             k.output_digest = "stale-digest".to_string();
             k
         };
-        let stale = sample_entry(stale_key, 1000, 300);
+        let stale = sample_entry(stale_key, 1000);
         // Set expiry in the past
         // Force expiry by setting expires_at_secs explicitly
-        let mut stale_forced = MetadataCacheEntry {
+        let stale_forced = MetadataCacheEntry {
             key: stale.key.clone(),
             created_at_secs: 1000,
             expires_at_secs: 500, // expired before "now" (600)
@@ -471,11 +456,11 @@ mod tests {
         let mut cache = AdvisoryMetadataCache::load(state_dir.path());
         let key = sample_key(MetadataClass::Narinfo);
 
-        let mut first = sample_entry(key.clone(), 1000, 900);
+        let mut first = sample_entry(key.clone(), 1000);
         first.detail = "first".to_string();
         cache.put(first);
 
-        let mut second = sample_entry(key.clone(), 1100, 900);
+        let mut second = sample_entry(key.clone(), 1100);
         second.detail = "second".to_string();
         cache.put(second);
 
@@ -490,8 +475,7 @@ mod tests {
         {
             // Create and save.
             let mut cache = AdvisoryMetadataCache::load(state_dir.path());
-            let entry = sample_entry(sample_key(MetadataClass::CachePreflight), 1000, 900);
-            let key = entry.key.clone();
+            let entry = sample_entry(sample_key(MetadataClass::CachePreflight), 1000);
             cache.put(entry);
             cache.save(state_dir.path());
 
@@ -536,7 +520,7 @@ mod tests {
     fn force_refresh_disables_get() {
         let state_dir = tempfile::tempdir().unwrap();
         let mut cache = AdvisoryMetadataCache::load(state_dir.path());
-        let entry = sample_entry(sample_key(MetadataClass::Narinfo), 1000, 900);
+        let entry = sample_entry(sample_key(MetadataClass::Narinfo), 1000);
         let key = entry.key.clone();
         cache.put(entry);
         assert!(cache.get(&key).is_some());

@@ -485,13 +485,13 @@ fn classify_candidate(candidate: &RouteCandidateFacts, policy: RoutePolicy) -> C
             detail: Some(candidate.route.as_str().to_string()),
         };
     }
-    if let Some(summary) = &candidate.upload_summary {
-        if let Some(forbidden) = summary.forbidden_by(policy.upload_policy) {
-            return CandidateDecision::Reject {
-                reason_code: "upload-privacy-denied".to_string(),
-                detail: Some(format!("forbidden upload class: {forbidden:?}")),
-            };
-        }
+    if let Some(summary) = &candidate.upload_summary
+        && let Some(forbidden) = summary.forbidden_by(policy.upload_policy)
+    {
+        return CandidateDecision::Reject {
+            reason_code: "upload-privacy-denied".to_string(),
+            detail: Some(format!("forbidden upload class: {forbidden:?}")),
+        };
     }
     CandidateDecision::Select
 }

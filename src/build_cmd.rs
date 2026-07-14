@@ -236,10 +236,10 @@ fn write_success_logs(
                 eprintln!("{log}");
                 eprintln!("--- end log ---");
             }
-        } else if !outcome.cached {
-            if let Err(failure) = write_log(logs_dir, &outcome.drv_path, label, true, "(no output captured)") {
-                failures.push(failure);
-            }
+        } else if !outcome.cached
+            && let Err(failure) = write_log(logs_dir, &outcome.drv_path, label, true, "(no output captured)")
+        {
+            failures.push(failure);
         }
     }
     failures

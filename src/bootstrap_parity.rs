@@ -2161,18 +2161,18 @@ fn marker_is_standalone(content: &str, marker: &str) -> bool {
         // dot, dash, or forward slash.
         let prev_is_word = abs > 0
             && (lower[..abs].chars().last().unwrap().is_ascii_alphanumeric()
-                || lower[..abs].chars().last().unwrap() == '_'
-                || lower[..abs].chars().last().unwrap() == '.'
-                || lower[..abs].chars().last().unwrap() == '-');
+                || lower[..abs].ends_with('_')
+                || lower[..abs].ends_with('.')
+                || lower[..abs].ends_with('-'));
         let next_is_word = end < lower.len()
             && (lower[end..].chars().next().unwrap().is_ascii_alphanumeric()
-                || lower[end..].chars().next() == Some('_')
-                || lower[end..].chars().next() == Some('/')
-                || lower[end..].chars().next() == Some('-'));
+                || lower[end..].starts_with('_')
+                || lower[end..].starts_with('/')
+                || lower[end..].starts_with('-'));
         // Reject quote-bounded matches: `'STUB'` is a heredoc delimiter,
         // not a placeholder marker.
-        let prev_is_quote = abs > 0 && lower[..abs].chars().last().unwrap() == '\'';
-        let next_is_quote = end < lower.len() && lower[end..].chars().next() == Some('\'');
+        let prev_is_quote = abs > 0 && lower[..abs].ends_with('\'');
+        let next_is_quote = end < lower.len() && lower[end..].starts_with('\'');
         // Reject heredoc terminators: marker where everything before it
         // on the line is whitespace/newline, and everything after it on
         // the line is whitespace/newline (marker is the sole non-whitespace).
@@ -2185,7 +2185,7 @@ fn marker_is_standalone(content: &str, marker: &str) -> bool {
         let is_heredoc_terminator = prev_line_is_blank && next_line_is_blank;
         // Reject if any of these are word characters, quote-bounded,
         // or a heredoc terminator.
-        if !prev_is_word && !next_is_word && !(prev_is_quote && next_is_quote) && !is_heredoc_terminator {
+        if !(prev_is_word || next_is_word || (prev_is_quote && next_is_quote) || is_heredoc_terminator) {
             return true;
         }
         start = abs + 1;

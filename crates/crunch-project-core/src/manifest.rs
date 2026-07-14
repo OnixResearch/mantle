@@ -186,8 +186,11 @@ impl ManifestInput {
         }
 
         if let Some(probe) = self.freshness.clone() {
-            if let Err(err) = validate_freshness_probe(probe) {
-                problems.push(format!("input '{}': invalid freshness probe: {err}", self.name));
+            match validate_freshness_probe(probe) {
+                Ok(_) => {}
+                Err(err) => {
+                    problems.push(format!("input '{}': invalid freshness probe: {err}", self.name));
+                }
             }
         }
 

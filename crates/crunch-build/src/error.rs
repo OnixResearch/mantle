@@ -76,7 +76,7 @@ impl From<crate::NetworkPolicyDenied> for Error {
             action_name: value.action_name,
             capability: value.capability,
             diagnostic: value.diagnostic,
-            report: Box::new(value.report),
+            report: value.report,
         }
     }
 }

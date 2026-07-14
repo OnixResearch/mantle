@@ -102,6 +102,8 @@ pub struct ArchiveListedPath {
     pub payload_blake3: String,
 }
 
+/// Bounded wire frames stay inline so serde reads and writes one complete frame value.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "frame", rename_all = "kebab-case")]
 enum ArchiveFrame {
@@ -1496,9 +1498,11 @@ mod tests {
 
     #[test]
     fn pathinfo_fixture_service_is_bounded() {
+        const {
+            assert!(MAX_ARCHIVE_RECORDS > 0);
+            assert!(MAX_ARCHIVE_METADATA_BYTES >= FRAME_LEN_BYTES);
+        }
         let service = LruPathInfoService::with_capacity("archive-fixture".to_string(), NonZeroUsize::new(32).unwrap());
         let _: Arc<dyn PathInfoService> = Arc::new(service);
-        assert!(MAX_ARCHIVE_RECORDS > 0);
-        assert!(MAX_ARCHIVE_METADATA_BYTES >= FRAME_LEN_BYTES);
     }
 }

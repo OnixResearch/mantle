@@ -1573,7 +1573,7 @@ mod tests {
             checkpoint(&manifest, BTreeSet::from([first.clone()]), TEST_SEQUENCE_ONE, TEST_TRANSFERRED_BYTES, 0);
 
         let mut tampered = previous.clone();
-        tampered.transferred_bytes = tampered.transferred_bytes + TEST_TRANSFERRED_BYTES;
+        tampered.transferred_bytes += TEST_TRANSFERRED_BYTES;
         let tamper_error =
             plan_remote_transfer_resume(&manifest, policy(), &receiver, None, Some(&tampered)).unwrap_err();
 

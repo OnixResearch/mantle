@@ -1250,7 +1250,7 @@ fn validate_manifest(manifest: &SourceBundleManifest) -> Result<(), RunError> {
 }
 
 fn normalize_source_records(mut records: Vec<SourceRecord>) -> Result<Vec<SourceRecord>, RunError> {
-    records.sort_by(|left, right| record_sort_key(left).cmp(&record_sort_key(right)));
+    records.sort_by_key(record_sort_key);
     let mut normalized = Vec::<SourceRecord>::with_capacity(records.len());
     for record in records {
         validate_source_record(&record)?;
@@ -1764,7 +1764,7 @@ fn digest_offline_preflight_state(
     matching_records: &[SourceRecord],
 ) -> Result<String, RunError> {
     let mut records = matching_records.to_vec();
-    records.sort_by(|left, right| record_sort_key(left).cmp(&record_sort_key(right)));
+    records.sort_by_key(record_sort_key);
     let mut hasher = blake3::Hasher::new();
     hasher.update(SOURCE_OFFLINE_PREFLIGHT_STATE_MARKER);
     hasher.update(manifest_blake3.unwrap_or("none").as_bytes());

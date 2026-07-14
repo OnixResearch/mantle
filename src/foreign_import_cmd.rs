@@ -493,10 +493,10 @@ fn validate_inputs(
         Ok((_, receipt)) => receipt,
         Err(diagnostic) => return rejected_report(VALIDATE_COMMAND, diagnostic),
     };
-    if let Some(receipt) = receipt.as_ref() {
-        if let Err(diagnostic) = admit_translated_graph(&graph, index.as_ref(), &policy, receipt) {
-            return rejected_report(VALIDATE_COMMAND, diagnostic);
-        }
+    if let Some(receipt) = receipt.as_ref()
+        && let Err(diagnostic) = admit_translated_graph(&graph, index.as_ref(), &policy, receipt)
+    {
+        return rejected_report(VALIDATE_COMMAND, diagnostic);
     }
     accepted_report(VALIDATE_COMMAND, Some(translated), None)
 }

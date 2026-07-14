@@ -73,7 +73,7 @@ fn foreign_import_cli_validates_and_plans_checked_fixtures() {
         let expected_validate = fixture_json(case.validate_snapshot);
         assert_eq!(validate, expected_validate);
         assert_eq!(validate["accepted"], true);
-        assert!(validate["receipt"]["raw_graph_digest"].as_str().unwrap().len() > 0);
+        assert!(!validate["receipt"]["raw_graph_digest"].as_str().unwrap().is_empty());
 
         let plan = run_plan_json(fixture_path(case.graph), fixture_path(case.index), fixture_path(POLICY));
         let expected_plan = fixture_json(case.plan_snapshot);

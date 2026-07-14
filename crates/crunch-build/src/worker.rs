@@ -191,7 +191,7 @@ pub struct NativeDynamicPlanScan {
 }
 
 enum NativeDynamicPlanOutputScan {
-    Accepted(NativeDynamicPlanAccepted),
+    Accepted(Box<NativeDynamicPlanAccepted>),
     Rejected(NativeDynamicPlanRejection),
 }
 
@@ -524,12 +524,16 @@ fn build_native_dynamic_derivation(
     })
 }
 
+type NativeDynamicInputDerivations = BTreeMap<StorePath<String>, BTreeSet<String>>;
+type NativeDynamicInputSources = BTreeSet<StorePath<String>>;
+type NativeDynamicInputs = (NativeDynamicInputDerivations, NativeDynamicInputSources);
+
 fn resolve_native_dynamic_inputs(
     unit: &DynamicUnit,
     sources: &BTreeMap<String, StorePath<String>>,
     registered_units: &BTreeMap<String, StorePath<String>>,
     store_dir: &str,
-) -> Result<(BTreeMap<StorePath<String>, BTreeSet<String>>, BTreeSet<StorePath<String>>), Error> {
+) -> Result<NativeDynamicInputs, Error> {
     let mut input_derivations: BTreeMap<StorePath<String>, BTreeSet<String>> = BTreeMap::new();
     let mut input_sources = BTreeSet::new();
     for input in &unit.derivation.inputs {
@@ -1256,7 +1260,7 @@ impl Worker {
                 .scan_declared_native_dynamic_output(producer_key, output_name, outcome, builder, store_prefix)
                 .await?
             {
-                NativeDynamicPlanOutputScan::Accepted(accepted) => scan.accepted.push(accepted),
+                NativeDynamicPlanOutputScan::Accepted(accepted) => scan.accepted.push(*accepted),
                 NativeDynamicPlanOutputScan::Rejected(rejected) => scan.rejected.push(rejected),
             }
         }
@@ -1322,13 +1326,13 @@ impl Worker {
         };
         let raw_digest = blake3_hex(&content);
         match decode_validated_plan_v1(&content, store_prefix) {
-            Ok(plan) => Ok(NativeDynamicPlanOutputScan::Accepted(accepted_native_plan(
+            Ok(plan) => Ok(NativeDynamicPlanOutputScan::Accepted(Box::new(accepted_native_plan(
                 producer_key,
                 output_name,
                 path_info.store_path.clone(),
                 raw_digest,
                 plan,
-            ))),
+            )))),
             Err(err) => Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(
                 producer_key,
                 output_name,

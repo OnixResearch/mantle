@@ -831,3 +831,102 @@ Mantle MAY propagate bounded validated W3C trace context across supported remote
 - WHEN Mantle validates the carrier
 - THEN it MUST drop or reject the context according to policy with bounded diagnostics
 - AND the remote request's authorization, scheduling, execution, and output-admission result MUST be unchanged by that diagnostic failure.
+
+### Requirement: Failed remote sandbox capture is explicit and bounded
+r[remote_builds.failure_debug_capture]
+
+Mantle MUST default remote failure bundles to metadata-only evidence. Failed-sandbox artifact capture MUST require explicit typed policy defining allowed relative paths or artifact classes, sensitivity policy, regular-file handling, maximum files/bytes/depth, retention, and cleanup behavior. Capture selection MUST be decided before filesystem reads, and rejected capture MUST NOT delay unboundedly or rewrite the remote build result.
+
+#### Scenario: Allowed artifact is captured before cleanup
+
+- GIVEN a remote attempt fails and policy explicitly allows a bounded regular-file artifact under the sandbox root
+- WHEN Mantle applies the accepted capture plan before cleanup
+- THEN it MAY ingest the artifact as a content-addressed debug object and bind its ref in the bundle
+- AND sandbox cleanup or quarantine MUST continue according to the recorded policy outcome.
+
+#### Scenario: Unsafe artifact is rejected
+
+- GIVEN a requested artifact is absolute, traverses above the sandbox, follows an escaping symlink, is a socket/device/FIFO, exceeds file/count/byte/depth limits, or matches sensitive policy
+- WHEN capture planning or application reaches it
+- THEN Mantle MUST reject the artifact before publication
+- AND it MUST NOT include host content, secrets, or an unverified ref in the debug bundle.
+
+#### Scenario: Capture failure does not rewrite build truth
+
+- GIVEN the remote build has already failed and debug capture encounters an I/O, quota, scrub, ingestion, or cleanup error
+- WHEN Mantle reports the attempt
+- THEN the original failure phase and output-admission state MUST remain unchanged
+- AND debug-capture degradation or quarantine MUST be reported as a separate diagnostic fact.
+
+#### Scenario: Retention preserves active replay lease only
+
+- GIVEN debug bundles and captured objects are subject to retention while one bundle has an active inspect or replay lease
+- WHEN retention runs
+- THEN Mantle MUST preserve the active leased bundle and apply only the accepted bounded deletion plan to eligible roots
+- AND expired metadata MUST NOT authorize deletion of ordinary build outputs or unrelated CAS objects.
+
+### Requirement: Remote stateful workspaces use bounded fenced leases
+r[remote_builds.stateful_workspace_leases]
+
+Mantle MUST bind each mutable remote workspace lease to a worker identity, authority class, action-compatibility digest, toolchain refs, stable guest mount path, current job, attempt, fence generation, quota policy, and retention class. A stale attempt, different worker, different authority, incompatible action/toolchain, concurrent owner, or unknown cleanup state MUST NOT read or mutate the workspace.
+
+#### Scenario: Current compatible attempt reuses workspace
+
+- GIVEN a worker holds a compatible bounded workspace and the current job/attempt/fence acquires its exclusive lease
+- WHEN the remote sandbox starts in mutable-session mode
+- THEN Mantle MAY mount the workspace at the declared stable guest path
+- AND status/build evidence MUST identify warm-state use and its narrower claim class without exposing host paths or workspace contents.
+
+#### Scenario: Stale or foreign owner is rejected
+
+- GIVEN a workspace lease belongs to a superseded attempt, different worker, different authority class, incompatible action/toolchain, or another active owner
+- WHEN a remote request asks to mount, renew, snapshot, scrub, or delete it
+- THEN Mantle MUST reject the mutation before sandbox start or filesystem change
+- AND current lease and workspace state MUST remain unchanged.
+
+#### Scenario: Failed cleanup quarantines state
+
+- GIVEN a remote build ends and required scrub, bounded scan, snapshot, or cleanup cannot complete
+- WHEN Mantle transitions the workspace lease
+- THEN it MUST quarantine the workspace and block subsequent reuse
+- AND it MUST report cleanup failure separately from execution/output truth while withholding any claim that requires successful cleanup.
+
+#### Scenario: Retention preserves active leases
+
+- GIVEN workspace retention or worker garbage collection runs
+- WHEN active, idle, expired, and quarantined workspaces are classified under policy
+- THEN Mantle MUST preserve current active leases and apply only the accepted bounded eviction plan
+- AND stale metadata or storage pressure MUST NOT authorize deletion of a current workspace.
+
+### Requirement: Remote worker resources use fenced leases
+r[remote_builds.fenced_worker_resource_leases]
+
+Mantle MUST reserve quantified worker capacities and named scarce tokens through durable leases bound to the normalized job, current attempt, fence generation, worker identity, requirement digest, and reservation digest before remote assignment. Lease authorization MUST control scheduling capacity only and MUST NOT establish tool identity, output trust, attestation validity, or license compliance.
+
+#### Scenario: Current assignment owns one reservation
+
+- GIVEN a compatible worker has sufficient unreserved capacity
+- WHEN the coordinator commits an assignment
+- THEN it MUST durably commit exactly one current job/attempt/fence-bound reservation before instructing the worker to execute
+- AND concurrent assignments MUST observe the committed remaining capacity.
+
+#### Scenario: Stale attempt cannot mutate capacity
+
+- GIVEN reassignment advanced the current attempt or fence
+- WHEN the superseded worker tries to renew, release, resize, or complete its old resource lease
+- THEN Mantle MUST reject the mutation with a stale-fence diagnostic
+- AND current reservation and job state MUST remain unchanged.
+
+#### Scenario: Restart recovers conservatively
+
+- GIVEN the coordinator or worker restarts with durable active resource leases
+- WHEN registrations and job state are reconciled
+- THEN Mantle MUST preserve or release each reservation through an explicit current-state transition
+- AND it MUST NOT silently double-allocate capacity or report a leaked reservation as successful execution.
+
+#### Scenario: Named token does not confer output trust
+
+- GIVEN a worker obtains a named scarce token such as a licensed-tool seat
+- WHEN the build completes
+- THEN the token MUST count only as resource authorization evidence
+- AND returned outputs MUST still pass ordinary action identity, PathInfo, signature, attestation, and producer-policy admission.
