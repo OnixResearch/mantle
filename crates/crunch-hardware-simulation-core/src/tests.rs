@@ -196,6 +196,7 @@ fn plan_request() -> HardwarePlanRequest {
             String::from(STORE_D),
             String::from(STORE_E),
         ],
+        runtime_library_paths: vec![format!("{STORE_D}/lib")],
         compile_flags: vec![String::from("-std=c++17"), String::from("-O1")],
         link_flags: vec![String::from("-pthread")],
         generated_units: generated_units(),
@@ -327,8 +328,26 @@ fn plan_has_independent_compile_units_one_link_and_parameterized_smoke_roots() {
     assert_eq!(compile_count, generated_units().len());
     assert_eq!(link_count, 1);
     assert_eq!(smoke_count, profile().smoke_cases.len());
+    let smoke_results = plan
+        .plan
+        .units
+        .iter()
+        .filter(|unit| unit.id.starts_with("smoke."))
+        .map(|unit| {
+            let json = unit.derivation.env.get("SMOKE_RESULT_JSON").unwrap();
+            let result = serde_json::from_str::<HardwareSmokeResult>(json).unwrap();
+            let validation = validate_smoke_result(&result, TEXT_BOUND, LOG_BOUND);
+            assert!(unit.derivation.args[1].contains("$SMOKE_RESULT_JSON"));
+            assert!(validation.valid);
+            assert!(validation.publishable);
+            result
+        })
+        .collect::<Vec<_>>();
+
     assert_eq!(plan.action_graph.len(), EXPECTED_ACTION_COUNT);
-    assert_eq!(plan.plan.roots, vec!["smoke.one-plus-two", "smoke.zero-plus-zero"]);
+    assert_eq!(plan.plan.roots, vec!["link.simulator", "smoke.one-plus-two", "smoke.zero-plus-zero"]);
+    assert_eq!(smoke_results.len(), profile().smoke_cases.len());
+    assert!(smoke_results.iter().all(|result| result.schema == SMOKE_RESULT_SCHEMA));
     assert!(plan.plan.units.iter().all(|unit| unit.derivation.addressing_mode == AddressingMode::InputAddressed));
     assert!(
         plan.plan
@@ -354,6 +373,7 @@ fn plan_rejects_undeclared_output_missing_file_unsupported_command_duplicate_and
     let missing = validate_generated_files(&plan, vec![String::from("Vtiny_adder.cpp")]);
     let mut overflow = request;
     overflow.bounds.max_generated_units = 1;
+    overflow.runtime_library_paths = vec![String::from("/usr/lib"), format!("{STORE_GEN}/lib")];
     let overflow = build_hardware_plan(overflow).unwrap_err();
 
     assert!(diagnostics.contains(&String::from("plan-undeclared-output")));
@@ -361,6 +381,8 @@ fn plan_rejects_undeclared_output_missing_file_unsupported_command_duplicate_and
     assert!(diagnostics.contains(&String::from("duplicate-plan-unit")));
     assert!(missing.contains(&String::from("generated-file-missing")));
     assert!(overflow.contains(&String::from("generated-unit-count-invalid")));
+    assert!(overflow.contains(&String::from("runtime-library-path-not-nix-store")));
+    assert!(overflow.contains(&String::from("runtime-library-root-missing")));
 }
 
 #[test]
@@ -375,7 +397,19 @@ fn smoke_result_requires_verdict_exit_refs_logs_and_observation_agreement() {
     contradictory.observed = String::from("4");
     contradictory.stdout.byte_count = LOG_BOUND.saturating_add(1);
     contradictory.action_ref = String::from("stale-ref");
+    contradictory.source_refs.push(String::from("stale-source-ref"));
+    contradictory.source_refs.push(contradictory.source_refs[0].clone());
     let contradictory = validate_smoke_result(&contradictory, TEXT_BOUND, LOG_BOUND);
+    let generated = successful_smoke_result(
+        &profile().smoke_cases[0],
+        typed_ref(SIMULATOR_REF_PREFIX, "simulator"),
+        typed_ref(ACTION_REF_PREFIX, "generated-smoke"),
+        validated_profile().profile_ref,
+        validated_profile().cohort_ref,
+        validated_profile().selected_source_refs,
+        TEXT_BOUND,
+    )
+    .unwrap();
 
     assert!(passing.valid);
     assert!(passing.publishable);
@@ -385,7 +419,12 @@ fn smoke_result_requires_verdict_exit_refs_logs_and_observation_agreement() {
     assert!(!contradictory.publishable);
     assert!(contradictory.diagnostics.contains(&String::from("smoke-pass-observation-mismatch")));
     assert!(contradictory.diagnostics.contains(&String::from("action-ref-prefix-invalid")));
+    assert!(contradictory.diagnostics.contains(&String::from("source-ref-prefix-invalid")));
+    assert!(contradictory.diagnostics.contains(&String::from("smoke-source-ref-duplicate")));
     assert!(contradictory.diagnostics.contains(&String::from("stdout-byte-bound-exceeded")));
+    assert_eq!(generated.stdout.byte_count, 1);
+    assert_eq!(generated.stderr.byte_count, 0);
+    assert!(generated.stdout.log_ref.starts_with(LOG_REF_PREFIX));
 }
 
 #[test]

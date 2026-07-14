@@ -18,6 +18,8 @@ const TEST_FILE_MODE_EXECUTABLE: u32 = 0o755;
 const TEST_TIMEOUT_MS: u64 = 2_000;
 const TEST_SHORT_TIMEOUT_MS: u64 = 10;
 const TEST_LOG_BOUND: u64 = 1_024;
+const PROVEN_TOOL_CLOSURE_PATH_COUNT: usize = 53;
+const PROVEN_TOOL_CLOSURE_DIGEST: &str = "32e93e2530eb0b3afcf3fd7062c1543441e02b5ba027a161e76631dcf31f31ed";
 const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 #[test]
@@ -129,6 +131,17 @@ fn tool_observation_hashes_only_declared_member_files_and_closure_paths() {
     assert_eq!(observation.closure_paths.len(), closure.len());
     assert_ne!(observation.closure_paths_blake3, DIGEST);
     assert!(observation.member_binary_blake3.values().all(|digest| digest.len() == DIGEST.len()));
+}
+
+#[test]
+fn checked_tool_closure_manifest_has_proven_identity() {
+    let manifest = include_str!("../../../tests/fixtures/hardware-simulation/tool-closure-paths.txt");
+    let paths = manifest.lines().map(PathBuf::from).collect::<Vec<_>>();
+    let canonical = canonical_paths(paths).unwrap();
+
+    assert_eq!(canonical.len(), PROVEN_TOOL_CLOSURE_PATH_COUNT);
+    assert_eq!(hash_path_list(CLOSURE_HASH_DOMAIN, &canonical), PROVEN_TOOL_CLOSURE_DIGEST);
+    assert!(canonical.iter().all(|path| path.starts_with("/nix/store")));
 }
 
 #[test]

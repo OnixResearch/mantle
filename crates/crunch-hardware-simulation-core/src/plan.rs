@@ -60,7 +60,8 @@ pub fn build_hardware_plan(request: HardwarePlanRequest) -> Result<HardwarePlan,
     let mut units = compile;
     units.push(link);
     units.extend(smoke);
-    let mut roots = request.smoke_cases.iter().map(|case| smoke_unit_id(&case.id)).collect::<Vec<_>>();
+    let mut roots = vec![String::from(LINK_UNIT_ID)];
+    roots.extend(request.smoke_cases.iter().map(|case| smoke_unit_id(&case.id)));
     roots.sort();
     let plan = MantlePlanV1 {
         schema: String::from(MANTLE_PLAN_SCHEMA),
@@ -155,6 +156,7 @@ fn validate_request(request: &HardwarePlanRequest) -> Vec<String> {
         push_result(&mut diagnostics, validate_store_path(path, "tool-path"));
     }
     validate_tool_closure(request, &mut diagnostics);
+    validate_runtime_library_paths(request, &mut diagnostics);
     validate_plan_count(
         request.generated_units.len(),
         request.bounds.max_generated_units,
@@ -317,6 +319,17 @@ fn build_smoke_units(
         let simulator_ref =
             digest_ref(crate::digest::SIMULATOR_REF_PREFIX, b"mantle.hardware.simulator.v1", &link_action)
                 .map_err(|error| vec![error])?;
+        let smoke_result = crate::smoke::successful_smoke_result(
+            case,
+            simulator_ref.clone(),
+            action_ref.clone(),
+            request.profile_ref.clone(),
+            request.cohort_ref.clone(),
+            request.source_refs.clone(),
+            request.bounds.max_text_bytes,
+        )?;
+        let smoke_result_json =
+            serde_json::to_string(&smoke_result).map_err(|error| vec![format!("smoke-result-json:{error}")])?;
         let mut env = common_env(request, &action_ref);
         env.extend([
             (String::from("SIMULATOR"), format!("{{{{mantle-unit-output:{}:{OUTPUT_NAME}}}}}", link_unit.id)),
@@ -324,6 +337,8 @@ fn build_smoke_units(
             (String::from("SMOKE_CASE_ID"), case.id.clone()),
             (String::from("SMOKE_INPUT"), case.input.clone()),
             (String::from("SMOKE_EXPECTED"), case.expected.clone()),
+            (String::from("SMOKE_RESULT_JSON"), smoke_result_json),
+            (String::from("LD_LIBRARY_PATH"), request.runtime_library_paths.join(":")),
         ]);
         let mut inputs = vec![DynamicInput::UnitOutput {
             unit: link_unit.id.clone(),
@@ -414,7 +429,7 @@ fn link_command(request: &HardwarePlanRequest, objects: &[String]) -> String {
 
 fn smoke_command() -> String {
     String::from(
-        "set -eu; observed=\"$($SIMULATOR \"$SMOKE_INPUT\")\"; test \"$observed\" = \"$SMOKE_EXPECTED\"; printf '%s\\n' \"$observed\" > \"$out\"",
+        "set -eu; stderr_file=./smoke.stderr; : > \"$stderr_file\"; set +e; observed=\"$($SIMULATOR \"$SMOKE_INPUT\" 2>\"$stderr_file\")\"; status=$?; set -e; if test \"$status\" -ne 0; then while IFS= read -r line; do printf '%s\\n' \"$line\" >&2; done < \"$stderr_file\"; exit \"$status\"; fi; if test -s \"$stderr_file\"; then while IFS= read -r line; do printf '%s\\n' \"$line\" >&2; done < \"$stderr_file\"; exit 1; fi; test \"$observed\" = \"$SMOKE_EXPECTED\"; printf '%s\\n' \"$SMOKE_RESULT_JSON\" > \"$out\"",
     )
 }
 
@@ -487,7 +502,12 @@ fn validate_unit_common(unit: &DynamicUnit, request: &HardwarePlanRequest, diagn
             diagnostics,
             validate_identifier(&key.to_ascii_lowercase().replace('_', "-"), "plan-env-key", MAX_ENV_KEY_BYTES),
         );
-        if value.len() > usize::try_from(request.bounds.max_text_bytes).unwrap_or(usize::MAX) {
+        let maximum_bytes = if key == "SMOKE_RESULT_JSON" {
+            request.bounds.max_plan_bytes
+        } else {
+            request.bounds.max_text_bytes
+        };
+        if value.len() > usize::try_from(maximum_bytes).unwrap_or(usize::MAX) {
             diagnostics.push(String::from("plan-env-value-too-large"));
         }
     }
@@ -532,7 +552,19 @@ fn validate_smoke_unit(unit: &DynamicUnit, diagnostics: &mut Vec<String>) {
         .iter()
         .filter(|input| matches!(input, DynamicInput::UnitOutput { unit, .. } if unit == LINK_UNIT_ID))
         .count();
-    if !command.contains("$SIMULATOR") || !command.contains("$SMOKE_EXPECTED") || dependency_count != 1 {
+    let result_schema_present = unit
+        .derivation
+        .env
+        .get("SMOKE_RESULT_JSON")
+        .is_some_and(|value| value.contains(crate::model::SMOKE_RESULT_SCHEMA));
+    let runtime_libraries_declared = unit.derivation.env.get("LD_LIBRARY_PATH").is_some_and(|value| !value.is_empty());
+    if !command.contains("$SIMULATOR")
+        || !command.contains("$SMOKE_EXPECTED")
+        || !command.contains("$SMOKE_RESULT_JSON")
+        || !result_schema_present
+        || !runtime_libraries_declared
+        || dependency_count != 1
+    {
         diagnostics.push(String::from("unsupported-smoke-command"));
     }
 }
@@ -540,7 +572,12 @@ fn validate_smoke_unit(unit: &DynamicUnit, diagnostics: &mut Vec<String>) {
 fn validate_plan_graph(plan: &MantlePlanV1, request: &HardwarePlanRequest, diagnostics: &mut Vec<String>) {
     let units = plan.units.iter().map(|unit| unit.id.as_str()).collect::<BTreeSet<_>>();
     let roots = plan.roots.iter().map(String::as_str).collect::<BTreeSet<_>>();
-    if roots.len() != request.smoke_cases.len() || !roots.iter().all(|root| root.starts_with("smoke.")) {
+    let expected_root_count = request.smoke_cases.len().saturating_add(1);
+    let smoke_root_count = roots.iter().filter(|root| root.starts_with("smoke.")).count();
+    if roots.len() != expected_root_count
+        || smoke_root_count != request.smoke_cases.len()
+        || !roots.contains(LINK_UNIT_ID)
+    {
         diagnostics.push(String::from("plan-root-set-invalid"));
     }
     for unit in &plan.units {
@@ -612,6 +649,30 @@ fn validate_tool_closure(request: &HardwarePlanRequest, diagnostics: &mut Vec<St
     }
     debug_assert!(diagnostics.iter().all(|diagnostic| !diagnostic.is_empty()));
     debug_assert!(roots.len() <= request.tool_closure_paths.len());
+}
+
+fn validate_runtime_library_paths(request: &HardwarePlanRequest, diagnostics: &mut Vec<String>) {
+    validate_plan_count(
+        request.runtime_library_paths.len(),
+        MAX_TOOL_CLOSURE_PATHS,
+        "runtime-library-path",
+        diagnostics,
+    );
+    let closure_roots = request.tool_closure_paths.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    let mut unique_paths = BTreeSet::new();
+    for path in &request.runtime_library_paths {
+        push_result(diagnostics, validate_store_path(path, "runtime-library-path"));
+        if !unique_paths.insert(path.as_str()) {
+            diagnostics.push(String::from("runtime-library-path-duplicate"));
+        }
+        if let Ok(root) = store_root(path)
+            && !closure_roots.contains(root.as_str())
+        {
+            diagnostics.push(String::from("runtime-library-root-missing"));
+        }
+    }
+    debug_assert!(unique_paths.len() <= request.runtime_library_paths.len());
+    debug_assert!(diagnostics.iter().all(|diagnostic| !diagnostic.is_empty()));
 }
 
 fn tool_closure_inputs(request: &HardwarePlanRequest) -> Vec<DynamicInput> {

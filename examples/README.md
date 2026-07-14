@@ -52,6 +52,9 @@ Project examples show selector syntax after package composition. See `examples/p
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#goodbye` | named package store path with `bin/goodbye` | generated seed |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#checks.test-hello` | check output with `result` text `ok` | generated seed |
 | `examples/rust_compatibility_rail.rs` + `examples/rust_compatibility_surface_matrix.ncl` | `cargo test -p mantle --test rust_compatibility_rail` | generated representative Rust compatibility rail surface matrix; sandboxed offline Cargo smoke plus rust-plan bounded success/blocker receipt | fast + bwrap |
+| `examples/hardware_simulation_plan.rs` | `cargo run -p mantle --example hardware_simulation_plan -- request.json plan.json` | bounded generic `mantle-plan-v1` JSON with independent compile, link, and smoke units | fast planning; real Verilator rail is heavy + bwrap |
+
+The hardware plan generator consumes a JSON `HardwarePlanRequest`; it does not interpret HDL in Mantle core. The exact request construction, tool cohort, real execution command, evidence shape, seed boundary, and non-claims are documented in [`docs/hardware-simulation.md`](../docs/hardware-simulation.md).
 
 The representative Rust compatibility rail is lane-scoped evidence, not proof of
 full Cargo compatibility, compiler correctness, release reproducibility, or
@@ -91,6 +94,7 @@ These commands inspect local build evidence. They are not release or witness pro
 | `examples/benchmark_compare.rs` | Compares two benchmark bundles. | `tests/benchmark_harness.rs` |
 | `examples/benchmark_eval_backends.rs` | Evaluation backend benchmark. | `tests/benchmark_harness.rs` |
 | `examples/benchmark_lazy_eval.rs` | Lazy selected-root evaluation benchmark. | `tests/benchmark_harness.rs` |
+| `examples/benchmark_scheduler_priority.rs` | Scheduler-priority benchmark. | `tests/benchmark_harness.rs` |
 
 ## Common commands
 
