@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Prove that Mantle’s frontend-neutral build primitives can realize a bounded, hermetic, selectively reusable SystemVerilog simulation and smoke-test graph without making HDL semantics part of Mantle core.
+Defines the `hardware-simulation-builds` capability.
 
 ## Requirements
 
