@@ -372,6 +372,24 @@ pub struct ActionResultOutputProbe {
     pub reused_nar_bytes: u64,
 }
 
+fn account_action_result_nar_bytes(
+    transferred_nar_bytes: u64,
+    reused_nar_bytes: u64,
+    nar_size: u64,
+    transferred: bool,
+) -> Result<(u64, u64), String> {
+    if transferred {
+        let transferred_nar_bytes = transferred_nar_bytes
+            .checked_add(nar_size)
+            .ok_or_else(|| "action-result-transferred-nar-bytes-overflow".to_string())?;
+        return Ok((transferred_nar_bytes, reused_nar_bytes));
+    }
+    let reused_nar_bytes = reused_nar_bytes
+        .checked_add(nar_size)
+        .ok_or_else(|| "action-result-reused-nar-bytes-overflow".to_string())?;
+    Ok((transferred_nar_bytes, reused_nar_bytes))
+}
+
 /// Grouped parameters for persisting a build output.
 pub struct PersistOutputRequest<'a> {
     pub output_name: &'a str,
@@ -869,15 +887,12 @@ impl StoreHandle {
             {
                 return Err("action-result-output-object-incomplete".to_string());
             }
-            if transferred {
-                transferred_nar_bytes = transferred_nar_bytes
-                    .checked_add(path_info.nar_size)
-                    .ok_or_else(|| "action-result-transferred-nar-bytes-overflow".to_string())?;
-            } else {
-                reused_nar_bytes = reused_nar_bytes
-                    .checked_add(path_info.nar_size)
-                    .ok_or_else(|| "action-result-reused-nar-bytes-overflow".to_string())?;
-            }
+            (transferred_nar_bytes, reused_nar_bytes) = account_action_result_nar_bytes(
+                transferred_nar_bytes,
+                reused_nar_bytes,
+                path_info.nar_size,
+                transferred,
+            )?;
             if outputs.insert(output.name.clone(), path_info).is_some() {
                 return Err("action-result-output-name-duplicate".to_string());
             }
@@ -2858,6 +2873,22 @@ mod tests {
     use tokio::io::AsyncWriteExt;
 
     use super::*;
+
+    #[test]
+    fn action_result_nar_byte_accounting_distinguishes_transfer_reuse_and_overflow() {
+        const NAR_SIZE: u64 = 7;
+
+        assert_eq!(account_action_result_nar_bytes(0, 0, NAR_SIZE, true), Ok((NAR_SIZE, 0)));
+        assert_eq!(account_action_result_nar_bytes(0, 0, NAR_SIZE, false), Ok((0, NAR_SIZE)));
+        assert_eq!(
+            account_action_result_nar_bytes(u64::MAX, 0, 1, true),
+            Err("action-result-transferred-nar-bytes-overflow".to_string())
+        );
+        assert_eq!(
+            account_action_result_nar_bytes(0, u64::MAX, 1, false),
+            Err("action-result-reused-nar-bytes-overflow".to_string())
+        );
+    }
 
     fn test_handle(state_dir: &Path) -> StoreHandle {
         test_handle_with_store_dir(state_dir, "/nix/store")
