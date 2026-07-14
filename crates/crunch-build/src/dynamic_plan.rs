@@ -35,11 +35,22 @@ pub const NO_HOST_PATHS_POLICY_VALUE: &str = "none";
 pub const NATIVE_SANDBOX_VALUE: &str = "native";
 const JSON_ROOT_DEPTH: u32 = 1;
 const JSON_CHILD_DEPTH_INCREMENT: u32 = 1;
+const DYNAMIC_PLACEHOLDER_START: &str = "{{mantle-";
+const DYNAMIC_PLACEHOLDER_END: &str = "}}";
+const DYNAMIC_SOURCE_PLACEHOLDER_PREFIX: &str = "source:";
+const DYNAMIC_UNIT_OUTPUT_PLACEHOLDER_PREFIX: &str = "unit-output:";
+const MAX_DYNAMIC_PLACEHOLDERS_PER_STRING: u32 = 1024;
 
 pub type UnitId = String;
 pub type SourceId = String;
 pub type StorePathString = String;
 pub type Blake3Hex = String;
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DynamicPlaceholder {
+    Source { source: SourceId },
+    UnitOutput { unit: UnitId, output: String },
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum DynamicPlanError {
@@ -394,6 +405,7 @@ fn validate_dynamic_derivation(derivation: &DynamicDerivation, store_prefix: &st
     validate_output_names("unit outputs", &derivation.outputs)?;
     validate_environment(&derivation.env, store_prefix)?;
     validate_inputs(&derivation.inputs, store_prefix)?;
+    validate_dynamic_placeholders(derivation)?;
     validate_fixed_output(derivation.fixed_output.as_ref(), store_prefix)?;
     validate_sandbox_mode(&derivation.sandbox)?;
     validate_output_names("dynamic plan outputs", &derivation.dynamic_plan_outputs)?;
@@ -429,6 +441,131 @@ fn validate_inputs(inputs: &[DynamicInput], store_prefix: &str) -> Result<(), Dy
         }
     }
     Ok(())
+}
+
+fn validate_dynamic_placeholders(derivation: &DynamicDerivation) -> Result<(), DynamicPlanError> {
+    let declared_sources = derivation
+        .inputs
+        .iter()
+        .filter_map(|input| match input {
+            DynamicInput::Source { source } => Some(source.as_str()),
+            DynamicInput::StorePath { .. } | DynamicInput::UnitOutput { .. } => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let declared_outputs = derivation
+        .inputs
+        .iter()
+        .filter_map(|input| match input {
+            DynamicInput::UnitOutput { unit, output } => Some((unit.as_str(), output.as_str())),
+            DynamicInput::StorePath { .. } | DynamicInput::Source { .. } => None,
+        })
+        .collect::<BTreeSet<_>>();
+
+    for value in derivation.args.iter().chain(derivation.env.values()) {
+        for placeholder in parse_dynamic_placeholders(value)? {
+            match placeholder {
+                DynamicPlaceholder::Source { source } if declared_sources.contains(source.as_str()) => {}
+                DynamicPlaceholder::UnitOutput { unit, output }
+                    if declared_outputs.contains(&(unit.as_str(), output.as_str())) => {}
+                DynamicPlaceholder::Source { .. } | DynamicPlaceholder::UnitOutput { .. } => {
+                    return invalid_scalar(
+                        "dynamic placeholder",
+                        value,
+                        "references an input not declared by the unit",
+                    );
+                }
+            }
+        }
+    }
+
+    assert!(declared_sources.len() <= derivation.inputs.len());
+    assert!(declared_outputs.len() <= derivation.inputs.len());
+    Ok(())
+}
+
+pub fn parse_dynamic_placeholders(value: &str) -> Result<Vec<DynamicPlaceholder>, DynamicPlanError> {
+    let mut placeholders = Vec::new();
+    let mut remaining = value;
+    for _ in 0..MAX_DYNAMIC_PLACEHOLDERS_PER_STRING {
+        let Some(start) = remaining.find(DYNAMIC_PLACEHOLDER_START) else {
+            assert!(placeholders.len() <= usize::try_from(MAX_DYNAMIC_PLACEHOLDERS_PER_STRING).unwrap_or(usize::MAX));
+            return Ok(placeholders);
+        };
+        let body_start = start.saturating_add(DYNAMIC_PLACEHOLDER_START.len());
+        let after_start = &remaining[body_start..];
+        let Some(end) = after_start.find(DYNAMIC_PLACEHOLDER_END) else {
+            return invalid_scalar("dynamic placeholder", value, "is missing a closing delimiter");
+        };
+        let body = &after_start[..end];
+        placeholders.push(parse_dynamic_placeholder_body(body, value)?);
+        let consumed = body_start.saturating_add(end).saturating_add(DYNAMIC_PLACEHOLDER_END.len());
+        remaining = &remaining[consumed..];
+    }
+    limit_exceeded(
+        "dynamic placeholders per string",
+        u64::from(MAX_DYNAMIC_PLACEHOLDERS_PER_STRING).saturating_add(1),
+        MAX_DYNAMIC_PLACEHOLDERS_PER_STRING,
+    )
+}
+
+pub fn resolve_dynamic_placeholders(
+    value: &str,
+    source_paths: &BTreeMap<SourceId, StorePathString>,
+    unit_output_paths: &BTreeMap<(UnitId, String), StorePathString>,
+) -> Result<String, DynamicPlanError> {
+    let placeholders = parse_dynamic_placeholders(value)?;
+    let mut resolved = value.to_string();
+    for placeholder in &placeholders {
+        let (token, path) = match placeholder {
+            DynamicPlaceholder::Source { source } => {
+                let path = source_paths.get(source).ok_or_else(|| DynamicPlanError::InvalidScalar {
+                    field: "dynamic placeholder",
+                    value: value.to_string(),
+                    reason: "source path binding is unavailable",
+                })?;
+                (format!("{{{{mantle-source:{source}}}}}"), path)
+            }
+            DynamicPlaceholder::UnitOutput { unit, output } => {
+                let path = unit_output_paths.get(&(unit.clone(), output.clone())).ok_or_else(|| {
+                    DynamicPlanError::InvalidScalar {
+                        field: "dynamic placeholder",
+                        value: value.to_string(),
+                        reason: "unit output path binding is unavailable",
+                    }
+                })?;
+                (format!("{{{{mantle-unit-output:{unit}:{output}}}}}"), path)
+            }
+        };
+        resolved = resolved.replace(&token, path);
+    }
+    validate_bounded_string("resolved dynamic value", &resolved)?;
+    if resolved.contains(DYNAMIC_PLACEHOLDER_START) {
+        return invalid_scalar("dynamic placeholder", value, "was not fully resolved");
+    }
+    assert_eq!(parse_dynamic_placeholders(&resolved)?.len(), 0);
+    assert!(resolved.len() <= usize::try_from(MAX_DYNAMIC_PLAN_STRING_BYTES).unwrap_or(usize::MAX));
+    Ok(resolved)
+}
+
+fn parse_dynamic_placeholder_body(body: &str, original: &str) -> Result<DynamicPlaceholder, DynamicPlanError> {
+    if let Some(source) = body.strip_prefix(DYNAMIC_SOURCE_PLACEHOLDER_PREFIX) {
+        validate_source_id(source)?;
+        return Ok(DynamicPlaceholder::Source {
+            source: source.to_string(),
+        });
+    }
+    if let Some(unit_output) = body.strip_prefix(DYNAMIC_UNIT_OUTPUT_PLACEHOLDER_PREFIX) {
+        let Some((unit, output)) = unit_output.rsplit_once(':') else {
+            return invalid_scalar("dynamic placeholder", original, "unit output token is missing its output name");
+        };
+        validate_unit_id(unit)?;
+        validate_output_name(output)?;
+        return Ok(DynamicPlaceholder::UnitOutput {
+            unit: unit.to_string(),
+            output: output.to_string(),
+        });
+    }
+    invalid_scalar("dynamic placeholder", original, "uses an unsupported token kind")
 }
 
 fn validate_fixed_output(fixed_output: Option<&FixedOutputSpec>, store_prefix: &str) -> Result<(), DynamicPlanError> {
@@ -1507,5 +1644,41 @@ mod tests {
         assert!(validate_store_path_string(TEST_STORE_PATH, "").is_err());
         assert!(validate_store_path_string(TEST_STORE_PATH, "mantle/store").is_err());
         assert!(validate_store_path_string(TEST_STORE_PATH, "/mantle/store/").is_err());
+    }
+
+    #[test]
+    fn dynamic_placeholders_resolve_declared_source_and_unit_output_paths() {
+        let source_token = "{{mantle-source:src.main}}";
+        let output_token = "{{mantle-unit-output:unit.main:out}}";
+        let source_paths = BTreeMap::from([("src.main".to_string(), TEST_STORE_PATH.to_string())]);
+        let output_path = format!("{TEST_STORE_PREFIX}/11111111111111111111111111111111-output");
+        let output_paths = BTreeMap::from([(("unit.main".to_string(), "out".to_string()), output_path.clone())]);
+
+        let resolved = resolve_dynamic_placeholders(
+            &format!("source={source_token};output={output_token}"),
+            &source_paths,
+            &output_paths,
+        )
+        .unwrap();
+
+        assert_eq!(resolved, format!("source={TEST_STORE_PATH};output={output_path}"));
+        assert!(parse_dynamic_placeholders(&resolved).unwrap().is_empty());
+    }
+
+    #[test]
+    fn dynamic_placeholder_validation_rejects_malformed_unknown_and_undeclared_tokens() {
+        assert!(parse_dynamic_placeholders("{{mantle-source:src.main}").is_err());
+        assert!(parse_dynamic_placeholders("{{mantle-secret:value}}").is_err());
+
+        let mut undeclared = valid_plan();
+        undeclared.units[0]
+            .derivation
+            .env
+            .insert("SOURCE".to_string(), "{{mantle-source:src.missing}}".to_string());
+        expect_invalid_scalar(validate_err(&undeclared), "dynamic placeholder");
+
+        let missing_bindings =
+            resolve_dynamic_placeholders("{{mantle-source:src.main}}", &BTreeMap::new(), &BTreeMap::new()).unwrap_err();
+        expect_invalid_scalar(missing_bindings, "dynamic placeholder");
     }
 }

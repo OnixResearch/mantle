@@ -36,12 +36,15 @@ use crate::dynamic_plan::AddressingMode;
 use crate::dynamic_plan::CanonicalDynamicPlanV1;
 use crate::dynamic_plan::DeclaredSourceInput;
 use crate::dynamic_plan::DynamicInput;
+use crate::dynamic_plan::DynamicPlaceholder;
 use crate::dynamic_plan::DynamicUnit;
 use crate::dynamic_plan::FixedOutputHashAlgo;
 use crate::dynamic_plan::FixedOutputMode;
 use crate::dynamic_plan::FixedOutputSpec;
 use crate::dynamic_plan::MAX_DYNAMIC_PLAN_BYTES;
 use crate::dynamic_plan::decode_validated_plan_v1;
+use crate::dynamic_plan::parse_dynamic_placeholders;
+use crate::dynamic_plan::resolve_dynamic_placeholders;
 use crate::goal::Goal;
 use crate::goal::GoalRegistry;
 use crate::goal::GoalState;
@@ -77,6 +80,11 @@ type PendingRegistryEntry = (
     Option<crunch_attestation::Claims>,
 );
 type CreatedGoal = (String, Vec<StorePath<String>>);
+
+struct DynamicPlaceholderBindings {
+    sources: BTreeMap<String, String>,
+    unit_outputs: BTreeMap<(String, String), String>,
+}
 
 /// A derivation arriving from the eval thread.
 ///
@@ -446,7 +454,7 @@ fn register_native_dynamic_unit(
         )));
     }
 
-    let mut derivation = build_native_dynamic_derivation(unit, sources, registered_units, store_dir)?;
+    let mut derivation = build_native_dynamic_derivation(unit, sources, registered_units, known_paths, store_dir)?;
     for parent_drv_path in derivation.input_derivations.keys() {
         let parent_abs = parent_drv_path.to_absolute_path_with_prefix(store_dir);
         if known_paths.get_hdm_by_drv_path(&parent_abs).is_none() {
@@ -490,6 +498,7 @@ fn build_native_dynamic_derivation(
     unit: &DynamicUnit,
     sources: &BTreeMap<String, StorePath<String>>,
     registered_units: &BTreeMap<String, StorePath<String>>,
+    known_paths: &DerivationRegistry,
     store_dir: &str,
 ) -> Result<Derivation, Error> {
     let ca_hash = unit.derivation.fixed_output.as_ref().map(parse_dynamic_fixed_output).transpose()?;
@@ -504,8 +513,21 @@ fn build_native_dynamic_derivation(
             })
         })
         .collect();
-    let mut environment: BTreeMap<String, BString> =
-        unit.derivation.env.iter().map(|(key, value)| (key.clone(), value.as_bytes().into())).collect();
+    let bindings = dynamic_placeholder_bindings(unit, sources, registered_units, known_paths, store_dir)?;
+    let arguments = unit
+        .derivation
+        .args
+        .iter()
+        .map(|value| resolve_dynamic_value(unit, value, &bindings))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut environment = unit
+        .derivation
+        .env
+        .iter()
+        .map(|(key, value)| {
+            resolve_dynamic_value(unit, value, &bindings).map(|resolved| (key.clone(), BString::from(resolved)))
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
     environment.insert("system".to_string(), unit.derivation.system.as_bytes().into());
     environment.insert("builder".to_string(), unit.derivation.builder.as_bytes().into());
     environment.insert("name".to_string(), unit.derivation.name.as_bytes().into());
@@ -513,8 +535,10 @@ fn build_native_dynamic_derivation(
     environment.insert("outputs".to_string(), unit.derivation.outputs.join(" ").as_bytes().into());
 
     let (input_derivations, input_sources) = resolve_native_dynamic_inputs(unit, sources, registered_units, store_dir)?;
+    assert_eq!(arguments.len(), unit.derivation.args.len());
+    assert!(bindings.sources.len() <= unit.derivation.inputs.len());
     Ok(Derivation {
-        arguments: unit.derivation.args.clone(),
+        arguments,
         builder: unit.derivation.builder.clone(),
         environment,
         input_derivations,
@@ -522,6 +546,79 @@ fn build_native_dynamic_derivation(
         outputs,
         system: unit.derivation.system.clone(),
     })
+}
+
+fn dynamic_placeholder_bindings(
+    unit: &DynamicUnit,
+    sources: &BTreeMap<String, StorePath<String>>,
+    registered_units: &BTreeMap<String, StorePath<String>>,
+    known_paths: &DerivationRegistry,
+    store_dir: &str,
+) -> Result<DynamicPlaceholderBindings, Error> {
+    let required_outputs = unit
+        .derivation
+        .args
+        .iter()
+        .chain(unit.derivation.env.values())
+        .map(|value| parse_dynamic_placeholders(value))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| Error::Store(format!("parsing native dynamic placeholders for unit '{}': {error}", unit.id)))?
+        .into_iter()
+        .flatten()
+        .filter_map(|placeholder| match placeholder {
+            DynamicPlaceholder::UnitOutput { unit, output } => Some((unit, output)),
+            DynamicPlaceholder::Source { .. } => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let mut source_bindings = BTreeMap::new();
+    let mut output_bindings = BTreeMap::new();
+    for input in &unit.derivation.inputs {
+        match input {
+            DynamicInput::Source { source } => {
+                let path = sources.get(source).ok_or_else(|| {
+                    Error::Store(format!("native dynamic unit '{}' references unknown source {source}", unit.id))
+                })?;
+                source_bindings.insert(source.clone(), path.to_absolute_path_with_prefix(store_dir));
+            }
+            DynamicInput::UnitOutput {
+                unit: dependency,
+                output,
+            } => {
+                let drv_path = registered_units.get(dependency).ok_or_else(|| {
+                    Error::Store(format!(
+                        "native dynamic unit '{}' references unregistered dynamic unit {dependency}",
+                        unit.id
+                    ))
+                })?;
+                let drv_abs = drv_path.to_absolute_path_with_prefix(store_dir);
+                let binding_key = (dependency.clone(), output.clone());
+                if let Some(path) = known_paths.get_output_path(&drv_abs, output) {
+                    output_bindings.insert(binding_key, path.to_absolute_path_with_prefix(store_dir));
+                } else if required_outputs.contains(&binding_key) {
+                    return Err(Error::Store(format!(
+                        "native dynamic unit '{}' requires a statically known path for {dependency}:{output}",
+                        unit.id
+                    )));
+                }
+            }
+            DynamicInput::StorePath { .. } => {}
+        }
+    }
+    assert!(source_bindings.len() <= unit.derivation.inputs.len());
+    assert!(output_bindings.len() <= unit.derivation.inputs.len());
+    Ok(DynamicPlaceholderBindings {
+        sources: source_bindings,
+        unit_outputs: output_bindings,
+    })
+}
+
+fn resolve_dynamic_value(
+    unit: &DynamicUnit,
+    value: &str,
+    bindings: &DynamicPlaceholderBindings,
+) -> Result<String, Error> {
+    resolve_dynamic_placeholders(value, &bindings.sources, &bindings.unit_outputs)
+        .map_err(|error| Error::Store(format!("resolving native dynamic placeholders for unit '{}': {error}", unit.id)))
 }
 
 type NativeDynamicInputDerivations = BTreeMap<StorePath<String>, BTreeSet<String>>;
@@ -2380,10 +2477,94 @@ mod tests {
         .into_bytes()
     }
 
+    fn native_plan_with_placeholders_bytes() -> Vec<u8> {
+        format!(
+            r#"{{
+  "schema": "mantle-plan-v1",
+  "producer": {{ "logical_name": "producer", "goal_hint": null }},
+  "sources": [{{ "id": "src.main", "path": "{TEST_NATIVE_PLAN_STORE_PATH}", "nar_blake3": null }}],
+  "units": [
+    {{
+      "id": "unit.dep",
+      "derivation": {{
+        "name": "unit-dep",
+        "builder": "{TEST_NATIVE_PLAN_STORE_PATH}/bin/builder",
+        "system": "x86_64-linux",
+        "args": ["--source={{{{mantle-source:src.main}}}}"],
+        "outputs": ["out"],
+        "env": {{ "SOURCE": "{{{{mantle-source:src.main}}}}" }},
+        "inputs": [{{ "kind": "source", "source": "src.main" }}],
+        "fixed_output": null,
+        "addressing_mode": "input-addressed",
+        "sandbox": "native",
+        "dynamic_plan_outputs": []
+      }},
+      "requested_outputs": ["out"],
+      "policy": {{ "sandbox": "inherit", "substitutions": "inherit", "store_prefix": "inherit", "host_paths": "none" }}
+    }},
+    {{
+      "id": "unit.root",
+      "derivation": {{
+        "name": "unit-root",
+        "builder": "{TEST_NATIVE_PLAN_STORE_PATH}/bin/builder",
+        "system": "x86_64-linux",
+        "args": ["--dependency={{{{mantle-unit-output:unit.dep:out}}}}"],
+        "outputs": ["out"],
+        "env": {{ "DEPENDENCY": "{{{{mantle-unit-output:unit.dep:out}}}}" }},
+        "inputs": [{{ "kind": "unit_output", "unit": "unit.dep", "output": "out" }}],
+        "fixed_output": null,
+        "addressing_mode": "input-addressed",
+        "sandbox": "native",
+        "dynamic_plan_outputs": []
+      }},
+      "requested_outputs": ["out"],
+      "policy": {{ "sandbox": "inherit", "substitutions": "inherit", "store_prefix": "inherit", "host_paths": "none" }}
+    }}
+  ],
+  "roots": ["unit.root"],
+  "provenance": {{}}
+}}"#,
+        )
+        .into_bytes()
+    }
+
     fn declare_native_plan_output(kp: &mut DerivationRegistry, sp: &StorePath<String>, output_name: &str) {
         let abs = sp.to_absolute_path();
         let entry = kp.get_by_drv_path_mut(&abs).unwrap();
         entry.dynamic_plan_outputs = vec![output_name.to_string()];
+    }
+
+    #[test]
+    fn native_dynamic_registration_resolves_declared_placeholders_and_rejects_unknown_ca_paths() {
+        let canonical = decode_validated_plan_v1(&native_plan_with_placeholders_bytes(), "/nix/store").unwrap();
+        let sources = dynamic_sources_by_id(&canonical.plan.sources, "/nix/store").unwrap();
+        let dep = canonical.plan.units.iter().find(|unit| unit.id == "unit.dep").unwrap();
+        let root = canonical.plan.units.iter().find(|unit| unit.id == "unit.root").unwrap();
+        let mut registry = DerivationRegistry::default();
+        let mut registered = BTreeMap::new();
+
+        let dep_drv = register_native_dynamic_unit(dep, &sources, &registered, &mut registry, "/nix/store").unwrap();
+        registered.insert(dep.id.clone(), dep_drv.clone());
+        let dep_output = registry.get_output_path(&dep_drv.to_absolute_path(), "out").unwrap().to_absolute_path();
+        let root_drv = register_native_dynamic_unit(root, &sources, &registered, &mut registry, "/nix/store").unwrap();
+        let root_entry = registry.get_by_drv_path(&root_drv.to_absolute_path()).unwrap();
+        let dep_entry = registry.get_by_drv_path(&dep_drv.to_absolute_path()).unwrap();
+
+        assert_eq!(dep_entry.derivation.environment["SOURCE"].as_slice(), TEST_NATIVE_PLAN_STORE_PATH.as_bytes());
+        assert_eq!(root_entry.derivation.environment["DEPENDENCY"].as_slice(), dep_output.as_bytes());
+        assert_eq!(root_entry.derivation.arguments, vec![format!("--dependency={dep_output}")]);
+        assert!(!root_entry.derivation.arguments[0].contains("{{mantle-"));
+
+        let mut ca_dep = dep.clone();
+        ca_dep.derivation.addressing_mode = AddressingMode::ContentAddressed;
+        let mut ca_registry = DerivationRegistry::default();
+        let ca_drv =
+            register_native_dynamic_unit(&ca_dep, &sources, &BTreeMap::new(), &mut ca_registry, "/nix/store").unwrap();
+        let ca_registered = BTreeMap::from([(ca_dep.id.clone(), ca_drv)]);
+        let error =
+            register_native_dynamic_unit(root, &sources, &ca_registered, &mut ca_registry, "/nix/store").unwrap_err();
+        assert!(error.to_string().contains("requires a statically known path"));
+        assert!(error.to_string().contains("unit.dep:out"));
     }
 
     #[tokio::test]
