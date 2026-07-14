@@ -4,7 +4,7 @@
 
 Build, resolve, compose, virtualize, validate, transform, optionally precompile, and materialize WebAssembly components as explicit Mantle stages while preserving digest roles and leaving runtime authority and evidence semantics to their owners.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Component build configuration is Nickel-authored
 
