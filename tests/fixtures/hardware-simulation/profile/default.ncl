@@ -1,0 +1,146 @@
+let Contracts = import "contracts.ncl" in
+
+{
+  schema = "mantle-hardware-profile-v1",
+  profile_id = "tiny-adder-verilator",
+  selected_target = "tiny-adder-smoke",
+
+  source_packages = [
+    {
+      id = "selected-ip",
+      locator = "fixture-git://selected-ip",
+      revision = "414a2f114880151657f02ca84624ce05efb4f9c1",
+      object_ref = "mantle-object://blake3/6860eda5dd590eef7c8cec838d78438a5cdd8f13494730ba9b533299fa5515ba",
+      recursive_blake3 = "6860eda5dd590eef7c8cec838d78438a5cdd8f13494730ba9b533299fa5515ba",
+      sentinel_blake3 = "08166595110d3a0f6fcf9bb5f7ca306986fa31b650949924ffbfceafe898003e",
+      dependencies = [],
+      files = ["rtl/tiny_adder.sv"],
+    },
+    {
+      id = "selected-vip",
+      locator = "fixture-git://selected-vip",
+      revision = "48659ef30e7948725b4373fe20f8585839e9634f",
+      object_ref = "mantle-object://blake3/cd82577a3366fcca505d116e5b5e139ad60aebc032242ef5dfdae8ed2f1d69c4",
+      recursive_blake3 = "cd82577a3366fcca505d116e5b5e139ad60aebc032242ef5dfdae8ed2f1d69c4",
+      sentinel_blake3 = "8484649375ef7bd4186bd190949587d3fdaffcab4051a9048286c2481c0e0c7c",
+      dependencies = ["selected-ip"],
+      files = [
+        "model/reference.cpp",
+        "model/sim_main.cpp",
+        "tb/tiny_adder_tb.sv",
+      ],
+    },
+    {
+      id = "unrelated-vip",
+      locator = "fixture-git://unrelated-vip",
+      revision = "831f20bb94d19bf8cce69ee79c6d457742234793",
+      object_ref = "mantle-object://blake3/862643f905750628f038ce38ddd1714c93d7494e3ed8fede01b7cca47e0042b6",
+      recursive_blake3 = "862643f905750628f038ce38ddd1714c93d7494e3ed8fede01b7cca47e0042b6",
+      sentinel_blake3 = "11942ae21b293285dd7c5debf45e4ee5e3131d464738360ddf984794aa233960",
+      dependencies = [],
+      files = ["rtl/unrelated_counter.sv"],
+    },
+  ],
+
+  targets = [
+    {
+      id = "tiny-adder-smoke",
+      top_module = "tiny_adder_tb",
+      source_packages = ["selected-vip"],
+      source_files = [
+        "selected-ip/rtl/tiny_adder.sv",
+        "selected-vip/tb/tiny_adder_tb.sv",
+        "selected-vip/model/sim_main.cpp",
+      ],
+      reference_model = "selected-vip/model/reference.cpp",
+    },
+  ],
+
+  tool_cohort = {
+    schema = "mantle-hardware-tool-cohort-v1",
+    identity_blake3 = "e4bb4bbd1f4c1826012736e2782e910e6f264e516d396ea6e0fb5ddebfe58dec",
+    seed_boundary = "nix-produced-open-source-tool-cohort",
+    system = "x86_64-linux",
+    members = [
+      {
+        role = "verilator",
+        package = "verilator",
+        version = "5.046",
+        store_path = "/nix/store/3761xqvdyh2f5962f8ivl5lshp97y6fm-verilator-5.046",
+        executable = "bin/verilator",
+        binary_blake3 = "15b2b86bd700374a2842bf964f50e2a52ba44a611522d07d115759db61db997b",
+      },
+      {
+        role = "cxx-compiler",
+        package = "clang",
+        version = "21.1.8",
+        store_path = "/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8",
+        executable = "bin/clang++",
+        binary_blake3 = "f3c515bef73ad7c93a3ea54ece03e19b16d03d38b83c104dad6940617bf2712d",
+      },
+      {
+        role = "linker",
+        package = "lld",
+        version = "21.1.8",
+        store_path = "/nix/store/2c5r0kpn5yb8qsvfw77j8h63pklij8rq-lld-21.1.8",
+        executable = "bin/ld.lld",
+        binary_blake3 = "910423a568a6961ae87bec93c3d669052416580e1d8c6af7b9d03f8ec265a354",
+      },
+      {
+        role = "runtime-support",
+        package = "verilator-runtime",
+        version = "5.046",
+        store_path = "/nix/store/3761xqvdyh2f5962f8ivl5lshp97y6fm-verilator-5.046",
+        executable = "share/verilator/include/verilated.cpp",
+        binary_blake3 = "befa4fc1ec5b96371861eefaecf41bd12c92d524b7735a3ef39e048c3a8aa535",
+      },
+      {
+        role = "shell",
+        package = "bash",
+        version = "5.3p9",
+        store_path = "/nix/store/sfvyavxai6qvzmv9p9x6mp4wwdz4v41m-bash-interactive-5.3p9",
+        executable = "bin/bash",
+        binary_blake3 = "c00bd6f79907184e7929a3a903247d87be92a233d6de7754a636edeaf784492f",
+      },
+    ],
+    closure_paths_blake3 = "892fd0af35662d6d934cda0d5872fa0c1c5fc94016eabc1a6df6f7919978ee42",
+  },
+
+  generation = {
+    language = "systemverilog",
+    trace = false,
+    optimization = "O1",
+    output_prefix = "Vtiny_adder_tb",
+    extra_args = ["--cc", "--exe"],
+  },
+  compile_flags = ["-std=c++17", "-O1"],
+  link_flags = ["-pthread", "-fuse-ld=lld"],
+  smoke_cases = [
+    { id = "zero-plus-zero", input = "0,0", expected = "0", max_log_bytes = 4096 },
+    { id = "one-plus-two", input = "1,2", expected = "3", max_log_bytes = 4096 },
+  ],
+  expected_outputs = [
+    { name = "simulator", kind = "executable" },
+    { name = "smoke-results", kind = "mantle-hardware-smoke-result-v1" },
+  ],
+  bounds = {
+    max_source_packages = 16,
+    max_source_files = 64,
+    max_generated_units = 32,
+    max_options = 32,
+    max_smoke_cases = 16,
+    max_outputs = 16,
+    max_text_bytes = 4096,
+    max_plan_bytes = 1048576,
+    max_log_bytes = 65536,
+    max_actions = 128,
+  },
+  support_tier = "heavy-capability-gated",
+  non_claims = [
+    "no-commercial-simulator-or-license-server-support",
+    "no-fpga-or-asic-correctness-proof",
+    "no-physical-design-or-timing-closure-claim",
+    "no-production-remote-farm-throughput-claim",
+    "no-dvcon-speedup-reproduction-claim",
+  ],
+} | Contracts.HardwareProfile | Contracts.ExactHardwareProfile

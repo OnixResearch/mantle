@@ -1398,6 +1398,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-hardware-simulation"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "crunch-eval",
+ "crunch-hardware-simulation-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "crunch-hardware-simulation-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "crunch-kernelscript-adapter"
 version = "0.1.0"
 dependencies = [
@@ -4447,6 +4468,8 @@ dependencies = [
  "crunch-delta",
  "crunch-eval",
  "crunch-glue",
+ "crunch-hardware-simulation",
+ "crunch-hardware-simulation-core",
  "crunch-kernelscript-core",
  "crunch-pipeline",
  "crunch-project",
