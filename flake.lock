@@ -50,6 +50,23 @@
         "type": "github"
       }
     },
+    "nickelExportCore": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783990479,
+        "narHash": "sha256-dV4+/jghpJ89F5DHprdjxyru8kllMAurS2DsBGn/ibA=",
+        "owner": "OnixResearch",
+        "repo": "nickel-export",
+        "rev": "257fafc1c746f1faf156207043a4c826bfb16d49",
+        "type": "github"
+      },
+      "original": {
+        "owner": "OnixResearch",
+        "repo": "nickel-export",
+        "rev": "257fafc1c746f1faf156207043a4c826bfb16d49",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1775579569,
@@ -86,6 +103,7 @@
       "inputs": {
         "crane": "crane",
         "flake-utils": "flake-utils",
+        "nickelExportCore": "nickelExportCore",
         "nixpkgs": "nixpkgs",
         "onix-nixpkgs": "onix-nixpkgs",
         "rust-overlay": "rust-overlay",

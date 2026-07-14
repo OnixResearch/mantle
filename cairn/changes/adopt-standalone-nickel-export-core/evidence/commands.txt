@@ -1,0 +1,20 @@
+# Focused implementation and compatibility checks
+nix --option secret-key-files '' develop -c cargo test -p mantle --bin mantle nickel_export -- --nocapture
+nix --option secret-key-files '' develop -c cargo clippy -p mantle --bin mantle --tests --no-deps -- -D warnings
+nix --option secret-key-files '' develop -c cargo check --locked -p mantle --bin mantle
+nix --option secret-key-files '' develop -c cargo tree --locked -p mantle -i nickel-export-core
+nix --option secret-key-files '' develop -c cargo -Zscript scripts/check-nickel-export-core-pin.rs --root .
+nix --option secret-key-files '' develop -c cargo -Zscript scripts/check-nickel-export-core-pin.rs --self-test
+nix --option secret-key-files '' develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
+nix --option secret-key-files '' develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs --self-test
+nix --option secret-key-files '' develop -c cargo test -p mantle --bin mantle release_evidence:: -- --nocapture
+nix --option secret-key-files '' develop -c cargo test -p crunch-release-core --lib
+nix --option secret-key-files '' build .#checks.x86_64-linux.nickel-export-core-pin --no-link -L
+
+# Lifecycle validation; no sync/archive by parent-drain contract
+# The Nix wrapper passed proposal, then stalled rebuilding Cairn in the shared
+# queue. Final all-stage evidence used the current sibling-built binary.
+/home/brittonr/git/OnixResearch/cairn/target/debug/cairn validate --root .
+/home/brittonr/git/OnixResearch/cairn/target/debug/cairn gate proposal adopt-standalone-nickel-export-core --root .
+/home/brittonr/git/OnixResearch/cairn/target/debug/cairn gate design adopt-standalone-nickel-export-core --root .
+/home/brittonr/git/OnixResearch/cairn/target/debug/cairn gate tasks adopt-standalone-nickel-export-core --root .

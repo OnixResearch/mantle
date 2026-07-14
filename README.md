@@ -81,6 +81,8 @@ not a product dependency.
 ```bash
 nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
 nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs --self-test
+nix develop -c cargo -Zscript scripts/check-nickel-export-core-pin.rs --root .
+nix develop -c cargo -Zscript scripts/check-nickel-export-core-pin.rs --self-test
 ```
 
 Contract conformance proves shape and declared linkage only—not build
@@ -367,7 +369,13 @@ claim rather than deployability or build proof.
 `mantle export` is the explicit Nickel export primitive. It evaluates declared
 relative Nickel sources/import paths to JSON, can write an explicit `--out`, and
 emits a deterministic receipt binding source/dependency digests, evaluator
-identity, output digest, and bounded non-claims.
+identity, output digest, and bounded non-claims. Evaluator-neutral admission,
+BLAKE3 identity, freshness, and the Mantle v1 projection delegate to
+`nickel-export-core` at exact revision
+`257fafc1c746f1faf156207043a4c826bfb16d49`; `crunch-eval`, no-follow
+filesystem/root admission, destination writes, build evidence, and release
+authority remain Mantle-owned. See
+[Standalone Nickel export core](docs/nickel-export-core-cutover.md).
 
 ## Validation tiers
 
@@ -1980,6 +1988,7 @@ Repository-owned Mantle source is `AGPL-3.0-or-later`; see [LICENSE](LICENSE). V
 - [adeci/drv-thru](https://github.com/adeci/drv-thru) — P2P Nix build tickets and signed-output import model used as remote-builder prior art; Mantle adaptations should replace Nix-specific plumbing with Mantle CAS, PathInfo, attestation, and substitution semantics.
 - [Mic92/tribuchet](https://github.com/Mic92/tribuchet) — remote-build hub/worker scheduling prior art for worker-dialed registration, capability queues, request dedupe, missing-input negotiation, signed output return, bounded log replay, and restart/reload survival; Mantle adaptations should keep those architecture ideas while replacing Nix external-builders, nix-daemon imports, scratch-path assumptions, and `/nix/store` pinning with Mantle-native CAS, PathInfo, attestation, and store-prefix contracts.
 - [Nixtamal](https://nixtamal.toast.al/) — Nix input pinning tool used as project-input workflow prior art for custom freshness checks, mirrors, declarative patches, per-input hash algorithms, non-Git VCS sources, and future lockfile import/trust ideas.
+- [OnixResearch/nickel-export](https://github.com/OnixResearch/nickel-export) — evaluator-neutral Nickel export admission, exact-byte identity, freshness, and compatibility projections consumed at immutable revision `257fafc1c746f1faf156207043a4c826bfb16d49`; Mantle retains embedded evaluation, filesystem, destination, build, and release authority.
 - [nickel-lang/rules_nickel](https://github.com/nickel-lang/rules_nickel) — declared Nickel export action and evaluator toolchain prior art; Mantle adaptations should keep source closures, safe import paths, export formats, and evaluator identity while avoiding Bazel-specific repository/toolchain machinery in core.
 - [nickel-lang/organist](https://github.com/nickel-lang/organist) — Nickel-managed project workflow prior art for typed generated files and named shell profiles; Mantle adaptations should keep explicit plan/apply mutation boundaries and avoid adopting service lifecycle management into core.
 - [nickel-lang/json-schema-to-nickel](https://github.com/nickel-lang/json-schema-to-nickel) — JSON Schema to Nickel contract generation prior art for machine-report schema validation; Mantle adaptations should use generated contracts as checked development/release rails with positive and negative fixtures.

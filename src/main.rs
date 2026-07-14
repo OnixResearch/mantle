@@ -39,6 +39,7 @@ mod log_cmd;
 mod machine_contract_producer_tests;
 mod native_toolchain_closure;
 mod nickel_export;
+mod nickel_export_core_adapter;
 #[allow(dead_code, clippy::type_complexity)]
 mod nix_evidence_core;
 #[allow(dead_code)]

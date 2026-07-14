@@ -1,0 +1,34 @@
+{
+  "schema": "mantle-nickel-export-core-source-v1",
+  "package": "nickel-export-core",
+  "repository": "https://github.com/OnixResearch/nickel-export",
+  "revision": "257fafc1c746f1faf156207043a4c826bfb16d49",
+  "cargo": {
+    "source_kind": "exact-git-revision",
+    "path_override_allowed": false,
+    "floating_ref_allowed": false
+  },
+  "nix": {
+    "input": "nickelExportCore",
+    "source": "github:OnixResearch/nickel-export/257fafc1c746f1faf156207043a4c826bfb16d49",
+    "flake": false
+  },
+  "release": {
+    "distribution": "immutable-git-revision",
+    "path_override_allowed": false,
+    "floating_ref_allowed": false
+  },
+  "authority": {
+    "evaluator": "mantle-crunch-eval",
+    "filesystem": "mantle-shell",
+    "destination": "mantle-shell",
+    "build": "mantle",
+    "release": "mantle"
+  },
+  "non_claims": [
+    "canonical export admission does not prove evaluator equivalence",
+    "canonical export admission does not prove build correctness",
+    "canonical export admission does not prove deployability",
+    "canonical export admission does not prove release eligibility"
+  ]
+}

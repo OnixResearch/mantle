@@ -4440,6 +4440,7 @@ dependencies = [
  "fs2",
  "futures",
  "libc",
+ "nickel-export-core",
  "nix-compat",
  "postcard",
  "predicates",
@@ -4672,6 +4673,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77a5d83df9f36fe23f0c3648c6bbb8b0298bb5f1939c8f2704431371f4b84d43"
 dependencies = [
  "smallvec",
+]
+
+[[package]]
+name = "nickel-export-core"
+version = "0.1.0"
+source = "git+https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1c746f1faf156207043a4c826bfb16d49"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

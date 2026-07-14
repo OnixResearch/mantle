@@ -21,6 +21,10 @@
       url = "github:bytecodealliance/wasi-virt/19b174a3244f81ed9b91e067b6901f71665316a8";
       flake = false;
     };
+    nickelExportCore = {
+      url = "github:OnixResearch/nickel-export/257fafc1c746f1faf156207043a4c826bfb16d49";
+      flake = false;
+    };
   };
 
   outputs =
@@ -33,6 +37,7 @@
       flake-utils,
       tigerstyle,
       wasi-virt,
+      nickelExportCore,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -61,6 +66,12 @@
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
         cargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+        nickelExportCoreRevision = "257fafc1c746f1faf156207043a4c826bfb16d49";
+        nickelExportCoreSource =
+          assert pkgs.lib.assertMsg (
+            nickelExportCore.rev == nickelExportCoreRevision
+          ) "Mantle nickel-export-core Nix input drifted from ${nickelExportCoreRevision}";
+          nickelExportCore;
         firstPartyCargoScope =
           pkgs.lib.concatStringsSep " " cargoManifest.workspace.metadata.tigerstyle.default_scope;
 
@@ -497,6 +508,44 @@
               cp "$TMPDIR/bootstrap-blocker-inventory.json" "$out/current.json"
               cp "$TMPDIR/bootstrap-blocker-inventory.md" "$out/current.md"
             '';
+
+        nickelExportCorePin =
+          pkgs.runCommand "mantle-nickel-export-core-pin"
+            {
+              nativeBuildInputs = [
+                pkgs.diffutils
+                pkgs.jq
+                pkgs.nickel
+                rustToolchain
+              ];
+            }
+            ''
+              mkdir -p source/.cargo source/config/generated source/scripts
+              cp ${./Cargo.toml} source/Cargo.toml
+              cp ${./Cargo.lock} source/Cargo.lock
+              cp ${./.cargo/vendor-config.toml} source/.cargo/vendor-config.toml
+              cp ${./flake.nix} source/flake.nix
+              cp ${./flake.lock} source/flake.lock
+              cp ${./config/nickel-export-core-source.ncl} source/config/nickel-export-core-source.ncl
+              cp ${./config/generated/nickel-export-core-source.json} source/config/generated/nickel-export-core-source.json
+              cp ${./scripts/check-nickel-export-core-pin.rs} source/scripts/check-nickel-export-core-pin.rs
+
+              export HOME="$TMPDIR/home"
+              export CARGO_HOME="$TMPDIR/cargo-home"
+              mkdir -p "$HOME" "$CARGO_HOME"
+
+              cargo -Zscript source/scripts/check-nickel-export-core-pin.rs --root source
+              cargo -Zscript source/scripts/check-nickel-export-core-pin.rs --self-test
+
+              nickel export --format json source/config/nickel-export-core-source.ncl > "$TMPDIR/actual.json"
+              jq --sort-keys . "$TMPDIR/actual.json" > "$TMPDIR/actual.sorted.json"
+              jq --sort-keys . source/config/generated/nickel-export-core-source.json > "$TMPDIR/expected.sorted.json"
+              diff -u "$TMPDIR/expected.sorted.json" "$TMPDIR/actual.sorted.json"
+
+              test -f "${nickelExportCoreSource}/crates/nickel-export-core/Cargo.toml"
+              mkdir -p "$out"
+              cp "$TMPDIR/actual.sorted.json" "$out/source-pin.json"
+            '';
       in
       {
         packages = {
@@ -533,6 +582,7 @@
           wasm-component-toolchain-compatibility = wasmComponentToolchainCompatibility;
           mantle-transcript-quality = mantleTranscriptQuality;
           bootstrap-blocker-inventory = bootstrapBlockerInventory;
+          nickel-export-core-pin = nickelExportCorePin;
           release-determinism-quality = releaseDeterminismQuality;
           release-nix-witness-quality = releaseNixWitnessQuality;
 

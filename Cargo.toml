@@ -101,6 +101,7 @@ path = "examples/benchmark_scheduler_priority.rs"
 [dependencies]
 crunch-pipeline = { path = "crates/crunch-pipeline" }
 crunch-eval = { path = "crates/crunch-eval" }
+nickel-export-core = { git = "https://github.com/OnixResearch/nickel-export", rev = "257fafc1c746f1faf156207043a4c826bfb16d49" }
 crunch-glue = { path = "crates/crunch-glue" }
 crunch-action-result-core = { path = "crates/crunch-action-result-core" }
 crunch-build = { path = "crates/crunch-build" }

@@ -5,5 +5,10 @@ replace-with = "vendored-sources"
 git = "https://github.com/tvlfyi/wu-manber.git"
 replace-with = "vendored-sources"
 
+[source."git+https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49"]
+git = "https://github.com/OnixResearch/nickel-export"
+rev = "257fafc1c746f1faf156207043a4c826bfb16d49"
+replace-with = "vendored-sources"
+
 [source.vendored-sources]
 directory = "vendor-deps"
