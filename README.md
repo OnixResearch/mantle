@@ -62,7 +62,10 @@ Human output reports same facts inline on cached outputs, for example:
 
 Remote build data uses receiver-driven bounded chunks, durable fenced resume,
 and ordinary output admission. See [Resumable remote transfer](docs/remote-transfer.md)
-for policy, checkpoint, fallback, completion, and non-claim semantics.
+for policy, checkpoint, fallback, completion, and non-claim semantics. External
+worker allocation can use digest-pinned direct or Slurm batch dispatchers without
+changing coordinator or output authority; see
+[External batch dispatchers](docs/external-batch-dispatchers.md).
 
 Retained tool caches are explicit, bounded, fenced, and claim-downgraded. See
 [Stateful tool workspaces](docs/stateful-workspaces.md) for Nickel policy,

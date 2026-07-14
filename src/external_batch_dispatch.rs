@@ -6,8 +6,8 @@
 //! deadlines, and translates direct JSON or Slurm CLI output into the canonical
 //! protocol.
 //!
-//! r[impl remote_builds.external_batch_confined_execution]
-//! r[impl remote_builds.external_batch_slurm_adapter]
+//! r[impl external_batch_dispatchers.adapter_confinement]
+//! r[impl external_batch_dispatchers.slurm_adapter]
 
 use std::io::Read;
 use std::io::Write;
@@ -31,11 +31,14 @@ use crunch_build::distributed::validate_external_batch_response;
 use crate::remote_farm_config::RemoteBatchDispatcherAdapter;
 use crate::remote_farm_config::RemoteBatchDispatcherCommandProfile;
 use crate::remote_farm_config::RemoteBatchDispatcherProfile;
+use crate::remote_farm_config::RemoteBatchEnvironmentHandle;
+use crate::remote_farm_config::validate_remote_batch_dispatcher_profile;
 
 const EXECUTABLE_DIGEST_BUFFER_BYTES: usize = 65_536;
 const PROCESS_OUTPUT_BUFFER_BYTES: usize = 8_192;
 const PROCESS_POLL_INTERVAL_MS: u64 = 10;
 const PROCESS_TEARDOWN_TIMEOUT_SECS: u64 = 5;
+const MAX_BATCH_ENVIRONMENT_VALUE_BYTES: usize = 65_536;
 const SLURM_MEMORY_SUFFIX: &str = "B";
 const SLURM_STATE_PENDING: [&str; 3] = ["CONFIGURING", "PD", "PENDING"];
 const SLURM_STATE_RUNNING: [&str; 3] = ["COMPLETING", "R", "RUNNING"];
@@ -183,9 +186,10 @@ impl DirectProcessBatchDispatcher<'_> {
     ) -> Result<ExternalBatchOperationResponse, String> {
         validate_operation_kind(expected_kind, operation)?;
         validate_observation_time(observed_unix_s)?;
+        validate_runtime_dispatcher_operation(self.profile, expected_kind)?;
         let stdin = serde_json::to_vec(operation)
             .map_err(|error| format!("external-batch-request-serialize-failed: {error}"))?;
-        let output = run_confined_process(command, &command.args, &stdin)?;
+        let output = run_confined_process(command, &self.profile.environment_handles, &command.args, &stdin)?;
         let response: ExternalBatchOperationResponse = serde_json::from_slice(&output.stdout)
             .map_err(|_| "external-batch-direct-response-malformed".to_string())?;
         validate_external_batch_response(operation, &response)?;
@@ -210,8 +214,9 @@ impl ExternalBatchDispatcher for SlurmCliBatchDispatcher<'_> {
     ) -> Result<ExternalBatchOperationResponse, String> {
         validate_operation_kind(ExternalBatchOperationKind::Submit, operation)?;
         validate_observation_time(observed_unix_s)?;
+        validate_runtime_dispatcher_operation(self.profile, ExternalBatchOperationKind::Submit)?;
         let args = slurm_submit_args(self.profile, operation)?;
-        let output = run_confined_process(&self.profile.submit, &args, &[])?;
+        let output = run_confined_process(&self.profile.submit, &self.profile.environment_handles, &args, &[])?;
         let external_job_id = parse_slurm_submit_job_id(&output.stdout)?;
         response_for_slurm(
             operation,
@@ -238,9 +243,10 @@ impl ExternalBatchDispatcher for SlurmCliBatchDispatcher<'_> {
         validate_operation_kind(ExternalBatchOperationKind::Cancel, operation)?;
         validate_observation_time(observed_unix_s)?;
         let external_job_id = required_external_job_id(operation)?;
+        validate_runtime_dispatcher_operation(self.profile, ExternalBatchOperationKind::Cancel)?;
         let mut args = self.profile.cancel.args.clone();
         args.push(external_job_id.to_string());
-        run_confined_process(&self.profile.cancel, &args, &[])?;
+        run_confined_process(&self.profile.cancel, &self.profile.environment_handles, &args, &[])?;
         response_for_slurm(
             operation,
             ExternalBatchJobState::Cancelled,
@@ -269,6 +275,7 @@ impl SlurmCliBatchDispatcher<'_> {
     ) -> Result<ExternalBatchOperationResponse, String> {
         validate_operation_kind(expected_kind, operation)?;
         validate_observation_time(observed_unix_s)?;
+        validate_runtime_dispatcher_operation(self.profile, expected_kind)?;
         let external_job_id = required_external_job_id(operation)?;
         let mut args = command.args.clone();
         args.extend([
@@ -277,7 +284,7 @@ impl SlurmCliBatchDispatcher<'_> {
             "--jobs".to_string(),
         ]);
         args.push(external_job_id.to_string());
-        let output = run_confined_process(command, &args, &[])?;
+        let output = run_confined_process(command, &self.profile.environment_handles, &args, &[])?;
         let state = parse_slurm_job_state(&output.stdout)?;
         response_for_slurm(operation, state, Some(external_job_id.to_string()), "slurm-state-observed", observed_unix_s)
     }
@@ -285,11 +292,13 @@ impl SlurmCliBatchDispatcher<'_> {
 
 fn run_confined_process(
     profile: &RemoteBatchDispatcherCommandProfile,
+    environment_handles: &[RemoteBatchEnvironmentHandle],
     args: &[String],
     stdin: &[u8],
 ) -> Result<ConfinedProcessOutput, String> {
     verify_executable_digest(&profile.program, &profile.expected_digest_blake3)?;
-    let mut child = spawn_confined_process(profile, args)?;
+    let environment = resolve_environment_handles(environment_handles)?;
+    let mut child = spawn_confined_process(profile, args, &environment)?;
     let child_stdin = child.stdin.take().ok_or_else(|| "external-batch-stdin-pipe-missing".to_string())?;
     let stdin_payload = stdin.to_vec();
     let stdin_writer = thread::spawn(move || write_child_stdin(child_stdin, &stdin_payload));
@@ -331,9 +340,34 @@ fn verify_executable_digest(program: &Path, expected_digest_blake3: &str) -> Res
     Ok(())
 }
 
-fn spawn_confined_process(profile: &RemoteBatchDispatcherCommandProfile, args: &[String]) -> Result<Child, String> {
+fn resolve_environment_handles(
+    handles: &[RemoteBatchEnvironmentHandle],
+) -> Result<Vec<(String, std::ffi::OsString)>, String> {
+    let mut environment = Vec::with_capacity(handles.len());
+    for handle in handles {
+        let value = std::env::var_os(&handle.name)
+            .ok_or_else(|| "external-batch-environment-handle-unavailable".to_string())?;
+        if value.as_encoded_bytes().len() > MAX_BATCH_ENVIRONMENT_VALUE_BYTES {
+            return Err("external-batch-environment-handle-value-too-large".to_string());
+        }
+        environment.push((handle.name.clone(), value));
+    }
+    Ok(environment)
+}
+
+fn spawn_confined_process(
+    profile: &RemoteBatchDispatcherCommandProfile,
+    args: &[String],
+    environment: &[(String, std::ffi::OsString)],
+) -> Result<Child, String> {
     let mut command = Command::new(&profile.program);
-    command.args(args).env_clear().stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    command
+        .args(args)
+        .env_clear()
+        .envs(environment.iter().cloned())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     command.spawn().map_err(|_| "external-batch-process-spawn-failed".to_string())
 }
 
@@ -516,11 +550,23 @@ fn response_for_slurm(
         external_job_id,
         reason_code: reason_code.to_string(),
         observed_unix_s,
+        non_claim: crunch_build::distributed::EXTERNAL_BATCH_NON_CLAIM.to_string(),
     };
     validate_external_batch_response(operation, &response)?;
     assert_eq!(response.operation_id_blake3, operation.operation_id_blake3);
     assert_eq!(response.dispatch_id_blake3, operation.dispatch_id_blake3);
     Ok(response)
+}
+
+fn validate_runtime_dispatcher_operation(
+    profile: &RemoteBatchDispatcherProfile,
+    operation: ExternalBatchOperationKind,
+) -> Result<(), String> {
+    validate_remote_batch_dispatcher_profile(profile)?;
+    if !profile.allowed_operations.contains(&operation) {
+        return Err("external-batch-operation-not-allowed".to_string());
+    }
+    Ok(())
 }
 
 fn validate_operation_kind(
@@ -566,6 +612,10 @@ mod tests {
         plan_external_batch_operation(ExternalBatchOperationInput {
             kind,
             adapter_instance_id: "slurm-fixture".to_string(),
+            dispatcher_profile_ref_blake3: blake3::hash(b"profile").to_hex().to_string(),
+            provider_class: "slurm".to_string(),
+            worker_bootstrap_ref_blake3: blake3::hash(b"bootstrap").to_hex().to_string(),
+            semantic_capability_class: "x86_64-linux:kvm".to_string(),
             dispatcher_generation: 1,
             normalized_build_key: blake3::hash(b"build").to_hex().to_string(),
             job_id: RemoteJobId::new("job-1").expect("fixture job id"),
@@ -611,12 +661,24 @@ mod tests {
             instance_id: "slurm-fixture".to_string(),
             generation: 1,
             adapter: RemoteBatchDispatcherAdapter::SlurmCliV1,
+            protocol_schema: EXTERNAL_BATCH_PROTOCOL_SCHEMA.to_string(),
+            allowed_operations: vec![
+                ExternalBatchOperationKind::Submit,
+                ExternalBatchOperationKind::Observe,
+                ExternalBatchOperationKind::Cancel,
+                ExternalBatchOperationKind::Reconcile,
+            ],
+            provider_class: "slurm".to_string(),
             submit: command("submit"),
             observe: command("observe"),
             cancel: command("cancel"),
             reconcile: command("reconcile"),
             worker_program: Path::new("/bin/true").to_path_buf(),
+            worker_program_digest_blake3: blake3::hash(b"fixture-worker").to_hex().to_string(),
             worker_args: vec!["remote".to_string(), "serve".to_string()],
+            environment_handles: Vec::new(),
+            bootstrap_policy: crate::remote_farm_config::RemoteBatchBootstrapPolicy::FixedTemplateV1,
+            redact_provider_output: true,
             startup_timeout_secs: TEST_TIMEOUT_SECS,
             terminal_timeout_secs: TEST_TIMEOUT_SECS,
             max_reconcile_attempts: TEST_RECONCILE_ATTEMPTS,
@@ -627,7 +689,7 @@ mod tests {
         let script = temp.path().join("fake-slurm");
         std::fs::write(
             &script,
-            "#!/bin/sh\noperation=$1\ncase \"$operation\" in\n  submit) printf '4242;fixture\\n' ;;\n  observe|reconcile) printf 'RUNNING\\n' ;;\n  cancel) exit 0 ;;\n  malformed) printf 'NOT_A_SLURM_STATE\\n' ;;\n  flood) i=0; while [ \"$i\" -lt 8192 ]; do printf x; i=$((i + 1)); done ;;\n  *) exit 64 ;;\nesac\n",
+            "#!/bin/sh\noperation=$1\ncase \"$operation\" in\n  submit) printf '4242;fixture\\n' ;;\n  observe|reconcile) printf 'RUNNING\\n' ;;\n  cancel) exit 0 ;;\n  malformed) printf 'NOT_A_SLURM_STATE\\n' ;;\n  flood) i=0; while [ \"$i\" -lt 8192 ]; do printf x; i=$((i + 1)); done ;;\n  hang) while :; do :; done ;;\n  *) exit 64 ;;\nesac\n",
         )
         .expect("fake Slurm fixture writes");
         let mut permissions = std::fs::metadata(&script).expect("fixture metadata reads").permissions();
@@ -636,15 +698,110 @@ mod tests {
         script
     }
 
+    fn fake_slurm_suite_profile(temp: &tempfile::TempDir) -> RemoteBatchDispatcherProfile {
+        let source = write_fake_slurm(temp);
+        let mut profile = fake_slurm_profile(&source);
+        for (command, name, operation) in [
+            (&mut profile.submit, "sbatch", "submit"),
+            (&mut profile.observe, "squeue", "observe"),
+            (&mut profile.reconcile, "sacct", "reconcile"),
+            (&mut profile.cancel, "scancel", "cancel"),
+        ] {
+            let target = temp.path().join(name);
+            std::fs::copy(&source, &target).expect("exact fake Slurm executable copies");
+            command.program = target.clone();
+            command.expected_digest_blake3 = executable_digest(&target);
+            command.args = vec![operation.to_string()];
+        }
+        profile
+    }
+
     fn executable_digest(path: &Path) -> String {
         blake3::hash(&std::fs::read(path).expect("fixture executable reads")).to_hex().to_string()
+    }
+
+    fn write_direct_response_fixture(
+        temp: &tempfile::TempDir,
+        response: &ExternalBatchOperationResponse,
+    ) -> std::path::PathBuf {
+        let encoded = serde_json::to_string(response).expect("direct fixture response serializes");
+        assert!(!encoded.contains('\''));
+        let script = temp.path().join("fake-direct-dispatcher");
+        let source = format!("#!/bin/sh\nif [ \"${{HOME+x}}\" = x ]; then exit 64; fi\nprintf '%s\\n' '{encoded}'\n");
+        std::fs::write(&script, source).expect("direct dispatcher fixture writes");
+        let mut permissions = std::fs::metadata(&script).expect("fixture metadata reads").permissions();
+        permissions.set_mode(0o700);
+        std::fs::set_permissions(&script, permissions).expect("fixture mode applies");
+        script
+    }
+
+    #[test]
+    fn direct_adapter_exchanges_canonical_json_with_clean_environment() {
+        let temp = tempfile::tempdir().expect("temporary direct dispatcher dir");
+        let operation = fixture_operation(ExternalBatchOperationKind::Submit, None);
+        let response = ExternalBatchOperationResponse {
+            schema: EXTERNAL_BATCH_PROTOCOL_SCHEMA.to_string(),
+            operation: operation.operation,
+            operation_id_blake3: operation.operation_id_blake3.clone(),
+            dispatch_id_blake3: operation.dispatch_id_blake3.clone(),
+            adapter_instance_id: operation.adapter_instance_id.clone(),
+            dispatcher_generation: operation.dispatcher_generation,
+            job_id: operation.job_id.clone(),
+            attempt_id: operation.attempt_id.clone(),
+            fence_generation: operation.fence_generation,
+            state: ExternalBatchJobState::Submitted,
+            external_job_id: Some("direct-42".to_string()),
+            reason_code: "direct-submit-accepted".to_string(),
+            observed_unix_s: TEST_OBSERVED_UNIX_S,
+            non_claim: crunch_build::distributed::EXTERNAL_BATCH_NON_CLAIM.to_string(),
+        };
+        let script = write_direct_response_fixture(&temp, &response);
+        let command = RemoteBatchDispatcherCommandProfile {
+            program: script.clone(),
+            expected_digest_blake3: executable_digest(&script),
+            args: Vec::new(),
+            timeout_secs: TEST_TIMEOUT_SECS,
+            stdout_limit_bytes: TEST_OUTPUT_LIMIT_BYTES,
+            stderr_limit_bytes: TEST_OUTPUT_LIMIT_BYTES,
+        };
+        let profile = RemoteBatchDispatcherProfile {
+            instance_id: "slurm-fixture".to_string(),
+            generation: 1,
+            adapter: RemoteBatchDispatcherAdapter::DirectProcessV1,
+            protocol_schema: EXTERNAL_BATCH_PROTOCOL_SCHEMA.to_string(),
+            allowed_operations: vec![
+                ExternalBatchOperationKind::Submit,
+                ExternalBatchOperationKind::Observe,
+                ExternalBatchOperationKind::Cancel,
+                ExternalBatchOperationKind::Reconcile,
+            ],
+            provider_class: "direct".to_string(),
+            submit: command.clone(),
+            observe: command.clone(),
+            cancel: command.clone(),
+            reconcile: command,
+            worker_program: Path::new("/bin/true").to_path_buf(),
+            worker_program_digest_blake3: blake3::hash(b"fixture-worker").to_hex().to_string(),
+            worker_args: Vec::new(),
+            environment_handles: Vec::new(),
+            bootstrap_policy: crate::remote_farm_config::RemoteBatchBootstrapPolicy::DirectWorkerExecV1,
+            redact_provider_output: true,
+            startup_timeout_secs: TEST_TIMEOUT_SECS,
+            terminal_timeout_secs: TEST_TIMEOUT_SECS,
+            max_reconcile_attempts: TEST_RECONCILE_ATTEMPTS,
+        };
+        let observed = DirectProcessBatchDispatcher { profile: &profile }
+            .submit(&operation, TEST_OBSERVED_UNIX_S)
+            .expect("direct canonical exchange succeeds");
+
+        assert_eq!(observed, response);
+        assert_eq!(observed.external_job_id.as_deref(), Some("direct-42"));
     }
 
     #[test]
     fn slurm_adapter_submits_observes_reconciles_and_cancels_fake_cli() {
         let temp = tempfile::tempdir().expect("temporary fake Slurm dir");
-        let script = write_fake_slurm(&temp);
-        let profile = fake_slurm_profile(&script);
+        let profile = fake_slurm_suite_profile(&temp);
         let adapter = SlurmCliBatchDispatcher { profile: &profile };
         let submit = adapter
             .submit(&fixture_operation(ExternalBatchOperationKind::Submit, None), TEST_OBSERVED_UNIX_S)
@@ -660,6 +817,10 @@ mod tests {
             .expect("fake Slurm cancel succeeds");
 
         assert_eq!(submit.external_job_id.as_deref(), Some("4242"));
+        assert_eq!(profile.submit.program.file_name().and_then(|name| name.to_str()), Some("sbatch"));
+        assert_eq!(profile.observe.program.file_name().and_then(|name| name.to_str()), Some("squeue"));
+        assert_eq!(profile.reconcile.program.file_name().and_then(|name| name.to_str()), Some("sacct"));
+        assert_eq!(profile.cancel.program.file_name().and_then(|name| name.to_str()), Some("scancel"));
         assert_eq!(observe.state, ExternalBatchJobState::Running);
         assert_eq!(reconcile.state, ExternalBatchJobState::Running);
         assert_eq!(cancel.state, ExternalBatchJobState::Cancelled);
@@ -680,9 +841,22 @@ mod tests {
         let flood_error = SlurmCliBatchDispatcher { profile: &flooded }
             .observe(&fixture_operation(ExternalBatchOperationKind::Observe, Some("4242")), TEST_OBSERVED_UNIX_S)
             .expect_err("bounded output rejects flood");
+        let mut timed_out = fake_slurm_profile(&script);
+        timed_out.observe.args = vec!["hang".to_string()];
+        timed_out.observe.timeout_secs = 1;
+        let timeout_error = SlurmCliBatchDispatcher { profile: &timed_out }
+            .observe(&fixture_operation(ExternalBatchOperationKind::Observe, Some("4242")), TEST_OBSERVED_UNIX_S)
+            .expect_err("hung provider command times out");
+        let mut disabled = fake_slurm_profile(&script);
+        disabled.allowed_operations.retain(|operation| *operation != ExternalBatchOperationKind::Cancel);
+        let disabled_error = SlurmCliBatchDispatcher { profile: &disabled }
+            .cancel(&fixture_operation(ExternalBatchOperationKind::Cancel, Some("4242")), TEST_OBSERVED_UNIX_S)
+            .expect_err("disabled operation is rejected before execution");
 
         assert_eq!(digest_error, "external-batch-executable-digest-mismatch");
         assert_eq!(flood_error, "external-batch-process-output-limit-exceeded");
+        assert_eq!(timeout_error, "external-batch-process-timeout");
+        assert_eq!(disabled_error, "external-batch-operation-not-allowed");
     }
 
     #[test]

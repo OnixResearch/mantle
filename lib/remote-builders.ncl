@@ -326,16 +326,33 @@ let BatchDispatcherCommand = {
   stderr_limit_bytes | Number,
 } in
 
+let BatchEnvironmentHandle = {
+  name
+    | doc "Allowlisted shell-owned environment handle name; values never enter canonical records"
+    | String,
+} in
+
 let BatchDispatcherProfile = {
   instance_id | String,
   generation | Number,
   adapter | [| 'direct-process-v1, 'slurm-cli-v1 |],
+  protocol_schema | String | default = "mantle-batch-dispatch-adapter-v1",
+  allowed_operations
+    | Array [| 'submit, 'observe, 'cancel, 'reconcile |]
+    | default = ['submit, 'observe, 'cancel, 'reconcile],
+  provider_class | String,
   submit | BatchDispatcherCommand,
   observe | BatchDispatcherCommand,
   cancel | BatchDispatcherCommand,
   reconcile | BatchDispatcherCommand,
   worker_program | String,
+  worker_program_digest_blake3 | String,
   worker_args | Array String | default = [],
+  environment_handles | Array BatchEnvironmentHandle | default = [],
+  bootstrap_policy
+    | [| 'direct-worker-exec-v1, 'fixed-template-v1 |]
+    | default = 'direct-worker-exec-v1,
+  redact_provider_output | Bool | default = true,
   startup_timeout_secs | Number,
   terminal_timeout_secs | Number,
   max_reconcile_attempts | Number,

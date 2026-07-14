@@ -119,6 +119,8 @@ use snix_store::path_info::PathInfo;
 use tokio::io::AsyncWrite;
 
 use crate::errors::RunError;
+#[cfg(test)]
+use crate::external_batch_dispatch::ConfiguredExternalBatchDispatcher;
 use crate::external_batch_dispatch::ExternalBatchDispatcher;
 use crate::remote_telemetry_export::RemoteTelemetryAdapterHealth;
 use crate::remote_telemetry_export::RemoteTelemetryAdapterStatus;
@@ -201,6 +203,7 @@ const LEGACY_LOG_MIGRATION_NON_CLAIM: &str =
 const REMOTE_COORDINATOR_BUILD_KEY_LABEL: &str = "remote-coordinator-build-key";
 const REMOTE_COORDINATOR_JOB_ID_LABEL: &str = "remote-coordinator-job";
 const REMOTE_ASSIGNMENT_NONCE_LABEL: &str = "remote-assignment-nonce";
+const EXTERNAL_BATCH_PLAN_REPORT_SCHEMA: &str = "mantle-external-batch-plan-v1";
 const EXTERNAL_BATCH_COMPOSITION_EVIDENCE_SCHEMA: &str = "mantle-external-batch-composition-v1";
 const REMOTE_RESOURCE_STATUS_NON_CLAIMS: [&str; 5] = [
     "resource leases authorize scheduling capacity only",
@@ -1494,6 +1497,7 @@ pub struct RemoteCoordinatorJobSummary {
     pub locality: Option<RemoteVerifiedLocalitySummary>,
 }
 
+// r[impl external_batch_dispatchers.fenced_lifecycle]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExternalBatchCoordinatorRecord {
@@ -1502,29 +1506,66 @@ pub struct ExternalBatchCoordinatorRecord {
     pub last_response: ExternalBatchOperationResponse,
     pub reconcile_attempts: u32,
     pub worker_registered: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordinator_job_id: Option<RemoteJobId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_lease_id_blake3: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_admission_digest_blake3: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ExternalBatchAttemptStatus {
     pub dispatch_id_blake3: String,
     pub adapter_instance_id: String,
+    pub dispatcher_profile_ref_blake3: String,
+    pub provider_class: String,
     pub dispatcher_generation: u64,
+    pub allocation_job_id: RemoteJobId,
+    pub allocation_attempt_id: RemoteAttemptId,
+    pub allocation_fence_generation: RemoteFenceGeneration,
     pub external_job_id: Option<String>,
     pub state: ExternalBatchJobState,
+    pub resources: crunch_build::distributed::ExternalBatchResourceProjection,
     pub worker_endpoint_id: String,
     pub worker_registered: bool,
+    pub coordinator_job_id: Option<RemoteJobId>,
+    pub resource_lease_id_blake3: Option<String>,
+    pub output_admission_completed: bool,
     pub reconcile_attempts: u32,
     pub reason_code: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ExternalBatchPlanReport {
+    pub schema: &'static str,
+    pub dispatch_id_blake3: String,
+    pub dispatcher_profile_ref_blake3: String,
+    pub provider_class: String,
+    pub worker_bootstrap_ref_blake3: String,
+    pub semantic_capability_class: String,
+    pub resources: crunch_build::distributed::ExternalBatchResourceProjection,
+    pub startup_timeout_secs: u64,
+    pub terminal_timeout_secs: u64,
+    pub non_claims: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ExternalBatchCompositionEvidence {
     pub schema: &'static str,
     pub dispatch_id_blake3: String,
+    pub dispatcher_profile_ref_blake3: String,
+    pub provider_class: String,
     pub external_job_id: String,
+    pub queue_state: ExternalBatchJobState,
+    pub resources: crunch_build::distributed::ExternalBatchResourceProjection,
     pub worker_endpoint_id: String,
     pub worker_registered: bool,
+    pub coordinator_job_id: RemoteJobId,
+    pub resource_lease_id_blake3: Option<String>,
+    pub transfer_mode: RemoteTransferMode,
     pub output_admission_digest_blake3: String,
+    pub output_trust_key_id: String,
     pub non_claims: Vec<String>,
 }
 
@@ -4493,6 +4534,22 @@ pub fn apply_worker_registration(
     Ok(adopted)
 }
 
+// r[impl external_batch_dispatchers.diagnostics]
+pub fn external_batch_plan_report(operation: &ExternalBatchOperation) -> ExternalBatchPlanReport {
+    ExternalBatchPlanReport {
+        schema: EXTERNAL_BATCH_PLAN_REPORT_SCHEMA,
+        dispatch_id_blake3: operation.dispatch_id_blake3.clone(),
+        dispatcher_profile_ref_blake3: operation.dispatcher_profile_ref_blake3.clone(),
+        provider_class: bounded_untrusted_text(&operation.provider_class),
+        worker_bootstrap_ref_blake3: operation.worker_bootstrap_ref_blake3.clone(),
+        semantic_capability_class: operation.semantic_capability_class.clone(),
+        resources: operation.resources.clone(),
+        startup_timeout_secs: operation.limits.startup_timeout_secs,
+        terminal_timeout_secs: operation.limits.terminal_timeout_secs,
+        non_claims: vec![EXTERNAL_BATCH_NON_CLAIM.to_string()],
+    }
+}
+
 pub fn submit_external_batch_allocation(
     state: &mut RemoteCoordinatorState,
     request: &RemoteCoordinatorBuildRequest,
@@ -4520,6 +4577,9 @@ pub fn submit_external_batch_allocation(
         last_response: response.clone(),
         reconcile_attempts: 0,
         worker_registered: false,
+        coordinator_job_id: None,
+        resource_lease_id_blake3: None,
+        output_admission_digest_blake3: None,
     };
     let mut candidate = state.clone();
     candidate.external_batch_attempts.insert(record.submit_operation.dispatch_id_blake3.clone(), record);
@@ -4559,6 +4619,10 @@ fn plan_external_batch_allocation(
     plan_external_batch_operation(ExternalBatchOperationInput {
         kind: ExternalBatchOperationKind::Submit,
         adapter_instance_id: profile.instance_id.clone(),
+        dispatcher_profile_ref_blake3: crate::remote_farm_config::remote_batch_dispatcher_profile_ref(profile)?,
+        provider_class: profile.provider_class.clone(),
+        worker_bootstrap_ref_blake3: crate::remote_farm_config::remote_batch_worker_bootstrap_ref(profile)?,
+        semantic_capability_class: external_batch_semantic_capability_class(request),
         dispatcher_generation: profile.generation,
         normalized_build_key,
         job_id,
@@ -4573,6 +4637,18 @@ fn plan_external_batch_allocation(
         },
         external_job_id: None,
     })
+}
+
+fn external_batch_semantic_capability_class(request: &RemoteCoordinatorBuildRequest) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, "system", &request.required_system);
+    hash_ordered_values(&mut hasher, "feature", &request.required_features);
+    hash_labeled_str(&mut hasher, "sandbox", &request.required_sandbox_mode);
+    hash_labeled_str(&mut hasher, "network", &request.required_network_mode);
+    let digest = hasher.finalize().to_hex().to_string();
+    debug_assert!(is_blake3_hex_digest(&digest));
+    debug_assert!(!request.required_system.is_empty());
+    digest
 }
 
 fn derive_external_batch_allocation_identity(
@@ -4680,6 +4756,7 @@ fn run_external_batch_followup(
         ExternalBatchOperationKind::Reconcile => dispatcher.reconcile(&operation, observed_unix_s)?,
     };
     crunch_build::distributed::validate_external_batch_response(&operation, &response)?;
+    crunch_build::distributed::validate_external_batch_state_transition(record.last_response.state, response.state)?;
     let mut candidate = state.clone();
     let candidate_record = candidate
         .external_batch_attempts
@@ -4703,6 +4780,7 @@ fn run_external_batch_followup(
     Ok(response)
 }
 
+// r[impl external_batch_dispatchers.worker_handoff]
 pub fn register_external_batch_worker(
     state: &mut RemoteCoordinatorState,
     dispatch_id_blake3: &str,
@@ -4799,18 +4877,52 @@ pub fn admit_external_batch_coordinator_dispatch(
         return Err("external-batch-worker-not-selected".to_string());
     }
     let decision = admit_coordinator_dispatch(state, request, retry_policy, time)?;
-    match &decision {
-        RemoteCoordinatorDispatchDecision::Dispatch { worker_endpoint_id, .. }
-            if worker_endpoint_id == &expected_worker_endpoint_id => {}
-        RemoteCoordinatorDispatchDecision::AttachExisting { .. }
-        | RemoteCoordinatorDispatchDecision::RedeliverResult { .. } => {}
+    let coordinator_job_id = match &decision {
+        RemoteCoordinatorDispatchDecision::Dispatch {
+            worker_endpoint_id,
+            job_id,
+            ..
+        } if worker_endpoint_id == &expected_worker_endpoint_id => job_id.clone(),
+        RemoteCoordinatorDispatchDecision::AttachExisting { job_id, .. }
+        | RemoteCoordinatorDispatchDecision::RedeliverResult { job_id, .. } => job_id.clone(),
         _ => return Err("external-batch-coordinator-assignment-mismatch".to_string()),
-    }
+    };
+    bind_external_batch_coordinator_job(state, dispatch_id_blake3, &coordinator_job_id)?;
     Ok(decision)
 }
 
+fn bind_external_batch_coordinator_job(
+    state: &mut RemoteCoordinatorState,
+    dispatch_id_blake3: &str,
+    coordinator_job_id: &RemoteJobId,
+) -> Result<(), String> {
+    let job = state
+        .jobs
+        .get(coordinator_job_id)
+        .cloned()
+        .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    let mut candidate = state.clone();
+    let record = candidate
+        .external_batch_attempts
+        .get_mut(dispatch_id_blake3)
+        .ok_or_else(|| "external-batch-attempt-unknown".to_string())?;
+    record.coordinator_job_id = Some(coordinator_job_id.clone());
+    record.resource_lease_id_blake3 = job.resource_lease_id_blake3;
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
+    assert_eq!(
+        state.external_batch_attempts[dispatch_id_blake3].coordinator_job_id.as_ref(),
+        Some(coordinator_job_id)
+    );
+    assert_eq!(
+        state.external_batch_attempts[dispatch_id_blake3].resource_lease_id_blake3,
+        state.jobs[coordinator_job_id].resource_lease_id_blake3
+    );
+    Ok(())
+}
+
 pub fn external_batch_composition_evidence(
-    state: &RemoteCoordinatorState,
+    state: &mut RemoteCoordinatorState,
     dispatch_id_blake3: &str,
     binding: &RemoteProductionAttemptBinding,
     admission: &RemoteOutputAdmissionReport,
@@ -4834,18 +4946,46 @@ pub fn external_batch_composition_evidence(
     if current.attempt_id != binding.attempt_id || current.fence_generation != binding.fence_generation {
         return Err("external-batch-composition-attempt-fence-mismatch".to_string());
     }
+    if !job.output_admission_completed {
+        return Err("external-batch-composition-output-not-admitted".to_string());
+    }
+    if !is_blake3_hex_digest(&admission.output_digest_blake3) {
+        return Err("external-batch-composition-output-digest-invalid".to_string());
+    }
     let external_job_id = record
         .last_response
         .external_job_id
         .clone()
         .ok_or_else(|| "external-batch-external-job-id-missing".to_string())?;
+    let worker_endpoint_id = endpoint_id.clone();
+    let dispatcher_profile_ref_blake3 = record.submit_operation.dispatcher_profile_ref_blake3.clone();
+    let provider_class = record.submit_operation.provider_class.clone();
+    let queue_state = record.last_response.state;
+    let resources = record.submit_operation.resources.clone();
+    let resource_lease_id_blake3 = record.resource_lease_id_blake3.clone();
+    let mut candidate = state.clone();
+    candidate
+        .external_batch_attempts
+        .get_mut(dispatch_id_blake3)
+        .ok_or_else(|| "external-batch-attempt-unknown".to_string())?
+        .output_admission_digest_blake3 = Some(admission.output_digest_blake3.clone());
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
     Ok(ExternalBatchCompositionEvidence {
         schema: EXTERNAL_BATCH_COMPOSITION_EVIDENCE_SCHEMA,
         dispatch_id_blake3: dispatch_id_blake3.to_string(),
+        dispatcher_profile_ref_blake3,
+        provider_class,
         external_job_id,
-        worker_endpoint_id: endpoint_id.clone(),
+        queue_state,
+        resources,
+        worker_endpoint_id,
         worker_registered: true,
+        coordinator_job_id: binding.job_id.clone(),
+        resource_lease_id_blake3,
+        transfer_mode: admission.transfer.mode,
         output_admission_digest_blake3: admission.output_digest_blake3.clone(),
+        output_trust_key_id: admission.trust_basis.key_id.clone(),
         non_claims: vec![
             EXTERNAL_BATCH_NON_CLAIM.to_string(),
             "output admission remains governed by the ordinary signed-output trust path".to_string(),
@@ -5312,6 +5452,66 @@ pub fn append_remote_production_observability_log(
         .get(&binding.job_id)
         .and_then(|job| job.immutable_log.clone())
         .ok_or_else(|| "remote-observability-log-summary-missing".to_string())?;
+    assert!(summary.next_cursor > cursor);
+    assert!(summary.head_record_blake3.is_some());
+    Ok(summary)
+}
+
+pub fn append_external_batch_attempt_diagnostic(
+    state: &mut RemoteCoordinatorState,
+    dispatch_id_blake3: &str,
+    binding: &RemoteProductionAttemptBinding,
+) -> Result<RemoteAttemptLogControlSummary, String> {
+    let job = state.jobs.get(&binding.job_id).ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    let attempt = job
+        .current_attempt
+        .as_ref()
+        .ok_or_else(|| RemoteAttemptReasonCode::LegacyStateRejected.as_str().to_string())?;
+    if attempt.attempt_id != binding.attempt_id || attempt.fence_generation != binding.fence_generation {
+        return Err(RemoteAttemptReasonCode::StaleReportRejected.as_str().to_string());
+    }
+    let record = state
+        .external_batch_attempts
+        .get(dispatch_id_blake3)
+        .ok_or_else(|| "external-batch-attempt-unknown".to_string())?;
+    if record.coordinator_job_id.as_ref() != Some(&binding.job_id) {
+        return Err("external-batch-diagnostic-coordinator-job-mismatch".to_string());
+    }
+    let status = external_batch_attempt_status(record);
+    let status_bytes =
+        serde_json::to_vec(&status).map_err(|error| format!("external-batch-diagnostic-serialize-failed: {error}"))?;
+    let payload = serde_json::to_string(&serde_json::json!({
+        "schema": "mantle-external-batch-immutable-diagnostic-v1",
+        "dispatch_id_blake3": status.dispatch_id_blake3,
+        "status_digest_blake3": blake3::hash(&status_bytes).to_hex().to_string(),
+        "state": status.state,
+        "worker_registered": status.worker_registered,
+        "output_admission_completed": status.output_admission_completed,
+        "non_claim": EXTERNAL_BATCH_NON_CLAIM,
+    }))
+    .map_err(|error| format!("external-batch-diagnostic-serialize-failed: {error}"))?;
+    if payload.len() > MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES {
+        return Err("external-batch-diagnostic-payload-too-large".to_string());
+    }
+    let cursor = job.immutable_log.as_ref().map_or(0, |log| log.next_cursor);
+    let report = production_attempt_report(
+        binding,
+        "external-batch-diagnostic",
+        cursor,
+        RemoteAttemptReportPayload::LogAppend { cursor, bytes: payload },
+    )?;
+    let mut candidate = state.clone();
+    let RemoteAttemptReportPayload::LogAppend { bytes, .. } = &report.payload else {
+        unreachable!("external batch diagnostic is a log append");
+    };
+    apply_fenced_log_append(&mut candidate, &report, cursor, bytes, RemoteLogRetentionPolicy::default())?;
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
+    let summary = state
+        .jobs
+        .get(&binding.job_id)
+        .and_then(|job| job.immutable_log.clone())
+        .ok_or_else(|| "external-batch-diagnostic-summary-missing".to_string())?;
     assert!(summary.next_cursor > cursor);
     assert!(summary.head_record_blake3.is_some());
     Ok(summary)
@@ -6404,10 +6604,10 @@ fn validate_external_batch_state(state: &RemoteCoordinatorState) -> Result<(), S
                 record.submit_operation.dispatcher_generation,
                 external_job_id
             );
-            if let Some(other_dispatch) = external_jobs.insert(external_key, dispatch_id) {
-                if other_dispatch != dispatch_id {
-                    return Err("external-batch-state-external-job-id-conflict".to_string());
-                }
+            let other_dispatch = external_jobs.insert(external_key, dispatch_id.clone());
+            let locator_conflicts = other_dispatch.as_ref().is_some_and(|other| other != dispatch_id);
+            if locator_conflicts {
+                return Err("external-batch-state-external-job-id-conflict".to_string());
             }
         }
         if record.worker_registered {
@@ -6419,6 +6619,34 @@ fn validate_external_batch_state(state: &RemoteCoordinatorState) -> Result<(), S
                 return Err("external-batch-state-worker-generation-mismatch".to_string());
             }
         }
+        validate_external_batch_coordinator_link(state, record)?;
+    }
+    Ok(())
+}
+
+fn validate_external_batch_coordinator_link(
+    state: &RemoteCoordinatorState,
+    record: &ExternalBatchCoordinatorRecord,
+) -> Result<(), String> {
+    let Some(job_id) = record.coordinator_job_id.as_ref() else {
+        if record.resource_lease_id_blake3.is_some() || record.output_admission_digest_blake3.is_some() {
+            return Err("external-batch-state-unbound-coordinator-facts".to_string());
+        }
+        return Ok(());
+    };
+    let job = state.jobs.get(job_id).ok_or_else(|| "external-batch-state-coordinator-job-missing".to_string())?;
+    if job.normalized_build_key != record.submit_operation.normalized_build_key
+        || job.assigned_worker_endpoint_id.as_deref()
+            != Some(record.submit_operation.expected_worker_endpoint_id.as_str())
+    {
+        return Err("external-batch-state-coordinator-job-mismatch".to_string());
+    }
+    let current_attempt_live = job.current_attempt.as_ref().is_some_and(|attempt| attempt.phase.is_live());
+    if current_attempt_live && record.resource_lease_id_blake3 != job.resource_lease_id_blake3 {
+        return Err("external-batch-state-resource-lease-mismatch".to_string());
+    }
+    if record.output_admission_digest_blake3.is_some() && !job.output_admission_completed {
+        return Err("external-batch-state-output-admission-mismatch".to_string());
     }
     Ok(())
 }
@@ -6770,11 +6998,20 @@ fn external_batch_attempt_status(record: &ExternalBatchCoordinatorRecord) -> Ext
     ExternalBatchAttemptStatus {
         dispatch_id_blake3: record.submit_operation.dispatch_id_blake3.clone(),
         adapter_instance_id: bounded_untrusted_text(&record.submit_operation.adapter_instance_id),
+        dispatcher_profile_ref_blake3: record.submit_operation.dispatcher_profile_ref_blake3.clone(),
+        provider_class: bounded_untrusted_text(&record.submit_operation.provider_class),
         dispatcher_generation: record.submit_operation.dispatcher_generation,
+        allocation_job_id: record.submit_operation.job_id.clone(),
+        allocation_attempt_id: record.submit_operation.attempt_id.clone(),
+        allocation_fence_generation: record.submit_operation.fence_generation,
         external_job_id: record.last_response.external_job_id.as_deref().map(bounded_untrusted_text),
         state: record.last_response.state,
+        resources: record.submit_operation.resources.clone(),
         worker_endpoint_id: bounded_untrusted_text(&record.submit_operation.expected_worker_endpoint_id),
         worker_registered: record.worker_registered,
+        coordinator_job_id: record.coordinator_job_id.clone(),
+        resource_lease_id_blake3: record.resource_lease_id_blake3.clone(),
+        output_admission_completed: record.output_admission_digest_blake3.is_some(),
         reconcile_attempts: record.reconcile_attempts,
         reason_code: bounded_untrusted_text(&record.last_response.reason_code),
     }
@@ -11022,6 +11259,8 @@ fn print_json_or_human(value: &impl Serialize, json_output: bool) -> Result<(), 
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
     use crunch_build::distributed::RemoteAttemptLogReasonCode;
     use crunch_build::distributed::RemoteNamedResourceQuantity;
     use crunch_build::distributed::RemoteResourceReasonCode;
@@ -15851,6 +16090,7 @@ mod tests {
                 external_job_id: Some(self.external_job_id.clone()),
                 reason_code: "fake-scheduler-state".to_string(),
                 observed_unix_s,
+                non_claim: EXTERNAL_BATCH_NON_CLAIM.to_string(),
             }
         }
     }
@@ -15906,16 +16146,56 @@ mod tests {
             instance_id: "fake-batch".to_string(),
             generation: 1,
             adapter: crate::remote_farm_config::RemoteBatchDispatcherAdapter::DirectProcessV1,
+            protocol_schema: crunch_build::distributed::EXTERNAL_BATCH_PROTOCOL_SCHEMA.to_string(),
+            allowed_operations: vec![
+                ExternalBatchOperationKind::Submit,
+                ExternalBatchOperationKind::Observe,
+                ExternalBatchOperationKind::Cancel,
+                ExternalBatchOperationKind::Reconcile,
+            ],
+            provider_class: "fake".to_string(),
             submit: command.clone(),
             observe: command.clone(),
             cancel: command.clone(),
             reconcile: command,
             worker_program: PathBuf::from("/bin/true"),
+            worker_program_digest_blake3: blake3::hash(b"fixture-worker").to_hex().to_string(),
             worker_args: Vec::new(),
+            environment_handles: Vec::new(),
+            bootstrap_policy: crate::remote_farm_config::RemoteBatchBootstrapPolicy::DirectWorkerExecV1,
+            redact_provider_output: true,
             startup_timeout_secs: TEST_EXTERNAL_BATCH_TIMEOUT_SECS,
             terminal_timeout_secs: TEST_EXTERNAL_BATCH_TIMEOUT_SECS,
             max_reconcile_attempts: TEST_EXTERNAL_BATCH_MAX_ATTEMPTS,
         }
+    }
+
+    fn fixture_multiprocess_slurm_profile(
+        temp: &tempfile::TempDir,
+    ) -> crate::remote_farm_config::RemoteBatchDispatcherProfile {
+        let script = temp.path().join("fake-slurm-cli");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\ncase \"$1\" in\n submit) printf '4242;fixture\\n' ;;\n observe|reconcile) printf 'RUNNING\\n' ;;\n cancel) exit 0 ;;\n *) exit 64 ;;\nesac\n",
+        )
+        .expect("fake Slurm CLI writes");
+        let mut permissions = std::fs::metadata(&script).expect("fake Slurm metadata").permissions();
+        permissions.set_mode(0o700);
+        std::fs::set_permissions(&script, permissions).expect("fake Slurm mode applies");
+        let digest = blake3::hash(&std::fs::read(&script).expect("fake Slurm bytes read")).to_hex().to_string();
+        let mut profile = fixture_batch_dispatcher_profile();
+        profile.adapter = crate::remote_farm_config::RemoteBatchDispatcherAdapter::SlurmCliV1;
+        for (command, operation) in [
+            (&mut profile.submit, "submit"),
+            (&mut profile.observe, "observe"),
+            (&mut profile.cancel, "cancel"),
+            (&mut profile.reconcile, "reconcile"),
+        ] {
+            command.program = script.clone();
+            command.expected_digest_blake3 = digest.clone();
+            command.args = vec![operation.to_string()];
+        }
+        profile
     }
 
     fn fixture_external_batch_worker() -> RemoteWorkerRegistration {
@@ -16088,9 +16368,124 @@ mod tests {
         assert!(state.external_batch_attempts.contains_key(&accepted.dispatch_id_blake3));
     }
 
+    #[tokio::test]
+    async fn external_batch_multiprocess_allocation_uses_ordinary_cas_and_output_admission() {
+        let temp = tempfile::tempdir().expect("multiprocess external allocation dir");
+        let mut client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let requirements = fixture_resource_requirements();
+        client.request.resource_requirements = Some(requirements.clone());
+        let mut request = fixture_remote_operator_coordinator_request(&client);
+        request.resource_requirements = Some(requirements);
+        request.request.resource_requirements = request.resource_requirements.clone();
+        let profile = fixture_multiprocess_slurm_profile(&temp);
+        let dispatcher = ConfiguredExternalBatchDispatcher::new(&profile);
+        let mut state = RemoteCoordinatorState::default();
+        let allocation = submit_external_batch_allocation(
+            &mut state,
+            &request,
+            &profile,
+            "batch-worker-1",
+            1,
+            &dispatcher,
+            fixture_retry_time().now_unix_s,
+        )
+        .expect("fake scheduler subprocess allocates worker");
+        let blocked = authorize_external_batch_transfer(&state, &allocation.dispatch_id_blake3, "batch-worker-1")
+            .expect_err("CAS transfer stays blocked before registration");
+        register_external_batch_worker(&mut state, &allocation.dispatch_id_blake3, fixture_external_batch_worker())
+            .expect("ordinary worker registration succeeds");
+        let decision = admit_external_batch_coordinator_dispatch(
+            &mut state,
+            &allocation.dispatch_id_blake3,
+            &request,
+            RemoteAttemptRetryPolicy::default(),
+            fixture_retry_time(),
+        )
+        .expect("ordinary coordinator assignment succeeds");
+        let RemoteCoordinatorDispatchDecision::Dispatch {
+            job_id,
+            attempt_id,
+            fence_generation,
+            ..
+        } = decision
+        else {
+            panic!("registered external worker dispatches");
+        };
+        let binding = RemoteProductionAttemptBinding {
+            job_id,
+            attempt_id,
+            fence_generation,
+        };
+        start_remote_production_attempt_if_queued(&mut state, &binding, fixture_retry_time().now_unix_s)
+            .expect("ordinary worker starts fenced attempt");
+        let builder = fixture_loopback_builder();
+        let executor = PathInfoRemoteExecutor {
+            path_info: importable_pathinfo(),
+            artifact_attestation_digest_blake3: None,
+            nar_payload: None,
+        };
+        let mut ticket_state = RemoteTicketState::default();
+        ticket_state.tickets.insert("ticket-1".to_string(), fixture_ticket());
+        let response = plan_stdio_remote_once_from_state_with_executor(
+            std::io::Cursor::new(encode_frame_stream(&remote_client_request_frames(&client))),
+            &builder,
+            &mut ticket_state,
+            client.transfer_capabilities,
+            &executor,
+        )
+        .expect("worker produces signed PathInfo through framed protocol");
+        let report = production_attempt_report(
+            &binding,
+            "external-batch-result",
+            fixture_retry_time().now_unix_s,
+            RemoteAttemptReportPayload::ResultReady {
+                output_digest_blake3: response.output_digest_blake3.clone(),
+            },
+        )
+        .expect("fenced result report derives");
+        let admitted = admit_fenced_remote_builder_response(
+            &mut state,
+            &report,
+            true,
+            RemoteLogRetentionPolicy::default(),
+            &client.request,
+            &client.trusted_output_keys,
+            &response,
+        )
+        .expect("ordinary fenced output admission succeeds");
+        let RemoteFencedOutputAdmissionDecision::Admit { admission, .. } = admitted else {
+            panic!("fresh fenced output must admit");
+        };
+        let admission = *admission;
+        let mut store = remote_import_store(temp.path()).await;
+        let imported = import_admitted_remote_outputs(
+            &mut store,
+            &client.request,
+            &admission,
+            true,
+            Some(crunch_store::GcRootSource::Build),
+        )
+        .await
+        .expect("ordinary CAS output import succeeds");
+        let evidence =
+            external_batch_composition_evidence(&mut state, &allocation.dispatch_id_blake3, &binding, &admission)
+                .expect("admitted CAS output composes with allocation evidence");
+
+        assert_eq!(blocked, "external-batch-worker-not-registered");
+        assert_eq!(allocation.external_job_id.as_deref(), Some("4242"));
+        assert_eq!(imported.outputs.len(), 1);
+        assert_eq!(evidence.transfer_mode, admission.transfer.mode);
+        assert_eq!(evidence.output_trust_key_id, "builder-key");
+        assert!(evidence.non_claims.iter().any(|claim| claim.contains("do not authorize workers")));
+    }
+
     #[test]
     fn external_batch_status_and_composition_keep_scheduler_identity_non_authoritative() {
-        let mut state = RemoteCoordinatorState::default();
+        let temp = tempfile::tempdir().expect("external diagnostic state dir");
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
         let request = fixture_quantified_coordinator_request("external-evidence", "external-evidence-claim");
         let profile = fixture_batch_dispatcher_profile();
         let dispatcher = FakeExternalBatchDispatcher::valid();
@@ -16128,6 +16523,11 @@ mod tests {
             attempt_id,
             fence_generation,
         };
+        start_remote_production_attempt_if_queued(&mut state, &binding, fixture_retry_time().now_unix_s)
+            .expect("ordinary worker starts diagnostic attempt");
+        let diagnostic = append_external_batch_attempt_diagnostic(&mut state, &response.dispatch_id_blake3, &binding)
+            .expect("external allocation diagnostic appends immutably");
+        state.jobs.get_mut(&binding.job_id).expect("assigned job exists").output_admission_completed = true;
         let output_digest = blake3::hash(b"admitted-output").to_hex().to_string();
         let admission = RemoteOutputAdmissionReport {
             request_id: request.request.request_id.clone(),
@@ -16143,12 +16543,19 @@ mod tests {
             streamed_manifest: None,
             transfer: full_transfer_report(1, "builder-key", None),
         };
-        let evidence = external_batch_composition_evidence(&state, &response.dispatch_id_blake3, &binding, &admission)
-            .expect("composition evidence links only validated seams");
+        let evidence =
+            external_batch_composition_evidence(&mut state, &response.dispatch_id_blake3, &binding, &admission)
+                .expect("composition evidence links only validated seams");
         let status = coordinator_status_snapshot("coordinator", 1, &state, &[], &[]).expect("external status renders");
+        let plan =
+            external_batch_plan_report(&state.external_batch_attempts[&response.dispatch_id_blake3].submit_operation);
         let encoded = serde_json::to_string(&status).expect("status serializes");
 
+        assert_eq!(plan.schema, EXTERNAL_BATCH_PLAN_REPORT_SCHEMA);
+        assert_eq!(plan.resources.cpu_units, TEST_RESOURCE_CPU_UNITS);
         assert_eq!(evidence.output_admission_digest_blake3, output_digest);
+        assert!(diagnostic.head_record_blake3.is_some());
+        assert!(diagnostic.next_cursor > 0);
         assert!(evidence.non_claims.iter().any(|claim| claim.contains("do not authorize workers")));
         assert_eq!(status.external_batch_attempts.len(), 1);
         assert!(!encoded.contains("do-not-store"));

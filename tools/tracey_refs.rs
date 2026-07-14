@@ -621,3 +621,34 @@
 // fenced output admission, and bounded status reports. Core, shell,
 // multiprocess publication, worker capture, clean-process inspect, retention,
 // and failed/successful replay tests provide positive and negative evidence.
+
+// External batch dispatcher bridge.
+//
+// r[impl external_batch_dispatchers.protocol]
+// r[verify external_batch_dispatchers.protocol]
+// r[impl external_batch_dispatchers.canonical_identity]
+// r[verify external_batch_dispatchers.canonical_identity]
+// r[impl external_batch_dispatchers.typed_configuration]
+// r[verify external_batch_dispatchers.typed_configuration]
+// r[impl external_batch_dispatchers.resources]
+// r[verify external_batch_dispatchers.resources]
+// r[impl external_batch_dispatchers.fenced_lifecycle]
+// r[verify external_batch_dispatchers.fenced_lifecycle]
+// r[impl external_batch_dispatchers.adapter_confinement]
+// r[verify external_batch_dispatchers.adapter_confinement]
+// r[impl external_batch_dispatchers.worker_handoff]
+// r[verify external_batch_dispatchers.worker_handoff]
+// r[impl external_batch_dispatchers.slurm_adapter]
+// r[verify external_batch_dispatchers.slurm_adapter]
+// r[impl external_batch_dispatchers.diagnostics]
+// r[verify external_batch_dispatchers.diagnostics]
+// Provider-neutral protocol and reconciliation logic live in
+// `crates/crunch-build/src/distributed/external_batch.rs`; typed configuration,
+// confined direct/Slurm process execution, fenced coordinator persistence,
+// worker registration, ordinary CAS transfer, output admission, and bounded
+// diagnostics live under root `src/`. Focused positive and negative tests cover
+// identities, resource projection, restart, stale fences, duplicate locators,
+// registration ordering, exact fake Slurm commands, malformed/flood/timeout
+// failures, CAS import, signed output admission, and scheduler non-authority.
+// Hardware composition remains intentionally unclaimed until the prerequisite
+// `prove-hardware-simulation-build-flow` change provides that lane.
