@@ -48,32 +48,36 @@ nix build .#spacewasm-reference-bundle --no-link --print-out-paths -L \
   --option builders '' --option secret-key-files ''
 ```
 
-Evidence: pueue task `1106` exited successfully and produced; task `1186` rebuilt twice and confirmed the identical output path:
+The final integrated tree produced this output in pueue task `187`:
 
 ```text
-/nix/store/zxs87x9m4xfjrs8gyvc21k8acmk20dhn-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3
+/nix/store/ifynz14rxzbx4zmdylwfbca2qyy8farj-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3
 ```
 
-Measured identities from that bundle:
+Pueue task `209` rebuilt that derivation with `--rebuild`; Nix checked the
+newly produced outputs against the existing result and completed successfully.
+Measured identities from the final bundle are:
 
 - profile identity BLAKE3: `cceb1bd03f90dd382d4c7ff6e79266650830a7c87e9fae07db2e48773469eb67`
 - cohort identity BLAKE3: `fb2c9e84459271828ad6840093c80af359508f47b06125f6741b14a31c9cc103`
-- report identity BLAKE3: `64eae12a64f3eace64505b3d8a10dc439c71b5a347c4e3ba86eb96eba64245b8`
-- bundle identity BLAKE3: `865152f8bd3b33414dc0b65e786e211a5d17830bcdfaa70ca31680c2de3e0c78`
+- report identity BLAKE3: `f3870c3682a9dc3dfb0658cd473ceedb2f4525475b0d4b341a44ac68cd5e8dcc`
+- bundle identity BLAKE3: `7775e57a4d07da89ca57ff282ab0d321f1adf70e9d650f3de4e3a329c92a71e6`
 - materialization disposition: `complete`
 - source admitted: `true`
 - support projection matched: `true`
 
 The exact recorded check states are six `passed`, one `skipped`, two `unavailable`, and one `unsupported`. The eight fixture-class results are all `passed`. No absent upstream workflow or continuous fuzzing run was synthesized.
 
-Independent relative-path remeasurement was run through a user-namespace bind at `/tmp/mantle-spacewasm-portable-bundle`, outside the producing store path:
+Independent member remeasurement ran through the separately built bundler:
 
 ```text
-unshare --mount --map-root-user ... mantle-spacewasm-reference verify \
-  /tmp/mantle-spacewasm-portable-bundle
+nix run .#spacewasm-reference-bundler -- verify \
+  /nix/store/ifynz14rxzbx4zmdylwfbca2qyy8farj-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3
 ```
 
-Evidence: pueue task `1154` returned `valid: true`, bundle identity `865152f8bd3b33414dc0b65e786e211a5d17830bcdfaa70ca31680c2de3e0c78`, and no diagnostics.
+Pueue task `191` returned `valid: true`, bundle identity
+`7775e57a4d07da89ca57ff282ab0d321f1adf70e9d650f3de4e3a329c92a71e6`,
+and no diagnostics.
 
 The Nix negative rail replaced the source archive member with unrelated fixture bytes and was rejected with `source-archive-drift`:
 
