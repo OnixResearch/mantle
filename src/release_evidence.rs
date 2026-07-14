@@ -761,6 +761,7 @@ fn manifest_publication_artifacts(
         artifacts.push(publication_artifact_input(report));
     }
     if let Some(receipt) = &manifest.cairn_handoff_validation {
+        artifacts.push(publication_input_from_cairn_artifact(&receipt.handoff.authentication.archive_receipt));
         for row in &receipt.handoff.rows {
             artifacts.push(publication_input_from_cairn_artifact(&row.artifact));
             artifacts.push(publication_input_from_cairn_artifact(&row.cairn_policy));
@@ -3093,6 +3094,19 @@ mod tests {
         let receipt = created.cairn_handoff_validation.as_ref().expect("Cairn receipt");
         let artifact_path = output_bundle_dir.join(&receipt.handoff.rows[0].artifact.relative_path);
         write_file(&artifact_path, b"tampered-cairn-receipt");
+
+        let error = verify_release_evidence_bundle(&output_bundle_dir).unwrap_err();
+        assert!(error.to_string().contains("declared digest"));
+        assert!(!error.to_string().contains("release correctness proven"));
+    }
+
+    // r[verify mantle.release_provenance.cairn_evidence_handoff.cross_repo_dependency]
+    #[test]
+    fn verify_rejects_tampered_cairn_handoff_authentication_dependency() {
+        let (_temp, output_bundle_dir, created) = create_cairn_handoff_bundle();
+        let receipt = created.cairn_handoff_validation.as_ref().expect("Cairn receipt");
+        let authentication_path = output_bundle_dir.join(&receipt.handoff.authentication.archive_receipt.relative_path);
+        write_file(&authentication_path, b"tampered-cairn-authentication-receipt");
 
         let error = verify_release_evidence_bundle(&output_bundle_dir).unwrap_err();
         assert!(error.to_string().contains("declared digest"));

@@ -1318,9 +1318,11 @@ mantle release verify target/release-evidence/<release-id> \
   --deterministic-sandbox-isolation-evidence <isolation.json>
 ```
 
-This handoff is explicitly `not-authenticated` until Cairn's active
-`authenticate-stack-provenance-inputs` change is archived. It does not prove
-release, build, source, or deployment correctness. See
+The handoff now requires and remeasures the pinned archived Cairn
+`authenticate-stack-provenance-inputs` dependency and records
+`archive-authentication-prerequisite-bound-v1`. This proves dependency and
+bundle-local linkage only; Mantle does not independently claim producer
+authorization, release, build, source, or deployment correctness. See
 [`docs/cairn-release-handoff.md`](docs/cairn-release-handoff.md).
 
 <!-- r[related mantle.release_provenance.opaque_boundary.visible] -->

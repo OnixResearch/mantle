@@ -4,6 +4,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crunch_release_core::CAIRN_HANDOFF_INPUT_SCHEMA;
+use crunch_release_core::CairnHandoffAuthenticationDependency;
 use crunch_release_core::CairnMeasuredArtifact;
 use crunch_release_core::CairnReleaseEvidenceHandoff;
 use crunch_release_core::CairnReleaseEvidenceRow;
@@ -22,13 +23,29 @@ const MAX_CAIRN_HANDOFF_ARTIFACT_BYTES: u64 = 67_108_864;
 const CAIRN_HANDOFF_BUNDLE_DIRECTORY: &str = "cairn-handoff";
 const CAIRN_HANDOFF_ARTIFACT_FILE: &str = "artifact";
 const CAIRN_HANDOFF_POLICY_FILE: &str = "policy";
+const CAIRN_HANDOFF_AUTHENTICATION_DIRECTORY: &str = "authentication";
+const CAIRN_HANDOFF_AUTHENTICATION_RECEIPT_FILE: &str = "archive-receipt.json";
 const CAIRN_HANDOFF_ARTIFACTS_PER_ROW: usize = 2;
+const CAIRN_HANDOFF_AUTHENTICATION_ARTIFACTS_COUNT: usize = 1;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CairnHandoffDescriptor {
     schema: String,
+    authentication: CairnHandoffDescriptorAuthentication,
     rows: Vec<CairnHandoffDescriptorRow>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CairnHandoffDescriptorAuthentication {
+    schema: String,
+    change_name: String,
+    cairn_revision: String,
+    archive_manifest_blake3: String,
+    archive_mutation_receipt_blake3: String,
+    archive_receipt_path: PathBuf,
+    archive_receipt_digest_blake3: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -63,13 +80,16 @@ pub fn prepare_cairn_handoff_for_bundle(
     })?;
     validate_descriptor_header(&descriptor)?;
     let descriptor_parent = descriptor_path.parent().unwrap_or_else(|| Path::new("."));
+    let preflight = preflight_handoff(&descriptor, descriptor_parent, bundle_dir)?;
+    debug_assert_eq!(preflight.rows.len(), descriptor.rows.len());
+    let authentication = prepare_authentication(descriptor.authentication, descriptor_parent, bundle_dir)?;
     let mut rows = Vec::with_capacity(descriptor.rows.len());
     for (index, row) in descriptor.rows.into_iter().enumerate() {
         let index_u32 = u32::try_from(index)
             .map_err(|_| RunError::Internal("Cairn handoff row index overflowed u32".to_string()))?;
         rows.push(prepare_row(row, index_u32, descriptor_parent, bundle_dir)?);
     }
-    let handoff = CairnReleaseEvidenceHandoff { rows };
+    let handoff = CairnReleaseEvidenceHandoff { authentication, rows };
     let report = crunch_release_core::validate_cairn_release_evidence_handoff(&handoff);
     if !report.valid {
         return Err(RunError::Internal(format!(
@@ -97,28 +117,20 @@ pub fn plan_cairn_handoff_artifacts(
     })?;
     validate_descriptor_header(&descriptor)?;
     let descriptor_parent = descriptor_path.parent().unwrap_or_else(|| Path::new("."));
-    let mut artifacts = Vec::with_capacity(descriptor.rows.len().saturating_mul(CAIRN_HANDOFF_ARTIFACTS_PER_ROW));
-    for (index, row) in descriptor.rows.iter().enumerate() {
-        let index_u32 = u32::try_from(index)
-            .map_err(|_| RunError::Internal("Cairn handoff row index overflowed u32".to_string()))?;
-        let artifact_source = resolve_descriptor_path(descriptor_parent, &row.artifact_path);
-        let policy_source = resolve_descriptor_path(descriptor_parent, &row.cairn_policy_path);
-        reject_bundle_local_source(&artifact_source, bundle_dir)?;
-        reject_bundle_local_source(&policy_source, bundle_dir)?;
-        let row_directory = PathBuf::from(CAIRN_HANDOFF_BUNDLE_DIRECTORY).join(index_u32.to_string());
-        artifacts.push(measure_planned_artifact(
-            &artifact_source,
-            &row_directory.join(CAIRN_HANDOFF_ARTIFACT_FILE),
-            row.artifact_digest_blake3.clone(),
-        )?);
-        artifacts.push(measure_planned_artifact(
-            &policy_source,
-            &row_directory.join(CAIRN_HANDOFF_POLICY_FILE),
-            row.cairn_policy_digest_blake3.clone(),
-        )?);
+    let handoff = preflight_handoff(&descriptor, descriptor_parent, bundle_dir)?;
+    let expected_row_artifacts = handoff.rows.len().saturating_mul(CAIRN_HANDOFF_ARTIFACTS_PER_ROW);
+    let mut artifacts =
+        Vec::with_capacity(expected_row_artifacts.saturating_add(CAIRN_HANDOFF_AUTHENTICATION_ARTIFACTS_COUNT));
+    artifacts.push(handoff.authentication.archive_receipt);
+    for row in handoff.rows {
+        artifacts.push(row.artifact);
+        artifacts.push(row.cairn_policy);
     }
     debug_assert!(!artifacts.is_empty());
-    debug_assert_eq!(artifacts.len(), descriptor.rows.len().saturating_mul(CAIRN_HANDOFF_ARTIFACTS_PER_ROW));
+    debug_assert_eq!(
+        artifacts.len(),
+        expected_row_artifacts.saturating_add(CAIRN_HANDOFF_AUTHENTICATION_ARTIFACTS_COUNT)
+    );
     Ok(artifacts)
 }
 
@@ -127,6 +139,7 @@ pub fn remeasure_cairn_handoff_from_bundle(
     receipt: &CairnReleaseEvidenceValidationReceipt,
 ) -> Result<CairnReleaseEvidenceHandoff, RunError> {
     let mut handoff = receipt.handoff.clone();
+    handoff.authentication.archive_receipt = remeasure_artifact(bundle_dir, &handoff.authentication.archive_receipt)?;
     for row in &mut handoff.rows {
         row.artifact = remeasure_artifact(bundle_dir, &row.artifact)?;
         row.cairn_policy = remeasure_artifact(bundle_dir, &row.cairn_policy)?;
@@ -141,6 +154,94 @@ pub fn remeasure_cairn_handoff_from_bundle(
     debug_assert!(!handoff.rows.is_empty());
     debug_assert_eq!(handoff.rows.len(), receipt.handoff.rows.len());
     Ok(handoff)
+}
+
+fn preflight_handoff(
+    descriptor: &CairnHandoffDescriptor,
+    descriptor_parent: &Path,
+    bundle_dir: &Path,
+) -> Result<CairnReleaseEvidenceHandoff, RunError> {
+    let authentication_source =
+        resolve_descriptor_path(descriptor_parent, &descriptor.authentication.archive_receipt_path);
+    reject_bundle_local_source(&authentication_source, bundle_dir)?;
+    let authentication_relative_path = PathBuf::from(CAIRN_HANDOFF_BUNDLE_DIRECTORY)
+        .join(CAIRN_HANDOFF_AUTHENTICATION_DIRECTORY)
+        .join(CAIRN_HANDOFF_AUTHENTICATION_RECEIPT_FILE);
+    let authentication = CairnHandoffAuthenticationDependency {
+        schema: descriptor.authentication.schema.clone(),
+        change_name: descriptor.authentication.change_name.clone(),
+        cairn_revision: descriptor.authentication.cairn_revision.clone(),
+        archive_manifest_blake3: descriptor.authentication.archive_manifest_blake3.clone(),
+        archive_mutation_receipt_blake3: descriptor.authentication.archive_mutation_receipt_blake3.clone(),
+        archive_receipt: measure_planned_artifact(
+            &authentication_source,
+            &authentication_relative_path,
+            descriptor.authentication.archive_receipt_digest_blake3.clone(),
+        )?,
+    };
+    let mut rows = Vec::with_capacity(descriptor.rows.len());
+    for (index, row) in descriptor.rows.iter().enumerate() {
+        let index_u32 = u32::try_from(index)
+            .map_err(|_| RunError::Internal("Cairn handoff row index overflowed u32".to_string()))?;
+        let artifact_source = resolve_descriptor_path(descriptor_parent, &row.artifact_path);
+        let policy_source = resolve_descriptor_path(descriptor_parent, &row.cairn_policy_path);
+        reject_bundle_local_source(&artifact_source, bundle_dir)?;
+        reject_bundle_local_source(&policy_source, bundle_dir)?;
+        let row_directory = PathBuf::from(CAIRN_HANDOFF_BUNDLE_DIRECTORY).join(index_u32.to_string());
+        rows.push(CairnReleaseEvidenceRow {
+            artifact_id: row.artifact_id.clone(),
+            role: row.role.clone(),
+            schema_id: row.schema_id.clone(),
+            artifact: measure_planned_artifact(
+                &artifact_source,
+                &row_directory.join(CAIRN_HANDOFF_ARTIFACT_FILE),
+                row.artifact_digest_blake3.clone(),
+            )?,
+            cairn_policy: measure_planned_artifact(
+                &policy_source,
+                &row_directory.join(CAIRN_HANDOFF_POLICY_FILE),
+                row.cairn_policy_digest_blake3.clone(),
+            )?,
+            release_readiness_id: row.release_readiness_id.clone(),
+            covers: row.covers.clone(),
+            non_claims: row.non_claims.clone(),
+        });
+    }
+    let handoff = CairnReleaseEvidenceHandoff { authentication, rows };
+    let report = crunch_release_core::validate_cairn_release_evidence_handoff(&handoff);
+    if !report.valid {
+        return Err(RunError::Internal(format!(
+            "Cairn handoff descriptor failed preflight validation: {}",
+            report.diagnostics.join("; ")
+        )));
+    }
+    Ok(handoff)
+}
+
+fn prepare_authentication(
+    authentication: CairnHandoffDescriptorAuthentication,
+    descriptor_parent: &Path,
+    bundle_dir: &Path,
+) -> Result<CairnHandoffAuthenticationDependency, RunError> {
+    let receipt_source = resolve_descriptor_path(descriptor_parent, &authentication.archive_receipt_path);
+    reject_bundle_local_source(&receipt_source, bundle_dir)?;
+    let receipt_relative_path = PathBuf::from(CAIRN_HANDOFF_BUNDLE_DIRECTORY)
+        .join(CAIRN_HANDOFF_AUTHENTICATION_DIRECTORY)
+        .join(CAIRN_HANDOFF_AUTHENTICATION_RECEIPT_FILE);
+    let archive_receipt = copy_and_measure(
+        &receipt_source,
+        bundle_dir,
+        &receipt_relative_path,
+        authentication.archive_receipt_digest_blake3,
+    )?;
+    Ok(CairnHandoffAuthenticationDependency {
+        schema: authentication.schema,
+        change_name: authentication.change_name,
+        cairn_revision: authentication.cairn_revision,
+        archive_manifest_blake3: authentication.archive_manifest_blake3,
+        archive_mutation_receipt_blake3: authentication.archive_mutation_receipt_blake3,
+        archive_receipt,
+    })
 }
 
 fn prepare_row(
@@ -399,13 +500,25 @@ mod tests {
 
     const ARTIFACT_BYTES: &[u8] = b"receipt";
     const POLICY_BYTES: &[u8] = b"policy";
+    const AUTHENTICATION_RECEIPT_BYTES: &[u8] =
+        include_bytes!("../cairn-policy/evidence/cairn-authenticated-inputs-archive-receipt.json");
 
     fn write_descriptor(root: &Path, declared_artifact_digest: &str) -> PathBuf {
         fs::write(root.join("receipt.json"), ARTIFACT_BYTES).unwrap();
         fs::write(root.join("policy.ncl"), POLICY_BYTES).unwrap();
+        fs::write(root.join("cairn-authentication.json"), AUTHENTICATION_RECEIPT_BYTES).unwrap();
         let policy_digest = blake3::hash(POLICY_BYTES).to_hex().to_string();
         let descriptor = serde_json::json!({
             "schema": CAIRN_HANDOFF_INPUT_SCHEMA,
+            "authentication": {
+                "schema": crunch_release_core::CAIRN_HANDOFF_AUTHENTICATION_SCHEMA,
+                "change_name": crunch_release_core::CAIRN_HANDOFF_AUTHENTICATION_CHANGE,
+                "cairn_revision": crunch_release_core::CAIRN_HANDOFF_AUTHENTICATION_CAIRN_REVISION,
+                "archive_manifest_blake3": crunch_release_core::CAIRN_HANDOFF_AUTHENTICATION_ARCHIVE_MANIFEST_BLAKE3,
+                "archive_mutation_receipt_blake3": crunch_release_core::CAIRN_HANDOFF_AUTHENTICATION_ARCHIVE_MUTATION_RECEIPT_BLAKE3,
+                "archive_receipt_path": "cairn-authentication.json",
+                "archive_receipt_digest_blake3": crunch_release_core::CAIRN_HANDOFF_AUTHENTICATION_RECEIPT_BLAKE3
+            },
             "rows": [{
                 "artifact_id": "readiness",
                 "role": "cairn-release-readiness-receipt",
@@ -434,6 +547,18 @@ mod tests {
         let handoff = prepare_cairn_handoff_for_bundle(&descriptor, &bundle).unwrap();
         assert_eq!(handoff.rows.len(), 1);
         assert_eq!(handoff.rows[0].artifact.measured_digest_blake3, digest);
+    }
+
+    #[test]
+    fn shell_rejects_tampered_authentication_dependency() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle = temp.path().join("bundle");
+        fs::create_dir(&bundle).unwrap();
+        let digest = blake3::hash(ARTIFACT_BYTES).to_hex().to_string();
+        let descriptor = write_descriptor(temp.path(), &digest);
+        fs::write(temp.path().join("cairn-authentication.json"), b"tampered").unwrap();
+        let error = prepare_cairn_handoff_for_bundle(&descriptor, &bundle).unwrap_err();
+        assert!(error.to_string().contains("declared digest"));
     }
 
     #[test]

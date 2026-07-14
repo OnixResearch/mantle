@@ -10,16 +10,25 @@ use serde::Serialize;
 
 use crate::ReleaseEvidenceError;
 
-pub const CAIRN_HANDOFF_INPUT_SCHEMA: &str = "mantle-cairn-release-handoff-input-v1";
-pub const CAIRN_HANDOFF_VALIDATION_RECEIPT_SCHEMA: &str = "mantle-cairn-release-handoff-validation-v1";
+pub const CAIRN_HANDOFF_INPUT_SCHEMA: &str = "mantle-cairn-release-handoff-input-v2";
+pub const CAIRN_HANDOFF_VALIDATION_RECEIPT_SCHEMA: &str = "mantle-cairn-release-handoff-validation-v2";
 pub const CAIRN_HANDOFF_VALIDATION_STATUS: &str = "validated-bundle-local";
-pub const CAIRN_HANDOFF_AUTHENTICATION_STATUS: &str = "not-authenticated";
+pub const CAIRN_HANDOFF_AUTHENTICATION_STATUS: &str = "archive-authentication-prerequisite-bound-v1";
+pub const CAIRN_HANDOFF_AUTHENTICATION_SCHEMA: &str = "mantle.cairn-authentication-dependency.v1";
+pub const CAIRN_HANDOFF_AUTHENTICATION_CHANGE: &str = "authenticate-stack-provenance-inputs";
+pub const CAIRN_HANDOFF_AUTHENTICATION_CAIRN_REVISION: &str = "f4a1f8df0d430c1b9431358a388ac1d3c1a823ec";
+pub const CAIRN_HANDOFF_AUTHENTICATION_ARCHIVE_MANIFEST_BLAKE3: &str =
+    "40ea9765488bd02e362f70d5c9c498932544c80f2231a70f9b5c3ef81cd7df83";
+pub const CAIRN_HANDOFF_AUTHENTICATION_ARCHIVE_MUTATION_RECEIPT_BLAKE3: &str =
+    "8a4250a7db47dd4c013467d65e5667af188aa66599a1b89df6788ef067598fa9";
+pub const CAIRN_HANDOFF_AUTHENTICATION_RECEIPT_BLAKE3: &str =
+    "bf33d82555c7bd3afcbc7adac743782327a5d08e536266f0dfda97d6fe342edf";
 pub const CAIRN_HANDOFF_DISPOSITION_ABSENT: &str = "absent";
 pub const CAIRN_HANDOFF_DISPOSITION_INVALID: &str = "invalid";
 pub const CAIRN_HANDOFF_DISPOSITION_PRESENT: &str = "present";
-pub const CAIRN_HANDOFF_BOUNDARY: &str = "Mantle validates bundle-local measured Cairn artifact, policy, role, schema, readiness, coverage, and release-bundle linkage only; Cairn owns lifecycle readiness";
+pub const CAIRN_HANDOFF_BOUNDARY: &str = "Mantle validates bundle-local measured Cairn artifact, policy, role, schema, readiness, coverage, release-bundle linkage, and the pinned archived Cairn authenticated-input dependency only; Cairn owns lifecycle readiness";
 pub const CAIRN_HANDOFF_AUTHENTICATION_BLOCKER: &str =
-    "authenticated Cairn handoff promotion requires the archived Cairn authenticate-stack-provenance-inputs receipt";
+    "Cairn handoff authentication does not match the pinned archived authenticate-stack-provenance-inputs receipt";
 pub const CAIRN_HANDOFF_NON_CLAIM_RELEASE_CORRECTNESS: &str = "not release correctness";
 pub const CAIRN_HANDOFF_NON_CLAIM_BUILD_CORRECTNESS: &str = "not build correctness";
 pub const CAIRN_HANDOFF_NON_CLAIM_SOURCE_CORRECTNESS: &str = "not source correctness";
@@ -34,7 +43,7 @@ pub const MAX_CAIRN_HANDOFF_TEXT_BYTES_COUNT: u32 = 4096;
 
 const BLAKE3_HEX_LENGTH_CHARS: u32 = 64;
 const BUNDLE_BINDING_DOMAIN: &[u8] = b"mantle.cairn-handoff.bundle-binding.v1\0";
-const RECEIPT_DOMAIN: &[u8] = b"mantle.cairn-handoff.validation-receipt.v1\0";
+const RECEIPT_DOMAIN: &[u8] = b"mantle.cairn-handoff.validation-receipt.v2\0";
 const REQUIRED_NON_CLAIM_FRAGMENT: &str = "not release correctness";
 const SUPPORTED_ROLE_SCHEMA_PAIRS: &[(&str, &str)] = &[
     ("cairn-release-readiness-receipt", "cairn.release-readiness.v1"),
@@ -70,7 +79,18 @@ pub struct CairnReleaseEvidenceRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CairnHandoffAuthenticationDependency {
+    pub schema: String,
+    pub change_name: String,
+    pub cairn_revision: String,
+    pub archive_manifest_blake3: String,
+    pub archive_mutation_receipt_blake3: String,
+    pub archive_receipt: CairnMeasuredArtifact,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CairnReleaseEvidenceHandoff {
+    pub authentication: CairnHandoffAuthenticationDependency,
     pub rows: Vec<CairnReleaseEvidenceRow>,
 }
 
@@ -123,6 +143,7 @@ pub struct CairnHandoffReleaseVerification {
 pub fn validate_cairn_release_evidence_handoff(handoff: &CairnReleaseEvidenceHandoff) -> CairnReleaseEvidenceReport {
     let mut diagnostics = Vec::new();
     validate_row_count(handoff.rows.len(), &mut diagnostics);
+    validate_authentication_dependency(&handoff.authentication, &mut diagnostics);
     let mut artifact_ids = BTreeSet::new();
     let mut artifact_paths = BTreeSet::new();
     let mut readiness_ids = BTreeSet::new();
@@ -282,6 +303,37 @@ fn validate_receipt_literals(receipt: &CairnReleaseEvidenceValidationReceipt) ->
         return Err(validation_error("Cairn handoff receipt non-claims are incomplete or non-canonical"));
     }
     Ok(())
+}
+
+// r[impl mantle.release_provenance.cairn_evidence_handoff.cross_repo_dependency]
+fn validate_authentication_dependency(
+    dependency: &CairnHandoffAuthenticationDependency,
+    diagnostics: &mut Vec<String>,
+) {
+    if dependency.schema != CAIRN_HANDOFF_AUTHENTICATION_SCHEMA {
+        push_diagnostic(diagnostics, "unsupported Cairn authentication dependency schema".to_string());
+    }
+    if dependency.change_name != CAIRN_HANDOFF_AUTHENTICATION_CHANGE {
+        push_diagnostic(diagnostics, "Cairn authentication dependency names another change".to_string());
+    }
+    if dependency.cairn_revision != CAIRN_HANDOFF_AUTHENTICATION_CAIRN_REVISION {
+        push_diagnostic(diagnostics, "Cairn authentication dependency revision is stale".to_string());
+    }
+    if dependency.archive_manifest_blake3 != CAIRN_HANDOFF_AUTHENTICATION_ARCHIVE_MANIFEST_BLAKE3 {
+        push_diagnostic(diagnostics, "Cairn authentication archive manifest identity is stale".to_string());
+    }
+    if dependency.archive_mutation_receipt_blake3 != CAIRN_HANDOFF_AUTHENTICATION_ARCHIVE_MUTATION_RECEIPT_BLAKE3 {
+        push_diagnostic(diagnostics, "Cairn authentication archive mutation receipt is stale".to_string());
+    }
+    validate_measured_artifact("authentication.archive_receipt", &dependency.archive_receipt, diagnostics);
+    if dependency.archive_receipt.declared_digest_blake3 != CAIRN_HANDOFF_AUTHENTICATION_RECEIPT_BLAKE3
+        || dependency.archive_receipt.measured_digest_blake3 != CAIRN_HANDOFF_AUTHENTICATION_RECEIPT_BLAKE3
+    {
+        push_diagnostic(
+            diagnostics,
+            "Cairn authentication archive receipt bytes are not the reviewed receipt".to_string(),
+        );
+    }
 }
 
 fn validate_row(
@@ -460,8 +512,23 @@ mod tests {
         }
     }
 
+    fn authentication() -> CairnHandoffAuthenticationDependency {
+        CairnHandoffAuthenticationDependency {
+            schema: CAIRN_HANDOFF_AUTHENTICATION_SCHEMA.to_string(),
+            change_name: CAIRN_HANDOFF_AUTHENTICATION_CHANGE.to_string(),
+            cairn_revision: CAIRN_HANDOFF_AUTHENTICATION_CAIRN_REVISION.to_string(),
+            archive_manifest_blake3: CAIRN_HANDOFF_AUTHENTICATION_ARCHIVE_MANIFEST_BLAKE3.to_string(),
+            archive_mutation_receipt_blake3: CAIRN_HANDOFF_AUTHENTICATION_ARCHIVE_MUTATION_RECEIPT_BLAKE3.to_string(),
+            archive_receipt: artifact(
+                "cairn/authentication/archive-receipt.json",
+                CAIRN_HANDOFF_AUTHENTICATION_RECEIPT_BLAKE3,
+            ),
+        }
+    }
+
     fn handoff() -> CairnReleaseEvidenceHandoff {
         CairnReleaseEvidenceHandoff {
+            authentication: authentication(),
             rows: vec![CairnReleaseEvidenceRow {
                 artifact_id: "readiness".to_string(),
                 role: "cairn-release-readiness-receipt".to_string(),
@@ -514,12 +581,17 @@ mod tests {
     }
 
     #[test]
-    fn authenticated_promotion_and_role_schema_swap_fail_closed() {
+    fn stale_authentication_and_role_schema_swap_fail_closed() {
+        let mut stale_authentication = handoff();
+        stale_authentication.authentication.archive_receipt.measured_digest_blake3 = DIGEST_A.to_string();
+        let report = validate_cairn_release_evidence_handoff(&stale_authentication);
+        assert!(!report.valid);
+        assert!(report.diagnostics.iter().any(|item| item.contains("reviewed receipt")));
         let mut receipt = cairn_release_evidence_validation_receipt(binding(), handoff()).expect("receipt");
-        receipt.authentication_status = "authenticated".to_string();
+        receipt.authentication_status = "not-authenticated".to_string();
         let error = validate_cairn_release_evidence_validation_receipt(&receipt, &binding(), &handoff())
-            .expect_err("blocked authentication");
-        assert!(error.to_string().contains("authenticate-stack-provenance-inputs"));
+            .expect_err("authentication downgrade");
+        assert!(error.to_string().contains("pinned archived"));
         let mut wrong_pair = handoff();
         wrong_pair.rows[0].schema_id = "cairn.archive-index.v1".to_string();
         assert!(!validate_cairn_release_evidence_handoff(&wrong_pair).valid);

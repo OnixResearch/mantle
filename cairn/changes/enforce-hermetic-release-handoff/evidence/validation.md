@@ -85,61 +85,72 @@ $ mantle --json bootstrap capabilities
 Both operation records carry host-influence notes and the non-claim that this is
 not a full-source bootstrap.
 
-## Cairn lifecycle validation
+## Authentication-dependency integration validation
+
+The focused post-dependency rail passed:
 
 ```text
-$ cairn validate --root .
-valid: true
+$ cargo test -p crunch-release-core
+207 passed; 0 failed
 
-$ cairn gate proposal enforce-hermetic-release-handoff --root .
-verdict: PASS
-receipt_hash: e078ab5a22e12f569a43064ced32485d8d4fa4366a47887ac130ce2bc9cfbf30
+$ cargo test -p crunch-release-core cairn_handoff
+5 passed; 0 failed
 
-$ cairn gate design enforce-hermetic-release-handoff --root .
-verdict: PASS
-receipt_hash: e7f17802fa8ee717ceb98ea034869e8933430d56448c53a3dc829e3e66724f7c
+$ cargo test -p mantle --bin mantle cairn_handoff
+4 passed; 0 failed
 
-$ cairn gate tasks enforce-hermetic-release-handoff --root .
-verdict: PASS
-receipt_hash: 46c22d28052eddc8218cca7e274307d9ae822f529631ad421a28793da308e9af
+$ cargo test -p mantle --bin mantle cairn_release_handoff
+8 passed; 0 failed
+
+$ cargo test -p mantle --test release_cli cairn_handoff
+2 passed; 0 failed
 ```
 
-No sync or archive command was run.
+Production-path coverage now includes exact dependency measurement during
+planning and assembly, publication-plan inclusion, bundle-local remeasurement,
+receipt binding, and rejection of tampered dependency bytes. Changed Rust files
+pass the repository's focused `rustfmt --edition 2024 --config
+skip_children=true` check.
 
-## Main-branch integration checkpoint
+## Cairn lifecycle validation
 
-After integration with atomic release publication and content-bound rebuild authority, pueue task `341` successfully reran `crunch-release-core`, `crunch-bootstrap-core`, focused Cairn handoff and release-evidence binary tests, Cairn handoff CLI tests, and all 13 `release_reproduce_` tests in one isolated target. The merge-specific handoff path now measures the planned artifact/policy bytes before staging, includes those files in the pure atomic publication plan, remeasures while assembling, and verifies the staged receipt again before no-clobber commit. This closes unplanned-artifact and post-plan replacement seams without claiming external Cairn authentication. Pueue task `400` then passed Cairn validation and proposal/design/tasks gates with no issues; the external accepted-authentication dependency and final production smoke remain explicitly incomplete.
+`cairn validate --root .` and the proposal, design, and tasks gates pass after
+the dependency integration. No sync or archive command was run because the
+final flake task remains blocked.
 
-## Required flake-check attempt
+## Required flake-check attempts
+
+The exact command evaluated 777 checks but the host could not publish build
+results because its configured signing key is absent:
 
 ```text
 $ nix flake check
-FAIL (exit 1)
+error: opening file "/run/secrets/vars/nix-signing-key/key": No such file or directory
 ```
 
-The final attempt evaluated the flake and began 404 checks, then the existing
-`checks.x86_64-linux.bootstrap-blocker-inventory` rail failed with:
+The bounded local retry disabled only unavailable host signing and remote
+builders. It reached the enforced pre-existing product blocker:
 
 ```text
+$ nix flake check --option secret-key-files '' --option builders ''
 bootstrap blocker inventory: 40 findings across 4 classes,
 396 evidence-backed suppressions, 0 promotion claims, enforce=true
 FAIL: bootstrap blocker inventory is not clean; expected 0 findings and 0 promotion claims
 ```
 
-An earlier attempt in the same session reached the repository-wide format rail
-and reported pre-existing drift in untouched paths including
-`crates/crunch-pipeline/src/lib.rs`, `crates/crunch-store/src/layer.rs`, several
-`tests/*_offline_rail.rs` files, and
-`vendor/snix-castore/src/blobservice/combinator.rs`. None of those paths is part
-of this change. The focused changed-file formatting check passes.
-
 This is exact closeout evidence, not a passing flake-check claim. The final
 lifecycle task remains unchecked.
 
-## External authentication blocker
+## External authentication dependency
 
-See `external-authentication-blocker.md`. Cairn's
-`authenticate-stack-provenance-inputs` remains active, metadata-blocked, 0/13
-complete, and absent from Cairn's archive. Mantle therefore records and accepts
-only `authentication_status: "not-authenticated"`; authenticated provenance is
-not claimed.
+See `external-authentication-dependency.md`. Cairn's
+`authenticate-stack-provenance-inputs` package is archived at revision
+`f4a1f8df0d430c1b9431358a388ac1d3c1a823ec`. Mantle now requires the exact
+reviewed dependency receipt, measures it before staging, includes it in the
+atomic publication plan, remeasures it during bundle verification, and binds it
+into the validation receipt. Missing, stale, fabricated, and tampered dependency
+identities fail focused core and production-path tests.
+
+The status `archive-authentication-prerequisite-bound-v1` remains bounded:
+Mantle does not independently re-run producer signatures or claim Cairn,
+producer, source, build, or release correctness.

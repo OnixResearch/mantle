@@ -4,15 +4,25 @@ Mantle can package Cairn lifecycle evidence without claiming to own Cairn's
 readiness semantics. Release assembly opens the descriptor and every referenced
 artifact through no-follow capability roots, enforces a 1 MiB descriptor bound
 and a 64 MiB per-artifact bound while reading, and measures the exact bytes with
-BLAKE3. It checks their declared typed identities, writes those already-measured
-bytes under `cairn-handoff/` without reopening the source path, and records a
-`mantle-cairn-release-handoff-validation-v1` receipt in `manifest.json`.
+BLAKE3. It also measures the pinned Cairn authenticated-input archive receipt.
+It checks all declared typed identities, writes those already-measured bytes
+under `cairn-handoff/` without reopening the source path, and records a
+`mantle-cairn-release-handoff-validation-v2` receipt in `manifest.json`.
 
-Create a descriptor with schema `mantle-cairn-release-handoff-input-v1`:
+Create a descriptor with schema `mantle-cairn-release-handoff-input-v2`:
 
 ```json
 {
-  "schema": "mantle-cairn-release-handoff-input-v1",
+  "schema": "mantle-cairn-release-handoff-input-v2",
+  "authentication": {
+    "schema": "mantle.cairn-authentication-dependency.v1",
+    "change_name": "authenticate-stack-provenance-inputs",
+    "cairn_revision": "f4a1f8df0d430c1b9431358a388ac1d3c1a823ec",
+    "archive_manifest_blake3": "40ea9765488bd02e362f70d5c9c498932544c80f2231a70f9b5c3ef81cd7df83",
+    "archive_mutation_receipt_blake3": "8a4250a7db47dd4c013467d65e5667af188aa66599a1b89df6788ef067598fa9",
+    "archive_receipt_path": "cairn-authentication.json",
+    "archive_receipt_digest_blake3": "bf33d82555c7bd3afcbc7adac743782327a5d08e536266f0dfda97d6fe342edf"
+  },
   "rows": [{
     "artifact_id": "release-readiness",
     "role": "cairn-release-readiness-receipt",
@@ -30,8 +40,10 @@ Create a descriptor with schema `mantle-cairn-release-handoff-input-v1`:
 
 Paths are resolved relative to the descriptor. Supported role/schema pairs are
 bounded and exact. Empty handoffs, duplicate artifacts, role/schema swaps,
-fabricated digests, stale policy bytes, missing non-claims, and overclaiming
-language fail closed.
+fabricated digests, stale policy bytes, missing non-claims, stale Cairn revisions,
+stale archive identities, tampered archive-receipt bytes, and overclaiming
+language fail closed. The reviewed dependency receipt is checked in at
+`cairn-policy/evidence/cairn-authenticated-inputs-archive-receipt.json`.
 
 Pass the descriptor during assembly:
 
@@ -57,7 +69,8 @@ or changing artifact or policy bytes is rejected.
 `mantle release verify --release-profile onix-stack` requires all of:
 
 - valid bundle-local Valence stack-provenance evidence;
-- a valid same-bundle Cairn handoff validation receipt; and
+- a valid same-bundle Cairn handoff validation receipt bound to the pinned
+  archived Cairn authenticated-input prerequisite; and
 - deterministic release proof evidence accepted by Mantle's existing strict
   hermetic policy, including strict hermeticity mode, successful sandbox
   isolation checks, host/network denial, perturbations, normalization controls,
@@ -69,14 +82,18 @@ advisory.
 
 ## Authentication boundary
 
-The receipt records `authentication_status: "not-authenticated"`. It proves only
-bundle-local measured identity, typed role/schema linkage, Cairn policy identity,
-readiness/coverage linkage, and same-bundle binding. It does **not** prove
-producer authorization, source correctness, build correctness, release
-correctness, deployment safety, verifier soundness, or Cairn lifecycle
-readiness.
+The receipt records
+`authentication_status: "archive-authentication-prerequisite-bound-v1"`. Mantle
+remeasures the exact reviewed dependency receipt, binds it into the same release
+bundle and validation receipt, and rejects legacy handoffs that omit it. The
+pinned receipt names Cairn commit `f4a1f8df0d430c1b9431358a388ac1d3c1a823ec`,
+the archived `2026-07-14-authenticate-stack-provenance-inputs` package, and its
+archive mutation and package-manifest identities.
 
-Authenticated promotion remains blocked until Cairn's active
-`authenticate-stack-provenance-inputs` change is completed and archived with a
-consumable receipt. Mantle rejects a handoff receipt that claims
-`authentication_status: "authenticated"` before that dependency exists.
+This status proves only bundle-local measured identity, typed role/schema
+linkage, Cairn policy identity, readiness/coverage linkage, same-bundle binding,
+and presence of the reviewed archived authentication prerequisite. Mantle does
+**not** independently re-run producer-signature verification and does not claim
+producer authorization, Cairn correctness, source correctness, build
+correctness, release correctness, deployment safety, verifier soundness, or
+Cairn lifecycle readiness.

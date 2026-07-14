@@ -1,5 +1,14 @@
 {
-  "schema": "mantle-cairn-release-handoff-input-v1",
+  "schema": "mantle-cairn-release-handoff-input-v2",
+  "authentication": {
+    "schema": "mantle.cairn-authentication-dependency.v1",
+    "change_name": "authenticate-stack-provenance-inputs",
+    "cairn_revision": "f4a1f8df0d430c1b9431358a388ac1d3c1a823ec",
+    "archive_manifest_blake3": "40ea9765488bd02e362f70d5c9c498932544c80f2231a70f9b5c3ef81cd7df83",
+    "archive_mutation_receipt_blake3": "8a4250a7db47dd4c013467d65e5667af188aa66599a1b89df6788ef067598fa9",
+    "archive_receipt_path": "cairn-authentication.json",
+    "archive_receipt_digest_blake3": "bf33d82555c7bd3afcbc7adac743782327a5d08e536266f0dfda97d6fe342edf"
+  },
   "rows": [
     {
       "artifact_id": "mantle-fixture-readiness",

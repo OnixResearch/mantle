@@ -1,0 +1,35 @@
+{
+  "archive_manifest_blake3": "40ea9765488bd02e362f70d5c9c498932544c80f2231a70f9b5c3ef81cd7df83",
+  "archive_mutation_receipt_blake3": "8a4250a7db47dd4c013467d65e5667af188aa66599a1b89df6788ef067598fa9",
+  "archive_path": "cairn/archive/2026-07-14-authenticate-stack-provenance-inputs",
+  "cairn_revision": "f4a1f8df0d430c1b9431358a388ac1d3c1a823ec",
+  "change_name": "authenticate-stack-provenance-inputs",
+  "files": [
+    {
+      "blake3": "74f3fe259e118b0419f9e11f10bd6fccb15b8d40c62d82c67de042e69cc869c9",
+      "path": "design.md"
+    },
+    {
+      "blake3": "789b5afe533d58a399932cc009117847f08df4141df2624f5cf7d8987163f0ee",
+      "path": "evidence/implementation-validation.md"
+    },
+    {
+      "blake3": "f751287b945eb3c698aedd4dc8e46da25fe2294f4c84551a8644408d47f5768a",
+      "path": "metadata.json"
+    },
+    {
+      "blake3": "61b93472da2b7aacd48d9eea78b4ee76113307f3ad41c10c9523281514c0054f",
+      "path": "proposal.md"
+    },
+    {
+      "blake3": "f1b2b4946e375cf3710837b3ca4f6c3d36941ab5728a682a4aa217ae9892ed85",
+      "path": "specs/stack-provenance-gates/spec.md"
+    },
+    {
+      "blake3": "433e1da9262228b1ad83a76f446e9ac5a77e067fdc75ac97c69ae7c85b1c4853",
+      "path": "tasks.md"
+    }
+  ],
+  "non_claim": "This receipt binds the archived Cairn authenticated-input lifecycle package; it does not make Mantle the authority for Cairn lifecycle, source, build, or release correctness.",
+  "schema": "mantle.cairn-authentication-dependency.v1"
+}

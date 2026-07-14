@@ -21,6 +21,7 @@
 // r[verify mantle.release_provenance.cairn_evidence_handoff.fixtures.negative]
 // r[verify mantle.release_provenance.cairn_evidence_handoff.bypass_protection]
 // r[verify mantle.release_provenance.cairn_evidence_handoff.measured_inputs]
+// r[verify mantle.release_provenance.cairn_evidence_handoff.cross_repo_dependency]
 // r[verify mantle.release_provenance.cairn_evidence_handoff.final_validation]
 // r[verify mantle.release_provenance.cairn_evidence_handoff.flake_check_ci]
 // r[verify mantle.build_correctness.onix_release_strict_hermeticity]
@@ -31,9 +32,9 @@
 // r[verify mantle.build_correctness.source_root_capability.boundary]
 // Positive/negative core and root-package tests cover measured bytes,
 // cross-bundle reuse, tampering, missing required handoffs, strict Onix
-// requirements, and honest unsupported source-root self-build reporting.
-// Authentication remains a non-claim while Cairn's external
-// `authenticate-stack-provenance-inputs` change is active.
+// requirements, the measured archived Cairn authentication prerequisite, and
+// honest unsupported source-root self-build reporting. Mantle still does not
+// claim independent producer-signature verification.
 //
 // Cairn's built-in tracey coverage rail currently scans `crates/` and `tools/`.
 // Mantle's CLI/root-package implementation lives under top-level `src/`, so

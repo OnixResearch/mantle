@@ -12,8 +12,8 @@
 
 ## Phase 3: Dependencies, fixtures, and docs
 
-- [ ] [serial] Require the archived Cairn `authenticate-stack-provenance-inputs` receipt before accepting authenticated handoff evidence. r[mantle.release_provenance.cairn_evidence_handoff.cross_repo_dependency]
-  - BLOCKED: the external change is active with metadata status `blocked`, has 0/13 tasks complete, and has no archive entry. Mantle rejects authenticated promotion. See `evidence/external-authentication-blocker.md`.
+- [x] [serial] Require the archived Cairn `authenticate-stack-provenance-inputs` receipt before accepting authenticated handoff evidence. r[mantle.release_provenance.cairn_evidence_handoff.cross_repo_dependency]
+  - PASS: Mantle pins, measures, bundles, and remeasures Cairn revision `f4a1f8d`, archive manifest `40ea9765…`, archive mutation receipt `8a4250a7…`, and reviewed dependency receipt `bf33d825…`. See `evidence/external-authentication-dependency.md`.
 - [x] [parallel] Add positive fixtures covering production handoff validation, implemented or honestly unsupported source-root capability, and clean strict execution. r[mantle.release_provenance.cairn_evidence_handoff.fixtures.positive] r[mantle.build_correctness.hermetic_handoff.fixtures.positive]
 - [x] [parallel] Add negative fixtures for validator bypass, tampered bytes, stale policy, unavailable advertised command, host influence, and practical-mode promotion. r[mantle.release_provenance.cairn_evidence_handoff.fixtures.negative] r[mantle.build_correctness.hermetic_handoff.fixtures.negative]
 - [x] [parallel] Document production wiring, capability reporting, hermetic profile selection, and bounded claims. r[mantle.release_provenance.cairn_evidence_handoff.docs] r[mantle.build_correctness.hermetic_handoff.docs]
@@ -24,4 +24,4 @@
   - PASS: core, binary, and production CLI suites cover measured bytes, tampering, manifest/bundle reuse, Onix strict admission, honest capability reporting, and source-root regressions. See `evidence/validation.md`.
 - [x] [serial] Add a checked-in CI workflow that runs only `nix flake check`. r[mantle.release_provenance.cairn_evidence_handoff.flake_check_ci]
 - [ ] [serial] Run `nix flake check` and Cairn validation/gates before sync and archive. r[mantle.release_provenance.cairn_evidence_handoff.final_validation]
-  - CLOSEOUT BLOCKED: final `nix flake check` fails the pre-existing bootstrap blocker inventory (40 findings; 396 evidence-backed suppressions); an earlier attempt also exposed untouched repository-wide format drift. The authenticated Cairn dependency is unarchived. Cairn gates pass, but this task stays unchecked and no sync/archive is performed.
+  - CLOSEOUT BLOCKED: Cairn validation and proposal/design/tasks gates pass, and the authenticated Cairn dependency is now pinned and validated. Exact `nix flake check` is host-blocked by the unavailable signing key; the bounded local run reaches the enforced pre-existing bootstrap inventory and fails on 40 findings with 396 evidence-backed suppressions. This task stays unchecked and no sync/archive is performed.
