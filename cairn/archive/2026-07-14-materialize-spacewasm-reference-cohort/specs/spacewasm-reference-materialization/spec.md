@@ -4,7 +4,7 @@
 
 Materialize one exact, rehashable SpaceWasm source/build/fixture cohort for bounded downstream diagnostics without promoting upstream provenance or test results into runtime, correctness, certification, or release claims.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: SpaceWasm reference materialization uses one typed profile
 
