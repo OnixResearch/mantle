@@ -675,6 +675,7 @@ mod tests {
             conflict_class: None,
             candidate_decisions: Vec::new(),
             publication_result_refs: Vec::new(),
+            transfer: None,
             diagnostics: Vec::new(),
             non_claims: vec!["index-presence-is-not-output-trust".to_string()],
         }

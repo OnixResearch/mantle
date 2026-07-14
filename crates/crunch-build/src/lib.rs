@@ -38,6 +38,7 @@ pub mod workspace;
 pub mod workspace_shell;
 
 pub use action_result::ActionResultRuntimeReport;
+pub use action_result::ActionResultTransferEvidence;
 pub use build_request::BuildRequestEnvelope;
 pub use build_request::WORKSPACE_LEASE_ENV;
 pub use build_request::WORKSPACE_POLICY_ENV;

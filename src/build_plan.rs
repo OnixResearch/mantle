@@ -563,7 +563,14 @@ impl PlanStore {
         .map_err(RunError::Build)?;
         let selected_source = plan.selected_result_ref.as_ref().and_then(|result_ref| sources.get(result_ref).cloned());
         let disposition = action_result_plan_disposition(&plan);
-        Ok(discovery_runtime_report(action_ref, disposition, plan, selected_source, discovery.diagnostics))
+        Ok(discovery_runtime_report(
+            action_ref,
+            disposition,
+            plan,
+            selected_source,
+            None,
+            discovery.diagnostics,
+        ))
     }
 
     async fn probe_local_action_outputs(
@@ -885,6 +892,7 @@ mod tests {
                 output_set_digest_blake3: None,
             }],
             publication_result_refs: Vec::new(),
+            transfer: None,
             diagnostics: Vec::new(),
             non_claims: vec!["index-presence-is-not-output-trust".to_string()],
         }

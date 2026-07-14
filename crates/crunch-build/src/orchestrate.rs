@@ -30,6 +30,7 @@ use tracing::debug;
 use tracing::info;
 
 use crate::ActionResultRuntimeReport;
+use crate::ActionResultTransferEvidence;
 use crate::BuildNetworkPolicyReport;
 use crate::Error;
 use crate::HermeticityAuditEvent;
@@ -135,7 +136,7 @@ struct CacheCheckHit {
 struct SharedActionCandidates {
     action_ref: String,
     candidates: Vec<DiscoveredActionResultCandidate>,
-    outputs_by_result_ref: BTreeMap<String, BTreeMap<String, PathInfo>>,
+    probes_by_result_ref: BTreeMap<String, crunch_store::ActionResultOutputProbe>,
     source_by_result_ref: BTreeMap<String, (String, String)>,
     diagnostics: Vec<String>,
 }
@@ -148,6 +149,23 @@ fn shared_action_disposition(plan: &crunch_action_result_core::StrongReusePlan) 
         return ACTION_RESULT_DISPOSITION_REUSED;
     }
     ACTION_RESULT_DISPOSITION_MISS
+}
+
+fn action_result_transfer_evidence(
+    probe: &crunch_store::ActionResultOutputProbe,
+) -> Result<ActionResultTransferEvidence, Error> {
+    let output_count = u32::try_from(probe.outputs.len())
+        .map_err(|_| Error::Store("shared action-result output count overflow".to_string()))?;
+    if output_count == 0 {
+        return Err(Error::Store("shared action-result output set empty".to_string()));
+    }
+    debug_assert!(probe.outputs.values().all(|path_info| !path_info.signatures.is_empty()));
+    debug_assert!(probe.transferred_nar_bytes > 0 || probe.reused_nar_bytes > 0);
+    Ok(ActionResultTransferEvidence {
+        output_count,
+        transferred_nar_bytes: probe.transferred_nar_bytes,
+        reused_nar_bytes: probe.reused_nar_bytes,
+    })
 }
 
 /// Metadata saved during `prepare_build`, consumed by `finish_build`.
@@ -1332,23 +1350,26 @@ where BServ: BuildService + 'static
         let disposition = shared_action_disposition(&plan);
         let selected_result_ref = plan.selected_result_ref.clone();
         let conflict_class = plan.conflict_class.clone();
+        let selected_probe = selected_result_ref
+            .as_ref()
+            .and_then(|result_ref| collection.probes_by_result_ref.get(result_ref).cloned());
+        let transfer = selected_probe.as_ref().map(action_result_transfer_evidence).transpose()?;
         self.action_result_reports.push(discovery_runtime_report(
             collection.action_ref,
             disposition,
             plan,
             selected_source,
+            transfer,
             collection.diagnostics,
         ));
         if let Some(conflict) = conflict_class {
             return Err(Error::Store(format!("{conflict}: strong shared action-result reuse rejected")));
         }
-        let Some(result_ref) = selected_result_ref else {
+        if selected_result_ref.is_none() {
             return Ok(None);
-        };
-        let infos = collection
-            .outputs_by_result_ref
-            .get(&result_ref)
-            .cloned()
+        }
+        let infos = selected_probe
+            .map(|probe| probe.outputs)
             .ok_or_else(|| Error::Store("selected action result has no admitted outputs".to_string()))?;
         self.store
             .admit_action_result_outputs(&infos, is_root, self.root_retention_source)
@@ -1366,24 +1387,24 @@ where BServ: BuildService + 'static
         let action_ref = action_ref_for_derivation(derivation, self.store.store_dir());
         let discovery = self.store.discover_action_results(&action_ref).await;
         let mut candidates = Vec::new();
-        let mut outputs_by_result_ref = BTreeMap::new();
+        let mut probes_by_result_ref = BTreeMap::new();
         let mut source_by_result_ref = BTreeMap::new();
         for lookup in discovery.lookups {
             for signed_record in lookup.records {
                 let result_ref = signed_record.record.result_ref.clone();
-                let outputs = self.store.probe_action_result_outputs(&signed_record.record).await.ok();
+                let probe = self.store.probe_action_result_outputs(&signed_record.record).await.ok();
                 let facts = candidate_admission_facts(
                     lookup.source_id.clone(),
                     lookup.source_class.clone(),
                     &signed_record,
                     derivation,
-                    outputs.as_ref(),
+                    probe.as_ref().map(|probe| &probe.outputs),
                     self.store.store_dir(),
                     self.hermeticity_mode,
                     &self.trusted_keys,
                 );
-                if let Some(outputs) = outputs {
-                    outputs_by_result_ref.entry(result_ref.clone()).or_insert(outputs);
+                if let Some(probe) = probe {
+                    probes_by_result_ref.entry(result_ref.clone()).or_insert(probe);
                 }
                 source_by_result_ref
                     .entry(result_ref)
@@ -1394,7 +1415,7 @@ where BServ: BuildService + 'static
         Ok(SharedActionCandidates {
             action_ref,
             candidates,
-            outputs_by_result_ref,
+            probes_by_result_ref,
             source_by_result_ref,
             diagnostics: discovery.diagnostics,
         })
@@ -2693,7 +2714,10 @@ mod tests {
         assert!(consumer_outcome.cached);
         assert_eq!(producer_outcome.outputs, consumer_outcome.outputs);
         assert!(publication_reports.iter().any(|report| report.phase == "publication"));
-        assert!(consumer_reports.iter().any(|report| report.disposition == "reused"));
+        let reused = consumer_reports.iter().find(|report| report.disposition == "reused").unwrap();
+        let transfer = reused.transfer.as_ref().unwrap();
+        assert_eq!(transfer.transferred_nar_bytes, 0);
+        assert!(transfer.reused_nar_bytes > 0);
     }
 
     // r[verify cache_substitution.shared_action_result_discovery]
@@ -2770,10 +2794,16 @@ mod tests {
         assert_eq!(producer_calls.lock().unwrap().len(), 1);
         assert!(consumer_outcome.cached);
         assert_eq!(consumer_outcome.outputs, producer_outcome.outputs);
-        assert!(reports.iter().any(|report| {
-            report.disposition == ACTION_RESULT_DISPOSITION_REUSED
-                && report.selected_source_class.as_deref() == Some("http")
-        }));
+        let reused = reports
+            .iter()
+            .find(|report| {
+                report.disposition == ACTION_RESULT_DISPOSITION_REUSED
+                    && report.selected_source_class.as_deref() == Some("http")
+            })
+            .unwrap();
+        let transfer = reused.transfer.as_ref().unwrap();
+        assert!(transfer.transferred_nar_bytes > 0);
+        assert_eq!(transfer.reused_nar_bytes, 0);
         let index_request = requests.iter().position(|path| path.contains("/action-results/v1/indexes/")).unwrap();
         let record_request = requests.iter().position(|path| path.contains("/action-results/v1/records/")).unwrap();
         let narinfo_request = requests.iter().position(|path| path.ends_with(".narinfo")).unwrap();

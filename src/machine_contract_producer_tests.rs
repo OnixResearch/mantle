@@ -148,6 +148,7 @@ fn doctor_and_build_reports_serialize_to_registered_positive_fixtures() {
                 ),
             }],
             publication_result_refs: Vec::new(),
+            transfer: None,
             diagnostics: Vec::new(),
             non_claims: vec!["index-presence-is-not-output-trust".to_string()],
         }],

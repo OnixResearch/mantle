@@ -73,6 +73,13 @@ pub struct ActionPolicyRefs {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ActionResultTransferEvidence {
+    pub output_count: u32,
+    pub transferred_nar_bytes: u64,
+    pub reused_nar_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ActionResultRuntimeReport {
     pub schema: String,
     pub phase: String,
@@ -85,6 +92,8 @@ pub struct ActionResultRuntimeReport {
     pub conflict_class: Option<String>,
     pub candidate_decisions: Vec<CandidateDecision>,
     pub publication_result_refs: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transfer: Option<ActionResultTransferEvidence>,
     pub diagnostics: Vec<String>,
     pub non_claims: Vec<String>,
 }
@@ -281,6 +290,7 @@ pub fn discovery_runtime_report(
     disposition: &str,
     plan: crunch_action_result_core::StrongReusePlan,
     selected_source: Option<(String, String)>,
+    transfer: Option<ActionResultTransferEvidence>,
     diagnostics: Vec<String>,
 ) -> ActionResultRuntimeReport {
     let trust_basis = plan
@@ -301,6 +311,7 @@ pub fn discovery_runtime_report(
         conflict_class: plan.conflict_class,
         candidate_decisions: plan.candidate_decisions,
         publication_result_refs: Vec::new(),
+        transfer,
         diagnostics,
         non_claims: plan.non_claims,
     }
@@ -323,6 +334,7 @@ pub fn publication_runtime_report(
         conflict_class: None,
         candidate_decisions: Vec::new(),
         publication_result_refs: vec![result_ref],
+        transfer: None,
         diagnostics,
         non_claims: runtime_non_claims(),
     }

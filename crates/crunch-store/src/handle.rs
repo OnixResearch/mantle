@@ -364,6 +364,14 @@ pub struct StoreHandleServices {
     pub publishers: Vec<Arc<dyn Publisher>>,
 }
 
+/// Outputs and logical NAR-byte accounting reconstructed during shared-result admission.
+#[derive(Debug, Clone)]
+pub struct ActionResultOutputProbe {
+    pub outputs: BTreeMap<String, PathInfo>,
+    pub transferred_nar_bytes: u64,
+    pub reused_nar_bytes: u64,
+}
+
 /// Grouped parameters for persisting a build output.
 pub struct PersistOutputRequest<'a> {
     pub output_name: &'a str,
@@ -823,8 +831,10 @@ impl StoreHandle {
     pub async fn probe_action_result_outputs(
         &self,
         record: &crunch_action_result_core::ActionResultRecord,
-    ) -> Result<BTreeMap<String, PathInfo>, String> {
+    ) -> Result<ActionResultOutputProbe, String> {
         let mut outputs = BTreeMap::new();
+        let mut transferred_nar_bytes = 0_u64;
+        let mut reused_nar_bytes = 0_u64;
         for output in &record.outputs {
             let store_path = StorePath::from_absolute_path_with_prefix(output.store_path.as_bytes(), &self.store_dir)
                 .map_err(|_| format!("action-result-output-store-path-invalid:{}", output.store_path))?;
@@ -834,18 +844,19 @@ impl StoreHandle {
                 .get(digest)
                 .await
                 .map_err(|error| format!("action-result-local-pathinfo-query:{error}"))?;
-            let path_info = match local {
-                Some(path_info) => path_info,
+            let (path_info, transferred) = match local {
+                Some(path_info) => (path_info, false),
                 None => {
                     let remote = self
                         .remote_pathinfo
                         .as_ref()
                         .ok_or_else(|| "action-result-output-pathinfo-missing".to_string())?;
-                    remote
+                    let path_info = remote
                         .get(digest)
                         .await
                         .map_err(|error| format!("action-result-remote-pathinfo-query:{error}"))?
-                        .ok_or_else(|| "action-result-output-pathinfo-missing".to_string())?
+                        .ok_or_else(|| "action-result-output-pathinfo-missing".to_string())?;
+                    (path_info, true)
                 }
             };
             if path_info.store_path != store_path {
@@ -858,11 +869,24 @@ impl StoreHandle {
             {
                 return Err("action-result-output-object-incomplete".to_string());
             }
+            if transferred {
+                transferred_nar_bytes = transferred_nar_bytes
+                    .checked_add(path_info.nar_size)
+                    .ok_or_else(|| "action-result-transferred-nar-bytes-overflow".to_string())?;
+            } else {
+                reused_nar_bytes = reused_nar_bytes
+                    .checked_add(path_info.nar_size)
+                    .ok_or_else(|| "action-result-reused-nar-bytes-overflow".to_string())?;
+            }
             if outputs.insert(output.name.clone(), path_info).is_some() {
                 return Err("action-result-output-name-duplicate".to_string());
             }
         }
-        Ok(outputs)
+        Ok(ActionResultOutputProbe {
+            outputs,
+            transferred_nar_bytes,
+            reused_nar_bytes,
+        })
     }
 
     pub async fn admit_action_result_outputs(

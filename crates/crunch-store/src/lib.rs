@@ -76,6 +76,7 @@ pub use export::export_castore_to_disk;
 pub use gc::GcContext;
 pub use gc::GcOperationKind;
 pub use gc::GcReport;
+pub use handle::ActionResultOutputProbe;
 pub use handle::CacheHit;
 pub use handle::OutputSubstitutionMode;
 pub use handle::OutputSubstitutionReport;
