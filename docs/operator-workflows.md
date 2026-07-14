@@ -361,10 +361,11 @@ the attestation and release binding.
 output is validated again and is the only portable object admitted to Octet,
 Wasmtime smoke validation, optional AOT, and release binding. A Wasmtime
 precompile remains target/CPU/configuration-bound trusted native output; it does
-not replace the portable component. Direct `wasm32-wasip2` output has no honest
-pre-component core-module handoff for Wizer, so enabled Wizer configuration is
-blocked with `wizer-pre-component-core-module-required` and records no
-transformed artifact.
+not replace the portable component. The pinned linker can expose a core module
+with `--skip-wit-component`, but the current request and evidence contracts do
+not identify that linker split, the core object, or the later componentization
+configuration. Enabled Wizer configuration is therefore blocked with
+`wizer-pre-component-core-module-required` and records no transformed artifact.
 
 All outputs retain the non-claims `not-component-behavior-correctness`,
 `not-runtime-authority`, `not-runtime-sandboxing`, `not-release-eligibility`,

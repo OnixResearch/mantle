@@ -120,11 +120,11 @@ fn validate_request_shape(request: &ComponentPipelineRequest) -> Result<(), Erro
         return Err(Error::Invalid("expected runtime stdout exceeds one MiB".to_string()));
     }
     if let Some(invoke) = &request.runtime_invoke {
-        let invalid = invoke.is_empty()
+        let is_invalid = invoke.is_empty()
             || invoke.len() > MAX_RUNTIME_INVOKE_BYTES
             || invoke.starts_with('-')
             || invoke.bytes().any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace());
-        if invalid {
+        if is_invalid {
             return Err(Error::Invalid("runtime invocation export is empty, oversized, or unsafe".to_string()));
         }
     }
@@ -166,12 +166,14 @@ fn validate_aot_configuration(request: &ComponentPipelineRequest) -> Result<Opti
     }
     validate_aot_args(&request.aot_configuration_args)?;
     let identity = identity(
-        &(request.aot_target.clone(), requested_features, request.aot_configuration_args.clone()),
+        &(request.aot_target.clone(), requested_features.clone(), request.aot_configuration_args.clone()),
         "Wasmtime AOT configuration",
     )?;
     if request.manifest.aot.wasmtime_configuration_identity_blake3.as_ref() != Some(&identity) {
         return Err(Error::Invalid("Wasmtime AOT configuration identity drifted".to_string()));
     }
+    debug_assert!(!request.aot_target.is_empty());
+    debug_assert_eq!(expected_features, requested_features);
     Ok(Some(identity))
 }
 

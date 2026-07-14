@@ -57,6 +57,29 @@ pub(crate) struct ExecutionState {
     pub non_claims: Vec<String>,
 }
 
+pub(crate) struct StageEvidence {
+    pub artifact: Option<StoreObject>,
+    pub tool_identity: Option<Blake3Identity>,
+    pub profile_identity: Option<Blake3Identity>,
+    pub claims: Vec<BoundedComponentClaim>,
+}
+
+impl StageEvidence {
+    pub(crate) fn new(
+        artifact: Option<StoreObject>,
+        tool_identity: Option<Blake3Identity>,
+        profile_identity: Option<Blake3Identity>,
+        claims: Vec<BoundedComponentClaim>,
+    ) -> Self {
+        Self {
+            artifact,
+            tool_identity,
+            profile_identity,
+            claims,
+        }
+    }
+}
+
 #[derive(Serialize)]
 struct ExecutionReportIdentityInput {
     schema: String,
@@ -165,16 +188,12 @@ impl ExecutionState {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn push_stage(
         &mut self,
         stage_key: &str,
         kind: ComponentStageKind,
         status: ComponentStageStatus,
-        artifact: Option<StoreObject>,
-        tool_identity: Option<Blake3Identity>,
-        profile_identity: Option<Blake3Identity>,
-        claims: Vec<BoundedComponentClaim>,
+        evidence: StageEvidence,
     ) -> Result<(), Error> {
         if self.stage_inputs.len() >= MAX_EXECUTION_STAGES {
             return Err(Error::Invalid(format!("execution report exceeds {MAX_EXECUTION_STAGES} stages")));
@@ -185,10 +204,10 @@ impl ExecutionState {
             kind,
             status,
             parents,
-            artifact,
-            tool_identity_blake3: tool_identity,
-            profile_identity_blake3: profile_identity,
-            claims,
+            artifact: evidence.artifact,
+            tool_identity_blake3: evidence.tool_identity,
+            profile_identity_blake3: evidence.profile_identity,
+            claims: evidence.claims,
             non_claims: self.non_claims.clone(),
         };
         let identity = stage_report_identity(input.clone())
@@ -213,9 +232,13 @@ pub(crate) fn finish_execution(
         state.block(&blocker.code, "component-report", blocker.message);
     }
     validate_state_bounds(&state)?;
-    let component_report = component_result.report;
-    let (component_attestation, release_binding) =
-        build_and_publish_component_evidence(&mut state, component_report.as_ref(), &scratch_root, evidence_dir)?;
+    let component_build_evidence = component_result.report;
+    let (component_attestation, release_binding) = build_and_publish_component_evidence(
+        &mut state,
+        component_build_evidence.as_ref(),
+        &scratch_root,
+        evidence_dir,
+    )?;
     let final_status = if state.blockers.is_empty() {
         "succeeded"
     } else {
@@ -230,7 +253,7 @@ pub(crate) fn finish_execution(
         artifacts: state.artifacts.clone(),
         blockers: state.blockers.clone(),
         octet_validations: state.octet_validations.clone(),
-        component_report: component_report.clone(),
+        component_report: component_build_evidence.clone(),
         materialization_bundle: state.materialization_bundle.clone(),
         component_attestation: component_attestation.clone(),
         release_binding: release_binding.clone(),
@@ -239,7 +262,7 @@ pub(crate) fn finish_execution(
     };
     let canonical = serde_json::to_vec(&input)
         .map_err(|error| Error::Invalid(format!("serializing execution report identity input: {error}")))?;
-    let report = PipelineExecutionReport {
+    let pipeline_evidence = PipelineExecutionReport {
         schema: PIPELINE_EXECUTION_REPORT_SCHEMA.to_string(),
         request_blake3: state.request_blake3,
         cohort_blake3: state.cohort_blake3,
@@ -247,7 +270,7 @@ pub(crate) fn finish_execution(
         artifacts: state.artifacts,
         blockers: state.blockers,
         octet_validations: state.octet_validations,
-        component_report,
+        component_report: component_build_evidence,
         materialization_bundle: state.materialization_bundle,
         component_attestation,
         release_binding,
@@ -255,11 +278,11 @@ pub(crate) fn finish_execution(
         report_blake3: Blake3Identity::from_slice(&canonical),
         non_claims: state.non_claims,
     };
-    write_json_new(&scratch_root.join(EXECUTION_REPORT_FILE), &report)?;
+    write_json_new(&scratch_root.join(EXECUTION_REPORT_FILE), &pipeline_evidence)?;
     publish_scratch(scratch_root, evidence_dir)?;
-    debug_assert_eq!(report.final_status == "succeeded", report.blockers.is_empty());
+    debug_assert_eq!(pipeline_evidence.final_status == "succeeded", pipeline_evidence.blockers.is_empty());
     debug_assert!(evidence_dir.join(EXECUTION_REPORT_FILE).is_file());
-    Ok(report)
+    Ok(pipeline_evidence)
 }
 
 fn build_and_publish_component_evidence(
@@ -342,19 +365,31 @@ fn write_evidence_object(
 }
 
 fn validate_state_bounds(state: &ExecutionState) -> Result<(), Error> {
-    if state.receipts.len() > MAX_EXECUTION_RECEIPTS
-        || state.artifacts.len() > MAX_EXECUTION_ARTIFACTS
-        || state.blockers.len() > MAX_EXECUTION_BLOCKERS
-        || state.octet_validations.len() > MAX_EXECUTION_STAGES
-        || state.stage_inputs.len() > MAX_EXECUTION_STAGES
-        || state.non_claims.len() > MAX_EXECUTION_NON_CLAIMS
-        || state.blockers.iter().any(|blocker| blocker.message.len() > MAX_BLOCKER_MESSAGE_BYTES)
-    {
-        return Err(Error::Invalid("component execution evidence exceeds a fixed report bound".to_string()));
+    if state.receipts.len() > MAX_EXECUTION_RECEIPTS {
+        return Err(evidence_bound_error());
+    }
+    if state.artifacts.len() > MAX_EXECUTION_ARTIFACTS {
+        return Err(evidence_bound_error());
+    }
+    if state.blockers.len() > MAX_EXECUTION_BLOCKERS {
+        return Err(evidence_bound_error());
+    }
+    if state.octet_validations.len() > MAX_EXECUTION_STAGES || state.stage_inputs.len() > MAX_EXECUTION_STAGES {
+        return Err(evidence_bound_error());
+    }
+    if state.non_claims.len() > MAX_EXECUTION_NON_CLAIMS {
+        return Err(evidence_bound_error());
+    }
+    if state.blockers.iter().any(|blocker| blocker.message.len() > MAX_BLOCKER_MESSAGE_BYTES) {
+        return Err(evidence_bound_error());
     }
     debug_assert!(state.blockers.iter().all(|blocker| blocker.message.len() <= MAX_BLOCKER_MESSAGE_BYTES));
     debug_assert!(state.receipts.len() <= MAX_EXECUTION_RECEIPTS);
     Ok(())
+}
+
+fn evidence_bound_error() -> Error {
+    Error::Invalid("component execution evidence exceeds a fixed report bound".to_string())
 }
 
 #[cfg(target_os = "linux")]

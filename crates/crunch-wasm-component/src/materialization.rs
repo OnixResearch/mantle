@@ -22,6 +22,7 @@ use crate::files::copy_regular_file_new;
 use crate::files::write_new;
 use crate::preflight::PreparedPipeline;
 use crate::reporting::ExecutionState;
+use crate::reporting::StageEvidence;
 use crate::stages::StageWorkspace;
 use crate::toolchain::hash_file_bounded;
 use crate::write_json_new;
@@ -82,10 +83,9 @@ pub(crate) fn materialize_bundle(
         "materialization-bundle",
         ComponentStageKind::MaterializationBundle,
         ComponentStageStatus::Succeeded,
-        Some(bundle_object.clone()),
-        None,
-        Some(bundle.bundle_identity_blake3.clone()),
-        vec![BoundedComponentClaim::MaterializationObjectsRehashable],
+        StageEvidence::new(Some(bundle_object.clone()), None, Some(bundle.bundle_identity_blake3.clone()), vec![
+            BoundedComponentClaim::MaterializationObjectsRehashable,
+        ]),
     )?;
     state.set_materialization_bundle(bundle.clone(), bundle_object)?;
     debug_assert!(workspace.publication_root.join(MATERIALIZATION_BUNDLE_FILE).is_file());

@@ -14,6 +14,8 @@ use crate::OctetValidationEvidence;
 use crate::files::write_new;
 use crate::preflight::PreparedPipeline;
 use crate::reporting::ExecutionState;
+use crate::reporting::StageEvidence;
+use crate::stages::StageInvocation;
 use crate::stages::StageWorkspace;
 use crate::stages::invoke;
 use crate::stages::publish_evidence_artifact;
@@ -23,7 +25,7 @@ const OCTET_SUMMARY_FILE: &str = "summary.txt";
 const OCTET_PROVENANCE_FILE: &str = "provenance.jsonl";
 const OCTET_ARTIFACT_FILE: &str = "wasm-artifact.bin";
 const OCTET_VERIFICATION_FILE: &str = "octet-artifact-verification.json";
-const MAX_OCTET_RECEIPT_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_OCTET_RECEIPT_BYTES: u64 = 16_777_216;
 const OCTET_RECEIPT_SCHEMA: &str = "octet-evidence-rail-receipt/v1";
 const OCTET_RAIL_ID: &str = "wasm-artifact";
 const OCTET_CHECKER_ID: &str = "cargo-octet";
@@ -76,6 +78,38 @@ struct OctetExpected<'a> {
     report_blake3: &'a Blake3Identity,
 }
 
+struct CompletedOctetRun {
+    receipt: OctetReceipt,
+    is_collect_success: bool,
+    is_verification_valid: bool,
+    published: PublishedOctetEvidence,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct OctetDecisionStatus {
+    is_collect_success: bool,
+    is_verification_valid: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum OctetIdentityRole {
+    Artifact,
+    Profile,
+    Configuration,
+    Cohort,
+}
+
+impl OctetIdentityRole {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Artifact => "exact artifact",
+            Self::Profile => "profile",
+            Self::Configuration => "configuration",
+            Self::Cohort => "cohort",
+        }
+    }
+}
+
 pub(crate) fn run_octet_validation(
     prepared: &PreparedPipeline,
     workspace: &StageWorkspace,
@@ -83,6 +117,8 @@ pub(crate) fn run_octet_validation(
     artifact_path: &Path,
     artifact: &StoreObject,
 ) -> Result<Option<OctetStageAdmission>, Error> {
+    debug_assert!(workspace.root.is_absolute());
+    debug_assert!(artifact.size_bytes > 0);
     let evidence_root = workspace.root.join("octet-final");
     let config_path = prepared.toolchain.octet_config_path()?;
     let parent_identity = format!("mantle:{}", artifact.digest_blake3.clone().into_hex());
@@ -104,42 +140,49 @@ pub(crate) fn run_octet_validation(
         "--output-format".to_string(),
         "json".to_string(),
     ];
-    let collect = invoke(prepared, workspace, "octet-validation", "cargo-octet", args, None)?;
+    let collect = invoke(prepared, workspace, StageInvocation {
+        stage_key: "octet-validation",
+        tool_name: "cargo-octet",
+        args,
+        output_path: None,
+    })?;
     state.add_receipt(collect.receipt)?;
     let receipt_path = evidence_root.join(OCTET_RECEIPT_FILE);
     let receipt_bytes =
         crate::files::read_source_file_bounded(&receipt_path, MAX_OCTET_RECEIPT_BYTES, "Octet Wasm artifact receipt")?;
     let receipt: OctetReceipt = serde_json::from_slice(&receipt_bytes)
         .map_err(|error| Error::Invalid(format!("parsing exact Octet Wasm artifact receipt: {error}")))?;
-    let verify = verify_octet_bundle(prepared, workspace, state, &evidence_root)?;
-    let published = publish_octet_evidence(workspace, state, &evidence_root, &verify)?;
+    let verification = verify_octet_bundle(prepared, workspace, state, &evidence_root)?;
+    let published = publish_octet_evidence(workspace, state, &evidence_root, &verification)?;
+    admit_completed_octet(prepared, state, artifact, CompletedOctetRun {
+        receipt,
+        is_collect_success: collect.success,
+        is_verification_valid: verification.is_valid,
+        published,
+    })
+}
+
+fn admit_completed_octet(
+    prepared: &PreparedPipeline,
+    state: &mut ExecutionState,
+    artifact: &StoreObject,
+    completed: CompletedOctetRun,
+) -> Result<Option<OctetStageAdmission>, Error> {
     let expected = OctetExpected {
         artifact,
         profile_id: &prepared.toolchain.manifest.octet.profile_id,
         profile_blake3: &prepared.toolchain.manifest.octet.profile_identity_blake3,
         config_blake3: &prepared.toolchain.manifest.octet.config_digest_blake3,
         cohort_blake3: &prepared.toolchain.manifest.octet.wasm_tools_cohort_identity_blake3,
-        report_blake3: &published.receipt.digest_blake3,
+        report_blake3: &completed.published.receipt.digest_blake3,
     };
-    let binding = validate_octet_receipt(&receipt, &expected, collect.success, verify.valid);
-    let admitted = binding.is_ok();
-    state.push_stage(
-        "octet-validation",
-        ComponentStageKind::OctetValidation,
-        if admitted {
-            ComponentStageStatus::Succeeded
-        } else {
-            ComponentStageStatus::Denied
-        },
-        Some(published.receipt.clone()),
-        Some(prepared.toolchain.tool_digest("cargo-octet")?),
-        Some(prepared.toolchain.manifest.octet.profile_identity_blake3.clone()),
-        if admitted {
-            vec![BoundedComponentClaim::OctetReportBound]
-        } else {
-            Vec::new()
-        },
-    )?;
+    let status = OctetDecisionStatus {
+        is_collect_success: completed.is_collect_success,
+        is_verification_valid: completed.is_verification_valid,
+    };
+    let binding = validate_octet_receipt(&completed.receipt, &expected, status);
+    let is_admitted = binding.is_ok();
+    push_octet_stage(prepared, state, &completed.published.receipt, is_admitted)?;
     let binding = match binding {
         Ok(binding) => binding,
         Err(message) => {
@@ -147,7 +190,46 @@ pub(crate) fn run_octet_validation(
             return Ok(None);
         }
     };
-    let evidence = OctetValidationEvidence {
+    let evidence = octet_evidence(prepared, artifact, completed.published);
+    state.add_octet_validation(evidence.clone())?;
+    debug_assert_eq!(binding.decision, ValidationDecision::Pass);
+    debug_assert_eq!(evidence.artifact.digest_blake3, binding.artifact_blake3);
+    Ok(Some(OctetStageAdmission { binding, evidence }))
+}
+
+fn push_octet_stage(
+    prepared: &PreparedPipeline,
+    state: &mut ExecutionState,
+    receipt: &StoreObject,
+    is_admitted: bool,
+) -> Result<(), Error> {
+    state.push_stage(
+        "octet-validation",
+        ComponentStageKind::OctetValidation,
+        if is_admitted {
+            ComponentStageStatus::Succeeded
+        } else {
+            ComponentStageStatus::Denied
+        },
+        StageEvidence::new(
+            Some(receipt.clone()),
+            Some(prepared.toolchain.tool_digest("cargo-octet")?),
+            Some(prepared.toolchain.manifest.octet.profile_identity_blake3.clone()),
+            if is_admitted {
+                vec![BoundedComponentClaim::OctetReportBound]
+            } else {
+                Vec::new()
+            },
+        ),
+    )
+}
+
+fn octet_evidence(
+    prepared: &PreparedPipeline,
+    artifact: &StoreObject,
+    published: PublishedOctetEvidence,
+) -> OctetValidationEvidence {
+    OctetValidationEvidence {
         stage_key: "octet-validation".to_string(),
         artifact: artifact.clone(),
         receipt: published.receipt,
@@ -160,11 +242,7 @@ pub(crate) fn run_octet_validation(
         package_version: prepared.toolchain.manifest.octet.package_version.clone(),
         config_blake3: prepared.toolchain.manifest.octet.config_digest_blake3.clone(),
         decision: "passed".to_string(),
-    };
-    state.add_octet_validation(evidence.clone())?;
-    debug_assert_eq!(binding.decision, ValidationDecision::Pass);
-    debug_assert_eq!(evidence.artifact.digest_blake3, binding.artifact_blake3);
-    Ok(Some(OctetStageAdmission { binding, evidence }))
+    }
 }
 
 struct PublishedOctetEvidence {
@@ -174,7 +252,7 @@ struct PublishedOctetEvidence {
 
 struct VerifiedOctetBundle {
     bytes: Vec<u8>,
-    valid: bool,
+    is_valid: bool,
 }
 
 fn verify_octet_bundle(
@@ -191,16 +269,25 @@ fn verify_octet_bundle(
         "--output-format".to_string(),
         "json".to_string(),
     ];
-    let run = invoke(prepared, workspace, "octet-artifact-verification", "cargo-octet", args, None)?;
+    let run = invoke(prepared, workspace, StageInvocation {
+        stage_key: "octet-artifact-verification",
+        tool_name: "cargo-octet",
+        args,
+        output_path: None,
+    })?;
     state.add_receipt(run.receipt)?;
-    let report: OctetVerificationReport = serde_json::from_slice(&run.stdout)
+    let verification_evidence: OctetVerificationReport = serde_json::from_slice(&run.stdout)
         .map_err(|error| Error::Invalid(format!("parsing Octet artifact verification report: {error}")))?;
-    let valid = run.success && report.status == "valid" && report.diagnostics.is_empty();
-    debug_assert_eq!(valid, run.success && report.status == "valid" && report.diagnostics.is_empty());
+    let is_valid =
+        run.success && verification_evidence.status == "valid" && verification_evidence.diagnostics.is_empty();
+    debug_assert_eq!(
+        is_valid,
+        run.success && verification_evidence.status == "valid" && verification_evidence.diagnostics.is_empty()
+    );
     debug_assert!(!run.stdout.is_empty());
     Ok(VerifiedOctetBundle {
         bytes: run.stdout,
-        valid,
+        is_valid,
     })
 }
 
@@ -240,23 +327,22 @@ fn publish_octet_evidence(
 fn validate_octet_receipt(
     receipt: &OctetReceipt,
     expected: &OctetExpected<'_>,
-    collect_success: bool,
-    verification_valid: bool,
+    status: OctetDecisionStatus,
 ) -> Result<OctetValidationBinding, String> {
     let details = receipt
         .wasm_artifact
         .as_ref()
         .ok_or_else(|| "Octet receipt omitted wasm_artifact details".to_string())?;
-    let artifact_blake3 = parse_prefixed_blake3(&details.exact_artifact_identity, "exact artifact")?;
-    let profile_blake3 = parse_prefixed_blake3(&details.profile_identity, "profile")?;
-    let config_blake3 = parse_prefixed_blake3(&details.registry_identity, "configuration")?;
-    let cohort_blake3 = parse_prefixed_blake3(&details.cohort_identity, "cohort")?;
+    let artifact_blake3 = parse_prefixed_blake3(&details.exact_artifact_identity, OctetIdentityRole::Artifact)?;
+    let profile_blake3 = parse_prefixed_blake3(&details.profile_identity, OctetIdentityRole::Profile)?;
+    let config_blake3 = parse_prefixed_blake3(&details.registry_identity, OctetIdentityRole::Configuration)?;
+    let cohort_blake3 = parse_prefixed_blake3(&details.cohort_identity, OctetIdentityRole::Cohort)?;
     let parent = format!("mantle:{}", expected.artifact.digest_blake3.clone().into_hex());
-    let identity_matches = artifact_blake3 == expected.artifact.digest_blake3
+    let is_identity_match = artifact_blake3 == expected.artifact.digest_blake3
         && profile_blake3 == *expected.profile_blake3
         && config_blake3 == *expected.config_blake3
         && cohort_blake3 == *expected.cohort_blake3;
-    let contract_matches = receipt.schema_version == OCTET_RECEIPT_SCHEMA
+    let is_contract_match = receipt.schema_version == OCTET_RECEIPT_SCHEMA
         && receipt.rail_id == OCTET_RAIL_ID
         && receipt.checker_id == OCTET_CHECKER_ID
         && receipt.profile.as_deref() == Some(expected.profile_id)
@@ -266,16 +352,18 @@ fn validate_octet_receipt(
         && details.handoff_role == OCTET_HANDOFF_ROLE
         && details.handoff_parent_identities == vec![parent]
         && details.verification_role == OCTET_VERIFICATION_ROLE;
-    let decision_passed =
-        collect_success && verification_valid && receipt.status == "passed" && receipt.diagnostics.is_empty();
-    if !identity_matches || !contract_matches || !decision_passed {
+    let is_decision_passed = status.is_collect_success
+        && status.is_verification_valid
+        && receipt.status == "passed"
+        && receipt.diagnostics.is_empty();
+    if !is_identity_match || !is_contract_match || !is_decision_passed {
         return Err(
             "Octet independently returned a non-pass, unverifiable, or identity-mismatched report; exact Octet evidence was retained without reinterpreting its findings"
                 .to_string(),
         );
     }
-    debug_assert!(identity_matches);
-    debug_assert!(contract_matches);
+    debug_assert!(is_identity_match);
+    debug_assert!(is_contract_match);
     Ok(OctetValidationBinding {
         artifact_blake3,
         profile_blake3,
@@ -285,7 +373,8 @@ fn validate_octet_receipt(
     })
 }
 
-fn parse_prefixed_blake3(value: &str, label: &str) -> Result<Blake3Identity, String> {
+fn parse_prefixed_blake3(value: &str, role: OctetIdentityRole) -> Result<Blake3Identity, String> {
+    let label = role.label();
     let hex = value
         .strip_prefix("b3:")
         .ok_or_else(|| format!("Octet {label} identity lacks the b3: role prefix"))?;
@@ -299,6 +388,13 @@ mod tests {
 
     fn digest(seed: u8) -> Blake3Identity {
         Blake3Identity::from_slice(&[seed])
+    }
+
+    fn passing_status() -> OctetDecisionStatus {
+        OctetDecisionStatus {
+            is_collect_success: true,
+            is_verification_valid: true,
+        }
     }
 
     fn expected_object() -> StoreObject {
@@ -350,7 +446,7 @@ mod tests {
             cohort_blake3: &cohort,
             report_blake3: &config,
         };
-        let result = validate_octet_receipt(&receipt_for(&expected), &expected, true, true).unwrap();
+        let result = validate_octet_receipt(&receipt_for(&expected), &expected, passing_status()).unwrap();
 
         assert_eq!(result.artifact_blake3, artifact.digest_blake3);
         assert_eq!(result.profile_blake3, profile);
@@ -373,8 +469,11 @@ mod tests {
         };
         let mut mismatched = receipt_for(&expected);
         mismatched.wasm_artifact.as_mut().unwrap().exact_artifact_identity = format!("b3:{}", digest(9).into_hex());
-        let mismatch = validate_octet_receipt(&mismatched, &expected, true, true);
-        let non_pass = validate_octet_receipt(&receipt_for(&expected), &expected, false, true);
+        let mismatch = validate_octet_receipt(&mismatched, &expected, passing_status());
+        let non_pass = validate_octet_receipt(&receipt_for(&expected), &expected, OctetDecisionStatus {
+            is_collect_success: false,
+            is_verification_valid: true,
+        });
 
         assert!(mismatch.is_err());
         assert!(non_pass.is_err());

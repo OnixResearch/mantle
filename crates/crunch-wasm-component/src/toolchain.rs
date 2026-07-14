@@ -36,9 +36,10 @@ use crate::process::spawn_drain;
 use crate::process::wait_bounded;
 
 const HASH_BUFFER_CAPACITY_BYTES: usize = 64 * 1024;
-const MAX_TOOL_BINARY_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_TOOL_BINARY_BYTES: u64 = 536_870_912;
 const MAX_TOOLCHAIN_MANIFEST_BYTES: u64 = 1024 * 1024;
-const MAX_VERSION_OUTPUT_BYTES: usize = 16 * 1024;
+const MAX_VERSION_OUTPUT_BYTES: usize = 16_384;
+const MAX_VERSION_OUTPUT_BYTES_U64: u64 = 16_384;
 const VERSION_PROBE_TIMEOUT_MS: u64 = 10 * 1000;
 const COHORT_CANONICAL_TERMINATOR: u8 = b'\n';
 
@@ -171,21 +172,26 @@ fn verify_cohort_identity(bytes: &[u8], manifest: &ToolchainManifest) -> Result<
 
 fn verify_octet_identity(root: &Path, manifest: &ToolchainManifest) -> Result<(), Error> {
     let octet = &manifest.octet;
-    let expected_cohort = pinned_identity(OCTET_WASM_TOOLS_COHORT_BLAKE3, "cohort")?;
-    let expected_config = pinned_identity(OCTET_CONFIG_BLAKE3, "configuration")?;
-    let expected_profile = pinned_identity(OCTET_PROFILE_IDENTITY_BLAKE3, "profile")?;
-    if octet.source_repository != OCTET_SOURCE_REPOSITORY
-        || octet.source_revision != OCTET_SOURCE_REVISION
-        || octet.package_name != OCTET_PACKAGE_NAME
-        || octet.package_version != OCTET_PACKAGE_VERSION
-        || octet.profile_id != OCTET_PROFILE_ID
-        || octet.config_digest_blake3 != expected_config
-        || octet.profile_identity_blake3 != expected_profile
-        || octet.wasm_tools_cohort_identity_blake3 != expected_cohort
-    {
-        return Err(Error::Invalid(
-            "Octet source revision, package, profile, or wasm-tools cohort identity drifted".to_string(),
-        ));
+    let expected_cohort = pinned_identity(OCTET_WASM_TOOLS_COHORT_BLAKE3, OctetPinnedRole::Cohort)?;
+    let expected_config = pinned_identity(OCTET_CONFIG_BLAKE3, OctetPinnedRole::Configuration)?;
+    let expected_profile = pinned_identity(OCTET_PROFILE_IDENTITY_BLAKE3, OctetPinnedRole::Profile)?;
+    if octet.source_repository != OCTET_SOURCE_REPOSITORY {
+        return Err(octet_identity_drift());
+    }
+    if octet.source_revision != OCTET_SOURCE_REVISION {
+        return Err(octet_identity_drift());
+    }
+    if octet.package_name != OCTET_PACKAGE_NAME || octet.package_version != OCTET_PACKAGE_VERSION {
+        return Err(octet_identity_drift());
+    }
+    if octet.profile_id != OCTET_PROFILE_ID {
+        return Err(octet_identity_drift());
+    }
+    if octet.config_digest_blake3 != expected_config || octet.profile_identity_blake3 != expected_profile {
+        return Err(octet_identity_drift());
+    }
+    if octet.wasm_tools_cohort_identity_blake3 != expected_cohort {
+        return Err(octet_identity_drift());
     }
     let config_path = root.join(&octet.config_path);
     if hash_file_bounded(&config_path)? != octet.config_digest_blake3 {
@@ -196,7 +202,29 @@ fn verify_octet_identity(root: &Path, manifest: &ToolchainManifest) -> Result<()
     Ok(())
 }
 
-fn pinned_identity(value: &str, label: &str) -> Result<Blake3Identity, Error> {
+#[derive(Debug, Clone, Copy)]
+enum OctetPinnedRole {
+    Cohort,
+    Configuration,
+    Profile,
+}
+
+impl OctetPinnedRole {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Cohort => "cohort",
+            Self::Configuration => "configuration",
+            Self::Profile => "profile",
+        }
+    }
+}
+
+fn octet_identity_drift() -> Error {
+    Error::Invalid("Octet source revision, package, profile, or wasm-tools cohort identity drifted".to_string())
+}
+
+fn pinned_identity(value: &str, role: OctetPinnedRole) -> Result<Blake3Identity, Error> {
+    let label = role.label();
     let identity = Blake3Identity::parse(value.to_string())
         .map_err(|error| Error::Invalid(format!("parsing pinned Octet {label} identity: {error}")))?;
     debug_assert_eq!(identity.clone().into_hex().len(), crunch_wasm_component_core::BLAKE3_HEX_LENGTH);
@@ -241,7 +269,7 @@ pub(crate) fn hash_file_bounded(path: &Path) -> Result<Blake3Identity, Error> {
     let mut hasher = blake3::Hasher::new();
     let mut buffer = vec![0_u8; HASH_BUFFER_CAPACITY_BYTES];
     let mut bytes_read = 0_u64;
-    loop {
+    while bytes_read < metadata.len() {
         let count = file.read(&mut buffer).map_err(|error| Error::io("hashing file", path, error))?;
         if count == 0 {
             break;
@@ -251,16 +279,16 @@ pub(crate) fn hash_file_bounded(path: &Path) -> Result<Blake3Identity, Error> {
         bytes_read = bytes_read
             .checked_add(count_u64)
             .ok_or_else(|| Error::Invalid("hashed byte count overflowed u64".to_string()))?;
-        if bytes_read > MAX_TOOL_BINARY_BYTES {
-            return Err(Error::Invalid(format!("file {} exceeded the hashing bound", path.display())));
+        if bytes_read > metadata.len() {
+            return Err(Error::Invalid(format!("file {} exceeded its measured size", path.display())));
         }
         hasher.update(&buffer[..count]);
     }
-    let final_size = file.metadata().map_err(|error| Error::io("remeasuring hashed file", path, error))?.len();
-    if bytes_read != metadata.len() || final_size != metadata.len() {
+    let final_size_bytes = file.metadata().map_err(|error| Error::io("remeasuring hashed file", path, error))?.len();
+    if bytes_read != metadata.len() || final_size_bytes != metadata.len() {
         return Err(Error::Io(format!("file size changed while hashing: {}", path.display())));
     }
-    debug_assert_eq!(bytes_read, final_size);
+    debug_assert_eq!(bytes_read, final_size_bytes);
     debug_assert!(bytes_read > 0);
     Blake3Identity::parse(hasher.finalize().to_hex().to_string())
         .map_err(|error| Error::Invalid(format!("encoding BLAKE3 for {}: {error}", path.display())))
@@ -276,42 +304,48 @@ fn read_regular_file_bounded(path: &Path, max_bytes: u64, label: &str) -> Result
     let mut options = fs::OpenOptions::new();
     options.read(true).custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
     let mut file = options.open(path).map_err(|error| Error::io(&format!("opening {label} no-follow"), path, error))?;
-    let initial_size = file
+    let initial_size_bytes = file
         .metadata()
         .map_err(|error| Error::io(&format!("reading opened {label} metadata"), path, error))?
         .len();
-    if initial_size == 0 || initial_size > max_bytes {
+    if initial_size_bytes == 0 || initial_size_bytes > max_bytes {
         return Err(Error::Invalid(format!("{label} exceeds its byte bound: {}", path.display())));
     }
-    let capacity = usize::try_from(initial_size).map_err(|_| Error::Invalid(format!("{label} size exceeds usize")))?;
-    let mut bytes = Vec::with_capacity(capacity);
+    let capacity_bytes =
+        usize::try_from(initial_size_bytes).map_err(|_| Error::Invalid(format!("{label} size exceeds usize")))?;
+    let mut bytes = Vec::with_capacity(capacity_bytes);
     let mut buffer = vec![0_u8; HASH_BUFFER_CAPACITY_BYTES];
-    loop {
+    let mut bytes_read = 0_u64;
+    while bytes_read < initial_size_bytes {
         let count = file
             .read(&mut buffer)
             .map_err(|error| Error::io(&format!("reading bounded {label}"), path, error))?;
         if count == 0 {
             break;
         }
-        bytes.extend_from_slice(&buffer[..count]);
-        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > max_bytes {
+        let count_u64 = u64::try_from(count).map_err(|_| Error::Invalid(format!("{label} read count exceeds u64")))?;
+        bytes_read = bytes_read
+            .checked_add(count_u64)
+            .ok_or_else(|| Error::Invalid(format!("{label} byte count overflowed u64")))?;
+        if bytes_read > max_bytes {
             return Err(Error::Invalid(format!("{label} exceeded its byte bound while reading: {}", path.display())));
         }
+        bytes.extend_from_slice(&buffer[..count]);
     }
-    let final_size = file.metadata().map_err(|error| Error::io(&format!("remeasuring {label}"), path, error))?.len();
-    let bytes_len = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
-    if bytes_len != initial_size || final_size != initial_size {
+    let final_size_bytes =
+        file.metadata().map_err(|error| Error::io(&format!("remeasuring {label}"), path, error))?.len();
+    if bytes_read != initial_size_bytes || final_size_bytes != initial_size_bytes {
         return Err(Error::Io(format!("{label} size changed while reading: {}", path.display())));
     }
-    debug_assert_eq!(bytes_len, final_size);
-    debug_assert!(bytes_len <= max_bytes);
+    debug_assert_eq!(bytes_read, final_size_bytes);
+    debug_assert!(bytes_read <= max_bytes);
     Ok(bytes)
 }
 
 fn read_version_output(path: &Path) -> Result<String, Error> {
     read_version_output_with_limits(path, ToolLimits {
         timeout_ms: VERSION_PROBE_TIMEOUT_MS,
-        output_bytes: u64::try_from(MAX_VERSION_OUTPUT_BYTES).unwrap_or(u64::MAX),
+        output_bytes: MAX_VERSION_OUTPUT_BYTES_U64,
     })
 }
 
@@ -328,16 +362,24 @@ fn read_version_output_with_limits(path: &Path, limits: ToolLimits) -> Result<St
     let mut child = command.spawn().map_err(|error| Error::io("executing bounded tool version probe", path, error))?;
     let stdout = child.stdout.take().ok_or_else(|| Error::Tool("version stdout pipe unavailable".to_string()))?;
     let stderr = child.stderr.take().ok_or_else(|| Error::Tool("version stderr pipe unavailable".to_string()))?;
-    let output_limit_hit = Arc::new(AtomicBool::new(false));
+    let did_exceed_output_bound = Arc::new(AtomicBool::new(false));
     let output_bytes_observed = Arc::new(AtomicU64::new(0));
-    let stdout_thread =
-        spawn_drain(stdout, limits.output_bytes, Arc::clone(&output_limit_hit), Arc::clone(&output_bytes_observed));
-    let stderr_thread =
-        spawn_drain(stderr, limits.output_bytes, Arc::clone(&output_limit_hit), Arc::clone(&output_bytes_observed));
-    let mut outcome = wait_bounded(&mut child, "tool-version", limits.timeout_ms, &output_limit_hit)?;
+    let stdout_thread = spawn_drain(
+        stdout,
+        limits.output_bytes,
+        Arc::clone(&did_exceed_output_bound),
+        Arc::clone(&output_bytes_observed),
+    );
+    let stderr_thread = spawn_drain(
+        stderr,
+        limits.output_bytes,
+        Arc::clone(&did_exceed_output_bound),
+        Arc::clone(&output_bytes_observed),
+    );
+    let mut outcome = wait_bounded(&mut child, "tool-version", limits.timeout_ms, &did_exceed_output_bound)?;
     let mut bytes = join_drain(stdout_thread, "version stdout")?;
     let stderr = join_drain(stderr_thread, "version stderr")?;
-    if output_limit_hit.load(Ordering::Acquire) {
+    if did_exceed_output_bound.load(Ordering::Acquire) {
         outcome.failure = Some("output-limit-exceeded");
     }
     if let Some(failure) = outcome.failure {
@@ -391,6 +433,8 @@ fn reject_symlink_components(path: &Path) -> Result<(), Error> {
             }
         }
     }
+    debug_assert!(!path.as_os_str().is_empty());
+    debug_assert!(cursor.components().count() <= path.components().count());
     Ok(())
 }
 

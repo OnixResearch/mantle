@@ -91,6 +91,8 @@ fn verify_published_artifacts(artifacts: &[PipelineArtifact]) -> Result<(), Erro
 }
 
 fn verify_evidence_sidecars(report: &PipelineExecutionReport, bundle: &MaterializationBundle) -> Result<(), Error> {
+    debug_assert_eq!(report.final_status, "succeeded");
+    debug_assert!(bundle.final_portable.size_bytes > 0);
     let bundle_object = artifact_object(report, MATERIALIZATION_BUNDLE_ROLE)?;
     let parsed_bundle: MaterializationBundle = read_json_object(&bundle_object, "materialization bundle")?;
     if parsed_bundle != *bundle {
@@ -121,7 +123,7 @@ fn reconstruct_component_evidence(
     expected_attestation: crunch_wasm_component_core::ComponentArtifactAttestation,
     expected_release: crunch_wasm_component_core::ComponentReleaseBinding,
 ) -> Result<(), Error> {
-    let component_report = report
+    let component_build_evidence = report
         .component_report
         .clone()
         .ok_or_else(|| Error::Invalid("component stage graph was absent during evidence reconstruction".to_string()))?;
@@ -131,7 +133,7 @@ fn reconstruct_component_evidence(
     let rebuilt = build_component_evidence(ComponentEvidenceRequest {
         bundle,
         bundle_object,
-        report: component_report,
+        report: component_build_evidence,
         octet_profile_blake3: octet.profile_blake3.clone(),
         octet_cohort_blake3: octet.cohort_blake3.clone(),
         octet_report: octet.receipt.clone(),

@@ -50,9 +50,11 @@ invalidates cohort-bound outputs until the relevant fixtures rerun.
 
 Optional Wizer output remains portable but must bind deterministic virtual
 inputs and repeated-output evidence when deterministic eligibility is claimed.
-Wizer accepts core modules rather than Component Model binaries, so a direct
-`wasm32-wasip2` component pipeline without a declared pre-component core-module
-handoff denies Wizer execution and records no transformed artifact instead of
+Wizer accepts core modules rather than Component Model binaries. Although the
+pinned linker can expose its pre-component module with `--skip-wit-component`,
+this pipeline does not yet declare or attest that linker split, core object, or
+componentization configuration. It therefore denies Wizer execution and records
+no transformed artifact instead of introducing an unbound intermediate or
 mislabeling component bytes. Optional Wasmtime precompile output is
 target-specific trusted native code, not
 portable validated Wasm. Consumers receive one versioned materialization bundle

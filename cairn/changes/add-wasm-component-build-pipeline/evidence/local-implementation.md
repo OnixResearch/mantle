@@ -419,3 +419,66 @@ tasks: {"valid":true,"verdict":"PASS","issues":[]}
   hidden or waived.
 
 No spec was synced and the change was not archived at this checkpoint.
+
+## Bounded Tiger Style and Wizer seam repair — 2026-07-14
+
+This pass repaired every full-crate Tiger Style diagnostic whose source path was
+modified by this change. The repair introduced explicit stage/invocation option
+records, decomposed the pipeline into bounded phases, removed ambiguous boolean
+and string interfaces, made bounded file reads visible to the checker, and
+preserved the existing functional-core/imperative-shell boundary.
+
+```text
+$ cargo fmt --check -p crunch-wasm-component
+(exit 0)
+
+$ cargo check -p crunch-wasm-component --tests --offline
+(exit 0)
+
+$ cargo test -p crunch-wasm-component --lib --offline -- --nocapture
+running 14 tests
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+$ cargo clippy -p crunch-wasm-component --all-targets --offline -- -D warnings
+(exit 0)
+
+$ cargo test -p mantle --test wasm_component_cli --offline -- --nocapture
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+$ nix --option builders '' --option secret-key-files '' run .#tigerstyle -- check -p crunch-wasm-component
+(exit 1; 43 diagnostics)
+remaining source paths: crates/crunch-wasm-component/src/files.rs
+                        crates/crunch-wasm-component/src/process.rs
+changed-source-path diagnostics: 0
+```
+
+The full rail therefore remains red, but its remaining 43 diagnostics are
+confined to `files.rs` and `process.rs`. Neither file was modified by commits
+`18bec579` or `ccd9b9cf`, and this bounded pass did not suppress, waive, or
+silently broaden into those pre-existing adapters. The final quality task stays
+unchecked.
+
+### Wizer seam portfolio assessment
+
+| Family | Mechanism | Checked evidence | State | Exact blocker |
+|---|---|---|---|---|
+| linker split | Build with `-C link-arg=--skip-wit-component`, run Wizer twice on the emitted core module, then `wasm-tools component new` | The pinned cohort produced `(module ...)`; repeated Wizer files were byte-identical; the re-componentized artifact validated, retained `run: func() -> u32`, and Wasmtime returned `42` | technically viable, not admitted | The pipeline request/report contracts do not identify the linker split, core object, componentization stage/configuration, or compile environment |
+| nested-module extraction | Unbundle a completed component and select one nested core module | `wasm-tools component unbundle` exists, but a component may contain multiple application/adapter modules | rejected | Selection and reassembly would not prove which module corresponds to the declared source or preserve the original componentization contract |
+| alternate Rust target | Compile a separately declared core-Wasm target, embed component metadata, then componentize | Requires another target/profile, adapter/configuration identity, and fixture matrix | out of bounded pass | This is a new build profile and evidence contract, not a closeout repair |
+
+The linker probe establishes capability, not pipeline admission. In particular,
+`ToolExecutionReceipt` currently omits the invocation environment, so injecting
+`RUSTFLAGS=-C link-arg=--skip-wit-component` would alter compilation without
+binding that choice into the receipt. The current stage graph also has no
+componentization node or rehashable componentization configuration. Implementing
+Wizer here would therefore create an unbound intermediate and overstate the
+existing evidence contract. The shell keeps the exact
+`wizer-pre-component-core-module-required` blocker, now explaining that the
+capability exists but is not yet modeled or attested.
+
+After these task and evidence updates, `cairn validate` and the proposal, design,
+and tasks gates each returned `valid: true` with no issues; all three gate
+verdicts were `PASS`.
+
+No spec was synced and the change was not archived during this repair pass.

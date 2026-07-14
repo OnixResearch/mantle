@@ -13,6 +13,8 @@ use crunch_wasm_component_core::admit_aot;
 use crate::Error;
 use crate::preflight::PreparedPipeline;
 use crate::reporting::ExecutionState;
+use crate::reporting::StageEvidence;
+use crate::stages::StageInvocation;
 use crate::stages::StageWorkspace;
 use crate::stages::invoke;
 use crate::stages::measure_artifact;
@@ -34,10 +36,7 @@ pub(crate) fn run_aot_stage(
             "aot",
             ComponentStageKind::Aot,
             ComponentStageStatus::NotRun,
-            None,
-            Some(prepared.toolchain.tool_digest("wasmtime")?),
-            None,
-            Vec::new(),
+            StageEvidence::new(None, Some(prepared.toolchain.tool_digest("wasmtime")?), None, Vec::new()),
         )?;
         return Ok(None);
     }
@@ -51,17 +50,24 @@ pub(crate) fn run_aot_stage(
         output.display().to_string(),
         portable_path.display().to_string(),
     ]);
-    let run = invoke(prepared, workspace, "aot", "wasmtime", args, Some(output.clone()))?;
+    let run = invoke(prepared, workspace, StageInvocation {
+        stage_key: "aot",
+        tool_name: "wasmtime",
+        args,
+        output_path: Some(output.clone()),
+    })?;
     state.add_receipt(run.receipt)?;
     if !run.success {
         state.push_stage(
             "aot",
             ComponentStageKind::Aot,
             ComponentStageStatus::Failed,
-            None,
-            Some(prepared.toolchain.tool_digest("wasmtime")?),
-            prepared.aot_configuration_blake3.clone(),
-            Vec::new(),
+            StageEvidence::new(
+                None,
+                Some(prepared.toolchain.tool_digest("wasmtime")?),
+                prepared.aot_configuration_blake3.clone(),
+                Vec::new(),
+            ),
         )?;
         state.block(
             "wasmtime-precompile-failed",
@@ -113,10 +119,12 @@ fn admit_completed_aot(
             "aot",
             ComponentStageKind::Aot,
             ComponentStageStatus::Denied,
-            Some(output_object),
-            Some(prepared.toolchain.tool_digest("wasmtime")?),
-            Some(configuration),
-            Vec::new(),
+            StageEvidence::new(
+                Some(output_object),
+                Some(prepared.toolchain.tool_digest("wasmtime")?),
+                Some(configuration),
+                Vec::new(),
+            ),
         )?;
         return Ok(None);
     };
@@ -126,10 +134,12 @@ fn admit_completed_aot(
         "aot",
         ComponentStageKind::Aot,
         ComponentStageStatus::Succeeded,
-        Some(output_object),
-        Some(prepared.toolchain.tool_digest("wasmtime")?),
-        Some(configuration),
-        vec![BoundedComponentClaim::TargetSpecificNativeReceiptBound],
+        StageEvidence::new(
+            Some(output_object),
+            Some(prepared.toolchain.tool_digest("wasmtime")?),
+            Some(configuration),
+            vec![BoundedComponentClaim::TargetSpecificNativeReceiptBound],
+        ),
     )?;
     debug_assert_eq!(admission.source_component_blake3, portable.artifact.digest_blake3);
     debug_assert_eq!(admission.build_inputs_blake3, prepared.request_blake3);

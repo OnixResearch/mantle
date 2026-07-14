@@ -27,6 +27,7 @@ use crate::materialize_generated_inputs;
 use crate::preflight::PreparedPipeline;
 use crate::preflight::core_blockers;
 use crate::reporting::ExecutionState;
+use crate::reporting::StageEvidence;
 use crate::run_offline_tool;
 use crate::toolchain::hash_file_bounded;
 
@@ -40,6 +41,19 @@ pub(crate) struct StageWorkspace {
     pub source: PathBuf,
     pub publication_root: PathBuf,
     pub final_output: PathBuf,
+}
+
+pub(crate) struct ValidationStage<'a> {
+    pub stage_key: &'a str,
+    pub artifact_path: &'a Path,
+    pub artifact: &'a StoreObject,
+}
+
+pub(crate) struct StageInvocation<'a> {
+    pub stage_key: &'a str,
+    pub tool_name: &'a str,
+    pub args: Vec<String>,
+    pub output_path: Option<PathBuf>,
 }
 
 pub(crate) fn create_workspace(
@@ -86,10 +100,9 @@ pub(crate) fn stage_source_and_inputs(
         "checked-lock",
         ComponentStageKind::Lock,
         ComponentStageStatus::Succeeded,
-        Some(lock_object),
-        None,
-        Some(prepared.source_plan.plan_identity_blake3.clone()),
-        vec![BoundedComponentClaim::ExactInputIdentities],
+        StageEvidence::new(Some(lock_object), None, Some(prepared.source_plan.plan_identity_blake3.clone()), vec![
+            BoundedComponentClaim::ExactInputIdentities,
+        ]),
     )?;
     debug_assert!(workspace.source.is_dir());
     debug_assert!(staged_lock.is_file());
@@ -101,6 +114,8 @@ pub(crate) fn run_wkg_stage(
     workspace: &StageWorkspace,
     state: &mut ExecutionState,
 ) -> Result<bool, Error> {
+    debug_assert!(workspace.root.is_absolute());
+    debug_assert!(!prepared.request.wit_relative_path.is_empty());
     let cache = workspace.root.join("wkg-cache");
     fs::create_dir(&cache).map_err(|error| Error::io("creating wkg cache", &cache, error))?;
     let args = vec![
@@ -115,17 +130,24 @@ pub(crate) fn run_wkg_stage(
         "--type".to_string(),
         "wasm".to_string(),
     ];
-    let run = invoke(prepared, workspace, "package-resolution", "wkg", args, None)?;
+    let run = invoke(prepared, workspace, StageInvocation {
+        stage_key: "package-resolution",
+        tool_name: "wkg",
+        args,
+        output_path: None,
+    })?;
     state.add_receipt(run.receipt.clone())?;
     let status = stage_status(run.success);
     state.push_stage(
         "package-resolution",
         ComponentStageKind::PackageResolution,
         status,
-        prepared.request.package_materializations.first().map(|item| item.object.clone()),
-        Some(prepared.toolchain.tool_digest("wkg")?),
-        Some(prepared.source_plan.plan_identity_blake3.clone()),
-        vec![BoundedComponentClaim::ExactInputIdentities],
+        StageEvidence::new(
+            prepared.request.package_materializations.first().map(|item| item.object.clone()),
+            Some(prepared.toolchain.tool_digest("wkg")?),
+            Some(prepared.source_plan.plan_identity_blake3.clone()),
+            vec![BoundedComponentClaim::ExactInputIdentities],
+        ),
     )?;
     if !run.success {
         state.block("wkg-execution-failed", "package-resolution", stderr_summary(&run.stderr));
@@ -156,16 +178,20 @@ pub(crate) fn run_binding_stage(
         output.display().to_string(),
         workspace.source.join(&prepared.request.wit_relative_path).display().to_string(),
     ];
-    let run = invoke(prepared, workspace, "binding-generation", "wit-bindgen", args, None)?;
+    let run = invoke(prepared, workspace, StageInvocation {
+        stage_key: "binding-generation",
+        tool_name: "wit-bindgen",
+        args,
+        output_path: None,
+    })?;
     state.add_receipt(run.receipt.clone())?;
     state.push_stage(
         "binding-generation",
         ComponentStageKind::BindingGeneration,
         stage_status(run.success),
-        None,
-        Some(prepared.toolchain.tool_digest("wit-bindgen")?),
-        None,
-        vec![BoundedComponentClaim::ExactInputIdentities],
+        StageEvidence::new(None, Some(prepared.toolchain.tool_digest("wit-bindgen")?), None, vec![
+            BoundedComponentClaim::ExactInputIdentities,
+        ]),
     )?;
     if !run.success {
         state.block("wit-bindgen-failed", "binding-generation", stderr_summary(&run.stderr));
@@ -180,6 +206,8 @@ pub(crate) fn run_compilation_stage(
     workspace: &StageWorkspace,
     state: &mut ExecutionState,
 ) -> Result<Option<(PathBuf, StoreObject)>, Error> {
+    debug_assert!(workspace.root.is_absolute());
+    debug_assert!(!prepared.request.manifest.implementation.package.is_empty());
     let mut args = vec!["build".to_string(), "--locked".to_string(), "--offline".to_string()];
     if prepared.request.manifest.implementation.profile == crunch_wasm_component_core::RustProfile::Release {
         args.push("--release".to_string());
@@ -202,17 +230,21 @@ pub(crate) fn run_compilation_stage(
         .ok_or_else(|| Error::Invalid("compiled component output has no parent directory".to_string()))?;
     fs::create_dir_all(component_parent)
         .map_err(|error| Error::io("creating compiled component output parent", component_parent, error))?;
-    let run = invoke(prepared, workspace, "compilation", "cargo", args, Some(component.clone()))?;
+    let run = invoke(prepared, workspace, StageInvocation {
+        stage_key: "compilation",
+        tool_name: "cargo",
+        args,
+        output_path: Some(component.clone()),
+    })?;
     state.add_receipt(run.receipt.clone())?;
     if !run.success {
         state.push_stage(
             "compilation",
             ComponentStageKind::Compilation,
             ComponentStageStatus::Failed,
-            None,
-            Some(prepared.toolchain.tool_digest("rustc")?),
-            None,
-            vec![BoundedComponentClaim::ExactInputIdentities],
+            StageEvidence::new(None, Some(prepared.toolchain.tool_digest("rustc")?), None, vec![
+                BoundedComponentClaim::ExactInputIdentities,
+            ]),
         )?;
         state.block("component-compilation-failed", "compilation", stderr_summary(&run.stderr));
         return Ok(None);
@@ -222,10 +254,9 @@ pub(crate) fn run_compilation_stage(
         "compilation",
         ComponentStageKind::Compilation,
         ComponentStageStatus::Succeeded,
-        Some(object.clone()),
-        Some(prepared.toolchain.tool_digest("rustc")?),
-        None,
-        vec![BoundedComponentClaim::ExactInputIdentities],
+        StageEvidence::new(Some(object.clone()), Some(prepared.toolchain.tool_digest("rustc")?), None, vec![
+            BoundedComponentClaim::ExactInputIdentities,
+        ]),
     )?;
     Ok(Some((component, object)))
 }
@@ -236,6 +267,8 @@ pub(crate) fn run_composition_stage(
     state: &mut ExecutionState,
     compiled_path: &Path,
 ) -> Result<Option<(PathBuf, StoreObject)>, Error> {
+    debug_assert!(compiled_path.is_absolute());
+    debug_assert!(!prepared.request.composition_dependencies.is_empty());
     let dependencies = composition_dependencies(prepared, compiled_path)?;
     let output = workspace.root.join("composed.wasm");
     let mut args = vec![
@@ -246,17 +279,21 @@ pub(crate) fn run_composition_stage(
         args.extend(["--dep".to_string(), format!("{package}={}", path.display())]);
     }
     args.extend(["--output".to_string(), output.display().to_string()]);
-    let run = invoke(prepared, workspace, "composition", "wac", args, Some(output.clone()))?;
+    let run = invoke(prepared, workspace, StageInvocation {
+        stage_key: "composition",
+        tool_name: "wac",
+        args,
+        output_path: Some(output.clone()),
+    })?;
     state.add_receipt(run.receipt.clone())?;
     if !run.success {
         state.push_stage(
             "composition",
             ComponentStageKind::Composition,
             ComponentStageStatus::Failed,
-            None,
-            Some(prepared.toolchain.tool_digest("wac")?),
-            None,
-            vec![BoundedComponentClaim::ExactInputIdentities],
+            StageEvidence::new(None, Some(prepared.toolchain.tool_digest("wac")?), None, vec![
+                BoundedComponentClaim::ExactInputIdentities,
+            ]),
         )?;
         state.block("wac-composition-failed", "composition", stderr_summary(&run.stderr));
         return Ok(None);
@@ -266,10 +303,9 @@ pub(crate) fn run_composition_stage(
         "composition",
         ComponentStageKind::Composition,
         ComponentStageStatus::Succeeded,
-        Some(object.clone()),
-        Some(prepared.toolchain.tool_digest("wac")?),
-        None,
-        vec![BoundedComponentClaim::ExactInputIdentities],
+        StageEvidence::new(Some(object.clone()), Some(prepared.toolchain.tool_digest("wac")?), None, vec![
+            BoundedComponentClaim::ExactInputIdentities,
+        ]),
     )?;
     Ok(Some((output, object)))
 }
@@ -278,38 +314,43 @@ pub(crate) fn run_validation_stage(
     prepared: &PreparedPipeline,
     workspace: &StageWorkspace,
     state: &mut ExecutionState,
-    stage_key: &str,
-    artifact_path: &Path,
-    artifact: &StoreObject,
+    validation: ValidationStage<'_>,
 ) -> Result<Option<BuildValidationBinding>, Error> {
-    let args = vec!["validate".to_string(), artifact_path.display().to_string()];
-    let run = invoke(prepared, workspace, stage_key, "wasm-tools", args, None)?;
-    let report_blake3 = run.receipt.receipt_blake3.clone();
+    let args = vec!["validate".to_string(), validation.artifact_path.display().to_string()];
+    let run = invoke(prepared, workspace, StageInvocation {
+        stage_key: validation.stage_key,
+        tool_name: "wasm-tools",
+        args,
+        output_path: None,
+    })?;
+    let validation_receipt_identity = run.receipt.receipt_blake3.clone();
     state.add_receipt(run.receipt.clone())?;
     state.push_stage(
-        stage_key,
+        validation.stage_key,
         ComponentStageKind::BuildValidation,
         stage_status(run.success),
-        Some(artifact.clone()),
-        Some(prepared.toolchain.tool_digest("wasm-tools")?),
-        None,
-        if run.success {
-            vec![BoundedComponentClaim::PortableBytesValidated]
-        } else {
-            Vec::new()
-        },
+        StageEvidence::new(
+            Some(validation.artifact.clone()),
+            Some(prepared.toolchain.tool_digest("wasm-tools")?),
+            None,
+            if run.success {
+                vec![BoundedComponentClaim::PortableBytesValidated]
+            } else {
+                Vec::new()
+            },
+        ),
     )?;
     if !run.success {
-        state.block("wasm-tools-validation-failed", stage_key, stderr_summary(&run.stderr));
+        state.block("wasm-tools-validation-failed", validation.stage_key, stderr_summary(&run.stderr));
         return Ok(None);
     }
     let binding = BuildValidationBinding {
-        artifact_blake3: artifact.digest_blake3.clone(),
+        artifact_blake3: validation.artifact.digest_blake3.clone(),
         cohort_blake3: prepared.toolchain.manifest.cohort_identity_blake3.clone(),
-        report_blake3,
+        report_blake3: validation_receipt_identity,
         decision: ValidationDecision::Pass,
     };
-    debug_assert_eq!(binding.artifact_blake3, artifact.digest_blake3);
+    debug_assert_eq!(binding.artifact_blake3, validation.artifact.digest_blake3);
     debug_assert_eq!(binding.decision, ValidationDecision::Pass);
     Ok(Some(binding))
 }
@@ -320,10 +361,7 @@ pub(crate) fn run_virtualization_stage(
     state: &mut ExecutionState,
     composed_path: &Path,
 ) -> Result<Option<(PathBuf, StoreObject)>, Error> {
-    let plan_result = plan_virtualization(prepared.request.manifest.virtualization.clone());
-    let Some(plan) = plan_result.plan else {
-        return Err(core_blockers("virtualization", &plan_result.blockers));
-    };
+    let plan = validated_virtualization_plan(prepared)?;
     let output = workspace.root.join("virtualized.wasm");
     let Some(input_imports) =
         read_component_imports(prepared, workspace, state, "virtualization-input-inspection", composed_path)?
@@ -344,27 +382,33 @@ pub(crate) fn run_virtualization_stage(
             "virtualization",
             ComponentStageKind::Virtualization,
             ComponentStageStatus::Succeeded,
-            Some(object.clone()),
-            None,
-            Some(plan.identity_blake3),
-            vec![BoundedComponentClaim::DenyAllVirtualizationPlanned],
+            StageEvidence::new(Some(object.clone()), None, Some(plan.identity_blake3), vec![
+                BoundedComponentClaim::DenyAllVirtualizationPlanned,
+            ]),
         )?;
         debug_assert!(output.is_file());
         debug_assert_eq!(object.digest_blake3, hash_file_bounded(composed_path)?);
         return Ok(Some((output, object)));
     }
     let args = virtualization_args(&plan, composed_path, &output)?;
-    let run = invoke(prepared, workspace, "virtualization", "wasi-virt", args, Some(output.clone()))?;
+    let run = invoke(prepared, workspace, StageInvocation {
+        stage_key: "virtualization",
+        tool_name: "wasi-virt",
+        args,
+        output_path: Some(output.clone()),
+    })?;
     state.add_receipt(run.receipt.clone())?;
     if !run.success {
         state.push_stage(
             "virtualization",
             ComponentStageKind::Virtualization,
             ComponentStageStatus::Failed,
-            None,
-            Some(prepared.toolchain.tool_digest("wasi-virt")?),
-            Some(plan.identity_blake3),
-            vec![BoundedComponentClaim::DenyAllVirtualizationPlanned],
+            StageEvidence::new(
+                None,
+                Some(prepared.toolchain.tool_digest("wasi-virt")?),
+                Some(plan.identity_blake3),
+                vec![BoundedComponentClaim::DenyAllVirtualizationPlanned],
+            ),
         )?;
         state.block("wasi-virt-failed", "virtualization", stderr_summary(&run.stderr));
         return Ok(None);
@@ -377,10 +421,12 @@ pub(crate) fn run_virtualization_stage(
         "virtualization",
         ComponentStageKind::Virtualization,
         ComponentStageStatus::Succeeded,
-        Some(object.clone()),
-        Some(prepared.toolchain.tool_digest("wasi-virt")?),
-        Some(plan.identity_blake3),
-        vec![BoundedComponentClaim::DenyAllVirtualizationPlanned],
+        StageEvidence::new(
+            Some(object.clone()),
+            Some(prepared.toolchain.tool_digest("wasi-virt")?),
+            Some(plan.identity_blake3),
+            vec![BoundedComponentClaim::DenyAllVirtualizationPlanned],
+        ),
     )?;
     Ok(Some((output, object)))
 }
@@ -398,17 +444,19 @@ pub(crate) fn run_metadata_normalization_stage(
         "-o".to_string(),
         output.display().to_string(),
     ];
-    let run = invoke(prepared, workspace, "metadata-normalization", "wasm-tools", args, Some(output.clone()))?;
+    let run = invoke(prepared, workspace, StageInvocation {
+        stage_key: "metadata-normalization",
+        tool_name: "wasm-tools",
+        args,
+        output_path: Some(output.clone()),
+    })?;
     state.add_receipt(run.receipt)?;
     if !run.success {
         state.push_stage(
             "metadata-normalization",
             ComponentStageKind::MetadataNormalization,
             ComponentStageStatus::Failed,
-            None,
-            Some(prepared.toolchain.tool_digest("wasm-tools")?),
-            None,
-            Vec::new(),
+            StageEvidence::new(None, Some(prepared.toolchain.tool_digest("wasm-tools")?), None, Vec::new()),
         )?;
         state.block(
             "wasm-metadata-normalization-failed",
@@ -422,10 +470,9 @@ pub(crate) fn run_metadata_normalization_stage(
         "metadata-normalization",
         ComponentStageKind::MetadataNormalization,
         ComponentStageStatus::Succeeded,
-        Some(object.clone()),
-        Some(prepared.toolchain.tool_digest("wasm-tools")?),
-        None,
-        vec![BoundedComponentClaim::ExactInputIdentities],
+        StageEvidence::new(Some(object.clone()), Some(prepared.toolchain.tool_digest("wasm-tools")?), None, vec![
+            BoundedComponentClaim::ExactInputIdentities,
+        ]),
     )?;
     debug_assert!(output.is_file());
     debug_assert!(object.size_bytes > 0);
@@ -444,22 +491,29 @@ pub(crate) fn run_runtime_smoke(
         args.extend(["--invoke".to_string(), runtime_invoke.clone()]);
     }
     args.push(artifact_path.display().to_string());
-    let run = invoke(prepared, workspace, "runtime-smoke", "wasmtime", args, None)?;
+    let run = invoke(prepared, workspace, StageInvocation {
+        stage_key: "runtime-smoke",
+        tool_name: "wasmtime",
+        args,
+        output_path: None,
+    })?;
     state.add_receipt(run.receipt.clone())?;
     let expected = prepared.request.expected_runtime_stdout.as_bytes();
-    let matches = run.success && run.stdout == expected;
+    let is_match = run.success && run.stdout == expected;
     state.push_stage(
         "runtime-smoke",
         ComponentStageKind::BuildValidation,
-        if matches {
+        if is_match {
             ComponentStageStatus::Succeeded
         } else {
             ComponentStageStatus::Failed
         },
-        Some(artifact.clone()),
-        Some(prepared.toolchain.tool_digest("wasmtime")?),
-        Some(prepared.request.manifest.validation_profiles.expected_runtime_profile_identity_blake3.clone()),
-        vec![BoundedComponentClaim::ExactInputIdentities],
+        StageEvidence::new(
+            Some(artifact.clone()),
+            Some(prepared.toolchain.tool_digest("wasmtime")?),
+            Some(prepared.request.manifest.validation_profiles.expected_runtime_profile_identity_blake3.clone()),
+            vec![BoundedComponentClaim::ExactInputIdentities],
+        ),
     )?;
     if !run.success {
         state.block("wasmtime-smoke-failed", "runtime-smoke", stderr_summary(&run.stderr));
@@ -471,8 +525,13 @@ pub(crate) fn run_runtime_smoke(
         );
     }
     debug_assert!(expected.len() <= MAX_EXPECTED_RUNTIME_STDOUT_BYTES);
-    debug_assert_eq!(matches, run.success && run.stdout == expected);
-    Ok(matches)
+    debug_assert_eq!(is_match, run.success && run.stdout == expected);
+    Ok(is_match)
+}
+
+fn validated_virtualization_plan(prepared: &PreparedPipeline) -> Result<VirtualizationPlan, Error> {
+    let plan_result = plan_virtualization(prepared.request.manifest.virtualization.clone());
+    plan_result.plan.ok_or_else(|| core_blockers("virtualization", &plan_result.blockers))
 }
 
 fn inspect_remaining_imports(
@@ -508,7 +567,12 @@ fn read_component_imports(
         "wit".to_string(),
         component.display().to_string(),
     ];
-    let run = invoke(prepared, workspace, stage_key, "wasm-tools", args, None)?;
+    let run = invoke(prepared, workspace, StageInvocation {
+        stage_key,
+        tool_name: "wasm-tools",
+        args,
+        output_path: None,
+    })?;
     state.add_receipt(run.receipt.clone())?;
     if !run.success {
         state.block("virtualization-inspection-failed", "virtualization", stderr_summary(&run.stderr));
@@ -516,10 +580,10 @@ fn read_component_imports(
     }
     let wit = String::from_utf8(run.stdout)
         .map_err(|error| Error::Tool(format!("wasm-tools WIT inspection was not UTF-8: {error}")))?;
-    let imports = wit.lines().filter_map(parse_import_line).collect();
+    let observed_interfaces = wit.lines().filter_map(parse_import_line).collect();
     debug_assert!(stage_key.starts_with("virtualization-"));
     debug_assert!(component.is_absolute());
-    Ok(Some(imports))
+    Ok(Some(observed_interfaces))
 }
 
 fn parse_import_line(line: &str) -> Option<String> {
@@ -593,6 +657,8 @@ fn allow_flag(subsystem: WasiSubsystem) -> Result<&'static str, Error> {
 }
 
 fn composition_dependencies(prepared: &PreparedPipeline, compiled: &Path) -> Result<BTreeMap<String, PathBuf>, Error> {
+    debug_assert!(compiled.is_absolute());
+    debug_assert!(!prepared.request.composition_dependencies.is_empty());
     let mut dependencies = BTreeMap::new();
     for dependency in &prepared.request.composition_dependencies {
         let path = match &dependency.source {
@@ -649,20 +715,17 @@ fn verify_wkg_outputs(
 pub(crate) fn invoke(
     prepared: &PreparedPipeline,
     workspace: &StageWorkspace,
-    stage_key: &str,
-    tool_name: &str,
-    args: Vec<String>,
-    output_path: Option<PathBuf>,
+    invocation: StageInvocation<'_>,
 ) -> Result<crate::ToolRun, Error> {
     run_offline_tool(&prepared.toolchain, ToolInvocation {
-        stage_key: stage_key.to_string(),
-        tool_name: tool_name.to_string(),
-        args,
+        stage_key: invocation.stage_key.to_string(),
+        tool_name: invocation.tool_name.to_string(),
+        args: invocation.args,
         cwd: workspace.source.clone(),
         work_root: workspace.root.clone(),
         env: tool_environment(&prepared.toolchain, workspace)?,
         read_only_inputs: read_only_inputs(prepared),
-        output_path,
+        output_path: invocation.output_path,
         limits: crate::ToolLimits::default(),
     })
 }
@@ -685,11 +748,14 @@ fn read_only_inputs(prepared: &PreparedPipeline) -> Vec<PathBuf> {
         }
     }
     let paths: Vec<PathBuf> = paths.into_iter().collect();
-    paths
+    let confined_paths: Vec<PathBuf> = paths
         .iter()
         .filter(|candidate| !paths.iter().any(|parent| *candidate != parent && candidate.starts_with(parent)))
         .cloned()
-        .collect()
+        .collect();
+    debug_assert!(confined_paths.len() <= paths.len());
+    debug_assert!(confined_paths.iter().all(|path| path.is_absolute()));
+    confined_paths
 }
 
 fn tool_environment(
