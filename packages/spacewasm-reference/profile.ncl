@@ -149,7 +149,7 @@ let profile_text_bytes_limit = 262144 in
 let collection_items_limit = 128 in
 let bundle_members_limit = 512 in
 let parent_edges_limit = 2048 in
-let bundle_member_bytes_limit = 536870912 in
+let bundle_member_bytes_limit = 805306368 in
 let bundle_total_bytes_limit = 2147483648 in
 let runner_input_bytes_limit = 1048576 in
 let stream_chunks_limit = 4096 in
@@ -236,14 +236,14 @@ let check = fun input_id input_status => { check_id = input_id, expected_status 
     max_stack_words = stack_words_limit,
   },
   fixtures = [
-    fixture "mvp-positive" "mvp-positive" "fixtures/wasm/mvp-positive.wasm" "fixtures/descriptors/mvp-positive.json" "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde" "6e2008fc3abaf41ec2af9c2d9e824829aa11d2d8b1b394cb9b40a8edb5b67af8" "95a86baa63e72211ccbe0d812937694e78a4b4d5e1fa616567d5c31335d80177" "finished",
-    fixture "mvp-negative" "mvp-negative" "fixtures/wasm/mvp-negative.wasm" "fixtures/descriptors/mvp-negative.json" "a65dcf6433860fed3ae87310f5f01cf5d3abb75f5275112b7131f44e165ba6df" "bd8294c8c3bfbe78c0957d50c326ad25283729493234c7f3d3588e36efbb4485" "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde" "malformed-magic",
-    fixture "streaming-positive" "streaming-positive" "fixtures/wasm/streaming-positive.wasm" "fixtures/descriptors/streaming-positive.json" "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde" "a1756e64451488a3b58c1055e3ac28e4154c5f60ef921966d3f88bef82f588ed" "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde" "stream-finished",
-    fixture "streaming-negative" "streaming-negative" "fixtures/wasm/streaming-negative.wasm" "fixtures/descriptors/streaming-negative.json" "94a979b596cf073331cf2954de8c15fb504749758c464d0201ae799a451e02dc" "fd9809a13bb0cdc2c61c45ab84bdcb65f3b0af9bf0a802a35bf37bfda2ecf966" "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde" "stream-unexpected-eof",
-    fixture "allocation-failure" "allocation-failure" "fixtures/wasm/allocation-failure.wasm" "fixtures/descriptors/allocation-failure.json" "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde" "8af948702be742eafcac1e6ca8a4a234e6a80ad27e3918c1f6fa97221854eaa1" "95a86baa63e72211ccbe0d812937694e78a4b4d5e1fa616567d5c31335d80177" "allocation-failed-without-panic",
-    fixture "unsupported-feature" "unsupported-feature" "fixtures/wasm/unsupported-bulk-memory.wasm" "fixtures/descriptors/unsupported-feature.json" "57a9e00325ec098e2ca8f7b7deb5b9659ccdcbce84d862ef60ea5f16e05e1624" "a350734b0166cce06244c1eaf9f3f4713ad02edbda2f7a63517e38f1d8f3283e" "be296033d6d2328e2ead458a66e2aefe76fee7c3a8b8dbca3315bcc0522fa91c" "unsupported-bulk-memory",
-    fixture "trap" "trap" "fixtures/wasm/trap-unreachable.wasm" "fixtures/descriptors/trap.json" "8dadfe79ddcae5a3c738f1ad24e812a2beb9a95c88702b4bad896fa1c8332c0a" "30ca5786c9b5654017d979efc50100435ebaeaf2bfb588f06b838fe5d49836fd" "b28ed13daf132eaf5259e1499276bd46c3cf85add27402d89bff854701caf71d" "trap-unreachable",
-    fixture "out-of-fuel" "out-of-fuel" "fixtures/wasm/out-of-fuel.wasm" "fixtures/descriptors/out-of-fuel.json" "3abd1aeeb22b89a284cc1a510d6f872a2a60f0bd61d43b640e1d0260d315eecb" "a3a1cfbcaf18ffab731bd2f6711982144ff4df03a70e331c7ea184788592310d" "129fa3bd5c3590311cffe329576b37344c0168c2943170c41e000a921d80a083" "out-of-fuel",
+    fixture "mvp-positive" "mvp-positive" "fixtures/wasm/mvp-positive.wasm" "fixtures/descriptors/mvp-positive.json" "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde" "7fb30c8d45d52b11be96d1a7865a07664d9c61ccb9bc448d1fb7cb771eb9b24c" "95a86baa63e72211ccbe0d812937694e78a4b4d5e1fa616567d5c31335d80177" "finished",
+    fixture "mvp-negative" "mvp-negative" "fixtures/wasm/mvp-negative.wasm" "fixtures/descriptors/mvp-negative.json" "a65dcf6433860fed3ae87310f5f01cf5d3abb75f5275112b7131f44e165ba6df" "a43ae7fe69be33034e8ad57abd74b531f829677978a430818a696df5a49de88c" "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde" "malformed-magic",
+    fixture "streaming-positive" "streaming-positive" "fixtures/wasm/streaming-positive.wasm" "fixtures/descriptors/streaming-positive.json" "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde" "5c33444b87896954490360e5f82db430e1eb07949ff09c6e453e030d527fd6d7" "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde" "stream-finished",
+    fixture "streaming-negative" "streaming-negative" "fixtures/wasm/streaming-negative.wasm" "fixtures/descriptors/streaming-negative.json" "94a979b596cf073331cf2954de8c15fb504749758c464d0201ae799a451e02dc" "b63ec68ad04c6bd30e4c00b36a5f4e43969471e861a24149c3850db62209af52" "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde" "stream-unexpected-eof",
+    fixture "allocation-failure" "allocation-failure" "fixtures/wasm/allocation-failure.wasm" "fixtures/descriptors/allocation-failure.json" "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde" "6965f6fd46e02652797fb308513cb144b4ef86167b5d0bb055b57a98bdcc311f" "95a86baa63e72211ccbe0d812937694e78a4b4d5e1fa616567d5c31335d80177" "allocation-failed-without-panic",
+    fixture "unsupported-feature" "unsupported-feature" "fixtures/wasm/unsupported-bulk-memory.wasm" "fixtures/descriptors/unsupported-feature.json" "57a9e00325ec098e2ca8f7b7deb5b9659ccdcbce84d862ef60ea5f16e05e1624" "fc0935f63f1fa062bb11a128f6595cb021cdc7c579c7b6aab65397b2ab351b79" "be296033d6d2328e2ead458a66e2aefe76fee7c3a8b8dbca3315bcc0522fa91c" "unsupported-bulk-memory",
+    fixture "trap" "trap" "fixtures/wasm/trap-unreachable.wasm" "fixtures/descriptors/trap.json" "8dadfe79ddcae5a3c738f1ad24e812a2beb9a95c88702b4bad896fa1c8332c0a" "70d983f4f47b9f6f79c0a90f9292cf686bc3d5dee0f7453e8c08ecdd2760fecc" "b28ed13daf132eaf5259e1499276bd46c3cf85add27402d89bff854701caf71d" "trap-unreachable",
+    fixture "out-of-fuel" "out-of-fuel" "fixtures/wasm/out-of-fuel.wasm" "fixtures/descriptors/out-of-fuel.json" "3abd1aeeb22b89a284cc1a510d6f872a2a60f0bd61d43b640e1d0260d315eecb" "02941213ebf026d1c30fb746a75c8e57b9a1eba0d4f588341cc6b123fb18e6d7" "129fa3bd5c3590311cffe329576b37344c0168c2943170c41e000a921d80a083" "out-of-fuel",
   ],
   corpora = [
     {
@@ -253,7 +253,7 @@ let check = fun input_id input_status => { check_id = input_id, expected_status 
       source_path = "tests/core",
       provenance = "SpaceWasm source archive at the selected revision, curated from WasmEdge/wasmedge-spectest",
       license_path = "licenses/wasmedge-spectest-MIT.txt",
-      descriptor_blake3 = "5138df4c6702c8bbccedffdf17a83e092658625ed8a9a5364d5422e454aa6ffc",
+      descriptor_blake3 = "655bfc040ff9ecc532f06357d3ab46c4f47085d491232d2e78864f290a8d4921",
       expected_status = "passed",
     },
     {
@@ -263,7 +263,7 @@ let check = fun input_id input_status => { check_id = input_id, expected_status 
       source_path = "fuzz/fuzz_targets",
       provenance = "NASA SpaceWasm source archive at the selected revision",
       license_path = "LICENSE",
-      descriptor_blake3 = "3fa7449e505a2fd685337a31a7b8be6b0c9afa89508ee4b31842c82a533644d8",
+      descriptor_blake3 = "3ce878f928a010430519836a67b5552af9836503c8be76aa89e695f087cdba16",
       expected_status = "skipped",
     },
   ],

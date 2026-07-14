@@ -64,33 +64,53 @@ pub fn admit_source(profile: ReferenceProfile, facts: SourceFacts) -> SourceAdmi
 
 fn compare_source_identity(profile: &ReferenceProfile, facts: &SourceFacts, diagnostics: &mut Vec<Diagnostic>) {
     if facts.reference_kind != ReferenceKind::ExactCommit {
-        diagnostics.push(error("floating-source-ref", "source.reference", "source admission requires an exact commit reference"));
+        diagnostics.push(error(
+            "floating-source-ref",
+            "source.reference",
+            "source admission requires an exact commit reference",
+        ));
     }
     if facts.revision != profile.source.revision || facts.archive_blake3 != profile.source.archive_blake3 {
-        diagnostics.push(error("source-identity-mismatch", "source.archive", "source revision or archive BLAKE3 differs from the profile"));
+        diagnostics.push(error(
+            "source-identity-mismatch",
+            "source.archive",
+            "source revision or archive BLAKE3 differs from the profile",
+        ));
     }
     if facts.cargo_lock_blake3 != profile.source.cargo_lock_blake3 {
-        diagnostics.push(error("stale-cargo-lock", "source.Cargo.lock", "Cargo.lock BLAKE3 differs from the reviewed profile"));
+        diagnostics.push(error(
+            "stale-cargo-lock",
+            "source.Cargo.lock",
+            "Cargo.lock BLAKE3 differs from the reviewed profile",
+        ));
     }
     if facts.dependency_manifest_blake3 != profile.source.dependency_manifest_blake3
         || facts.dependency_package_count != profile.source.dependency_package_count
     {
-        diagnostics.push(error("dependency-closure-mismatch", "source.dependencies", "dependency manifest identity or package count differs from the reviewed closure"));
+        diagnostics.push(error(
+            "dependency-closure-mismatch",
+            "source.dependencies",
+            "dependency manifest identity or package count differs from the reviewed closure",
+        ));
     }
     if facts.octet_support_projection_blake3 != profile.source.octet_support_projection_blake3 {
-        diagnostics.push(error("support-projection-drift", "source.octet-support-projection", "Octet support projection bytes differ from the selected cohort"));
+        diagnostics.push(error(
+            "support-projection-drift",
+            "source.octet-support-projection",
+            "Octet support projection bytes differ from the selected cohort",
+        ));
     }
     debug_assert!(!facts.revision.is_empty());
     debug_assert!(facts.dependency_package_count > 0 || !diagnostics.is_empty());
 }
 
-fn compare_toolchain_and_targets(
-    profile: &ReferenceProfile,
-    facts: &SourceFacts,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn compare_toolchain_and_targets(profile: &ReferenceProfile, facts: &SourceFacts, diagnostics: &mut Vec<Diagnostic>) {
     if facts.rust_version != profile.toolchain.rust_version {
-        diagnostics.push(error("wrong-rust-toolchain", "toolchain.rust-version", "observed Rust version differs from the exact profile"));
+        diagnostics.push(error(
+            "wrong-rust-toolchain",
+            "toolchain.rust-version",
+            "observed Rust version differs from the exact profile",
+        ));
     }
     let expected: BTreeMap<_, _> = profile.targets.iter().map(|target| (target.role, target)).collect();
     let observed: BTreeMap<_, _> = facts.targets.iter().map(|target| (target.role, target)).collect();
@@ -99,14 +119,22 @@ fn compare_toolchain_and_targets(
     }
     for (role, expected_target) in expected {
         let Some(observed_target) = observed.get(&role) else {
-            diagnostics.push(error("missing-target-fact", "toolchain.targets", "observed build facts omit a declared target"));
+            diagnostics.push(error(
+                "missing-target-fact",
+                "toolchain.targets",
+                "observed build facts omit a declared target",
+            ));
             continue;
         };
         if observed_target.triple != expected_target.triple
             || observed_target.pointer_width_bits != expected_target.pointer_width_bits
             || normalized_features(&observed_target.features) != normalized_features(&expected_target.features)
         {
-            diagnostics.push(error("target-identity-mismatch", &expected_target.triple, "target triple, pointer width, or feature identity differs from the profile"));
+            diagnostics.push(error(
+                "target-identity-mismatch",
+                &expected_target.triple,
+                "target triple, pointer width, or feature identity differs from the profile",
+            ));
         }
     }
     debug_assert!(expected_target_count(profile) > 0);
@@ -142,8 +170,14 @@ fn compare_corpora(profile: &ReferenceProfile, facts: &SourceFacts, diagnostics:
     for expected in &profile.corpora {
         match observed.get(&expected.corpus_id) {
             Some(digest) if digest == &expected.descriptor_blake3 => {}
-            Some(_) => diagnostics.push(error("corpus-drift", &expected.corpus_id, "corpus descriptor BLAKE3 differs from the profile")),
-            None => diagnostics.push(error("missing-corpus", &expected.corpus_id, "required corpus descriptor is absent")),
+            Some(_) => diagnostics.push(error(
+                "corpus-drift",
+                &expected.corpus_id,
+                "corpus descriptor BLAKE3 differs from the profile",
+            )),
+            None => {
+                diagnostics.push(error("missing-corpus", &expected.corpus_id, "required corpus descriptor is absent"))
+            }
         }
     }
     debug_assert!(observed.len() <= facts.corpora.len());

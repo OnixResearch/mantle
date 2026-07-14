@@ -21,7 +21,8 @@ fn run(arguments: Vec<String>) -> Result<String, crunch_spacewasm::ShellError> {
         "materialize" if arguments.len() == 4 => {
             let request = crunch_spacewasm::read_materialization_request(Path::new(&arguments[2]))?;
             let summary = crunch_spacewasm::materialize(request, Path::new(&arguments[3]))?;
-            serde_json::to_string_pretty(&summary).map_err(|error| crunch_spacewasm::ShellError::Json(error.to_string()))
+            serde_json::to_string_pretty(&summary)
+                .map_err(|error| crunch_spacewasm::ShellError::Json(error.to_string()))
         }
         "verify" if arguments.len() == 3 => {
             let summary = crunch_spacewasm::verify_bundle(Path::new(&arguments[2]))?;

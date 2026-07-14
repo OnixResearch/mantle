@@ -22,7 +22,7 @@ use crate::profile::REQUIRED_NON_CLAIMS;
 
 pub const BUNDLE_MANIFEST_SCHEMA: &str = "mantle-spacewasm-reference-bundle-v1";
 
-const REQUIRED_SINGLETON_ROLES: [BundleRole; 17] = [
+const REQUIRED_SINGLETON_ROLES: [BundleRole; 18] = [
     BundleRole::SourceArchive,
     BundleRole::CargoLock,
     BundleRole::DependencyManifest,
@@ -30,6 +30,7 @@ const REQUIRED_SINGLETON_ROLES: [BundleRole; 17] = [
     BundleRole::RustcBinary,
     BundleRole::CargoBinary,
     BundleRole::ToolchainArchive,
+    BundleRole::FixtureGenerator,
     BundleRole::HostLibrary,
     BundleRole::WasmLibrary,
     BundleRole::HostRunner,
@@ -147,7 +148,11 @@ pub fn verify_bundle_manifest(manifest: BundleManifest, measured: Vec<BundleMemb
     for (path, declared) in &declared_by_path {
         match measured_by_path.get(path) {
             Some(actual) if actual == declared => {}
-            Some(_) => diagnostics.push(error("bundle-member-tamper", path, "measured member role, size, or BLAKE3 differs from the manifest")),
+            Some(_) => diagnostics.push(error(
+                "bundle-member-tamper",
+                path,
+                "measured member role, size, or BLAKE3 differs from the manifest",
+            )),
             None => diagnostics.push(error("incomplete-bundle", path, "required bundle member is missing")),
         }
     }
@@ -181,14 +186,22 @@ fn validate_bundle_bounds(input: &BundleManifestInput, diagnostics: &mut Vec<Dia
     if count_exceeds(input.members.len(), input.profile.bounds.max_bundle_members)
         || count_exceeds(input.parent_edges.len(), input.profile.bounds.max_parent_edges)
     {
-        diagnostics.push(error("bundle-limit", "bundle", "bundle member or parent-edge collection exceeds the profile bound"));
+        diagnostics.push(error(
+            "bundle-limit",
+            "bundle",
+            "bundle member or parent-edge collection exceeds the profile bound",
+        ));
     }
     let mut total_bytes = 0_u64;
     for member in &input.members {
         if member.size_bytes == 0 || member.size_bytes > input.profile.bounds.max_bundle_member_bytes {
-            diagnostics.push(error("bundle-member-size", &member.path, "bundle member size is zero or exceeds the profile bound"));
+            diagnostics.push(error(
+                "bundle-member-size",
+                &member.path,
+                "bundle member size is zero or exceeds the profile bound",
+            ));
         }
-        total_bytes = total_bytes.checked_add(member.size_bytes).unwrap_or(u64::MAX);
+        total_bytes = total_bytes.saturating_add(member.size_bytes);
     }
     if total_bytes > input.profile.bounds.max_bundle_total_bytes {
         diagnostics.push(error("bundle-total-size", "bundle", "bundle total byte count exceeds the profile bound"));
@@ -205,7 +218,11 @@ fn validate_required_roles(
     let role_counts = role_counts(members.values());
     for role in REQUIRED_SINGLETON_ROLES {
         if role_counts.get(&role) != Some(&1_u32) {
-            diagnostics.push(error("missing-or-duplicate-bundle-role", &role_label(&role), "bundle requires exactly one member for this role"));
+            diagnostics.push(error(
+                "missing-or-duplicate-bundle-role",
+                &role_label(&role),
+                "bundle requires exactly one member for this role",
+            ));
         }
     }
     for role in [
@@ -213,6 +230,7 @@ fn validate_required_roles(
         BundleRole::FixtureDescriptor,
         BundleRole::CorpusArtifact,
         BundleRole::CorpusDescriptor,
+        BundleRole::CheckReceipt,
     ] {
         if role_counts.get(&role).copied().unwrap_or(0) == 0 {
             diagnostics.push(error("missing-bundle-role", &role_label(&role), "bundle omits a required repeated role"));
@@ -283,16 +301,29 @@ fn validate_fixture_and_corpus_members(
         require_path_role(members, &fixture.artifact_path, BundleRole::FixtureArtifact, diagnostics);
         require_path_role(members, &fixture.descriptor_path, BundleRole::FixtureDescriptor, diagnostics);
         if members.get(&fixture.artifact_path).map(|member| &member.digest_blake3) != Some(&fixture.artifact_blake3) {
-            diagnostics.push(error("fixture-digest-mismatch", &fixture.fixture_id, "fixture bytes differ from the profile"));
+            diagnostics.push(error(
+                "fixture-digest-mismatch",
+                &fixture.fixture_id,
+                "fixture bytes differ from the profile",
+            ));
         }
-        if members.get(&fixture.descriptor_path).map(|member| &member.digest_blake3) != Some(&fixture.descriptor_blake3) {
-            diagnostics.push(error("fixture-descriptor-drift", &fixture.fixture_id, "fixture descriptor bytes differ from the profile"));
+        if members.get(&fixture.descriptor_path).map(|member| &member.digest_blake3) != Some(&fixture.descriptor_blake3)
+        {
+            diagnostics.push(error(
+                "fixture-descriptor-drift",
+                &fixture.fixture_id,
+                "fixture descriptor bytes differ from the profile",
+            ));
         }
     }
     for corpus in &input.profile.corpora {
         require_path_role(members, &corpus.descriptor_path, BundleRole::CorpusDescriptor, diagnostics);
         if members.get(&corpus.descriptor_path).map(|member| &member.digest_blake3) != Some(&corpus.descriptor_blake3) {
-            diagnostics.push(error("corpus-drift", &corpus.corpus_id, "corpus descriptor bytes differ from the profile"));
+            diagnostics.push(error(
+                "corpus-drift",
+                &corpus.corpus_id,
+                "corpus descriptor bytes differ from the profile",
+            ));
         }
     }
     debug_assert!(input.profile.fixtures.is_empty() || !members.is_empty());
@@ -322,8 +353,16 @@ fn validate_parent_edges(
     let mut edges = BTreeSet::new();
     for edge in &input.parent_edges {
         let valid_paths = members.contains_key(&edge.parent_path) && members.contains_key(&edge.child_path);
-        if !valid_paths || edge.parent_path == edge.child_path || edge.relation.is_empty() || !edges.insert(edge.clone()) {
-            diagnostics.push(error("invalid-parent-edge", &edge.child_path, "parent edges must be unique, non-circular, and refer to declared members"));
+        if !valid_paths
+            || edge.parent_path == edge.child_path
+            || edge.relation.is_empty()
+            || !edges.insert(edge.clone())
+        {
+            diagnostics.push(error(
+                "invalid-parent-edge",
+                &edge.child_path,
+                "parent edges must be unique, non-circular, and refer to declared members",
+            ));
         }
     }
     let children: BTreeSet<_> = input.parent_edges.iter().map(|edge| edge.child_path.as_str()).collect();
@@ -340,7 +379,11 @@ fn validate_non_claims(non_claims: &[String], diagnostics: &mut Vec<Diagnostic>)
     let values: BTreeSet<_> = non_claims.iter().map(String::as_str).collect();
     for required in REQUIRED_NON_CLAIMS {
         if !values.contains(required) {
-            diagnostics.push(error("missing-required-non-claim", required, "bundle omits a required SpaceWasm claim boundary"));
+            diagnostics.push(error(
+                "missing-required-non-claim",
+                required,
+                "bundle omits a required SpaceWasm claim boundary",
+            ));
         }
     }
     if values.len() != non_claims.len() {
@@ -362,7 +405,11 @@ fn validate_manifest_identity(manifest: &BundleManifest, diagnostics: &mut Vec<D
         non_claims: manifest.non_claims.clone(),
     };
     if canonical_identity(input).as_ref() != Ok(&expected) {
-        diagnostics.push(error("bundle-manifest-tamper", "bundle.manifest", "bundle manifest identity does not match canonical fields"));
+        diagnostics.push(error(
+            "bundle-manifest-tamper",
+            "bundle.manifest",
+            "bundle manifest identity does not match canonical fields",
+        ));
     }
     debug_assert!(!manifest.schema.is_empty());
     debug_assert!(!manifest.profile_id.is_empty());
@@ -384,7 +431,11 @@ fn member_map(
     let mut map = BTreeMap::new();
     for member in members {
         if !is_safe_relative_path(&member.path) || map.insert(member.path.clone(), member.clone()).is_some() {
-            diagnostics.push(error("invalid-bundle-member-path", subject, "bundle member paths must be unique safe relative paths"));
+            diagnostics.push(error(
+                "invalid-bundle-member-path",
+                subject,
+                "bundle member paths must be unique safe relative paths",
+            ));
         }
     }
     debug_assert!(map.len() <= members.len());

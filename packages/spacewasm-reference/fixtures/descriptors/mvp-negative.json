@@ -6,6 +6,7 @@
   "fixture_class": "mvp-negative",
   "fixture_id": "mvp-negative",
   "generator": "replace-first-byte-with-0x02",
+  "generator_version": "mantle-fixture-generation-v1",
   "generator_input_blake3": "b2568cffcad3c442a90dd65ccb82d6b7e285bf71c2c9908ce539b6b515217bde",
   "generator_input_path": "fixtures/wasm/mvp-positive.wasm",
   "schema": "mantle-spacewasm-fixture-descriptor-v1"

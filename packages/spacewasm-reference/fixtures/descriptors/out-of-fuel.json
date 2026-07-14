@@ -6,6 +6,7 @@
   "fixture_class": "out-of-fuel",
   "fixture_id": "out-of-fuel",
   "generator": "wasm-tools-parse",
+  "generator_version": "wasm-tools-1.245.1",
   "generator_input_blake3": "129fa3bd5c3590311cffe329576b37344c0168c2943170c41e000a921d80a083",
   "generator_input_path": "fixtures/wat/out-of-fuel.wat",
   "schema": "mantle-spacewasm-fixture-descriptor-v1"

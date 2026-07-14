@@ -6,6 +6,7 @@
   "fixture_class": "allocation-failure",
   "fixture_id": "allocation-failure",
   "generator": "wasm-tools-parse",
+  "generator_version": "wasm-tools-1.245.1",
   "generator_input_blake3": "95a86baa63e72211ccbe0d812937694e78a4b4d5e1fa616567d5c31335d80177",
   "generator_input_path": "fixtures/wat/allocation-failure.wat",
   "schema": "mantle-spacewasm-fixture-descriptor-v1"

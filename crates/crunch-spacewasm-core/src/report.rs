@@ -125,10 +125,18 @@ pub fn build_materialization_report(mut input: ReportBuildInput) -> Result<Mater
 pub fn validate_materialization_report(report: MaterializationReport) -> ReportValidation {
     let mut diagnostics = Vec::new();
     if report.schema != MATERIALIZATION_REPORT_SCHEMA {
-        diagnostics.push(error("unsupported-report-schema", "report.schema", "materialization report schema is unsupported"));
+        diagnostics.push(error(
+            "unsupported-report-schema",
+            "report.schema",
+            "materialization report schema is unsupported",
+        ));
     }
     if report.claim_class != REFERENCE_CLAIM_CLASS {
-        diagnostics.push(error("unsupported-claim-promotion", "report.claim-class", "report requests an unsupported claim class"));
+        diagnostics.push(error(
+            "unsupported-claim-promotion",
+            "report.claim-class",
+            "report requests an unsupported claim class",
+        ));
     }
     validate_report_non_claims(&report.non_claims, &mut diagnostics);
     let expected_identity = report.report_identity_blake3.clone();

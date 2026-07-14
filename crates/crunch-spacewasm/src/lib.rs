@@ -140,12 +140,11 @@ fn materialize_inner(request: MaterializationRequest, output: &Path) -> Result<M
     validate_request_header(&request)?;
     let profile: ReferenceProfile = read_json(Path::new(&request.profile_path), HARD_MAX_PROFILE_BYTES)?;
     let validation = validate_profile(profile.clone());
-    let profile_identity = validation
-        .profile_identity_blake3
-        .ok_or_else(|| ShellError::Core(validation.diagnostics))?;
+    let profile_identity = validation.profile_identity_blake3.ok_or(ShellError::Core(validation.diagnostics))?;
     let cohort_identity = cohort_identity(profile.clone()).map_err(|error| ShellError::Invalid(error.to_string()))?;
     let source_facts: SourceFacts = read_json(Path::new(&request.source_facts_path), HARD_MAX_REPORT_BYTES)?;
-    let observed_support: Vec<SupportEntry> = read_json(Path::new(&request.support_matrix_path), HARD_MAX_REPORT_BYTES)?;
+    let observed_support: Vec<SupportEntry> =
+        read_json(Path::new(&request.support_matrix_path), HARD_MAX_REPORT_BYTES)?;
     let observed_checks: Vec<ObservedCheck> = read_json(Path::new(&request.checks_path), HARD_MAX_REPORT_BYTES)?;
     let source_admission = admit_source(profile.clone(), source_facts);
     let support_comparison = compare_support_matrix(profile.clone(), observed_support);
@@ -173,7 +172,8 @@ fn materialize_inner(request: MaterializationRequest, output: &Path) -> Result<M
     .map_err(|error| ShellError::Json(error.to_string()))?;
     write_bundle_file(output, NON_CLAIMS_PATH, &non_claim_bytes)?;
     members.push(measured_member(output, NON_CLAIMS_PATH, BundleRole::NonClaims, &profile)?);
-    let parent_edges = plan_bundle_parent_edges(members.clone(), String::from(PROFILE_ROOT_PATH)).map_err(ShellError::Core)?;
+    let parent_edges =
+        plan_bundle_parent_edges(members.clone(), String::from(PROFILE_ROOT_PATH)).map_err(ShellError::Core)?;
     let manifest = build_bundle_manifest(BundleManifestInput {
         profile: profile.clone(),
         profile_identity_blake3: profile_identity.clone(),
@@ -188,8 +188,8 @@ fn materialize_inner(request: MaterializationRequest, output: &Path) -> Result<M
     if !verification.valid {
         return Err(ShellError::Core(verification.diagnostics));
     }
-    let member_count = u32::try_from(members.len())
-        .map_err(|_| ShellError::Invalid(String::from("bundle member count overflow")))?;
+    let member_count =
+        u32::try_from(members.len()).map_err(|_| ShellError::Invalid(String::from("bundle member count overflow")))?;
     debug_assert!(member_count > 0);
     debug_assert!(verification.bundle_identity_blake3.is_some());
     Ok(MaterializationSummary {
@@ -207,11 +207,8 @@ pub fn verify_bundle(root: &Path) -> Result<VerifySummary, ShellError> {
     require_real_directory(root)?;
     let manifest_path = root.join(MANIFEST_PATH);
     let manifest: BundleManifest = read_json(&manifest_path, HARD_MAX_REPORT_BYTES)?;
-    let declared: BTreeMap<_, _> = manifest
-        .members
-        .iter()
-        .map(|member| (member.path.clone(), member.role.clone()))
-        .collect();
+    let declared: BTreeMap<_, _> =
+        manifest.members.iter().map(|member| (member.path.clone(), member.role.clone())).collect();
     let paths = collect_bundle_files(root, HARD_MAX_BUNDLE_FILES)?;
     let mut measured = Vec::new();
     for relative in paths {
@@ -384,7 +381,8 @@ fn collect_bundle_files(root: &Path, maximum_files: u32) -> Result<Vec<String>, 
         entries.sort_by_key(fs::DirEntry::file_name);
         for entry in entries.into_iter().rev() {
             let path = entry.path();
-            let metadata = fs::symlink_metadata(&path).map_err(|error| io_error("inspecting bundle entry", &path, error))?;
+            let metadata =
+                fs::symlink_metadata(&path).map_err(|error| io_error("inspecting bundle entry", &path, error))?;
             if metadata.file_type().is_symlink() {
                 return Err(ShellError::Invalid(format!("bundle contains a symlink: {}", path.display())));
             }

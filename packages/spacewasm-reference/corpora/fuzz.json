@@ -1,5 +1,5 @@
 {
-  "canonical_archive_blake3": "d723096088d5828861b41182ef5f0a2573e9aa992df6075a8a68219eb3459a8a",
+  "canonical_archive_blake3": "2ccffdf847b1dbaaa23c10b8f9c418699385f549a50e0b1b574ab3c3462e1df3",
   "canonical_archive_format": "gnu-tar-sort-name-owner-0-group-0-mtime-1",
   "continuous_fuzzing_status": "unavailable",
   "corpus_id": "upstream-fuzz",

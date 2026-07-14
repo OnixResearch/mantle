@@ -102,5 +102,5 @@ fn is_lower_hex(value: &str, expected_length: usize) -> bool {
 }
 
 pub(crate) fn count_exceeds(count: usize, maximum: u32) -> bool {
-    usize::try_from(maximum).map_or(false, |maximum| count > maximum)
+    usize::try_from(maximum).is_ok_and(|maximum| count > maximum)
 }

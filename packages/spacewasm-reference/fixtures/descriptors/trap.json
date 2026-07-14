@@ -6,6 +6,7 @@
   "fixture_class": "trap",
   "fixture_id": "trap",
   "generator": "wasm-tools-parse",
+  "generator_version": "wasm-tools-1.245.1",
   "generator_input_blake3": "b28ed13daf132eaf5259e1499276bd46c3cf85add27402d89bff854701caf71d",
   "generator_input_path": "fixtures/wat/trap-unreachable.wat",
   "schema": "mantle-spacewasm-fixture-descriptor-v1"

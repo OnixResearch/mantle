@@ -57,6 +57,16 @@
             }
           else
             null;
+        spacewasmReference =
+          if system == "x86_64-linux" then
+            import ./nix/spacewasm-reference.nix {
+              inherit pkgs;
+              packageRoot = ./packages/spacewasm-reference;
+              coreCrate = ./crates/crunch-spacewasm-core;
+              shellCrate = ./crates/crunch-spacewasm;
+            }
+          else
+            null;
 
         rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
         componentRustVersion = "1.90.0";
@@ -566,6 +576,10 @@
           kernelscript-production-cohort = kernelscriptExperiment.cohort;
           kernelscript-production-shell = kernelscriptExperiment.productionShell;
           kernelscript-production-runtime-check = kernelscriptExperiment.runtimeCheck;
+          spacewasm-reference-bundle = spacewasmReference.bundle;
+          spacewasm-reference-bundler = spacewasmReference.bundler;
+          spacewasm-reference-evidence = spacewasmReference.evidence;
+          spacewasm-reference-rust-toolchain = spacewasmReference.toolchain;
         };
 
         apps = {
@@ -632,6 +646,15 @@
         }
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
           kernelscript-production = kernelscriptExperiment.structuralCheck;
+          spacewasm-reference-profile = spacewasmReference.profileExport;
+          spacewasm-reference-host-library = spacewasmReference.hostLibrary;
+          spacewasm-reference-wasm-library = spacewasmReference.wasmLibrary;
+          spacewasm-reference-host-runner = spacewasmReference.hostRunner;
+          spacewasm-reference-upstream-unit-tests = spacewasmReference.upstreamUnitTests;
+          spacewasm-reference-spectest-address = spacewasmReference.upstreamSpectestAddress;
+          spacewasm-reference-fixtures = spacewasmReference.fixtureReport;
+          spacewasm-reference-negative = spacewasmReference.negativeCheck;
+          spacewasm-reference-bundle = spacewasmReference.bundle;
         };
 
         devShells.default = craneLib.devShell {

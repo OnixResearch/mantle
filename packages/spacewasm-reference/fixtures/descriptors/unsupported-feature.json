@@ -6,6 +6,7 @@
   "fixture_class": "unsupported-feature",
   "fixture_id": "unsupported-feature",
   "generator": "wasm-tools-parse",
+  "generator_version": "wasm-tools-1.245.1",
   "generator_input_blake3": "be296033d6d2328e2ead458a66e2aefe76fee7c3a8b8dbca3315bcc0522fa91c",
   "generator_input_path": "fixtures/wat/unsupported-bulk-memory.wat",
   "schema": "mantle-spacewasm-fixture-descriptor-v1"

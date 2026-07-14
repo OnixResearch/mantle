@@ -360,10 +360,8 @@ fn complete_bundle_remeasures_and_missing_report_fails() {
     let verified = verify_bundle_manifest(manifest.clone(), members.clone());
     assert!(verified.valid, "{:?}", verified.diagnostics);
 
-    let without_report: Vec<_> = members
-        .into_iter()
-        .filter(|member| member.role != BundleRole::MaterializationReport)
-        .collect();
+    let without_report: Vec<_> =
+        members.into_iter().filter(|member| member.role != BundleRole::MaterializationReport).collect();
     let rejected = verify_bundle_manifest(manifest, without_report);
     assert!(!rejected.valid);
     assert!(rejected.diagnostics.iter().any(|item| item.code == "incomplete-bundle"));
@@ -408,15 +406,25 @@ fn complete_members(profile: &ReferenceProfile) -> Vec<BundleMember> {
         member("profile/profile.json", BundleRole::ProfileExport, digest('2')),
         member("source/spacewasm.tar.gz", BundleRole::SourceArchive, profile.source.archive_blake3.clone()),
         member("source/Cargo.lock", BundleRole::CargoLock, profile.source.cargo_lock_blake3.clone()),
-        member("dependencies/manifest.json", BundleRole::DependencyManifest, profile.source.dependency_manifest_blake3.clone()),
+        member(
+            "dependencies/manifest.json",
+            BundleRole::DependencyManifest,
+            profile.source.dependency_manifest_blake3.clone(),
+        ),
         member("dependencies/vendor.tar", BundleRole::DependencyClosure, digest('3')),
         member("toolchain/rustc", BundleRole::RustcBinary, digest('4')),
         member("toolchain/cargo", BundleRole::CargoBinary, digest('5')),
         member("toolchain/toolchain.tar", BundleRole::ToolchainArchive, digest('a')),
+        member("toolchain/wasm-tools", BundleRole::FixtureGenerator, digest('e')),
         member("binaries/host/libspacewasm.rlib", BundleRole::HostLibrary, digest('6')),
         member("binaries/wasm/libspacewasm.rlib", BundleRole::WasmLibrary, digest('7')),
         member("binaries/host/spacewasm-diagnostic-runner", BundleRole::HostRunner, digest('8')),
-        member("profile/octet-support-projection.json", BundleRole::SupportProjection, profile.source.octet_support_projection_blake3.clone()),
+        member(
+            "profile/octet-support-projection.json",
+            BundleRole::SupportProjection,
+            profile.source.octet_support_projection_blake3.clone(),
+        ),
+        member("reports/checks/fixture-replay.json", BundleRole::CheckReceipt, digest('0')),
         member("reports/results.json", BundleRole::ResultReport, digest('b')),
         member("reports/replay-evidence.json", BundleRole::ReplayEvidence, digest('c')),
         member("reports/materialization.json", BundleRole::MaterializationReport, digest('9')),
@@ -427,11 +435,7 @@ fn complete_members(profile: &ReferenceProfile) -> Vec<BundleMember> {
         members.push(member(&fixture.descriptor_path, BundleRole::FixtureDescriptor, digest('b')));
     }
     for corpus in &profile.corpora {
-        members.push(member(
-            &format!("corpora/{}.tar", corpus.corpus_id),
-            BundleRole::CorpusArtifact,
-            digest('f'),
-        ));
+        members.push(member(&format!("corpora/{}.tar", corpus.corpus_id), BundleRole::CorpusArtifact, digest('f')));
         members.push(member(&corpus.descriptor_path, BundleRole::CorpusDescriptor, corpus.descriptor_blake3.clone()));
     }
     for license in &profile.source.license_members {

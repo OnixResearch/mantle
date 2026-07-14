@@ -42,18 +42,30 @@ pub fn evaluate_checks(profile: ReferenceProfile, observed: Vec<ObservedCheck>) 
     for check in observed {
         let check_id = check.check_id.clone();
         if check_id.is_empty() || observed_by_id.insert(check_id.clone(), check).is_some() {
-            diagnostics.push(error("duplicate-observed-check", &check_id, "observed check ids must be unique and non-empty"));
+            diagnostics.push(error(
+                "duplicate-observed-check",
+                &check_id,
+                "observed check ids must be unique and non-empty",
+            ));
         }
     }
     let mut decisions = Vec::new();
     for expected in &profile.checks {
         let Some(check) = observed_by_id.get(&expected.check_id) else {
-            diagnostics.push(error("missing-declared-check", &expected.check_id, "declared check has no recorded outcome"));
+            diagnostics.push(error(
+                "missing-declared-check",
+                &expected.check_id,
+                "declared check has no recorded outcome",
+            ));
             continue;
         };
         let matched = check.status == expected.expected_status;
         if !matched {
-            diagnostics.push(error("check-status-mismatch", &expected.check_id, "recorded check status differs from the declared expected status"));
+            diagnostics.push(error(
+                "check-status-mismatch",
+                &expected.check_id,
+                "recorded check status differs from the declared expected status",
+            ));
         }
         decisions.push(CheckDecision {
             check_id: expected.check_id.clone(),
@@ -69,7 +81,11 @@ pub fn evaluate_checks(profile: ReferenceProfile, observed: Vec<ObservedCheck>) 
     }
     for check_id in observed_by_id.keys() {
         if !profile.checks.iter().any(|expected| &expected.check_id == check_id) {
-            diagnostics.push(error("undeclared-check-result", check_id, "recorded result does not correspond to a declared check"));
+            diagnostics.push(error(
+                "undeclared-check-result",
+                check_id,
+                "recorded result does not correspond to a declared check",
+            ));
         }
     }
     decisions.sort_by(|left, right| left.check_id.cmp(&right.check_id));
