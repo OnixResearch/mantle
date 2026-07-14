@@ -482,3 +482,101 @@ and tasks gates each returned `valid: true` with no issues; all three gate
 verdicts were `PASS`.
 
 No spec was synced and the change was not archived during this repair pass.
+
+## Receipt-bound Wizer and final-quality completion — 2026-07-14
+
+This section supersedes the earlier Wizer and Tiger Style blockers. Mantle now
+models the complete pre-component transformation graph rather than inferring a
+nested module from already-componentized bytes:
+
+1. Cargo runs with a cleared, receipt-bound environment containing exact
+   `RUSTFLAGS=-C link-arg=--skip-wit-component` and the pinned
+   `CARGO_TARGET_WASM32_WASIP2_LINKER`.
+2. The compilation receipt binds and rehashes subordinate `rustc` and
+   `wasm-component-ld` executables, and the declared core-module output is
+   validated and published as `compiled-core.wasm`.
+3. Pinned Wizer runs twice from clean output paths with inherited environment
+   and stdio disabled. Admission requires equal BLAKE3 identities and sizes.
+4. Pinned `wasm-tools component new` creates separately classified Component
+   Model bytes. Mantle validates that artifact before composition and never
+   labels it as direct Wizer output.
+5. The final normalized component still passes exact Octet collection and
+   verification, Wasmtime smoke execution, bundle/report/attestation/release
+   binding, and consumer-side remeasurement. Release eligibility and runtime
+   authority remain explicit non-claims.
+
+The production fixture exports a no-op `wizer.initialize`; the successful smoke
+invocation still returns `42`. Negative coverage rejects Wizer output drift,
+ambient observations, compile-environment drift, unexpected compile-state keys,
+and componentization argument drift. Tool receipts now use schema
+`mantle-wasm-component-tool-execution-receipt-v2` and bind the exact cleared
+environment plus subordinate tool identities.
+
+The broader shell-quality debt was repaired rather than waived. `files.rs` now
+uses bounded no-follow reads, copies, and hashing; `process.rs` uses bounded
+supervision and stream draining without treating fragmented reads as fixed-size
+buffers. Failed child executions are classified before output hashing, so an
+empty partial file cannot mask the authoritative process diagnostic.
+
+Final current evidence:
+
+```text
+$ cargo test -q -p crunch-wasm-component-core --lib --offline
+running 36 tests
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+$ cargo test -q -p crunch-wasm-component --lib --offline
+running 15 tests
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+$ cargo test -p mantle --test wasm_component_cli --offline -- --nocapture
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+$ cargo test -q -p mantle --test stdlib_tests wasm_component --offline -- --nocapture
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out
+
+$ cargo test -q -p crunch-eval stdlib::tests --offline -- --nocapture
+running 10 tests
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 68 filtered out
+
+$ cargo fmt --check -p crunch-wasm-component-core -p crunch-wasm-component -p mantle
+(exit 0)
+
+$ cargo clippy -p crunch-wasm-component-core -p crunch-wasm-component --all-targets --offline -- -D warnings
+(exit 0)
+
+$ cargo check -p crunch-wasm-component-core --target wasm32-unknown-unknown --offline
+(exit 0)
+
+$ nix --option builders '' --option secret-key-files '' run .#tigerstyle -- check -p crunch-wasm-component-core
+(exit 0)
+
+$ nix --option builders '' --option secret-key-files '' run .#tigerstyle -- check -p crunch-wasm-component
+(exit 0)
+
+$ nix --option builders '' --option secret-key-files '' build '.#checks.x86_64-linux.wasm-component-toolchain-identity' --no-link -L
+(exit 0)
+
+$ nix --option builders '' --option secret-key-files '' build '.#checks.x86_64-linux.wasm-component-toolchain-compatibility' --no-link -L
+(exit 0)
+
+$ cargo -Zscript scripts/check-machine-schema-contracts.rs
+machine schema contract check: PASS (16 contracted, 45 classified)
+
+$ cairn validate --root . --policy cairn-policy/generated/cairn-policy.json
+{"valid":true,"issues":[],"change_issues":[],"spec_issues":[]}
+
+$ cairn gate proposal|design|tasks add-wasm-component-build-pipeline --root . --policy cairn-policy/generated/cairn-policy.json
+proposal: {"valid":true,"verdict":"PASS","issues":[]}
+design: {"valid":true,"verdict":"PASS","issues":[]}
+tasks: {"valid":true,"verdict":"PASS","issues":[]}
+```
+
+The machine-schema check initially exposed one pre-existing stale producer
+freshness binding for `release.function-address-binding`. The checked generator
+updated only that expected BLAKE3 line in `schemas/machine-contracts/inventory.ncl`;
+no schema or contract bytes changed, and the immediate check passed.
+
+No spec was synced and the change was not archived.
