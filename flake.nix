@@ -84,8 +84,7 @@
             nickelExportCore.rev == nickelExportCoreRevision
           ) "Mantle nickel-export-core Nix input drifted from ${nickelExportCoreRevision}";
           nickelExportCore;
-        firstPartyCargoScope =
-          pkgs.lib.concatStringsSep " " cargoManifest.workspace.metadata.tigerstyle.default_scope;
+        firstPartyCargoScope = pkgs.lib.concatStringsSep " " cargoManifest.workspace.metadata.tigerstyle.default_scope;
 
         # Common source filtering. The Rust workspace embeds Nickel stdlib files
         # from ./lib with include_str!, bootstrap tests read checked Nickel
@@ -197,302 +196,302 @@
 
         wasmComponentToolchain =
           pkgs.runCommand "mantle-wasm-component-toolchain-v1"
-          {
-            nativeBuildInputs = [
-              pkgs.b3sum
-              pkgs.coreutils
-              pkgs.jq
-            ];
-          }
-          ''
-            set -eu
-            mkdir -p "$out/bin" "$out/share/mantle"
-
-            install_tool() {
-              source_path="$1"
-              tool_name="$2"
-              test -x "$source_path"
-              cp --dereference "$source_path" "$out/bin/$tool_name"
-              chmod u=rwx,go=rx "$out/bin/$tool_name"
+            {
+              nativeBuildInputs = [
+                pkgs.b3sum
+                pkgs.coreutils
+                pkgs.jq
+              ];
             }
+            ''
+              set -eu
+              mkdir -p "$out/bin" "$out/share/mantle"
 
-            wrap_rust_tool() {
-              source_path="$1"
-              tool_name="$2"
-              test -x "$source_path"
-              printf '%s\n' '#!${pkgs.bash}/bin/bash' "exec \"$source_path\" \"\$@\"" > "$out/bin/$tool_name"
-              chmod u=rwx,go=rx "$out/bin/$tool_name"
-            }
+              install_tool() {
+                source_path="$1"
+                tool_name="$2"
+                test -x "$source_path"
+                cp --dereference "$source_path" "$out/bin/$tool_name"
+                chmod u=rwx,go=rx "$out/bin/$tool_name"
+              }
 
-            wrap_rust_tool "${componentRustToolchain}/bin/cargo" cargo
-            wrap_rust_tool "${componentRustToolchain}/bin/rustc" rustc
-            install_tool "${componentRustToolchain}/lib/rustlib/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/bin/wasm-component-ld" wasm-component-ld
-            install_tool "${pkgs.wkg}/bin/wkg" wkg
-            install_tool "${pkgs.wit-bindgen}/bin/wit-bindgen" wit-bindgen
-            install_tool "${pkgs.wasm-tools}/bin/wasm-tools" wasm-tools
-            install_tool "${pkgs.wac-cli}/bin/wac" wac
-            install_tool "${wasiVirt}/bin/wasi-virt" wasi-virt
-            install_tool "${pkgs.wizer}/bin/wizer" wizer
-            install_tool "${pkgs.wasmtime}/bin/wasmtime" wasmtime
-            install_tool "${pkgs.bubblewrap}/bin/bwrap" bwrap
-              wrap_rust_tool "${octetPackage}/bin/cargo-octet" cargo-octet
-              mkdir -p "$out/share/mantle/octet"
-              cp "${octetProfileConfig}" "$out/share/mantle/octet/wasm-artifact-profiles.json"
-              chmod u=rw,go=r "$out/share/mantle/octet/wasm-artifact-profiles.json"
+              wrap_rust_tool() {
+                source_path="$1"
+                tool_name="$2"
+                test -x "$source_path"
+                printf '%s\n' '#!${pkgs.bash}/bin/bash' "exec \"$source_path\" \"\$@\"" > "$out/bin/$tool_name"
+                chmod u=rwx,go=rx "$out/bin/$tool_name"
+              }
 
-            tool_record() {
-              tool_name="$1"
-              expected_version="$2"
-              binary="$out/bin/$tool_name"
-              version_output="$($binary --version 2>&1 | ${pkgs.coreutils}/bin/head -n 1)"
-              binary_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$binary")"
-              ${pkgs.jq}/bin/jq --null-input --sort-keys \
-                --arg name "$tool_name" \
-                --arg version "$expected_version" \
-                --arg versionOutput "$version_output" \
-                --arg path "bin/$tool_name" \
-                --arg binaryDigestBlake3 "$binary_digest" \
-                '{
-                  name: $name,
-                  version: $version,
-                  version_output: $versionOutput,
-                  path: $path,
-                  binary_digest_blake3: $binaryDigestBlake3
-                }'
-            }
+              wrap_rust_tool "${componentRustToolchain}/bin/cargo" cargo
+              wrap_rust_tool "${componentRustToolchain}/bin/rustc" rustc
+              install_tool "${componentRustToolchain}/lib/rustlib/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/bin/wasm-component-ld" wasm-component-ld
+              install_tool "${pkgs.wkg}/bin/wkg" wkg
+              install_tool "${pkgs.wit-bindgen}/bin/wit-bindgen" wit-bindgen
+              install_tool "${pkgs.wasm-tools}/bin/wasm-tools" wasm-tools
+              install_tool "${pkgs.wac-cli}/bin/wac" wac
+              install_tool "${wasiVirt}/bin/wasi-virt" wasi-virt
+              install_tool "${pkgs.wizer}/bin/wizer" wizer
+              install_tool "${pkgs.wasmtime}/bin/wasmtime" wasmtime
+              install_tool "${pkgs.bubblewrap}/bin/bwrap" bwrap
+                wrap_rust_tool "${octetPackage}/bin/cargo-octet" cargo-octet
+                mkdir -p "$out/share/mantle/octet"
+                cp "${octetProfileConfig}" "$out/share/mantle/octet/wasm-artifact-profiles.json"
+                chmod u=rw,go=r "$out/share/mantle/octet/wasm-artifact-profiles.json"
 
-            tool_record cargo "${componentRustVersion}" > "$TMPDIR/cargo.json"
-            tool_record rustc "${componentRustVersion}" > "$TMPDIR/rustc.json"
-            tool_record wasm-component-ld "0.5.15" > "$TMPDIR/wasm-component-ld.json"
-            tool_record wkg "${pkgs.wkg.version}" > "$TMPDIR/wkg.json"
-            tool_record wit-bindgen "${pkgs.wit-bindgen.version}" > "$TMPDIR/wit-bindgen.json"
-            tool_record wasm-tools "${pkgs.wasm-tools.version}" > "$TMPDIR/wasm-tools.json"
-            tool_record wac "${pkgs.wac-cli.version}" > "$TMPDIR/wac.json"
-            tool_record wasi-virt "${wasiVirtVersion}" > "$TMPDIR/wasi-virt.json"
-            tool_record wizer "${pkgs.wizer.version}" > "$TMPDIR/wizer.json"
-            tool_record wasmtime "${pkgs.wasmtime.version}" > "$TMPDIR/wasmtime.json"
-            tool_record bwrap "${pkgs.bubblewrap.version}" > "$TMPDIR/bwrap.json"
-              tool_record cargo-octet "${octetPackageVersion}" > "$TMPDIR/cargo-octet.json"
+              tool_record() {
+                tool_name="$1"
+                expected_version="$2"
+                binary="$out/bin/$tool_name"
+                version_output="$($binary --version 2>&1 | ${pkgs.coreutils}/bin/head -n 1)"
+                binary_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$binary")"
+                ${pkgs.jq}/bin/jq --null-input --sort-keys \
+                  --arg name "$tool_name" \
+                  --arg version "$expected_version" \
+                  --arg versionOutput "$version_output" \
+                  --arg path "bin/$tool_name" \
+                  --arg binaryDigestBlake3 "$binary_digest" \
+                  '{
+                    name: $name,
+                    version: $version,
+                    version_output: $versionOutput,
+                    path: $path,
+                    binary_digest_blake3: $binaryDigestBlake3
+                  }'
+              }
 
-              octet_config="$out/share/mantle/octet/wasm-artifact-profiles.json"
-              octet_config_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$octet_config")"
-              "$out/bin/wasm-tools" parse "${octet}/standards/wasm-artifact/fixtures/positive/component.wat" \
-                -o "$TMPDIR/octet-positive-component.wasm"
-              "$out/bin/cargo-octet" evidence collect \
-                --rail wasm-artifact \
-                --input "$TMPDIR/octet-positive-component.wasm" \
-                --config "$octet_config" \
-                --profile "${octetProfileId}" \
-                --artifact-dir "$TMPDIR/octet-profile-evidence" \
-                --output-format json > "$TMPDIR/octet-profile-run.json"
-              "$out/bin/cargo-octet" artifact verify \
-                --artifact-dir "$TMPDIR/octet-profile-evidence" \
-                --output-format json > "$TMPDIR/octet-profile-verify.json"
-              ${pkgs.jq}/bin/jq --exit-status '.status == "valid" and (.diagnostics | length) == 0' \
-                "$TMPDIR/octet-profile-verify.json" > /dev/null
-              octet_profile_identity="$(${pkgs.jq}/bin/jq --raw-output '.wasm_artifact.profile_identity | sub("^b3:"; "")' "$TMPDIR/octet-profile-evidence/evidence-rail-receipt.json")"
-              octet_cohort_identity="$(${pkgs.jq}/bin/jq --raw-output '.wasm_artifact.cohort_identity | sub("^b3:"; "")' "$TMPDIR/octet-profile-evidence/evidence-rail-receipt.json")"
-              octet_registry_identity="$(${pkgs.jq}/bin/jq --raw-output '.wasm_artifact.registry_identity | sub("^b3:"; "")' "$TMPDIR/octet-profile-evidence/evidence-rail-receipt.json")"
-              test "$octet_registry_identity" = "$octet_config_digest"
-              test "$octet_cohort_identity" = "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a"
+              tool_record cargo "${componentRustVersion}" > "$TMPDIR/cargo.json"
+              tool_record rustc "${componentRustVersion}" > "$TMPDIR/rustc.json"
+              tool_record wasm-component-ld "0.5.15" > "$TMPDIR/wasm-component-ld.json"
+              tool_record wkg "${pkgs.wkg.version}" > "$TMPDIR/wkg.json"
+              tool_record wit-bindgen "${pkgs.wit-bindgen.version}" > "$TMPDIR/wit-bindgen.json"
+              tool_record wasm-tools "${pkgs.wasm-tools.version}" > "$TMPDIR/wasm-tools.json"
+              tool_record wac "${pkgs.wac-cli.version}" > "$TMPDIR/wac.json"
+              tool_record wasi-virt "${wasiVirtVersion}" > "$TMPDIR/wasi-virt.json"
+              tool_record wizer "${pkgs.wizer.version}" > "$TMPDIR/wizer.json"
+              tool_record wasmtime "${pkgs.wasmtime.version}" > "$TMPDIR/wasmtime.json"
+              tool_record bwrap "${pkgs.bubblewrap.version}" > "$TMPDIR/bwrap.json"
+                tool_record cargo-octet "${octetPackageVersion}" > "$TMPDIR/cargo-octet.json"
+
+                octet_config="$out/share/mantle/octet/wasm-artifact-profiles.json"
+                octet_config_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$octet_config")"
+                "$out/bin/wasm-tools" parse "${octet}/standards/wasm-artifact/fixtures/positive/component.wat" \
+                  -o "$TMPDIR/octet-positive-component.wasm"
+                "$out/bin/cargo-octet" evidence collect \
+                  --rail wasm-artifact \
+                  --input "$TMPDIR/octet-positive-component.wasm" \
+                  --config "$octet_config" \
+                  --profile "${octetProfileId}" \
+                  --artifact-dir "$TMPDIR/octet-profile-evidence" \
+                  --output-format json > "$TMPDIR/octet-profile-run.json"
+                "$out/bin/cargo-octet" artifact verify \
+                  --artifact-dir "$TMPDIR/octet-profile-evidence" \
+                  --output-format json > "$TMPDIR/octet-profile-verify.json"
+                ${pkgs.jq}/bin/jq --exit-status '.status == "valid" and (.diagnostics | length) == 0' \
+                  "$TMPDIR/octet-profile-verify.json" > /dev/null
+                octet_profile_identity="$(${pkgs.jq}/bin/jq --raw-output '.wasm_artifact.profile_identity | sub("^b3:"; "")' "$TMPDIR/octet-profile-evidence/evidence-rail-receipt.json")"
+                octet_cohort_identity="$(${pkgs.jq}/bin/jq --raw-output '.wasm_artifact.cohort_identity | sub("^b3:"; "")' "$TMPDIR/octet-profile-evidence/evidence-rail-receipt.json")"
+                octet_registry_identity="$(${pkgs.jq}/bin/jq --raw-output '.wasm_artifact.registry_identity | sub("^b3:"; "")' "$TMPDIR/octet-profile-evidence/evidence-rail-receipt.json")"
+                test "$octet_registry_identity" = "$octet_config_digest"
+                test "$octet_cohort_identity" = "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a"
+                ${pkgs.jq}/bin/jq --null-input --compact-output --sort-keys \
+                  --arg sourceRepository "${octetSourceRepository}" \
+                  --arg sourceRevision "${octetSourceRevision}" \
+                  --arg packageName "${octetPackageName}" \
+                  --arg packageVersion "${octetPackageVersion}" \
+                  --arg configPath "share/mantle/octet/wasm-artifact-profiles.json" \
+                  --arg configDigest "$octet_config_digest" \
+                  --arg profileId "${octetProfileId}" \
+                  --arg profileIdentity "$octet_profile_identity" \
+                  --arg cohortIdentity "$octet_cohort_identity" \
+                  '{
+                    source_repository: $sourceRepository,
+                    source_revision: $sourceRevision,
+                    package_name: $packageName,
+                    package_version: $packageVersion,
+                    config_path: $configPath,
+                    config_digest_blake3: $configDigest,
+                    profile_id: $profileId,
+                    profile_identity_blake3: $profileIdentity,
+                    wasm_tools_cohort_identity_blake3: $cohortIdentity
+                  }' > "$TMPDIR/octet.json"
+
               ${pkgs.jq}/bin/jq --null-input --compact-output --sort-keys \
-                --arg sourceRepository "${octetSourceRepository}" \
-                --arg sourceRevision "${octetSourceRevision}" \
-                --arg packageName "${octetPackageName}" \
-                --arg packageVersion "${octetPackageVersion}" \
-                --arg configPath "share/mantle/octet/wasm-artifact-profiles.json" \
-                --arg configDigest "$octet_config_digest" \
-                --arg profileId "${octetProfileId}" \
-                --arg profileIdentity "$octet_profile_identity" \
-                --arg cohortIdentity "$octet_cohort_identity" \
+                --arg schema "mantle-wasm-component-toolchain-v1" \
+                --arg target "wasm32-wasip2" \
+                --slurpfile cargo "$TMPDIR/cargo.json" \
+                --slurpfile rustc "$TMPDIR/rustc.json" \
+                --slurpfile componentLd "$TMPDIR/wasm-component-ld.json" \
+                --slurpfile wkg "$TMPDIR/wkg.json" \
+                --slurpfile witBindgen "$TMPDIR/wit-bindgen.json" \
+                --slurpfile wasmTools "$TMPDIR/wasm-tools.json" \
+                --slurpfile wac "$TMPDIR/wac.json" \
+                --slurpfile wasiVirt "$TMPDIR/wasi-virt.json" \
+                --slurpfile wizer "$TMPDIR/wizer.json" \
+                --slurpfile wasmtime "$TMPDIR/wasmtime.json" \
+                --slurpfile bwrap "$TMPDIR/bwrap.json" \
+                  --slurpfile cargoOctet "$TMPDIR/cargo-octet.json" \
+                  --slurpfile octet "$TMPDIR/octet.json" \
                 '{
-                  source_repository: $sourceRepository,
-                  source_revision: $sourceRevision,
-                  package_name: $packageName,
-                  package_version: $packageVersion,
-                  config_path: $configPath,
-                  config_digest_blake3: $configDigest,
-                  profile_id: $profileId,
-                  profile_identity_blake3: $profileIdentity,
-                  wasm_tools_cohort_identity_blake3: $cohortIdentity
-                }' > "$TMPDIR/octet.json"
-
-            ${pkgs.jq}/bin/jq --null-input --compact-output --sort-keys \
-              --arg schema "mantle-wasm-component-toolchain-v1" \
-              --arg target "wasm32-wasip2" \
-              --slurpfile cargo "$TMPDIR/cargo.json" \
-              --slurpfile rustc "$TMPDIR/rustc.json" \
-              --slurpfile componentLd "$TMPDIR/wasm-component-ld.json" \
-              --slurpfile wkg "$TMPDIR/wkg.json" \
-              --slurpfile witBindgen "$TMPDIR/wit-bindgen.json" \
-              --slurpfile wasmTools "$TMPDIR/wasm-tools.json" \
-              --slurpfile wac "$TMPDIR/wac.json" \
-              --slurpfile wasiVirt "$TMPDIR/wasi-virt.json" \
-              --slurpfile wizer "$TMPDIR/wizer.json" \
-              --slurpfile wasmtime "$TMPDIR/wasmtime.json" \
-              --slurpfile bwrap "$TMPDIR/bwrap.json" \
-                --slurpfile cargoOctet "$TMPDIR/cargo-octet.json" \
-                --slurpfile octet "$TMPDIR/octet.json" \
-              '{
-                schema: $schema,
-                rust_target: $target,
-                  octet: $octet[0],
-                tools: [
-                  $cargo[0],
-                  $rustc[0],
-                  $componentLd[0],
-                  $wkg[0],
-                  $witBindgen[0],
-                  $wasmTools[0],
-                  $wac[0],
-                  $wasiVirt[0],
-                  $wizer[0],
-                  $wasmtime[0],
-                    $bwrap[0],
-                    $cargoOctet[0]
-                ]
-              }' > "$TMPDIR/cohort-input.json"
-            cohort_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$TMPDIR/cohort-input.json")"
-            ${pkgs.jq}/bin/jq --sort-keys --arg cohortDigest "$cohort_digest" \
-              '. + {cohort_identity_blake3: $cohortDigest}' \
-              "$TMPDIR/cohort-input.json" > "$out/share/mantle/wasm-component-toolchain.json"
-          '';
+                  schema: $schema,
+                  rust_target: $target,
+                    octet: $octet[0],
+                  tools: [
+                    $cargo[0],
+                    $rustc[0],
+                    $componentLd[0],
+                    $wkg[0],
+                    $witBindgen[0],
+                    $wasmTools[0],
+                    $wac[0],
+                    $wasiVirt[0],
+                    $wizer[0],
+                    $wasmtime[0],
+                      $bwrap[0],
+                      $cargoOctet[0]
+                  ]
+                }' > "$TMPDIR/cohort-input.json"
+              cohort_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$TMPDIR/cohort-input.json")"
+              ${pkgs.jq}/bin/jq --sort-keys --arg cohortDigest "$cohort_digest" \
+                '. + {cohort_identity_blake3: $cohortDigest}' \
+                "$TMPDIR/cohort-input.json" > "$out/share/mantle/wasm-component-toolchain.json"
+            '';
 
         wasmComponentToolchainIdentity =
           pkgs.runCommand "mantle-wasm-component-toolchain-identity"
-          {
-            nativeBuildInputs = [
-              pkgs.b3sum
-              pkgs.jq
-            ];
-          }
-          ''
-            set -eu
-            manifest="${wasmComponentToolchain}/share/mantle/wasm-component-toolchain.json"
-            ${pkgs.jq}/bin/jq --exit-status \
-              '.schema == "mantle-wasm-component-toolchain-v1"
-                and .rust_target == "wasm32-wasip2"
-                  and (.tools | length) == 12
-                  and ([.tools[].name] | unique | length) == 12
-                and ([.tools[].binary_digest_blake3 | test("^[0-9a-f]{64}$")] | all)
-                  and (.octet.source_repository == "${octetSourceRepository}")
-                  and (.octet.source_revision == "${octetSourceRevision}")
-                  and (.octet.package_name == "${octetPackageName}")
-                  and (.octet.package_version == "${octetPackageVersion}")
-                  and (.octet.profile_id == "${octetProfileId}")
-                  and (.octet.config_digest_blake3 | test("^[0-9a-f]{64}$"))
-                  and (.octet.profile_identity_blake3 | test("^[0-9a-f]{64}$"))
-                  and (.octet.wasm_tools_cohort_identity_blake3 == "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a")
-                and (.cohort_identity_blake3 | test("^[0-9a-f]{64}$"))' \
-              "$manifest" > /dev/null
+            {
+              nativeBuildInputs = [
+                pkgs.b3sum
+                pkgs.jq
+              ];
+            }
+            ''
+              set -eu
+              manifest="${wasmComponentToolchain}/share/mantle/wasm-component-toolchain.json"
+              ${pkgs.jq}/bin/jq --exit-status \
+                '.schema == "mantle-wasm-component-toolchain-v1"
+                  and .rust_target == "wasm32-wasip2"
+                    and (.tools | length) == 12
+                    and ([.tools[].name] | unique | length) == 12
+                  and ([.tools[].binary_digest_blake3 | test("^[0-9a-f]{64}$")] | all)
+                    and (.octet.source_repository == "${octetSourceRepository}")
+                    and (.octet.source_revision == "${octetSourceRevision}")
+                    and (.octet.package_name == "${octetPackageName}")
+                    and (.octet.package_version == "${octetPackageVersion}")
+                    and (.octet.profile_id == "${octetProfileId}")
+                    and (.octet.config_digest_blake3 | test("^[0-9a-f]{64}$"))
+                    and (.octet.profile_identity_blake3 | test("^[0-9a-f]{64}$"))
+                    and (.octet.wasm_tools_cohort_identity_blake3 == "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a")
+                  and (.cohort_identity_blake3 | test("^[0-9a-f]{64}$"))' \
+                "$manifest" > /dev/null
 
-            ${pkgs.jq}/bin/jq -cS 'del(.cohort_identity_blake3)' "$manifest" > "$TMPDIR/cohort-input.json"
-            actual_cohort_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$TMPDIR/cohort-input.json")"
-            expected_cohort_digest="$(${pkgs.jq}/bin/jq --raw-output '.cohort_identity_blake3' "$manifest")"
-            test "$actual_cohort_digest" = "$expected_cohort_digest"
+              ${pkgs.jq}/bin/jq -cS 'del(.cohort_identity_blake3)' "$manifest" > "$TMPDIR/cohort-input.json"
+              actual_cohort_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$TMPDIR/cohort-input.json")"
+              expected_cohort_digest="$(${pkgs.jq}/bin/jq --raw-output '.cohort_identity_blake3' "$manifest")"
+              test "$actual_cohort_digest" = "$expected_cohort_digest"
 
-              for tool in cargo rustc wasm-component-ld wkg wit-bindgen wasm-tools wac wasi-virt wizer wasmtime bwrap cargo-octet; do
-              binary="${wasmComponentToolchain}/bin/$tool"
-              test -x "$binary"
-              actual_binary_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$binary")"
-              expected_binary_digest="$(${pkgs.jq}/bin/jq --raw-output --arg tool "$tool" '.tools[] | select(.name == $tool) | .binary_digest_blake3' "$manifest")"
-              test "$actual_binary_digest" = "$expected_binary_digest"
-              "$binary" --version > /dev/null 2>&1
-            done
-              octet_config="${wasmComponentToolchain}/share/mantle/octet/wasm-artifact-profiles.json"
-              actual_octet_config_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$octet_config")"
-              expected_octet_config_digest="$(${pkgs.jq}/bin/jq --raw-output '.octet.config_digest_blake3' "$manifest")"
-              test "$actual_octet_config_digest" = "$expected_octet_config_digest"
+                for tool in cargo rustc wasm-component-ld wkg wit-bindgen wasm-tools wac wasi-virt wizer wasmtime bwrap cargo-octet; do
+                binary="${wasmComponentToolchain}/bin/$tool"
+                test -x "$binary"
+                actual_binary_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$binary")"
+                expected_binary_digest="$(${pkgs.jq}/bin/jq --raw-output --arg tool "$tool" '.tools[] | select(.name == $tool) | .binary_digest_blake3' "$manifest")"
+                test "$actual_binary_digest" = "$expected_binary_digest"
+                "$binary" --version > /dev/null 2>&1
+              done
+                octet_config="${wasmComponentToolchain}/share/mantle/octet/wasm-artifact-profiles.json"
+                actual_octet_config_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$octet_config")"
+                expected_octet_config_digest="$(${pkgs.jq}/bin/jq --raw-output '.octet.config_digest_blake3' "$manifest")"
+                test "$actual_octet_config_digest" = "$expected_octet_config_digest"
 
-            mkdir -p "$out"
-            cp "$manifest" "$out/wasm-component-toolchain.json"
-          '';
+              mkdir -p "$out"
+              cp "$manifest" "$out/wasm-component-toolchain.json"
+            '';
 
         wasmComponentToolchainCompatibility =
           pkgs.runCommand "mantle-wasm-component-toolchain-compatibility"
-          {
+            {
               nativeBuildInputs = [
                 wasmComponentToolchain
                 pkgs.b3sum
                 pkgs.jq
               ];
-          }
-          ''
-            set -eu
-            work="$TMPDIR/component-cohort"
-            mkdir -p "$work/src" "$work/home" "$work/cargo-home" "$work/target"
-            cat > "$work/Cargo.toml" <<'EOF'
-            [package]
-            name = "mantle-cohort-smoke"
-            version = "0.1.0"
-            edition = "2024"
-            EOF
-            cat > "$work/Cargo.lock" <<'EOF'
-            # This file is automatically @generated by Cargo.
-            version = 4
-
-            [[package]]
-            name = "mantle-cohort-smoke"
-            version = "0.1.0"
-            EOF
-            cat > "$work/src/main.rs" <<'EOF'
-            fn main() {
-                println!("mantle-component-cohort-ok");
             }
-            EOF
+            ''
+              set -eu
+              work="$TMPDIR/component-cohort"
+              mkdir -p "$work/src" "$work/home" "$work/cargo-home" "$work/target"
+              cat > "$work/Cargo.toml" <<'EOF'
+              [package]
+              name = "mantle-cohort-smoke"
+              version = "0.1.0"
+              edition = "2024"
+              EOF
+              cat > "$work/Cargo.lock" <<'EOF'
+              # This file is automatically @generated by Cargo.
+              version = 4
 
-            export HOME="$work/home"
-            export CARGO_HOME="$work/cargo-home"
-            export CARGO_TARGET_DIR="$work/target"
-            export CARGO_NET_OFFLINE=true
-            export RUSTC="${wasmComponentToolchain}/bin/rustc"
-            export PATH="${wasmComponentToolchain}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin"
-            cd "$work"
-            cargo build --locked --offline --release --target wasm32-wasip2
-            component="$work/target/wasm32-wasip2/release/mantle-cohort-smoke.wasm"
-            wasm-tools validate "$component"
-            wasm-tools component wit "$component" > "$work/component.wit"
-            grep -F '@0.2.3' "$work/component.wit" > /dev/null
-            wasi-virt --wasi-version 0.2.3 --allow-stdio=true --out "$work/virtualized.wasm" "$component"
-            wasm-tools validate "$work/virtualized.wasm"
-            test "$(wasmtime run "$work/virtualized.wasm")" = "mantle-component-cohort-ok"
+              [[package]]
+              name = "mantle-cohort-smoke"
+              version = "0.1.0"
+              EOF
+              cat > "$work/src/main.rs" <<'EOF'
+              fn main() {
+                  println!("mantle-component-cohort-ok");
+              }
+              EOF
 
-              printf '\x00asm\x0d\x00\x01\x00' > "$work/octet-smoke.component.wasm"
-              octet_input_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$work/octet-smoke.component.wasm")"
-              octet_config="${wasmComponentToolchain}/share/mantle/octet/wasm-artifact-profiles.json"
-              if ! cargo-octet evidence collect \
-                --rail wasm-artifact \
-                --input "$work/octet-smoke.component.wasm" \
-                --config "$octet_config" \
-                --profile portable-component-baseline \
-                --parent-artifact "mantle:$octet_input_digest" \
-                --artifact-dir "$work/octet-evidence" \
-                --output-format json > "$work/octet-collect.json"; then
-                cat "$work/octet-collect.json"
-                exit 1
-              fi
-              if ! cargo-octet artifact verify \
-                --artifact-dir "$work/octet-evidence" \
-                --output-format json > "$work/octet-verify.json"; then
-                cat "$work/octet-verify.json"
-                exit 1
-              fi
-              ${pkgs.jq}/bin/jq --exit-status \
-                --arg input "b3:$octet_input_digest" \
-                '.status == "passed"
-                  and .profile == "portable-component-baseline"
-                  and .wasm_artifact.exact_artifact_identity == $input
-                  and .wasm_artifact.verification_role == "recorded_only"' \
-                "$work/octet-evidence/evidence-rail-receipt.json" > /dev/null
-              ${pkgs.jq}/bin/jq --exit-status '.status == "valid" and (.diagnostics | length) == 0' \
-                "$work/octet-verify.json" > /dev/null
+              export HOME="$work/home"
+              export CARGO_HOME="$work/cargo-home"
+              export CARGO_TARGET_DIR="$work/target"
+              export CARGO_NET_OFFLINE=true
+              export RUSTC="${wasmComponentToolchain}/bin/rustc"
+              export PATH="${wasmComponentToolchain}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin"
+              cd "$work"
+              cargo build --locked --offline --release --target wasm32-wasip2
+              component="$work/target/wasm32-wasip2/release/mantle-cohort-smoke.wasm"
+              wasm-tools validate "$component"
+              wasm-tools component wit "$component" > "$work/component.wit"
+              grep -F '@0.2.3' "$work/component.wit" > /dev/null
+              wasi-virt --wasi-version 0.2.3 --allow-stdio=true --out "$work/virtualized.wasm" "$component"
+              wasm-tools validate "$work/virtualized.wasm"
+              test "$(wasmtime run "$work/virtualized.wasm")" = "mantle-component-cohort-ok"
 
-              mkdir -p "$out/octet-evidence"
-            cp "$work/component.wit" "$out/component.wit"
-            cp "$work/virtualized.wasm" "$out/virtualized.wasm"
-              cp "$work/octet-verify.json" "$out/octet-verification.json"
-              cp "$work/octet-evidence/"* "$out/octet-evidence/"
-          '';
+                printf '\x00asm\x0d\x00\x01\x00' > "$work/octet-smoke.component.wasm"
+                octet_input_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$work/octet-smoke.component.wasm")"
+                octet_config="${wasmComponentToolchain}/share/mantle/octet/wasm-artifact-profiles.json"
+                if ! cargo-octet evidence collect \
+                  --rail wasm-artifact \
+                  --input "$work/octet-smoke.component.wasm" \
+                  --config "$octet_config" \
+                  --profile portable-component-baseline \
+                  --parent-artifact "mantle:$octet_input_digest" \
+                  --artifact-dir "$work/octet-evidence" \
+                  --output-format json > "$work/octet-collect.json"; then
+                  cat "$work/octet-collect.json"
+                  exit 1
+                fi
+                if ! cargo-octet artifact verify \
+                  --artifact-dir "$work/octet-evidence" \
+                  --output-format json > "$work/octet-verify.json"; then
+                  cat "$work/octet-verify.json"
+                  exit 1
+                fi
+                ${pkgs.jq}/bin/jq --exit-status \
+                  --arg input "b3:$octet_input_digest" \
+                  '.status == "passed"
+                    and .profile == "portable-component-baseline"
+                    and .wasm_artifact.exact_artifact_identity == $input
+                    and .wasm_artifact.verification_role == "recorded_only"' \
+                  "$work/octet-evidence/evidence-rail-receipt.json" > /dev/null
+                ${pkgs.jq}/bin/jq --exit-status '.status == "valid" and (.diagnostics | length) == 0' \
+                  "$work/octet-verify.json" > /dev/null
+
+                mkdir -p "$out/octet-evidence"
+              cp "$work/component.wit" "$out/component.wit"
+              cp "$work/virtualized.wasm" "$out/virtualized.wasm"
+                cp "$work/octet-verify.json" "$out/octet-verification.json"
+                cp "$work/octet-evidence/"* "$out/octet-evidence/"
+            '';
 
         astGrepPackageIdentity = pkgs.runCommand "mantle-ast-grep-package-identity-smoke" { } ''
           set -eu

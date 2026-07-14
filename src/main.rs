@@ -54,12 +54,12 @@ mod operator_diagnostics;
 mod pin_import;
 #[allow(dead_code)]
 mod portable_receipt;
-mod proof_clock_seccomp;
 #[allow(dead_code, clippy::type_complexity)]
 mod preserves_release_carrier;
 mod project_build;
 mod project_cmd;
 mod project_resolve;
+mod proof_clock_seccomp;
 #[allow(dead_code)]
 mod protected_exec;
 #[allow(dead_code)]
