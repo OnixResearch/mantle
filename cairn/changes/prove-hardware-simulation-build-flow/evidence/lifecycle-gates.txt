@@ -81,4 +81,3 @@ command: cairn gate tasks prove-hardware-simulation-build-flow --root .
   "valid": true,
   "verdict": "PASS"
 }
-
