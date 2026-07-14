@@ -4,7 +4,7 @@
 
 Adopt the immutable standalone evaluator-neutral Nickel export core while preserving Mantle's embedded evaluator, sandbox, destination, build, and release authority.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Standalone core source is immutable
 

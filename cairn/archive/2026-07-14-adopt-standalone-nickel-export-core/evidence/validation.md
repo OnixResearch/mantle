@@ -86,3 +86,22 @@ functional-core/shell tests passed.
 Export evidence remains bounded: it does not prove evaluator equivalence,
 complete observed import closure, semantic/build correctness, deployability, or
 release eligibility.
+
+## Post-archive validation
+
+The accepted specification was synchronized before archive. The exact
+post-archive validation command completed successfully:
+
+```text
+$ /home/brittonr/git/OnixResearch/cairn/target/debug/cairn validate --root .
+{
+  "change_issues": [],
+  "changes": 6,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 30,
+  "valid": true
+}
+```
