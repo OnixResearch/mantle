@@ -327,6 +327,50 @@ Mantle's sandbox policy; it is not evidence of Cargo-free execution, full Cargo
 compatibility, compiler correctness, release reproducibility, bootstrap
 correctness, or module-layer semantics.
 
+## WebAssembly component materialization
+
+Use the typed `lib/wasm_component.ncl` contract to author component build
+configuration, then provide the resolved pipeline request to the production
+shell:
+
+```bash
+nix build .#checks.x86_64-linux.wasm-component-toolchain-identity --no-link -L
+nix build .#checks.x86_64-linux.wasm-component-toolchain-compatibility --no-link -L
+mantle --json wasm-component build component-request.ncl \
+  --out target/component-evidence
+```
+
+The request must name absolute immutable source/package inputs, the checked
+`wkg.lock`, exact local WAC dependency bindings, and the generated-input owner
+receipts. Package resolution and every build tool run with network access
+unshared. The pinned cohort includes the immutable Octet source revision,
+`cargo-octet` package, checked profile configuration and identity, and its
+wasm-tools cohort identity.
+
+Successful output includes validated compiled, composed, virtualized, and
+metadata-normalized portable bytes; exact Octet receipt/provenance/verification
+files; stage receipt objects; `materialization-bundle.json`;
+`component-attestation.json`; `component-release-binding.json`; and
+`execution-report.json`. Consumers should deserialize the execution report and
+call `crunch_wasm_component::verify_pipeline_execution_report_files` before
+using any locator. That verifier rehashes published files and the copied source
+closure, reconstructs canonical stage/report/bundle identities, and rebuilds
+the attestation and release binding.
+
+`wasm-tools strip` is an explicit identity-changing normalization stage: its
+output is validated again and is the only portable object admitted to Octet,
+Wasmtime smoke validation, optional AOT, and release binding. A Wasmtime
+precompile remains target/CPU/configuration-bound trusted native output; it does
+not replace the portable component. Direct `wasm32-wasip2` output has no honest
+pre-component core-module handoff for Wizer, so enabled Wizer configuration is
+blocked with `wizer-pre-component-core-module-required` and records no
+transformed artifact.
+
+All outputs retain the non-claims `not-component-behavior-correctness`,
+`not-runtime-authority`, `not-runtime-sandboxing`, `not-release-eligibility`,
+and `not-octet-policy-interpretation`. Mantle records and binds Octet's decision
+and findings without reinterpreting them.
+
 ## Rust project verification lane
 
 Use `mantle rust-plan` only when you want explicit native Rust planner evidence.

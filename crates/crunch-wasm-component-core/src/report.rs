@@ -33,6 +33,7 @@ pub enum ComponentStageKind {
     Compilation,
     Composition,
     Virtualization,
+    MetadataNormalization,
     BuildValidation,
     OctetValidation,
     Wizer,

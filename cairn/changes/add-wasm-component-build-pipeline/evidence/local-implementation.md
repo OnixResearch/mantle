@@ -330,3 +330,92 @@ not AOT evidence, runtime authority, behavioral correctness, or release
 eligibility.
 
 No accepted spec was synced and the change was not archived.
+
+## Closeout checkpoint — 2026-07-14
+
+This section supersedes the 2026-07-12 blocker table for the implementation
+state at closeout. The exact Octet rail is now available from immutable Octet
+revision `86ee46b3b9257b145d2dbeb6ce9d9897607db99c`, package
+`cargo-octet` `0.1.0`, profile `portable-component-baseline`, and wasm-tools
+cohort `c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a`.
+Mantle retains Octet's receipt and verification report and binds them to the
+exact final portable bytes without reinterpreting the independent decision.
+
+The production fixture used
+`/nix/store/ysg1d1202xq9hjar9lvzwp3qiyjlqgh8-mantle-wasm-component-toolchain-v1`.
+It built a no-std Rust component, validated every identity-changing portable
+stage with the pinned `wasm-tools`, composed and virtualized with explicit
+plans, stripped producer metadata before final validation, invoked the exact
+Octet rail, smoke-ran `run()` with the pinned Wasmtime, published a canonical
+materialization bundle plus report/attestation/release bindings, and then
+consumer-rehashed every referenced file and directory. A separate production
+test emitted Wasmtime AOT bytes and retained target/CPU/configuration/cohort/
+WIT/build-input identity while preserving the non-portable trusted-native
+label and all release/runtime non-claims.
+
+Current command evidence:
+
+```text
+$ cargo fmt --check -p crunch-wasm-component-core -p crunch-wasm-component
+(exit 0)
+
+$ cargo test -p crunch-wasm-component-core --offline -- --nocapture
+running 35 tests
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+$ cargo check -p crunch-wasm-component-core --target wasm32-unknown-unknown --offline
+(exit 0)
+
+$ cargo test -p crunch-wasm-component --lib --offline -- --nocapture
+running 14 tests
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+$ cargo clippy -p crunch-wasm-component-core -p crunch-wasm-component --all-targets --offline -- -D warnings
+(exit 0)
+
+$ cargo test -p mantle --test wasm_component_cli --offline -- --nocapture
+running 3 tests
+test production_cli_executes_pinned_pipeline_and_publishes_rehashable_component_evidence ... ok
+test production_cli_binds_target_specific_wasmtime_aot_without_promoting_portability ... ok
+test production_cli_fails_closed_on_identity_interface_composition_and_runtime_drift ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+$ cargo test -p mantle --test stdlib_tests wasm_component --offline -- --nocapture
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out
+
+$ nix --option builders '' --option secret-key-files '' build '.#checks.x86_64-linux.wasm-component-toolchain-identity' --no-link -L
+(exit 0)
+
+$ nix --option builders '' --option secret-key-files '' build '.#checks.x86_64-linux.wasm-component-toolchain-compatibility' --no-link -L
+(exit 0)
+
+$ nix --option builders '' --option secret-key-files '' run .#tigerstyle -- check -p crunch-wasm-component-core
+(exit 0)
+
+$ /nix/store/jyg3svhxsnmwr98282ar4c93j625c2hh-cairn-0.1.0/bin/cairn validate --root . --policy cairn-policy/generated/cairn-policy.json
+{"valid":true,"issues":[],"change_issues":[],"spec_issues":[]}
+
+$ cairn gate proposal|design|tasks add-wasm-component-build-pipeline --root .
+proposal: {"valid":true,"verdict":"PASS","issues":[]}
+design: {"valid":true,"verdict":"PASS","issues":[]}
+tasks: {"valid":true,"verdict":"PASS","issues":[]}
+```
+
+### Remaining bounded blockers
+
+- **Wizer shell execution remains unimplemented and task 8 remains unchecked.**
+  The pinned Wizer accepts core Wasm modules, not Component Model bytes. The
+  pure core validates deterministic imports, repeated clean digest agreement,
+  and drift denial, but the current producer has no declared pre-component
+  core-module/componentization handoff. Enabling Wizer therefore fails closed
+  with `wizer-pre-component-core-module-required`; Mantle makes no claim that
+  any Component Model bytes were Wizer-transformed.
+- **The final quality/closeout task remains unchecked.** Scoped Tiger Style for
+  `crunch-wasm-component-core` passes, but the full
+  `crunch-wasm-component` rail still reports 89 shell-quality violations in
+  `files.rs`, `process.rs`, and neighboring imperative adapters. Strict Clippy,
+  focused tests, and Nix checks pass, but this broader Tiger Style debt is not
+  hidden or waived.
+
+No spec was synced and the change was not archived at this checkpoint.

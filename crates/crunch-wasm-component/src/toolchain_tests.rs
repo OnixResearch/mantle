@@ -11,6 +11,12 @@ use super::MAX_TOOLCHAIN_MANIFEST_BYTES;
 use super::read_version_output_with_limits;
 use super::verify_cohort_identity;
 use super::verify_toolchain_manifest;
+use crate::OCTET_PACKAGE_NAME;
+use crate::OCTET_PACKAGE_VERSION;
+use crate::OCTET_PROFILE_ID;
+use crate::OCTET_SOURCE_REPOSITORY;
+use crate::OCTET_SOURCE_REVISION;
+use crate::OctetRailIdentity;
 use crate::ToolLimits;
 use crate::ToolchainManifest;
 
@@ -19,25 +25,41 @@ const TEST_OUTPUT_BYTES: u64 = 128;
 
 #[test]
 fn cohort_identity_matches_sorted_compact_json_with_line_terminator() {
-    let canonical =
-        b"{\"rust_target\":\"wasm32-wasip2\",\"schema\":\"mantle-wasm-component-toolchain-v1\",\"tools\":[]}\n";
-    let identity = Blake3Identity::from_slice(canonical);
+    let octet = test_octet_identity();
+    let octet_digest = octet.config_digest_blake3.clone().into_hex();
+    let canonical = format!(
+        "{{\"octet\":{{\"config_digest_blake3\":\"{octet_digest}\",\"config_path\":\"share/octet/profiles.json\",\"package_name\":\"cargo-octet\",\"package_version\":\"0.1.0\",\"profile_id\":\"portable-component-baseline\",\"profile_identity_blake3\":\"{octet_digest}\",\"source_repository\":\"https://github.com/OnixResearch/octet\",\"source_revision\":\"86ee46b3b9257b145d2dbeb6ce9d9897607db99c\",\"wasm_tools_cohort_identity_blake3\":\"{octet_digest}\"}},\"rust_target\":\"wasm32-wasip2\",\"schema\":\"mantle-wasm-component-toolchain-v1\",\"tools\":[]}}\n"
+    );
+    let identity = Blake3Identity::from_slice(canonical.as_bytes());
     let manifest = ToolchainManifest {
         schema: "mantle-wasm-component-toolchain-v1".to_string(),
         rust_target: "wasm32-wasip2".to_string(),
+        octet,
         tools: Vec::new(),
         cohort_identity_blake3: identity.clone(),
     };
-    let bytes = format!(
-        "{{\"tools\":[],\"cohort_identity_blake3\":\"{}\",\"schema\":\"mantle-wasm-component-toolchain-v1\",\"rust_target\":\"wasm32-wasip2\"}}",
-        identity.clone().into_hex()
-    );
+    let bytes = serde_json::to_vec(&manifest).unwrap();
 
-    verify_cohort_identity(bytes.as_bytes(), &manifest).unwrap();
+    verify_cohort_identity(&bytes, &manifest).unwrap();
 
     let mut tampered = manifest;
     tampered.cohort_identity_blake3 = Blake3Identity::from_slice(b"tampered-cohort");
-    assert!(verify_cohort_identity(bytes.as_bytes(), &tampered).is_err());
+    assert!(verify_cohort_identity(&bytes, &tampered).is_err());
+}
+
+fn test_octet_identity() -> OctetRailIdentity {
+    let identity = Blake3Identity::from_slice(b"test-octet-identity");
+    OctetRailIdentity {
+        source_repository: OCTET_SOURCE_REPOSITORY.to_string(),
+        source_revision: OCTET_SOURCE_REVISION.to_string(),
+        package_name: OCTET_PACKAGE_NAME.to_string(),
+        package_version: OCTET_PACKAGE_VERSION.to_string(),
+        config_path: "share/octet/profiles.json".to_string(),
+        config_digest_blake3: identity.clone(),
+        profile_id: OCTET_PROFILE_ID.to_string(),
+        profile_identity_blake3: identity.clone(),
+        wasm_tools_cohort_identity_blake3: identity,
+    }
 }
 
 #[test]

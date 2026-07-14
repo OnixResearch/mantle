@@ -7,6 +7,12 @@ use std::time::Duration;
 
 use crunch_wasm_component_core::Blake3Identity;
 
+use crate::OCTET_PACKAGE_NAME;
+use crate::OCTET_PACKAGE_VERSION;
+use crate::OCTET_PROFILE_ID;
+use crate::OCTET_SOURCE_REPOSITORY;
+use crate::OCTET_SOURCE_REVISION;
+use crate::OctetRailIdentity;
 use crate::ToolInvocation;
 use crate::ToolLimits;
 use crate::ToolRecord;
@@ -150,6 +156,7 @@ impl Fixture {
             manifest: ToolchainManifest {
                 schema: "test-toolchain".to_string(),
                 rust_target: "test-target".to_string(),
+                octet: test_octet_identity(),
                 tools,
                 cohort_identity_blake3: Blake3Identity::from_slice(b"test-cohort"),
             },
@@ -169,6 +176,21 @@ impl Fixture {
             output_path: None,
             limits: ToolLimits::default(),
         }
+    }
+}
+
+fn test_octet_identity() -> OctetRailIdentity {
+    let identity = Blake3Identity::from_slice(b"test-octet-identity");
+    OctetRailIdentity {
+        source_repository: OCTET_SOURCE_REPOSITORY.to_string(),
+        source_revision: OCTET_SOURCE_REVISION.to_string(),
+        package_name: OCTET_PACKAGE_NAME.to_string(),
+        package_version: OCTET_PACKAGE_VERSION.to_string(),
+        config_path: "share/octet/profiles.json".to_string(),
+        config_digest_blake3: identity.clone(),
+        profile_id: OCTET_PROFILE_ID.to_string(),
+        profile_identity_blake3: identity.clone(),
+        wasm_tools_cohort_identity_blake3: identity,
     }
 }
 

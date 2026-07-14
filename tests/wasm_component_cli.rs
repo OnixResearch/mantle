@@ -45,7 +45,7 @@ use sha2::Digest;
 use sha2::Sha256;
 
 const PACKAGE_VERSION: &str = "0.1.0";
-const EXPECTED_STDOUT: &str = "mantle wasm production\n";
+const EXPECTED_STDOUT: &str = "42\n";
 const TOOLCHAIN_ENV: &str = "MANTLE_WASM_COMPONENT_TOOLCHAIN";
 const REQUIRED_RECEIPT_TOOL_COUNT: usize = 7;
 
@@ -64,7 +64,7 @@ impl CliFixture {
         let registry = temp.path().join("registry");
         let source = temp.path().join("source");
         fs::create_dir(&registry).unwrap();
-        create_source(&source);
+        create_source(&toolchain_root, &source);
         let package_path = prepare_registry_and_lock(&toolchain_root, temp.path(), &registry, &source);
         let package_object = file_object(&package_path);
         let protocol_digest = crunch_wasm_component_core::OciSha256Digest::parse(format!(
@@ -110,30 +110,73 @@ impl CliFixture {
 }
 
 #[test]
-fn production_cli_executes_pinned_pipeline_and_persists_octet_blocker() {
+fn production_cli_executes_pinned_pipeline_and_publishes_rehashable_component_evidence() {
     let fixture = CliFixture::new();
     let (command_output, output) = fixture.run(&fixture.request, "positive");
 
-    assert!(!command_output.status.success(), "Octet absence must keep consumer admission fail-closed");
-    let report = report_from_output(&command_output);
-    assert_eq!(report.final_status, "blocked");
     assert!(
-        report.blockers.iter().any(|blocker| blocker.code == "octet-wasm-artifact-rail-unavailable"),
-        "pipeline stopped before the authoritative Octet blocker: blockers={:?}\nstderr={}",
-        report.blockers,
+        command_output.status.success(),
+        "pinned component pipeline failed: stdout={}\nstderr={}",
+        String::from_utf8_lossy(&command_output.stdout),
         String::from_utf8_lossy(&command_output.stderr)
     );
-    assert!(report.materialization_bundle.is_none());
+    let report: PipelineExecutionReport = serde_json::from_slice(&command_output.stdout).unwrap();
+    assert_eq!(report.final_status, "succeeded");
+    assert!(report.blockers.is_empty());
+    let bundle = report.materialization_bundle.as_ref().expect("materialization bundle");
     assert!(report.component_report.is_some());
+    assert!(report.component_attestation.is_some());
+    assert!(report.release_binding.as_ref().is_some_and(|binding| !binding.release_eligible));
     assert!(output.join("execution-report.json").is_file());
+    assert!(output.join("materialization-bundle.json").is_file());
+    assert!(output.join("component-attestation.json").is_file());
+    assert!(output.join("component-release-binding.json").is_file());
     assert!(output.join("artifacts/compiled.wasm").is_file());
     assert!(output.join("artifacts/composed.wasm").is_file());
     assert!(output.join("artifacts/virtualized.wasm").is_file());
+    assert!(output.join("artifacts/normalized.wasm").is_file());
+    assert!(output.join("inputs/source").is_dir());
     assert!(!output.join("source").exists(), "work source must not enter the bounded publication");
     assert!(!output.join("target").exists(), "compiler scratch must not enter the bounded publication");
+    crunch_wasm_component::verify_materialization_bundle_files(bundle).unwrap();
+    crunch_wasm_component::verify_pipeline_execution_report_files(&report).unwrap();
     assert_required_tools_executed(&report);
-    let stderr = String::from_utf8_lossy(&command_output.stderr);
-    assert!(stderr.contains("authoritative blocker"), "{stderr}");
+    fs::write(output.join("component-attestation.json"), b"{}\n").unwrap();
+    let error = crunch_wasm_component::verify_pipeline_execution_report_files(&report)
+        .expect_err("tampered component evidence must fail consumer verification");
+    assert!(error.to_string().contains("published component artifact bytes drifted"));
+}
+
+#[test]
+fn production_cli_binds_target_specific_wasmtime_aot_without_promoting_portability() {
+    let fixture = CliFixture::new();
+    let mut request = fixture.request.clone();
+    let configuration =
+        (request.aot_target.clone(), request.aot_cpu_features.clone(), request.aot_configuration_args.clone());
+    request.manifest.aot = AotConfig {
+        mode: AotMode::TrustedNative,
+        target: Some(request.aot_target.clone()),
+        cpu_features: request.aot_cpu_features.clone(),
+        wasmtime_configuration_identity_blake3: Some(Blake3Identity::from_slice(
+            &serde_json::to_vec(&configuration).unwrap(),
+        )),
+    };
+    request.generated_inputs = generated_inputs(&request, &request.package_materializations[0].object.digest_blake3);
+    let (command_output, output) = fixture.run(&request, "trusted-native-aot");
+
+    assert!(
+        command_output.status.success(),
+        "trusted-native pipeline failed: stdout={}\nstderr={}",
+        String::from_utf8_lossy(&command_output.stdout),
+        String::from_utf8_lossy(&command_output.stderr)
+    );
+    let report: PipelineExecutionReport = serde_json::from_slice(&command_output.stdout).unwrap();
+    let bundle = report.materialization_bundle.as_ref().unwrap();
+    let aot = bundle.aot.as_ref().expect("target-specific AOT admission");
+    assert_eq!(aot.source_component_blake3, bundle.final_portable.digest_blake3);
+    assert!(output.join("artifacts/component.cwasm").is_file());
+    assert_eq!(report.release_binding.as_ref().unwrap().portable, bundle.final_portable);
+    assert!(!report.release_binding.as_ref().unwrap().release_eligible);
 }
 
 #[test]
@@ -144,6 +187,12 @@ fn production_cli_fails_closed_on_identity_interface_composition_and_runtime_dri
     tool_drift.manifest.cohort.wkg.executable.digest_blake3 = Blake3Identity::from_slice(b"tampered-wkg");
     let (output, evidence) = fixture.run(&tool_drift, "tool-drift");
     assert_preflight_rejected(&output, &evidence, "declared component cohort drifts from pinned tool `wkg`");
+
+    let mut octet_profile_drift = fixture.request.clone();
+    octet_profile_drift.manifest.validation_profiles.octet_artifact_profile_identity_blake3 =
+        Blake3Identity::from_slice(b"tampered-octet-profile");
+    let (output, evidence) = fixture.run(&octet_profile_drift, "octet-profile-drift");
+    assert_preflight_rejected(&output, &evidence, "declared Octet artifact profile identity drifts");
 
     let mut package_drift = fixture.request.clone();
     package_drift.package_materializations[0].object.digest_blake3 = Blake3Identity::from_slice(b"tampered-package");
@@ -160,7 +209,11 @@ fn production_cli_fails_closed_on_identity_interface_composition_and_runtime_dri
     }));
 
     let mut interface_drift = fixture.request.clone();
-    interface_drift.manifest.virtualization.expected_remaining_imports.clear();
+    interface_drift
+        .manifest
+        .virtualization
+        .expected_remaining_imports
+        .push("wasi:cli/stdout@0.2.3".to_string());
     let (output, evidence) = fixture.run(&interface_drift, "interface-drift");
     let report = report_from_output(&output);
     assert!(report.blockers.iter().any(|blocker| blocker.code == "remaining-import-drift"));
@@ -174,6 +227,25 @@ fn production_cli_fails_closed_on_identity_interface_composition_and_runtime_dri
     let (output, _) = fixture.run(&runtime_drift, "runtime-drift");
     let report = report_from_output(&output);
     assert!(report.blockers.iter().any(|blocker| blocker.code == "wasmtime-stdout-mismatch"));
+
+    let mut wizer_without_core_handoff = fixture.request.clone();
+    wizer_without_core_handoff.manifest.wizer = WizerConfig {
+        mode: WizerMode::Deterministic,
+        initialization_entrypoint: Some("wizer.initialize".to_string()),
+        deterministic_virtual_imports: Vec::new(),
+    };
+    let (output, _) = fixture.run(&wizer_without_core_handoff, "wizer-without-core-handoff");
+    let report = report_from_output(&output);
+    assert!(report.blockers.iter().any(|blocker| blocker.code == "wizer-pre-component-core-module-required"));
+    let wizer = report
+        .component_report
+        .unwrap()
+        .nodes
+        .into_iter()
+        .find(|node| node.kind == crunch_wasm_component_core::ComponentStageKind::Wizer)
+        .unwrap();
+    assert_eq!(wizer.status, crunch_wasm_component_core::ComponentStageStatus::Denied);
+    assert!(wizer.artifact.is_none(), "Component Model bytes must not be labeled as Wizer output");
 }
 
 fn report_from_output(output: &std::process::Output) -> PipelineExecutionReport {
@@ -195,12 +267,12 @@ fn assert_preflight_rejected(output: &std::process::Output, evidence: &Path, exp
     assert!(stderr.contains(expected), "unexpected preflight diagnostic: {stderr}");
 }
 
-fn create_source(source: &Path) {
+fn create_source(toolchain: &Path, source: &Path) {
     fs::create_dir_all(source.join("src")).unwrap();
-    fs::create_dir_all(source.join("wit")).unwrap();
+    fs::create_dir_all(source.join("wit/deps/demo-dep")).unwrap();
     fs::write(
         source.join("Cargo.toml"),
-        "[package]\nname = \"mantle-wasm-production-fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+        "[package]\nname = \"mantle-wasm-production-fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[lib]\ncrate-type = [\"cdylib\"]\n",
     )
     .unwrap();
     fs::write(
@@ -208,11 +280,37 @@ fn create_source(source: &Path) {
         "# This file is automatically @generated by Cargo.\nversion = 4\n\n[[package]]\nname = \"mantle-wasm-production-fixture\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    fs::write(source.join("src/main.rs"), format!("fn main() {{ println!(\"{}\"); }}\n", EXPECTED_STDOUT.trim()))
-        .unwrap();
     fs::write(
         source.join("wit/app.wit"),
-        "package demo:app@0.1.0;\n\nworld app {\n  import demo:dep/add@0.1.0;\n}\n",
+        "package demo:app@0.1.0;\n\nworld unused {\n  import demo:dep/add@0.1.0;\n}\n\nworld app {\n  export run: func() -> u32;\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("wit/deps/demo-dep/dep.wit"),
+        "package demo:dep@0.1.0;\n\ninterface add {\n  add: func(a: u32, b: u32) -> u32;\n}\n",
+    )
+    .unwrap();
+    let generation = ProcessCommand::new(toolchain.join("bin/wit-bindgen"))
+        .args(["rust", "--world", "app", "--generate-all", "--out-dir"])
+        .arg(source.join("src"))
+        .arg(source.join("wit"))
+        .env_clear()
+        .output()
+        .unwrap();
+    assert!(
+        generation.status.success(),
+        "wit-bindgen fixture generation failed: {}",
+        String::from_utf8_lossy(&generation.stderr)
+    );
+    let bindings_path = source.join("src/app.rs");
+    let bindings = fs::read_to_string(&bindings_path)
+        .unwrap()
+        .replace("wit_bindgen::rt::run_ctors_once();", "")
+        .replace("wit_bindgen::rt::maybe_link_cabi_realloc();", "");
+    fs::write(&bindings_path, bindings).unwrap();
+    fs::write(
+        source.join("src/lib.rs"),
+        "#![no_std]\nmod app;\nstruct Component;\nimpl app::Guest for Component { fn run() -> u32 { 42 } }\napp::export!(Component with_types_in app);\n#[panic_handler]\nfn panic(_: &core::panic::PanicInfo<'_>) -> ! { loop {} }\n",
     )
     .unwrap();
 }
@@ -299,7 +397,8 @@ fn request(
         size_bytes: 1,
     };
     let wit_source = file_object(&source.join("wit/app.wit"));
-    let profile = Blake3Identity::from_slice(b"fixture-profile");
+    let octet_profile = toolchain.octet.profile_identity_blake3.clone();
+    let runtime_profile = Blake3Identity::from_slice(b"fixture-runtime-profile");
     let expected_imports = expected_virtualized_imports();
     ComponentPipelineRequest {
         schema: PIPELINE_REQUEST_SCHEMA.to_string(),
@@ -369,8 +468,8 @@ fn request(
                 expected_remaining_imports: expected_imports,
             },
             validation_profiles: ValidationProfiles {
-                octet_artifact_profile_identity_blake3: profile.clone(),
-                expected_runtime_profile_identity_blake3: profile,
+                octet_artifact_profile_identity_blake3: octet_profile,
+                expected_runtime_profile_identity_blake3: runtime_profile,
             },
             wizer: WizerConfig {
                 mode: WizerMode::Disabled,
@@ -407,12 +506,13 @@ fn request(
             protocol_digest: protocol_digest.clone(),
             object: package_object,
         }],
-        cargo_component_relative_path: "wasm32-wasip2/release/mantle-wasm-production-fixture.wasm".to_string(),
+        cargo_component_relative_path: "wasm32-wasip2/release/mantle_wasm_production_fixture.wasm".to_string(),
         composition_dependencies: vec![CompositionDependency {
             package: "root:component".to_string(),
             source: CompositionDependencySource::CompiledComponent,
         }],
         package_resolution_network: false,
+        runtime_invoke: Some("run()".to_string()),
         expected_runtime_stdout: EXPECTED_STDOUT.to_string(),
         aot_target: "x86_64-unknown-linux-gnu".to_string(),
         aot_cpu_features: Vec::new(),
@@ -519,23 +619,7 @@ fn generated_inputs(request: &ComponentPipelineRequest, dependency: &Blake3Ident
 }
 
 fn expected_virtualized_imports() -> Vec<String> {
-    [
-        "wasi:clocks/wall-clock@0.2.3",
-        "wasi:io/error@0.2.3",
-        "wasi:io/poll@0.2.3",
-        "wasi:io/streams@0.2.3",
-        "wasi:cli/stdin@0.2.3",
-        "wasi:cli/stdout@0.2.3",
-        "wasi:cli/stderr@0.2.3",
-        "wasi:cli/terminal-input@0.2.3",
-        "wasi:cli/terminal-output@0.2.3",
-        "wasi:cli/terminal-stdin@0.2.3",
-        "wasi:cli/terminal-stdout@0.2.3",
-        "wasi:cli/terminal-stderr@0.2.3",
-    ]
-    .into_iter()
-    .map(str::to_string)
-    .collect()
+    Vec::new()
 }
 
 fn assert_required_tools_executed(report: &PipelineExecutionReport) {
@@ -544,9 +628,9 @@ fn assert_required_tools_executed(report: &PipelineExecutionReport) {
         "wit-bindgen",
         "cargo",
         "wac",
-        "wasi-virt",
         "wasm-tools",
         "wasmtime",
+        "cargo-octet",
     ];
     assert_eq!(tools.len(), REQUIRED_RECEIPT_TOOL_COUNT);
     for tool in tools {

@@ -425,11 +425,7 @@ fn validate_aot_request(request: &AotAdmissionRequest, blockers: &mut Vec<Compon
             "precompiled artifact target differs from the expected release target",
         ));
     }
-    if request.receipt.wasmtime_configuration_blake3 != request.expected_wasmtime_configuration_blake3
-        || request.receipt.cohort_blake3 != request.expected_cohort_blake3
-        || request.receipt.wit_profile_blake3 != request.expected_wit_profile_blake3
-        || request.receipt.build_inputs_blake3 != request.expected_build_inputs_blake3
-    {
+    if !aot_configuration_matches(request) {
         blockers.push(blocker(
             "aot-configuration-mismatch",
             "aot-receipt",
@@ -445,6 +441,24 @@ fn validate_aot_request(request: &AotAdmissionRequest, blockers: &mut Vec<Compon
     }
     debug_assert!(blockers.len() >= blocker_count_before);
     debug_assert!(blockers.iter().skip(blocker_count_before).all(|item| !item.code.is_empty()));
+}
+
+fn aot_configuration_matches(request: &AotAdmissionRequest) -> bool {
+    if request.receipt.wasmtime_configuration_blake3 != request.expected_wasmtime_configuration_blake3 {
+        return false;
+    }
+    if request.receipt.cohort_blake3 != request.expected_cohort_blake3 {
+        return false;
+    }
+    if request.receipt.wit_profile_blake3 != request.expected_wit_profile_blake3 {
+        return false;
+    }
+    if request.receipt.build_inputs_blake3 != request.expected_build_inputs_blake3 {
+        return false;
+    }
+    debug_assert_eq!(request.receipt.cohort_blake3, request.expected_cohort_blake3);
+    debug_assert_eq!(request.receipt.build_inputs_blake3, request.expected_build_inputs_blake3);
+    true
 }
 
 fn normalize_cpu_features(features: &mut Vec<String>, blockers: &mut Vec<ComponentBlocker>, subject: &str) {

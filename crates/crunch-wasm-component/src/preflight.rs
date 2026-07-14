@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use crunch_wasm_component_core::AotMode;
 use crunch_wasm_component_core::Blake3Identity;
 use crunch_wasm_component_core::GeneratedInputPlan;
 use crunch_wasm_component_core::LockFacts;
@@ -25,10 +26,17 @@ use crate::verify_toolchain_manifest;
 
 const DECLARED_COMPONENT_TOOL_COUNT: usize = 9;
 const MAX_WKG_LOCK_BYTES: u64 = 1024 * 1024;
+const MAX_AOT_CONFIGURATION_ARGS: usize = 64;
+const MAX_AOT_CONFIGURATION_ARG_BYTES: usize = 4096;
+const MAX_RUNTIME_STDOUT_BYTES: usize = 1024 * 1024;
+const MAX_RUNTIME_INVOKE_BYTES: usize = 256;
 
 pub(crate) struct PreparedPipeline {
     pub request: ComponentPipelineRequest,
     pub request_blake3: Blake3Identity,
+    pub manifest_blake3: Blake3Identity,
+    pub wit_profile_blake3: Blake3Identity,
+    pub aot_configuration_blake3: Option<Blake3Identity>,
     pub toolchain: VerifiedToolchain,
     pub generated_plan: GeneratedInputPlan,
     pub source_plan: SourceAcquisitionPlan,
@@ -42,10 +50,16 @@ pub(crate) fn prepare_pipeline(request: ComponentPipelineRequest) -> Result<Prep
     let request_blake3 = Blake3Identity::from_slice(&request_bytes);
     let toolchain = verify_toolchain_manifest(Path::new(&request.toolchain_manifest))?;
     validate_declared_cohort(&request.manifest.cohort, &toolchain)?;
+    validate_octet_profile(&request, &toolchain)?;
     let manifest_validation = validate_manifest(request.manifest.clone());
     if !manifest_validation.blockers.is_empty() {
         return Err(core_blockers("manifest", &manifest_validation.blockers));
     }
+    let manifest_blake3 = manifest_validation
+        .manifest_identity_blake3
+        .ok_or_else(|| Error::Invalid("validated component manifest omitted its identity".to_string()))?;
+    let wit_profile_blake3 = identity(&request.manifest.wit, "WIT profile")?;
+    let aot_configuration_blake3 = validate_aot_configuration(&request)?;
     let generated = finalize_generated_inputs(request.generated_inputs.clone());
     let generated_plan = generated.plan.ok_or_else(|| core_blockers("generated-inputs", &generated.blockers))?;
     let lock_path = Path::new(&request.source_root).join(&request.manifest.package_resolution.lock_path);
@@ -71,6 +85,9 @@ pub(crate) fn prepare_pipeline(request: ComponentPipelineRequest) -> Result<Prep
     Ok(PreparedPipeline {
         request,
         request_blake3,
+        manifest_blake3,
+        wit_profile_blake3,
+        aot_configuration_blake3,
         toolchain,
         generated_plan,
         source_plan,
@@ -99,12 +116,93 @@ fn validate_request_shape(request: &ComponentPipelineRequest) -> Result<(), Erro
     ] {
         validate_relative_path(Path::new(relative))?;
     }
-    if request.expected_runtime_stdout.len() > 1_048_576 {
+    if request.expected_runtime_stdout.len() > MAX_RUNTIME_STDOUT_BYTES {
         return Err(Error::Invalid("expected runtime stdout exceeds one MiB".to_string()));
+    }
+    if let Some(invoke) = &request.runtime_invoke {
+        let invalid = invoke.is_empty()
+            || invoke.len() > MAX_RUNTIME_INVOKE_BYTES
+            || invoke.starts_with('-')
+            || invoke.bytes().any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace());
+        if invalid {
+            return Err(Error::Invalid("runtime invocation export is empty, oversized, or unsafe".to_string()));
+        }
     }
     debug_assert!(source_root.is_absolute());
     debug_assert!(!request.wit_relative_path.is_empty());
+    debug_assert!(request.runtime_invoke.as_ref().is_none_or(|invoke| !invoke.starts_with('-')));
     Ok(())
+}
+
+fn validate_octet_profile(request: &ComponentPipelineRequest, toolchain: &VerifiedToolchain) -> Result<(), Error> {
+    if request.manifest.validation_profiles.octet_artifact_profile_identity_blake3
+        != toolchain.manifest.octet.profile_identity_blake3
+    {
+        return Err(Error::Invalid(
+            "declared Octet artifact profile identity drifts from the pinned Octet configuration".to_string(),
+        ));
+    }
+    debug_assert_eq!(toolchain.manifest.octet.profile_id, crate::OCTET_PROFILE_ID);
+    debug_assert_eq!(
+        request.manifest.validation_profiles.octet_artifact_profile_identity_blake3,
+        toolchain.manifest.octet.profile_identity_blake3
+    );
+    Ok(())
+}
+
+fn validate_aot_configuration(request: &ComponentPipelineRequest) -> Result<Option<Blake3Identity>, Error> {
+    if request.manifest.aot.mode == AotMode::Disabled {
+        return Ok(None);
+    }
+    if request.aot_target != request.manifest.aot.target.as_deref().unwrap_or_default() {
+        return Err(Error::Invalid("AOT target drifts from the typed component manifest".to_string()));
+    }
+    let mut expected_features = request.manifest.aot.cpu_features.clone();
+    let mut requested_features = request.aot_cpu_features.clone();
+    expected_features.sort();
+    requested_features.sort();
+    if expected_features != requested_features {
+        return Err(Error::Invalid("AOT CPU features drift from the typed component manifest".to_string()));
+    }
+    validate_aot_args(&request.aot_configuration_args)?;
+    let identity = identity(
+        &(request.aot_target.clone(), requested_features, request.aot_configuration_args.clone()),
+        "Wasmtime AOT configuration",
+    )?;
+    if request.manifest.aot.wasmtime_configuration_identity_blake3.as_ref() != Some(&identity) {
+        return Err(Error::Invalid("Wasmtime AOT configuration identity drifted".to_string()));
+    }
+    Ok(Some(identity))
+}
+
+fn validate_aot_args(args: &[String]) -> Result<(), Error> {
+    if args.len() > MAX_AOT_CONFIGURATION_ARGS {
+        return Err(Error::Invalid(format!(
+            "Wasmtime AOT configuration exceeds {MAX_AOT_CONFIGURATION_ARGS} arguments"
+        )));
+    }
+    for arg in args {
+        if !arg.starts_with("-C") || arg.len() > MAX_AOT_CONFIGURATION_ARG_BYTES || arg.as_bytes().contains(&0) {
+            return Err(Error::Invalid(
+                "Wasmtime AOT configuration arguments must be bounded explicit -C settings".to_string(),
+            ));
+        }
+    }
+    debug_assert!(args.len() <= MAX_AOT_CONFIGURATION_ARGS);
+    debug_assert!(args.iter().all(|arg| arg.starts_with("-C")));
+    Ok(())
+}
+
+fn identity(value: &impl serde::Serialize, label: &str) -> Result<Blake3Identity, Error> {
+    let bytes = serde_json::to_vec(value)
+        .map_err(|error| Error::Invalid(format!("serializing {label} identity input: {error}")))?;
+    if bytes.is_empty() {
+        return Err(Error::Invalid(format!("{label} identity input is empty")));
+    }
+    let identity = Blake3Identity::from_slice(&bytes);
+    debug_assert!(!identity.clone().into_hex().is_empty());
+    debug_assert!(!bytes.is_empty());
+    Ok(identity)
 }
 
 fn parse_lock(path: &Path, bytes: &[u8]) -> Result<WkgLock, Error> {

@@ -144,8 +144,7 @@ fn validate_request(request: &ComponentEvidenceRequest) -> Vec<ComponentBlocker>
     let mut blockers = Vec::new();
     let bundle_result = verify_materialization_bundle(request.bundle.clone());
     blockers.extend(bundle_result.blockers);
-    let report_result = verify_component_report(request.report.clone());
-    blockers.extend(report_result.blockers);
+    blockers.extend(verify_component_report(request.report.clone()).blockers);
     validate_object(&request.bundle_object, "materialization-bundle", &mut blockers);
     validate_object(&request.octet_report, "octet-report", &mut blockers);
     if !blockers.is_empty() {
@@ -164,17 +163,31 @@ fn validate_octet_stage(request: &ComponentEvidenceRequest, blockers: &mut Vec<C
     let Some(node) = unique_stage(&request.report.nodes, ComponentStageKind::OctetValidation, blockers) else {
         return;
     };
-    if node.status != ComponentStageStatus::Succeeded
-        || node.artifact.as_ref() != Some(&request.octet_report)
-        || node.profile_identity_blake3.as_ref() != Some(&request.octet_profile_blake3)
-        || request.bundle.expected_octet_profile_blake3 != request.octet_profile_blake3
-    {
+    if !octet_stage_matches(request, node) {
         blockers.push(blocker(
             "component-attestation-octet-mismatch",
             "octet-validation",
             "Octet stage, exact report object, profile, and materialization bundle do not agree",
         ));
     }
+}
+
+fn octet_stage_matches(request: &ComponentEvidenceRequest, node: &StageReportNode) -> bool {
+    if node.status != ComponentStageStatus::Succeeded {
+        return false;
+    }
+    if node.artifact.as_ref() != Some(&request.octet_report) {
+        return false;
+    }
+    if node.profile_identity_blake3.as_ref() != Some(&request.octet_profile_blake3) {
+        return false;
+    }
+    if request.bundle.expected_octet_profile_blake3 != request.octet_profile_blake3 {
+        return false;
+    }
+    debug_assert_eq!(node.artifact.as_ref(), Some(&request.octet_report));
+    debug_assert_eq!(node.profile_identity_blake3.as_ref(), Some(&request.octet_profile_blake3));
+    true
 }
 
 fn validate_materialization_stage(request: &ComponentEvidenceRequest, blockers: &mut Vec<ComponentBlocker>) {
@@ -241,7 +254,7 @@ fn artifact_attestation(request: &ComponentEvidenceRequest) -> Result<ComponentA
         non_claims,
     };
     let identity = canonical_identity(&input).map_err(|_| identity_blocker("component-attestation-identity-failed"))?;
-    Ok(ComponentArtifactAttestation {
+    let attestation = ComponentArtifactAttestation {
         schema: input.schema,
         materialization_bundle_blake3: input.materialization_bundle_blake3,
         materialization_bundle_object: input.materialization_bundle_object,
@@ -254,7 +267,10 @@ fn artifact_attestation(request: &ComponentEvidenceRequest) -> Result<ComponentA
         aot: input.aot,
         non_claims: input.non_claims,
         attestation_blake3: identity,
-    })
+    };
+    debug_assert!(!attestation.stage_node_blake3.is_empty());
+    debug_assert!(!attestation.non_claims.is_empty());
+    Ok(attestation)
 }
 
 fn release_binding(
@@ -275,7 +291,7 @@ fn release_binding(
         non_claims: request.bundle.non_claims.clone(),
     };
     let identity = canonical_identity(&input).map_err(|_| identity_blocker("component-release-identity-failed"))?;
-    Ok(ComponentReleaseBinding {
+    let release = ComponentReleaseBinding {
         schema: input.schema,
         materialization_bundle_blake3: input.materialization_bundle_blake3,
         materialization_bundle_object: input.materialization_bundle_object,
@@ -288,7 +304,10 @@ fn release_binding(
         release_eligible: input.release_eligible,
         non_claims: input.non_claims,
         release_binding_blake3: identity,
-    })
+    };
+    debug_assert!(!release.release_eligible);
+    debug_assert!(!release.non_claims.is_empty());
+    Ok(release)
 }
 
 fn validate_object(object: &StoreObject, subject: &str, blockers: &mut Vec<ComponentBlocker>) {
@@ -313,6 +332,7 @@ fn stage_label(kind: ComponentStageKind) -> String {
         ComponentStageKind::Compilation => "compilation",
         ComponentStageKind::Composition => "composition",
         ComponentStageKind::Virtualization => "virtualization",
+        ComponentStageKind::MetadataNormalization => "metadata-normalization",
         ComponentStageKind::BuildValidation => "build-validation",
         ComponentStageKind::OctetValidation => "octet-validation",
         ComponentStageKind::Wizer => "wizer",

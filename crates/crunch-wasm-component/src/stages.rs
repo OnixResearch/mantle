@@ -5,9 +5,11 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crunch_wasm_component_core::BoundedComponentClaim;
+use crunch_wasm_component_core::BuildValidationBinding;
 use crunch_wasm_component_core::ComponentStageKind;
 use crunch_wasm_component_core::ComponentStageStatus;
 use crunch_wasm_component_core::StoreObject;
+use crunch_wasm_component_core::ValidationDecision;
 use crunch_wasm_component_core::VirtualizationAction;
 use crunch_wasm_component_core::VirtualizationPlan;
 use crunch_wasm_component_core::WasiSubsystem;
@@ -279,9 +281,10 @@ pub(crate) fn run_validation_stage(
     stage_key: &str,
     artifact_path: &Path,
     artifact: &StoreObject,
-) -> Result<bool, Error> {
+) -> Result<Option<BuildValidationBinding>, Error> {
     let args = vec!["validate".to_string(), artifact_path.display().to_string()];
     let run = invoke(prepared, workspace, stage_key, "wasm-tools", args, None)?;
+    let report_blake3 = run.receipt.receipt_blake3.clone();
     state.add_receipt(run.receipt.clone())?;
     state.push_stage(
         stage_key,
@@ -298,8 +301,17 @@ pub(crate) fn run_validation_stage(
     )?;
     if !run.success {
         state.block("wasm-tools-validation-failed", stage_key, stderr_summary(&run.stderr));
+        return Ok(None);
     }
-    Ok(run.success)
+    let binding = BuildValidationBinding {
+        artifact_blake3: artifact.digest_blake3.clone(),
+        cohort_blake3: prepared.toolchain.manifest.cohort_identity_blake3.clone(),
+        report_blake3,
+        decision: ValidationDecision::Pass,
+    };
+    debug_assert_eq!(binding.artifact_blake3, artifact.digest_blake3);
+    debug_assert_eq!(binding.decision, ValidationDecision::Pass);
+    Ok(Some(binding))
 }
 
 pub(crate) fn run_virtualization_stage(
@@ -313,6 +325,34 @@ pub(crate) fn run_virtualization_stage(
         return Err(core_blockers("virtualization", &plan_result.blockers));
     };
     let output = workspace.root.join("virtualized.wasm");
+    let Some(input_imports) =
+        read_component_imports(prepared, workspace, state, "virtualization-input-inspection", composed_path)?
+    else {
+        return Ok(None);
+    };
+    if input_imports.is_empty() {
+        let validation = validate_remaining_imports(plan.clone(), input_imports);
+        if !validation.matches_plan {
+            for blocker in validation.blockers {
+                state.block(&blocker.code, "virtualization", blocker.message);
+            }
+            return Ok(None);
+        }
+        copy_regular_file_new(composed_path, &output, "import-free virtualization output")?;
+        let object = measure_artifact(&output, "virtualized.wasm", workspace)?;
+        state.push_stage(
+            "virtualization",
+            ComponentStageKind::Virtualization,
+            ComponentStageStatus::Succeeded,
+            Some(object.clone()),
+            None,
+            Some(plan.identity_blake3),
+            vec![BoundedComponentClaim::DenyAllVirtualizationPlanned],
+        )?;
+        debug_assert!(output.is_file());
+        debug_assert_eq!(object.digest_blake3, hash_file_bounded(composed_path)?);
+        return Ok(Some((output, object)));
+    }
     let args = virtualization_args(&plan, composed_path, &output)?;
     let run = invoke(prepared, workspace, "virtualization", "wasi-virt", args, Some(output.clone()))?;
     state.add_receipt(run.receipt.clone())?;
@@ -345,6 +385,53 @@ pub(crate) fn run_virtualization_stage(
     Ok(Some((output, object)))
 }
 
+pub(crate) fn run_metadata_normalization_stage(
+    prepared: &PreparedPipeline,
+    workspace: &StageWorkspace,
+    state: &mut ExecutionState,
+    artifact_path: &Path,
+) -> Result<Option<(PathBuf, StoreObject)>, Error> {
+    let output = workspace.root.join("normalized.wasm");
+    let args = vec![
+        "strip".to_string(),
+        artifact_path.display().to_string(),
+        "-o".to_string(),
+        output.display().to_string(),
+    ];
+    let run = invoke(prepared, workspace, "metadata-normalization", "wasm-tools", args, Some(output.clone()))?;
+    state.add_receipt(run.receipt)?;
+    if !run.success {
+        state.push_stage(
+            "metadata-normalization",
+            ComponentStageKind::MetadataNormalization,
+            ComponentStageStatus::Failed,
+            None,
+            Some(prepared.toolchain.tool_digest("wasm-tools")?),
+            None,
+            Vec::new(),
+        )?;
+        state.block(
+            "wasm-metadata-normalization-failed",
+            "metadata-normalization",
+            "pinned wasm-tools did not produce the profile-normalized component",
+        );
+        return Ok(None);
+    }
+    let object = measure_artifact(&output, "normalized.wasm", workspace)?;
+    state.push_stage(
+        "metadata-normalization",
+        ComponentStageKind::MetadataNormalization,
+        ComponentStageStatus::Succeeded,
+        Some(object.clone()),
+        Some(prepared.toolchain.tool_digest("wasm-tools")?),
+        None,
+        vec![BoundedComponentClaim::ExactInputIdentities],
+    )?;
+    debug_assert!(output.is_file());
+    debug_assert!(object.size_bytes > 0);
+    Ok(Some((output, object)))
+}
+
 pub(crate) fn run_runtime_smoke(
     prepared: &PreparedPipeline,
     workspace: &StageWorkspace,
@@ -352,7 +439,11 @@ pub(crate) fn run_runtime_smoke(
     artifact_path: &Path,
     artifact: &StoreObject,
 ) -> Result<bool, Error> {
-    let args = vec!["run".to_string(), artifact_path.display().to_string()];
+    let mut args = vec!["run".to_string()];
+    if let Some(runtime_invoke) = &prepared.request.runtime_invoke {
+        args.extend(["--invoke".to_string(), runtime_invoke.clone()]);
+    }
+    args.push(artifact_path.display().to_string());
     let run = invoke(prepared, workspace, "runtime-smoke", "wasmtime", args, None)?;
     state.add_receipt(run.receipt.clone())?;
     let expected = prepared.request.expected_runtime_stdout.as_bytes();
@@ -384,39 +475,6 @@ pub(crate) fn run_runtime_smoke(
     Ok(matches)
 }
 
-pub(crate) fn add_octet_blocker(
-    prepared: &PreparedPipeline,
-    state: &mut ExecutionState,
-    artifact: &StoreObject,
-) -> Result<(), Error> {
-    state.block(
-        crate::OCTET_AUTHORITY_BLOCKER,
-        "octet-validation",
-        "canonical Octet has no implemented Wasm artifact rail CLI/package; portable bytes cannot enter a consumer bundle",
-    );
-    state.push_stage(
-        "octet-validation",
-        ComponentStageKind::OctetValidation,
-        ComponentStageStatus::Denied,
-        Some(artifact.clone()),
-        None,
-        Some(prepared.request.manifest.validation_profiles.octet_artifact_profile_identity_blake3.clone()),
-        Vec::new(),
-    )?;
-    state.push_stage(
-        "materialization-bundle",
-        ComponentStageKind::MaterializationBundle,
-        ComponentStageStatus::NotRun,
-        None,
-        None,
-        None,
-        Vec::new(),
-    )?;
-    debug_assert!(!state.blockers.is_empty());
-    debug_assert_eq!(state.blockers.last().expect("Octet blocker exists").code, crate::OCTET_AUTHORITY_BLOCKER);
-    Ok(())
-}
-
 fn inspect_remaining_imports(
     prepared: &PreparedPipeline,
     workspace: &StageWorkspace,
@@ -424,16 +482,11 @@ fn inspect_remaining_imports(
     plan: &VirtualizationPlan,
     output: &Path,
 ) -> Result<bool, Error> {
-    let args = vec!["component".to_string(), "wit".to_string(), output.display().to_string()];
-    let run = invoke(prepared, workspace, "virtualization-import-inspection", "wasm-tools", args, None)?;
-    state.add_receipt(run.receipt.clone())?;
-    if !run.success {
-        state.block("virtualization-inspection-failed", "virtualization", stderr_summary(&run.stderr));
+    let Some(observed) =
+        read_component_imports(prepared, workspace, state, "virtualization-import-inspection", output)?
+    else {
         return Ok(false);
-    }
-    let wit = String::from_utf8(run.stdout)
-        .map_err(|error| Error::Tool(format!("wasm-tools WIT inspection was not UTF-8: {error}")))?;
-    let observed = wit.lines().filter_map(parse_import_line).collect();
+    };
     let validation = validate_remaining_imports(plan.clone(), observed);
     if !validation.matches_plan {
         for blocker in validation.blockers {
@@ -441,6 +494,32 @@ fn inspect_remaining_imports(
         }
     }
     Ok(validation.matches_plan)
+}
+
+fn read_component_imports(
+    prepared: &PreparedPipeline,
+    workspace: &StageWorkspace,
+    state: &mut ExecutionState,
+    stage_key: &str,
+    component: &Path,
+) -> Result<Option<Vec<String>>, Error> {
+    let args = vec![
+        "component".to_string(),
+        "wit".to_string(),
+        component.display().to_string(),
+    ];
+    let run = invoke(prepared, workspace, stage_key, "wasm-tools", args, None)?;
+    state.add_receipt(run.receipt.clone())?;
+    if !run.success {
+        state.block("virtualization-inspection-failed", "virtualization", stderr_summary(&run.stderr));
+        return Ok(None);
+    }
+    let wit = String::from_utf8(run.stdout)
+        .map_err(|error| Error::Tool(format!("wasm-tools WIT inspection was not UTF-8: {error}")))?;
+    let imports = wit.lines().filter_map(parse_import_line).collect();
+    debug_assert!(stage_key.starts_with("virtualization-"));
+    debug_assert!(component.is_absolute());
+    Ok(Some(imports))
 }
 
 fn parse_import_line(line: &str) -> Option<String> {
@@ -567,7 +646,7 @@ fn verify_wkg_outputs(
     Ok(true)
 }
 
-fn invoke(
+pub(crate) fn invoke(
     prepared: &PreparedPipeline,
     workspace: &StageWorkspace,
     stage_key: &str,
@@ -628,7 +707,7 @@ fn tool_environment(
     ]))
 }
 
-fn measure_artifact(source: &Path, name: &str, workspace: &StageWorkspace) -> Result<StoreObject, Error> {
+pub(crate) fn measure_artifact(source: &Path, name: &str, workspace: &StageWorkspace) -> Result<StoreObject, Error> {
     let metadata = fs::symlink_metadata(source)
         .map_err(|error| Error::io("reading component artifact metadata", source, error))?;
     if !metadata.file_type().is_file() || metadata.len() == 0 {
@@ -648,7 +727,11 @@ fn measure_artifact(source: &Path, name: &str, workspace: &StageWorkspace) -> Re
     Ok(object)
 }
 
-fn publish_evidence_artifact(source: &Path, name: &str, workspace: &StageWorkspace) -> Result<StoreObject, Error> {
+pub(crate) fn publish_evidence_artifact(
+    source: &Path,
+    name: &str,
+    workspace: &StageWorkspace,
+) -> Result<StoreObject, Error> {
     let object = measure_artifact(source, name, workspace)?;
     publish_validated_artifact(source, name, &object, workspace)?;
     Ok(object)

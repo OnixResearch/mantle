@@ -218,11 +218,12 @@ fn validate_request(request: &MaterializationBundleRequest, blockers: &mut Vec<C
 }
 
 fn validate_bounds(request: &MaterializationBundleRequest, blockers: &mut Vec<ComponentBlocker>) {
-    let exceeds_bound = is_count_above_bound(request.wit_inputs.len(), MAX_BUNDLE_WIT_INPUTS)
+    let blocker_count_before = blockers.len();
+    let is_any_bound_exceeded = is_count_above_bound(request.wit_inputs.len(), MAX_BUNDLE_WIT_INPUTS)
         || is_count_above_bound(request.package_inputs.len(), MAX_BUNDLE_PACKAGE_INPUTS)
         || is_count_above_bound(request.stage_receipts.len(), MAX_BUNDLE_STAGE_RECEIPTS)
         || is_count_above_bound(request.non_claims.len(), MAX_BUNDLE_NON_CLAIMS);
-    if exceeds_bound {
+    if is_any_bound_exceeded {
         blockers.push(blocker(
             "materialization-bundle-limit",
             "materialization-bundle",
@@ -236,6 +237,8 @@ fn validate_bounds(request: &MaterializationBundleRequest, blockers: &mut Vec<Co
             "materialization bundle requires WIT inputs and stage receipts",
         ));
     }
+    debug_assert!(blockers.len() >= blocker_count_before);
+    debug_assert!(blockers.iter().skip(blocker_count_before).all(|item| !item.code.is_empty()));
 }
 
 fn validate_input_objects(request: &MaterializationBundleRequest, blockers: &mut Vec<ComponentBlocker>) {
@@ -253,6 +256,7 @@ fn validate_input_objects(request: &MaterializationBundleRequest, blockers: &mut
 }
 
 fn validate_stage_receipts(request: &MaterializationBundleRequest, blockers: &mut Vec<ComponentBlocker>) {
+    let blocker_count_before = blockers.len();
     if is_count_above_bound(request.stage_receipts.len(), MAX_BUNDLE_STAGE_RECEIPTS) {
         return;
     }
@@ -296,9 +300,12 @@ fn validate_stage_receipts(request: &MaterializationBundleRequest, blockers: &mu
             ));
         }
     }
+    debug_assert!(keys.len() <= request.stage_receipts.len());
+    debug_assert!(blockers.len() >= blocker_count_before);
 }
 
 fn validate_non_claims(non_claims: &[String], blockers: &mut Vec<ComponentBlocker>) {
+    let blocker_count_before = blockers.len();
     if is_count_above_bound(non_claims.len(), MAX_BUNDLE_NON_CLAIMS) {
         return;
     }
@@ -322,9 +329,12 @@ fn validate_non_claims(non_claims: &[String], blockers: &mut Vec<ComponentBlocke
             ));
         }
     }
+    debug_assert!(unique.len() <= non_claims.len());
+    debug_assert!(blockers.len() >= blocker_count_before);
 }
 
 fn validate_optional_outputs(request: &MaterializationBundleRequest, blockers: &mut Vec<ComponentBlocker>) {
+    let blocker_count_before = blockers.len();
     if let Some(wizer) = &request.wizer {
         if !wizer.eligible_for_bundle || wizer.output.digest_blake3 != request.final_portable.digest_blake3 {
             blockers.push(blocker(
@@ -357,6 +367,8 @@ fn validate_optional_outputs(request: &MaterializationBundleRequest, blockers: &
             ));
         }
     }
+    debug_assert!(blockers.len() >= blocker_count_before);
+    debug_assert!(blockers.iter().skip(blocker_count_before).all(|item| !item.code.is_empty()));
 }
 
 fn validate_store_object(object: &StoreObject, subject: &str, blockers: &mut Vec<ComponentBlocker>) {
@@ -437,6 +449,7 @@ fn stage_label(kind: ComponentStageKind) -> String {
         ComponentStageKind::Compilation => "compilation",
         ComponentStageKind::Composition => "composition",
         ComponentStageKind::Virtualization => "virtualization",
+        ComponentStageKind::MetadataNormalization => "metadata-normalization",
         ComponentStageKind::BuildValidation => "build-validation",
         ComponentStageKind::OctetValidation => "octet-validation",
         ComponentStageKind::Wizer => "wizer",

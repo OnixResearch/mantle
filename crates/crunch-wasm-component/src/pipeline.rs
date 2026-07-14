@@ -1,26 +1,32 @@
 use std::fs;
 use std::path::Path;
 
+use crunch_wasm_component_core::AotMode;
 use crunch_wasm_component_core::ComponentStageKind;
 use crunch_wasm_component_core::ComponentStageStatus;
+use crunch_wasm_component_core::PortableAdmissionRequest;
 use crunch_wasm_component_core::WizerMode;
+use crunch_wasm_component_core::bind_portable_admission;
 use crunch_wasm_component_core::cohort_identity;
 
 use crate::ComponentPipelineRequest;
 use crate::Error;
 use crate::PipelineExecutionReport;
 use crate::PipelinePaths;
+use crate::aot::run_aot_stage;
+use crate::materialization::materialize_bundle;
+use crate::octet::run_octet_validation;
 use crate::preflight::PreparedPipeline;
 use crate::preflight::prepare_pipeline;
 use crate::reporting::ExecutionState;
 use crate::reporting::finish_execution;
 use crate::stages::StageWorkspace;
-use crate::stages::add_octet_blocker;
 use crate::stages::create_workspace;
 use crate::stages::publish_validated_artifact;
 use crate::stages::run_binding_stage;
 use crate::stages::run_compilation_stage;
 use crate::stages::run_composition_stage;
+use crate::stages::run_metadata_normalization_stage;
 use crate::stages::run_runtime_smoke;
 use crate::stages::run_validation_stage;
 use crate::stages::run_virtualization_stage;
@@ -76,7 +82,7 @@ fn execute_available_pipeline(
         add_not_run_bundle(state)?;
         return Ok(());
     };
-    if !run_validation_stage(prepared, workspace, state, "compiled-validation", &compiled_path, &compiled)? {
+    if run_validation_stage(prepared, workspace, state, "compiled-validation", &compiled_path, &compiled)?.is_none() {
         add_not_run_bundle(state)?;
         return Ok(());
     }
@@ -86,7 +92,7 @@ fn execute_available_pipeline(
         add_not_run_bundle(state)?;
         return Ok(());
     };
-    if !run_validation_stage(prepared, workspace, state, "composed-validation", &composed_path, &composed)? {
+    if run_validation_stage(prepared, workspace, state, "composed-validation", &composed_path, &composed)?.is_none() {
         add_not_run_bundle(state)?;
         return Ok(());
     }
@@ -97,27 +103,43 @@ fn execute_available_pipeline(
         add_not_run_bundle(state)?;
         return Ok(());
     };
-    if !run_validation_stage(prepared, workspace, state, "virtualized-validation", &final_path, &final_component)? {
+    if run_validation_stage(prepared, workspace, state, "virtualized-validation", &final_path, &final_component)?
+        .is_none()
+    {
         add_not_run_bundle(state)?;
         return Ok(());
     }
     publish_validated_artifact(&final_path, "virtualized.wasm", &final_component, workspace)?;
     state.add_artifact("virtualized-component", &final_component)?;
-    if !run_runtime_smoke(prepared, workspace, state, &final_path, &final_component)? {
+    let Some((portable_path, portable_component)) =
+        run_metadata_normalization_stage(prepared, workspace, state, &final_path)?
+    else {
+        add_not_run_bundle(state)?;
+        return Ok(());
+    };
+    let Some(final_build_validation) =
+        run_validation_stage(prepared, workspace, state, "portable-validation", &portable_path, &portable_component)?
+    else {
+        add_not_run_bundle(state)?;
+        return Ok(());
+    };
+    publish_validated_artifact(&portable_path, "normalized.wasm", &portable_component, workspace)?;
+    state.add_artifact("normalized-portable-component", &portable_component)?;
+    if !run_runtime_smoke(prepared, workspace, state, &portable_path, &portable_component)? {
         add_not_run_bundle(state)?;
         return Ok(());
     }
     if prepared.request.manifest.wizer.mode != WizerMode::Disabled {
         state.block(
-            "wizer-component-transform-unsupported",
+            "wizer-pre-component-core-module-required",
             "wizer",
-            "pinned Wizer accepts core modules, not Component Model binaries; no unsafe transform fallback is allowed",
+            "pinned Wizer accepts pre-component core modules only; this component-producing pipeline has no declared core-module/componentization boundary and will not mislabel Component Model bytes as Wizer-transformed",
         );
         state.push_stage(
             "wizer",
             ComponentStageKind::Wizer,
             ComponentStageStatus::Denied,
-            Some(final_component),
+            None,
             Some(prepared.toolchain.tool_digest("wizer")?),
             None,
             Vec::new(),
@@ -125,7 +147,42 @@ fn execute_available_pipeline(
         add_not_run_bundle(state)?;
         return Ok(());
     }
-    add_octet_blocker(prepared, state, &final_component)
+    state.push_stage(
+        "wizer",
+        ComponentStageKind::Wizer,
+        ComponentStageStatus::NotRun,
+        None,
+        Some(prepared.toolchain.tool_digest("wizer")?),
+        None,
+        Vec::new(),
+    )?;
+    let Some(octet) = run_octet_validation(prepared, workspace, state, &portable_path, &portable_component)? else {
+        add_not_run_bundle(state)?;
+        return Ok(());
+    };
+    let portable_result = bind_portable_admission(PortableAdmissionRequest {
+        artifact: portable_component.clone(),
+        build_validation: final_build_validation,
+        octet_validation: Some(octet.binding),
+        octet_required: true,
+        expected_octet_profile_blake3: prepared.toolchain.manifest.octet.profile_identity_blake3.clone(),
+        expected_octet_cohort_blake3: prepared.toolchain.manifest.octet.wasm_tools_cohort_identity_blake3.clone(),
+    });
+    let Some(portable) = portable_result.admission else {
+        for blocker in portable_result.blockers {
+            state.block(&blocker.code, "portable-admission", blocker.message);
+        }
+        add_not_run_bundle(state)?;
+        return Ok(());
+    };
+    debug_assert_eq!(octet.evidence.artifact.digest_blake3, portable.artifact.digest_blake3);
+    let aot = run_aot_stage(prepared, workspace, state, &portable_path, &portable)?;
+    if prepared.request.manifest.aot.mode == AotMode::TrustedNative && aot.is_none() {
+        add_not_run_bundle(state)?;
+        return Ok(());
+    }
+    materialize_bundle(prepared, workspace, state, &portable_component, aot)?;
+    Ok(())
 }
 
 fn add_not_run_bundle(state: &mut ExecutionState) -> Result<(), Error> {

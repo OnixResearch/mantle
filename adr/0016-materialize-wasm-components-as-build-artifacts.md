@@ -36,9 +36,12 @@ The package-resolution shell uses an explicit `wkg` configuration and checked
 stages. WAC composition receives every dependency through an exact local
 binding; missing dependencies do not fall back to Warg or another live
 resolver. Each identity-changing portable artifact re-enters pinned
-`wasm-tools` validation. Consumer and release profiles also bind the independent
-Octet artifact-rail result for the same bytes without translating Octet
-findings into Mantle policy.
+`wasm-tools` validation. Before final portable admission, pinned `wasm-tools
+strip` removes non-semantic producer/custom metadata that otherwise duplicates
+across nested Rust component modules; the normalized bytes are validated again
+and become the exact Octet, runtime-smoke, bundle, and release input. Consumer
+and release profiles bind the independent Octet artifact-rail result for those
+same bytes without translating Octet findings into Mantle policy.
 
 Rust `wasm32-wasip2`, wit-bindgen, wasm-component-ld, wasm-tools, WAC,
 WASI-Virt, Wizer, and Wasmtime form one compatibility cohort. Any member,
@@ -47,7 +50,11 @@ invalidates cohort-bound outputs until the relevant fixtures rerun.
 
 Optional Wizer output remains portable but must bind deterministic virtual
 inputs and repeated-output evidence when deterministic eligibility is claimed.
-Optional Wasmtime precompile output is target-specific trusted native code, not
+Wizer accepts core modules rather than Component Model binaries, so a direct
+`wasm32-wasip2` component pipeline without a declared pre-component core-module
+handoff denies Wizer execution and records no transformed artifact instead of
+mislabeling component bytes. Optional Wasmtime precompile output is
+target-specific trusted native code, not
 portable validated Wasm. Consumers receive one versioned materialization bundle
 whose exact objects and BLAKE3 identities can be remeasured. Later Valence or
 Cairn admission evidence may refer to that bundle but cannot enter its canonical

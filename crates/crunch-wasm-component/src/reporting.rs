@@ -10,16 +10,22 @@ use std::path::PathBuf;
 
 use crunch_wasm_component_core::Blake3Identity;
 use crunch_wasm_component_core::BoundedComponentClaim;
+use crunch_wasm_component_core::ComponentArtifactAttestation;
 use crunch_wasm_component_core::ComponentBuildReport;
+use crunch_wasm_component_core::ComponentEvidenceRequest;
+use crunch_wasm_component_core::ComponentReleaseBinding;
 use crunch_wasm_component_core::ComponentStageKind;
 use crunch_wasm_component_core::ComponentStageStatus;
+use crunch_wasm_component_core::MaterializationBundle;
 use crunch_wasm_component_core::StageReportInput;
 use crunch_wasm_component_core::StoreObject;
+use crunch_wasm_component_core::build_component_evidence;
 use crunch_wasm_component_core::build_component_report;
 use crunch_wasm_component_core::stage_report_identity;
 use serde::Serialize;
 
 use crate::Error;
+use crate::OctetValidationEvidence;
 use crate::PIPELINE_EXECUTION_REPORT_SCHEMA;
 use crate::PipelineArtifact;
 use crate::PipelineBlocker;
@@ -43,8 +49,11 @@ pub(crate) struct ExecutionState {
     pub receipts: Vec<ToolExecutionReceipt>,
     pub artifacts: Vec<PipelineArtifact>,
     pub blockers: Vec<PipelineBlocker>,
+    pub octet_validations: Vec<OctetValidationEvidence>,
     pub stage_inputs: Vec<StageReportInput>,
     pub last_stage_identity: Option<Blake3Identity>,
+    pub materialization_bundle: Option<MaterializationBundle>,
+    pub materialization_bundle_object: Option<StoreObject>,
     pub non_claims: Vec<String>,
 }
 
@@ -56,7 +65,11 @@ struct ExecutionReportIdentityInput {
     stage_receipts: Vec<ToolExecutionReceipt>,
     artifacts: Vec<PipelineArtifact>,
     blockers: Vec<PipelineBlocker>,
+    octet_validations: Vec<OctetValidationEvidence>,
     component_report: Option<ComponentBuildReport>,
+    materialization_bundle: Option<MaterializationBundle>,
+    component_attestation: Option<ComponentArtifactAttestation>,
+    release_binding: Option<ComponentReleaseBinding>,
     final_status: String,
     non_claims: Vec<String>,
 }
@@ -74,8 +87,11 @@ impl ExecutionState {
             receipts: Vec::new(),
             artifacts: Vec::new(),
             blockers: Vec::new(),
+            octet_validations: Vec::new(),
             stage_inputs: Vec::new(),
             last_stage_identity: None,
+            materialization_bundle: None,
+            materialization_bundle_object: None,
             non_claims,
         })
     }
@@ -106,6 +122,31 @@ impl ExecutionState {
         self.receipts.push(receipt);
         debug_assert!(self.receipts.len() <= MAX_EXECUTION_RECEIPTS);
         debug_assert!(self.receipts.last().is_some_and(|receipt| !receipt.stage_key.is_empty()));
+        Ok(())
+    }
+
+    pub fn add_octet_validation(&mut self, evidence: OctetValidationEvidence) -> Result<(), Error> {
+        if self.octet_validations.len() >= MAX_EXECUTION_STAGES {
+            return Err(Error::Invalid(format!("execution report exceeds {MAX_EXECUTION_STAGES} Octet validations")));
+        }
+        self.octet_validations.push(evidence);
+        debug_assert!(self.octet_validations.len() <= MAX_EXECUTION_STAGES);
+        debug_assert!(self.octet_validations.last().is_some_and(|item| item.decision == "passed"));
+        Ok(())
+    }
+
+    pub fn set_materialization_bundle(
+        &mut self,
+        bundle: MaterializationBundle,
+        object: StoreObject,
+    ) -> Result<(), Error> {
+        if self.materialization_bundle.is_some() || self.materialization_bundle_object.is_some() {
+            return Err(Error::Invalid("materialization bundle was already recorded".to_string()));
+        }
+        self.materialization_bundle = Some(bundle);
+        self.materialization_bundle_object = Some(object);
+        debug_assert!(self.materialization_bundle.is_some());
+        debug_assert!(self.materialization_bundle_object.is_some());
         Ok(())
     }
 
@@ -173,6 +214,8 @@ pub(crate) fn finish_execution(
     }
     validate_state_bounds(&state)?;
     let component_report = component_result.report;
+    let (component_attestation, release_binding) =
+        build_and_publish_component_evidence(&mut state, component_report.as_ref(), &scratch_root, evidence_dir)?;
     let final_status = if state.blockers.is_empty() {
         "succeeded"
     } else {
@@ -186,7 +229,11 @@ pub(crate) fn finish_execution(
         stage_receipts: state.receipts.clone(),
         artifacts: state.artifacts.clone(),
         blockers: state.blockers.clone(),
+        octet_validations: state.octet_validations.clone(),
         component_report: component_report.clone(),
+        materialization_bundle: state.materialization_bundle.clone(),
+        component_attestation: component_attestation.clone(),
+        release_binding: release_binding.clone(),
         final_status: final_status.clone(),
         non_claims: state.non_claims.clone(),
     };
@@ -199,8 +246,11 @@ pub(crate) fn finish_execution(
         stage_receipts: state.receipts,
         artifacts: state.artifacts,
         blockers: state.blockers,
+        octet_validations: state.octet_validations,
         component_report,
-        materialization_bundle: None,
+        materialization_bundle: state.materialization_bundle,
+        component_attestation,
+        release_binding,
         final_status,
         report_blake3: Blake3Identity::from_slice(&canonical),
         non_claims: state.non_claims,
@@ -212,10 +262,90 @@ pub(crate) fn finish_execution(
     Ok(report)
 }
 
+fn build_and_publish_component_evidence(
+    state: &mut ExecutionState,
+    report: Option<&ComponentBuildReport>,
+    scratch_root: &Path,
+    evidence_dir: &Path,
+) -> Result<(Option<ComponentArtifactAttestation>, Option<ComponentReleaseBinding>), Error> {
+    let Some(bundle) = state.materialization_bundle.clone() else {
+        if state.blockers.is_empty() {
+            state.block(
+                "missing-materialization-bundle",
+                "component-evidence",
+                "successful pipeline omitted its bundle",
+            );
+        }
+        return Ok((None, None));
+    };
+    let Some(bundle_object) = state.materialization_bundle_object.clone() else {
+        state.block("missing-materialization-bundle-object", "component-evidence", "bundle object was not recorded");
+        return Ok((None, None));
+    };
+    let Some(component_report) = report.cloned() else {
+        state.block(
+            "missing-component-report",
+            "component-evidence",
+            "component stage graph report was not constructed",
+        );
+        return Ok((None, None));
+    };
+    let Some(octet) = state.octet_validations.last().cloned() else {
+        state.block("missing-octet-evidence", "component-evidence", "materialized component omitted Octet evidence");
+        return Ok((None, None));
+    };
+    let result = build_component_evidence(ComponentEvidenceRequest {
+        bundle,
+        bundle_object,
+        report: component_report,
+        octet_profile_blake3: octet.profile_blake3,
+        octet_cohort_blake3: octet.cohort_blake3,
+        octet_report: octet.receipt,
+    });
+    for blocker in result.blockers {
+        state.block(&blocker.code, "component-evidence", blocker.message);
+    }
+    let (Some(attestation), Some(release)) = (result.artifact_attestation, result.release_binding) else {
+        return Ok((None, None));
+    };
+    let attestation_object =
+        write_evidence_object(scratch_root, evidence_dir, "component-attestation.json", &attestation)?;
+    let release_object = write_evidence_object(scratch_root, evidence_dir, "component-release-binding.json", &release)?;
+    state.add_artifact("component-artifact-attestation", &attestation_object)?;
+    state.add_artifact("component-release-binding", &release_object)?;
+    debug_assert!(!release.release_eligible);
+    debug_assert_eq!(release.artifact_attestation_blake3, attestation.attestation_blake3);
+    Ok((Some(attestation), Some(release)))
+}
+
+fn write_evidence_object(
+    scratch_root: &Path,
+    evidence_dir: &Path,
+    name: &str,
+    value: &impl Serialize,
+) -> Result<StoreObject, Error> {
+    let scratch_path = scratch_root.join(name);
+    write_json_new(&scratch_path, value)?;
+    let metadata = fs::symlink_metadata(&scratch_path)
+        .map_err(|error| Error::io("reading component evidence metadata", &scratch_path, error))?;
+    if !metadata.file_type().is_file() || metadata.len() == 0 {
+        return Err(Error::Invalid(format!("component evidence file is empty or not regular: {name}")));
+    }
+    let object = StoreObject {
+        logical_path: evidence_dir.join(name).display().to_string(),
+        digest_blake3: crate::toolchain::hash_file_bounded(&scratch_path)?,
+        size_bytes: metadata.len(),
+    };
+    debug_assert!(object.logical_path.starts_with('/'));
+    debug_assert!(object.size_bytes > 0);
+    Ok(object)
+}
+
 fn validate_state_bounds(state: &ExecutionState) -> Result<(), Error> {
     if state.receipts.len() > MAX_EXECUTION_RECEIPTS
         || state.artifacts.len() > MAX_EXECUTION_ARTIFACTS
         || state.blockers.len() > MAX_EXECUTION_BLOCKERS
+        || state.octet_validations.len() > MAX_EXECUTION_STAGES
         || state.stage_inputs.len() > MAX_EXECUTION_STAGES
         || state.non_claims.len() > MAX_EXECUTION_NON_CLAIMS
         || state.blockers.iter().any(|blocker| blocker.message.len() > MAX_BLOCKER_MESSAGE_BYTES)

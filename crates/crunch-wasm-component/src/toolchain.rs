@@ -16,6 +16,14 @@ use crunch_wasm_component_core::Blake3Identity;
 use serde_json::Value;
 
 use crate::Error;
+use crate::model::OCTET_CONFIG_BLAKE3;
+use crate::model::OCTET_PACKAGE_NAME;
+use crate::model::OCTET_PACKAGE_VERSION;
+use crate::model::OCTET_PROFILE_ID;
+use crate::model::OCTET_PROFILE_IDENTITY_BLAKE3;
+use crate::model::OCTET_SOURCE_REPOSITORY;
+use crate::model::OCTET_SOURCE_REVISION;
+use crate::model::OCTET_WASM_TOOLS_COHORT_BLAKE3;
 use crate::model::REQUIRED_TOOL_NAMES;
 use crate::model::TOOLCHAIN_MANIFEST_SCHEMA;
 use crate::model::ToolRecord;
@@ -42,6 +50,7 @@ pub fn verify_toolchain_manifest(path: &Path) -> Result<VerifiedToolchain, Error
     verify_cohort_identity(&bytes, &manifest)?;
     let root = toolchain_root(path)?;
     verify_tools(&root, &manifest.tools)?;
+    verify_octet_identity(&root, &manifest)?;
     debug_assert_eq!(manifest.tools.len(), REQUIRED_TOOL_NAMES.len());
     debug_assert!(root.is_absolute());
     Ok(VerifiedToolchain { root, manifest })
@@ -74,6 +83,22 @@ impl VerifiedToolchain {
             .map(|record| record.binary_digest_blake3.clone())
             .ok_or_else(|| Error::Invalid(format!("toolchain manifest is missing digest for `{name}`")))
     }
+
+    pub fn octet_config_path(&self) -> Result<PathBuf, Error> {
+        let path = self.root.join(&self.manifest.octet.config_path);
+        reject_symlink_components(&path)?;
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|error| Error::io("reading Octet profile configuration metadata", &path, error))?;
+        if !metadata.file_type().is_file() {
+            return Err(Error::Invalid(format!(
+                "Octet profile configuration is not a no-follow regular file: {}",
+                path.display()
+            )));
+        }
+        debug_assert!(path.is_absolute());
+        debug_assert!(metadata.len() > 0);
+        Ok(path)
+    }
 }
 
 fn validate_manifest_shape(manifest: &ToolchainManifest) -> Result<(), Error> {
@@ -88,6 +113,12 @@ fn validate_manifest_shape(manifest: &ToolchainManifest) -> Result<(), Error> {
             "toolchain contains {} tools, expected {}",
             manifest.tools.len(),
             REQUIRED_TOOL_NAMES.len()
+        )));
+    }
+    if !safe_relative_path(Path::new(&manifest.octet.config_path)) {
+        return Err(Error::Invalid(format!(
+            "Octet profile configuration has unsafe relative path `{}`",
+            manifest.octet.config_path
         )));
     }
     let records = tool_record_index(&manifest.tools)?;
@@ -136,6 +167,41 @@ fn verify_cohort_identity(bytes: &[u8], manifest: &ToolchainManifest) -> Result<
     debug_assert!(!canonical.is_empty());
     debug_assert_eq!(measured, manifest.cohort_identity_blake3);
     Ok(())
+}
+
+fn verify_octet_identity(root: &Path, manifest: &ToolchainManifest) -> Result<(), Error> {
+    let octet = &manifest.octet;
+    let expected_cohort = pinned_identity(OCTET_WASM_TOOLS_COHORT_BLAKE3, "cohort")?;
+    let expected_config = pinned_identity(OCTET_CONFIG_BLAKE3, "configuration")?;
+    let expected_profile = pinned_identity(OCTET_PROFILE_IDENTITY_BLAKE3, "profile")?;
+    if octet.source_repository != OCTET_SOURCE_REPOSITORY
+        || octet.source_revision != OCTET_SOURCE_REVISION
+        || octet.package_name != OCTET_PACKAGE_NAME
+        || octet.package_version != OCTET_PACKAGE_VERSION
+        || octet.profile_id != OCTET_PROFILE_ID
+        || octet.config_digest_blake3 != expected_config
+        || octet.profile_identity_blake3 != expected_profile
+        || octet.wasm_tools_cohort_identity_blake3 != expected_cohort
+    {
+        return Err(Error::Invalid(
+            "Octet source revision, package, profile, or wasm-tools cohort identity drifted".to_string(),
+        ));
+    }
+    let config_path = root.join(&octet.config_path);
+    if hash_file_bounded(&config_path)? != octet.config_digest_blake3 {
+        return Err(Error::Invalid("Octet Wasm artifact profile configuration digest drifted".to_string()));
+    }
+    debug_assert_eq!(octet.source_revision.len(), OCTET_SOURCE_REVISION.len());
+    debug_assert_eq!(octet.profile_id, OCTET_PROFILE_ID);
+    Ok(())
+}
+
+fn pinned_identity(value: &str, label: &str) -> Result<Blake3Identity, Error> {
+    let identity = Blake3Identity::parse(value.to_string())
+        .map_err(|error| Error::Invalid(format!("parsing pinned Octet {label} identity: {error}")))?;
+    debug_assert_eq!(identity.clone().into_hex().len(), crunch_wasm_component_core::BLAKE3_HEX_LENGTH);
+    debug_assert!(!label.is_empty());
+    Ok(identity)
 }
 
 fn verify_tools(root: &Path, tools: &[ToolRecord]) -> Result<(), Error> {

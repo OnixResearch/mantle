@@ -309,6 +309,9 @@ mantle export config.ncl --format json --out generated/config.json
 mantle filegen plan --plan-out target/filegen-plan.json
 mantle filegen apply --plan target/filegen-plan.json
 
+# Pinned, network-denied WebAssembly component materialization
+mantle wasm-component build component-request.ncl --out target/component-evidence
+
 # Attestation and release evidence entry points
 mantle attest show /nix/store/<hash>-hello
 mantle release verify target/release-evidence/<release-id>
@@ -328,6 +331,10 @@ For foreign derivation import receipt boundaries, policy digests, cache/source
 trust, sandbox capabilities, Guix-like and Nix-like examples, and admission-only
 non-claims, see
 [`docs/foreign-derivation-import-trust-model.md`](docs/foreign-derivation-import-trust-model.md).
+For the typed component manifest, exact `wkg.lock`/package handoff, pinned Octet
+rail, normalized portable bytes, optional target-specific Wasmtime AOT output,
+consumer remeasurement, and Wizer core-module boundary, see the WebAssembly
+component section in [`docs/operator-workflows.md`](docs/operator-workflows.md).
 
 For self-build, Cargo-free fixed-point, Nix-free demo-bundle proof operations,
 and foreign import receipt trust-model links, see
@@ -1882,6 +1889,8 @@ mantle artifact oci-export --projection <projection.json> --spec-material <spec>
                                  Project admitted frontend objects into an atomic local OCI image layout
 mantle artifact oci-import --layout <layout> --report-out <report.json>
                                  Verify descriptors and admit exact OCI blobs; external layouts remain compatibility-only
+mantle wasm-component build <request.ncl> --out <evidence-dir>
+                                 Build, validate, Octet-check, and materialize an exact component evidence bundle
 
 # Store, logs, attestations, release evidence
 mantle store <subcommand>        List, inspect, verify, sign, pin, push, pull, or GC store state
