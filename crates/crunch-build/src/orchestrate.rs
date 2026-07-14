@@ -493,24 +493,14 @@ where BServ: BuildService + 'static
         let drv_name = drv_path.name().to_string();
         let derivation_ref = derivation.as_ref();
 
-        // 1. Strong shared cache lookup. Mutable-history executions are
-        // practical-only and must never satisfy this claim boundary.
-        let mutable_workspace = derivation_uses_mutable_workspace(derivation_ref)?;
-        if !mutable_workspace && let Some(cached_hit) = self.check_cache(drv_path, derivation_ref, is_root).await? {
-            self.record_cached_output_paths(drv_path, derivation_ref, &cached_hit.infos, known_paths)?;
-            info!(drv = %drv_name, "all outputs cached, skipping build");
-            return Ok(PrepareResult::Done(BuildOutcome {
-                drv_path: drv_path.clone(),
-                outputs: cached_hit.infos,
-                substitutions: cached_hit.substitutions,
-                cached: true,
-                log: None,
-            }));
-        }
-
-        // Shared action-result discovery is separate from CA mapping lookup.
-        // Every candidate is re-admitted before the executor can be skipped.
+        // 1. Strong shared action-result admission. This precedes ordinary
+        // PathInfo cache lookup so input-addressed results cannot bypass the
+        // receipt, policy, reference-scan, conflict, and poisoning checks.
+        // Mutable-history executions are practical-only and must never satisfy
+        // this claim boundary. Every candidate is re-admitted before the
+        // executor can be skipped.
         // r[impl build_correctness.shared_action_result_admission]
+        let mutable_workspace = derivation_uses_mutable_workspace(derivation_ref)?;
         if !mutable_workspace
             && let Some(shared_hit) =
                 self.check_shared_action_result(drv_path, derivation_ref, known_paths, is_root).await?
@@ -525,7 +515,21 @@ where BServ: BuildService + 'static
             }));
         }
 
-        // 2. Ensure input derivation outputs are in castore.
+        // 2. Ordinary signed PathInfo cache fallback remains independent when
+        // no shared action result is fully admitted.
+        if !mutable_workspace && let Some(cached_hit) = self.check_cache(drv_path, derivation_ref, is_root).await? {
+            self.record_cached_output_paths(drv_path, derivation_ref, &cached_hit.infos, known_paths)?;
+            info!(drv = %drv_name, "all outputs cached, skipping build");
+            return Ok(PrepareResult::Done(BuildOutcome {
+                drv_path: drv_path.clone(),
+                outputs: cached_hit.infos,
+                substitutions: cached_hit.substitutions,
+                cached: true,
+                log: None,
+            }));
+        }
+
+        // 3. Ensure input derivation outputs are in castore.
         for input_drv_path in derivation_ref.input_derivations.keys() {
             let input_abs = input_drv_path.to_absolute_path_with_prefix(self.store.store_dir());
             if let Some(entry) = known_paths.get_by_drv_path(&input_abs) {
@@ -533,13 +537,13 @@ where BServ: BuildService + 'static
             }
         }
 
-        // 3. Resolve source inputs + closures.
+        // 4. Resolve source inputs + closures.
         let all_source_paths = self.resolve_and_ingest_sources(derivation_ref).await?;
 
-        // 4. Collect sandbox inputs.
+        // 5. Collect sandbox inputs.
         let sandbox_inputs = self.collect_sandbox_inputs(derivation_ref, known_paths, &all_source_paths).await?;
 
-        // 5. Create build request.
+        // 6. Create build request.
         let request_envelope = match derivation_to_build_request(
             derivation_ref,
             &sandbox_inputs,
@@ -2694,7 +2698,7 @@ mod tests {
 
     // r[verify cache_substitution.shared_action_result_discovery]
     #[tokio::test]
-    async fn fresh_client_fetches_http_action_result_and_objects_without_execution() {
+    async fn fresh_input_addressed_client_prefers_http_action_result_and_objects_without_execution() {
         use crunch_store::ActionResultStore as _;
 
         let producer_state = tempfile::tempdir().unwrap();
@@ -2720,7 +2724,9 @@ mod tests {
             false,
         );
         let mut producer_registry = DerivationRegistry::default();
-        let (drv_path, _) = build_and_register_ca("http-shared-ca", &mut producer_registry);
+        let (drv_path, producer_derivation) =
+            build_and_register("http-shared-input-addressed", &[], &mut producer_registry);
+        assert!(producer_derivation.outputs["out"].path.is_some());
         let producer_outcome = producer.build(&drv_path, &mut producer_registry).await.unwrap();
         let output_infos = producer_outcome.outputs.values().cloned().collect::<Vec<_>>();
         crunch_store::export_paths_to_cache_dir(
@@ -2754,8 +2760,9 @@ mod tests {
         let mut consumer =
             Builder::from_store(consumer_store, PanicSandboxService, keypair, trusted_keys, false, false);
         let mut consumer_registry = DerivationRegistry::default();
-        let (consumer_drv_path, _) = build_and_register_ca("http-shared-ca", &mut consumer_registry);
-        assert!(!consumer_state.path().join("ca_mappings.json").exists());
+        let (consumer_drv_path, consumer_derivation) =
+            build_and_register("http-shared-input-addressed", &[], &mut consumer_registry);
+        assert!(consumer_derivation.outputs["out"].path.is_some());
         let consumer_outcome = consumer.build(&consumer_drv_path, &mut consumer_registry).await.unwrap();
         let reports = consumer.take_action_result_reports();
         let requests = server.requests.lock().unwrap().clone();
@@ -2767,10 +2774,13 @@ mod tests {
             report.disposition == ACTION_RESULT_DISPOSITION_REUSED
                 && report.selected_source_class.as_deref() == Some("http")
         }));
-        assert!(requests.iter().any(|path| path.ends_with(".narinfo")));
-        assert!(requests.iter().any(|path| path.contains("/action-results/v1/indexes/")));
-        assert!(requests.iter().any(|path| path.contains("/action-results/v1/records/")));
-        assert!(requests.iter().any(|path| path.starts_with("/nar/")));
+        let index_request = requests.iter().position(|path| path.contains("/action-results/v1/indexes/")).unwrap();
+        let record_request = requests.iter().position(|path| path.contains("/action-results/v1/records/")).unwrap();
+        let narinfo_request = requests.iter().position(|path| path.ends_with(".narinfo")).unwrap();
+        let nar_request = requests.iter().position(|path| path.starts_with("/nar/")).unwrap();
+        assert!(index_request < record_request);
+        assert!(record_request < narinfo_request);
+        assert!(narinfo_request < nar_request);
     }
 
     fn write_http_action_result_sidecars(
