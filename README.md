@@ -1967,6 +1967,10 @@ fixed-point artifact that was actually proven.
   supported via `mantle.select dep "dev"` to mount a single output of
   a multi-output dependency in the sandbox (like Nix's `pkg.dev`).
 
+## License
+
+Repository-owned Mantle source is `AGPL-3.0-or-later`; see [LICENSE](LICENSE). Vendored `fuse-backend-rs` remains `Apache-2.0 AND BSD-3-Clause` under the license texts and notices in its own directory. Other dependencies and generated material containing upstream code retain their original terms. License metadata does not expand Mantle's bounded build, cache, or evidence claims.
+
 ## References
 
 - [rust-lang/rustc-dev-guide](https://github.com/rust-lang/rustc-dev-guide/tree/main) — important Rust compiler architecture reference; keep the [HIR](https://github.com/rust-lang/rustc-dev-guide/tree/main/src/hir), [MIR](https://github.com/rust-lang/rustc-dev-guide/tree/main/src/mir), and [backend](https://github.com/rust-lang/rustc-dev-guide/tree/main/src/backend) sections handy for Mantle's Rust planning, compiler-interface, and evidence-boundary work.
