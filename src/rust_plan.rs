@@ -1617,7 +1617,7 @@ struct NativePlanningInputs<'a> {
 }
 
 fn summarize_native_planning_layers(inputs: NativePlanningInputs<'_>) -> Result<NativePlanningLayers, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
     let package_targets = summarize_native_package_target_planning_from_inputs(NativePackagePlanningInputs {
         root: &inputs.options.root,
@@ -1689,7 +1689,7 @@ fn build_rust_plan_receipt(
     options: &RustPlanOptions,
     inputs: RustPlanReceiptInputs,
 ) -> Result<RustPlanReceipt, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!inputs.workspace_root.is_empty());
     let package_count = inputs.cargo_packages.len();
     let packages = summarize_packages(inputs.cargo_packages, &inputs.workspace_members);
@@ -1721,8 +1721,8 @@ fn capture_rust_plan_with_oracle(
     options: &RustPlanOptions,
     oracle: &impl CargoOracle,
 ) -> Result<RustPlanReceipt, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     validate_options(options)?;
 
     let cargo_version = run_checked_text(oracle.run_tool_version(&options.cargo, &["--version"]), "cargo --version")?;
@@ -1779,7 +1779,8 @@ fn cargo_free_planning_blockers(layers: &NativePlanningLayers) -> Vec<String> {
     ];
     let mut blockers = readiness
         .into_iter()
-        .filter_map(|(is_ready, blocker)| (!is_ready).then(|| blocker.to_string()))
+        .filter(|(is_ready, _)| !is_ready)
+        .map(|(_, blocker)| blocker.to_string())
         .collect::<Vec<_>>();
     blockers.sort();
     blockers.dedup();
@@ -1787,8 +1788,8 @@ fn cargo_free_planning_blockers(layers: &NativePlanningLayers) -> Vec<String> {
 }
 
 fn capture_rust_plan_without_cargo(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     validate_options(options)?;
 
     let rustc_version_verbose =
@@ -1977,8 +1978,8 @@ pub(crate) fn default_profile() -> String {
 }
 
 fn native_path_cargo_packages(root: &Path, options: &RustPlanOptions) -> Result<Vec<CargoPackage>, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     const MAX_NATIVE_PATH_PACKAGES: usize = 4096;
     let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut queued = native_workspace_manifest_paths(root, &mut blockers).into_iter().collect::<VecDeque<_>>();
@@ -2037,8 +2038,8 @@ fn reachable_lock_package_keys(
     facts: &NativeLockfileFacts,
     root_packages: &[CargoPackage],
 ) -> BTreeSet<(String, String, Option<String>)> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let package_by_key = facts
         .packages
         .iter()
@@ -2120,8 +2121,8 @@ fn lock_package_key(inputs: LockPackageKeyInputs<'_>) -> (String, String, Option
 }
 
 fn native_lock_source_cargo_packages(root: &Path, lock_packages: &[LockPackage]) -> Vec<CargoPackage> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut vendor_blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let vendor_roots = declared_vendor_roots(root, &mut vendor_blockers);
     let mut packages = lock_packages
@@ -2134,15 +2135,15 @@ fn native_lock_source_cargo_packages(root: &Path, lock_packages: &[LockPackage])
 }
 
 fn native_lock_source_cargo_package(vendor_roots: &[PathBuf], package: &LockPackage) -> Option<CargoPackage> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let source = package.source.as_ref()?;
     let kind = source_kind(Some(source));
     if !matches!(kind, SourceKind::Registry | SourceKind::Git) {
         return None;
     }
     let manifest_path = locate_declared_vendor_manifest(DeclaredVendorManifestInputs {
-        vendor_roots: vendor_roots,
+        vendor_roots,
         name: &package.name,
         version: &package.version,
     })
@@ -2150,7 +2151,7 @@ fn native_lock_source_cargo_package(vendor_roots: &[PathBuf], package: &LockPack
     .unwrap_or_default();
     Some(CargoPackage {
         id: cargo_source_package_id(CargoSourcePackageIdInputs {
-            source: source,
+            source,
             name: &package.name,
             version: &package.version,
         }),
@@ -2259,8 +2260,8 @@ fn native_path_cargo_package_from_manifest(
     manifest: &NativeManifest,
     options: &RustPlanOptions,
 ) -> Result<CargoPackage, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let package = manifest.package.as_ref().ok_or_else(|| {
         RunError::Internal(format!("Cargo-free native package manifest lacks [package]: {}", manifest_path.display()))
     })?;
@@ -2280,11 +2281,11 @@ fn native_path_cargo_package_from_manifest(
         RunError::Internal(format!("Cargo-free manifest path has no parent: {}", manifest_path.display()))
     })?;
     let native_targets = native_targets_for_manifest(NativeTargetsForManifestInputs {
-        source_root: source_root,
+        source_root,
         package_name: &package.name,
         package_version: &version,
         package_edition: &edition,
-        manifest: manifest,
+        manifest,
     })
     .map_err(|blocker| RunError::Internal(format!("Cargo-free native target planning failed: {}", blocker.message)))?;
     let targets = native_targets
@@ -2354,8 +2355,8 @@ fn metadata_args() -> Vec<String> {
 }
 
 fn unit_graph_args(options: &RustPlanOptions) -> Vec<String> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut args = vec![
         "build".to_string(),
         "-Z".to_string(),
@@ -2412,8 +2413,8 @@ fn summarize_source_closure(
     packages: &[CargoPackage],
     lock_packages: &[LockPackage],
 ) -> Result<SourceClosureSummary, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut sources = Vec::with_capacity(packages.len());
     let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for package in packages {
@@ -2629,8 +2630,8 @@ fn registry_source_digest(
 }
 
 fn git_source_digest(package: &CargoPackage) -> Result<SourceDigest, SourceClosureBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let Some(source) = package.source.as_deref() else {
         return Err(SourceClosureBlocker {
             package_id: package.id.clone(),
@@ -2652,8 +2653,8 @@ fn git_source_digest(package: &CargoPackage) -> Result<SourceDigest, SourceClosu
 }
 
 fn path_source_digest(package: &CargoPackage) -> Result<SourceDigest, SourceClosureBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let manifest_path = Path::new(&package.manifest_path);
     let Some(source_root) = manifest_path.parent() else {
         return Err(SourceClosureBlocker {
@@ -2694,7 +2695,7 @@ fn hash_path_source_tree(root: &Path) -> Result<String, String> {
 }
 
 fn collect_source_files(root: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES > 0);
+    const { assert!(MAX_SOURCE_TREE_ENTRIES > 0) };
     let mut directories = Vec::with_capacity(1);
     directories.push(root.to_path_buf());
     debug_assert_eq!(directories.len(), 1);
@@ -2845,8 +2846,8 @@ fn summarize_native_registry_source_planning(
     lock_packages: &[LockPackage],
     lockfile: &LockfileIdentity,
 ) -> Result<NativeRegistrySourcePlanningSummary, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let vendor_roots = declared_vendor_roots(root, &mut blockers);
     let mut sources = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
@@ -2975,8 +2976,8 @@ fn append_native_patch_sources(
     sources: &mut Vec<NativeRegistrySourceSummary>,
     blockers: &mut Vec<NativeRegistrySourceBlocker>,
 ) {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let manifest_path = root.join("Cargo.toml");
     let manifest = match read_native_manifest(&manifest_path) {
         Ok(manifest) => manifest,
@@ -3017,8 +3018,8 @@ fn append_native_patch_sources(
 }
 
 fn declared_vendor_roots(root: &Path, blockers: &mut Vec<NativeRegistrySourceBlocker>) -> Vec<PathBuf> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut roots = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for config_path in [root.join(".cargo/config.toml"), root.join(".cargo/config")] {
         if !config_path.is_file() {
@@ -3081,8 +3082,8 @@ fn bind_declared_vendor_source(
     checksum: &str,
     vendor_roots: &[PathBuf],
 ) -> Result<(PathBuf, PathBuf, SourceDigest), NativeRegistrySourceBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if vendor_roots.is_empty() {
         return Err(native_registry_blocker(NativeRegistryBlockerInputs {
             package_id: Some(package.id.clone()),
@@ -3149,8 +3150,8 @@ fn validate_vendor_checksum(
     source_root: &Path,
     expected_checksum: &str,
 ) -> Result<(), NativeRegistrySourceBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let checksum_path = source_root.join(CARGO_VENDOR_CHECKSUM_FILE_NAME);
     let text = fs::read_to_string(&checksum_path).map_err(|err| {
         native_registry_blocker(NativeRegistryBlockerInputs {
@@ -3194,10 +3195,10 @@ fn validate_vendor_checksum_files(
     checksum_path: &Path,
     files: &BTreeMap<String, String>,
 ) -> Result<(), NativeRegistrySourceBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if files.is_empty() {
         return Err(native_registry_checksum_evidence_blocker(NativeRegistryChecksumBlockerInputs {
             package_id: Some(package.id.clone()),
@@ -3212,11 +3213,11 @@ fn validate_vendor_checksum_files(
     }
     for (relative_path, expected_digest) in files {
         validate_vendor_checksum_file(VendorChecksumFileInputs {
-            package: package,
-            source_root: source_root,
-            checksum_path: checksum_path,
-            relative_path: relative_path,
-            expected_digest: expected_digest,
+            package,
+            source_root,
+            checksum_path,
+            relative_path,
+            expected_digest,
         })?;
     }
     validate_vendor_checksum_no_extra_files(package, source_root, checksum_path, files)
@@ -3231,8 +3232,8 @@ struct VendorChecksumFileInputs<'a> {
 }
 
 fn validate_vendor_checksum_file(inputs: VendorChecksumFileInputs<'_>) -> Result<(), NativeRegistrySourceBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let VendorChecksumFileInputs {
         package,
         source_root,
@@ -3253,11 +3254,11 @@ fn validate_vendor_checksum_file(inputs: VendorChecksumFileInputs<'_>) -> Result
         }));
     }
     let file_path = vendor_checksum_entry_path(VendorChecksumFileInputs {
-        package: package,
-        source_root: source_root,
-        checksum_path: checksum_path,
-        relative_path: relative_path,
-        expected_digest: expected_digest,
+        package,
+        source_root,
+        checksum_path,
+        relative_path,
+        expected_digest,
     })?;
     if !file_path.is_file() {
         return Err(native_registry_checksum_evidence_blocker(NativeRegistryChecksumBlockerInputs {
@@ -3299,8 +3300,8 @@ fn validate_vendor_checksum_no_extra_files(
     checksum_path: &Path,
     files: &BTreeMap<String, String>,
 ) -> Result<(), NativeRegistrySourceBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut actual_files = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     collect_source_files(source_root, &mut actual_files).map_err(|message| {
         native_registry_blocker(NativeRegistryBlockerInputs {
@@ -3337,8 +3338,8 @@ fn validate_vendor_checksum_no_extra_files(
 }
 
 fn vendor_checksum_entry_path(inputs: VendorChecksumFileInputs<'_>) -> Result<PathBuf, NativeRegistrySourceBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let VendorChecksumFileInputs {
         package,
         source_root,
@@ -3374,8 +3375,8 @@ fn vendor_checksum_relative_path_is_safe(relative: &Path) -> bool {
 }
 
 fn cargo_sha256_file_hex(path: &Path) -> Result<String, String> {
-    debug_assert!(CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES > 0);
-    debug_assert!(MAX_VENDOR_SOURCE_FILE_BYTES >= CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES);
+    const { assert!(CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES > 0) };
+    const { assert!(MAX_VENDOR_SOURCE_FILE_BYTES >= CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES) };
     let mut file =
         fs::File::open(path).map_err(|err| format!("opening vendor source file {}: {err}", path.display()))?;
     let mut hasher = <sha2::Sha256 as sha2::Digest>::new();
@@ -3415,8 +3416,8 @@ fn summarize_native_git_source_planning(
     lockfile: &LockfileIdentity,
     source_closure: &SourceClosureSummary,
 ) -> Result<NativeGitSourcePlanningSummary, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut sources = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for package in cargo_packages.iter().filter(|package| source_kind(package.source.as_deref()) == SourceKind::Git) {
@@ -3536,8 +3537,8 @@ fn bind_captured_git_source(
     lock_packages: &[LockPackage],
     source_closure: &SourceClosureSummary,
 ) -> Result<NativeGitSourceSummary, NativeGitSourceBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let package_id = package.id.clone();
     let lock_identity = find_lock_package(package, lock_packages)
         .map(|lock_package| LockPackageIdentity {
@@ -3613,8 +3614,8 @@ struct NativeGitSourceDigestInputs<'a> {
 }
 
 fn native_git_source_digest(inputs: NativeGitSourceDigestInputs<'_>) -> Result<String, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let NativeGitSourceDigestInputs {
         sources,
         blockers,
@@ -3649,8 +3650,8 @@ struct NativeRegistrySourceDigestInputs<'a> {
 }
 
 fn native_registry_source_digest(inputs: NativeRegistrySourceDigestInputs<'_>) -> Result<String, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let NativeRegistrySourceDigestInputs {
         sources,
         blockers,
@@ -3752,7 +3753,7 @@ fn native_package_manifest_paths(
     selected_package_ids: &BTreeSet<String>,
     blockers: &mut Vec<NativePackagePlanningBlocker>,
 ) -> Vec<PathBuf> {
-    debug_assert!(NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS > 0);
+    const { assert!(NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS > 0) };
     debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
     let mut manifest_paths = native_workspace_manifest_paths(inputs.root, blockers);
     manifest_paths.extend(
@@ -3800,7 +3801,7 @@ struct NativePackagePlanningResultInputs<'a> {
 fn finalize_native_package_target_planning(
     mut inputs: NativePackagePlanningResultInputs<'_>,
 ) -> Result<NativePackageTargetPlanningSummary, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!inputs.cargo_oracle_identity.is_empty());
     inputs.native_packages.sort_by(|left, right| left.manifest_path.cmp(&right.manifest_path));
     if !inputs.options.no_cargo_oracle {
@@ -3857,7 +3858,7 @@ fn cargo_workspace_packages_for_native<'a>(
 fn summarize_native_package_target_planning_from_inputs(
     inputs: NativePackagePlanningInputs<'_>,
 ) -> Result<NativePackageTargetPlanningSummary, RunError> {
-    debug_assert!(NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS > 0);
+    const { assert!(NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS > 0) };
     debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
     let options = inputs.options;
     let cargo_packages = inputs.cargo_packages;
@@ -3964,8 +3965,8 @@ fn queue_native_dependency_manifest_paths(
     context: &mut DependencyFeatureQueueContext<'_>,
     blockers: &mut Vec<NativePackagePlanningBlocker>,
 ) {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let dependencies = package.path_dependencies.iter().chain(package.build_dependencies.iter()).collect::<Vec<_>>();
     for dependency in &dependencies {
         context.queued_manifest_paths.push_back(PathBuf::from(&dependency.manifest_path));
@@ -4000,8 +4001,8 @@ fn queue_target_cfg_dependency_feature_requests(
     context: &mut DependencyFeatureQueueContext<'_>,
     blockers: &mut Vec<NativePackagePlanningBlocker>,
 ) {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let selected_names = package
         .target_cfg_dependencies
         .iter()
@@ -4092,8 +4093,8 @@ fn forwarded_dependency_features(
     selected_parent_features: &[String],
     parent_feature_defs: &BTreeMap<String, Vec<String>>,
 ) -> BTreeMap<String, Vec<String>> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut forwarded = BTreeMap::new();
     for parent_feature in selected_parent_features {
         let Some(entries) = parent_feature_defs.get(parent_feature) else {
@@ -4148,8 +4149,8 @@ fn dependency_package_id_for_manifest(
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
     native_git_source_planning: &NativeGitSourcePlanningSummary,
 ) -> String {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if let Some(source) = source_closure
         .sources
         .iter()
@@ -4282,8 +4283,8 @@ fn native_workspace_manifest_paths_from_root_manifest(
     root_manifest: &NativeManifest,
     blockers: &mut Vec<NativePackagePlanningBlocker>,
 ) -> Vec<PathBuf> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut manifests = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if root_manifest.package.is_some() {
         manifests.push(root_manifest_path.to_path_buf());
@@ -4314,8 +4315,8 @@ fn native_workspace_manifest_paths_from_root_manifest(
 }
 
 fn workspace_member_has_unsupported_glob(member: &str) -> bool {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if ['?', '[', ']'].iter().any(|token| member.contains(*token)) {
         return true;
     }
@@ -4338,8 +4339,8 @@ fn workspace_member_has_unsupported_glob(member: &str) -> bool {
 }
 
 fn expand_workspace_member_glob(root: &Path, member: &str) -> Result<Vec<PathBuf>, NativePackagePlanningBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let Some((prefix, "")) = member.split_once('*') else {
         return Err(native_blocker(NativePackageBlockerInputs {
             package_id: None,
@@ -4397,8 +4398,8 @@ struct NativeManifestPackageIdInputs<'a> {
 }
 
 fn native_manifest_package_id(inputs: NativeManifestPackageIdInputs<'_>) -> String {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let NativeManifestPackageIdInputs {
         manifest_inputs: inputs,
         package_name,
@@ -4498,7 +4499,7 @@ fn native_package_dependencies(
     inputs: NativePackageDependencyInputs<'_>,
 ) -> Result<NativePackageDependencies, NativePackagePlanningBlocker> {
     debug_assert!(!inputs.package_id.is_empty());
-    debug_assert!(MAX_CFG_EVALUATION_STEPS > 0);
+    const { assert!(MAX_CFG_EVALUATION_STEPS > 0) };
     let optional_dependencies = native_optional_dependency_names(&inputs.manifest.dependencies);
     let selected_features = inputs
         .manifest_inputs
@@ -4565,8 +4566,8 @@ fn native_package_dependencies(
 fn native_package_from_manifest(
     inputs: NativePackageManifestInputs<'_>,
 ) -> Result<NativePackagePlanningSummary, NativePackagePlanningBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let workspace_root = inputs.workspace_root;
     let manifest_path = inputs.manifest_path;
     let manifest = read_native_manifest(manifest_path).map_err(|message| {
@@ -4599,7 +4600,7 @@ fn native_package_from_manifest(
         })
     })?;
     let targets = native_targets_for_manifest(NativeTargetsForManifestInputs {
-        source_root: source_root,
+        source_root,
         package_name: &package.name,
         package_version: &package_version,
         package_edition: &package_edition,
@@ -4635,8 +4636,8 @@ fn native_cargo_package_env(
     workspace_package: &NativeWorkspacePackage,
     package_version: &str,
 ) -> BTreeMap<String, String> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let (major, minor, patch, pre) = cargo_package_version_components(package_version);
     BTreeMap::from([
         (
@@ -4763,8 +4764,8 @@ fn native_package_edition(
     package_name: &str,
     edition: &NativeManifestInheritedString,
 ) -> Result<String, NativePackagePlanningBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if let Some(value) = &edition.value {
         return Ok(value.clone());
     }
@@ -4796,8 +4797,8 @@ fn native_package_version(
     package_name: &str,
     version: &NativeManifestInheritedString,
 ) -> Result<String, NativePackagePlanningBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if let Some(value) = &version.value {
         return Ok(value.clone());
     }
@@ -4844,8 +4845,8 @@ fn read_native_manifest(path: &Path) -> Result<NativeManifest, String> {
 
 #[allow(dead_code)]
 fn collect_native_manifest_lock_texts(root: &Path) -> Result<NativeManifestLockInputTexts, String> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let root_manifest_path = root.join("Cargo.toml");
     let root_manifest_input = read_native_text_input(&root_manifest_path, "root manifest")?;
     let root_manifest = parse_native_manifest_text(NativeTextParseInputs {
@@ -4899,8 +4900,8 @@ fn native_manifest_lock_unsupported_blockers(
 
 #[allow(dead_code)]
 fn native_manifest_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeManifestLockUnsupportedBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let parsed = match input.text.parse::<toml::Value>() {
         Ok(parsed) => parsed,
@@ -4936,8 +4937,8 @@ fn native_target_table_unsupported_blockers(
     path: &str,
     target_table: Option<&toml::Value>,
 ) -> Vec<NativeManifestLockUnsupportedBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let Some(targets) = target_table.and_then(toml::Value::as_table) else {
         return blockers;
@@ -4945,7 +4946,7 @@ fn native_target_table_unsupported_blockers(
     for (cfg, target) in targets {
         let Some(table) = target.as_table() else {
             blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
-                path: path,
+                path,
                 class: "unsupported-target-table",
                 message: &format!("target cfg `{cfg}` is not a table"),
             }));
@@ -4954,7 +4955,7 @@ fn native_target_table_unsupported_blockers(
         for key in table.keys() {
             if key != "dependencies" {
                 blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
-                    path: path,
+                    path,
                     class: "unsupported-target-table",
                     message: &format!(
                         "target cfg `{cfg}` key `{key}` is outside the supported dependency-only fragment"
@@ -4968,8 +4969,8 @@ fn native_target_table_unsupported_blockers(
 
 #[allow(dead_code)]
 fn native_lockfile_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeManifestLockUnsupportedBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let facts = match parse_native_lockfile_text(NativeTextParseInputs {
         path_label: &input.path,
@@ -5046,8 +5047,8 @@ fn push_native_bin_targets(
     inputs: &NativeTargetsForManifestInputs<'_>,
     targets: &mut Vec<NativeTargetPlanningSummary>,
 ) -> Result<(), NativePackagePlanningBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if inputs.manifest.bin.is_empty() {
         let path = inputs.source_root.join("src/main.rs");
         if path.is_file() {
@@ -5079,8 +5080,8 @@ fn push_native_bin_targets(
 fn native_targets_for_manifest(
     inputs: NativeTargetsForManifestInputs<'_>,
 ) -> Result<Vec<NativeTargetPlanningSummary>, NativePackagePlanningBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let NativeTargetsForManifestInputs {
         source_root,
         package_name,
@@ -5116,7 +5117,7 @@ fn native_targets_for_manifest(
         push_native_target(PushNativeTargetInputs {
             targets: &mut targets,
             name: lib.name.as_deref().unwrap_or(package_name),
-            kind: kind,
+            kind,
             path: &path,
             edition: package_edition,
         })?;
@@ -5178,8 +5179,8 @@ struct PushNativeTargetInputs<'a> {
 }
 
 fn push_native_target(inputs: PushNativeTargetInputs<'_>) -> Result<(), NativePackagePlanningBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let PushNativeTargetInputs {
         targets,
         name,
@@ -5217,8 +5218,8 @@ struct NativePathDependenciesInputs<'a> {
 fn native_path_dependencies(
     inputs: NativePathDependenciesInputs<'_>,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let NativePathDependenciesInputs {
         source_root,
         dependencies,
@@ -5254,7 +5255,7 @@ fn native_path_dependencies(
                 continue;
             } else {
                 return Err(native_blocker(NativePackageBlockerInputs {
-                    package_id: package_id,
+                    package_id,
                     class: "unsupported-non-path-dependency",
                     message: &format!(
                         "dependency `{name}` is outside the bounded path, declared-registry, or captured-git dependency fragment"
@@ -5264,7 +5265,7 @@ fn native_path_dependencies(
         };
         if !manifest_path.is_file() {
             return Err(native_blocker(NativePackageBlockerInputs {
-                package_id: package_id,
+                package_id,
                 class: "missing-path-dependency-manifest",
                 message: &format!("dependency `{name}` manifest {} is not readable", manifest_path.display()),
             }));
@@ -5301,8 +5302,8 @@ fn native_dev_dependencies(
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
     native_git_source_planning: &NativeGitSourcePlanningSummary,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     // Dev-dependency feature/default-feature/test resolver behavior is not part of the normal build
     // topology. Record only explicitly readable path or declared-registry source material for the
     // dedicated dev-test rails; otherwise ignore test-only dependencies so they cannot block build-mode
@@ -5380,8 +5381,8 @@ struct NativeWorkspaceDependencyInputs<'a> {
 fn workspace_dependency_manifest_path(
     inputs: &NativeWorkspaceDependencyInputs<'_>,
 ) -> Result<PathBuf, NativePackagePlanningBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let manifest_path = if let Some(path) = dependency_path(inputs.inherited) {
         inputs.planning.source_root.join(path).join("Cargo.toml")
     } else {
@@ -5464,8 +5465,8 @@ fn native_workspace_dependency(
 fn native_workspace_dependencies(
     inputs: NativeWorkspaceDependenciesInputs<'_>,
 ) -> Result<(Vec<NativeWorkspaceDependencySummary>, Vec<NativePathDependencySummary>), NativePackagePlanningBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if !inputs.dependencies.values().any(dependency_uses_workspace) {
         return Ok((Vec::new(), Vec::new()));
     }
@@ -5538,8 +5539,8 @@ fn dependency_has_unsupported_workspace_inherited_options(value: &toml::Value) -
 }
 
 fn dependency_features(value: &toml::Value) -> Result<Vec<String>, NativePackagePlanningBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let Some(features) = value.as_table().and_then(|table| table.get("features")) else {
         return Ok(Vec::new());
     };
@@ -5697,8 +5698,8 @@ fn native_target_cfg_dependency(
 fn native_target_cfg_dependencies(
     inputs: NativeTargetCfgDependenciesInputs<'_>,
 ) -> Result<(Vec<NativeTargetCfgDependencySummary>, Vec<NativePathDependencySummary>), NativePackagePlanningBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut cfg_facts = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut selected_dependencies = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for (cfg_expr, target) in inputs.target_tables {
@@ -5749,7 +5750,7 @@ fn evaluate_supported_target_cfg(inputs: TargetCfgEvaluationInputs<'_>) -> Optio
     let inner = trimmed.strip_prefix("cfg(")?.strip_suffix(')')?.trim();
     evaluate_cfg_inner(TargetCfgEvaluationInputs {
         expression: inner,
-        active_target: active_target,
+        active_target,
     })
 }
 
@@ -5766,7 +5767,7 @@ fn evaluate_cfg_inner<'a>(inputs: TargetCfgEvaluationInputs<'a>) -> Option<bool>
         active_target,
     } = inputs;
     debug_assert!(!active_target.is_empty());
-    debug_assert!(MAX_CFG_EVALUATION_STEPS > 0);
+    const { assert!(MAX_CFG_EVALUATION_STEPS > 0) };
     let mut frames = Vec::with_capacity(INITIAL_CFG_STACK_CAPACITY_ITEMS);
     let mut values = Vec::with_capacity(INITIAL_CFG_STACK_CAPACITY_ITEMS);
     frames.push(CfgEvaluationFrame::Evaluate(expr));
@@ -5778,8 +5779,8 @@ fn evaluate_cfg_inner<'a>(inputs: TargetCfgEvaluationInputs<'a>) -> Option<bool>
         match frames.pop()? {
             CfgEvaluationFrame::Evaluate(candidate) => {
                 queue_cfg_evaluation(QueueCfgEvaluationInputs {
-                    candidate: candidate,
-                    active_target: active_target,
+                    candidate,
+                    active_target,
                     frames: &mut frames,
                     values: &mut values,
                 })?;
@@ -5807,8 +5808,8 @@ struct QueueCfgEvaluationInputs<'a, 'b> {
 }
 
 fn queue_cfg_evaluation<'a>(inputs: QueueCfgEvaluationInputs<'a, '_>) -> Option<()> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let QueueCfgEvaluationInputs {
         candidate,
         active_target,
@@ -5838,7 +5839,7 @@ fn queue_cfg_evaluation<'a>(inputs: QueueCfgEvaluationInputs<'a, '_>) -> Option<
     }
     values.push(evaluate_cfg_atom(TargetCfgEvaluationInputs {
         expression: trimmed,
-        active_target: active_target,
+        active_target,
     })?);
     Some(())
 }
@@ -5849,8 +5850,8 @@ fn queue_cfg_arguments<'a>(
     frames: &mut Vec<CfgEvaluationFrame<'a>>,
     values: &mut Vec<bool>,
 ) -> Option<()> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let Some(first) = arguments.first().copied() else {
         values.push(identity);
         return Some(());
@@ -5920,8 +5921,8 @@ fn continue_cfg_arguments<'a>(
 }
 
 fn evaluate_cfg_atom(inputs: TargetCfgEvaluationInputs<'_>) -> Option<bool> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let TargetCfgEvaluationInputs {
         expression: trimmed,
         active_target,
@@ -5934,9 +5935,9 @@ fn evaluate_cfg_atom(inputs: TargetCfgEvaluationInputs<'_>) -> Option<bool> {
     }
     if let Some((key, value)) = parse_cfg_key_value(trimmed) {
         return cfg_key_value_matches(CfgKeyValueInputs {
-            key: key,
-            value: value,
-            active_target: active_target,
+            key,
+            value,
+            active_target,
         });
     }
     known_inactive_cfg_atom(trimmed).then_some(false)
@@ -6014,8 +6015,8 @@ struct CfgKeyValueInputs<'a> {
 }
 
 fn cfg_key_value_matches(inputs: CfgKeyValueInputs<'_>) -> Option<bool> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let CfgKeyValueInputs {
         key,
         value,
@@ -6031,7 +6032,7 @@ fn cfg_key_value_matches(inputs: CfgKeyValueInputs<'_>) -> Option<bool> {
         "target_endian" => value == target_endian_from_triple(active_target),
         "target_pointer_width" => value == target_pointer_width_from_triple(active_target),
         "target_has_atomic" => target_has_atomic(TargetAtomicInputs {
-            active_target: active_target,
+            active_target,
             width: value,
         }),
         "feature" => false,
@@ -6215,10 +6216,7 @@ fn optional_dependency_selected(
                 .get(feature)
                 .map(|entries| {
                     entries.iter().any(|entry| {
-                        feature_entry_selects_dependency(FeatureDependencySelectionInputs {
-                            entry: entry,
-                            dependency_name: dependency_name,
-                        })
+                        feature_entry_selects_dependency(FeatureDependencySelectionInputs { entry, dependency_name })
                     })
                 })
                 .unwrap_or(false)
@@ -6328,19 +6326,19 @@ fn registry_version_req_matches(inputs: RegistryVersionMatchInputs<'_>) -> bool 
     }
     if let Some(matches) = registry_semver_range_req_matches(RegistryVersionMatchInputs {
         requirement: normalized_req,
-        source_version: source_version,
+        source_version,
     }) {
         return matches;
     }
     if let Some(matches) = registry_semver_caret_req_matches(RegistryVersionMatchInputs {
         requirement: normalized_req,
-        source_version: source_version,
+        source_version,
     }) {
         return matches;
     }
     registry_version_prefix_matches(RegistryVersionMatchInputs {
         requirement: normalized_req,
-        source_version: source_version,
+        source_version,
     })
 }
 
@@ -6483,8 +6481,8 @@ fn git_dependency_source<'a>(
     value: &toml::Value,
     native_git_source_planning: &'a NativeGitSourcePlanningSummary,
 ) -> Result<&'a NativeGitSourceSummary, DependencySourceResolutionError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if !native_git_source_planning.ready {
         return Err(dependency_source_error(
             "native-git-source-planning-blocked",
@@ -6558,8 +6556,8 @@ fn git_dependency_selector<'a>(
 fn git_dependency_reference<'a>(
     value: &'a toml::Value,
 ) -> Result<Option<GitDependencyReference<'a>>, DependencySourceResolutionError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let Some(table) = value.as_table() else {
         return Ok(None);
     };
@@ -6766,8 +6764,8 @@ fn seed_native_feature_queue(
     selected_features: &mut BTreeSet<String>,
     queue: &mut Vec<String>,
 ) {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if request.all_features {
         for feature in request.feature_defs.keys() {
             push_native_feature(feature, selected_features, queue);
@@ -6872,8 +6870,8 @@ fn compare_native_packages_to_cargo(
     required_cargo_packages: &[&CargoPackage],
     blockers: &mut Vec<NativePackagePlanningBlocker>,
 ) {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     for native in native_packages {
         let Some(cargo) = all_cargo_packages.iter().find(|package| {
             package.id == native.package_id
@@ -6941,8 +6939,8 @@ fn cargo_package_target_oracle_digest(
     cargo_packages: &[CargoPackage],
     workspace_members: &[String],
 ) -> Result<String, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     #[derive(Serialize)]
     struct HashableTarget<'a> {
         name: &'a str,
@@ -7017,7 +7015,7 @@ fn finalize_native_unit_graph_planning(
     mut inputs: NativeUnitPlanningResultInputs,
 ) -> Result<NativeUnitGraphPlanningSummary, RunError> {
     debug_assert!(!inputs.cargo_unit_graph_oracle_digest.is_empty());
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     inputs.blockers.sort();
     inputs.blockers.dedup();
     let comparison_status = if inputs.no_cargo_oracle && inputs.blockers.is_empty() {
@@ -7067,7 +7065,7 @@ fn collect_native_rust_units(
     options: &RustPlanOptions,
     blockers: &mut Vec<NativeUnitGraphPlanningBlocker>,
 ) -> Vec<NativeRustUnitSummary> {
-    debug_assert!(NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS > 0);
+    const { assert!(NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS > 0) };
     debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
     let packages_by_id = package_planning
         .packages
@@ -7115,8 +7113,8 @@ fn summarize_native_unit_graph_planning(
     native_package_target_planning: &NativePackageTargetPlanningSummary,
     options: &RustPlanOptions,
 ) -> Result<NativeUnitGraphPlanningSummary, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let (cargo_unit_graph_oracle_digest, cargo_graph) =
         native_unit_cargo_evidence(unit_graph, source_closure, options)?;
     let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
@@ -7164,8 +7162,8 @@ fn native_reachable_unit_packages<'a>(
     workspace_manifest_paths: &BTreeSet<String>,
     blockers: &mut Vec<NativeUnitGraphPlanningBlocker>,
 ) -> Vec<&'a NativePackagePlanningSummary> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let packages_by_manifest =
         packages.iter().map(|package| (package.manifest_path.clone(), package)).collect::<BTreeMap<_, _>>();
     let mut queued = VecDeque::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
@@ -7258,12 +7256,12 @@ fn native_rust_unit_from_package_target(
     dependency_artifacts: Vec<RustDependencyArtifact>,
     options: &RustPlanOptions,
 ) -> NativeRustUnitSummary {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mode = "build".to_string();
     let unit_id = native_rust_unit_id(NativeRustUnitIdInputs {
-        package: package,
-        target: target,
+        package,
+        target,
         mode: &mode,
         profile: &options.profile,
         dependency_artifacts: &dependency_artifacts,
@@ -7298,8 +7296,8 @@ struct NativeRustUnitIdInputs<'a> {
 }
 
 fn native_rust_unit_id(inputs: NativeRustUnitIdInputs<'_>) -> String {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let NativeRustUnitIdInputs {
         package,
         target,
@@ -7394,8 +7392,8 @@ struct SelectedHostBuildUnit {
 fn native_selected_host_units_by_key(
     packages: &[NativePackagePlanningSummary],
 ) -> BTreeMap<(String, String, String), Vec<SelectedHostUnit>> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut units_by_key = BTreeMap::<(String, String, String), Vec<SelectedHostUnit>>::new();
     let mut unit_index = 0usize;
     for package in packages {
@@ -7443,8 +7441,8 @@ fn selected_host_units_by_key(unit_graph: &Value) -> BTreeMap<(String, String, S
 }
 
 fn selected_host_build_units_by_key(units: &[Value]) -> BTreeMap<(String, String, String), Vec<SelectedHostBuildUnit>> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut build_units = BTreeMap::<(String, String, String), Vec<SelectedHostBuildUnit>>::new();
     for (index, unit) in units.iter().enumerate() {
         let Some((package_id, target_name, target_kind)) = selected_host_unit_parts(unit) else {
@@ -7457,14 +7455,14 @@ fn selected_host_build_units_by_key(units: &[Value]) -> BTreeMap<(String, String
         let key = host_unit_key(UnitTargetIdentityInputs {
             package_id: &package_id,
             target_name: &target_name,
-            target_kind: target_kind,
+            target_kind,
         });
         build_units.entry(key).or_default().push(SelectedHostBuildUnit {
             unit_id: rust_unit_id(RustUnitIdInputs {
-                index: index,
+                index,
                 package_id: &package_id,
                 target_name: &target_name,
-                target_kind: target_kind,
+                target_kind,
                 mode: "build",
             }),
         });
@@ -7481,21 +7479,21 @@ fn selected_host_unit_from_unit_value_with_build_map(
     unit: &Value,
     build_units: &BTreeMap<(String, String, String), Vec<SelectedHostBuildUnit>>,
 ) -> Option<SelectedHostUnit> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let (package_id, target_name, target_kind) = selected_host_unit_parts(unit)?;
     let key = host_unit_key(UnitTargetIdentityInputs {
         package_id: &package_id,
         target_name: &target_name,
-        target_kind: target_kind,
+        target_kind,
     });
     let unit_id = host_unit_id_from_unit_value(HostUnitIdInputs {
-        index: index,
+        index,
         package_id: &package_id,
         target_name: &target_name,
-        target_kind: target_kind,
-        unit: unit,
-        build_units: build_units,
+        target_kind,
+        unit,
+        build_units,
     })?;
     Some(SelectedHostUnit {
         key,
@@ -7527,8 +7525,8 @@ struct HostUnitIdInputs<'a> {
 }
 
 fn host_unit_id_from_unit_value(inputs: HostUnitIdInputs<'_>) -> Option<String> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let HostUnitIdInputs {
         index,
         package_id,
@@ -7540,18 +7538,18 @@ fn host_unit_id_from_unit_value(inputs: HostUnitIdInputs<'_>) -> Option<String> 
     let mode = target_string(unit, "mode").unwrap_or_else(|| "build".to_string());
     if mode == "build" {
         return Some(rust_unit_id(RustUnitIdInputs {
-            index: index,
-            package_id: package_id,
-            target_name: target_name,
-            target_kind: target_kind,
+            index,
+            package_id,
+            target_name,
+            target_kind,
             mode: &mode,
         }));
     }
     if target_kind == "custom-build" && mode == "run-custom-build" {
         let key = host_unit_key(UnitTargetIdentityInputs {
-            package_id: package_id,
-            target_name: target_name,
-            target_kind: target_kind,
+            package_id,
+            target_name,
+            target_kind,
         });
         if let Some([build_unit]) = build_units.get(&key).map(Vec::as_slice) {
             return Some(build_unit.unit_id.clone());
@@ -7560,10 +7558,10 @@ fn host_unit_id_from_unit_value(inputs: HostUnitIdInputs<'_>) -> Option<String> 
             return None;
         }
         return Some(rust_unit_id(RustUnitIdInputs {
-            index: index,
-            package_id: package_id,
+            index,
+            package_id,
             target_name: BUILD_SCRIPT_TARGET_NAME,
-            target_kind: target_kind,
+            target_kind,
             mode: "build",
         }));
     }
@@ -7613,8 +7611,8 @@ fn native_dependency_artifacts(
     packages: &[NativePackagePlanningSummary],
     blockers: &mut Vec<NativeUnitGraphPlanningBlocker>,
 ) -> Vec<RustDependencyArtifact> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut artifacts = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for dependency in dependencies {
         let Some(dependency_package) = packages.iter().find(|candidate| {
@@ -7708,8 +7706,8 @@ fn compare_native_units_to_cargo(
 }
 
 fn comparable_native_unit_facts(units: &[NativeRustUnitSummary]) -> Vec<String> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut facts = units
         .iter()
         .map(|unit| {
@@ -7736,8 +7734,8 @@ fn comparable_native_unit_facts(units: &[NativeRustUnitSummary]) -> Vec<String> 
 }
 
 fn comparable_cargo_unit_facts(units: &[RustUnitDerivationSummary]) -> Vec<String> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut facts = units
         .iter()
         .filter(|unit| unit.execution_kind == "target" && (unit.target_kind == "lib" || unit.target_kind == "bin"))
@@ -7786,7 +7784,7 @@ fn native_host_planning_indexes<'a>(
     inputs: &'a NativeHostPlanningInputs<'a>,
     cargo_graph: &UnitDerivationGraphSummary,
 ) -> NativeHostPlanningIndexes<'a> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!DEFAULT_CARGO_PROFILE.is_empty());
     let packages_by_manifest = inputs
         .package_planning
@@ -7824,7 +7822,7 @@ fn native_host_artifacts_by_package(
     inputs: &NativeHostPlanningInputs<'_>,
     indexes: &NativeHostPlanningIndexes<'_>,
 ) -> BTreeMap<String, Vec<RustHostArtifact>> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!HOST_DEPENDENCY_EXECUTION_KIND.is_empty());
     let mut artifacts_by_package: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
     for package in &inputs.package_planning.packages {
@@ -7889,8 +7887,8 @@ struct NativeHostUnitDependencies {
 }
 
 fn native_host_unit_dependencies(inputs: &mut NativeHostUnitInputs<'_>) -> NativeHostUnitDependencies {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     debug_assert!(is_host_target_kind(&inputs.target.kind));
     debug_assert!(!inputs.selected.unit_id.is_empty());
     let dependency_artifacts = native_host_unit_dependency_artifacts(NativeHostUnitDependencyInputs {
@@ -7940,8 +7938,8 @@ fn native_host_unit_dependencies(inputs: &mut NativeHostUnitInputs<'_>) -> Nativ
 }
 
 fn native_host_unit(mut inputs: NativeHostUnitInputs<'_>) -> NativeHostUnitSummary {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let dependencies = native_host_unit_dependencies(&mut inputs);
     let generated_metadata = (inputs.target.kind == "custom-build").then(|| {
         build_script_metadata_summary(BuildScriptMetadataKeyInputs {
@@ -7980,7 +7978,7 @@ fn collect_native_host_units(
     artifacts_by_package: &BTreeMap<String, Vec<RustHostArtifact>>,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) -> Vec<NativeHostUnitSummary> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
     let mut host_units = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for package in &inputs.package_planning.packages {
@@ -8045,7 +8043,7 @@ fn collect_native_host_target_consumers(
     artifacts_by_package: &BTreeMap<String, Vec<RustHostArtifact>>,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) -> Vec<NativeHostTargetConsumerSummary> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!HOST_DEPENDENCY_EXECUTION_KIND.is_empty());
     let all_host_artifacts = artifacts_by_package.values().flatten().cloned().collect::<Vec<_>>();
     let mut target_consumers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
@@ -8101,7 +8099,7 @@ struct NativeHostPlanningResultInputs<'a> {
 fn finalize_native_host_unit_graph_planning(
     mut inputs: NativeHostPlanningResultInputs<'_>,
 ) -> Result<NativeHostUnitGraphPlanningSummary, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!inputs.cargo_host_oracle_digest.is_empty());
     inputs.host_units.sort();
     inputs.host_units.dedup();
@@ -8166,7 +8164,7 @@ fn finalize_native_host_unit_graph_planning(
 fn summarize_native_host_unit_graph_planning_from_inputs(
     inputs: NativeHostPlanningInputs<'_>,
 ) -> Result<NativeHostUnitGraphPlanningSummary, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!DEFAULT_CARGO_PROFILE.is_empty());
     let cargo_graph = if inputs.options.no_cargo_oracle {
         empty_unit_derivation_graph()?
@@ -8234,8 +8232,8 @@ fn selected_target_consumed_host_artifacts(
     target_unit: &NativeRustUnitSummary,
     host_artifacts: &[RustHostArtifact],
 ) -> Option<Vec<RustHostArtifact>> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let units = unit_graph.get("units").and_then(Value::as_array)?;
     for (index, unit) in units.iter().enumerate() {
         let is_exact_unit_match =
@@ -8279,8 +8277,8 @@ fn fallback_target_consumed_host_artifacts(
     artifacts_by_package: &BTreeMap<String, Vec<RustHostArtifact>>,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) -> Vec<RustHostArtifact> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut consumed_host_artifacts = artifacts_by_package.get(&package.package_id).cloned().unwrap_or_default();
     for dependency in &package.path_dependencies {
         let Some(dependency_package) = packages_by_manifest
@@ -8348,8 +8346,8 @@ struct NativeHostMetadataDependencyInputs<'a> {
 fn native_host_metadata_dependencies(
     inputs: NativeHostMetadataDependencyInputs<'_>,
 ) -> Vec<BuildScriptMetadataDependency> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let NativeHostMetadataDependencyInputs {
         package,
         target_kind,
@@ -8417,8 +8415,8 @@ fn custom_build_metadata_producers_by_package(
     packages: &[NativePackagePlanningSummary],
     selected_host_units_by_key: &BTreeMap<(String, String, String), Vec<SelectedHostUnit>>,
 ) -> BTreeMap<String, Vec<String>> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut producers = BTreeMap::<String, Vec<String>>::new();
     for package in packages {
         for target in &package.targets {
@@ -8449,8 +8447,8 @@ fn selected_host_consumed_artifacts(
     selected: &SelectedHostUnit,
     artifacts: &[RustHostArtifact],
 ) -> Vec<RustHostArtifact> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if selected.key.2 == "custom-build" {
         return Vec::new();
     }
@@ -8478,8 +8476,8 @@ fn fallback_host_consumed_host_artifacts(
     artifacts_by_package: &BTreeMap<String, Vec<RustHostArtifact>>,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) -> Vec<RustHostArtifact> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if target_kind != "proc-macro" {
         return Vec::new();
     }
@@ -8526,8 +8524,8 @@ fn matching_host_artifacts_for_dependency(
     units: &[Value],
     artifacts: &[RustHostArtifact],
 ) -> Vec<RustHostArtifact> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if let Some(producer_unit_id) = host_dependency_producer_unit_id(dep, units) {
         return artifacts
             .iter()
@@ -8587,11 +8585,11 @@ fn native_host_unit_dependency_artifacts(inputs: NativeHostUnitDependencyInputs<
     debug_assert!(is_host_target_kind(target_kind));
     match target_kind {
         "custom-build" => native_host_dependency_artifacts(NativeHostDependencyArtifactInputs {
-            package: package,
+            package,
             dependencies: &package.build_dependencies,
-            packages_by_id: packages_by_id,
-            packages: packages,
-            blockers: blockers,
+            packages_by_id,
+            packages,
+            blockers,
             unresolved_class: "unresolved-build-dependency-edge",
             missing_class: "missing-native-build-dependency-fact",
         }),
@@ -8606,11 +8604,11 @@ fn native_host_unit_dependency_artifacts(inputs: NativeHostUnitDependencyInputs<
                 )
             } else {
                 native_host_dependency_artifacts(NativeHostDependencyArtifactInputs {
-                    package: package,
+                    package,
                     dependencies: &package.path_dependencies,
-                    packages_by_id: packages_by_id,
-                    packages: packages,
-                    blockers: blockers,
+                    packages_by_id,
+                    packages,
+                    blockers,
                     unresolved_class: "unresolved-proc-macro-dependency-edge",
                     missing_class: "missing-native-proc-macro-dependency-fact",
                 })
@@ -8627,8 +8625,8 @@ fn native_selected_host_dependency_artifacts(
     source_closure: &SourceClosureSummary,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) -> Vec<RustDependencyArtifact> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut artifacts = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let Some(selected_artifacts) = selected_artifacts else {
         return artifacts;
@@ -8681,8 +8679,8 @@ struct NativeHostDependencyArtifactInputs<'a> {
 }
 
 fn native_host_dependency_artifacts(inputs: NativeHostDependencyArtifactInputs<'_>) -> Vec<RustDependencyArtifact> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let NativeHostDependencyArtifactInputs {
         package,
         dependencies,
@@ -8737,8 +8735,8 @@ fn compare_native_host_units_to_cargo(
     unit_graph: &Value,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if !cargo_graph.blockers.is_empty() {
         for blocker in &cargo_graph.blockers {
             blockers.push(native_host_blocker(NativeHostBlockerInputs {
@@ -8765,8 +8763,8 @@ fn comparable_native_host_facts(
     host_units: &[NativeHostUnitSummary],
     target_consumers: &[NativeHostTargetConsumerSummary],
 ) -> Vec<String> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut facts = host_units
         .iter()
         .map(|unit| {
@@ -8808,8 +8806,8 @@ fn comparable_native_host_facts(
 }
 
 fn selected_cargo_host_artifacts_and_facts(unit_graph: &Value) -> (Vec<RustHostArtifact>, BTreeSet<String>) {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let selected_host_units = selected_host_units_by_key(unit_graph);
     let host_artifacts = selected_host_units
         .values()
@@ -8840,8 +8838,8 @@ fn selected_cargo_host_artifacts_and_facts(unit_graph: &Value) -> (Vec<RustHostA
 }
 
 fn comparable_cargo_host_facts(cargo_graph: &UnitDerivationGraphSummary, unit_graph: &Value) -> Vec<String> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let (host_artifacts, mut facts) = selected_cargo_host_artifacts_and_facts(unit_graph);
     if let Some(units) = unit_graph.get("units").and_then(Value::as_array) {
         facts.extend(units.iter().enumerate().filter_map(|(index, unit)| {
@@ -8956,8 +8954,8 @@ fn summarize_native_unit_derivation_graph(
     source_closure: &SourceClosureSummary,
     options: &RustPlanOptions,
 ) -> Result<UnitDerivationGraphSummary, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let consumed_hosts_by_unit = native_host_unit_graph
         .map(|host_graph| {
             host_graph
@@ -9183,8 +9181,8 @@ fn remap_normalized_text(value: &str, remaps: &[RustPathRemap]) -> String {
 }
 
 fn execution_source_closure_digest(source_closure: &SourceClosureSummary, options: &RustPlanOptions) -> String {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if !options.deterministic_release_paths {
         return source_closure.digest_blake3.clone();
     }
@@ -9277,8 +9275,8 @@ fn c_prefix_map_flags(
     remaps: &[RustPathRemap],
     selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> Option<String> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let route = selected_c_compiler?;
     if !c_compiler_family_supports_prefix_map(&route.compiler_family) {
         return None;
@@ -9326,11 +9324,7 @@ fn append_env_flags(inputs: AppendEnvFlagsInputs<'_>) {
 fn append_c_prefix_map_env(env: &mut BTreeMap<String, String>, flags: &str) {
     debug_assert!(!flags.is_empty());
     for key in C_PREFIX_MAP_ENV_KEYS {
-        append_env_flags(AppendEnvFlagsInputs {
-            env: env,
-            key: key,
-            flags: flags,
-        });
+        append_env_flags(AppendEnvFlagsInputs { env, key, flags });
     }
 }
 
@@ -9488,7 +9482,7 @@ fn native_rust_env(
         compile_time_manifest_dir(CompileTimeManifestDirInputs {
             package_root: inputs.package_root,
             target_kind: inputs.target_kind,
-            options: options,
+            options,
         }),
     );
     insert_deterministic_release_compile_env(&mut env, options);
@@ -9673,8 +9667,8 @@ fn native_host_unit_derivation(
 }
 
 fn add_host_dependency_derivations(derivations: &mut Vec<RustUnitDerivationSummary>) {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let target_libs_by_unit_id = target_lib_derivations_by_unit_id(derivations);
     let target_libs_by_package = target_lib_derivation_ids_by_package(derivations);
     let required_target_ids =
@@ -9720,8 +9714,8 @@ fn target_lib_derivations_by_unit_id(
 }
 
 fn target_lib_derivation_ids_by_package(derivations: &[RustUnitDerivationSummary]) -> BTreeMap<String, String> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut by_package = BTreeMap::new();
     let mut ambiguous_packages = BTreeSet::new();
     for unit in derivations.iter().filter(|unit| is_supported_target_unit(unit) && unit.target_kind == "lib") {
@@ -9751,8 +9745,8 @@ fn host_dependency_target_unit_ids(
     target_libs_by_unit_id: &BTreeMap<String, RustUnitDerivationSummary>,
     target_libs_by_package: &BTreeMap<String, String>,
 ) -> BTreeSet<String> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut queue = VecDeque::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for unit in derivations.iter().filter(|unit| is_supported_host_unit(unit)) {
         enqueue_host_dependency_targets(
@@ -9959,8 +9953,8 @@ fn summarize_unit_derivation_graph_with_native(
     native_unit_graph: Option<&NativeUnitGraphPlanningSummary>,
     native_host_unit_graph: Option<&NativeHostUnitGraphPlanningSummary>,
 ) -> Result<UnitDerivationGraphSummary, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if let Some(native_unit_graph) = native_unit_graph {
         if !native_unit_graph.ready {
             return blocked_unit_derivation_graph_from_native(native_unit_graph, native_host_unit_graph);
@@ -9985,8 +9979,8 @@ fn blocked_unit_derivation_graph_from_native(
     native_unit_graph: &NativeUnitGraphPlanningSummary,
     native_host_unit_graph: Option<&NativeHostUnitGraphPlanningSummary>,
 ) -> Result<UnitDerivationGraphSummary, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut blockers = native_unit_graph
         .blockers
         .iter()
@@ -10029,8 +10023,8 @@ fn summarize_cargo_unit_derivation_graph(
     source_closure: &SourceClosureSummary,
     options: &RustPlanOptions,
 ) -> Result<UnitDerivationGraphSummary, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut derivations = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut blockers = source_closure
         .blockers
@@ -10117,7 +10111,7 @@ struct CargoUnitFacts {
 }
 
 fn cargo_unit_facts(inputs: &CargoUnitDerivationInputs<'_>) -> Result<CargoUnitFacts, UnitDerivationBlocker> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!DEFAULT_RUST_EDITION.is_empty());
     let package_id = required_unit_string(inputs.unit, "pkg_id", inputs.index)?;
     let target = inputs.unit.get("target").ok_or_else(|| {
@@ -10237,7 +10231,7 @@ fn cargo_unit_env(
 fn summarize_unit_derivation(
     inputs: CargoUnitDerivationInputs<'_>,
 ) -> Result<RustUnitDerivationSummary, UnitDerivationBlocker> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!DEFAULT_RUST_EDITION.is_empty());
     let facts = cargo_unit_facts(&inputs)?;
     let dependency_artifacts = unit_dependency_artifacts(inputs.unit, inputs.units);
@@ -10304,8 +10298,8 @@ fn select_supported_target_kind(
     index: usize,
     package_id: &str,
 ) -> Result<String, UnitDerivationBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let kinds = target_string_array(target, "kind");
     let crate_types = target_string_array(target, "crate_types");
     if let Some(target_kind) = classify_supported_cargo_target_kind(&kinds, &crate_types) {
@@ -10325,9 +10319,9 @@ fn select_supported_target_kind(
         )
     };
     Err(unit_blocker(UnitBlockerInputs {
-        index: index,
+        index,
         package_id: Some(package_id.to_string()),
-        class: class,
+        class,
         message: &message,
     }))
 }
@@ -10357,8 +10351,8 @@ fn classify_supported_cargo_target_kind(kinds: &[String], crate_types: &[String]
 }
 
 fn host_artifacts_by_package(units: &[Value]) -> BTreeMap<String, Vec<RustHostArtifact>> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut artifacts: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
     for (index, unit) in units.iter().enumerate() {
         if is_custom_build_run_unit(unit) {
@@ -10445,8 +10439,8 @@ struct BuildScriptMetadataKeyInputs<'a> {
 }
 
 fn build_script_metadata_summary(inputs: BuildScriptMetadataKeyInputs<'_>) -> BuildScriptMetadataSummary {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let BuildScriptMetadataKeyInputs {
         package_id,
         target_name,
@@ -10495,8 +10489,8 @@ fn is_host_target_kind(target_kind: &str) -> bool {
 }
 
 fn unit_dependency_artifacts(unit: &Value, units: &[Value]) -> Vec<RustDependencyArtifact> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut artifacts = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let Some(deps) = unit_dependency_array(unit) else {
         return artifacts;
@@ -10624,8 +10618,8 @@ fn rust_unit_id(inputs: RustUnitIdInputs<'_>) -> String {
 }
 
 fn rust_unit_id_from_unit_value(index: usize, unit: &Value) -> Option<String> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if is_custom_build_run_unit(unit) {
         return None;
     }
@@ -10640,10 +10634,10 @@ fn rust_unit_id_from_unit_value(index: usize, unit: &Value) -> Option<String> {
         return None;
     }
     Some(rust_unit_id(RustUnitIdInputs {
-        index: index,
+        index,
         package_id: &package_id,
         target_name: &target_name,
-        target_kind: target_kind,
+        target_kind,
         mode: &mode,
     }))
 }
@@ -10668,7 +10662,7 @@ fn rust_crate_name(name: &str) -> String {
 fn required_unit_string(unit: &Value, field: &str, index: usize) -> Result<String, UnitDerivationBlocker> {
     target_string(unit, field).ok_or_else(|| {
         unit_blocker(UnitBlockerInputs {
-            index: index,
+            index,
             package_id: None,
             class: &format!("missing-{field}"),
             message: &format!("unit lacks `{field}`"),
@@ -10684,7 +10678,7 @@ fn required_target_string(
 ) -> Result<String, UnitDerivationBlocker> {
     target_string(target, field).ok_or_else(|| {
         unit_blocker(UnitBlockerInputs {
-            index: index,
+            index,
             package_id: Some(package_id.to_string()),
             class: &format!("missing-target-{field}"),
             message: &format!("unit target lacks `{field}`"),
@@ -10785,7 +10779,7 @@ struct RustUnitDependencyChain<'a> {
 fn first_supported_rust_unit_dependency_chain(
     graph: &UnitDerivationGraphSummary,
 ) -> Result<RustUnitDependencyChain<'_>, RustUnitExecutionBlocker> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
     let consumer = graph
         .derivations
@@ -10836,8 +10830,8 @@ pub(crate) fn execute_first_rust_unit_dependency_chain(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitDependencyChainExecutionReceipt, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if !graph.ready {
         return dependency_chain_receipt(
             "blocked",
@@ -10901,12 +10895,12 @@ fn validate_role_sensitive_artifact_graph(graph: &UnitDerivationGraphSummary) ->
 }
 
 fn validate_unit_role_triple(unit: &RustUnitDerivationSummary) -> Option<RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if unit.execution_kind == TARGET_EXECUTION_KIND {
         if unit.selected_triple.is_empty() {
             return Some(role_mismatch_blocker(RoleMismatchInputs {
-                unit: unit,
+                unit,
                 edge: "unit",
                 expected_role: TARGET_EXECUTION_KIND,
                 expected_triple: "non-empty-target-triple",
@@ -10920,7 +10914,7 @@ fn validate_unit_role_triple(unit: &RustUnitDerivationSummary) -> Option<RustUni
         let host_triple = host_target_triple();
         if unit.selected_triple != host_triple {
             return Some(role_mismatch_blocker(RoleMismatchInputs {
-                unit: unit,
+                unit,
                 edge: "unit",
                 expected_role: &unit.execution_kind,
                 expected_triple: &host_triple,
@@ -10931,7 +10925,7 @@ fn validate_unit_role_triple(unit: &RustUnitDerivationSummary) -> Option<RustUni
         return None;
     }
     Some(role_mismatch_blocker(RoleMismatchInputs {
-        unit: unit,
+        unit,
         edge: "unit",
         expected_role: "known-execution-kind",
         expected_triple: "known-selected-triple",
@@ -10953,7 +10947,7 @@ fn validate_dependency_artifact_role(
         return Some(role_mismatch_blocker(RoleMismatchInputs {
             unit: consumer,
             edge: &format!("dependency:{}", dependency.name),
-            expected_role: expected_role,
+            expected_role,
             expected_triple: &expected_triple,
             actual_role: &producer.execution_kind,
             actual_triple: &producer.selected_triple,
@@ -10988,8 +10982,8 @@ fn validate_dependency_artifact_identity(
     dependency: &RustDependencyArtifact,
     producer: &RustUnitDerivationSummary,
 ) -> Option<RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if dependency.package_id != producer.package_id {
         return Some(identity_mismatch_blocker(IdentityMismatchInputs {
             unit: consumer,
@@ -11144,7 +11138,7 @@ fn identity_mismatch_blocker(inputs: IdentityMismatchInputs<'_>) -> RustUnitExec
 }
 
 fn selected_target_unit_indices(graph: &UnitDerivationGraphSummary) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
     let mut selected_indices = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for (index, unit) in graph.derivations.iter().enumerate() {
@@ -11219,7 +11213,7 @@ fn execute_target_topology_order(
     ordered_indices: Vec<usize>,
 ) -> Result<RustUnitTargetTopologyExecutionReceipt, RunError> {
     debug_assert!(ordered_indices.iter().all(|index| *index < graph.derivations.len()));
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     let mut executions = Vec::with_capacity(ordered_indices.len());
     let mut produced_artifacts = ProducedArtifactIndex::default();
     for index in ordered_indices {
@@ -11265,7 +11259,7 @@ pub(crate) fn execute_rust_target_unit_topology(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitTargetTopologyExecutionReceipt, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
     if !graph.ready {
         return target_topology_receipt(
@@ -11313,8 +11307,8 @@ fn target_dependency_producer_index(
     unit_indices_by_id: &BTreeMap<String, usize>,
     lib_producers: &BTreeMap<String, usize>,
 ) -> Result<usize, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if let Some(producer_unit_id) = &dependency.producer_unit_id {
         let Some(index) = unit_indices_by_id.get(producer_unit_id).copied() else {
             return Err(RustUnitExecutionBlocker {
@@ -11353,8 +11347,8 @@ fn plan_host_dependency_topology(
     target_edges: &BTreeMap<usize, Vec<usize>>,
     graph: &UnitDerivationGraphSummary,
 ) -> Result<HostDependencyTopologyPlan, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let unit_indices_by_id = rust_unit_indices_by_id(graph);
     let mut target_dependency_indices = BTreeSet::new();
     let mut host_edges = BTreeMap::<usize, Vec<usize>>::new();
@@ -11552,8 +11546,8 @@ fn select_build_script_metadata_producer_index(
     producers: &BuildScriptMetadataProducerIndex,
     graph: &UnitDerivationGraphSummary,
 ) -> Result<usize, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if let Some(producer_unit_id) = &metadata_dependency.producer_unit_id {
         return producers.by_unit_id.get(producer_unit_id).copied().ok_or_else(|| RustUnitExecutionBlocker {
             class: "missing-build-script-metadata-producer".to_string(),
@@ -11595,8 +11589,8 @@ fn collapse_build_script_alias_producer_candidates(
     candidates: Vec<usize>,
     graph: &UnitDerivationGraphSummary,
 ) -> Vec<usize> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut alias_candidates_by_name = BTreeMap::<String, Vec<usize>>::new();
     let mut collapsed_candidates = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for index in candidates {
@@ -11690,7 +11684,7 @@ struct CombinedTopologyProducers {
 fn combined_topology_indices(
     graph: &UnitDerivationGraphSummary,
 ) -> Result<CombinedTopologyIndices, RustUnitExecutionBlocker> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
     let host = graph
         .derivations
@@ -11844,7 +11838,7 @@ fn combined_topology_execution_order(
         host_producers: &producers.host,
         proc_macro_producers: &producers.proc_macro,
         target_edges: &edges,
-        graph: graph,
+        graph,
     })
 }
 
@@ -12053,7 +12047,7 @@ pub(crate) fn execute_rust_unit_topology(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitTopologyExecutionReceipt, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
     if let Some(blocker) = validate_native_registry_topology_inputs(native_registry_sources, graph) {
         return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
@@ -12149,7 +12143,7 @@ fn native_dev_dependency_test_plan(
     planning: &NativePackageTargetPlanningSummary,
 ) -> Result<DevDependencyTestPlan<'_>, DevDependencyTestPlanFailure> {
     debug_assert!(planning.ready);
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     let package = dev_dependency_test_package(planning)?;
     let dependency_names = dev_dependency_names(package);
     let manifest_path = Path::new(&package.manifest_path);
@@ -12408,7 +12402,7 @@ fn validate_dev_dependency_topology_inputs(
     planning: &NativePackageTargetPlanningSummary,
     graph: &UnitDerivationGraphSummary,
 ) -> Result<Option<RustDevDependencyTestTopologyExecutionReceipt>, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
     if !planning.ready {
         return dev_dependency_test_topology_receipt(DevDependencyTopologyReceiptInputs {
@@ -12446,7 +12440,7 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustDevDependencyTestTopologyExecutionReceipt, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!DEFAULT_CARGO_PROFILE.is_empty());
     if let Some(receipt) = validate_dev_dependency_topology_inputs(native_package_target_planning, graph)? {
         return Ok(receipt);
@@ -12496,7 +12490,7 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
         test_target: Some(plan.test_name),
         dev_dependency_packages: state.package_ids,
         unit_executions: state.executions,
-        blocker: blocker,
+        blocker,
     })
 }
 
@@ -12510,7 +12504,7 @@ fn workspace_dependency_plan(
     planning: &NativePackageTargetPlanningSummary,
 ) -> Result<WorkspaceDependencyPlan<'_>, RustUnitExecutionBlocker> {
     debug_assert!(planning.ready);
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     let candidate_packages = planning
         .packages
         .iter()
@@ -12687,7 +12681,7 @@ fn validate_workspace_dependency_topology_inputs(
     planning: &NativePackageTargetPlanningSummary,
     graph: &UnitDerivationGraphSummary,
 ) -> Result<Option<RustWorkspaceDependencyTopologyExecutionReceipt>, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
     if !planning.ready {
         return workspace_dependency_topology_receipt(WorkspaceDependencyTopologyReceiptInputs {
@@ -12725,7 +12719,7 @@ pub(crate) fn execute_native_registry_workspace_dependency_topology(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustWorkspaceDependencyTopologyExecutionReceipt, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
     if let Some(receipt) = validate_workspace_dependency_topology_inputs(native_package_target_planning, graph)? {
         return Ok(receipt);
@@ -12772,7 +12766,7 @@ pub(crate) fn execute_native_registry_workspace_dependency_topology(
         member_package_id: Some(plan.package.package_id.clone()),
         inherited_dependency_packages: state.package_ids,
         unit_executions: state.executions,
-        blocker: blocker,
+        blocker,
     })
 }
 
@@ -12918,7 +12912,7 @@ fn validate_patch_source_topology_inputs(
     package_planning: &NativePackageTargetPlanningSummary,
     graph: &UnitDerivationGraphSummary,
 ) -> Result<Option<RustPatchSourceTopologyExecutionReceipt>, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
     if !registry_sources.ready {
         return patch_source_topology_receipt(
@@ -12968,7 +12962,7 @@ pub(crate) fn execute_native_registry_patch_source_topology(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustPatchSourceTopologyExecutionReceipt, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
     if let Some(receipt) =
         validate_patch_source_topology_inputs(native_registry_sources, native_package_target_planning, graph)?
@@ -13027,8 +13021,8 @@ fn validate_native_registry_topology_inputs(
     native_registry_sources: &NativeRegistrySourcePlanningSummary,
     graph: &UnitDerivationGraphSummary,
 ) -> Option<RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let registry_packages = graph
         .derivations
         .iter()
@@ -13077,7 +13071,7 @@ fn validate_native_host_unit_identities(
     native_units: &BTreeSet<NativeHostUnitIdentity>,
     graph_units: &BTreeSet<NativeHostUnitIdentity>,
 ) -> Option<RustUnitExecutionBlocker> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!HOST_EXECUTION_KIND.is_empty());
     for native_unit in native_units {
         if !graph_units.contains(native_unit) {
@@ -13108,7 +13102,7 @@ fn validate_native_host_consumer_identities(
     native_consumers: &BTreeMap<String, NativeHostConsumerIdentity>,
     graph_consumers: &BTreeMap<String, NativeHostConsumerIdentity>,
 ) -> Option<RustUnitExecutionBlocker> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
     for (key, (unit_id, package_id, native_artifacts)) in native_consumers {
         let Some((_, graph_artifacts)) = graph_consumers.get_key_value(key) else {
@@ -13150,7 +13144,7 @@ fn validate_native_host_artifact_topology_inputs(
     execution_context: &str,
 ) -> Option<RustUnitExecutionBlocker> {
     debug_assert!(!execution_context.is_empty());
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     if !native_host_graph.ready {
         return Some(RustUnitExecutionBlocker {
             class: "native-host-unit-graph-blocked".to_string(),
@@ -13207,7 +13201,7 @@ fn host_artifact_topology_indices(
     graph: &UnitDerivationGraphSummary,
 ) -> Result<HostArtifactTopologyIndices, RustUnitExecutionBlocker> {
     debug_assert!(graph.ready);
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     let host = graph
         .derivations
         .iter()
@@ -13397,7 +13391,7 @@ pub(crate) fn execute_rust_host_artifact_topology(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitHostArtifactTopologyExecutionReceipt, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!HOST_EXECUTION_KIND.is_empty());
     if let Some(blocker) = validate_native_registry_topology_inputs(native_registry_sources, graph) {
         return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
@@ -13483,9 +13477,9 @@ fn topologically_order_units(
             };
             match phase {
                 TopologyVisitPhase::Enter => enter_topology_unit(EnterTopologyUnitInputs {
-                    index: index,
-                    edges: edges,
-                    graph: graph,
+                    index,
+                    edges,
+                    graph,
                     temporary: &mut temporary,
                     permanent: &permanent,
                     pending: &mut pending,
@@ -13518,8 +13512,8 @@ struct EnterTopologyUnitInputs<'a> {
 }
 
 fn enter_topology_unit(inputs: EnterTopologyUnitInputs<'_>) -> Result<(), RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let EnterTopologyUnitInputs {
         index,
         edges,
@@ -13711,8 +13705,8 @@ fn select_produced_dependency_artifact<'a>(
     dependency: &RustDependencyArtifact,
     produced_artifacts: &'a ProducedArtifactIndex,
 ) -> Result<&'a Path, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if let Some(producer_unit_id) = &dependency.producer_unit_id {
         return produced_artifacts.by_unit_id.get(producer_unit_id).map(PathBuf::as_path).ok_or_else(|| {
             RustUnitExecutionBlocker {
@@ -13780,8 +13774,8 @@ fn selected_dependency_search_artifacts(
     graph: &UnitDerivationGraphSummary,
     produced_artifacts: &ProducedArtifactIndex,
 ) -> Result<Vec<PathBuf>, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut units_by_id = BTreeMap::new();
     for candidate in &graph.derivations {
         insert_btree_entry_with_bound(&mut units_by_id, candidate.unit_id.clone(), candidate, graph.derivations.len());
@@ -13827,8 +13821,8 @@ fn select_produced_host_search_artifact(
     host_artifact: &RustHostArtifact,
     produced_artifacts: &ProducedArtifactIndex,
 ) -> Result<Option<PathBuf>, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if let Some(producer_unit_id) = &host_artifact.producer_unit_id {
         return Ok(produced_artifacts.by_unit_id.get(producer_unit_id).cloned());
     }
@@ -13863,8 +13857,8 @@ fn dependency_producer_unit_ids(
     dependency: &RustDependencyArtifact,
     produced_artifacts: &ProducedArtifactIndex,
 ) -> Result<Vec<String>, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if let Some(producer_unit_id) = &dependency.producer_unit_id {
         return Ok(vec![producer_unit_id.clone()]);
     }
@@ -13952,8 +13946,8 @@ fn bind_all_host_artifacts_with_index(
     unit: &RustUnitDerivationSummary,
     produced_host_artifacts: &ProducedHostArtifactIndex,
 ) -> Result<RustUnitDerivationSummary, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut bound = unit.clone();
     for host_artifact in &unit.consumed_host_artifacts {
         let produced_artifact = select_produced_host_artifact(unit, host_artifact, produced_host_artifacts)?;
@@ -13994,8 +13988,8 @@ fn select_produced_host_artifact<'a>(
     host_artifact: &RustHostArtifact,
     produced_host_artifacts: &'a ProducedHostArtifactIndex,
 ) -> Result<&'a Path, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if let Some(producer_unit_id) = &host_artifact.producer_unit_id {
         return produced_host_artifacts.by_unit_id.get(producer_unit_id).map(PathBuf::as_path).ok_or_else(|| {
             RustUnitExecutionBlocker {
@@ -14173,8 +14167,8 @@ fn select_package_build_script_metadata(
     package_id: &str,
     produced_metadata: &ProducedBuildScriptMetadataIndex,
 ) -> Result<BuildScriptMetadataSummary, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let candidates = produced_metadata.by_package.get(package_id).cloned().unwrap_or_default();
     let candidates = collapse_build_script_alias_metadata_candidates(candidates);
     match candidates.as_slice() {
@@ -14201,8 +14195,8 @@ fn select_package_build_script_metadata(
 fn collapse_build_script_alias_metadata_candidates(
     candidates: Vec<ProducedBuildScriptMetadata>,
 ) -> Vec<ProducedBuildScriptMetadata> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut alias_candidates_by_name = BTreeMap::<String, Vec<ProducedBuildScriptMetadata>>::new();
     let mut collapsed = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for candidate in candidates {
@@ -14476,8 +14470,8 @@ fn build_script_child_env(
     package_root: Option<&Path>,
     selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> BTreeMap<String, String> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut env = BTreeMap::new();
     append_build_script_dependency_env(&mut env, &unit.derivation.env);
     append_build_script_package_env(&mut env, &unit.derivation.env);
@@ -14539,8 +14533,8 @@ fn run_build_script_metadata(
     options: &RustUnitExecutionOptions,
     executable: &Path,
 ) -> Result<Result<BuildScriptMetadataRunReceipt, RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if !executable.is_file() {
         return Ok(Err(RustUnitExecutionBlocker {
             class: "missing-build-script-executable".to_string(),
@@ -14647,8 +14641,8 @@ fn source_built_c_compiler_route_from_env()
 fn source_built_c_compiler_route_from_json(
     text: &str,
 ) -> Result<Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if text.trim().is_empty() {
         return Err(RustUnitExecutionBlocker {
             class: "source-built-c-compiler-route-invalid".to_string(),
@@ -14790,8 +14784,8 @@ fn parse_build_script_metadata(
     stdout: &str,
     out_dir: &Path,
 ) -> Result<BuildScriptMetadataSummary, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let metadata_entry_bound = stdout.lines().count();
     let mut rustc_cfg = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut rustc_env = BTreeMap::new();
@@ -14849,12 +14843,12 @@ fn parse_build_script_metadata(
     rerun_if_changed.dedup();
     build_script_metadata_summary_from_parts(BuildScriptMetadataParts {
         out_dir: normalize_path_string(out_dir),
-        rustc_cfg: rustc_cfg,
-        rustc_env: rustc_env,
-        rustc_link_lib: rustc_link_lib,
-        rustc_link_search: rustc_link_search,
-        rerun_if_changed: rerun_if_changed,
-        metadata: metadata,
+        rustc_cfg,
+        rustc_env,
+        rustc_link_lib,
+        rustc_link_search,
+        rerun_if_changed,
+        metadata,
     })
 }
 
@@ -14886,8 +14880,8 @@ fn validate_build_script_metadata_key(key: &str, line_index: usize) -> Result<()
 }
 
 fn validate_rustc_link_lib_metadata(value: &str, line_index: usize) -> Result<(), RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if value.is_empty() {
         return Err(malformed_build_script_metadata(line_index, "metadata value must not be empty"));
     }
@@ -14940,8 +14934,8 @@ fn validate_rustc_link_lib_modifiers(modifiers: &str, line_index: usize) -> Resu
 }
 
 fn validate_rustc_link_search_metadata(value: &str, line_index: usize) -> Result<(), RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if value.is_empty() {
         return Err(malformed_build_script_metadata(line_index, "metadata value must not be empty"));
     }
@@ -15017,8 +15011,8 @@ struct BuildScriptMetadataParts {
 fn build_script_metadata_summary_from_parts(
     parts: BuildScriptMetadataParts,
 ) -> Result<BuildScriptMetadataSummary, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let BuildScriptMetadataParts {
         out_dir,
         rustc_cfg,
@@ -15117,8 +15111,8 @@ fn append_dependency_search_paths_from_paths<'a>(
     unit: &mut RustUnitDerivationSummary,
     produced_artifacts: impl IntoIterator<Item = &'a PathBuf>,
 ) {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let existing_search_args = rustc_dependency_search_args(&unit.derivation.args);
     let mut new_search_args = BTreeSet::new();
     for produced_artifact in produced_artifacts {
@@ -15178,14 +15172,14 @@ fn resolve_compiler_policy_invocation(
     unit: &RustUnitDerivationSummary,
     toolchain: &RustToolchainIdentity,
 ) -> Result<Result<Option<RustCompilerPolicyInvocation>, RustCompilerPolicyResolutionBlocker>, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if selection.mode.is_plain() {
         return Ok(Ok(None));
     }
     let Some(manifest_path) = selection.provider_manifest.as_ref() else {
         return Ok(Err(compiler_policy_resolution_blocker(CompilerPolicyResolutionBlockerInputs {
-            selection: selection,
+            selection,
             class: "compiler-policy-missing-provider-manifest",
             message: "compiler-policy mode requires a provider manifest",
         })?));
@@ -15194,7 +15188,7 @@ fn resolve_compiler_policy_invocation(
         Ok(bytes) => bytes,
         Err(err) => {
             return Ok(Err(compiler_policy_resolution_blocker(CompilerPolicyResolutionBlockerInputs {
-                selection: selection,
+                selection,
                 class: "compiler-policy-missing-provider-manifest",
                 message: &format!("reading compiler-policy provider manifest {}: {err}", manifest_path.display()),
             })?));
@@ -15204,14 +15198,14 @@ fn resolve_compiler_policy_invocation(
     if let Some(expected_digest) = &selection.expected_provider_manifest_digest {
         let Some(expected_digest) = normalize_compiler_policy_digest(expected_digest) else {
             return Ok(Err(compiler_policy_resolution_blocker(CompilerPolicyResolutionBlockerInputs {
-                selection: selection,
+                selection,
                 class: "compiler-policy-invalid-provider-manifest-digest",
                 message: "expected compiler-policy provider manifest digest must be b3:<64 lowercase hex> or raw 64 lowercase hex",
             })?));
         };
         if expected_digest != manifest_digest {
             return Ok(Err(compiler_policy_resolution_blocker(CompilerPolicyResolutionBlockerInputs {
-                selection: selection,
+                selection,
                 class: "compiler-policy-provider-manifest-digest-mismatch",
                 message: "compiler-policy provider manifest digest does not match the operator-selected digest",
             })?));
@@ -15221,7 +15215,7 @@ fn resolve_compiler_policy_invocation(
         Ok(manifest) => manifest,
         Err(err) => {
             return Ok(Err(compiler_policy_resolution_blocker(CompilerPolicyResolutionBlockerInputs {
-                selection: selection,
+                selection,
                 class: "compiler-policy-invalid-provider-manifest",
                 message: &format!("parsing compiler-policy provider manifest {}: {err}", manifest_path.display()),
             })?));
@@ -15258,8 +15252,8 @@ fn compiler_policy_manifest_compatibility_blocker(
     debug_assert!(!COMPILER_POLICY_DIGEST_PREFIX.is_empty());
     if manifest.provider.is_empty() || manifest.profile.is_empty() || manifest.adapter_kind.is_empty() {
         return compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
-            mode: mode,
-            manifest: manifest,
+            mode,
+            manifest,
             provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
             class: "compiler-policy-invalid-provider-manifest",
             message: "compiler-policy provider, profile, and adapter kind must be non-empty",
@@ -15268,8 +15262,8 @@ fn compiler_policy_manifest_compatibility_blocker(
     }
     if manifest.compatible_rustc.version_verbose != toolchain.version_verbose {
         return compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
-            mode: mode,
-            manifest: manifest,
+            mode,
+            manifest,
             provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
             class: "compiler-policy-toolchain-mismatch",
             message: "compiler-policy provider manifest was produced for a different rustc -vV identity",
@@ -15281,8 +15275,8 @@ fn compiler_policy_manifest_compatibility_blocker(
         && normalize_compiler_policy_digest(expected_digest).as_deref() != Some(actual_digest.as_str())
     {
         return compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
-            mode: mode,
-            manifest: manifest,
+            mode,
+            manifest,
             provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
             class: "compiler-policy-toolchain-mismatch",
             message: "compiler-policy provider manifest rustc executable digest does not match selected rustc",
@@ -15358,8 +15352,8 @@ fn compiler_policy_artifact_digests(
         },
         None if mode == RustCompilerPolicyMode::Required => {
             let blocker = compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
-                mode: mode,
-                manifest: manifest,
+                mode,
+                manifest,
                 provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
                 class: "compiler-policy-missing-standards-policy",
                 message: "required compiler-policy mode requires a declared standards policy artifact",
@@ -15383,8 +15377,8 @@ fn validate_compiler_policy_manifest(
     manifest: &RustCompilerPolicyProviderManifest,
     manifest_digest: &str,
 ) -> Result<Result<RustCompilerPolicyIdentity, RustCompilerPolicyResolutionBlocker>, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if let Some(blocker) =
         compiler_policy_manifest_compatibility_blocker(mode, rustc, toolchain, manifest, manifest_digest)?
     {
@@ -15396,8 +15390,8 @@ fn validate_compiler_policy_manifest(
     };
     if manifest.claims.is_empty() {
         return Ok(Err(compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
-            mode: mode,
-            manifest: manifest,
+            mode,
+            manifest,
             provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
             class: "compiler-policy-invalid-provider-manifest",
             message: "compiler-policy provider manifest must declare bounded claims",
@@ -15405,8 +15399,8 @@ fn validate_compiler_policy_manifest(
     }
     if !manifest.non_claims.iter().any(|claim| claim == "program-correctness") {
         return Ok(Err(compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
-            mode: mode,
-            manifest: manifest,
+            mode,
+            manifest,
             provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
             class: "compiler-policy-invalid-provider-manifest",
             message: "compiler-policy provider manifest must explicitly avoid program-correctness claims",
@@ -15432,8 +15426,8 @@ fn verify_compiler_policy_artifact(
     field: &str,
     artifact: &RustCompilerPolicyManifestArtifact,
 ) -> Result<String, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let Some(declared_digest) = normalize_compiler_policy_digest(&artifact.blake3) else {
         return Err(RustUnitExecutionBlocker {
             class: "compiler-policy-invalid-digest".to_string(),
@@ -15472,8 +15466,8 @@ struct CompilerPolicyResolutionBlockerInputs<'a> {
 fn compiler_policy_resolution_blocker(
     inputs: CompilerPolicyResolutionBlockerInputs<'_>,
 ) -> Result<RustCompilerPolicyResolutionBlocker, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let CompilerPolicyResolutionBlockerInputs {
         selection,
         class,
@@ -15517,8 +15511,8 @@ struct CompilerPolicyManifestBlockerInputs<'a> {
 fn compiler_policy_resolution_blocker_for_manifest(
     inputs: CompilerPolicyManifestBlockerInputs<'_>,
 ) -> Result<RustCompilerPolicyResolutionBlocker, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let CompilerPolicyManifestBlockerInputs {
         mode,
         manifest,
@@ -15563,8 +15557,8 @@ fn compiler_policy_receipt(
     invocation_status: &str,
     waiver_summary: Option<RustCompilerPolicyWaiverSummary>,
 ) -> RustCompilerPolicyExecutionReceipt {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let compliance_claim = if invocation_status == COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN
         || invocation_status == COMPILER_POLICY_STATUS_NOT_RUN
     {
@@ -15610,8 +15604,8 @@ fn compiler_policy_receipt_from_report(
     invocation_status: &str,
     fail_closed: bool,
 ) -> Result<Result<RustCompilerPolicyExecutionReceipt, RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut receipt = compiler_policy_receipt_with_status(invocation.receipt.clone(), invocation_status);
     if !invocation.report_path.exists() {
         return Ok(Ok(receipt));
@@ -15678,8 +15672,8 @@ fn execute_rust_compiler_command(
     unit_output_dir: &Path,
     compiler_policy: Option<&RustCompilerPolicyInvocation>,
 ) -> Result<std::process::Output, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut command = match compiler_policy {
         Some(policy) => {
             if let Some(report_dir) = policy.report_path.parent() {
@@ -15752,12 +15746,12 @@ struct RustUnitExecutionInputs {
     compiler_policy_receipt: Option<RustCompilerPolicyExecutionReceipt>,
 }
 
+type RequiredExecutionArtifactDigests =
+    Result<(Vec<RustExecutionArtifactDigest>, Vec<RustExecutionArtifactDigest>), RustUnitExecutionBlocker>;
+
 fn required_execution_artifact_digests(
     unit: &RustUnitDerivationSummary,
-) -> Result<
-    Result<(Vec<RustExecutionArtifactDigest>, Vec<RustExecutionArtifactDigest>), RustUnitExecutionBlocker>,
-    RunError,
-> {
+) -> Result<RequiredExecutionArtifactDigests, RunError> {
     let dependency_paths =
         unit.dependency_artifacts.iter().map(|artifact| artifact.artifact.as_str()).collect::<Vec<_>>();
     let dependency_digests = match artifact_digests(&dependency_paths, "missing-dependency-artifact")? {
@@ -15776,7 +15770,7 @@ fn prepare_rust_unit_execution_inputs(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<Result<RustUnitExecutionInputs, RustUnitExecutionReceipt>, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!RUST_UNIT_EXECUTION_RECEIPT_FILE.is_empty());
     if unit.derivation.builder != "rustc" {
         return blocked_execution_receipt(BlockedExecutionReceiptInputs {
@@ -15874,7 +15868,7 @@ fn apply_rust_unit_compiler_policy(
             Ok(None)
         }
         Err(policy_blocker) => compiler_policy_blocked_execution_receipt(CompilerPolicyBlockedReceiptInputs {
-            unit: unit,
+            unit,
             toolchain: inputs.toolchain.clone(),
             environment_digest_blake3: inputs.environment_digest_blake3.clone(),
             dependency_artifact_digests: inputs.dependency_artifact_digests.clone(),
@@ -15893,11 +15887,11 @@ fn failed_rust_compiler_execution(
     output: &std::process::Output,
 ) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
     debug_assert!(!output.status.success());
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     let Some(invocation) = inputs.compiler_policy_invocation.as_ref() else {
         let diagnostic = redacted_diagnostic(&output.stderr);
         return failed_execution_receipt(FailedExecutionReceiptInputs {
-            unit: unit,
+            unit,
             toolchain: inputs.toolchain.clone(),
             dependency_artifact_digests: inputs.dependency_artifact_digests.clone(),
             host_artifact_digests: inputs.host_artifact_digests.clone(),
@@ -15913,7 +15907,7 @@ fn failed_rust_compiler_execution(
             .clone()
             .map(|receipt| compiler_policy_receipt_with_status(receipt, COMPILER_POLICY_STATUS_FAILED));
         return failed_execution_receipt(FailedExecutionReceiptInputs {
-            unit: unit,
+            unit,
             toolchain: inputs.toolchain.clone(),
             dependency_artifact_digests: inputs.dependency_artifact_digests.clone(),
             host_artifact_digests: inputs.host_artifact_digests.clone(),
@@ -15931,7 +15925,7 @@ fn failed_rust_compiler_execution(
             .clone()
             .map(|receipt| compiler_policy_receipt_with_status(receipt, COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN));
         return failed_execution_receipt(FailedExecutionReceiptInputs {
-            unit: unit,
+            unit,
             toolchain: inputs.toolchain.clone(),
             dependency_artifact_digests: inputs.dependency_artifact_digests.clone(),
             host_artifact_digests: inputs.host_artifact_digests.clone(),
@@ -15952,8 +15946,8 @@ fn validate_successful_compiler_policy_report(
     options: &RustUnitExecutionOptions,
     inputs: &mut RustUnitExecutionInputs,
 ) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let Some(invocation) = inputs.compiler_policy_invocation.as_ref() else {
         return Ok(None);
     };
@@ -15967,7 +15961,7 @@ fn validate_successful_compiler_policy_report(
             Ok(None)
         }
         Err(blocker) => compiler_policy_blocked_execution_receipt(CompilerPolicyBlockedReceiptInputs {
-            unit: unit,
+            unit,
             toolchain: inputs.toolchain.clone(),
             environment_digest_blake3: inputs.environment_digest_blake3.clone(),
             dependency_artifact_digests: inputs.dependency_artifact_digests.clone(),
@@ -15976,7 +15970,7 @@ fn validate_successful_compiler_policy_report(
                 invocation.receipt.clone(),
                 COMPILER_POLICY_STATUS_FAILED,
             ),
-            blocker: blocker,
+            blocker,
         })
         .map(Some),
     }
@@ -15986,18 +15980,18 @@ fn finalize_successful_rust_unit_execution(
     unit: &RustUnitDerivationSummary,
     inputs: RustUnitExecutionInputs,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!inputs.output_dir.as_os_str().is_empty());
     let output_artifact_digests = digest_output_artifacts(&inputs.output_dir)?;
     if output_artifact_digests.is_empty() {
         if let Some(compiler_policy) = inputs.compiler_policy_receipt {
             return compiler_policy_blocked_execution_receipt(CompilerPolicyBlockedReceiptInputs {
-                unit: unit,
+                unit,
                 toolchain: inputs.toolchain,
                 environment_digest_blake3: inputs.environment_digest_blake3,
                 dependency_artifact_digests: inputs.dependency_artifact_digests,
                 host_artifact_digests: inputs.host_artifact_digests,
-                compiler_policy: compiler_policy,
+                compiler_policy,
                 blocker: RustUnitExecutionBlocker {
                     class: "missing-declared-output".to_string(),
                     message: "rustc completed but produced no declared output artifacts".to_string(),
@@ -16011,14 +16005,14 @@ fn finalize_successful_rust_unit_execution(
         });
     }
     let receipt = finalized_execution_receipt(FinalizedExecutionReceiptInputs {
-        unit: unit,
+        unit,
         execution_status: "success",
         rebuild_reason: "rebuilt-explicit-unit",
         toolchain: inputs.toolchain,
         environment_digest_blake3: inputs.environment_digest_blake3,
         dependency_artifact_digests: inputs.dependency_artifact_digests,
         host_artifact_digests: inputs.host_artifact_digests,
-        output_artifact_digests: output_artifact_digests,
+        output_artifact_digests,
         compiler_policy: inputs.compiler_policy_receipt,
         blocker: None,
     })?;
@@ -16030,7 +16024,7 @@ fn execute_rust_unit(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
-    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!RUST_UNIT_EXECUTION_RECEIPT_FILE.is_empty());
     let mut inputs = match prepare_rust_unit_execution_inputs(unit, options)? {
         Ok(inputs) => inputs,
@@ -16142,8 +16136,8 @@ fn stale_cached_output_from_reuse_inputs(
 fn try_reuse_rust_unit_outputs(
     inputs: ReuseRustUnitOutputsInputs<'_>,
 ) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let receipt_path = inputs.output_dir.join(RUST_UNIT_EXECUTION_RECEIPT_FILE);
     if !receipt_path.exists() {
         return Ok(None);
@@ -16230,8 +16224,8 @@ fn produced_host_artifact_path(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<Result<PathBuf, RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let output_dir = options.output_root.join(safe_path_component(&unit.unit_id));
     if !output_dir.is_dir() {
         return Ok(Err(RustUnitExecutionBlocker {
@@ -16265,8 +16259,8 @@ fn produced_library_artifact_path(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<Result<PathBuf, RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let output_dir = options.output_root.join(safe_path_component(&unit.unit_id));
     if !output_dir.is_dir() {
         return Ok(Err(RustUnitExecutionBlocker {
@@ -16295,8 +16289,8 @@ fn bind_dependency_artifact(
     dependency: &RustDependencyArtifact,
     produced_artifact: &Path,
 ) -> Result<RustUnitDerivationSummary, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let produced_artifact = normalize_path_string(&rustc_artifact_path(produced_artifact));
     let mut bound = consumer.clone();
     for artifact in &mut bound.dependency_artifacts {
@@ -16458,8 +16452,8 @@ fn dev_dependency_lib_derivation(
     package: &NativePackagePlanningSummary,
     dependency_name: &str,
 ) -> Result<RustUnitDerivationSummary, RustUnitExecutionBlocker> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let libs = package.targets.iter().filter(|target| target.kind == "lib").collect::<Vec<_>>();
     if libs.len() != 1 {
         return Err(RustUnitExecutionBlocker {
@@ -16719,7 +16713,7 @@ fn blocked_execution_receipt(inputs: BlockedExecutionReceiptInputs<'_>) -> Resul
         execution_status: "blocked",
         rebuild_reason: "not-run-preflight-blocker",
         toolchain: missing_toolchain_identity(),
-        environment_digest_blake3: environment_digest_blake3,
+        environment_digest_blake3,
         dependency_artifact_digests: Vec::new(),
         host_artifact_digests: Vec::new(),
         output_artifact_digests: Vec::new(),
@@ -16773,8 +16767,8 @@ fn rust_unit_toolchain_policy_digest(
     unit: &RustUnitDerivationSummary,
     compiler_policy: Option<&RustCompilerPolicyExecutionReceipt>,
 ) -> Result<String, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if let Some(env_digest) = unit
         .derivation
         .env
@@ -16809,8 +16803,8 @@ fn rust_unit_toolchain_policy_digest(
 }
 
 fn consumed_artifact_role_evidence(unit: &RustUnitDerivationSummary) -> Vec<RustConsumedArtifactRoleEvidence> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut evidence = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     evidence.extend(unit.dependency_artifacts.iter().map(|artifact| {
         let role = dependency_artifact_role(unit, artifact);
@@ -16862,8 +16856,8 @@ fn rust_unit_artifact_identity_digest(
     toolchain_policy_digest_blake3: &str,
     consumed_roles: &[RustConsumedArtifactRoleEvidence],
 ) -> Result<String, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     #[derive(Serialize)]
     struct ArtifactIdentity<'a> {
         unit_id: &'a str,
@@ -16913,8 +16907,8 @@ struct FinalizedExecutionReceiptInputs<'a> {
 fn finalized_execution_receipt(
     inputs: FinalizedExecutionReceiptInputs<'_>,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let FinalizedExecutionReceiptInputs {
         unit,
         execution_status,
@@ -17128,8 +17122,8 @@ fn rust_unit_execution_receipt_hash(receipt: &RustUnitExecutionReceipt) -> Resul
 }
 
 fn rustc_toolchain_identity(tool: &Path) -> Result<Result<RustToolchainIdentity, RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
-    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let output = Command::new(tool)
         .arg("-vV")
         .output()
@@ -17199,7 +17193,7 @@ fn digest_output_artifacts(output_dir: &Path) -> Result<Vec<RustExecutionArtifac
 }
 
 fn collect_output_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), RunError> {
-    debug_assert!(MAX_RUST_OUTPUT_TREE_ENTRIES > 0);
+    const { assert!(MAX_RUST_OUTPUT_TREE_ENTRIES > 0) };
     let mut directories = Vec::with_capacity(1);
     directories.push(directory.to_path_buf());
     debug_assert_eq!(directories.len(), 1);
@@ -17702,9 +17696,9 @@ mod tests {
         NativeRustUnitSummary {
             unit_id: rust_unit_id(RustUnitIdInputs {
                 index: 0,
-                package_id: package_id,
+                package_id,
                 target_name: package_name,
-                target_kind: target_kind,
+                target_kind,
                 mode: "build",
             }),
             package_id: package_id.to_string(),
@@ -17735,9 +17729,9 @@ mod tests {
         NativeHostUnitSummary {
             unit_id: rust_unit_id(RustUnitIdInputs {
                 index: 0,
-                package_id: package_id,
+                package_id,
                 target_name: package_name,
-                target_kind: target_kind,
+                target_kind,
                 mode: "build",
             }),
             package_id: package_id.to_string(),
@@ -17783,10 +17777,10 @@ mod tests {
         ];
         RustUnitDerivationSummary {
             unit_id: rust_unit_id(RustUnitIdInputs {
-                index: index,
-                package_id: package_id,
+                index,
+                package_id,
                 target_name: package_id,
-                target_kind: target_kind,
+                target_kind,
                 mode: "build",
             }),
             package_id: package_id.to_string(),
@@ -20466,7 +20460,7 @@ rust-version = "1.80"
             artifacts[0].producer_unit_id,
             Some(rust_unit_id(RustUnitIdInputs {
                 index: 1,
-                package_id: package_id,
+                package_id,
                 target_name: package_id,
                 target_kind: "lib",
                 mode: "build",
@@ -20476,7 +20470,7 @@ rust-version = "1.80"
             artifacts[0].producer_unit_id,
             Some(rust_unit_id(RustUnitIdInputs {
                 index: 0,
-                package_id: package_id,
+                package_id,
                 target_name: package_id,
                 target_kind: "lib",
                 mode: "build",
@@ -20585,7 +20579,7 @@ rust-version = "1.80"
             native_graph.units[0].unit_id,
             rust_unit_id(RustUnitIdInputs {
                 index: 0,
-                package_id: package_id,
+                package_id,
                 target_name: package_id,
                 target_kind: "lib",
                 mode: "build",
@@ -20925,14 +20919,14 @@ rust-version = "1.80"
         produced.record_unit(
             &first,
             build_script_metadata_summary(BuildScriptMetadataKeyInputs {
-                package_id: package_id,
+                package_id,
                 target_name: BUILD_SCRIPT_TARGET_NAME,
             }),
         );
         produced.record_unit(
             &second,
             build_script_metadata_summary(BuildScriptMetadataKeyInputs {
-                package_id: package_id,
+                package_id,
                 target_name: BUILD_SCRIPT_TARGET_NAME,
             }),
         );
@@ -20956,7 +20950,7 @@ rust-version = "1.80"
         first.target_name = BUILD_SCRIPT_TARGET_NAME.to_string();
         first.unit_id = rust_unit_id(RustUnitIdInputs {
             index: FIRST_BUILD_INDEX,
-            package_id: package_id,
+            package_id,
             target_name: BUILD_SCRIPT_TARGET_NAME,
             target_kind: "custom-build",
             mode: "build",
@@ -20964,7 +20958,7 @@ rust-version = "1.80"
         second.target_name = BUILD_SCRIPT_TARGET_NAME.to_string();
         second.unit_id = rust_unit_id(RustUnitIdInputs {
             index: SECOND_BUILD_INDEX,
-            package_id: package_id,
+            package_id,
             target_name: BUILD_SCRIPT_TARGET_NAME,
             target_kind: "custom-build",
             mode: "build",
@@ -20972,7 +20966,7 @@ rust-version = "1.80"
         main_alias.target_name = BUILD_SCRIPT_MAIN_TARGET_NAME.to_string();
         main_alias.unit_id = rust_unit_id(RustUnitIdInputs {
             index: MAIN_ALIAS_INDEX,
-            package_id: package_id,
+            package_id,
             target_name: BUILD_SCRIPT_MAIN_TARGET_NAME,
             target_kind: "custom-build",
             mode: "build",
@@ -21023,7 +21017,7 @@ rust-version = "1.80"
         first.target_name = BUILD_SCRIPT_TARGET_NAME.to_string();
         first.unit_id = rust_unit_id(RustUnitIdInputs {
             index: FIRST_BUILD_INDEX,
-            package_id: package_id,
+            package_id,
             target_name: BUILD_SCRIPT_TARGET_NAME,
             target_kind: "custom-build",
             mode: "build",
@@ -21031,7 +21025,7 @@ rust-version = "1.80"
         second.target_name = BUILD_SCRIPT_TARGET_NAME.to_string();
         second.unit_id = rust_unit_id(RustUnitIdInputs {
             index: SECOND_BUILD_INDEX,
-            package_id: package_id,
+            package_id,
             target_name: BUILD_SCRIPT_TARGET_NAME,
             target_kind: "custom-build",
             mode: "build",
@@ -21039,7 +21033,7 @@ rust-version = "1.80"
         main_alias.target_name = BUILD_SCRIPT_MAIN_TARGET_NAME.to_string();
         main_alias.unit_id = rust_unit_id(RustUnitIdInputs {
             index: MAIN_ALIAS_INDEX,
-            package_id: package_id,
+            package_id,
             target_name: BUILD_SCRIPT_MAIN_TARGET_NAME,
             target_kind: "custom-build",
             mode: "build",
@@ -21047,21 +21041,21 @@ rust-version = "1.80"
         produced.record_unit(
             &first,
             build_script_metadata_summary(BuildScriptMetadataKeyInputs {
-                package_id: package_id,
+                package_id,
                 target_name: BUILD_SCRIPT_TARGET_NAME,
             }),
         );
         produced.record_unit(
             &second,
             build_script_metadata_summary(BuildScriptMetadataKeyInputs {
-                package_id: package_id,
+                package_id,
                 target_name: BUILD_SCRIPT_TARGET_NAME,
             }),
         );
         produced.record_unit(
             &main_alias,
             build_script_metadata_summary(BuildScriptMetadataKeyInputs {
-                package_id: package_id,
+                package_id,
                 target_name: BUILD_SCRIPT_MAIN_TARGET_NAME,
             }),
         );
