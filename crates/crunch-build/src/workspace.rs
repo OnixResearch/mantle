@@ -33,7 +33,8 @@ pub const MAX_WORKSPACE_TOOLCHAIN_REFS: usize = 128;
 pub const MAX_WORKSPACE_SENSITIVE_PATHS: usize = 128;
 pub const MAX_WORKSPACE_SECRET_MARKERS: usize = 64;
 pub const MAX_WORKSPACE_RETENTION_RECORDS: usize = 4_096;
-pub const MAX_WORKSPACE_SNAPSHOT_ENTRIES: usize = DEFAULT_WORKSPACE_FILES_MAX as usize;
+pub const MAX_WORKSPACE_SNAPSHOT_ENTRIES: usize = 100_000;
+const WORKSPACE_FILES_OVER_LIMIT: u32 = DEFAULT_WORKSPACE_FILES_MAX.saturating_add(1);
 const BLAKE3_HEX_LENGTH: usize = 64;
 const COMPATIBILITY_DIGEST_DOMAIN: &str = "mantle-workspace-compatibility-v1";
 const SNAPSHOT_DIGEST_DOMAIN: &str = "mantle-workspace-snapshot-v1";
@@ -512,7 +513,7 @@ pub fn derive_workspace_compatibility_digest(
     };
     let bytes = serde_json::to_vec(&normalized).map_err(|_| WorkspaceReasonCode::PolicyInvalid)?;
     let mut hasher = blake3::Hasher::new();
-    hash_part(&mut hasher, COMPATIBILITY_DIGEST_DOMAIN);
+    hash_part(&mut hasher, COMPATIBILITY_DIGEST_DOMAIN)?;
     hasher.update(&bytes);
     let digest = hasher.finalize().to_hex().to_string();
     debug_assert_eq!(digest.len(), BLAKE3_HEX_LENGTH);
@@ -524,6 +525,8 @@ pub fn plan_workspace_admission(
     policy: &WorkspacePolicy,
     availability: WorkspaceAvailability,
 ) -> WorkspaceAdmissionPlan {
+    assert!(!WORKSPACE_POLICY_SCHEMA.is_empty(), "workspace policy schema must not be empty");
+    assert!(!DEFAULT_WORKSPACE_GUEST_PATH.is_empty(), "default workspace guest path must not be empty");
     if validate_workspace_policy(policy).is_err() {
         return rejected_admission(policy.mode, WorkspaceReasonCode::PolicyInvalid);
     }
@@ -567,8 +570,10 @@ pub fn plan_workspace_content(
     scrub: &WorkspaceScrubPolicy,
     snapshot: &WorkspaceSnapshotPolicy,
 ) -> WorkspaceContentPlan {
-    let mut reasons = Vec::new();
-    let mut scrub_paths = Vec::new();
+    assert!(MAX_WORKSPACE_SENSITIVE_PATHS > 0, "workspace sensitive-path bound must be positive");
+    assert!(MAX_WORKSPACE_SECRET_MARKERS > 0, "workspace secret-marker bound must be positive");
+    let mut reasons = Vec::with_capacity(observations.len());
+    let mut scrub_paths = Vec::with_capacity(observations.len());
     let usage = observe_usage(observations, &mut reasons);
     validate_content_paths(observations, scrub, &mut scrub_paths, &mut reasons);
     if !usage_within_quota(&usage, quota) {
@@ -578,7 +583,7 @@ pub fn plan_workspace_content(
     reasons.dedup();
     scrub_paths.sort();
     scrub_paths.dedup();
-    let unsafe_reason = reasons.iter().any(|reason| {
+    let is_unsafe_reason = reasons.iter().any(|reason| {
         matches!(
             reason,
             WorkspaceReasonCode::ArithmeticOverflow
@@ -591,12 +596,12 @@ pub fn plan_workspace_content(
                 | WorkspaceReasonCode::QuotaExceeded
         )
     });
-    let scrub_blocked = snapshot.require_clean_scrub && !scrub_paths.is_empty();
+    let is_scrub_blocked = snapshot.require_clean_scrub && !scrub_paths.is_empty();
     WorkspaceContentPlan {
         usage,
         scrub_paths,
-        snapshot_allowed: snapshot.enabled && !unsafe_reason && !scrub_blocked,
-        quarantine_required: unsafe_reason,
+        snapshot_allowed: snapshot.enabled && !is_unsafe_reason && !is_scrub_blocked,
+        quarantine_required: is_unsafe_reason,
         reasons,
     }
 }
@@ -607,6 +612,11 @@ pub fn build_workspace_snapshot_manifest(
     observations: Vec<WorkspaceEntryObservation>,
     content_plan: &WorkspaceContentPlan,
 ) -> Result<WorkspaceSnapshotManifest, WorkspaceReasonCode> {
+    assert_eq!(
+        u32::try_from(MAX_WORKSPACE_SNAPSHOT_ENTRIES),
+        Ok(DEFAULT_WORKSPACE_FILES_MAX),
+        "snapshot entry and workspace file bounds must stay aligned"
+    );
     if !content_plan.snapshot_allowed || content_plan.quarantine_required {
         return Err(WorkspaceReasonCode::SnapshotRejected);
     }
@@ -614,7 +624,8 @@ pub fn build_workspace_snapshot_manifest(
         return Err(WorkspaceReasonCode::CompatibilityMismatch);
     }
     validate_guest_path(&guest_path)?;
-    if observations.len() > MAX_WORKSPACE_SNAPSHOT_ENTRIES {
+    let observation_count = observations.len();
+    if observation_count > MAX_WORKSPACE_SNAPSHOT_ENTRIES {
         return Err(WorkspaceReasonCode::QuotaExceeded);
     }
     let mut entries = observations.into_iter().map(snapshot_entry).collect::<Result<Vec<_>, WorkspaceReasonCode>>()?;
@@ -628,9 +639,11 @@ pub fn build_workspace_snapshot_manifest(
     });
     let bytes = serde_json::to_vec(&hashable).map_err(|_| WorkspaceReasonCode::SnapshotRejected)?;
     let mut hasher = blake3::Hasher::new();
-    hash_part(&mut hasher, SNAPSHOT_DIGEST_DOMAIN);
+    hash_part(&mut hasher, SNAPSHOT_DIGEST_DOMAIN)?;
     hasher.update(&bytes);
     let object_ref = format!("{WORKSPACE_SNAPSHOT_REF_PREFIX}{}", hasher.finalize().to_hex());
+    assert_eq!(entries.len(), observation_count, "snapshot entries must preserve observation count");
+    assert!(content_plan.snapshot_allowed, "snapshot manifest requires an admitted content plan");
     Ok(WorkspaceSnapshotManifest {
         schema: WORKSPACE_SNAPSHOT_SCHEMA.to_string(),
         object_ref,
@@ -651,9 +664,14 @@ pub fn plan_workspace_retention(
         return Err(WorkspaceReasonCode::QuotaExceeded);
     }
     validate_retention_records(records, current_generation)?;
-    let mut preserve = Vec::new();
-    let mut idle_candidates = Vec::new();
-    let mut quarantine_candidates = Vec::new();
+    assert!(records.len() <= MAX_WORKSPACE_RETENTION_RECORDS, "retention records must stay bounded");
+    assert!(
+        records.iter().all(|record| record.last_used_generation <= current_generation),
+        "validated retention records must not be from the future"
+    );
+    let mut preserve = Vec::with_capacity(records.len());
+    let mut idle_candidates = Vec::with_capacity(records.len());
+    let mut quarantine_candidates = Vec::with_capacity(records.len());
     for record in records {
         match record.state {
             WorkspaceRetentionState::Active => preserve.push(record.workspace_id.clone()),
@@ -715,14 +733,14 @@ pub fn compare_clean_rebuild_outputs(
 ) -> WorkspaceCleanComparisonPlan {
     warm_outputs.sort_by(|left, right| left.name.cmp(&right.name).then(left.object_ref.cmp(&right.object_ref)));
     clean_outputs.sort_by(|left, right| left.name.cmp(&right.name).then(left.object_ref.cmp(&right.object_ref)));
-    let valid = validate_output_set(&warm_outputs) && validate_output_set(&clean_outputs);
-    let matched = valid && warm_outputs == clean_outputs;
+    let is_valid = validate_output_set(&warm_outputs) && validate_output_set(&clean_outputs);
+    let is_matched = is_valid && warm_outputs == clean_outputs;
     WorkspaceCleanComparisonPlan {
-        matched,
+        matched: is_matched,
         warm_outputs,
         clean_outputs,
         original_execution_hermetic: false,
-        reason: if matched {
+        reason: if is_matched {
             WorkspaceReasonCode::CleanComparisonMatched
         } else {
             WorkspaceReasonCode::CleanComparisonDiverged
@@ -764,17 +782,24 @@ fn validate_quota(quota: &WorkspaceQuotaPolicy) -> Result<(), WorkspaceReasonCod
 }
 
 fn validate_retention(policy: &WorkspaceRetentionPolicy) -> Result<(), WorkspaceReasonCode> {
-    if policy.workspace_count_max == 0
-        || policy.idle_generations_max == 0
-        || policy.age_generations_max == 0
-        || policy.quarantine_count_max == 0
-    {
+    if policy.workspace_count_max == 0 {
+        return Err(WorkspaceReasonCode::PolicyInvalid);
+    }
+    if policy.idle_generations_max == 0 {
+        return Err(WorkspaceReasonCode::PolicyInvalid);
+    }
+    if policy.age_generations_max == 0 {
+        return Err(WorkspaceReasonCode::PolicyInvalid);
+    }
+    if policy.quarantine_count_max == 0 {
         return Err(WorkspaceReasonCode::PolicyInvalid);
     }
     Ok(())
 }
 
 fn validate_scrub(policy: &WorkspaceScrubPolicy) -> Result<(), WorkspaceReasonCode> {
+    assert!(MAX_WORKSPACE_SENSITIVE_PATHS > 0, "workspace sensitive-path bound must be positive");
+    assert!(MAX_WORKSPACE_SECRET_MARKERS > 0, "workspace secret-marker bound must be positive");
     if policy.scan_depth_max == 0 || policy.path_bytes_max == 0 {
         return Err(WorkspaceReasonCode::PolicyInvalid);
     }
@@ -784,7 +809,10 @@ fn validate_scrub(policy: &WorkspaceScrubPolicy) -> Result<(), WorkspaceReasonCo
         return Err(WorkspaceReasonCode::PolicyInvalid);
     }
     for path in &policy.sensitive_paths {
-        validate_relative_path(path, policy.scan_depth_max, policy.path_bytes_max)?;
+        validate_relative_path(path, RelativePathLimits {
+            depth_max: policy.scan_depth_max,
+            bytes_max: policy.path_bytes_max,
+        })?;
     }
     if policy.secret_markers.iter().any(|marker| marker.is_empty()) {
         return Err(WorkspaceReasonCode::PolicyInvalid);
@@ -871,6 +899,8 @@ fn validate_lease_request(request: &WorkspaceLeaseRequest) -> Result<(), Workspa
 }
 
 fn plan_lease_acquire(current: Option<&WorkspaceLeaseRecord>, request: &WorkspaceLeaseRequest) -> WorkspaceLeasePlan {
+    assert_eq!(request.operation, WorkspaceLeaseOperation::Acquire, "acquire planner requires acquire operation");
+    assert!(!request.workspace_id.is_empty(), "validated acquire request must name a workspace");
     let Some(current) = current else {
         return accepted_lease(new_lease_record(request));
     };
@@ -995,6 +1025,8 @@ fn classify_owner_mismatch(
     current: Option<&WorkspaceLeaseOwner>,
     requested: &WorkspaceLeaseOwner,
 ) -> WorkspaceReasonCode {
+    assert!(!requested.worker_id.is_empty(), "requested lease owner must name a worker");
+    assert!(requested.fence_generation > 0, "requested lease fence generation must be positive");
     let Some(current) = current else {
         return WorkspaceReasonCode::LeaseNotActive;
     };
@@ -1036,25 +1068,34 @@ fn rejected_lease(current: Option<&WorkspaceLeaseRecord>, reason: WorkspaceReaso
 }
 
 fn observe_usage(observations: &[WorkspaceEntryObservation], reasons: &mut Vec<WorkspaceReasonCode>) -> WorkspaceUsage {
-    let files = u32::try_from(observations.len()).unwrap_or_else(|_| {
-        reasons.push(WorkspaceReasonCode::ArithmeticOverflow);
-        u32::MAX
-    });
+    assert!(
+        WORKSPACE_FILES_OVER_LIMIT > DEFAULT_WORKSPACE_FILES_MAX,
+        "overflow count must exceed the default quota"
+    );
+    let files = match u32::try_from(observations.len()) {
+        Ok(count) => count,
+        Err(_) => {
+            reasons.push(WorkspaceReasonCode::ArithmeticOverflow);
+            WORKSPACE_FILES_OVER_LIMIT
+        }
+    };
     let mut bytes = 0u64;
     for observation in observations {
         bytes = match bytes.checked_add(observation.size_bytes) {
             Some(total) => total,
             None => {
                 reasons.push(WorkspaceReasonCode::ArithmeticOverflow);
-                u64::MAX
+                bytes.saturating_add(observation.size_bytes)
             }
         };
     }
-    WorkspaceUsage {
+    let usage = WorkspaceUsage {
         bytes,
         files,
         snapshots: 0,
-    }
+    };
+    assert_eq!(usage.files, files, "workspace usage must retain the observed file count");
+    usage
 }
 
 fn validate_content_paths(
@@ -1063,12 +1104,19 @@ fn validate_content_paths(
     scrub_paths: &mut Vec<String>,
     reasons: &mut Vec<WorkspaceReasonCode>,
 ) {
+    let scrub_path_count_before = scrub_paths.len();
+    let reason_count_before = reasons.len();
     let planned = observations.iter().map(|item| item.relative_path.as_str()).collect::<BTreeSet<_>>();
     if planned.len() != observations.len() {
         reasons.push(WorkspaceReasonCode::PathDuplicate);
     }
     for observation in observations {
-        if validate_relative_path(&observation.relative_path, scrub.scan_depth_max, scrub.path_bytes_max).is_err() {
+        if validate_relative_path(&observation.relative_path, RelativePathLimits {
+            depth_max: scrub.scan_depth_max,
+            bytes_max: scrub.path_bytes_max,
+        })
+        .is_err()
+        {
             reasons.push(WorkspaceReasonCode::PathInvalid);
             continue;
         }
@@ -1083,6 +1131,8 @@ fn validate_content_paths(
         }
         validate_observed_symlink(observation, &planned, reasons);
     }
+    assert!(scrub_paths.len() >= scrub_path_count_before, "content validation must not remove scrub paths");
+    assert!(reasons.len() >= reason_count_before, "content validation must not remove reasons");
 }
 
 fn validate_observed_symlink(
@@ -1109,12 +1159,17 @@ fn validate_observed_symlink(
     }
 }
 
-fn validate_relative_path(path: &str, depth_max: u32, bytes_max: u32) -> Result<(), WorkspaceReasonCode> {
+struct RelativePathLimits {
+    depth_max: u32,
+    bytes_max: u32,
+}
+
+fn validate_relative_path(path: &str, limits: RelativePathLimits) -> Result<(), WorkspaceReasonCode> {
     if path.is_empty() || Path::new(path).is_absolute() {
         return Err(WorkspaceReasonCode::PathInvalid);
     }
     let byte_count = u32::try_from(path.len()).map_err(|_| WorkspaceReasonCode::ArithmeticOverflow)?;
-    if byte_count > bytes_max {
+    if byte_count > limits.bytes_max {
         return Err(WorkspaceReasonCode::PathInvalid);
     }
     let mut depth = 0u32;
@@ -1123,21 +1178,25 @@ fn validate_relative_path(path: &str, depth_max: u32, bytes_max: u32) -> Result<
             return Err(WorkspaceReasonCode::PathInvalid);
         }
         depth = depth.checked_add(1).ok_or(WorkspaceReasonCode::ArithmeticOverflow)?;
-        if depth > depth_max {
+        if depth > limits.depth_max {
             return Err(WorkspaceReasonCode::PathInvalid);
         }
     }
+    assert!(depth > 0, "validated relative paths must contain a component");
+    assert!(depth <= limits.depth_max, "validated relative path depth must stay bounded");
     Ok(())
 }
 
-fn resolve_relative_symlink(link_path: &str, target: &str) -> Option<String> {
+fn resolve_relative_symlink(link_path: &str, target: impl AsRef<str>) -> Option<String> {
+    let target = target.as_ref();
     let target_path = Path::new(target);
     if target_path.is_absolute() {
         return None;
     }
     let parent = Path::new(link_path).parent().unwrap_or_else(|| Path::new(""));
     let joined = parent.join(target_path);
-    let mut parts = Vec::new();
+    let component_slots = joined.components().count();
+    let mut parts = Vec::with_capacity(component_slots);
     for component in joined.components() {
         match component {
             Component::Normal(value) => parts.push(value.to_str()?.to_string()),
@@ -1151,6 +1210,8 @@ fn resolve_relative_symlink(link_path: &str, target: &str) -> Option<String> {
     if parts.is_empty() {
         return None;
     }
+    assert!(!parts.is_empty(), "resolved symlink must contain a path component");
+    assert!(parts.len() <= component_slots, "resolved symlink components must stay within capacity");
     Some(parts.join("/"))
 }
 
@@ -1269,10 +1330,11 @@ fn is_blake3_hex(value: &str) -> bool {
     value.len() == BLAKE3_HEX_LENGTH && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
-fn hash_part(hasher: &mut blake3::Hasher, value: &str) {
-    let length = u64::try_from(value.len()).expect("bounded workspace identity length must fit u64");
-    hasher.update(&length.to_le_bytes());
+fn hash_part(hasher: &mut blake3::Hasher, value: &str) -> Result<(), WorkspaceReasonCode> {
+    let length_bytes = u64::try_from(value.len()).map_err(|_| WorkspaceReasonCode::ArithmeticOverflow)?;
+    hasher.update(&length_bytes.to_le_bytes());
     hasher.update(value.as_bytes());
+    Ok(())
 }
 
 #[cfg(test)]

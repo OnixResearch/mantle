@@ -34,6 +34,15 @@ pub struct RegistryEntry {
     pub resolved_outputs: HashMap<String, StorePath<String>>,
 }
 
+struct RegistryInsert {
+    drv_path: StorePath<String>,
+    hash_derivation_modulo: [u8; 32],
+    derivation: Arc<Derivation>,
+    content_addressed: bool,
+    dynamic_plan_outputs: Vec<String>,
+    provenance_claims: Option<Claims>,
+}
+
 /// Build-time derivation lookup for the Worker and Builder.
 ///
 /// Indexed by absolute derivation store path (e.g.,
@@ -87,17 +96,21 @@ impl DerivationRegistry {
         content_addressed: bool,
         provenance_claims: Option<Claims>,
     ) {
-        self.insert_with_dynamic_plan_outputs(
+        self.insert_registration(RegistryInsert {
             drv_path,
-            hdm,
-            derivation,
+            hash_derivation_modulo: hdm,
+            derivation: derivation.into(),
             content_addressed,
-            Vec::new(),
+            dynamic_plan_outputs: Vec::new(),
             provenance_claims,
-        );
+        });
     }
 
     /// Register a derivation with native dynamic-plan output metadata.
+    ///
+    /// This compatibility-shaped method remains for the worker lane; the
+    /// implementation routes through the typed internal registration request.
+    #[allow(tigerstyle::too_many_parameters)] // Stable worker boundary; migration requires the sibling-owned worker lane.
     pub fn insert_with_dynamic_plan_outputs(
         &mut self,
         drv_path: StorePath<String>,
@@ -107,7 +120,25 @@ impl DerivationRegistry {
         dynamic_plan_outputs: Vec<String>,
         provenance_claims: Option<Claims>,
     ) {
-        let derivation = derivation.into();
+        self.insert_registration(RegistryInsert {
+            drv_path,
+            hash_derivation_modulo: hdm,
+            derivation: derivation.into(),
+            content_addressed,
+            dynamic_plan_outputs,
+            provenance_claims,
+        });
+    }
+
+    fn insert_registration(&mut self, registration: RegistryInsert) {
+        let RegistryInsert {
+            drv_path,
+            hash_derivation_modulo: hdm,
+            derivation,
+            content_addressed,
+            dynamic_plan_outputs,
+            provenance_claims,
+        } = registration;
         debug_assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
         debug_assert!(
             dynamic_plan_outputs.iter().all(|output| derivation.outputs.contains_key(output)),
@@ -200,14 +231,14 @@ impl Default for DerivationRegistry {
 pub fn populate_registry<I>(registry: &mut DerivationRegistry, entries: I)
 where I: IntoIterator<Item = (StorePath<String>, [u8; 32], Derivation, bool, Vec<String>, Option<Claims>)> {
     for (drv_path, hdm, derivation, content_addressed, dynamic_plan_outputs, provenance_claims) in entries {
-        registry.insert_with_dynamic_plan_outputs(
+        registry.insert_registration(RegistryInsert {
             drv_path,
-            hdm,
-            derivation,
+            hash_derivation_modulo: hdm,
+            derivation: Arc::new(derivation),
             content_addressed,
             dynamic_plan_outputs,
             provenance_claims,
-        );
+        });
     }
 }
 

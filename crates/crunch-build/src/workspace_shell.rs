@@ -38,6 +38,7 @@ const FILE_MODE: u32 = 0o600;
 const DIR_MODE: u32 = 0o700;
 const RECORD_BYTES_MAX: u64 = 1_048_576;
 const BLAKE3_DIGEST_HEX_LENGTH: usize = 64;
+const WORKSPACE_REMOVAL_STACK_INITIAL_ENTRIES: usize = 64;
 const HOST_PATH_MARKERS: [&[u8]; 2] = [b"/home/", b"/tmp/"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -75,11 +76,19 @@ pub struct WorkspaceReportCollector(Arc<Mutex<Vec<WorkspaceExecutionReport>>>);
 
 impl WorkspaceReportCollector {
     pub fn take(&self) -> Vec<WorkspaceExecutionReport> {
-        std::mem::take(&mut *self.0.lock().expect("workspace report mutex poisoned"))
+        let mut workspace_evidence = match self.0.lock() {
+            Ok(workspace_evidence) => workspace_evidence,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        std::mem::take(&mut *workspace_evidence)
     }
 
-    fn push(&self, report: WorkspaceExecutionReport) {
-        self.0.lock().expect("workspace report mutex poisoned").push(report);
+    fn push(&self, execution_report: WorkspaceExecutionReport) {
+        let mut workspace_evidence = match self.0.lock() {
+            Ok(workspace_evidence) => workspace_evidence,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        workspace_evidence.push(execution_report);
     }
 }
 
@@ -150,9 +159,9 @@ impl WorkspaceStore {
         let content_path = self.content_path(workspace_id)?;
         create_private_dir(&content_path)?;
         ensure_contained_no_symlinks(&self.root, &content_path)?;
-        let warm_state_used = directory_has_entries(&content_path)?;
+        let is_warm_state_used = directory_has_entries(&content_path)?;
         let plan = scrub_and_plan(&content_path, request)?;
-        let mut record = lease_plan.next.expect("accepted lease has record");
+        let mut record = lease_plan.next.ok_or(WorkspaceShellError::Lease("accepted-lease-missing-record"))?;
         if plan.quarantine_required {
             self.quarantine_content(workspace_id, request.generation)?;
             record = quarantined_record(record, request.generation);
@@ -164,7 +173,7 @@ impl WorkspaceStore {
             store: self.clone(),
             request: request.clone(),
             content_path,
-            warm_state_used,
+            warm_state_used: is_warm_state_used,
             record,
             lock,
             finished: false,
@@ -193,12 +202,12 @@ impl WorkspaceStore {
     }
 
     fn reconcile_retention(&self, request: &StatefulWorkspaceRequest) -> Result<(), WorkspaceShellError> {
-        let mut records = Vec::new();
         let mut entries = std::fs::read_dir(self.root.join(RECORD_DIR))?.collect::<Result<Vec<_>, _>>()?;
         entries.sort_by_key(std::fs::DirEntry::file_name);
         if entries.len() > MAX_WORKSPACE_RETENTION_RECORDS {
             return Err(WorkspaceShellError::Record("workspace record bound exceeded".into()));
         }
+        let mut records = Vec::with_capacity(entries.len());
         for entry in entries {
             let path = entry.path();
             if path.extension().and_then(|value| value.to_str()) != Some("json") {
@@ -336,13 +345,21 @@ impl ActiveWorkspace {
     pub fn finish(mut self) -> WorkspaceExecutionReport {
         let result = self.finish_inner();
         self.finished = true;
-        let _ = FileExt::unlock(&self.lock);
+        if let Err(error) = FileExt::unlock(&self.lock) {
+            tracing::warn!(%error, "workspace lock release failed after finish");
+        }
         match result {
-            Ok(report) => report,
+            Ok(execution_report) => execution_report,
             Err(error) => {
-                let _ = self.store.quarantine_content(&self.record.workspace_id, self.request.generation);
+                if let Err(quarantine_error) =
+                    self.store.quarantine_content(&self.record.workspace_id, self.request.generation)
+                {
+                    tracing::warn!(error = %quarantine_error, "workspace quarantine failed after finish error");
+                }
                 let record = quarantined_record(self.record.clone(), self.request.generation);
-                let _ = self.store.save_record(&record);
+                if let Err(record_error) = self.store.save_record(&record) {
+                    tracing::warn!(error = %record_error, "workspace quarantine record save failed");
+                }
                 workspace_report(
                     &self.request,
                     self.warm_state_used,
@@ -386,7 +403,7 @@ impl ActiveWorkspace {
         if released.disposition != WorkspaceLeaseDisposition::Accepted {
             return Err(WorkspaceShellError::Lease(released.reason.as_str()));
         }
-        self.record = released.next.expect("accepted release has record");
+        self.record = released.next.ok_or(WorkspaceShellError::Lease("accepted-release-missing-record"))?;
         self.store.save_record(&self.record)?;
         Ok(workspace_report(
             &self.request,
@@ -401,11 +418,17 @@ impl ActiveWorkspace {
 impl Drop for ActiveWorkspace {
     fn drop(&mut self) {
         if !self.finished {
-            let _ = self.store.quarantine_content(&self.record.workspace_id, self.request.generation);
+            if let Err(error) = self.store.quarantine_content(&self.record.workspace_id, self.request.generation) {
+                tracing::warn!(%error, "workspace quarantine failed during drop");
+            }
             let record = quarantined_record(self.record.clone(), self.request.generation);
-            let _ = self.store.save_record(&record);
+            if let Err(error) = self.store.save_record(&record) {
+                tracing::warn!(%error, "workspace quarantine record save failed during drop");
+            }
         }
-        let _ = FileExt::unlock(&self.lock);
+        if let Err(error) = FileExt::unlock(&self.lock) {
+            tracing::warn!(%error, "workspace lock release failed during drop");
+        }
     }
 }
 
@@ -461,26 +484,34 @@ where S: BuildService + Send + Sync
                 let active = self.store.prepare(&workspace).map_err(std::io::Error::other)?;
                 let mut clean_request = request.clone();
                 clean_request.workspace = None;
-                request.workspace.as_mut().expect("workspace request exists").runtime_host_path =
-                    Some(active.host_path().to_path_buf());
+                let workspace_request = request
+                    .workspace
+                    .as_mut()
+                    .ok_or_else(|| std::io::Error::other("mutable workspace request disappeared"))?;
+                workspace_request.runtime_host_path = Some(active.host_path().to_path_buf());
                 let result = self.inner.do_build(request).await;
                 let clean_result = if workspace.clean_rebuild_enabled && result.is_ok() {
                     Some(self.inner.do_build(clean_request).await)
                 } else {
                     None
                 };
-                let mut report = active.finish();
-                report.clean_comparison_performed = clean_result.is_some();
-                report.clean_comparison_matched = matches!(
+                let mut workspace_evidence = active.finish();
+                workspace_evidence.clean_comparison_performed = clean_result.is_some();
+                workspace_evidence.clean_comparison_matched = matches!(
                     (&result, &clean_result),
                     (Ok(warm), Some(Ok(clean))) if warm.outputs == clean.outputs
                 );
-                report.warm_output_set_digest_blake3 = result.as_ref().ok().map(output_set_digest);
-                report.clean_output_set_digest_blake3 =
-                    clean_result.as_ref().and_then(|clean| clean.as_ref().ok()).map(output_set_digest);
-                debug_assert!(!report.original_execution_hermetic);
-                debug_assert!(!report.shared_action_publish_allowed);
-                self.reports.push(report);
+                workspace_evidence.warm_output_set_digest_blake3 =
+                    result.as_ref().ok().map(output_set_digest).transpose().map_err(std::io::Error::other)?;
+                workspace_evidence.clean_output_set_digest_blake3 = clean_result
+                    .as_ref()
+                    .and_then(|clean| clean.as_ref().ok())
+                    .map(output_set_digest)
+                    .transpose()
+                    .map_err(std::io::Error::other)?;
+                debug_assert!(!workspace_evidence.original_execution_hermetic);
+                debug_assert!(!workspace_evidence.shared_action_publish_allowed);
+                self.reports.push(workspace_evidence);
                 result
             }
         }
@@ -543,12 +574,12 @@ fn validate_snapshot_input(
     Ok(())
 }
 
-fn output_set_digest(result: &BuildResult) -> String {
-    let bytes = serde_json::to_vec(&result.outputs).expect("build outputs must serialize");
+fn output_set_digest(result: &BuildResult) -> Result<String, WorkspaceShellError> {
+    let bytes = serde_json::to_vec(&result.outputs).map_err(|error| WorkspaceShellError::Record(error.to_string()))?;
     let digest = blake3::hash(&bytes).to_hex().to_string();
     debug_assert!(!digest.is_empty());
     debug_assert_eq!(digest.len(), BLAKE3_DIGEST_HEX_LENGTH);
-    digest
+    Ok(digest)
 }
 
 fn workspace_report(
@@ -558,6 +589,8 @@ fn workspace_report(
     cleanup_reason: WorkspaceReasonCode,
     snapshot_ref: Option<String>,
 ) -> WorkspaceExecutionReport {
+    assert!(!WORKSPACE_EXECUTION_REPORT_SCHEMA.is_empty(), "workspace report schema must not be empty");
+    assert!(!request.guest_path.as_os_str().is_empty(), "workspace report guest path must not be empty");
     let mode = match request.mode {
         StatefulWorkspaceMode::None => WorkspaceMode::None,
         StatefulWorkspaceMode::ImmutableSnapshot => WorkspaceMode::ImmutableSnapshot,
@@ -589,6 +622,8 @@ fn lease_request(
     request: &StatefulWorkspaceRequest,
     operation: WorkspaceLeaseOperation,
 ) -> Result<WorkspaceLeaseRequest, WorkspaceShellError> {
+    assert!(MAX_WORKSPACE_ID_BYTES > 0, "workspace ID bound must be positive");
+    assert!(MAX_WORKSPACE_TOOLCHAIN_REFS > 0, "workspace toolchain-reference bound must be positive");
     let lease = request.lease.as_ref().ok_or(WorkspaceShellError::Policy("workspace-lease-missing"))?;
     Ok(WorkspaceLeaseRequest {
         workspace_id: request.workspace_id.clone().ok_or(WorkspaceShellError::Policy("workspace-id-missing"))?,
@@ -668,9 +703,16 @@ fn scan_workspace(
     root: &Path,
     request: &StatefulWorkspaceRequest,
 ) -> Result<Vec<WorkspaceEntryObservation>, WorkspaceShellError> {
+    assert!(root.is_absolute(), "workspace scan root must be absolute");
+    assert!(request.quota_files_max > 0, "workspace scan file quota must be positive");
     ensure_path_chain_no_symlinks(root)?;
     let mut pending = vec![(root.to_path_buf(), PathBuf::new(), 0u32)];
-    let mut observations = Vec::new();
+    let snapshot_entry_bound = u32::try_from(MAX_WORKSPACE_SNAPSHOT_ENTRIES)
+        .map_err(|_| WorkspaceShellError::Quarantine(WorkspaceReasonCode::ArithmeticOverflow.as_str()))?;
+    let bounded_entries = request.quota_files_max.min(snapshot_entry_bound);
+    let observation_slots = usize::try_from(bounded_entries)
+        .map_err(|_| WorkspaceShellError::Quarantine(WorkspaceReasonCode::ArithmeticOverflow.as_str()))?;
+    let mut observations = Vec::with_capacity(observation_slots);
     let mut total_bytes = 0u64;
     while let Some((path, relative, depth)) = pending.pop() {
         if depth > request.scan_depth_max {
@@ -691,25 +733,9 @@ fn scan_workspace(
             return Err(WorkspaceShellError::Quarantine(WorkspaceReasonCode::PathInvalid.as_str()));
         }
         if metadata.file_type().is_symlink() {
-            observations.push(WorkspaceEntryObservation {
-                relative_path: relative_text,
-                kind: WorkspaceEntryKind::Symlink,
-                size_bytes: 0,
-                content_digest_blake3: None,
-                symlink_target: std::fs::read_link(&path)?.to_str().map(ToOwned::to_owned),
-                contains_secret: false,
-                contains_host_path: false,
-            });
+            observations.push(symlink_observation(relative_text, &path)?);
         } else if metadata.is_dir() {
-            observations.push(WorkspaceEntryObservation {
-                relative_path: relative_text,
-                kind: WorkspaceEntryKind::Directory,
-                size_bytes: 0,
-                content_digest_blake3: None,
-                symlink_target: None,
-                contains_secret: false,
-                contains_host_path: false,
-            });
+            observations.push(directory_observation(relative_text));
             enqueue_children(&path, &relative, depth, &mut pending)?;
         } else if metadata.is_file() {
             total_bytes = total_bytes
@@ -738,6 +764,30 @@ fn scan_workspace(
     Ok(observations)
 }
 
+fn symlink_observation(relative_path: String, path: &Path) -> Result<WorkspaceEntryObservation, WorkspaceShellError> {
+    Ok(WorkspaceEntryObservation {
+        relative_path,
+        kind: WorkspaceEntryKind::Symlink,
+        size_bytes: 0,
+        content_digest_blake3: None,
+        symlink_target: std::fs::read_link(path)?.to_str().map(ToOwned::to_owned),
+        contains_secret: false,
+        contains_host_path: false,
+    })
+}
+
+fn directory_observation(relative_path: String) -> WorkspaceEntryObservation {
+    WorkspaceEntryObservation {
+        relative_path,
+        kind: WorkspaceEntryKind::Directory,
+        size_bytes: 0,
+        content_digest_blake3: None,
+        symlink_target: None,
+        contains_secret: false,
+        contains_host_path: false,
+    }
+}
+
 fn enqueue_children(
     path: &Path,
     relative: &Path,
@@ -756,6 +806,8 @@ fn enqueue_children(
 }
 
 fn read_no_follow(path: &Path, bytes_max: u64) -> Result<Vec<u8>, WorkspaceShellError> {
+    assert!(!path.as_os_str().is_empty(), "no-follow read path must not be empty");
+    assert!(bytes_max > 0, "no-follow read byte limit must be positive");
     let mut options = OpenOptions::new();
     options.read(true);
     #[cfg(unix)]
@@ -764,11 +816,11 @@ fn read_no_follow(path: &Path, bytes_max: u64) -> Result<Vec<u8>, WorkspaceShell
         options.custom_flags(libc::O_NOFOLLOW);
     }
     let file = options.open(path)?;
-    let read_limit = bytes_max
+    let read_limit_bytes = bytes_max
         .checked_add(1)
         .ok_or_else(|| WorkspaceShellError::Quarantine(WorkspaceReasonCode::ArithmeticOverflow.as_str()))?;
     let mut bytes = Vec::new();
-    file.take(read_limit).read_to_end(&mut bytes)?;
+    file.take(read_limit_bytes).read_to_end(&mut bytes)?;
     if u64::try_from(bytes.len())
         .map_err(|_| WorkspaceShellError::Quarantine(WorkspaceReasonCode::ArithmeticOverflow.as_str()))?
         > bytes_max
@@ -842,9 +894,9 @@ fn safe_child(root: &Path, name: &str) -> Result<PathBuf, WorkspaceShellError> {
     Ok(root.join(name))
 }
 
-fn safe_file(root: &Path, name: &str, extension: &str) -> Result<PathBuf, WorkspaceShellError> {
+fn safe_file(root: &Path, name: &str, extension: impl AsRef<str>) -> Result<PathBuf, WorkspaceShellError> {
     let mut path = safe_child(root, name)?;
-    path.set_extension(extension);
+    path.set_extension(extension.as_ref());
     Ok(path)
 }
 
@@ -952,24 +1004,52 @@ fn remove_file_no_follow_if_exists(path: &Path) -> Result<(), WorkspaceShellErro
 }
 
 fn remove_tree_no_follow_if_exists(path: &Path) -> Result<(), WorkspaceShellError> {
+    assert!(!path.as_os_str().is_empty(), "workspace removal path must not be empty");
+    assert!(MAX_WORKSPACE_SNAPSHOT_ENTRIES > 0, "workspace removal bound must be positive");
     if !path.try_exists()? && std::fs::symlink_metadata(path).is_err() {
         return Ok(());
     }
-    let metadata = std::fs::symlink_metadata(path)?;
-    if metadata.is_dir() && !metadata.file_type().is_symlink() {
-        let mut children = std::fs::read_dir(path)?.collect::<Result<Vec<_>, _>>()?;
-        children.sort_by_key(std::fs::DirEntry::file_name);
-        for child in children {
-            remove_tree_no_follow_if_exists(&child.path())?;
+    let removal_bound = MAX_WORKSPACE_SNAPSHOT_ENTRIES;
+    let mut pending = Vec::with_capacity(WORKSPACE_REMOVAL_STACK_INITIAL_ENTRIES);
+    pending.push((path.to_path_buf(), false));
+    let mut visited_entries = 0usize;
+    while let Some((current, is_expanded)) = pending.pop() {
+        if !is_expanded {
+            visited_entries = visited_entries
+                .checked_add(1)
+                .ok_or_else(|| WorkspaceShellError::Record("workspace removal count overflow".into()))?;
+            if visited_entries > removal_bound {
+                return Err(WorkspaceShellError::Record("workspace removal bound exceeded".into()));
+            }
         }
-        std::fs::remove_dir(path)?;
-    } else {
-        std::fs::remove_file(path)?;
+        let metadata = std::fs::symlink_metadata(&current)?;
+        if metadata.is_dir() && !metadata.file_type().is_symlink() {
+            if is_expanded {
+                std::fs::remove_dir(&current)?;
+                continue;
+            }
+            let mut children = std::fs::read_dir(&current)?.collect::<Result<Vec<_>, _>>()?;
+            children.sort_by_key(std::fs::DirEntry::file_name);
+            let pending_count = pending
+                .len()
+                .checked_add(children.len())
+                .and_then(|count| count.checked_add(1))
+                .ok_or_else(|| WorkspaceShellError::Record("workspace removal queue overflow".into()))?;
+            if pending_count > removal_bound {
+                return Err(WorkspaceShellError::Record("workspace removal queue bound exceeded".into()));
+            }
+            pending.push((current, true));
+            pending.extend(children.into_iter().rev().map(|child| (child.path(), false)));
+        } else {
+            std::fs::remove_file(&current)?;
+        }
     }
     Ok(())
 }
 
 fn remove_prefixed_entries(root: &Path, id: &str) -> Result<(), WorkspaceShellError> {
+    assert!(!id.is_empty(), "workspace prefix ID must not be empty");
+    assert!(MAX_WORKSPACE_RETENTION_RECORDS > 0, "workspace retention bound must be positive");
     if !root.try_exists()? {
         return Ok(());
     }

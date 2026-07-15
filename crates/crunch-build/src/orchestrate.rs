@@ -400,15 +400,15 @@ where BServ: BuildService + 'static
     }
 
     pub fn take_action_result_reports(&mut self) -> Vec<ActionResultRuntimeReport> {
-        let mut reports = std::mem::take(&mut self.action_result_reports);
-        reports.sort_by(|left, right| {
+        let mut action_result_evidence = std::mem::take(&mut self.action_result_reports);
+        action_result_evidence.sort_by(|left, right| {
             left.action_ref
                 .cmp(&right.action_ref)
                 .then(left.phase.cmp(&right.phase))
                 .then(left.disposition.cmp(&right.disposition))
                 .then(left.selected_result_ref.cmp(&right.selected_result_ref))
         });
-        reports
+        action_result_evidence
     }
 
     /// Read the full content of a blob from castore.
@@ -518,8 +518,8 @@ where BServ: BuildService + 'static
         // this claim boundary. Every candidate is re-admitted before the
         // executor can be skipped.
         // r[impl build_correctness.shared_action_result_admission]
-        let mutable_workspace = derivation_uses_mutable_workspace(derivation_ref)?;
-        if !mutable_workspace
+        let is_mutable_workspace = derivation_uses_mutable_workspace(derivation_ref)?;
+        if !is_mutable_workspace
             && let Some(shared_hit) =
                 self.check_shared_action_result(drv_path, derivation_ref, known_paths, is_root).await?
         {
@@ -535,7 +535,7 @@ where BServ: BuildService + 'static
 
         // 2. Ordinary signed PathInfo cache fallback remains independent when
         // no shared action result is fully admitted.
-        if !mutable_workspace && let Some(cached_hit) = self.check_cache(drv_path, derivation_ref, is_root).await? {
+        if !is_mutable_workspace && let Some(cached_hit) = self.check_cache(drv_path, derivation_ref, is_root).await? {
             self.record_cached_output_paths(drv_path, derivation_ref, &cached_hit.infos, known_paths)?;
             info!(drv = %drv_name, "all outputs cached, skipping build");
             return Ok(PrepareResult::Done(BuildOutcome {
@@ -805,9 +805,15 @@ where BServ: BuildService + 'static
             .collect();
 
         let drv_abs = prepared.drv_path.to_absolute_path_with_prefix(self.store.store_dir());
+        if intermediates.len() > prepared.derivation.outputs.len() {
+            return Err(Error::Store("multi-CA intermediate count exceeds declared outputs".to_string()));
+        }
         let mut output_infos: BTreeMap<String, PathInfo> = BTreeMap::new();
 
         for (idx, intermediate) in intermediates.iter().enumerate() {
+            if output_infos.len() >= intermediates.len() {
+                return Err(Error::Store("multi-CA output map exceeded intermediate bound".to_string()));
+            }
             let final_node = self.rewrite_markers_to_final(&intermediate.marked_node, &final_rewrites).await?;
 
             self.register_ca_output(
@@ -1386,7 +1392,12 @@ where BServ: BuildService + 'static
     async fn collect_shared_action_candidates(&self, derivation: &Derivation) -> Result<SharedActionCandidates, Error> {
         let action_ref = action_ref_for_derivation(derivation, self.store.store_dir());
         let discovery = self.store.discover_action_results(&action_ref).await;
-        let mut candidates = Vec::new();
+        let candidate_slots = discovery.lookups.iter().try_fold(0usize, |count, lookup| {
+            count
+                .checked_add(lookup.records.len())
+                .ok_or_else(|| Error::Store("action-result candidate count overflow".to_string()))
+        })?;
+        let mut candidates = Vec::with_capacity(candidate_slots);
         let mut probes_by_result_ref = BTreeMap::new();
         let mut source_by_result_ref = BTreeMap::new();
         for lookup in discovery.lookups {

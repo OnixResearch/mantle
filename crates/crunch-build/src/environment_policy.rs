@@ -25,9 +25,12 @@ const SEARCH_PATH_VARIABLE: &str = "PATH";
 const MAX_SEARCH_PATH_ENTRIES: usize = 256;
 const MAX_DETERMINISM_CONTROLS: usize = 32;
 const HEX_CHARS_PER_BYTE: usize = 2;
-const BLAKE3_HEX_CHARS: usize = blake3::OUT_LEN * HEX_CHARS_PER_BYTE;
+const BLAKE3_HEX_CHARS: usize = blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE);
 const ENV_NAME: &str = "name";
 const UNKNOWN_ACTION_NAME: &str = "<unnamed>";
+const ENV_DIGEST_SERIALIZATION_ERROR_DOMAIN: &[u8] = b"mantle-env-digest-serialization-error-v1";
+const DETERMINISM_DIGEST_SERIALIZATION_ERROR_DOMAIN: &[u8] = b"mantle-determinism-digest-serialization-error-v1";
+const SEARCH_PATH_DIGEST_SERIALIZATION_ERROR_DOMAIN: &[u8] = b"mantle-search-path-digest-serialization-error-v1";
 const DYNAMIC_LINKER_KEYS: [&str; 3] = ["LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT"];
 const COMPILER_WRAPPER_KEYS: [&str; 4] = ["RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "CARGO", "RUSTC"];
 const PROXY_KEYS: [&str; 8] = [
@@ -172,8 +175,7 @@ pub fn normalized_environment_digest_blake3(environment_vars: &BTreeMap<String, 
             value_base64: data_encoding::BASE64.encode(value),
         })
         .collect();
-    let canonical = serde_json::to_vec(&entries).expect("canonical env digest serialization should not fail");
-    blake3::hash(&canonical).to_hex().to_string()
+    canonical_json_digest_blake3(&entries, ENV_DIGEST_SERIALIZATION_ERROR_DOMAIN)
 }
 
 pub fn plan_receipt_bound_search_path(
@@ -181,10 +183,12 @@ pub fn plan_receipt_bound_search_path(
 ) -> Result<BuildSearchPathReport, SearchPathPlanError> {
     validate_search_path_request_size(&request)?;
     reject_ambient_search_path_entries(&request)?;
+    assert!(request.entries.len() <= MAX_SEARCH_PATH_ENTRIES, "declared search paths must stay bounded");
+    assert!(request.ambient_entries.is_empty(), "receipt-bound search paths must reject ambient entries");
 
     let mut entries = Vec::with_capacity(request.entries.len());
-    let mut aliases = Vec::new();
-    let mut real_tool_refs = Vec::new();
+    let mut aliases = Vec::with_capacity(request.entries.len());
+    let mut real_tool_refs = Vec::with_capacity(request.entries.len());
     let mut seen_paths: BTreeMap<String, (String, String)> = BTreeMap::new();
 
     for declaration in request.entries {
@@ -219,25 +223,30 @@ pub fn plan_determinism_normalization(
     request: DeterminismNormalizationRequest,
 ) -> Result<BuildDeterminismNormalizationReport, DeterminismNormalizationError> {
     validate_determinism_request_size(&request)?;
+    assert!(request.controls.len() <= MAX_DETERMINISM_CONTROLS, "determinism controls must stay bounded");
+    assert!(
+        request.unsupported_controls.len() <= MAX_DETERMINISM_CONTROLS,
+        "unsupported determinism controls must stay bounded"
+    );
     let mut controls = request.controls;
     controls.sort();
     validate_determinism_controls(&controls)?;
-    let unsupported_controls = sorted_unique_unsupported_controls(request.unsupported_controls)?;
+    let unhandled_controls = sorted_unique_unsupported_controls(request.unsupported_controls)?;
     if let Some(divergence) = &request.divergence {
         validate_output_divergence(divergence)?;
     }
-    let strong_claim_blocked = !unsupported_controls.is_empty()
+    let is_strong_claim_blocked = !unhandled_controls.is_empty()
         || request
             .divergence
             .as_ref()
             .is_some_and(|divergence| divergence.status == DETERMINISM_DIVERGENCE_DIVERGED);
-    let policy_digest_blake3 = determinism_policy_digest_blake3(&controls, &unsupported_controls);
+    let policy_digest_blake3 = determinism_policy_digest_blake3(&controls, &unhandled_controls);
     Ok(BuildDeterminismNormalizationReport {
         policy_digest_blake3,
         controls,
-        unsupported_controls,
+        unsupported_controls: unhandled_controls,
         divergence: request.divergence,
-        strong_claim_blocked,
+        strong_claim_blocked: is_strong_claim_blocked,
     })
 }
 
@@ -258,20 +267,25 @@ pub fn output_divergence_diagnostic(
     })
 }
 
-pub fn denied_search_path_variable(
+pub fn denied_search_path_variable<Count>(
     action_name: String,
-    accepted_variable_count: usize,
+    accepted_variable_count: Count,
     diagnostic: String,
-) -> DeniedEnvironmentVariable {
+) -> DeniedEnvironmentVariable
+where
+    Count: TryInto<u32>,
+{
     assert!(!diagnostic.is_empty(), "search-path rejection diagnostic must not be empty");
+    assert!(!action_name.is_empty(), "search-path rejection action name must not be empty");
     let rejection = BuildEnvironmentRejection {
         variable: SEARCH_PATH_VARIABLE.to_string(),
         class: ENV_REJECTION_SEARCH_PATH.to_string(),
         diagnostic,
         redacted: false,
     };
-    let mut report = denied_report(action_name.clone(), accepted_variable_count, rejection.clone());
-    report.search_path = Some(BuildSearchPathReport {
+    let mut denied_environment_evidence =
+        denied_report(action_name.clone(), accepted_variable_count, rejection.clone());
+    denied_environment_evidence.search_path = Some(BuildSearchPathReport {
         digest_blake3: None,
         entries: Vec::new(),
         aliases: Vec::new(),
@@ -280,7 +294,7 @@ pub fn denied_search_path_variable(
     DeniedEnvironmentVariable {
         action_name,
         rejection,
-        report,
+        report: denied_environment_evidence,
     }
 }
 
@@ -355,6 +369,8 @@ fn validate_output_divergence(
             });
         }
     }
+    assert!(!divergence.left_digest_blake3.is_empty(), "left divergence digest must not be empty");
+    assert!(!divergence.right_digest_blake3.is_empty(), "right divergence digest must not be empty");
     if divergence.status != DETERMINISM_DIVERGENCE_DIVERGED {
         return Err(DeterminismNormalizationError::InvalidDivergence {
             diagnostic: format!("unsupported divergence status {}", divergence.status),
@@ -390,8 +406,7 @@ fn determinism_policy_digest_blake3(controls: &[BuildDeterminismControl], unsupp
         controls,
         unsupported_controls,
     };
-    let bytes = serde_json::to_vec(&canonical).expect("canonical determinism policy serialization should not fail");
-    blake3::hash(&bytes).to_hex().to_string()
+    canonical_json_digest_blake3(&canonical, DETERMINISM_DIGEST_SERIALIZATION_ERROR_DOMAIN)
 }
 
 fn validate_search_path_request_size(request: &SearchPathPlanRequest) -> Result<(), SearchPathPlanError> {
@@ -431,6 +446,8 @@ fn validate_search_path_declaration(declaration: &SearchPathEntryDeclaration) ->
             path: declaration.path.clone(),
         });
     }
+    assert!(declaration.path.starts_with('/'), "validated search path must be absolute");
+    assert!(!declaration.real_tool_ref.is_empty(), "validated search path tool reference must not be empty");
     Ok(())
 }
 
@@ -478,8 +495,22 @@ fn search_path_digest_blake3(
         aliases,
         real_tool_refs,
     };
-    let bytes = serde_json::to_vec(&canonical).expect("canonical search-path digest serialization should not fail");
-    blake3::hash(&bytes).to_hex().to_string()
+    canonical_json_digest_blake3(&canonical, SEARCH_PATH_DIGEST_SERIALIZATION_ERROR_DOMAIN)
+}
+
+fn canonical_json_digest_blake3<T>(value: &T, serialization_error_domain: &[u8]) -> String
+where T: Serialize {
+    assert!(!serialization_error_domain.is_empty(), "serialization error domain must not be empty");
+    let canonical_bytes = match serde_json::to_vec(value) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            let mut tagged_error = serialization_error_domain.to_vec();
+            tagged_error.extend_from_slice(error.to_string().as_bytes());
+            tagged_error
+        }
+    };
+    assert!(!canonical_bytes.is_empty(), "canonical digest input must not be empty");
+    blake3::hash(&canonical_bytes).to_hex().to_string()
 }
 
 impl std::fmt::Display for DeterminismNormalizationError {
@@ -526,11 +557,14 @@ pub fn success_report(action_name: String, environment_vars: &BTreeMap<String, V
     }
 }
 
-pub fn denied_report(
+pub fn denied_report<Count>(
     action_name: String,
-    accepted_variable_count: usize,
+    accepted_variable_count: Count,
     rejection: BuildEnvironmentRejection,
-) -> BuildEnvironmentReport {
+) -> BuildEnvironmentReport
+where
+    Count: TryInto<u32>,
+{
     assert!(!action_name.is_empty(), "action name must not be empty");
     assert!(!rejection.variable.is_empty(), "rejection variable must not be empty");
     BuildEnvironmentReport {
@@ -543,22 +577,26 @@ pub fn denied_report(
     }
 }
 
-pub fn denied_environment_variable(
+pub fn denied_environment_variable<Count>(
     action_name: String,
-    accepted_variable_count: usize,
+    accepted_variable_count: Count,
     variable: &str,
-) -> Option<DeniedEnvironmentVariable> {
+) -> Option<DeniedEnvironmentVariable>
+where
+    Count: TryInto<u32>,
+{
     let rejection = classify_denied_environment_variable(variable)?;
-    let report = denied_report(action_name.clone(), accepted_variable_count, rejection.clone());
+    let denied_environment_evidence = denied_report(action_name.clone(), accepted_variable_count, rejection.clone());
     Some(DeniedEnvironmentVariable {
         action_name,
         rejection,
-        report,
+        report: denied_environment_evidence,
     })
 }
 
 pub fn classify_denied_environment_variable(variable: &str) -> Option<BuildEnvironmentRejection> {
     assert!(!variable.is_empty(), "environment variable name must not be empty");
+    assert!(!DENIED_ENV_DIAGNOSTIC.is_empty(), "environment rejection diagnostic must not be empty");
     if DYNAMIC_LINKER_KEYS.contains(&variable) {
         return Some(rejection(variable, ENV_REJECTION_DYNAMIC_LINKER, false));
     }
@@ -590,10 +628,10 @@ pub fn action_name_from_environment(environment_vars: &BTreeMap<String, bstr::BS
         .to_string()
 }
 
-fn rejection(variable: &str, class: &str, redacted: bool) -> BuildEnvironmentRejection {
+fn rejection(variable: &str, class: impl Into<String>, redacted: bool) -> BuildEnvironmentRejection {
     BuildEnvironmentRejection {
         variable: variable.to_string(),
-        class: class.to_string(),
+        class: class.into(),
         diagnostic: DENIED_ENV_DIAGNOSTIC.to_string(),
         redacted,
     }
@@ -608,8 +646,12 @@ fn is_secret_like_key(variable: &str) -> bool {
     SECRET_MARKERS.iter().any(|marker| upper.contains(marker))
 }
 
-fn bounded_variable_count(count: usize) -> u32 {
-    u32::try_from(count).expect("build environment variable count must fit in u32")
+fn bounded_variable_count<Count>(count: Count) -> u32
+where Count: TryInto<u32> {
+    match count.try_into() {
+        Ok(count) => count,
+        Err(_) => u32::MAX,
+    }
 }
 
 #[cfg(test)]

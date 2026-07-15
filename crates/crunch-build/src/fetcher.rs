@@ -345,7 +345,7 @@ fn fetch_agent() -> ureq::Agent {
 pub(crate) fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
     fetch_with_retry(
         || {
-            let result = fetch_flat_once(url, out);
+            let result = fetch_flat_once(FetchOnceRequest { url, out });
             if result.is_err() {
                 cleanup_fetch_output(out);
             }
@@ -355,10 +355,15 @@ pub(crate) fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
     )
 }
 
-fn fetch_flat_once(url: &str, out: &str) -> Result<(), FetchError> {
-    let reader: Box<dyn Read + Send> = open_url_reader(url)?;
+struct FetchOnceRequest<'a> {
+    url: &'a str,
+    out: &'a str,
+}
+
+fn fetch_flat_once(request: FetchOnceRequest<'_>) -> Result<(), FetchError> {
+    let reader: Box<dyn Read + Send> = open_url_reader(request.url)?;
     let mut bounded_reader = reader.take(MAX_DOWNLOAD_BYTES);
-    let mut file = std::fs::File::create(out)?;
+    let mut file = std::fs::File::create(request.out)?;
     let bytes_written = io::copy(&mut bounded_reader, &mut file)?;
     debug_assert!(bytes_written <= MAX_DOWNLOAD_BYTES);
     Ok(())
@@ -369,7 +374,7 @@ fn fetch_flat_once(url: &str, out: &str) -> Result<(), FetchError> {
 pub fn fetch_and_unpack(url: &str, out: &str) -> Result<(), FetchError> {
     fetch_with_retry(
         || {
-            let result = fetch_and_unpack_once(url, out);
+            let result = fetch_and_unpack_once(FetchOnceRequest { url, out });
             if result.is_err() {
                 cleanup_fetch_output(out);
             }
@@ -379,10 +384,10 @@ pub fn fetch_and_unpack(url: &str, out: &str) -> Result<(), FetchError> {
     )
 }
 
-fn fetch_and_unpack_once(url: &str, out: &str) -> Result<(), FetchError> {
-    let reader = open_url_reader(url)?;
-    let decompressed = decompress_reader(url, reader)?;
-    extract_tar(decompressed, out)?;
+fn fetch_and_unpack_once(request: FetchOnceRequest<'_>) -> Result<(), FetchError> {
+    let reader = open_url_reader(request.url)?;
+    let decompressed = decompress_reader(request.url, reader)?;
+    extract_tar(decompressed, request.out)?;
     Ok(())
 }
 
@@ -401,10 +406,12 @@ where
                 if !should_retry_fetch_error(&error, attempt_number) {
                     return Err(error);
                 }
-                let delay_ms = fetch_retry_delay_ms(attempt_number);
+                let delay_ms = fetch_retry_delay_ms(attempt_number)?;
                 warn!(attempt = attempt_number, max_attempts = FETCH_MAX_ATTEMPTS, delay_ms, error = %error, "transient fetch failed; retrying");
                 sleep_ms(delay_ms);
-                attempt_number = attempt_number.checked_add(1).expect("fetch attempt count must not overflow");
+                attempt_number = attempt_number
+                    .checked_add(1)
+                    .ok_or_else(|| FetchError::Io(io::Error::other("fetch attempt count overflow")))?;
             }
         }
     }
@@ -423,13 +430,18 @@ fn should_retry_fetch_error(error: &FetchError, attempt_number: u32) -> bool {
     }
 }
 
-fn fetch_retry_delay_ms(attempt_number: u32) -> u64 {
+fn fetch_retry_delay_ms(attempt_number: u32) -> Result<u64, FetchError> {
     assert!(attempt_number >= 1, "attempt numbers are one-based");
     assert!(attempt_number < FETCH_MAX_ATTEMPTS, "retry delay is only defined before final attempt");
-    let exponent = attempt_number.checked_sub(1).expect("attempt number is nonzero");
-    let multiplier =
-        FETCH_RETRY_BACKOFF_FACTOR.checked_pow(exponent).expect("fetch retry multiplier must not overflow");
-    FETCH_RETRY_BASE_DELAY_MS.checked_mul(multiplier).expect("fetch retry delay must not overflow")
+    let exponent = attempt_number
+        .checked_sub(1)
+        .ok_or_else(|| FetchError::Io(io::Error::other("fetch retry exponent underflow")))?;
+    let multiplier = FETCH_RETRY_BACKOFF_FACTOR
+        .checked_pow(exponent)
+        .ok_or_else(|| FetchError::Io(io::Error::other("fetch retry multiplier overflow")))?;
+    FETCH_RETRY_BASE_DELAY_MS
+        .checked_mul(multiplier)
+        .ok_or_else(|| FetchError::Io(io::Error::other("fetch retry delay overflow")))
 }
 
 fn sleep_fetch_retry(delay_ms: u64) {
@@ -440,6 +452,7 @@ fn sleep_fetch_retry(delay_ms: u64) {
 fn is_transient_http_reason(reason: &str) -> bool {
     assert!(!reason.is_empty(), "HTTP error reason must not be empty");
     let lower = reason.to_ascii_lowercase();
+    assert_eq!(lower.len(), reason.len(), "ASCII case folding must preserve byte length");
     if lower.contains("network unreachable") {
         return true;
     }

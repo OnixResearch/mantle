@@ -16,7 +16,7 @@ use serde_json::Value;
 const BYTES_PER_KIB: u64 = 1024;
 const KIB_PER_MIB: u64 = 1024;
 pub const MAX_DYNAMIC_PLAN_MIB: u64 = 4;
-pub const MAX_DYNAMIC_PLAN_BYTES: u64 = MAX_DYNAMIC_PLAN_MIB * KIB_PER_MIB * BYTES_PER_KIB;
+pub const MAX_DYNAMIC_PLAN_BYTES: u64 = MAX_DYNAMIC_PLAN_MIB.saturating_mul(KIB_PER_MIB).saturating_mul(BYTES_PER_KIB);
 pub const MAX_DYNAMIC_PLAN_UNITS: u32 = 4096;
 pub const MAX_DYNAMIC_PLAN_DEPENDENCIES_PER_UNIT: u32 = 256;
 pub const MAX_DYNAMIC_PLAN_OUTPUTS_PER_UNIT: u32 = 16;
@@ -86,6 +86,9 @@ pub enum DynamicPlanError {
 
     #[error("serializing canonical mantle-plan-v1 JSON: {message}")]
     CanonicalJson { message: String },
+
+    #[error("dynamic plan arithmetic overflow: {field}")]
+    ArithmeticOverflow { field: &'static str },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,7 +205,7 @@ pub enum DynamicInput {
 }
 
 pub fn decode_plan_v1(bytes: &[u8]) -> Result<DynamicPlanV1, DynamicPlanError> {
-    let actual_bytes = len_as_u64(bytes.len());
+    let actual_bytes = len_as_u64("plan bytes", bytes.len())?;
     if actual_bytes > MAX_DYNAMIC_PLAN_BYTES {
         return Err(DynamicPlanError::PlanTooLarge {
             actual_bytes,
@@ -271,7 +274,7 @@ pub fn canonical_plan_v1_bytes(plan: &DynamicPlanV1) -> Result<Vec<u8>, DynamicP
         message: err.to_string(),
     })?;
 
-    let actual_bytes = len_as_u64(bytes.len());
+    let actual_bytes = len_as_u64("canonical plan bytes", bytes.len())?;
     if actual_bytes > MAX_DYNAMIC_PLAN_BYTES {
         return Err(DynamicPlanError::PlanTooLarge {
             actual_bytes,
@@ -319,14 +322,17 @@ fn decode_plan_json_value(bytes: &[u8]) -> Result<Value, DynamicPlanError> {
 }
 
 fn validate_json_nesting_depth(value: &Value) -> Result<(), DynamicPlanError> {
+    assert!(JSON_ROOT_DEPTH > 0, "JSON root depth must be positive");
+    assert!(JSON_CHILD_DEPTH_INCREMENT > 0, "JSON child depth increment must be positive");
     let mut stack = vec![(value, JSON_ROOT_DEPTH)];
     while let Some((current, depth)) = stack.pop() {
         if depth > MAX_DYNAMIC_PLAN_NESTING_DEPTH {
             return limit_exceeded("json nesting depth", u64::from(depth), MAX_DYNAMIC_PLAN_NESTING_DEPTH);
         }
-        let child_depth = depth
-            .checked_add(JSON_CHILD_DEPTH_INCREMENT)
-            .unwrap_or(MAX_DYNAMIC_PLAN_NESTING_DEPTH.saturating_add(JSON_CHILD_DEPTH_INCREMENT));
+        let child_depth =
+            depth.checked_add(JSON_CHILD_DEPTH_INCREMENT).ok_or(DynamicPlanError::ArithmeticOverflow {
+                field: "json nesting depth",
+            })?;
         match current {
             Value::Array(items) => {
                 for item in items {
@@ -484,11 +490,17 @@ fn validate_dynamic_placeholders(derivation: &DynamicDerivation) -> Result<(), D
 }
 
 pub fn parse_dynamic_placeholders(value: &str) -> Result<Vec<DynamicPlaceholder>, DynamicPlanError> {
-    let mut placeholders = Vec::new();
+    assert!(!DYNAMIC_PLACEHOLDER_START.is_empty(), "placeholder start delimiter must not be empty");
+    assert!(!DYNAMIC_PLACEHOLDER_END.is_empty(), "placeholder end delimiter must not be empty");
+    let placeholder_slots =
+        usize::try_from(MAX_DYNAMIC_PLACEHOLDERS_PER_STRING).map_err(|_| DynamicPlanError::ArithmeticOverflow {
+            field: "dynamic placeholder capacity",
+        })?;
+    let mut placeholders = Vec::with_capacity(placeholder_slots);
     let mut remaining = value;
     for _ in 0..MAX_DYNAMIC_PLACEHOLDERS_PER_STRING {
         let Some(start) = remaining.find(DYNAMIC_PLACEHOLDER_START) else {
-            assert!(placeholders.len() <= usize::try_from(MAX_DYNAMIC_PLACEHOLDERS_PER_STRING).unwrap_or(usize::MAX));
+            assert!(placeholders.len() <= placeholder_slots, "placeholder count must stay within capacity");
             return Ok(placeholders);
         };
         let body_start = start.saturating_add(DYNAMIC_PLACEHOLDER_START.len());
@@ -543,11 +555,23 @@ pub fn resolve_dynamic_placeholders(
         return invalid_scalar("dynamic placeholder", value, "was not fully resolved");
     }
     assert_eq!(parse_dynamic_placeholders(&resolved)?.len(), 0);
-    assert!(resolved.len() <= usize::try_from(MAX_DYNAMIC_PLAN_STRING_BYTES).unwrap_or(usize::MAX));
+    assert!(
+        len_as_u64("resolved dynamic value", resolved.len())? <= u64::from(MAX_DYNAMIC_PLAN_STRING_BYTES),
+        "resolved dynamic value must stay within the validated byte limit"
+    );
     Ok(resolved)
 }
 
-fn parse_dynamic_placeholder_body(body: &str, original: &str) -> Result<DynamicPlaceholder, DynamicPlanError> {
+fn parse_dynamic_placeholder_body(
+    body: &str,
+    original: impl Into<String>,
+) -> Result<DynamicPlaceholder, DynamicPlanError> {
+    assert!(!DYNAMIC_SOURCE_PLACEHOLDER_PREFIX.is_empty(), "source placeholder prefix must not be empty");
+    assert!(
+        !DYNAMIC_UNIT_OUTPUT_PLACEHOLDER_PREFIX.is_empty(),
+        "unit-output placeholder prefix must not be empty"
+    );
+    let original = original.into();
     if let Some(source) = body.strip_prefix(DYNAMIC_SOURCE_PLACEHOLDER_PREFIX) {
         validate_source_id(source)?;
         return Ok(DynamicPlaceholder::Source {
@@ -629,7 +653,9 @@ fn validate_plan_graph(plan: &DynamicPlanV1) -> Result<(), DynamicPlanError> {
     validate_unit_dependency_cycles(&plan.units)?;
 
     assert_eq!(unit_outputs.len(), plan.units.len());
-    assert!(plan.roots.is_empty() || !unit_outputs.is_empty());
+    if !plan.roots.is_empty() {
+        assert!(!unit_outputs.is_empty(), "non-empty roots require registered unit outputs");
+    }
 
     Ok(())
 }
@@ -683,6 +709,8 @@ fn validate_input_graph(
     source_ids: &BTreeSet<&str>,
     unit_outputs: &BTreeMap<&str, BTreeSet<&str>>,
 ) -> Result<(), DynamicPlanError> {
+    assert_eq!(unit_outputs.len(), units.len(), "every unit must have an output-set entry");
+    assert!(units.iter().all(|unit| !unit.id.is_empty()), "validated unit IDs must not be empty");
     for unit in units {
         for input in &unit.derivation.inputs {
             match input {
@@ -708,6 +736,7 @@ fn validate_input_graph(
 
 fn validate_unit_dependency_cycles(units: &[DynamicUnit]) -> Result<(), DynamicPlanError> {
     let mut remaining_dependencies = build_unit_dependency_sets(units);
+    assert_eq!(remaining_dependencies.len(), units.len(), "dependency map must cover every unit");
     let dependents = build_dependents_by_dependency(&remaining_dependencies);
     let mut ready = remaining_dependencies
         .iter()
@@ -716,7 +745,9 @@ fn validate_unit_dependency_cycles(units: &[DynamicUnit]) -> Result<(), DynamicP
     let mut processed_count = 0usize;
 
     while let Some(unit) = ready.pop_first() {
-        processed_count = processed_count.saturating_add(1);
+        processed_count = processed_count.checked_add(1).ok_or(DynamicPlanError::ArithmeticOverflow {
+            field: "processed unit count",
+        })?;
         if let Some(unit_dependents) = dependents.get(unit) {
             for dependent in unit_dependents {
                 let Some(dependencies) = remaining_dependencies.get_mut(dependent) else {
@@ -742,16 +773,21 @@ fn validate_unit_dependency_cycles(units: &[DynamicUnit]) -> Result<(), DynamicP
 }
 
 fn build_unit_dependency_sets(units: &[DynamicUnit]) -> BTreeMap<&str, BTreeSet<&str>> {
-    let mut dependencies_by_unit = BTreeMap::new();
-    for unit in units {
-        let mut dependencies = BTreeSet::new();
-        for input in &unit.derivation.inputs {
-            if let DynamicInput::UnitOutput { unit: dependency, .. } = input {
-                dependencies.insert(dependency.as_str());
-            }
-        }
-        dependencies_by_unit.insert(unit.id.as_str(), dependencies);
-    }
+    let dependencies_by_unit = units
+        .iter()
+        .map(|unit| {
+            let dependencies = unit
+                .derivation
+                .inputs
+                .iter()
+                .filter_map(|input| match input {
+                    DynamicInput::UnitOutput { unit: dependency, .. } => Some(dependency.as_str()),
+                    DynamicInput::StorePath { .. } | DynamicInput::Source { .. } => None,
+                })
+                .collect::<BTreeSet<_>>();
+            (unit.id.as_str(), dependencies)
+        })
+        .collect::<BTreeMap<_, _>>();
     assert_eq!(dependencies_by_unit.len(), units.len());
     dependencies_by_unit
 }
@@ -768,7 +804,12 @@ fn build_dependents_by_dependency<'a>(
     dependents
 }
 
-fn validate_policy_literal(field: &'static str, value: &str, expected: &'static str) -> Result<(), DynamicPlanError> {
+fn validate_policy_literal(
+    field: &'static str,
+    value: impl AsRef<str>,
+    expected: &'static str,
+) -> Result<(), DynamicPlanError> {
+    let value = value.as_ref();
     validate_bounded_string(field, value)?;
     if value == expected {
         Ok(())
@@ -781,7 +822,12 @@ fn validate_policy_literal(field: &'static str, value: &str, expected: &'static 
     }
 }
 
-fn validate_required_string(field: &'static str, value: &str, store_prefix: &str) -> Result<(), DynamicPlanError> {
+fn validate_required_string(
+    field: &'static str,
+    value: impl AsRef<str>,
+    store_prefix: &str,
+) -> Result<(), DynamicPlanError> {
+    let value = value.as_ref();
     if value.is_empty() {
         return invalid_scalar(field, value, "must not be empty");
     }
@@ -789,8 +835,9 @@ fn validate_required_string(field: &'static str, value: &str, store_prefix: &str
     validate_no_absolute_host_path(field, value, store_prefix)
 }
 
-fn validate_bounded_string(field: &'static str, value: &str) -> Result<(), DynamicPlanError> {
-    let byte_len = len_as_u64(value.len());
+fn validate_bounded_string(field: &'static str, value: impl AsRef<str>) -> Result<(), DynamicPlanError> {
+    let value = value.as_ref();
+    let byte_len = len_as_u64(field, value.len())?;
     if byte_len > u64::from(MAX_DYNAMIC_PLAN_STRING_BYTES) {
         return limit_exceeded(field, byte_len, MAX_DYNAMIC_PLAN_STRING_BYTES);
     }
@@ -799,9 +846,10 @@ fn validate_bounded_string(field: &'static str, value: &str) -> Result<(), Dynam
 
 fn validate_no_absolute_host_path(
     field: &'static str,
-    value: &str,
+    value: impl AsRef<str>,
     store_prefix: &str,
 ) -> Result<(), DynamicPlanError> {
+    let value = value.as_ref();
     if store_prefix.is_empty() {
         return Ok(());
     }
@@ -815,7 +863,7 @@ fn validate_no_absolute_host_path(
 }
 
 fn validate_len_limit(field: &'static str, len: usize, max: u32) -> Result<(), DynamicPlanError> {
-    let actual_count = len_as_u64(len);
+    let actual_count = len_as_u64(field, len)?;
     let max_count = u64::from(max);
     if actual_count > max_count {
         limit_exceeded(field, actual_count, max)
@@ -864,13 +912,24 @@ fn blake3_hex_digest(bytes: &[u8]) -> Blake3Hex {
 }
 
 fn require_nullable_fields_present(value: &Value) -> Result<(), DynamicPlanError> {
+    assert!(!MANTLE_PLAN_V1_SCHEMA.is_empty(), "dynamic plan schema name must not be empty");
+    assert!(
+        MAX_DYNAMIC_PLAN_NESTING_DEPTH > JSON_ROOT_DEPTH,
+        "dynamic plan nesting bound must exceed root depth"
+    );
     if let Some(producer) = value.get("producer").and_then(Value::as_object) {
-        require_json_key(producer, "goal_hint", "producer.goal_hint")?;
+        require_json_key(producer, RequiredJsonKey {
+            key: "goal_hint",
+            field: "producer.goal_hint",
+        })?;
     }
     if let Some(sources) = value.get("sources").and_then(Value::as_array) {
         for source in sources {
             if let Some(source) = source.as_object() {
-                require_json_key(source, "nar_blake3", "sources[].nar_blake3")?;
+                require_json_key(source, RequiredJsonKey {
+                    key: "nar_blake3",
+                    field: "sources[].nar_blake3",
+                })?;
             }
         }
     }
@@ -879,21 +938,28 @@ fn require_nullable_fields_present(value: &Value) -> Result<(), DynamicPlanError
             let Some(derivation) = unit.get("derivation").and_then(Value::as_object) else {
                 continue;
             };
-            require_json_key(derivation, "fixed_output", "units[].derivation.fixed_output")?;
+            require_json_key(derivation, RequiredJsonKey {
+                key: "fixed_output",
+                field: "units[].derivation.fixed_output",
+            })?;
         }
     }
     Ok(())
 }
 
-fn require_json_key(
-    object: &serde_json::Map<String, Value>,
+struct RequiredJsonKey {
     key: &'static str,
     field: &'static str,
+}
+
+fn require_json_key(
+    object: &serde_json::Map<String, Value>,
+    required: RequiredJsonKey,
 ) -> Result<(), DynamicPlanError> {
-    if object.contains_key(key) {
+    if object.contains_key(required.key) {
         Ok(())
     } else {
-        Err(DynamicPlanError::MissingNullableField { field })
+        Err(DynamicPlanError::MissingNullableField { field: required.field })
     }
 }
 
@@ -906,7 +972,12 @@ pub fn validate_source_id(value: &str) -> Result<(), DynamicPlanError> {
 }
 
 pub fn validate_output_name(value: &str) -> Result<(), DynamicPlanError> {
-    let byte_len = len_as_u64(value.len());
+    assert!(MAX_DYNAMIC_PLAN_OUTPUT_NAME_BYTES > 0, "output name byte bound must be positive");
+    assert!(
+        MAX_DYNAMIC_PLAN_OUTPUT_NAME_BYTES <= MAX_DYNAMIC_PLAN_STRING_BYTES,
+        "output names must fit plan strings"
+    );
+    let byte_len = len_as_u64("output name", value.len())?;
     if value.is_empty() {
         return invalid_scalar("output name", value, "must not be empty");
     }
@@ -915,7 +986,9 @@ pub fn validate_output_name(value: &str) -> Result<(), DynamicPlanError> {
     }
 
     let mut chars = value.chars();
-    let first = chars.next().expect("non-empty output name has first char");
+    let Some(first) = chars.next() else {
+        return invalid_scalar("output name", value, "must not be empty");
+    };
     if !first.is_ascii_lowercase() {
         return invalid_scalar("output name", value, "must start with lowercase ASCII letter");
     }
@@ -928,8 +1001,8 @@ pub fn validate_output_name(value: &str) -> Result<(), DynamicPlanError> {
 }
 
 pub fn validate_blake3_hex(value: &str) -> Result<(), DynamicPlanError> {
-    let byte_len = len_as_u64(value.len());
-    if byte_len != len_as_u64(BLAKE3_HEX_BYTES) {
+    let byte_len = len_as_u64("blake3 hex", value.len())?;
+    if byte_len != len_as_u64("blake3 hex bound", BLAKE3_HEX_BYTES)? {
         return invalid_scalar("blake3 hex", value, "must be exactly 64 lowercase hex bytes");
     }
     if !value.chars().all(is_lower_hex_char) {
@@ -938,7 +1011,8 @@ pub fn validate_blake3_hex(value: &str) -> Result<(), DynamicPlanError> {
     Ok(())
 }
 
-pub fn validate_store_path_string(value: &str, store_prefix: &str) -> Result<(), DynamicPlanError> {
+pub fn validate_store_path_string(value: &str, store_prefix: impl AsRef<str>) -> Result<(), DynamicPlanError> {
+    let store_prefix = store_prefix.as_ref();
     validate_store_prefix(store_prefix)?;
 
     let Some(rest) = value.strip_prefix(store_prefix) else {
@@ -965,6 +1039,8 @@ pub fn validate_store_path_string(value: &str, store_prefix: &str) -> Result<(),
             return invalid_scalar("store path", value, "contains non-normal suffix component");
         }
     }
+    assert!(!first_component.is_empty(), "validated store path component must not be empty");
+    assert!(value.starts_with(store_prefix), "validated store path must retain its prefix");
     Ok(())
 }
 
@@ -981,8 +1057,11 @@ fn validate_store_prefix(store_prefix: &str) -> Result<(), DynamicPlanError> {
     Ok(())
 }
 
-fn validate_id_like(field: &'static str, value: &str, max_bytes: u32) -> Result<(), DynamicPlanError> {
-    let byte_len = len_as_u64(value.len());
+fn validate_id_like(field: &'static str, value: impl AsRef<str>, max_bytes: u32) -> Result<(), DynamicPlanError> {
+    assert!(max_bytes > 0, "identifier byte bound must be positive");
+    assert!(max_bytes <= MAX_DYNAMIC_PLAN_STRING_BYTES, "identifiers must fit plan strings");
+    let value = value.as_ref();
+    let byte_len = len_as_u64(field, value.len())?;
     if value.is_empty() {
         return invalid_scalar(field, value, "must not be empty");
     }
@@ -991,7 +1070,9 @@ fn validate_id_like(field: &'static str, value: &str, max_bytes: u32) -> Result<
     }
 
     let mut chars = value.chars();
-    let first = chars.next().expect("non-empty identifier has first char");
+    let Some(first) = chars.next() else {
+        return invalid_scalar(field, value, "must not be empty");
+    };
     if !first.is_ascii_lowercase() {
         return invalid_scalar(field, value, "must start with lowercase ASCII letter");
     }
@@ -1003,10 +1084,14 @@ fn validate_id_like(field: &'static str, value: &str, max_bytes: u32) -> Result<
     Ok(())
 }
 
-fn invalid_scalar<T>(field: &'static str, value: &str, reason: &'static str) -> Result<T, DynamicPlanError> {
+fn invalid_scalar<T>(
+    field: &'static str,
+    value: impl Into<String>,
+    reason: &'static str,
+) -> Result<T, DynamicPlanError> {
     Err(DynamicPlanError::InvalidScalar {
         field,
-        value: value.to_string(),
+        value: value.into(),
         reason,
     })
 }
@@ -1015,8 +1100,8 @@ fn is_lower_hex_char(ch: char) -> bool {
     ch.is_ascii_digit() || ('a'..='f').contains(&ch)
 }
 
-fn len_as_u64(len: usize) -> u64 {
-    u64::try_from(len).unwrap_or(u64::MAX)
+fn len_as_u64(field: &'static str, len: usize) -> Result<u64, DynamicPlanError> {
+    u64::try_from(len).map_err(|_| DynamicPlanError::ArithmeticOverflow { field })
 }
 
 #[cfg(test)]

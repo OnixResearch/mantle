@@ -133,23 +133,23 @@ fn compatibility_plan(
     action_name: String,
     capability: String,
 ) -> Result<BuildNetworkPolicyPlan, NetworkPolicyDenied> {
+    assert!(!action_name.is_empty(), "network policy action name must not be empty");
+    assert!(!capability.is_empty(), "network capability must not be empty");
     if capability != NETWORK_CAPABILITY_BUILD_TIME {
         return Err(denied(action_name, Some(capability), INVALID_CAPABILITY_DIAGNOSTIC));
     }
-    let policy_basis = required_env_string(
-        derivation,
-        ENV_NETWORK_POLICY_BASIS,
-        &action_name,
-        &capability,
-        MISSING_POLICY_BASIS_DIAGNOSTIC,
-    )?;
-    let audit_class = required_env_string(
-        derivation,
-        ENV_NETWORK_AUDIT_CLASS,
-        &action_name,
-        &capability,
-        MISSING_AUDIT_CLASS_DIAGNOSTIC,
-    )?;
+    let policy_basis = required_env_string(derivation, RequiredNetworkEnvironment {
+        key: ENV_NETWORK_POLICY_BASIS,
+        action_name: &action_name,
+        capability: &capability,
+        missing_diagnostic: MISSING_POLICY_BASIS_DIAGNOSTIC,
+    })?;
+    let audit_class = required_env_string(derivation, RequiredNetworkEnvironment {
+        key: ENV_NETWORK_AUDIT_CLASS,
+        action_name: &action_name,
+        capability: &capability,
+        missing_diagnostic: MISSING_AUDIT_CLASS_DIAGNOSTIC,
+    })?;
     if compatibility_policy == CompatibilityNetworkPolicy::DenyAll {
         return Err(denied_with_scope(
             action_name,
@@ -193,16 +193,24 @@ fn ca_hash_mode_string(hash: &CAHash) -> String {
     .to_string()
 }
 
+struct RequiredNetworkEnvironment<'a> {
+    key: &'a str,
+    action_name: &'a str,
+    capability: &'a str,
+    missing_diagnostic: &'a str,
+}
+
 fn required_env_string(
     derivation: &Derivation,
-    key: &str,
-    action_name: &str,
-    capability: &str,
-    missing_diagnostic: &str,
+    required: RequiredNetworkEnvironment<'_>,
 ) -> Result<String, NetworkPolicyDenied> {
-    match env_string(derivation, key)? {
+    match env_string(derivation, required.key)? {
         Some(value) => Ok(value),
-        None => Err(denied(action_name.to_string(), Some(capability.to_string()), missing_diagnostic)),
+        None => Err(denied(
+            required.action_name.to_string(),
+            Some(required.capability.to_string()),
+            required.missing_diagnostic,
+        )),
     }
 }
 

@@ -205,6 +205,8 @@ fn copy_override_payload(source: &Path, target: &Path) -> Result<(), FetchError>
 }
 
 fn copy_override_dir(source: &Path, target: &Path) -> Result<(), FetchError> {
+    assert!(source.is_dir(), "source override directory must exist");
+    assert!(MAX_OVERRIDE_COPY_ENTRIES > 0, "source override copy bound must be positive");
     let mut stack = vec![(source.to_path_buf(), target.to_path_buf())];
     let mut copied_entries = 0usize;
     while let Some((source_dir, target_dir)) = stack.pop() {

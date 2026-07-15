@@ -116,6 +116,7 @@ async fn flatten_tree(
         !matches!(root, Node::Symlink { target, .. } if target.as_ref().is_empty()),
         "root symlink target must not be empty"
     );
+    assert!(MAX_REWRITE_NODES > 0, "rewrite node bound must be positive");
     let mut worklist: Vec<WorkItem> = Vec::with_capacity(64);
     let mut expand_stack: Vec<(Node, Option<snix_castore::PathComponent>, Option<u32>, u32)> = Vec::with_capacity(64);
     expand_stack.push((root.clone(), None, None, 0));
