@@ -853,7 +853,6 @@ fn validate_existing_scratch_root(path: &Path) -> Result<(), RunError> {
 
 fn unexpected_scratch_root_entries(path: &Path) -> Result<Vec<String>, RunError> {
     debug_assert!(path.is_dir());
-    debug_assert!(MAX_SCRATCH_ROOT_ENTRIES > 0);
     let mut unexpected_entries = Vec::with_capacity(MAX_SCRATCH_ROOT_ENTRIES);
     for entry_result in
         std::fs::read_dir(path).map_err(|err| RunError::Internal(format!("reading {}: {err}", path.display())))?
@@ -876,6 +875,7 @@ fn unexpected_scratch_root_entries(path: &Path) -> Result<Vec<String>, RunError>
         unexpected_entries.push(entry_name);
     }
     unexpected_entries.sort();
+    debug_assert!(unexpected_entries.len() <= MAX_SCRATCH_ROOT_ENTRIES);
     Ok(unexpected_entries)
 }
 
@@ -1034,7 +1034,6 @@ fn copy_source_archive_with_limit(
     limit_bytes: u64,
 ) -> Result<u64, RunError> {
     debug_assert!(limit_bytes > 0);
-    debug_assert!(SOURCE_FETCH_BUFFER_BYTES > 0);
     let mut total_bytes = 0u64;
     let mut buffer = [0u8; SOURCE_FETCH_BUFFER_BYTES];
     let buffer_size_bytes = u64::try_from(SOURCE_FETCH_BUFFER_BYTES)
@@ -1667,7 +1666,6 @@ fn expected_output_diagnostics(expected_outputs: &[ExpectedRebuiltOutput]) -> Ve
 }
 
 fn collect_available_proof_digest_diagnostics(plan: &WitnessRebuildPlan) -> Vec<WitnessAvailableProofDigest> {
-    debug_assert!(PROOF_BINARY_CANDIDATE_LIMIT > 0);
     debug_assert!(!plan.scratch_layout.proof_bundle_dir.as_os_str().is_empty());
     let mut candidates = Vec::with_capacity(PROOF_BINARY_CANDIDATE_LIMIT);
     if let Ok(proof_manifest) = load_proof_bundle_manifest(&plan.scratch_layout.proof_bundle_dir)
@@ -1757,7 +1755,6 @@ fn explicit_bootstrap_divergence(
     proof_manifest: Option<&Value>,
     path_leak_scan_summary: &[String],
 ) -> Option<WitnessBootstrapDivergenceDiagnostic> {
-    debug_assert!(DIAGNOSTIC_EXCERPT_LIMIT > 0);
     debug_assert!(!BOOTSTRAP_DIVERGENCE_ROOT_POINTER.is_empty());
     let manifest = proof_manifest?;
     let root = manifest.pointer(BOOTSTRAP_DIVERGENCE_ROOT_POINTER).and_then(Value::as_str)?;
@@ -1783,7 +1780,6 @@ fn derived_bootstrap_divergence(
     proof_manifest: Option<&Value>,
     path_leak_scan_summary: &[String],
 ) -> Option<WitnessBootstrapDivergenceDiagnostic> {
-    debug_assert!(DIAGNOSTIC_EXCERPT_LIMIT > 0);
     debug_assert!(!BOOTSTRAP_STAGE1_EQUALS_STAGE2_POINTER.is_empty());
     let manifest = proof_manifest?;
     if manifest.pointer(BOOTSTRAP_BWRAP_EQUALS_POINTER).and_then(Value::as_bool) == Some(false) {
@@ -1854,7 +1850,6 @@ fn bootstrap_stage_divergence(
     manifest: &Value,
     path_leak_scan_summary: &[String],
 ) -> WitnessBootstrapDivergenceDiagnostic {
-    debug_assert!(DIAGNOSTIC_EXCERPT_LIMIT > 0);
     debug_assert!(!BOOTSTRAP_STAGE1_DIGEST_POINTER.is_empty());
     let resolved_root = if root.is_empty() {
         BOOTSTRAP_DIVERGENCE_UNKNOWN_ROOT

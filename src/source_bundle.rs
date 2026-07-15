@@ -1262,7 +1262,6 @@ fn collect_source_entries(
 
 fn read_sorted_source_children(current: &Path, is_skipping_git_dir: bool) -> Result<Vec<PathBuf>, RunError> {
     assert!(current.is_absolute());
-    assert!(MAX_SOURCE_FILES_PER_RECORD > 0);
     let entries = fs::read_dir(current)
         .map_err(|err| RunError::Internal(format!("reading source dir {}: {err}", current.display())))?;
     let mut children = Vec::new();
@@ -2436,7 +2435,6 @@ fn local_checkout_git_dir(checkout_path: &Path) -> Result<PathBuf, RunError> {
 fn resolve_git_revision(git_dir: &Path, revision: &str) -> Result<String, RunError> {
     validate_git_revision_text(revision)?;
     assert!(!revision.is_empty());
-    assert!(MAX_GIT_REF_INDIRECTIONS > 0);
     let mut current_revision = revision.to_string();
     for _ in 0..MAX_GIT_REF_INDIRECTIONS {
         validate_git_revision_text(&current_revision)?;

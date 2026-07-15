@@ -90,8 +90,6 @@ pub(crate) struct RustcDevGuideValidationReport {
 pub(crate) fn validate_rustc_dev_guide_boundaries(
     input: &RustcDevGuideValidationInput,
 ) -> RustcDevGuideValidationReport {
-    debug_assert!(MAX_GUIDE_REFERENCES > 0);
-    debug_assert!(MAX_EVIDENCE_ROWS > 0);
     let mut diagnostics = Vec::new();
     validate_count(
         CountBound {
@@ -119,10 +117,13 @@ pub(crate) fn validate_rustc_dev_guide_boundaries(
     validate_planning_evidence(&input.planning_evidence, &reference_ids, &mut diagnostics);
     validate_compiler_policy_receipts(&input.compiler_policy_receipts, &reference_ids, &mut diagnostics);
     validate_provider_patch_plans(&input.provider_patch_plans, &reference_ids, &mut diagnostics);
-    RustcDevGuideValidationReport {
+    debug_assert!(reference_ids.len() <= input.references.len());
+    let report = RustcDevGuideValidationReport {
         valid: diagnostics.is_empty(),
         diagnostics,
-    }
+    };
+    debug_assert_eq!(report.valid, report.diagnostics.is_empty());
+    report
 }
 
 struct CountBound<'a> {

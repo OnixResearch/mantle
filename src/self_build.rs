@@ -637,14 +637,13 @@ pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError
     require_checked_vendor_inputs(&stage_root)?;
 
     let source_size_bytes = dir_size(&stage_root);
-    assert!(MEBIBYTE_BYTES > 0, "mebibyte divisor must be nonzero");
+    let source_size_mib = source_size_bytes / MEBIBYTE_BYTES;
+    let maximum_source_size_mib = MAX_SOURCE_BYTES / MEBIBYTE_BYTES;
     assert!(
         source_size_bytes <= MAX_SOURCE_BYTES,
-        "source tree {} MiB exceeds {} MiB limit",
-        source_size_bytes / MEBIBYTE_BYTES,
-        MAX_SOURCE_BYTES / MEBIBYTE_BYTES,
+        "source tree {source_size_mib} MiB exceeds {maximum_source_size_mib} MiB limit",
     );
-    eprintln!("  source tree: {} MiB", source_size_bytes / MEBIBYTE_BYTES);
+    eprintln!("  source tree: {source_size_mib} MiB");
 
     let fingerprint = tree_fingerprint(&stage_root)?;
     let store_name = staged_source_store_name_from_fingerprint(&fingerprint)?;
@@ -1165,7 +1164,6 @@ fn expected_vendor_packages(
     packages: &[LockedPackage],
 ) -> Result<BTreeMap<PackageKey, ExpectedVendorPackage>, RunError> {
     debug_assert!(packages.len() <= MAX_CARGO_LOCK_PACKAGE_COUNT);
-    debug_assert!(MAX_VENDOR_PACKAGE_COUNT > 0);
     let mut expected: BTreeMap<PackageKey, ExpectedVendorPackage> = BTreeMap::new();
     for package in packages {
         let Some(source) = package.source.as_ref() else {
@@ -1191,6 +1189,7 @@ fn expected_vendor_packages(
             return Err(RunError::Internal(format!("duplicate vendored package in Cargo.lock: {}", package.key)));
         }
     }
+    debug_assert!(expected.len() <= packages.len());
     Ok(expected)
 }
 
@@ -1288,9 +1287,9 @@ fn read_vendor_checksum_manifest(checksum_path: &Path) -> Result<VendorChecksumM
 }
 
 fn verify_vendor_file_checksums(package_dir: &Path, manifest: &VendorChecksumManifest) -> Result<(), RunError> {
-    debug_assert!(MAX_VENDOR_PACKAGE_FILE_COUNT > 0);
-    debug_assert!(CARGO_SHA256_HEX_LEN > 0);
     let actual = vendor_file_hashes(package_dir)?;
+    debug_assert!(actual.len() <= MAX_VENDOR_PACKAGE_FILE_COUNT);
+    debug_assert!(actual.values().all(|digest| digest.len() == CARGO_SHA256_HEX_LEN));
     for (relative_path, expected_digest) in &manifest.files {
         let Some(actual_digest) = actual.get(relative_path) else {
             return Err(RunError::Internal(format!(
@@ -1333,7 +1332,6 @@ fn collect_vendor_file_hashes(
     hashes: &mut BTreeMap<String, String>,
     file_count: &mut usize,
 ) -> Result<(), RunError> {
-    debug_assert!(MAX_VENDOR_PACKAGE_FILE_COUNT > 0);
     debug_assert!(hashes.len() <= MAX_VENDOR_PACKAGE_FILE_COUNT);
     let mut children: Vec<PathBuf> = Vec::new();
     let entries = std::fs::read_dir(current_dir)
@@ -1422,7 +1420,6 @@ fn verify_vendor_package_lock_checksum(
     expected: &ExpectedVendorPackage,
     actual: &VendoredPackage,
 ) -> Result<(), RunError> {
-    debug_assert!(CARGO_SHA256_HEX_LEN > 0);
     debug_assert!(!expected.source.is_empty());
     if let Some(expected_checksum) = expected.checksum.as_ref() {
         let actual_checksum = actual
@@ -1597,7 +1594,6 @@ fn staged_source_path_is_copyable(relative_path: &Path) -> Result<bool, RunError
 
 fn staged_source_release_path(relative_path: &Path) -> Result<String, String> {
     assert!(relative_path.is_relative(), "staged source path must be relative: {}", relative_path.display());
-    assert!(MAX_STAGE_SOURCE_DEPTH > 0, "staged source depth limit must be nonzero");
     let mut components = Vec::with_capacity(relative_path.components().count());
     for component in relative_path.components() {
         match component {
@@ -1628,6 +1624,7 @@ fn staged_source_release_path(relative_path: &Path) -> Result<String, String> {
     if components.is_empty() {
         return Err("staged source path must not be empty".to_string());
     }
+    debug_assert!(components.len() <= MAX_STAGE_SOURCE_DEPTH);
     Ok(components.join("/"))
 }
 
@@ -1880,10 +1877,10 @@ fn entry_mode_bits(_metadata: &std::fs::Metadata) -> u32 {
 
 fn collect_paths_strict(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), RunError> {
     assert!(out.is_empty(), "strict path collection requires an empty destination");
-    assert!(MAX_STAGE_SOURCE_WALK_STEPS > MAX_STAGE_SOURCE_ENTRIES);
     let mut pending = vec![dir.to_path_buf()];
     for _ in 0..MAX_STAGE_SOURCE_WALK_STEPS {
         let Some(current_dir) = pending.pop() else {
+            debug_assert!(out.len() <= MAX_STAGE_SOURCE_ENTRIES);
             return Ok(());
         };
         let entries = std::fs::read_dir(&current_dir)
@@ -1906,10 +1903,10 @@ fn collect_paths_strict(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), RunErr
 
 fn collect_paths(dir: &Path, out: &mut Vec<PathBuf>) {
     assert!(out.is_empty(), "best-effort path collection requires an empty destination");
-    assert!(MAX_STAGE_SOURCE_WALK_STEPS > MAX_STAGE_SOURCE_ENTRIES);
     let mut pending = vec![dir.to_path_buf()];
     for _ in 0..MAX_STAGE_SOURCE_WALK_STEPS {
         let Some(current_dir) = pending.pop() else {
+            debug_assert!(out.len() <= MAX_STAGE_SOURCE_ENTRIES);
             return;
         };
         let Ok(entries) = std::fs::read_dir(&current_dir) else {
@@ -2145,7 +2142,6 @@ pub fn find_crunch_busybox(output_dir: &Path) -> Option<PathBuf> {
 /// exists at `<dir>/bin/mantle`.
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn find_crunch_outputs(output_dir: &Path) -> Vec<(String, PathBuf)> {
-    debug_assert!(MAX_CRUNCH_OUTPUTS > 0);
     debug_assert!(!output_dir.as_os_str().is_empty());
     let entries = match std::fs::read_dir(output_dir) {
         Ok(e) => e,
@@ -2167,6 +2163,7 @@ pub fn find_crunch_outputs(output_dir: &Path) -> Vec<(String, PathBuf)> {
             }
         }
     }
+    debug_assert!(found.len() <= MAX_CRUNCH_OUTPUTS);
     found
 }
 
@@ -2894,7 +2891,6 @@ struct InitializeSelfBuildRequest<'a> {
 }
 
 fn initialize_self_build(request: InitializeSelfBuildRequest<'_>) -> Result<SelfBuildSetup, RunError> {
-    assert!(SELF_BUILD_STEP_COUNT > 0, "self-build step count must be nonzero");
     assert!(!REQUIRED_BOOTSTRAP_TOOLS.is_empty(), "bootstrap tool list must not be empty");
     eprintln!("=== crunch self-build ===");
 
@@ -3028,7 +3024,6 @@ pub struct StagexEligibilityFailure {
 
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn validate_stagex_proof_eligibility(report: &SelfBuildReport) -> Result<(), Vec<StagexEligibilityFailure>> {
-    assert!(MAX_PROTECTED_SECCOMP_EVENTS > 0, "seccomp event limit must be nonzero");
     assert!(!FORBIDDEN_EXEC_BASENAMES.is_empty(), "forbidden executable set must not be empty");
     let mut failures = Vec::new();
 

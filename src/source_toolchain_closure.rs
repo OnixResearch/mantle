@@ -1371,10 +1371,10 @@ fn validate_rust_provider_bootstrap_role_path(
         RustProviderRole::Cargo => require_provider_path(&output.path, CARGO_PROVIDER_PATH, output.role),
         RustProviderRole::Rustdoc => require_provider_path(&output.path, RUSTDOC_PROVIDER_PATH, output.role),
         RustProviderRole::HostRustlib => {
-            require_provider_path_prefix(&output.path, &rustlib_lib_prefix(&plan.host_triple), output.role)
+            require_provider_path_prefix(&output.path, rustlib_lib_prefix(&plan.host_triple), output.role)
         }
         RustProviderRole::TargetRustlib => {
-            require_provider_path_prefix(&output.path, &rustlib_lib_prefix(&plan.target_triple), output.role)
+            require_provider_path_prefix(&output.path, rustlib_lib_prefix(&plan.target_triple), output.role)
         }
         RustProviderRole::ProviderReceipt => validate_provider_receipt_path(&output.path),
     }
@@ -1604,10 +1604,10 @@ fn validate_rust_provider_role_path(
         RustProviderRole::Cargo => require_provider_path(&artifact.path, CARGO_PROVIDER_PATH, artifact.role),
         RustProviderRole::Rustdoc => require_provider_path(&artifact.path, RUSTDOC_PROVIDER_PATH, artifact.role),
         RustProviderRole::HostRustlib => {
-            require_provider_path_prefix(&artifact.path, &rustlib_lib_prefix(&metadata.host_triple), artifact.role)
+            require_provider_path_prefix(&artifact.path, rustlib_lib_prefix(&metadata.host_triple), artifact.role)
         }
         RustProviderRole::TargetRustlib => {
-            require_provider_path_prefix(&artifact.path, &rustlib_lib_prefix(&metadata.target_triple), artifact.role)
+            require_provider_path_prefix(&artifact.path, rustlib_lib_prefix(&metadata.target_triple), artifact.role)
         }
         RustProviderRole::ProviderReceipt => validate_provider_receipt_path(&artifact.path),
     }

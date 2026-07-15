@@ -2700,8 +2700,10 @@ struct RuntimeBuildModeInput<'a> {
 }
 
 fn runtime_fingerprint_mode_fields(args: &Args) -> RuntimeFingerprintModeFields {
-    let mut modes = RuntimeFingerprintModeFields::default();
-    modes.nix_compat_mode = args.nix_compat.then_some(true);
+    let mut modes = RuntimeFingerprintModeFields {
+        nix_compat_mode: args.nix_compat.then_some(true),
+        ..RuntimeFingerprintModeFields::default()
+    };
     apply_runtime_fingerprint_command_fields(&mut modes, args);
     modes
 }
@@ -4615,7 +4617,6 @@ struct RemoteFailureDebugEmissionContext<'a> {
 
 fn parse_remote_worker_failure_debug_report(reason: &str) -> Option<RemoteWorkerFailureDebugReport> {
     debug_assert!(!REMOTE_FAILURE_DEBUG_BUNDLE_REF_PREFIX.is_empty());
-    debug_assert!(REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS > 0);
     let bundle_ref = remote_failure_debug_report_field(RemoteFailureFieldQuery {
         reason,
         prefix: "worker_bundle_ref=",
@@ -5568,7 +5569,6 @@ struct SourceRootManifestCheck {
 
 fn validate_source_root_manifest_file(manifest_path: &Path) -> Result<SourceRootManifestCheck, RunError> {
     debug_assert!(!manifest_path.as_os_str().is_empty());
-    debug_assert_eq!(manifest_path.as_os_str().is_empty(), false);
     let manifest_bytes = fs::read(manifest_path).map_err(|err| {
         RunError::Internal(format!("reading source-root manifest {}: {err}", manifest_path.display()))
     })?;
@@ -5677,8 +5677,6 @@ fn source_root_provider_store_name(output_digest_hex: &str) -> Result<String, Ru
 }
 
 fn decode_blake3_hex(value: &str) -> Result<[u8; blake3::OUT_LEN], RunError> {
-    debug_assert!(blake3::OUT_LEN > 0);
-    debug_assert!(HEX_CHARS_PER_BYTE > 0);
     let expected_hex_chars = blake3::OUT_LEN
         .checked_mul(HEX_CHARS_PER_BYTE)
         .ok_or_else(|| RunError::Internal("BLAKE3 hex length overflowed usize".to_string()))?;
@@ -5884,7 +5882,6 @@ fn cmd_import_rust_source_provider(
 
 fn cmd_smoke_rust_source_provider(provider_dir: &Path, evidence_dir: Option<&Path>) -> Result<(), RunError> {
     debug_assert!(!provider_dir.as_os_str().is_empty());
-    debug_assert_eq!(provider_dir.as_os_str().is_empty(), false);
     let validation = rust_source_provider::validate_materialized_rust_source_provider(provider_dir)
         .map_err(|err| RunError::Build(format!("Rust source provider validation failed closed: {err}")))?;
     let scratch = tempfile::Builder::new()
@@ -6926,7 +6923,6 @@ fn executable_file_or_symlink(path: &Path) -> bool {
 
 fn select_run_binary(out_path: &Path, bin: Option<&str>) -> Result<PathBuf, RunError> {
     debug_assert!(!out_path.as_os_str().is_empty());
-    debug_assert_eq!(out_path.as_os_str().is_empty(), false);
     let bin_dir = out_path.join("bin");
     if !bin_dir.is_dir() {
         return Err(RunError::Internal(format!("no bin/ directory in {}", out_path.display())));

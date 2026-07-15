@@ -1547,7 +1547,6 @@ fn run_rustc_stage1_provider_candidate_chain(
     bootstrap_candidate: &RustSourceProviderBootstrapProviderCandidate,
     verbose: bool,
 ) -> Result<Vec<RustSourceProviderRustcStage1ProviderCandidateRun>, RustSourceProviderError> {
-    debug_assert!(RUSTC_STAGE1_CHAIN_MAX_STAGES > 0);
     debug_assert!(!bootstrap_candidate.stage_id.is_empty());
     let mut current_bootstrap = bootstrap_candidate.clone();
     let mut scratch_layout = RustcStage1ScratchLayout::TopLevel;
@@ -1573,6 +1572,7 @@ fn run_rustc_stage1_provider_candidate_chain(
             bootstrap_candidate.stage_id
         )));
     }
+    debug_assert!(runs.len() <= RUSTC_STAGE1_CHAIN_MAX_STAGES);
     Ok(runs)
 }
 
@@ -3376,7 +3376,6 @@ fn run_generated_script_with_log(script_path: &Path, log_path: &Path) -> Result<
         return Err(RustSourceProviderError::Build("generated script path and build log path must differ".to_string()));
     }
     debug_assert_ne!(script_path, log_path);
-    debug_assert!(GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS > 0);
     let log = File::create(log_path)
         .map_err(|err| RustSourceProviderError::Build(format!("create {}: {err}", log_path.display())))?;
     for attempt in 1..=GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS {
@@ -5398,8 +5397,8 @@ struct HttpSourceRequest<'a> {
 }
 
 fn fetch_http_source_bytes(request: HttpSourceRequest<'_>) -> Result<Vec<u8>, RustSourceProviderError> {
-    debug_assert!(FIRST_STAGE_FETCH_MAX_RETRIES > 0);
-    debug_assert!(FIRST_STAGE_FETCH_MAX_BYTES > 0);
+    debug_assert!(!request.source_id.is_empty());
+    debug_assert!(!request.url.is_empty());
     let agent = ureq::Agent::config_builder()
         .timeout_global(Some(std::time::Duration::from_secs(FIRST_STAGE_FETCH_TIMEOUT_SECS)))
         .build()
@@ -7494,7 +7493,7 @@ fn file_digest_blake3(path: &Path) -> Result<String, RustSourceProviderError> {
 }
 
 fn directory_digest_blake3(dir: &Path) -> Result<String, RustSourceProviderError> {
-    debug_assert!(DIRECTORY_DIGEST_MAX_ENTRIES > 0);
+    debug_assert!(dir.is_dir());
     let mut entries = Vec::with_capacity(1);
     collect_relative_paths(dir, dir, &mut entries)?;
     debug_assert!(entries.len() <= DIRECTORY_DIGEST_MAX_ENTRIES);
