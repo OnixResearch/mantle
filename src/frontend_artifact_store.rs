@@ -109,13 +109,16 @@ pub fn import_frontend_artifact(source: &Path, state_dir: &Path) -> Result<Front
     };
     write_json_file(&manifest_path, &manifest)?;
 
-    Ok(FrontendArtifactStoreImportReport {
+    let outcome = FrontendArtifactStoreImportReport {
         schema: FRONTEND_ARTIFACT_STORE_REPORT_SCHEMA.to_string(),
         artifact_ref,
         artifact_digest,
         stored_content_path: content_path.display().to_string(),
         manifest_path: manifest_path.display().to_string(),
-    })
+    };
+    debug_assert_eq!(outcome.artifact_ref, manifest.artifact_ref);
+    debug_assert_eq!(outcome.artifact_digest, manifest.artifact_digest);
+    Ok(outcome)
 }
 
 pub fn materialize_frontend_artifact(

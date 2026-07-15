@@ -2435,6 +2435,7 @@ fn local_checkout_git_dir(checkout_path: &Path) -> Result<PathBuf, RunError> {
 fn resolve_git_revision(git_dir: &Path, revision: &str) -> Result<String, RunError> {
     validate_git_revision_text(revision)?;
     assert!(!revision.is_empty());
+    assert!(!revision.contains('\0'));
     let mut current_revision = revision.to_string();
     for _ in 0..MAX_GIT_REF_INDIRECTIONS {
         validate_git_revision_text(&current_revision)?;

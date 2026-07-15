@@ -118,12 +118,12 @@ pub(crate) fn validate_rustc_dev_guide_boundaries(
     validate_compiler_policy_receipts(&input.compiler_policy_receipts, &reference_ids, &mut diagnostics);
     validate_provider_patch_plans(&input.provider_patch_plans, &reference_ids, &mut diagnostics);
     debug_assert!(reference_ids.len() <= input.references.len());
-    let report = RustcDevGuideValidationReport {
+    let validation_result = RustcDevGuideValidationReport {
         valid: diagnostics.is_empty(),
         diagnostics,
     };
-    debug_assert_eq!(report.valid, report.diagnostics.is_empty());
-    report
+    debug_assert_eq!(validation_result.valid, validation_result.diagnostics.is_empty());
+    validation_result
 }
 
 struct CountBound<'a> {

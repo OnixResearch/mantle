@@ -157,6 +157,8 @@ pub fn parse_cache_candidate_set(
 
     // Stable sort by priority preserves configuration order for ties.
     candidates.sort_by_key(|c| c.priority);
+    debug_assert!(candidates.len() <= request.raw_urls.len());
+    debug_assert!(candidates.windows(2).all(|pair| pair[0].priority < pair[1].priority));
     Ok(CacheCandidateSet { candidates })
 }
 
@@ -169,6 +171,7 @@ pub fn sanitize_cache_identity(raw_url: &str) -> Option<String> {
     if parsed.scheme().is_empty() {
         return None;
     }
+    debug_assert!(!parsed.scheme().is_empty());
     // file:// URLs have no host — use scheme + path as the identity.
     if parsed.scheme() == "file" {
         let path = parsed.path();
@@ -178,6 +181,7 @@ pub fn sanitize_cache_identity(raw_url: &str) -> Option<String> {
         return Some(format!("file://{path}"));
     }
     parsed.host_str()?;
+    debug_assert!(parsed.host_str().is_some());
     let mut sanitized = parsed.clone();
     sanitized.set_query(None);
     sanitized.set_fragment(None);

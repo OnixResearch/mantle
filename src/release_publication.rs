@@ -389,6 +389,10 @@ fn read_stage_marker(stage_root: &ReleaseCapabilityRoot) -> Result<Option<Releas
     let mut bytes = Vec::with_capacity(marker_size_bytes);
     file.read_to_end(&mut bytes)
         .map_err(|error| RunError::Internal(format!("reading release stage marker: {error}")))?;
+    if bytes.len() != marker_size_bytes {
+        return Ok(None);
+    }
+    debug_assert_eq!(bytes.len(), marker_size_bytes);
     Ok(serde_json::from_slice(&bytes).ok())
 }
 

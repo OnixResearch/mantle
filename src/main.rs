@@ -5685,6 +5685,7 @@ fn decode_blake3_hex(value: &str) -> Result<[u8; blake3::OUT_LEN], RunError> {
             "source-root provider output digest must be {expected_hex_chars} lowercase hex chars"
         )));
     }
+    debug_assert_eq!(value.len(), expected_hex_chars);
     let mut bytes = [0u8; blake3::OUT_LEN];
     for (idx, byte) in bytes.iter_mut().enumerate() {
         let start = idx
@@ -5701,6 +5702,7 @@ fn decode_blake3_hex(value: &str) -> Result<[u8; blake3::OUT_LEN], RunError> {
             RunError::Internal(format!("parsing source-root provider output digest byte {idx}: {err}"))
         })?;
     }
+    debug_assert!(value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
     Ok(bytes)
 }
 

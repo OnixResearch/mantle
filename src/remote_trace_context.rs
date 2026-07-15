@@ -115,6 +115,7 @@ fn validate_traceparent(value: &str) -> Result<(), &'static str> {
         return Err("remote-traceparent-length-invalid");
     }
     let bytes = value.as_bytes();
+    debug_assert_eq!(bytes.len(), W3C_TRACEPARENT_BYTES);
     if bytes.get(VERSION_SEPARATOR_INDEX) != Some(&b'-')
         || bytes.get(TRACE_ID_SEPARATOR_INDEX) != Some(&b'-')
         || bytes.get(PARENT_ID_SEPARATOR_INDEX) != Some(&b'-')
@@ -133,6 +134,8 @@ fn validate_traceparent(value: &str) -> Result<(), &'static str> {
     if all_zero(trace_id) || all_zero(parent_id) {
         return Err("remote-traceparent-zero-identity");
     }
+    debug_assert!(lower_hex(trace_id));
+    debug_assert!(lower_hex(parent_id));
     Ok(())
 }
 

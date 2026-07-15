@@ -309,6 +309,7 @@ fn tracked_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
         tracked.push(relative_path);
     }
     tracked.sort();
+    debug_assert!(tracked.len() <= tracked_path_count_max);
     Ok(tracked)
 }
 
@@ -371,6 +372,7 @@ fn collect_vendor_source_paths(repo_root: &Path, current_dir: &Path, paths: &mut
         children.push(entry.path());
     }
     children.sort();
+    debug_assert!(children.len() <= child_count_max);
     for child in &children {
         collect_vendor_source_child(repo_root, child, paths)?;
     }

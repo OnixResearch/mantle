@@ -493,6 +493,7 @@ fn open_directory_no_symlinks(path: &Path) -> Result<fs::File, String> {
             std::io::Error::last_os_error()
         ));
     }
+    debug_assert!(raw_fd >= 0, "successful openat2 must return a non-negative descriptor");
     let raw_fd = i32::try_from(raw_fd).map_err(|_| "remote-telemetry-prometheus-parent-fd-invalid".to_string())?;
     Ok(unsafe { fs::File::from_raw_fd(raw_fd) })
 }

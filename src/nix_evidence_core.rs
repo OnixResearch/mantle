@@ -85,6 +85,8 @@ pub(crate) fn validate_nix_evidence(input: &NixEvidenceInput) -> NixEvidenceRepo
 }
 
 fn validate_row(row: &NixEvidenceRow, row_ids: &mut BTreeSet<String>, diagnostics: &mut Vec<String>) {
+    let row_id_count_before = row_ids.len();
+    let diagnostic_count_before = diagnostics.len();
     push_nonempty(&row.row_id, "row_id", diagnostics);
     validate_adapter(&row.adapter_kind, diagnostics);
     validate_store_path(&row.store_path, diagnostics);
@@ -104,6 +106,9 @@ fn validate_row(row: &NixEvidenceRow, row_ids: &mut BTreeSet<String>, diagnostic
     if !row_ids.insert(row.row_id.clone()) {
         diagnostics.push(format!("duplicate Nix evidence row id: {}", row.row_id));
     }
+    debug_assert!(diagnostics.len() >= diagnostic_count_before);
+    debug_assert!(row_ids.len() >= row_id_count_before);
+    debug_assert!(row_ids.len() <= row_id_count_before.saturating_add(1));
 }
 
 fn validate_store_path(path_ref: &NixStorePathRef, diagnostics: &mut Vec<String>) {

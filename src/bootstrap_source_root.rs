@@ -223,15 +223,21 @@ pub(crate) fn select_bootstrap_provider(
             "ambiguous provider selection: only one of --fetch, --source-root, --stagex-lineage may be specified",
         ));
     }
-    if stagex_lineage.is_some() {
-        Ok(BootstrapProviderMode::StagexLineage)
+    let selected_mode = if stagex_lineage.is_some() {
+        BootstrapProviderMode::StagexLineage
     } else if source_root.is_some() {
-        Ok(BootstrapProviderMode::SourceRoot)
+        BootstrapProviderMode::SourceRoot
     } else if fetch {
-        Ok(BootstrapProviderMode::LegacyFetch)
+        BootstrapProviderMode::LegacyFetch
     } else {
-        Ok(BootstrapProviderMode::NixPackages)
-    }
+        BootstrapProviderMode::NixPackages
+    };
+    assert_eq!(
+        selected_mode_count == 0,
+        selected_mode == BootstrapProviderMode::NixPackages,
+        "default provider must be selected exactly when no explicit mode is selected"
+    );
+    Ok(selected_mode)
 }
 
 pub(crate) fn parse_source_root_manifest_bytes(bytes: &[u8]) -> Result<SourceRootManifest, String> {

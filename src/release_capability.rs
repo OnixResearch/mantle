@@ -308,6 +308,8 @@ fn validate_relative_release_path(path: &str) -> Result<(), ReleasePathError> {
     if path.len() > MAX_RELEASE_RELATIVE_PATH_BYTES {
         return Err(ReleasePathError::TooLong);
     }
+    debug_assert!(!path.is_empty());
+    debug_assert!(path.len() <= MAX_RELEASE_RELATIVE_PATH_BYTES);
     let mut component_count = 0_usize;
     for component in Path::new(path).components() {
         component_count = component_count.saturating_add(1);

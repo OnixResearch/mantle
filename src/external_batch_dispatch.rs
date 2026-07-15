@@ -475,6 +475,7 @@ fn read_bounded_output(mut reader: impl Read, limit_bytes: usize) -> Result<Vec<
     if !is_complete {
         return Err("external-batch-process-output-limit-exceeded".to_string());
     }
+    debug_assert!(output.len() <= limit_bytes);
     Ok(output)
 }
 

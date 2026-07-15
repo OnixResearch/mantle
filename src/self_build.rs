@@ -637,13 +637,13 @@ pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError
     require_checked_vendor_inputs(&stage_root)?;
 
     let source_size_bytes = dir_size(&stage_root);
-    let source_size_mib = source_size_bytes / MEBIBYTE_BYTES;
-    let maximum_source_size_mib = MAX_SOURCE_BYTES / MEBIBYTE_BYTES;
     assert!(
         source_size_bytes <= MAX_SOURCE_BYTES,
-        "source tree {source_size_mib} MiB exceeds {maximum_source_size_mib} MiB limit",
+        "source tree {} MiB exceeds {} MiB limit",
+        source_size_bytes / MEBIBYTE_BYTES,
+        MAX_SOURCE_BYTES / MEBIBYTE_BYTES,
     );
-    eprintln!("  source tree: {source_size_mib} MiB");
+    eprintln!("  source tree: {} MiB", source_size_bytes / MEBIBYTE_BYTES);
 
     let fingerprint = tree_fingerprint(&stage_root)?;
     let store_name = staged_source_store_name_from_fingerprint(&fingerprint)?;
@@ -2897,6 +2897,7 @@ fn initialize_self_build(request: InitializeSelfBuildRequest<'_>) -> Result<Self
     let invoking_binary = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("crunch"));
     eprintln!("  invoking binary: {}", invoking_binary.display());
     let output_dir = absolutize_path(request.output_dir)?;
+    assert!(output_dir.is_absolute(), "self-build output directory must be absolute after normalization");
 
     let explicit_bwrap_source = resolve_explicit_bootstrap_bwrap_source(&output_dir, request.bootstrap_bwrap_path)?;
     let explicit_busybox_path = resolve_explicit_bootstrap_busybox_path(&output_dir, request.bootstrap_busybox_path)?;
@@ -3077,6 +3078,7 @@ pub fn validate_stagex_proof_eligibility(report: &SelfBuildReport) -> Result<(),
         }
     }
 
+    debug_assert!(failures.len() <= MAX_STAGEX_ELIGIBILITY_FAILURES);
     if failures.is_empty() { Ok(()) } else { Err(failures) }
 }
 

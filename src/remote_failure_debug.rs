@@ -1338,6 +1338,8 @@ fn cmd_remote_failure_gc(
 pub fn resolve_bundle_selector(state_dir: &Path, selector: &str) -> Result<PathBuf, crate::RunError> {
     let digest = selector.strip_prefix("remote-failure-debug:").unwrap_or(selector);
     if is_blake3_hex(digest) {
+        debug_assert_eq!(digest.len(), blake3::OUT_LEN.saturating_mul(2));
+        debug_assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
         let coordinator = state_dir.join(REMOTE_FAILURE_DEBUG_STORE_DIR).join(BUNDLES_DIR).join(digest);
         if coordinator.is_dir() {
             return Ok(coordinator);

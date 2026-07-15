@@ -794,7 +794,9 @@ fn hash_file(path: &Path) -> Result<(u64, String), RunError> {
     if !is_complete {
         return Err(RunError::Internal(format!("rebuild input changed while hashing: {}", path.display())));
     }
-    Ok((metadata.len(), hasher.finalize().to_hex().to_string()))
+    let digest_blake3 = hasher.finalize().to_hex().to_string();
+    debug_assert!(digest_blake3.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+    Ok((metadata.len(), digest_blake3))
 }
 
 fn copy_regular_file(source: &Path, destination: &Path) -> Result<(), RunError> {

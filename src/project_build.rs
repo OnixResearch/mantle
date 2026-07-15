@@ -216,6 +216,7 @@ else
 }
 
 fn render_attribute_target(root_path: &str, segments: &[String]) -> String {
+    assert!(!root_path.is_empty(), "project root path must not be empty");
     assert!(!segments.is_empty(), "selector must have at least one segment");
     if segments.len() == 1 {
         let name = &segments[0];
