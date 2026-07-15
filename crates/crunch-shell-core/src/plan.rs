@@ -9,6 +9,7 @@ use crate::HostEnv;
 use crate::ShellError;
 use crate::ShellSidecar;
 use crate::ShellWarning;
+use crate::limits::count_with_overflow_marker;
 
 const PROTECTED_VARS: &[&str] = &["HOME", "USER", "TERM", "LOGNAME", "DISPLAY", "LANG", "SHELL"];
 const MAX_PATH_ENTRIES: u32 = 4096;
@@ -89,7 +90,7 @@ fn compose_activation_path(
     if path_entries.is_empty() {
         return Err(ShellError::EmptyPath);
     }
-    let path_entry_count = u32_count(path_entries.len());
+    let path_entry_count = count_with_overflow_marker(path_entries.len(), MAX_PATH_ENTRIES);
     if path_entry_count > MAX_PATH_ENTRIES {
         return Err(ShellError::TooManyPathEntries {
             count: path_entry_count,
@@ -115,7 +116,7 @@ fn checked_insert_env(env: &mut BTreeMap<String, String>, key: String, value: St
     let is_new_key = !env.contains_key(&key);
     if is_new_key && env.len() >= usize_limit_from_u32(MAX_ENV_VARS) {
         return Err(ShellError::TooManyEnvVars {
-            count: u32_count(env.len()).saturating_add(1),
+            count: count_with_overflow_marker(env.len().saturating_add(1), MAX_ENV_VARS),
             limit: MAX_ENV_VARS,
         });
     }
@@ -136,10 +137,6 @@ fn usize_limit_from_u32(limit: u32) -> usize {
         Ok(limit_usize) => limit_usize,
         Err(_) => usize::MAX,
     }
-}
-
-fn u32_count(count: usize) -> u32 {
-    u32::try_from(count).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]

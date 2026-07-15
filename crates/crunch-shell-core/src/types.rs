@@ -8,6 +8,7 @@ use serde::Deserializer;
 use serde::Serialize;
 
 use crate::ShellError;
+use crate::limits::count_with_overflow_marker;
 
 const SUPPORTED_SIDECAR_VERSION: u32 = 1;
 const MAX_ENV_VARS: u32 = 4096;
@@ -53,7 +54,7 @@ fn validate_shell_sidecar(sidecar: &ShellSidecar) -> Result<(), ShellError> {
             version: sidecar.version,
         });
     }
-    let env_var_count = u32_count(sidecar.env.len());
+    let env_var_count = count_with_overflow_marker(sidecar.env.len(), MAX_ENV_VARS);
     if env_var_count > MAX_ENV_VARS {
         return Err(ShellError::TooManyEnvVars {
             count: env_var_count,
@@ -80,10 +81,6 @@ pub struct ActivationPlan {
     pub path_entries: Vec<String>,
     pub hook: Option<String>,
     pub warnings: Vec<ShellWarning>,
-}
-
-fn u32_count(count: usize) -> u32 {
-    u32::try_from(count).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@
 extern crate alloc;
 
 mod error;
+mod limits;
 mod plan;
 mod profile;
 mod types;

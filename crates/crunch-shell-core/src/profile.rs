@@ -7,6 +7,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::ShellSidecar;
+use crate::limits::count_with_overflow_marker;
 
 const SIDECAR_VERSION: u32 = 1;
 const MAX_PROFILE_NAME_BYTES: usize = 64;
@@ -16,7 +17,7 @@ const MAX_PROFILE_ENV_ENTRIES: u32 = 1024;
 const MAX_PROFILE_PATH_ENTRIES: u32 = 1024;
 const BYTES_PER_KIBIBYTE: usize = 1024;
 const MAX_PROFILE_HOOK_KIBIBYTES: usize = 16;
-const MAX_PROFILE_HOOK_BYTES: usize = MAX_PROFILE_HOOK_KIBIBYTES * BYTES_PER_KIBIBYTE;
+const MAX_PROFILE_HOOK_BYTES: usize = MAX_PROFILE_HOOK_KIBIBYTES.saturating_mul(BYTES_PER_KIBIBYTE);
 const CLAIM_SHELL_ACTIVATION: &str = "shell-activation";
 const DEFAULT_PROFILE_NAME: &str = "default";
 const DEV_PROFILE_NAME: &str = "dev";
@@ -68,6 +69,19 @@ pub struct ShellProfileDiagnostic {
     pub message: String,
 }
 
+struct ProfileNameValidation<'a> {
+    name: &'a str,
+    code: &'static str,
+}
+
+struct CountValidation<'a> {
+    count: usize,
+    limit: u32,
+    code: &'static str,
+    profile_name: &'a str,
+    label: &'static str,
+}
+
 pub fn plan_named_shell_profile(
     request: ShellProfileSelectionRequest,
 ) -> Result<ShellProfilePlan, Vec<ShellProfileDiagnostic>> {
@@ -82,13 +96,20 @@ pub fn plan_named_shell_profile(
         return Err(diagnostics);
     }
 
-    let selected_name = selected_profile.expect("validated profile selection must be present");
-    let profile = request
-        .profiles
-        .profiles
-        .iter()
-        .find(|profile| profile.name == selected_name)
-        .expect("selected profile exists after validation");
+    let Some(selected_name) = selected_profile else {
+        return Err(vec![diagnostic(
+            "profile-selection-failed",
+            None,
+            "shell profile selection produced no result without a diagnostic".to_string(),
+        )]);
+    };
+    let Some(profile) = request.profiles.profiles.iter().find(|profile| profile.name == selected_name) else {
+        return Err(vec![diagnostic(
+            "selected-profile-missing",
+            Some(selected_name.clone()),
+            format!("selected shell profile `{selected_name}` is not declared"),
+        )]);
+    };
     let sidecar = profile_to_sidecar(profile);
     Ok(ShellProfilePlan {
         selected_profile: selected_name,
@@ -102,8 +123,11 @@ pub fn plan_named_shell_profile(
 }
 
 fn validate_profile_set(profiles: &NamedShellProfiles) -> Vec<ShellProfileDiagnostic> {
-    let mut diagnostics = Vec::new();
-    let profile_count = u32_count(profiles.profiles.len());
+    let mut diagnostics = Vec::with_capacity(profiles.profiles.len());
+    assert!(diagnostics.is_empty(), "profile diagnostics must start empty");
+    assert!(MAX_SHELL_PROFILES > 0, "shell profile limit must be positive");
+
+    let profile_count = count_with_overflow_marker(profiles.profiles.len(), MAX_SHELL_PROFILES);
     if profile_count > MAX_SHELL_PROFILES {
         diagnostics.push(diagnostic(
             "too-many-profiles",
@@ -125,7 +149,13 @@ fn validate_profile_set(profiles: &NamedShellProfiles) -> Vec<ShellProfileDiagno
     }
 
     if let Some(default_profile) = &profiles.default_profile {
-        validate_profile_name(default_profile, "invalid-default-profile", &mut diagnostics);
+        validate_profile_name(
+            ProfileNameValidation {
+                name: default_profile,
+                code: "invalid-default-profile",
+            },
+            &mut diagnostics,
+        );
         if !profiles.profiles.iter().any(|profile| profile.name == *default_profile) {
             diagnostics.push(diagnostic(
                 "missing-default-profile",
@@ -138,30 +168,50 @@ fn validate_profile_set(profiles: &NamedShellProfiles) -> Vec<ShellProfileDiagno
 }
 
 fn validate_profile(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagnostic> {
-    let mut diagnostics = Vec::new();
-    validate_profile_name(&profile.name, "invalid-profile-name", &mut diagnostics);
-    validate_count(
-        profile.build_inputs.len(),
-        MAX_PROFILE_BUILD_INPUTS,
-        "too-many-build-inputs",
-        &profile.name,
-        "build inputs",
+    let diagnostic_reservation_count = profile
+        .build_inputs
+        .len()
+        .saturating_add(profile.env.len())
+        .saturating_add(profile.path_entries.len());
+    let mut diagnostics = Vec::with_capacity(diagnostic_reservation_count);
+    assert!(diagnostics.is_empty(), "profile diagnostics must start empty");
+    assert!(MAX_PROFILE_NAME_BYTES > 0, "profile name limit must be positive");
+
+    validate_profile_name(
+        ProfileNameValidation {
+            name: &profile.name,
+            code: "invalid-profile-name",
+        },
         &mut diagnostics,
     );
     validate_count(
-        profile.env.len(),
-        MAX_PROFILE_ENV_ENTRIES,
-        "too-many-env-entries",
-        &profile.name,
-        "environment entries",
+        CountValidation {
+            count: profile.build_inputs.len(),
+            limit: MAX_PROFILE_BUILD_INPUTS,
+            code: "too-many-build-inputs",
+            profile_name: &profile.name,
+            label: "build inputs",
+        },
         &mut diagnostics,
     );
     validate_count(
-        profile.path_entries.len(),
-        MAX_PROFILE_PATH_ENTRIES,
-        "too-many-path-entries",
-        &profile.name,
-        "PATH entries",
+        CountValidation {
+            count: profile.env.len(),
+            limit: MAX_PROFILE_ENV_ENTRIES,
+            code: "too-many-env-entries",
+            profile_name: &profile.name,
+            label: "environment entries",
+        },
+        &mut diagnostics,
+    );
+    validate_count(
+        CountValidation {
+            count: profile.path_entries.len(),
+            limit: MAX_PROFILE_PATH_ENTRIES,
+            code: "too-many-path-entries",
+            profile_name: &profile.name,
+            label: "PATH entries",
+        },
         &mut diagnostics,
     );
 
@@ -187,7 +237,11 @@ fn validate_profile(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagno
     diagnostics
 }
 
-fn validate_profile_name(name: &str, code: &'static str, diagnostics: &mut Vec<ShellProfileDiagnostic>) {
+fn validate_profile_name(validation: ProfileNameValidation<'_>, diagnostics: &mut Vec<ShellProfileDiagnostic>) {
+    let ProfileNameValidation { name, code } = validation;
+    assert!(!code.is_empty(), "profile-name diagnostic code must not be empty");
+    assert!(MAX_PROFILE_NAME_BYTES > 0, "profile name limit must be positive");
+
     if name.is_empty() {
         diagnostics.push(diagnostic(code, None, "shell profile name must not be empty".to_string()));
         return;
@@ -199,9 +253,10 @@ fn validate_profile_name(name: &str, code: &'static str, diagnostics: &mut Vec<S
             format!("shell profile name `{name}` exceeds {MAX_PROFILE_NAME_BYTES} bytes"),
         ));
     }
-    let first_valid = name.bytes().next().is_some_and(|byte| byte.is_ascii_alphanumeric() || byte == b'_');
-    let all_valid = name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'));
-    if !first_valid || !all_valid {
+    let is_first_byte_valid = name.bytes().next().is_some_and(|byte| byte.is_ascii_alphanumeric() || byte == b'_');
+    let is_every_byte_valid =
+        name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'));
+    if !is_first_byte_valid || !is_every_byte_valid {
         diagnostics.push(diagnostic(
             code,
             Some(name.to_string()),
@@ -210,27 +265,28 @@ fn validate_profile_name(name: &str, code: &'static str, diagnostics: &mut Vec<S
     }
 }
 
-fn validate_count(
-    count: usize,
-    limit: u32,
-    code: &'static str,
-    profile_name: &str,
-    label: &str,
-    diagnostics: &mut Vec<ShellProfileDiagnostic>,
-) {
-    let count_u32 = u32_count(count);
-    if count_u32 > limit {
+fn validate_count(validation: CountValidation<'_>, diagnostics: &mut Vec<ShellProfileDiagnostic>) {
+    assert!(validation.limit > 0, "profile collection limit must be positive");
+    assert!(!validation.code.is_empty(), "profile count diagnostic code must not be empty");
+
+    let count_u32 = count_with_overflow_marker(validation.count, validation.limit);
+    if count_u32 > validation.limit {
         diagnostics.push(diagnostic(
-            code,
-            Some(profile_name.to_string()),
-            format!("shell profile `{profile_name}` has too many {label}: {count_u32} > {limit}"),
+            validation.code,
+            Some(validation.profile_name.to_string()),
+            format!(
+                "shell profile `{}` has too many {}: {count_u32} > {}",
+                validation.profile_name, validation.label, validation.limit
+            ),
         ));
     }
 }
 
 fn validate_env_entries(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagnostic> {
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(profile.env.len());
     let mut seen = BTreeSet::new();
+    assert!(diagnostics.is_empty(), "environment diagnostics must start empty");
+    assert!(seen.is_empty(), "normalized environment keys must start empty");
     for entry in &profile.env {
         if entry.key.is_empty() {
             diagnostics.push(diagnostic(
@@ -253,7 +309,9 @@ fn validate_env_entries(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDi
 }
 
 fn validate_path_entries(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagnostic> {
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(profile.path_entries.len());
+    assert!(diagnostics.is_empty(), "path diagnostics must start empty");
+    assert!(MAX_PROFILE_PATH_ENTRIES > 0, "profile PATH entry limit must be positive");
     for entry in &profile.path_entries {
         if entry.is_empty() {
             diagnostics.push(diagnostic(
@@ -296,7 +354,7 @@ fn validate_hook(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagnosti
 }
 
 fn validate_requested_claims(claims: &[String]) -> Vec<ShellProfileDiagnostic> {
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(claims.len());
     for claim in claims {
         if claim != CLAIM_SHELL_ACTIVATION {
             diagnostics.push(diagnostic(
@@ -314,6 +372,9 @@ fn select_profile_name(
     requested_profile: Option<&str>,
     diagnostics: &mut Vec<ShellProfileDiagnostic>,
 ) -> Option<String> {
+    assert!(!DEV_PROFILE_NAME.is_empty(), "dev profile name must not be empty");
+    assert_ne!(DEV_PROFILE_NAME, DEFAULT_PROFILE_NAME, "implicit profile names must be distinct");
+
     if let Some(requested) = requested_profile {
         if profiles.profiles.iter().any(|profile| profile.name == requested) {
             return Some(requested.to_string());
@@ -365,10 +426,6 @@ fn diagnostic(code: &'static str, profile: Option<String>, message: String) -> S
     assert!(!code.is_empty(), "diagnostic code must not be empty");
     assert!(!message.is_empty(), "diagnostic message must not be empty");
     ShellProfileDiagnostic { code, profile, message }
-}
-
-fn u32_count(count: usize) -> u32 {
-    u32::try_from(count).unwrap_or(u32::MAX)
 }
 
 fn usize_limit_from_u32(limit: u32) -> usize {
