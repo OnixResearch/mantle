@@ -22,6 +22,7 @@ pub const OFFLINE_CARGO_IDENTITY_STORE_PATH: &str = "store-path";
 
 const MAX_SOURCE_CLOSURE_ENTRIES: usize = 32;
 const MAX_NAME_BYTES: usize = 128;
+const _: () = assert!(MAX_NAME_BYTES > 0, "offline Cargo names require a positive byte bound");
 const MAX_PATH_BYTES: usize = 4_096;
 const MAX_COMMAND_ARGS: usize = 16;
 const BLAKE3_HEX_BYTES: usize = 64;
@@ -308,16 +309,12 @@ fn validate_evidence_source_inputs(inputs: &[OfflineCargoEvidenceInput], blocker
         );
         validate_input_identity(input, blockers);
         if !roles_seen.insert(input.role.as_str()) {
-            blockers.push(blocker(
-                "duplicate-source-role",
-                &format!("source role `{}` appears more than once", input.role),
-            ));
+            blockers
+                .push(blocker("duplicate-source-role", format!("source role `{}` appears more than once", input.role)));
         }
         if !paths_seen.insert(input.path.as_str()) {
-            blockers.push(blocker(
-                "duplicate-source-path",
-                &format!("source path `{}` appears more than once", input.path),
-            ));
+            blockers
+                .push(blocker("duplicate-source-path", format!("source path `{}` appears more than once", input.path)));
         }
     }
     validate_required_roles(&roles_seen, blockers);
@@ -330,7 +327,7 @@ fn validate_required_roles(roles_seen: &BTreeSet<&str>, blockers: &mut Vec<RustO
         }
         blockers.push(blocker(
             "missing-source-material",
-            &format!("required source closure role `{required_role}` is missing"),
+            format!("required source closure role `{required_role}` is missing"),
         ));
     }
 }
@@ -356,7 +353,7 @@ fn validate_source_identity_digest(input: &OfflineCargoEvidenceInput, blockers: 
     };
     validate_source_digest(&source, blockers);
     if input.digest_blake3.is_none() {
-        blockers.push(blocker("missing-source-digest", &format!("source `{}` digest is required", input.role)));
+        blockers.push(blocker("missing-source-digest", format!("source `{}` digest is required", input.role)));
     }
 }
 
@@ -370,7 +367,7 @@ fn validate_identity_class(
     }
     blockers.push(blocker(
         "unexpected-source-identity-class",
-        &format!("source `{}` must use `{expected}` identity", input.role),
+        format!("source `{}` must use `{expected}` identity", input.role),
     ));
 }
 
@@ -439,7 +436,7 @@ fn require_command_arg(command: &OfflineCargoEvidenceCommand, arg: &str, blocker
     if command.args.iter().any(|candidate| candidate == arg) {
         return;
     }
-    blockers.push(blocker("missing-cargo-command-arg", &format!("offline Cargo command is missing `{arg}`")));
+    blockers.push(blocker("missing-cargo-command-arg", format!("offline Cargo command is missing `{arg}`")));
 }
 
 struct CommandPair<'a> {
@@ -502,10 +499,8 @@ fn validate_non_claims(non_claims: &[String], blockers: &mut Vec<RustOfflineCarg
         if present.contains(required) {
             continue;
         }
-        blockers.push(blocker(
-            "missing-offline-cargo-non-claim",
-            &format!("offline Cargo evidence is missing `{required}`"),
-        ));
+        blockers
+            .push(blocker("missing-offline-cargo-non-claim", format!("offline Cargo evidence is missing `{required}")));
     }
 }
 
@@ -558,7 +553,6 @@ fn validate_lockfile_digest(
     blockers: &mut Vec<RustOfflineCargoBlocker>,
 ) {
     debug_assert_eq!(BLAKE3_HEX_BYTES, blake3::OUT_LEN.saturating_mul(2));
-    debug_assert!(MAX_NAME_BYTES > 0);
     let Some(digest) = digest else {
         blockers.push(blocker(
             "missing-lockfile-digest",
@@ -629,12 +623,11 @@ fn validate_source_closure(sources: &[RustOfflineCargoSource], blockers: &mut Ve
         if !roles_seen.insert(source.role.as_str()) {
             blockers.push(blocker(
                 "duplicate-source-role",
-                &format!("source role `{}` appears more than once", source.role),
+                format!("source role `{}` appears more than once", source.role),
             ));
         }
         if !names_seen.insert(source.name.as_str()) {
-            blockers
-                .push(blocker("duplicate-source-name", &format!("source `{}` appears more than once", source.name)));
+            blockers.push(blocker("duplicate-source-name", format!("source `{}` appears more than once", source.name)));
         }
         validate_source_digest(source, blockers);
     }
@@ -645,21 +638,20 @@ fn validate_source_closure(sources: &[RustOfflineCargoSource], blockers: &mut Ve
         }
         blockers.push(blocker(
             "missing-source-material",
-            &format!("required source closure role `{required_role}` is missing"),
+            format!("required source closure role `{required_role}` is missing"),
         ));
     }
 }
 
 fn validate_source_digest(source: &RustOfflineCargoSource, blockers: &mut Vec<RustOfflineCargoBlocker>) {
     debug_assert_eq!(BLAKE3_HEX_BYTES, blake3::OUT_LEN.saturating_mul(2));
-    debug_assert!(MAX_NAME_BYTES > 0);
     let Some(digest) = source.digest_blake3.as_deref() else {
         return;
     };
     if !is_blake3_hex(digest) {
         blockers.push(blocker(
             "invalid-source-digest",
-            &format!("source `{}` digest must be lowercase BLAKE3 hex", source.name),
+            format!("source `{}` digest must be lowercase BLAKE3 hex", source.name),
         ));
         return;
     }
@@ -669,7 +661,7 @@ fn validate_source_digest(source: &RustOfflineCargoSource, blockers: &mut Vec<Ru
     if !is_blake3_hex(expected) {
         blockers.push(blocker(
             "invalid-expected-source-digest",
-            &format!("source `{}` expected digest must be lowercase BLAKE3 hex", source.name),
+            format!("source `{}` expected digest must be lowercase BLAKE3 hex", source.name),
         ));
         return;
     }
@@ -678,7 +670,7 @@ fn validate_source_digest(source: &RustOfflineCargoSource, blockers: &mut Vec<Ru
     }
     blockers.push(blocker(
         "stale-source-digest",
-        &format!("source `{}` digest differs from the recorded project expectation", source.name),
+        format!("source `{}` digest differs from the recorded project expectation", source.name),
     ));
 }
 

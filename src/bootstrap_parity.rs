@@ -1382,9 +1382,9 @@ fn validate_gcc40_arithmetic_identity(value: &serde_json::Value) -> Result<(), S
     Ok(())
 }
 
-fn validate_gcc40_arithmetic_smokes<'a>(
-    value: &'a serde_json::Value,
-) -> Result<Vec<&'a serde_json::Map<String, serde_json::Value>>, String> {
+fn validate_gcc40_arithmetic_smokes(
+    value: &serde_json::Value,
+) -> Result<Vec<&serde_json::Map<String, serde_json::Value>>, String> {
     let primary = value
         .get("smoke")
         .and_then(serde_json::Value::as_object)

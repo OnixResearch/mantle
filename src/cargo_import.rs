@@ -372,7 +372,7 @@ fn select_package<'a>(
         if matches.len() == 1 {
             return matches.first().copied();
         }
-        blockers.push(blocker("unknown-package", &format!("selected package `{name}` is not in the workspace")));
+        blockers.push(blocker("unknown-package", format!("selected package `{name}` is not in the workspace")));
         return None;
     }
     if facts.packages.len() == 1 {
@@ -396,7 +396,7 @@ fn select_binary<'a>(
         }
         blockers.push(blocker(
             "missing-selected-binary",
-            &format!("selected binary `{name}` is not declared by package `{}`", package.name),
+            format!("selected binary `{name}` is not declared by package `{}`", package.name),
         ));
         return None;
     }
@@ -469,7 +469,7 @@ fn validate_dependency_source(
         }
         CargoDependencySource::Unknown => blockers.push(blocker(
             "unsupported-dependency-source",
-            &format!("dependency `{}` has an unsupported source declaration", dependency.name),
+            format!("dependency `{}` has an unsupported source declaration", dependency.name),
         )),
     }
 }
@@ -495,22 +495,21 @@ fn validate_vendored_dependency(
     let lock_package = match unique_lock_package(&dependency.name, lock_packages) {
         Ok(lock_package) => lock_package,
         Err(class) => {
-            blockers
-                .push(blocker(class, &format!("dependency `{}` has no unique Cargo.lock package", dependency.name)));
+            blockers.push(blocker(class, format!("dependency `{}` has no unique Cargo.lock package", dependency.name)));
             return;
         }
     };
     if !dependency_source_matches_lock(dependency, lock_package) {
         blockers.push(blocker(
             "lock-source-mismatch",
-            &format!("dependency `{}` source does not match Cargo.lock", dependency.name),
+            format!("dependency `{}` source does not match Cargo.lock", dependency.name),
         ));
         return;
     }
     let Some(vendor_source) = vendor_source else {
         blockers.push(blocker(
             "missing-vendored-source",
-            &format!("dependency `{}` requires declared vendored source material", dependency.name),
+            format!("dependency `{}` requires declared vendored source material", dependency.name),
         ));
         return;
     };
@@ -522,14 +521,14 @@ fn validate_vendored_dependency(
     if matches.is_empty() {
         blockers.push(blocker(
             "missing-vendored-package",
-            &format!("dependency `{}` has no vendored package entry", dependency.name),
+            format!("dependency `{}` has no vendored package entry", dependency.name),
         ));
         return;
     }
     if matches.len() != 1 {
         blockers.push(blocker(
             "ambiguous-vendored-package",
-            &format!("dependency `{}` maps to multiple vendored package entries", dependency.name),
+            format!("dependency `{}` maps to multiple vendored package entries", dependency.name),
         ));
         return;
     }
@@ -537,13 +536,13 @@ fn validate_vendored_dependency(
     if vendored.checksum_status != "verified" {
         blockers.push(blocker(
             "stale-vendor-checksum",
-            &format!("dependency `{}` has unverified Cargo checksum metadata", dependency.name),
+            format!("dependency `{}` has unverified Cargo checksum metadata", dependency.name),
         ));
     }
     if lock_package.checksum.is_some() && vendored.checksum.is_none() {
         blockers.push(blocker(
             "missing-vendor-checksum",
-            &format!("dependency `{}` lockfile checksum is not represented in vendor metadata", dependency.name),
+            format!("dependency `{}` lockfile checksum is not represented in vendor metadata", dependency.name),
         ));
     }
 }
@@ -694,7 +693,7 @@ fn validate_file_conflicts(
             operation.action = "keep-equivalent".to_string();
             continue;
         }
-        blockers.push(blocker("existing-file-conflict", &format!("{} exists with different content", operation.path)));
+        blockers.push(blocker("existing-file-conflict", format!("{} exists with different content", operation.path)));
     }
 }
 
@@ -808,7 +807,7 @@ fn validate_name(validation: NameValidation<'_>, blockers: &mut Vec<CargoImportB
     }
     blockers.push(blocker(
         validation.blocker_class,
-        &format!("{} must be a non-empty derivation-compatible name", validation.label),
+        format!("{} must be a non-empty derivation-compatible name", validation.label),
     ));
 }
 
@@ -944,7 +943,7 @@ fn read_vendor_source_facts(
     if !vendor_root.is_dir() {
         blockers.push(blocker(
             "missing-vendor-directory",
-            &format!("declared Cargo vendor directory {} does not exist", vendor_root.display()),
+            format!("declared Cargo vendor directory {} does not exist", vendor_root.display()),
         ));
     } else {
         packages = read_vendor_packages(root, &vendor_root, lock_packages, &mut blockers)?;
@@ -986,14 +985,14 @@ fn read_vendor_replacement(root: &Path) -> Result<Option<(String, PathBuf, Vec<C
     let Some(replacement) = source_table.get(replacement_source).and_then(Value::as_table) else {
         blockers.push(blocker(
             "unsupported-source-replacement",
-            &format!("Cargo source replacement `{replacement_source}` has no table"),
+            format!("Cargo source replacement `{replacement_source}` has no table"),
         ));
         return Ok(Some((replacement_source.to_string(), root.join("vendor"), blockers)));
     };
     let Some(directory) = replacement.get(CARGO_DIRECTORY_FIELD).and_then(Value::as_str) else {
         blockers.push(blocker(
             "unsupported-source-replacement",
-            &format!("Cargo source replacement `{replacement_source}` is not a local directory source"),
+            format!("Cargo source replacement `{replacement_source}` is not a local directory source"),
         ));
         return Ok(Some((replacement_source.to_string(), root.join("vendor"), blockers)));
     };
