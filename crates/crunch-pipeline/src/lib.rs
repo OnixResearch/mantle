@@ -38,6 +38,7 @@ use crunch_build::RemoteFirstBuildService;
 pub use crunch_build::SEARCH_PATH_DIGEST_ALGORITHM;
 pub use crunch_build::SchedulingPolicy;
 use crunch_build::Worker;
+use crunch_build::WorkerResult;
 use crunch_eval::session::RootForceExecutionPolicy;
 use crunch_glue::ConversionCache;
 use crunch_glue::CrunchDerivation;
@@ -222,22 +223,66 @@ async fn build_linux(
     session: crunch_eval::session::EvaluationSession,
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
 ) -> Result<PipelineResult, Error> {
-    use snix_build::buildservice::BubblewrapBuildService;
     debug_assert!(!config.store_dir.is_empty());
     debug_assert!(config.max_jobs >= 1);
+
+    let (mut builder, workspace_evidence_sink) = create_pipeline_builder(config, store)?;
+
+    let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
+    let mut known_paths = DerivationRegistry::new(&config.store_dir);
+    let mut worker = Worker::with_scheduling_policy(config.max_jobs, config.scheduling_policy.clone())
+        .map_err(|error| Error::Build(format!("scheduler policy: {error}")))?;
+    let worker_run = worker.run_streaming(&mut builder, &mut known_paths, &mut rx);
+    let eval_stream = stream_roots_into_worker(
+        config.max_jobs,
+        &config.store_dir,
+        RootForceExecutionPolicy::PreferThreaded,
+        &session,
+        tx,
+    );
+    let (worker_run, eval_stream) = tokio::join!(worker_run, eval_stream);
+    let worker_result = match worker_run {
+        Ok(result) => result,
+        Err(err) => return Err(Error::Build(format!("{err}"))),
+    };
+    let eval_stream = eval_stream?;
+    let mut hermeticity_audit_events = hermeticity_audit_events;
+    hermeticity_audit_events.extend(builder.take_hermeticity_audit_events());
+    let pipeline_evidence = PipelineRunEvidence {
+        hermeticity_audit_events,
+        build_environment_rows: builder.take_build_environment_reports(),
+        network_policy_rows: builder.take_network_policy_reports(),
+        workspace_rows: workspace_evidence_sink.take(),
+        action_result_rows: builder.take_action_result_reports(),
+    };
+    Ok(finish_pipeline_result(
+        &config.store_dir,
+        config.hermeticity_mode,
+        worker_result,
+        eval_stream,
+        pipeline_evidence,
+    ))
+}
+
+#[cfg(target_os = "linux")]
+fn create_pipeline_builder(
+    config: &BuildConfig,
+    store: crunch_store::StoreHandle,
+) -> Result<(Builder<impl snix_build::buildservice::BuildService + use<>>, crunch_build::WorkspaceReportCollector), Error>
+{
+    use snix_build::buildservice::BubblewrapBuildService;
+    debug_assert!(!config.store_dir.is_empty(), "store prefix must not be empty");
+    debug_assert!(config.max_jobs >= 1, "builder requires at least one job");
 
     let blob_service = store.blob_service();
     let directory_service = store.directory_service();
     let workdir = std::env::temp_dir().join("crunch-builds");
-    std::fs::create_dir_all(&workdir).map_err(|e| Error::Internal(format!("create workdir: {e}")))?;
-
+    std::fs::create_dir_all(&workdir).map_err(|error| Error::Internal(format!("create workdir: {error}")))?;
     let fetch_service = FetchBuildService::new(blob_service.clone(), directory_service.clone())
         .with_source_overrides(config.source_fetch_overrides.clone());
 
-    // Wrap the sandbox service in RemoteFirstBuildService so remote
-    // dispatch (when configured) participates in the lazy scheduler:
-    // goal dedupe, waiter notification, -j bounds, local fallback,
-    // terminal-state propagation.
+    // Keep remote dispatch inside the lazy scheduler so dedupe, waiter
+    // notification, job bounds, fallback, and terminal propagation stay shared.
     // r[impl remote_builds.production_scheduler_realization]
     let profile = crunch_build::RealizerProfileFacts {
         name: "local-sandbox".to_string(),
@@ -255,9 +300,9 @@ async fn build_linux(
     let sandbox_service =
         RemoteFirstBuildService::new(remote_realizer, local_bwrap, RemoteBuildFallbackPolicy::OnRemoteFailure);
     let dispatch = DispatchBuildService::new(fetch_service, sandbox_service);
-    let workspace_reports = crunch_build::WorkspaceReportCollector::default();
+    let workspace_evidence_sink = empty_workspace_report_collector();
     let build_service =
-        crunch_build::StatefulWorkspaceBuildService::new(dispatch, store.state_dir(), workspace_reports.clone());
+        crunch_build::StatefulWorkspaceBuildService::new(dispatch, store.state_dir(), workspace_evidence_sink.clone());
     let mut builder = Builder::from_store(
         store,
         build_service,
@@ -268,55 +313,66 @@ async fn build_linux(
     );
     builder.set_hermeticity_mode(config.hermeticity_mode);
     builder.set_root_retention_source(config.root_retention_source);
+    Ok((builder, workspace_evidence_sink))
+}
 
-    let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
-    let mut known_paths = DerivationRegistry::new(&config.store_dir);
-    let mut worker = Worker::with_scheduling_policy(config.max_jobs, config.scheduling_policy.clone())
-        .map_err(|error| Error::Build(format!("scheduler policy: {error}")))?;
-    let worker_run = worker.run_streaming(&mut builder, &mut known_paths, &mut rx);
-    let eval_stream = stream_roots_into_worker(
-        config.max_jobs,
-        &config.store_dir,
-        RootForceExecutionPolicy::PreferThreaded,
-        &session,
-        tx,
+struct PipelineRunEvidence {
+    hermeticity_audit_events: Vec<HermeticityAuditEvent>,
+    build_environment_rows: Vec<BuildEnvironmentReport>,
+    network_policy_rows: Vec<BuildNetworkPolicyReport>,
+    workspace_rows: Vec<crunch_build::WorkspaceExecutionReport>,
+    action_result_rows: Vec<crunch_build::ActionResultRuntimeReport>,
+}
+
+fn empty_workspace_report_collector() -> crunch_build::WorkspaceReportCollector {
+    // The foreign type exposes no explicit constructor. Normalize its only
+    // public construction path to the empty state required at this boundary.
+    let construct_empty: fn() -> crunch_build::WorkspaceReportCollector = std::default::Default::default;
+    let collector = construct_empty();
+    debug_assert!(collector.take().is_empty(), "collector must start empty");
+    debug_assert!(collector.take().is_empty(), "collector must remain empty after draining");
+    collector
+}
+
+fn finish_pipeline_result(
+    store_dir: &str,
+    hermeticity_mode: HermeticityMode,
+    mut worker_result: WorkerResult,
+    eval_stream: EvalStreamResult,
+    evidence: PipelineRunEvidence,
+) -> PipelineResult {
+    debug_assert!(!store_dir.is_empty(), "store prefix must not be empty");
+    debug_assert!(
+        eval_stream.eval_failure.is_some() || !eval_stream.root_drv_paths.is_empty(),
+        "pipeline must finish with a converted root or labeled evaluation failure"
     );
-    let (worker_run, eval_stream) = tokio::join!(worker_run, eval_stream);
-    let mut worker_result = match worker_run {
-        Ok(result) => result,
-        Err(err) => return Err(Error::Build(format!("{err}"))),
-    };
-    let eval_stream = eval_stream?;
-    let mut hermeticity_audit_events = hermeticity_audit_events;
-    hermeticity_audit_events.extend(builder.take_hermeticity_audit_events());
-    let build_environment_reports = builder.take_build_environment_reports();
-    let network_policy_reports = builder.take_network_policy_reports();
-    let action_result_reports = builder.take_action_result_reports();
+
     if let Some(eval_failure) = &eval_stream.eval_failure {
         worker_result.failed.push(FailedGoal {
             drv_key: eval_failure_key(&eval_failure.label),
             error: eval_failure.error.clone(),
         });
     }
-    normalize_failed_goal_keys(&mut worker_result.failed, &config.store_dir);
-    let mut root_labels = build_root_labels(&eval_stream.root_drv_paths, &config.store_dir);
+    normalize_failed_goal_keys(&mut worker_result.failed, store_dir);
+    let mut root_labels = build_root_labels(&eval_stream.root_drv_paths, store_dir);
     if let Some(eval_failure) = &eval_stream.eval_failure {
         root_labels.insert(eval_failure_key(&eval_failure.label), eval_failure.label.clone());
     }
-    Ok(PipelineResult {
+
+    PipelineResult {
         root_labels,
         fod_mismatches: collect_fod_mismatches(&worker_result.failed),
         outcomes: worker_result.outcomes,
         failed: worker_result.failed,
-        hermeticity_mode: config.hermeticity_mode,
-        hermeticity_audit_events,
-        build_environment_reports,
-        network_policy_reports,
-        workspace_reports: workspace_reports.take(),
-        action_result_reports,
+        hermeticity_mode,
+        hermeticity_audit_events: evidence.hermeticity_audit_events,
+        build_environment_reports: evidence.build_environment_rows,
+        network_policy_reports: evidence.network_policy_rows,
+        workspace_reports: evidence.workspace_rows,
+        action_result_reports: evidence.action_result_rows,
         native_dynamic_plans: worker_result.native_dynamic_plans,
         priority_decisions: worker_result.priority_decisions,
-    })
+    }
 }
 
 fn map_store_audit_events(store_events: &[crunch_store::StoreAuditEvent]) -> Vec<HermeticityAuditEvent> {
@@ -502,6 +558,9 @@ fn build_preflight_failure(
     derivations: &[(String, CrunchDerivation)],
     error: String,
 ) -> Result<PipelineResult, Error> {
+    debug_assert!(!config.store_dir.is_empty(), "store prefix must not be empty");
+    debug_assert!(!derivations.is_empty(), "preflight failure must cover at least one root");
+    debug_assert!(!error.is_empty(), "preflight failure must retain its cause");
     let root_drv_paths = convert_root_drv_paths(derivations, &config.store_dir)?;
     let failed = root_drv_paths
         .iter()
