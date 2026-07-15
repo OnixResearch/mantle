@@ -2,7 +2,7 @@
 
 - Date: 2026-07-15
 - Question: Did the downstream OnixOS/ChaosControl path accept Mantle's exact private-kfunc cohort with bounded identities?
-- Decision: **partial downstream admission exists, but final authority is still blocked**. ChaosControl now has a pure `kernel-bundle/vm-compat-smoke` profile/receipt binding the exact Onix bundle identities and Mantle module/BPF byte identities. OnixOS now has a pure BPF runtime admission receipt binding that ChaosControl receipt, exact target facts, scoped abilities, loader identity, bounds, and non-claims. Neither downstream change is archive-ready: ChaosControl still lacks the dedicated KVM execution rail, and OnixOS still lacks target shell/generation/restart/rollback enforcement.
+- Decision: **partial downstream admission exists, but final authority is still blocked**. ChaosControl now has a pure `kernel-bundle/vm-compat-smoke` profile/receipt binding the exact Onix bundle identities and Mantle module/BPF byte identities, plus a local KVM-shell/structured-marker receipt path that still lacks the exact private-kfunc guest loader. OnixOS now has a pure BPF runtime admission receipt binding that ChaosControl receipt, exact target facts, scoped abilities, loader identity, bounds, and non-claims. Neither downstream change is archive-ready: ChaosControl still lacks exact selected KVM execution of the module/BPF loader, and OnixOS still lacks target shell/generation/restart/rollback enforcement.
 - Owner: Mantle records this as dependent evidence only; downstream repositories own acceptance and final authority.
 - Next action: wait for archived/accepted ChaosControl KVM and OnixOS runtime-adapter evidence before archiving this Mantle change.
 
@@ -11,6 +11,8 @@
 ```text
 chaoscontrol.kernel_bundle_vm_compat_smoke_profile = 216bd1a6c5461209f340a9c4f4d00aacf5c2312679bb9cb5808d329c619fc589
 chaoscontrol.kernel_bundle_vm_compat_smoke_receipt = fb37d05d6ee328b05d8f1bdc80ae0d622dcdef590f0dbf7e2721bb3993e76119
+chaoscontrol.kvm_marker_pass_receipt = ef38c2f41862b9a4c0cf3be09dd50290780004897b307278fc2f41c4380f9ee6
+chaoscontrol.kvm_blocked_input_receipt = c9798576d1425d456dd6a544c0e2b6d332347ee608e7771c7de0ae2c719cadab
 onixos.bpf_runtime_admission_receipt = 30e011f64315879f3bd666390229882d0e3311b6c22052d2da85461c60cac39a
 ```
 
@@ -32,7 +34,12 @@ ChaosControl:
 test kernel_bundle_validation::tests::exact_mantle_private_kfunc_profile_emits_scoped_receipt ... ok
 test kernel_bundle_validation::tests::stale_or_role_confused_inputs_fail_before_receipt ... ok
 test kernel_bundle_validation::tests::cleanup_and_non_claim_gaps_cannot_pass ... ok
+test kernel_bundle_validation::tests::raw_log_or_missing_cleanup_cannot_pass_kvm_rail ... ok
+test kernel_bundle_validation::tests::unavailable_kvm_is_blocked_not_passed ... ok
+test kernel_bundle_validation::tests::kvm_markers_emit_passed_rail_receipt ... ok
 ```
+
+ChaosControl local commit `95afb9d` (`Bind kernel-bundle receipts to KVM rail shell`) records this as a partial KVM-shell rail only. The marker-pass receipt is structured transcript classification, and the blocked-input receipt proves fail-closed unavailable-loader behavior; neither receipt is final KVM authority.
 
 OnixOS:
 
@@ -54,4 +61,4 @@ Focused Cairn tasks gate with the canonical generated policy passed during this 
 
 ## Non-claim boundary
 
-Mantle must not reinterpret these active-change pure receipts as final OnixOS target authority or ChaosControl deterministic VMM evidence. This change remains active until downstream owners accept and archive the runtime/KVM rails or provide an equivalent accepted receipt.
+Mantle must not reinterpret these active-change pure receipts or the ChaosControl marker-pass receipt as final OnixOS target authority or exact ChaosControl deterministic VMM evidence. This change remains active until downstream owners accept and archive the runtime/KVM rails or provide an equivalent accepted receipt.
