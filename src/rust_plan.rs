@@ -99,6 +99,13 @@ const RUSTC_EXTERN_ARG_PAIR_WIDTH: usize = 2;
 const NATIVE_FEATURE_RESOLUTION_MAX_STEPS: usize = 4096;
 const NATIVE_LOCK_REACHABILITY_MAX_STEPS: usize = 8192;
 const NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS: usize = 4096;
+const MAX_SOURCE_TREE_ENTRIES: usize = 1_000_000;
+const MAX_VENDOR_SOURCE_FILE_KIBIBYTES: usize = 1_048_576;
+const MAX_VENDOR_SOURCE_FILE_BYTES: usize = MAX_VENDOR_SOURCE_FILE_KIBIBYTES.saturating_mul(BYTES_PER_KIBIBYTE);
+const MAX_CFG_EVALUATION_STEPS: usize = 1024;
+const INITIAL_CFG_STACK_CAPACITY_ITEMS: usize = 8;
+const INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS: usize = 8;
+const MAX_RUST_OUTPUT_TREE_ENTRIES: usize = 1_000_000;
 const RUSTC_LINK_SEARCH_FLAG: &str = "-L";
 const RUSTC_DEPENDENCY_SEARCH_PREFIX: &str = "dependency=";
 const RUSTC_CAP_LINTS_FLAG: &str = "--cap-lints";
@@ -118,9 +125,11 @@ const RUSTC_METADATA_HEX_CHARS: usize = 16;
 const BLAKE3_HEX_CHARS: usize = 64;
 const CARGO_SHA256_HEX_CHARS: usize = BLAKE3_HEX_CHARS;
 const BYTES_PER_KIBIBYTE: usize = 1024;
-const CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES: usize = VENDOR_CHECKSUM_READ_BUFFER_KIBIBYTES * BYTES_PER_KIBIBYTE;
+const CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES: usize =
+    VENDOR_CHECKSUM_READ_BUFFER_KIBIBYTES.saturating_mul(BYTES_PER_KIBIBYTE);
 const RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES: usize = 16;
-const RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES: usize = RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES * BYTES_PER_KIBIBYTE;
+const RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES: usize =
+    RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES.saturating_mul(BYTES_PER_KIBIBYTE);
 const RUST_UNIT_REPLAY_EVIDENCE_MAX_BOUNDARY_ITEMS: u32 = 4096;
 const DETERMINISTIC_RELEASE_SOURCE_PREFIX: &str = "/mantle/release/source";
 const DETERMINISTIC_RELEASE_EXECUTION_PREFIX: &str = "/mantle/release/execution";
@@ -279,14 +288,65 @@ pub(crate) struct RustPlanInvocation {
     pub(crate) features: Vec<String>,
     pub(crate) all_features: bool,
     pub(crate) no_default_features: bool,
-    #[serde(default, skip_serializing_if = "is_false")]
+    #[serde(default = "serde_default_false", skip_serializing_if = "is_false")]
     pub(crate) deterministic_release_paths: bool,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default = "serde_default_empty_vec", skip_serializing_if = "Vec::is_empty")]
     pub(crate) path_remaps: Vec<RustPathRemap>,
+}
+
+fn insert_btree_entry_with_bound<K: Ord, V>(
+    entries: &mut BTreeMap<K, V>,
+    key: K,
+    value: V,
+    entry_bound: usize,
+) -> Option<V> {
+    debug_assert!(entries.len() <= entry_bound);
+    debug_assert!(entries.contains_key(&key) || entries.len() < entry_bound);
+    let previous = entries.insert(key, value);
+    debug_assert!(entries.len() <= entry_bound);
+    previous
 }
 
 fn is_false(value: &bool) -> bool {
     !*value
+}
+
+fn serde_default_false() -> bool {
+    false
+}
+
+fn serde_default_none<T>() -> Option<T> {
+    None
+}
+
+fn serde_default_empty_vec<T>() -> Vec<T> {
+    Vec::new()
+}
+
+fn serde_default_empty_btree_map<K, V>() -> BTreeMap<K, V> {
+    BTreeMap::new()
+}
+
+fn serde_default_native_manifest_inherited_string() -> NativeManifestInheritedString {
+    NativeManifestInheritedString {
+        value: None,
+        workspace: false,
+    }
+}
+
+fn serde_default_native_workspace_package() -> NativeWorkspacePackage {
+    NativeWorkspacePackage {
+        version: None,
+        edition: None,
+        authors: None,
+        description: None,
+        homepage: None,
+        license: None,
+        license_file: None,
+        readme: None,
+        repository: None,
+        rust_version: None,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -640,7 +700,7 @@ pub(crate) struct RustUnitDerivationSummary {
 pub(crate) struct RustDependencyArtifact {
     pub(crate) package_id: String,
     pub(crate) name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) producer_unit_id: Option<String>,
     pub(crate) artifact: String,
 }
@@ -650,7 +710,7 @@ pub(crate) struct RustHostArtifact {
     pub(crate) package_id: String,
     pub(crate) target_name: String,
     pub(crate) target_kind: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) producer_unit_id: Option<String>,
     pub(crate) artifact: String,
     pub(crate) metadata_digest_blake3: Option<String>,
@@ -660,7 +720,7 @@ pub(crate) struct RustHostArtifact {
 pub(crate) struct BuildScriptMetadataDependency {
     pub(crate) package_id: String,
     pub(crate) links: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) producer_unit_id: Option<String>,
 }
 
@@ -765,9 +825,9 @@ pub(crate) struct RustCompilerPolicyExecutionReceipt {
     pub(crate) invocation_status: String,
     pub(crate) compliance_claim: String,
     pub(crate) non_claims: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) standards_gate: Option<RustCompilerPolicyStandardsGateReceipt>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) waiver_summary: Option<RustCompilerPolicyWaiverSummary>,
 }
 
@@ -777,15 +837,15 @@ pub(crate) struct RustCompilerPolicyIdentity {
     pub(crate) provider: String,
     pub(crate) profile: String,
     pub(crate) adapter_kind: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) provider_manifest_digest_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) driver_digest_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) lint_library_digest_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) config_digest_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) standards_policy_digest_blake3: Option<String>,
     pub(crate) adapter_executable: String,
     pub(crate) adapter_environment_digest_blake3: String,
@@ -796,7 +856,7 @@ pub(crate) struct RustCompilerPolicyStandardsGateReceipt {
     pub(crate) scope: String,
     pub(crate) policy_digest_blake3: String,
     pub(crate) status: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) waiver_summary: Option<RustCompilerPolicyWaiverSummary>,
 }
 
@@ -816,19 +876,19 @@ struct RustCompilerPolicyProviderManifest {
     driver: RustCompilerPolicyManifestArtifact,
     lint_library: RustCompilerPolicyManifestArtifact,
     config: RustCompilerPolicyManifestArtifact,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     standards_policy: Option<RustCompilerPolicyManifestArtifact>,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_btree_map")]
     required_environment: BTreeMap<String, String>,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_vec")]
     claims: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_vec")]
     non_claims: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct RustCompilerPolicyManifestRustcIdentity {
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     executable_blake3: Option<String>,
     version_verbose: String,
 }
@@ -849,9 +909,9 @@ struct RustCompilerPolicyInvocation {
 
 #[derive(Debug, Clone, Deserialize)]
 struct RustCompilerPolicyAdapterReport {
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     waiver_summary: Option<RustCompilerPolicyWaiverSummary>,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     standards_gate: Option<RustCompilerPolicyStandardsGateReceipt>,
 }
 
@@ -887,12 +947,12 @@ pub(crate) struct RustUnitExecutionReceipt {
     pub(crate) dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     pub(crate) host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     pub(crate) output_artifact_digests: Vec<RustExecutionArtifactDigest>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
     pub(crate) blocker: Option<RustUnitExecutionBlocker>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) diagnostic_context: Option<RustUnitDiagnosticContext>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) replay_evidence: Option<RustUnitReplayEvidence>,
     pub(crate) receipt_hash: String,
 }
@@ -1034,7 +1094,7 @@ pub(crate) struct BuildScriptMetadataRunReceipt {
     pub(crate) out_dir_artifact_digests: Vec<RustExecutionArtifactDigest>,
     pub(crate) stdout_digest_blake3: String,
     pub(crate) metadata_digest_blake3: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) selected_c_compiler: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
     pub(crate) blocker: Option<RustUnitExecutionBlocker>,
 }
@@ -1161,9 +1221,9 @@ struct CargoPackage {
     version: String,
     source: Option<String>,
     manifest_path: String,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_vec")]
     targets: Vec<CargoTarget>,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_btree_map")]
     features: BTreeMap<String, Vec<String>>,
 }
 
@@ -1191,8 +1251,8 @@ impl<'de> Deserialize<'de> for NativeManifestInheritedString {
             });
         }
         if let Some(table) = value.as_table() {
-            let workspace = table.get("workspace").and_then(toml::Value::as_bool).unwrap_or(false);
-            if workspace && table.len() == 1 {
+            let is_workspace_inherited = table.get("workspace").and_then(toml::Value::as_bool).unwrap_or(false);
+            if is_workspace_inherited && table.len() == 1 {
                 return Ok(Self {
                     value: None,
                     workspace: true,
@@ -1207,21 +1267,21 @@ impl<'de> Deserialize<'de> for NativeManifestInheritedString {
 struct NativeWorkspacePackage {
     version: Option<String>,
     edition: Option<String>,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     authors: Option<toml::Value>,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     description: Option<toml::Value>,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     homepage: Option<toml::Value>,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     license: Option<toml::Value>,
-    #[serde(rename = "license-file", default)]
+    #[serde(rename = "license-file", default = "serde_default_none")]
     license_file: Option<toml::Value>,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     readme: Option<toml::Value>,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     repository: Option<toml::Value>,
-    #[serde(rename = "rust-version", default)]
+    #[serde(rename = "rust-version", default = "serde_default_none")]
     rust_version: Option<toml::Value>,
 }
 
@@ -1229,26 +1289,26 @@ struct NativeWorkspacePackage {
 struct NativeManifestPackage {
     name: String,
     version: NativeManifestInheritedString,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     authors: Option<toml::Value>,
-    #[serde(default)]
+    #[serde(default = "serde_default_native_manifest_inherited_string")]
     edition: NativeManifestInheritedString,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     build: Option<toml::Value>,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     description: Option<toml::Value>,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     homepage: Option<toml::Value>,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     license: Option<toml::Value>,
-    #[serde(rename = "license-file", default)]
+    #[serde(rename = "license-file", default = "serde_default_none")]
     license_file: Option<toml::Value>,
     links: Option<String>,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     readme: Option<toml::Value>,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     repository: Option<toml::Value>,
-    #[serde(rename = "rust-version", default)]
+    #[serde(rename = "rust-version", default = "serde_default_none")]
     rust_version: Option<toml::Value>,
 }
 
@@ -1256,7 +1316,7 @@ struct NativeManifestPackage {
 struct NativeManifestLib {
     name: Option<String>,
     path: Option<String>,
-    #[serde(rename = "proc-macro", alias = "proc_macro", default)]
+    #[serde(rename = "proc-macro", alias = "proc_macro", default = "serde_default_false")]
     proc_macro: bool,
 }
 
@@ -1270,23 +1330,23 @@ struct NativeManifestBin {
 struct NativeManifestTest {
     name: Option<String>,
     path: Option<String>,
-    #[serde(default)]
+    #[serde(default = "serde_default_false")]
     harness: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
 struct NativeManifestWorkspace {
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_vec")]
     members: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_btree_map")]
     dependencies: BTreeMap<String, toml::Value>,
-    #[serde(default)]
+    #[serde(default = "serde_default_native_workspace_package")]
     package: NativeWorkspacePackage,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
 struct NativeManifestTarget {
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_btree_map")]
     dependencies: BTreeMap<String, toml::Value>,
 }
 
@@ -1294,24 +1354,24 @@ struct NativeManifestTarget {
 struct NativeManifest {
     package: Option<NativeManifestPackage>,
     workspace: Option<NativeManifestWorkspace>,
-    #[serde(default)]
+    #[serde(default = "serde_default_none")]
     build: Option<toml::Value>,
     lib: Option<NativeManifestLib>,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_vec")]
     bin: Vec<NativeManifestBin>,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_vec")]
     test: Vec<NativeManifestTest>,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_btree_map")]
     features: BTreeMap<String, Vec<String>>,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_btree_map")]
     dependencies: BTreeMap<String, toml::Value>,
-    #[serde(rename = "dev-dependencies", default)]
+    #[serde(rename = "dev-dependencies", default = "serde_default_empty_btree_map")]
     dev_dependencies: BTreeMap<String, toml::Value>,
-    #[serde(rename = "build-dependencies", default)]
+    #[serde(rename = "build-dependencies", default = "serde_default_empty_btree_map")]
     build_dependencies: BTreeMap<String, toml::Value>,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_btree_map")]
     patch: BTreeMap<String, BTreeMap<String, toml::Value>>,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_btree_map")]
     target: BTreeMap<String, NativeManifestTarget>,
 }
 
@@ -1348,7 +1408,7 @@ struct NativeLockDependencyFact {
 
 #[derive(Debug, Deserialize)]
 struct CargoLockfile {
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_vec")]
     package: Vec<CargoLockPackageRecord>,
 }
 
@@ -1358,7 +1418,7 @@ struct CargoLockPackageRecord {
     version: String,
     source: Option<String>,
     checksum: Option<String>,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_vec")]
     dependencies: Vec<String>,
 }
 
@@ -1539,10 +1599,130 @@ fn rust_plan_non_claims(no_cargo_oracle: bool) -> Vec<String> {
     non_claims
 }
 
+struct NativePlanningLayers {
+    package_targets: NativePackageTargetPlanningSummary,
+    units: NativeUnitGraphPlanningSummary,
+    host_units: NativeHostUnitGraphPlanningSummary,
+    derivations: UnitDerivationGraphSummary,
+}
+
+struct NativePlanningInputs<'a> {
+    options: &'a RustPlanOptions,
+    unit_graph: &'a Value,
+    packages: &'a [CargoPackage],
+    workspace_members: &'a [String],
+    source_closure: &'a SourceClosureSummary,
+    registry_sources: &'a NativeRegistrySourcePlanningSummary,
+    git_sources: &'a NativeGitSourcePlanningSummary,
+}
+
+fn summarize_native_planning_layers(inputs: NativePlanningInputs<'_>) -> Result<NativePlanningLayers, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
+    let package_targets = summarize_native_package_target_planning_from_inputs(NativePackagePlanningInputs {
+        root: &inputs.options.root,
+        options: inputs.options,
+        unit_graph: inputs.unit_graph,
+        cargo_packages: inputs.packages,
+        workspace_members: inputs.workspace_members,
+        source_closure: inputs.source_closure,
+        registry_sources: inputs.registry_sources,
+        git_sources: inputs.git_sources,
+    })?;
+    let units = summarize_native_unit_graph_planning(
+        inputs.unit_graph,
+        inputs.source_closure,
+        &package_targets,
+        inputs.options,
+    )?;
+    let host_units = summarize_native_host_unit_graph_planning_from_inputs(NativeHostPlanningInputs {
+        unit_graph: inputs.unit_graph,
+        source_closure: inputs.source_closure,
+        registry_sources: inputs.registry_sources,
+        package_planning: &package_targets,
+        unit_planning: &units,
+        options: inputs.options,
+    })?;
+    let derivations = summarize_unit_derivation_graph_with_native(
+        inputs.unit_graph,
+        inputs.source_closure,
+        inputs.options,
+        Some(&units),
+        Some(&host_units),
+    )?;
+    Ok(NativePlanningLayers {
+        package_targets,
+        units,
+        host_units,
+        derivations,
+    })
+}
+
+fn rust_plan_invocation(options: &RustPlanOptions) -> RustPlanInvocation {
+    RustPlanInvocation {
+        profile: options.profile.clone(),
+        targets: sorted_strings(options.targets.clone()),
+        features: sorted_strings(options.features.clone()),
+        all_features: options.all_features,
+        no_default_features: options.no_default_features,
+        deterministic_release_paths: options.deterministic_release_paths,
+        path_remaps: options.path_remaps.clone(),
+    }
+}
+
+struct RustPlanReceiptInputs {
+    cargo_mode: RustPlanCargoModeSummary,
+    workspace_root: String,
+    cargo_version: String,
+    rustc_version_verbose: String,
+    lockfile: LockfileIdentity,
+    cargo_packages: Vec<CargoPackage>,
+    workspace_members: Vec<String>,
+    source_closure: SourceClosureSummary,
+    registry_sources: NativeRegistrySourcePlanningSummary,
+    git_sources: NativeGitSourcePlanningSummary,
+    native_layers: NativePlanningLayers,
+    unit_graph: Value,
+}
+
+fn build_rust_plan_receipt(
+    options: &RustPlanOptions,
+    inputs: RustPlanReceiptInputs,
+) -> Result<RustPlanReceipt, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!inputs.workspace_root.is_empty());
+    let package_count = inputs.cargo_packages.len();
+    let packages = summarize_packages(inputs.cargo_packages, &inputs.workspace_members);
+    let mut receipt = RustPlanReceipt {
+        schema_version: RECEIPT_SCHEMA_VERSION,
+        cargo_mode: inputs.cargo_mode,
+        workspace_root: inputs.workspace_root,
+        cargo_version: inputs.cargo_version,
+        rustc_version_verbose: inputs.rustc_version_verbose,
+        lockfile: inputs.lockfile,
+        invocation: rust_plan_invocation(options),
+        package_count,
+        packages,
+        source_closure: inputs.source_closure,
+        native_registry_source_planning: inputs.registry_sources,
+        native_git_source_planning: inputs.git_sources,
+        native_package_target_planning: inputs.native_layers.package_targets,
+        native_unit_graph_planning: inputs.native_layers.units,
+        native_host_unit_graph_planning: inputs.native_layers.host_units,
+        unit_graph: summarize_unit_graph(inputs.unit_graph)?,
+        unit_derivation_graph: inputs.native_layers.derivations,
+        receipt_hash: String::new(),
+    };
+    receipt.receipt_hash = receipt_hash(&receipt)?;
+    Ok(receipt)
+}
+
 fn capture_rust_plan_with_oracle(
     options: &RustPlanOptions,
     oracle: &impl CargoOracle,
 ) -> Result<RustPlanReceipt, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     validate_options(options)?;
 
     let cargo_version = run_checked_text(oracle.run_tool_version(&options.cargo, &["--version"]), "cargo --version")?;
@@ -1565,72 +1745,50 @@ fn capture_rust_plan_with_oracle(
         summarize_native_registry_source_planning(&options.root, &metadata.packages, &lock_packages, &lockfile)?;
     let native_git_source_planning =
         summarize_native_git_source_planning(&metadata.packages, &lock_packages, &lockfile, &source_closure)?;
-    let native_package_target_planning = summarize_native_package_target_planning(
-        &options.root,
+    let native_layers = summarize_native_planning_layers(NativePlanningInputs {
         options,
-        &unit_graph_value,
-        &metadata.packages,
-        &metadata.workspace_members,
-        &source_closure,
-        &native_registry_source_planning,
-        &native_git_source_planning,
-    )?;
-    let native_unit_graph_planning = summarize_native_unit_graph_planning(
-        &unit_graph_value,
-        &source_closure,
-        &native_package_target_planning,
-        options,
-    )?;
-    let native_host_unit_graph_planning = summarize_native_host_unit_graph_planning(
-        &unit_graph_value,
-        &source_closure,
-        &native_registry_source_planning,
-        &native_package_target_planning,
-        &native_unit_graph_planning,
-        options,
-    )?;
-    let unit_derivation_graph = summarize_unit_derivation_graph_with_native(
-        &unit_graph_value,
-        &source_closure,
-        options,
-        Some(&native_unit_graph_planning),
-        Some(&native_host_unit_graph_planning),
-    )?;
-    let packages = summarize_packages(metadata.packages.clone(), &metadata.workspace_members);
-
-    let mut receipt = RustPlanReceipt {
-        schema_version: RECEIPT_SCHEMA_VERSION,
+        unit_graph: &unit_graph_value,
+        packages: &metadata.packages,
+        workspace_members: &metadata.workspace_members,
+        source_closure: &source_closure,
+        registry_sources: &native_registry_source_planning,
+        git_sources: &native_git_source_planning,
+    })?;
+    build_rust_plan_receipt(options, RustPlanReceiptInputs {
         cargo_mode: rust_plan_cargo_mode(false, Vec::new()),
         workspace_root: normalize_path_string(Path::new(&metadata.workspace_root)),
         cargo_version: cargo_version.trim().to_string(),
         rustc_version_verbose: rustc_version_verbose.trim().to_string(),
         lockfile,
-        invocation: RustPlanInvocation {
-            profile: options.profile.clone(),
-            targets: sorted_strings(options.targets.clone()),
-            features: sorted_strings(options.features.clone()),
-            all_features: options.all_features,
-            no_default_features: options.no_default_features,
-            deterministic_release_paths: options.deterministic_release_paths,
-            path_remaps: options.path_remaps.clone(),
-        },
-        package_count: metadata.packages.len(),
-        packages,
+        cargo_packages: metadata.packages,
+        workspace_members: metadata.workspace_members,
         source_closure,
-        native_registry_source_planning,
-        native_git_source_planning,
-        native_package_target_planning,
-        native_unit_graph_planning,
-        native_host_unit_graph_planning,
-        unit_graph: summarize_unit_graph(unit_graph_value)?,
-        unit_derivation_graph,
-        receipt_hash: String::new(),
-    };
-    receipt.receipt_hash = receipt_hash(&receipt)?;
-    Ok(receipt)
+        registry_sources: native_registry_source_planning,
+        git_sources: native_git_source_planning,
+        native_layers,
+        unit_graph: unit_graph_value,
+    })
+}
+
+fn cargo_free_planning_blockers(layers: &NativePlanningLayers) -> Vec<String> {
+    let readiness = [
+        (layers.package_targets.ready, "native-package-target-planning-blocked"),
+        (layers.units.ready, "native-unit-graph-planning-blocked"),
+        (layers.host_units.ready, "native-host-unit-graph-planning-blocked"),
+        (layers.derivations.ready, "unit-derivation-graph-blocked"),
+    ];
+    let mut blockers = readiness
+        .into_iter()
+        .filter_map(|(is_ready, blocker)| (!is_ready).then(|| blocker.to_string()))
+        .collect::<Vec<_>>();
+    blockers.sort();
+    blockers.dedup();
+    blockers
 }
 
 fn capture_rust_plan_without_cargo(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     validate_options(options)?;
 
     let rustc_version_verbose =
@@ -1661,84 +1819,30 @@ fn capture_rust_plan_without_cargo(options: &RustPlanOptions) -> Result<RustPlan
     let native_git_source_planning =
         summarize_native_git_source_planning(&native_cargo_packages, &lock_packages, &lockfile, &source_closure)?;
     let unit_graph_value = empty_native_unit_graph_value();
-    let native_package_target_planning = summarize_native_package_target_planning(
-        &options.root,
+    let native_layers = summarize_native_planning_layers(NativePlanningInputs {
         options,
-        &unit_graph_value,
-        &native_cargo_packages,
-        &workspace_members,
-        &source_closure,
-        &native_registry_source_planning,
-        &native_git_source_planning,
-    )?;
-    let native_unit_graph_planning = summarize_native_unit_graph_planning(
-        &unit_graph_value,
-        &source_closure,
-        &native_package_target_planning,
-        options,
-    )?;
-    let native_host_unit_graph_planning = summarize_native_host_unit_graph_planning(
-        &unit_graph_value,
-        &source_closure,
-        &native_registry_source_planning,
-        &native_package_target_planning,
-        &native_unit_graph_planning,
-        options,
-    )?;
-    let unit_derivation_graph = summarize_unit_derivation_graph_with_native(
-        &unit_graph_value,
-        &source_closure,
-        options,
-        Some(&native_unit_graph_planning),
-        Some(&native_host_unit_graph_planning),
-    )?;
-    let packages = summarize_packages(native_cargo_packages.clone(), &workspace_members);
-    let mut blockers = Vec::new();
-    if !native_package_target_planning.ready {
-        blockers.push("native-package-target-planning-blocked".to_string());
-    }
-    if !native_unit_graph_planning.ready {
-        blockers.push("native-unit-graph-planning-blocked".to_string());
-    }
-    if !native_host_unit_graph_planning.ready {
-        blockers.push("native-host-unit-graph-planning-blocked".to_string());
-    }
-    if !unit_derivation_graph.ready {
-        blockers.push("unit-derivation-graph-blocked".to_string());
-    }
-    blockers.sort();
-    blockers.dedup();
-
-    let mut receipt = RustPlanReceipt {
-        schema_version: RECEIPT_SCHEMA_VERSION,
+        unit_graph: &unit_graph_value,
+        packages: &native_cargo_packages,
+        workspace_members: &workspace_members,
+        source_closure: &source_closure,
+        registry_sources: &native_registry_source_planning,
+        git_sources: &native_git_source_planning,
+    })?;
+    let blockers = cargo_free_planning_blockers(&native_layers);
+    build_rust_plan_receipt(options, RustPlanReceiptInputs {
         cargo_mode: rust_plan_cargo_mode(true, blockers),
         workspace_root: normalize_path_string(&options.root),
         cargo_version: "cargo-free:no-cargo-oracle".to_string(),
         rustc_version_verbose: rustc_version_verbose.trim().to_string(),
         lockfile,
-        invocation: RustPlanInvocation {
-            profile: options.profile.clone(),
-            targets: sorted_strings(options.targets.clone()),
-            features: sorted_strings(options.features.clone()),
-            all_features: options.all_features,
-            no_default_features: options.no_default_features,
-            deterministic_release_paths: options.deterministic_release_paths,
-            path_remaps: options.path_remaps.clone(),
-        },
-        package_count: native_cargo_packages.len(),
-        packages,
+        cargo_packages: native_cargo_packages,
+        workspace_members,
         source_closure,
-        native_registry_source_planning,
-        native_git_source_planning,
-        native_package_target_planning,
-        native_unit_graph_planning,
-        native_host_unit_graph_planning,
-        unit_graph: summarize_unit_graph(unit_graph_value)?,
-        unit_derivation_graph,
-        receipt_hash: String::new(),
-    };
-    receipt.receipt_hash = receipt_hash(&receipt)?;
-    Ok(receipt)
+        registry_sources: native_registry_source_planning,
+        git_sources: native_git_source_planning,
+        native_layers,
+        unit_graph: unit_graph_value,
+    })
 }
 
 pub(crate) fn print_rust_plan_receipt(receipt: &RustPlanReceipt, json_mode: bool) -> Result<(), RunError> {
@@ -1873,8 +1977,10 @@ pub(crate) fn default_profile() -> String {
 }
 
 fn native_path_cargo_packages(root: &Path, options: &RustPlanOptions) -> Result<Vec<CargoPackage>, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     const MAX_NATIVE_PATH_PACKAGES: usize = 4096;
-    let mut blockers = Vec::new();
+    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut queued = native_workspace_manifest_paths(root, &mut blockers).into_iter().collect::<VecDeque<_>>();
     if !blockers.is_empty() {
         let messages = blockers
@@ -1885,7 +1991,7 @@ fn native_path_cargo_packages(root: &Path, options: &RustPlanOptions) -> Result<
         return Err(RunError::Internal(format!("native Cargo-free manifest discovery failed: {messages}")));
     }
     let mut visited = BTreeSet::new();
-    let mut packages = Vec::new();
+    let mut packages = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     while let Some(manifest_path) = queued.pop_front() {
         let normalized_manifest = normalize_path_string(&manifest_path);
         if !visited.insert(normalized_manifest) {
@@ -1915,7 +2021,11 @@ fn native_reachable_lock_source_cargo_packages(
     let mut packages = native_lock_source_cargo_packages(root, lock_packages)
         .into_iter()
         .filter(|package| {
-            reachable.contains(&lock_package_key(&package.name, &package.version, package.source.as_deref()))
+            reachable.contains(&lock_package_key(LockPackageKeyInputs {
+                name: &package.name,
+                version: &package.version,
+                source: package.source.as_deref(),
+            }))
         })
         .collect::<Vec<_>>();
     packages.sort_by(|left, right| left.id.cmp(&right.id));
@@ -1927,15 +2037,30 @@ fn reachable_lock_package_keys(
     facts: &NativeLockfileFacts,
     root_packages: &[CargoPackage],
 ) -> BTreeSet<(String, String, Option<String>)> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let package_by_key = facts
         .packages
         .iter()
-        .map(|package| (lock_package_key(&package.name, &package.version, package.source.as_deref()), package))
+        .map(|package| {
+            (
+                lock_package_key(LockPackageKeyInputs {
+                    name: &package.name,
+                    version: &package.version,
+                    source: package.source.as_deref(),
+                }),
+                package,
+            )
+        })
         .collect::<BTreeMap<_, _>>();
     let mut reachable = BTreeSet::new();
-    let mut queue = Vec::new();
+    let mut queue = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for package in root_packages {
-        let key = lock_package_key(&package.name, &package.version, package.source.as_deref());
+        let key = lock_package_key(LockPackageKeyInputs {
+            name: &package.name,
+            version: &package.version,
+            source: package.source.as_deref(),
+        });
         if package_by_key.contains_key(&key) && reachable.insert(key.clone()) {
             queue.push(key);
         }
@@ -1971,19 +2096,33 @@ fn lock_dependency_matching_keys(
         .filter(|package| package.name == dependency.name)
         .filter(|package| dependency.version.as_ref().is_none_or(|version| package.version == *version))
         .filter(|package| dependency.source.as_ref().is_none_or(|source| package.source.as_ref() == Some(source)))
-        .map(|package| lock_package_key(&package.name, &package.version, package.source.as_deref()))
+        .map(|package| {
+            lock_package_key(LockPackageKeyInputs {
+                name: &package.name,
+                version: &package.version,
+                source: package.source.as_deref(),
+            })
+        })
         .collect::<Vec<_>>();
     keys.sort();
     keys.dedup();
     keys
 }
 
-fn lock_package_key(name: &str, version: &str, source: Option<&str>) -> (String, String, Option<String>) {
-    (name.to_string(), version.to_string(), source.map(ToString::to_string))
+struct LockPackageKeyInputs<'a> {
+    name: &'a str,
+    version: &'a str,
+    source: Option<&'a str>,
+}
+
+fn lock_package_key(inputs: LockPackageKeyInputs<'_>) -> (String, String, Option<String>) {
+    (inputs.name.to_string(), inputs.version.to_string(), inputs.source.map(ToString::to_string))
 }
 
 fn native_lock_source_cargo_packages(root: &Path, lock_packages: &[LockPackage]) -> Vec<CargoPackage> {
-    let mut vendor_blockers = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut vendor_blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let vendor_roots = declared_vendor_roots(root, &mut vendor_blockers);
     let mut packages = lock_packages
         .iter()
@@ -1995,16 +2134,26 @@ fn native_lock_source_cargo_packages(root: &Path, lock_packages: &[LockPackage])
 }
 
 fn native_lock_source_cargo_package(vendor_roots: &[PathBuf], package: &LockPackage) -> Option<CargoPackage> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let source = package.source.as_ref()?;
     let kind = source_kind(Some(source));
     if !matches!(kind, SourceKind::Registry | SourceKind::Git) {
         return None;
     }
-    let manifest_path = locate_declared_vendor_manifest(vendor_roots, &package.name, &package.version)
-        .map(|path| normalize_path_string(&path))
-        .unwrap_or_default();
+    let manifest_path = locate_declared_vendor_manifest(DeclaredVendorManifestInputs {
+        vendor_roots: vendor_roots,
+        name: &package.name,
+        version: &package.version,
+    })
+    .map(|path| normalize_path_string(&path))
+    .unwrap_or_default();
     Some(CargoPackage {
-        id: cargo_source_package_id(source, &package.name, &package.version),
+        id: cargo_source_package_id(CargoSourcePackageIdInputs {
+            source: source,
+            name: &package.name,
+            version: &package.version,
+        }),
         name: package.name.clone(),
         version: package.version.clone(),
         source: Some(source.clone()),
@@ -2043,7 +2192,18 @@ fn native_git_cargo_packages_from_lock(lock_source_packages: &[CargoPackage]) ->
     packages
 }
 
-fn locate_declared_vendor_manifest(vendor_roots: &[PathBuf], name: &str, version: &str) -> Option<PathBuf> {
+struct DeclaredVendorManifestInputs<'a> {
+    vendor_roots: &'a [PathBuf],
+    name: &'a str,
+    version: &'a str,
+}
+
+fn locate_declared_vendor_manifest(inputs: DeclaredVendorManifestInputs<'_>) -> Option<PathBuf> {
+    let DeclaredVendorManifestInputs {
+        vendor_roots,
+        name,
+        version,
+    } = inputs;
     for vendor_root in vendor_roots {
         let versioned = vendor_root.join(format!("{name}-{version}")).join("Cargo.toml");
         if versioned.is_file() {
@@ -2057,15 +2217,21 @@ fn locate_declared_vendor_manifest(vendor_roots: &[PathBuf], name: &str, version
     None
 }
 
-fn cargo_source_package_id(source: &str, name: &str, version: &str) -> String {
-    format!("{source}#{name}@{version}")
+struct CargoSourcePackageIdInputs<'a> {
+    source: &'a str,
+    name: &'a str,
+    version: &'a str,
+}
+
+fn cargo_source_package_id(inputs: CargoSourcePackageIdInputs<'_>) -> String {
+    format!("{}#{}@{}", inputs.source, inputs.name, inputs.version)
 }
 
 fn native_manifest_path_dependency_manifests(manifest_path: &Path, manifest: &NativeManifest) -> Vec<PathBuf> {
     let Some(source_root) = manifest_path.parent() else {
         return Vec::new();
     };
-    let mut manifests = Vec::new();
+    let mut manifests = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     manifests.extend(native_dependency_table_path_manifests(source_root, &manifest.dependencies));
     manifests.extend(native_dependency_table_path_manifests(source_root, &manifest.build_dependencies));
     for target in manifest.target.values() {
@@ -2093,6 +2259,8 @@ fn native_path_cargo_package_from_manifest(
     manifest: &NativeManifest,
     options: &RustPlanOptions,
 ) -> Result<CargoPackage, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let package = manifest.package.as_ref().ok_or_else(|| {
         RunError::Internal(format!("Cargo-free native package manifest lacks [package]: {}", manifest_path.display()))
     })?;
@@ -2111,10 +2279,14 @@ fn native_path_cargo_package_from_manifest(
     let source_root = manifest_path.parent().ok_or_else(|| {
         RunError::Internal(format!("Cargo-free manifest path has no parent: {}", manifest_path.display()))
     })?;
-    let native_targets = native_targets_for_manifest(source_root, &package.name, &version, &edition, manifest)
-        .map_err(|blocker| {
-            RunError::Internal(format!("Cargo-free native target planning failed: {}", blocker.message))
-        })?;
+    let native_targets = native_targets_for_manifest(NativeTargetsForManifestInputs {
+        source_root: source_root,
+        package_name: &package.name,
+        package_version: &version,
+        package_edition: &edition,
+        manifest: manifest,
+    })
+    .map_err(|blocker| RunError::Internal(format!("Cargo-free native target planning failed: {}", blocker.message)))?;
     let targets = native_targets
         .into_iter()
         .map(|target| CargoTarget {
@@ -2129,7 +2301,10 @@ fn native_path_cargo_package_from_manifest(
         &native_optional_dependency_names(&manifest.dependencies),
     );
     Ok(CargoPackage {
-        id: cargo_path_package_id(&package.name, &version),
+        id: cargo_path_package_id(CargoPathPackageIdInputs {
+            name: &package.name,
+            version: &version,
+        }),
         name: package.name.clone(),
         version,
         source: None,
@@ -2179,6 +2354,8 @@ fn metadata_args() -> Vec<String> {
 }
 
 fn unit_graph_args(options: &RustPlanOptions) -> Vec<String> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut args = vec![
         "build".to_string(),
         "-Z".to_string(),
@@ -2235,8 +2412,10 @@ fn summarize_source_closure(
     packages: &[CargoPackage],
     lock_packages: &[LockPackage],
 ) -> Result<SourceClosureSummary, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut sources = Vec::with_capacity(packages.len());
-    let mut blockers = Vec::new();
+    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for package in packages {
         let kind = source_kind(package.source.as_deref());
         let lockfile_identity = find_lock_package(package, lock_packages).map(|lock_package| LockPackageIdentity {
@@ -2291,10 +2470,20 @@ fn parse_lockfile_facts(root: &Path) -> Result<NativeLockfileFacts, RunError> {
     let text = fs::read_to_string(&path).map_err(|err| {
         RunError::Internal(format!("Rust plan requires a readable Cargo.lock at {}: {err}", path.display()))
     })?;
-    parse_native_lockfile_text(&path.display().to_string(), &text).map_err(RunError::Internal)
+    parse_native_lockfile_text(NativeTextParseInputs {
+        path_label: &path.display().to_string(),
+        text: &text,
+    })
+    .map_err(RunError::Internal)
 }
 
-fn parse_native_lockfile_text(path_label: &str, text: &str) -> Result<NativeLockfileFacts, String> {
+struct NativeTextParseInputs<'a> {
+    path_label: &'a str,
+    text: &'a str,
+}
+
+fn parse_native_lockfile_text(inputs: NativeTextParseInputs<'_>) -> Result<NativeLockfileFacts, String> {
+    let NativeTextParseInputs { path_label, text } = inputs;
     debug_assert!(!path_label.is_empty());
     let lockfile: CargoLockfile =
         toml::from_str(text).map_err(|err| format!("parsing lockfile {path_label}: {err}"))?;
@@ -2440,6 +2629,8 @@ fn registry_source_digest(
 }
 
 fn git_source_digest(package: &CargoPackage) -> Result<SourceDigest, SourceClosureBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let Some(source) = package.source.as_deref() else {
         return Err(SourceClosureBlocker {
             package_id: package.id.clone(),
@@ -2461,6 +2652,8 @@ fn git_source_digest(package: &CargoPackage) -> Result<SourceDigest, SourceClosu
 }
 
 fn path_source_digest(package: &CargoPackage) -> Result<SourceDigest, SourceClosureBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let manifest_path = Path::new(&package.manifest_path);
     let Some(source_root) = manifest_path.parent() else {
         return Err(SourceClosureBlocker {
@@ -2482,7 +2675,7 @@ fn path_source_digest(package: &CargoPackage) -> Result<SourceDigest, SourceClos
 }
 
 fn hash_path_source_tree(root: &Path) -> Result<String, String> {
-    let mut files = Vec::new();
+    let mut files = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     collect_source_files(root, &mut files)?;
     let mut hasher = blake3::Hasher::new();
     for file in files {
@@ -2501,29 +2694,37 @@ fn hash_path_source_tree(root: &Path) -> Result<String, String> {
 }
 
 fn collect_source_files(root: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
-    collect_source_files_inner(root, root, files)?;
-    files.sort();
-    Ok(())
-}
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES > 0);
+    let mut directories = Vec::with_capacity(1);
+    directories.push(root.to_path_buf());
+    debug_assert_eq!(directories.len(), 1);
+    let mut visited_entries = 0usize;
 
-fn collect_source_files_inner(root: &Path, directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
-    let entries = fs::read_dir(directory)
-        .map_err(|err| format!("reading path source directory {}: {err}", directory.display()))?;
-    for entry in entries {
-        let entry = entry.map_err(|err| format!("reading path source directory {}: {err}", directory.display()))?;
-        let path = entry.path();
-        let file_name = entry.file_name();
-        if should_skip_source_entry(root, directory, file_name.as_os_str()) {
-            continue;
-        }
-        let file_type =
-            entry.file_type().map_err(|err| format!("reading path source metadata {}: {err}", path.display()))?;
-        if file_type.is_dir() {
-            collect_source_files_inner(root, &path, files)?;
-        } else if file_type.is_file() {
-            files.push(path);
+    while let Some(directory) = directories.pop() {
+        let entries = fs::read_dir(&directory)
+            .map_err(|err| format!("reading path source directory {}: {err}", directory.display()))?;
+        for entry in entries {
+            visited_entries =
+                visited_entries.checked_add(1).ok_or_else(|| "path source entry count overflowed".to_string())?;
+            if visited_entries > MAX_SOURCE_TREE_ENTRIES {
+                return Err(format!("path source tree exceeds {MAX_SOURCE_TREE_ENTRIES} entries"));
+            }
+            let entry = entry.map_err(|err| format!("reading path source directory {}: {err}", directory.display()))?;
+            let path = entry.path();
+            if should_skip_source_entry(root, &directory, entry.file_name().as_os_str()) {
+                continue;
+            }
+            let file_type =
+                entry.file_type().map_err(|err| format!("reading path source metadata {}: {err}", path.display()))?;
+            if file_type.is_dir() {
+                directories.push(path);
+            } else if file_type.is_file() {
+                files.push(path);
+            }
         }
     }
+    files.sort();
+    debug_assert!(visited_entries <= MAX_SOURCE_TREE_ENTRIES);
     Ok(())
 }
 
@@ -2553,7 +2754,7 @@ fn source_closure_digest(
 
 #[derive(Debug, Deserialize)]
 struct CargoConfigToml {
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_btree_map")]
     source: BTreeMap<String, CargoConfigSource>,
 }
 
@@ -2564,82 +2765,102 @@ struct CargoConfigSource {
     replace_with: Option<String>,
 }
 
+struct NativeRegistryPackageInputs<'a> {
+    root: &'a Path,
+    package: &'a CargoPackage,
+    lock_packages: &'a [LockPackage],
+    vendor_roots: &'a [PathBuf],
+}
+
+fn native_registry_source(
+    inputs: NativeRegistryPackageInputs<'_>,
+) -> Result<NativeRegistrySourceSummary, NativeRegistrySourceBlocker> {
+    debug_assert_eq!(source_kind(inputs.package.source.as_deref()), SourceKind::Registry);
+    debug_assert!(!CARGO_REGISTRY_SOURCE_PREFIX.is_empty());
+    let package = inputs.package;
+    let lock_identity = find_lock_package(package, inputs.lock_packages)
+        .map(|lock_package| LockPackageIdentity {
+            name: lock_package.name.clone(),
+            version: lock_package.version.clone(),
+            source: lock_package.source.clone(),
+            checksum: lock_package.checksum.clone(),
+        })
+        .ok_or_else(|| {
+            native_registry_blocker(NativeRegistryBlockerInputs {
+                package_id: Some(package.id.clone()),
+                class: "missing-lockfile-registry-identity",
+                message: "registry package has no matching Cargo.lock package identity",
+            })
+        })?;
+    let source = lock_identity.source.clone().or_else(|| package.source.clone()).ok_or_else(|| {
+        native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "missing-registry-source",
+            message: "registry package lacks lockfile source material",
+        })
+    })?;
+    if !source.starts_with(CARGO_REGISTRY_SOURCE_PREFIX) {
+        return Err(native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "unsupported-registry-source-kind",
+            message: "native registry source planning supports only registry+ lockfile sources",
+        }));
+    }
+    let checksum = lock_identity.checksum.clone().ok_or_else(|| {
+        native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "missing-registry-checksum",
+            message: "registry package lacks Cargo.lock checksum material",
+        })
+    })?;
+    let has_identity_mismatch = lock_identity.name != package.name
+        || lock_identity.version != package.version
+        || Some(source.clone()) != package.source;
+    if has_identity_mismatch {
+        return Err(native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "cargo-oracle-registry-identity-mismatch",
+            message: "Cargo oracle registry package identity differs from Cargo.lock identity",
+        }));
+    }
+    let (vendor_root, manifest_path, source_digest) =
+        bind_declared_vendor_source(inputs.root, package, &checksum, inputs.vendor_roots)?;
+    Ok(NativeRegistrySourceSummary {
+        package_id: package.id.clone(),
+        name: package.name.clone(),
+        version: package.version.clone(),
+        source,
+        source_class: "registry".to_string(),
+        checksum,
+        vendor_root: normalize_path_string(&vendor_root),
+        manifest_path: normalize_path_string(&manifest_path),
+        source_digest,
+        lockfile_identity: lock_identity,
+    })
+}
+
 fn summarize_native_registry_source_planning(
     root: &Path,
     cargo_packages: &[CargoPackage],
     lock_packages: &[LockPackage],
     lockfile: &LockfileIdentity,
 ) -> Result<NativeRegistrySourcePlanningSummary, RunError> {
-    let mut blockers = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let vendor_roots = declared_vendor_roots(root, &mut blockers);
-    let mut sources = Vec::new();
+    let mut sources = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for package in cargo_packages
         .iter()
         .filter(|package| source_kind(package.source.as_deref()) == SourceKind::Registry)
     {
-        let lock_identity = find_lock_package(package, lock_packages).map(|lock_package| LockPackageIdentity {
-            name: lock_package.name.clone(),
-            version: lock_package.version.clone(),
-            source: lock_package.source.clone(),
-            checksum: lock_package.checksum.clone(),
-        });
-        let package_id = package.id.clone();
-        let Some(lock_identity) = lock_identity else {
-            blockers.push(native_registry_blocker(
-                Some(package_id),
-                "missing-lockfile-registry-identity",
-                "registry package has no matching Cargo.lock package identity",
-            ));
-            continue;
-        };
-        let Some(source) = lock_identity.source.clone().or_else(|| package.source.clone()) else {
-            blockers.push(native_registry_blocker(
-                Some(package.id.clone()),
-                "missing-registry-source",
-                "registry package lacks lockfile source material",
-            ));
-            continue;
-        };
-        if !source.starts_with(CARGO_REGISTRY_SOURCE_PREFIX) {
-            blockers.push(native_registry_blocker(
-                Some(package.id.clone()),
-                "unsupported-registry-source-kind",
-                "native registry source planning supports only registry+ lockfile sources",
-            ));
-            continue;
-        }
-        let Some(checksum) = lock_identity.checksum.clone() else {
-            blockers.push(native_registry_blocker(
-                Some(package.id.clone()),
-                "missing-registry-checksum",
-                "registry package lacks Cargo.lock checksum material",
-            ));
-            continue;
-        };
-        if lock_identity.name != package.name
-            || lock_identity.version != package.version
-            || Some(source.clone()) != package.source
-        {
-            blockers.push(native_registry_blocker(
-                Some(package.id.clone()),
-                "cargo-oracle-registry-identity-mismatch",
-                "Cargo oracle registry package identity differs from Cargo.lock identity",
-            ));
-            continue;
-        }
-        match bind_declared_vendor_source(root, package, &checksum, &vendor_roots) {
-            Ok((vendor_root, manifest_path, source_digest)) => sources.push(NativeRegistrySourceSummary {
-                package_id: package.id.clone(),
-                name: package.name.clone(),
-                version: package.version.clone(),
-                source,
-                source_class: "registry".to_string(),
-                checksum,
-                vendor_root: normalize_path_string(&vendor_root),
-                manifest_path: normalize_path_string(&manifest_path),
-                source_digest,
-                lockfile_identity: lock_identity,
-            }),
+        match native_registry_source(NativeRegistryPackageInputs {
+            root,
+            package,
+            lock_packages,
+            vendor_roots: &vendor_roots,
+        }) {
+            Ok(source) => sources.push(source),
             Err(blocker) => blockers.push(blocker),
         }
     }
@@ -2648,7 +2869,12 @@ fn summarize_native_registry_source_planning(
     blockers.sort();
     blockers.dedup();
     let comparison_status = if blockers.is_empty() { "matched" } else { "blocked" }.to_string();
-    let digest_blake3 = native_registry_source_digest(&sources, &blockers, &comparison_status, &lockfile.blake3)?;
+    let digest_blake3 = native_registry_source_digest(NativeRegistrySourceDigestInputs {
+        sources: &sources,
+        blockers: &blockers,
+        comparison_status: &comparison_status,
+        lockfile_digest_blake3: &lockfile.blake3,
+    })?;
     Ok(NativeRegistrySourcePlanningSummary {
         ready: blockers.is_empty(),
         comparison_status,
@@ -2666,17 +2892,100 @@ fn summarize_native_registry_source_planning(
     })
 }
 
+struct NativePatchSourceInputs<'a> {
+    root: &'a Path,
+    registry: &'a str,
+    dependency_key: &'a str,
+    value: &'a toml::Value,
+    cargo_packages: &'a [CargoPackage],
+}
+
+fn native_patch_source(
+    inputs: NativePatchSourceInputs<'_>,
+) -> Result<NativeRegistrySourceSummary, NativeRegistrySourceBlocker> {
+    debug_assert_eq!(inputs.registry, "crates-io");
+    debug_assert!(!inputs.dependency_key.is_empty());
+    let path = dependency_path(inputs.value).ok_or_else(|| {
+        native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: None,
+            class: "unsupported-patch-source-kind",
+            message: &format!("patch `{}` is outside the bounded local path patch fragment", inputs.dependency_key),
+        })
+    })?;
+    let package_name = dependency_package_name(inputs.dependency_key, inputs.value);
+    let patch_manifest = inputs.root.join(path).join("Cargo.toml");
+    if !patch_manifest.is_file() {
+        return Err(native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: None,
+            class: "missing-patch-source-manifest",
+            message: &format!(
+                "patch `{}` manifest {} is not readable",
+                inputs.dependency_key,
+                patch_manifest.display()
+            ),
+        }));
+    }
+    let package = inputs
+        .cargo_packages
+        .iter()
+        .find(|package| package.name == package_name && manifest_paths_same(&package.manifest_path, &patch_manifest))
+        .ok_or_else(|| {
+            native_registry_blocker(NativeRegistryBlockerInputs {
+                package_id: None,
+                class: "missing-patch-source-cargo-package",
+                message: &format!("patch `{}` has no matching Cargo metadata package", inputs.dependency_key),
+            })
+        })?;
+    if source_kind(package.source.as_deref()) != SourceKind::Path {
+        return Err(native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "unsupported-patch-source-cargo-kind",
+            message: "patched package must resolve to a local path package in Cargo metadata",
+        }));
+    }
+    let source_digest = path_source_digest(package).map_err(|blocker| {
+        native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: &blocker.class,
+            message: &blocker.message,
+        })
+    })?;
+    Ok(NativeRegistrySourceSummary {
+        package_id: package.id.clone(),
+        name: package.name.clone(),
+        version: package.version.clone(),
+        source: format!("patch+{}", inputs.registry),
+        source_class: "patch-path".to_string(),
+        checksum: format!("patch-path:{}", source_digest.value),
+        vendor_root: normalize_path_string(&inputs.root.join(path)),
+        manifest_path: normalize_path_string(&patch_manifest),
+        source_digest,
+        lockfile_identity: LockPackageIdentity {
+            name: package.name.clone(),
+            version: package.version.clone(),
+            source: None,
+            checksum: None,
+        },
+    })
+}
+
 fn append_native_patch_sources(
     root: &Path,
     cargo_packages: &[CargoPackage],
     sources: &mut Vec<NativeRegistrySourceSummary>,
     blockers: &mut Vec<NativeRegistrySourceBlocker>,
 ) {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let manifest_path = root.join("Cargo.toml");
     let manifest = match read_native_manifest(&manifest_path) {
         Ok(manifest) => manifest,
         Err(message) => {
-            blockers.push(native_registry_blocker(None, "unreadable-patch-source-manifest", &message));
+            blockers.push(native_registry_blocker(NativeRegistryBlockerInputs {
+                package_id: None,
+                class: "unreadable-patch-source-manifest",
+                message: &message,
+            }));
             return;
         }
     };
@@ -2685,78 +2994,32 @@ fn append_native_patch_sources(
     }
     for (registry, patches) in &manifest.patch {
         if registry != "crates-io" {
-            blockers.push(native_registry_blocker(
-                None,
-                "unsupported-patch-source-registry",
-                &format!("patch registry `{registry}` is outside the bounded crates-io patch fragment"),
-            ));
+            blockers.push(native_registry_blocker(NativeRegistryBlockerInputs {
+                package_id: None,
+                class: "unsupported-patch-source-registry",
+                message: &format!("patch registry `{registry}` is outside the bounded crates-io patch fragment"),
+            }));
             continue;
         }
         for (dependency_key, value) in patches {
-            let Some(path) = dependency_path(value) else {
-                blockers.push(native_registry_blocker(
-                    None,
-                    "unsupported-patch-source-kind",
-                    &format!("patch `{dependency_key}` is outside the bounded local path patch fragment"),
-                ));
-                continue;
-            };
-            let package_name = dependency_package_name(dependency_key, value);
-            let patch_manifest = root.join(path).join("Cargo.toml");
-            if !patch_manifest.is_file() {
-                blockers.push(native_registry_blocker(
-                    None,
-                    "missing-patch-source-manifest",
-                    &format!("patch `{dependency_key}` manifest {} is not readable", patch_manifest.display()),
-                ));
-                continue;
-            }
-            let Some(package) = cargo_packages.iter().find(|package| {
-                package.name == package_name && manifest_paths_same(&package.manifest_path, &patch_manifest)
-            }) else {
-                blockers.push(native_registry_blocker(
-                    None,
-                    "missing-patch-source-cargo-package",
-                    &format!("patch `{dependency_key}` has no matching Cargo metadata package"),
-                ));
-                continue;
-            };
-            if source_kind(package.source.as_deref()) != SourceKind::Path {
-                blockers.push(native_registry_blocker(
-                    Some(package.id.clone()),
-                    "unsupported-patch-source-cargo-kind",
-                    "patched package must resolve to a local path package in Cargo metadata",
-                ));
-                continue;
-            }
-            match path_source_digest(package) {
-                Ok(source_digest) => sources.push(NativeRegistrySourceSummary {
-                    package_id: package.id.clone(),
-                    name: package.name.clone(),
-                    version: package.version.clone(),
-                    source: format!("patch+{registry}"),
-                    source_class: "patch-path".to_string(),
-                    checksum: format!("patch-path:{}", source_digest.value),
-                    vendor_root: normalize_path_string(&root.join(path)),
-                    manifest_path: normalize_path_string(&patch_manifest),
-                    source_digest,
-                    lockfile_identity: LockPackageIdentity {
-                        name: package.name.clone(),
-                        version: package.version.clone(),
-                        source: None,
-                        checksum: None,
-                    },
-                }),
-                Err(blocker) => {
-                    blockers.push(native_registry_blocker(Some(package.id.clone()), &blocker.class, &blocker.message))
-                }
+            match native_patch_source(NativePatchSourceInputs {
+                root,
+                registry,
+                dependency_key,
+                value,
+                cargo_packages,
+            }) {
+                Ok(source) => sources.push(source),
+                Err(blocker) => blockers.push(blocker),
             }
         }
     }
 }
 
 fn declared_vendor_roots(root: &Path, blockers: &mut Vec<NativeRegistrySourceBlocker>) -> Vec<PathBuf> {
-    let mut roots = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut roots = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for config_path in [root.join(".cargo/config.toml"), root.join(".cargo/config")] {
         if !config_path.is_file() {
             continue;
@@ -2764,22 +3027,22 @@ fn declared_vendor_roots(root: &Path, blockers: &mut Vec<NativeRegistrySourceBlo
         let config_text = match fs::read_to_string(&config_path) {
             Ok(text) => text,
             Err(err) => {
-                blockers.push(native_registry_blocker(
-                    None,
-                    "unreadable-cargo-source-config",
-                    &format!("reading declared Cargo source config {}: {err}", config_path.display()),
-                ));
+                blockers.push(native_registry_blocker(NativeRegistryBlockerInputs {
+                    package_id: None,
+                    class: "unreadable-cargo-source-config",
+                    message: &format!("reading declared Cargo source config {}: {err}", config_path.display()),
+                }));
                 continue;
             }
         };
         let config: CargoConfigToml = match toml::from_str(&config_text) {
             Ok(config) => config,
             Err(err) => {
-                blockers.push(native_registry_blocker(
-                    None,
-                    "invalid-cargo-source-config",
-                    &format!("parsing declared Cargo source config {}: {err}", config_path.display()),
-                ));
+                blockers.push(native_registry_blocker(NativeRegistryBlockerInputs {
+                    package_id: None,
+                    class: "invalid-cargo-source-config",
+                    message: &format!("parsing declared Cargo source config {}: {err}", config_path.display()),
+                }));
                 continue;
             }
         };
@@ -2818,12 +3081,14 @@ fn bind_declared_vendor_source(
     checksum: &str,
     vendor_roots: &[PathBuf],
 ) -> Result<(PathBuf, PathBuf, SourceDigest), NativeRegistrySourceBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if vendor_roots.is_empty() {
-        return Err(native_registry_blocker(
-            Some(package.id.clone()),
-            "missing-declared-vendor-root",
-            "registry package requires a declared local vendor/source root; ambient Cargo caches are not accepted",
-        ));
+        return Err(native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "missing-declared-vendor-root",
+            message: "registry package requires a declared local vendor/source root; ambient Cargo caches are not accepted",
+        }));
     }
     let manifest_path = PathBuf::from(&package.manifest_path);
     let manifest_parent = manifest_path.parent();
@@ -2845,15 +3110,19 @@ fn bind_declared_vendor_source(
                 continue;
             };
             let source_root = manifest_candidate.parent().ok_or_else(|| {
-                native_registry_blocker(
-                    Some(package.id.clone()),
-                    "invalid-vendor-source-root",
-                    "declared vendor manifest path has no parent directory",
-                )
+                native_registry_blocker(NativeRegistryBlockerInputs {
+                    package_id: Some(package.id.clone()),
+                    class: "invalid-vendor-source-root",
+                    message: "declared vendor manifest path has no parent directory",
+                })
             })?;
             validate_vendor_checksum(package, source_root, checksum)?;
             let digest = hash_path_source_tree(source_root).map_err(|message| {
-                native_registry_blocker(Some(package.id.clone()), "vendor-source-unreadable", &message)
+                native_registry_blocker(NativeRegistryBlockerInputs {
+                    package_id: Some(package.id.clone()),
+                    class: "vendor-source-unreadable",
+                    message: &message,
+                })
             })?;
             return Ok((vendor_root.clone(), manifest_candidate, SourceDigest {
                 algorithm: PATH_SOURCE_DIGEST_ALGORITHM.to_string(),
@@ -2861,17 +3130,17 @@ fn bind_declared_vendor_source(
             }));
         }
     }
-    Err(native_registry_blocker(
-        Some(package.id.clone()),
-        "missing-vendor-source-root",
-        "declared vendor/source roots do not contain the registry package source tree",
-    ))
+    Err(native_registry_blocker(NativeRegistryBlockerInputs {
+        package_id: Some(package.id.clone()),
+        class: "missing-vendor-source-root",
+        message: "declared vendor/source roots do not contain the registry package source tree",
+    }))
 }
 
 #[derive(Debug, Deserialize)]
 struct CargoVendorChecksumManifest {
     package: Option<String>,
-    #[serde(default)]
+    #[serde(default = "serde_default_empty_btree_map")]
     files: BTreeMap<String, String>,
 }
 
@@ -2880,39 +3149,41 @@ fn validate_vendor_checksum(
     source_root: &Path,
     expected_checksum: &str,
 ) -> Result<(), NativeRegistrySourceBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let checksum_path = source_root.join(CARGO_VENDOR_CHECKSUM_FILE_NAME);
     let text = fs::read_to_string(&checksum_path).map_err(|err| {
-        native_registry_blocker(
-            Some(package.id.clone()),
-            "missing-vendor-checksum-manifest",
-            &format!("reading vendor checksum manifest {}: {err}", checksum_path.display()),
-        )
+        native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "missing-vendor-checksum-manifest",
+            message: &format!("reading vendor checksum manifest {}: {err}", checksum_path.display()),
+        })
     })?;
     let manifest: CargoVendorChecksumManifest = serde_json::from_str(&text).map_err(|err| {
-        native_registry_blocker(
-            Some(package.id.clone()),
-            "invalid-vendor-checksum-manifest",
-            &format!("parsing vendor checksum manifest {}: {err}", checksum_path.display()),
-        )
+        native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "invalid-vendor-checksum-manifest",
+            message: &format!("parsing vendor checksum manifest {}: {err}", checksum_path.display()),
+        })
     })?;
     let actual = manifest.package.as_deref().ok_or_else(|| {
-        native_registry_blocker(
-            Some(package.id.clone()),
-            "missing-vendor-package-checksum",
-            "vendor checksum manifest lacks package checksum material",
-        )
+        native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "missing-vendor-package-checksum",
+            message: "vendor checksum manifest lacks package checksum material",
+        })
     })?;
     if actual != expected_checksum {
-        return Err(native_registry_checksum_evidence_blocker(
-            Some(package.id.clone()),
-            "vendor-checksum-mismatch",
-            "vendor package checksum does not match Cargo.lock checksum material",
-            &checksum_path,
-            CARGO_VENDOR_PACKAGE_DIGEST_ALGORITHM,
-            "package",
-            Some(expected_checksum),
-            Some(actual),
-        ));
+        return Err(native_registry_checksum_evidence_blocker(NativeRegistryChecksumBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "vendor-checksum-mismatch",
+            message: "vendor package checksum does not match Cargo.lock checksum material",
+            checksum_manifest_path: &checksum_path,
+            digest_algorithm: CARGO_VENDOR_PACKAGE_DIGEST_ALGORITHM,
+            digest_subject: "package",
+            expected_digest: Some(expected_checksum),
+            actual_digest: Some(actual),
+        }));
     }
     validate_vendor_checksum_files(package, source_root, &checksum_path, &manifest.files)
 }
@@ -2923,69 +3194,101 @@ fn validate_vendor_checksum_files(
     checksum_path: &Path,
     files: &BTreeMap<String, String>,
 ) -> Result<(), NativeRegistrySourceBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if files.is_empty() {
-        return Err(native_registry_checksum_evidence_blocker(
-            Some(package.id.clone()),
-            "missing-vendor-file-checksums",
-            "vendor checksum manifest lacks file checksum material",
-            checksum_path,
-            CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
-            "files",
-            None,
-            None,
-        ));
+        return Err(native_registry_checksum_evidence_blocker(NativeRegistryChecksumBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "missing-vendor-file-checksums",
+            message: "vendor checksum manifest lacks file checksum material",
+            checksum_manifest_path: checksum_path,
+            digest_algorithm: CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
+            digest_subject: "files",
+            expected_digest: None,
+            actual_digest: None,
+        }));
     }
     for (relative_path, expected_digest) in files {
-        validate_vendor_checksum_file(package, source_root, checksum_path, relative_path, expected_digest)?;
+        validate_vendor_checksum_file(VendorChecksumFileInputs {
+            package: package,
+            source_root: source_root,
+            checksum_path: checksum_path,
+            relative_path: relative_path,
+            expected_digest: expected_digest,
+        })?;
     }
     validate_vendor_checksum_no_extra_files(package, source_root, checksum_path, files)
 }
 
-fn validate_vendor_checksum_file(
-    package: &CargoPackage,
-    source_root: &Path,
-    checksum_path: &Path,
-    relative_path: &str,
-    expected_digest: &str,
-) -> Result<(), NativeRegistrySourceBlocker> {
+struct VendorChecksumFileInputs<'a> {
+    package: &'a CargoPackage,
+    source_root: &'a Path,
+    checksum_path: &'a Path,
+    relative_path: &'a str,
+    expected_digest: &'a str,
+}
+
+fn validate_vendor_checksum_file(inputs: VendorChecksumFileInputs<'_>) -> Result<(), NativeRegistrySourceBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let VendorChecksumFileInputs {
+        package,
+        source_root,
+        checksum_path,
+        relative_path,
+        expected_digest,
+    } = inputs;
     if !is_lowercase_sha256_hex(expected_digest) {
-        return Err(native_registry_checksum_evidence_blocker(
-            Some(package.id.clone()),
-            "invalid-vendor-file-checksum",
-            "vendor file checksum is not lowercase SHA-256 hex",
-            checksum_path,
-            CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
-            relative_path,
-            Some(expected_digest),
-            None,
-        ));
+        return Err(native_registry_checksum_evidence_blocker(NativeRegistryChecksumBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "invalid-vendor-file-checksum",
+            message: "vendor file checksum is not lowercase SHA-256 hex",
+            checksum_manifest_path: checksum_path,
+            digest_algorithm: CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
+            digest_subject: relative_path,
+            expected_digest: Some(expected_digest),
+            actual_digest: None,
+        }));
     }
-    let file_path = vendor_checksum_entry_path(package, source_root, checksum_path, relative_path, expected_digest)?;
+    let file_path = vendor_checksum_entry_path(VendorChecksumFileInputs {
+        package: package,
+        source_root: source_root,
+        checksum_path: checksum_path,
+        relative_path: relative_path,
+        expected_digest: expected_digest,
+    })?;
     if !file_path.is_file() {
-        return Err(native_registry_checksum_evidence_blocker(
-            Some(package.id.clone()),
-            "missing-vendor-file-material",
-            "vendor checksum manifest names a file that is not present",
-            checksum_path,
-            CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
-            relative_path,
-            Some(expected_digest),
-            None,
-        ));
+        return Err(native_registry_checksum_evidence_blocker(NativeRegistryChecksumBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "missing-vendor-file-material",
+            message: "vendor checksum manifest names a file that is not present",
+            checksum_manifest_path: checksum_path,
+            digest_algorithm: CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
+            digest_subject: relative_path,
+            expected_digest: Some(expected_digest),
+            actual_digest: None,
+        }));
     }
-    let actual_digest = cargo_sha256_file_hex(&file_path)
-        .map_err(|message| native_registry_blocker(Some(package.id.clone()), "vendor-file-unreadable", &message))?;
+    let actual_digest = cargo_sha256_file_hex(&file_path).map_err(|message| {
+        native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "vendor-file-unreadable",
+            message: &message,
+        })
+    })?;
     if actual_digest != expected_digest {
-        return Err(native_registry_checksum_evidence_blocker(
-            Some(package.id.clone()),
-            "vendor-file-checksum-mismatch",
-            "vendor file checksum does not match Cargo checksum metadata",
-            checksum_path,
-            CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
-            relative_path,
-            Some(expected_digest),
-            Some(&actual_digest),
-        ));
+        return Err(native_registry_checksum_evidence_blocker(NativeRegistryChecksumBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "vendor-file-checksum-mismatch",
+            message: "vendor file checksum does not match Cargo checksum metadata",
+            checksum_manifest_path: checksum_path,
+            digest_algorithm: CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
+            digest_subject: relative_path,
+            expected_digest: Some(expected_digest),
+            actual_digest: Some(&actual_digest),
+        }));
     }
     Ok(())
 }
@@ -2996,84 +3299,107 @@ fn validate_vendor_checksum_no_extra_files(
     checksum_path: &Path,
     files: &BTreeMap<String, String>,
 ) -> Result<(), NativeRegistrySourceBlocker> {
-    let mut actual_files = Vec::new();
-    collect_source_files(source_root, &mut actual_files)
-        .map_err(|message| native_registry_blocker(Some(package.id.clone()), "vendor-source-unreadable", &message))?;
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut actual_files = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    collect_source_files(source_root, &mut actual_files).map_err(|message| {
+        native_registry_blocker(NativeRegistryBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "vendor-source-unreadable",
+            message: &message,
+        })
+    })?;
     for file in actual_files {
         let relative = file.strip_prefix(source_root).map_err(|err| {
-            native_registry_blocker(
-                Some(package.id.clone()),
-                "vendor-source-unreadable",
-                &format!("normalizing vendor source file {}: {err}", file.display()),
-            )
+            native_registry_blocker(NativeRegistryBlockerInputs {
+                package_id: Some(package.id.clone()),
+                class: "vendor-source-unreadable",
+                message: &format!("normalizing vendor source file {}: {err}", file.display()),
+            })
         })?;
         let relative_text = normalize_path_string(relative);
         if relative_text == CARGO_VENDOR_CHECKSUM_FILE_NAME || files.contains_key(&relative_text) {
             continue;
         }
         let actual_digest = cargo_sha256_file_hex(&file).ok();
-        return Err(native_registry_checksum_evidence_blocker(
-            Some(package.id.clone()),
-            "vendor-file-not-in-checksum-manifest",
-            "vendor source contains a file not recorded in Cargo checksum metadata",
-            checksum_path,
-            CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
-            &relative_text,
-            None,
-            actual_digest.as_deref(),
-        ));
+        return Err(native_registry_checksum_evidence_blocker(NativeRegistryChecksumBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "vendor-file-not-in-checksum-manifest",
+            message: "vendor source contains a file not recorded in Cargo checksum metadata",
+            checksum_manifest_path: checksum_path,
+            digest_algorithm: CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
+            digest_subject: &relative_text,
+            expected_digest: None,
+            actual_digest: actual_digest.as_deref(),
+        }));
     }
     Ok(())
 }
 
-fn vendor_checksum_entry_path(
-    package: &CargoPackage,
-    source_root: &Path,
-    checksum_path: &Path,
-    relative_path: &str,
-    expected_digest: &str,
-) -> Result<PathBuf, NativeRegistrySourceBlocker> {
+fn vendor_checksum_entry_path(inputs: VendorChecksumFileInputs<'_>) -> Result<PathBuf, NativeRegistrySourceBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let VendorChecksumFileInputs {
+        package,
+        source_root,
+        checksum_path,
+        relative_path,
+        expected_digest,
+    } = inputs;
     let relative = Path::new(relative_path);
     if !vendor_checksum_relative_path_is_safe(relative) {
-        return Err(native_registry_checksum_evidence_blocker(
-            Some(package.id.clone()),
-            "invalid-vendor-file-checksum-path",
-            "vendor checksum manifest contains an unsafe relative file path",
-            checksum_path,
-            CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
-            relative_path,
-            Some(expected_digest),
-            None,
-        ));
+        return Err(native_registry_checksum_evidence_blocker(NativeRegistryChecksumBlockerInputs {
+            package_id: Some(package.id.clone()),
+            class: "invalid-vendor-file-checksum-path",
+            message: "vendor checksum manifest contains an unsafe relative file path",
+            checksum_manifest_path: checksum_path,
+            digest_algorithm: CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
+            digest_subject: relative_path,
+            expected_digest: Some(expected_digest),
+            actual_digest: None,
+        }));
     }
     Ok(source_root.join(relative))
 }
 
 fn vendor_checksum_relative_path_is_safe(relative: &Path) -> bool {
-    let mut seen_component = false;
+    let mut has_component = false;
     for component in relative.components() {
         match component {
-            std::path::Component::Normal(_) => seen_component = true,
+            std::path::Component::Normal(_) => has_component = true,
             _ => return false,
         }
     }
-    seen_component
+    has_component
 }
 
 fn cargo_sha256_file_hex(path: &Path) -> Result<String, String> {
+    debug_assert!(CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES > 0);
+    debug_assert!(MAX_VENDOR_SOURCE_FILE_BYTES >= CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES);
     let mut file =
         fs::File::open(path).map_err(|err| format!("opening vendor source file {}: {err}", path.display()))?;
     let mut hasher = <sha2::Sha256 as sha2::Digest>::new();
     let mut buffer = [0_u8; CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES];
-    loop {
+    let read_iterations = MAX_VENDOR_SOURCE_FILE_BYTES.div_ceil(CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES);
+    let mut read_bytes_total = 0usize;
+    let mut has_reached_eof = false;
+    for _ in 0..read_iterations {
         let read_bytes = file
             .read(&mut buffer)
             .map_err(|err| format!("reading vendor source file {}: {err}", path.display()))?;
         if read_bytes == 0 {
+            has_reached_eof = true;
             break;
         }
+        read_bytes_total = read_bytes_total
+            .checked_add(read_bytes)
+            .ok_or_else(|| format!("vendor source file size overflowed: {}", path.display()))?;
         <sha2::Sha256 as sha2::Digest>::update(&mut hasher, &buffer[..read_bytes]);
     }
+    if !has_reached_eof {
+        return Err(format!("vendor source file exceeds {MAX_VENDOR_SOURCE_FILE_BYTES} bytes: {}", path.display()));
+    }
+    debug_assert!(read_bytes_total <= MAX_VENDOR_SOURCE_FILE_BYTES);
     let digest = <sha2::Sha256 as sha2::Digest>::finalize(hasher);
     Ok(data_encoding::HEXLOWER.encode(&digest))
 }
@@ -3089,8 +3415,10 @@ fn summarize_native_git_source_planning(
     lockfile: &LockfileIdentity,
     source_closure: &SourceClosureSummary,
 ) -> Result<NativeGitSourcePlanningSummary, RunError> {
-    let mut sources = Vec::new();
-    let mut blockers = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut sources = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for package in cargo_packages.iter().filter(|package| source_kind(package.source.as_deref()) == SourceKind::Git) {
         match bind_captured_git_source(package, lock_packages, source_closure) {
             Ok(source) => sources.push(source),
@@ -3101,13 +3429,13 @@ fn summarize_native_git_source_planning(
     blockers.sort();
     blockers.dedup();
     let comparison_status = if blockers.is_empty() { "matched" } else { "blocked" }.to_string();
-    let digest_blake3 = native_git_source_digest(
-        &sources,
-        &blockers,
-        &comparison_status,
-        &lockfile.blake3,
-        &source_closure.digest_blake3,
-    )?;
+    let digest_blake3 = native_git_source_digest(NativeGitSourceDigestInputs {
+        sources: &sources,
+        blockers: &blockers,
+        comparison_status: &comparison_status,
+        lockfile_digest_blake3: &lockfile.blake3,
+        source_closure_digest_blake3: &source_closure.digest_blake3,
+    })?;
     Ok(NativeGitSourcePlanningSummary {
         ready: blockers.is_empty(),
         comparison_status,
@@ -3128,11 +3456,88 @@ fn summarize_native_git_source_planning(
     })
 }
 
+struct CapturedGitSourceInputs<'a> {
+    package: &'a CargoPackage,
+    source_closure: &'a SourceClosureSummary,
+    source: &'a str,
+    resolved_revision: &'a str,
+}
+
+struct CapturedGitSourceMaterial {
+    source_root: String,
+    manifest_path: String,
+    source_digest: SourceDigest,
+}
+
+fn captured_git_source_material(
+    inputs: CapturedGitSourceInputs<'_>,
+) -> Result<CapturedGitSourceMaterial, NativeGitSourceBlocker> {
+    debug_assert!(!inputs.source.is_empty());
+    debug_assert!(!inputs.resolved_revision.is_empty());
+    let matching_sources = inputs
+        .source_closure
+        .sources
+        .iter()
+        .filter(|source| source.package_id == inputs.package.id && source.kind == SourceKind::Git)
+        .collect::<Vec<_>>();
+    if matching_sources.len() != UNIQUE_CANDIDATE_COUNT {
+        return Err(native_git_blocker(NativeGitBlockerInputs {
+            package_id: Some(inputs.package.id.clone()),
+            class: "ambiguous-git-source-closure-material",
+            message: "git package requires exactly one captured source-closure record",
+        }));
+    }
+    let closure_source = matching_sources[0];
+    let has_identity_mismatch = closure_source.source.as_deref() != Some(inputs.source)
+        || closure_source.resolved_revision.as_deref() != Some(inputs.resolved_revision);
+    if has_identity_mismatch {
+        return Err(native_git_blocker(NativeGitBlockerInputs {
+            package_id: Some(inputs.package.id.clone()),
+            class: "source-closure-git-identity-mismatch",
+            message: "captured source-closure git identity differs from Cargo.lock identity",
+        }));
+    }
+    let manifest_path = PathBuf::from(&closure_source.manifest_path);
+    if !manifest_path.is_file() {
+        return Err(native_git_blocker(NativeGitBlockerInputs {
+            package_id: Some(inputs.package.id.clone()),
+            class: "missing-git-source-manifest",
+            message: &format!("captured git source manifest {} is not readable", manifest_path.display()),
+        }));
+    }
+    let source_root = manifest_path.parent().ok_or_else(|| {
+        native_git_blocker(NativeGitBlockerInputs {
+            package_id: Some(inputs.package.id.clone()),
+            class: "invalid-git-source-root",
+            message: "captured git source manifest has no parent directory",
+        })
+    })?;
+    let source_digest = hash_path_source_tree(source_root)
+        .map(|value| SourceDigest {
+            algorithm: PATH_SOURCE_DIGEST_ALGORITHM.to_string(),
+            value,
+        })
+        .map_err(|message| {
+            native_git_blocker(NativeGitBlockerInputs {
+                package_id: Some(inputs.package.id.clone()),
+                class: "git-source-unreadable",
+                message: &message,
+            })
+        })?;
+    Ok(CapturedGitSourceMaterial {
+        source_root: normalize_path_string(source_root),
+        manifest_path: normalize_path_string(&manifest_path),
+        source_digest,
+    })
+}
+
 fn bind_captured_git_source(
     package: &CargoPackage,
     lock_packages: &[LockPackage],
     source_closure: &SourceClosureSummary,
 ) -> Result<NativeGitSourceSummary, NativeGitSourceBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let package_id = package.id.clone();
     let lock_identity = find_lock_package(package, lock_packages)
         .map(|lock_package| LockPackageIdentity {
@@ -3142,78 +3547,49 @@ fn bind_captured_git_source(
             checksum: lock_package.checksum.clone(),
         })
         .ok_or_else(|| {
-            native_git_blocker(
-                Some(package_id.clone()),
-                "missing-lockfile-git-identity",
-                "git package has no matching Cargo.lock package identity",
-            )
+            native_git_blocker(NativeGitBlockerInputs {
+                package_id: Some(package_id.clone()),
+                class: "missing-lockfile-git-identity",
+                message: "git package has no matching Cargo.lock package identity",
+            })
         })?;
     let source = lock_identity.source.clone().or_else(|| package.source.clone()).ok_or_else(|| {
-        native_git_blocker(Some(package_id.clone()), "missing-git-source", "git package lacks lockfile source material")
+        native_git_blocker(NativeGitBlockerInputs {
+            package_id: Some(package_id.clone()),
+            class: "missing-git-source",
+            message: "git package lacks lockfile source material",
+        })
     })?;
     if !source.starts_with(CARGO_GIT_SOURCE_PREFIX) {
-        return Err(native_git_blocker(
-            Some(package_id),
-            "unsupported-git-source-kind",
-            "native git source planning supports only git+ lockfile sources",
-        ));
+        return Err(native_git_blocker(NativeGitBlockerInputs {
+            package_id: Some(package_id),
+            class: "unsupported-git-source-kind",
+            message: "native git source planning supports only git+ lockfile sources",
+        }));
     }
     let resolved_revision = source_revision(&source).ok_or_else(|| {
-        native_git_blocker(Some(package_id.clone()), "missing-git-revision", "git package lacks a resolved revision")
+        native_git_blocker(NativeGitBlockerInputs {
+            package_id: Some(package_id.clone()),
+            class: "missing-git-revision",
+            message: "git package lacks a resolved revision",
+        })
     })?;
     if lock_identity.name != package.name
         || lock_identity.version != package.version
         || Some(source.clone()) != package.source
     {
-        return Err(native_git_blocker(
-            Some(package_id),
-            "cargo-oracle-git-identity-mismatch",
-            "Cargo oracle git package identity differs from Cargo.lock identity",
-        ));
+        return Err(native_git_blocker(NativeGitBlockerInputs {
+            package_id: Some(package_id),
+            class: "cargo-oracle-git-identity-mismatch",
+            message: "Cargo oracle git package identity differs from Cargo.lock identity",
+        }));
     }
-    let matching_sources = source_closure
-        .sources
-        .iter()
-        .filter(|source| source.package_id == package.id && source.kind == SourceKind::Git)
-        .collect::<Vec<_>>();
-    if matching_sources.len() != 1 {
-        return Err(native_git_blocker(
-            Some(package.id.clone()),
-            "ambiguous-git-source-closure-material",
-            "git package requires exactly one captured source-closure record",
-        ));
-    }
-    let closure_source = matching_sources[0];
-    if closure_source.source.as_deref() != Some(source.as_str())
-        || closure_source.resolved_revision.as_deref() != Some(resolved_revision.as_str())
-    {
-        return Err(native_git_blocker(
-            Some(package.id.clone()),
-            "source-closure-git-identity-mismatch",
-            "captured source-closure git identity differs from Cargo.lock identity",
-        ));
-    }
-    let manifest_path = PathBuf::from(&closure_source.manifest_path);
-    if !manifest_path.is_file() {
-        return Err(native_git_blocker(
-            Some(package.id.clone()),
-            "missing-git-source-manifest",
-            &format!("captured git source manifest {} is not readable", manifest_path.display()),
-        ));
-    }
-    let source_root = manifest_path.parent().ok_or_else(|| {
-        native_git_blocker(
-            Some(package.id.clone()),
-            "invalid-git-source-root",
-            "captured git source manifest has no parent directory",
-        )
+    let material = captured_git_source_material(CapturedGitSourceInputs {
+        package,
+        source_closure,
+        source: &source,
+        resolved_revision: &resolved_revision,
     })?;
-    let source_digest = hash_path_source_tree(source_root)
-        .map(|value| SourceDigest {
-            algorithm: PATH_SOURCE_DIGEST_ALGORITHM.to_string(),
-            value,
-        })
-        .map_err(|message| native_git_blocker(Some(package.id.clone()), "git-source-unreadable", &message))?;
     Ok(NativeGitSourceSummary {
         package_id: package.id.clone(),
         name: package.name.clone(),
@@ -3221,20 +3597,31 @@ fn bind_captured_git_source(
         source,
         source_class: "git".to_string(),
         resolved_revision,
-        source_root: normalize_path_string(source_root),
-        manifest_path: normalize_path_string(&manifest_path),
-        source_digest,
+        source_root: material.source_root,
+        manifest_path: material.manifest_path,
+        source_digest: material.source_digest,
         lockfile_identity: lock_identity,
     })
 }
 
-fn native_git_source_digest(
-    sources: &[NativeGitSourceSummary],
-    blockers: &[NativeGitSourceBlocker],
-    comparison_status: &str,
-    lockfile_digest_blake3: &str,
-    source_closure_digest_blake3: &str,
-) -> Result<String, RunError> {
+struct NativeGitSourceDigestInputs<'a> {
+    sources: &'a [NativeGitSourceSummary],
+    blockers: &'a [NativeGitSourceBlocker],
+    comparison_status: &'a str,
+    lockfile_digest_blake3: &'a str,
+    source_closure_digest_blake3: &'a str,
+}
+
+fn native_git_source_digest(inputs: NativeGitSourceDigestInputs<'_>) -> Result<String, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let NativeGitSourceDigestInputs {
+        sources,
+        blockers,
+        comparison_status,
+        lockfile_digest_blake3,
+        source_closure_digest_blake3,
+    } = inputs;
     #[derive(Serialize)]
     struct Hashable<'a> {
         comparison_status: &'a str,
@@ -3254,12 +3641,22 @@ fn native_git_source_digest(
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
-fn native_registry_source_digest(
-    sources: &[NativeRegistrySourceSummary],
-    blockers: &[NativeRegistrySourceBlocker],
-    comparison_status: &str,
-    lockfile_digest_blake3: &str,
-) -> Result<String, RunError> {
+struct NativeRegistrySourceDigestInputs<'a> {
+    sources: &'a [NativeRegistrySourceSummary],
+    blockers: &'a [NativeRegistrySourceBlocker],
+    comparison_status: &'a str,
+    lockfile_digest_blake3: &'a str,
+}
+
+fn native_registry_source_digest(inputs: NativeRegistrySourceDigestInputs<'_>) -> Result<String, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let NativeRegistrySourceDigestInputs {
+        sources,
+        blockers,
+        comparison_status,
+        lockfile_digest_blake3,
+    } = inputs;
     #[derive(Serialize)]
     struct Hashable<'a> {
         comparison_status: &'a str,
@@ -3277,11 +3674,17 @@ fn native_registry_source_digest(
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
-fn native_registry_blocker(package_id: Option<String>, class: &str, message: &str) -> NativeRegistrySourceBlocker {
+struct NativeRegistryBlockerInputs<'a> {
+    package_id: Option<String>,
+    class: &'a str,
+    message: &'a str,
+}
+
+fn native_registry_blocker(inputs: NativeRegistryBlockerInputs<'_>) -> NativeRegistrySourceBlocker {
     NativeRegistrySourceBlocker {
-        package_id,
-        class: class.to_string(),
-        message: message.to_string(),
+        package_id: inputs.package_id,
+        class: inputs.class.to_string(),
+        message: inputs.message.to_string(),
         planning_path: None,
         checksum_manifest_path: None,
         digest_algorithm: None,
@@ -3291,72 +3694,89 @@ fn native_registry_blocker(package_id: Option<String>, class: &str, message: &st
     }
 }
 
-fn native_registry_checksum_evidence_blocker(
+struct NativeRegistryChecksumBlockerInputs<'a> {
     package_id: Option<String>,
-    class: &str,
-    message: &str,
-    checksum_manifest_path: &Path,
-    digest_algorithm: &str,
-    digest_subject: &str,
-    expected_digest: Option<&str>,
-    actual_digest: Option<&str>,
+    class: &'a str,
+    message: &'a str,
+    checksum_manifest_path: &'a Path,
+    digest_algorithm: &'a str,
+    digest_subject: &'a str,
+    expected_digest: Option<&'a str>,
+    actual_digest: Option<&'a str>,
+}
+
+fn native_registry_checksum_evidence_blocker(
+    inputs: NativeRegistryChecksumBlockerInputs<'_>,
 ) -> NativeRegistrySourceBlocker {
-    let mut blocker = native_registry_blocker(package_id, class, message);
+    let mut blocker = native_registry_blocker(NativeRegistryBlockerInputs {
+        package_id: inputs.package_id,
+        class: inputs.class,
+        message: inputs.message,
+    });
     blocker.planning_path = Some(VENDOR_CHECKSUM_PLANNING_PATH.to_string());
-    blocker.checksum_manifest_path = Some(normalize_path_string(checksum_manifest_path));
-    blocker.digest_algorithm = Some(digest_algorithm.to_string());
-    blocker.digest_subject = Some(digest_subject.to_string());
-    blocker.expected_digest = expected_digest.map(ToOwned::to_owned);
-    blocker.actual_digest = actual_digest.map(ToOwned::to_owned);
+    blocker.checksum_manifest_path = Some(normalize_path_string(inputs.checksum_manifest_path));
+    blocker.digest_algorithm = Some(inputs.digest_algorithm.to_string());
+    blocker.digest_subject = Some(inputs.digest_subject.to_string());
+    blocker.expected_digest = inputs.expected_digest.map(ToOwned::to_owned);
+    blocker.actual_digest = inputs.actual_digest.map(ToOwned::to_owned);
     blocker
 }
 
-fn native_git_blocker(package_id: Option<String>, class: &str, message: &str) -> NativeGitSourceBlocker {
+struct NativeGitBlockerInputs<'a> {
+    package_id: Option<String>,
+    class: &'a str,
+    message: &'a str,
+}
+
+fn native_git_blocker(inputs: NativeGitBlockerInputs<'_>) -> NativeGitSourceBlocker {
     NativeGitSourceBlocker {
-        package_id,
-        class: class.to_string(),
-        message: message.to_string(),
+        package_id: inputs.package_id,
+        class: inputs.class.to_string(),
+        message: inputs.message.to_string(),
     }
 }
 
-fn summarize_native_package_target_planning(
-    root: &Path,
-    options: &RustPlanOptions,
-    unit_graph: &Value,
-    cargo_packages: &[CargoPackage],
-    workspace_members: &[String],
-    source_closure: &SourceClosureSummary,
-    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
-    native_git_source_planning: &NativeGitSourcePlanningSummary,
-) -> Result<NativePackageTargetPlanningSummary, RunError> {
-    let cargo_oracle_identity = if options.no_cargo_oracle {
-        "cargo-free:no-cargo-package-target-oracle".to_string()
-    } else {
-        cargo_package_target_oracle_digest(cargo_packages, workspace_members)?
-    };
-    let mut selected_features_by_package = selected_features_by_package_from_unit_graph(unit_graph);
-    let selected_package_ids = selected_package_ids_from_unit_graph(unit_graph);
-    let mut blockers = Vec::new();
-    let mut manifest_paths = native_workspace_manifest_paths(root, &mut blockers);
+struct NativePackagePlanningInputs<'a> {
+    root: &'a Path,
+    options: &'a RustPlanOptions,
+    unit_graph: &'a Value,
+    cargo_packages: &'a [CargoPackage],
+    workspace_members: &'a [String],
+    source_closure: &'a SourceClosureSummary,
+    registry_sources: &'a NativeRegistrySourcePlanningSummary,
+    git_sources: &'a NativeGitSourcePlanningSummary,
+}
+
+fn native_package_manifest_paths(
+    inputs: &NativePackagePlanningInputs<'_>,
+    selected_package_ids: &BTreeSet<String>,
+    blockers: &mut Vec<NativePackagePlanningBlocker>,
+) -> Vec<PathBuf> {
+    debug_assert!(NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS > 0);
+    debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
+    let mut manifest_paths = native_workspace_manifest_paths(inputs.root, blockers);
     manifest_paths.extend(
-        source_closure
+        inputs
+            .source_closure
             .sources
             .iter()
             .filter(|source| source.kind == SourceKind::Path)
             .map(|source| PathBuf::from(&source.manifest_path)),
     );
-    if native_registry_source_planning.ready {
+    if inputs.registry_sources.ready {
         manifest_paths.extend(
-            native_registry_source_planning
+            inputs
+                .registry_sources
                 .sources
                 .iter()
                 .filter(|source| !selected_package_ids.is_empty() && selected_package_ids.contains(&source.package_id))
                 .map(|source| PathBuf::from(&source.manifest_path)),
         );
     }
-    if native_git_source_planning.ready {
+    if inputs.git_sources.ready {
         manifest_paths.extend(
-            native_git_source_planning
+            inputs
+                .git_sources
                 .sources
                 .iter()
                 .filter(|source| !selected_package_ids.is_empty() && selected_package_ids.contains(&source.package_id))
@@ -3365,79 +3785,49 @@ fn summarize_native_package_target_planning(
     }
     manifest_paths.sort();
     manifest_paths.dedup();
-    let workspace_member_set: BTreeSet<&str> = workspace_members.iter().map(String::as_str).collect();
-    let mut native_packages = Vec::new();
-    let mut visited_manifest_paths = BTreeSet::new();
-    let mut queued_manifest_paths = VecDeque::from(manifest_paths);
-    while let Some(manifest_path) = queued_manifest_paths.pop_front() {
-        if visited_manifest_paths.len() >= NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS {
-            blockers.push(native_blocker(
-                None,
-                "native-package-manifest-reachability-limit",
-                "native package planning exceeded bounded manifest reachability limit",
-            ));
-            break;
-        }
-        let normalized_manifest_path = normalize_path_string(&manifest_path);
-        if !visited_manifest_paths.insert(normalized_manifest_path) {
-            continue;
-        }
-        match native_package_from_manifest(
-            root,
-            &manifest_path,
-            options,
-            source_closure,
-            native_registry_source_planning,
-            native_git_source_planning,
-            &selected_features_by_package,
-        ) {
-            Ok(package) => {
-                queue_native_dependency_manifest_paths(
-                    root,
-                    &package,
-                    source_closure,
-                    native_registry_source_planning,
-                    native_git_source_planning,
-                    &mut queued_manifest_paths,
-                    &mut visited_manifest_paths,
-                    &mut selected_features_by_package,
-                    &mut blockers,
-                );
-                upsert_native_package(&mut native_packages, package);
-            }
-            Err(blocker) => blockers.push(blocker),
-        }
+    manifest_paths
+}
+
+struct NativePackagePlanningResultInputs<'a> {
+    options: &'a RustPlanOptions,
+    cargo_packages: &'a [CargoPackage],
+    cargo_workspace_packages: Vec<&'a CargoPackage>,
+    cargo_oracle_identity: String,
+    native_packages: Vec<NativePackagePlanningSummary>,
+    blockers: Vec<NativePackagePlanningBlocker>,
+}
+
+fn finalize_native_package_target_planning(
+    mut inputs: NativePackagePlanningResultInputs<'_>,
+) -> Result<NativePackageTargetPlanningSummary, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!inputs.cargo_oracle_identity.is_empty());
+    inputs.native_packages.sort_by(|left, right| left.manifest_path.cmp(&right.manifest_path));
+    if !inputs.options.no_cargo_oracle {
+        compare_native_packages_to_cargo(
+            &inputs.native_packages,
+            inputs.cargo_packages,
+            &inputs.cargo_workspace_packages,
+            &mut inputs.blockers,
+        );
     }
-    let cargo_workspace_packages = cargo_packages
-        .iter()
-        .filter(|package| {
-            workspace_member_set.contains(package.id.as_str())
-                || native_packages.iter().any(|native_package| {
-                    manifest_paths_same(&package.manifest_path, Path::new(&native_package.manifest_path))
-                })
-        })
-        .collect::<Vec<_>>();
-    native_packages.sort_by(|left, right| left.manifest_path.cmp(&right.manifest_path));
-    if !options.no_cargo_oracle {
-        compare_native_packages_to_cargo(&native_packages, cargo_packages, &cargo_workspace_packages, &mut blockers);
-    }
-    blockers.sort();
-    blockers.dedup();
-    let comparison_status = if options.no_cargo_oracle && blockers.is_empty() {
+    inputs.blockers.sort();
+    inputs.blockers.dedup();
+    let comparison_status = if inputs.options.no_cargo_oracle && inputs.blockers.is_empty() {
         "cargo-free:no-oracle".to_string()
-    } else if blockers.is_empty() {
+    } else if inputs.blockers.is_empty() {
         "matched".to_string()
     } else {
         "blocked".to_string()
     };
-    let digest_blake3 = native_package_target_digest(&native_packages, &blockers, &comparison_status)?;
+    let digest_blake3 = native_package_target_digest(&inputs.native_packages, &inputs.blockers, &comparison_status)?;
     Ok(NativePackageTargetPlanningSummary {
-        ready: blockers.is_empty(),
+        ready: inputs.blockers.is_empty(),
         comparison_status,
-        cargo_oracle_identity,
+        cargo_oracle_identity: inputs.cargo_oracle_identity,
         digest_blake3,
-        packages: native_packages,
-        blockers,
+        packages: inputs.native_packages,
+        blockers: inputs.blockers,
         non_claims: vec![
             "bounded-lib-bin-path-fragment-only".to_string(),
             "not-full-cargo-feature-resolution".to_string(),
@@ -3447,100 +3837,171 @@ fn summarize_native_package_target_planning(
     })
 }
 
-fn queue_native_dependency_manifest_paths(
+fn cargo_workspace_packages_for_native<'a>(
+    cargo_packages: &'a [CargoPackage],
+    workspace_members: &[String],
+    native_packages: &[NativePackagePlanningSummary],
+) -> Vec<&'a CargoPackage> {
+    let workspace_member_set = workspace_members.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    cargo_packages
+        .iter()
+        .filter(|package| {
+            workspace_member_set.contains(package.id.as_str())
+                || native_packages.iter().any(|native_package| {
+                    manifest_paths_same(&package.manifest_path, Path::new(&native_package.manifest_path))
+                })
+        })
+        .collect()
+}
+
+fn summarize_native_package_target_planning_from_inputs(
+    inputs: NativePackagePlanningInputs<'_>,
+) -> Result<NativePackageTargetPlanningSummary, RunError> {
+    debug_assert!(NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS > 0);
+    debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
+    let options = inputs.options;
+    let cargo_packages = inputs.cargo_packages;
+    let workspace_members = inputs.workspace_members;
+    let native_registry_source_planning = inputs.registry_sources;
+    let native_git_source_planning = inputs.git_sources;
+    let cargo_oracle_identity = if options.no_cargo_oracle {
+        "cargo-free:no-cargo-package-target-oracle".to_string()
+    } else {
+        cargo_package_target_oracle_digest(cargo_packages, workspace_members)?
+    };
+    let mut selected_features_by_package = selected_features_by_package_from_unit_graph(inputs.unit_graph);
+    let selected_package_ids = selected_package_ids_from_unit_graph(inputs.unit_graph);
+    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let manifest_paths = native_package_manifest_paths(&inputs, &selected_package_ids, &mut blockers);
+    let mut native_packages = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut visited_manifest_paths = BTreeSet::new();
+    let mut queued_manifest_paths = VecDeque::from(manifest_paths);
+    while let Some(manifest_path) = queued_manifest_paths.pop_front() {
+        if visited_manifest_paths.len() >= NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS {
+            blockers.push(native_blocker(NativePackageBlockerInputs {
+                package_id: None,
+                class: "native-package-manifest-reachability-limit",
+                message: "native package planning exceeded bounded manifest reachability limit",
+            }));
+            break;
+        }
+        let normalized_manifest_path = normalize_path_string(&manifest_path);
+        if !visited_manifest_paths.insert(normalized_manifest_path) {
+            continue;
+        }
+        match native_package_from_manifest(NativePackageManifestInputs {
+            workspace_root: inputs.root,
+            manifest_path: &manifest_path,
+            options,
+            source_closure: inputs.source_closure,
+            registry_sources: native_registry_source_planning,
+            git_sources: native_git_source_planning,
+            selected_features_by_package: &selected_features_by_package,
+        }) {
+            Ok(package) => {
+                let mut context = DependencyFeatureQueueContext {
+                    root: inputs.root,
+                    source_closure: inputs.source_closure,
+                    registry_sources: native_registry_source_planning,
+                    git_sources: native_git_source_planning,
+                    queued_manifest_paths: &mut queued_manifest_paths,
+                    visited_manifest_paths: &mut visited_manifest_paths,
+                    selected_features_by_package: &mut selected_features_by_package,
+                };
+                queue_native_dependency_manifest_paths(&package, &mut context, &mut blockers);
+                upsert_native_package(&mut native_packages, package);
+            }
+            Err(blocker) => blockers.push(blocker),
+        }
+    }
+    let cargo_workspace_packages =
+        cargo_workspace_packages_for_native(cargo_packages, workspace_members, &native_packages);
+    finalize_native_package_target_planning(NativePackagePlanningResultInputs {
+        options,
+        cargo_packages,
+        cargo_workspace_packages,
+        cargo_oracle_identity,
+        native_packages,
+        blockers,
+    })
+}
+
+#[cfg(test)]
+fn summarize_native_package_target_planning(
     root: &Path,
-    package: &NativePackagePlanningSummary,
+    options: &RustPlanOptions,
+    unit_graph: &Value,
+    cargo_packages: &[CargoPackage],
+    workspace_members: &[String],
     source_closure: &SourceClosureSummary,
-    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
-    native_git_source_planning: &NativeGitSourcePlanningSummary,
-    queued_manifest_paths: &mut VecDeque<PathBuf>,
-    visited_manifest_paths: &mut BTreeSet<String>,
-    selected_features_by_package: &mut BTreeMap<String, Vec<String>>,
+    registry_sources: &NativeRegistrySourcePlanningSummary,
+    git_sources: &NativeGitSourcePlanningSummary,
+) -> Result<NativePackageTargetPlanningSummary, RunError> {
+    summarize_native_package_target_planning_from_inputs(NativePackagePlanningInputs {
+        root,
+        options,
+        unit_graph,
+        cargo_packages,
+        workspace_members,
+        source_closure,
+        registry_sources,
+        git_sources,
+    })
+}
+
+struct DependencyFeatureQueueContext<'a> {
+    root: &'a Path,
+    source_closure: &'a SourceClosureSummary,
+    registry_sources: &'a NativeRegistrySourcePlanningSummary,
+    git_sources: &'a NativeGitSourcePlanningSummary,
+    queued_manifest_paths: &'a mut VecDeque<PathBuf>,
+    visited_manifest_paths: &'a mut BTreeSet<String>,
+    selected_features_by_package: &'a mut BTreeMap<String, Vec<String>>,
+}
+
+fn queue_native_dependency_manifest_paths(
+    package: &NativePackagePlanningSummary,
+    context: &mut DependencyFeatureQueueContext<'_>,
     blockers: &mut Vec<NativePackagePlanningBlocker>,
 ) {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let dependencies = package.path_dependencies.iter().chain(package.build_dependencies.iter()).collect::<Vec<_>>();
     for dependency in &dependencies {
-        queued_manifest_paths.push_back(PathBuf::from(&dependency.manifest_path));
+        context.queued_manifest_paths.push_back(PathBuf::from(&dependency.manifest_path));
     }
     let manifest = match read_native_manifest(Path::new(&package.manifest_path)) {
         Ok(manifest) => manifest,
         Err(message) => {
-            blockers.push(native_blocker(
-                Some(package.package_id.clone()),
-                "unreadable-dependency-feature-manifest",
-                &message,
-            ));
+            blockers.push(native_blocker(NativePackageBlockerInputs {
+                package_id: Some(package.package_id.clone()),
+                class: "unreadable-dependency-feature-manifest",
+                message: &message,
+            }));
             return;
         }
     };
+    queue_dependency_feature_requests(&package.package_id, &manifest.dependencies, &dependencies, context, blockers);
     queue_dependency_feature_requests(
-        root,
-        &package.package_id,
-        &manifest.dependencies,
-        &dependencies,
-        source_closure,
-        native_registry_source_planning,
-        native_git_source_planning,
-        queued_manifest_paths,
-        visited_manifest_paths,
-        selected_features_by_package,
-        blockers,
-    );
-    queue_dependency_feature_requests(
-        root,
         &package.package_id,
         &manifest.build_dependencies,
         &dependencies,
-        source_closure,
-        native_registry_source_planning,
-        native_git_source_planning,
-        queued_manifest_paths,
-        visited_manifest_paths,
-        selected_features_by_package,
+        context,
         blockers,
     );
-    queue_target_cfg_dependency_feature_requests(
-        root,
-        package,
-        &manifest.target,
-        &dependencies,
-        source_closure,
-        native_registry_source_planning,
-        native_git_source_planning,
-        queued_manifest_paths,
-        visited_manifest_paths,
-        selected_features_by_package,
-        blockers,
-    );
-    queue_parent_feature_dependency_requests(
-        root,
-        &package.package_id,
-        &package.selected_features,
-        &manifest.features,
-        &dependencies,
-        source_closure,
-        native_registry_source_planning,
-        native_git_source_planning,
-        queued_manifest_paths,
-        visited_manifest_paths,
-        selected_features_by_package,
-        blockers,
-    );
+    queue_target_cfg_dependency_feature_requests(package, &manifest.target, &dependencies, context, blockers);
+    queue_parent_feature_dependency_requests(package, &manifest.features, &dependencies, context, blockers);
 }
 
 fn queue_target_cfg_dependency_feature_requests(
-    root: &Path,
     package: &NativePackagePlanningSummary,
     target_tables: &BTreeMap<String, NativeManifestTarget>,
     selected_dependencies: &[&NativePathDependencySummary],
-    source_closure: &SourceClosureSummary,
-    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
-    native_git_source_planning: &NativeGitSourcePlanningSummary,
-    queued_manifest_paths: &mut VecDeque<PathBuf>,
-    visited_manifest_paths: &mut BTreeSet<String>,
-    selected_features_by_package: &mut BTreeMap<String, Vec<String>>,
+    context: &mut DependencyFeatureQueueContext<'_>,
     blockers: &mut Vec<NativePackagePlanningBlocker>,
 ) {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let selected_names = package
         .target_cfg_dependencies
         .iter()
@@ -3558,16 +4019,10 @@ fn queue_target_cfg_dependency_feature_requests(
             .map(|(name, value)| (name.clone(), value.clone()))
             .collect::<BTreeMap<_, _>>();
         queue_dependency_feature_requests(
-            root,
             &package.package_id,
             &selected_target_dependencies,
             selected_dependencies,
-            source_closure,
-            native_registry_source_planning,
-            native_git_source_planning,
-            queued_manifest_paths,
-            visited_manifest_paths,
-            selected_features_by_package,
+            context,
             blockers,
         );
     }
@@ -3585,16 +4040,10 @@ fn upsert_native_package(
 }
 
 fn queue_dependency_feature_requests(
-    root: &Path,
     package_id: &str,
     dependency_table: &BTreeMap<String, toml::Value>,
     selected_dependencies: &[&NativePathDependencySummary],
-    source_closure: &SourceClosureSummary,
-    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
-    native_git_source_planning: &NativeGitSourcePlanningSummary,
-    queued_manifest_paths: &mut VecDeque<PathBuf>,
-    visited_manifest_paths: &mut BTreeSet<String>,
-    selected_features_by_package: &mut BTreeMap<String, Vec<String>>,
+    context: &mut DependencyFeatureQueueContext<'_>,
     blockers: &mut Vec<NativePackagePlanningBlocker>,
 ) {
     for (name, value) in dependency_table {
@@ -3603,63 +4052,38 @@ fn queue_dependency_feature_requests(
         };
         let dependency_manifest_path = PathBuf::from(&dependency.manifest_path);
         match selected_features_for_dependency(&dependency_manifest_path, value) {
-            Ok(features) => merge_dependency_feature_request(
-                root,
-                dependency_manifest_path,
-                features,
-                source_closure,
-                native_registry_source_planning,
-                native_git_source_planning,
-                queued_manifest_paths,
-                visited_manifest_paths,
-                selected_features_by_package,
-            ),
-            Err(message) => blockers.push(native_blocker(
-                Some(package_id.to_string()),
-                "unsupported-dependency-feature-request",
-                &message,
-            )),
+            Ok(features) => merge_dependency_feature_request(dependency_manifest_path, features, context),
+            Err(message) => blockers.push(native_blocker(NativePackageBlockerInputs {
+                package_id: Some(package_id.to_string()),
+                class: "unsupported-dependency-feature-request",
+                message: &message,
+            })),
         }
     }
 }
 
 fn queue_parent_feature_dependency_requests(
-    root: &Path,
-    package_id: &str,
-    selected_parent_features: &[String],
+    package: &NativePackagePlanningSummary,
     parent_feature_defs: &BTreeMap<String, Vec<String>>,
     selected_dependencies: &[&NativePathDependencySummary],
-    source_closure: &SourceClosureSummary,
-    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
-    native_git_source_planning: &NativeGitSourcePlanningSummary,
-    queued_manifest_paths: &mut VecDeque<PathBuf>,
-    visited_manifest_paths: &mut BTreeSet<String>,
-    selected_features_by_package: &mut BTreeMap<String, Vec<String>>,
+    context: &mut DependencyFeatureQueueContext<'_>,
     blockers: &mut Vec<NativePackagePlanningBlocker>,
 ) {
-    let forwarded_features = forwarded_dependency_features(selected_parent_features, parent_feature_defs);
+    let forwarded_features = forwarded_dependency_features(&package.selected_features, parent_feature_defs);
     for dependency in selected_dependencies {
         let Some(features) = forwarded_features.get(&dependency.name) else {
             continue;
         };
         let dependency_manifest_path = PathBuf::from(&dependency.manifest_path);
         match selected_features_for_forwarded_dependency(&dependency_manifest_path, features) {
-            Ok(selected_features) => merge_dependency_feature_request(
-                root,
-                dependency_manifest_path,
-                selected_features,
-                source_closure,
-                native_registry_source_planning,
-                native_git_source_planning,
-                queued_manifest_paths,
-                visited_manifest_paths,
-                selected_features_by_package,
-            ),
-            Err(message) => blockers.push(native_blocker(
-                Some(package_id.to_string()),
-                "unsupported-forwarded-dependency-feature-request",
-                &message,
-            )),
+            Ok(selected_features) => {
+                merge_dependency_feature_request(dependency_manifest_path, selected_features, context);
+            }
+            Err(message) => blockers.push(native_blocker(NativePackageBlockerInputs {
+                package_id: Some(package.package_id.clone()),
+                class: "unsupported-forwarded-dependency-feature-request",
+                message: &message,
+            })),
         }
     }
 }
@@ -3668,6 +4092,8 @@ fn forwarded_dependency_features(
     selected_parent_features: &[String],
     parent_feature_defs: &BTreeMap<String, Vec<String>>,
 ) -> BTreeMap<String, Vec<String>> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut forwarded = BTreeMap::new();
     for parent_feature in selected_parent_features {
         let Some(entries) = parent_feature_defs.get(parent_feature) else {
@@ -3698,26 +4124,20 @@ fn forwarded_dependency_feature_entry(entry: &str) -> Option<(String, String)> {
 }
 
 fn merge_dependency_feature_request(
-    root: &Path,
     dependency_manifest_path: PathBuf,
     features: Vec<String>,
-    source_closure: &SourceClosureSummary,
-    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
-    native_git_source_planning: &NativeGitSourcePlanningSummary,
-    queued_manifest_paths: &mut VecDeque<PathBuf>,
-    visited_manifest_paths: &mut BTreeSet<String>,
-    selected_features_by_package: &mut BTreeMap<String, Vec<String>>,
+    context: &mut DependencyFeatureQueueContext<'_>,
 ) {
     let dependency_package_id = dependency_package_id_for_manifest(
-        root,
+        context.root,
         &dependency_manifest_path,
-        source_closure,
-        native_registry_source_planning,
-        native_git_source_planning,
+        context.source_closure,
+        context.registry_sources,
+        context.git_sources,
     );
-    if merge_selected_features(selected_features_by_package, dependency_package_id, features) {
-        visited_manifest_paths.remove(&normalize_path_string(&dependency_manifest_path));
-        queued_manifest_paths.push_back(dependency_manifest_path);
+    if merge_selected_features(context.selected_features_by_package, dependency_package_id, features) {
+        context.visited_manifest_paths.remove(&normalize_path_string(&dependency_manifest_path));
+        context.queued_manifest_paths.push_back(dependency_manifest_path);
     }
 }
 
@@ -3728,6 +4148,8 @@ fn dependency_package_id_for_manifest(
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
     native_git_source_planning: &NativeGitSourcePlanningSummary,
 ) -> String {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(source) = source_closure
         .sources
         .iter()
@@ -3754,9 +4176,12 @@ fn dependency_package_id_for_manifest(
             .package
             .as_ref()
             .and_then(|package| {
-                native_package_version(root, &package.name, &package.version)
-                    .ok()
-                    .map(|version| cargo_path_package_id(&package.name, &version))
+                native_package_version(root, &package.name, &package.version).ok().map(|version| {
+                    cargo_path_package_id(CargoPathPackageIdInputs {
+                        name: &package.name,
+                        version: &version,
+                    })
+                })
             })
             .unwrap_or_else(|| normalize_path_string(manifest_path)),
         Err(_) => normalize_path_string(manifest_path),
@@ -3765,11 +4190,11 @@ fn dependency_package_id_for_manifest(
 
 fn selected_features_for_dependency(manifest_path: &Path, value: &toml::Value) -> Result<Vec<String>, String> {
     let mut explicit_features = dependency_feature_list(value)?;
-    let no_default_features = !dependency_default_features_enabled(value);
-    if !no_default_features {
+    let is_default_features_disabled = !dependency_default_features_enabled(value);
+    if !is_default_features_disabled {
         explicit_features.push("default".to_string());
     }
-    selected_features_for_dependency_request(manifest_path, explicit_features, no_default_features)
+    selected_features_for_dependency_request(manifest_path, explicit_features, is_default_features_disabled)
 }
 
 fn selected_features_for_forwarded_dependency(
@@ -3813,7 +4238,7 @@ fn dependency_feature_list(value: &toml::Value) -> Result<Vec<String>, String> {
     let Some(array) = features.as_array() else {
         return Err("dependency features must be an array of strings".to_string());
     };
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for feature in array {
         let Some(feature) = feature.as_str() else {
             return Err("dependency features must be strings".to_string());
@@ -3841,11 +4266,11 @@ fn merge_selected_features(
 fn native_workspace_manifest_paths(root: &Path, blockers: &mut Vec<NativePackagePlanningBlocker>) -> Vec<PathBuf> {
     let root_manifest_path = root.join("Cargo.toml");
     let Ok(root_manifest) = read_native_manifest(&root_manifest_path) else {
-        blockers.push(native_blocker(
-            None,
-            "missing-native-root-manifest",
-            &format!("native planner requires readable root manifest at {}", root_manifest_path.display()),
-        ));
+        blockers.push(native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "missing-native-root-manifest",
+            message: &format!("native planner requires readable root manifest at {}", root_manifest_path.display()),
+        }));
         return Vec::new();
     };
     native_workspace_manifest_paths_from_root_manifest(root, &root_manifest_path, &root_manifest, blockers)
@@ -3857,18 +4282,20 @@ fn native_workspace_manifest_paths_from_root_manifest(
     root_manifest: &NativeManifest,
     blockers: &mut Vec<NativePackagePlanningBlocker>,
 ) -> Vec<PathBuf> {
-    let mut manifests = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut manifests = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if root_manifest.package.is_some() {
         manifests.push(root_manifest_path.to_path_buf());
     }
     if let Some(workspace) = root_manifest.workspace.as_ref() {
         for member in &workspace.members {
             if workspace_member_has_unsupported_glob(member) {
-                blockers.push(native_blocker(
-                    None,
-                    "unsupported-workspace-member-pattern",
-                    &format!("native planner supports explicit members or one-level `*` workspace member globs, got `{member}`"),
-                ));
+                blockers.push(native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "unsupported-workspace-member-pattern",
+            message: &format!("native planner supports explicit members or one-level `*` workspace member globs, got `{member}`"),
+        }));
                 continue;
             }
             if member.contains('*') {
@@ -3887,7 +4314,12 @@ fn native_workspace_manifest_paths_from_root_manifest(
 }
 
 fn workspace_member_has_unsupported_glob(member: &str) -> bool {
-    if member.contains('?') || member.contains('[') || member.contains(']') || member.contains("**") {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    if ['?', '[', ']'].iter().any(|token| member.contains(*token)) {
+        return true;
+    }
+    if member.contains("**") {
         return true;
     }
     if !member.contains('*') {
@@ -3896,33 +4328,41 @@ fn workspace_member_has_unsupported_glob(member: &str) -> bool {
     let Some((prefix, suffix)) = member.split_once('*') else {
         return true;
     };
-    !suffix.is_empty() || prefix.is_empty() || !prefix.ends_with('/') || prefix[..prefix.len() - 1].contains('*')
+    if !suffix.is_empty() {
+        return true;
+    }
+    let Some(parent_prefix) = prefix.strip_suffix('/') else {
+        return true;
+    };
+    parent_prefix.is_empty() || parent_prefix.contains('*')
 }
 
 fn expand_workspace_member_glob(root: &Path, member: &str) -> Result<Vec<PathBuf>, NativePackagePlanningBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let Some((prefix, "")) = member.split_once('*') else {
-        return Err(native_blocker(
-            None,
-            "unsupported-workspace-member-pattern",
-            &format!("native planner cannot expand workspace member pattern `{member}`"),
-        ));
+        return Err(native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "unsupported-workspace-member-pattern",
+            message: &format!("native planner cannot expand workspace member pattern `{member}`"),
+        }));
     };
     let base = root.join(prefix.trim_end_matches('/'));
     let entries = fs::read_dir(&base).map_err(|err| {
-        native_blocker(
-            None,
-            "unreadable-workspace-member-glob-root",
-            &format!("reading workspace member glob root {}: {err}", base.display()),
-        )
+        native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "unreadable-workspace-member-glob-root",
+            message: &format!("reading workspace member glob root {}: {err}", base.display()),
+        })
     })?;
-    let mut manifests = Vec::new();
+    let mut manifests = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for entry in entries {
         let entry = entry.map_err(|err| {
-            native_blocker(
-                None,
-                "unreadable-workspace-member-glob-entry",
-                &format!("reading workspace member glob entry {}: {err}", base.display()),
-            )
+            native_blocker(NativePackageBlockerInputs {
+                package_id: None,
+                class: "unreadable-workspace-member-glob-entry",
+                message: &format!("reading workspace member glob entry {}: {err}", base.display()),
+            })
         })?;
         let path = entry.path();
         if path.join("Cargo.toml").is_file() {
@@ -3930,140 +4370,248 @@ fn expand_workspace_member_glob(root: &Path, member: &str) -> Result<Vec<PathBuf
         }
     }
     if manifests.is_empty() {
-        return Err(native_blocker(
-            None,
-            "empty-workspace-member-glob",
-            &format!("workspace member glob `{member}` matched no readable manifests"),
-        ));
+        return Err(native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "empty-workspace-member-glob",
+            message: &format!("workspace member glob `{member}` matched no readable manifests"),
+        }));
     }
     manifests.sort();
     Ok(manifests)
 }
 
-fn native_package_from_manifest(
-    workspace_root: &Path,
-    manifest_path: &Path,
-    options: &RustPlanOptions,
-    source_closure: &SourceClosureSummary,
-    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
-    native_git_source_planning: &NativeGitSourcePlanningSummary,
-    selected_features_by_package: &BTreeMap<String, Vec<String>>,
-) -> Result<NativePackagePlanningSummary, NativePackagePlanningBlocker> {
-    let manifest =
-        read_native_manifest(manifest_path).map_err(|message| native_blocker(None, "unreadable-manifest", &message))?;
-    let Some(package) = manifest.package.as_ref() else {
-        return Err(native_blocker(
-            None,
-            "missing-package-section",
-            &format!("manifest {} lacks [package]", manifest_path.display()),
-        ));
-    };
-    let package_version = native_package_version(workspace_root, &package.name, &package.version)?;
-    let package_edition = native_package_edition(workspace_root, &package.name, &package.edition)?;
-    let workspace_package = native_cargo_package_env_workspace(workspace_root, package)?;
-    let package_id = source_closure
+struct NativePackageManifestInputs<'a> {
+    workspace_root: &'a Path,
+    manifest_path: &'a Path,
+    options: &'a RustPlanOptions,
+    source_closure: &'a SourceClosureSummary,
+    registry_sources: &'a NativeRegistrySourcePlanningSummary,
+    git_sources: &'a NativeGitSourcePlanningSummary,
+    selected_features_by_package: &'a BTreeMap<String, Vec<String>>,
+}
+
+struct NativeManifestPackageIdInputs<'a> {
+    manifest_inputs: &'a NativePackageManifestInputs<'a>,
+    package_name: &'a str,
+    package_version: &'a str,
+}
+
+fn native_manifest_package_id(inputs: NativeManifestPackageIdInputs<'_>) -> String {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let NativeManifestPackageIdInputs {
+        manifest_inputs: inputs,
+        package_name,
+        package_version,
+    } = inputs;
+    inputs
+        .source_closure
         .sources
         .iter()
-        .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+        .find(|source| manifest_paths_same(&source.manifest_path, inputs.manifest_path))
         .map(|source| source.package_id.clone())
         .or_else(|| {
-            native_registry_source_planning
+            inputs
+                .registry_sources
                 .sources
                 .iter()
-                .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+                .find(|source| manifest_paths_same(&source.manifest_path, inputs.manifest_path))
                 .map(|source| source.package_id.clone())
         })
         .or_else(|| {
-            native_git_source_planning
+            inputs
+                .git_sources
                 .sources
                 .iter()
-                .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+                .find(|source| manifest_paths_same(&source.manifest_path, inputs.manifest_path))
                 .map(|source| source.package_id.clone())
         })
-        .unwrap_or_else(|| cargo_path_package_id(&package.name, &package_version));
-    let source_root = manifest_path.parent().ok_or_else(|| {
-        native_blocker(Some(package_id.clone()), "invalid-manifest-path", "manifest path has no parent directory")
-    })?;
-    let targets =
-        native_targets_for_manifest(source_root, &package.name, &package_version, &package_edition, &manifest)?;
-    let optional_dependencies = native_optional_dependency_names(&manifest.dependencies);
-    let selected_features = selected_features_by_package
-        .get(&package_id)
-        .cloned()
-        .unwrap_or_else(|| native_selected_features(options, &manifest.features, &optional_dependencies));
-    let active_target = active_rust_target(options);
-    let (target_cfg_dependencies, selected_target_cfg_dependencies) = native_target_cfg_dependencies(
-        source_root,
-        &manifest.target,
-        &active_target,
-        &manifest.features,
-        &selected_features,
-        Some(package_id.clone()),
-        native_registry_source_planning,
-        native_git_source_planning,
-    )?;
-    let path_dependencies = native_path_dependencies(
-        source_root,
-        &manifest.dependencies,
-        &manifest.features,
-        &selected_features,
-        Some(package_id.clone()),
-        native_registry_source_planning,
-        native_git_source_planning,
-    )?;
-    let build_dependencies = native_build_dependencies(
-        source_root,
-        &manifest.build_dependencies,
-        &manifest.features,
-        &selected_features,
-        Some(package_id.clone()),
-        native_registry_source_planning,
-        native_git_source_planning,
-    )?;
-    let dev_dependencies = native_dev_dependencies(
-        source_root,
-        &manifest.dev_dependencies,
-        Some(package_id.clone()),
-        native_registry_source_planning,
-        native_git_source_planning,
-    )?;
-    let (workspace_dependencies, selected_workspace_dependencies) = native_workspace_dependencies(
-        workspace_root,
-        source_root,
-        &package_id,
-        &manifest.dependencies,
-        Some(package_id.clone()),
-        native_registry_source_planning,
-        native_git_source_planning,
-    )?;
-    let mut path_dependencies = path_dependencies;
-    path_dependencies.extend(selected_target_cfg_dependencies);
-    path_dependencies.extend(selected_workspace_dependencies);
-    path_dependencies.sort();
-    path_dependencies.dedup();
-    let source_digest = native_registry_source_planning
+        .unwrap_or_else(|| {
+            cargo_path_package_id(CargoPathPackageIdInputs {
+                name: package_name,
+                version: package_version,
+            })
+        })
+}
+
+fn native_manifest_source_digest(inputs: &NativePackageManifestInputs<'_>) -> SourceDigest {
+    inputs
+        .registry_sources
         .sources
         .iter()
-        .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+        .find(|source| manifest_paths_same(&source.manifest_path, inputs.manifest_path))
         .map(|source| source.source_digest.clone())
         .or_else(|| {
-            native_git_source_planning
+            inputs
+                .git_sources
                 .sources
                 .iter()
-                .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+                .find(|source| manifest_paths_same(&source.manifest_path, inputs.manifest_path))
                 .map(|source| source.source_digest.clone())
         })
         .or_else(|| {
-            source_closure
+            inputs
+                .source_closure
                 .sources
                 .iter()
-                .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+                .find(|source| manifest_paths_same(&source.manifest_path, inputs.manifest_path))
                 .map(|source| source.source_digest.clone())
         })
         .unwrap_or_else(|| SourceDigest {
             algorithm: "missing".to_string(),
             value: "missing".to_string(),
+        })
+}
+
+struct NativePackageDependencyInputs<'a> {
+    manifest_inputs: &'a NativePackageManifestInputs<'a>,
+    manifest: &'a NativeManifest,
+    source_root: &'a Path,
+    package_id: &'a str,
+}
+
+struct NativePackageDependencies {
+    selected_features: Vec<String>,
+    path_dependencies: Vec<NativePathDependencySummary>,
+    build_dependencies: Vec<NativePathDependencySummary>,
+    dev_dependencies: Vec<NativePathDependencySummary>,
+    target_cfg_dependencies: Vec<NativeTargetCfgDependencySummary>,
+    workspace_dependencies: Vec<NativeWorkspaceDependencySummary>,
+}
+
+fn native_package_workspace_dependencies(
+    inputs: &NativePackageDependencyInputs<'_>,
+    package_id: Option<String>,
+) -> Result<(Vec<NativeWorkspaceDependencySummary>, Vec<NativePathDependencySummary>), NativePackagePlanningBlocker> {
+    native_workspace_dependencies(NativeWorkspaceDependenciesInputs {
+        workspace_root: inputs.manifest_inputs.workspace_root,
+        source_root: inputs.source_root,
+        member_package_id: inputs.package_id,
+        dependencies: &inputs.manifest.dependencies,
+        package_id,
+        registry_sources: inputs.manifest_inputs.registry_sources,
+        git_sources: inputs.manifest_inputs.git_sources,
+    })
+}
+
+fn native_package_dependencies(
+    inputs: NativePackageDependencyInputs<'_>,
+) -> Result<NativePackageDependencies, NativePackagePlanningBlocker> {
+    debug_assert!(!inputs.package_id.is_empty());
+    debug_assert!(MAX_CFG_EVALUATION_STEPS > 0);
+    let optional_dependencies = native_optional_dependency_names(&inputs.manifest.dependencies);
+    let selected_features = inputs
+        .manifest_inputs
+        .selected_features_by_package
+        .get(inputs.package_id)
+        .cloned()
+        .unwrap_or_else(|| {
+            native_selected_features(inputs.manifest_inputs.options, &inputs.manifest.features, &optional_dependencies)
         });
+    let active_target = active_rust_target(inputs.manifest_inputs.options);
+    let package_id = Some(inputs.package_id.to_string());
+    let (target_cfg_dependencies, selected_target_cfg_dependencies) =
+        native_target_cfg_dependencies(NativeTargetCfgDependenciesInputs {
+            source_root: inputs.source_root,
+            target_tables: &inputs.manifest.target,
+            active_target: &active_target,
+            feature_defs: &inputs.manifest.features,
+            selected_features: &selected_features,
+            package_id: package_id.clone(),
+            registry_sources: inputs.manifest_inputs.registry_sources,
+            git_sources: inputs.manifest_inputs.git_sources,
+        })?;
+    let mut path_dependencies = native_path_dependencies(NativePathDependenciesInputs {
+        source_root: inputs.source_root,
+        dependencies: &inputs.manifest.dependencies,
+        feature_defs: &inputs.manifest.features,
+        selected_features: &selected_features,
+        package_id: package_id.clone(),
+        registry_sources: inputs.manifest_inputs.registry_sources,
+        git_sources: inputs.manifest_inputs.git_sources,
+    })?;
+    let build_dependencies = native_build_dependencies(NativePathDependenciesInputs {
+        source_root: inputs.source_root,
+        dependencies: &inputs.manifest.build_dependencies,
+        feature_defs: &inputs.manifest.features,
+        selected_features: &selected_features,
+        package_id: package_id.clone(),
+        registry_sources: inputs.manifest_inputs.registry_sources,
+        git_sources: inputs.manifest_inputs.git_sources,
+    })?;
+    let dev_dependencies = native_dev_dependencies(
+        inputs.source_root,
+        &inputs.manifest.dev_dependencies,
+        package_id.clone(),
+        inputs.manifest_inputs.registry_sources,
+        inputs.manifest_inputs.git_sources,
+    )?;
+    let (workspace_dependencies, selected_workspace_dependencies) =
+        native_package_workspace_dependencies(&inputs, package_id)?;
+    path_dependencies.extend(selected_target_cfg_dependencies);
+    path_dependencies.extend(selected_workspace_dependencies);
+    path_dependencies.sort();
+    path_dependencies.dedup();
+    Ok(NativePackageDependencies {
+        selected_features,
+        path_dependencies,
+        build_dependencies,
+        dev_dependencies,
+        target_cfg_dependencies,
+        workspace_dependencies,
+    })
+}
+
+fn native_package_from_manifest(
+    inputs: NativePackageManifestInputs<'_>,
+) -> Result<NativePackagePlanningSummary, NativePackagePlanningBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let workspace_root = inputs.workspace_root;
+    let manifest_path = inputs.manifest_path;
+    let manifest = read_native_manifest(manifest_path).map_err(|message| {
+        native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "unreadable-manifest",
+            message: &message,
+        })
+    })?;
+    let Some(package) = manifest.package.as_ref() else {
+        return Err(native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "missing-package-section",
+            message: &format!("manifest {} lacks [package]", manifest_path.display()),
+        }));
+    };
+    let package_version = native_package_version(workspace_root, &package.name, &package.version)?;
+    let package_edition = native_package_edition(workspace_root, &package.name, &package.edition)?;
+    let workspace_package = native_cargo_package_env_workspace(workspace_root, package)?;
+    let package_id = native_manifest_package_id(NativeManifestPackageIdInputs {
+        manifest_inputs: &inputs,
+        package_name: &package.name,
+        package_version: &package_version,
+    });
+    let source_root = manifest_path.parent().ok_or_else(|| {
+        native_blocker(NativePackageBlockerInputs {
+            package_id: Some(package_id.clone()),
+            class: "invalid-manifest-path",
+            message: "manifest path has no parent directory",
+        })
+    })?;
+    let targets = native_targets_for_manifest(NativeTargetsForManifestInputs {
+        source_root: source_root,
+        package_name: &package.name,
+        package_version: &package_version,
+        package_edition: &package_edition,
+        manifest: &manifest,
+    })?;
+    let dependencies = native_package_dependencies(NativePackageDependencyInputs {
+        manifest_inputs: &inputs,
+        manifest: &manifest,
+        source_root,
+        package_id: &package_id,
+    })?;
+    let source_digest = native_manifest_source_digest(&inputs);
     Ok(NativePackagePlanningSummary {
         package_id,
         name: package.name.clone(),
@@ -4071,13 +4619,13 @@ fn native_package_from_manifest(
         manifest_path: normalize_path_string(manifest_path),
         links: package.links.clone(),
         cargo_package_env: native_cargo_package_env(package, &workspace_package, &package_version),
-        selected_features,
+        selected_features: dependencies.selected_features,
         targets,
-        path_dependencies,
-        build_dependencies,
-        dev_dependencies,
-        target_cfg_dependencies,
-        workspace_dependencies,
+        path_dependencies: dependencies.path_dependencies,
+        build_dependencies: dependencies.build_dependencies,
+        dev_dependencies: dependencies.dev_dependencies,
+        target_cfg_dependencies: dependencies.target_cfg_dependencies,
+        workspace_dependencies: dependencies.workspace_dependencies,
         source_digest,
     })
 }
@@ -4087,6 +4635,8 @@ fn native_cargo_package_env(
     workspace_package: &NativeWorkspacePackage,
     package_version: &str,
 ) -> BTreeMap<String, String> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let (major, minor, patch, pre) = cargo_package_version_components(package_version);
     BTreeMap::from([
         (
@@ -4149,8 +4699,13 @@ fn native_cargo_package_env_workspace(
         return Ok(NativeWorkspacePackage::default());
     }
     let root_manifest_path = workspace_root.join("Cargo.toml");
-    let root_manifest = read_native_manifest(&root_manifest_path)
-        .map_err(|message| native_blocker(None, "unreadable-workspace-package-manifest", &message))?;
+    let root_manifest = read_native_manifest(&root_manifest_path).map_err(|message| {
+        native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "unreadable-workspace-package-manifest",
+            message: &message,
+        })
+    })?;
     Ok(root_manifest.workspace.map(|workspace| workspace.package).unwrap_or_default())
 }
 
@@ -4208,6 +4763,8 @@ fn native_package_edition(
     package_name: &str,
     edition: &NativeManifestInheritedString,
 ) -> Result<String, NativePackagePlanningBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(value) = &edition.value {
         return Ok(value.clone());
     }
@@ -4215,14 +4772,21 @@ fn native_package_edition(
         return Ok(DEFAULT_RUST_EDITION.to_string());
     }
     let root_manifest_path = workspace_root.join("Cargo.toml");
-    let root_manifest = read_native_manifest(&root_manifest_path)
-        .map_err(|message| native_blocker(None, "unreadable-workspace-package-manifest", &message))?;
+    let root_manifest = read_native_manifest(&root_manifest_path).map_err(|message| {
+        native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "unreadable-workspace-package-manifest",
+            message: &message,
+        })
+    })?;
     let Some(workspace_edition) = root_manifest.workspace.and_then(|workspace| workspace.package.edition) else {
-        return Err(native_blocker(
-            None,
-            "missing-workspace-package-edition",
-            &format!("package `{package_name}` inherits workspace edition but workspace.package.edition is missing"),
-        ));
+        return Err(native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "missing-workspace-package-edition",
+            message: &format!(
+                "package `{package_name}` inherits workspace edition but workspace.package.edition is missing"
+            ),
+        }));
     };
     Ok(workspace_edition)
 }
@@ -4232,47 +4796,63 @@ fn native_package_version(
     package_name: &str,
     version: &NativeManifestInheritedString,
 ) -> Result<String, NativePackagePlanningBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(value) = &version.value {
         return Ok(value.clone());
     }
     if !version.workspace {
-        return Err(native_blocker(
-            None,
-            "missing-package-version",
-            &format!("package `{package_name}` lacks a literal version or workspace version inheritance"),
-        ));
+        return Err(native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "missing-package-version",
+            message: &format!("package `{package_name}` lacks a literal version or workspace version inheritance"),
+        }));
     }
     let root_manifest_path = workspace_root.join("Cargo.toml");
-    let root_manifest = read_native_manifest(&root_manifest_path)
-        .map_err(|message| native_blocker(None, "unreadable-workspace-package-manifest", &message))?;
+    let root_manifest = read_native_manifest(&root_manifest_path).map_err(|message| {
+        native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "unreadable-workspace-package-manifest",
+            message: &message,
+        })
+    })?;
     let Some(workspace_version) = root_manifest.workspace.and_then(|workspace| workspace.package.version) else {
-        return Err(native_blocker(
-            None,
-            "missing-workspace-package-version",
-            &format!(
+        return Err(native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "missing-workspace-package-version",
+            message: &format!(
                 "package `{package_name}` inherits version from [workspace.package], but no workspace package version is declared"
             ),
-        ));
+        }));
     };
     Ok(workspace_version)
 }
 
-fn parse_native_manifest_text(path_label: &str, text: &str) -> Result<NativeManifest, String> {
+fn parse_native_manifest_text(inputs: NativeTextParseInputs<'_>) -> Result<NativeManifest, String> {
+    let NativeTextParseInputs { path_label, text } = inputs;
     debug_assert!(!path_label.is_empty());
     toml::from_str(text).map_err(|err| format!("parsing manifest {path_label}: {err}"))
 }
 
 fn read_native_manifest(path: &Path) -> Result<NativeManifest, String> {
     let text = fs::read_to_string(path).map_err(|err| format!("reading manifest {}: {err}", path.display()))?;
-    parse_native_manifest_text(&path.display().to_string(), &text)
+    parse_native_manifest_text(NativeTextParseInputs {
+        path_label: &path.display().to_string(),
+        text: &text,
+    })
 }
 
 #[allow(dead_code)]
 fn collect_native_manifest_lock_texts(root: &Path) -> Result<NativeManifestLockInputTexts, String> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let root_manifest_path = root.join("Cargo.toml");
     let root_manifest_input = read_native_text_input(&root_manifest_path, "root manifest")?;
-    let root_manifest = parse_native_manifest_text(&root_manifest_input.path, &root_manifest_input.text)?;
-    let mut blockers = Vec::new();
+    let root_manifest = parse_native_manifest_text(NativeTextParseInputs {
+        path_label: &root_manifest_input.path,
+        text: &root_manifest_input.text,
+    })?;
+    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut manifest_paths = vec![root_manifest_path.clone()];
     manifest_paths.extend(native_workspace_manifest_paths_from_root_manifest(
         root,
@@ -4285,7 +4865,7 @@ fn collect_native_manifest_lock_texts(root: &Path) -> Result<NativeManifestLockI
     }
     manifest_paths.sort();
     manifest_paths.dedup();
-    let mut manifests = Vec::new();
+    let mut manifests = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for manifest_path in manifest_paths {
         manifests.push(read_native_text_input(&manifest_path, "manifest")?);
     }
@@ -4307,7 +4887,7 @@ fn read_native_text_input(path: &Path, label: &str) -> Result<NativeTextInput, S
 fn native_manifest_lock_unsupported_blockers(
     inputs: &NativeManifestLockInputTexts,
 ) -> Vec<NativeManifestLockUnsupportedBlocker> {
-    let mut blockers = Vec::new();
+    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for manifest in &inputs.manifests {
         blockers.extend(native_manifest_unsupported_blockers(manifest));
     }
@@ -4319,31 +4899,33 @@ fn native_manifest_lock_unsupported_blockers(
 
 #[allow(dead_code)]
 fn native_manifest_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeManifestLockUnsupportedBlocker> {
-    let mut blockers = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let parsed = match input.text.parse::<toml::Value>() {
         Ok(parsed) => parsed,
         Err(err) => {
-            blockers.push(native_manifest_lock_blocker(
-                &input.path,
-                "malformed-manifest",
-                &format!("manifest failed TOML parsing: {err}"),
-            ));
+            blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
+                path: &input.path,
+                class: "malformed-manifest",
+                message: &format!("manifest failed TOML parsing: {err}"),
+            }));
             return blockers;
         }
     };
     if parsed.get("patch").is_some() {
-        blockers.push(native_manifest_lock_blocker(
-            &input.path,
-            "unsupported-manifest-patch",
-            "native manifest planning does not yet implement [patch] source overrides",
-        ));
+        blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
+            path: &input.path,
+            class: "unsupported-manifest-patch",
+            message: "native manifest planning does not yet implement [patch] source overrides",
+        }));
     }
     if parsed.get("replace").is_some() {
-        blockers.push(native_manifest_lock_blocker(
-            &input.path,
-            "unsupported-manifest-replace",
-            "native manifest planning does not yet implement [replace] source overrides",
-        ));
+        blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
+            path: &input.path,
+            class: "unsupported-manifest-replace",
+            message: "native manifest planning does not yet implement [replace] source overrides",
+        }));
     }
     blockers.extend(native_target_table_unsupported_blockers(&input.path, parsed.get("target")));
     blockers
@@ -4354,26 +4936,30 @@ fn native_target_table_unsupported_blockers(
     path: &str,
     target_table: Option<&toml::Value>,
 ) -> Vec<NativeManifestLockUnsupportedBlocker> {
-    let mut blockers = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let Some(targets) = target_table.and_then(toml::Value::as_table) else {
         return blockers;
     };
     for (cfg, target) in targets {
         let Some(table) = target.as_table() else {
-            blockers.push(native_manifest_lock_blocker(
-                path,
-                "unsupported-target-table",
-                &format!("target cfg `{cfg}` is not a table"),
-            ));
+            blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
+                path: path,
+                class: "unsupported-target-table",
+                message: &format!("target cfg `{cfg}` is not a table"),
+            }));
             continue;
         };
         for key in table.keys() {
             if key != "dependencies" {
-                blockers.push(native_manifest_lock_blocker(
-                    path,
-                    "unsupported-target-table",
-                    &format!("target cfg `{cfg}` key `{key}` is outside the supported dependency-only fragment"),
-                ));
+                blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
+                    path: path,
+                    class: "unsupported-target-table",
+                    message: &format!(
+                        "target cfg `{cfg}` key `{key}` is outside the supported dependency-only fragment"
+                    ),
+                }));
             }
         }
     }
@@ -4382,11 +4968,20 @@ fn native_target_table_unsupported_blockers(
 
 #[allow(dead_code)]
 fn native_lockfile_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeManifestLockUnsupportedBlocker> {
-    let mut blockers = Vec::new();
-    let facts = match parse_native_lockfile_text(&input.path, &input.text) {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let facts = match parse_native_lockfile_text(NativeTextParseInputs {
+        path_label: &input.path,
+        text: &input.text,
+    }) {
         Ok(facts) => facts,
         Err(err) => {
-            blockers.push(native_manifest_lock_blocker(&input.path, "malformed-lockfile", &err));
+            blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
+                path: &input.path,
+                class: "malformed-lockfile",
+                message: &err,
+            }));
             return blockers;
         }
     };
@@ -4394,19 +4989,22 @@ fn native_lockfile_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeMa
         if let Some(source) = package.source.as_deref()
             && !lock_source_supported(source)
         {
-            blockers.push(native_manifest_lock_blocker(
-                &input.path,
-                "unsupported-lockfile-source",
-                &format!("lock package `{}` uses unsupported source `{source}`", package.name),
-            ));
+            blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
+                path: &input.path,
+                class: "unsupported-lockfile-source",
+                message: &format!("lock package `{}` uses unsupported source `{source}`", package.name),
+            }));
         }
         for dependency in package.dependencies {
             if dependency.name.is_empty() {
-                blockers.push(native_manifest_lock_blocker(
-                    &input.path,
-                    "unsupported-lockfile-dependency-edge",
-                    &format!("lock package `{}` has an empty dependency edge `{}`", package.name, dependency.raw),
-                ));
+                blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
+                    path: &input.path,
+                    class: "unsupported-lockfile-dependency-edge",
+                    message: &format!(
+                        "lock package `{}` has an empty dependency edge `{}`",
+                        package.name, dependency.raw
+                    ),
+                }));
             }
         }
     }
@@ -4419,7 +5017,14 @@ fn lock_source_supported(source: &str) -> bool {
 }
 
 #[allow(dead_code)]
-fn native_manifest_lock_blocker(path: &str, class: &str, message: &str) -> NativeManifestLockUnsupportedBlocker {
+struct NativeManifestLockBlockerInputs<'a> {
+    path: &'a str,
+    class: &'a str,
+    message: &'a str,
+}
+
+fn native_manifest_lock_blocker(inputs: NativeManifestLockBlockerInputs<'_>) -> NativeManifestLockUnsupportedBlocker {
+    let NativeManifestLockBlockerInputs { path, class, message } = inputs;
     debug_assert!(!path.is_empty());
     debug_assert!(!class.is_empty());
     NativeManifestLockUnsupportedBlocker {
@@ -4429,48 +5034,114 @@ fn native_manifest_lock_blocker(path: &str, class: &str, message: &str) -> Nativ
     }
 }
 
+struct NativeTargetsForManifestInputs<'a> {
+    source_root: &'a Path,
+    package_name: &'a str,
+    package_version: &'a str,
+    package_edition: &'a str,
+    manifest: &'a NativeManifest,
+}
+
+fn push_native_bin_targets(
+    inputs: &NativeTargetsForManifestInputs<'_>,
+    targets: &mut Vec<NativeTargetPlanningSummary>,
+) -> Result<(), NativePackagePlanningBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    if inputs.manifest.bin.is_empty() {
+        let path = inputs.source_root.join("src/main.rs");
+        if path.is_file() {
+            push_native_target(PushNativeTargetInputs {
+                targets,
+                name: inputs.package_name,
+                kind: "bin",
+                path: &path,
+                edition: inputs.package_edition,
+            })?;
+        }
+    } else {
+        for bin in &inputs.manifest.bin {
+            let name = bin.name.as_deref().unwrap_or(inputs.package_name);
+            let default_path = format!("src/bin/{name}.rs");
+            let path = inputs.source_root.join(bin.path.as_deref().unwrap_or(&default_path));
+            push_native_target(PushNativeTargetInputs {
+                targets,
+                name,
+                kind: "bin",
+                path: &path,
+                edition: inputs.package_edition,
+            })?;
+        }
+    }
+    Ok(())
+}
+
 fn native_targets_for_manifest(
-    source_root: &Path,
-    package_name: &str,
-    package_version: &str,
-    package_edition: &str,
-    manifest: &NativeManifest,
+    inputs: NativeTargetsForManifestInputs<'_>,
 ) -> Result<Vec<NativeTargetPlanningSummary>, NativePackagePlanningBlocker> {
-    let mut targets = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let NativeTargetsForManifestInputs {
+        source_root,
+        package_name,
+        package_version,
+        package_edition,
+        manifest,
+    } = inputs;
+    let mut targets = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    push_native_bin_targets(
+        &NativeTargetsForManifestInputs {
+            source_root,
+            package_name,
+            package_version,
+            package_edition,
+            manifest,
+        },
+        &mut targets,
+    )?;
     if let Some(build_script) = native_manifest_build_script(source_root, manifest) {
         let path = source_root.join(&build_script);
         let target_name = build_script_target_name(&build_script);
-        push_native_target(&mut targets, &target_name, "custom-build", &path, package_edition)?;
+        push_native_target(PushNativeTargetInputs {
+            targets: &mut targets,
+            name: &target_name,
+            kind: "custom-build",
+            path: &path,
+            edition: package_edition,
+        })?;
     }
     if let Some(lib) = &manifest.lib {
         let kind = if lib.proc_macro { "proc-macro" } else { "lib" };
         let path = source_root.join(lib.path.as_deref().unwrap_or("src/lib.rs"));
-        push_native_target(&mut targets, lib.name.as_deref().unwrap_or(package_name), kind, &path, package_edition)?;
+        push_native_target(PushNativeTargetInputs {
+            targets: &mut targets,
+            name: lib.name.as_deref().unwrap_or(package_name),
+            kind: kind,
+            path: &path,
+            edition: package_edition,
+        })?;
     } else {
         let path = source_root.join("src/lib.rs");
         if path.is_file() {
-            push_native_target(&mut targets, package_name, "lib", &path, package_edition)?;
+            push_native_target(PushNativeTargetInputs {
+                targets: &mut targets,
+                name: package_name,
+                kind: "lib",
+                path: &path,
+                edition: package_edition,
+            })?;
         }
     }
-    if manifest.bin.is_empty() {
-        let path = source_root.join("src/main.rs");
-        if path.is_file() {
-            push_native_target(&mut targets, package_name, "bin", &path, package_edition)?;
-        }
-    } else {
-        for bin in &manifest.bin {
-            let name = bin.name.as_deref().unwrap_or(package_name);
-            let default_path = format!("src/bin/{name}.rs");
-            let path = source_root.join(bin.path.as_deref().unwrap_or(&default_path));
-            push_native_target(&mut targets, name, "bin", &path, package_edition)?;
-        }
-    }
+
     if targets.is_empty() {
-        return Err(native_blocker(
-            Some(cargo_path_package_id(package_name, package_version)),
-            "missing-supported-target",
-            "native package/target fragment found no readable lib/bin target source",
-        ));
+        return Err(native_blocker(NativePackageBlockerInputs {
+            package_id: Some(cargo_path_package_id(CargoPathPackageIdInputs {
+                name: package_name,
+                version: package_version,
+            })),
+            class: "missing-supported-target",
+            message: "native package/target fragment found no readable lib/bin target source",
+        }));
     }
     targets.sort();
     targets.dedup();
@@ -4498,19 +5169,30 @@ fn build_script_target_name(_build_script: &str) -> String {
     BUILD_SCRIPT_TARGET_NAME.to_string()
 }
 
-fn push_native_target(
-    targets: &mut Vec<NativeTargetPlanningSummary>,
-    name: &str,
-    kind: &str,
-    path: &Path,
-    edition: &str,
-) -> Result<(), NativePackagePlanningBlocker> {
+struct PushNativeTargetInputs<'a> {
+    targets: &'a mut Vec<NativeTargetPlanningSummary>,
+    name: &'a str,
+    kind: &'a str,
+    path: &'a Path,
+    edition: &'a str,
+}
+
+fn push_native_target(inputs: PushNativeTargetInputs<'_>) -> Result<(), NativePackagePlanningBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let PushNativeTargetInputs {
+        targets,
+        name,
+        kind,
+        path,
+        edition,
+    } = inputs;
     if !path.is_file() {
-        return Err(native_blocker(
-            None,
-            "missing-target-source",
-            &format!("target `{name}` source {} is not readable", path.display()),
-        ));
+        return Err(native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "missing-target-source",
+            message: &format!("target `{name}` source {} is not readable", path.display()),
+        }));
     }
     targets.push(NativeTargetPlanningSummary {
         name: name.to_string(),
@@ -4522,16 +5204,31 @@ fn push_native_target(
     Ok(())
 }
 
-fn native_path_dependencies(
-    source_root: &Path,
-    dependencies: &BTreeMap<String, toml::Value>,
-    feature_defs: &BTreeMap<String, Vec<String>>,
-    selected_features: &[String],
+struct NativePathDependenciesInputs<'a> {
+    source_root: &'a Path,
+    dependencies: &'a BTreeMap<String, toml::Value>,
+    feature_defs: &'a BTreeMap<String, Vec<String>>,
+    selected_features: &'a [String],
     package_id: Option<String>,
-    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
-    native_git_source_planning: &NativeGitSourcePlanningSummary,
+    registry_sources: &'a NativeRegistrySourcePlanningSummary,
+    git_sources: &'a NativeGitSourcePlanningSummary,
+}
+
+fn native_path_dependencies(
+    inputs: NativePathDependenciesInputs<'_>,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
-    let mut summaries = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let NativePathDependenciesInputs {
+        source_root,
+        dependencies,
+        feature_defs,
+        selected_features,
+        package_id,
+        registry_sources: native_registry_source_planning,
+        git_sources: native_git_source_planning,
+    } = inputs;
+    let mut summaries = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for (name, value) in dependencies {
         if dependency_uses_workspace(value) {
             continue;
@@ -4544,27 +5241,33 @@ fn native_path_dependencies(
         } else {
             let resolved =
                 native_dependency_source(name, value, native_registry_source_planning, native_git_source_planning)
-                    .map_err(|err| native_blocker(package_id.clone(), err.class, &err.message))?;
+                    .map_err(|err| {
+                        native_blocker(NativePackageBlockerInputs {
+                            package_id: package_id.clone(),
+                            class: err.class,
+                            message: &err.message,
+                        })
+                    })?;
             if let Some(source) = resolved {
                 PathBuf::from(source)
             } else if dependency_optional(value) {
                 continue;
             } else {
-                return Err(native_blocker(
-                    package_id,
-                    "unsupported-non-path-dependency",
-                    &format!(
+                return Err(native_blocker(NativePackageBlockerInputs {
+                    package_id: package_id,
+                    class: "unsupported-non-path-dependency",
+                    message: &format!(
                         "dependency `{name}` is outside the bounded path, declared-registry, or captured-git dependency fragment"
                     ),
-                ));
+                }));
             }
         };
         if !manifest_path.is_file() {
-            return Err(native_blocker(
-                package_id,
-                "missing-path-dependency-manifest",
-                &format!("dependency `{name}` manifest {} is not readable", manifest_path.display()),
-            ));
+            return Err(native_blocker(NativePackageBlockerInputs {
+                package_id: package_id,
+                class: "missing-path-dependency-manifest",
+                message: &format!("dependency `{name}` manifest {} is not readable", manifest_path.display()),
+            }));
         }
         summaries.push(NativePathDependencySummary {
             name: name.clone(),
@@ -4577,32 +5280,18 @@ fn native_path_dependencies(
 }
 
 fn native_build_dependencies(
-    source_root: &Path,
-    dependencies: &BTreeMap<String, toml::Value>,
-    feature_defs: &BTreeMap<String, Vec<String>>,
-    selected_features: &[String],
-    package_id: Option<String>,
-    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
-    native_git_source_planning: &NativeGitSourcePlanningSummary,
+    inputs: NativePathDependenciesInputs<'_>,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
-    for (name, value) in dependencies {
+    for (name, value) in inputs.dependencies {
         if dependency_has_unsupported_build_options(value) {
-            return Err(native_blocker(
-                package_id,
-                "unsupported-build-dependency-options",
-                &format!("build dependency `{name}` uses unsupported target or workspace behavior"),
-            ));
+            return Err(native_blocker(NativePackageBlockerInputs {
+                package_id: inputs.package_id.clone(),
+                class: "unsupported-build-dependency-options",
+                message: &format!("build dependency `{name}` uses unsupported target or workspace behavior"),
+            }));
         }
     }
-    native_path_dependencies(
-        source_root,
-        dependencies,
-        feature_defs,
-        selected_features,
-        package_id,
-        native_registry_source_planning,
-        native_git_source_planning,
-    )
+    native_path_dependencies(inputs)
 }
 
 fn native_dev_dependencies(
@@ -4612,11 +5301,13 @@ fn native_dev_dependencies(
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
     native_git_source_planning: &NativeGitSourcePlanningSummary,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     // Dev-dependency feature/default-feature/test resolver behavior is not part of the normal build
     // topology. Record only explicitly readable path or declared-registry source material for the
     // dedicated dev-test rails; otherwise ignore test-only dependencies so they cannot block build-mode
     // package/target facts or normal self execution.
-    let mut summaries = Vec::new();
+    let mut summaries = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for (name, value) in dependencies {
         let manifest_path = if let Some(path) = dependency_path(value) {
             source_root.join(path).join("Cargo.toml")
@@ -4624,7 +5315,13 @@ fn native_dev_dependencies(
             match native_dependency_source(name, value, native_registry_source_planning, native_git_source_planning) {
                 Ok(Some(source)) => PathBuf::from(source),
                 Ok(None) => continue,
-                Err(err) => return Err(native_blocker(package_id.clone(), err.class, &err.message)),
+                Err(err) => {
+                    return Err(native_blocker(NativePackageBlockerInputs {
+                        package_id: package_id.clone(),
+                        class: err.class,
+                        message: &err.message,
+                    }));
+                }
             }
         };
         if !manifest_path.is_file() {
@@ -4663,98 +5360,153 @@ fn native_optional_dependency_names(dependencies: &BTreeMap<String, toml::Value>
         .collect()
 }
 
-fn native_workspace_dependencies(
-    workspace_root: &Path,
-    source_root: &Path,
-    member_package_id: &str,
-    dependencies: &BTreeMap<String, toml::Value>,
+struct NativeWorkspaceDependenciesInputs<'a> {
+    workspace_root: &'a Path,
+    source_root: &'a Path,
+    member_package_id: &'a str,
+    dependencies: &'a BTreeMap<String, toml::Value>,
     package_id: Option<String>,
-    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
-    native_git_source_planning: &NativeGitSourcePlanningSummary,
+    registry_sources: &'a NativeRegistrySourcePlanningSummary,
+    git_sources: &'a NativeGitSourcePlanningSummary,
+}
+
+struct NativeWorkspaceDependencyInputs<'a> {
+    planning: &'a NativeWorkspaceDependenciesInputs<'a>,
+    name: &'a str,
+    value: &'a toml::Value,
+    inherited: &'a toml::Value,
+}
+
+fn workspace_dependency_manifest_path(
+    inputs: &NativeWorkspaceDependencyInputs<'_>,
+) -> Result<PathBuf, NativePackagePlanningBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let manifest_path = if let Some(path) = dependency_path(inputs.inherited) {
+        inputs.planning.source_root.join(path).join("Cargo.toml")
+    } else {
+        native_dependency_source(
+            inputs.name,
+            inputs.inherited,
+            inputs.planning.registry_sources,
+            inputs.planning.git_sources,
+        )
+        .map_err(|err| native_blocker(NativePackageBlockerInputs {
+            package_id: inputs.planning.package_id.clone(),
+            class: err.class,
+            message: &err.message,
+        }))?
+        .map(PathBuf::from)
+        .ok_or_else(|| {
+            native_blocker(NativePackageBlockerInputs {
+                package_id: inputs.planning.package_id.clone(),
+                class: "unsupported-workspace-dependency-source",
+                message: &format!(
+                    "workspace dependency `{}` is outside the bounded path, declared-registry, or captured-git fragment",
+                    inputs.name
+                ),
+            })
+        })?
+    };
+    if !manifest_path.is_file() {
+        return Err(native_blocker(NativePackageBlockerInputs {
+            package_id: inputs.planning.package_id.clone(),
+            class: "missing-workspace-dependency-manifest",
+            message: &format!(
+                "workspace dependency `{}` manifest {} is not readable",
+                inputs.name,
+                manifest_path.display()
+            ),
+        }));
+    }
+    Ok(manifest_path)
+}
+
+fn native_workspace_dependency(
+    inputs: NativeWorkspaceDependencyInputs<'_>,
+) -> Result<(NativeWorkspaceDependencySummary, NativePathDependencySummary), NativePackagePlanningBlocker> {
+    debug_assert!(dependency_uses_workspace(inputs.value));
+    debug_assert!(!inputs.name.is_empty());
+    if dependency_has_unsupported_workspace_member_options(inputs.value)
+        || dependency_has_unsupported_workspace_inherited_options(inputs.inherited)
+    {
+        return Err(native_blocker(NativePackageBlockerInputs {
+            package_id: inputs.planning.package_id.clone(),
+            class: "unsupported-workspace-dependency-options",
+            message: &format!(
+                "workspace dependency `{}` uses unsupported inherited feature/default-feature/platform behavior",
+                inputs.name
+            ),
+        }));
+    }
+    let inherited_features = dependency_features(inputs.inherited)?;
+    let inherited_default_features = dependency_default_features(inputs.inherited)?;
+    let manifest_path = workspace_dependency_manifest_path(&inputs)?;
+    let normalized_manifest_path = normalize_path_string(&manifest_path);
+    let summary = NativeWorkspaceDependencySummary {
+        workspace_root: normalize_path_string(inputs.planning.workspace_root),
+        member_package_id: inputs.planning.member_package_id.to_string(),
+        dependency_key: inputs.name.to_string(),
+        inherited_package_name: dependency_package_name(inputs.name, inputs.inherited).to_string(),
+        inherited_features,
+        inherited_default_features,
+        decision: "selected".to_string(),
+        manifest_path: Some(normalized_manifest_path.clone()),
+        blocker_class: None,
+    };
+    let selected = NativePathDependencySummary {
+        name: inputs.name.to_string(),
+        manifest_path: normalized_manifest_path,
+    };
+    Ok((summary, selected))
+}
+
+fn native_workspace_dependencies(
+    inputs: NativeWorkspaceDependenciesInputs<'_>,
 ) -> Result<(Vec<NativeWorkspaceDependencySummary>, Vec<NativePathDependencySummary>), NativePackagePlanningBlocker> {
-    if !dependencies.values().any(dependency_uses_workspace) {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    if !inputs.dependencies.values().any(dependency_uses_workspace) {
         return Ok((Vec::new(), Vec::new()));
     }
-    let workspace_manifest_path = workspace_root.join("Cargo.toml");
-    let workspace_manifest = read_native_manifest(&workspace_manifest_path)
-        .map_err(|message| native_blocker(package_id.clone(), "unreadable-workspace-manifest", &message))?;
+    let workspace_manifest_path = inputs.workspace_root.join("Cargo.toml");
+    let workspace_manifest = read_native_manifest(&workspace_manifest_path).map_err(|message| {
+        native_blocker(NativePackageBlockerInputs {
+            package_id: inputs.package_id.clone(),
+            class: "unreadable-workspace-manifest",
+            message: &message,
+        })
+    })?;
     let workspace_dependencies =
         workspace_manifest.workspace.as_ref().map(|workspace| &workspace.dependencies).ok_or_else(|| {
-            native_blocker(
-                package_id.clone(),
-                "missing-workspace-section",
-                "workspace dependency inheritance requires a root [workspace] table",
-            )
+            native_blocker(NativePackageBlockerInputs {
+                package_id: inputs.package_id.clone(),
+                class: "missing-workspace-section",
+                message: "workspace dependency inheritance requires a root [workspace] table",
+            })
         })?;
 
-    let mut summaries = Vec::new();
-    let mut selected = Vec::new();
-    for (name, value) in dependencies {
+    let mut summaries = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut selected = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    for (name, value) in inputs.dependencies {
         if !dependency_uses_workspace(value) {
             continue;
         }
         let inherited = workspace_dependencies.get(name).ok_or_else(|| {
-            native_blocker(
-                package_id.clone(),
-                "missing-workspace-dependency",
-                &format!("dependency `{name}` uses workspace inheritance but root [workspace.dependencies] has no matching key"),
-            )
+            native_blocker(NativePackageBlockerInputs {
+            package_id: inputs.package_id.clone(),
+            class: "missing-workspace-dependency",
+            message: &format!("dependency `{name}` uses workspace inheritance but root [workspace.dependencies] has no matching key"),
+        })
         })?;
-        if dependency_has_unsupported_workspace_member_options(value)
-            || dependency_has_unsupported_workspace_inherited_options(inherited)
-        {
-            return Err(native_blocker(
-                package_id.clone(),
-                "unsupported-workspace-dependency-options",
-                &format!(
-                    "workspace dependency `{name}` uses unsupported inherited feature/default-feature/platform behavior"
-                ),
-            ));
-        }
-        let inherited_features = dependency_features(inherited)?;
-        let inherited_default_features = dependency_default_features(inherited)?;
-        let manifest_path = if let Some(path) = dependency_path(inherited) {
-            source_root.join(path).join("Cargo.toml")
-        } else {
-            let resolved =
-                native_dependency_source(name, inherited, native_registry_source_planning, native_git_source_planning)
-                    .map_err(|err| native_blocker(package_id.clone(), err.class, &err.message))?;
-            if let Some(source) = resolved {
-                PathBuf::from(source)
-            } else {
-                return Err(native_blocker(
-                    package_id.clone(),
-                    "unsupported-workspace-dependency-source",
-                    &format!(
-                        "workspace dependency `{name}` is outside the bounded path, declared-registry, or captured-git fragment"
-                    ),
-                ));
-            }
-        };
-        if !manifest_path.is_file() {
-            return Err(native_blocker(
-                package_id.clone(),
-                "missing-workspace-dependency-manifest",
-                &format!("workspace dependency `{name}` manifest {} is not readable", manifest_path.display()),
-            ));
-        }
-        let inherited_package_name = dependency_package_name(name, inherited).to_string();
-        let normalized_manifest_path = normalize_path_string(&manifest_path);
-        summaries.push(NativeWorkspaceDependencySummary {
-            workspace_root: normalize_path_string(workspace_root),
-            member_package_id: member_package_id.to_string(),
-            dependency_key: name.clone(),
-            inherited_package_name,
-            inherited_features,
-            inherited_default_features,
-            decision: "selected".to_string(),
-            manifest_path: Some(normalized_manifest_path.clone()),
-            blocker_class: None,
-        });
-        selected.push(NativePathDependencySummary {
-            name: name.clone(),
-            manifest_path: normalized_manifest_path,
-        });
+        let (summary, selected_dependency) = native_workspace_dependency(NativeWorkspaceDependencyInputs {
+            planning: &inputs,
+            name,
+            value,
+            inherited,
+        })?;
+        summaries.push(summary);
+        selected.push(selected_dependency);
     }
     summaries.sort();
     summaries.dedup();
@@ -4786,24 +5538,26 @@ fn dependency_has_unsupported_workspace_inherited_options(value: &toml::Value) -
 }
 
 fn dependency_features(value: &toml::Value) -> Result<Vec<String>, NativePackagePlanningBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let Some(features) = value.as_table().and_then(|table| table.get("features")) else {
         return Ok(Vec::new());
     };
     let Some(array) = features.as_array() else {
-        return Err(native_blocker(
-            None,
-            "unsupported-workspace-dependency-options",
-            "workspace dependency features must be an array of strings",
-        ));
+        return Err(native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "unsupported-workspace-dependency-options",
+            message: "workspace dependency features must be an array of strings",
+        }));
     };
-    let mut out = Vec::new();
+    let mut out = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for feature in array {
         let Some(feature) = feature.as_str() else {
-            return Err(native_blocker(
-                None,
-                "unsupported-workspace-dependency-options",
-                "workspace dependency features must be an array of strings",
-            ));
+            return Err(native_blocker(NativePackageBlockerInputs {
+                package_id: None,
+                class: "unsupported-workspace-dependency-options",
+                message: "workspace dependency features must be an array of strings",
+            }));
         };
         out.push(feature.to_string());
     }
@@ -4817,11 +5571,11 @@ fn dependency_default_features(value: &toml::Value) -> Result<Option<bool>, Nati
         return Ok(None);
     };
     default_features.as_bool().map(Some).ok_or_else(|| {
-        native_blocker(
-            None,
-            "unsupported-workspace-dependency-options",
-            "workspace dependency default-features must be a boolean",
-        )
+        native_blocker(NativePackageBlockerInputs {
+            package_id: None,
+            class: "unsupported-workspace-dependency-options",
+            message: "workspace dependency default-features must be a boolean",
+        })
     })
 }
 
@@ -4833,91 +5587,142 @@ fn dependency_package_name<'a>(dependency_name: &'a str, value: &'a toml::Value)
         .unwrap_or(dependency_name)
 }
 
-fn native_target_cfg_dependencies(
-    source_root: &Path,
-    target_tables: &BTreeMap<String, NativeManifestTarget>,
-    active_target: &str,
-    feature_defs: &BTreeMap<String, Vec<String>>,
-    selected_features: &[String],
+struct NativeTargetCfgDependenciesInputs<'a> {
+    source_root: &'a Path,
+    target_tables: &'a BTreeMap<String, NativeManifestTarget>,
+    active_target: &'a str,
+    feature_defs: &'a BTreeMap<String, Vec<String>>,
+    selected_features: &'a [String],
     package_id: Option<String>,
-    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
-    native_git_source_planning: &NativeGitSourcePlanningSummary,
+    registry_sources: &'a NativeRegistrySourcePlanningSummary,
+    git_sources: &'a NativeGitSourcePlanningSummary,
+}
+
+struct NativeTargetCfgDependencyInputs<'a> {
+    planning: &'a NativeTargetCfgDependenciesInputs<'a>,
+    cfg_expr: &'a str,
+    is_cfg_selected: bool,
+    name: &'a str,
+    value: &'a toml::Value,
+}
+
+struct TargetCfgDecisionInputs {
+    is_dependency_selected: bool,
+    is_cfg_selected: bool,
+}
+
+fn target_cfg_dependency_decision(inputs: TargetCfgDecisionInputs) -> &'static str {
+    if inputs.is_dependency_selected {
+        "selected"
+    } else if inputs.is_cfg_selected {
+        "not-selected-optional"
+    } else {
+        "not-selected"
+    }
+}
+
+fn native_target_cfg_dependency(
+    inputs: NativeTargetCfgDependencyInputs<'_>,
+) -> Result<(NativeTargetCfgDependencySummary, Option<NativePathDependencySummary>), NativePackagePlanningBlocker> {
+    debug_assert!(!inputs.cfg_expr.is_empty());
+    debug_assert!(!inputs.name.is_empty());
+    let is_optional = dependency_optional(inputs.value);
+    let is_optional_selected =
+        optional_dependency_selected(inputs.name, inputs.planning.feature_defs, inputs.planning.selected_features);
+    let mut is_dependency_selected = inputs.is_cfg_selected && (!is_optional || is_optional_selected);
+    let manifest_path = if !is_dependency_selected {
+        None
+    } else if let Some(path) = dependency_path(inputs.value) {
+        Some(inputs.planning.source_root.join(path).join("Cargo.toml"))
+    } else {
+        native_dependency_source(
+            inputs.name,
+            inputs.value,
+            inputs.planning.registry_sources,
+            inputs.planning.git_sources,
+        )
+        .map_err(|err| {
+            native_blocker(NativePackageBlockerInputs {
+                package_id: inputs.planning.package_id.clone(),
+                class: err.class,
+                message: &err.message,
+            })
+        })?
+        .map(PathBuf::from)
+    };
+    if is_dependency_selected && manifest_path.is_none() {
+        if !is_optional {
+            return Err(native_blocker(NativePackageBlockerInputs {
+                package_id: inputs.planning.package_id.clone(),
+                class: "unsupported-target-cfg-dependency",
+                message: &format!(
+                    "target cfg dependency `{}` is outside the bounded path, declared-registry, or captured-git dependency fragment",
+                    inputs.name
+                ),
+            }));
+        }
+        is_dependency_selected = false;
+    }
+    if let Some(path) = &manifest_path
+        && !path.is_file()
+    {
+        return Err(native_blocker(NativePackageBlockerInputs {
+            package_id: inputs.planning.package_id.clone(),
+            class: "missing-target-cfg-dependency-manifest",
+            message: &format!("target cfg dependency `{}` manifest {} is not readable", inputs.name, path.display()),
+        }));
+    }
+    let normalized_manifest_path = manifest_path.as_ref().map(|path| normalize_path_string(path));
+    let decision = target_cfg_dependency_decision(TargetCfgDecisionInputs {
+        is_dependency_selected,
+        is_cfg_selected: inputs.is_cfg_selected,
+    });
+    let fact = NativeTargetCfgDependencySummary {
+        cfg: inputs.cfg_expr.to_string(),
+        active_target: inputs.planning.active_target.to_string(),
+        decision: decision.to_string(),
+        name: inputs.name.to_string(),
+        manifest_path: normalized_manifest_path.clone(),
+        blocker_class: None,
+    };
+    let selected = normalized_manifest_path.filter(|_path| is_dependency_selected).map(|manifest_path| {
+        NativePathDependencySummary {
+            name: inputs.name.to_string(),
+            manifest_path,
+        }
+    });
+    Ok((fact, selected))
+}
+
+fn native_target_cfg_dependencies(
+    inputs: NativeTargetCfgDependenciesInputs<'_>,
 ) -> Result<(Vec<NativeTargetCfgDependencySummary>, Vec<NativePathDependencySummary>), NativePackagePlanningBlocker> {
-    let mut cfg_facts = Vec::new();
-    let mut selected_dependencies = Vec::new();
-    for (cfg_expr, target) in target_tables {
-        let cfg_selected = evaluate_supported_target_cfg(cfg_expr, active_target).ok_or_else(|| {
-            native_blocker(
-                package_id.clone(),
-                "unsupported-target-cfg-surface",
-                &format!("target cfg `{cfg_expr}` is outside the bounded native target-cfg fragment"),
-            )
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut cfg_facts = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut selected_dependencies = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    for (cfg_expr, target) in inputs.target_tables {
+        let is_cfg_selected = evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
+            expression: cfg_expr,
+            active_target: inputs.active_target,
+        })
+        .ok_or_else(|| {
+            native_blocker(NativePackageBlockerInputs {
+                package_id: inputs.package_id.clone(),
+                class: "unsupported-target-cfg-surface",
+                message: &format!("target cfg `{cfg_expr}` is outside the bounded native target-cfg fragment"),
+            })
         })?;
         for (name, value) in &target.dependencies {
-            let mut dependency_selected = cfg_selected
-                && (!dependency_optional(value) || optional_dependency_selected(name, feature_defs, selected_features));
-            let manifest_path = if dependency_selected {
-                if let Some(path) = dependency_path(value) {
-                    Some(source_root.join(path).join("Cargo.toml"))
-                } else {
-                    let resolved = native_dependency_source(
-                        name,
-                        value,
-                        native_registry_source_planning,
-                        native_git_source_planning,
-                    )
-                    .map_err(|err| native_blocker(package_id.clone(), err.class, &err.message))?;
-                    if let Some(source) = resolved {
-                        Some(PathBuf::from(source))
-                    } else if dependency_optional(value) {
-                        None
-                    } else {
-                        return Err(native_blocker(
-                            package_id.clone(),
-                            "unsupported-target-cfg-dependency",
-                            &format!(
-                                "target cfg dependency `{name}` is outside the bounded path, declared-registry, or captured-git dependency fragment"
-                            ),
-                        ));
-                    }
-                }
-            } else {
-                None
-            };
-            if manifest_path.is_none() && dependency_optional(value) {
-                dependency_selected = false;
-            }
-            if let Some(path) = &manifest_path
-                && !path.is_file()
-            {
-                return Err(native_blocker(
-                    package_id.clone(),
-                    "missing-target-cfg-dependency-manifest",
-                    &format!("target cfg dependency `{name}` manifest {} is not readable", path.display()),
-                ));
-            }
-            let normalized_manifest_path = manifest_path.as_ref().map(|path| normalize_path_string(path));
-            cfg_facts.push(NativeTargetCfgDependencySummary {
-                cfg: cfg_expr.clone(),
-                active_target: active_target.to_string(),
-                decision: if dependency_selected {
-                    "selected"
-                } else if cfg_selected {
-                    "not-selected-optional"
-                } else {
-                    "not-selected"
-                }
-                .to_string(),
-                name: name.clone(),
-                manifest_path: normalized_manifest_path.clone(),
-                blocker_class: None,
-            });
-            if dependency_selected && let Some(path) = normalized_manifest_path {
-                selected_dependencies.push(NativePathDependencySummary {
-                    name: name.clone(),
-                    manifest_path: path,
-                });
-            }
+            let (fact, selected) = native_target_cfg_dependency(NativeTargetCfgDependencyInputs {
+                planning: &inputs,
+                cfg_expr,
+                is_cfg_selected,
+                name,
+                value,
+            })?;
+            cfg_facts.push(fact);
+            selected_dependencies.extend(selected);
         }
     }
     cfg_facts.sort();
@@ -4927,38 +5732,200 @@ fn native_target_cfg_dependencies(
     Ok((cfg_facts, selected_dependencies))
 }
 
-fn evaluate_supported_target_cfg(cfg_expr: &str, active_target: &str) -> Option<bool> {
+struct TargetCfgEvaluationInputs<'a> {
+    expression: &'a str,
+    active_target: &'a str,
+}
+
+fn evaluate_supported_target_cfg(inputs: TargetCfgEvaluationInputs<'_>) -> Option<bool> {
+    let TargetCfgEvaluationInputs {
+        expression: cfg_expr,
+        active_target,
+    } = inputs;
     let trimmed = cfg_expr.trim();
     if !trimmed.starts_with("cfg(") {
         return Some(trimmed == active_target);
     }
     let inner = trimmed.strip_prefix("cfg(")?.strip_suffix(')')?.trim();
-    evaluate_cfg_inner(inner, active_target)
+    evaluate_cfg_inner(TargetCfgEvaluationInputs {
+        expression: inner,
+        active_target: active_target,
+    })
 }
 
-fn evaluate_cfg_inner(expr: &str, active_target: &str) -> Option<bool> {
-    let trimmed = expr.trim();
-    if let Some(inner) = cfg_call_arg(trimmed, "not") {
-        return evaluate_cfg_inner(inner, active_target).map(|value| !value);
-    }
-    if let Some(inner) = cfg_call_arg(trimmed, "any") {
-        let args = split_cfg_args(inner)?;
-        for arg in args {
-            if evaluate_cfg_inner(arg, active_target)? {
-                return Some(true);
+enum CfgEvaluationFrame<'a> {
+    Evaluate(&'a str),
+    ApplyNot,
+    ApplyAny { arguments: Vec<&'a str>, next_index: usize },
+    ApplyAll { arguments: Vec<&'a str>, next_index: usize },
+}
+
+fn evaluate_cfg_inner<'a>(inputs: TargetCfgEvaluationInputs<'a>) -> Option<bool> {
+    let TargetCfgEvaluationInputs {
+        expression: expr,
+        active_target,
+    } = inputs;
+    debug_assert!(!active_target.is_empty());
+    debug_assert!(MAX_CFG_EVALUATION_STEPS > 0);
+    let mut frames = Vec::with_capacity(INITIAL_CFG_STACK_CAPACITY_ITEMS);
+    let mut values = Vec::with_capacity(INITIAL_CFG_STACK_CAPACITY_ITEMS);
+    frames.push(CfgEvaluationFrame::Evaluate(expr));
+
+    for _ in 0..MAX_CFG_EVALUATION_STEPS {
+        if frames.is_empty() {
+            return (values.len() == 1).then(|| values.pop()).flatten();
+        }
+        match frames.pop()? {
+            CfgEvaluationFrame::Evaluate(candidate) => {
+                queue_cfg_evaluation(QueueCfgEvaluationInputs {
+                    candidate: candidate,
+                    active_target: active_target,
+                    frames: &mut frames,
+                    values: &mut values,
+                })?;
+            }
+            CfgEvaluationFrame::ApplyNot => {
+                let is_value = values.pop()?;
+                values.push(!is_value);
+            }
+            CfgEvaluationFrame::ApplyAny { arguments, next_index } => {
+                continue_cfg_any(arguments, next_index, &mut frames, &mut values)?;
+            }
+            CfgEvaluationFrame::ApplyAll { arguments, next_index } => {
+                continue_cfg_all(arguments, next_index, &mut frames, &mut values)?;
             }
         }
-        return Some(false);
     }
-    if let Some(inner) = cfg_call_arg(trimmed, "all") {
-        let args = split_cfg_args(inner)?;
-        for arg in args {
-            if !evaluate_cfg_inner(arg, active_target)? {
-                return Some(false);
-            }
+    None
+}
+
+struct QueueCfgEvaluationInputs<'a, 'b> {
+    candidate: &'a str,
+    active_target: &'b str,
+    frames: &'b mut Vec<CfgEvaluationFrame<'a>>,
+    values: &'b mut Vec<bool>,
+}
+
+fn queue_cfg_evaluation<'a>(inputs: QueueCfgEvaluationInputs<'a, '_>) -> Option<()> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let QueueCfgEvaluationInputs {
+        candidate,
+        active_target,
+        frames,
+        values,
+    } = inputs;
+    let trimmed = candidate.trim();
+    if let Some(inner) = cfg_call_arg(CfgCallInputs {
+        expression: trimmed,
+        name: "not",
+    }) {
+        frames.push(CfgEvaluationFrame::ApplyNot);
+        frames.push(CfgEvaluationFrame::Evaluate(inner));
+        return Some(());
+    }
+    if let Some(inner) = cfg_call_arg(CfgCallInputs {
+        expression: trimmed,
+        name: "any",
+    }) {
+        return queue_cfg_arguments(split_cfg_args(inner)?, false, frames, values);
+    }
+    if let Some(inner) = cfg_call_arg(CfgCallInputs {
+        expression: trimmed,
+        name: "all",
+    }) {
+        return queue_cfg_arguments(split_cfg_args(inner)?, true, frames, values);
+    }
+    values.push(evaluate_cfg_atom(TargetCfgEvaluationInputs {
+        expression: trimmed,
+        active_target: active_target,
+    })?);
+    Some(())
+}
+
+fn queue_cfg_arguments<'a>(
+    arguments: Vec<&'a str>,
+    identity: bool,
+    frames: &mut Vec<CfgEvaluationFrame<'a>>,
+    values: &mut Vec<bool>,
+) -> Option<()> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let Some(first) = arguments.first().copied() else {
+        values.push(identity);
+        return Some(());
+    };
+    let continuation = if identity {
+        CfgEvaluationFrame::ApplyAll {
+            arguments,
+            next_index: 1,
         }
-        return Some(true);
+    } else {
+        CfgEvaluationFrame::ApplyAny {
+            arguments,
+            next_index: 1,
+        }
+    };
+    frames.push(continuation);
+    frames.push(CfgEvaluationFrame::Evaluate(first));
+    Some(())
+}
+
+fn continue_cfg_any<'a>(
+    arguments: Vec<&'a str>,
+    next_index: usize,
+    frames: &mut Vec<CfgEvaluationFrame<'a>>,
+    values: &mut Vec<bool>,
+) -> Option<()> {
+    if values.pop()? {
+        values.push(true);
+        return Some(());
     }
+    continue_cfg_arguments(arguments, next_index, false, frames, values)
+}
+
+fn continue_cfg_all<'a>(
+    arguments: Vec<&'a str>,
+    next_index: usize,
+    frames: &mut Vec<CfgEvaluationFrame<'a>>,
+    values: &mut Vec<bool>,
+) -> Option<()> {
+    if !values.pop()? {
+        values.push(false);
+        return Some(());
+    }
+    continue_cfg_arguments(arguments, next_index, true, frames, values)
+}
+
+fn continue_cfg_arguments<'a>(
+    arguments: Vec<&'a str>,
+    next_index: usize,
+    identity: bool,
+    frames: &mut Vec<CfgEvaluationFrame<'a>>,
+    values: &mut Vec<bool>,
+) -> Option<()> {
+    let Some(argument) = arguments.get(next_index).copied() else {
+        values.push(identity);
+        return Some(());
+    };
+    let next_index = next_index.checked_add(1)?;
+    let continuation = if identity {
+        CfgEvaluationFrame::ApplyAll { arguments, next_index }
+    } else {
+        CfgEvaluationFrame::ApplyAny { arguments, next_index }
+    };
+    frames.push(continuation);
+    frames.push(CfgEvaluationFrame::Evaluate(argument));
+    Some(())
+}
+
+fn evaluate_cfg_atom(inputs: TargetCfgEvaluationInputs<'_>) -> Option<bool> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let TargetCfgEvaluationInputs {
+        expression: trimmed,
+        active_target,
+    } = inputs;
     if trimmed == "unix" {
         return Some(target_is_unix(active_target));
     }
@@ -4966,7 +5933,11 @@ fn evaluate_cfg_inner(expr: &str, active_target: &str) -> Option<bool> {
         return Some(target_os_from_triple(active_target) == "windows");
     }
     if let Some((key, value)) = parse_cfg_key_value(trimmed) {
-        return cfg_key_value_matches(key, value, active_target);
+        return cfg_key_value_matches(CfgKeyValueInputs {
+            key: key,
+            value: value,
+            active_target: active_target,
+        });
     }
     known_inactive_cfg_atom(trimmed).then_some(false)
 }
@@ -4989,37 +5960,45 @@ fn known_inactive_cfg_atom(atom: &str) -> bool {
     )
 }
 
-fn cfg_call_arg<'a>(expr: &'a str, name: &str) -> Option<&'a str> {
-    expr.strip_prefix(name)?.strip_prefix('(')?.strip_suffix(')')
+struct CfgCallInputs<'a, 'b> {
+    expression: &'a str,
+    name: &'b str,
+}
+
+fn cfg_call_arg<'a>(inputs: CfgCallInputs<'a, '_>) -> Option<&'a str> {
+    inputs.expression.strip_prefix(inputs.name)?.strip_prefix('(')?.strip_suffix(')')
 }
 
 fn split_cfg_args(args: &str) -> Option<Vec<&str>> {
-    let mut parts = Vec::new();
+    let part_slots = args.matches(',').count().saturating_add(1);
+    debug_assert!(part_slots > 0);
+    let mut parts = Vec::with_capacity(part_slots);
     let mut depth = 0usize;
-    let mut in_string = false;
+    let mut is_in_string = false;
     let mut start = 0usize;
     for (index, ch) in args.char_indices() {
         match ch {
-            '"' => in_string = !in_string,
-            '(' if !in_string => depth = depth.checked_add(1)?,
-            ')' if !in_string => depth = depth.checked_sub(1)?,
-            ',' if !in_string && depth == 0 => {
+            '"' => is_in_string = !is_in_string,
+            '(' if !is_in_string => depth = depth.checked_add(1)?,
+            ')' if !is_in_string => depth = depth.checked_sub(1)?,
+            ',' if !is_in_string && depth == 0 => {
                 let part = args[start..index].trim();
                 if !part.is_empty() {
                     parts.push(part);
                 }
-                start = index + ch.len_utf8();
+                start = index.saturating_add(ch.len_utf8());
             }
             _ => {}
         }
     }
-    if in_string || depth != 0 {
+    if is_in_string || depth != 0 {
         return None;
     }
     let tail = args[start..].trim();
     if !tail.is_empty() {
         parts.push(tail);
     }
+    debug_assert!(parts.len() <= part_slots);
     Some(parts)
 }
 
@@ -5028,8 +6007,21 @@ fn parse_cfg_key_value(expr: &str) -> Option<(&str, &str)> {
     Some((left.trim(), right.trim().trim_matches('"')))
 }
 
-fn cfg_key_value_matches(key: &str, value: &str, active_target: &str) -> Option<bool> {
-    let matched = match key {
+struct CfgKeyValueInputs<'a> {
+    key: &'a str,
+    value: &'a str,
+    active_target: &'a str,
+}
+
+fn cfg_key_value_matches(inputs: CfgKeyValueInputs<'_>) -> Option<bool> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let CfgKeyValueInputs {
+        key,
+        value,
+        active_target,
+    } = inputs;
+    let is_matched = match key {
         "target_os" => value == target_os_from_triple(active_target),
         "target_arch" => value == target_arch_from_triple(active_target),
         "target_family" => value == target_family_from_triple(active_target),
@@ -5038,12 +6030,15 @@ fn cfg_key_value_matches(key: &str, value: &str, active_target: &str) -> Option<
         "target_abi" => value == target_abi_from_triple(active_target),
         "target_endian" => value == target_endian_from_triple(active_target),
         "target_pointer_width" => value == target_pointer_width_from_triple(active_target),
-        "target_has_atomic" => target_has_atomic(active_target, value),
+        "target_has_atomic" => target_has_atomic(TargetAtomicInputs {
+            active_target: active_target,
+            width: value,
+        }),
         "feature" => false,
         key if key.ends_with("_backend") || key.starts_with("rustix_") || key == "getrandom_backend" => false,
         _ => return None,
     };
-    Some(matched)
+    Some(is_matched)
 }
 
 fn active_rust_target(options: &RustPlanOptions) -> String {
@@ -5074,23 +6069,21 @@ fn target_is_unix(active_target: &str) -> bool {
 }
 
 fn target_os_from_triple(active_target: &str) -> &str {
-    if active_target.contains("linux") {
-        "linux"
-    } else if active_target.contains("darwin") || active_target.contains("apple") {
-        "darwin"
-    } else if active_target.contains("windows") || active_target.contains("msvc") {
-        "windows"
-    } else if active_target.contains("freebsd") {
-        "freebsd"
-    } else if active_target.contains("netbsd") {
-        "netbsd"
-    } else if active_target.contains("openbsd") {
-        "openbsd"
-    } else if active_target.contains("android") {
-        "android"
-    } else {
-        "unknown"
-    }
+    const TARGET_OS_MARKERS: &[(&str, &str)] = &[
+        ("linux", "linux"),
+        ("darwin", "darwin"),
+        ("apple", "darwin"),
+        ("windows", "windows"),
+        ("msvc", "windows"),
+        ("freebsd", "freebsd"),
+        ("netbsd", "netbsd"),
+        ("openbsd", "openbsd"),
+        ("android", "android"),
+    ];
+    TARGET_OS_MARKERS
+        .iter()
+        .find_map(|(marker, target_os)| active_target.contains(marker).then_some(*target_os))
+        .unwrap_or("unknown")
 }
 
 fn target_arch_from_triple(active_target: &str) -> &str {
@@ -5152,13 +6145,13 @@ fn target_feature_env_from_triple(active_target: &str) -> &str {
 
 fn build_script_profile_env(profile: &str) -> BTreeMap<String, String> {
     debug_assert!(!profile.is_empty());
-    let release_like = matches!(profile, CARGO_PROFILE_RELEASE | CARGO_PROFILE_BENCH);
-    let opt_level = if release_like {
+    let is_release_like = matches!(profile, CARGO_PROFILE_RELEASE | CARGO_PROFILE_BENCH);
+    let opt_level = if is_release_like {
         CARGO_OPT_LEVEL_RELEASE
     } else {
         CARGO_OPT_LEVEL_DEBUG
     };
-    let debug = if release_like {
+    let debug = if is_release_like {
         CARGO_DEBUG_FALSE
     } else {
         CARGO_DEBUG_TRUE
@@ -5197,7 +6190,13 @@ fn build_script_target_cfg_env(active_target: &str) -> BTreeMap<String, String> 
     env
 }
 
-fn target_has_atomic(active_target: &str, width: &str) -> bool {
+struct TargetAtomicInputs<'a> {
+    active_target: &'a str,
+    width: &'a str,
+}
+
+fn target_has_atomic(inputs: TargetAtomicInputs<'_>) -> bool {
+    let TargetAtomicInputs { active_target, width } = inputs;
     let pointer_width = target_pointer_width_from_triple(active_target).parse::<u32>().unwrap_or(0);
     if width == "ptr" {
         return pointer_width > 0;
@@ -5214,12 +6213,25 @@ fn optional_dependency_selected(
         feature == dependency_name
             || feature_defs
                 .get(feature)
-                .map(|entries| entries.iter().any(|entry| feature_entry_selects_dependency(entry, dependency_name)))
+                .map(|entries| {
+                    entries.iter().any(|entry| {
+                        feature_entry_selects_dependency(FeatureDependencySelectionInputs {
+                            entry: entry,
+                            dependency_name: dependency_name,
+                        })
+                    })
+                })
                 .unwrap_or(false)
     })
 }
 
-fn feature_entry_selects_dependency(entry: &str, dependency_name: &str) -> bool {
+struct FeatureDependencySelectionInputs<'a> {
+    entry: &'a str,
+    dependency_name: &'a str,
+}
+
+fn feature_entry_selects_dependency(inputs: FeatureDependencySelectionInputs<'_>) -> bool {
+    let FeatureDependencySelectionInputs { entry, dependency_name } = inputs;
     if entry == dependency_name || entry == format!("dep:{dependency_name}") {
         return true;
     }
@@ -5267,7 +6279,12 @@ fn registry_dependency_source<'a>(
         let matching = candidates
             .iter()
             .copied()
-            .filter(|source| registry_version_req_matches(version_req, &source.version))
+            .filter(|source| {
+                registry_version_req_matches(RegistryVersionMatchInputs {
+                    requirement: version_req,
+                    source_version: &source.version,
+                })
+            })
             .collect::<Vec<_>>();
         if let Some(selected) = newest_registry_source(matching.as_slice()) {
             return Ok(Some(selected));
@@ -5290,7 +6307,16 @@ fn dependency_exact_version(version_req: &str) -> &str {
     version_req.strip_prefix('=').map(str::trim).unwrap_or(version_req.trim())
 }
 
-fn registry_version_req_matches(version_req: &str, source_version: &str) -> bool {
+struct RegistryVersionMatchInputs<'a> {
+    requirement: &'a str,
+    source_version: &'a str,
+}
+
+fn registry_version_req_matches(inputs: RegistryVersionMatchInputs<'_>) -> bool {
+    let RegistryVersionMatchInputs {
+        requirement: version_req,
+        source_version,
+    } = inputs;
     debug_assert!(!version_req.trim().is_empty());
     debug_assert!(!source_version.is_empty());
     let normalized_req = dependency_exact_version(version_req);
@@ -5300,13 +6326,22 @@ fn registry_version_req_matches(version_req: &str, source_version: &str) -> bool
     if version_req.trim().starts_with('=') {
         return false;
     }
-    if let Some(matches) = registry_semver_range_req_matches(normalized_req, source_version) {
+    if let Some(matches) = registry_semver_range_req_matches(RegistryVersionMatchInputs {
+        requirement: normalized_req,
+        source_version: source_version,
+    }) {
         return matches;
     }
-    if let Some(matches) = registry_semver_caret_req_matches(normalized_req, source_version) {
+    if let Some(matches) = registry_semver_caret_req_matches(RegistryVersionMatchInputs {
+        requirement: normalized_req,
+        source_version: source_version,
+    }) {
         return matches;
     }
-    registry_version_prefix_matches(normalized_req, source_version)
+    registry_version_prefix_matches(RegistryVersionMatchInputs {
+        requirement: normalized_req,
+        source_version: source_version,
+    })
 }
 
 fn newest_registry_source<'a>(sources: &[&'a NativeRegistrySourceSummary]) -> Option<&'a NativeRegistrySourceSummary> {
@@ -5322,35 +6357,30 @@ fn semver_sort_key(version: &str) -> (u32, u32, u32) {
         .unwrap_or((0, 0, 0))
 }
 
-fn registry_semver_range_req_matches(version_req: &str, source_version: &str) -> Option<bool> {
+fn registry_semver_range_req_matches(inputs: RegistryVersionMatchInputs<'_>) -> Option<bool> {
+    let RegistryVersionMatchInputs {
+        requirement: version_req,
+        source_version,
+    } = inputs;
     if !version_req.contains(',') && !version_req.contains('<') && !version_req.contains('>') {
         return None;
     }
     let source = semver_components(source_version)?;
-    let mut saw_comparator = false;
+    let mut has_comparator = false;
     for comparator in version_req.split(',').map(str::trim).filter(|part| !part.is_empty()) {
-        saw_comparator = true;
+        has_comparator = true;
         if !semver_comparator_matches(comparator, source)? {
             return Some(false);
         }
     }
-    Some(saw_comparator)
+    Some(has_comparator)
 }
 
 fn semver_comparator_matches(comparator: &str, source: SemverComponents) -> Option<bool> {
-    let (operator, version) = if let Some(version) = comparator.strip_prefix(">=") {
-        (">=", version.trim())
-    } else if let Some(version) = comparator.strip_prefix("<=") {
-        ("<=", version.trim())
-    } else if let Some(version) = comparator.strip_prefix('>') {
-        (">", version.trim())
-    } else if let Some(version) = comparator.strip_prefix('<') {
-        ("<", version.trim())
-    } else if let Some(version) = comparator.strip_prefix('=') {
-        ("=", version.trim())
-    } else {
-        return None;
-    };
+    const SEMVER_COMPARATORS: &[&str] = &[">=", "<=", ">", "<", "="];
+    let (operator, version) = SEMVER_COMPARATORS
+        .iter()
+        .find_map(|operator| comparator.strip_prefix(operator).map(|version| (*operator, version.trim())))?;
     let required = semver_components(version)?;
     let source_key = (source.major, source.minor, source.patch);
     let required_key = (required.major, required.minor, required.patch);
@@ -5364,7 +6394,11 @@ fn semver_comparator_matches(comparator: &str, source: SemverComponents) -> Opti
     })
 }
 
-fn registry_semver_caret_req_matches(version_req: &str, source_version: &str) -> Option<bool> {
+fn registry_semver_caret_req_matches(inputs: RegistryVersionMatchInputs<'_>) -> Option<bool> {
+    let RegistryVersionMatchInputs {
+        requirement: version_req,
+        source_version,
+    } = inputs;
     let req = semver_components(version_req)?;
     let source = semver_components(source_version)?;
     if !semver_source_meets_lower_bound(req, source) {
@@ -5402,7 +6436,11 @@ fn semver_source_meets_lower_bound(req: SemverComponents, source: SemverComponen
     (source.major, source.minor, source.patch) >= (req.major, req.minor, req.patch)
 }
 
-fn registry_version_prefix_matches(version_prefix: &str, source_version: &str) -> bool {
+fn registry_version_prefix_matches(inputs: RegistryVersionMatchInputs<'_>) -> bool {
+    let RegistryVersionMatchInputs {
+        requirement: version_prefix,
+        source_version,
+    } = inputs;
     debug_assert!(!version_prefix.is_empty());
     debug_assert!(!source_version.is_empty());
     let Some(suffix) = source_version.strip_prefix(version_prefix) else {
@@ -5445,6 +6483,8 @@ fn git_dependency_source<'a>(
     value: &toml::Value,
     native_git_source_planning: &'a NativeGitSourcePlanningSummary,
 ) -> Result<&'a NativeGitSourceSummary, DependencySourceResolutionError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if !native_git_source_planning.ready {
         return Err(dependency_source_error(
             "native-git-source-planning-blocked",
@@ -5518,10 +6558,12 @@ fn git_dependency_selector<'a>(
 fn git_dependency_reference<'a>(
     value: &'a toml::Value,
 ) -> Result<Option<GitDependencyReference<'a>>, DependencySourceResolutionError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let Some(table) = value.as_table() else {
         return Ok(None);
     };
-    let mut references = Vec::new();
+    let mut references = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(rev) = table.get("rev").and_then(toml::Value::as_str) {
         references.push(GitDependencyReference::Revision(rev));
     }
@@ -5556,14 +6598,28 @@ fn git_source_reference_matches(source: &NativeGitSourceSummary, selector: &GitD
     match &selector.reference {
         None => true,
         Some(GitDependencyReference::Revision(rev)) => source.resolved_revision == *rev,
-        Some(GitDependencyReference::Tag(tag)) => git_source_query_value(&source.source, "tag") == Some(*tag),
+        Some(GitDependencyReference::Tag(tag)) => {
+            git_source_query_value(GitSourceQueryInputs {
+                source: &source.source,
+                key: "tag",
+            }) == Some(*tag)
+        }
         Some(GitDependencyReference::Branch(branch)) => {
-            git_source_query_value(&source.source, "branch") == Some(*branch)
+            git_source_query_value(GitSourceQueryInputs {
+                source: &source.source,
+                key: "branch",
+            }) == Some(*branch)
         }
     }
 }
 
-fn git_source_query_value<'a>(source: &'a str, key: &str) -> Option<&'a str> {
+struct GitSourceQueryInputs<'a, 'b> {
+    source: &'a str,
+    key: &'b str,
+}
+
+fn git_source_query_value<'a>(inputs: GitSourceQueryInputs<'a, '_>) -> Option<&'a str> {
+    let GitSourceQueryInputs { source, key } = inputs;
     let without_prefix = source.strip_prefix("git+")?;
     let without_revision = without_prefix.split_once('#').map(|(prefix, _)| prefix).unwrap_or(without_prefix);
     let (_, query) = without_revision.split_once('?')?;
@@ -5651,10 +6707,10 @@ fn resolve_native_features(request: NativeFeatureResolutionRequest) -> NativeFea
     let mut cursor = 0usize;
     while cursor < queue.len() {
         if cursor >= NATIVE_FEATURE_RESOLUTION_MAX_STEPS {
-            blockers.insert(native_feature_blocker(
-                "feature-resolution-step-limit",
-                "native feature resolution exceeded bounded fixed-point step limit",
-            ));
+            blockers.insert(native_feature_blocker(NativeFeatureBlockerInputs {
+                class: "feature-resolution-step-limit",
+                message: "native feature resolution exceeded bounded fixed-point step limit",
+            }));
             break;
         }
         let feature = queue[cursor].clone();
@@ -5710,6 +6766,8 @@ fn seed_native_feature_queue(
     selected_features: &mut BTreeSet<String>,
     queue: &mut Vec<String>,
 ) {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if request.all_features {
         for feature in request.feature_defs.keys() {
             push_native_feature(feature, selected_features, queue);
@@ -5745,7 +6803,10 @@ fn parse_native_feature_entry(
     debug_assert!(!entry.is_empty());
     if let Some(dependency) = entry.strip_prefix("dep:") {
         if dependency.is_empty() {
-            return Err(native_feature_blocker("unsupported-feature-entry", "empty dep: feature entry"));
+            return Err(native_feature_blocker(NativeFeatureBlockerInputs {
+                class: "unsupported-feature-entry",
+                message: "empty dep: feature entry",
+            }));
         }
         return Ok(NativeFeatureEntry::OptionalDependency {
             dependency: dependency.to_string(),
@@ -5764,10 +6825,10 @@ fn parse_native_feature_entry(
             expose_feature: true,
         });
     }
-    Err(native_feature_blocker(
-        "unknown-feature-entry",
-        &format!("feature entry `{entry}` references no known feature or optional dependency"),
-    ))
+    Err(native_feature_blocker(NativeFeatureBlockerInputs {
+        class: "unknown-feature-entry",
+        message: &format!("feature entry `{entry}` references no known feature or optional dependency"),
+    }))
 }
 
 fn parse_native_dependency_feature_entry(
@@ -5778,10 +6839,10 @@ fn parse_native_dependency_feature_entry(
     };
     let (dependency, weak) = dependency.strip_suffix('?').map_or((dependency, false), |dependency| (dependency, true));
     if dependency.is_empty() || feature.is_empty() {
-        return Err(native_feature_blocker(
-            "unsupported-feature-entry",
-            &format!("dependency feature entry `{entry}` is malformed"),
-        ));
+        return Err(native_feature_blocker(NativeFeatureBlockerInputs {
+            class: "unsupported-feature-entry",
+            message: &format!("dependency feature entry `{entry}` is malformed"),
+        }));
     }
     Ok(Some(NativeDependencyFeatureEdge {
         dependency: dependency.to_string(),
@@ -5790,7 +6851,13 @@ fn parse_native_dependency_feature_entry(
     }))
 }
 
-fn native_feature_blocker(class: &str, message: &str) -> NativeFeatureResolutionBlocker {
+struct NativeFeatureBlockerInputs<'a> {
+    class: &'a str,
+    message: &'a str,
+}
+
+fn native_feature_blocker(inputs: NativeFeatureBlockerInputs<'_>) -> NativeFeatureResolutionBlocker {
+    let NativeFeatureBlockerInputs { class, message } = inputs;
     debug_assert!(!class.is_empty());
     debug_assert!(!message.is_empty());
     NativeFeatureResolutionBlocker {
@@ -5805,35 +6872,37 @@ fn compare_native_packages_to_cargo(
     required_cargo_packages: &[&CargoPackage],
     blockers: &mut Vec<NativePackagePlanningBlocker>,
 ) {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for native in native_packages {
         let Some(cargo) = all_cargo_packages.iter().find(|package| {
             package.id == native.package_id
                 || manifest_paths_same(&package.manifest_path, Path::new(&native.manifest_path))
         }) else {
-            blockers.push(native_blocker(
-                Some(native.package_id.clone()),
-                "cargo-oracle-missing-package",
-                "native package has no matching Cargo oracle workspace package",
-            ));
+            blockers.push(native_blocker(NativePackageBlockerInputs {
+                package_id: Some(native.package_id.clone()),
+                class: "cargo-oracle-missing-package",
+                message: "native package has no matching Cargo oracle workspace package",
+            }));
             continue;
         };
         if native.name != cargo.name || native.version != cargo.version {
-            blockers.push(native_blocker(
-                Some(native.package_id.clone()),
-                "cargo-oracle-package-identity-mismatch",
-                "native package identity differs from Cargo oracle",
-            ));
+            blockers.push(native_blocker(NativePackageBlockerInputs {
+                package_id: Some(native.package_id.clone()),
+                class: "cargo-oracle-package-identity-mismatch",
+                message: "native package identity differs from Cargo oracle",
+            }));
         }
     }
     for cargo in required_cargo_packages {
         if !native_packages.iter().any(|native| {
             native.package_id == cargo.id || manifest_paths_same(&native.manifest_path, Path::new(&cargo.manifest_path))
         }) {
-            blockers.push(native_blocker(
-                Some(cargo.id.clone()),
-                "native-missing-cargo-package",
-                "Cargo oracle workspace package is absent from native planning fragment",
-            ));
+            blockers.push(native_blocker(NativePackageBlockerInputs {
+                package_id: Some(cargo.id.clone()),
+                class: "native-missing-cargo-package",
+                message: "Cargo oracle workspace package is absent from native planning fragment",
+            }));
         }
     }
 }
@@ -5845,15 +6914,26 @@ fn manifest_paths_same(left: &str, right: &Path) -> bool {
     left_normalized == right_normalized
 }
 
-fn cargo_path_package_id(name: &str, version: &str) -> String {
-    format!("path+native#{name}@{version}")
+struct CargoPathPackageIdInputs<'a> {
+    name: &'a str,
+    version: &'a str,
 }
 
-fn native_blocker(package_id: Option<String>, class: &str, message: &str) -> NativePackagePlanningBlocker {
+fn cargo_path_package_id(inputs: CargoPathPackageIdInputs<'_>) -> String {
+    format!("path+native#{}@{}", inputs.name, inputs.version)
+}
+
+struct NativePackageBlockerInputs<'a> {
+    package_id: Option<String>,
+    class: &'a str,
+    message: &'a str,
+}
+
+fn native_blocker(inputs: NativePackageBlockerInputs<'_>) -> NativePackagePlanningBlocker {
     NativePackagePlanningBlocker {
-        package_id,
-        class: class.to_string(),
-        message: message.to_string(),
+        package_id: inputs.package_id,
+        class: inputs.class.to_string(),
+        message: inputs.message.to_string(),
     }
 }
 
@@ -5861,6 +6941,8 @@ fn cargo_package_target_oracle_digest(
     cargo_packages: &[CargoPackage],
     workspace_members: &[String],
 ) -> Result<String, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     #[derive(Serialize)]
     struct HashableTarget<'a> {
         name: &'a str,
@@ -5923,106 +7005,39 @@ fn native_package_target_digest(
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
-fn summarize_native_unit_graph_planning(
-    unit_graph: &Value,
-    source_closure: &SourceClosureSummary,
-    native_package_target_planning: &NativePackageTargetPlanningSummary,
-    options: &RustPlanOptions,
+struct NativeUnitPlanningResultInputs {
+    no_cargo_oracle: bool,
+    cargo_unit_graph_oracle_digest: String,
+    cargo_derivations: Vec<RustUnitDerivationSummary>,
+    units: Vec<NativeRustUnitSummary>,
+    blockers: Vec<NativeUnitGraphPlanningBlocker>,
+}
+
+fn finalize_native_unit_graph_planning(
+    mut inputs: NativeUnitPlanningResultInputs,
 ) -> Result<NativeUnitGraphPlanningSummary, RunError> {
-    let cargo_unit_graph_oracle_digest = if options.no_cargo_oracle {
-        "cargo-free:no-cargo-unit-graph-oracle".to_string()
-    } else {
-        cargo_unit_graph_oracle_digest(unit_graph)?
-    };
-    let cargo_graph = if options.no_cargo_oracle {
-        empty_unit_derivation_graph()?
-    } else {
-        summarize_cargo_unit_derivation_graph(unit_graph, source_closure, options)?
-    };
-    let mut blockers = Vec::new();
-    if !native_package_target_planning.ready {
-        blockers.push(native_unit_blocker(
-            None,
-            None,
-            "native-package-target-planning-blocked",
-            "native unit graph planning requires ready native package/target facts",
-        ));
-    }
-    if options.all_features || options.no_default_features {
-        blockers.push(native_unit_blocker(
-            None,
-            None,
-            "unsupported-feature-surface",
-            "native unit graph fragment supports only bounded default feature invocation",
-        ));
-    }
-    let packages_by_id = native_package_target_planning
-        .packages
-        .iter()
-        .map(|package| (package.package_id.clone(), package))
-        .collect::<BTreeMap<_, _>>();
-    let workspace_manifest_paths = native_workspace_manifest_paths_for_unit_graph(&options.root);
-    let reachable_packages = native_reachable_unit_packages(
-        &native_package_target_planning.packages,
-        &workspace_manifest_paths,
-        &mut blockers,
-    );
-    let mut units = Vec::new();
-    for package in reachable_packages {
-        if !source_closure.sources.iter().any(|source| source.package_id == package.package_id) {
-            blockers.push(native_unit_blocker(
-                None,
-                Some(package.package_id.clone()),
-                "missing-source-input",
-                "native unit package is absent from source closure",
-            ));
-            continue;
-        }
-        let base_dependency_artifacts = native_dependency_artifacts(
-            package,
-            &package.path_dependencies,
-            &packages_by_id,
-            &native_package_target_planning.packages,
-            &mut blockers,
-        );
-        for target in package.targets.iter().filter(|target| native_target_is_unit_target(target)) {
-            if target.kind == "bin" && !native_package_bin_targets_are_in_scope(package, &workspace_manifest_paths) {
-                continue;
-            }
-            let dependency_artifacts = native_unit_dependency_artifacts_from_package_target(
-                package,
-                target,
-                base_dependency_artifacts.clone(),
-            );
-            units.push(native_rust_unit_from_package_target(package, target, dependency_artifacts, options));
-        }
-    }
-    units.sort();
-    add_missing_native_producer_blockers(&units, &packages_by_id, &mut blockers);
-    blockers.sort();
-    blockers.dedup();
-    if !options.no_cargo_oracle {
-        compare_native_units_to_cargo(&units, &cargo_graph, &mut blockers);
-    }
-    blockers.sort();
-    blockers.dedup();
-    let comparison_status = if options.no_cargo_oracle && blockers.is_empty() {
+    debug_assert!(!inputs.cargo_unit_graph_oracle_digest.is_empty());
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    inputs.blockers.sort();
+    inputs.blockers.dedup();
+    let comparison_status = if inputs.no_cargo_oracle && inputs.blockers.is_empty() {
         "cargo-free:no-oracle".to_string()
-    } else if blockers.is_empty() {
+    } else if inputs.blockers.is_empty() {
         "matched".to_string()
     } else {
         "blocked".to_string()
     };
-    let native_unit_graph_digest = native_unit_graph_digest(&units, &blockers)?;
-    let oracle_comparison_digest = native_unit_oracle_comparison_digest(&units, &cargo_graph.derivations, &blockers)?;
+    let native_unit_graph_digest = native_unit_graph_digest(&inputs.units, &inputs.blockers)?;
+    let oracle_comparison_digest =
+        native_unit_oracle_comparison_digest(&inputs.units, &inputs.cargo_derivations, &inputs.blockers)?;
     Ok(NativeUnitGraphPlanningSummary {
-        ready: blockers.is_empty(),
+        ready: inputs.blockers.is_empty(),
         comparison_status,
-        cargo_unit_graph_oracle_digest,
+        cargo_unit_graph_oracle_digest: inputs.cargo_unit_graph_oracle_digest,
         native_unit_graph_digest,
         oracle_comparison_digest,
-        units,
-        blockers,
+        units: inputs.units,
+        blockers: inputs.blockers,
         non_claims: vec![
             "bounded-lib-bin-build-mode-path-fragment-only".to_string(),
             "cargo-unit-graph-retained-as-oracle-evidence-only".to_string(),
@@ -6032,8 +7047,112 @@ fn summarize_native_unit_graph_planning(
     })
 }
 
+fn native_unit_cargo_evidence(
+    unit_graph: &Value,
+    source_closure: &SourceClosureSummary,
+    options: &RustPlanOptions,
+) -> Result<(String, UnitDerivationGraphSummary), RunError> {
+    if options.no_cargo_oracle {
+        return Ok(("cargo-free:no-cargo-unit-graph-oracle".to_string(), empty_unit_derivation_graph()?));
+    }
+    Ok((
+        cargo_unit_graph_oracle_digest(unit_graph)?,
+        summarize_cargo_unit_derivation_graph(unit_graph, source_closure, options)?,
+    ))
+}
+
+fn collect_native_rust_units(
+    source_closure: &SourceClosureSummary,
+    package_planning: &NativePackageTargetPlanningSummary,
+    options: &RustPlanOptions,
+    blockers: &mut Vec<NativeUnitGraphPlanningBlocker>,
+) -> Vec<NativeRustUnitSummary> {
+    debug_assert!(NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS > 0);
+    debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
+    let packages_by_id = package_planning
+        .packages
+        .iter()
+        .map(|package| (package.package_id.clone(), package))
+        .collect::<BTreeMap<_, _>>();
+    let workspace_manifest_paths = native_workspace_manifest_paths_for_unit_graph(&options.root);
+    let reachable_packages =
+        native_reachable_unit_packages(&package_planning.packages, &workspace_manifest_paths, blockers);
+    let mut units = Vec::with_capacity(reachable_packages.len());
+    for package in reachable_packages {
+        if !source_closure.sources.iter().any(|source| source.package_id == package.package_id) {
+            blockers.push(native_unit_blocker(NativeUnitBlockerInputs {
+                unit_id: None,
+                package_id: Some(package.package_id.clone()),
+                class: "missing-source-input",
+                message: "native unit package is absent from source closure",
+            }));
+            continue;
+        }
+        let base_dependencies = native_dependency_artifacts(
+            package,
+            &package.path_dependencies,
+            &packages_by_id,
+            &package_planning.packages,
+            blockers,
+        );
+        for target in package.targets.iter().filter(|target| native_target_is_unit_target(target)) {
+            if target.kind == "bin" && !native_package_bin_targets_are_in_scope(package, &workspace_manifest_paths) {
+                continue;
+            }
+            let dependencies =
+                native_unit_dependency_artifacts_from_package_target(package, target, base_dependencies.clone());
+            units.push(native_rust_unit_from_package_target(package, target, dependencies, options));
+        }
+    }
+    units.sort();
+    add_missing_native_producer_blockers(&units, &packages_by_id, blockers);
+    units
+}
+
+fn summarize_native_unit_graph_planning(
+    unit_graph: &Value,
+    source_closure: &SourceClosureSummary,
+    native_package_target_planning: &NativePackageTargetPlanningSummary,
+    options: &RustPlanOptions,
+) -> Result<NativeUnitGraphPlanningSummary, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let (cargo_unit_graph_oracle_digest, cargo_graph) =
+        native_unit_cargo_evidence(unit_graph, source_closure, options)?;
+    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    if !native_package_target_planning.ready {
+        blockers.push(native_unit_blocker(NativeUnitBlockerInputs {
+            unit_id: None,
+            package_id: None,
+            class: "native-package-target-planning-blocked",
+            message: "native unit graph planning requires ready native package/target facts",
+        }));
+    }
+    if options.all_features || options.no_default_features {
+        blockers.push(native_unit_blocker(NativeUnitBlockerInputs {
+            unit_id: None,
+            package_id: None,
+            class: "unsupported-feature-surface",
+            message: "native unit graph fragment supports only bounded default feature invocation",
+        }));
+    }
+    let units = collect_native_rust_units(source_closure, native_package_target_planning, options, &mut blockers);
+    blockers.sort();
+    blockers.dedup();
+    if !options.no_cargo_oracle {
+        compare_native_units_to_cargo(&units, &cargo_graph, &mut blockers);
+    }
+    finalize_native_unit_graph_planning(NativeUnitPlanningResultInputs {
+        no_cargo_oracle: options.no_cargo_oracle,
+        cargo_unit_graph_oracle_digest,
+        cargo_derivations: cargo_graph.derivations,
+        units,
+        blockers,
+    })
+}
+
 fn native_workspace_manifest_paths_for_unit_graph(root: &Path) -> BTreeSet<String> {
-    let mut ignored_blockers = Vec::new();
+    let mut ignored_blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     native_workspace_manifest_paths(root, &mut ignored_blockers)
         .into_iter()
         .map(|path| normalize_path_string(&path))
@@ -6045,9 +7164,11 @@ fn native_reachable_unit_packages<'a>(
     workspace_manifest_paths: &BTreeSet<String>,
     blockers: &mut Vec<NativeUnitGraphPlanningBlocker>,
 ) -> Vec<&'a NativePackagePlanningSummary> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let packages_by_manifest =
         packages.iter().map(|package| (package.manifest_path.clone(), package)).collect::<BTreeMap<_, _>>();
-    let mut queued = VecDeque::new();
+    let mut queued = VecDeque::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if workspace_manifest_paths.is_empty() {
         queued.extend(packages.iter().map(|package| package.manifest_path.clone()));
     } else {
@@ -6055,14 +7176,19 @@ fn native_reachable_unit_packages<'a>(
     }
     let mut visited = BTreeSet::new();
     let mut reachable_package_ids = BTreeSet::new();
-    let mut reachable = Vec::new();
+    let mut reachable = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     while let Some(manifest_path) = queued.pop_front() {
         if !visited.insert(manifest_path.clone()) {
             continue;
         }
         let Some(package) = packages_by_manifest
             .iter()
-            .find(|(candidate, _)| manifest_path_strings_same(candidate, &manifest_path))
+            .find(|(candidate, _)| {
+                manifest_path_strings_same(ManifestPathComparisonInputs {
+                    left: candidate,
+                    right: &manifest_path,
+                })
+            })
             .map(|(_, package)| *package)
         else {
             continue;
@@ -6072,12 +7198,12 @@ fn native_reachable_unit_packages<'a>(
         }
         reachable.push(package);
         if reachable_package_ids.len() > packages.len() {
-            blockers.push(native_unit_blocker(
-                None,
-                Some(package.package_id.clone()),
-                "native-unit-package-closure-limit-exceeded",
-                "native unit package traversal exceeded package fact count",
-            ));
+            blockers.push(native_unit_blocker(NativeUnitBlockerInputs {
+                unit_id: None,
+                package_id: Some(package.package_id.clone()),
+                class: "native-unit-package-closure-limit-exceeded",
+                message: "native unit package traversal exceeded package fact count",
+            }));
             break;
         }
         for dependency in package.path_dependencies.iter().chain(package.build_dependencies.iter()) {
@@ -6098,9 +7224,12 @@ fn native_package_bin_targets_are_in_scope(
     workspace_manifest_paths: &BTreeSet<String>,
 ) -> bool {
     workspace_manifest_paths.is_empty()
-        || workspace_manifest_paths
-            .iter()
-            .any(|manifest_path| manifest_path_strings_same(manifest_path, &package.manifest_path))
+        || workspace_manifest_paths.iter().any(|manifest_path| {
+            manifest_path_strings_same(ManifestPathComparisonInputs {
+                left: manifest_path,
+                right: &package.manifest_path,
+            })
+        })
 }
 
 fn native_unit_dependency_artifacts_from_package_target(
@@ -6129,8 +7258,16 @@ fn native_rust_unit_from_package_target(
     dependency_artifacts: Vec<RustDependencyArtifact>,
     options: &RustPlanOptions,
 ) -> NativeRustUnitSummary {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mode = "build".to_string();
-    let unit_id = native_rust_unit_id(package, target, &mode, &options.profile, &dependency_artifacts);
+    let unit_id = native_rust_unit_id(NativeRustUnitIdInputs {
+        package: package,
+        target: target,
+        mode: &mode,
+        profile: &options.profile,
+        dependency_artifacts: &dependency_artifacts,
+    });
     NativeRustUnitSummary {
         unit_id,
         package_id: package.package_id.clone(),
@@ -6152,13 +7289,24 @@ fn native_rust_unit_from_package_target(
     }
 }
 
-fn native_rust_unit_id(
-    package: &NativePackagePlanningSummary,
-    target: &NativeTargetPlanningSummary,
-    mode: &str,
-    profile: &str,
-    dependency_artifacts: &[RustDependencyArtifact],
-) -> String {
+struct NativeRustUnitIdInputs<'a> {
+    package: &'a NativePackagePlanningSummary,
+    target: &'a NativeTargetPlanningSummary,
+    mode: &'a str,
+    profile: &'a str,
+    dependency_artifacts: &'a [RustDependencyArtifact],
+}
+
+fn native_rust_unit_id(inputs: NativeRustUnitIdInputs<'_>) -> String {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let NativeRustUnitIdInputs {
+        package,
+        target,
+        mode,
+        profile,
+        dependency_artifacts,
+    } = inputs;
     let features = package.selected_features.join(",");
     let dependencies = dependency_artifacts
         .iter()
@@ -6204,15 +7352,15 @@ fn add_missing_native_producer_blockers(
                 })
             };
             if !has_producer {
-                blockers.push(native_unit_blocker(
-                    Some(unit.unit_id.clone()),
-                    Some(unit.package_id.clone()),
-                    "missing-native-dependency-producer",
-                    &format!(
+                blockers.push(native_unit_blocker(NativeUnitBlockerInputs {
+                    unit_id: Some(unit.unit_id.clone()),
+                    package_id: Some(unit.package_id.clone()),
+                    class: "missing-native-dependency-producer",
+                    message: &format!(
                         "consumer package {} dependency `{}` for package {} has no supported native lib producer unit",
                         unit.package_id, dependency.name, dependency.package_id
                     ),
-                ));
+                }));
             }
         }
     }
@@ -6246,12 +7394,24 @@ struct SelectedHostBuildUnit {
 fn native_selected_host_units_by_key(
     packages: &[NativePackagePlanningSummary],
 ) -> BTreeMap<(String, String, String), Vec<SelectedHostUnit>> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut units_by_key = BTreeMap::<(String, String, String), Vec<SelectedHostUnit>>::new();
     let mut unit_index = 0usize;
     for package in packages {
         for target in package.targets.iter().filter(|target| is_host_target_kind(&target.kind)) {
-            let key = host_unit_key(&package.package_id, &target.name, &target.kind);
-            let unit_id = rust_unit_id(unit_index, &package.package_id, &target.name, &target.kind, "build");
+            let key = host_unit_key(UnitTargetIdentityInputs {
+                package_id: &package.package_id,
+                target_name: &target.name,
+                target_kind: &target.kind,
+            });
+            let unit_id = rust_unit_id(RustUnitIdInputs {
+                index: unit_index,
+                package_id: &package.package_id,
+                target_name: &target.name,
+                target_kind: &target.kind,
+                mode: "build",
+            });
             units_by_key.entry(key.clone()).or_default().push(SelectedHostUnit {
                 key,
                 unit_id,
@@ -6283,6 +7443,8 @@ fn selected_host_units_by_key(unit_graph: &Value) -> BTreeMap<(String, String, S
 }
 
 fn selected_host_build_units_by_key(units: &[Value]) -> BTreeMap<(String, String, String), Vec<SelectedHostBuildUnit>> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut build_units = BTreeMap::<(String, String, String), Vec<SelectedHostBuildUnit>>::new();
     for (index, unit) in units.iter().enumerate() {
         let Some((package_id, target_name, target_kind)) = selected_host_unit_parts(unit) else {
@@ -6292,9 +7454,19 @@ fn selected_host_build_units_by_key(units: &[Value]) -> BTreeMap<(String, String
         if mode != "build" {
             continue;
         }
-        let key = host_unit_key(&package_id, &target_name, target_kind);
+        let key = host_unit_key(UnitTargetIdentityInputs {
+            package_id: &package_id,
+            target_name: &target_name,
+            target_kind: target_kind,
+        });
         build_units.entry(key).or_default().push(SelectedHostBuildUnit {
-            unit_id: rust_unit_id(index, &package_id, &target_name, target_kind, "build"),
+            unit_id: rust_unit_id(RustUnitIdInputs {
+                index: index,
+                package_id: &package_id,
+                target_name: &target_name,
+                target_kind: target_kind,
+                mode: "build",
+            }),
         });
     }
     for units in build_units.values_mut() {
@@ -6309,9 +7481,22 @@ fn selected_host_unit_from_unit_value_with_build_map(
     unit: &Value,
     build_units: &BTreeMap<(String, String, String), Vec<SelectedHostBuildUnit>>,
 ) -> Option<SelectedHostUnit> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let (package_id, target_name, target_kind) = selected_host_unit_parts(unit)?;
-    let key = host_unit_key(&package_id, &target_name, target_kind);
-    let unit_id = host_unit_id_from_unit_value(index, &package_id, &target_name, target_kind, unit, build_units)?;
+    let key = host_unit_key(UnitTargetIdentityInputs {
+        package_id: &package_id,
+        target_name: &target_name,
+        target_kind: target_kind,
+    });
+    let unit_id = host_unit_id_from_unit_value(HostUnitIdInputs {
+        index: index,
+        package_id: &package_id,
+        target_name: &target_name,
+        target_kind: target_kind,
+        unit: unit,
+        build_units: build_units,
+    })?;
     Some(SelectedHostUnit {
         key,
         unit_id,
@@ -6332,32 +7517,71 @@ fn selected_host_unit_parts(unit: &Value) -> Option<(String, String, &'static st
     Some((package_id, target_name, target_kind))
 }
 
-fn host_unit_id_from_unit_value(
+struct HostUnitIdInputs<'a> {
     index: usize,
-    package_id: &str,
-    target_name: &str,
-    target_kind: &str,
-    unit: &Value,
-    build_units: &BTreeMap<(String, String, String), Vec<SelectedHostBuildUnit>>,
-) -> Option<String> {
+    package_id: &'a str,
+    target_name: &'a str,
+    target_kind: &'a str,
+    unit: &'a Value,
+    build_units: &'a BTreeMap<(String, String, String), Vec<SelectedHostBuildUnit>>,
+}
+
+fn host_unit_id_from_unit_value(inputs: HostUnitIdInputs<'_>) -> Option<String> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let HostUnitIdInputs {
+        index,
+        package_id,
+        target_name,
+        target_kind,
+        unit,
+        build_units,
+    } = inputs;
     let mode = target_string(unit, "mode").unwrap_or_else(|| "build".to_string());
     if mode == "build" {
-        return Some(rust_unit_id(index, package_id, target_name, target_kind, &mode));
+        return Some(rust_unit_id(RustUnitIdInputs {
+            index: index,
+            package_id: package_id,
+            target_name: target_name,
+            target_kind: target_kind,
+            mode: &mode,
+        }));
     }
     if target_kind == "custom-build" && mode == "run-custom-build" {
-        let key = host_unit_key(package_id, target_name, target_kind);
+        let key = host_unit_key(UnitTargetIdentityInputs {
+            package_id: package_id,
+            target_name: target_name,
+            target_kind: target_kind,
+        });
         if let Some([build_unit]) = build_units.get(&key).map(Vec::as_slice) {
             return Some(build_unit.unit_id.clone());
         }
         if build_units.get(&key).is_some() {
             return None;
         }
-        return Some(rust_unit_id(index, package_id, BUILD_SCRIPT_TARGET_NAME, target_kind, "build"));
+        return Some(rust_unit_id(RustUnitIdInputs {
+            index: index,
+            package_id: package_id,
+            target_name: BUILD_SCRIPT_TARGET_NAME,
+            target_kind: target_kind,
+            mode: "build",
+        }));
     }
     None
 }
 
-fn host_unit_key(package_id: &str, target_name: &str, target_kind: &str) -> (String, String, String) {
+struct UnitTargetIdentityInputs<'a> {
+    package_id: &'a str,
+    target_name: &'a str,
+    target_kind: &'a str,
+}
+
+fn host_unit_key(inputs: UnitTargetIdentityInputs<'_>) -> (String, String, String) {
+    let UnitTargetIdentityInputs {
+        package_id,
+        target_name,
+        target_kind,
+    } = inputs;
     debug_assert!(!package_id.is_empty());
     debug_assert!(!target_name.is_empty());
     debug_assert!(!target_kind.is_empty());
@@ -6389,27 +7613,31 @@ fn native_dependency_artifacts(
     packages: &[NativePackagePlanningSummary],
     blockers: &mut Vec<NativeUnitGraphPlanningBlocker>,
 ) -> Vec<RustDependencyArtifact> {
-    let mut artifacts = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut artifacts = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for dependency in dependencies {
-        let Some(dependency_package) = packages
-            .iter()
-            .find(|candidate| manifest_path_strings_same(&candidate.manifest_path, &dependency.manifest_path))
-        else {
-            blockers.push(native_unit_blocker(
-                None,
-                Some(package.package_id.clone()),
-                "unresolved-path-dependency-edge",
-                &format!("path dependency `{}` has no native package fact", dependency.name),
-            ));
+        let Some(dependency_package) = packages.iter().find(|candidate| {
+            manifest_path_strings_same(ManifestPathComparisonInputs {
+                left: &candidate.manifest_path,
+                right: &dependency.manifest_path,
+            })
+        }) else {
+            blockers.push(native_unit_blocker(NativeUnitBlockerInputs {
+                unit_id: None,
+                package_id: Some(package.package_id.clone()),
+                class: "unresolved-path-dependency-edge",
+                message: &format!("path dependency `{}` has no native package fact", dependency.name),
+            }));
             continue;
         };
         if packages_by_id.get(&dependency_package.package_id).is_none() {
-            blockers.push(native_unit_blocker(
-                None,
-                Some(package.package_id.clone()),
-                "missing-native-package-fact",
-                &format!("path dependency `{}` cannot be resolved to a native package", dependency.name),
-            ));
+            blockers.push(native_unit_blocker(NativeUnitBlockerInputs {
+                unit_id: None,
+                package_id: Some(package.package_id.clone()),
+                class: "missing-native-package-fact",
+                message: &format!("path dependency `{}` cannot be resolved to a native package", dependency.name),
+            }));
             continue;
         }
         if dependency_package.targets.iter().any(|target| target.kind == "proc-macro") {
@@ -6445,7 +7673,13 @@ fn native_dependency_extern_crate_name(
         .unwrap_or(dependency_key)
 }
 
-fn manifest_path_strings_same(left: &str, right: &str) -> bool {
+struct ManifestPathComparisonInputs<'a> {
+    left: &'a str,
+    right: &'a str,
+}
+
+fn manifest_path_strings_same(inputs: ManifestPathComparisonInputs<'_>) -> bool {
+    let ManifestPathComparisonInputs { left, right } = inputs;
     let left_path = Path::new(left);
     let right_path = Path::new(right);
     let left_normalized = left_path.canonicalize().unwrap_or_else(|_| left_path.to_path_buf());
@@ -6460,12 +7694,12 @@ fn compare_native_units_to_cargo(
 ) {
     if !cargo_graph.blockers.is_empty() {
         for blocker in &cargo_graph.blockers {
-            blockers.push(native_unit_blocker(
-                Some(blocker.unit_id.clone()),
-                blocker.package_id.clone(),
-                "cargo-oracle-unit-graph-blocked",
-                &blocker.message,
-            ));
+            blockers.push(native_unit_blocker(NativeUnitBlockerInputs {
+                unit_id: Some(blocker.unit_id.clone()),
+                package_id: blocker.package_id.clone(),
+                class: "cargo-oracle-unit-graph-blocked",
+                message: &blocker.message,
+            }));
         }
     }
     let native_facts = comparable_native_unit_facts(native_units);
@@ -6474,6 +7708,8 @@ fn compare_native_units_to_cargo(
 }
 
 fn comparable_native_unit_facts(units: &[NativeRustUnitSummary]) -> Vec<String> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut facts = units
         .iter()
         .map(|unit| {
@@ -6500,6 +7736,8 @@ fn comparable_native_unit_facts(units: &[NativeRustUnitSummary]) -> Vec<String> 
 }
 
 fn comparable_cargo_unit_facts(units: &[RustUnitDerivationSummary]) -> Vec<String> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut facts = units
         .iter()
         .filter(|unit| unit.execution_kind == "target" && (unit.target_kind == "lib" || unit.target_kind == "bin"))
@@ -6526,74 +7764,82 @@ fn comparable_cargo_unit_facts(units: &[RustUnitDerivationSummary]) -> Vec<Strin
     facts
 }
 
-fn summarize_native_host_unit_graph_planning(
-    unit_graph: &Value,
-    source_closure: &SourceClosureSummary,
-    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
-    native_package_target_planning: &NativePackageTargetPlanningSummary,
-    native_unit_graph_planning: &NativeUnitGraphPlanningSummary,
-    options: &RustPlanOptions,
-) -> Result<NativeHostUnitGraphPlanningSummary, RunError> {
-    let cargo_graph = if options.no_cargo_oracle {
-        empty_unit_derivation_graph()?
-    } else {
-        summarize_cargo_unit_derivation_graph(unit_graph, source_closure, options)?
-    };
-    let cargo_host_oracle_digest = if options.no_cargo_oracle {
-        "cargo-free:no-cargo-host-oracle".to_string()
-    } else {
-        cargo_host_oracle_digest(&cargo_graph, unit_graph)?
-    };
-    let mut host_units = Vec::new();
-    let mut target_consumers = Vec::new();
-    let mut blockers = Vec::new();
-    if !native_package_target_planning.ready {
-        blockers.push(native_host_blocker(
-            None,
-            None,
-            "native-package-target-planning-blocked",
-            "native host-unit graph planning requires ready native package/target facts",
-        ));
-    }
-    if !native_unit_graph_planning.ready {
-        blockers.push(native_host_blocker(
-            None,
-            None,
-            "native-unit-graph-planning-blocked",
-            "native host-unit graph planning requires ready native target unit facts",
-        ));
-    }
-    let packages_by_manifest = native_package_target_planning
+struct NativeHostPlanningInputs<'a> {
+    unit_graph: &'a Value,
+    source_closure: &'a SourceClosureSummary,
+    registry_sources: &'a NativeRegistrySourcePlanningSummary,
+    package_planning: &'a NativePackageTargetPlanningSummary,
+    unit_planning: &'a NativeUnitGraphPlanningSummary,
+    options: &'a RustPlanOptions,
+}
+
+struct NativeHostPlanningIndexes<'a> {
+    packages_by_manifest: BTreeMap<String, &'a NativePackagePlanningSummary>,
+    packages_by_id: BTreeMap<String, &'a NativePackagePlanningSummary>,
+    selected_dependency_artifacts: BTreeMap<String, BTreeSet<RustDependencyArtifact>>,
+    selected_native_dependency_artifacts: BTreeMap<String, BTreeSet<RustDependencyArtifact>>,
+    selected_host_units: BTreeMap<(String, String, String), Vec<SelectedHostUnit>>,
+    custom_build_metadata_producers: BTreeMap<String, Vec<String>>,
+}
+
+fn native_host_planning_indexes<'a>(
+    inputs: &'a NativeHostPlanningInputs<'a>,
+    cargo_graph: &UnitDerivationGraphSummary,
+) -> NativeHostPlanningIndexes<'a> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!DEFAULT_CARGO_PROFILE.is_empty());
+    let packages_by_manifest = inputs
+        .package_planning
         .packages
         .iter()
         .map(|package| (package.manifest_path.clone(), package))
         .collect::<BTreeMap<_, _>>();
-    let packages_by_id = native_package_target_planning
+    let packages_by_id = inputs
+        .package_planning
         .packages
         .iter()
         .map(|package| (package.package_id.clone(), package))
         .collect::<BTreeMap<_, _>>();
-    let selected_dependency_artifacts_by_package = selected_dependency_artifacts_by_package(&cargo_graph.derivations);
-    let selected_native_dependency_artifacts_by_package =
-        selected_native_dependency_artifacts_by_package(&native_unit_graph_planning.units);
-    let selected_host_units_by_key = if options.no_cargo_oracle {
-        native_selected_host_units_by_key(&native_package_target_planning.packages)
+    let selected_dependency_artifacts = selected_dependency_artifacts_by_package(&cargo_graph.derivations);
+    let selected_native_dependency_artifacts =
+        selected_native_dependency_artifacts_by_package(&inputs.unit_planning.units);
+    let selected_host_units = if inputs.options.no_cargo_oracle {
+        native_selected_host_units_by_key(&inputs.package_planning.packages)
     } else {
-        selected_host_units_by_key(unit_graph)
+        selected_host_units_by_key(inputs.unit_graph)
     };
-    let custom_build_metadata_producer_unit_ids = custom_build_metadata_producers_by_package(
-        &native_package_target_planning.packages,
-        &selected_host_units_by_key,
-    );
+    let custom_build_metadata_producers =
+        custom_build_metadata_producers_by_package(&inputs.package_planning.packages, &selected_host_units);
+    NativeHostPlanningIndexes {
+        packages_by_manifest,
+        packages_by_id,
+        selected_dependency_artifacts,
+        selected_native_dependency_artifacts,
+        selected_host_units,
+        custom_build_metadata_producers,
+    }
+}
+
+fn native_host_artifacts_by_package(
+    inputs: &NativeHostPlanningInputs<'_>,
+    indexes: &NativeHostPlanningIndexes<'_>,
+) -> BTreeMap<String, Vec<RustHostArtifact>> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!HOST_DEPENDENCY_EXECUTION_KIND.is_empty());
     let mut artifacts_by_package: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
-    for package in &native_package_target_planning.packages {
+    for package in &inputs.package_planning.packages {
         let package_host_artifacts = package
             .targets
             .iter()
             .filter(|target| is_host_target_kind(&target.kind))
             .flat_map(|target| {
-                selected_host_units_by_key
-                    .get(&host_unit_key(&package.package_id, &target.name, &target.kind))
+                indexes
+                    .selected_host_units
+                    .get(&host_unit_key(UnitTargetIdentityInputs {
+                        package_id: &package.package_id,
+                        target_name: &target.name,
+                        target_kind: &target.kind,
+                    }))
                     .into_iter()
                     .flatten()
                     .map(move |selected| RustHostArtifact {
@@ -6605,8 +7851,13 @@ fn summarize_native_host_unit_graph_planning(
                             "host-artifact:{}:{}:{}",
                             selected.unit_index, target.kind, target.crate_name
                         ),
-                        metadata_digest_blake3: (target.kind == "custom-build")
-                            .then(|| build_script_metadata_summary(&package.package_id, &target.name).digest_blake3),
+                        metadata_digest_blake3: (target.kind == "custom-build").then(|| {
+                            build_script_metadata_summary(BuildScriptMetadataKeyInputs {
+                                package_id: &package.package_id,
+                                target_name: &target.name,
+                            })
+                            .digest_blake3
+                        }),
                     })
             })
             .collect::<Vec<_>>();
@@ -6616,187 +7867,294 @@ fn summarize_native_host_unit_graph_planning(
         artifacts.sort();
         artifacts.dedup();
     }
-    for package in &native_package_target_planning.packages {
-        let Some(source) = source_closure.sources.iter().find(|source| source.package_id == package.package_id) else {
-            blockers.push(native_host_blocker(
-                None,
-                Some(package.package_id.clone()),
-                "missing-source-input",
-                "native host package is absent from source closure",
-            ));
+    artifacts_by_package
+}
+
+struct NativeHostUnitInputs<'a> {
+    planning: &'a NativeHostPlanningInputs<'a>,
+    indexes: &'a NativeHostPlanningIndexes<'a>,
+    artifacts_by_package: &'a BTreeMap<String, Vec<RustHostArtifact>>,
+    package: &'a NativePackagePlanningSummary,
+    target: &'a NativeTargetPlanningSummary,
+    selected: &'a SelectedHostUnit,
+    artifact: RustHostArtifact,
+    source_digest: SourceDigest,
+    blockers: &'a mut Vec<NativeHostUnitGraphPlanningBlocker>,
+}
+
+struct NativeHostUnitDependencies {
+    dependency_artifacts: Vec<RustDependencyArtifact>,
+    consumed_host_artifacts: Vec<RustHostArtifact>,
+    metadata_dependencies: Vec<BuildScriptMetadataDependency>,
+}
+
+fn native_host_unit_dependencies(inputs: &mut NativeHostUnitInputs<'_>) -> NativeHostUnitDependencies {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    debug_assert!(is_host_target_kind(&inputs.target.kind));
+    debug_assert!(!inputs.selected.unit_id.is_empty());
+    let dependency_artifacts = native_host_unit_dependency_artifacts(NativeHostUnitDependencyInputs {
+        package: inputs.package,
+        target_kind: &inputs.target.kind,
+        selected_artifacts: inputs.indexes.selected_dependency_artifacts.get(&inputs.package.package_id),
+        packages_by_id: &inputs.indexes.packages_by_id,
+        packages: &inputs.planning.package_planning.packages,
+        source_closure: inputs.planning.source_closure,
+        blockers: inputs.blockers,
+    });
+    let package_host_artifacts =
+        inputs.artifacts_by_package.get(&inputs.package.package_id).cloned().unwrap_or_default();
+    let mut consumed_host_artifacts =
+        selected_host_consumed_artifacts(inputs.planning.unit_graph, inputs.selected, &package_host_artifacts);
+    let mut fallback_consumed_host_artifacts = fallback_host_consumed_host_artifacts(
+        &inputs.target.kind,
+        inputs.package,
+        &inputs.indexes.packages_by_manifest,
+        inputs.artifacts_by_package,
+        inputs.blockers,
+    );
+    let has_selected_custom_build = consumed_host_artifacts
+        .iter()
+        .any(|artifact| artifact.package_id == inputs.package.package_id && artifact.target_kind == "custom-build");
+    if has_selected_custom_build {
+        fallback_consumed_host_artifacts.retain(|artifact| {
+            artifact.package_id != inputs.package.package_id || artifact.target_kind != "custom-build"
+        });
+    }
+    consumed_host_artifacts.extend(fallback_consumed_host_artifacts);
+    consumed_host_artifacts.sort();
+    consumed_host_artifacts.dedup();
+    let metadata_dependencies = native_host_metadata_dependencies(NativeHostMetadataDependencyInputs {
+        package: inputs.package,
+        target_kind: &inputs.target.kind,
+        selected_artifacts: inputs.indexes.selected_native_dependency_artifacts.get(&inputs.package.package_id),
+        packages_by_id: &inputs.indexes.packages_by_id,
+        custom_build_metadata_producers: &inputs.indexes.custom_build_metadata_producers,
+        blockers: inputs.blockers,
+    });
+    NativeHostUnitDependencies {
+        dependency_artifacts,
+        consumed_host_artifacts,
+        metadata_dependencies,
+    }
+}
+
+fn native_host_unit(mut inputs: NativeHostUnitInputs<'_>) -> NativeHostUnitSummary {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let dependencies = native_host_unit_dependencies(&mut inputs);
+    let generated_metadata = (inputs.target.kind == "custom-build").then(|| {
+        build_script_metadata_summary(BuildScriptMetadataKeyInputs {
+            package_id: &inputs.package.package_id,
+            target_name: &inputs.target.name,
+        })
+    });
+    NativeHostUnitSummary {
+        unit_id: inputs.selected.unit_id.clone(),
+        package_id: inputs.package.package_id.clone(),
+        package_name: inputs.package.name.clone(),
+        package_links: inputs.package.links.clone(),
+        package_root: package_root_from_manifest_path(&inputs.package.manifest_path),
+        cargo_package_env: inputs.package.cargo_package_env.clone(),
+        target_name: inputs.target.name.clone(),
+        target_kind: inputs.target.kind.clone(),
+        crate_name: inputs.target.crate_name.clone(),
+        source_path: inputs.target.source_path.clone(),
+        edition: inputs.target.edition.clone(),
+        selected_features: inputs.package.selected_features.clone(),
+        crate_types: normalized_crate_types(std::slice::from_ref(&inputs.target.kind), &inputs.target.kind),
+        mode: "build".to_string(),
+        profile: inputs.planning.options.profile.clone(),
+        source_digest: inputs.source_digest,
+        artifact: inputs.artifact,
+        dependency_artifacts: dependencies.dependency_artifacts,
+        consumed_host_artifacts: dependencies.consumed_host_artifacts,
+        metadata_dependencies: dependencies.metadata_dependencies,
+        generated_metadata,
+    }
+}
+
+fn collect_native_host_units(
+    inputs: &NativeHostPlanningInputs<'_>,
+    indexes: &NativeHostPlanningIndexes<'_>,
+    artifacts_by_package: &BTreeMap<String, Vec<RustHostArtifact>>,
+    blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
+) -> Vec<NativeHostUnitSummary> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
+    let mut host_units = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    for package in &inputs.package_planning.packages {
+        let Some(source) = inputs.source_closure.sources.iter().find(|source| source.package_id == package.package_id)
+        else {
+            blockers.push(native_host_blocker(NativeHostBlockerInputs {
+                unit_id: None,
+                package_id: Some(package.package_id.clone()),
+                class: "missing-source-input",
+                message: "native host package is absent from source closure",
+            }));
             continue;
         };
-        let source_digest = native_registry_source_planning
+        let source_digest = inputs
+            .registry_sources
             .sources
             .iter()
             .find(|registry_source| registry_source.package_id == package.package_id)
             .map(|registry_source| registry_source.source_digest.clone())
             .unwrap_or_else(|| source.source_digest.clone());
-        let package_host_selections = package
-            .targets
-            .iter()
-            .filter(|target| is_host_target_kind(&target.kind))
-            .flat_map(|target| {
-                selected_host_units_by_key
-                    .get(&host_unit_key(&package.package_id, &target.name, &target.kind))
-                    .into_iter()
-                    .flatten()
-                    .cloned()
-                    .map(move |selected| (target, selected))
-            })
-            .collect::<Vec<_>>();
-        let package_host_artifacts = package_host_selections
-            .iter()
-            .map(|(target, selected)| RustHostArtifact {
-                package_id: package.package_id.clone(),
-                target_name: target.name.clone(),
-                target_kind: target.kind.clone(),
-                producer_unit_id: Some(selected.unit_id.clone()),
-                artifact: format!("host-artifact:{}:{}:{}", selected.unit_index, target.kind, target.crate_name),
-                metadata_digest_blake3: (target.kind == "custom-build")
-                    .then(|| build_script_metadata_summary(&package.package_id, &target.name).digest_blake3),
-            })
-            .collect::<Vec<_>>();
-        for ((target, selected), artifact) in package_host_selections.iter().zip(package_host_artifacts.iter()) {
-            let host_dependency_artifacts = native_host_unit_dependency_artifacts(
-                package,
-                &target.kind,
-                selected_dependency_artifacts_by_package.get(&package.package_id),
-                &packages_by_id,
-                &native_package_target_planning.packages,
-                source_closure,
-                &mut blockers,
-            );
-            let mut consumed_host_artifacts =
-                selected_host_consumed_artifacts(unit_graph, selected, &package_host_artifacts);
-            let mut fallback_consumed_host_artifacts = fallback_host_consumed_host_artifacts(
-                &target.kind,
-                package,
-                &packages_by_manifest,
-                &artifacts_by_package,
-                &mut blockers,
-            );
-            if consumed_host_artifacts
-                .iter()
-                .any(|artifact| artifact.package_id == package.package_id && artifact.target_kind == "custom-build")
-            {
-                fallback_consumed_host_artifacts.retain(|artifact| {
-                    artifact.package_id != package.package_id || artifact.target_kind != "custom-build"
-                });
-            }
-            consumed_host_artifacts.extend(fallback_consumed_host_artifacts);
-            consumed_host_artifacts.sort();
-            consumed_host_artifacts.dedup();
-            let metadata_dependencies = native_host_metadata_dependencies(
-                package,
-                &target.kind,
-                selected_native_dependency_artifacts_by_package.get(&package.package_id),
-                &packages_by_id,
-                &custom_build_metadata_producer_unit_ids,
-                &mut blockers,
-            );
-            let generated_metadata = (target.kind == "custom-build")
-                .then(|| build_script_metadata_summary(&package.package_id, &target.name));
-            host_units.push(NativeHostUnitSummary {
-                unit_id: selected.unit_id.clone(),
-                package_id: package.package_id.clone(),
-                package_name: package.name.clone(),
-                package_links: package.links.clone(),
-                package_root: package_root_from_manifest_path(&package.manifest_path),
-                cargo_package_env: package.cargo_package_env.clone(),
-                target_name: target.name.clone(),
-                target_kind: target.kind.clone(),
-                crate_name: target.crate_name.clone(),
-                source_path: target.source_path.clone(),
-                edition: target.edition.clone(),
-                selected_features: package.selected_features.clone(),
-                crate_types: normalized_crate_types(std::slice::from_ref(&target.kind), &target.kind),
-                mode: "build".to_string(),
-                profile: options.profile.clone(),
-                source_digest: source_digest.clone(),
-                artifact: artifact.clone(),
-                dependency_artifacts: host_dependency_artifacts.clone(),
-                consumed_host_artifacts,
-                metadata_dependencies,
-                generated_metadata,
+        for target in package.targets.iter().filter(|target| is_host_target_kind(&target.kind)) {
+            let host_key = host_unit_key(UnitTargetIdentityInputs {
+                package_id: &package.package_id,
+                target_name: &target.name,
+                target_kind: &target.kind,
             });
+            for selected in indexes.selected_host_units.get(&host_key).into_iter().flatten() {
+                let artifact = RustHostArtifact {
+                    package_id: package.package_id.clone(),
+                    target_name: target.name.clone(),
+                    target_kind: target.kind.clone(),
+                    producer_unit_id: Some(selected.unit_id.clone()),
+                    artifact: format!("host-artifact:{}:{}:{}", selected.unit_index, target.kind, target.crate_name),
+                    metadata_digest_blake3: (target.kind == "custom-build").then(|| {
+                        build_script_metadata_summary(BuildScriptMetadataKeyInputs {
+                            package_id: &package.package_id,
+                            target_name: &target.name,
+                        })
+                        .digest_blake3
+                    }),
+                };
+                host_units.push(native_host_unit(NativeHostUnitInputs {
+                    planning: inputs,
+                    indexes,
+                    artifacts_by_package,
+                    package,
+                    target,
+                    selected,
+                    artifact,
+                    source_digest: source_digest.clone(),
+                    blockers,
+                }));
+            }
         }
     }
-    for artifacts in artifacts_by_package.values_mut() {
-        artifacts.sort();
-        artifacts.dedup();
-    }
+    dedupe_native_host_units_by_unit_id(host_units)
+}
+
+fn collect_native_host_target_consumers(
+    inputs: &NativeHostPlanningInputs<'_>,
+    indexes: &NativeHostPlanningIndexes<'_>,
+    artifacts_by_package: &BTreeMap<String, Vec<RustHostArtifact>>,
+    blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
+) -> Vec<NativeHostTargetConsumerSummary> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!HOST_DEPENDENCY_EXECUTION_KIND.is_empty());
     let all_host_artifacts = artifacts_by_package.values().flatten().cloned().collect::<Vec<_>>();
-    for unit in &native_unit_graph_planning.units {
+    let mut target_consumers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    for unit in &inputs.unit_planning.units {
         let Some(package) =
-            native_package_target_planning.packages.iter().find(|package| package.package_id == unit.package_id)
+            inputs.package_planning.packages.iter().find(|package| package.package_id == unit.package_id)
         else {
-            blockers.push(native_host_blocker(
-                Some(unit.unit_id.clone()),
-                Some(unit.package_id.clone()),
-                "missing-native-package-fact",
-                "native target consumer has no package fact",
-            ));
+            blockers.push(native_host_blocker(NativeHostBlockerInputs {
+                unit_id: Some(unit.unit_id.clone()),
+                package_id: Some(unit.package_id.clone()),
+                class: "missing-native-package-fact",
+                message: "native target consumer has no package fact",
+            }));
             continue;
         };
         let mut consumed_host_artifacts =
-            selected_target_consumed_host_artifacts(unit_graph, unit, &all_host_artifacts).unwrap_or_else(|| {
-                fallback_target_consumed_host_artifacts(
-                    unit,
-                    package,
-                    &packages_by_manifest,
-                    &artifacts_by_package,
-                    &mut blockers,
-                )
-            });
+            selected_target_consumed_host_artifacts(inputs.unit_graph, unit, &all_host_artifacts).unwrap_or_else(
+                || {
+                    fallback_target_consumed_host_artifacts(
+                        unit,
+                        package,
+                        &indexes.packages_by_manifest,
+                        artifacts_by_package,
+                        blockers,
+                    )
+                },
+            );
         consumed_host_artifacts.sort();
         consumed_host_artifacts.dedup();
-        if !consumed_host_artifacts.is_empty() {
-            target_consumers.push(NativeHostTargetConsumerSummary {
-                unit_id: unit.unit_id.clone(),
-                package_id: unit.package_id.clone(),
-                target_name: unit.target_name.clone(),
-                target_kind: unit.target_kind.clone(),
-                consumed_host_artifacts,
-            });
+        if consumed_host_artifacts.is_empty() {
+            continue;
         }
+        target_consumers.push(NativeHostTargetConsumerSummary {
+            unit_id: unit.unit_id.clone(),
+            package_id: unit.package_id.clone(),
+            target_name: unit.target_name.clone(),
+            target_kind: unit.target_kind.clone(),
+            consumed_host_artifacts,
+        });
     }
-    host_units = dedupe_native_host_units_by_unit_id(host_units);
-    host_units.sort();
-    host_units.dedup();
-    target_consumers.sort();
-    target_consumers.dedup();
-    if !options.no_cargo_oracle
-        && blockers.is_empty()
-        && !host_units.iter().any(|unit| unit.package_id.starts_with("registry+"))
-        && !target_consumers.iter().any(|consumer| {
-            consumer.package_id.starts_with("registry+")
-                || consumer.consumed_host_artifacts.iter().any(|artifact| artifact.package_id.starts_with("registry+"))
-        })
-    {
-        compare_native_host_units_to_cargo(&host_units, &target_consumers, &cargo_graph, unit_graph, &mut blockers);
+    target_consumers
+}
+
+struct NativeHostPlanningResultInputs<'a> {
+    planning: &'a NativeHostPlanningInputs<'a>,
+    cargo_graph: UnitDerivationGraphSummary,
+    cargo_host_oracle_digest: String,
+    host_units: Vec<NativeHostUnitSummary>,
+    target_consumers: Vec<NativeHostTargetConsumerSummary>,
+    blockers: Vec<NativeHostUnitGraphPlanningBlocker>,
+}
+
+fn finalize_native_host_unit_graph_planning(
+    mut inputs: NativeHostPlanningResultInputs<'_>,
+) -> Result<NativeHostUnitGraphPlanningSummary, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!inputs.cargo_host_oracle_digest.is_empty());
+    inputs.host_units.sort();
+    inputs.host_units.dedup();
+    inputs.target_consumers.sort();
+    inputs.target_consumers.dedup();
+    let has_registry_target_consumer = inputs.target_consumers.iter().any(|consumer| {
+        consumer.package_id.starts_with("registry+")
+            || consumer.consumed_host_artifacts.iter().any(|artifact| artifact.package_id.starts_with("registry+"))
+    });
+    let is_comparison_ready = [
+        !inputs.planning.options.no_cargo_oracle,
+        inputs.blockers.is_empty(),
+        !inputs.host_units.iter().any(|unit| unit.package_id.starts_with("registry+")),
+        !has_registry_target_consumer,
+    ]
+    .into_iter()
+    .all(|is_ready| is_ready);
+    if is_comparison_ready {
+        compare_native_host_units_to_cargo(
+            &inputs.host_units,
+            &inputs.target_consumers,
+            &inputs.cargo_graph,
+            inputs.planning.unit_graph,
+            &mut inputs.blockers,
+        );
     }
-    blockers.sort();
-    blockers.dedup();
-    let comparison_status = if options.no_cargo_oracle && blockers.is_empty() {
+    inputs.blockers.sort();
+    inputs.blockers.dedup();
+    let comparison_status = if inputs.planning.options.no_cargo_oracle && inputs.blockers.is_empty() {
         "cargo-free:no-oracle".to_string()
-    } else if blockers.is_empty() {
+    } else if inputs.blockers.is_empty() {
         "matched".to_string()
     } else {
         "blocked".to_string()
     };
-    let native_host_graph_digest = native_host_graph_digest(&host_units, &target_consumers, &blockers)?;
-    let oracle_comparison_digest =
-        native_host_oracle_comparison_digest(&host_units, &target_consumers, &cargo_graph, unit_graph, &blockers)?;
+    let native_host_graph_digest =
+        native_host_graph_digest(&inputs.host_units, &inputs.target_consumers, &inputs.blockers)?;
+    let oracle_comparison_digest = native_host_oracle_comparison_digest(
+        &inputs.host_units,
+        &inputs.target_consumers,
+        &inputs.cargo_graph,
+        inputs.planning.unit_graph,
+        &inputs.blockers,
+    )?;
     Ok(NativeHostUnitGraphPlanningSummary {
-        ready: blockers.is_empty(),
+        ready: inputs.blockers.is_empty(),
         comparison_status,
-        cargo_host_oracle_digest,
+        cargo_host_oracle_digest: inputs.cargo_host_oracle_digest,
         native_host_graph_digest,
         oracle_comparison_digest,
-        host_units,
-        target_consumers,
-        blockers,
+        host_units: inputs.host_units,
+        target_consumers: inputs.target_consumers,
+        blockers: inputs.blockers,
         non_claims: vec![
             "bounded-custom-build-and-proc-macro-build-mode-path-fragment-only".to_string(),
             "cargo-unit-graph-retained-as-host-oracle".to_string(),
@@ -6805,20 +8163,88 @@ fn summarize_native_host_unit_graph_planning(
     })
 }
 
+fn summarize_native_host_unit_graph_planning_from_inputs(
+    inputs: NativeHostPlanningInputs<'_>,
+) -> Result<NativeHostUnitGraphPlanningSummary, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!DEFAULT_CARGO_PROFILE.is_empty());
+    let cargo_graph = if inputs.options.no_cargo_oracle {
+        empty_unit_derivation_graph()?
+    } else {
+        summarize_cargo_unit_derivation_graph(inputs.unit_graph, inputs.source_closure, inputs.options)?
+    };
+    let cargo_host_oracle_digest = if inputs.options.no_cargo_oracle {
+        "cargo-free:no-cargo-host-oracle".to_string()
+    } else {
+        cargo_host_oracle_digest(&cargo_graph, inputs.unit_graph)?
+    };
+    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    if !inputs.package_planning.ready {
+        blockers.push(native_host_blocker(NativeHostBlockerInputs {
+            unit_id: None,
+            package_id: None,
+            class: "native-package-target-planning-blocked",
+            message: "native host-unit graph planning requires ready native package/target facts",
+        }));
+    }
+    if !inputs.unit_planning.ready {
+        blockers.push(native_host_blocker(NativeHostBlockerInputs {
+            unit_id: None,
+            package_id: None,
+            class: "native-unit-graph-planning-blocked",
+            message: "native host-unit graph planning requires ready native target unit facts",
+        }));
+    }
+    let indexes = native_host_planning_indexes(&inputs, &cargo_graph);
+    let artifacts_by_package = native_host_artifacts_by_package(&inputs, &indexes);
+    let host_units = collect_native_host_units(&inputs, &indexes, &artifacts_by_package, &mut blockers);
+    let target_consumers =
+        collect_native_host_target_consumers(&inputs, &indexes, &artifacts_by_package, &mut blockers);
+    finalize_native_host_unit_graph_planning(NativeHostPlanningResultInputs {
+        planning: &inputs,
+        cargo_graph,
+        cargo_host_oracle_digest,
+        host_units,
+        target_consumers,
+        blockers,
+    })
+}
+
+#[cfg(test)]
+fn summarize_native_host_unit_graph_planning(
+    unit_graph: &Value,
+    source_closure: &SourceClosureSummary,
+    registry_sources: &NativeRegistrySourcePlanningSummary,
+    package_planning: &NativePackageTargetPlanningSummary,
+    unit_planning: &NativeUnitGraphPlanningSummary,
+    options: &RustPlanOptions,
+) -> Result<NativeHostUnitGraphPlanningSummary, RunError> {
+    summarize_native_host_unit_graph_planning_from_inputs(NativeHostPlanningInputs {
+        unit_graph,
+        source_closure,
+        registry_sources,
+        package_planning,
+        unit_planning,
+        options,
+    })
+}
+
 fn selected_target_consumed_host_artifacts(
     unit_graph: &Value,
     target_unit: &NativeRustUnitSummary,
     host_artifacts: &[RustHostArtifact],
 ) -> Option<Vec<RustHostArtifact>> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let units = unit_graph.get("units").and_then(Value::as_array)?;
     for (index, unit) in units.iter().enumerate() {
-        let exact_unit_match =
+        let is_exact_unit_match =
             rust_unit_id_from_unit_value(index, unit).as_deref() == Some(target_unit.unit_id.as_str());
-        let native_unit_match = unit_graph_target_matches_native_unit(unit, target_unit);
-        if !exact_unit_match && !native_unit_match {
+        let is_native_unit_match = unit_graph_target_matches_native_unit(unit, target_unit);
+        if !is_exact_unit_match && !is_native_unit_match {
             continue;
         }
-        let mut consumed = Vec::new();
+        let mut consumed = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
         if let Some(deps) = unit_dependency_array(unit) {
             for dep in deps {
                 consumed.extend(matching_host_artifacts_for_dependency(dep, units, host_artifacts));
@@ -6853,19 +8279,26 @@ fn fallback_target_consumed_host_artifacts(
     artifacts_by_package: &BTreeMap<String, Vec<RustHostArtifact>>,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) -> Vec<RustHostArtifact> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut consumed_host_artifacts = artifacts_by_package.get(&package.package_id).cloned().unwrap_or_default();
     for dependency in &package.path_dependencies {
         let Some(dependency_package) = packages_by_manifest
             .iter()
-            .find(|(manifest_path, _)| manifest_path_strings_same(manifest_path, &dependency.manifest_path))
+            .find(|(manifest_path, _)| {
+                manifest_path_strings_same(ManifestPathComparisonInputs {
+                    left: manifest_path,
+                    right: &dependency.manifest_path,
+                })
+            })
             .map(|(_, package)| *package)
         else {
-            blockers.push(native_host_blocker(
-                Some(unit.unit_id.clone()),
-                Some(unit.package_id.clone()),
-                "unresolved-host-consumer-edge",
-                &format!("target dependency `{}` has no native package fact", dependency.name),
-            ));
+            blockers.push(native_host_blocker(NativeHostBlockerInputs {
+                unit_id: Some(unit.unit_id.clone()),
+                package_id: Some(unit.package_id.clone()),
+                class: "unresolved-host-consumer-edge",
+                message: &format!("target dependency `{}` has no native package fact", dependency.name),
+            }));
             continue;
         };
         consumed_host_artifacts.extend(
@@ -6881,12 +8314,13 @@ fn fallback_target_consumed_host_artifacts(
 }
 
 fn dedupe_native_host_units_by_unit_id(host_units: Vec<NativeHostUnitSummary>) -> Vec<NativeHostUnitSummary> {
+    let entry_bound = host_units.len();
     let mut by_unit_id = BTreeMap::<String, NativeHostUnitSummary>::new();
     for host_unit in host_units {
         match by_unit_id.get(&host_unit.unit_id) {
             Some(existing) if native_host_unit_source_is_preferred(existing, &host_unit) => {}
             _ => {
-                by_unit_id.insert(host_unit.unit_id.clone(), host_unit);
+                insert_btree_entry_with_bound(&mut by_unit_id, host_unit.unit_id.clone(), host_unit, entry_bound);
             }
         }
     }
@@ -6894,40 +8328,57 @@ fn dedupe_native_host_units_by_unit_id(host_units: Vec<NativeHostUnitSummary>) -
 }
 
 fn native_host_unit_source_is_preferred(existing: &NativeHostUnitSummary, candidate: &NativeHostUnitSummary) -> bool {
-    let existing_absolute = Path::new(&existing.source_path).is_absolute();
-    let candidate_absolute = Path::new(&candidate.source_path).is_absolute();
-    if existing_absolute != candidate_absolute {
-        return existing_absolute;
+    let is_existing_absolute = Path::new(&existing.source_path).is_absolute();
+    let is_candidate_absolute = Path::new(&candidate.source_path).is_absolute();
+    if is_existing_absolute != is_candidate_absolute {
+        return is_existing_absolute;
     }
     existing <= candidate
 }
 
+struct NativeHostMetadataDependencyInputs<'a> {
+    package: &'a NativePackagePlanningSummary,
+    target_kind: &'a str,
+    selected_artifacts: Option<&'a BTreeSet<RustDependencyArtifact>>,
+    packages_by_id: &'a BTreeMap<String, &'a NativePackagePlanningSummary>,
+    custom_build_metadata_producers: &'a BTreeMap<String, Vec<String>>,
+    blockers: &'a mut Vec<NativeHostUnitGraphPlanningBlocker>,
+}
+
 fn native_host_metadata_dependencies(
-    package: &NativePackagePlanningSummary,
-    target_kind: &str,
-    selected_artifacts: Option<&BTreeSet<RustDependencyArtifact>>,
-    packages_by_id: &BTreeMap<String, &NativePackagePlanningSummary>,
-    custom_build_metadata_producers_by_package: &BTreeMap<String, Vec<String>>,
-    blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
+    inputs: NativeHostMetadataDependencyInputs<'_>,
 ) -> Vec<BuildScriptMetadataDependency> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let NativeHostMetadataDependencyInputs {
+        package,
+        target_kind,
+        selected_artifacts,
+        packages_by_id,
+        custom_build_metadata_producers: custom_build_metadata_producers_by_package,
+        blockers,
+    } = inputs;
     if target_kind != "custom-build" {
         return Vec::new();
     }
     let Some(selected_artifacts) = selected_artifacts else {
         return Vec::new();
     };
-    let mut dependencies = Vec::new();
+    let mut dependencies = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for artifact in selected_artifacts {
         if artifact.package_id == package.package_id {
             continue;
         }
         let Some(dependency_package) = packages_by_id.get(&artifact.package_id).copied() else {
-            blockers.push(native_host_blocker(
-                None,
-                Some(package.package_id.clone()),
-                "missing-native-linked-metadata-dependency-fact",
-                &format!("selected linked dependency package {} has no native package fact", artifact.package_id),
-            ));
+            blockers.push(native_host_blocker(NativeHostBlockerInputs {
+                unit_id: None,
+                package_id: Some(package.package_id.clone()),
+                class: "missing-native-linked-metadata-dependency-fact",
+                message: &format!(
+                    "selected linked dependency package {} has no native package fact",
+                    artifact.package_id
+                ),
+            }));
             continue;
         };
         if let Some(links) = &dependency_package.links {
@@ -6937,16 +8388,16 @@ fn native_host_metadata_dependencies(
                     Some([producer_unit_id]) => Some(producer_unit_id.clone()),
                     Some([]) | None => None,
                     Some(candidates) => {
-                        blockers.push(native_host_blocker(
-                            None,
-                            Some(package.package_id.clone()),
-                            "ambiguous-build-script-metadata-producer",
-                            &format!(
+                        blockers.push(native_host_blocker(NativeHostBlockerInputs {
+                            unit_id: None,
+                            package_id: Some(package.package_id.clone()),
+                            class: "ambiguous-build-script-metadata-producer",
+                            message: &format!(
                                 "selected linked dependency package {} has {} custom-build metadata producers",
                                 dependency_package.package_id,
                                 candidates.len()
                             ),
-                        ));
+                        }));
                         None
                     }
                 };
@@ -6966,13 +8417,19 @@ fn custom_build_metadata_producers_by_package(
     packages: &[NativePackagePlanningSummary],
     selected_host_units_by_key: &BTreeMap<(String, String, String), Vec<SelectedHostUnit>>,
 ) -> BTreeMap<String, Vec<String>> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut producers = BTreeMap::<String, Vec<String>>::new();
     for package in packages {
         for target in &package.targets {
             if target.kind != "custom-build" {
                 continue;
             }
-            let key = host_unit_key(&package.package_id, &target.name, &target.kind);
+            let key = host_unit_key(UnitTargetIdentityInputs {
+                package_id: &package.package_id,
+                target_name: &target.name,
+                target_kind: &target.kind,
+            });
             let selected_units = selected_host_units_by_key.get(&key).into_iter().flatten();
             producers
                 .entry(package.package_id.clone())
@@ -6992,6 +8449,8 @@ fn selected_host_consumed_artifacts(
     selected: &SelectedHostUnit,
     artifacts: &[RustHostArtifact],
 ) -> Vec<RustHostArtifact> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if selected.key.2 == "custom-build" {
         return Vec::new();
     }
@@ -7001,7 +8460,7 @@ fn selected_host_consumed_artifacts(
     let Some(unit) = units.get(selected.unit_index) else {
         return Vec::new();
     };
-    let mut consumed = Vec::new();
+    let mut consumed = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(deps) = unit_dependency_array(unit) {
         for dep in deps {
             consumed.extend(matching_host_artifacts_for_dependency(dep, units, artifacts));
@@ -7019,6 +8478,8 @@ fn fallback_host_consumed_host_artifacts(
     artifacts_by_package: &BTreeMap<String, Vec<RustHostArtifact>>,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) -> Vec<RustHostArtifact> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if target_kind != "proc-macro" {
         return Vec::new();
     }
@@ -7032,15 +8493,20 @@ fn fallback_host_consumed_host_artifacts(
     for dependency in &package.path_dependencies {
         let Some(dependency_package) = packages_by_manifest
             .iter()
-            .find(|(manifest_path, _)| manifest_path_strings_same(manifest_path, &dependency.manifest_path))
+            .find(|(manifest_path, _)| {
+                manifest_path_strings_same(ManifestPathComparisonInputs {
+                    left: manifest_path,
+                    right: &dependency.manifest_path,
+                })
+            })
             .map(|(_, package)| *package)
         else {
-            blockers.push(native_host_blocker(
-                None,
-                Some(package.package_id.clone()),
-                "unresolved-host-proc-macro-consumer-edge",
-                &format!("proc-macro dependency `{}` has no native package fact", dependency.name),
-            ));
+            blockers.push(native_host_blocker(NativeHostBlockerInputs {
+                unit_id: None,
+                package_id: Some(package.package_id.clone()),
+                class: "unresolved-host-proc-macro-consumer-edge",
+                message: &format!("proc-macro dependency `{}` has no native package fact", dependency.name),
+            }));
             continue;
         };
         consumed_host_artifacts.extend(
@@ -7060,6 +8526,8 @@ fn matching_host_artifacts_for_dependency(
     units: &[Value],
     artifacts: &[RustHostArtifact],
 ) -> Vec<RustHostArtifact> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(producer_unit_id) = host_dependency_producer_unit_id(dep, units) {
         return artifacts
             .iter()
@@ -7096,26 +8564,37 @@ fn is_build_script_dependency_artifact(artifact: &RustDependencyArtifact) -> boo
     artifact.name == rust_crate_name(BUILD_SCRIPT_TARGET_NAME)
 }
 
-fn native_host_unit_dependency_artifacts(
-    package: &NativePackagePlanningSummary,
-    target_kind: &str,
-    selected_artifacts: Option<&BTreeSet<RustDependencyArtifact>>,
-    packages_by_id: &BTreeMap<String, &NativePackagePlanningSummary>,
-    packages: &[NativePackagePlanningSummary],
-    source_closure: &SourceClosureSummary,
-    blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
-) -> Vec<RustDependencyArtifact> {
+struct NativeHostUnitDependencyInputs<'a> {
+    package: &'a NativePackagePlanningSummary,
+    target_kind: &'a str,
+    selected_artifacts: Option<&'a BTreeSet<RustDependencyArtifact>>,
+    packages_by_id: &'a BTreeMap<String, &'a NativePackagePlanningSummary>,
+    packages: &'a [NativePackagePlanningSummary],
+    source_closure: &'a SourceClosureSummary,
+    blockers: &'a mut Vec<NativeHostUnitGraphPlanningBlocker>,
+}
+
+fn native_host_unit_dependency_artifacts(inputs: NativeHostUnitDependencyInputs<'_>) -> Vec<RustDependencyArtifact> {
+    let NativeHostUnitDependencyInputs {
+        package,
+        target_kind,
+        selected_artifacts,
+        packages_by_id,
+        packages,
+        source_closure,
+        blockers,
+    } = inputs;
     debug_assert!(is_host_target_kind(target_kind));
     match target_kind {
-        "custom-build" => native_host_dependency_artifacts(
-            package,
-            &package.build_dependencies,
-            packages_by_id,
-            packages,
-            blockers,
-            "unresolved-build-dependency-edge",
-            "missing-native-build-dependency-fact",
-        ),
+        "custom-build" => native_host_dependency_artifacts(NativeHostDependencyArtifactInputs {
+            package: package,
+            dependencies: &package.build_dependencies,
+            packages_by_id: packages_by_id,
+            packages: packages,
+            blockers: blockers,
+            unresolved_class: "unresolved-build-dependency-edge",
+            missing_class: "missing-native-build-dependency-fact",
+        }),
         "proc-macro" => {
             if selected_artifacts.is_some() {
                 native_selected_host_dependency_artifacts(
@@ -7126,15 +8605,15 @@ fn native_host_unit_dependency_artifacts(
                     blockers,
                 )
             } else {
-                native_host_dependency_artifacts(
-                    package,
-                    &package.path_dependencies,
-                    packages_by_id,
-                    packages,
-                    blockers,
-                    "unresolved-proc-macro-dependency-edge",
-                    "missing-native-proc-macro-dependency-fact",
-                )
+                native_host_dependency_artifacts(NativeHostDependencyArtifactInputs {
+                    package: package,
+                    dependencies: &package.path_dependencies,
+                    packages_by_id: packages_by_id,
+                    packages: packages,
+                    blockers: blockers,
+                    unresolved_class: "unresolved-proc-macro-dependency-edge",
+                    missing_class: "missing-native-proc-macro-dependency-fact",
+                })
             }
         }
         _ => Vec::new(),
@@ -7148,7 +8627,9 @@ fn native_selected_host_dependency_artifacts(
     source_closure: &SourceClosureSummary,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) -> Vec<RustDependencyArtifact> {
-    let mut artifacts = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut artifacts = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let Some(selected_artifacts) = selected_artifacts else {
         return artifacts;
     };
@@ -7157,22 +8638,28 @@ fn native_selected_host_dependency_artifacts(
             continue;
         }
         if packages_by_id.get(&artifact.package_id).is_none() {
-            blockers.push(native_host_blocker(
-                None,
-                Some(package.package_id.clone()),
-                "missing-native-proc-macro-dependency-fact",
-                &format!("proc-macro host dependency package {} has no native package fact", artifact.package_id),
-            ));
+            blockers.push(native_host_blocker(NativeHostBlockerInputs {
+                unit_id: None,
+                package_id: Some(package.package_id.clone()),
+                class: "missing-native-proc-macro-dependency-fact",
+                message: &format!(
+                    "proc-macro host dependency package {} has no native package fact",
+                    artifact.package_id
+                ),
+            }));
             artifacts.push(artifact.clone());
             continue;
         }
         if !source_closure.sources.iter().any(|source| source.package_id == artifact.package_id) {
-            blockers.push(native_host_blocker(
-                None,
-                Some(package.package_id.clone()),
-                "missing-source-input",
-                &format!("proc-macro host dependency package {} is absent from source closure", artifact.package_id),
-            ));
+            blockers.push(native_host_blocker(NativeHostBlockerInputs {
+                unit_id: None,
+                package_id: Some(package.package_id.clone()),
+                class: "missing-source-input",
+                message: &format!(
+                    "proc-macro host dependency package {} is absent from source closure",
+                    artifact.package_id
+                ),
+            }));
         }
         let mut native_artifact = artifact.clone();
         native_artifact.producer_unit_id = None;
@@ -7183,36 +8670,51 @@ fn native_selected_host_dependency_artifacts(
     artifacts
 }
 
-fn native_host_dependency_artifacts(
-    package: &NativePackagePlanningSummary,
-    dependencies: &[NativePathDependencySummary],
-    packages_by_id: &BTreeMap<String, &NativePackagePlanningSummary>,
-    packages: &[NativePackagePlanningSummary],
-    blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
-    unresolved_class: &str,
-    missing_class: &str,
-) -> Vec<RustDependencyArtifact> {
-    let mut artifacts = Vec::new();
+struct NativeHostDependencyArtifactInputs<'a> {
+    package: &'a NativePackagePlanningSummary,
+    dependencies: &'a [NativePathDependencySummary],
+    packages_by_id: &'a BTreeMap<String, &'a NativePackagePlanningSummary>,
+    packages: &'a [NativePackagePlanningSummary],
+    blockers: &'a mut Vec<NativeHostUnitGraphPlanningBlocker>,
+    unresolved_class: &'a str,
+    missing_class: &'a str,
+}
+
+fn native_host_dependency_artifacts(inputs: NativeHostDependencyArtifactInputs<'_>) -> Vec<RustDependencyArtifact> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let NativeHostDependencyArtifactInputs {
+        package,
+        dependencies,
+        packages_by_id,
+        packages,
+        blockers,
+        unresolved_class,
+        missing_class,
+    } = inputs;
+    let mut artifacts = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for dependency in dependencies {
-        let Some(dependency_package) = packages
-            .iter()
-            .find(|candidate| manifest_path_strings_same(&candidate.manifest_path, &dependency.manifest_path))
-        else {
-            blockers.push(native_host_blocker(
-                None,
-                Some(package.package_id.clone()),
-                unresolved_class,
-                &format!("host dependency `{}` has no native package fact", dependency.name),
-            ));
+        let Some(dependency_package) = packages.iter().find(|candidate| {
+            manifest_path_strings_same(ManifestPathComparisonInputs {
+                left: &candidate.manifest_path,
+                right: &dependency.manifest_path,
+            })
+        }) else {
+            blockers.push(native_host_blocker(NativeHostBlockerInputs {
+                unit_id: None,
+                package_id: Some(package.package_id.clone()),
+                class: unresolved_class,
+                message: &format!("host dependency `{}` has no native package fact", dependency.name),
+            }));
             continue;
         };
         if packages_by_id.get(&dependency_package.package_id).is_none() {
-            blockers.push(native_host_blocker(
-                None,
-                Some(package.package_id.clone()),
-                missing_class,
-                &format!("host dependency `{}` cannot be resolved to a native package", dependency.name),
-            ));
+            blockers.push(native_host_blocker(NativeHostBlockerInputs {
+                unit_id: None,
+                package_id: Some(package.package_id.clone()),
+                class: missing_class,
+                message: &format!("host dependency `{}` cannot be resolved to a native package", dependency.name),
+            }));
             continue;
         }
         let crate_name = native_dependency_extern_crate_name(dependency, dependency_package);
@@ -7235,25 +8737,27 @@ fn compare_native_host_units_to_cargo(
     unit_graph: &Value,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if !cargo_graph.blockers.is_empty() {
         for blocker in &cargo_graph.blockers {
-            blockers.push(native_host_blocker(
-                Some(blocker.unit_id.clone()),
-                blocker.package_id.clone(),
-                "cargo-oracle-host-graph-blocked",
-                &blocker.message,
-            ));
+            blockers.push(native_host_blocker(NativeHostBlockerInputs {
+                unit_id: Some(blocker.unit_id.clone()),
+                package_id: blocker.package_id.clone(),
+                class: "cargo-oracle-host-graph-blocked",
+                message: &blocker.message,
+            }));
         }
     }
     let native_facts = comparable_native_host_facts(host_units, target_consumers);
     let cargo_facts = comparable_cargo_host_facts(cargo_graph, unit_graph);
     if native_facts != cargo_facts {
-        blockers.push(native_host_blocker(
-            None,
-            None,
-            "cargo-oracle-host-graph-mismatch",
-            "native host-unit graph facts differ from Cargo oracle host-unit graph facts",
-        ));
+        blockers.push(native_host_blocker(NativeHostBlockerInputs {
+            unit_id: None,
+            package_id: None,
+            class: "cargo-oracle-host-graph-mismatch",
+            message: "native host-unit graph facts differ from Cargo oracle host-unit graph facts",
+        }));
     }
 }
 
@@ -7261,6 +8765,8 @@ fn comparable_native_host_facts(
     host_units: &[NativeHostUnitSummary],
     target_consumers: &[NativeHostTargetConsumerSummary],
 ) -> Vec<String> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut facts = host_units
         .iter()
         .map(|unit| {
@@ -7301,7 +8807,9 @@ fn comparable_native_host_facts(
     facts
 }
 
-fn comparable_cargo_host_facts(cargo_graph: &UnitDerivationGraphSummary, unit_graph: &Value) -> Vec<String> {
+fn selected_cargo_host_artifacts_and_facts(unit_graph: &Value) -> (Vec<RustHostArtifact>, BTreeSet<String>) {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let selected_host_units = selected_host_units_by_key(unit_graph);
     let host_artifacts = selected_host_units
         .values()
@@ -7315,7 +8823,7 @@ fn comparable_cargo_host_facts(cargo_graph: &UnitDerivationGraphSummary, unit_gr
             metadata_digest_blake3: None,
         })
         .collect::<Vec<_>>();
-    let mut facts = selected_host_units
+    let facts = selected_host_units
         .into_values()
         .flatten()
         .map(|selected| {
@@ -7328,6 +8836,13 @@ fn comparable_cargo_host_facts(cargo_graph: &UnitDerivationGraphSummary, unit_gr
             )
         })
         .collect::<BTreeSet<_>>();
+    (host_artifacts, facts)
+}
+
+fn comparable_cargo_host_facts(cargo_graph: &UnitDerivationGraphSummary, unit_graph: &Value) -> Vec<String> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let (host_artifacts, mut facts) = selected_cargo_host_artifacts_and_facts(unit_graph);
     if let Some(units) = unit_graph.get("units").and_then(Value::as_array) {
         facts.extend(units.iter().enumerate().filter_map(|(index, unit)| {
             let unit_id = rust_unit_id_from_unit_value(index, unit)?;
@@ -7335,7 +8850,7 @@ fn comparable_cargo_host_facts(cargo_graph: &UnitDerivationGraphSummary, unit_gr
             if cargo_unit.execution_kind != "target" {
                 return None;
             }
-            let mut consumed = Vec::new();
+            let mut consumed = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
             if let Some(deps) = unit_dependency_array(unit) {
                 for dep in deps {
                     consumed.extend(matching_host_artifacts_for_dependency(dep, units, &host_artifacts));
@@ -7419,17 +8934,19 @@ fn native_host_oracle_comparison_digest(
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
-fn native_host_blocker(
+struct NativeHostBlockerInputs<'a> {
     unit_id: Option<String>,
     package_id: Option<String>,
-    class: &str,
-    message: &str,
-) -> NativeHostUnitGraphPlanningBlocker {
+    class: &'a str,
+    message: &'a str,
+}
+
+fn native_host_blocker(inputs: NativeHostBlockerInputs<'_>) -> NativeHostUnitGraphPlanningBlocker {
     NativeHostUnitGraphPlanningBlocker {
-        unit_id,
-        package_id,
-        class: class.to_string(),
-        message: message.to_string(),
+        unit_id: inputs.unit_id,
+        package_id: inputs.package_id,
+        class: inputs.class.to_string(),
+        message: inputs.message.to_string(),
     }
 }
 
@@ -7439,6 +8956,8 @@ fn summarize_native_unit_derivation_graph(
     source_closure: &SourceClosureSummary,
     options: &RustPlanOptions,
 ) -> Result<UnitDerivationGraphSummary, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let consumed_hosts_by_unit = native_host_unit_graph
         .map(|host_graph| {
             host_graph
@@ -7488,12 +9007,13 @@ fn summarize_native_unit_derivation_graph(
 }
 
 fn dedupe_unit_derivations_by_unit_id(derivations: Vec<RustUnitDerivationSummary>) -> Vec<RustUnitDerivationSummary> {
+    let entry_bound = derivations.len();
     let mut by_unit_id = BTreeMap::<String, RustUnitDerivationSummary>::new();
     for derivation in derivations {
         match by_unit_id.get(&derivation.unit_id) {
             Some(existing) if rust_derivation_source_is_preferred(existing, &derivation) => {}
             _ => {
-                by_unit_id.insert(derivation.unit_id.clone(), derivation);
+                insert_btree_entry_with_bound(&mut by_unit_id, derivation.unit_id.clone(), derivation, entry_bound);
             }
         }
     }
@@ -7504,10 +9024,10 @@ fn rust_derivation_source_is_preferred(
     existing: &RustUnitDerivationSummary,
     candidate: &RustUnitDerivationSummary,
 ) -> bool {
-    let existing_absolute = rustc_source_path(&existing.derivation.args).is_some_and(|path| path.is_absolute());
-    let candidate_absolute = rustc_source_path(&candidate.derivation.args).is_some_and(|path| path.is_absolute());
-    if existing_absolute != candidate_absolute {
-        return existing_absolute;
+    let is_existing_absolute = rustc_source_path(&existing.derivation.args).is_some_and(|path| path.is_absolute());
+    let is_candidate_absolute = rustc_source_path(&candidate.derivation.args).is_some_and(|path| path.is_absolute());
+    if is_existing_absolute != is_candidate_absolute {
+        return is_existing_absolute;
     }
     let _ = candidate;
     true
@@ -7523,17 +9043,28 @@ fn append_rustc_metadata_args(args: &mut Vec<String>, metadata: &str) {
 fn replace_rustc_metadata_arg(args: &mut [String], metadata: &str) {
     debug_assert!(!metadata.is_empty());
     debug_assert!(metadata.bytes().all(|byte| byte.is_ascii_hexdigit()));
-    let mut replaced = false;
+    let mut is_replaced = false;
     for arg in args {
         if arg.starts_with(RUSTC_METADATA_ARG_PREFIX) {
             *arg = format!("{RUSTC_METADATA_ARG_PREFIX}{metadata}");
-            replaced = true;
+            is_replaced = true;
         }
     }
-    debug_assert!(replaced);
+    debug_assert!(is_replaced);
 }
 
-fn retagged_rustc_metadata_hash(base_metadata: &str, execution_kind: &str, mode: &str) -> String {
+struct RetaggedRustcMetadataInputs<'a> {
+    base_metadata: &'a str,
+    execution_kind: &'a str,
+    mode: &'a str,
+}
+
+fn retagged_rustc_metadata_hash(inputs: RetaggedRustcMetadataInputs<'_>) -> String {
+    let RetaggedRustcMetadataInputs {
+        base_metadata,
+        execution_kind,
+        mode,
+    } = inputs;
     debug_assert!(!base_metadata.is_empty());
     debug_assert!(!execution_kind.is_empty());
     debug_assert!(!mode.is_empty());
@@ -7652,6 +9183,8 @@ fn remap_normalized_text(value: &str, remaps: &[RustPathRemap]) -> String {
 }
 
 fn execution_source_closure_digest(source_closure: &SourceClosureSummary, options: &RustPlanOptions) -> String {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if !options.deterministic_release_paths {
         return source_closure.digest_blake3.clone();
     }
@@ -7664,8 +9197,15 @@ fn execution_source_closure_digest(source_closure: &SourceClosureSummary, option
             source
         })
         .collect::<Vec<_>>();
-    source_closure_digest(&sources, &source_closure.blockers)
-        .expect("serializing deterministic source closure digest from owned summaries should not fail")
+    match source_closure_digest(&sources, &source_closure.blockers) {
+        Ok(digest) => digest,
+        Err(error) => blake3::hash(
+            format!("deterministic-source-closure-serialization-error:{}:{error}", source_closure.digest_blake3)
+                .as_bytes(),
+        )
+        .to_hex()
+        .to_string(),
+    }
 }
 
 fn rustc_linker_arg(linker: &Path, options: &RustPlanOptions) -> String {
@@ -7690,7 +9230,18 @@ fn reviewable_rustc_source_path(source_path: &str, options: &RustPlanOptions) ->
     normalized
 }
 
-fn compile_time_manifest_dir(package_root: &str, target_kind: &str, options: &RustPlanOptions) -> String {
+struct CompileTimeManifestDirInputs<'a> {
+    package_root: &'a str,
+    target_kind: &'a str,
+    options: &'a RustPlanOptions,
+}
+
+fn compile_time_manifest_dir(inputs: CompileTimeManifestDirInputs<'_>) -> String {
+    let CompileTimeManifestDirInputs {
+        package_root,
+        target_kind,
+        options,
+    } = inputs;
     let path = Path::new(package_root);
     if target_kind == "custom-build" {
         return normalize_path_string(path);
@@ -7726,11 +9277,13 @@ fn c_prefix_map_flags(
     remaps: &[RustPathRemap],
     selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> Option<String> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let route = selected_c_compiler?;
     if !c_compiler_family_supports_prefix_map(&route.compiler_family) {
         return None;
     }
-    let mut flags = Vec::new();
+    let mut flags = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut seen = BTreeSet::new();
     for remap in remaps_by_c_prefix_application_order(remaps) {
         if !c_prefix_map_candidate(remap) {
@@ -7749,7 +9302,14 @@ fn c_prefix_map_flags(
     Some(flags.join(ENV_FLAG_SEPARATOR_STR))
 }
 
-fn append_env_flags(env: &mut BTreeMap<String, String>, key: &str, flags: &str) {
+struct AppendEnvFlagsInputs<'a> {
+    env: &'a mut BTreeMap<String, String>,
+    key: &'a str,
+    flags: &'a str,
+}
+
+fn append_env_flags(inputs: AppendEnvFlagsInputs<'_>) {
+    let AppendEnvFlagsInputs { env, key, flags } = inputs;
     debug_assert!(!key.is_empty());
     debug_assert!(!flags.is_empty());
     match env.get_mut(key) {
@@ -7766,7 +9326,11 @@ fn append_env_flags(env: &mut BTreeMap<String, String>, key: &str, flags: &str) 
 fn append_c_prefix_map_env(env: &mut BTreeMap<String, String>, flags: &str) {
     debug_assert!(!flags.is_empty());
     for key in C_PREFIX_MAP_ENV_KEYS {
-        append_env_flags(env, key, flags);
+        append_env_flags(AppendEnvFlagsInputs {
+            env: env,
+            key: key,
+            flags: flags,
+        });
     }
 }
 
@@ -7782,15 +9346,26 @@ fn append_deterministic_c_prefix_map_env(
     append_c_prefix_map_env(env, &flags);
 }
 
-fn rustc_unit_metadata_disambiguator(
-    package_id: &str,
-    target_name: &str,
-    target_kind: &str,
-    mode: &str,
-    source_digest: &SourceDigest,
-    selected_features: &[String],
-    crate_types: &[String],
-) -> String {
+struct RustcMetadataDisambiguatorInputs<'a> {
+    package_id: &'a str,
+    target_name: &'a str,
+    target_kind: &'a str,
+    mode: &'a str,
+    source_digest: &'a SourceDigest,
+    selected_features: &'a [String],
+    crate_types: &'a [String],
+}
+
+fn rustc_unit_metadata_disambiguator(inputs: RustcMetadataDisambiguatorInputs<'_>) -> String {
+    let RustcMetadataDisambiguatorInputs {
+        package_id,
+        target_name,
+        target_kind,
+        mode,
+        source_digest,
+        selected_features,
+        crate_types,
+    } = inputs;
     debug_assert!(!package_id.is_empty());
     debug_assert!(!target_name.is_empty());
     debug_assert!(!target_kind.is_empty());
@@ -7816,6 +9391,166 @@ fn rustc_unit_metadata_disambiguator(
     hex[..RUSTC_METADATA_HEX_CHARS].to_string()
 }
 
+struct NativeRustcArgsInputs<'a> {
+    package_id: &'a str,
+    target_name: &'a str,
+    target_kind: &'a str,
+    crate_name: &'a str,
+    edition: &'a str,
+    source_path: &'a str,
+    mode: &'a str,
+    source_digest: &'a SourceDigest,
+    selected_features: &'a [String],
+    crate_types: &'a [String],
+    dependencies: &'a [RustDependencyArtifact],
+    is_proc_macro: bool,
+    needs_linker: bool,
+}
+
+fn native_rustc_args(
+    inputs: NativeRustcArgsInputs<'_>,
+    source_closure: &SourceClosureSummary,
+    options: &RustPlanOptions,
+) -> (Vec<String>, String) {
+    debug_assert!(!inputs.package_id.is_empty());
+    debug_assert!(!inputs.crate_name.is_empty());
+    let mut args = vec![
+        "--crate-name".to_string(),
+        inputs.crate_name.to_string(),
+        "--edition".to_string(),
+        inputs.edition.to_string(),
+        reviewable_rustc_source_path(inputs.source_path, options),
+        "--emit=link".to_string(),
+    ];
+    for crate_type in rustc_crate_types(inputs.crate_types, inputs.target_kind) {
+        args.push("--crate-type".to_string());
+        args.push(crate_type);
+    }
+    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
+        package_id: inputs.package_id,
+        target_name: inputs.target_name,
+        target_kind: inputs.target_kind,
+        mode: inputs.mode,
+        source_digest: inputs.source_digest,
+        selected_features: inputs.selected_features,
+        crate_types: inputs.crate_types,
+    });
+    append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
+    append_rustc_feature_cfg_args(&mut args, inputs.selected_features);
+    append_cap_lints_args(&mut args, inputs.package_id, source_closure);
+    if inputs.is_proc_macro {
+        args.push(RUSTC_EXTERN_FLAG.to_string());
+        args.push(RUSTC_PROC_MACRO_EXTERN.to_string());
+    }
+    if inputs.needs_linker
+        && let Some(linker) = resolve_tool_path("cc")
+    {
+        args.push(RUSTC_CODEGEN_OPTION_FLAG.to_string());
+        args.push(rustc_linker_arg(&linker, options));
+    }
+    for dependency in inputs.dependencies {
+        args.push(RUSTC_EXTERN_FLAG.to_string());
+        args.push(format!("{}={}", dependency.name, dependency.artifact));
+    }
+    append_rustc_path_remap_args(&mut args, &options.path_remaps);
+    (args, rustc_metadata_hash)
+}
+
+struct NativeRustEnvInputs<'a> {
+    package_id: &'a str,
+    package_name: &'a str,
+    package_root: &'a str,
+    package_links: Option<&'a str>,
+    cargo_package_env: &'a BTreeMap<String, String>,
+    target_kind: &'a str,
+    execution_kind: &'a str,
+    mode: &'a str,
+}
+
+fn native_rust_env(
+    inputs: NativeRustEnvInputs<'_>,
+    source_closure: &SourceClosureSummary,
+    options: &RustPlanOptions,
+) -> BTreeMap<String, String> {
+    debug_assert!(!inputs.package_name.is_empty());
+    debug_assert!(!inputs.execution_kind.is_empty());
+    let mut env = BTreeMap::new();
+    env.insert("CRATE_KIND".to_string(), inputs.target_kind.to_string());
+    env.insert(RUST_UNIT_EXECUTION_KIND_ENV.to_string(), inputs.execution_kind.to_string());
+    env.insert("MODE".to_string(), inputs.mode.to_string());
+    env.insert("PACKAGE_ID".to_string(), inputs.package_id.to_string());
+    env.insert("PROFILE".to_string(), options.profile.clone());
+    env.insert("SOURCE_CLOSURE_DIGEST".to_string(), execution_source_closure_digest(source_closure, options));
+    append_cargo_package_env(&mut env, inputs.cargo_package_env);
+    env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), inputs.package_name.to_string());
+    env.insert(
+        BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(),
+        compile_time_manifest_dir(CompileTimeManifestDirInputs {
+            package_root: inputs.package_root,
+            target_kind: inputs.target_kind,
+            options: options,
+        }),
+    );
+    insert_deterministic_release_compile_env(&mut env, options);
+    if let Some(links) = inputs.package_links {
+        env.insert(PACKAGE_LINKS_ENV.to_string(), links.to_string());
+    }
+    if let Some(target) = options.targets.first() {
+        env.insert("TARGET".to_string(), target.clone());
+    }
+    env
+}
+
+fn native_derivation_inputs(
+    package_id: &str,
+    source_digest: &SourceDigest,
+    dependencies: &[RustDependencyArtifact],
+    host_artifacts: &[RustHostArtifact],
+) -> Vec<String> {
+    let mut inputs = vec![format!("source:{package_id}:{}", source_digest.value)];
+    inputs.extend(dependencies.iter().map(|dependency| dependency.artifact.clone()));
+    inputs.extend(host_artifacts.iter().map(|artifact| artifact.artifact.clone()));
+    inputs.sort();
+    inputs.dedup();
+    inputs
+}
+
+fn native_target_rustc_args_inputs(unit: &NativeRustUnitSummary) -> NativeRustcArgsInputs<'_> {
+    NativeRustcArgsInputs {
+        package_id: &unit.package_id,
+        target_name: &unit.target_name,
+        target_kind: &unit.target_kind,
+        crate_name: &unit.crate_name,
+        edition: &unit.edition,
+        source_path: &unit.source_path,
+        mode: &unit.mode,
+        source_digest: &unit.source_digest,
+        selected_features: &unit.selected_features,
+        crate_types: &unit.crate_types,
+        dependencies: &unit.dependency_artifacts,
+        is_proc_macro: false,
+        needs_linker: unit.target_kind == "bin",
+    }
+}
+
+fn native_host_rustc_args_inputs(unit: &NativeHostUnitSummary) -> NativeRustcArgsInputs<'_> {
+    NativeRustcArgsInputs {
+        package_id: &unit.package_id,
+        target_name: &unit.target_name,
+        target_kind: &unit.target_kind,
+        crate_name: &unit.crate_name,
+        edition: &unit.edition,
+        source_path: &unit.source_path,
+        mode: &unit.mode,
+        source_digest: &unit.source_digest,
+        selected_features: &unit.selected_features,
+        crate_types: &unit.crate_types,
+        dependencies: &unit.dependency_artifacts,
+        is_proc_macro: unit.target_kind == "proc-macro",
+        needs_linker: true,
+    }
+}
+
 fn native_unit_derivation(
     unit: &NativeRustUnitSummary,
     consumed_host_artifacts: Vec<RustHostArtifact>,
@@ -7825,67 +9560,28 @@ fn native_unit_derivation(
     debug_assert!(!unit.package_name.is_empty());
     debug_assert!(!unit.package_root.is_empty());
     debug_assert!(!unit.cargo_package_env.is_empty());
-    let mut args = vec![
-        "--crate-name".to_string(),
-        unit.crate_name.clone(),
-        "--edition".to_string(),
-        unit.edition.clone(),
-        reviewable_rustc_source_path(&unit.source_path, options),
-        "--emit=link".to_string(),
-    ];
-    for crate_type in rustc_crate_types(&unit.crate_types, &unit.target_kind) {
-        args.push("--crate-type".to_string());
-        args.push(crate_type);
-    }
-    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(
-        &unit.package_id,
-        &unit.target_name,
-        &unit.target_kind,
-        &unit.mode,
-        &unit.source_digest,
-        &unit.selected_features,
-        &unit.crate_types,
-    );
-    append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
-    append_rustc_feature_cfg_args(&mut args, &unit.selected_features);
-    append_cap_lints_args(&mut args, &unit.package_id, source_closure);
-    if unit.target_kind == "bin"
-        && let Some(linker) = resolve_tool_path("cc")
-    {
-        args.push("-C".to_string());
-        args.push(rustc_linker_arg(&linker, options));
-    }
-    for dependency in &unit.dependency_artifacts {
-        args.push("--extern".to_string());
-        args.push(format!("{}={}", dependency.name, dependency.artifact));
-    }
-    append_rustc_path_remap_args(&mut args, &options.path_remaps);
+    let (args, rustc_metadata_hash) = native_rustc_args(native_target_rustc_args_inputs(unit), source_closure, options);
     let args_digest = blake3::hash(args.join("\0").as_bytes()).to_hex().to_string();
-    let mut env = BTreeMap::new();
-    env.insert("CRATE_KIND".to_string(), unit.target_kind.clone());
-    env.insert(RUST_UNIT_EXECUTION_KIND_ENV.to_string(), "target".to_string());
-    env.insert("MODE".to_string(), unit.mode.clone());
-    env.insert("PACKAGE_ID".to_string(), unit.package_id.clone());
-    env.insert("PROFILE".to_string(), options.profile.clone());
-    env.insert("SOURCE_CLOSURE_DIGEST".to_string(), execution_source_closure_digest(source_closure, options));
-    append_cargo_package_env(&mut env, &unit.cargo_package_env);
-    env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
-    env.insert(
-        BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(),
-        compile_time_manifest_dir(&unit.package_root, &unit.target_kind, options),
+    let env = native_rust_env(
+        NativeRustEnvInputs {
+            package_id: &unit.package_id,
+            package_name: &unit.package_name,
+            package_root: &unit.package_root,
+            package_links: unit.package_links.as_deref(),
+            cargo_package_env: &unit.cargo_package_env,
+            target_kind: &unit.target_kind,
+            execution_kind: TARGET_EXECUTION_KIND,
+            mode: &unit.mode,
+        },
+        source_closure,
+        options,
     );
-    insert_deterministic_release_compile_env(&mut env, options);
-    if let Some(links) = &unit.package_links {
-        env.insert(PACKAGE_LINKS_ENV.to_string(), links.clone());
-    }
-    if let Some(target) = options.targets.first() {
-        env.insert("TARGET".to_string(), target.clone());
-    }
-    let mut inputs = vec![format!("source:{}:{}", unit.package_id, unit.source_digest.value)];
-    inputs.extend(unit.dependency_artifacts.iter().map(|dependency| dependency.artifact.clone()));
-    inputs.extend(consumed_host_artifacts.iter().map(|artifact| artifact.artifact.clone()));
-    inputs.sort();
-    inputs.dedup();
+    let inputs = native_derivation_inputs(
+        &unit.package_id,
+        &unit.source_digest,
+        &unit.dependency_artifacts,
+        &consumed_host_artifacts,
+    );
     RustUnitDerivationSummary {
         unit_id: unit.unit_id.clone(),
         package_id: unit.package_id.clone(),
@@ -7924,69 +9620,28 @@ fn native_host_unit_derivation(
     debug_assert!(!unit.package_name.is_empty());
     debug_assert!(!unit.package_root.is_empty());
     debug_assert!(!unit.cargo_package_env.is_empty());
-    let mut args = vec![
-        "--crate-name".to_string(),
-        unit.crate_name.clone(),
-        "--edition".to_string(),
-        unit.edition.clone(),
-        reviewable_rustc_source_path(&unit.source_path, options),
-        "--emit=link".to_string(),
-    ];
-    for crate_type in rustc_crate_types(&unit.crate_types, &unit.target_kind) {
-        args.push("--crate-type".to_string());
-        args.push(crate_type);
-    }
-    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(
-        &unit.package_id,
-        &unit.target_name,
-        &unit.target_kind,
-        &unit.mode,
-        &unit.source_digest,
-        &unit.selected_features,
-        &unit.crate_types,
-    );
-    append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
-    append_rustc_feature_cfg_args(&mut args, &unit.selected_features);
-    append_cap_lints_args(&mut args, &unit.package_id, source_closure);
-    if unit.target_kind == "proc-macro" {
-        args.push(RUSTC_EXTERN_FLAG.to_string());
-        args.push(RUSTC_PROC_MACRO_EXTERN.to_string());
-    }
-    if let Some(linker) = resolve_tool_path("cc") {
-        args.push("-C".to_string());
-        args.push(rustc_linker_arg(&linker, options));
-    }
-    for dependency in &unit.dependency_artifacts {
-        args.push(RUSTC_EXTERN_FLAG.to_string());
-        args.push(format!("{}={}", dependency.name, dependency.artifact));
-    }
-    append_rustc_path_remap_args(&mut args, &options.path_remaps);
+    let (args, rustc_metadata_hash) = native_rustc_args(native_host_rustc_args_inputs(unit), source_closure, options);
     let args_digest = blake3::hash(args.join("\0").as_bytes()).to_hex().to_string();
-    let mut env = BTreeMap::new();
-    env.insert("CRATE_KIND".to_string(), unit.target_kind.clone());
-    env.insert(RUST_UNIT_EXECUTION_KIND_ENV.to_string(), "host".to_string());
-    env.insert("MODE".to_string(), unit.mode.clone());
-    env.insert("PACKAGE_ID".to_string(), unit.package_id.clone());
-    env.insert("PROFILE".to_string(), options.profile.clone());
-    env.insert("SOURCE_CLOSURE_DIGEST".to_string(), execution_source_closure_digest(source_closure, options));
-    append_cargo_package_env(&mut env, &unit.cargo_package_env);
-    env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
-    env.insert(
-        BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(),
-        compile_time_manifest_dir(&unit.package_root, &unit.target_kind, options),
+    let env = native_rust_env(
+        NativeRustEnvInputs {
+            package_id: &unit.package_id,
+            package_name: &unit.package_name,
+            package_root: &unit.package_root,
+            package_links: unit.package_links.as_deref(),
+            cargo_package_env: &unit.cargo_package_env,
+            target_kind: &unit.target_kind,
+            execution_kind: HOST_EXECUTION_KIND,
+            mode: &unit.mode,
+        },
+        source_closure,
+        options,
     );
-    insert_deterministic_release_compile_env(&mut env, options);
-    if let Some(links) = &unit.package_links {
-        env.insert(PACKAGE_LINKS_ENV.to_string(), links.clone());
-    }
-    if let Some(target) = options.targets.first() {
-        env.insert("TARGET".to_string(), target.clone());
-    }
-    let mut inputs = vec![format!("source:{}:{}", unit.package_id, unit.source_digest.value)];
-    inputs.extend(unit.dependency_artifacts.iter().map(|dependency| dependency.artifact.clone()));
-    inputs.extend(unit.consumed_host_artifacts.iter().map(|artifact| artifact.artifact.clone()));
-    inputs.sort();
-    inputs.dedup();
+    let inputs = native_derivation_inputs(
+        &unit.package_id,
+        &unit.source_digest,
+        &unit.dependency_artifacts,
+        &unit.consumed_host_artifacts,
+    );
     RustUnitDerivationSummary {
         unit_id: unit.unit_id.clone(),
         package_id: unit.package_id.clone(),
@@ -8018,6 +9673,8 @@ fn native_host_unit_derivation(
 }
 
 fn add_host_dependency_derivations(derivations: &mut Vec<RustUnitDerivationSummary>) {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let target_libs_by_unit_id = target_lib_derivations_by_unit_id(derivations);
     let target_libs_by_package = target_lib_derivation_ids_by_package(derivations);
     let required_target_ids =
@@ -8063,6 +9720,8 @@ fn target_lib_derivations_by_unit_id(
 }
 
 fn target_lib_derivation_ids_by_package(derivations: &[RustUnitDerivationSummary]) -> BTreeMap<String, String> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut by_package = BTreeMap::new();
     let mut ambiguous_packages = BTreeSet::new();
     for unit in derivations.iter().filter(|unit| is_supported_target_unit(unit) && unit.target_kind == "lib") {
@@ -8072,7 +9731,12 @@ fn target_lib_derivation_ids_by_package(derivations: &[RustUnitDerivationSummary
             }
             Some(_existing_unit_id) => {}
             None => {
-                by_package.insert(unit.package_id.clone(), unit.unit_id.clone());
+                insert_btree_entry_with_bound(
+                    &mut by_package,
+                    unit.package_id.clone(),
+                    unit.unit_id.clone(),
+                    derivations.len(),
+                );
             }
         }
     }
@@ -8087,7 +9751,9 @@ fn host_dependency_target_unit_ids(
     target_libs_by_unit_id: &BTreeMap<String, RustUnitDerivationSummary>,
     target_libs_by_package: &BTreeMap<String, String>,
 ) -> BTreeSet<String> {
-    let mut queue = VecDeque::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut queue = VecDeque::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for unit in derivations.iter().filter(|unit| is_supported_host_unit(unit)) {
         enqueue_host_dependency_targets(
             &unit.dependency_artifacts,
@@ -8154,11 +9820,11 @@ fn host_dependency_derivation(
     host_unit.execution_kind = HOST_DEPENDENCY_EXECUTION_KIND.to_string();
     host_unit.selected_triple = host_target_triple();
     host_unit.mode = HOST_DEPENDENCY_MODE.to_string();
-    host_unit.rustc_metadata_hash = retagged_rustc_metadata_hash(
-        &target_unit.rustc_metadata_hash,
-        HOST_DEPENDENCY_EXECUTION_KIND,
-        HOST_DEPENDENCY_MODE,
-    );
+    host_unit.rustc_metadata_hash = retagged_rustc_metadata_hash(RetaggedRustcMetadataInputs {
+        base_metadata: &target_unit.rustc_metadata_hash,
+        execution_kind: HOST_DEPENDENCY_EXECUTION_KIND,
+        mode: HOST_DEPENDENCY_MODE,
+    });
     replace_rustc_metadata_arg(&mut host_unit.derivation.args, &host_unit.rustc_metadata_hash);
     host_unit.rustc_args_digest_blake3 =
         blake3::hash(host_unit.derivation.args.join("\0").as_bytes()).to_hex().to_string();
@@ -8261,17 +9927,19 @@ fn native_unit_oracle_comparison_digest(
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
-fn native_unit_blocker(
+struct NativeUnitBlockerInputs<'a> {
     unit_id: Option<String>,
     package_id: Option<String>,
-    class: &str,
-    message: &str,
-) -> NativeUnitGraphPlanningBlocker {
+    class: &'a str,
+    message: &'a str,
+}
+
+fn native_unit_blocker(inputs: NativeUnitBlockerInputs<'_>) -> NativeUnitGraphPlanningBlocker {
     NativeUnitGraphPlanningBlocker {
-        unit_id,
-        package_id,
-        class: class.to_string(),
-        message: message.to_string(),
+        unit_id: inputs.unit_id,
+        package_id: inputs.package_id,
+        class: inputs.class.to_string(),
+        message: inputs.message.to_string(),
     }
 }
 
@@ -8291,6 +9959,8 @@ fn summarize_unit_derivation_graph_with_native(
     native_unit_graph: Option<&NativeUnitGraphPlanningSummary>,
     native_host_unit_graph: Option<&NativeHostUnitGraphPlanningSummary>,
 ) -> Result<UnitDerivationGraphSummary, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(native_unit_graph) = native_unit_graph {
         if !native_unit_graph.ready {
             return blocked_unit_derivation_graph_from_native(native_unit_graph, native_host_unit_graph);
@@ -8315,6 +9985,8 @@ fn blocked_unit_derivation_graph_from_native(
     native_unit_graph: &NativeUnitGraphPlanningSummary,
     native_host_unit_graph: Option<&NativeHostUnitGraphPlanningSummary>,
 ) -> Result<UnitDerivationGraphSummary, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut blockers = native_unit_graph
         .blockers
         .iter()
@@ -8357,7 +10029,9 @@ fn summarize_cargo_unit_derivation_graph(
     source_closure: &SourceClosureSummary,
     options: &RustPlanOptions,
 ) -> Result<UnitDerivationGraphSummary, RunError> {
-    let mut derivations = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut derivations = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut blockers = source_closure
         .blockers
         .iter()
@@ -8392,7 +10066,14 @@ fn summarize_cargo_unit_derivation_graph(
         if is_custom_build_run_unit(unit) {
             continue;
         }
-        match summarize_unit_derivation(index, unit, units, source_closure, options, &host_artifacts) {
+        match summarize_unit_derivation(CargoUnitDerivationInputs {
+            index,
+            unit,
+            units,
+            source_closure,
+            options,
+            host_artifacts: &host_artifacts,
+        }) {
             Ok(derivation) => derivations.push(derivation),
             Err(blocker) => blockers.push(blocker),
         }
@@ -8413,134 +10094,205 @@ fn summarize_cargo_unit_derivation_graph(
     })
 }
 
-fn summarize_unit_derivation(
+struct CargoUnitDerivationInputs<'a> {
     index: usize,
-    unit: &Value,
-    units: &[Value],
-    source_closure: &SourceClosureSummary,
-    options: &RustPlanOptions,
-    host_artifacts: &BTreeMap<String, Vec<RustHostArtifact>>,
-) -> Result<RustUnitDerivationSummary, UnitDerivationBlocker> {
-    let package_id = required_unit_string(unit, "pkg_id", index)?;
-    let target = unit
-        .get("target")
-        .ok_or_else(|| unit_blocker(index, Some(package_id.clone()), "missing-target", "unit lacks a target object"))?;
-    let target_name = required_target_string(target, "name", index, &package_id)?;
-    let mode = target_string(unit, "mode").unwrap_or_else(|| "build".to_string());
+    unit: &'a Value,
+    units: &'a [Value],
+    source_closure: &'a SourceClosureSummary,
+    options: &'a RustPlanOptions,
+    host_artifacts: &'a BTreeMap<String, Vec<RustHostArtifact>>,
+}
+
+struct CargoUnitFacts {
+    package_id: String,
+    target_name: String,
+    target_kind: String,
+    execution_kind: String,
+    crate_types: Vec<String>,
+    edition: String,
+    source_path: String,
+    selected_features: Vec<String>,
+    mode: String,
+    source_digest: SourceDigest,
+}
+
+fn cargo_unit_facts(inputs: &CargoUnitDerivationInputs<'_>) -> Result<CargoUnitFacts, UnitDerivationBlocker> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!DEFAULT_RUST_EDITION.is_empty());
+    let package_id = required_unit_string(inputs.unit, "pkg_id", inputs.index)?;
+    let target = inputs.unit.get("target").ok_or_else(|| {
+        unit_blocker(UnitBlockerInputs {
+            index: inputs.index,
+            package_id: Some(package_id.clone()),
+            class: "missing-target",
+            message: "unit lacks a target object",
+        })
+    })?;
+    let target_name = required_target_string(target, "name", inputs.index, &package_id)?;
+    let mode = target_string(inputs.unit, "mode").unwrap_or_else(|| "build".to_string());
     if mode != "build" {
-        return Err(unit_blocker(
-            index,
-            Some(package_id.clone()),
-            "unsupported-unit-mode",
-            "only Cargo build-mode units are supported before explicit test/doctest/run derivation modeling lands",
-        ));
+        return Err(unit_blocker(UnitBlockerInputs {
+            index: inputs.index,
+            package_id: Some(package_id.clone()),
+            class: "unsupported-unit-mode",
+            message: "only Cargo build-mode units are supported before explicit test/doctest/run derivation modeling lands",
+        }));
     }
-    let target_kind = select_supported_target_kind(target, index, &package_id)?;
+    let target_kind = select_supported_target_kind(target, inputs.index, &package_id)?;
     let execution_kind = if is_host_target_kind(&target_kind) {
         HOST_EXECUTION_KIND
     } else {
         TARGET_EXECUTION_KIND
     }
     .to_string();
-    let crate_types = target_string_array(target, "crate_types");
-    let edition = target_string(target, "edition").unwrap_or_else(|| DEFAULT_RUST_EDITION.to_string());
-    let src_path = required_target_string(target, "src_path", index, &package_id)?;
-    let features = unit_string_array(unit, "features");
-    let source = source_closure.sources.iter().find(|source| source.package_id == package_id).ok_or_else(|| {
-        unit_blocker(
-            index,
-            Some(package_id.clone()),
-            "missing-source-input",
-            "unit package is absent from source closure",
-        )
-    })?;
+    let source =
+        inputs.source_closure.sources.iter().find(|source| source.package_id == package_id).ok_or_else(|| {
+            unit_blocker(UnitBlockerInputs {
+                index: inputs.index,
+                package_id: Some(package_id.clone()),
+                class: "missing-source-input",
+                message: "unit package is absent from source closure",
+            })
+        })?;
+    Ok(CargoUnitFacts {
+        package_id,
+        target_name,
+        target_kind,
+        execution_kind,
+        crate_types: target_string_array(target, "crate_types"),
+        edition: target_string(target, "edition").unwrap_or_else(|| DEFAULT_RUST_EDITION.to_string()),
+        source_path: required_target_string(target, "src_path", inputs.index, &source.package_id)?,
+        selected_features: unit_string_array(inputs.unit, "features"),
+        mode,
+        source_digest: source.source_digest.clone(),
+    })
+}
 
-    let dependency_artifacts = unit_dependency_artifacts(unit, units);
-    let consumed_host_artifacts = if execution_kind == "host" {
-        Vec::new()
-    } else {
-        consumed_host_artifacts(unit, units, host_artifacts)
-    };
-    let generated_metadata =
-        (target_kind == "custom-build").then(|| build_script_metadata_summary(&package_id, &target_name));
+fn cargo_unit_rustc_args(
+    facts: &CargoUnitFacts,
+    dependency_artifacts: &[RustDependencyArtifact],
+    source_closure: &SourceClosureSummary,
+    options: &RustPlanOptions,
+) -> (Vec<String>, String) {
+    debug_assert!(!facts.package_id.is_empty());
+    debug_assert!(!facts.target_name.is_empty());
     let mut args = vec![
         "--crate-name".to_string(),
-        rust_crate_name(&target_name),
+        rust_crate_name(&facts.target_name),
         "--edition".to_string(),
-        edition,
-        reviewable_rustc_source_path(&src_path, options),
+        facts.edition.clone(),
+        reviewable_rustc_source_path(&facts.source_path, options),
         "--emit=link".to_string(),
     ];
-    for crate_type in rustc_crate_types(&crate_types, &target_kind) {
+    for crate_type in rustc_crate_types(&facts.crate_types, &facts.target_kind) {
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
-    if (is_host_target_kind(&target_kind) || target_kind == "bin")
+    if (is_host_target_kind(&facts.target_kind) || facts.target_kind == "bin")
         && let Some(linker) = resolve_tool_path("cc")
     {
-        args.push("-C".to_string());
+        args.push(RUSTC_CODEGEN_OPTION_FLAG.to_string());
         args.push(rustc_linker_arg(&linker, options));
     }
-    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(
-        &package_id,
-        &target_name,
-        &target_kind,
-        &mode,
-        &source.source_digest,
-        &features,
-        &crate_types,
-    );
+    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
+        package_id: &facts.package_id,
+        target_name: &facts.target_name,
+        target_kind: &facts.target_kind,
+        mode: &facts.mode,
+        source_digest: &facts.source_digest,
+        selected_features: &facts.selected_features,
+        crate_types: &facts.crate_types,
+    });
     append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
-    append_rustc_feature_cfg_args(&mut args, &features);
-    append_cap_lints_args_for_source_kind(&mut args, &source.kind);
-    for dependency in &dependency_artifacts {
-        args.push("--extern".to_string());
+    append_rustc_feature_cfg_args(&mut args, &facts.selected_features);
+    append_cap_lints_args(&mut args, &facts.package_id, source_closure);
+    for dependency in dependency_artifacts {
+        args.push(RUSTC_EXTERN_FLAG.to_string());
         args.push(format!("{}={}", dependency.name, dependency.artifact));
     }
     append_rustc_path_remap_args(&mut args, &options.path_remaps);
-    let args_digest = blake3::hash(args.join("\0").as_bytes()).to_hex().to_string();
-    let mut env = BTreeMap::new();
-    env.insert("CRATE_KIND".to_string(), target_kind.clone());
-    env.insert(RUST_UNIT_EXECUTION_KIND_ENV.to_string(), execution_kind.clone());
-    env.insert("MODE".to_string(), mode.clone());
-    env.insert("PACKAGE_ID".to_string(), package_id.clone());
-    env.insert("PROFILE".to_string(), options.profile.clone());
-    env.insert("SOURCE_CLOSURE_DIGEST".to_string(), execution_source_closure_digest(source_closure, options));
+    (args, rustc_metadata_hash)
+}
+
+fn cargo_unit_env(
+    facts: &CargoUnitFacts,
+    source_closure: &SourceClosureSummary,
+    options: &RustPlanOptions,
+) -> BTreeMap<String, String> {
+    let mut env = BTreeMap::from([
+        ("CRATE_KIND".to_string(), facts.target_kind.clone()),
+        (RUST_UNIT_EXECUTION_KIND_ENV.to_string(), facts.execution_kind.clone()),
+        ("MODE".to_string(), facts.mode.clone()),
+        ("PACKAGE_ID".to_string(), facts.package_id.clone()),
+        ("PROFILE".to_string(), options.profile.clone()),
+        ("SOURCE_CLOSURE_DIGEST".to_string(), execution_source_closure_digest(source_closure, options)),
+    ]);
     insert_deterministic_release_compile_env(&mut env, options);
     if let Some(target) = options.targets.first() {
         env.insert("TARGET".to_string(), target.clone());
     }
-    let mut inputs = vec![format!("source:{}:{}", package_id, source.source_digest.value)];
-    inputs.extend(dependency_artifacts.iter().map(|dependency| dependency.artifact.clone()));
-    inputs.extend(consumed_host_artifacts.iter().map(|artifact| artifact.artifact.clone()));
-    inputs.sort();
-    inputs.dedup();
-    let unit_id = rust_unit_id(index, &package_id, &target_name, &target_kind, &mode);
+    env
+}
 
+fn summarize_unit_derivation(
+    inputs: CargoUnitDerivationInputs<'_>,
+) -> Result<RustUnitDerivationSummary, UnitDerivationBlocker> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!DEFAULT_RUST_EDITION.is_empty());
+    let facts = cargo_unit_facts(&inputs)?;
+    let dependency_artifacts = unit_dependency_artifacts(inputs.unit, inputs.units);
+    let consumed_host_artifacts = if facts.execution_kind == HOST_EXECUTION_KIND {
+        Vec::new()
+    } else {
+        consumed_host_artifacts(inputs.unit, inputs.units, inputs.host_artifacts)
+    };
+    let generated_metadata = (facts.target_kind == "custom-build").then(|| {
+        build_script_metadata_summary(BuildScriptMetadataKeyInputs {
+            package_id: &facts.package_id,
+            target_name: &facts.target_name,
+        })
+    });
+    let (args, rustc_metadata_hash) =
+        cargo_unit_rustc_args(&facts, &dependency_artifacts, inputs.source_closure, inputs.options);
+    let args_digest = blake3::hash(args.join("\0").as_bytes()).to_hex().to_string();
+    let env = cargo_unit_env(&facts, inputs.source_closure, inputs.options);
+    let derivation_inputs = native_derivation_inputs(
+        &facts.package_id,
+        &facts.source_digest,
+        &dependency_artifacts,
+        &consumed_host_artifacts,
+    );
+    let unit_id = rust_unit_id(RustUnitIdInputs {
+        index: inputs.index,
+        package_id: &facts.package_id,
+        target_name: &facts.target_name,
+        target_kind: &facts.target_kind,
+        mode: &facts.mode,
+    });
     Ok(RustUnitDerivationSummary {
         unit_id: unit_id.clone(),
-        package_id: package_id.clone(),
-        target_name: target_name.clone(),
-        target_kind,
-        execution_kind: execution_kind.clone(),
-        selected_triple: selected_triple_for_execution_kind(&execution_kind, options),
+        package_id: facts.package_id,
+        target_name: facts.target_name.clone(),
+        target_kind: facts.target_kind,
+        execution_kind: facts.execution_kind.clone(),
+        selected_triple: selected_triple_for_execution_kind(&facts.execution_kind, inputs.options),
         rustc_metadata_hash,
-        crate_types,
-        mode,
-        profile: options.profile.clone(),
-        source_digest: source.source_digest.clone(),
+        crate_types: facts.crate_types,
+        mode: facts.mode,
+        profile: inputs.options.profile.clone(),
+        source_digest: facts.source_digest,
         dependency_artifacts,
         consumed_host_artifacts,
         metadata_dependencies: Vec::new(),
         generated_metadata,
         derivation: ReviewableRustDerivation {
-            name: derivation_name(&target_name, index),
+            name: derivation_name(&facts.target_name, inputs.index),
             builder: "rustc".to_string(),
             system: "x86_64-linux".to_string(),
             args,
             outputs: vec!["out".to_string()],
             env,
-            inputs,
+            inputs: derivation_inputs,
             addressing_mode: "content-addressed".to_string(),
         },
         rustc_args_digest_blake3: args_digest,
@@ -8552,6 +10304,8 @@ fn select_supported_target_kind(
     index: usize,
     package_id: &str,
 ) -> Result<String, UnitDerivationBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let kinds = target_string_array(target, "kind");
     let crate_types = target_string_array(target, "crate_types");
     if let Some(target_kind) = classify_supported_cargo_target_kind(&kinds, &crate_types) {
@@ -8570,24 +10324,29 @@ fn select_supported_target_kind(
             kinds.join(",")
         )
     };
-    Err(unit_blocker(index, Some(package_id.to_string()), class, &message))
+    Err(unit_blocker(UnitBlockerInputs {
+        index: index,
+        package_id: Some(package_id.to_string()),
+        class: class,
+        message: &message,
+    }))
 }
 
 fn classify_supported_cargo_target_kind(kinds: &[String], crate_types: &[String]) -> Option<&'static str> {
-    let proc_macro_crate_type = crate_types.iter().any(|crate_type| crate_type == "proc-macro");
-    let lib_shaped_kind = kinds.iter().any(|kind| kind == "lib" || kind == "rlib");
-    let classified = if kinds.iter().any(|kind| kind == "custom-build") {
-        Some("custom-build")
-    } else if kinds.iter().any(|kind| kind == "proc-macro") || (proc_macro_crate_type && lib_shaped_kind) {
-        Some("proc-macro")
-    } else if lib_shaped_kind {
-        Some("lib")
-    } else if kinds.iter().any(|kind| kind == "bin") {
-        Some("bin")
-    } else {
-        None
-    };
-    if proc_macro_crate_type && lib_shaped_kind {
+    let is_proc_macro_crate_type = crate_types.iter().any(|crate_type| crate_type == "proc-macro");
+    let is_lib_shaped_kind = kinds.iter().any(|kind| kind == "lib" || kind == "rlib");
+    let classified = [
+        (kinds.iter().any(|kind| kind == "custom-build"), "custom-build"),
+        (
+            kinds.iter().any(|kind| kind == "proc-macro") || (is_proc_macro_crate_type && is_lib_shaped_kind),
+            "proc-macro",
+        ),
+        (is_lib_shaped_kind, "lib"),
+        (kinds.iter().any(|kind| kind == "bin"), "bin"),
+    ]
+    .into_iter()
+    .find_map(|(is_kind, kind)| is_kind.then_some(kind));
+    if is_proc_macro_crate_type && is_lib_shaped_kind {
         debug_assert_ne!(classified, Some("lib"));
         debug_assert_ne!(classified, Some("bin"));
     }
@@ -8598,6 +10357,8 @@ fn classify_supported_cargo_target_kind(kinds: &[String], crate_types: &[String]
 }
 
 fn host_artifacts_by_package(units: &[Value]) -> BTreeMap<String, Vec<RustHostArtifact>> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut artifacts: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
     for (index, unit) in units.iter().enumerate() {
         if is_custom_build_run_unit(unit) {
@@ -8618,8 +10379,13 @@ fn host_artifacts_by_package(units: &[Value]) -> BTreeMap<String, Vec<RustHostAr
             continue;
         }
         let target_name = target_string(target, "name").unwrap_or_else(|| format!("host-unit-{index}"));
-        let metadata_digest_blake3 = (target_kind == "custom-build")
-            .then(|| build_script_metadata_summary(&package_id, &target_name).digest_blake3);
+        let metadata_digest_blake3 = (target_kind == "custom-build").then(|| {
+            build_script_metadata_summary(BuildScriptMetadataKeyInputs {
+                package_id: &package_id,
+                target_name: &target_name,
+            })
+            .digest_blake3
+        });
         artifacts.entry(package_id.clone()).or_default().push(RustHostArtifact {
             package_id: package_id.clone(),
             target_name: target_name.clone(),
@@ -8657,7 +10423,7 @@ fn consumed_host_artifacts(
     units: &[Value],
     host_artifacts: &BTreeMap<String, Vec<RustHostArtifact>>,
 ) -> Vec<RustHostArtifact> {
-    let mut artifacts = Vec::new();
+    let mut artifacts = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(package_id) = target_string(unit, "pkg_id") {
         artifacts.extend(host_artifacts.get(&package_id).into_iter().flatten().cloned());
     }
@@ -8673,7 +10439,18 @@ fn consumed_host_artifacts(
     artifacts
 }
 
-fn build_script_metadata_summary(package_id: &str, target_name: &str) -> BuildScriptMetadataSummary {
+struct BuildScriptMetadataKeyInputs<'a> {
+    package_id: &'a str,
+    target_name: &'a str,
+}
+
+fn build_script_metadata_summary(inputs: BuildScriptMetadataKeyInputs<'_>) -> BuildScriptMetadataSummary {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let BuildScriptMetadataKeyInputs {
+        package_id,
+        target_name,
+    } = inputs;
     let out_dir = format!("host-metadata:{package_id}:{target_name}:OUT_DIR");
     let rustc_cfg = Vec::new();
     let rustc_env = BTreeMap::new();
@@ -8718,7 +10495,9 @@ fn is_host_target_kind(target_kind: &str) -> bool {
 }
 
 fn unit_dependency_artifacts(unit: &Value, units: &[Value]) -> Vec<RustDependencyArtifact> {
-    let mut artifacts = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut artifacts = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let Some(deps) = unit_dependency_array(unit) else {
         return artifacts;
     };
@@ -8829,11 +10608,24 @@ fn source_kind_needs_cap_lints(source_kind: &SourceKind) -> bool {
     matches!(source_kind, SourceKind::Registry | SourceKind::Git)
 }
 
-fn rust_unit_id(index: usize, package_id: &str, target_name: &str, target_kind: &str, mode: &str) -> String {
-    format!("{index}:{package_id}:{target_name}:{target_kind}:{mode}")
+struct RustUnitIdInputs<'a> {
+    index: usize,
+    package_id: &'a str,
+    target_name: &'a str,
+    target_kind: &'a str,
+    mode: &'a str,
+}
+
+fn rust_unit_id(inputs: RustUnitIdInputs<'_>) -> String {
+    format!(
+        "{}:{}:{}:{}:{}",
+        inputs.index, inputs.package_id, inputs.target_name, inputs.target_kind, inputs.mode
+    )
 }
 
 fn rust_unit_id_from_unit_value(index: usize, unit: &Value) -> Option<String> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if is_custom_build_run_unit(unit) {
         return None;
     }
@@ -8847,7 +10639,13 @@ fn rust_unit_id_from_unit_value(index: usize, unit: &Value) -> Option<String> {
     if mode != "build" {
         return None;
     }
-    Some(rust_unit_id(index, &package_id, &target_name, target_kind, &mode))
+    Some(rust_unit_id(RustUnitIdInputs {
+        index: index,
+        package_id: &package_id,
+        target_name: &target_name,
+        target_kind: target_kind,
+        mode: &mode,
+    }))
 }
 
 fn rustc_crate_name_from_args(args: &[String]) -> Option<String> {
@@ -8868,8 +10666,14 @@ fn rust_crate_name(name: &str) -> String {
 }
 
 fn required_unit_string(unit: &Value, field: &str, index: usize) -> Result<String, UnitDerivationBlocker> {
-    target_string(unit, field)
-        .ok_or_else(|| unit_blocker(index, None, &format!("missing-{field}"), &format!("unit lacks `{field}`")))
+    target_string(unit, field).ok_or_else(|| {
+        unit_blocker(UnitBlockerInputs {
+            index: index,
+            package_id: None,
+            class: &format!("missing-{field}"),
+            message: &format!("unit lacks `{field}`"),
+        })
+    })
 }
 
 fn required_target_string(
@@ -8879,12 +10683,12 @@ fn required_target_string(
     package_id: &str,
 ) -> Result<String, UnitDerivationBlocker> {
     target_string(target, field).ok_or_else(|| {
-        unit_blocker(
-            index,
-            Some(package_id.to_string()),
-            &format!("missing-target-{field}"),
-            &format!("unit target lacks `{field}`"),
-        )
+        unit_blocker(UnitBlockerInputs {
+            index: index,
+            package_id: Some(package_id.to_string()),
+            class: &format!("missing-target-{field}"),
+            message: &format!("unit target lacks `{field}`"),
+        })
     })
 }
 
@@ -8907,12 +10711,19 @@ fn target_string_array(value: &Value, field: &str) -> Vec<String> {
     values
 }
 
-fn unit_blocker(index: usize, package_id: Option<String>, class: &str, message: &str) -> UnitDerivationBlocker {
+struct UnitBlockerInputs<'a> {
+    index: usize,
+    package_id: Option<String>,
+    class: &'a str,
+    message: &'a str,
+}
+
+fn unit_blocker(inputs: UnitBlockerInputs<'_>) -> UnitDerivationBlocker {
     UnitDerivationBlocker {
-        unit_id: index.to_string(),
-        package_id,
-        class: class.to_string(),
-        message: message.to_string(),
+        unit_id: inputs.index.to_string(),
+        package_id: inputs.package_id,
+        class: inputs.class.to_string(),
+        message: inputs.message.to_string(),
     }
 }
 
@@ -8949,26 +10760,84 @@ pub(crate) fn execute_first_supported_rust_unit(
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
     let Some(unit) = graph.derivations.iter().find(|unit| is_supported_target_unit(unit)) else {
-        return blocked_execution_receipt(
-            None,
-            "missing-supported-unit",
-            "unit_derivation_graph does not contain a supported target lib/bin unit",
-        );
+        return blocked_execution_receipt(BlockedExecutionReceiptInputs {
+            unit: None,
+            class: "missing-supported-unit",
+            message: "unit_derivation_graph does not contain a supported target lib/bin unit",
+        });
     };
     if !graph.ready {
-        return blocked_execution_receipt(
-            Some(unit),
-            "unit-derivation-graph-blocked",
-            "unit_derivation_graph is not ready; resolve planning blockers before execution",
-        );
+        return blocked_execution_receipt(BlockedExecutionReceiptInputs {
+            unit: Some(unit),
+            class: "unit-derivation-graph-blocked",
+            message: "unit_derivation_graph is not ready; resolve planning blockers before execution",
+        });
     }
     execute_rust_unit(unit, options)
+}
+
+struct RustUnitDependencyChain<'a> {
+    consumer: &'a RustUnitDerivationSummary,
+    dependency: &'a RustDependencyArtifact,
+    producer: &'a RustUnitDerivationSummary,
+}
+
+fn first_supported_rust_unit_dependency_chain(
+    graph: &UnitDerivationGraphSummary,
+) -> Result<RustUnitDependencyChain<'_>, RustUnitExecutionBlocker> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    let consumer = graph
+        .derivations
+        .iter()
+        .find(|unit| is_supported_target_unit(unit) && !unit.dependency_artifacts.is_empty())
+        .ok_or_else(|| RustUnitExecutionBlocker {
+            class: "missing-dependency-chain".to_string(),
+            message: "unit_derivation_graph does not contain a supported target unit with dependency artifacts"
+                .to_string(),
+        })?;
+    if !consumer.consumed_host_artifacts.is_empty() {
+        return Err(RustUnitExecutionBlocker {
+            class: "unsupported-chain-shape".to_string(),
+            message: "bounded dependency-chain execution does not yet support host/proc-macro/build-script artifacts"
+                .to_string(),
+        });
+    }
+    if consumer.dependency_artifacts.len() != UNIQUE_CANDIDATE_COUNT {
+        return Err(RustUnitExecutionBlocker {
+            class: "unsupported-chain-shape".to_string(),
+            message: "bounded dependency-chain execution currently supports exactly one producer dependency artifact"
+                .to_string(),
+        });
+    }
+    let dependency = &consumer.dependency_artifacts[0];
+    let producer = graph
+        .derivations
+        .iter()
+        .find(|unit| {
+            is_supported_target_unit(unit)
+                && unit.package_id == dependency.package_id
+                && unit.target_kind == "lib"
+                && unit.dependency_artifacts.is_empty()
+                && unit.consumed_host_artifacts.is_empty()
+        })
+        .ok_or_else(|| RustUnitExecutionBlocker {
+            class: "missing-dependency-producer".to_string(),
+            message: format!("no supported producer lib unit for dependency package {}", dependency.package_id),
+        })?;
+    Ok(RustUnitDependencyChain {
+        consumer,
+        dependency,
+        producer,
+    })
 }
 
 pub(crate) fn execute_first_rust_unit_dependency_chain(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitDependencyChainExecutionReceipt, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if !graph.ready {
         return dependency_chain_receipt(
             "blocked",
@@ -8981,79 +10850,26 @@ pub(crate) fn execute_first_rust_unit_dependency_chain(
             }),
         );
     }
-    let Some(consumer) = graph
-        .derivations
-        .iter()
-        .find(|unit| is_supported_target_unit(unit) && !unit.dependency_artifacts.is_empty())
-    else {
-        return dependency_chain_receipt(
-            "blocked",
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "missing-dependency-chain".to_string(),
-                message: "unit_derivation_graph does not contain a supported target unit with dependency artifacts"
-                    .to_string(),
-            }),
-        );
+    let chain = match first_supported_rust_unit_dependency_chain(graph) {
+        Ok(chain) => chain,
+        Err(blocker) => return dependency_chain_receipt("blocked", Vec::new(), Some(blocker)),
     };
-    if !consumer.consumed_host_artifacts.is_empty() {
-        return dependency_chain_receipt(
-            "blocked",
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "unsupported-chain-shape".to_string(),
-                message:
-                    "bounded dependency-chain execution does not yet support host/proc-macro/build-script artifacts"
-                        .to_string(),
-            }),
-        );
-    }
-    if consumer.dependency_artifacts.len() != 1 {
-        return dependency_chain_receipt(
-            "blocked",
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "unsupported-chain-shape".to_string(),
-                message:
-                    "bounded dependency-chain execution currently supports exactly one producer dependency artifact"
-                        .to_string(),
-            }),
-        );
-    }
-    let dependency = &consumer.dependency_artifacts[0];
-    let Some(producer) = graph.derivations.iter().find(|unit| {
-        is_supported_target_unit(unit)
-            && unit.package_id == dependency.package_id
-            && unit.target_kind == "lib"
-            && unit.dependency_artifacts.is_empty()
-            && unit.consumed_host_artifacts.is_empty()
-    }) else {
-        return dependency_chain_receipt(
-            "blocked",
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "missing-dependency-producer".to_string(),
-                message: format!("no supported producer lib unit for dependency package {}", dependency.package_id),
-            }),
-        );
-    };
-
-    let producer_receipt = execute_rust_unit(producer, options)?;
+    let producer_receipt = execute_rust_unit(chain.producer, options)?;
     if producer_receipt.execution_status != "success" {
         return dependency_chain_receipt(
             "blocked",
             vec![producer_receipt],
             Some(RustUnitExecutionBlocker {
                 class: "dependency-producer-failed".to_string(),
-                message: format!("producer unit {} did not produce a successful artifact", producer.unit_id),
+                message: format!("producer unit {} did not produce a successful artifact", chain.producer.unit_id),
             }),
         );
     }
-    let producer_artifact = match produced_library_artifact_path(producer, options)? {
+    let producer_artifact = match produced_library_artifact_path(chain.producer, options)? {
         Ok(path) => path,
         Err(blocker) => return dependency_chain_receipt("blocked", vec![producer_receipt], Some(blocker)),
     };
-    let bound_consumer = bind_dependency_artifact(consumer, dependency, &producer_artifact)?;
+    let bound_consumer = bind_dependency_artifact(chain.consumer, chain.dependency, &producer_artifact)?;
     let consumer_receipt = execute_rust_unit(&bound_consumer, options)?;
     let status = if consumer_receipt.execution_status == "success" {
         "success"
@@ -9085,41 +10901,43 @@ fn validate_role_sensitive_artifact_graph(graph: &UnitDerivationGraphSummary) ->
 }
 
 fn validate_unit_role_triple(unit: &RustUnitDerivationSummary) -> Option<RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if unit.execution_kind == TARGET_EXECUTION_KIND {
         if unit.selected_triple.is_empty() {
-            return Some(role_mismatch_blocker(
-                unit,
-                "unit",
-                TARGET_EXECUTION_KIND,
-                "non-empty-target-triple",
-                &unit.execution_kind,
-                &unit.selected_triple,
-            ));
+            return Some(role_mismatch_blocker(RoleMismatchInputs {
+                unit: unit,
+                edge: "unit",
+                expected_role: TARGET_EXECUTION_KIND,
+                expected_triple: "non-empty-target-triple",
+                actual_role: &unit.execution_kind,
+                actual_triple: &unit.selected_triple,
+            }));
         }
         return None;
     }
     if unit.execution_kind == HOST_EXECUTION_KIND || unit.execution_kind == HOST_DEPENDENCY_EXECUTION_KIND {
         let host_triple = host_target_triple();
         if unit.selected_triple != host_triple {
-            return Some(role_mismatch_blocker(
-                unit,
-                "unit",
-                &unit.execution_kind,
-                &host_triple,
-                &unit.execution_kind,
-                &unit.selected_triple,
-            ));
+            return Some(role_mismatch_blocker(RoleMismatchInputs {
+                unit: unit,
+                edge: "unit",
+                expected_role: &unit.execution_kind,
+                expected_triple: &host_triple,
+                actual_role: &unit.execution_kind,
+                actual_triple: &unit.selected_triple,
+            }));
         }
         return None;
     }
-    Some(role_mismatch_blocker(
-        unit,
-        "unit",
-        "known-execution-kind",
-        "known-selected-triple",
-        &unit.execution_kind,
-        &unit.selected_triple,
-    ))
+    Some(role_mismatch_blocker(RoleMismatchInputs {
+        unit: unit,
+        edge: "unit",
+        expected_role: "known-execution-kind",
+        expected_triple: "known-selected-triple",
+        actual_role: &unit.execution_kind,
+        actual_triple: &unit.selected_triple,
+    }))
 }
 
 fn validate_dependency_artifact_role(
@@ -9132,14 +10950,14 @@ fn validate_dependency_artifact_role(
     let expected_triple = expected_triple_for_role(consumer, expected_role);
     let producer = dependency_artifact_producer(consumer, dependency, expected_role, graph, unit_indices_by_id)?;
     if producer.execution_kind != expected_role || producer.selected_triple != expected_triple {
-        return Some(role_mismatch_blocker(
-            consumer,
-            &format!("dependency:{}", dependency.name),
-            expected_role,
-            &expected_triple,
-            &producer.execution_kind,
-            &producer.selected_triple,
-        ));
+        return Some(role_mismatch_blocker(RoleMismatchInputs {
+            unit: consumer,
+            edge: &format!("dependency:{}", dependency.name),
+            expected_role: expected_role,
+            expected_triple: &expected_triple,
+            actual_role: &producer.execution_kind,
+            actual_triple: &producer.selected_triple,
+        }));
     }
     validate_dependency_artifact_identity(consumer, dependency, producer)
 }
@@ -9153,14 +10971,14 @@ fn validate_host_artifact_role(
     let expected_triple = host_target_triple();
     let producer = host_artifact_producer(artifact, graph, unit_indices_by_id)?;
     if producer.execution_kind != HOST_EXECUTION_KIND || producer.selected_triple != expected_triple {
-        return Some(role_mismatch_blocker(
-            consumer,
-            &format!("host-artifact:{}", artifact.target_name),
-            HOST_EXECUTION_KIND,
-            &expected_triple,
-            &producer.execution_kind,
-            &producer.selected_triple,
-        ));
+        return Some(role_mismatch_blocker(RoleMismatchInputs {
+            unit: consumer,
+            edge: &format!("host-artifact:{}", artifact.target_name),
+            expected_role: HOST_EXECUTION_KIND,
+            expected_triple: &expected_triple,
+            actual_role: &producer.execution_kind,
+            actual_triple: &producer.selected_triple,
+        }));
     }
     None
 }
@@ -9170,24 +10988,26 @@ fn validate_dependency_artifact_identity(
     dependency: &RustDependencyArtifact,
     producer: &RustUnitDerivationSummary,
 ) -> Option<RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if dependency.package_id != producer.package_id {
-        return Some(identity_mismatch_blocker(
-            consumer,
-            &format!("dependency:{}", dependency.name),
-            "source package",
-            &dependency.package_id,
-            &producer.package_id,
-        ));
+        return Some(identity_mismatch_blocker(IdentityMismatchInputs {
+            unit: consumer,
+            edge: &format!("dependency:{}", dependency.name),
+            field: "source package",
+            expected: &dependency.package_id,
+            observed: &producer.package_id,
+        }));
     }
     let observed_metadata = rustc_metadata_hash_from_args(&producer.derivation.args);
     if observed_metadata.as_deref() != Some(producer.rustc_metadata_hash.as_str()) {
-        return Some(identity_mismatch_blocker(
-            consumer,
-            &format!("dependency:{}", dependency.name),
-            "metadata hash",
-            &producer.rustc_metadata_hash,
-            observed_metadata.as_deref().unwrap_or("missing"),
-        ));
+        return Some(identity_mismatch_blocker(IdentityMismatchInputs {
+            unit: consumer,
+            edge: &format!("dependency:{}", dependency.name),
+            field: "metadata hash",
+            expected: &producer.rustc_metadata_hash,
+            observed: observed_metadata.as_deref().unwrap_or("missing"),
+        }));
     }
     if let Some(blocker) = validate_dependency_toolchain_policy_digest(consumer, dependency, producer) {
         return Some(blocker);
@@ -9205,13 +11025,13 @@ fn validate_dependency_toolchain_policy_digest(
     if expected == observed {
         return None;
     }
-    Some(identity_mismatch_blocker(
-        consumer,
-        &format!("dependency:{}", dependency.name),
-        "toolchain-policy digest",
-        &expected,
-        &observed,
-    ))
+    Some(identity_mismatch_blocker(IdentityMismatchInputs {
+        unit: consumer,
+        edge: &format!("dependency:{}", dependency.name),
+        field: "toolchain-policy digest",
+        expected: &expected,
+        observed: &observed,
+    }))
 }
 
 fn source_root_policy_digest_from_unit(unit: &RustUnitDerivationSummary) -> Option<String> {
@@ -9274,14 +11094,24 @@ fn host_artifact_producer<'a>(
     })
 }
 
-fn role_mismatch_blocker(
-    unit: &RustUnitDerivationSummary,
-    edge: &str,
-    expected_role: &str,
-    expected_triple: &str,
-    actual_role: &str,
-    actual_triple: &str,
-) -> RustUnitExecutionBlocker {
+struct RoleMismatchInputs<'a> {
+    unit: &'a RustUnitDerivationSummary,
+    edge: &'a str,
+    expected_role: &'a str,
+    expected_triple: &'a str,
+    actual_role: &'a str,
+    actual_triple: &'a str,
+}
+
+fn role_mismatch_blocker(inputs: RoleMismatchInputs<'_>) -> RustUnitExecutionBlocker {
+    let RoleMismatchInputs {
+        unit,
+        edge,
+        expected_role,
+        expected_triple,
+        actual_role,
+        actual_triple,
+    } = inputs;
     RustUnitExecutionBlocker {
         class: "artifact-identity-mismatch".to_string(),
         message: format!(
@@ -9291,123 +11121,106 @@ fn role_mismatch_blocker(
     }
 }
 
-fn identity_mismatch_blocker(
-    unit: &RustUnitDerivationSummary,
-    edge: &str,
-    field: &str,
-    expected: &str,
-    observed: &str,
-) -> RustUnitExecutionBlocker {
+struct IdentityMismatchInputs<'a> {
+    unit: &'a RustUnitDerivationSummary,
+    edge: &'a str,
+    field: &'a str,
+    expected: &'a str,
+    observed: &'a str,
+}
+
+fn identity_mismatch_blocker(inputs: IdentityMismatchInputs<'_>) -> RustUnitExecutionBlocker {
+    let IdentityMismatchInputs {
+        unit,
+        edge,
+        field,
+        expected,
+        observed,
+    } = inputs;
     RustUnitExecutionBlocker {
         class: "artifact-identity-mismatch".to_string(),
         message: format!("unit {} {edge} expected {field} {expected}, got {field} {observed}", unit.unit_id),
     }
 }
 
-pub(crate) fn execute_rust_target_unit_topology(
-    graph: &UnitDerivationGraphSummary,
-    options: &RustUnitExecutionOptions,
-) -> Result<RustUnitTargetTopologyExecutionReceipt, RunError> {
-    if !graph.ready {
-        return target_topology_receipt(
-            "blocked",
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "unit-derivation-graph-blocked".to_string(),
-                message:
-                    "unit_derivation_graph is not ready; resolve planning blockers before target-topology execution"
-                        .to_string(),
-            }),
-        );
-    }
-    if let Some(blocker) = validate_role_sensitive_artifact_graph(graph) {
-        return target_topology_receipt("blocked", Vec::new(), Some(blocker));
-    }
-
-    let mut selected_indices = Vec::new();
+fn selected_target_unit_indices(graph: &UnitDerivationGraphSummary) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    let mut selected_indices = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for (index, unit) in graph.derivations.iter().enumerate() {
-        if is_supported_target_unit(unit) {
-            if !unit.consumed_host_artifacts.is_empty() {
-                return target_topology_receipt(
-                    "blocked",
-                    Vec::new(),
-                    Some(RustUnitExecutionBlocker {
-                        class: "unsupported-topology-shape".to_string(),
-                        message: format!(
-                            "target topology execution does not yet support host/proc-macro/build-script artifacts for unit {}",
-                            unit.unit_id
-                        ),
-                    }),
-                );
-            }
-            selected_indices.push(index);
+        if !is_supported_target_unit(unit) {
+            continue;
         }
+        if !unit.consumed_host_artifacts.is_empty() {
+            return Err(RustUnitExecutionBlocker {
+                class: "unsupported-topology-shape".to_string(),
+                message: format!(
+                    "target topology execution does not yet support host/proc-macro/build-script artifacts for unit {}",
+                    unit.unit_id
+                ),
+            });
+        }
+        selected_indices.push(index);
     }
     if selected_indices.is_empty() {
-        return target_topology_receipt(
-            "blocked",
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "missing-supported-unit".to_string(),
-                message: "unit_derivation_graph does not contain supported target lib/bin units".to_string(),
-            }),
-        );
+        return Err(RustUnitExecutionBlocker {
+            class: "missing-supported-unit".to_string(),
+            message: "unit_derivation_graph does not contain supported target lib/bin units".to_string(),
+        });
     }
+    Ok(selected_indices)
+}
 
+fn target_topology_execution_order(
+    graph: &UnitDerivationGraphSummary,
+    selected_indices: &[usize],
+) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
+    debug_assert!(!selected_indices.is_empty());
+    debug_assert!(selected_indices.iter().all(|index| *index < graph.derivations.len()));
     let selected_set = selected_indices.iter().copied().collect::<BTreeSet<_>>();
     let unit_indices_by_id = rust_unit_indices_by_id(graph);
     let mut lib_producers = BTreeMap::new();
-    for index in &selected_indices {
+    for index in selected_indices {
         let unit = &graph.derivations[*index];
         if unit.target_kind == "lib" {
             lib_producers.entry(unit.package_id.clone()).or_insert(*index);
         }
     }
-
     let mut edges = BTreeMap::<usize, Vec<usize>>::new();
-    for index in &selected_indices {
+    for index in selected_indices {
         let unit = &graph.derivations[*index];
-        let mut deps = Vec::new();
+        let mut dependencies = Vec::with_capacity(unit.dependency_artifacts.len());
         for dependency in &unit.dependency_artifacts {
             let producer_index =
-                match target_dependency_producer_index(dependency, graph, &unit_indices_by_id, &lib_producers) {
-                    Ok(index) => index,
-                    Err(blocker) => return target_topology_receipt("blocked", Vec::new(), Some(blocker)),
-                };
+                target_dependency_producer_index(dependency, graph, &unit_indices_by_id, &lib_producers)?;
             if !selected_set.contains(&producer_index) {
-                return target_topology_receipt(
-                    "blocked",
-                    Vec::new(),
-                    Some(RustUnitExecutionBlocker {
-                        class: "missing-dependency-producer".to_string(),
-                        message: format!(
-                            "dependency producer for package {} is outside the selected target topology",
-                            dependency.package_id
-                        ),
-                    }),
-                );
+                return Err(RustUnitExecutionBlocker {
+                    class: "missing-dependency-producer".to_string(),
+                    message: format!(
+                        "dependency producer for package {} is outside the selected target topology",
+                        dependency.package_id
+                    ),
+                });
             }
             if producer_index != *index {
-                deps.push(producer_index);
+                dependencies.push(producer_index);
             }
         }
-        deps.sort_unstable();
-        deps.dedup();
-        edges.insert(*index, deps);
+        dependencies.sort_unstable();
+        dependencies.dedup();
+        insert_btree_entry_with_bound(&mut edges, *index, dependencies, graph.derivations.len());
     }
+    topologically_order_units(selected_indices, &edges, graph)
+}
 
-    let mut ordered_indices = Vec::new();
-    let mut temporary = BTreeSet::new();
-    let mut permanent = BTreeSet::new();
-    for index in &selected_indices {
-        if let Err(blocker) =
-            visit_target_topology_unit(*index, &edges, &mut temporary, &mut permanent, &mut ordered_indices, graph)
-        {
-            return target_topology_receipt("blocked", Vec::new(), Some(blocker));
-        }
-    }
-
-    let mut executions = Vec::new();
+fn execute_target_topology_order(
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+    ordered_indices: Vec<usize>,
+) -> Result<RustUnitTargetTopologyExecutionReceipt, RunError> {
+    debug_assert!(ordered_indices.iter().all(|index| *index < graph.derivations.len()));
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    let mut executions = Vec::with_capacity(ordered_indices.len());
     let mut produced_artifacts = ProducedArtifactIndex::default();
     for index in ordered_indices {
         let unit = &graph.derivations[index];
@@ -9436,9 +11249,7 @@ pub(crate) fn execute_rust_target_unit_topology(
         }
         if unit.target_kind == "lib" {
             match produced_library_artifact_path(&executable_unit, options)? {
-                Ok(path) => {
-                    produced_artifacts.record_unit(unit, path);
-                }
+                Ok(path) => produced_artifacts.record_unit(unit, path),
                 Err(blocker) => {
                     executions.push(receipt);
                     return target_topology_receipt("blocked", executions, Some(blocker));
@@ -9447,8 +11258,39 @@ pub(crate) fn execute_rust_target_unit_topology(
         }
         executions.push(receipt);
     }
-
     target_topology_receipt("success", executions, None)
+}
+
+pub(crate) fn execute_rust_target_unit_topology(
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<RustUnitTargetTopologyExecutionReceipt, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    if !graph.ready {
+        return target_topology_receipt(
+            "blocked",
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "unit-derivation-graph-blocked".to_string(),
+                message:
+                    "unit_derivation_graph is not ready; resolve planning blockers before target-topology execution"
+                        .to_string(),
+            }),
+        );
+    }
+    if let Some(blocker) = validate_role_sensitive_artifact_graph(graph) {
+        return target_topology_receipt("blocked", Vec::new(), Some(blocker));
+    }
+    let selected_indices = match selected_target_unit_indices(graph) {
+        Ok(indices) => indices,
+        Err(blocker) => return target_topology_receipt("blocked", Vec::new(), Some(blocker)),
+    };
+    let ordered_indices = match target_topology_execution_order(graph, &selected_indices) {
+        Ok(indices) => indices,
+        Err(blocker) => return target_topology_receipt("blocked", Vec::new(), Some(blocker)),
+    };
+    execute_target_topology_order(graph, options, ordered_indices)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9460,7 +11302,7 @@ struct HostDependencyTopologyPlan {
 fn rust_unit_indices_by_id(graph: &UnitDerivationGraphSummary) -> BTreeMap<String, usize> {
     let mut indices = BTreeMap::new();
     for (index, unit) in graph.derivations.iter().enumerate() {
-        indices.insert(unit.unit_id.clone(), index);
+        insert_btree_entry_with_bound(&mut indices, unit.unit_id.clone(), index, graph.derivations.len());
     }
     indices
 }
@@ -9471,6 +11313,8 @@ fn target_dependency_producer_index(
     unit_indices_by_id: &BTreeMap<String, usize>,
     lib_producers: &BTreeMap<String, usize>,
 ) -> Result<usize, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(producer_unit_id) = &dependency.producer_unit_id {
         let Some(index) = unit_indices_by_id.get(producer_unit_id).copied() else {
             return Err(RustUnitExecutionBlocker {
@@ -9509,12 +11353,14 @@ fn plan_host_dependency_topology(
     target_edges: &BTreeMap<usize, Vec<usize>>,
     graph: &UnitDerivationGraphSummary,
 ) -> Result<HostDependencyTopologyPlan, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let unit_indices_by_id = rust_unit_indices_by_id(graph);
     let mut target_dependency_indices = BTreeSet::new();
     let mut host_edges = BTreeMap::<usize, Vec<usize>>::new();
     for index in host_indices {
         let unit = &graph.derivations[*index];
-        let mut host_dependencies = Vec::new();
+        let mut host_dependencies = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
         for dependency in &unit.dependency_artifacts {
             if let Some(producer_unit_id) = &dependency.producer_unit_id {
                 let Some(producer_index) = unit_indices_by_id.get(producer_unit_id).copied() else {
@@ -9567,7 +11413,7 @@ fn plan_host_dependency_topology(
         }
         host_dependencies.sort_unstable();
         host_dependencies.dedup();
-        host_edges.insert(*index, host_dependencies);
+        insert_btree_entry_with_bound(&mut host_edges, *index, host_dependencies, graph.derivations.len());
     }
     Ok(HostDependencyTopologyPlan {
         target_dependency_indices,
@@ -9576,27 +11422,48 @@ fn plan_host_dependency_topology(
 }
 
 fn collect_target_dependencies(index: usize, edges: &BTreeMap<usize, Vec<usize>>, collected: &mut BTreeSet<usize>) {
-    if !collected.insert(index) {
-        return;
-    }
-    if let Some(deps) = edges.get(&index) {
-        for dep in deps {
-            collect_target_dependencies(*dep, edges, collected);
+    let edge_count = edges.values().fold(0usize, |count, dependencies| count.saturating_add(dependencies.len()));
+    let traversal_steps = edge_count.saturating_add(1);
+    let mut pending = Vec::with_capacity(traversal_steps);
+    pending.push(index);
+    for _ in 0..traversal_steps {
+        let Some(current) = pending.pop() else {
+            return;
+        };
+        if !collected.insert(current) {
+            continue;
+        }
+        if let Some(dependencies) = edges.get(&current) {
+            pending.extend(dependencies.iter().copied());
         }
     }
 }
 
+struct CombinedTopologyOrderInputs<'a> {
+    target_indices: &'a [usize],
+    host_indices: &'a [usize],
+    lib_producers: &'a BTreeMap<String, usize>,
+    host_producers: &'a BTreeMap<String, usize>,
+    proc_macro_producers: &'a BTreeMap<String, usize>,
+    target_edges: &'a BTreeMap<usize, Vec<usize>>,
+    graph: &'a UnitDerivationGraphSummary,
+}
+
 fn plan_combined_unit_topology_order(
-    target_indices: &[usize],
-    host_indices: &[usize],
-    lib_producers: &BTreeMap<String, usize>,
-    _host_producers: &BTreeMap<String, usize>,
-    proc_macro_producers: &BTreeMap<String, usize>,
-    target_edges: &BTreeMap<usize, Vec<usize>>,
-    graph: &UnitDerivationGraphSummary,
+    inputs: CombinedTopologyOrderInputs<'_>,
 ) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
-    let host_dependency_plan =
-        plan_host_dependency_topology(host_indices, lib_producers, proc_macro_producers, target_edges, graph)?;
+    debug_assert!(inputs.host_producers.len() <= inputs.graph.derivations.len());
+    let host_dependency_plan = plan_host_dependency_topology(
+        inputs.host_indices,
+        inputs.lib_producers,
+        inputs.proc_macro_producers,
+        inputs.target_edges,
+        inputs.graph,
+    )?;
+    let target_indices = inputs.target_indices;
+    let host_indices = inputs.host_indices;
+    let target_edges = inputs.target_edges;
+    let graph = inputs.graph;
     let mut combined_edges = target_edges.clone();
     for index in &host_dependency_plan.target_dependency_indices {
         debug_assert!(combined_edges.contains_key(index));
@@ -9642,20 +11509,7 @@ fn plan_combined_unit_topology_order(
         deps.dedup();
     }
 
-    let mut ordered_unit_indices = Vec::new();
-    let mut temporary = BTreeSet::new();
-    let mut permanent = BTreeSet::new();
-    for index in &participant_indices {
-        visit_target_topology_unit(
-            *index,
-            &combined_edges,
-            &mut temporary,
-            &mut permanent,
-            &mut ordered_unit_indices,
-            graph,
-        )?;
-    }
-    Ok(ordered_unit_indices)
+    topologically_order_units(&participant_indices, &combined_edges, graph)
 }
 
 fn combined_topology_participant_indices(
@@ -9698,6 +11552,8 @@ fn select_build_script_metadata_producer_index(
     producers: &BuildScriptMetadataProducerIndex,
     graph: &UnitDerivationGraphSummary,
 ) -> Result<usize, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(producer_unit_id) = &metadata_dependency.producer_unit_id {
         return producers.by_unit_id.get(producer_unit_id).copied().ok_or_else(|| RustUnitExecutionBlocker {
             class: "missing-build-script-metadata-producer".to_string(),
@@ -9739,8 +11595,10 @@ fn collapse_build_script_alias_producer_candidates(
     candidates: Vec<usize>,
     graph: &UnitDerivationGraphSummary,
 ) -> Vec<usize> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut alias_candidates_by_name = BTreeMap::<String, Vec<usize>>::new();
-    let mut collapsed_candidates = Vec::new();
+    let mut collapsed_candidates = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for index in candidates {
         let unit = &graph.derivations[index];
         if is_build_script_target_alias(&unit.target_name) {
@@ -9816,12 +11674,387 @@ fn host_artifact_producer_index(
     })
 }
 
+struct CombinedTopologyIndices {
+    host: Vec<usize>,
+    host_dependencies: Vec<usize>,
+    target: Vec<usize>,
+}
+
+struct CombinedTopologyProducers {
+    host: BTreeMap<String, usize>,
+    proc_macro: BTreeMap<String, usize>,
+    target_lib: BTreeMap<String, usize>,
+    host_dependency_lib: BTreeMap<String, usize>,
+}
+
+fn combined_topology_indices(
+    graph: &UnitDerivationGraphSummary,
+) -> Result<CombinedTopologyIndices, RustUnitExecutionBlocker> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    let host = graph
+        .derivations
+        .iter()
+        .enumerate()
+        .filter_map(|(index, unit)| is_supported_host_unit(unit).then_some(index))
+        .collect::<Vec<_>>();
+    let host_dependencies = graph
+        .derivations
+        .iter()
+        .enumerate()
+        .filter_map(|(index, unit)| is_supported_host_dependency_unit(unit).then_some(index))
+        .collect::<Vec<_>>();
+    let target = graph
+        .derivations
+        .iter()
+        .enumerate()
+        .filter_map(|(index, unit)| is_supported_target_unit(unit).then_some(index))
+        .collect::<Vec<_>>();
+    if target.is_empty() {
+        return Err(RustUnitExecutionBlocker {
+            class: "missing-supported-unit".to_string(),
+            message: "unit_derivation_graph does not contain supported target lib/bin units".to_string(),
+        });
+    }
+    Ok(CombinedTopologyIndices {
+        host,
+        host_dependencies,
+        target,
+    })
+}
+
+fn combined_topology_producers(
+    graph: &UnitDerivationGraphSummary,
+    indices: &CombinedTopologyIndices,
+) -> Result<CombinedTopologyProducers, RustUnitExecutionBlocker> {
+    debug_assert!(!indices.target.is_empty());
+    debug_assert!(indices.target.iter().all(|index| *index < graph.derivations.len()));
+    let mut host = BTreeMap::<String, usize>::new();
+    let mut proc_macro = BTreeMap::<String, usize>::new();
+    for index in &indices.host {
+        let unit = &graph.derivations[*index];
+        host.entry(unit.package_id.clone()).or_insert(*index);
+        if unit.target_kind == "proc-macro" {
+            proc_macro.entry(unit.package_id.clone()).or_insert(*index);
+        }
+    }
+    for index in &indices.target {
+        let unit = &graph.derivations[*index];
+        for artifact in &unit.consumed_host_artifacts {
+            if !host.contains_key(&artifact.package_id) {
+                return Err(RustUnitExecutionBlocker {
+                    class: "missing-host-artifact-producer".to_string(),
+                    message: format!(
+                        "no supported host producer unit for host artifact package {}",
+                        artifact.package_id
+                    ),
+                });
+            }
+        }
+    }
+    let target_lib = indices
+        .target
+        .iter()
+        .filter_map(|index| {
+            let unit = &graph.derivations[*index];
+            (unit.target_kind == "lib").then(|| (unit.package_id.clone(), *index))
+        })
+        .collect();
+    let host_dependency_lib = indices
+        .host_dependencies
+        .iter()
+        .filter_map(|index| {
+            let unit = &graph.derivations[*index];
+            (unit.target_kind == "lib").then(|| (unit.package_id.clone(), *index))
+        })
+        .collect();
+    Ok(CombinedTopologyProducers {
+        host,
+        proc_macro,
+        target_lib,
+        host_dependency_lib,
+    })
+}
+
+fn combined_topology_target_edges(
+    graph: &UnitDerivationGraphSummary,
+    indices: &CombinedTopologyIndices,
+    producers: &CombinedTopologyProducers,
+) -> Result<BTreeMap<usize, Vec<usize>>, RustUnitExecutionBlocker> {
+    debug_assert!(!indices.target.is_empty());
+    debug_assert!(indices.host_dependencies.iter().all(|index| *index < graph.derivations.len()));
+    let selected_targets = indices.target.iter().copied().collect::<BTreeSet<_>>();
+    let selected_host_dependencies = indices.host_dependencies.iter().copied().collect::<BTreeSet<_>>();
+    let unit_indices_by_id = rust_unit_indices_by_id(graph);
+    let mut edges = BTreeMap::<usize, Vec<usize>>::new();
+    for index in &indices.target {
+        let unit = &graph.derivations[*index];
+        let mut dependencies = Vec::with_capacity(unit.dependency_artifacts.len());
+        for dependency in &unit.dependency_artifacts {
+            let producer_index =
+                match target_dependency_producer_index(dependency, graph, &unit_indices_by_id, &producers.target_lib) {
+                    Ok(index) => index,
+                    Err(_blocker)
+                        if dependency.producer_unit_id.is_none()
+                            && producers.host.contains_key(&dependency.package_id) =>
+                    {
+                        continue;
+                    }
+                    Err(blocker) => return Err(blocker),
+                };
+            if selected_targets.contains(&producer_index) && producer_index != *index {
+                dependencies.push(producer_index);
+            }
+        }
+        dependencies.sort_unstable();
+        dependencies.dedup();
+        insert_btree_entry_with_bound(&mut edges, *index, dependencies, graph.derivations.len());
+    }
+    for index in &indices.host_dependencies {
+        let unit = &graph.derivations[*index];
+        let mut dependencies = Vec::with_capacity(unit.dependency_artifacts.len());
+        for dependency in &unit.dependency_artifacts {
+            let producer_index = target_dependency_producer_index(
+                dependency,
+                graph,
+                &unit_indices_by_id,
+                &producers.host_dependency_lib,
+            )?;
+            if selected_host_dependencies.contains(&producer_index) && producer_index != *index {
+                dependencies.push(producer_index);
+            }
+        }
+        dependencies.sort_unstable();
+        dependencies.dedup();
+        insert_btree_entry_with_bound(&mut edges, *index, dependencies, graph.derivations.len());
+    }
+    Ok(edges)
+}
+
+fn combined_topology_execution_order(
+    graph: &UnitDerivationGraphSummary,
+) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
+    let indices = combined_topology_indices(graph)?;
+    let producers = combined_topology_producers(graph, &indices)?;
+    let edges = combined_topology_target_edges(graph, &indices, &producers)?;
+    plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+        target_indices: &indices.target,
+        host_indices: &indices.host,
+        lib_producers: &producers.host_dependency_lib,
+        host_producers: &producers.host,
+        proc_macro_producers: &producers.proc_macro,
+        target_edges: &edges,
+        graph: graph,
+    })
+}
+
+#[derive(Default)]
+struct RustUnitTopologyExecutionState {
+    executions: Vec<RustUnitExecutionReceipt>,
+    metadata_runs: Vec<BuildScriptMetadataRunReceipt>,
+    target_artifacts: ProducedArtifactIndex,
+    host_dependency_artifacts: ProducedArtifactIndex,
+    host_artifacts: ProducedHostArtifactIndex,
+    proc_macro_artifacts: ProducedArtifactIndex,
+    build_script_metadata: ProducedBuildScriptMetadataIndex,
+}
+
+fn topology_unit_failed_blocker(
+    receipt: &RustUnitExecutionReceipt,
+    class: &str,
+    message: String,
+) -> Option<RustUnitExecutionBlocker> {
+    if receipt.execution_status == "success" {
+        return None;
+    }
+    Some(receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
+        class: class.to_string(),
+        message,
+    }))
+}
+
+struct TopologyUnitExecutionInputs<'a> {
+    graph: &'a UnitDerivationGraphSummary,
+    options: &'a RustUnitExecutionOptions,
+    unit: &'a RustUnitDerivationSummary,
+    state: &'a mut RustUnitTopologyExecutionState,
+}
+
+fn execute_host_dependency_topology_unit(
+    inputs: TopologyUnitExecutionInputs<'_>,
+) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(is_supported_host_dependency_unit(inputs.unit));
+    debug_assert!(!inputs.unit.unit_id.is_empty());
+    let mut executable = match bind_all_host_artifacts_with_index(inputs.unit, &inputs.state.host_artifacts) {
+        Ok(unit) => unit,
+        Err(blocker) => return Ok(Some(blocker)),
+    };
+    executable = match bind_all_build_script_metadata_with_index(&executable, &inputs.state.build_script_metadata) {
+        Ok(unit) => unit,
+        Err(blocker) => return Ok(Some(blocker)),
+    };
+    let mut dependency_artifacts = inputs.state.host_dependency_artifacts.clone();
+    dependency_artifacts.extend_from(&inputs.state.proc_macro_artifacts);
+    if !executable.dependency_artifacts.is_empty() {
+        executable = match bind_all_dependency_artifacts_with_index(&executable, &dependency_artifacts) {
+            Ok(unit) => unit,
+            Err(blocker) => return Ok(Some(blocker)),
+        };
+    }
+    let has_search_paths =
+        !inputs.unit.dependency_artifacts.is_empty() || !inputs.unit.consumed_host_artifacts.is_empty();
+    if has_search_paths
+        && let Err(blocker) =
+            append_selected_dependency_search_paths(&mut executable, inputs.graph, &dependency_artifacts)
+    {
+        return Ok(Some(blocker));
+    }
+    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    let blocker = topology_unit_failed_blocker(
+        &receipt,
+        "host-dependency-unit-failed",
+        format!("host dependency unit {} did not execute successfully", inputs.unit.unit_id),
+    );
+    inputs.state.executions.push(receipt);
+    if blocker.is_some() {
+        return Ok(blocker);
+    }
+    if inputs.unit.target_kind == "lib" {
+        match produced_library_artifact_path(&executable, inputs.options)? {
+            Ok(path) => inputs.state.host_dependency_artifacts.record_unit(inputs.unit, path),
+            Err(blocker) => return Ok(Some(blocker)),
+        }
+    }
+    Ok(None)
+}
+
+fn record_host_topology_outputs(
+    inputs: &mut TopologyUnitExecutionInputs<'_>,
+    executable: &RustUnitDerivationSummary,
+    output_path: PathBuf,
+) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(is_supported_host_unit(inputs.unit));
+    debug_assert!(!inputs.unit.unit_id.is_empty());
+    if inputs.unit.target_kind == "custom-build" {
+        match run_build_script_metadata(executable, inputs.options, &output_path)? {
+            Ok(metadata_run) => {
+                inputs
+                    .state
+                    .build_script_metadata
+                    .record_unit(inputs.unit, build_script_metadata_from_run(&metadata_run));
+                inputs.state.metadata_runs.push(metadata_run);
+            }
+            Err(blocker) => return Ok(Some(blocker)),
+        }
+    }
+    if inputs.unit.target_kind == "proc-macro" {
+        inputs.state.proc_macro_artifacts.record_unit(inputs.unit, output_path.clone());
+    }
+    inputs.state.host_artifacts.record_unit(inputs.unit, output_path);
+    Ok(None)
+}
+
+fn execute_host_topology_unit(
+    mut inputs: TopologyUnitExecutionInputs<'_>,
+) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(is_supported_host_unit(inputs.unit));
+    debug_assert!(!inputs.unit.unit_id.is_empty());
+    let mut executable = match bind_all_host_artifacts_with_index(inputs.unit, &inputs.state.host_artifacts) {
+        Ok(unit) => unit,
+        Err(blocker) => return Ok(Some(blocker)),
+    };
+    let mut dependency_artifacts = inputs.state.host_dependency_artifacts.clone();
+    dependency_artifacts.extend_from(&inputs.state.proc_macro_artifacts);
+    if !executable.dependency_artifacts.is_empty() {
+        executable = match bind_all_dependency_artifacts_with_index(&executable, &dependency_artifacts) {
+            Ok(unit) => unit,
+            Err(blocker) => return Ok(Some(blocker)),
+        };
+    }
+    let has_search_paths =
+        !inputs.unit.dependency_artifacts.is_empty() || !inputs.unit.consumed_host_artifacts.is_empty();
+    if has_search_paths
+        && let Err(blocker) =
+            append_selected_dependency_search_paths(&mut executable, inputs.graph, &dependency_artifacts)
+    {
+        return Ok(Some(blocker));
+    }
+    executable = match bind_all_build_script_metadata_with_index(&executable, &inputs.state.build_script_metadata) {
+        Ok(unit) => unit,
+        Err(blocker) => return Ok(Some(blocker)),
+    };
+    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    let blocker = topology_unit_failed_blocker(
+        &receipt,
+        "host-unit-failed",
+        format!("host unit {} did not execute successfully", inputs.unit.unit_id),
+    );
+    inputs.state.executions.push(receipt);
+    if blocker.is_some() {
+        return Ok(blocker);
+    }
+    match produced_host_artifact_path(inputs.unit, inputs.options)? {
+        Ok(path) => record_host_topology_outputs(&mut inputs, &executable, path),
+        Err(blocker) => Ok(Some(blocker)),
+    }
+}
+
+fn execute_target_topology_unit(
+    inputs: TopologyUnitExecutionInputs<'_>,
+) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(is_supported_target_unit(inputs.unit));
+    debug_assert!(!inputs.unit.unit_id.is_empty());
+    let mut executable = match bind_all_host_artifacts_with_index(inputs.unit, &inputs.state.host_artifacts) {
+        Ok(unit) => unit,
+        Err(blocker) => return Ok(Some(blocker)),
+    };
+    executable = match bind_all_build_script_metadata_with_index(&executable, &inputs.state.build_script_metadata) {
+        Ok(unit) => unit,
+        Err(blocker) => return Ok(Some(blocker)),
+    };
+    let mut dependency_artifacts = inputs.state.target_artifacts.clone();
+    dependency_artifacts.extend_from(&inputs.state.proc_macro_artifacts);
+    if !executable.dependency_artifacts.is_empty() {
+        executable = match bind_all_dependency_artifacts_with_index(&executable, &dependency_artifacts) {
+            Ok(unit) => unit,
+            Err(blocker) => return Ok(Some(blocker)),
+        };
+    }
+    let has_search_paths =
+        !inputs.unit.dependency_artifacts.is_empty() || !inputs.unit.consumed_host_artifacts.is_empty();
+    if has_search_paths
+        && let Err(blocker) =
+            append_selected_dependency_search_paths(&mut executable, inputs.graph, &dependency_artifacts)
+    {
+        return Ok(Some(blocker));
+    }
+    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    let blocker = topology_unit_failed_blocker(
+        &receipt,
+        "target-unit-failed",
+        format!("target unit {} did not execute successfully", inputs.unit.unit_id),
+    );
+    inputs.state.executions.push(receipt);
+    if blocker.is_some() {
+        return Ok(blocker);
+    }
+    if inputs.unit.target_kind == "lib" {
+        match produced_library_artifact_path(&executable, inputs.options)? {
+            Ok(path) => inputs.state.target_artifacts.record_unit(inputs.unit, path),
+            Err(blocker) => return Ok(Some(blocker)),
+        }
+    }
+    Ok(None)
+}
+
 pub(crate) fn execute_rust_unit_topology(
     native_registry_sources: &NativeRegistrySourcePlanningSummary,
     native_host_graph: &NativeHostUnitGraphPlanningSummary,
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitTopologyExecutionReceipt, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
     if let Some(blocker) = validate_native_registry_topology_inputs(native_registry_sources, graph) {
         return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }
@@ -9843,578 +12076,303 @@ pub(crate) fn execute_rust_unit_topology(
     if let Some(blocker) = validate_role_sensitive_artifact_graph(graph) {
         return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }
-
-    let host_indices = graph
-        .derivations
-        .iter()
-        .enumerate()
-        .filter_map(|(index, unit)| is_supported_host_unit(unit).then_some(index))
-        .collect::<Vec<_>>();
-    let host_dependency_indices = graph
-        .derivations
-        .iter()
-        .enumerate()
-        .filter_map(|(index, unit)| is_supported_host_dependency_unit(unit).then_some(index))
-        .collect::<Vec<_>>();
-    let target_indices = graph
-        .derivations
-        .iter()
-        .enumerate()
-        .filter_map(|(index, unit)| is_supported_target_unit(unit).then_some(index))
-        .collect::<Vec<_>>();
-    if target_indices.is_empty() {
-        return topology_receipt(
-            "blocked",
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "missing-supported-unit".to_string(),
-                message: "unit_derivation_graph does not contain supported target lib/bin units".to_string(),
-            }),
-        );
-    }
-
-    let mut host_producers = BTreeMap::<String, usize>::new();
-    let mut proc_macro_producers = BTreeMap::<String, usize>::new();
-    for index in &host_indices {
-        let unit = &graph.derivations[*index];
-        host_producers.entry(unit.package_id.clone()).or_insert(*index);
-        if unit.target_kind == "proc-macro" {
-            proc_macro_producers.entry(unit.package_id.clone()).or_insert(*index);
-        }
-    }
-    for index in &target_indices {
-        let unit = &graph.derivations[*index];
-        for host_artifact in &unit.consumed_host_artifacts {
-            if !host_producers.contains_key(&host_artifact.package_id) {
-                return topology_receipt(
-                    "blocked",
-                    Vec::new(),
-                    Vec::new(),
-                    Some(RustUnitExecutionBlocker {
-                        class: "missing-host-artifact-producer".to_string(),
-                        message: format!(
-                            "no supported host producer unit for host artifact package {}",
-                            host_artifact.package_id
-                        ),
-                    }),
-                );
-            }
-        }
-    }
-
-    let selected_set = target_indices.iter().copied().collect::<BTreeSet<_>>();
-    let host_dependency_set = host_dependency_indices.iter().copied().collect::<BTreeSet<_>>();
-    let unit_indices_by_id = rust_unit_indices_by_id(graph);
-    let mut target_lib_producers = BTreeMap::new();
-    for index in &target_indices {
-        let unit = &graph.derivations[*index];
-        if unit.target_kind == "lib" {
-            target_lib_producers.entry(unit.package_id.clone()).or_insert(*index);
-        }
-    }
-    let mut host_dependency_lib_producers = BTreeMap::new();
-    for index in &host_dependency_indices {
-        let unit = &graph.derivations[*index];
-        host_dependency_lib_producers.entry(unit.package_id.clone()).or_insert(*index);
-    }
-    let mut edges = BTreeMap::<usize, Vec<usize>>::new();
-    for index in &target_indices {
-        let unit = &graph.derivations[*index];
-        let mut deps = Vec::new();
-        for dependency in &unit.dependency_artifacts {
-            let producer_index =
-                match target_dependency_producer_index(dependency, graph, &unit_indices_by_id, &target_lib_producers) {
-                    Ok(index) => index,
-                    Err(blocker) => {
-                        if dependency.producer_unit_id.is_none() && host_producers.contains_key(&dependency.package_id)
-                        {
-                            continue;
-                        }
-                        return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
-                    }
-                };
-            if selected_set.contains(&producer_index) && producer_index != *index {
-                deps.push(producer_index);
-            }
-        }
-        deps.sort_unstable();
-        deps.dedup();
-        edges.insert(*index, deps);
-    }
-    for index in &host_dependency_indices {
-        let unit = &graph.derivations[*index];
-        let mut deps = Vec::new();
-        for dependency in &unit.dependency_artifacts {
-            let producer_index = match target_dependency_producer_index(
-                dependency,
-                graph,
-                &unit_indices_by_id,
-                &host_dependency_lib_producers,
-            ) {
-                Ok(index) => index,
-                Err(blocker) => return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
-            };
-            if host_dependency_set.contains(&producer_index) && producer_index != *index {
-                deps.push(producer_index);
-            }
-        }
-        deps.sort_unstable();
-        deps.dedup();
-        edges.insert(*index, deps);
-    }
-
-    let ordered_unit_indices = match plan_combined_unit_topology_order(
-        &target_indices,
-        &host_indices,
-        &host_dependency_lib_producers,
-        &host_producers,
-        &proc_macro_producers,
-        &edges,
-        graph,
-    ) {
-        Ok(order) => order,
+    let ordered_indices = match combined_topology_execution_order(graph) {
+        Ok(indices) => indices,
         Err(blocker) => return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
     };
-
-    let mut executions = Vec::new();
-    let mut build_script_metadata_runs = Vec::new();
-    let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
-    let mut produced_target_artifact_index = ProducedArtifactIndex::default();
-    let mut produced_host_dependency_artifact_index = ProducedArtifactIndex::default();
-    let mut produced_host_artifacts = ProducedHostArtifactIndex::default();
-    let mut produced_proc_macro_artifacts = BTreeMap::<String, PathBuf>::new();
-    let mut produced_proc_macro_artifact_index = ProducedArtifactIndex::default();
-    let mut produced_build_script_metadata = ProducedBuildScriptMetadataIndex::default();
-    for index in ordered_unit_indices {
+    let mut state = RustUnitTopologyExecutionState::default();
+    state.executions.reserve(ordered_indices.len());
+    for index in ordered_indices {
         let unit = &graph.derivations[index];
-        if is_supported_host_dependency_unit(unit) {
-            let mut executable_unit = match bind_all_host_artifacts_with_index(unit, &produced_host_artifacts) {
-                Ok(bound) => bound,
-                Err(blocker) => {
-                    return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                }
-            };
-            executable_unit =
-                match bind_all_build_script_metadata_with_index(&executable_unit, &produced_build_script_metadata) {
-                    Ok(bound) => bound,
-                    Err(blocker) => {
-                        return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                    }
-                };
-            let mut produced_dependency_artifacts = produced_host_dependency_artifact_index.clone();
-            produced_dependency_artifacts.extend_from(&produced_proc_macro_artifact_index);
-            if !executable_unit.dependency_artifacts.is_empty() {
-                match bind_all_dependency_artifacts_with_index(&executable_unit, &produced_dependency_artifacts) {
-                    Ok(bound) => executable_unit = bound,
-                    Err(blocker) => {
-                        return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                    }
-                }
-            }
-            if (!unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty())
-                && let Err(blocker) =
-                    append_selected_dependency_search_paths(&mut executable_unit, graph, &produced_dependency_artifacts)
-            {
-                return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-            }
-            let receipt = execute_rust_unit(&executable_unit, options)?;
-            if receipt.execution_status != "success" {
-                let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-                    class: "host-dependency-unit-failed".to_string(),
-                    message: format!("host dependency unit {} did not execute successfully", unit.unit_id),
-                });
-                executions.push(receipt);
-                return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-            }
-            if unit.target_kind == "lib" {
-                match produced_library_artifact_path(&executable_unit, options)? {
-                    Ok(path) => {
-                        produced_host_dependency_artifact_index.record_unit(unit, path);
-                    }
-                    Err(blocker) => {
-                        executions.push(receipt);
-                        return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                    }
-                }
-            }
-            executions.push(receipt);
-            continue;
-        }
-
-        if is_supported_host_unit(unit) {
-            let mut executable_unit = match bind_all_host_artifacts_with_index(unit, &produced_host_artifacts) {
-                Ok(bound) => bound,
-                Err(blocker) => {
-                    return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                }
-            };
-            let mut produced_dependency_artifacts = produced_host_dependency_artifact_index.clone();
-            produced_dependency_artifacts.extend_from(&produced_proc_macro_artifact_index);
-            if !executable_unit.dependency_artifacts.is_empty() {
-                match bind_all_dependency_artifacts_with_index(&executable_unit, &produced_dependency_artifacts) {
-                    Ok(bound) => executable_unit = bound,
-                    Err(blocker) => {
-                        return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                    }
-                }
-            }
-            if (!unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty())
-                && let Err(blocker) =
-                    append_selected_dependency_search_paths(&mut executable_unit, graph, &produced_dependency_artifacts)
-            {
-                return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-            }
-            executable_unit =
-                match bind_all_build_script_metadata_with_index(&executable_unit, &produced_build_script_metadata) {
-                    Ok(bound) => bound,
-                    Err(blocker) => {
-                        return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                    }
-                };
-            let receipt = execute_rust_unit(&executable_unit, options)?;
-            if receipt.execution_status != "success" {
-                let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-                    class: "host-unit-failed".to_string(),
-                    message: format!("host unit {} did not execute successfully", unit.unit_id),
-                });
-                executions.push(receipt);
-                return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-            }
-            match produced_host_artifact_path(unit, options)? {
-                Ok(path) => {
-                    if unit.target_kind == "custom-build" {
-                        match run_build_script_metadata(&executable_unit, options, &path)? {
-                            Ok(metadata_run) => {
-                                produced_build_script_metadata
-                                    .record_unit(unit, build_script_metadata_from_run(&metadata_run));
-                                build_script_metadata_runs.push(metadata_run);
-                            }
-                            Err(blocker) => {
-                                executions.push(receipt);
-                                return topology_receipt(
-                                    "blocked",
-                                    executions,
-                                    build_script_metadata_runs,
-                                    Some(blocker),
-                                );
-                            }
-                        }
-                    }
-                    if unit.target_kind == "proc-macro" {
-                        produced_proc_macro_artifact_index.record_unit(unit, path.clone());
-                        produced_proc_macro_artifacts.insert(unit.package_id.clone(), path.clone());
-                    }
-                    produced_host_artifacts.record_unit(unit, path);
-                }
-                Err(blocker) => {
-                    executions.push(receipt);
-                    return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                }
-            }
-            executions.push(receipt);
-            continue;
-        }
-
-        if is_supported_target_unit(unit) {
-            let mut executable_unit = match bind_all_host_artifacts_with_index(unit, &produced_host_artifacts) {
-                Ok(bound) => bound,
-                Err(blocker) => {
-                    return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                }
-            };
-            executable_unit =
-                match bind_all_build_script_metadata_with_index(&executable_unit, &produced_build_script_metadata) {
-                    Ok(bound) => bound,
-                    Err(blocker) => {
-                        return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                    }
-                };
-            let mut produced_dependency_artifacts = produced_target_artifact_index.clone();
-            produced_dependency_artifacts.extend_from(&produced_proc_macro_artifact_index);
-            if !executable_unit.dependency_artifacts.is_empty() {
-                match bind_all_dependency_artifacts_with_index(&executable_unit, &produced_dependency_artifacts) {
-                    Ok(bound) => executable_unit = bound,
-                    Err(blocker) => {
-                        return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                    }
-                }
-            }
-            if (!unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty())
-                && let Err(blocker) =
-                    append_selected_dependency_search_paths(&mut executable_unit, graph, &produced_dependency_artifacts)
-            {
-                return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-            }
-            let receipt = execute_rust_unit(&executable_unit, options)?;
-            if receipt.execution_status != "success" {
-                let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-                    class: "target-unit-failed".to_string(),
-                    message: format!("target unit {} did not execute successfully", unit.unit_id),
-                });
-                executions.push(receipt);
-                return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-            }
-            if unit.target_kind == "lib" {
-                match produced_library_artifact_path(&executable_unit, options)? {
-                    Ok(path) => {
-                        produced_target_artifact_index.record_unit(unit, path.clone());
-                        produced_target_artifacts.insert(unit.package_id.clone(), path);
-                    }
-                    Err(blocker) => {
-                        executions.push(receipt);
-                        return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                    }
-                }
-            }
-            executions.push(receipt);
+        let inputs = TopologyUnitExecutionInputs {
+            graph,
+            options,
+            unit,
+            state: &mut state,
+        };
+        let blocker = if is_supported_host_dependency_unit(unit) {
+            execute_host_dependency_topology_unit(inputs)?
+        } else if is_supported_host_unit(unit) {
+            execute_host_topology_unit(inputs)?
+        } else if is_supported_target_unit(unit) {
+            execute_target_topology_unit(inputs)?
+        } else {
+            None
+        };
+        if let Some(blocker) = blocker {
+            return topology_receipt("blocked", state.executions, state.metadata_runs, Some(blocker));
         }
     }
-
-    topology_receipt("success", executions, build_script_metadata_runs, None)
+    topology_receipt("success", state.executions, state.metadata_runs, None)
 }
 
-pub(crate) fn execute_native_rust_dev_dependency_test_topology(
-    native_package_target_planning: &NativePackageTargetPlanningSummary,
-    graph: &UnitDerivationGraphSummary,
-    options: &RustUnitExecutionOptions,
-) -> Result<RustDevDependencyTestTopologyExecutionReceipt, RunError> {
-    if !native_package_target_planning.ready {
-        return dev_dependency_test_topology_receipt(
-            "blocked",
-            None,
-            None,
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "dev-dependency-test-planning-not-ready".to_string(),
-                message: "native_rust_dev_dependency_test_topology_execution requires ready native package/dev-dependency planning evidence".to_string(),
-            }),
-        );
-    }
-    if !graph.ready {
-        return dev_dependency_test_topology_receipt(
-            "blocked",
-            None,
-            None,
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "unit-derivation-graph-blocked".to_string(),
-                message: "unit_derivation_graph is not ready; resolve planning blockers before dev-dependency test topology execution".to_string(),
-            }),
-        );
-    }
+struct DevDependencyTestPlan<'a> {
+    package: &'a NativePackagePlanningSummary,
+    test_name: String,
+    test_source: PathBuf,
+}
 
-    let candidate_packages = native_package_target_planning
-        .packages
-        .iter()
-        .filter(|package| !package.dev_dependencies.is_empty())
-        .collect::<Vec<_>>();
-    if candidate_packages.len() != 1 {
-        return dev_dependency_test_topology_receipt(
-            "blocked",
-            None,
-            None,
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
+struct DevDependencyTestPlanFailure {
+    package_id: Option<String>,
+    test_name: Option<String>,
+    dependency_names: Vec<String>,
+    blocker: RustUnitExecutionBlocker,
+}
+
+fn dev_dependency_names(package: &NativePackagePlanningSummary) -> Vec<String> {
+    package.dev_dependencies.iter().map(|dependency| dependency.name.clone()).collect()
+}
+
+fn dev_dependency_test_package(
+    planning: &NativePackageTargetPlanningSummary,
+) -> Result<&NativePackagePlanningSummary, DevDependencyTestPlanFailure> {
+    let candidate_packages =
+        planning.packages.iter().filter(|package| !package.dev_dependencies.is_empty()).collect::<Vec<_>>();
+    if candidate_packages.len() != UNIQUE_CANDIDATE_COUNT {
+        return Err(DevDependencyTestPlanFailure {
+            package_id: None,
+            test_name: None,
+            dependency_names: Vec::new(),
+            blocker: RustUnitExecutionBlocker {
                 class: "ambiguous-dev-dependency-test-topology".to_string(),
                 message: format!(
                     "expected exactly one package with dev-dependencies for bounded execution, found {}",
                     candidate_packages.len()
                 ),
-            }),
-        );
+            },
+        });
     }
-    let package = candidate_packages[0];
+    Ok(candidate_packages[0])
+}
+
+fn native_dev_dependency_test_plan(
+    planning: &NativePackageTargetPlanningSummary,
+) -> Result<DevDependencyTestPlan<'_>, DevDependencyTestPlanFailure> {
+    debug_assert!(planning.ready);
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    let package = dev_dependency_test_package(planning)?;
+    let dependency_names = dev_dependency_names(package);
     let manifest_path = Path::new(&package.manifest_path);
-    let source_root = manifest_path
-        .parent()
-        .ok_or_else(|| RunError::Internal(format!("package manifest path has no parent: {}", package.manifest_path)))?;
-    let manifest = match read_native_manifest(manifest_path) {
-        Ok(manifest) => manifest,
-        Err(message) => {
-            return dev_dependency_test_topology_receipt(
-                "blocked",
-                Some(package.package_id.clone()),
-                None,
-                package.dev_dependencies.iter().map(|dep| dep.name.clone()).collect(),
-                Vec::new(),
-                Some(RustUnitExecutionBlocker {
-                    class: "unreadable-test-manifest".to_string(),
-                    message,
-                }),
-            );
-        }
-    };
-    let supported_tests = manifest.test.iter().filter(|test| !test.harness).collect::<Vec<_>>();
-    if supported_tests.len() != 1 {
-        return dev_dependency_test_topology_receipt(
-            "blocked",
-            Some(package.package_id.clone()),
-            None,
-            package.dev_dependencies.iter().map(|dep| dep.name.clone()).collect(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
+    let source_root = manifest_path.parent().ok_or_else(|| DevDependencyTestPlanFailure {
+        package_id: Some(package.package_id.clone()),
+        test_name: None,
+        dependency_names: dependency_names.clone(),
+        blocker: RustUnitExecutionBlocker {
+            class: "invalid-test-manifest-path".to_string(),
+            message: format!("package manifest path has no parent: {}", package.manifest_path),
+        },
+    })?;
+    let manifest = read_native_manifest(manifest_path).map_err(|message| DevDependencyTestPlanFailure {
+        package_id: Some(package.package_id.clone()),
+        test_name: None,
+        dependency_names: dependency_names.clone(),
+        blocker: RustUnitExecutionBlocker {
+            class: "unreadable-test-manifest".to_string(),
+            message,
+        },
+    })?;
+    let eligible_tests = manifest.test.iter().filter(|test| !test.harness).collect::<Vec<_>>();
+    if eligible_tests.len() != UNIQUE_CANDIDATE_COUNT {
+        return Err(DevDependencyTestPlanFailure {
+            package_id: Some(package.package_id.clone()),
+            test_name: None,
+            dependency_names,
+            blocker: RustUnitExecutionBlocker {
                 class: "unsupported-cargo-test-harness".to_string(),
                 message: "bounded dev-dependency test execution requires exactly one explicit [[test]] target with harness = false".to_string(),
-            }),
-        );
+            },
+        });
     }
-    let test = supported_tests[0];
-    let test_name = test.name.as_deref().unwrap_or("dev_dependency_test");
-    let test_source = source_root.join(test.path.as_deref().unwrap_or(&format!("tests/{test_name}.rs")));
+    let test = eligible_tests[0];
+    let test_name = test.name.clone().unwrap_or_else(|| "dev_dependency_test".to_string());
+    let default_test_path = format!("tests/{test_name}.rs");
+    let test_source = source_root.join(test.path.as_deref().unwrap_or(&default_test_path));
     if !test_source.is_file() {
-        return dev_dependency_test_topology_receipt(
-            "blocked",
-            Some(package.package_id.clone()),
-            Some(test_name.to_string()),
-            package.dev_dependencies.iter().map(|dep| dep.name.clone()).collect(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
+        return Err(DevDependencyTestPlanFailure {
+            package_id: Some(package.package_id.clone()),
+            test_name: Some(test_name),
+            dependency_names,
+            blocker: RustUnitExecutionBlocker {
                 class: "missing-test-unit-derivation".to_string(),
                 message: format!("declared test target source is not readable: {}", test_source.display()),
-            }),
-        );
+            },
+        });
     }
+    Ok(DevDependencyTestPlan {
+        package,
+        test_name,
+        test_source,
+    })
+}
 
-    let packages_by_manifest = native_package_target_planning
+#[derive(Default)]
+struct DevDependencyExecutionState {
+    executions: Vec<RustUnitExecutionReceipt>,
+    produced_artifacts: BTreeMap<String, PathBuf>,
+    dependency_artifacts: Vec<RustDependencyArtifact>,
+    package_ids: Vec<String>,
+    blocker: Option<RustUnitExecutionBlocker>,
+}
+
+struct DevDependencyProducerInputs<'a> {
+    graph: &'a UnitDerivationGraphSummary,
+    options: &'a RustUnitExecutionOptions,
+    dependency: &'a NativePathDependencySummary,
+    package: &'a NativePackagePlanningSummary,
+    state: &'a mut DevDependencyExecutionState,
+}
+
+fn execute_dev_dependency_producer(
+    inputs: DevDependencyProducerInputs<'_>,
+) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(!inputs.dependency.name.is_empty());
+    debug_assert!(!inputs.package.package_id.is_empty());
+    let producer = match inputs
+        .graph
+        .derivations
+        .iter()
+        .find(|unit| unit.package_id == inputs.package.package_id && unit.target_kind == "lib" && unit.mode == "build")
+        .cloned()
+    {
+        Some(producer) => producer,
+        None => match dev_dependency_lib_derivation(inputs.package, &inputs.dependency.name) {
+            Ok(producer) => producer,
+            Err(blocker) => return Ok(Some(blocker)),
+        },
+    };
+    let executable = bind_all_dependency_artifacts(&producer, &inputs.state.produced_artifacts)?;
+    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    let blocker = topology_unit_failed_blocker(
+        &receipt,
+        "dev-dependency-producer-failed",
+        format!("dev dependency producer {} did not execute successfully", producer.unit_id),
+    );
+    inputs.state.executions.push(receipt);
+    if blocker.is_some() {
+        return Ok(blocker);
+    }
+    let path = match produced_library_artifact_path(&executable, inputs.options)? {
+        Ok(path) => path,
+        Err(blocker) => return Ok(Some(blocker)),
+    };
+    insert_btree_entry_with_bound(
+        &mut inputs.state.produced_artifacts,
+        producer.package_id.clone(),
+        path,
+        inputs.graph.derivations.len(),
+    );
+    inputs.state.dependency_artifacts.push(RustDependencyArtifact {
+        package_id: producer.package_id.clone(),
+        name: inputs.dependency.name.clone(),
+        producer_unit_id: Some(producer.unit_id),
+        artifact: format!("artifact:{}:{}", producer.package_id, inputs.dependency.name),
+    });
+    inputs.state.package_ids.push(producer.package_id);
+    Ok(None)
+}
+
+fn execute_dev_dependency_producers(
+    plan: &DevDependencyTestPlan<'_>,
+    planning: &NativePackageTargetPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<DevDependencyExecutionState, RunError> {
+    debug_assert!(!plan.package.dev_dependencies.is_empty());
+    debug_assert!(planning.ready);
+    let packages_by_manifest = planning
         .packages
         .iter()
         .map(|candidate| (normalize_path_string(Path::new(&candidate.manifest_path)), candidate))
         .collect::<BTreeMap<_, _>>();
-    let mut executions = Vec::new();
-    let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
-    let mut dependency_artifacts = Vec::new();
-    let mut dev_dependency_packages = Vec::new();
-
-    for dev_dependency in &package.dev_dependencies {
-        let Some(dev_package) =
-            packages_by_manifest.get(&normalize_path_string(Path::new(&dev_dependency.manifest_path)))
+    let mut state = DevDependencyExecutionState::default();
+    state.executions.reserve(plan.package.dev_dependencies.len());
+    for dependency in &plan.package.dev_dependencies {
+        let Some(package) = packages_by_manifest.get(&normalize_path_string(Path::new(&dependency.manifest_path)))
         else {
-            return dev_dependency_test_topology_receipt(
-                "blocked",
-                Some(package.package_id.clone()),
-                Some(test_name.to_string()),
-                dev_dependency_packages,
-                executions,
-                Some(RustUnitExecutionBlocker {
-                    class: "missing-dev-dependency-source".to_string(),
-                    message: format!("dev dependency `{}` has no native package source facts", dev_dependency.name),
-                }),
-            );
-        };
-        let producer = match graph
-            .derivations
-            .iter()
-            .find(|unit| unit.package_id == dev_package.package_id && unit.target_kind == "lib" && unit.mode == "build")
-            .cloned()
-        {
-            Some(producer) => producer,
-            None => match dev_dependency_lib_derivation(dev_package, &dev_dependency.name) {
-                Ok(producer) => producer,
-                Err(blocker) => {
-                    return dev_dependency_test_topology_receipt(
-                        "blocked",
-                        Some(package.package_id.clone()),
-                        Some(test_name.to_string()),
-                        dev_dependency_packages,
-                        executions,
-                        Some(blocker),
-                    );
-                }
-            },
-        };
-        let executable_producer = bind_all_dependency_artifacts(&producer, &produced_target_artifacts)?;
-        let receipt = execute_rust_unit(&executable_producer, options)?;
-        if receipt.execution_status != "success" {
-            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-                class: "dev-dependency-producer-failed".to_string(),
-                message: format!("dev dependency producer {} did not execute successfully", producer.unit_id),
+            state.blocker = Some(RustUnitExecutionBlocker {
+                class: "missing-dev-dependency-source".to_string(),
+                message: format!("dev dependency `{}` has no native package source facts", dependency.name),
             });
-            executions.push(receipt);
-            return dev_dependency_test_topology_receipt(
-                "blocked",
-                Some(package.package_id.clone()),
-                Some(test_name.to_string()),
-                dev_dependency_packages,
-                executions,
-                Some(blocker),
-            );
+            break;
+        };
+        if let Some(blocker) = execute_dev_dependency_producer(DevDependencyProducerInputs {
+            graph,
+            options,
+            dependency,
+            package,
+            state: &mut state,
+        })? {
+            state.blocker = Some(blocker);
+            break;
         }
-        match produced_library_artifact_path(&executable_producer, options)? {
-            Ok(path) => {
-                produced_target_artifacts.insert(producer.package_id.clone(), path);
-            }
-            Err(blocker) => {
-                executions.push(receipt);
-                return dev_dependency_test_topology_receipt(
-                    "blocked",
-                    Some(package.package_id.clone()),
-                    Some(test_name.to_string()),
-                    dev_dependency_packages,
-                    executions,
-                    Some(blocker),
-                );
-            }
-        }
-        dependency_artifacts.push(RustDependencyArtifact {
-            package_id: producer.package_id.clone(),
-            name: dev_dependency.name.clone(),
-            producer_unit_id: Some(producer.unit_id.clone()),
-            artifact: format!("artifact:{}:{}", producer.package_id, dev_dependency.name),
-        });
-        dev_dependency_packages.push(producer.package_id.clone());
-        executions.push(receipt);
     }
-    dependency_artifacts.sort();
-    dependency_artifacts.dedup();
-    dev_dependency_packages.sort();
-    dev_dependency_packages.dedup();
+    state.dependency_artifacts.sort();
+    state.dependency_artifacts.dedup();
+    state.package_ids.sort();
+    state.package_ids.dedup();
+    Ok(state)
+}
 
+fn dev_dependency_state_blocker(state: &mut DevDependencyExecutionState) -> Option<RustUnitExecutionBlocker> {
+    state.blocker.take()
+}
+
+fn dev_dependency_test_rustc_args(
+    plan: &DevDependencyTestPlan<'_>,
+    dependency_artifacts: &[RustDependencyArtifact],
+) -> (Vec<String>, String) {
+    debug_assert!(!plan.test_name.is_empty());
+    debug_assert!(plan.test_source.is_file());
     let mut args = vec![
         "--crate-name".to_string(),
-        rust_crate_name(test_name),
+        rust_crate_name(&plan.test_name),
         "--edition".to_string(),
-        native_package_test_edition(package),
-        normalize_path_string(&test_source),
+        native_package_test_edition(plan.package),
+        normalize_path_string(&plan.test_source),
         "--emit=link".to_string(),
         "--crate-type".to_string(),
         "bin".to_string(),
     ];
     if let Some(linker) = resolve_tool_path("cc") {
-        args.push("-C".to_string());
+        args.push(RUSTC_CODEGEN_OPTION_FLAG.to_string());
         args.push(format!("linker={}", normalize_path_string(&linker)));
     }
-    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(
-        &package.package_id,
-        test_name,
-        "test",
-        "test",
-        &package.source_digest,
-        &[],
-        &["bin".to_string()],
-    );
+    let crate_types = ["bin".to_string()];
+    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
+        package_id: &plan.package.package_id,
+        target_name: &plan.test_name,
+        target_kind: "test",
+        mode: "test",
+        source_digest: &plan.package.source_digest,
+        selected_features: &[],
+        crate_types: &crate_types,
+    });
     append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
-    for dependency in &dependency_artifacts {
-        args.push("--extern".to_string());
+    for dependency in dependency_artifacts {
+        args.push(RUSTC_EXTERN_FLAG.to_string());
         args.push(format!("{}={}", dependency.name, dependency.artifact));
     }
-    let unit_id = format!("native-dev-dependency-test:{}:{}", package.package_id, test_name);
-    let mut env = BTreeMap::new();
-    env.insert("CRATE_KIND".to_string(), "test".to_string());
-    env.insert("MODE".to_string(), "test".to_string());
-    env.insert("PACKAGE_ID".to_string(), package.package_id.clone());
-    env.insert("PROFILE".to_string(), DEFAULT_CARGO_PROFILE.to_string());
-    let mut inputs = vec![format!("source:{}:{}", package.package_id, package.source_digest.value)];
-    inputs.extend(dependency_artifacts.iter().map(|dependency| dependency.artifact.clone()));
-    inputs.sort();
-    inputs.dedup();
-    let mut test_unit = RustUnitDerivationSummary {
-        unit_id: unit_id.clone(),
-        package_id: package.package_id.clone(),
-        target_name: test_name.to_string(),
+    (args, rustc_metadata_hash)
+}
+
+fn dev_dependency_test_unit(
+    plan: &DevDependencyTestPlan<'_>,
+    state: &DevDependencyExecutionState,
+) -> RustUnitDerivationSummary {
+    debug_assert!(!plan.test_name.is_empty());
+    debug_assert!(!state.dependency_artifacts.is_empty());
+    let (args, rustc_metadata_hash) = dev_dependency_test_rustc_args(plan, &state.dependency_artifacts);
+    let unit_id = format!("native-dev-dependency-test:{}:{}", plan.package.package_id, plan.test_name);
+    let env = BTreeMap::from([
+        ("CRATE_KIND".to_string(), "test".to_string()),
+        ("MODE".to_string(), "test".to_string()),
+        ("PACKAGE_ID".to_string(), plan.package.package_id.clone()),
+        ("PROFILE".to_string(), DEFAULT_CARGO_PROFILE.to_string()),
+    ]);
+    RustUnitDerivationSummary {
+        unit_id,
+        package_id: plan.package.package_id.clone(),
+        target_name: plan.test_name.clone(),
         target_kind: "test".to_string(),
         execution_kind: TARGET_EXECUTION_KIND.to_string(),
         selected_triple: host_target_triple(),
@@ -10422,51 +12380,344 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
         crate_types: vec!["bin".to_string()],
         mode: "test".to_string(),
         profile: DEFAULT_CARGO_PROFILE.to_string(),
-        source_digest: package.source_digest.clone(),
-        dependency_artifacts,
+        source_digest: plan.package.source_digest.clone(),
+        dependency_artifacts: state.dependency_artifacts.clone(),
         consumed_host_artifacts: Vec::new(),
         metadata_dependencies: Vec::new(),
         generated_metadata: None,
         derivation: ReviewableRustDerivation {
-            name: derivation_name(test_name, 0),
+            name: derivation_name(&plan.test_name, 0),
             builder: "rustc".to_string(),
             system: "x86_64-linux".to_string(),
             args,
             outputs: vec!["out".to_string()],
             env,
-            inputs,
+            inputs: native_derivation_inputs(
+                &plan.package.package_id,
+                &plan.package.source_digest,
+                &state.dependency_artifacts,
+                &[],
+            ),
             addressing_mode: "content-addressed".to_string(),
         },
         rustc_args_digest_blake3: String::new(),
+    }
+}
+
+fn validate_dev_dependency_topology_inputs(
+    planning: &NativePackageTargetPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+) -> Result<Option<RustDevDependencyTestTopologyExecutionReceipt>, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    if !planning.ready {
+        return dev_dependency_test_topology_receipt(DevDependencyTopologyReceiptInputs {
+            execution_status: "blocked",
+            package_id: None,
+            test_target: None,
+            dev_dependency_packages: Vec::new(),
+            unit_executions: Vec::new(),
+            blocker: Some(RustUnitExecutionBlocker {
+                class: "dev-dependency-test-planning-not-ready".to_string(),
+                message: "native_rust_dev_dependency_test_topology_execution requires ready native package/dev-dependency planning evidence".to_string(),
+            }),
+        })
+        .map(Some);
+    }
+    if !graph.ready {
+        return dev_dependency_test_topology_receipt(DevDependencyTopologyReceiptInputs {
+            execution_status: "blocked",
+            package_id: None,
+            test_target: None,
+            dev_dependency_packages: Vec::new(),
+            unit_executions: Vec::new(),
+            blocker: Some(RustUnitExecutionBlocker {
+                class: "unit-derivation-graph-blocked".to_string(),
+                message: "unit_derivation_graph is not ready; resolve planning blockers before dev-dependency test topology execution".to_string(),
+            }),
+        })
+        .map(Some);
+    }
+    Ok(None)
+}
+
+pub(crate) fn execute_native_rust_dev_dependency_test_topology(
+    native_package_target_planning: &NativePackageTargetPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<RustDevDependencyTestTopologyExecutionReceipt, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!DEFAULT_CARGO_PROFILE.is_empty());
+    if let Some(receipt) = validate_dev_dependency_topology_inputs(native_package_target_planning, graph)? {
+        return Ok(receipt);
+    }
+    let plan = match native_dev_dependency_test_plan(native_package_target_planning) {
+        Ok(plan) => plan,
+        Err(failure) if failure.blocker.class == "invalid-test-manifest-path" => {
+            return Err(RunError::Internal(failure.blocker.message));
+        }
+        Err(failure) => {
+            return dev_dependency_test_topology_receipt(DevDependencyTopologyReceiptInputs {
+                execution_status: "blocked",
+                package_id: failure.package_id,
+                test_target: failure.test_name,
+                dev_dependency_packages: failure.dependency_names,
+                unit_executions: Vec::new(),
+                blocker: Some(failure.blocker),
+            });
+        }
     };
-    test_unit = bind_all_dependency_artifacts(&test_unit, &produced_target_artifacts)?;
+    let mut state = execute_dev_dependency_producers(&plan, native_package_target_planning, graph, options)?;
+    if let Some(blocker) = dev_dependency_state_blocker(&mut state) {
+        return dev_dependency_test_topology_receipt(DevDependencyTopologyReceiptInputs {
+            execution_status: "blocked",
+            package_id: Some(plan.package.package_id.clone()),
+            test_target: Some(plan.test_name.clone()),
+            dev_dependency_packages: state.package_ids,
+            unit_executions: state.executions,
+            blocker: Some(blocker),
+        });
+    }
+    let mut test_unit = dev_dependency_test_unit(&plan, &state);
+    test_unit = bind_all_dependency_artifacts(&test_unit, &state.produced_artifacts)?;
     test_unit.rustc_args_digest_blake3 =
         blake3::hash(test_unit.derivation.args.join("\0").as_bytes()).to_hex().to_string();
     let receipt = execute_rust_unit(&test_unit, options)?;
-    if receipt.execution_status != "success" {
-        let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-            class: "dev-dependency-test-unit-failed".to_string(),
-            message: format!("dev-dependency test unit {unit_id} did not execute successfully"),
+    let blocker = topology_unit_failed_blocker(
+        &receipt,
+        "dev-dependency-test-unit-failed",
+        format!("dev-dependency test unit {} did not execute successfully", test_unit.unit_id),
+    );
+    state.executions.push(receipt);
+    let status = if blocker.is_some() { "blocked" } else { "success" };
+    dev_dependency_test_topology_receipt(DevDependencyTopologyReceiptInputs {
+        execution_status: status,
+        package_id: Some(plan.package.package_id.clone()),
+        test_target: Some(plan.test_name),
+        dev_dependency_packages: state.package_ids,
+        unit_executions: state.executions,
+        blocker: blocker,
+    })
+}
+
+struct WorkspaceDependencyPlan<'a> {
+    package: &'a NativePackagePlanningSummary,
+    dependencies: Vec<&'a NativeWorkspaceDependencySummary>,
+    workspace_root: Option<String>,
+}
+
+fn workspace_dependency_plan(
+    planning: &NativePackageTargetPlanningSummary,
+) -> Result<WorkspaceDependencyPlan<'_>, RustUnitExecutionBlocker> {
+    debug_assert!(planning.ready);
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    let candidate_packages = planning
+        .packages
+        .iter()
+        .filter(|package| package.workspace_dependencies.iter().any(|dependency| dependency.decision == "selected"))
+        .collect::<Vec<_>>();
+    if candidate_packages.len() != UNIQUE_CANDIDATE_COUNT {
+        return Err(RustUnitExecutionBlocker {
+            class: "ambiguous-workspace-dependency-topology".to_string(),
+            message: format!(
+                "expected exactly one package with selected workspace-inherited dependencies for bounded execution, found {}",
+                candidate_packages.len()
+            ),
         });
-        executions.push(receipt);
-        return dev_dependency_test_topology_receipt(
-            "blocked",
-            Some(package.package_id.clone()),
-            Some(test_name.to_string()),
-            dev_dependency_packages,
-            executions,
-            Some(blocker),
-        );
     }
-    executions.push(receipt);
-    dev_dependency_test_topology_receipt(
-        "success",
-        Some(package.package_id.clone()),
-        Some(test_name.to_string()),
-        dev_dependency_packages,
-        executions,
-        None,
-    )
+    let package = candidate_packages[0];
+    let dependencies = package
+        .workspace_dependencies
+        .iter()
+        .filter(|dependency| dependency.decision == "selected")
+        .collect::<Vec<_>>();
+    if dependencies.is_empty() {
+        return Err(RustUnitExecutionBlocker {
+            class: "missing-workspace-dependency-selection".to_string(),
+            message: format!("package {} has no selected workspace-inherited dependency facts", package.package_id),
+        });
+    }
+    Ok(WorkspaceDependencyPlan {
+        package,
+        workspace_root: package.workspace_dependencies.first().map(|dependency| dependency.workspace_root.clone()),
+        dependencies,
+    })
+}
+
+#[derive(Default)]
+struct WorkspaceDependencyExecutionState {
+    executions: Vec<RustUnitExecutionReceipt>,
+    produced_artifacts: BTreeMap<String, PathBuf>,
+    package_ids: Vec<String>,
+}
+
+struct WorkspaceDependencyProducerInputs<'a> {
+    graph: &'a UnitDerivationGraphSummary,
+    options: &'a RustUnitExecutionOptions,
+    dependency: &'a NativeWorkspaceDependencySummary,
+    package: &'a NativePackagePlanningSummary,
+    state: &'a mut WorkspaceDependencyExecutionState,
+}
+
+fn execute_workspace_dependency_producer(
+    inputs: WorkspaceDependencyProducerInputs<'_>,
+) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(!inputs.dependency.dependency_key.is_empty());
+    debug_assert!(!inputs.package.package_id.is_empty());
+    let Some(producer) =
+        inputs.graph.derivations.iter().find(|unit| {
+            unit.package_id == inputs.package.package_id && unit.target_kind == "lib" && unit.mode == "build"
+        })
+    else {
+        return Ok(Some(RustUnitExecutionBlocker {
+            class: "missing-workspace-dependency-artifact".to_string(),
+            message: format!(
+                "workspace dependency `{}` has no supported lib derivation",
+                inputs.dependency.dependency_key
+            ),
+        }));
+    };
+    let executable = bind_all_dependency_artifacts(producer, &inputs.state.produced_artifacts)?;
+    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    let blocker = topology_unit_failed_blocker(
+        &receipt,
+        "workspace-dependency-producer-failed",
+        format!("workspace dependency producer {} did not execute successfully", producer.unit_id),
+    );
+    inputs.state.executions.push(receipt);
+    if blocker.is_some() {
+        return Ok(blocker);
+    }
+    let path = match produced_library_artifact_path(&executable, inputs.options)? {
+        Ok(path) => path,
+        Err(blocker) => return Ok(Some(blocker)),
+    };
+    insert_btree_entry_with_bound(
+        &mut inputs.state.produced_artifacts,
+        producer.package_id.clone(),
+        path,
+        inputs.graph.derivations.len(),
+    );
+    inputs.state.package_ids.push(producer.package_id.clone());
+    Ok(None)
+}
+
+fn execute_workspace_dependency_producers(
+    plan: &WorkspaceDependencyPlan<'_>,
+    planning: &NativePackageTargetPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<(WorkspaceDependencyExecutionState, Option<RustUnitExecutionBlocker>), RunError> {
+    debug_assert!(!plan.dependencies.is_empty());
+    debug_assert!(planning.ready);
+    let packages_by_manifest = planning
+        .packages
+        .iter()
+        .map(|candidate| (normalize_path_string(Path::new(&candidate.manifest_path)), candidate))
+        .collect::<BTreeMap<_, _>>();
+    let mut state = WorkspaceDependencyExecutionState::default();
+    state.executions.reserve(plan.dependencies.len());
+    for dependency in &plan.dependencies {
+        let Some(manifest_path) = dependency.manifest_path.as_deref() else {
+            let blocker = RustUnitExecutionBlocker {
+                class: "missing-workspace-dependency-source".to_string(),
+                message: format!("workspace dependency `{}` has no manifest path", dependency.dependency_key),
+            };
+            return Ok((state, Some(blocker)));
+        };
+        let Some(package) = packages_by_manifest.get(&normalize_path_string(Path::new(manifest_path))) else {
+            let blocker = RustUnitExecutionBlocker {
+                class: "missing-workspace-dependency-source".to_string(),
+                message: format!(
+                    "workspace dependency `{}` has no native package source facts",
+                    dependency.dependency_key
+                ),
+            };
+            return Ok((state, Some(blocker)));
+        };
+        let blocker = execute_workspace_dependency_producer(WorkspaceDependencyProducerInputs {
+            graph,
+            options,
+            dependency,
+            package,
+            state: &mut state,
+        })?;
+        if blocker.is_some() {
+            return Ok((state, blocker));
+        }
+    }
+    state.package_ids.sort();
+    state.package_ids.dedup();
+    Ok((state, None))
+}
+
+fn execute_workspace_dependency_consumer(
+    plan: &WorkspaceDependencyPlan<'_>,
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+    state: &mut WorkspaceDependencyExecutionState,
+) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(!plan.package.package_id.is_empty());
+    debug_assert!(!plan.dependencies.is_empty());
+    let Some(consumer) = graph.derivations.iter().find(|unit| {
+        unit.package_id == plan.package.package_id
+            && matches!(unit.target_kind.as_str(), "lib" | "bin")
+            && unit.mode == "build"
+    }) else {
+        return Ok(Some(RustUnitExecutionBlocker {
+            class: "missing-workspace-dependency-consumer".to_string(),
+            message: format!(
+                "workspace dependency consumer {} has no supported lib/bin derivation",
+                plan.package.package_id
+            ),
+        }));
+    };
+    let executable = bind_all_dependency_artifacts(consumer, &state.produced_artifacts)?;
+    let receipt = execute_rust_unit(&executable, options)?;
+    let blocker = topology_unit_failed_blocker(
+        &receipt,
+        "workspace-dependency-consumer-failed",
+        format!("workspace dependency consumer {} did not execute successfully", consumer.unit_id),
+    );
+    state.executions.push(receipt);
+    Ok(blocker)
+}
+
+fn validate_workspace_dependency_topology_inputs(
+    planning: &NativePackageTargetPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+) -> Result<Option<RustWorkspaceDependencyTopologyExecutionReceipt>, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    if !planning.ready {
+        return workspace_dependency_topology_receipt(WorkspaceDependencyTopologyReceiptInputs {
+            execution_status: "blocked",
+            workspace_root: None,
+            member_package_id: None,
+            inherited_dependency_packages: Vec::new(),
+            unit_executions: Vec::new(),
+            blocker: Some(RustUnitExecutionBlocker {
+                class: "workspace-dependency-planning-not-ready".to_string(),
+                message: "native_registry_workspace_dependency_topology_execution requires ready native_registry_workspace_dependency_topology_planning evidence".to_string(),
+            }),
+        })
+        .map(Some);
+    }
+    if !graph.ready {
+        return workspace_dependency_topology_receipt(WorkspaceDependencyTopologyReceiptInputs {
+            execution_status: "blocked",
+            workspace_root: None,
+            member_package_id: None,
+            inherited_dependency_packages: Vec::new(),
+            unit_executions: Vec::new(),
+            blocker: Some(RustUnitExecutionBlocker {
+                class: "unit-derivation-graph-blocked".to_string(),
+                message: "unit_derivation_graph is not ready; resolve planning blockers before workspace-dependency topology execution".to_string(),
+            }),
+        })
+        .map(Some);
+    }
+    Ok(None)
 }
 
 pub(crate) fn execute_native_registry_workspace_dependency_topology(
@@ -10474,226 +12725,202 @@ pub(crate) fn execute_native_registry_workspace_dependency_topology(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustWorkspaceDependencyTopologyExecutionReceipt, RunError> {
-    if !native_package_target_planning.ready {
-        return workspace_dependency_topology_receipt(
-            "blocked",
-            None,
-            None,
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "workspace-dependency-planning-not-ready".to_string(),
-                message: "native_registry_workspace_dependency_topology_execution requires ready native_registry_workspace_dependency_topology_planning evidence".to_string(),
-            }),
-        );
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    if let Some(receipt) = validate_workspace_dependency_topology_inputs(native_package_target_planning, graph)? {
+        return Ok(receipt);
     }
-    if !graph.ready {
-        return workspace_dependency_topology_receipt(
-            "blocked",
-            None,
-            None,
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "unit-derivation-graph-blocked".to_string(),
-                message: "unit_derivation_graph is not ready; resolve planning blockers before workspace-dependency topology execution".to_string(),
-            }),
-        );
-    }
-
-    let candidate_packages = native_package_target_planning
-        .packages
-        .iter()
-        .filter(|package| package.workspace_dependencies.iter().any(|dependency| dependency.decision == "selected"))
-        .collect::<Vec<_>>();
-    if candidate_packages.len() != 1 {
-        return workspace_dependency_topology_receipt(
-            "blocked",
-            None,
-            None,
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "ambiguous-workspace-dependency-topology".to_string(),
-                message: format!(
-                    "expected exactly one package with selected workspace-inherited dependencies for bounded execution, found {}",
-                    candidate_packages.len()
-                ),
-            }),
-        );
-    }
-    let package = candidate_packages[0];
-    let selected_dependencies = package
-        .workspace_dependencies
-        .iter()
-        .filter(|dependency| dependency.decision == "selected")
-        .collect::<Vec<_>>();
-    if selected_dependencies.is_empty() {
-        return workspace_dependency_topology_receipt(
-            "blocked",
-            None,
-            Some(package.package_id.clone()),
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "missing-workspace-dependency-selection".to_string(),
-                message: format!("package {} has no selected workspace-inherited dependency facts", package.package_id),
-            }),
-        );
-    }
-
-    let packages_by_manifest = native_package_target_planning
-        .packages
-        .iter()
-        .map(|candidate| (normalize_path_string(Path::new(&candidate.manifest_path)), candidate))
-        .collect::<BTreeMap<_, _>>();
-    let mut executions = Vec::new();
-    let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
-    let mut inherited_dependency_packages = Vec::new();
-
-    for dependency in selected_dependencies {
-        let Some(manifest_path) = dependency.manifest_path.as_deref() else {
-            return workspace_dependency_topology_receipt(
-                "blocked",
-                Some(dependency.workspace_root.clone()),
-                Some(package.package_id.clone()),
-                inherited_dependency_packages,
-                executions,
-                Some(RustUnitExecutionBlocker {
-                    class: "missing-workspace-dependency-source".to_string(),
-                    message: format!("workspace dependency `{}` has no manifest path", dependency.dependency_key),
-                }),
-            );
-        };
-        let Some(dependency_package) = packages_by_manifest.get(&normalize_path_string(Path::new(manifest_path)))
-        else {
-            return workspace_dependency_topology_receipt(
-                "blocked",
-                Some(dependency.workspace_root.clone()),
-                Some(package.package_id.clone()),
-                inherited_dependency_packages,
-                executions,
-                Some(RustUnitExecutionBlocker {
-                    class: "missing-workspace-dependency-source".to_string(),
-                    message: format!(
-                        "workspace dependency `{}` has no native package source facts",
-                        dependency.dependency_key
-                    ),
-                }),
-            );
-        };
-        let Some(producer) = graph.derivations.iter().find(|unit| {
-            unit.package_id == dependency_package.package_id && unit.target_kind == "lib" && unit.mode == "build"
-        }) else {
-            return workspace_dependency_topology_receipt(
-                "blocked",
-                Some(dependency.workspace_root.clone()),
-                Some(package.package_id.clone()),
-                inherited_dependency_packages,
-                executions,
-                Some(RustUnitExecutionBlocker {
-                    class: "missing-workspace-dependency-artifact".to_string(),
-                    message: format!(
-                        "workspace dependency `{}` has no supported lib derivation",
-                        dependency.dependency_key
-                    ),
-                }),
-            );
-        };
-        let executable_producer = bind_all_dependency_artifacts(producer, &produced_target_artifacts)?;
-        let receipt = execute_rust_unit(&executable_producer, options)?;
-        if receipt.execution_status != "success" {
-            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-                class: "workspace-dependency-producer-failed".to_string(),
-                message: format!("workspace dependency producer {} did not execute successfully", producer.unit_id),
+    let plan = match workspace_dependency_plan(native_package_target_planning) {
+        Ok(plan) => plan,
+        Err(blocker) => {
+            let package_id = (blocker.class == "missing-workspace-dependency-selection")
+                .then(|| {
+                    native_package_target_planning
+                        .packages
+                        .iter()
+                        .find(|package| !package.workspace_dependencies.is_empty())
+                        .map(|package| package.package_id.clone())
+                })
+                .flatten();
+            return workspace_dependency_topology_receipt(WorkspaceDependencyTopologyReceiptInputs {
+                execution_status: "blocked",
+                workspace_root: None,
+                member_package_id: package_id,
+                inherited_dependency_packages: Vec::new(),
+                unit_executions: Vec::new(),
+                blocker: Some(blocker),
             });
-            executions.push(receipt);
-            return workspace_dependency_topology_receipt(
-                "blocked",
-                Some(dependency.workspace_root.clone()),
-                Some(package.package_id.clone()),
-                inherited_dependency_packages,
-                executions,
-                Some(blocker),
-            );
         }
-        match produced_library_artifact_path(&executable_producer, options)? {
-            Ok(path) => {
-                produced_target_artifacts.insert(producer.package_id.clone(), path);
-            }
-            Err(blocker) => {
-                executions.push(receipt);
-                return workspace_dependency_topology_receipt(
-                    "blocked",
-                    Some(dependency.workspace_root.clone()),
-                    Some(package.package_id.clone()),
-                    inherited_dependency_packages,
-                    executions,
-                    Some(blocker),
-                );
-            }
-        }
-        inherited_dependency_packages.push(producer.package_id.clone());
-        executions.push(receipt);
-    }
-    inherited_dependency_packages.sort();
-    inherited_dependency_packages.dedup();
-
-    let Some(consumer) = graph.derivations.iter().find(|unit| {
-        unit.package_id == package.package_id
-            && matches!(unit.target_kind.as_str(), "lib" | "bin")
-            && unit.mode == "build"
-    }) else {
-        return workspace_dependency_topology_receipt(
-            "blocked",
-            package.workspace_dependencies.first().map(|dependency| dependency.workspace_root.clone()),
-            Some(package.package_id.clone()),
-            inherited_dependency_packages,
-            executions,
-            Some(RustUnitExecutionBlocker {
-                class: "missing-workspace-dependency-consumer".to_string(),
-                message: format!(
-                    "workspace dependency consumer {} has no supported lib/bin derivation",
-                    package.package_id
-                ),
-            }),
-        );
     };
-    let executable_consumer = bind_all_dependency_artifacts(consumer, &produced_target_artifacts)?;
-    let receipt = execute_rust_unit(&executable_consumer, options)?;
-    if receipt.execution_status != "success" {
-        let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-            class: "workspace-dependency-consumer-failed".to_string(),
-            message: format!("workspace dependency consumer {} did not execute successfully", consumer.unit_id),
+    let (mut state, producer_blocker) =
+        execute_workspace_dependency_producers(&plan, native_package_target_planning, graph, options)?;
+    if let Some(blocker) = producer_blocker {
+        return workspace_dependency_topology_receipt(WorkspaceDependencyTopologyReceiptInputs {
+            execution_status: "blocked",
+            workspace_root: plan.workspace_root,
+            member_package_id: Some(plan.package.package_id.clone()),
+            inherited_dependency_packages: state.package_ids,
+            unit_executions: state.executions,
+            blocker: Some(blocker),
         });
-        executions.push(receipt);
-        return workspace_dependency_topology_receipt(
-            "blocked",
-            package.workspace_dependencies.first().map(|dependency| dependency.workspace_root.clone()),
-            Some(package.package_id.clone()),
-            inherited_dependency_packages,
-            executions,
-            Some(blocker),
-        );
     }
-    executions.push(receipt);
-    workspace_dependency_topology_receipt(
-        "success",
-        package.workspace_dependencies.first().map(|dependency| dependency.workspace_root.clone()),
-        Some(package.package_id.clone()),
-        inherited_dependency_packages,
-        executions,
-        None,
-    )
+    let blocker = execute_workspace_dependency_consumer(&plan, graph, options, &mut state)?;
+    let status = if blocker.is_some() { "blocked" } else { "success" };
+    workspace_dependency_topology_receipt(WorkspaceDependencyTopologyReceiptInputs {
+        execution_status: status,
+        workspace_root: plan.workspace_root,
+        member_package_id: Some(plan.package.package_id.clone()),
+        inherited_dependency_packages: state.package_ids,
+        unit_executions: state.executions,
+        blocker: blocker,
+    })
 }
 
-pub(crate) fn execute_native_registry_patch_source_topology(
-    native_registry_sources: &NativeRegistrySourcePlanningSummary,
-    native_package_target_planning: &NativePackageTargetPlanningSummary,
-    graph: &UnitDerivationGraphSummary,
+struct PatchSourcePackage<'a> {
+    source: &'a NativeRegistrySourceSummary,
+    package: &'a NativePackagePlanningSummary,
+}
+
+fn patch_source_package<'a>(
+    registry_sources: &'a NativeRegistrySourcePlanningSummary,
+    package_planning: &'a NativePackageTargetPlanningSummary,
+) -> Result<PatchSourcePackage<'a>, RustUnitExecutionBlocker> {
+    debug_assert!(registry_sources.ready);
+    debug_assert!(package_planning.ready);
+    let patch_sources = registry_sources
+        .sources
+        .iter()
+        .filter(|source| source.source_class == "patch-path")
+        .collect::<Vec<_>>();
+    if patch_sources.len() != UNIQUE_CANDIDATE_COUNT {
+        return Err(RustUnitExecutionBlocker {
+            class: "ambiguous-patch-source-topology".to_string(),
+            message: format!(
+                "expected exactly one local patch source for bounded execution, found {}",
+                patch_sources.len()
+            ),
+        });
+    }
+    let source = patch_sources[0];
+    let package = package_planning
+        .packages
+        .iter()
+        .find(|package| manifest_paths_same(&package.manifest_path, Path::new(&source.manifest_path)))
+        .ok_or_else(|| RustUnitExecutionBlocker {
+            class: "missing-patch-source-package".to_string(),
+            message: format!("patch source {} has no native package facts", source.package_id),
+        })?;
+    Ok(PatchSourcePackage { source, package })
+}
+
+struct PatchSourceTopologyPlan<'a> {
+    consumer_package: &'a NativePackagePlanningSummary,
+    producer: &'a RustUnitDerivationSummary,
+    consumer: &'a RustUnitDerivationSummary,
+}
+
+fn patch_source_topology_plan<'a>(
+    source_package: &PatchSourcePackage<'a>,
+    package_planning: &'a NativePackageTargetPlanningSummary,
+    graph: &'a UnitDerivationGraphSummary,
+) -> Result<PatchSourceTopologyPlan<'a>, RustUnitExecutionBlocker> {
+    debug_assert!(!source_package.source.package_id.is_empty());
+    debug_assert!(!source_package.package.package_id.is_empty());
+    let candidate_consumers = package_planning
+        .packages
+        .iter()
+        .filter(|package| {
+            package.package_id != source_package.package.package_id
+                && package.path_dependencies.iter().any(|dependency| {
+                    manifest_paths_same(&dependency.manifest_path, Path::new(&source_package.source.manifest_path))
+                })
+        })
+        .collect::<Vec<_>>();
+    if candidate_consumers.len() != UNIQUE_CANDIDATE_COUNT {
+        return Err(RustUnitExecutionBlocker {
+            class: "ambiguous-patch-source-consumer".to_string(),
+            message: format!(
+                "expected exactly one consumer for bounded patch-source execution, found {}",
+                candidate_consumers.len()
+            ),
+        });
+    }
+    let consumer_package = candidate_consumers[0];
+    let producer = graph
+        .derivations
+        .iter()
+        .find(|unit| {
+            unit.package_id == source_package.package.package_id && unit.target_kind == "lib" && unit.mode == "build"
+        })
+        .ok_or_else(|| RustUnitExecutionBlocker {
+            class: "missing-patch-source-artifact".to_string(),
+            message: format!("patch source {} has no supported lib derivation", source_package.source.package_id),
+        })?;
+    let consumer = graph
+        .derivations
+        .iter()
+        .find(|unit| {
+            unit.package_id == consumer_package.package_id
+                && matches!(unit.target_kind.as_str(), "lib" | "bin")
+                && unit.mode == "build"
+        })
+        .ok_or_else(|| RustUnitExecutionBlocker {
+            class: "missing-patch-source-consumer".to_string(),
+            message: format!(
+                "patch source consumer {} has no supported lib/bin derivation",
+                consumer_package.package_id
+            ),
+        })?;
+    Ok(PatchSourceTopologyPlan {
+        consumer_package,
+        producer,
+        consumer,
+    })
+}
+
+fn execute_patch_source_topology_plan(
+    plan: &PatchSourceTopologyPlan<'_>,
     options: &RustUnitExecutionOptions,
-) -> Result<RustPatchSourceTopologyExecutionReceipt, RunError> {
-    if !native_registry_sources.ready {
+) -> Result<(Vec<RustUnitExecutionReceipt>, Option<RustUnitExecutionBlocker>), RunError> {
+    debug_assert!(!plan.producer.unit_id.is_empty());
+    debug_assert!(!plan.consumer.unit_id.is_empty());
+    let mut executions = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut produced_artifacts = BTreeMap::<String, PathBuf>::new();
+    let executable_producer = bind_all_dependency_artifacts(plan.producer, &produced_artifacts)?;
+    let producer_receipt = execute_rust_unit(&executable_producer, options)?;
+    let blocker = topology_unit_failed_blocker(
+        &producer_receipt,
+        "patch-source-producer-failed",
+        format!("patch source producer {} did not execute successfully", plan.producer.unit_id),
+    );
+    executions.push(producer_receipt);
+    if blocker.is_some() {
+        return Ok((executions, blocker));
+    }
+    let path = match produced_library_artifact_path(&executable_producer, options)? {
+        Ok(path) => path,
+        Err(blocker) => return Ok((executions, Some(blocker))),
+    };
+    produced_artifacts.insert(plan.producer.package_id.clone(), path);
+    let executable_consumer = bind_all_dependency_artifacts(plan.consumer, &produced_artifacts)?;
+    let consumer_receipt = execute_rust_unit(&executable_consumer, options)?;
+    let blocker = topology_unit_failed_blocker(
+        &consumer_receipt,
+        "patch-source-consumer-failed",
+        format!("patch source consumer {} did not execute successfully", plan.consumer.unit_id),
+    );
+    executions.push(consumer_receipt);
+    Ok((executions, blocker))
+}
+
+fn validate_patch_source_topology_inputs(
+    registry_sources: &NativeRegistrySourcePlanningSummary,
+    package_planning: &NativePackageTargetPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+) -> Result<Option<RustPatchSourceTopologyExecutionReceipt>, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    if !registry_sources.ready {
         return patch_source_topology_receipt(
             "blocked",
             None,
@@ -10703,9 +12930,10 @@ pub(crate) fn execute_native_registry_patch_source_topology(
                 class: "patch-source-planning-not-ready".to_string(),
                 message: "native_registry_patch_source_topology_execution requires ready native_registry_patch_source_planning evidence".to_string(),
             }),
-        );
+        )
+        .map(Some);
     }
-    if !native_package_target_planning.ready {
+    if !package_planning.ready {
         return patch_source_topology_receipt(
             "blocked",
             None,
@@ -10715,7 +12943,8 @@ pub(crate) fn execute_native_registry_patch_source_topology(
                 class: "native-package-planning-not-ready".to_string(),
                 message: "native package/target planning is not ready; resolve planning blockers before patch-source topology execution".to_string(),
             }),
-        );
+        )
+        .map(Some);
     }
     if !graph.ready {
         return patch_source_topology_receipt(
@@ -10727,167 +12956,70 @@ pub(crate) fn execute_native_registry_patch_source_topology(
                 class: "unit-derivation-graph-blocked".to_string(),
                 message: "unit_derivation_graph is not ready; resolve planning blockers before patch-source topology execution".to_string(),
             }),
-        );
+        )
+        .map(Some);
     }
+    Ok(None)
+}
 
-    let patch_sources = native_registry_sources
-        .sources
-        .iter()
-        .filter(|source| source.source_class == "patch-path")
-        .collect::<Vec<_>>();
-    if patch_sources.len() != 1 {
-        return patch_source_topology_receipt(
-            "blocked",
-            None,
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "ambiguous-patch-source-topology".to_string(),
-                message: format!(
-                    "expected exactly one local patch source for bounded execution, found {}",
-                    patch_sources.len()
-                ),
-            }),
-        );
+pub(crate) fn execute_native_registry_patch_source_topology(
+    native_registry_sources: &NativeRegistrySourcePlanningSummary,
+    native_package_target_planning: &NativePackageTargetPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<RustPatchSourceTopologyExecutionReceipt, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    if let Some(receipt) =
+        validate_patch_source_topology_inputs(native_registry_sources, native_package_target_planning, graph)?
+    {
+        return Ok(receipt);
     }
-    let patch_source = patch_sources[0];
-    let packages_by_manifest = native_package_target_planning
-        .packages
-        .iter()
-        .map(|candidate| (normalize_path_string(Path::new(&candidate.manifest_path)), candidate))
-        .collect::<BTreeMap<_, _>>();
-    let Some(patch_package) = packages_by_manifest.get(&normalize_path_string(Path::new(&patch_source.manifest_path)))
-    else {
-        return patch_source_topology_receipt(
-            "blocked",
-            None,
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "missing-patch-source-package".to_string(),
-                message: format!("patch source {} has no native package facts", patch_source.package_id),
-            }),
-        );
+    let source_package = match patch_source_package(native_registry_sources, native_package_target_planning) {
+        Ok(source_package) => source_package,
+        Err(blocker) => return patch_source_topology_receipt("blocked", None, Vec::new(), Vec::new(), Some(blocker)),
     };
-    let candidate_consumers = native_package_target_planning
-        .packages
-        .iter()
-        .filter(|package| {
-            package.package_id != patch_package.package_id
-                && package.path_dependencies.iter().any(|dependency| {
-                    manifest_paths_same(&dependency.manifest_path, Path::new(&patch_source.manifest_path))
-                })
-        })
-        .collect::<Vec<_>>();
-    if candidate_consumers.len() != 1 {
-        return patch_source_topology_receipt(
-            "blocked",
-            None,
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "ambiguous-patch-source-consumer".to_string(),
-                message: format!(
-                    "expected exactly one consumer for bounded patch-source execution, found {}",
-                    candidate_consumers.len()
-                ),
-            }),
-        );
-    }
-    let consumer_package = candidate_consumers[0];
-    let Some(producer) = graph
-        .derivations
-        .iter()
-        .find(|unit| unit.package_id == patch_package.package_id && unit.target_kind == "lib" && unit.mode == "build")
-    else {
-        return patch_source_topology_receipt(
-            "blocked",
-            Some(consumer_package.package_id.clone()),
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "missing-patch-source-artifact".to_string(),
-                message: format!("patch source {} has no supported lib derivation", patch_source.package_id),
-            }),
-        );
-    };
-    let Some(consumer) = graph.derivations.iter().find(|unit| {
-        unit.package_id == consumer_package.package_id
-            && matches!(unit.target_kind.as_str(), "lib" | "bin")
-            && unit.mode == "build"
-    }) else {
-        return patch_source_topology_receipt(
-            "blocked",
-            Some(consumer_package.package_id.clone()),
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "missing-patch-source-consumer".to_string(),
-                message: format!(
-                    "patch source consumer {} has no supported lib/bin derivation",
-                    consumer_package.package_id
-                ),
-            }),
-        );
-    };
-
-    let mut executions = Vec::new();
-    let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
-    let executable_producer = bind_all_dependency_artifacts(producer, &produced_target_artifacts)?;
-    let receipt = execute_rust_unit(&executable_producer, options)?;
-    if receipt.execution_status != "success" {
-        let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-            class: "patch-source-producer-failed".to_string(),
-            message: format!("patch source producer {} did not execute successfully", producer.unit_id),
-        });
-        executions.push(receipt);
-        return patch_source_topology_receipt(
-            "blocked",
-            Some(consumer_package.package_id.clone()),
-            Vec::new(),
-            executions,
-            Some(blocker),
-        );
-    }
-    match produced_library_artifact_path(&executable_producer, options)? {
-        Ok(path) => {
-            produced_target_artifacts.insert(producer.package_id.clone(), path);
-        }
+    let plan = match patch_source_topology_plan(&source_package, native_package_target_planning, graph) {
+        Ok(plan) => plan,
         Err(blocker) => {
-            executions.push(receipt);
+            let consumer_package_id = native_package_target_planning
+                .packages
+                .iter()
+                .find(|package| {
+                    package.package_id != source_package.package.package_id
+                        && package.path_dependencies.iter().any(|dependency| {
+                            manifest_paths_same(
+                                &dependency.manifest_path,
+                                Path::new(&source_package.source.manifest_path),
+                            )
+                        })
+                })
+                .map(|package| package.package_id.clone())
+                .filter(|_package_id| {
+                    matches!(blocker.class.as_str(), "missing-patch-source-artifact" | "missing-patch-source-consumer")
+                });
             return patch_source_topology_receipt(
                 "blocked",
-                Some(consumer_package.package_id.clone()),
+                consumer_package_id,
                 Vec::new(),
-                executions,
+                Vec::new(),
                 Some(blocker),
             );
         }
-    }
-    executions.push(receipt);
-    let executable_consumer = bind_all_dependency_artifacts(consumer, &produced_target_artifacts)?;
-    let receipt = execute_rust_unit(&executable_consumer, options)?;
-    if receipt.execution_status != "success" {
-        let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-            class: "patch-source-consumer-failed".to_string(),
-            message: format!("patch source consumer {} did not execute successfully", consumer.unit_id),
-        });
-        executions.push(receipt);
-        return patch_source_topology_receipt(
-            "blocked",
-            Some(consumer_package.package_id.clone()),
-            vec![producer.package_id.clone()],
-            executions,
-            Some(blocker),
-        );
-    }
-    executions.push(receipt);
+    };
+    let (executions, blocker) = execute_patch_source_topology_plan(&plan, options)?;
+    let status = if blocker.is_some() { "blocked" } else { "success" };
+    let patch_packages = if executions.len() > UNIQUE_CANDIDATE_COUNT {
+        vec![plan.producer.package_id.clone()]
+    } else {
+        Vec::new()
+    };
     patch_source_topology_receipt(
-        "success",
-        Some(consumer_package.package_id.clone()),
-        vec![producer.package_id.clone()],
+        status,
+        Some(plan.consumer_package.package_id.clone()),
+        patch_packages,
         executions,
-        None,
+        blocker,
     )
 }
 
@@ -10895,6 +13027,8 @@ fn validate_native_registry_topology_inputs(
     native_registry_sources: &NativeRegistrySourcePlanningSummary,
     graph: &UnitDerivationGraphSummary,
 ) -> Option<RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let registry_packages = graph
         .derivations
         .iter()
@@ -10936,37 +13070,17 @@ fn validate_native_registry_topology_inputs(
     None
 }
 
-fn validate_native_host_artifact_topology_inputs(
-    native_host_graph: &NativeHostUnitGraphPlanningSummary,
-    graph: &UnitDerivationGraphSummary,
-    execution_context: &str,
+type NativeHostUnitIdentity = (String, String, String, String);
+type NativeHostConsumerIdentity = (String, String, BTreeSet<RustHostArtifact>);
+
+fn validate_native_host_unit_identities(
+    native_units: &BTreeSet<NativeHostUnitIdentity>,
+    graph_units: &BTreeSet<NativeHostUnitIdentity>,
 ) -> Option<RustUnitExecutionBlocker> {
-    if !native_host_graph.ready {
-        return Some(RustUnitExecutionBlocker {
-            class: "native-host-unit-graph-blocked".to_string(),
-            message: format!(
-                "native_host_unit_graph_planning is not ready; resolve native host graph blockers before {execution_context} execution"
-            ),
-        });
-    }
-    if !graph.ready {
-        return None;
-    }
-
-    let graph_host_units = graph
-        .derivations
-        .iter()
-        .filter(|unit| is_supported_host_unit(unit))
-        .map(|unit| (unit.unit_id.clone(), unit.package_id.clone(), unit.target_name.clone(), unit.target_kind.clone()))
-        .collect::<BTreeSet<_>>();
-    let native_host_units = native_host_graph
-        .host_units
-        .iter()
-        .map(|unit| (unit.unit_id.clone(), unit.package_id.clone(), unit.target_name.clone(), unit.target_kind.clone()))
-        .collect::<BTreeSet<_>>();
-
-    for native_unit in &native_host_units {
-        if !graph_host_units.contains(native_unit) {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!HOST_EXECUTION_KIND.is_empty());
+    for native_unit in native_units {
+        if !graph_units.contains(native_unit) {
             return Some(RustUnitExecutionBlocker {
                 class: "missing-native-host-derivation".to_string(),
                 message: format!(
@@ -10976,8 +13090,8 @@ fn validate_native_host_artifact_topology_inputs(
             });
         }
     }
-    for graph_unit in &graph_host_units {
-        if !native_host_units.contains(graph_unit) {
+    for graph_unit in graph_units {
+        if !native_units.contains(graph_unit) {
             return Some(RustUnitExecutionBlocker {
                 class: "non-native-host-derivation".to_string(),
                 message: format!(
@@ -10987,27 +13101,16 @@ fn validate_native_host_artifact_topology_inputs(
             });
         }
     }
+    None
+}
 
-    let graph_consumers = graph
-        .derivations
-        .iter()
-        .filter(|unit| is_supported_target_unit(unit) && !unit.consumed_host_artifacts.is_empty())
-        .map(|unit| {
-            let artifacts = unit.consumed_host_artifacts.iter().cloned().collect::<BTreeSet<_>>();
-            (unit.unit_id.clone(), (unit.unit_id.clone(), unit.package_id.clone(), artifacts))
-        })
-        .collect::<BTreeMap<_, _>>();
-    let native_consumers = native_host_graph
-        .target_consumers
-        .iter()
-        .filter(|unit| !unit.consumed_host_artifacts.is_empty())
-        .map(|unit| {
-            let artifacts = unit.consumed_host_artifacts.iter().cloned().collect::<BTreeSet<_>>();
-            (unit.unit_id.clone(), (unit.unit_id.clone(), unit.package_id.clone(), artifacts))
-        })
-        .collect::<BTreeMap<_, _>>();
-
-    for (key, (unit_id, package_id, native_artifacts)) in &native_consumers {
+fn validate_native_host_consumer_identities(
+    native_consumers: &BTreeMap<String, NativeHostConsumerIdentity>,
+    graph_consumers: &BTreeMap<String, NativeHostConsumerIdentity>,
+) -> Option<RustUnitExecutionBlocker> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    for (key, (unit_id, package_id, native_artifacts)) in native_consumers {
         let Some((_, graph_artifacts)) = graph_consumers.get_key_value(key) else {
             return Some(RustUnitExecutionBlocker {
                 class: "missing-native-host-consumer-derivation".to_string(),
@@ -11028,7 +13131,7 @@ fn validate_native_host_artifact_topology_inputs(
             }
         }
     }
-    for (key, (unit_id, package_id, _)) in &graph_consumers {
+    for (key, (unit_id, package_id, _artifacts)) in graph_consumers {
         if !native_consumers.contains_key(key) {
             return Some(RustUnitExecutionBlocker {
                 class: "non-native-host-artifact-consumer".to_string(),
@@ -11038,8 +13141,254 @@ fn validate_native_host_artifact_topology_inputs(
             });
         }
     }
-
     None
+}
+
+fn validate_native_host_artifact_topology_inputs(
+    native_host_graph: &NativeHostUnitGraphPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+    execution_context: &str,
+) -> Option<RustUnitExecutionBlocker> {
+    debug_assert!(!execution_context.is_empty());
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    if !native_host_graph.ready {
+        return Some(RustUnitExecutionBlocker {
+            class: "native-host-unit-graph-blocked".to_string(),
+            message: format!(
+                "native_host_unit_graph_planning is not ready; resolve native host graph blockers before {execution_context} execution"
+            ),
+        });
+    }
+    if !graph.ready {
+        return None;
+    }
+    let graph_host_units = graph
+        .derivations
+        .iter()
+        .filter(|unit| is_supported_host_unit(unit))
+        .map(|unit| (unit.unit_id.clone(), unit.package_id.clone(), unit.target_name.clone(), unit.target_kind.clone()))
+        .collect::<BTreeSet<_>>();
+    let native_host_units = native_host_graph
+        .host_units
+        .iter()
+        .map(|unit| (unit.unit_id.clone(), unit.package_id.clone(), unit.target_name.clone(), unit.target_kind.clone()))
+        .collect::<BTreeSet<_>>();
+    if let Some(blocker) = validate_native_host_unit_identities(&native_host_units, &graph_host_units) {
+        return Some(blocker);
+    }
+    let graph_consumers = graph
+        .derivations
+        .iter()
+        .filter(|unit| is_supported_target_unit(unit) && !unit.consumed_host_artifacts.is_empty())
+        .map(|unit| {
+            let artifacts = unit.consumed_host_artifacts.iter().cloned().collect::<BTreeSet<_>>();
+            (unit.unit_id.clone(), (unit.unit_id.clone(), unit.package_id.clone(), artifacts))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let native_consumers = native_host_graph
+        .target_consumers
+        .iter()
+        .filter(|unit| !unit.consumed_host_artifacts.is_empty())
+        .map(|unit| {
+            let artifacts = unit.consumed_host_artifacts.iter().cloned().collect::<BTreeSet<_>>();
+            (unit.unit_id.clone(), (unit.unit_id.clone(), unit.package_id.clone(), artifacts))
+        })
+        .collect::<BTreeMap<_, _>>();
+    validate_native_host_consumer_identities(&native_consumers, &graph_consumers)
+}
+
+struct HostArtifactTopologyIndices {
+    host: Vec<usize>,
+    target: Vec<usize>,
+    host_producers: BTreeMap<String, usize>,
+}
+
+fn host_artifact_topology_indices(
+    graph: &UnitDerivationGraphSummary,
+) -> Result<HostArtifactTopologyIndices, RustUnitExecutionBlocker> {
+    debug_assert!(graph.ready);
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    let host = graph
+        .derivations
+        .iter()
+        .enumerate()
+        .filter_map(|(index, unit)| is_supported_host_unit(unit).then_some(index))
+        .collect::<Vec<_>>();
+    if host.is_empty() {
+        return Err(RustUnitExecutionBlocker {
+            class: "missing-host-artifact-unit".to_string(),
+            message: "unit_derivation_graph does not contain supported proc-macro/custom-build host units".to_string(),
+        });
+    }
+    let host_producers = host
+        .iter()
+        .map(|index| (graph.derivations[*index].package_id.clone(), *index))
+        .collect::<BTreeMap<_, _>>();
+    let mut target = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    for (index, unit) in graph.derivations.iter().enumerate() {
+        if !is_supported_target_unit(unit) || unit.consumed_host_artifacts.is_empty() {
+            continue;
+        }
+        for artifact in &unit.consumed_host_artifacts {
+            if !host_producers.contains_key(&artifact.package_id) {
+                return Err(RustUnitExecutionBlocker {
+                    class: "missing-host-artifact-producer".to_string(),
+                    message: format!(
+                        "no supported host producer unit for host artifact package {}",
+                        artifact.package_id
+                    ),
+                });
+            }
+        }
+        target.push(index);
+    }
+    if target.is_empty() {
+        return Err(RustUnitExecutionBlocker {
+            class: "missing-host-artifact-consumer".to_string(),
+            message: "unit_derivation_graph does not contain target units that consume host artifacts".to_string(),
+        });
+    }
+    Ok(HostArtifactTopologyIndices {
+        host,
+        target,
+        host_producers,
+    })
+}
+
+fn host_artifact_target_execution_order(
+    graph: &UnitDerivationGraphSummary,
+    indices: &HostArtifactTopologyIndices,
+) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
+    debug_assert!(!indices.target.is_empty());
+    debug_assert!(!indices.host.is_empty());
+    let selected = indices.target.iter().copied().collect::<BTreeSet<_>>();
+    let lib_producers = indices
+        .target
+        .iter()
+        .filter_map(|index| {
+            let unit = &graph.derivations[*index];
+            (unit.target_kind == "lib").then(|| (unit.package_id.clone(), *index))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut edges = BTreeMap::<usize, Vec<usize>>::new();
+    for index in &indices.target {
+        let unit = &graph.derivations[*index];
+        let mut dependencies = Vec::with_capacity(unit.dependency_artifacts.len());
+        for dependency in &unit.dependency_artifacts {
+            if indices.host_producers.contains_key(&dependency.package_id) {
+                continue;
+            }
+            let producer_index =
+                lib_producers.get(&dependency.package_id).copied().ok_or_else(|| RustUnitExecutionBlocker {
+                    class: "missing-dependency-producer".to_string(),
+                    message: format!(
+                        "no supported target producer lib unit for dependency package {}",
+                        dependency.package_id
+                    ),
+                })?;
+            if selected.contains(&producer_index) && producer_index != *index {
+                dependencies.push(producer_index);
+            }
+        }
+        dependencies.sort_unstable();
+        dependencies.dedup();
+        insert_btree_entry_with_bound(&mut edges, *index, dependencies, graph.derivations.len());
+    }
+    topologically_order_units(&indices.target, &edges, graph)
+}
+
+#[derive(Default)]
+struct HostArtifactTopologyExecutionState {
+    executions: Vec<RustUnitExecutionReceipt>,
+    metadata_runs: Vec<BuildScriptMetadataRunReceipt>,
+    host_artifacts: ProducedHostArtifactIndex,
+    build_script_metadata: ProducedBuildScriptMetadataIndex,
+    target_artifacts: BTreeMap<String, PathBuf>,
+}
+
+struct HostArtifactTopologyUnitInputs<'a> {
+    options: &'a RustUnitExecutionOptions,
+    unit: &'a RustUnitDerivationSummary,
+    state: &'a mut HostArtifactTopologyExecutionState,
+}
+
+fn execute_host_artifact_producer(
+    inputs: HostArtifactTopologyUnitInputs<'_>,
+) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(is_supported_host_unit(inputs.unit));
+    debug_assert!(!inputs.unit.unit_id.is_empty());
+    let mut executable = match bind_all_host_artifacts_with_index(inputs.unit, &inputs.state.host_artifacts) {
+        Ok(unit) => unit,
+        Err(blocker) => return Ok(Some(blocker)),
+    };
+    executable = match bind_all_build_script_metadata_with_index(&executable, &inputs.state.build_script_metadata) {
+        Ok(unit) => unit,
+        Err(blocker) => return Ok(Some(blocker)),
+    };
+    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    let blocker = topology_unit_failed_blocker(
+        &receipt,
+        "host-unit-failed",
+        format!("host unit {} did not execute successfully", inputs.unit.unit_id),
+    );
+    inputs.state.executions.push(receipt);
+    if blocker.is_some() {
+        return Ok(blocker);
+    }
+    let path = match produced_host_artifact_path(inputs.unit, inputs.options)? {
+        Ok(path) => path,
+        Err(blocker) => return Ok(Some(blocker)),
+    };
+    if inputs.unit.target_kind == "custom-build" {
+        match run_build_script_metadata(inputs.unit, inputs.options, &path)? {
+            Ok(metadata_run) => {
+                inputs
+                    .state
+                    .build_script_metadata
+                    .record_unit(inputs.unit, build_script_metadata_from_run(&metadata_run));
+                inputs.state.metadata_runs.push(metadata_run);
+            }
+            Err(blocker) => return Ok(Some(blocker)),
+        }
+    }
+    inputs.state.host_artifacts.record_unit(inputs.unit, path);
+    Ok(None)
+}
+
+fn execute_host_artifact_consumer(
+    inputs: HostArtifactTopologyUnitInputs<'_>,
+) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(is_supported_target_unit(inputs.unit));
+    debug_assert!(!inputs.unit.unit_id.is_empty());
+    let mut executable = match bind_all_host_artifacts_with_index(inputs.unit, &inputs.state.host_artifacts) {
+        Ok(unit) => unit,
+        Err(blocker) => return Ok(Some(blocker)),
+    };
+    executable = match bind_all_build_script_metadata_with_index(&executable, &inputs.state.build_script_metadata) {
+        Ok(unit) => unit,
+        Err(blocker) => return Ok(Some(blocker)),
+    };
+    if !executable.dependency_artifacts.is_empty() {
+        executable = bind_all_dependency_artifacts(&executable, &inputs.state.target_artifacts)?;
+    }
+    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    let blocker = topology_unit_failed_blocker(
+        &receipt,
+        "target-unit-failed",
+        format!("target unit {} did not execute successfully", inputs.unit.unit_id),
+    );
+    inputs.state.executions.push(receipt);
+    if blocker.is_some() {
+        return Ok(blocker);
+    }
+    if inputs.unit.target_kind == "lib" {
+        let path = match produced_library_artifact_path(&executable, inputs.options)? {
+            Ok(path) => path,
+            Err(blocker) => return Ok(Some(blocker)),
+        };
+        inputs.state.target_artifacts.insert(inputs.unit.package_id.clone(), path);
+    }
+    Ok(None)
 }
 
 pub(crate) fn execute_rust_host_artifact_topology(
@@ -11048,6 +13397,8 @@ pub(crate) fn execute_rust_host_artifact_topology(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitHostArtifactTopologyExecutionReceipt, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!HOST_EXECUTION_KIND.is_empty());
     if let Some(blocker) = validate_native_registry_topology_inputs(native_registry_sources, graph) {
         return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }
@@ -11066,261 +13417,117 @@ pub(crate) fn execute_rust_host_artifact_topology(
             }),
         );
     }
-
-    let host_indices = graph
-        .derivations
-        .iter()
-        .enumerate()
-        .filter_map(|(index, unit)| is_supported_host_unit(unit).then_some(index))
-        .collect::<Vec<_>>();
-    if host_indices.is_empty() {
-        return host_artifact_topology_receipt(
-            "blocked",
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "missing-host-artifact-unit".to_string(),
-                message: "unit_derivation_graph does not contain supported proc-macro/custom-build host units"
-                    .to_string(),
-            }),
-        );
-    }
-
-    let mut host_producers = BTreeMap::<String, usize>::new();
-    for index in &host_indices {
-        host_producers.entry(graph.derivations[*index].package_id.clone()).or_insert(*index);
-    }
-
-    let mut target_indices = Vec::new();
-    for (index, unit) in graph.derivations.iter().enumerate() {
-        if is_supported_target_unit(unit) && !unit.consumed_host_artifacts.is_empty() {
-            for host_artifact in &unit.consumed_host_artifacts {
-                if !host_producers.contains_key(&host_artifact.package_id) {
-                    return host_artifact_topology_receipt(
-                        "blocked",
-                        Vec::new(),
-                        Vec::new(),
-                        Some(RustUnitExecutionBlocker {
-                            class: "missing-host-artifact-producer".to_string(),
-                            message: format!(
-                                "no supported host producer unit for host artifact package {}",
-                                host_artifact.package_id
-                            ),
-                        }),
-                    );
-                }
-            }
-            target_indices.push(index);
-        }
-    }
-    if target_indices.is_empty() {
-        return host_artifact_topology_receipt(
-            "blocked",
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "missing-host-artifact-consumer".to_string(),
-                message: "unit_derivation_graph does not contain target units that consume host artifacts".to_string(),
-            }),
-        );
-    }
-
-    let selected_set = target_indices.iter().copied().collect::<BTreeSet<_>>();
-    let mut lib_producers = BTreeMap::new();
-    for index in &target_indices {
-        let unit = &graph.derivations[*index];
-        if unit.target_kind == "lib" {
-            lib_producers.entry(unit.package_id.clone()).or_insert(*index);
-        }
-    }
-    let mut edges = BTreeMap::<usize, Vec<usize>>::new();
-    for index in &target_indices {
-        let unit = &graph.derivations[*index];
-        let mut deps = Vec::new();
-        for dependency in &unit.dependency_artifacts {
-            if host_producers.contains_key(&dependency.package_id) {
-                continue;
-            }
-            let Some(producer_index) = lib_producers.get(&dependency.package_id).copied() else {
-                return host_artifact_topology_receipt(
-                    "blocked",
-                    Vec::new(),
-                    Vec::new(),
-                    Some(RustUnitExecutionBlocker {
-                        class: "missing-dependency-producer".to_string(),
-                        message: format!(
-                            "no supported target producer lib unit for dependency package {}",
-                            dependency.package_id
-                        ),
-                    }),
-                );
-            };
-            if selected_set.contains(&producer_index) && producer_index != *index {
-                deps.push(producer_index);
-            }
-        }
-        deps.sort_unstable();
-        deps.dedup();
-        edges.insert(*index, deps);
-    }
-
-    let mut ordered_target_indices = Vec::new();
-    let mut temporary = BTreeSet::new();
-    let mut permanent = BTreeSet::new();
-    for index in &target_indices {
-        if let Err(blocker) = visit_target_topology_unit(
-            *index,
-            &edges,
-            &mut temporary,
-            &mut permanent,
-            &mut ordered_target_indices,
-            graph,
-        ) {
-            return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
-        }
-    }
-
-    let mut executions = Vec::new();
-    let mut build_script_metadata_runs = Vec::new();
-    let mut produced_host_artifacts = ProducedHostArtifactIndex::default();
-    let mut produced_build_script_metadata = ProducedBuildScriptMetadataIndex::default();
-    for index in host_indices {
+    let indices = match host_artifact_topology_indices(graph) {
+        Ok(indices) => indices,
+        Err(blocker) => return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
+    };
+    let target_order = match host_artifact_target_execution_order(graph, &indices) {
+        Ok(order) => order,
+        Err(blocker) => return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
+    };
+    let mut state = HostArtifactTopologyExecutionState::default();
+    state.executions.reserve(indices.host.len().saturating_add(target_order.len()));
+    for index in indices.host {
         let unit = &graph.derivations[index];
-        let mut executable_unit = match bind_all_host_artifacts_with_index(unit, &produced_host_artifacts) {
-            Ok(bound) => bound,
-            Err(blocker) => {
-                return host_artifact_topology_receipt(
-                    "blocked",
-                    executions,
-                    build_script_metadata_runs,
-                    Some(blocker),
-                );
-            }
-        };
-        executable_unit =
-            match bind_all_build_script_metadata_with_index(&executable_unit, &produced_build_script_metadata) {
-                Ok(bound) => bound,
-                Err(blocker) => {
-                    return host_artifact_topology_receipt(
-                        "blocked",
-                        executions,
-                        build_script_metadata_runs,
-                        Some(blocker),
-                    );
-                }
-            };
-        let receipt = execute_rust_unit(&executable_unit, options)?;
-        if receipt.execution_status != "success" {
-            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-                class: "host-unit-failed".to_string(),
-                message: format!("host unit {} did not execute successfully", unit.unit_id),
-            });
-            executions.push(receipt);
-            return host_artifact_topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
+        let blocker = execute_host_artifact_producer(HostArtifactTopologyUnitInputs {
+            options,
+            unit,
+            state: &mut state,
+        })?;
+        if let Some(blocker) = blocker {
+            return host_artifact_topology_receipt("blocked", state.executions, state.metadata_runs, Some(blocker));
         }
-        match produced_host_artifact_path(unit, options)? {
-            Ok(path) => {
-                if unit.target_kind == "custom-build" {
-                    match run_build_script_metadata(unit, options, &path)? {
-                        Ok(metadata_run) => {
-                            produced_build_script_metadata
-                                .record_unit(unit, build_script_metadata_from_run(&metadata_run));
-                            build_script_metadata_runs.push(metadata_run);
-                        }
-                        Err(blocker) => {
-                            executions.push(receipt);
-                            return host_artifact_topology_receipt(
-                                "blocked",
-                                executions,
-                                build_script_metadata_runs,
-                                Some(blocker),
-                            );
-                        }
-                    }
-                }
-                produced_host_artifacts.record_unit(unit, path);
-            }
-            Err(blocker) => {
-                executions.push(receipt);
-                return host_artifact_topology_receipt(
-                    "blocked",
-                    executions,
-                    build_script_metadata_runs,
-                    Some(blocker),
-                );
-            }
-        }
-        executions.push(receipt);
     }
-
-    let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
-    for index in ordered_target_indices {
+    for index in target_order {
         let unit = &graph.derivations[index];
-        let mut executable_unit = match bind_all_host_artifacts_with_index(unit, &produced_host_artifacts) {
-            Ok(bound) => bound,
-            Err(blocker) => {
-                return host_artifact_topology_receipt(
-                    "blocked",
-                    executions,
-                    build_script_metadata_runs,
-                    Some(blocker),
-                );
-            }
-        };
-        executable_unit =
-            match bind_all_build_script_metadata_with_index(&executable_unit, &produced_build_script_metadata) {
-                Ok(bound) => bound,
-                Err(blocker) => {
-                    return host_artifact_topology_receipt(
-                        "blocked",
-                        executions,
-                        build_script_metadata_runs,
-                        Some(blocker),
-                    );
-                }
-            };
-        if !executable_unit.dependency_artifacts.is_empty() {
-            executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_target_artifacts)?;
+        let blocker = execute_host_artifact_consumer(HostArtifactTopologyUnitInputs {
+            options,
+            unit,
+            state: &mut state,
+        })?;
+        if let Some(blocker) = blocker {
+            return host_artifact_topology_receipt("blocked", state.executions, state.metadata_runs, Some(blocker));
         }
-        let receipt = execute_rust_unit(&executable_unit, options)?;
-        if receipt.execution_status != "success" {
-            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-                class: "target-unit-failed".to_string(),
-                message: format!("target unit {} did not execute successfully", unit.unit_id),
-            });
-            executions.push(receipt);
-            return host_artifact_topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-        }
-        if unit.target_kind == "lib" {
-            match produced_library_artifact_path(&executable_unit, options)? {
-                Ok(path) => {
-                    produced_target_artifacts.insert(unit.package_id.clone(), path);
-                }
-                Err(blocker) => {
-                    executions.push(receipt);
-                    return host_artifact_topology_receipt(
-                        "blocked",
-                        executions,
-                        build_script_metadata_runs,
-                        Some(blocker),
-                    );
-                }
-            }
-        }
-        executions.push(receipt);
     }
-
-    host_artifact_topology_receipt("success", executions, build_script_metadata_runs, None)
+    host_artifact_topology_receipt("success", state.executions, state.metadata_runs, None)
 }
 
-fn visit_target_topology_unit(
-    index: usize,
+#[derive(Clone, Copy)]
+enum TopologyVisitPhase {
+    Enter,
+    Exit,
+}
+
+fn topologically_order_units(
+    roots: &[usize],
     edges: &BTreeMap<usize, Vec<usize>>,
-    temporary: &mut BTreeSet<usize>,
-    permanent: &mut BTreeSet<usize>,
-    ordered_indices: &mut Vec<usize>,
     graph: &UnitDerivationGraphSummary,
-) -> Result<(), RustUnitExecutionBlocker> {
+) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
+    debug_assert!(roots.iter().all(|index| *index < graph.derivations.len()));
+    debug_assert!(edges.keys().all(|index| *index < graph.derivations.len()));
+    let edge_count = edges.values().fold(0usize, |count, dependencies| count.saturating_add(dependencies.len()));
+    let traversal_steps = roots.len().saturating_add(edge_count).saturating_mul(2).saturating_add(1);
+    let mut ordered_indices = Vec::with_capacity(roots.len());
+    let mut temporary = BTreeSet::new();
+    let mut permanent = BTreeSet::new();
+    let mut pending = Vec::with_capacity(traversal_steps);
+
+    for root in roots {
+        if permanent.contains(root) {
+            continue;
+        }
+        pending.push((*root, TopologyVisitPhase::Enter));
+        for _ in 0..traversal_steps {
+            let Some((index, phase)) = pending.pop() else {
+                break;
+            };
+            match phase {
+                TopologyVisitPhase::Enter => enter_topology_unit(EnterTopologyUnitInputs {
+                    index: index,
+                    edges: edges,
+                    graph: graph,
+                    temporary: &mut temporary,
+                    permanent: &permanent,
+                    pending: &mut pending,
+                })?,
+                TopologyVisitPhase::Exit => {
+                    temporary.remove(&index);
+                    if permanent.insert(index) {
+                        ordered_indices.push(index);
+                    }
+                }
+            }
+        }
+        if !pending.is_empty() {
+            return Err(RustUnitExecutionBlocker {
+                class: "topology-traversal-limit-exceeded".to_string(),
+                message: format!("target topology traversal exceeded {traversal_steps} bounded steps"),
+            });
+        }
+    }
+    Ok(ordered_indices)
+}
+
+struct EnterTopologyUnitInputs<'a> {
+    index: usize,
+    edges: &'a BTreeMap<usize, Vec<usize>>,
+    graph: &'a UnitDerivationGraphSummary,
+    temporary: &'a mut BTreeSet<usize>,
+    permanent: &'a BTreeSet<usize>,
+    pending: &'a mut Vec<(usize, TopologyVisitPhase)>,
+}
+
+fn enter_topology_unit(inputs: EnterTopologyUnitInputs<'_>) -> Result<(), RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let EnterTopologyUnitInputs {
+        index,
+        edges,
+        graph,
+        temporary,
+        permanent,
+        pending,
+    } = inputs;
     if permanent.contains(&index) {
         return Ok(());
     }
@@ -11333,12 +13540,10 @@ fn visit_target_topology_unit(
             ),
         });
     }
-    for dependency_index in edges.get(&index).into_iter().flatten() {
-        visit_target_topology_unit(*dependency_index, edges, temporary, permanent, ordered_indices, graph)?;
+    pending.push((index, TopologyVisitPhase::Exit));
+    if let Some(dependencies) = edges.get(&index) {
+        pending.extend(dependencies.iter().rev().map(|dependency| (*dependency, TopologyVisitPhase::Enter)));
     }
-    temporary.remove(&index);
-    permanent.insert(index);
-    ordered_indices.push(index);
     Ok(())
 }
 
@@ -11506,6 +13711,8 @@ fn select_produced_dependency_artifact<'a>(
     dependency: &RustDependencyArtifact,
     produced_artifacts: &'a ProducedArtifactIndex,
 ) -> Result<&'a Path, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(producer_unit_id) = &dependency.producer_unit_id {
         return produced_artifacts.by_unit_id.get(producer_unit_id).map(PathBuf::as_path).ok_or_else(|| {
             RustUnitExecutionBlocker {
@@ -11573,11 +13780,13 @@ fn selected_dependency_search_artifacts(
     graph: &UnitDerivationGraphSummary,
     produced_artifacts: &ProducedArtifactIndex,
 ) -> Result<Vec<PathBuf>, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut units_by_id = BTreeMap::new();
     for candidate in &graph.derivations {
-        units_by_id.insert(candidate.unit_id.clone(), candidate);
+        insert_btree_entry_with_bound(&mut units_by_id, candidate.unit_id.clone(), candidate, graph.derivations.len());
     }
-    let mut stack = Vec::new();
+    let mut stack = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for dependency in &unit.dependency_artifacts {
         stack.extend(dependency_producer_unit_ids(unit, dependency, produced_artifacts)?);
     }
@@ -11618,6 +13827,8 @@ fn select_produced_host_search_artifact(
     host_artifact: &RustHostArtifact,
     produced_artifacts: &ProducedArtifactIndex,
 ) -> Result<Option<PathBuf>, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(producer_unit_id) = &host_artifact.producer_unit_id {
         return Ok(produced_artifacts.by_unit_id.get(producer_unit_id).cloned());
     }
@@ -11652,6 +13863,8 @@ fn dependency_producer_unit_ids(
     dependency: &RustDependencyArtifact,
     produced_artifacts: &ProducedArtifactIndex,
 ) -> Result<Vec<String>, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(producer_unit_id) = &dependency.producer_unit_id {
         return Ok(vec![producer_unit_id.clone()]);
     }
@@ -11724,7 +13937,11 @@ fn bind_all_host_artifacts(
             bound = bind_dependency_artifact(&bound, &dependency, produced_artifact)?;
         }
         if host_artifact.target_kind == "proc-macro" {
-            ensure_host_artifact_extern_arg(&mut bound.derivation.args, &host_crate_name, &produced_artifact_string);
+            ensure_host_artifact_extern_arg(HostArtifactExternArgInputs {
+                args: &mut bound.derivation.args,
+                crate_name: &host_crate_name,
+                produced_artifact: &produced_artifact_string,
+            });
         }
     }
     refresh_rustc_args_digest(&mut bound);
@@ -11735,6 +13952,8 @@ fn bind_all_host_artifacts_with_index(
     unit: &RustUnitDerivationSummary,
     produced_host_artifacts: &ProducedHostArtifactIndex,
 ) -> Result<RustUnitDerivationSummary, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut bound = unit.clone();
     for host_artifact in &unit.consumed_host_artifacts {
         let produced_artifact = select_produced_host_artifact(unit, host_artifact, produced_host_artifacts)?;
@@ -11759,7 +13978,11 @@ fn bind_all_host_artifacts_with_index(
             })?;
         }
         if host_artifact.target_kind == "proc-macro" {
-            ensure_host_artifact_extern_arg(&mut bound.derivation.args, &host_crate_name, &produced_artifact_string);
+            ensure_host_artifact_extern_arg(HostArtifactExternArgInputs {
+                args: &mut bound.derivation.args,
+                crate_name: &host_crate_name,
+                produced_artifact: &produced_artifact_string,
+            });
         }
     }
     refresh_rustc_args_digest(&mut bound);
@@ -11771,6 +13994,8 @@ fn select_produced_host_artifact<'a>(
     host_artifact: &RustHostArtifact,
     produced_host_artifacts: &'a ProducedHostArtifactIndex,
 ) -> Result<&'a Path, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(producer_unit_id) = &host_artifact.producer_unit_id {
         return produced_host_artifacts.by_unit_id.get(producer_unit_id).map(PathBuf::as_path).ok_or_else(|| {
             RustUnitExecutionBlocker {
@@ -11837,11 +14062,15 @@ fn bind_host_artifact_material(
     debug_assert!(!host_artifact.artifact.is_empty());
     debug_assert!(!produced_artifact.is_empty());
     for artifact in &mut unit.consumed_host_artifacts {
-        if artifact.package_id == host_artifact.package_id
-            && artifact.target_name == host_artifact.target_name
-            && artifact.target_kind == host_artifact.target_kind
-            && artifact.artifact == host_artifact.artifact
-        {
+        let is_artifact_identity_match = [
+            artifact.package_id == host_artifact.package_id,
+            artifact.target_name == host_artifact.target_name,
+            artifact.target_kind == host_artifact.target_kind,
+            artifact.artifact == host_artifact.artifact,
+        ]
+        .into_iter()
+        .all(|is_match| is_match);
+        if is_artifact_identity_match {
             artifact.artifact = produced_artifact.to_string();
         }
     }
@@ -11852,7 +14081,18 @@ fn bind_host_artifact_material(
     }
 }
 
-fn ensure_host_artifact_extern_arg(args: &mut Vec<String>, crate_name: &str, produced_artifact: &str) {
+struct HostArtifactExternArgInputs<'a> {
+    args: &'a mut Vec<String>,
+    crate_name: &'a str,
+    produced_artifact: &'a str,
+}
+
+fn ensure_host_artifact_extern_arg(inputs: HostArtifactExternArgInputs<'_>) {
+    let HostArtifactExternArgInputs {
+        args,
+        crate_name,
+        produced_artifact,
+    } = inputs;
     debug_assert!(!crate_name.is_empty());
     debug_assert!(!produced_artifact.is_empty());
     let extern_arg = format!("{crate_name}={produced_artifact}");
@@ -11933,6 +14173,8 @@ fn select_package_build_script_metadata(
     package_id: &str,
     produced_metadata: &ProducedBuildScriptMetadataIndex,
 ) -> Result<BuildScriptMetadataSummary, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let candidates = produced_metadata.by_package.get(package_id).cloned().unwrap_or_default();
     let candidates = collapse_build_script_alias_metadata_candidates(candidates);
     match candidates.as_slice() {
@@ -11959,8 +14201,10 @@ fn select_package_build_script_metadata(
 fn collapse_build_script_alias_metadata_candidates(
     candidates: Vec<ProducedBuildScriptMetadata>,
 ) -> Vec<ProducedBuildScriptMetadata> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut alias_candidates_by_name = BTreeMap::<String, Vec<ProducedBuildScriptMetadata>>::new();
-    let mut collapsed = Vec::new();
+    let mut collapsed = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for candidate in candidates {
         if is_build_script_target_alias(&candidate.target_name) {
             alias_candidates_by_name.entry(candidate.target_name.clone()).or_default().push(candidate);
@@ -12087,15 +14331,15 @@ fn is_link_self_contained_codegen_option(option: &str) -> bool {
 
 fn rust_topology_runtime_args(reviewable_args: &[String]) -> Vec<String> {
     let mut has_link_self_contained = false;
-    let mut previous_is_codegen_flag = false;
+    let mut is_previous_codegen_flag = false;
     for arg in reviewable_args {
-        if previous_is_codegen_flag && is_link_self_contained_codegen_option(arg) {
+        if is_previous_codegen_flag && is_link_self_contained_codegen_option(arg) {
             has_link_self_contained = true;
         }
         if arg.strip_prefix("-C").is_some_and(is_link_self_contained_codegen_option) {
             has_link_self_contained = true;
         }
-        previous_is_codegen_flag = arg == RUSTC_CODEGEN_OPTION_FLAG;
+        is_previous_codegen_flag = arg == RUSTC_CODEGEN_OPTION_FLAG;
     }
     let mut runtime_args = reviewable_args.to_vec();
     if !has_link_self_contained {
@@ -12141,20 +14385,21 @@ fn rust_topology_child_env(
     inherited_path: Option<OsString>,
     inherited_compile_env: &BTreeMap<String, OsString>,
 ) -> BTreeMap<String, OsString> {
+    let entry_bound = explicit_env.len().saturating_add(inherited_compile_env.len()).saturating_add(1);
     let mut env = BTreeMap::new();
     if let Some(path) = inherited_path
         && !path.is_empty()
     {
-        env.insert(RUST_TOPOLOGY_TOOL_PATH_ENV.to_string(), path);
+        insert_btree_entry_with_bound(&mut env, RUST_TOPOLOGY_TOOL_PATH_ENV.to_string(), path, entry_bound);
     }
     for (key, value) in inherited_compile_env {
         debug_assert!(RUST_TOPOLOGY_COMPILE_ENV_ALLOWLIST.contains(&key.as_str()));
         debug_assert!(!value.is_empty());
-        env.insert(key.clone(), value.clone());
+        insert_btree_entry_with_bound(&mut env, key.clone(), value.clone(), entry_bound);
     }
     for (key, value) in explicit_env {
         debug_assert!(!key.is_empty());
-        env.insert(key.clone(), OsString::from(value));
+        insert_btree_entry_with_bound(&mut env, key.clone(), OsString::from(value), entry_bound);
     }
     env
 }
@@ -12168,7 +14413,12 @@ fn allowed_rust_topology_compile_env(candidates: &BTreeMap<String, OsString>) ->
         if value.is_empty() {
             continue;
         }
-        allowed.insert((*key).to_string(), value.clone());
+        insert_btree_entry_with_bound(
+            &mut allowed,
+            (*key).to_string(),
+            value.clone(),
+            RUST_TOPOLOGY_COMPILE_ENV_ALLOWLIST.len(),
+        );
     }
     allowed
 }
@@ -12226,6 +14476,8 @@ fn build_script_child_env(
     package_root: Option<&Path>,
     selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> BTreeMap<String, String> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut env = BTreeMap::new();
     append_build_script_dependency_env(&mut env, &unit.derivation.env);
     append_build_script_package_env(&mut env, &unit.derivation.env);
@@ -12287,6 +14539,8 @@ fn run_build_script_metadata(
     options: &RustUnitExecutionOptions,
     executable: &Path,
 ) -> Result<Result<BuildScriptMetadataRunReceipt, RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if !executable.is_file() {
         return Ok(Err(RustUnitExecutionBlocker {
             class: "missing-build-script-executable".to_string(),
@@ -12393,6 +14647,8 @@ fn source_built_c_compiler_route_from_env()
 fn source_built_c_compiler_route_from_json(
     text: &str,
 ) -> Result<Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if text.trim().is_empty() {
         return Err(RustUnitExecutionBlocker {
             class: "source-built-c-compiler-route-invalid".to_string(),
@@ -12534,11 +14790,14 @@ fn parse_build_script_metadata(
     stdout: &str,
     out_dir: &Path,
 ) -> Result<BuildScriptMetadataSummary, RustUnitExecutionBlocker> {
-    let mut rustc_cfg = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let metadata_entry_bound = stdout.lines().count();
+    let mut rustc_cfg = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut rustc_env = BTreeMap::new();
-    let mut rustc_link_lib = Vec::new();
-    let mut rustc_link_search = Vec::new();
-    let mut rerun_if_changed = Vec::new();
+    let mut rustc_link_lib = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut rustc_link_search = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut rerun_if_changed = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut metadata = BTreeMap::new();
     for (line_index, line) in stdout.lines().enumerate() {
         let Some(payload) = cargo_metadata_payload(line) else {
@@ -12546,27 +14805,38 @@ fn parse_build_script_metadata(
         };
         if let Some(value) = payload.strip_prefix("rustc-cfg=") {
             push_metadata_value(&mut rustc_cfg, value, line_index)?;
-        } else if let Some(value) = payload.strip_prefix("rustc-env=") {
+            continue;
+        }
+        if let Some(value) = payload.strip_prefix("rustc-env=") {
             let Some((key, env_value)) = value.split_once('=') else {
                 return Err(malformed_build_script_metadata(line_index, "rustc-env must be KEY=VALUE"));
             };
             if key.is_empty() {
                 return Err(malformed_build_script_metadata(line_index, "rustc-env key must not be empty"));
             }
-            rustc_env.insert(key.to_string(), env_value.to_string());
-        } else if let Some(value) = payload.strip_prefix("rustc-link-lib=") {
+            insert_btree_entry_with_bound(&mut rustc_env, key.to_string(), env_value.to_string(), metadata_entry_bound);
+            continue;
+        }
+        if let Some(value) = payload.strip_prefix("rustc-link-lib=") {
             validate_rustc_link_lib_metadata(value, line_index)?;
             push_metadata_value(&mut rustc_link_lib, value, line_index)?;
-        } else if let Some(value) = payload.strip_prefix("rustc-link-search=") {
+            continue;
+        }
+        if let Some(value) = payload.strip_prefix("rustc-link-search=") {
             validate_rustc_link_search_metadata(value, line_index)?;
             push_metadata_value(&mut rustc_link_search, value, line_index)?;
-        } else if let Some(value) = payload.strip_prefix("rerun-if-changed=") {
-            push_metadata_value(&mut rerun_if_changed, value, line_index)?;
-        } else if cargo_metadata_directive_is_ignored(payload) {
             continue;
-        } else if let Some((key, value)) = payload.split_once('=') {
+        }
+        if let Some(value) = payload.strip_prefix("rerun-if-changed=") {
+            push_metadata_value(&mut rerun_if_changed, value, line_index)?;
+            continue;
+        }
+        if cargo_metadata_directive_is_ignored(payload) {
+            continue;
+        }
+        if let Some((key, value)) = payload.split_once('=') {
             validate_build_script_metadata_key(key, line_index)?;
-            metadata.insert(key.to_string(), value.to_string());
+            insert_btree_entry_with_bound(&mut metadata, key.to_string(), value.to_string(), metadata_entry_bound);
         }
     }
     rustc_cfg.sort();
@@ -12577,15 +14847,15 @@ fn parse_build_script_metadata(
     rustc_link_search.dedup();
     rerun_if_changed.sort();
     rerun_if_changed.dedup();
-    build_script_metadata_summary_from_parts(
-        normalize_path_string(out_dir),
-        rustc_cfg,
-        rustc_env,
-        rustc_link_lib,
-        rustc_link_search,
-        rerun_if_changed,
-        metadata,
-    )
+    build_script_metadata_summary_from_parts(BuildScriptMetadataParts {
+        out_dir: normalize_path_string(out_dir),
+        rustc_cfg: rustc_cfg,
+        rustc_env: rustc_env,
+        rustc_link_lib: rustc_link_lib,
+        rustc_link_search: rustc_link_search,
+        rerun_if_changed: rerun_if_changed,
+        metadata: metadata,
+    })
 }
 
 fn cargo_metadata_payload(line: &str) -> Option<&str> {
@@ -12616,6 +14886,8 @@ fn validate_build_script_metadata_key(key: &str, line_index: usize) -> Result<()
 }
 
 fn validate_rustc_link_lib_metadata(value: &str, line_index: usize) -> Result<(), RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if value.is_empty() {
         return Err(malformed_build_script_metadata(line_index, "metadata value must not be empty"));
     }
@@ -12668,6 +14940,8 @@ fn validate_rustc_link_lib_modifiers(modifiers: &str, line_index: usize) -> Resu
 }
 
 fn validate_rustc_link_search_metadata(value: &str, line_index: usize) -> Result<(), RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if value.is_empty() {
         return Err(malformed_build_script_metadata(line_index, "metadata value must not be empty"));
     }
@@ -12726,11 +15000,11 @@ fn push_metadata_value(
 fn malformed_build_script_metadata(line_index: usize, reason: &str) -> RustUnitExecutionBlocker {
     RustUnitExecutionBlocker {
         class: "malformed-build-script-metadata".to_string(),
-        message: format!("build-script metadata line {} is malformed: {reason}", line_index + 1),
+        message: format!("build-script metadata line {} is malformed: {reason}", line_index.saturating_add(1)),
     }
 }
 
-fn build_script_metadata_summary_from_parts(
+struct BuildScriptMetadataParts {
     out_dir: String,
     rustc_cfg: Vec<String>,
     rustc_env: BTreeMap<String, String>,
@@ -12738,7 +15012,22 @@ fn build_script_metadata_summary_from_parts(
     rustc_link_search: Vec<String>,
     rerun_if_changed: Vec<String>,
     metadata: BTreeMap<String, String>,
+}
+
+fn build_script_metadata_summary_from_parts(
+    parts: BuildScriptMetadataParts,
 ) -> Result<BuildScriptMetadataSummary, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let BuildScriptMetadataParts {
+        out_dir,
+        rustc_cfg,
+        rustc_env,
+        rustc_link_lib,
+        rustc_link_search,
+        rerun_if_changed,
+        metadata,
+    } = parts;
     #[derive(Serialize)]
     struct Hashable<'a> {
         out_dir: &'a str,
@@ -12788,9 +15077,9 @@ fn build_script_metadata_from_run(run: &BuildScriptMetadataRunReceipt) -> BuildS
 }
 
 fn digest_build_script_out_dir(out_dir: &Path) -> Result<Vec<RustExecutionArtifactDigest>, RunError> {
-    let mut files = Vec::new();
+    let mut files = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     collect_output_files(out_dir, &mut files)?;
-    let mut digests = Vec::new();
+    let mut digests = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for file in files {
         let bytes = fs::read(&file).map_err(|err| {
             RunError::Internal(format!("reading build-script OUT_DIR artifact {}: {err}", file.display()))
@@ -12828,6 +15117,8 @@ fn append_dependency_search_paths_from_paths<'a>(
     unit: &mut RustUnitDerivationSummary,
     produced_artifacts: impl IntoIterator<Item = &'a PathBuf>,
 ) {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let existing_search_args = rustc_dependency_search_args(&unit.derivation.args);
     let mut new_search_args = BTreeSet::new();
     for produced_artifact in produced_artifacts {
@@ -12887,60 +15178,62 @@ fn resolve_compiler_policy_invocation(
     unit: &RustUnitDerivationSummary,
     toolchain: &RustToolchainIdentity,
 ) -> Result<Result<Option<RustCompilerPolicyInvocation>, RustCompilerPolicyResolutionBlocker>, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if selection.mode.is_plain() {
         return Ok(Ok(None));
     }
     let Some(manifest_path) = selection.provider_manifest.as_ref() else {
-        return Ok(Err(compiler_policy_resolution_blocker(
-            selection,
-            "compiler-policy-missing-provider-manifest",
-            "compiler-policy mode requires a provider manifest",
-        )?));
+        return Ok(Err(compiler_policy_resolution_blocker(CompilerPolicyResolutionBlockerInputs {
+            selection: selection,
+            class: "compiler-policy-missing-provider-manifest",
+            message: "compiler-policy mode requires a provider manifest",
+        })?));
     };
     let manifest_bytes = match fs::read(manifest_path) {
         Ok(bytes) => bytes,
         Err(err) => {
-            return Ok(Err(compiler_policy_resolution_blocker(
-                selection,
-                "compiler-policy-missing-provider-manifest",
-                &format!("reading compiler-policy provider manifest {}: {err}", manifest_path.display()),
-            )?));
+            return Ok(Err(compiler_policy_resolution_blocker(CompilerPolicyResolutionBlockerInputs {
+                selection: selection,
+                class: "compiler-policy-missing-provider-manifest",
+                message: &format!("reading compiler-policy provider manifest {}: {err}", manifest_path.display()),
+            })?));
         }
     };
     let manifest_digest = compiler_policy_digest_bytes(&manifest_bytes);
     if let Some(expected_digest) = &selection.expected_provider_manifest_digest {
         let Some(expected_digest) = normalize_compiler_policy_digest(expected_digest) else {
-            return Ok(Err(compiler_policy_resolution_blocker(
-                selection,
-                "compiler-policy-invalid-provider-manifest-digest",
-                "expected compiler-policy provider manifest digest must be b3:<64 lowercase hex> or raw 64 lowercase hex",
-            )?));
+            return Ok(Err(compiler_policy_resolution_blocker(CompilerPolicyResolutionBlockerInputs {
+                selection: selection,
+                class: "compiler-policy-invalid-provider-manifest-digest",
+                message: "expected compiler-policy provider manifest digest must be b3:<64 lowercase hex> or raw 64 lowercase hex",
+            })?));
         };
         if expected_digest != manifest_digest {
-            return Ok(Err(compiler_policy_resolution_blocker(
-                selection,
-                "compiler-policy-provider-manifest-digest-mismatch",
-                "compiler-policy provider manifest digest does not match the operator-selected digest",
-            )?));
+            return Ok(Err(compiler_policy_resolution_blocker(CompilerPolicyResolutionBlockerInputs {
+                selection: selection,
+                class: "compiler-policy-provider-manifest-digest-mismatch",
+                message: "compiler-policy provider manifest digest does not match the operator-selected digest",
+            })?));
         }
     }
     let manifest = match serde_json::from_slice::<RustCompilerPolicyProviderManifest>(&manifest_bytes) {
         Ok(manifest) => manifest,
         Err(err) => {
-            return Ok(Err(compiler_policy_resolution_blocker(
-                selection,
-                "compiler-policy-invalid-provider-manifest",
-                &format!("parsing compiler-policy provider manifest {}: {err}", manifest_path.display()),
-            )?));
+            return Ok(Err(compiler_policy_resolution_blocker(CompilerPolicyResolutionBlockerInputs {
+                selection: selection,
+                class: "compiler-policy-invalid-provider-manifest",
+                message: &format!("parsing compiler-policy provider manifest {}: {err}", manifest_path.display()),
+            })?));
         }
     };
     match validate_compiler_policy_manifest(selection.mode, rustc, toolchain, &manifest, &manifest_digest)? {
         Ok(identity) => {
-            let report_path = compiler_policy_report_path(output_root, unit);
+            let policy_output_path = compiler_policy_report_path(output_root, unit);
             Ok(Ok(Some(RustCompilerPolicyInvocation {
                 executable: PathBuf::from(&manifest.driver.path),
                 environment: manifest.required_environment,
-                report_path,
+                report_path: policy_output_path,
                 receipt: compiler_policy_receipt(identity, COMPILER_POLICY_STATUS_NOT_RUN, None),
             })))
         }
@@ -12954,6 +15247,135 @@ struct RustCompilerPolicyResolutionBlocker {
     blocker: RustUnitExecutionBlocker,
 }
 
+fn compiler_policy_manifest_compatibility_blocker(
+    mode: RustCompilerPolicyMode,
+    rustc: &Path,
+    toolchain: &RustToolchainIdentity,
+    manifest: &RustCompilerPolicyProviderManifest,
+    manifest_digest: &str,
+) -> Result<Option<RustCompilerPolicyResolutionBlocker>, RunError> {
+    debug_assert!(!manifest_digest.is_empty());
+    debug_assert!(!COMPILER_POLICY_DIGEST_PREFIX.is_empty());
+    if manifest.provider.is_empty() || manifest.profile.is_empty() || manifest.adapter_kind.is_empty() {
+        return compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
+            mode: mode,
+            manifest: manifest,
+            provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
+            class: "compiler-policy-invalid-provider-manifest",
+            message: "compiler-policy provider, profile, and adapter kind must be non-empty",
+        })
+        .map(Some);
+    }
+    if manifest.compatible_rustc.version_verbose != toolchain.version_verbose {
+        return compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
+            mode: mode,
+            manifest: manifest,
+            provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
+            class: "compiler-policy-toolchain-mismatch",
+            message: "compiler-policy provider manifest was produced for a different rustc -vV identity",
+        })
+        .map(Some);
+    }
+    if let Some(expected_digest) = &manifest.compatible_rustc.executable_blake3
+        && let Some(actual_digest) = readable_path_digest(rustc)?
+        && normalize_compiler_policy_digest(expected_digest).as_deref() != Some(actual_digest.as_str())
+    {
+        return compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
+            mode: mode,
+            manifest: manifest,
+            provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
+            class: "compiler-policy-toolchain-mismatch",
+            message: "compiler-policy provider manifest rustc executable digest does not match selected rustc",
+        })
+        .map(Some);
+    }
+    Ok(None)
+}
+
+struct CompilerPolicyArtifactVerificationInputs<'a> {
+    mode: RustCompilerPolicyMode,
+    manifest: &'a RustCompilerPolicyProviderManifest,
+    manifest_digest: &'a str,
+    field: &'a str,
+    artifact: &'a RustCompilerPolicyManifestArtifact,
+}
+
+fn verified_compiler_policy_artifact(
+    inputs: CompilerPolicyArtifactVerificationInputs<'_>,
+) -> Result<Result<String, RustCompilerPolicyResolutionBlocker>, RunError> {
+    match verify_compiler_policy_artifact(inputs.field, inputs.artifact) {
+        Ok(digest) => Ok(Ok(digest)),
+        Err(blocker) => compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
+            mode: inputs.mode,
+            manifest: inputs.manifest,
+            provider_manifest_digest_blake3: Some(inputs.manifest_digest.to_string()),
+            class: &blocker.class,
+            message: &blocker.message,
+        })
+        .map(Err),
+    }
+}
+
+struct CompilerPolicyArtifactDigests {
+    driver: String,
+    lint_library: String,
+    config: String,
+    standards_policy: Option<String>,
+}
+
+fn compiler_policy_artifact_digests(
+    mode: RustCompilerPolicyMode,
+    manifest: &RustCompilerPolicyProviderManifest,
+    manifest_digest: &str,
+) -> Result<Result<CompilerPolicyArtifactDigests, RustCompilerPolicyResolutionBlocker>, RunError> {
+    debug_assert!(!manifest_digest.is_empty());
+    debug_assert!(!COMPILER_POLICY_DIGEST_PREFIX.is_empty());
+    let verify = |field, artifact| {
+        verified_compiler_policy_artifact(CompilerPolicyArtifactVerificationInputs {
+            mode,
+            manifest,
+            manifest_digest,
+            field,
+            artifact,
+        })
+    };
+    let driver = match verify("driver", &manifest.driver)? {
+        Ok(digest) => digest,
+        Err(blocker) => return Ok(Err(blocker)),
+    };
+    let lint_library = match verify("lint_library", &manifest.lint_library)? {
+        Ok(digest) => digest,
+        Err(blocker) => return Ok(Err(blocker)),
+    };
+    let config = match verify("config", &manifest.config)? {
+        Ok(digest) => digest,
+        Err(blocker) => return Ok(Err(blocker)),
+    };
+    let standards_policy = match &manifest.standards_policy {
+        Some(artifact) => match verify("standards_policy", artifact)? {
+            Ok(digest) => Some(digest),
+            Err(blocker) => return Ok(Err(blocker)),
+        },
+        None if mode == RustCompilerPolicyMode::Required => {
+            let blocker = compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
+                mode: mode,
+                manifest: manifest,
+                provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
+                class: "compiler-policy-missing-standards-policy",
+                message: "required compiler-policy mode requires a declared standards policy artifact",
+            })?;
+            return Ok(Err(blocker));
+        }
+        None => None,
+    };
+    Ok(Ok(CompilerPolicyArtifactDigests {
+        driver,
+        lint_library,
+        config,
+        standards_policy,
+    }))
+}
+
 fn validate_compiler_policy_manifest(
     mode: RustCompilerPolicyMode,
     rustc: &Path,
@@ -12961,113 +15383,34 @@ fn validate_compiler_policy_manifest(
     manifest: &RustCompilerPolicyProviderManifest,
     manifest_digest: &str,
 ) -> Result<Result<RustCompilerPolicyIdentity, RustCompilerPolicyResolutionBlocker>, RunError> {
-    if manifest.provider.is_empty() || manifest.profile.is_empty() || manifest.adapter_kind.is_empty() {
-        return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
-            mode,
-            manifest,
-            Some(manifest_digest.to_string()),
-            "compiler-policy-invalid-provider-manifest",
-            "compiler-policy provider, profile, and adapter kind must be non-empty",
-        )?));
-    }
-    if manifest.compatible_rustc.version_verbose != toolchain.version_verbose {
-        return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
-            mode,
-            manifest,
-            Some(manifest_digest.to_string()),
-            "compiler-policy-toolchain-mismatch",
-            "compiler-policy provider manifest was produced for a different rustc -vV identity",
-        )?));
-    }
-    if let Some(expected_rustc_digest) = &manifest.compatible_rustc.executable_blake3
-        && let Some(actual_rustc_digest) = readable_path_digest(rustc)?
-        && normalize_compiler_policy_digest(expected_rustc_digest).as_deref() != Some(actual_rustc_digest.as_str())
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    if let Some(blocker) =
+        compiler_policy_manifest_compatibility_blocker(mode, rustc, toolchain, manifest, manifest_digest)?
     {
-        return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
-            mode,
-            manifest,
-            Some(manifest_digest.to_string()),
-            "compiler-policy-toolchain-mismatch",
-            "compiler-policy provider manifest rustc executable digest does not match selected rustc",
-        )?));
+        return Ok(Err(blocker));
     }
-    let driver_digest = match verify_compiler_policy_artifact("driver", &manifest.driver) {
-        Ok(digest) => digest,
-        Err(blocker) => {
-            return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
-                mode,
-                manifest,
-                Some(manifest_digest.to_string()),
-                &blocker.class,
-                &blocker.message,
-            )?));
-        }
-    };
-    let lint_library_digest = match verify_compiler_policy_artifact("lint_library", &manifest.lint_library) {
-        Ok(digest) => digest,
-        Err(blocker) => {
-            return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
-                mode,
-                manifest,
-                Some(manifest_digest.to_string()),
-                &blocker.class,
-                &blocker.message,
-            )?));
-        }
-    };
-    let config_digest = match verify_compiler_policy_artifact("config", &manifest.config) {
-        Ok(digest) => digest,
-        Err(blocker) => {
-            return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
-                mode,
-                manifest,
-                Some(manifest_digest.to_string()),
-                &blocker.class,
-                &blocker.message,
-            )?));
-        }
-    };
-    let standards_policy_digest = match &manifest.standards_policy {
-        Some(artifact) => match verify_compiler_policy_artifact("standards_policy", artifact) {
-            Ok(digest) => Some(digest),
-            Err(blocker) => {
-                return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
-                    mode,
-                    manifest,
-                    Some(manifest_digest.to_string()),
-                    &blocker.class,
-                    &blocker.message,
-                )?));
-            }
-        },
-        None if mode == RustCompilerPolicyMode::Required => {
-            return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
-                mode,
-                manifest,
-                Some(manifest_digest.to_string()),
-                "compiler-policy-missing-standards-policy",
-                "required compiler-policy mode requires a declared standards policy artifact",
-            )?));
-        }
-        None => None,
+    let artifact_digests = match compiler_policy_artifact_digests(mode, manifest, manifest_digest)? {
+        Ok(digests) => digests,
+        Err(blocker) => return Ok(Err(blocker)),
     };
     if manifest.claims.is_empty() {
-        return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
-            mode,
-            manifest,
-            Some(manifest_digest.to_string()),
-            "compiler-policy-invalid-provider-manifest",
-            "compiler-policy provider manifest must declare bounded claims",
-        )?));
+        return Ok(Err(compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
+            mode: mode,
+            manifest: manifest,
+            provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
+            class: "compiler-policy-invalid-provider-manifest",
+            message: "compiler-policy provider manifest must declare bounded claims",
+        })?));
     }
     if !manifest.non_claims.iter().any(|claim| claim == "program-correctness") {
-        return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
-            mode,
-            manifest,
-            Some(manifest_digest.to_string()),
-            "compiler-policy-invalid-provider-manifest",
-            "compiler-policy provider manifest must explicitly avoid program-correctness claims",
-        )?));
+        return Ok(Err(compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
+            mode: mode,
+            manifest: manifest,
+            provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
+            class: "compiler-policy-invalid-provider-manifest",
+            message: "compiler-policy provider manifest must explicitly avoid program-correctness claims",
+        })?));
     }
     let adapter_environment_digest_blake3 = rust_derivation_env_digest(&manifest.required_environment)?;
     Ok(Ok(RustCompilerPolicyIdentity {
@@ -13076,10 +15419,10 @@ fn validate_compiler_policy_manifest(
         profile: manifest.profile.clone(),
         adapter_kind: manifest.adapter_kind.clone(),
         provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
-        driver_digest_blake3: Some(driver_digest),
-        lint_library_digest_blake3: Some(lint_library_digest),
-        config_digest_blake3: Some(config_digest),
-        standards_policy_digest_blake3: standards_policy_digest,
+        driver_digest_blake3: Some(artifact_digests.driver),
+        lint_library_digest_blake3: Some(artifact_digests.lint_library),
+        config_digest_blake3: Some(artifact_digests.config),
+        standards_policy_digest_blake3: artifact_digests.standards_policy,
         adapter_executable: normalize_path_string(Path::new(&manifest.driver.path)),
         adapter_environment_digest_blake3,
     }))
@@ -13089,6 +15432,8 @@ fn verify_compiler_policy_artifact(
     field: &str,
     artifact: &RustCompilerPolicyManifestArtifact,
 ) -> Result<String, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let Some(declared_digest) = normalize_compiler_policy_digest(&artifact.blake3) else {
         return Err(RustUnitExecutionBlocker {
             class: "compiler-policy-invalid-digest".to_string(),
@@ -13118,11 +15463,22 @@ fn readable_path_digest(path: &Path) -> Result<Option<String>, RunError> {
     }
 }
 
+struct CompilerPolicyResolutionBlockerInputs<'a> {
+    selection: &'a RustCompilerPolicySelection,
+    class: &'a str,
+    message: &'a str,
+}
+
 fn compiler_policy_resolution_blocker(
-    selection: &RustCompilerPolicySelection,
-    class: &str,
-    message: &str,
+    inputs: CompilerPolicyResolutionBlockerInputs<'_>,
 ) -> Result<RustCompilerPolicyResolutionBlocker, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let CompilerPolicyResolutionBlockerInputs {
+        selection,
+        class,
+        message,
+    } = inputs;
     let adapter_executable = selection
         .provider_manifest
         .as_deref()
@@ -13150,13 +15506,26 @@ fn compiler_policy_resolution_blocker(
     })
 }
 
-fn compiler_policy_resolution_blocker_for_manifest(
+struct CompilerPolicyManifestBlockerInputs<'a> {
     mode: RustCompilerPolicyMode,
-    manifest: &RustCompilerPolicyProviderManifest,
+    manifest: &'a RustCompilerPolicyProviderManifest,
     provider_manifest_digest_blake3: Option<String>,
-    class: &str,
-    message: &str,
+    class: &'a str,
+    message: &'a str,
+}
+
+fn compiler_policy_resolution_blocker_for_manifest(
+    inputs: CompilerPolicyManifestBlockerInputs<'_>,
 ) -> Result<RustCompilerPolicyResolutionBlocker, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let CompilerPolicyManifestBlockerInputs {
+        mode,
+        manifest,
+        provider_manifest_digest_blake3,
+        class,
+        message,
+    } = inputs;
     let identity = RustCompilerPolicyIdentity {
         mode: mode.as_str().to_string(),
         provider: empty_to_unresolved(&manifest.provider),
@@ -13194,6 +15563,8 @@ fn compiler_policy_receipt(
     invocation_status: &str,
     waiver_summary: Option<RustCompilerPolicyWaiverSummary>,
 ) -> RustCompilerPolicyExecutionReceipt {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let compliance_claim = if invocation_status == COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN
         || invocation_status == COMPILER_POLICY_STATUS_NOT_RUN
     {
@@ -13239,6 +15610,8 @@ fn compiler_policy_receipt_from_report(
     invocation_status: &str,
     fail_closed: bool,
 ) -> Result<Result<RustCompilerPolicyExecutionReceipt, RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut receipt = compiler_policy_receipt_with_status(invocation.receipt.clone(), invocation_status);
     if !invocation.report_path.exists() {
         return Ok(Ok(receipt));
@@ -13249,8 +15622,8 @@ fn compiler_policy_receipt_from_report(
             invocation.report_path.display()
         ))
     })?;
-    let report = match serde_json::from_slice::<RustCompilerPolicyAdapterReport>(&bytes) {
-        Ok(report) => report,
+    let policy_evidence = match serde_json::from_slice::<RustCompilerPolicyAdapterReport>(&bytes) {
+        Ok(policy_evidence) => policy_evidence,
         Err(err) if fail_closed => {
             return Ok(Err(RustUnitExecutionBlocker {
                 class: "compiler-policy-invalid-adapter-report".to_string(),
@@ -13259,10 +15632,10 @@ fn compiler_policy_receipt_from_report(
         }
         Err(_err) => return Ok(Ok(receipt)),
     };
-    if let Some(waiver_summary) = report.waiver_summary {
+    if let Some(waiver_summary) = policy_evidence.waiver_summary {
         receipt.waiver_summary = Some(waiver_summary);
     }
-    if let Some(standards_gate) = report.standards_gate {
+    if let Some(standards_gate) = policy_evidence.standards_gate {
         receipt.standards_gate = Some(standards_gate);
     }
     Ok(Ok(receipt))
@@ -13305,6 +15678,8 @@ fn execute_rust_compiler_command(
     unit_output_dir: &Path,
     compiler_policy: Option<&RustCompilerPolicyInvocation>,
 ) -> Result<std::process::Output, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut command = match compiler_policy {
         Some(policy) => {
             if let Some(report_dir) = policy.report_path.parent() {
@@ -13340,355 +15715,491 @@ fn execute_rust_compiler_command(
     })
 }
 
-fn compiler_policy_blocked_execution_receipt(
-    unit: &RustUnitDerivationSummary,
+struct CompilerPolicyBlockedReceiptInputs<'a> {
+    unit: &'a RustUnitDerivationSummary,
     toolchain: RustToolchainIdentity,
     environment_digest_blake3: String,
     dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     compiler_policy: RustCompilerPolicyExecutionReceipt,
     blocker: RustUnitExecutionBlocker,
+}
+
+fn compiler_policy_blocked_execution_receipt(
+    inputs: CompilerPolicyBlockedReceiptInputs<'_>,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
-    finalized_execution_receipt(
-        unit,
-        "blocked",
-        "not-run-compiler-policy-blocker",
+    finalized_execution_receipt(FinalizedExecutionReceiptInputs {
+        unit: inputs.unit,
+        execution_status: "blocked",
+        rebuild_reason: "not-run-compiler-policy-blocker",
+        toolchain: inputs.toolchain,
+        environment_digest_blake3: inputs.environment_digest_blake3,
+        dependency_artifact_digests: inputs.dependency_artifact_digests,
+        host_artifact_digests: inputs.host_artifact_digests,
+        output_artifact_digests: Vec::new(),
+        compiler_policy: Some(inputs.compiler_policy),
+        blocker: Some(inputs.blocker),
+    })
+}
+
+struct RustUnitExecutionInputs {
+    output_dir: PathBuf,
+    toolchain: RustToolchainIdentity,
+    environment_digest_blake3: String,
+    dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    host_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    compiler_policy_invocation: Option<RustCompilerPolicyInvocation>,
+    compiler_policy_receipt: Option<RustCompilerPolicyExecutionReceipt>,
+}
+
+fn required_execution_artifact_digests(
+    unit: &RustUnitDerivationSummary,
+) -> Result<
+    Result<(Vec<RustExecutionArtifactDigest>, Vec<RustExecutionArtifactDigest>), RustUnitExecutionBlocker>,
+    RunError,
+> {
+    let dependency_paths =
+        unit.dependency_artifacts.iter().map(|artifact| artifact.artifact.as_str()).collect::<Vec<_>>();
+    let dependency_digests = match artifact_digests(&dependency_paths, "missing-dependency-artifact")? {
+        Ok(digests) => digests,
+        Err(blocker) => return Ok(Err(blocker)),
+    };
+    let host_paths = unit.consumed_host_artifacts.iter().map(|artifact| artifact.artifact.as_str()).collect::<Vec<_>>();
+    let host_digests = match artifact_digests(&host_paths, "missing-host-artifact")? {
+        Ok(digests) => digests,
+        Err(blocker) => return Ok(Err(blocker)),
+    };
+    Ok(Ok((dependency_digests, host_digests)))
+}
+
+fn prepare_rust_unit_execution_inputs(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<Result<RustUnitExecutionInputs, RustUnitExecutionReceipt>, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!RUST_UNIT_EXECUTION_RECEIPT_FILE.is_empty());
+    if unit.derivation.builder != "rustc" {
+        return blocked_execution_receipt(BlockedExecutionReceiptInputs {
+            unit: Some(unit),
+            class: "unsupported-builder",
+            message: "only rustc-backed Rust unit derivations are supported by this execution rail",
+        })
+        .map(Err);
+    }
+    if !tool_exists(&options.rustc) {
+        return blocked_execution_receipt(BlockedExecutionReceiptInputs {
+            unit: Some(unit),
+            class: "missing-toolchain",
+            message: &format!("rustc tool is not available: {}", options.rustc.display()),
+        })
+        .map(Err);
+    }
+    let toolchain = match rustc_toolchain_identity(&options.rustc)? {
+        Ok(identity) => identity,
+        Err(blocker) => {
+            return blocked_execution_receipt(BlockedExecutionReceiptInputs {
+                unit: Some(unit),
+                class: &blocker.class,
+                message: &blocker.message,
+            })
+            .map(Err);
+        }
+    };
+    let source_path = rustc_materialized_source_path(&unit.derivation.args).ok_or_else(|| {
+        RunError::Internal(format!("unit {} lacks a rustc source path in reviewable args", unit.unit_id))
+    })?;
+    if !source_path.is_file() {
+        return blocked_execution_receipt(BlockedExecutionReceiptInputs {
+            unit: Some(unit),
+            class: "missing-source-material",
+            message: &format!("declared Rust source is not readable: {}", source_path.display()),
+        })
+        .map(Err);
+    }
+    if unit.derivation.outputs.is_empty() {
+        return blocked_execution_receipt(BlockedExecutionReceiptInputs {
+            unit: Some(unit),
+            class: "missing-declared-output",
+            message: "unit derivation does not declare any output artifact paths",
+        })
+        .map(Err);
+    }
+    let (dependency_artifact_digests, host_artifact_digests) = match required_execution_artifact_digests(unit)? {
+        Ok(digests) => digests,
+        Err(blocker) => {
+            return blocked_execution_receipt(BlockedExecutionReceiptInputs {
+                unit: Some(unit),
+                class: &blocker.class,
+                message: &blocker.message,
+            })
+            .map(Err);
+        }
+    };
+    Ok(Ok(RustUnitExecutionInputs {
+        output_dir: options.output_root.join(safe_path_component(&unit.unit_id)),
         toolchain,
-        environment_digest_blake3,
+        environment_digest_blake3: rust_derivation_env_digest(&unit.derivation.env)?,
         dependency_artifact_digests,
         host_artifact_digests,
-        Vec::new(),
-        Some(compiler_policy),
-        Some(blocker),
-    )
+        compiler_policy_invocation: None,
+        compiler_policy_receipt: None,
+    }))
+}
+
+fn apply_rust_unit_compiler_policy(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    inputs: &mut RustUnitExecutionInputs,
+) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
+    debug_assert!(inputs.compiler_policy_invocation.is_none());
+    debug_assert!(inputs.compiler_policy_receipt.is_none());
+    let resolution = resolve_compiler_policy_invocation(
+        &options.compiler_policy,
+        &options.rustc,
+        &options.output_root,
+        unit,
+        &inputs.toolchain,
+    )?;
+    match resolution {
+        Ok(invocation) => {
+            inputs.compiler_policy_receipt = invocation.as_ref().map(|policy| policy.receipt.clone());
+            inputs.compiler_policy_invocation = invocation;
+            Ok(None)
+        }
+        Err(policy_blocker) if options.compiler_policy.mode == RustCompilerPolicyMode::Audit => {
+            inputs.compiler_policy_receipt = Some(compiler_policy_receipt_with_status(
+                policy_blocker.receipt,
+                COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN,
+            ));
+            Ok(None)
+        }
+        Err(policy_blocker) => compiler_policy_blocked_execution_receipt(CompilerPolicyBlockedReceiptInputs {
+            unit: unit,
+            toolchain: inputs.toolchain.clone(),
+            environment_digest_blake3: inputs.environment_digest_blake3.clone(),
+            dependency_artifact_digests: inputs.dependency_artifact_digests.clone(),
+            host_artifact_digests: inputs.host_artifact_digests.clone(),
+            compiler_policy: policy_blocker.receipt,
+            blocker: policy_blocker.blocker,
+        })
+        .map(Some),
+    }
+}
+
+fn failed_rust_compiler_execution(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    inputs: &mut RustUnitExecutionInputs,
+    output: &std::process::Output,
+) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
+    debug_assert!(!output.status.success());
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    let Some(invocation) = inputs.compiler_policy_invocation.as_ref() else {
+        let diagnostic = redacted_diagnostic(&output.stderr);
+        return failed_execution_receipt(FailedExecutionReceiptInputs {
+            unit: unit,
+            toolchain: inputs.toolchain.clone(),
+            dependency_artifact_digests: inputs.dependency_artifact_digests.clone(),
+            host_artifact_digests: inputs.host_artifact_digests.clone(),
+            compiler_policy: inputs.compiler_policy_receipt.clone(),
+            diagnostic: &diagnostic,
+        })
+        .map(Some);
+    };
+    if options.compiler_policy.mode != RustCompilerPolicyMode::Audit {
+        let diagnostic = redacted_diagnostic(&output.stderr);
+        let policy = inputs
+            .compiler_policy_receipt
+            .clone()
+            .map(|receipt| compiler_policy_receipt_with_status(receipt, COMPILER_POLICY_STATUS_FAILED));
+        return failed_execution_receipt(FailedExecutionReceiptInputs {
+            unit: unit,
+            toolchain: inputs.toolchain.clone(),
+            dependency_artifact_digests: inputs.dependency_artifact_digests.clone(),
+            host_artifact_digests: inputs.host_artifact_digests.clone(),
+            compiler_policy: policy,
+            diagnostic: &diagnostic,
+        })
+        .map(Some);
+    }
+    prepare_unit_output_dir(&inputs.output_dir)?;
+    let fallback_output = execute_rust_compiler_command(unit, options, &inputs.output_dir, None)?;
+    if !fallback_output.status.success() {
+        let diagnostic = redacted_diagnostic(&fallback_output.stderr);
+        let policy = inputs
+            .compiler_policy_receipt
+            .clone()
+            .map(|receipt| compiler_policy_receipt_with_status(receipt, COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN));
+        return failed_execution_receipt(FailedExecutionReceiptInputs {
+            unit: unit,
+            toolchain: inputs.toolchain.clone(),
+            dependency_artifact_digests: inputs.dependency_artifact_digests.clone(),
+            host_artifact_digests: inputs.host_artifact_digests.clone(),
+            compiler_policy: policy,
+            diagnostic: &diagnostic,
+        })
+        .map(Some);
+    }
+    inputs.compiler_policy_receipt = Some(compiler_policy_receipt_with_status(
+        invocation.receipt.clone(),
+        COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN,
+    ));
+    Ok(None)
+}
+
+fn validate_successful_compiler_policy_report(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    inputs: &mut RustUnitExecutionInputs,
+) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let Some(invocation) = inputs.compiler_policy_invocation.as_ref() else {
+        return Ok(None);
+    };
+    match compiler_policy_receipt_from_report(
+        invocation,
+        COMPILER_POLICY_STATUS_PASSED,
+        options.compiler_policy.mode.is_fail_closed(),
+    )? {
+        Ok(receipt) => {
+            inputs.compiler_policy_receipt = Some(receipt);
+            Ok(None)
+        }
+        Err(blocker) => compiler_policy_blocked_execution_receipt(CompilerPolicyBlockedReceiptInputs {
+            unit: unit,
+            toolchain: inputs.toolchain.clone(),
+            environment_digest_blake3: inputs.environment_digest_blake3.clone(),
+            dependency_artifact_digests: inputs.dependency_artifact_digests.clone(),
+            host_artifact_digests: inputs.host_artifact_digests.clone(),
+            compiler_policy: compiler_policy_receipt_with_status(
+                invocation.receipt.clone(),
+                COMPILER_POLICY_STATUS_FAILED,
+            ),
+            blocker: blocker,
+        })
+        .map(Some),
+    }
+}
+
+fn finalize_successful_rust_unit_execution(
+    unit: &RustUnitDerivationSummary,
+    inputs: RustUnitExecutionInputs,
+) -> Result<RustUnitExecutionReceipt, RunError> {
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!inputs.output_dir.as_os_str().is_empty());
+    let output_artifact_digests = digest_output_artifacts(&inputs.output_dir)?;
+    if output_artifact_digests.is_empty() {
+        if let Some(compiler_policy) = inputs.compiler_policy_receipt {
+            return compiler_policy_blocked_execution_receipt(CompilerPolicyBlockedReceiptInputs {
+                unit: unit,
+                toolchain: inputs.toolchain,
+                environment_digest_blake3: inputs.environment_digest_blake3,
+                dependency_artifact_digests: inputs.dependency_artifact_digests,
+                host_artifact_digests: inputs.host_artifact_digests,
+                compiler_policy: compiler_policy,
+                blocker: RustUnitExecutionBlocker {
+                    class: "missing-declared-output".to_string(),
+                    message: "rustc completed but produced no declared output artifacts".to_string(),
+                },
+            });
+        }
+        return blocked_execution_receipt(BlockedExecutionReceiptInputs {
+            unit: Some(unit),
+            class: "missing-declared-output",
+            message: "rustc completed but produced no declared output artifacts",
+        });
+    }
+    let receipt = finalized_execution_receipt(FinalizedExecutionReceiptInputs {
+        unit: unit,
+        execution_status: "success",
+        rebuild_reason: "rebuilt-explicit-unit",
+        toolchain: inputs.toolchain,
+        environment_digest_blake3: inputs.environment_digest_blake3,
+        dependency_artifact_digests: inputs.dependency_artifact_digests,
+        host_artifact_digests: inputs.host_artifact_digests,
+        output_artifact_digests: output_artifact_digests,
+        compiler_policy: inputs.compiler_policy_receipt,
+        blocker: None,
+    })?;
+    write_rust_unit_execution_receipt(&inputs.output_dir, &receipt)?;
+    Ok(receipt)
 }
 
 fn execute_rust_unit(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
-    if unit.derivation.builder != "rustc" {
-        return blocked_execution_receipt(
-            Some(unit),
-            "unsupported-builder",
-            "only rustc-backed Rust unit derivations are supported by this execution rail",
-        );
-    }
-    if !tool_exists(&options.rustc) {
-        return blocked_execution_receipt(
-            Some(unit),
-            "missing-toolchain",
-            &format!("rustc tool is not available: {}", options.rustc.display()),
-        );
-    }
-    let toolchain = match rustc_toolchain_identity(&options.rustc)? {
-        Ok(identity) => identity,
-        Err(blocker) => return blocked_execution_receipt(Some(unit), &blocker.class, &blocker.message),
+    debug_assert!(RECEIPT_SCHEMA_VERSION > 0);
+    debug_assert!(!RUST_UNIT_EXECUTION_RECEIPT_FILE.is_empty());
+    let mut inputs = match prepare_rust_unit_execution_inputs(unit, options)? {
+        Ok(inputs) => inputs,
+        Err(receipt) => return Ok(receipt),
     };
-    let src_path = rustc_materialized_source_path(&unit.derivation.args).ok_or_else(|| {
-        RunError::Internal(format!("unit {} lacks a rustc source path in reviewable args", unit.unit_id))
-    })?;
-    if !src_path.is_file() {
-        return blocked_execution_receipt(
-            Some(unit),
-            "missing-source-material",
-            &format!("declared Rust source is not readable: {}", src_path.display()),
-        );
-    }
-    if unit.derivation.outputs.is_empty() {
-        return blocked_execution_receipt(
-            Some(unit),
-            "missing-declared-output",
-            "unit derivation does not declare any output artifact paths",
-        );
-    }
-    let dependency_artifact_digests = artifact_digests(
-        &unit.dependency_artifacts.iter().map(|artifact| artifact.artifact.as_str()).collect::<Vec<_>>(),
-        "missing-dependency-artifact",
-    )?;
-    if let Err(blocker) = &dependency_artifact_digests {
-        return blocked_execution_receipt(Some(unit), &blocker.class, &blocker.message);
-    }
-    let host_artifact_digests = artifact_digests(
-        &unit.consumed_host_artifacts.iter().map(|artifact| artifact.artifact.as_str()).collect::<Vec<_>>(),
-        "missing-host-artifact",
-    )?;
-    if let Err(blocker) = &host_artifact_digests {
-        return blocked_execution_receipt(Some(unit), &blocker.class, &blocker.message);
-    }
-
-    let unit_output_dir = options.output_root.join(safe_path_component(&unit.unit_id));
-    let dependency_artifact_digests = dependency_artifact_digests.unwrap();
-    let host_artifact_digests = host_artifact_digests.unwrap();
-    let environment_digest_blake3 = rust_derivation_env_digest(&unit.derivation.env)?;
-    let compiler_policy_resolution = resolve_compiler_policy_invocation(
-        &options.compiler_policy,
-        &options.rustc,
-        &options.output_root,
-        unit,
-        &toolchain,
-    )?;
-    let (compiler_policy_invocation, unresolved_audit_policy) = match compiler_policy_resolution {
-        Ok(invocation) => (invocation, None),
-        Err(policy_blocker) if options.compiler_policy.mode == RustCompilerPolicyMode::Audit => (
-            None,
-            Some(compiler_policy_receipt_with_status(
-                policy_blocker.receipt,
-                COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN,
-            )),
-        ),
-        Err(policy_blocker) => {
-            return compiler_policy_blocked_execution_receipt(
-                unit,
-                toolchain,
-                environment_digest_blake3,
-                dependency_artifact_digests,
-                host_artifact_digests,
-                policy_blocker.receipt,
-                policy_blocker.blocker,
-            );
-        }
-    };
-    let expected_compiler_policy_receipt = compiler_policy_invocation
-        .as_ref()
-        .map(|invocation| invocation.receipt.clone())
-        .or(unresolved_audit_policy.clone());
-    if let Some(receipt) = try_reuse_rust_unit_outputs(
-        unit,
-        &unit_output_dir,
-        toolchain.clone(),
-        environment_digest_blake3.clone(),
-        dependency_artifact_digests.clone(),
-        host_artifact_digests.clone(),
-        expected_compiler_policy_receipt.clone(),
-    )? {
+    if let Some(receipt) = apply_rust_unit_compiler_policy(unit, options, &mut inputs)? {
         return Ok(receipt);
     }
-    prepare_unit_output_dir(&unit_output_dir)?;
-
-    let output = execute_rust_compiler_command(unit, options, &unit_output_dir, compiler_policy_invocation.as_ref())?;
-    let mut compiler_policy_receipt = expected_compiler_policy_receipt;
-    if !output.status.success() {
-        if let Some(invocation) = compiler_policy_invocation.as_ref() {
-            if options.compiler_policy.mode == RustCompilerPolicyMode::Audit {
-                prepare_unit_output_dir(&unit_output_dir)?;
-                let fallback_output = execute_rust_compiler_command(unit, options, &unit_output_dir, None)?;
-                if !fallback_output.status.success() {
-                    let diagnostic = redacted_diagnostic(&fallback_output.stderr);
-                    return failed_execution_receipt(
-                        unit,
-                        toolchain,
-                        dependency_artifact_digests,
-                        host_artifact_digests,
-                        compiler_policy_receipt.map(|receipt| {
-                            compiler_policy_receipt_with_status(receipt, COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN)
-                        }),
-                        &diagnostic,
-                    );
-                }
-                compiler_policy_receipt = Some(compiler_policy_receipt_with_status(
-                    invocation.receipt.clone(),
-                    COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN,
-                ));
-            } else {
-                let diagnostic = redacted_diagnostic(&output.stderr);
-                return failed_execution_receipt(
-                    unit,
-                    toolchain,
-                    dependency_artifact_digests,
-                    host_artifact_digests,
-                    compiler_policy_receipt
-                        .map(|receipt| compiler_policy_receipt_with_status(receipt, COMPILER_POLICY_STATUS_FAILED)),
-                    &diagnostic,
-                );
-            }
-        } else {
-            let diagnostic = redacted_diagnostic(&output.stderr);
-            return failed_execution_receipt(
-                unit,
-                toolchain,
-                dependency_artifact_digests,
-                host_artifact_digests,
-                compiler_policy_receipt,
-                &diagnostic,
-            );
-        }
-    } else if let Some(invocation) = compiler_policy_invocation.as_ref() {
-        match compiler_policy_receipt_from_report(
-            invocation,
-            COMPILER_POLICY_STATUS_PASSED,
-            options.compiler_policy.mode.is_fail_closed(),
-        )? {
-            Ok(receipt) => compiler_policy_receipt = Some(receipt),
-            Err(blocker) => {
-                return compiler_policy_blocked_execution_receipt(
-                    unit,
-                    toolchain,
-                    environment_digest_blake3,
-                    dependency_artifact_digests,
-                    host_artifact_digests,
-                    compiler_policy_receipt_with_status(invocation.receipt.clone(), COMPILER_POLICY_STATUS_FAILED),
-                    blocker,
-                );
-            }
-        }
-    }
-    let output_artifact_digests = digest_output_artifacts(&unit_output_dir)?;
-    if output_artifact_digests.is_empty() {
-        if let Some(compiler_policy) = compiler_policy_receipt.clone() {
-            return compiler_policy_blocked_execution_receipt(
-                unit,
-                toolchain,
-                environment_digest_blake3,
-                dependency_artifact_digests,
-                host_artifact_digests,
-                compiler_policy,
-                RustUnitExecutionBlocker {
-                    class: "missing-declared-output".to_string(),
-                    message: "rustc completed but produced no declared output artifacts".to_string(),
-                },
-            );
-        }
-        return blocked_execution_receipt(
-            Some(unit),
-            "missing-declared-output",
-            "rustc completed but produced no declared output artifacts",
-        );
-    }
-    let receipt = finalized_execution_receipt(
+    if let Some(receipt) = try_reuse_rust_unit_outputs(ReuseRustUnitOutputsInputs {
         unit,
-        "success",
-        "rebuilt-explicit-unit",
-        toolchain,
-        environment_digest_blake3,
-        dependency_artifact_digests,
-        host_artifact_digests,
-        output_artifact_digests,
-        compiler_policy_receipt,
-        None,
-    )?;
-    write_rust_unit_execution_receipt(&unit_output_dir, &receipt)?;
-    Ok(receipt)
+        output_dir: &inputs.output_dir,
+        toolchain: inputs.toolchain.clone(),
+        environment_digest_blake3: inputs.environment_digest_blake3.clone(),
+        dependency_artifact_digests: inputs.dependency_artifact_digests.clone(),
+        host_artifact_digests: inputs.host_artifact_digests.clone(),
+        compiler_policy: inputs.compiler_policy_receipt.clone(),
+    })? {
+        return Ok(receipt);
+    }
+    prepare_unit_output_dir(&inputs.output_dir)?;
+    let output =
+        execute_rust_compiler_command(unit, options, &inputs.output_dir, inputs.compiler_policy_invocation.as_ref())?;
+    if !output.status.success() {
+        if let Some(receipt) = failed_rust_compiler_execution(unit, options, &mut inputs, &output)? {
+            return Ok(receipt);
+        }
+    } else if let Some(receipt) = validate_successful_compiler_policy_report(unit, options, &mut inputs)? {
+        return Ok(receipt);
+    }
+    finalize_successful_rust_unit_execution(unit, inputs)
 }
 
-fn try_reuse_rust_unit_outputs(
-    unit: &RustUnitDerivationSummary,
-    unit_output_dir: &Path,
+struct ReuseRustUnitOutputsInputs<'a> {
+    unit: &'a RustUnitDerivationSummary,
+    output_dir: &'a Path,
     toolchain: RustToolchainIdentity,
     environment_digest_blake3: String,
     dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
+}
+
+struct CachedReceiptMatchInputs<'a> {
+    prior: &'a RustUnitExecutionReceipt,
+    unit: &'a RustUnitDerivationSummary,
+    toolchain: &'a RustToolchainIdentity,
+    environment_digest_blake3: &'a str,
+    dependency_artifact_digests: &'a [RustExecutionArtifactDigest],
+    host_artifact_digests: &'a [RustExecutionArtifactDigest],
+    output_artifact_digests: &'a [RustExecutionArtifactDigest],
+    compiler_policy: Option<&'a RustCompilerPolicyExecutionReceipt>,
+}
+
+fn cached_execution_receipt_matches(inputs: CachedReceiptMatchInputs<'_>) -> bool {
+    debug_assert!(!inputs.unit.unit_id.is_empty());
+    debug_assert!(!inputs.environment_digest_blake3.is_empty());
+    let expected_outputs = sorted_strings(inputs.unit.derivation.outputs.clone());
+    let expected_policy_identity = inputs.compiler_policy.map(|receipt| &receipt.identity);
+    let prior_policy_identity = inputs.prior.compiler_policy.as_ref().map(|receipt| &receipt.identity);
+    [
+        inputs.prior.execution_status == "success",
+        inputs.prior.unit_id == inputs.unit.unit_id,
+        inputs.prior.package_id == inputs.unit.package_id,
+        inputs.prior.target_name == inputs.unit.target_name,
+        inputs.prior.target_kind == inputs.unit.target_kind,
+        inputs.prior.source_digest == inputs.unit.source_digest,
+        inputs.prior.toolchain == *inputs.toolchain,
+        inputs.prior.rustc_args_digest_blake3 == inputs.unit.rustc_args_digest_blake3,
+        inputs.prior.environment_digest_blake3 == inputs.environment_digest_blake3,
+        inputs.prior.declared_outputs == expected_outputs,
+        inputs.prior.dependency_artifact_digests == inputs.dependency_artifact_digests,
+        inputs.prior.host_artifact_digests == inputs.host_artifact_digests,
+        inputs.prior.output_artifact_digests == inputs.output_artifact_digests,
+        prior_policy_identity == expected_policy_identity,
+        inputs.prior.blocker.is_none(),
+    ]
+    .into_iter()
+    .all(|is_match| is_match)
+}
+
+fn read_prior_rust_unit_execution_receipt(receipt_path: &Path) -> Option<RustUnitExecutionReceipt> {
+    fs::read(receipt_path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<RustUnitExecutionReceipt>(&bytes).ok())
+}
+
+fn stale_cached_output_from_reuse_inputs(
+    inputs: ReuseRustUnitOutputsInputs<'_>,
+    output_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    message: &str,
+) -> Result<RustUnitExecutionReceipt, RunError> {
+    finalized_execution_receipt(FinalizedExecutionReceiptInputs {
+        unit: inputs.unit,
+        execution_status: "blocked",
+        rebuild_reason: "not-run-stale-cached-output",
+        toolchain: inputs.toolchain,
+        environment_digest_blake3: inputs.environment_digest_blake3,
+        dependency_artifact_digests: inputs.dependency_artifact_digests,
+        host_artifact_digests: inputs.host_artifact_digests,
+        output_artifact_digests,
+        compiler_policy: inputs.compiler_policy,
+        blocker: Some(RustUnitExecutionBlocker {
+            class: "stale-cached-output".to_string(),
+            message: message.to_string(),
+        }),
+    })
+}
+
+fn try_reuse_rust_unit_outputs(
+    inputs: ReuseRustUnitOutputsInputs<'_>,
 ) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
-    let receipt_path = unit_output_dir.join(RUST_UNIT_EXECUTION_RECEIPT_FILE);
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let receipt_path = inputs.output_dir.join(RUST_UNIT_EXECUTION_RECEIPT_FILE);
     if !receipt_path.exists() {
         return Ok(None);
     }
-    let prior_receipt = match fs::read(&receipt_path)
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<RustUnitExecutionReceipt>(&bytes).ok())
-    {
+    let prior_receipt = match read_prior_rust_unit_execution_receipt(&receipt_path) {
         Some(receipt) => receipt,
         None => {
-            return stale_cached_output_receipt(
-                unit,
-                toolchain,
-                environment_digest_blake3.clone(),
-                dependency_artifact_digests,
-                host_artifact_digests,
+            return stale_cached_output_from_reuse_inputs(
+                inputs,
                 Vec::new(),
-                compiler_policy,
                 "prior execution receipt is missing or malformed",
             )
             .map(Some);
         }
     };
-    let current_output_artifact_digests = digest_output_artifacts(unit_output_dir)?;
+    let current_output_artifact_digests = digest_output_artifacts(inputs.output_dir)?;
     if current_output_artifact_digests.is_empty() {
-        return stale_cached_output_receipt(
-            unit,
-            toolchain,
-            environment_digest_blake3.clone(),
-            dependency_artifact_digests,
-            host_artifact_digests,
+        return stale_cached_output_from_reuse_inputs(
+            inputs,
             current_output_artifact_digests,
-            compiler_policy,
             "prior execution receipt exists but no declared output artifacts are readable",
         )
         .map(Some);
     }
-    let expected_outputs = sorted_strings(unit.derivation.outputs.clone());
-    let expected_policy_identity = compiler_policy.as_ref().map(|receipt| &receipt.identity);
-    let prior_policy_identity = prior_receipt.compiler_policy.as_ref().map(|receipt| &receipt.identity);
-    let matches_current_inputs = prior_receipt.execution_status == "success"
-        && prior_receipt.unit_id == unit.unit_id
-        && prior_receipt.package_id == unit.package_id
-        && prior_receipt.target_name == unit.target_name
-        && prior_receipt.target_kind == unit.target_kind
-        && prior_receipt.source_digest == unit.source_digest
-        && prior_receipt.toolchain == toolchain
-        && prior_receipt.rustc_args_digest_blake3 == unit.rustc_args_digest_blake3
-        && prior_receipt.environment_digest_blake3 == environment_digest_blake3
-        && prior_receipt.declared_outputs == expected_outputs
-        && prior_receipt.dependency_artifact_digests == dependency_artifact_digests
-        && prior_receipt.host_artifact_digests == host_artifact_digests
-        && prior_receipt.output_artifact_digests == current_output_artifact_digests
-        && prior_policy_identity == expected_policy_identity
-        && prior_receipt.blocker.is_none();
-    if !matches_current_inputs {
-        return stale_cached_output_receipt(
-            unit,
-            toolchain,
-            environment_digest_blake3.clone(),
-            dependency_artifact_digests,
-            host_artifact_digests,
+    let has_matching_current_inputs = cached_execution_receipt_matches(CachedReceiptMatchInputs {
+        prior: &prior_receipt,
+        unit: inputs.unit,
+        toolchain: &inputs.toolchain,
+        environment_digest_blake3: &inputs.environment_digest_blake3,
+        dependency_artifact_digests: &inputs.dependency_artifact_digests,
+        host_artifact_digests: &inputs.host_artifact_digests,
+        output_artifact_digests: &current_output_artifact_digests,
+        compiler_policy: inputs.compiler_policy.as_ref(),
+    });
+    if !has_matching_current_inputs {
+        return stale_cached_output_from_reuse_inputs(
+            inputs,
             current_output_artifact_digests,
-            compiler_policy,
             "prior execution receipt does not match current explicit inputs, compiler-policy identity, or output artifact digests",
         )
         .map(Some);
     }
-    let receipt = finalized_execution_receipt(
-        unit,
-        "success",
-        "reused-explicit-unit-output",
-        toolchain,
-        environment_digest_blake3,
-        dependency_artifact_digests,
-        host_artifact_digests,
-        current_output_artifact_digests,
-        prior_receipt.compiler_policy,
-        None,
-    )?;
-    write_rust_unit_execution_receipt(unit_output_dir, &receipt)?;
+    let receipt = finalized_execution_receipt(FinalizedExecutionReceiptInputs {
+        unit: inputs.unit,
+        execution_status: "success",
+        rebuild_reason: "reused-explicit-unit-output",
+        toolchain: inputs.toolchain,
+        environment_digest_blake3: inputs.environment_digest_blake3,
+        dependency_artifact_digests: inputs.dependency_artifact_digests,
+        host_artifact_digests: inputs.host_artifact_digests,
+        output_artifact_digests: current_output_artifact_digests,
+        compiler_policy: prior_receipt.compiler_policy,
+        blocker: None,
+    })?;
+    write_rust_unit_execution_receipt(inputs.output_dir, &receipt)?;
     Ok(Some(receipt))
-}
-
-fn stale_cached_output_receipt(
-    unit: &RustUnitDerivationSummary,
-    toolchain: RustToolchainIdentity,
-    environment_digest_blake3: String,
-    dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
-    host_artifact_digests: Vec<RustExecutionArtifactDigest>,
-    output_artifact_digests: Vec<RustExecutionArtifactDigest>,
-    compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
-    message: &str,
-) -> Result<RustUnitExecutionReceipt, RunError> {
-    finalized_execution_receipt(
-        unit,
-        "blocked",
-        "not-run-stale-cached-output",
-        toolchain,
-        environment_digest_blake3,
-        dependency_artifact_digests,
-        host_artifact_digests,
-        output_artifact_digests,
-        compiler_policy,
-        Some(RustUnitExecutionBlocker {
-            class: "stale-cached-output".to_string(),
-            message: message.to_string(),
-        }),
-    )
 }
 
 fn write_rust_unit_execution_receipt(
@@ -13719,6 +16230,8 @@ fn produced_host_artifact_path(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<Result<PathBuf, RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let output_dir = options.output_root.join(safe_path_component(&unit.unit_id));
     if !output_dir.is_dir() {
         return Ok(Err(RustUnitExecutionBlocker {
@@ -13726,7 +16239,7 @@ fn produced_host_artifact_path(
             message: format!("host output directory is missing: {}", output_dir.display()),
         }));
     }
-    let mut files = Vec::new();
+    let mut files = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     collect_output_files(&output_dir, &mut files)?;
     let crate_name = rust_crate_name(&unit.target_name);
     let artifact = if unit.target_kind == "proc-macro" {
@@ -13752,6 +16265,8 @@ fn produced_library_artifact_path(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<Result<PathBuf, RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let output_dir = options.output_root.join(safe_path_component(&unit.unit_id));
     if !output_dir.is_dir() {
         return Ok(Err(RustUnitExecutionBlocker {
@@ -13759,7 +16274,7 @@ fn produced_library_artifact_path(
             message: format!("producer output directory is missing: {}", output_dir.display()),
         }));
     }
-    let mut files = Vec::new();
+    let mut files = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     collect_output_files(&output_dir, &mut files)?;
     let crate_prefix = format!("lib{}", rust_crate_name(&unit.target_name));
     let artifact = files
@@ -13780,6 +16295,8 @@ fn bind_dependency_artifact(
     dependency: &RustDependencyArtifact,
     produced_artifact: &Path,
 ) -> Result<RustUnitDerivationSummary, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let produced_artifact = normalize_path_string(&rustc_artifact_path(produced_artifact));
     let mut bound = consumer.clone();
     for artifact in &mut bound.dependency_artifacts {
@@ -13797,14 +16314,14 @@ fn bind_dependency_artifact(
     }
     let expected_extern = format!("{}={}", dependency.name, dependency.artifact);
     let rewritten_extern = format!("{}={produced_artifact}", dependency.name);
-    let mut replaced = false;
+    let mut is_replaced = false;
     for arg in &mut bound.derivation.args {
         if arg == &expected_extern {
             *arg = rewritten_extern.clone();
-            replaced = true;
+            is_replaced = true;
         }
     }
-    if !replaced {
+    if !is_replaced {
         return Err(RunError::Internal(format!(
             "consumer unit {} lacks expected dependency extern {}",
             consumer.unit_id, expected_extern
@@ -13941,6 +16458,8 @@ fn dev_dependency_lib_derivation(
     package: &NativePackagePlanningSummary,
     dependency_name: &str,
 ) -> Result<RustUnitDerivationSummary, RustUnitExecutionBlocker> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let libs = package.targets.iter().filter(|target| target.kind == "lib").collect::<Vec<_>>();
     if libs.len() != 1 {
         return Err(RustUnitExecutionBlocker {
@@ -13960,15 +16479,15 @@ fn dev_dependency_lib_derivation(
         "--crate-type".to_string(),
         "lib".to_string(),
     ];
-    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(
-        &package.package_id,
-        &target.name,
-        "lib",
-        "build",
-        &package.source_digest,
-        &[],
-        &["lib".to_string()],
-    );
+    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
+        package_id: &package.package_id,
+        target_name: &target.name,
+        target_kind: "lib",
+        mode: "build",
+        source_digest: &package.source_digest,
+        selected_features: &[],
+        crate_types: &["lib".to_string()],
+    });
     append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
     let args_digest = blake3::hash(args.join("\0").as_bytes()).to_hex().to_string();
     let mut env = BTreeMap::new();
@@ -14006,23 +16525,27 @@ fn dev_dependency_lib_derivation(
     })
 }
 
-fn dev_dependency_test_topology_receipt(
-    execution_status: &str,
+struct DevDependencyTopologyReceiptInputs<'a> {
+    execution_status: &'a str,
     package_id: Option<String>,
     test_target: Option<String>,
     dev_dependency_packages: Vec<String>,
     unit_executions: Vec<RustUnitExecutionReceipt>,
     blocker: Option<RustUnitExecutionBlocker>,
+}
+
+fn dev_dependency_test_topology_receipt(
+    inputs: DevDependencyTopologyReceiptInputs<'_>,
 ) -> Result<RustDevDependencyTestTopologyExecutionReceipt, RunError> {
     let mut receipt = RustDevDependencyTestTopologyExecutionReceipt {
         schema_version: RECEIPT_SCHEMA_VERSION,
-        execution_status: execution_status.to_string(),
+        execution_status: inputs.execution_status.to_string(),
         claim: "bounded native Rust dev-dependency test topology; explicit harness=false test target only, not full cargo test compatibility or Cargo orchestration".to_string(),
-        package_id,
-        test_target,
-        dev_dependency_packages,
-        unit_executions,
-        blocker,
+        package_id: inputs.package_id,
+        test_target: inputs.test_target,
+        dev_dependency_packages: inputs.dev_dependency_packages,
+        unit_executions: inputs.unit_executions,
+        blocker: inputs.blocker,
         receipt_hash: String::new(),
     };
     receipt.receipt_hash = rust_dev_dependency_test_topology_execution_receipt_hash(&receipt)?;
@@ -14040,23 +16563,27 @@ fn rust_dev_dependency_test_topology_execution_receipt_hash(
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
-fn workspace_dependency_topology_receipt(
-    execution_status: &str,
+struct WorkspaceDependencyTopologyReceiptInputs<'a> {
+    execution_status: &'a str,
     workspace_root: Option<String>,
     member_package_id: Option<String>,
     inherited_dependency_packages: Vec<String>,
     unit_executions: Vec<RustUnitExecutionReceipt>,
     blocker: Option<RustUnitExecutionBlocker>,
+}
+
+fn workspace_dependency_topology_receipt(
+    inputs: WorkspaceDependencyTopologyReceiptInputs<'_>,
 ) -> Result<RustWorkspaceDependencyTopologyExecutionReceipt, RunError> {
     let mut receipt = RustWorkspaceDependencyTopologyExecutionReceipt {
         schema_version: RECEIPT_SCHEMA_VERSION,
-        execution_status: execution_status.to_string(),
+        execution_status: inputs.execution_status.to_string(),
         claim: "bounded native registry workspace-dependency topology; explicit workspace inheritance facts only, not Cargo orchestration, Cargo resolver fallback, registry cache fallback, or network/index access".to_string(),
-        workspace_root,
-        member_package_id,
-        inherited_dependency_packages,
-        unit_executions,
-        blocker,
+        workspace_root: inputs.workspace_root,
+        member_package_id: inputs.member_package_id,
+        inherited_dependency_packages: inputs.inherited_dependency_packages,
+        unit_executions: inputs.unit_executions,
+        blocker: inputs.blocker,
         receipt_hash: String::new(),
     };
     receipt.receipt_hash = rust_workspace_dependency_topology_execution_receipt_hash(&receipt)?;
@@ -14106,123 +16633,129 @@ fn rust_patch_source_topology_execution_receipt_hash(
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
-fn blocked_execution_receipt(
-    unit: Option<&RustUnitDerivationSummary>,
-    class: &str,
-    message: &str,
-) -> Result<RustUnitExecutionReceipt, RunError> {
-    let fallback_source_digest = SourceDigest {
-        algorithm: "missing".to_string(),
-        value: "missing".to_string(),
-    };
-    let (
-        unit_id,
-        package_id,
-        target_name,
-        target_kind,
-        execution_kind,
-        selected_triple,
-        rustc_metadata_hash,
-        source_digest,
-        rustc_args_digest_blake3,
-        derivation_env,
-    ) = unit.map_or_else(
-        || {
-            (
-                "missing".to_string(),
-                "missing".to_string(),
-                "missing".to_string(),
-                "missing".to_string(),
-                TARGET_EXECUTION_KIND.to_string(),
-                host_target_triple(),
-                "missing".to_string(),
-                fallback_source_digest.clone(),
-                "missing".to_string(),
-                BTreeMap::new(),
-            )
+fn missing_blocked_unit_derivation() -> RustUnitDerivationSummary {
+    RustUnitDerivationSummary {
+        unit_id: "missing".to_string(),
+        package_id: "missing".to_string(),
+        target_name: "missing".to_string(),
+        target_kind: "missing".to_string(),
+        execution_kind: TARGET_EXECUTION_KIND.to_string(),
+        selected_triple: host_target_triple(),
+        rustc_metadata_hash: "missing".to_string(),
+        crate_types: Vec::new(),
+        mode: "build".to_string(),
+        profile: String::new(),
+        source_digest: SourceDigest {
+            algorithm: "missing".to_string(),
+            value: "missing".to_string(),
         },
-        |unit| {
-            (
-                unit.unit_id.clone(),
-                unit.package_id.clone(),
-                unit.target_name.clone(),
-                unit.target_kind.clone(),
-                unit.execution_kind.clone(),
-                unit.selected_triple.clone(),
-                unit.rustc_metadata_hash.clone(),
-                unit.source_digest.clone(),
-                unit.rustc_args_digest_blake3.clone(),
-                unit.derivation.env.clone(),
-            )
+        dependency_artifacts: Vec::new(),
+        consumed_host_artifacts: Vec::new(),
+        metadata_dependencies: Vec::new(),
+        generated_metadata: None,
+        derivation: ReviewableRustDerivation {
+            name: String::new(),
+            builder: "rustc".to_string(),
+            system: String::new(),
+            args: Vec::new(),
+            outputs: Vec::new(),
+            env: BTreeMap::new(),
+            inputs: Vec::new(),
+            addressing_mode: String::new(),
         },
-    );
-    finalized_execution_receipt(
-        &RustUnitDerivationSummary {
-            unit_id,
-            package_id,
-            target_name,
-            target_kind,
-            execution_kind,
-            selected_triple,
-            rustc_metadata_hash,
-            crate_types: Vec::new(),
-            mode: "build".to_string(),
-            profile: String::new(),
-            source_digest,
-            dependency_artifacts: Vec::new(),
-            consumed_host_artifacts: Vec::new(),
-            metadata_dependencies: Vec::new(),
-            generated_metadata: None,
-            derivation: ReviewableRustDerivation {
-                name: String::new(),
-                builder: "rustc".to_string(),
-                system: String::new(),
-                args: Vec::new(),
-                outputs: Vec::new(),
-                env: derivation_env.clone(),
-                inputs: Vec::new(),
-                addressing_mode: String::new(),
-            },
-            rustc_args_digest_blake3,
+        rustc_args_digest_blake3: "missing".to_string(),
+    }
+}
+
+fn blocked_unit_derivation_from(unit: &RustUnitDerivationSummary) -> RustUnitDerivationSummary {
+    RustUnitDerivationSummary {
+        unit_id: unit.unit_id.clone(),
+        package_id: unit.package_id.clone(),
+        target_name: unit.target_name.clone(),
+        target_kind: unit.target_kind.clone(),
+        execution_kind: unit.execution_kind.clone(),
+        selected_triple: unit.selected_triple.clone(),
+        rustc_metadata_hash: unit.rustc_metadata_hash.clone(),
+        crate_types: Vec::new(),
+        mode: "build".to_string(),
+        profile: String::new(),
+        source_digest: unit.source_digest.clone(),
+        dependency_artifacts: Vec::new(),
+        consumed_host_artifacts: Vec::new(),
+        metadata_dependencies: Vec::new(),
+        generated_metadata: None,
+        derivation: ReviewableRustDerivation {
+            name: String::new(),
+            builder: "rustc".to_string(),
+            system: String::new(),
+            args: Vec::new(),
+            outputs: Vec::new(),
+            env: unit.derivation.env.clone(),
+            inputs: Vec::new(),
+            addressing_mode: String::new(),
         },
-        "blocked",
-        "not-run-preflight-blocker",
-        missing_toolchain_identity(),
-        rust_derivation_env_digest(&derivation_env)?,
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        None,
-        Some(RustUnitExecutionBlocker {
+        rustc_args_digest_blake3: unit.rustc_args_digest_blake3.clone(),
+    }
+}
+
+fn blocked_unit_derivation(unit: Option<&RustUnitDerivationSummary>) -> RustUnitDerivationSummary {
+    unit.map_or_else(missing_blocked_unit_derivation, blocked_unit_derivation_from)
+}
+
+struct BlockedExecutionReceiptInputs<'a> {
+    unit: Option<&'a RustUnitDerivationSummary>,
+    class: &'a str,
+    message: &'a str,
+}
+
+fn blocked_execution_receipt(inputs: BlockedExecutionReceiptInputs<'_>) -> Result<RustUnitExecutionReceipt, RunError> {
+    let BlockedExecutionReceiptInputs { unit, class, message } = inputs;
+    debug_assert!(!class.is_empty());
+    debug_assert!(!message.is_empty());
+    let unit = blocked_unit_derivation(unit);
+    let environment_digest_blake3 = rust_derivation_env_digest(&unit.derivation.env)?;
+    finalized_execution_receipt(FinalizedExecutionReceiptInputs {
+        unit: &unit,
+        execution_status: "blocked",
+        rebuild_reason: "not-run-preflight-blocker",
+        toolchain: missing_toolchain_identity(),
+        environment_digest_blake3: environment_digest_blake3,
+        dependency_artifact_digests: Vec::new(),
+        host_artifact_digests: Vec::new(),
+        output_artifact_digests: Vec::new(),
+        compiler_policy: None,
+        blocker: Some(RustUnitExecutionBlocker {
             class: class.to_string(),
             message: message.to_string(),
         }),
-    )
+    })
 }
 
-fn failed_execution_receipt(
-    unit: &RustUnitDerivationSummary,
+struct FailedExecutionReceiptInputs<'a> {
+    unit: &'a RustUnitDerivationSummary,
     toolchain: RustToolchainIdentity,
     dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
-    diagnostic: &str,
-) -> Result<RustUnitExecutionReceipt, RunError> {
-    finalized_execution_receipt(
-        unit,
-        "failed",
-        "rustc-exit-nonzero",
-        toolchain,
-        rust_derivation_env_digest(&unit.derivation.env)?,
-        dependency_artifact_digests,
-        host_artifact_digests,
-        Vec::new(),
-        compiler_policy,
-        Some(RustUnitExecutionBlocker {
+    diagnostic: &'a str,
+}
+
+fn failed_execution_receipt(inputs: FailedExecutionReceiptInputs<'_>) -> Result<RustUnitExecutionReceipt, RunError> {
+    finalized_execution_receipt(FinalizedExecutionReceiptInputs {
+        unit: inputs.unit,
+        execution_status: "failed",
+        rebuild_reason: "rustc-exit-nonzero",
+        toolchain: inputs.toolchain,
+        environment_digest_blake3: rust_derivation_env_digest(&inputs.unit.derivation.env)?,
+        dependency_artifact_digests: inputs.dependency_artifact_digests,
+        host_artifact_digests: inputs.host_artifact_digests,
+        output_artifact_digests: Vec::new(),
+        compiler_policy: inputs.compiler_policy,
+        blocker: Some(RustUnitExecutionBlocker {
             class: "rustc-failed".to_string(),
-            message: diagnostic.to_string(),
+            message: inputs.diagnostic.to_string(),
         }),
-    )
+    })
 }
 
 fn normalized_blake3_hex(value: &str) -> Option<String> {
@@ -14240,6 +16773,8 @@ fn rust_unit_toolchain_policy_digest(
     unit: &RustUnitDerivationSummary,
     compiler_policy: Option<&RustCompilerPolicyExecutionReceipt>,
 ) -> Result<String, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     if let Some(env_digest) = unit
         .derivation
         .env
@@ -14274,7 +16809,9 @@ fn rust_unit_toolchain_policy_digest(
 }
 
 fn consumed_artifact_role_evidence(unit: &RustUnitDerivationSummary) -> Vec<RustConsumedArtifactRoleEvidence> {
-    let mut evidence = Vec::new();
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let mut evidence = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     evidence.extend(unit.dependency_artifacts.iter().map(|artifact| {
         let role = dependency_artifact_role(unit, artifact);
         let selected_triple = if role == TARGET_EXECUTION_KIND {
@@ -14325,6 +16862,8 @@ fn rust_unit_artifact_identity_digest(
     toolchain_policy_digest_blake3: &str,
     consumed_roles: &[RustConsumedArtifactRoleEvidence],
 ) -> Result<String, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     #[derive(Serialize)]
     struct ArtifactIdentity<'a> {
         unit_id: &'a str,
@@ -14358,10 +16897,10 @@ fn rust_unit_artifact_identity_digest(
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
-fn finalized_execution_receipt(
-    unit: &RustUnitDerivationSummary,
-    execution_status: &str,
-    rebuild_reason: &str,
+struct FinalizedExecutionReceiptInputs<'a> {
+    unit: &'a RustUnitDerivationSummary,
+    execution_status: &'a str,
+    rebuild_reason: &'a str,
     toolchain: RustToolchainIdentity,
     environment_digest_blake3: String,
     dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
@@ -14369,7 +16908,25 @@ fn finalized_execution_receipt(
     output_artifact_digests: Vec<RustExecutionArtifactDigest>,
     compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
     blocker: Option<RustUnitExecutionBlocker>,
+}
+
+fn finalized_execution_receipt(
+    inputs: FinalizedExecutionReceiptInputs<'_>,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let FinalizedExecutionReceiptInputs {
+        unit,
+        execution_status,
+        rebuild_reason,
+        toolchain,
+        environment_digest_blake3,
+        dependency_artifact_digests,
+        host_artifact_digests,
+        output_artifact_digests,
+        compiler_policy,
+        blocker,
+    } = inputs;
     let consumed_artifact_roles = consumed_artifact_role_evidence(unit);
     let toolchain_policy_digest_blake3 = rust_unit_toolchain_policy_digest(unit, compiler_policy.as_ref())?;
     let artifact_identity_digest_blake3 =
@@ -14571,6 +17128,8 @@ fn rust_unit_execution_receipt_hash(receipt: &RustUnitExecutionReceipt) -> Resul
 }
 
 fn rustc_toolchain_identity(tool: &Path) -> Result<Result<RustToolchainIdentity, RustUnitExecutionBlocker>, RunError> {
+    debug_assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0);
+    debug_assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let output = Command::new(tool)
         .arg("-vV")
         .output()
@@ -14608,7 +17167,7 @@ fn artifact_digests(
     paths: &[&str],
     missing_class: &str,
 ) -> Result<Result<Vec<RustExecutionArtifactDigest>, RustUnitExecutionBlocker>, RunError> {
-    let mut digests = Vec::new();
+    let mut digests = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for path in paths {
         let artifact_path = Path::new(path);
         if !artifact_path.is_file() {
@@ -14624,9 +17183,9 @@ fn artifact_digests(
 }
 
 fn digest_output_artifacts(output_dir: &Path) -> Result<Vec<RustExecutionArtifactDigest>, RunError> {
-    let mut paths = Vec::new();
+    let mut paths = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     collect_output_files(output_dir, &mut paths)?;
-    let mut digests = Vec::new();
+    let mut digests = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for path in paths {
         if path.file_name().and_then(OsStr::to_str) == Some(RUST_UNIT_EXECUTION_RECEIPT_FILE) {
             continue;
@@ -14640,21 +17199,40 @@ fn digest_output_artifacts(output_dir: &Path) -> Result<Vec<RustExecutionArtifac
 }
 
 fn collect_output_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), RunError> {
-    let entries = fs::read_dir(directory)
-        .map_err(|err| RunError::Internal(format!("reading Rust unit output {}: {err}", directory.display())))?;
-    for entry in entries {
-        let entry = entry
-            .map_err(|err| RunError::Internal(format!("reading Rust unit output {}: {err}", directory.display())))?;
-        let file_type = entry.file_type().map_err(|err| {
-            RunError::Internal(format!("reading Rust unit output metadata {}: {err}", entry.path().display()))
+    debug_assert!(MAX_RUST_OUTPUT_TREE_ENTRIES > 0);
+    let mut directories = Vec::with_capacity(1);
+    directories.push(directory.to_path_buf());
+    debug_assert_eq!(directories.len(), 1);
+    let mut visited_entries = 0usize;
+
+    while let Some(current_directory) = directories.pop() {
+        let entries = fs::read_dir(&current_directory).map_err(|err| {
+            RunError::Internal(format!("reading Rust unit output {}: {err}", current_directory.display()))
         })?;
-        if file_type.is_dir() {
-            collect_output_files(&entry.path(), files)?;
-        } else if file_type.is_file() {
-            files.push(entry.path());
+        for entry in entries {
+            visited_entries = visited_entries
+                .checked_add(1)
+                .ok_or_else(|| RunError::Internal("Rust unit output entry count overflowed".to_string()))?;
+            if visited_entries > MAX_RUST_OUTPUT_TREE_ENTRIES {
+                return Err(RunError::Internal(format!(
+                    "Rust unit output tree exceeds {MAX_RUST_OUTPUT_TREE_ENTRIES} entries"
+                )));
+            }
+            let entry = entry.map_err(|err| {
+                RunError::Internal(format!("reading Rust unit output {}: {err}", current_directory.display()))
+            })?;
+            let file_type = entry.file_type().map_err(|err| {
+                RunError::Internal(format!("reading Rust unit output metadata {}: {err}", entry.path().display()))
+            })?;
+            if file_type.is_dir() {
+                directories.push(entry.path());
+            } else if file_type.is_file() {
+                files.push(entry.path());
+            }
         }
     }
     files.sort();
+    debug_assert!(visited_entries <= MAX_RUST_OUTPUT_TREE_ENTRIES);
     Ok(())
 }
 
@@ -14725,11 +17303,13 @@ fn redact_temp_paths(text: &str) -> String {
             redacted.push_str(&text[cursor..]);
             break;
         };
-        let start = cursor + prefix_offset;
+        let start = cursor.saturating_add(prefix_offset);
         redacted.push_str(&text[cursor..start]);
         redacted.push_str(REDACTED_DIAGNOSTIC_TEMP_PATH);
-        let path_start = start + prefix.len();
-        let path_tail = text[path_start..].find(temp_path_delimiter).map_or(text.len(), |offset| path_start + offset);
+        let path_start = start.saturating_add(prefix.len());
+        let path_tail = text[path_start..]
+            .find(temp_path_delimiter)
+            .map_or(text.len(), |offset| path_start.saturating_add(offset));
         cursor = path_tail;
     }
     redacted
@@ -15120,7 +17700,13 @@ mod tests {
         root: &Path,
     ) -> NativeRustUnitSummary {
         NativeRustUnitSummary {
-            unit_id: rust_unit_id(0, package_id, package_name, target_kind, "build"),
+            unit_id: rust_unit_id(RustUnitIdInputs {
+                index: 0,
+                package_id: package_id,
+                target_name: package_name,
+                target_kind: target_kind,
+                mode: "build",
+            }),
             package_id: package_id.to_string(),
             package_name: package_name.to_string(),
             package_links: None,
@@ -15147,7 +17733,13 @@ mod tests {
         root: &Path,
     ) -> NativeHostUnitSummary {
         NativeHostUnitSummary {
-            unit_id: rust_unit_id(0, package_id, package_name, target_kind, "build"),
+            unit_id: rust_unit_id(RustUnitIdInputs {
+                index: 0,
+                package_id: package_id,
+                target_name: package_name,
+                target_kind: target_kind,
+                mode: "build",
+            }),
             package_id: package_id.to_string(),
             package_name: package_name.to_string(),
             package_links: None,
@@ -15190,7 +17782,13 @@ mod tests {
             format!("{RUSTC_METADATA_ARG_PREFIX}{rustc_metadata_hash}"),
         ];
         RustUnitDerivationSummary {
-            unit_id: rust_unit_id(index, package_id, package_id, target_kind, "build"),
+            unit_id: rust_unit_id(RustUnitIdInputs {
+                index: index,
+                package_id: package_id,
+                target_name: package_id,
+                target_kind: target_kind,
+                mode: "build",
+            }),
             package_id: package_id.to_string(),
             target_name: package_id.to_string(),
             target_kind: target_kind.to_string(),
@@ -15636,24 +18234,24 @@ mod tests {
         let source_digest = test_source_digest("same-crate-source");
         let crate_types = vec!["lib".to_string()];
         let features = vec!["std".to_string()];
-        let first = rustc_unit_metadata_disambiguator(
-            "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.2.17",
-            "getrandom",
-            "lib",
-            "build",
-            &source_digest,
-            &features,
-            &crate_types,
-        );
-        let second = rustc_unit_metadata_disambiguator(
-            "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.4.2",
-            "getrandom",
-            "lib",
-            "build",
-            &source_digest,
-            &features,
-            &crate_types,
-        );
+        let first = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
+            package_id: "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.2.17",
+            target_name: "getrandom",
+            target_kind: "lib",
+            mode: "build",
+            source_digest: &source_digest,
+            selected_features: &features,
+            crate_types: &crate_types,
+        });
+        let second = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
+            package_id: "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.4.2",
+            target_name: "getrandom",
+            target_kind: "lib",
+            mode: "build",
+            source_digest: &source_digest,
+            selected_features: &features,
+            crate_types: &crate_types,
+        });
 
         assert_eq!(first.len(), RUSTC_METADATA_HEX_CHARS);
         assert_eq!(second.len(), RUSTC_METADATA_HEX_CHARS);
@@ -15673,15 +18271,15 @@ mod tests {
         let second = native_unit_derivation(&unit, Vec::new(), &source_closure, &options(dir.path()));
         let expected = format!(
             "{RUSTC_METADATA_ARG_PREFIX}{}",
-            rustc_unit_metadata_disambiguator(
-                &unit.package_id,
-                &unit.target_name,
-                &unit.target_kind,
-                &unit.mode,
-                &unit.source_digest,
-                &unit.selected_features,
-                &unit.crate_types,
-            )
+            rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
+                package_id: &unit.package_id,
+                target_name: &unit.target_name,
+                target_kind: &unit.target_kind,
+                mode: &unit.mode,
+                source_digest: &unit.source_digest,
+                selected_features: &unit.selected_features,
+                crate_types: &unit.crate_types,
+            })
         );
 
         assert_eq!(rustc_metadata_arg(&first.derivation.args), Some(expected.as_str()));
@@ -15804,8 +18402,11 @@ mod tests {
         plan_options.path_remaps =
             deterministic_release_path_remaps(&package_root, Some(&dir.path().join("execution")));
 
-        let manifest_dir =
-            compile_time_manifest_dir(&normalize_path_string(&package_root), "custom-build", &plan_options);
+        let manifest_dir = compile_time_manifest_dir(CompileTimeManifestDirInputs {
+            package_root: &normalize_path_string(&package_root),
+            target_kind: "custom-build",
+            options: &plan_options,
+        });
         unit.derivation.env.insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), manifest_dir.clone());
         let root = build_script_package_root(&unit).expect("real manifest dir should be available");
         unit.derivation
@@ -15914,7 +18515,11 @@ mod tests {
         assert!(c_prefix_map_flags(&remaps, Some(&route)).is_none());
         route.compiler_family = "clang".to_string();
         assert!(c_prefix_map_flags(&[], Some(&route)).is_none());
-        append_env_flags(&mut env, CFLAGS_ENV, "-ffile-prefix-map=/a=/b");
+        append_env_flags(AppendEnvFlagsInputs {
+            env: &mut env,
+            key: CFLAGS_ENV,
+            flags: "-ffile-prefix-map=/a=/b",
+        });
         assert_eq!(env.get(CFLAGS_ENV).unwrap(), "-O2 -ffile-prefix-map=/a=/b");
     }
 
@@ -15927,15 +18532,15 @@ mod tests {
         let derivation = native_host_unit_derivation(&unit, &source_closure, &options(dir.path()));
         let expected = format!(
             "{RUSTC_METADATA_ARG_PREFIX}{}",
-            rustc_unit_metadata_disambiguator(
-                &unit.package_id,
-                &unit.target_name,
-                &unit.target_kind,
-                &unit.mode,
-                &unit.source_digest,
-                &unit.selected_features,
-                &unit.crate_types,
-            )
+            rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
+                package_id: &unit.package_id,
+                target_name: &unit.target_name,
+                target_kind: &unit.target_kind,
+                mode: &unit.mode,
+                source_digest: &unit.source_digest,
+                selected_features: &unit.selected_features,
+                crate_types: &unit.crate_types,
+            })
         );
 
         assert_eq!(rustc_metadata_arg(&derivation.derivation.args), Some(expected.as_str()));
@@ -16014,7 +18619,13 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let package_id = "path+file://syn#syn@0.1.0".to_string();
         let mut unit = NativeRustUnitSummary {
-            unit_id: rust_unit_id(0, &package_id, "syn", "lib", "build"),
+            unit_id: rust_unit_id(RustUnitIdInputs {
+                index: 0,
+                package_id: &package_id,
+                target_name: "syn",
+                target_kind: "lib",
+                mode: "build",
+            }),
             package_id: package_id.clone(),
             package_name: "syn".to_string(),
             package_links: None,
@@ -16125,7 +18736,13 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let package_id = "path+file://mac#mac@0.1.0".to_string();
         let mut unit = NativeHostUnitSummary {
-            unit_id: rust_unit_id(0, &package_id, "mac", "proc-macro", "build"),
+            unit_id: rust_unit_id(RustUnitIdInputs {
+                index: 0,
+                package_id: &package_id,
+                target_name: "mac",
+                target_kind: "proc-macro",
+                mode: "build",
+            }),
             package_id: package_id.clone(),
             package_name: "mac".to_string(),
             package_links: None,
@@ -16193,24 +18810,24 @@ mod tests {
         }]);
         let mut blockers = Vec::new();
 
-        let proc_macro_deps = native_host_unit_dependency_artifacts(
-            &macro_package,
-            "proc-macro",
-            Some(&selected_artifacts),
-            &packages_by_id,
-            &packages,
-            &source_closure,
-            &mut blockers,
-        );
-        let custom_build_deps = native_host_unit_dependency_artifacts(
-            &macro_package,
-            "custom-build",
-            None,
-            &packages_by_id,
-            &packages,
-            &source_closure,
-            &mut blockers,
-        );
+        let proc_macro_deps = native_host_unit_dependency_artifacts(NativeHostUnitDependencyInputs {
+            package: &macro_package,
+            target_kind: "proc-macro",
+            selected_artifacts: Some(&selected_artifacts),
+            packages_by_id: &packages_by_id,
+            packages: &packages,
+            source_closure: &source_closure,
+            blockers: &mut blockers,
+        });
+        let custom_build_deps = native_host_unit_dependency_artifacts(NativeHostUnitDependencyInputs {
+            package: &macro_package,
+            target_kind: "custom-build",
+            selected_artifacts: None,
+            packages_by_id: &packages_by_id,
+            packages: &packages,
+            source_closure: &source_closure,
+            blockers: &mut blockers,
+        });
 
         assert!(blockers.is_empty(), "{blockers:#?}");
         assert_eq!(proc_macro_deps.len(), 1usize);
@@ -16240,15 +18857,15 @@ mod tests {
         )]);
         let mut blockers = Vec::new();
 
-        let proc_macro_deps = native_host_unit_dependency_artifacts(
-            &package,
-            "proc-macro",
-            Some(&selected_artifacts),
-            &packages_by_id,
-            &packages,
-            &source_closure,
-            &mut blockers,
-        );
+        let proc_macro_deps = native_host_unit_dependency_artifacts(NativeHostUnitDependencyInputs {
+            package: &package,
+            target_kind: "proc-macro",
+            selected_artifacts: Some(&selected_artifacts),
+            packages_by_id: &packages_by_id,
+            packages: &packages,
+            source_closure: &source_closure,
+            blockers: &mut blockers,
+        });
 
         assert!(blockers.is_empty(), "{blockers:#?}");
         assert!(proc_macro_deps.is_empty());
@@ -16584,8 +19201,20 @@ mod tests {
         let host_unit_ids = native_hosts.host_units.iter().map(|unit| unit.unit_id.clone()).collect::<Vec<_>>();
         assert_eq!(host_unit_ids.len(), 2usize);
         assert_ne!(host_unit_ids[0], host_unit_ids[1]);
-        assert!(host_unit_ids.contains(&rust_unit_id(0, proc_macro_id, "dupe_macro", "proc-macro", "build")));
-        assert!(host_unit_ids.contains(&rust_unit_id(1, proc_macro_id, "dupe_macro", "proc-macro", "build")));
+        assert!(host_unit_ids.contains(&rust_unit_id(RustUnitIdInputs {
+            index: 0,
+            package_id: proc_macro_id,
+            target_name: "dupe_macro",
+            target_kind: "proc-macro",
+            mode: "build",
+        })));
+        assert!(host_unit_ids.contains(&rust_unit_id(RustUnitIdInputs {
+            index: 1,
+            package_id: proc_macro_id,
+            target_name: "dupe_macro",
+            target_kind: "proc-macro",
+            mode: "build",
+        })));
         let app_consumer = native_hosts
             .target_consumers
             .iter()
@@ -16594,7 +19223,13 @@ mod tests {
         assert_eq!(app_consumer.consumed_host_artifacts.len(), 1usize);
         assert_eq!(
             app_consumer.consumed_host_artifacts[0].producer_unit_id,
-            Some(rust_unit_id(1, proc_macro_id, "dupe_macro", "proc-macro", "build"))
+            Some(rust_unit_id(RustUnitIdInputs {
+                index: 1,
+                package_id: proc_macro_id,
+                target_name: "dupe_macro",
+                target_kind: "proc-macro",
+                mode: "build",
+            }))
         );
     }
 
@@ -16665,20 +19300,20 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(custom_build_ids.len(), 2usize);
         assert_ne!(custom_build_ids[0], custom_build_ids[1]);
-        assert!(custom_build_ids.contains(&rust_unit_id(
-            0,
-            helper_id,
-            BUILD_SCRIPT_TARGET_NAME,
-            "custom-build",
-            "build"
-        )));
-        assert!(custom_build_ids.contains(&rust_unit_id(
-            1,
-            helper_id,
-            BUILD_SCRIPT_TARGET_NAME,
-            "custom-build",
-            "build"
-        )));
+        assert!(custom_build_ids.contains(&rust_unit_id(RustUnitIdInputs {
+            index: 0,
+            package_id: helper_id,
+            target_name: BUILD_SCRIPT_TARGET_NAME,
+            target_kind: "custom-build",
+            mode: "build",
+        })));
+        assert!(custom_build_ids.contains(&rust_unit_id(RustUnitIdInputs {
+            index: 1,
+            package_id: helper_id,
+            target_name: BUILD_SCRIPT_TARGET_NAME,
+            target_kind: "custom-build",
+            mode: "build",
+        })));
         let proc_macro = native_hosts
             .host_units
             .iter()
@@ -16687,7 +19322,13 @@ mod tests {
         assert_eq!(proc_macro.consumed_host_artifacts.len(), 1usize);
         assert_eq!(
             proc_macro.consumed_host_artifacts[0].producer_unit_id,
-            Some(rust_unit_id(1, helper_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "build"))
+            Some(rust_unit_id(RustUnitIdInputs {
+                index: 1,
+                package_id: helper_id,
+                target_name: BUILD_SCRIPT_TARGET_NAME,
+                target_kind: "custom-build",
+                mode: "build",
+            }))
         );
     }
 
@@ -16752,12 +19393,27 @@ mod tests {
         )
         .unwrap();
 
-        let exact_build_unit_id =
-            rust_unit_id(BUILD_INDEX, helper_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "build");
-        let run_alias_unit_id =
-            rust_unit_id(RUN_BUILD_INDEX, helper_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "run-custom-build");
-        let exact_proc_macro_unit_id =
-            rust_unit_id(PROC_MACRO_INDEX, helper_id, "build-helper-exact", "proc-macro", "build");
+        let exact_build_unit_id = rust_unit_id(RustUnitIdInputs {
+            index: BUILD_INDEX,
+            package_id: helper_id,
+            target_name: BUILD_SCRIPT_TARGET_NAME,
+            target_kind: "custom-build",
+            mode: "build",
+        });
+        let run_alias_unit_id = rust_unit_id(RustUnitIdInputs {
+            index: RUN_BUILD_INDEX,
+            package_id: helper_id,
+            target_name: BUILD_SCRIPT_TARGET_NAME,
+            target_kind: "custom-build",
+            mode: "run-custom-build",
+        });
+        let exact_proc_macro_unit_id = rust_unit_id(RustUnitIdInputs {
+            index: PROC_MACRO_INDEX,
+            package_id: helper_id,
+            target_name: "build-helper-exact",
+            target_kind: "proc-macro",
+            mode: "build",
+        });
         let units = unit_graph.get("units").and_then(Value::as_array).expect("unit graph has units");
         assert_eq!(
             host_dependency_producer_unit_id(&serde_json::json!({"index": RUN_BUILD_INDEX}), units),
@@ -16863,20 +19519,20 @@ mod tests {
             .filter_map(|artifact| artifact.producer_unit_id.clone())
             .collect::<BTreeSet<_>>();
         assert_eq!(producer_unit_ids.len(), EXPECTED_DUPLICATE_PRODUCER_COUNT);
-        assert!(producer_unit_ids.contains(&rust_unit_id(
-            FIRST_BUILD_INDEX,
-            helper_id,
-            BUILD_SCRIPT_TARGET_NAME,
-            "custom-build",
-            "build"
-        )));
-        assert!(producer_unit_ids.contains(&rust_unit_id(
-            SECOND_BUILD_INDEX,
-            helper_id,
-            BUILD_SCRIPT_TARGET_NAME,
-            "custom-build",
-            "build"
-        )));
+        assert!(producer_unit_ids.contains(&rust_unit_id(RustUnitIdInputs {
+            index: FIRST_BUILD_INDEX,
+            package_id: helper_id,
+            target_name: BUILD_SCRIPT_TARGET_NAME,
+            target_kind: "custom-build",
+            mode: "build",
+        })));
+        assert!(producer_unit_ids.contains(&rust_unit_id(RustUnitIdInputs {
+            index: SECOND_BUILD_INDEX,
+            package_id: helper_id,
+            target_name: BUILD_SCRIPT_TARGET_NAME,
+            target_kind: "custom-build",
+            mode: "build",
+        })));
     }
 
     #[test]
@@ -16971,7 +19627,13 @@ rust-version = "1.80"
         let package_id = "path+file://hyphen-pkg#hyphen-pkg@0.1.0".to_string();
         let source_path = dir.path().join("hyphen-pkg/build.rs");
         let mut unit = NativeHostUnitSummary {
-            unit_id: rust_unit_id(0, &package_id, "build-script-build", "custom-build", "build"),
+            unit_id: rust_unit_id(RustUnitIdInputs {
+                index: 0,
+                package_id: &package_id,
+                target_name: "build-script-build",
+                target_kind: "custom-build",
+                mode: "build",
+            }),
             package_id: package_id.clone(),
             package_name: package_name.clone(),
             package_links: None,
@@ -16991,7 +19653,10 @@ rust-version = "1.80"
             dependency_artifacts: Vec::new(),
             consumed_host_artifacts: Vec::new(),
             metadata_dependencies: Vec::new(),
-            generated_metadata: Some(build_script_metadata_summary(&package_id, "build-script-build")),
+            generated_metadata: Some(build_script_metadata_summary(BuildScriptMetadataKeyInputs {
+                package_id: &package_id,
+                target_name: "build-script-build",
+            })),
         };
         unit.cargo_package_env
             .insert(BUILD_SCRIPT_CARGO_MANIFEST_LINKS_ENV.to_string(), "hyphen_links".to_string());
@@ -17797,8 +20462,26 @@ rust-version = "1.80"
         let artifacts = unit_dependency_artifacts(&units[2], &units);
 
         assert_eq!(artifacts.len(), 1);
-        assert_eq!(artifacts[0].producer_unit_id, Some(rust_unit_id(1, package_id, package_id, "lib", "build")));
-        assert_ne!(artifacts[0].producer_unit_id, Some(rust_unit_id(0, package_id, package_id, "lib", "build")));
+        assert_eq!(
+            artifacts[0].producer_unit_id,
+            Some(rust_unit_id(RustUnitIdInputs {
+                index: 1,
+                package_id: package_id,
+                target_name: package_id,
+                target_kind: "lib",
+                mode: "build",
+            }))
+        );
+        assert_ne!(
+            artifacts[0].producer_unit_id,
+            Some(rust_unit_id(RustUnitIdInputs {
+                index: 0,
+                package_id: package_id,
+                target_name: package_id,
+                target_kind: "lib",
+                mode: "build",
+            }))
+        );
     }
 
     #[test]
@@ -17898,7 +20581,16 @@ rust-version = "1.80"
         assert_eq!(native_graph.units.len(), 1);
         assert_eq!(native_graph.units[0].unit_id, reversed_native_graph.units[0].unit_id);
         assert!(native_graph.units[0].unit_id.starts_with("native:"));
-        assert_ne!(native_graph.units[0].unit_id, rust_unit_id(0, package_id, package_id, "lib", "build"));
+        assert_ne!(
+            native_graph.units[0].unit_id,
+            rust_unit_id(RustUnitIdInputs {
+                index: 0,
+                package_id: package_id,
+                target_name: package_id,
+                target_kind: "lib",
+                mode: "build",
+            })
+        );
         assert_eq!(native_graph.units[0].selected_features, vec!["alt".to_string(), "default".to_string()]);
     }
 
@@ -18230,8 +20922,20 @@ rust-version = "1.80"
         let mut produced = ProducedBuildScriptMetadataIndex::default();
         let first = test_rust_derivation(1, package_id, "custom-build", "host", Vec::new());
         let second = test_rust_derivation(2, package_id, "custom-build", "host", Vec::new());
-        produced.record_unit(&first, build_script_metadata_summary(package_id, BUILD_SCRIPT_TARGET_NAME));
-        produced.record_unit(&second, build_script_metadata_summary(package_id, BUILD_SCRIPT_TARGET_NAME));
+        produced.record_unit(
+            &first,
+            build_script_metadata_summary(BuildScriptMetadataKeyInputs {
+                package_id: package_id,
+                target_name: BUILD_SCRIPT_TARGET_NAME,
+            }),
+        );
+        produced.record_unit(
+            &second,
+            build_script_metadata_summary(BuildScriptMetadataKeyInputs {
+                package_id: package_id,
+                target_name: BUILD_SCRIPT_TARGET_NAME,
+            }),
+        );
 
         let err = bind_all_build_script_metadata_with_index(&unit, &produced).unwrap_err();
 
@@ -18250,13 +20954,29 @@ rust-version = "1.80"
         let mut second = test_rust_derivation(SECOND_BUILD_INDEX, package_id, "custom-build", "host", Vec::new());
         let mut main_alias = test_rust_derivation(MAIN_ALIAS_INDEX, package_id, "custom-build", "host", Vec::new());
         first.target_name = BUILD_SCRIPT_TARGET_NAME.to_string();
-        first.unit_id = rust_unit_id(FIRST_BUILD_INDEX, package_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "build");
+        first.unit_id = rust_unit_id(RustUnitIdInputs {
+            index: FIRST_BUILD_INDEX,
+            package_id: package_id,
+            target_name: BUILD_SCRIPT_TARGET_NAME,
+            target_kind: "custom-build",
+            mode: "build",
+        });
         second.target_name = BUILD_SCRIPT_TARGET_NAME.to_string();
-        second.unit_id =
-            rust_unit_id(SECOND_BUILD_INDEX, package_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "build");
+        second.unit_id = rust_unit_id(RustUnitIdInputs {
+            index: SECOND_BUILD_INDEX,
+            package_id: package_id,
+            target_name: BUILD_SCRIPT_TARGET_NAME,
+            target_kind: "custom-build",
+            mode: "build",
+        });
         main_alias.target_name = BUILD_SCRIPT_MAIN_TARGET_NAME.to_string();
-        main_alias.unit_id =
-            rust_unit_id(MAIN_ALIAS_INDEX, package_id, BUILD_SCRIPT_MAIN_TARGET_NAME, "custom-build", "build");
+        main_alias.unit_id = rust_unit_id(RustUnitIdInputs {
+            index: MAIN_ALIAS_INDEX,
+            package_id: package_id,
+            target_name: BUILD_SCRIPT_MAIN_TARGET_NAME,
+            target_kind: "custom-build",
+            mode: "build",
+        });
         let consumer = test_rust_derivation(
             CONSUMER_INDEX,
             "path+file://consumer#consumer@0.1.0",
@@ -18301,16 +21021,50 @@ rust-version = "1.80"
         let mut second = test_rust_derivation(SECOND_BUILD_INDEX, package_id, "custom-build", "host", Vec::new());
         let mut main_alias = test_rust_derivation(MAIN_ALIAS_INDEX, package_id, "custom-build", "host", Vec::new());
         first.target_name = BUILD_SCRIPT_TARGET_NAME.to_string();
-        first.unit_id = rust_unit_id(FIRST_BUILD_INDEX, package_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "build");
+        first.unit_id = rust_unit_id(RustUnitIdInputs {
+            index: FIRST_BUILD_INDEX,
+            package_id: package_id,
+            target_name: BUILD_SCRIPT_TARGET_NAME,
+            target_kind: "custom-build",
+            mode: "build",
+        });
         second.target_name = BUILD_SCRIPT_TARGET_NAME.to_string();
-        second.unit_id =
-            rust_unit_id(SECOND_BUILD_INDEX, package_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "build");
+        second.unit_id = rust_unit_id(RustUnitIdInputs {
+            index: SECOND_BUILD_INDEX,
+            package_id: package_id,
+            target_name: BUILD_SCRIPT_TARGET_NAME,
+            target_kind: "custom-build",
+            mode: "build",
+        });
         main_alias.target_name = BUILD_SCRIPT_MAIN_TARGET_NAME.to_string();
-        main_alias.unit_id =
-            rust_unit_id(MAIN_ALIAS_INDEX, package_id, BUILD_SCRIPT_MAIN_TARGET_NAME, "custom-build", "build");
-        produced.record_unit(&first, build_script_metadata_summary(package_id, BUILD_SCRIPT_TARGET_NAME));
-        produced.record_unit(&second, build_script_metadata_summary(package_id, BUILD_SCRIPT_TARGET_NAME));
-        produced.record_unit(&main_alias, build_script_metadata_summary(package_id, BUILD_SCRIPT_MAIN_TARGET_NAME));
+        main_alias.unit_id = rust_unit_id(RustUnitIdInputs {
+            index: MAIN_ALIAS_INDEX,
+            package_id: package_id,
+            target_name: BUILD_SCRIPT_MAIN_TARGET_NAME,
+            target_kind: "custom-build",
+            mode: "build",
+        });
+        produced.record_unit(
+            &first,
+            build_script_metadata_summary(BuildScriptMetadataKeyInputs {
+                package_id: package_id,
+                target_name: BUILD_SCRIPT_TARGET_NAME,
+            }),
+        );
+        produced.record_unit(
+            &second,
+            build_script_metadata_summary(BuildScriptMetadataKeyInputs {
+                package_id: package_id,
+                target_name: BUILD_SCRIPT_TARGET_NAME,
+            }),
+        );
+        produced.record_unit(
+            &main_alias,
+            build_script_metadata_summary(BuildScriptMetadataKeyInputs {
+                package_id: package_id,
+                target_name: BUILD_SCRIPT_MAIN_TARGET_NAME,
+            }),
+        );
 
         let err = bind_all_build_script_metadata_with_index(&unit, &produced).unwrap_err();
 
@@ -18437,15 +21191,15 @@ rust-version = "1.80"
         target_edges.insert(0usize, Vec::new());
         target_edges.insert(2usize, Vec::new());
 
-        let order = plan_combined_unit_topology_order(
-            &[0usize, 2usize],
-            &[1usize],
-            &lib_producers,
-            &host_producers,
-            &proc_macro_producers,
-            &target_edges,
-            &graph,
-        )
+        let order = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+            target_indices: &[0usize, 2usize],
+            host_indices: &[1usize],
+            lib_producers: &lib_producers,
+            host_producers: &host_producers,
+            proc_macro_producers: &proc_macro_producers,
+            target_edges: &target_edges,
+            graph: &graph,
+        })
         .unwrap();
 
         assert_eq!(order, vec![0usize, 1usize, 2usize]);
@@ -18508,18 +21262,18 @@ rust-version = "1.80"
             .env
             .insert(RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV.to_string(), TEST_DIGEST_A.to_string());
 
-        let receipt = finalized_execution_receipt(
-            &unit,
-            "success",
-            "test",
-            missing_toolchain_identity(),
-            TEST_DIGEST_B.to_string(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            None,
-            None,
-        )
+        let receipt = finalized_execution_receipt(FinalizedExecutionReceiptInputs {
+            unit: &unit,
+            execution_status: "success",
+            rebuild_reason: "test",
+            toolchain: missing_toolchain_identity(),
+            environment_digest_blake3: TEST_DIGEST_B.to_string(),
+            dependency_artifact_digests: Vec::new(),
+            host_artifact_digests: Vec::new(),
+            output_artifact_digests: Vec::new(),
+            compiler_policy: None,
+            blocker: None,
+        })
         .unwrap();
 
         assert_eq!(receipt.execution_kind, TARGET_EXECUTION_KIND);
@@ -18543,27 +21297,27 @@ rust-version = "1.80"
         unit.consumed_host_artifacts = vec![test_host_artifact(host_id, "proc-macro")];
         let blocker_class = "missing-host-artifact";
 
-        let receipt = finalized_execution_receipt(
-            &unit,
-            "blocked",
-            "test-blocker",
-            missing_toolchain_identity(),
-            TEST_DIGEST_A.to_string(),
-            vec![RustExecutionArtifactDigest {
+        let receipt = finalized_execution_receipt(FinalizedExecutionReceiptInputs {
+            unit: &unit,
+            execution_status: "blocked",
+            rebuild_reason: "test-blocker",
+            toolchain: missing_toolchain_identity(),
+            environment_digest_blake3: TEST_DIGEST_A.to_string(),
+            dependency_artifact_digests: vec![RustExecutionArtifactDigest {
                 path: "dep/libcc.rlib".to_string(),
                 blake3: TEST_DIGEST_A.to_string(),
             }],
-            vec![RustExecutionArtifactDigest {
+            host_artifact_digests: vec![RustExecutionArtifactDigest {
                 path: "host/librustversion.so".to_string(),
                 blake3: TEST_DIGEST_B.to_string(),
             }],
-            Vec::new(),
-            None,
-            Some(RustUnitExecutionBlocker {
+            output_artifact_digests: Vec::new(),
+            compiler_policy: None,
+            blocker: Some(RustUnitExecutionBlocker {
                 class: blocker_class.to_string(),
                 message: "missing host artifact for replay evidence test".to_string(),
             }),
-        )
+        })
         .unwrap();
 
         let context = receipt.diagnostic_context.as_ref().expect("blocked receipt has diagnostic context");
@@ -18615,21 +21369,21 @@ rust-version = "1.80"
         let mut unit =
             test_rust_derivation(0, "path+file://mantle#mantle@0.1.0", "lib", TARGET_EXECUTION_KIND, Vec::new());
         unit.rustc_args_digest_blake3 = TEST_DIGEST_A.to_string();
-        let receipt = finalized_execution_receipt(
-            &unit,
-            "blocked",
-            "test-blocker",
-            missing_toolchain_identity(),
-            TEST_DIGEST_A.to_string(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            None,
-            Some(RustUnitExecutionBlocker {
+        let receipt = finalized_execution_receipt(FinalizedExecutionReceiptInputs {
+            unit: &unit,
+            execution_status: "blocked",
+            rebuild_reason: "test-blocker",
+            toolchain: missing_toolchain_identity(),
+            environment_digest_blake3: TEST_DIGEST_A.to_string(),
+            dependency_artifact_digests: Vec::new(),
+            host_artifact_digests: Vec::new(),
+            output_artifact_digests: Vec::new(),
+            compiler_policy: None,
+            blocker: Some(RustUnitExecutionBlocker {
                 class: "test-blocker".to_string(),
                 message: "invalid digest test".to_string(),
             }),
-        )
+        })
         .unwrap();
         let mut replay = receipt.replay_evidence.unwrap();
         replay.environment_digest_blake3 = "not-a-digest".to_string();
@@ -18857,15 +21611,15 @@ rust-version = "1.80"
         target_edges.insert(1usize, Vec::new());
         target_edges.insert(3usize, vec![0usize]);
 
-        let order = plan_combined_unit_topology_order(
-            &[0usize, 3usize],
-            &[2usize],
-            &host_dependency_lib_producers,
-            &host_producers,
-            &BTreeMap::new(),
-            &target_edges,
-            &graph,
-        )
+        let order = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+            target_indices: &[0usize, 3usize],
+            host_indices: &[2usize],
+            lib_producers: &host_dependency_lib_producers,
+            host_producers: &host_producers,
+            proc_macro_producers: &BTreeMap::new(),
+            target_edges: &target_edges,
+            graph: &graph,
+        })
         .unwrap();
 
         let host_dependency_position = order.iter().position(|index| *index == 1usize).unwrap();
@@ -18896,15 +21650,15 @@ rust-version = "1.80"
         let mut target_edges = BTreeMap::new();
         target_edges.insert(2usize, Vec::new());
 
-        let order = plan_combined_unit_topology_order(
-            &[2usize],
-            &[0usize, 1usize],
-            &lib_producers,
-            &host_producers,
-            &proc_macro_producers,
-            &target_edges,
-            &graph,
-        )
+        let order = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+            target_indices: &[2usize],
+            host_indices: &[0usize, 1usize],
+            lib_producers: &lib_producers,
+            host_producers: &host_producers,
+            proc_macro_producers: &proc_macro_producers,
+            target_edges: &target_edges,
+            graph: &graph,
+        })
         .unwrap();
 
         assert_eq!(order, vec![0usize, 1usize, 2usize]);
@@ -18933,15 +21687,15 @@ rust-version = "1.80"
         let mut target_edges = BTreeMap::new();
         target_edges.insert(0usize, Vec::new());
 
-        let order = plan_combined_unit_topology_order(
-            &[0usize],
-            &[1usize, 2usize],
-            &lib_producers,
-            &host_producers,
-            &proc_macro_producers,
-            &target_edges,
-            &graph,
-        )
+        let order = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+            target_indices: &[0usize],
+            host_indices: &[1usize, 2usize],
+            lib_producers: &lib_producers,
+            host_producers: &host_producers,
+            proc_macro_producers: &proc_macro_producers,
+            target_edges: &target_edges,
+            graph: &graph,
+        })
         .unwrap();
 
         assert_eq!(order, vec![2usize, 1usize, 0usize]);
@@ -18980,19 +21734,25 @@ rust-version = "1.80"
             test_dependency_artifact(consumer_id, "aws_lc_rs"),
             test_dependency_artifact(linked_id, "aws_lc_sys"),
         ]);
-        let linked_producer_unit_id = rust_unit_id(0, linked_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "build");
+        let linked_producer_unit_id = rust_unit_id(RustUnitIdInputs {
+            index: 0,
+            package_id: linked_id,
+            target_name: BUILD_SCRIPT_TARGET_NAME,
+            target_kind: "custom-build",
+            mode: "build",
+        });
         let custom_build_metadata_producers_by_package =
             BTreeMap::from([(linked_id.to_string(), vec![linked_producer_unit_id.clone()])]);
         let mut blockers = Vec::new();
 
-        let dependencies = native_host_metadata_dependencies(
-            &consumer,
-            "custom-build",
-            Some(&selected_artifacts),
-            &packages_by_id,
-            &custom_build_metadata_producers_by_package,
-            &mut blockers,
-        );
+        let dependencies = native_host_metadata_dependencies(NativeHostMetadataDependencyInputs {
+            package: &consumer,
+            target_kind: "custom-build",
+            selected_artifacts: Some(&selected_artifacts),
+            packages_by_id: &packages_by_id,
+            custom_build_metadata_producers: &custom_build_metadata_producers_by_package,
+            blockers: &mut blockers,
+        });
 
         assert_eq!(dependencies, vec![BuildScriptMetadataDependency {
             package_id: linked_id.to_string(),
@@ -19022,14 +21782,14 @@ rust-version = "1.80"
         let custom_build_metadata_producers_by_package = BTreeMap::new();
         let mut blockers = Vec::new();
 
-        let dependencies = native_host_metadata_dependencies(
-            &consumer,
-            "custom-build",
-            Some(&selected_artifacts),
-            &packages_by_id,
-            &custom_build_metadata_producers_by_package,
-            &mut blockers,
-        );
+        let dependencies = native_host_metadata_dependencies(NativeHostMetadataDependencyInputs {
+            package: &consumer,
+            target_kind: "custom-build",
+            selected_artifacts: Some(&selected_artifacts),
+            packages_by_id: &packages_by_id,
+            custom_build_metadata_producers: &custom_build_metadata_producers_by_package,
+            blockers: &mut blockers,
+        });
 
         assert!(dependencies.is_empty());
         assert!(blockers.is_empty());
@@ -19060,15 +21820,15 @@ rust-version = "1.80"
         let mut target_edges = BTreeMap::new();
         target_edges.insert(TARGET_INDEX, Vec::new());
 
-        let order = plan_combined_unit_topology_order(
-            &[TARGET_INDEX],
-            &[LINKED_BUILD_INDEX, DEPENDENT_BUILD_INDEX],
-            &lib_producers,
-            &host_producers,
-            &BTreeMap::new(),
-            &target_edges,
-            &graph,
-        )
+        let order = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+            target_indices: &[TARGET_INDEX],
+            host_indices: &[LINKED_BUILD_INDEX, DEPENDENT_BUILD_INDEX],
+            lib_producers: &lib_producers,
+            host_producers: &host_producers,
+            proc_macro_producers: &BTreeMap::new(),
+            target_edges: &target_edges,
+            graph: &graph,
+        })
         .unwrap();
 
         assert_eq!(order, vec![LINKED_BUILD_INDEX, DEPENDENT_BUILD_INDEX, TARGET_INDEX]);
@@ -19096,15 +21856,15 @@ rust-version = "1.80"
         let mut target_edges = BTreeMap::new();
         target_edges.insert(TARGET_INDEX, Vec::new());
 
-        let err = plan_combined_unit_topology_order(
-            &[TARGET_INDEX],
-            &[DEPENDENT_BUILD_INDEX],
-            &lib_producers,
-            &host_producers,
-            &BTreeMap::new(),
-            &target_edges,
-            &graph,
-        )
+        let err = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+            target_indices: &[TARGET_INDEX],
+            host_indices: &[DEPENDENT_BUILD_INDEX],
+            lib_producers: &lib_producers,
+            host_producers: &host_producers,
+            proc_macro_producers: &BTreeMap::new(),
+            target_edges: &target_edges,
+            graph: &graph,
+        })
         .unwrap_err();
 
         assert_eq!(err.class, "missing-build-script-metadata-producer");
@@ -19129,15 +21889,15 @@ rust-version = "1.80"
         let mut target_edges = BTreeMap::new();
         target_edges.insert(target_index, Vec::new());
 
-        let order = plan_combined_unit_topology_order(
-            &[target_index],
-            &[standalone_host_index],
-            &lib_producers,
-            &host_producers,
-            &BTreeMap::new(),
-            &target_edges,
-            &graph,
-        )
+        let order = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+            target_indices: &[target_index],
+            host_indices: &[standalone_host_index],
+            lib_producers: &lib_producers,
+            host_producers: &host_producers,
+            proc_macro_producers: &BTreeMap::new(),
+            target_edges: &target_edges,
+            graph: &graph,
+        })
         .unwrap();
 
         assert_eq!(order.len(), expected_unit_count);
@@ -19156,15 +21916,15 @@ rust-version = "1.80"
         let mut target_edges = BTreeMap::new();
         target_edges.insert(0usize, Vec::new());
 
-        let err = plan_combined_unit_topology_order(
-            &[0usize],
-            &[],
-            &lib_producers,
-            &BTreeMap::new(),
-            &BTreeMap::new(),
-            &target_edges,
-            &graph,
-        )
+        let err = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+            target_indices: &[0usize],
+            host_indices: &[],
+            lib_producers: &lib_producers,
+            host_producers: &BTreeMap::new(),
+            proc_macro_producers: &BTreeMap::new(),
+            target_edges: &target_edges,
+            graph: &graph,
+        })
         .unwrap_err();
 
         assert_eq!(err.class, "missing-host-artifact-producer");
@@ -19490,9 +22250,9 @@ rust-version = "1.80"
 
     #[test]
     fn parse_native_lockfile_text_extracts_source_identities_revisions_checksums_and_edges() {
-        let facts = parse_native_lockfile_text(
-            "fixtures/Cargo.lock",
-            r#"
+        let facts = parse_native_lockfile_text(NativeTextParseInputs {
+            path_label: "fixtures/Cargo.lock",
+            text: r#"
 version = 3
 
 [[package]]
@@ -19519,7 +22279,7 @@ version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
 "#,
-        )
+        })
         .unwrap();
 
         assert_eq!(facts.packages.len(), 4usize);
@@ -19543,7 +22303,11 @@ checksum = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
 
     #[test]
     fn parse_native_lockfile_text_rejects_malformed_package_records() {
-        let err = parse_native_lockfile_text("bad/Cargo.lock", "[[package]]\nname = 'bad'\n").unwrap_err();
+        let err = parse_native_lockfile_text(NativeTextParseInputs {
+            path_label: "bad/Cargo.lock",
+            text: "[[package]]\nname = 'bad'\n",
+        })
+        .unwrap_err();
 
         assert!(err.contains("parsing lockfile bad/Cargo.lock"));
         assert!(err.contains("missing field `version`"));
@@ -19551,9 +22315,9 @@ checksum = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
 
     #[test]
     fn parse_native_manifest_text_extracts_core_workspace_package_target_and_dependency_facts() {
-        let manifest = parse_native_manifest_text(
-            "fixtures/Cargo.toml",
-            r#"
+        let manifest = parse_native_manifest_text(NativeTextParseInputs {
+            path_label: "fixtures/Cargo.toml",
+            text: r#"
 [workspace]
 members = ["app", "crates/*"]
 
@@ -19588,7 +22352,7 @@ path = "src/bin/app.rs"
 [target.'cfg(unix)'.dependencies]
 unix_dep = { path = "../unix-dep" }
 "#,
-        )
+        })
         .unwrap();
 
         let package = manifest.package.as_ref().unwrap();
@@ -19611,10 +22375,10 @@ unix_dep = { path = "../unix-dep" }
 
     #[test]
     fn parse_native_manifest_text_rejects_invalid_inherited_package_version() {
-        let err = parse_native_manifest_text(
-            "bad/Cargo.toml",
-            "[package]\nname = 'bad'\nversion = { workspace = true, unexpected = true }\n",
-        )
+        let err = parse_native_manifest_text(NativeTextParseInputs {
+            path_label: "bad/Cargo.toml",
+            text: "[package]\nname = 'bad'\nversion = { workspace = true, unexpected = true }\n",
+        })
         .unwrap_err();
 
         assert!(err.contains("parsing manifest bad/Cargo.toml"));
@@ -19646,10 +22410,22 @@ unix_dep = { path = "../unix-dep" }
         let linked_manifest = read_native_manifest(&package_dir.join("Cargo.toml")).unwrap();
         let disabled_manifest = read_native_manifest(&disabled_dir.join("Cargo.toml")).unwrap();
 
-        let linked_targets =
-            native_targets_for_manifest(&package_dir, "linked", "0.1.0", "2021", &linked_manifest).unwrap();
-        let disabled_targets =
-            native_targets_for_manifest(&disabled_dir, "disabled", "0.1.0", "2021", &disabled_manifest).unwrap();
+        let linked_targets = native_targets_for_manifest(NativeTargetsForManifestInputs {
+            source_root: &package_dir,
+            package_name: "linked",
+            package_version: "0.1.0",
+            package_edition: "2021",
+            manifest: &linked_manifest,
+        })
+        .unwrap();
+        let disabled_targets = native_targets_for_manifest(NativeTargetsForManifestInputs {
+            source_root: &disabled_dir,
+            package_name: "disabled",
+            package_version: "0.1.0",
+            package_edition: "2021",
+            manifest: &disabled_manifest,
+        })
+        .unwrap();
 
         assert_eq!(linked_manifest.package.as_ref().unwrap().links.as_deref(), Some("linked_native"));
         let build_target = linked_targets.iter().find(|target| target.kind == "custom-build").unwrap();
@@ -19876,7 +22652,14 @@ unix_dep = { path = "../unix-dep" }
         std::fs::write(dir.path().join("src/lib.rs"), "extern crate proc_macro;\n").unwrap();
         let manifest = read_native_manifest(&manifest_path).unwrap();
 
-        let targets = native_targets_for_manifest(dir.path(), "spez", "0.1.2", "2021", &manifest).unwrap();
+        let targets = native_targets_for_manifest(NativeTargetsForManifestInputs {
+            source_root: dir.path(),
+            package_name: "spez",
+            package_version: "0.1.2",
+            package_edition: "2021",
+            manifest: &manifest,
+        })
+        .unwrap();
 
         assert_eq!(targets.len(), 1usize);
         assert_eq!(targets[0].name, "spez");
@@ -21635,33 +24418,96 @@ unix_dep = { path = "../unix-dep" }
     fn native_target_cfg_predicate_scope_evaluates_nested_common_predicates() {
         let target = "x86_64-unknown-linux-gnu";
 
-        assert_eq!(evaluate_supported_target_cfg("cfg(unix)", target), Some(true));
-        assert_eq!(evaluate_supported_target_cfg("cfg(windows)", target), Some(false));
-        assert_eq!(evaluate_supported_target_cfg("cfg(not(windows))", target), Some(true));
         assert_eq!(
-            evaluate_supported_target_cfg("cfg(any(target_os = \"linux\", target_os = \"macos\"))", target),
+            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
+                expression: "cfg(unix)",
+                active_target: target,
+            }),
             Some(true)
         );
         assert_eq!(
-            evaluate_supported_target_cfg(
-                "cfg(all(any(target_arch = \"x86\", target_arch = \"x86_64\"), not(target_os = \"windows\")))",
-                target
-            ),
+            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
+                expression: "cfg(windows)",
+                active_target: target,
+            }),
+            Some(false)
+        );
+        assert_eq!(
+            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
+                expression: "cfg(not(windows))",
+                active_target: target,
+            }),
             Some(true)
         );
-        assert_eq!(evaluate_supported_target_cfg("x86_64-unknown-linux-gnu", target), Some(true));
-        assert_eq!(evaluate_supported_target_cfg("aarch64-pc-windows-gnullvm", target), Some(false));
-        assert_eq!(evaluate_supported_target_cfg("cfg(target_has_atomic = \"ptr\")", target), Some(true));
-        assert_eq!(evaluate_supported_target_cfg("cfg(not(target_has_atomic = \"ptr\"))", target), Some(false));
-        assert_eq!(evaluate_supported_target_cfg("cfg(loom)", target), Some(false));
+        assert_eq!(
+            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
+                expression: "cfg(any(target_os = \"linux\", target_os = \"macos\"))",
+                active_target: target,
+            }),
+            Some(true)
+        );
+        assert_eq!(
+            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
+                expression: "cfg(all(any(target_arch = \"x86\", target_arch = \"x86_64\"), not(target_os = \"windows\")))",
+                active_target: target,
+            }),
+            Some(true)
+        );
+        assert_eq!(
+            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
+                expression: "x86_64-unknown-linux-gnu",
+                active_target: target,
+            }),
+            Some(true)
+        );
+        assert_eq!(
+            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
+                expression: "aarch64-pc-windows-gnullvm",
+                active_target: target,
+            }),
+            Some(false)
+        );
+        assert_eq!(
+            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
+                expression: "cfg(target_has_atomic = \"ptr\")",
+                active_target: target,
+            }),
+            Some(true)
+        );
+        assert_eq!(
+            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
+                expression: "cfg(not(target_has_atomic = \"ptr\"))",
+                active_target: target,
+            }),
+            Some(false)
+        );
+        assert_eq!(
+            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
+                expression: "cfg(loom)",
+                active_target: target,
+            }),
+            Some(false)
+        );
     }
 
     #[test]
     fn native_target_cfg_predicate_scope_blocks_unknown_or_malformed_syntax() {
         let target = "x86_64-unknown-linux-gnu";
 
-        assert_eq!(evaluate_supported_target_cfg("cfg(unknown_selector)", target), None);
-        assert_eq!(evaluate_supported_target_cfg("cfg(any(target_os = \"linux\"", target), None);
+        assert_eq!(
+            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
+                expression: "cfg(unknown_selector)",
+                active_target: target,
+            }),
+            None
+        );
+        assert_eq!(
+            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
+                expression: "cfg(any(target_os = \"linux\"",
+                active_target: target,
+            }),
+            None
+        );
     }
 
     #[test]
