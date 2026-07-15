@@ -1,3 +1,6 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::fs::File;
@@ -30,6 +33,8 @@ pub const DEFAULT_ACTION_TIMEOUT_MS: u64 = 120_000;
 
 const PROCESS_POLL_INTERVAL_MS: u64 = 10;
 const MAX_READ_ONLY_BINDINGS: u32 = 64;
+const MAX_FIXTURE_DIRECTORY_COUNT: u32 = DEFAULT_MAX_FIXTURE_FILES;
+const MAX_TOOL_COHORT_MEMBER_COUNT: u32 = 5;
 const GIT_AUTHOR_NAME: &str = "Mantle Fixture";
 const GIT_AUTHOR_EMAIL: &str = "mantle-fixture@example.invalid";
 const GIT_TIMESTAMP: &str = "2000-01-01T00:00:00Z";
@@ -93,6 +98,19 @@ pub struct DirectoryMeasurement {
     pub total_bytes: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DirectoryMeasurementLimits {
+    pub maximum_files: u32,
+    pub maximum_file_bytes: u64,
+    pub maximum_total_bytes: u64,
+}
+
+pub const DEFAULT_DIRECTORY_MEASUREMENT_LIMITS: DirectoryMeasurementLimits = DirectoryMeasurementLimits {
+    maximum_files: DEFAULT_MAX_FIXTURE_FILES,
+    maximum_file_bytes: DEFAULT_MAX_FIXTURE_FILE_BYTES,
+    maximum_total_bytes: DEFAULT_MAX_FIXTURE_TOTAL_BYTES,
+};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MaterializedGitFixture {
     pub repository_path: PathBuf,
@@ -128,17 +146,26 @@ pub struct StrictActionRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StrictActionResult {
-    pub exit_code: i32,
+    pub exit_code: Option<i32>,
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
     pub elapsed_diagnostic_ns: u64,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct WaitTiming {
+    started: Instant,
+    timeout_ms: u64,
+    poll_interval_ms: u64,
+}
+
 pub fn read_json_bounded<T: DeserializeOwned>(path: &Path, maximum_bytes: u64) -> Result<T, ShellError> {
     let bytes = read_regular_file_bounded(path, maximum_bytes)?;
+    let byte_count =
+        u64::try_from(bytes.len()).map_err(|_| ShellError::Invalid(String::from("json-byte-count-overflow")))?;
     let value = serde_json::from_slice(&bytes).map_err(|error| ShellError::Json(error.to_string()))?;
     debug_assert!(!bytes.is_empty());
-    debug_assert!(u64::try_from(bytes.len()).unwrap_or(u64::MAX) <= maximum_bytes);
+    debug_assert!(byte_count <= maximum_bytes);
     Ok(value)
 }
 
@@ -182,13 +209,7 @@ pub fn materialize_git_fixture(
     run_git(git_executable, repository_path, &["add", "--all"])?;
     run_git(git_executable, repository_path, &["commit", "--quiet", "--message", "pinned fixture"])?;
     let revision = git_stdout(git_executable, repository_path, &["rev-parse", "HEAD"])?;
-    let measurement = measure_directory(
-        repository_path,
-        sentinel_relative_path,
-        DEFAULT_MAX_FIXTURE_FILES,
-        DEFAULT_MAX_FIXTURE_FILE_BYTES,
-        DEFAULT_MAX_FIXTURE_TOTAL_BYTES,
-    )?;
+    let measurement = measure_directory(repository_path, sentinel_relative_path, DEFAULT_DIRECTORY_MEASUREMENT_LIMITS)?;
     debug_assert_eq!(revision.len(), crunch_hardware_simulation_core::GIT_REVISION_HEX_LENGTH);
     debug_assert!(repository_path.join(".git").is_dir());
     Ok(MaterializedGitFixture {
@@ -220,13 +241,13 @@ pub fn source_observation(
 pub fn measure_directory(
     root: &Path,
     sentinel_relative_path: &Path,
-    maximum_files: u32,
-    maximum_file_bytes: u64,
-    maximum_total_bytes: u64,
+    limits: DirectoryMeasurementLimits,
 ) -> Result<DirectoryMeasurement, ShellError> {
     require_real_directory(root)?;
-    let mut paths = Vec::new();
-    collect_regular_files(root, root, maximum_files, &mut paths)?;
+    let path_slots = usize::try_from(limits.maximum_files)
+        .map_err(|_| ShellError::Invalid(String::from("fixture-file-count-overflow")))?;
+    let mut paths = Vec::with_capacity(path_slots);
+    collect_regular_files(root, limits.maximum_files, &mut paths)?;
     paths.sort();
     let mut hasher = blake3::Hasher::new();
     hasher.update(DIRECTORY_HASH_DOMAIN);
@@ -234,16 +255,18 @@ pub fn measure_directory(
     let mut total_bytes = 0_u64;
     for relative in &paths {
         let absolute = root.join(relative);
-        let bytes = read_regular_file_bounded(&absolute, maximum_file_bytes)?;
+        let bytes = read_regular_file_bounded(&absolute, limits.maximum_file_bytes)?;
+        let file_size_bytes =
+            u64::try_from(bytes.len()).map_err(|_| ShellError::Invalid(String::from("fixture-file-size-overflow")))?;
         total_bytes = total_bytes
-            .checked_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX))
+            .checked_add(file_size_bytes)
             .ok_or_else(|| ShellError::Invalid(String::from("fixture-total-byte-overflow")))?;
-        if total_bytes > maximum_total_bytes {
+        if total_bytes > limits.maximum_total_bytes {
             return Err(ShellError::Invalid(String::from("fixture-total-byte-bound-exceeded")));
         }
-        update_tree_hash(&mut hasher, relative, &bytes);
+        update_tree_hash(&mut hasher, relative, &bytes)?;
     }
-    let sentinel = read_regular_file_bounded(&root.join(sentinel_relative_path), maximum_file_bytes)?;
+    let sentinel = read_regular_file_bounded(&root.join(sentinel_relative_path), limits.maximum_file_bytes)?;
     let file_count =
         u32::try_from(paths.len()).map_err(|_| ShellError::Invalid(String::from("fixture-file-count-overflow")))?;
     let measurement = DirectoryMeasurement {
@@ -264,8 +287,18 @@ pub fn observe_tool_cohort(
     if closure_paths.is_empty() {
         return Err(ShellError::Invalid(String::from("tool-closure-empty")));
     }
+    let member_count = u32::try_from(cohort.members.len())
+        .map_err(|_| ShellError::Invalid(String::from("tool-member-count-overflow")))?;
+    if member_count > MAX_TOOL_COHORT_MEMBER_COUNT {
+        return Err(ShellError::Invalid(String::from("tool-member-count-bound-exceeded")));
+    }
+    let member_slots = usize::try_from(MAX_TOOL_COHORT_MEMBER_COUNT)
+        .map_err(|_| ShellError::Invalid(String::from("tool-member-count-overflow")))?;
     let mut member_binary_blake3 = BTreeMap::new();
     for member in &cohort.members {
+        if member_binary_blake3.len() >= member_slots {
+            return Err(ShellError::Invalid(String::from("tool-member-count-bound-exceeded")));
+        }
         let executable = Path::new(&member.store_path).join(&member.executable);
         let digest = hash_regular_file(&executable, DEFAULT_MAX_FIXTURE_TOTAL_BYTES)?;
         member_binary_blake3.insert(format!("{:?}", member.role), digest);
@@ -292,15 +325,22 @@ pub fn run_strict_action(request: StrictActionRequest) -> Result<StrictActionRes
     let mut command = strict_bwrap_command(&request)?;
     command.stdout(Stdio::from(stdout_file));
     command.stderr(Stdio::from(stderr_file));
-    let started = Instant::now();
+    let started = monotonic_now();
+    let timing = WaitTiming {
+        started,
+        timeout_ms: request.timeout_ms,
+        poll_interval_ms: PROCESS_POLL_INTERVAL_MS,
+    };
     let mut child = command.spawn().map_err(|error| io_error("spawning strict bwrap action", &request.bwrap, error))?;
-    let status = wait_bounded(&mut child, &request.executable, request.timeout_ms)?;
-    let elapsed_diagnostic_ns = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    let status = wait_bounded(&mut child, &request.executable, timing)?;
+    let elapsed_diagnostic_ns = elapsed_ns(started)?;
     let stdout = read_regular_file_allow_empty_bounded(&stdout_path, request.max_log_bytes)?;
     let stderr = read_regular_file_allow_empty_bounded(&stderr_path, request.max_log_bytes)?;
-    let exit_code = status.code().unwrap_or(i32::MIN);
+    let stdout_size_bytes = u64::try_from(stdout.len())
+        .map_err(|_| ShellError::Invalid(String::from("strict-action-stdout-size-overflow")))?;
+    let exit_code = status.code();
     debug_assert!(elapsed_diagnostic_ns > 0);
-    debug_assert!(u64::try_from(stdout.len()).unwrap_or(u64::MAX) <= request.max_log_bytes);
+    debug_assert!(stdout_size_bytes <= request.max_log_bytes);
     Ok(StrictActionResult {
         exit_code,
         stdout,
@@ -328,7 +368,8 @@ fn validate_action_request(request: &StrictActionRequest) -> Result<(), ShellErr
 }
 
 fn validate_read_only_bindings(bindings: &[ReadOnlyBinding]) -> Result<(), ShellError> {
-    let binding_count = u32::try_from(bindings.len()).unwrap_or(u32::MAX);
+    let binding_count = u32::try_from(bindings.len())
+        .map_err(|_| ShellError::Invalid(String::from("strict-action-binding-count-overflow")))?;
     if binding_count > MAX_READ_ONLY_BINDINGS {
         return Err(ShellError::Invalid(String::from("strict-action-binding-count-exceeded")));
     }
@@ -391,24 +432,52 @@ fn strict_bwrap_command(request: &StrictActionRequest) -> Result<Command, ShellE
     Ok(command)
 }
 
-fn wait_bounded(child: &mut std::process::Child, program: &Path, timeout_ms: u64) -> Result<ExitStatus, ShellError> {
-    let started = Instant::now();
-    let timeout = Duration::from_millis(timeout_ms);
-    let interval = Duration::from_millis(PROCESS_POLL_INTERVAL_MS);
-    loop {
+fn wait_bounded(child: &mut std::process::Child, program: &Path, timing: WaitTiming) -> Result<ExitStatus, ShellError> {
+    let timeout_duration_ms = Duration::from_millis(timing.timeout_ms);
+    let poll_interval_ms = Duration::from_millis(timing.poll_interval_ms);
+    let maximum_poll_count = timing.timeout_ms.div_ceil(timing.poll_interval_ms).saturating_add(1);
+    debug_assert!(timing.poll_interval_ms > 0);
+    debug_assert!(maximum_poll_count > 0);
+    for _poll_index in 0..maximum_poll_count {
         if let Some(status) = child.try_wait().map_err(|error| io_error("polling strict action", program, error))? {
             return Ok(status);
         }
-        if started.elapsed() >= timeout {
-            let _ = child.kill();
-            let _ = child.wait();
+        if timing.started.elapsed() >= timeout_duration_ms {
+            kill_and_reap_after_timeout(child, program);
             return Err(ShellError::Timeout {
                 program: program.to_path_buf(),
-                timeout_ms,
+                timeout_ms: timing.timeout_ms,
             });
         }
-        thread::sleep(interval);
+        thread::sleep(poll_interval_ms);
     }
+    kill_and_reap_after_timeout(child, program);
+    Err(ShellError::Timeout {
+        program: program.to_path_buf(),
+        timeout_ms: timing.timeout_ms,
+    })
+}
+
+fn kill_and_reap_after_timeout(child: &mut std::process::Child, program: &Path) {
+    if let Err(error) = child.kill() {
+        eprintln!("failed to kill timed-out strict action `{}`: {error}", program.display());
+    }
+    if let Err(error) = child.wait() {
+        eprintln!("failed to reap timed-out strict action `{}`: {error}", program.display());
+    }
+}
+
+fn elapsed_ns(started: Instant) -> Result<u64, ShellError> {
+    u64::try_from(started.elapsed().as_nanos())
+        .map_err(|_| ShellError::Invalid(String::from("strict-action-elapsed-nanoseconds-overflow")))
+}
+
+#[allow(
+    tigerstyle::ambient_clock,
+    reason = "imperative shell boundary samples monotonic child-process time"
+)]
+fn monotonic_now() -> Instant {
+    Instant::now()
 }
 
 fn run_git(git: &Path, repository: &Path, args: &[&str]) -> Result<(), ShellError> {
@@ -469,18 +538,51 @@ fn git_command(git: &Path, repository: &Path, args: &[&str]) -> Command {
 
 fn copy_fixture_tree(source: &Path, destination: &Path) -> Result<(), ShellError> {
     fs::create_dir(destination).map_err(|error| io_error("creating fixture repository", destination, error))?;
-    let mut entries = fs::read_dir(source)
-        .map_err(|error| io_error("reading fixture source", source, error))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| io_error("reading fixture source entry", source, error))?;
-    entries.sort_by_key(fs::DirEntry::file_name);
+    let directory_slots = usize::try_from(MAX_FIXTURE_DIRECTORY_COUNT)
+        .map_err(|_| ShellError::Invalid(String::from("fixture-directory-count-overflow")))?;
+    let mut pending = Vec::with_capacity(directory_slots);
+    pending.push((source.to_path_buf(), destination.to_path_buf()));
+    let mut copied_directory_count = 0_u32;
+    for _directory_index in 0..MAX_FIXTURE_DIRECTORY_COUNT {
+        let Some((current_source, current_destination)) = pending.pop() else {
+            break;
+        };
+        copied_directory_count = copied_directory_count
+            .checked_add(1)
+            .ok_or_else(|| ShellError::Invalid(String::from("fixture-directory-count-overflow")))?;
+        let mut entries = fs::read_dir(&current_source)
+            .map_err(|error| io_error("reading fixture source", &current_source, error))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| io_error("reading fixture source entry", &current_source, error))?;
+        entries.sort_by_key(fs::DirEntry::file_name);
+        copy_fixture_entries(entries, &current_destination, &mut pending, directory_slots)?;
+    }
+    if !pending.is_empty() {
+        return Err(ShellError::Invalid(String::from("fixture-directory-count-bound-exceeded")));
+    }
+    debug_assert!(copied_directory_count > 0);
+    debug_assert!(destination.is_dir());
+    Ok(())
+}
+
+fn copy_fixture_entries(
+    entries: Vec<fs::DirEntry>,
+    destination: &Path,
+    pending: &mut Vec<(PathBuf, PathBuf)>,
+    directory_capacity_items_count: usize,
+) -> Result<(), ShellError> {
     for entry in entries {
         let source_path = entry.path();
         let destination_path = destination.join(entry.file_name());
         let metadata = fs::symlink_metadata(&source_path)
             .map_err(|error| io_error("inspecting fixture source", &source_path, error))?;
         if metadata.file_type().is_dir() {
-            copy_fixture_tree(&source_path, &destination_path)?;
+            fs::create_dir(&destination_path)
+                .map_err(|error| io_error("creating fixture directory", &destination_path, error))?;
+            if pending.len() >= directory_capacity_items_count {
+                return Err(ShellError::Invalid(String::from("fixture-directory-count-bound-exceeded")));
+            }
+            pending.push((source_path, destination_path));
         } else if metadata.file_type().is_file() {
             fs::copy(&source_path, &destination_path)
                 .map_err(|error| io_error("copying fixture source", &source_path, error))?;
@@ -488,22 +590,55 @@ fn copy_fixture_tree(source: &Path, destination: &Path) -> Result<(), ShellError
             return Err(ShellError::Invalid(String::from("fixture-source-kind-unsupported")));
         }
     }
-    debug_assert!(destination.is_dir());
+    debug_assert!(pending.len() <= directory_capacity_items_count);
     debug_assert!(!destination.is_symlink());
     Ok(())
 }
 
-fn collect_regular_files(
-    root: &Path,
-    current: &Path,
+fn collect_regular_files(root: &Path, maximum_files: u32, paths: &mut Vec<PathBuf>) -> Result<(), ShellError> {
+    let directory_slots = usize::try_from(MAX_FIXTURE_DIRECTORY_COUNT)
+        .map_err(|_| ShellError::Invalid(String::from("fixture-directory-count-overflow")))?;
+    let mut pending = Vec::with_capacity(directory_slots);
+    pending.push(root.to_path_buf());
+    for _directory_index in 0..MAX_FIXTURE_DIRECTORY_COUNT {
+        let Some(current) = pending.pop() else {
+            break;
+        };
+        let mut entries = fs::read_dir(&current)
+            .map_err(|error| io_error("reading fixture directory", &current, error))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| io_error("reading fixture entry", &current, error))?;
+        entries.sort_by_key(fs::DirEntry::file_name);
+        collect_regular_entries(entries, RegularFileCollection {
+            root,
+            maximum_files,
+            paths,
+            pending: &mut pending,
+            directory_capacity_items_count: directory_slots,
+        })?;
+    }
+    if !pending.is_empty() {
+        return Err(ShellError::Invalid(String::from("fixture-directory-count-bound-exceeded")));
+    }
+    let file_count =
+        u32::try_from(paths.len()).map_err(|_| ShellError::Invalid(String::from("fixture-file-count-overflow")))?;
+    debug_assert!(file_count <= maximum_files);
+    debug_assert!(paths.iter().all(|path| path.is_relative()));
+    Ok(())
+}
+
+struct RegularFileCollection<'a> {
+    root: &'a Path,
     maximum_files: u32,
-    paths: &mut Vec<PathBuf>,
+    paths: &'a mut Vec<PathBuf>,
+    pending: &'a mut Vec<PathBuf>,
+    directory_capacity_items_count: usize,
+}
+
+fn collect_regular_entries(
+    entries: Vec<fs::DirEntry>,
+    collection: RegularFileCollection<'_>,
 ) -> Result<(), ShellError> {
-    let mut entries = fs::read_dir(current)
-        .map_err(|error| io_error("reading fixture directory", current, error))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| io_error("reading fixture entry", current, error))?;
-    entries.sort_by_key(fs::DirEntry::file_name);
     for entry in entries {
         if entry.file_name() == ".git" {
             continue;
@@ -512,33 +647,41 @@ fn collect_regular_files(
         let metadata =
             fs::symlink_metadata(&path).map_err(|error| io_error("inspecting fixture entry", &path, error))?;
         if metadata.file_type().is_dir() {
-            collect_regular_files(root, &path, maximum_files, paths)?;
+            if collection.pending.len() >= collection.directory_capacity_items_count {
+                return Err(ShellError::Invalid(String::from("fixture-directory-count-bound-exceeded")));
+            }
+            collection.pending.push(path);
             continue;
         }
         if !metadata.file_type().is_file() {
             return Err(ShellError::Invalid(String::from("fixture-entry-kind-unsupported")));
         }
-        paths.push(
-            path.strip_prefix(root)
+        let file_count = u32::try_from(collection.paths.len())
+            .map_err(|_| ShellError::Invalid(String::from("fixture-file-count-overflow")))?;
+        if file_count >= collection.maximum_files {
+            return Err(ShellError::Invalid(String::from("fixture-file-count-bound-exceeded")));
+        }
+        collection.paths.push(
+            path.strip_prefix(collection.root)
                 .map_err(|_| ShellError::Invalid(String::from("fixture-path-escape")))?
                 .to_path_buf(),
         );
-        if u32::try_from(paths.len()).unwrap_or(u32::MAX) > maximum_files {
-            return Err(ShellError::Invalid(String::from("fixture-file-count-bound-exceeded")));
-        }
     }
-    debug_assert!(u32::try_from(paths.len()).unwrap_or(u32::MAX) <= maximum_files);
-    debug_assert!(paths.iter().all(|path| path.is_relative()));
+    debug_assert!(collection.pending.len() <= collection.directory_capacity_items_count);
+    debug_assert!(collection.paths.iter().all(|path| path.is_relative()));
     Ok(())
 }
 
-fn update_tree_hash(hasher: &mut blake3::Hasher, relative: &Path, bytes: &[u8]) {
+fn update_tree_hash(hasher: &mut blake3::Hasher, relative: &Path, bytes: &[u8]) -> Result<(), ShellError> {
+    let content_size_bytes =
+        u64::try_from(bytes.len()).map_err(|_| ShellError::Invalid(String::from("fixture-file-size-overflow")))?;
     let path = relative.to_string_lossy();
     hasher.update(path.as_bytes());
     hasher.update(&[DOMAIN_SEPARATOR]);
-    hasher.update(&u64::try_from(bytes.len()).unwrap_or(u64::MAX).to_le_bytes());
+    hasher.update(&content_size_bytes.to_le_bytes());
     hasher.update(&[DOMAIN_SEPARATOR]);
     hasher.update(bytes);
+    Ok(())
 }
 
 fn hash_regular_file(path: &Path, maximum_bytes: u64) -> Result<String, ShellError> {
@@ -619,15 +762,17 @@ fn read_regular_file_allow_empty_bounded(path: &Path, maximum_bytes: u64) -> Res
     if !metadata.is_file() || metadata.len() > maximum_bytes {
         return Err(ShellError::Invalid(format!("regular-file-bound-invalid:{}", path.display())));
     }
-    let capacity =
+    let capacity_bytes =
         usize::try_from(metadata.len()).map_err(|_| ShellError::Invalid(String::from("file-size-overflow")))?;
-    let mut bytes = Vec::with_capacity(capacity);
+    let mut bytes = Vec::with_capacity(capacity_bytes);
     input.read_to_end(&mut bytes).map_err(|error| io_error("reading bounded file", path, error))?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) != metadata.len() {
+    let actual_size_bytes =
+        u64::try_from(bytes.len()).map_err(|_| ShellError::Invalid(String::from("file-size-overflow")))?;
+    if actual_size_bytes != metadata.len() {
         return Err(ShellError::Invalid(format!("regular-file-size-drift:{}", path.display())));
     }
-    debug_assert!(u64::try_from(bytes.len()).unwrap_or(u64::MAX) <= maximum_bytes);
-    debug_assert_eq!(bytes.len(), capacity);
+    debug_assert!(actual_size_bytes <= maximum_bytes);
+    debug_assert_eq!(bytes.len(), capacity_bytes);
     Ok(bytes)
 }
 
