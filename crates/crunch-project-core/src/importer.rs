@@ -55,6 +55,7 @@ const SEMANTIC_FETCH_REFRESH: &str = "refresh";
 const SEMANTIC_FETCH_GENERATION: &str = "generation";
 const SEMANTIC_TRUST_CONTENT_HASH: &str = "content-hash";
 const SEMANTIC_TRUST_HASH_ONLY: &str = "hash-only";
+const JSON_STRING_SERIALIZATION_FAILURE: &str = "\"<serialization-error>\"";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PinImportOptions {
@@ -284,7 +285,8 @@ fn validate_options(options: &PinImportOptions, blockers: &mut Vec<PinImportBloc
     validate_relative_output_path(&options.inputs_file, "invalid-inputs-file", blockers);
 }
 
-fn validate_relative_output_path(path: &str, class: &str, blockers: &mut Vec<PinImportBlocker>) {
+fn validate_relative_output_path(path: &str, class: impl AsRef<str>, blockers: &mut Vec<PinImportBlocker>) {
+    let class = class.as_ref();
     if path.is_empty() || path.len() > MAX_IMPORT_OUTPUT_PATH_BYTES {
         blockers.push(blocker(class, path, "planned file path must be non-empty and bounded"));
         return;
@@ -311,14 +313,19 @@ fn validate_pin_set_shape(pin_set: &ExternalPinSet, blockers: &mut Vec<PinImport
 }
 
 fn map_pin_set(pin_set: &ExternalPinSet, blockers: &mut Vec<PinImportBlocker>) -> Option<MappedImport> {
+    let blocker_count_before = blockers.len();
     let patch_names = patch_name_set(&pin_set.patches, blockers);
     let mapped_patches = map_patches(&pin_set.patches, blockers);
     let mapped_inputs = map_inputs(&pin_set.pins, &patch_names, blockers);
     if !blockers.is_empty() {
         return None;
     }
-    let mapped_patches = mapped_patches.expect("blocker-free patch mapping exists");
-    let mapped_inputs = mapped_inputs.expect("blocker-free input mapping exists");
+    let (Some(mapped_patches), Some(mapped_inputs)) = (mapped_patches, mapped_inputs) else {
+        debug_assert!(blockers.len() > blocker_count_before);
+        return None;
+    };
+    debug_assert_eq!(mapped_patches.manifest_patches.len(), pin_set.patches.len());
+    debug_assert_eq!(mapped_inputs.manifest_inputs.len(), pin_set.pins.len());
     Some(MappedImport {
         manifest: ProjectManifest {
             version: IMPORT_MANIFEST_VERSION.to_string(),
@@ -358,22 +365,24 @@ struct MappedPatches {
 fn map_patches(patches: &[ExternalPatch], blockers: &mut Vec<PinImportBlocker>) -> Option<MappedPatches> {
     let blocker_count_before = blockers.len();
     let mut manifest_patches = Vec::with_capacity(patches.len());
-    let mut lock_patches = BTreeMap::new();
-    let mut report_patches = Vec::with_capacity(patches.len());
+    let mut lock_patch_entries = Vec::with_capacity(patches.len());
+    let mut mapped_patch_records = Vec::with_capacity(patches.len());
     for patch in patches {
         if let Some(mapped) = map_patch(patch, blockers) {
-            report_patches.push(mapped.report);
+            mapped_patch_records.push(mapped.report);
             manifest_patches.push(mapped.manifest_patch);
-            lock_patches.insert(patch.name.clone(), mapped.lock_patch);
+            lock_patch_entries.push((patch.name.clone(), mapped.lock_patch));
         }
     }
     if blockers.len() != blocker_count_before {
         return None;
     }
+    debug_assert_eq!(manifest_patches.len(), patches.len());
+    debug_assert_eq!(mapped_patch_records.len(), patches.len());
     Some(MappedPatches {
         manifest_patches,
-        lock_patches,
-        report_patches,
+        lock_patches: lock_patch_entries.into_iter().collect(),
+        report_patches: mapped_patch_records,
     })
 }
 
@@ -411,7 +420,7 @@ fn map_patch(patch: &ExternalPatch, blockers: &mut Vec<PinImportBlocker>) -> Opt
             return None;
         }
     };
-    Some(MappedPatch {
+    let mapped = MappedPatch {
         manifest_patch: PatchDef {
             name: patch.name.clone(),
             source: manifest_source,
@@ -427,7 +436,10 @@ fn map_patch(patch: &ExternalPatch, blockers: &mut Vec<PinImportBlocker>) -> Opt
             source_kind,
             hash_algo: hash.algo.to_string(),
         },
-    })
+    };
+    debug_assert_eq!(mapped.manifest_patch.name, patch.name);
+    debug_assert_eq!(mapped.lock_patch.hash, hash);
+    Some(mapped)
 }
 
 struct MappedInputs {
@@ -443,30 +455,34 @@ fn map_inputs(
     patch_names: &BTreeSet<String>,
     blockers: &mut Vec<PinImportBlocker>,
 ) -> Option<MappedInputs> {
+    const PRESERVED_SEMANTICS_PER_PIN: usize = 3;
+
     let blocker_count_before = blockers.len();
     let mut names = BTreeSet::new();
     let mut manifest_inputs = Vec::with_capacity(pins.len());
-    let mut lock_inputs = BTreeMap::new();
-    let mut report_inputs = Vec::with_capacity(pins.len());
-    let mut preserved_semantics = Vec::new();
-    let mut rewritten_semantics = Vec::new();
+    let mut lock_input_entries = Vec::with_capacity(pins.len());
+    let mut mapped_input_records = Vec::with_capacity(pins.len());
+    let mut preserved_semantics = Vec::with_capacity(pins.len().saturating_mul(PRESERVED_SEMANTICS_PER_PIN));
+    let mut rewritten_semantics = Vec::with_capacity(pins.len().saturating_mul(MAX_IMPORT_SEMANTICS_PER_PIN));
     for pin in pins {
         validate_pin_identity(pin, &mut names, blockers);
         validate_pin_patches(pin, patch_names, blockers);
         validate_pin_metadata(pin, &mut preserved_semantics, &mut rewritten_semantics, blockers);
         if let Some(mapped) = map_pin(pin, blockers) {
-            report_inputs.push(mapped.report);
+            mapped_input_records.push(mapped.report);
             manifest_inputs.push(mapped.manifest_input);
-            lock_inputs.insert(pin.name.clone(), mapped.lock_entry);
+            lock_input_entries.push((pin.name.clone(), mapped.lock_entry));
         }
     }
     if blockers.len() != blocker_count_before {
         return None;
     }
+    debug_assert_eq!(manifest_inputs.len(), pins.len());
+    debug_assert_eq!(mapped_input_records.len(), pins.len());
     Some(MappedInputs {
         manifest_inputs,
-        lock_inputs,
-        report_inputs,
+        lock_inputs: lock_input_entries.into_iter().collect(),
+        report_inputs: mapped_input_records,
         preserved_semantics,
         rewritten_semantics,
     })
@@ -479,7 +495,8 @@ fn validate_pin_identity(pin: &ExternalPin, names: &mut BTreeSet<String>, blocke
     }
 }
 
-fn validate_name(name: &str, subject: &str, blockers: &mut Vec<PinImportBlocker>) {
+fn validate_name(name: &str, subject: impl AsRef<str>, blockers: &mut Vec<PinImportBlocker>) {
+    let subject = subject.as_ref();
     if name.is_empty() || name.len() > MAX_IMPORT_NAME_BYTES {
         blockers.push(blocker("invalid-name", subject, "name must be non-empty and bounded"));
     }
@@ -506,27 +523,35 @@ fn validate_pin_metadata(
     rewritten: &mut Vec<PinImportSemantic>,
     blockers: &mut Vec<PinImportBlocker>,
 ) {
+    let preserved_count_before = preserved.len();
+    let rewritten_count_before = rewritten.len();
     validate_semantic_value(
-        pin,
-        "freshness",
-        pin.metadata.freshness.as_deref(),
-        supported_freshness,
+        SemanticValueValidation {
+            pin,
+            key: "freshness",
+            value: pin.metadata.freshness.as_deref(),
+            supported: supported_freshness,
+        },
         preserved,
         blockers,
     );
     validate_semantic_value(
-        pin,
-        "fetch_policy",
-        pin.metadata.fetch_policy.as_deref(),
-        supported_fetch_policy,
+        SemanticValueValidation {
+            pin,
+            key: "fetch_policy",
+            value: pin.metadata.fetch_policy.as_deref(),
+            supported: supported_fetch_policy,
+        },
         preserved,
         blockers,
     );
     validate_semantic_value(
-        pin,
-        "trust_policy",
-        pin.metadata.trust_policy.as_deref(),
-        supported_trust_policy,
+        SemanticValueValidation {
+            pin,
+            key: "trust_policy",
+            value: pin.metadata.trust_policy.as_deref(),
+            supported: supported_trust_policy,
+        },
         preserved,
         blockers,
     );
@@ -545,26 +570,38 @@ fn validate_pin_metadata(
             value: semantic.clone(),
         });
     }
+    debug_assert!(preserved.len().saturating_sub(preserved_count_before) <= PRESERVED_METADATA_FIELD_COUNT);
+    debug_assert_eq!(rewritten.len().saturating_sub(rewritten_count_before), pin.metadata.composition_semantics.len());
+}
+
+const PRESERVED_METADATA_FIELD_COUNT: usize = 3;
+
+struct SemanticValueValidation<'a> {
+    pin: &'a ExternalPin,
+    key: &'static str,
+    value: Option<&'a str>,
+    supported: fn(&str) -> bool,
 }
 
 fn validate_semantic_value(
-    pin: &ExternalPin,
-    key: &str,
-    value: Option<&str>,
-    supported: fn(&str) -> bool,
+    validation: SemanticValueValidation<'_>,
     preserved: &mut Vec<PinImportSemantic>,
     blockers: &mut Vec<PinImportBlocker>,
 ) {
-    let Some(value) = value else { return };
-    if supported(value) {
+    let Some(value) = validation.value else { return };
+    if (validation.supported)(value) {
         preserved.push(PinImportSemantic {
-            subject: pin.name.clone(),
-            key: key.to_string(),
+            subject: validation.pin.name.clone(),
+            key: validation.key.to_string(),
             value: value.to_string(),
         });
         return;
     }
-    blockers.push(blocker("unsupported-metadata", &pin.name, &format!("unsupported {key}: {value}")));
+    blockers.push(blocker(
+        "unsupported-metadata",
+        &validation.pin.name,
+        &format!("unsupported {}: {value}", validation.key),
+    ));
 }
 
 fn supported_freshness(value: &str) -> bool {
@@ -599,7 +636,7 @@ fn map_pin(pin: &ExternalPin, blockers: &mut Vec<PinImportBlocker>) -> Option<Ma
         return None;
     };
     let fetch_policy = map_external_fetch_policy(&pin.metadata);
-    Some(MappedPin {
+    let mapped = MappedPin {
         manifest_input: ManifestInput {
             name: pin.name.clone(),
             kind: manifest_kind,
@@ -631,7 +668,10 @@ fn map_pin(pin: &ExternalPin, blockers: &mut Vec<PinImportBlocker>) -> Option<Ma
             hash_algo: hash.algo.to_string(),
             lock_identity: pin.lock_identity.clone(),
         },
-    })
+    };
+    debug_assert_eq!(mapped.manifest_input.name, pin.name);
+    debug_assert_eq!(mapped.lock_entry.hash, hash);
+    Some(mapped)
 }
 
 fn map_pin_kind(
@@ -652,7 +692,15 @@ fn map_pin_kind(
             repository,
             reference,
             rev,
-        } => map_git_kind(repository, reference.as_deref(), rev.as_deref(), subject, blockers),
+        } => map_git_kind(
+            GitMapping {
+                repository,
+                reference: reference.as_deref(),
+                rev: rev.as_deref(),
+                subject,
+            },
+            blockers,
+        ),
         ExternalPinKind::Unsupported { kind } => {
             blockers.push(blocker("unsupported-source-kind", subject, &format!("unsupported source kind: {kind}")));
             None
@@ -660,35 +708,42 @@ fn map_pin_kind(
     }
 }
 
+struct GitMapping<'a> {
+    repository: &'a str,
+    reference: Option<&'a str>,
+    rev: Option<&'a str>,
+    subject: &'a str,
+}
+
 fn map_git_kind(
-    repository: &str,
-    reference: Option<&str>,
-    rev: Option<&str>,
-    subject: &str,
+    mapping: GitMapping<'_>,
     blockers: &mut Vec<PinImportBlocker>,
 ) -> Option<(InputKind, LockedKind, String)> {
-    let Some(rev) = rev else {
-        blockers.push(blocker("missing-git-rev", subject, "git inputs require resolved lock rev identity"));
+    let Some(rev) = mapping.rev else {
+        blockers.push(blocker("missing-git-rev", mapping.subject, "git inputs require resolved lock rev identity"));
         return None;
     };
-    let reference = reference.unwrap_or(rev);
+    let reference = mapping.reference.unwrap_or(rev);
     let manifest_reference = if reference == rev {
         GitReference::Rev(reference.to_string())
     } else {
         GitReference::Branch(reference.to_string())
     };
-    Some((
+    let mapped = (
         InputKind::Git {
-            repository: repository.to_string(),
+            repository: mapping.repository.to_string(),
             reference: manifest_reference,
         },
         LockedKind::Git {
-            repository: repository.to_string(),
+            repository: mapping.repository.to_string(),
             rev: rev.to_string(),
             ref_name: Some(reference.to_string()),
         },
         KIND_GIT.to_string(),
-    ))
+    );
+    debug_assert!(matches!(&mapped.0, InputKind::Git { .. }));
+    debug_assert!(matches!(&mapped.1, LockedKind::Git { .. }));
+    Some(mapped)
 }
 
 fn map_locked_hash(hash: &ExternalHash, subject: &str, blockers: &mut Vec<PinImportBlocker>) -> Option<LockedHash> {
@@ -713,6 +768,8 @@ fn map_locked_hash(hash: &ExternalHash, subject: &str, blockers: &mut Vec<PinImp
         blockers.push(blocker("missing-hash", subject, "imported hash value must be non-empty"));
         return None;
     }
+    debug_assert!(!value.is_empty());
+    debug_assert!(matches!(algo, HashAlgo::Sha256 | HashAlgo::Sha512 | HashAlgo::Blake3));
     Some(LockedHash {
         algo,
         value: value.clone(),
@@ -944,7 +1001,10 @@ fn render_patch_source(out: &mut String, source: &PatchSource) {
 }
 
 fn quote(value: &str) -> String {
-    serde_json::to_string(value).expect("string serialization is infallible")
+    match serde_json::to_string(value) {
+        Ok(serialized) => serialized,
+        Err(_) => JSON_STRING_SERIALIZATION_FAILURE.to_string(),
+    }
 }
 
 fn pin_import_non_claims() -> Vec<String> {
@@ -955,11 +1015,11 @@ fn pin_import_non_claims() -> Vec<String> {
     ]
 }
 
-fn blocker(class: &str, subject: &str, message: &str) -> PinImportBlocker {
+fn blocker(class: impl AsRef<str>, subject: &str, message: impl AsRef<str>) -> PinImportBlocker {
     PinImportBlocker {
-        class: class.to_string(),
+        class: class.as_ref().to_string(),
         subject: subject.to_string(),
-        message: message.to_string(),
+        message: message.as_ref().to_string(),
     }
 }
 

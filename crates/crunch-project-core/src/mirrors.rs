@@ -9,10 +9,15 @@ const _: () = assert!(MAX_MIRRORS >= 1, "mirror limit must be positive");
 const _: () = assert!(MAX_MIRRORS <= 1024, "mirror limit must stay bounded");
 
 pub fn validate_mirrors(mirrors: Vec<String>) -> Vec<String> {
-    let mut issues = Vec::new();
+    const MAX_ISSUES_PER_MIRROR: usize = 3;
+    const GLOBAL_LIMIT_ISSUES: usize = 1;
 
-    if mirrors.len() as u64 > MAX_MIRRORS as u64 {
-        issues.push(format!("too many mirrors: {} (max {MAX_MIRRORS})", mirrors.len()));
+    let mirror_count = mirrors.len();
+    let mut issues =
+        Vec::with_capacity(mirror_count.saturating_mul(MAX_ISSUES_PER_MIRROR).saturating_add(GLOBAL_LIMIT_ISSUES));
+
+    if mirror_count as u64 > MAX_MIRRORS as u64 {
+        issues.push(format!("too many mirrors: {mirror_count} (max {MAX_MIRRORS})"));
     }
 
     for (index, url) in mirrors.iter().enumerate() {
@@ -31,6 +36,8 @@ pub fn validate_mirrors(mirrors: Vec<String>) -> Vec<String> {
         }
     }
 
+    debug_assert!(seen.len() <= mirror_count);
+    debug_assert!(issues.len() <= issues.capacity());
     issues
 }
 

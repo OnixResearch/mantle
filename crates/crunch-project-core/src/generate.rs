@@ -291,7 +291,12 @@ fn generate_darcs_kind_fields(
     weak_hash: Option<&str>,
 ) {
     assert!(!repository.is_empty(), "darcs repository must not be empty");
-    assert!(context.is_some() || weak_hash.is_some(), "darcs identity metadata must be present");
+    if context.is_none() {
+        assert!(weak_hash.is_some(), "darcs weak hash must provide identity when context is absent");
+    }
+    if weak_hash.is_none() {
+        assert!(context.is_some(), "darcs context must provide identity when weak hash is absent");
+    }
     generate_vcs_common_fields(out, "darcs", repository);
     match selector {
         DarcsSelector::Tag(tag) => push_selector_fields(out, "tag", tag),
@@ -372,7 +377,8 @@ fn generate_fossil_kind_fields(out: &mut String, repository: &str, selector: &Fo
     });
 }
 
-fn generate_vcs_common_fields(out: &mut String, kind_name: &str, repository: &str) {
+fn generate_vcs_common_fields(out: &mut String, kind_name: impl AsRef<str>, repository: &str) {
+    let kind_name = kind_name.as_ref();
     push_string_field(out, RenderedStringField {
         indent: "    ",
         name: "type",
@@ -385,7 +391,8 @@ fn generate_vcs_common_fields(out: &mut String, kind_name: &str, repository: &st
     });
 }
 
-fn push_selector_fields(out: &mut String, selector_type: &str, selector_value: &str) {
+fn push_selector_fields(out: &mut String, selector_type: impl AsRef<str>, selector_value: &str) {
+    let selector_type = selector_type.as_ref();
     push_string_field(out, RenderedStringField {
         indent: "    ",
         name: "selector_type",

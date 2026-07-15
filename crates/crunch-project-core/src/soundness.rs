@@ -41,6 +41,8 @@ const NON_CLAIM_SOURCE_AVAILABILITY: &str =
     "static project soundness does not prove remote source availability or upstream freshness";
 const NON_CLAIM_INPUT_TRUST: &str =
     "static project soundness does not prove input trust, release reproducibility, or clean VCS state";
+const MAX_HASH_MISMATCH_ISSUES: usize = 2;
+const MAX_GENERATED_INPUT_ISSUES: usize = 1;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProjectSoundnessInput {
@@ -70,12 +72,12 @@ impl ProjectSoundnessReport {
     pub fn from_issues_with_mode(mut issues: Vec<ProjectSoundnessIssue>, mode: ProjectSoundnessMode) -> Self {
         sort_issues(&mut issues);
         let highest_severity = highest_severity(&issues);
-        let valid = !issues.iter().any(ProjectSoundnessIssue::is_error);
+        let is_valid = !issues.iter().any(ProjectSoundnessIssue::is_error);
         let issue_count = issue_count_u32(&issues);
         Self {
             schema: SOUNDNESS_SCHEMA.into(),
             mode,
-            valid,
+            valid: is_valid,
             issue_count,
             highest_severity,
             issues,
@@ -533,6 +535,7 @@ fn push_hash_mismatches(input: &ManifestInput, entry: &LockEntry, issues: &mut V
     if issues_at_limit(issues) {
         return;
     }
+    let issue_count_before = issues.len();
     if input.hash.algo != entry.hash.algo {
         issues.push(ProjectSoundnessIssue::error(
             ProjectSoundnessClass::HashAlgorithmMismatch,
@@ -553,6 +556,8 @@ fn push_hash_mismatches(input: &ManifestInput, entry: &LockEntry, issues: &mut V
             format!("input '{}': manifest expected hash does not match lock hash", input.name),
         ));
     }
+    debug_assert!(issues.len() >= issue_count_before);
+    debug_assert!(issues.len().saturating_sub(issue_count_before) <= MAX_HASH_MISMATCH_ISSUES);
 }
 
 fn push_patch_set_mismatch(input: &ManifestInput, entry: &LockEntry, issues: &mut Vec<ProjectSoundnessIssue>) {
@@ -629,6 +634,7 @@ fn push_generated_input_issue(
     if issues_at_limit(issues) {
         return;
     }
+    let issue_count_before = issues.len();
     match check_drift(lock, generated_inputs) {
         DriftStatus::InSync => {}
         DriftStatus::Missing => issues.push(
@@ -653,6 +659,8 @@ fn push_generated_input_issue(
             .with_fix("run `mantle refresh` to rewrite generated inputs from the lockfile".into()),
         ),
     }
+    debug_assert!(issues.len() >= issue_count_before);
+    debug_assert!(issues.len().saturating_sub(issue_count_before) <= MAX_GENERATED_INPUT_ISSUES);
 }
 
 fn manifest_input_names(manifest: &ProjectManifest) -> BTreeSet<&str> {

@@ -201,7 +201,7 @@ fn project_node(project_node_id: &str, manifest: &ProjectManifest, lock: &Lockfi
 fn source_node(input_name: &str, manifest_input: &ManifestInput, entry: &LockEntry) -> Result<Node, Error> {
     assert!(!input_name.is_empty(), "input name must not be empty");
     assert!(!entry.hash.value.is_empty(), "entry hash must not be empty");
-    let mut attributes = BTreeMap::new();
+    let mut attributes = source_kind_attributes(&entry.kind);
     attributes.insert("input_name".to_string(), input_name.to_string());
     attributes.insert("frozen".to_string(), manifest_input.frozen.to_string());
     attributes.insert("hash_algo".to_string(), entry.hash.algo.to_string());
@@ -213,7 +213,16 @@ fn source_node(input_name: &str, manifest_input: &ManifestInput, entry: &LockEnt
         attributes.insert("patches".to_string(), json_string_array(&entry.patches)?);
     }
 
-    match &entry.kind {
+    Ok(Node {
+        node_id: source_node_id(input_name),
+        kind: NodeKind::Source,
+        attributes,
+    })
+}
+
+fn source_kind_attributes(kind: &LockedKind) -> BTreeMap<String, String> {
+    let mut attributes = BTreeMap::new();
+    match kind {
         LockedKind::File { url } => {
             attributes.insert("kind".to_string(), "file".to_string());
             attributes.insert("url".to_string(), url.clone());
@@ -275,12 +284,9 @@ fn source_node(input_name: &str, manifest_input: &ManifestInput, entry: &LockEnt
             attributes.insert("checkin".to_string(), checkin.clone());
         }
     }
-
-    Ok(Node {
-        node_id: source_node_id(input_name),
-        kind: NodeKind::Source,
-        attributes,
-    })
+    debug_assert!(attributes.contains_key("kind"));
+    debug_assert!(attributes.len() >= 2);
+    attributes
 }
 
 fn patch_node(patch_name: &str, patch: &LockedPatch) -> Node {

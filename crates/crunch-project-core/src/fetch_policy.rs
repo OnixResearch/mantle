@@ -19,6 +19,7 @@ use crate::ProjectManifest;
 pub const FETCH_POLICY_NON_CLAIM: &str =
     "input fetch policy classifies source acquisition timing; it does not prove source availability or build success";
 const MAX_SOURCE_STATE_FACTS: u32 = 4096;
+const MAX_DIAGNOSTICS_PER_INPUT: usize = 3;
 const SOURCE_ID_FILE_PREFIX: &str = "file:";
 const SOURCE_ID_TARBALL_PREFIX: &str = "tarball:";
 const SOURCE_ID_GIT_PREFIX: &str = "git:";
@@ -142,7 +143,7 @@ pub fn plan_input_fetch_policies(request: InputFetchPolicyPlanRequest) -> InputF
     );
     let source_state = source_state_map(&request.source_state);
     let mut items = Vec::with_capacity(request.manifest.inputs.len());
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(request.manifest.inputs.len().saturating_mul(MAX_DIAGNOSTICS_PER_INPUT));
 
     for input in &request.manifest.inputs {
         let planned = plan_one_input(input, &request.lock, &source_state, request.offline);
@@ -221,7 +222,7 @@ fn plan_one_input(
         requirement = InputFetchRequirement::Conflicting;
     }
 
-    PlannedInput {
+    let planned = PlannedInput {
         item: InputFetchPolicyItem {
             name: input.name.clone(),
             policy: input.fetch_policy,
@@ -230,7 +231,10 @@ fn plan_one_input(
             source_state_blake3: source_fact.map(|fact| fact.source_state_blake3.clone()),
         },
         diagnostics,
-    }
+    };
+    debug_assert_eq!(planned.item.name, input.name);
+    debug_assert!(planned.diagnostics.len() <= MAX_DIAGNOSTICS_PER_INPUT);
+    planned
 }
 
 fn compatibility_diagnostics(input: &ManifestInput) -> Vec<InputFetchDiagnostic> {
@@ -286,6 +290,8 @@ fn add_offline_diagnostics(
     source_fact: Option<&InputSourceStateFact>,
     diagnostics: &mut Vec<InputFetchDiagnostic>,
 ) {
+    assert!(!input.name.is_empty(), "input name must not be empty");
+    let diagnostic_count_before = diagnostics.len();
     if source_fact.is_some() {
         return;
     }
@@ -307,6 +313,7 @@ fn add_offline_diagnostics(
             ),
         ),
     }
+    debug_assert!(diagnostics.len() >= diagnostic_count_before);
 }
 
 fn offline_requirement(policy: InputFetchPolicy) -> InputFetchRequirement {
@@ -340,6 +347,7 @@ fn lock_entry_from_expected(
     existing: Option<&LockEntry>,
     expected: &str,
 ) -> Result<LockEntry, InputFetchDiagnostic> {
+    assert!(!input.name.is_empty(), "input name must not be empty");
     if expected.is_empty() {
         return Err(diagnostic(
             &input.name,
@@ -347,6 +355,7 @@ fn lock_entry_from_expected(
             "expected hash for non-generation fetch policy must not be empty",
         ));
     }
+    debug_assert!(!expected.is_empty());
     let kind = locked_kind_from_manifest(input, existing)?;
     Ok(LockEntry {
         kind,
@@ -390,7 +399,7 @@ fn locked_git_kind(
     existing: Option<&LockEntry>,
     input_name: &str,
 ) -> Result<LockedKind, InputFetchDiagnostic> {
-    if let Some(LockEntry {
+    let result = if let Some(LockEntry {
         kind:
             LockedKind::Git {
                 repository: locked_repository,
@@ -401,24 +410,31 @@ fn locked_git_kind(
     }) = existing
         && locked_repository == repository
     {
-        return Ok(LockedKind::Git {
+        Ok(LockedKind::Git {
             repository: repository.to_string(),
             rev: rev.clone(),
             ref_name: ref_name.clone(),
-        });
-    }
-    if let GitReference::Rev(rev) = reference {
-        return Ok(LockedKind::Git {
+        })
+    } else if let GitReference::Rev(rev) = reference {
+        Ok(LockedKind::Git {
             repository: repository.to_string(),
             rev: rev.clone(),
             ref_name: None,
-        });
+        })
+    } else {
+        Err(diagnostic(
+            input_name,
+            InputFetchDiagnosticKind::BuildFetchRequired,
+            "git build-time or imported fetch policy requires an existing lock rev or explicit rev reference",
+        ))
+    };
+    if result.is_ok() {
+        debug_assert!(matches!(&result, Ok(LockedKind::Git { .. })));
     }
-    Err(diagnostic(
-        input_name,
-        InputFetchDiagnosticKind::BuildFetchRequired,
-        "git build-time or imported fetch policy requires an existing lock rev or explicit rev reference",
-    ))
+    if let Ok(LockedKind::Git { repository: locked, .. }) = &result {
+        debug_assert_eq!(locked, repository);
+    }
+    result
 }
 
 fn locked_darcs_kind(
@@ -427,7 +443,7 @@ fn locked_darcs_kind(
     existing: Option<&LockEntry>,
     input_name: &str,
 ) -> Result<LockedKind, InputFetchDiagnostic> {
-    if let Some(LockEntry {
+    let result = if let Some(LockEntry {
         kind:
             LockedKind::Darcs {
                 repository: locked_repository,
@@ -440,26 +456,33 @@ fn locked_darcs_kind(
         && locked_repository == repository
         && locked_selector == selector
     {
-        return Ok(LockedKind::Darcs {
+        Ok(LockedKind::Darcs {
             repository: repository.to_string(),
             selector: selector.clone(),
             context: context.clone(),
             weak_hash: weak_hash.clone(),
-        });
-    }
-    if let crate::DarcsSelector::Context(context) = selector {
-        return Ok(LockedKind::Darcs {
+        })
+    } else if let crate::DarcsSelector::Context(context) = selector {
+        Ok(LockedKind::Darcs {
             repository: repository.to_string(),
             selector: selector.clone(),
             context: Some(context.clone()),
             weak_hash: None,
-        });
+        })
+    } else {
+        Err(diagnostic(
+            input_name,
+            InputFetchDiagnosticKind::BuildFetchRequired,
+            "darcs build-time or imported fetch policy requires an existing lock context/weak-hash or an explicit context selector",
+        ))
+    };
+    if result.is_ok() {
+        debug_assert!(matches!(&result, Ok(LockedKind::Darcs { .. })));
     }
-    Err(diagnostic(
-        input_name,
-        InputFetchDiagnosticKind::BuildFetchRequired,
-        "darcs build-time or imported fetch policy requires an existing lock context/weak-hash or an explicit context selector",
-    ))
+    if let Ok(LockedKind::Darcs { repository: locked, .. }) = &result {
+        debug_assert_eq!(locked, repository);
+    }
+    result
 }
 
 fn locked_pijul_kind(
@@ -468,7 +491,7 @@ fn locked_pijul_kind(
     existing: Option<&LockEntry>,
     input_name: &str,
 ) -> Result<LockedKind, InputFetchDiagnostic> {
-    if let Some(LockEntry {
+    let result = if let Some(LockEntry {
         kind:
             LockedKind::Pijul {
                 repository: locked_repository,
@@ -481,26 +504,33 @@ fn locked_pijul_kind(
         && locked_repository == repository
         && locked_selector == selector
     {
-        return Ok(LockedKind::Pijul {
+        Ok(LockedKind::Pijul {
             repository: repository.to_string(),
             selector: selector.clone(),
             state: state.clone(),
             change: change.clone(),
-        });
-    }
-    if let crate::PijulSelector::State { state, .. } = selector {
-        return Ok(LockedKind::Pijul {
+        })
+    } else if let crate::PijulSelector::State { state, .. } = selector {
+        Ok(LockedKind::Pijul {
             repository: repository.to_string(),
             selector: selector.clone(),
             state: state.clone(),
             change: None,
-        });
+        })
+    } else {
+        Err(diagnostic(
+            input_name,
+            InputFetchDiagnosticKind::BuildFetchRequired,
+            "pijul build-time or imported fetch policy requires an existing lock state or an explicit state selector",
+        ))
+    };
+    if result.is_ok() {
+        debug_assert!(matches!(&result, Ok(LockedKind::Pijul { .. })));
     }
-    Err(diagnostic(
-        input_name,
-        InputFetchDiagnosticKind::BuildFetchRequired,
-        "pijul build-time or imported fetch policy requires an existing lock state or an explicit state selector",
-    ))
+    if let Ok(LockedKind::Pijul { repository: locked, .. }) = &result {
+        debug_assert_eq!(locked, repository);
+    }
+    result
 }
 
 fn locked_fossil_kind(
@@ -509,7 +539,7 @@ fn locked_fossil_kind(
     existing: Option<&LockEntry>,
     input_name: &str,
 ) -> Result<LockedKind, InputFetchDiagnostic> {
-    if let Some(LockEntry {
+    let result = if let Some(LockEntry {
         kind:
             LockedKind::Fossil {
                 repository: locked_repository,
@@ -521,24 +551,31 @@ fn locked_fossil_kind(
         && locked_repository == repository
         && locked_selector == selector
     {
-        return Ok(LockedKind::Fossil {
+        Ok(LockedKind::Fossil {
             repository: repository.to_string(),
             selector: selector.clone(),
             checkin: checkin.clone(),
-        });
-    }
-    if let crate::FossilSelector::Checkin(checkin) = selector {
-        return Ok(LockedKind::Fossil {
+        })
+    } else if let crate::FossilSelector::Checkin(checkin) = selector {
+        Ok(LockedKind::Fossil {
             repository: repository.to_string(),
             selector: selector.clone(),
             checkin: checkin.clone(),
-        });
+        })
+    } else {
+        Err(diagnostic(
+            input_name,
+            InputFetchDiagnosticKind::BuildFetchRequired,
+            "fossil build-time or imported fetch policy requires an existing lock check-in or an explicit check-in selector",
+        ))
+    };
+    if result.is_ok() {
+        debug_assert!(matches!(&result, Ok(LockedKind::Fossil { .. })));
     }
-    Err(diagnostic(
-        input_name,
-        InputFetchDiagnosticKind::BuildFetchRequired,
-        "fossil build-time or imported fetch policy requires an existing lock check-in or an explicit check-in selector",
-    ))
+    if let Ok(LockedKind::Fossil { repository: locked, .. }) = &result {
+        debug_assert_eq!(locked, repository);
+    }
+    result
 }
 
 fn matching_source_fact<'a>(
@@ -627,7 +664,8 @@ fn git_reference_identity(repository: &str, reference: &GitReference) -> String 
     }
 }
 
-fn git_identity(repository: &str, revision_or_ref: &str) -> String {
+fn git_identity(repository: &str, revision_or_ref: impl AsRef<str>) -> String {
+    let revision_or_ref = revision_or_ref.as_ref();
     format!("{repository}{SOURCE_ID_GIT_REF_SEPARATOR}{revision_or_ref}")
 }
 
@@ -641,22 +679,25 @@ fn darcs_locked_identity(repository: &str, context: &Option<String>, weak_hash: 
     vcs_selector_identity(repository, "unresolved")
 }
 
-fn pijul_locked_identity(repository: &str, state: &str, change: &Option<String>) -> String {
+fn pijul_locked_identity(repository: &str, state: impl AsRef<str>, change: &Option<String>) -> String {
+    let state = state.as_ref();
     if let Some(change) = change {
-        return vcs_selector_identity(repository, &format!("state:{state}:change:{change}"));
+        return vcs_selector_identity(repository, format!("state:{state}:change:{change}"));
     }
-    vcs_selector_identity(repository, &format!("state:{state}"))
+    vcs_selector_identity(repository, format!("state:{state}"))
 }
 
-fn fossil_identity(repository: &str, checkin: &str) -> String {
-    vcs_selector_identity(repository, &format!("checkin:{checkin}"))
+fn fossil_identity(repository: &str, checkin: impl AsRef<str>) -> String {
+    vcs_selector_identity(repository, format!("checkin:{}", checkin.as_ref()))
 }
 
-fn vcs_selector_identity(repository: &str, selector: &str) -> String {
+fn vcs_selector_identity(repository: &str, selector: impl AsRef<str>) -> String {
+    let selector = selector.as_ref();
     format!("{repository}{SOURCE_ID_GIT_REF_SEPARATOR}{selector}")
 }
 
-fn source_identity(prefix: &str, value: &str) -> String {
+fn source_identity(prefix: impl AsRef<str>, value: &str) -> String {
+    let prefix = prefix.as_ref();
     format!("{prefix}{value}")
 }
 
@@ -669,10 +710,10 @@ fn source_state_map(facts: &[InputSourceStateFact]) -> BTreeMap<&str, Vec<&Input
 }
 
 fn push_diagnostic_once(diagnostics: &mut Vec<InputFetchDiagnostic>, diagnostic: InputFetchDiagnostic) {
-    let duplicate = diagnostics
+    let is_duplicate = diagnostics
         .iter()
         .any(|existing| existing.input_name == diagnostic.input_name && existing.kind == diagnostic.kind);
-    if !duplicate {
+    if !is_duplicate {
         diagnostics.push(diagnostic);
     }
 }

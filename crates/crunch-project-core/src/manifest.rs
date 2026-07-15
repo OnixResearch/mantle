@@ -309,7 +309,8 @@ impl InputKind {
     }
 }
 
-fn validate_repository(input_name: &str, kind: &str, repository: &str) -> Vec<String> {
+fn validate_repository(input_name: &str, kind: impl AsRef<str>, repository: &str) -> Vec<String> {
+    let kind = kind.as_ref();
     let mut problems = Vec::new();
     if repository.is_empty() {
         problems.push(format!("input '{input_name}': {kind} repository must not be empty"));
@@ -327,7 +328,8 @@ fn is_forge_shortcut(repository: &str) -> bool {
     FORGE_SHORTCUT_PREFIXES.iter().any(|prefix| repository.starts_with(prefix))
 }
 
-fn validate_selector_value(input_name: &str, selector: &str, value: &str) -> Vec<String> {
+fn validate_selector_value(input_name: &str, selector: impl AsRef<str>, value: &str) -> Vec<String> {
+    let selector = selector.as_ref();
     if value.is_empty() {
         return vec![format!("input '{input_name}': {selector} selector must not be empty")];
     }

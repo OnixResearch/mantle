@@ -240,7 +240,12 @@ pub fn retention_record_for_input(input_name: &str, entry: &LockEntry, generatio
     let lock_digest = lock_entry_digest(input_name, entry);
     let source_identity = locked_source_identity(&entry.kind);
     let content_digest = entry.hash.value.clone();
-    let root_id = retention_root_id(input_name, &lock_digest, &source_identity, &content_digest);
+    let root_id = retention_root_id(RetentionRootIdentity {
+        input_name,
+        lock_digest: &lock_digest,
+        source_identity: &source_identity,
+        content_digest: &content_digest,
+    });
     RetentionRootRecord {
         input_name: input_name.into(),
         lock_digest,
@@ -316,6 +321,7 @@ fn plan_one_input(
     next_generation: u32,
 ) -> PlannedInputRetention {
     assert!(!input_name.is_empty(), "input name must not be empty");
+    assert!(next_generation > 0, "next retention generation must be nonzero");
     let mut planned = empty_planned_input(input_name, policy);
     planned.diagnostics.extend(policy_diagnostics(input_name, policy));
     if policy == InputRetentionPolicy::Untracked {
@@ -326,31 +332,49 @@ fn plan_one_input(
         plan_unpinned_input(input_name, roots, &mut planned);
         return planned;
     };
-    plan_tracked_input(input_name, policy, entry, roots, next_generation, &mut planned);
+    plan_tracked_input(
+        TrackedInputPlan {
+            input_name,
+            policy,
+            entry,
+            roots,
+            next_generation,
+        },
+        &mut planned,
+    );
     planned
 }
 
-fn plan_tracked_input(
-    input_name: &str,
+struct TrackedInputPlan<'a> {
+    input_name: &'a str,
     policy: InputRetentionPolicy,
-    entry: &LockEntry,
-    roots: Vec<&RetentionRootFact>,
+    entry: &'a LockEntry,
+    roots: Vec<&'a RetentionRootFact>,
     next_generation: u32,
-    planned: &mut PlannedInputRetention,
-) {
-    let desired = desired_current_record(input_name, entry, &roots, next_generation);
-    let current_root = roots.iter().find(|fact| root_satisfies_current(fact, &desired));
-    let retained = retained_records_for_policy(policy, desired.clone(), &roots);
-    let current_pinned = current_root.is_some();
-    let stale_roots = stale_roots(&roots, &retained);
+}
+
+fn plan_tracked_input(request: TrackedInputPlan<'_>, planned: &mut PlannedInputRetention) {
+    assert!(!request.input_name.is_empty(), "input name must not be empty");
+    assert!(request.next_generation > 0, "next retention generation must be nonzero");
+    let desired = desired_current_record(request.input_name, request.entry, &request.roots, request.next_generation);
+    let current_root = request.roots.iter().find(|fact| root_satisfies_current(fact, &desired));
+    let retained = retained_records_for_policy(request.policy, desired.clone(), &request.roots);
+    let is_current_pinned = current_root.is_some();
+    let stale_roots = stale_roots(&request.roots, &retained);
 
     planned.retained_records = retained;
-    planned.status = tracked_status(input_name, policy, &desired, current_pinned, !stale_roots.is_empty());
-    if !current_pinned {
-        planned.actions.push(create_action(input_name, desired.clone()));
-        planned.diagnostics.push(missing_root_diagnostic(input_name, &desired));
+    planned.status = tracked_status(TrackedStatus {
+        input_name: request.input_name,
+        policy: request.policy,
+        desired: &desired,
+        is_current_pinned,
+        has_stale_roots: !stale_roots.is_empty(),
+    });
+    if !is_current_pinned {
+        planned.actions.push(create_action(request.input_name, desired.clone()));
+        planned.diagnostics.push(missing_root_diagnostic(request.input_name, &desired));
     }
-    push_stale_root_diagnostics(input_name, stale_roots, planned);
+    push_stale_root_diagnostics(request.input_name, stale_roots, planned);
 }
 
 fn plan_untracked_input(input_name: &str, roots: Vec<&RetentionRootFact>, planned: &mut PlannedInputRetention) {
@@ -400,8 +424,8 @@ fn retained_records_for_policy(
     desired: RetentionRootRecord,
     roots: &[&RetentionRootFact],
 ) -> Vec<RetentionRootRecord> {
-    let limit = policy.tracked_generation_limit();
-    if limit == 0 {
+    let retained_generation_count_max = policy.tracked_generation_limit();
+    if retained_generation_count_max == 0 {
         return Vec::new();
     }
     let mut retained = vec![desired.clone()];
@@ -411,32 +435,40 @@ fn retained_records_for_policy(
         .map(|fact| fact.record.clone())
         .collect::<Vec<_>>();
     previous.sort_by(compare_records_newest_first);
-    for record in previous.into_iter().take(limit.saturating_sub(1) as usize) {
+    let previous_generation_count_max = match usize::try_from(retained_generation_count_max.saturating_sub(1)) {
+        Ok(limit) => limit,
+        Err(_) => roots.len(),
+    };
+    for record in previous.into_iter().take(previous_generation_count_max) {
         retained.push(record);
     }
     retained.sort_by(compare_records_oldest_first);
+    debug_assert!(retained.len() as u64 <= u64::from(retained_generation_count_max));
+    debug_assert!(retained.iter().any(|record| record.root_id == desired.root_id));
     retained
 }
 
-fn tracked_status(
-    input_name: &str,
+struct TrackedStatus<'a> {
+    input_name: &'a str,
     policy: InputRetentionPolicy,
-    desired: &RetentionRootRecord,
-    current_pinned: bool,
+    desired: &'a RetentionRootRecord,
+    is_current_pinned: bool,
     has_stale_roots: bool,
-) -> RetentionInputStatus {
-    let state = match (current_pinned, has_stale_roots) {
+}
+
+fn tracked_status(status: TrackedStatus<'_>) -> RetentionInputStatus {
+    let state = match (status.is_current_pinned, status.has_stale_roots) {
         (true, false) => RetentionInputState::Pinned,
         (true, true) => RetentionInputState::StaleRoot,
         (false, _) => RetentionInputState::MissingRoot,
     };
     RetentionInputStatus {
-        input_name: input_name.into(),
-        policy,
+        input_name: status.input_name.into(),
+        policy: status.policy,
         state,
         gc_eligible: false,
-        lock_digest: Some(desired.lock_digest.clone()),
-        root_id: current_pinned.then(|| desired.root_id.clone()),
+        lock_digest: Some(status.desired.lock_digest.clone()),
+        root_id: status.is_current_pinned.then(|| status.desired.root_id.clone()),
     }
 }
 
@@ -628,6 +660,9 @@ fn action_for_stale_root(input_name: &str, fact: &RetentionRootFact) -> Retentio
 }
 
 fn push_record_validation(record: &RetentionRootRecord, problems: &mut Vec<String>) {
+    const MAX_RECORD_VALIDATION_PROBLEMS: usize = 6;
+
+    let problem_count_before = problems.len();
     if record.input_name.is_empty() {
         problems.push("retention record input name must not be empty".into());
     }
@@ -646,6 +681,8 @@ fn push_record_validation(record: &RetentionRootRecord, problems: &mut Vec<Strin
     if record.root_id.is_empty() {
         problems.push(format!("retention record '{}': root id is empty", record.input_name));
     }
+    debug_assert!(problems.len() >= problem_count_before);
+    debug_assert!(problems.len().saturating_sub(problem_count_before) <= MAX_RECORD_VALIDATION_PROBLEMS);
 }
 
 fn sort_plan(plan: &mut RetentionPlan) {
@@ -705,13 +742,20 @@ fn action_rank(kind: RetentionRootActionKind) -> u32 {
     }
 }
 
-fn retention_root_id(input_name: &str, lock_digest: &str, source_identity: &str, content_digest: &str) -> String {
+struct RetentionRootIdentity<'a> {
+    input_name: &'a str,
+    lock_digest: &'a str,
+    source_identity: &'a str,
+    content_digest: &'a str,
+}
+
+fn retention_root_id(identity: RetentionRootIdentity<'_>) -> String {
     let mut hasher = blake3::Hasher::new();
     hash_field(&mut hasher, "domain", RETENTION_ROOT_ID_DOMAIN);
-    hash_field(&mut hasher, "input", input_name);
-    hash_field(&mut hasher, "lock_digest", lock_digest);
-    hash_field(&mut hasher, "source_identity", source_identity);
-    hash_field(&mut hasher, "content_digest", content_digest);
+    hash_field(&mut hasher, "input", identity.input_name);
+    hash_field(&mut hasher, "lock_digest", identity.lock_digest);
+    hash_field(&mut hasher, "source_identity", identity.source_identity);
+    hash_field(&mut hasher, "content_digest", identity.content_digest);
     hasher.finalize().to_hex().to_string()
 }
 
@@ -779,7 +823,8 @@ fn hash_string_vec(hasher: &mut blake3::Hasher, label: &str, values: &[String]) 
     }
 }
 
-fn hash_field(hasher: &mut blake3::Hasher, label: &str, value: &str) {
+fn hash_field(hasher: &mut blake3::Hasher, label: impl AsRef<str>, value: &str) {
+    let label = label.as_ref();
     hasher.update(label.as_bytes());
     hasher.update(HASH_FIELD_SEPARATOR);
     hasher.update(value.len().to_string().as_bytes());

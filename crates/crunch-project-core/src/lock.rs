@@ -330,14 +330,17 @@ impl LockedKind {
     }
 }
 
-fn validate_locked_url(input_name: &str, kind: &str, url: &str) -> Vec<String> {
+fn validate_locked_url(input_name: &str, kind: impl AsRef<str>, url: &str) -> Vec<String> {
+    let kind = kind.as_ref();
     if url.is_empty() {
         return vec![format!("lock entry '{input_name}': {kind} URL is empty")];
     }
     Vec::new()
 }
 
-fn validate_locked_git(input_name: &str, repository: &str, rev: &str) -> Vec<String> {
+fn validate_locked_git(input_name: impl AsRef<str>, repository: &str, rev: impl AsRef<str>) -> Vec<String> {
+    let input_name = input_name.as_ref();
+    let rev = rev.as_ref();
     let mut problems = validate_locked_repository(input_name, "git", repository);
     if rev.is_empty() {
         problems.push(format!("lock entry '{input_name}': git rev is empty"));
@@ -346,12 +349,13 @@ fn validate_locked_git(input_name: &str, repository: &str, rev: &str) -> Vec<Str
 }
 
 fn validate_locked_darcs(
-    input_name: &str,
+    input_name: impl AsRef<str>,
     repository: &str,
     selector: &DarcsSelector,
     context: &Option<String>,
     weak_hash: &Option<String>,
 ) -> Vec<String> {
+    let input_name = input_name.as_ref();
     let mut problems = validate_locked_repository(input_name, "darcs", repository);
     problems.extend(selector.validate(input_name));
     validate_optional_identity(input_name, "darcs context", context, &mut problems);
@@ -363,12 +367,13 @@ fn validate_locked_darcs(
 }
 
 fn validate_locked_pijul(
-    input_name: &str,
+    input_name: impl AsRef<str>,
     repository: &str,
     selector: &PijulSelector,
     state: &str,
     change: &Option<String>,
 ) -> Vec<String> {
+    let input_name = input_name.as_ref();
     let mut problems = validate_locked_repository(input_name, "pijul", repository);
     problems.extend(selector.validate(input_name));
     if state.is_empty() {
@@ -378,7 +383,13 @@ fn validate_locked_pijul(
     problems
 }
 
-fn validate_locked_fossil(input_name: &str, repository: &str, selector: &FossilSelector, checkin: &str) -> Vec<String> {
+fn validate_locked_fossil(
+    input_name: impl AsRef<str>,
+    repository: &str,
+    selector: &FossilSelector,
+    checkin: &str,
+) -> Vec<String> {
+    let input_name = input_name.as_ref();
     let mut problems = validate_locked_repository(input_name, "fossil", repository);
     problems.extend(selector.validate(input_name));
     if checkin.is_empty() {
@@ -387,7 +398,8 @@ fn validate_locked_fossil(input_name: &str, repository: &str, selector: &FossilS
     problems
 }
 
-fn validate_locked_repository(input_name: &str, kind: &str, repository: &str) -> Vec<String> {
+fn validate_locked_repository(input_name: &str, kind: impl AsRef<str>, repository: &str) -> Vec<String> {
+    let kind = kind.as_ref();
     let mut problems = Vec::new();
     if repository.is_empty() {
         problems.push(format!("lock entry '{input_name}': {kind} repository is empty"));
@@ -400,7 +412,13 @@ fn validate_locked_repository(input_name: &str, kind: &str, repository: &str) ->
     problems
 }
 
-fn validate_optional_identity(input_name: &str, label: &str, value: &Option<String>, problems: &mut Vec<String>) {
+fn validate_optional_identity(
+    input_name: &str,
+    label: impl AsRef<str>,
+    value: &Option<String>,
+    problems: &mut Vec<String>,
+) {
+    let label = label.as_ref();
     if matches!(value, Some(text) if text.is_empty()) {
         problems.push(format!("lock entry '{input_name}': {label} is empty"));
     }

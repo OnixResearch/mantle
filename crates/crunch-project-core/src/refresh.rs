@@ -134,6 +134,7 @@ pub fn plan_refresh_inputs(request: RefreshInputsPlanRequest) -> Vec<ManifestInp
 }
 
 pub fn refresh_inputs(request: RefreshInputsRequest) -> Vec<RefreshOutcome> {
+    assert!(request.manifest.inputs.len() as u64 <= MAX_INPUTS as u64, "manifest input limit exceeded");
     let inputs_to_refresh = select_inputs(&request.manifest, &request.selected);
     assert!(
         inputs_to_refresh.len() as u64 <= MAX_REFRESH_BATCH as u64,
@@ -147,14 +148,13 @@ pub fn refresh_inputs(request: RefreshInputsRequest) -> Vec<RefreshOutcome> {
     inputs_to_refresh
         .into_iter()
         .map(|input| {
-            refresh_one(
-                input,
-                &request.lock,
-                &resolution_map,
-                &source_state_map,
-                &freshness_decision_map,
-                &request.trust_facts,
-            )
+            refresh_one(input, RefreshContext {
+                lock: &request.lock,
+                resolutions: &resolution_map,
+                source_state: &source_state_map,
+                freshness_decisions: &freshness_decision_map,
+                trust_facts: &request.trust_facts,
+            })
         })
         .collect()
 }
@@ -178,13 +178,16 @@ pub fn list_stale(request: RefreshInputsRequest) -> StaleReport {
     let skipped = skipped_from_outcomes(&outcomes);
     let network_required = network_required_from_outcomes(&outcomes);
     let failed = refresh_failures_from_outcomes(&outcomes);
-    StaleReport {
+    let stale_summary = StaleReport {
         stale,
         unchanged,
         skipped,
         network_required,
         failed,
-    }
+    };
+    debug_assert!(stale_summary.stale.len() <= outcomes.len());
+    debug_assert!(stale_summary.unchanged.len() <= outcomes.len());
+    stale_summary
 }
 
 pub fn plan_patch_resolutions(request: PatchResolutionPlanRequest) -> Vec<PatchDef> {
@@ -197,11 +200,12 @@ pub fn apply_outcomes(request: ApplyOutcomesRequest) -> ApplyResult {
     assert!(request.lock.inputs.len() as u64 <= MAX_INPUTS as u64, "lock inputs must stay within manifest limit");
     let mut new_lock = request.lock.clone();
     let inputs_changed = apply_updated_outcomes(&mut new_lock, &request.outcomes);
+    debug_assert!(inputs_changed as u64 <= request.outcomes.len() as u64);
 
     let planned_patches = compute_needed_patch_resolutions(&request.manifest, &new_lock);
     let patch_resolution_map = patch_resolution_map(request.patch_resolutions);
-    let mut patch_failures = Vec::new();
-    let mut patch_changed = false;
+    let mut patch_failures = Vec::with_capacity(planned_patches.len());
+    let mut is_patch_changed = false;
     for patch_def in planned_patches {
         let patch_name = patch_def.name.clone();
         match patch_resolution_map.get(patch_name.as_str()) {
@@ -209,7 +213,7 @@ pub fn apply_outcomes(request: ApplyOutcomesRequest) -> ApplyResult {
                 match trusted_locked_patch(&patch_def, patch.clone(), &request.trust_facts) {
                     Ok(trusted_patch) => {
                         new_lock.patches.insert(patch_name, trusted_patch);
-                        patch_changed = true;
+                        is_patch_changed = true;
                     }
                     Err(reason) => patch_failures.push(RefreshFailure {
                         name: patch_name,
@@ -230,14 +234,14 @@ pub fn apply_outcomes(request: ApplyOutcomesRequest) -> ApplyResult {
 
     let reverted = revert_failed_patch_inputs(&request.lock, &mut new_lock, &patch_failures);
     let inputs_changed = inputs_changed.saturating_sub(reverted);
-    let orphan_changed = remove_orphaned_patches(&mut new_lock);
+    let is_orphan_changed = remove_orphaned_patches(&mut new_lock);
 
-    let has_changes = inputs_changed > 0 || patch_changed || orphan_changed;
+    let has_changes = inputs_changed > 0 || is_patch_changed || is_orphan_changed;
 
     ApplyResult {
         lock: new_lock,
         inputs_changed,
-        patches_changed: patch_changed || orphan_changed,
+        patches_changed: is_patch_changed || is_orphan_changed,
         has_changes,
         failures: patch_failures,
     }
@@ -252,33 +256,31 @@ fn select_inputs<'a>(manifest: &'a ProjectManifest, selected: &[String]) -> Vec<
 }
 
 fn input_resolution_map(resolutions: Vec<ResolvedInputState>) -> BTreeMap<String, ResolvedInputState> {
-    let mut map = BTreeMap::new();
-    for resolution in resolutions {
-        let key = match &resolution {
-            ResolvedInputState::Resolved(resolved) => resolved.name.clone(),
-            ResolvedInputState::Failed(failure) => failure.name.clone(),
-        };
-        map.insert(key, resolution);
-    }
-    map
+    resolutions
+        .into_iter()
+        .map(|resolution| {
+            let key = match &resolution {
+                ResolvedInputState::Resolved(resolved) => resolved.name.clone(),
+                ResolvedInputState::Failed(failure) => failure.name.clone(),
+            };
+            (key, resolution)
+        })
+        .collect()
 }
 
 fn freshness_decision_map(decisions: Vec<FreshnessDecision>) -> BTreeMap<String, FreshnessDecision> {
-    let mut map = BTreeMap::new();
-    for decision in decisions {
-        map.insert(decision.input_name.clone(), decision);
-    }
-    map
+    decisions.into_iter().map(|decision| (decision.input_name.clone(), decision)).collect()
 }
 
-fn refresh_one(
-    input: &ManifestInput,
-    lock: &Lockfile,
-    resolutions: &BTreeMap<String, ResolvedInputState>,
-    source_state: &BTreeMap<&str, Vec<&InputSourceStateFact>>,
-    freshness_decisions: &BTreeMap<String, FreshnessDecision>,
-    trust_facts: &[VerifiedTrustFact],
-) -> RefreshOutcome {
+struct RefreshContext<'a> {
+    lock: &'a Lockfile,
+    resolutions: &'a BTreeMap<String, ResolvedInputState>,
+    source_state: &'a BTreeMap<&'a str, Vec<&'a InputSourceStateFact>>,
+    freshness_decisions: &'a BTreeMap<String, FreshnessDecision>,
+    trust_facts: &'a [VerifiedTrustFact],
+}
+
+fn refresh_one(input: &ManifestInput, context: RefreshContext<'_>) -> RefreshOutcome {
     assert!(!input.name.is_empty(), "input name must not be empty");
     assert!(
         input.mirrors.len() as u64 <= crate::MAX_MIRRORS_PER_INPUT as u64,
@@ -289,7 +291,7 @@ fn refresh_one(
             name: input.name.clone(),
         };
     }
-    if let Some(outcome) = freshness_gate(input, freshness_decisions) {
+    if let Some(outcome) = freshness_gate(input, context.freshness_decisions) {
         return outcome;
     }
     let compatibility = fetch_policy_compatibility_problems(input);
@@ -301,9 +303,15 @@ fn refresh_one(
     }
 
     match input.fetch_policy {
-        InputFetchPolicy::GenerationMaterial => refresh_generation_material(input, lock, resolutions, trust_facts),
-        InputFetchPolicy::BuildFetchAction => refresh_without_generation_fetch(input, lock, trust_facts),
-        InputFetchPolicy::ImportedSourceRequired => refresh_imported_source(input, lock, source_state, trust_facts),
+        InputFetchPolicy::GenerationMaterial => {
+            refresh_generation_material(input, context.lock, context.resolutions, context.trust_facts)
+        }
+        InputFetchPolicy::BuildFetchAction => {
+            refresh_without_generation_fetch(input, context.lock, context.trust_facts)
+        }
+        InputFetchPolicy::ImportedSourceRequired => {
+            refresh_imported_source(input, context.lock, context.source_state, context.trust_facts)
+        }
     }
 }
 
@@ -311,7 +319,9 @@ fn freshness_gate(
     input: &ManifestInput,
     freshness_decisions: &BTreeMap<String, FreshnessDecision>,
 ) -> Option<RefreshOutcome> {
+    assert!(!input.name.is_empty(), "input name must not be empty");
     let decision = freshness_decisions.get(input.name.as_str())?;
+    assert_eq!(decision.input_name, input.name, "freshness decision name must match input");
     match decision.kind {
         FreshnessDecisionKind::Stale => None,
         FreshnessDecisionKind::Unchanged => Some(RefreshOutcome::Unchanged {
@@ -508,15 +518,16 @@ fn compute_needed_patch_resolutions(manifest: &ProjectManifest, lock: &Lockfile)
 }
 
 fn patch_resolution_map(resolutions: Vec<PatchResolution>) -> BTreeMap<String, PatchResolution> {
-    let mut map = BTreeMap::new();
-    for resolution in resolutions {
-        let key = match &resolution {
-            PatchResolution::Resolved { name, .. } => name.clone(),
-            PatchResolution::Failed { name, .. } => name.clone(),
-        };
-        map.insert(key, resolution);
-    }
-    map
+    resolutions
+        .into_iter()
+        .map(|resolution| {
+            let key = match &resolution {
+                PatchResolution::Resolved { name, .. } => name.clone(),
+                PatchResolution::Failed { name, .. } => name.clone(),
+            };
+            (key, resolution)
+        })
+        .collect()
 }
 
 fn collect_needed_patches(lock: &Lockfile) -> BTreeSet<String> {
@@ -548,30 +559,30 @@ fn revert_failed_patch_inputs(old_lock: &Lockfile, new_lock: &mut Lockfile, fail
         .map(|(name, _)| name.clone())
         .collect();
     let mut reverted: u32 = 0;
-    for name in impacted_inputs {
-        match old_lock.inputs.get(&name) {
+    for name in &impacted_inputs {
+        match old_lock.inputs.get(name) {
             Some(previous) => {
-                let current = new_lock.inputs.get(&name);
+                let current = new_lock.inputs.get(name);
                 if current != Some(previous) {
-                    new_lock.inputs.insert(name, previous.clone());
+                    new_lock.inputs.insert(name.clone(), previous.clone());
                     reverted = reverted.saturating_add(1);
                 }
             }
             None => {
-                if new_lock.inputs.remove(&name).is_some() {
+                if new_lock.inputs.remove(name).is_some() {
                     reverted = reverted.saturating_add(1);
                 }
             }
         }
     }
+    debug_assert!(reverted as u64 <= impacted_inputs.len() as u64);
+    debug_assert!(impacted_inputs.iter().all(|name| new_lock.inputs.get(name) == old_lock.inputs.get(name)));
     reverted
 }
 
 fn patch_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
-    if !patch_trust_matches_def(locked, def) {
-        return false;
-    }
-    match (&locked.source, &def.source) {
+    let is_trust_match = patch_trust_matches_def(locked, def);
+    let is_source_match = match (&locked.source, &def.source) {
         (LockedPatchSource::Local { path: locked_path }, PatchSource::Local { path: def_path }) => {
             locked_path == def_path
         }
@@ -581,21 +592,39 @@ fn patch_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
                 url: def_url,
                 hash: def_hash,
             },
-        ) => {
-            if locked_url != def_url {
-                return false;
-            }
-            if locked.hash.algo != def_hash.algo {
-                return false;
-            }
-            if let Some(expected) = &def_hash.expected
-                && locked.hash.value != *expected
-            {
-                return false;
-            }
-            true
-        }
+        ) => remote_patch_matches(RemotePatchComparison {
+            locked,
+            locked_url,
+            definition_url: def_url,
+            definition_hash: def_hash,
+        }),
         _ => false,
+    };
+    let is_match = is_trust_match && is_source_match;
+    if is_match {
+        debug_assert!(is_trust_match);
+        debug_assert!(is_source_match);
+    }
+    is_match
+}
+
+struct RemotePatchComparison<'a> {
+    locked: &'a LockedPatch,
+    locked_url: &'a str,
+    definition_url: &'a str,
+    definition_hash: &'a crate::HashSpec,
+}
+
+fn remote_patch_matches(comparison: RemotePatchComparison<'_>) -> bool {
+    if comparison.locked_url != comparison.definition_url {
+        return false;
+    }
+    if comparison.locked.hash.algo != comparison.definition_hash.algo {
+        return false;
+    }
+    match &comparison.definition_hash.expected {
+        Some(expected) => comparison.locked.hash.value == *expected,
+        None => true,
     }
 }
 

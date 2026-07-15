@@ -46,6 +46,9 @@ const TEMPLATE_VAR_FRESHNESS_DIGEST: &str = "freshness.value_digest";
 const TEMPLATE_VAR_INPUT_NAME: &str = "input.name";
 const URL_SCHEME_SEPARATOR: &str = "://";
 const DIAGNOSTIC_TRUNCATED_SUFFIX: &str = "...[truncated]";
+const MAX_FRESHNESS_DIAGNOSTIC_BYTES_USIZE: usize = 1024;
+
+const _: () = assert!(MAX_FRESHNESS_DIAGNOSTIC_BYTES as u64 == MAX_FRESHNESS_DIAGNOSTIC_BYTES_USIZE as u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -257,6 +260,8 @@ pub fn validate_freshness_probe(probe: FreshnessProbe) -> Result<FreshnessProbeV
         FreshnessProbe::LocalDirectory { path } => require_non_empty(path, "local directory path")?,
         FreshnessProbe::Command { command, .. } => validate_command_probe(command)?,
     }
+    debug_assert_eq!(validation.kind, probe_kind(&probe));
+    debug_assert_eq!(validation.requires_network, probe_requires_network(&probe));
     Ok(validation)
 }
 
@@ -358,6 +363,8 @@ fn validate_command_limits(command: &CommandFreshnessProbe) -> Result<(), Freshn
     if command.success_statuses.len() as u64 > MAX_COMMAND_SUCCESS_STATUS_COUNT as u64 {
         return Err(error(FreshnessErrorKind::InvalidProbe, "command probe has too many success statuses"));
     }
+    debug_assert!(command.timeout_ms <= MAX_COMMAND_TIMEOUT_MS);
+    debug_assert!(command.output_limit_bytes <= MAX_COMMAND_OUTPUT_BYTES);
     for status in &command.success_statuses {
         if *status < 0 || *status > MAX_COMMAND_EXIT_STATUS {
             return Err(error(
@@ -389,6 +396,8 @@ fn validate_command_env(env: &[CommandFreshnessEnv]) -> Result<(), FreshnessErro
             return Err(error(FreshnessErrorKind::InvalidProbe, "command probe env contains duplicate names"));
         }
     }
+    debug_assert!(seen.len() <= env.len());
+    debug_assert!(env.len() as u64 <= MAX_COMMAND_ENV_COUNT as u64);
     Ok(())
 }
 
@@ -477,8 +486,7 @@ fn bounded_diagnostic(value: String) -> String {
     if value.len() as u64 <= MAX_FRESHNESS_DIAGNOSTIC_BYTES as u64 {
         return value;
     }
-    let max_without_suffix =
-        (MAX_FRESHNESS_DIAGNOSTIC_BYTES as usize).saturating_sub(DIAGNOSTIC_TRUNCATED_SUFFIX.len());
+    let max_without_suffix = MAX_FRESHNESS_DIAGNOSTIC_BYTES_USIZE.saturating_sub(DIAGNOSTIC_TRUNCATED_SUFFIX.len());
     let mut output = String::new();
     for ch in value.chars() {
         if output.len().saturating_add(ch.len_utf8()) > max_without_suffix {
@@ -509,7 +517,7 @@ fn selected_inputs<'a>(
         return Ok(declared.iter().copied().collect());
     }
     let mut seen = BTreeSet::new();
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(selected.len());
     for input in selected {
         validate_input_name(input)?;
         if !declared.contains(input.as_str()) {
@@ -522,6 +530,8 @@ fn selected_inputs<'a>(
             result.push(input.as_str());
         }
     }
+    debug_assert!(result.len() <= selected.len());
+    debug_assert!(result.iter().all(|input| declared.contains(input)));
     Ok(result)
 }
 
@@ -582,6 +592,8 @@ fn validate_observation_for_plan(
             "network freshness probe was observed in no-network mode",
         ));
     }
+    debug_assert!(!observation.input_name.is_empty());
+    debug_assert!(declared.contains(observation.input_name.as_str()));
     Ok(())
 }
 
@@ -666,6 +678,8 @@ fn decision(
 }
 
 fn render_template_bytes(request: &FreshnessTemplateRequest) -> Result<String, FreshnessError> {
+    debug_assert!(request.template.len() as u64 <= MAX_FRESHNESS_TEMPLATE_BYTES as u64);
+    debug_assert!(request.max_output_bytes > 0);
     let mut rendered = String::new();
     let mut remaining = request.template.as_str();
     loop {
@@ -680,14 +694,20 @@ fn render_template_bytes(request: &FreshnessTemplateRequest) -> Result<String, F
                 let prefix = &remaining[..open_index];
                 reject_unmatched_close(prefix)?;
                 rendered.push_str(prefix);
-                let after_open = &remaining[open_index + TEMPLATE_DELIMITER_BYTES..];
+                let after_open_index = open_index.checked_add(TEMPLATE_DELIMITER_BYTES).ok_or_else(|| {
+                    error(FreshnessErrorKind::InvalidTemplate, "freshness template opening index overflow")
+                })?;
+                let after_open = &remaining[after_open_index..];
                 let close_index = after_open.find(TEMPLATE_CLOSE).ok_or_else(|| {
                     error(FreshnessErrorKind::InvalidTemplate, "freshness template has an unclosed variable")
                 })?;
                 let var = after_open[..close_index].trim();
                 rendered.push_str(template_value(var, request)?);
                 enforce_rendered_bound(&rendered, request.max_output_bytes)?;
-                remaining = &after_open[close_index + TEMPLATE_DELIMITER_BYTES..];
+                let after_close_index = close_index.checked_add(TEMPLATE_DELIMITER_BYTES).ok_or_else(|| {
+                    error(FreshnessErrorKind::InvalidTemplate, "freshness template closing index overflow")
+                })?;
+                remaining = &after_open[after_close_index..];
             }
         }
     }
@@ -763,7 +783,8 @@ fn has_ascii_space_or_control(value: &str) -> bool {
     value.chars().any(|ch| ch.is_ascii_whitespace() || ch.is_ascii_control())
 }
 
-fn require_url_like(value: &str, label: &str) -> Result<(), FreshnessError> {
+fn require_url_like(value: &str, label: impl AsRef<str>) -> Result<(), FreshnessError> {
+    let label = label.as_ref();
     require_non_empty(value, label)?;
     if !value.contains(URL_SCHEME_SEPARATOR) {
         return Err(error(FreshnessErrorKind::InvalidProbe, format!("{label} lacks a URL scheme")));
@@ -771,7 +792,8 @@ fn require_url_like(value: &str, label: &str) -> Result<(), FreshnessError> {
     Ok(())
 }
 
-fn require_non_empty(value: &str, label: &str) -> Result<(), FreshnessError> {
+fn require_non_empty(value: &str, label: impl AsRef<str>) -> Result<(), FreshnessError> {
+    let label = label.as_ref();
     if value.is_empty() {
         return Err(error(FreshnessErrorKind::InvalidProbe, format!("{label} must not be empty")));
     }

@@ -18,6 +18,8 @@ pub const MAX_REQUIRED_SIGNERS: u32 = 32;
 pub const MAX_TRUST_REF_BYTES: u32 = 1024;
 const MIN_TRUST_QUORUM: u32 = 1;
 const TRUST_DIGEST_PREFIX: &str = "blake3:";
+const TRUST_POLICY_SERIALIZATION_FAILURE: &[u8] = b"mantle-project-input-trust-v1:serialization-failure";
+const MAX_LOCKED_TRUST_PROBLEMS: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -197,7 +199,10 @@ pub fn trust_signature_payload(
 }
 
 pub fn trust_policy_digest(policy: &InputTrustPolicy) -> String {
-    let bytes = serde_json::to_vec(policy).expect("trust policy serialization must not fail");
+    let bytes = match serde_json::to_vec(policy) {
+        Ok(bytes) => bytes,
+        Err(_) => TRUST_POLICY_SERIALIZATION_FAILURE.to_vec(),
+    };
     let digest = blake3::hash(&bytes).to_hex().to_string();
     format!("{TRUST_DIGEST_PREFIX}{digest}")
 }
@@ -252,19 +257,39 @@ pub fn validate_locked_trust(
     subject: &TrustSubject,
     hash_algo: &HashAlgo,
     hash_value: &str,
-    context: &str,
+    context: impl AsRef<str>,
 ) -> Vec<String> {
+    validate_locked_trust_fields(LockedTrustValidation {
+        trust,
+        subject,
+        hash_algo,
+        hash_value,
+        context: context.as_ref(),
+    })
+}
+
+struct LockedTrustValidation<'a> {
+    trust: &'a LockedTrust,
+    subject: &'a TrustSubject,
+    hash_algo: &'a HashAlgo,
+    hash_value: &'a str,
+    context: &'a str,
+}
+
+fn validate_locked_trust_fields(validation: LockedTrustValidation<'_>) -> Vec<String> {
     let mut problems = Vec::new();
+    let trust = validation.trust;
+    let context = validation.context;
     if trust.schema != TRUST_POLICY_SCHEMA {
         problems.push(format!("{context}: trust schema '{}' is unsupported", trust.schema));
     }
-    if trust.subject != *subject {
-        problems.push(format!("{context}: trust subject does not match {}", subject.label()));
+    if trust.subject != *validation.subject {
+        problems.push(format!("{context}: trust subject does not match {}", validation.subject.label()));
     }
-    if &trust.hash_algo != hash_algo {
+    if &trust.hash_algo != validation.hash_algo {
         problems.push(format!("{context}: trust hash algorithm does not match locked hash"));
     }
-    if trust.hash_value != hash_value {
+    if trust.hash_value != validation.hash_value {
         problems.push(format!("{context}: trust hash value does not match locked hash"));
     }
     if trust.signers.is_empty() {
@@ -279,6 +304,8 @@ pub fn validate_locked_trust(
     if !trust.claim.contains(PROJECT_INPUT_TRUST_NON_CLAIM) {
         problems.push(format!("{context}: trust claim is missing bounded non-claim text"));
     }
+    debug_assert!(problems.len() <= MAX_LOCKED_TRUST_PROBLEMS);
+    debug_assert!(problems.iter().all(|problem| problem.starts_with(context)));
     problems
 }
 
@@ -321,6 +348,7 @@ fn push_signature_ref_problems(policy: &InputTrustPolicy, context: &str, problem
 }
 
 fn push_trusted_key_problems(policy: &InputTrustPolicy, context: &str, problems: &mut Vec<String>) {
+    let problem_count_before = problems.len();
     if policy.trusted_public_keys.is_empty() {
         problems.push(format!("{context}: trust policy requires at least one trusted public key"));
     }
@@ -339,6 +367,8 @@ fn push_trusted_key_problems(policy: &InputTrustPolicy, context: &str, problems:
             None => problems.push(format!("{context}: trusted public key must be name:base64")),
         }
     }
+    debug_assert!(problems.len() >= problem_count_before);
+    debug_assert!(names.len() <= policy.trusted_public_keys.len());
 }
 
 fn push_required_signer_problems(policy: &InputTrustPolicy, context: &str, problems: &mut Vec<String>) {
@@ -372,7 +402,9 @@ fn push_quorum_problems(policy: &InputTrustPolicy, context: &str, problems: &mut
     }
 }
 
-fn push_ref_text_problem(label: &str, value: &str, context: &str, problems: &mut Vec<String>) {
+fn push_ref_text_problem(label: impl AsRef<str>, value: &str, context: impl AsRef<str>, problems: &mut Vec<String>) {
+    let label = label.as_ref();
+    let context = context.as_ref();
     if value.is_empty() {
         problems.push(format!("{context}: {label} must not be empty"));
     }

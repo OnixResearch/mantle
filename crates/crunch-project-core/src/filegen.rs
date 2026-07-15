@@ -119,16 +119,16 @@ pub struct FilegenBlocker {
 
 pub fn plan_file_generation(request: FilegenPlanRequest) -> FilegenPlan {
     let mut blockers = Vec::new();
-    let declaration_count = u32_count(request.declarations.len());
-    let current_fact_count = u32_count(request.current_files.len());
-    if declaration_count > MAX_FILEGEN_DECLARATIONS {
+    let declaration_count = request.declarations.len() as u64;
+    let current_fact_count = request.current_files.len() as u64;
+    if declaration_count > u64::from(MAX_FILEGEN_DECLARATIONS) {
         blockers.push(blocker(
             "too-many-generated-files",
             "<manifest>",
             format!("too many generated file declarations: {declaration_count} > {MAX_FILEGEN_DECLARATIONS}"),
         ));
     }
-    if current_fact_count > MAX_FILEGEN_DECLARATIONS {
+    if current_fact_count > u64::from(MAX_FILEGEN_DECLARATIONS) {
         blockers.push(blocker(
             "too-many-current-file-facts",
             "<state>",
@@ -153,12 +153,15 @@ pub fn plan_file_generation(request: FilegenPlanRequest) -> FilegenPlan {
     }
     append_stale_operations(&current_files, &declared_targets, &mut operations);
 
-    FilegenPlan {
+    let plan = FilegenPlan {
         schema: FILEGEN_PLAN_SCHEMA.to_string(),
         operations,
         blockers,
         non_claim: FILEGEN_NON_CLAIM.to_string(),
-    }
+    };
+    debug_assert_eq!(plan.schema, FILEGEN_PLAN_SCHEMA);
+    debug_assert_eq!(plan.non_claim, FILEGEN_NON_CLAIM);
+    plan
 }
 
 pub fn verify_filegen_apply_plan(reviewed: &FilegenPlan, current: &FilegenPlan) -> Result<(), Vec<FilegenBlocker>> {
@@ -216,6 +219,8 @@ fn plan_declaration(
     operations: &mut Vec<FilegenOperation>,
     blockers: &mut Vec<FilegenBlocker>,
 ) {
+    debug_assert!(declared_targets.len() as u64 <= u64::from(MAX_FILEGEN_DECLARATIONS));
+    debug_assert!(operations.len() as u64 <= u64::from(MAX_FILEGEN_DECLARATIONS));
     if declaration.name.is_empty() {
         blockers.push(blocker(
             "empty-generated-file-name",
@@ -302,7 +307,10 @@ fn normalize_target(target: &str) -> Result<String, String> {
     if target.starts_with('/') {
         return Err(format!("generated file target `{target}` must be relative to the project root"));
     }
-    let mut normalized = Vec::new();
+    debug_assert!(!target.is_empty());
+    debug_assert!(target.len() <= MAX_FILEGEN_TARGET_BYTES);
+    let component_count = target.split('/').count();
+    let mut normalized = Vec::with_capacity(component_count);
     for component in target.split('/') {
         match component {
             "" | "." => {}
@@ -323,7 +331,7 @@ fn validate_contract(declaration: &GeneratedFileDeclaration) -> Result<(), Strin
     if contract.identity.is_empty() {
         return Err("generated file contract identity must not be empty".to_string());
     }
-    if u32_count(contract.required_json_fields.len()) > MAX_CONTRACT_FIELDS {
+    if contract.required_json_fields.len() as u64 > u64::from(MAX_CONTRACT_FIELDS) {
         return Err(format!(
             "generated file contract has too many required JSON fields: {} > {MAX_CONTRACT_FIELDS}",
             contract.required_json_fields.len()
@@ -332,6 +340,8 @@ fn validate_contract(declaration: &GeneratedFileDeclaration) -> Result<(), Strin
     if declaration.materialization == GeneratedFileMaterialization::Symlink {
         return Err("typed generated-file contracts apply only to copy materialization".to_string());
     }
+    debug_assert!(!contract.identity.is_empty());
+    debug_assert!(contract.required_json_fields.len() as u64 <= u64::from(MAX_CONTRACT_FIELDS));
     let content = declaration_content(&declaration.content);
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("generated content is not valid JSON for contract `{}`: {err}", contract.identity))?;
@@ -408,18 +418,14 @@ fn blake3_hex(bytes: &[u8]) -> String {
     blake3::hash(bytes).to_hex().to_string()
 }
 
-fn blocker(code: &'static str, target: &str, message: String) -> FilegenBlocker {
+fn blocker(code: &'static str, target: impl AsRef<str>, message: String) -> FilegenBlocker {
     assert!(!code.is_empty(), "filegen blocker code must not be empty");
     assert!(!message.is_empty(), "filegen blocker message must not be empty");
     FilegenBlocker {
         code: code.to_string(),
-        target: target.to_string(),
+        target: target.as_ref().to_string(),
         message,
     }
-}
-
-fn u32_count(count: usize) -> u32 {
-    u32::try_from(count).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]
