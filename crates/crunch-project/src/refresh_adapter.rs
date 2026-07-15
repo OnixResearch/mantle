@@ -207,7 +207,9 @@ fn build_refresh_request(
         manifest: manifest.clone(),
         selected: selected.to_vec(),
     });
+    assert!(plan.len() <= manifest.inputs.len(), "refresh plan must be a manifest input subset");
     let observations = collect_freshness_observations(&plan, resolver, no_network);
+    assert!(observations.len() <= plan.len(), "freshness collection must emit at most one observation per input");
     let decisions = plan_freshness_decisions(&plan, lock, selected, &observations, no_network);
     let mut trust_facts = Vec::new();
     let resolutions = plan
@@ -261,6 +263,7 @@ fn plan_freshness_decisions(
         .filter(|input| input.freshness.is_some())
         .map(|input| input.name.clone())
         .collect::<Vec<_>>();
+    assert!(declared_inputs.len() <= plan.len(), "freshness declarations must be a refresh plan subset");
     if declared_inputs.is_empty() {
         return Vec::new();
     }
@@ -268,6 +271,7 @@ fn plan_freshness_decisions(
         .iter()
         .filter_map(|name| lock.inputs.get(name).and_then(|entry| entry.freshness.clone()))
         .collect::<Vec<_>>();
+    assert!(locked_values.len() <= declared_inputs.len(), "locked freshness values must match declared inputs");
     let selected = selected
         .iter()
         .filter(|name| declared_inputs.iter().any(|declared| declared == *name))
@@ -316,21 +320,43 @@ fn freshness_observation_for<'a>(
 }
 
 fn failed_freshness_observation(input: &ManifestInput, reason: String) -> FreshnessObservation {
-    crunch_project_core::normalize_freshness_observation(crunch_project_core::FreshnessObservationRequest {
+    let probe_kind = input
+        .freshness
+        .as_ref()
+        .map(freshness_kind)
+        .unwrap_or(crunch_project_core::FreshnessProbeKind::Command);
+    let is_network_required = input.freshness.as_ref().is_some_and(freshness_requires_network);
+    let diagnostic = if reason.is_empty() {
+        "freshness resolver failed without a diagnostic".to_string()
+    } else {
+        reason
+    };
+    let request = crunch_project_core::FreshnessObservationRequest {
         version: crunch_project_core::FRESHNESS_PROBE_VERSION,
         input_name: input.name.clone(),
-        probe_kind: input
-            .freshness
-            .as_ref()
-            .map(freshness_kind)
-            .unwrap_or(crunch_project_core::FreshnessProbeKind::Command),
-        requires_network: input.freshness.as_ref().is_some_and(freshness_requires_network),
+        probe_kind,
+        requires_network: is_network_required,
         status: crunch_project_core::FreshnessObservationStatus::Failed,
         value: None,
-        diagnostic: reason,
+        diagnostic,
         probe_identity_digest: None,
-    })
-    .expect("failed freshness observations from valid manifest inputs must normalize")
+    };
+    assert_eq!(request.input_name, input.name, "failed observation must retain the manifest input name");
+    assert!(!request.diagnostic.is_empty(), "failed observation must carry a diagnostic");
+    match crunch_project_core::normalize_freshness_observation(request) {
+        Ok(observation) => observation,
+        Err(err) => FreshnessObservation {
+            version: crunch_project_core::FRESHNESS_PROBE_VERSION,
+            input_name: input.name.clone(),
+            probe_kind,
+            requires_network: is_network_required,
+            status: crunch_project_core::FreshnessObservationStatus::Failed,
+            value: None,
+            value_digest: None,
+            diagnostic: format!("invalid failed freshness observation: {err}"),
+            probe_identity_digest: None,
+        },
+    }
 }
 
 fn freshness_kind(probe: &crunch_project_core::FreshnessProbe) -> crunch_project_core::FreshnessProbeKind {
@@ -586,6 +612,8 @@ fn locked_freshness_from_observation(observation: &FreshnessObservation) -> Opti
     })
 }
 
+type ResolvedLockKind = (LockedKind, LockedHash);
+
 fn resolve_input(
     input: &ManifestInput,
     resolver: &dyn RefreshResolver,
@@ -597,123 +625,7 @@ fn resolve_input(
         "patch count must stay within manifest limit"
     );
     let effective_kind = render_input_kind(input, freshness_observation)?;
-    let (kind, hash) = match &effective_kind {
-        InputKind::File { url } => {
-            let hash_value = require_string_resolution(
-                resolver.hash_url_content(url, &input.hash.algo, HashResolutionMode::Flat)?,
-                &format!("flat hash for {}", input.name),
-            )?;
-            (LockedKind::File { url: url.clone() }, LockedHash {
-                algo: input.hash.algo.clone(),
-                value: hash_value,
-            })
-        }
-        InputKind::Tarball { url } => {
-            let hash_value = require_string_resolution(
-                resolver.hash_url_content(url, &input.hash.algo, HashResolutionMode::Recursive)?,
-                &format!("tarball tree hash for {}", input.name),
-            )?;
-            (LockedKind::Tarball { url: url.clone() }, LockedHash {
-                algo: input.hash.algo.clone(),
-                value: hash_value,
-            })
-        }
-        InputKind::Git { repository, reference } => {
-            let rev = require_string_resolution(
-                resolver.resolve_git_rev(repository, reference)?,
-                &format!("git revision for {}", input.name),
-            )?;
-            let ref_name = match reference {
-                GitReference::Branch(branch) => Some(branch.clone()),
-                GitReference::Tag(tag) => Some(tag.clone()),
-                GitReference::Rev(_) => None,
-            };
-            let hash_value = require_string_resolution(
-                resolver.hash_git_checkout(repository, &rev, &input.hash.algo)?,
-                &format!("git tree hash for {}", input.name),
-            )?;
-            (
-                LockedKind::Git {
-                    repository: repository.clone(),
-                    rev,
-                    ref_name,
-                },
-                LockedHash {
-                    algo: input.hash.algo.clone(),
-                    value: hash_value,
-                },
-            )
-        }
-        InputKind::Darcs { repository, selector } => {
-            let identity = require_resolution(
-                resolver.resolve_darcs_identity(repository, selector)?,
-                &format!("darcs identity for {}", input.name),
-            )?;
-            require_darcs_identity(&input.name, &identity)?;
-            let hash_value = require_string_resolution(
-                resolver.hash_darcs_checkout(repository, &identity, &input.hash.algo)?,
-                &format!("darcs tree hash for {}", input.name),
-            )?;
-            (
-                LockedKind::Darcs {
-                    repository: repository.clone(),
-                    selector: selector.clone(),
-                    context: identity.context,
-                    weak_hash: identity.weak_hash,
-                },
-                LockedHash {
-                    algo: input.hash.algo.clone(),
-                    value: hash_value,
-                },
-            )
-        }
-        InputKind::Pijul { repository, selector } => {
-            let identity = require_resolution(
-                resolver.resolve_pijul_identity(repository, selector)?,
-                &format!("pijul identity for {}", input.name),
-            )?;
-            require_nonempty_identity(&input.name, "pijul state", &identity.state)?;
-            let hash_value = require_string_resolution(
-                resolver.hash_pijul_checkout(repository, &identity, &input.hash.algo)?,
-                &format!("pijul tree hash for {}", input.name),
-            )?;
-            (
-                LockedKind::Pijul {
-                    repository: repository.clone(),
-                    selector: selector.clone(),
-                    state: identity.state,
-                    change: identity.change,
-                },
-                LockedHash {
-                    algo: input.hash.algo.clone(),
-                    value: hash_value,
-                },
-            )
-        }
-        InputKind::Fossil { repository, selector } => {
-            let identity = require_resolution(
-                resolver.resolve_fossil_identity(repository, selector)?,
-                &format!("fossil identity for {}", input.name),
-            )?;
-            require_nonempty_identity(&input.name, "fossil check-in", &identity.checkin)?;
-            let hash_value = require_string_resolution(
-                resolver.hash_fossil_checkout(repository, &identity, &input.hash.algo)?,
-                &format!("fossil tree hash for {}", input.name),
-            )?;
-            (
-                LockedKind::Fossil {
-                    repository: repository.clone(),
-                    selector: selector.clone(),
-                    checkin: identity.checkin,
-                },
-                LockedHash {
-                    algo: input.hash.algo.clone(),
-                    value: hash_value,
-                },
-            )
-        }
-    };
-
+    let (kind, hash) = resolve_effective_input(input, resolver, &effective_kind)?;
     Ok(LockEntry {
         kind,
         hash,
@@ -725,26 +637,222 @@ fn resolve_input(
     })
 }
 
+fn resolve_effective_input(
+    input: &ManifestInput,
+    resolver: &dyn RefreshResolver,
+    effective_kind: &InputKind,
+) -> Result<ResolvedLockKind, Error> {
+    match effective_kind {
+        InputKind::File { url } => resolve_file_input(input, resolver, url),
+        InputKind::Tarball { url } => resolve_tarball_input(input, resolver, url),
+        InputKind::Git { repository, reference } => resolve_git_input(input, resolver, repository, reference),
+        InputKind::Darcs { repository, selector } => resolve_darcs_input(input, resolver, repository, selector),
+        InputKind::Pijul { repository, selector } => resolve_pijul_input(input, resolver, repository, selector),
+        InputKind::Fossil { repository, selector } => resolve_fossil_input(input, resolver, repository, selector),
+    }
+}
+
+fn resolve_file_input(
+    input: &ManifestInput,
+    resolver: &dyn RefreshResolver,
+    url: &str,
+) -> Result<ResolvedLockKind, Error> {
+    let hash_value = require_string_resolution(
+        resolver.hash_url_content(url, &input.hash.algo, HashResolutionMode::Flat)?,
+        &format!("flat hash for {}", input.name),
+    )?;
+    let hash = locked_hash(input, hash_value);
+    assert!(!hash.value.is_empty(), "resolved file hash must not be empty");
+    assert_eq!(hash.algo, input.hash.algo, "resolved file hash must retain the declared algorithm");
+    Ok((LockedKind::File { url: url.to_string() }, hash))
+}
+
+fn resolve_tarball_input(
+    input: &ManifestInput,
+    resolver: &dyn RefreshResolver,
+    url: &str,
+) -> Result<ResolvedLockKind, Error> {
+    let hash_value = require_string_resolution(
+        resolver.hash_url_content(url, &input.hash.algo, HashResolutionMode::Recursive)?,
+        &format!("tarball tree hash for {}", input.name),
+    )?;
+    let hash = locked_hash(input, hash_value);
+    assert!(!hash.value.is_empty(), "resolved tarball hash must not be empty");
+    assert_eq!(hash.algo, input.hash.algo, "resolved tarball hash must retain the declared algorithm");
+    Ok((LockedKind::Tarball { url: url.to_string() }, hash))
+}
+
+fn resolve_git_input(
+    input: &ManifestInput,
+    resolver: &dyn RefreshResolver,
+    repository: &str,
+    reference: &GitReference,
+) -> Result<ResolvedLockKind, Error> {
+    let rev = require_string_resolution(
+        resolver.resolve_git_rev(repository, reference)?,
+        &format!("git revision for {}", input.name),
+    )?;
+    let hash_value = require_string_resolution(
+        resolver.hash_git_checkout(repository, &rev, &input.hash.algo)?,
+        &format!("git tree hash for {}", input.name),
+    )?;
+    assert!(!rev.is_empty(), "resolved git revision must not be empty");
+    assert!(!hash_value.is_empty(), "resolved git tree hash must not be empty");
+    Ok((
+        LockedKind::Git {
+            repository: repository.to_string(),
+            rev,
+            ref_name: git_reference_name(reference),
+        },
+        locked_hash(input, hash_value),
+    ))
+}
+
+fn git_reference_name(reference: &GitReference) -> Option<String> {
+    match reference {
+        GitReference::Branch(branch) => Some(branch.clone()),
+        GitReference::Tag(tag) => Some(tag.clone()),
+        GitReference::Rev(_) => None,
+    }
+}
+
+fn resolve_darcs_input(
+    input: &ManifestInput,
+    resolver: &dyn RefreshResolver,
+    repository: &str,
+    selector: &DarcsSelector,
+) -> Result<ResolvedLockKind, Error> {
+    let identity = require_resolution(
+        resolver.resolve_darcs_identity(repository, selector)?,
+        &format!("darcs identity for {}", input.name),
+    )?;
+    require_darcs_identity(&input.name, &identity)?;
+    let hash_value = require_string_resolution(
+        resolver.hash_darcs_checkout(repository, &identity, &input.hash.algo)?,
+        &format!("darcs tree hash for {}", input.name),
+    )?;
+    assert_ne!(
+        (identity.context.as_deref(), identity.weak_hash.as_deref()),
+        (None, None),
+        "darcs identity must have a stable selector"
+    );
+    assert!(!hash_value.is_empty(), "resolved darcs tree hash must not be empty");
+    Ok((
+        LockedKind::Darcs {
+            repository: repository.to_string(),
+            selector: selector.clone(),
+            context: identity.context,
+            weak_hash: identity.weak_hash,
+        },
+        locked_hash(input, hash_value),
+    ))
+}
+
+fn resolve_pijul_input(
+    input: &ManifestInput,
+    resolver: &dyn RefreshResolver,
+    repository: &str,
+    selector: &PijulSelector,
+) -> Result<ResolvedLockKind, Error> {
+    let identity = require_resolution(
+        resolver.resolve_pijul_identity(repository, selector)?,
+        &format!("pijul identity for {}", input.name),
+    )?;
+    require_nonempty_identity(&input.name, IdentityFieldLabel::PijulState, &identity.state)?;
+    let hash_value = require_string_resolution(
+        resolver.hash_pijul_checkout(repository, &identity, &input.hash.algo)?,
+        &format!("pijul tree hash for {}", input.name),
+    )?;
+    assert!(!identity.state.is_empty(), "resolved pijul state must not be empty");
+    assert!(!hash_value.is_empty(), "resolved pijul tree hash must not be empty");
+    Ok((
+        LockedKind::Pijul {
+            repository: repository.to_string(),
+            selector: selector.clone(),
+            state: identity.state,
+            change: identity.change,
+        },
+        locked_hash(input, hash_value),
+    ))
+}
+
+fn resolve_fossil_input(
+    input: &ManifestInput,
+    resolver: &dyn RefreshResolver,
+    repository: &str,
+    selector: &FossilSelector,
+) -> Result<ResolvedLockKind, Error> {
+    let identity = require_resolution(
+        resolver.resolve_fossil_identity(repository, selector)?,
+        &format!("fossil identity for {}", input.name),
+    )?;
+    require_nonempty_identity(&input.name, IdentityFieldLabel::FossilCheckin, &identity.checkin)?;
+    let hash_value = require_string_resolution(
+        resolver.hash_fossil_checkout(repository, &identity, &input.hash.algo)?,
+        &format!("fossil tree hash for {}", input.name),
+    )?;
+    assert!(!identity.checkin.is_empty(), "resolved fossil check-in must not be empty");
+    assert!(!hash_value.is_empty(), "resolved fossil tree hash must not be empty");
+    Ok((
+        LockedKind::Fossil {
+            repository: repository.to_string(),
+            selector: selector.clone(),
+            checkin: identity.checkin,
+        },
+        locked_hash(input, hash_value),
+    ))
+}
+
+fn locked_hash(input: &ManifestInput, value: String) -> LockedHash {
+    LockedHash {
+        algo: input.hash.algo.clone(),
+        value,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IdentityFieldLabel {
+    DarcsContext,
+    DarcsWeakHash,
+    PijulState,
+    FossilCheckin,
+}
+
+impl IdentityFieldLabel {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::DarcsContext => "darcs context",
+            Self::DarcsWeakHash => "darcs weak hash",
+            Self::PijulState => "pijul state",
+            Self::FossilCheckin => "fossil check-in",
+        }
+    }
+}
+
 fn require_darcs_identity(input_name: &str, identity: &ResolvedDarcsIdentity) -> Result<(), Error> {
     if identity.context.as_deref().unwrap_or("").is_empty() && identity.weak_hash.as_deref().unwrap_or("").is_empty() {
         return Err(Error::Manifest(format!(
             "input '{input_name}' darcs resolver did not prove context or weak-hash identity"
         )));
     }
-    require_optional_nonempty_identity(input_name, "darcs context", &identity.context)?;
-    require_optional_nonempty_identity(input_name, "darcs weak hash", &identity.weak_hash)
+    require_optional_nonempty_identity(input_name, IdentityFieldLabel::DarcsContext, &identity.context)?;
+    require_optional_nonempty_identity(input_name, IdentityFieldLabel::DarcsWeakHash, &identity.weak_hash)
 }
 
-fn require_optional_nonempty_identity(input_name: &str, label: &str, value: &Option<String>) -> Result<(), Error> {
+fn require_optional_nonempty_identity(
+    input_name: &str,
+    label: IdentityFieldLabel,
+    value: &Option<String>,
+) -> Result<(), Error> {
     if matches!(value, Some(text) if text.is_empty()) {
-        return Err(Error::Manifest(format!("input '{input_name}' resolver returned empty {label}")));
+        return Err(Error::Manifest(format!("input '{input_name}' resolver returned empty {}", label.as_str())));
     }
     Ok(())
 }
 
-fn require_nonempty_identity(input_name: &str, label: &str, value: &str) -> Result<(), Error> {
+fn require_nonempty_identity(input_name: &str, label: IdentityFieldLabel, value: &str) -> Result<(), Error> {
     if value.is_empty() {
-        return Err(Error::Manifest(format!("input '{input_name}' resolver returned empty {label}")));
+        return Err(Error::Manifest(format!("input '{input_name}' resolver returned empty {}", label.as_str())));
     }
     Ok(())
 }
@@ -931,6 +1039,46 @@ mod tests {
         ) -> Result<Option<String>, Error> {
             Ok(self.fossil_hash.clone())
         }
+    }
+
+    #[test]
+    fn failed_freshness_observation_maps_empty_resolver_diagnostic() {
+        let input = ManifestInput {
+            name: "pkg".into(),
+            kind: InputKind::File {
+                url: "https://example.com/pkg".into(),
+            },
+            hash: HashSpec::default(),
+            frozen: false,
+            mirrors: vec![],
+            patches: vec![],
+            fetch_policy: crunch_project_core::InputFetchPolicy::GenerationMaterial,
+            retention: None,
+            freshness: Some(crunch_project_core::FreshnessProbe::LocalFile { path: "VERSION".into() }),
+            trust: None,
+        };
+
+        let observation = failed_freshness_observation(&input, String::new());
+
+        assert_eq!(observation.input_name, "pkg");
+        assert_eq!(observation.status, crunch_project_core::FreshnessObservationStatus::Failed);
+        assert!(observation.diagnostic.contains("without a diagnostic"));
+    }
+
+    #[test]
+    fn identity_validation_preserves_missing_and_empty_behavior() {
+        let missing = None;
+        let empty = Some(String::new());
+
+        assert!(require_optional_nonempty_identity("pkg", IdentityFieldLabel::DarcsContext, &missing).is_ok());
+        assert!(matches!(
+            require_optional_nonempty_identity("pkg", IdentityFieldLabel::DarcsWeakHash, &empty),
+            Err(Error::Manifest(message)) if message == "input 'pkg' resolver returned empty darcs weak hash"
+        ));
+        assert!(matches!(
+            require_nonempty_identity("pkg", IdentityFieldLabel::FossilCheckin, ""),
+            Err(Error::Manifest(message)) if message == "input 'pkg' resolver returned empty fossil check-in"
+        ));
     }
 
     #[test]
