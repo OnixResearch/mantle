@@ -22,6 +22,14 @@ pub const MAX_REBUILD_TEXT_BYTES: u32 = 16_384;
 const MIN_GENUINE_REBUILD_RUN_COUNT: u32 = 2;
 const ROOT_IDENTITIES_PER_RUN: u32 = 2;
 
+const _: () = {
+    assert!(MAX_REBUILD_INPUT_COUNT > 0, "rebuild input limit must be positive");
+    assert!(
+        MAX_REBUILD_RUN_COUNT >= MIN_GENUINE_REBUILD_RUN_COUNT,
+        "rebuild run limit must admit the minimum genuine rebuild run count"
+    );
+};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RebuildContentKind {
@@ -414,8 +422,6 @@ fn validate_descriptor_header(descriptor: &ContentBoundRebuildDescriptor) -> Res
 }
 
 fn validate_descriptor_evidence(descriptor: &ContentBoundRebuildDescriptor) -> Result<(), ReleaseEvidenceError> {
-    debug_assert!(MAX_REBUILD_INPUT_COUNT > 0);
-    debug_assert!(MAX_REBUILD_RUN_COUNT >= MIN_GENUINE_REBUILD_RUN_COUNT);
     validate_identity_vec(&descriptor.target_artifacts, MAX_REBUILD_INPUT_COUNT, "target artifacts")?;
     validate_identity(&descriptor.recipe, RebuildInputRole::Recipe, "recipe")?;
     validate_identity(&descriptor.executable, RebuildInputRole::Executable, "executable")?;
@@ -489,7 +495,7 @@ fn validate_identity_shape(identity: &RebuildContentIdentity, field: &str) -> Re
         value: &identity.name,
         name: &field_name,
     })?;
-    validate_blake3_hex(&identity.digest_blake3, &format!("content-bound rebuild descriptor {field} digest"))?;
+    validate_blake3_hex(&identity.digest_blake3, format!("content-bound rebuild descriptor {field} digest"))?;
     if identity.kind == RebuildContentKind::Symlink || identity.kind == RebuildContentKind::Other {
         return Err(validation_error(format!(
             "content-bound rebuild descriptor {field} uses unsupported content kind {:?}",
@@ -583,7 +589,6 @@ fn policy_key(role: RebuildInputRole, digest: &str) -> String {
 fn classify_candidate(candidate: &RebuildInputObservation, classification: &mut CandidateClassification<'_>) {
     let subject = candidate.identity.name.as_str();
     let blocker_count_before = classification.blockers.len();
-    debug_assert!(MAX_REBUILD_INPUT_COUNT > 0);
     debug_assert!(!REBUILD_AUTHORITY_PLAN_SCHEMA.is_empty());
     if !candidate.identity.role.is_declared_rebuild_input() {
         let code = role_blocker_code(candidate.identity.role);

@@ -22,6 +22,12 @@ const WINDOWS_PATH_SEPARATOR: char = '\\';
 const NUL_CHARACTER: char = '\0';
 const WINDOW_PAIR_COUNT: usize = 2;
 
+const _: () = {
+    assert!(RELEASE_PUBLICATION_ARTIFACTS_COUNT_MAX > 0, "publication artifact limit must be positive");
+    assert!(RELEASE_PUBLICATION_TEXT_BYTES_MAX > 0, "publication text limit must be positive");
+    assert!(RELEASE_PUBLICATION_PATH_COMPONENTS_MAX > 0, "publication path component limit must be positive");
+};
+
 struct CountValidation<'a> {
     actual_count: usize,
     maximum_count: u32,
@@ -170,7 +176,6 @@ fn validate_plan_request(request: &PublicationPlanRequest) -> Vec<PublicationPla
     for fact in &request.policy {
         validate_policy_fact(fact, &mut blockers);
     }
-    debug_assert!(RELEASE_PUBLICATION_ARTIFACTS_COUNT_MAX > 0);
     debug_assert!(blockers.iter().all(|blocker| !blocker.message.is_empty()));
     blockers
 }
@@ -259,8 +264,8 @@ fn validate_artifact(artifact: &PublicationArtifactInput, blockers: &mut Vec<Pub
 }
 
 fn validate_artifact_path(path: &str, blockers: &mut Vec<PublicationPlanBlocker>) {
-    debug_assert!(RELEASE_PUBLICATION_TEXT_BYTES_MAX > 0);
-    debug_assert!(RELEASE_PUBLICATION_PATH_COMPONENTS_MAX > 0);
+    let blocker_count_before = blockers.len();
+    debug_assert!(blockers.iter().all(|blocker| !blocker.message.is_empty()));
     if path == MANIFEST_RELATIVE_PATH {
         blockers.push(blocker(
             PublicationPlanBlockerKind::ManifestPathReserved,
@@ -299,10 +304,10 @@ fn validate_artifact_path(path: &str, blockers: &mut Vec<PublicationPlanBlocker>
             ),
         ));
     }
+    debug_assert!(blockers.len() >= blocker_count_before);
 }
 
 fn validate_policy_fact(fact: &PublicationPolicyFact, blockers: &mut Vec<PublicationPlanBlocker>) {
-    debug_assert!(RELEASE_PUBLICATION_TEXT_BYTES_MAX > 0);
     debug_assert!(!RELEASE_PUBLICATION_PLAN_SCHEMA.is_empty());
     if fact.name.trim().is_empty() {
         blockers.push(blocker(

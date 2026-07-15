@@ -434,8 +434,8 @@ fn validate_no_overclaim(value: &str) -> Result<(), ReleaseEvidenceError> {
 }
 
 fn validate_identity_pair(identity: IdentityPair<'_>) -> Result<(), ReleaseEvidenceError> {
-    validate_blake3_hex(identity.actual, &format!("{}_digest_blake3", identity.field_name))?;
-    validate_blake3_hex(identity.expected, &format!("{}_expected_digest_blake3", identity.field_name))?;
+    validate_blake3_hex(identity.actual, format!("{}_digest_blake3", identity.field_name))?;
+    validate_blake3_hex(identity.expected, format!("{}_expected_digest_blake3", identity.field_name))?;
     if identity.actual != identity.expected {
         return Err(validation_error(format!(
             "ast-grep {}_digest_blake3 is stale or does not match {}_expected_digest_blake3",

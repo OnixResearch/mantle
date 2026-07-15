@@ -245,7 +245,7 @@ fn validate_entry_path(path: &str, limits: TreeCopyLimits) -> Result<Vec<String>
         return Err(path_blocker(
             TreeCopyBlockerKind::PathTooLong,
             path,
-            &format!("tree copy path exceeds {} bytes: {path}", limits.path_bytes_max),
+            format!("tree copy path exceeds {} bytes: {path}", limits.path_bytes_max),
         ));
     }
     let components = validate_entry_components(path)?;
@@ -255,7 +255,7 @@ fn validate_entry_path(path: &str, limits: TreeCopyLimits) -> Result<Vec<String>
         return Err(path_blocker(
             TreeCopyBlockerKind::PathTooDeep,
             path,
-            &format!("tree copy path depth {depth_count} exceeds {}: {path}", limits.depth_count_max),
+            format!("tree copy path depth {depth_count} exceeds {}: {path}", limits.depth_count_max),
         ));
     }
     Ok(components)
@@ -367,13 +367,13 @@ fn validate_parent_shapes(entries: &[ValidatedObservation], blockers: &mut Vec<T
             None => blockers.push(path_blocker(
                 TreeCopyBlockerKind::MissingParent,
                 &entry.observation.relative_path,
-                &format!("tree copy path {} has missing parent {parent_path}", entry.observation.relative_path),
+                format!("tree copy path {} has missing parent {parent_path}", entry.observation.relative_path),
             )),
             Some(TreeEntryKind::Directory) => {}
             Some(_) => blockers.push(path_blocker(
                 TreeCopyBlockerKind::ParentNotDirectory,
                 &entry.observation.relative_path,
-                &format!("tree copy path {} has non-directory parent {parent_path}", entry.observation.relative_path),
+                format!("tree copy path {} has non-directory parent {parent_path}", entry.observation.relative_path),
             )),
         }
     }
@@ -477,7 +477,7 @@ fn normalize_symlink_target(input: SymlinkTargetInput<'_>) -> Result<String, Tre
         return Err(target_blocker(
             TreeCopyBlockerKind::SymlinkTargetTooDeep,
             input.link_path,
-            &format!("tree copy symlink target depth {depth_count} exceeds {}", input.limits.depth_count_max),
+            format!("tree copy symlink target depth {depth_count} exceeds {}", input.limits.depth_count_max),
         ));
     }
     Ok(resolved.join("/"))
@@ -495,7 +495,7 @@ fn validate_symlink_target_length(input: SymlinkTargetInput<'_>) -> Result<(), T
         return Err(target_blocker(
             TreeCopyBlockerKind::SymlinkTargetTooLong,
             input.link_path,
-            &format!("tree copy symlink target exceeds {} bytes", input.limits.path_bytes_max),
+            format!("tree copy symlink target exceeds {} bytes", input.limits.path_bytes_max),
         ));
     }
     Ok(())
@@ -545,7 +545,7 @@ fn validate_normalized_symlink_target(
         blockers.push(target_blocker(
             TreeCopyBlockerKind::SymlinkTargetMissing,
             input.link_path,
-            &format!("tree copy symlink target does not name a planned entry: {}", input.target_path),
+            format!("tree copy symlink target does not name a planned entry: {}", input.target_path),
         ));
     }
 }

@@ -13,6 +13,14 @@ const MAX_CANCELLATION_OUTCOME_COUNT: usize = 64;
 const MAX_CLAIM_TEXT_COUNT: usize = 32;
 const PROOF_AUTHORITY_NON_CLAIM_FRAGMENT: &str = "not proof authority";
 
+const _: () = {
+    assert!(MAX_RELEASE_PROFILE_COUNT > 0, "release profile limit must be positive");
+    assert!(
+        MAX_WORKER_RECEIPT_COUNT >= MAX_REFERENCE_COUNT,
+        "worker receipt limit must cover the reference inventory"
+    );
+};
+
 struct CountBound<'a> {
     field_name: &'a str,
     actual_count: usize,
@@ -169,7 +177,6 @@ fn validate_fixture_collection_bounds(fixture: &OxideReleaseWorkerFixture, diagn
         validate_bounded_count(bound, diagnostics);
     }
     debug_assert!(diagnostics.len() >= diagnostic_count_before);
-    debug_assert!(MAX_WORKER_RECEIPT_COUNT >= MAX_REFERENCE_COUNT);
 }
 
 fn validate_bounded_count(bound: CountBound<'_>, diagnostics: &mut Vec<String>) {
@@ -256,7 +263,6 @@ fn validate_release_profiles(profiles: &[ReleaseRepositoryProfile], diagnostics:
 
 fn validate_release_target(target: &ReleaseTargetProfile, diagnostics: &mut Vec<String>) {
     let diagnostic_count_before = diagnostics.len();
-    debug_assert!(MAX_RELEASE_PROFILE_COUNT > 0);
     push_required_texts(
         &[
             DiagnosticText {

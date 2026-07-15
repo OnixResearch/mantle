@@ -61,6 +61,11 @@ const CLASSIFICATION_BASE_REASON_CAPACITY_COUNT: usize = 8;
 const GENUINE_REBUILD_BASE_REASON_CAPACITY_COUNT: usize = 8;
 const GENUINE_REBUILD_REASONS_PER_RUN_COUNT: usize = 5;
 
+const _: () = assert!(
+    GENUINE_REBUILD_REASONS_PER_RUN_COUNT > 0,
+    "genuine rebuild reason capacity per run must be positive"
+);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum BuildEffect {
@@ -811,7 +816,6 @@ struct GenuineRebuildEvidence<'a> {
 
 fn genuine_rebuild_admission_reasons(receipt: &DeterministicBuildProofReceipt) -> Vec<String> {
     debug_assert!(!DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.is_empty());
-    debug_assert!(GENUINE_REBUILD_REASONS_PER_RUN_COUNT > 0);
     let Some(descriptor) = &receipt.rebuild_descriptor else {
         return vec!["missing genuine rebuild evidence: content-bound rebuild descriptor".to_string()];
     };

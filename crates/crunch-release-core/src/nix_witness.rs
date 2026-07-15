@@ -15,6 +15,11 @@ pub const NIX_CROSS_BUILDER_WITNESS_RECEIPT_SCHEMA: &str = "mantle-nix-cross-bui
 pub const NIX_CROSS_BUILDER_WITNESS_PROOF_CLASS: &str = "nix-cross-builder-witness";
 const MAX_WITNESS_ARTIFACT_DIGESTS_COUNT: u32 = 32;
 
+const _: () = assert!(
+    MAX_WITNESS_ARTIFACT_DIGESTS_COUNT > 0,
+    "cross-builder witness artifact digest limit must be positive"
+);
+
 struct TextField<'a> {
     value: &'a str,
     name: &'a str,
@@ -242,7 +247,6 @@ fn validate_artifact_digest_set(
     artifacts: &[NixCrossBuilderArtifactDigest],
     field_name: &str,
 ) -> Result<(), ReleaseEvidenceError> {
-    debug_assert!(MAX_WITNESS_ARTIFACT_DIGESTS_COUNT > 0);
     debug_assert!(!field_name.is_empty());
     let count = u32_count(artifacts.len(), &format!("nix cross-builder witness {field_name} count overflowed u32"))?;
     if count == 0 {
@@ -272,7 +276,7 @@ fn validate_artifact_digest_set(
                 artifact.name
             )));
         }
-        validate_blake3_hex(&artifact.digest_blake3, &format!("{field_name}.{}.digest_blake3", artifact.name))?;
+        validate_blake3_hex(&artifact.digest_blake3, format!("{field_name}.{}.digest_blake3", artifact.name))?;
     }
     debug_assert_eq!(seen_names.len(), artifacts.len());
     debug_assert!(!artifacts.is_empty());
@@ -281,7 +285,6 @@ fn validate_artifact_digest_set(
 
 fn validate_build_policy(policy: &NixCrossBuilderBuildPolicy) -> Result<(), ReleaseEvidenceError> {
     debug_assert!(!NIX_CROSS_BUILDER_WITNESS_RECEIPT_SCHEMA.is_empty());
-    debug_assert!(MAX_WITNESS_ARTIFACT_DIGESTS_COUNT > 0);
     validate_non_empty(TextField {
         value: &policy.rust_toolchain_identity,
         name: "build_policy.rust_toolchain_identity",

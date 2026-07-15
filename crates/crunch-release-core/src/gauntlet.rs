@@ -499,7 +499,7 @@ pub fn evaluate_adversarial_hermeticity_gauntlet(
     cells: Vec<HermeticityCellEvidence>,
 ) -> Result<AdversarialHermeticityGauntletReport, ReleaseEvidenceError> {
     validate_blake3_hex(&source_digest_blake3, DIGEST_FIELD_SOURCE)?;
-    validate_non_empty_string(&run_id, "hermeticity run_id")?;
+    validate_non_empty_string(&run_id, FieldName("hermeticity run_id"))?;
     let profile = canonicalize_hermeticity_profile(profile)?;
     let cell_count: usize = cells.len();
     validate_report_cell_count(cell_count, "hermeticity cells")?;
@@ -547,7 +547,7 @@ pub fn canonical_adversarial_hermeticity_gauntlet_report(
     canonicalize_blockers(&mut report.blockers)?;
     canonicalize_string_vec(&mut report.non_claims, "hermeticity non_claims")?;
     validate_report_cell_count(report.cells.len(), "hermeticity cells")?;
-    validate_non_empty_string(&report.run_id, "hermeticity run_id")?;
+    validate_non_empty_string(&report.run_id, FieldName("hermeticity run_id"))?;
     Ok(report)
 }
 
@@ -570,7 +570,7 @@ pub fn evaluate_bootstrap_pressure_gauntlet(
     cells: Vec<BootstrapPressureCellEvidence>,
 ) -> Result<BootstrapPressureGauntletReport, ReleaseEvidenceError> {
     validate_blake3_hex(&source_digest_blake3, DIGEST_FIELD_SOURCE)?;
-    validate_non_empty_string(&run_id, "bootstrap pressure run_id")?;
+    validate_non_empty_string(&run_id, FieldName("bootstrap pressure run_id"))?;
     let cell_count: usize = cells.len();
     validate_report_cell_count(cell_count, "bootstrap pressure cells")?;
     debug_assert!(cell_count > 0, "validated gauntlet contains a cell");
@@ -606,7 +606,7 @@ pub fn canonical_bootstrap_pressure_gauntlet_report(
         field_name: "bootstrap pressure report schema",
     })?;
     report.schema = BOOTSTRAP_PRESSURE_GAUNTLET_REPORT_SCHEMA.to_string();
-    validate_non_empty_string(&report.run_id, "bootstrap pressure run_id")?;
+    validate_non_empty_string(&report.run_id, FieldName("bootstrap pressure run_id"))?;
     validate_blake3_hex(&report.source_digest_blake3, DIGEST_FIELD_SOURCE)?;
     report.cells.sort_by(|left, right| left.cell_id.cmp(&right.cell_id));
     for cell in &mut report.cells {
@@ -635,7 +635,7 @@ pub fn evaluate_substitution_cache_attack_gauntlet(
     policy_digest_blake3: String,
     cases: Vec<SubstitutionAttackCaseEvidence>,
 ) -> Result<SubstitutionCacheAttackGauntletReport, ReleaseEvidenceError> {
-    validate_non_empty_string(&run_id, "substitution attack run_id")?;
+    validate_non_empty_string(&run_id, FieldName("substitution attack run_id"))?;
     validate_blake3_hex(&policy_digest_blake3, DIGEST_FIELD_POLICY)?;
     let case_count: usize = cases.len();
     validate_report_cell_count(case_count, "substitution attack cases")?;
@@ -672,7 +672,7 @@ pub fn canonical_substitution_cache_attack_gauntlet_report(
         field_name: "substitution cache attack report schema",
     })?;
     report.schema = SUBSTITUTION_CACHE_ATTACK_GAUNTLET_REPORT_SCHEMA.to_string();
-    validate_non_empty_string(&report.run_id, "substitution attack run_id")?;
+    validate_non_empty_string(&report.run_id, FieldName("substitution attack run_id"))?;
     validate_blake3_hex(&report.policy_digest_blake3, DIGEST_FIELD_POLICY)?;
     report.cases.sort_by(|left, right| left.case_id.cmp(&right.case_id));
     for case in &mut report.cases {
@@ -703,7 +703,7 @@ pub fn evaluate_nix_mantle_comparison_corpus(
     policy_digest_blake3: String,
     cases: Vec<NixMantleComparisonCaseEvidence>,
 ) -> Result<NixMantleComparisonCorpusReport, ReleaseEvidenceError> {
-    validate_non_empty_string(&run_id, "Nix Mantle comparison run_id")?;
+    validate_non_empty_string(&run_id, FieldName("Nix Mantle comparison run_id"))?;
     validate_blake3_hex(&policy_digest_blake3, DIGEST_FIELD_POLICY)?;
     let case_count: usize = cases.len();
     validate_report_cell_count(case_count, "Nix Mantle comparison cases")?;
@@ -740,7 +740,7 @@ pub fn canonical_nix_mantle_comparison_corpus_report(
         field_name: "Nix Mantle comparison report schema",
     })?;
     report.schema = NIX_MANTLE_COMPARISON_CORPUS_REPORT_SCHEMA.to_string();
-    validate_non_empty_string(&report.run_id, "Nix Mantle comparison run_id")?;
+    validate_non_empty_string(&report.run_id, FieldName("Nix Mantle comparison run_id"))?;
     validate_blake3_hex(&report.policy_digest_blake3, DIGEST_FIELD_POLICY)?;
     report.cases.sort_by(|left, right| left.case_id.cmp(&right.case_id));
     for case in &mut report.cases {
@@ -895,7 +895,7 @@ pub fn continuous_reproducibility_gauntlet_report_digest_blake3(
 }
 
 fn evaluate_hermeticity_cell(mut cell: HermeticityCellEvidence) -> Result<HermeticityCellReport, ReleaseEvidenceError> {
-    validate_non_empty_string(&cell.cell_id, "hermeticity cell_id")?;
+    validate_non_empty_string(&cell.cell_id, FieldName("hermeticity cell_id"))?;
     canonicalize_violations(&mut cell.observed_violations)?;
     canonicalize_string_vec(&mut cell.audit_events, "hermeticity audit_events")?;
     canonicalize_string_vec(&mut cell.unsupported_axes, "hermeticity unsupported_axes")?;
@@ -936,8 +936,8 @@ fn hermeticity_cell_blockers(cell: &HermeticityCellEvidence) -> Result<Vec<Gaunt
         .ok_or_else(|| validation_error("hermeticity blocker capacity overflowed usize".to_string()))?;
     let mut blockers = Vec::with_capacity(blocker_count_max);
     for violation in &cell.observed_violations {
-        validate_non_empty_string(&violation.class, "hermeticity violation class")?;
-        validate_non_empty_string(&violation.detail, "hermeticity violation detail")?;
+        validate_non_empty_string(&violation.class, FieldName("hermeticity violation class"))?;
+        validate_non_empty_string(&violation.detail, FieldName("hermeticity violation detail"))?;
         blockers.push(blocker(GauntletBlockerInput {
             evidence_class: "hermeticity-violation",
             message: &violation.detail,
@@ -1005,9 +1005,9 @@ fn evaluate_bootstrap_pressure_cell(
 }
 
 fn validate_bootstrap_pressure_cell(cell: &mut BootstrapPressureCellEvidence) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&cell.cell_id, "bootstrap pressure cell_id")?;
-    validate_non_empty_string(&cell.profile, "bootstrap pressure profile")?;
-    validate_non_empty_string(&cell.host_tool_policy, "bootstrap pressure host_tool_policy")?;
+    validate_non_empty_string(&cell.cell_id, FieldName("bootstrap pressure cell_id"))?;
+    validate_non_empty_string(&cell.profile, FieldName("bootstrap pressure profile"))?;
+    validate_non_empty_string(&cell.host_tool_policy, FieldName("bootstrap pressure host_tool_policy"))?;
     validate_optional_digest(&cell.seed_inventory_digest_blake3, "seed_inventory_digest_blake3")?;
     validate_optional_digest(&cell.protected_exec_audit_digest_blake3, "protected_exec_audit_digest_blake3")?;
     canonicalize_digest_vec(&mut cell.stage_output_digest_set_blake3, "stage_output_digest_set_blake3")?;
@@ -1151,7 +1151,7 @@ fn evaluate_substitution_attack_case(
 }
 
 fn validate_substitution_attack_case(case: &mut SubstitutionAttackCaseEvidence) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&case.case_id, "substitution attack case_id")?;
+    validate_non_empty_string(&case.case_id, FieldName("substitution attack case_id"))?;
     validate_optional_string(&case.trusted_key_material, "trusted_key_material")?;
     validate_optional_string(&case.fallback_mode, "fallback_mode")?;
     validate_optional_digest(&case.expected_digest_blake3, "expected_digest_blake3")?;
@@ -1262,9 +1262,9 @@ fn evaluate_nix_mantle_comparison_case(
 }
 
 fn validate_nix_mantle_case(case: &mut NixMantleComparisonCaseEvidence) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&case.case_id, "comparison case_id")?;
-    validate_non_empty_string(&case.build_recipe_identity, "build_recipe_identity")?;
-    validate_non_empty_string(&case.normalization_policy, "normalization_policy")?;
+    validate_non_empty_string(&case.case_id, FieldName("comparison case_id"))?;
+    validate_non_empty_string(&case.build_recipe_identity, FieldName("build_recipe_identity"))?;
+    validate_non_empty_string(&case.normalization_policy, FieldName("normalization_policy"))?;
     canonicalize_string_vec(&mut case.source_refs, "source_refs")?;
     canonicalize_string_vec(&mut case.toolchain_refs, "toolchain_refs")?;
     canonicalize_string_vec(&mut case.dependency_refs, "dependency_refs")?;
@@ -1362,9 +1362,9 @@ fn evaluate_repeatability_cell(
 }
 
 fn validate_repeatability_cell(cell: &mut RepeatabilityMatrixCellEvidence) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&cell.cell_id, "repeatability cell_id")?;
-    validate_non_empty_string(&cell.cache_mode, "repeatability cache_mode")?;
-    validate_non_empty_string(&cell.store_isolation_mode, "repeatability store_isolation_mode")?;
+    validate_non_empty_string(&cell.cell_id, FieldName("repeatability cell_id"))?;
+    validate_non_empty_string(&cell.cache_mode, FieldName("repeatability cache_mode"))?;
+    validate_non_empty_string(&cell.store_isolation_mode, FieldName("repeatability store_isolation_mode"))?;
     validate_optional_string(&cell.output_root_identity, "output_root_identity")?;
     validate_optional_string(&cell.store_root_identity, "store_root_identity")?;
     canonicalize_digest_vec(&mut cell.expected_output_digest_set_blake3, "expected_output_digest_set_blake3")?;
@@ -1771,7 +1771,7 @@ fn push_missing_axis(missing: &mut Vec<String>, axis: &str, values: &[String]) {
 }
 
 fn canonicalize_hermeticity_cell_report(cell: &mut HermeticityCellReport) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&cell.cell_id, "hermeticity cell report cell_id")?;
+    validate_non_empty_string(&cell.cell_id, FieldName("hermeticity cell report cell_id"))?;
     validate_optional_digest(&cell.output_digest_blake3, "hermeticity cell output_digest_blake3")?;
     canonicalize_blockers(&mut cell.blockers)?;
     canonicalize_string_vec(&mut cell.non_claims, "hermeticity cell non_claims")?;
@@ -1781,9 +1781,9 @@ fn canonicalize_hermeticity_cell_report(cell: &mut HermeticityCellReport) -> Res
 fn canonicalize_bootstrap_pressure_cell_report(
     cell: &mut BootstrapPressureCellReport,
 ) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&cell.cell_id, "bootstrap pressure cell_id")?;
-    validate_non_empty_string(&cell.profile, "bootstrap pressure profile")?;
-    validate_non_empty_string(&cell.host_tool_policy, "bootstrap pressure host_tool_policy")?;
+    validate_non_empty_string(&cell.cell_id, FieldName("bootstrap pressure cell_id"))?;
+    validate_non_empty_string(&cell.profile, FieldName("bootstrap pressure profile"))?;
+    validate_non_empty_string(&cell.host_tool_policy, FieldName("bootstrap pressure host_tool_policy"))?;
     validate_optional_digest(&cell.seed_inventory_digest_blake3, "seed_inventory_digest_blake3")?;
     validate_optional_digest(&cell.protected_exec_audit_digest_blake3, "protected_exec_audit_digest_blake3")?;
     canonicalize_digest_vec(&mut cell.stage_output_digest_set_blake3, "stage_output_digest_set_blake3")?;
@@ -1798,7 +1798,7 @@ fn canonicalize_bootstrap_pressure_cell_report(
 }
 
 fn canonicalize_substitution_case_report(case: &mut SubstitutionAttackCaseReport) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&case.case_id, "substitution attack case_id")?;
+    validate_non_empty_string(&case.case_id, FieldName("substitution attack case_id"))?;
     validate_optional_string(&case.trusted_key_material, "trusted_key_material")?;
     validate_optional_string(&case.fallback_mode, "fallback_mode")?;
     validate_optional_digest(&case.expected_digest_blake3, "expected_digest_blake3")?;
@@ -1810,9 +1810,9 @@ fn canonicalize_substitution_case_report(case: &mut SubstitutionAttackCaseReport
 }
 
 fn canonicalize_nix_mantle_case_report(case: &mut NixMantleComparisonCaseReport) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&case.case_id, "comparison case_id")?;
-    validate_non_empty_string(&case.build_recipe_identity, "build_recipe_identity")?;
-    validate_non_empty_string(&case.normalization_policy, "normalization_policy")?;
+    validate_non_empty_string(&case.case_id, FieldName("comparison case_id"))?;
+    validate_non_empty_string(&case.build_recipe_identity, FieldName("build_recipe_identity"))?;
+    validate_non_empty_string(&case.normalization_policy, FieldName("normalization_policy"))?;
     canonicalize_string_vec(&mut case.source_refs, "source_refs")?;
     canonicalize_string_vec(&mut case.toolchain_refs, "toolchain_refs")?;
     canonicalize_string_vec(&mut case.dependency_refs, "dependency_refs")?;
@@ -1828,7 +1828,7 @@ fn canonicalize_nix_mantle_case_report(case: &mut NixMantleComparisonCaseReport)
 fn canonicalize_repeatability_profile(
     mut profile: RepeatabilityMatrixProfile,
 ) -> Result<RepeatabilityMatrixProfile, ReleaseEvidenceError> {
-    validate_non_empty_string(&profile.release_id, "repeatability release_id")?;
+    validate_non_empty_string(&profile.release_id, FieldName("repeatability release_id"))?;
     validate_blake3_hex(&profile.matrix_profile_digest_blake3, "matrix_profile_digest_blake3")?;
     if profile.run_count < MIN_REPEATABILITY_RUN_COUNT {
         return Err(validation_error(format!(
@@ -1849,9 +1849,9 @@ fn canonicalize_repeatability_profile(
 fn canonicalize_repeatability_cell_report(
     cell: &mut RepeatabilityMatrixCellReport,
 ) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&cell.cell_id, "repeatability cell_id")?;
-    validate_non_empty_string(&cell.cache_mode, "repeatability cache_mode")?;
-    validate_non_empty_string(&cell.store_isolation_mode, "repeatability store_isolation_mode")?;
+    validate_non_empty_string(&cell.cell_id, FieldName("repeatability cell_id"))?;
+    validate_non_empty_string(&cell.cache_mode, FieldName("repeatability cache_mode"))?;
+    validate_non_empty_string(&cell.store_isolation_mode, FieldName("repeatability store_isolation_mode"))?;
     validate_optional_string(&cell.output_root_identity, "output_root_identity")?;
     validate_optional_string(&cell.store_root_identity, "store_root_identity")?;
     canonicalize_digest_vec(&mut cell.expected_output_digest_set_blake3, "expected_output_digest_set_blake3")?;
@@ -1870,11 +1870,11 @@ fn canonicalize_continuous_context(
     validate_blake3_hex(&context.universe_digest_blake3, DIGEST_FIELD_UNIVERSE)?;
     validate_blake3_hex(&context.toolchain_digest_blake3, DIGEST_FIELD_TOOLCHAIN)?;
     validate_blake3_hex(&context.witness_set_digest_blake3, DIGEST_FIELD_WITNESS_SET)?;
-    validate_non_empty_string(&context.host_class, "continuous host_class")?;
+    validate_non_empty_string(&context.host_class, FieldName("continuous host_class"))?;
     context.required_track_schema_versions.sort_by(|left, right| left.track_id.cmp(&right.track_id));
     for version in &context.required_track_schema_versions {
-        validate_non_empty_string(&version.track_id, "required track_id")?;
-        validate_non_empty_string(&version.schema_version, "required track schema_version")?;
+        validate_non_empty_string(&version.track_id, FieldName("required track_id"))?;
+        validate_non_empty_string(&version.schema_version, FieldName("required track schema_version"))?;
     }
     Ok(context)
 }
@@ -1892,21 +1892,21 @@ fn required_track_versions(
 }
 
 fn validate_track_evidence(track: &mut GauntletTrackEvidence) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&track.track_id, "track_id")?;
-    validate_non_empty_string(&track.track_schema_version, "track_schema_version")?;
+    validate_non_empty_string(&track.track_id, FieldName("track_id"))?;
+    validate_non_empty_string(&track.track_schema_version, FieldName("track_schema_version"))?;
     validate_blake3_hex(&track.report_digest_blake3, DIGEST_FIELD_REPORT)?;
     validate_blake3_hex(&track.source_digest_blake3, DIGEST_FIELD_SOURCE)?;
     validate_blake3_hex(&track.policy_digest_blake3, DIGEST_FIELD_POLICY)?;
     validate_blake3_hex(&track.universe_digest_blake3, DIGEST_FIELD_UNIVERSE)?;
     validate_blake3_hex(&track.toolchain_digest_blake3, DIGEST_FIELD_TOOLCHAIN)?;
     validate_blake3_hex(&track.witness_set_digest_blake3, DIGEST_FIELD_WITNESS_SET)?;
-    validate_non_empty_string(&track.host_class, "track host_class")?;
+    validate_non_empty_string(&track.host_class, FieldName("track host_class"))?;
     track.runs.sort_by(|left, right| left.run_id.cmp(&right.run_id));
     Ok(())
 }
 
 fn validate_track_run(run: &TrackRunEvidence) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&run.run_id, "track run_id")?;
+    validate_non_empty_string(&run.run_id, FieldName("track run_id"))?;
     validate_string_slice(&run.blockers, "track run blockers")?;
     validate_string_slice(&run.next_actions, "track run next_actions")?;
     Ok(())
@@ -1926,19 +1926,19 @@ fn push_run_blockers(run: &TrackRunEvidence, blockers: &mut Vec<GauntletBlocker>
 }
 
 fn canonicalize_track_report(track: &mut TrackAggregateReport) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&track.track_id, "track report track_id")?;
-    validate_non_empty_string(&track.track_schema_version, "track report schema_version")?;
+    validate_non_empty_string(&track.track_id, FieldName("track report track_id"))?;
+    validate_non_empty_string(&track.track_schema_version, FieldName("track report schema_version"))?;
     validate_blake3_hex(&track.report_digest_blake3, DIGEST_FIELD_REPORT)?;
-    validate_non_empty_string(&track.first_run_id, "track first_run_id")?;
-    validate_non_empty_string(&track.last_run_id, "track last_run_id")?;
+    validate_non_empty_string(&track.first_run_id, FieldName("track first_run_id"))?;
+    validate_non_empty_string(&track.last_run_id, FieldName("track last_run_id"))?;
     canonicalize_blockers(&mut track.blockers)?;
     canonicalize_string_vec(&mut track.next_actions, "track next_actions")?;
     Ok(())
 }
 
 fn validate_observed_exec(observed: &ProtectedExecObservation) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&observed.path, "observed exec path")?;
-    validate_non_empty_string(&observed.executable_class, "observed exec class")?;
+    validate_non_empty_string(&observed.path, FieldName("observed exec path"))?;
+    validate_non_empty_string(&observed.executable_class, FieldName("observed exec class"))?;
     validate_blake3_hex(&observed.digest_blake3, "observed exec digest_blake3")?;
     Ok(())
 }
@@ -1953,8 +1953,8 @@ fn profile_requires_protected_exec(profile: &str) -> bool {
 fn canonicalize_violations(violations: &mut [HermeticityViolation]) -> Result<(), ReleaseEvidenceError> {
     validate_collection_limit(violations.len(), MAX_GAUNTLET_BLOCKER_COUNT, "hermeticity violations")?;
     for violation in violations.iter() {
-        validate_non_empty_string(&violation.class, "hermeticity violation class")?;
-        validate_non_empty_string(&violation.detail, "hermeticity violation detail")?;
+        validate_non_empty_string(&violation.class, FieldName("hermeticity violation class"))?;
+        validate_non_empty_string(&violation.detail, FieldName("hermeticity violation detail"))?;
         validate_optional_string(&violation.axis, "hermeticity violation axis")?;
     }
     violations.sort_by(|left, right| {
@@ -2014,7 +2014,7 @@ fn canonicalize_string_vec(values: &mut Vec<String>, field_name: &str) -> Result
 fn validate_string_slice(values: &[String], field_name: &str) -> Result<(), ReleaseEvidenceError> {
     validate_collection_limit(values.len(), MAX_GAUNTLET_STRING_SET_COUNT, field_name)?;
     for value in values {
-        validate_non_empty_string(value, field_name)?;
+        validate_non_empty_string(value, FieldName(field_name))?;
     }
     Ok(())
 }
@@ -2052,9 +2052,9 @@ fn canonicalize_blockers(blockers: &mut Vec<GauntletBlocker>) -> Result<(), Rele
 }
 
 fn validate_blocker(blocker: &GauntletBlocker) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&blocker.evidence_class, "blocker.evidence_class")?;
-    validate_non_empty_string(&blocker.message, "blocker.message")?;
-    validate_non_empty_string(&blocker.next_action, "blocker.next_action")?;
+    validate_non_empty_string(&blocker.evidence_class, FieldName("blocker.evidence_class"))?;
+    validate_non_empty_string(&blocker.message, FieldName("blocker.message"))?;
+    validate_non_empty_string(&blocker.next_action, FieldName("blocker.next_action"))?;
     validate_optional_string(&blocker.axis, "blocker.axis")?;
     validate_optional_digest(&blocker.expected_digest_blake3, "blocker.expected_digest_blake3")?;
     validate_optional_digest(&blocker.observed_digest_blake3, "blocker.observed_digest_blake3")?;
@@ -2070,18 +2070,20 @@ fn validate_optional_digest(value: &Option<String>, field_name: &str) -> Result<
 
 fn validate_optional_string(value: &Option<String>, field_name: &str) -> Result<(), ReleaseEvidenceError> {
     if let Some(value) = value {
-        validate_non_empty_string(value, field_name)?;
+        validate_non_empty_string(value, FieldName(field_name))?;
     }
     Ok(())
 }
 
-fn validate_non_empty_string(value: &String, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+struct FieldName<'a>(&'a str);
+
+fn validate_non_empty_string(value: &str, field_name: FieldName<'_>) -> Result<(), ReleaseEvidenceError> {
     if value.is_empty() {
-        return Err(validation_error(format!("{field_name} must not be empty")));
+        return Err(validation_error(format!("{} must not be empty", field_name.0)));
     }
-    let byte_count = u32_count(value.len(), &format!("{field_name} length overflowed u32"))?;
+    let byte_count = u32_count(value.len(), &format!("{} length overflowed u32", field_name.0))?;
     if byte_count > MAX_GAUNTLET_STRING_BYTES_COUNT {
-        return Err(validation_error(format!("{field_name} exceeds {MAX_GAUNTLET_STRING_BYTES_COUNT} bytes")));
+        return Err(validation_error(format!("{} exceeds {MAX_GAUNTLET_STRING_BYTES_COUNT} bytes", field_name.0)));
     }
     Ok(())
 }

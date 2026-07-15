@@ -27,6 +27,8 @@ pub const MAX_TRELLIS_PROOF_DIAGNOSTICS_COUNT: u32 = 32;
 const MAX_TRELLIS_PROOF_DIAGNOSTICS_COUNT_USIZE: usize = 32;
 const DUPLICATE_DETECTION_COUNT: usize = 2;
 
+const _: () = assert!(MAX_TRELLIS_PROOF_DIAGNOSTICS_COUNT > 0, "Trellis proof diagnostic limit must be positive");
+
 struct StringComparison<'a> {
     actual: &'a str,
     expected: &'a str,
@@ -70,7 +72,6 @@ pub fn evaluate_trellis_proof_release_evidence(
     let is_required = mode == TRELLIS_PROOF_MODE_REQUIRED;
     let mut diagnostics = validate_mode(mode);
     debug_assert!(!TRELLIS_PROOF_RELEASE_BOUNDARY.is_empty());
-    debug_assert!(MAX_TRELLIS_PROOF_DIAGNOSTICS_COUNT > 0);
     let matches = matching_profile_bindings(manifest);
     if matches.len() > 1 {
         diagnostics.push("multiple Trellis proof sidecar bindings match the registered profile".to_string());

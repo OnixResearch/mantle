@@ -438,7 +438,7 @@ fn validate_artifact_comparison(artifact: &ReproducibilityArtifactComparison) ->
     }
     validate_blake3_hex(
         &artifact.expected_digest_blake3,
-        &format!("artifacts.{}.expected_digest_blake3", artifact.name),
+        format!("artifacts.{}.expected_digest_blake3", artifact.name),
     )?;
     validate_observed_fields(artifact)?;
     validate_result_consistency(artifact)
@@ -467,7 +467,7 @@ fn validate_observed_fields(artifact: &ReproducibilityArtifactComparison) -> Res
         )));
     }
     if let Some(observed_digest_blake3) = &artifact.observed_digest_blake3 {
-        validate_blake3_hex(observed_digest_blake3, &format!("artifacts.{}.observed_digest_blake3", artifact.name))?;
+        validate_blake3_hex(observed_digest_blake3, format!("artifacts.{}.observed_digest_blake3", artifact.name))?;
     }
     Ok(())
 }

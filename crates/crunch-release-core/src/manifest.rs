@@ -172,7 +172,7 @@ fn validate_bundled_artifact(artifact: &BundledArtifact, field_name: &str) -> Re
     if artifact.size_bytes == 0 {
         return Err(validation_error(format!("release evidence {field_name}.size_bytes must be non-zero")));
     }
-    validate_blake3_hex(&artifact.digest_blake3, &format!("{field_name}.digest_blake3"))?;
+    validate_blake3_hex(&artifact.digest_blake3, format!("{field_name}.digest_blake3"))?;
     Ok(())
 }
 
@@ -1467,8 +1467,8 @@ fn validate_external_evidence_entry(evidence: &ExternalEvidence, field_name: &st
     if evidence.schema.trim().is_empty() {
         return Err(validation_error(format!("release evidence {field_name}.schema must not be empty")));
     }
-    validate_relative_member_path(&evidence.relative_path, &format!("{field_name}.relative_path"))?;
-    validate_blake3_hex(&evidence.digest_blake3, &format!("{field_name}.digest_blake3"))?;
+    validate_relative_member_path(&evidence.relative_path, format!("{field_name}.relative_path"))?;
+    validate_blake3_hex(&evidence.digest_blake3, format!("{field_name}.digest_blake3"))?;
     if evidence.claim_scope.trim().is_empty() {
         return Err(validation_error(format!("release evidence {field_name}.claim_scope must not be empty")));
     }
@@ -1528,8 +1528,8 @@ fn validate_kani_toolchain_entry(
         value: &evidence.receipt_role,
         field_name: &format!("{field_name}.receipt_role"),
     })?;
-    validate_relative_member_path(&evidence.receipt_relative_path, &format!("{field_name}.receipt_relative_path"))?;
-    validate_blake3_hex(&evidence.receipt_digest_blake3, &format!("{field_name}.receipt_digest_blake3"))?;
+    validate_relative_member_path(&evidence.receipt_relative_path, format!("{field_name}.receipt_relative_path"))?;
+    validate_blake3_hex(&evidence.receipt_digest_blake3, format!("{field_name}.receipt_digest_blake3"))?;
     validate_non_empty_string(DiagnosticField {
         value: &evidence.kani_version,
         field_name: &format!("{field_name}.kani_version"),
@@ -1547,10 +1547,10 @@ fn validate_kani_toolchain_entry(
         value: &evidence.invocation_wrapper,
         field_name: &format!("{field_name}.invocation_wrapper"),
     })?;
-    validate_blake3_hex(&evidence.closure_identity_blake3, &format!("{field_name}.closure_identity_blake3"))?;
+    validate_blake3_hex(&evidence.closure_identity_blake3, format!("{field_name}.closure_identity_blake3"))?;
     validate_blake3_hex(
         &evidence.expected_closure_identity_blake3,
-        &format!("{field_name}.expected_closure_identity_blake3"),
+        format!("{field_name}.expected_closure_identity_blake3"),
     )?;
     if evidence.closure_identity_blake3 != evidence.expected_closure_identity_blake3 {
         return Err(validation_error(format!(
@@ -2346,7 +2346,7 @@ fn validate_hashed_path(hashed: &SelfHostingProofHashedPath, field_name: &str) -
             "full proof artifact required: {field_name}.size_bytes must be non-zero"
         )));
     }
-    validate_blake3_hex(&hashed.digest_blake3, &format!("{field_name}.digest_blake3"))
+    validate_blake3_hex(&hashed.digest_blake3, format!("{field_name}.digest_blake3"))
 }
 
 fn validate_stage_report(input: StageReportValidation<'_>) -> Result<(), ReleaseEvidenceError> {
