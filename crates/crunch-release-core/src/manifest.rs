@@ -587,7 +587,7 @@ fn validate_opaque_evidence_sidecar_bindings(manifest: &ReleaseEvidenceManifest)
 }
 
 // Compatibility: downstream callers rely on this stable two-string public selection API.
-#[allow(ambiguous_params)]
+#[allow(tigerstyle::ambiguous_params)]
 pub fn stack_provenance_mode_for_release_profile(
     release_profile: &str,
     requested_mode: &str,
@@ -687,7 +687,7 @@ fn present_stack_provenance_verification(
 }
 
 // Compatibility: downstream callers rely on this stable two-string public selection API.
-#[allow(ambiguous_params)]
+#[allow(tigerstyle::ambiguous_params)]
 pub fn function_address_evidence_mode_for_release_profile(
     release_profile: &str,
     requested_mode: &str,

@@ -186,6 +186,20 @@ impl ToolchainRole {
     // Compatibility name retained because sibling root-package modules still pattern-match this role.
     #[allow(non_upper_case_globals)]
     pub(crate) const CCompiler: Self = Self::Ccompiler;
+
+    fn diagnostic_name(self) -> &'static str {
+        match self {
+            Self::Rustc => "Rustc",
+            Self::Linker => "Linker",
+            Self::Ccompiler => "CCompiler",
+            Self::CxxCompiler => "CxxCompiler",
+            Self::PkgConfig => "PkgConfig",
+            Self::Sysroot => "Sysroot",
+            Self::CrtObject => "CrtObject",
+            Self::RuntimeLibrary => "RuntimeLibrary",
+            Self::NativeHelper => "NativeHelper",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -857,7 +871,11 @@ fn require_observed_input_declared(
     let Some(member) = role_path_match else {
         return Err(error(
             ToolchainClosureErrorKind::HostToolLeakage,
-            format!("host-tool-leakage: {:?} uses undeclared path {}", input.role, input.execution_path),
+            format!(
+                "host-tool-leakage: {} uses undeclared path {}",
+                input.role.diagnostic_name(),
+                input.execution_path
+            ),
         ));
     };
     debug_assert_eq!(member.role, input.role);
@@ -867,7 +885,7 @@ fn require_observed_input_declared(
     {
         return Err(error(
             ToolchainClosureErrorKind::HostToolLeakage,
-            format!("host-tool-leakage: {:?} digest mismatch for {}", input.role, input.execution_path),
+            format!("host-tool-leakage: {} digest mismatch for {}", input.role.diagnostic_name(), input.execution_path),
         ));
     }
     Ok(())

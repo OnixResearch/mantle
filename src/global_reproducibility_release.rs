@@ -1024,15 +1024,15 @@ mod tests {
         write_json(&release_verify_json, &final_verify_json()).unwrap();
         write_json(&witness_dir.join("aspen.json"), &witness_json()).unwrap();
 
-        let output = derive_release_surface_evidence_from_paths(
-            temp.path(),
-            PathBuf::from("universe.json"),
-            PathBuf::from("policy.json"),
-            PathBuf::from("bundle"),
-            PathBuf::from("verification"),
-            PathBuf::from("release-verify.json"),
-            PathBuf::from("out/evidence.json"),
-        )
+        let output = derive_release_surface_evidence_from_paths(ReleaseSurfacePaths {
+            current_dir: temp.path(),
+            universe_path: PathBuf::from("universe.json"),
+            policy_path: PathBuf::from("policy.json"),
+            bundle_dir: PathBuf::from("bundle"),
+            verification_dir: PathBuf::from("verification"),
+            release_verify_json: PathBuf::from("release-verify.json"),
+            evidence_path: PathBuf::from("out/evidence.json"),
+        })
         .unwrap();
 
         assert_eq!(output.evidence.len(), 1);

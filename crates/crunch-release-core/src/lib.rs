@@ -1,4 +1,6 @@
 #![no_std]
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
 extern crate alloc;
 
 fn empty_vec<T>() -> alloc::vec::Vec<T> {

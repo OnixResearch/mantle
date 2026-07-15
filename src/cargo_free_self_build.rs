@@ -4949,7 +4949,7 @@ mod tests {
         let err = enforce_receipt_bound_toolchain(&tools.rustc, &closure, &manifest).unwrap_err();
 
         assert!(err.message().contains("host-tool-leakage"));
-        assert!(err.message().contains("CCompiler"));
+        assert!(err.message().contains("CCompiler"), "unexpected error: {}", err.message());
         assert!(err.message().contains("digest mismatch"));
     }
 

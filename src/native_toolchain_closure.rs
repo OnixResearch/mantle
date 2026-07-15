@@ -857,14 +857,14 @@ mod tests {
             layout: NativeRootLayout::SourceRootMusl,
         };
 
-        let candidates = collect_native_closure_candidates(
-            &rust_provider,
-            &source_root,
-            &source_root,
-            &rust_identity,
-            &source_root_identity,
-            &source_root_identity,
-        )
+        let candidates = collect_native_closure_candidates(NativeClosureRoots {
+            rust_provider: &rust_provider,
+            host_root: &source_root,
+            target_root: &source_root,
+            rust_identity: &rust_identity,
+            host_identity: &source_root_identity,
+            target_identity: &source_root_identity,
+        })
         .unwrap();
         let materialized =
             crate::source_toolchain_closure::materialize_source_built_native_closure(&candidates).unwrap();

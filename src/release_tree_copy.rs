@@ -1130,14 +1130,14 @@ mod tests {
         assert!(!destination.exists());
 
         let bounded_source = temp.path().join("bounded-source");
-        write_file(&bounded_source.join("first"), FILE_BYTES);
-        write_file(&bounded_source.join("second"), FILE_BYTES);
+        write_file(&bounded_source.join("nested/second"), FILE_BYTES);
         let entry_limits = TreeCopyLimits {
             entries_count_max: SMALL_ENTRY_LIMIT,
             ..TreeCopyLimits::RELEASE_BUNDLE
         };
         let entry_result = prepare_tree_copy_with_limits(&bounded_source, entry_limits);
-        assert!(entry_result.unwrap_err().to_string().contains("observation count exceeds"));
+        let entry_error = entry_result.unwrap_err();
+        assert!(entry_error.to_string().contains("observation count exceeds"), "unexpected error: {entry_error}");
 
         let depth_source = temp.path().join("depth-source");
         write_file(&depth_source.join("nested/file"), FILE_BYTES);
