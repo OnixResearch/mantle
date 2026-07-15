@@ -207,6 +207,8 @@ pub struct StrongReusePlan {
 
 pub fn canonical_action_result(input: ActionResultRecordInput) -> Result<ActionResultRecord, String> {
     let normalized = normalize_record_input(input);
+    assert!(is_strictly_sorted(&normalized.outputs), "normalized outputs must be sorted and unique");
+    assert!(is_strictly_sorted(&normalized.non_claims), "normalized non-claims must be sorted and unique");
     validate_record_input(&normalized)?;
     let result_ref = digest_ref(ACTION_RESULT_REF_PREFIX, RECORD_DOMAIN, &normalized)?;
     let record = ActionResultRecord {
@@ -249,9 +251,15 @@ pub fn canonical_action_result_index(
     action_ref: String,
     result_refs: Vec<String>,
 ) -> Result<ActionResultIndex, String> {
-    validate_typed_ref("action-ref", &action_ref, ACTION_REF_PREFIX)?;
+    validate_typed_ref(TypedRefValidation {
+        field: "action-ref",
+        value: &action_ref,
+        prefix: ACTION_REF_PREFIX,
+    })?;
     let result_refs = sorted_unique_strings(result_refs);
     validate_index_result_refs(&result_refs)?;
+    assert!(result_refs.len() <= MAX_ACTION_RESULT_CANDIDATES, "canonical result refs must remain bounded");
+    assert!(is_strictly_sorted(&result_refs), "canonical result refs must be sorted and unique");
     let hashable = IndexHashable {
         schema: ACTION_RESULT_INDEX_SCHEMA,
         action_ref: &action_ref,
@@ -272,11 +280,17 @@ pub fn validate_action_result_index(index: &ActionResultIndex) -> Result<(), Str
     if index.schema != ACTION_RESULT_INDEX_SCHEMA {
         return Err("action-result-index-schema-unsupported".to_string());
     }
-    validate_typed_ref("action-ref", &index.action_ref, ACTION_REF_PREFIX)?;
+    assert_eq!(index.schema, ACTION_RESULT_INDEX_SCHEMA, "validated index schema must match");
+    validate_typed_ref(TypedRefValidation {
+        field: "action-ref",
+        value: &index.action_ref,
+        prefix: ACTION_REF_PREFIX,
+    })?;
     validate_index_result_refs(&index.result_refs)?;
     if index.result_refs != sorted_unique_strings(index.result_refs.clone()) {
         return Err("action-result-index-not-canonical".to_string());
     }
+    assert!(is_strictly_sorted(&index.result_refs), "validated result refs must be sorted and unique");
     let hashable = IndexHashable {
         schema: ACTION_RESULT_INDEX_SCHEMA,
         action_ref: &index.action_ref,
@@ -330,13 +344,22 @@ pub fn plan_strong_reuse(
     let mut admitted_by_output = BTreeMap::<String, Vec<String>>::new();
     for candidate in unique.into_values() {
         let decision = evaluate_candidate(&request, &candidate);
-        if decision.admitted {
-            let digest = decision.output_set_digest_blake3.clone().expect("admitted candidate must have output digest");
+        if let Some(digest) = admitted_output_digest(&decision)? {
             admitted_by_output.entry(digest).or_default().push(decision.result_ref.clone());
         }
         decisions.push(decision);
     }
     finish_plan(decisions, admitted_by_output)
+}
+
+fn admitted_output_digest(decision: &CandidateDecision) -> Result<Option<String>, String> {
+    if !decision.admitted {
+        return Ok(None);
+    }
+    let Some(digest) = decision.output_set_digest_blake3.clone() else {
+        return Err("action-result-admitted-candidate-digest-missing".to_string());
+    };
+    Ok(Some(digest))
 }
 
 fn finish_plan(
@@ -347,6 +370,11 @@ fn finish_plan(
     if decisions.len() > MAX_ACTION_RESULT_DIAGNOSTICS {
         return Err("action-result-diagnostic-limit-exceeded".to_string());
     }
+    assert!(decisions.len() <= MAX_ACTION_RESULT_DIAGNOSTICS, "validated decision count must remain bounded");
+    assert!(
+        admitted_by_output.len() <= decisions.len(),
+        "admitted output groups cannot exceed candidate decisions"
+    );
     let admitted_output_set_digests_blake3 = admitted_by_output.keys().cloned().collect::<Vec<_>>();
     let has_conflict = admitted_by_output.len() > 1;
     let selected_result_ref = if has_conflict {
@@ -412,6 +440,14 @@ fn validate_candidate_trust(
     facts: &CandidateAdmissionFacts,
     diagnostics: &mut Vec<String>,
 ) {
+    assert_eq!(
+        request.policy.schema, ACTION_RESULT_POLICY_SCHEMA,
+        "candidate trust requires a validated policy schema"
+    );
+    assert!(
+        request.policy.allowed_source_classes.first().is_some(),
+        "candidate trust requires an allowed source class"
+    );
     let record = &signed.record;
     if !request.policy.trusted_producers.is_empty()
         && !request.policy.trusted_producers.contains(&record.producer_identity)
@@ -421,11 +457,11 @@ fn validate_candidate_trust(
     if request.policy.require_record_signature && signed.record_signatures.is_empty() {
         diagnostics.push("action-result-record-signature-missing".to_string());
     }
-    let signer_matches = facts
+    let has_trusted_record_signer = facts
         .verified_record_signers
         .iter()
         .any(|signer| request.policy.trusted_record_signers.contains(signer));
-    if request.policy.require_record_signature && !signer_matches {
+    if request.policy.require_record_signature && !has_trusted_record_signer {
         diagnostics.push("action-result-record-signature-untrusted".to_string());
     }
     if !request.policy.allowed_sandbox_policy_refs.is_empty()
@@ -469,47 +505,92 @@ fn output_set_digest(record: &ActionResultRecord) -> Result<String, String> {
 }
 
 fn validate_record_input(input: &ActionResultRecordInput) -> Result<(), String> {
-    validate_typed_ref("action-ref", &input.action_ref, ACTION_REF_PREFIX)?;
+    validate_typed_ref(TypedRefValidation {
+        field: "action-ref",
+        value: &input.action_ref,
+        prefix: ACTION_REF_PREFIX,
+    })?;
     if input.outputs.is_empty() || input.outputs.len() > MAX_ACTION_RESULT_OUTPUTS {
         return Err("action-result-output-count-invalid".to_string());
     }
+    assert!(input.outputs.first().is_some(), "validated action result must declare an output");
+    assert!(
+        input.outputs.len() <= MAX_ACTION_RESULT_OUTPUTS,
+        "validated action result outputs must remain bounded"
+    );
     if input.outputs != sorted_unique_structs(input.outputs.clone()) {
         return Err("action-result-outputs-not-canonical".to_string());
     }
     for output in &input.outputs {
         validate_output(output)?;
     }
-    validate_typed_ref("action-receipt-ref", &input.action_receipt_ref, ACTION_RECEIPT_REF_PREFIX)?;
+    validate_typed_ref(TypedRefValidation {
+        field: "action-receipt-ref",
+        value: &input.action_receipt_ref,
+        prefix: ACTION_RECEIPT_REF_PREFIX,
+    })?;
     validate_bounded_refs(
         "reference-scan-ref",
         &input.reference_scan_refs,
         REFERENCE_SCAN_REF_PREFIX,
         MAX_ACTION_RESULT_METADATA_REFS,
     )?;
-    validate_typed_ref("sandbox-policy-ref", &input.sandbox_policy_ref, SANDBOX_POLICY_REF_PREFIX)?;
-    validate_typed_ref("network-policy-ref", &input.network_policy_ref, NETWORK_POLICY_REF_PREFIX)?;
-    validate_identifier("producer-identity", &input.producer_identity)?;
-    validate_typed_ref("producer-policy-ref", &input.producer_policy_ref, PRODUCER_POLICY_REF_PREFIX)?;
+    validate_typed_ref(TypedRefValidation {
+        field: "sandbox-policy-ref",
+        value: &input.sandbox_policy_ref,
+        prefix: SANDBOX_POLICY_REF_PREFIX,
+    })?;
+    validate_typed_ref(TypedRefValidation {
+        field: "network-policy-ref",
+        value: &input.network_policy_ref,
+        prefix: NETWORK_POLICY_REF_PREFIX,
+    })?;
+    validate_identifier(IdentifierValidation {
+        field: "producer-identity",
+        value: &input.producer_identity,
+    })?;
+    validate_typed_ref(TypedRefValidation {
+        field: "producer-policy-ref",
+        value: &input.producer_policy_ref,
+        prefix: PRODUCER_POLICY_REF_PREFIX,
+    })?;
     validate_bounded_refs(
         "signature-ref",
         &input.signature_refs,
         SIGNATURE_REF_PREFIX,
         MAX_ACTION_RESULT_SIGNATURE_REFS,
     )?;
-    validate_typed_ref("publication-policy-ref", &input.publication_policy_ref, PUBLICATION_POLICY_REF_PREFIX)?;
+    validate_typed_ref(TypedRefValidation {
+        field: "publication-policy-ref",
+        value: &input.publication_policy_ref,
+        prefix: PUBLICATION_POLICY_REF_PREFIX,
+    })?;
     validate_non_claims(&input.non_claims)
 }
 
 fn validate_output(output: &ActionResultOutput) -> Result<(), String> {
-    validate_identifier("output-name", &output.name)?;
-    validate_typed_ref("object-ref", &output.object_ref, OBJECT_REF_PREFIX)?;
-    validate_typed_ref("path-info-ref", &output.path_info_ref, PATH_INFO_REF_PREFIX)?;
+    validate_identifier(IdentifierValidation {
+        field: "output-name",
+        value: &output.name,
+    })?;
+    validate_typed_ref(TypedRefValidation {
+        field: "object-ref",
+        value: &output.object_ref,
+        prefix: OBJECT_REF_PREFIX,
+    })?;
+    validate_typed_ref(TypedRefValidation {
+        field: "path-info-ref",
+        value: &output.path_info_ref,
+        prefix: PATH_INFO_REF_PREFIX,
+    })?;
     if !output.store_path.starts_with('/') || output.store_path.len() > MAX_ACTION_RESULT_PATH_BYTES {
         return Err("action-result-store-path-invalid".to_string());
     }
     if output.store_path.split('/').any(|segment| segment == "..") {
         return Err("action-result-store-path-traversal".to_string());
     }
+    assert!(output.store_path.starts_with('/'), "validated store path must remain absolute");
+    assert!(output.store_path.len() <= MAX_ACTION_RESULT_PATH_BYTES, "validated store path must remain bounded");
     Ok(())
 }
 
@@ -532,7 +613,10 @@ fn validate_policy(policy: &ActionResultTrustPolicy) -> Result<(), String> {
     if policy.schema != ACTION_RESULT_POLICY_SCHEMA {
         return Err("action-result-policy-schema-unsupported".to_string());
     }
-    validate_identifier("policy-id", &policy.policy_id)?;
+    validate_identifier(IdentifierValidation {
+        field: "policy-id",
+        value: &policy.policy_id,
+    })?;
     if policy.allowed_source_classes.is_empty() {
         return Err("action-result-policy-source-classes-empty".to_string());
     }
@@ -546,7 +630,11 @@ fn validate_policy(policy: &ActionResultTrustPolicy) -> Result<(), String> {
 }
 
 fn validate_request(request: &StrongReuseRequest, candidate_count: usize) -> Result<(), String> {
-    validate_typed_ref("action-ref", &request.action_ref, ACTION_REF_PREFIX)?;
+    validate_typed_ref(TypedRefValidation {
+        field: "action-ref",
+        value: &request.action_ref,
+        prefix: ACTION_REF_PREFIX,
+    })?;
     if request.output_names.is_empty() || request.output_names.len() > MAX_ACTION_RESULT_OUTPUTS {
         return Err("action-result-request-output-count-invalid".to_string());
     }
@@ -564,7 +652,11 @@ fn validate_index_result_refs(refs: &[String]) -> Result<(), String> {
         return Err("result-ref-list-not-canonical".to_string());
     }
     for value in refs {
-        validate_typed_ref("result-ref", value, ACTION_RESULT_REF_PREFIX)?;
+        validate_typed_ref(TypedRefValidation {
+            field: "result-ref",
+            value,
+            prefix: ACTION_RESULT_REF_PREFIX,
+        })?;
     }
     Ok(())
 }
@@ -577,30 +669,41 @@ fn validate_bounded_refs(field: &str, refs: &[String], prefix: &str, count_max: 
         return Err(format!("{field}-list-not-canonical"));
     }
     for value in refs {
-        validate_typed_ref(field, value, prefix)?;
+        validate_typed_ref(TypedRefValidation { field, value, prefix })?;
     }
     Ok(())
 }
 
-fn validate_typed_ref(field: &str, value: &str, prefix: &str) -> Result<(), String> {
-    let Some(digest) = value.strip_prefix(prefix) else {
-        return Err(format!("{field}-prefix-invalid"));
+struct TypedRefValidation<'a> {
+    field: &'a str,
+    value: &'a str,
+    prefix: &'a str,
+}
+
+fn validate_typed_ref(input: TypedRefValidation<'_>) -> Result<(), String> {
+    let Some(digest) = input.value.strip_prefix(input.prefix) else {
+        return Err(format!("{}-prefix-invalid", input.field));
     };
     if digest.len() != BLAKE3_HEX_CHARS {
-        return Err(format!("{field}-digest-length-invalid"));
+        return Err(format!("{}-digest-length-invalid", input.field));
     }
     if !digest.chars().all(|character| character.is_ascii_digit() || ('a'..='f').contains(&character)) {
-        return Err(format!("{field}-digest-encoding-invalid"));
+        return Err(format!("{}-digest-encoding-invalid", input.field));
     }
     Ok(())
 }
 
-fn validate_identifier(field: &str, value: &str) -> Result<(), String> {
-    if value.is_empty() || value.len() > MAX_ACTION_RESULT_ID_BYTES {
-        return Err(format!("{field}-invalid"));
+struct IdentifierValidation<'a> {
+    field: &'a str,
+    value: &'a str,
+}
+
+fn validate_identifier(input: IdentifierValidation<'_>) -> Result<(), String> {
+    if input.value.is_empty() || input.value.len() > MAX_ACTION_RESULT_ID_BYTES {
+        return Err(format!("{}-invalid", input.field));
     }
-    if value.chars().any(char::is_control) {
-        return Err(format!("{field}-control-character"));
+    if input.value.chars().any(char::is_control) {
+        return Err(format!("{}-control-character", input.field));
     }
     Ok(())
 }
@@ -666,6 +769,10 @@ fn sorted_unique_strings(values: Vec<String>) -> Vec<String> {
 
 fn sorted_unique_structs<T: Ord>(values: Vec<T>) -> Vec<T> {
     values.into_iter().collect::<BTreeSet<_>>().into_iter().collect()
+}
+
+fn is_strictly_sorted<T: Ord>(values: &[T]) -> bool {
+    values.iter().zip(values.iter().skip(1)).all(|(left, right)| left < right)
 }
 
 fn push_error(diagnostics: &mut Vec<String>, result: Result<(), String>) {
@@ -909,5 +1016,28 @@ mod tests {
         assert!(decision.diagnostics.contains(&"action-result-pathinfo-linkage-invalid".to_string()));
         assert!(plan.non_claims.contains(&REQUIRED_NON_CLAIM_CA_MAPPING_NOT_TRUST.to_string()));
         assert!(plan.non_claims.contains(&REQUIRED_NON_CLAIM_INDEX_NOT_TRUST.to_string()));
+    }
+
+    #[test]
+    fn admitted_output_digest_is_present_or_fails_closed_without_panicking() {
+        let candidate = DiscoveredActionResultCandidate {
+            signed_record: signed_record("digest-invariant"),
+            facts: admitted_facts(),
+        };
+        let plan = plan_strong_reuse(request(), vec![candidate]).unwrap();
+        let admitted = plan.candidate_decisions[0].clone();
+        let expected_digest = admitted.output_set_digest_blake3.clone();
+
+        assert_eq!(admitted_output_digest(&admitted), Ok(expected_digest));
+
+        let mut missing = admitted;
+        missing.output_set_digest_blake3 = None;
+        assert_eq!(
+            admitted_output_digest(&missing),
+            Err("action-result-admitted-candidate-digest-missing".to_string())
+        );
+
+        missing.admitted = false;
+        assert_eq!(admitted_output_digest(&missing), Ok(None));
     }
 }
