@@ -166,7 +166,7 @@ pub struct OpaqueEvidenceSidecarBinding {
     pub schema: String,
     pub evidence_kind: String,
     pub profile_version: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub profile_roles: Option<OpaqueEvidenceProfileRoles>,
     pub canonical_envelope: OpaqueEvidenceCanonicalEnvelopeLink,
     pub upstream_validation: OpaqueEvidenceUpstreamValidationLink,
@@ -209,6 +209,13 @@ struct ExternalArtifactFields<'a> {
 struct ExpectedFunctionAddressArtifact<'a> {
     role: &'a str,
     schema: &'a str,
+}
+
+struct ExpectedArtifactFields<'a> {
+    actual_role: &'a str,
+    actual_schema: &'a str,
+    expected: ExpectedFunctionAddressArtifact<'a>,
+    field_name: &'a str,
 }
 
 struct CollectionCountBounds<'a> {
@@ -456,47 +463,50 @@ fn validate_trellis_proof_profile(binding: &OpaqueEvidenceSidecarBinding, diagno
 }
 
 fn validate_trellis_proof_artifacts(binding: &OpaqueEvidenceSidecarBinding, diagnostics: &mut Vec<String>) {
+    debug_assert!(!KAMACITE_TRELLIS_PROOF_PRESERVES_ROLE.is_empty());
+    debug_assert!(!VALENCE_TRELLIS_PROOF_VALIDATION_ROLE.is_empty());
     validate_expected_artifact(
-        &binding.canonical_envelope.role,
-        &binding.canonical_envelope.schema,
-        KAMACITE_TRELLIS_PROOF_PRESERVES_ROLE,
-        KAMACITE_TRELLIS_PROOF_PRESERVES_SCHEMA,
-        "binding.canonical_envelope",
+        ExpectedArtifactFields {
+            actual_role: &binding.canonical_envelope.role,
+            actual_schema: &binding.canonical_envelope.schema,
+            expected: ExpectedFunctionAddressArtifact {
+                role: KAMACITE_TRELLIS_PROOF_PRESERVES_ROLE,
+                schema: KAMACITE_TRELLIS_PROOF_PRESERVES_SCHEMA,
+            },
+            field_name: "binding.canonical_envelope",
+        },
         diagnostics,
     );
     validate_expected_artifact(
-        &binding.upstream_validation.role,
-        &binding.upstream_validation.schema,
-        VALENCE_TRELLIS_PROOF_VALIDATION_ROLE,
-        VALENCE_TRELLIS_PROOF_VALIDATION_SCHEMA,
-        "binding.upstream_validation",
+        ExpectedArtifactFields {
+            actual_role: &binding.upstream_validation.role,
+            actual_schema: &binding.upstream_validation.schema,
+            expected: ExpectedFunctionAddressArtifact {
+                role: VALENCE_TRELLIS_PROOF_VALIDATION_ROLE,
+                schema: VALENCE_TRELLIS_PROOF_VALIDATION_SCHEMA,
+            },
+            field_name: "binding.upstream_validation",
+        },
         diagnostics,
     );
 }
 
-fn validate_expected_artifact(
-    actual_role: &str,
-    actual_schema: &str,
-    expected_role: &str,
-    expected_schema: &str,
-    field_name: &str,
-    diagnostics: &mut Vec<String>,
-) {
-    debug_assert!(!expected_role.is_empty());
-    debug_assert!(!expected_schema.is_empty());
+fn validate_expected_artifact(fields: ExpectedArtifactFields<'_>, diagnostics: &mut Vec<String>) {
+    debug_assert!(!fields.expected.role.is_empty());
+    debug_assert!(!fields.expected.schema.is_empty());
     push_literal_diagnostic(
         LiteralDiagnosticField {
-            actual: actual_role,
-            expected: expected_role,
-            field_name: &format!("{field_name}.role"),
+            actual: fields.actual_role,
+            expected: fields.expected.role,
+            field_name: &format!("{}.role", fields.field_name),
         },
         diagnostics,
     );
     push_literal_diagnostic(
         LiteralDiagnosticField {
-            actual: actual_schema,
-            expected: expected_schema,
-            field_name: &format!("{field_name}.schema"),
+            actual: fields.actual_schema,
+            expected: fields.expected.schema,
+            field_name: &format!("{}.schema", fields.field_name),
         },
         diagnostics,
     );
@@ -507,20 +517,20 @@ fn validate_trellis_proof_roles(roles: Option<&OpaqueEvidenceProfileRoles>, diag
         diagnostics.push("binding.profile_roles is required for Trellis proof evidence".to_string());
         return;
     };
-    let role_pair_is_supported = matches!(
+    let is_role_pair_recognized = matches!(
         (roles.producer_role.as_str(), roles.validation_role.as_str()),
         (
             TRELLIS_PROOF_KAMACITE_ROLE_RECORDED_ONLY | TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE,
             TRELLIS_PROOF_VALENCE_ROLE_RECORDED_ONLY,
         ) | (TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE, TRELLIS_PROOF_VALENCE_ROLE_PROPERTY,)
     );
-    if !role_pair_is_supported {
+    if !is_role_pair_recognized {
         diagnostics.push(format!(
             "binding.profile_roles pair is unsupported for Trellis proof evidence: producer={}, validation={}",
             roles.producer_role, roles.validation_role
         ));
     }
-    debug_assert!(role_pair_is_supported || !diagnostics.is_empty());
+    debug_assert!(is_role_pair_recognized || !diagnostics.is_empty());
 }
 
 fn validate_trellis_identity_domains(binding: &OpaqueEvidenceSidecarBinding, diagnostics: &mut Vec<String>) {
@@ -556,16 +566,22 @@ fn validate_trellis_proof_projections(
     diagnostics: &mut Vec<String>,
 ) {
     const MAX_TRELLIS_PROOF_PROJECTIONS_COUNT: usize = 1;
+    debug_assert!(!KAMACITE_TRELLIS_PROOF_JSON_PROJECTION_ROLE.is_empty());
+    debug_assert!(!KAMACITE_TRELLIS_PROOF_JSON_PROJECTION_SCHEMA.is_empty());
     if projections.len() > MAX_TRELLIS_PROOF_PROJECTIONS_COUNT {
         diagnostics.push("binding.compatibility_projections permits at most one Trellis JSON projection".to_string());
     }
     for projection in projections {
         validate_expected_artifact(
-            &projection.role,
-            &projection.schema,
-            KAMACITE_TRELLIS_PROOF_JSON_PROJECTION_ROLE,
-            KAMACITE_TRELLIS_PROOF_JSON_PROJECTION_SCHEMA,
-            "binding.compatibility_projections",
+            ExpectedArtifactFields {
+                actual_role: &projection.role,
+                actual_schema: &projection.schema,
+                expected: ExpectedFunctionAddressArtifact {
+                    role: KAMACITE_TRELLIS_PROOF_JSON_PROJECTION_ROLE,
+                    schema: KAMACITE_TRELLIS_PROOF_JSON_PROJECTION_SCHEMA,
+                },
+                field_name: "binding.compatibility_projections",
+            },
             diagnostics,
         );
     }

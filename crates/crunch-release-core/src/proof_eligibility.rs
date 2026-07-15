@@ -65,16 +65,18 @@ pub struct StrictProofEligibilityReport {
     pub diagnostics: Vec<String>,
 }
 
+struct StatusBlocker<'a> {
+    status: ProofFactStatus,
+    class: &'a str,
+    label: &'a str,
+    workflow: &'a str,
+}
+
 pub fn strict_proof_eligibility_gate(input: StrictProofEligibilityInput) -> StrictProofEligibilityReport {
     assert!(!input.workflow.trim().is_empty(), "strict proof workflow must not be empty");
     assert!(!input.requested_claim.trim().is_empty(), "strict proof requested claim must not be empty");
 
     let mode = normalized_mode(&input.hermeticity_mode);
-    let audit_report = crate::proof_audit::strict_proof_audit_gate(
-        input.workflow.clone(),
-        input.requested_claim.clone(),
-        input.hermeticity_audit_events,
-    );
     let mut blocked_classes = Vec::new();
     let mut diagnostics = Vec::new();
 
@@ -85,33 +87,15 @@ pub fn strict_proof_eligibility_gate(input: StrictProofEligibilityInput) -> Stri
             input.workflow, input.requested_claim, mode
         ));
     }
-    push_status_blocker(
-        input.closure_status,
-        CLOSURE_BLOCKER_CLASS,
-        "closure facts",
-        &input.workflow,
-        &mut blocked_classes,
-        &mut diagnostics,
+    append_fact_status_blockers(&input, &mut blocked_classes, &mut diagnostics);
+    let audit_decision = crate::proof_audit::strict_proof_audit_gate(
+        input.workflow.clone(),
+        input.requested_claim.clone(),
+        input.hermeticity_audit_events,
     );
-    push_status_blocker(
-        input.protected_environment_status,
-        PROTECTED_ENV_BLOCKER_CLASS,
-        "protected environment",
-        &input.workflow,
-        &mut blocked_classes,
-        &mut diagnostics,
-    );
-    push_status_blocker(
-        input.host_tool_status,
-        HOST_TOOL_BLOCKER_CLASS,
-        "host tool inventory",
-        &input.workflow,
-        &mut blocked_classes,
-        &mut diagnostics,
-    );
-    if !audit_report.strict_claim_satisfied {
+    if !audit_decision.strict_claim_satisfied {
         blocked_classes.push(AUDIT_BLOCKER_CLASS.to_string());
-        diagnostics.extend(crate::proof_audit::proof_audit_gate_blocking_reasons(audit_report.clone()));
+        diagnostics.extend(crate::proof_audit::proof_audit_gate_blocking_reasons(audit_decision.clone()));
     }
 
     blocked_classes = sorted_unique_strings(blocked_classes);
@@ -129,20 +113,22 @@ pub fn strict_proof_eligibility_gate(input: StrictProofEligibilityInput) -> Stri
         workflow: input.workflow,
         requested_claim: input.requested_claim,
         hermeticity_mode: mode,
-        audit_event_set_digest_blake3: audit_report.event_set_digest_blake3,
-        audit_policy_basis: audit_report.policy_basis,
+        audit_event_set_digest_blake3: audit_decision.event_set_digest_blake3,
+        audit_policy_basis: audit_decision.policy_basis,
         closure_status: input.closure_status,
         protected_environment_status: input.protected_environment_status,
         host_tool_status: input.host_tool_status,
         blocked_classes,
-        blocked_audit_events: audit_report.blocked_events,
-        narrower_claims: audit_report.narrower_claims,
+        blocked_audit_events: audit_decision.blocked_events,
+        narrower_claims: audit_decision.narrower_claims,
         diagnostics,
     }
 }
 
 pub fn proof_eligibility_blocking_reasons(report: StrictProofEligibilityReport) -> Vec<String> {
-    let mut reasons = Vec::new();
+    let blocked_class_count = report.blocked_classes.len();
+    let reason_slots = blocked_class_count.saturating_add(report.diagnostics.len());
+    let mut reasons = Vec::with_capacity(reason_slots);
     for class in report.blocked_classes {
         reasons.push(format!(
             "strict proof eligibility class {class} blocked workflow {} claim {} by {}",
@@ -150,25 +136,53 @@ pub fn proof_eligibility_blocking_reasons(report: StrictProofEligibilityReport) 
         ));
     }
     reasons.extend(report.diagnostics);
+    debug_assert!(reasons.len() <= reason_slots);
+    debug_assert!(reason_slots >= blocked_class_count);
     sorted_unique_strings(reasons)
 }
 
-fn push_status_blocker(
-    status: ProofFactStatus,
-    class: &str,
-    label: &str,
-    workflow: &str,
+fn append_fact_status_blockers(
+    input: &StrictProofEligibilityInput,
     blocked_classes: &mut Vec<String>,
     diagnostics: &mut Vec<String>,
 ) {
-    if status == ProofFactStatus::Satisfied {
+    let blocker_count_before = blocked_classes.len();
+    for blocker in [
+        StatusBlocker {
+            status: input.closure_status,
+            class: CLOSURE_BLOCKER_CLASS,
+            label: "closure facts",
+            workflow: &input.workflow,
+        },
+        StatusBlocker {
+            status: input.protected_environment_status,
+            class: PROTECTED_ENV_BLOCKER_CLASS,
+            label: "protected environment",
+            workflow: &input.workflow,
+        },
+        StatusBlocker {
+            status: input.host_tool_status,
+            class: HOST_TOOL_BLOCKER_CLASS,
+            label: "host tool inventory",
+            workflow: &input.workflow,
+        },
+    ] {
+        push_status_blocker(blocker, blocked_classes, diagnostics);
+    }
+    debug_assert!(blocked_classes.len() >= blocker_count_before);
+    debug_assert!(diagnostics.len() >= blocked_classes.len().saturating_sub(blocker_count_before));
+}
+
+fn push_status_blocker(blocker: StatusBlocker<'_>, blocked_classes: &mut Vec<String>, diagnostics: &mut Vec<String>) {
+    if blocker.status == ProofFactStatus::Satisfied {
         return;
     }
-    blocked_classes.push(class.to_string());
+    blocked_classes.push(blocker.class.to_string());
     diagnostics.push(format!(
-        "strict proof workflow {workflow} has {} status {}; satisfied is required",
-        label,
-        status.as_str()
+        "strict proof workflow {} has {} status {}; satisfied is required",
+        blocker.workflow,
+        blocker.label,
+        blocker.status.as_str()
     ));
 }
 

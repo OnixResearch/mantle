@@ -13,6 +13,24 @@ const MAX_CANCELLATION_OUTCOME_COUNT: usize = 64;
 const MAX_CLAIM_TEXT_COUNT: usize = 32;
 const PROOF_AUTHORITY_NON_CLAIM_FRAGMENT: &str = "not proof authority";
 
+struct CountBound<'a> {
+    field_name: &'a str,
+    actual_count: usize,
+    maximum_count: usize,
+}
+
+#[derive(Clone, Copy)]
+struct DiagnosticText<'a> {
+    value: &'a str,
+    field_name: &'a str,
+}
+
+struct RequiredFragment<'a> {
+    value: &'a str,
+    fragment: &'a str,
+    field_name: &'a str,
+}
+
 const OVERCLAIM_FRAGMENTS: &[&str] = &[
     "proves release correctness",
     "proves reproducibility",
@@ -100,65 +118,130 @@ pub struct OxideReleaseWorkerReport {
 // r[impl mantle.verification_evidence.oxide_release_worker.cancel_safety]
 pub fn validate_oxide_release_worker_fixture(fixture: &OxideReleaseWorkerFixture) -> OxideReleaseWorkerReport {
     let mut diagnostics = Vec::new();
-    validate_bounded_count("references", fixture.references.len(), MAX_REFERENCE_COUNT, &mut diagnostics);
-    validate_bounded_count(
-        "release_profiles",
-        fixture.release_profiles.len(),
-        MAX_RELEASE_PROFILE_COUNT,
-        &mut diagnostics,
-    );
-    validate_bounded_count(
-        "worker_receipts",
-        fixture.worker_receipts.len(),
-        MAX_WORKER_RECEIPT_COUNT,
-        &mut diagnostics,
-    );
-    validate_bounded_count(
-        "cancellation_outcomes",
-        fixture.cancellation_outcomes.len(),
-        MAX_CANCELLATION_OUTCOME_COUNT,
-        &mut diagnostics,
-    );
-    validate_bounded_count("claim_texts", fixture.claim_texts.len(), MAX_CLAIM_TEXT_COUNT, &mut diagnostics);
+    validate_fixture_collection_bounds(fixture, &mut diagnostics);
     validate_reference_inventory(&fixture.references, &mut diagnostics);
     validate_release_profiles(&fixture.release_profiles, &mut diagnostics);
     validate_worker_receipts(&fixture.worker_receipts, &mut diagnostics);
     validate_cancellation_outcomes(&fixture.cancellation_outcomes, &mut diagnostics);
     validate_claim_texts(&fixture.claim_texts, &mut diagnostics);
-    OxideReleaseWorkerReport {
+    let outcome = OxideReleaseWorkerReport {
         accepted: diagnostics.is_empty(),
         diagnostics,
+    };
+    debug_assert_eq!(outcome.accepted, outcome.diagnostics.is_empty());
+    if outcome.accepted {
+        debug_assert!(outcome.diagnostics.is_empty());
+    } else {
+        debug_assert!(!outcome.diagnostics.is_empty());
     }
+    outcome
 }
 
-fn validate_bounded_count(field_name: &str, count: usize, max_count: usize, diagnostics: &mut Vec<String>) {
-    if count > max_count {
-        diagnostics.push(format!("{field_name} exceeds maximum count {max_count}"));
+fn validate_fixture_collection_bounds(fixture: &OxideReleaseWorkerFixture, diagnostics: &mut Vec<String>) {
+    let diagnostic_count_before = diagnostics.len();
+    for bound in [
+        CountBound {
+            field_name: "references",
+            actual_count: fixture.references.len(),
+            maximum_count: MAX_REFERENCE_COUNT,
+        },
+        CountBound {
+            field_name: "release_profiles",
+            actual_count: fixture.release_profiles.len(),
+            maximum_count: MAX_RELEASE_PROFILE_COUNT,
+        },
+        CountBound {
+            field_name: "worker_receipts",
+            actual_count: fixture.worker_receipts.len(),
+            maximum_count: MAX_WORKER_RECEIPT_COUNT,
+        },
+        CountBound {
+            field_name: "cancellation_outcomes",
+            actual_count: fixture.cancellation_outcomes.len(),
+            maximum_count: MAX_CANCELLATION_OUTCOME_COUNT,
+        },
+        CountBound {
+            field_name: "claim_texts",
+            actual_count: fixture.claim_texts.len(),
+            maximum_count: MAX_CLAIM_TEXT_COUNT,
+        },
+    ] {
+        validate_bounded_count(bound, diagnostics);
+    }
+    debug_assert!(diagnostics.len() >= diagnostic_count_before);
+    debug_assert!(MAX_WORKER_RECEIPT_COUNT >= MAX_REFERENCE_COUNT);
+}
+
+fn validate_bounded_count(bound: CountBound<'_>, diagnostics: &mut Vec<String>) {
+    if bound.actual_count > bound.maximum_count {
+        diagnostics.push(format!("{} exceeds maximum count {}", bound.field_name, bound.maximum_count));
     }
 }
 
 fn validate_reference_inventory(references: &[ReferenceIntake], diagnostics: &mut Vec<String>) {
     for reference in references {
-        push_nonempty(&reference.source_repository, "reference.source_repository", diagnostics);
-        push_nonempty(&reference.intended_adaptation, "reference.intended_adaptation", diagnostics);
-        push_nonempty(&reference.license_posture, "reference.license_posture", diagnostics);
-        push_nonempty(&reference.trust_boundary, "reference.trust_boundary", diagnostics);
-        push_required_fragment(
-            &reference.non_claim_boundary,
-            PROOF_AUTHORITY_NON_CLAIM_FRAGMENT,
-            "reference.non_claim_boundary",
+        push_required_texts(
+            &[
+                DiagnosticText {
+                    value: &reference.source_repository,
+                    field_name: "reference.source_repository",
+                },
+                DiagnosticText {
+                    value: &reference.intended_adaptation,
+                    field_name: "reference.intended_adaptation",
+                },
+                DiagnosticText {
+                    value: &reference.license_posture,
+                    field_name: "reference.license_posture",
+                },
+                DiagnosticText {
+                    value: &reference.trust_boundary,
+                    field_name: "reference.trust_boundary",
+                },
+            ],
             diagnostics,
         );
-        push_no_overclaim(&reference.non_claim_boundary, "reference.non_claim_boundary", diagnostics);
+        push_required_fragment(
+            RequiredFragment {
+                value: &reference.non_claim_boundary,
+                fragment: PROOF_AUTHORITY_NON_CLAIM_FRAGMENT,
+                field_name: "reference.non_claim_boundary",
+            },
+            diagnostics,
+        );
+        push_no_overclaim(
+            DiagnosticText {
+                value: &reference.non_claim_boundary,
+                field_name: "reference.non_claim_boundary",
+            },
+            diagnostics,
+        );
     }
 }
 
 fn validate_release_profiles(profiles: &[ReleaseRepositoryProfile], diagnostics: &mut Vec<String>) {
     for profile in profiles {
-        push_nonempty(&profile.profile_id, "release_profile.profile_id", diagnostics);
-        push_nonempty(&profile.signed_metadata_identity, "release_profile.signed_metadata_identity", diagnostics);
-        push_nonempty(&profile.expiration_policy, "release_profile.expiration_policy", diagnostics);
-        push_nonempty(&profile.trust_root, "release_profile.trust_root", diagnostics);
+        push_required_texts(
+            &[
+                DiagnosticText {
+                    value: &profile.profile_id,
+                    field_name: "release_profile.profile_id",
+                },
+                DiagnosticText {
+                    value: &profile.signed_metadata_identity,
+                    field_name: "release_profile.signed_metadata_identity",
+                },
+                DiagnosticText {
+                    value: &profile.expiration_policy,
+                    field_name: "release_profile.expiration_policy",
+                },
+                DiagnosticText {
+                    value: &profile.trust_root,
+                    field_name: "release_profile.trust_root",
+                },
+            ],
+            diagnostics,
+        );
         if profile.metadata_expired {
             diagnostics.push("release_profile metadata is expired".to_string());
         }
@@ -172,9 +255,25 @@ fn validate_release_profiles(profiles: &[ReleaseRepositoryProfile], diagnostics:
 }
 
 fn validate_release_target(target: &ReleaseTargetProfile, diagnostics: &mut Vec<String>) {
-    push_nonempty(&target.artifact_identity, "release_target.artifact_identity", diagnostics);
-    push_nonempty(&target.release_role, "release_target.release_role", diagnostics);
-    push_nonempty(&target.signed_metadata_role, "release_target.signed_metadata_role", diagnostics);
+    let diagnostic_count_before = diagnostics.len();
+    debug_assert!(MAX_RELEASE_PROFILE_COUNT > 0);
+    push_required_texts(
+        &[
+            DiagnosticText {
+                value: &target.artifact_identity,
+                field_name: "release_target.artifact_identity",
+            },
+            DiagnosticText {
+                value: &target.release_role,
+                field_name: "release_target.release_role",
+            },
+            DiagnosticText {
+                value: &target.signed_metadata_role,
+                field_name: "release_target.signed_metadata_role",
+            },
+        ],
+        diagnostics,
+    );
     if target.expected_tags.is_empty() {
         diagnostics.push("release_target expected_tags must not be empty".to_string());
     }
@@ -183,16 +282,40 @@ fn validate_release_target(target: &ReleaseTargetProfile, diagnostics: &mut Vec<
             diagnostics.push(format!("release_target tag mismatch: missing {tag}"));
         }
     }
+    debug_assert!(diagnostics.len() >= diagnostic_count_before);
 }
 
 fn validate_worker_receipts(receipts: &[WorkerReceiptProfile], diagnostics: &mut Vec<String>) {
     for receipt in receipts {
-        push_nonempty(&receipt.job_id, "worker_receipt.job_id", diagnostics);
-        push_nonempty(&receipt.input_identity, "worker_receipt.input_identity", diagnostics);
-        push_nonempty(&receipt.target_profile, "worker_receipt.target_profile", diagnostics);
-        push_nonempty(&receipt.worker_identity, "worker_receipt.worker_identity", diagnostics);
-        push_nonempty(&receipt.log_identity, "worker_receipt.log_identity", diagnostics);
-        push_nonempty(&receipt.replayable_event_id, "worker_receipt.replayable_event_id", diagnostics);
+        push_required_texts(
+            &[
+                DiagnosticText {
+                    value: &receipt.job_id,
+                    field_name: "worker_receipt.job_id",
+                },
+                DiagnosticText {
+                    value: &receipt.input_identity,
+                    field_name: "worker_receipt.input_identity",
+                },
+                DiagnosticText {
+                    value: &receipt.target_profile,
+                    field_name: "worker_receipt.target_profile",
+                },
+                DiagnosticText {
+                    value: &receipt.worker_identity,
+                    field_name: "worker_receipt.worker_identity",
+                },
+                DiagnosticText {
+                    value: &receipt.log_identity,
+                    field_name: "worker_receipt.log_identity",
+                },
+                DiagnosticText {
+                    value: &receipt.replayable_event_id,
+                    field_name: "worker_receipt.replayable_event_id",
+                },
+            ],
+            diagnostics,
+        );
         if receipt.artifact_identities.is_empty() {
             diagnostics.push("worker_receipt artifact_identities must not be empty".to_string());
         }
@@ -224,27 +347,42 @@ fn validate_cancellation_outcomes(outcomes: &[CancellationOutcomeProfile], diagn
 
 fn validate_claim_texts(claim_texts: &[String], diagnostics: &mut Vec<String>) {
     for claim_text in claim_texts {
-        push_no_overclaim(claim_text, "claim_text", diagnostics);
+        push_no_overclaim(
+            DiagnosticText {
+                value: claim_text,
+                field_name: "claim_text",
+            },
+            diagnostics,
+        );
     }
 }
 
-fn push_nonempty(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
-    if value.trim().is_empty() {
-        diagnostics.push(format!("{field_name} must not be empty"));
+fn push_required_texts(fields: &[DiagnosticText<'_>], diagnostics: &mut Vec<String>) {
+    let diagnostic_count_before = diagnostics.len();
+    for field in fields {
+        push_nonempty(*field, diagnostics);
+    }
+    debug_assert!(diagnostics.len() >= diagnostic_count_before);
+    debug_assert!(fields.iter().all(|field| !field.field_name.is_empty()));
+}
+
+fn push_nonempty(field: DiagnosticText<'_>, diagnostics: &mut Vec<String>) {
+    if field.value.trim().is_empty() {
+        diagnostics.push(format!("{} must not be empty", field.field_name));
     }
 }
 
-fn push_required_fragment(value: &str, fragment: &str, field_name: &str, diagnostics: &mut Vec<String>) {
-    if !value.to_ascii_lowercase().contains(fragment) {
-        diagnostics.push(format!("{field_name} missing required fragment {fragment:?}"));
+fn push_required_fragment(field: RequiredFragment<'_>, diagnostics: &mut Vec<String>) {
+    if !field.value.to_ascii_lowercase().contains(field.fragment) {
+        diagnostics.push(format!("{} missing required fragment {:?}", field.field_name, field.fragment));
     }
 }
 
-fn push_no_overclaim(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
-    let lower = value.to_ascii_lowercase();
+fn push_no_overclaim(field: DiagnosticText<'_>, diagnostics: &mut Vec<String>) {
+    let lower = field.value.to_ascii_lowercase();
     for fragment in OVERCLAIM_FRAGMENTS {
         if lower.contains(fragment) {
-            diagnostics.push(format!("{field_name} contains overclaim fragment {fragment:?}"));
+            diagnostics.push(format!("{} contains overclaim fragment {fragment:?}", field.field_name));
         }
     }
 }

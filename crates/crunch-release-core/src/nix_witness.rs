@@ -15,6 +15,11 @@ pub const NIX_CROSS_BUILDER_WITNESS_RECEIPT_SCHEMA: &str = "mantle-nix-cross-bui
 pub const NIX_CROSS_BUILDER_WITNESS_PROOF_CLASS: &str = "nix-cross-builder-witness";
 const MAX_WITNESS_ARTIFACT_DIGESTS_COUNT: u32 = 32;
 
+struct TextField<'a> {
+    value: &'a str,
+    name: &'a str,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum NixCrossBuilderWitnessVerdict {
@@ -34,7 +39,7 @@ pub struct NixCrossBuilderBuildPolicy {
     pub rust_toolchain_identity: String,
     pub target_triple: String,
     pub build_flags: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub linker_identity: Option<String>,
     pub strip_debug_policy: String,
     pub source_date_epoch_policy: String,
@@ -43,7 +48,7 @@ pub struct NixCrossBuilderBuildPolicy {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NixCrossBuilderWitnessReceipt {
     pub schema: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub proof_class: Option<String>,
     pub release_id: String,
     pub selected_artifact_identity: String,
@@ -56,7 +61,7 @@ pub struct NixCrossBuilderWitnessReceipt {
     pub nix_derivation_identity: String,
     pub nix_output_identity: String,
     pub comparison_verdict: NixCrossBuilderWitnessVerdict,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub receipt_blake3: Option<String>,
 }
 
@@ -121,6 +126,8 @@ pub fn canonical_nix_cross_builder_witness_receipt(
             receipt.proof_class, expected_verdict
         )));
     }
+    debug_assert!(receipt.mantle_artifact_digests.windows(2).all(|pair| pair[0].name < pair[1].name));
+    debug_assert!(receipt.nix_artifact_digests.windows(2).all(|pair| pair[0].name < pair[1].name));
     if let Some(provided) = provided_receipt_blake3 {
         let digest = nix_cross_builder_witness_receipt_digest_blake3(receipt.clone())?;
         if provided != digest {
@@ -181,6 +188,8 @@ fn proof_class_for_verdict(verdict: NixCrossBuilderWitnessVerdict) -> Option<Str
 }
 
 fn validate_receipt_header(receipt: &NixCrossBuilderWitnessReceipt) -> Result<(), ReleaseEvidenceError> {
+    debug_assert!(!NIX_CROSS_BUILDER_WITNESS_RECEIPT_SCHEMA.is_empty());
+    debug_assert!(!NIX_CROSS_BUILDER_WITNESS_PROOF_CLASS.is_empty());
     if receipt.schema != NIX_CROSS_BUILDER_WITNESS_RECEIPT_SCHEMA {
         return Err(validation_error(format!(
             "nix cross-builder witness schema must be {NIX_CROSS_BUILDER_WITNESS_RECEIPT_SCHEMA}, got {}",
@@ -195,14 +204,22 @@ fn validate_receipt_header(receipt: &NixCrossBuilderWitnessReceipt) -> Result<()
             proof_class
         )));
     }
-    validate_non_empty(&receipt.release_id, "release_id")?;
-    validate_non_empty(&receipt.selected_artifact_identity, "selected_artifact_identity")?;
+    validate_non_empty(TextField {
+        value: &receipt.release_id,
+        name: "release_id",
+    })?;
+    validate_non_empty(TextField {
+        value: &receipt.selected_artifact_identity,
+        name: "selected_artifact_identity",
+    })?;
     validate_blake3_hex(
         &receipt.mantle_deterministic_proof_receipt_digest_blake3,
         "mantle_deterministic_proof_receipt_digest_blake3",
     )?;
     validate_blake3_hex(&receipt.source_tree_digest_blake3, "source_tree_digest_blake3")?;
     validate_blake3_hex(&receipt.vendor_input_digest_blake3, "vendor_input_digest_blake3")?;
+    debug_assert_eq!(receipt.schema, NIX_CROSS_BUILDER_WITNESS_RECEIPT_SCHEMA);
+    debug_assert!(!receipt.release_id.is_empty());
     Ok(())
 }
 
@@ -210,8 +227,14 @@ fn validate_receipt_evidence(receipt: &NixCrossBuilderWitnessReceipt) -> Result<
     validate_artifact_digest_set(&receipt.mantle_artifact_digests, "mantle_artifact_digests")?;
     validate_artifact_digest_set(&receipt.nix_artifact_digests, "nix_artifact_digests")?;
     validate_build_policy(&receipt.build_policy)?;
-    validate_non_empty(&receipt.nix_derivation_identity, "nix_derivation_identity")?;
-    validate_non_empty(&receipt.nix_output_identity, "nix_output_identity")?;
+    validate_non_empty(TextField {
+        value: &receipt.nix_derivation_identity,
+        name: "nix_derivation_identity",
+    })?;
+    validate_non_empty(TextField {
+        value: &receipt.nix_output_identity,
+        name: "nix_output_identity",
+    })?;
     Ok(())
 }
 
@@ -219,6 +242,8 @@ fn validate_artifact_digest_set(
     artifacts: &[NixCrossBuilderArtifactDigest],
     field_name: &str,
 ) -> Result<(), ReleaseEvidenceError> {
+    debug_assert!(MAX_WITNESS_ARTIFACT_DIGESTS_COUNT > 0);
+    debug_assert!(!field_name.is_empty());
     let count = u32_count(artifacts.len(), &format!("nix cross-builder witness {field_name} count overflowed u32"))?;
     if count == 0 {
         return Err(validation_error(format!("nix cross-builder witness {field_name} must not be empty")));
@@ -230,7 +255,11 @@ fn validate_artifact_digest_set(
     }
     let mut seen_names = alloc::collections::BTreeSet::new();
     for artifact in artifacts {
-        validate_non_empty(&artifact.name, &format!("{field_name}.name"))?;
+        let artifact_name_field = format!("{field_name}.name");
+        validate_non_empty(TextField {
+            value: &artifact.name,
+            name: &artifact_name_field,
+        })?;
         if !seen_names.insert(artifact.name.clone()) {
             return Err(validation_error(format!(
                 "nix cross-builder witness {field_name} contains duplicate artifact {}",
@@ -245,26 +274,50 @@ fn validate_artifact_digest_set(
         }
         validate_blake3_hex(&artifact.digest_blake3, &format!("{field_name}.{}.digest_blake3", artifact.name))?;
     }
+    debug_assert_eq!(seen_names.len(), artifacts.len());
+    debug_assert!(!artifacts.is_empty());
     Ok(())
 }
 
 fn validate_build_policy(policy: &NixCrossBuilderBuildPolicy) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty(&policy.rust_toolchain_identity, "build_policy.rust_toolchain_identity")?;
-    validate_non_empty(&policy.target_triple, "build_policy.target_triple")?;
-    validate_non_empty(&policy.strip_debug_policy, "build_policy.strip_debug_policy")?;
-    validate_non_empty(&policy.source_date_epoch_policy, "build_policy.source_date_epoch_policy")?;
+    debug_assert!(!NIX_CROSS_BUILDER_WITNESS_RECEIPT_SCHEMA.is_empty());
+    debug_assert!(MAX_WITNESS_ARTIFACT_DIGESTS_COUNT > 0);
+    validate_non_empty(TextField {
+        value: &policy.rust_toolchain_identity,
+        name: "build_policy.rust_toolchain_identity",
+    })?;
+    validate_non_empty(TextField {
+        value: &policy.target_triple,
+        name: "build_policy.target_triple",
+    })?;
+    validate_non_empty(TextField {
+        value: &policy.strip_debug_policy,
+        name: "build_policy.strip_debug_policy",
+    })?;
+    validate_non_empty(TextField {
+        value: &policy.source_date_epoch_policy,
+        name: "build_policy.source_date_epoch_policy",
+    })?;
     for flag in &policy.build_flags {
-        validate_non_empty(flag, "build_policy.build_flags[]")?;
+        validate_non_empty(TextField {
+            value: flag,
+            name: "build_policy.build_flags[]",
+        })?;
     }
     if let Some(linker) = &policy.linker_identity {
-        validate_non_empty(linker, "build_policy.linker_identity")?;
+        validate_non_empty(TextField {
+            value: linker,
+            name: "build_policy.linker_identity",
+        })?;
     }
+    debug_assert!(!policy.rust_toolchain_identity.is_empty());
+    debug_assert!(!policy.target_triple.is_empty());
     Ok(())
 }
 
-fn validate_non_empty(value: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
-    if value.trim().is_empty() {
-        return Err(validation_error(format!("nix cross-builder witness {field_name} must not be empty")));
+fn validate_non_empty(field: TextField<'_>) -> Result<(), ReleaseEvidenceError> {
+    if field.value.trim().is_empty() {
+        return Err(validation_error(format!("nix cross-builder witness {} must not be empty", field.name)));
     }
     Ok(())
 }

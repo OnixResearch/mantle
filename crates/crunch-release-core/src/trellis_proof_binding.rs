@@ -24,7 +24,14 @@ pub const TRELLIS_PROOF_RELEASE_BOUNDARY: &str = "Mantle validates bounded Trell
 pub const TRELLIS_PROOF_ACCEPTANCE_AUTHORITY_BLOCKER: &str =
     "required Trellis proof evidence needs the exact Kamacite formal-proof-candidate and Valence property role pair";
 pub const MAX_TRELLIS_PROOF_DIAGNOSTICS_COUNT: u32 = 32;
+const MAX_TRELLIS_PROOF_DIAGNOSTICS_COUNT_USIZE: usize = 32;
 const DUPLICATE_DETECTION_COUNT: usize = 2;
+
+struct StringComparison<'a> {
+    actual: &'a str,
+    expected: &'a str,
+    label: &'a str,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrellisProofArtifactObservations {
@@ -32,9 +39,9 @@ pub struct TrellisProofArtifactObservations {
     pub canonical_envelope_digest_blake3: String,
     pub valence_artifact_digest_blake3: String,
     pub valence_receipt_hash_blake3: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub projection_artifact_digest_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub projection_canonical_envelope_digest_blake3: Option<String>,
 }
 
@@ -44,9 +51,9 @@ pub struct TrellisProofReleaseVerification {
     pub required: bool,
     pub valid: bool,
     pub disposition: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub producer_role: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub validation_role: Option<String>,
     pub boundary: String,
     pub diagnostics: Vec<String>,
@@ -60,16 +67,18 @@ pub fn evaluate_trellis_proof_release_evidence(
     mode: &str,
     observations: Option<&TrellisProofArtifactObservations>,
 ) -> TrellisProofReleaseVerification {
-    let required = mode == TRELLIS_PROOF_MODE_REQUIRED;
+    let is_required = mode == TRELLIS_PROOF_MODE_REQUIRED;
     let mut diagnostics = validate_mode(mode);
+    debug_assert!(!TRELLIS_PROOF_RELEASE_BOUNDARY.is_empty());
+    debug_assert!(MAX_TRELLIS_PROOF_DIAGNOSTICS_COUNT > 0);
     let matches = matching_profile_bindings(manifest);
     if matches.len() > 1 {
         diagnostics.push("multiple Trellis proof sidecar bindings match the registered profile".to_string());
-        return finish_verification(mode, required, None, diagnostics);
+        return finish_verification(mode, is_required, None, diagnostics);
     }
     let Some(binding) = matches.first().copied() else {
-        validate_absent_binding(required, observations, &mut diagnostics);
-        return finish_verification(mode, required, None, diagnostics);
+        validate_absent_binding(is_required, observations, &mut diagnostics);
+        return finish_verification(mode, is_required, None, diagnostics);
     };
     diagnostics.extend(opaque_evidence_sidecar_binding_diagnostics(
         binding,
@@ -78,10 +87,10 @@ pub fn evaluate_trellis_proof_release_evidence(
         &manifest.external_evidence,
     ));
     validate_observations(&binding.binding, observations, &mut diagnostics);
-    if required && !binding_has_accepted_authority(&binding.binding) {
+    if is_required && !binding_has_accepted_authority(&binding.binding) {
         diagnostics.push(TRELLIS_PROOF_ACCEPTANCE_AUTHORITY_BLOCKER.to_string());
     }
-    finish_verification(mode, required, Some(&binding.binding), diagnostics)
+    finish_verification(mode, is_required, Some(&binding.binding), diagnostics)
 }
 
 // r[impl mantle.release_provenance.trellis_proof_sidecars.positive]
@@ -143,6 +152,8 @@ fn validate_observations(
     observations: Option<&TrellisProofArtifactObservations>,
     diagnostics: &mut Vec<String>,
 ) {
+    debug_assert!(!binding.profile_version.is_empty());
+    debug_assert!(!TRELLIS_PROOF_PROFILE_VERSION.is_empty());
     let Some(observed) = observations else {
         diagnostics.push("Trellis proof artifact observations are required for a present binding".to_string());
         return;
@@ -154,15 +165,19 @@ fn validate_observations(
         diagnostics,
     );
     compare_string(
-        &observed.canonical_envelope_digest_blake3,
-        &binding.canonical_envelope.digest_blake3,
-        "canonical Preserves artifact digest",
+        StringComparison {
+            actual: &observed.canonical_envelope_digest_blake3,
+            expected: &binding.canonical_envelope.digest_blake3,
+            label: "canonical Preserves artifact digest",
+        },
         diagnostics,
     );
     compare_string(
-        &observed.valence_artifact_digest_blake3,
-        &binding.upstream_validation.digest_blake3,
-        "Valence artifact digest",
+        StringComparison {
+            actual: &observed.valence_artifact_digest_blake3,
+            expected: &binding.upstream_validation.digest_blake3,
+            label: "Valence artifact digest",
+        },
         diagnostics,
     );
     compare_optional_string(
@@ -206,12 +221,20 @@ fn compare_u64(actual: u64, expected: Option<u64>, label: &str, diagnostics: &mu
     debug_assert!(!label.is_empty());
 }
 
-fn compare_string(actual: &str, expected: &str, label: &str, diagnostics: &mut Vec<String>) {
-    if actual != expected {
-        diagnostics.push(alloc::format!("{label} mismatch: expected {expected}, got {actual}"));
+fn compare_string(comparison: StringComparison<'_>, diagnostics: &mut Vec<String>) {
+    if comparison.actual != comparison.expected {
+        diagnostics.push(alloc::format!(
+            "{} mismatch: expected {}, got {}",
+            comparison.label,
+            comparison.expected,
+            comparison.actual
+        ));
     }
-    debug_assert!(actual == expected || diagnostics.iter().any(|diagnostic| diagnostic.contains(label)));
-    debug_assert!(!label.is_empty());
+    debug_assert!(
+        comparison.actual == comparison.expected
+            || diagnostics.iter().any(|diagnostic| diagnostic.contains(comparison.label))
+    );
+    debug_assert!(!comparison.label.is_empty());
 }
 
 fn compare_optional_string(
@@ -235,16 +258,15 @@ fn finish_verification(
 ) -> TrellisProofReleaseVerification {
     diagnostics.sort();
     diagnostics.dedup();
-    let diagnostics_limit = usize::try_from(MAX_TRELLIS_PROOF_DIAGNOSTICS_COUNT)
-        .expect("Trellis proof diagnostic limit fits the target pointer width");
-    diagnostics.truncate(diagnostics_limit);
-    let valid = diagnostics.is_empty();
+    let diagnostics_max_entries = MAX_TRELLIS_PROOF_DIAGNOSTICS_COUNT_USIZE;
+    diagnostics.truncate(diagnostics_max_entries);
+    let is_valid = diagnostics.is_empty();
     let roles = binding.and_then(|value| value.profile_roles.as_ref());
-    let disposition = if valid && binding.is_none() {
+    let disposition = if is_valid && binding.is_none() {
         TRELLIS_PROOF_DISPOSITION_ABSENT
-    } else if valid && binding.is_some_and(binding_has_accepted_authority) {
+    } else if is_valid && binding.is_some_and(binding_has_accepted_authority) {
         TRELLIS_PROOF_DISPOSITION_ACCEPTED_FORMAL_PROOF
-    } else if valid {
+    } else if is_valid {
         TRELLIS_PROOF_DISPOSITION_RECORDED_ONLY
     } else {
         TRELLIS_PROOF_DISPOSITION_INVALID
@@ -252,7 +274,7 @@ fn finish_verification(
     let verification = TrellisProofReleaseVerification {
         mode: mode.to_string(),
         required,
-        valid,
+        valid: is_valid,
         disposition: disposition.to_string(),
         producer_role: roles.map(|value| value.producer_role.clone()),
         validation_role: roles.map(|value| value.validation_role.clone()),

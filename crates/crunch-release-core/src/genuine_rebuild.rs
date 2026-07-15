@@ -114,7 +114,7 @@ pub struct ContentBoundRebuildDescriptor {
 pub struct RebuildInputObservation {
     pub identity: RebuildContentIdentity,
     pub normalized_path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub filesystem_object_identity: Option<String>,
 }
 
@@ -176,6 +176,25 @@ pub struct RebuildAuthorityPlan {
     pub blockers: Vec<RebuildAuthorityBlocker>,
 }
 
+struct TextField<'a> {
+    value: &'a str,
+    name: &'a str,
+}
+
+struct CandidateClassification<'a> {
+    target_digests: &'a BTreeSet<String>,
+    target_objects: &'a BTreeSet<String>,
+    approved_read_identities: &'a mut Vec<String>,
+    approved_read_paths: &'a mut Vec<String>,
+    blockers: &'a mut Vec<RebuildAuthorityBlocker>,
+}
+
+#[derive(Clone, Copy)]
+struct PathPair<'a> {
+    candidate_path: &'a str,
+    reference_path: &'a str,
+}
+
 impl RebuildAuthorityPlan {
     pub fn eligible(&self) -> bool {
         self.target_authority_excluded && self.blockers.is_empty()
@@ -226,40 +245,7 @@ pub fn content_bound_rebuild_descriptor_digest_blake3(
 // r[impl mantle.build_correctness.release_determinism.authority_plan]
 pub fn plan_rebuild_authority(input: RebuildAuthorityInput) -> RebuildAuthorityPlan {
     let mut blockers = Vec::new();
-    let canonical_descriptor = canonical_content_bound_rebuild_descriptor(input.descriptor.clone());
-    let expected_descriptor_blake3 =
-        canonical_descriptor.clone().and_then(content_bound_rebuild_descriptor_digest_blake3);
-    if let Err(err) = &canonical_descriptor {
-        push_blocker(&mut blockers, RebuildAuthorityBlockerCode::DescriptorInvalid, "descriptor", err.to_string());
-    }
-    match expected_descriptor_blake3 {
-        Ok(expected) if expected != input.descriptor_blake3 => push_blocker(
-            &mut blockers,
-            RebuildAuthorityBlockerCode::DescriptorDigestMismatch,
-            "descriptor",
-            format!("expected {expected}, observed {}", input.descriptor_blake3),
-        ),
-        Err(_) | Ok(_) => {}
-    }
-
-    let declared = canonical_descriptor.as_ref().map(descriptor_input_keys).unwrap_or_default();
-    let observed = input.candidate_inputs.iter().map(|item| item.identity.stable_key()).collect::<BTreeSet<_>>();
-    for missing in declared.difference(&observed) {
-        push_blocker(
-            &mut blockers,
-            RebuildAuthorityBlockerCode::MissingDeclaredInput,
-            missing,
-            "descriptor input was not observed",
-        );
-    }
-    for unexpected in observed.difference(&declared) {
-        push_blocker(
-            &mut blockers,
-            RebuildAuthorityBlockerCode::UnexpectedDeclaredInput,
-            unexpected,
-            "observed input is absent from descriptor",
-        );
-    }
+    collect_descriptor_input_blockers(&input, &mut blockers);
 
     let target_digests = input
         .published_targets
@@ -271,17 +257,19 @@ pub fn plan_rebuild_authority(input: RebuildAuthorityInput) -> RebuildAuthorityP
         .iter()
         .filter_map(|target| target.filesystem_object_identity.clone())
         .collect::<BTreeSet<_>>();
-    let mut approved_read_identities = Vec::new();
-    let mut approved_read_paths = Vec::new();
-    for candidate in &input.candidate_inputs {
-        classify_candidate(
-            candidate,
-            &target_digests,
-            &target_objects,
-            &mut approved_read_identities,
-            &mut approved_read_paths,
-            &mut blockers,
-        );
+    let mut approved_read_identities = Vec::with_capacity(input.candidate_inputs.len());
+    let mut approved_read_paths = Vec::with_capacity(input.candidate_inputs.len());
+    {
+        let mut classification = CandidateClassification {
+            target_digests: &target_digests,
+            target_objects: &target_objects,
+            approved_read_identities: &mut approved_read_identities,
+            approved_read_paths: &mut approved_read_paths,
+            blockers: &mut blockers,
+        };
+        for candidate in &input.candidate_inputs {
+            classify_candidate(candidate, &mut classification);
+        }
     }
     classify_run_roots(&input, &approved_read_paths, &mut blockers);
 
@@ -289,7 +277,7 @@ pub fn plan_rebuild_authority(input: RebuildAuthorityInput) -> RebuildAuthorityP
     approved_read_identities.dedup();
     approved_read_paths.sort();
     approved_read_paths.dedup();
-    let approved_read_paths_blake3 = digest_string_list(&approved_read_paths);
+    let approved_read_paths_blake3 = approved_read_paths_digest(&approved_read_paths, &mut blockers);
     let mut fresh_write_root_identities = input
         .run_roots
         .iter()
@@ -304,19 +292,36 @@ pub fn plan_rebuild_authority(input: RebuildAuthorityInput) -> RebuildAuthorityP
     fresh_write_root_identities.dedup();
     blockers.sort();
     blockers.dedup();
-    let target_authority_excluded = !blockers.iter().any(is_target_authority_blocker);
+    let is_target_authority_excluded = !blockers.iter().any(is_target_authority_blocker);
     let plan = RebuildAuthorityPlan {
         schema: REBUILD_AUTHORITY_PLAN_SCHEMA.to_string(),
         descriptor_blake3: input.descriptor_blake3,
         approved_read_identities,
         approved_read_paths_blake3,
         fresh_write_root_identities,
-        target_authority_excluded,
+        target_authority_excluded: is_target_authority_excluded,
         blockers,
     };
     debug_assert_eq!(plan.schema, REBUILD_AUTHORITY_PLAN_SCHEMA);
     debug_assert_eq!(plan.eligible(), plan.target_authority_excluded && plan.blockers.is_empty());
     plan
+}
+
+fn approved_read_paths_digest(approved_read_paths: &[String], blockers: &mut Vec<RebuildAuthorityBlocker>) -> String {
+    debug_assert!(approved_read_paths.windows(2).all(|pair| pair[0] < pair[1]));
+    debug_assert!(!REBUILD_AUTHORITY_PLAN_SCHEMA.is_empty());
+    match digest_string_list(approved_read_paths) {
+        Ok(digest_blake3) => digest_blake3,
+        Err(error) => {
+            push_blocker(
+                blockers,
+                RebuildAuthorityBlockerCode::DescriptorInvalid,
+                "approved-read-paths",
+                error.to_string(),
+            );
+            String::new()
+        }
+    }
 }
 
 pub fn rebuild_authority_plan_canonical_bytes(mut plan: RebuildAuthorityPlan) -> Result<Vec<u8>, ReleaseEvidenceError> {
@@ -340,6 +345,8 @@ pub fn rebuild_authority_plan_canonical_bytes(mut plan: RebuildAuthorityPlan) ->
     plan.fresh_write_root_identities.dedup();
     plan.blockers.sort();
     plan.blockers.dedup();
+    debug_assert!(plan.approved_read_identities.windows(2).all(|pair| pair[0] < pair[1]));
+    debug_assert!(plan.fresh_write_root_identities.windows(2).all(|pair| pair[0] < pair[1]));
     serde_json::to_vec(&plan)
         .map_err(|err| ReleaseEvidenceError::Parse(format!("serializing rebuild authority plan: {err}")))
 }
@@ -349,6 +356,47 @@ pub fn rebuild_authority_plan_digest_blake3(plan: RebuildAuthorityPlan) -> Resul
     debug_assert!(!bytes.is_empty());
     debug_assert!(u32::try_from(bytes.len()).is_ok());
     Ok(blake3::hash(&bytes).to_hex().to_string())
+}
+
+fn collect_descriptor_input_blockers(input: &RebuildAuthorityInput, blockers: &mut Vec<RebuildAuthorityBlocker>) {
+    let blocker_count_before = blockers.len();
+    let canonical_descriptor = canonical_content_bound_rebuild_descriptor(input.descriptor.clone());
+    let expected_descriptor_blake3 =
+        canonical_descriptor.clone().and_then(content_bound_rebuild_descriptor_digest_blake3);
+    if let Err(error) = &canonical_descriptor {
+        push_blocker(blockers, RebuildAuthorityBlockerCode::DescriptorInvalid, "descriptor", error.to_string());
+    }
+    if let Ok(expected) = expected_descriptor_blake3
+        && expected != input.descriptor_blake3
+    {
+        push_blocker(
+            blockers,
+            RebuildAuthorityBlockerCode::DescriptorDigestMismatch,
+            "descriptor",
+            format!("expected {expected}, observed {}", input.descriptor_blake3),
+        );
+    }
+
+    let declared = canonical_descriptor.as_ref().map(descriptor_input_keys).unwrap_or_default();
+    let observed = input.candidate_inputs.iter().map(|item| item.identity.stable_key()).collect::<BTreeSet<_>>();
+    for missing in declared.difference(&observed) {
+        push_blocker(
+            blockers,
+            RebuildAuthorityBlockerCode::MissingDeclaredInput,
+            missing,
+            "descriptor input was not observed",
+        );
+    }
+    for unexpected in observed.difference(&declared) {
+        push_blocker(
+            blockers,
+            RebuildAuthorityBlockerCode::UnexpectedDeclaredInput,
+            unexpected,
+            "observed input is absent from descriptor",
+        );
+    }
+    debug_assert!(blockers.len() >= blocker_count_before);
+    debug_assert!(canonical_descriptor.is_ok() || blockers.len() > blocker_count_before);
 }
 
 fn validate_descriptor_header(descriptor: &ContentBoundRebuildDescriptor) -> Result<(), ReleaseEvidenceError> {
@@ -366,6 +414,8 @@ fn validate_descriptor_header(descriptor: &ContentBoundRebuildDescriptor) -> Res
 }
 
 fn validate_descriptor_evidence(descriptor: &ContentBoundRebuildDescriptor) -> Result<(), ReleaseEvidenceError> {
+    debug_assert!(MAX_REBUILD_INPUT_COUNT > 0);
+    debug_assert!(MAX_REBUILD_RUN_COUNT >= MIN_GENUINE_REBUILD_RUN_COUNT);
     validate_identity_vec(&descriptor.target_artifacts, MAX_REBUILD_INPUT_COUNT, "target artifacts")?;
     validate_identity(&descriptor.recipe, RebuildInputRole::Recipe, "recipe")?;
     validate_identity(&descriptor.executable, RebuildInputRole::Executable, "executable")?;
@@ -395,6 +445,8 @@ fn validate_descriptor_evidence(descriptor: &ContentBoundRebuildDescriptor) -> R
         validate_identity(source, RebuildInputRole::Source, "source input")?;
     }
     validate_run_roots(&descriptor.run_roots)?;
+    debug_assert!(!descriptor.target_artifacts.is_empty());
+    debug_assert!(!descriptor.source_inputs.is_empty());
     Ok(())
 }
 
@@ -432,7 +484,11 @@ fn validate_identity(
 }
 
 fn validate_identity_shape(identity: &RebuildContentIdentity, field: &str) -> Result<(), ReleaseEvidenceError> {
-    validate_text(&identity.name, &format!("{field}.name"))?;
+    let field_name = format!("{field}.name");
+    validate_text(TextField {
+        value: &identity.name,
+        name: &field_name,
+    })?;
     validate_blake3_hex(&identity.digest_blake3, &format!("content-bound rebuild descriptor {field} digest"))?;
     if identity.kind == RebuildContentKind::Symlink || identity.kind == RebuildContentKind::Other {
         return Err(validation_error(format!(
@@ -455,9 +511,18 @@ fn validate_run_roots(run_roots: &[RebuildRunRootIdentity]) -> Result<(), Releas
     let mut ids = BTreeSet::new();
     let mut roots = BTreeSet::new();
     for root in run_roots {
-        validate_text(&root.run_id, "run root id")?;
-        validate_text(&root.output_root_identity, "output root identity")?;
-        validate_text(&root.store_root_identity, "store root identity")?;
+        validate_text(TextField {
+            value: &root.run_id,
+            name: "run root id",
+        })?;
+        validate_text(TextField {
+            value: &root.output_root_identity,
+            name: "output root identity",
+        })?;
+        validate_text(TextField {
+            value: &root.store_root_identity,
+            name: "store root identity",
+        })?;
         if !ids.insert(root.run_id.clone()) {
             return Err(validation_error(format!("duplicate rebuild run root id {}", root.run_id)));
         }
@@ -465,25 +530,27 @@ fn validate_run_roots(run_roots: &[RebuildRunRootIdentity]) -> Result<(), Releas
             return Err(validation_error("rebuild run roots must be distinct".to_string()));
         }
     }
+    debug_assert_eq!(ids.len(), run_roots.len());
+    debug_assert_eq!(roots.len(), run_roots.len().saturating_add(run_roots.len()));
     Ok(())
 }
 
 fn validate_string_vec(values: &[String], max_count: u32, field: &str) -> Result<(), ReleaseEvidenceError> {
     bounded_count(values.len(), max_count, field)?;
     for value in values {
-        validate_text(value, field)?;
+        validate_text(TextField { value, name: field })?;
     }
     Ok(())
 }
 
-fn validate_text(value: &str, field: &str) -> Result<(), ReleaseEvidenceError> {
-    if value.trim().is_empty() {
-        return Err(validation_error(format!("{field} must not be empty")));
+fn validate_text(field: TextField<'_>) -> Result<(), ReleaseEvidenceError> {
+    if field.value.trim().is_empty() {
+        return Err(validation_error(format!("{} must not be empty", field.name)));
     }
-    let bytes =
-        u32::try_from(value.len()).map_err(|_| validation_error(format!("{field} byte length overflowed u32")))?;
-    if bytes > MAX_REBUILD_TEXT_BYTES {
-        return Err(validation_error(format!("{field} exceeds {MAX_REBUILD_TEXT_BYTES} UTF-8 bytes")));
+    let bytes_count = u32::try_from(field.value.len())
+        .map_err(|_| validation_error(format!("{} byte length overflowed u32", field.name)))?;
+    if bytes_count > MAX_REBUILD_TEXT_BYTES {
+        return Err(validation_error(format!("{} exceeds {MAX_REBUILD_TEXT_BYTES} UTF-8 bytes", field.name)));
     }
     Ok(())
 }
@@ -513,56 +580,57 @@ fn policy_key(role: RebuildInputRole, digest: &str) -> String {
     format!("{:?}:policy:{digest}", role)
 }
 
-fn classify_candidate(
-    candidate: &RebuildInputObservation,
-    target_digests: &BTreeSet<String>,
-    target_objects: &BTreeSet<String>,
-    approved_read_identities: &mut Vec<String>,
-    approved_read_paths: &mut Vec<String>,
-    blockers: &mut Vec<RebuildAuthorityBlocker>,
-) {
+fn classify_candidate(candidate: &RebuildInputObservation, classification: &mut CandidateClassification<'_>) {
     let subject = candidate.identity.name.as_str();
+    let blocker_count_before = classification.blockers.len();
+    debug_assert!(MAX_REBUILD_INPUT_COUNT > 0);
+    debug_assert!(!REBUILD_AUTHORITY_PLAN_SCHEMA.is_empty());
     if !candidate.identity.role.is_declared_rebuild_input() {
         let code = role_blocker_code(candidate.identity.role);
-        push_blocker(blockers, code, subject, "input role cannot receive rebuild read authority");
+        push_blocker(classification.blockers, code, subject, "input role cannot receive rebuild read authority");
     }
     match candidate.identity.kind {
         RebuildContentKind::Symlink => push_blocker(
-            blockers,
+            classification.blockers,
             RebuildAuthorityBlockerCode::SymlinkInput,
             subject,
             "symlink roots are not rebuild authority",
         ),
         RebuildContentKind::Other => push_blocker(
-            blockers,
+            classification.blockers,
             RebuildAuthorityBlockerCode::UnsupportedInputKind,
             subject,
             "unsupported filesystem object cannot be rebuild authority",
         ),
         RebuildContentKind::RegularFile | RebuildContentKind::Directory | RebuildContentKind::SyntheticPolicy => {}
     }
-    if target_digests.contains(&candidate.identity.digest_blake3) {
+    if classification.target_digests.contains(&candidate.identity.digest_blake3) {
         push_blocker(
-            blockers,
+            classification.blockers,
             RebuildAuthorityBlockerCode::TargetIdenticalInput,
             subject,
             "input BLAKE3 equals a published target",
         );
     }
     match &candidate.filesystem_object_identity {
-        Some(object) if target_objects.contains(object) => push_blocker(
-            blockers,
+        Some(object) if classification.target_objects.contains(object) => push_blocker(
+            classification.blockers,
             RebuildAuthorityBlockerCode::TargetObjectAlias,
             subject,
             "input filesystem object aliases a published target",
         ),
         Some(_) | None => {}
     }
-    let candidate_blocked = blockers.iter().any(|blocker| blocker.subject == subject);
-    if !candidate_blocked {
-        approved_read_identities.push(candidate.identity.stable_key());
-        approved_read_paths.push(candidate.normalized_path.clone());
+    let is_candidate_blocked =
+        classification.blockers[blocker_count_before..].iter().any(|blocker| blocker.subject == subject);
+    if !is_candidate_blocked {
+        classification.approved_read_identities.push(candidate.identity.stable_key());
+        classification.approved_read_paths.push(candidate.normalized_path.clone());
     }
+    debug_assert!(
+        is_candidate_blocked || classification.approved_read_paths.last() == Some(&candidate.normalized_path)
+    );
+    debug_assert!(classification.blockers.len() >= blocker_count_before);
 }
 
 fn role_blocker_code(role: RebuildInputRole) -> RebuildAuthorityBlockerCode {
@@ -580,6 +648,7 @@ fn classify_run_roots(
     approved_read_paths: &[String],
     blockers: &mut Vec<RebuildAuthorityBlocker>,
 ) {
+    let blocker_count_before = blockers.len();
     let mut write_paths = BTreeSet::new();
     for root in &input.run_roots {
         for (identity, path) in [
@@ -594,7 +663,10 @@ fn classify_run_roots(
                     format!("write path {path} is reused"),
                 );
             }
-            if paths_overlap(path, &input.ordinary_output_path) {
+            if paths_overlap(PathPair {
+                candidate_path: path,
+                reference_path: &input.ordinary_output_path,
+            }) {
                 push_blocker(
                     blockers,
                     RebuildAuthorityBlockerCode::OrdinaryOutputReuse,
@@ -611,7 +683,10 @@ fn classify_run_roots(
                 );
             }
             for read_path in approved_read_paths {
-                if paths_overlap(path, read_path) {
+                if paths_overlap(PathPair {
+                    candidate_path: path,
+                    reference_path: read_path,
+                }) {
                     push_blocker(
                         blockers,
                         RebuildAuthorityBlockerCode::OverlappingReadWriteRoot,
@@ -622,18 +697,25 @@ fn classify_run_roots(
             }
         }
     }
+    debug_assert!(blockers.len() >= blocker_count_before);
+    debug_assert!(write_paths.len() <= input.run_roots.len().saturating_add(input.run_roots.len()));
 }
 
-fn paths_overlap(left: &str, right: &str) -> bool {
-    left == right || path_is_descendant(left, right) || path_is_descendant(right, left)
+fn paths_overlap(paths: PathPair<'_>) -> bool {
+    paths.candidate_path == paths.reference_path
+        || path_is_descendant(paths)
+        || path_is_descendant(PathPair {
+            candidate_path: paths.reference_path,
+            reference_path: paths.candidate_path,
+        })
 }
 
-fn path_is_descendant(candidate: &str, parent: &str) -> bool {
-    if parent == "/" {
-        return candidate.starts_with('/') && candidate != parent;
+fn path_is_descendant(paths: PathPair<'_>) -> bool {
+    if paths.reference_path == "/" {
+        return paths.candidate_path.starts_with('/') && paths.candidate_path != paths.reference_path;
     }
-    let prefix = format!("{}/", parent.trim_end_matches('/'));
-    candidate.starts_with(&prefix)
+    let prefix = format!("{}/", paths.reference_path.trim_end_matches('/'));
+    paths.candidate_path.starts_with(&prefix)
 }
 
 fn push_blocker(
@@ -663,10 +745,12 @@ fn is_target_authority_blocker(blocker: &RebuildAuthorityBlocker) -> bool {
     )
 }
 
-fn digest_string_list(values: &[String]) -> String {
-    let bytes = serde_json::to_vec(values).expect("serializing an in-memory string list cannot fail");
+fn digest_string_list(values: &[String]) -> Result<String, ReleaseEvidenceError> {
+    let bytes = serde_json::to_vec(values)
+        .map_err(|error| ReleaseEvidenceError::Parse(format!("serializing rebuild authority path list: {error}")))?;
     debug_assert!(!bytes.is_empty());
-    blake3::hash(&bytes).to_hex().to_string()
+    debug_assert!(bytes.starts_with(b"["));
+    Ok(blake3::hash(&bytes).to_hex().to_string())
 }
 
 #[cfg(test)]

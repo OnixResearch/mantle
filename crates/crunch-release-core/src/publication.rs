@@ -22,6 +22,14 @@ const WINDOWS_PATH_SEPARATOR: char = '\\';
 const NUL_CHARACTER: char = '\0';
 const WINDOW_PAIR_COUNT: usize = 2;
 
+struct CountValidation<'a> {
+    actual_count: usize,
+    maximum_count: u32,
+    overflow_kind: PublicationPlanBlockerKind,
+    exceeded_kind: PublicationPlanBlockerKind,
+    label: &'a str,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PublicationDestinationObservation {
@@ -112,7 +120,8 @@ pub fn plan_release_publication(
         return Err(blockers);
     }
 
-    let plan_identity_blake3 = publication_plan_identity(&request.release_id, &request.artifacts, &request.policy);
+    let plan_identity_blake3 = publication_plan_identity(&request.release_id, &request.artifacts, &request.policy)
+        .map_err(|blocker| vec![blocker])?;
     assert!(!request.artifacts.is_empty(), "valid publication plan must include artifacts");
     assert!(!request.policy.is_empty(), "valid publication plan must include policy facts");
     assert_eq!(plan_identity_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
@@ -130,19 +139,23 @@ fn validate_plan_request(request: &PublicationPlanRequest) -> Vec<PublicationPla
     validate_destination(request.destination, &mut blockers);
     validate_release_id(&request.release_id, &mut blockers);
     validate_count(
-        request.artifacts.len(),
-        RELEASE_PUBLICATION_ARTIFACTS_COUNT_MAX,
-        PublicationPlanBlockerKind::ArtifactCountOverflow,
-        PublicationPlanBlockerKind::ArtifactCountExceeded,
-        "artifact",
+        CountValidation {
+            actual_count: request.artifacts.len(),
+            maximum_count: RELEASE_PUBLICATION_ARTIFACTS_COUNT_MAX,
+            overflow_kind: PublicationPlanBlockerKind::ArtifactCountOverflow,
+            exceeded_kind: PublicationPlanBlockerKind::ArtifactCountExceeded,
+            label: "artifact",
+        },
         &mut blockers,
     );
     validate_count(
-        request.policy.len(),
-        RELEASE_PUBLICATION_POLICY_FACTS_COUNT_MAX,
-        PublicationPlanBlockerKind::PolicyCountOverflow,
-        PublicationPlanBlockerKind::PolicyCountExceeded,
-        "policy fact",
+        CountValidation {
+            actual_count: request.policy.len(),
+            maximum_count: RELEASE_PUBLICATION_POLICY_FACTS_COUNT_MAX,
+            overflow_kind: PublicationPlanBlockerKind::PolicyCountOverflow,
+            exceeded_kind: PublicationPlanBlockerKind::PolicyCountExceeded,
+            label: "policy fact",
+        },
         &mut blockers,
     );
     if request.artifacts.is_empty() {
@@ -157,6 +170,8 @@ fn validate_plan_request(request: &PublicationPlanRequest) -> Vec<PublicationPla
     for fact in &request.policy {
         validate_policy_fact(fact, &mut blockers);
     }
+    debug_assert!(RELEASE_PUBLICATION_ARTIFACTS_COUNT_MAX > 0);
+    debug_assert!(blockers.iter().all(|blocker| !blocker.message.is_empty()));
     blockers
 }
 
@@ -212,23 +227,22 @@ fn validate_release_id(release_id: &str, blockers: &mut Vec<PublicationPlanBlock
     }
 }
 
-fn validate_count(
-    count: usize,
-    count_max: u32,
-    overflow_kind: PublicationPlanBlockerKind,
-    exceeded_kind: PublicationPlanBlockerKind,
-    label: &str,
-    blockers: &mut Vec<PublicationPlanBlocker>,
-) {
-    let Ok(count_u32) = u32::try_from(count) else {
-        blockers.push(blocker(overflow_kind, None, &format!("publication {label} count overflowed u32")));
+fn validate_count(validation: CountValidation<'_>, blockers: &mut Vec<PublicationPlanBlocker>) {
+    debug_assert!(validation.maximum_count > 0);
+    debug_assert!(!validation.label.is_empty());
+    let Ok(count_u32) = u32::try_from(validation.actual_count) else {
+        blockers.push(blocker(
+            validation.overflow_kind,
+            None,
+            &format!("publication {} count overflowed u32", validation.label),
+        ));
         return;
     };
-    if count_u32 > count_max {
+    if count_u32 > validation.maximum_count {
         blockers.push(blocker(
-            exceeded_kind,
+            validation.exceeded_kind,
             None,
-            &format!("publication {label} count {count_u32} exceeds {count_max}"),
+            &format!("publication {} count {count_u32} exceeds {}", validation.label, validation.maximum_count),
         ));
     }
 }
@@ -245,6 +259,8 @@ fn validate_artifact(artifact: &PublicationArtifactInput, blockers: &mut Vec<Pub
 }
 
 fn validate_artifact_path(path: &str, blockers: &mut Vec<PublicationPlanBlocker>) {
+    debug_assert!(RELEASE_PUBLICATION_TEXT_BYTES_MAX > 0);
+    debug_assert!(RELEASE_PUBLICATION_PATH_COMPONENTS_MAX > 0);
     if path == MANIFEST_RELATIVE_PATH {
         blockers.push(blocker(
             PublicationPlanBlockerKind::ManifestPathReserved,
@@ -269,11 +285,11 @@ fn validate_artifact_path(path: &str, blockers: &mut Vec<PublicationPlanBlocker>
         ));
     }
     let component_count = path.split(PATH_SEPARATOR).count();
-    let component_count_exceeded = match u32::try_from(component_count) {
+    let is_component_count_exceeded = match u32::try_from(component_count) {
         Ok(count) => count > RELEASE_PUBLICATION_PATH_COMPONENTS_MAX,
         Err(_) => true,
     };
-    if component_count_exceeded {
+    if is_component_count_exceeded {
         blockers.push(blocker(
             PublicationPlanBlockerKind::ArtifactPathTooDeep,
             Some(path.to_string()),
@@ -286,6 +302,8 @@ fn validate_artifact_path(path: &str, blockers: &mut Vec<PublicationPlanBlocker>
 }
 
 fn validate_policy_fact(fact: &PublicationPolicyFact, blockers: &mut Vec<PublicationPlanBlocker>) {
+    debug_assert!(RELEASE_PUBLICATION_TEXT_BYTES_MAX > 0);
+    debug_assert!(!RELEASE_PUBLICATION_PLAN_SCHEMA.is_empty());
     if fact.name.trim().is_empty() {
         blockers.push(blocker(
             PublicationPlanBlockerKind::EmptyPolicyName,
@@ -310,7 +328,8 @@ fn validate_policy_fact(fact: &PublicationPolicyFact, blockers: &mut Vec<Publica
 }
 
 fn validate_sorted_artifact_relationships(artifacts: &[PublicationArtifactInput]) -> Vec<PublicationPlanBlocker> {
-    let mut blockers = Vec::new();
+    let pair_count = artifacts.len().saturating_sub(1);
+    let mut blockers = Vec::with_capacity(pair_count);
     for pair in artifacts.windows(WINDOW_PAIR_COUNT) {
         let left = &pair[0].relative_path;
         let right = &pair[1].relative_path;
@@ -331,11 +350,14 @@ fn validate_sorted_artifact_relationships(artifacts: &[PublicationArtifactInput]
             ));
         }
     }
+    debug_assert!(blockers.len() <= pair_count);
+    debug_assert!(artifacts.windows(WINDOW_PAIR_COUNT).all(|pair| pair[0].relative_path <= pair[1].relative_path));
     blockers
 }
 
 fn validate_sorted_policy_relationships(policy: &[PublicationPolicyFact]) -> Vec<PublicationPlanBlocker> {
-    let mut blockers = Vec::new();
+    let pair_count = policy.len().saturating_sub(1);
+    let mut blockers = Vec::with_capacity(pair_count);
     for pair in policy.windows(WINDOW_PAIR_COUNT) {
         if pair[0].name == pair[1].name {
             blockers.push(blocker(
@@ -360,17 +382,23 @@ fn publication_plan_identity(
     release_id: &str,
     artifacts: &[PublicationArtifactInput],
     policy: &[PublicationPolicyFact],
-) -> String {
+) -> Result<String, PublicationPlanBlocker> {
     let identity = PublicationPlanIdentity {
         schema: RELEASE_PUBLICATION_PLAN_SCHEMA,
         release_id,
         artifacts,
         policy,
     };
-    let bytes = serde_json::to_vec(&identity).expect("publication plan identity serialization must succeed");
+    let bytes = serde_json::to_vec(&identity).map_err(|error| {
+        blocker(
+            PublicationPlanBlockerKind::InvalidArtifactDigest,
+            None,
+            &format!("publication plan identity serialization failed: {error}"),
+        )
+    })?;
     assert!(!bytes.is_empty(), "publication plan identity bytes must not be empty");
     assert!(!artifacts.is_empty(), "publication plan identity requires artifacts");
-    blake3::hash(&bytes).to_hex().to_string()
+    Ok(blake3::hash(&bytes).to_hex().to_string())
 }
 
 fn is_normal_relative_path(path: &str) -> bool {

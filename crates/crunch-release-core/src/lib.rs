@@ -1,6 +1,14 @@
 #![no_std]
 extern crate alloc;
 
+fn empty_vec<T>() -> alloc::vec::Vec<T> {
+    alloc::vec::Vec::new()
+}
+
+fn default_false() -> bool {
+    false
+}
+
 mod ast_grep;
 mod cairn_handoff;
 mod determinism;

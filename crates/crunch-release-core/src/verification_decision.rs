@@ -8,6 +8,7 @@ use serde::Serialize;
 pub const RELEASE_VERIFICATION_DECISION_SCHEMA: &str = "mantle-release-verification-decision-v1";
 /// Bounds diagnostics copied from any one specialized verifier.
 pub const MAX_RELEASE_VERIFICATION_DIAGNOSTICS_PER_CONTRIBUTOR: u32 = 32;
+const MAX_RELEASE_VERIFICATION_DIAGNOSTICS_PER_CONTRIBUTOR_USIZE: usize = 32;
 /// Bounds external evidence roles selected by one CLI invocation.
 pub const MAX_RELEASE_VERIFICATION_REQUIRED_EXTERNAL_ROLES: u32 = 64;
 
@@ -217,7 +218,9 @@ pub fn aggregate_release_verification(
     requirements: ReleaseVerificationRequirements,
 ) -> ReleaseVerificationDecision {
     let mut checks = Vec::with_capacity(RELEASE_VERIFICATION_CONTRIBUTOR_COUNT);
-    let mut diagnostics = Vec::new();
+    let diagnostic_slots = MAX_RELEASE_VERIFICATION_DIAGNOSTICS_PER_CONTRIBUTOR_USIZE
+        .saturating_mul(RELEASE_VERIFICATION_CONTRIBUTOR_COUNT);
+    let mut diagnostics = Vec::with_capacity(diagnostic_slots);
     for contributor in ReleaseVerificationContributor::ALL {
         let fact = facts.for_contributor(*contributor);
         let requirement = requirements.for_contributor(*contributor);
@@ -228,18 +231,18 @@ pub fn aggregate_release_verification(
         checks.push(check);
     }
 
-    let valid = checks.iter().all(|check| !check.blocking);
-    let disposition = if valid {
+    let is_valid = checks.iter().all(|check| !check.blocking);
+    let disposition = if is_valid {
         ReleaseVerificationDecisionDisposition::Accepted
     } else {
         ReleaseVerificationDecisionDisposition::PolicyRejected
     };
     assert_eq!(checks.len(), RELEASE_VERIFICATION_CONTRIBUTOR_COUNT);
-    assert_eq!(valid, diagnostics.is_empty());
+    assert_eq!(is_valid, diagnostics.is_empty());
 
     ReleaseVerificationDecision {
         schema: RELEASE_VERIFICATION_DECISION_SCHEMA,
-        valid,
+        valid: is_valid,
         disposition,
         checks,
         diagnostics,
@@ -254,10 +257,10 @@ fn release_verification_check(
     assert!(!contributor.as_str().is_empty(), "release verification contributor label must not be empty");
     assert!(!requirement.as_str().is_empty(), "release verification requirement label must not be empty");
 
-    let (mut diagnostics, diagnostics_overflowed) = bounded_diagnostics(contributor, &fact.diagnostics);
-    let policy_blocking = requirement.is_enforced() && !fact.disposition.is_satisfied();
-    let blocking = diagnostics_overflowed || policy_blocking;
-    if blocking && diagnostics.is_empty() {
+    let (mut diagnostics, has_diagnostics_overflow) = bounded_diagnostics(contributor, &fact.diagnostics);
+    let is_policy_blocking = requirement.is_enforced() && !fact.disposition.is_satisfied();
+    let is_blocking = has_diagnostics_overflow || is_policy_blocking;
+    if is_blocking && diagnostics.is_empty() {
         diagnostics.push(format!(
             "release verification contributor {} is {} but requirement is {}",
             contributor.as_str(),
@@ -266,26 +269,28 @@ fn release_verification_check(
         ));
     }
 
-    assert!(!blocking || !diagnostics.is_empty(), "blocking verification checks need diagnostics");
-    assert!(diagnostics.len() <= diagnostic_limit(), "verification diagnostics must remain bounded");
+    if is_blocking {
+        assert!(!diagnostics.is_empty(), "blocking verification checks need diagnostics");
+    }
+    assert!(diagnostics.len() <= diagnostic_max_entries(), "verification diagnostics must remain bounded");
     ReleaseVerificationCheck {
         contributor,
         requirement,
         disposition: fact.disposition,
-        blocking,
+        blocking: is_blocking,
         diagnostics,
     }
 }
 
 fn bounded_diagnostics(contributor: ReleaseVerificationContributor, diagnostics: &[String]) -> (Vec<String>, bool) {
-    let limit = diagnostic_limit();
-    assert!(limit > 0, "release verification diagnostic limit must be positive");
+    let diagnostic_max_entries = diagnostic_max_entries();
+    assert!(diagnostic_max_entries > 0, "release verification diagnostic limit must be positive");
     assert!(!contributor.as_str().is_empty(), "release verification contributor label must not be empty");
-    if diagnostics.len() <= limit {
+    if diagnostics.len() <= diagnostic_max_entries {
         return (diagnostics.to_vec(), false);
     }
 
-    let retained_diagnostic_count = limit.saturating_sub(1);
+    let retained_diagnostic_count = diagnostic_max_entries.saturating_sub(1);
     let mut bounded = diagnostics.iter().take(retained_diagnostic_count).cloned().collect::<Vec<_>>();
     bounded.push(format!(
         "release verification contributor {} diagnostic count exceeds limit {}: observed {}",
@@ -293,13 +298,13 @@ fn bounded_diagnostics(contributor: ReleaseVerificationContributor, diagnostics:
         MAX_RELEASE_VERIFICATION_DIAGNOSTICS_PER_CONTRIBUTOR,
         diagnostics.len()
     ));
-    assert_eq!(bounded.len(), limit);
+    assert_eq!(bounded.len(), diagnostic_max_entries);
     assert!(diagnostics.len() > bounded.len());
     (bounded, true)
 }
 
-const fn diagnostic_limit() -> usize {
-    MAX_RELEASE_VERIFICATION_DIAGNOSTICS_PER_CONTRIBUTOR as usize
+const fn diagnostic_max_entries() -> usize {
+    MAX_RELEASE_VERIFICATION_DIAGNOSTICS_PER_CONTRIBUTOR_USIZE
 }
 
 #[cfg(test)]
@@ -434,7 +439,7 @@ mod tests {
 
     #[test]
     fn diagnostic_overflow_is_bounded_and_fails_closed() {
-        let overflow_count = diagnostic_limit().saturating_add(1);
+        let overflow_count = diagnostic_max_entries().saturating_add(1);
         let diagnostics = (0..overflow_count).map(|index| format!("diagnostic-{index}")).collect::<Vec<_>>();
         let mut facts = satisfied_facts();
         facts.function_address = ReleaseVerificationFact::rejected(diagnostics);
@@ -450,7 +455,7 @@ mod tests {
 
         assert!(!decision.valid);
         assert!(check.blocking);
-        assert_eq!(check.diagnostics.len(), diagnostic_limit());
+        assert_eq!(check.diagnostics.len(), diagnostic_max_entries());
         assert!(check.diagnostics.last().unwrap().contains("diagnostic count exceeds limit"));
     }
 

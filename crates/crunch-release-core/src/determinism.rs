@@ -57,6 +57,9 @@ const UNSUPPORTED_NORMALIZATION_PREFIX: &str = "normalization-unsupported:";
 const DETERMINISTIC_PROOF_WORKFLOW: &str = "deterministic-release";
 const DETERMINISTIC_PROOF_CLAIM: &str = "deterministic-release";
 const SUPPORTED_SANDBOX_PROFILE_PREFIX: &str = "mantle-proof-sandbox-v1:";
+const CLASSIFICATION_BASE_REASON_CAPACITY_COUNT: usize = 8;
+const GENUINE_REBUILD_BASE_REASON_CAPACITY_COUNT: usize = 8;
+const GENUINE_REBUILD_REASONS_PER_RUN_COUNT: usize = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -135,15 +138,15 @@ pub struct DeterministicBuildRunReceipt {
     pub output_digests: Vec<DeterministicOutputDigest>,
     pub substituted_dependency_identities: Vec<String>,
     pub hermeticity_audit_events: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub observed_effects: Option<Vec<BuildEffect>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rebuild_descriptor_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rebuild_authority_plan_blake3: Option<String>,
-    #[serde(default)]
+    #[serde(default = "crate::empty_vec")]
     pub observed_read_identities: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "crate::empty_vec")]
     pub authority_violations: Vec<String>,
 }
 
@@ -163,23 +166,23 @@ pub struct DeterministicBuildProofReceipt {
     pub physical_store_isolation: String,
     pub effect_policy_version: String,
     pub declared_effects: Vec<BuildEffect>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub observed_effects: Option<Vec<BuildEffect>>,
     pub normalized_execution_envelope: Vec<String>,
     pub ambient_host_perturbations: Vec<String>,
     pub sandbox_profile_identities: Vec<String>,
     pub runs: Vec<DeterministicBuildRunReceipt>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rebuild_descriptor: Option<ContentBoundRebuildDescriptor>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rebuild_descriptor_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rebuild_authority_plan: Option<RebuildAuthorityPlan>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rebuild_authority_plan_blake3: Option<String>,
     pub verdict: DeterministicBuildProofVerdict,
     pub blocking_reasons: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub receipt_blake3: Option<String>,
 }
 
@@ -251,8 +254,8 @@ pub fn canonical_deterministic_build_proof_receipt(
 ) -> Result<DeterministicBuildProofReceipt, ReleaseEvidenceError> {
     let provided_receipt_blake3 = receipt.receipt_blake3.take();
     validate_receipt_header(&receipt)?;
-    let legacy_receipt = receipt.schema == LEGACY_DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
-    if !legacy_receipt {
+    let is_legacy_receipt = receipt.schema == LEGACY_DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
+    if !is_legacy_receipt {
         receipt.schema = DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string();
     }
     receipt.declared_effects.sort();
@@ -284,7 +287,7 @@ pub fn canonical_deterministic_build_proof_receipt(
     receipt.runs.sort_by(|left, right| left.run_id.cmp(&right.run_id));
     validate_receipt_evidence(&receipt)?;
     let (expected_verdict, expected_reasons) = classify_deterministic_build_proof(&receipt);
-    if !legacy_receipt && receipt.verdict != expected_verdict {
+    if !is_legacy_receipt && receipt.verdict != expected_verdict {
         return Err(validation_error(format!(
             "deterministic build proof receipt verdict {:?} does not match classified verdict {:?}",
             receipt.verdict, expected_verdict
@@ -292,11 +295,13 @@ pub fn canonical_deterministic_build_proof_receipt(
     }
     let mut sorted_expected_reasons = expected_reasons;
     sorted_expected_reasons.sort();
-    if !legacy_receipt && receipt.blocking_reasons != sorted_expected_reasons {
+    if !is_legacy_receipt && receipt.blocking_reasons != sorted_expected_reasons {
         return Err(validation_error(
             "deterministic build proof receipt blocking_reasons do not match classified reasons".to_string(),
         ));
     }
+    debug_assert!(receipt.declared_effects.windows(2).all(|pair| pair[0] < pair[1]));
+    debug_assert!(receipt.runs.windows(2).all(|pair| pair[0].run_id <= pair[1].run_id));
     if let Some(provided) = provided_receipt_blake3 {
         let digest = blake3::hash(&serde_json::to_vec(&receipt).map_err(|err| {
             ReleaseEvidenceError::Parse(format!("serializing deterministic build proof receipt: {err}"))
@@ -335,6 +340,8 @@ pub fn deterministic_build_proof_receipt_digest_blake3(
 pub fn validate_deterministic_sandbox_isolation_evidence(
     evidence: &DeterministicSandboxIsolationEvidence,
 ) -> Result<(), ReleaseEvidenceError> {
+    debug_assert!(!REQUIRED_ISOLATION_CHECKS.is_empty());
+    debug_assert!(!SUPPORTED_SANDBOX_PROFILE_FAMILY.is_empty());
     if evidence.schema != DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA {
         return Err(validation_error(format!(
             "deterministic sandbox isolation evidence schema must be {DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA}, got {}",
@@ -367,6 +374,12 @@ pub fn validate_deterministic_sandbox_isolation_evidence(
         }
     }
     validate_blake3_hex(&evidence.evidence_digest_blake3, "deterministic sandbox isolation evidence digest_blake3")?;
+    debug_assert!(
+        REQUIRED_ISOLATION_CHECKS
+            .iter()
+            .all(|required| evidence.checks.iter().any(|actual| actual == required))
+    );
+    debug_assert_eq!(evidence.status, DeterministicSandboxIsolationEvidenceStatus::Passed);
     Ok(())
 }
 
@@ -398,7 +411,7 @@ pub fn deterministic_release_claim_eligible(
     validate_deterministic_sandbox_isolation_evidence(isolation_evidence)?;
     let mut release_digests = canonical_digest_set(release_digest_set, "release_digest_set")?;
     release_digests.sort();
-    let mut receipt_digests = Vec::new();
+    let mut receipt_digests = Vec::with_capacity(release_digests.len());
     for receipt in receipts {
         let receipt = canonical_deterministic_build_proof_receipt(receipt.clone())?;
         if !deterministic_build_proof_has_genuine_rebuild_authority(receipt.clone())? {
@@ -428,6 +441,8 @@ pub fn deterministic_release_claim_eligible(
     }
     receipt_digests.sort();
     receipt_digests.dedup();
+    debug_assert!(release_digests.windows(2).all(|pair| pair[0] < pair[1]));
+    debug_assert!(receipt_digests.windows(2).all(|pair| pair[0] < pair[1]));
     Ok(!release_digests.is_empty() && release_digests == receipt_digests)
 }
 
@@ -444,9 +459,11 @@ pub fn deterministic_build_proof_has_genuine_rebuild_authority(
 }
 
 fn validate_receipt_header(receipt: &DeterministicBuildProofReceipt) -> Result<(), ReleaseEvidenceError> {
-    let supported_schema = receipt.schema == DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA
+    debug_assert!(!DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.is_empty());
+    debug_assert!(!LEGACY_DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.is_empty());
+    let is_schema_recognized = receipt.schema == DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA
         || receipt.schema == LEGACY_DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
-    if !supported_schema {
+    if !is_schema_recognized {
         return Err(validation_error(format!(
             "deterministic build proof receipt schema must be {DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA} or diagnostic-only {LEGACY_DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA}, got {}",
             receipt.schema
@@ -470,6 +487,8 @@ fn validate_receipt_header(receipt: &DeterministicBuildProofReceipt) -> Result<(
     }
     validate_blake3_hex(&receipt.source_blake3, "deterministic build proof receipt source_blake3")?;
     validate_blake3_hex(&receipt.vendor_blake3, "deterministic build proof receipt vendor_blake3")?;
+    debug_assert!(is_schema_recognized);
+    debug_assert!(!receipt.proof_unit.target_artifact_identity.is_empty());
     Ok(())
 }
 
@@ -508,6 +527,8 @@ fn validate_genuine_rebuild_evidence_shape(
 }
 
 fn validate_run(run: &DeterministicBuildRunReceipt) -> Result<(), ReleaseEvidenceError> {
+    debug_assert!(!BUILD_EFFECT_POLICY_VERSION.is_empty());
+    debug_assert!(!SUPPORTED_SANDBOX_PROFILE_PREFIX.is_empty());
     for (field, value) in [
         ("run_id", &run.run_id),
         ("perturbation_case", &run.perturbation_case),
@@ -549,6 +570,8 @@ fn validate_run(run: &DeterministicBuildRunReceipt) -> Result<(), ReleaseEvidenc
         }
         validate_blake3_hex(&output.digest_blake3, "deterministic output digest_blake3")?;
     }
+    debug_assert!(!run.output_digests.is_empty());
+    debug_assert_eq!(names.len(), run.output_digests.len());
     Ok(())
 }
 
@@ -647,48 +670,18 @@ fn validate_string_set(values: &[String], field: &str) -> Result<(), ReleaseEvid
 fn classify_deterministic_build_proof(
     receipt: &DeterministicBuildProofReceipt,
 ) -> (DeterministicBuildProofVerdict, Vec<String>) {
-    let mut reasons = Vec::new();
-    if receipt.schema == LEGACY_DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA {
-        reasons.push("missing genuine rebuild evidence: legacy path-bound v1 receipt".to_string());
-        return (DeterministicBuildProofVerdict::MissingGenuineRebuildEvidence, reasons);
+    debug_assert!(!DETERMINISTIC_PROOF_WORKFLOW.is_empty());
+    debug_assert!(!DETERMINISTIC_PROOF_CLAIM.is_empty());
+    if let Some(classification) = classify_identity_and_authority(receipt) {
+        return classification;
     }
-    if receipt.workflow_version != DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA {
-        reasons.push(format!("unsupported workflow_version {}", receipt.workflow_version));
-        return (DeterministicBuildProofVerdict::UnsupportedWorkflow, reasons);
-    }
-    if receipt.source_blake3.len() != crate::manifest::BLAKE3_HEX_LENGTH_CHARS
-        || receipt.vendor_blake3.len() != crate::manifest::BLAKE3_HEX_LENGTH_CHARS
-    {
-        reasons.push("malformed source/vendor BLAKE3 input identity".to_string());
-        return (DeterministicBuildProofVerdict::MalformedReceipt, reasons);
-    }
-    if !receipt
-        .toolchain_provider_identity
-        .contains(&format!("provider-kind={}", receipt.selected_provider_kind))
-    {
-        reasons.push("provider kind mismatch between proof unit and provider identity".to_string());
-        return (DeterministicBuildProofVerdict::ProviderKindMismatch, reasons);
-    }
-    if receipt.effect_policy_version != BUILD_EFFECT_POLICY_VERSION {
-        reasons.push(format!("unsupported build effect policy {}", receipt.effect_policy_version));
-        return (DeterministicBuildProofVerdict::MissingEvidence, reasons);
-    }
-    let effect_reasons = undeclared_effect_reasons(receipt);
-    if !effect_reasons.is_empty() {
-        reasons.extend(effect_reasons);
-        return (DeterministicBuildProofVerdict::MissingEvidence, reasons);
-    }
-    let genuine_rebuild_reasons = genuine_rebuild_admission_reasons(receipt);
-    if !genuine_rebuild_reasons.is_empty() {
-        let target_authority_violation =
-            genuine_rebuild_reasons.iter().any(|reason| reason.contains("target authority"));
-        reasons.extend(genuine_rebuild_reasons);
-        return if target_authority_violation {
-            (DeterministicBuildProofVerdict::TargetAuthorityViolation, reasons)
-        } else {
-            (DeterministicBuildProofVerdict::MissingGenuineRebuildEvidence, reasons)
-        };
-    }
+
+    let reason_slots = CLASSIFICATION_BASE_REASON_CAPACITY_COUNT
+        .saturating_add(REQUIRED_PERTURBATIONS.len())
+        .saturating_add(REQUIRED_NORMALIZATION_CONTROLS.len())
+        .saturating_add(receipt.sandbox_profile_identities.len())
+        .saturating_add(receipt.runs.len());
+    let mut reasons = Vec::with_capacity(reason_slots);
     reasons.extend(strict_proof_eligibility_reasons(receipt));
     if receipt.runs.len() < REQUIRED_RUN_COUNT {
         reasons.push("fewer than two clean proof runs".to_string());
@@ -721,20 +714,10 @@ fn classify_deterministic_build_proof(
             ));
         }
     }
+    debug_assert!(reason_slots >= REQUIRED_PERTURBATIONS.len());
+    debug_assert!(reason_slots >= receipt.runs.len());
     if !reasons.is_empty() {
-        if receipt.hermeticity_mode == crate::proof_eligibility::IMPURE_HERMETICITY_MODE {
-            return (DeterministicBuildProofVerdict::ImpureMode, reasons);
-        }
-        if reasons.iter().any(|reason| {
-            reason.contains("reused derivation-under-test output store identity")
-                || reason.contains("reused derivation-under-test output root identity")
-        }) {
-            return (DeterministicBuildProofVerdict::ReusedStore, reasons);
-        }
-        if reasons.iter().any(|reason| reason.contains("sandbox")) {
-            return (DeterministicBuildProofVerdict::UnsupportedSandbox, reasons);
-        }
-        return (DeterministicBuildProofVerdict::MissingEvidence, reasons);
+        return (classify_blocking_verdict(receipt, &reasons), reasons);
     }
     if digest_sets_match(&receipt.runs) {
         (DeterministicBuildProofVerdict::SelfRebuildMatch, Vec::new())
@@ -743,8 +726,92 @@ fn classify_deterministic_build_proof(
     }
 }
 
+fn classify_identity_and_authority(
+    receipt: &DeterministicBuildProofReceipt,
+) -> Option<(DeterministicBuildProofVerdict, Vec<String>)> {
+    debug_assert!(!BUILD_EFFECT_POLICY_VERSION.is_empty());
+    debug_assert!(!DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.is_empty());
+    if receipt.schema == LEGACY_DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA {
+        return Some((DeterministicBuildProofVerdict::MissingGenuineRebuildEvidence, vec![
+            "missing genuine rebuild evidence: legacy path-bound v1 receipt".to_string(),
+        ]));
+    }
+    if receipt.workflow_version != DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA {
+        return Some((DeterministicBuildProofVerdict::UnsupportedWorkflow, vec![format!(
+            "unsupported workflow_version {}",
+            receipt.workflow_version
+        )]));
+    }
+    if receipt.source_blake3.len() != crate::manifest::BLAKE3_HEX_LENGTH_CHARS
+        || receipt.vendor_blake3.len() != crate::manifest::BLAKE3_HEX_LENGTH_CHARS
+    {
+        return Some((DeterministicBuildProofVerdict::MalformedReceipt, vec![
+            "malformed source/vendor BLAKE3 input identity".to_string(),
+        ]));
+    }
+    if !receipt
+        .toolchain_provider_identity
+        .contains(&format!("provider-kind={}", receipt.selected_provider_kind))
+    {
+        return Some((DeterministicBuildProofVerdict::ProviderKindMismatch, vec![
+            "provider kind mismatch between proof unit and provider identity".to_string(),
+        ]));
+    }
+    if receipt.effect_policy_version != BUILD_EFFECT_POLICY_VERSION {
+        return Some((DeterministicBuildProofVerdict::MissingEvidence, vec![format!(
+            "unsupported build effect policy {}",
+            receipt.effect_policy_version
+        )]));
+    }
+    let effect_reasons = undeclared_effect_reasons(receipt);
+    if !effect_reasons.is_empty() {
+        return Some((DeterministicBuildProofVerdict::MissingEvidence, effect_reasons));
+    }
+    let genuine_rebuild_reasons = genuine_rebuild_admission_reasons(receipt);
+    if genuine_rebuild_reasons.is_empty() {
+        return None;
+    }
+    let has_target_authority_violation =
+        genuine_rebuild_reasons.iter().any(|reason| reason.contains("target authority"));
+    let verdict = if has_target_authority_violation {
+        DeterministicBuildProofVerdict::TargetAuthorityViolation
+    } else {
+        DeterministicBuildProofVerdict::MissingGenuineRebuildEvidence
+    };
+    Some((verdict, genuine_rebuild_reasons))
+}
+
+fn classify_blocking_verdict(
+    receipt: &DeterministicBuildProofReceipt,
+    reasons: &[String],
+) -> DeterministicBuildProofVerdict {
+    debug_assert!(!reasons.is_empty());
+    debug_assert!(!DETERMINISTIC_PROOF_CLAIM.is_empty());
+    if receipt.hermeticity_mode == crate::proof_eligibility::IMPURE_HERMETICITY_MODE {
+        return DeterministicBuildProofVerdict::ImpureMode;
+    }
+    if reasons.iter().any(|reason| {
+        reason.contains("reused derivation-under-test output store identity")
+            || reason.contains("reused derivation-under-test output root identity")
+    }) {
+        return DeterministicBuildProofVerdict::ReusedStore;
+    }
+    if reasons.iter().any(|reason| reason.contains("sandbox")) {
+        return DeterministicBuildProofVerdict::UnsupportedSandbox;
+    }
+    DeterministicBuildProofVerdict::MissingEvidence
+}
+
+struct GenuineRebuildEvidence<'a> {
+    descriptor: &'a ContentBoundRebuildDescriptor,
+    descriptor_blake3: &'a str,
+    plan: &'a RebuildAuthorityPlan,
+    plan_blake3: &'a str,
+}
+
 fn genuine_rebuild_admission_reasons(receipt: &DeterministicBuildProofReceipt) -> Vec<String> {
-    let mut reasons = Vec::new();
+    debug_assert!(!DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.is_empty());
+    debug_assert!(GENUINE_REBUILD_REASONS_PER_RUN_COUNT > 0);
     let Some(descriptor) = &receipt.rebuild_descriptor else {
         return vec!["missing genuine rebuild evidence: content-bound rebuild descriptor".to_string()];
     };
@@ -757,35 +824,70 @@ fn genuine_rebuild_admission_reasons(receipt: &DeterministicBuildProofReceipt) -
     let Some(plan_blake3) = &receipt.rebuild_authority_plan_blake3 else {
         return vec!["missing genuine rebuild evidence: rebuild authority plan BLAKE3".to_string()];
     };
-    match content_bound_rebuild_descriptor_digest_blake3(descriptor.clone()) {
-        Ok(actual) if &actual != descriptor_blake3 => {
+    let evidence = GenuineRebuildEvidence {
+        descriptor,
+        descriptor_blake3,
+        plan,
+        plan_blake3,
+    };
+    let reason_slots = GENUINE_REBUILD_BASE_REASON_CAPACITY_COUNT
+        .saturating_add(evidence.plan.blockers.len())
+        .saturating_add(receipt.runs.len().saturating_mul(GENUINE_REBUILD_REASONS_PER_RUN_COUNT));
+    let mut reasons = Vec::with_capacity(reason_slots);
+    append_genuine_digest_reasons(&evidence, &mut reasons);
+    append_authority_plan_reasons(&evidence, &mut reasons);
+    append_run_authority_reasons(receipt, &evidence, &mut reasons);
+    append_descriptor_binding_reasons(receipt, evidence.descriptor, &mut reasons);
+    debug_assert!(reason_slots >= evidence.plan.blockers.len());
+    debug_assert!(reason_slots >= receipt.runs.len());
+    reasons
+}
+
+fn append_genuine_digest_reasons(evidence: &GenuineRebuildEvidence<'_>, reasons: &mut Vec<String>) {
+    match content_bound_rebuild_descriptor_digest_blake3(evidence.descriptor.clone()) {
+        Ok(actual) if actual != evidence.descriptor_blake3 => {
             reasons.push("stale genuine rebuild descriptor BLAKE3".to_string())
         }
         Err(err) => reasons.push(format!("invalid genuine rebuild descriptor: {err}")),
         Ok(_) => {}
     }
-    match rebuild_authority_plan_digest_blake3(plan.clone()) {
-        Ok(actual) if &actual != plan_blake3 => reasons.push("stale genuine rebuild authority plan BLAKE3".to_string()),
+    match rebuild_authority_plan_digest_blake3(evidence.plan.clone()) {
+        Ok(actual) if actual != evidence.plan_blake3 => {
+            reasons.push("stale genuine rebuild authority plan BLAKE3".to_string())
+        }
         Err(err) => reasons.push(format!("invalid genuine rebuild authority plan: {err}")),
         Ok(_) => {}
     }
-    if plan.descriptor_blake3 != *descriptor_blake3 {
+}
+
+fn append_authority_plan_reasons(evidence: &GenuineRebuildEvidence<'_>, reasons: &mut Vec<String>) {
+    if evidence.plan.descriptor_blake3 != evidence.descriptor_blake3 {
         reasons.push("rebuild authority plan cites a different descriptor".to_string());
     }
-    if !plan.target_authority_excluded {
+    if !evidence.plan.target_authority_excluded {
         reasons.push("target authority was not excluded".to_string());
     }
-    for blocker in &plan.blockers {
+    for blocker in &evidence.plan.blockers {
         reasons.push(format!("target authority or declared-input blocker {:?}:{}", blocker.code, blocker.subject));
     }
-    let mut expected_reads = plan.approved_read_identities.clone();
+}
+
+fn append_run_authority_reasons(
+    receipt: &DeterministicBuildProofReceipt,
+    evidence: &GenuineRebuildEvidence<'_>,
+    reasons: &mut Vec<String>,
+) {
+    debug_assert!(!evidence.descriptor.run_roots.is_empty());
+    debug_assert!(!evidence.plan.approved_read_paths_blake3.is_empty());
+    let mut expected_reads = evidence.plan.approved_read_identities.clone();
     expected_reads.sort();
-    let descriptor_run_ids = descriptor.run_roots.iter().map(|root| root.run_id.clone()).collect::<BTreeSet<_>>();
+    let descriptor_run_ids =
+        evidence.descriptor.run_roots.iter().map(|root| root.run_id.clone()).collect::<BTreeSet<_>>();
     for run in &receipt.runs {
-        if run.rebuild_descriptor_blake3.as_ref() != Some(descriptor_blake3) {
+        if run.rebuild_descriptor_blake3.as_deref() != Some(evidence.descriptor_blake3) {
             reasons.push(format!("run {} does not cite accepted rebuild descriptor", run.run_id));
         }
-        if run.rebuild_authority_plan_blake3.as_ref() != Some(plan_blake3) {
+        if run.rebuild_authority_plan_blake3.as_deref() != Some(evidence.plan_blake3) {
             reasons.push(format!("run {} does not cite accepted rebuild authority plan", run.run_id));
         }
         let mut observed_reads = run.observed_read_identities.clone();
@@ -808,6 +910,13 @@ fn genuine_rebuild_admission_reasons(receipt: &DeterministicBuildProofReceipt) -
     if run_ids != descriptor_run_ids {
         reasons.push("rebuild descriptor run roots do not match executed runs".to_string());
     }
+}
+
+fn append_descriptor_binding_reasons(
+    receipt: &DeterministicBuildProofReceipt,
+    descriptor: &ContentBoundRebuildDescriptor,
+    reasons: &mut Vec<String>,
+) {
     let target_pairs = descriptor
         .target_artifacts
         .iter()
@@ -820,11 +929,11 @@ fn genuine_rebuild_admission_reasons(receipt: &DeterministicBuildProofReceipt) -
     if !descriptor.source_inputs.iter().any(|source| source.digest_blake3 == receipt.source_blake3) {
         reasons.push("rebuild descriptor source closure does not bind receipt source".to_string());
     }
-    reasons
 }
 
 fn normalization_policy_reasons(envelope: &[String]) -> Vec<String> {
-    let mut reasons = Vec::new();
+    let reason_slots = envelope.len().saturating_add(REQUIRED_NORMALIZATION_CONTROLS.len());
+    let mut reasons = Vec::with_capacity(reason_slots);
     for entry in envelope {
         if let Some(control) = entry.strip_prefix(UNSUPPORTED_NORMALIZATION_PREFIX) {
             reasons.push(format!("unsupported determinism normalization control {control}"));
@@ -863,7 +972,7 @@ fn output_divergence_reasons(runs: &[DeterministicBuildRunReceipt]) -> Vec<Strin
 fn strict_proof_eligibility_reasons(receipt: &DeterministicBuildProofReceipt) -> Vec<String> {
     let event_classes =
         receipt.runs.iter().flat_map(|run| run.hermeticity_audit_events.iter().cloned()).collect::<Vec<_>>();
-    let report = crate::proof_eligibility::strict_proof_eligibility_gate(
+    let eligibility_decision = crate::proof_eligibility::strict_proof_eligibility_gate(
         crate::proof_eligibility::StrictProofEligibilityInput {
             workflow: DETERMINISTIC_PROOF_WORKFLOW.to_string(),
             requested_claim: DETERMINISTIC_PROOF_CLAIM.to_string(),
@@ -874,16 +983,16 @@ fn strict_proof_eligibility_reasons(receipt: &DeterministicBuildProofReceipt) ->
             host_tool_status: crate::proof_eligibility::ProofFactStatus::Satisfied,
         },
     );
-    if report.strict_claim_satisfied {
+    if eligibility_decision.strict_claim_satisfied {
         return Vec::new();
     }
-    crate::proof_eligibility::proof_eligibility_blocking_reasons(report)
+    crate::proof_eligibility::proof_eligibility_blocking_reasons(eligibility_decision)
 }
 
 fn reused_output_store_path_reasons(runs: &[DeterministicBuildRunReceipt]) -> Vec<String> {
     let mut seen_store_paths = BTreeSet::new();
     let mut seen_output_roots = BTreeSet::new();
-    let mut reasons = Vec::new();
+    let mut reasons = Vec::with_capacity(runs.len());
     for run in runs {
         if run.output_store_paths.is_empty() {
             reasons.push(format!("run {} has no clean output store identity", run.run_id));
@@ -900,6 +1009,8 @@ fn reused_output_store_path_reasons(runs: &[DeterministicBuildRunReceipt]) -> Ve
             reasons.push(format!("reused derivation-under-test output root identity {}", run.output_root_identity));
         }
     }
+    debug_assert!(seen_output_roots.len() <= runs.len());
+    debug_assert!(reasons.len() <= runs.len().saturating_mul(runs.len().saturating_add(1)));
     reasons
 }
 
