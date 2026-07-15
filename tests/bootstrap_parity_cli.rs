@@ -111,7 +111,7 @@ fn bootstrap_parity_report_requires_binutils_tcc_transcript_for_live_bootstrap_a
 }
 
 #[test]
-fn bootstrap_parity_report_exposes_real_self_build_proof_details_without_unblocking_axes() {
+fn bootstrap_parity_report_rejects_legacy_self_build_proof_without_unblocking_axes() {
     let repo = env!("CARGO_MANIFEST_DIR");
 
     let output = crunch()
@@ -127,13 +127,10 @@ fn bootstrap_parity_report_exposes_real_self_build_proof_details_without_unblock
 
     let report: Value = serde_json::from_slice(&output).unwrap();
     let row = row_by_id(&report, "crunch.self-build");
-    assert_eq!(row["status"], "partial");
-    assert_eq!(row["provider_kind"], "source-root");
-    assert_eq!(row["proof_details"]["schema"], "mantle-real-self-build-proof-parity-evidence-v1");
-    assert_eq!(row["proof_details"]["verdict"], "self-rebuild-match");
-    assert_eq!(row["proof_details"]["verify_status"], "eligible");
-    assert!(row["proof_details"]["bounded_claim"].as_str().unwrap().contains("rebuilt twice"));
-    assert!(row["notes"].as_str().unwrap().contains("real self-build proof evidence accepted"));
+    assert_eq!(row["status"], "blocked");
+    assert_eq!(row["provider_kind"], "unknown");
+    assert!(row["proof_details"].is_null());
+    assert!(row["notes"].as_str().unwrap().contains("mantle-deterministic-proof-receipt-v2"));
 
     let guix = report["axes"].as_array().unwrap().iter().find(|axis| axis["axis"] == "guix").unwrap();
     let stagex = report["axes"].as_array().unwrap().iter().find(|axis| axis["axis"] == "stagex").unwrap();

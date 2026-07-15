@@ -366,8 +366,8 @@ fn project_build_no_crunch_ncl_fails() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("crunch.ncl") && (stderr.contains("not found") || stderr.contains("no crunch.ncl")),
-        "error should mention missing crunch.ncl, got: {stderr}"
+        stderr.contains("mantle-project.ncl") && stderr.contains("crunch.ncl") && stderr.contains("found"),
+        "error should name both supported project manifests, got: {stderr}"
     );
 }
 

@@ -16,6 +16,7 @@ use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
 use std::thread::{self};
 use std::time::Duration;
+use std::time::Instant;
 
 use assert_cmd::Command;
 use predicates::prelude::*;
@@ -34,6 +35,44 @@ fn crunch_root() -> PathBuf {
 
 const RUNTIME_FINGERPRINT_PREFIX: &str = "mantle-runtime-fingerprint";
 const CLAP_USAGE_ERROR_CODE: i32 = 2;
+const LOOPBACK_PROBE_TIMEOUT: Duration = Duration::from_millis(100);
+const HTTP_FIXTURE_ACCEPT_TIMEOUT: Duration = Duration::from_secs(5);
+const HTTP_FIXTURE_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(10);
+
+fn require_loopback_network(test_name: &str) -> bool {
+    debug_assert!(!test_name.is_empty());
+    if loopback_network_available() {
+        return true;
+    }
+    eprintln!("SKIP {test_name}: isolated environment does not provide IPv4 loopback networking");
+    false
+}
+
+fn loopback_network_available() -> bool {
+    let Ok(listener) = TcpListener::bind("127.0.0.1:0") else {
+        return false;
+    };
+    let Ok(addr) = listener.local_addr() else {
+        return false;
+    };
+    let Ok(_client) = TcpStream::connect_timeout(&addr, LOOPBACK_PROBE_TIMEOUT) else {
+        return false;
+    };
+    listener.accept().is_ok()
+}
+
+fn accept_http_fixture_connection(listener: &TcpListener) -> Option<TcpStream> {
+    let deadline = Instant::now().checked_add(HTTP_FIXTURE_ACCEPT_TIMEOUT)?;
+    loop {
+        match listener.accept() {
+            Ok((stream, _)) => return Some(stream),
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => {
+                thread::sleep(HTTP_FIXTURE_ACCEPT_POLL_INTERVAL);
+            }
+            Err(_) => return None,
+        }
+    }
+}
 
 fn runtime_fingerprint_payload(stderr: &str) -> serde_json::Value {
     let line = stderr
@@ -483,6 +522,7 @@ mod build_tests {
         // in inputs, which bootstrap doesn't resolve yet.
         let dir = tempfile::tempdir().unwrap();
         let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
         std::fs::write(
             dir.path().join("hello.ncl"),
             r#"let crunch = import "lib.ncl" in
@@ -498,7 +538,10 @@ mod build_tests {
         crunch_cmd()
             .arg("--store")
             .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
             .arg("build")
+            .arg("--no-substitute")
             .arg("-I")
             .arg(dir.path())
             .arg(dir.path().join("hello.ncl"))
@@ -516,6 +559,7 @@ mod build_tests {
 
         let dir = tempfile::tempdir().unwrap();
         let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
         let log_dir = tempfile::tempdir().unwrap();
 
         std::fs::write(
@@ -534,7 +578,10 @@ mod build_tests {
             .env("CRUNCH_LOG_DIR", log_dir.path())
             .arg("--store")
             .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
             .arg("build")
+            .arg("--no-substitute")
             .arg("-I")
             .arg(dir.path())
             .arg(dir.path().join("logged.ncl"))
@@ -618,7 +665,7 @@ mod build_tests {
     }
 
     #[test]
-    fn build_json_failure_keeps_report_and_json_error_separate() {
+    fn build_json_failure_keeps_report_on_stdout_and_stderr_empty() {
         if !can_build() {
             eprintln!("skipping build test: bwrap or /nix/store not available");
             return;
@@ -660,15 +707,12 @@ mod build_tests {
         assert_eq!(report["hermeticity_mode"], "practical");
         assert_eq!(report["hermeticity_audit_events"], serde_json::json!([]));
         assert_eq!(report["counts"]["failed_total"], 1);
-        assert_eq!(report["failed"][0]["label"], "json-fail");
-        assert!(report["failed"][0]["error"].as_str().unwrap().contains("exit code 7"));
+        assert_eq!(report["failed"][0]["root"], "json-fail");
+        let failure_message = report["failed"][0]["message"].as_str().unwrap();
+        assert!(failure_message.contains("exit status: 7"), "unexpected failure message: {failure_message}");
 
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let error: serde_json::Value =
-            serde_json::from_str(stderr.trim()).expect("stderr should be a JSON error object");
-        assert_eq!(error["kind"], "build");
-        assert_eq!(error["code"], 1);
-        assert!(error["error"].as_str().unwrap().contains("root build(s) failed"));
+        assert!(stderr.trim().is_empty(), "reported JSON build failures must not emit a second error: {stderr}");
     }
 
     #[test]
@@ -679,6 +723,8 @@ mod build_tests {
         }
 
         let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
 
         std::fs::write(
             dir.path().join("fail.ncl"),
@@ -693,7 +739,12 @@ mod build_tests {
         .unwrap();
 
         crunch_cmd()
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
             .arg("build")
+            .arg("--no-substitute")
             .arg("-I")
             .arg(dir.path())
             .arg(dir.path().join("fail.ncl"))
@@ -770,7 +821,11 @@ mod build_tests {
                 "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",
             )
             .unwrap();
-            let verify = crunch_build::verify_pathinfo_signatures(&pi, &[keypair.verifying_key]);
+            let verify = crunch_build::verify_pathinfo_signatures_with_store_dir(
+                &pi,
+                &[keypair.verifying_key],
+                "/mantle/store",
+            );
             assert!(verify.is_trusted(), "persisted build signature should verify");
         });
     }
@@ -834,7 +889,7 @@ fn store_sign_all_signs_existing_unsigned_entries() {
             deriver: None,
             ca: None,
         };
-        crunch_build::sign_pathinfo(&mut signed_pi, &other_keypair.signing_key);
+        crunch_build::sign_pathinfo_with_store_dir(&mut signed_pi, &other_keypair.signing_key, "/mantle/store");
         svc.put(signed_pi).await.unwrap();
     });
 
@@ -957,6 +1012,9 @@ fn store_pull_rejects_unsupported_url_scheme() {
 
 #[test]
 fn store_pull_http_round_trip_imports_path() {
+    if !require_loopback_network("store_pull_http_round_trip_imports_path") {
+        return;
+    }
     let work = tempfile::tempdir().unwrap();
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let (cache_dir, logical_store_path, trusted_public_key) =
@@ -1200,13 +1258,17 @@ fn log_subcommand_query_not_found() {
 
 #[test]
 fn fetchurl_wrong_hash_shows_correct_hash() {
+    if !require_loopback_network("fetchurl_wrong_hash_shows_correct_hash") {
+        return;
+    }
     // Spin up a local HTTP server serving known content.
     let content = b"auto-fix test content";
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
     let addr = listener.local_addr().unwrap();
     let handle = std::thread::spawn(move || {
         use std::io::Write;
-        if let Ok((mut stream, _)) = listener.accept() {
+        if let Some(mut stream) = accept_http_fixture_connection(&listener) {
             let mut buf = [0u8; 4096];
             let _ = std::io::Read::read(&mut stream, &mut buf);
             let resp = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", content.len());
@@ -1217,6 +1279,7 @@ fn fetchurl_wrong_hash_shows_correct_hash() {
 
     // Write a .ncl file with a wrong hash
     let store_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
     let work_dir = tempfile::tempdir().unwrap();
     let ncl_file = work_dir.path().join("fetch-test.ncl");
     std::fs::write(
@@ -1231,7 +1294,15 @@ fn fetchurl_wrong_hash_shows_correct_hash() {
     )
     .unwrap();
 
-    let output = crunch_cmd().arg("--store").arg(store_dir.path()).arg("build").arg(&ncl_file).output().unwrap();
+    let output = crunch_cmd()
+        .arg("--store")
+        .arg(store_dir.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
+        .arg("build")
+        .arg(&ncl_file)
+        .output()
+        .unwrap();
 
     handle.join().unwrap();
 
@@ -1249,13 +1320,17 @@ fn fetchurl_wrong_hash_shows_correct_hash() {
 
 #[test]
 fn fix_flag_rewrites_hash() {
+    if !require_loopback_network("fix_flag_rewrites_hash") {
+        return;
+    }
     // Spin up a local HTTP server
     let content = b"fix-flag test content";
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
     let addr = listener.local_addr().unwrap();
     let handle = std::thread::spawn(move || {
         use std::io::Write;
-        if let Ok((mut stream, _)) = listener.accept() {
+        if let Some(mut stream) = accept_http_fixture_connection(&listener) {
             let mut buf = [0u8; 4096];
             let _ = std::io::Read::read(&mut stream, &mut buf);
             let resp = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", content.len());
@@ -1265,6 +1340,7 @@ fn fix_flag_rewrites_hash() {
     });
 
     let store_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
     let work_dir = tempfile::tempdir().unwrap();
     let ncl_file = work_dir.path().join("fix-test.ncl");
     let wrong_hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
@@ -1283,6 +1359,8 @@ fn fix_flag_rewrites_hash() {
     let output = crunch_cmd()
         .arg("--store")
         .arg(store_dir.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
         .arg("build")
         .arg("--fix")
         .arg(&ncl_file)

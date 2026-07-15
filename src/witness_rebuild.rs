@@ -5,6 +5,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Output;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use crunch_attestation::ReleaseAttestation;
 use serde::Deserialize;
@@ -117,7 +120,6 @@ const SOURCE_ACQUISITION_STATUS_VERIFIED: &str = "verified";
 const MAX_SOURCE_ARCHIVE_FETCH_BYTES: u64 = 4_294_967_296;
 const SOURCE_FETCH_BUFFER_BYTES: usize = 65_536;
 const MAX_SCRATCH_ROOT_ENTRIES: usize = 16;
-const MILLISECONDS_PER_SECOND: u64 = 1000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ExpectedRebuiltOutput {
@@ -1917,9 +1919,15 @@ fn collect_matching_excerpt_lines(text: &str, excerpts: &mut Vec<String>) {
 }
 
 fn unix_time_ms_now() -> Result<u64, RunError> {
-    crate::unix_time_now_s()?
-        .checked_mul(MILLISECONDS_PER_SECOND)
-        .ok_or_else(|| RunError::Internal("unix time overflowed u64 milliseconds".to_string()))
+    let elapsed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|err| RunError::Internal(format!("system time before Unix epoch: {err}")))?;
+    duration_to_unix_time_ms(elapsed)
+}
+
+fn duration_to_unix_time_ms(elapsed: Duration) -> Result<u64, RunError> {
+    u64::try_from(elapsed.as_millis())
+        .map_err(|_| RunError::Internal("unix time overflowed u64 milliseconds".to_string()))
 }
 
 fn audit_status_success() -> &'static str {
@@ -1943,6 +1951,21 @@ mod tests {
     const TEST_REQUEST_LAYOUT_VERSION: u32 = 1;
     const TEST_SOURCE_ARCHIVE_FILE_MODE: u32 = 0o644;
     const TEST_SHA256_HEX_LENGTH_CHARS: usize = 64;
+    const TEST_DURATION_SECONDS: u64 = 1;
+    const TEST_DURATION_NANOSECONDS: u32 = 234_000_000;
+    const TEST_DURATION_MILLISECONDS: u64 = 1_234;
+
+    #[test]
+    fn duration_to_unix_time_ms_preserves_millisecond_precision() {
+        let elapsed = Duration::new(TEST_DURATION_SECONDS, TEST_DURATION_NANOSECONDS);
+        assert_eq!(duration_to_unix_time_ms(elapsed).unwrap(), TEST_DURATION_MILLISECONDS);
+    }
+
+    #[test]
+    fn duration_to_unix_time_ms_rejects_u64_overflow() {
+        let err = duration_to_unix_time_ms(Duration::MAX).unwrap_err();
+        assert!(err.message().contains("overflowed u64 milliseconds"));
+    }
 
     #[test]
     fn default_witness_scratch_dir_appends_work_suffix() {

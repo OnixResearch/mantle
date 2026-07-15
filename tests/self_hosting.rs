@@ -71,6 +71,7 @@ const PROOF_STAGE0_INVENTORY_DOC_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTO
 const PROOF_NO_HOST_TOOLS_ENV: &str = "CRUNCH_SELF_HOSTING_NO_HOST_TOOLS";
 const PROOF_STAGE0_INVENTORY_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTORY";
 const PROOF_LATER_STAGE_HERMETICITY_ENV: &str = "CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE";
+const TEST_SCRIPT_SHELL_ENV: &str = "MANTLE_TEST_SCRIPT_SHELL";
 const PROOF_BUNDLE_SCHEMA: &str = "mantle-self-hosting-proof-v2";
 const PROOF_STAGE1_BINARY_RELATIVE_PATH: &str = "binaries/stage1-mantle";
 const PROOF_STAGE2_BINARY_RELATIVE_PATH: &str = "binaries/stage2-mantle";
@@ -2214,9 +2215,40 @@ fn chmod_executable(path: &Path) {
 }
 
 #[cfg(unix)]
+fn test_script_shell() -> PathBuf {
+    if let Some(configured) = std::env::var_os(TEST_SCRIPT_SHELL_ENV) {
+        let shell = PathBuf::from(configured);
+        assert!(shell.is_absolute(), "configured test script shell must be absolute");
+        assert!(shell.is_file(), "configured test script shell must be a file");
+        return shell;
+    }
+    if let Some(path_var) = std::env::var_os("PATH") {
+        let entries = path_entries(&path_var);
+        if let Some(shell) = find_executable_in_entries("bash", &entries) {
+            return shell;
+        }
+    }
+    let shell = PathBuf::from("/bin/sh");
+    assert!(shell.is_file(), "test script shell must be configured when /bin/sh is absent");
+    shell
+}
+
+#[cfg(unix)]
+fn rewrite_test_script_shebang(body: &str, shell: &Path) -> String {
+    assert!(!body.is_empty(), "test script body must not be empty");
+    assert!(shell.is_absolute(), "test script shell must be absolute");
+    let rest = body.strip_prefix("#!/bin/sh\n").or_else(|| body.strip_prefix("#!/usr/bin/env bash\n"));
+    match rest {
+        Some(rest) => format!("#!{}\n{rest}", shell.display()),
+        None => body.to_string(),
+    }
+}
+
+#[cfg(unix)]
 fn write_executable_script(path: &Path, body: &str) {
     let parent = path.parent().unwrap_or_else(|| panic!("script path has no parent: {}", path.display()));
     std::fs::create_dir_all(parent).unwrap_or_else(|err| panic!("mkdir {}: {err}", parent.display()));
+    let body = rewrite_test_script_shebang(body, &test_script_shell());
     std::fs::write(path, body).unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
     chmod_executable(path);
 }
@@ -2319,7 +2351,7 @@ done
         for blocked in BLOCKED_NIX_BINARIES {
             write_executable_script(&tool_dir.join(blocked), "#!/bin/sh\nset -eu\nexit 0\n");
         }
-        write_executable_script(&tool_dir.join("bash"), "#!/bin/sh\nexec /bin/sh \"$@\"\n");
+        write_executable_script(&tool_dir.join("bash"), "#!/bin/sh\nexec \"${MANTLE_TEST_SCRIPT_SHELL:?}\" \"$@\"\n");
         write_executable_script(&tool_dir.join("static-sh"), "#!/bin/sh\nset -eu\nexit 0\n");
 
         Self {
@@ -2365,14 +2397,17 @@ done
         } else {
             format!("{}:{host_path}", self.tool_dir.display())
         };
-        let mut command = std::process::Command::new(self.script_path());
+        let script_shell = test_script_shell();
+        let mut command = std::process::Command::new(&script_shell);
         command
+            .arg(self.script_path())
             .current_dir(cwd)
             .env("PATH", fake_path)
             .env("HOME", self.repo_dir.join("home"))
             .env("TMPDIR", self.ambient_tmpdir())
             .env("CARGO_TARGET_DIR", self.ambient_cargo_target_dir())
-            .env("SNIX_BUILD_SANDBOX_SHELL", self.tool_dir.join("static-sh"));
+            .env("SNIX_BUILD_SANDBOX_SHELL", self.tool_dir.join("static-sh"))
+            .env(TEST_SCRIPT_SHELL_ENV, script_shell);
         command
     }
 
@@ -2405,6 +2440,22 @@ done
         let bundle_arg_owned = bundle_arg.to_string_lossy().into_owned();
         self.run_args(&["--bundle-dir", &bundle_arg_owned])
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn test_script_shebang_uses_declared_absolute_shell() {
+    let rewritten = rewrite_test_script_shebang("#!/bin/sh\nset -eu\n", Path::new("/declared/bash"));
+    assert_eq!(rewritten, "#!/declared/bash\nset -eu\n");
+    assert!(!rewritten.contains("/usr/bin/env"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_script_shebang_leaves_non_script_payload_unchanged() {
+    let payload = "not a script\n";
+    assert_eq!(rewrite_test_script_shebang(payload, Path::new("/declared/bash")), payload);
+    assert!(!payload.starts_with("#!"));
 }
 
 #[test]

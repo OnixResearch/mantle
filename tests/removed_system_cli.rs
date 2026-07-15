@@ -102,13 +102,18 @@ fn external_frontend_can_hand_mantle_build_shaped_input() {
         .arg(&ncl_path)
         .output()
         .unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
-    let planned_or_preflighted = stderr.contains("will-build") || stderr.contains("preflight-error");
+    let plan_output = format!("{stdout}\n{stderr}");
+    let planned_or_preflighted = plan_output.contains(": build") || plan_output.contains("preflight-error");
 
-    assert!(stderr.contains("frontend-output"), "build plan should name frontend output:\n{stderr}");
-    assert!(planned_or_preflighted, "build-shaped input should reach build planning:\n{stderr}");
-    assert!(!stderr.contains("deserialization error"), "build-shaped input must deserialize:\n{stderr}");
-    assert!(!stderr.contains("roles"), "build plan should not interpret module roles:\n{stderr}");
+    assert!(plan_output.contains("frontend-output"), "build plan should name frontend output:\n{plan_output}");
+    assert!(planned_or_preflighted, "build-shaped input should reach build planning:\n{plan_output}");
+    assert!(
+        !plan_output.contains("deserialization error"),
+        "build-shaped input must deserialize:\n{plan_output}"
+    );
+    assert!(!plan_output.contains("roles"), "build plan should not interpret module roles:\n{plan_output}");
 }
 
 #[test]

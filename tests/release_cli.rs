@@ -1817,11 +1817,11 @@ fn assert_fake_witness_driver_launch_signal_absent(path: &Path) {
 }
 
 fn write_fake_provider_cli_capture_shim(path: &Path) {
-    let script = r#"#!/usr/bin/env bash
-set -euo pipefail
+    let script = r#"#!/bin/sh
+set -eu
 : "${CRUNCH_TEST_REAL_CLI:?}"
 : "${CRUNCH_TEST_CAPTURE_ARGS:?}"
-if [[ "$#" -ge 2 && "$1" == "release" && "$2" == "witness-rebuild" ]]; then
+if [ "$#" -ge 2 ] && [ "$1" = "release" ] && [ "$2" = "witness-rebuild" ]; then
   exec "$CRUNCH_TEST_REAL_CLI" "$@"
 fi
 : > "$CRUNCH_TEST_CAPTURE_ARGS"
@@ -1839,9 +1839,10 @@ done
 }
 
 fn write_fake_witness_rebuild_driver(path: &Path) {
-    let script = r#"#!/usr/bin/env bash
-set -euo pipefail
-readonly DRIVER_SLEEP_SECONDS=0.1
+    let script = r#"#!/bin/sh
+set -eu
+DRIVER_SLEEP_SECONDS=0.1
+readonly DRIVER_SLEEP_SECONDS
 launch_signal="${CRUNCH_TEST_WITNESS_DRIVER_LAUNCH_SIGNAL:?fake driver requires launch signal path}"
 # Write launch signal before later env validation so preflight-failure tests can
 # distinguish "driver never launched" from "driver started and failed early".
@@ -1900,6 +1901,49 @@ fn rewrite_request_release_attestation(request_dir: &Path, rewrite: impl FnOnce(
 
 fn witness_rebuild_helper_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/rebuild-witness-request.sh")
+}
+
+fn witness_rebuild_helper_command() -> ProcessCommand {
+    let bash = release_fixture_tool("bash");
+    let mut command = ProcessCommand::new(&bash);
+    command
+        .arg("-c")
+        .arg(
+            r#"set -eu
+tool_dir="$(mktemp -d)"
+trap 'rm -rf -- "$tool_dir"' EXIT
+printf '#!/bin/sh\nexit 0\n' > "$tool_dir/bwrap"
+chmod +x "$tool_dir/bwrap"
+export PATH="$tool_dir:$PATH"
+if [ -z "${SNIX_BUILD_SANDBOX_SHELL:-}" ] || [ "$SNIX_BUILD_SANDBOX_SHELL" = /bin/sh ]; then
+  export SNIX_BUILD_SANDBOX_SHELL="$tool_dir/bwrap"
+fi
+"$1" "$2" "${@:3}"
+"#,
+        )
+        .arg("witness-rebuild-helper")
+        .arg(bash)
+        .arg(witness_rebuild_helper_path());
+    command
+}
+
+fn release_fixture_tool(name: &str) -> PathBuf {
+    debug_assert!(!name.is_empty());
+    debug_assert!(!name.contains('/'));
+    if let Some(path) = std::env::var_os("PATH")
+        .into_iter()
+        .flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
+        .map(|directory| directory.join(name))
+        .find(|candidate| candidate.is_file())
+    {
+        return path;
+    }
+    ["/run/current-system/sw/bin", "/usr/bin", "/bin"]
+        .into_iter()
+        .map(Path::new)
+        .map(|directory| directory.join(name))
+        .find(|candidate| candidate.is_file())
+        .unwrap_or_else(|| panic!("a {name} executable is required for release fixtures"))
 }
 
 fn copy_directory_for_test(source_dir: &Path, dest_dir: &Path) {
@@ -1961,11 +2005,7 @@ fn retarget_release_binary_to_source_size(bundle_dir: &Path, manifest: &mut Rele
 }
 
 fn write_source_size_rebuild_script(script_path: &Path, binary_relative_path: &str) -> [PathBuf; 2] {
-    let host_wc = ["/run/current-system/sw/bin/wc", "/usr/bin/wc", "/bin/wc"]
-        .into_iter()
-        .map(PathBuf::from)
-        .find(|path| path.is_file())
-        .expect("a wc executable is required for release rebuild fixtures");
+    let host_wc = release_fixture_tool("wc");
     let wc_tool = script_path.with_file_name("wc-tool").join("wc");
     write_rebuild_script(&wc_tool, &format!("exec \"{}\" \"$@\"\n", host_wc.display()));
     let mkdir_tool = write_genuine_rebuild_script(script_path, binary_relative_path);
@@ -1979,11 +2019,7 @@ fn write_source_size_rebuild_script(script_path: &Path, binary_relative_path: &s
 }
 
 fn write_genuine_rebuild_script(script_path: &Path, binary_relative_path: &str) -> PathBuf {
-    let host_mkdir = ["/run/current-system/sw/bin/mkdir", "/usr/bin/mkdir", "/bin/mkdir"]
-        .into_iter()
-        .map(PathBuf::from)
-        .find(|path| path.is_file())
-        .expect("a mkdir executable is required for release rebuild fixtures");
+    let host_mkdir = release_fixture_tool("mkdir");
     let mkdir_tool = script_path.with_file_name("mkdir-tool").join("mkdir");
     write_rebuild_script(&mkdir_tool, &format!("exec \"{}\" \"$@\"\n", host_mkdir.display()));
     write_rebuild_script(
@@ -4911,7 +4947,7 @@ fn witness_rebuild_helper_check_is_preflight_only() {
         .assert()
         .success();
 
-    let output = ProcessCommand::new(witness_rebuild_helper_path())
+    let output = witness_rebuild_helper_command()
         .current_dir(temp.path())
         .arg("--check")
         .arg("--json")
@@ -4968,7 +5004,7 @@ fn witness_rebuild_helper_check_accepts_provider_bound_inputs() {
         .assert()
         .success();
 
-    let output = ProcessCommand::new(witness_rebuild_helper_path())
+    let output = witness_rebuild_helper_command()
         .current_dir(temp.path())
         .arg("--check")
         .arg("--json")
@@ -5026,7 +5062,7 @@ fn witness_rebuild_helper_provider_bound_driver_passes_default_target() {
         .assert()
         .success();
 
-    let output = ProcessCommand::new(witness_rebuild_helper_path())
+    let output = witness_rebuild_helper_command()
         .current_dir(temp.path())
         .arg("--scratch-dir")
         .arg(&scratch_dir)
@@ -5068,7 +5104,7 @@ fn witness_rebuild_helper_rejects_incomplete_provider_bound_inputs() {
     let request_dir = temp.path().join("request");
     std::fs::create_dir_all(&provider_dir).unwrap();
 
-    let output = ProcessCommand::new(witness_rebuild_helper_path())
+    let output = witness_rebuild_helper_command()
         .current_dir(temp.path())
         .arg("--check")
         .arg(&request_dir)
@@ -5090,7 +5126,7 @@ fn witness_rebuild_helper_rejects_empty_provider_target() {
     std::fs::create_dir_all(&provider_dir).unwrap();
     write_file(&closure_manifest, br#"{}"#);
 
-    let output = ProcessCommand::new(witness_rebuild_helper_path())
+    let output = witness_rebuild_helper_command()
         .current_dir(temp.path())
         .arg("--check")
         .arg(&request_dir)
@@ -5142,7 +5178,7 @@ fn witness_rebuild_helper_happy_path_writes_sidecars_and_audit() {
         .assert()
         .success();
 
-    let output = ProcessCommand::new(witness_rebuild_helper_path())
+    let output = witness_rebuild_helper_command()
         .current_dir(temp.path())
         .arg("--json")
         .arg("--scratch-dir")

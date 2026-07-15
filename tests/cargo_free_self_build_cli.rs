@@ -10,7 +10,11 @@ const DIGEST_C: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 const DIGEST_D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 const DIGEST_E: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const DIGEST_F: &str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-const REQUIRED_TOOLCHAIN_MEMBER_COUNT: u64 = 4;
+const RECEIPT_LINKER_PROGRAM: &str = "ld.lld";
+const TARGET_C_COMPILER_PROGRAM: &str = "x86_64-unknown-linux-musl-gcc";
+const TARGET_CRT1_MEMBER_NAME: &str = "x86_64-linux-musl-crt1.o";
+const TARGET_CRT1_FILE_NAME: &str = "crt1.o";
+const REQUIRED_TOOLCHAIN_MEMBER_COUNT: u64 = 6;
 const SOURCE_BUILT_WITH_SEED_MEMBER_COUNT: u64 = REQUIRED_TOOLCHAIN_MEMBER_COUNT - 1;
 const BLAKE3_HEX_CHAR_COUNT: usize = DIGEST_A.len();
 const FIXED_POINT_SUCCESS_SOURCE: &str = r##"
@@ -133,6 +137,8 @@ fn write_matching_seed_exception_toolchain_closure_manifest(dir: &TempDir) -> st
         toolchain_member("linker", "cc-linker", &path_string(&cc), &cc_digest, DIGEST_C),
         toolchain_member("c-compiler", "cc", &path_string(&cc), &cc_digest, DIGEST_D),
         seed_exception_toolchain_member("sysroot", "rustc-sysroot", &path_string(&sysroot), DIGEST_E),
+        matching_target_crt_member(),
+        matching_linker_helper_member(),
     ];
     let seed_exceptions = vec![serde_json::json!({
         "name": "rustc-sysroot",
@@ -178,7 +184,26 @@ fn matching_toolchain_members(rustc_member_path: &std::path::Path) -> Vec<Value>
         toolchain_member("linker", "cc-linker", &path_string(&cc), &cc_digest, DIGEST_C),
         toolchain_member("c-compiler", "cc", &path_string(&cc), &cc_digest, DIGEST_D),
         toolchain_member("sysroot", "rustc-sysroot", &path_string(&sysroot), DIGEST_E, DIGEST_F),
+        matching_target_crt_member(),
+        matching_linker_helper_member(),
     ]
+}
+
+fn matching_linker_helper_member() -> Value {
+    let linker = resolve_on_path(RECEIPT_LINKER_PROGRAM);
+    toolchain_member("native-helper", RECEIPT_LINKER_PROGRAM, &path_string(&linker), &blake3_file(&linker), DIGEST_B)
+}
+
+fn matching_target_crt_member() -> Value {
+    let target_c_compiler = resolve_on_path(TARGET_C_COMPILER_PROGRAM);
+    let target_crt1 = compiler_runtime_file(&target_c_compiler, TARGET_CRT1_FILE_NAME);
+    toolchain_member(
+        "crt-object",
+        TARGET_CRT1_MEMBER_NAME,
+        &path_string(&target_crt1),
+        &blake3_file(&target_crt1),
+        DIGEST_A,
+    )
 }
 
 fn write_toolchain_manifest_value(path: &std::path::Path, members: Vec<Value>) {
@@ -225,8 +250,15 @@ fn seed_exception_toolchain_member(role: &str, name: &str, execution_path: &str,
     })
 }
 
-fn assert_validated_toolchain_closure(closure: &Value, manifest: &std::path::Path) {
-    assert_validated_toolchain_closure_counts(closure, manifest, REQUIRED_TOOLCHAIN_MEMBER_COUNT, 0);
+fn assert_enforced_toolchain_closure(closure: &Value, manifest: &std::path::Path) {
+    assert_eq!(closure["status"], "enforced-source-built");
+    assert_eq!(closure["claim"], true);
+    assert!(closure["non_claim"].is_null());
+    assert_eq!(closure["manifest_path"], manifest.to_string_lossy().as_ref());
+    assert_eq!(closure["member_count"], REQUIRED_TOOLCHAIN_MEMBER_COUNT);
+    assert_eq!(closure["source_built_member_count"], REQUIRED_TOOLCHAIN_MEMBER_COUNT);
+    assert_eq!(closure["seed_exception_count"], 0);
+    assert_eq!(closure["policy_digest_blake3"].as_str().unwrap().len(), BLAKE3_HEX_CHAR_COUNT);
 }
 
 fn assert_validated_seed_toolchain_closure(closure: &Value, manifest: &std::path::Path) {
@@ -288,6 +320,16 @@ fn rustc_sysroot(rustc: &std::path::Path) -> std::path::PathBuf {
     assert!(output.status.success(), "rustc --print sysroot should succeed");
     let text = String::from_utf8(output.stdout).unwrap();
     std::fs::canonicalize(text.trim()).unwrap()
+}
+
+fn compiler_runtime_file(compiler: &std::path::Path, file_name: &str) -> std::path::PathBuf {
+    let output = std::process::Command::new(compiler).arg(format!("-print-file-name={file_name}")).output().unwrap();
+    assert!(output.status.success(), "compiler runtime file lookup should succeed");
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(!text.trim().is_empty(), "compiler runtime file lookup must return a path");
+    let path = std::path::PathBuf::from(text.trim());
+    assert!(path.is_absolute(), "compiler runtime file lookup must return an absolute path");
+    std::fs::canonicalize(path).unwrap()
 }
 
 fn blake3_file(path: &std::path::Path) -> String {
@@ -363,9 +405,13 @@ fn cargo_free_self_build_enforces_matching_toolchain_closure_manifest_without_cl
     let summary: Value = serde_json::from_slice(&output.stdout).expect("summary JSON should parse");
     assert_eq!(summary["schema"], "mantle-cargo-free-self-build-v1");
     assert_eq!(summary["status"], "success");
-    assert_validated_toolchain_closure(&summary["source_built_toolchain_closure"], &manifest);
+    assert_enforced_toolchain_closure(&summary["source_built_toolchain_closure"], &manifest);
     assert!(
-        summary["non_claims"]
+        summary["non_claims"].as_array().unwrap().contains(&Value::from("not-full-cargo-compatibility")),
+        "a source-built closure does not establish full Cargo compatibility"
+    );
+    assert!(
+        !summary["non_claims"]
             .as_array()
             .unwrap()
             .contains(&Value::from("not-source-built-toolchain-closure"))
@@ -595,9 +641,13 @@ fn cargo_free_fixed_point_enforces_matching_toolchain_closure_manifest_without_c
     );
     let summary: Value = serde_json::from_slice(&output.stdout).expect("summary JSON should parse");
     let closure = &summary["source_built_toolchain_closure"];
-    assert_validated_toolchain_closure(closure, &manifest);
+    assert_enforced_toolchain_closure(closure, &manifest);
     assert!(
-        summary["non_claims"]
+        summary["non_claims"].as_array().unwrap().contains(&Value::from("not-full-cargo-compatibility")),
+        "a source-built closure does not establish full Cargo compatibility"
+    );
+    assert!(
+        !summary["non_claims"]
             .as_array()
             .unwrap()
             .contains(&Value::from("not-source-built-toolchain-closure"))

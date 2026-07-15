@@ -49,9 +49,14 @@ const EXPECTED_WORKER_AND_COORDINATOR_BUNDLES: usize = 2;
 const BLAKE3_HEX_CHARS: usize = 64;
 const REJECTING_CAPTURE_FILE_BYTES: u64 = 4;
 const ACCEPTING_CAPTURE_FILE_BYTES: u64 = 4_096;
+const TEST_REAL_BWRAP_ENV: &str = "MANTLE_TEST_REAL_BWRAP";
 
 #[test]
 fn production_stdio_resumes_missing_chunks_and_imports_output() {
+    if !cfg!(debug_assertions) {
+        eprintln!("SKIP: the deterministic transfer-interruption seam is disabled in release binaries");
+        return;
+    }
     let root = tempfile::tempdir().expect("production transfer tempdir");
     let state_dir = root.path().join("state");
     let store_dir = root.path().join("store");
@@ -153,6 +158,10 @@ fn production_stdio_resumes_missing_chunks_and_imports_output() {
 
 #[test]
 fn production_stdio_resumes_interrupted_multi_chunk_input_upload() {
+    if !cfg!(debug_assertions) {
+        eprintln!("SKIP: the deterministic transfer-interruption seam is disabled in release binaries");
+        return;
+    }
     let root = tempfile::tempdir().expect("production input resume tempdir");
     let state_dir = root.path().join("state");
     let store_dir = root.path().join("store");
@@ -833,31 +842,27 @@ fn read_checkpoint_summary(path: &Path) -> CheckpointSummary {
 
 fn remote_failure_replay_command(state_dir: &Path, store_dir: &Path, bundle_digest: &str) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_mantle"));
-    command
-        .env("CRUNCH_NO_FUSE", "1")
-        .args(["--json", "--state-dir"])
-        .arg(state_dir)
-        .arg("--store")
-        .arg(store_dir)
-        .args([
-            "--store-prefix",
-            STORE_PREFIX,
-            "remote",
-            "debug",
-            "replay",
-            bundle_digest,
-            "--builder",
-            BUILDER_ID,
-            "--ticket",
-            &format!("{TICKET_ID}:{TICKET_SECRET}"),
-            "--remote-build-time-secs",
-            &MAX_BUILD_TIME_SECS.to_string(),
-        ]);
+    configure_test_sandbox_command(&mut command);
+    command.args(["--json", "--state-dir"]).arg(state_dir).arg("--store").arg(store_dir).args([
+        "--store-prefix",
+        STORE_PREFIX,
+        "remote",
+        "debug",
+        "replay",
+        bundle_digest,
+        "--builder",
+        BUILDER_ID,
+        "--ticket",
+        &format!("{TICKET_ID}:{TICKET_SECRET}"),
+        "--remote-build-time-secs",
+        &MAX_BUILD_TIME_SECS.to_string(),
+    ]);
     command
 }
 
 fn remote_build_command(state_dir: &Path, store_dir: &Path, build_file: &Path) -> Command {
     let mut command = Command::new(assert_cmd::cargo::cargo_bin("mantle"));
+    configure_test_sandbox_command(&mut command);
     command.args([
         "--json",
         "--state-dir",
@@ -877,6 +882,15 @@ fn remote_build_command(state_dir: &Path, store_dir: &Path, build_file: &Path) -
         &MAX_BUILD_TIME_SECS.to_string(),
     ]);
     command
+}
+
+fn configure_test_sandbox_command(command: &mut Command) {
+    command.env("CRUNCH_NO_FUSE", "1");
+    let Some(bwrap_path) = std::env::var_os(TEST_REAL_BWRAP_ENV) else {
+        return;
+    };
+    assert!(Path::new(&bwrap_path).is_file(), "declared test bwrap must be a file");
+    command.env("SNIX_BUILD_BWRAP", bwrap_path);
 }
 
 fn write_ticket_state(state_dir: &Path) {

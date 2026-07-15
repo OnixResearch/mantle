@@ -2978,6 +2978,7 @@ mod tests {
         assert!(pos_c < pos_d, "tree2-leaf before tree2-root");
     }
 
+    #[cfg(debug_assertions)]
     #[tokio::test]
     #[should_panic(expected = "no root goals to build")]
     async fn run_empty_worker_panics() {
@@ -3003,6 +3004,12 @@ mod tests {
 
         // No roots — debug_assert catches this.
         let _ = w.run(&mut builder, &mut kp).await;
+    }
+
+    #[cfg(not(debug_assertions))]
+    #[test]
+    fn run_empty_worker_panics() {
+        eprintln!("SKIP run_empty_worker_panics: debug assertions are disabled in release builds");
     }
 
     // ── run_streaming() tests ───────────────────────────────

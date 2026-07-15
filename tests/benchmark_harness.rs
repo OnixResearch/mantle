@@ -309,8 +309,8 @@ fn benchmark_runtime_boundary_stays_out_of_library_path() {
 
     assert!(!lib_rs.contains("pub mod benchmark"));
     assert!(!main_rs.contains("mod benchmark"));
-    assert!(dev_dependency_section.contains("crunch-delta = { path = \"crates/crunch-delta\" }"));
-    assert!(!dependency_section.contains("crunch-delta = { path = \"crates/crunch-delta\" }"));
+    assert!(dependency_section.contains("crunch-delta = { path = \"crates/crunch-delta\" }"));
+    assert!(!dev_dependency_section.contains("crunch-delta = { path = \"crates/crunch-delta\" }"));
     assert!(repo_root().join("examples").join("benchmark_support.rs").exists());
 }
 

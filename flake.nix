@@ -85,39 +85,83 @@
           ) "Mantle nickel-export-core Nix input drifted from ${nickelExportCoreRevision}";
           nickelExportCore;
         firstPartyCargoScope = pkgs.lib.concatStringsSep " " cargoManifest.workspace.metadata.tigerstyle.default_scope;
+        catalogExampleRelativePaths = builtins.filter (path: path != null) (
+          map (
+            line:
+            let
+              matched = builtins.match "[[:space:]]*path = \"([^\"]+)\",[[:space:]]*" line;
+            in
+            if matched == null then null else builtins.head matched
+          ) (pkgs.lib.splitString "\n" (builtins.readFile ./examples/catalog.ncl))
+        );
+        catalogExamplePaths = map (
+          relativePath: "${toString ./.}/${relativePath}"
+        ) catalogExampleRelativePaths;
+        caCertificateBundlePath = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+        sandboxShellPath =
+          if pkgs.stdenv.isLinux then "${pkgs.pkgsStatic.busybox}/bin/busybox" else "/bin/sh";
 
-        # Common source filtering. The Rust workspace embeds Nickel stdlib files
-        # from ./lib with include_str!, bootstrap tests read checked Nickel
-        # definitions from ./bootstrap, benchmark checks read checked example
-        # workloads from ./examples, and the executable transcript tests read
-        # checked Markdown fixtures from ./tests/fixtures. Keep these directories
-        # alongside normal Cargo sources for Nix-built checks. The bootstrap
-        # blocker inventory gate also needs scripts/ and OpenSpec
-        # bootstrap text so flake checks inspect the same repo-controlled
-        # sources as the local script.
+        # Common source filtering. The Rust workspace embeds Nickel stdlib,
+        # generated runtime policy, archived lifecycle evidence, and CI workflow
+        # fixtures with include_str!/include_bytes!. Bootstrap tests read checked
+        # Nickel definitions, benchmark checks read checked example workloads,
+        # and executable transcript tests read checked Markdown fixtures. Keep
+        # these inputs alongside normal Cargo sources for Nix-built checks. The
+        # bootstrap blocker inventory gate also needs scripts/ and OpenSpec
+        # bootstrap text so flake checks inspect the same repo-controlled sources
+        # as the local script.
         src = pkgs.lib.cleanSourceWith {
           src = ./.;
           filter =
             path: type:
-            (craneLib.filterCargoSources path type)
-            || pkgs.lib.hasPrefix "${toString ./lib}/" (toString path)
-            || pkgs.lib.hasPrefix "${toString ./bootstrap}/" (toString path)
-            || pkgs.lib.hasPrefix "${toString ./builders}/" (toString path)
-            || pkgs.lib.hasPrefix "${toString ./examples}/" (toString path)
-            || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" (toString path)
-            || pkgs.lib.hasPrefix "${toString ./packages/kernelscript-experiment}/" (toString path)
-            || pkgs.lib.hasPrefix "${toString ./docs}/" (toString path)
-            || pkgs.lib.hasPrefix "${toString ./scripts}/" (toString path)
-            || pkgs.lib.hasPrefix "${toString ./openspec}/" (toString path);
+            let
+              rootPath = toString ./.;
+              pathString = toString path;
+              gitMetadataPath = "${rootPath}/.git";
+            in
+            pathString != gitMetadataPath
+            && !pkgs.lib.hasPrefix "${gitMetadataPath}/" pathString
+            && (
+              (craneLib.filterCargoSources path type)
+              || pathString == toString ./README.md
+              || pkgs.lib.hasPrefix "${toString ./.github/workflows}/" pathString
+              || pkgs.lib.hasPrefix "${toString ./lib}/" pathString
+              || pkgs.lib.hasPrefix "${toString ./bootstrap}/" pathString
+              || pkgs.lib.hasPrefix "${toString ./builders}/" pathString
+              || pkgs.lib.hasPrefix "${toString ./cairn-policy/evidence}/" pathString
+              || pkgs.lib.hasPrefix "${toString ./cairn/archive}/" pathString
+              || pkgs.lib.hasPrefix "${toString ./config/action-result-policy}/" pathString
+              || builtins.elem pathString catalogExamplePaths
+              || pathString == toString ./examples/catalog.ncl
+              || pathString == toString ./examples/README.md
+              || pathString == toString ./examples/project/README.md
+              || pkgs.lib.hasPrefix "${toString ./schemas/machine-contracts}/" pathString
+              || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" pathString
+              || pkgs.lib.hasPrefix "${toString ./packages/kernelscript-experiment}/" pathString
+              || pathString == toString ./nix/kernelscript-experiment.nix
+              || pkgs.lib.hasPrefix "${toString ./docs}/" pathString
+              || pkgs.lib.hasPrefix "${toString ./scripts}/" pathString
+              || pkgs.lib.hasPrefix "${toString ./openspec}/" pathString
+            );
         };
 
         # Common build inputs
-        nativeBuildInputs = with pkgs; [
-          pkg-config
-          clang
-          mold
-          git
-        ];
+        nativeBuildInputs =
+          with pkgs;
+          [
+            pkg-config
+            clang
+            mold
+            lld
+            git
+            cmake
+            bash
+          ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+            pkgs.bubblewrap
+            pkgs.fuse3.bin
+            pkgs.pkgsCross.musl64.stdenv.cc
+          ];
 
         buildInputs =
           with pkgs;
@@ -538,8 +582,15 @@
             nativeBuildInputs
             buildInputs
             ;
-          SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
           GIT = "${pkgs.git}/bin/git";
+          SSL_CERT_FILE = caCertificateBundlePath;
+          NIX_SSL_CERT_FILE = caCertificateBundlePath;
+          MANTLE_TEST_REAL_BWRAP = "${pkgs.bubblewrap}/bin/bwrap";
+          MANTLE_TEST_SCRIPT_SHELL = "${pkgs.bash}/bin/bash";
+          MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
+          CRUNCH_NO_FUSE = "1";
+          MANTLE_TEST_OFFLINE = "1";
           nativeCheckInputs = [ pkgs.git ];
         };
 
@@ -576,6 +627,8 @@
           partitions = 1;
           partitionType = "count";
           SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          SSL_CERT_FILE = caCertificateBundlePath;
+          NIX_SSL_CERT_FILE = caCertificateBundlePath;
           MANTLE_FAKE_BWRAP_HOST_PATH = pkgs.lib.makeBinPath [ pkgs.coreutils ];
         };
 
@@ -587,6 +640,8 @@
           partitions = 1;
           partitionType = "count";
           SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          SSL_CERT_FILE = caCertificateBundlePath;
+          NIX_SSL_CERT_FILE = caCertificateBundlePath;
         };
 
         mantleTranscriptQuality = craneLib.cargoNextest {
@@ -601,6 +656,8 @@
           partitions = 1;
           partitionType = "count";
           SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          SSL_CERT_FILE = caCertificateBundlePath;
+          NIX_SSL_CERT_FILE = caCertificateBundlePath;
         };
 
         bootstrapBlockerInventory =
@@ -732,8 +789,15 @@
               ;
             partitions = 1;
             partitionType = "count";
-            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+            SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
             GIT = "${pkgs.git}/bin/git";
+            SSL_CERT_FILE = caCertificateBundlePath;
+            NIX_SSL_CERT_FILE = caCertificateBundlePath;
+            MANTLE_TEST_REAL_BWRAP = "${pkgs.bubblewrap}/bin/bwrap";
+            MANTLE_TEST_SCRIPT_SHELL = "${pkgs.bash}/bin/bash";
+            MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
+            CRUNCH_NO_FUSE = "1";
+            MANTLE_TEST_OFFLINE = "1";
           };
 
           # Clippy lints: keep the flake gate aligned with
@@ -785,6 +849,8 @@
               wasmComponentToolchain
               tigerstyle.packages.${system}.cargo-tigerstyle
             ];
+
+          MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
 
           # Ensure the nightly toolchain is available
           inputsFrom = [ crunch ];

@@ -50,6 +50,7 @@ EOF
   default = { package = "hello" },
 } | mantle.Project
 "#;
+const TEST_OFFLINE_ENV: &str = "MANTLE_TEST_OFFLINE";
 const MULTI_OUTPUT_FIXTURE: &str = r#"
 let mantle = import "lib.ncl" in
 {
@@ -679,6 +680,10 @@ fn fix_flag_updates_temp_fetchurl_fixture_hash() {
 
 #[test]
 fn fetch_crate_crc64_example_builds() {
+    if std::env::var_os(TEST_OFFLINE_ENV).is_some() {
+        eprintln!("SKIP: network fetch example is disabled by the bounded offline test configuration");
+        return;
+    }
     if !can_build() {
         eprintln!("SKIP: example build requires Linux + bwrap + /nix/store");
         return;
@@ -697,6 +702,10 @@ fn fetch_crate_crc64_example_builds() {
 #[test]
 #[ignore = "heavy bootstrap build; run explicitly when validating the real crate example"]
 fn build_crate_crc64_example_builds_binary() {
+    if std::env::var_os(TEST_OFFLINE_ENV).is_some() {
+        eprintln!("SKIP: network crate build example is disabled by the bounded offline test configuration");
+        return;
+    }
     if !can_build() {
         eprintln!("SKIP: example build requires Linux + bwrap + /nix/store");
         return;

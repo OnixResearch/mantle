@@ -225,8 +225,13 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
         state_dir: config.state_dir,
     });
     let plan_store = PlanStore::open(config.state_dir, config.store_dir, config.substituter_urls).await?;
-    let trust =
-        PlanTrust::load(config.signing_key_path, config.trusted_public_keys, config.state_dir, config.trust_unsigned)?;
+    let trust = PlanTrust::load(
+        config.signing_key_path,
+        config.trusted_public_keys,
+        config.state_dir,
+        config.store_dir,
+        config.trust_unsigned,
+    )?;
 
     let mut entries = Vec::with_capacity(roots.len());
     for root in roots {
@@ -767,6 +772,7 @@ enum OutputPlan {
 struct PlanTrust {
     trust_unsigned: bool,
     trusted_keys: Vec<VerifyingKey>,
+    store_dir: String,
 }
 
 impl PlanTrust {
@@ -774,6 +780,7 @@ impl PlanTrust {
         signing_key_path: Option<&Path>,
         explicit_trusted_keys: Option<&[VerifyingKey]>,
         state_dir: &Path,
+        store_dir: &str,
         trust_unsigned: bool,
     ) -> Result<Self, RunError> {
         let mut trusted_keys = Vec::new();
@@ -786,6 +793,7 @@ impl PlanTrust {
         Ok(Self {
             trust_unsigned,
             trusted_keys,
+            store_dir: store_dir.to_string(),
         })
     }
 
@@ -793,7 +801,7 @@ impl PlanTrust {
         if self.trust_unsigned {
             return true;
         }
-        signing::verify_pathinfo_signatures(path_info, &self.trusted_keys).is_trusted()
+        signing::verify_pathinfo_signatures_with_store_dir(path_info, &self.trusted_keys, &self.store_dir).is_trusted()
     }
 }
 

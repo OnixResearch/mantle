@@ -1317,7 +1317,7 @@ where BServ: BuildService + 'static
             ca,
         };
 
-        signing::sign_pathinfo(&mut path_info, &self.keypair.signing_key);
+        signing::sign_pathinfo_with_store_dir(&mut path_info, &self.keypair.signing_key, self.store.store_dir());
 
         self.store
             .persist_and_export_signed_output(crunch_store::PersistOutputRequest {
@@ -1512,7 +1512,11 @@ where BServ: BuildService + 'static
 
         // Verify signatures on every cached output.
         for (output_name, path_info) in &infos {
-            let result = signing::verify_pathinfo_signatures(path_info, &self.trusted_keys);
+            let result = signing::verify_pathinfo_signatures_with_store_dir(
+                path_info,
+                &self.trusted_keys,
+                self.store.store_dir(),
+            );
             if !result.is_trusted() {
                 if result.total_sigs == 0 {
                     tracing::warn!(

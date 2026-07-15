@@ -1709,7 +1709,7 @@ fn write_rustc_wrapper(wrapper: &Path, real_rustc: &Path) -> Result<(), RunError
 
 fn rustc_wrapper_script(real_rustc: &Path) -> String {
     format!(
-        "#!/usr/bin/env bash\nset -euo pipefail\nexport {RUSTC_BOOTSTRAP_ENV}=1\nexport {REAL_RUSTC_ENV}={}\nargs=()\nwhile (($#)); do\n  arg=\"$1\"\n  shift\n  if [[ \"$arg\" == \"-C\" && \"${{1-}}\" == \"{LINK_SELF_CONTAINED_PROBE_ARG}\" ]]; then\n    shift\n    continue\n  fi\n  if [[ \"$arg\" == \"{LINK_SELF_CONTAINED_JOINED_ARG}\" ]]; then\n    continue\n  fi\n  args+=(\"$arg\")\ndone\nexec \"${REAL_RUSTC_ENV}\" \"${{args[@]}}\"\n",
+        "#!/bin/sh\nset -eu\nexport {RUSTC_BOOTSTRAP_ENV}=1\nexport {REAL_RUSTC_ENV}={}\nremaining=$#\nwhile [ \"$remaining\" -gt 0 ]; do\n  arg=$1\n  shift\n  remaining=$((remaining - 1))\n  if [ \"$arg\" = \"-C\" ] && [ \"$remaining\" -gt 0 ] && [ \"$1\" = \"{LINK_SELF_CONTAINED_PROBE_ARG}\" ]; then\n    shift\n    remaining=$((remaining - 1))\n    continue\n  fi\n  if [ \"$arg\" = \"{LINK_SELF_CONTAINED_JOINED_ARG}\" ]; then\n    continue\n  fi\n  set -- \"$@\" \"$arg\"\ndone\nexec \"${REAL_RUSTC_ENV}\" \"$@\"\n",
         shell_quote(real_rustc)
     )
 }
@@ -3305,6 +3305,8 @@ fn write_c_compiler_toolchain_alias(
 
 fn copy_alias_runtime_file(source: &Path, destination: &Path, label: &str) -> Result<(), RunError> {
     debug_assert!(!label.is_empty());
+    debug_assert_ne!(source, destination);
+    remove_owned_path(destination)?;
     fs::copy(source, destination).map_err(|err| {
         internal(format!("copy declared {label} {} -> {}: {err}", source.display(), destination.display()))
     })?;
@@ -3953,11 +3955,52 @@ mod tests {
     fn rustc_wrapper_script_strips_link_self_contained_runtime_args() {
         let script = rustc_wrapper_script(Path::new("/toolchain/bin/rustc"));
 
+        assert!(script.starts_with("#!/bin/sh\n"));
+        assert!(!script.contains("/usr/bin/env"));
         assert!(script.contains(LINK_SELF_CONTAINED_PROBE_ARG));
         assert!(script.contains(LINK_SELF_CONTAINED_JOINED_ARG));
         assert!(script.contains(RUSTC_BOOTSTRAP_ENV));
         assert!(script.contains(REAL_RUSTC_ENV));
+        assert!(script.contains("set -- \"$@\" \"$arg\""));
         assert!(script.contains("exec"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rustc_wrapper_runs_with_posix_shell_and_preserves_remaining_args() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let real_rustc = dir.path().join("real-rustc");
+        let wrapper = dir.path().join("rustc-wrapper");
+        let observed = dir.path().join("observed-args.txt");
+        write_fake_executable(
+            &real_rustc,
+            &format!(
+                "#!/bin/sh\nprintf 'bootstrap=%s\\n' \"${{{RUSTC_BOOTSTRAP_ENV}-}}\" > {}\nprintf 'arg=%s\\n' \"$@\" >> {}\n",
+                shell_quote(&observed),
+                shell_quote(&observed)
+            ),
+        );
+        write_rustc_wrapper(&wrapper, &real_rustc).unwrap();
+
+        let status = Command::new(&wrapper)
+            .args([
+                "--crate-name",
+                "demo",
+                "-C",
+                LINK_SELF_CONTAINED_PROBE_ARG,
+                "source path.rs",
+                LINK_SELF_CONTAINED_JOINED_ARG,
+                "--emit",
+                "link",
+            ])
+            .status()
+            .unwrap();
+        let observed = fs::read_to_string(observed).unwrap();
+
+        assert!(status.success());
+        assert_eq!(observed, "bootstrap=1\narg=--crate-name\narg=demo\narg=source path.rs\narg=--emit\narg=link\n");
+        assert!(!observed.contains(LINK_SELF_CONTAINED_PROBE_ARG));
+        assert!(!observed.contains(LINK_SELF_CONTAINED_JOINED_ARG));
     }
 
     #[test]
@@ -4737,7 +4780,11 @@ mod tests {
         let manifest = fake_toolchain_manifest(&tools, None);
         let guard_dir = dir.path().join("guard-bin");
         fs::create_dir_all(&guard_dir).unwrap();
+        let mut crt1_permissions = fs::metadata(&tools.target_crt1).unwrap().permissions();
+        crt1_permissions.set_readonly(true);
+        fs::set_permissions(&tools.target_crt1, crt1_permissions).unwrap();
 
+        write_toolchain_path_aliases(&guard_dir, &manifest).unwrap();
         write_toolchain_path_aliases(&guard_dir, &manifest).unwrap();
         let status = Command::new(guard_dir.join(C_COMPILER_ALIAS))
             .args([

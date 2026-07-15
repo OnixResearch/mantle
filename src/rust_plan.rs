@@ -123,6 +123,8 @@ const RUSTC_REMAP_PATH_PREFIX_FLAG: &str = "--remap-path-prefix";
 const RUSTC_REMAP_SEPARATOR: char = '=';
 const RUSTC_METADATA_HEX_CHARS: usize = 16;
 const BLAKE3_HEX_CHARS: usize = 64;
+const SAFE_PATH_COMPONENT_BYTES_MAX: usize = 192;
+const PATH_COMPONENT_DIGEST_SEPARATOR_BYTES: usize = 1;
 const CARGO_SHA256_HEX_CHARS: usize = BLAKE3_HEX_CHARS;
 const BYTES_PER_KIBIBYTE: usize = 1024;
 const CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES: usize =
@@ -3967,10 +3969,6 @@ fn queue_native_dependency_manifest_paths(
 ) {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let dependencies = package.path_dependencies.iter().chain(package.build_dependencies.iter()).collect::<Vec<_>>();
-    for dependency in &dependencies {
-        context.queued_manifest_paths.push_back(PathBuf::from(&dependency.manifest_path));
-    }
     let manifest = match read_native_manifest(Path::new(&package.manifest_path)) {
         Ok(manifest) => manifest,
         Err(message) => {
@@ -3982,6 +3980,15 @@ fn queue_native_dependency_manifest_paths(
             return;
         }
     };
+    let has_bounded_dev_test = manifest.test.iter().any(|test| !test.harness);
+    let mut dependencies =
+        package.path_dependencies.iter().chain(package.build_dependencies.iter()).collect::<Vec<_>>();
+    if has_bounded_dev_test {
+        dependencies.extend(package.dev_dependencies.iter());
+    }
+    for dependency in &dependencies {
+        context.queued_manifest_paths.push_back(PathBuf::from(&dependency.manifest_path));
+    }
     queue_dependency_feature_requests(&package.package_id, &manifest.dependencies, &dependencies, context, blockers);
     queue_dependency_feature_requests(
         &package.package_id,
@@ -3990,6 +3997,15 @@ fn queue_native_dependency_manifest_paths(
         context,
         blockers,
     );
+    if has_bounded_dev_test {
+        queue_dependency_feature_requests(
+            &package.package_id,
+            &manifest.dev_dependencies,
+            &dependencies,
+            context,
+            blockers,
+        );
+    }
     queue_target_cfg_dependency_feature_requests(package, &manifest.target, &dependencies, context, blockers);
     queue_parent_feature_dependency_requests(package, &manifest.features, &dependencies, context, blockers);
 }
@@ -17247,7 +17263,11 @@ fn digest_artifact_path_with_receipt_path(
 }
 
 fn safe_path_component(value: &str) -> String {
-    value
+    const {
+        assert!(SAFE_PATH_COMPONENT_BYTES_MAX > BLAKE3_HEX_CHARS);
+        assert!(SAFE_PATH_COMPONENT_BYTES_MAX > BLAKE3_HEX_CHARS + PATH_COMPONENT_DIGEST_SEPARATOR_BYTES);
+    }
+    let sanitized = value
         .chars()
         .map(|ch| {
             if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
@@ -17256,7 +17276,17 @@ fn safe_path_component(value: &str) -> String {
                 '_'
             }
         })
-        .collect()
+        .collect::<String>();
+    if sanitized.len() <= SAFE_PATH_COMPONENT_BYTES_MAX {
+        return sanitized;
+    }
+
+    let prefix_bytes_max = SAFE_PATH_COMPONENT_BYTES_MAX - BLAKE3_HEX_CHARS - PATH_COMPONENT_DIGEST_SEPARATOR_BYTES;
+    let digest = blake3::hash(value.as_bytes()).to_hex();
+    let bounded = format!("{}-{digest}", &sanitized[..prefix_bytes_max]);
+    assert_eq!(bounded.len(), SAFE_PATH_COMPONENT_BYTES_MAX);
+    assert!(bounded.is_ascii());
+    bounded
 }
 
 fn tool_exists(tool: &Path) -> bool {
@@ -17437,6 +17467,23 @@ mod tests {
             stderr: text.as_bytes().to_vec(),
             status_code: 101,
         }
+    }
+
+    #[test]
+    fn safe_path_component_preserves_short_identity_and_replaces_unsafe_bytes() {
+        assert_eq!(safe_path_component("unit.lib-build"), "unit.lib-build");
+        assert_eq!(safe_path_component("unit/path:build"), "unit_path_build");
+    }
+
+    #[test]
+    fn safe_path_component_bounds_long_identity_without_collisions() {
+        let long_prefix = "a".repeat(SAFE_PATH_COMPONENT_BYTES_MAX);
+        let left = safe_path_component(&format!("{long_prefix}-left"));
+        let right = safe_path_component(&format!("{long_prefix}-right"));
+        assert_eq!(left.len(), SAFE_PATH_COMPONENT_BYTES_MAX);
+        assert_eq!(right.len(), SAFE_PATH_COMPONENT_BYTES_MAX);
+        assert_ne!(left, right);
+        assert!(left.ends_with(&blake3::hash(format!("{long_prefix}-left").as_bytes()).to_hex().to_string()));
     }
 
     fn options(root: &Path) -> RustPlanOptions {
@@ -17883,8 +17930,9 @@ mod tests {
     fn write_fake_policy_adapter(dir: &Path, passes: bool, report_json: Option<&str>) -> PathBuf {
         let adapter = dir.join(if passes { "policy-driver" } else { "policy-driver-fails" });
         let report_writer = report_json.map_or_else(String::new, |json| {
+            assert!(!json.contains('\''), "policy report fixture must remain shell-single-quote safe");
             format!(
-                "if [ -n \"$MANTLE_COMPILER_POLICY_REPORT\" ]; then\n  cat > \"$MANTLE_COMPILER_POLICY_REPORT\" <<'JSON'\n{json}\nJSON\nfi\n"
+                "if [ -n \"$MANTLE_COMPILER_POLICY_REPORT\" ]; then\n  printf '%s\\n' '{json}' > \"$MANTLE_COMPILER_POLICY_REPORT\"\nfi\n"
             )
         });
         let status = if passes { 0 } else { TEST_FAKE_POLICY_FAIL_STATUS };

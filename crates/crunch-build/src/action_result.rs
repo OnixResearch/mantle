@@ -264,8 +264,9 @@ pub fn candidate_admission_facts(
         )
         .ok()
     });
-    let is_path_info_signatures_verified =
-        outputs.map(|outputs| all_path_info_signatures_verified(outputs, trusted_keys)).unwrap_or(false);
+    let is_path_info_signatures_verified = outputs
+        .map(|outputs| all_path_info_signatures_verified(outputs, store_dir, trusted_keys))
+        .unwrap_or(false);
     let is_producer_policy_admitted = expected.as_ref().is_some_and(|input| {
         input.producer_policy_ref == signed.record.producer_policy_ref
             && input.producer_identity == signed.record.producer_identity
@@ -533,13 +534,17 @@ fn verify_record_signatures(signed: &SignedActionResultRecord, trusted_keys: &[V
     verified
 }
 
-fn all_path_info_signatures_verified(outputs: &BTreeMap<String, PathInfo>, trusted_keys: &[VerifyingKey]) -> bool {
+fn all_path_info_signatures_verified(
+    outputs: &BTreeMap<String, PathInfo>,
+    store_dir: &str,
+    trusted_keys: &[VerifyingKey],
+) -> bool {
     if trusted_keys.is_empty() {
         return false;
     }
-    outputs
-        .values()
-        .all(|path_info| signing::verify_pathinfo_signatures(path_info, trusted_keys).is_trusted())
+    outputs.values().all(|path_info| {
+        signing::verify_pathinfo_signatures_with_store_dir(path_info, trusted_keys, store_dir).is_trusted()
+    })
 }
 
 fn same_object_refs(input: &ActionResultRecordInput, record: &ActionResultRecord) -> bool {
@@ -643,7 +648,7 @@ mod tests {
             deriver: None,
             ca: None,
         };
-        signing::sign_pathinfo(&mut path_info, &keypair().signing_key);
+        signing::sign_pathinfo_with_store_dir(&mut path_info, &keypair().signing_key, "/mantle/store");
         path_info
     }
 

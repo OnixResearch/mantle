@@ -8,7 +8,7 @@
 use nix_compat::narinfo::Signature;
 use nix_compat::narinfo::SigningKey;
 use nix_compat::narinfo::VerifyingKey;
-use nix_compat::narinfo::fingerprint;
+use nix_compat::narinfo::fingerprint_with_store_dir;
 use nix_compat::store_path::StorePathRef;
 use snix_store::path_info::PathInfo;
 
@@ -21,7 +21,18 @@ use snix_store::path_info::PathInfo;
 ///
 /// Returns the signature string for logging.
 pub fn sign_pathinfo(path_info: &mut PathInfo, signing_key: &SigningKey<ed25519_dalek::SigningKey>) -> String {
-    let fp = compute_fingerprint(path_info);
+    sign_pathinfo_with_store_dir(path_info, signing_key, "/nix/store")
+}
+
+/// Sign a PathInfo using the logical store prefix carried by its cache protocol.
+pub fn sign_pathinfo_with_store_dir(
+    path_info: &mut PathInfo,
+    signing_key: &SigningKey<ed25519_dalek::SigningKey>,
+    store_dir: &str,
+) -> String {
+    assert!(!store_dir.is_empty(), "logical store prefix must not be empty");
+    assert!(store_dir.starts_with('/'), "logical store prefix must be absolute");
+    let fp = compute_fingerprint_with_store_dir(path_info, store_dir);
 
     let sig_ref = signing_key.sign(fp.as_bytes());
     let sig_owned: Signature<String> = sig_ref.to_owned();
@@ -69,6 +80,17 @@ impl VerifyResult {
 /// Returns a [VerifyResult] summarising how many signatures matched.
 /// The caller decides policy (e.g., require `is_trusted()` for cache hits).
 pub fn verify_pathinfo_signatures(path_info: &PathInfo, trusted_keys: &[VerifyingKey]) -> VerifyResult {
+    verify_pathinfo_signatures_with_store_dir(path_info, trusted_keys, "/nix/store")
+}
+
+/// Verify PathInfo signatures against the logical store prefix used when signing.
+pub fn verify_pathinfo_signatures_with_store_dir(
+    path_info: &PathInfo,
+    trusted_keys: &[VerifyingKey],
+    store_dir: &str,
+) -> VerifyResult {
+    assert!(!store_dir.is_empty(), "logical store prefix must not be empty");
+    assert!(store_dir.starts_with('/'), "logical store prefix must be absolute");
     debug_assert!(!trusted_keys.is_empty(), "verify_pathinfo_signatures called with zero trusted keys");
 
     if path_info.signatures.is_empty() {
@@ -79,7 +101,7 @@ pub fn verify_pathinfo_signatures(path_info: &PathInfo, trusted_keys: &[Verifyin
         };
     }
 
-    let fp = compute_fingerprint(path_info);
+    let fp = compute_fingerprint_with_store_dir(path_info, store_dir);
 
     let mut trusted_count: u32 = 0;
     let mut untrusted_names: Vec<String> = Vec::with_capacity(path_info.signatures.len());
@@ -205,12 +227,17 @@ pub fn load_keypair(contents: &str) -> Result<KeyPair, String> {
 
 // ── Internal helpers ────────────────────────────────────────
 
-/// Compute the narinfo fingerprint for a PathInfo.
+/// Compute the default Nix narinfo fingerprint for compatibility tests.
+#[cfg(test)]
 fn compute_fingerprint(path_info: &PathInfo) -> String {
+    compute_fingerprint_with_store_dir(path_info, "/nix/store")
+}
+
+fn compute_fingerprint_with_store_dir(path_info: &PathInfo, store_dir: &str) -> String {
     let sp_ref: StorePathRef = path_info.store_path.as_ref();
     let refs: Vec<StorePathRef> = path_info.references.iter().map(|r| r.as_ref()).collect();
 
-    fingerprint(&sp_ref, &path_info.nar_sha256, path_info.nar_size, refs.iter())
+    fingerprint_with_store_dir(&sp_ref, &path_info.nar_sha256, path_info.nar_size, refs.iter(), store_dir)
 }
 
 #[cfg(test)]
@@ -266,6 +293,20 @@ mod tests {
         assert!(result.is_trusted());
         assert_eq!(result.trusted_count, 1);
         assert!(result.untrusted_names.is_empty());
+    }
+
+    #[test]
+    fn sign_round_trip_honors_custom_store_prefix() {
+        let kp = test_keypair();
+        let mut pi = dummy_pathinfo();
+
+        sign_pathinfo_with_store_dir(&mut pi, &kp.signing_key, "/mantle/store");
+        let accepted =
+            verify_pathinfo_signatures_with_store_dir(&pi, std::slice::from_ref(&kp.verifying_key), "/mantle/store");
+        let rejected =
+            verify_pathinfo_signatures_with_store_dir(&pi, std::slice::from_ref(&kp.verifying_key), "/nix/store");
+        assert!(accepted.is_trusted());
+        assert!(!rejected.is_trusted());
     }
 
     #[test]

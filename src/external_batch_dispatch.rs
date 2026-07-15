@@ -778,7 +778,9 @@ mod tests {
         let encoded = serde_json::to_string(response).expect("direct fixture response serializes");
         assert!(!encoded.contains('\''));
         let script = temp.path().join("fake-direct-dispatcher");
-        let source = format!("#!/bin/sh\nif [ \"${{HOME+x}}\" = x ]; then exit 64; fi\nprintf '%s\\n' '{encoded}'\n");
+        let source = format!(
+            "#!/bin/sh\nif [ \"${{HOME+x}}\" = x ]; then exit 64; fi\nIFS= read -r _request || [ -n \"$_request\" ] || exit 65\nprintf '%s\\n' '{encoded}'\n"
+        );
         std::fs::write(&script, source).expect("direct dispatcher fixture writes");
         let mut permissions = std::fs::metadata(&script).expect("fixture metadata reads").permissions();
         permissions.set_mode(0o700);

@@ -24,6 +24,31 @@ use audit_support::AuditArtifact;
 use audit_support::write_command_audit;
 use serde::Deserialize;
 
+const DEFAULT_LOGICAL_STORE_PREFIX: &str = "/mantle/store";
+const LOOPBACK_PROBE_TIMEOUT: Duration = Duration::from_millis(100);
+
+fn require_loopback_network(test_name: &str) -> bool {
+    assert!(!test_name.is_empty(), "test name must not be empty");
+    if loopback_network_available() {
+        return true;
+    }
+    eprintln!("SKIP {test_name}: isolated environment does not provide IPv4 loopback networking");
+    false
+}
+
+fn loopback_network_available() -> bool {
+    let Ok(listener) = TcpListener::bind("127.0.0.1:0") else {
+        return false;
+    };
+    let Ok(addr) = listener.local_addr() else {
+        return false;
+    };
+    let Ok(_client) = TcpStream::connect_timeout(&addr, LOOPBACK_PROBE_TIMEOUT) else {
+        return false;
+    };
+    listener.accept().is_ok()
+}
+
 fn crunch_cmd() -> Command {
     Command::cargo_bin("crunch").expect("crunch binary should be built")
 }
@@ -870,7 +895,7 @@ fn smoke_build_then_push_narinfo_and_nar_match() {
 
     for entry in &narinfo_entries {
         let narinfo_text = std::fs::read_to_string(entry.path()).unwrap();
-        let narinfo = nix_compat::narinfo::NarInfo::parse_with_store_dir(&narinfo_text, "/crunch/store")
+        let narinfo = nix_compat::narinfo::NarInfo::parse_with_store_dir(&narinfo_text, DEFAULT_LOGICAL_STORE_PREFIX)
             .unwrap_or_else(|e| panic!("narinfo should parse: {e}\ncontent:\n{narinfo_text}"));
 
         let narinfo_store_name = narinfo.store_path.to_string();
@@ -1142,6 +1167,9 @@ fn smoke_build_push_pull_round_trip() {
 
 #[test]
 fn smoke_build_push_http_pull_round_trip() {
+    if !require_loopback_network("smoke_build_push_http_pull_round_trip") {
+        return;
+    }
     if !can_build() {
         eprintln!("SKIP: /nix/store not writable or bwrap missing");
         return;
@@ -1199,7 +1227,7 @@ fn smoke_build_push_http_pull_round_trip() {
     std::fs::create_dir_all(&store_b).unwrap();
     std::fs::create_dir_all(&state_b).unwrap();
 
-    let logical_store_path = format!("/crunch/store/{}", out.file_name().unwrap().to_string_lossy());
+    let logical_store_path = format!("{DEFAULT_LOGICAL_STORE_PREFIX}/{}", out.file_name().unwrap().to_string_lossy());
     let mut pull_cmd = crunch_cmd();
     pull_cmd
         .arg("--store")
@@ -1221,7 +1249,10 @@ fn smoke_build_push_http_pull_round_trip() {
         "HTTP pull failed (exit {}):\nstdout: {pull_stdout}\nstderr: {pull_stderr}",
         pull_output.status.code().unwrap_or(-1),
     );
-    assert!(pull_stdout.contains("PULL "), "HTTP pull should report imported path, got: {pull_stdout}");
+    assert!(
+        pull_stdout.contains("PULL "),
+        "HTTP pull should report imported path; stdout: {pull_stdout}; stderr: {pull_stderr}"
+    );
     assert!(pull_stderr.contains("imported=1"), "HTTP pull should print summary, got: {pull_stderr}");
 
     let out_name = out.file_name().unwrap().to_str().unwrap();

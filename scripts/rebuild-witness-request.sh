@@ -176,6 +176,20 @@ prepend_nightly_toolchain() {
     return
   fi
 
+  if [[ -z "${CRUNCH_PROOF_RUSTUP_TOOLCHAIN:-}" ]]; then
+    cargo_path="$(command -v -- cargo 2>/dev/null || true)"
+    rustc_path="$(command -v -- rustc 2>/dev/null || true)"
+    if [[ -n "$cargo_path" && -n "$rustc_path" ]]; then
+      case "$("$rustc_path" --version 2>/dev/null || true)" in
+        *-nightly*)
+          prepend_path_dir "$(dirname -- "$cargo_path")"
+          prepend_path_dir "$(dirname -- "$rustc_path")"
+          return
+          ;;
+      esac
+    fi
+  fi
+
   for candidate_bin in \
     "$HOME/.rustup/toolchains/$toolchain/bin" \
     "$HOME/.rustup/toolchains/$toolchain-"*/bin
@@ -362,6 +376,7 @@ configure_provider_inputs() {
 }
 
 configure_provider_bound_driver() {
+  local bash_path
   local wrapper_path
 
   if ! provider_env_supplied; then
@@ -377,8 +392,12 @@ configure_provider_bound_driver() {
   fi
 
   wrapper_path="$scratch_root/$TMP_SUBDIR/$PROVIDER_DRIVER_WRAPPER_NAME"
-  cat >"$wrapper_path" <<'EOF'
-#!/usr/bin/env bash
+  bash_path="$(resolve_tool_path bash 2>/dev/null || true)"
+  if [[ -z "$bash_path" ]]; then
+    die "required tool 'bash' not found for provider-bound witness driver"
+  fi
+  printf '#!%s\n' "$bash_path" >"$wrapper_path"
+  cat >>"$wrapper_path" <<'EOF'
 set -euo pipefail
 
 run_mantle_cli() {
