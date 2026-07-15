@@ -132,7 +132,9 @@ fn production_shell_delegates_shape_and_receipt_semantics_to_the_core_adapter() 
     assert!(source.contains("probe-core-report.json"));
     assert!(source.contains("kfunc-core-report.json"));
     assert!(source.contains("generated-shapes-admitted-receipts-blocked-on-external-target-authority"));
-    assert!(source.contains("blocked-no-checked-nix-build-or-vm-load-gate"));
+    assert!(source.contains("checked-nix-module-build"));
+    assert!(source.contains("checked-by-separate-nixos-vm-smoke"));
+    assert!(!source.contains("blocked-no-checked-nix-build-or-vm-load-gate"));
     assert!(!source.contains("exact_shape()"));
     assert!(!source.contains("generated shape drift"));
     assert!(!source.contains("find \"$directory\""));

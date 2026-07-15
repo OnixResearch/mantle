@@ -31,13 +31,19 @@ Synthetic Mantle fixtures, structural KernelScript receipts, public-only OnixOS
 examples, active unarchived downstream specs, and process success without those
 identity links are false-completion cases.
 
+Update note: later on 2026-07-15, `downstream-authority-attempt-2026-07-15.md`
+advanced the Mantle-local module/BPF materialization and OnixOS structural
+identity validation. This audit's downstream completion decision remains valid
+because the accepted OnixOS runtime-adapter authority and ChaosControl behavior
+receipt are still absent.
+
 ## Approach-family registry
 
 | Family | Mechanism inspected | Evidence | State |
 |---|---|---|---|
 | OnixOS target authority | Accepted `onix-kernel-bundle-v1` and active `realize-linux-bpf-pack-adapter` lifecycle package | `cairn/specs/kernel-bundles/spec.md` accepts structural ModulePack/BPF Pack binding, but `docs/kernel-bundles.md` explicitly excludes deep kfunc-signature/eBPF safety verification. The active `cairn/changes/realize-linux-bpf-pack-adapter/tasks.md` still has all implementation, target shell, authority, lifecycle, evidence, and closeout tasks unchecked. | blocked |
 | ChaosControl runtime receipt | Active `add-kernel-bundle-validation-rail` lifecycle package | `cairn/changes/add-kernel-bundle-validation-rail/tasks.md` still has profile/admission, guest harness, module, BPF, KVM behavior rail, receipt, and closeout tasks unchecked. No accepted behavior receipt exists for Mantle's private-kfunc fixture. | blocked |
-| Mantle local KernelScript evidence | Existing production probe and core receipts | `probe-production-evidence.md` still records `target_identity_blake3: null`, `kernel-target-observation-only`, and `module-build-and-vm-gate-absent` for the private-kfunc route. The exact-kernel probe VM observation covers only the probe object/loader path and does not establish target authority or the module/kfunc route. | blocked |
+| Mantle local KernelScript evidence | Existing production probe/private-kfunc core receipts plus later same-day materialization attempt | `probe-production-evidence.md` and `downstream-authority-attempt-2026-07-15.md` now record `target_identity_blake3: null` and `kernel-target-observation-only` for both routes. The later attempt removed the prior Mantle-local `module-build-and-vm-gate-absent` blocker by building/loading the module and XDP object in the exact-kernel NixOS VM smoke, but this still does not establish accepted OnixOS runtime-adapter authority or a ChaosControl receipt. | blocked |
 
 ## Inspected checkout identities
 
