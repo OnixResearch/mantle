@@ -837,9 +837,7 @@ fn json_contains_secret_material(value: &serde_json::Value, visited: &mut usize)
 
 fn object_field_has_secret(normalized_key: &str, value: &serde_json::Value) -> bool {
     if normalized_key == "env" {
-        if value.as_object().is_some_and(|environment| !environment.is_empty()) {
-            return true;
-        }
+        return value.as_object().is_some_and(|environment| !environment.is_empty());
     }
     for marker in SECRET_KEY_MARKERS {
         if normalized_key.contains(marker) {
@@ -1338,8 +1336,6 @@ fn cmd_remote_failure_gc(
 }
 
 pub fn resolve_bundle_selector(state_dir: &Path, selector: &str) -> Result<PathBuf, crate::RunError> {
-    debug_assert!(!REMOTE_FAILURE_DEBUG_STORE_DIR.is_empty());
-    debug_assert!(MAX_REMOTE_WORKER_STATE_DIRS > 0);
     let digest = selector.strip_prefix("remote-failure-debug:").unwrap_or(selector);
     if is_blake3_hex(digest) {
         let coordinator = state_dir.join(REMOTE_FAILURE_DEBUG_STORE_DIR).join(BUNDLES_DIR).join(digest);

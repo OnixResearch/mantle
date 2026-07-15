@@ -38,22 +38,22 @@ const OTLP_HTTP_CONTENT_TYPE: &str = "application/json";
 const OTLP_METRICS_PATH_DEFAULT: &str = "/v1/metrics";
 const HTTP_STATUS_SUCCESS_MIN: u16 = 200;
 const HTTP_STATUS_SUCCESS_MAX_EXCLUSIVE: u16 = 300;
+#[cfg(target_os = "linux")]
+const OPENAT2_RESOLVE_NO_SYMLINKS: u64 = 0x04;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+const _: () = {
+    assert!(DEFAULT_OTLP_TIMEOUT_MS > 0, "default OTLP timeout must be positive");
+    assert!(DEFAULT_OTLP_TIMEOUT_MS <= MAX_OTLP_TIMEOUT_MS, "default OTLP timeout must stay within policy");
+};
+#[cfg(target_os = "linux")]
+const _: () = assert!(OPENAT2_RESOLVE_NO_SYMLINKS > 0, "openat2 no-symlink policy must be active");
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemotePrometheusConfig {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default = "no_optional_value", skip_serializing_if = "Option::is_none")]
     pub textfile_path: Option<PathBuf>,
-}
-
-impl Default for RemotePrometheusConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            textfile_path: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -133,8 +133,6 @@ struct BoundedMetricAdmission {
 }
 
 pub fn validate_remote_telemetry_export_config(config: &RemoteTelemetryExportConfig) -> Result<(), String> {
-    assert!(DEFAULT_OTLP_TIMEOUT_MS > 0, "default OTLP timeout must be positive");
-    assert!(DEFAULT_OTLP_TIMEOUT_MS <= MAX_OTLP_TIMEOUT_MS, "default OTLP timeout must stay within policy");
     config.telemetry.validate().map_err(|reason| reason.as_str().to_string())?;
     if config.prometheus.enabled {
         let path = config
@@ -470,7 +468,6 @@ fn open_directory_no_symlinks(path: &Path) -> Result<fs::File, String> {
     use std::os::fd::FromRawFd;
     use std::os::unix::ffi::OsStrExt;
 
-    const OPENAT2_RESOLVE_NO_SYMLINKS: u64 = 0x04;
     #[repr(C)]
     struct OpenHow {
         flags: u64,
@@ -481,7 +478,6 @@ fn open_directory_no_symlinks(path: &Path) -> Result<fs::File, String> {
     let path = CString::new(path.as_os_str().as_bytes())
         .map_err(|_| "remote-telemetry-prometheus-parent-invalid".to_string())?;
     assert!(!path.as_bytes().is_empty(), "Prometheus parent path must not be empty");
-    assert!(OPENAT2_RESOLVE_NO_SYMLINKS > 0, "openat2 no-symlink policy must be active");
     let how = OpenHow {
         flags: u64::try_from(libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC)
             .map_err(|_| "remote-telemetry-prometheus-open-flags-invalid".to_string())?,

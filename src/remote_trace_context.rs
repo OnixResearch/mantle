@@ -12,7 +12,20 @@ use serde::Serialize;
 
 pub const REMOTE_TRACE_CONTEXT_CAPABILITY: &str = "w3c-trace-context-v1";
 pub const REMOTE_TRACE_CONTEXT_NON_CLAIM: &str = "trace context is diagnostic only and does not affect request identity, authorization, scheduling, fencing, cache identity, output trust, or build results";
-pub const W3C_TRACEPARENT_BYTES: usize = 55;
+const W3C_TRACE_VERSION: &[u8] = b"00";
+const W3C_TRACE_SEPARATOR_BYTES: usize = 1;
+const W3C_TRACE_ID_BYTES: usize = 32;
+const W3C_PARENT_ID_BYTES: usize = 16;
+const W3C_TRACE_FLAGS_BYTES: usize = 2;
+const VERSION_SEPARATOR_INDEX: usize = W3C_TRACE_VERSION.len();
+const TRACE_ID_START: usize = VERSION_SEPARATOR_INDEX.saturating_add(W3C_TRACE_SEPARATOR_BYTES);
+const TRACE_ID_END: usize = TRACE_ID_START.saturating_add(W3C_TRACE_ID_BYTES);
+const TRACE_ID_SEPARATOR_INDEX: usize = TRACE_ID_END;
+const PARENT_ID_START: usize = TRACE_ID_SEPARATOR_INDEX.saturating_add(W3C_TRACE_SEPARATOR_BYTES);
+const PARENT_ID_END: usize = PARENT_ID_START.saturating_add(W3C_PARENT_ID_BYTES);
+const PARENT_ID_SEPARATOR_INDEX: usize = PARENT_ID_END;
+const TRACE_FLAGS_START: usize = PARENT_ID_SEPARATOR_INDEX.saturating_add(W3C_TRACE_SEPARATOR_BYTES);
+pub const W3C_TRACEPARENT_BYTES: usize = TRACE_FLAGS_START.saturating_add(W3C_TRACE_FLAGS_BYTES);
 pub const W3C_TRACESTATE_BYTES_MAX: usize = 512;
 pub const W3C_TRACESTATE_MEMBERS_MAX: u32 = 32;
 pub const W3C_TRACESTATE_MEMBER_BYTES_MAX: usize = 256;
@@ -20,12 +33,6 @@ const W3C_TRACESTATE_TENANT_BYTES_MAX: usize = 241;
 const W3C_TRACESTATE_SYSTEM_BYTES_MAX: usize = 14;
 const ASCII_VISIBLE_MIN: u8 = 0x20;
 const ASCII_VISIBLE_MAX: u8 = 0x7e;
-const TRACE_ID_START: usize = 3;
-const TRACE_ID_END: usize = 35;
-const PARENT_ID_START: usize = 36;
-const PARENT_ID_END: usize = 52;
-const TRACE_FLAGS_START: usize = 53;
-const TRACE_FLAGS_END: usize = W3C_TRACEPARENT_BYTES;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteTraceContext {
@@ -104,21 +111,22 @@ pub fn remote_trace_context_digest(context: &RemoteTraceContext) -> Result<Strin
 }
 
 fn validate_traceparent(value: &str) -> Result<(), &'static str> {
-    debug_assert!(TRACE_ID_START < TRACE_ID_END);
-    debug_assert!(PARENT_ID_START < PARENT_ID_END);
     if value.len() != W3C_TRACEPARENT_BYTES {
         return Err("remote-traceparent-length-invalid");
     }
     let bytes = value.as_bytes();
-    if bytes.get(2) != Some(&b'-') || bytes.get(35) != Some(&b'-') || bytes.get(52) != Some(&b'-') {
+    if bytes.get(VERSION_SEPARATOR_INDEX) != Some(&b'-')
+        || bytes.get(TRACE_ID_SEPARATOR_INDEX) != Some(&b'-')
+        || bytes.get(PARENT_ID_SEPARATOR_INDEX) != Some(&b'-')
+    {
         return Err("remote-traceparent-layout-invalid");
     }
-    if &bytes[..2] != b"00" {
+    if bytes.get(..VERSION_SEPARATOR_INDEX) != Some(W3C_TRACE_VERSION) {
         return Err("remote-traceparent-version-unsupported");
     }
     let trace_id = &bytes[TRACE_ID_START..TRACE_ID_END];
     let parent_id = &bytes[PARENT_ID_START..PARENT_ID_END];
-    let trace_flags = &bytes[TRACE_FLAGS_START..TRACE_FLAGS_END];
+    let trace_flags = &bytes[TRACE_FLAGS_START..W3C_TRACEPARENT_BYTES];
     if !lower_hex(trace_id) || !lower_hex(parent_id) || !lower_hex(trace_flags) {
         return Err("remote-traceparent-hex-invalid");
     }
