@@ -1329,15 +1329,18 @@ fn route_plan_path_for_recipe(recipe_path: &Path) -> Result<PathBuf, RustSourceP
 }
 
 fn load_rust_source_provider_route(plan_path: &Path) -> Result<LoadedRustSourceProviderRoute, RustSourceProviderError> {
+    debug_assert!(!plan_path.as_os_str().is_empty());
     let plan_bytes = fs::read(plan_path)
         .map_err(|err| RustSourceProviderError::Read(format!("route plan {}: {err}", plan_path.display())))?;
     if plan_bytes.is_empty() {
         return Err(RustSourceProviderError::Read(format!("route plan {} is empty", plan_path.display())));
     }
     let plan_digest_blake3 = blake3::hash(&plan_bytes).to_hex().to_string();
-    let import_entries: Vec<OsString> = Vec::new();
-    let plan: RustSourceProviderBootstrapPlan = crunch_eval::evaluate_and_deserialize(plan_path, &import_entries)
-        .map_err(|err| RustSourceProviderError::Parse(format!("route plan {}: {err}", plan_path.display())))?;
+    debug_assert_eq!(plan_digest_blake3.len(), BLAKE3_DIGEST_HEX_LEN);
+    let nickel_search_dirs: Vec<OsString> = Vec::new();
+    let plan: RustSourceProviderBootstrapPlan =
+        crunch_eval::evaluate_and_deserialize(plan_path, &nickel_search_dirs)
+            .map_err(|err| RustSourceProviderError::Parse(format!("route plan {}: {err}", plan_path.display())))?;
     let validation = crate::source_toolchain_closure::validate_rust_source_provider_bootstrap_plan(&plan)
         .map_err(|err| RustSourceProviderError::Validate(err.message().to_string()))?;
     Ok(LoadedRustSourceProviderRoute {
@@ -5161,6 +5164,8 @@ fn first_stage_build_sources(
 fn first_stage_patch_plan(
     boundary: &RustSourceProviderFirstStageBoundary,
 ) -> Result<RustBootstrapPatchPlan, RustSourceProviderError> {
+    debug_assert!(!boundary.stage_id.is_empty());
+    debug_assert!(!boundary.route_plan_digest_blake3.is_empty());
     let build_sources = first_stage_build_sources(boundary)?;
     let input = RustBootstrapPatchPlanInput {
         stage: RustBootstrapPatchStage::FirstStage,

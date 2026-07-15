@@ -3498,9 +3498,8 @@ fn run_stage0_inventory_command(ctx: &RunContext, output: &Path) -> Result<(), R
 }
 
 fn run_eval(file: &Path, import_paths: &[PathBuf]) -> Result<(), RunError> {
-    let nickel_import_entries = build_import_paths(import_paths)?;
-    let json =
-        crunch_eval::evaluate_to_json(file, &nickel_import_entries).map_err(|e| RunError::Eval(format!("{e}")))?;
+    let nickel_search_dirs = build_import_paths(import_paths)?;
+    let json = crunch_eval::evaluate_to_json(file, &nickel_search_dirs).map_err(|e| RunError::Eval(format!("{e}")))?;
     println!("{json}");
     Ok(())
 }
@@ -3729,11 +3728,11 @@ fn prepare_build_command<'a>(
 fn run_file_build_target(prepared: &PreparedBuildCommand<'_>, path: &Path) -> Result<(), RunError> {
     debug_assert!(prepared.ctx.store_prefix.starts_with('/'));
     debug_assert!(!path.as_os_str().is_empty());
-    let import_entries = build_import_paths(prepared.import_path_args)?;
+    let nickel_search_dirs = build_import_paths(prepared.import_path_args)?;
     let source_preflight = run_offline_source_preflight_if_requested(OfflineSourcePreflightRequest {
         enabled: prepared.offline_source_preflight,
         file: path,
-        import_entries: &import_entries,
+        import_entries: &nickel_search_dirs,
         state_dir: &prepared.ctx.resolved_state_dir,
         store_prefix: &prepared.ctx.store_prefix,
         output_mode: prepared.ctx.output_mode(),
@@ -3742,7 +3741,7 @@ fn run_file_build_target(prepared: &PreparedBuildCommand<'_>, path: &Path) -> Re
         if prepared.offline_source_preflight && !prepared.plan && prepared.remote_selection.is_none() {
             Some(source_bundle::source_fetch_override_plan_for_file(
                 path,
-                &import_entries,
+                &nickel_search_dirs,
                 &prepared.ctx.resolved_state_dir,
                 &prepared.ctx.store_prefix,
             )?)
@@ -3753,14 +3752,14 @@ fn run_file_build_target(prepared: &PreparedBuildCommand<'_>, path: &Path) -> Re
         return run_remote_build_command(RemoteBuildCommandRequest {
             selection,
             source: RemoteBuildSource::File(path),
-            import_entries: &import_entries,
+            import_entries: &nickel_search_dirs,
             ctx: prepared.ctx,
         });
     }
     if prepared.plan {
-        return run_file_build_plan(prepared, path, &import_entries, source_preflight.as_ref());
+        return run_file_build_plan(prepared, path, &nickel_search_dirs, source_preflight.as_ref());
     }
-    run_local_file_build(prepared, path, &import_entries, source_fetch_plan.as_ref())
+    run_local_file_build(prepared, path, &nickel_search_dirs, source_fetch_plan.as_ref())
 }
 
 fn run_file_build_plan(
@@ -3791,6 +3790,9 @@ fn run_local_file_build(
     import_entries: &[OsString],
     source_fetch_plan: Option<&source_bundle::SourceFetchOverridePlan>,
 ) -> Result<(), RunError> {
+    debug_assert!(prepared.max_jobs > 0);
+    debug_assert!(prepared.ctx.store_prefix.starts_with('/'));
+    debug_assert!(!path.as_os_str().is_empty());
     if let Some(source_fetch_plan) = source_fetch_plan {
         return build_cmd::cmd_build_with_source_fetch_overrides(
             path,
@@ -3835,12 +3837,12 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
     let cwd = current_dir_or_error()?;
     let resolved = project_build::resolve_project_target(&prepared.target, &cwd, prepared.import_path_args)?;
     let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
-    let mut import_entries = build_import_paths(&[])?;
-    import_entries.extend(resolved.import_paths);
+    let mut nickel_search_dirs = build_import_paths(&[])?;
+    nickel_search_dirs.extend(resolved.import_paths);
     let source_preflight = run_offline_source_preflight_for_expr_if_requested(OfflineExprPreflightRequest {
         enabled: prepared.offline_source_preflight,
         expr: &expr,
-        import_entries: &import_entries,
+        import_entries: &nickel_search_dirs,
         state_dir: &prepared.ctx.resolved_state_dir,
         store_prefix: &prepared.ctx.store_prefix,
         output_mode: prepared.ctx.output_mode(),
@@ -3848,7 +3850,7 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
     let source_fetch_plan = source_fetch_override_plan_for_expr_if_requested(
         prepared.offline_source_preflight && !prepared.plan && prepared.remote_selection.is_none(),
         &expr,
-        &import_entries,
+        &nickel_search_dirs,
         &prepared.ctx.resolved_state_dir,
         &prepared.ctx.store_prefix,
     )?;
@@ -3856,21 +3858,21 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
         return run_remote_build_command(RemoteBuildCommandRequest {
             selection,
             source: RemoteBuildSource::Expr(&expr),
-            import_entries: &import_entries,
+            import_entries: &nickel_search_dirs,
             ctx: prepared.ctx,
         });
     }
     if prepared.plan {
         return build_plan_from_expr(InlineBuildPlanRequest {
             expr: &expr,
-            import_entries: &import_entries,
+            import_entries: &nickel_search_dirs,
             prepared,
             source_preflight: source_preflight.as_ref(),
         });
     }
     build_from_expr(InlineBuildRequest {
         expr: &expr,
-        import_entries: &import_entries,
+        import_entries: &nickel_search_dirs,
         prepared,
         source_fetch_overrides: source_fetch_plan.map(|plan| plan.overrides).unwrap_or_default(),
     })
@@ -4327,12 +4329,12 @@ async fn run_remote_failure_debug_replay_async(
     complete_remote_failure_replay_report(bundle, &mut runtime, completed)
 }
 
-async fn prepare_remote_failure_replay_runtime(
-    input: RemoteFailureReplayExecutionInput<'_>,
-) -> Result<RemoteFailureReplayRuntime, RunError> {
+async fn open_remote_failure_replay_store(
+    input: &RemoteFailureReplayExecutionInput<'_>,
+) -> Result<crunch_store::StoreHandle, RunError> {
     debug_assert!(input.store_prefix.starts_with('/'));
-    debug_assert_eq!(input.request.store_prefix, input.store_prefix);
-    let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+    debug_assert!(!input.state_dir.as_os_str().is_empty());
+    crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: input.state_dir.to_path_buf(),
         output_dir: input.output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),
@@ -4341,7 +4343,15 @@ async fn prepare_remote_failure_replay_runtime(
         base_state_dirs: Vec::new(),
     })
     .await
-    .map_err(|error| RunError::Internal(format!("opening replay store: {error}")))?;
+    .map_err(|error| RunError::Internal(format!("opening replay store: {error}")))
+}
+
+async fn prepare_remote_failure_replay_runtime(
+    input: RemoteFailureReplayExecutionInput<'_>,
+) -> Result<RemoteFailureReplayRuntime, RunError> {
+    debug_assert!(input.store_prefix.starts_with('/'));
+    debug_assert_eq!(input.request.store_prefix, input.store_prefix);
+    let store = open_remote_failure_replay_store(&input).await?;
     let mut coordinator = remote_build::load_coordinator_state(input.state_dir)?;
     let mut dispatch =
         remote_build::plan_remote_stdio_replay_dispatch(input.request, &input.options).map_err(RunError::Internal)?;
@@ -4456,6 +4466,19 @@ async fn execute_remote_failure_replay(
             ));
         }
     };
+    complete_remote_failure_replay_attempt(runtime, &admission)?;
+    Ok(CompletedRemoteFailureReplay {
+        admission,
+        output_admission,
+    })
+}
+
+fn complete_remote_failure_replay_attempt(
+    runtime: &mut RemoteFailureReplayRuntime,
+    admission: &remote_build::RemoteOutputAdmissionReport,
+) -> Result<(), RunError> {
+    debug_assert_eq!(admission.request_id, runtime.replay_request.request_id);
+    debug_assert!(!admission.output_digest_blake3.is_empty());
     if let Err(error) = remote_build::complete_remote_production_attempt(
         &mut runtime.coordinator,
         &runtime.attempt,
@@ -4469,10 +4492,7 @@ async fn execute_remote_failure_replay(
             format!("remote failure replay completion: {error}"),
         ));
     }
-    Ok(CompletedRemoteFailureReplay {
-        admission,
-        output_admission,
-    })
+    Ok(())
 }
 
 fn complete_remote_failure_replay_report(
@@ -4697,7 +4717,7 @@ fn record_remote_failure_observability(
     } else {
         remote_build::append_remote_production_observability_log(coordinator, attempt, telemetry)
     };
-    let telemetry_export_report = remote_telemetry_export::export_remote_telemetry(export_config, &telemetry.events);
+    let telemetry_delivery = remote_telemetry_export::export_remote_telemetry(export_config, &telemetry.events);
     let worker_debug = debug_context.as_ref().and_then(|context| context.worker_debug.clone());
     let failure_debug = debug_context.map(|context| {
         let result = publish_remote_failure_debug_observability(
@@ -4726,27 +4746,37 @@ fn record_remote_failure_observability(
         }
         result
     });
-    let attempt_failure = if matches!(
-        fact,
-        remote_build::RemoteProductionTelemetryFact::StaleFenceRejected
-            | remote_build::RemoteProductionTelemetryFact::TransferCutoff { accepted: false }
-    ) {
-        None
-    } else {
-        Some(remote_build::fail_remote_production_attempt(
-            coordinator,
-            attempt,
-            telemetry.accepted_events.saturating_add(1),
-        ))
-    };
+    let attempt_failure = fail_remote_attempt_after_observability(coordinator, attempt, telemetry, fact);
     debug_assert!(telemetry.accepted_events >= accepted_events_before);
     RemoteFailureObservabilityOutcome {
         immutable_log,
-        exporters: telemetry_export_report,
+        exporters: telemetry_delivery,
         failure_debug,
         attempt_failure,
         worker_debug,
     }
+}
+
+fn fail_remote_attempt_after_observability(
+    coordinator: &mut remote_build::RemoteCoordinatorState,
+    attempt: &remote_build::RemoteProductionAttemptBinding,
+    telemetry: &crunch_build::distributed::RemoteTelemetryBuffer,
+    fact: remote_build::RemoteProductionTelemetryFact,
+) -> Option<Result<(), String>> {
+    debug_assert!(!attempt.job_id.as_str().is_empty());
+    debug_assert!(!attempt.attempt_id.as_str().is_empty());
+    if matches!(
+        fact,
+        remote_build::RemoteProductionTelemetryFact::StaleFenceRejected
+            | remote_build::RemoteProductionTelemetryFact::TransferCutoff { accepted: false }
+    ) {
+        return None;
+    }
+    Some(remote_build::fail_remote_production_attempt(
+        coordinator,
+        attempt,
+        telemetry.accepted_events.saturating_add(1),
+    ))
 }
 
 fn annotate_remote_failure_error(error: RunError, observability: &RemoteFailureObservabilityOutcome) -> RunError {
@@ -4921,7 +4951,7 @@ async fn run_remote_build_dispatches_async(
             input,
             priority_competing_goal_count: (priority_index == 0).then_some(competing_goal_count),
         })?;
-        let imported = execute_remote_dispatch(RemoteDispatchExecutionInput {
+        let accepted_build = execute_remote_dispatch(RemoteDispatchExecutionInput {
             selection,
             state_dir,
             store: &mut store,
@@ -4929,7 +4959,7 @@ async fn run_remote_build_dispatches_async(
             prepared: &mut prepared,
         })
         .await?;
-        accepted_builds.push(imported);
+        accepted_builds.push(accepted_build);
     }
     assert_eq!(accepted_builds.len(), input_slots.len());
     assert!(input_slots.iter().all(Option::is_none));
@@ -5137,6 +5167,8 @@ async fn admit_remote_dispatch_outputs(
     input: &mut RemoteDispatchExecutionInput<'_>,
     transcript: &remote_build::RemoteStdioTranscript,
 ) -> Result<(remote_build::RemoteOutputAdmissionReport, remote_build::RemoteOutputImportReport), RunError> {
+    debug_assert_eq!(input.prepared.request.request_id, input.prepared.plan.client.request.request_id);
+    debug_assert!(!input.prepared.plan.client.trusted_output_keys.is_empty());
     let admission = match remote_build::admit_fenced_remote_stdio_output(
         input.coordinator,
         &input.prepared.attempt,
@@ -5180,6 +5212,8 @@ async fn admit_remote_dispatch_outputs(
     )
     .await
     .map_err(|err| RunError::Internal(format!("remote output import failed: {err}")))?;
+    debug_assert_eq!(admission.request_id, input.prepared.request.request_id);
+    debug_assert_eq!(output_admission.request_id, input.prepared.request.request_id);
     Ok((admission, output_admission))
 }
 
@@ -5189,6 +5223,9 @@ fn finalize_remote_dispatch(
     admission: remote_build::RemoteOutputAdmissionReport,
     output_admission: remote_build::RemoteOutputImportReport,
 ) -> Result<remote_build::RemoteClientImportedBuild, RunError> {
+    debug_assert_eq!(admission.request_id, input.prepared.request.request_id);
+    debug_assert_eq!(output_admission.request_id, input.prepared.request.request_id);
+    debug_assert!(!output_admission.outputs.is_empty());
     let telemetry = remote_build::record_remote_production_telemetry(
         &input.prepared.telemetry,
         remote_build::RemoteProductionTelemetryFact::OutputAdmitted,
@@ -5207,11 +5244,11 @@ fn finalize_remote_dispatch(
         &telemetry,
     );
     let (immutable_log, immutable_log_health) = remote_immutable_log_health(immutable_log_result);
-    let telemetry_export_report =
+    let telemetry_delivery =
         remote_telemetry_export::export_remote_telemetry(&input.selection.telemetry, &telemetry.events);
     let health = remote_build::RemoteAttemptObservabilityHealth {
         telemetry: remote_build::remote_telemetry_buffer_health(&telemetry),
-        exporters: telemetry_export_report,
+        exporters: telemetry_delivery,
         trace_context: production_trace_health(input.selection, &transcript),
         immutable_log: immutable_log_health,
         non_claim: remote_build::REMOTE_OBSERVABILITY_NON_CLAIM.to_string(),
@@ -5326,14 +5363,13 @@ fn remote_client_build_json_report(
         .map(|build| remote_client_build_outcome_json(report, build, output_dir))
         .collect::<Result<Vec<_>, _>>()?;
     let succeeded_total = remote_report_count(outcomes.len())?;
-    let telemetry_event_capacity_entries =
-        usize::try_from(crunch_build::distributed::MAX_REMOTE_TELEMETRY_EVENT_CAPACITY)
-            .map_err(|_| RunError::Internal("remote telemetry event capacity does not fit in usize".to_string()))?;
+    let telemetry_take_count = usize::try_from(crunch_build::distributed::MAX_REMOTE_TELEMETRY_EVENT_CAPACITY)
+        .map_err(|_| RunError::Internal("remote telemetry event capacity does not fit in usize".to_string()))?;
     let telemetry_events = report
         .imported
         .iter()
         .flat_map(|build| build.observability.events.iter().cloned())
-        .take(telemetry_event_capacity_entries)
+        .take(telemetry_take_count)
         .collect::<Vec<_>>();
     let remote_observability = report
         .imported
@@ -5676,9 +5712,10 @@ struct LoadedStage0InventoryPolicy {
 }
 
 fn load_stage0_inventory_policy(path: &Path) -> Result<LoadedStage0InventoryPolicy, RunError> {
-    let import_entries: Vec<OsString> = Vec::new();
-    let inventory: protected_exec::Stage0Inventory = crunch_eval::evaluate_and_deserialize(path, &import_entries)
-        .map_err(|e| RunError::Eval(format!("loading stage0 inventory {}: {e}", path.display())))?;
+    let nickel_search_dirs: Vec<OsString> = Vec::new();
+    let inventory: protected_exec::Stage0Inventory =
+        crunch_eval::evaluate_and_deserialize(path, &nickel_search_dirs)
+            .map_err(|e| RunError::Eval(format!("loading stage0 inventory {}: {e}", path.display())))?;
     let policy = protected_exec::ProtectedExecPolicy::from_inventory(inventory)
         .map_err(|e| RunError::Internal(format!("validating stage0 inventory {}: {e}", path.display())))?;
     let digest_blake3 = policy.inventory_digest_blake3().to_string();
@@ -5832,15 +5869,15 @@ fn cmd_import_rust_source_provider(
     smoke: bool,
     smoke_evidence_dir: Option<&Path>,
 ) -> Result<(), RunError> {
-    let imported_provider = rust_source_provider::import_rust_source_provider(import_dir, output_dir)
+    let provider_copy = rust_source_provider::import_rust_source_provider(import_dir, output_dir)
         .map_err(|err| RunError::Build(format!("Rust source provider import failed closed: {err}")))?;
-    eprintln!("Imported Rust source provider {}", imported_provider.output_path.display());
-    eprintln!("  input: {}", imported_provider.input_path.display());
-    eprintln!("  metadata_path: {}", imported_provider.validation.metadata_path.display());
-    eprintln!("  metadata_digest_blake3: {}", imported_provider.validation.metadata_digest_blake3);
-    eprintln!("  policy_digest_blake3: {}", imported_provider.validation.validation.policy_digest_blake3);
+    eprintln!("Imported Rust source provider {}", provider_copy.output_path.display());
+    eprintln!("  input: {}", provider_copy.input_path.display());
+    eprintln!("  metadata_path: {}", provider_copy.validation.metadata_path.display());
+    eprintln!("  metadata_digest_blake3: {}", provider_copy.validation.metadata_digest_blake3);
+    eprintln!("  policy_digest_blake3: {}", provider_copy.validation.validation.policy_digest_blake3);
     if smoke {
-        cmd_smoke_rust_source_provider(&imported_provider.output_path, smoke_evidence_dir)?;
+        cmd_smoke_rust_source_provider(&provider_copy.output_path, smoke_evidence_dir)?;
     }
     Ok(())
 }
@@ -5895,6 +5932,8 @@ struct BootstrapCommandRequest<'a> {
 }
 
 fn run_bootstrap_command(request: BootstrapCommandRequest<'_>) -> Result<(), RunError> {
+    debug_assert!(!request.output.as_os_str().is_empty());
+    debug_assert!(!request.ctx.store.as_os_str().is_empty());
     let mode =
         bootstrap_source_root::select_bootstrap_provider(request.fetch, request.source_root, request.stagex_lineage)
             .map_err(|err| RunError::Internal(err.to_string()))?;
@@ -5976,6 +6015,70 @@ fn run_attest_command(ctx: &RunContext, action: AttestAction) -> Result<(), RunE
     )
 }
 
+struct RustPlanCaptureRequest<'a> {
+    root: PathBuf,
+    cargo: &'a Path,
+    rustc: &'a Path,
+    compiler_policy_mode: &'a str,
+    compiler_policy_provider_manifest: Option<&'a Path>,
+    compiler_policy_provider_manifest_digest: Option<&'a str>,
+    targets: &'a [String],
+    profile: &'a str,
+    features: &'a [String],
+    all_features: bool,
+    no_default_features: bool,
+    no_cargo_oracle: bool,
+    c_compiler_route_json: Option<&'a str>,
+    deterministic_release_paths: bool,
+    execution_output_root: Option<&'a Path>,
+}
+
+struct CapturedRustPlan {
+    receipt: rust_plan::RustPlanReceipt,
+    compiler_policy: rust_plan::RustCompilerPolicySelection,
+    c_compiler_route: Option<source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+}
+
+fn capture_rust_plan_command(request: RustPlanCaptureRequest<'_>) -> Result<CapturedRustPlan, RunError> {
+    debug_assert!(!request.root.as_os_str().is_empty());
+    debug_assert!(!request.cargo.as_os_str().is_empty());
+    debug_assert!(!request.rustc.as_os_str().is_empty());
+    let c_compiler_route = rust_plan::receipt_bound_c_compiler_route_from_cli_json(request.c_compiler_route_json)?;
+    let path_remaps = if request.deterministic_release_paths {
+        rust_plan::deterministic_release_path_remaps_with_c_compiler(
+            &request.root,
+            request.execution_output_root,
+            c_compiler_route.as_ref(),
+        )
+    } else {
+        Vec::new()
+    };
+    let compiler_policy = rust_plan::rust_compiler_policy_selection(
+        request.compiler_policy_mode,
+        request.compiler_policy_provider_manifest.map(Path::to_path_buf),
+        request.compiler_policy_provider_manifest_digest.map(str::to_string),
+    )?;
+    let options = rust_plan::RustPlanOptions {
+        root: request.root,
+        cargo: request.cargo.to_path_buf(),
+        rustc: request.rustc.to_path_buf(),
+        targets: request.targets.to_vec(),
+        profile: request.profile.to_string(),
+        features: request.features.to_vec(),
+        all_features: request.all_features,
+        no_default_features: request.no_default_features,
+        no_cargo_oracle: request.no_cargo_oracle,
+        deterministic_release_paths: request.deterministic_release_paths,
+        path_remaps,
+    };
+    let receipt = rust_plan::capture_rust_plan(&options)?;
+    Ok(CapturedRustPlan {
+        receipt,
+        compiler_policy,
+        c_compiler_route,
+    })
+}
+
 fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
     debug_assert!(ctx.store_prefix.starts_with('/'));
     debug_assert!(!ctx.resolved_state_dir.as_os_str().is_empty());
@@ -6008,37 +6111,24 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         return Err(RunError::Internal("run_rust_plan_command called with non-RustPlan command".to_string()));
     };
     let root = root.clone().unwrap_or(current_dir_or_error()?);
-    let selected_c_compiler_route =
-        rust_plan::receipt_bound_c_compiler_route_from_cli_json(source_built_c_compiler_route_json.as_deref())?;
-    let path_remaps = if *deterministic_release_paths {
-        rust_plan::deterministic_release_path_remaps_with_c_compiler(
-            &root,
-            execution_output_root.as_deref(),
-            selected_c_compiler_route.as_ref(),
-        )
-    } else {
-        Vec::new()
-    };
-    let compiler_policy = rust_plan::rust_compiler_policy_selection(
-        compiler_policy_mode,
-        compiler_policy_provider_manifest.clone(),
-        compiler_policy_provider_manifest_digest.clone(),
-    )?;
-    let options = rust_plan::RustPlanOptions {
+    let captured = capture_rust_plan_command(RustPlanCaptureRequest {
         root,
-        cargo: cargo.clone(),
-        rustc: rustc.clone(),
-        targets: targets.clone(),
-        profile: profile.clone(),
-        features: features.clone(),
+        cargo,
+        rustc,
+        compiler_policy_mode,
+        compiler_policy_provider_manifest: compiler_policy_provider_manifest.as_deref(),
+        compiler_policy_provider_manifest_digest: compiler_policy_provider_manifest_digest.as_deref(),
+        targets,
+        profile,
+        features,
         all_features: *all_features,
         no_default_features: *no_default_features,
         no_cargo_oracle: *no_cargo_oracle,
+        c_compiler_route_json: source_built_c_compiler_route_json.as_deref(),
         deterministic_release_paths: *deterministic_release_paths,
-        path_remaps,
-    };
-    let receipt = rust_plan::capture_rust_plan(&options)?;
-    rust_plan::set_receipt_bound_c_compiler_route_override(selected_c_compiler_route)?;
+        execution_output_root: execution_output_root.as_deref(),
+    })?;
+    rust_plan::set_receipt_bound_c_compiler_route_override(captured.c_compiler_route)?;
     let execution_mode = select_rust_plan_execution_mode(RustPlanExecutionSelection {
         first_supported: *execute_first_supported_unit,
         first_dependency_chain: *execute_first_dependency_chain,
@@ -6050,9 +6140,9 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         patch_source_topology: *execute_patch_source_topology,
     });
     execute_rust_plan_receipt(RustPlanExecutionRequest {
-        receipt,
+        receipt: captured.receipt,
         rustc,
-        compiler_policy,
+        compiler_policy: captured.compiler_policy,
         output_root: execution_output_root.as_deref(),
         mode: execution_mode,
         json: ctx.json,
@@ -6085,24 +6175,16 @@ struct RustPlanExecutionSelection {
 }
 
 fn select_rust_plan_execution_mode(selection: RustPlanExecutionSelection) -> RustPlanExecutionMode {
-    if selection.first_supported {
-        RustPlanExecutionMode::FirstSupported
-    } else if selection.first_dependency_chain {
-        RustPlanExecutionMode::FirstDependencyChain
-    } else if selection.target_topology {
-        RustPlanExecutionMode::TargetTopology
-    } else if selection.host_artifact_topology {
-        RustPlanExecutionMode::HostArtifactTopology
-    } else if selection.topology {
-        RustPlanExecutionMode::Topology
-    } else if selection.dev_dependency_test_topology {
-        RustPlanExecutionMode::DevDependencyTestTopology
-    } else if selection.workspace_dependency_topology {
-        RustPlanExecutionMode::WorkspaceDependencyTopology
-    } else if selection.patch_source_topology {
-        RustPlanExecutionMode::PatchSourceTopology
-    } else {
-        RustPlanExecutionMode::PrintOnly
+    match selection {
+        selected if selected.first_supported => RustPlanExecutionMode::FirstSupported,
+        selected if selected.first_dependency_chain => RustPlanExecutionMode::FirstDependencyChain,
+        selected if selected.target_topology => RustPlanExecutionMode::TargetTopology,
+        selected if selected.host_artifact_topology => RustPlanExecutionMode::HostArtifactTopology,
+        selected if selected.topology => RustPlanExecutionMode::Topology,
+        selected if selected.dev_dependency_test_topology => RustPlanExecutionMode::DevDependencyTestTopology,
+        selected if selected.workspace_dependency_topology => RustPlanExecutionMode::WorkspaceDependencyTopology,
+        selected if selected.patch_source_topology => RustPlanExecutionMode::PatchSourceTopology,
+        _ => RustPlanExecutionMode::PrintOnly,
     }
 }
 
@@ -6492,6 +6574,8 @@ fn run_self_build_command(request: SelfBuildCommandRequest<'_>) -> Result<(), Ru
 }
 
 fn run_cargo_free_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<(), RunError> {
+    debug_assert!(request.cargo_free);
+    debug_assert!(!request.rustc.as_os_str().is_empty());
     validate_cargo_free_legacy_self_build_args(CargoFreeLegacyOptions {
         jobs: request.jobs,
         no_substitute: request.no_substitute,
@@ -6526,6 +6610,8 @@ fn run_cargo_free_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<()
 }
 
 fn run_legacy_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<(), RunError> {
+    debug_assert!(!request.cargo_free);
+    debug_assert!(request.ctx.store_prefix.starts_with('/'));
     validate_stage0_inventory_args(request.no_host_tools, request.stage0_inventory)?;
     let loaded_stage0_policy = request.stage0_inventory.map(load_stage0_inventory_policy).transpose()?;
     let parsed_trusted = parse_trusted_keys(request.trusted_public_keys)?;
@@ -6946,11 +7032,11 @@ fn build_project_expr_request(
     debug_assert!(request.settings.max_jobs > 0);
     debug_assert!(request.settings.store_prefix.starts_with('/'));
     let substituter_urls = run_substituter_urls(request.settings.no_substitute);
-    let mut import_entries = build_import_paths(&[])?;
-    import_entries.extend(request.resolved_import_entries);
+    let mut nickel_search_dirs = build_import_paths(&[])?;
+    nickel_search_dirs.extend(request.resolved_import_entries);
     build_from_expr_raw(RawInlineBuildRequest {
         expr: request.expr,
-        import_entries: &import_entries,
+        import_entries: &nickel_search_dirs,
         output_dir: request.settings.output_dir,
         state_dir: request.settings.state_dir,
         store_prefix: request.settings.store_prefix,
@@ -6969,7 +7055,8 @@ fn build_project_expr_request(
 #[allow(
     clippy::too_many_arguments,
     tigerstyle::ambiguous_params,
-    reason = "cross-module shell command compatibility adapter"
+    tigerstyle::too_many_parameters,
+    reason = "stable shell callback delegates immediately to the named ProjectExprBuildRequest boundary"
 )]
 fn build_project_expr(
     expr: &str,
@@ -6983,6 +7070,8 @@ fn build_project_expr(
     signing_key_path: Option<&Path>,
     trust_unsigned: bool,
 ) -> Result<crunch_pipeline::PipelineResult, RunError> {
+    debug_assert!(max_jobs > 0);
+    debug_assert!(store_prefix.starts_with('/'));
     let settings = RunBuildSettings {
         output_dir,
         state_dir,
@@ -7010,7 +7099,7 @@ fn build_file_raw(request: FileRawBuildRequest<'_>) -> Result<crunch_pipeline::P
     debug_assert!(request.settings.max_jobs > 0);
     debug_assert!(request.settings.store_prefix.starts_with('/'));
     let substituter_urls = run_substituter_urls(request.settings.no_substitute);
-    let import_entries = build_import_paths(request.import_paths)?;
+    let nickel_search_dirs = build_import_paths(request.import_paths)?;
     let keypair = build_cmd::load_or_generate_signing_keypair(
         request.settings.signing_key_path,
         request.settings.state_dir,
@@ -7020,7 +7109,7 @@ fn build_file_raw(request: FileRawBuildRequest<'_>) -> Result<crunch_pipeline::P
     let trusted_keys = crunch_build::signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
     let config = crunch_pipeline::BuildConfig {
         file: request.file.to_path_buf(),
-        import_paths: import_entries,
+        import_paths: nickel_search_dirs,
         output_dir: request.settings.output_dir.to_path_buf(),
         state_dir: request.settings.state_dir.to_path_buf(),
         base_state_dirs: Vec::new(),
