@@ -438,7 +438,7 @@ impl EvaluationSession {
                 .ok_or_else(|| Error::Boundary(format!("array element [{i}] 'name' field is not a string")))?;
             self.labels.push(RootLabel {
                 label,
-                index: u32_from_usize(i),
+                index: u32_from_usize(i, "array root index")?,
             });
         }
         Ok(())
@@ -455,7 +455,7 @@ impl EvaluationSession {
             assert!(i <= usize_limit_from_u32_max(), "record root count exceeds u32::MAX");
             self.labels.push(RootLabel {
                 label: key.to_string(),
-                index: u32_from_usize(i),
+                index: u32_from_usize(i, "record root index")?,
             });
         }
         Ok(())
@@ -620,7 +620,8 @@ impl AssignmentExecutor for ThreadedExecutor {
         worker_input: &IsolatedWorkerInput,
         assignments: &[WorkerAssignment],
     ) -> Result<AssignmentResults<T>, Error> {
-        let worker_pool = bounded_worker_pool(u32_from_usize(assignments.len()))?;
+        let worker_count = u32_from_usize(assignments.len(), "worker assignment count")?;
+        let worker_pool = bounded_worker_pool(worker_count)?;
         let mut worker_receivers = Vec::with_capacity(assignments.len());
         for assignment in assignments {
             let worker = worker_input.clone();
@@ -633,13 +634,9 @@ impl AssignmentExecutor for ThreadedExecutor {
 }
 
 const MIN_ROOTS_PER_WORKER: usize = 8;
-const SESSION_REUSE_ALL_ROOTS_MAX_WORKERS: u32 = 2;
+const SESSION_REUSE_ALL_ROOTS_MAX_WORKERS: usize = 2;
 const SESSION_REUSE_ALL_ROOTS_MAX_ROOTS: usize =
-    MIN_ROOTS_PER_WORKER * usize_from_u32_const(SESSION_REUSE_ALL_ROOTS_MAX_WORKERS);
-
-const fn usize_from_u32_const(value: u32) -> usize {
-    value as usize
-}
+    MIN_ROOTS_PER_WORKER.saturating_mul(SESSION_REUSE_ALL_ROOTS_MAX_WORKERS);
 
 fn usize_from_u32(value: u32) -> usize {
     match usize::try_from(value) {
@@ -648,8 +645,8 @@ fn usize_from_u32(value: u32) -> usize {
     }
 }
 
-fn u32_from_usize(value: usize) -> u32 {
-    u32::try_from(value).unwrap_or(u32::MAX)
+fn u32_from_usize(value: usize, boundary: &'static str) -> Result<u32, Error> {
+    u32::try_from(value).map_err(|_| Error::Boundary(format!("{boundary} {value} exceeds u32")))
 }
 
 fn usize_limit_from_u32_max() -> usize {
@@ -668,7 +665,7 @@ fn force_selected_roots_with_policy<T: DeserializeOwned + Send + 'static>(
     }
 
     let effective_concurrency = effective_parallel_workers(requested_root_count, max_concurrency);
-    let assignments = build_worker_assignments(labels, effective_concurrency);
+    let assignments = build_worker_assignments(labels, effective_concurrency)?;
     let inline_executor = InlineExecutor;
     let threaded_executor = ThreadedExecutor;
     force_selected_roots_with_executors(worker_input, &assignments, policy, &inline_executor, &threaded_executor)
@@ -682,7 +679,8 @@ fn force_selected_roots_with_executors<T: DeserializeOwned + Send + 'static>(
     threaded_executor: &impl AssignmentExecutor,
 ) -> Result<Vec<(String, T)>, Error> {
     let inline_results = || inline_executor.execute(worker_input, assignments);
-    let assignment_results = match resolve_execution_backend(policy, assignments.len() as u32) {
+    let assignment_count = u32_from_usize(assignments.len(), "worker assignment count")?;
+    let assignment_results = match resolve_execution_backend(policy, assignment_count) {
         ResolvedExecutionBackend::Inline => inline_results()?,
         ResolvedExecutionBackend::Threaded => match threaded_executor.execute(worker_input, assignments) {
             Ok(results) => results,
@@ -770,7 +768,7 @@ fn bounded_worker_pool(worker_count: u32) -> Result<Arc<BoundedWorkerPool>, Erro
         workers.push(BoundedWorkerSlot { sender, result_slot });
     }
 
-    assert_eq!(u32_from_usize(workers.len()), worker_count, "worker pool must create one worker slot per worker");
+    assert_eq!(workers.len(), usize_from_u32(worker_count), "worker pool must create one worker slot per worker");
     let worker_pool = Arc::new(BoundedWorkerPool {
         workers,
         next_worker: AtomicU32::new(0),
@@ -805,6 +803,9 @@ fn should_reuse_session_for_all_roots(
         return false;
     }
 
+    let Ok(effective_concurrency) = usize::try_from(effective_concurrency) else {
+        return false;
+    };
     effective_concurrency <= SESSION_REUSE_ALL_ROOTS_MAX_WORKERS
 }
 
@@ -812,17 +813,18 @@ fn clamp_parallel_workers(requested_root_count: usize, concurrency_cap: u32) -> 
     assert!(requested_root_count >= 1, "requested_root_count must not be zero");
     assert!(concurrency_cap >= 1, "concurrency_cap must be at least 1");
 
-    let max_workers_from_chunking = requested_root_count.div_ceil(MIN_ROOTS_PER_WORKER);
-    let max_workers_from_chunking = max_workers_from_chunking.max(1);
-    let max_workers_from_chunking = u32_from_usize(max_workers_from_chunking);
-    concurrency_cap.min(max_workers_from_chunking)
+    let max_workers_from_chunking = requested_root_count.div_ceil(MIN_ROOTS_PER_WORKER).max(1);
+    match u32::try_from(max_workers_from_chunking) {
+        Ok(max_workers) => concurrency_cap.min(max_workers),
+        Err(_) => concurrency_cap,
+    }
 }
 
-fn build_worker_assignments(labels: &[String], concurrency_cap: u32) -> Vec<WorkerAssignment> {
+fn build_worker_assignments(labels: &[String], concurrency_cap: u32) -> Result<Vec<WorkerAssignment>, Error> {
     assert!(concurrency_cap >= 1, "concurrency_cap must be at least 1");
     assert!(labels.len() <= usize_limit_from_u32_max(), "label count must fit in u32");
     if labels.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
     let chunk_len = labels.len().div_ceil(usize_from_u32(concurrency_cap));
@@ -831,13 +833,13 @@ fn build_worker_assignments(labels: &[String], concurrency_cap: u32) -> Vec<Work
     let assignment_count = labels.len().div_ceil(chunk_len);
     let mut assignments = Vec::with_capacity(assignment_count);
     for (chunk_index, chunk_labels) in labels.chunks(chunk_len).enumerate() {
-        let start_index = u32_from_usize(chunk_index.saturating_mul(chunk_len));
+        let start_index = u32_from_usize(chunk_index.saturating_mul(chunk_len), "worker assignment start index")?;
         assignments.push(WorkerAssignment {
             start_index,
             labels: chunk_labels.to_vec(),
         });
     }
-    assignments
+    Ok(assignments)
 }
 
 fn force_worker_assignment<T: DeserializeOwned + Send>(
@@ -936,49 +938,71 @@ fn discover_static_record_labels(source: &str) -> Option<Vec<RootLabel>> {
     static_record_labels_from_value(&parsed)
 }
 
-fn static_record_labels_from_value(value: &nickel_lang_core::eval::value::NickelValue) -> Option<Vec<RootLabel>> {
+struct StaticRecordCandidate<'a> {
+    record: &'a nickel_lang_core::term::record::RecordData,
+    has_no_includes: bool,
+    has_no_dynamic_fields: bool,
+}
+
+enum StaticRecordStep<'a> {
+    Continue(&'a nickel_lang_core::eval::value::NickelValue),
+    Collect(StaticRecordCandidate<'a>),
+}
+
+fn static_record_step(value: &nickel_lang_core::eval::value::NickelValue) -> Option<StaticRecordStep<'_>> {
     use nickel_lang_core::term::Term;
 
-    let term = value.as_term()?;
-    match term {
-        Term::Let(data) => static_record_labels_from_value(&data.body),
-        Term::Annotated(data) => static_record_labels_from_value(&data.inner),
-        Term::Sealed(data) => static_record_labels_from_value(&data.inner),
-        Term::Closurize(value) => static_record_labels_from_value(value),
-        Term::RecRecord(data) => {
-            collect_static_record_labels(&data.record, data.includes.is_empty(), data.dyn_fields.is_empty())
-        }
+    match value.as_term()? {
+        Term::Let(data) => Some(StaticRecordStep::Continue(&data.body)),
+        Term::Annotated(data) => Some(StaticRecordStep::Continue(&data.inner)),
+        Term::Sealed(data) => Some(StaticRecordStep::Continue(&data.inner)),
+        Term::Closurize(value) => Some(StaticRecordStep::Continue(value)),
+        Term::RecRecord(data) => Some(StaticRecordStep::Collect(StaticRecordCandidate {
+            record: &data.record,
+            has_no_includes: data.includes.is_empty(),
+            has_no_dynamic_fields: data.dyn_fields.is_empty(),
+        })),
         _ => None,
     }
 }
 
-fn collect_static_record_labels(
-    record: &nickel_lang_core::term::record::RecordData,
-    has_no_includes: bool,
-    has_no_dynamic_fields: bool,
-) -> Option<Vec<RootLabel>> {
-    if !has_no_includes {
+fn static_record_labels_from_value(value: &nickel_lang_core::eval::value::NickelValue) -> Option<Vec<RootLabel>> {
+    let mut step = static_record_step(value)?;
+    while let StaticRecordStep::Continue(next) = step {
+        step = static_record_step(next)?;
+    }
+    let StaticRecordStep::Collect(record) = step else {
+        return None;
+    };
+    collect_static_record_labels(record)
+}
+
+fn collect_static_record_labels(candidate: StaticRecordCandidate<'_>) -> Option<Vec<RootLabel>> {
+    if !candidate.has_no_includes {
         return None;
     }
-
-    if !has_no_dynamic_fields {
+    if !candidate.has_no_dynamic_fields {
         return None;
     }
+    assert!(candidate.has_no_includes, "static record candidates must not contain includes");
+    assert!(candidate.has_no_dynamic_fields, "static record candidates must not contain dynamic fields");
 
+    let record = candidate.record;
     if record.fields.keys().any(|key| key.label() == "name") {
         return None;
     }
+    assert!(record.fields.keys().all(|key| key.label() != "name"), "static record roots must not contain name");
 
     let mut labels = Vec::with_capacity(record.fields.len());
     for (index, (key, field)) in record.fields.iter().enumerate() {
         field.value.as_ref()?;
-
         labels.push(RootLabel {
             label: key.label().to_string(),
-            index: u32_from_usize(index),
+            index: u32::try_from(index).ok()?,
         });
     }
 
+    assert_eq!(labels.len(), record.fields.len(), "every static record field must produce one root label");
     Some(labels)
 }
 
@@ -997,6 +1021,7 @@ fn classify_shape(ctx: &mut Context, expr: &Expr) -> Result<RootShape, Error> {
                 .to_string(),
         ));
     };
+    assert!(expr.as_array().is_none(), "record expressions must not expose array payloads");
 
     // A record with a `name` field is treated as a single derivation.
     // For a record-of-derivations, individual fields don't have `name` at the top level.
@@ -1144,10 +1169,37 @@ let crunch = import "lib.ncl" in {
     }
 
     #[test]
+    fn discover_static_record_labels_iteratively_unwraps_nested_lets() {
+        let source = r#"
+let first = 1 in
+let second = first + 1 in {
+  alpha = { x = second },
+}
+"#;
+
+        let labels = discover_static_record_labels(source).unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].label, "alpha");
+        assert_eq!(labels[0].index, 0);
+    }
+
+    #[test]
     fn discover_static_record_labels_rejects_single_derivation_shape() {
         let source = r#"{ name = "demo", builder = "/bin/sh" }"#;
 
         assert!(discover_static_record_labels(source).is_none());
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn u32_from_usize_rejects_overflow_without_a_sentinel() {
+        let overflowing = usize::try_from(u64::from(u32::MAX).saturating_add(1)).unwrap();
+        let error = u32_from_usize(overflowing, "test boundary").unwrap_err();
+        let rendered = error.to_string();
+
+        assert!(matches!(error, Error::Boundary(_)));
+        assert!(rendered.contains("test boundary"));
+        assert!(rendered.contains(&overflowing.to_string()));
     }
 
     #[test]
@@ -1161,25 +1213,26 @@ let crunch = import "lib.ncl" in {
 
     #[test]
     fn small_all_root_sets_reuse_the_session_even_when_threading_is_allowed() {
+        let max_workers = u32::try_from(SESSION_REUSE_ALL_ROOTS_MAX_WORKERS).unwrap();
         assert!(should_reuse_session_for_all_roots(1, 1, RootForceExecutionPolicy::PreferThreaded));
         assert!(should_reuse_session_for_all_roots(
             SESSION_REUSE_ALL_ROOTS_MAX_ROOTS,
-            SESSION_REUSE_ALL_ROOTS_MAX_WORKERS,
+            max_workers,
             RootForceExecutionPolicy::PreferThreaded,
         ));
         assert!(!should_reuse_session_for_all_roots(
             SESSION_REUSE_ALL_ROOTS_MAX_ROOTS + 1,
-            SESSION_REUSE_ALL_ROOTS_MAX_WORKERS,
+            max_workers,
             RootForceExecutionPolicy::PreferThreaded,
         ));
         assert!(!should_reuse_session_for_all_roots(
             SESSION_REUSE_ALL_ROOTS_MAX_ROOTS,
-            SESSION_REUSE_ALL_ROOTS_MAX_WORKERS.saturating_add(1),
+            max_workers.saturating_add(1),
             RootForceExecutionPolicy::PreferThreaded,
         ));
         assert!(should_reuse_session_for_all_roots(
-            SESSION_REUSE_ALL_ROOTS_MAX_ROOTS + 8,
-            SESSION_REUSE_ALL_ROOTS_MAX_WORKERS.saturating_add(1),
+            SESSION_REUSE_ALL_ROOTS_MAX_ROOTS + MIN_ROOTS_PER_WORKER,
+            max_workers.saturating_add(1),
             RootForceExecutionPolicy::Inline,
         ));
     }
@@ -1358,7 +1411,7 @@ let crunch = import "lib.ncl" in {
         let session = EvaluationSession::open_str(source, &[]).unwrap();
         let worker_input = session.isolated_worker_input();
         let labels = vec!["beta".to_string(), "alpha".to_string()];
-        let assignments = build_worker_assignments(&labels, 2);
+        let assignments = build_worker_assignments(&labels, 2).unwrap();
         let inline_executor = InlineExecutor;
 
         let assignment_results = inline_executor.execute::<CrunchDerivation>(&worker_input, &assignments).unwrap();
@@ -1377,7 +1430,7 @@ let crunch = import "lib.ncl" in {
         let session = EvaluationSession::open_str(source, &[]).unwrap();
         let worker_input = session.isolated_worker_input();
         let labels = vec!["beta".to_string(), "alpha".to_string()];
-        let assignments = build_worker_assignments(&labels, 2);
+        let assignments = build_worker_assignments(&labels, 2).unwrap();
         let inline_executor = InlineExecutor;
         let fallback = force_selected_roots_with_executors::<CrunchDerivation>(
             &worker_input,
