@@ -336,7 +336,10 @@ fn plan_has_independent_compile_units_one_link_and_parameterized_smoke_roots() {
         .map(|unit| {
             let json = unit.derivation.env.get("SMOKE_RESULT_JSON").unwrap();
             let result = serde_json::from_str::<HardwareSmokeResult>(json).unwrap();
-            let validation = validate_smoke_result(&result, TEXT_BOUND, LOG_BOUND);
+            let validation = validate_smoke_result(&result, SmokeValidationLimits {
+                maximum_text_bytes: TEXT_BOUND,
+                maximum_log_bytes: LOG_BOUND,
+            });
             assert!(unit.derivation.args[1].contains("$SMOKE_RESULT_JSON"));
             assert!(validation.valid);
             assert!(validation.publishable);
@@ -387,28 +390,37 @@ fn plan_rejects_undeclared_output_missing_file_unsupported_command_duplicate_and
 
 #[test]
 fn smoke_result_requires_verdict_exit_refs_logs_and_observation_agreement() {
-    let passing = validate_smoke_result(&passing_smoke_result(), TEXT_BOUND, LOG_BOUND);
+    let passing = validate_smoke_result(&passing_smoke_result(), SmokeValidationLimits {
+        maximum_text_bytes: TEXT_BOUND,
+        maximum_log_bytes: LOG_BOUND,
+    });
     let mut wrong_model = passing_smoke_result();
     wrong_model.observed = String::from("4");
     wrong_model.verdict = SmokeVerdict::Fail;
     wrong_model.process_exit_code = WRONG_EXIT_CODE;
-    let wrong_model = validate_smoke_result(&wrong_model, TEXT_BOUND, LOG_BOUND);
+    let wrong_model = validate_smoke_result(&wrong_model, SmokeValidationLimits {
+        maximum_text_bytes: TEXT_BOUND,
+        maximum_log_bytes: LOG_BOUND,
+    });
     let mut contradictory = passing_smoke_result();
     contradictory.observed = String::from("4");
     contradictory.stdout.byte_count = LOG_BOUND.saturating_add(1);
     contradictory.action_ref = String::from("stale-ref");
     contradictory.source_refs.push(String::from("stale-source-ref"));
     contradictory.source_refs.push(contradictory.source_refs[0].clone());
-    let contradictory = validate_smoke_result(&contradictory, TEXT_BOUND, LOG_BOUND);
-    let generated = successful_smoke_result(
-        &profile().smoke_cases[0],
-        typed_ref(SIMULATOR_REF_PREFIX, "simulator"),
-        typed_ref(ACTION_REF_PREFIX, "generated-smoke"),
-        validated_profile().profile_ref,
-        validated_profile().cohort_ref,
-        validated_profile().selected_source_refs,
-        TEXT_BOUND,
-    )
+    let contradictory = validate_smoke_result(&contradictory, SmokeValidationLimits {
+        maximum_text_bytes: TEXT_BOUND,
+        maximum_log_bytes: LOG_BOUND,
+    });
+    let generated = successful_smoke_result(SuccessfulSmokeResultInput {
+        case: &profile().smoke_cases[0],
+        simulator_ref: typed_ref(SIMULATOR_REF_PREFIX, "simulator"),
+        action_ref: typed_ref(ACTION_REF_PREFIX, "generated-smoke"),
+        profile_ref: validated_profile().profile_ref,
+        cohort_ref: validated_profile().cohort_ref,
+        source_refs: validated_profile().selected_source_refs,
+        maximum_text_bytes: TEXT_BOUND,
+    })
     .unwrap();
 
     assert!(passing.valid);
@@ -445,8 +457,15 @@ fn selective_invalidation_and_four_run_evidence_are_count_based_not_elapsed_prom
     );
     let unrelated = run_evidence(RunClass::UnrelatedSourceChange, &plan.action_graph, &[], &all_actions, &[], 0, 42);
     let shared = run_evidence(RunClass::FullSharedHit, &plan.action_graph, &[], &all_actions, &[], 128, 4_096);
-    let bundle =
-        build_evidence_bundle(&plan.action_graph, &[selected_ref], fresh, selected, unrelated, shared).unwrap();
+    let bundle = build_evidence_bundle(EvidenceBundleInput {
+        action_graph: &plan.action_graph,
+        selected_changed_refs: &[selected_ref],
+        fresh,
+        selected_source_change: selected,
+        unrelated_source_change: unrelated,
+        full_shared_hit: shared,
+    })
+    .unwrap();
 
     assert_eq!(invalidated.len(), all_actions.len());
     assert!(bundle.unrelated_source_change.invalidated_action_refs.is_empty());
@@ -478,8 +497,15 @@ fn evidence_rejects_partial_counts_unrelated_invalidation_and_elapsed_gates() {
     unrelated.counts.get_mut(&ActionStage::Generation).unwrap().invalidated = 1;
     let mut shared = run_evidence(RunClass::FullSharedHit, &plan.action_graph, &[], &all_actions, &[], 1, 1);
     shared.counts.get_mut(&ActionStage::Compile).unwrap().executed = 1;
-    let diagnostics =
-        build_evidence_bundle(&plan.action_graph, &[selected_ref], fresh, selected, unrelated, shared).unwrap_err();
+    let diagnostics = build_evidence_bundle(EvidenceBundleInput {
+        action_graph: &plan.action_graph,
+        selected_changed_refs: &[selected_ref],
+        fresh,
+        selected_source_change: selected,
+        unrelated_source_change: unrelated,
+        full_shared_hit: shared,
+    })
+    .unwrap_err();
 
     assert!(diagnostics.contains(&String::from("elapsed-time-promise-forbidden")));
     assert!(diagnostics.contains(&String::from("unrelated-change-invalidated-selected-graph")));

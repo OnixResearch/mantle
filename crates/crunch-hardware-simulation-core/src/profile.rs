@@ -6,9 +6,12 @@ use alloc::vec::Vec;
 
 use serde::Serialize;
 
+use crate::digest::BoundedValue;
 use crate::digest::COHORT_REF_PREFIX;
+use crate::digest::NamedValue;
 use crate::digest::OBJECT_REF_PREFIX;
 use crate::digest::PROFILE_REF_PREFIX;
+use crate::digest::TypedRefValidation;
 use crate::digest::digest_ref;
 use crate::digest::validate_blake3;
 use crate::digest::validate_git_revision;
@@ -53,6 +56,13 @@ pub const HARD_MAX_SOURCE_CLOSURE_STEPS: u32 = 256;
 const PROFILE_DOMAIN: &[u8] = b"mantle.hardware.profile.v1";
 const COHORT_DOMAIN: &[u8] = b"mantle.hardware.cohort.v1";
 const REQUIRED_TOOL_ROLE_COUNT: usize = 5;
+const SOURCE_OBSERVATION_DIAGNOSTIC_CAPACITY: usize = 32;
+
+struct BoundValidation<'a> {
+    value: u32,
+    hard_maximum: u32,
+    field: &'a str,
+}
 
 #[derive(Serialize)]
 struct CohortHashable<'a> {
@@ -160,7 +170,7 @@ pub fn validate_source_observations(
         .map(|package| (package.id.as_str(), package))
         .collect::<BTreeMap<_, _>>();
     let mut observed = BTreeMap::new();
-    let mut rejected = Vec::new();
+    let mut rejected = Vec::with_capacity(SOURCE_OBSERVATION_DIAGNOSTIC_CAPACITY);
     for observation in observations {
         if observed.insert(observation.id.clone(), observation).is_some() {
             rejected.push(String::from("duplicate-source-observation"));
@@ -247,69 +257,177 @@ fn normalize_cohort(mut cohort: ToolCohort) -> ToolCohort {
 }
 
 fn validate_profile_header(profile: &HardwareProfile, diagnostics: &mut Vec<String>) {
+    let diagnostics_before = diagnostics.len();
     if profile.schema != HARDWARE_PROFILE_SCHEMA {
         diagnostics.push(String::from("hardware-profile-schema-unsupported"));
     }
-    push_result(diagnostics, validate_identifier(&profile.profile_id, "profile-id", profile.bounds.max_text_bytes));
     push_result(
         diagnostics,
-        validate_identifier(&profile.selected_target, "selected-target", profile.bounds.max_text_bytes),
+        validate_identifier(BoundedValue {
+            value: &profile.profile_id,
+            field: "profile-id",
+            maximum_bytes: profile.bounds.max_text_bytes,
+        }),
+    );
+    push_result(
+        diagnostics,
+        validate_identifier(BoundedValue {
+            value: &profile.selected_target,
+            field: "selected-target",
+            maximum_bytes: profile.bounds.max_text_bytes,
+        }),
     );
     if profile.support_tier != "heavy-capability-gated" {
         diagnostics.push(String::from("hardware-support-tier-invalid"));
     }
+    debug_assert!(diagnostics.len() >= diagnostics_before);
+    debug_assert!(diagnostics[diagnostics_before..].iter().all(|diagnostic| !diagnostic.is_empty()));
 }
 
 fn validate_bounds(bounds: &HardwareBounds, diagnostics: &mut Vec<String>) {
-    validate_bound(bounds.max_source_packages, HARD_MAX_SOURCE_PACKAGES, "source-packages", diagnostics);
-    validate_bound(bounds.max_source_files, HARD_MAX_SOURCE_FILES, "source-files", diagnostics);
-    validate_bound(bounds.max_generated_units, HARD_MAX_GENERATED_UNITS, "generated-units", diagnostics);
-    validate_bound(bounds.max_options, HARD_MAX_OPTIONS, "options", diagnostics);
-    validate_bound(bounds.max_smoke_cases, HARD_MAX_SMOKE_CASES, "smoke-cases", diagnostics);
-    validate_bound(bounds.max_outputs, HARD_MAX_OUTPUTS, "outputs", diagnostics);
-    validate_bound(bounds.max_text_bytes, HARD_MAX_TEXT_BYTES, "text-bytes", diagnostics);
-    validate_bound(bounds.max_plan_bytes, HARD_MAX_PLAN_BYTES, "plan-bytes", diagnostics);
-    validate_bound(bounds.max_log_bytes, HARD_MAX_LOG_BYTES, "log-bytes", diagnostics);
-    validate_bound(bounds.max_actions, HARD_MAX_ACTIONS, "actions", diagnostics);
+    for input in [
+        BoundValidation {
+            value: bounds.max_source_packages,
+            hard_maximum: HARD_MAX_SOURCE_PACKAGES,
+            field: "source-packages",
+        },
+        BoundValidation {
+            value: bounds.max_source_files,
+            hard_maximum: HARD_MAX_SOURCE_FILES,
+            field: "source-files",
+        },
+        BoundValidation {
+            value: bounds.max_generated_units,
+            hard_maximum: HARD_MAX_GENERATED_UNITS,
+            field: "generated-units",
+        },
+        BoundValidation {
+            value: bounds.max_options,
+            hard_maximum: HARD_MAX_OPTIONS,
+            field: "options",
+        },
+        BoundValidation {
+            value: bounds.max_smoke_cases,
+            hard_maximum: HARD_MAX_SMOKE_CASES,
+            field: "smoke-cases",
+        },
+        BoundValidation {
+            value: bounds.max_outputs,
+            hard_maximum: HARD_MAX_OUTPUTS,
+            field: "outputs",
+        },
+        BoundValidation {
+            value: bounds.max_text_bytes,
+            hard_maximum: HARD_MAX_TEXT_BYTES,
+            field: "text-bytes",
+        },
+        BoundValidation {
+            value: bounds.max_plan_bytes,
+            hard_maximum: HARD_MAX_PLAN_BYTES,
+            field: "plan-bytes",
+        },
+        BoundValidation {
+            value: bounds.max_log_bytes,
+            hard_maximum: HARD_MAX_LOG_BYTES,
+            field: "log-bytes",
+        },
+        BoundValidation {
+            value: bounds.max_actions,
+            hard_maximum: HARD_MAX_ACTIONS,
+            field: "actions",
+        },
+    ] {
+        validate_bound(input, diagnostics);
+    }
 }
 
-fn validate_bound(value: u32, hard_maximum: u32, field: &str, diagnostics: &mut Vec<String>) {
-    if value == 0 || value > hard_maximum {
-        diagnostics.push(alloc::format!("{field}-bound-invalid"));
+fn validate_bound(input: BoundValidation<'_>, diagnostics: &mut Vec<String>) {
+    if input.value == 0 || input.value > input.hard_maximum {
+        diagnostics.push(alloc::format!("{}-bound-invalid", input.field));
     }
 }
 
 fn validate_sources(profile: &HardwareProfile, diagnostics: &mut Vec<String>) {
+    let diagnostics_before = diagnostics.len();
     validate_count(profile.source_packages.len(), profile.bounds.max_source_packages, "source-package", diagnostics);
     let mut ids = BTreeSet::new();
-    let mut total_files = 0_u32;
+    let mut total_file_count = 0_u32;
+    let mut is_total_file_count_representable = true;
     for package in &profile.source_packages {
         if !ids.insert(package.id.as_str()) {
             diagnostics.push(String::from("duplicate-source-package"));
         }
         validate_source_package(package, &profile.bounds, diagnostics);
-        total_files = total_files.saturating_add(u32::try_from(package.files.len()).unwrap_or(u32::MAX));
+        match u32::try_from(package.files.len()) {
+            Ok(package_file_count) => {
+                total_file_count = total_file_count.saturating_add(package_file_count);
+            }
+            Err(_) => {
+                is_total_file_count_representable = false;
+            }
+        }
     }
-    if total_files == 0 || total_files > profile.bounds.max_source_files {
+    let is_total_file_count_valid = is_total_file_count_representable
+        && total_file_count > 0
+        && total_file_count <= profile.bounds.max_source_files;
+    if !is_total_file_count_valid {
         diagnostics.push(String::from("source-file-bound-exceeded"));
     }
+    debug_assert!(ids.len() <= profile.source_packages.len());
+    debug_assert!(diagnostics.len() >= diagnostics_before);
 }
 
 fn validate_source_package(package: &SourcePackage, bounds: &HardwareBounds, diagnostics: &mut Vec<String>) {
-    push_result(diagnostics, validate_identifier(&package.id, "source-id", bounds.max_text_bytes));
+    let diagnostics_before = diagnostics.len();
+    push_result(
+        diagnostics,
+        validate_identifier(BoundedValue {
+            value: &package.id,
+            field: "source-id",
+            maximum_bytes: bounds.max_text_bytes,
+        }),
+    );
     if !package.locator.starts_with("fixture-git://") {
         diagnostics.push(String::from("source-locator-not-pinned-local-git"));
     }
     push_result(diagnostics, validate_git_revision(&package.revision));
-    push_result(diagnostics, validate_blake3(&package.recursive_blake3, "source-recursive"));
-    push_result(diagnostics, validate_blake3(&package.sentinel_blake3, "source-sentinel"));
-    push_result(diagnostics, validate_typed_ref(&package.object_ref, OBJECT_REF_PREFIX, "source-object-ref"));
+    push_result(
+        diagnostics,
+        validate_blake3(NamedValue {
+            value: &package.recursive_blake3,
+            field: "source-recursive",
+        }),
+    );
+    push_result(
+        diagnostics,
+        validate_blake3(NamedValue {
+            value: &package.sentinel_blake3,
+            field: "source-sentinel",
+        }),
+    );
+    push_result(
+        diagnostics,
+        validate_typed_ref(TypedRefValidation {
+            value: &package.object_ref,
+            prefix: OBJECT_REF_PREFIX,
+            field: "source-object-ref",
+        }),
+    );
     if package.files.is_empty() {
         diagnostics.push(String::from("source-files-empty"));
     }
     for file in &package.files {
-        push_result(diagnostics, validate_relative_path(file, "source-file", bounds.max_text_bytes));
+        push_result(
+            diagnostics,
+            validate_relative_path(BoundedValue {
+                value: file,
+                field: "source-file",
+                maximum_bytes: bounds.max_text_bytes,
+            }),
+        );
     }
+    debug_assert!(diagnostics.len() >= diagnostics_before);
+    debug_assert!(diagnostics[diagnostics_before..].iter().all(|diagnostic| !diagnostic.is_empty()));
 }
 
 fn validate_targets(profile: &HardwareProfile, diagnostics: &mut Vec<String>) {
@@ -329,21 +447,50 @@ fn validate_targets(profile: &HardwareProfile, diagnostics: &mut Vec<String>) {
 }
 
 fn validate_target(target: &HardwareTarget, bounds: &HardwareBounds, diagnostics: &mut Vec<String>) {
-    push_result(diagnostics, validate_identifier(&target.id, "target-id", bounds.max_text_bytes));
-    push_result(diagnostics, validate_identifier(&target.top_module, "top-module", bounds.max_text_bytes));
+    let diagnostics_before = diagnostics.len();
+    push_result(
+        diagnostics,
+        validate_identifier(BoundedValue {
+            value: &target.id,
+            field: "target-id",
+            maximum_bytes: bounds.max_text_bytes,
+        }),
+    );
+    push_result(
+        diagnostics,
+        validate_identifier(BoundedValue {
+            value: &target.top_module,
+            field: "top-module",
+            maximum_bytes: bounds.max_text_bytes,
+        }),
+    );
     if target.source_packages.is_empty() || target.source_files.is_empty() {
         diagnostics.push(String::from("target-source-set-empty"));
     }
     for file in &target.source_files {
-        push_result(diagnostics, validate_relative_path(file, "target-source-file", bounds.max_text_bytes));
+        push_result(
+            diagnostics,
+            validate_relative_path(BoundedValue {
+                value: file,
+                field: "target-source-file",
+                maximum_bytes: bounds.max_text_bytes,
+            }),
+        );
     }
     push_result(
         diagnostics,
-        validate_relative_path(&target.reference_model, "reference-model", bounds.max_text_bytes),
+        validate_relative_path(BoundedValue {
+            value: &target.reference_model,
+            field: "reference-model",
+            maximum_bytes: bounds.max_text_bytes,
+        }),
     );
+    debug_assert!(diagnostics.len() >= diagnostics_before);
+    debug_assert!(diagnostics[diagnostics_before..].iter().all(|diagnostic| !diagnostic.is_empty()));
 }
 
 fn validate_tool_cohort(cohort: &ToolCohort, diagnostics: &mut Vec<String>) {
+    let diagnostics_before = diagnostics.len();
     if cohort.schema != TOOL_COHORT_SCHEMA {
         diagnostics.push(String::from("tool-cohort-schema-unsupported"));
     }
@@ -353,8 +500,20 @@ fn validate_tool_cohort(cohort: &ToolCohort, diagnostics: &mut Vec<String>) {
     if cohort.system != SYSTEM_X86_64_LINUX {
         diagnostics.push(String::from("tool-cohort-system-unsupported"));
     }
-    push_result(diagnostics, validate_blake3(&cohort.identity_blake3, "tool-cohort-identity"));
-    push_result(diagnostics, validate_blake3(&cohort.closure_paths_blake3, "tool-closure-paths"));
+    push_result(
+        diagnostics,
+        validate_blake3(NamedValue {
+            value: &cohort.identity_blake3,
+            field: "tool-cohort-identity",
+        }),
+    );
+    push_result(
+        diagnostics,
+        validate_blake3(NamedValue {
+            value: &cohort.closure_paths_blake3,
+            field: "tool-closure-paths",
+        }),
+    );
     let expected_identity = cohort_ref(cohort)
         .ok()
         .and_then(|reference| reference.strip_prefix(COHORT_REF_PREFIX).map(String::from));
@@ -368,18 +527,43 @@ fn validate_tool_cohort(cohort: &ToolCohort, diagnostics: &mut Vec<String>) {
     for member in &cohort.members {
         validate_tool_member(member, diagnostics);
     }
+    debug_assert!(diagnostics.len() >= diagnostics_before);
+    debug_assert!(diagnostics[diagnostics_before..].iter().all(|diagnostic| !diagnostic.is_empty()));
 }
 
 fn validate_tool_member(member: &crate::model::ToolMember, diagnostics: &mut Vec<String>) {
+    let diagnostics_before = diagnostics.len();
     if member.package.is_empty() || member.version.is_empty() {
         diagnostics.push(String::from("tool-member-identity-empty"));
     }
-    push_result(diagnostics, validate_store_path(&member.store_path, "tool-store-path"));
-    push_result(diagnostics, validate_relative_path(&member.executable, "tool-executable", HARD_MAX_TEXT_BYTES));
-    push_result(diagnostics, validate_blake3(&member.binary_blake3, "tool-binary"));
+    push_result(
+        diagnostics,
+        validate_store_path(NamedValue {
+            value: &member.store_path,
+            field: "tool-store-path",
+        }),
+    );
+    push_result(
+        diagnostics,
+        validate_relative_path(BoundedValue {
+            value: &member.executable,
+            field: "tool-executable",
+            maximum_bytes: HARD_MAX_TEXT_BYTES,
+        }),
+    );
+    push_result(
+        diagnostics,
+        validate_blake3(NamedValue {
+            value: &member.binary_blake3,
+            field: "tool-binary",
+        }),
+    );
+    debug_assert!(diagnostics.len() >= diagnostics_before);
+    debug_assert!(diagnostics[diagnostics_before..].iter().all(|diagnostic| !diagnostic.is_empty()));
 }
 
 fn validate_options_and_cases(profile: &HardwareProfile, diagnostics: &mut Vec<String>) {
+    let diagnostics_before = diagnostics.len();
     if profile.generation.language != "systemverilog" || profile.generation.output_prefix.is_empty() {
         diagnostics.push(String::from("generation-options-invalid"));
     }
@@ -393,7 +577,14 @@ fn validate_options_and_cases(profile: &HardwareProfile, diagnostics: &mut Vec<S
         if !case_ids.insert(case.id.as_str()) {
             diagnostics.push(String::from("duplicate-smoke-case"));
         }
-        push_result(diagnostics, validate_identifier(&case.id, "smoke-case-id", profile.bounds.max_text_bytes));
+        push_result(
+            diagnostics,
+            validate_identifier(BoundedValue {
+                value: &case.id,
+                field: "smoke-case-id",
+                maximum_bytes: profile.bounds.max_text_bytes,
+            }),
+        );
         if case.input.is_empty() || case.expected.is_empty() || case.max_log_bytes == 0 {
             diagnostics.push(String::from("smoke-case-invalid"));
         }
@@ -401,6 +592,8 @@ fn validate_options_and_cases(profile: &HardwareProfile, diagnostics: &mut Vec<S
             diagnostics.push(String::from("smoke-log-bound-exceeded"));
         }
     }
+    debug_assert!(diagnostics.len() >= diagnostics_before);
+    debug_assert!(diagnostics[diagnostics_before..].iter().all(|diagnostic| !diagnostic.is_empty()));
 }
 
 fn validate_non_claims(non_claims: &[String], diagnostics: &mut Vec<String>) {
@@ -413,8 +606,8 @@ fn validate_non_claims(non_claims: &[String], diagnostics: &mut Vec<String>) {
 }
 
 fn validate_count(actual: usize, maximum: u32, field: &str, diagnostics: &mut Vec<String>) {
-    let actual = u32::try_from(actual).unwrap_or(u32::MAX);
-    if actual == 0 || actual > maximum {
+    let is_count_valid = u32::try_from(actual).is_ok_and(|actual_count| actual_count > 0 && actual_count <= maximum);
+    if !is_count_valid {
         diagnostics.push(alloc::format!("{field}-count-invalid"));
     }
 }

@@ -28,6 +28,7 @@ pub const EVIDENCE_NON_CLAIMS: &[&str] = &[
 const EVIDENCE_DOMAIN: &[u8] = b"mantle.hardware.evidence.v1";
 const INVALIDATION_STEP_MULTIPLIER: u32 = 2;
 const REQUIRED_STAGE_COUNT: usize = 4;
+const EVIDENCE_VALIDATION_DIAGNOSTIC_CAPACITY: usize = 16;
 
 #[derive(Serialize)]
 struct EvidenceHashable<'a> {
@@ -39,8 +40,18 @@ struct EvidenceHashable<'a> {
     non_claims: &'a [String],
 }
 
+pub struct EvidenceBundleInput<'a> {
+    pub action_graph: &'a [ActionNode],
+    pub selected_changed_refs: &'a [String],
+    pub fresh: RunEvidence,
+    pub selected_source_change: RunEvidence,
+    pub unrelated_source_change: RunEvidence,
+    pub full_shared_hit: RunEvidence,
+}
+
 pub fn invalidated_actions(action_graph: &[ActionNode], changed_refs: &[String]) -> Result<Vec<String>, String> {
-    let action_count = u32::try_from(action_graph.len()).unwrap_or(u32::MAX);
+    let action_count =
+        u32::try_from(action_graph.len()).map_err(|_| String::from("invalidation-action-count-invalid"))?;
     if action_count == 0 || action_count > HARD_MAX_ACTIONS {
         return Err(String::from("invalidation-action-count-invalid"));
     }
@@ -50,8 +61,8 @@ pub fn invalidated_actions(action_graph: &[ActionNode], changed_refs: &[String])
         .filter(|node| node.direct_input_refs.iter().any(|reference| changed.contains(reference.as_str())))
         .map(|node| node.action_ref.clone())
         .collect::<BTreeSet<_>>();
-    let step_limit = action_count.saturating_mul(INVALIDATION_STEP_MULTIPLIER);
-    for _ in 0..step_limit {
+    let invalidation_step_count_max = action_count.saturating_mul(INVALIDATION_STEP_MULTIPLIER);
+    for _ in 0..invalidation_step_count_max {
         let before = invalidated.len();
         for node in action_graph {
             if node.dependency_action_refs.iter().any(|dependency| invalidated.contains(dependency)) {
@@ -66,20 +77,21 @@ pub fn invalidated_actions(action_graph: &[ActionNode], changed_refs: &[String])
         return Err(String::from("invalidation-result-count-invalid"));
     }
     debug_assert!(invalidated.len() <= action_graph.len());
-    debug_assert!(step_limit >= action_count);
+    debug_assert!(invalidation_step_count_max >= action_count);
     Ok(invalidated.into_iter().collect())
 }
 
-pub fn build_evidence_bundle(
-    action_graph: &[ActionNode],
-    selected_changed_refs: &[String],
-    fresh: RunEvidence,
-    selected_source_change: RunEvidence,
-    unrelated_source_change: RunEvidence,
-    full_shared_hit: RunEvidence,
-) -> Result<HardwareEvidenceBundle, Vec<String>> {
+pub fn build_evidence_bundle(input: EvidenceBundleInput<'_>) -> Result<HardwareEvidenceBundle, Vec<String>> {
+    let EvidenceBundleInput {
+        action_graph,
+        selected_changed_refs,
+        fresh,
+        selected_source_change,
+        unrelated_source_change,
+        full_shared_hit,
+    } = input;
     let expected_selected = invalidated_actions(action_graph, selected_changed_refs).map_err(|error| vec![error])?;
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(EVIDENCE_VALIDATION_DIAGNOSTIC_CAPACITY);
     validate_run(&fresh, RunClass::Fresh, &mut diagnostics);
     validate_run(&selected_source_change, RunClass::SelectedSourceChange, &mut diagnostics);
     validate_run(&unrelated_source_change, RunClass::UnrelatedSourceChange, &mut diagnostics);
@@ -127,7 +139,7 @@ pub fn stage_counts(
     let invalidated = invalidated.iter().map(String::as_str).collect::<BTreeSet<_>>();
     let mut counts = all_stage_counts();
     for node in action_graph {
-        let stage = counts.get_mut(&node.stage).expect("all action stages have counters");
+        let stage = counts.entry(node.stage).or_insert_with(empty_stage_counts);
         stage.requested = stage.requested.saturating_add(1);
         if executed.contains(node.action_ref.as_str()) {
             stage.executed = stage.executed.saturating_add(1);
@@ -139,8 +151,9 @@ pub fn stage_counts(
             stage.invalidated = stage.invalidated.saturating_add(1);
         }
     }
+    let requested_count = counts.values().map(|value| value.requested).sum::<u32>();
     debug_assert_eq!(counts.len(), REQUIRED_STAGE_COUNT);
-    debug_assert_eq!(counts.values().map(|value| value.requested).sum::<u32>(), action_graph.len() as u32);
+    debug_assert_eq!(usize::try_from(requested_count).ok(), Some(action_graph.len()));
     counts
 }
 
@@ -215,6 +228,15 @@ fn validate_run_non_claims(non_claims: &[String], diagnostics: &mut Vec<String>)
     }
 }
 
+fn empty_stage_counts() -> StageCounts {
+    StageCounts {
+        requested: 0,
+        executed: 0,
+        reused: 0,
+        invalidated: 0,
+    }
+}
+
 fn all_stage_counts() -> BTreeMap<ActionStage, StageCounts> {
     [
         ActionStage::Generation,
@@ -223,14 +245,7 @@ fn all_stage_counts() -> BTreeMap<ActionStage, StageCounts> {
         ActionStage::Smoke,
     ]
     .into_iter()
-    .map(|stage| {
-        (stage, StageCounts {
-            requested: 0,
-            executed: 0,
-            reused: 0,
-            invalidated: 0,
-        })
-    })
+    .map(|stage| (stage, empty_stage_counts()))
     .collect()
 }
 

@@ -6,9 +6,12 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::digest::ACTION_REF_PREFIX;
+use crate::digest::BoundedValue;
 use crate::digest::COHORT_REF_PREFIX;
+use crate::digest::NamedValue;
 use crate::digest::OBJECT_REF_PREFIX;
 use crate::digest::PROFILE_REF_PREFIX;
+use crate::digest::TypedRefValidation;
 use crate::digest::digest_ref;
 use crate::digest::domain_digest;
 use crate::digest::validate_blake3;
@@ -44,6 +47,15 @@ const SHELL_COMMAND_FLAG: &str = "-c";
 const MAX_ENV_KEY_BYTES: u32 = 128;
 const MAX_TOOL_CLOSURE_PATHS: u32 = 256;
 const MAX_VALIDATION_DIAGNOSTICS: usize = 128;
+
+struct DynamicUnitInput<'a> {
+    id: &'a str,
+    name: &'a str,
+    builder: &'a str,
+    args: Vec<String>,
+    env: BTreeMap<String, String>,
+    inputs: Vec<DynamicInput>,
+}
 
 pub fn build_hardware_plan(request: HardwarePlanRequest) -> Result<HardwarePlan, Vec<String>> {
     let mut diagnostics = validate_request(&request);
@@ -121,7 +133,7 @@ pub fn validate_hardware_plan(plan: &MantlePlanV1, request: &HardwarePlanRequest
 
 pub fn validate_generated_files(plan: &MantlePlanV1, observed_relative_paths: Vec<String>) -> Vec<String> {
     let observed = observed_relative_paths.into_iter().collect::<BTreeSet<_>>();
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(plan.units.len().min(MAX_VALIDATION_DIAGNOSTICS));
     for unit in plan.units.iter().filter(|unit| unit.id.starts_with("compile.")) {
         let Some(relative_path) = unit.derivation.env.get("SOURCE_RELATIVE_PATH") else {
             diagnostics.push(String::from("compile-source-path-missing"));
@@ -139,22 +151,9 @@ pub fn validate_generated_files(plan: &MantlePlanV1, observed_relative_paths: Ve
 }
 
 fn validate_request(request: &HardwarePlanRequest) -> Vec<String> {
-    let mut diagnostics = Vec::new();
-    push_result(&mut diagnostics, validate_typed_ref(&request.profile_ref, PROFILE_REF_PREFIX, "profile-ref"));
-    push_result(&mut diagnostics, validate_typed_ref(&request.cohort_ref, COHORT_REF_PREFIX, "cohort-ref"));
-    for source_ref in &request.source_refs {
-        push_result(&mut diagnostics, validate_typed_ref(source_ref, OBJECT_REF_PREFIX, "source-ref"));
-    }
-    push_result(&mut diagnostics, validate_store_path(&request.generated_source_path, "generated-source-path"));
-    push_result(&mut diagnostics, validate_blake3(&request.generated_source_blake3, "generated-source"));
-    for path in [
-        &request.shell_builder,
-        &request.cxx_executable,
-        &request.linker_executable,
-        &request.runtime_support_path,
-    ] {
-        push_result(&mut diagnostics, validate_store_path(path, "tool-path"));
-    }
+    let mut diagnostics = Vec::with_capacity(MAX_VALIDATION_DIAGNOSTICS);
+    validate_request_identity(request, &mut diagnostics);
+    validate_request_tool_paths(request, &mut diagnostics);
     validate_tool_closure(request, &mut diagnostics);
     validate_runtime_library_paths(request, &mut diagnostics);
     validate_plan_count(
@@ -164,26 +163,113 @@ fn validate_request(request: &HardwarePlanRequest) -> Vec<String> {
         &mut diagnostics,
     );
     validate_plan_count(request.smoke_cases.len(), request.bounds.max_smoke_cases, "smoke-case", &mut diagnostics);
-    let total_actions = request.generated_units.len().saturating_add(request.smoke_cases.len()).saturating_add(1);
-    validate_plan_count(total_actions, request.bounds.max_actions, "plan-action", &mut diagnostics);
+    let total_action_count = request.generated_units.len().saturating_add(request.smoke_cases.len()).saturating_add(1);
+    validate_plan_count(total_action_count, request.bounds.max_actions, "plan-action", &mut diagnostics);
+    validate_generated_unit_requests(request, &mut diagnostics);
+    debug_assert!(total_action_count >= request.generated_units.len());
+    debug_assert!(diagnostics.iter().all(|diagnostic| !diagnostic.is_empty()));
+    diagnostics
+}
+
+fn validate_request_identity(request: &HardwarePlanRequest, diagnostics: &mut Vec<String>) {
+    let diagnostics_before = diagnostics.len();
+    push_result(
+        diagnostics,
+        validate_typed_ref(TypedRefValidation {
+            value: &request.profile_ref,
+            prefix: PROFILE_REF_PREFIX,
+            field: "profile-ref",
+        }),
+    );
+    push_result(
+        diagnostics,
+        validate_typed_ref(TypedRefValidation {
+            value: &request.cohort_ref,
+            prefix: COHORT_REF_PREFIX,
+            field: "cohort-ref",
+        }),
+    );
+    for source_ref in &request.source_refs {
+        push_result(
+            diagnostics,
+            validate_typed_ref(TypedRefValidation {
+                value: source_ref,
+                prefix: OBJECT_REF_PREFIX,
+                field: "source-ref",
+            }),
+        );
+    }
+    push_result(
+        diagnostics,
+        validate_store_path(NamedValue {
+            value: &request.generated_source_path,
+            field: "generated-source-path",
+        }),
+    );
+    push_result(
+        diagnostics,
+        validate_blake3(NamedValue {
+            value: &request.generated_source_blake3,
+            field: "generated-source",
+        }),
+    );
+    debug_assert!(diagnostics.len() >= diagnostics_before);
+    debug_assert!(diagnostics[diagnostics_before..].iter().all(|diagnostic| !diagnostic.is_empty()));
+}
+
+fn validate_request_tool_paths(request: &HardwarePlanRequest, diagnostics: &mut Vec<String>) {
+    let diagnostics_before = diagnostics.len();
+    for path in [
+        &request.shell_builder,
+        &request.cxx_executable,
+        &request.linker_executable,
+        &request.runtime_support_path,
+    ] {
+        push_result(
+            diagnostics,
+            validate_store_path(NamedValue {
+                value: path,
+                field: "tool-path",
+            }),
+        );
+    }
+    debug_assert!(diagnostics.len() >= diagnostics_before);
+    debug_assert!(diagnostics[diagnostics_before..].iter().all(|diagnostic| !diagnostic.is_empty()));
+}
+
+fn validate_generated_unit_requests(request: &HardwarePlanRequest, diagnostics: &mut Vec<String>) {
+    let diagnostics_before = diagnostics.len();
     let mut unit_ids = BTreeSet::new();
     for unit in &request.generated_units {
         if !unit_ids.insert(unit.id.as_str()) {
             diagnostics.push(String::from("duplicate-generated-unit"));
         }
         push_result(
-            &mut diagnostics,
-            validate_identifier(&unit.id, "generated-unit-id", request.bounds.max_text_bytes),
+            diagnostics,
+            validate_identifier(BoundedValue {
+                value: &unit.id,
+                field: "generated-unit-id",
+                maximum_bytes: request.bounds.max_text_bytes,
+            }),
         );
         push_result(
-            &mut diagnostics,
-            validate_relative_path(&unit.relative_path, "generated-unit-path", request.bounds.max_text_bytes),
+            diagnostics,
+            validate_relative_path(BoundedValue {
+                value: &unit.relative_path,
+                field: "generated-unit-path",
+                maximum_bytes: request.bounds.max_text_bytes,
+            }),
         );
-        push_result(&mut diagnostics, validate_blake3(&unit.source_blake3, "generated-unit-source"));
+        push_result(
+            diagnostics,
+            validate_blake3(NamedValue {
+                value: &unit.source_blake3,
+                field: "generated-unit-source",
+            }),
+        );
     }
-    debug_assert!(total_actions >= request.generated_units.len());
-    debug_assert!(diagnostics.iter().all(|diagnostic| !diagnostic.is_empty()));
-    diagnostics
+    debug_assert!(unit_ids.len() <= request.generated_units.len());
+    debug_assert!(diagnostics.len() >= diagnostics_before);
 }
 
 fn generation_action(request: &HardwarePlanRequest) -> Result<ActionNode, Vec<String>> {
@@ -233,14 +319,14 @@ fn build_compile_units(
             source: String::from(GENERATED_SOURCE_ID),
         }];
         inputs.extend(tool_closure_inputs(request));
-        units.push(dynamic_unit(
-            &unit_id,
-            &format!("hardware-{}", sanitize_name(&source.id)),
-            &request.shell_builder,
-            vec![String::from(SHELL_COMMAND_FLAG), command],
+        units.push(dynamic_unit(DynamicUnitInput {
+            id: &unit_id,
+            name: &format!("hardware-{}", sanitize_name(&source.id)),
+            builder: &request.shell_builder,
+            args: vec![String::from(SHELL_COMMAND_FLAG), command],
             env,
             inputs,
-        ));
+        }));
         action_graph.push(ActionNode {
             action_ref,
             unit_id,
@@ -280,14 +366,14 @@ fn build_link_unit(
     }
     inputs.extend(tool_closure_inputs(request));
     let command = link_command(request, &object_variables);
-    let unit = dynamic_unit(
-        LINK_UNIT_ID,
-        "hardware-simulator",
-        &request.shell_builder,
-        vec![String::from(SHELL_COMMAND_FLAG), command],
+    let unit = dynamic_unit(DynamicUnitInput {
+        id: LINK_UNIT_ID,
+        name: "hardware-simulator",
+        builder: &request.shell_builder,
+        args: vec![String::from(SHELL_COMMAND_FLAG), command],
         env,
         inputs,
-    );
+    });
     action_graph.push(ActionNode {
         action_ref,
         unit_id: String::from(LINK_UNIT_ID),
@@ -319,15 +405,15 @@ fn build_smoke_units(
         let simulator_ref =
             digest_ref(crate::digest::SIMULATOR_REF_PREFIX, b"mantle.hardware.simulator.v1", &link_action)
                 .map_err(|error| vec![error])?;
-        let smoke_result = crate::smoke::successful_smoke_result(
+        let smoke_result = crate::smoke::successful_smoke_result(crate::smoke::SuccessfulSmokeResultInput {
             case,
-            simulator_ref.clone(),
-            action_ref.clone(),
-            request.profile_ref.clone(),
-            request.cohort_ref.clone(),
-            request.source_refs.clone(),
-            request.bounds.max_text_bytes,
-        )?;
+            simulator_ref: simulator_ref.clone(),
+            action_ref: action_ref.clone(),
+            profile_ref: request.profile_ref.clone(),
+            cohort_ref: request.cohort_ref.clone(),
+            source_refs: request.source_refs.clone(),
+            maximum_text_bytes: request.bounds.max_text_bytes,
+        })?;
         let smoke_result_json =
             serde_json::to_string(&smoke_result).map_err(|error| vec![format!("smoke-result-json:{error}")])?;
         let mut env = common_env(request, &action_ref);
@@ -345,14 +431,14 @@ fn build_smoke_units(
             output: String::from(OUTPUT_NAME),
         }];
         inputs.extend(tool_closure_inputs(request));
-        let unit = dynamic_unit(
-            &unit_id,
-            &format!("hardware-smoke-{}", sanitize_name(&case.id)),
-            &request.shell_builder,
-            vec![String::from(SHELL_COMMAND_FLAG), smoke_command()],
+        let unit = dynamic_unit(DynamicUnitInput {
+            id: &unit_id,
+            name: &format!("hardware-smoke-{}", sanitize_name(&case.id)),
+            builder: &request.shell_builder,
+            args: vec![String::from(SHELL_COMMAND_FLAG), smoke_command()],
             env,
             inputs,
-        );
+        });
         units.push(unit);
         action_graph.push(ActionNode {
             action_ref,
@@ -367,24 +453,17 @@ fn build_smoke_units(
     Ok(units)
 }
 
-fn dynamic_unit(
-    id: &str,
-    name: &str,
-    builder: &str,
-    args: Vec<String>,
-    env: BTreeMap<String, String>,
-    inputs: Vec<DynamicInput>,
-) -> DynamicUnit {
+fn dynamic_unit(input: DynamicUnitInput<'_>) -> DynamicUnit {
     DynamicUnit {
-        id: String::from(id),
+        id: String::from(input.id),
         derivation: DynamicDerivation {
-            name: String::from(name),
-            builder: String::from(builder),
+            name: String::from(input.name),
+            builder: String::from(input.builder),
             system: String::from(SYSTEM_X86_64_LINUX),
-            args,
+            args: input.args,
             outputs: vec![String::from(OUTPUT_NAME)],
-            env,
-            inputs,
+            env: input.env,
+            inputs: input.inputs,
             fixed_output: None,
             addressing_mode: AddressingMode::InputAddressed,
             sandbox: SandboxMode::Native,
@@ -448,6 +527,7 @@ fn validate_plan_sources(plan: &MantlePlanV1, request: &HardwarePlanRequest, dia
 }
 
 fn validate_plan_units(plan: &MantlePlanV1, request: &HardwarePlanRequest, diagnostics: &mut Vec<String>) {
+    let diagnostics_before = diagnostics.len();
     let mut unit_ids = BTreeSet::new();
     let expected_compile_paths =
         request.generated_units.iter().map(|unit| unit.relative_path.as_str()).collect::<BTreeSet<_>>();
@@ -480,52 +560,87 @@ fn validate_plan_units(plan: &MantlePlanV1, request: &HardwarePlanRequest, diagn
     if link_count != 1 {
         diagnostics.push(String::from("plan-link-root-count-invalid"));
     }
-    if smoke_count != u32::try_from(request.smoke_cases.len()).unwrap_or(u32::MAX) {
+    let is_smoke_count_valid =
+        u32::try_from(request.smoke_cases.len()).is_ok_and(|expected_smoke_count| smoke_count == expected_smoke_count);
+    if !is_smoke_count_valid {
         diagnostics.push(String::from("plan-smoke-count-invalid"));
     }
+    debug_assert!(unit_ids.len() <= plan.units.len());
+    debug_assert!(diagnostics.len() >= diagnostics_before);
 }
 
 fn validate_unit_common(unit: &DynamicUnit, request: &HardwarePlanRequest, diagnostics: &mut Vec<String>) {
-    if unit.derivation.builder != request.shell_builder
-        || unit.derivation.system != SYSTEM_X86_64_LINUX
-        || unit.derivation.outputs != vec![String::from(OUTPUT_NAME)]
-        || unit.requested_outputs != vec![String::from(OUTPUT_NAME)]
-        || unit.policy.host_paths != NO_HOST_PATHS_POLICY
-    {
+    let diagnostics_before = diagnostics.len();
+    let expected_outputs = vec![String::from(OUTPUT_NAME)];
+    let is_builder_valid = unit.derivation.builder == request.shell_builder;
+    let is_system_valid = unit.derivation.system == SYSTEM_X86_64_LINUX;
+    let is_derivation_output_valid = unit.derivation.outputs == expected_outputs;
+    let is_requested_output_valid = unit.requested_outputs == expected_outputs;
+    let is_host_path_policy_valid = unit.policy.host_paths == NO_HOST_PATHS_POLICY;
+    let is_unit_policy_valid = [
+        is_builder_valid,
+        is_system_valid,
+        is_derivation_output_valid,
+        is_requested_output_valid,
+        is_host_path_policy_valid,
+    ]
+    .into_iter()
+    .all(|is_valid| is_valid);
+    if !is_unit_policy_valid {
         diagnostics.push(String::from("plan-unit-policy-invalid"));
     }
     if unit.derivation.args.first().map(String::as_str) != Some(SHELL_COMMAND_FLAG) {
         diagnostics.push(String::from("unsupported-plan-command"));
     }
     for (key, value) in &unit.derivation.env {
+        let normalized_key = key.to_ascii_lowercase().replace('_', "-");
         push_result(
             diagnostics,
-            validate_identifier(&key.to_ascii_lowercase().replace('_', "-"), "plan-env-key", MAX_ENV_KEY_BYTES),
+            validate_identifier(BoundedValue {
+                value: &normalized_key,
+                field: "plan-env-key",
+                maximum_bytes: MAX_ENV_KEY_BYTES,
+            }),
         );
         let maximum_bytes = if key == "SMOKE_RESULT_JSON" {
             request.bounds.max_plan_bytes
         } else {
             request.bounds.max_text_bytes
         };
-        if value.len() > usize::try_from(maximum_bytes).unwrap_or(usize::MAX) {
+        let is_value_within_limit_bytes =
+            u32::try_from(value.len()).is_ok_and(|value_bytes| value_bytes <= maximum_bytes);
+        if !is_value_within_limit_bytes {
             diagnostics.push(String::from("plan-env-value-too-large"));
         }
     }
+    debug_assert!(diagnostics.len() >= diagnostics_before);
+    debug_assert!(diagnostics[diagnostics_before..].iter().all(|diagnostic| !diagnostic.is_empty()));
 }
 
 fn validate_compile_unit(unit: &DynamicUnit, request: &HardwarePlanRequest, diagnostics: &mut Vec<String>) {
+    let diagnostics_before = diagnostics.len();
     let command = unit.derivation.args.get(1).map(String::as_str).unwrap_or_default();
-    if !command.contains(&request.cxx_executable)
-        || !command.contains("$GENERATED_ROOT")
-        || !command.contains(" -c ")
-        || !unit
-            .derivation
-            .inputs
-            .iter()
-            .any(|input| matches!(input, DynamicInput::Source { source } if source == GENERATED_SOURCE_ID))
-    {
+    let is_cxx_declared = command.contains(&request.cxx_executable);
+    let is_generated_root_declared = command.contains("$GENERATED_ROOT");
+    let is_compile_mode_declared = command.contains(" -c ");
+    let is_generated_source_declared = unit
+        .derivation
+        .inputs
+        .iter()
+        .any(|input| matches!(input, DynamicInput::Source { source } if source == GENERATED_SOURCE_ID));
+    let is_compile_command_accepted = [
+        is_cxx_declared,
+        is_generated_root_declared,
+        is_compile_mode_declared,
+        is_generated_source_declared,
+    ]
+    .into_iter()
+    .all(|is_supported| is_supported);
+    if !is_compile_command_accepted {
         diagnostics.push(String::from("unsupported-compile-command"));
     }
+    debug_assert!(diagnostics.len() >= diagnostics_before);
+    debug_assert!(diagnostics[diagnostics_before..].iter().all(|diagnostic| !diagnostic.is_empty()));
 }
 
 fn validate_link_unit(unit: &DynamicUnit, request: &HardwarePlanRequest, diagnostics: &mut Vec<String>) {
@@ -545,6 +660,7 @@ fn validate_link_unit(unit: &DynamicUnit, request: &HardwarePlanRequest, diagnos
 }
 
 fn validate_smoke_unit(unit: &DynamicUnit, diagnostics: &mut Vec<String>) {
+    let diagnostics_before = diagnostics.len();
     let command = unit.derivation.args.get(1).map(String::as_str).unwrap_or_default();
     let dependency_count = unit
         .derivation
@@ -552,24 +668,36 @@ fn validate_smoke_unit(unit: &DynamicUnit, diagnostics: &mut Vec<String>) {
         .iter()
         .filter(|input| matches!(input, DynamicInput::UnitOutput { unit, .. } if unit == LINK_UNIT_ID))
         .count();
-    let result_schema_present = unit
+    let is_result_schema_present = unit
         .derivation
         .env
         .get("SMOKE_RESULT_JSON")
         .is_some_and(|value| value.contains(crate::model::SMOKE_RESULT_SCHEMA));
-    let runtime_libraries_declared = unit.derivation.env.get("LD_LIBRARY_PATH").is_some_and(|value| !value.is_empty());
-    if !command.contains("$SIMULATOR")
-        || !command.contains("$SMOKE_EXPECTED")
-        || !command.contains("$SMOKE_RESULT_JSON")
-        || !result_schema_present
-        || !runtime_libraries_declared
-        || dependency_count != 1
-    {
+    let is_runtime_libraries_declared =
+        unit.derivation.env.get("LD_LIBRARY_PATH").is_some_and(|value| !value.is_empty());
+    let is_simulator_declared = command.contains("$SIMULATOR");
+    let is_expected_value_declared = command.contains("$SMOKE_EXPECTED");
+    let is_result_json_declared = command.contains("$SMOKE_RESULT_JSON");
+    let is_dependency_count_valid = dependency_count == 1;
+    let is_smoke_command_accepted = [
+        is_simulator_declared,
+        is_expected_value_declared,
+        is_result_json_declared,
+        is_result_schema_present,
+        is_runtime_libraries_declared,
+        is_dependency_count_valid,
+    ]
+    .into_iter()
+    .all(|is_supported| is_supported);
+    if !is_smoke_command_accepted {
         diagnostics.push(String::from("unsupported-smoke-command"));
     }
+    debug_assert!(diagnostics.len() >= diagnostics_before);
+    debug_assert!(diagnostics[diagnostics_before..].iter().all(|diagnostic| !diagnostic.is_empty()));
 }
 
 fn validate_plan_graph(plan: &MantlePlanV1, request: &HardwarePlanRequest, diagnostics: &mut Vec<String>) {
+    let diagnostics_before = diagnostics.len();
     let units = plan.units.iter().map(|unit| unit.id.as_str()).collect::<BTreeSet<_>>();
     let roots = plan.roots.iter().map(String::as_str).collect::<BTreeSet<_>>();
     let expected_root_count = request.smoke_cases.len().saturating_add(1);
@@ -592,19 +720,23 @@ fn validate_plan_graph(plan: &MantlePlanV1, request: &HardwarePlanRequest, diagn
     if plan.units.iter().any(|unit| unit.derivation.outputs.iter().any(|output| output != OUTPUT_NAME)) {
         diagnostics.push(String::from("plan-undeclared-output"));
     }
+    debug_assert!(roots.len() <= plan.roots.len());
+    debug_assert!(diagnostics.len() >= diagnostics_before);
 }
 
-fn validate_plan_bytes(plan: &MantlePlanV1, maximum: u32, diagnostics: &mut Vec<String>) {
+fn validate_plan_bytes(plan: &MantlePlanV1, maximum_bytes: u32, diagnostics: &mut Vec<String>) {
     match serde_json::to_vec(plan) {
-        Ok(bytes) if bytes.len() <= usize::try_from(maximum).unwrap_or(usize::MAX) => {}
-        Ok(_) => diagnostics.push(String::from("plan-byte-bound-exceeded")),
+        Ok(bytes) => match u32::try_from(bytes.len()) {
+            Ok(actual_bytes) if actual_bytes <= maximum_bytes => {}
+            Ok(_) | Err(_) => diagnostics.push(String::from("plan-byte-bound-exceeded")),
+        },
         Err(_) => diagnostics.push(String::from("plan-json-invalid")),
     }
 }
 
 fn validate_plan_count(actual: usize, maximum: u32, field: &str, diagnostics: &mut Vec<String>) {
-    let actual = u32::try_from(actual).unwrap_or(u32::MAX);
-    if actual == 0 || actual > maximum {
+    let is_count_valid = u32::try_from(actual).is_ok_and(|actual_count| actual_count > 0 && actual_count <= maximum);
+    if !is_count_valid {
         diagnostics.push(format!("{field}-count-invalid"));
     }
 }
@@ -630,7 +762,13 @@ fn validate_tool_closure(request: &HardwarePlanRequest, diagnostics: &mut Vec<St
         diagnostics.push(String::from("tool-closure-path-duplicate"));
     }
     for path in &request.tool_closure_paths {
-        push_result(diagnostics, validate_store_path(path, "tool-closure-path"));
+        push_result(
+            diagnostics,
+            validate_store_path(NamedValue {
+                value: path,
+                field: "tool-closure-path",
+            }),
+        );
         if store_root(path).as_deref() != Ok(path.as_str()) {
             diagnostics.push(String::from("tool-closure-path-not-root"));
         }
@@ -661,7 +799,13 @@ fn validate_runtime_library_paths(request: &HardwarePlanRequest, diagnostics: &m
     let closure_roots = request.tool_closure_paths.iter().map(String::as_str).collect::<BTreeSet<_>>();
     let mut unique_paths = BTreeSet::new();
     for path in &request.runtime_library_paths {
-        push_result(diagnostics, validate_store_path(path, "runtime-library-path"));
+        push_result(
+            diagnostics,
+            validate_store_path(NamedValue {
+                value: path,
+                field: "runtime-library-path",
+            }),
+        );
         if !unique_paths.insert(path.as_str()) {
             diagnostics.push(String::from("runtime-library-path-duplicate"));
         }
