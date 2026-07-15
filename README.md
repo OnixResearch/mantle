@@ -735,9 +735,12 @@ discovery must be treated as compatibility behavior rather than Mantle's core
 dynamic-plan interface.
 
 The [hardware simulation reference slice](docs/hardware-simulation.md) exercises
-typed frontend-owned semantics against this generic boundary and records the
-current capability-gated end-to-end blocker without adding HDL-specific worker
-logic.
+typed frontend-owned semantics against this generic boundary. Its accepted
+13-action generation/compile/link/smoke graph is also composed with the
+[provider-free external batch fixture](docs/external-batch-dispatchers.md):
+ordinary resource/locality placement, worker registration, CAS transfer,
+signed output admission, and shared-result checks remain generic, with no
+HDL-specific worker or scheduler logic.
 
 ## Crate Layout
 

@@ -4871,8 +4871,8 @@ pub fn admit_external_batch_coordinator_dispatch(
         .expected_worker_endpoint_id
         .clone();
     authorize_external_batch_transfer(state, dispatch_id_blake3, &expected_worker_endpoint_id)?;
-    let placements = coordinator_worker_placement_candidates(state, request)?;
-    let selected = placements.first().ok_or_else(|| "external-batch-worker-not-eligible".to_string())?;
+    let selected =
+        select_coordinator_worker(state, request)?.ok_or_else(|| "external-batch-worker-not-eligible".to_string())?;
     if selected.worker_endpoint_id != expected_worker_endpoint_id {
         return Err("external-batch-worker-not-selected".to_string());
     }
@@ -11267,6 +11267,8 @@ mod tests {
     use crunch_build::distributed::RemoteResourceVector;
 
     use super::*;
+
+    mod external_batch_hardware_tests;
 
     const CUSTOM_REMOTE_OUTPUT_BYTES: u64 = 777;
     const REMOTE_CLIENT_DISPATCH_FRAME_COUNT: usize = 5;

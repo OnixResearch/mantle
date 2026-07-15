@@ -133,3 +133,35 @@ mode, trust-key ID, and already-admitted output digest. The evidence also
 records that scheduler identity does not transfer worker or output authority.
 Existing fenced reports, signed `PathInfo`, artifact-attestation, and
 output-import checks remain the only output-admission authority.
+
+## Hardware workload composition fixture
+
+The provider-free validation rail consumes the accepted immutable evidence from
+`cairn/archive/2026-07-14-prove-hardware-simulation-build-flow/` and binds its
+exact profile, cohort, sources, and 13 action identities to the generic external
+batch path. The tracked graph contains one generation action, nine compile
+actions, one link action, and two smoke actions.
+
+For every tracked action, the fixture:
+
+1. projects four CPU units, bounded memory and scratch bytes, and one opaque
+   `verilator-capacity` scheduling token into the digest-pinned fake Slurm
+   process;
+2. rejects transfer before the expected worker registers under the current
+   dispatcher generation and fence;
+3. records receiver-verified partial CAS locality and proves normal placement
+   selects that worker over an otherwise compatible cold worker;
+4. sends only BLAKE3 input refs through the ordinary framed upload path and
+   proves a complete receiver manifest has no missing bytes;
+5. admits one signed `PathInfo` output through the ordinary fenced result path,
+   imports it through the existing CAS/store seam, and then admits a generic
+   strong action-result record; and
+6. observes provider completion only after output admission, so the external
+   job identifier and queue state remain non-authoritative metadata.
+
+The rail also fails closed if the archived stage counts, exact profile/cohort
+identities, clean-client shared-result facts, zero-executor-call observation, or
+required hardware non-claims drift. This fixture proves deterministic
+composition with a fake provider process. It does not claim real-cluster
+compatibility, production throughput or speedup, commercial-license behavior,
+hardware correctness from elapsed time, or release eligibility.

@@ -642,6 +642,10 @@
 // r[verify external_batch_dispatchers.slurm_adapter]
 // r[impl external_batch_dispatchers.diagnostics]
 // r[verify external_batch_dispatchers.diagnostics]
+// r[impl external_batch_dispatchers.hardware_workload_composition]
+// r[verify external_batch_dispatchers.hardware_workload_composition]
+// r[impl external_batch_dispatchers.final_validation]
+// r[verify external_batch_dispatchers.final_validation]
 // Provider-neutral protocol and reconciliation logic live in
 // `crates/crunch-build/src/distributed/external_batch.rs`; typed configuration,
 // confined direct/Slurm process execution, fenced coordinator persistence,
