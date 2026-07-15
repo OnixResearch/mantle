@@ -30,6 +30,9 @@ const CARGO_SHA256_HEX_BYTES: usize = 64;
 const MAX_NAME_BYTES: usize = 128;
 const MIN_TARGET_SEGMENTS: usize = 3;
 const MAX_VENDOR_PACKAGES: usize = 512;
+const MAX_VENDOR_DIGEST_NODES: usize = 100_000;
+const MAX_SOURCE_INPUTS: usize = 5;
+const GENERATED_FILE_OPERATION_COUNT: usize = 2;
 const CARGO_CONFIG_TOML: &str = ".cargo/config.toml";
 const CARGO_CONFIG_LEGACY: &str = ".cargo/config";
 const CARGO_SOURCE_TABLE: &str = "source";
@@ -188,8 +191,34 @@ pub struct CargoImportShellOptions<'a> {
     pub json: bool,
 }
 
+struct WorkspaceFactLoadRequest<'a> {
+    root: &'a Path,
+    project_file: &'a str,
+    inputs_file: &'a str,
+}
+
+struct RelativeOutputPathValidation<'a> {
+    path: &'a str,
+    blocker_class: &'a str,
+}
+
+struct NameValidation<'a> {
+    label: &'a str,
+    value: &'a str,
+    blocker_class: &'a str,
+}
+
+struct CargoImportEmissionOptions {
+    is_applied: bool,
+    is_json: bool,
+}
+
 pub fn run_cargo_import(options: CargoImportShellOptions<'_>) -> Result<(), RunError> {
-    let facts = load_workspace_facts(options.root, options.project_file, options.inputs_file)?;
+    let facts = load_workspace_facts(WorkspaceFactLoadRequest {
+        root: options.root,
+        project_file: options.project_file,
+        inputs_file: options.inputs_file,
+    })?;
     let plan = build_cargo_import_plan(facts, CargoImportOptions {
         selected_package: options.selected_package.map(ToOwned::to_owned),
         selected_binary: options.selected_binary.map(ToOwned::to_owned),
@@ -198,20 +227,26 @@ pub fn run_cargo_import(options: CargoImportShellOptions<'_>) -> Result<(), RunE
         target_triple: options.target_triple.to_string(),
         profile: options.profile.to_string(),
     });
+    debug_assert_eq!(plan.schema, CARGO_IMPORT_PLAN_SCHEMA);
+    debug_assert_eq!(plan.target_triple.as_str(), options.target_triple);
+    let emission = CargoImportEmissionOptions {
+        is_applied: options.apply,
+        is_json: options.json,
+    };
 
     if options.apply {
         if !plan.blockers.is_empty() {
-            emit_cargo_import_plan(&plan, options.apply, options.json)?;
+            emit_cargo_import_plan(&plan, &emission)?;
             return Err(RunError::Internal(format!(
                 "refusing to apply cargo import plan with {} blocker(s)",
                 plan.blockers.len()
             )));
         }
         apply_cargo_import_plan(options.root, &plan)?;
-        emit_cargo_import_plan(&plan, options.apply, options.json)?;
+        emit_cargo_import_plan(&plan, &emission)?;
         return Ok(());
     }
-    emit_cargo_import_plan(&plan, options.apply, options.json)?;
+    emit_cargo_import_plan(&plan, &emission)?;
     if plan.blockers.is_empty() {
         return Ok(());
     }
@@ -239,15 +274,21 @@ pub fn build_cargo_import_plan(facts: CargoWorkspaceFacts, options: CargoImportO
     let mut source_inputs = Vec::new();
     let mut vendor_source = None;
     if blockers.is_empty() {
-        let package = selected_package.expect("selected package must exist after blocker-free selection");
-        let binary = selected_binary.expect("selected binary must exist after blocker-free selection");
-        vendor_source = accepted_vendor_source(package, facts.vendor_source.as_ref());
-        source_inputs = source_inputs_for(package, vendor_source.as_ref());
-        file_operations = generated_file_operations(package, binary, &options, &source_inputs, vendor_source.as_ref());
-        validate_file_conflicts(&mut file_operations, &facts.existing_files, &mut blockers);
+        if let (Some(package), Some(binary)) = (selected_package, selected_binary) {
+            vendor_source = accepted_vendor_source(package, facts.vendor_source.as_ref());
+            source_inputs = source_inputs_for(package, vendor_source.as_ref());
+            file_operations =
+                generated_file_operations(package, binary, &options, &source_inputs, vendor_source.as_ref());
+            validate_file_conflicts(&mut file_operations, &facts.existing_files, &mut blockers);
+        } else {
+            blockers.push(blocker(
+                "internal-selection-invariant",
+                "blocker-free Cargo import selection must identify one package and binary",
+            ));
+        }
     }
 
-    CargoImportPlan {
+    let plan = CargoImportPlan {
         schema: CARGO_IMPORT_PLAN_SCHEMA.to_string(),
         selected_package: selected_package.map(|package| package.name.clone()),
         selected_binary: selected_binary.map(ToOwned::to_owned),
@@ -267,7 +308,10 @@ pub fn build_cargo_import_plan(facts: CargoWorkspaceFacts, options: CargoImportO
             "Review the plan, materialize declared source/toolchain inputs, then run `mantle import cargo --apply`."
                 .to_string(),
         ],
-    }
+    };
+    debug_assert!(!plan.non_claims.is_empty());
+    debug_assert!(!plan.build_hints.is_empty());
+    plan
 }
 
 fn validate_workspace_shape(facts: &CargoWorkspaceFacts, blockers: &mut Vec<CargoImportBlocker>) {
@@ -283,19 +327,38 @@ fn validate_workspace_shape(facts: &CargoWorkspaceFacts, blockers: &mut Vec<Carg
 }
 
 fn validate_import_options(options: &CargoImportOptions, blockers: &mut Vec<CargoImportBlocker>) {
-    validate_relative_output_path(&options.project_file, "invalid-project-file", blockers);
-    validate_relative_output_path(&options.inputs_file, "invalid-inputs-file", blockers);
+    let blocker_count_before = blockers.len();
+    validate_relative_output_path(
+        RelativeOutputPathValidation {
+            path: &options.project_file,
+            blocker_class: "invalid-project-file",
+        },
+        blockers,
+    );
+    validate_relative_output_path(
+        RelativeOutputPathValidation {
+            path: &options.inputs_file,
+            blocker_class: "invalid-inputs-file",
+        },
+        blockers,
+    );
     if options.target_triple.split('-').filter(|segment| !segment.is_empty()).count() < MIN_TARGET_SEGMENTS {
         blockers.push(blocker("unsupported-target-triple", "target triple must be explicit"));
     }
     if !matches!(options.profile.as_str(), "debug" | "release") {
         blockers.push(blocker("unsupported-profile", "import scaffold supports debug or release profiles"));
     }
+    debug_assert!(blockers.len() >= blocker_count_before);
+    debug_assert!(blockers[blocker_count_before..].iter().all(|blocker| !blocker.class.is_empty()));
 }
 
-fn validate_relative_output_path(path: &str, class: &str, blockers: &mut Vec<CargoImportBlocker>) {
+fn validate_relative_output_path(validation: RelativeOutputPathValidation<'_>, blockers: &mut Vec<CargoImportBlocker>) {
+    let path = validation.path;
     if path.is_empty() || path.starts_with('/') || path.split('/').any(|part| part == ".." || part.is_empty()) {
-        blockers.push(blocker(class, "generated file path must be a relative path without parent traversal"));
+        blockers.push(blocker(
+            validation.blocker_class,
+            "generated file path must be a relative path without parent traversal",
+        ));
     }
 }
 
@@ -324,8 +387,11 @@ fn select_binary<'a>(
     selected_binary: Option<&'a str>,
     blockers: &mut Vec<CargoImportBlocker>,
 ) -> Option<&'a str> {
+    let blocker_count_before = blockers.len();
     if let Some(name) = selected_binary {
         if package.binaries.iter().any(|binary| binary == name) {
+            debug_assert!(package.binaries.iter().any(|binary| binary == name));
+            debug_assert_eq!(blockers.len(), blocker_count_before);
             return Some(name);
         }
         blockers.push(blocker(
@@ -354,9 +420,24 @@ fn validate_package_fact(
     vendor_source: Option<&CargoVendorSourceFact>,
     blockers: &mut Vec<CargoImportBlocker>,
 ) {
-    validate_name("package name", &package.name, "malformed-package-name", blockers);
+    let blocker_count_before = blockers.len();
+    validate_name(
+        NameValidation {
+            label: "package name",
+            value: &package.name,
+            blocker_class: "malformed-package-name",
+        },
+        blockers,
+    );
     for binary in &package.binaries {
-        validate_name("binary name", binary, "malformed-binary-name", blockers);
+        validate_name(
+            NameValidation {
+                label: "binary name",
+                value: binary,
+                blocker_class: "malformed-binary-name",
+            },
+            blockers,
+        );
     }
     if package.binaries.len() > MAX_BINARIES_PER_PACKAGE {
         blockers.push(blocker("too-many-binaries", "package has too many binary targets for initial import"));
@@ -367,6 +448,12 @@ fn validate_package_fact(
     for dependency in &package.dependencies {
         validate_dependency_source(dependency, lock_packages, vendor_source, blockers);
     }
+    debug_assert!(blockers.len() >= blocker_count_before);
+    debug_assert!(
+        blockers[blocker_count_before..]
+            .iter()
+            .all(|blocker| !blocker.class.is_empty() && !blocker.message.is_empty())
+    );
 }
 
 fn validate_dependency_source(
@@ -403,6 +490,8 @@ fn validate_vendored_dependency(
     vendor_source: Option<&CargoVendorSourceFact>,
     blockers: &mut Vec<CargoImportBlocker>,
 ) {
+    debug_assert!(matches!(&dependency.source, CargoDependencySource::Registry | CargoDependencySource::Git(_)));
+    debug_assert!(!matches!(&dependency.source, CargoDependencySource::LocalPath(_) | CargoDependencySource::Unknown));
     let lock_package = match unique_lock_package(&dependency.name, lock_packages) {
         Ok(lock_package) => lock_package,
         Err(class) => {
@@ -531,6 +620,9 @@ fn source_inputs_for(
             name: vendor_source.name.clone(),
         });
     }
+    let package_source_count = inputs.iter().filter(|input| input.role == "package-source").count();
+    debug_assert_eq!(package_source_count, 1);
+    debug_assert!(inputs.len() <= MAX_SOURCE_INPUTS);
     inputs
 }
 
@@ -545,6 +637,13 @@ fn accepted_vendor_source(
             .iter()
             .any(|dependency| !matches!(&dependency.source, CargoDependencySource::LocalPath(_)))
     {
+        debug_assert!(vendor_source.blockers.is_empty());
+        debug_assert!(
+            package
+                .dependencies
+                .iter()
+                .any(|dependency| !matches!(&dependency.source, CargoDependencySource::LocalPath(_)))
+        );
         return Some(CargoImportVendorSource {
             role: "vendored-dependencies".to_string(),
             field: "vendor_src".to_string(),
@@ -607,7 +706,14 @@ fn render_project_ncl(
     vendor_source: Option<&CargoImportVendorSource>,
 ) -> String {
     let package_field = nickel_field(&package.name);
-    let source = source_inputs.iter().find(|input| input.role == "package-source").expect("source input exists");
+    let source_field = source_field_name(&package.name);
+    let source_name = format!("{}-src", package.name);
+    let package_source_count = source_inputs
+        .iter()
+        .filter(|input| input.role == "package-source" && input.field == source_field && input.name == source_name)
+        .count();
+    debug_assert_eq!(package_source_count, 1);
+    debug_assert!(source_inputs.len() <= MAX_SOURCE_INPUTS);
     let vendor_fields = render_vendor_project_fields(vendor_source);
     format!(
         r#"# Generated by `mantle import cargo --apply`.
@@ -635,8 +741,8 @@ let inputs = import {inputs_file} in
         inputs_file = nickel_string(&options.inputs_file),
         package_field = package_field,
         package_name = nickel_string(&package.name),
-        source_field = nickel_field(&source.field),
-        source_name = nickel_string(&source.name),
+        source_field = nickel_field(&source_field),
+        source_name = nickel_string(&source_name),
         rust_field = nickel_field(RUST_FIELD_NAME),
         rust_name = nickel_string(RUST_INPUT_NAME),
         seed_field = nickel_field(SEED_FIELD_NAME),
@@ -662,6 +768,8 @@ fn render_vendor_project_fields(vendor_source: Option<&CargoImportVendorSource>)
 }
 
 fn render_inputs_ncl(source_inputs: &[CargoImportSourceInput]) -> String {
+    debug_assert!(!source_inputs.is_empty());
+    debug_assert!(source_inputs.len() <= MAX_SOURCE_INPUTS);
     let mut fields = String::new();
     for input in source_inputs {
         fields.push_str(&format!(
@@ -694,11 +802,14 @@ fn source_field_name(package_name: &str) -> String {
     field
 }
 
-fn validate_name(label: &str, value: &str, class: &str, blockers: &mut Vec<CargoImportBlocker>) {
-    if is_valid_derivation_name(value) {
+fn validate_name(validation: NameValidation<'_>, blockers: &mut Vec<CargoImportBlocker>) {
+    if is_valid_derivation_name(validation.value) {
         return;
     }
-    blockers.push(blocker(class, &format!("{label} must be a non-empty derivation-compatible name")));
+    blockers.push(blocker(
+        validation.blocker_class,
+        &format!("{} must be a non-empty derivation-compatible name", validation.label),
+    ));
 }
 
 fn is_valid_derivation_name(value: &str) -> bool {
@@ -729,44 +840,49 @@ fn is_nickel_identifier(value: &str) -> bool {
 }
 
 fn nickel_string(value: &str) -> String {
-    serde_json::to_string(value).expect("JSON string serialization cannot fail")
+    serde_json::Value::String(value.to_string()).to_string()
 }
 
 fn blake3_hex(bytes: &[u8]) -> String {
     blake3::hash(bytes).to_hex().to_string()
 }
 
-fn blocker(class: &str, message: &str) -> CargoImportBlocker {
+fn blocker(class: &str, message: impl ToString) -> CargoImportBlocker {
     CargoImportBlocker {
         class: class.to_string(),
         message: message.to_string(),
     }
 }
 
-fn load_workspace_facts(root: &Path, project_file: &str, inputs_file: &str) -> Result<CargoWorkspaceFacts, RunError> {
-    let root_text = root
+fn load_workspace_facts(request: WorkspaceFactLoadRequest<'_>) -> Result<CargoWorkspaceFacts, RunError> {
+    let root_text = request
+        .root
         .to_str()
         .ok_or_else(|| RunError::Internal("cargo import requires a UTF-8 workspace root path".to_string()))?
         .to_string();
-    let manifest_path = root.join("Cargo.toml");
+    let manifest_path = request.root.join("Cargo.toml");
     let manifest = read_toml_value(&manifest_path)?;
-    let lock_digest = read_lock_digest(root);
-    let lock_packages = read_lock_packages(root)?;
-    let vendor_source = read_vendor_source_facts(root, &lock_packages)?;
-    let package_paths = package_manifest_paths(root, &manifest)?;
-    let mut packages = Vec::with_capacity(package_paths.len());
+    let lock_digest = read_lock_digest(request.root);
+    let lock_packages = read_lock_packages(request.root)?;
+    let vendor_source = read_vendor_source_facts(request.root, &lock_packages)?;
+    let package_paths = package_manifest_paths(request.root, &manifest)?;
+    let package_path_count = package_paths.len();
+    let mut packages = Vec::with_capacity(package_path_count);
     for package_path in package_paths {
         packages.push(load_package_fact(&package_path)?);
     }
-    let existing_files = read_existing_files(root, &[project_file, inputs_file])?;
-    Ok(CargoWorkspaceFacts {
+    let existing_files = read_existing_files(request.root, &[request.project_file, request.inputs_file])?;
+    let facts = CargoWorkspaceFacts {
         workspace_root: root_text,
         lockfile_digest_blake3: lock_digest,
         lock_packages,
         vendor_source,
         packages,
         existing_files,
-    })
+    };
+    debug_assert_eq!(facts.packages.len(), package_path_count);
+    debug_assert!(facts.existing_files.len() <= GENERATED_FILE_OPERATION_COUNT);
+    Ok(facts)
 }
 
 fn read_toml_value(path: &Path) -> Result<Value, RunError> {
@@ -787,7 +903,8 @@ fn read_lock_packages(root: &Path) -> Result<Vec<CargoLockPackageFact>, RunError
     }
     let lockfile = read_toml_value(&path)?;
     let packages = lockfile.get("package").and_then(Value::as_array).cloned().unwrap_or_default();
-    let mut facts = Vec::with_capacity(packages.len());
+    let package_count = packages.len();
+    let mut facts = Vec::with_capacity(package_count);
     for package in packages {
         let Some(table) = package.as_table() else {
             continue;
@@ -808,6 +925,11 @@ fn read_lock_packages(root: &Path) -> Result<Vec<CargoLockPackageFact>, RunError
     facts.sort_by(|left, right| {
         (&left.name, &left.version, &left.source).cmp(&(&right.name, &right.version, &right.source))
     });
+    debug_assert!(facts.len() <= package_count);
+    debug_assert!(facts.windows(2).all(|window| {
+        (&window[0].name, &window[0].version, &window[0].source)
+            <= (&window[1].name, &window[1].version, &window[1].source)
+    }));
     Ok(facts)
 }
 
@@ -832,19 +954,24 @@ fn read_vendor_source_facts(
     } else {
         None
     };
-    Ok(Some(CargoVendorSourceFact {
+    let facts = CargoVendorSourceFact {
         root: normalize_relative_path(root, &vendor_root),
         root_digest_blake3,
         replacement_source,
         packages,
         blockers,
-    }))
+    };
+    debug_assert!(facts.packages.len() <= MAX_VENDOR_PACKAGES);
+    debug_assert!(facts.root_digest_blake3.as_ref().is_none_or(|digest| digest.len() == BLAKE3_HEX_BYTES));
+    Ok(Some(facts))
 }
 
 fn read_vendor_replacement(root: &Path) -> Result<Option<(String, PathBuf, Vec<CargoImportBlocker>)>, RunError> {
     let Some(config_path) = cargo_config_path(root) else {
         return Ok(None);
     };
+    debug_assert!(config_path.is_file());
+    debug_assert!(config_path.ends_with(CARGO_CONFIG_TOML) || config_path.ends_with(CARGO_CONFIG_LEGACY));
     let mut blockers = Vec::new();
     let config = read_toml_value(&config_path)?;
     let Some(source_table) = config.get(CARGO_SOURCE_TABLE).and_then(Value::as_table) else {
@@ -898,7 +1025,7 @@ fn read_vendor_packages(
     lock_packages: &[CargoLockPackageFact],
     blockers: &mut Vec<CargoImportBlocker>,
 ) -> Result<Vec<CargoVendorPackageFact>, RunError> {
-    let mut packages = Vec::new();
+    let mut packages = Vec::with_capacity(MAX_VENDOR_PACKAGES);
     for entry in std::fs::read_dir(vendor_root)
         .map_err(|err| RunError::Internal(format!("reading vendor directory {}: {err}", vendor_root.display())))?
     {
@@ -916,6 +1043,11 @@ fn read_vendor_packages(
     packages.sort_by(|left, right| {
         (&left.name, &left.version, &left.directory).cmp(&(&right.name, &right.version, &right.directory))
     });
+    debug_assert!(packages.len() <= MAX_VENDOR_PACKAGES);
+    debug_assert!(packages.windows(2).all(|window| {
+        (&window[0].name, &window[0].version, &window[0].directory)
+            <= (&window[1].name, &window[1].version, &window[1].directory)
+    }));
     Ok(packages)
 }
 
@@ -936,7 +1068,7 @@ fn read_vendor_package(
     let lock = lock_packages.iter().find(|lock| lock.name == name && lock.version == version);
     let checksum = lock.and_then(|lock| lock.checksum.clone());
     let checksum_status = validate_vendor_checksum(package_dir, blockers);
-    Ok(CargoVendorPackageFact {
+    let fact = CargoVendorPackageFact {
         name,
         version,
         directory: normalize_relative_path(root, package_dir),
@@ -944,19 +1076,32 @@ fn read_vendor_package(
         checksum,
         digest_blake3: path_digest_blake3(package_dir).ok(),
         checksum_status,
-    })
+    };
+    debug_assert_eq!(fact.directory, normalize_relative_path(root, package_dir));
+    debug_assert!(fact.digest_blake3.as_ref().is_none_or(|digest| digest.len() == BLAKE3_HEX_BYTES));
+    Ok(fact)
 }
 
 #[derive(Debug, Deserialize)]
 struct CargoVendorChecksumFile {
-    #[serde(default)]
+    #[serde(default = "empty_vendor_checksum_files")]
     files: std::collections::BTreeMap<String, String>,
-    #[serde(default)]
+    #[serde(default = "missing_vendor_package_checksum")]
     package: Option<String>,
+}
+
+fn empty_vendor_checksum_files() -> std::collections::BTreeMap<String, String> {
+    std::collections::BTreeMap::new()
+}
+
+fn missing_vendor_package_checksum() -> Option<String> {
+    None
 }
 
 fn validate_vendor_checksum(package_dir: &Path, blockers: &mut Vec<CargoImportBlocker>) -> String {
     let checksum_path = package_dir.join(CARGO_CHECKSUM_FILE);
+    debug_assert!(package_dir.is_dir());
+    debug_assert!(checksum_path.ends_with(CARGO_CHECKSUM_FILE));
     let text = match std::fs::read_to_string(&checksum_path) {
         Ok(text) => text,
         Err(_) => {
@@ -1017,26 +1162,42 @@ fn path_digest_blake3(path: &Path) -> Result<String, std::io::Error> {
     if path.is_file() {
         return std::fs::read(path).map(|bytes| blake3_hex(&bytes));
     }
-    let mut entries = Vec::new();
+    let mut entries = Vec::with_capacity(MAX_VENDOR_PACKAGES);
     collect_digest_entries(path, path, &mut entries)?;
     entries.sort();
     Ok(blake3_hex(entries.join("\n").as_bytes()))
 }
 
 fn collect_digest_entries(root: &Path, path: &Path, entries: &mut Vec<String>) -> Result<(), std::io::Error> {
-    for entry in std::fs::read_dir(path)? {
-        let entry = entry?;
-        let child = entry.path();
-        let relative = child.strip_prefix(root).unwrap_or(&child).display().to_string();
-        let metadata = std::fs::symlink_metadata(&child)?;
-        if metadata.is_dir() {
-            collect_digest_entries(root, &child, entries)?;
-        } else if metadata.is_file() {
-            let digest = std::fs::read(&child).map(|bytes| blake3_hex(&bytes))?;
-            entries.push(format!("file:{relative}:{digest}"));
-        } else if metadata.file_type().is_symlink() {
-            let target = std::fs::read_link(&child)?.display().to_string();
-            entries.push(format!("symlink:{relative}:{target}"));
+    debug_assert!(root.is_dir());
+    debug_assert!(path.starts_with(root));
+    let mut directory_worklist = Vec::with_capacity(MAX_VENDOR_PACKAGES);
+    directory_worklist.push(path.to_path_buf());
+    let mut visited_node_count = 0usize;
+    while let Some(directory) = directory_worklist.pop() {
+        for entry in std::fs::read_dir(directory)? {
+            let entry = entry?;
+            visited_node_count = visited_node_count.checked_add(1).ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, "vendor source digest node count overflow")
+            })?;
+            if visited_node_count > MAX_VENDOR_DIGEST_NODES {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("vendor source digest exceeds {MAX_VENDOR_DIGEST_NODES} nodes"),
+                ));
+            }
+            let child = entry.path();
+            let relative = child.strip_prefix(root).unwrap_or(&child).display().to_string();
+            let metadata = std::fs::symlink_metadata(&child)?;
+            if metadata.is_dir() {
+                directory_worklist.push(child);
+            } else if metadata.is_file() {
+                let digest = std::fs::read(&child).map(|bytes| blake3_hex(&bytes))?;
+                entries.push(format!("file:{relative}:{digest}"));
+            } else if metadata.file_type().is_symlink() {
+                let target = std::fs::read_link(&child)?.display().to_string();
+                entries.push(format!("symlink:{relative}:{target}"));
+            }
         }
     }
     Ok(())
@@ -1062,6 +1223,8 @@ fn package_manifest_paths(root: &Path, manifest: &Value) -> Result<Vec<PathBuf>,
 
 fn load_package_fact(manifest_path: &Path) -> Result<CargoPackageFact, RunError> {
     let manifest = read_toml_value(manifest_path)?;
+    debug_assert!(manifest_path.is_file());
+    debug_assert!(manifest_path.ends_with("Cargo.toml"));
     let package = manifest
         .get("package")
         .and_then(Value::as_table)
@@ -1188,6 +1351,8 @@ fn apply_cargo_import_plan(root: &Path, plan: &CargoImportPlan) -> Result<(), Ru
             plan.blockers.len()
         )));
     }
+    debug_assert!(plan.blockers.is_empty());
+    debug_assert!(plan.file_operations.len() <= GENERATED_FILE_OPERATION_COUNT);
     for operation in &plan.file_operations {
         if operation.action == "keep-equivalent" {
             continue;
@@ -1203,8 +1368,10 @@ fn apply_cargo_import_plan(root: &Path, plan: &CargoImportPlan) -> Result<(), Ru
     Ok(())
 }
 
-fn emit_cargo_import_plan(plan: &CargoImportPlan, applied: bool, json: bool) -> Result<(), RunError> {
-    if json {
+fn emit_cargo_import_plan(plan: &CargoImportPlan, options: &CargoImportEmissionOptions) -> Result<(), RunError> {
+    debug_assert_eq!(plan.schema, CARGO_IMPORT_PLAN_SCHEMA);
+    debug_assert!(plan.file_operations.len() <= GENERATED_FILE_OPERATION_COUNT);
+    if options.is_json {
         println!(
             "{}",
             serde_json::to_string_pretty(plan)
@@ -1212,7 +1379,7 @@ fn emit_cargo_import_plan(plan: &CargoImportPlan, applied: bool, json: bool) -> 
         );
         return Ok(());
     }
-    if applied {
+    if options.is_applied {
         println!("Applied Cargo import scaffold for {:?}", plan.selected_package);
     } else {
         println!("Cargo import plan for {:?}", plan.selected_package);
