@@ -399,7 +399,7 @@ fn validate_required_guards(summary: &NixFreeDemoMachineSummary, diagnostics: &m
     for guard in REQUIRED_GUARDS {
         if !denied.contains(guard) {
             diagnostics
-                .push(diagnostic(MISSING_GUARD_EVIDENCE, &format!("required guard `{guard}` lacks denial evidence")));
+                .push(diagnostic(MISSING_GUARD_EVIDENCE, format!("required guard `{guard}` lacks denial evidence")));
         }
     }
 }

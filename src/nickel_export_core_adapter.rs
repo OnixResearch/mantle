@@ -448,10 +448,8 @@ fn enforce_no_drift(evidence: DualRunEvidence) -> Result<DualRunEvidence, Adapte
     let is_identity_match = evidence.identity_matches;
     let is_projection_match = evidence.projection_matches;
     let is_exact_match = is_identity_match && is_projection_match;
-    if is_exact_match {
-        if evidence.drift_class.is_none() {
-            return Ok(evidence);
-        }
+    if is_exact_match && evidence.drift_class.is_none() {
+        return Ok(evidence);
     }
     Err(AdapterFailure {
         class: "dual-run-drift".to_string(),

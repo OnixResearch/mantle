@@ -46,6 +46,8 @@ const SLURM_STATE_SUCCEEDED: [&str; 2] = ["CD", "COMPLETED"];
 const SLURM_STATE_CANCELLED: [&str; 2] = ["CA", "CANCELLED"];
 const SLURM_STATE_FAILED: [&str; 7] = ["F", "FAILED", "NODE_FAIL", "NF", "OOM", "OUT_OF_MEMORY", "TIMEOUT"];
 
+const _: () = assert!(PROCESS_OUTPUT_BUFFER_BYTES > 0);
+
 struct BoundedReadAttemptFacts {
     total_bytes: u64,
     buffer_bytes: u64,
@@ -445,7 +447,6 @@ fn bounded_read_attempt_count(facts: BoundedReadAttemptFacts) -> Result<u64, Str
 }
 
 fn read_bounded_output(mut reader: impl Read, limit_bytes: usize) -> Result<Vec<u8>, String> {
-    assert!(PROCESS_OUTPUT_BUFFER_BYTES > 0, "external batch read buffer must not be empty");
     let read_limit_bytes =
         u64::try_from(limit_bytes).map_err(|_| "external-batch-output-limit-overflow".to_string())?;
     let buffer_size_bytes = u64::try_from(PROCESS_OUTPUT_BUFFER_BYTES)

@@ -21,6 +21,8 @@ const HEX_CHARS_PER_BYTE: usize = 2;
 const BLAKE3_HEX_LEN: usize = DIGEST_HEX_BYTES.saturating_mul(HEX_CHARS_PER_BYTE);
 const BOOTSTRAP_PROVIDER_MODE_COUNT_MAX: usize = 3;
 
+const _: () = assert!(BOOTSTRAP_PROVIDER_MODE_COUNT_MAX > 0);
+
 pub(crate) const REQUIRED_PROVIDER_TOOL_ROLES: &[&str] = &[
     "x86_64-linux-musl-gcc",
     "x86_64-linux-musl-g++",
@@ -211,7 +213,6 @@ pub(crate) fn select_bootstrap_provider(
         .into_iter()
         .filter(|is_selected| *is_selected)
         .count();
-    assert!(BOOTSTRAP_PROVIDER_MODE_COUNT_MAX > 0, "provider mode bound must be positive");
     assert!(
         selected_mode_count <= BOOTSTRAP_PROVIDER_MODE_COUNT_MAX,
         "selected provider mode count must stay bounded"

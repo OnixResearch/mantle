@@ -635,7 +635,7 @@ fn open_parent_directory_nofollow(
     for component in components {
         current = current
             .open_dir_nofollow(component)
-            .map_err(|error| tree_io_error(&format!("opening no-follow {label} parent"), relative_path, error))?;
+            .map_err(|error| tree_io_error(format!("opening no-follow {label} parent"), relative_path, error))?;
     }
     Ok((current, OsString::from(name)))
 }
@@ -645,7 +645,7 @@ fn open_directory_relative_nofollow(root: &Dir, relative_path: &str, role: TreeP
     let (parent, name) = open_parent_directory_nofollow(root, relative_path, role)?;
     parent
         .open_dir_nofollow(name)
-        .map_err(|error| tree_io_error(&format!("opening no-follow {label} directory"), relative_path, error))
+        .map_err(|error| tree_io_error(format!("opening no-follow {label} directory"), relative_path, error))
 }
 
 fn open_file_nofollow(

@@ -37,6 +37,8 @@ const DIGEST_SEPARATOR: char = ':';
 const DIGEST_PART_COUNT: usize = 2;
 const GUARD_PART_COUNT: usize = 3;
 
+const _: () = assert!(DIGEST_PART_COUNT > 0);
+
 #[derive(Subcommand, Debug, Clone)]
 pub(crate) enum NixFreeDemoAction {
     /// Validate a Nix-free demo bundle machine summary JSON file
@@ -283,7 +285,7 @@ fn ensure_output_available(out: &Path) -> Result<(), NixFreeDemoDiagnostic> {
         return Ok(());
     }
     let mut entries =
-        fs::read_dir(out).map_err(|error| diagnostic("output-conflict", &format!("read output dir: {error}")))?;
+        fs::read_dir(out).map_err(|error| diagnostic("output-conflict", format!("read output dir: {error}")))?;
     if entries.next().is_some() {
         return Err(diagnostic("output-conflict", "output directory is not empty"));
     }
@@ -294,12 +296,11 @@ fn transcript_evidence(
     paths: &[PathBuf],
 ) -> Result<(Vec<NixFreeDemoEvidenceRef>, Vec<TranscriptCopy>), NixFreeDemoDiagnostic> {
     debug_assert!(!TRANSCRIPTS_DIR.is_empty());
-    debug_assert!(DIGEST_PART_COUNT > 0);
     let mut refs = Vec::with_capacity(paths.len());
     let mut copies = Vec::with_capacity(paths.len());
     for source in paths {
         let bytes = fs::read(source)
-            .map_err(|error| diagnostic("missing-transcript", &format!("{}: {error}", source.display())))?;
+            .map_err(|error| diagnostic("missing-transcript", format!("{}: {error}", source.display())))?;
         let file_name = source
             .file_name()
             .and_then(|name| name.to_str())

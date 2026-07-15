@@ -24,6 +24,11 @@ const FIRST_STAGE_MUSL_REPAIR_OPERATION_COUNT: usize = 6;
 const RUST_BOOTSTRAP_REPAIR_OPERATION_COUNT: usize = 5;
 const OPERATION_LABEL_SEPARATOR: &str = ":";
 
+const _: () = {
+    assert!(PATCH_PLAN_MAX_SOURCE_IDENTITIES > 0);
+    assert!(PATCH_PLAN_MAX_OPERATIONS > 0);
+};
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct RustBootstrapPatchPlanInput {
     pub(crate) stage: RustBootstrapPatchStage,
@@ -191,8 +196,6 @@ impl RustBootstrapPatchOperation {
 pub(crate) fn derive_rust_bootstrap_patch_plan(
     input: RustBootstrapPatchPlanInput,
 ) -> Result<RustBootstrapPatchPlan, RustBootstrapPatchPlanError> {
-    debug_assert!(PATCH_PLAN_MAX_OPERATIONS > 0);
-    debug_assert!(PATCH_PLAN_MAX_SOURCE_IDENTITIES > 0);
     validate_plan_input(&input)?;
     let operations = derive_operations(&input)?;
     validate_operation_count(&operations)?;

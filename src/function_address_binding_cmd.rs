@@ -31,6 +31,11 @@ const MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_BYTES: usize = 1_048_576;
 const MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_READ_BYTES: u64 =
     MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES.saturating_add(1);
 
+const _: () = {
+    assert!(MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_BYTES > 0);
+    assert!(MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_READ_BYTES > MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES);
+};
+
 #[derive(Debug)]
 pub(crate) struct FunctionAddressBindingCommand {
     pub bundle_dir: PathBuf,
@@ -363,8 +368,6 @@ fn read_kamacite_identity(request: ReceiptReadRequest<'_>) -> Result<FunctionAdd
 }
 
 fn read_bounded_receipt(request: ReceiptReadRequest<'_>) -> Result<Vec<u8>, RunError> {
-    debug_assert!(MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_BYTES > 0);
-    debug_assert!(MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_READ_BYTES > MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES);
     let validated = authorize_release_path(&ReleasePathRequest {
         required_root: ReleaseRootKind::ReleaseEvidence,
         available_root: Some(request.root.kind()),
@@ -405,7 +408,6 @@ fn require_current_receipt_digest(bytes: &[u8], request: &ReceiptReadRequest<'_>
 }
 
 fn write_receipt_noclobber(path: &Path, bytes: &[u8]) -> Result<(), RunError> {
-    debug_assert!(MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_BYTES > 0);
     debug_assert!(!FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION.is_empty());
     let parent = output_parent(path);
     prepare_output_parent(parent)?;
@@ -431,7 +433,6 @@ fn write_receipt_noclobber(path: &Path, bytes: &[u8]) -> Result<(), RunError> {
 }
 
 fn prepare_output_parent(parent: &Path) -> Result<(), RunError> {
-    debug_assert!(MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_BYTES > 0);
     debug_assert!(!FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION.is_empty());
     match std::fs::symlink_metadata(parent) {
         Ok(metadata) if metadata.file_type().is_dir() => return Ok(()),

@@ -462,7 +462,7 @@ fn observe_git_ref<R: AsRef<str>, F: AsRef<str>>(
             bounded_stderr_utf8_lossy(&output.stderr)
         )));
     }
-    parse_git_ref_probe_output(&String::from_utf8_lossy(&output.stdout), reference)
+    parse_git_ref_probe_output(String::from_utf8_lossy(&output.stdout), reference)
 }
 
 fn parse_git_ref_probe_output<O: AsRef<str>, F: AsRef<str>>(

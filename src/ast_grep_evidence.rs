@@ -21,6 +21,8 @@ const BLOCKER_TOO_LARGE: &str = "ast-grep-evidence-too-large";
 const BLOCKER_MALFORMED: &str = "malformed-ast-grep-evidence";
 const BLOCKER_INVALID: &str = "invalid-ast-grep-evidence";
 
+const _: () = assert!(MAX_AST_GREP_SIDECAR_BYTES > 0);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LoadedAstGrepEvidence {
     pub evidence: AstGrepStructuralEvidence,
@@ -40,7 +42,6 @@ pub(crate) enum AstGrepEvidenceRead {
 
 // r[impl mantle.ast_grep_structural_rails.shell_boundary]
 pub(crate) fn read_ast_grep_evidence(path: &Path) -> AstGrepEvidenceRead {
-    debug_assert!(MAX_AST_GREP_SIDECAR_BYTES > 0);
     debug_assert_ne!(BLOCKER_MALFORMED, BLOCKER_INVALID);
     let bytes = match read_bounded_sidecar_bytes(path) {
         Ok(Some(bytes)) => bytes,
@@ -102,7 +103,6 @@ pub(crate) fn validate_ast_grep_release_attachment_file(
 }
 
 fn read_bounded_sidecar_bytes(path: &Path) -> Result<Option<Vec<u8>>, AstGrepEvidenceRead> {
-    debug_assert!(MAX_AST_GREP_SIDECAR_BYTES > 0);
     debug_assert_ne!(BLOCKER_READ, BLOCKER_TOO_LARGE);
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {

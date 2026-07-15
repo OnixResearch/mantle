@@ -29,6 +29,11 @@ const APPLY_FAILURE_EXIT_CODE: u8 = 3;
 const MAX_FILEGEN_FILES: usize = 4096;
 const MAX_FILEGEN_FACTS: usize = MAX_FILEGEN_FILES.saturating_mul(2);
 
+const _: () = {
+    assert!(MAX_FILEGEN_FILES > 0);
+    assert!(MAX_FILEGEN_FACTS >= MAX_FILEGEN_FILES);
+};
+
 #[derive(Debug, Clone)]
 pub struct FilegenPlanOptions<'a> {
     pub root: &'a Path,
@@ -221,7 +226,6 @@ fn apply_filegen_operations(root: &Path, operations: &[FilegenOperation]) -> Res
             operations.len()
         )));
     }
-    debug_assert!(MAX_FILEGEN_FACTS >= MAX_FILEGEN_FILES);
     debug_assert!(operations.len() <= MAX_FILEGEN_FACTS);
     for operation in operations {
         match operation.action {
@@ -237,7 +241,6 @@ fn apply_filegen_operations(root: &Path, operations: &[FilegenOperation]) -> Res
 
 fn write_filegen_operation(root: &Path, operation: &FilegenOperation) -> Result<(), RunError> {
     debug_assert!(!FILEGEN_STATE_SCHEMA.is_empty());
-    debug_assert!(MAX_FILEGEN_FILES > 0);
     let path = root.join(&operation.target);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -252,7 +255,6 @@ fn write_filegen_operation(root: &Path, operation: &FilegenOperation) -> Result<
 #[cfg(unix)]
 fn write_symlink(path: &Path, target: &str) -> Result<(), RunError> {
     debug_assert!(!FILEGEN_STATE_SCHEMA.is_empty());
-    debug_assert!(MAX_FILEGEN_FILES > 0);
     match fs::remove_file(path) {
         Ok(()) => {}
         Err(err) if err.kind() == ErrorKind::NotFound => {}
@@ -428,7 +430,6 @@ fn read_json_file<T: for<'de> Deserialize<'de>>(path: &Path, label: &str) -> Res
 
 fn write_json_file<T: Serialize>(path: &Path, value: &T, label: &str) -> Result<(), RunError> {
     debug_assert!(!FILEGEN_STATE_SCHEMA.is_empty());
-    debug_assert!(MAX_FILEGEN_FILES > 0);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| RunError::Internal(format!("creating {label} dir {}: {err}", parent.display())))?;

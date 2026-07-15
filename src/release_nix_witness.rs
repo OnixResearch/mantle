@@ -21,6 +21,8 @@ use crate::release_evidence::verify_release_evidence_bundle;
 const DEFAULT_WITNESS_RELATIVE_PATH: &str = "witness/nix-cross-builder-witness.json";
 const HASH_BUFFER_BYTES: usize = 8192;
 
+const _: () = assert!(HASH_BUFFER_BYTES > 0);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ReleaseNixWitnessRequest {
     pub bundle_dir: PathBuf,
@@ -78,7 +80,6 @@ pub(crate) fn write_release_nix_cross_builder_witness(
     request: &ReleaseNixWitnessRequest,
 ) -> Result<ReleaseNixWitnessSummary, RunError> {
     debug_assert!(!DEFAULT_WITNESS_RELATIVE_PATH.is_empty());
-    debug_assert!(HASH_BUFFER_BYTES > 0);
     validate_witness_request(request)?;
     let manifest = verify_release_evidence_bundle(&request.bundle_dir)?;
     let deterministic_proof = load_canonical_deterministic_proof(&request.deterministic_proof_path)?;
@@ -168,7 +169,6 @@ fn cross_builder_artifact_digests(
 
 fn validate_witness_request(request: &ReleaseNixWitnessRequest) -> Result<(), RunError> {
     debug_assert!(!DEFAULT_WITNESS_RELATIVE_PATH.is_empty());
-    debug_assert!(HASH_BUFFER_BYTES > 0);
     if !request.bundle_dir.is_dir() {
         return Err(RunError::Internal(format!(
             "release bundle directory does not exist: {}",
@@ -228,7 +228,6 @@ fn ensure_deterministic_proof_promotes(
     manifest: &crunch_release_core::ReleaseEvidenceManifest,
 ) -> Result<(), RunError> {
     debug_assert!(!DEFAULT_WITNESS_RELATIVE_PATH.is_empty());
-    debug_assert!(HASH_BUFFER_BYTES > 0);
     let is_genuine_rebuild = deterministic_build_proof_has_genuine_rebuild_authority(proof.receipt.clone())
         .map_err(|err| RunError::Internal(format!("validating deterministic proof rebuild authority: {err}")))?;
     if !is_genuine_rebuild {

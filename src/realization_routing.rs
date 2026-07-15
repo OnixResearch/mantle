@@ -17,6 +17,11 @@ const MAX_UPLOAD_BYTES: u64 = 1_099_511_627_776;
 const REMOTE_CAPABILITY_DEFAULT: &str = "stdio-default";
 const REMOTE_PLAN_NON_CLAIM: &str = "route-eligibility-only";
 
+const _: () = {
+    assert!(MAX_ROUTE_CANDIDATES > 0);
+    assert!(MAX_REJECTED_ROUTES >= MAX_ROUTE_CANDIDATES.saturating_sub(1));
+};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RouteClass {
@@ -522,8 +527,6 @@ pub fn route_plan_for_build_action_with_remote_and_source(
     remote_builder: Option<&RemoteBuilderPlanFacts>,
     source_bundle: Option<&SourceBundleRouteFacts>,
 ) -> RoutePlanReport {
-    debug_assert!(MAX_ROUTE_CANDIDATES > 0);
-    debug_assert!(MAX_REJECTED_ROUTES >= MAX_ROUTE_CANDIDATES.saturating_sub(1));
     let detail = detail.map(truncate_detail);
     let mut candidates = Vec::with_capacity(MAX_ROUTE_CANDIDATES);
     push_build_action_candidates(action, detail.as_deref(), remote_builder, source_bundle, &mut candidates);

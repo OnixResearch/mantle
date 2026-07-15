@@ -38,6 +38,8 @@ const SANDBOX_POLICY_IDENTITY: &str = "exact-declared-read-binds;network=none;bu
 const NORMALIZATION_POLICY_IDENTITY: &str = "source-date-epoch=1;timezone=UTC;locale=C.UTF-8;umask=0022";
 const INPUT_DIRECTORY_NAME: &str = "rebuild-inputs";
 
+const _: () = assert!(HASH_BUFFER_BYTES > 0);
+
 #[derive(Debug, Clone)]
 pub(crate) struct RebuildRunPaths {
     pub run_id: String,
@@ -767,7 +769,6 @@ fn measure_regular_file(path: &Path, name: &str, role: RebuildInputRole) -> Resu
 fn hash_file(path: &Path) -> Result<(u64, String), RunError> {
     let metadata =
         std::fs::metadata(path).map_err(|err| RunError::Internal(format!("metadata {}: {err}", path.display())))?;
-    assert!(HASH_BUFFER_BYTES > 0, "rebuild hash buffer must not be empty");
     let buffer_size_bytes = u64::try_from(HASH_BUFFER_BYTES)
         .map_err(|_| RunError::Internal("rebuild hash buffer size overflowed u64".to_string()))?;
     let read_attempt_count_max = metadata

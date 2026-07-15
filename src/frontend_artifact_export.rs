@@ -378,7 +378,7 @@ fn export_receipt_preimage(material: &FrontendArtifactExportReceiptMaterial) -> 
         if material.no_hidden_fallback { "true" } else { "false" },
     );
     for (key, value) in &material.content_provenance {
-        append_receipt_field(&mut preimage, &format!("content_provenance.{key}"), value);
+        append_receipt_field(&mut preimage, format!("content_provenance.{key}"), value);
     }
     debug_assert!(preimage.contains(RECEIPT_PREIMAGE_VERSION));
     debug_assert!(!preimage.is_empty());

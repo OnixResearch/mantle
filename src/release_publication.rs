@@ -30,6 +30,8 @@ const RELEASE_PLAN_ID_STAGE_PREFIX_CHARS: usize = 16;
 #[cfg(unix)]
 const PRIVATE_STAGE_DIRECTORY_MODE: libc::mode_t = 0o700;
 
+const _: () = assert!(RELEASE_STAGE_MARKER_BYTES_MAX > 0);
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ReleaseStageOwnershipMarker {
@@ -369,7 +371,6 @@ fn valid_stage_marker(
 
 fn read_stage_marker(stage_root: &ReleaseCapabilityRoot) -> Result<Option<ReleaseStageOwnershipMarker>, RunError> {
     assert_eq!(stage_root.kind(), ReleaseRootKind::ReleaseEvidence);
-    assert!(RELEASE_STAGE_MARKER_BYTES_MAX > 0, "release stage marker byte bound must be positive");
     let path = ValidatedReleasePath::new(RELEASE_STAGE_MARKER_FILENAME)
         .map_err(|error| RunError::Internal(format!("invalid release stage marker path: {error:?}")))?;
     let mut file = match stage_root.open_file_read_nofollow(&path) {

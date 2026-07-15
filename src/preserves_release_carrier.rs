@@ -17,6 +17,8 @@ const OVERCLAIM_FRAGMENTS: &[&str] = &[
     "proves semantic correctness",
 ];
 
+const _: () = assert!(MAX_ADAPTER_FACTS > 0);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PreservesCarrierRow {
     pub carrier_id: String,
@@ -80,7 +82,6 @@ fn validate_role(role: &str, diagnostics: &mut Vec<String>) {
 }
 
 fn validate_adapter_shape(carrier: &PreservesCarrierRow, diagnostics: &mut Vec<String>) {
-    debug_assert!(MAX_ADAPTER_FACTS > 0);
     debug_assert!(!SUPPORTED_ROLES.is_empty());
     let is_adapter_required = carrier.role == "preserves-adapter-backed-release-evidence";
     if is_adapter_required {

@@ -17,6 +17,8 @@ const LEGACY_PROJECT_ROOT_FILE: &str = "crunch.ncl";
 /// Maximum ancestor directories to search for a project root.
 const MAX_SEARCH_DEPTH: u32 = 64;
 
+const _: () = assert!(MAX_SEARCH_DEPTH > 0);
+
 /// A parsed build target: either a file path or a project selector.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuildTarget {
@@ -99,7 +101,6 @@ pub fn find_project_root(start_dir: &Path) -> Option<PathBuf> {
 }
 
 fn find_project_root_checked(start_dir: &Path) -> Result<Option<PathBuf>, RunError> {
-    debug_assert!(MAX_SEARCH_DEPTH > 0);
     debug_assert_ne!(CANONICAL_PROJECT_ROOT_FILE, LEGACY_PROJECT_ROOT_FILE);
     let mut dir = start_dir.to_path_buf();
     for _ in 0..MAX_SEARCH_DEPTH {
@@ -132,7 +133,6 @@ pub fn resolve_project_target(
     cwd: &Path,
     user_import_paths: &[PathBuf],
 ) -> Result<ResolvedProject, RunError> {
-    debug_assert!(MAX_SEARCH_DEPTH > 0);
     debug_assert_ne!(CANONICAL_PROJECT_ROOT_FILE, LEGACY_PROJECT_ROOT_FILE);
     let root_file = find_project_root_checked(cwd)?.ok_or_else(|| {
         RunError::Internal(format!(
@@ -182,7 +182,6 @@ fn resolve_selector_to_target(sel: &Selector) -> ProjectTarget {
 /// Returns a Nickel snippet that, when evaluated, produces either a single
 /// derivation or a record of derivations suitable for the build pipeline.
 pub fn generate_extraction_expr(root_file: &Path, target: &ProjectTarget) -> String {
-    debug_assert!(MAX_SEARCH_DEPTH > 0);
     debug_assert_ne!(CANONICAL_PROJECT_ROOT_FILE, LEGACY_PROJECT_ROOT_FILE);
     let root_path = root_file.to_string_lossy();
     match target {
@@ -218,7 +217,6 @@ else
 
 fn render_attribute_target(root_path: &str, segments: &[String]) -> String {
     assert!(!segments.is_empty(), "selector must have at least one segment");
-    debug_assert!(MAX_SEARCH_DEPTH > 0);
     if segments.len() == 1 {
         let name = &segments[0];
         return format!(

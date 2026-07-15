@@ -30,6 +30,11 @@ const GIT_SUBMODULE_FILEMODE: &str = "160000";
 const GIT_HEAD_REF_PREFIX: &str = "refs/heads/";
 const GIT_REMOTE_ORIGIN_REF_PREFIX: &str = "refs/remotes/origin/";
 
+const _: () = {
+    assert!(MAX_TRACKED_SOURCE_PATHS > 0);
+    assert!(INITIAL_VENDOR_CHILD_CAPACITY > 0);
+};
+
 struct GitRefPolicy<'a> {
     git_ref: &'a str,
     expected_commit: &'a str,
@@ -264,7 +269,6 @@ fn release_source_symlink_target(source_path: &Path) -> Result<String, RunError>
 
 fn tracked_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
     assert!(repo_root.is_dir(), "tracked source root must be a directory");
-    assert!(MAX_TRACKED_SOURCE_PATHS > 0, "tracked source path bound must be positive");
     let output = Command::new("git")
         .arg("ls-files")
         .arg("-s")
@@ -352,7 +356,6 @@ fn vendored_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
 }
 
 fn collect_vendor_source_paths(repo_root: &Path, current_dir: &Path, paths: &mut Vec<PathBuf>) -> Result<(), RunError> {
-    assert!(INITIAL_VENDOR_CHILD_CAPACITY > 0, "vendor child capacity must be positive");
     assert!(current_dir.starts_with(repo_root), "vendor traversal must remain below the repository root");
     let child_count_max = usize::try_from(MAX_VENDOR_SOURCE_PATHS)
         .map_err(|_| RunError::Internal("vendor source path bound overflowed usize".to_string()))?;

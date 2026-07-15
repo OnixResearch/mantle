@@ -27,6 +27,12 @@ const OVERCLAIM_FRAGMENTS: &[&str] = &[
     "proves substituter trust",
 ];
 
+const _: () = {
+    assert!(MAX_NIX_EVIDENCE_ROWS > 0);
+    assert!(STORE_HASH_LENGTH > 0);
+    assert!(BLAKE3_HEX_LENGTH == blake3::OUT_LEN.saturating_mul(2));
+};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct NixStorePathRef {
     pub store_prefix: String,
@@ -79,8 +85,6 @@ pub(crate) fn validate_nix_evidence(input: &NixEvidenceInput) -> NixEvidenceRepo
 }
 
 fn validate_row(row: &NixEvidenceRow, row_ids: &mut BTreeSet<String>, diagnostics: &mut Vec<String>) {
-    debug_assert!(MAX_NIX_EVIDENCE_ROWS > 0);
-    debug_assert_eq!(BLAKE3_HEX_LENGTH, blake3::OUT_LEN.saturating_mul(2));
     push_nonempty(&row.row_id, "row_id", diagnostics);
     validate_adapter(&row.adapter_kind, diagnostics);
     validate_store_path(&row.store_path, diagnostics);
@@ -103,7 +107,6 @@ fn validate_row(row: &NixEvidenceRow, row_ids: &mut BTreeSet<String>, diagnostic
 }
 
 fn validate_store_path(path_ref: &NixStorePathRef, diagnostics: &mut Vec<String>) {
-    debug_assert!(STORE_HASH_LENGTH > 0);
     debug_assert!(!NIX_HASH_ALPHABET.is_empty());
     push_nonempty(&path_ref.store_prefix, "store_prefix", diagnostics);
     push_nonempty(&path_ref.logical_path, "logical_path", diagnostics);

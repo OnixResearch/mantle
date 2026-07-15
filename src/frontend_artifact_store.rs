@@ -31,6 +31,12 @@ const MAX_TREE_ENTRIES: usize = 1_000_000;
 const INITIAL_WORKLIST_CAPACITY: usize = 64;
 const EXECUTABLE_PERMISSION_MASK: u32 = 0o111;
 
+const _: () = {
+    assert!(BLAKE3_HEX_LENGTH == blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE));
+    assert!(INITIAL_WORKLIST_CAPACITY > 0);
+    assert!(MAX_TREE_ENTRIES >= INITIAL_WORKLIST_CAPACITY);
+};
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FrontendArtifactStoreManifest {
     pub schema: String,
@@ -76,8 +82,6 @@ pub fn frontend_artifact_identity(source: &Path) -> Result<String, String> {
 }
 
 pub fn import_frontend_artifact(source: &Path, state_dir: &Path) -> Result<FrontendArtifactStoreImportReport, String> {
-    debug_assert_eq!(BLAKE3_HEX_LENGTH, blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE));
-    debug_assert!(MAX_TREE_ENTRIES > 0);
     if !source.exists() {
         return Err(format!("frontend artifact source does not exist: {}", source.display()));
     }
@@ -143,7 +147,6 @@ pub fn artifact_digest_from_ref(artifact_ref: &str) -> Option<String> {
 /// Check that both content and store metadata exist without reading content bytes.
 pub fn frontend_artifact_is_available(state_dir: &Path, artifact_ref: &str) -> Result<bool, String> {
     debug_assert!(!FRONTEND_ARTIFACT_REF_PREFIX_BLAKE3.is_empty());
-    debug_assert_eq!(BLAKE3_HEX_LENGTH, blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE));
     let Some(digest_hex) = parse_artifact_ref_digest_hex(artifact_ref) else {
         return Err(format!(
             "frontend artifact ref must use {FRONTEND_ARTIFACT_REF_PREFIX_BLAKE3}<hex>; got {artifact_ref}"
@@ -206,8 +209,6 @@ fn is_lowercase_blake3_hex(value: &str) -> bool {
 }
 
 fn collect_artifact_tree_entries(root: &Path) -> Result<Vec<ArtifactTreeEntry>, String> {
-    debug_assert!(MAX_TREE_ENTRIES >= INITIAL_WORKLIST_CAPACITY);
-    debug_assert!(INITIAL_WORKLIST_CAPACITY > 0);
     let mut entries = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY);
     let mut worklist = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY);
     worklist.push(root.to_path_buf());
@@ -390,8 +391,6 @@ fn copy_file(source: &Path, destination: &Path) -> Result<(), String> {
 }
 
 fn copy_directory(source: &Path, destination: &Path) -> Result<(), String> {
-    debug_assert!(MAX_TREE_ENTRIES >= INITIAL_WORKLIST_CAPACITY);
-    debug_assert!(INITIAL_WORKLIST_CAPACITY > 0);
     std::fs::create_dir_all(destination).map_err(|err| format!("creating {}: {err}", destination.display()))?;
     let mut copied_entries = 0_usize;
     let mut worklist = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY);

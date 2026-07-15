@@ -20,6 +20,11 @@ const MAX_RELEASE_PATH_COMPONENTS: usize = 128;
 #[cfg(unix)]
 const PRIVATE_STAGING_FILE_MODE: u32 = 0o600;
 
+const _: () = {
+    assert!(MAX_RELEASE_RELATIVE_PATH_BYTES > 0);
+    assert!(MAX_RELEASE_PATH_COMPONENTS > 0);
+};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ReleaseRootKind {
     ReleaseEvidence,
@@ -227,8 +232,6 @@ pub(crate) fn authorize_release_path(request: &ReleasePathRequest) -> Result<Val
 }
 
 fn walk_ambient_directory_nofollow(root_path: &Path, create_missing: bool) -> io::Result<Dir> {
-    debug_assert!(MAX_RELEASE_PATH_COMPONENTS > 0);
-    debug_assert!(MAX_RELEASE_RELATIVE_PATH_BYTES > 0);
     let (anchor, components) = absolute_anchor_and_components(root_path)?;
     let mut current = Dir::open_ambient_dir(&anchor, ambient_authority())?;
     for component in components {
@@ -299,8 +302,6 @@ fn validate_real_directory(metadata: &cap_std::fs::Metadata, name: &OsString) ->
 }
 
 fn validate_relative_release_path(path: &str) -> Result<(), ReleasePathError> {
-    debug_assert!(MAX_RELEASE_RELATIVE_PATH_BYTES > 0);
-    debug_assert!(MAX_RELEASE_PATH_COMPONENTS > 0);
     if path.is_empty() {
         return Err(ReleasePathError::EmptyPath);
     }

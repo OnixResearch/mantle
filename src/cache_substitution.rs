@@ -18,6 +18,12 @@ pub const MAX_CACHE_IDENTITY_BYTES: usize = 512;
 
 const TRUST_POLICY_DIGEST_BYTES: usize = 64;
 
+const _: () = {
+    assert!(MAX_CACHE_CANDIDATES > 0);
+    assert!(MAX_CACHE_IDENTITY_BYTES > 0);
+    assert!(TRUST_POLICY_DIGEST_BYTES == blake3::OUT_LEN.saturating_mul(2));
+};
+
 /// A sanitized, ordered substituter candidate derived from configuration.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct CacheCandidate {
@@ -108,8 +114,6 @@ pub struct CacheAdmissionEvent {
 pub fn parse_cache_candidate_set(
     request: CacheCandidateSetRequest<'_>,
 ) -> Result<CacheCandidateSet, CacheCandidateError> {
-    debug_assert!(MAX_CACHE_CANDIDATES > 0);
-    debug_assert_eq!(TRUST_POLICY_DIGEST_BYTES, blake3::OUT_LEN.saturating_mul(2));
     if request.raw_urls.len() > MAX_CACHE_CANDIDATES {
         return Err(CacheCandidateError::TooManyCandidates {
             actual: request.raw_urls.len(),
@@ -161,8 +165,6 @@ pub fn parse_cache_candidate_set(
 /// Strips query, fragment, and userinfo. Keeps scheme, host, port, and path.
 /// Returns `None` if the URL is missing a scheme or host.
 pub fn sanitize_cache_identity(raw_url: &str) -> Option<String> {
-    debug_assert!(MAX_CACHE_IDENTITY_BYTES > 0);
-    debug_assert!(MAX_CACHE_CANDIDATES > 0);
     let parsed = url::Url::parse(raw_url).ok()?;
     if parsed.scheme().is_empty() {
         return None;
