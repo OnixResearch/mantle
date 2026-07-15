@@ -17,7 +17,12 @@ const SIDECAR_FILENAME: &str = ".crunch-shell.json";
 
 /// Read the sidecar from a built shell output, snapshot the host env,
 /// compute the activation plan, and exec into the result.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    tigerstyle::too_many_parameters,
+    tigerstyle::ambiguous_boolean_parameters,
+    reason = "the protected CLI dispatch caller retains this compatibility boundary"
+)]
 pub fn cmd_shell(
     name: Option<&str>,
     import_paths: &[PathBuf],
@@ -35,8 +40,10 @@ pub fn cmd_shell(
     store_prefix: &str,
     verbose: bool,
 ) -> Result<(), RunError> {
+    debug_assert!(!SIDECAR_FILENAME.is_empty());
+    debug_assert!(SIDECAR_FILENAME.starts_with('.'));
     // 1. Build the shell derivation.
-    let out_path = build_shell_target(
+    let out_path = build_shell_target(BuildShellTargetRequest {
         name,
         import_paths,
         jobs,
@@ -47,7 +54,7 @@ pub fn cmd_shell(
         state_dir,
         store_prefix,
         verbose,
-    )?;
+    })?;
 
     // 2. Read sidecar from $out/.crunch-shell.json.
     let sidecar_path = out_path.join(SIDECAR_FILENAME);
@@ -103,21 +110,25 @@ pub fn cmd_shell(
     exec_plan(&plan)
 }
 
-fn build_shell_target(
-    name: Option<&str>,
-    import_paths: &[PathBuf],
+struct BuildShellTargetRequest<'a> {
+    name: Option<&'a str>,
+    import_paths: &'a [PathBuf],
     jobs: Option<u32>,
     no_substitute: bool,
-    signing_key: Option<&Path>,
+    signing_key: Option<&'a Path>,
     trust_unsigned: bool,
-    output_dir: &Path,
-    state_dir: &Path,
-    store_prefix: &str,
+    output_dir: &'a Path,
+    state_dir: &'a Path,
+    store_prefix: &'a str,
     verbose: bool,
-) -> Result<PathBuf, RunError> {
+}
+
+fn build_shell_target(request: BuildShellTargetRequest<'_>) -> Result<PathBuf, RunError> {
+    debug_assert!(!SIDECAR_FILENAME.is_empty());
+    debug_assert!(SIDECAR_FILENAME.starts_with('.'));
     let cwd = crate::current_dir_or_error()?;
-    let target = crate::name_to_build_target(name);
-    let resolved = project_build::resolve_project_target(&target, &cwd, import_paths)?;
+    let target = crate::name_to_build_target(request.name);
+    let resolved = project_build::resolve_project_target(&target, &cwd, request.import_paths)?;
     let shell_target = match &resolved.target {
         project_build::ProjectTarget::Default => project_build::ProjectTarget::DefaultShell,
         project_build::ProjectTarget::Attribute(segs) if segs.len() == 1 => {
@@ -126,20 +137,20 @@ fn build_shell_target(
         other => other.clone(),
     };
     let expr = project_build::generate_extraction_expr(&resolved.root_file, &shell_target);
-    let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
+    let max_jobs = crunch_pipeline::resolve_max_jobs(request.jobs);
     let result = crate::build_project_expr(
         &expr,
         resolved.import_paths,
-        output_dir,
-        state_dir,
-        store_prefix,
-        verbose,
+        request.output_dir,
+        request.state_dir,
+        request.store_prefix,
+        request.verbose,
         max_jobs,
-        no_substitute,
-        signing_key,
-        trust_unsigned,
+        request.no_substitute,
+        request.signing_key,
+        request.trust_unsigned,
     )?;
-    crate::first_output_path(&result, output_dir, store_prefix)
+    crate::first_output_path(&result, request.output_dir, request.store_prefix)
         .ok_or_else(|| RunError::Internal("no outputs built for shell".into()))
 }
 
@@ -150,13 +161,16 @@ fn snapshot_host_env() -> HostEnv {
 }
 
 fn exec_hook(hook: &str, plan: &ActivationPlan, strict: bool) -> Result<(), RunError> {
+    debug_assert!(!SIDECAR_FILENAME.is_empty());
+    debug_assert!(SIDECAR_FILENAME.starts_with('.'));
     let shell = match &plan.exec_target {
         ExecTarget::Interactive { shell } => shell.clone(),
         ExecTarget::Run { shell, .. } => shell.clone(),
         ExecTarget::Command { .. } => PathBuf::from(std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into())),
     };
 
-    let env_path = std::env::join_paths(&plan.path).unwrap_or_default();
+    let env_path = std::env::join_paths(&plan.path)
+        .map_err(|error| RunError::Internal(format!("joining shell activation PATH: {error}")))?;
 
     let status = std::process::Command::new(&shell)
         .arg("-c")
@@ -194,7 +208,10 @@ fn resolve_in_path(cmd: &OsString, path: &[PathBuf]) -> Option<OsString> {
 }
 
 fn exec_plan(plan: &ActivationPlan) -> Result<(), RunError> {
-    let env_path = std::env::join_paths(&plan.path).unwrap_or_default();
+    debug_assert!(!SIDECAR_FILENAME.is_empty());
+    debug_assert!(SIDECAR_FILENAME.starts_with('.'));
+    let env_path = std::env::join_paths(&plan.path)
+        .map_err(|error| RunError::Internal(format!("joining shell activation PATH: {error}")))?;
 
     let status = match &plan.exec_target {
         ExecTarget::Interactive { shell } => {

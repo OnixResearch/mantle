@@ -77,9 +77,9 @@ impl fmt::Display for SemanticEdgeKind {
 pub struct SemanticNode {
     pub id: String,
     pub kind: SemanticNodeKind,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_semantic_digest", skip_serializing_if = "Option::is_none")]
     pub digest: Option<String>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default = "empty_semantic_metadata", skip_serializing_if = "BTreeMap::is_empty")]
     pub metadata: BTreeMap<String, String>,
 }
 
@@ -88,7 +88,7 @@ pub struct SemanticEdge {
     pub from: String,
     pub to: String,
     pub kind: SemanticEdgeKind,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default = "empty_semantic_metadata", skip_serializing_if = "BTreeMap::is_empty")]
     pub metadata: BTreeMap<String, String>,
 }
 
@@ -96,19 +96,39 @@ pub struct SemanticEdge {
 pub struct SemanticAlias {
     pub alias: String,
     pub target: String,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default = "empty_semantic_metadata", skip_serializing_if = "BTreeMap::is_empty")]
     pub metadata: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SemanticGraph {
     pub schema: String,
-    #[serde(default)]
+    #[serde(default = "empty_semantic_nodes")]
     pub nodes: Vec<SemanticNode>,
-    #[serde(default)]
+    #[serde(default = "empty_semantic_edges")]
     pub edges: Vec<SemanticEdge>,
-    #[serde(default)]
+    #[serde(default = "empty_semantic_aliases")]
     pub aliases: Vec<SemanticAlias>,
+}
+
+fn no_semantic_digest() -> Option<String> {
+    None
+}
+
+fn empty_semantic_metadata() -> BTreeMap<String, String> {
+    BTreeMap::new()
+}
+
+fn empty_semantic_nodes() -> Vec<SemanticNode> {
+    Vec::new()
+}
+
+fn empty_semantic_edges() -> Vec<SemanticEdge> {
+    Vec::new()
+}
+
+fn empty_semantic_aliases() -> Vec<SemanticAlias> {
+    Vec::new()
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -278,7 +298,11 @@ impl SemanticGraph {
 
     pub fn why(&self, query: &str) -> Result<WhyResult<'_>, SemanticGraphError> {
         let target = self.resolve_or_incomplete("why", query)?;
-        let node = self.nodes.iter().find(|node| node.id == target).expect("resolved node exists");
+        let node = self.node(&target).ok_or_else(|| {
+            SemanticGraphError::Invalid(format!(
+                "resolved semantic graph identity `{target}` has no corresponding node"
+            ))
+        })?;
         let outgoing = |kind: SemanticEdgeKind| -> Vec<&SemanticNode> {
             self.edges
                 .iter()

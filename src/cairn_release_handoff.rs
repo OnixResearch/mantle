@@ -90,15 +90,16 @@ pub fn prepare_cairn_handoff_for_bundle(
         rows.push(prepare_row(row, index_u32, descriptor_parent, bundle_dir)?);
     }
     let handoff = CairnReleaseEvidenceHandoff { authentication, rows };
-    let report = crunch_release_core::validate_cairn_release_evidence_handoff(&handoff);
-    if !report.valid {
+    let validation_result = crunch_release_core::validate_cairn_release_evidence_handoff(&handoff);
+    if !validation_result.valid {
         return Err(RunError::Internal(format!(
             "Cairn handoff descriptor failed measured validation: {}",
-            report.diagnostics.join("; ")
+            validation_result.diagnostics.join("; ")
         )));
     }
+    let maximum_rows_count = maximum_handoff_rows_count()?;
     debug_assert!(!handoff.rows.is_empty());
-    debug_assert!(handoff.rows.len() <= MAX_CAIRN_HANDOFF_ROWS_COUNT as usize);
+    debug_assert!(handoff.rows.len() <= maximum_rows_count);
     Ok(handoff)
 }
 
@@ -144,11 +145,11 @@ pub fn remeasure_cairn_handoff_from_bundle(
         row.artifact = remeasure_artifact(bundle_dir, &row.artifact)?;
         row.cairn_policy = remeasure_artifact(bundle_dir, &row.cairn_policy)?;
     }
-    let report = crunch_release_core::validate_cairn_release_evidence_handoff(&handoff);
-    if !report.valid {
+    let validation_result = crunch_release_core::validate_cairn_release_evidence_handoff(&handoff);
+    if !validation_result.valid {
         return Err(RunError::Internal(format!(
             "bundle-local Cairn handoff bytes failed validation: {}",
-            report.diagnostics.join("; ")
+            validation_result.diagnostics.join("; ")
         )));
     }
     debug_assert!(!handoff.rows.is_empty());
@@ -161,6 +162,8 @@ fn preflight_handoff(
     descriptor_parent: &Path,
     bundle_dir: &Path,
 ) -> Result<CairnReleaseEvidenceHandoff, RunError> {
+    debug_assert!(!CAIRN_HANDOFF_BUNDLE_DIRECTORY.is_empty());
+    debug_assert!(!CAIRN_HANDOFF_AUTHENTICATION_DIRECTORY.is_empty());
     let authentication_source =
         resolve_descriptor_path(descriptor_parent, &descriptor.authentication.archive_receipt_path);
     reject_bundle_local_source(&authentication_source, bundle_dir)?;
@@ -208,13 +211,15 @@ fn preflight_handoff(
         });
     }
     let handoff = CairnReleaseEvidenceHandoff { authentication, rows };
-    let report = crunch_release_core::validate_cairn_release_evidence_handoff(&handoff);
-    if !report.valid {
+    let validation_result = crunch_release_core::validate_cairn_release_evidence_handoff(&handoff);
+    if !validation_result.valid {
         return Err(RunError::Internal(format!(
             "Cairn handoff descriptor failed preflight validation: {}",
-            report.diagnostics.join("; ")
+            validation_result.diagnostics.join("; ")
         )));
     }
+    debug_assert_eq!(handoff.rows.len(), descriptor.rows.len());
+    debug_assert!(validation_result.valid);
     Ok(handoff)
 }
 
@@ -223,6 +228,8 @@ fn prepare_authentication(
     descriptor_parent: &Path,
     bundle_dir: &Path,
 ) -> Result<CairnHandoffAuthenticationDependency, RunError> {
+    debug_assert!(!CAIRN_HANDOFF_AUTHENTICATION_DIRECTORY.is_empty());
+    debug_assert!(!CAIRN_HANDOFF_AUTHENTICATION_RECEIPT_FILE.is_empty());
     let receipt_source = resolve_descriptor_path(descriptor_parent, &authentication.archive_receipt_path);
     reject_bundle_local_source(&receipt_source, bundle_dir)?;
     let receipt_relative_path = PathBuf::from(CAIRN_HANDOFF_BUNDLE_DIRECTORY)
@@ -250,6 +257,8 @@ fn prepare_row(
     descriptor_parent: &Path,
     bundle_dir: &Path,
 ) -> Result<CairnReleaseEvidenceRow, RunError> {
+    debug_assert!(!CAIRN_HANDOFF_ARTIFACT_FILE.is_empty());
+    debug_assert!(!CAIRN_HANDOFF_POLICY_FILE.is_empty());
     let artifact_source = resolve_descriptor_path(descriptor_parent, &row.artifact_path);
     let policy_source = resolve_descriptor_path(descriptor_parent, &row.cairn_policy_path);
     reject_bundle_local_source(&artifact_source, bundle_dir)?;
@@ -385,12 +394,13 @@ fn remeasure_artifact(bundle_dir: &Path, artifact: &CairnMeasuredArtifact) -> Re
         "bundled Cairn handoff artifact",
         ReleaseRootKind::ReleaseEvidence,
     )?;
-    debug_assert!(bytes.len() <= MAX_CAIRN_HANDOFF_ARTIFACT_BYTES as usize);
+    let size_bytes = u64::try_from(bytes.len())
+        .map_err(|_| RunError::Internal("bundled Cairn artifact length overflowed u64".to_string()))?;
+    debug_assert!(size_bytes <= MAX_CAIRN_HANDOFF_ARTIFACT_BYTES);
     debug_assert!(!artifact.relative_path.is_empty());
     Ok(CairnMeasuredArtifact {
         relative_path: artifact.relative_path.clone(),
-        size_bytes: u64::try_from(bytes.len())
-            .map_err(|_| RunError::Internal("bundled Cairn artifact length overflowed u64".to_string()))?,
+        size_bytes,
         declared_digest_blake3: artifact.declared_digest_blake3.clone(),
         measured_digest_blake3: blake3::hash(&bytes).to_hex().to_string(),
     })
@@ -433,13 +443,13 @@ fn read_bounded_file(
             metadata.len()
         )));
     }
-    let capacity = usize::try_from(metadata.len())
+    let capacity_bytes = usize::try_from(metadata.len())
         .map_err(|_| RunError::Internal(format!("{label} byte length does not fit usize: {}", absolute.display())))?;
-    let read_limit = maximum_bytes
+    let read_limit_bytes = maximum_bytes
         .checked_add(1)
         .ok_or_else(|| RunError::Internal(format!("{label} read limit overflowed u64")))?;
-    let mut bytes = Vec::with_capacity(capacity);
-    file.take(read_limit)
+    let mut bytes = Vec::with_capacity(capacity_bytes);
+    file.take(read_limit_bytes)
         .read_to_end(&mut bytes)
         .map_err(|error| RunError::Internal(format!("reading bounded {label} {}: {error}", absolute.display())))?;
     let observed_bytes = u64::try_from(bytes.len())
@@ -456,20 +466,28 @@ fn read_bounded_file(
 }
 
 fn validate_descriptor_header(descriptor: &CairnHandoffDescriptor) -> Result<(), RunError> {
+    let maximum_rows_count = maximum_handoff_rows_count()?;
+    let maximum_text_size_bytes = usize::try_from(MAX_CAIRN_HANDOFF_TEXT_BYTES_COUNT)
+        .map_err(|_| RunError::Internal("Cairn handoff text limit does not fit usize".to_string()))?;
     if descriptor.schema != CAIRN_HANDOFF_INPUT_SCHEMA {
         return Err(RunError::Internal(format!("unsupported Cairn handoff descriptor schema: {}", descriptor.schema)));
     }
-    if descriptor.rows.is_empty() || descriptor.rows.len() > MAX_CAIRN_HANDOFF_ROWS_COUNT as usize {
+    if descriptor.rows.is_empty() || descriptor.rows.len() > maximum_rows_count {
         return Err(RunError::Internal(format!(
             "Cairn handoff descriptor row count must be between 1 and {MAX_CAIRN_HANDOFF_ROWS_COUNT}"
         )));
     }
     for row in &descriptor.rows {
-        if row.artifact_id.len() > MAX_CAIRN_HANDOFF_TEXT_BYTES_COUNT as usize {
+        if row.artifact_id.len() > maximum_text_size_bytes {
             return Err(RunError::Internal("Cairn handoff artifact_id is oversized".to_string()));
         }
     }
     Ok(())
+}
+
+fn maximum_handoff_rows_count() -> Result<usize, RunError> {
+    usize::try_from(MAX_CAIRN_HANDOFF_ROWS_COUNT)
+        .map_err(|_| RunError::Internal("Cairn handoff row limit does not fit usize".to_string()))
 }
 
 fn resolve_descriptor_path(parent: &Path, path: &Path) -> PathBuf {

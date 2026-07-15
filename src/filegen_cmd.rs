@@ -27,6 +27,7 @@ const FILEGEN_STATE_FILE: &str = ".mantle/filegen-state.json";
 const FILEGEN_STATE_SCHEMA: &str = "mantle-project-filegen-state-v1";
 const APPLY_FAILURE_EXIT_CODE: u8 = 3;
 const MAX_FILEGEN_FILES: usize = 4096;
+const MAX_FILEGEN_FACTS: usize = MAX_FILEGEN_FILES.saturating_mul(2);
 
 #[derive(Debug, Clone)]
 pub struct FilegenPlanOptions<'a> {
@@ -46,8 +47,12 @@ pub struct FilegenApplyOptions<'a> {
 
 #[derive(Debug, Deserialize)]
 struct FilegenManifest {
-    #[serde(default)]
+    #[serde(default = "empty_generated_file_declarations")]
     files: Vec<GeneratedFileDeclaration>,
+}
+
+fn empty_generated_file_declarations() -> Vec<GeneratedFileDeclaration> {
+    Vec::new()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -123,8 +128,17 @@ fn current_file_facts(
     declarations: &[GeneratedFileDeclaration],
     state: &FilegenState,
 ) -> Result<Vec<CurrentFileFact>, RunError> {
+    let fact_capacity_count = declarations
+        .len()
+        .checked_add(state.files.len())
+        .ok_or_else(|| RunError::Internal("filegen fact count overflowed usize".to_string()))?;
+    if fact_capacity_count > MAX_FILEGEN_FACTS {
+        return Err(RunError::Internal(format!(
+            "too many current file facts: {fact_capacity_count} > {MAX_FILEGEN_FACTS}"
+        )));
+    }
     let mut seen = BTreeMap::<String, ()>::new();
-    let mut facts = Vec::with_capacity(declarations.len().saturating_add(state.files.len()));
+    let mut facts = Vec::with_capacity(fact_capacity_count);
     for declaration in declarations {
         let Some(target) = normalized_target_for_shell(&declaration.target) else {
             facts.push(CurrentFileFact {
@@ -150,6 +164,8 @@ fn current_file_facts(
         }
         facts.push(current_file_fact(root, target, state)?);
     }
+    debug_assert!(facts.len() <= fact_capacity_count);
+    debug_assert!(seen.len() <= fact_capacity_count);
     Ok(facts)
 }
 
@@ -197,6 +213,14 @@ fn current_file_fact(root: &Path, target: &str, state: &FilegenState) -> Result<
 }
 
 fn apply_filegen_operations(root: &Path, operations: &[FilegenOperation]) -> Result<(), RunError> {
+    if operations.len() > MAX_FILEGEN_FACTS {
+        return Err(RunError::Internal(format!(
+            "too many filegen operations: {} > {MAX_FILEGEN_FACTS}",
+            operations.len()
+        )));
+    }
+    debug_assert!(MAX_FILEGEN_FACTS >= MAX_FILEGEN_FILES);
+    debug_assert!(operations.len() <= MAX_FILEGEN_FACTS);
     for operation in operations {
         match operation.action {
             FilegenAction::Create | FilegenAction::Update => write_filegen_operation(root, operation)?,
@@ -210,6 +234,8 @@ fn apply_filegen_operations(root: &Path, operations: &[FilegenOperation]) -> Res
 }
 
 fn write_filegen_operation(root: &Path, operation: &FilegenOperation) -> Result<(), RunError> {
+    debug_assert!(!FILEGEN_STATE_SCHEMA.is_empty());
+    debug_assert!(MAX_FILEGEN_FILES > 0);
     let path = root.join(&operation.target);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -223,6 +249,8 @@ fn write_filegen_operation(root: &Path, operation: &FilegenOperation) -> Result<
 
 #[cfg(unix)]
 fn write_symlink(path: &Path, target: &str) -> Result<(), RunError> {
+    debug_assert!(!FILEGEN_STATE_SCHEMA.is_empty());
+    debug_assert!(MAX_FILEGEN_FILES > 0);
     match fs::remove_file(path) {
         Ok(()) => {}
         Err(err) if err.kind() == ErrorKind::NotFound => {}
@@ -241,15 +269,24 @@ fn write_symlink(path: &Path, _target: &str) -> Result<(), RunError> {
 }
 
 fn write_filegen_state(root: &Path, plan: &FilegenPlan) -> Result<(), RunError> {
-    let mut files = BTreeMap::new();
-    for operation in &plan.operations {
-        match operation.action {
-            FilegenAction::Create | FilegenAction::Update | FilegenAction::Unchanged => {
-                files.insert(operation.target.clone(), operation.desired_digest_blake3.clone());
-            }
-            FilegenAction::Stale | FilegenAction::Conflict => {}
-        }
+    if plan.operations.len() > MAX_FILEGEN_FACTS {
+        return Err(RunError::Internal(format!(
+            "too many filegen state operations: {} > {MAX_FILEGEN_FACTS}",
+            plan.operations.len()
+        )));
     }
+    let files = plan
+        .operations
+        .iter()
+        .filter_map(|operation| match operation.action {
+            FilegenAction::Create | FilegenAction::Update | FilegenAction::Unchanged => {
+                Some((operation.target.clone(), operation.desired_digest_blake3.clone()))
+            }
+            FilegenAction::Stale | FilegenAction::Conflict => None,
+        })
+        .collect::<BTreeMap<_, _>>();
+    debug_assert!(files.len() <= plan.operations.len());
+    debug_assert!(files.len() <= MAX_FILEGEN_FACTS);
     let state = FilegenState {
         schema: FILEGEN_STATE_SCHEMA.to_string(),
         files,
@@ -266,6 +303,12 @@ fn load_filegen_state(root: &Path) -> Result<FilegenState, RunError> {
         });
     }
     let state = read_json_file::<FilegenState>(&path, "filegen state")?;
+    if state.files.len() > MAX_FILEGEN_FILES {
+        return Err(RunError::Internal(format!(
+            "too many filegen state entries: {} > {MAX_FILEGEN_FILES}",
+            state.files.len()
+        )));
+    }
     if state.schema != FILEGEN_STATE_SCHEMA {
         return Err(RunError::Internal(format!(
             "unsupported filegen state schema {} in {}",
@@ -273,6 +316,8 @@ fn load_filegen_state(root: &Path) -> Result<FilegenState, RunError> {
             path.display()
         )));
     }
+    debug_assert_eq!(state.schema, FILEGEN_STATE_SCHEMA);
+    debug_assert!(state.files.len() <= MAX_FILEGEN_FILES);
     Ok(state)
 }
 
@@ -335,7 +380,8 @@ fn normalized_target_for_shell(target: &str) -> Option<String> {
     if target.is_empty() || target.starts_with('/') {
         return None;
     }
-    let mut parts = Vec::new();
+    let component_capacity_count = Path::new(target).components().count();
+    let mut parts = Vec::with_capacity(component_capacity_count);
     for component in Path::new(target).components() {
         match component {
             Component::Normal(part) => parts.push(part.to_string_lossy().into_owned()),
@@ -343,15 +389,25 @@ fn normalized_target_for_shell(target: &str) -> Option<String> {
             Component::ParentDir | Component::RootDir | Component::Prefix(_) => return None,
         }
     }
-    if parts.is_empty() { None } else { Some(parts.join("/")) }
+    if parts.is_empty() {
+        None
+    } else {
+        debug_assert!(parts.len() <= component_capacity_count);
+        debug_assert!(!parts.iter().any(String::is_empty));
+        Some(parts.join("/"))
+    }
 }
 
 fn write_file_atomic(path: &Path, content: &[u8], label: &str) -> Result<(), RunError> {
     let tmp_path = atomic_tmp_path(path);
+    debug_assert_ne!(tmp_path, path);
+    debug_assert_eq!(tmp_path.parent(), path.parent());
     fs::write(&tmp_path, content)
         .map_err(|err| RunError::Internal(format!("writing temporary generated file {label}: {err}")))?;
     fs::rename(&tmp_path, path)
         .map_err(|err| RunError::Internal(format!("committing generated file {label}: {err}")))?;
+    debug_assert!(path.exists());
+    debug_assert!(!tmp_path.exists());
     Ok(())
 }
 
@@ -367,6 +423,8 @@ fn read_json_file<T: for<'de> Deserialize<'de>>(path: &Path, label: &str) -> Res
 }
 
 fn write_json_file<T: Serialize>(path: &Path, value: &T, label: &str) -> Result<(), RunError> {
+    debug_assert!(!FILEGEN_STATE_SCHEMA.is_empty());
+    debug_assert!(MAX_FILEGEN_FILES > 0);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| RunError::Internal(format!("creating {label} dir {}: {err}", parent.display())))?;

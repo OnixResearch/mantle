@@ -102,8 +102,13 @@ pub(crate) fn create_witness_request_directory(
     verification_dir: &Path,
     request_dir: &Path,
 ) -> Result<CreatedWitnessRequest, RunError> {
+    debug_assert!(!WITNESS_REQUEST_SCHEMA.is_empty());
+    debug_assert!(!WITNESS_REQUEST_FILE_NAME.is_empty());
     let (release_attestation, _attestation_path) = load_release_attestation_document(verification_dir)?;
-    validate_matching_release_ids(&verified_manifest.release_id, &release_attestation.release_id)?;
+    validate_matching_release_ids(ReleaseIdPair {
+        bundle: &verified_manifest.release_id,
+        attestation: &release_attestation.release_id,
+    })?;
     let layout = plan_witness_request_layout(&verified_manifest.release_id)?;
     let request_document = build_witness_request_document(&layout, &verified_manifest.release_id)?;
     prepare_empty_directory(request_dir, "witness request directory")?;
@@ -150,13 +155,18 @@ fn validate_release_id(release_id: &str) -> Result<(), RunError> {
     Ok(())
 }
 
-fn validate_matching_release_ids(bundle_release_id: &str, attestation_release_id: &str) -> Result<(), RunError> {
-    if bundle_release_id == attestation_release_id {
+struct ReleaseIdPair<'a> {
+    bundle: &'a str,
+    attestation: &'a str,
+}
+
+fn validate_matching_release_ids(release_ids: ReleaseIdPair<'_>) -> Result<(), RunError> {
+    if release_ids.bundle == release_ids.attestation {
         return Ok(());
     }
     Err(RunError::Internal(format!(
         "release id mismatch between verified bundle '{}' and release attestation '{}'",
-        bundle_release_id, attestation_release_id
+        release_ids.bundle, release_ids.attestation
     )))
 }
 
@@ -267,7 +277,11 @@ fn resolve_witness_source_directory(source: &Path) -> Result<PathBuf, RunError> 
 }
 
 fn collect_witness_json_paths(witness_dir: &Path) -> Result<Vec<PathBuf>, RunError> {
-    let mut json_paths = Vec::new();
+    let maximum_candidate_count = usize::try_from(MAX_IMPORT_CANDIDATES)
+        .map_err(|_| RunError::Internal("witness import candidate limit does not fit usize".to_string()))?;
+    debug_assert!(maximum_candidate_count > 0);
+    debug_assert!(!JSON_EXTENSION.is_empty());
+    let mut json_paths = Vec::with_capacity(maximum_candidate_count);
     let entries = std::fs::read_dir(witness_dir)
         .map_err(|err| RunError::Internal(format!("reading {}: {err}", witness_dir.display())))?;
     for entry_result in entries {
@@ -275,6 +289,11 @@ fn collect_witness_json_paths(witness_dir: &Path) -> Result<Vec<PathBuf>, RunErr
             .map_err(|err| RunError::Internal(format!("reading {} entry: {err}", witness_dir.display())))?;
         let path = entry.path();
         if path.extension().and_then(|ext| ext.to_str()) == Some(JSON_EXTENSION) {
+            if json_paths.len() >= maximum_candidate_count {
+                return Err(RunError::Internal(format!(
+                    "witness import candidate count exceeds limit {MAX_IMPORT_CANDIDATES}"
+                )));
+            }
             json_paths.push(path);
         }
     }
@@ -326,6 +345,13 @@ fn build_witness_import_plan(
     witness_dir: &Path,
     candidates: &[WitnessImportCandidate],
 ) -> Result<Vec<WitnessImportPlanEntry>, RunError> {
+    let maximum_candidate_count = usize::try_from(MAX_IMPORT_CANDIDATES)
+        .map_err(|_| RunError::Internal("witness import candidate limit does not fit usize".to_string()))?;
+    if candidates.len() > maximum_candidate_count {
+        return Err(RunError::Internal(format!(
+            "witness import candidate count exceeds limit {MAX_IMPORT_CANDIDATES}"
+        )));
+    }
     let mut plan = Vec::with_capacity(candidates.len());
     for candidate in candidates {
         validate_release_digest_match(destination_release_digest, candidate)?;
@@ -346,6 +372,8 @@ fn build_witness_import_plan(
             signature_bytes: candidate.signature_bytes.clone(),
         });
     }
+    debug_assert_eq!(plan.len(), candidates.len());
+    debug_assert!(plan.len() <= maximum_candidate_count);
     Ok(plan)
 }
 
@@ -413,8 +441,8 @@ fn apply_witness_import_plan(
     witness_dir: &Path,
     plan: &[WitnessImportPlanEntry],
 ) -> Result<AppliedWitnessImportPlan, RunError> {
-    let mut imported_witness_identities = Vec::new();
-    let mut skipped_duplicate_identities = Vec::new();
+    let mut written_witness_identities = Vec::with_capacity(plan.len());
+    let mut skipped_duplicate_identities = Vec::with_capacity(plan.len());
     for entry in plan {
         let destination_paths = destination_witness_paths(witness_dir, &entry.identity);
         match entry.decision {
@@ -423,13 +451,15 @@ fn apply_witness_import_plan(
                     .map_err(|err| RunError::Internal(format!("writing {}: {err}", destination_paths.0.display())))?;
                 std::fs::write(&destination_paths.1, &entry.signature_bytes)
                     .map_err(|err| RunError::Internal(format!("writing {}: {err}", destination_paths.1.display())))?;
-                imported_witness_identities.push(entry.identity.clone());
+                written_witness_identities.push(entry.identity.clone());
             }
             WitnessImportDecision::SkipExactDuplicate => skipped_duplicate_identities.push(entry.identity.clone()),
         }
     }
+    debug_assert_eq!(written_witness_identities.len().saturating_add(skipped_duplicate_identities.len()), plan.len());
+    debug_assert!(written_witness_identities.len() <= plan.len());
     Ok(AppliedWitnessImportPlan {
-        imported_witness_identities,
+        imported_witness_identities: written_witness_identities,
         skipped_duplicate_identities,
     })
 }

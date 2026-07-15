@@ -79,6 +79,8 @@ pub(crate) fn validate_nix_evidence(input: &NixEvidenceInput) -> NixEvidenceRepo
 }
 
 fn validate_row(row: &NixEvidenceRow, row_ids: &mut BTreeSet<String>, diagnostics: &mut Vec<String>) {
+    debug_assert!(MAX_NIX_EVIDENCE_ROWS > 0);
+    debug_assert_eq!(BLAKE3_HEX_LENGTH, blake3::OUT_LEN.saturating_mul(2));
     push_nonempty(&row.row_id, "row_id", diagnostics);
     validate_adapter(&row.adapter_kind, diagnostics);
     validate_store_path(&row.store_path, diagnostics);
@@ -101,6 +103,8 @@ fn validate_row(row: &NixEvidenceRow, row_ids: &mut BTreeSet<String>, diagnostic
 }
 
 fn validate_store_path(path_ref: &NixStorePathRef, diagnostics: &mut Vec<String>) {
+    debug_assert!(STORE_HASH_LENGTH > 0);
+    debug_assert!(!NIX_HASH_ALPHABET.is_empty());
     push_nonempty(&path_ref.store_prefix, "store_prefix", diagnostics);
     push_nonempty(&path_ref.logical_path, "logical_path", diagnostics);
     if !path_ref.store_prefix.starts_with('/') {
@@ -164,23 +168,23 @@ fn validate_non_claims(non_claims: &[String], diagnostics: &mut Vec<String>) {
     }
 }
 
-fn validate_digest(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+fn validate_digest(value: &str, field_name: impl AsRef<str>, diagnostics: &mut Vec<String>) {
     if value.len() != BLAKE3_HEX_LENGTH || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        diagnostics.push(format!("{field_name} is not BLAKE3 hex"));
+        diagnostics.push(format!("{} is not BLAKE3 hex", field_name.as_ref()));
     }
 }
 
-fn push_nonempty(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+fn push_nonempty(value: &str, field_name: impl AsRef<str>, diagnostics: &mut Vec<String>) {
     if value.trim().is_empty() {
-        diagnostics.push(format!("{field_name} must not be empty"));
+        diagnostics.push(format!("{} must not be empty", field_name.as_ref()));
     }
 }
 
-fn push_no_overclaim(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+fn push_no_overclaim(value: &str, field_name: impl AsRef<str>, diagnostics: &mut Vec<String>) {
     let lower = value.to_ascii_lowercase();
     for fragment in OVERCLAIM_FRAGMENTS {
         if lower.contains(fragment) {
-            diagnostics.push(format!("{field_name} contains overclaim fragment {fragment:?}"));
+            diagnostics.push(format!("{} contains overclaim fragment {fragment:?}", field_name.as_ref()));
         }
     }
 }

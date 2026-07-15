@@ -22,7 +22,7 @@ pub const FRONTEND_ARTIFACT_DIAG_INVALID_SPEC_MATERIAL: &str = "frontend-artifac
 pub const FRONTEND_ARTIFACT_DIAG_KIND_NOT_ALLOWED: &str = "frontend-artifact-kind-not-allowed";
 
 const HEX_CHARS_PER_BYTE: usize = 2;
-const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN * HEX_CHARS_PER_BYTE;
+const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FrontendArtifactSpecRef {
@@ -101,6 +101,8 @@ pub struct FrontendArtifactAdmissionReport {
 }
 
 pub fn admit_frontend_artifact(request: &FrontendArtifactAdmissionRequest<'_>) -> FrontendArtifactAdmissionReport {
+    debug_assert!(!FRONTEND_ARTIFACT_ADMISSION_SIDECAR_SCHEMA.is_empty());
+    debug_assert_eq!(BLAKE3_HEX_LENGTH, blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE));
     let mut diagnostics = Vec::new();
     let Some(spec) = request.spec else {
         diagnostics.push(diagnostic(
@@ -190,6 +192,8 @@ fn validate_blake3_hash(
     spec_material: &[u8],
     diagnostics: &mut Vec<FrontendArtifactAdmissionDiagnostic>,
 ) {
+    debug_assert!(!FRONTEND_ARTIFACT_HASH_ALGORITHM_BLAKE3.is_empty());
+    debug_assert_eq!(BLAKE3_HEX_LENGTH, blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE));
     if spec.hash_algorithm != FRONTEND_ARTIFACT_HASH_ALGORITHM_BLAKE3 {
         diagnostics.push(diagnostic(
             FRONTEND_ARTIFACT_DIAG_UNSUPPORTED_HASH,
@@ -239,6 +243,8 @@ fn execute_kind_allowlist_validator(
     spec_material: &[u8],
     diagnostics: &mut Vec<FrontendArtifactAdmissionDiagnostic>,
 ) {
+    debug_assert!(!FRONTEND_ARTIFACT_KIND_ALLOWLIST_SCHEMA_V1.is_empty());
+    debug_assert!(!FRONTEND_ARTIFACT_DIAG_KIND_NOT_ALLOWED.is_empty());
     let Ok(spec_material) = serde_json::from_slice::<FrontendArtifactKindAllowlistSpec>(spec_material) else {
         diagnostics.push(diagnostic(
             FRONTEND_ARTIFACT_DIAG_INVALID_SPEC_MATERIAL,
@@ -282,6 +288,8 @@ fn validate_manifest_binding(
     manifest: &FrontendArtifactManifest,
     diagnostics: &mut Vec<FrontendArtifactAdmissionDiagnostic>,
 ) {
+    debug_assert!(!FRONTEND_ARTIFACT_DIAG_SPEC_BINDING_MISMATCH.is_empty());
+    debug_assert!(!FRONTEND_ARTIFACT_DIAG_HIDDEN_FALLBACK.is_empty());
     require_non_empty(&manifest.kind, "manifest.kind", diagnostics);
     require_non_empty(&manifest.artifact_ref, "manifest.artifact_ref", diagnostics);
     require_non_empty(&manifest.spec_id, "manifest.spec_id", diagnostics);
@@ -318,7 +326,8 @@ fn validate_manifest_binding(
     }
 }
 
-fn require_non_empty(value: &str, path: &'static str, diagnostics: &mut Vec<FrontendArtifactAdmissionDiagnostic>) {
+fn require_non_empty(value: &str, path: impl AsRef<str>, diagnostics: &mut Vec<FrontendArtifactAdmissionDiagnostic>) {
+    let path = path.as_ref();
     if value.is_empty() {
         diagnostics.push(diagnostic(
             FRONTEND_ARTIFACT_DIAG_EMPTY_FIELD,

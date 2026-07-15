@@ -81,9 +81,11 @@ pub fn crunch_to_mantle_session() -> RefactorSession {
 }
 
 pub fn plan_crunch_to_mantle(root: &Path, configured_store_prefixes: &[String]) -> RefactorPlan {
+    const REFACTOR_PLAN_ENTRY_CAPACITY_COUNT: usize = 4;
+
     let session = crunch_to_mantle_session();
-    let mut operations = Vec::new();
-    let mut diagnostics = Vec::new();
+    let mut operations = Vec::with_capacity(REFACTOR_PLAN_ENTRY_CAPACITY_COUNT);
+    let mut diagnostics = Vec::with_capacity(REFACTOR_PLAN_ENTRY_CAPACITY_COUNT);
 
     for (legacy, canonical) in [
         ("crunch-project.ncl", "mantle-project.ncl"),
@@ -112,11 +114,11 @@ pub fn plan_crunch_to_mantle(root: &Path, configured_store_prefixes: &[String]) 
         }
     }
 
-    let saw_canonical = configured_store_prefixes.iter().any(|prefix| prefix == session.canonical_store_prefix);
-    let saw_legacy = configured_store_prefixes
+    let has_canonical = configured_store_prefixes.iter().any(|prefix| prefix == session.canonical_store_prefix);
+    let has_legacy = configured_store_prefixes
         .iter()
         .any(|prefix| session.legacy_store_prefixes.contains(&prefix.as_str()));
-    if saw_canonical && saw_legacy {
+    if has_canonical && has_legacy {
         diagnostics.push(RefactorDiagnostic {
             code: "ambiguous-store-prefix-conflict",
             message: format!(
@@ -129,7 +131,7 @@ pub fn plan_crunch_to_mantle(root: &Path, configured_store_prefixes: &[String]) 
                 session.canonical_store_prefix
             ),
         });
-    } else if saw_legacy && !saw_canonical {
+    } else if has_legacy && !has_canonical {
         operations.push(RefactorOperation {
             kind: "store-prefix-default",
             from: session.legacy_store_prefixes[0].to_string(),
@@ -138,6 +140,8 @@ pub fn plan_crunch_to_mantle(root: &Path, configured_store_prefixes: &[String]) 
         });
     }
 
+    debug_assert!(operations.len() <= REFACTOR_PLAN_ENTRY_CAPACITY_COUNT);
+    debug_assert!(diagnostics.len() <= REFACTOR_PLAN_ENTRY_CAPACITY_COUNT);
     RefactorPlan {
         schema: "mantle-refactor-plan-v1",
         session_id: session.id,
@@ -156,6 +160,8 @@ pub fn apply_crunch_to_mantle(
     if plan.has_conflicts() {
         return Err(RefactorError::Conflicts(plan));
     }
+    debug_assert!(plan.diagnostics.is_empty());
+    debug_assert!(plan.dry_run);
     for operation in &plan.operations {
         if !operation.apply_supported {
             return Err(RefactorError::UnsupportedApply(operation.clone()));

@@ -40,6 +40,8 @@ pub(crate) enum AstGrepEvidenceRead {
 
 // r[impl mantle.ast_grep_structural_rails.shell_boundary]
 pub(crate) fn read_ast_grep_evidence(path: &Path) -> AstGrepEvidenceRead {
+    debug_assert!(MAX_AST_GREP_SIDECAR_BYTES > 0);
+    debug_assert_ne!(BLOCKER_MALFORMED, BLOCKER_INVALID);
     let bytes = match read_bounded_sidecar_bytes(path) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => return AstGrepEvidenceRead::Missing,
@@ -77,6 +79,8 @@ pub(crate) fn validate_ast_grep_release_attachment_file(
     claim_scope: String,
     non_claims: Vec<String>,
 ) -> Result<(), String> {
+    debug_assert_ne!(BLOCKER_READ, BLOCKER_INVALID);
+    debug_assert_ne!(BLOCKER_TOO_LARGE, BLOCKER_MALFORMED);
     let loaded = match read_ast_grep_evidence(path) {
         AstGrepEvidenceRead::Valid(loaded) => loaded,
         AstGrepEvidenceRead::Missing => {
@@ -98,6 +102,8 @@ pub(crate) fn validate_ast_grep_release_attachment_file(
 }
 
 fn read_bounded_sidecar_bytes(path: &Path) -> Result<Option<Vec<u8>>, AstGrepEvidenceRead> {
+    debug_assert!(MAX_AST_GREP_SIDECAR_BYTES > 0);
+    debug_assert_ne!(BLOCKER_READ, BLOCKER_TOO_LARGE);
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
         return Err(invalid(
@@ -131,12 +137,12 @@ fn read_bounded_sidecar_bytes(path: &Path) -> Result<Option<Vec<u8>>, AstGrepEvi
     if metadata.len() > MAX_AST_GREP_SIDECAR_BYTES {
         return Err(sidecar_too_large(path, metadata.len()));
     }
-    let read_limit = MAX_AST_GREP_SIDECAR_BYTES.checked_add(1).ok_or_else(|| {
+    let read_limit_bytes = MAX_AST_GREP_SIDECAR_BYTES.checked_add(1).ok_or_else(|| {
         invalid(BLOCKER_TOO_LARGE, "ast-grep structural evidence read limit overflowed u64".to_string())
     })?;
     let mut bytes = Vec::new();
     file.by_ref()
-        .take(read_limit)
+        .take(read_limit_bytes)
         .read_to_end(&mut bytes)
         .map_err(|error| sidecar_read_error(path, "reading opened file", error))?;
     let byte_count = u64::try_from(bytes.len()).map_err(|_| {
@@ -151,10 +157,14 @@ fn read_bounded_sidecar_bytes(path: &Path) -> Result<Option<Vec<u8>>, AstGrepEvi
 }
 
 fn sidecar_read_error(path: &Path, operation: &str, error: std::io::Error) -> AstGrepEvidenceRead {
+    debug_assert!(!BLOCKER_READ.is_empty());
+    debug_assert_ne!(BLOCKER_READ, BLOCKER_TOO_LARGE);
     invalid(BLOCKER_READ, format!("{operation} for ast-grep structural evidence at {}: {error}", path.display()))
 }
 
 fn sidecar_too_large(path: &Path, byte_count: u64) -> AstGrepEvidenceRead {
+    debug_assert!(byte_count > MAX_AST_GREP_SIDECAR_BYTES);
+    debug_assert!(!BLOCKER_TOO_LARGE.is_empty());
     invalid(
         BLOCKER_TOO_LARGE,
         format!(
@@ -165,6 +175,8 @@ fn sidecar_too_large(path: &Path, byte_count: u64) -> AstGrepEvidenceRead {
 }
 
 fn core_error_to_read(error: ReleaseEvidenceError) -> AstGrepEvidenceRead {
+    debug_assert_ne!(BLOCKER_MALFORMED, BLOCKER_INVALID);
+    debug_assert!(!BLOCKER_INVALID.is_empty());
     let blocker_class = match error {
         ReleaseEvidenceError::Parse(_) => BLOCKER_MALFORMED,
         ReleaseEvidenceError::Validation(_) => BLOCKER_INVALID,
@@ -173,6 +185,8 @@ fn core_error_to_read(error: ReleaseEvidenceError) -> AstGrepEvidenceRead {
 }
 
 fn invalid(blocker_class: &'static str, message: String) -> AstGrepEvidenceRead {
+    debug_assert!(!blocker_class.is_empty());
+    debug_assert!(!blocker_class.contains(char::is_whitespace));
     AstGrepEvidenceRead::Invalid { blocker_class, message }
 }
 

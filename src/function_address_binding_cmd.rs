@@ -28,7 +28,8 @@ use crate::release_capability::authorize_release_path;
 use crate::release_evidence::verify_release_evidence_bundle;
 
 const MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_BYTES: usize = 1_048_576;
-const MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_READ_BYTES: u64 = MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES + 1;
+const MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_READ_BYTES: u64 =
+    MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES.saturating_add(1);
 
 #[derive(Debug)]
 pub(crate) struct FunctionAddressBindingCommand {
@@ -46,8 +47,12 @@ pub(crate) struct FunctionAddressBindingCommand {
 struct ValenceReceiptIdentityEnvelope {
     schema_version: String,
     receipt_hash: String,
-    #[serde(default)]
+    #[serde(default = "no_kamacite_receipt_hash")]
     kamacite_receipt_hash: Option<String>,
+}
+
+fn no_kamacite_receipt_hash() -> Option<String> {
+    None
 }
 
 #[derive(Debug, Deserialize)]
@@ -185,22 +190,23 @@ fn validate_preserves_manifest_identities(
         expected_digest_blake3: &binding.canonical_envelope.digest_blake3,
         label: "Kamacite Preserves sidecar",
     })?;
-    let actual_size = u64::try_from(preserves_bytes.len())
+    let actual_size_bytes = u64::try_from(preserves_bytes.len())
         .map_err(|_| RunError::Internal("Kamacite Preserves sidecar size does not fit u64".to_string()))?;
-    let expected_size = binding
+    let expected_size_bytes = binding
         .canonical_envelope
         .size_bytes
         .ok_or_else(|| RunError::Internal("Kamacite Preserves sidecar metadata is missing size_bytes".to_string()))?;
-    if actual_size != expected_size {
+    if actual_size_bytes != expected_size_bytes {
         return Err(RunError::Internal(format!(
-            "Kamacite Preserves sidecar size changed after release bundle verification: expected {expected_size}, got {actual_size}"
+            "Kamacite Preserves sidecar size changed after release bundle verification: expected {expected_size_bytes}, got {actual_size_bytes}"
         )));
     }
-    let valence = read_valence_identity(
+    let valence = read_valence_identity(ReceiptReadRequest {
         root,
-        &binding.upstream_validation.relative_path,
-        &binding.upstream_validation.digest_blake3,
-    )?;
+        relative_path: &binding.upstream_validation.relative_path,
+        expected_digest_blake3: &binding.upstream_validation.digest_blake3,
+        label: "Valence receipt",
+    })?;
     require_identity_match(IdentityEquality {
         actual: &valence.schema_version,
         expected: FUNCTION_ADDRESS_VALENCE_RECEIPT_IDENTITY_SCHEMA,
@@ -249,7 +255,12 @@ fn validate_preserves_json_projection(
 ) -> Result<(), RunError> {
     let canonical_digest = &receipt.binding.canonical_envelope.digest_blake3;
     for projection in &receipt.binding.compatibility_projections {
-        let identity = read_kamacite_identity(root, &projection.relative_path, &projection.digest_blake3)?;
+        let identity = read_kamacite_identity(ReceiptReadRequest {
+            root,
+            relative_path: &projection.relative_path,
+            expected_digest_blake3: &projection.digest_blake3,
+            label: "Kamacite receipt",
+        })?;
         require_identity_match(IdentityEquality {
             actual: &identity.schema_version,
             expected: FUNCTION_ADDRESS_KAMACITE_RECEIPT_IDENTITY_SCHEMA,
@@ -281,12 +292,24 @@ fn binding_selection(
     declared_digests: &DeclaredReceiptDigests,
 ) -> Result<FunctionAddressBindingSelection, RunError> {
     debug_assert_eq!(command.kamacite_receipt_relative_path.is_some(), declared_digests.kamacite.is_some());
-    let valence = read_valence_identity(root, paths.valence, &declared_digests.valence)?;
+    let valence = read_valence_identity(ReceiptReadRequest {
+        root,
+        relative_path: paths.valence,
+        expected_digest_blake3: &declared_digests.valence,
+        label: "Valence receipt",
+    })?;
     let kamacite = command
         .kamacite_receipt_relative_path
         .as_deref()
         .zip(declared_digests.kamacite.as_deref())
-        .map(|(path, digest)| read_kamacite_identity(root, path, digest))
+        .map(|(path, digest)| {
+            read_kamacite_identity(ReceiptReadRequest {
+                root,
+                relative_path: path,
+                expected_digest_blake3: digest,
+                label: "Kamacite receipt",
+            })
+        })
         .transpose()?;
     Ok(FunctionAddressBindingSelection {
         mode: command.mode.clone(),
@@ -299,17 +322,8 @@ fn binding_selection(
     })
 }
 
-fn read_valence_identity(
-    root: &ReleaseCapabilityRoot,
-    relative_path: &str,
-    expected_digest_blake3: &str,
-) -> Result<FunctionAddressValenceReceiptIdentity, RunError> {
-    let bytes = read_bounded_receipt(ReceiptReadRequest {
-        root,
-        relative_path,
-        expected_digest_blake3,
-        label: "Valence receipt",
-    })?;
+fn read_valence_identity(request: ReceiptReadRequest<'_>) -> Result<FunctionAddressValenceReceiptIdentity, RunError> {
+    let bytes = read_bounded_receipt(request)?;
     let envelope: ValenceReceiptIdentityEnvelope = serde_json::from_slice(&bytes)
         .map_err(|error| RunError::Internal(format!("parsing Valence function-address receipt identity: {error}")))?;
     Ok(FunctionAddressValenceReceiptIdentity {
@@ -319,17 +333,8 @@ fn read_valence_identity(
     })
 }
 
-fn read_kamacite_identity(
-    root: &ReleaseCapabilityRoot,
-    relative_path: &str,
-    expected_digest_blake3: &str,
-) -> Result<FunctionAddressKamaciteReceiptIdentity, RunError> {
-    let bytes = read_bounded_receipt(ReceiptReadRequest {
-        root,
-        relative_path,
-        expected_digest_blake3,
-        label: "Kamacite receipt",
-    })?;
+fn read_kamacite_identity(request: ReceiptReadRequest<'_>) -> Result<FunctionAddressKamaciteReceiptIdentity, RunError> {
+    let bytes = read_bounded_receipt(request)?;
     let envelope: KamaciteReceiptIdentityEnvelope = serde_json::from_slice(&bytes)
         .map_err(|error| RunError::Internal(format!("parsing Kamacite function-address receipt identity: {error}")))?;
     Ok(FunctionAddressKamaciteReceiptIdentity {
@@ -339,6 +344,8 @@ fn read_kamacite_identity(
 }
 
 fn read_bounded_receipt(request: ReceiptReadRequest<'_>) -> Result<Vec<u8>, RunError> {
+    debug_assert!(MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_BYTES > 0);
+    debug_assert!(MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_READ_BYTES > MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES);
     let validated = authorize_release_path(&ReleasePathRequest {
         required_root: ReleaseRootKind::ReleaseEvidence,
         available_root: Some(request.root.kind()),
@@ -362,6 +369,8 @@ fn read_bounded_receipt(request: ReceiptReadRequest<'_>) -> Result<Vec<u8>, RunE
         )));
     }
     require_current_receipt_digest(&bytes, &request)?;
+    debug_assert!(bytes.len() <= MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_BYTES);
+    debug_assert!(receipt_digest_matches(&bytes, request.expected_digest_blake3));
     Ok(bytes)
 }
 
@@ -377,6 +386,8 @@ fn require_current_receipt_digest(bytes: &[u8], request: &ReceiptReadRequest<'_>
 }
 
 fn write_receipt_noclobber(path: &Path, bytes: &[u8]) -> Result<(), RunError> {
+    debug_assert!(MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_BYTES > 0);
+    debug_assert!(!FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION.is_empty());
     let parent = output_parent(path);
     prepare_output_parent(parent)?;
     let mut temporary = NamedTempFile::new_in(parent)
@@ -395,10 +406,14 @@ fn write_receipt_noclobber(path: &Path, bytes: &[u8]) -> Result<(), RunError> {
             error.error
         ))
     })?;
+    debug_assert!(path.is_file());
+    debug_assert!(!path.is_symlink());
     Ok(())
 }
 
 fn prepare_output_parent(parent: &Path) -> Result<(), RunError> {
+    debug_assert!(MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_BYTES > 0);
+    debug_assert!(!FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION.is_empty());
     match std::fs::symlink_metadata(parent) {
         Ok(metadata) if metadata.file_type().is_dir() => return Ok(()),
         Ok(_) => {

@@ -90,16 +90,31 @@ pub(crate) struct RustcDevGuideValidationReport {
 pub(crate) fn validate_rustc_dev_guide_boundaries(
     input: &RustcDevGuideValidationInput,
 ) -> RustcDevGuideValidationReport {
+    debug_assert!(MAX_GUIDE_REFERENCES > 0);
+    debug_assert!(MAX_EVIDENCE_ROWS > 0);
     let mut diagnostics = Vec::new();
-    validate_count("references", input.references.len(), MAX_GUIDE_REFERENCES, &mut diagnostics);
-    validate_count("planning_evidence", input.planning_evidence.len(), MAX_EVIDENCE_ROWS, &mut diagnostics);
     validate_count(
-        "compiler_policy_receipts",
-        input.compiler_policy_receipts.len(),
-        MAX_EVIDENCE_ROWS,
+        CountBound {
+            field_name: "references",
+            actual_count: input.references.len(),
+            maximum_count: MAX_GUIDE_REFERENCES,
+        },
         &mut diagnostics,
     );
-    validate_count("provider_patch_plans", input.provider_patch_plans.len(), MAX_EVIDENCE_ROWS, &mut diagnostics);
+    for (field_name, actual_count) in [
+        ("planning_evidence", input.planning_evidence.len()),
+        ("compiler_policy_receipts", input.compiler_policy_receipts.len()),
+        ("provider_patch_plans", input.provider_patch_plans.len()),
+    ] {
+        validate_count(
+            CountBound {
+                field_name,
+                actual_count,
+                maximum_count: MAX_EVIDENCE_ROWS,
+            },
+            &mut diagnostics,
+        );
+    }
     let reference_ids = validate_references(&input.references, &mut diagnostics);
     validate_planning_evidence(&input.planning_evidence, &reference_ids, &mut diagnostics);
     validate_compiler_policy_receipts(&input.compiler_policy_receipts, &reference_ids, &mut diagnostics);
@@ -110,9 +125,15 @@ pub(crate) fn validate_rustc_dev_guide_boundaries(
     }
 }
 
-fn validate_count(field_name: &str, count: usize, max_count: usize, diagnostics: &mut Vec<String>) {
-    if count > max_count {
-        diagnostics.push(format!("rustc-dev-guide {field_name} exceeds maximum count {max_count}"));
+struct CountBound<'a> {
+    field_name: &'a str,
+    actual_count: usize,
+    maximum_count: usize,
+}
+
+fn validate_count(bound: CountBound<'_>, diagnostics: &mut Vec<String>) {
+    if bound.actual_count > bound.maximum_count {
+        diagnostics.push(format!("rustc-dev-guide {} exceeds maximum count {}", bound.field_name, bound.maximum_count));
     }
 }
 
@@ -251,23 +272,23 @@ fn validate_non_claims(non_claims: &[String], field_name: &str, diagnostics: &mu
     }
 }
 
-fn validate_digest(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+fn validate_digest(value: &str, field_name: impl AsRef<str>, diagnostics: &mut Vec<String>) {
     if value.len() != BLAKE3_HEX_LENGTH || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        diagnostics.push(format!("{field_name} is not BLAKE3 hex"));
+        diagnostics.push(format!("{} is not BLAKE3 hex", field_name.as_ref()));
     }
 }
 
-fn push_nonempty(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+fn push_nonempty(value: &str, field_name: impl AsRef<str>, diagnostics: &mut Vec<String>) {
     if value.trim().is_empty() {
-        diagnostics.push(format!("{field_name} must not be empty"));
+        diagnostics.push(format!("{} must not be empty", field_name.as_ref()));
     }
 }
 
-fn push_no_overclaim(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+fn push_no_overclaim(value: &str, field_name: impl AsRef<str>, diagnostics: &mut Vec<String>) {
     let lower = value.to_ascii_lowercase();
     for fragment in OVERCLAIM_FRAGMENTS {
         if lower.contains(fragment) {
-            diagnostics.push(format!("{field_name} contains overclaim fragment {fragment:?}"));
+            diagnostics.push(format!("{} contains overclaim fragment {fragment:?}", field_name.as_ref()));
         }
     }
 }

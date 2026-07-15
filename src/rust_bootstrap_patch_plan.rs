@@ -20,6 +20,8 @@ const DIGEST_HEX_CHAR_COUNT: usize = 64;
 const PATCH_PLAN_MAX_SOURCE_IDENTITIES: usize = 16;
 const PATCH_PLAN_MAX_OPERATIONS: usize = 64;
 const PATCH_PLAN_BASE_RECEIPT_ARGUMENTS: usize = 10;
+const FIRST_STAGE_MUSL_REPAIR_OPERATION_COUNT: usize = 6;
+const RUST_BOOTSTRAP_REPAIR_OPERATION_COUNT: usize = 5;
 const OPERATION_LABEL_SEPARATOR: &str = ":";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,7 +146,8 @@ impl std::error::Error for RustBootstrapPatchPlanError {}
 
 impl RustBootstrapPatchPlan {
     pub(crate) fn receipt_arguments(&self) -> Vec<String> {
-        let mut arguments = Vec::with_capacity(PATCH_PLAN_BASE_RECEIPT_ARGUMENTS + self.operations.len());
+        let argument_capacity_count = PATCH_PLAN_BASE_RECEIPT_ARGUMENTS.saturating_add(self.operations.len());
+        let mut arguments = Vec::with_capacity(argument_capacity_count);
         arguments.push(format!("schema={}", self.schema));
         arguments.push(format!("stage={:?}", self.input.stage));
         arguments.push(format!("stage-id={}", self.input.stage_id));
@@ -188,6 +191,8 @@ impl RustBootstrapPatchOperation {
 pub(crate) fn derive_rust_bootstrap_patch_plan(
     input: RustBootstrapPatchPlanInput,
 ) -> Result<RustBootstrapPatchPlan, RustBootstrapPatchPlanError> {
+    debug_assert!(PATCH_PLAN_MAX_OPERATIONS > 0);
+    debug_assert!(PATCH_PLAN_MAX_SOURCE_IDENTITIES > 0);
     validate_plan_input(&input)?;
     let operations = derive_operations(&input)?;
     validate_operation_count(&operations)?;
@@ -200,7 +205,7 @@ pub(crate) fn derive_rust_bootstrap_patch_plan(
         },
         "patch-plan output",
     )?;
-    Ok(RustBootstrapPatchPlan {
+    let plan = RustBootstrapPatchPlan {
         schema: RUST_BOOTSTRAP_PATCH_PLAN_SCHEMA.to_string(),
         operation_count: operations
             .len()
@@ -210,7 +215,10 @@ pub(crate) fn derive_rust_bootstrap_patch_plan(
         output_digest_blake3,
         input,
         operations,
-    })
+    };
+    debug_assert_eq!(usize::try_from(plan.operation_count).ok(), Some(plan.operations.len()));
+    debug_assert!(plan.operations.len() <= PATCH_PLAN_MAX_OPERATIONS);
+    Ok(plan)
 }
 
 #[derive(Serialize)]
@@ -306,8 +314,32 @@ fn derive_first_stage_operations(
     Ok(())
 }
 
+struct PatchOperationInput<'a> {
+    id: &'a str,
+    kind: RustBootstrapPatchOperationKind,
+    phase: RustBootstrapPatchPhase,
+    summary: &'a str,
+    source_id: Option<&'a str>,
+    expected_anchor: Option<&'a str>,
+}
+
+macro_rules! patch_operation {
+    ($id:expr, $kind:expr, $phase:expr, $summary:expr, $source_id:expr, $expected_anchor:expr $(,)?) => {
+        operation(PatchOperationInput {
+            id: $id,
+            kind: $kind,
+            phase: $phase,
+            summary: $summary,
+            source_id: $source_id,
+            expected_anchor: $expected_anchor,
+        })
+    };
+}
+
 fn derive_first_stage_musl_repair_operations(operations: &mut Vec<RustBootstrapPatchOperation>) {
-    operations.push(operation(
+    let initial_operation_count = operations.len();
+    debug_assert!(initial_operation_count <= PATCH_PLAN_MAX_OPERATIONS);
+    operations.push(patch_operation!(
         "first-stage-minicargo-out-dir",
         RustBootstrapPatchOperationKind::MinicargoBuildOutDir,
         RustBootstrapPatchPhase::BeforeFirstStageMainMake,
@@ -315,7 +347,7 @@ fn derive_first_stage_musl_repair_operations(operations: &mut Vec<RustBootstrapP
         Some(&format!("mrustc-{SUPPORTED_MRUSTC_VERSION}")),
         Some("tools/minicargo/build.cpp OUT_DIR assignment"),
     ));
-    operations.push(operation(
+    operations.push(patch_operation!(
         "first-stage-minicargo-rustc-threads",
         RustBootstrapPatchOperationKind::MinicargoRustcThreads,
         RustBootstrapPatchPhase::BeforeFirstStageMainMake,
@@ -323,7 +355,7 @@ fn derive_first_stage_musl_repair_operations(operations: &mut Vec<RustBootstrapP
         Some(&format!("mrustc-{SUPPORTED_MRUSTC_VERSION}")),
         Some("tools/minicargo/build.cpp rustc argument construction"),
     ));
-    operations.push(operation(
+    operations.push(patch_operation!(
         "first-stage-llvm-static-archives",
         RustBootstrapPatchOperationKind::MinicargoLlvmStaticArchiveTargets,
         RustBootstrapPatchPhase::BeforeFirstStageMainMake,
@@ -331,7 +363,7 @@ fn derive_first_stage_musl_repair_operations(operations: &mut Vec<RustBootstrapP
         Some(&format!("mrustc-{SUPPORTED_MRUSTC_VERSION}")),
         Some("minicargo.mk LLVM CMake configuration"),
     ));
-    operations.push(operation(
+    operations.push(patch_operation!(
         "first-stage-source-root-musl-runtime",
         RustBootstrapPatchOperationKind::SourceRootMuslLlvmRuntime,
         RustBootstrapPatchPhase::AfterFirstStageMinicargo,
@@ -339,7 +371,7 @@ fn derive_first_stage_musl_repair_operations(operations: &mut Vec<RustBootstrapP
         Some(&format!("mrustc-{SUPPORTED_MRUSTC_VERSION}")),
         Some("source-root musl target toolchain"),
     ));
-    operations.push(operation(
+    operations.push(patch_operation!(
         "first-stage-rust-explicit-sysroot",
         RustBootstrapPatchOperationKind::RustExplicitSysroot,
         RustBootstrapPatchPhase::AfterFirstStageRustSourceExtract,
@@ -347,7 +379,7 @@ fn derive_first_stage_musl_repair_operations(operations: &mut Vec<RustBootstrapP
         Some(&format!("rust-{SUPPORTED_FIRST_STAGE_RUST_VERSION}")),
         Some("compiler/rustc_session/src/config.rs Sysroot::new"),
     ));
-    operations.push(operation(
+    operations.push(patch_operation!(
         "first-stage-rustc-driver-rlib",
         RustBootstrapPatchOperationKind::RustcDriverRlib,
         RustBootstrapPatchPhase::AfterFirstStageTranslatedCargo,
@@ -355,10 +387,11 @@ fn derive_first_stage_musl_repair_operations(operations: &mut Vec<RustBootstrapP
         Some(&format!("rust-{SUPPORTED_FIRST_STAGE_RUST_VERSION}")),
         Some("compiler/rustc_driver/Cargo.toml crate-type"),
     ));
+    debug_assert_eq!(operations.len(), initial_operation_count.saturating_add(FIRST_STAGE_MUSL_REPAIR_OPERATION_COUNT));
 }
 
 fn derive_first_stage_run_operations(operations: &mut Vec<RustBootstrapPatchOperation>) {
-    operations.push(operation(
+    operations.push(patch_operation!(
         "first-stage-run-rustc-host-runtime",
         RustBootstrapPatchOperationKind::RunRustcHostRuntime,
         RustBootstrapPatchPhase::FirstStageRunRustcHost,
@@ -366,7 +399,7 @@ fn derive_first_stage_run_operations(operations: &mut Vec<RustBootstrapPatchOper
         Some(&format!("mrustc-{SUPPORTED_MRUSTC_VERSION}")),
         Some("run_rustc/Makefile host compiler rules"),
     ));
-    operations.push(operation(
+    operations.push(patch_operation!(
         "first-stage-run-rustc-target",
         RustBootstrapPatchOperationKind::RunRustcTargetRustlib,
         RustBootstrapPatchPhase::FirstStageRunRustcTarget,
@@ -384,7 +417,9 @@ fn derive_rust_bootstrap_operations(
         return Ok(());
     }
     require_musl_capabilities(input)?;
-    operations.push(operation(
+    let initial_operation_count = operations.len();
+    debug_assert!(initial_operation_count <= PATCH_PLAN_MAX_OPERATIONS);
+    operations.push(patch_operation!(
         "rust-bootstrap-target-tool-config",
         RustBootstrapPatchOperationKind::RustBootstrapTargetToolConfig,
         RustBootstrapPatchPhase::RustBootstrapBeforeXpy,
@@ -392,7 +427,7 @@ fn derive_rust_bootstrap_operations(
         Some(&format!("rust-{}", input.rust_version)),
         Some("Rust bootstrap target tool configuration"),
     ));
-    operations.push(operation(
+    operations.push(patch_operation!(
         "rust-bootstrap-workspace-isolation",
         RustBootstrapPatchOperationKind::RustBootstrapWorkspaceIsolation,
         RustBootstrapPatchPhase::RustBootstrapBeforeXpy,
@@ -400,7 +435,7 @@ fn derive_rust_bootstrap_operations(
         Some(&format!("rust-{}", input.rust_version)),
         Some("src/bootstrap/Cargo.toml workspace members"),
     ));
-    operations.push(operation(
+    operations.push(patch_operation!(
         "rust-bootstrap-rustc-driver-rlib",
         RustBootstrapPatchOperationKind::RustBootstrapRustcDriverRlib,
         RustBootstrapPatchPhase::RustBootstrapBeforeXpy,
@@ -408,7 +443,7 @@ fn derive_rust_bootstrap_operations(
         Some(&format!("rust-{}", input.rust_version)),
         Some("compiler/rustc_driver/Cargo.toml crate-type"),
     ));
-    operations.push(operation(
+    operations.push(patch_operation!(
         "rust-bootstrap-sysroot-fallback",
         RustBootstrapPatchOperationKind::RustBootstrapSysrootFallback,
         RustBootstrapPatchPhase::RustBootstrapBeforeXpy,
@@ -416,7 +451,7 @@ fn derive_rust_bootstrap_operations(
         Some(&format!("rust-{}", input.rust_version)),
         Some("compiler/rustc_session/src/filesearch.rs default sysroot"),
     ));
-    operations.push(operation(
+    operations.push(patch_operation!(
         "rust-bootstrap-rustc-private-tool-rlibs",
         RustBootstrapPatchOperationKind::RustBootstrapRustcPrivateToolRlibLookup,
         RustBootstrapPatchPhase::RustBootstrapBeforeXpy,
@@ -424,6 +459,7 @@ fn derive_rust_bootstrap_operations(
         Some(&format!("rust-{}", input.rust_version)),
         Some("src/bootstrap/src/core/build_steps/tool.rs ToolBuild cargo"),
     ));
+    debug_assert_eq!(operations.len(), initial_operation_count.saturating_add(RUST_BOOTSTRAP_REPAIR_OPERATION_COUNT));
     Ok(())
 }
 
@@ -441,7 +477,7 @@ fn require_musl_capabilities(input: &RustBootstrapPatchPlanInput) -> Result<(), 
 }
 
 fn provider_contract_assertion_operation(input: &RustBootstrapPatchPlanInput) -> RustBootstrapPatchOperation {
-    operation(
+    patch_operation!(
         "provider-contract-assertion",
         RustBootstrapPatchOperationKind::ProviderContractAssertion,
         RustBootstrapPatchPhase::ProviderEvidence,
@@ -454,23 +490,16 @@ fn provider_contract_assertion_operation(input: &RustBootstrapPatchPlanInput) ->
     )
 }
 
-fn operation(
-    id: &str,
-    kind: RustBootstrapPatchOperationKind,
-    phase: RustBootstrapPatchPhase,
-    summary: &str,
-    source_id: Option<&str>,
-    expected_anchor: Option<&str>,
-) -> RustBootstrapPatchOperation {
-    debug_assert!(!id.trim().is_empty());
-    debug_assert!(!summary.trim().is_empty());
+fn operation(fields: PatchOperationInput<'_>) -> RustBootstrapPatchOperation {
+    debug_assert!(!fields.id.trim().is_empty());
+    debug_assert!(!fields.summary.trim().is_empty());
     RustBootstrapPatchOperation {
-        id: id.to_string(),
-        kind,
-        phase,
-        summary: summary.to_string(),
-        source_id: source_id.map(ToOwned::to_owned),
-        expected_anchor: expected_anchor.map(ToOwned::to_owned),
+        id: fields.id.to_string(),
+        kind: fields.kind,
+        phase: fields.phase,
+        summary: fields.summary.to_string(),
+        source_id: fields.source_id.map(ToOwned::to_owned),
+        expected_anchor: fields.expected_anchor.map(ToOwned::to_owned),
     }
 }
 
@@ -500,21 +529,23 @@ fn require_source_id(
     Err(RustBootstrapPatchPlanError::new(format!("patch-plan input missing source identity {expected_id}")))
 }
 
-fn require_equal(label: &str, actual: &str, expected: &str) -> Result<(), RustBootstrapPatchPlanError> {
+fn require_equal(label: &str, actual: impl AsRef<str>, expected: &str) -> Result<(), RustBootstrapPatchPlanError> {
+    let actual = actual.as_ref();
     if actual == expected {
         return Ok(());
     }
     Err(RustBootstrapPatchPlanError::new(format!("{label} expected {expected}, got {actual}")))
 }
 
-fn require_non_empty(label: &str, value: &str) -> Result<(), RustBootstrapPatchPlanError> {
-    if !value.trim().is_empty() {
+fn require_non_empty(label: &str, value: impl AsRef<str>) -> Result<(), RustBootstrapPatchPlanError> {
+    if !value.as_ref().trim().is_empty() {
         return Ok(());
     }
     Err(RustBootstrapPatchPlanError::new(format!("{label} is empty")))
 }
 
-fn require_digest(label: &str, value: &str) -> Result<(), RustBootstrapPatchPlanError> {
+fn require_digest(label: &str, value: impl AsRef<str>) -> Result<(), RustBootstrapPatchPlanError> {
+    let value = value.as_ref();
     require_non_empty(label, value)?;
     if value.len() != DIGEST_HEX_CHAR_COUNT {
         return Err(RustBootstrapPatchPlanError::new(format!(

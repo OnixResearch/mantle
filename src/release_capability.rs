@@ -144,6 +144,8 @@ impl ReleaseCapabilityRoot {
     }
 
     pub(crate) fn write_new_file_nofollow(&self, path: &ValidatedReleasePath, bytes: &[u8]) -> io::Result<()> {
+        debug_assert!(!path.as_str().is_empty());
+        debug_assert!(!Path::new(path.as_str()).is_absolute());
         let mut file = self.open_new_file_nofollow(path)?;
         file.write_all(bytes)?;
         file.flush()?;
@@ -178,6 +180,8 @@ fn open_or_create_relative_parent(root: &Dir, path: &ValidatedReleasePath) -> io
 }
 
 fn open_existing_relative_parent(root: &Dir, path: &ValidatedReleasePath) -> io::Result<(Dir, OsString)> {
+    debug_assert!(!path.as_str().is_empty());
+    debug_assert!(!Path::new(path.as_str()).is_absolute());
     let mut components = validated_normal_components(path)?;
     let name = components
         .pop()
@@ -190,6 +194,8 @@ fn open_existing_relative_parent(root: &Dir, path: &ValidatedReleasePath) -> io:
 }
 
 fn validated_normal_components(path: &ValidatedReleasePath) -> io::Result<Vec<OsString>> {
+    debug_assert!(!path.as_str().is_empty());
+    debug_assert!(!Path::new(path.as_str()).is_absolute());
     let components = Path::new(path.as_str())
         .components()
         .filter_map(|component| match component {
@@ -221,6 +227,8 @@ pub(crate) fn authorize_release_path(request: &ReleasePathRequest) -> Result<Val
 }
 
 fn walk_ambient_directory_nofollow(root_path: &Path, create_missing: bool) -> io::Result<Dir> {
+    debug_assert!(MAX_RELEASE_PATH_COMPONENTS > 0);
+    debug_assert!(MAX_RELEASE_RELATIVE_PATH_BYTES > 0);
     let (anchor, components) = absolute_anchor_and_components(root_path)?;
     let mut current = Dir::open_ambient_dir(&anchor, ambient_authority())?;
     for component in components {
@@ -231,8 +239,9 @@ fn walk_ambient_directory_nofollow(root_path: &Path, create_missing: bool) -> io
 
 fn absolute_anchor_and_components(path: &Path) -> io::Result<(PathBuf, Vec<OsString>)> {
     let absolute = std::path::absolute(path)?;
+    let component_capacity_count = absolute.components().count();
     let mut anchor = PathBuf::new();
-    let mut components = Vec::new();
+    let mut components = Vec::with_capacity(component_capacity_count);
     for component in absolute.components() {
         match component {
             Component::Prefix(prefix) => anchor.push(prefix.as_os_str()),
@@ -253,10 +262,14 @@ fn absolute_anchor_and_components(path: &Path) -> io::Result<(PathBuf, Vec<OsStr
             format!("capability root path has no absolute anchor: {}", absolute.display()),
         ));
     }
+    debug_assert!(absolute.is_absolute());
+    debug_assert!(components.len() <= component_capacity_count);
     Ok((anchor, components))
 }
 
 fn open_or_create_child_directory(parent: &Dir, name: &OsString, create_missing: bool) -> io::Result<Dir> {
+    debug_assert!(!name.is_empty());
+    debug_assert_eq!(Path::new(name).components().count(), 1);
     match parent.symlink_metadata(name) {
         Ok(metadata) => validate_real_directory(&metadata, name)?,
         Err(error) if error.kind() == io::ErrorKind::NotFound && create_missing => match parent.create_dir(name) {
@@ -286,6 +299,8 @@ fn validate_real_directory(metadata: &cap_std::fs::Metadata, name: &OsString) ->
 }
 
 fn validate_relative_release_path(path: &str) -> Result<(), ReleasePathError> {
+    debug_assert!(MAX_RELEASE_RELATIVE_PATH_BYTES > 0);
+    debug_assert!(MAX_RELEASE_PATH_COMPONENTS > 0);
     if path.is_empty() {
         return Err(ReleasePathError::EmptyPath);
     }

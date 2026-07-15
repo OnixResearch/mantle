@@ -108,12 +108,20 @@ pub struct OfflineCargoEvidenceV2File {
 pub struct OfflineCargoEvidenceInput {
     pub role: String,
     pub path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_evidence_digest", skip_serializing_if = "Option::is_none")]
     pub digest_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_evidence_digest", skip_serializing_if = "Option::is_none")]
     pub expected_digest_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[serde(default = "empty_identity_class", skip_serializing_if = "String::is_empty")]
     pub identity_class: String,
+}
+
+fn no_evidence_digest() -> Option<String> {
+    None
+}
+
+fn empty_identity_class() -> String {
+    String::new()
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -147,9 +155,25 @@ pub fn offline_cargo_non_claims() -> Vec<String> {
 }
 
 pub fn plan_offline_cargo_package(request: RustOfflineCargoPackageRequest) -> RustOfflineCargoPlan {
+    debug_assert!(!OFFLINE_CARGO_EVIDENCE_CLASS.is_empty());
+    debug_assert!(!OFFLINE_CARGO_PROJECT_BUILD_STATUS.is_empty());
     let mut blockers = Vec::new();
-    validate_name("package name", &request.package_name, "invalid-package-name", &mut blockers);
-    validate_name("binary name", &request.binary_name, "missing-selected-binary", &mut blockers);
+    validate_name(
+        ValidationField {
+            label: "package name",
+            value: &request.package_name,
+            blocker_class: "invalid-package-name",
+        },
+        &mut blockers,
+    );
+    validate_name(
+        ValidationField {
+            label: "binary name",
+            value: &request.binary_name,
+            blocker_class: "missing-selected-binary",
+        },
+        &mut blockers,
+    );
     validate_target_triple(&request.target_triple, &mut blockers);
     validate_profile(&request.profile, &mut blockers);
     validate_lockfile_digest(
@@ -160,7 +184,7 @@ pub fn plan_offline_cargo_package(request: RustOfflineCargoPackageRequest) -> Ru
     validate_network_policy(request.allow_network, &mut blockers);
     validate_source_closure(&request.source_closure, &mut blockers);
 
-    RustOfflineCargoPlan {
+    let plan = RustOfflineCargoPlan {
         ready: blockers.is_empty(),
         package_name: request.package_name,
         binary_name: request.binary_name,
@@ -171,13 +195,23 @@ pub fn plan_offline_cargo_package(request: RustOfflineCargoPackageRequest) -> Ru
         source_closure: request.source_closure,
         non_claims: offline_cargo_non_claims(),
         blockers,
-    }
+    };
+    debug_assert_eq!(plan.ready, plan.blockers.is_empty());
+    debug_assert_eq!(plan.non_claims.len(), OFFLINE_CARGO_NON_CLAIMS.len());
+    plan
 }
 
 pub fn validate_digest_bound_evidence(evidence: &OfflineCargoEvidenceV2File) -> Vec<RustOfflineCargoBlocker> {
     let mut blockers = Vec::new();
     validate_v2_header(evidence, &mut blockers);
-    validate_name("binary name", &evidence.binary, "missing-selected-binary", &mut blockers);
+    validate_name(
+        ValidationField {
+            label: "binary name",
+            value: &evidence.binary,
+            blocker_class: "missing-selected-binary",
+        },
+        &mut blockers,
+    );
     validate_target_triple(&evidence.target, &mut blockers);
     validate_profile(&evidence.profile, &mut blockers);
     validate_evidence_lockfile(&evidence.lockfile, &mut blockers);
@@ -229,12 +263,21 @@ fn validate_evidence_lockfile(input: &OfflineCargoEvidenceInput, blockers: &mut 
     if input.role != OFFLINE_CARGO_LOCKFILE_ROLE {
         blockers.push(blocker("unexpected-lockfile-role", "Cargo.lock evidence role is unsupported"));
     }
-    validate_absolute_path("Cargo.lock path", &input.path, "invalid-lockfile-path", blockers);
+    validate_absolute_path(
+        ValidationField {
+            label: "Cargo.lock path",
+            value: &input.path,
+            blocker_class: "invalid-lockfile-path",
+        },
+        blockers,
+    );
     validate_identity_class(input, OFFLINE_CARGO_IDENTITY_BLAKE3_CONTENT, blockers);
     validate_lockfile_digest(input.digest_blake3.as_deref(), input.expected_digest_blake3.as_deref(), blockers);
 }
 
 fn validate_evidence_source_inputs(inputs: &[OfflineCargoEvidenceInput], blockers: &mut Vec<RustOfflineCargoBlocker>) {
+    debug_assert!(MAX_SOURCE_CLOSURE_ENTRIES >= REQUIRED_SOURCE_ROLES.len());
+    debug_assert!(MAX_SOURCE_CLOSURE_ENTRIES >= REQUIRED_DIGEST_SOURCE_ROLES.len());
     if inputs.len() > MAX_SOURCE_CLOSURE_ENTRIES {
         blockers.push(blocker(
             "source-closure-too-large",
@@ -245,8 +288,22 @@ fn validate_evidence_source_inputs(inputs: &[OfflineCargoEvidenceInput], blocker
     let mut roles_seen = BTreeSet::new();
     let mut paths_seen = BTreeSet::new();
     for input in inputs {
-        validate_name("source role", &input.role, "invalid-source-role", blockers);
-        validate_absolute_path("source path", &input.path, "invalid-source-path", blockers);
+        validate_name(
+            ValidationField {
+                label: "source role",
+                value: &input.role,
+                blocker_class: "invalid-source-role",
+            },
+            blockers,
+        );
+        validate_absolute_path(
+            ValidationField {
+                label: "source path",
+                value: &input.path,
+                blocker_class: "invalid-source-path",
+            },
+            blockers,
+        );
         validate_input_identity(input, blockers);
         if !roles_seen.insert(input.role.as_str()) {
             blockers.push(blocker(
@@ -316,9 +373,20 @@ fn validate_identity_class(
 }
 
 fn validate_toolchain_paths(toolchain: &OfflineCargoEvidenceToolchain, blockers: &mut Vec<RustOfflineCargoBlocker>) {
-    validate_absolute_path("cargo path", &toolchain.cargo, "invalid-toolchain-path", blockers);
-    validate_absolute_path("rustc path", &toolchain.rustc, "invalid-toolchain-path", blockers);
-    validate_absolute_path("linker path", &toolchain.linker, "invalid-toolchain-path", blockers);
+    for (label, value) in [
+        ("cargo path", toolchain.cargo.as_str()),
+        ("rustc path", toolchain.rustc.as_str()),
+        ("linker path", toolchain.linker.as_str()),
+    ] {
+        validate_absolute_path(
+            ValidationField {
+                label,
+                value,
+                blocker_class: "invalid-toolchain-path",
+            },
+            blockers,
+        );
+    }
 }
 
 fn validate_cargo_command(evidence: &OfflineCargoEvidenceV2File, blockers: &mut Vec<RustOfflineCargoBlocker>) {
@@ -333,8 +401,22 @@ fn validate_cargo_command(evidence: &OfflineCargoEvidenceV2File, blockers: &mut 
     require_command_arg(command, "build", blockers);
     require_command_arg(command, "--locked", blockers);
     require_command_arg(command, "--offline", blockers);
-    require_command_pair(command, "--bin", &evidence.binary, blockers);
-    require_command_pair(command, "--target", &evidence.target, blockers);
+    require_command_pair(
+        command,
+        CommandPair {
+            flag: "--bin",
+            value: &evidence.binary,
+        },
+        blockers,
+    );
+    require_command_pair(
+        command,
+        CommandPair {
+            flag: "--target",
+            value: &evidence.target,
+        },
+        blockers,
+    );
     validate_profile_command_arg(evidence, blockers);
 }
 
@@ -355,18 +437,25 @@ fn require_command_arg(command: &OfflineCargoEvidenceCommand, arg: &str, blocker
     blockers.push(blocker("missing-cargo-command-arg", &format!("offline Cargo command is missing `{arg}`")));
 }
 
+struct CommandPair<'a> {
+    flag: &'a str,
+    value: &'a str,
+}
+
 fn require_command_pair(
     command: &OfflineCargoEvidenceCommand,
-    flag: &str,
-    value: &str,
+    required: CommandPair<'_>,
     blockers: &mut Vec<RustOfflineCargoBlocker>,
 ) {
     for pair in command.args.windows(2) {
-        if pair[0] == flag && pair[1] == value {
+        if pair[0] == required.flag && pair[1] == required.value {
             return;
         }
     }
-    blockers.push(blocker("missing-cargo-command-arg", &format!("offline Cargo command is missing `{flag} {value}`")));
+    blockers.push(blocker(
+        "missing-cargo-command-arg",
+        format!("offline Cargo command is missing `{} {}`", required.flag, required.value),
+    ));
 }
 
 fn validate_evidence_network_policy(
@@ -392,7 +481,14 @@ fn validate_evidence_output(evidence: &OfflineCargoEvidenceV2File, blockers: &mu
     if evidence.output.binary != evidence.binary {
         blockers.push(blocker("offline-cargo-output-mismatch", "output binary does not match selected binary"));
     }
-    validate_absolute_path("output path", &evidence.output.path, "invalid-output-path", blockers);
+    validate_absolute_path(
+        ValidationField {
+            label: "output path",
+            value: &evidence.output.path,
+            blocker_class: "invalid-output-path",
+        },
+        blockers,
+    );
 }
 
 fn validate_non_claims(non_claims: &[String], blockers: &mut Vec<RustOfflineCargoBlocker>) {
@@ -408,18 +504,27 @@ fn validate_non_claims(non_claims: &[String], blockers: &mut Vec<RustOfflineCarg
     }
 }
 
-fn validate_name(label: &str, value: &str, class: &str, blockers: &mut Vec<RustOfflineCargoBlocker>) {
-    if is_valid_derivation_name(value) {
-        return;
-    }
-    blockers.push(blocker(class, &format!("{label} must be a non-empty derivation-compatible name")));
+struct ValidationField<'a> {
+    label: &'a str,
+    value: &'a str,
+    blocker_class: &'a str,
 }
 
-fn validate_absolute_path(label: &str, value: &str, class: &str, blockers: &mut Vec<RustOfflineCargoBlocker>) {
-    if value.starts_with('/') && value.len() <= MAX_PATH_BYTES {
+fn validate_name(field: ValidationField<'_>, blockers: &mut Vec<RustOfflineCargoBlocker>) {
+    if is_valid_derivation_name(field.value) {
         return;
     }
-    blockers.push(blocker(class, &format!("{label} must be an absolute bounded path")));
+    blockers.push(blocker(
+        field.blocker_class,
+        format!("{} must be a non-empty derivation-compatible name", field.label),
+    ));
+}
+
+fn validate_absolute_path(field: ValidationField<'_>, blockers: &mut Vec<RustOfflineCargoBlocker>) {
+    if field.value.starts_with('/') && field.value.len() <= MAX_PATH_BYTES {
+        return;
+    }
+    blockers.push(blocker(field.blocker_class, format!("{} must be an absolute bounded path", field.label)));
 }
 
 fn validate_target_triple(target: &str, blockers: &mut Vec<RustOfflineCargoBlocker>) {
@@ -447,6 +552,8 @@ fn validate_lockfile_digest(
     expected_digest: Option<&str>,
     blockers: &mut Vec<RustOfflineCargoBlocker>,
 ) {
+    debug_assert_eq!(BLAKE3_HEX_BYTES, blake3::OUT_LEN.saturating_mul(2));
+    debug_assert!(MAX_NAME_BYTES > 0);
     let Some(digest) = digest else {
         blockers.push(blocker(
             "missing-lockfile-digest",
@@ -485,6 +592,8 @@ fn validate_network_policy(allow_network: bool, blockers: &mut Vec<RustOfflineCa
 }
 
 fn validate_source_closure(sources: &[RustOfflineCargoSource], blockers: &mut Vec<RustOfflineCargoBlocker>) {
+    debug_assert!(MAX_SOURCE_CLOSURE_ENTRIES >= REQUIRED_SOURCE_ROLES.len());
+    debug_assert!(MAX_SOURCE_CLOSURE_ENTRIES >= REQUIRED_DIGEST_SOURCE_ROLES.len());
     if sources.len() > MAX_SOURCE_CLOSURE_ENTRIES {
         blockers.push(blocker(
             "source-closure-too-large",
@@ -496,8 +605,22 @@ fn validate_source_closure(sources: &[RustOfflineCargoSource], blockers: &mut Ve
     let mut roles_seen = BTreeSet::new();
     let mut names_seen = BTreeSet::new();
     for source in sources {
-        validate_name("source role", &source.role, "invalid-source-role", blockers);
-        validate_name("source name", &source.name, "invalid-source-name", blockers);
+        validate_name(
+            ValidationField {
+                label: "source role",
+                value: &source.role,
+                blocker_class: "invalid-source-role",
+            },
+            blockers,
+        );
+        validate_name(
+            ValidationField {
+                label: "source name",
+                value: &source.name,
+                blocker_class: "invalid-source-name",
+            },
+            blockers,
+        );
         if !roles_seen.insert(source.role.as_str()) {
             blockers.push(blocker(
                 "duplicate-source-role",
@@ -523,6 +646,8 @@ fn validate_source_closure(sources: &[RustOfflineCargoSource], blockers: &mut Ve
 }
 
 fn validate_source_digest(source: &RustOfflineCargoSource, blockers: &mut Vec<RustOfflineCargoBlocker>) {
+    debug_assert_eq!(BLAKE3_HEX_BYTES, blake3::OUT_LEN.saturating_mul(2));
+    debug_assert!(MAX_NAME_BYTES > 0);
     let Some(digest) = source.digest_blake3.as_deref() else {
         return;
     };
@@ -565,7 +690,8 @@ pub fn is_blake3_hex(value: &str) -> bool {
     value.len() == BLAKE3_HEX_BYTES && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
-fn blocker(class: &str, message: &str) -> RustOfflineCargoBlocker {
+fn blocker(class: &str, message: impl AsRef<str>) -> RustOfflineCargoBlocker {
+    let message = message.as_ref();
     RustOfflineCargoBlocker {
         class: class.to_string(),
         message: message.to_string(),

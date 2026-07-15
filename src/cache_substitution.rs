@@ -39,6 +39,12 @@ pub struct CacheCandidateSet {
     pub candidates: Vec<CacheCandidate>,
 }
 
+pub struct CacheCandidateSetRequest<'a> {
+    pub raw_urls: &'a [String],
+    pub store_prefix: &'a str,
+    pub trust_policy_digest: &'a str,
+}
+
 /// Reason code for cache admission or rejection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -100,25 +106,25 @@ pub struct CacheAdmissionEvent {
 /// no query/fragment/userinfo). Duplicate identities with the same trust
 /// policy are collapsed; duplicates with different trust material are rejected.
 pub fn parse_cache_candidate_set(
-    raw_urls: &[String],
-    store_prefix: &str,
-    trust_policy_digest: &str,
+    request: CacheCandidateSetRequest<'_>,
 ) -> Result<CacheCandidateSet, CacheCandidateError> {
-    if raw_urls.len() > MAX_CACHE_CANDIDATES {
+    debug_assert!(MAX_CACHE_CANDIDATES > 0);
+    debug_assert_eq!(TRUST_POLICY_DIGEST_BYTES, blake3::OUT_LEN.saturating_mul(2));
+    if request.raw_urls.len() > MAX_CACHE_CANDIDATES {
         return Err(CacheCandidateError::TooManyCandidates {
-            actual: raw_urls.len(),
+            actual: request.raw_urls.len(),
             limit: MAX_CACHE_CANDIDATES,
         });
     }
-    validate_trust_policy_digest(trust_policy_digest)?;
-    if !store_prefix.starts_with('/') {
-        return Err(CacheCandidateError::InvalidStorePrefix(store_prefix.to_string()));
+    validate_trust_policy_digest(request.trust_policy_digest)?;
+    if !request.store_prefix.starts_with('/') {
+        return Err(CacheCandidateError::InvalidStorePrefix(request.store_prefix.to_string()));
     }
 
-    let mut candidates = Vec::with_capacity(raw_urls.len());
+    let mut candidates = Vec::with_capacity(request.raw_urls.len());
     let mut seen_identities = BTreeSet::new();
 
-    for (index, raw_url) in raw_urls.iter().enumerate() {
+    for (index, raw_url) in request.raw_urls.iter().enumerate() {
         let identity = sanitize_cache_identity(raw_url).ok_or_else(|| CacheCandidateError::MalformedUrl {
             index,
             url: raw_url.clone(),
@@ -134,13 +140,14 @@ pub fn parse_cache_candidate_set(
             // Duplicate identity with same trust policy: skip (same cache).
             continue;
         }
-        let requires_network = !identity.starts_with("file://");
+        let is_network_required = !identity.starts_with("file://");
+        let priority = u32::try_from(index).map_err(|_| CacheCandidateError::PriorityOverflow { index })?;
         candidates.push(CacheCandidate {
             cache_identity: identity,
-            priority: u32::try_from(index).unwrap_or(u32::MAX),
-            trust_policy_digest: trust_policy_digest.to_string(),
-            store_prefix: store_prefix.to_string(),
-            requires_network,
+            priority,
+            trust_policy_digest: request.trust_policy_digest.to_string(),
+            store_prefix: request.store_prefix.to_string(),
+            requires_network: is_network_required,
         });
     }
 
@@ -154,6 +161,8 @@ pub fn parse_cache_candidate_set(
 /// Strips query, fragment, and userinfo. Keeps scheme, host, port, and path.
 /// Returns `None` if the URL is missing a scheme or host.
 pub fn sanitize_cache_identity(raw_url: &str) -> Option<String> {
+    debug_assert!(MAX_CACHE_IDENTITY_BYTES > 0);
+    debug_assert!(MAX_CACHE_CANDIDATES > 0);
     let parsed = url::Url::parse(raw_url).ok()?;
     if parsed.scheme().is_empty() {
         return None;
@@ -172,12 +181,12 @@ pub fn sanitize_cache_identity(raw_url: &str) -> Option<String> {
     sanitized.set_fragment(None);
     sanitized.set_username("").ok()?;
     sanitized.set_password(None).ok()?;
-    let port = sanitized.port().map(|p| format!(":{p}")).unwrap_or_default();
+    let port_suffix = sanitized.port().map(|port_number| format!(":{port_number}")).unwrap_or_default();
     let path = sanitized.path();
     if path == "/" {
-        Some(format!("{}://{}{}", sanitized.scheme(), sanitized.host_str()?, port))
+        Some(format!("{}://{}{}", sanitized.scheme(), sanitized.host_str()?, port_suffix))
     } else {
-        Some(format!("{}://{}{}{}", sanitized.scheme(), sanitized.host_str()?, port, path))
+        Some(format!("{}://{}{}{}", sanitized.scheme(), sanitized.host_str()?, port_suffix, path))
     }
 }
 
@@ -212,6 +221,7 @@ pub enum CacheCandidateError {
     IdentityTooLong { index: usize, len: usize, limit: usize },
     InvalidStorePrefix(String),
     InvalidTrustPolicyDigest,
+    PriorityOverflow { index: usize },
 }
 
 impl std::fmt::Display for CacheCandidateError {
@@ -231,6 +241,9 @@ impl std::fmt::Display for CacheCandidateError {
             }
             Self::InvalidTrustPolicyDigest => {
                 write!(f, "trust policy digest must be 64 lowercase hex chars")
+            }
+            Self::PriorityOverflow { index } => {
+                write!(f, "cache candidate priority does not fit u32: {index}")
             }
         }
     }
@@ -278,6 +291,14 @@ mod tests {
     const VALID_DIGEST: &str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
     const STORE_PREFIX: &str = "/mantle/store";
     const _: () = assert!(NEGATIVE_MISS_TTL_SECS < DEFAULT_METADATA_TTL_SECS);
+
+    fn parse_fixture(raw_urls: &[String], policy: (&str, &str)) -> Result<CacheCandidateSet, CacheCandidateError> {
+        parse_cache_candidate_set(CacheCandidateSetRequest {
+            raw_urls,
+            store_prefix: policy.0,
+            trust_policy_digest: policy.1,
+        })
+    }
 
     fn candidate(identity: &str, priority: u32) -> CacheCandidate {
         CacheCandidate {
@@ -328,7 +349,7 @@ mod tests {
             "https://cache-a.example.com".to_string(),
             "https://cache-b.example.com".to_string(),
         ];
-        let set = parse_cache_candidate_set(&urls, STORE_PREFIX, VALID_DIGEST).unwrap();
+        let set = parse_fixture(&urls, (STORE_PREFIX, VALID_DIGEST)).unwrap();
         assert_eq!(set.candidates.len(), 2);
         assert_eq!(set.candidates[0].cache_identity, "https://cache-a.example.com");
         assert_eq!(set.candidates[0].priority, 0);
@@ -342,14 +363,14 @@ mod tests {
             "https://cache.example.com?k=1".to_string(),
             "https://cache.example.com?k=2".to_string(),
         ];
-        let set = parse_cache_candidate_set(&urls, STORE_PREFIX, VALID_DIGEST).unwrap();
+        let set = parse_fixture(&urls, (STORE_PREFIX, VALID_DIGEST)).unwrap();
         assert_eq!(set.candidates.len(), 1);
     }
 
     #[test]
     fn parse_rejects_malformed_url() {
         let urls = vec!["not a url".to_string()];
-        let err = parse_cache_candidate_set(&urls, STORE_PREFIX, VALID_DIGEST).unwrap_err();
+        let err = parse_fixture(&urls, (STORE_PREFIX, VALID_DIGEST)).unwrap_err();
         assert!(matches!(err, CacheCandidateError::MalformedUrl { index: 0, .. }));
     }
 
@@ -357,35 +378,35 @@ mod tests {
     fn parse_rejects_too_many_candidates() {
         let urls: Vec<String> =
             (0..MAX_CACHE_CANDIDATES + 1).map(|i| format!("https://cache-{i}.example.com")).collect();
-        let err = parse_cache_candidate_set(&urls, STORE_PREFIX, VALID_DIGEST).unwrap_err();
+        let err = parse_fixture(&urls, (STORE_PREFIX, VALID_DIGEST)).unwrap_err();
         assert!(matches!(err, CacheCandidateError::TooManyCandidates { .. }));
     }
 
     #[test]
     fn parse_rejects_invalid_store_prefix() {
         let urls = vec!["https://cache.example.com".to_string()];
-        let err = parse_cache_candidate_set(&urls, "relative/path", VALID_DIGEST).unwrap_err();
+        let err = parse_fixture(&urls, ("relative/path", VALID_DIGEST)).unwrap_err();
         assert!(matches!(err, CacheCandidateError::InvalidStorePrefix(_)));
     }
 
     #[test]
     fn parse_rejects_invalid_trust_policy_digest() {
         let urls = vec!["https://cache.example.com".to_string()];
-        let err = parse_cache_candidate_set(&urls, STORE_PREFIX, "not-a-digest").unwrap_err();
+        let err = parse_fixture(&urls, (STORE_PREFIX, "not-a-digest")).unwrap_err();
         assert!(matches!(err, CacheCandidateError::InvalidTrustPolicyDigest));
     }
 
     #[test]
     fn parse_marks_file_url_as_not_requiring_network() {
         let urls = vec!["file:///tmp/cache".to_string()];
-        let set = parse_cache_candidate_set(&urls, STORE_PREFIX, VALID_DIGEST).unwrap();
+        let set = parse_fixture(&urls, (STORE_PREFIX, VALID_DIGEST)).unwrap();
         assert!(!set.candidates[0].requires_network);
     }
 
     #[test]
     fn parse_marks_https_url_as_requiring_network() {
         let urls = vec!["https://cache.example.com".to_string()];
-        let set = parse_cache_candidate_set(&urls, STORE_PREFIX, VALID_DIGEST).unwrap();
+        let set = parse_fixture(&urls, (STORE_PREFIX, VALID_DIGEST)).unwrap();
         assert!(set.candidates[0].requires_network);
     }
 

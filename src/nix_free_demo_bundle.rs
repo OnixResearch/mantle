@@ -21,6 +21,7 @@ const GENERATED_SUMMARY_PATH: &str = "summary.json";
 const GENERATED_README_PATH: &str = "README.md";
 const GENERATED_MANIFEST_PATH: &str = "manifest.json";
 const SUCCESS_STAGE_DIGEST_COUNT: usize = 2;
+const README_BASE_LINE_COUNT: usize = 13;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct NixFreeDemoMachineSummary {
@@ -31,14 +32,18 @@ pub(crate) struct NixFreeDemoMachineSummary {
     pub(crate) stage2_binary_blake3: Option<String>,
     pub(crate) source_root_identity: String,
     pub(crate) toolchain_policy_digest_blake3: String,
-    #[serde(default)]
+    #[serde(default = "empty_demo_values")]
     pub(crate) command_owned_wrappers: Vec<NixFreeDemoNamedDigest>,
-    #[serde(default)]
+    #[serde(default = "empty_demo_values")]
     pub(crate) guards: Vec<NixFreeDemoGuardEvidence>,
-    #[serde(default)]
+    #[serde(default = "empty_demo_values")]
     pub(crate) replay_hints: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "empty_demo_values")]
     pub(crate) non_claims: Vec<String>,
+}
+
+fn empty_demo_values<T>() -> Vec<T> {
+    Vec::new()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -152,7 +157,12 @@ pub(crate) fn render_nix_free_demo_readme(
     summary: &NixFreeDemoMachineSummary,
     validation: &NixFreeDemoValidation,
 ) -> String {
-    let mut lines = Vec::new();
+    let line_capacity_count = README_BASE_LINE_COUNT
+        .saturating_add(summary.guards.len())
+        .saturating_add(summary.replay_hints.len())
+        .saturating_add(summary.non_claims.len())
+        .saturating_add(validation.diagnostics.len());
+    let mut lines = Vec::with_capacity(line_capacity_count);
     lines.push("# Mantle fixed-point demo bundle".to_string());
     lines.push(String::new());
     if validation.demo_claimable {
@@ -184,6 +194,8 @@ pub(crate) fn render_nix_free_demo_readme(
         }
     }
     lines.push(String::new());
+    debug_assert!(lines.len() <= line_capacity_count);
+    debug_assert_eq!(validation.demo_claimable, validation.diagnostics.is_empty());
     lines.join("\n")
 }
 
@@ -192,6 +204,8 @@ fn render_generated_nix_free_demo_readme(
     validation: &NixFreeDemoValidation,
     manifest: &NixFreeDemoBundleManifest,
 ) -> String {
+    debug_assert_eq!(manifest.schema, BUNDLE_MANIFEST_SCHEMA);
+    debug_assert_eq!(manifest.profile, DEMO_PROFILE);
     let mut readme = render_nix_free_demo_readme(summary, validation);
     readme.push_str("generated bundle:\n");
     readme.push_str(&format!("- manifest: {}\n", GENERATED_MANIFEST_PATH));
@@ -210,6 +224,8 @@ fn render_generated_nix_free_demo_readme(
     for artifact in &manifest.artifact_digests {
         readme.push_str(&format!("- {}: {}\n", artifact.name, artifact.digest_blake3));
     }
+    debug_assert!(readme.starts_with("# Mantle fixed-point demo bundle"));
+    debug_assert!(readme.contains("generated bundle:"));
     readme
 }
 
@@ -225,6 +241,8 @@ pub(crate) fn nix_free_demo_claim(summary: &NixFreeDemoMachineSummary) -> Option
 }
 
 fn validate_manifest_input(input: &NixFreeDemoManifestInput) -> Result<(), NixFreeDemoDiagnostic> {
+    debug_assert!(!SUCCESS_VERDICT.is_empty());
+    debug_assert_eq!(BLAKE3_HEX_LEN, blake3::OUT_LEN.saturating_mul(2));
     if input.proof_status.trim().is_empty() {
         return Err(diagnostic("missing-proof-status", "proof status is required"));
     }
@@ -339,6 +357,8 @@ fn sorted_strings(mut values: Vec<String>) -> Vec<String> {
 }
 
 fn validate_fixed_point(summary: &NixFreeDemoMachineSummary, diagnostics: &mut Vec<NixFreeDemoDiagnostic>) {
+    debug_assert!(!SUCCESS_VERDICT.is_empty());
+    debug_assert_eq!(BLAKE3_HEX_LEN, blake3::OUT_LEN.saturating_mul(2));
     if summary.fixed_point_verdict != SUCCESS_VERDICT {
         diagnostics.push(diagnostic(MISSING_FIXED_POINT_EVIDENCE, "fixed-point verdict is not success"));
         return;
@@ -396,10 +416,10 @@ fn sorted_guards(guards: &[NixFreeDemoGuardEvidence]) -> Vec<&NixFreeDemoGuardEv
     sorted
 }
 
-fn diagnostic(code: &str, message: &str) -> NixFreeDemoDiagnostic {
+fn diagnostic(code: &str, message: impl AsRef<str>) -> NixFreeDemoDiagnostic {
     NixFreeDemoDiagnostic {
         code: code.to_string(),
-        message: message.to_string(),
+        message: message.as_ref().to_string(),
     }
 }
 

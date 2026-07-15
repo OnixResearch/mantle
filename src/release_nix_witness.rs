@@ -77,33 +77,15 @@ struct ObservedArtifact {
 pub(crate) fn write_release_nix_cross_builder_witness(
     request: &ReleaseNixWitnessRequest,
 ) -> Result<ReleaseNixWitnessSummary, RunError> {
+    debug_assert!(!DEFAULT_WITNESS_RELATIVE_PATH.is_empty());
+    debug_assert!(HASH_BUFFER_BYTES > 0);
     validate_witness_request(request)?;
     let manifest = verify_release_evidence_bundle(&request.bundle_dir)?;
     let deterministic_proof = load_canonical_deterministic_proof(&request.deterministic_proof_path)?;
     ensure_deterministic_proof_promotes(&deterministic_proof, &manifest)?;
 
-    let mantle_artifact_digests = manifest
-        .binaries
-        .iter()
-        .map(|artifact| NixCrossBuilderArtifactDigest {
-            name: artifact.relative_path.clone(),
-            size_bytes: artifact.size_bytes,
-            digest_blake3: artifact.digest_blake3.clone(),
-        })
-        .collect::<Vec<_>>();
-    let nix_artifact_digests = manifest
-        .binaries
-        .iter()
-        .map(|artifact| {
-            let path = request.nix_output_dir.join(&artifact.relative_path);
-            let observed = observed_artifact(&path)?;
-            Ok(NixCrossBuilderArtifactDigest {
-                name: artifact.relative_path.clone(),
-                size_bytes: observed.size_bytes,
-                digest_blake3: observed.digest_blake3,
-            })
-        })
-        .collect::<Result<Vec<_>, RunError>>()?;
+    let (mantle_artifact_digests, nix_artifact_digests) =
+        cross_builder_artifact_digests(&manifest, &request.nix_output_dir)?;
 
     let mut receipt = NixCrossBuilderWitnessReceipt::new(NixCrossBuilderWitnessReceiptInit {
         release_id: manifest.release_id.clone(),
@@ -153,7 +135,40 @@ pub(crate) fn write_release_nix_cross_builder_witness(
     Ok(summary)
 }
 
+fn cross_builder_artifact_digests(
+    manifest: &crunch_release_core::ReleaseEvidenceManifest,
+    nix_output_dir: &Path,
+) -> Result<(Vec<NixCrossBuilderArtifactDigest>, Vec<NixCrossBuilderArtifactDigest>), RunError> {
+    let mantle_artifact_digests = manifest
+        .binaries
+        .iter()
+        .map(|artifact| NixCrossBuilderArtifactDigest {
+            name: artifact.relative_path.clone(),
+            size_bytes: artifact.size_bytes,
+            digest_blake3: artifact.digest_blake3.clone(),
+        })
+        .collect::<Vec<_>>();
+    let nix_artifact_digests = manifest
+        .binaries
+        .iter()
+        .map(|artifact| {
+            let path = nix_output_dir.join(&artifact.relative_path);
+            let observed = observed_artifact(&path)?;
+            Ok(NixCrossBuilderArtifactDigest {
+                name: artifact.relative_path.clone(),
+                size_bytes: observed.size_bytes,
+                digest_blake3: observed.digest_blake3,
+            })
+        })
+        .collect::<Result<Vec<_>, RunError>>()?;
+    debug_assert_eq!(mantle_artifact_digests.len(), manifest.binaries.len());
+    debug_assert_eq!(nix_artifact_digests.len(), manifest.binaries.len());
+    Ok((mantle_artifact_digests, nix_artifact_digests))
+}
+
 fn validate_witness_request(request: &ReleaseNixWitnessRequest) -> Result<(), RunError> {
+    debug_assert!(!DEFAULT_WITNESS_RELATIVE_PATH.is_empty());
+    debug_assert!(HASH_BUFFER_BYTES > 0);
     if !request.bundle_dir.is_dir() {
         return Err(RunError::Internal(format!(
             "release bundle directory does not exist: {}",
@@ -181,7 +196,8 @@ fn validate_witness_request(request: &ReleaseNixWitnessRequest) -> Result<(), Ru
     Ok(())
 }
 
-fn validate_non_empty(value: &str, field_name: &str) -> Result<(), RunError> {
+fn validate_non_empty(value: &str, field_name: impl AsRef<str>) -> Result<(), RunError> {
+    let field_name = field_name.as_ref();
     if value.trim().is_empty() {
         return Err(RunError::Internal(format!("nix cross-builder witness {field_name} must not be empty")));
     }
@@ -211,9 +227,11 @@ fn ensure_deterministic_proof_promotes(
     proof: &VerifiedDeterministicProof,
     manifest: &crunch_release_core::ReleaseEvidenceManifest,
 ) -> Result<(), RunError> {
-    let genuine_rebuild = deterministic_build_proof_has_genuine_rebuild_authority(proof.receipt.clone())
+    debug_assert!(!DEFAULT_WITNESS_RELATIVE_PATH.is_empty());
+    debug_assert!(HASH_BUFFER_BYTES > 0);
+    let is_genuine_rebuild = deterministic_build_proof_has_genuine_rebuild_authority(proof.receipt.clone())
         .map_err(|err| RunError::Internal(format!("validating deterministic proof rebuild authority: {err}")))?;
-    if !genuine_rebuild {
+    if !is_genuine_rebuild {
         return Err(RunError::Internal(
             "nix cross-builder witness requires content-bound genuine rebuild authority; legacy path-bound evidence is non-promoting"
                 .to_string(),
@@ -271,19 +289,26 @@ fn observed_artifact(path: &Path) -> Result<ObservedArtifact, RunError> {
 fn hash_file(path: &Path) -> Result<(u64, String), RunError> {
     let metadata =
         std::fs::metadata(path).map_err(|err| RunError::Internal(format!("metadata {}: {err}", path.display())))?;
+    let buffer_size_bytes = u64::try_from(HASH_BUFFER_BYTES)
+        .map_err(|_| RunError::Internal("hash buffer size does not fit u64".to_string()))?;
+    let maximum_read_count = metadata
+        .len()
+        .div_ceil(buffer_size_bytes)
+        .checked_add(1)
+        .ok_or_else(|| RunError::Internal(format!("hash read count overflowed for {}", path.display())))?;
     let mut file = File::open(path).map_err(|err| RunError::Internal(format!("open {}: {err}", path.display())))?;
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0_u8; HASH_BUFFER_BYTES];
-    loop {
-        let bytes_read = file
+    for _ in 0..maximum_read_count {
+        let read_size_bytes = file
             .read(&mut buffer)
             .map_err(|err| RunError::Internal(format!("read {}: {err}", path.display())))?;
-        if bytes_read == 0 {
-            break;
+        if read_size_bytes == 0 {
+            return Ok((metadata.len(), hasher.finalize().to_hex().to_string()));
         }
-        hasher.update(&buffer[..bytes_read]);
+        hasher.update(&buffer[..read_size_bytes]);
     }
-    Ok((metadata.len(), hasher.finalize().to_hex().to_string()))
+    Err(RunError::Internal(format!("file grew while hashing: {}", path.display())))
 }
 
 fn write_receipt(path: &Path, bytes: &[u8]) -> Result<(), RunError> {

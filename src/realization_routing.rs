@@ -133,7 +133,7 @@ pub struct UploadSummary {
 }
 
 impl UploadSummary {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn new(classes: Vec<UploadClass>, object_count: u32, byte_count: u64) -> Self {
         Self::try_new(classes, object_count, byte_count).expect("upload summary fixture within bounds")
     }
@@ -283,16 +283,20 @@ impl RemoteBuilderPlanFacts {
         if endpoint_id.is_none() && !ticket_configured && trusted_output_key_count == 0 {
             return None;
         }
-        let builder_configured = endpoint_id.is_some();
+        let is_builder_configured = endpoint_id.is_some();
         let endpoint_id = endpoint_id.unwrap_or("unconfigured").to_string();
         Some(Self {
             endpoint_id,
-            builder_configured,
+            builder_configured: is_builder_configured,
             ticket_configured,
             concrete_inputs: true,
             capabilities_match: true,
             source_inputs_ready: true,
-            upload_summary: UploadSummary::try_new(Vec::new(), 0, 0).expect("empty remote upload summary is bounded"),
+            upload_summary: UploadSummary {
+                classes: Vec::new(),
+                object_count: 0,
+                byte_count: 0,
+            },
             trusted_output_key_count,
         })
     }
@@ -331,6 +335,8 @@ fn source_bundle_blocks_local_build(facts: Option<&SourceBundleRouteFacts>) -> b
 }
 
 pub fn remote_builder_candidate_from_facts(facts: &RemoteBuilderPlanFacts) -> RouteCandidateFacts {
+    debug_assert!(facts.upload_summary.classes.len() <= MAX_UPLOAD_CLASSES);
+    debug_assert!(facts.upload_summary.object_count <= MAX_UPLOAD_OBJECTS);
     let detail = Some(facts.redacted_detail());
     if !facts.builder_configured {
         return RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "remote-builder-not-configured")
@@ -467,6 +473,8 @@ enum CandidateDecision {
 }
 
 fn classify_candidate(candidate: &RouteCandidateFacts, policy: RoutePolicy) -> CandidateDecision {
+    debug_assert!(candidate.reason_code.len() <= MAX_REASON_CODE_BYTES);
+    debug_assert!(candidate.detail.as_ref().is_none_or(|detail| detail.len() <= MAX_DETAIL_BYTES));
     if !candidate.eligible {
         return CandidateDecision::Reject {
             reason_code: candidate.reason_code.to_string(),
@@ -514,6 +522,8 @@ pub fn route_plan_for_build_action_with_remote_and_source(
     remote_builder: Option<&RemoteBuilderPlanFacts>,
     source_bundle: Option<&SourceBundleRouteFacts>,
 ) -> RoutePlanReport {
+    debug_assert!(MAX_ROUTE_CANDIDATES > 0);
+    debug_assert!(MAX_REJECTED_ROUTES >= MAX_ROUTE_CANDIDATES.saturating_sub(1));
     let detail = detail.map(truncate_detail);
     let mut candidates = Vec::with_capacity(MAX_ROUTE_CANDIDATES);
     match action {
@@ -577,7 +587,10 @@ pub fn route_plan_for_build_action_with_remote_and_source(
                     .with_detail(detail.as_deref()),
             );
         }
-        _ => unreachable!("unknown build plan action"),
+        _ => candidates.push(
+            RouteCandidateFacts::eligible(RouteClass::PreflightError, "unknown-build-plan-action")
+                .with_detail(detail.as_deref()),
+        ),
     }
     let policy = route_policy_for_source_bundle(source_bundle);
     plan_realization_route(RoutePlannerInput::new(policy, candidates))
@@ -616,6 +629,15 @@ mod tests {
 
     fn selected_route(input: RoutePlannerInput) -> RouteClass {
         plan_realization_route(input).selected_route
+    }
+
+    #[test]
+    fn unknown_build_action_fails_closed_as_preflight_error() {
+        let report = route_plan_for_existing_build_action("unknown-action", Some("operator input"));
+
+        assert_eq!(report.selected_route, RouteClass::PreflightError);
+        assert_eq!(report.selected_reason_code, "unknown-build-plan-action");
+        assert_eq!(report.selected_detail.as_deref(), Some("operator input"));
     }
 
     #[test]

@@ -25,7 +25,7 @@ const ENTRY_KIND_FILE: &str = "file";
 const ENTRY_KIND_DIRECTORY: &str = "directory";
 const ENTRY_KIND_SYMLINK: &str = "symlink";
 const HEX_CHARS_PER_BYTE: usize = 2;
-const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN * HEX_CHARS_PER_BYTE;
+const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE);
 const FILE_READ_BUFFER_BYTES: usize = 65_536;
 const MAX_TREE_ENTRIES: usize = 1_000_000;
 const INITIAL_WORKLIST_CAPACITY: usize = 64;
@@ -76,6 +76,8 @@ pub fn frontend_artifact_identity(source: &Path) -> Result<String, String> {
 }
 
 pub fn import_frontend_artifact(source: &Path, state_dir: &Path) -> Result<FrontendArtifactStoreImportReport, String> {
+    debug_assert_eq!(BLAKE3_HEX_LENGTH, blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE));
+    debug_assert!(MAX_TREE_ENTRIES > 0);
     if !source.exists() {
         return Err(format!("frontend artifact source does not exist: {}", source.display()));
     }
@@ -140,6 +142,8 @@ pub fn artifact_digest_from_ref(artifact_ref: &str) -> Option<String> {
 
 /// Check that both content and store metadata exist without reading content bytes.
 pub fn frontend_artifact_is_available(state_dir: &Path, artifact_ref: &str) -> Result<bool, String> {
+    debug_assert!(!FRONTEND_ARTIFACT_REF_PREFIX_BLAKE3.is_empty());
+    debug_assert_eq!(BLAKE3_HEX_LENGTH, blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE));
     let Some(digest_hex) = parse_artifact_ref_digest_hex(artifact_ref) else {
         return Err(format!(
             "frontend artifact ref must use {FRONTEND_ARTIFACT_REF_PREFIX_BLAKE3}<hex>; got {artifact_ref}"
@@ -147,17 +151,17 @@ pub fn frontend_artifact_is_available(state_dir: &Path, artifact_ref: &str) -> R
     };
     let content_path = stored_content_path(state_dir, digest_hex);
     let manifest_path = stored_manifest_path(state_dir, digest_hex);
-    let content_available = match std::fs::symlink_metadata(&content_path) {
+    let is_content_available = match std::fs::symlink_metadata(&content_path) {
         Ok(_) => true,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
         Err(error) => return Err(format!("checking frontend artifact content availability: {error}")),
     };
-    let manifest_available = match std::fs::symlink_metadata(&manifest_path) {
+    let is_manifest_available = match std::fs::symlink_metadata(&manifest_path) {
         Ok(metadata) => metadata.is_file() && !metadata.file_type().is_symlink(),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
         Err(error) => return Err(format!("checking frontend artifact manifest availability: {error}")),
     };
-    Ok(content_available && manifest_available)
+    Ok(is_content_available && is_manifest_available)
 }
 
 fn stored_content_path(state_dir: &Path, digest_hex: &str) -> PathBuf {
@@ -202,6 +206,8 @@ fn is_lowercase_blake3_hex(value: &str) -> bool {
 }
 
 fn collect_artifact_tree_entries(root: &Path) -> Result<Vec<ArtifactTreeEntry>, String> {
+    debug_assert!(MAX_TREE_ENTRIES >= INITIAL_WORKLIST_CAPACITY);
+    debug_assert!(INITIAL_WORKLIST_CAPACITY > 0);
     let mut entries = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY);
     let mut worklist = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY);
     worklist.push(root.to_path_buf());
@@ -236,6 +242,8 @@ fn collect_artifact_tree_entries(root: &Path) -> Result<Vec<ArtifactTreeEntry>, 
         return Err(format!("unsupported frontend artifact file type: {}", path.display()));
     }
     entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path).then(left.kind.cmp(&right.kind)));
+    debug_assert!(entries.len() <= MAX_TREE_ENTRIES);
+    debug_assert!(entries.iter().any(|entry| entry.relative_path == ROOT_RELATIVE_PATH));
     Ok(entries)
 }
 
@@ -272,17 +280,25 @@ fn symlink_entry(path: &Path, relative_path: String) -> Result<ArtifactTreeEntry
 
 fn hash_file_content(path: &Path) -> Result<String, String> {
     let mut file = std::fs::File::open(path).map_err(|err| format!("opening {}: {err}", path.display()))?;
+    let file_size_bytes =
+        file.metadata().map_err(|err| format!("reading metadata for {}: {err}", path.display()))?.len();
+    let buffer_size_bytes = u64::try_from(FILE_READ_BUFFER_BYTES)
+        .map_err(|_| "frontend artifact read buffer size does not fit u64".to_string())?;
+    let maximum_read_count = file_size_bytes
+        .div_ceil(buffer_size_bytes)
+        .checked_add(1)
+        .ok_or_else(|| format!("frontend artifact read count overflowed for {}", path.display()))?;
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0_u8; FILE_READ_BUFFER_BYTES];
-    loop {
-        let read_bytes =
+    for _ in 0..maximum_read_count {
+        let read_size_bytes =
             std::io::Read::read(&mut file, &mut buffer).map_err(|err| format!("reading {}: {err}", path.display()))?;
-        if read_bytes == 0 {
-            break;
+        if read_size_bytes == 0 {
+            return Ok(hasher.finalize().to_hex().to_string());
         }
-        hasher.update(&buffer[..read_bytes]);
+        hasher.update(&buffer[..read_size_bytes]);
     }
-    Ok(hasher.finalize().to_hex().to_string())
+    Err(format!("frontend artifact file grew while hashing: {}", path.display()))
 }
 
 fn hash_artifact_tree_entries(entries: &[ArtifactTreeEntry]) -> String {
@@ -298,8 +314,8 @@ fn hash_artifact_tree_entries(entries: &[ArtifactTreeEntry]) -> String {
     blake3::hash(preimage.as_bytes()).to_hex().to_string()
 }
 
-fn append_tree_field(preimage: &mut String, name: &str, value: &str) {
-    preimage.push_str(name);
+fn append_tree_field(preimage: &mut String, name: impl AsRef<str>, value: &str) {
+    preimage.push_str(name.as_ref());
     preimage.push_str(TREE_FIELD_SEPARATOR);
     preimage.push_str(&value.len().to_string());
     preimage.push_str(TREE_FIELD_SEPARATOR);
@@ -314,7 +330,8 @@ fn relative_path_string(root: &Path, path: &Path) -> Result<String, String> {
     if relative.as_os_str().is_empty() {
         return Ok(ROOT_RELATIVE_PATH.to_string());
     }
-    let mut parts = Vec::new();
+    let component_capacity_count = relative.components().count();
+    let mut parts = Vec::with_capacity(component_capacity_count);
     for component in relative.components() {
         match component {
             Component::Normal(part) => parts.push(
@@ -325,16 +342,20 @@ fn relative_path_string(root: &Path, path: &Path) -> Result<String, String> {
             other => return Err(format!("unsupported artifact path component {other:?} in {}", path.display())),
         }
     }
+    debug_assert!(parts.len() <= component_capacity_count);
+    debug_assert!(!parts.is_empty());
     Ok(parts.join("/"))
 }
 
 fn read_dir_sorted(path: &Path) -> Result<Vec<PathBuf>, String> {
-    let mut entries = Vec::new();
     let read_dir = std::fs::read_dir(path).map_err(|err| format!("reading dir {}: {err}", path.display()))?;
-    for entry in read_dir {
-        let entry = entry.map_err(|err| format!("reading dir entry in {}: {err}", path.display()))?;
-        entries.push(entry.path());
-    }
+    let mut entries = read_dir
+        .map(|entry| {
+            entry
+                .map(|value| value.path())
+                .map_err(|err| format!("reading dir entry in {}: {err}", path.display()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     entries.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
     Ok(entries)
 }
@@ -367,6 +388,8 @@ fn copy_file(source: &Path, destination: &Path) -> Result<(), String> {
 }
 
 fn copy_directory(source: &Path, destination: &Path) -> Result<(), String> {
+    debug_assert!(MAX_TREE_ENTRIES >= INITIAL_WORKLIST_CAPACITY);
+    debug_assert!(INITIAL_WORKLIST_CAPACITY > 0);
     std::fs::create_dir_all(destination).map_err(|err| format!("creating {}: {err}", destination.display()))?;
     let mut copied_entries = 0_usize;
     let mut worklist = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY);
@@ -399,6 +422,8 @@ fn copy_directory(source: &Path, destination: &Path) -> Result<(), String> {
             return Err(format!("unsupported frontend artifact file type: {}", child.display()));
         }
     }
+    debug_assert!(copied_entries <= MAX_TREE_ENTRIES);
+    debug_assert!(destination.is_dir());
     Ok(())
 }
 

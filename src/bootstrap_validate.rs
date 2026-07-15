@@ -8,8 +8,6 @@ use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
 use std::thread;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use serde::Serialize;
 
@@ -94,10 +92,11 @@ struct LeakageFinding {
 }
 
 pub(crate) fn cmd_bootstrap_validate(ctx: &RunContext, opts: BootstrapValidateOptions) -> Result<(), RunError> {
+    debug_assert!(!SUMMARY_SCHEMA.is_empty());
+    debug_assert!(!DOCTOR_JSON_FILE.is_empty());
     let evidence_dir = resolve_evidence_dir(opts.evidence_dir.as_deref(), &opts.target)?;
     fs::create_dir_all(&evidence_dir)
         .map_err(|err| RunError::Internal(format!("creating evidence dir {}: {err}", evidence_dir.display())))?;
-
     let doctor = operator_diagnostics::collect_doctor_report(operator_diagnostics::DoctorRequest {
         profile: DoctorProfile::Build,
         store_dir: &ctx.store,
@@ -107,25 +106,35 @@ pub(crate) fn cmd_bootstrap_validate(ctx: &RunContext, opts: BootstrapValidateOp
         .render_json()
         .map_err(|err| RunError::Internal(format!("serializing doctor report: {err}")))?;
     write_text(&evidence_dir.join(DOCTOR_JSON_FILE), &doctor_json)?;
-
     if !doctor.ok {
-        let summary = make_summary(
+        let summary = make_summary(SummaryRequest {
             ctx,
-            &opts,
-            &evidence_dir,
-            false,
-            None,
-            Vec::new(),
-            ValidationStatus::PreflightFailed,
-            Some("preflight"),
-            Vec::new(),
-        );
+            opts: &opts,
+            evidence_dir: &evidence_dir,
+            build_attempted: false,
+            build_exit_code: None,
+            warmups: Vec::new(),
+            status: ValidationStatus::PreflightFailed,
+            failure_class: Some("preflight"),
+            leakage_findings: Vec::new(),
+        })?;
         write_summaries(&evidence_dir, &summary)?;
         render_summary(ctx, &summary)?;
         return Err(RunError::Reported(3));
     }
+    let evaluation_search_paths = build_import_paths(&opts.import_paths)?;
+    let warmup_summaries = run_warmup_builds(ctx, &opts, &evidence_dir, &evaluation_search_paths)?;
+    run_primary_build(ctx, &opts, &evidence_dir, &evaluation_search_paths, warmup_summaries)
+}
 
-    let import_paths = build_import_paths(&opts.import_paths)?;
+fn run_warmup_builds(
+    ctx: &RunContext,
+    opts: &BootstrapValidateOptions,
+    evidence_dir: &Path,
+    evaluation_search_paths: &[std::ffi::OsString],
+) -> Result<Vec<WarmupSummary>, RunError> {
+    debug_assert!(!SUMMARY_SCHEMA.is_empty());
+    debug_assert!(!SUMMARY_MD_FILE.is_empty());
     let mut warmup_summaries = Vec::with_capacity(opts.warmups.len());
     for warmup in &opts.warmups {
         let stem = evidence_stem(warmup);
@@ -133,7 +142,14 @@ pub(crate) fn cmd_bootstrap_validate(ctx: &RunContext, opts: BootstrapValidateOp
         let stderr_path = evidence_dir.join(format!("warmup-{stem}.stderr.log"));
         write_text(&stdout_path, "")?;
         write_text(&stderr_path, "")?;
-        let status = run_build_child(ctx, warmup, &opts, &import_paths, &stdout_path, &stderr_path)?;
+        let status = run_build_child(BuildChildRequest {
+            ctx,
+            target: warmup,
+            opts,
+            evaluation_search_paths,
+            stdout_path: &stdout_path,
+            stderr_path: &stderr_path,
+        })?;
         let warmup_status = if status.success() {
             ValidationStatus::Passed
         } else {
@@ -144,70 +160,85 @@ pub(crate) fn cmd_bootstrap_validate(ctx: &RunContext, opts: BootstrapValidateOp
             stdout: stdout_path.display().to_string(),
             stderr: stderr_path.display().to_string(),
             exit_code: status.code(),
-            status: warmup_status.clone(),
+            status: warmup_status,
         });
         if !status.success() {
-            let summary = make_summary(
+            let summary = make_summary(SummaryRequest {
                 ctx,
-                &opts,
-                &evidence_dir,
-                false,
-                None,
-                warmup_summaries,
-                ValidationStatus::WarmupFailed,
-                Some("warmup"),
-                Vec::new(),
-            );
-            write_summaries(&evidence_dir, &summary)?;
+                opts,
+                evidence_dir,
+                build_attempted: false,
+                build_exit_code: None,
+                warmups: warmup_summaries,
+                status: ValidationStatus::WarmupFailed,
+                failure_class: Some("warmup"),
+                leakage_findings: Vec::new(),
+            })?;
+            write_summaries(evidence_dir, &summary)?;
             render_summary(ctx, &summary)?;
             return Err(RunError::Reported(1));
         }
     }
+    Ok(warmup_summaries)
+}
+
+fn run_primary_build(
+    ctx: &RunContext,
+    opts: &BootstrapValidateOptions,
+    evidence_dir: &Path,
+    evaluation_search_paths: &[std::ffi::OsString],
+    warmup_summaries: Vec<WarmupSummary>,
+) -> Result<(), RunError> {
+    debug_assert!(!BUILD_STDOUT_FILE.is_empty());
+    debug_assert!(!BUILD_STDERR_FILE.is_empty());
     let stdout_path = evidence_dir.join(BUILD_STDOUT_FILE);
     let stderr_path = evidence_dir.join(BUILD_STDERR_FILE);
     write_text(&stdout_path, "")?;
     write_text(&stderr_path, "")?;
-
-    let checkpoint_summary = make_summary(
+    let checkpoint_summary = make_summary(SummaryRequest {
         ctx,
-        &opts,
-        &evidence_dir,
-        true,
-        None,
-        warmup_summaries.clone(),
-        ValidationStatus::Running,
-        Some("running"),
-        Vec::new(),
-    );
-    write_summaries(&evidence_dir, &checkpoint_summary)?;
-
-    let status = run_build_child(ctx, &opts.target, &opts, &import_paths, &stdout_path, &stderr_path)?;
-
-    let stdout = fs::read_to_string(&stdout_path).unwrap_or_else(|_| String::new());
-    let stderr = fs::read_to_string(&stderr_path).unwrap_or_else(|_| String::new());
+        opts,
+        evidence_dir,
+        build_attempted: true,
+        build_exit_code: None,
+        warmups: warmup_summaries.clone(),
+        status: ValidationStatus::Running,
+        failure_class: Some("running"),
+        leakage_findings: Vec::new(),
+    })?;
+    write_summaries(evidence_dir, &checkpoint_summary)?;
+    let status = run_build_child(BuildChildRequest {
+        ctx,
+        target: &opts.target,
+        opts,
+        evaluation_search_paths,
+        stdout_path: &stdout_path,
+        stderr_path: &stderr_path,
+    })?;
+    let stdout = fs::read_to_string(&stdout_path)
+        .map_err(|error| RunError::Internal(format!("reading {}: {error}", stdout_path.display())))?;
+    let stderr = fs::read_to_string(&stderr_path)
+        .map_err(|error| RunError::Internal(format!("reading {}: {error}", stderr_path.display())))?;
     let mut leakage_findings = scan_leakage("stdout", &stdout);
     leakage_findings.extend(scan_leakage("stderr", &stderr));
-
-    let exit_code = status.code();
     let (validation_status, failure_class) = if status.success() {
         (ValidationStatus::Passed, None)
     } else {
         (ValidationStatus::BuildFailed, Some("build"))
     };
-    let summary = make_summary(
+    let summary = make_summary(SummaryRequest {
         ctx,
-        &opts,
-        &evidence_dir,
-        true,
-        exit_code,
-        warmup_summaries,
-        validation_status,
+        opts,
+        evidence_dir,
+        build_attempted: true,
+        build_exit_code: status.code(),
+        warmups: warmup_summaries,
+        status: validation_status,
         failure_class,
         leakage_findings,
-    );
-    write_summaries(&evidence_dir, &summary)?;
+    })?;
+    write_summaries(evidence_dir, &summary)?;
     render_summary(ctx, &summary)?;
-
     if status.success() {
         Ok(())
     } else {
@@ -215,38 +246,42 @@ pub(crate) fn cmd_bootstrap_validate(ctx: &RunContext, opts: BootstrapValidateOp
     }
 }
 
-fn run_build_child(
-    ctx: &RunContext,
-    target: &Path,
-    opts: &BootstrapValidateOptions,
-    import_paths: &[std::ffi::OsString],
-    stdout_path: &Path,
-    stderr_path: &Path,
-) -> Result<ExitStatus, RunError> {
+struct BuildChildRequest<'a> {
+    ctx: &'a RunContext,
+    target: &'a Path,
+    opts: &'a BootstrapValidateOptions,
+    evaluation_search_paths: &'a [std::ffi::OsString],
+    stdout_path: &'a Path,
+    stderr_path: &'a Path,
+}
+
+fn run_build_child(request: BuildChildRequest<'_>) -> Result<ExitStatus, RunError> {
+    debug_assert!(!BUILD_STDOUT_FILE.is_empty());
+    debug_assert!(!BUILD_STDERR_FILE.is_empty());
     let exe =
         std::env::current_exe().map_err(|err| RunError::Internal(format!("resolving current executable: {err}")))?;
     let mut command = Command::new(exe);
     command
         .arg("--json")
         .arg("--store")
-        .arg(&ctx.store)
+        .arg(&request.ctx.store)
         .arg("--store-prefix")
-        .arg(&ctx.store_prefix)
+        .arg(&request.ctx.store_prefix)
         .arg("--state-dir")
-        .arg(&ctx.resolved_state_dir)
+        .arg(&request.ctx.resolved_state_dir)
         .arg("build")
-        .arg(target)
+        .arg(request.target)
         .arg("--no-substitute");
-    if opts.strict_hermetic {
+    if request.opts.strict_hermetic {
         command.arg("--strict-hermetic");
     }
-    if opts.impure {
+    if request.opts.impure {
         command.arg("--impure");
     }
-    if let Some(jobs) = opts.jobs {
+    if let Some(jobs) = request.opts.jobs {
         command.arg("--jobs").arg(jobs.to_string());
     }
-    for path in import_paths {
+    for path in request.evaluation_search_paths {
         command.arg("--import-path").arg(path);
     }
 
@@ -264,8 +299,8 @@ fn run_build_child(
         .take()
         .ok_or_else(|| RunError::Internal("capturing bootstrap validation child stderr".to_string()))?;
 
-    let stdout_path_for_thread = stdout_path.to_path_buf();
-    let stderr_path_for_thread = stderr_path.to_path_buf();
+    let stdout_path_for_thread = request.stdout_path.to_path_buf();
+    let stderr_path_for_thread = request.stderr_path.to_path_buf();
     let stdout_thread = thread::spawn(move || copy_stream_to_file(stdout, &stdout_path_for_thread));
     let stderr_thread = thread::spawn(move || copy_stream_to_file(stderr, &stderr_path_for_thread));
 
@@ -331,41 +366,51 @@ fn write_text(path: &Path, text: &str) -> Result<(), RunError> {
         .map_err(|err| RunError::Internal(format!("writing {}: {err}", path.display())))
 }
 
-fn make_summary(
-    ctx: &RunContext,
-    opts: &BootstrapValidateOptions,
-    evidence_dir: &Path,
+struct SummaryRequest<'a> {
+    ctx: &'a RunContext,
+    opts: &'a BootstrapValidateOptions,
+    evidence_dir: &'a Path,
     build_attempted: bool,
     build_exit_code: Option<i32>,
     warmups: Vec<WarmupSummary>,
     status: ValidationStatus,
     failure_class: Option<&'static str>,
     leakage_findings: Vec<LeakageFinding>,
-) -> BootstrapValidationSummary {
-    BootstrapValidationSummary {
+}
+
+fn make_summary(request: SummaryRequest<'_>) -> Result<BootstrapValidationSummary, RunError> {
+    debug_assert!(!SUMMARY_SCHEMA.is_empty());
+    debug_assert!(!SUMMARY_JSON_FILE.is_empty());
+    let doctor_ok = !matches!(request.status, ValidationStatus::PreflightFailed);
+    let generated_at_unix = crate::unix_time_now_s()?;
+    Ok(BootstrapValidationSummary {
         schema: SUMMARY_SCHEMA,
-        target: opts.target.display().to_string(),
-        evidence_dir: evidence_dir.display().to_string(),
-        store: ctx.store.display().to_string(),
-        state_dir: ctx.resolved_state_dir.display().to_string(),
-        store_prefix: ctx.store_prefix.clone(),
-        resume: opts.resume,
-        doctor_ok: !matches!(status, ValidationStatus::PreflightFailed),
-        build_attempted,
-        build_exit_code,
-        warmups,
-        status,
-        failure_class,
+        target: request.opts.target.display().to_string(),
+        evidence_dir: request.evidence_dir.display().to_string(),
+        store: request.ctx.store.display().to_string(),
+        state_dir: request.ctx.resolved_state_dir.display().to_string(),
+        store_prefix: request.ctx.store_prefix.clone(),
+        resume: request.opts.resume,
+        doctor_ok,
+        build_attempted: request.build_attempted,
+        build_exit_code: request.build_exit_code,
+        warmups: request.warmups,
+        status: request.status,
+        failure_class: request.failure_class,
         evidence: ValidationEvidence {
-            doctor_json: evidence_dir.join(DOCTOR_JSON_FILE).display().to_string(),
-            build_stdout: build_attempted.then(|| evidence_dir.join(BUILD_STDOUT_FILE).display().to_string()),
-            build_stderr: build_attempted.then(|| evidence_dir.join(BUILD_STDERR_FILE).display().to_string()),
-            summary_json: evidence_dir.join(SUMMARY_JSON_FILE).display().to_string(),
-            summary_md: evidence_dir.join(SUMMARY_MD_FILE).display().to_string(),
+            doctor_json: request.evidence_dir.join(DOCTOR_JSON_FILE).display().to_string(),
+            build_stdout: request
+                .build_attempted
+                .then(|| request.evidence_dir.join(BUILD_STDOUT_FILE).display().to_string()),
+            build_stderr: request
+                .build_attempted
+                .then(|| request.evidence_dir.join(BUILD_STDERR_FILE).display().to_string()),
+            summary_json: request.evidence_dir.join(SUMMARY_JSON_FILE).display().to_string(),
+            summary_md: request.evidence_dir.join(SUMMARY_MD_FILE).display().to_string(),
         },
-        leakage_findings,
-        generated_at_unix: SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
-    }
+        leakage_findings: request.leakage_findings,
+        generated_at_unix,
+    })
 }
 
 fn write_summaries(evidence_dir: &Path, summary: &BootstrapValidationSummary) -> Result<(), RunError> {
@@ -376,6 +421,8 @@ fn write_summaries(evidence_dir: &Path, summary: &BootstrapValidationSummary) ->
 }
 
 fn render_markdown(summary: &BootstrapValidationSummary) -> String {
+    debug_assert_eq!(summary.schema, SUMMARY_SCHEMA);
+    debug_assert!(!summary.evidence.summary_json.is_empty());
     let mut out = String::new();
     out.push_str("# Bootstrap validation summary\n\n");
     out.push_str(&format!("- Schema: `{}`\n", summary.schema));
@@ -408,6 +455,8 @@ fn render_markdown(summary: &BootstrapValidationSummary) -> String {
             out.push_str(&format!("- `{}` found `{}` {} time(s)\n", finding.source, finding.needle, finding.count));
         }
     }
+    debug_assert!(out.starts_with("# Bootstrap validation summary"));
+    debug_assert!(out.contains("## Evidence"));
     out
 }
 
@@ -430,8 +479,9 @@ fn render_summary(ctx: &RunContext, summary: &BootstrapValidationSummary) -> Res
     Ok(())
 }
 
-fn scan_leakage(source: &'static str, text: &str) -> Vec<LeakageFinding> {
+fn scan_leakage(source: &'static str, text: impl AsRef<str>) -> Vec<LeakageFinding> {
     const NEEDLES: [&str; 5] = ["/usr/bin", "/usr/lib", "/bin/", "/lib64", "HOME="];
+    let text = text.as_ref();
     NEEDLES
         .iter()
         .filter_map(|needle| {

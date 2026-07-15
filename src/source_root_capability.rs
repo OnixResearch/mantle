@@ -12,13 +12,15 @@ const VERSION_ARGUMENT: &str = "--version";
 // r[impl mantle.build_correctness.source_root_capability]
 // r[impl mantle.build_correctness.source_root_capability.boundary]
 pub fn cmd_source_root_capabilities(json: bool) -> Result<(), RunError> {
-    let report = probe_source_root_capabilities();
+    let capability_result = probe_source_root_capabilities();
+    debug_assert!(!capability_result.schema.is_empty());
+    debug_assert!(!capability_result.operations.is_empty());
     if json {
-        let rendered = serde_json::to_string(&report)
+        let rendered = serde_json::to_string(&capability_result)
             .map_err(|error| RunError::Internal(format!("serializing source-root capability report: {error}")))?;
         println!("{rendered}");
     } else {
-        render_human(&report);
+        render_human(&capability_result);
     }
     Ok(())
 }
@@ -30,10 +32,15 @@ fn probe_source_root_capabilities() -> SourceRootCapabilityReport {
         host_make_available: command_available("make"),
         host_tar_available: command_available("tar"),
     };
-    evaluate_source_root_capabilities(observations)
+    let capability_result = evaluate_source_root_capabilities(observations);
+    debug_assert!(!capability_result.schema.is_empty());
+    debug_assert!(!capability_result.operations.is_empty());
+    capability_result
 }
 
 fn command_available(command: &str) -> bool {
+    debug_assert!(!VERSION_ARGUMENT.is_empty());
+    debug_assert!(VERSION_ARGUMENT.starts_with('-'));
     Command::new(command)
         .arg(VERSION_ARGUMENT)
         .stdin(Stdio::null())
@@ -43,9 +50,11 @@ fn command_available(command: &str) -> bool {
         .is_ok_and(|status| status.success())
 }
 
-fn render_human(report: &SourceRootCapabilityReport) {
-    println!("source-root capability schema: {}", report.schema);
-    for capability in &report.operations {
+fn render_human(capability_result: &SourceRootCapabilityReport) {
+    debug_assert!(!capability_result.schema.is_empty());
+    debug_assert!(!capability_result.operations.is_empty());
+    println!("source-root capability schema: {}", capability_result.schema);
+    for capability in &capability_result.operations {
         println!("operation: {}", capability.operation);
         println!("  status: {}", capability.status);
         println!("  capability class: {}", capability.capability_class);

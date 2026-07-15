@@ -40,9 +40,16 @@ pub fn log_file_path(logs_dir: &Path, drv_path: &StorePath<String>) -> PathBuf {
     logs_dir.join(format!("{}.log", drv_path))
 }
 
+#[expect(
+    tigerstyle::ambiguous_params,
+    reason = "callers in protected root command modules retain the established log lookup API"
+)]
 pub fn log_file_path_from_drv_key(logs_dir: &Path, store_dir: &str, drv_key: &str) -> Option<PathBuf> {
     let drv_path = crunch_pipeline::parse_drv_key(store_dir, drv_key)?;
-    Some(log_file_path(logs_dir, &drv_path))
+    let log_path = log_file_path(logs_dir, &drv_path);
+    debug_assert!(log_path.starts_with(logs_dir));
+    debug_assert_eq!(log_path.extension().and_then(|extension| extension.to_str()), Some("log"));
+    Some(log_path)
 }
 
 pub fn existing_log_file_path(logs_dir: &Path, drv_path: &StorePath<String>) -> Option<String> {
@@ -53,8 +60,14 @@ pub fn existing_log_file_path(logs_dir: &Path, drv_path: &StorePath<String>) -> 
     Some(log_path.display().to_string())
 }
 
+#[expect(
+    tigerstyle::ambiguous_params,
+    reason = "callers in protected root command modules retain the established log lookup API"
+)]
 pub fn existing_log_file_path_from_drv_key(logs_dir: &Path, store_dir: &str, drv_key: &str) -> Option<String> {
     let log_path = log_file_path_from_drv_key(logs_dir, store_dir, drv_key)?;
+    debug_assert!(log_path.starts_with(logs_dir));
+    debug_assert_eq!(log_path.extension().and_then(|extension| extension.to_str()), Some("log"));
     if !log_path.exists() {
         return None;
     }
@@ -69,9 +82,10 @@ pub fn write_log_file(
     body: &str,
 ) -> Result<PathBuf, std::io::Error> {
     let log_file = log_file_path(logs_dir, drv_path);
+    debug_assert!(log_file.starts_with(logs_dir));
+    debug_assert_eq!(log_file.extension().and_then(|extension| extension.to_str()), Some("log"));
     let status = if success { "success" } else { "failure" };
-    let timestamp =
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let timestamp = crate::unix_time_now_s().map_err(|error| std::io::Error::other(error.to_string()))?;
     let content = format!(
         "# crunch build log\n# derivation: {label}\n# drv_path: {drv_path}\n# status: {status}\n# timestamp: {timestamp}\n\n{body}\n"
     );

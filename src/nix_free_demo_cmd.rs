@@ -201,8 +201,8 @@ fn run_validate(summary_path: &Path, json: bool) -> Result<(), RunError> {
         Ok(pair) => pair,
         Err(report) => return emit_report(report, json),
     };
-    let report = report_for_summary(&summary, &validation);
-    emit_report(report, json)
+    let command_output = report_for_summary(&summary, &validation);
+    emit_report(command_output, json)
 }
 
 fn run_readme(summary_path: &Path, _json: bool) -> Result<(), RunError> {
@@ -221,14 +221,14 @@ fn run_readme(summary_path: &Path, _json: bool) -> Result<(), RunError> {
 }
 
 fn run_generate(options: GenerateOptions<'_>, json: bool) -> Result<(), RunError> {
-    let report = match prepare_generate_bundle(&options) {
+    let command_output = match prepare_generate_bundle(&options) {
         Ok(prepared) => {
             write_generated_bundle(options.out, &prepared)?;
             generated_report(options.out, &prepared)
         }
         Err(diagnostic) => rejected_generate_report(options.out, diagnostic),
     };
-    emit_generate_report(report, json)
+    emit_generate_report(command_output, json)
 }
 
 fn read_summary(summary_path: &Path) -> Result<String, RunError> {
@@ -250,6 +250,8 @@ fn parse_and_validate_summary(
 }
 
 fn prepare_generate_bundle(options: &GenerateOptions<'_>) -> Result<PreparedGeneratedBundle, NixFreeDemoDiagnostic> {
+    debug_assert!(!SUMMARY_FILE_NAME.is_empty());
+    debug_assert!(!MANIFEST_FILE_NAME.is_empty());
     ensure_output_available(options.out)?;
     let (transcripts, transcript_copies) = transcript_evidence(&options.transcripts)?;
     let input = NixFreeDemoManifestInput {
@@ -291,8 +293,10 @@ fn ensure_output_available(out: &Path) -> Result<(), NixFreeDemoDiagnostic> {
 fn transcript_evidence(
     paths: &[PathBuf],
 ) -> Result<(Vec<NixFreeDemoEvidenceRef>, Vec<TranscriptCopy>), NixFreeDemoDiagnostic> {
-    let mut refs = Vec::new();
-    let mut copies = Vec::new();
+    debug_assert!(!TRANSCRIPTS_DIR.is_empty());
+    debug_assert!(DIGEST_PART_COUNT > 0);
+    let mut refs = Vec::with_capacity(paths.len());
+    let mut copies = Vec::with_capacity(paths.len());
     for source in paths {
         let bytes = fs::read(source)
             .map_err(|error| diagnostic("missing-transcript", &format!("{}: {error}", source.display())))?;
@@ -311,6 +315,8 @@ fn transcript_evidence(
             bundle_path,
         });
     }
+    debug_assert_eq!(refs.len(), paths.len());
+    debug_assert_eq!(copies.len(), paths.len());
     Ok((refs, copies))
 }
 
@@ -318,7 +324,8 @@ fn parse_named_digests(values: &[String], code: &str) -> Result<Vec<NixFreeDemoN
     values.iter().map(|value| parse_named_digest(value, code)).collect::<Result<Vec<_>, _>>()
 }
 
-fn parse_named_digest(value: &str, code: &str) -> Result<NixFreeDemoNamedDigest, NixFreeDemoDiagnostic> {
+fn parse_named_digest(value: &str, code: impl AsRef<str>) -> Result<NixFreeDemoNamedDigest, NixFreeDemoDiagnostic> {
+    let code = code.as_ref();
     let parts = value.splitn(DIGEST_PART_COUNT, DIGEST_SEPARATOR).collect::<Vec<_>>();
     if parts.len() != DIGEST_PART_COUNT || parts[0].trim().is_empty() || !is_blake3_hex(parts[1]) {
         return Err(diagnostic(code, "expected name:blake3"));
@@ -501,10 +508,10 @@ fn append_diagnostics(lines: &mut Vec<String>, diagnostics: &[NixFreeDemoDiagnos
     }
 }
 
-fn diagnostic(code: &str, message: &str) -> NixFreeDemoDiagnostic {
+fn diagnostic(code: &str, message: impl AsRef<str>) -> NixFreeDemoDiagnostic {
     NixFreeDemoDiagnostic {
         code: code.to_string(),
-        message: message.to_string(),
+        message: message.as_ref().to_string(),
     }
 }
 

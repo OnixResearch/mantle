@@ -19,6 +19,8 @@ pub(crate) struct WasmComponentBuildOptions<'a> {
 pub(crate) fn cmd_wasm_component_build(options: WasmComponentBuildOptions<'_>) -> Result<(), RunError> {
     let request_path = absolute_path(options.request_path)?;
     let output_dir = absolute_path(options.output_dir)?;
+    debug_assert!(request_path.is_absolute());
+    debug_assert!(output_dir.is_absolute());
     let output_parent = output_dir
         .parent()
         .ok_or_else(|| RunError::Internal(format!("Wasm component output has no parent: {}", output_dir.display())))?;
@@ -31,13 +33,13 @@ pub(crate) fn cmd_wasm_component_build(options: WasmComponentBuildOptions<'_>) -
         .map_err(|error| {
             RunError::Eval(format!("loading Wasm component request {}: {error}", request_path.display()))
         })?;
-    let report = run_component_pipeline(request, PipelinePaths {
+    let execution_result = run_component_pipeline(request, PipelinePaths {
         evidence_dir: output_dir.clone(),
         scratch_parent,
     })
     .map_err(|error| RunError::Internal(format!("Wasm component pipeline: {error}")))?;
-    render_report(&report, &output_dir, options.json)?;
-    if report.final_status != "succeeded" {
+    render_report(&execution_result, &output_dir, options.json)?;
+    if execution_result.final_status != "succeeded" {
         return Err(RunError::Internal(format!(
             "Wasm component pipeline stopped at an authoritative blocker; report: {}",
             output_dir.join("execution-report.json").display()
@@ -47,6 +49,8 @@ pub(crate) fn cmd_wasm_component_build(options: WasmComponentBuildOptions<'_>) -
 }
 
 fn evaluation_import_paths(request_path: &Path, explicit: &[PathBuf]) -> Result<Vec<OsString>, RunError> {
+    debug_assert!(request_path.is_absolute());
+    debug_assert!(explicit.len().checked_add(2).is_some());
     let mut paths = Vec::with_capacity(explicit.len().saturating_add(2));
     if let Some(parent) = request_path.parent() {
         paths.push(parent.as_os_str().to_owned());
@@ -63,31 +67,36 @@ fn evaluation_import_paths(request_path: &Path, explicit: &[PathBuf]) -> Result<
 }
 
 fn render_report(
-    report: &crunch_wasm_component::PipelineExecutionReport,
+    execution_result: &crunch_wasm_component::PipelineExecutionReport,
     output_dir: &Path,
     json: bool,
 ) -> Result<(), RunError> {
     if json {
-        let rendered = serde_json::to_string(report)
+        let rendered = serde_json::to_string(execution_result)
             .map_err(|error| RunError::Internal(format!("serializing Wasm component report: {error}")))?;
         println!("{rendered}");
     } else {
-        println!("Wasm component pipeline status: {}", report.final_status);
+        println!("Wasm component pipeline status: {}", execution_result.final_status);
         println!("report: {}", output_dir.join("execution-report.json").display());
-        for blocker in &report.blockers {
+        for blocker in &execution_result.blockers {
             println!("blocked: {} [{}]: {}", blocker.stage_key, blocker.code, blocker.message);
         }
     }
-    debug_assert_eq!(report.final_status == "succeeded", report.blockers.is_empty());
+    debug_assert_eq!(execution_result.final_status == "succeeded", execution_result.blockers.is_empty());
     debug_assert!(output_dir.is_absolute());
     Ok(())
 }
 
 fn absolute_path(path: &Path) -> Result<PathBuf, RunError> {
     if path.is_absolute() {
+        debug_assert!(path.has_root());
+        debug_assert!(!path.as_os_str().is_empty());
         return Ok(path.to_path_buf());
     }
     let current =
         std::env::current_dir().map_err(|error| RunError::Internal(format!("resolving current directory: {error}")))?;
-    Ok(current.join(path))
+    let absolute = current.join(path);
+    debug_assert!(absolute.is_absolute());
+    debug_assert!(absolute.starts_with(&current));
+    Ok(absolute)
 }

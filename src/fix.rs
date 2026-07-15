@@ -5,6 +5,11 @@ use nix_compat::store_path::StorePath;
 
 use crate::errors::RunError;
 
+#[expect(
+    tigerstyle::too_many_parameters,
+    tigerstyle::ambiguous_boolean_parameters,
+    reason = "the protected build command caller retains this compatibility boundary"
+)]
 pub fn handle_fod_mismatch(
     mismatch: &FodMismatch,
     _drv_path: &StorePath<String>,
@@ -13,13 +18,19 @@ pub fn handle_fod_mismatch(
     fix: bool,
     emit_human: bool,
 ) -> Result<(), RunError> {
+    debug_assert!(!_drv_path.name().is_empty());
+    debug_assert_ne!(mismatch.expected_sri, mismatch.actual_sri);
     let msg = format!(
         "hash mismatch for '{}':\n expected: {}\n got:      {}",
         mismatch.name, mismatch.expected_sri, mismatch.actual_sri,
     );
 
     if fix {
-        match auto_fix_hash(source_file, &mismatch.expected_sri, &mismatch.actual_sri) {
+        match auto_fix_hash(HashReplacement {
+            file: source_file,
+            old_hash: &mismatch.expected_sri,
+            new_hash: &mismatch.actual_sri,
+        }) {
             Ok(()) => {
                 if emit_human {
                     eprintln!("{msg}");
@@ -44,23 +55,33 @@ pub fn handle_fod_mismatch(
     Err(RunError::Build(msg))
 }
 
-pub fn auto_fix_hash(file: &Path, old_hash: &str, new_hash: &str) -> Result<(), String> {
-    let content = std::fs::read_to_string(file).map_err(|e| format!("reading {}: {e}", file.display()))?;
+pub struct HashReplacement<'a> {
+    pub file: &'a Path,
+    pub old_hash: &'a str,
+    pub new_hash: &'a str,
+}
 
-    let count = content.matches(old_hash).count();
-    if count == 0 {
-        return Err(format!("hash '{}' not found in {}", old_hash, file.display()));
+pub fn auto_fix_hash(replacement: HashReplacement<'_>) -> Result<(), String> {
+    let content = std::fs::read_to_string(replacement.file)
+        .map_err(|error| format!("reading {}: {error}", replacement.file.display()))?;
+
+    let match_count = content.matches(replacement.old_hash).count();
+    if match_count == 0 {
+        return Err(format!("hash '{}' not found in {}", replacement.old_hash, replacement.file.display()));
     }
-    if count > 1 {
+    if match_count > 1 {
         return Err(format!(
             "hash '{}' appears {} times in {} -- ambiguous, not fixing",
-            old_hash,
-            count,
-            file.display(),
+            replacement.old_hash,
+            match_count,
+            replacement.file.display(),
         ));
     }
 
-    let fixed = content.replacen(old_hash, new_hash, 1);
-    std::fs::write(file, &fixed).map_err(|e| format!("writing {}: {e}", file.display()))?;
+    let fixed = content.replacen(replacement.old_hash, replacement.new_hash, 1);
+    debug_assert_eq!(match_count, 1);
+    debug_assert!(fixed.contains(replacement.new_hash));
+    std::fs::write(replacement.file, &fixed)
+        .map_err(|error| format!("writing {}: {error}", replacement.file.display()))?;
     Ok(())
 }

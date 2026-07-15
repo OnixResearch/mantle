@@ -28,7 +28,7 @@ pub const FRONTEND_ARTIFACT_EXPORT_DIAG_CONTENT_UNAVAILABLE: &str = "frontend-ar
 pub const FRONTEND_ARTIFACT_EXPORT_DIAG_HIDDEN_FALLBACK: &str = "frontend-artifact-export-hidden-fallback";
 
 const HEX_CHARS_PER_BYTE: usize = 2;
-const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN * HEX_CHARS_PER_BYTE;
+const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE);
 const RECEIPT_PREIMAGE_VERSION: &str = "mantle-frontend-artifact-export-receipt-preimage-v1";
 const RECEIPT_FIELD_SEPARATOR: &str = "\u{0}";
 const RECEIPT_RECORD_SEPARATOR: &str = "\n";
@@ -157,6 +157,8 @@ fn validate_request_shape(
     request: &FrontendArtifactExportPreflightRequest<'_>,
     diagnostics: &mut Vec<FrontendArtifactExportDiagnostic>,
 ) {
+    debug_assert!(!FRONTEND_ARTIFACT_EXPORT_REF_SCHEME_MANTLE.is_empty());
+    debug_assert!(!FRONTEND_ARTIFACT_EXPORT_DIAG_HIDDEN_FALLBACK.is_empty());
     require_non_empty(request.expectation.artifact_ref, "expectation.artifact_ref", diagnostics);
     require_non_empty(request.destination_mode, "destination_mode", diagnostics);
     if !request.expectation.artifact_ref.starts_with(FRONTEND_ARTIFACT_EXPORT_REF_SCHEME_MANTLE) {
@@ -186,6 +188,8 @@ fn validate_attestation(
     request: &FrontendArtifactExportPreflightRequest<'_>,
     diagnostics: &mut Vec<FrontendArtifactExportDiagnostic>,
 ) {
+    debug_assert!(!FRONTEND_ARTIFACT_EXPORT_DIAG_MISSING_ADMISSION_PROOF.is_empty());
+    debug_assert!(!FRONTEND_ARTIFACT_VALIDATION_RESULT_ADMITTED.is_empty());
     let Some(attestation) = request.attestation else {
         diagnostics.push(diagnostic(
             FRONTEND_ARTIFACT_EXPORT_DIAG_MISSING_ADMISSION_PROOF,
@@ -259,6 +263,8 @@ fn validate_content(
     request: &FrontendArtifactExportRequest<'_>,
     diagnostics: &mut Vec<FrontendArtifactExportDiagnostic>,
 ) {
+    debug_assert!(!FRONTEND_ARTIFACT_EXPORT_DIAG_CONTENT_UNAVAILABLE.is_empty());
+    debug_assert!(!FRONTEND_ARTIFACT_EXPORT_DIAG_DIGEST_MISMATCH.is_empty());
     let Some(content) = request.content else {
         diagnostics.push(diagnostic(
             FRONTEND_ARTIFACT_EXPORT_DIAG_CONTENT_UNAVAILABLE,
@@ -302,6 +308,8 @@ fn receipt_from_validated(
     attestation: &FrontendArtifactAdmissionAttestation,
     content: &FrontendArtifactExportContent,
 ) -> FrontendArtifactExportReceipt {
+    debug_assert!(request.preflight.no_hidden_fallback);
+    debug_assert_eq!(attestation.validation_result, FRONTEND_ARTIFACT_VALIDATION_RESULT_ADMITTED);
     let material = FrontendArtifactExportReceiptMaterial {
         schema: FRONTEND_ARTIFACT_EXPORT_RECEIPT_SCHEMA.to_string(),
         artifact_ref: request.preflight.expectation.artifact_ref.to_string(),
@@ -347,6 +355,8 @@ fn export_receipt_hash(material: &FrontendArtifactExportReceiptMaterial) -> Stri
 }
 
 fn export_receipt_preimage(material: &FrontendArtifactExportReceiptMaterial) -> String {
+    debug_assert!(!RECEIPT_PREIMAGE_VERSION.is_empty());
+    debug_assert!(!RECEIPT_FIELD_SEPARATOR.is_empty());
     let mut preimage = String::new();
     append_receipt_field(&mut preimage, "preimage_version", RECEIPT_PREIMAGE_VERSION);
     append_receipt_field(&mut preimage, "schema", &material.schema);
@@ -370,11 +380,13 @@ fn export_receipt_preimage(material: &FrontendArtifactExportReceiptMaterial) -> 
     for (key, value) in &material.content_provenance {
         append_receipt_field(&mut preimage, &format!("content_provenance.{key}"), value);
     }
+    debug_assert!(preimage.contains(RECEIPT_PREIMAGE_VERSION));
+    debug_assert!(!preimage.is_empty());
     preimage
 }
 
-fn append_receipt_field(preimage: &mut String, key: &str, value: &str) {
-    preimage.push_str(key);
+fn append_receipt_field(preimage: &mut String, key: impl AsRef<str>, value: &str) {
+    preimage.push_str(key.as_ref());
     preimage.push_str(RECEIPT_FIELD_SEPARATOR);
     preimage.push_str(value);
     preimage.push_str(RECEIPT_RECORD_SEPARATOR);
@@ -391,7 +403,8 @@ fn report(
     }
 }
 
-fn require_non_empty(value: &str, path: &'static str, diagnostics: &mut Vec<FrontendArtifactExportDiagnostic>) {
+fn require_non_empty(value: &str, path: impl AsRef<str>, diagnostics: &mut Vec<FrontendArtifactExportDiagnostic>) {
+    let path = path.as_ref();
     if value.is_empty() {
         diagnostics.push(diagnostic(
             FRONTEND_ARTIFACT_EXPORT_DIAG_EMPTY_FIELD,
@@ -403,43 +416,43 @@ fn require_non_empty(value: &str, path: &'static str, diagnostics: &mut Vec<Fron
 
 fn require_equal(
     actual: &str,
-    expected: &str,
+    expected: impl AsRef<str>,
     path: &'static str,
-    message: &'static str,
+    message: impl AsRef<str>,
     diagnostics: &mut Vec<FrontendArtifactExportDiagnostic>,
 ) {
-    if actual != expected {
-        diagnostics.push(diagnostic(FRONTEND_ARTIFACT_EXPORT_DIAG_PROOF_MISMATCH, path, message));
+    if actual != expected.as_ref() {
+        diagnostics.push(diagnostic(FRONTEND_ARTIFACT_EXPORT_DIAG_PROOF_MISMATCH, path, message.as_ref()));
     }
 }
 
 fn require_optional_equal(
     expected: Option<&str>,
-    actual: &str,
+    actual: impl AsRef<str>,
     path: &'static str,
-    message: &'static str,
+    message: impl AsRef<str>,
     diagnostics: &mut Vec<FrontendArtifactExportDiagnostic>,
 ) {
     let Some(expected) = expected else {
         return;
     };
-    if actual != expected {
-        diagnostics.push(diagnostic(FRONTEND_ARTIFACT_EXPORT_DIAG_PROOF_MISMATCH, path, message));
+    if actual.as_ref() != expected {
+        diagnostics.push(diagnostic(FRONTEND_ARTIFACT_EXPORT_DIAG_PROOF_MISMATCH, path, message.as_ref()));
     }
 }
 
 fn require_optional_digest_equal(
     expected: Option<&str>,
-    actual: &str,
+    actual: impl AsRef<str>,
     path: &'static str,
-    message: &'static str,
+    message: impl AsRef<str>,
     diagnostics: &mut Vec<FrontendArtifactExportDiagnostic>,
 ) {
     let Some(expected) = expected else {
         return;
     };
-    if actual != expected {
-        diagnostics.push(diagnostic(FRONTEND_ARTIFACT_EXPORT_DIAG_DIGEST_MISMATCH, path, message));
+    if actual.as_ref() != expected {
+        diagnostics.push(diagnostic(FRONTEND_ARTIFACT_EXPORT_DIAG_DIGEST_MISMATCH, path, message.as_ref()));
     }
 }
 
@@ -473,9 +486,10 @@ fn validate_expected_artifact_digest(
 
 fn validate_required_artifact_digest(
     digest: &str,
-    path: &'static str,
+    path: impl AsRef<str>,
     diagnostics: &mut Vec<FrontendArtifactExportDiagnostic>,
 ) {
+    let path = path.as_ref();
     if !is_blake3_prefixed_digest(digest) {
         diagnostics.push(diagnostic(
             FRONTEND_ARTIFACT_EXPORT_DIAG_INVALID_DIGEST,

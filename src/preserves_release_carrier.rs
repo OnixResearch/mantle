@@ -80,8 +80,10 @@ fn validate_role(role: &str, diagnostics: &mut Vec<String>) {
 }
 
 fn validate_adapter_shape(carrier: &PreservesCarrierRow, diagnostics: &mut Vec<String>) {
-    let adapter_required = carrier.role == "preserves-adapter-backed-release-evidence";
-    if adapter_required {
+    debug_assert!(MAX_ADAPTER_FACTS > 0);
+    debug_assert!(!SUPPORTED_ROLES.is_empty());
+    let is_adapter_required = carrier.role == "preserves-adapter-backed-release-evidence";
+    if is_adapter_required {
         if carrier.adapter_id.as_deref().unwrap_or_default().is_empty() {
             diagnostics.push("adapter-backed carrier missing adapter_id".to_string());
         }
@@ -93,7 +95,7 @@ fn validate_adapter_shape(carrier: &PreservesCarrierRow, diagnostics: &mut Vec<S
             diagnostics.push("adapter-backed carrier missing adapter_facts".to_string());
         }
     }
-    if !adapter_required && (carrier.adapter_id.is_some() || carrier.adapter_digest_blake3.is_some()) {
+    if !is_adapter_required && (carrier.adapter_id.is_some() || carrier.adapter_digest_blake3.is_some()) {
         diagnostics.push("opaque Preserves carrier must not claim adapter-backed facts".to_string());
     }
     if carrier.adapter_facts.len() > MAX_ADAPTER_FACTS {
@@ -112,23 +114,23 @@ fn validate_non_claims(non_claims: &[String], diagnostics: &mut Vec<String>) {
     }
 }
 
-fn validate_digest(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+fn validate_digest(value: &str, field_name: impl AsRef<str>, diagnostics: &mut Vec<String>) {
     if value.len() != BLAKE3_HEX_LENGTH || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        diagnostics.push(format!("{field_name} is not BLAKE3 hex"));
+        diagnostics.push(format!("{} is not BLAKE3 hex", field_name.as_ref()));
     }
 }
 
-fn push_nonempty(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+fn push_nonempty(value: &str, field_name: impl AsRef<str>, diagnostics: &mut Vec<String>) {
     if value.trim().is_empty() {
-        diagnostics.push(format!("{field_name} must not be empty"));
+        diagnostics.push(format!("{} must not be empty", field_name.as_ref()));
     }
 }
 
-fn push_no_overclaim(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+fn push_no_overclaim(value: &str, field_name: impl AsRef<str>, diagnostics: &mut Vec<String>) {
     let lower = value.to_ascii_lowercase();
     for fragment in OVERCLAIM_FRAGMENTS {
         if lower.contains(fragment) {
-            diagnostics.push(format!("{field_name} contains overclaim fragment {fragment:?}"));
+            diagnostics.push(format!("{} contains overclaim fragment {fragment:?}", field_name.as_ref()));
         }
     }
 }

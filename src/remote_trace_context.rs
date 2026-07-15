@@ -30,7 +30,7 @@ const TRACE_FLAGS_END: usize = W3C_TRACEPARENT_BYTES;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteTraceContext {
     pub traceparent: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_trace_context_value", skip_serializing_if = "Option::is_none")]
     pub tracestate: Option<String>,
 }
 
@@ -46,9 +46,13 @@ pub enum RemoteTraceContextStatus {
 pub struct RemoteTraceContextHealth {
     pub status: RemoteTraceContextStatus,
     pub reason_code: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_trace_context_value", skip_serializing_if = "Option::is_none")]
     pub context_digest_blake3: Option<String>,
     pub non_claim: String,
+}
+
+fn no_trace_context_value() -> Option<String> {
+    None
 }
 
 pub fn accept_remote_trace_context(
@@ -69,7 +73,10 @@ pub fn accept_remote_trace_context(
     if let Err(reason) = validate_remote_trace_context(&context) {
         return (None, trace_health(RemoteTraceContextStatus::Dropped, reason, None));
     }
-    let digest = remote_trace_context_digest(&context);
+    let digest = match remote_trace_context_digest(&context) {
+        Ok(digest) => digest,
+        Err(reason) => return (None, trace_health(RemoteTraceContextStatus::Dropped, reason, None)),
+    };
     debug_assert_eq!(digest.len(), blake3::OUT_LEN.saturating_mul(2));
     debug_assert!(!context.traceparent.is_empty());
     (
@@ -88,15 +95,17 @@ pub fn validate_remote_trace_context(context: &RemoteTraceContext) -> Result<(),
     Ok(())
 }
 
-pub fn remote_trace_context_digest(context: &RemoteTraceContext) -> String {
+pub fn remote_trace_context_digest(context: &RemoteTraceContext) -> Result<String, &'static str> {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"mantle-remote-trace-context-v1\0");
-    hash_component(&mut hasher, context.traceparent.as_bytes());
-    hash_component(&mut hasher, context.tracestate.as_deref().unwrap_or_default().as_bytes());
-    hasher.finalize().to_hex().to_string()
+    hash_component(&mut hasher, context.traceparent.as_bytes())?;
+    hash_component(&mut hasher, context.tracestate.as_deref().unwrap_or_default().as_bytes())?;
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
 fn validate_traceparent(value: &str) -> Result<(), &'static str> {
+    debug_assert!(TRACE_ID_START < TRACE_ID_END);
+    debug_assert!(PARENT_ID_START < PARENT_ID_END);
     if value.len() != W3C_TRACEPARENT_BYTES {
         return Err("remote-traceparent-length-invalid");
     }
@@ -135,7 +144,8 @@ fn validate_tracestate(value: &str) -> Result<(), &'static str> {
             return Err("remote-tracestate-duplicate-key");
         }
     }
-    debug_assert_eq!(keys.len(), usize::try_from(member_count).unwrap_or(usize::MAX));
+    let member_count_usize = usize::try_from(member_count).map_err(|_| "remote-tracestate-member-count-invalid")?;
+    debug_assert_eq!(keys.len(), member_count_usize);
     debug_assert!(member_count <= W3C_TRACESTATE_MEMBERS_MAX);
     Ok(())
 }
@@ -172,9 +182,9 @@ fn valid_tracestate_key(key: &str) -> bool {
     if system.len() > W3C_TRACESTATE_SYSTEM_BYTES_MAX || !starts_lowercase(system) {
         return false;
     }
-    let tenant_starts_valid =
+    let is_tenant_start_valid =
         tenant.as_bytes().first().is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit());
-    tenant_starts_valid
+    is_tenant_start_valid
         && tenant.bytes().all(valid_tracestate_key_tail_byte)
         && system.bytes().all(valid_tracestate_key_tail_byte)
 }
@@ -195,10 +205,11 @@ fn all_zero(bytes: &[u8]) -> bool {
     !bytes.is_empty() && bytes.iter().all(|byte| *byte == b'0')
 }
 
-fn hash_component(hasher: &mut blake3::Hasher, bytes: &[u8]) {
-    let length = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
-    hasher.update(&length.to_le_bytes());
+fn hash_component(hasher: &mut blake3::Hasher, bytes: &[u8]) -> Result<(), &'static str> {
+    let length_bytes = u64::try_from(bytes.len()).map_err(|_| "remote-trace-context-length-invalid")?;
+    hasher.update(&length_bytes.to_le_bytes());
     hasher.update(bytes);
+    Ok(())
 }
 
 fn trace_health(

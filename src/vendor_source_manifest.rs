@@ -48,8 +48,22 @@ pub(crate) struct VendorManifestValidationReport {
 // r[impl mantle.source_transports.vendor_source_manifests.validation]
 pub(crate) fn validate_vendor_manifest(input: &VendorManifestValidationInput) -> VendorManifestValidationReport {
     let mut diagnostics = Vec::new();
-    validate_count("rows", input.rows.len(), MAX_VENDOR_ROWS, &mut diagnostics);
-    validate_count("measured_files", input.measured_files.len(), MAX_VENDOR_FILES, &mut diagnostics);
+    validate_count(
+        CountBound {
+            field_name: "rows",
+            actual_count: input.rows.len(),
+            maximum_count: MAX_VENDOR_ROWS,
+        },
+        &mut diagnostics,
+    );
+    validate_count(
+        CountBound {
+            field_name: "measured_files",
+            actual_count: input.measured_files.len(),
+            maximum_count: MAX_VENDOR_FILES,
+        },
+        &mut diagnostics,
+    );
     let measured = measured_file_map(&input.measured_files, &mut diagnostics);
     for row in &input.rows {
         validate_vendor_row(row, &measured, &mut diagnostics);
@@ -81,9 +95,15 @@ pub(crate) fn measure_vendor_files(
     Ok(measured)
 }
 
-fn validate_count(field_name: &str, count: usize, max_count: usize, diagnostics: &mut Vec<String>) {
-    if count > max_count {
-        diagnostics.push(format!("vendor manifest {field_name} exceeds maximum count {max_count}"));
+struct CountBound<'a> {
+    field_name: &'a str,
+    actual_count: usize,
+    maximum_count: usize,
+}
+
+fn validate_count(bound: CountBound<'_>, diagnostics: &mut Vec<String>) {
+    if bound.actual_count > bound.maximum_count {
+        diagnostics.push(format!("vendor manifest {} exceeds maximum count {}", bound.field_name, bound.maximum_count));
     }
 }
 
@@ -177,18 +197,18 @@ fn validate_undeclared_measured_files(
     diagnostics: &mut Vec<String>,
 ) {
     for path in measured.keys() {
-        let declared_expected = row.expected_files.iter().any(|expected| expected.path == *path);
-        let declared_local_edit = row.local_edits.iter().any(|edit| edit == path);
-        let selected = row.selected_paths.iter().any(|selected| path_is_under(path, selected));
-        if selected && !declared_expected && !declared_local_edit {
+        let is_declared_expected = row.expected_files.iter().any(|expected| expected.path == *path);
+        let is_declared_local_edit = row.local_edits.iter().any(|edit| edit == path);
+        let is_selected = row.selected_paths.iter().any(|selected| path_is_under(path, selected));
+        if is_selected && !is_declared_expected && !is_declared_local_edit {
             diagnostics.push(format!("undeclared local edit in vendored source: {path}"));
         }
     }
 }
 
-fn push_nonempty(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+fn push_nonempty(value: &str, field_name: impl AsRef<str>, diagnostics: &mut Vec<String>) {
     if value.trim().is_empty() {
-        diagnostics.push(format!("vendor manifest {field_name} must not be empty"));
+        diagnostics.push(format!("vendor manifest {} must not be empty", field_name.as_ref()));
     }
 }
 
@@ -200,7 +220,8 @@ fn is_safe_relative_path(value: &str) -> bool {
     path.components().all(|component| matches!(component, Component::Normal(_)))
 }
 
-fn path_is_under(path: &str, selected: &str) -> bool {
+fn path_is_under(path: &str, selected: impl AsRef<str>) -> bool {
+    let selected = selected.as_ref();
     path == selected || path.strip_prefix(selected).is_some_and(|suffix| suffix.starts_with('/'))
 }
 

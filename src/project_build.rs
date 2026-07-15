@@ -99,22 +99,24 @@ pub fn find_project_root(start_dir: &Path) -> Option<PathBuf> {
 }
 
 fn find_project_root_checked(start_dir: &Path) -> Result<Option<PathBuf>, RunError> {
+    debug_assert!(MAX_SEARCH_DEPTH > 0);
+    debug_assert_ne!(CANONICAL_PROJECT_ROOT_FILE, LEGACY_PROJECT_ROOT_FILE);
     let mut dir = start_dir.to_path_buf();
     for _ in 0..MAX_SEARCH_DEPTH {
         let canonical = dir.join(CANONICAL_PROJECT_ROOT_FILE);
         let legacy = dir.join(LEGACY_PROJECT_ROOT_FILE);
-        let canonical_exists = canonical.is_file();
-        let legacy_exists = legacy.is_file();
-        if canonical_exists && legacy_exists {
+        let has_canonical = canonical.is_file();
+        let has_legacy = legacy.is_file();
+        if has_canonical && has_legacy {
             return Err(RunError::Internal(format!(
                 "both {CANONICAL_PROJECT_ROOT_FILE} and {LEGACY_PROJECT_ROOT_FILE} exist in {}; keep one project surface",
                 dir.display()
             )));
         }
-        if canonical_exists {
+        if has_canonical {
             return Ok(Some(canonical));
         }
-        if legacy_exists {
+        if has_legacy {
             return Ok(Some(legacy));
         }
         if !dir.pop() {
@@ -130,6 +132,8 @@ pub fn resolve_project_target(
     cwd: &Path,
     user_import_paths: &[PathBuf],
 ) -> Result<ResolvedProject, RunError> {
+    debug_assert!(MAX_SEARCH_DEPTH > 0);
+    debug_assert_ne!(CANONICAL_PROJECT_ROOT_FILE, LEGACY_PROJECT_ROOT_FILE);
     let root_file = find_project_root_checked(cwd)?.ok_or_else(|| {
         RunError::Internal(format!(
             "no {CANONICAL_PROJECT_ROOT_FILE} or {LEGACY_PROJECT_ROOT_FILE} found in {} or any parent directory.\n\
@@ -138,10 +142,17 @@ pub fn resolve_project_target(
         ))
     })?;
 
-    let project_dir = root_file.parent().unwrap();
-    let mut import_paths: Vec<OsString> = vec![project_dir.as_os_str().to_owned()];
-    for p in user_import_paths {
-        import_paths.push(p.as_os_str().to_owned());
+    let project_dir = root_file
+        .parent()
+        .ok_or_else(|| RunError::Internal(format!("project root file has no parent: {}", root_file.display())))?;
+    let search_path_capacity_count = user_import_paths
+        .len()
+        .checked_add(1)
+        .ok_or_else(|| RunError::Internal("project import path count overflowed usize".to_string()))?;
+    let mut evaluation_search_paths: Vec<OsString> = Vec::with_capacity(search_path_capacity_count);
+    evaluation_search_paths.push(project_dir.as_os_str().to_owned());
+    for path in user_import_paths {
+        evaluation_search_paths.push(path.as_os_str().to_owned());
     }
 
     let project_target = match target {
@@ -156,7 +167,7 @@ pub fn resolve_project_target(
     Ok(ResolvedProject {
         root_file,
         target: project_target,
-        import_paths,
+        import_paths: evaluation_search_paths,
     })
 }
 
@@ -171,13 +182,29 @@ fn resolve_selector_to_target(sel: &Selector) -> ProjectTarget {
 /// Returns a Nickel snippet that, when evaluated, produces either a single
 /// derivation or a record of derivations suitable for the build pipeline.
 pub fn generate_extraction_expr(root_file: &Path, target: &ProjectTarget) -> String {
+    debug_assert!(MAX_SEARCH_DEPTH > 0);
+    debug_assert_ne!(CANONICAL_PROJECT_ROOT_FILE, LEGACY_PROJECT_ROOT_FILE);
     let root_path = root_file.to_string_lossy();
-
     match target {
-        ProjectTarget::Default => {
-            // Evaluate the project, check default.package, fall back to all packages.
-            format!(
-                r#"let _proj = import "{root_path}" in
+        ProjectTarget::Default => render_default_target(&root_path),
+        ProjectTarget::Attribute(segments) => render_attribute_target(&root_path, segments),
+        ProjectTarget::AllPackages => format!(r#"(import "{root_path}").packages"#),
+        ProjectTarget::AllChecks => format!(r#"(import "{root_path}").checks"#),
+        ProjectTarget::DefaultShell => render_default_shell_target(&root_path),
+        ProjectTarget::NamedShell(name) => format!(
+            r#"let _proj = import "{root_path}" in
+if std.record.has_field "shells" _proj && std.record.has_field "{name}" _proj.shells then
+  let _profile = _proj.shells."{name}" in
+  if std.record.has_field "derivation" _profile then _profile.derivation else _profile
+else
+  _proj.devShells."{name}""#
+        ),
+    }
+}
+
+fn render_default_target(root_path: &str) -> String {
+    format!(
+        r#"let _proj = import "{root_path}" in
 let _pkg_name = if std.record.has_field "default" _proj
   then (if std.record.has_field "package" _proj.default then _proj.default.package else null)
   else null
@@ -186,40 +213,34 @@ if _pkg_name != null then
   _proj.packages."%{{_pkg_name}}"
 else
   _proj.packages"#
-            )
-        }
-        ProjectTarget::Attribute(segments) => {
-            assert!(!segments.is_empty(), "selector must have at least one segment");
-            // Single segment: resolve in order packages → checks → top-level
-            if segments.len() == 1 {
-                let name = &segments[0];
-                format!(
-                    r#"let _proj = import "{root_path}" in
+    )
+}
+
+fn render_attribute_target(root_path: &str, segments: &[String]) -> String {
+    assert!(!segments.is_empty(), "selector must have at least one segment");
+    debug_assert!(MAX_SEARCH_DEPTH > 0);
+    if segments.len() == 1 {
+        let name = &segments[0];
+        return format!(
+            r#"let _proj = import "{root_path}" in
 if std.record.has_field "{name}" _proj.packages then
   _proj.packages."{name}"
 else if std.record.has_field "{name}" _proj.checks then
   _proj.checks."{name}"
 else
   _proj."{name}""#
-                )
-            } else {
-                // Multi-segment: navigate directly (e.g. packages.hello)
-                let path = segments.iter().map(|s| format!("\"{s}\"")).collect::<Vec<_>>().join(".");
-                format!(
-                    r#"let _proj = import "{root_path}" in
+        );
+    }
+    let path = segments.iter().map(|segment| format!("\"{segment}\"")).collect::<Vec<_>>().join(".");
+    format!(
+        r#"let _proj = import "{root_path}" in
 _proj.{path}"#
-                )
-            }
-        }
-        ProjectTarget::AllPackages => {
-            format!(r#"(import "{root_path}").packages"#)
-        }
-        ProjectTarget::AllChecks => {
-            format!(r#"(import "{root_path}").checks"#)
-        }
-        ProjectTarget::DefaultShell => {
-            format!(
-                r#"let _proj = import "{root_path}" in
+    )
+}
+
+fn render_default_shell_target(root_path: &str) -> String {
+    format!(
+        r#"let _proj = import "{root_path}" in
 let _has_profiles = std.record.has_field "shells" _proj in
 let _explicit_shell_name = if std.record.has_field "default" _proj
   then (if std.record.has_field "shell" _proj.default then _proj.default.shell else null)
@@ -251,19 +272,7 @@ else
       std.fail_with "no shells or devShells defined in mantle project"
     else
       std.fail_with "multiple shell profiles defined; set default.shell or use `mantle shell .#name`""#
-            )
-        }
-        ProjectTarget::NamedShell(name) => {
-            format!(
-                r#"let _proj = import "{root_path}" in
-if std.record.has_field "shells" _proj && std.record.has_field "{name}" _proj.shells then
-  let _profile = _proj.shells."{name}" in
-  if std.record.has_field "derivation" _profile then _profile.derivation else _profile
-else
-  _proj.devShells."{name}""#
-            )
-        }
-    }
+    )
 }
 
 #[cfg(test)]

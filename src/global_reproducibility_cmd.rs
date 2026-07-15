@@ -25,6 +25,10 @@ pub(crate) struct GlobalReproducibilityCommandOutput {
     pub report_path: Option<PathBuf>,
 }
 
+#[expect(
+    tigerstyle::too_many_parameters,
+    reason = "the protected release command caller retains this compatibility boundary"
+)]
 pub(crate) fn cmd_global_reproducibility(
     current_dir: &Path,
     json: bool,
@@ -33,6 +37,8 @@ pub(crate) fn cmd_global_reproducibility(
     evidence_paths: Vec<PathBuf>,
     report_path: Option<PathBuf>,
 ) -> Result<(), RunError> {
+    debug_assert!(!GLOBAL_REPRODUCIBILITY_OUTPUT_KIND.is_empty());
+    debug_assert!(!BLOCKED_GLOBAL_REPRODUCIBILITY_MESSAGE.is_empty());
     let output = evaluate_global_reproducibility_from_paths(
         current_dir,
         universe_path,
@@ -61,12 +67,14 @@ pub(crate) fn evaluate_global_reproducibility_from_paths(
     evidence_paths: Vec<PathBuf>,
     report_path: Option<PathBuf>,
 ) -> Result<GlobalReproducibilityCommandOutput, RunError> {
+    debug_assert!(!GLOBAL_REPRODUCIBILITY_OUTPUT_KIND.is_empty());
+    debug_assert!(!BLOCKED_GLOBAL_REPRODUCIBILITY_MESSAGE.is_empty());
     let universe = read_json_file::<GlobalReproducibilityUniverse>(&resolve_input_path(current_dir, universe_path))?;
     let policy = read_json_file::<GlobalReproducibilityPolicy>(&resolve_input_path(current_dir, policy_path))?;
     let universe_digest_blake3 = global_reproducibility_universe_digest_blake3(universe.clone()).map_err(core_error)?;
     let policy_digest_blake3 = global_reproducibility_policy_digest_blake3(policy.clone()).map_err(core_error)?;
     let surface_evidence = read_surface_evidence_files(current_dir, evidence_paths)?;
-    let report = evaluate_global_reproducibility(GlobalReproducibilityEvaluationInput {
+    let evaluation_result = evaluate_global_reproducibility(GlobalReproducibilityEvaluationInput {
         universe,
         policy,
         universe_digest_blake3,
@@ -74,15 +82,16 @@ pub(crate) fn evaluate_global_reproducibility_from_paths(
         surface_evidence,
     })
     .map_err(core_error)?;
-    let report_digest_blake3 = global_reproducibility_report_digest_blake3(report.clone()).map_err(core_error)?;
-    let resolved_report_path = report_path.map(|path| resolve_input_path(current_dir, path));
-    if let Some(path) = &resolved_report_path {
-        write_report(path, report.clone())?;
+    let evaluation_digest_blake3 =
+        global_reproducibility_report_digest_blake3(evaluation_result.clone()).map_err(core_error)?;
+    let resolved_output_path = report_path.map(|path| resolve_input_path(current_dir, path));
+    if let Some(path) = &resolved_output_path {
+        write_report(path, evaluation_result.clone())?;
     }
     Ok(GlobalReproducibilityCommandOutput {
-        report,
-        report_digest_blake3,
-        report_path: resolved_report_path,
+        report: evaluation_result,
+        report_digest_blake3: evaluation_digest_blake3,
+        report_path: resolved_output_path,
     })
 }
 
@@ -90,7 +99,7 @@ fn read_surface_evidence_files(
     current_dir: &Path,
     evidence_paths: Vec<PathBuf>,
 ) -> Result<Vec<GlobalSurfaceEvidence>, RunError> {
-    let mut evidence = Vec::new();
+    let mut evidence = Vec::with_capacity(evidence_paths.len());
     for path in evidence_paths {
         let resolved = resolve_input_path(current_dir, path);
         evidence.extend(read_surface_evidence_file(&resolved)?);
