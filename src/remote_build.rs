@@ -2763,7 +2763,7 @@ fn remote_failure_workspace_root(
     hash_labeled_str(&mut hasher, "domain", "mantle-remote-failure-workspace-v1");
     hash_labeled_str(&mut hasher, "request-id", &request.request_id);
     hash_labeled_str(&mut hasher, "attempt-id", attempt.attempt_id.as_str());
-    hash_labeled_str(&mut hasher, "fence-generation", &attempt.fence_generation.get().to_string());
+    hash_labeled_str(&mut hasher, "fence-generation", attempt.fence_generation.get().to_string());
     Ok(executor.state_dir.join(REMOTE_FAILURE_WORKSPACE_DIR).join(hasher.finalize().to_hex().as_str()))
 }
 
@@ -2843,18 +2843,19 @@ fn sole_retained_failure_workspace(root: &Path) -> Result<Option<PathBuf>, Strin
 fn cleanup_remote_failure_workspace(root: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
 
-    debug_assert!(REMOTE_FAILURE_CLEANUP_ENTRIES_MAX > 0);
-    debug_assert!(REMOTE_FAILURE_CLEANUP_DIRECTORY_MODE != REMOTE_FAILURE_CLEANUP_FILE_MODE);
     if !root.exists() {
         return Ok(());
     }
     let mut pending = vec![root.to_path_buf()];
+    debug_assert_eq!(pending.len(), 1);
+    debug_assert_eq!(pending.last().map(PathBuf::as_path), Some(root));
     let mut visited = 0_usize;
     while let Some(path) = pending.pop() {
         if visited >= REMOTE_FAILURE_CLEANUP_ENTRIES_MAX {
             return Err(std::io::Error::other("remote failure cleanup entry limit exceeded"));
         }
         visited = visited.saturating_add(1);
+        debug_assert!(visited <= REMOTE_FAILURE_CLEANUP_ENTRIES_MAX);
         let metadata = std::fs::symlink_metadata(&path)?;
         if metadata.file_type().is_symlink() {
             continue;
@@ -3210,7 +3211,7 @@ fn remote_output_nar_artifact_id(
 ) -> Result<RemoteTransferArtifactId, String> {
     remote_hashed_transfer_artifact_id(
         REMOTE_OUTPUT_NAR_ARTIFACT_DOMAIN,
-        &format!("{output_name}\0{}", logical_path.as_ref()),
+        format!("{output_name}\0{}", logical_path.as_ref()),
     )
 }
 
@@ -3220,7 +3221,7 @@ fn remote_output_pathinfo_artifact_id(
 ) -> Result<RemoteTransferArtifactId, String> {
     remote_hashed_transfer_artifact_id(
         REMOTE_OUTPUT_PATHINFO_ARTIFACT_DOMAIN,
-        &format!("{output_name}\0{}", logical_path.as_ref()),
+        format!("{output_name}\0{}", logical_path.as_ref()),
     )
 }
 
@@ -3423,7 +3424,7 @@ struct RemoteBuildObservabilityInput<'a> {
     non_claims: &'a [String],
 }
 
-pub const REMOTE_BUILD_OBSERVABILITY_REPORT: fn(
+pub type RemoteBuildObservabilityReportFn = fn(
     &str,
     &[String],
     Option<&str>,
@@ -3434,7 +3435,9 @@ pub const REMOTE_BUILD_OBSERVABILITY_REPORT: fn(
     &RemoteOutputAdmissionReport,
     &RemoteOutputImportReport,
     &[String],
-) -> Result<RemoteBuildObservabilityReport, String> =
+) -> Result<RemoteBuildObservabilityReport, String>;
+
+pub const REMOTE_BUILD_OBSERVABILITY_REPORT: RemoteBuildObservabilityReportFn =
     |selected_route,
      rejected_route_reasons,
      endpoint_id,
@@ -3524,7 +3527,7 @@ struct RemoteOperatorE2eRailInput<'a> {
     non_claims: &'a [String],
 }
 
-pub const REMOTE_OPERATOR_E2E_RAIL_REPORT: fn(
+pub type RemoteOperatorE2eRailReportFn = fn(
     &crate::realization_routing::RoutePlanReport,
     &RemoteStdioTranscript,
     RemoteInputUploadPrivacySummary,
@@ -3532,7 +3535,9 @@ pub const REMOTE_OPERATOR_E2E_RAIL_REPORT: fn(
     &RemoteOutputImportReport,
     RemoteCoordinatorStatusSnapshot,
     &[String],
-) -> Result<RemoteOperatorE2eRailReport, String> =
+) -> Result<RemoteOperatorE2eRailReport, String>;
+
+pub const REMOTE_OPERATOR_E2E_RAIL_REPORT: RemoteOperatorE2eRailReportFn =
     |route_plan, transcript, upload_summary, admission, import_report, status, non_claims| {
         remote_operator_e2e_rail_report_core(RemoteOperatorE2eRailInput {
             route_plan,
@@ -4146,7 +4151,7 @@ fn hash_remote_output_digest_fields(hasher: &mut blake3::Hasher, fields: RemoteO
     hash_labeled_str(hasher, "output-path", fields.logical_path);
     hash_labeled_str(hasher, "content-digest", fields.content_digest_blake3);
     hash_labeled_str(hasher, "artifact-digest", fields.artifact_attestation_digest_blake3);
-    hash_labeled_str(hasher, "size-bytes", &fields.size_bytes.to_string());
+    hash_labeled_str(hasher, "size-bytes", fields.size_bytes.to_string());
     hash_optional_digest_field(hasher, "nar-payload-digest", fields.nar_payload_digest_blake3);
     hash_optional_u64_field(hasher, "nar-payload-size", fields.nar_payload_size_bytes);
 }
@@ -4160,7 +4165,7 @@ fn hash_optional_digest_field(hasher: &mut blake3::Hasher, label: &str, value: O
 
 fn hash_optional_u64_field(hasher: &mut blake3::Hasher, label: &str, value: Option<u64>) {
     match value {
-        Some(value) => hash_labeled_str(hasher, label, &value.to_string()),
+        Some(value) => hash_labeled_str(hasher, label, value.to_string()),
         None => hash_labeled_str(hasher, label, "<absent>"),
     }
 }
@@ -4948,7 +4953,7 @@ struct ExternalBatchSubmitInput<'a> {
     observed_unix_s: u64,
 }
 
-pub const SUBMIT_EXTERNAL_BATCH_ALLOCATION: fn(
+pub type ExternalBatchAllocationSubmitFn = fn(
     &mut RemoteCoordinatorState,
     &RemoteCoordinatorBuildRequest,
     &crate::remote_farm_config::RemoteBatchDispatcherProfile,
@@ -4956,7 +4961,9 @@ pub const SUBMIT_EXTERNAL_BATCH_ALLOCATION: fn(
     u32,
     &dyn ExternalBatchDispatcher,
     u64,
-) -> Result<ExternalBatchOperationResponse, String> =
+) -> Result<ExternalBatchOperationResponse, String>;
+
+pub const SUBMIT_EXTERNAL_BATCH_ALLOCATION: ExternalBatchAllocationSubmitFn =
     |state, request, profile, expected_worker_endpoint_id, allocation_attempt, dispatcher, observed_unix_s| {
         submit_external_batch_allocation_core(state, ExternalBatchSubmitInput {
             request,
@@ -5085,8 +5092,8 @@ fn derive_external_batch_allocation_identity(input: ExternalBatchAllocationIdent
     hash_labeled_str(&mut hasher, "domain", "mantle-external-batch-allocation-identity-v1");
     hash_labeled_str(&mut hasher, "normalized-build-key", input.normalized_build_key);
     hash_labeled_str(&mut hasher, "adapter-instance", input.adapter_instance_id);
-    hash_labeled_str(&mut hasher, "dispatcher-generation", &input.dispatcher_generation.to_string());
-    hash_labeled_str(&mut hasher, "allocation-attempt", &input.allocation_attempt.to_string());
+    hash_labeled_str(&mut hasher, "dispatcher-generation", input.dispatcher_generation.to_string());
+    hash_labeled_str(&mut hasher, "allocation-attempt", input.allocation_attempt.to_string());
     let identity = hasher.finalize().to_hex().to_string();
     debug_assert!(is_blake3_hex_digest(&identity));
     debug_assert!(!input.adapter_instance_id.is_empty());
@@ -5288,14 +5295,16 @@ struct ExternalBatchTerminationInput<'a> {
     observed_unix_s: u64,
 }
 
-pub const TERMINATE_EXTERNAL_BATCH_ASSIGNED_ATTEMPT: fn(
+pub type ExternalBatchAssignedAttemptTerminationFn = fn(
     &mut RemoteCoordinatorState,
     &str,
     &RemoteProductionAttemptBinding,
     RemoteCoordinatorTerminationCause,
     &dyn ExternalBatchDispatcher,
     u64,
-) -> Result<ExternalBatchOperationResponse, String> =
+) -> Result<ExternalBatchOperationResponse, String>;
+
+pub const TERMINATE_EXTERNAL_BATCH_ASSIGNED_ATTEMPT: ExternalBatchAssignedAttemptTerminationFn =
     |state, dispatch_id_blake3, binding, cause, dispatcher, observed_unix_s| {
         terminate_external_batch_assigned_attempt_core(state, ExternalBatchTerminationInput {
             dispatch_id_blake3,
@@ -5472,14 +5481,16 @@ struct RemoteWorkerLocalityProbeInput<'a> {
     admission: crate::remote_transfer::RemoteTransferAdmissionFacts,
 }
 
-pub const PROBE_AND_RECORD_REMOTE_WORKER_LOCALITY: fn(
+pub type RemoteWorkerLocalityProbeFn = fn(
     &mut RemoteCoordinatorState,
     &str,
     u64,
     &Path,
     &CanonicalRemoteTransferManifest,
     crate::remote_transfer::RemoteTransferAdmissionFacts,
-) -> Result<RemoteVerifiedLocalitySummary, String> =
+) -> Result<RemoteVerifiedLocalitySummary, String>;
+
+pub const PROBE_AND_RECORD_REMOTE_WORKER_LOCALITY: RemoteWorkerLocalityProbeFn =
     |state, worker_endpoint_id, worker_generation, receiver_root, manifest, admission| {
         probe_and_record_remote_worker_locality_core(state, RemoteWorkerLocalityProbeInput {
             worker_endpoint_id,
@@ -5557,7 +5568,7 @@ fn record_receiver_verified_worker_locality(
 fn verified_locality_observation_key(summary: &RemoteVerifiedLocalitySummary) -> String {
     let mut hasher = blake3::Hasher::new();
     hash_labeled_str(&mut hasher, "worker", &summary.worker_endpoint_id);
-    hash_labeled_str(&mut hasher, "generation", &summary.worker_generation.to_string());
+    hash_labeled_str(&mut hasher, "generation", summary.worker_generation.to_string());
     hash_labeled_str(&mut hasher, "manifest", &summary.scope.manifest_digest_blake3);
     hash_labeled_str(&mut hasher, "policy", &summary.scope.policy_digest_blake3);
     let digest = hasher.finalize().to_hex().to_string();
@@ -5576,7 +5587,7 @@ struct RemoteProductionDispatchInput<'a> {
     now_unix_s: u64,
 }
 
-pub const ADMIT_REMOTE_PRODUCTION_DISPATCH: fn(
+pub type RemoteProductionDispatchAdmissionFn = fn(
     &mut RemoteCoordinatorState,
     &ConcreteBuildRequest,
     &str,
@@ -5585,7 +5596,9 @@ pub const ADMIT_REMOTE_PRODUCTION_DISPATCH: fn(
     Option<RemoteWorkerResourceInventory>,
     &[String],
     u64,
-) -> Result<RemoteProductionAttemptBinding, String> =
+) -> Result<RemoteProductionAttemptBinding, String>;
+
+pub const ADMIT_REMOTE_PRODUCTION_DISPATCH: RemoteProductionDispatchAdmissionFn =
     |state,
      request,
      endpoint_id,
@@ -6029,7 +6042,7 @@ fn production_attempt_report(
     hash_labeled_str(&mut hasher, "job", binding.job_id.as_str());
     hash_labeled_str(&mut hasher, "attempt", binding.attempt_id.as_str());
     hash_labeled_str(&mut hasher, "label", label);
-    hash_labeled_str(&mut hasher, "event-number", &event_number.to_string());
+    hash_labeled_str(&mut hasher, "event-number", event_number.to_string());
     let event_id =
         RemoteEventId::new(hasher.finalize().to_hex().to_string()).map_err(|reason| reason.as_str().to_string())?;
     RemoteAttemptReport::new(
@@ -6186,7 +6199,7 @@ fn rejected_observability_log_scope(binding: &RemoteProductionAttemptBinding) ->
     hasher.update(b"mantle-rejected-remote-observability-v1\0");
     hash_labeled_str(&mut hasher, "job", binding.job_id.as_str());
     hash_labeled_str(&mut hasher, "attempt", binding.attempt_id.as_str());
-    hash_labeled_str(&mut hasher, "fence", &binding.fence_generation.get().to_string());
+    hash_labeled_str(&mut hasher, "fence", binding.fence_generation.get().to_string());
     let digest = hasher.finalize().to_hex().to_string();
     let job_id = RemoteJobId::new(format!("rejected-job-{digest}")).map_err(|reason| reason.as_str().to_string())?;
     let attempt_id =
@@ -6581,14 +6594,16 @@ struct ReassignCoordinatorAttemptInput<'a> {
     assignment_nonce: RemoteAssignmentNonce,
 }
 
-pub const REASSIGN_COORDINATOR_ATTEMPT: fn(
+pub type CoordinatorAttemptReassignmentFn = fn(
     &mut RemoteCoordinatorState,
     &RemoteJobId,
     &str,
     RemoteAttemptFailureClass,
     RemoteAttemptRetryPolicy,
     RemoteAttemptTimeFacts,
-) -> Result<RemoteCoordinatorDispatchDecision, String> =
+) -> Result<RemoteCoordinatorDispatchDecision, String>;
+
+pub const REASSIGN_COORDINATOR_ATTEMPT: CoordinatorAttemptReassignmentFn =
     |state, job_id, worker_endpoint_id, failure_class, retry_policy, time| {
         let assignment_nonce = generate_remote_assignment_nonce()?;
         reassign_coordinator_attempt_core(state, ReassignCoordinatorAttemptInput {
@@ -6601,14 +6616,7 @@ pub const REASSIGN_COORDINATOR_ATTEMPT: fn(
         })
     };
 pub use REASSIGN_COORDINATOR_ATTEMPT as reassign_coordinator_attempt;
-const _: fn(
-    &mut RemoteCoordinatorState,
-    &RemoteJobId,
-    &str,
-    RemoteAttemptFailureClass,
-    RemoteAttemptRetryPolicy,
-    RemoteAttemptTimeFacts,
-) -> Result<RemoteCoordinatorDispatchDecision, String> = reassign_coordinator_attempt;
+const _: CoordinatorAttemptReassignmentFn = reassign_coordinator_attempt;
 
 fn reassign_coordinator_attempt_core(
     state: &mut RemoteCoordinatorState,
@@ -8458,8 +8466,9 @@ fn receive_remote_transfer_interactively(
         },
         &mut validate_fence,
     );
-    debug_assert!(MAX_REMOTE_FRAME_BYTES > 0);
-    debug_assert!(MAX_REMOTE_STDIO_FRAME_COUNT > 0);
+    let sender_state = session.sender_credit_state();
+    debug_assert!(sender_state.in_flight.is_empty());
+    debug_assert_eq!(sender_state.granted_chunks_remaining, 0);
     transfer_result
 }
 
@@ -8636,13 +8645,15 @@ fn run_remote_production_client_protocol(
         auth: &auth,
         policy,
     };
-    let mut io = RemoteProductionClientIo {
-        stdin: &mut stdin,
-        stdout: &mut stdout,
+    let (progress, streaming_output) = {
+        let mut io = RemoteProductionClientIo {
+            stdin: &mut stdin,
+            stdout: &mut stdout,
+        };
+        let mut progress = open_remote_production_client(&mut io, &context, hello, trace_context, input_manifest)?;
+        let streaming_output = receive_remote_production_output(&mut io, &context, &mut progress)?;
+        (progress, streaming_output)
     };
-    let mut progress = open_remote_production_client(&mut io, &context, hello, trace_context, input_manifest)?;
-    let streaming_output = receive_remote_production_output(&mut io, &context, &mut progress)?;
-    drop(io);
     drop(stdin);
     let transcript = RemoteStdioTranscript {
         binding: command.binding,
@@ -8878,8 +8889,8 @@ fn finish_remote_production_output_transfer(
         direction: crate::remote_transfer::RemoteTransferDirection::Download,
         report: transfer_receipt,
     })?;
-    debug_assert!(MAX_REMOTE_FRAME_BYTES > 0);
-    debug_assert!(MAX_REMOTE_STDIO_FRAME_COUNT > 0);
+    debug_assert_eq!(output_transfer.direction, crate::remote_transfer::RemoteTransferDirection::Download);
+    debug_assert!(progress.frames.len() <= MAX_REMOTE_STDIO_FRAME_COUNT);
     Ok(())
 }
 
@@ -8967,7 +8978,7 @@ fn wait_for_remote_child_teardown(child: &mut std::process::Child) -> Result<(),
             .is_some()
         {
             assert!(poll_attempts > 0);
-            assert!(REMOTE_CHILD_POLL_INTERVAL_MS > 0);
+            assert!(child.id() > 0);
             return Ok(());
         }
         thread::sleep(Duration::from_millis(REMOTE_CHILD_POLL_INTERVAL_MS));
@@ -8999,15 +9010,11 @@ fn run_production_stdio_remote_child(
     let production_owned = production.clone();
     thread::spawn(move || {
         let result = run_remote_production_client_protocol(stdin, stdout, command_owned, production_owned);
-        if protocol_tx.send(result).is_err() {
-            return;
-        }
+        let _delivery_result = protocol_tx.send(result);
     });
     let (stderr_tx, stderr_rx) = std::sync::mpsc::sync_channel(1);
     thread::spawn(move || {
-        if stderr_tx.send(drain_bounded_pipe(stderr, MAX_REMOTE_STDIO_STDERR_BYTES)).is_err() {
-            return;
-        }
+        let _delivery_result = stderr_tx.send(drain_bounded_pipe(stderr, MAX_REMOTE_STDIO_STDERR_BYTES));
     });
     let protocol_timeout_secs = Duration::from_secs(command.timeout_secs);
     let protocol_result = match protocol_rx.recv_timeout(protocol_timeout_secs) {
@@ -9123,7 +9130,7 @@ fn wait_for_stdio_child_output(
             .is_some()
         {
             debug_assert!(poll_attempts > 0);
-            debug_assert!(REMOTE_CHILD_POLL_INTERVAL_MS > 0);
+            debug_assert!(child.id() > 0);
             return child.wait_with_output().map_err(|err| {
                 RunError::Internal(format!("collecting stdio remote child {} output: {err}", program.display()))
             });
@@ -9406,7 +9413,7 @@ fn remote_client_request_id(label: &str, drv_path: &StorePath<String>, store_pre
     let mut hasher = blake3::Hasher::new();
     hash_labeled_str(&mut hasher, "kind", REMOTE_CLIENT_REQUEST_ID_LABEL);
     hash_labeled_str(&mut hasher, "label", label);
-    hash_labeled_str(&mut hasher, "drv-path", &drv_path.to_absolute_path_with_prefix(store_prefix));
+    hash_labeled_str(&mut hasher, "drv-path", drv_path.to_absolute_path_with_prefix(store_prefix));
     hasher.finalize().to_hex().to_string()
 }
 
@@ -9664,7 +9671,9 @@ struct MissingUploadValidationInput<'a> {
     max_upload_bytes: u64,
 }
 
-pub const VALIDATE_MISSING_UPLOADS: fn(&[String], &[String], u64, u64) -> Result<(), String> =
+pub type MissingUploadsValidationFn = fn(&[String], &[String], u64, u64) -> Result<(), String>;
+
+pub const VALIDATE_MISSING_UPLOADS: MissingUploadsValidationFn =
     |missing_refs, uploaded_refs, uploaded_bytes, max_upload_bytes| {
         validate_missing_uploads_core(MissingUploadValidationInput {
             missing_refs,
@@ -9760,12 +9769,13 @@ pub fn plan_output_transfer(
 ) -> Result<RemoteTransferReport, String> {
     // A negotiated label is not runtime evidence. Only
     // `streaming_transfer_report_from_runtime` may report streaming mode.
-    debug_assert!(DELTA_REUSE_PERCENT <= PERCENT_DENOMINATOR);
-    debug_assert!(PERCENT_DENOMINATOR > 0);
     let is_delta_available = client.delta && builder.delta;
     let is_delta_failure_simulated = client.simulate_delta_failure || builder.simulate_delta_failure;
     if is_delta_available && !is_delta_failure_simulated {
-        return Ok(delta_transfer_report(output_size_bytes, verified_builder_key));
+        let delta_result = delta_transfer_report(output_size_bytes, verified_builder_key);
+        debug_assert_eq!(delta_result.transferred_bytes.saturating_add(delta_result.reused_bytes), output_size_bytes);
+        debug_assert_eq!(delta_result.verified_builder_key, verified_builder_key);
+        return Ok(delta_result);
     }
     if is_delta_available && is_delta_failure_simulated {
         if client.full && builder.full {
@@ -9986,7 +9996,7 @@ struct FencedRemoteStdioOutputInput<'a> {
     event_number: u64,
 }
 
-pub const ADMIT_FENCED_REMOTE_STDIO_OUTPUT: fn(
+pub type FencedRemoteStdioOutputAdmissionFn = fn(
     &mut RemoteCoordinatorState,
     &RemoteProductionAttemptBinding,
     bool,
@@ -9994,7 +10004,9 @@ pub const ADMIT_FENCED_REMOTE_STDIO_OUTPUT: fn(
     &[String],
     &RemoteStdioTranscript,
     u64,
-) -> Result<RemoteOutputAdmissionReport, String> =
+) -> Result<RemoteOutputAdmissionReport, String>;
+
+pub const ADMIT_FENCED_REMOTE_STDIO_OUTPUT: FencedRemoteStdioOutputAdmissionFn =
     |state, binding, worker_authorized, request, trusted_output_keys, transcript, event_number| {
         admit_fenced_remote_stdio_output_core(state, FencedRemoteStdioOutputInput {
             binding,
@@ -10132,7 +10144,7 @@ struct FencedRemoteBuilderResponseInput<'a> {
     response: &'a RemoteBuilderFrameResponse,
 }
 
-pub const ADMIT_FENCED_REMOTE_BUILDER_RESPONSE: fn(
+pub type FencedRemoteBuilderResponseAdmissionFn = fn(
     &mut RemoteCoordinatorState,
     &RemoteAttemptReport,
     bool,
@@ -10140,7 +10152,9 @@ pub const ADMIT_FENCED_REMOTE_BUILDER_RESPONSE: fn(
     &ConcreteBuildRequest,
     &[String],
     &RemoteBuilderFrameResponse,
-) -> Result<RemoteFencedOutputAdmissionDecision, String> =
+) -> Result<RemoteFencedOutputAdmissionDecision, String>;
+
+pub const ADMIT_FENCED_REMOTE_BUILDER_RESPONSE: FencedRemoteBuilderResponseAdmissionFn =
     |state, report, worker_authorized, log_policy, request, trusted_output_keys, response| {
         admit_fenced_remote_builder_response_core(state, FencedRemoteBuilderResponseInput {
             report,
@@ -10152,15 +10166,7 @@ pub const ADMIT_FENCED_REMOTE_BUILDER_RESPONSE: fn(
         })
     };
 pub use ADMIT_FENCED_REMOTE_BUILDER_RESPONSE as admit_fenced_remote_builder_response;
-const _: fn(
-    &mut RemoteCoordinatorState,
-    &RemoteAttemptReport,
-    bool,
-    RemoteLogRetentionPolicy,
-    &ConcreteBuildRequest,
-    &[String],
-    &RemoteBuilderFrameResponse,
-) -> Result<RemoteFencedOutputAdmissionDecision, String> = admit_fenced_remote_builder_response;
+const _: FencedRemoteBuilderResponseAdmissionFn = admit_fenced_remote_builder_response;
 
 fn admit_fenced_remote_builder_response_core(
     state: &mut RemoteCoordinatorState,
@@ -11416,16 +11422,10 @@ struct CreateTicketInput {
     bound_client_endpoint: Option<String>,
 }
 
-pub const CREATE_TICKET: fn(
-    &mut RemoteTicketState,
-    String,
-    u64,
-    u64,
-    u32,
-    u64,
-    u64,
-    Option<String>,
-) -> Result<RemoteTicketView, RunError> =
+pub type TicketCreationFn =
+    fn(&mut RemoteTicketState, String, u64, u64, u32, u64, u64, Option<String>) -> Result<RemoteTicketView, RunError>;
+
+pub const CREATE_TICKET: TicketCreationFn =
     |state, display_name, now_unix_s, ttl_secs, uses, max_build_time_secs, max_upload_bytes, bound_client_endpoint| {
         create_ticket_core(state, CreateTicketInput {
             display_name,
@@ -11811,8 +11811,6 @@ fn coordinator_job_attempt_is_valid(job: &RemoteCoordinatorJobSummary) -> bool {
 }
 
 fn coordinator_attempt_identity_is_valid(job: &RemoteCoordinatorJobSummary, attempt: &RemoteAttemptState) -> bool {
-    debug_assert!(MAX_REMOTE_STATUS_ITEMS > 0);
-    debug_assert!(crunch_build::distributed::MAX_REMOTE_ATTEMPT_EVENTS > 0);
     if attempt.job_id != job.job_id {
         return false;
     }
@@ -11862,6 +11860,8 @@ fn coordinator_attempt_identity_is_valid(job: &RemoteCoordinatorJobSummary, atte
             return false;
         }
     }
+    debug_assert_eq!(attempt.job_id, job.job_id);
+    debug_assert!(attempt.applied_events.len() <= crunch_build::distributed::MAX_REMOTE_ATTEMPT_EVENTS);
     true
 }
 
@@ -11894,8 +11894,6 @@ fn coordinator_attempt_result_is_valid(attempt: &RemoteAttemptState) -> bool {
 }
 
 fn coordinator_attempt_projection_matches(job: &RemoteCoordinatorJobSummary, attempt: &RemoteAttemptState) -> bool {
-    debug_assert!(crunch_build::distributed::MAX_REMOTE_ATTEMPTS > 0);
-    debug_assert!(crunch_build::distributed::MAX_REMOTE_ATTEMPT_EVENTS > 0);
     let is_result_available = attempt.phase == RemoteAttemptPhase::Completed;
     let is_output_admitted =
         matches!(attempt.phase, RemoteAttemptPhase::FinishedUndelivered | RemoteAttemptPhase::Completed);
@@ -11911,7 +11909,12 @@ fn coordinator_attempt_projection_matches(job: &RemoteCoordinatorJobSummary, att
     if job.transfer_checkpoint != attempt.transfer_checkpoint {
         return false;
     }
-    job.transferred_bytes == attempt.transferred_bytes
+    if job.transferred_bytes != attempt.transferred_bytes {
+        return false;
+    }
+    debug_assert_eq!(job.phase, coordinator_phase_for_attempt(attempt.phase));
+    debug_assert_eq!(job.output_admission_completed, is_output_admitted);
+    true
 }
 
 fn fail_closed_coordinator_job(job: &mut RemoteCoordinatorJobSummary, reason_code: RemoteAttemptReasonCode) {
@@ -12637,8 +12640,6 @@ fn cmd_remote_status(
 }
 
 fn cmd_remote_ticket(action: crate::RemoteTicketAction, state_dir: &Path, json_output: bool) -> Result<(), RunError> {
-    debug_assert!(MAX_TICKET_DISPLAY_NAME_BYTES > 0);
-    debug_assert!(MAX_REMOTE_STATUS_ITEMS > 0);
     let mut state = load_ticket_state(state_dir)?;
     match action {
         crate::RemoteTicketAction::Create {
@@ -12661,6 +12662,8 @@ fn cmd_remote_ticket(action: crate::RemoteTicketAction, state_dir: &Path, json_o
                 bound_client_endpoint,
             )?;
             save_ticket_state(state_dir, &state)?;
+            debug_assert!(state.tickets.contains_key(&view.id));
+            debug_assert_eq!(view.secret, SECRET_REDACTION);
             print_json_or_human(&view, json_output)
         }
         crate::RemoteTicketAction::List => {
