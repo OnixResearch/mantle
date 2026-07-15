@@ -105,7 +105,7 @@ impl Lockfile {
                     &subject,
                     &entry.hash.algo,
                     &entry.hash.value,
-                    &format!("lock entry '{name}'"),
+                    format!("lock entry '{name}'"),
                 ));
             }
             for patch_name in &entry.patches {
@@ -129,7 +129,7 @@ impl Lockfile {
                     &subject,
                     &patch.hash.algo,
                     &patch.hash.value,
-                    &format!("locked patch '{name}'"),
+                    format!("locked patch '{name}'"),
                 ));
             }
         }

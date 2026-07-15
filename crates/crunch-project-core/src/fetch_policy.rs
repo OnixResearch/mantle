@@ -645,13 +645,13 @@ fn source_identity_from_input_kind(kind: &InputKind) -> String {
             source_identity(SOURCE_ID_GIT_PREFIX, &git_reference_identity(repository, reference))
         }
         InputKind::Darcs { repository, selector } => {
-            source_identity(SOURCE_ID_DARCS_PREFIX, &vcs_selector_identity(repository, &selector.identity_fragment()))
+            source_identity(SOURCE_ID_DARCS_PREFIX, &vcs_selector_identity(repository, selector.identity_fragment()))
         }
         InputKind::Pijul { repository, selector } => {
-            source_identity(SOURCE_ID_PIJUL_PREFIX, &vcs_selector_identity(repository, &selector.identity_fragment()))
+            source_identity(SOURCE_ID_PIJUL_PREFIX, &vcs_selector_identity(repository, selector.identity_fragment()))
         }
         InputKind::Fossil { repository, selector } => {
-            source_identity(SOURCE_ID_FOSSIL_PREFIX, &vcs_selector_identity(repository, &selector.identity_fragment()))
+            source_identity(SOURCE_ID_FOSSIL_PREFIX, &vcs_selector_identity(repository, selector.identity_fragment()))
         }
     }
 }
@@ -671,10 +671,10 @@ fn git_identity(repository: &str, revision_or_ref: impl AsRef<str>) -> String {
 
 fn darcs_locked_identity(repository: &str, context: &Option<String>, weak_hash: &Option<String>) -> String {
     if let Some(context) = context {
-        return vcs_selector_identity(repository, &format!("context:{context}"));
+        return vcs_selector_identity(repository, format!("context:{context}"));
     }
     if let Some(weak_hash) = weak_hash {
-        return vcs_selector_identity(repository, &format!("weak-hash:{weak_hash}"));
+        return vcs_selector_identity(repository, format!("weak-hash:{weak_hash}"));
     }
     vcs_selector_identity(repository, "unresolved")
 }

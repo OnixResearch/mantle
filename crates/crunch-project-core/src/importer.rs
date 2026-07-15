@@ -415,7 +415,7 @@ fn map_patch(patch: &ExternalPatch, blockers: &mut Vec<PinImportBlocker>) -> Opt
             blockers.push(blocker(
                 "unsupported-patch-source",
                 &patch.name,
-                &format!("unsupported patch source: {kind}"),
+                format!("unsupported patch source: {kind}"),
             ));
             return None;
         }
@@ -509,7 +509,7 @@ fn validate_pin_patches(pin: &ExternalPin, patch_names: &BTreeSet<String>, block
     let mut seen = BTreeSet::new();
     for patch in &pin.patches {
         if !patch_names.contains(patch) {
-            blockers.push(blocker("unknown-patch", &pin.name, &format!("input references unknown patch `{patch}`")));
+            blockers.push(blocker("unknown-patch", &pin.name, format!("input references unknown patch `{patch}`")));
         }
         if !seen.insert(patch) {
             blockers.push(blocker("duplicate-patch-reference", &pin.name, "input repeats a patch reference"));
@@ -600,7 +600,7 @@ fn validate_semantic_value(
     blockers.push(blocker(
         "unsupported-metadata",
         &validation.pin.name,
-        &format!("unsupported {}: {value}", validation.key),
+        format!("unsupported {}: {value}", validation.key),
     ));
 }
 
@@ -702,7 +702,7 @@ fn map_pin_kind(
             blockers,
         ),
         ExternalPinKind::Unsupported { kind } => {
-            blockers.push(blocker("unsupported-source-kind", subject, &format!("unsupported source kind: {kind}")));
+            blockers.push(blocker("unsupported-source-kind", subject, format!("unsupported source kind: {kind}")));
             None
         }
     }
@@ -755,7 +755,7 @@ fn map_locked_hash(hash: &ExternalHash, subject: &str, blockers: &mut Vec<PinImp
             blockers.push(blocker(
                 "unsupported-hash-algorithm",
                 subject,
-                &format!("unsupported hash algorithm: {other}"),
+                format!("unsupported hash algorithm: {other}"),
             ));
             return None;
         }
@@ -786,7 +786,7 @@ fn plan_file_operations(
     let lock_content = match lock.clone().to_json() {
         Ok(content) => content,
         Err(error) => {
-            blockers.push(blocker("lock-serialization", &options.lock_file, &error.to_string()));
+            blockers.push(blocker("lock-serialization", &options.lock_file, error.to_string()));
             return Vec::new();
         }
     };

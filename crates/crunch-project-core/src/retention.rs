@@ -817,7 +817,7 @@ fn hash_locked_kind(hasher: &mut blake3::Hasher, kind: &LockedKind) {
 }
 
 fn hash_string_vec(hasher: &mut blake3::Hasher, label: &str, values: &[String]) {
-    hash_field(hasher, &format!("{label}_count"), &values.len().to_string());
+    hash_field(hasher, format!("{label}_count"), &values.len().to_string());
     for value in values {
         hash_field(hasher, label, value);
     }
