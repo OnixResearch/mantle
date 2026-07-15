@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Allow Mantle to place fenced remote build attempts through existing external batch schedulers while preserving provider-neutral planning, CAS-based transfer, current worker authority, secret boundaries, and ordinary output admission.
+Defines the `external-batch-dispatchers` capability.
 
 ## Requirements
 
