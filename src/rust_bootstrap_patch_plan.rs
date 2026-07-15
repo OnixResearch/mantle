@@ -146,8 +146,8 @@ impl std::error::Error for RustBootstrapPatchPlanError {}
 
 impl RustBootstrapPatchPlan {
     pub(crate) fn receipt_arguments(&self) -> Vec<String> {
-        let argument_capacity_entries = PATCH_PLAN_BASE_RECEIPT_ARGUMENTS.saturating_add(self.operations.len());
-        let mut arguments = Vec::with_capacity(argument_capacity_entries);
+        let argument_count = PATCH_PLAN_BASE_RECEIPT_ARGUMENTS.saturating_add(self.operations.len());
+        let mut arguments = Vec::with_capacity(argument_count);
         arguments.push(format!("schema={}", self.schema));
         arguments.push(format!("stage={:?}", self.input.stage));
         arguments.push(format!("stage-id={}", self.input.stage_id));

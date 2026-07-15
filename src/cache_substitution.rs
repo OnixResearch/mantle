@@ -181,12 +181,12 @@ pub fn sanitize_cache_identity(raw_url: &str) -> Option<String> {
     sanitized.set_fragment(None);
     sanitized.set_username("").ok()?;
     sanitized.set_password(None).ok()?;
-    let port_authority_suffix = sanitized.port().map(|port_number| format!(":{port_number}")).unwrap_or_default();
+    let authority_suffix = sanitized.port().map(|port_number| format!(":{port_number}")).unwrap_or_default();
     let path = sanitized.path();
     if path == "/" {
-        Some(format!("{}://{}{}", sanitized.scheme(), sanitized.host_str()?, port_authority_suffix))
+        Some(format!("{}://{}{}", sanitized.scheme(), sanitized.host_str()?, authority_suffix))
     } else {
-        Some(format!("{}://{}{}{}", sanitized.scheme(), sanitized.host_str()?, port_authority_suffix, path))
+        Some(format!("{}://{}{}{}", sanitized.scheme(), sanitized.host_str()?, authority_suffix, path))
     }
 }
 

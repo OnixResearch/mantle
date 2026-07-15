@@ -130,17 +130,15 @@ fn current_file_facts(
     declarations: &[GeneratedFileDeclaration],
     state: &FilegenState,
 ) -> Result<Vec<CurrentFileFact>, RunError> {
-    let fact_capacity_entries = declarations
+    let fact_count = declarations
         .len()
         .checked_add(state.files.len())
         .ok_or_else(|| RunError::Internal("filegen fact count overflowed usize".to_string()))?;
-    if fact_capacity_entries > MAX_FILEGEN_FACTS {
-        return Err(RunError::Internal(format!(
-            "too many current file facts: {fact_capacity_entries} > {MAX_FILEGEN_FACTS}"
-        )));
+    if fact_count > MAX_FILEGEN_FACTS {
+        return Err(RunError::Internal(format!("too many current file facts: {fact_count} > {MAX_FILEGEN_FACTS}")));
     }
     let mut seen = BTreeMap::<String, ()>::new();
-    let mut facts = Vec::with_capacity(fact_capacity_entries);
+    let mut facts = Vec::with_capacity(fact_count);
     for declaration in declarations {
         let Some(target) = normalized_target_for_shell(&declaration.target) else {
             facts.push(CurrentFileFact {
@@ -166,8 +164,8 @@ fn current_file_facts(
         }
         facts.push(current_file_fact(root, target, state)?);
     }
-    debug_assert!(facts.len() <= fact_capacity_entries);
-    debug_assert!(seen.len() <= fact_capacity_entries);
+    debug_assert!(facts.len() <= fact_count);
+    debug_assert!(seen.len() <= fact_count);
     Ok(facts)
 }
 
@@ -386,8 +384,8 @@ fn normalized_target_for_shell(target: &str) -> Option<String> {
     if target.is_empty() || target.starts_with('/') {
         return None;
     }
-    let component_capacity_entries = Path::new(target).components().count();
-    let mut parts = Vec::with_capacity(component_capacity_entries);
+    let component_count = Path::new(target).components().count();
+    let mut parts = Vec::with_capacity(component_count);
     for component in Path::new(target).components() {
         match component {
             Component::Normal(part) => parts.push(part.to_string_lossy().into_owned()),
@@ -398,7 +396,7 @@ fn normalized_target_for_shell(target: &str) -> Option<String> {
     if parts.is_empty() {
         None
     } else {
-        debug_assert!(parts.len() <= component_capacity_entries);
+        debug_assert!(parts.len() <= component_count);
         debug_assert!(!parts.iter().any(String::is_empty));
         Some(parts.join("/"))
     }

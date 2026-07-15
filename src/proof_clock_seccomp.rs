@@ -90,7 +90,7 @@ mod linux {
         if denied_syscalls.is_empty() {
             return Err("proof clock seccomp filtering has no denied syscalls".to_string());
         }
-        let instruction_capacity_entries = FILTER_FIXED_INSTRUCTION_COUNT
+        let instruction_count = FILTER_FIXED_INSTRUCTION_COUNT
             .checked_add(
                 denied_syscalls
                     .len()
@@ -98,7 +98,7 @@ mod linux {
                     .ok_or_else(|| "proof clock seccomp instruction count overflowed".to_string())?,
             )
             .ok_or_else(|| "proof clock seccomp instruction count overflowed".to_string())?;
-        let mut instructions = Vec::with_capacity(instruction_capacity_entries);
+        let mut instructions = Vec::with_capacity(instruction_count);
         instructions.push(bpf_stmt(BpfStatement {
             code: libc::BPF_LD | libc::BPF_W | libc::BPF_ABS,
             immediate: SECCOMP_DATA_ARCH_OFFSET_BYTES,
@@ -133,7 +133,7 @@ mod linux {
             code: libc::BPF_RET | libc::BPF_K,
             immediate: libc::SECCOMP_RET_ALLOW,
         })?);
-        assert_eq!(instructions.len(), instruction_capacity_entries);
+        assert_eq!(instructions.len(), instruction_count);
         assert!(instructions.len() > FILTER_FIXED_INSTRUCTION_COUNT);
         Ok(instructions)
     }

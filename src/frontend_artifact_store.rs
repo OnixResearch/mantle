@@ -332,8 +332,8 @@ fn relative_path_string(root: &Path, path: &Path) -> Result<String, String> {
     if relative.as_os_str().is_empty() {
         return Ok(ROOT_RELATIVE_PATH.to_string());
     }
-    let component_capacity_entries = relative.components().count();
-    let mut parts = Vec::with_capacity(component_capacity_entries);
+    let component_count = relative.components().count();
+    let mut parts = Vec::with_capacity(component_count);
     for component in relative.components() {
         match component {
             Component::Normal(part) => parts.push(
@@ -344,7 +344,7 @@ fn relative_path_string(root: &Path, path: &Path) -> Result<String, String> {
             other => return Err(format!("unsupported artifact path component {other:?} in {}", path.display())),
         }
     }
-    debug_assert!(parts.len() <= component_capacity_entries);
+    debug_assert!(parts.len() <= component_count);
     debug_assert!(!parts.is_empty());
     Ok(parts.join("/"))
 }

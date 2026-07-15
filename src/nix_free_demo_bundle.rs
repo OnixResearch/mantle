@@ -157,12 +157,12 @@ pub(crate) fn render_nix_free_demo_readme(
     summary: &NixFreeDemoMachineSummary,
     validation: &NixFreeDemoValidation,
 ) -> String {
-    let line_capacity_entries = README_BASE_LINE_COUNT
+    let line_count = README_BASE_LINE_COUNT
         .saturating_add(summary.guards.len())
         .saturating_add(summary.replay_hints.len())
         .saturating_add(summary.non_claims.len())
         .saturating_add(validation.diagnostics.len());
-    let mut lines = Vec::with_capacity(line_capacity_entries);
+    let mut lines = Vec::with_capacity(line_count);
     lines.push("# Mantle fixed-point demo bundle".to_string());
     lines.push(String::new());
     if validation.demo_claimable {
@@ -194,7 +194,7 @@ pub(crate) fn render_nix_free_demo_readme(
         }
     }
     lines.push(String::new());
-    debug_assert!(lines.len() <= line_capacity_entries);
+    debug_assert!(lines.len() <= line_count);
     debug_assert_eq!(validation.demo_claimable, validation.diagnostics.is_empty());
     lines.join("\n")
 }
