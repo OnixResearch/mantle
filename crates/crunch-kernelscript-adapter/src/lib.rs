@@ -178,8 +178,10 @@ impl std::error::Error for AdapterError {}
 pub fn read_request(path: &Path) -> Result<CoreAdapterRequest, AdapterError> {
     let bytes = read_regular_file_bounded(path, MAX_REQUEST_BYTES)?;
     let request = serde_json::from_slice(&bytes).map_err(|error| AdapterError::Json(error.to_string()))?;
+    let maximum_request_bytes = usize::try_from(MAX_REQUEST_BYTES)
+        .map_err(|_| AdapterError::Invalid(String::from("request byte bound does not fit memory bounds")))?;
     debug_assert!(!bytes.is_empty());
-    debug_assert!(bytes.len() <= usize::try_from(MAX_REQUEST_BYTES).unwrap_or(usize::MAX));
+    debug_assert!(bytes.len() <= maximum_request_bytes);
     Ok(request)
 }
 
@@ -207,16 +209,16 @@ pub fn run_request(request: CoreAdapterRequest, generated_root: &Path) -> Result
     let compilation = plan_compilation(profile.clone(), generated_manifest.clone());
     let compilation_plan = compilation.plan.ok_or(AdapterError::CoreRejected(compilation.blockers))?;
     let target_admission = observe_target_admission(&profile)?;
-    let receipt = build_blocked_receipt(
-        &request,
-        &profile,
-        &compiler_admission,
-        &target_admission,
-        &codegen_plan,
-        &generated_manifest,
-        &compilation_plan,
-    )?;
-    let report = CoreAdapterReport {
+    let receipt = build_blocked_receipt(BlockedReceiptInput {
+        request: &request,
+        profile: &profile,
+        compiler_admission: &compiler_admission,
+        target_admission: &target_admission,
+        codegen_plan: &codegen_plan,
+        generated_manifest: &generated_manifest,
+        compilation_plan: &compilation_plan,
+    })?;
+    let adapter_output = CoreAdapterReport {
         schema: String::from(ADAPTER_REPORT_SCHEMA),
         profile,
         compiler_admission,
@@ -226,9 +228,9 @@ pub fn run_request(request: CoreAdapterRequest, generated_root: &Path) -> Result
         compilation_plan,
         receipt,
     };
-    debug_assert!(report.compiler_admission.admitted);
-    debug_assert!(!report.target_admission.admitted);
-    Ok(report)
+    debug_assert!(adapter_output.compiler_admission.admitted);
+    debug_assert!(!adapter_output.target_admission.admitted);
+    Ok(adapter_output)
 }
 
 fn validate_request_header(request: &CoreAdapterRequest) -> Result<(), AdapterError> {
@@ -251,24 +253,47 @@ fn validate_request_header(request: &CoreAdapterRequest) -> Result<(), AdapterEr
 
 fn validate_request_bounds(request: &CoreAdapterRequest) -> Result<(), AdapterError> {
     let bounds = &request.bounds;
-    let valid = bounded_u32(bounds.max_generated_files, HARD_MAX_GENERATED_FILES)
-        && bounded_u64(bounds.max_generated_file_bytes, HARD_MAX_GENERATED_FILE_BYTES)
-        && bounded_u64(bounds.max_generated_total_bytes, HARD_MAX_GENERATED_TOTAL_BYTES)
-        && bounded_u32(bounds.max_compilation_steps, HARD_MAX_COMPILATION_STEPS)
-        && bounded_u32(bounds.max_output_files, HARD_MAX_OUTPUT_FILES)
-        && bounded_u64(bounds.max_output_bytes, HARD_MAX_OUTPUT_BYTES)
-        && bounded_u32(bounds.max_elf_sections, HARD_MAX_ELF_SECTIONS)
-        && bounded_u32(bounds.max_section_name_bytes, HARD_MAX_SECTION_NAME_BYTES)
-        && bounded_u32(bounds.max_receipt_blockers, HARD_MAX_RECEIPT_BLOCKERS)
-        && bounded_u32(bounds.max_text_bytes, HARD_MAX_TEXT_BYTES);
-    let expected_count = u32::try_from(request.expected_generated_files.len()).unwrap_or(u32::MAX);
-    let tool_count = u32::try_from(request.toolchain.len()).unwrap_or(u32::MAX);
-    if !valid || expected_count == 0 || expected_count > bounds.max_generated_files {
+    let is_valid = is_bounded_u32(BoundU32Validation {
+        value: bounds.max_generated_files,
+        maximum: HARD_MAX_GENERATED_FILES,
+    }) && is_bounded_u64(BoundU64Validation {
+        value: bounds.max_generated_file_bytes,
+        maximum: HARD_MAX_GENERATED_FILE_BYTES,
+    }) && is_bounded_u64(BoundU64Validation {
+        value: bounds.max_generated_total_bytes,
+        maximum: HARD_MAX_GENERATED_TOTAL_BYTES,
+    }) && is_bounded_u32(BoundU32Validation {
+        value: bounds.max_compilation_steps,
+        maximum: HARD_MAX_COMPILATION_STEPS,
+    }) && is_bounded_u32(BoundU32Validation {
+        value: bounds.max_output_files,
+        maximum: HARD_MAX_OUTPUT_FILES,
+    }) && is_bounded_u64(BoundU64Validation {
+        value: bounds.max_output_bytes,
+        maximum: HARD_MAX_OUTPUT_BYTES,
+    }) && is_bounded_u32(BoundU32Validation {
+        value: bounds.max_elf_sections,
+        maximum: HARD_MAX_ELF_SECTIONS,
+    }) && is_bounded_u32(BoundU32Validation {
+        value: bounds.max_section_name_bytes,
+        maximum: HARD_MAX_SECTION_NAME_BYTES,
+    }) && is_bounded_u32(BoundU32Validation {
+        value: bounds.max_receipt_blockers,
+        maximum: HARD_MAX_RECEIPT_BLOCKERS,
+    }) && is_bounded_u32(BoundU32Validation {
+        value: bounds.max_text_bytes,
+        maximum: HARD_MAX_TEXT_BYTES,
+    });
+    let expected_file_count = u32::try_from(request.expected_generated_files.len())
+        .map_err(|_| AdapterError::Invalid(String::from("expected generated-file count exceeds u32 bounds")))?;
+    let toolchain_member_count = u32::try_from(request.toolchain.len())
+        .map_err(|_| AdapterError::Invalid(String::from("toolchain-member count exceeds u32 bounds")))?;
+    if !is_valid || expected_file_count == 0 || expected_file_count > bounds.max_generated_files {
         return Err(AdapterError::Invalid(String::from(
             "KernelScript adapter request exceeds hard generated/output/text bounds",
         )));
     }
-    if tool_count == 0 || tool_count > HARD_MAX_TOOLCHAIN_MEMBERS {
+    if toolchain_member_count == 0 || toolchain_member_count > HARD_MAX_TOOLCHAIN_MEMBERS {
         return Err(AdapterError::Invalid(String::from(
             "KernelScript adapter request exceeds the hard toolchain-member bound",
         )));
@@ -278,12 +303,24 @@ fn validate_request_bounds(request: &CoreAdapterRequest) -> Result<(), AdapterEr
     Ok(())
 }
 
-fn bounded_u32(value: u32, maximum: u32) -> bool {
-    value > 0 && value <= maximum
+#[derive(Clone, Copy)]
+struct BoundU32Validation {
+    value: u32,
+    maximum: u32,
 }
 
-fn bounded_u64(value: u64, maximum: u64) -> bool {
-    value > 0 && value <= maximum
+#[derive(Clone, Copy)]
+struct BoundU64Validation {
+    value: u64,
+    maximum: u64,
+}
+
+fn is_bounded_u32(validation: BoundU32Validation) -> bool {
+    validation.value > 0 && validation.value <= validation.maximum
+}
+
+fn is_bounded_u64(validation: BoundU64Validation) -> bool {
+    validation.value > 0 && validation.value <= validation.maximum
 }
 
 fn observe_profile(request: &CoreAdapterRequest) -> Result<ExperimentProfile, AdapterError> {
@@ -298,6 +335,8 @@ fn observe_profile(request: &CoreAdapterRequest) -> Result<ExperimentProfile, Ad
     };
     let toolchain = observe_toolchain(&request.toolchain)?;
     let target = observe_target(&request.target)?;
+    let source_size_bytes = u64::try_from(source_bytes.len())
+        .map_err(|_| AdapterError::Invalid(String::from("source byte count exceeds u64 bounds")))?;
     let profile = ExperimentProfile {
         schema: String::from(crunch_kernelscript_core::EXPERIMENT_PROFILE_SCHEMA),
         experiment_id: request.experiment_id.clone(),
@@ -306,7 +345,7 @@ fn observe_profile(request: &CoreAdapterRequest) -> Result<ExperimentProfile, Ad
         source: SourceIdentity {
             relative_path: request.source.relative_path.clone(),
             digest_blake3: Blake3Digest::from_slice(&source_bytes),
-            size_bytes: u64::try_from(source_bytes.len()).unwrap_or(u64::MAX),
+            size_bytes: source_size_bytes,
         },
         compiler: compiler_cohort(request, compiler_executable, closure_identity, dependency)?,
         toolchain,
@@ -332,7 +371,7 @@ fn compiler_cohort(
     dependency: CompilerDependency,
 ) -> Result<CompilerCohort, AdapterError> {
     let dependency_count = 1_u32;
-    Ok(CompilerCohort {
+    let cohort = CompilerCohort {
         version: request.compiler.version.clone(),
         source_revision: request.compiler.source_revision.clone(),
         source_archive_url: request.compiler.source_archive_url.clone(),
@@ -348,7 +387,10 @@ fn compiler_cohort(
         },
         compiler_executable,
         closure_blake3: closure_identity.digest_blake3,
-    })
+    };
+    debug_assert_eq!(cohort.dependency_lock.dependency_count, dependency_count);
+    debug_assert_eq!(cohort.dependency_lock.dependencies.len(), 1);
+    Ok(cohort)
 }
 
 fn observe_toolchain(requests: &[ToolRequest]) -> Result<Vec<ToolIdentity>, AdapterError> {
@@ -378,14 +420,17 @@ fn observe_target(request: &TargetRequest) -> Result<KernelTarget, AdapterError>
         kernel_release: request.kernel_release.clone(),
         kernel_build_identity: identity.clone(),
     };
-    Ok(KernelTarget {
+    let target = KernelTarget {
         architecture: request.architecture,
         kernel_release: request.kernel_release.clone(),
         kernel_build_identity: identity.clone(),
         btf: input(TargetInputRole::Btf, btf),
         headers: input(TargetInputRole::Headers, headers),
         config: input(TargetInputRole::Config, config),
-    })
+    };
+    debug_assert_eq!(target.architecture, request.architecture);
+    debug_assert_eq!(target.kernel_build_identity, identity);
+    Ok(target)
 }
 
 #[derive(Serialize)]
@@ -424,10 +469,13 @@ fn observe_compiler_admission(
     profile: &ExperimentProfile,
 ) -> Result<CompilerAdmission, AdapterError> {
     let archive = hash_source_archive(Path::new(&request.compiler.source_archive_path))?;
+    let source_archive_sha256 = archive.sha256.ok_or_else(|| {
+        AdapterError::Invalid(String::from("source archive measurement did not include required SHA-256"))
+    })?;
     let dependency = profile.compiler.dependency_lock.dependencies[0].clone();
     let facts = CompilerMaterializationFacts {
         source_revision: request.compiler.source_revision.clone(),
-        source_archive_sha256: archive.sha256.expect("source archive measurement includes SHA-256"),
+        source_archive_sha256,
         source_archive_blake3: archive.blake3,
         dependency_lock_blake3: Some(profile.compiler.dependency_lock.lock_blake3.clone()),
         dependency_count: profile.compiler.dependency_lock.dependency_count,
@@ -451,12 +499,11 @@ fn observe_generated_manifest(
     profile: &ExperimentProfile,
     generated_root: &Path,
 ) -> Result<GeneratedProjectManifest, AdapterError> {
-    let files = read_generated_files(
-        generated_root,
-        profile.bounds.max_generated_files,
-        profile.bounds.max_generated_file_bytes,
-        profile.bounds.max_generated_total_bytes,
-    )?;
+    let files = read_generated_files(generated_root, GeneratedFileReadBounds {
+        maximum_files_count: profile.bounds.max_generated_files,
+        maximum_file_bytes: profile.bounds.max_generated_file_bytes,
+        maximum_total_bytes: profile.bounds.max_generated_total_bytes,
+    })?;
     let result = classify_generated_project(GeneratedProjectFacts {
         profile: profile.clone(),
         files,
@@ -484,8 +531,9 @@ fn observe_target_admission(profile: &ExperimentProfile) -> Result<TargetAdmissi
         ambient_inputs_used: false,
     };
     let admission = admit_kernel_target(profile.clone(), facts);
-    let observation_blocked = admission.blockers.iter().any(|blocker| blocker.code == TARGET_OBSERVATION_BLOCKER_CODE);
-    if admission.admitted || !observation_blocked {
+    let is_observation_blocked =
+        admission.blockers.iter().any(|blocker| blocker.code == TARGET_OBSERVATION_BLOCKER_CODE);
+    if admission.admitted || !is_observation_blocked {
         return Err(AdapterError::Invalid(String::from(
             "observation target unexpectedly crossed the Onix authority boundary",
         )));
@@ -514,26 +562,27 @@ fn compiler_flags_identity(profile: &ExperimentProfile) -> Result<Blake3Digest, 
     Ok(Blake3Digest::from_slice(&bytes))
 }
 
-#[allow(clippy::too_many_arguments)]
-fn build_blocked_receipt(
-    request: &CoreAdapterRequest,
-    profile: &ExperimentProfile,
-    compiler_admission: &CompilerAdmission,
-    target_admission: &TargetAdmission,
-    codegen_plan: &CodegenPlan,
-    generated_manifest: &GeneratedProjectManifest,
-    compilation_plan: &CompilationPlan,
-) -> Result<ExperimentReceipt, AdapterError> {
-    let mut blockers = target_admission.blockers.clone();
-    blockers.extend(request.receipt_blockers.clone());
+struct BlockedReceiptInput<'a> {
+    request: &'a CoreAdapterRequest,
+    profile: &'a ExperimentProfile,
+    compiler_admission: &'a CompilerAdmission,
+    target_admission: &'a TargetAdmission,
+    codegen_plan: &'a CodegenPlan,
+    generated_manifest: &'a GeneratedProjectManifest,
+    compilation_plan: &'a CompilationPlan,
+}
+
+fn build_blocked_receipt(input: BlockedReceiptInput<'_>) -> Result<ExperimentReceipt, AdapterError> {
+    let mut blockers = input.target_admission.blockers.clone();
+    blockers.extend(input.request.receipt_blockers.clone());
     let result = build_experiment_receipt(ExperimentReceiptInput {
-        profile: profile.clone(),
+        profile: input.profile.clone(),
         stage_status: ExperimentStageStatus::Blocked,
-        compiler_admission: compiler_admission.clone(),
-        codegen_plan: Some(codegen_plan.clone()),
-        generated_manifest: Some(generated_manifest.clone()),
-        target_admission: Some(target_admission.clone()),
-        compilation_plan: Some(compilation_plan.clone()),
+        compiler_admission: input.compiler_admission.clone(),
+        codegen_plan: Some(input.codegen_plan.clone()),
+        generated_manifest: Some(input.generated_manifest.clone()),
+        target_admission: Some(input.target_admission.clone()),
+        compilation_plan: Some(input.compilation_plan.clone()),
         output_classes: Vec::new(),
         output_inspections: Vec::new(),
         candidate_packs: Vec::new(),
@@ -545,26 +594,37 @@ fn build_blocked_receipt(
     Ok(receipt)
 }
 
+#[derive(Clone, Copy)]
+struct GeneratedFileReadBounds {
+    maximum_files_count: u32,
+    maximum_file_bytes: u64,
+    maximum_total_bytes: u64,
+}
+
 fn read_generated_files(
     root: &Path,
-    max_files: u32,
-    max_file_bytes: u64,
-    max_total_bytes: u64,
+    bounds: GeneratedFileReadBounds,
 ) -> Result<Vec<ObservedGeneratedFile>, AdapterError> {
     require_real_directory(root)?;
-    let mut files = Vec::new();
+    let mut files = Vec::with_capacity(
+        usize::try_from(bounds.maximum_files_count)
+            .map_err(|_| AdapterError::Invalid(String::from("generated-file count does not fit memory bounds")))?,
+    );
     let mut total_bytes = 0_u64;
     let entries = fs::read_dir(root).map_err(|error| io_error("reading generated directory", root, error))?;
     for entry in entries {
-        let observed_count = u32::try_from(files.len()).unwrap_or(u32::MAX).saturating_add(1);
-        if observed_count > max_files || observed_count > HARD_MAX_GENERATED_FILES {
+        let observed_file_count = u32::try_from(files.len())
+            .map_err(|_| AdapterError::Invalid(String::from("generated-file count exceeds u32 bounds")))?
+            .checked_add(1)
+            .ok_or_else(|| AdapterError::Invalid(String::from("generated-file count overflow")))?;
+        if observed_file_count > bounds.maximum_files_count || observed_file_count > HARD_MAX_GENERATED_FILES {
             return Err(AdapterError::Invalid(String::from("generated file count exceeds the admitted bound")));
         }
         let entry = entry.map_err(|error| io_error("reading generated directory entry", root, error))?;
         let path = entry.path();
         let metadata =
             fs::symlink_metadata(&path).map_err(|error| io_error("inspecting generated file", &path, error))?;
-        if !metadata.file_type().is_file() || metadata.len() == 0 || metadata.len() > max_file_bytes {
+        if !metadata.file_type().is_file() || metadata.len() == 0 || metadata.len() > bounds.maximum_file_bytes {
             return Err(AdapterError::Invalid(format!(
                 "generated project member is not bounded regular data: {}",
                 path.display()
@@ -573,7 +633,7 @@ fn read_generated_files(
         total_bytes = total_bytes
             .checked_add(metadata.len())
             .ok_or_else(|| AdapterError::Invalid(String::from("generated total byte count overflow")))?;
-        if total_bytes > max_total_bytes || total_bytes > HARD_MAX_GENERATED_TOTAL_BYTES {
+        if total_bytes > bounds.maximum_total_bytes || total_bytes > HARD_MAX_GENERATED_TOTAL_BYTES {
             return Err(AdapterError::Invalid(String::from("generated total bytes exceed the admitted bound")));
         }
         let name = entry
@@ -582,13 +642,13 @@ fn read_generated_files(
             .map_err(|_| AdapterError::Invalid(String::from("generated project member name is not valid UTF-8")))?;
         files.push(ObservedGeneratedFile {
             relative_path: name,
-            bytes: read_regular_file_bounded(&path, max_file_bytes)?,
+            bytes: read_regular_file_bounded(&path, bounds.maximum_file_bytes)?,
             executable: generated_file_is_executable(&metadata),
         });
     }
     files.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
     debug_assert!(files.windows(2).all(|pair| pair[0].relative_path <= pair[1].relative_path));
-    debug_assert!(total_bytes <= max_total_bytes);
+    debug_assert!(total_bytes <= bounds.maximum_total_bytes);
     Ok(files)
 }
 
@@ -650,7 +710,7 @@ fn hash_open_file(
     let mut sha256_hasher = Sha256::new();
     let mut buffer = [0_u8; HASH_BUFFER_BYTES];
     let mut total_bytes = 0_u64;
-    loop {
+    for _read_attempt_count in 0..=maximum_bytes {
         let count = input.read(&mut buffer).map_err(|error| io_error("reading identity file", path, error))?;
         if count == 0 {
             break;
@@ -661,18 +721,25 @@ fn hash_open_file(
             sha256_hasher.update(&buffer[..count]);
         }
     }
-    require_stable_descriptor_size(total_bytes, metadata.len(), path)?;
+    require_stable_descriptor_size(
+        DescriptorSize {
+            observed_bytes: total_bytes,
+            expected_bytes: metadata.len(),
+        },
+        path,
+    )?;
     let sha256 = if require_sha256 {
         let hex = format!("{:x}", sha256_hasher.finalize());
-        Some(Sha256Digest::parse(hex).expect("SHA-256 emits lowercase hex"))
+        Some(Sha256Digest::parse(hex).map_err(|error| AdapterError::Invalid(error.to_string()))?)
     } else {
         None
     };
+    let blake3_hex = blake3::Hasher::finalize(&blake3_hasher).to_hex().to_string();
+    let blake3 = Blake3Digest::parse(blake3_hex).map_err(|error| AdapterError::Invalid(error.to_string()))?;
     debug_assert!(total_bytes > 0);
     debug_assert!(total_bytes <= maximum_bytes);
     Ok(FileMeasurement {
-        blake3: Blake3Digest::parse(blake3::Hasher::finalize(&blake3_hasher).to_hex().to_string())
-            .expect("BLAKE3 emits lowercase hex"),
+        blake3,
         sha256,
         size_bytes: total_bytes,
     })
@@ -689,12 +756,19 @@ fn read_open_regular_file_bounded(
 ) -> Result<Vec<u8>, AdapterError> {
     let (mut input, metadata) = opened;
     validate_open_metadata(&metadata, path, maximum_bytes)?;
-    let capacity = usize::try_from(metadata.len())
+    let input_capacity_bytes = usize::try_from(metadata.len())
         .map_err(|_| AdapterError::Invalid(String::from("input byte count does not fit memory bounds")))?;
-    let mut bytes = Vec::with_capacity(capacity);
+    let mut bytes = Vec::with_capacity(input_capacity_bytes);
     input.read_to_end(&mut bytes).map_err(|error| io_error("reading file", path, error))?;
-    let byte_count = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
-    require_stable_descriptor_size(byte_count, metadata.len(), path)?;
+    let byte_count = u64::try_from(bytes.len())
+        .map_err(|_| AdapterError::Invalid(String::from("input byte count exceeds u64 bounds")))?;
+    require_stable_descriptor_size(
+        DescriptorSize {
+            observed_bytes: byte_count,
+            expected_bytes: metadata.len(),
+        },
+        path,
+    )?;
     if byte_count > maximum_bytes {
         return Err(AdapterError::Invalid(format!("input exceeds byte bound: {}", path.display())));
     }
@@ -734,8 +808,10 @@ fn validate_open_metadata(metadata: &fs::Metadata, path: &Path, maximum_bytes: u
 }
 
 fn checked_read_total(total: u64, count: usize, maximum: u64, path: &Path) -> Result<u64, AdapterError> {
+    let read_bytes = u64::try_from(count)
+        .map_err(|_| AdapterError::Invalid(String::from("identity read byte count exceeds u64 bounds")))?;
     let next = total
-        .checked_add(u64::try_from(count).unwrap_or(u64::MAX))
+        .checked_add(read_bytes)
         .ok_or_else(|| AdapterError::Invalid(String::from("identity input byte count overflow")))?;
     if next > maximum {
         return Err(AdapterError::Invalid(format!("identity input exceeds byte bound: {}", path.display())));
@@ -743,8 +819,14 @@ fn checked_read_total(total: u64, count: usize, maximum: u64, path: &Path) -> Re
     Ok(next)
 }
 
-fn require_stable_descriptor_size(actual: u64, expected: u64, path: &Path) -> Result<(), AdapterError> {
-    if actual != expected {
+#[derive(Clone, Copy)]
+struct DescriptorSize {
+    observed_bytes: u64,
+    expected_bytes: u64,
+}
+
+fn require_stable_descriptor_size(size: DescriptorSize, path: &Path) -> Result<(), AdapterError> {
+    if size.observed_bytes != size.expected_bytes {
         return Err(AdapterError::Invalid(format!("opened input changed while reading: {}", path.display())));
     }
     Ok(())
