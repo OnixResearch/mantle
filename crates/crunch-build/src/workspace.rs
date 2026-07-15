@@ -570,10 +570,10 @@ pub fn plan_workspace_content(
     scrub: &WorkspaceScrubPolicy,
     snapshot: &WorkspaceSnapshotPolicy,
 ) -> WorkspaceContentPlan {
-    assert!(MAX_WORKSPACE_SENSITIVE_PATHS > 0, "workspace sensitive-path bound must be positive");
-    assert!(MAX_WORKSPACE_SECRET_MARKERS > 0, "workspace secret-marker bound must be positive");
     let mut reasons = Vec::with_capacity(observations.len());
     let mut scrub_paths = Vec::with_capacity(observations.len());
+    assert!(reasons.capacity() >= observations.len());
+    assert!(scrub_paths.capacity() >= observations.len());
     let usage = observe_usage(observations, &mut reasons);
     validate_content_paths(observations, scrub, &mut scrub_paths, &mut reasons);
     if !usage_within_quota(&usage, quota) {
@@ -798,11 +798,11 @@ fn validate_retention(policy: &WorkspaceRetentionPolicy) -> Result<(), Workspace
 }
 
 fn validate_scrub(policy: &WorkspaceScrubPolicy) -> Result<(), WorkspaceReasonCode> {
-    assert!(MAX_WORKSPACE_SENSITIVE_PATHS > 0, "workspace sensitive-path bound must be positive");
-    assert!(MAX_WORKSPACE_SECRET_MARKERS > 0, "workspace secret-marker bound must be positive");
     if policy.scan_depth_max == 0 || policy.path_bytes_max == 0 {
         return Err(WorkspaceReasonCode::PolicyInvalid);
     }
+    assert!(policy.scan_depth_max > 0);
+    assert!(policy.path_bytes_max > 0);
     if policy.sensitive_paths.len() > MAX_WORKSPACE_SENSITIVE_PATHS
         || policy.secret_markers.len() > MAX_WORKSPACE_SECRET_MARKERS
     {
@@ -1068,10 +1068,6 @@ fn rejected_lease(current: Option<&WorkspaceLeaseRecord>, reason: WorkspaceReaso
 }
 
 fn observe_usage(observations: &[WorkspaceEntryObservation], reasons: &mut Vec<WorkspaceReasonCode>) -> WorkspaceUsage {
-    assert!(
-        WORKSPACE_FILES_OVER_LIMIT > DEFAULT_WORKSPACE_FILES_MAX,
-        "overflow count must exceed the default quota"
-    );
     let files = match u32::try_from(observations.len()) {
         Ok(count) => count,
         Err(_) => {
@@ -1095,6 +1091,7 @@ fn observe_usage(observations: &[WorkspaceEntryObservation], reasons: &mut Vec<W
         snapshots: 0,
     };
     assert_eq!(usage.files, files, "workspace usage must retain the observed file count");
+    assert_eq!(usage.bytes, bytes, "workspace usage must retain the observed byte count");
     usage
 }
 

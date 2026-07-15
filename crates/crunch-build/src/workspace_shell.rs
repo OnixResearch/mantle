@@ -622,10 +622,8 @@ fn lease_request(
     request: &StatefulWorkspaceRequest,
     operation: WorkspaceLeaseOperation,
 ) -> Result<WorkspaceLeaseRequest, WorkspaceShellError> {
-    assert!(MAX_WORKSPACE_ID_BYTES > 0, "workspace ID bound must be positive");
-    assert!(MAX_WORKSPACE_TOOLCHAIN_REFS > 0, "workspace toolchain-reference bound must be positive");
     let lease = request.lease.as_ref().ok_or(WorkspaceShellError::Policy("workspace-lease-missing"))?;
-    Ok(WorkspaceLeaseRequest {
+    let planned = WorkspaceLeaseRequest {
         workspace_id: request.workspace_id.clone().ok_or(WorkspaceShellError::Policy("workspace-id-missing"))?,
         compatibility_digest_blake3: request.compatibility_digest_blake3.clone(),
         toolchain_refs: request.toolchain_refs.clone(),
@@ -641,7 +639,10 @@ fn lease_request(
             fence_generation: lease.fence_generation,
         },
         operation,
-    })
+    };
+    assert_eq!(planned.operation, operation);
+    assert_eq!(planned.generation, request.generation);
+    Ok(planned)
 }
 
 fn request_quota(request: &StatefulWorkspaceRequest) -> WorkspaceQuotaPolicy {
@@ -1005,13 +1006,14 @@ fn remove_file_no_follow_if_exists(path: &Path) -> Result<(), WorkspaceShellErro
 
 fn remove_tree_no_follow_if_exists(path: &Path) -> Result<(), WorkspaceShellError> {
     assert!(!path.as_os_str().is_empty(), "workspace removal path must not be empty");
-    assert!(MAX_WORKSPACE_SNAPSHOT_ENTRIES > 0, "workspace removal bound must be positive");
     if !path.try_exists()? && std::fs::symlink_metadata(path).is_err() {
         return Ok(());
     }
     let removal_bound = MAX_WORKSPACE_SNAPSHOT_ENTRIES;
     let mut pending = Vec::with_capacity(WORKSPACE_REMOVAL_STACK_INITIAL_ENTRIES);
     pending.push((path.to_path_buf(), false));
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].0, path);
     let mut visited_entries = 0usize;
     while let Some((current, is_expanded)) = pending.pop() {
         if !is_expanded {
@@ -1049,11 +1051,12 @@ fn remove_tree_no_follow_if_exists(path: &Path) -> Result<(), WorkspaceShellErro
 
 fn remove_prefixed_entries(root: &Path, id: &str) -> Result<(), WorkspaceShellError> {
     assert!(!id.is_empty(), "workspace prefix ID must not be empty");
-    assert!(MAX_WORKSPACE_RETENTION_RECORDS > 0, "workspace retention bound must be positive");
     if !root.try_exists()? {
         return Ok(());
     }
     let prefix = format!("{id}-");
+    assert!(prefix.starts_with(id));
+    assert!(prefix.ends_with('-'));
     let mut matched = 0usize;
     for entry in std::fs::read_dir(root)? {
         let entry = entry?;

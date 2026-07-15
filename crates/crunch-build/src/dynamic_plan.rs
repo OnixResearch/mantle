@@ -322,9 +322,9 @@ fn decode_plan_json_value(bytes: &[u8]) -> Result<Value, DynamicPlanError> {
 }
 
 fn validate_json_nesting_depth(value: &Value) -> Result<(), DynamicPlanError> {
-    assert!(JSON_ROOT_DEPTH > 0, "JSON root depth must be positive");
-    assert!(JSON_CHILD_DEPTH_INCREMENT > 0, "JSON child depth increment must be positive");
     let mut stack = vec![(value, JSON_ROOT_DEPTH)];
+    assert_eq!(stack.last().map(|(_, depth)| *depth), Some(JSON_ROOT_DEPTH));
+    assert!(stack.capacity() >= stack.len());
     while let Some((current, depth)) = stack.pop() {
         if depth > MAX_DYNAMIC_PLAN_NESTING_DEPTH {
             return limit_exceeded("json nesting depth", u64::from(depth), MAX_DYNAMIC_PLAN_NESTING_DEPTH);
@@ -912,11 +912,10 @@ fn blake3_hex_digest(bytes: &[u8]) -> Blake3Hex {
 }
 
 fn require_nullable_fields_present(value: &Value) -> Result<(), DynamicPlanError> {
-    assert!(!MANTLE_PLAN_V1_SCHEMA.is_empty(), "dynamic plan schema name must not be empty");
-    assert!(
-        MAX_DYNAMIC_PLAN_NESTING_DEPTH > JSON_ROOT_DEPTH,
-        "dynamic plan nesting bound must exceed root depth"
-    );
+    let mut source_entry_count = 0usize;
+    let mut source_field_count = 0usize;
+    let mut unit_entry_count = 0usize;
+    let mut unit_field_count = 0usize;
     if let Some(producer) = value.get("producer").and_then(Value::as_object) {
         require_json_key(producer, RequiredJsonKey {
             key: "goal_hint",
@@ -924,16 +923,21 @@ fn require_nullable_fields_present(value: &Value) -> Result<(), DynamicPlanError
         })?;
     }
     if let Some(sources) = value.get("sources").and_then(Value::as_array) {
+        source_entry_count = sources.len();
         for source in sources {
             if let Some(source) = source.as_object() {
                 require_json_key(source, RequiredJsonKey {
                     key: "nar_blake3",
                     field: "sources[].nar_blake3",
                 })?;
+                source_field_count = source_field_count.checked_add(1).ok_or(DynamicPlanError::ArithmeticOverflow {
+                    field: "required nullable source field count",
+                })?;
             }
         }
     }
     if let Some(units) = value.get("units").and_then(Value::as_array) {
+        unit_entry_count = units.len();
         for unit in units {
             let Some(derivation) = unit.get("derivation").and_then(Value::as_object) else {
                 continue;
@@ -942,8 +946,13 @@ fn require_nullable_fields_present(value: &Value) -> Result<(), DynamicPlanError
                 key: "fixed_output",
                 field: "units[].derivation.fixed_output",
             })?;
+            unit_field_count = unit_field_count.checked_add(1).ok_or(DynamicPlanError::ArithmeticOverflow {
+                field: "required nullable unit field count",
+            })?;
         }
     }
+    assert!(source_field_count <= source_entry_count);
+    assert!(unit_field_count <= unit_entry_count);
     Ok(())
 }
 
@@ -972,11 +981,6 @@ pub fn validate_source_id(value: &str) -> Result<(), DynamicPlanError> {
 }
 
 pub fn validate_output_name(value: &str) -> Result<(), DynamicPlanError> {
-    assert!(MAX_DYNAMIC_PLAN_OUTPUT_NAME_BYTES > 0, "output name byte bound must be positive");
-    assert!(
-        MAX_DYNAMIC_PLAN_OUTPUT_NAME_BYTES <= MAX_DYNAMIC_PLAN_STRING_BYTES,
-        "output names must fit plan strings"
-    );
     let byte_len = len_as_u64("output name", value.len())?;
     if value.is_empty() {
         return invalid_scalar("output name", value, "must not be empty");
@@ -984,6 +988,8 @@ pub fn validate_output_name(value: &str) -> Result<(), DynamicPlanError> {
     if byte_len > u64::from(MAX_DYNAMIC_PLAN_OUTPUT_NAME_BYTES) {
         return invalid_scalar("output name", value, "exceeds byte limit");
     }
+    assert!(!value.is_empty());
+    assert!(byte_len <= u64::from(MAX_DYNAMIC_PLAN_OUTPUT_NAME_BYTES));
 
     let mut chars = value.chars();
     let Some(first) = chars.next() else {

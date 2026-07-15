@@ -28,6 +28,7 @@ const HEX_CHARS_PER_BYTE: usize = 2;
 const BLAKE3_HEX_CHARS: usize = blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE);
 const ENV_NAME: &str = "name";
 const UNKNOWN_ACTION_NAME: &str = "<unnamed>";
+const VARIABLE_COUNT_OVERFLOW: u32 = u32::MAX;
 const ENV_DIGEST_SERIALIZATION_ERROR_DOMAIN: &[u8] = b"mantle-env-digest-serialization-error-v1";
 const DETERMINISM_DIGEST_SERIALIZATION_ERROR_DOMAIN: &[u8] = b"mantle-determinism-digest-serialization-error-v1";
 const SEARCH_PATH_DIGEST_SERIALIZATION_ERROR_DOMAIN: &[u8] = b"mantle-search-path-digest-serialization-error-v1";
@@ -648,10 +649,7 @@ fn is_secret_like_key(variable: &str) -> bool {
 
 fn bounded_variable_count<Count>(count: Count) -> u32
 where Count: TryInto<u32> {
-    match count.try_into() {
-        Ok(count) => count,
-        Err(_) => u32::MAX,
-    }
+    count.try_into().unwrap_or(VARIABLE_COUNT_OVERFLOW)
 }
 
 #[cfg(test)]
