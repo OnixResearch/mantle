@@ -144,8 +144,8 @@ fn validate_tracestate(value: &str) -> Result<(), &'static str> {
             return Err("remote-tracestate-duplicate-key");
         }
     }
-    let member_count_usize = usize::try_from(member_count).map_err(|_| "remote-tracestate-member-count-invalid")?;
-    debug_assert_eq!(keys.len(), member_count_usize);
+    let unique_members = u32::try_from(keys.len()).map_err(|_| "remote-tracestate-member-count-invalid")?;
+    debug_assert_eq!(unique_members, member_count);
     debug_assert!(member_count <= W3C_TRACESTATE_MEMBERS_MAX);
     Ok(())
 }

@@ -381,7 +381,7 @@ struct SummaryRequest<'a> {
 fn make_summary(request: SummaryRequest<'_>) -> Result<BootstrapValidationSummary, RunError> {
     debug_assert!(!SUMMARY_SCHEMA.is_empty());
     debug_assert!(!SUMMARY_JSON_FILE.is_empty());
-    let doctor_ok = !matches!(request.status, ValidationStatus::PreflightFailed);
+    let is_doctor_ok = !matches!(request.status, ValidationStatus::PreflightFailed);
     let generated_at_unix = crate::unix_time_now_s()?;
     Ok(BootstrapValidationSummary {
         schema: SUMMARY_SCHEMA,
@@ -391,7 +391,7 @@ fn make_summary(request: SummaryRequest<'_>) -> Result<BootstrapValidationSummar
         state_dir: request.ctx.resolved_state_dir.display().to_string(),
         store_prefix: request.ctx.store_prefix.clone(),
         resume: request.opts.resume,
-        doctor_ok,
+        doctor_ok: is_doctor_ok,
         build_attempted: request.build_attempted,
         build_exit_code: request.build_exit_code,
         warmups: request.warmups,

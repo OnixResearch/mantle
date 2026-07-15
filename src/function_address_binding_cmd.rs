@@ -254,6 +254,25 @@ fn validate_preserves_json_projection(
     receipt: &OpaqueEvidenceSidecarBindingReceipt,
 ) -> Result<(), RunError> {
     let canonical_digest = &receipt.binding.canonical_envelope.digest_blake3;
+    if canonical_digest.is_empty() {
+        return Err(RunError::Internal("Kamacite canonical Preserves receipt digest is empty".to_string()));
+    }
+    if receipt
+        .binding
+        .compatibility_projections
+        .iter()
+        .any(|projection| projection.relative_path.is_empty())
+    {
+        return Err(RunError::Internal("Kamacite JSON projection path is empty".to_string()));
+    }
+    debug_assert!(!canonical_digest.is_empty());
+    debug_assert!(
+        receipt
+            .binding
+            .compatibility_projections
+            .iter()
+            .all(|projection| !projection.relative_path.is_empty())
+    );
     for projection in &receipt.binding.compatibility_projections {
         let identity = read_kamacite_identity(ReceiptReadRequest {
             root,

@@ -287,8 +287,14 @@ fn observed_artifact(path: &Path) -> Result<ObservedArtifact, RunError> {
 }
 
 fn hash_file(path: &Path) -> Result<(u64, String), RunError> {
-    let metadata =
-        std::fs::metadata(path).map_err(|err| RunError::Internal(format!("metadata {}: {err}", path.display())))?;
+    let mut file = File::open(path).map_err(|err| RunError::Internal(format!("open {}: {err}", path.display())))?;
+    let metadata = file.metadata().map_err(|err| RunError::Internal(format!("metadata {}: {err}", path.display())))?;
+    if !metadata.is_file() {
+        return Err(RunError::Internal(format!(
+            "nix cross-builder witness artifact is not a regular file: {}",
+            path.display()
+        )));
+    }
     let buffer_size_bytes = u64::try_from(HASH_BUFFER_BYTES)
         .map_err(|_| RunError::Internal("hash buffer size does not fit u64".to_string()))?;
     let maximum_read_count = metadata
@@ -296,9 +302,10 @@ fn hash_file(path: &Path) -> Result<(u64, String), RunError> {
         .div_ceil(buffer_size_bytes)
         .checked_add(1)
         .ok_or_else(|| RunError::Internal(format!("hash read count overflowed for {}", path.display())))?;
-    let mut file = File::open(path).map_err(|err| RunError::Internal(format!("open {}: {err}", path.display())))?;
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0_u8; HASH_BUFFER_BYTES];
+    debug_assert!(metadata.is_file());
+    debug_assert!(maximum_read_count > 0);
     for _ in 0..maximum_read_count {
         let read_size_bytes = file
             .read(&mut buffer)

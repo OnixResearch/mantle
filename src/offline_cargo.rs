@@ -221,6 +221,8 @@ pub fn validate_digest_bound_evidence(evidence: &OfflineCargoEvidenceV2File) -> 
     validate_evidence_network_policy(&evidence.network_policy, &mut blockers);
     validate_evidence_output(evidence, &mut blockers);
     validate_non_claims(&evidence.non_claims, &mut blockers);
+    debug_assert!(blockers.iter().all(|blocker| !blocker.class.is_empty()));
+    debug_assert!(blockers.iter().all(|blocker| !blocker.message.is_empty()));
     blockers
 }
 
@@ -390,6 +392,7 @@ fn validate_toolchain_paths(toolchain: &OfflineCargoEvidenceToolchain, blockers:
 }
 
 fn validate_cargo_command(evidence: &OfflineCargoEvidenceV2File, blockers: &mut Vec<RustOfflineCargoBlocker>) {
+    let blocker_count_before = blockers.len();
     let command = &evidence.cargo_command;
     if command.program != OFFLINE_CARGO_COMMAND_PROGRAM {
         blockers.push(blocker("unexpected-cargo-command", "offline Cargo evidence must run cargo"));
@@ -418,6 +421,8 @@ fn validate_cargo_command(evidence: &OfflineCargoEvidenceV2File, blockers: &mut 
         blockers,
     );
     validate_profile_command_arg(evidence, blockers);
+    debug_assert!(command.args.len() <= MAX_COMMAND_ARGS);
+    debug_assert!(blockers.len() >= blocker_count_before);
 }
 
 fn validate_profile_command_arg(evidence: &OfflineCargoEvidenceV2File, blockers: &mut Vec<RustOfflineCargoBlocker>) {

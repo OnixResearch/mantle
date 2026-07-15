@@ -109,9 +109,9 @@ fn load_filegen_declarations(root: &Path, manifest: &Path) -> Result<Vec<Generat
             manifest_path.display()
         )));
     }
-    let import_paths = vec![root.as_os_str().to_owned()];
-    let manifest: FilegenManifest =
-        crunch_eval::evaluate_and_deserialize(&manifest_path, &import_paths).map_err(|err| {
+    let evaluation_search_roots = vec![root.as_os_str().to_owned()];
+    let manifest: FilegenManifest = crunch_eval::evaluate_and_deserialize(&manifest_path, &evaluation_search_roots)
+        .map_err(|err| {
             RunError::Eval(format!("loading filegen declarations from {}: {err}", manifest_path.display()))
         })?;
     if manifest.files.len() > MAX_FILEGEN_FILES {
@@ -120,6 +120,8 @@ fn load_filegen_declarations(root: &Path, manifest: &Path) -> Result<Vec<Generat
             manifest.files.len()
         )));
     }
+    debug_assert!(manifest_path.is_file());
+    debug_assert!(manifest.files.len() <= MAX_FILEGEN_FILES);
     Ok(manifest.files)
 }
 
@@ -128,17 +130,17 @@ fn current_file_facts(
     declarations: &[GeneratedFileDeclaration],
     state: &FilegenState,
 ) -> Result<Vec<CurrentFileFact>, RunError> {
-    let fact_capacity_count = declarations
+    let fact_capacity_entries = declarations
         .len()
         .checked_add(state.files.len())
         .ok_or_else(|| RunError::Internal("filegen fact count overflowed usize".to_string()))?;
-    if fact_capacity_count > MAX_FILEGEN_FACTS {
+    if fact_capacity_entries > MAX_FILEGEN_FACTS {
         return Err(RunError::Internal(format!(
-            "too many current file facts: {fact_capacity_count} > {MAX_FILEGEN_FACTS}"
+            "too many current file facts: {fact_capacity_entries} > {MAX_FILEGEN_FACTS}"
         )));
     }
     let mut seen = BTreeMap::<String, ()>::new();
-    let mut facts = Vec::with_capacity(fact_capacity_count);
+    let mut facts = Vec::with_capacity(fact_capacity_entries);
     for declaration in declarations {
         let Some(target) = normalized_target_for_shell(&declaration.target) else {
             facts.push(CurrentFileFact {
@@ -164,12 +166,14 @@ fn current_file_facts(
         }
         facts.push(current_file_fact(root, target, state)?);
     }
-    debug_assert!(facts.len() <= fact_capacity_count);
-    debug_assert!(seen.len() <= fact_capacity_count);
+    debug_assert!(facts.len() <= fact_capacity_entries);
+    debug_assert!(seen.len() <= fact_capacity_entries);
     Ok(facts)
 }
 
 fn current_file_fact(root: &Path, target: &str, state: &FilegenState) -> Result<CurrentFileFact, RunError> {
+    debug_assert!(!target.is_empty());
+    debug_assert!(normalized_target_for_shell(target).is_some());
     let path = root.join(target);
     let state_digest = state.files.get(target);
     let metadata = match fs::symlink_metadata(&path) {
@@ -189,12 +193,12 @@ fn current_file_fact(root: &Path, target: &str, state: &FilegenState) -> Result<
             .map_err(|err| RunError::Internal(format!("reading generated symlink {}: {err}", path.display())))?;
         let link_text = link_target.to_string_lossy().into_owned();
         let digest = blake3_hex(link_text.as_bytes());
-        let managed = state_digest.is_some_and(|expected| *expected == digest);
+        let is_managed = state_digest.is_some_and(|expected| *expected == digest);
         return Ok(CurrentFileFact {
             target: target.to_string(),
             state: CurrentFileState::Symlink {
                 target: link_text,
-                managed,
+                managed: is_managed,
             },
         });
     }
@@ -322,6 +326,8 @@ fn load_filegen_state(root: &Path) -> Result<FilegenState, RunError> {
 }
 
 fn render_filegen_plan(plan: &FilegenPlan, json: bool) -> Result<(), RunError> {
+    debug_assert!(plan.operations.len() <= MAX_FILEGEN_FACTS);
+    debug_assert!(!plan.non_claim.is_empty());
     if json {
         let rendered = serde_json::to_string_pretty(plan)
             .map_err(|err| RunError::Internal(format!("rendering filegen JSON: {err}")))?;
@@ -380,8 +386,8 @@ fn normalized_target_for_shell(target: &str) -> Option<String> {
     if target.is_empty() || target.starts_with('/') {
         return None;
     }
-    let component_capacity_count = Path::new(target).components().count();
-    let mut parts = Vec::with_capacity(component_capacity_count);
+    let component_capacity_entries = Path::new(target).components().count();
+    let mut parts = Vec::with_capacity(component_capacity_entries);
     for component in Path::new(target).components() {
         match component {
             Component::Normal(part) => parts.push(part.to_string_lossy().into_owned()),
@@ -392,7 +398,7 @@ fn normalized_target_for_shell(target: &str) -> Option<String> {
     if parts.is_empty() {
         None
     } else {
-        debug_assert!(parts.len() <= component_capacity_count);
+        debug_assert!(parts.len() <= component_capacity_entries);
         debug_assert!(!parts.iter().any(String::is_empty));
         Some(parts.join("/"))
     }

@@ -13,6 +13,8 @@ pub fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
         .filter(|e| e.path().extension().is_some_and(|ext| ext == "log"))
         .collect();
     entries.sort_by_key(|e| e.file_name());
+    debug_assert!(entries.iter().all(|entry| entry.path().extension().is_some_and(|ext| ext == "log")));
+    debug_assert!(entries.windows(2).all(|pair| pair[0].file_name() <= pair[1].file_name()));
 
     if list || query.is_none() {
         if entries.is_empty() {

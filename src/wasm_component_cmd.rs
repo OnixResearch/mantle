@@ -28,9 +28,9 @@ pub(crate) fn cmd_wasm_component_build(options: WasmComponentBuildOptions<'_>) -
         Some(path) => absolute_path(path)?,
         None => output_parent.to_path_buf(),
     };
-    let import_paths = evaluation_import_paths(&request_path, options.import_paths)?;
-    let request: ComponentPipelineRequest = crunch_eval::evaluate_and_deserialize(&request_path, &import_paths)
-        .map_err(|error| {
+    let evaluation_search_roots = evaluation_import_paths(&request_path, options.import_paths)?;
+    let request: ComponentPipelineRequest =
+        crunch_eval::evaluate_and_deserialize(&request_path, &evaluation_search_roots).map_err(|error| {
             RunError::Eval(format!("loading Wasm component request {}: {error}", request_path.display()))
         })?;
     let execution_result = run_component_pipeline(request, PipelinePaths {

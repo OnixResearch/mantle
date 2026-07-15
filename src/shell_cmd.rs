@@ -15,15 +15,38 @@ use crate::project_build;
 
 const SIDECAR_FILENAME: &str = ".crunch-shell.json";
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct HookExecutionMode {
+    should_execute: bool,
+}
+
+impl From<bool> for HookExecutionMode {
+    fn from(is_hook_disabled: bool) -> Self {
+        Self {
+            should_execute: !is_hook_disabled,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct StrictHookMode {
+    is_strict: bool,
+}
+
+impl From<bool> for StrictHookMode {
+    fn from(is_strict: bool) -> Self {
+        Self { is_strict }
+    }
+}
+
 /// Read the sidecar from a built shell output, snapshot the host env,
 /// compute the activation plan, and exec into the result.
 #[expect(
     clippy::too_many_arguments,
     tigerstyle::too_many_parameters,
-    tigerstyle::ambiguous_boolean_parameters,
     reason = "the protected CLI dispatch caller retains this compatibility boundary"
 )]
-pub fn cmd_shell(
+pub(crate) fn cmd_shell(
     name: Option<&str>,
     import_paths: &[PathBuf],
     jobs: Option<u32>,
@@ -33,8 +56,8 @@ pub fn cmd_shell(
     command_argv: &[OsString],
     run_script: Option<&str>,
     with_paths: &[PathBuf],
-    no_hook: bool,
-    strict_hooks: bool,
+    no_hook: impl Into<HookExecutionMode>,
+    strict_hooks: impl Into<StrictHookMode>,
     output_dir: &Path,
     state_dir: &Path,
     store_prefix: &str,
@@ -42,6 +65,8 @@ pub fn cmd_shell(
 ) -> Result<(), RunError> {
     debug_assert!(!SIDECAR_FILENAME.is_empty());
     debug_assert!(SIDECAR_FILENAME.starts_with('.'));
+    let hook_execution_mode = no_hook.into();
+    let strict_hook_mode = strict_hooks.into();
     // 1. Build the shell derivation.
     let out_path = build_shell_target(BuildShellTargetRequest {
         name,
@@ -102,8 +127,10 @@ pub fn cmd_shell(
     }
 
     // 8. Execute hook (shell-side decision).
-    if !no_hook && let Some(ref hook) = plan.hook {
-        exec_hook(hook, &plan, strict_hooks)?;
+    if hook_execution_mode.should_execute
+        && let Some(ref hook) = plan.hook
+    {
+        exec_hook(hook, &plan, strict_hook_mode.is_strict)?;
     }
 
     // 9. Exec into target.

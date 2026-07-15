@@ -526,74 +526,104 @@ pub fn route_plan_for_build_action_with_remote_and_source(
     debug_assert!(MAX_REJECTED_ROUTES >= MAX_ROUTE_CANDIDATES.saturating_sub(1));
     let detail = detail.map(truncate_detail);
     let mut candidates = Vec::with_capacity(MAX_ROUTE_CANDIDATES);
-    match action {
-        "cached" => {
-            candidates
-                .push(RouteCandidateFacts::eligible(RouteClass::CachedLocal, "local-pathinfo-and-castore-present"));
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::TrustedSubstitute, "not-needed-local-hit"));
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::ArchiveImport, "not-configured"));
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::SourceBundle, "not-needed-local-hit"));
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "not-configured"));
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::LocalBuild, "not-needed-local-hit"));
-        }
-        "substitute" => {
-            candidates.push(
-                RouteCandidateFacts::rejected(RouteClass::CachedLocal, "local-output-missing")
-                    .with_detail(detail.as_deref()),
-            );
-            candidates.push(
-                RouteCandidateFacts::eligible(RouteClass::TrustedSubstitute, "trusted-remote-pathinfo-available")
-                    .requiring_network(),
-            );
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::ArchiveImport, "not-configured"));
-            candidates.push(source_bundle_candidate_from_facts(source_bundle));
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "not-configured"));
-            if source_bundle_blocks_local_build(source_bundle) {
-                candidates
-                    .push(RouteCandidateFacts::rejected(RouteClass::LocalBuild, "offline-source-readiness-incomplete"));
-            } else {
-                candidates
-                    .push(RouteCandidateFacts::rejected(RouteClass::LocalBuild, "not-selected-higher-priority-route"));
-            }
-        }
-        "build" => {
-            candidates.push(
-                RouteCandidateFacts::rejected(RouteClass::CachedLocal, "local-output-missing")
-                    .with_detail(detail.as_deref()),
-            );
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::TrustedSubstitute, "trusted-substitute-missing"));
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::ArchiveImport, "not-configured"));
-            candidates.push(source_bundle_candidate_from_facts(source_bundle));
-            push_remote_candidate(&mut candidates, remote_builder);
-            if source_bundle_blocks_local_build(source_bundle) {
-                candidates
-                    .push(RouteCandidateFacts::rejected(RouteClass::LocalBuild, "offline-source-readiness-incomplete"));
-            } else {
-                candidates.push(RouteCandidateFacts::eligible(RouteClass::LocalBuild, "local-preflight-ok"));
-            }
-        }
-        "preflight-error" => {
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::CachedLocal, "local-output-missing"));
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::TrustedSubstitute, "trusted-substitute-missing"));
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::ArchiveImport, "not-configured"));
-            candidates.push(source_bundle_candidate_from_facts(source_bundle));
-            push_remote_candidate(&mut candidates, remote_builder);
-            candidates.push(
-                RouteCandidateFacts::rejected(RouteClass::LocalBuild, "local-preflight-failed")
-                    .with_detail(detail.as_deref()),
-            );
-            candidates.push(
-                RouteCandidateFacts::eligible(RouteClass::PreflightError, "local-preflight-failed")
-                    .with_detail(detail.as_deref()),
-            );
-        }
-        _ => candidates.push(
-            RouteCandidateFacts::eligible(RouteClass::PreflightError, "unknown-build-plan-action")
-                .with_detail(detail.as_deref()),
-        ),
-    }
+    push_build_action_candidates(action, detail.as_deref(), remote_builder, source_bundle, &mut candidates);
+    debug_assert!(!candidates.is_empty());
+    debug_assert!(candidates.len() <= MAX_ROUTE_CANDIDATES);
     let policy = route_policy_for_source_bundle(source_bundle);
     plan_realization_route(RoutePlannerInput::new(policy, candidates))
+}
+
+fn push_build_action_candidates(
+    action: &str,
+    detail: Option<&str>,
+    remote_builder: Option<&RemoteBuilderPlanFacts>,
+    source_bundle: Option<&SourceBundleRouteFacts>,
+    candidates: &mut Vec<RouteCandidateFacts>,
+) {
+    match action {
+        "cached" => push_cached_action_candidates(candidates),
+        "substitute" => push_substitute_action_candidates(detail, source_bundle, candidates),
+        "build" => push_local_build_action_candidates(detail, remote_builder, source_bundle, candidates),
+        "preflight-error" => push_preflight_error_candidates(detail, remote_builder, source_bundle, candidates),
+        _ => candidates.push(
+            RouteCandidateFacts::eligible(RouteClass::PreflightError, "unknown-build-plan-action").with_detail(detail),
+        ),
+    }
+}
+
+fn push_cached_action_candidates(candidates: &mut Vec<RouteCandidateFacts>) {
+    candidates.extend([
+        RouteCandidateFacts::eligible(RouteClass::CachedLocal, "local-pathinfo-and-castore-present"),
+        RouteCandidateFacts::rejected(RouteClass::TrustedSubstitute, "not-needed-local-hit"),
+        RouteCandidateFacts::rejected(RouteClass::ArchiveImport, "not-configured"),
+        RouteCandidateFacts::rejected(RouteClass::SourceBundle, "not-needed-local-hit"),
+        RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "not-configured"),
+        RouteCandidateFacts::rejected(RouteClass::LocalBuild, "not-needed-local-hit"),
+    ]);
+}
+
+fn push_substitute_action_candidates(
+    detail: Option<&str>,
+    source_bundle: Option<&SourceBundleRouteFacts>,
+    candidates: &mut Vec<RouteCandidateFacts>,
+) {
+    candidates.extend([
+        RouteCandidateFacts::rejected(RouteClass::CachedLocal, "local-output-missing").with_detail(detail),
+        RouteCandidateFacts::eligible(RouteClass::TrustedSubstitute, "trusted-remote-pathinfo-available")
+            .requiring_network(),
+        RouteCandidateFacts::rejected(RouteClass::ArchiveImport, "not-configured"),
+        source_bundle_candidate_from_facts(source_bundle),
+        RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "not-configured"),
+        local_build_candidate(source_bundle, false),
+    ]);
+}
+
+fn push_local_build_action_candidates(
+    detail: Option<&str>,
+    remote_builder: Option<&RemoteBuilderPlanFacts>,
+    source_bundle: Option<&SourceBundleRouteFacts>,
+    candidates: &mut Vec<RouteCandidateFacts>,
+) {
+    candidates.extend([
+        RouteCandidateFacts::rejected(RouteClass::CachedLocal, "local-output-missing").with_detail(detail),
+        RouteCandidateFacts::rejected(RouteClass::TrustedSubstitute, "trusted-substitute-missing"),
+        RouteCandidateFacts::rejected(RouteClass::ArchiveImport, "not-configured"),
+        source_bundle_candidate_from_facts(source_bundle),
+    ]);
+    push_remote_candidate(candidates, remote_builder);
+    candidates.push(local_build_candidate(source_bundle, true));
+}
+
+fn push_preflight_error_candidates(
+    detail: Option<&str>,
+    remote_builder: Option<&RemoteBuilderPlanFacts>,
+    source_bundle: Option<&SourceBundleRouteFacts>,
+    candidates: &mut Vec<RouteCandidateFacts>,
+) {
+    candidates.extend([
+        RouteCandidateFacts::rejected(RouteClass::CachedLocal, "local-output-missing"),
+        RouteCandidateFacts::rejected(RouteClass::TrustedSubstitute, "trusted-substitute-missing"),
+        RouteCandidateFacts::rejected(RouteClass::ArchiveImport, "not-configured"),
+        source_bundle_candidate_from_facts(source_bundle),
+    ]);
+    push_remote_candidate(candidates, remote_builder);
+    candidates.extend([
+        RouteCandidateFacts::rejected(RouteClass::LocalBuild, "local-preflight-failed").with_detail(detail),
+        RouteCandidateFacts::eligible(RouteClass::PreflightError, "local-preflight-failed").with_detail(detail),
+    ]);
+}
+
+fn local_build_candidate(
+    source_bundle: Option<&SourceBundleRouteFacts>,
+    is_build_eligible: bool,
+) -> RouteCandidateFacts {
+    if source_bundle_blocks_local_build(source_bundle) {
+        return RouteCandidateFacts::rejected(RouteClass::LocalBuild, "offline-source-readiness-incomplete");
+    }
+    if is_build_eligible {
+        return RouteCandidateFacts::eligible(RouteClass::LocalBuild, "local-preflight-ok");
+    }
+    RouteCandidateFacts::rejected(RouteClass::LocalBuild, "not-selected-higher-priority-route")
 }
 
 fn route_policy_for_source_bundle(source_bundle: Option<&SourceBundleRouteFacts>) -> RoutePolicy {

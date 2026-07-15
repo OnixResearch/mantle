@@ -290,6 +290,8 @@ fn hash_file_content(path: &Path) -> Result<String, String> {
         .ok_or_else(|| format!("frontend artifact read count overflowed for {}", path.display()))?;
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0_u8; FILE_READ_BUFFER_BYTES];
+    debug_assert!(maximum_read_count > 0);
+    debug_assert_eq!(u64::try_from(buffer.len()), Ok(buffer_size_bytes));
     for _ in 0..maximum_read_count {
         let read_size_bytes =
             std::io::Read::read(&mut file, &mut buffer).map_err(|err| format!("reading {}: {err}", path.display()))?;
@@ -330,8 +332,8 @@ fn relative_path_string(root: &Path, path: &Path) -> Result<String, String> {
     if relative.as_os_str().is_empty() {
         return Ok(ROOT_RELATIVE_PATH.to_string());
     }
-    let component_capacity_count = relative.components().count();
-    let mut parts = Vec::with_capacity(component_capacity_count);
+    let component_capacity_entries = relative.components().count();
+    let mut parts = Vec::with_capacity(component_capacity_entries);
     for component in relative.components() {
         match component {
             Component::Normal(part) => parts.push(
@@ -342,7 +344,7 @@ fn relative_path_string(root: &Path, path: &Path) -> Result<String, String> {
             other => return Err(format!("unsupported artifact path component {other:?} in {}", path.display())),
         }
     }
-    debug_assert!(parts.len() <= component_capacity_count);
+    debug_assert!(parts.len() <= component_capacity_entries);
     debug_assert!(!parts.is_empty());
     Ok(parts.join("/"))
 }

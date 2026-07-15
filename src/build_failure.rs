@@ -66,6 +66,7 @@ pub fn should_write_failure_log(error: &str) -> bool {
 }
 
 pub fn build_failure_envelopes(result: &PipelineResult, store_dir: &str, logs_dir: &Path) -> Vec<BuildFailureEnvelope> {
+    let failed_count = result.failed.len();
     let mut envelopes = result
         .failed
         .iter()
@@ -88,6 +89,8 @@ pub fn build_failure_envelopes(result: &PipelineResult, store_dir: &str, logs_di
         })
         .collect::<Vec<_>>();
     envelopes.sort_by(|left, right| left.root.cmp(&right.root).then(left.drv_key.cmp(&right.drv_key)));
+    debug_assert_eq!(envelopes.len(), failed_count);
+    debug_assert!(envelopes.iter().all(|envelope| !envelope.drv_key.is_empty()));
     envelopes
 }
 
@@ -125,28 +128,39 @@ fn classify_phase(error: &str) -> FailurePhase {
 
 fn classify_error_class(error: &str) -> FailureClass {
     let lower = error.to_lowercase();
-    let error_class = if classify_phase(error) == FailurePhase::Preflight {
-        if lower.contains("only supported on linux") {
-            FailureClass::UnsupportedPlatform
-        } else {
-            FailureClass::Preflight
-        }
-    } else if lower.contains("fod hash mismatch") {
-        FailureClass::FixedOutputHashMismatch
-    } else if lower.contains("bwrap") || lower.contains("fusermount") {
-        FailureClass::Sandbox
-    } else if lower.contains("output not produced by build") {
-        FailureClass::MissingOutput
-    } else if lower.contains("source input not found in store") {
-        FailureClass::MissingSourceInput
-    } else if lower.contains("unsigned pathinfo") || lower.contains("trusted signature") {
-        FailureClass::CacheVerification
-    } else {
-        FailureClass::Builder
+    let error_class = match classify_phase(error) {
+        FailurePhase::Preflight => classify_preflight_error_class(&lower),
+        FailurePhase::Build => classify_build_error_class(&lower),
     };
     debug_assert!(!error_class.as_str().is_empty());
     debug_assert!(!error_class.as_str().contains(' '));
     error_class
+}
+
+fn classify_preflight_error_class(lower_error: &str) -> FailureClass {
+    if lower_error.contains("only supported on linux") {
+        return FailureClass::UnsupportedPlatform;
+    }
+    FailureClass::Preflight
+}
+
+fn classify_build_error_class(lower_error: &str) -> FailureClass {
+    if lower_error.contains("fod hash mismatch") {
+        return FailureClass::FixedOutputHashMismatch;
+    }
+    if lower_error.contains("bwrap") || lower_error.contains("fusermount") {
+        return FailureClass::Sandbox;
+    }
+    if lower_error.contains("output not produced by build") {
+        return FailureClass::MissingOutput;
+    }
+    if lower_error.contains("source input not found in store") {
+        return FailureClass::MissingSourceInput;
+    }
+    if lower_error.contains("unsigned pathinfo") || lower_error.contains("trusted signature") {
+        return FailureClass::CacheVerification;
+    }
+    FailureClass::Builder
 }
 
 #[cfg(test)]

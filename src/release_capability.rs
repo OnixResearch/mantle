@@ -239,9 +239,9 @@ fn walk_ambient_directory_nofollow(root_path: &Path, create_missing: bool) -> io
 
 fn absolute_anchor_and_components(path: &Path) -> io::Result<(PathBuf, Vec<OsString>)> {
     let absolute = std::path::absolute(path)?;
-    let component_capacity_count = absolute.components().count();
+    let component_capacity_entries = absolute.components().count();
     let mut anchor = PathBuf::new();
-    let mut components = Vec::with_capacity(component_capacity_count);
+    let mut components = Vec::with_capacity(component_capacity_entries);
     for component in absolute.components() {
         match component {
             Component::Prefix(prefix) => anchor.push(prefix.as_os_str()),
@@ -263,7 +263,7 @@ fn absolute_anchor_and_components(path: &Path) -> io::Result<(PathBuf, Vec<OsStr
         ));
     }
     debug_assert!(absolute.is_absolute());
-    debug_assert!(components.len() <= component_capacity_count);
+    debug_assert!(components.len() <= component_capacity_entries);
     Ok((anchor, components))
 }
 

@@ -5,41 +5,64 @@ use nix_compat::store_path::StorePath;
 
 use crate::errors::RunError;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct FixMode {
+    is_enabled: bool,
+}
+
+impl From<bool> for FixMode {
+    fn from(is_enabled: bool) -> Self {
+        Self { is_enabled }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct HumanOutputMode {
+    is_enabled: bool,
+}
+
+impl From<bool> for HumanOutputMode {
+    fn from(is_enabled: bool) -> Self {
+        Self { is_enabled }
+    }
+}
+
 #[expect(
     tigerstyle::too_many_parameters,
-    tigerstyle::ambiguous_boolean_parameters,
     reason = "the protected build command caller retains this compatibility boundary"
 )]
-pub fn handle_fod_mismatch(
+pub(crate) fn handle_fod_mismatch(
     mismatch: &FodMismatch,
     _drv_path: &StorePath<String>,
     _label: &str,
     source_file: &Path,
-    fix: bool,
-    emit_human: bool,
+    fix: impl Into<FixMode>,
+    emit_human: impl Into<HumanOutputMode>,
 ) -> Result<(), RunError> {
     debug_assert!(!_drv_path.name().is_empty());
     debug_assert_ne!(mismatch.expected_sri, mismatch.actual_sri);
+    let is_fix_enabled = fix.into().is_enabled;
+    let is_human_output_enabled = emit_human.into().is_enabled;
     let msg = format!(
         "hash mismatch for '{}':\n expected: {}\n got:      {}",
         mismatch.name, mismatch.expected_sri, mismatch.actual_sri,
     );
 
-    if fix {
+    if is_fix_enabled {
         match auto_fix_hash(HashReplacement {
             file: source_file,
             old_hash: &mismatch.expected_sri,
             new_hash: &mismatch.actual_sri,
         }) {
             Ok(()) => {
-                if emit_human {
+                if is_human_output_enabled {
                     eprintln!("{msg}");
                     eprintln!("  fixed: updated {} with correct hash", source_file.display());
                 }
                 return Err(RunError::Build(format!("{msg}\n  fixed: re-run to build with the corrected hash")));
             }
             Err(fix_err) => {
-                if emit_human {
+                if is_human_output_enabled {
                     eprintln!("{msg}");
                     eprintln!("  --fix failed: {fix_err}");
                 }
@@ -48,7 +71,7 @@ pub fn handle_fod_mismatch(
         }
     }
 
-    if emit_human {
+    if is_human_output_enabled {
         eprintln!("{msg}");
         eprintln!("  update {}: hash = \"{}\"", source_file.display(), mismatch.actual_sri,);
     }

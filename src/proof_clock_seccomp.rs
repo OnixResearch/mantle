@@ -90,7 +90,7 @@ mod linux {
         if denied_syscalls.is_empty() {
             return Err("proof clock seccomp filtering has no denied syscalls".to_string());
         }
-        let instruction_capacity_count = FILTER_FIXED_INSTRUCTION_COUNT
+        let instruction_capacity_entries = FILTER_FIXED_INSTRUCTION_COUNT
             .checked_add(
                 denied_syscalls
                     .len()
@@ -98,17 +98,42 @@ mod linux {
                     .ok_or_else(|| "proof clock seccomp instruction count overflowed".to_string())?,
             )
             .ok_or_else(|| "proof clock seccomp instruction count overflowed".to_string())?;
-        let mut instructions = Vec::with_capacity(instruction_capacity_count);
-        instructions.push(bpf_stmt(libc::BPF_LD | libc::BPF_W | libc::BPF_ABS, SECCOMP_DATA_ARCH_OFFSET_BYTES)?);
-        instructions.push(bpf_jump(libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K, audit_arch, 1, 0)?);
-        instructions.push(bpf_stmt(libc::BPF_RET | libc::BPF_K, libc::SECCOMP_RET_KILL_PROCESS)?);
-        instructions.push(bpf_stmt(libc::BPF_LD | libc::BPF_W | libc::BPF_ABS, SECCOMP_DATA_NR_OFFSET_BYTES)?);
+        let mut instructions = Vec::with_capacity(instruction_capacity_entries);
+        instructions.push(bpf_stmt(BpfStatement {
+            code: libc::BPF_LD | libc::BPF_W | libc::BPF_ABS,
+            immediate: SECCOMP_DATA_ARCH_OFFSET_BYTES,
+        })?);
+        instructions.push(bpf_jump(BpfJump {
+            code: libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K,
+            comparison: audit_arch,
+            jump_true: 1,
+            jump_false: 0,
+        })?);
+        instructions.push(bpf_stmt(BpfStatement {
+            code: libc::BPF_RET | libc::BPF_K,
+            immediate: libc::SECCOMP_RET_KILL_PROCESS,
+        })?);
+        instructions.push(bpf_stmt(BpfStatement {
+            code: libc::BPF_LD | libc::BPF_W | libc::BPF_ABS,
+            immediate: SECCOMP_DATA_NR_OFFSET_BYTES,
+        })?);
         for syscall_number in denied_syscalls {
-            instructions.push(bpf_jump(libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K, syscall_number, 0, 1)?);
-            instructions.push(bpf_stmt(libc::BPF_RET | libc::BPF_K, libc::SECCOMP_RET_ERRNO | FILTER_DENIAL_ERRNO)?);
+            instructions.push(bpf_jump(BpfJump {
+                code: libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K,
+                comparison: syscall_number,
+                jump_true: 0,
+                jump_false: 1,
+            })?);
+            instructions.push(bpf_stmt(BpfStatement {
+                code: libc::BPF_RET | libc::BPF_K,
+                immediate: libc::SECCOMP_RET_ERRNO | FILTER_DENIAL_ERRNO,
+            })?);
         }
-        instructions.push(bpf_stmt(libc::BPF_RET | libc::BPF_K, libc::SECCOMP_RET_ALLOW)?);
-        assert_eq!(instructions.len(), instruction_capacity_count);
+        instructions.push(bpf_stmt(BpfStatement {
+            code: libc::BPF_RET | libc::BPF_K,
+            immediate: libc::SECCOMP_RET_ALLOW,
+        })?);
+        assert_eq!(instructions.len(), instruction_capacity_entries);
         assert!(instructions.len() > FILTER_FIXED_INSTRUCTION_COUNT);
         Ok(instructions)
     }
@@ -161,8 +186,9 @@ mod linux {
     fn filter_identity(instructions: &[libc::sock_filter]) -> String {
         assert!(!instructions.is_empty(), "proof clock seccomp filter must contain instructions");
         let digest = blake3::hash(instruction_bytes(instructions)).to_hex().to_string();
+        let expected_digest_length_bytes = blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE);
         assert!(!digest.is_empty(), "proof clock seccomp filter digest must be present");
-        assert_eq!(digest.len(), blake3::OUT_LEN * HEX_CHARS_PER_BYTE);
+        assert_eq!(digest.len(), expected_digest_length_bytes);
         format!("{FILTER_IDENTITY_PREFIX}:{digest}")
     }
 
@@ -185,27 +211,40 @@ mod linux {
         None
     }
 
-    fn bpf_stmt(code: u32, k: u32) -> Result<libc::sock_filter, String> {
-        let encoded_code = u16::try_from(code).map_err(|_| format!("BPF statement code exceeds u16: {code}"))?;
-        assert_eq!(u32::from(encoded_code), code);
-        assert_ne!(code, 0, "BPF statement code must identify an operation");
+    struct BpfStatement {
+        code: u32,
+        immediate: u32,
+    }
+
+    struct BpfJump {
+        code: u32,
+        comparison: u32,
+        jump_true: u8,
+        jump_false: u8,
+    }
+
+    fn bpf_stmt(statement: BpfStatement) -> Result<libc::sock_filter, String> {
+        let encoded_code =
+            u16::try_from(statement.code).map_err(|_| format!("BPF statement code exceeds u16: {}", statement.code))?;
+        assert_eq!(u32::from(encoded_code), statement.code);
+        assert_ne!(statement.code, 0, "BPF statement code must identify an operation");
         Ok(libc::sock_filter {
             code: encoded_code,
             jt: 0,
             jf: 0,
-            k,
+            k: statement.immediate,
         })
     }
 
-    fn bpf_jump(code: u32, k: u32, jump_true: u8, jump_false: u8) -> Result<libc::sock_filter, String> {
-        let encoded_code = u16::try_from(code).map_err(|_| format!("BPF jump code exceeds u16: {code}"))?;
-        assert_eq!(u32::from(encoded_code), code);
-        assert_ne!(code, 0, "BPF jump code must identify an operation");
+    fn bpf_jump(jump: BpfJump) -> Result<libc::sock_filter, String> {
+        let encoded_code = u16::try_from(jump.code).map_err(|_| format!("BPF jump code exceeds u16: {}", jump.code))?;
+        assert_eq!(u32::from(encoded_code), jump.code);
+        assert_ne!(jump.code, 0, "BPF jump code must identify an operation");
         Ok(libc::sock_filter {
             code: encoded_code,
-            jt: jump_true,
-            jf: jump_false,
-            k,
+            jt: jump.jump_true,
+            jf: jump.jump_false,
+            k: jump.comparison,
         })
     }
 

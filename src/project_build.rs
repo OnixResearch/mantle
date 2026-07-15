@@ -145,11 +145,11 @@ pub fn resolve_project_target(
     let project_dir = root_file
         .parent()
         .ok_or_else(|| RunError::Internal(format!("project root file has no parent: {}", root_file.display())))?;
-    let search_path_capacity_count = user_import_paths
+    let search_path_capacity_entries = user_import_paths
         .len()
         .checked_add(1)
         .ok_or_else(|| RunError::Internal("project import path count overflowed usize".to_string()))?;
-    let mut evaluation_search_paths: Vec<OsString> = Vec::with_capacity(search_path_capacity_count);
+    let mut evaluation_search_paths: Vec<OsString> = Vec::with_capacity(search_path_capacity_entries);
     evaluation_search_paths.push(project_dir.as_os_str().to_owned());
     for path in user_import_paths {
         evaluation_search_paths.push(path.as_os_str().to_owned());

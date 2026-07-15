@@ -68,10 +68,13 @@ pub(crate) fn validate_vendor_manifest(input: &VendorManifestValidationInput) ->
     for row in &input.rows {
         validate_vendor_row(row, &measured, &mut diagnostics);
     }
-    VendorManifestValidationReport {
+    let report = VendorManifestValidationReport {
         valid: diagnostics.is_empty(),
         diagnostics,
-    }
+    };
+    debug_assert!(measured.len() <= input.measured_files.len());
+    debug_assert_eq!(report.valid, report.diagnostics.is_empty());
+    report
 }
 
 // r[impl mantle.source_transports.vendor_source_manifests.validation]
