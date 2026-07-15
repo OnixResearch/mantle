@@ -31,6 +31,10 @@ const MAX_GAUNTLET_REPORT_DIGEST_COUNT: u32 = 512;
 const MAX_GAUNTLET_TRACK_COUNT: u32 = 64;
 const MAX_GAUNTLET_RUN_COUNT: u32 = 256;
 const MAX_GAUNTLET_STRING_BYTES_COUNT: u32 = 2048;
+const MAX_GAUNTLET_CELL_COUNT_USIZE: usize = 256;
+const MAX_GAUNTLET_STRING_SET_COUNT_USIZE: usize = 512;
+const MAX_GAUNTLET_BLOCKER_COUNT_USIZE: usize = 512;
+const MAX_GAUNTLET_TRACK_COUNT_USIZE: usize = 64;
 const ZERO_COUNT: u32 = 0;
 const MIN_REPEATABILITY_RUN_COUNT: u32 = 1;
 
@@ -88,69 +92,82 @@ impl GauntletVerdict {
     }
 }
 
+fn omitted_option<T>() -> Option<T> {
+    None
+}
+
+fn omitted_vec<T>() -> Vec<T> {
+    Vec::new()
+}
+
+// Omitted optional fields are part of the stable v1 report schema.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GauntletBlocker {
     pub evidence_class: String,
     pub message: String,
     pub next_action: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub axis: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub expected_digest_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub observed_digest_blake3: Option<String>,
 }
 
+// Omitted axis lists decode as empty for stable v1 profile compatibility.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HermeticityGauntletProfile {
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub host_tool_axes: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub environment_axes: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub network_axes: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub timestamp_axes: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub locale_axes: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub umask_axes: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub temp_path_axes: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub store_path_axes: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub randomness_axes: Vec<String>,
 }
 
+// The optional axis remains omittable in the stable v1 evidence schema.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HermeticityViolation {
     pub class: String,
     pub detail: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub axis: Option<String>,
 }
 
+// Omitted optional and repeated evidence fields preserve the stable v1 schema.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HermeticityCellEvidence {
     pub cell_id: String,
     pub mode: GauntletMode,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub observed_violations: Vec<HermeticityViolation>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub audit_events: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub unsupported_axes: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub output_digest_blake3: Option<String>,
 }
 
+// The optional output digest remains omittable in the stable v1 report schema.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HermeticityCellReport {
     pub cell_id: String,
     pub mode: GauntletMode,
     pub verdict: GauntletVerdict,
-    #[serde(default)]
+    #[serde(default = "omitted_option")]
     pub output_digest_blake3: Option<String>,
     pub blockers: Vec<GauntletBlocker>,
     pub non_claims: Vec<String>,
@@ -176,26 +193,28 @@ pub struct ProtectedExecObservation {
     pub digest_blake3: String,
 }
 
+// Omitted optional and repeated evidence fields preserve the stable v1 schema.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BootstrapPressureCellEvidence {
     pub cell_id: String,
     pub profile: String,
     pub fixed_point: bool,
     pub host_tool_policy: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub seed_inventory_digest_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub protected_exec_audit_digest_blake3: Option<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub stage_output_digest_set_blake3: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub observed_execs: Vec<ProtectedExecObservation>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub remaining_trusted_root: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub unsupported_reason: Option<String>,
 }
 
+// Optional bootstrap digests remain omittable in the stable v1 report schema.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BootstrapPressureCellReport {
     pub cell_id: String,
@@ -203,9 +222,9 @@ pub struct BootstrapPressureCellReport {
     pub verdict: GauntletVerdict,
     pub fixed_point: bool,
     pub host_tool_policy: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub seed_inventory_digest_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub protected_exec_audit_digest_blake3: Option<String>,
     pub stage_output_digest_set_blake3: Vec<String>,
     pub remaining_trusted_root: Vec<String>,
@@ -224,6 +243,7 @@ pub struct BootstrapPressureGauntletReport {
     pub non_claims: Vec<String>,
 }
 
+// Omitted optional and repeated evidence fields preserve the stable v1 schema.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SubstitutionAttackCaseEvidence {
     pub case_id: String,
@@ -231,31 +251,32 @@ pub struct SubstitutionAttackCaseEvidence {
     pub accepted: bool,
     pub closure_complete: bool,
     pub artifact_attestation_fresh: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub trusted_key_material: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub fallback_mode: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub expected_digest_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub observed_digest_blake3: Option<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub failed_trust_edges: Vec<String>,
 }
 
+// Optional cache evidence remains omittable in the stable v1 report schema.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SubstitutionAttackCaseReport {
     pub case_id: String,
     pub verdict: GauntletVerdict,
     pub strict_mode: bool,
     pub accepted: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub trusted_key_material: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub fallback_mode: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub expected_digest_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub observed_digest_blake3: Option<String>,
     pub failed_trust_edges: Vec<String>,
     pub blockers: Vec<GauntletBlocker>,
@@ -273,27 +294,28 @@ pub struct SubstitutionCacheAttackGauntletReport {
     pub non_claims: Vec<String>,
 }
 
+// Omitted optional and repeated evidence fields preserve the stable v1 schema.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NixMantleComparisonCaseEvidence {
     pub case_id: String,
     pub equivalence_declared: bool,
     pub build_recipe_identity: String,
     pub normalization_policy: String,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub source_refs: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub toolchain_refs: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub dependency_refs: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub output_surfaces: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub allowed_differences: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub nix_digest_set_blake3: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub mantle_digest_set_blake3: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub unsupported_reason: Option<String>,
 }
 
@@ -324,29 +346,31 @@ pub struct NixMantleComparisonCorpusReport {
     pub non_claims: Vec<String>,
 }
 
+// Omitted matrix dimensions decode as empty for stable v1 profile compatibility.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RepeatabilityMatrixProfile {
     pub release_id: String,
     pub matrix_profile_digest_blake3: String,
     pub run_count: u32,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub artifact_surfaces: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub expected_output_digest_set_blake3: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub cache_modes: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub store_isolation_modes: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub environment_controls: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub temp_root_controls: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub user_controls: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub host_classes: Vec<String>,
 }
 
+// Omitted optional and repeated evidence fields preserve the stable v1 schema.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RepeatabilityMatrixCellEvidence {
     pub cell_id: String,
@@ -355,20 +379,21 @@ pub struct RepeatabilityMatrixCellEvidence {
     pub fresh_store: bool,
     pub explicit_reuse_test: bool,
     pub reused_store: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub output_root_identity: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub store_root_identity: Option<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub expected_output_digest_set_blake3: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub observed_output_digest_set_blake3: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub missing_outputs: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub unsupported_reason: Option<String>,
 }
 
+// Optional root identities remain omittable in the stable v1 report schema.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RepeatabilityMatrixCellReport {
     pub cell_id: String,
@@ -377,9 +402,9 @@ pub struct RepeatabilityMatrixCellReport {
     pub store_isolation_mode: String,
     pub fresh_store: bool,
     pub explicit_reuse_test: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub output_root_identity: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "omitted_option", skip_serializing_if = "Option::is_none")]
     pub store_root_identity: Option<String>,
     pub expected_output_digest_set_blake3: Vec<String>,
     pub observed_output_digest_set_blake3: Vec<String>,
@@ -404,6 +429,7 @@ pub struct TrackSchemaVersion {
     pub schema_version: String,
 }
 
+// Omitted required-track declarations preserve stable v1 context decoding.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContinuousGauntletContext {
     pub source_digest_blake3: String,
@@ -412,20 +438,22 @@ pub struct ContinuousGauntletContext {
     pub toolchain_digest_blake3: String,
     pub host_class: String,
     pub witness_set_digest_blake3: String,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub required_track_schema_versions: Vec<TrackSchemaVersion>,
 }
 
+// Omitted run diagnostics decode as empty for stable v1 evidence compatibility.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrackRunEvidence {
     pub run_id: String,
     pub status: GauntletVerdict,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub blockers: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub next_actions: Vec<String>,
 }
 
+// Omitted run history decodes as empty for stable v1 evidence compatibility.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GauntletTrackEvidence {
     pub track_id: String,
@@ -437,7 +465,7 @@ pub struct GauntletTrackEvidence {
     pub toolchain_digest_blake3: String,
     pub host_class: String,
     pub witness_set_digest_blake3: String,
-    #[serde(default)]
+    #[serde(default = "omitted_vec")]
     pub runs: Vec<TrackRunEvidence>,
 }
 
@@ -473,15 +501,21 @@ pub fn evaluate_adversarial_hermeticity_gauntlet(
     validate_blake3_hex(&source_digest_blake3, DIGEST_FIELD_SOURCE)?;
     validate_non_empty_string(&run_id, "hermeticity run_id")?;
     let profile = canonicalize_hermeticity_profile(profile)?;
-    let mut reports = Vec::new();
+    let cell_count: usize = cells.len();
+    validate_report_cell_count(cell_count, "hermeticity cells")?;
+    debug_assert!(cell_count > 0, "validated gauntlet contains a cell");
+    debug_assert!(cell_count <= MAX_GAUNTLET_CELL_COUNT_USIZE, "validated cell count is bounded");
+    let mut evaluated_cells: Vec<HermeticityCellReport> = Vec::with_capacity(cell_count);
     for cell in cells {
-        reports.push(evaluate_hermeticity_cell(cell)?);
+        evaluated_cells.push(evaluate_hermeticity_cell(cell)?);
     }
-    let mut blockers = collect_cell_blockers(reports.iter().map(|cell| &cell.blockers))?;
+    debug_assert_eq!(evaluated_cells.len(), cell_count, "every cell produces one report");
+    let mut blockers = collect_cell_blockers(evaluated_cells.iter().map(|cell| &cell.blockers))?;
     blockers.extend(profile_non_claim_blockers(&profile));
-    let strict_evidence_eligible = reports.iter().all(|cell| cell.verdict.is_strict_evidence()) && blockers.is_empty();
+    let is_strict_evidence_eligible =
+        evaluated_cells.iter().all(|cell| cell.verdict.is_strict_evidence()) && blockers.is_empty();
     let mut non_claims = hermeticity_non_claims(&profile);
-    if !strict_evidence_eligible {
+    if !is_strict_evidence_eligible {
         non_claims.push(NON_CLAIM_STRICT_REPRODUCIBILITY_BLOCKED.to_string());
     }
     canonical_adversarial_hermeticity_gauntlet_report(AdversarialHermeticityGauntletReport {
@@ -489,8 +523,8 @@ pub fn evaluate_adversarial_hermeticity_gauntlet(
         run_id,
         source_digest_blake3,
         profile,
-        cells: reports,
-        strict_evidence_eligible,
+        cells: evaluated_cells,
+        strict_evidence_eligible: is_strict_evidence_eligible,
         blockers,
         non_claims,
     })
@@ -499,11 +533,10 @@ pub fn evaluate_adversarial_hermeticity_gauntlet(
 pub fn canonical_adversarial_hermeticity_gauntlet_report(
     mut report: AdversarialHermeticityGauntletReport,
 ) -> Result<AdversarialHermeticityGauntletReport, ReleaseEvidenceError> {
-    require_schema(
-        &report.schema,
-        ADVERSARIAL_HERMETICITY_GAUNTLET_REPORT_SCHEMA,
-        "adversarial hermeticity report schema",
-    )?;
+    require_schema(&report.schema, SchemaRequirement {
+        expected: ADVERSARIAL_HERMETICITY_GAUNTLET_REPORT_SCHEMA,
+        field_name: "adversarial hermeticity report schema",
+    })?;
     validate_blake3_hex(&report.source_digest_blake3, DIGEST_FIELD_SOURCE)?;
     report.schema = ADVERSARIAL_HERMETICITY_GAUNTLET_REPORT_SCHEMA.to_string();
     report.profile = canonicalize_hermeticity_profile(report.profile)?;
@@ -538,11 +571,16 @@ pub fn evaluate_bootstrap_pressure_gauntlet(
 ) -> Result<BootstrapPressureGauntletReport, ReleaseEvidenceError> {
     validate_blake3_hex(&source_digest_blake3, DIGEST_FIELD_SOURCE)?;
     validate_non_empty_string(&run_id, "bootstrap pressure run_id")?;
-    let mut reports = Vec::new();
+    let cell_count: usize = cells.len();
+    validate_report_cell_count(cell_count, "bootstrap pressure cells")?;
+    debug_assert!(cell_count > 0, "validated gauntlet contains a cell");
+    debug_assert!(cell_count <= MAX_GAUNTLET_CELL_COUNT_USIZE, "validated cell count is bounded");
+    let mut evaluated_cells: Vec<BootstrapPressureCellReport> = Vec::with_capacity(cell_count);
     for cell in cells {
-        reports.push(evaluate_bootstrap_pressure_cell(cell)?);
+        evaluated_cells.push(evaluate_bootstrap_pressure_cell(cell)?);
     }
-    let blockers = collect_cell_blockers(reports.iter().map(|cell| &cell.blockers))?;
+    debug_assert_eq!(evaluated_cells.len(), cell_count, "every cell produces one report");
+    let blockers = collect_cell_blockers(evaluated_cells.iter().map(|cell| &cell.blockers))?;
     let mut non_claims = vec![
         NON_CLAIM_FULL_SOURCE_BOOTSTRAP.to_string(),
         NON_CLAIM_COMPILER_CORRECTNESS.to_string(),
@@ -554,7 +592,7 @@ pub fn evaluate_bootstrap_pressure_gauntlet(
         schema: BOOTSTRAP_PRESSURE_GAUNTLET_REPORT_SCHEMA.to_string(),
         run_id,
         source_digest_blake3,
-        cells: reports,
+        cells: evaluated_cells,
         blockers,
         non_claims,
     })
@@ -563,7 +601,10 @@ pub fn evaluate_bootstrap_pressure_gauntlet(
 pub fn canonical_bootstrap_pressure_gauntlet_report(
     mut report: BootstrapPressureGauntletReport,
 ) -> Result<BootstrapPressureGauntletReport, ReleaseEvidenceError> {
-    require_schema(&report.schema, BOOTSTRAP_PRESSURE_GAUNTLET_REPORT_SCHEMA, "bootstrap pressure report schema")?;
+    require_schema(&report.schema, SchemaRequirement {
+        expected: BOOTSTRAP_PRESSURE_GAUNTLET_REPORT_SCHEMA,
+        field_name: "bootstrap pressure report schema",
+    })?;
     report.schema = BOOTSTRAP_PRESSURE_GAUNTLET_REPORT_SCHEMA.to_string();
     validate_non_empty_string(&report.run_id, "bootstrap pressure run_id")?;
     validate_blake3_hex(&report.source_digest_blake3, DIGEST_FIELD_SOURCE)?;
@@ -596,22 +637,28 @@ pub fn evaluate_substitution_cache_attack_gauntlet(
 ) -> Result<SubstitutionCacheAttackGauntletReport, ReleaseEvidenceError> {
     validate_non_empty_string(&run_id, "substitution attack run_id")?;
     validate_blake3_hex(&policy_digest_blake3, DIGEST_FIELD_POLICY)?;
-    let mut reports = Vec::new();
+    let case_count: usize = cases.len();
+    validate_report_cell_count(case_count, "substitution attack cases")?;
+    debug_assert!(case_count > 0, "validated gauntlet contains a case");
+    debug_assert!(case_count <= MAX_GAUNTLET_CELL_COUNT_USIZE, "validated case count is bounded");
+    let mut evaluated_cases: Vec<SubstitutionAttackCaseReport> = Vec::with_capacity(case_count);
     for case in cases {
-        reports.push(evaluate_substitution_attack_case(case)?);
+        evaluated_cases.push(evaluate_substitution_attack_case(case)?);
     }
-    let blockers = collect_cell_blockers(reports.iter().map(|case| &case.blockers))?;
-    let strict_cache_evidence_eligible = reports.iter().all(|case| !case.verdict.is_blocking()) && blockers.is_empty();
+    debug_assert_eq!(evaluated_cases.len(), case_count, "every case produces one report");
+    let blockers = collect_cell_blockers(evaluated_cases.iter().map(|case| &case.blockers))?;
+    let is_strict_cache_evidence_eligible =
+        evaluated_cases.iter().all(|case| !case.verdict.is_blocking()) && blockers.is_empty();
     let mut non_claims = vec![NON_CLAIM_COMPILER_CORRECTNESS.to_string()];
-    if !strict_cache_evidence_eligible {
+    if !is_strict_cache_evidence_eligible {
         non_claims.push(NON_CLAIM_STRICT_REPRODUCIBILITY_BLOCKED.to_string());
     }
     canonical_substitution_cache_attack_gauntlet_report(SubstitutionCacheAttackGauntletReport {
         schema: SUBSTITUTION_CACHE_ATTACK_GAUNTLET_REPORT_SCHEMA.to_string(),
         run_id,
         policy_digest_blake3,
-        cases: reports,
-        strict_cache_evidence_eligible,
+        cases: evaluated_cases,
+        strict_cache_evidence_eligible: is_strict_cache_evidence_eligible,
         blockers,
         non_claims,
     })
@@ -620,11 +667,10 @@ pub fn evaluate_substitution_cache_attack_gauntlet(
 pub fn canonical_substitution_cache_attack_gauntlet_report(
     mut report: SubstitutionCacheAttackGauntletReport,
 ) -> Result<SubstitutionCacheAttackGauntletReport, ReleaseEvidenceError> {
-    require_schema(
-        &report.schema,
-        SUBSTITUTION_CACHE_ATTACK_GAUNTLET_REPORT_SCHEMA,
-        "substitution cache attack report schema",
-    )?;
+    require_schema(&report.schema, SchemaRequirement {
+        expected: SUBSTITUTION_CACHE_ATTACK_GAUNTLET_REPORT_SCHEMA,
+        field_name: "substitution cache attack report schema",
+    })?;
     report.schema = SUBSTITUTION_CACHE_ATTACK_GAUNTLET_REPORT_SCHEMA.to_string();
     validate_non_empty_string(&report.run_id, "substitution attack run_id")?;
     validate_blake3_hex(&report.policy_digest_blake3, DIGEST_FIELD_POLICY)?;
@@ -659,11 +705,16 @@ pub fn evaluate_nix_mantle_comparison_corpus(
 ) -> Result<NixMantleComparisonCorpusReport, ReleaseEvidenceError> {
     validate_non_empty_string(&run_id, "Nix Mantle comparison run_id")?;
     validate_blake3_hex(&policy_digest_blake3, DIGEST_FIELD_POLICY)?;
-    let mut reports = Vec::new();
+    let case_count: usize = cases.len();
+    validate_report_cell_count(case_count, "Nix Mantle comparison cases")?;
+    debug_assert!(case_count > 0, "validated corpus contains a case");
+    debug_assert!(case_count <= MAX_GAUNTLET_CELL_COUNT_USIZE, "validated case count is bounded");
+    let mut evaluated_cases: Vec<NixMantleComparisonCaseReport> = Vec::with_capacity(case_count);
     for case in cases {
-        reports.push(evaluate_nix_mantle_comparison_case(case)?);
+        evaluated_cases.push(evaluate_nix_mantle_comparison_case(case)?);
     }
-    let blockers = collect_cell_blockers(reports.iter().map(|case| &case.blockers))?;
+    debug_assert_eq!(evaluated_cases.len(), case_count, "every case produces one report");
+    let blockers = collect_cell_blockers(evaluated_cases.iter().map(|case| &case.blockers))?;
     let mut non_claims = vec![
         NON_CLAIM_GLOBAL_SUPERIORITY.to_string(),
         NON_CLAIM_COMPILER_CORRECTNESS.to_string(),
@@ -675,7 +726,7 @@ pub fn evaluate_nix_mantle_comparison_corpus(
         schema: NIX_MANTLE_COMPARISON_CORPUS_REPORT_SCHEMA.to_string(),
         run_id,
         policy_digest_blake3,
-        cases: reports,
+        cases: evaluated_cases,
         blockers,
         non_claims,
     })
@@ -684,7 +735,10 @@ pub fn evaluate_nix_mantle_comparison_corpus(
 pub fn canonical_nix_mantle_comparison_corpus_report(
     mut report: NixMantleComparisonCorpusReport,
 ) -> Result<NixMantleComparisonCorpusReport, ReleaseEvidenceError> {
-    require_schema(&report.schema, NIX_MANTLE_COMPARISON_CORPUS_REPORT_SCHEMA, "Nix Mantle comparison report schema")?;
+    require_schema(&report.schema, SchemaRequirement {
+        expected: NIX_MANTLE_COMPARISON_CORPUS_REPORT_SCHEMA,
+        field_name: "Nix Mantle comparison report schema",
+    })?;
     report.schema = NIX_MANTLE_COMPARISON_CORPUS_REPORT_SCHEMA.to_string();
     validate_non_empty_string(&report.run_id, "Nix Mantle comparison run_id")?;
     validate_blake3_hex(&report.policy_digest_blake3, DIGEST_FIELD_POLICY)?;
@@ -715,22 +769,27 @@ pub fn evaluate_release_repeatability_matrix(
     cells: Vec<RepeatabilityMatrixCellEvidence>,
 ) -> Result<ReleaseRepeatabilityMatrixReport, ReleaseEvidenceError> {
     let profile = canonicalize_repeatability_profile(profile)?;
-    let mut reports = Vec::new();
+    let cell_count: usize = cells.len();
+    validate_report_cell_count(cell_count, "release repeatability cells")?;
+    debug_assert!(cell_count > 0, "validated matrix contains a cell");
+    debug_assert!(cell_count <= MAX_GAUNTLET_CELL_COUNT_USIZE, "validated cell count is bounded");
+    let mut evaluated_cells: Vec<RepeatabilityMatrixCellReport> = Vec::with_capacity(cell_count);
     for cell in cells {
-        reports.push(evaluate_repeatability_cell(&profile, cell)?);
+        evaluated_cells.push(evaluate_repeatability_cell(&profile, cell)?);
     }
-    let blockers = collect_cell_blockers(reports.iter().map(|cell| &cell.blockers))?;
-    let repeatability_evidence_eligible =
-        reports.iter().all(|cell| cell.verdict == GauntletVerdict::Matched) && blockers.is_empty();
+    debug_assert_eq!(evaluated_cells.len(), cell_count, "every cell produces one report");
+    let blockers = collect_cell_blockers(evaluated_cells.iter().map(|cell| &cell.blockers))?;
+    let is_repeatability_evidence_eligible =
+        evaluated_cells.iter().all(|cell| cell.verdict == GauntletVerdict::Matched) && blockers.is_empty();
     let mut non_claims = vec![NON_CLAIM_COMPILER_CORRECTNESS.to_string()];
-    if !repeatability_evidence_eligible {
+    if !is_repeatability_evidence_eligible {
         non_claims.push(NON_CLAIM_STRICT_REPRODUCIBILITY_BLOCKED.to_string());
     }
     canonical_release_repeatability_matrix_report(ReleaseRepeatabilityMatrixReport {
         schema: RELEASE_REPEATABILITY_MATRIX_REPORT_SCHEMA.to_string(),
         profile,
-        cells: reports,
-        repeatability_evidence_eligible,
+        cells: evaluated_cells,
+        repeatability_evidence_eligible: is_repeatability_evidence_eligible,
         blockers,
         non_claims,
     })
@@ -739,11 +798,10 @@ pub fn evaluate_release_repeatability_matrix(
 pub fn canonical_release_repeatability_matrix_report(
     mut report: ReleaseRepeatabilityMatrixReport,
 ) -> Result<ReleaseRepeatabilityMatrixReport, ReleaseEvidenceError> {
-    require_schema(
-        &report.schema,
-        RELEASE_REPEATABILITY_MATRIX_REPORT_SCHEMA,
-        "release repeatability matrix report schema",
-    )?;
+    require_schema(&report.schema, SchemaRequirement {
+        expected: RELEASE_REPEATABILITY_MATRIX_REPORT_SCHEMA,
+        field_name: "release repeatability matrix report schema",
+    })?;
     report.schema = RELEASE_REPEATABILITY_MATRIX_REPORT_SCHEMA.to_string();
     report.profile = canonicalize_repeatability_profile(report.profile)?;
     report.cells.sort_by(|left, right| left.cell_id.cmp(&right.cell_id));
@@ -774,13 +832,18 @@ pub fn evaluate_continuous_reproducibility_gauntlet(
 ) -> Result<ContinuousReproducibilityGauntletReport, ReleaseEvidenceError> {
     let context = canonicalize_continuous_context(context)?;
     let required_versions = required_track_versions(&context)?;
-    let mut reports = Vec::new();
+    let track_count: usize = tracks.len();
+    validate_continuous_track_count(track_count)?;
+    debug_assert!(track_count > 0, "validated gauntlet contains a track");
+    debug_assert!(track_count <= MAX_GAUNTLET_TRACK_COUNT_USIZE, "validated track count is bounded");
+    let mut evaluated_tracks: Vec<TrackAggregateReport> = Vec::with_capacity(track_count);
     for track in tracks {
-        reports.push(evaluate_track_evidence(&context, &required_versions, track)?);
+        evaluated_tracks.push(evaluate_track_evidence(&context, &required_versions, track)?);
     }
-    let blockers = collect_cell_blockers(reports.iter().map(|track| &track.blockers))?;
-    let current_claim_status = classify_continuous_status(&reports, &blockers);
-    let mut digests = reports.iter().map(|track| track.report_digest_blake3.clone()).collect::<Vec<_>>();
+    debug_assert_eq!(evaluated_tracks.len(), track_count, "every track produces one report");
+    let blockers = collect_cell_blockers(evaluated_tracks.iter().map(|track| &track.blockers))?;
+    let current_claim_status = classify_continuous_status(&evaluated_tracks, &blockers);
+    let mut digests = evaluated_tracks.iter().map(|track| track.report_digest_blake3.clone()).collect::<Vec<_>>();
     canonicalize_digest_vec(&mut digests, "continuous track report digests")?;
     let mut non_claims = vec![NON_CLAIM_GLOBAL_SUPERIORITY.to_string()];
     if current_claim_status != GauntletVerdict::Accepted {
@@ -789,7 +852,7 @@ pub fn evaluate_continuous_reproducibility_gauntlet(
     canonical_continuous_reproducibility_gauntlet_report(ContinuousReproducibilityGauntletReport {
         schema: CONTINUOUS_REPRODUCIBILITY_GAUNTLET_REPORT_SCHEMA.to_string(),
         context,
-        tracks: reports,
+        tracks: evaluated_tracks,
         current_claim_status,
         track_report_digests_blake3: digests,
         blockers,
@@ -800,11 +863,10 @@ pub fn evaluate_continuous_reproducibility_gauntlet(
 pub fn canonical_continuous_reproducibility_gauntlet_report(
     mut report: ContinuousReproducibilityGauntletReport,
 ) -> Result<ContinuousReproducibilityGauntletReport, ReleaseEvidenceError> {
-    require_schema(
-        &report.schema,
-        CONTINUOUS_REPRODUCIBILITY_GAUNTLET_REPORT_SCHEMA,
-        "continuous gauntlet report schema",
-    )?;
+    require_schema(&report.schema, SchemaRequirement {
+        expected: CONTINUOUS_REPRODUCIBILITY_GAUNTLET_REPORT_SCHEMA,
+        field_name: "continuous gauntlet report schema",
+    })?;
     report.schema = CONTINUOUS_REPRODUCIBILITY_GAUNTLET_REPORT_SCHEMA.to_string();
     report.context = canonicalize_continuous_context(report.context)?;
     report.tracks.sort_by(|left, right| left.track_id.cmp(&right.track_id));
@@ -838,6 +900,11 @@ fn evaluate_hermeticity_cell(mut cell: HermeticityCellEvidence) -> Result<Hermet
     canonicalize_string_vec(&mut cell.audit_events, "hermeticity audit_events")?;
     canonicalize_string_vec(&mut cell.unsupported_axes, "hermeticity unsupported_axes")?;
     validate_optional_digest(&cell.output_digest_blake3, "hermeticity output_digest_blake3")?;
+    debug_assert!(!cell.cell_id.is_empty(), "validated cell id is nonempty");
+    debug_assert!(
+        cell.observed_violations.len() <= MAX_GAUNTLET_BLOCKER_COUNT_USIZE,
+        "validated violation count is bounded"
+    );
     let mut blockers = hermeticity_cell_blockers(&cell)?;
     let verdict = hermeticity_verdict(&cell, &blockers);
     let mut non_claims = unsupported_axis_non_claims(&cell.unsupported_axes);
@@ -857,29 +924,40 @@ fn evaluate_hermeticity_cell(mut cell: HermeticityCellEvidence) -> Result<Hermet
 }
 
 fn hermeticity_cell_blockers(cell: &HermeticityCellEvidence) -> Result<Vec<GauntletBlocker>, ReleaseEvidenceError> {
-    let mut blockers = Vec::new();
+    debug_assert!(!cell.cell_id.is_empty(), "validated cell id is nonempty");
+    debug_assert!(
+        cell.observed_violations.len() <= MAX_GAUNTLET_BLOCKER_COUNT_USIZE,
+        "validated violation count is bounded"
+    );
+    let blocker_count_max: usize = cell
+        .observed_violations
+        .len()
+        .checked_add(1)
+        .ok_or_else(|| validation_error("hermeticity blocker capacity overflowed usize".to_string()))?;
+    let mut blockers = Vec::with_capacity(blocker_count_max);
     for violation in &cell.observed_violations {
         validate_non_empty_string(&violation.class, "hermeticity violation class")?;
         validate_non_empty_string(&violation.detail, "hermeticity violation detail")?;
-        blockers.push(blocker(
-            "hermeticity-violation",
-            &violation.detail,
-            "rerun with the hidden host influence removed or keep the cell as a blocker",
-            violation.axis.clone(),
-            None,
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "hermeticity-violation",
+            message: &violation.detail,
+            next_action: "rerun with the hidden host influence removed or keep the cell as a blocker",
+            axis: violation.axis.clone(),
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
     }
     if cell.mode == GauntletMode::Strict && !cell.unsupported_axes.is_empty() {
-        blockers.push(blocker(
-            "unsupported-hermeticity-axis",
-            "strict hermeticity cell has unsupported perturbation axes",
-            "record the unsupported axis as a non-claim or add host support before using strict evidence",
-            None,
-            None,
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "unsupported-hermeticity-axis",
+            message: "strict hermeticity cell has unsupported perturbation axes",
+            next_action: "record the unsupported axis as a non-claim or add host support before using strict evidence",
+            axis: None,
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
     }
+    debug_assert!(blockers.len() <= blocker_count_max, "reserved capacity covers every blocker");
     Ok(blockers)
 }
 
@@ -897,6 +975,8 @@ fn evaluate_bootstrap_pressure_cell(
     mut cell: BootstrapPressureCellEvidence,
 ) -> Result<BootstrapPressureCellReport, ReleaseEvidenceError> {
     validate_bootstrap_pressure_cell(&mut cell)?;
+    debug_assert!(!cell.cell_id.is_empty(), "validated cell id is nonempty");
+    debug_assert!(!cell.profile.is_empty(), "validated bootstrap profile is nonempty");
     let mut blockers = bootstrap_pressure_cell_blockers(&cell);
     let verdict = bootstrap_pressure_verdict(&cell, &blockers);
     let mut non_claims = vec![
@@ -943,14 +1023,14 @@ fn validate_bootstrap_pressure_cell(cell: &mut BootstrapPressureCellEvidence) ->
 fn bootstrap_pressure_cell_blockers(cell: &BootstrapPressureCellEvidence) -> Vec<GauntletBlocker> {
     let mut blockers = Vec::new();
     if let Some(reason) = &cell.unsupported_reason {
-        blockers.push(blocker(
-            "unsupported-bootstrap-profile",
-            reason,
-            "rerun on a supported host profile",
-            None,
-            None,
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "unsupported-bootstrap-profile",
+            message: reason,
+            next_action: "rerun on a supported host profile",
+            axis: None,
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
     }
     push_protected_profile_blockers(cell, &mut blockers);
     push_bootstrap_exec_blockers(cell, &mut blockers);
@@ -959,28 +1039,30 @@ fn bootstrap_pressure_cell_blockers(cell: &BootstrapPressureCellEvidence) -> Vec
 }
 
 fn push_protected_profile_blockers(cell: &BootstrapPressureCellEvidence, blockers: &mut Vec<GauntletBlocker>) {
+    debug_assert!(!cell.cell_id.is_empty(), "validated cell id is nonempty");
+    debug_assert!(!cell.profile.is_empty(), "validated bootstrap profile is nonempty");
     if !profile_requires_protected_exec(&cell.profile) {
         return;
     }
     if cell.seed_inventory_digest_blake3.is_none() {
-        blockers.push(blocker(
-            "missing-seed-inventory",
-            "protected bootstrap profile is missing seed inventory digest",
-            "bind the protected phase to a declared seed inventory digest",
-            None,
-            None,
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "missing-seed-inventory",
+            message: "protected bootstrap profile is missing seed inventory digest",
+            next_action: "bind the protected phase to a declared seed inventory digest",
+            axis: None,
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
     }
     if cell.protected_exec_audit_digest_blake3.is_none() {
-        blockers.push(blocker(
-            "missing-protected-exec-audit",
-            "protected bootstrap profile is missing protected-exec audit digest",
-            "capture protected-exec audit evidence before promoting this profile",
-            None,
-            None,
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "missing-protected-exec-audit",
+            message: "protected bootstrap profile is missing protected-exec audit digest",
+            next_action: "capture protected-exec audit evidence before promoting this profile",
+            axis: None,
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
     }
 }
 
@@ -989,37 +1071,39 @@ fn push_bootstrap_exec_blockers(cell: &BootstrapPressureCellEvidence, blockers: 
         if observed.declared {
             continue;
         }
-        blockers.push(blocker(
-            "undeclared-protected-exec",
-            &format!("undeclared protected executable observed: {}", observed.executable_class),
-            "add the executable to the inventory or remove it from the protected phase",
-            Some(observed.path.clone()),
-            None,
-            Some(observed.digest_blake3.clone()),
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "undeclared-protected-exec",
+            message: &format!("undeclared protected executable observed: {}", observed.executable_class),
+            next_action: "add the executable to the inventory or remove it from the protected phase",
+            axis: Some(observed.path.clone()),
+            expected_digest_blake3: None,
+            observed_digest_blake3: Some(observed.digest_blake3.clone()),
+        }));
     }
 }
 
 fn push_bootstrap_fixed_point_blockers(cell: &BootstrapPressureCellEvidence, blockers: &mut Vec<GauntletBlocker>) {
+    debug_assert!(!cell.cell_id.is_empty(), "validated cell id is nonempty");
+    debug_assert!(!cell.profile.is_empty(), "validated bootstrap profile is nonempty");
     if !cell.fixed_point {
-        blockers.push(blocker(
-            "bootstrap-fixed-point",
-            "bootstrap pressure profile did not prove a fixed point",
-            "rerun the profile until stage outputs match or record the mismatch as evidence debt",
-            None,
-            None,
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "bootstrap-fixed-point",
+            message: "bootstrap pressure profile did not prove a fixed point",
+            next_action: "rerun the profile until stage outputs match or record the mismatch as evidence debt",
+            axis: None,
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
     }
     if cell.profile == PROFILE_FULL_SOURCE_ROOT_ATTEMPT && !cell.remaining_trusted_root.is_empty() {
-        blockers.push(blocker(
-            "remaining-trusted-root",
-            "full-source-root attempt still has trusted seed or host blockers",
-            "derive the remaining root from accepted source evidence before making a full-source claim",
-            None,
-            None,
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "remaining-trusted-root",
+            message: "full-source-root attempt still has trusted seed or host blockers",
+            next_action: "derive the remaining root from accepted source evidence before making a full-source claim",
+            axis: None,
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
     }
 }
 
@@ -1037,9 +1121,14 @@ fn evaluate_substitution_attack_case(
     mut case: SubstitutionAttackCaseEvidence,
 ) -> Result<SubstitutionAttackCaseReport, ReleaseEvidenceError> {
     validate_substitution_attack_case(&mut case)?;
-    let attack_observed = substitution_attack_observed(&case);
-    let mut blockers = substitution_attack_blockers(&case, attack_observed);
-    let verdict = substitution_attack_verdict(&case, attack_observed, &blockers);
+    debug_assert!(!case.case_id.is_empty(), "validated case id is nonempty");
+    debug_assert!(
+        case.failed_trust_edges.len() <= MAX_GAUNTLET_STRING_SET_COUNT_USIZE,
+        "validated trust-edge count is bounded"
+    );
+    let is_attack_observed = substitution_attack_observed(&case);
+    let mut blockers = substitution_attack_blockers(&case, is_attack_observed);
+    let verdict = substitution_attack_verdict(&case, is_attack_observed, &blockers);
     let mut non_claims = Vec::new();
     if verdict == GauntletVerdict::Degraded || verdict.is_blocking() {
         non_claims.push(NON_CLAIM_STRICT_REPRODUCIBILITY_BLOCKED.to_string());
@@ -1078,53 +1167,61 @@ fn substitution_attack_observed(case: &SubstitutionAttackCaseEvidence) -> bool {
         || digest_options_mismatch(&case.expected_digest_blake3, &case.observed_digest_blake3)
 }
 
-fn substitution_attack_blockers(case: &SubstitutionAttackCaseEvidence, attack_observed: bool) -> Vec<GauntletBlocker> {
+fn substitution_attack_blockers(
+    case: &SubstitutionAttackCaseEvidence,
+    is_attack_observed: bool,
+) -> Vec<GauntletBlocker> {
+    debug_assert!(!case.case_id.is_empty(), "validated case id is nonempty");
+    debug_assert!(
+        case.failed_trust_edges.len() <= MAX_GAUNTLET_STRING_SET_COUNT_USIZE,
+        "validated trust-edge count is bounded"
+    );
     let mut blockers = Vec::new();
-    if !attack_observed && !case.accepted {
-        blockers.push(blocker(
-            "trusted-substitute-rejected",
-            "trusted substitute with matching evidence was not accepted",
-            "inspect signature, closure, and content evidence for the trusted fixture",
-            None,
-            case.expected_digest_blake3.clone(),
-            case.observed_digest_blake3.clone(),
-        ));
+    if !is_attack_observed && !case.accepted {
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "trusted-substitute-rejected",
+            message: "trusted substitute with matching evidence was not accepted",
+            next_action: "inspect signature, closure, and content evidence for the trusted fixture",
+            axis: None,
+            expected_digest_blake3: case.expected_digest_blake3.clone(),
+            observed_digest_blake3: case.observed_digest_blake3.clone(),
+        }));
     }
-    if attack_observed && case.strict_mode && case.accepted {
-        blockers.push(blocker(
-            "malicious-cache-accepted",
-            "strict mode accepted malicious or incomplete cache material",
-            "reject the substitute before reuse evidence is emitted",
-            None,
-            case.expected_digest_blake3.clone(),
-            case.observed_digest_blake3.clone(),
-        ));
+    if is_attack_observed && case.strict_mode && case.accepted {
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "malicious-cache-accepted",
+            message: "strict mode accepted malicious or incomplete cache material",
+            next_action: "reject the substitute before reuse evidence is emitted",
+            axis: None,
+            expected_digest_blake3: case.expected_digest_blake3.clone(),
+            observed_digest_blake3: case.observed_digest_blake3.clone(),
+        }));
     }
-    if attack_observed && !case.strict_mode && case.fallback_mode.is_some() {
-        blockers.push(blocker(
-            "practical-cache-fallback",
-            "practical mode used fallback after invalid cache evidence",
-            "keep fallback evidence out of strict reproducibility admission",
-            None,
-            case.expected_digest_blake3.clone(),
-            case.observed_digest_blake3.clone(),
-        ));
+    if is_attack_observed && !case.strict_mode && case.fallback_mode.is_some() {
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "practical-cache-fallback",
+            message: "practical mode used fallback after invalid cache evidence",
+            next_action: "keep fallback evidence out of strict reproducibility admission",
+            axis: None,
+            expected_digest_blake3: case.expected_digest_blake3.clone(),
+            observed_digest_blake3: case.observed_digest_blake3.clone(),
+        }));
     }
     blockers
 }
 
 fn substitution_attack_verdict(
     case: &SubstitutionAttackCaseEvidence,
-    attack_observed: bool,
+    is_attack_observed: bool,
     blockers: &[GauntletBlocker],
 ) -> GauntletVerdict {
     if !blockers.is_empty() && case.strict_mode {
         return GauntletVerdict::Blocked;
     }
-    if attack_observed && case.strict_mode && !case.accepted {
+    if is_attack_observed && case.strict_mode && !case.accepted {
         return GauntletVerdict::Rejected;
     }
-    if attack_observed && !case.strict_mode {
+    if is_attack_observed && !case.strict_mode {
         return GauntletVerdict::Degraded;
     }
     if blockers.is_empty() && case.accepted {
@@ -1137,6 +1234,8 @@ fn evaluate_nix_mantle_comparison_case(
     mut case: NixMantleComparisonCaseEvidence,
 ) -> Result<NixMantleComparisonCaseReport, ReleaseEvidenceError> {
     validate_nix_mantle_case(&mut case)?;
+    debug_assert!(!case.case_id.is_empty(), "validated case id is nonempty");
+    debug_assert!(!case.build_recipe_identity.is_empty(), "validated recipe identity is nonempty");
     let mut blockers = nix_mantle_case_blockers(&case);
     let verdict = nix_mantle_case_verdict(&case, &blockers);
     let mut non_claims = vec![NON_CLAIM_GLOBAL_SUPERIORITY.to_string()];
@@ -1178,36 +1277,38 @@ fn validate_nix_mantle_case(case: &mut NixMantleComparisonCaseEvidence) -> Resul
 }
 
 fn nix_mantle_case_blockers(case: &NixMantleComparisonCaseEvidence) -> Vec<GauntletBlocker> {
+    debug_assert!(!case.case_id.is_empty(), "validated case id is nonempty");
+    debug_assert!(!case.build_recipe_identity.is_empty(), "validated recipe identity is nonempty");
     let mut blockers = Vec::new();
     if let Some(reason) = &case.unsupported_reason {
-        blockers.push(blocker(
-            "unsupported-comparison-case",
-            reason,
-            "record a next action or remove the case from the required corpus",
-            None,
-            None,
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "unsupported-comparison-case",
+            message: reason,
+            next_action: "record a next action or remove the case from the required corpus",
+            axis: None,
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
     }
     if !case.equivalence_declared {
-        blockers.push(blocker(
-            "missing-equivalence-policy",
-            "comparison case lacks equivalent input policy",
-            "declare equivalent source, toolchain, dependency, recipe, output, and normalization policy",
-            None,
-            None,
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "missing-equivalence-policy",
+            message: "comparison case lacks equivalent input policy",
+            next_action: "declare equivalent source, toolchain, dependency, recipe, output, and normalization policy",
+            axis: None,
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
     }
     if case.equivalence_declared && !digest_vecs_match(&case.nix_digest_set_blake3, &case.mantle_digest_set_blake3) {
-        blockers.push(blocker(
-            "comparison-digest-mismatch",
-            "Nix and Mantle output digest sets differ",
-            "inspect byte-level outputs before treating the case as matched",
-            None,
-            first_digest(&case.nix_digest_set_blake3),
-            first_digest(&case.mantle_digest_set_blake3),
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "comparison-digest-mismatch",
+            message: "Nix and Mantle output digest sets differ",
+            next_action: "inspect byte-level outputs before treating the case as matched",
+            axis: None,
+            expected_digest_blake3: first_digest(&case.nix_digest_set_blake3),
+            observed_digest_blake3: first_digest(&case.mantle_digest_set_blake3),
+        }));
     }
     blockers
 }
@@ -1233,6 +1334,8 @@ fn evaluate_repeatability_cell(
     mut cell: RepeatabilityMatrixCellEvidence,
 ) -> Result<RepeatabilityMatrixCellReport, ReleaseEvidenceError> {
     validate_repeatability_cell(&mut cell)?;
+    debug_assert!(!profile.release_id.is_empty(), "validated release id is nonempty");
+    debug_assert!(!cell.cell_id.is_empty(), "validated cell id is nonempty");
     let mut blockers = repeatability_cell_blockers(profile, &cell);
     let verdict = repeatability_cell_verdict(&cell, &blockers);
     let mut non_claims = Vec::new();
@@ -1277,14 +1380,14 @@ fn repeatability_cell_blockers(
 ) -> Vec<GauntletBlocker> {
     let mut blockers = Vec::new();
     if let Some(reason) = &cell.unsupported_reason {
-        blockers.push(blocker(
-            "unsupported-repeatability-cell",
-            reason,
-            "rerun on a supported host or record the axis as a non-claim",
-            None,
-            None,
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "unsupported-repeatability-cell",
+            message: reason,
+            next_action: "rerun on a supported host or record the axis as a non-claim",
+            axis: None,
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
     }
     push_fresh_store_blockers(cell, &mut blockers);
     push_repeatability_digest_blockers(profile, cell, &mut blockers);
@@ -1292,28 +1395,30 @@ fn repeatability_cell_blockers(
 }
 
 fn push_fresh_store_blockers(cell: &RepeatabilityMatrixCellEvidence, blockers: &mut Vec<GauntletBlocker>) {
+    debug_assert!(!cell.cell_id.is_empty(), "validated cell id is nonempty");
+    debug_assert!(!cell.store_isolation_mode.is_empty(), "validated store isolation mode is nonempty");
     if !cell.fresh_store {
         return;
     }
     if cell.output_root_identity.is_none() || cell.store_root_identity.is_none() {
-        blockers.push(blocker(
-            "missing-isolated-roots",
-            "fresh-store matrix cell lacks output/store root identities",
-            "record isolated output and store root identities for the cell",
-            None,
-            None,
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "missing-isolated-roots",
+            message: "fresh-store matrix cell lacks output/store root identities",
+            next_action: "record isolated output and store root identities for the cell",
+            axis: None,
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
     }
     if cell.reused_store && !cell.explicit_reuse_test {
-        blockers.push(blocker(
-            "reused-store",
-            "fresh-store matrix cell reused prior store state",
-            "rerun with a fresh store or mark this as an explicit reuse experiment",
-            None,
-            None,
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "reused-store",
+            message: "fresh-store matrix cell reused prior store state",
+            next_action: "rerun with a fresh store or mark this as an explicit reuse experiment",
+            axis: None,
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
     }
 }
 
@@ -1322,35 +1427,37 @@ fn push_repeatability_digest_blockers(
     cell: &RepeatabilityMatrixCellEvidence,
     blockers: &mut Vec<GauntletBlocker>,
 ) {
+    debug_assert!(!profile.release_id.is_empty(), "validated release id is nonempty");
+    debug_assert!(!cell.cell_id.is_empty(), "validated cell id is nonempty");
     if !cell.missing_outputs.is_empty() {
-        blockers.push(blocker(
-            "missing-repeatability-output",
-            "matrix cell produced missing outputs",
-            "inspect the failing axis and keep global admission blocked",
-            None,
-            first_digest(&cell.expected_output_digest_set_blake3),
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "missing-repeatability-output",
+            message: "matrix cell produced missing outputs",
+            next_action: "inspect the failing axis and keep global admission blocked",
+            axis: None,
+            expected_digest_blake3: first_digest(&cell.expected_output_digest_set_blake3),
+            observed_digest_blake3: None,
+        }));
     }
     if !digest_vecs_match(&cell.expected_output_digest_set_blake3, &cell.observed_output_digest_set_blake3) {
-        blockers.push(blocker(
-            "repeatability-digest-mismatch",
-            "matrix cell output digest set did not match expected release digests",
-            "inspect the mismatch and keep affected release surfaces blocked",
-            None,
-            first_digest(&cell.expected_output_digest_set_blake3),
-            first_digest(&cell.observed_output_digest_set_blake3),
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "repeatability-digest-mismatch",
+            message: "matrix cell output digest set did not match expected release digests",
+            next_action: "inspect the mismatch and keep affected release surfaces blocked",
+            axis: None,
+            expected_digest_blake3: first_digest(&cell.expected_output_digest_set_blake3),
+            observed_digest_blake3: first_digest(&cell.observed_output_digest_set_blake3),
+        }));
     }
     if !digest_vecs_match(&profile.expected_output_digest_set_blake3, &cell.expected_output_digest_set_blake3) {
-        blockers.push(blocker(
-            "profile-digest-mismatch",
-            "matrix cell expected digest set does not match profile expected digest set",
-            "regenerate the cell plan from the matrix profile",
-            None,
-            first_digest(&profile.expected_output_digest_set_blake3),
-            first_digest(&cell.expected_output_digest_set_blake3),
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "profile-digest-mismatch",
+            message: "matrix cell expected digest set does not match profile expected digest set",
+            next_action: "regenerate the cell plan from the matrix profile",
+            axis: None,
+            expected_digest_blake3: first_digest(&profile.expected_output_digest_set_blake3),
+            observed_digest_blake3: first_digest(&cell.expected_output_digest_set_blake3),
+        }));
     }
 }
 
@@ -1376,6 +1483,8 @@ fn evaluate_track_evidence(
     mut track: GauntletTrackEvidence,
 ) -> Result<TrackAggregateReport, ReleaseEvidenceError> {
     validate_track_evidence(&mut track)?;
+    debug_assert!(!track.track_id.is_empty(), "validated track id is nonempty");
+    debug_assert!(!track.track_schema_version.is_empty(), "validated track schema is nonempty");
     let mut blockers = track_staleness_blockers(context, required_versions, &track);
     let run_summary = summarize_track_runs(&track.runs, &mut blockers)?;
     let status = classify_track_status(&blockers, &run_summary.statuses);
@@ -1411,14 +1520,14 @@ fn summarize_track_runs(
 ) -> Result<TrackRunSummary, ReleaseEvidenceError> {
     let run_count = u32_count(runs.len(), "continuous run count overflowed u32")?;
     if run_count == ZERO_COUNT {
-        blockers.push(blocker(
-            "missing-track-run",
-            "track evidence has no recorded runs",
-            "record at least one track run before aggregation",
-            None,
-            None,
-            None,
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "missing-track-run",
+            message: "track evidence has no recorded runs",
+            next_action: "record at least one track run before aggregation",
+            axis: None,
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
         return Ok(TrackRunSummary::empty());
     }
     if run_count > MAX_GAUNTLET_RUN_COUNT {
@@ -1426,6 +1535,8 @@ fn summarize_track_runs(
             "continuous track has {run_count} runs, limit is {MAX_GAUNTLET_RUN_COUNT}"
         )));
     }
+    debug_assert!(run_count >= MIN_REPEATABILITY_RUN_COUNT, "nonempty run set has a positive count");
+    debug_assert!(run_count <= MAX_GAUNTLET_RUN_COUNT, "validated run count is bounded");
     collect_track_run_summary(runs, blockers)
 }
 
@@ -1435,20 +1546,33 @@ fn collect_track_run_summary(
 ) -> Result<TrackRunSummary, ReleaseEvidenceError> {
     let mut sorted_runs = runs.to_vec();
     sorted_runs.sort_by(|left, right| left.run_id.cmp(&right.run_id));
+    let next_action_count_max: usize = track_next_action_capacity(&sorted_runs)?;
     let mut statuses = BTreeSet::new();
-    let mut next_actions = Vec::new();
+    let mut next_actions = Vec::with_capacity(next_action_count_max);
     for run in &sorted_runs {
-        validate_track_run(run)?;
         statuses.insert(run.status);
         push_run_blockers(run, blockers);
         next_actions.extend(run.next_actions.iter().cloned());
     }
+    debug_assert_eq!(sorted_runs.len(), runs.len(), "sorting preserves every run");
+    debug_assert!(next_actions.len() <= next_action_count_max, "reserved capacity covers every next action");
     Ok(TrackRunSummary {
         first_run_id: sorted_runs.first().map(|run| run.run_id.clone()).unwrap_or_default(),
         last_run_id: sorted_runs.last().map(|run| run.run_id.clone()).unwrap_or_default(),
         statuses,
         next_actions,
     })
+}
+
+fn track_next_action_capacity(runs: &[TrackRunEvidence]) -> Result<usize, ReleaseEvidenceError> {
+    let mut next_action_count_max: usize = 0;
+    for run in runs {
+        validate_track_run(run)?;
+        next_action_count_max = next_action_count_max
+            .checked_add(run.next_actions.len())
+            .ok_or_else(|| validation_error("track next-action capacity overflowed usize".to_string()))?;
+    }
+    Ok(next_action_count_max)
 }
 
 impl TrackRunSummary {
@@ -1467,46 +1591,43 @@ fn track_staleness_blockers(
     required_versions: &BTreeMap<String, String>,
     track: &GauntletTrackEvidence,
 ) -> Vec<GauntletBlocker> {
+    debug_assert!(!context.host_class.is_empty(), "validated context host class is nonempty");
+    debug_assert!(!track.host_class.is_empty(), "validated track host class is nonempty");
     let mut blockers = Vec::new();
-    push_digest_boundary_blocker(
-        &mut blockers,
-        DIGEST_FIELD_SOURCE,
-        &context.source_digest_blake3,
-        &track.source_digest_blake3,
-    );
-    push_digest_boundary_blocker(
-        &mut blockers,
-        DIGEST_FIELD_POLICY,
-        &context.policy_digest_blake3,
-        &track.policy_digest_blake3,
-    );
-    push_digest_boundary_blocker(
-        &mut blockers,
-        DIGEST_FIELD_UNIVERSE,
-        &context.universe_digest_blake3,
-        &track.universe_digest_blake3,
-    );
-    push_digest_boundary_blocker(
-        &mut blockers,
-        DIGEST_FIELD_TOOLCHAIN,
-        &context.toolchain_digest_blake3,
-        &track.toolchain_digest_blake3,
-    );
-    push_digest_boundary_blocker(
-        &mut blockers,
-        DIGEST_FIELD_WITNESS_SET,
-        &context.witness_set_digest_blake3,
-        &track.witness_set_digest_blake3,
-    );
+    push_digest_boundary_blocker(&mut blockers, DigestBoundary {
+        field_name: DIGEST_FIELD_SOURCE,
+        expected_digest_blake3: &context.source_digest_blake3,
+        observed_digest_blake3: &track.source_digest_blake3,
+    });
+    push_digest_boundary_blocker(&mut blockers, DigestBoundary {
+        field_name: DIGEST_FIELD_POLICY,
+        expected_digest_blake3: &context.policy_digest_blake3,
+        observed_digest_blake3: &track.policy_digest_blake3,
+    });
+    push_digest_boundary_blocker(&mut blockers, DigestBoundary {
+        field_name: DIGEST_FIELD_UNIVERSE,
+        expected_digest_blake3: &context.universe_digest_blake3,
+        observed_digest_blake3: &track.universe_digest_blake3,
+    });
+    push_digest_boundary_blocker(&mut blockers, DigestBoundary {
+        field_name: DIGEST_FIELD_TOOLCHAIN,
+        expected_digest_blake3: &context.toolchain_digest_blake3,
+        observed_digest_blake3: &track.toolchain_digest_blake3,
+    });
+    push_digest_boundary_blocker(&mut blockers, DigestBoundary {
+        field_name: DIGEST_FIELD_WITNESS_SET,
+        expected_digest_blake3: &context.witness_set_digest_blake3,
+        observed_digest_blake3: &track.witness_set_digest_blake3,
+    });
     if context.host_class != track.host_class {
-        blockers.push(blocker(
-            "host-class-stale",
-            "track evidence was produced for a different host class",
-            "rerun or mark the track out-of-scope for this host class",
-            None,
-            Some(context.host_class.clone()),
-            Some(track.host_class.clone()),
-        ));
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "host-class-stale",
+            message: "track evidence was produced for a different host class",
+            next_action: "rerun or mark the track out-of-scope for this host class",
+            axis: None,
+            expected_digest_blake3: Some(context.host_class.clone()),
+            observed_digest_blake3: Some(track.host_class.clone()),
+        }));
     }
     push_schema_version_blocker(&mut blockers, required_versions, track);
     blockers
@@ -1523,28 +1644,35 @@ fn push_schema_version_blocker(
     if required_version == &track.track_schema_version {
         return;
     }
-    blockers.push(blocker(
-        "track-schema-stale",
-        "track evidence schema version does not match the current claim boundary",
-        "regenerate the track report with the required schema version",
-        None,
-        Some(required_version.clone()),
-        Some(track.track_schema_version.clone()),
-    ));
+    blockers.push(blocker(GauntletBlockerInput {
+        evidence_class: "track-schema-stale",
+        message: "track evidence schema version does not match the current claim boundary",
+        next_action: "regenerate the track report with the required schema version",
+        axis: None,
+        expected_digest_blake3: Some(required_version.clone()),
+        observed_digest_blake3: Some(track.track_schema_version.clone()),
+    }));
 }
 
-fn push_digest_boundary_blocker(blockers: &mut Vec<GauntletBlocker>, field: &str, expected: &str, observed: &str) {
-    if expected == observed {
+#[derive(Debug, Clone, Copy)]
+struct DigestBoundary<'a> {
+    field_name: &'a str,
+    expected_digest_blake3: &'a str,
+    observed_digest_blake3: &'a str,
+}
+
+fn push_digest_boundary_blocker(blockers: &mut Vec<GauntletBlocker>, boundary: DigestBoundary<'_>) {
+    if boundary.expected_digest_blake3 == boundary.observed_digest_blake3 {
         return;
     }
-    blockers.push(blocker(
-        "track-boundary-stale",
-        &format!("track evidence {field} does not match the current claim boundary"),
-        "regenerate the track report for the current claim boundary",
-        None,
-        Some(expected.to_string()),
-        Some(observed.to_string()),
-    ));
+    blockers.push(blocker(GauntletBlockerInput {
+        evidence_class: "track-boundary-stale",
+        message: &format!("track evidence {} does not match the current claim boundary", boundary.field_name),
+        next_action: "regenerate the track report for the current claim boundary",
+        axis: None,
+        expected_digest_blake3: Some(boundary.expected_digest_blake3.to_string()),
+        observed_digest_blake3: Some(boundary.observed_digest_blake3.to_string()),
+    }));
 }
 
 fn classify_track_status(blockers: &[GauntletBlocker], statuses: &BTreeSet<GauntletVerdict>) -> GauntletVerdict {
@@ -1561,6 +1689,8 @@ fn classify_track_status(blockers: &[GauntletBlocker], statuses: &BTreeSet<Gaunt
 }
 
 fn classify_continuous_status(tracks: &[TrackAggregateReport], blockers: &[GauntletBlocker]) -> GauntletVerdict {
+    debug_assert!(tracks.len() <= MAX_GAUNTLET_TRACK_COUNT_USIZE, "track count remains bounded");
+    debug_assert!(blockers.len() <= MAX_GAUNTLET_BLOCKER_COUNT_USIZE, "blocker count remains bounded");
     if !blockers.is_empty() {
         return GauntletVerdict::Blocked;
     }
@@ -1601,14 +1731,14 @@ fn profile_non_claim_blockers(profile: &HermeticityGauntletProfile) -> Vec<Gaunt
     missing_profile_axes(profile)
         .into_iter()
         .map(|axis| {
-            blocker(
-                "omitted-hermeticity-axis",
-                "hermeticity profile omits a perturbation axis",
-                "record the omission as a non-claim or add the axis to the gauntlet profile",
-                Some(axis),
-                None,
-                None,
-            )
+            blocker(GauntletBlockerInput {
+                evidence_class: "omitted-hermeticity-axis",
+                message: "hermeticity profile omits a perturbation axis",
+                next_action: "record the omission as a non-claim or add the axis to the gauntlet profile",
+                axis: Some(axis),
+                expected_digest_blake3: None,
+                observed_digest_blake3: None,
+            })
         })
         .collect()
 }
@@ -1784,14 +1914,14 @@ fn validate_track_run(run: &TrackRunEvidence) -> Result<(), ReleaseEvidenceError
 
 fn push_run_blockers(run: &TrackRunEvidence, blockers: &mut Vec<GauntletBlocker>) {
     for message in &run.blockers {
-        blockers.push(blocker(
-            "track-run-blocker",
+        blockers.push(blocker(GauntletBlockerInput {
+            evidence_class: "track-run-blocker",
             message,
-            "complete the track-specific next action before promoting the aggregate",
-            None,
-            None,
-            None,
-        ));
+            next_action: "complete the track-specific next action before promoting the aggregate",
+            axis: None,
+            expected_digest_blake3: None,
+            observed_digest_blake3: None,
+        }));
     }
 }
 
@@ -1838,11 +1968,24 @@ fn unsupported_axis_non_claims(axes: &[String]) -> Vec<String> {
 }
 
 fn collect_cell_blockers<'a, I>(blocker_sets: I) -> Result<Vec<GauntletBlocker>, ReleaseEvidenceError>
-where I: IntoIterator<Item = &'a Vec<GauntletBlocker>> {
-    let mut blockers = Vec::new();
+where I: Clone + ExactSizeIterator<Item = &'a Vec<GauntletBlocker>> {
+    let blocker_set_count: usize = blocker_sets.len();
+    validate_collection_limit(blocker_set_count, MAX_GAUNTLET_CELL_COUNT, "gauntlet blocker sets")?;
+    debug_assert!(blocker_set_count > 0, "evaluated reports provide blocker sets");
+    debug_assert!(
+        blocker_sets.clone().all(|set| set.len() <= MAX_GAUNTLET_BLOCKER_COUNT_USIZE),
+        "each blocker set is canonical and bounded"
+    );
+    let blocker_count_max: usize = blocker_sets.clone().try_fold(0usize, |count, set| {
+        count
+            .checked_add(set.len())
+            .ok_or_else(|| validation_error("aggregate blocker capacity overflowed usize".to_string()))
+    })?;
+    let mut blockers = Vec::with_capacity(blocker_count_max);
     for set in blocker_sets {
         blockers.extend(set.iter().cloned());
     }
+    debug_assert!(blockers.len() <= blocker_count_max, "reserved capacity covers every blocker");
     canonicalize_blockers(&mut blockers)?;
     Ok(blockers)
 }
@@ -1878,9 +2021,14 @@ fn validate_string_slice(values: &[String], field_name: &str) -> Result<(), Rele
 
 fn canonicalize_blockers(blockers: &mut Vec<GauntletBlocker>) -> Result<(), ReleaseEvidenceError> {
     validate_collection_limit(blockers.len(), MAX_GAUNTLET_BLOCKER_COUNT, "gauntlet blockers")?;
+    debug_assert!(blockers.len() <= MAX_GAUNTLET_BLOCKER_COUNT_USIZE, "blocker count remains bounded");
     for blocker in blockers.iter() {
         validate_blocker(blocker)?;
     }
+    debug_assert!(
+        blockers.iter().all(|blocker| !blocker.evidence_class.is_empty()),
+        "validated blockers have evidence classes"
+    );
     blockers.sort_by(|left, right| {
         (
             &left.evidence_class,
@@ -1927,7 +2075,7 @@ fn validate_optional_string(value: &Option<String>, field_name: &str) -> Result<
     Ok(())
 }
 
-fn validate_non_empty_string(value: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+fn validate_non_empty_string(value: &String, field_name: &str) -> Result<(), ReleaseEvidenceError> {
     if value.is_empty() {
         return Err(validation_error(format!("{field_name} must not be empty")));
     }
@@ -1972,9 +2120,18 @@ fn validate_continuous_track_count(count: usize) -> Result<(), ReleaseEvidenceEr
     Ok(())
 }
 
-fn require_schema(actual: &str, expected: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
-    if actual != expected {
-        return Err(validation_error(format!("{field_name} must be {expected}, got {actual}")));
+#[derive(Debug, Clone, Copy)]
+struct SchemaRequirement {
+    expected: &'static str,
+    field_name: &'static str,
+}
+
+fn require_schema(actual: &String, requirement: SchemaRequirement) -> Result<(), ReleaseEvidenceError> {
+    if actual != requirement.expected {
+        return Err(validation_error(format!(
+            "{} must be {}, got {actual}",
+            requirement.field_name, requirement.expected
+        )));
     }
     Ok(())
 }
@@ -1983,21 +2140,24 @@ fn serialize_canonical<T: Serialize>(value: &T, label: &str) -> Result<Vec<u8>, 
     serde_json::to_vec(value).map_err(|err| ReleaseEvidenceError::Parse(format!("serializing {label}: {err}")))
 }
 
-fn blocker(
-    evidence_class: &str,
-    message: &str,
-    next_action: &str,
+#[derive(Debug)]
+struct GauntletBlockerInput<'a> {
+    evidence_class: &'a str,
+    message: &'a str,
+    next_action: &'a str,
     axis: Option<String>,
     expected_digest_blake3: Option<String>,
     observed_digest_blake3: Option<String>,
-) -> GauntletBlocker {
+}
+
+fn blocker(input: GauntletBlockerInput<'_>) -> GauntletBlocker {
     GauntletBlocker {
-        evidence_class: evidence_class.to_string(),
-        message: message.to_string(),
-        next_action: next_action.to_string(),
-        axis,
-        expected_digest_blake3,
-        observed_digest_blake3,
+        evidence_class: input.evidence_class.to_string(),
+        message: input.message.to_string(),
+        next_action: input.next_action.to_string(),
+        axis: input.axis,
+        expected_digest_blake3: input.expected_digest_blake3,
+        observed_digest_blake3: input.observed_digest_blake3,
     }
 }
 
