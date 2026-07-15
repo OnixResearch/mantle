@@ -697,17 +697,22 @@ pub fn validate_remote_attempt_log_chain(
     for (segment, expected_ref) in segments.iter().zip(&manifest.segments) {
         validate_remote_attempt_log_segment(segment, policy)?;
         validate_segment_against_ref(segment, expected_ref)?;
-        validate_chain_link(
-            segment,
-            &manifest.scope,
+        validate_chain_link(segment, ChainLinkExpectation {
+            scope: &manifest.scope,
             expected_sequence,
             expected_cursor,
-            &previous_record,
-            &previous_segment,
-        )?;
+            previous_record_blake3: &previous_record,
+            previous_segment_blake3: &previous_segment,
+        })?;
         validate_retained_event_records(segment, manifest, &mut retained_events)?;
-        record_count = checked_add_u32(record_count, segment.record_count)?;
-        payload_bytes = checked_add_u64(payload_bytes, segment.payload_bytes)?;
+        record_count = checked_add_u32(CheckedAddU32Operands {
+            left: record_count,
+            right: segment.record_count,
+        })?;
+        payload_bytes = checked_add_u64(CheckedAddU64Operands {
+            left: payload_bytes,
+            right: segment.payload_bytes,
+        })?;
         expected_sequence = segment.next_cursor;
         expected_cursor = segment.next_cursor;
         let head_record = segment.records.last().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
@@ -841,37 +846,71 @@ fn validate_policy_nonzero(policy: RemoteAttemptLogPolicy) -> Result<(), RemoteA
     if policy.record_payload_bytes_max < MIN_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES {
         return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
     }
-    if policy.segment_record_count_max == 0
-        || policy.segment_payload_bytes_max == 0
-        || policy.manifest_segment_count_max == 0
-        || policy.retained_segment_count_max == 0
-        || policy.retained_record_count_max == 0
-        || policy.retained_payload_bytes_max == 0
-        || policy.replay_record_count_max == 0
-        || policy.replay_payload_bytes_max == 0
-        || policy.event_identity_count_max == 0
-    {
+    if policy.segment_record_count_max == 0 {
         return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
     }
+    if policy.segment_payload_bytes_max == 0 {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.manifest_segment_count_max == 0 {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.retained_segment_count_max == 0 {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.retained_record_count_max == 0 {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.retained_payload_bytes_max == 0 {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.replay_record_count_max == 0 {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.replay_payload_bytes_max == 0 {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.event_identity_count_max == 0 {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    debug_assert!(policy.record_payload_bytes_max >= MIN_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES);
+    debug_assert!(policy.segment_record_count_max > 0);
     Ok(())
 }
 
 fn validate_policy_hard_limits(policy: RemoteAttemptLogPolicy) -> Result<(), RemoteAttemptLogReasonCode> {
-    if policy.record_payload_bytes_max > MAX_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES_HARD
-        || policy.segment_record_count_max > MAX_REMOTE_ATTEMPT_LOG_SEGMENT_RECORDS_HARD
-        || policy.segment_payload_bytes_max > MAX_REMOTE_ATTEMPT_LOG_SEGMENT_PAYLOAD_BYTES_HARD
-        || policy.manifest_segment_count_max > MAX_REMOTE_ATTEMPT_LOG_MANIFEST_SEGMENTS_HARD
-        || policy.retained_record_count_max > MAX_REMOTE_ATTEMPT_LOG_RETAINED_RECORDS_HARD
-        || policy.retained_payload_bytes_max > MAX_REMOTE_ATTEMPT_LOG_RETAINED_PAYLOAD_BYTES_HARD
-        || policy.replay_record_count_max > MAX_REMOTE_ATTEMPT_LOG_REPLAY_RECORDS_HARD
-        || policy.replay_payload_bytes_max > MAX_REMOTE_ATTEMPT_LOG_REPLAY_PAYLOAD_BYTES_HARD
-        || policy.event_identity_count_max > MAX_REMOTE_ATTEMPT_LOG_EVENT_IDENTITIES_HARD
-    {
+    if policy.record_payload_bytes_max > MAX_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES_HARD {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.segment_record_count_max > MAX_REMOTE_ATTEMPT_LOG_SEGMENT_RECORDS_HARD {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.segment_payload_bytes_max > MAX_REMOTE_ATTEMPT_LOG_SEGMENT_PAYLOAD_BYTES_HARD {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.manifest_segment_count_max > MAX_REMOTE_ATTEMPT_LOG_MANIFEST_SEGMENTS_HARD {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.retained_record_count_max > MAX_REMOTE_ATTEMPT_LOG_RETAINED_RECORDS_HARD {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.retained_payload_bytes_max > MAX_REMOTE_ATTEMPT_LOG_RETAINED_PAYLOAD_BYTES_HARD {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.replay_record_count_max > MAX_REMOTE_ATTEMPT_LOG_REPLAY_RECORDS_HARD {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.replay_payload_bytes_max > MAX_REMOTE_ATTEMPT_LOG_REPLAY_PAYLOAD_BYTES_HARD {
+        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
+    }
+    if policy.event_identity_count_max > MAX_REMOTE_ATTEMPT_LOG_EVENT_IDENTITIES_HARD {
         return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
     }
     if policy.retained_segment_count_max > policy.manifest_segment_count_max {
         return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
     }
+    debug_assert!(policy.record_payload_bytes_max <= MAX_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES_HARD);
+    debug_assert!(policy.retained_segment_count_max <= policy.manifest_segment_count_max);
     Ok(())
 }
 
@@ -910,36 +949,36 @@ fn escape_and_bound_payload(
 ) -> Result<RemoteAttemptLogRedactionPlan, RemoteAttemptLogReasonCode> {
     let max = u32_to_usize(payload_bytes_max)?;
     let mut rendered = Vec::with_capacity(payload.len().min(max));
-    let mut control_escaped = false;
-    let mut payload_truncated = false;
+    let mut is_control_escaped = false;
+    let mut is_payload_truncated = false;
     for byte in payload {
         if byte.is_ascii_control() {
-            control_escaped = true;
+            is_control_escaped = true;
             let escaped = control_escape(*byte);
             if rendered.len().saturating_add(CONTROL_ESCAPE_BYTES) > max {
-                payload_truncated = true;
+                is_payload_truncated = true;
                 break;
             }
             rendered.extend_from_slice(&escaped);
             continue;
         }
         if rendered.len() >= max {
-            payload_truncated = true;
+            is_payload_truncated = true;
             break;
         }
         rendered.push(*byte);
     }
-    if rendered.len() < payload.len() && !control_escaped {
-        payload_truncated = true;
+    if rendered.len() < payload.len() && !is_control_escaped {
+        is_payload_truncated = true;
     }
     debug_assert!(rendered.len() <= max);
-    debug_assert!(!control_escaped || payload.iter().any(u8::is_ascii_control));
+    debug_assert!(!is_control_escaped || payload.iter().any(u8::is_ascii_control));
     Ok(RemoteAttemptLogRedactionPlan {
         payload: rendered,
         flags: RemoteAttemptLogRecordFlags {
             secret_redacted: false,
-            control_escaped,
-            payload_truncated,
+            control_escaped: is_control_escaped,
+            payload_truncated: is_payload_truncated,
         },
     })
 }
@@ -998,11 +1037,11 @@ fn validate_record_payload_metadata(
     record: &RemoteAttemptLogRecord,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    let payload_length = usize_to_u32(record.payload.len())?;
-    if payload_length > policy.record_payload_bytes_max {
+    let payload_length_bytes = usize_to_u32(record.payload.len())?;
+    if payload_length_bytes > policy.record_payload_bytes_max {
         return Err(RemoteAttemptLogReasonCode::RecordPayloadTooLarge);
     }
-    if payload_length != record.payload_length_bytes || record.payload_blake3 != content_hash(&record.payload) {
+    if payload_length_bytes != record.payload_length_bytes || record.payload_blake3 != content_hash(&record.payload) {
         return Err(RemoteAttemptLogReasonCode::RecordPayloadMetadataMismatch);
     }
     if record.flags.secret_redacted && record.payload != REDACTED_PAYLOAD {
@@ -1065,14 +1104,14 @@ fn summarize_segment_records(
     records: &[RemoteAttemptLogRecord],
     policy: RemoteAttemptLogPolicy,
 ) -> Result<SegmentRecordSummary, RemoteAttemptLogReasonCode> {
-    if records.is_empty() {
-        return Err(RemoteAttemptLogReasonCode::SegmentEmpty);
-    }
+    let first = records.first().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
+    let last = records.last().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
     let record_count = usize_to_u32(records.len())?;
     if record_count > policy.segment_record_count_max {
         return Err(RemoteAttemptLogReasonCode::SegmentBoundsExceeded);
     }
-    let first = records.first().expect("non-empty records");
+    debug_assert!(!records.is_empty());
+    debug_assert!(record_count <= policy.segment_record_count_max);
     let mut expected_sequence = first.sequence;
     let mut expected_cursor = first.cursor;
     let mut previous_record = first.previous_record_blake3.clone();
@@ -1085,7 +1124,10 @@ fn summarize_segment_records(
         if record.previous_record_blake3 != previous_record {
             return Err(RemoteAttemptLogReasonCode::PreviousRecordMismatch);
         }
-        payload_bytes = checked_add_u64(payload_bytes, u64::from(record.payload_length_bytes))?;
+        payload_bytes = checked_add_u64(CheckedAddU64Operands {
+            left: payload_bytes,
+            right: u64::from(record.payload_length_bytes),
+        })?;
         if payload_bytes > policy.segment_payload_bytes_max {
             return Err(RemoteAttemptLogReasonCode::SegmentBoundsExceeded);
         }
@@ -1093,7 +1135,6 @@ fn summarize_segment_records(
         expected_cursor = expected_cursor.checked_add(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
         previous_record = Some(record.record_blake3.clone());
     }
-    let last = records.last().expect("non-empty records");
     Ok(SegmentRecordSummary {
         scope: first.scope.clone(),
         first_sequence: first.sequence,
@@ -1150,10 +1191,12 @@ fn segment_payload_digest(
     domain_hash(SEGMENT_DIGEST_DOMAIN, &bytes)
 }
 
-fn segment_ref(segment: &RemoteAttemptLogSegment) -> RemoteAttemptLogSegmentRef {
-    let first = segment.records.first().expect("validated non-empty segment");
-    let last = segment.records.last().expect("validated non-empty segment");
-    RemoteAttemptLogSegmentRef {
+fn segment_ref(segment: &RemoteAttemptLogSegment) -> Result<RemoteAttemptLogSegmentRef, RemoteAttemptLogReasonCode> {
+    let first = segment.records.first().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
+    let last = segment.records.last().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
+    debug_assert!(!segment.records.is_empty());
+    debug_assert!(segment.record_count > 0);
+    Ok(RemoteAttemptLogSegmentRef {
         segment_index: segment.segment_index,
         segment_blake3: segment.segment_blake3.clone(),
         previous_segment_blake3: segment.previous_segment_blake3.clone(),
@@ -1165,7 +1208,7 @@ fn segment_ref(segment: &RemoteAttemptLogSegment) -> RemoteAttemptLogSegmentRef 
         head_record_blake3: last.record_blake3.clone(),
         record_count: segment.record_count,
         payload_bytes: segment.payload_bytes,
-    }
+    })
 }
 
 fn validate_manifest_shape(
@@ -1204,17 +1247,28 @@ fn validate_manifest_bounds(
     manifest: &RemoteAttemptLogManifest,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    if manifest.segments.len() > u32_to_usize(policy.manifest_segment_count_max)?
-        || manifest.event_records.len() > u32_to_usize(policy.event_identity_count_max)?
-        || manifest.retained_record_count > MAX_REMOTE_ATTEMPT_LOG_RETAINED_RECORDS_HARD
-        || manifest.retained_payload_bytes > MAX_REMOTE_ATTEMPT_LOG_RETAINED_PAYLOAD_BYTES_HARD
-        || manifest.retained_start_cursor > manifest.next_cursor
-    {
+    let segment_count_max = u32_to_usize(policy.manifest_segment_count_max)?;
+    let event_identity_count_max = u32_to_usize(policy.event_identity_count_max)?;
+    if manifest.segments.len() > segment_count_max {
+        return Err(RemoteAttemptLogReasonCode::ManifestBoundsExceeded);
+    }
+    if manifest.event_records.len() > event_identity_count_max {
+        return Err(RemoteAttemptLogReasonCode::ManifestBoundsExceeded);
+    }
+    if manifest.retained_record_count > MAX_REMOTE_ATTEMPT_LOG_RETAINED_RECORDS_HARD {
+        return Err(RemoteAttemptLogReasonCode::ManifestBoundsExceeded);
+    }
+    if manifest.retained_payload_bytes > MAX_REMOTE_ATTEMPT_LOG_RETAINED_PAYLOAD_BYTES_HARD {
+        return Err(RemoteAttemptLogReasonCode::ManifestBoundsExceeded);
+    }
+    if manifest.retained_start_cursor > manifest.next_cursor {
         return Err(RemoteAttemptLogReasonCode::ManifestBoundsExceeded);
     }
     if manifest.segments.is_empty() && empty_manifest_summary_is_invalid(manifest) {
         return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
     }
+    debug_assert!(manifest.segments.len() <= segment_count_max);
+    debug_assert!(manifest.event_records.len() <= event_identity_count_max);
     Ok(())
 }
 
@@ -1238,29 +1292,51 @@ fn validate_manifest_segment_refs(manifest: &RemoteAttemptLogManifest) -> Result
     let mut payload_bytes = 0_u64;
     for item in &manifest.segments {
         validate_segment_ref(item)?;
-        if Some(item.segment_index) != expected_index
-            || item.first_cursor != expected_cursor
-            || item.first_sequence != expected_cursor
-            || item.previous_segment_blake3 != previous_segment
-            || item.first_previous_record_blake3 != previous_record
-        {
+        if Some(item.segment_index) != expected_index {
             return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
         }
-        record_count = checked_add_u32(record_count, item.record_count)?;
-        payload_bytes = checked_add_u64(payload_bytes, item.payload_bytes)?;
+        if item.first_cursor != expected_cursor {
+            return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
+        }
+        if item.first_sequence != expected_cursor {
+            return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
+        }
+        if item.previous_segment_blake3 != previous_segment {
+            return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
+        }
+        if item.first_previous_record_blake3 != previous_record {
+            return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
+        }
+        record_count = checked_add_u32(CheckedAddU32Operands {
+            left: record_count,
+            right: item.record_count,
+        })?;
+        payload_bytes = checked_add_u64(CheckedAddU64Operands {
+            left: payload_bytes,
+            right: item.payload_bytes,
+        })?;
         expected_cursor = item.next_cursor;
         expected_index = Some(item.segment_index.checked_add(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?);
         previous_segment = Some(item.segment_blake3.clone());
         previous_record = Some(item.head_record_blake3.clone());
     }
-    if record_count != manifest.retained_record_count
-        || payload_bytes != manifest.retained_payload_bytes
-        || expected_cursor != manifest.next_cursor
-        || previous_segment != manifest.head_segment_blake3
-        || previous_record != manifest.head_record_blake3
-    {
+    if record_count != manifest.retained_record_count {
         return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
     }
+    if payload_bytes != manifest.retained_payload_bytes {
+        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
+    }
+    if expected_cursor != manifest.next_cursor {
+        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
+    }
+    if previous_segment != manifest.head_segment_blake3 {
+        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
+    }
+    if previous_record != manifest.head_record_blake3 {
+        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
+    }
+    debug_assert_eq!(record_count, manifest.retained_record_count);
+    debug_assert_eq!(payload_bytes, manifest.retained_payload_bytes);
     Ok(())
 }
 
@@ -1387,17 +1463,26 @@ fn append_segment_to_manifest(
     policy: RemoteAttemptLogPolicy,
 ) -> Result<RemoteAttemptLogManifest, RemoteAttemptLogReasonCode> {
     let mut next = manifest.clone();
-    next.segments.push(segment_ref(segment));
+    let head_record = segment.records.last().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
+    next.segments.push(segment_ref(segment)?);
     next.next_cursor = segment.next_cursor;
-    next.head_record_blake3 = Some(segment.records.last().expect("validated non-empty segment").record_blake3.clone());
+    next.head_record_blake3 = Some(head_record.record_blake3.clone());
     next.head_segment_blake3 = Some(segment.segment_blake3.clone());
-    next.retained_record_count = checked_add_u32(next.retained_record_count, segment.record_count)?;
-    next.retained_payload_bytes = checked_add_u64(next.retained_payload_bytes, segment.payload_bytes)?;
+    next.retained_record_count = checked_add_u32(CheckedAddU32Operands {
+        left: next.retained_record_count,
+        right: segment.record_count,
+    })?;
+    next.retained_payload_bytes = checked_add_u64(CheckedAddU64Operands {
+        left: next.retained_payload_bytes,
+        right: segment.payload_bytes,
+    })?;
     for record in &segment.records {
         if next.event_records.insert(record.event_id.clone(), record.record_blake3.clone()).is_some() {
             return Err(RemoteAttemptLogReasonCode::EventDigestConflict);
         }
     }
+    debug_assert_eq!(next.next_cursor, segment.next_cursor);
+    debug_assert_eq!(next.head_record_blake3.as_ref(), Some(&head_record.record_blake3));
     seal_manifest(next, policy)
 }
 
@@ -1405,29 +1490,43 @@ fn validate_segment_against_ref(
     segment: &RemoteAttemptLogSegment,
     expected: &RemoteAttemptLogSegmentRef,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    if segment_ref(segment) != *expected {
+    if segment_ref(segment)? != *expected {
         return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
     }
     Ok(())
 }
 
-fn validate_chain_link(
-    segment: &RemoteAttemptLogSegment,
-    scope: &RemoteAttemptLogScope,
+#[derive(Debug, Clone, Copy)]
+struct ChainLinkExpectation<'a> {
+    scope: &'a RemoteAttemptLogScope,
     expected_sequence: u64,
     expected_cursor: u64,
-    previous_record: &Option<RemoteAttemptLogDigest>,
-    previous_segment: &Option<RemoteAttemptLogDigest>,
+    previous_record_blake3: &'a Option<RemoteAttemptLogDigest>,
+    previous_segment_blake3: &'a Option<RemoteAttemptLogDigest>,
+}
+
+fn validate_chain_link(
+    segment: &RemoteAttemptLogSegment,
+    expected: ChainLinkExpectation<'_>,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    let first = segment.records.first().expect("validated non-empty segment");
-    if &segment.scope != scope
-        || segment.first_sequence != expected_sequence
-        || segment.first_cursor != expected_cursor
-        || &first.previous_record_blake3 != previous_record
-        || &segment.previous_segment_blake3 != previous_segment
-    {
+    let first = segment.records.first().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
+    if &segment.scope != expected.scope {
         return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
     }
+    if segment.first_sequence != expected.expected_sequence {
+        return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
+    }
+    if segment.first_cursor != expected.expected_cursor {
+        return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
+    }
+    if &first.previous_record_blake3 != expected.previous_record_blake3 {
+        return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
+    }
+    if &segment.previous_segment_blake3 != expected.previous_segment_blake3 {
+        return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
+    }
+    debug_assert_eq!(&segment.scope, expected.scope);
+    debug_assert_eq!(segment.first_cursor, expected.expected_cursor);
     Ok(())
 }
 
@@ -1451,15 +1550,26 @@ fn validate_chain_summary(
     manifest: &RemoteAttemptLogManifest,
     summary: &RemoteAttemptLogChainSummary,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    if summary.next_cursor != manifest.next_cursor
-        || summary.segment_count != usize_to_u32(manifest.segments.len())?
-        || summary.record_count != manifest.retained_record_count
-        || summary.payload_bytes != manifest.retained_payload_bytes
-        || summary.head_record_blake3 != manifest.head_record_blake3
-        || summary.head_segment_blake3 != manifest.head_segment_blake3
-    {
+    if summary.next_cursor != manifest.next_cursor {
         return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
     }
+    if summary.segment_count != usize_to_u32(manifest.segments.len())? {
+        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
+    }
+    if summary.record_count != manifest.retained_record_count {
+        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
+    }
+    if summary.payload_bytes != manifest.retained_payload_bytes {
+        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
+    }
+    if summary.head_record_blake3 != manifest.head_record_blake3 {
+        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
+    }
+    if summary.head_segment_blake3 != manifest.head_segment_blake3 {
+        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
+    }
+    debug_assert_eq!(summary.next_cursor, manifest.next_cursor);
+    debug_assert_eq!(summary.record_count, manifest.retained_record_count);
     Ok(())
 }
 
@@ -1467,11 +1577,16 @@ fn validate_replay_request(
     request: RemoteAttemptLogReplayRequest,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    if request.record_count_max == 0
-        || request.payload_bytes_max == 0
-        || request.record_count_max > policy.replay_record_count_max
-        || request.payload_bytes_max > policy.replay_payload_bytes_max
-    {
+    if request.record_count_max == 0 {
+        return Err(RemoteAttemptLogReasonCode::ReplayRequestInvalid);
+    }
+    if request.payload_bytes_max == 0 {
+        return Err(RemoteAttemptLogReasonCode::ReplayRequestInvalid);
+    }
+    if request.record_count_max > policy.replay_record_count_max {
+        return Err(RemoteAttemptLogReasonCode::ReplayRequestInvalid);
+    }
+    if request.payload_bytes_max > policy.replay_payload_bytes_max {
         return Err(RemoteAttemptLogReasonCode::ReplayRequestInvalid);
     }
     Ok(())
@@ -1483,31 +1598,27 @@ fn collect_replay_records(
     request: RemoteAttemptLogReplayRequest,
     cursor: RemoteAttemptLogCursorDecision,
 ) -> Result<RemoteAttemptLogReplayPlan, RemoteAttemptLogReasonCode> {
-    let mut records = Vec::new();
+    let record_count_max = u32_to_usize(request.record_count_max)?;
+    let mut records = Vec::with_capacity(record_count_max);
     let mut payload_bytes = 0_u64;
-    let record_limit = u32_to_usize(request.record_count_max)?;
     for record in segments.iter().flat_map(|segment| &segment.records) {
         if record.cursor < cursor.effective_cursor {
             continue;
         }
-        let projected = checked_add_u64(payload_bytes, u64::from(record.payload_length_bytes))?;
-        if records.len() >= record_limit || projected > request.payload_bytes_max {
+        let projected = checked_add_u64(CheckedAddU64Operands {
+            left: payload_bytes,
+            right: u64::from(record.payload_length_bytes),
+        })?;
+        if records.len() >= record_count_max || projected > request.payload_bytes_max {
             break;
         }
         payload_bytes = projected;
         records.push(record.clone());
     }
-    if records.is_empty() {
-        return Err(RemoteAttemptLogReasonCode::ReplayLimitTooSmall);
-    }
-    let next_cursor = records
-        .last()
-        .expect("non-empty replay records")
-        .cursor
-        .checked_add(1)
-        .ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
+    let last = records.last().ok_or(RemoteAttemptLogReasonCode::ReplayLimitTooSmall)?;
+    let next_cursor = last.cursor.checked_add(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
     debug_assert!(payload_bytes <= request.payload_bytes_max);
-    debug_assert!(records.len() <= record_limit);
+    debug_assert!(records.len() <= record_count_max);
     Ok(RemoteAttemptLogReplayPlan {
         cursor,
         records,
@@ -1521,33 +1632,42 @@ fn retention_drop_count(
     manifest: &RemoteAttemptLogManifest,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<usize, RemoteAttemptLogReasonCode> {
-    let mut remaining_segments = usize_to_u32(manifest.segments.len())?;
-    let mut remaining_records = manifest.retained_record_count;
-    let mut remaining_bytes = manifest.retained_payload_bytes;
+    let mut remaining = RemoteAttemptLogRetentionUsage {
+        segment_count: usize_to_u32(manifest.segments.len())?,
+        record_count: manifest.retained_record_count,
+        payload_bytes: manifest.retained_payload_bytes,
+    };
     let mut drop_count = 0_usize;
-    while retention_exceeded(remaining_segments, remaining_records, remaining_bytes, policy) {
+    while retention_exceeded(remaining, policy) {
         let item = manifest.segments.get(drop_count).ok_or(RemoteAttemptLogReasonCode::RetentionWouldDropAll)?;
-        remaining_segments = remaining_segments.checked_sub(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
-        remaining_records = remaining_records
+        remaining.segment_count =
+            remaining.segment_count.checked_sub(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
+        remaining.record_count = remaining
+            .record_count
             .checked_sub(item.record_count)
             .ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
-        remaining_bytes = remaining_bytes
+        remaining.payload_bytes = remaining
+            .payload_bytes
             .checked_sub(item.payload_bytes)
             .ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
         drop_count = drop_count.checked_add(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
     }
+    debug_assert!(!retention_exceeded(remaining, policy));
+    debug_assert!(drop_count <= manifest.segments.len());
     Ok(drop_count)
 }
 
-fn retention_exceeded(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RemoteAttemptLogRetentionUsage {
     segment_count: u32,
     record_count: u32,
     payload_bytes: u64,
-    policy: RemoteAttemptLogPolicy,
-) -> bool {
-    segment_count > policy.retained_segment_count_max
-        || record_count > policy.retained_record_count_max
-        || payload_bytes > policy.retained_payload_bytes_max
+}
+
+fn retention_exceeded(usage: RemoteAttemptLogRetentionUsage, policy: RemoteAttemptLogPolicy) -> bool {
+    usage.segment_count > policy.retained_segment_count_max
+        || usage.record_count > policy.retained_record_count_max
+        || usage.payload_bytes > policy.retained_payload_bytes_max
 }
 
 fn build_retention_plan(
@@ -1607,16 +1727,25 @@ fn summarize_dropped_segments(
     let mut record_count = 0_u32;
     let mut payload_bytes = 0_u64;
     for segment in dropped {
-        record_count = checked_add_u32(record_count, segment.record_count)?;
-        payload_bytes = checked_add_u64(payload_bytes, segment.payload_bytes)?;
+        record_count = checked_add_u32(CheckedAddU32Operands {
+            left: record_count,
+            right: segment.record_count,
+        })?;
+        payload_bytes = checked_add_u64(CheckedAddU64Operands {
+            left: payload_bytes,
+            right: segment.payload_bytes,
+        })?;
     }
+    let tail_record = last.records.last().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
+    debug_assert!(!dropped.is_empty());
+    debug_assert!(first.first_cursor < last.next_cursor);
     Ok(DroppedSegmentSummary {
         start_cursor: first.first_cursor,
         end_cursor: last.next_cursor,
         chunk_count: usize_to_u32(dropped.len())?,
         record_count,
         payload_bytes,
-        tail_record_blake3: last.records.last().expect("validated non-empty segment").record_blake3.clone(),
+        tail_record_blake3: tail_record.record_blake3.clone(),
         tail_segment_blake3: last.segment_blake3.clone(),
     })
 }
@@ -1650,6 +1779,8 @@ fn seal_truncation_anchor(
     };
     anchor.anchor_blake3 = truncation_anchor_payload_digest(&anchor)?;
     validate_truncation_anchor(&anchor, &manifest.scope, &manifest.policy)?;
+    debug_assert_eq!(anchor.new_retained_start_cursor, retained_start);
+    debug_assert!(anchor.dropped_chunk_count > 0);
     Ok(anchor)
 }
 
@@ -1658,14 +1789,25 @@ fn validate_truncation_anchor(
     scope: &RemoteAttemptLogScope,
     policy_identity: &RemoteAttemptLogPolicyIdentity,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    if anchor.schema != REMOTE_ATTEMPT_LOG_TRUNCATION_ANCHOR_SCHEMA
-        || &anchor.scope != scope
-        || &anchor.policy != policy_identity
-        || anchor.dropped_start_cursor >= anchor.dropped_end_cursor_exclusive
-        || anchor.dropped_end_cursor_exclusive != anchor.new_retained_start_cursor
-        || anchor.dropped_chunk_count == 0
-        || anchor.dropped_record_count == 0
-    {
+    if anchor.schema != REMOTE_ATTEMPT_LOG_TRUNCATION_ANCHOR_SCHEMA {
+        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
+    }
+    if &anchor.scope != scope {
+        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
+    }
+    if &anchor.policy != policy_identity {
+        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
+    }
+    if anchor.dropped_start_cursor >= anchor.dropped_end_cursor_exclusive {
+        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
+    }
+    if anchor.dropped_end_cursor_exclusive != anchor.new_retained_start_cursor {
+        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
+    }
+    if anchor.dropped_chunk_count == 0 {
+        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
+    }
+    if anchor.dropped_record_count == 0 {
         return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
     }
     validate_optional_digest(&anchor.previous_anchor_blake3)?;
@@ -1680,6 +1822,8 @@ fn validate_truncation_anchor(
     if anchor.anchor_blake3 != truncation_anchor_payload_digest(anchor)? {
         return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
     }
+    debug_assert_eq!(&anchor.scope, scope);
+    debug_assert_eq!(&anchor.policy, policy_identity);
     Ok(())
 }
 
@@ -1760,12 +1904,24 @@ fn is_blake3_hex_digest(value: &str) -> bool {
         && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn checked_add_u32(left: u32, right: u32) -> Result<u32, RemoteAttemptLogReasonCode> {
-    left.checked_add(right).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CheckedAddU32Operands {
+    left: u32,
+    right: u32,
 }
 
-fn checked_add_u64(left: u64, right: u64) -> Result<u64, RemoteAttemptLogReasonCode> {
-    left.checked_add(right).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)
+fn checked_add_u32(operands: CheckedAddU32Operands) -> Result<u32, RemoteAttemptLogReasonCode> {
+    operands.left.checked_add(operands.right).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CheckedAddU64Operands {
+    left: u64,
+    right: u64,
+}
+
+fn checked_add_u64(operands: CheckedAddU64Operands) -> Result<u64, RemoteAttemptLogReasonCode> {
+    operands.left.checked_add(operands.right).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)
 }
 
 fn usize_to_u32(value: usize) -> Result<u32, RemoteAttemptLogReasonCode> {
@@ -2162,8 +2318,20 @@ mod tests {
             seal_remote_attempt_log_segment(vec![overflow_record], INITIAL_SEGMENT_INDEX, None, policy()).unwrap_err(),
             RemoteAttemptLogReasonCode::ArithmeticOverflow
         );
-        assert_eq!(checked_add_u64(u64::MAX, 1), Err(RemoteAttemptLogReasonCode::ArithmeticOverflow));
-        assert_eq!(checked_add_u32(u32::MAX, 1), Err(RemoteAttemptLogReasonCode::ArithmeticOverflow));
+        assert_eq!(
+            checked_add_u64(CheckedAddU64Operands {
+                left: u64::MAX,
+                right: 1
+            }),
+            Err(RemoteAttemptLogReasonCode::ArithmeticOverflow)
+        );
+        assert_eq!(
+            checked_add_u32(CheckedAddU32Operands {
+                left: u32::MAX,
+                right: 1
+            }),
+            Err(RemoteAttemptLogReasonCode::ArithmeticOverflow)
+        );
         assert_eq!(manifest.next_cursor, INITIAL_LOG_POSITION);
     }
 
@@ -2193,7 +2361,7 @@ mod tests {
 
         #[test]
         fn checked_accounting_never_wraps(left in any::<u64>(), right in any::<u64>()) {
-            match checked_add_u64(left, right) {
+            match checked_add_u64(CheckedAddU64Operands { left, right }) {
                 Ok(sum) => {
                     prop_assert!(sum >= left);
                     prop_assert!(sum >= right);
@@ -2212,7 +2380,7 @@ mod kani_proofs {
     fn checked_accounting_never_wraps() {
         let left: u64 = kani::any();
         let right: u64 = kani::any();
-        match checked_add_u64(left, right) {
+        match checked_add_u64(CheckedAddU64Operands { left, right }) {
             Ok(sum) => {
                 assert!(sum >= left);
                 assert!(sum >= right);
