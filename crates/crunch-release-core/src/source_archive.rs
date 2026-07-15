@@ -38,6 +38,12 @@ pub struct ReleaseSourceMember {
     pub symlink_target: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct RelativePathInput<'a> {
+    path: &'a str,
+    field_name: &'a str,
+}
+
 pub fn plan_release_source_archive_members(
     candidates: Vec<ReleaseSourceCandidate>,
 ) -> Result<Vec<ReleaseSourceMember>, ReleaseEvidenceError> {
@@ -61,11 +67,16 @@ pub fn plan_release_source_archive_members(
 }
 
 pub fn release_source_path_is_releasable(path: &str) -> Result<bool, ReleaseEvidenceError> {
-    let components = normalized_relative_components(path, "release source path")?;
+    let components = normalized_relative_components(RelativePathInput {
+        path,
+        field_name: "release source path",
+    })?;
     if components.iter().any(|component| RELEASE_SOURCE_SKIP_ANYWHERE.contains(&component.as_str())) {
         return Ok(false);
     }
-    let first_component = components.first().expect("validated components must be non-empty");
+    let Some(first_component) = components.first() else {
+        return Err(validation_error("release source path normalization produced no path components".to_string()));
+    };
     if RELEASE_SOURCE_SKIP_AT_ROOT.contains(&first_component.as_str()) {
         return Ok(false);
     }
@@ -73,7 +84,10 @@ pub fn release_source_path_is_releasable(path: &str) -> Result<bool, ReleaseEvid
 }
 
 pub fn validate_release_source_symlink_target(target: &str) -> Result<(), ReleaseEvidenceError> {
-    normalized_relative_components(target, "release source symlink target")?;
+    normalized_relative_components(RelativePathInput {
+        path: target,
+        field_name: "release source symlink target",
+    })?;
     Ok(())
 }
 
@@ -89,20 +103,33 @@ fn normalize_release_source_candidate(
     if !release_source_path_is_releasable(&candidate.relative_path)? {
         return Ok(None);
     }
-    if candidate.kind == ReleaseSourceEntryKind::Symlink {
-        let target = candidate.symlink_target.as_deref().ok_or_else(|| {
-            validation_error(format!("release source symlink {} must record a target", candidate.relative_path))
-        })?;
-        validate_release_source_symlink_target(target)?;
-    }
-    Ok(Some(ReleaseSourceMember {
+    validate_release_source_candidate_symlink(&candidate)?;
+    let member = ReleaseSourceMember {
         relative_path: candidate.relative_path,
         kind: candidate.kind,
         symlink_target: candidate.symlink_target,
-    }))
+    };
+    debug_assert!(!member.relative_path.is_empty());
+    debug_assert_ne!(member.kind, ReleaseSourceEntryKind::Submodule);
+    Ok(Some(member))
 }
 
-fn normalized_relative_components(path: &str, field_name: &str) -> Result<Vec<String>, ReleaseEvidenceError> {
+fn validate_release_source_candidate_symlink(candidate: &ReleaseSourceCandidate) -> Result<(), ReleaseEvidenceError> {
+    if candidate.kind != ReleaseSourceEntryKind::Symlink {
+        return Ok(());
+    }
+    let Some(target) = candidate.symlink_target.as_deref() else {
+        return Err(validation_error(format!(
+            "release source symlink {} must record a target",
+            candidate.relative_path
+        )));
+    };
+    validate_release_source_symlink_target(target)
+}
+
+fn normalized_relative_components(input: RelativePathInput<'_>) -> Result<Vec<String>, ReleaseEvidenceError> {
+    let path = input.path;
+    let field_name = input.field_name;
     if path.trim().is_empty() {
         return Err(validation_error(format!("{field_name} must not be empty")));
     }
@@ -112,12 +139,13 @@ fn normalized_relative_components(path: &str, field_name: &str) -> Result<Vec<St
     if path.contains('\\') {
         return Err(validation_error(format!("{field_name} must use '/' separators: {path}")));
     }
-    let path_len = u32_count(path.len(), &format!("{field_name} length overflowed u32"))?;
-    if path_len > MAX_RELEASE_SOURCE_PATH_BYTES_COUNT {
+    let path_len_bytes = u32_count(path.len(), &format!("{field_name} length overflowed u32"))?;
+    if path_len_bytes > MAX_RELEASE_SOURCE_PATH_BYTES_COUNT {
         return Err(validation_error(format!("{field_name} exceeds {MAX_RELEASE_SOURCE_PATH_BYTES_COUNT} bytes")));
     }
 
-    let mut components = Vec::new();
+    let component_count = path.bytes().filter(|byte| *byte == b'/').count().saturating_add(1);
+    let mut components = Vec::with_capacity(component_count);
     for component in path.split('/') {
         if component.is_empty() || component == "." {
             return Err(validation_error(format!("{field_name} contains an empty or current-dir component: {path}")));
@@ -130,6 +158,8 @@ fn normalized_relative_components(path: &str, field_name: &str) -> Result<Vec<St
     if components.is_empty() {
         return Err(validation_error(format!("{field_name} must contain at least one path component")));
     }
+    debug_assert_eq!(components.len(), component_count);
+    debug_assert_eq!(components.join("/"), path);
     Ok(components)
 }
 

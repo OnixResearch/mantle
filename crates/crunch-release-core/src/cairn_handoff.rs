@@ -41,7 +41,7 @@ pub const MAX_CAIRN_HANDOFF_BINARY_DIGESTS_COUNT: u32 = 16;
 pub const MAX_CAIRN_HANDOFF_DIAGNOSTICS_COUNT: u32 = 128;
 pub const MAX_CAIRN_HANDOFF_TEXT_BYTES_COUNT: u32 = 4096;
 
-const BLAKE3_HEX_LENGTH_CHARS: u32 = 64;
+const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
 const BUNDLE_BINDING_DOMAIN: &[u8] = b"mantle.cairn-handoff.bundle-binding.v1\0";
 const RECEIPT_DOMAIN: &[u8] = b"mantle.cairn-handoff.validation-receipt.v2\0";
 const REQUIRED_NON_CLAIM_FRAGMENT: &str = "not release correctness";
@@ -123,19 +123,29 @@ pub struct CairnReleaseEvidenceReport {
     pub diagnostics: Vec<String>,
 }
 
+fn absent_optional<T>() -> Option<T> {
+    None
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CairnHandoffReleaseVerification {
     pub required: bool,
     pub valid: bool,
     pub disposition: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub bundle_binding_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub receipt_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub authentication_status: Option<String>,
     pub boundary: String,
     pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TextField<'a> {
+    label: &'a str,
+    value: &'a str,
 }
 
 // r[impl mantle.release_provenance.cairn_evidence_handoff.measured_inputs]
@@ -153,10 +163,13 @@ pub fn validate_cairn_release_evidence_handoff(handoff: &CairnReleaseEvidenceHan
     if readiness_ids.len() > 1 {
         push_diagnostic(&mut diagnostics, "Cairn handoff rows do not share one release_readiness_id".to_string());
     }
-    let valid = diagnostics.is_empty();
-    debug_assert!(diagnostics.len() <= MAX_CAIRN_HANDOFF_DIAGNOSTICS_COUNT as usize);
-    debug_assert_eq!(valid, diagnostics.is_empty());
-    CairnReleaseEvidenceReport { valid, diagnostics }
+    let is_valid = diagnostics.is_empty();
+    debug_assert!(count_fits_limit(diagnostics.len(), MAX_CAIRN_HANDOFF_DIAGNOSTICS_COUNT));
+    debug_assert_eq!(is_valid, diagnostics.is_empty());
+    CairnReleaseEvidenceReport {
+        valid: is_valid,
+        diagnostics,
+    }
 }
 
 pub fn cairn_release_evidence_validation_receipt(
@@ -166,9 +179,12 @@ pub fn cairn_release_evidence_validation_receipt(
     let bundle_binding = canonical_bundle_binding(bundle_binding);
     validate_bundle_binding(&bundle_binding)?;
     let handoff = canonical_handoff(handoff);
-    let report = validate_cairn_release_evidence_handoff(&handoff);
-    if !report.valid {
-        return Err(validation_error(format!("Cairn handoff validation failed: {}", report.diagnostics.join("; "))));
+    let handoff_validation = validate_cairn_release_evidence_handoff(&handoff);
+    if !handoff_validation.valid {
+        return Err(validation_error(format!(
+            "Cairn handoff validation failed: {}",
+            handoff_validation.diagnostics.join("; ")
+        )));
     }
     let bundle_binding_blake3 = cairn_release_bundle_binding_digest_blake3(&bundle_binding)?;
     let mut receipt = CairnReleaseEvidenceValidationReceipt {
@@ -206,9 +222,12 @@ pub fn validate_cairn_release_evidence_validation_receipt(
         return Err(validation_error("Cairn handoff validation receipt bundle binding digest is stale"));
     }
     let measured_handoff = canonical_handoff(measured_handoff.clone());
-    let report = validate_cairn_release_evidence_handoff(&measured_handoff);
-    if !report.valid {
-        return Err(validation_error(format!("Cairn measured inputs are invalid: {}", report.diagnostics.join("; "))));
+    let handoff_validation = validate_cairn_release_evidence_handoff(&measured_handoff);
+    if !handoff_validation.valid {
+        return Err(validation_error(format!(
+            "Cairn measured inputs are invalid: {}",
+            handoff_validation.diagnostics.join("; ")
+        )));
     }
     if receipt.handoff != measured_handoff {
         return Err(validation_error("Cairn handoff validation receipt does not match measured bundle bytes"));
@@ -246,17 +265,17 @@ pub fn evaluate_cairn_handoff_release_evidence(
     };
     let result = validate_cairn_release_evidence_validation_receipt(receipt, expected_binding, &receipt.handoff);
     let diagnostics = result.err().map(|error| vec![error.to_string()]).unwrap_or_default();
-    let valid = diagnostics.is_empty();
-    let disposition = if valid {
+    let is_valid = diagnostics.is_empty();
+    let disposition = if is_valid {
         CAIRN_HANDOFF_DISPOSITION_PRESENT
     } else {
         CAIRN_HANDOFF_DISPOSITION_INVALID
     };
-    debug_assert_eq!(valid, disposition == CAIRN_HANDOFF_DISPOSITION_PRESENT);
+    debug_assert_eq!(is_valid, disposition == CAIRN_HANDOFF_DISPOSITION_PRESENT);
     debug_assert!(!receipt.receipt_blake3.is_empty());
     CairnHandoffReleaseVerification {
         required,
-        valid,
+        valid: is_valid,
         disposition: disposition.to_string(),
         bundle_binding_blake3: Some(receipt.bundle_binding_blake3.clone()),
         receipt_blake3: Some(receipt.receipt_blake3.clone()),
@@ -310,6 +329,8 @@ fn validate_authentication_dependency(
     dependency: &CairnHandoffAuthenticationDependency,
     diagnostics: &mut Vec<String>,
 ) {
+    debug_assert!(count_fits_limit(diagnostics.len(), MAX_CAIRN_HANDOFF_DIAGNOSTICS_COUNT));
+    debug_assert!(!CAIRN_HANDOFF_AUTHENTICATION_SCHEMA.is_empty());
     if dependency.schema != CAIRN_HANDOFF_AUTHENTICATION_SCHEMA {
         push_diagnostic(diagnostics, "unsupported Cairn authentication dependency schema".to_string());
     }
@@ -326,9 +347,11 @@ fn validate_authentication_dependency(
         push_diagnostic(diagnostics, "Cairn authentication archive mutation receipt is stale".to_string());
     }
     validate_measured_artifact("authentication.archive_receipt", &dependency.archive_receipt, diagnostics);
-    if dependency.archive_receipt.declared_digest_blake3 != CAIRN_HANDOFF_AUTHENTICATION_RECEIPT_BLAKE3
-        || dependency.archive_receipt.measured_digest_blake3 != CAIRN_HANDOFF_AUTHENTICATION_RECEIPT_BLAKE3
-    {
+    let has_expected_declared_digest =
+        dependency.archive_receipt.declared_digest_blake3 == CAIRN_HANDOFF_AUTHENTICATION_RECEIPT_BLAKE3;
+    let has_expected_measured_digest =
+        dependency.archive_receipt.measured_digest_blake3 == CAIRN_HANDOFF_AUTHENTICATION_RECEIPT_BLAKE3;
+    if !has_expected_declared_digest || !has_expected_measured_digest {
         push_diagnostic(
             diagnostics,
             "Cairn authentication archive receipt bytes are not the reviewed receipt".to_string(),
@@ -343,8 +366,21 @@ fn validate_row(
     readiness_ids: &mut BTreeSet<String>,
     diagnostics: &mut Vec<String>,
 ) {
-    validate_text("artifact_id", &row.artifact_id, diagnostics);
-    validate_text("release_readiness_id", &row.release_readiness_id, diagnostics);
+    debug_assert!(count_fits_limit(diagnostics.len(), MAX_CAIRN_HANDOFF_DIAGNOSTICS_COUNT));
+    validate_text(
+        TextField {
+            label: "artifact_id",
+            value: &row.artifact_id,
+        },
+        diagnostics,
+    );
+    validate_text(
+        TextField {
+            label: "release_readiness_id",
+            value: &row.release_readiness_id,
+        },
+        diagnostics,
+    );
     validate_role_schema(row, diagnostics);
     validate_measured_artifact("artifact", &row.artifact, diagnostics);
     validate_measured_artifact("cairn_policy", &row.cairn_policy, diagnostics);
@@ -360,6 +396,7 @@ fn validate_row(
         push_diagnostic(diagnostics, format!("duplicate artifact or policy path {}", row.cairn_policy.relative_path));
     }
     readiness_ids.insert(row.release_readiness_id.clone());
+    debug_assert!(readiness_ids.contains(&row.release_readiness_id));
     let non_claim_text = row.non_claims.join(" ").to_ascii_lowercase();
     if !non_claim_text.contains(REQUIRED_NON_CLAIM_FRAGMENT) {
         push_diagnostic(diagnostics, format!("artifact {} omits the release-correctness non-claim", row.artifact_id));
@@ -372,7 +409,14 @@ fn validate_row(
 }
 
 fn validate_measured_artifact(label: &str, artifact: &CairnMeasuredArtifact, diagnostics: &mut Vec<String>) {
-    validate_text(&format!("{label}.relative_path"), &artifact.relative_path, diagnostics);
+    debug_assert!(!label.trim().is_empty());
+    validate_text(
+        TextField {
+            label: &format!("{label}.relative_path"),
+            value: &artifact.relative_path,
+        },
+        diagnostics,
+    );
     if artifact.relative_path.starts_with('/')
         || artifact.relative_path.split('/').any(|part| part.is_empty() || part == "." || part == "..")
     {
@@ -387,41 +431,62 @@ fn validate_measured_artifact(label: &str, artifact: &CairnMeasuredArtifact, dia
     if artifact.declared_digest_blake3 != artifact.measured_digest_blake3 {
         push_diagnostic(diagnostics, format!("{label} declared digest does not match shell-measured bytes"));
     }
+    debug_assert!(count_fits_limit(diagnostics.len(), MAX_CAIRN_HANDOFF_DIAGNOSTICS_COUNT));
 }
 
 fn validate_role_schema(row: &CairnReleaseEvidenceRow, diagnostics: &mut Vec<String>) {
-    let supported = SUPPORTED_ROLE_SCHEMA_PAIRS
+    let is_role_schema_allowed = SUPPORTED_ROLE_SCHEMA_PAIRS
         .iter()
         .any(|(role, schema)| row.role == *role && row.schema_id == *schema);
-    if !supported {
+    if !is_role_schema_allowed {
         push_diagnostic(diagnostics, format!("unsupported Cairn role/schema pair {}/{}", row.role, row.schema_id));
     }
 }
 
 fn validate_bundle_binding(binding: &CairnReleaseBundleBinding) -> Result<(), ReleaseEvidenceError> {
-    if binding.release_id.is_empty() || binding.release_id.len() > MAX_CAIRN_HANDOFF_TEXT_BYTES_COUNT as usize {
+    let release_id_bytes = u32::try_from(binding.release_id.len())
+        .map_err(|_| validation_error("Cairn bundle binding release_id length overflowed u32"))?;
+    if binding.release_id.is_empty() || release_id_bytes > MAX_CAIRN_HANDOFF_TEXT_BYTES_COUNT {
         return Err(validation_error("Cairn bundle binding release_id is empty or oversized"));
     }
-    if !valid_blake3(&binding.source_archive_digest_blake3)
-        || !valid_blake3(&binding.proof_bundle_digest_blake3)
-        || !valid_blake3(&binding.prerequisite_inventory_digest_blake3)
-        || !valid_blake3(&binding.release_manifest_projection_blake3)
-    {
+    validate_bundle_binding_digests(binding)?;
+    validate_bundle_binding_binary_digests(&binding.binary_digests_blake3)?;
+    debug_assert!(release_id_bytes > 0);
+    debug_assert!(release_id_bytes <= MAX_CAIRN_HANDOFF_TEXT_BYTES_COUNT);
+    Ok(())
+}
+
+fn validate_bundle_binding_digests(binding: &CairnReleaseBundleBinding) -> Result<(), ReleaseEvidenceError> {
+    let digests = [
+        &binding.source_archive_digest_blake3,
+        &binding.proof_bundle_digest_blake3,
+        &binding.prerequisite_inventory_digest_blake3,
+        &binding.release_manifest_projection_blake3,
+    ];
+    if digests.into_iter().any(|digest| !valid_blake3(digest)) {
         return Err(validation_error("Cairn bundle binding contains an invalid BLAKE3 identity"));
     }
-    if binding.binary_digests_blake3.is_empty()
-        || binding.binary_digests_blake3.len() > MAX_CAIRN_HANDOFF_BINARY_DIGESTS_COUNT as usize
-    {
+    Ok(())
+}
+
+fn validate_bundle_binding_binary_digests(binary_digests: &[String]) -> Result<(), ReleaseEvidenceError> {
+    let binary_digest_count = u32::try_from(binary_digests.len())
+        .map_err(|_| validation_error("Cairn bundle binding binary digest count overflowed u32"))?;
+    if binary_digest_count == 0 || binary_digest_count > MAX_CAIRN_HANDOFF_BINARY_DIGESTS_COUNT {
         return Err(validation_error("Cairn bundle binding binary digest count is out of bounds"));
     }
-    if binding.binary_digests_blake3.iter().any(|digest| !valid_blake3(digest)) {
+    if binary_digests.iter().any(|digest| !valid_blake3(digest)) {
         return Err(validation_error("Cairn bundle binding contains an invalid binary BLAKE3 identity"));
     }
     Ok(())
 }
 
 fn validate_row_count(row_count: usize, diagnostics: &mut Vec<String>) {
-    if row_count == 0 || row_count > MAX_CAIRN_HANDOFF_ROWS_COUNT as usize {
+    let Ok(row_count_u32) = u32::try_from(row_count) else {
+        push_diagnostic(diagnostics, "Cairn handoff row count overflowed u32".to_string());
+        return;
+    };
+    if row_count_u32 == 0 || row_count_u32 > MAX_CAIRN_HANDOFF_ROWS_COUNT {
         push_diagnostic(
             diagnostics,
             format!("Cairn handoff row count must be between 1 and {}", MAX_CAIRN_HANDOFF_ROWS_COUNT),
@@ -430,21 +495,35 @@ fn validate_row_count(row_count: usize, diagnostics: &mut Vec<String>) {
 }
 
 fn validate_bounded_strings(label: &str, values: &[String], maximum_count: u32, diagnostics: &mut Vec<String>) {
-    if values.is_empty() || values.len() > maximum_count as usize {
+    let value_count = match u32::try_from(values.len()) {
+        Ok(value_count) => value_count,
+        Err(_) => {
+            push_diagnostic(diagnostics, format!("{label} count overflowed u32"));
+            return;
+        }
+    };
+    if value_count == 0 || value_count > maximum_count {
         push_diagnostic(diagnostics, format!("{label} count must be between 1 and {maximum_count}"));
     }
     let mut unique = BTreeSet::new();
     for value in values {
-        validate_text(label, value, diagnostics);
+        validate_text(TextField { label, value }, diagnostics);
         if !unique.insert(value) {
             push_diagnostic(diagnostics, format!("{label} contains a duplicate value"));
         }
     }
 }
 
-fn validate_text(label: &str, value: &str, diagnostics: &mut Vec<String>) {
-    if value.is_empty() || value.len() > MAX_CAIRN_HANDOFF_TEXT_BYTES_COUNT as usize {
-        push_diagnostic(diagnostics, format!("{label} is empty or oversized"));
+fn validate_text(field: TextField<'_>, diagnostics: &mut Vec<String>) {
+    let value_bytes = match u32::try_from(field.value.len()) {
+        Ok(value_bytes) => value_bytes,
+        Err(_) => {
+            push_diagnostic(diagnostics, format!("{} length overflowed u32", field.label));
+            return;
+        }
+    };
+    if field.value.is_empty() || value_bytes > MAX_CAIRN_HANDOFF_TEXT_BYTES_COUNT {
+        push_diagnostic(diagnostics, format!("{} is empty or oversized", field.label));
     }
 }
 
@@ -474,7 +553,7 @@ fn required_non_claims() -> Vec<String> {
 }
 
 fn valid_blake3(value: &str) -> bool {
-    value.len() == BLAKE3_HEX_LENGTH_CHARS as usize
+    value.len() == BLAKE3_HEX_LENGTH_CHARS
         && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
@@ -486,9 +565,16 @@ fn domain_digest(domain: &[u8], bytes: &[u8]) -> String {
 }
 
 fn push_diagnostic(diagnostics: &mut Vec<String>, diagnostic: String) {
-    if diagnostics.len() < MAX_CAIRN_HANDOFF_DIAGNOSTICS_COUNT as usize {
+    let Ok(diagnostic_count) = u32::try_from(diagnostics.len()) else {
+        return;
+    };
+    if diagnostic_count < MAX_CAIRN_HANDOFF_DIAGNOSTICS_COUNT {
         diagnostics.push(diagnostic);
     }
+}
+
+fn count_fits_limit(count: usize, maximum_count: u32) -> bool {
+    u32::try_from(count).is_ok_and(|count_u32| count_u32 <= maximum_count)
 }
 
 fn validation_error(message: impl Into<String>) -> ReleaseEvidenceError {

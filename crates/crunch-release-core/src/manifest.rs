@@ -286,13 +286,13 @@ pub struct FunctionAddressReleaseEvidence {
     pub valence_receipt_schema: String,
     pub valence_receipt_relative_path: String,
     pub valence_receipt_digest_blake3: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub kamacite_receipt_role: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub kamacite_receipt_schema: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub kamacite_receipt_relative_path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub kamacite_receipt_digest_blake3: Option<String>,
     pub source_archive_digest_blake3: String,
     pub release_binary_relative_path: String,
@@ -330,15 +330,15 @@ pub struct SourceAcquisition {
     pub kind: String,
     pub url: String,
     pub digest_blake3: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub commit: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub reference: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub tag: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub archive_profile: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub archive_version: Option<String>,
 }
 
@@ -400,6 +400,14 @@ pub struct ProvenanceCoverage {
     pub coverage_boundary: String,
 }
 
+fn absent_optional<T>() -> Option<T> {
+    None
+}
+
+fn empty_values<T>() -> Vec<T> {
+    Vec::new()
+}
+
 fn empty_opaque_evidence_sidecar_bindings() -> Vec<OpaqueEvidenceSidecarBindingReceipt> {
     Vec::new()
 }
@@ -411,38 +419,38 @@ pub struct ReleaseEvidenceManifest {
     pub claim_scope: String,
     pub workflow: ReleaseWorkflowIdentity,
     pub source_archive: BundledArtifact,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub source_acquisition: Option<SourceAcquisition>,
     pub binaries: Vec<BundledArtifact>,
     pub proof_bundle: BundledArtifact,
     pub prerequisite_inventory: BundledArtifact,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub provider_fixed_point_proof: Option<ProviderFixedPointProofArtifact>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub reproducibility_report: Option<BundledArtifact>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub deterministic_build_proof: Option<RoleBoundedReleaseArtifact>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub deterministic_sandbox_isolation_evidence: Option<RoleBoundedReleaseArtifact>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub independent_agreement_report: Option<BundledArtifact>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default = "empty_values", skip_serializing_if = "Vec::is_empty")]
     pub external_evidence: Vec<ExternalEvidence>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default = "empty_values", skip_serializing_if = "Vec::is_empty")]
     pub kani_toolchain_evidence: Vec<KaniToolchainEvidence>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub stack_provenance: Option<StackProvenanceReleaseEvidence>,
     #[serde(
         default = "empty_opaque_evidence_sidecar_bindings",
         skip_serializing_if = "Vec::is_empty"
     )]
     pub opaque_evidence_sidecar_bindings: Vec<OpaqueEvidenceSidecarBindingReceipt>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub cairn_handoff_validation: Option<crate::CairnReleaseEvidenceValidationReceipt>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub function_address_evidence: Option<FunctionAddressReleaseEvidence>,
     pub proof_linkage: ReleaseProofLinkage,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub provenance_coverage: Option<ProvenanceCoverage>,
 }
 
@@ -578,6 +586,8 @@ fn validate_opaque_evidence_sidecar_bindings(manifest: &ReleaseEvidenceManifest)
     Ok(())
 }
 
+// Compatibility: downstream callers rely on this stable two-string public selection API.
+#[allow(ambiguous_params)]
 pub fn stack_provenance_mode_for_release_profile(
     release_profile: &str,
     requested_mode: &str,
@@ -586,11 +596,12 @@ pub fn stack_provenance_mode_for_release_profile(
         return Err(validation_error(format!("unsupported stack provenance mode: {requested_mode}")));
     }
     match release_profile {
-        RELEASE_PROFILE_GENERIC => match requested_mode {
-            STACK_PROVENANCE_MODE_OPTIONAL => Ok(STACK_PROVENANCE_MODE_OPTIONAL),
-            STACK_PROVENANCE_MODE_REQUIRED => Ok(STACK_PROVENANCE_MODE_REQUIRED),
-            _ => unreachable!("requested stack provenance mode was already validated"),
-        },
+        RELEASE_PROFILE_GENERIC => {
+            if requested_mode == STACK_PROVENANCE_MODE_OPTIONAL {
+                return Ok(STACK_PROVENANCE_MODE_OPTIONAL);
+            }
+            Ok(STACK_PROVENANCE_MODE_REQUIRED)
+        }
         RELEASE_PROFILE_ONIX_STACK => Ok(STACK_PROVENANCE_MODE_REQUIRED),
         _ => Err(validation_error(format!("unsupported release profile: {release_profile}"))),
     }
@@ -604,36 +615,56 @@ pub fn evaluate_stack_provenance_release_evidence(
     if !stack_provenance_mode_is_supported(mode) {
         diagnostics.push(format!("unsupported stack provenance mode: {mode}"));
     }
-    let required = mode == STACK_PROVENANCE_MODE_REQUIRED;
+    let is_required = mode == STACK_PROVENANCE_MODE_REQUIRED;
     let Some(evidence) = &manifest.stack_provenance else {
-        if required {
-            diagnostics.push("required Valence stack provenance sidecar or receipt is missing".to_string());
-        }
-        return StackProvenanceReleaseVerification {
-            mode: mode.to_string(),
-            required,
-            valid: diagnostics.is_empty(),
-            disposition: STACK_PROVENANCE_DISPOSITION_ABSENT.to_string(),
-            sidecar_role: None,
-            sidecar_schema: None,
-            sidecar_claim_scope: None,
-            sidecar_digest_blake3: None,
-            valence_receipt_role: None,
-            valence_receipt_schema: None,
-            valence_receipt_digest_blake3: None,
-            release_binary_relative_path: None,
-            release_binary_digest_blake3: None,
-            boundary: STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string(),
-            diagnostics,
-        };
+        return absent_stack_provenance_verification(mode, is_required, diagnostics);
     };
     diagnostics.extend(stack_provenance_evidence_diagnostics(manifest, evidence));
-    let valid = diagnostics.is_empty();
-    StackProvenanceReleaseVerification {
+    present_stack_provenance_verification(mode, is_required, evidence, diagnostics)
+}
+
+fn absent_stack_provenance_verification(
+    mode: &str,
+    is_required: bool,
+    mut diagnostics: Vec<String>,
+) -> StackProvenanceReleaseVerification {
+    if is_required {
+        diagnostics.push("required Valence stack provenance sidecar or receipt is missing".to_string());
+    }
+    let verification = StackProvenanceReleaseVerification {
         mode: mode.to_string(),
-        required,
-        valid,
-        disposition: if valid {
+        required: is_required,
+        valid: diagnostics.is_empty(),
+        disposition: STACK_PROVENANCE_DISPOSITION_ABSENT.to_string(),
+        sidecar_role: None,
+        sidecar_schema: None,
+        sidecar_claim_scope: None,
+        sidecar_digest_blake3: None,
+        valence_receipt_role: None,
+        valence_receipt_schema: None,
+        valence_receipt_digest_blake3: None,
+        release_binary_relative_path: None,
+        release_binary_digest_blake3: None,
+        boundary: STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string(),
+        diagnostics,
+    };
+    debug_assert_eq!(verification.disposition, STACK_PROVENANCE_DISPOSITION_ABSENT);
+    debug_assert!(verification.sidecar_digest_blake3.is_none());
+    verification
+}
+
+fn present_stack_provenance_verification(
+    mode: &str,
+    is_required: bool,
+    evidence: &StackProvenanceReleaseEvidence,
+    diagnostics: Vec<String>,
+) -> StackProvenanceReleaseVerification {
+    let is_valid = diagnostics.is_empty();
+    let verification = StackProvenanceReleaseVerification {
+        mode: mode.to_string(),
+        required: is_required,
+        valid: is_valid,
+        disposition: if is_valid {
             STACK_PROVENANCE_DISPOSITION_PRESENT.to_string()
         } else {
             STACK_PROVENANCE_DISPOSITION_INVALID.to_string()
@@ -649,9 +680,14 @@ pub fn evaluate_stack_provenance_release_evidence(
         release_binary_digest_blake3: Some(evidence.release_binary_digest_blake3.clone()),
         boundary: STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string(),
         diagnostics,
-    }
+    };
+    debug_assert_eq!(verification.valid, verification.diagnostics.is_empty());
+    debug_assert_eq!(verification.disposition == STACK_PROVENANCE_DISPOSITION_PRESENT, verification.valid);
+    verification
 }
 
+// Compatibility: downstream callers rely on this stable two-string public selection API.
+#[allow(ambiguous_params)]
 pub fn function_address_evidence_mode_for_release_profile(
     release_profile: &str,
     requested_mode: &str,
@@ -660,11 +696,12 @@ pub fn function_address_evidence_mode_for_release_profile(
         return Err(validation_error(format!("unsupported function-address evidence mode: {requested_mode}")));
     }
     match release_profile {
-        RELEASE_PROFILE_GENERIC | RELEASE_PROFILE_ONIX_STACK => match requested_mode {
-            FUNCTION_ADDRESS_MODE_OPTIONAL => Ok(FUNCTION_ADDRESS_MODE_OPTIONAL),
-            FUNCTION_ADDRESS_MODE_REQUIRED => Ok(FUNCTION_ADDRESS_MODE_REQUIRED),
-            _ => unreachable!("requested function-address evidence mode was already validated"),
-        },
+        RELEASE_PROFILE_GENERIC | RELEASE_PROFILE_ONIX_STACK => {
+            if requested_mode == FUNCTION_ADDRESS_MODE_OPTIONAL {
+                return Ok(FUNCTION_ADDRESS_MODE_OPTIONAL);
+            }
+            Ok(FUNCTION_ADDRESS_MODE_REQUIRED)
+        }
         _ => Err(validation_error(format!("unsupported release profile: {release_profile}"))),
     }
 }
@@ -763,6 +800,13 @@ fn legacy_function_address_verification(
     is_required: bool,
     mut diagnostics: Vec<String>,
 ) -> FunctionAddressReleaseVerification {
+    debug_assert!(
+        manifest
+            .function_address_evidence
+            .as_ref()
+            .is_some_and(|candidate| core::ptr::eq(candidate, evidence))
+    );
+    debug_assert!(!manifest.opaque_evidence_sidecar_bindings.iter().any(opaque_binding_is_function_address_candidate));
     diagnostics.extend(function_address_evidence_diagnostics(manifest, evidence));
     present_function_address_verification(mode, is_required, diagnostics, FunctionAddressVerificationLinks {
         sidecar_role: evidence.sidecar_role.clone(),
@@ -799,6 +843,50 @@ struct FunctionAddressVerificationLinks {
     source_archive_digest_blake3: String,
     release_binary_relative_path: String,
     release_binary_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DiagnosticField<'a> {
+    value: &'a str,
+    field_name: &'a str,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LiteralDiagnosticField<'a> {
+    actual: &'a str,
+    expected: &'a str,
+    field_name: &'a str,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ExternalEvidenceLink<'a> {
+    role: &'a str,
+    schema: &'a str,
+    claim_scope: &'a str,
+    relative_path: &'a str,
+    digest_blake3: &'a str,
+    label: &'a str,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RequiredLiteralField<'a> {
+    actual: &'a str,
+    expected: &'a str,
+    field_name: &'a str,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RequiredOptionalLiteralField<'a> {
+    value: &'a Option<String>,
+    expected: &'a str,
+    field_name: &'a str,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct StageReportValidation<'a> {
+    report: &'a SelfHostingProofReportView,
+    expected_staged_source: &'a str,
+    field_name: &'a str,
 }
 
 fn present_function_address_verification(
@@ -899,6 +987,8 @@ fn stack_provenance_evidence_diagnostics(
     manifest: &ReleaseEvidenceManifest,
     evidence: &StackProvenanceReleaseEvidence,
 ) -> Vec<String> {
+    debug_assert_ne!(STACK_PROVENANCE_EVIDENCE_ROLE, VALENCE_STACK_PROVENANCE_RECEIPT_ROLE);
+    debug_assert_ne!(STACK_PROVENANCE_SIDECAR_SCHEMA, STACK_PROVENANCE_GRAPH_REPORT_SCHEMA);
     let mut diagnostics = Vec::new();
     validate_stack_provenance_literals(evidence, &mut diagnostics);
     validate_stack_provenance_paths_and_hashes(evidence, &mut diagnostics);
@@ -906,63 +996,69 @@ fn stack_provenance_evidence_diagnostics(
     validate_stack_provenance_binary_link(manifest, evidence, &mut diagnostics);
     validate_stack_provenance_external_link(
         &manifest.external_evidence,
-        &evidence.sidecar_role,
-        &evidence.sidecar_schema,
-        &evidence.sidecar_claim_scope,
-        &evidence.sidecar_relative_path,
-        &evidence.sidecar_digest_blake3,
-        "sidecar",
+        ExternalEvidenceLink {
+            role: &evidence.sidecar_role,
+            schema: &evidence.sidecar_schema,
+            claim_scope: &evidence.sidecar_claim_scope,
+            relative_path: &evidence.sidecar_relative_path,
+            digest_blake3: &evidence.sidecar_digest_blake3,
+            label: "sidecar",
+        },
         &mut diagnostics,
     );
     validate_stack_provenance_external_link(
         &manifest.external_evidence,
-        &evidence.valence_receipt_role,
-        &evidence.valence_receipt_schema,
-        STACK_PROVENANCE_CLAIM_SCOPE,
-        &evidence.valence_receipt_relative_path,
-        &evidence.valence_receipt_digest_blake3,
-        "Valence receipt",
+        ExternalEvidenceLink {
+            role: &evidence.valence_receipt_role,
+            schema: &evidence.valence_receipt_schema,
+            claim_scope: STACK_PROVENANCE_CLAIM_SCOPE,
+            relative_path: &evidence.valence_receipt_relative_path,
+            digest_blake3: &evidence.valence_receipt_digest_blake3,
+            label: "Valence receipt",
+        },
         &mut diagnostics,
     );
     diagnostics
 }
 
 fn validate_stack_provenance_literals(evidence: &StackProvenanceReleaseEvidence, diagnostics: &mut Vec<String>) {
-    push_literal_diagnostic(
-        &evidence.sidecar_role,
-        STACK_PROVENANCE_EVIDENCE_ROLE,
-        "stack_provenance.sidecar_role",
-        diagnostics,
-    );
-    push_literal_diagnostic(
-        &evidence.sidecar_schema,
-        STACK_PROVENANCE_SIDECAR_SCHEMA,
-        "stack_provenance.sidecar_schema",
-        diagnostics,
-    );
-    push_literal_diagnostic(
-        &evidence.sidecar_claim_scope,
-        STACK_PROVENANCE_CLAIM_SCOPE,
-        "stack_provenance.sidecar_claim_scope",
-        diagnostics,
-    );
-    push_literal_diagnostic(
-        &evidence.valence_receipt_role,
-        VALENCE_STACK_PROVENANCE_RECEIPT_ROLE,
-        "stack_provenance.valence_receipt_role",
-        diagnostics,
-    );
-    push_literal_diagnostic(
-        &evidence.valence_receipt_schema,
-        STACK_PROVENANCE_GRAPH_REPORT_SCHEMA,
-        "stack_provenance.valence_receipt_schema",
-        diagnostics,
-    );
+    debug_assert_ne!(STACK_PROVENANCE_EVIDENCE_ROLE, VALENCE_STACK_PROVENANCE_RECEIPT_ROLE);
+    debug_assert_ne!(STACK_PROVENANCE_SIDECAR_SCHEMA, STACK_PROVENANCE_GRAPH_REPORT_SCHEMA);
+    let fields = [
+        LiteralDiagnosticField {
+            actual: &evidence.sidecar_role,
+            expected: STACK_PROVENANCE_EVIDENCE_ROLE,
+            field_name: "stack_provenance.sidecar_role",
+        },
+        LiteralDiagnosticField {
+            actual: &evidence.sidecar_schema,
+            expected: STACK_PROVENANCE_SIDECAR_SCHEMA,
+            field_name: "stack_provenance.sidecar_schema",
+        },
+        LiteralDiagnosticField {
+            actual: &evidence.sidecar_claim_scope,
+            expected: STACK_PROVENANCE_CLAIM_SCOPE,
+            field_name: "stack_provenance.sidecar_claim_scope",
+        },
+        LiteralDiagnosticField {
+            actual: &evidence.valence_receipt_role,
+            expected: VALENCE_STACK_PROVENANCE_RECEIPT_ROLE,
+            field_name: "stack_provenance.valence_receipt_role",
+        },
+        LiteralDiagnosticField {
+            actual: &evidence.valence_receipt_schema,
+            expected: STACK_PROVENANCE_GRAPH_REPORT_SCHEMA,
+            field_name: "stack_provenance.valence_receipt_schema",
+        },
+    ];
+    for field in fields {
+        push_literal_diagnostic(field, diagnostics);
+    }
 }
 
-fn push_literal_diagnostic(actual: &str, expected: &str, field_name: &str, diagnostics: &mut Vec<String>) {
-    if actual != expected {
-        diagnostics.push(format!("{field_name} must be {expected}, got {actual}"));
+fn push_literal_diagnostic(field: LiteralDiagnosticField<'_>, diagnostics: &mut Vec<String>) {
+    if field.actual != field.expected {
+        diagnostics.push(format!("{} must be {}, got {}", field.field_name, field.expected, field.actual));
     }
 }
 
@@ -970,42 +1066,52 @@ fn validate_stack_provenance_paths_and_hashes(
     evidence: &StackProvenanceReleaseEvidence,
     diagnostics: &mut Vec<String>,
 ) {
-    push_relative_path_diagnostic(
-        &evidence.sidecar_relative_path,
-        "stack_provenance.sidecar_relative_path",
-        diagnostics,
-    );
-    push_relative_path_diagnostic(
-        &evidence.valence_receipt_relative_path,
-        "stack_provenance.valence_receipt_relative_path",
-        diagnostics,
-    );
-    push_relative_path_diagnostic(
-        &evidence.release_binary_relative_path,
-        "stack_provenance.release_binary_relative_path",
-        diagnostics,
-    );
-    push_blake3_diagnostic(&evidence.sidecar_digest_blake3, "stack_provenance.sidecar_digest_blake3", diagnostics);
-    push_blake3_diagnostic(
-        &evidence.valence_receipt_digest_blake3,
-        "stack_provenance.valence_receipt_digest_blake3",
-        diagnostics,
-    );
-    push_blake3_diagnostic(
-        &evidence.release_binary_digest_blake3,
-        "stack_provenance.release_binary_digest_blake3",
-        diagnostics,
-    );
+    let paths = [
+        DiagnosticField {
+            value: &evidence.sidecar_relative_path,
+            field_name: "stack_provenance.sidecar_relative_path",
+        },
+        DiagnosticField {
+            value: &evidence.valence_receipt_relative_path,
+            field_name: "stack_provenance.valence_receipt_relative_path",
+        },
+        DiagnosticField {
+            value: &evidence.release_binary_relative_path,
+            field_name: "stack_provenance.release_binary_relative_path",
+        },
+    ];
+    debug_assert!(!paths.is_empty());
+    for field in paths {
+        push_relative_path_diagnostic(field, diagnostics);
+    }
+    let digests = [
+        DiagnosticField {
+            value: &evidence.sidecar_digest_blake3,
+            field_name: "stack_provenance.sidecar_digest_blake3",
+        },
+        DiagnosticField {
+            value: &evidence.valence_receipt_digest_blake3,
+            field_name: "stack_provenance.valence_receipt_digest_blake3",
+        },
+        DiagnosticField {
+            value: &evidence.release_binary_digest_blake3,
+            field_name: "stack_provenance.release_binary_digest_blake3",
+        },
+    ];
+    debug_assert!(!digests.is_empty());
+    for field in digests {
+        push_blake3_diagnostic(field, diagnostics);
+    }
 }
 
-fn push_relative_path_diagnostic(path: &str, field_name: &str, diagnostics: &mut Vec<String>) {
-    if let Err(error) = validate_relative_member_path(path, field_name) {
+fn push_relative_path_diagnostic(field: DiagnosticField<'_>, diagnostics: &mut Vec<String>) {
+    if let Err(error) = validate_relative_member_path(field.value, field.field_name) {
         diagnostics.push(error.to_string());
     }
 }
 
-fn push_blake3_diagnostic(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
-    if let Err(error) = validate_blake3_hex(value, field_name) {
+fn push_blake3_diagnostic(field: DiagnosticField<'_>, diagnostics: &mut Vec<String>) {
+    if let Err(error) = validate_blake3_hex(field.value, field.field_name) {
         diagnostics.push(error.to_string());
     }
 }
@@ -1030,31 +1136,26 @@ fn validate_stack_provenance_binary_link(
 
 fn validate_stack_provenance_external_link(
     external_evidence: &[ExternalEvidence],
-    role: &str,
-    schema: &str,
-    claim_scope: &str,
-    relative_path: &str,
-    digest_blake3: &str,
-    label: &str,
+    link: ExternalEvidenceLink<'_>,
     diagnostics: &mut Vec<String>,
 ) {
-    let Some(external) = external_evidence.iter().find(|external| external.role == role) else {
-        diagnostics.push(format!("stack provenance {label} external evidence is missing"));
+    let Some(external) = external_evidence.iter().find(|external| external.role == link.role) else {
+        diagnostics.push(format!("stack provenance {} external evidence is missing", link.label));
         return;
     };
-    if external.schema != schema {
-        diagnostics.push(format!("stack provenance {label} schema does not match declared metadata"));
+    if external.schema != link.schema {
+        diagnostics.push(format!("stack provenance {} schema does not match declared metadata", link.label));
     }
-    if external.claim_scope != claim_scope {
-        diagnostics.push(format!("stack provenance {label} claim scope does not match declared metadata"));
+    if external.claim_scope != link.claim_scope {
+        diagnostics.push(format!("stack provenance {} claim scope does not match declared metadata", link.label));
     }
-    if external.relative_path != relative_path {
-        diagnostics.push(format!("stack provenance {label} path does not match declared metadata"));
+    if external.relative_path != link.relative_path {
+        diagnostics.push(format!("stack provenance {} path does not match declared metadata", link.label));
     }
-    if external.digest_blake3 != digest_blake3 {
-        diagnostics.push(format!("stack provenance {label} digest does not match declared metadata"));
+    if external.digest_blake3 != link.digest_blake3 {
+        diagnostics.push(format!("stack provenance {} digest does not match declared metadata", link.label));
     }
-    validate_stack_provenance_non_claims(&external.non_claims, label, diagnostics);
+    validate_stack_provenance_non_claims(&external.non_claims, link.label, diagnostics);
 }
 
 fn validate_stack_provenance_non_claims(non_claims: &[String], field_name: &str, diagnostics: &mut Vec<String>) {
@@ -1088,6 +1189,8 @@ fn function_address_evidence_diagnostics(
     manifest: &ReleaseEvidenceManifest,
     evidence: &FunctionAddressReleaseEvidence,
 ) -> Vec<String> {
+    debug_assert_ne!(FUNCTION_ADDRESS_EVIDENCE_ROLE, VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE);
+    debug_assert_ne!(FUNCTION_ADDRESS_EVIDENCE_SCHEMA, VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA);
     let mut diagnostics = Vec::new();
     validate_function_address_literals(evidence, &mut diagnostics);
     validate_function_address_paths_and_hashes(evidence, &mut diagnostics);
@@ -1100,22 +1203,26 @@ fn function_address_evidence_diagnostics(
     validate_function_address_binary_link(manifest, evidence, &mut diagnostics);
     validate_function_address_external_link(
         &manifest.external_evidence,
-        &evidence.sidecar_role,
-        &evidence.sidecar_schema,
-        &evidence.sidecar_claim_scope,
-        &evidence.sidecar_relative_path,
-        &evidence.sidecar_digest_blake3,
-        "sidecar",
+        ExternalEvidenceLink {
+            role: &evidence.sidecar_role,
+            schema: &evidence.sidecar_schema,
+            claim_scope: &evidence.sidecar_claim_scope,
+            relative_path: &evidence.sidecar_relative_path,
+            digest_blake3: &evidence.sidecar_digest_blake3,
+            label: "sidecar",
+        },
         &mut diagnostics,
     );
     validate_function_address_external_link(
         &manifest.external_evidence,
-        &evidence.valence_receipt_role,
-        &evidence.valence_receipt_schema,
-        FUNCTION_ADDRESS_CLAIM_SCOPE,
-        &evidence.valence_receipt_relative_path,
-        &evidence.valence_receipt_digest_blake3,
-        "Valence receipt",
+        ExternalEvidenceLink {
+            role: &evidence.valence_receipt_role,
+            schema: &evidence.valence_receipt_schema,
+            claim_scope: FUNCTION_ADDRESS_CLAIM_SCOPE,
+            relative_path: &evidence.valence_receipt_relative_path,
+            digest_blake3: &evidence.valence_receipt_digest_blake3,
+            label: "Valence receipt",
+        },
         &mut diagnostics,
     );
     validate_optional_kamacite_function_address_external_link(manifest, evidence, &mut diagnostics);
@@ -1123,77 +1230,84 @@ fn function_address_evidence_diagnostics(
 }
 
 fn validate_function_address_literals(evidence: &FunctionAddressReleaseEvidence, diagnostics: &mut Vec<String>) {
-    push_literal_diagnostic(
-        &evidence.sidecar_role,
-        FUNCTION_ADDRESS_EVIDENCE_ROLE,
-        "function_address_evidence.sidecar_role",
-        diagnostics,
-    );
-    push_literal_diagnostic(
-        &evidence.sidecar_schema,
-        FUNCTION_ADDRESS_EVIDENCE_SCHEMA,
-        "function_address_evidence.sidecar_schema",
-        diagnostics,
-    );
-    push_literal_diagnostic(
-        &evidence.sidecar_claim_scope,
-        FUNCTION_ADDRESS_CLAIM_SCOPE,
-        "function_address_evidence.sidecar_claim_scope",
-        diagnostics,
-    );
-    push_literal_diagnostic(
-        &evidence.valence_receipt_role,
-        VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE,
-        "function_address_evidence.valence_receipt_role",
-        diagnostics,
-    );
-    push_literal_diagnostic(
-        &evidence.valence_receipt_schema,
-        VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA,
-        "function_address_evidence.valence_receipt_schema",
-        diagnostics,
-    );
+    debug_assert_ne!(FUNCTION_ADDRESS_EVIDENCE_ROLE, VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE);
+    debug_assert_ne!(FUNCTION_ADDRESS_EVIDENCE_SCHEMA, VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA);
+    let fields = [
+        LiteralDiagnosticField {
+            actual: &evidence.sidecar_role,
+            expected: FUNCTION_ADDRESS_EVIDENCE_ROLE,
+            field_name: "function_address_evidence.sidecar_role",
+        },
+        LiteralDiagnosticField {
+            actual: &evidence.sidecar_schema,
+            expected: FUNCTION_ADDRESS_EVIDENCE_SCHEMA,
+            field_name: "function_address_evidence.sidecar_schema",
+        },
+        LiteralDiagnosticField {
+            actual: &evidence.sidecar_claim_scope,
+            expected: FUNCTION_ADDRESS_CLAIM_SCOPE,
+            field_name: "function_address_evidence.sidecar_claim_scope",
+        },
+        LiteralDiagnosticField {
+            actual: &evidence.valence_receipt_role,
+            expected: VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE,
+            field_name: "function_address_evidence.valence_receipt_role",
+        },
+        LiteralDiagnosticField {
+            actual: &evidence.valence_receipt_schema,
+            expected: VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA,
+            field_name: "function_address_evidence.valence_receipt_schema",
+        },
+    ];
+    for field in fields {
+        push_literal_diagnostic(field, diagnostics);
+    }
 }
 
 fn validate_function_address_paths_and_hashes(
     evidence: &FunctionAddressReleaseEvidence,
     diagnostics: &mut Vec<String>,
 ) {
-    push_relative_path_diagnostic(
-        &evidence.sidecar_relative_path,
-        "function_address_evidence.sidecar_relative_path",
-        diagnostics,
-    );
-    push_relative_path_diagnostic(
-        &evidence.valence_receipt_relative_path,
-        "function_address_evidence.valence_receipt_relative_path",
-        diagnostics,
-    );
-    push_relative_path_diagnostic(
-        &evidence.release_binary_relative_path,
-        "function_address_evidence.release_binary_relative_path",
-        diagnostics,
-    );
-    push_blake3_diagnostic(
-        &evidence.sidecar_digest_blake3,
-        "function_address_evidence.sidecar_digest_blake3",
-        diagnostics,
-    );
-    push_blake3_diagnostic(
-        &evidence.valence_receipt_digest_blake3,
-        "function_address_evidence.valence_receipt_digest_blake3",
-        diagnostics,
-    );
-    push_blake3_diagnostic(
-        &evidence.source_archive_digest_blake3,
-        "function_address_evidence.source_archive_digest_blake3",
-        diagnostics,
-    );
-    push_blake3_diagnostic(
-        &evidence.release_binary_digest_blake3,
-        "function_address_evidence.release_binary_digest_blake3",
-        diagnostics,
-    );
+    let paths = [
+        DiagnosticField {
+            value: &evidence.sidecar_relative_path,
+            field_name: "function_address_evidence.sidecar_relative_path",
+        },
+        DiagnosticField {
+            value: &evidence.valence_receipt_relative_path,
+            field_name: "function_address_evidence.valence_receipt_relative_path",
+        },
+        DiagnosticField {
+            value: &evidence.release_binary_relative_path,
+            field_name: "function_address_evidence.release_binary_relative_path",
+        },
+    ];
+    debug_assert!(!paths.is_empty());
+    for field in paths {
+        push_relative_path_diagnostic(field, diagnostics);
+    }
+    let digests = [
+        DiagnosticField {
+            value: &evidence.sidecar_digest_blake3,
+            field_name: "function_address_evidence.sidecar_digest_blake3",
+        },
+        DiagnosticField {
+            value: &evidence.valence_receipt_digest_blake3,
+            field_name: "function_address_evidence.valence_receipt_digest_blake3",
+        },
+        DiagnosticField {
+            value: &evidence.source_archive_digest_blake3,
+            field_name: "function_address_evidence.source_archive_digest_blake3",
+        },
+        DiagnosticField {
+            value: &evidence.release_binary_digest_blake3,
+            field_name: "function_address_evidence.release_binary_digest_blake3",
+        },
+    ];
+    debug_assert!(!digests.is_empty());
+    for field in digests {
+        push_blake3_diagnostic(field, diagnostics);
+    }
 }
 
 fn validate_function_address_source_link(
@@ -1232,31 +1346,26 @@ fn validate_function_address_binary_link(
 
 fn validate_function_address_external_link(
     external_evidence: &[ExternalEvidence],
-    role: &str,
-    schema: &str,
-    claim_scope: &str,
-    relative_path: &str,
-    digest_blake3: &str,
-    label: &str,
+    link: ExternalEvidenceLink<'_>,
     diagnostics: &mut Vec<String>,
 ) {
-    let Some(external) = external_evidence.iter().find(|external| external.role == role) else {
-        diagnostics.push(format!("function-address {label} external evidence is missing"));
+    let Some(external) = external_evidence.iter().find(|external| external.role == link.role) else {
+        diagnostics.push(format!("function-address {} external evidence is missing", link.label));
         return;
     };
-    if external.schema != schema {
-        diagnostics.push(format!("function-address {label} schema does not match declared metadata"));
+    if external.schema != link.schema {
+        diagnostics.push(format!("function-address {} schema does not match declared metadata", link.label));
     }
-    if external.claim_scope != claim_scope {
-        diagnostics.push(format!("function-address {label} claim scope does not match declared metadata"));
+    if external.claim_scope != link.claim_scope {
+        diagnostics.push(format!("function-address {} claim scope does not match declared metadata", link.label));
     }
-    if external.relative_path != relative_path {
-        diagnostics.push(format!("function-address {label} path does not match declared metadata"));
+    if external.relative_path != link.relative_path {
+        diagnostics.push(format!("function-address {} path does not match declared metadata", link.label));
     }
-    if external.digest_blake3 != digest_blake3 {
-        diagnostics.push(format!("function-address {label} digest does not match declared metadata"));
+    if external.digest_blake3 != link.digest_blake3 {
+        diagnostics.push(format!("function-address {} digest does not match declared metadata", link.label));
     }
-    validate_function_address_non_claims(&external.non_claims, label, diagnostics);
+    validate_function_address_non_claims(&external.non_claims, link.label, diagnostics);
 }
 
 fn validate_optional_kamacite_function_address_external_link(
@@ -1273,35 +1382,45 @@ fn validate_optional_kamacite_function_address_external_link(
         (None, None, None, None) => {}
         (Some(role), Some(schema), Some(relative_path), Some(digest_blake3)) => {
             push_literal_diagnostic(
-                role,
-                KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE,
-                "function_address_evidence.kamacite_receipt_role",
+                LiteralDiagnosticField {
+                    actual: role,
+                    expected: KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE,
+                    field_name: "function_address_evidence.kamacite_receipt_role",
+                },
                 diagnostics,
             );
             push_literal_diagnostic(
-                schema,
-                KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA,
-                "function_address_evidence.kamacite_receipt_schema",
+                LiteralDiagnosticField {
+                    actual: schema,
+                    expected: KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA,
+                    field_name: "function_address_evidence.kamacite_receipt_schema",
+                },
                 diagnostics,
             );
             push_relative_path_diagnostic(
-                relative_path,
-                "function_address_evidence.kamacite_receipt_relative_path",
+                DiagnosticField {
+                    value: relative_path,
+                    field_name: "function_address_evidence.kamacite_receipt_relative_path",
+                },
                 diagnostics,
             );
             push_blake3_diagnostic(
-                digest_blake3,
-                "function_address_evidence.kamacite_receipt_digest_blake3",
+                DiagnosticField {
+                    value: digest_blake3,
+                    field_name: "function_address_evidence.kamacite_receipt_digest_blake3",
+                },
                 diagnostics,
             );
             validate_function_address_external_link(
                 &manifest.external_evidence,
-                role,
-                schema,
-                FUNCTION_ADDRESS_CLAIM_SCOPE,
-                relative_path,
-                digest_blake3,
-                "Kamacite receipt",
+                ExternalEvidenceLink {
+                    role,
+                    schema,
+                    claim_scope: FUNCTION_ADDRESS_CLAIM_SCOPE,
+                    relative_path,
+                    digest_blake3,
+                    label: "Kamacite receipt",
+                },
                 diagnostics,
             );
         }
@@ -1364,6 +1483,8 @@ fn validate_external_evidence_entry(evidence: &ExternalEvidence, field_name: &st
             )));
         }
     }
+    debug_assert!(!evidence.role.trim().is_empty());
+    debug_assert!(!evidence.non_claims.is_empty());
     Ok(())
 }
 
@@ -1389,6 +1510,8 @@ fn validate_kani_toolchain_evidence(manifest: &ReleaseEvidenceManifest) -> Resul
             ));
         }
     }
+    debug_assert!(seen_roles.len() <= manifest.kani_toolchain_evidence.len());
+    debug_assert_eq!(seen_roles.len(), manifest.kani_toolchain_evidence.len());
     Ok(())
 }
 
@@ -1396,19 +1519,34 @@ fn validate_kani_toolchain_entry(
     evidence: &KaniToolchainEvidence,
     field_name: &str,
 ) -> Result<(), ReleaseEvidenceError> {
-    validate_required_literal_string(
-        &evidence.schema,
-        KANI_TOOLCHAIN_EVIDENCE_SCHEMA,
-        &format!("{field_name}.schema"),
-    )?;
-    validate_non_empty_string(&evidence.receipt_role, &format!("{field_name}.receipt_role"))?;
+    validate_required_literal_string(RequiredLiteralField {
+        actual: &evidence.schema,
+        expected: KANI_TOOLCHAIN_EVIDENCE_SCHEMA,
+        field_name: &format!("{field_name}.schema"),
+    })?;
+    validate_non_empty_string(DiagnosticField {
+        value: &evidence.receipt_role,
+        field_name: &format!("{field_name}.receipt_role"),
+    })?;
     validate_relative_member_path(&evidence.receipt_relative_path, &format!("{field_name}.receipt_relative_path"))?;
     validate_blake3_hex(&evidence.receipt_digest_blake3, &format!("{field_name}.receipt_digest_blake3"))?;
-    validate_non_empty_string(&evidence.kani_version, &format!("{field_name}.kani_version"))?;
-    validate_non_empty_string(&evidence.rust_toolchain, &format!("{field_name}.rust_toolchain"))?;
-    validate_non_empty_string(&evidence.cbmc_version, &format!("{field_name}.cbmc_version"))?;
+    validate_non_empty_string(DiagnosticField {
+        value: &evidence.kani_version,
+        field_name: &format!("{field_name}.kani_version"),
+    })?;
+    validate_non_empty_string(DiagnosticField {
+        value: &evidence.rust_toolchain,
+        field_name: &format!("{field_name}.rust_toolchain"),
+    })?;
+    validate_non_empty_string(DiagnosticField {
+        value: &evidence.cbmc_version,
+        field_name: &format!("{field_name}.cbmc_version"),
+    })?;
     validate_kani_solver_identity(&evidence.solver, &format!("{field_name}.solver"))?;
-    validate_non_empty_string(&evidence.invocation_wrapper, &format!("{field_name}.invocation_wrapper"))?;
+    validate_non_empty_string(DiagnosticField {
+        value: &evidence.invocation_wrapper,
+        field_name: &format!("{field_name}.invocation_wrapper"),
+    })?;
     validate_blake3_hex(&evidence.closure_identity_blake3, &format!("{field_name}.closure_identity_blake3"))?;
     validate_blake3_hex(
         &evidence.expected_closure_identity_blake3,
@@ -1419,22 +1557,31 @@ fn validate_kani_toolchain_entry(
             "release evidence {field_name}.closure_identity_blake3 is stale or does not match expected_closure_identity_blake3"
         )));
     }
-    validate_required_literal_string(
-        &evidence.valence_semantic_role,
-        KANI_VALENCE_SEMANTIC_ROLE,
-        &format!("{field_name}.valence_semantic_role"),
-    )?;
-    validate_required_literal_string(
-        &evidence.claim_scope,
-        KANI_EVIDENCE_CLAIM_SCOPE,
-        &format!("{field_name}.claim_scope"),
-    )?;
-    validate_kani_non_claims(&evidence.non_claims, &format!("{field_name}.non_claims"))
+    validate_required_literal_string(RequiredLiteralField {
+        actual: &evidence.valence_semantic_role,
+        expected: KANI_VALENCE_SEMANTIC_ROLE,
+        field_name: &format!("{field_name}.valence_semantic_role"),
+    })?;
+    validate_required_literal_string(RequiredLiteralField {
+        actual: &evidence.claim_scope,
+        expected: KANI_EVIDENCE_CLAIM_SCOPE,
+        field_name: &format!("{field_name}.claim_scope"),
+    })?;
+    validate_kani_non_claims(&evidence.non_claims, &format!("{field_name}.non_claims"))?;
+    debug_assert_eq!(evidence.closure_identity_blake3, evidence.expected_closure_identity_blake3);
+    debug_assert_eq!(evidence.claim_scope, KANI_EVIDENCE_CLAIM_SCOPE);
+    Ok(())
 }
 
 fn validate_kani_solver_identity(solver: &KaniSolverIdentity, field_name: &str) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(&solver.kind, &format!("{field_name}.kind"))?;
-    validate_non_empty_string(&solver.version, &format!("{field_name}.version"))?;
+    validate_non_empty_string(DiagnosticField {
+        value: &solver.kind,
+        field_name: &format!("{field_name}.kind"),
+    })?;
+    validate_non_empty_string(DiagnosticField {
+        value: &solver.version,
+        field_name: &format!("{field_name}.version"),
+    })?;
     if !KANI_SUPPORTED_SOLVER_KINDS.contains(&solver.kind.as_str()) {
         return Err(validation_error(format!(
             "release evidence {field_name}.kind has unsupported Kani solver metadata: {}",
@@ -1469,7 +1616,10 @@ fn validate_kani_external_evidence_link(
             "release evidence external evidence for {field_name} must use claim_scope {KANI_EVIDENCE_CLAIM_SCOPE}"
         )));
     }
-    validate_kani_non_claims(&external.non_claims, &format!("external evidence for {field_name}.non_claims"))
+    validate_kani_non_claims(&external.non_claims, &format!("external evidence for {field_name}.non_claims"))?;
+    debug_assert_eq!(external.relative_path, evidence.receipt_relative_path);
+    debug_assert_eq!(external.digest_blake3, evidence.receipt_digest_blake3);
+    Ok(())
 }
 
 fn validate_kani_non_claims(non_claims: &[String], field_name: &str) -> Result<(), ReleaseEvidenceError> {
@@ -1485,26 +1635,37 @@ fn validate_kani_non_claims(non_claims: &[String], field_name: &str) -> Result<(
     }
     for (index_usize, non_claim) in non_claims.iter().enumerate() {
         let index_u32 = u32_count(index_usize, "Kani non-claim index overflowed u32")?;
-        validate_non_empty_string(non_claim, &format!("{field_name}[{index_u32}]"))?;
+        validate_non_empty_string(DiagnosticField {
+            value: non_claim,
+            field_name: &format!("{field_name}[{index_u32}]"),
+        })?;
+    }
+    debug_assert!(!non_claims.is_empty());
+    debug_assert!(
+        KANI_REQUIRED_NON_CLAIMS
+            .iter()
+            .all(|required| non_claims.iter().any(|non_claim| non_claim == required))
+    );
+    Ok(())
+}
+
+fn validate_non_empty_string(field: DiagnosticField<'_>) -> Result<(), ReleaseEvidenceError> {
+    if field.value.trim().is_empty() {
+        return Err(validation_error(format!("release evidence {} must not be empty", field.field_name)));
     }
     Ok(())
 }
 
-fn validate_non_empty_string(value: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
-    if value.trim().is_empty() {
-        return Err(validation_error(format!("release evidence {field_name} must not be empty")));
-    }
-    Ok(())
-}
-
-fn validate_required_literal_string(
-    actual: &str,
-    expected: &str,
-    field_name: &str,
-) -> Result<(), ReleaseEvidenceError> {
-    validate_non_empty_string(actual, field_name)?;
-    if actual != expected {
-        return Err(validation_error(format!("release evidence {field_name} must be {expected}, got {actual}")));
+fn validate_required_literal_string(field: RequiredLiteralField<'_>) -> Result<(), ReleaseEvidenceError> {
+    validate_non_empty_string(DiagnosticField {
+        value: field.actual,
+        field_name: field.field_name,
+    })?;
+    if field.actual != field.expected {
+        return Err(validation_error(format!(
+            "release evidence {} must be {}, got {}",
+            field.field_name, field.expected, field.actual
+        )));
     }
     Ok(())
 }
@@ -1519,15 +1680,17 @@ fn validate_provenance_coverage(manifest: &ReleaseEvidenceManifest) -> Result<()
             "provenance_coverage.coverage_boundary must match the required non-claim boundary".to_string(),
         ));
     }
-    if coverage.covered_source_ids.is_empty()
-        && coverage.covered_function_object_ids.is_empty()
-        && coverage.covered_requirement_ids.is_empty()
-    {
+    let has_source_coverage = !coverage.covered_source_ids.is_empty();
+    let has_function_coverage = !coverage.covered_function_object_ids.is_empty();
+    let has_requirement_coverage = !coverage.covered_requirement_ids.is_empty();
+    if !has_source_coverage && !has_function_coverage && !has_requirement_coverage {
         return Err(validation_error(
             "provenance_coverage must record at least one covered source_id, function_object_id, or requirement_id"
                 .to_string(),
         ));
     }
+    debug_assert_eq!(coverage.coverage_boundary, PROVENANCE_COVERAGE_BOUNDARY);
+    debug_assert!(validate_blake3_hex(&coverage.binary_hash, "provenance_coverage.binary_hash").is_ok());
     Ok(())
 }
 
@@ -1639,6 +1802,8 @@ fn validate_manifest_header(manifest: &ReleaseEvidenceManifest) -> Result<(), Re
     if manifest.workflow.version.trim().is_empty() {
         return Err(validation_error("release evidence workflow.version must not be empty".to_string()));
     }
+    debug_assert_eq!(manifest.schema, RELEASE_EVIDENCE_SCHEMA);
+    debug_assert_eq!(manifest.claim_scope, CLAIM_SCOPE_PACKAGED_INTEGRITY);
     Ok(())
 }
 
@@ -1657,11 +1822,31 @@ fn validate_manifest_artifacts(manifest: &ReleaseEvidenceManifest) -> Result<(),
     validate_and_record_path(&manifest.source_archive, "source_archive", &mut seen_paths)?;
     validate_and_record_path(&manifest.proof_bundle, "proof_bundle", &mut seen_paths)?;
     validate_and_record_path(&manifest.prerequisite_inventory, "prerequisite_inventory", &mut seen_paths)?;
+    validate_optional_release_artifacts(manifest, &mut seen_paths)?;
+    for (index_usize, artifact) in manifest.binaries.iter().enumerate() {
+        let index_u32 = u32_count(index_usize, "release evidence binary index overflowed u32")?;
+        validate_and_record_path(artifact, &format!("binaries[{index_u32}]"), &mut seen_paths)?;
+    }
+    for (index_usize, evidence) in manifest.external_evidence.iter().enumerate() {
+        let index_u32 = u32_count(index_usize, "external evidence index overflowed u32")?;
+        record_unique_artifact_path(&evidence.relative_path, &mut seen_paths).map_err(|err| {
+            validation_error(format!("release evidence external_evidence[{index_u32}].relative_path conflict: {err}"))
+        })?;
+    }
+    debug_assert!(binary_count > 0);
+    debug_assert!(binary_count <= MAX_BINARY_ARTIFACTS_COUNT);
+    Ok(())
+}
+
+fn validate_optional_release_artifacts(
+    manifest: &ReleaseEvidenceManifest,
+    seen_paths: &mut BTreeSet<String>,
+) -> Result<(), ReleaseEvidenceError> {
     if let Some(proof) = &manifest.provider_fixed_point_proof {
-        validate_provider_fixed_point_proof_artifact(proof, &mut seen_paths)?;
+        validate_provider_fixed_point_proof_artifact(proof, seen_paths)?;
     }
     if let Some(report) = &manifest.reproducibility_report {
-        validate_and_record_path(report, "reproducibility_report", &mut seen_paths)?;
+        validate_and_record_path(report, "reproducibility_report", seen_paths)?;
         if report.kind != BundledArtifactKind::File {
             return Err(validation_error(
                 "release evidence reproducibility_report must be recorded as a file artifact".to_string(),
@@ -1670,24 +1855,28 @@ fn validate_manifest_artifacts(manifest: &ReleaseEvidenceManifest) -> Result<(),
     }
     if let Some(proof) = &manifest.deterministic_build_proof {
         validate_role_bounded_release_artifact(
-            proof,
-            "deterministic_build_proof",
-            DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE,
-            "deterministic-release/deterministic-build-proof.json",
-            &mut seen_paths,
+            RoleBoundedArtifactValidation {
+                artifact: proof,
+                field_name: "deterministic_build_proof",
+                expected_role: DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE,
+                expected_relative_path: "deterministic-release/deterministic-build-proof.json",
+            },
+            seen_paths,
         )?;
     }
     if let Some(evidence) = &manifest.deterministic_sandbox_isolation_evidence {
         validate_role_bounded_release_artifact(
-            evidence,
-            "deterministic_sandbox_isolation_evidence",
-            DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE,
-            "deterministic-release/deterministic-sandbox-isolation-evidence.json",
-            &mut seen_paths,
+            RoleBoundedArtifactValidation {
+                artifact: evidence,
+                field_name: "deterministic_sandbox_isolation_evidence",
+                expected_role: DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE,
+                expected_relative_path: "deterministic-release/deterministic-sandbox-isolation-evidence.json",
+            },
+            seen_paths,
         )?;
     }
     if let Some(report) = &manifest.independent_agreement_report {
-        validate_and_record_path(report, "independent_agreement_report", &mut seen_paths)?;
+        validate_and_record_path(report, "independent_agreement_report", seen_paths)?;
         if report.kind != BundledArtifactKind::File {
             return Err(validation_error(
                 "release evidence independent_agreement_report must be recorded as a file artifact".to_string(),
@@ -1700,16 +1889,8 @@ fn validate_manifest_artifacts(manifest: &ReleaseEvidenceManifest) -> Result<(),
             ));
         }
     }
-    for (index_usize, artifact) in manifest.binaries.iter().enumerate() {
-        let index_u32 = u32_count(index_usize, "release evidence binary index overflowed u32")?;
-        validate_and_record_path(artifact, &format!("binaries[{index_u32}]"), &mut seen_paths)?;
-    }
-    for (index_usize, evidence) in manifest.external_evidence.iter().enumerate() {
-        let index_u32 = u32_count(index_usize, "external evidence index overflowed u32")?;
-        record_unique_artifact_path(&evidence.relative_path, &mut seen_paths).map_err(|err| {
-            validation_error(format!("release evidence external_evidence[{index_u32}].relative_path conflict: {err}"))
-        })?;
-    }
+    debug_assert!(seen_paths.contains(&manifest.source_archive.relative_path));
+    debug_assert!(seen_paths.contains(&manifest.proof_bundle.relative_path));
     Ok(())
 }
 
@@ -1750,27 +1931,41 @@ fn provider_fixed_point_bundled_artifact(artifact: &ProviderFixedPointProofArtif
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct RoleBoundedArtifactValidation<'a> {
+    artifact: &'a RoleBoundedReleaseArtifact,
+    field_name: &'a str,
+    expected_role: &'a str,
+    expected_relative_path: &'a str,
+}
+
 fn validate_role_bounded_release_artifact(
-    artifact: &RoleBoundedReleaseArtifact,
-    field_name: &str,
-    expected_role: &str,
-    expected_relative_path: &str,
+    input: RoleBoundedArtifactValidation<'_>,
     seen_paths: &mut BTreeSet<String>,
 ) -> Result<(), ReleaseEvidenceError> {
-    validate_bundled_artifact(&role_bounded_bundled_artifact(artifact), field_name)?;
-    if artifact.kind != BundledArtifactKind::File {
-        return Err(validation_error(format!("release evidence {field_name} must be recorded as a file artifact")));
-    }
-    if artifact.evidence_role != expected_role {
+    validate_bundled_artifact(&role_bounded_bundled_artifact(input.artifact), input.field_name)?;
+    if input.artifact.kind != BundledArtifactKind::File {
         return Err(validation_error(format!(
-            "release evidence {field_name}.evidence_role must be {expected_role}, got {}",
-            artifact.evidence_role
+            "release evidence {} must be recorded as a file artifact",
+            input.field_name
         )));
     }
-    if artifact.relative_path != expected_relative_path {
-        return Err(validation_error(format!("release evidence {field_name} must be {expected_relative_path}")));
+    if input.artifact.evidence_role != input.expected_role {
+        return Err(validation_error(format!(
+            "release evidence {}.evidence_role must be {}, got {}",
+            input.field_name, input.expected_role, input.artifact.evidence_role
+        )));
     }
-    record_unique_artifact_path(&artifact.relative_path, seen_paths)
+    if input.artifact.relative_path != input.expected_relative_path {
+        return Err(validation_error(format!(
+            "release evidence {} must be {}",
+            input.field_name, input.expected_relative_path
+        )));
+    }
+    record_unique_artifact_path(&input.artifact.relative_path, seen_paths)?;
+    debug_assert_eq!(input.artifact.evidence_role, input.expected_role);
+    debug_assert_eq!(input.artifact.relative_path, input.expected_relative_path);
+    Ok(())
 }
 
 fn role_bounded_bundled_artifact(artifact: &RoleBoundedReleaseArtifact) -> BundledArtifact {
@@ -1827,16 +2022,22 @@ fn validate_external_source_acquisition(source_acquisition: &SourceAcquisition) 
         &["file", "http", "https"],
         "file://, http://, or https://",
     )?;
-    if source_acquisition.commit.is_some()
-        || source_acquisition.reference.is_some()
-        || source_acquisition.tag.is_some()
-        || source_acquisition.archive_profile.is_some()
-        || source_acquisition.archive_version.is_some()
-    {
+    let has_git_metadata = [
+        source_acquisition.commit.is_some(),
+        source_acquisition.reference.is_some(),
+        source_acquisition.tag.is_some(),
+        source_acquisition.archive_profile.is_some(),
+        source_acquisition.archive_version.is_some(),
+    ]
+    .into_iter()
+    .any(|is_present| is_present);
+    if has_git_metadata {
         return Err(validation_error(
             "release evidence external-archive source_acquisition must not carry Git metadata".to_string(),
         ));
     }
+    debug_assert!(!has_git_metadata);
+    debug_assert!(!source_acquisition.url.trim().is_empty());
     Ok(())
 }
 
@@ -1849,21 +2050,29 @@ fn validate_git_source_acquisition(source_acquisition: &SourceAcquisition) -> Re
     let commit = required_source_acquisition_field(&source_acquisition.commit, "source_acquisition.commit")?;
     validate_git_commit_hex(commit)?;
     if let Some(reference) = &source_acquisition.reference {
-        validate_git_ref_text(reference, "source_acquisition.reference")?;
+        validate_git_ref_text(DiagnosticField {
+            value: reference,
+            field_name: "source_acquisition.reference",
+        })?;
     }
     if let Some(tag) = &source_acquisition.tag {
-        validate_git_ref_text(tag, "source_acquisition.tag")?;
+        validate_git_ref_text(DiagnosticField {
+            value: tag,
+            field_name: "source_acquisition.tag",
+        })?;
     }
-    validate_required_literal_field(
-        &source_acquisition.archive_profile,
-        RELEASE_SOURCE_ARCHIVE_PROFILE,
-        "source_acquisition.archive_profile",
-    )?;
-    validate_required_literal_field(
-        &source_acquisition.archive_version,
-        RELEASE_SOURCE_ARCHIVE_VERSION,
-        "source_acquisition.archive_version",
-    )?;
+    validate_required_literal_field(RequiredOptionalLiteralField {
+        value: &source_acquisition.archive_profile,
+        expected: RELEASE_SOURCE_ARCHIVE_PROFILE,
+        field_name: "source_acquisition.archive_profile",
+    })?;
+    validate_required_literal_field(RequiredOptionalLiteralField {
+        value: &source_acquisition.archive_version,
+        expected: RELEASE_SOURCE_ARCHIVE_VERSION,
+        field_name: "source_acquisition.archive_version",
+    })?;
+    debug_assert!(source_acquisition.archive_profile.is_some());
+    debug_assert!(source_acquisition.archive_version.is_some());
     Ok(())
 }
 
@@ -1880,14 +2089,13 @@ fn required_source_acquisition_field<'a>(
     Ok(value)
 }
 
-fn validate_required_literal_field(
-    value: &Option<String>,
-    expected: &str,
-    field_name: &str,
-) -> Result<(), ReleaseEvidenceError> {
-    let actual = required_source_acquisition_field(value, field_name)?;
-    if actual != expected {
-        return Err(validation_error(format!("release evidence {field_name} must be {expected}, got {actual}")));
+fn validate_required_literal_field(field: RequiredOptionalLiteralField<'_>) -> Result<(), ReleaseEvidenceError> {
+    let actual = required_source_acquisition_field(field.value, field.field_name)?;
+    if actual != field.expected {
+        return Err(validation_error(format!(
+            "release evidence {} must be {}, got {actual}",
+            field.field_name, field.expected
+        )));
     }
     Ok(())
 }
@@ -1905,19 +2113,26 @@ fn validate_git_commit_hex(commit: &str) -> Result<(), ReleaseEvidenceError> {
     Ok(())
 }
 
-fn validate_git_ref_text(reference: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
-    if reference.trim().is_empty() {
-        return Err(validation_error(format!("release evidence {field_name} must not be empty")));
+fn validate_git_ref_text(field: DiagnosticField<'_>) -> Result<(), ReleaseEvidenceError> {
+    if field.value.trim().is_empty() {
+        return Err(validation_error(format!("release evidence {} must not be empty", field.field_name)));
     }
-    let byte_count = u32_count(reference.len(), &format!("release evidence {field_name} length overflowed u32"))?;
+    let byte_count =
+        u32_count(field.value.len(), &format!("release evidence {} length overflowed u32", field.field_name))?;
     if byte_count > MAX_SOURCE_ACQUISITION_REF_BYTES_COUNT {
         return Err(validation_error(format!(
-            "release evidence {field_name} is {byte_count} bytes, limit is {MAX_SOURCE_ACQUISITION_REF_BYTES_COUNT}"
+            "release evidence {} is {byte_count} bytes, limit is {MAX_SOURCE_ACQUISITION_REF_BYTES_COUNT}",
+            field.field_name
         )));
     }
-    if reference.bytes().any(|byte| byte.is_ascii_control()) {
-        return Err(validation_error(format!("release evidence {field_name} must not contain control characters")));
+    if field.value.bytes().any(|byte| byte.is_ascii_control()) {
+        return Err(validation_error(format!(
+            "release evidence {} must not contain control characters",
+            field.field_name
+        )));
     }
+    debug_assert!(byte_count <= MAX_SOURCE_ACQUISITION_REF_BYTES_COUNT);
+    debug_assert!(!field.value.bytes().any(|byte| byte.is_ascii_control()));
     Ok(())
 }
 
@@ -1946,6 +2161,8 @@ fn validate_source_acquisition_url(
         )));
     }
     reject_credential_bearing_url(rest)?;
+    debug_assert!(byte_count <= MAX_SOURCE_ACQUISITION_URL_BYTES_COUNT);
+    debug_assert!(allowed_schemes.contains(&scheme));
     Ok(())
 }
 
@@ -1960,6 +2177,19 @@ fn reject_credential_bearing_url(rest_after_scheme: &str) -> Result<(), ReleaseE
 }
 
 fn validate_manifest_linkage(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    validate_manifest_linkage_identity(manifest)?;
+    validate_manifest_linkage_artifacts(manifest)?;
+    debug_assert_eq!(manifest.proof_linkage.release_id, manifest.release_id);
+    debug_assert!(
+        manifest
+            .binaries
+            .iter()
+            .any(|artifact| artifact.digest_blake3 == manifest.proof_linkage.stage2_binary_digest_blake3)
+    );
+    Ok(())
+}
+
+fn validate_manifest_linkage_identity(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
     if manifest.proof_linkage.release_id != manifest.release_id {
         return Err(validation_error("release evidence proof linkage release_id must match release_id".to_string()));
     }
@@ -1988,10 +2218,19 @@ fn validate_manifest_linkage(manifest: &ReleaseEvidenceManifest) -> Result<(), R
     if manifest.proof_linkage.proof_mode.trim().is_empty() {
         return Err(validation_error("release evidence proof_mode must not be empty".to_string()));
     }
-    validate_provider_kind(&manifest.proof_linkage.selected_provider_kind, "proof_linkage.selected_provider_kind")?;
+    validate_provider_kind(DiagnosticField {
+        value: &manifest.proof_linkage.selected_provider_kind,
+        field_name: "proof_linkage.selected_provider_kind",
+    })?;
     if manifest.proof_linkage.staged_source.trim().is_empty() {
         return Err(validation_error("release evidence staged_source must not be empty".to_string()));
     }
+    debug_assert_eq!(manifest.proof_linkage.release_id, manifest.release_id);
+    debug_assert_eq!(manifest.proof_linkage.proof_bundle_schema, FULL_SELF_HOSTING_PROOF_SCHEMA);
+    Ok(())
+}
+
+fn validate_manifest_linkage_artifacts(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
     if manifest.proof_bundle.kind != BundledArtifactKind::Directory {
         return Err(validation_error(
             "release evidence proof_bundle must be recorded as a directory artifact".to_string(),
@@ -2013,15 +2252,17 @@ fn validate_manifest_linkage(manifest: &ReleaseEvidenceManifest) -> Result<(), R
                 .to_string(),
         ));
     }
-    if !manifest
+    let has_stage2_binary = manifest
         .binaries
         .iter()
-        .any(|artifact| artifact.digest_blake3 == manifest.proof_linkage.stage2_binary_digest_blake3)
-    {
+        .any(|artifact| artifact.digest_blake3 == manifest.proof_linkage.stage2_binary_digest_blake3);
+    if !has_stage2_binary {
         return Err(validation_error(
             "release evidence proof linkage stage2 digest does not match any bundled binary artifact".to_string(),
         ));
     }
+    debug_assert_eq!(manifest.proof_bundle.kind, BundledArtifactKind::Directory);
+    debug_assert!(has_stage2_binary);
     Ok(())
 }
 
@@ -2038,7 +2279,10 @@ fn validate_full_proof_manifest(manifest: &SelfHostingProofManifestView) -> Resu
     if manifest.prerequisites.mode.trim().is_empty() {
         return Err(validation_error("full proof artifact required: proof mode is missing".to_string()));
     }
-    validate_provider_kind(&manifest.prerequisites.provider_kind, "prerequisites.provider_kind")?;
+    validate_provider_kind(DiagnosticField {
+        value: &manifest.prerequisites.provider_kind,
+        field_name: "prerequisites.provider_kind",
+    })?;
 
     validate_hashed_path(&manifest.prerequisites.inventory_doc, "prerequisites.inventory_doc")?;
     validate_hashed_path(&manifest.binaries.stage1, "binaries.stage1")?;
@@ -2062,22 +2306,33 @@ fn validate_full_proof_manifest(manifest: &SelfHostingProofManifestView) -> Resu
         ));
     }
 
-    validate_stage_report(&manifest.stage0.report, &manifest.staged_source, "stage0.report")?;
-    validate_stage_report(&manifest.stage2.report, &manifest.staged_source, "stage2.report")?;
+    validate_stage_report(StageReportValidation {
+        report: &manifest.stage0.report,
+        expected_staged_source: &manifest.staged_source,
+        field_name: "stage0.report",
+    })?;
+    validate_stage_report(StageReportValidation {
+        report: &manifest.stage2.report,
+        expected_staged_source: &manifest.staged_source,
+        field_name: "stage2.report",
+    })?;
     if manifest.stage2.report.output_binary != manifest.binaries.stage2.path {
         return Err(validation_error(
             "full proof artifact required: stage2 report output_binary must match binaries.stage2.path".to_string(),
         ));
     }
+    debug_assert_eq!(manifest.schema, FULL_SELF_HOSTING_PROOF_SCHEMA);
+    debug_assert_eq!(manifest.stage2.report.output_binary, manifest.binaries.stage2.path);
     Ok(())
 }
 
-fn validate_provider_kind(provider_kind: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
-    match provider_kind {
+fn validate_provider_kind(field: DiagnosticField<'_>) -> Result<(), ReleaseEvidenceError> {
+    match field.value {
         "legacy-fetch" | "source-root" | "stagex-lineage" => Ok(()),
-        "" => Err(validation_error(format!("{field_name} must not be empty"))),
+        "" => Err(validation_error(format!("{} must not be empty", field.field_name))),
         other => Err(validation_error(format!(
-            "{field_name} must be one of legacy-fetch, source-root, stagex-lineage; got {other}"
+            "{} must be one of legacy-fetch, source-root, stagex-lineage; got {other}",
+            field.field_name
         ))),
     }
 }
@@ -2094,55 +2349,86 @@ fn validate_hashed_path(hashed: &SelfHostingProofHashedPath, field_name: &str) -
     validate_blake3_hex(&hashed.digest_blake3, &format!("{field_name}.digest_blake3"))
 }
 
-fn validate_stage_report(
-    report: &SelfHostingProofReportView,
-    expected_staged_source: &str,
-    field_name: &str,
-) -> Result<(), ReleaseEvidenceError> {
-    if report.staged_source != expected_staged_source {
+fn validate_stage_report(input: StageReportValidation<'_>) -> Result<(), ReleaseEvidenceError> {
+    if input.report.staged_source != input.expected_staged_source {
         return Err(validation_error(format!(
-            "full proof artifact required: {field_name}.staged_source does not match top-level staged_source"
+            "full proof artifact required: {}.staged_source does not match top-level staged_source",
+            input.field_name
         )));
     }
-    if report.output_binary.trim().is_empty() {
-        return Err(validation_error(format!("full proof artifact required: {field_name}.output_binary is missing")));
+    if input.report.output_binary.trim().is_empty() {
+        return Err(validation_error(format!(
+            "full proof artifact required: {}.output_binary is missing",
+            input.field_name
+        )));
     }
-    if report.busybox_path.is_none() {
-        return Err(validation_error(format!("full proof artifact required: {field_name}.busybox_path is missing")));
+    if input.report.busybox_path.is_none() {
+        return Err(validation_error(format!(
+            "full proof artifact required: {}.busybox_path is missing",
+            input.field_name
+        )));
     }
+    debug_assert_eq!(input.report.staged_source, input.expected_staged_source);
+    debug_assert!(input.report.busybox_path.is_some());
     Ok(())
 }
 
-pub(crate) fn validate_relative_member_path(path: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
-    if path.trim().is_empty() {
-        return Err(validation_error(format!("release evidence {field_name} must not be empty")));
+pub(crate) fn validate_relative_member_path(
+    path: &str,
+    field_name: impl AsRef<str>,
+) -> Result<(), ReleaseEvidenceError> {
+    validate_relative_member_path_field(DiagnosticField {
+        value: path,
+        field_name: field_name.as_ref(),
+    })
+}
+
+fn validate_relative_member_path_field(field: DiagnosticField<'_>) -> Result<(), ReleaseEvidenceError> {
+    if field.value.trim().is_empty() {
+        return Err(validation_error(format!("release evidence {} must not be empty", field.field_name)));
     }
-    if path.starts_with('/') {
+    if field.value.starts_with('/') {
         return Err(validation_error(format!(
-            "release evidence {field_name} must be relative, got absolute path {path}"
+            "release evidence {} must be relative, got absolute path {}",
+            field.field_name, field.value
         )));
     }
-    if path.split('/').any(|component| component == "..") {
-        return Err(validation_error(format!("release evidence {field_name} must not escape the bundle root: {path}")));
+    if field.value.split('/').any(|component| component == "..") {
+        return Err(validation_error(format!(
+            "release evidence {} must not escape the bundle root: {}",
+            field.field_name, field.value
+        )));
     }
-    let path_len_bytes = u32_count(path.len(), &format!("release evidence {field_name} length overflowed u32"))?;
+    let path_len_bytes =
+        u32_count(field.value.len(), &format!("release evidence {} length overflowed u32", field.field_name))?;
     if path_len_bytes > MAX_RELATIVE_PATH_BYTES_COUNT {
         return Err(validation_error(format!(
-            "release evidence {field_name} exceeds {MAX_RELATIVE_PATH_BYTES_COUNT} bytes"
+            "release evidence {} exceeds {MAX_RELATIVE_PATH_BYTES_COUNT} bytes",
+            field.field_name
         )));
     }
+    debug_assert!(!field.value.is_empty());
+    debug_assert!(path_len_bytes <= MAX_RELATIVE_PATH_BYTES_COUNT);
     Ok(())
 }
 
-pub(crate) fn validate_blake3_hex(digest_hex: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
-    if digest_hex.len() != BLAKE3_HEX_LENGTH_CHARS {
+pub(crate) fn validate_blake3_hex(digest_hex: &str, field_name: impl AsRef<str>) -> Result<(), ReleaseEvidenceError> {
+    validate_blake3_field(DiagnosticField {
+        value: digest_hex,
+        field_name: field_name.as_ref(),
+    })
+}
+
+fn validate_blake3_field(field: DiagnosticField<'_>) -> Result<(), ReleaseEvidenceError> {
+    if field.value.len() != BLAKE3_HEX_LENGTH_CHARS {
         return Err(validation_error(format!(
-            "{field_name} must be {BLAKE3_HEX_LENGTH_CHARS} lowercase hex chars, got {}",
-            digest_hex.len()
+            "{} must be {BLAKE3_HEX_LENGTH_CHARS} lowercase hex chars, got {}",
+            field.field_name,
+            field.value.len()
         )));
     }
-    if !digest_hex.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
-        return Err(validation_error(format!("{field_name} must contain lowercase hex only")));
+    if !field.value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
+        return Err(validation_error(format!("{} must contain lowercase hex only", field.field_name)));
     }
     Ok(())
 }
