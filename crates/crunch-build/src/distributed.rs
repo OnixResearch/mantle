@@ -36,6 +36,7 @@ const REALIZATION_KEY_SCHEMA: &str = "crunch-realization-key-v1";
 const MAX_READY_REMOTE_GOALS: usize = 4096;
 const REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION: &str = "request-validation";
 const REMOTE_BUILD_SERVICE_PHASE_REMOTE_DISPATCH: &str = "remote-dispatch";
+const OPERATOR_SECRET_MARKERS: [&str; 5] = ["bearer ", "token=", "authorization", "secret", "password"];
 
 /// Stable provider-neutral key for a derivation realization request.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -84,13 +85,34 @@ pub struct RealizationKeyRequest {
 
 impl RealizationKeyRequest {
     fn validate(&self) -> Result<(), RealizationKeyError> {
-        validate_non_empty("derivation.identity", &self.derivation.identity)?;
-        validate_non_empty("derivation.builder", &self.derivation.builder)?;
-        validate_non_empty("platform.system", &self.platform.system)?;
-        validate_non_empty("store.logical_prefix", &self.store.logical_prefix)?;
-        validate_non_empty("store.output_prefix", &self.store.output_prefix)?;
-        validate_non_empty("sandbox.hermeticity", &self.sandbox.hermeticity)?;
-        validate_non_empty("realizer_profile.name", &self.realizer_profile.name)?;
+        validate_non_empty(NonEmptyField {
+            field: "derivation.identity",
+            value: &self.derivation.identity,
+        })?;
+        validate_non_empty(NonEmptyField {
+            field: "derivation.builder",
+            value: &self.derivation.builder,
+        })?;
+        validate_non_empty(NonEmptyField {
+            field: "platform.system",
+            value: &self.platform.system,
+        })?;
+        validate_non_empty(NonEmptyField {
+            field: "store.logical_prefix",
+            value: &self.store.logical_prefix,
+        })?;
+        validate_non_empty(NonEmptyField {
+            field: "store.output_prefix",
+            value: &self.store.output_prefix,
+        })?;
+        validate_non_empty(NonEmptyField {
+            field: "sandbox.hermeticity",
+            value: &self.sandbox.hermeticity,
+        })?;
+        validate_non_empty(NonEmptyField {
+            field: "realizer_profile.name",
+            value: &self.realizer_profile.name,
+        })?;
         validate_sorted_unique_by(&self.input_closure, |fact| fact.store_path.as_str(), "input_closure.store_path")?;
         validate_sorted_unique_by(&self.toolchains, |fact| fact.name.as_str(), "toolchains.name")?;
         validate_sorted_unique_by(
@@ -283,12 +305,8 @@ impl DistributedDiagnostic {
 
 pub fn redact_for_operator(value: &str) -> String {
     let lower = value.to_ascii_lowercase();
-    if lower.contains("bearer ")
-        || lower.contains("token=")
-        || lower.contains("authorization")
-        || lower.contains("secret")
-        || lower.contains("password")
-    {
+    let is_secret_bearing = OPERATOR_SECRET_MARKERS.iter().any(|marker| lower.contains(marker));
+    if is_secret_bearing {
         "[REDACTED]".to_string()
     } else {
         value.to_string()
@@ -513,6 +531,8 @@ where
             });
         }
     }
+    debug_assert_eq!(attachments.len(), ready.len());
+    debug_assert!(attachments.len() <= MAX_READY_REMOTE_GOALS);
     Ok(attachments)
 }
 
@@ -629,23 +649,26 @@ pub struct RemoteRealizationHandshakeRequest {
     pub declared_capabilities: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteRealizationHandshakeInput {
+    pub realization_key: RealizationKey,
+    pub recipe: RemoteContentIdentity,
+    pub root_inputs: Vec<RemoteContentIdentity>,
+    pub platform: PlatformFacts,
+    pub worker_profile: String,
+    pub declared_capabilities: Vec<String>,
+}
+
 impl RemoteRealizationHandshakeRequest {
-    pub fn new(
-        realization_key: RealizationKey,
-        recipe: RemoteContentIdentity,
-        root_inputs: Vec<RemoteContentIdentity>,
-        platform: PlatformFacts,
-        worker_profile: String,
-        declared_capabilities: Vec<String>,
-    ) -> Self {
+    pub fn new(input: RemoteRealizationHandshakeInput) -> Self {
         Self {
             version: HASH_NEGOTIATED_REMOTE_REALIZATION_VERSION.to_string(),
-            realization_key,
-            recipe,
-            root_inputs,
-            platform,
-            worker_profile,
-            declared_capabilities,
+            realization_key: input.realization_key,
+            recipe: input.recipe,
+            root_inputs: input.root_inputs,
+            platform: input.platform,
+            worker_profile: input.worker_profile,
+            declared_capabilities: input.declared_capabilities,
         }
     }
 
@@ -990,6 +1013,12 @@ pub struct ScheduledRealization {
     pub plan: RealizationPlan,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RealizationJobCapacity {
+    pub running_jobs: u32,
+    pub max_jobs: u32,
+}
+
 /// Apply max-job and dedup ownership to a priority-ranked ready snapshot.
 ///
 /// The caller owns deterministic priority ordering; this route seam preserves
@@ -997,13 +1026,16 @@ pub struct ScheduledRealization {
 pub fn select_ready_realizations<P>(
     policy: &P,
     ready: &[ReadyDerivationGoal],
-    running_jobs: usize,
-    max_jobs: usize,
+    capacity: RealizationJobCapacity,
 ) -> Vec<ScheduledRealization>
 where
     P: RealizationPolicy,
 {
-    let available_slots = max_jobs.saturating_sub(running_jobs);
+    let available_slots = capacity.max_jobs.saturating_sub(capacity.running_jobs);
+    let available_slots = match usize::try_from(available_slots) {
+        Ok(available_slots) => available_slots.min(ready.len()),
+        Err(_) => ready.len(),
+    };
     let mut seen = std::collections::BTreeSet::new();
     ready
         .iter()
@@ -1086,9 +1118,14 @@ pub enum RealizationKeyError {
     Serialize { source: serde_json::Error },
 }
 
-fn validate_non_empty(field: &'static str, value: &str) -> Result<(), RealizationKeyError> {
-    if value.is_empty() {
-        return Err(RealizationKeyError::EmptyField { field });
+struct NonEmptyField<'a> {
+    field: &'static str,
+    value: &'a str,
+}
+
+fn validate_non_empty(input: NonEmptyField<'_>) -> Result<(), RealizationKeyError> {
+    if input.value.is_empty() {
+        return Err(RealizationKeyError::EmptyField { field: input.field });
     }
     Ok(())
 }
@@ -1282,18 +1319,18 @@ mod tests {
         recipe: RemoteContentIdentity,
         root_inputs: Vec<RemoteContentIdentity>,
     ) -> RemoteRealizationHandshakeRequest {
-        RemoteRealizationHandshakeRequest::new(
-            key(&base_request()),
+        RemoteRealizationHandshakeRequest::new(RemoteRealizationHandshakeInput {
+            realization_key: key(&base_request()),
             recipe,
             root_inputs,
-            PlatformFacts {
+            platform: PlatformFacts {
                 system: "x86_64-linux".to_string(),
                 cpu: "x86_64".to_string(),
                 os: "linux".to_string(),
             },
-            "fake-worker-v1".to_string(),
-            vec!["sandbox".to_string(), "write-output".to_string()],
-        )
+            worker_profile: "fake-worker-v1".to_string(),
+            declared_capabilities: vec!["sandbox".to_string(), "write-output".to_string()],
+        })
     }
 
     fn remote_worker() -> InMemoryRemoteRealizationWorker {
@@ -1652,7 +1689,10 @@ mod tests {
             },
         ];
 
-        let scheduled = select_ready_realizations(&LocalOnlyRealizationPolicy, &ready, 1, 2);
+        let scheduled = select_ready_realizations(&LocalOnlyRealizationPolicy, &ready, RealizationJobCapacity {
+            running_jobs: 1,
+            max_jobs: 2,
+        });
         assert_eq!(scheduled.len(), 1);
         assert_eq!(scheduled[0].goal_key, "a");
         assert_eq!(scheduled[0].plan, RealizationPlan::RequireLocal);
@@ -1671,7 +1711,10 @@ mod tests {
             },
         ];
 
-        let scheduled = select_ready_realizations(&RemoteAllowedRealizationPolicy, &ready, 0, 8);
+        let scheduled = select_ready_realizations(&RemoteAllowedRealizationPolicy, &ready, RealizationJobCapacity {
+            running_jobs: 0,
+            max_jobs: 8,
+        });
         assert_eq!(scheduled.len(), 1);
         assert_eq!(scheduled[0].plan, RealizationPlan::AllowRemote);
     }
@@ -1683,7 +1726,13 @@ mod tests {
             request: base_request(),
         }];
 
-        assert!(select_ready_realizations(&LocalOnlyRealizationPolicy, &ready, 2, 2).is_empty());
+        assert!(
+            select_ready_realizations(&LocalOnlyRealizationPolicy, &ready, RealizationJobCapacity {
+                running_jobs: 2,
+                max_jobs: 2,
+            },)
+            .is_empty()
+        );
     }
 
     #[test]

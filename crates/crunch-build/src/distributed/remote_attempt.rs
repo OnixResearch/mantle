@@ -321,6 +321,16 @@ pub struct RemoteAttemptTimeFacts {
     pub overall_deadline_unix_s: u64,
 }
 
+#[derive(Debug)]
+pub struct RemoteAttemptAssignmentInput<'a> {
+    pub job_id: &'a RemoteJobId,
+    pub worker_endpoint_id: &'a str,
+    pub assignment_nonce: RemoteAssignmentNonce,
+    pub previous: Option<&'a RemoteAttemptState>,
+    pub retry_policy: RemoteAttemptRetryPolicy,
+    pub time: RemoteAttemptTimeFacts,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RemoteAttemptAuthorizationFacts {
     pub worker_authorized: bool,
@@ -460,7 +470,7 @@ pub fn canonical_remote_attempt_payload_digest(
         return Err(RemoteAttemptReasonCode::PayloadTooLarge);
     }
     let mut hasher = blake3::Hasher::new();
-    hash_identity_part(&mut hasher, REMOTE_ATTEMPT_PAYLOAD_DOMAIN);
+    hash_identity_part(&mut hasher, REMOTE_ATTEMPT_PAYLOAD_DOMAIN)?;
     hasher.update(&bytes);
     let digest = hasher.finalize().to_hex().to_string();
     debug_assert_eq!(digest.len(), BLAKE3_HEX_LENGTH_CHARS);
@@ -477,17 +487,21 @@ pub fn derive_remote_attempt_id(
     let worker_endpoint_id = bounded_identity(worker_endpoint_id.to_string())?;
     RemoteAssignmentNonce::new(assignment_nonce.as_str().to_string())?;
     let mut hasher = blake3::Hasher::new();
-    hash_identity_part(&mut hasher, REMOTE_ATTEMPT_ID_DOMAIN);
-    hash_identity_part(&mut hasher, job_id.as_str());
-    hash_identity_part(&mut hasher, assignment_nonce.as_str());
-    hash_identity_part(&mut hasher, &fence_generation.get().to_string());
-    hash_identity_part(&mut hasher, &worker_endpoint_id);
+    hash_identity_part(&mut hasher, REMOTE_ATTEMPT_ID_DOMAIN)?;
+    hash_identity_part(&mut hasher, job_id.as_str())?;
+    hash_identity_part(&mut hasher, assignment_nonce.as_str())?;
+    hash_identity_part(&mut hasher, &fence_generation.get().to_string())?;
+    hash_identity_part(&mut hasher, &worker_endpoint_id)?;
     let value = hasher.finalize().to_hex().to_string();
     debug_assert!(is_blake3_hex_digest(&value));
     debug_assert_ne!(fence_generation.get(), 0);
     RemoteAttemptId::new(value)
 }
 
+#[expect(
+    tigerstyle::too_many_parameters,
+    reason = "stable coordinator compatibility wrapper delegates immediately to the named assignment input"
+)]
 pub fn plan_remote_attempt_assignment(
     job_id: &RemoteJobId,
     worker_endpoint_id: &str,
@@ -496,33 +510,48 @@ pub fn plan_remote_attempt_assignment(
     retry_policy: RemoteAttemptRetryPolicy,
     time: RemoteAttemptTimeFacts,
 ) -> Result<RemoteAttemptState, RemoteAttemptReasonCode> {
-    retry_policy.validate()?;
-    validate_previous_attempt(job_id, previous)?;
-    let fence_generation = next_remote_fence(previous)?;
-    let attempts_started = next_attempt_count(previous)?;
-    if attempts_started > retry_policy.max_attempts {
+    plan_remote_attempt_assignment_from_input(RemoteAttemptAssignmentInput {
+        job_id,
+        worker_endpoint_id,
+        assignment_nonce,
+        previous,
+        retry_policy,
+        time,
+    })
+}
+
+pub fn plan_remote_attempt_assignment_from_input(
+    input: RemoteAttemptAssignmentInput<'_>,
+) -> Result<RemoteAttemptState, RemoteAttemptReasonCode> {
+    input.retry_policy.validate()?;
+    validate_previous_attempt(input.job_id, input.previous)?;
+    let fence_generation = next_remote_fence(input.previous)?;
+    let attempts_started = next_attempt_count(input.previous)?;
+    if attempts_started > input.retry_policy.max_attempts {
         return Err(RemoteAttemptReasonCode::RetryBudgetExhausted);
     }
-    let attempt_deadline_unix_s = time
+    let attempt_deadline_unix_s = input
+        .time
         .now_unix_s
-        .checked_add(retry_policy.attempt_timeout_secs)
+        .checked_add(input.retry_policy.attempt_timeout_secs)
         .ok_or(RemoteAttemptReasonCode::RetryDeadlineExceeded)?;
-    let deadline_unix_s = attempt_deadline_unix_s.min(time.overall_deadline_unix_s);
-    if deadline_unix_s <= time.now_unix_s {
+    let deadline_unix_s = attempt_deadline_unix_s.min(input.time.overall_deadline_unix_s);
+    if deadline_unix_s <= input.time.now_unix_s {
         return Err(RemoteAttemptReasonCode::RetryDeadlineExceeded);
     }
-    let attempt_id = derive_remote_attempt_id(job_id, &assignment_nonce, fence_generation, worker_endpoint_id)?;
-    let applied_events = previous.map(|attempt| attempt.applied_events.clone()).unwrap_or_default();
+    let attempt_id =
+        derive_remote_attempt_id(input.job_id, &input.assignment_nonce, fence_generation, input.worker_endpoint_id)?;
+    let applied_events = input.previous.map(|attempt| attempt.applied_events.clone()).unwrap_or_default();
     debug_assert!(applied_events.len() <= MAX_REMOTE_ATTEMPT_EVENTS);
-    debug_assert!(deadline_unix_s > time.now_unix_s);
+    debug_assert!(deadline_unix_s > input.time.now_unix_s);
     Ok(RemoteAttemptState {
-        job_id: job_id.clone(),
+        job_id: input.job_id.clone(),
         attempt_id,
-        assignment_nonce,
+        assignment_nonce: input.assignment_nonce,
         fence_generation,
         phase: RemoteAttemptPhase::Queued,
         attempts_started,
-        started_unix_s: time.now_unix_s,
+        started_unix_s: input.time.now_unix_s,
         deadline_unix_s,
         applied_events,
         transfer_checkpoint: None,
@@ -751,7 +780,11 @@ fn validate_payload_linkage(
         RemoteAttemptReportPayload::TransferCheckpoint {
             checkpoint,
             transferred_bytes,
-        } if transfer_checkpoint_regresses(current, *checkpoint, *transferred_bytes) => {
+        } if transfer_checkpoint_regresses(current, TransferCheckpointProgress {
+            checkpoint: *checkpoint,
+            transferred_bytes: *transferred_bytes,
+        }) =>
+        {
             Some(RemoteAttemptReasonCode::TransitionRejected)
         }
         RemoteAttemptReportPayload::Heartbeat { observed_unix_s }
@@ -763,11 +796,17 @@ fn validate_payload_linkage(
     }
 }
 
-fn transfer_checkpoint_regresses(current: &RemoteAttemptState, checkpoint: u64, transferred_bytes: u64) -> bool {
-    if current.transfer_checkpoint.is_some_and(|current| checkpoint <= current) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TransferCheckpointProgress {
+    checkpoint: u64,
+    transferred_bytes: u64,
+}
+
+fn transfer_checkpoint_regresses(current: &RemoteAttemptState, progress: TransferCheckpointProgress) -> bool {
+    if current.transfer_checkpoint.is_some_and(|current| progress.checkpoint <= current) {
         return true;
     }
-    if transferred_bytes < current.transferred_bytes {
+    if progress.transferred_bytes < current.transferred_bytes {
         return true;
     }
     false
@@ -910,12 +949,13 @@ fn is_blake3_hex_digest(value: &str) -> bool {
         && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn hash_identity_part(hasher: &mut blake3::Hasher, value: &str) {
-    let length_bytes = u64::try_from(value.len()).expect("bounded identity length fits u64").to_le_bytes();
+fn hash_identity_part(hasher: &mut blake3::Hasher, value: &str) -> Result<(), RemoteAttemptReasonCode> {
+    let length_bytes = u64::try_from(value.len()).map_err(|_| RemoteAttemptReasonCode::IdentityInvalid)?.to_le_bytes();
     debug_assert!(!value.is_empty());
     debug_assert!(value.len() <= MAX_REMOTE_ATTEMPT_ID_BYTES);
     hasher.update(&length_bytes);
     hasher.update(value.as_bytes());
+    Ok(())
 }
 
 #[cfg(test)]

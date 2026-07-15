@@ -66,15 +66,23 @@ pub struct RemoteNamedResourceQuantity {
     pub quantity: u32,
 }
 
+fn empty_named_resource_quantities() -> Vec<RemoteNamedResourceQuantity> {
+    Vec::new()
+}
+
+fn empty_resource_class_names() -> Vec<String> {
+    Vec::new()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RemoteResourceVector {
     pub cpu_units: u32,
     pub memory_bytes: u64,
     pub scratch_bytes: u64,
-    #[serde(default)]
+    #[serde(default = "empty_named_resource_quantities")]
     pub accelerators: Vec<RemoteNamedResourceQuantity>,
-    #[serde(default)]
+    #[serde(default = "empty_named_resource_quantities")]
     pub named_tokens: Vec<RemoteNamedResourceQuantity>,
 }
 
@@ -82,7 +90,7 @@ pub struct RemoteResourceVector {
 #[serde(deny_unknown_fields)]
 pub struct RemoteResourceRequirements {
     pub quantities: RemoteResourceVector,
-    #[serde(default)]
+    #[serde(default = "empty_resource_class_names")]
     pub semantic_accelerator_classes: Vec<String>,
 }
 
@@ -321,6 +329,33 @@ struct ResourceTotals {
     named_tokens: BTreeMap<String, u32>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LocalityQuantities {
+    present_object_count: u32,
+    missing_object_count: u32,
+    present_bytes: u64,
+    missing_bytes: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LocalityClassification {
+    content_locality: ContentLocalityClass,
+    transfer_cost: TransferCostClass,
+    reason_code: RemoteLocalityReasonCode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PositiveU32Bound {
+    value: u32,
+    maximum: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PositiveU64Bound {
+    value: u64,
+    maximum: u64,
+}
+
 pub fn canonical_remote_resource_requirements(
     requirements: &RemoteResourceRequirements,
 ) -> Result<RemoteResourceRequirements, RemoteResourceReasonCode> {
@@ -539,25 +574,16 @@ pub fn normalize_remote_verified_locality(
         .chunk_count
         .checked_sub(missing_object_count)
         .ok_or(RemoteLocalityReasonCode::ArithmeticOverflow)?;
-    let (content_locality, transfer_cost, reason_code) = locality_classes(
-        verified_present_object_count,
+    let quantities = LocalityQuantities {
+        present_object_count: verified_present_object_count,
         missing_object_count,
-        demand.reused_bytes,
-        demand.missing_bytes,
-    );
+        present_bytes: demand.reused_bytes,
+        missing_bytes: demand.missing_bytes,
+    };
+    let classification = locality_classes(quantities);
     debug_assert_eq!(verified_present_object_count.checked_add(missing_object_count), Some(manifest.chunk_count));
     debug_assert!(demand.reused_bytes <= manifest.total_bytes);
-    Ok(locality_summary(
-        manifest,
-        observation,
-        verified_present_object_count,
-        missing_object_count,
-        demand.reused_bytes,
-        demand.missing_bytes,
-        content_locality,
-        transfer_cost,
-        reason_code,
-    ))
+    Ok(locality_summary(manifest, observation, quantities, classification))
 }
 
 pub fn rank_remote_worker_placement_candidates(
@@ -589,9 +615,18 @@ pub fn rank_remote_worker_placement_candidates(
 fn canonical_positive_resource_vector(
     vector: &RemoteResourceVector,
 ) -> Result<RemoteResourceVector, RemoteResourceReasonCode> {
-    validate_positive_u32(vector.cpu_units, MAX_REMOTE_CPU_UNITS)?;
-    validate_positive_u64(vector.memory_bytes, MAX_REMOTE_RESOURCE_BYTES)?;
-    validate_positive_u64(vector.scratch_bytes, MAX_REMOTE_RESOURCE_BYTES)?;
+    validate_positive_u32(PositiveU32Bound {
+        value: vector.cpu_units,
+        maximum: MAX_REMOTE_CPU_UNITS,
+    })?;
+    validate_positive_u64(PositiveU64Bound {
+        value: vector.memory_bytes,
+        maximum: MAX_REMOTE_RESOURCE_BYTES,
+    })?;
+    validate_positive_u64(PositiveU64Bound {
+        value: vector.scratch_bytes,
+        maximum: MAX_REMOTE_RESOURCE_BYTES,
+    })?;
     let accelerators = canonical_named_resources(&vector.accelerators)?;
     let named_tokens = canonical_named_resources(&vector.named_tokens)?;
     debug_assert!(accelerators.len() <= MAX_REMOTE_RESOURCE_CLASSES);
@@ -616,7 +651,10 @@ fn canonical_named_resources(
     let mut previous: Option<&str> = None;
     for entry in &canonical {
         validate_resource_class_name(&entry.name)?;
-        validate_positive_u32(entry.quantity, MAX_REMOTE_RESOURCE_COUNT)?;
+        validate_positive_u32(PositiveU32Bound {
+            value: entry.quantity,
+            maximum: MAX_REMOTE_RESOURCE_COUNT,
+        })?;
         if previous == Some(entry.name.as_str()) {
             return Err(RemoteResourceReasonCode::ResourceClassDuplicate);
         }
@@ -645,9 +683,10 @@ fn canonical_resource_class_names(names: &[String]) -> Result<Vec<String>, Remot
 }
 
 fn validate_resource_class_name(name: &str) -> Result<(), RemoteResourceReasonCode> {
-    let valid_length = !name.is_empty() && name.len() <= MAX_REMOTE_RESOURCE_CLASS_NAME_BYTES;
-    let valid_chars = name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'));
-    if !valid_length || !valid_chars {
+    let is_name_length_within_limit_bytes = !name.is_empty() && name.len() <= MAX_REMOTE_RESOURCE_CLASS_NAME_BYTES;
+    let is_name_character_set_valid =
+        name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'));
+    if !is_name_length_within_limit_bytes || !is_name_character_set_valid {
         return Err(RemoteResourceReasonCode::ResourceClassNameInvalid);
     }
     debug_assert!(!name.is_empty());
@@ -664,27 +703,27 @@ fn validate_resource_identity(value: &str) -> Result<(), RemoteResourceReasonCod
     Ok(())
 }
 
-fn validate_positive_u32(value: u32, maximum: u32) -> Result<(), RemoteResourceReasonCode> {
-    if value == 0 {
+fn validate_positive_u32(bound: PositiveU32Bound) -> Result<(), RemoteResourceReasonCode> {
+    if bound.value == 0 {
         return Err(RemoteResourceReasonCode::QuantityZero);
     }
-    if value > maximum {
+    if bound.value > bound.maximum {
         return Err(RemoteResourceReasonCode::QuantityExceedsLimit);
     }
-    debug_assert!(value > 0);
-    debug_assert!(value <= maximum);
+    debug_assert!(bound.value > 0);
+    debug_assert!(bound.value <= bound.maximum);
     Ok(())
 }
 
-fn validate_positive_u64(value: u64, maximum: u64) -> Result<(), RemoteResourceReasonCode> {
-    if value == 0 {
+fn validate_positive_u64(bound: PositiveU64Bound) -> Result<(), RemoteResourceReasonCode> {
+    if bound.value == 0 {
         return Err(RemoteResourceReasonCode::QuantityZero);
     }
-    if value > maximum {
+    if bound.value > bound.maximum {
         return Err(RemoteResourceReasonCode::QuantityExceedsLimit);
     }
-    debug_assert!(value > 0);
-    debug_assert!(value <= maximum);
+    debug_assert!(bound.value > 0);
+    debug_assert!(bound.value <= bound.maximum);
     Ok(())
 }
 
@@ -837,12 +876,12 @@ fn resource_fit_class(remaining: &ResourceTotals, requested: &ResourceTotals) ->
     if totals_are_zero(remaining) {
         return ResourceFitClass::Exact;
     }
-    let constrained = remaining.cpu_units < requested.cpu_units
+    let is_resource_constrained = remaining.cpu_units < requested.cpu_units
         || remaining.memory_bytes < requested.memory_bytes
         || remaining.scratch_bytes < requested.scratch_bytes
         || named_remaining_is_constrained(&remaining.accelerators, &requested.accelerators)
         || named_remaining_is_constrained(&remaining.named_tokens, &requested.named_tokens);
-    let class = if constrained {
+    let class = if is_resource_constrained {
         ResourceFitClass::Constrained
     } else {
         ResourceFitClass::Compatible
@@ -901,11 +940,16 @@ fn named_quantities_from_map(values: &BTreeMap<String, u32>) -> Vec<RemoteNamedR
 
 fn validate_lease_scope(scope: &RemoteResourceLeaseScope) -> Result<(), RemoteResourceReasonCode> {
     validate_resource_identity(&scope.worker_endpoint_id)?;
-    if scope.worker_generation == 0
-        || scope.job_id.as_str().is_empty()
-        || scope.attempt_id.as_str().is_empty()
-        || scope.fence_generation.get() == 0
-    {
+    if scope.worker_generation == 0 {
+        return Err(RemoteResourceReasonCode::LeaseDigestInvalid);
+    }
+    if scope.job_id.as_str().is_empty() {
+        return Err(RemoteResourceReasonCode::LeaseDigestInvalid);
+    }
+    if scope.attempt_id.as_str().is_empty() {
+        return Err(RemoteResourceReasonCode::LeaseDigestInvalid);
+    }
+    if scope.fence_generation.get() == 0 {
         return Err(RemoteResourceReasonCode::LeaseDigestInvalid);
     }
     debug_assert!(!scope.worker_endpoint_id.is_empty());
@@ -1012,8 +1056,8 @@ fn domain_hash_json<T: Serialize>(domain: &str, value: &T) -> Result<String, Rem
 }
 
 fn hash_part(hasher: &mut blake3::Hasher, value: &str) -> Result<(), RemoteResourceReasonCode> {
-    let length = u64::try_from(value.len()).map_err(|_| RemoteResourceReasonCode::ArithmeticOverflow)?;
-    hasher.update(&length.to_le_bytes());
+    let length_bytes = u64::try_from(value.len()).map_err(|_| RemoteResourceReasonCode::ArithmeticOverflow)?;
+    hasher.update(&length_bytes.to_le_bytes());
     hasher.update(value.as_bytes());
     Ok(())
 }
@@ -1060,60 +1104,54 @@ fn conservative_unverified_locality(
     let missing_bytes = manifest.total_bytes;
     debug_assert!(!observation.receiver_probe_verified);
     debug_assert!(missing_bytes > 0);
-    Ok(locality_summary(
-        manifest,
-        observation,
-        0,
+    let quantities = LocalityQuantities {
+        present_object_count: 0,
         missing_object_count,
-        0,
+        present_bytes: 0,
         missing_bytes,
-        ContentLocalityClass::NoVerifiedContent,
-        TransferCostClass::Large,
-        RemoteLocalityReasonCode::UnverifiedHintDowngraded,
-    ))
+    };
+    let classification = LocalityClassification {
+        content_locality: ContentLocalityClass::NoVerifiedContent,
+        transfer_cost: TransferCostClass::Large,
+        reason_code: RemoteLocalityReasonCode::UnverifiedHintDowngraded,
+    };
+    Ok(locality_summary(manifest, observation, quantities, classification))
 }
 
-fn locality_classes(
-    present_objects: u32,
-    missing_objects: u32,
-    present_bytes: u64,
-    missing_bytes: u64,
-) -> (ContentLocalityClass, TransferCostClass, RemoteLocalityReasonCode) {
-    if missing_objects == 0 && missing_bytes == 0 {
-        return (
-            ContentLocalityClass::FullyPresent,
-            TransferCostClass::None,
-            RemoteLocalityReasonCode::VerifiedFullyPresent,
-        );
+fn locality_classes(quantities: LocalityQuantities) -> LocalityClassification {
+    if quantities.missing_object_count == 0 && quantities.missing_bytes == 0 {
+        return LocalityClassification {
+            content_locality: ContentLocalityClass::FullyPresent,
+            transfer_cost: TransferCostClass::None,
+            reason_code: RemoteLocalityReasonCode::VerifiedFullyPresent,
+        };
     }
-    if present_objects == 0 && present_bytes == 0 {
-        return (
-            ContentLocalityClass::NoVerifiedContent,
-            TransferCostClass::Large,
-            RemoteLocalityReasonCode::VerifiedNoContent,
-        );
+    if quantities.present_object_count == 0 && quantities.present_bytes == 0 {
+        return LocalityClassification {
+            content_locality: ContentLocalityClass::NoVerifiedContent,
+            transfer_cost: TransferCostClass::Large,
+            reason_code: RemoteLocalityReasonCode::VerifiedNoContent,
+        };
     }
-    let transfer = match missing_bytes.cmp(&present_bytes) {
+    let transfer_cost = match quantities.missing_bytes.cmp(&quantities.present_bytes) {
         Ordering::Less => TransferCostClass::Small,
         Ordering::Equal => TransferCostClass::Medium,
         Ordering::Greater => TransferCostClass::Large,
     };
-    debug_assert!(missing_objects > 0);
-    debug_assert!(present_objects > 0 || present_bytes > 0);
-    (ContentLocalityClass::PartiallyPresent, transfer, RemoteLocalityReasonCode::VerifiedPartiallyPresent)
+    debug_assert!(quantities.missing_object_count > 0);
+    debug_assert!(quantities.present_object_count > 0 || quantities.present_bytes > 0);
+    LocalityClassification {
+        content_locality: ContentLocalityClass::PartiallyPresent,
+        transfer_cost,
+        reason_code: RemoteLocalityReasonCode::VerifiedPartiallyPresent,
+    }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn locality_summary(
     manifest: &CanonicalRemoteTransferManifest,
     observation: &RemoteLocalityProbeObservation,
-    present_objects: u32,
-    missing_objects: u32,
-    present_bytes: u64,
-    missing_bytes: u64,
-    content_locality: ContentLocalityClass,
-    transfer_cost: TransferCostClass,
-    reason_code: RemoteLocalityReasonCode,
+    quantities: LocalityQuantities,
+    classification: LocalityClassification,
 ) -> RemoteVerifiedLocalitySummary {
     let summary = RemoteVerifiedLocalitySummary {
         schema: REMOTE_LOCALITY_SUMMARY_SCHEMA.to_string(),
@@ -1121,14 +1159,14 @@ fn locality_summary(
         worker_generation: observation.worker_generation,
         scope: observation.scope.clone(),
         demanded_object_count: manifest.chunk_count,
-        verified_present_object_count: present_objects,
-        missing_object_count: missing_objects,
+        verified_present_object_count: quantities.present_object_count,
+        missing_object_count: quantities.missing_object_count,
         demanded_bytes: manifest.total_bytes,
-        verified_present_bytes: present_bytes,
-        missing_bytes,
-        content_locality,
-        transfer_cost,
-        reason_code,
+        verified_present_bytes: quantities.present_bytes,
+        missing_bytes: quantities.missing_bytes,
+        content_locality: classification.content_locality,
+        transfer_cost: classification.transfer_cost,
+        reason_code: classification.reason_code,
         claim_scope: REMOTE_LOCALITY_CLAIM_SCOPE.to_string(),
         non_claims: REMOTE_LOCALITY_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect(),
     };

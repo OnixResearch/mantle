@@ -18,6 +18,23 @@ pub const MAX_REMOTE_TELEMETRY_EVENT_CAPACITY: u32 = 16_384;
 pub const MAX_REMOTE_TELEMETRY_BATCH_SIZE: u32 = 1_024;
 pub const MAX_REMOTE_METRIC_LABELS: u32 = 8;
 pub const MAX_REMOTE_METRIC_LABEL_BYTES: usize = 64;
+const SENSITIVE_METRIC_KEY_MARKERS: [&str; 15] = [
+    "id",
+    "path",
+    "output",
+    "trace",
+    "bearer",
+    "token",
+    "key",
+    "credential",
+    "secret",
+    "error",
+    "ticket",
+    "job",
+    "attempt",
+    "worker",
+    "provider",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -161,6 +178,20 @@ pub struct RemoteTelemetryEvent {
     pub non_claim: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemoteTelemetryEventFields {
+    pub category: RemoteTelemetryCategory,
+    pub phase: RemoteTelemetryPhaseClass,
+    pub result: RemoteTelemetryResultClass,
+    pub route: RemoteTelemetryRouteClass,
+    pub retry: RemoteTelemetryRetryClass,
+    pub transfer: RemoteTelemetryTransferClass,
+    pub reason: RemoteTelemetryReasonClass,
+    pub capability: RemoteTelemetryCapabilityClass,
+    pub measurement: RemoteTelemetryMeasurementKind,
+    pub value: u64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteTelemetryPolicy {
     pub event_capacity: u32,
@@ -264,6 +295,10 @@ impl RemoteTelemetryReasonCode {
     }
 }
 
+#[expect(
+    tigerstyle::too_many_parameters,
+    reason = "stable shell compatibility wrapper delegates immediately to named telemetry fields"
+)]
 pub fn remote_telemetry_event(
     category: RemoteTelemetryCategory,
     phase: RemoteTelemetryPhaseClass,
@@ -276,11 +311,7 @@ pub fn remote_telemetry_event(
     measurement: RemoteTelemetryMeasurementKind,
     value: u64,
 ) -> Result<RemoteTelemetryEvent, RemoteTelemetryReasonCode> {
-    if value == 0 {
-        return Err(RemoteTelemetryReasonCode::EventValueInvalid);
-    }
-    let event = RemoteTelemetryEvent {
-        schema: REMOTE_TELEMETRY_EVENT_SCHEMA.to_string(),
+    remote_telemetry_event_from_fields(RemoteTelemetryEventFields {
         category,
         phase,
         result,
@@ -291,9 +322,32 @@ pub fn remote_telemetry_event(
         capability,
         measurement,
         value,
+    })
+}
+
+pub fn remote_telemetry_event_from_fields(
+    fields: RemoteTelemetryEventFields,
+) -> Result<RemoteTelemetryEvent, RemoteTelemetryReasonCode> {
+    if fields.value == 0 {
+        return Err(RemoteTelemetryReasonCode::EventValueInvalid);
+    }
+    let event = RemoteTelemetryEvent {
+        schema: REMOTE_TELEMETRY_EVENT_SCHEMA.to_string(),
+        category: fields.category,
+        phase: fields.phase,
+        result: fields.result,
+        route: fields.route,
+        retry: fields.retry,
+        transfer: fields.transfer,
+        reason: fields.reason,
+        capability: fields.capability,
+        measurement: fields.measurement,
+        value: fields.value,
         non_claim: REMOTE_TELEMETRY_NON_CLAIM.to_string(),
     };
     validate_remote_telemetry_event(&event)?;
+    debug_assert_eq!(event.value, fields.value);
+    debug_assert_eq!(event.non_claim, REMOTE_TELEMETRY_NON_CLAIM);
     Ok(event)
 }
 
@@ -314,8 +368,8 @@ pub fn record_remote_telemetry(
 ) -> RemoteTelemetryBuffer {
     let mut next = buffer.clone();
     let valid = policy.validate().and_then(|()| validate_remote_telemetry_event(&event));
-    let capacity = match usize::try_from(policy.event_capacity) {
-        Ok(capacity) => capacity,
+    let max_events = match usize::try_from(policy.event_capacity) {
+        Ok(max_events) => max_events,
         Err(_) => {
             return record_dropped_telemetry(next, RemoteTelemetryReasonCode::PolicyInvalid);
         }
@@ -323,7 +377,7 @@ pub fn record_remote_telemetry(
     if let Err(reason) = valid {
         return record_dropped_telemetry(next, reason);
     }
-    if next.events.len() >= capacity {
+    if next.events.len() >= max_events {
         return record_dropped_telemetry(next, RemoteTelemetryReasonCode::BufferFullDropped);
     }
     let Some(accepted_events) = next.accepted_events.checked_add(1) else {
@@ -332,7 +386,7 @@ pub fn record_remote_telemetry(
     next.events.push(event);
     next.accepted_events = accepted_events;
     next.last_drop_reason = None;
-    debug_assert!(next.events.len() <= capacity);
+    debug_assert!(next.events.len() <= max_events);
     debug_assert!(next.accepted_events >= buffer.accepted_events);
     next
 }
@@ -362,18 +416,21 @@ pub fn telemetry_for_priority_dispatch(
         ResourceFitClass::Constrained => RemoteTelemetryCapabilityClass::Degraded,
         ResourceFitClass::Unknown => RemoteTelemetryCapabilityClass::Unknown,
     };
-    remote_telemetry_event(
-        RemoteTelemetryCategory::Assignment,
-        RemoteTelemetryPhaseClass::Assigned,
-        RemoteTelemetryResultClass::Accepted,
-        RemoteTelemetryRouteClass::NotApplicable,
-        RemoteTelemetryRetryClass::None,
-        RemoteTelemetryTransferClass::None,
-        RemoteTelemetryReasonClass::PrioritySelected,
+    let event = remote_telemetry_event_from_fields(RemoteTelemetryEventFields {
+        category: RemoteTelemetryCategory::Assignment,
+        phase: RemoteTelemetryPhaseClass::Assigned,
+        result: RemoteTelemetryResultClass::Accepted,
+        route: RemoteTelemetryRouteClass::NotApplicable,
+        retry: RemoteTelemetryRetryClass::None,
+        transfer: RemoteTelemetryTransferClass::None,
+        reason: RemoteTelemetryReasonClass::PrioritySelected,
         capability,
-        RemoteTelemetryMeasurementKind::CandidateCount,
-        u64::from(decision.competing_goal_count),
-    )
+        measurement: RemoteTelemetryMeasurementKind::CandidateCount,
+        value: u64::from(decision.competing_goal_count),
+    })?;
+    debug_assert_eq!(event.capability, capability);
+    debug_assert_eq!(event.value, u64::from(decision.competing_goal_count));
+    Ok(event)
 }
 
 pub fn metric_descriptor_for_event(
@@ -391,12 +448,15 @@ pub fn metric_descriptor_for_event(
         candidate("capability", enum_label(event.capability)?),
     ];
     let labels = admit_remote_metric_labels(&candidates)?;
-    Ok(RemoteMetricDescriptor {
+    let descriptor = RemoteMetricDescriptor {
         name: metric_name(event.category).to_string(),
         kind: RemoteMetricKind::Counter,
         labels,
         value: event.value,
-    })
+    };
+    debug_assert_eq!(descriptor.value, event.value);
+    debug_assert!(descriptor.labels.len() <= candidates.len());
+    Ok(descriptor)
 }
 
 pub fn admit_remote_metric_labels(
@@ -418,13 +478,22 @@ pub fn admit_remote_metric_labels(
 }
 
 fn validate_metric_label_candidate(candidate: &RemoteMetricLabelCandidate) -> Result<(), RemoteTelemetryReasonCode> {
-    if candidate.key.is_empty()
-        || candidate.value.is_empty()
-        || candidate.key.len() > MAX_REMOTE_METRIC_LABEL_BYTES
-        || candidate.value.len() > MAX_REMOTE_METRIC_LABEL_BYTES
-        || candidate.key.chars().any(char::is_control)
-        || candidate.value.chars().any(char::is_control)
-    {
+    if candidate.key.is_empty() {
+        return Err(RemoteTelemetryReasonCode::LabelBoundsExceeded);
+    }
+    if candidate.value.is_empty() {
+        return Err(RemoteTelemetryReasonCode::LabelBoundsExceeded);
+    }
+    if candidate.key.len() > MAX_REMOTE_METRIC_LABEL_BYTES {
+        return Err(RemoteTelemetryReasonCode::LabelBoundsExceeded);
+    }
+    if candidate.value.len() > MAX_REMOTE_METRIC_LABEL_BYTES {
+        return Err(RemoteTelemetryReasonCode::LabelBoundsExceeded);
+    }
+    if candidate.key.chars().any(char::is_control) {
+        return Err(RemoteTelemetryReasonCode::LabelBoundsExceeded);
+    }
+    if candidate.value.chars().any(char::is_control) {
         return Err(RemoteTelemetryReasonCode::LabelBoundsExceeded);
     }
     if looks_sensitive_key(&candidate.key) {
@@ -436,33 +505,20 @@ fn validate_metric_label_candidate(candidate: &RemoteMetricLabelCandidate) -> Re
     if !is_supported_label_key(&candidate.key) {
         return Err(RemoteTelemetryReasonCode::LabelKeyUnsupported);
     }
-    if !is_supported_label_value(&candidate.key, &candidate.value) {
+    if !is_supported_label_value(RemoteMetricLabelRef {
+        key: &candidate.key,
+        value: &candidate.value,
+    }) {
         return Err(RemoteTelemetryReasonCode::LabelValueUnsupported);
     }
+    debug_assert!(!candidate.key.is_empty());
+    debug_assert!(!candidate.value.is_empty());
     Ok(())
 }
 
 fn looks_sensitive_key(value: &str) -> bool {
-    let value = value.to_ascii_lowercase();
-    [
-        "id",
-        "path",
-        "output",
-        "trace",
-        "bearer",
-        "token",
-        "key",
-        "credential",
-        "secret",
-        "error",
-        "ticket",
-        "job",
-        "attempt",
-        "worker",
-        "provider",
-    ]
-    .iter()
-    .any(|marker| value.contains(marker))
+    let lowercase_value = value.to_ascii_lowercase();
+    SENSITIVE_METRIC_KEY_MARKERS.iter().any(|marker| lowercase_value.contains(marker))
 }
 
 fn looks_sensitive_value(value: &str) -> bool {
@@ -481,16 +537,21 @@ fn is_supported_label_key(value: &str) -> bool {
     matches!(value, "category" | "phase" | "result" | "route" | "retry" | "transfer" | "reason" | "capability")
 }
 
-fn is_supported_label_value(key: &str, value: &str) -> bool {
-    match key {
-        "category" => enum_values::<RemoteTelemetryCategory>().contains(&value),
-        "phase" => enum_values::<RemoteTelemetryPhaseClass>().contains(&value),
-        "result" => enum_values::<RemoteTelemetryResultClass>().contains(&value),
-        "route" => enum_values::<RemoteTelemetryRouteClass>().contains(&value),
-        "retry" => enum_values::<RemoteTelemetryRetryClass>().contains(&value),
-        "transfer" => enum_values::<RemoteTelemetryTransferClass>().contains(&value),
-        "reason" => enum_values::<RemoteTelemetryReasonClass>().contains(&value),
-        "capability" => enum_values::<RemoteTelemetryCapabilityClass>().contains(&value),
+struct RemoteMetricLabelRef<'a> {
+    key: &'a str,
+    value: &'a str,
+}
+
+fn is_supported_label_value(label: RemoteMetricLabelRef<'_>) -> bool {
+    match label.key {
+        "category" => enum_values::<RemoteTelemetryCategory>().contains(&label.value),
+        "phase" => enum_values::<RemoteTelemetryPhaseClass>().contains(&label.value),
+        "result" => enum_values::<RemoteTelemetryResultClass>().contains(&label.value),
+        "route" => enum_values::<RemoteTelemetryRouteClass>().contains(&label.value),
+        "retry" => enum_values::<RemoteTelemetryRetryClass>().contains(&label.value),
+        "transfer" => enum_values::<RemoteTelemetryTransferClass>().contains(&label.value),
+        "reason" => enum_values::<RemoteTelemetryReasonClass>().contains(&label.value),
+        "capability" => enum_values::<RemoteTelemetryCapabilityClass>().contains(&label.value),
         _ => false,
     }
 }
@@ -504,95 +565,120 @@ fn enum_label<T: Serialize>(value: T) -> Result<String, RemoteTelemetryReasonCod
         .ok_or(RemoteTelemetryReasonCode::LabelValueUnsupported)
 }
 
-fn enum_values<T>() -> Vec<&'static str> {
-    let type_name = std::any::type_name::<T>();
-    match type_name.rsplit("::").next().unwrap_or_default() {
-        "RemoteTelemetryCategory" => vec![
-            "route",
-            "queue",
-            "assignment",
-            "retry-fencing",
-            "execution",
-            "transfer",
-            "admission",
-            "publication",
-        ],
-        "RemoteTelemetryPhaseClass" => vec![
-            "planning",
-            "queued",
-            "assigned",
-            "running",
-            "transferring",
-            "admitting",
-            "publishing",
-            "terminal",
-            "not-applicable",
-        ],
-        "RemoteTelemetryResultClass" => vec![
-            "accepted",
-            "rejected",
-            "succeeded",
-            "failed",
-            "retried",
-            "dropped",
-            "pending",
-            "not-applicable",
-        ],
-        "RemoteTelemetryRouteClass" => vec![
-            "local",
-            "remote-stdio",
-            "remote-ssh-stdio",
-            "remote-p2p",
-            "substitute",
-            "preflight-error",
-            "not-applicable",
-        ],
-        "RemoteTelemetryRetryClass" => vec![
-            "none",
-            "current-fence",
-            "retryable",
-            "terminal",
-            "policy-denied",
-            "stale-fence",
-            "unknown-fence",
-        ],
-        "RemoteTelemetryTransferClass" => vec!["none", "full", "delta", "streaming", "fallback", "not-available"],
-        "RemoteTelemetryReasonClass" => vec![
-            "route-selected",
-            "route-ineligible",
-            "queue-admitted",
-            "priority-selected",
-            "worker-assigned",
-            "attempt-transition",
-            "fence-accepted",
-            "retry-allowed",
-            "retry-denied",
-            "fence-rejected",
-            "execution-completed",
-            "execution-failed",
-            "transfer-demand",
-            "transfer-credit",
-            "transfer-resumed",
-            "transfer-cutoff",
-            "transfer-completed",
-            "transfer-fallback",
-            "output-admitted",
-            "output-rejected",
-            "published",
-            "publication-failed",
-            "exporter-backpressure",
-            "exporter-unavailable",
-        ],
-        "RemoteTelemetryCapabilityClass" => vec![
-            "exact",
-            "compatible",
-            "degraded",
-            "ineligible",
-            "unknown",
-            "not-applicable",
-        ],
-        _ => Vec::new(),
-    }
+trait RemoteTelemetryEnumValues {
+    const VALUES: &'static [&'static str];
+}
+
+impl RemoteTelemetryEnumValues for RemoteTelemetryCategory {
+    const VALUES: &'static [&'static str] = &[
+        "route",
+        "queue",
+        "assignment",
+        "retry-fencing",
+        "execution",
+        "transfer",
+        "admission",
+        "publication",
+    ];
+}
+
+impl RemoteTelemetryEnumValues for RemoteTelemetryPhaseClass {
+    const VALUES: &'static [&'static str] = &[
+        "planning",
+        "queued",
+        "assigned",
+        "running",
+        "transferring",
+        "admitting",
+        "publishing",
+        "terminal",
+        "not-applicable",
+    ];
+}
+
+impl RemoteTelemetryEnumValues for RemoteTelemetryResultClass {
+    const VALUES: &'static [&'static str] = &[
+        "accepted",
+        "rejected",
+        "succeeded",
+        "failed",
+        "retried",
+        "dropped",
+        "pending",
+        "not-applicable",
+    ];
+}
+
+impl RemoteTelemetryEnumValues for RemoteTelemetryRouteClass {
+    const VALUES: &'static [&'static str] = &[
+        "local",
+        "remote-stdio",
+        "remote-ssh-stdio",
+        "remote-p2p",
+        "substitute",
+        "preflight-error",
+        "not-applicable",
+    ];
+}
+
+impl RemoteTelemetryEnumValues for RemoteTelemetryRetryClass {
+    const VALUES: &'static [&'static str] = &[
+        "none",
+        "current-fence",
+        "retryable",
+        "terminal",
+        "policy-denied",
+        "stale-fence",
+        "unknown-fence",
+    ];
+}
+
+impl RemoteTelemetryEnumValues for RemoteTelemetryTransferClass {
+    const VALUES: &'static [&'static str] = &["none", "full", "delta", "streaming", "fallback", "not-available"];
+}
+
+impl RemoteTelemetryEnumValues for RemoteTelemetryReasonClass {
+    const VALUES: &'static [&'static str] = &[
+        "route-selected",
+        "route-ineligible",
+        "queue-admitted",
+        "priority-selected",
+        "worker-assigned",
+        "attempt-transition",
+        "fence-accepted",
+        "retry-allowed",
+        "retry-denied",
+        "fence-rejected",
+        "execution-completed",
+        "execution-failed",
+        "transfer-demand",
+        "transfer-credit",
+        "transfer-resumed",
+        "transfer-cutoff",
+        "transfer-completed",
+        "transfer-fallback",
+        "output-admitted",
+        "output-rejected",
+        "published",
+        "publication-failed",
+        "exporter-backpressure",
+        "exporter-unavailable",
+    ];
+}
+
+impl RemoteTelemetryEnumValues for RemoteTelemetryCapabilityClass {
+    const VALUES: &'static [&'static str] = &[
+        "exact",
+        "compatible",
+        "degraded",
+        "ineligible",
+        "unknown",
+        "not-applicable",
+    ];
+}
+
+fn enum_values<T: RemoteTelemetryEnumValues>() -> &'static [&'static str] {
+    T::VALUES
 }
 
 fn candidate(key: &str, value: String) -> RemoteMetricLabelCandidate {
