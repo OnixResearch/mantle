@@ -22,6 +22,15 @@ const CLAIM_SHELL_ACTIVATION: &str = "shell-activation";
 const DEFAULT_PROFILE_NAME: &str = "default";
 const DEV_PROFILE_NAME: &str = "dev";
 
+const _: () = {
+    assert!(MAX_PROFILE_NAME_BYTES > 0, "profile name limit must be positive");
+    assert!(MAX_SHELL_PROFILES > 0, "shell profile limit must be positive");
+    assert!(MAX_PROFILE_BUILD_INPUTS > 0, "profile build-input limit must be positive");
+    assert!(MAX_PROFILE_ENV_ENTRIES > 0, "profile environment limit must be positive");
+    assert!(MAX_PROFILE_PATH_ENTRIES > 0, "profile PATH limit must be positive");
+    assert!(MAX_PROFILE_HOOK_BYTES > 0, "profile hook limit must be positive");
+};
+
 pub const NAMED_SHELL_PROFILE_NON_CLAIM: &str = "shell profile activation is convenience evidence only; it does not prove builds, tests, services, deployability, or release reproducibility";
 pub const DEV_SHELL_DECOUPLING_NON_CLAIM: &str = "dev shell planning must not mutate generated files, lockfiles, project manifests, release evidence, or package build identity";
 
@@ -125,7 +134,10 @@ pub fn plan_named_shell_profile(
 fn validate_profile_set(profiles: &NamedShellProfiles) -> Vec<ShellProfileDiagnostic> {
     let mut diagnostics = Vec::with_capacity(profiles.profiles.len());
     assert!(diagnostics.is_empty(), "profile diagnostics must start empty");
-    assert!(MAX_SHELL_PROFILES > 0, "shell profile limit must be positive");
+    assert!(
+        diagnostics.capacity() >= profiles.profiles.len(),
+        "profile diagnostic capacity must cover every declaration"
+    );
 
     let profile_count = count_with_overflow_marker(profiles.profiles.len(), MAX_SHELL_PROFILES);
     if profile_count > MAX_SHELL_PROFILES {
@@ -175,7 +187,10 @@ fn validate_profile(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagno
         .saturating_add(profile.path_entries.len());
     let mut diagnostics = Vec::with_capacity(diagnostic_reservation_count);
     assert!(diagnostics.is_empty(), "profile diagnostics must start empty");
-    assert!(MAX_PROFILE_NAME_BYTES > 0, "profile name limit must be positive");
+    assert!(
+        diagnostics.capacity() >= diagnostic_reservation_count,
+        "profile diagnostic capacity must cover the reserved validation inputs"
+    );
 
     validate_profile_name(
         ProfileNameValidation {
@@ -240,7 +255,14 @@ fn validate_profile(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagno
 fn validate_profile_name(validation: ProfileNameValidation<'_>, diagnostics: &mut Vec<ShellProfileDiagnostic>) {
     let ProfileNameValidation { name, code } = validation;
     assert!(!code.is_empty(), "profile-name diagnostic code must not be empty");
-    assert!(MAX_PROFILE_NAME_BYTES > 0, "profile name limit must be positive");
+    assert!(
+        diagnostics.iter().all(|diagnostic| !diagnostic.code.is_empty()),
+        "existing profile-name diagnostics must have codes"
+    );
+    assert!(
+        diagnostics.iter().all(|diagnostic| !diagnostic.message.is_empty()),
+        "existing profile-name diagnostics must have messages"
+    );
 
     if name.is_empty() {
         diagnostics.push(diagnostic(code, None, "shell profile name must not be empty".to_string()));
@@ -311,7 +333,10 @@ fn validate_env_entries(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDi
 fn validate_path_entries(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagnostic> {
     let mut diagnostics = Vec::with_capacity(profile.path_entries.len());
     assert!(diagnostics.is_empty(), "path diagnostics must start empty");
-    assert!(MAX_PROFILE_PATH_ENTRIES > 0, "profile PATH entry limit must be positive");
+    assert!(
+        diagnostics.capacity() >= profile.path_entries.len(),
+        "path diagnostic capacity must cover every PATH entry"
+    );
     for entry in &profile.path_entries {
         if entry.is_empty() {
             diagnostics.push(diagnostic(

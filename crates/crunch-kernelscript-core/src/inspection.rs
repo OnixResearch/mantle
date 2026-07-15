@@ -57,6 +57,38 @@ const BTF_FLAGS_NONE: u8 = 0;
 const BTF_STRING_TABLE_INITIAL_BYTE: u8 = 0;
 const MODULE_VERMAGIC_PREFIX: &str = "vermagic=";
 
+const _: () = {
+    assert!(ELF_MAGIC.len() <= ELF64_HEADER_BYTES, "ELF magic must fit in the ELF64 header");
+    assert!(
+        matches!(
+            ELF_MACHINE_OFFSET.checked_add(core::mem::size_of::<u16>()),
+            Some(end_bytes) if end_bytes <= ELF64_HEADER_BYTES
+        ),
+        "ELF machine field must fit in the ELF64 header"
+    );
+    assert!(
+        matches!(
+            ELF_SECTION_NAMES_INDEX_OFFSET.checked_add(core::mem::size_of::<u16>()),
+            Some(end_bytes) if end_bytes <= ELF64_HEADER_BYTES
+        ),
+        "ELF section-name index must fit in the ELF64 header"
+    );
+    assert!(
+        matches!(
+            SECTION_SIZE_OFFSET.checked_add(core::mem::size_of::<u64>()),
+            Some(end_bytes) if end_bytes <= ELF64_SECTION_HEADER_BYTES
+        ),
+        "ELF section size must fit in an ELF64 section header"
+    );
+    assert!(
+        matches!(
+            BTF_STRING_LENGTH_OFFSET.checked_add(core::mem::size_of::<u32>()),
+            Some(end_bytes) if end_bytes <= BTF_HEADER_BYTES_MIN
+        ),
+        "BTF string length must fit in the minimum BTF header"
+    );
+};
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ObservedOutput {
@@ -313,8 +345,8 @@ pub(crate) fn expected_generated_source_members(
 }
 
 fn parse_elf(bytes: &[u8], profile: &ExperimentProfile, blockers: &mut Vec<ExperimentBlocker>) -> Option<ElfFacts> {
-    debug_assert!(ELF64_HEADER_BYTES >= ELF_MAGIC.len());
-    debug_assert!(ELF_MACHINE_OFFSET < ELF64_HEADER_BYTES);
+    let initial_blocker_count: usize = blockers.len();
+    debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
     if !has_complete_elf_header(bytes) {
         blockers.push(blocker("malformed-elf-header", "output", "output is not a complete ELF object"));
         return None;
@@ -342,9 +374,9 @@ fn parse_elf(bytes: &[u8], profile: &ExperimentProfile, blockers: &mut Vec<Exper
         blockers.push(blocker("malformed-elf-header", "output", "ELF machine is truncated"));
         return None;
     };
-    let initial_blocker_count: usize = blockers.len();
+    let section_blocker_count: usize = blockers.len();
     let Some(sections) = parse_sections(bytes, profile, blockers) else {
-        if blockers.len() == initial_blocker_count {
+        if blockers.len() == section_blocker_count {
             blockers.push(blocker(
                 "malformed-elf-section-table",
                 "output",
@@ -353,6 +385,7 @@ fn parse_elf(bytes: &[u8], profile: &ExperimentProfile, blockers: &mut Vec<Exper
         }
         return None;
     };
+    debug_assert!(blockers.len() >= initial_blocker_count);
     Some(ElfFacts {
         elf_class,
         elf_type,
@@ -377,7 +410,7 @@ fn parse_sections(
     blockers: &mut Vec<ExperimentBlocker>,
 ) -> Option<Vec<ElfSectionFacts>> {
     debug_assert!(bytes.len() >= ELF64_HEADER_BYTES);
-    debug_assert!(ELF64_SECTION_HEADER_BYTES > 0);
+    debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
     let table_offset_bytes = usize_from_u64(read_u64(bytes, ELF_SECTION_TABLE_OFFSET)?)?;
     let entry_size_bytes = usize::from(read_u16(bytes, ELF_SECTION_ENTRY_SIZE_OFFSET)?);
     let section_count = usize::from(read_u16(bytes, ELF_SECTION_COUNT_OFFSET)?);

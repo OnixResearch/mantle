@@ -57,6 +57,25 @@ pub const OPAM_LOCK_FORMAT: &str = "opam-lock";
 pub const NIX_CLOSURE_OBSERVATION_LOCK_FORMAT: &str = "nix-closure-observation";
 const SOURCE_EXTENSION: &str = ".ks";
 
+const _: () = {
+    assert!(GIT_REVISION_HEX_LENGTH > 0, "Git revision length must be positive");
+    assert!(MAX_GENERATED_FILES_LIMIT > 0, "generated-file limit must be positive");
+    assert!(MAX_GENERATED_FILE_BYTES_LIMIT > 0, "generated-file byte limit must be positive");
+    assert!(MAX_GENERATED_TOTAL_BYTES_LIMIT > 0, "generated-total byte limit must be positive");
+    assert!(MAX_COMPILATION_STEPS_LIMIT > 0, "compilation-step limit must be positive");
+    assert!(MAX_OUTPUT_FILES_LIMIT > 0, "output-file limit must be positive");
+    assert!(MAX_OUTPUT_BYTES_LIMIT > 0, "output byte limit must be positive");
+    assert!(MAX_ELF_SECTIONS_LIMIT > 0, "ELF section limit must be positive");
+    assert!(MAX_SECTION_NAME_BYTES_LIMIT > 0, "section-name byte limit must be positive");
+    assert!(MAX_RECEIPT_BLOCKERS_LIMIT > 0, "receipt-blocker limit must be positive");
+    assert!(MAX_TEXT_BYTES_LIMIT > 0, "text byte limit must be positive");
+    assert!(MAX_TOOLCHAIN_MEMBERS > 0, "toolchain-member limit must be positive");
+    assert!(MAX_COMPILER_DEPENDENCIES > 0, "compiler-dependency limit must be positive");
+    assert!(MAX_OUTPUT_CLASSES > 0, "output-class limit must be positive");
+    assert!(MAX_NON_CLAIMS > 0, "non-claim limit must be positive");
+    assert!(MAX_FLAGS_PER_CLASS > 0, "compiler-flag limit must be positive");
+};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfileValidation {
     pub profile_identity_blake3: Option<Blake3Digest>,
@@ -173,8 +192,8 @@ fn validate_source_and_compiler(profile: &ExperimentProfile, blockers: &mut Vec<
     }
     validate_dependency_lock(&compiler.dependency_lock, profile.bounds.max_text_bytes, blockers);
     validate_artifact(&compiler.compiler_executable, "compiler.executable", blockers);
-    debug_assert!(GIT_REVISION_HEX_LENGTH > 0);
     debug_assert!(blockers.len() >= initial_blocker_count);
+    debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
 }
 
 fn validate_dependency_lock(lock: &CompilerDependencyLock, text_bound: u32, blockers: &mut Vec<ExperimentBlocker>) {
@@ -236,15 +255,15 @@ fn has_valid_dependency_lock_shape(lock: &CompilerDependencyLock) -> bool {
 }
 
 fn validate_bounds(bounds: &ExperimentBounds, blockers: &mut Vec<ExperimentBlocker>) {
-    debug_assert!(MAX_GENERATED_FILES_LIMIT > 0);
-    debug_assert!(MAX_GENERATED_FILE_BYTES_LIMIT > 0);
+    let initial_blocker_count: usize = blockers.len();
     validate_u32_bounds(bounds, blockers);
     validate_u64_bounds(bounds, blockers);
+    debug_assert!(blockers.len() >= initial_blocker_count);
+    debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
 }
 
 fn validate_u32_bounds(bounds: &ExperimentBounds, blockers: &mut Vec<ExperimentBlocker>) {
-    debug_assert!(MAX_COMPILATION_STEPS_LIMIT > 0);
-    debug_assert!(MAX_RECEIPT_BLOCKERS_LIMIT > 0);
+    let initial_blocker_count: usize = blockers.len();
     for validation in [
         BoundU32Validation {
             value: bounds.max_generated_files,
@@ -284,11 +303,12 @@ fn validate_u32_bounds(bounds: &ExperimentBounds, blockers: &mut Vec<ExperimentB
     ] {
         validate_bound_u32(validation, blockers);
     }
+    debug_assert!(blockers.len() >= initial_blocker_count);
+    debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
 }
 
 fn validate_u64_bounds(bounds: &ExperimentBounds, blockers: &mut Vec<ExperimentBlocker>) {
-    debug_assert!(MAX_GENERATED_TOTAL_BYTES_LIMIT > 0);
-    debug_assert!(MAX_OUTPUT_BYTES_LIMIT > 0);
+    let initial_blocker_count: usize = blockers.len();
     for validation in [
         BoundU64Validation {
             value: bounds.max_generated_file_bytes,
@@ -308,6 +328,8 @@ fn validate_u64_bounds(bounds: &ExperimentBounds, blockers: &mut Vec<ExperimentB
     ] {
         validate_bound_u64(validation, blockers);
     }
+    debug_assert!(blockers.len() >= initial_blocker_count);
+    debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
 }
 
 fn validate_toolchain(profile: &ExperimentProfile, blockers: &mut Vec<ExperimentBlocker>) {
