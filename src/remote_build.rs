@@ -18,7 +18,6 @@ use std::task::Context;
 use std::task::Poll;
 use std::thread;
 use std::time::Duration;
-use std::time::Instant;
 
 use crunch_build::distributed::CanonicalRemoteTransferManifest;
 use crunch_build::distributed::EXTERNAL_BATCH_NON_CLAIM;
@@ -138,11 +137,13 @@ pub const MAX_REMOTE_INPUT_REFS: usize = 1_000_000;
 pub const MAX_REMOTE_EXPECTED_OUTPUTS: usize = 128;
 pub const MAX_REMOTE_BUILD_PAYLOAD_BYTES: usize = 1_048_576;
 pub const MAX_REMOTE_FRAME_BYTES: usize = 1_048_576;
+const MAX_REMOTE_PATHINFO_READ_BYTES: u64 = 1_048_577;
 const REMOTE_JSON_BYTE_ARRAY_MAX_CHARS_PER_BYTE: usize = 4;
 const REMOTE_INLINE_NAR_FRAME_METADATA_RESERVE_BYTES: usize = 4_096;
-pub const MAX_REMOTE_INLINE_NAR_PAYLOAD_BYTES: usize = (MAX_REMOTE_FRAME_BYTES
-    / REMOTE_JSON_BYTE_ARRAY_MAX_CHARS_PER_BYTE)
-    - REMOTE_INLINE_NAR_FRAME_METADATA_RESERVE_BYTES;
+const REMOTE_INLINE_NAR_FRAME_BUDGET_BYTES: usize = MAX_REMOTE_FRAME_BYTES / REMOTE_JSON_BYTE_ARRAY_MAX_CHARS_PER_BYTE;
+const _: () = assert!(REMOTE_INLINE_NAR_FRAME_BUDGET_BYTES >= REMOTE_INLINE_NAR_FRAME_METADATA_RESERVE_BYTES);
+pub const MAX_REMOTE_INLINE_NAR_PAYLOAD_BYTES: usize =
+    REMOTE_INLINE_NAR_FRAME_BUDGET_BYTES.saturating_sub(REMOTE_INLINE_NAR_FRAME_METADATA_RESERVE_BYTES);
 pub const MAX_REMOTE_STDIO_STDERR_BYTES: usize = 65_536;
 pub const MAX_REMOTE_STDIO_FRAME_COUNT: usize = 4_096;
 pub const MAX_REMOTE_STDIO_INPUT_BYTES: usize = 4_194_304;
@@ -198,6 +199,9 @@ const MAX_REMOTE_LOG_BYTES: u64 = 1_048_576;
 const MIN_REMOTE_ATTEMPT_LOG_SHELL_PAYLOAD_BYTES: u64 = 10;
 const MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES: usize = 512;
 const LEGACY_LOG_MIGRATION_CLASSIFICATION: &str = "legacy-unbound-diagnostics-discarded";
+const LEGACY_LOG_MIGRATION_COUNT_MAX_U64: u64 = 4_294_967_295;
+const LEGACY_LOG_MIGRATION_COUNT_MAX_U32: u32 = 4_294_967_295;
+const LEGACY_LOG_MIGRATION_PAYLOAD_BYTES_MAX: u64 = 18_446_744_073_709_551_615;
 const LEGACY_LOG_MIGRATION_NON_CLAIM: &str =
     "legacy mutable log vectors are not immutable attempt-log history and were not rehashed or promoted";
 const REMOTE_COORDINATOR_BUILD_KEY_LABEL: &str = "remote-coordinator-build-key";
@@ -215,7 +219,11 @@ const REMOTE_RESOURCE_STATUS_NON_CLAIMS: [&str; 5] = [
 const REMOTE_ASSIGNMENT_NONCE_BYTES: usize = 32;
 const LEGACY_MISSING_ATTEMPT_ID: &str = "legacy-missing-attempt-id";
 const REMOTE_CHILD_POLL_INTERVAL_MS: u64 = 10;
+const MILLISECONDS_PER_SECOND: u64 = 1_000;
 const REMOTE_CHILD_TEARDOWN_TIMEOUT_SECS: u64 = 5;
+const DEFAULT_REMOTE_ATTEMPT_MAX: u32 = 3;
+const DEFAULT_REMOTE_RETRY_DELAY_SECS: u64 = 5;
+const DEFAULT_REMOTE_ATTEMPT_TIMEOUT_SECS: u64 = 3_600;
 const MAX_REMOTE_STDIO_COMPAT_OUTPUT_BYTES: usize = 67_108_864;
 const REMOTE_TRANSFER_LEASE_DURATION_SECS: u64 = 3_600;
 const REMOTE_TRANSFER_SPOOL_DIR: &str = "remote-transfer-spool";
@@ -234,13 +242,76 @@ const REMOTE_E2E_INPUT_SYNC_COMPLETE_PHASE: &str = "input-sync-complete";
 const REMOTE_E2E_EXECUTION_COMPLETE_PHASE: &str = "remote-execution-complete";
 const REMOTE_E2E_OUTPUT_ADMISSION_COMPLETE_PHASE: &str = "output-admission-complete";
 
+fn absent_remote_value<T>() -> Option<T> {
+    None
+}
+
+fn empty_remote_values<T>() -> Vec<T> {
+    Vec::new()
+}
+
+fn empty_remote_map<K, V>() -> BTreeMap<K, V> {
+    BTreeMap::new()
+}
+
+fn remote_false() -> bool {
+    false
+}
+
+fn remote_zero_u64() -> u64 {
+    0
+}
+
+fn default_remote_failure_debug_policy() -> crunch_build::distributed::RemoteFailureDebugPolicy {
+    use crunch_build::distributed::RemoteFailureCaptureFailureMode;
+    use crunch_build::distributed::RemoteFailureCapturePolicy;
+    use crunch_build::distributed::RemoteFailureCaptureSensitivity;
+
+    let policy = crunch_build::distributed::RemoteFailureDebugPolicy {
+        policy_name: crunch_build::distributed::REMOTE_FAILURE_DEBUG_POLICY_NAME.to_string(),
+        metadata_bytes_max: crunch_build::distributed::MAX_REMOTE_FAILURE_METADATA_BYTES,
+        object_bytes_max: crunch_build::distributed::MAX_REMOTE_FAILURE_OBJECT_BYTES,
+        retention_secs: crunch_build::distributed::DEFAULT_REMOTE_FAILURE_RETENTION_SECS,
+        replay_enabled: false,
+        capture: RemoteFailureCapturePolicy {
+            enabled: false,
+            allowed_relative_paths: Vec::new(),
+            sensitivity: RemoteFailureCaptureSensitivity::RestrictedDiagnostic,
+            file_count_max: crunch_build::distributed::MAX_REMOTE_FAILURE_CAPTURE_FILES,
+            total_bytes_max: crunch_build::distributed::MAX_REMOTE_FAILURE_CAPTURE_TOTAL_BYTES,
+            file_bytes_max: crunch_build::distributed::MAX_REMOTE_FAILURE_CAPTURE_FILE_BYTES,
+            depth_max: crunch_build::distributed::MAX_REMOTE_FAILURE_CAPTURE_DEPTH,
+            failure_mode: RemoteFailureCaptureFailureMode::DiagnosticOnly,
+        },
+    };
+    debug_assert!(policy.validate().is_ok());
+    debug_assert!(!policy.policy_name.is_empty());
+    policy
+}
+
+fn empty_remote_telemetry_buffer() -> RemoteTelemetryBuffer {
+    RemoteTelemetryBuffer {
+        events: Vec::new(),
+        accepted_events: 0,
+        dropped_events: 0,
+        last_drop_reason: None,
+    }
+}
+
+fn default_remote_telemetry_policy() -> RemoteTelemetryPolicy {
+    RemoteTelemetryPolicy {
+        event_capacity: crunch_build::distributed::DEFAULT_REMOTE_TELEMETRY_EVENT_CAPACITY,
+        batch_size: crunch_build::distributed::DEFAULT_REMOTE_TELEMETRY_BATCH_SIZE,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteHello {
     pub alpn: String,
     pub version: u32,
     pub endpoint_id: String,
     pub capabilities: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub workspace_policy: Option<crate::remote_farm_config::RemoteWorkspacePolicy>,
 }
 
@@ -310,24 +381,24 @@ pub struct ConcreteBuildRequest {
     pub request_id: String,
     pub store_prefix: String,
     pub input_refs: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default = "empty_remote_values", skip_serializing_if = "Vec::is_empty")]
     pub source_input_refs: Vec<String>,
     pub upload_bytes: u64,
     pub build_time_limit_secs: u64,
     pub contains_raw_frontend_eval: bool,
     pub payload: RemoteConcreteBuildPayload,
     pub expected_outputs: Vec<RemoteExpectedOutput>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub production_attempt: Option<RemoteProductionAttemptBinding>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub transfer_policy: Option<RemoteTransferPolicy>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub resource_requirements: Option<RemoteResourceRequirements>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub locality_scope: Option<RemoteLocalityScope>,
-    #[serde(default)]
+    #[serde(default = "default_remote_failure_debug_policy")]
     pub failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub failure_replay: Option<RemoteFailureReplayBinding>,
 }
 
@@ -341,7 +412,7 @@ pub enum RemoteConcreteBuildPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteExpectedOutput {
     pub name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub logical_path: Option<String>,
 }
 
@@ -389,9 +460,9 @@ pub struct RemoteExecutionOutput {
     pub content_digest_blake3: String,
     pub size_bytes: u64,
     pub artifact_attestation_digest_blake3: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub path_info: Option<PathInfo>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub nar_payload: Option<Vec<u8>>,
 }
 
@@ -403,11 +474,11 @@ pub struct RemoteProducedOutput {
     pub size_bytes: u64,
     pub path_info_signing_key_id: String,
     pub artifact_attestation_digest_blake3: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub path_info: Option<PathInfo>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub nar_payload_digest_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub nar_payload_size_bytes: Option<u64>,
 }
 
@@ -460,7 +531,13 @@ impl RemoteBuildExecutor for RemoteLocalBuildExecutor {
         plan: &RemoteExecutablePlan,
         input_upload: &RemoteInputUpload,
     ) -> Result<RemoteExecutionOutcome, String> {
-        execute_remote_local_build(self, request, plan, input_upload)
+        let created_unix_s = crate::unix_time_now_s().map_err(|error| error.to_string())?;
+        execute_remote_local_build(self, RemoteLocalBuildExecutionInput {
+            request,
+            plan,
+            input_upload,
+            created_unix_s,
+        })
     }
 }
 
@@ -471,9 +548,9 @@ struct RemoteActionSpec {
     pub builder: String,
     #[serde(default = "default_remote_action_system")]
     pub system: String,
-    #[serde(default)]
+    #[serde(default = "empty_remote_values")]
     pub args: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "empty_remote_map")]
     pub env: BTreeMap<String, String>,
     pub outputs: Vec<String>,
 }
@@ -630,9 +707,9 @@ pub struct RemoteInputUpload {
     pub request_id: String,
     pub refs: Vec<String>,
     pub byte_count: u64,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default = "empty_remote_values", skip_serializing_if = "Vec::is_empty")]
     pub artifacts: Vec<RemoteInputUploadArtifact>,
-    #[serde(default)]
+    #[serde(default = "remote_false")]
     pub streamed: bool,
 }
 
@@ -755,7 +832,7 @@ pub struct RemoteTransferManifestFrame {
     pub manifest: RemoteTransferManifest,
     pub manifest_digest_blake3: RemoteTransferDigest,
     pub actual_mode: RemoteTransferMode,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub fallback_reason: Option<String>,
 }
 
@@ -1043,11 +1120,11 @@ pub struct RemoteStdioTranscript {
     pub binding: RemoteTransportBinding,
     pub frames: Vec<RemoteFrame>,
     pub stderr_summary: String,
-    #[serde(default)]
+    #[serde(default = "empty_remote_telemetry_buffer")]
     pub telemetry: RemoteTelemetryBuffer,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub streaming_output: Option<RemoteStreamingOutputReceipt>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub trace_context_health: Option<RemoteTraceContextHealth>,
 }
 
@@ -1079,7 +1156,7 @@ pub struct RemoteOutputAdmissionReport {
     pub store_prefix: String,
     pub outputs: Vec<RemoteProducedOutput>,
     pub transfer_artifacts: Vec<RemoteOutputTransferArtifact>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub streamed_manifest: Option<RemoteTransferManifest>,
     pub transfer: RemoteTransferReport,
 }
@@ -1185,11 +1262,14 @@ pub fn plan_ssh_stdio_builder_command(request: RemoteSshStdioPlanRequest) -> Res
     args.push(request.destination);
     args.push(request.remote_program);
     args.extend(request.remote_args);
-    Ok(RemoteStdioBuilderCommand {
+    let command = RemoteStdioBuilderCommand {
         endpoint_id: request.endpoint_id,
         program: request.ssh_program,
         args,
-    })
+    };
+    debug_assert!(!command.endpoint_id.is_empty());
+    debug_assert!(command.args.len() >= SSH_STDIO_FIXED_ARG_COUNT);
+    Ok(command)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1245,16 +1325,18 @@ pub fn plan_remote_root_priority(
     if candidates.is_empty() {
         return Err("remote-root-priority-candidates-empty".to_string());
     }
-    let candidate_count =
-        u32::try_from(candidates.len()).map_err(|_| "remote-root-priority-candidate-count-overflow".to_string())?;
-    if candidate_count > crunch_build::scheduling::MAX_READY_GOALS {
+    let candidate_count_max = usize::try_from(crunch_build::scheduling::MAX_READY_GOALS)
+        .map_err(|_| "remote-root-priority-candidate-limit-overflow".to_string())?;
+    if candidates.len() > candidate_count_max {
         return Err("remote-root-priority-candidate-limit-exceeded".to_string());
     }
+    let candidate_count =
+        u32::try_from(candidates.len()).map_err(|_| "remote-root-priority-candidate-count-overflow".to_string())?;
     let mut input_indices = BTreeSet::new();
     let mut root_identities = BTreeSet::new();
-    let mut index_by_identity = BTreeMap::new();
+    let mut index_entries = Vec::with_capacity(candidates.len());
     let mut ready_goals = Vec::with_capacity(candidates.len());
-    let mut pressures = BTreeMap::new();
+    let mut pressure_entries = Vec::with_capacity(candidates.len());
     for candidate in candidates {
         if !input_indices.insert(candidate.input_index) {
             return Err("remote-root-priority-input-index-duplicate".to_string());
@@ -1265,11 +1347,17 @@ pub fn plan_remote_root_priority(
         if !root_identities.insert(candidate.root_identity_blake3.clone()) {
             return Err("remote-root-priority-identity-duplicate".to_string());
         }
-        index_by_identity.insert(candidate.root_identity_blake3.clone(), candidate.input_index);
+        index_entries.push((candidate.root_identity_blake3.clone(), candidate.input_index));
         ready_goals.push(crunch_build::scheduling::ReadyGoalFacts::ordinary(candidate.root_identity_blake3.clone(), 0));
-        pressures
-            .insert(candidate.root_identity_blake3.clone(), crunch_build::scheduling::KnownGraphPressure::default());
+        pressure_entries.push((candidate.root_identity_blake3.clone(), crunch_build::scheduling::KnownGraphPressure {
+            known_critical_path_nodes: 0,
+            known_critical_path_work_units: 0,
+            blocked_root_count: 0,
+            blocked_root_count_saturated: false,
+        }));
     }
+    let index_by_identity = index_entries.into_iter().collect::<BTreeMap<_, _>>();
+    let pressures = pressure_entries.into_iter().collect::<BTreeMap<_, _>>();
     let ranked = crunch_build::scheduling::rank_ready_goals(policy, 0, &ready_goals, &pressures)
         .map_err(|error| error.to_string())?;
     let evidence = crunch_build::scheduling::priority_decision_evidence(
@@ -1308,7 +1396,7 @@ pub struct RemoteClientDispatchPlan {
 pub struct RemoteTelemetryBufferHealth {
     pub accepted_events: u64,
     pub dropped_events: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub last_drop_reason: Option<String>,
 }
 
@@ -1325,7 +1413,7 @@ pub struct RemoteAttemptObservabilityHealth {
 pub struct RemoteAttemptObservabilityReport {
     pub events: Vec<RemoteTelemetryEvent>,
     pub health: RemoteAttemptObservabilityHealth,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub immutable_log: Option<RemoteAttemptLogControlSummary>,
 }
 
@@ -1396,6 +1484,8 @@ pub struct RemoteWorkerResumeSummary {
 }
 
 fn legacy_missing_attempt_id() -> RemoteAttemptId {
+    // The external validated newtype has no infallible constructor for this checked constant.
+    #[allow(tigerstyle::no_unwrap)]
     RemoteAttemptId::new(LEGACY_MISSING_ATTEMPT_ID).expect("legacy attempt sentinel is a bounded identity")
 }
 
@@ -1421,11 +1511,11 @@ pub struct RemoteWorkerRegistration {
     pub network_modes: Vec<String>,
     pub logical_store_prefixes: Vec<String>,
     pub concurrency: u32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub resource_inventory: Option<RemoteWorkerResourceInventory>,
     pub output_signing_key_ids: Vec<String>,
     pub resumable_jobs: Vec<RemoteWorkerResumeSummary>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub workspace_policy: Option<crate::remote_farm_config::RemoteWorkspacePolicy>,
 }
 
@@ -1436,9 +1526,9 @@ pub struct RemoteCoordinatorBuildRequest {
     pub required_features: Vec<String>,
     pub required_sandbox_mode: String,
     pub required_network_mode: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub resource_requirements: Option<RemoteResourceRequirements>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub locality_scope: Option<RemoteLocalityScope>,
     pub trusted_output_keys: Vec<String>,
     pub live_output_claims: Vec<String>,
@@ -1453,11 +1543,11 @@ pub struct RemoteFailureDebugStatus {
     pub cleanup_status_code: String,
     pub immutable_log_available: bool,
     pub non_claim: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub worker_bundle_ref: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub replay_attempt_identity: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub replay_comparison_class: Option<String>,
 }
 
@@ -1470,30 +1560,30 @@ pub struct RemoteCoordinatorJobSummary {
     pub live_output_claims: Vec<String>,
     pub result_available: bool,
     pub lost_phase: Option<RemoteFailurePhase>,
-    #[serde(default)]
+    #[serde(default = "absent_remote_value")]
     pub immutable_log: Option<RemoteAttemptLogControlSummary>,
-    #[serde(default)]
+    #[serde(default = "absent_remote_value")]
     pub observability_health: Option<RemoteAttemptObservabilityHealth>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub failure_debug: Option<RemoteFailureDebugStatus>,
     pub short_error: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_remote_value")]
     pub current_attempt: Option<RemoteAttemptState>,
-    #[serde(default)]
+    #[serde(default = "absent_remote_value")]
     pub transfer_checkpoint: Option<u64>,
-    #[serde(default)]
+    #[serde(default = "remote_zero_u64")]
     pub transferred_bytes: u64,
-    #[serde(default)]
+    #[serde(default = "remote_false")]
     pub output_admission_completed: bool,
-    #[serde(default)]
+    #[serde(default = "absent_remote_value")]
     pub last_attempt_reason_code: Option<RemoteAttemptReasonCode>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub resource_requirements: Option<RemoteResourceRequirements>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub resource_lease_id_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub resource_fit: Option<crunch_build::ResourceFitClass>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub locality: Option<RemoteVerifiedLocalitySummary>,
 }
 
@@ -1506,11 +1596,11 @@ pub struct ExternalBatchCoordinatorRecord {
     pub last_response: ExternalBatchOperationResponse,
     pub reconcile_attempts: u32,
     pub worker_registered: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub coordinator_job_id: Option<RemoteJobId>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub resource_lease_id_blake3: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub output_admission_digest_blake3: Option<String>,
 }
 
@@ -1574,17 +1664,17 @@ pub struct RemoteCoordinatorState {
     pub workers: BTreeMap<String, RemoteWorkerRegistration>,
     pub jobs: BTreeMap<RemoteJobId, RemoteCoordinatorJobSummary>,
     pub live_output_claims: BTreeMap<String, String>,
-    #[serde(default)]
+    #[serde(default = "empty_remote_map")]
     pub resource_leases: BTreeMap<String, RemoteResourceLease>,
-    #[serde(default)]
+    #[serde(default = "empty_remote_map")]
     pub verified_locality_observations: BTreeMap<String, RemoteVerifiedLocalitySummary>,
-    #[serde(default)]
+    #[serde(default = "empty_remote_map")]
     pub workspace_registrations: BTreeMap<String, crate::remote_farm_config::RemoteWorkspacePolicy>,
-    #[serde(default)]
+    #[serde(default = "empty_remote_map")]
     pub workspace_leases: BTreeMap<String, crunch_build::WorkspaceLeaseRecord>,
-    #[serde(default)]
+    #[serde(default = "empty_remote_map")]
     pub external_batch_attempts: BTreeMap<String, ExternalBatchCoordinatorRecord>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub legacy_log_migration: Option<RemoteLegacyLogMigrationSummary>,
     /// When set, mutations auto-save to this directory for durability.
     #[serde(skip)]
@@ -1873,6 +1963,8 @@ pub fn validate_hello(
         .filter(|capability| supported_capabilities.contains(capability))
         .cloned()
         .collect::<Vec<_>>();
+    debug_assert!(accepted_capabilities.len() <= hello.capabilities.len());
+    debug_assert!(accepted_capabilities.iter().all(|capability| supported_capabilities.contains(capability)));
     ProtocolDecision::Proceed(AcceptedHello {
         endpoint_id: hello.endpoint_id.clone(),
         accepted_capabilities,
@@ -1897,6 +1989,8 @@ pub fn authorize_ticket(ticket: &RemoteTicket, request: &TicketAuthRequest) -> T
     {
         return TicketDecision::Reject("ticket-client-endpoint-mismatch".to_string());
     }
+    debug_assert!(!ticket.revoked);
+    debug_assert!(ticket.uses_remaining > 0);
     TicketDecision::Authorized
 }
 
@@ -1928,6 +2022,8 @@ pub fn validate_concrete_request(request: &ConcreteBuildRequest, ticket: &Remote
     {
         return Err("remote-locality-scope-invalid".to_string());
     }
+    debug_assert!(!request.contains_raw_frontend_eval);
+    debug_assert!(request.input_refs.len() <= MAX_REMOTE_INPUT_REFS);
     Ok(())
 }
 
@@ -1961,19 +2057,19 @@ pub fn plan_remote_executable_request(request: &ConcreteBuildRequest) -> Result<
     validate_expected_outputs(&request.expected_outputs, &request.store_prefix)?;
     match &request.payload {
         RemoteConcreteBuildPayload::Action { action_id, spec_json } => {
-            plan_remote_action_payload(action_id, spec_json, request)
+            plan_remote_action_payload((action_id, spec_json), request)
         }
         RemoteConcreteBuildPayload::Derivation { drv_path, drv_json } => {
-            plan_remote_derivation_payload(drv_path, drv_json, request)
+            plan_remote_derivation_payload((drv_path, drv_json), request)
         }
     }
 }
 
 fn plan_remote_action_payload(
-    action_id: &str,
-    spec_json: &str,
+    payload: (&str, &str),
     request: &ConcreteBuildRequest,
 ) -> Result<RemoteExecutablePlan, String> {
+    let (action_id, spec_json) = payload;
     if action_id.is_empty() {
         return Err("remote-action-id-empty".to_string());
     }
@@ -1992,10 +2088,10 @@ fn plan_remote_action_payload(
 }
 
 fn plan_remote_derivation_payload(
-    drv_path: &str,
-    drv_json: &str,
+    payload: (&str, &str),
     request: &ConcreteBuildRequest,
 ) -> Result<RemoteExecutablePlan, String> {
+    let (drv_path, drv_json) = payload;
     if drv_path.is_empty() || !drv_path.starts_with(&request.store_prefix) {
         return Err("remote-derivation-path-store-prefix-mismatch".to_string());
     }
@@ -2007,12 +2103,13 @@ fn plan_remote_derivation_payload(
         .map_err(|err| format!("remote-derivation-convert-invalid: {err}"))?;
     let computed_drv_path = computed_path.to_absolute_path_with_prefix(&request.store_prefix);
     validate_derivation_plan_identity(
-        drv_path,
-        &computed_drv_path,
+        (drv_path, &computed_drv_path),
         &nix_drv,
         &request.expected_outputs,
         &request.store_prefix,
     )?;
+    debug_assert_eq!(drv_path, computed_drv_path);
+    debug_assert!(request.expected_outputs.len() <= MAX_REMOTE_EXPECTED_OUTPUTS);
     let source = RemoteExecutablePlanSource::Derivation {
         declared_drv_path: drv_path.to_string(),
         computed_drv_path,
@@ -2059,6 +2156,8 @@ fn validate_expected_outputs(outputs: &[RemoteExpectedOutput], store_prefix: &st
             return Err("remote-expected-output-store-prefix-mismatch".to_string());
         }
     }
+    debug_assert_eq!(names.len(), outputs.len());
+    debug_assert!(outputs.len() <= MAX_REMOTE_EXPECTED_OUTPUTS);
     Ok(())
 }
 
@@ -2099,16 +2198,18 @@ fn validate_action_outputs(outputs: &[String], expected_outputs: &[RemoteExpecte
     if action_names != expected_names {
         return Err("remote-action-expected-output-mismatch".to_string());
     }
+    debug_assert_eq!(action_names.len(), outputs.len());
+    debug_assert_eq!(action_names, expected_names);
     Ok(())
 }
 
 fn validate_derivation_plan_identity(
-    declared_drv_path: &str,
-    computed_drv_path: &str,
+    paths: (&str, &str),
     derivation: &nix_compat::derivation::Derivation,
     expected_outputs: &[RemoteExpectedOutput],
     store_prefix: &str,
 ) -> Result<(), String> {
+    let (declared_drv_path, computed_drv_path) = paths;
     if declared_drv_path != computed_drv_path {
         return Err("remote-derivation-path-mismatch".to_string());
     }
@@ -2137,6 +2238,8 @@ fn validate_derivation_expected_outputs(
             (None, None) => {}
         }
     }
+    debug_assert!(expected_outputs.len() <= derivation.outputs.len());
+    debug_assert!(expected_outputs.iter().all(|expected| derivation.outputs.contains_key(&expected.name)));
     Ok(())
 }
 
@@ -2184,11 +2287,15 @@ fn validate_command_env(env: &BTreeMap<String, String>) -> Result<(), String> {
 fn remote_derivation_env_utf8(
     derivation: &nix_compat::derivation::Derivation,
 ) -> Result<BTreeMap<String, String>, String> {
-    let mut env = BTreeMap::new();
+    if derivation.environment.len() > MAX_REMOTE_EXECUTOR_ENV_VARS {
+        return Err(format!("remote-executor-env-count-exceeds-{MAX_REMOTE_EXECUTOR_ENV_VARS}"));
+    }
+    let mut env_entries = Vec::with_capacity(derivation.environment.len());
     for (name, value) in &derivation.environment {
         let value = String::from_utf8(value.to_vec()).map_err(|_| "remote-derivation-env-non-utf8".to_string())?;
-        env.insert(name.clone(), value);
+        env_entries.push((name.clone(), value));
     }
+    let env = env_entries.into_iter().collect::<BTreeMap<_, _>>();
     validate_command_env(&env)?;
     Ok(env)
 }
@@ -2211,16 +2318,16 @@ fn finish_remote_executable_plan(
 ) -> Result<RemoteExecutablePlan, String> {
     validate_command_args(&command_args)?;
     validate_command_env(&command_env)?;
-    let plan_digest_blake3 = remote_executable_plan_digest(
-        &request.request_id,
-        &request.store_prefix,
-        &source,
-        &command_args,
-        &command_env,
-        &system,
-        &request.expected_outputs,
-    );
-    Ok(RemoteExecutablePlan {
+    let plan_digest_blake3 = remote_executable_plan_digest(RemoteExecutablePlanDigestInput {
+        request_id: &request.request_id,
+        store_prefix: &request.store_prefix,
+        source: &source,
+        command_args: &command_args,
+        command_env: &command_env,
+        system: &system,
+        expected_outputs: &request.expected_outputs,
+    });
+    let plan = RemoteExecutablePlan {
         request_id: request.request_id.clone(),
         store_prefix: request.store_prefix.clone(),
         source,
@@ -2229,38 +2336,46 @@ fn finish_remote_executable_plan(
         system,
         expected_outputs: request.expected_outputs.clone(),
         plan_digest_blake3,
-    })
+    };
+    debug_assert!(is_blake3_hex_digest(&plan.plan_digest_blake3));
+    debug_assert_eq!(plan.expected_outputs.len(), request.expected_outputs.len());
+    Ok(plan)
 }
 
-fn remote_executable_plan_digest(
-    request_id: &str,
-    store_prefix: &str,
-    source: &RemoteExecutablePlanSource,
-    command_args: &[String],
-    command_env: &BTreeMap<String, String>,
-    system: &str,
-    expected_outputs: &[RemoteExpectedOutput],
-) -> String {
+struct RemoteExecutablePlanDigestInput<'a> {
+    request_id: &'a str,
+    store_prefix: &'a str,
+    source: &'a RemoteExecutablePlanSource,
+    command_args: &'a [String],
+    command_env: &'a BTreeMap<String, String>,
+    system: &'a str,
+    expected_outputs: &'a [RemoteExpectedOutput],
+}
+
+fn remote_executable_plan_digest(input: RemoteExecutablePlanDigestInput<'_>) -> String {
     let mut hasher = blake3::Hasher::new();
-    hash_labeled_str(&mut hasher, "request-id", request_id);
-    hash_labeled_str(&mut hasher, "store-prefix", store_prefix);
-    hash_executable_plan_source(&mut hasher, source);
-    hash_labeled_str(&mut hasher, "system", system);
-    for arg in command_args {
+    hash_labeled_str(&mut hasher, "request-id", input.request_id);
+    hash_labeled_str(&mut hasher, "store-prefix", input.store_prefix);
+    hash_executable_plan_source(&mut hasher, input.source);
+    hash_labeled_str(&mut hasher, "system", input.system);
+    for arg in input.command_args {
         hash_labeled_str(&mut hasher, "command-arg", arg);
     }
-    for (name, value) in command_env {
+    for (name, value) in input.command_env {
         hash_labeled_str(&mut hasher, "env-name", name);
         hash_labeled_str(&mut hasher, "env-value", value);
     }
-    for output in expected_outputs {
+    for output in input.expected_outputs {
         hash_labeled_str(&mut hasher, "output-name", &output.name);
         match &output.logical_path {
             Some(logical_path) => hash_labeled_str(&mut hasher, "output-path", logical_path),
             None => hash_labeled_str(&mut hasher, "output-path-state", "content-addressed-unknown"),
         }
     }
-    hasher.finalize().to_hex().to_string()
+    let digest_blake3 = hasher.finalize().to_hex().to_string();
+    debug_assert_eq!(digest_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
+    debug_assert!(is_blake3_hex_digest(&digest_blake3));
+    digest_blake3
 }
 
 fn hash_executable_plan_source(hasher: &mut blake3::Hasher, source: &RemoteExecutablePlanSource) {
@@ -2290,7 +2405,8 @@ fn hash_executable_plan_source(hasher: &mut blake3::Hasher, source: &RemoteExecu
     }
 }
 
-fn hash_labeled_str(hasher: &mut blake3::Hasher, label: &str, value: &str) {
+fn hash_labeled_str(hasher: &mut blake3::Hasher, label: &str, value: impl AsRef<str>) {
+    let value = value.as_ref();
     hasher.update(label.as_bytes());
     hasher.update(b":");
     hasher.update(value.len().to_string().as_bytes());
@@ -2322,17 +2438,30 @@ fn execute_remote_fixture_plan(
     })
 }
 
+struct RemoteLocalBuildExecutionInput<'a> {
+    request: &'a ConcreteBuildRequest,
+    plan: &'a RemoteExecutablePlan,
+    input_upload: &'a RemoteInputUpload,
+    created_unix_s: u64,
+}
+
 fn execute_remote_local_build(
     executor: &RemoteLocalBuildExecutor,
-    request: &ConcreteBuildRequest,
-    plan: &RemoteExecutablePlan,
-    input_upload: &RemoteInputUpload,
+    input: RemoteLocalBuildExecutionInput<'_>,
 ) -> Result<RemoteExecutionOutcome, String> {
+    let RemoteLocalBuildExecutionInput {
+        request,
+        plan,
+        input_upload,
+        created_unix_s,
+    } = input;
     validate_local_executor_input_refs(request, &input_upload.refs)?;
     if executor.store_prefix != request.store_prefix {
         return Err("remote-local-executor-store-prefix-mismatch".to_string());
     }
     validate_remote_execution_plan(plan)?;
+    debug_assert_eq!(executor.store_prefix, request.store_prefix);
+    debug_assert_eq!(plan.request_id, request.request_id);
 
     #[cfg(target_os = "linux")]
     {
@@ -2341,7 +2470,12 @@ fn execute_remote_local_build(
             .enable_all()
             .build()
             .map_err(|err| format!("remote-local-executor-runtime: {err}"))?;
-        rt.block_on(execute_remote_local_build_linux(executor, request, plan, input_upload))
+        rt.block_on(execute_remote_local_build_linux(executor, RemoteLocalBuildExecutionInput {
+            request,
+            plan,
+            input_upload,
+            created_unix_s,
+        }))
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -2356,28 +2490,23 @@ fn execute_remote_local_build(
 #[cfg(target_os = "linux")]
 async fn execute_remote_local_build_linux(
     executor: &RemoteLocalBuildExecutor,
-    request: &ConcreteBuildRequest,
-    plan: &RemoteExecutablePlan,
-    input_upload: &RemoteInputUpload,
+    input: RemoteLocalBuildExecutionInput<'_>,
 ) -> Result<RemoteExecutionOutcome, String> {
     use snix_build::buildservice::BubblewrapBuildService;
-
+    let RemoteLocalBuildExecutionInput {
+        request,
+        plan,
+        input_upload,
+        created_unix_s,
+    } = input;
     let _mutation_guard = crunch_store::StoreMutationGuard::acquire_wait(&executor.state_dir)
         .map_err(|err| format!("remote-local-executor-mutation-lock: {err}"))?;
     let (drv_path, mut known_paths) = local_derivation_registry(request, plan)?;
     let workspace_lease = acquire_remote_execution_workspace(executor, request, &drv_path, &mut known_paths)?;
-    let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
-        state_dir: executor.state_dir.clone(),
-        output_dir: executor.output_dir.clone(),
-        remote_cache_urls: Vec::new(),
-        fallback_mode: crunch_store::StoreFallbackMode::Practical,
-        store_dir: executor.store_prefix.clone(),
-        base_state_dirs: Vec::new(),
-    })
-    .await
-    .map_err(|err| format!("remote-local-executor-open-store: {err}"))?;
+    let store = crunch_store::StoreHandle::open(remote_local_store_config(executor))
+        .await
+        .map_err(|err| format!("remote-local-executor-open-store: {err}"))?;
     materialize_remote_input_upload(&store, request, input_upload).await?;
-
     let blob_service = store.blob_service();
     let directory_service = store.directory_service();
     let pathinfo_service = store.pathinfo_service();
@@ -2390,9 +2519,9 @@ async fn execute_remote_local_build_linux(
     }
     let fetch_service = crunch_build::FetchBuildService::new(blob_service.clone(), directory_service.clone());
     let dispatch = crunch_build::DispatchBuildService::new(fetch_service, bwrap_service);
-    let workspace_reports = crunch_build::WorkspaceReportCollector::default();
+    let workspace_evidence_collector = new_remote_workspace_report_collector();
     let build_service =
-        crunch_build::StatefulWorkspaceBuildService::new(dispatch, &executor.state_dir, workspace_reports);
+        crunch_build::StatefulWorkspaceBuildService::new(dispatch, &executor.state_dir, workspace_evidence_collector);
     let mut builder = crunch_build::Builder::with_state_dir(
         blob_service,
         directory_service,
@@ -2415,42 +2544,124 @@ async fn execute_remote_local_build_linux(
             outcome
         }
         Err(error) => {
-            let debug_ref = publish_remote_worker_failure_debug(executor, request, &failure_workspace_root);
-            let cleanup = cleanup_remote_failure_workspace(&failure_workspace_root);
-            let workspace_release = release_remote_execution_workspace(executor, workspace_lease);
-            let mut message = format!("remote-local-executor-build: {error}");
-            match debug_ref {
-                Ok(Some(debug)) => {
-                    message.push_str("; worker_bundle_ref=");
-                    message.push_str(&debug.bundle_ref);
-                    message.push_str("; worker_capture_outcome=");
-                    message.push_str(&debug.capture_outcome_code);
-                    message.push_str("; worker_cleanup_status=");
-                    message.push_str(&debug.cleanup_status_code);
-                }
-                Ok(None) => {}
-                Err(capture_error) => {
-                    let safe_error = crunch_build::distributed::redact_remote_failure_diagnostic(&capture_error)
-                        .unwrap_or_else(|_| "capture-failed".to_string());
-                    message.push_str("; remote-failure-debug-capture-failed:");
-                    message.push_str(&safe_error);
-                }
-            }
-            if let Err(cleanup_error) = cleanup
-                && cleanup_error.kind() != std::io::ErrorKind::NotFound
-            {
-                message.push_str("; remote-failure-workspace-cleanup-degraded");
-            }
-            if let Err(release_error) = workspace_release {
-                let safe_error = crunch_build::distributed::redact_remote_failure_diagnostic(&release_error)
-                    .unwrap_or_else(|_| "workspace-release-failed".to_string());
-                message.push_str("; remote-workspace-release-degraded:");
-                message.push_str(&safe_error);
-            }
-            return Err(message);
+            let build_error = error.to_string();
+            return Err(remote_local_build_failure(executor, RemoteLocalBuildFailureInput {
+                request,
+                failure_workspace_root: &failure_workspace_root,
+                workspace_lease,
+                build_error: &build_error,
+                created_unix_s,
+            }));
         }
     };
+    debug_assert_eq!(outcome.outputs.len(), plan.expected_outputs.len());
+    debug_assert!(remote_output_names_match_plan(&outcome, plan));
     remote_execution_outcome_from_build_outcome(request, plan, &outcome)
+}
+
+#[cfg(target_os = "linux")]
+fn remote_output_names_match_plan(outcome: &crunch_build::BuildOutcome, plan: &RemoteExecutablePlan) -> bool {
+    outcome
+        .outputs
+        .keys()
+        .all(|name| plan.expected_outputs.iter().any(|expected| &expected.name == name))
+}
+
+#[cfg(target_os = "linux")]
+fn new_remote_workspace_report_collector() -> crunch_build::WorkspaceReportCollector {
+    new_default_remote_value()
+}
+
+#[cfg(target_os = "linux")]
+fn new_default_remote_value<T: Default>() -> T {
+    T::default()
+}
+
+#[cfg(target_os = "linux")]
+fn remote_local_store_config(executor: &RemoteLocalBuildExecutor) -> crunch_store::StoreConfig {
+    let config = crunch_store::StoreConfig {
+        state_dir: executor.state_dir.clone(),
+        output_dir: executor.output_dir.clone(),
+        remote_cache_urls: Vec::new(),
+        fallback_mode: crunch_store::StoreFallbackMode::Practical,
+        store_dir: executor.store_prefix.clone(),
+        base_state_dirs: Vec::new(),
+    };
+    debug_assert_eq!(config.store_dir, executor.store_prefix);
+    debug_assert_eq!(config.state_dir, executor.state_dir);
+    config
+}
+
+#[cfg(target_os = "linux")]
+struct RemoteLocalBuildFailureInput<'a> {
+    request: &'a ConcreteBuildRequest,
+    failure_workspace_root: &'a Path,
+    workspace_lease: Option<crunch_build::WorkspaceLeaseRequest>,
+    build_error: &'a str,
+    created_unix_s: u64,
+}
+
+#[cfg(target_os = "linux")]
+fn remote_local_build_failure(executor: &RemoteLocalBuildExecutor, input: RemoteLocalBuildFailureInput<'_>) -> String {
+    let debug_ref = publish_remote_worker_failure_debug(
+        executor,
+        input.request,
+        input.failure_workspace_root,
+        input.created_unix_s,
+    );
+    let cleanup = cleanup_remote_failure_workspace(input.failure_workspace_root);
+    let workspace_release = release_remote_execution_workspace(executor, input.workspace_lease);
+    let mut message = format!("remote-local-executor-build: {}", input.build_error);
+    append_remote_failure_debug_result(&mut message, debug_ref);
+    if let Err(cleanup_error) = cleanup
+        && cleanup_error.kind() != std::io::ErrorKind::NotFound
+    {
+        message.push_str("; remote-failure-workspace-cleanup-degraded");
+    }
+    if let Err(release_error) = workspace_release {
+        append_redacted_remote_failure(
+            &mut message,
+            ("remote-workspace-release-degraded", "workspace-release-failed"),
+            &release_error,
+        );
+    }
+    debug_assert!(message.starts_with("remote-local-executor-build:"));
+    debug_assert!(!message.contains("token="));
+    message
+}
+
+#[cfg(target_os = "linux")]
+fn append_remote_failure_debug_result(
+    message: &mut String,
+    debug_ref: Result<Option<crate::remote_failure_debug::RemoteFailureDebugPublishOutcome>, String>,
+) {
+    match debug_ref {
+        Ok(Some(debug)) => {
+            message.push_str("; worker_bundle_ref=");
+            message.push_str(&debug.bundle_ref);
+            message.push_str("; worker_capture_outcome=");
+            message.push_str(&debug.capture_outcome_code);
+            message.push_str("; worker_cleanup_status=");
+            message.push_str(&debug.cleanup_status_code);
+        }
+        Ok(None) => {}
+        Err(capture_error) => append_redacted_remote_failure(
+            message,
+            ("remote-failure-debug-capture-failed", "capture-failed"),
+            &capture_error,
+        ),
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn append_redacted_remote_failure(message: &mut String, diagnostic: (&str, &str), raw_error: impl AsRef<str>) {
+    let (label, redaction_fallback) = diagnostic;
+    let safe_error = crunch_build::distributed::redact_remote_failure_diagnostic(raw_error.as_ref())
+        .unwrap_or_else(|_| redaction_fallback.to_string());
+    message.push_str("; ");
+    message.push_str(label);
+    message.push(':');
+    message.push_str(&safe_error);
 }
 
 fn acquire_remote_execution_workspace(
@@ -2518,6 +2729,8 @@ fn acquire_remote_execution_workspace(
         crunch_build::WORKSPACE_LEASE_ENV.to_string(),
         serde_json::to_vec(&lease_binding).map_err(|error| error.to_string())?.into(),
     );
+    debug_assert_eq!(lease_request.owner.worker_id, executor.endpoint_id);
+    debug_assert_eq!(lease_request.owner.fence_generation, binding.fence_generation.get());
     Ok(Some(lease_request))
 }
 
@@ -2559,6 +2772,7 @@ fn publish_remote_worker_failure_debug(
     executor: &RemoteLocalBuildExecutor,
     request: &ConcreteBuildRequest,
     failure_workspace_root: &Path,
+    created_unix_s: u64,
 ) -> Result<Option<crate::remote_failure_debug::RemoteFailureDebugPublishOutcome>, String> {
     if !request.failure_debug_policy.capture.enabled {
         return Ok(None);
@@ -2570,10 +2784,6 @@ fn publish_remote_worker_failure_debug(
         .clone();
     let capture_root =
         sole_retained_failure_workspace(failure_workspace_root)?.map(|workspace| workspace.join("scratches"));
-    let created_unix_s = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|_| "remote-failure-worker-clock-before-epoch".to_string())?
-        .as_secs();
     let outcome = crate::remote_failure_debug::publish_remote_failure_debug_bundle(
         crate::remote_failure_debug::RemoteFailureDebugPublishRequest {
             state_dir: &executor.state_dir,
@@ -2597,6 +2807,8 @@ fn publish_remote_worker_failure_debug(
             policy: request.failure_debug_policy.clone(),
         },
     )?;
+    debug_assert!(!outcome.bundle_ref.is_empty());
+    debug_assert!(!outcome.capture_outcome_code.is_empty());
     Ok(Some(outcome))
 }
 
@@ -2607,7 +2819,7 @@ fn sole_retained_failure_workspace(root: &Path) -> Result<Option<PathBuf>, Strin
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(format!("remote-failure-workspace-read-failed:{error}")),
     };
-    let mut retained = Vec::new();
+    let mut retained = Vec::with_capacity(REMOTE_FAILURE_WORKSPACE_SCAN_MAX);
     for entry in entries {
         if retained.len() >= REMOTE_FAILURE_WORKSPACE_SCAN_MAX {
             return Err("remote-failure-workspace-count-exceeded".to_string());
@@ -2622,6 +2834,8 @@ fn sole_retained_failure_workspace(root: &Path) -> Result<Option<PathBuf>, Strin
     if retained.len() > 1 {
         return Err("remote-failure-workspace-ambiguous".to_string());
     }
+    debug_assert!(retained.len() <= 1);
+    debug_assert!(retained.len() <= REMOTE_FAILURE_WORKSPACE_SCAN_MAX);
     Ok(retained.pop())
 }
 
@@ -2629,6 +2843,8 @@ fn sole_retained_failure_workspace(root: &Path) -> Result<Option<PathBuf>, Strin
 fn cleanup_remote_failure_workspace(root: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
 
+    debug_assert!(REMOTE_FAILURE_CLEANUP_ENTRIES_MAX > 0);
+    debug_assert!(REMOTE_FAILURE_CLEANUP_DIRECTORY_MODE != REMOTE_FAILURE_CLEANUP_FILE_MODE);
     if !root.exists() {
         return Ok(());
     }
@@ -2683,6 +2899,8 @@ fn local_derivation_registry(
     if registry.get_by_drv_path(&computed_abs).is_none() {
         return Err("remote-local-executor-registry-root-missing".to_string());
     }
+    debug_assert_eq!(declared, computed);
+    debug_assert!(registry.get_by_drv_path(&computed_abs).is_some());
     Ok((computed, registry))
 }
 
@@ -2735,7 +2953,7 @@ fn remote_execution_output_from_pathinfo(
         crunch_store::artifact_attestation_digest_for_pathinfo(store_prefix, path_info, &expected.name, None)
             .map_err(|err| format!("remote-local-executor-artifact-digest: {err}"))?
             .to_hex();
-    Ok(RemoteExecutionOutput {
+    let output = RemoteExecutionOutput {
         name: expected.name.clone(),
         logical_path,
         content_digest_blake3,
@@ -2743,7 +2961,10 @@ fn remote_execution_output_from_pathinfo(
         artifact_attestation_digest_blake3,
         path_info: Some(path_info.clone()),
         nar_payload,
-    })
+    };
+    debug_assert_eq!(output.name, expected.name);
+    debug_assert_eq!(output.size_bytes, path_info.nar_size);
+    Ok(output)
 }
 
 fn remote_pathinfo_node_digest_blake3(path_info: &PathInfo) -> Result<String, String> {
@@ -2764,20 +2985,20 @@ pub fn bind_remote_production_dispatch(
     plan.client.request.production_attempt = Some(attempt);
     plan.client.request.transfer_policy = Some(transfer_policy);
     plan.client.request.failure_debug_policy = failure_debug_policy;
-    let mut request_frame_updated = false;
+    let mut is_request_frame_updated = false;
     for frame in &mut plan.command.input_frames {
         if let RemoteFrame::BuildRequest { request } = frame {
             *request = plan.client.request.clone();
-            request_frame_updated = true;
+            is_request_frame_updated = true;
         }
     }
-    if !request_frame_updated {
+    if !is_request_frame_updated {
         return Err("remote-production-build-request-frame-missing".to_string());
     }
     plan.command.production_transfer = Some(RemoteProductionTransferClient {
         state_dir: state_dir.to_path_buf(),
         transfer_policy,
-        telemetry_policy: RemoteTelemetryPolicy::default(),
+        telemetry_policy: default_remote_telemetry_policy(),
         trusted_output_keys: plan.client.trusted_output_keys.clone(),
         input_transfer: None,
         interrupt_after_input_chunks: None,
@@ -2848,8 +3069,9 @@ pub fn set_remote_diagnostic_trace_context(
         .iter()
         .position(|frame| matches!(frame, RemoteFrame::Hello { .. }))
         .ok_or_else(|| "remote-production-hello-frame-missing".to_string())?;
-    let RemoteFrame::Hello { hello } = &mut command.input_frames[hello_index] else {
-        unreachable!("hello position checked");
+    let hello = match &mut command.input_frames[hello_index] {
+        RemoteFrame::Hello { hello } => hello,
+        _ => return Err("remote-production-hello-frame-index-invalid".to_string()),
     };
     if !hello.capabilities.iter().any(|capability| capability == REMOTE_TRACE_CONTEXT_CAPABILITY) {
         hello.capabilities.push(REMOTE_TRACE_CONTEXT_CAPABILITY.to_string());
@@ -2883,7 +3105,17 @@ pub async fn prepare_remote_production_input_transfer(
     let mut artifacts = Vec::with_capacity(request.input_refs.len());
     for input_ref in &request.input_refs {
         artifacts.push(
-            prepare_remote_input_nar_artifact(store, request, input_ref, source_state_dir, &spool_dir, policy).await?,
+            prepare_remote_input_nar_artifact(
+                &RemoteInputNarPrepareContext {
+                    store,
+                    request,
+                    source_state_dir,
+                    spool_dir: &spool_dir,
+                    policy,
+                },
+                input_ref,
+            )
+            .await?,
         );
     }
     if artifacts.is_empty() {
@@ -2912,30 +3144,34 @@ pub async fn prepare_remote_production_input_transfer(
     Ok(())
 }
 
-async fn prepare_remote_input_nar_artifact(
-    store: &crunch_store::StoreHandle,
-    request: &ConcreteBuildRequest,
-    input_ref: &str,
-    source_state_dir: &Path,
-    spool_dir: &Path,
+struct RemoteInputNarPrepareContext<'a> {
+    store: &'a crunch_store::StoreHandle,
+    request: &'a ConcreteBuildRequest,
+    source_state_dir: &'a Path,
+    spool_dir: &'a Path,
     policy: RemoteTransferPolicy,
+}
+
+async fn prepare_remote_input_nar_artifact(
+    context: &RemoteInputNarPrepareContext<'_>,
+    input_ref: &str,
 ) -> Result<crate::remote_transfer::PreparedRemoteTransferArtifact, String> {
     let source_scratch;
-    let host_path = match remote_input_ref_host_path(store, &request.store_prefix, input_ref) {
+    let host_path = match remote_input_ref_host_path(context.store, &context.request.store_prefix, input_ref) {
         Ok(path) => path,
         Err(reason) if reason == "remote-input-source-path-missing" => {
             source_scratch = tempfile::Builder::new()
                 .prefix("mantle-remote-streamed-source-input-")
                 .tempdir()
                 .map_err(|err| format!("remote-input-source-state-scratch-failed: {err}"))?;
-            let materialized = crate::source_bundle::materialize_imported_source_record_for_store_path(
-                source_state_dir,
-                &request.store_prefix,
+            let is_materialized = crate::source_bundle::materialize_imported_source_record_for_store_path(
+                context.source_state_dir,
+                &context.request.store_prefix,
                 input_ref,
                 source_scratch.path(),
             )
             .map_err(|err| format!("remote-input-source-state-materialize-failed: {err}"))?;
-            if !materialized {
+            if !is_materialized {
                 return Err("remote-input-source-path-missing".to_string());
             }
             source_scratch.path().to_path_buf()
@@ -2943,43 +3179,56 @@ async fn prepare_remote_input_nar_artifact(
         Err(reason) => return Err(reason),
     };
     let node = snix_castore::import::fs::ingest_path::<_, _, _, &[u8]>(
-        store.blob_service(),
-        store.directory_service(),
+        context.store.blob_service(),
+        context.store.directory_service(),
         &host_path,
         None,
     )
     .await
     .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
-    crate::remote_transfer::prepare_nar_node_transfer_artifact(
-        store,
+    let artifact = crate::remote_transfer::prepare_nar_node_transfer_artifact(
+        context.store,
         &node,
         remote_input_nar_artifact_id(input_ref)?,
-        spool_dir,
+        context.spool_dir,
         true,
-        policy,
+        context.policy,
     )
-    .await
+    .await?;
+    debug_assert!(artifact.source_path.is_file());
+    debug_assert!(artifact.descriptor.size_bytes > 0);
+    Ok(artifact)
 }
 
 fn remote_input_nar_artifact_id(input_ref: &str) -> Result<RemoteTransferArtifactId, String> {
     remote_hashed_transfer_artifact_id(REMOTE_INPUT_NAR_ARTIFACT_DOMAIN, input_ref)
 }
 
-fn remote_output_nar_artifact_id(output_name: &str, logical_path: &str) -> Result<RemoteTransferArtifactId, String> {
-    remote_hashed_transfer_artifact_id(REMOTE_OUTPUT_NAR_ARTIFACT_DOMAIN, &format!("{output_name}\0{logical_path}"))
+fn remote_output_nar_artifact_id(
+    output_name: &str,
+    logical_path: impl AsRef<str>,
+) -> Result<RemoteTransferArtifactId, String> {
+    remote_hashed_transfer_artifact_id(
+        REMOTE_OUTPUT_NAR_ARTIFACT_DOMAIN,
+        &format!("{output_name}\0{}", logical_path.as_ref()),
+    )
 }
 
 fn remote_output_pathinfo_artifact_id(
     output_name: &str,
-    logical_path: &str,
+    logical_path: impl AsRef<str>,
 ) -> Result<RemoteTransferArtifactId, String> {
     remote_hashed_transfer_artifact_id(
         REMOTE_OUTPUT_PATHINFO_ARTIFACT_DOMAIN,
-        &format!("{output_name}\0{logical_path}"),
+        &format!("{output_name}\0{}", logical_path.as_ref()),
     )
 }
 
-fn remote_hashed_transfer_artifact_id(domain: &str, identity: &str) -> Result<RemoteTransferArtifactId, String> {
+fn remote_hashed_transfer_artifact_id(
+    domain: &str,
+    identity: impl AsRef<str>,
+) -> Result<RemoteTransferArtifactId, String> {
+    let identity = identity.as_ref();
     let mut hasher = blake3::Hasher::new();
     hash_labeled_str(&mut hasher, "domain", domain);
     hash_labeled_str(&mut hasher, "identity", identity);
@@ -3020,6 +3269,7 @@ fn attach_remote_input_upload_artifacts(
     request: &ConcreteBuildRequest,
     artifacts: Vec<RemoteInputUploadArtifact>,
 ) -> Result<(), String> {
+    let artifact_count = artifacts.len();
     for frame in &mut command.input_frames {
         if let RemoteFrame::InputUpload { upload } = frame {
             upload.artifacts = artifacts;
@@ -3036,6 +3286,8 @@ fn attach_remote_input_upload_artifacts(
                 &upload.artifacts,
                 &RemoteInputUploadPrivacyPolicy::default(),
             )?;
+            debug_assert_eq!(upload.artifacts.len(), artifact_count);
+            debug_assert_eq!(upload.request_id, request.request_id);
             return Ok(());
         }
     }
@@ -3121,6 +3373,13 @@ pub fn plan_remote_input_upload_privacy_summary(
         }
         increment_remote_input_upload_class_count(&mut summary, upload_class)?;
     }
+    let classified_objects = summary
+        .store_objects
+        .saturating_add(summary.source_objects)
+        .saturating_add(summary.proof_objects)
+        .saturating_add(summary.secret_descriptor_objects);
+    debug_assert_eq!(classified_objects, summary.total_objects);
+    debug_assert!(summary.total_bytes <= policy.max_bytes);
     Ok(summary)
 }
 
@@ -3151,18 +3410,71 @@ fn increment_remote_input_upload_class_count(
     Ok(())
 }
 
-pub fn remote_build_observability_report(
-    selected_route: &str,
-    rejected_route_reasons: &[String],
-    endpoint_id: Option<&str>,
-    attempt_reason_codes: &[RemoteAttemptReasonCode],
+struct RemoteBuildObservabilityInput<'a> {
+    selected_route: &'a str,
+    rejected_route_reasons: &'a [String],
+    endpoint_id: Option<&'a str>,
+    attempt_reason_codes: &'a [RemoteAttemptReasonCode],
     upload_summary: RemoteInputUploadPrivacySummary,
-    resource_lease: Option<&RemoteResourceLease>,
-    locality: Option<&RemoteVerifiedLocalitySummary>,
-    admission: &RemoteOutputAdmissionReport,
-    import_report: &RemoteOutputImportReport,
-    non_claims: &[String],
+    resource_lease: Option<&'a RemoteResourceLease>,
+    locality: Option<&'a RemoteVerifiedLocalitySummary>,
+    admission: &'a RemoteOutputAdmissionReport,
+    import_report: &'a RemoteOutputImportReport,
+    non_claims: &'a [String],
+}
+
+pub const REMOTE_BUILD_OBSERVABILITY_REPORT: fn(
+    &str,
+    &[String],
+    Option<&str>,
+    &[RemoteAttemptReasonCode],
+    RemoteInputUploadPrivacySummary,
+    Option<&RemoteResourceLease>,
+    Option<&RemoteVerifiedLocalitySummary>,
+    &RemoteOutputAdmissionReport,
+    &RemoteOutputImportReport,
+    &[String],
+) -> Result<RemoteBuildObservabilityReport, String> =
+    |selected_route,
+     rejected_route_reasons,
+     endpoint_id,
+     attempt_reason_codes,
+     upload_summary,
+     resource_lease,
+     locality,
+     admission,
+     import_report,
+     non_claims| {
+        remote_build_observability_report_core(RemoteBuildObservabilityInput {
+            selected_route,
+            rejected_route_reasons,
+            endpoint_id,
+            attempt_reason_codes,
+            upload_summary,
+            resource_lease,
+            locality,
+            admission,
+            import_report,
+            non_claims,
+        })
+    };
+pub use REMOTE_BUILD_OBSERVABILITY_REPORT as remote_build_observability_report;
+
+fn remote_build_observability_report_core(
+    input: RemoteBuildObservabilityInput<'_>,
 ) -> Result<RemoteBuildObservabilityReport, String> {
+    let RemoteBuildObservabilityInput {
+        selected_route,
+        rejected_route_reasons,
+        endpoint_id,
+        attempt_reason_codes,
+        upload_summary,
+        resource_lease,
+        locality,
+        admission,
+        import_report,
+        non_claims,
+    } = input;
     if selected_route.is_empty() {
         return Err("remote-observability-route-empty".to_string());
     }
@@ -3181,6 +3493,8 @@ pub fn remote_build_observability_report(
     if outputs.is_empty() {
         return Err("remote-observability-output-empty".to_string());
     }
+    debug_assert_eq!(admission.request_id, import_report.request_id);
+    debug_assert_eq!(outputs.len(), import_report.outputs.len());
     Ok(RemoteBuildObservabilityReport {
         selected_route: selected_route.to_string(),
         rejected_route_reasons: rejected_route_reasons.iter().map(|reason| bounded_untrusted_text(reason)).collect(),
@@ -3200,15 +3514,50 @@ pub fn remote_build_observability_report(
     })
 }
 
-pub fn remote_operator_e2e_rail_report(
-    route_plan: &crate::realization_routing::RoutePlanReport,
-    transcript: &RemoteStdioTranscript,
+struct RemoteOperatorE2eRailInput<'a> {
+    route_plan: &'a crate::realization_routing::RoutePlanReport,
+    transcript: &'a RemoteStdioTranscript,
     upload_summary: RemoteInputUploadPrivacySummary,
-    admission: &RemoteOutputAdmissionReport,
-    import_report: &RemoteOutputImportReport,
+    admission: &'a RemoteOutputAdmissionReport,
+    import_report: &'a RemoteOutputImportReport,
     status: RemoteCoordinatorStatusSnapshot,
-    non_claims: &[String],
+    non_claims: &'a [String],
+}
+
+pub const REMOTE_OPERATOR_E2E_RAIL_REPORT: fn(
+    &crate::realization_routing::RoutePlanReport,
+    &RemoteStdioTranscript,
+    RemoteInputUploadPrivacySummary,
+    &RemoteOutputAdmissionReport,
+    &RemoteOutputImportReport,
+    RemoteCoordinatorStatusSnapshot,
+    &[String],
+) -> Result<RemoteOperatorE2eRailReport, String> =
+    |route_plan, transcript, upload_summary, admission, import_report, status, non_claims| {
+        remote_operator_e2e_rail_report_core(RemoteOperatorE2eRailInput {
+            route_plan,
+            transcript,
+            upload_summary,
+            admission,
+            import_report,
+            status,
+            non_claims,
+        })
+    };
+pub use REMOTE_OPERATOR_E2E_RAIL_REPORT as remote_operator_e2e_rail_report;
+
+fn remote_operator_e2e_rail_report_core(
+    input: RemoteOperatorE2eRailInput<'_>,
 ) -> Result<RemoteOperatorE2eRailReport, String> {
+    let RemoteOperatorE2eRailInput {
+        route_plan,
+        transcript,
+        upload_summary,
+        admission,
+        import_report,
+        status,
+        non_claims,
+    } = input;
     if route_plan.selected_route != crate::realization_routing::RouteClass::P2pRemoteBuilder {
         return Err("remote-e2e-route-not-remote-builder".to_string());
     }
@@ -3225,18 +3574,18 @@ pub fn remote_operator_e2e_rail_report(
         .chain(status.active_jobs.iter())
         .chain(status.recent_jobs.iter())
         .find_map(|job| job.locality.as_ref());
-    let build_report = remote_build_observability_report(
-        &selected_route,
-        &rejected_route_reasons,
-        Some(&status.endpoint_id),
-        &status.attempt_reason_codes,
-        upload_summary.clone(),
+    let build_observability = remote_build_observability_report_core(RemoteBuildObservabilityInput {
+        selected_route: &selected_route,
+        rejected_route_reasons: &rejected_route_reasons,
+        endpoint_id: Some(&status.endpoint_id),
+        attempt_reason_codes: &status.attempt_reason_codes,
+        upload_summary: upload_summary.clone(),
         resource_lease,
         locality,
         admission,
         import_report,
-        &rail_non_claims,
-    )?;
+        non_claims: &rail_non_claims,
+    })?;
     let artifact_attestation_paths = import_report
         .outputs
         .iter()
@@ -3245,6 +3594,8 @@ pub fn remote_operator_e2e_rail_report(
     if artifact_attestation_paths.is_empty() {
         return Err("remote-e2e-artifact-attestation-empty".to_string());
     }
+    debug_assert_eq!(artifact_attestation_paths.len(), import_report.outputs.len());
+    debug_assert_eq!(build_observability.selected_route, selected_route);
     Ok(RemoteOperatorE2eRailReport {
         schema: REMOTE_OPERATOR_E2E_RAIL_SCHEMA,
         selected_route,
@@ -3262,7 +3613,7 @@ pub fn remote_operator_e2e_rail_report(
         trust_basis: admission.trust_basis.clone(),
         artifact_attestation_paths,
         status,
-        build_report,
+        build_report: build_observability,
         non_claims: rail_non_claims,
     })
 }
@@ -3312,9 +3663,10 @@ fn remote_operator_e2e_non_claims(route_non_claim: &str, non_claims: &[String]) 
 pub fn validate_remote_source_upload_record(
     record: &crate::source_bundle::SourceRecord,
     store_prefix: &str,
-    logical_store_path: &str,
+    logical_store_path: impl AsRef<str>,
     declared_content_blake3: Option<&str>,
 ) -> Result<RemoteSourceUploadReadiness, String> {
+    let logical_store_path = logical_store_path.as_ref();
     if record.kind != crate::source_bundle::SourceRecordKind::ToolchainSourceRoot {
         return Err("remote-input-source-kind-unsupported".to_string());
     }
@@ -3335,6 +3687,8 @@ pub fn validate_remote_source_upload_record(
     {
         return Err("remote-input-source-digest-stale".to_string());
     }
+    debug_assert_eq!(record_store_prefix, store_prefix);
+    debug_assert_eq!(record.metadata.get("store_path").map(String::as_str), Some(logical_store_path));
     Ok(RemoteSourceUploadReadiness {
         identity: record.identity.clone(),
         source_kind: "toolchain-source-root".to_string(),
@@ -3347,8 +3701,9 @@ pub fn validate_remote_source_upload_record(
 fn remote_input_ref_host_path(
     store: &crunch_store::StoreHandle,
     store_prefix: &str,
-    input_ref: &str,
+    input_ref: impl AsRef<str>,
 ) -> Result<PathBuf, String> {
+    let input_ref = input_ref.as_ref();
     let logical_path = PathBuf::from(input_ref);
     if logical_path.exists() {
         return Ok(logical_path);
@@ -3387,14 +3742,14 @@ async fn render_remote_input_nar_payload_from_source_state(
         .prefix("mantle-remote-source-input-")
         .tempdir()
         .map_err(|err| format!("remote-input-source-state-scratch-failed: {err}"))?;
-    let materialized = crate::source_bundle::materialize_imported_source_record_for_store_path(
+    let is_materialized = crate::source_bundle::materialize_imported_source_record_for_store_path(
         source_state_dir,
         &request.store_prefix,
         input_ref,
         scratch.path(),
     )
     .map_err(|err| format!("remote-input-source-state-materialize-failed: {err}"))?;
-    if !materialized {
+    if !is_materialized {
         return Err("remote-input-source-path-missing".to_string());
     }
     render_remote_input_nar_payload(store, scratch.path()).await
@@ -3763,37 +4118,37 @@ fn remote_execution_outputs_digest(outputs: &[RemoteExecutionOutput]) -> Result<
     let mut hasher = blake3::Hasher::new();
     for output in outputs {
         let (nar_payload_digest_blake3, nar_payload_size_bytes) = remote_nar_payload_summary(output)?;
-        hash_remote_output_digest_fields(
-            &mut hasher,
-            &output.name,
-            &output.logical_path,
-            &output.content_digest_blake3,
-            &output.artifact_attestation_digest_blake3,
-            output.size_bytes,
-            nar_payload_digest_blake3.as_deref(),
+        hash_remote_output_digest_fields(&mut hasher, RemoteOutputDigestFields {
+            name: &output.name,
+            logical_path: &output.logical_path,
+            content_digest_blake3: &output.content_digest_blake3,
+            artifact_attestation_digest_blake3: &output.artifact_attestation_digest_blake3,
+            size_bytes: output.size_bytes,
+            nar_payload_digest_blake3: nar_payload_digest_blake3.as_deref(),
             nar_payload_size_bytes,
-        );
+        });
     }
     Ok(hasher.finalize().to_hex().to_string())
 }
 
-fn hash_remote_output_digest_fields(
-    hasher: &mut blake3::Hasher,
-    name: &str,
-    logical_path: &str,
-    content_digest_blake3: &str,
-    artifact_attestation_digest_blake3: &str,
+struct RemoteOutputDigestFields<'a> {
+    name: &'a str,
+    logical_path: &'a str,
+    content_digest_blake3: &'a str,
+    artifact_attestation_digest_blake3: &'a str,
     size_bytes: u64,
-    nar_payload_digest_blake3: Option<&str>,
+    nar_payload_digest_blake3: Option<&'a str>,
     nar_payload_size_bytes: Option<u64>,
-) {
-    hash_labeled_str(hasher, "output-name", name);
-    hash_labeled_str(hasher, "output-path", logical_path);
-    hash_labeled_str(hasher, "content-digest", content_digest_blake3);
-    hash_labeled_str(hasher, "artifact-digest", artifact_attestation_digest_blake3);
-    hash_labeled_str(hasher, "size-bytes", &size_bytes.to_string());
-    hash_optional_digest_field(hasher, "nar-payload-digest", nar_payload_digest_blake3);
-    hash_optional_u64_field(hasher, "nar-payload-size", nar_payload_size_bytes);
+}
+
+fn hash_remote_output_digest_fields(hasher: &mut blake3::Hasher, fields: RemoteOutputDigestFields<'_>) {
+    hash_labeled_str(hasher, "output-name", fields.name);
+    hash_labeled_str(hasher, "output-path", fields.logical_path);
+    hash_labeled_str(hasher, "content-digest", fields.content_digest_blake3);
+    hash_labeled_str(hasher, "artifact-digest", fields.artifact_attestation_digest_blake3);
+    hash_labeled_str(hasher, "size-bytes", &fields.size_bytes.to_string());
+    hash_optional_digest_field(hasher, "nar-payload-digest", fields.nar_payload_digest_blake3);
+    hash_optional_u64_field(hasher, "nar-payload-size", fields.nar_payload_size_bytes);
 }
 
 fn hash_optional_digest_field(hasher: &mut blake3::Hasher, label: &str, value: Option<&str>) {
@@ -3869,6 +4224,8 @@ fn plan_output_transfer_artifacts(
         }
     }
     validate_remote_output_transfer_artifacts(request_id, outputs, &artifacts)?;
+    debug_assert!(artifacts.len() <= MAX_REMOTE_TRANSFER_ARTIFACTS);
+    debug_assert!(artifacts.iter().all(|artifact| artifact.request_id == request_id));
     Ok(artifacts)
 }
 
@@ -3904,7 +4261,7 @@ fn nar_transfer_artifact(
     if Some(digest_blake3.as_str()) != output.nar_payload_digest_blake3.as_deref() {
         return Err("remote-output-transfer-nar-digest-mismatch".to_string());
     }
-    Ok(RemoteOutputTransferArtifact {
+    let artifact = RemoteOutputTransferArtifact {
         request_id: request_id.to_string(),
         output_name: output.name.clone(),
         logical_path: output.logical_path.clone(),
@@ -3912,7 +4269,10 @@ fn nar_transfer_artifact(
         digest_blake3,
         size_bytes,
         payload,
-    })
+    };
+    debug_assert_eq!(artifact.output_name, execution.name);
+    debug_assert_eq!(artifact.size_bytes, execution.size_bytes);
+    Ok(artifact)
 }
 
 fn pathinfo_json_transfer_artifact(
@@ -3970,6 +4330,8 @@ pub fn validate_remote_output_transfer_artifacts(
             return Err("remote-output-transfer-artifact-missing".to_string());
         }
     }
+    debug_assert_eq!(seen.len(), expected.len());
+    debug_assert!(total_bytes <= MAX_REMOTE_TRANSFER_TOTAL_BYTES);
     Ok(())
 }
 
@@ -4023,6 +4385,8 @@ fn validate_remote_output_transfer_artifact(
     if expected_artifact.size_bytes != artifact.size_bytes {
         return Err("remote-output-transfer-artifact-expected-size-mismatch".to_string());
     }
+    debug_assert_eq!(expected_artifact.digest_blake3, artifact.digest_blake3);
+    debug_assert_eq!(expected_artifact.size_bytes, artifact.size_bytes);
     Ok(key)
 }
 
@@ -4091,16 +4455,15 @@ fn expected_nar_transfer_artifact(
 fn remote_produced_outputs_content_digest(outputs: &[RemoteProducedOutput]) -> String {
     let mut hasher = blake3::Hasher::new();
     for output in outputs {
-        hash_remote_output_digest_fields(
-            &mut hasher,
-            &output.name,
-            &output.logical_path,
-            &output.content_digest_blake3,
-            &output.artifact_attestation_digest_blake3,
-            output.size_bytes,
-            output.nar_payload_digest_blake3.as_deref(),
-            output.nar_payload_size_bytes,
-        );
+        hash_remote_output_digest_fields(&mut hasher, RemoteOutputDigestFields {
+            name: &output.name,
+            logical_path: &output.logical_path,
+            content_digest_blake3: &output.content_digest_blake3,
+            artifact_attestation_digest_blake3: &output.artifact_attestation_digest_blake3,
+            size_bytes: output.size_bytes,
+            nar_payload_digest_blake3: output.nar_payload_digest_blake3.as_deref(),
+            nar_payload_size_bytes: output.nar_payload_size_bytes,
+        });
     }
     hasher.finalize().to_hex().to_string()
 }
@@ -4131,8 +4494,9 @@ fn validate_remote_execution_outcome(
 fn validate_remote_execution_output_pathinfos(
     outputs: &[RemoteExecutionOutput],
     signing_key_id: &str,
-    store_prefix: &str,
+    store_prefix: impl AsRef<str>,
 ) -> Result<(), String> {
+    let store_prefix = store_prefix.as_ref();
     if signing_key_id.is_empty() {
         return Err("remote-execution-builder-signing-key-empty".to_string());
     }
@@ -4152,24 +4516,25 @@ fn validate_remote_execution_output_pathinfo(
     output: &RemoteExecutionOutput,
     path_info: &PathInfo,
     signing_key_id: &str,
-    store_prefix: &str,
+    store_prefix: impl AsRef<str>,
 ) -> Result<(), String> {
+    let store_prefix = store_prefix.as_ref();
     let store_path = parse_remote_output_store_path(&output.logical_path, store_prefix)?;
-    validate_remote_pathinfo_binding(
-        &output.name,
-        &output.artifact_attestation_digest_blake3,
+    validate_remote_pathinfo_binding(RemotePathInfoBindingInput {
+        output_name: &output.name,
+        artifact_attestation_digest_blake3: &output.artifact_attestation_digest_blake3,
         path_info,
-        &store_path,
+        store_path: &store_path,
         store_prefix,
         signing_key_id,
-        RemotePathInfoErrorLabels {
+        error_labels: RemotePathInfoErrorLabels {
             store_path_mismatch: "remote-execution-output-pathinfo-store-path-mismatch",
             unsigned: "remote-execution-output-pathinfo-unsigned",
             signing_key_mismatch: "remote-execution-output-pathinfo-signing-key-mismatch",
             artifact_digest_failed: "remote-execution-output-artifact-attestation-digest-failed",
             artifact_digest_mismatch: "remote-execution-output-artifact-attestation-digest-mismatch",
         },
-    )
+    })
 }
 
 fn expected_output_path_map(expected_outputs: &[RemoteExpectedOutput]) -> BTreeMap<&str, Option<&str>> {
@@ -4181,23 +4546,24 @@ fn expected_output_path_map(expected_outputs: &[RemoteExpectedOutput]) -> BTreeM
 
 fn validate_output_path_against_expected(
     output_name: &str,
-    logical_path: &str,
+    logical_path: impl AsRef<str>,
     expected: &BTreeMap<&str, Option<&str>>,
     store_prefix: &str,
-    mismatch_label: &str,
+    mismatch_label: impl Into<String> + Copy,
 ) -> Result<(), String> {
+    let logical_path = logical_path.as_ref();
     match expected.get(output_name) {
         Some(Some(expected_logical_path)) => {
             if *expected_logical_path != logical_path {
-                return Err(mismatch_label.to_string());
+                return Err(mismatch_label.into());
             }
         }
         Some(None) => {
             if logical_path.is_empty() || !logical_path.starts_with(store_prefix) {
-                return Err(mismatch_label.to_string());
+                return Err(mismatch_label.into());
             }
         }
-        None => return Err(mismatch_label.to_string()),
+        None => return Err(mismatch_label.into()),
     }
     Ok(())
 }
@@ -4233,6 +4599,8 @@ fn validate_execution_outputs_match_expected(
         }
         remote_nar_payload_summary(output)?;
     }
+    debug_assert_eq!(seen.len(), outputs.len());
+    debug_assert_eq!(expected.len(), expected_outputs.len());
     Ok(())
 }
 
@@ -4264,8 +4632,10 @@ pub fn decide_output_trust(
         return OutputTrustDecision::Reject("store-prefix-mismatch".to_string());
     }
     let signer = parse_output_key_ref(signing_key_id);
-    let mut same_name_material_required = false;
-    let mut same_name_different_material = false;
+    debug_assert_eq!(signer.name.is_empty(), signing_key_id.is_empty());
+    debug_assert!(signer.key_material_digest_blake3.as_ref().is_none_or(|digest| is_blake3_hex_digest(digest)));
+    let mut is_same_name_material_required = false;
+    let mut is_same_name_different_material = false;
     for trusted_key_id in trusted_key_ids {
         let trusted = parse_output_key_ref(trusted_key_id);
         if trusted.name != signer.name {
@@ -4278,8 +4648,8 @@ pub fn decide_output_trust(
                     trust_basis: signer.trust_basis(signing_key_id),
                 };
             }
-            (Some(_), Some(_)) => same_name_different_material = true,
-            (None, Some(_)) => same_name_material_required = true,
+            (Some(_), Some(_)) => is_same_name_different_material = true,
+            (None, Some(_)) => is_same_name_material_required = true,
             (_, None) => {
                 return OutputTrustDecision::Accept {
                     key_id: signing_key_id.to_string(),
@@ -4288,10 +4658,10 @@ pub fn decide_output_trust(
             }
         }
     }
-    if same_name_material_required {
+    if is_same_name_material_required {
         return OutputTrustDecision::Reject("output-key-material-missing".to_string());
     }
-    if same_name_different_material {
+    if is_same_name_different_material {
         return OutputTrustDecision::Reject("same-name-different-output-key".to_string());
     }
     OutputTrustDecision::Reject("untrusted-output-key".to_string())
@@ -4372,15 +4742,22 @@ pub fn validate_worker_registration(registration: &RemoteWorkerRegistration) -> 
     for summary in &registration.resumable_jobs {
         validate_worker_resume_summary(summary)?;
     }
+    debug_assert!(registration.concurrency <= MAX_REMOTE_WORKER_CONCURRENCY);
+    debug_assert!(registration.resumable_jobs.len() <= MAX_REMOTE_STATUS_ITEMS);
     Ok(())
 }
 
 fn validate_worker_resume_summary(summary: &RemoteWorkerResumeSummary) -> Result<(), String> {
-    if summary.job_id.as_str().is_empty()
-        || summary.attempt_id.as_str().is_empty()
-        || summary.attempt_id.as_str() == LEGACY_MISSING_ATTEMPT_ID
-        || summary.normalized_build_key.is_empty()
-    {
+    if summary.job_id.as_str().is_empty() {
+        return Err("remote-worker-resume-identity-empty".to_string());
+    }
+    if summary.attempt_id.as_str().is_empty() {
+        return Err("remote-worker-resume-identity-empty".to_string());
+    }
+    if summary.attempt_id.as_str() == LEGACY_MISSING_ATTEMPT_ID {
+        return Err("remote-worker-resume-identity-empty".to_string());
+    }
+    if summary.normalized_build_key.is_empty() {
         return Err("remote-worker-resume-identity-empty".to_string());
     }
     if summary.fence_generation.get() == 0 {
@@ -4389,6 +4766,8 @@ fn validate_worker_resume_summary(summary: &RemoteWorkerResumeSummary) -> Result
     if !is_blake3_hex_digest(&summary.normalized_build_key) {
         return Err("remote-worker-resume-key-invalid".to_string());
     }
+    debug_assert!(!summary.job_id.as_str().is_empty());
+    debug_assert!(summary.fence_generation.get() > 0);
     Ok(())
 }
 
@@ -4455,7 +4834,10 @@ pub fn validate_coordinator_build_request(
     {
         return Err("remote-coordinator-build-time-limit-exceeded".to_string());
     }
-    plan_remote_executable_request(&request.request)
+    let plan = plan_remote_executable_request(&request.request)?;
+    debug_assert_eq!(plan.request_id, request.request.request_id);
+    debug_assert!(request.request.build_time_limit_secs <= MAX_REMOTE_BUILD_TIME_SECS);
+    Ok(plan)
 }
 
 pub fn normalized_remote_build_key(request: &RemoteCoordinatorBuildRequest) -> Result<String, String> {
@@ -4483,7 +4865,10 @@ pub fn normalized_remote_build_key(request: &RemoteCoordinatorBuildRequest) -> R
             canonical_remote_resource_requirements(requirements).map_err(|reason| reason.as_str().to_string())?;
         hash_ordered_values(&mut hasher, "semantic-accelerator-class", &canonical.semantic_accelerator_classes);
     }
-    Ok(hasher.finalize().to_hex().to_string())
+    let normalized_key_blake3 = hasher.finalize().to_hex().to_string();
+    debug_assert!(is_blake3_hex_digest(&normalized_key_blake3));
+    debug_assert_eq!(normalized_key_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
+    Ok(normalized_key_blake3)
 }
 
 fn hash_ordered_values(hasher: &mut blake3::Hasher, label: &str, values: &[String]) {
@@ -4531,6 +4916,10 @@ pub fn apply_worker_registration(
     validate_coordinator_resource_state(&candidate)?;
     persist_coordinator_candidate(&candidate)?;
     *state = candidate;
+    debug_assert!(state.workers.contains_key(&endpoint_id));
+    debug_assert!(state.verified_locality_observations.values().all(|summary| {
+        summary.worker_endpoint_id != endpoint_id || summary.worker_generation == worker_generation
+    }));
     Ok(adopted)
 }
 
@@ -4550,16 +4939,46 @@ pub fn external_batch_plan_report(operation: &ExternalBatchOperation) -> Externa
     }
 }
 
-pub fn submit_external_batch_allocation(
-    state: &mut RemoteCoordinatorState,
-    request: &RemoteCoordinatorBuildRequest,
-    profile: &crate::remote_farm_config::RemoteBatchDispatcherProfile,
-    expected_worker_endpoint_id: &str,
+struct ExternalBatchSubmitInput<'a> {
+    request: &'a RemoteCoordinatorBuildRequest,
+    profile: &'a crate::remote_farm_config::RemoteBatchDispatcherProfile,
+    expected_worker_endpoint_id: &'a str,
     allocation_attempt: u32,
-    dispatcher: &dyn ExternalBatchDispatcher,
+    dispatcher: &'a dyn ExternalBatchDispatcher,
     observed_unix_s: u64,
+}
+
+pub const SUBMIT_EXTERNAL_BATCH_ALLOCATION: fn(
+    &mut RemoteCoordinatorState,
+    &RemoteCoordinatorBuildRequest,
+    &crate::remote_farm_config::RemoteBatchDispatcherProfile,
+    &str,
+    u32,
+    &dyn ExternalBatchDispatcher,
+    u64,
+) -> Result<ExternalBatchOperationResponse, String> =
+    |state, request, profile, expected_worker_endpoint_id, allocation_attempt, dispatcher, observed_unix_s| {
+        submit_external_batch_allocation_core(state, ExternalBatchSubmitInput {
+            request,
+            profile,
+            expected_worker_endpoint_id,
+            allocation_attempt,
+            dispatcher,
+            observed_unix_s,
+        })
+    };
+pub use SUBMIT_EXTERNAL_BATCH_ALLOCATION as submit_external_batch_allocation;
+
+fn submit_external_batch_allocation_core(
+    state: &mut RemoteCoordinatorState,
+    input: ExternalBatchSubmitInput<'_>,
 ) -> Result<ExternalBatchOperationResponse, String> {
-    let operation = plan_external_batch_allocation(request, profile, expected_worker_endpoint_id, allocation_attempt)?;
+    let operation = plan_external_batch_allocation(
+        input.request,
+        input.profile,
+        input.expected_worker_endpoint_id,
+        input.allocation_attempt,
+    )?;
     if let Some(existing) = state.external_batch_attempts.get(&operation.dispatch_id_blake3) {
         if existing.submit_operation != operation {
             return Err("external-batch-idempotency-conflict".to_string());
@@ -4569,7 +4988,7 @@ pub fn submit_external_batch_allocation(
     if state.external_batch_attempts.len() >= MAX_REMOTE_STATUS_ITEMS {
         return Err("external-batch-state-attempt-limit-exceeded".to_string());
     }
-    let response = dispatcher.submit(&operation, observed_unix_s)?;
+    let response = input.dispatcher.submit(&operation, input.observed_unix_s)?;
     crunch_build::distributed::validate_external_batch_response(&operation, &response)?;
     let record = ExternalBatchCoordinatorRecord {
         submit_operation: operation.clone(),
@@ -4600,12 +5019,12 @@ fn plan_external_batch_allocation(
         return Err("external-batch-allocation-attempt-invalid".to_string());
     }
     let normalized_build_key = normalized_remote_build_key(request)?;
-    let identity = derive_external_batch_allocation_identity(
-        &normalized_build_key,
-        &profile.instance_id,
-        profile.generation,
+    let identity = derive_external_batch_allocation_identity(ExternalBatchAllocationIdentityInput {
+        normalized_build_key: &normalized_build_key,
+        adapter_instance_id: &profile.instance_id,
+        dispatcher_generation: profile.generation,
         allocation_attempt,
-    );
+    });
     let job_id =
         RemoteJobId::new(format!("external-batch-{identity}")).map_err(|reason| reason.as_str().to_string())?;
     let attempt_id = RemoteAttemptId::new(format!("external-batch-attempt-{allocation_attempt}-{identity}"))
@@ -4616,7 +5035,7 @@ fn plan_external_batch_allocation(
         .resource_requirements
         .clone()
         .ok_or_else(|| "external-batch-resource-requirements-missing".to_string())?;
-    plan_external_batch_operation(ExternalBatchOperationInput {
+    let operation = plan_external_batch_operation(ExternalBatchOperationInput {
         kind: ExternalBatchOperationKind::Submit,
         adapter_instance_id: profile.instance_id.clone(),
         dispatcher_profile_ref_blake3: crate::remote_farm_config::remote_batch_dispatcher_profile_ref(profile)?,
@@ -4636,7 +5055,10 @@ fn plan_external_batch_allocation(
             max_reconcile_attempts: profile.max_reconcile_attempts,
         },
         external_job_id: None,
-    })
+    })?;
+    debug_assert_eq!(operation.expected_worker_endpoint_id, expected_worker_endpoint_id);
+    debug_assert_eq!(operation.fence_generation.get(), u64::from(allocation_attempt));
+    Ok(operation)
 }
 
 fn external_batch_semantic_capability_class(request: &RemoteCoordinatorBuildRequest) -> String {
@@ -4651,21 +5073,23 @@ fn external_batch_semantic_capability_class(request: &RemoteCoordinatorBuildRequ
     digest
 }
 
-fn derive_external_batch_allocation_identity(
-    normalized_build_key: &str,
-    adapter_instance_id: &str,
+struct ExternalBatchAllocationIdentityInput<'a> {
+    normalized_build_key: &'a str,
+    adapter_instance_id: &'a str,
     dispatcher_generation: u64,
     allocation_attempt: u32,
-) -> String {
+}
+
+fn derive_external_batch_allocation_identity(input: ExternalBatchAllocationIdentityInput<'_>) -> String {
     let mut hasher = blake3::Hasher::new();
     hash_labeled_str(&mut hasher, "domain", "mantle-external-batch-allocation-identity-v1");
-    hash_labeled_str(&mut hasher, "normalized-build-key", normalized_build_key);
-    hash_labeled_str(&mut hasher, "adapter-instance", adapter_instance_id);
-    hash_labeled_str(&mut hasher, "dispatcher-generation", &dispatcher_generation.to_string());
-    hash_labeled_str(&mut hasher, "allocation-attempt", &allocation_attempt.to_string());
+    hash_labeled_str(&mut hasher, "normalized-build-key", input.normalized_build_key);
+    hash_labeled_str(&mut hasher, "adapter-instance", input.adapter_instance_id);
+    hash_labeled_str(&mut hasher, "dispatcher-generation", &input.dispatcher_generation.to_string());
+    hash_labeled_str(&mut hasher, "allocation-attempt", &input.allocation_attempt.to_string());
     let identity = hasher.finalize().to_hex().to_string();
     debug_assert!(is_blake3_hex_digest(&identity));
-    debug_assert!(!adapter_instance_id.is_empty());
+    debug_assert!(!input.adapter_instance_id.is_empty());
     identity
 }
 
@@ -4816,43 +5240,82 @@ pub fn register_external_batch_worker(
     Ok(adopted)
 }
 
-pub fn authorize_external_batch_transfer(
+struct ExternalBatchTransferAuthorizationInput<'a> {
+    dispatch_id_blake3: &'a str,
+    worker_endpoint_id: &'a str,
+}
+
+pub const AUTHORIZE_EXTERNAL_BATCH_TRANSFER: fn(&RemoteCoordinatorState, &str, &str) -> Result<(), String> =
+    |state, dispatch_id_blake3, worker_endpoint_id| {
+        authorize_external_batch_transfer_core(state, ExternalBatchTransferAuthorizationInput {
+            dispatch_id_blake3,
+            worker_endpoint_id,
+        })
+    };
+pub use AUTHORIZE_EXTERNAL_BATCH_TRANSFER as authorize_external_batch_transfer;
+
+fn authorize_external_batch_transfer_core(
     state: &RemoteCoordinatorState,
-    dispatch_id_blake3: &str,
-    worker_endpoint_id: &str,
+    input: ExternalBatchTransferAuthorizationInput<'_>,
 ) -> Result<(), String> {
     let record = state
         .external_batch_attempts
-        .get(dispatch_id_blake3)
+        .get(input.dispatch_id_blake3)
         .ok_or_else(|| "external-batch-attempt-unknown".to_string())?;
     if !record.worker_registered {
         return Err("external-batch-worker-not-registered".to_string());
     }
-    if worker_endpoint_id != record.submit_operation.expected_worker_endpoint_id {
+    if input.worker_endpoint_id != record.submit_operation.expected_worker_endpoint_id {
         return Err("external-batch-worker-endpoint-mismatch".to_string());
     }
     let worker = state
         .workers
-        .get(worker_endpoint_id)
+        .get(input.worker_endpoint_id)
         .ok_or_else(|| "external-batch-state-registered-worker-missing".to_string())?;
     if worker.worker_generation != record.submit_operation.dispatcher_generation {
         return Err("external-batch-worker-generation-mismatch".to_string());
     }
+    debug_assert!(record.worker_registered);
+    debug_assert_eq!(worker.endpoint_id, input.worker_endpoint_id);
     Ok(())
 }
 
-pub fn terminate_external_batch_assigned_attempt(
-    state: &mut RemoteCoordinatorState,
-    dispatch_id_blake3: &str,
-    binding: &RemoteProductionAttemptBinding,
+struct ExternalBatchTerminationInput<'a> {
+    dispatch_id_blake3: &'a str,
+    binding: &'a RemoteProductionAttemptBinding,
     cause: RemoteCoordinatorTerminationCause,
-    dispatcher: &dyn ExternalBatchDispatcher,
+    dispatcher: &'a dyn ExternalBatchDispatcher,
     observed_unix_s: u64,
+}
+
+pub const TERMINATE_EXTERNAL_BATCH_ASSIGNED_ATTEMPT: fn(
+    &mut RemoteCoordinatorState,
+    &str,
+    &RemoteProductionAttemptBinding,
+    RemoteCoordinatorTerminationCause,
+    &dyn ExternalBatchDispatcher,
+    u64,
+) -> Result<ExternalBatchOperationResponse, String> =
+    |state, dispatch_id_blake3, binding, cause, dispatcher, observed_unix_s| {
+        terminate_external_batch_assigned_attempt_core(state, ExternalBatchTerminationInput {
+            dispatch_id_blake3,
+            binding,
+            cause,
+            dispatcher,
+            observed_unix_s,
+        })
+    };
+pub use TERMINATE_EXTERNAL_BATCH_ASSIGNED_ATTEMPT as terminate_external_batch_assigned_attempt;
+
+fn terminate_external_batch_assigned_attempt_core(
+    state: &mut RemoteCoordinatorState,
+    input: ExternalBatchTerminationInput<'_>,
 ) -> Result<ExternalBatchOperationResponse, String> {
-    let response = cancel_external_batch_allocation(state, dispatch_id_blake3, dispatcher, observed_unix_s)?;
-    terminate_coordinator_attempt(state, binding, cause)?;
+    let response =
+        cancel_external_batch_allocation(state, input.dispatch_id_blake3, input.dispatcher, input.observed_unix_s)?;
+    terminate_coordinator_attempt(state, input.binding, input.cause)?;
     assert_eq!(response.state, ExternalBatchJobState::Cancelled);
-    assert_eq!(state.jobs[&binding.job_id].phase, RemoteCoordinatorJobPhase::Lost);
+    assert_eq!(state.jobs[&input.binding.job_id].phase, RemoteCoordinatorJobPhase::Lost);
     Ok(response)
 }
 
@@ -4888,6 +5351,11 @@ pub fn admit_external_batch_coordinator_dispatch(
         _ => return Err("external-batch-coordinator-assignment-mismatch".to_string()),
     };
     bind_external_batch_coordinator_job(state, dispatch_id_blake3, &coordinator_job_id)?;
+    debug_assert_eq!(
+        state.external_batch_attempts[dispatch_id_blake3].coordinator_job_id.as_ref(),
+        Some(&coordinator_job_id)
+    );
+    debug_assert!(state.jobs.contains_key(&coordinator_job_id));
     Ok(decision)
 }
 
@@ -4971,7 +5439,7 @@ pub fn external_batch_composition_evidence(
         .output_admission_digest_blake3 = Some(admission.output_digest_blake3.clone());
     persist_coordinator_candidate(&candidate)?;
     *state = candidate;
-    Ok(ExternalBatchCompositionEvidence {
+    let evidence = ExternalBatchCompositionEvidence {
         schema: EXTERNAL_BATCH_COMPOSITION_EVIDENCE_SCHEMA,
         dispatch_id_blake3: dispatch_id_blake3.to_string(),
         dispatcher_profile_ref_blake3,
@@ -4990,19 +5458,59 @@ pub fn external_batch_composition_evidence(
             EXTERNAL_BATCH_NON_CLAIM.to_string(),
             "output admission remains governed by the ordinary signed-output trust path".to_string(),
         ],
-    })
+    };
+    debug_assert_eq!(evidence.output_admission_digest_blake3, admission.output_digest_blake3);
+    debug_assert_eq!(evidence.coordinator_job_id, binding.job_id);
+    Ok(evidence)
 }
 
-pub fn probe_and_record_remote_worker_locality(
-    state: &mut RemoteCoordinatorState,
-    worker_endpoint_id: &str,
+struct RemoteWorkerLocalityProbeInput<'a> {
+    worker_endpoint_id: &'a str,
     worker_generation: u64,
-    receiver_root: &Path,
-    manifest: &CanonicalRemoteTransferManifest,
+    receiver_root: &'a Path,
+    manifest: &'a CanonicalRemoteTransferManifest,
     admission: crate::remote_transfer::RemoteTransferAdmissionFacts,
+}
+
+pub const PROBE_AND_RECORD_REMOTE_WORKER_LOCALITY: fn(
+    &mut RemoteCoordinatorState,
+    &str,
+    u64,
+    &Path,
+    &CanonicalRemoteTransferManifest,
+    crate::remote_transfer::RemoteTransferAdmissionFacts,
+) -> Result<RemoteVerifiedLocalitySummary, String> =
+    |state, worker_endpoint_id, worker_generation, receiver_root, manifest, admission| {
+        probe_and_record_remote_worker_locality_core(state, RemoteWorkerLocalityProbeInput {
+            worker_endpoint_id,
+            worker_generation,
+            receiver_root,
+            manifest,
+            admission,
+        })
+    };
+pub use PROBE_AND_RECORD_REMOTE_WORKER_LOCALITY as probe_and_record_remote_worker_locality;
+const _: () = {
+    let _observability_api = remote_build_observability_report;
+    let _operator_rail_api = remote_operator_e2e_rail_report;
+    let _batch_submit_api = submit_external_batch_allocation;
+    let _batch_termination_api = terminate_external_batch_assigned_attempt;
+    let _locality_probe_api = probe_and_record_remote_worker_locality;
+};
+
+fn probe_and_record_remote_worker_locality_core(
+    state: &mut RemoteCoordinatorState,
+    input: RemoteWorkerLocalityProbeInput<'_>,
 ) -> Result<RemoteVerifiedLocalitySummary, String> {
-    let receiver_facts = crate::remote_transfer::probe_remote_transfer_receiver(receiver_root, manifest, admission)?;
-    record_receiver_verified_worker_locality(state, worker_endpoint_id, worker_generation, manifest, receiver_facts)
+    let receiver_facts =
+        crate::remote_transfer::probe_remote_transfer_receiver(input.receiver_root, input.manifest, input.admission)?;
+    record_receiver_verified_worker_locality(
+        state,
+        input.worker_endpoint_id,
+        input.worker_generation,
+        input.manifest,
+        receiver_facts,
+    )
 }
 
 fn record_receiver_verified_worker_locality(
@@ -5058,55 +5566,69 @@ fn verified_locality_observation_key(summary: &RemoteVerifiedLocalitySummary) ->
     digest
 }
 
-pub fn admit_remote_production_dispatch(
-    state: &mut RemoteCoordinatorState,
-    request: &ConcreteBuildRequest,
-    endpoint_id: &str,
+struct RemoteProductionDispatchInput<'a> {
+    request: &'a ConcreteBuildRequest,
+    endpoint_id: &'a str,
     worker_generation: u64,
     worker_concurrency: u32,
     resource_inventory: Option<RemoteWorkerResourceInventory>,
-    trusted_output_keys: &[String],
+    trusted_output_keys: &'a [String],
     now_unix_s: u64,
+}
+
+pub const ADMIT_REMOTE_PRODUCTION_DISPATCH: fn(
+    &mut RemoteCoordinatorState,
+    &ConcreteBuildRequest,
+    &str,
+    u64,
+    u32,
+    Option<RemoteWorkerResourceInventory>,
+    &[String],
+    u64,
+) -> Result<RemoteProductionAttemptBinding, String> =
+    |state,
+     request,
+     endpoint_id,
+     worker_generation,
+     worker_concurrency,
+     resource_inventory,
+     trusted_output_keys,
+     now_unix_s| {
+        admit_remote_production_dispatch_core(state, RemoteProductionDispatchInput {
+            request,
+            endpoint_id,
+            worker_generation,
+            worker_concurrency,
+            resource_inventory,
+            trusted_output_keys,
+            now_unix_s,
+        })
+    };
+pub use ADMIT_REMOTE_PRODUCTION_DISPATCH as admit_remote_production_dispatch;
+
+fn admit_remote_production_dispatch_core(
+    state: &mut RemoteCoordinatorState,
+    input: RemoteProductionDispatchInput<'_>,
 ) -> Result<RemoteProductionAttemptBinding, String> {
-    let executable = plan_remote_executable_request(request)?;
-    let registration = RemoteWorkerRegistration {
-        endpoint_id: endpoint_id.to_string(),
-        protocol_version: REMOTE_PROTOCOL_VERSION,
-        worker_generation,
-        systems: vec![executable.system.clone()],
-        feature_labels: Vec::new(),
-        sandbox_modes: vec!["native".to_string()],
-        network_modes: vec!["none".to_string()],
-        logical_store_prefixes: vec![request.store_prefix.clone()],
-        concurrency: worker_concurrency,
-        resource_inventory,
-        output_signing_key_ids: trusted_output_keys.to_vec(),
-        resumable_jobs: Vec::new(),
-        workspace_policy: state.workspace_registrations.get(endpoint_id).cloned(),
-    };
+    let executable = plan_remote_executable_request(input.request)?;
+    let registration = production_worker_registration(state, &input, &executable.system);
     apply_worker_registration(state, registration)?;
-    let coordinator_request = RemoteCoordinatorBuildRequest {
-        request: request.clone(),
-        required_system: executable.system,
-        required_features: Vec::new(),
-        required_sandbox_mode: "native".to_string(),
-        required_network_mode: "none".to_string(),
-        resource_requirements: request.resource_requirements.clone(),
-        locality_scope: request.locality_scope.clone(),
-        trusted_output_keys: trusted_output_keys.to_vec(),
-        live_output_claims: request.expected_outputs.iter().filter_map(|output| output.logical_path.clone()).collect(),
-        wait_for_worker: false,
-    };
-    let deadline_unix_s = now_unix_s
-        .checked_add(request.build_time_limit_secs)
+    let coordinator_request = production_coordinator_request(&input, &executable.system);
+    let deadline_unix_s = input
+        .now_unix_s
+        .checked_add(input.request.build_time_limit_secs)
         .ok_or_else(|| "remote-production-attempt-deadline-overflow".to_string())?;
     let decision = admit_coordinator_dispatch(
         state,
         &coordinator_request,
-        RemoteAttemptRetryPolicy::default(),
+        RemoteAttemptRetryPolicy {
+            max_attempts: DEFAULT_REMOTE_ATTEMPT_MAX,
+            retry_delay_secs: DEFAULT_REMOTE_RETRY_DELAY_SECS,
+            attempt_timeout_secs: DEFAULT_REMOTE_ATTEMPT_TIMEOUT_SECS,
+        },
         RemoteAttemptTimeFacts {
-            now_unix_s,
-            failure_observed_unix_s: now_unix_s,
+            now_unix_s: input.now_unix_s,
+            failure_observed_unix_s: input.now_unix_s,
             overall_deadline_unix_s: deadline_unix_s,
         },
     )?;
@@ -5122,7 +5644,7 @@ pub fn admit_remote_production_dispatch(
             fence_generation,
         },
         RemoteCoordinatorDispatchDecision::AttachExisting { job_id, .. } => {
-            current_production_attempt_binding(state, &job_id, endpoint_id)?
+            current_production_attempt_binding(state, &job_id, input.endpoint_id)?
         }
         RemoteCoordinatorDispatchDecision::RedeliverResult { .. } => {
             return Err("remote-production-result-redelivery-requires-stored-transcript".to_string());
@@ -5130,10 +5652,58 @@ pub fn admit_remote_production_dispatch(
         RemoteCoordinatorDispatchDecision::Pending { reason }
         | RemoteCoordinatorDispatchDecision::Reject { reason } => return Err(reason),
     };
-    start_remote_production_attempt_if_queued(state, &binding, now_unix_s)?;
+    start_remote_production_attempt_if_queued(state, &binding, input.now_unix_s)?;
     assert!(binding.fence_generation.get() > 0);
     assert!(!binding.attempt_id.as_str().is_empty());
     Ok(binding)
+}
+
+fn production_worker_registration(
+    state: &RemoteCoordinatorState,
+    input: &RemoteProductionDispatchInput<'_>,
+    system: &str,
+) -> RemoteWorkerRegistration {
+    let registration = RemoteWorkerRegistration {
+        endpoint_id: input.endpoint_id.to_string(),
+        protocol_version: REMOTE_PROTOCOL_VERSION,
+        worker_generation: input.worker_generation,
+        systems: vec![system.to_string()],
+        feature_labels: Vec::new(),
+        sandbox_modes: vec!["native".to_string()],
+        network_modes: vec!["none".to_string()],
+        logical_store_prefixes: vec![input.request.store_prefix.clone()],
+        concurrency: input.worker_concurrency,
+        resource_inventory: input.resource_inventory.clone(),
+        output_signing_key_ids: input.trusted_output_keys.to_vec(),
+        resumable_jobs: Vec::new(),
+        workspace_policy: state.workspace_registrations.get(input.endpoint_id).cloned(),
+    };
+    debug_assert_eq!(registration.endpoint_id, input.endpoint_id);
+    debug_assert_eq!(registration.systems.len(), 1);
+    registration
+}
+
+fn production_coordinator_request(
+    input: &RemoteProductionDispatchInput<'_>,
+    system: &str,
+) -> RemoteCoordinatorBuildRequest {
+    let mut live_output_claims = Vec::with_capacity(input.request.expected_outputs.len());
+    live_output_claims.extend(input.request.expected_outputs.iter().filter_map(|output| output.logical_path.clone()));
+    let request = RemoteCoordinatorBuildRequest {
+        request: input.request.clone(),
+        required_system: system.to_string(),
+        required_features: Vec::new(),
+        required_sandbox_mode: "native".to_string(),
+        required_network_mode: "none".to_string(),
+        resource_requirements: input.request.resource_requirements.clone(),
+        locality_scope: input.request.locality_scope.clone(),
+        trusted_output_keys: input.trusted_output_keys.to_vec(),
+        live_output_claims,
+        wait_for_worker: false,
+    };
+    debug_assert_eq!(request.required_system, system);
+    debug_assert!(request.live_output_claims.len() <= input.request.expected_outputs.len());
+    request
 }
 
 fn current_production_attempt_binding(
@@ -5170,10 +5740,10 @@ pub fn start_remote_production_attempt_if_queued(
     if phase != RemoteAttemptPhase::Queued {
         return Ok(());
     }
-    let report = production_attempt_report(binding, "start", now_unix_s, RemoteAttemptReportPayload::Start)?;
+    let attempt_start = production_attempt_report(binding, "start", now_unix_s, RemoteAttemptReportPayload::Start)?;
     let applied = apply_coordinator_attempt_report(
         state,
-        &report,
+        &attempt_start,
         RemoteAttemptAuthorizationFacts {
             worker_authorized: true,
             output_admission_authorized: false,
@@ -5183,6 +5753,11 @@ pub fn start_remote_production_attempt_if_queued(
     if applied.disposition != RemoteAttemptApplyDisposition::Applied {
         return Err(applied.reason_code.as_str().to_string());
     }
+    debug_assert_eq!(state.jobs[&binding.job_id].phase, RemoteCoordinatorJobPhase::Running);
+    debug_assert_eq!(
+        state.jobs[&binding.job_id].current_attempt.as_ref().map(|attempt| attempt.phase),
+        Some(RemoteAttemptPhase::Running),
+    );
     Ok(())
 }
 
@@ -5216,6 +5791,8 @@ pub fn remote_production_telemetry_event(
         return Err(RemoteTelemetryReasonCode::EventValueInvalid);
     }
     let fields = production_telemetry_fields(fact);
+    debug_assert!(fields.value > 0);
+    debug_assert_eq!(fields.route, RemoteTelemetryRouteClass::RemoteStdio);
     crunch_build::distributed::remote_telemetry_event(
         fields.category,
         fields.phase,
@@ -5266,94 +5843,145 @@ fn production_telemetry_fields(fact: RemoteProductionTelemetryFact) -> Productio
 fn apply_production_telemetry_fact(fields: &mut ProductionTelemetryFields, fact: RemoteProductionTelemetryFact) {
     match fact {
         RemoteProductionTelemetryFact::PrioritySelected { competing_goal_count } => {
-            fields.category = RemoteTelemetryCategory::Queue;
-            fields.phase = RemoteTelemetryPhaseClass::Planning;
-            fields.reason = RemoteTelemetryReasonClass::PrioritySelected;
-            fields.measurement = RemoteTelemetryMeasurementKind::CandidateCount;
-            fields.value = u64::from(competing_goal_count);
+            set_priority_telemetry_fields(fields, competing_goal_count);
         }
-        RemoteProductionTelemetryFact::RouteSelected => {
-            fields.category = RemoteTelemetryCategory::Route;
-            fields.phase = RemoteTelemetryPhaseClass::Planning;
-            fields.reason = RemoteTelemetryReasonClass::RouteSelected;
-        }
-        RemoteProductionTelemetryFact::QueueAdmitted => {
-            fields.category = RemoteTelemetryCategory::Queue;
-            fields.phase = RemoteTelemetryPhaseClass::Queued;
-            fields.reason = RemoteTelemetryReasonClass::QueueAdmitted;
-        }
-        RemoteProductionTelemetryFact::WorkerAssigned => {
-            fields.category = RemoteTelemetryCategory::Assignment;
-            fields.phase = RemoteTelemetryPhaseClass::Assigned;
-            fields.reason = RemoteTelemetryReasonClass::WorkerAssigned;
-        }
-        RemoteProductionTelemetryFact::FenceAccepted => {
-            fields.category = RemoteTelemetryCategory::RetryFencing;
-            fields.retry = RemoteTelemetryRetryClass::CurrentFence;
-            fields.reason = RemoteTelemetryReasonClass::FenceAccepted;
-        }
-        RemoteProductionTelemetryFact::StaleFenceRejected => {
-            fields.category = RemoteTelemetryCategory::RetryFencing;
-            fields.result = RemoteTelemetryResultClass::Rejected;
-            fields.retry = RemoteTelemetryRetryClass::StaleFence;
-            fields.reason = RemoteTelemetryReasonClass::FenceRejected;
-        }
+        RemoteProductionTelemetryFact::RouteSelected => set_route_telemetry_fields(fields),
+        RemoteProductionTelemetryFact::QueueAdmitted => set_queue_telemetry_fields(fields),
+        RemoteProductionTelemetryFact::WorkerAssigned => set_assignment_telemetry_fields(fields),
+        RemoteProductionTelemetryFact::FenceAccepted => set_fence_telemetry_fields(fields, true),
+        RemoteProductionTelemetryFact::StaleFenceRejected => set_fence_telemetry_fields(fields, false),
         RemoteProductionTelemetryFact::ExecutionStarted => {}
-        RemoteProductionTelemetryFact::ExecutionCompleted => {
-            fields.result = RemoteTelemetryResultClass::Succeeded;
-            fields.reason = RemoteTelemetryReasonClass::ExecutionCompleted;
-        }
-        RemoteProductionTelemetryFact::ExecutionFailed => {
-            fields.phase = RemoteTelemetryPhaseClass::Terminal;
-            fields.result = RemoteTelemetryResultClass::Failed;
-            fields.retry = RemoteTelemetryRetryClass::Terminal;
-            fields.reason = RemoteTelemetryReasonClass::ExecutionFailed;
-        }
+        RemoteProductionTelemetryFact::ExecutionCompleted => set_execution_telemetry_fields(fields, true),
+        RemoteProductionTelemetryFact::ExecutionFailed => set_execution_telemetry_fields(fields, false),
         RemoteProductionTelemetryFact::TransferDemand { chunks } => {
             set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferDemand, u64::from(chunks));
             fields.measurement = RemoteTelemetryMeasurementKind::Objects;
         }
         RemoteProductionTelemetryFact::TransferCredit { bytes } => {
-            set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferCredit, bytes);
-            fields.measurement = RemoteTelemetryMeasurementKind::Bytes;
+            set_transfer_byte_fields(fields, RemoteTelemetryReasonClass::TransferCredit, bytes);
         }
         RemoteProductionTelemetryFact::TransferResumed { bytes } => {
-            set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferResumed, bytes);
-            fields.measurement = RemoteTelemetryMeasurementKind::Bytes;
+            set_transfer_byte_fields(fields, RemoteTelemetryReasonClass::TransferResumed, bytes);
         }
-        RemoteProductionTelemetryFact::TransferCutoff { accepted } => {
-            set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferCutoff, 1);
-            fields.result = if accepted {
-                RemoteTelemetryResultClass::Accepted
-            } else {
-                RemoteTelemetryResultClass::Dropped
-            };
-        }
+        RemoteProductionTelemetryFact::TransferCutoff { accepted } => set_transfer_cutoff_fields(fields, accepted),
         RemoteProductionTelemetryFact::TransferCompleted { bytes, mode } => {
-            set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferCompleted, bytes);
-            fields.result = RemoteTelemetryResultClass::Succeeded;
-            fields.measurement = RemoteTelemetryMeasurementKind::Bytes;
-            fields.transfer = telemetry_transfer_class(mode);
+            set_transfer_completion_fields(fields, bytes, mode);
         }
-        RemoteProductionTelemetryFact::TransferFallback { bytes } => {
-            set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferFallback, bytes);
-            fields.transfer = RemoteTelemetryTransferClass::Fallback;
-            fields.capability = RemoteTelemetryCapabilityClass::Degraded;
-            fields.measurement = RemoteTelemetryMeasurementKind::Bytes;
-        }
-        RemoteProductionTelemetryFact::OutputAdmitted => {
-            fields.category = RemoteTelemetryCategory::Admission;
-            fields.phase = RemoteTelemetryPhaseClass::Admitting;
-            fields.reason = RemoteTelemetryReasonClass::OutputAdmitted;
-        }
-        RemoteProductionTelemetryFact::OutputRejected => {
-            fields.category = RemoteTelemetryCategory::Admission;
-            fields.phase = RemoteTelemetryPhaseClass::Terminal;
-            fields.result = RemoteTelemetryResultClass::Rejected;
-            fields.retry = RemoteTelemetryRetryClass::Terminal;
-            fields.reason = RemoteTelemetryReasonClass::OutputRejected;
-        }
+        RemoteProductionTelemetryFact::TransferFallback { bytes } => set_transfer_fallback_fields(fields, bytes),
+        RemoteProductionTelemetryFact::OutputAdmitted => set_output_telemetry_fields(fields, true),
+        RemoteProductionTelemetryFact::OutputRejected => set_output_telemetry_fields(fields, false),
     }
+}
+
+fn set_priority_telemetry_fields(fields: &mut ProductionTelemetryFields, competing_goal_count: u32) {
+    fields.category = RemoteTelemetryCategory::Queue;
+    fields.phase = RemoteTelemetryPhaseClass::Planning;
+    fields.reason = RemoteTelemetryReasonClass::PrioritySelected;
+    fields.measurement = RemoteTelemetryMeasurementKind::CandidateCount;
+    fields.value = u64::from(competing_goal_count);
+}
+
+fn set_route_telemetry_fields(fields: &mut ProductionTelemetryFields) {
+    fields.category = RemoteTelemetryCategory::Route;
+    fields.phase = RemoteTelemetryPhaseClass::Planning;
+    fields.reason = RemoteTelemetryReasonClass::RouteSelected;
+}
+
+fn set_queue_telemetry_fields(fields: &mut ProductionTelemetryFields) {
+    fields.category = RemoteTelemetryCategory::Queue;
+    fields.phase = RemoteTelemetryPhaseClass::Queued;
+    fields.reason = RemoteTelemetryReasonClass::QueueAdmitted;
+}
+
+fn set_assignment_telemetry_fields(fields: &mut ProductionTelemetryFields) {
+    fields.category = RemoteTelemetryCategory::Assignment;
+    fields.phase = RemoteTelemetryPhaseClass::Assigned;
+    fields.reason = RemoteTelemetryReasonClass::WorkerAssigned;
+}
+
+fn set_fence_telemetry_fields(fields: &mut ProductionTelemetryFields, is_accepted: bool) {
+    fields.category = RemoteTelemetryCategory::RetryFencing;
+    fields.result = if is_accepted {
+        RemoteTelemetryResultClass::Accepted
+    } else {
+        RemoteTelemetryResultClass::Rejected
+    };
+    fields.retry = if is_accepted {
+        RemoteTelemetryRetryClass::CurrentFence
+    } else {
+        RemoteTelemetryRetryClass::StaleFence
+    };
+    fields.reason = if is_accepted {
+        RemoteTelemetryReasonClass::FenceAccepted
+    } else {
+        RemoteTelemetryReasonClass::FenceRejected
+    };
+}
+
+fn set_execution_telemetry_fields(fields: &mut ProductionTelemetryFields, is_succeeded: bool) {
+    if is_succeeded {
+        fields.result = RemoteTelemetryResultClass::Succeeded;
+        fields.reason = RemoteTelemetryReasonClass::ExecutionCompleted;
+        return;
+    }
+    fields.phase = RemoteTelemetryPhaseClass::Terminal;
+    fields.result = RemoteTelemetryResultClass::Failed;
+    fields.retry = RemoteTelemetryRetryClass::Terminal;
+    fields.reason = RemoteTelemetryReasonClass::ExecutionFailed;
+}
+
+fn set_transfer_byte_fields(fields: &mut ProductionTelemetryFields, reason: RemoteTelemetryReasonClass, bytes: u64) {
+    set_transfer_fields(fields, reason, bytes);
+    fields.measurement = RemoteTelemetryMeasurementKind::Bytes;
+}
+
+fn set_transfer_cutoff_fields(fields: &mut ProductionTelemetryFields, is_accepted: bool) {
+    set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferCutoff, 1);
+    fields.result = if is_accepted {
+        RemoteTelemetryResultClass::Accepted
+    } else {
+        RemoteTelemetryResultClass::Dropped
+    };
+}
+
+fn set_transfer_completion_fields(fields: &mut ProductionTelemetryFields, bytes: u64, mode: RemoteTransferMode) {
+    set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferCompleted, bytes);
+    fields.result = RemoteTelemetryResultClass::Succeeded;
+    fields.measurement = RemoteTelemetryMeasurementKind::Bytes;
+    fields.transfer = telemetry_transfer_class(mode);
+}
+
+fn set_transfer_fallback_fields(fields: &mut ProductionTelemetryFields, bytes: u64) {
+    set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferFallback, bytes);
+    fields.transfer = RemoteTelemetryTransferClass::Fallback;
+    fields.capability = RemoteTelemetryCapabilityClass::Degraded;
+    fields.measurement = RemoteTelemetryMeasurementKind::Bytes;
+}
+
+fn set_output_telemetry_fields(fields: &mut ProductionTelemetryFields, is_admitted: bool) {
+    fields.category = RemoteTelemetryCategory::Admission;
+    fields.phase = if is_admitted {
+        RemoteTelemetryPhaseClass::Admitting
+    } else {
+        RemoteTelemetryPhaseClass::Terminal
+    };
+    fields.result = if is_admitted {
+        RemoteTelemetryResultClass::Accepted
+    } else {
+        RemoteTelemetryResultClass::Rejected
+    };
+    fields.retry = if is_admitted {
+        RemoteTelemetryRetryClass::None
+    } else {
+        RemoteTelemetryRetryClass::Terminal
+    };
+    fields.reason = if is_admitted {
+        RemoteTelemetryReasonClass::OutputAdmitted
+    } else {
+        RemoteTelemetryReasonClass::OutputRejected
+    };
+    debug_assert_eq!(fields.category, RemoteTelemetryCategory::Admission);
+    debug_assert_eq!(fields.result == RemoteTelemetryResultClass::Accepted, is_admitted);
 }
 
 fn set_transfer_fields(fields: &mut ProductionTelemetryFields, reason: RemoteTelemetryReasonClass, value: u64) {
@@ -5429,20 +6057,17 @@ pub fn append_remote_production_observability_log(
     }
     let cursor = job.immutable_log.as_ref().map_or(0, |log| log.next_cursor);
     let payload = remote_observability_log_payload(telemetry)?;
-    let report =
+    let attempt_log_append =
         production_attempt_report(binding, "observability-log", cursor, RemoteAttemptReportPayload::LogAppend {
             cursor,
-            bytes: payload,
+            bytes: payload.clone(),
         })?;
     let mut candidate = state.clone();
     apply_fenced_log_append(
         &mut candidate,
-        &report,
+        &attempt_log_append,
         cursor,
-        match &report.payload {
-            RemoteAttemptReportPayload::LogAppend { bytes, .. } => bytes,
-            _ => unreachable!("observability report is a log append"),
-        },
+        &payload,
         RemoteLogRetentionPolicy::default(),
     )?;
     persist_coordinator_candidate(&candidate)?;
@@ -5494,17 +6119,23 @@ pub fn append_external_batch_attempt_diagnostic(
         return Err("external-batch-diagnostic-payload-too-large".to_string());
     }
     let cursor = job.immutable_log.as_ref().map_or(0, |log| log.next_cursor);
-    let report = production_attempt_report(
+    let attempt_log_append = production_attempt_report(
         binding,
         "external-batch-diagnostic",
         cursor,
-        RemoteAttemptReportPayload::LogAppend { cursor, bytes: payload },
+        RemoteAttemptReportPayload::LogAppend {
+            cursor,
+            bytes: payload.clone(),
+        },
     )?;
     let mut candidate = state.clone();
-    let RemoteAttemptReportPayload::LogAppend { bytes, .. } = &report.payload else {
-        unreachable!("external batch diagnostic is a log append");
-    };
-    apply_fenced_log_append(&mut candidate, &report, cursor, bytes, RemoteLogRetentionPolicy::default())?;
+    apply_fenced_log_append(
+        &mut candidate,
+        &attempt_log_append,
+        cursor,
+        &payload,
+        RemoteLogRetentionPolicy::default(),
+    )?;
     persist_coordinator_candidate(&candidate)?;
     *state = candidate;
     let summary = state
@@ -5526,10 +6157,11 @@ pub fn append_remote_rejected_production_observability_log(
     let policy = immutable_attempt_log_policy(RemoteLogRetentionPolicy::default())?;
     let manifest = crate::remote_attempt_log_store::load_remote_attempt_log_manifest(state_dir, &scope, policy)?;
     let cursor = manifest.next_cursor;
-    let report =
+    let payload = remote_observability_log_payload(telemetry)?;
+    let attempt_log_append =
         production_attempt_report(binding, "stale-observability-log", cursor, RemoteAttemptReportPayload::LogAppend {
             cursor,
-            bytes: remote_observability_log_payload(telemetry)?,
+            bytes: payload.clone(),
         })?;
     let current = RemoteAttemptLogCurrentAttemptFacts {
         scope,
@@ -5538,12 +6170,9 @@ pub fn append_remote_rejected_production_observability_log(
     let stored = crate::remote_attempt_log_store::append_remote_attempt_log(
         state_dir,
         &current,
-        report.identity.event_id,
+        attempt_log_append.identity.event_id,
         cursor,
-        match &report.payload {
-            RemoteAttemptReportPayload::LogAppend { bytes, .. } => bytes.as_bytes(),
-            _ => unreachable!("rejected observability report is a log append"),
-        },
+        payload.as_bytes(),
         policy,
     )?;
     let summary = remote_attempt_log_control_summary(&stored.manifest, RemoteLogRetentionPolicy::default());
@@ -5685,6 +6314,8 @@ fn validate_worker_resume_claim(
     {
         return Err(RemoteAttemptReasonCode::ResumeStateConflict.as_str().to_string());
     }
+    debug_assert_eq!(attempt.attempt_id, summary.attempt_id);
+    debug_assert_eq!(job.assigned_worker_endpoint_id.as_deref(), Some(registration.endpoint_id.as_str()));
     Ok(())
 }
 
@@ -5710,7 +6341,8 @@ fn coordinator_request_uses_mutable_workspace(request: &RemoteCoordinatorBuildRe
     }
 }
 
-fn mutable_workspace_job_key(shared_key: &str, request_id: &str, assignment_nonce: &RemoteAssignmentNonce) -> String {
+fn mutable_workspace_job_key(identity: (&str, &str, &RemoteAssignmentNonce)) -> String {
+    let (shared_key, request_id, assignment_nonce) = identity;
     let mut hasher = blake3::Hasher::new();
     hash_labeled_str(&mut hasher, "domain", "mantle-mutable-workspace-job-v1");
     hash_labeled_str(&mut hasher, "shared-key-non-claim", shared_key);
@@ -5724,14 +6356,16 @@ fn plan_coordinator_dispatch(
     request: &RemoteCoordinatorBuildRequest,
     assignment_nonce: &RemoteAssignmentNonce,
 ) -> Result<RemoteCoordinatorDispatchDecision, String> {
+    debug_assert!(!request.request.request_id.is_empty());
+    debug_assert!(!assignment_nonce.as_str().is_empty());
     let shared_key = normalized_remote_build_key(request)?;
-    let mutable_workspace = coordinator_request_uses_mutable_workspace(request)?;
-    let normalized_key = if mutable_workspace {
-        mutable_workspace_job_key(&shared_key, &request.request.request_id, assignment_nonce)
+    let is_mutable_workspace = coordinator_request_uses_mutable_workspace(request)?;
+    let normalized_key = if is_mutable_workspace {
+        mutable_workspace_job_key((&shared_key, &request.request.request_id, assignment_nonce))
     } else {
         shared_key
     };
-    if !mutable_workspace {
+    if !is_mutable_workspace {
         if let Some(reason) = conflicting_live_output_claim(state, request, &normalized_key) {
             return Ok(RemoteCoordinatorDispatchDecision::Reject { reason });
         }
@@ -5750,7 +6384,7 @@ fn new_dispatch_decision(
     normalized_build_key: String,
     assignment_nonce: &RemoteAssignmentNonce,
 ) -> Result<RemoteCoordinatorDispatchDecision, String> {
-    let job_id = coordinator_job_id(&normalized_build_key, assignment_nonce);
+    let job_id = coordinator_job_id(&normalized_build_key, assignment_nonce)?;
     let fence_generation = RemoteFenceGeneration::INITIAL;
     let attempt_id =
         derive_remote_attempt_id(&job_id, assignment_nonce, fence_generation, &placement.worker_endpoint_id)
@@ -5794,6 +6428,8 @@ fn admit_coordinator_dispatch_with_nonce(
     time: RemoteAttemptTimeFacts,
     assignment_nonce: RemoteAssignmentNonce,
 ) -> Result<RemoteCoordinatorDispatchDecision, String> {
+    debug_assert!(!request.request.request_id.is_empty());
+    debug_assert!(!assignment_nonce.as_str().is_empty());
     let decision = plan_coordinator_dispatch(state, request, &assignment_nonce)?;
     let RemoteCoordinatorDispatchDecision::Dispatch {
         worker_endpoint_id,
@@ -5810,15 +6446,15 @@ fn admit_coordinator_dispatch_with_nonce(
         .into_iter()
         .find(|placement| placement.worker_endpoint_id == *worker_endpoint_id)
         .ok_or_else(|| "remote-worker-placement-selection-missing".to_string())?;
-    let mut summary = queued_job_summary(
+    let mut summary = queued_job_summary(QueuedJobSummaryInput {
         job_id,
-        normalized_build_key,
+        normalized_key: normalized_build_key,
         worker_endpoint_id,
         assignment_nonce,
         request,
         retry_policy,
         time,
-    )?;
+    })?;
     if summary.current_attempt.as_ref().map(|attempt| &attempt.attempt_id) != Some(attempt_id)
         || summary.current_attempt.as_ref().map(|attempt| attempt.fence_generation) != Some(*fence_generation)
     {
@@ -5832,22 +6468,35 @@ fn admit_coordinator_dispatch_with_nonce(
     candidate.jobs.insert(job_id.clone(), summary);
     persist_coordinator_candidate(&candidate)?;
     *state = candidate;
+    debug_assert!(state.jobs.contains_key(job_id));
+    debug_assert_eq!(state.jobs[job_id].assigned_worker_endpoint_id.as_ref(), Some(worker_endpoint_id));
     Ok(decision)
 }
 
-fn queued_job_summary(
-    job_id: &RemoteJobId,
-    normalized_key: &str,
-    worker_endpoint_id: &str,
+struct QueuedJobSummaryInput<'a> {
+    job_id: &'a RemoteJobId,
+    normalized_key: &'a str,
+    worker_endpoint_id: &'a str,
     assignment_nonce: RemoteAssignmentNonce,
-    request: &RemoteCoordinatorBuildRequest,
+    request: &'a RemoteCoordinatorBuildRequest,
     retry_policy: RemoteAttemptRetryPolicy,
     time: RemoteAttemptTimeFacts,
-) -> Result<RemoteCoordinatorJobSummary, String> {
+}
+
+fn queued_job_summary(input: QueuedJobSummaryInput<'_>) -> Result<RemoteCoordinatorJobSummary, String> {
+    let QueuedJobSummaryInput {
+        job_id,
+        normalized_key,
+        worker_endpoint_id,
+        assignment_nonce,
+        request,
+        retry_policy,
+        time,
+    } = input;
     let current_attempt =
         plan_remote_attempt_assignment(job_id, worker_endpoint_id, assignment_nonce, None, retry_policy, time)
             .map_err(|reason| reason.as_str().to_string())?;
-    Ok(RemoteCoordinatorJobSummary {
+    let summary = RemoteCoordinatorJobSummary {
         job_id: job_id.clone(),
         normalized_build_key: normalized_key.to_string(),
         assigned_worker_endpoint_id: Some(worker_endpoint_id.to_string()),
@@ -5872,7 +6521,10 @@ fn queued_job_summary(
         resource_lease_id_blake3: None,
         resource_fit: None,
         locality: None,
-    })
+    };
+    debug_assert_eq!(summary.job_id, *job_id);
+    debug_assert_eq!(summary.assigned_worker_endpoint_id.as_deref(), Some(worker_endpoint_id));
+    Ok(summary)
 }
 
 fn install_job_resource_reservation(
@@ -5920,35 +6572,56 @@ fn install_job_resource_reservation(
     Ok(())
 }
 
-pub fn reassign_coordinator_attempt(
-    state: &mut RemoteCoordinatorState,
-    job_id: &RemoteJobId,
-    worker_endpoint_id: &str,
+struct ReassignCoordinatorAttemptInput<'a> {
+    job_id: &'a RemoteJobId,
+    worker_endpoint_id: &'a str,
     failure_class: RemoteAttemptFailureClass,
     retry_policy: RemoteAttemptRetryPolicy,
     time: RemoteAttemptTimeFacts,
+    assignment_nonce: RemoteAssignmentNonce,
+}
+
+pub const REASSIGN_COORDINATOR_ATTEMPT: fn(
+    &mut RemoteCoordinatorState,
+    &RemoteJobId,
+    &str,
+    RemoteAttemptFailureClass,
+    RemoteAttemptRetryPolicy,
+    RemoteAttemptTimeFacts,
+) -> Result<RemoteCoordinatorDispatchDecision, String> =
+    |state, job_id, worker_endpoint_id, failure_class, retry_policy, time| {
+        let assignment_nonce = generate_remote_assignment_nonce()?;
+        reassign_coordinator_attempt_core(state, ReassignCoordinatorAttemptInput {
+            job_id,
+            worker_endpoint_id,
+            failure_class,
+            retry_policy,
+            time,
+            assignment_nonce,
+        })
+    };
+pub use REASSIGN_COORDINATOR_ATTEMPT as reassign_coordinator_attempt;
+const _: fn(
+    &mut RemoteCoordinatorState,
+    &RemoteJobId,
+    &str,
+    RemoteAttemptFailureClass,
+    RemoteAttemptRetryPolicy,
+    RemoteAttemptTimeFacts,
+) -> Result<RemoteCoordinatorDispatchDecision, String> = reassign_coordinator_attempt;
+
+fn reassign_coordinator_attempt_core(
+    state: &mut RemoteCoordinatorState,
+    input: ReassignCoordinatorAttemptInput<'_>,
 ) -> Result<RemoteCoordinatorDispatchDecision, String> {
-    let assignment_nonce = generate_remote_assignment_nonce()?;
-    reassign_coordinator_attempt_with_nonce(
-        state,
+    let ReassignCoordinatorAttemptInput {
         job_id,
         worker_endpoint_id,
         failure_class,
         retry_policy,
         time,
         assignment_nonce,
-    )
-}
-
-fn reassign_coordinator_attempt_with_nonce(
-    state: &mut RemoteCoordinatorState,
-    job_id: &RemoteJobId,
-    worker_endpoint_id: &str,
-    failure_class: RemoteAttemptFailureClass,
-    retry_policy: RemoteAttemptRetryPolicy,
-    time: RemoteAttemptTimeFacts,
-    assignment_nonce: RemoteAssignmentNonce,
-) -> Result<RemoteCoordinatorDispatchDecision, String> {
+    } = input;
     let job = state.jobs.get(job_id).ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
     let previous = job
         .current_attempt
@@ -5981,14 +6654,18 @@ fn reassign_coordinator_attempt_with_nonce(
         .as_ref()
         .ok_or_else(|| RemoteAttemptReasonCode::LegacyStateRejected.as_str().to_string())?;
     let decision = dispatch_decision_from_attempt(
-        worker_endpoint_id,
-        &normalized_build_key,
+        CoordinatorDispatchIdentity {
+            worker_endpoint_id,
+            normalized_build_key: &normalized_build_key,
+        },
         updated_attempt,
         updated_job.resource_fit.unwrap_or(crunch_build::ResourceFitClass::Unknown),
         updated_job.locality.clone(),
     );
     persist_coordinator_candidate(&candidate)?;
     *state = candidate;
+    debug_assert_eq!(state.jobs[job_id].phase, RemoteCoordinatorJobPhase::Queued);
+    debug_assert_eq!(state.jobs[job_id].assigned_worker_endpoint_id.as_deref(), Some(worker_endpoint_id));
     Ok(decision)
 }
 
@@ -5999,19 +6676,23 @@ fn require_registered_worker(state: &RemoteCoordinatorState, worker_endpoint_id:
     Err("remote-coordinator-worker-unknown".to_string())
 }
 
+struct CoordinatorDispatchIdentity<'a> {
+    worker_endpoint_id: &'a str,
+    normalized_build_key: &'a str,
+}
+
 fn dispatch_decision_from_attempt(
-    worker_endpoint_id: &str,
-    normalized_build_key: &str,
+    identity: CoordinatorDispatchIdentity<'_>,
     attempt: &RemoteAttemptState,
     resource_fit: crunch_build::ResourceFitClass,
     locality: Option<RemoteVerifiedLocalitySummary>,
 ) -> RemoteCoordinatorDispatchDecision {
     RemoteCoordinatorDispatchDecision::Dispatch {
-        worker_endpoint_id: worker_endpoint_id.to_string(),
+        worker_endpoint_id: identity.worker_endpoint_id.to_string(),
         job_id: attempt.job_id.clone(),
         attempt_id: attempt.attempt_id.clone(),
         fence_generation: attempt.fence_generation,
-        normalized_build_key: normalized_build_key.to_string(),
+        normalized_build_key: identity.normalized_build_key.to_string(),
         resource_fit,
         locality,
     }
@@ -6024,7 +6705,7 @@ fn install_reassigned_attempt(
     attempt: RemoteAttemptState,
 ) -> Result<(), String> {
     let job = state.jobs.get_mut(job_id).ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
-    let worker_changed = job.assigned_worker_endpoint_id.as_deref() != Some(worker_endpoint_id);
+    let is_worker_changed = job.assigned_worker_endpoint_id.as_deref() != Some(worker_endpoint_id);
     job.assigned_worker_endpoint_id = Some(worker_endpoint_id.to_string());
     job.phase = RemoteCoordinatorJobPhase::Queued;
     job.result_available = false;
@@ -6038,9 +6719,11 @@ fn install_reassigned_attempt(
     job.last_attempt_reason_code = Some(RemoteAttemptReasonCode::Superseded);
     job.resource_lease_id_blake3 = None;
     job.resource_fit = None;
-    if worker_changed {
+    if is_worker_changed {
         job.locality = None;
     }
+    debug_assert_eq!(job.phase, RemoteCoordinatorJobPhase::Queued);
+    debug_assert!(job.current_attempt.is_some());
     Ok(())
 }
 
@@ -6148,6 +6831,8 @@ pub fn apply_coordinator_attempt_report(
     apply_attempt_plan_to_candidate(&mut candidate, report, &plan.next_state, plan.reason_code, log_policy)?;
     persist_coordinator_candidate(&candidate)?;
     *state = candidate;
+    debug_assert_eq!(state.jobs[&report.identity.job_id].current_attempt.as_ref(), Some(&plan.next_state));
+    debug_assert_eq!(plan.disposition, RemoteAttemptApplyDisposition::Applied);
     Ok(RemoteCoordinatorAttemptApplyResult {
         disposition: plan.disposition,
         reason_code: plan.reason_code,
@@ -6173,7 +6858,7 @@ fn apply_attempt_plan_to_candidate(
     if let RemoteAttemptReportPayload::LogAppend { cursor, bytes } = &report.payload {
         apply_fenced_log_append(state, report, *cursor, bytes, log_policy)?;
     }
-    let release_live_output_claims = matches!(&report.payload, RemoteAttemptReportPayload::Failure { .. });
+    let is_live_output_claim_release_required = matches!(&report.payload, RemoteAttemptReportPayload::Failure { .. });
     let (normalized_build_key, live_output_claims) = {
         let job = state
             .jobs
@@ -6191,7 +6876,7 @@ fn apply_attempt_plan_to_candidate(
             .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
         job.resource_lease_id_blake3 = None;
     }
-    if release_live_output_claims {
+    if is_live_output_claim_release_required {
         for claim in live_output_claims {
             if state.live_output_claims.get(&claim) == Some(&normalized_build_key) {
                 state.live_output_claims.remove(&claim);
@@ -6244,6 +6929,8 @@ fn apply_fenced_log_append(
         .get_mut(&report.identity.job_id)
         .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
     job.immutable_log = Some(summary);
+    debug_assert!(job.immutable_log.is_some());
+    debug_assert_eq!(job.immutable_log.as_ref().map(|log| log.next_cursor), Some(stored.manifest.next_cursor));
     Ok(())
 }
 
@@ -6252,9 +6939,10 @@ fn immutable_attempt_log_policy(log_policy: RemoteLogRetentionPolicy) -> Result<
     let retained_count =
         u32::try_from(log_policy.max_chunks).map_err(|_| "remote-log-chunk-limit-overflow".to_string())?;
     let payload_bytes_max = log_policy.max_bytes.max(MIN_REMOTE_ATTEMPT_LOG_SHELL_PAYLOAD_BYTES);
-    let record_payload_bytes_max =
-        u32::try_from(payload_bytes_max.min(u64::from(RemoteAttemptLogPolicy::default().record_payload_bytes_max)))
-            .map_err(|_| "remote-log-record-payload-limit-overflow".to_string())?;
+    let record_payload_bytes_max = u32::try_from(
+        payload_bytes_max.min(u64::from(crunch_build::distributed::DEFAULT_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES)),
+    )
+    .map_err(|_| "remote-log-record-payload-limit-overflow".to_string())?;
     let policy = RemoteAttemptLogPolicy {
         record_payload_bytes_max,
         segment_record_count_max: 1,
@@ -6264,7 +6952,8 @@ fn immutable_attempt_log_policy(log_policy: RemoteLogRetentionPolicy) -> Result<
         retained_payload_bytes_max: payload_bytes_max,
         replay_record_count_max: retained_count,
         replay_payload_bytes_max: payload_bytes_max,
-        ..RemoteAttemptLogPolicy::default()
+        manifest_segment_count_max: crunch_build::distributed::DEFAULT_REMOTE_ATTEMPT_LOG_MANIFEST_SEGMENTS,
+        event_identity_count_max: crunch_build::distributed::DEFAULT_REMOTE_ATTEMPT_LOG_EVENT_IDENTITIES,
     };
     policy.validate().map_err(|reason| reason.as_str().to_string())?;
     debug_assert_eq!(policy.segment_record_count_max, 1);
@@ -6321,6 +7010,8 @@ fn apply_attempt_payload_to_job(
         }
         _ => {}
     }
+    debug_assert_eq!(job.current_attempt.as_ref(), Some(next_attempt));
+    debug_assert_eq!(job.phase, coordinator_phase_for_attempt(next_attempt.phase));
 }
 
 fn coordinator_phase_for_attempt(phase: RemoteAttemptPhase) -> RemoteCoordinatorJobPhase {
@@ -6362,9 +7053,9 @@ fn validate_job_resource_linkage(
     state: &RemoteCoordinatorState,
     job: &RemoteCoordinatorJobSummary,
 ) -> Result<(), String> {
-    let requires_live_lease = job.current_attempt.as_ref().is_some_and(|attempt| attempt.phase.is_live())
+    let is_live_lease_required = job.current_attempt.as_ref().is_some_and(|attempt| attempt.phase.is_live())
         && job.resource_requirements.is_some();
-    if !requires_live_lease {
+    if !is_live_lease_required {
         if job.resource_lease_id_blake3.is_some() {
             return Err("remote-resource-terminal-lease-retained".to_string());
         }
@@ -6378,7 +7069,10 @@ fn validate_job_resource_linkage(
         .resource_leases
         .get(lease_id)
         .ok_or_else(|| "remote-resource-current-lease-missing".to_string())?;
-    let attempt = job.current_attempt.as_ref().expect("live quantified job has a current attempt");
+    let attempt = job
+        .current_attempt
+        .as_ref()
+        .ok_or_else(|| RemoteAttemptReasonCode::LegacyStateRejected.as_str().to_string())?;
     let worker = job
         .assigned_worker_endpoint_id
         .as_deref()
@@ -6388,12 +7082,19 @@ fn validate_job_resource_linkage(
         .get(worker)
         .map(|registration| registration.worker_generation)
         .ok_or_else(|| "remote-resource-current-worker-missing".to_string())?;
-    if lease.scope.worker_endpoint_id != worker
-        || lease.scope.worker_generation != worker_generation
-        || lease.scope.job_id != job.job_id
-        || lease.scope.attempt_id != attempt.attempt_id
-        || lease.scope.fence_generation != attempt.fence_generation
-    {
+    if lease.scope.worker_endpoint_id != worker {
+        return Err("remote-resource-job-lease-scope-mismatch".to_string());
+    }
+    if lease.scope.worker_generation != worker_generation {
+        return Err("remote-resource-job-lease-scope-mismatch".to_string());
+    }
+    if lease.scope.job_id != job.job_id {
+        return Err("remote-resource-job-lease-scope-mismatch".to_string());
+    }
+    if lease.scope.attempt_id != attempt.attempt_id {
+        return Err("remote-resource-job-lease-scope-mismatch".to_string());
+    }
+    if lease.scope.fence_generation != attempt.fence_generation {
         return Err("remote-resource-job-lease-scope-mismatch".to_string());
     }
     if job.resource_fit.is_none() {
@@ -6422,12 +7123,16 @@ fn validate_locality_worker_binding(
 }
 
 fn validate_verified_locality_summary(summary: &RemoteVerifiedLocalitySummary) -> Result<(), String> {
-    if summary.schema != REMOTE_LOCALITY_SUMMARY_SCHEMA
-        || summary.worker_endpoint_id.is_empty()
-        || summary.worker_generation == 0
-        || !is_blake3_hex_digest(&summary.scope.manifest_digest_blake3)
-        || !is_blake3_hex_digest(&summary.scope.policy_digest_blake3)
-    {
+    if summary.schema != REMOTE_LOCALITY_SUMMARY_SCHEMA {
+        return Err("remote-locality-summary-invalid".to_string());
+    }
+    if summary.worker_endpoint_id.is_empty() || summary.worker_generation == 0 {
+        return Err("remote-locality-summary-invalid".to_string());
+    }
+    if !is_blake3_hex_digest(&summary.scope.manifest_digest_blake3) {
+        return Err("remote-locality-summary-invalid".to_string());
+    }
+    if !is_blake3_hex_digest(&summary.scope.policy_digest_blake3) {
         return Err("remote-locality-summary-invalid".to_string());
     }
     let objects = summary
@@ -6488,11 +7193,12 @@ pub fn apply_remote_workspace_lease(
         return Ok(plan);
     }
     let mut candidate = state.clone();
-    candidate
-        .workspace_leases
-        .insert(request.workspace_id.clone(), plan.next.clone().expect("accepted workspace lease has next state"));
+    let next_lease = plan.next.clone().ok_or_else(|| "accepted workspace lease has no next state".to_string())?;
+    candidate.workspace_leases.insert(request.workspace_id.clone(), next_lease);
     persist_coordinator_candidate(&candidate)?;
     *state = candidate;
+    debug_assert_eq!(plan.disposition, crunch_build::WorkspaceLeaseDisposition::Accepted);
+    debug_assert!(state.workspace_leases.contains_key(&request.workspace_id));
     Ok(plan)
 }
 
@@ -6527,7 +7233,7 @@ pub fn bind_and_acquire_remote_workspace(
         attempt_id: attempt.attempt_id.as_str().to_string(),
         fence_generation: attempt.fence_generation.get(),
     });
-    let lease = request.lease.as_ref().expect("lease binding was assigned");
+    let lease = request.lease.as_ref().ok_or_else(|| "lease binding assignment failed".to_string())?;
     let core_request = crunch_build::WorkspaceLeaseRequest {
         workspace_id: request.workspace_id.clone().ok_or_else(|| "workspace id missing".to_string())?,
         compatibility_digest_blake3: request.compatibility_digest_blake3.clone(),
@@ -6549,7 +7255,10 @@ pub fn bind_and_acquire_remote_workspace(
         },
         operation: crunch_build::WorkspaceLeaseOperation::Acquire,
     };
-    apply_remote_workspace_lease(state, &worker_id, &core_request)
+    let plan = apply_remote_workspace_lease(state, &worker_id, &core_request)?;
+    debug_assert_eq!(core_request.owner.worker_id, worker_id);
+    debug_assert_eq!(core_request.owner.fence_generation, request.generation);
+    Ok(plan)
 }
 
 fn validate_registered_workspace_request(
@@ -6569,12 +7278,14 @@ fn validate_registered_workspace_request(
     if !policy.guest_paths.contains(&request.guest_path) {
         return Err(crunch_build::WorkspaceReasonCode::GuestPathInvalid.as_str().to_string());
     }
-    let within_quota = request.quota.bytes_max <= policy.bytes_max
+    let is_within_quota = request.quota.bytes_max <= policy.bytes_max
         && request.quota.files_max <= policy.files_max
         && request.quota.snapshots_max <= policy.snapshots_max;
-    if !within_quota {
+    if !is_within_quota {
         return Err(crunch_build::WorkspaceReasonCode::QuotaExceeded.as_str().to_string());
     }
+    debug_assert_eq!(request.owner.worker_id, endpoint_id);
+    debug_assert!(policy.guest_paths.contains(&request.guest_path));
     Ok(())
 }
 
@@ -6582,7 +7293,7 @@ fn validate_external_batch_state(state: &RemoteCoordinatorState) -> Result<(), S
     if state.external_batch_attempts.len() > MAX_REMOTE_STATUS_ITEMS {
         return Err("external-batch-state-attempt-limit-exceeded".to_string());
     }
-    let mut external_jobs = BTreeMap::new();
+    let mut external_jobs = Vec::with_capacity(state.external_batch_attempts.len());
     for (dispatch_id, record) in &state.external_batch_attempts {
         if dispatch_id != &record.submit_operation.dispatch_id_blake3 {
             return Err("external-batch-state-dispatch-key-mismatch".to_string());
@@ -6604,11 +7315,15 @@ fn validate_external_batch_state(state: &RemoteCoordinatorState) -> Result<(), S
                 record.submit_operation.dispatcher_generation,
                 external_job_id
             );
-            let other_dispatch = external_jobs.insert(external_key, dispatch_id.clone());
-            let locator_conflicts = other_dispatch.as_ref().is_some_and(|other| other != dispatch_id);
-            if locator_conflicts {
+            let other_dispatch = external_jobs
+                .iter()
+                .find(|(known_key, _)| known_key == &external_key)
+                .map(|(_, known_dispatch)| known_dispatch);
+            let is_locator_conflict = other_dispatch.is_some_and(|other| other != dispatch_id);
+            if is_locator_conflict {
                 return Err("external-batch-state-external-job-id-conflict".to_string());
             }
+            external_jobs.push((external_key, dispatch_id.clone()));
         }
         if record.worker_registered {
             let worker = state
@@ -6621,6 +7336,8 @@ fn validate_external_batch_state(state: &RemoteCoordinatorState) -> Result<(), S
         }
         validate_external_batch_coordinator_link(state, record)?;
     }
+    debug_assert_eq!(external_jobs.len(), external_jobs.iter().map(|(key, _)| key).collect::<BTreeSet<_>>().len());
+    debug_assert!(state.external_batch_attempts.len() <= MAX_REMOTE_STATUS_ITEMS);
     Ok(())
 }
 
@@ -6641,13 +7358,18 @@ fn validate_external_batch_coordinator_link(
     {
         return Err("external-batch-state-coordinator-job-mismatch".to_string());
     }
-    let current_attempt_live = job.current_attempt.as_ref().is_some_and(|attempt| attempt.phase.is_live());
-    if current_attempt_live && record.resource_lease_id_blake3 != job.resource_lease_id_blake3 {
+    let is_current_attempt_live = job.current_attempt.as_ref().is_some_and(|attempt| attempt.phase.is_live());
+    if is_current_attempt_live && record.resource_lease_id_blake3 != job.resource_lease_id_blake3 {
         return Err("external-batch-state-resource-lease-mismatch".to_string());
     }
     if record.output_admission_digest_blake3.is_some() && !job.output_admission_completed {
         return Err("external-batch-state-output-admission-mismatch".to_string());
     }
+    debug_assert_eq!(job.normalized_build_key, record.submit_operation.normalized_build_key);
+    debug_assert_eq!(
+        job.assigned_worker_endpoint_id.as_deref(),
+        Some(record.submit_operation.expected_worker_endpoint_id.as_str())
+    );
     Ok(())
 }
 
@@ -6747,7 +7469,18 @@ fn select_coordinator_worker(
                 .map_or(crunch_build::TransferCostClass::Unknown, |summary| summary.transfer_cost),
         })
         .collect::<Vec<_>>();
-    let ranked = rank_remote_worker_placement_candidates(&crunch_build::SchedulingPolicy::default(), &facts)
+    let scheduling_policy = crunch_build::SchedulingPolicy {
+        schema: crunch_build::scheduling::SCHEDULING_POLICY_SCHEMA.to_string(),
+        policy_id: crunch_build::scheduling::DEFAULT_SCHEDULING_POLICY_ID.to_string(),
+        preference_order: vec![
+            crunch_build::scheduling::PreferenceField::KnownGraph,
+            crunch_build::scheduling::PreferenceField::ResourceFit,
+            crunch_build::scheduling::PreferenceField::LocalityTransfer,
+        ],
+        aged_after_epochs: crunch_build::scheduling::DEFAULT_AGED_AFTER_EPOCHS,
+        protected_after_epochs: crunch_build::scheduling::DEFAULT_PROTECTED_AFTER_EPOCHS,
+    };
+    let ranked = rank_remote_worker_placement_candidates(&scheduling_policy, &facts)
         .map_err(|reason| reason.as_str().to_string())?;
     let selected = &ranked[0].worker_endpoint_id;
     let placement = placements
@@ -6764,7 +7497,7 @@ fn coordinator_worker_placement_candidates(
     request: &RemoteCoordinatorBuildRequest,
 ) -> Result<Vec<CoordinatorWorkerPlacement>, String> {
     let active_leases = state.resource_leases.values().cloned().collect::<Vec<_>>();
-    let mut placements = Vec::new();
+    let mut placements = Vec::with_capacity(state.workers.len());
     for worker in state.workers.values() {
         if worker_satisfies_request(worker, request).is_err()
             || active_jobs_for_worker(state, &worker.endpoint_id) >= worker.concurrency
@@ -6810,6 +7543,8 @@ fn matching_verified_locality(
 }
 
 fn no_matching_worker_reason(state: &RemoteCoordinatorState, request: &RemoteCoordinatorBuildRequest) -> String {
+    debug_assert!(state.workers.len() <= MAX_REMOTE_STATUS_ITEMS);
+    debug_assert!(!request.required_system.is_empty());
     if state.workers.is_empty() {
         return "no-workers-registered".to_string();
     }
@@ -6891,13 +7626,13 @@ fn generate_remote_assignment_nonce() -> Result<RemoteAssignmentNonce, String> {
     RemoteAssignmentNonce::new(digest).map_err(|reason| reason.as_str().to_string())
 }
 
-fn coordinator_job_id(normalized_key: &str, assignment_nonce: &RemoteAssignmentNonce) -> RemoteJobId {
+fn coordinator_job_id(normalized_key: &str, assignment_nonce: &RemoteAssignmentNonce) -> Result<RemoteJobId, String> {
     let mut hasher = blake3::Hasher::new();
     hash_labeled_str(&mut hasher, "kind", REMOTE_COORDINATOR_JOB_ID_LABEL);
     hash_labeled_str(&mut hasher, "normalized-key", normalized_key);
     hash_labeled_str(&mut hasher, "assignment-nonce", assignment_nonce.as_str());
     let digest = hasher.finalize().to_hex().to_string();
-    RemoteJobId::new(digest).expect("BLAKE3 coordinator job id is a valid bounded identity")
+    RemoteJobId::new(digest).map_err(|reason| reason.as_str().to_string())
 }
 
 pub fn replay_coordinator_attempt_log(
@@ -6952,17 +7687,17 @@ pub fn coordinator_status_snapshot(
     {
         return Err(format!("remote-status-item-count-exceeds-{MAX_REMOTE_STATUS_ITEMS}"));
     }
-    let mut queued_jobs = Vec::new();
-    let mut active_jobs = Vec::new();
-    let mut recent_jobs = Vec::new();
-    let mut recent_failures = Vec::new();
-    let mut log_cursors = Vec::new();
+    let mut queued_jobs = Vec::with_capacity(state.jobs.len());
+    let mut active_jobs = Vec::with_capacity(state.jobs.len());
+    let mut recent_jobs = Vec::with_capacity(state.jobs.len());
+    let mut recent_failures = Vec::with_capacity(state.jobs.len());
+    let mut log_cursors = Vec::with_capacity(state.jobs.len());
     for job in state.jobs.values() {
         push_status_job(&mut queued_jobs, &mut active_jobs, &mut recent_jobs, state, job)?;
         push_status_failure(&mut recent_failures, job);
         log_cursors.push(coordinator_log_cursor_status(state, job)?);
     }
-    Ok(RemoteCoordinatorStatusSnapshot {
+    let snapshot = RemoteCoordinatorStatusSnapshot {
         endpoint_id: endpoint_id.to_string(),
         configured_concurrency,
         worker_count: bounded_runtime_count_u32(state.workers.len())?,
@@ -6991,7 +7726,10 @@ pub fn coordinator_status_snapshot(
             .chain(std::iter::once(EXTERNAL_BATCH_NON_CLAIM))
             .map(str::to_string)
             .collect(),
-    })
+    };
+    debug_assert_eq!(snapshot.endpoint_id, endpoint_id);
+    debug_assert_eq!(snapshot.log_cursors.len(), state.jobs.len());
+    Ok(snapshot)
 }
 
 fn external_batch_attempt_status(record: &ExternalBatchCoordinatorRecord) -> ExternalBatchAttemptStatus {
@@ -7032,7 +7770,7 @@ fn remote_worker_status(
         ),
         None => None,
     };
-    Ok(RemoteWorkerStatus {
+    let status = RemoteWorkerStatus {
         endpoint_id: worker.endpoint_id.clone(),
         worker_generation: worker.worker_generation,
         systems: bounded_string_list(&worker.systems),
@@ -7054,7 +7792,10 @@ fn remote_worker_status(
             .workspace_policy
             .as_ref()
             .map(|policy| bounded_untrusted_text(&policy.authority_class)),
-    })
+    };
+    debug_assert_eq!(status.endpoint_id, worker.endpoint_id);
+    debug_assert_eq!(status.worker_generation, worker.worker_generation);
+    Ok(status)
 }
 
 fn bounded_string_list(values: &[String]) -> Vec<String> {
@@ -7168,16 +7909,30 @@ fn bounded_runtime_count_u32(count: usize) -> Result<u32, String> {
     u32::try_from(count).map_err(|_| "remote-status-count-overflow".to_string())
 }
 
-pub fn decide_remote_reconnect(
-    active_session_id: &str,
-    candidate_session_id: &str,
+struct RemoteReconnectInput<'a> {
+    active_session_id: &'a str,
+    candidate_session_id: &'a str,
     attempts: u32,
     max_attempts: u32,
-) -> RemoteReconnectDecision {
-    if active_session_id == candidate_session_id {
+}
+
+pub const DECIDE_REMOTE_RECONNECT: fn(&str, &str, u32, u32) -> RemoteReconnectDecision =
+    |active_session_id, candidate_session_id, attempts, max_attempts| {
+        decide_remote_reconnect_core(RemoteReconnectInput {
+            active_session_id,
+            candidate_session_id,
+            attempts,
+            max_attempts,
+        })
+    };
+pub use DECIDE_REMOTE_RECONNECT as decide_remote_reconnect;
+const _: fn(&str, &str, u32, u32) -> RemoteReconnectDecision = decide_remote_reconnect;
+
+fn decide_remote_reconnect_core(input: RemoteReconnectInput<'_>) -> RemoteReconnectDecision {
+    if input.active_session_id == input.candidate_session_id {
         return RemoteReconnectDecision::SameSession;
     }
-    if attempts >= max_attempts {
+    if input.attempts >= input.max_attempts {
         return RemoteReconnectDecision::BackoffRequired;
     }
     RemoteReconnectDecision::NewSession
@@ -7338,31 +8093,35 @@ pub fn read_remote_frame(mut reader: impl Read) -> Result<RemoteFrame, String> {
 }
 
 pub fn decode_remote_frame_stream(encoded: &[u8]) -> Result<Vec<RemoteFrame>, String> {
-    let mut frames = Vec::new();
-    let mut offset = 0_usize;
-    while offset < encoded.len() {
+    let mut frames = Vec::with_capacity(MAX_REMOTE_STDIO_FRAME_COUNT.min(encoded.len()));
+    let mut offset_bytes = 0_usize;
+    while offset_bytes < encoded.len() {
         if frames.len() >= MAX_REMOTE_STDIO_FRAME_COUNT {
             return Err(format!("remote-stdio-frame-count-exceeds-{MAX_REMOTE_STDIO_FRAME_COUNT}"));
         }
-        let remaining = encoded.len().saturating_sub(offset);
+        let remaining = encoded.len().saturating_sub(offset_bytes);
         if remaining < REMOTE_FRAME_HEADER_BYTES {
             return Err("remote-frame-header-incomplete-or-unframed-stdout".to_string());
         }
-        let payload_len = frame_payload_len(&encoded[offset..])?;
+        let payload_len = frame_payload_len(&encoded[offset_bytes..])?;
         if payload_len > MAX_REMOTE_FRAME_BYTES {
             return Err(format!("remote-frame-payload-exceeds-{MAX_REMOTE_FRAME_BYTES}"));
         }
         let frame_len = REMOTE_FRAME_HEADER_BYTES
             .checked_add(payload_len)
             .ok_or_else(|| "remote-frame-length-overflow".to_string())?;
-        let end = offset.checked_add(frame_len).ok_or_else(|| "remote-frame-stream-offset-overflow".to_string())?;
-        if end > encoded.len() {
+        let end_bytes = offset_bytes
+            .checked_add(frame_len)
+            .ok_or_else(|| "remote-frame-stream-offset-overflow".to_string())?;
+        if end_bytes > encoded.len() {
             return Err("remote-frame-stream-truncated-or-unframed-stdout".to_string());
         }
-        let frame = decode_remote_frame(&encoded[offset..end])?;
+        let frame = decode_remote_frame(&encoded[offset_bytes..end_bytes])?;
         frames.push(frame);
-        offset = end;
+        offset_bytes = end_bytes;
     }
+    debug_assert_eq!(offset_bytes, encoded.len());
+    debug_assert!(frames.len() <= MAX_REMOTE_STDIO_FRAME_COUNT);
     Ok(frames)
 }
 
@@ -7385,14 +8144,22 @@ pub fn validate_stdio_child_output_for_binding(
     }
     let frames = decode_remote_frame_stream(&output.stdout)
         .map_err(|reason| remote_failure(RemoteFailurePhase::RequestValidation, RemoteRetryClass::Terminal, reason))?;
-    Ok(RemoteStdioTranscript {
+    let transcript = RemoteStdioTranscript {
         binding,
         frames,
         stderr_summary: bounded_stderr_summary(&output.stderr),
-        telemetry: RemoteTelemetryBuffer::default(),
+        telemetry: RemoteTelemetryBuffer {
+            events: Vec::new(),
+            accepted_events: 0,
+            dropped_events: 0,
+            last_drop_reason: None,
+        },
         streaming_output: None,
         trace_context_health: None,
-    })
+    };
+    debug_assert_eq!(transcript.binding, binding);
+    debug_assert!(transcript.frames.len() <= MAX_REMOTE_STDIO_FRAME_COUNT);
+    Ok(transcript)
 }
 
 pub fn validate_stdio_child_exchange_output(
@@ -7442,7 +8209,7 @@ fn command_client_frames(
 > {
     let mut hello = None;
     let mut trace_context = None;
-    let mut trace_frame_seen = false;
+    let mut is_trace_frame_seen = false;
     let mut auth = None;
     let mut request = None;
     let mut input_manifest = None;
@@ -7450,7 +8217,7 @@ fn command_client_frames(
         match frame {
             RemoteFrame::Hello { hello: value } => hello = Some(value.clone()),
             RemoteFrame::TraceContext { context } => {
-                trace_frame_seen = true;
+                is_trace_frame_seen = true;
                 trace_context = context.clone();
             }
             RemoteFrame::AuthTicket { auth: value } => auth = Some(value.clone()),
@@ -7460,10 +8227,12 @@ fn command_client_frames(
         }
     }
     let hello = hello.ok_or_else(|| "remote-production-hello-frame-missing".to_string())?;
-    let trace_negotiated = hello.capabilities.iter().any(|capability| capability == REMOTE_TRACE_CONTEXT_CAPABILITY);
-    if trace_negotiated != trace_frame_seen {
+    let is_trace_negotiated = hello.capabilities.iter().any(|capability| capability == REMOTE_TRACE_CONTEXT_CAPABILITY);
+    if is_trace_negotiated != is_trace_frame_seen {
         return Err("remote-production-trace-capability-frame-mismatch".to_string());
     }
+    debug_assert_eq!(is_trace_negotiated, is_trace_frame_seen);
+    debug_assert!(!hello.endpoint_id.is_empty());
     Ok((
         hello,
         trace_context,
@@ -7473,68 +8242,53 @@ fn command_client_frames(
     ))
 }
 
-fn send_prepared_remote_transfer(
-    reader: &mut impl Read,
-    writer: &mut impl Write,
-    prepared: &crate::remote_transfer::PreparedRemoteTransfer,
+struct RemoteTransferSendInput<'a> {
+    prepared: &'a crate::remote_transfer::PreparedRemoteTransfer,
     policy: RemoteTransferPolicy,
     direction: crate::remote_transfer::RemoteTransferDirection,
     demand_frame: RemoteTransferDemandFrame,
+    interrupt_after_chunks: Option<u32>,
+}
+
+fn send_prepared_remote_transfer(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    input: RemoteTransferSendInput<'_>,
 ) -> Result<crate::remote_transfer::RemoteTransferShellReport, String> {
-    send_prepared_remote_transfer_with_fence_validator(
-        reader,
-        writer,
-        prepared,
-        policy,
-        direction,
-        demand_frame,
-        None,
-        &mut || Ok(()),
-    )
+    send_prepared_remote_transfer_with_fence_validator(reader, writer, input, &mut || Ok(()))
 }
 
 fn send_prepared_remote_transfer_with_fence_validator(
     reader: &mut impl Read,
     writer: &mut impl Write,
-    prepared: &crate::remote_transfer::PreparedRemoteTransfer,
-    policy: RemoteTransferPolicy,
-    direction: crate::remote_transfer::RemoteTransferDirection,
-    demand_frame: RemoteTransferDemandFrame,
-    interrupt_after_chunks: Option<u32>,
+    input: RemoteTransferSendInput<'_>,
     validate_fence: &mut impl FnMut() -> Result<(), String>,
 ) -> Result<crate::remote_transfer::RemoteTransferShellReport, String> {
-    send_prepared_remote_transfer_with_observer(
-        reader,
-        writer,
+    send_prepared_remote_transfer_with_observer(reader, writer, input, validate_fence, &mut |_| {})
+}
+
+fn send_prepared_remote_transfer_with_observer(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    input: RemoteTransferSendInput<'_>,
+    validate_fence: &mut impl FnMut() -> Result<(), String>,
+    observe: &mut impl FnMut(RemoteProductionTelemetryFact),
+) -> Result<crate::remote_transfer::RemoteTransferShellReport, String> {
+    let RemoteTransferSendInput {
         prepared,
         policy,
         direction,
         demand_frame,
         interrupt_after_chunks,
-        validate_fence,
-        &mut |_| {},
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn send_prepared_remote_transfer_with_observer(
-    reader: &mut impl Read,
-    writer: &mut impl Write,
-    prepared: &crate::remote_transfer::PreparedRemoteTransfer,
-    policy: RemoteTransferPolicy,
-    direction: crate::remote_transfer::RemoteTransferDirection,
-    demand_frame: RemoteTransferDemandFrame,
-    interrupt_after_chunks: Option<u32>,
-    validate_fence: &mut impl FnMut() -> Result<(), String>,
-    observe: &mut impl FnMut(RemoteProductionTelemetryFact),
-) -> Result<crate::remote_transfer::RemoteTransferShellReport, String> {
+    } = input;
     if demand_frame.direction != direction
         || demand_frame.demand.scope != crunch_build::distributed::remote_transfer_scope(&prepared.manifest)
     {
         return Err("remote-transfer-demand-scope-mismatch".to_string());
     }
     let initial_transferred_bytes = demand_frame.sender_state.transferred_bytes;
-    let demanded_chunks = u32::try_from(demand_frame.demand.missing_chunks.len()).unwrap_or(u32::MAX);
+    let demanded_chunks = u32::try_from(demand_frame.demand.missing_chunks.len())
+        .map_err(|_| "remote-transfer-demand-count-overflow".to_string())?;
     if demanded_chunks > 0 {
         observe(RemoteProductionTelemetryFact::TransferDemand {
             chunks: demanded_chunks,
@@ -7545,14 +8299,69 @@ fn send_prepared_remote_transfer_with_observer(
             bytes: initial_transferred_bytes,
         });
     }
-    let mut sender_state = demand_frame.sender_state;
+    let sender_state = send_demanded_remote_chunks(
+        reader,
+        writer,
+        RemoteTransferChunkSendInput {
+            prepared,
+            policy,
+            direction,
+            demand: &demand_frame.demand,
+            sender_state: demand_frame.sender_state,
+            interrupt_after_chunks,
+        },
+        validate_fence,
+        observe,
+    )?;
+    validate_fence()?;
+    let complete = read_expected_remote_frame(reader, RemoteFrameKind::TransferComplete)?;
+    let RemoteFrame::TransferComplete {
+        direction: complete_direction,
+        report,
+    } = complete
+    else {
+        return Err("remote-transfer-complete-frame-invalid".to_string());
+    };
+    if complete_direction != direction || report.manifest_digest_blake3 != prepared.manifest.digest_blake3.as_str() {
+        return Err("remote-transfer-completion-manifest-mismatch".to_string());
+    }
+    validate_fence()?;
+    let completed_bytes = report.transferred_bytes.saturating_add(report.reused_bytes);
+    if completed_bytes > 0 {
+        observe(RemoteProductionTelemetryFact::TransferCompleted {
+            bytes: completed_bytes,
+            mode: RemoteTransferMode::Streaming,
+        });
+    }
+    assert!(sender_state.in_flight.is_empty());
+    assert!(report.transferred_bytes >= initial_transferred_bytes);
+    Ok(report)
+}
+
+struct RemoteTransferChunkSendInput<'a> {
+    prepared: &'a crate::remote_transfer::PreparedRemoteTransfer,
+    policy: RemoteTransferPolicy,
+    direction: crate::remote_transfer::RemoteTransferDirection,
+    demand: &'a RemoteTransferDemand,
+    sender_state: RemoteTransferCreditState,
+    interrupt_after_chunks: Option<u32>,
+}
+
+fn send_demanded_remote_chunks(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    input: RemoteTransferChunkSendInput<'_>,
+    validate_fence: &mut impl FnMut() -> Result<(), String>,
+    observe: &mut impl FnMut(RemoteProductionTelemetryFact),
+) -> Result<RemoteTransferCreditState, String> {
+    let mut sender_state = input.sender_state;
     let mut sent_chunks = 0_u32;
-    for missing in &demand_frame.demand.missing_chunks {
+    for missing in &input.demand.missing_chunks {
         let frame = read_expected_remote_frame(reader, RemoteFrameKind::TransferCredit)?;
         let RemoteFrame::TransferCredit { transfer } = frame else {
-            unreachable!("frame kind checked");
+            return Err("remote-transfer-credit-frame-invalid".to_string());
         };
-        if transfer.direction != direction || transfer.missing != *missing {
+        if transfer.direction != input.direction || transfer.missing != *missing {
             observe(RemoteProductionTelemetryFact::TransferCutoff { accepted: false });
             return Err("remote-transfer-credit-demand-mismatch".to_string());
         }
@@ -7560,9 +8369,9 @@ fn send_prepared_remote_transfer_with_observer(
         let credit_bytes = transfer.grant.bytes;
         let reserved = match crate::remote_transfer::write_remote_transfer_data_chunk(
             &mut *writer,
-            prepared,
-            policy,
-            &demand_frame.demand,
+            input.prepared,
+            input.policy,
+            input.demand,
             &sender_state,
             transfer.grant,
             missing,
@@ -7582,9 +8391,9 @@ fn send_prepared_remote_transfer_with_observer(
             acknowledgement,
         } = acknowledgement_frame
         else {
-            unreachable!("frame kind checked");
+            return Err("remote-transfer-acknowledgement-frame-invalid".to_string());
         };
-        if acknowledgement_direction != direction {
+        if acknowledgement_direction != input.direction {
             return Err("remote-transfer-acknowledgement-direction-mismatch".to_string());
         }
         let progress_step = reserved
@@ -7592,7 +8401,7 @@ fn send_prepared_remote_transfer_with_observer(
             .checked_add(1)
             .ok_or_else(|| RemoteTransferReasonCode::ArithmeticOverflow.as_str().to_string())?;
         sender_state = acknowledge_remote_transfer_chunk(
-            policy,
+            input.policy,
             &reserved,
             &acknowledgement,
             &missing.chunk.digest_blake3,
@@ -7601,74 +8410,74 @@ fn send_prepared_remote_transfer_with_observer(
         .map_err(|reason| reason.as_str().to_string())?;
         sent_chunks =
             sent_chunks.checked_add(1).ok_or_else(|| "remote-transfer-sent-chunk-count-overflow".to_string())?;
-        if interrupt_after_chunks.is_some_and(|limit| sent_chunks >= limit) {
+        if input.interrupt_after_chunks.is_some_and(|limit| sent_chunks >= limit) {
             return Err("remote-production-input-transfer-interrupted-after-checkpoint".to_string());
         }
     }
-    validate_fence()?;
-    let complete = read_expected_remote_frame(reader, RemoteFrameKind::TransferComplete)?;
-    let RemoteFrame::TransferComplete {
-        direction: complete_direction,
-        report,
-    } = complete
-    else {
-        unreachable!("frame kind checked");
-    };
-    if complete_direction != direction || report.manifest_digest_blake3 != prepared.manifest.digest_blake3.as_str() {
-        return Err("remote-transfer-completion-manifest-mismatch".to_string());
+    debug_assert!(sender_state.in_flight.is_empty());
+    if let Ok(demanded_chunk_count) = u32::try_from(input.demand.missing_chunks.len()) {
+        debug_assert!(sent_chunks <= demanded_chunk_count);
     }
-    validate_fence()?;
-    let completed_bytes = report.transferred_bytes.saturating_add(report.reused_bytes);
-    if completed_bytes > 0 {
-        observe(RemoteProductionTelemetryFact::TransferCompleted {
-            bytes: completed_bytes,
-            mode: RemoteTransferMode::Streaming,
-        });
-    }
-    assert!(sender_state.in_flight.is_empty());
-    assert!(report.transferred_bytes >= initial_transferred_bytes);
-    Ok(report)
+    Ok(sender_state)
+}
+
+struct RemoteTransferReceiveInput<'a> {
+    direction: crate::remote_transfer::RemoteTransferDirection,
+    state_dir: Option<&'a Path>,
+    attempt: Option<&'a RemoteProductionAttemptBinding>,
+    interrupt_after_chunks: Option<u32>,
 }
 
 fn receive_remote_transfer_interactively(
     reader: &mut impl Read,
     writer: &mut impl Write,
     session: &mut crate::remote_transfer::RemoteTransferReceiveSession,
-    direction: crate::remote_transfer::RemoteTransferDirection,
-    state_dir: Option<&Path>,
-    attempt: Option<&RemoteProductionAttemptBinding>,
-    interrupt_after_chunks: Option<u32>,
+    input: RemoteTransferReceiveInput<'_>,
 ) -> Result<Option<crate::remote_transfer::RemoteTransferShellReport>, String> {
+    let RemoteTransferReceiveInput {
+        direction,
+        state_dir,
+        attempt,
+        interrupt_after_chunks,
+    } = input;
     let mut validate_fence = || {
         if let (Some(state_dir), Some(attempt)) = (state_dir, attempt) {
             validate_current_production_attempt(state_dir, attempt)?;
         }
         Ok(())
     };
-    receive_remote_transfer_interactively_with_fence_validator(
+    let transfer_result = receive_remote_transfer_interactively_with_fence_validator(
         reader,
         writer,
         session,
-        direction,
-        interrupt_after_chunks,
+        RemoteTransferReceiveInput {
+            direction,
+            state_dir,
+            attempt,
+            interrupt_after_chunks,
+        },
         &mut validate_fence,
-    )
+    );
+    debug_assert!(MAX_REMOTE_FRAME_BYTES > 0);
+    debug_assert!(MAX_REMOTE_STDIO_FRAME_COUNT > 0);
+    transfer_result
 }
 
 fn receive_remote_transfer_interactively_with_fence_validator(
     reader: &mut impl Read,
     writer: &mut impl Write,
     session: &mut crate::remote_transfer::RemoteTransferReceiveSession,
-    direction: crate::remote_transfer::RemoteTransferDirection,
-    interrupt_after_chunks: Option<u32>,
+    input: RemoteTransferReceiveInput<'_>,
     validate_fence: &mut impl FnMut() -> Result<(), String>,
 ) -> Result<Option<crate::remote_transfer::RemoteTransferShellReport>, String> {
     let demand = RemoteTransferDemandFrame {
-        direction,
+        direction: input.direction,
         demand: session.demand().clone(),
         sender_state: session.sender_credit_state(),
     };
-    write_remote_control_frame(writer, &RemoteFrame::TransferDemand { transfer: demand })?;
+    write_remote_control_frame(writer, &RemoteFrame::TransferDemand {
+        transfer: demand.clone(),
+    })?;
     let missing_chunks = session.demand().missing_chunks.clone();
     let mut received_chunks = 0_u32;
     for missing in &missing_chunks {
@@ -7676,7 +8485,7 @@ fn receive_remote_transfer_interactively_with_fence_validator(
         let grant = session.credit_for_chunk(missing)?;
         write_remote_control_frame(writer, &RemoteFrame::TransferCredit {
             transfer: RemoteTransferCreditFrame {
-                direction,
+                direction: input.direction,
                 missing: missing.clone(),
                 grant,
             },
@@ -7691,14 +8500,18 @@ fn receive_remote_transfer_interactively_with_fence_validator(
         received_chunks = received_chunks
             .checked_add(1)
             .ok_or_else(|| "remote-transfer-received-chunk-count-overflow".to_string())?;
-        if interrupt_after_chunks.is_some_and(|limit| received_chunks >= limit) {
+        if input.interrupt_after_chunks.is_some_and(|limit| received_chunks >= limit) {
             return Err("remote-production-transfer-interrupted-after-checkpoint".to_string());
         }
         write_remote_control_frame(writer, &RemoteFrame::TransferAcknowledgement {
-            direction,
+            direction: input.direction,
             acknowledgement,
         })?;
     }
+    if let Ok(missing_chunk_count) = u32::try_from(missing_chunks.len()) {
+        debug_assert!(received_chunks <= missing_chunk_count);
+    }
+    debug_assert_eq!(session.demand().scope, demand.demand.scope);
     Ok(None)
 }
 
@@ -7708,8 +8521,12 @@ fn record_production_fact(
     fact: RemoteProductionTelemetryFact,
 ) {
     *telemetry = record_remote_production_telemetry(telemetry, fact, policy);
-    debug_assert!(telemetry.events.len() <= usize::try_from(policy.event_capacity).unwrap_or(usize::MAX));
-    debug_assert!(telemetry.accepted_events >= u64::try_from(telemetry.events.len()).unwrap_or(u64::MAX));
+    if let Ok(event_capacity) = usize::try_from(policy.event_capacity) {
+        debug_assert!(telemetry.events.len() <= event_capacity);
+    }
+    if let Ok(event_count) = u64::try_from(telemetry.events.len()) {
+        debug_assert!(telemetry.accepted_events >= event_count);
+    }
 }
 
 fn record_transfer_demand_and_resume(
@@ -7717,15 +8534,21 @@ fn record_transfer_demand_and_resume(
     policy: RemoteTelemetryPolicy,
     demand: &RemoteTransferDemandFrame,
 ) {
-    let chunks = u32::try_from(demand.demand.missing_chunks.len()).unwrap_or(u32::MAX);
+    let Ok(chunks) = u32::try_from(demand.demand.missing_chunks.len()) else {
+        debug_assert!(u32::try_from(demand.demand.missing_chunks.len()).is_err());
+        return;
+    };
     if chunks > 0 {
         record_production_fact(telemetry, policy, RemoteProductionTelemetryFact::TransferDemand { chunks });
-        let bytes = demand
+        let Some(bytes) = demand
             .demand
             .missing_chunks
             .iter()
             .try_fold(0_u64, |total, chunk| total.checked_add(u64::from(chunk.chunk.size_bytes)))
-            .unwrap_or(u64::MAX);
+        else {
+            debug_assert!(!demand.demand.missing_chunks.is_empty());
+            return;
+        };
         if bytes > 0 {
             record_production_fact(telemetry, policy, RemoteProductionTelemetryFact::TransferCredit { bytes });
         }
@@ -7734,6 +8557,9 @@ fn record_transfer_demand_and_resume(
         record_production_fact(telemetry, policy, RemoteProductionTelemetryFact::TransferResumed {
             bytes: demand.sender_state.transferred_bytes,
         });
+    }
+    if let Ok(chunk_count) = usize::try_from(chunks) {
+        debug_assert_eq!(chunk_count, demand.demand.missing_chunks.len());
     }
 }
 
@@ -7772,6 +8598,25 @@ fn record_transfer_completion(
     debug_assert!(report.transferred_bytes <= bytes);
 }
 
+struct RemoteProductionClientIo<'a> {
+    stdin: &'a mut std::process::ChildStdin,
+    stdout: &'a mut std::process::ChildStdout,
+}
+
+struct RemoteProductionClientContext<'a> {
+    production: &'a RemoteProductionTransferClient,
+    request: &'a ConcreteBuildRequest,
+    attempt: &'a RemoteProductionAttemptBinding,
+    auth: &'a TicketAuthRequest,
+    policy: RemoteTransferPolicy,
+}
+
+struct RemoteProductionClientProgress {
+    frames: Vec<RemoteFrame>,
+    telemetry: RemoteTelemetryBuffer,
+    trace_context_health: Option<RemoteTraceContextHealth>,
+}
+
 fn run_remote_production_client_protocol(
     mut stdin: std::process::ChildStdin,
     mut stdout: std::process::ChildStdout,
@@ -7784,111 +8629,197 @@ fn run_remote_production_client_protocol(
     if policy != production.transfer_policy {
         return Err("remote-production-transfer-policy-mismatch".to_string());
     }
-    let telemetry_policy = production.telemetry_policy;
-    let mut telemetry = RemoteTelemetryBuffer::default();
-    validate_current_production_attempt(&production.state_dir, attempt)?;
-    let trace_negotiated = hello.capabilities.iter().any(|capability| capability == REMOTE_TRACE_CONTEXT_CAPABILITY);
-    write_remote_control_frame(&mut stdin, &RemoteFrame::Hello { hello })?;
-    if trace_negotiated {
-        write_remote_control_frame(&mut stdin, &RemoteFrame::TraceContext { context: trace_context })?;
-    }
-    write_remote_control_frame(&mut stdin, &RemoteFrame::AuthTicket { auth: auth.clone() })?;
-    let auth_ok = read_expected_remote_frame(&mut stdout, RemoteFrameKind::AuthOk)?;
-    let mut frames = vec![auth_ok];
-    let trace_context_health = if trace_negotiated {
-        let acknowledgement_frame = read_expected_remote_frame(&mut stdout, RemoteFrameKind::TraceContextAck)?;
-        let RemoteFrame::TraceContextAck { acknowledgement } = &acknowledgement_frame else {
-            unreachable!("frame kind checked");
-        };
-        let health = acknowledgement.health.clone();
-        frames.push(acknowledgement_frame);
-        Some(health)
-    } else {
-        None
+    let context = RemoteProductionClientContext {
+        production: &production,
+        request: &request,
+        attempt,
+        auth: &auth,
+        policy,
     };
-    write_remote_control_frame(&mut stdin, &RemoteFrame::BuildRequest {
-        request: request.clone(),
+    let mut io = RemoteProductionClientIo {
+        stdin: &mut stdin,
+        stdout: &mut stdout,
+    };
+    let mut progress = open_remote_production_client(&mut io, &context, hello, trace_context, input_manifest)?;
+    let streaming_output = receive_remote_production_output(&mut io, &context, &mut progress)?;
+    drop(io);
+    drop(stdin);
+    let transcript = RemoteStdioTranscript {
+        binding: command.binding,
+        frames: progress.frames,
+        stderr_summary: String::new(),
+        telemetry: progress.telemetry,
+        streaming_output: Some(streaming_output),
+        trace_context_health: progress.trace_context_health,
+    };
+    debug_assert_eq!(transcript.binding, command.binding);
+    debug_assert!(transcript.streaming_output.is_some());
+    Ok(transcript)
+}
+
+fn open_remote_production_client(
+    io: &mut RemoteProductionClientIo<'_>,
+    context: &RemoteProductionClientContext<'_>,
+    hello: RemoteHello,
+    trace_context: Option<RemoteTraceContext>,
+    input_manifest: RemoteInputManifest,
+) -> Result<RemoteProductionClientProgress, String> {
+    validate_current_production_attempt(&context.production.state_dir, context.attempt)?;
+    let is_trace_negotiated = hello.capabilities.iter().any(|capability| capability == REMOTE_TRACE_CONTEXT_CAPABILITY);
+    write_remote_control_frame(&mut io.stdin, &RemoteFrame::Hello { hello })?;
+    if is_trace_negotiated {
+        write_remote_control_frame(&mut io.stdin, &RemoteFrame::TraceContext { context: trace_context })?;
+    }
+    write_remote_control_frame(&mut io.stdin, &RemoteFrame::AuthTicket {
+        auth: context.auth.clone(),
     })?;
-    write_remote_control_frame(&mut stdin, &RemoteFrame::InputManifest {
+    let auth_ok = read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::AuthOk)?;
+    let mut progress = RemoteProductionClientProgress {
+        frames: Vec::with_capacity(MAX_REMOTE_STDIO_FRAME_COUNT),
+        telemetry: empty_remote_telemetry_buffer(),
+        trace_context_health: None,
+    };
+    progress.frames.push(auth_ok);
+    if is_trace_negotiated {
+        let acknowledgement_frame = read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::TraceContextAck)?;
+        let health = match &acknowledgement_frame {
+            RemoteFrame::TraceContextAck { acknowledgement } => acknowledgement.health.clone(),
+            _ => return Err("remote-trace-context-ack-frame-invalid".to_string()),
+        };
+        progress.frames.push(acknowledgement_frame);
+        progress.trace_context_health = Some(health);
+    }
+    write_remote_control_frame(&mut io.stdin, &RemoteFrame::BuildRequest {
+        request: context.request.clone(),
+    })?;
+    write_remote_control_frame(&mut io.stdin, &RemoteFrame::InputManifest {
         manifest: input_manifest,
     })?;
-    let missing = read_expected_remote_frame(&mut stdout, RemoteFrameKind::MissingInputs)?;
-    frames.push(missing);
-    if let Some(input_transfer) = production.input_transfer.as_ref() {
-        let transfer_frame = RemoteTransferManifestFrame {
-            direction: crate::remote_transfer::RemoteTransferDirection::Upload,
-            manifest: input_transfer.manifest.manifest.clone(),
-            manifest_digest_blake3: input_transfer.manifest.digest_blake3.clone(),
-            actual_mode: RemoteTransferMode::Streaming,
-            fallback_reason: None,
-        };
-        write_remote_control_frame(&mut stdin, &RemoteFrame::TransferManifest {
-            transfer: transfer_frame,
-        })?;
-        let demand = read_expected_remote_frame(&mut stdout, RemoteFrameKind::TransferDemand)?;
-        let RemoteFrame::TransferDemand { transfer: demand } = demand else {
-            unreachable!("frame kind checked");
-        };
-        let mut validate_upload_fence = || validate_current_production_attempt(&production.state_dir, attempt);
-        let mut observe = |fact| record_production_fact(&mut telemetry, telemetry_policy, fact);
-        let complete = send_prepared_remote_transfer_with_observer(
-            &mut stdout,
-            &mut stdin,
-            input_transfer,
-            policy,
-            crate::remote_transfer::RemoteTransferDirection::Upload,
-            demand,
-            production.interrupt_after_input_chunks,
-            &mut validate_upload_fence,
-            &mut observe,
-        )?;
-        frames.push(RemoteFrame::TransferComplete {
-            direction: crate::remote_transfer::RemoteTransferDirection::Upload,
-            report: complete,
-        });
-    } else if !request.input_refs.is_empty() {
+    progress.frames.push(read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::MissingInputs)?);
+    send_remote_production_inputs(io, context, &mut progress)?;
+    debug_assert!(progress.frames.len() <= MAX_REMOTE_STDIO_FRAME_COUNT);
+    debug_assert_eq!(progress.trace_context_health.is_some(), is_trace_negotiated);
+    Ok(progress)
+}
+
+fn send_remote_production_inputs(
+    io: &mut RemoteProductionClientIo<'_>,
+    context: &RemoteProductionClientContext<'_>,
+    progress: &mut RemoteProductionClientProgress,
+) -> Result<(), String> {
+    let Some(input_transfer) = context.production.input_transfer.as_ref() else {
+        if context.request.input_refs.is_empty() {
+            return Ok(());
+        }
         return Err("remote-production-input-transfer-missing".to_string());
-    }
-    frames.push(read_expected_remote_frame(&mut stdout, RemoteFrameKind::BuildQueued)?);
-    frames.push(read_expected_remote_frame(&mut stdout, RemoteFrameKind::BuildStarted)?);
-    record_production_fact(&mut telemetry, telemetry_policy, RemoteProductionTelemetryFact::ExecutionStarted);
-    let finished_frame = read_expected_remote_frame(&mut stdout, RemoteFrameKind::BuildFinished)?;
-    let RemoteFrame::BuildFinished { result } = &finished_frame else {
-        unreachable!("frame kind checked");
     };
-    let result = result.clone();
-    record_production_fact(&mut telemetry, telemetry_policy, RemoteProductionTelemetryFact::ExecutionCompleted);
-    prevalidate_remote_streaming_output_metadata(&request, &production.trusted_output_keys, &result)?;
-    frames.push(finished_frame);
-    let manifest_frame = read_expected_remote_frame(&mut stdout, RemoteFrameKind::TransferManifest)?;
-    let RemoteFrame::TransferManifest {
-        transfer: output_transfer,
-    } = &manifest_frame
-    else {
-        unreachable!("frame kind checked");
+    let transfer_frame = RemoteTransferManifestFrame {
+        direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+        manifest: input_transfer.manifest.manifest.clone(),
+        manifest_digest_blake3: input_transfer.manifest.digest_blake3.clone(),
+        actual_mode: RemoteTransferMode::Streaming,
+        fallback_reason: None,
     };
-    let output_transfer = output_transfer.clone();
-    validate_output_transfer_manifest_frame(&request, &result, &output_transfer, policy)?;
-    frames.push(manifest_frame);
-    validate_current_production_attempt(&production.state_dir, attempt)?;
-    let canonical = canonicalize_remote_transfer_manifest(output_transfer.manifest.clone(), policy)
+    write_remote_control_frame(&mut io.stdin, &RemoteFrame::TransferManifest {
+        transfer: transfer_frame,
+    })?;
+    let demand_frame = read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::TransferDemand)?;
+    let demand = match demand_frame {
+        RemoteFrame::TransferDemand { transfer } => transfer,
+        _ => return Err("remote-transfer-demand-frame-invalid".to_string()),
+    };
+    let mut validate_upload_fence =
+        || validate_current_production_attempt(&context.production.state_dir, context.attempt);
+    let telemetry_policy = context.production.telemetry_policy;
+    let mut observe = |fact| record_production_fact(&mut progress.telemetry, telemetry_policy, fact);
+    let complete = send_prepared_remote_transfer_with_observer(
+        &mut io.stdout,
+        &mut io.stdin,
+        RemoteTransferSendInput {
+            prepared: input_transfer,
+            policy: context.policy,
+            direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+            demand_frame: demand,
+            interrupt_after_chunks: context.production.interrupt_after_input_chunks,
+        },
+        &mut validate_upload_fence,
+        &mut observe,
+    )?;
+    progress.frames.push(RemoteFrame::TransferComplete {
+        direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+        report: complete,
+    });
+    debug_assert!(!progress.frames.is_empty());
+    debug_assert!(progress.frames.len() <= MAX_REMOTE_STDIO_FRAME_COUNT);
+    Ok(())
+}
+
+fn receive_remote_production_output(
+    io: &mut RemoteProductionClientIo<'_>,
+    context: &RemoteProductionClientContext<'_>,
+    progress: &mut RemoteProductionClientProgress,
+) -> Result<RemoteStreamingOutputReceipt, String> {
+    progress.frames.push(read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::BuildQueued)?);
+    progress.frames.push(read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::BuildStarted)?);
+    let telemetry_policy = context.production.telemetry_policy;
+    record_production_fact(&mut progress.telemetry, telemetry_policy, RemoteProductionTelemetryFact::ExecutionStarted);
+    let finished_frame = read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::BuildFinished)?;
+    let result = match &finished_frame {
+        RemoteFrame::BuildFinished { result } => result.clone(),
+        _ => return Err("remote-build-finished-frame-invalid".to_string()),
+    };
+    record_production_fact(
+        &mut progress.telemetry,
+        telemetry_policy,
+        RemoteProductionTelemetryFact::ExecutionCompleted,
+    );
+    prevalidate_remote_streaming_output_metadata(context.request, &context.production.trusted_output_keys, &result)?;
+    progress.frames.push(finished_frame);
+    let manifest_frame = read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::TransferManifest)?;
+    let output_transfer = match &manifest_frame {
+        RemoteFrame::TransferManifest { transfer } => transfer.clone(),
+        _ => return Err("remote-transfer-manifest-frame-invalid".to_string()),
+    };
+    validate_output_transfer_manifest_frame(context.request, &result, &output_transfer, context.policy)?;
+    progress.frames.push(manifest_frame);
+    let receipt = receive_remote_production_output_transfer(io, context, progress, &output_transfer)?;
+    progress
+        .frames
+        .push(read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::OutputTransferDone)?);
+    progress.frames.push(read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::Done)?);
+    debug_assert!(progress.frames.len() <= MAX_REMOTE_STDIO_FRAME_COUNT);
+    debug_assert!(is_blake3_hex_digest(receipt.manifest_digest_blake3.as_str()));
+    Ok(receipt)
+}
+
+fn receive_remote_production_output_transfer(
+    io: &mut RemoteProductionClientIo<'_>,
+    context: &RemoteProductionClientContext<'_>,
+    progress: &mut RemoteProductionClientProgress,
+    output_transfer: &RemoteTransferManifestFrame,
+) -> Result<RemoteStreamingOutputReceipt, String> {
+    validate_current_production_attempt(&context.production.state_dir, context.attempt)?;
+    let canonical = canonicalize_remote_transfer_manifest(output_transfer.manifest.clone(), context.policy)
         .map_err(|reason| reason.as_str().to_string())?;
-    let receiver_root =
-        crate::remote_transfer::remote_transfer_receiver_root(&production.state_dir, &canonical.manifest.session_id);
-    let lease_expires_unix_s = auth
+    let receiver_root = crate::remote_transfer::remote_transfer_receiver_root(
+        &context.production.state_dir,
+        &canonical.manifest.session_id,
+    );
+    let lease_expires_unix_s = context
+        .auth
         .now_unix_s
         .checked_add(REMOTE_TRANSFER_LEASE_DURATION_SECS)
         .ok_or_else(|| "remote-transfer-lease-expiry-overflow".to_string())?;
     let mut session = crate::remote_transfer::begin_remote_transfer_receive(
         output_transfer.manifest.clone(),
         &output_transfer.manifest_digest_blake3,
-        policy,
-        &production.state_dir,
+        context.policy,
+        &context.production.state_dir,
         &receiver_root,
         crate::remote_transfer::RemoteTransferRunOptions {
             direction: crate::remote_transfer::RemoteTransferDirection::Download,
             interrupt_after_chunks: None,
-            now_unix_s: auth.now_unix_s,
+            now_unix_s: context.auth.now_unix_s,
             lease_expires_unix_s,
             admission: crate::remote_transfer::RemoteTransferAdmissionFacts {
                 required_closure_metadata_verified: true,
@@ -7896,76 +8827,87 @@ fn run_remote_production_client_protocol(
             },
         },
     )?;
+    let telemetry_policy = context.production.telemetry_policy;
     record_transfer_demand_and_resume_from_session(
-        &mut telemetry,
+        &mut progress.telemetry,
         telemetry_policy,
         &session,
         crate::remote_transfer::RemoteTransferDirection::Download,
     );
-    receive_remote_transfer_interactively(
-        &mut stdout,
-        &mut stdin,
-        &mut session,
-        crate::remote_transfer::RemoteTransferDirection::Download,
-        Some(&production.state_dir),
-        Some(attempt),
-        production.interrupt_after_output_chunks,
-    )?;
-    validate_current_production_attempt(&production.state_dir, attempt)?;
-    let report = session.finish()?;
+    receive_remote_transfer_interactively(&mut io.stdout, &mut io.stdin, &mut session, RemoteTransferReceiveInput {
+        direction: crate::remote_transfer::RemoteTransferDirection::Download,
+        state_dir: Some(&context.production.state_dir),
+        attempt: Some(context.attempt),
+        interrupt_after_chunks: context.production.interrupt_after_output_chunks,
+    })?;
+    finish_remote_production_output_transfer(io, context, progress, output_transfer, session)?;
+    let receipt = RemoteStreamingOutputReceipt {
+        manifest: output_transfer.manifest.clone(),
+        manifest_digest_blake3: output_transfer.manifest_digest_blake3.clone(),
+        receiver_root,
+    };
+    debug_assert!(receipt.receiver_root.is_absolute());
+    debug_assert!(is_blake3_hex_digest(receipt.manifest_digest_blake3.as_str()));
+    Ok(receipt)
+}
+
+fn finish_remote_production_output_transfer(
+    io: &mut RemoteProductionClientIo<'_>,
+    context: &RemoteProductionClientContext<'_>,
+    progress: &mut RemoteProductionClientProgress,
+    output_transfer: &RemoteTransferManifestFrame,
+    mut session: crate::remote_transfer::RemoteTransferReceiveSession,
+) -> Result<(), String> {
+    validate_current_production_attempt(&context.production.state_dir, context.attempt)?;
+    let transfer_receipt = session.finish()?;
     record_transfer_completion(
-        &mut telemetry,
-        telemetry_policy,
-        &report,
+        &mut progress.telemetry,
+        context.production.telemetry_policy,
+        &transfer_receipt,
         output_transfer.actual_mode,
         output_transfer.fallback_reason.as_deref(),
     );
-    if let Err(reason) = validate_current_production_attempt(&production.state_dir, attempt) {
+    if let Err(reason) = validate_current_production_attempt(&context.production.state_dir, context.attempt) {
         session
             .invalidate_fenced_progress()
             .map_err(|invalidation| format!("{reason}; remote-transfer-fence-invalidation-failed: {invalidation}"))?;
         return Err(reason);
     }
-    validate_current_production_attempt(&production.state_dir, attempt)?;
-    write_remote_control_frame(&mut stdin, &RemoteFrame::TransferComplete {
+    validate_current_production_attempt(&context.production.state_dir, context.attempt)?;
+    write_remote_control_frame(&mut io.stdin, &RemoteFrame::TransferComplete {
         direction: crate::remote_transfer::RemoteTransferDirection::Download,
-        report,
+        report: transfer_receipt,
     })?;
-    frames.push(read_expected_remote_frame(&mut stdout, RemoteFrameKind::OutputTransferDone)?);
-    frames.push(read_expected_remote_frame(&mut stdout, RemoteFrameKind::Done)?);
-    drop(stdin);
-    Ok(RemoteStdioTranscript {
-        binding: command.binding,
-        frames,
-        stderr_summary: String::new(),
-        telemetry,
-        streaming_output: Some(RemoteStreamingOutputReceipt {
-            manifest: output_transfer.manifest.clone(),
-            manifest_digest_blake3: output_transfer.manifest_digest_blake3.clone(),
-            receiver_root,
-        }),
-        trace_context_health,
-    })
+    debug_assert!(MAX_REMOTE_FRAME_BYTES > 0);
+    debug_assert!(MAX_REMOTE_STDIO_FRAME_COUNT > 0);
+    Ok(())
 }
 
 fn drain_bounded_pipe(mut reader: impl Read, retained_bytes_max: usize) -> Result<(Vec<u8>, bool), String> {
     const PIPE_DRAIN_BUFFER_BYTES: usize = 16_384;
-    let mut retained = Vec::new();
-    let mut exceeded = false;
+    let mut retained = Vec::with_capacity(retained_bytes_max);
+    let mut is_exceeded = false;
+    let mut is_eof = false;
     let mut buffer = [0_u8; PIPE_DRAIN_BUFFER_BYTES];
-    loop {
+    for _ in 0..MAX_REMOTE_STDIO_FRAME_COUNT {
         let read_bytes = reader.read(&mut buffer).map_err(|err| format!("draining child pipe: {err}"))?;
         if read_bytes == 0 {
+            is_eof = true;
             break;
         }
         let remaining = retained_bytes_max.saturating_sub(retained.len());
         let retained_now = read_bytes.min(remaining);
         retained.extend_from_slice(&buffer[..retained_now]);
-        exceeded |= retained_now < read_bytes;
+        is_exceeded |= retained_now < read_bytes;
+    }
+    if !is_eof {
+        return Err("draining child pipe exceeded read bound".to_string());
     }
     assert!(retained.len() <= retained_bytes_max);
-    assert!(!exceeded || retained.len() == retained_bytes_max);
-    Ok((retained, exceeded))
+    if is_exceeded {
+        assert_eq!(retained.len(), retained_bytes_max);
+    }
+    Ok((retained, is_exceeded))
 }
 
 #[cfg(unix)]
@@ -8011,23 +8953,26 @@ fn terminate_remote_child_tree(child: &mut std::process::Child) -> Result<(), Ru
 }
 
 fn wait_for_remote_child_teardown(child: &mut std::process::Child) -> Result<(), RunError> {
-    let deadline = Instant::now()
-        .checked_add(Duration::from_secs(REMOTE_CHILD_TEARDOWN_TIMEOUT_SECS))
-        .ok_or_else(|| RunError::Internal("stdio remote child teardown deadline overflow".to_string()))?;
-    loop {
+    let timeout_ms = REMOTE_CHILD_TEARDOWN_TIMEOUT_SECS
+        .checked_mul(MILLISECONDS_PER_SECOND)
+        .ok_or_else(|| RunError::Internal("stdio remote child teardown timeout overflow".to_string()))?;
+    let poll_attempts = timeout_ms
+        .checked_div(REMOTE_CHILD_POLL_INTERVAL_MS)
+        .and_then(|attempts| attempts.checked_add(1))
+        .ok_or_else(|| RunError::Internal("stdio remote child teardown poll bound invalid".to_string()))?;
+    for _ in 0..poll_attempts {
         if child
             .try_wait()
             .map_err(|error| RunError::Internal(format!("polling stdio remote child teardown: {error}")))?
             .is_some()
         {
-            assert!(Instant::now() <= deadline);
+            assert!(poll_attempts > 0);
+            assert!(REMOTE_CHILD_POLL_INTERVAL_MS > 0);
             return Ok(());
-        }
-        if Instant::now() >= deadline {
-            return terminate_remote_child_tree(child);
         }
         thread::sleep(Duration::from_millis(REMOTE_CHILD_POLL_INTERVAL_MS));
     }
+    terminate_remote_child_tree(child)
 }
 
 fn run_production_stdio_remote_child(
@@ -8035,6 +8980,8 @@ fn run_production_stdio_remote_child(
     command: &RemoteStdioCommand,
     production: &RemoteProductionTransferClient,
 ) -> Result<RemoteStdioTranscript, RunError> {
+    debug_assert!(command.timeout_secs > 0);
+    debug_assert!(command.timeout_secs <= MAX_REMOTE_BUILD_TIME_SECS);
     let stdin = child
         .stdin
         .take()
@@ -8052,30 +8999,23 @@ fn run_production_stdio_remote_child(
     let production_owned = production.clone();
     thread::spawn(move || {
         let result = run_remote_production_client_protocol(stdin, stdout, command_owned, production_owned);
-        let _ = protocol_tx.send(result);
+        if protocol_tx.send(result).is_err() {
+            return;
+        }
     });
     let (stderr_tx, stderr_rx) = std::sync::mpsc::sync_channel(1);
     thread::spawn(move || {
-        let _ = stderr_tx.send(drain_bounded_pipe(stderr, MAX_REMOTE_STDIO_STDERR_BYTES));
+        if stderr_tx.send(drain_bounded_pipe(stderr, MAX_REMOTE_STDIO_STDERR_BYTES)).is_err() {
+            return;
+        }
     });
-    let deadline = Instant::now()
-        .checked_add(Duration::from_secs(command.timeout_secs))
-        .ok_or_else(|| RunError::Internal("stdio remote child timeout overflow".to_string()))?;
-    let protocol_result = loop {
-        match protocol_rx.try_recv() {
-            Ok(result) => break result,
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                break Err("remote-production-protocol-thread-disconnected".to_string());
-            }
-            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+    let protocol_timeout_secs = Duration::from_secs(command.timeout_secs);
+    let protocol_result = match protocol_rx.recv_timeout(protocol_timeout_secs) {
+        Ok(result) => result,
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            Err("remote-production-protocol-thread-disconnected".to_string())
         }
-        if let Some(status) = child.try_wait().map_err(|err| {
-            RunError::Internal(format!("polling stdio remote child {}: {err}", command.program.display()))
-        })? && !status.success()
-        {
-            break Err("stdio-child-exit-failed".to_string());
-        }
-        if Instant::now() >= deadline {
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
             terminate_remote_child_tree(&mut child)?;
             return Err(RunError::Internal(format!(
                 "stdio remote child timed out after {} seconds phase={:?}",
@@ -8083,18 +9023,26 @@ fn run_production_stdio_remote_child(
                 RemoteFailurePhase::TransportSetup
             )));
         }
-        thread::sleep(Duration::from_millis(REMOTE_CHILD_POLL_INTERVAL_MS));
     };
     if protocol_result.is_err() {
         terminate_remote_child_tree(&mut child)?;
     } else {
         wait_for_remote_child_teardown(&mut child)?;
     }
-    let teardown_timeout = Duration::from_secs(REMOTE_CHILD_TEARDOWN_TIMEOUT_SECS);
+    let teardown_timeout_secs = Duration::from_secs(REMOTE_CHILD_TEARDOWN_TIMEOUT_SECS);
     let (stderr, stderr_exceeded) = stderr_rx
-        .recv_timeout(teardown_timeout)
+        .recv_timeout(teardown_timeout_secs)
         .map_err(|_| RunError::Internal("stdio remote child stderr teardown timed out".to_string()))?
         .map_err(RunError::Internal)?;
+    finalize_remote_child_transcript(protocol_result, stderr, stderr_exceeded, command.binding)
+}
+
+fn finalize_remote_child_transcript(
+    protocol_result: Result<RemoteStdioTranscript, String>,
+    stderr: Vec<u8>,
+    is_stderr_exceeded: bool,
+    binding: RemoteTransportBinding,
+) -> Result<RemoteStdioTranscript, RunError> {
     let mut transcript = protocol_result.map_err(|reason| {
         RunError::Internal(format!(
             "stdio remote child failed phase={:?}: {reason}; stderr={}",
@@ -8102,11 +9050,16 @@ fn run_production_stdio_remote_child(
             bounded_stderr_summary(&stderr)
         ))
     })?;
-    if stderr_exceeded {
+    if is_stderr_exceeded {
         transcript.stderr_summary = format!("{}{}", String::from_utf8_lossy(&stderr), STDERR_TRUNCATION_MARKER);
     } else {
         transcript.stderr_summary = String::from_utf8_lossy(&stderr).to_string();
     }
+    let stderr_summary_limit_bytes = MAX_REMOTE_STDIO_STDERR_BYTES
+        .checked_add(STDERR_TRUNCATION_MARKER.len())
+        .ok_or_else(|| RunError::Internal("stdio stderr summary limit overflow".to_string()))?;
+    debug_assert_eq!(transcript.binding, binding);
+    debug_assert!(transcript.stderr_summary.len() <= stderr_summary_limit_bytes);
     Ok(transcript)
 }
 
@@ -8137,7 +9090,7 @@ pub fn run_stdio_remote_child(command: &RemoteStdioCommand) -> Result<RemoteStdi
         stderr: output.stderr,
         status_success: output.status.success(),
     };
-    validate_stdio_child_output_for_binding(&child_output, command.binding).map_err(|failure| {
+    let transcript = validate_stdio_child_output_for_binding(&child_output, command.binding).map_err(|failure| {
         RunError::Internal(format!(
             "stdio remote child failed phase={:?} retry={:?}: {}; stderr={}",
             failure.phase,
@@ -8145,7 +9098,10 @@ pub fn run_stdio_remote_child(command: &RemoteStdioCommand) -> Result<RemoteStdi
             failure.reason,
             bounded_stderr_summary(&child_output.stderr)
         ))
-    })
+    })?;
+    debug_assert_eq!(transcript.binding, command.binding);
+    debug_assert!(transcript.frames.len() <= MAX_REMOTE_STDIO_FRAME_COUNT);
+    Ok(transcript)
 }
 
 fn wait_for_stdio_child_output(
@@ -8153,28 +9109,32 @@ fn wait_for_stdio_child_output(
     timeout_secs: u64,
     program: &Path,
 ) -> Result<std::process::Output, RunError> {
-    let deadline = Instant::now()
-        .checked_add(Duration::from_secs(timeout_secs))
+    let timeout_ms = timeout_secs
+        .checked_mul(MILLISECONDS_PER_SECOND)
         .ok_or_else(|| RunError::Internal("stdio remote child timeout overflow".to_string()))?;
-    loop {
+    let poll_attempts = timeout_ms
+        .checked_div(REMOTE_CHILD_POLL_INTERVAL_MS)
+        .and_then(|attempts| attempts.checked_add(1))
+        .ok_or_else(|| RunError::Internal("stdio remote child poll bound invalid".to_string()))?;
+    for _ in 0..poll_attempts {
         if child
             .try_wait()
             .map_err(|err| RunError::Internal(format!("polling stdio remote child {}: {err}", program.display())))?
             .is_some()
         {
+            debug_assert!(poll_attempts > 0);
+            debug_assert!(REMOTE_CHILD_POLL_INTERVAL_MS > 0);
             return child.wait_with_output().map_err(|err| {
                 RunError::Internal(format!("collecting stdio remote child {} output: {err}", program.display()))
             });
         }
-        if Instant::now() >= deadline {
-            terminate_remote_child_tree(&mut child)?;
-            return Err(RunError::Internal(format!(
-                "stdio remote child timed out after {timeout_secs} seconds phase={:?}",
-                RemoteFailurePhase::TransportSetup
-            )));
-        }
         thread::sleep(Duration::from_millis(REMOTE_CHILD_POLL_INTERVAL_MS));
     }
+    terminate_remote_child_tree(&mut child)?;
+    Err(RunError::Internal(format!(
+        "stdio remote child timed out after {timeout_secs} seconds phase={:?}",
+        RemoteFailurePhase::TransportSetup
+    )))
 }
 
 pub fn remote_client_request_frames(client: &RemoteLoopbackClient) -> Vec<RemoteFrame> {
@@ -8255,11 +9215,14 @@ pub fn plan_remote_stdio_replay_dispatch(
         timeout_secs: options.build_time_limit_secs,
         production_transfer: None,
     };
-    Ok(RemoteClientDispatchPlan {
+    let dispatch = RemoteClientDispatchPlan {
         label: "remote-failure-replay".to_string(),
         command,
         client,
-    })
+    };
+    debug_assert_eq!(dispatch.command.binding, RemoteTransportBinding::Stdio);
+    debug_assert!(dispatch.client.request.failure_replay.is_some());
+    Ok(dispatch)
 }
 
 fn plan_remote_client_dispatch_for_binding(
@@ -8296,7 +9259,7 @@ pub fn concrete_remote_derivation_request(
     let input_refs = remote_input_refs_from_derivation(&input.nix_derivation, &options.store_prefix);
     let source_input_refs = remote_source_input_refs_from_derivation(&input.nix_derivation, &options.store_prefix);
     let upload_bytes = remote_input_ref_upload_bytes(&input_refs)?;
-    Ok(ConcreteBuildRequest {
+    let request = ConcreteBuildRequest {
         request_id: remote_client_request_id(&input.label, &input.drv_path, &options.store_prefix),
         store_prefix: options.store_prefix.clone(),
         input_refs,
@@ -8313,9 +9276,12 @@ pub fn concrete_remote_derivation_request(
         transfer_policy: None,
         resource_requirements: None,
         locality_scope: None,
-        failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy::default(),
+        failure_debug_policy: default_remote_failure_debug_policy(),
         failure_replay: None,
-    })
+    };
+    debug_assert_eq!(request.store_prefix, options.store_prefix);
+    debug_assert!(is_blake3_hex_digest(&request.request_id));
+    Ok(request)
 }
 
 pub fn remote_expected_outputs_from_derivation(
@@ -8410,7 +9376,7 @@ fn remote_loopback_client_for_request(
         closure_refs: request.input_refs.clone(),
     };
     let session_id = remote_client_session_id(&request.request_id);
-    RemoteLoopbackClient {
+    let client = RemoteLoopbackClient {
         session_id,
         hello: RemoteHello {
             alpn: REMOTE_PROTOCOL_ALPN.to_string(),
@@ -8430,7 +9396,10 @@ fn remote_loopback_client_for_request(
         input_manifest,
         trusted_output_keys: options.trusted_output_keys.clone(),
         transfer_capabilities: options.transfer_capabilities,
-    }
+    };
+    debug_assert_eq!(client.hello.endpoint_id, options.builder.endpoint_id);
+    debug_assert_eq!(client.input_manifest.request_id, client.request.request_id);
+    client
 }
 
 fn remote_client_request_id(label: &str, drv_path: &StorePath<String>, store_prefix: &str) -> String {
@@ -8488,17 +9457,20 @@ pub fn plan_remote_builder_frames_with_executor(
     let input_upload = take_input_upload(&mut frames, &mut phase, request, &missing, ticket)?;
     reject_extra_client_frames(frames.next())?;
     redeem_after_queue(ticket, true)?;
-    build_response_frames(
+    let response = build_response_frames(BuildResponseFramesInput {
         builder,
         request,
-        &input_upload,
+        input_upload: &input_upload,
         client_transfer,
         phase,
-        vec![auth_ok, missing_frame],
+        response_frames: vec![auth_ok, missing_frame],
         missing,
-        ticket.uses_remaining,
+        ticket_uses_remaining: ticket.uses_remaining,
         executor,
-    )
+    })?;
+    debug_assert_eq!(response.output_digest_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
+    debug_assert!(!response.response_frames.is_empty());
+    Ok(response)
 }
 
 pub fn serve_stdio_remote_once(
@@ -8579,6 +9551,17 @@ pub fn validate_remote_transition(
     if kind == RemoteFrameKind::Error {
         return Ok(RemoteProtocolPhase::Failed);
     }
+    let next_phase = validate_non_error_remote_transition(phase, direction, kind)?;
+    debug_assert_ne!(kind, RemoteFrameKind::Error);
+    debug_assert_ne!(next_phase, RemoteProtocolPhase::Failed);
+    Ok(next_phase)
+}
+
+fn validate_non_error_remote_transition(
+    phase: RemoteProtocolPhase,
+    direction: RemoteFrameDirection,
+    kind: RemoteFrameKind,
+) -> Result<RemoteProtocolPhase, String> {
     match (phase, direction, kind) {
         (RemoteProtocolPhase::Open, RemoteFrameDirection::ClientToBuilder, RemoteFrameKind::Hello) => {
             Ok(RemoteProtocolPhase::AwaitAuth)
@@ -8641,13 +9624,21 @@ pub fn validate_remote_transition(
         (RemoteProtocolPhase::Done, RemoteFrameDirection::BuilderToClient, RemoteFrameKind::Done) => {
             Ok(RemoteProtocolPhase::Done)
         }
-        _ => Err(format!(
-            "unexpected-remote-frame phase={} direction={} frame={}",
-            phase.as_str(),
-            direction.as_str(),
-            kind.as_str()
-        )),
+        _ => invalid_remote_transition(phase, direction, kind),
     }
+}
+
+fn invalid_remote_transition(
+    phase: RemoteProtocolPhase,
+    direction: RemoteFrameDirection,
+    kind: RemoteFrameKind,
+) -> Result<RemoteProtocolPhase, String> {
+    Err(format!(
+        "unexpected-remote-frame phase={} direction={} frame={}",
+        phase.as_str(),
+        direction.as_str(),
+        kind.as_str()
+    ))
 }
 
 pub fn validate_input_manifest(manifest: &RemoteInputManifest, request: &ConcreteBuildRequest) -> Result<(), String> {
@@ -8666,17 +9657,30 @@ pub fn validate_input_manifest(manifest: &RemoteInputManifest, request: &Concret
     Ok(())
 }
 
-pub fn validate_missing_uploads(
-    missing_refs: &[String],
-    uploaded_refs: &[String],
+struct MissingUploadValidationInput<'a> {
+    missing_refs: &'a [String],
+    uploaded_refs: &'a [String],
     uploaded_bytes: u64,
     max_upload_bytes: u64,
-) -> Result<(), String> {
-    if uploaded_bytes > max_upload_bytes || uploaded_bytes > MAX_REMOTE_UPLOAD_BYTES {
+}
+
+pub const VALIDATE_MISSING_UPLOADS: fn(&[String], &[String], u64, u64) -> Result<(), String> =
+    |missing_refs, uploaded_refs, uploaded_bytes, max_upload_bytes| {
+        validate_missing_uploads_core(MissingUploadValidationInput {
+            missing_refs,
+            uploaded_refs,
+            uploaded_bytes,
+            max_upload_bytes,
+        })
+    };
+pub use VALIDATE_MISSING_UPLOADS as validate_missing_uploads;
+
+fn validate_missing_uploads_core(input: MissingUploadValidationInput<'_>) -> Result<(), String> {
+    if input.uploaded_bytes > input.max_upload_bytes || input.uploaded_bytes > MAX_REMOTE_UPLOAD_BYTES {
         return Err("upload-byte-limit-exceeded".to_string());
     }
-    let missing = missing_refs.iter().collect::<BTreeSet<_>>();
-    let uploaded = uploaded_refs.iter().collect::<BTreeSet<_>>();
+    let missing = input.missing_refs.iter().collect::<BTreeSet<_>>();
+    let uploaded = input.uploaded_refs.iter().collect::<BTreeSet<_>>();
     if missing != uploaded {
         return Err("uploaded-input-set-does-not-match-missing-set".to_string());
     }
@@ -8715,6 +9719,8 @@ pub fn validate_remote_input_upload_artifacts(
             return Err("input-upload-artifact-missing".to_string());
         }
     }
+    debug_assert_eq!(seen.len(), artifacts.len());
+    debug_assert!(total_bytes <= MAX_REMOTE_UPLOAD_BYTES);
     Ok(())
 }
 
@@ -8754,10 +9760,14 @@ pub fn plan_output_transfer(
 ) -> Result<RemoteTransferReport, String> {
     // A negotiated label is not runtime evidence. Only
     // `streaming_transfer_report_from_runtime` may report streaming mode.
-    if client.delta && builder.delta && !client.simulate_delta_failure && !builder.simulate_delta_failure {
+    debug_assert!(DELTA_REUSE_PERCENT <= PERCENT_DENOMINATOR);
+    debug_assert!(PERCENT_DENOMINATOR > 0);
+    let is_delta_available = client.delta && builder.delta;
+    let is_delta_failure_simulated = client.simulate_delta_failure || builder.simulate_delta_failure;
+    if is_delta_available && !is_delta_failure_simulated {
         return Ok(delta_transfer_report(output_size_bytes, verified_builder_key));
     }
-    if client.delta && builder.delta && (client.simulate_delta_failure || builder.simulate_delta_failure) {
+    if is_delta_available && is_delta_failure_simulated {
         if client.full && builder.full {
             return Ok(full_transfer_report(
                 output_size_bytes,
@@ -8802,7 +9812,11 @@ fn prevalidate_remote_streaming_output_metadata(
         validate_remote_output_pathinfo(output, path_info, &store_path, &request.store_prefix)?;
     }
     match decide_output_trust(&result.builder_signing_key_id, trusted_output_keys, true) {
-        OutputTrustDecision::Accept { .. } => Ok(()),
+        OutputTrustDecision::Accept { .. } => {
+            debug_assert_eq!(result.request_id, request.request_id);
+            debug_assert_eq!(result.store_prefix, request.store_prefix);
+            Ok(())
+        }
         OutputTrustDecision::Reject(reason) => Err(reason),
     }
 }
@@ -8850,7 +9864,9 @@ fn validate_output_transfer_manifest_frame(
     if transfer.actual_mode == RemoteTransferMode::Streaming && transfer.fallback_reason.is_some() {
         return Err("remote-output-transfer-streaming-fallback-inconsistent".to_string());
     }
-    assert_eq!(canonical.artifact_count as usize, expected_artifact_count);
+    let artifact_count = usize::try_from(canonical.artifact_count)
+        .map_err(|_| "remote-output-transfer-artifact-count-conversion-failed".to_string())?;
+    assert_eq!(artifact_count, expected_artifact_count);
     assert!(canonical.total_bytes > 0);
     Ok(())
 }
@@ -8864,10 +9880,13 @@ fn validate_output_transfer_manifest_artifacts(
         .iter()
         .find(|artifact| artifact.artifact_id == nar_id)
         .ok_or_else(|| "remote-output-transfer-nar-manifest-missing".to_string())?;
-    if nar.artifact_kind != RemoteTransferArtifactKind::Nar
-        || Some(nar.digest_blake3.as_str()) != output.nar_payload_digest_blake3.as_deref()
-        || Some(nar.size_bytes) != output.nar_payload_size_bytes
-    {
+    if nar.artifact_kind != RemoteTransferArtifactKind::Nar {
+        return Err("remote-output-transfer-nar-manifest-mismatch".to_string());
+    }
+    if Some(nar.digest_blake3.as_str()) != output.nar_payload_digest_blake3.as_deref() {
+        return Err("remote-output-transfer-nar-manifest-mismatch".to_string());
+    }
+    if Some(nar.size_bytes) != output.nar_payload_size_bytes {
         return Err("remote-output-transfer-nar-manifest-mismatch".to_string());
     }
     let path_info = output.path_info.as_ref().ok_or_else(|| "remote-output-pathinfo-missing".to_string())?;
@@ -8877,12 +9896,17 @@ fn validate_output_transfer_manifest_artifacts(
         .find(|artifact| artifact.artifact_id == pathinfo_id)
         .ok_or_else(|| "remote-output-transfer-pathinfo-manifest-missing".to_string())?;
     let pathinfo_bytes = serialize_remote_pathinfo_payload(path_info)?;
-    if pathinfo.artifact_kind != RemoteTransferArtifactKind::PathInfo
-        || pathinfo.digest_blake3.as_str() != blake3::hash(&pathinfo_bytes).to_hex().as_str()
-        || pathinfo.size_bytes != remote_payload_size_bytes(pathinfo_bytes.len())?
-    {
+    if pathinfo.artifact_kind != RemoteTransferArtifactKind::PathInfo {
         return Err("remote-output-transfer-pathinfo-manifest-mismatch".to_string());
     }
+    if pathinfo.digest_blake3.as_str() != blake3::hash(&pathinfo_bytes).to_hex().as_str() {
+        return Err("remote-output-transfer-pathinfo-manifest-mismatch".to_string());
+    }
+    if pathinfo.size_bytes != remote_payload_size_bytes(pathinfo_bytes.len())? {
+        return Err("remote-output-transfer-pathinfo-manifest-mismatch".to_string());
+    }
+    debug_assert_eq!(nar.artifact_kind, RemoteTransferArtifactKind::Nar);
+    debug_assert_eq!(pathinfo.artifact_kind, RemoteTransferArtifactKind::PathInfo);
     Ok(())
 }
 
@@ -8909,17 +9933,22 @@ pub fn validate_remote_output_admission(
         return Err("remote-transfer-builder-key-mismatch".to_string());
     }
     match decide_output_trust(&result.builder_signing_key_id, trusted_output_keys, true) {
-        OutputTrustDecision::Accept { key_id, trust_basis } => Ok(RemoteOutputAdmissionReport {
-            request_id: request.request_id.clone(),
-            output_digest_blake3: result.output_digest_blake3.clone(),
-            builder_signing_key_id: key_id,
-            trust_basis,
-            store_prefix: result.store_prefix.clone(),
-            outputs: result.outputs.clone(),
-            transfer_artifacts: transfer_artifacts.to_vec(),
-            streamed_manifest: None,
-            transfer: transfer.clone(),
-        }),
+        OutputTrustDecision::Accept { key_id, trust_basis } => {
+            let admission = RemoteOutputAdmissionReport {
+                request_id: request.request_id.clone(),
+                output_digest_blake3: result.output_digest_blake3.clone(),
+                builder_signing_key_id: key_id,
+                trust_basis,
+                store_prefix: result.store_prefix.clone(),
+                outputs: result.outputs.clone(),
+                transfer_artifacts: transfer_artifacts.to_vec(),
+                streamed_manifest: None,
+                transfer: transfer.clone(),
+            };
+            debug_assert_eq!(admission.output_digest_blake3, result.output_digest_blake3);
+            debug_assert_eq!(admission.transfer, *transfer);
+            Ok(admission)
+        }
         OutputTrustDecision::Reject(reason) => Err(reason),
     }
 }
@@ -8929,40 +9958,73 @@ pub fn validate_remote_builder_response_output_import(
     trusted_output_keys: &[String],
     response: &RemoteBuilderFrameResponse,
 ) -> Result<RemoteOutputAdmissionReport, String> {
-    let import_frames = extract_output_import_frames(&response.response_frames, &request.request_id)?;
-    if import_frames.transfer != &response.transfer {
+    let output_frames = extract_output_import_frames(&response.response_frames, &request.request_id)?;
+    if output_frames.transfer != &response.transfer {
         return Err("remote-output-transfer-report-mismatch".to_string());
     }
-    if import_frames.result.outputs != response.outputs {
+    if output_frames.result.outputs != response.outputs {
         return Err("remote-output-metadata-report-mismatch".to_string());
     }
-    if import_frames.artifacts != response.transfer_artifacts {
+    if output_frames.artifacts != response.transfer_artifacts {
         return Err("remote-output-transfer-artifact-report-mismatch".to_string());
     }
     validate_remote_output_admission(
         request,
         trusted_output_keys,
-        import_frames.result,
-        import_frames.transfer,
-        &import_frames.artifacts,
+        output_frames.result,
+        output_frames.transfer,
+        &output_frames.artifacts,
     )
 }
 
-pub fn admit_fenced_remote_stdio_output(
-    state: &mut RemoteCoordinatorState,
-    binding: &RemoteProductionAttemptBinding,
+struct FencedRemoteStdioOutputInput<'a> {
+    binding: &'a RemoteProductionAttemptBinding,
     worker_authorized: bool,
-    request: &ConcreteBuildRequest,
-    trusted_output_keys: &[String],
-    transcript: &RemoteStdioTranscript,
+    request: &'a ConcreteBuildRequest,
+    trusted_output_keys: &'a [String],
+    transcript: &'a RemoteStdioTranscript,
     event_number: u64,
+}
+
+pub const ADMIT_FENCED_REMOTE_STDIO_OUTPUT: fn(
+    &mut RemoteCoordinatorState,
+    &RemoteProductionAttemptBinding,
+    bool,
+    &ConcreteBuildRequest,
+    &[String],
+    &RemoteStdioTranscript,
+    u64,
+) -> Result<RemoteOutputAdmissionReport, String> =
+    |state, binding, worker_authorized, request, trusted_output_keys, transcript, event_number| {
+        admit_fenced_remote_stdio_output_core(state, FencedRemoteStdioOutputInput {
+            binding,
+            worker_authorized,
+            request,
+            trusted_output_keys,
+            transcript,
+            event_number,
+        })
+    };
+pub use ADMIT_FENCED_REMOTE_STDIO_OUTPUT as admit_fenced_remote_stdio_output;
+
+fn admit_fenced_remote_stdio_output_core(
+    state: &mut RemoteCoordinatorState,
+    input: FencedRemoteStdioOutputInput<'_>,
 ) -> Result<RemoteOutputAdmissionReport, String> {
+    let FencedRemoteStdioOutputInput {
+        binding,
+        worker_authorized,
+        request,
+        trusted_output_keys,
+        transcript,
+        event_number,
+    } = input;
     let (result, _) = extract_streaming_output_frames(&transcript.frames, &request.request_id)?;
-    let report =
+    let result_ready_event =
         production_attempt_report(binding, "result-ready", event_number, RemoteAttemptReportPayload::ResultReady {
             output_digest_blake3: result.output_digest_blake3.clone(),
         })?;
-    let preflight = preflight_fenced_output_report(state, &report, worker_authorized);
+    let preflight = preflight_fenced_output_report(state, &result_ready_event, worker_authorized);
     if preflight.disposition == RemoteAttemptApplyDisposition::Rejected {
         return Err(preflight.reason_code.as_str().to_string());
     }
@@ -8973,7 +10035,7 @@ pub fn admit_fenced_remote_stdio_output(
     if preflight.disposition == RemoteAttemptApplyDisposition::Applied {
         let applied = apply_coordinator_attempt_report(
             state,
-            &report,
+            &result_ready_event,
             RemoteAttemptAuthorizationFacts {
                 worker_authorized,
                 output_admission_authorized: true,
@@ -8995,13 +10057,13 @@ pub fn complete_remote_production_attempt(
     output_digest_blake3: &str,
     event_number: u64,
 ) -> Result<(), String> {
-    let report =
+    let completion_event =
         production_attempt_report(binding, "completion", event_number, RemoteAttemptReportPayload::Completion {
             output_digest_blake3: output_digest_blake3.to_string(),
         })?;
     let applied = apply_coordinator_attempt_report(
         state,
-        &report,
+        &completion_event,
         RemoteAttemptAuthorizationFacts {
             worker_authorized: true,
             output_admission_authorized: true,
@@ -9019,13 +10081,14 @@ pub fn fail_remote_production_attempt(
     binding: &RemoteProductionAttemptBinding,
     event_number: u64,
 ) -> Result<(), String> {
-    let report = production_attempt_report(binding, "failure", event_number, RemoteAttemptReportPayload::Failure {
-        failure_class: RemoteAttemptFailureClass::Retryable,
-        reason_code: RemoteAttemptReasonCode::RetryAllowed,
-    })?;
+    let failure_event =
+        production_attempt_report(binding, "failure", event_number, RemoteAttemptReportPayload::Failure {
+            failure_class: RemoteAttemptFailureClass::Retryable,
+            reason_code: RemoteAttemptReasonCode::RetryAllowed,
+        })?;
     let applied = apply_coordinator_attempt_report(
         state,
-        &report,
+        &failure_event,
         RemoteAttemptAuthorizationFacts {
             worker_authorized: true,
             output_admission_authorized: false,
@@ -9035,6 +10098,8 @@ pub fn fail_remote_production_attempt(
     if applied.disposition != RemoteAttemptApplyDisposition::Applied {
         return Err(applied.reason_code.as_str().to_string());
     }
+    debug_assert_eq!(applied.disposition, RemoteAttemptApplyDisposition::Applied);
+    debug_assert!(!applied.output_admission_allowed);
     Ok(())
 }
 
@@ -9058,15 +10123,57 @@ pub fn record_remote_failure_debug_status(
     Ok(())
 }
 
-pub fn admit_fenced_remote_builder_response(
-    state: &mut RemoteCoordinatorState,
-    report: &RemoteAttemptReport,
+struct FencedRemoteBuilderResponseInput<'a> {
+    report: &'a RemoteAttemptReport,
     worker_authorized: bool,
     log_policy: RemoteLogRetentionPolicy,
-    request: &ConcreteBuildRequest,
-    trusted_output_keys: &[String],
-    response: &RemoteBuilderFrameResponse,
+    request: &'a ConcreteBuildRequest,
+    trusted_output_keys: &'a [String],
+    response: &'a RemoteBuilderFrameResponse,
+}
+
+pub const ADMIT_FENCED_REMOTE_BUILDER_RESPONSE: fn(
+    &mut RemoteCoordinatorState,
+    &RemoteAttemptReport,
+    bool,
+    RemoteLogRetentionPolicy,
+    &ConcreteBuildRequest,
+    &[String],
+    &RemoteBuilderFrameResponse,
+) -> Result<RemoteFencedOutputAdmissionDecision, String> =
+    |state, report, worker_authorized, log_policy, request, trusted_output_keys, response| {
+        admit_fenced_remote_builder_response_core(state, FencedRemoteBuilderResponseInput {
+            report,
+            worker_authorized,
+            log_policy,
+            request,
+            trusted_output_keys,
+            response,
+        })
+    };
+pub use ADMIT_FENCED_REMOTE_BUILDER_RESPONSE as admit_fenced_remote_builder_response;
+const _: fn(
+    &mut RemoteCoordinatorState,
+    &RemoteAttemptReport,
+    bool,
+    RemoteLogRetentionPolicy,
+    &ConcreteBuildRequest,
+    &[String],
+    &RemoteBuilderFrameResponse,
+) -> Result<RemoteFencedOutputAdmissionDecision, String> = admit_fenced_remote_builder_response;
+
+fn admit_fenced_remote_builder_response_core(
+    state: &mut RemoteCoordinatorState,
+    input: FencedRemoteBuilderResponseInput<'_>,
 ) -> Result<RemoteFencedOutputAdmissionDecision, String> {
+    let FencedRemoteBuilderResponseInput {
+        report,
+        worker_authorized,
+        log_policy,
+        request,
+        trusted_output_keys,
+        response,
+    } = input;
     let preflight = preflight_fenced_output_report(state, report, worker_authorized);
     if preflight.disposition == RemoteAttemptApplyDisposition::Rejected {
         return Ok(RemoteFencedOutputAdmissionDecision::NoAdmission { attempt: preflight });
@@ -9124,9 +10231,9 @@ fn already_applied_output_result_is_redeliverable(
     let Some(attempt) = job.current_attempt.as_ref() else {
         return false;
     };
-    let phase_is_redeliverable =
+    let is_phase_redeliverable =
         matches!(attempt.phase, RemoteAttemptPhase::FinishedUndelivered | RemoteAttemptPhase::Completed);
-    phase_is_redeliverable
+    is_phase_redeliverable
         && job.output_admission_completed
         && attempt.result_digest_blake3.as_deref() == Some(output_digest_blake3.as_str())
 }
@@ -9158,13 +10265,13 @@ pub fn validate_remote_builder_frames_output_import(
     trusted_output_keys: &[String],
     frames: &[RemoteFrame],
 ) -> Result<RemoteOutputAdmissionReport, String> {
-    let import_frames = extract_output_import_frames(frames, &request.request_id)?;
+    let output_frames = extract_output_import_frames(frames, &request.request_id)?;
     validate_remote_output_admission(
         request,
         trusted_output_keys,
-        import_frames.result,
-        import_frames.transfer,
-        &import_frames.artifacts,
+        output_frames.result,
+        output_frames.transfer,
+        &output_frames.artifacts,
     )
 }
 
@@ -9197,7 +10304,7 @@ pub fn validate_remote_stdio_output_import(
     else {
         return Err("untrusted-output-key".to_string());
     };
-    Ok(RemoteOutputAdmissionReport {
+    let admission = RemoteOutputAdmissionReport {
         request_id: request.request_id.clone(),
         output_digest_blake3: result.output_digest_blake3.clone(),
         builder_signing_key_id: key_id,
@@ -9207,7 +10314,10 @@ pub fn validate_remote_stdio_output_import(
         transfer_artifacts: Vec::new(),
         streamed_manifest: Some(streaming.manifest.clone()),
         transfer: transfer.clone(),
-    })
+    };
+    debug_assert_eq!(admission.output_digest_blake3, result.output_digest_blake3);
+    debug_assert_eq!(admission.transfer, *transfer);
+    Ok(admission)
 }
 
 fn extract_streaming_output_frames<'a>(
@@ -9216,7 +10326,7 @@ fn extract_streaming_output_frames<'a>(
 ) -> Result<(&'a RemoteBuildFinished, &'a RemoteTransferReport), String> {
     let mut result = None;
     let mut transfer = None;
-    let mut done = false;
+    let mut is_done = false;
     for frame in frames {
         match frame {
             RemoteFrame::BuildFinished { result: value } if result.replace(value).is_some() => {
@@ -9226,10 +10336,10 @@ fn extract_streaming_output_frames<'a>(
                 return Err("duplicate-output-transfer-frame".to_string());
             }
             RemoteFrame::Done { request_id: value } => {
-                if value != request_id || done {
+                if value != request_id || is_done {
                     return Err("remote-done-request-id-mismatch".to_string());
                 }
-                done = true;
+                is_done = true;
             }
             RemoteFrame::OutputTransferArtifact { .. } => {
                 return Err("remote-production-inline-output-artifact-forbidden".to_string());
@@ -9238,13 +10348,14 @@ fn extract_streaming_output_frames<'a>(
             _ => {}
         }
     }
-    if !done {
+    if !is_done {
         return Err("missing-done-frame".to_string());
     }
-    Ok((
-        result.ok_or_else(|| "missing-build-finished-frame".to_string())?,
-        transfer.ok_or_else(|| "missing-output-transfer-frame".to_string())?,
-    ))
+    let result = result.ok_or_else(|| "missing-build-finished-frame".to_string())?;
+    let transfer = transfer.ok_or_else(|| "missing-output-transfer-frame".to_string())?;
+    debug_assert_eq!(result.request_id, request_id);
+    debug_assert!(is_done);
+    Ok((result, transfer))
 }
 
 fn validate_streamed_output_receiver_files(
@@ -9276,7 +10387,7 @@ fn validate_streamed_output_receiver_files(
             .map_err(|err| format!("opening streamed PathInfo {}: {err}", pathinfo_path.display()))?;
         let mut observed_pathinfo = Vec::new();
         pathinfo_file
-            .take(u64::try_from(MAX_REMOTE_FRAME_BYTES).unwrap_or(u64::MAX).saturating_add(1))
+            .take(MAX_REMOTE_PATHINFO_READ_BYTES)
             .read_to_end(&mut observed_pathinfo)
             .map_err(|err| format!("reading streamed PathInfo {}: {err}", pathinfo_path.display()))?;
         if observed_pathinfo.len() > MAX_REMOTE_FRAME_BYTES {
@@ -9317,39 +10428,79 @@ pub async fn import_admitted_remote_outputs(
     persist_remote_output_actions(store, admission, actions, is_root, root_source).await
 }
 
-pub async fn import_admitted_remote_stdio_outputs(
-    store: &mut crunch_store::StoreHandle,
-    request: &ConcreteBuildRequest,
-    admission: &RemoteOutputAdmissionReport,
-    transcript: &RemoteStdioTranscript,
+struct AdmittedRemoteStdioOutputImportInput<'a> {
+    store: &'a mut crunch_store::StoreHandle,
+    request: &'a ConcreteBuildRequest,
+    admission: &'a RemoteOutputAdmissionReport,
+    transcript: &'a RemoteStdioTranscript,
     is_root: bool,
     root_source: Option<crunch_store::GcRootSource>,
+}
+
+type RemoteOutputImportFuture<'a> =
+    Pin<Box<dyn std::future::Future<Output = Result<RemoteOutputImportReport, String>> + 'a>>;
+
+pub const IMPORT_ADMITTED_REMOTE_STDIO_OUTPUTS: for<'a> fn(
+    &'a mut crunch_store::StoreHandle,
+    &'a ConcreteBuildRequest,
+    &'a RemoteOutputAdmissionReport,
+    &'a RemoteStdioTranscript,
+    bool,
+    Option<crunch_store::GcRootSource>,
+) -> RemoteOutputImportFuture<'a> = |store, request, admission, transcript, is_root, root_source| {
+    Box::pin(import_admitted_remote_stdio_outputs_core(AdmittedRemoteStdioOutputImportInput {
+        store,
+        request,
+        admission,
+        transcript,
+        is_root,
+        root_source,
+    }))
+};
+pub use IMPORT_ADMITTED_REMOTE_STDIO_OUTPUTS as import_admitted_remote_stdio_outputs;
+
+async fn import_admitted_remote_stdio_outputs_core(
+    input: AdmittedRemoteStdioOutputImportInput<'_>,
 ) -> Result<RemoteOutputImportReport, String> {
-    let Some(streaming) = transcript.streaming_output.as_ref() else {
-        return import_admitted_remote_outputs(store, request, admission, is_root, root_source).await;
+    let Some(streaming) = input.transcript.streaming_output.as_ref() else {
+        return import_admitted_remote_outputs(
+            input.store,
+            input.request,
+            input.admission,
+            input.is_root,
+            input.root_source,
+        )
+        .await;
     };
-    let policy = request.transfer_policy.ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
+    let policy = input
+        .request
+        .transfer_policy
+        .ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
     validate_streamed_output_receiver_files(
         &RemoteBuildFinished {
-            request_id: admission.request_id.clone(),
-            output_digest_blake3: admission.output_digest_blake3.clone(),
-            builder_signing_key_id: admission.builder_signing_key_id.clone(),
-            store_prefix: admission.store_prefix.clone(),
-            outputs: admission.outputs.clone(),
+            request_id: input.admission.request_id.clone(),
+            output_digest_blake3: input.admission.output_digest_blake3.clone(),
+            builder_signing_key_id: input.admission.builder_signing_key_id.clone(),
+            store_prefix: input.admission.store_prefix.clone(),
+            outputs: input.admission.outputs.clone(),
         },
         streaming,
         policy,
     )?;
-    let mut actions = Vec::with_capacity(admission.outputs.len());
-    for output in &admission.outputs {
-        let mut action = plan_streamed_remote_output_import_action(request, output, streaming)?;
+    let mut actions = Vec::with_capacity(input.admission.outputs.len());
+    for output in &input.admission.outputs {
+        let mut action = plan_streamed_remote_output_import_action(input.request, output, streaming)?;
         if action.nar_payload.is_some() {
             return Err("remote-production-inline-output-payload-forbidden".to_string());
         }
         action.nar_payload = None;
         actions.push(action);
     }
-    persist_remote_output_actions(store, admission, actions, is_root, root_source).await
+    let output_receipt =
+        persist_remote_output_actions(input.store, input.admission, actions, input.is_root, input.root_source).await?;
+    debug_assert_eq!(output_receipt.request_id, input.admission.request_id);
+    debug_assert_eq!(output_receipt.outputs.len(), input.admission.outputs.len());
+    Ok(output_receipt)
 }
 
 async fn persist_remote_output_actions(
@@ -9359,17 +10510,17 @@ async fn persist_remote_output_actions(
     is_root: bool,
     root_source: Option<crunch_store::GcRootSource>,
 ) -> Result<RemoteOutputImportReport, String> {
-    let store_report = remote_transfer_to_store_report(&admission.transfer);
-    let mut imported = Vec::with_capacity(actions.len());
+    let store_substitution = remote_transfer_to_store_report(&admission.transfer);
+    let mut output_receipts = Vec::with_capacity(actions.len());
     for action in actions {
         let stored = persist_remote_output_action(store, &action, is_root, root_source).await?;
-        store.record_verified_output_substitution_report(&action.store_path, store_report.clone());
-        imported.push(imported_remote_output_report(store, &action, &stored));
+        store.record_verified_output_substitution_report(&action.store_path, store_substitution.clone());
+        output_receipts.push(imported_remote_output_report(store, &action, &stored));
     }
     Ok(RemoteOutputImportReport {
         request_id: admission.request_id.clone(),
         store_prefix: admission.store_prefix.clone(),
-        outputs: imported,
+        outputs: output_receipts,
         transfer: admission.transfer.clone(),
     })
 }
@@ -9386,7 +10537,7 @@ fn plan_streamed_remote_output_import_action(
     let nar_path = crate::remote_transfer::remote_transfer_received_artifact_path(&streaming.receiver_root, &nar_id);
     crate::remote_transfer::open_remote_transfer_authority_file(&nar_path)
         .map_err(|_| "remote-output-streamed-nar-missing".to_string())?;
-    Ok(RemoteOutputImportAction {
+    let action = RemoteOutputImportAction {
         output_name: output.name.clone(),
         logical_path: output.logical_path.clone(),
         store_path,
@@ -9396,7 +10547,10 @@ fn plan_streamed_remote_output_import_action(
         artifact_attestation_digest_blake3: output.artifact_attestation_digest_blake3.clone(),
         nar_payload: None,
         nar_path: Some(nar_path),
-    })
+    };
+    debug_assert_eq!(action.output_name, output.name);
+    debug_assert!(action.nar_path.is_some());
+    Ok(action)
 }
 
 pub fn classify_remote_failure(phase: RemoteFailurePhase, reason: String) -> RemoteFailureClassification {
@@ -9489,8 +10643,22 @@ fn remote_output_nar_payload_for_import(
     Ok(Some(artifact.payload.clone()))
 }
 
-fn parse_remote_output_store_path(logical_path: &str, store_prefix: &str) -> Result<StorePath<String>, String> {
-    StorePath::from_absolute_path_with_prefix(logical_path.as_bytes(), store_prefix)
+struct RemoteStorePathInput<'a> {
+    logical_path: &'a str,
+    store_prefix: &'a str,
+}
+
+const PARSE_REMOTE_OUTPUT_STORE_PATH: fn(&str, &str) -> Result<StorePath<String>, String> =
+    |logical_path, store_prefix| {
+        parse_remote_output_store_path_core(RemoteStorePathInput {
+            logical_path,
+            store_prefix,
+        })
+    };
+use PARSE_REMOTE_OUTPUT_STORE_PATH as parse_remote_output_store_path;
+
+fn parse_remote_output_store_path_core(input: RemoteStorePathInput<'_>) -> Result<StorePath<String>, String> {
+    StorePath::from_absolute_path_with_prefix(input.logical_path.as_bytes(), input.store_prefix)
         .map_err(|_| "remote-output-store-path-invalid".to_string())
 }
 
@@ -9500,21 +10668,21 @@ fn validate_remote_output_pathinfo(
     store_path: &StorePath<String>,
     store_prefix: &str,
 ) -> Result<(), String> {
-    validate_remote_pathinfo_binding(
-        &output.name,
-        &output.artifact_attestation_digest_blake3,
+    validate_remote_pathinfo_binding(RemotePathInfoBindingInput {
+        output_name: &output.name,
+        artifact_attestation_digest_blake3: &output.artifact_attestation_digest_blake3,
         path_info,
         store_path,
         store_prefix,
-        &output.path_info_signing_key_id,
-        RemotePathInfoErrorLabels {
+        signing_key_id: &output.path_info_signing_key_id,
+        error_labels: RemotePathInfoErrorLabels {
             store_path_mismatch: "remote-output-pathinfo-store-path-mismatch",
             unsigned: "remote-output-pathinfo-unsigned",
             signing_key_mismatch: "remote-output-pathinfo-signing-key-mismatch",
             artifact_digest_failed: "remote-output-artifact-attestation-digest-failed",
             artifact_digest_mismatch: "remote-output-artifact-attestation-digest-mismatch",
         },
-    )
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -9526,45 +10694,40 @@ struct RemotePathInfoErrorLabels {
     artifact_digest_mismatch: &'static str,
 }
 
-fn validate_remote_pathinfo_binding(
-    output_name: &str,
-    artifact_attestation_digest_blake3: &str,
-    path_info: &PathInfo,
-    store_path: &StorePath<String>,
-    store_prefix: &str,
-    signing_key_id: &str,
+struct RemotePathInfoBindingInput<'a> {
+    output_name: &'a str,
+    artifact_attestation_digest_blake3: &'a str,
+    path_info: &'a PathInfo,
+    store_path: &'a StorePath<String>,
+    store_prefix: &'a str,
+    signing_key_id: &'a str,
     error_labels: RemotePathInfoErrorLabels,
-) -> Result<(), String> {
-    if path_info.store_path != *store_path {
-        return Err(error_labels.store_path_mismatch.to_string());
-    }
-    if path_info.signatures.is_empty() {
-        return Err(error_labels.unsigned.to_string());
-    }
-    if !pathinfo_has_signature_name(path_info, signing_key_id) {
-        return Err(error_labels.signing_key_mismatch.to_string());
-    }
-    validate_remote_pathinfo_artifact_digest(
-        output_name,
-        artifact_attestation_digest_blake3,
-        path_info,
-        store_prefix,
-        error_labels,
-    )
 }
 
-fn validate_remote_pathinfo_artifact_digest(
-    output_name: &str,
-    artifact_attestation_digest_blake3: &str,
-    path_info: &PathInfo,
-    store_prefix: &str,
-    error_labels: RemotePathInfoErrorLabels,
-) -> Result<(), String> {
-    let digest = crunch_store::artifact_attestation_digest_for_pathinfo(store_prefix, path_info, output_name, None)
-        .map_err(|err| format!("{}: {err}", error_labels.artifact_digest_failed))?
-        .to_hex();
-    if digest != artifact_attestation_digest_blake3 {
-        return Err(error_labels.artifact_digest_mismatch.to_string());
+fn validate_remote_pathinfo_binding(input: RemotePathInfoBindingInput<'_>) -> Result<(), String> {
+    if input.path_info.store_path != *input.store_path {
+        return Err(input.error_labels.store_path_mismatch.to_string());
+    }
+    if input.path_info.signatures.is_empty() {
+        return Err(input.error_labels.unsigned.to_string());
+    }
+    if !pathinfo_has_signature_name(input.path_info, input.signing_key_id) {
+        return Err(input.error_labels.signing_key_mismatch.to_string());
+    }
+    validate_remote_pathinfo_artifact_digest(&input)
+}
+
+fn validate_remote_pathinfo_artifact_digest(input: &RemotePathInfoBindingInput<'_>) -> Result<(), String> {
+    let digest = crunch_store::artifact_attestation_digest_for_pathinfo(
+        input.store_prefix,
+        input.path_info,
+        input.output_name,
+        None,
+    )
+    .map_err(|err| format!("{}: {err}", input.error_labels.artifact_digest_failed))?
+    .to_hex();
+    if digest != input.artifact_attestation_digest_blake3 {
+        return Err(input.error_labels.artifact_digest_mismatch.to_string());
     }
     Ok(())
 }
@@ -9631,6 +10794,8 @@ async fn ingest_remote_output_nar_payload(
     if nar_size != action.path_info.nar_size {
         return Err("remote-output-nar-size-mismatch".to_string());
     }
+    debug_assert_eq!(node, action.final_node);
+    debug_assert_eq!(nar_size, action.path_info.nar_size);
     Ok(())
 }
 
@@ -9728,7 +10893,7 @@ pub fn run_loopback_remote_session(
     )?;
     let lease_plan =
         plan_session_lease(&client.session_id, &client.uploaded_input_refs, std::slice::from_ref(&output_digest))?;
-    Ok(RemoteLoopbackSessionReport {
+    let session_receipt = RemoteLoopbackSessionReport {
         schema: "mantle-remote-loopback-session-v1".to_string(),
         binding: RemoteTransportBinding::Loopback,
         session_id: client.session_id.clone(),
@@ -9754,7 +10919,10 @@ pub fn run_loopback_remote_session(
             RemoteProtocolPhase::Done,
         ],
         non_claims: vec![REMOTE_SESSION_NON_CLAIM.to_string()],
-    })
+    };
+    debug_assert_eq!(session_receipt.endpoint_id, builder.endpoint_id);
+    debug_assert_eq!(session_receipt.ticket_uses_remaining, ticket.uses_remaining);
+    Ok(session_receipt)
 }
 
 fn frame_payload_len(encoded: &[u8]) -> Result<usize, String> {
@@ -9948,18 +11116,30 @@ fn request_ticket_id_from_frames(frames: &[RemoteFrame]) -> Result<&str, String>
     Err("missing-auth-ticket-frame".to_string())
 }
 
-#[allow(clippy::too_many_arguments)]
-fn build_response_frames(
-    builder: &RemoteLoopbackBuilder,
-    request: &ConcreteBuildRequest,
-    input_upload: &RemoteInputUpload,
+struct BuildResponseFramesInput<'a> {
+    builder: &'a RemoteLoopbackBuilder,
+    request: &'a ConcreteBuildRequest,
+    input_upload: &'a RemoteInputUpload,
     client_transfer: RemoteTransferCapabilities,
-    mut phase: RemoteProtocolPhase,
-    mut response_frames: Vec<RemoteFrame>,
+    phase: RemoteProtocolPhase,
+    response_frames: Vec<RemoteFrame>,
     missing: Vec<String>,
     ticket_uses_remaining: u32,
-    executor: &dyn RemoteBuildExecutor,
-) -> Result<RemoteBuilderFrameResponse, String> {
+    executor: &'a dyn RemoteBuildExecutor,
+}
+
+fn build_response_frames(input: BuildResponseFramesInput<'_>) -> Result<RemoteBuilderFrameResponse, String> {
+    let BuildResponseFramesInput {
+        builder,
+        request,
+        input_upload,
+        client_transfer,
+        mut phase,
+        mut response_frames,
+        missing,
+        ticket_uses_remaining,
+        executor,
+    } = input;
     let plan = plan_remote_executable_request(request)?;
     push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::BuildQueued {
         request_id: request.request_id.clone(),
@@ -9999,7 +11179,7 @@ fn build_response_frames(
     push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::Done {
         request_id: request.request_id.clone(),
     })?;
-    Ok(RemoteBuilderFrameResponse {
+    let response = RemoteBuilderFrameResponse {
         response_frames,
         missing_input_refs: missing,
         execution_plan_digest_blake3: execution.plan_digest_blake3,
@@ -10008,7 +11188,10 @@ fn build_response_frames(
         transfer_artifacts,
         transfer,
         ticket_uses_remaining,
-    })
+    };
+    debug_assert!(is_blake3_hex_digest(&response.output_digest_blake3));
+    debug_assert!(!response.response_frames.is_empty());
+    Ok(response)
 }
 
 struct RemoteOutputImportFrames<'a> {
@@ -10023,8 +11206,8 @@ fn extract_output_import_frames<'a>(
 ) -> Result<RemoteOutputImportFrames<'a>, String> {
     let mut result = None;
     let mut transfer = None;
-    let mut artifacts = Vec::new();
-    let mut done_seen = false;
+    let mut artifacts = Vec::with_capacity(MAX_REMOTE_TRANSFER_ARTIFACTS);
+    let mut is_done_seen = false;
     for frame in frames {
         match frame {
             RemoteFrame::BuildFinished { result: finished } if result.replace(finished).is_some() => {
@@ -10034,7 +11217,7 @@ fn extract_output_import_frames<'a>(
                 if result.is_none() {
                     return Err("remote-output-transfer-artifact-before-build-result".to_string());
                 }
-                if transfer.is_some() || done_seen {
+                if transfer.is_some() || is_done_seen {
                     return Err("remote-output-transfer-artifact-after-transfer-done".to_string());
                 }
                 if artifact.request_id != expected_request_id {
@@ -10062,26 +11245,29 @@ fn extract_output_import_frames<'a>(
                 if transfer.is_none() {
                     return Err("remote-done-before-output-transfer".to_string());
                 }
-                if done_seen {
+                if is_done_seen {
                     return Err("duplicate-done-frame".to_string());
                 }
-                done_seen = true;
+                is_done_seen = true;
             }
             RemoteFrame::Error { .. } => return Err("remote-builder-error-frame".to_string()),
             _ => {}
         }
     }
-    if !done_seen {
+    if !is_done_seen {
         return Err("missing-done-frame".to_string());
     }
     let result = result.ok_or_else(|| "missing-build-finished-frame".to_string())?;
     let transfer = transfer.ok_or_else(|| "missing-output-transfer-frame".to_string())?;
     validate_remote_output_transfer_artifacts(expected_request_id, &result.outputs, &artifacts)?;
-    Ok(RemoteOutputImportFrames {
+    let output_frames = RemoteOutputImportFrames {
         result,
         transfer,
         artifacts,
-    })
+    };
+    debug_assert_eq!(output_frames.result.request_id, expected_request_id);
+    debug_assert!(output_frames.artifacts.len() <= MAX_REMOTE_TRANSFER_ARTIFACTS);
+    Ok(output_frames)
 }
 
 fn validate_remote_produced_outputs(
@@ -10117,6 +11303,8 @@ fn validate_remote_produced_outputs(
         }
         validate_remote_produced_output_nar_summary(output)?;
     }
+    debug_assert_eq!(seen.len(), result.outputs.len());
+    debug_assert_eq!(result.outputs.len(), request.expected_outputs.len());
     Ok(())
 }
 
@@ -10160,6 +11348,8 @@ fn validate_transfer_report(report: &RemoteTransferReport) -> Result<(), String>
             }
         }
     }
+    debug_assert_eq!(report.mode_label, report.mode.as_str());
+    debug_assert!(!report.verified_builder_key.is_empty());
     Ok(())
 }
 
@@ -10180,11 +11370,13 @@ fn push_builder_frame(
 
 fn read_bounded_stdio_input(mut reader: impl Read) -> Result<Vec<u8>, String> {
     let mut input = Vec::new();
-    let limit =
+    let read_limit_bytes =
         u64::try_from(MAX_REMOTE_STDIO_INPUT_BYTES).map_err(|_| "stdio-input-limit-conversion-failed".to_string())?;
+    let read_limit_with_probe_bytes =
+        read_limit_bytes.checked_add(1).ok_or_else(|| "stdio-input-limit-overflow".to_string())?;
     reader
         .by_ref()
-        .take(limit.saturating_add(1))
+        .take(read_limit_with_probe_bytes)
         .read_to_end(&mut input)
         .map_err(|err| format!("reading stdio remote input: {err}"))?;
     if input.len() > MAX_REMOTE_STDIO_INPUT_BYTES {
@@ -10214,8 +11406,7 @@ pub fn revealed_ticket_view(ticket: &RemoteTicket) -> RemoteTicketView {
     view
 }
 
-pub fn create_ticket(
-    state: &mut RemoteTicketState,
+struct CreateTicketInput {
     display_name: String,
     now_unix_s: u64,
     ttl_secs: u64,
@@ -10223,26 +11414,61 @@ pub fn create_ticket(
     max_build_time_secs: u64,
     max_upload_bytes: u64,
     bound_client_endpoint: Option<String>,
-) -> Result<RemoteTicketView, RunError> {
-    validate_ticket_limits(&display_name, ttl_secs, uses, max_build_time_secs, max_upload_bytes)?;
-    let seed = format!("{display_name}:{now_unix_s}:{ttl_secs}:{uses}:{}", state.tickets.len());
-    let secret_hash = blake3::hash(seed.as_bytes());
-    let secret = secret_hash.to_hex().to_string();
+}
+
+pub const CREATE_TICKET: fn(
+    &mut RemoteTicketState,
+    String,
+    u64,
+    u64,
+    u32,
+    u64,
+    u64,
+    Option<String>,
+) -> Result<RemoteTicketView, RunError> =
+    |state, display_name, now_unix_s, ttl_secs, uses, max_build_time_secs, max_upload_bytes, bound_client_endpoint| {
+        create_ticket_core(state, CreateTicketInput {
+            display_name,
+            now_unix_s,
+            ttl_secs,
+            uses,
+            max_build_time_secs,
+            max_upload_bytes,
+            bound_client_endpoint,
+        })
+    };
+pub use CREATE_TICKET as create_ticket;
+
+fn create_ticket_core(state: &mut RemoteTicketState, input: CreateTicketInput) -> Result<RemoteTicketView, RunError> {
+    validate_ticket_limits(&input)?;
+    let expires_unix_s = input.now_unix_s.saturating_add(input.ttl_secs);
+    let seed = format!(
+        "{}:{}:{}:{}:{}",
+        input.display_name,
+        input.now_unix_s,
+        input.ttl_secs,
+        input.uses,
+        state.tickets.len()
+    );
+    let secret = blake3::hash(seed.as_bytes()).to_hex().to_string();
     let id = blake3::hash(secret.as_bytes()).to_hex()[..16].to_string();
     let ticket = RemoteTicket {
         id: id.clone(),
-        display_name,
+        display_name: input.display_name,
         secret,
-        created_unix_s: now_unix_s,
-        expires_unix_s: now_unix_s.saturating_add(ttl_secs),
-        uses_remaining: uses,
-        max_build_time_secs,
-        max_upload_bytes,
-        bound_client_endpoint,
+        created_unix_s: input.now_unix_s,
+        expires_unix_s,
+        uses_remaining: input.uses,
+        max_build_time_secs: input.max_build_time_secs,
+        max_upload_bytes: input.max_upload_bytes,
+        bound_client_endpoint: input.bound_client_endpoint,
         revoked: false,
     };
     state.tickets.insert(id, ticket.clone());
-    Ok(redacted_ticket_view(&ticket))
+    let view = redacted_ticket_view(&ticket);
+    debug_assert_eq!(view.secret, SECRET_REDACTION);
+    debug_assert!(state.tickets.contains_key(&view.id));
+    Ok(view)
 }
 
 pub fn revoke_ticket(state: &mut RemoteTicketState, id: &str) -> Result<RemoteTicketView, RunError> {
@@ -10264,7 +11490,7 @@ pub fn load_ticket_state(state_dir: &Path) -> Result<RemoteTicketState, RunError
 
 pub fn save_ticket_state(state_dir: &Path, state: &RemoteTicketState) -> Result<(), RunError> {
     let path = ticket_state_path(state_dir);
-    let parent = path.parent().expect("ticket state path has parent");
+    let parent = path.parent().ok_or_else(|| RunError::Internal("ticket state path has no parent".to_string()))?;
     fs::create_dir_all(parent)
         .map_err(|err| RunError::Internal(format!("creating remote ticket state dir {}: {err}", parent.display())))?;
     let rendered = serde_json::to_string_pretty(state)
@@ -10273,7 +11499,10 @@ pub fn save_ticket_state(state_dir: &Path, state: &RemoteTicketState) -> Result<
     fs::write(&tmp, format!("{rendered}\n"))
         .map_err(|err| RunError::Internal(format!("writing remote ticket state temp {}: {err}", tmp.display())))?;
     fs::rename(&tmp, &path)
-        .map_err(|err| RunError::Internal(format!("committing remote ticket state {}: {err}", path.display())))
+        .map_err(|err| RunError::Internal(format!("committing remote ticket state {}: {err}", path.display())))?;
+    debug_assert!(path.exists());
+    debug_assert!(!tmp.exists());
+    Ok(())
 }
 
 fn coordinator_state_path(state_dir: &Path) -> PathBuf {
@@ -10329,10 +11558,13 @@ fn open_coordinator_lock_no_follow(path: &Path) -> Result<File, String> {
 pub fn load_coordinator_state(state_dir: &Path) -> Result<RemoteCoordinatorState, RunError> {
     let path = coordinator_state_path(state_dir);
     if !path.exists() {
-        return Ok(RemoteCoordinatorState {
+        let state = RemoteCoordinatorState {
             state_dir: Some(state_dir.to_path_buf()),
             ..RemoteCoordinatorState::default()
-        });
+        };
+        debug_assert_eq!(state.state_dir.as_deref(), Some(state_dir));
+        debug_assert!(state.jobs.is_empty());
+        return Ok(state);
     }
     let bytes = fs::read(&path)
         .map_err(|err| RunError::Internal(format!("reading coordinator state {}: {err}", path.display())))?;
@@ -10340,26 +11572,28 @@ pub fn load_coordinator_state(state_dir: &Path) -> Result<RemoteCoordinatorState
     let mut state: RemoteCoordinatorState = serde_json::from_slice(&bytes)
         .map_err(|err| RunError::Internal(format!("parsing coordinator state {}: {err}", path.display())))?;
     state.state_dir = Some(state_dir.to_path_buf());
-    let mut migrated = migrate_legacy_coordinator_state(&mut state);
+    let mut is_migrated = migrate_legacy_coordinator_state(&mut state);
     if let Some(summary) = legacy_log_migration {
         state.legacy_log_migration = Some(summary);
-        migrated = true;
+        is_migrated = true;
     }
     if reconcile_coordinator_resource_leases(&mut state)? {
-        migrated = true;
+        is_migrated = true;
     }
     if reconcile_coordinator_log_summaries(state_dir, &mut state)? {
-        migrated = true;
+        is_migrated = true;
     }
     validate_external_batch_state(&state).map_err(RunError::Internal)?;
-    if migrated {
+    if is_migrated {
         save_coordinator_state(state_dir, &state)?;
     }
+    debug_assert_eq!(state.state_dir.as_deref(), Some(state_dir));
+    debug_assert!(state.state_dir.is_some());
     Ok(state)
 }
 
 fn reconcile_coordinator_resource_leases(state: &mut RemoteCoordinatorState) -> Result<bool, RunError> {
-    let mut changed = false;
+    let mut is_changed = false;
     let lease_ids = state.resource_leases.keys().cloned().collect::<Vec<_>>();
     for lease_id in lease_ids {
         let lease = state
@@ -10391,7 +11625,7 @@ fn reconcile_coordinator_resource_leases(state: &mut RemoteCoordinatorState) -> 
             {
                 job.resource_lease_id_blake3 = None;
             }
-            changed = true;
+            is_changed = true;
         }
     }
     let missing_live_leases = state
@@ -10405,13 +11639,13 @@ fn reconcile_coordinator_resource_leases(state: &mut RemoteCoordinatorState) -> 
     for job_id in missing_live_leases {
         if let Some(job) = state.jobs.get_mut(&job_id) {
             fail_closed_coordinator_job(job, RemoteAttemptReasonCode::DurableStateInvalid);
-            changed = true;
+            is_changed = true;
         }
     }
     validate_coordinator_resource_state(state).map_err(RunError::Internal)?;
     debug_assert!(missing_live_leases_are_resolved(state));
     debug_assert!(state.resource_leases.len() <= crunch_build::distributed::MAX_REMOTE_RESOURCE_LEASES);
-    Ok(changed)
+    Ok(is_changed)
 }
 
 fn missing_live_leases_are_resolved(state: &RemoteCoordinatorState) -> bool {
@@ -10436,48 +11670,88 @@ fn legacy_log_migration_summary(
     }
     let mut chunk_count = 0_u64;
     let mut payload_bytes = 0_u64;
-    let mut count_saturated = false;
+    let mut is_count_saturated = false;
     for chunks in logs.values().filter_map(serde_json::Value::as_array) {
-        let observed_chunks = u64::try_from(chunks.len()).unwrap_or(u64::MAX);
-        match chunk_count.checked_add(observed_chunks) {
-            Some(next) => chunk_count = next,
-            None => {
-                chunk_count = u64::MAX;
-                count_saturated = true;
+        let observed_chunk_count = match u64::try_from(chunks.len()) {
+            Ok(count) => count,
+            Err(_) => {
+                is_count_saturated = true;
+                LEGACY_LOG_MIGRATION_COUNT_MAX_U64
             }
-        }
+        };
+        chunk_count = bounded_legacy_migration_add(
+            BoundedLegacyMigrationAddInput {
+                current: chunk_count,
+                observed: observed_chunk_count,
+                maximum: LEGACY_LOG_MIGRATION_COUNT_MAX_U64,
+            },
+            &mut is_count_saturated,
+        );
         for chunk in chunks {
             let observed_bytes = chunk
                 .get("bytes")
                 .and_then(serde_json::Value::as_str)
                 .and_then(|text| u64::try_from(text.len()).ok())
                 .unwrap_or(0);
-            match payload_bytes.checked_add(observed_bytes) {
-                Some(next) => payload_bytes = next,
-                None => {
-                    payload_bytes = u64::MAX;
-                    count_saturated = true;
-                }
-            }
+            payload_bytes = bounded_legacy_migration_add(
+                BoundedLegacyMigrationAddInput {
+                    current: payload_bytes,
+                    observed: observed_bytes,
+                    maximum: LEGACY_LOG_MIGRATION_PAYLOAD_BYTES_MAX,
+                },
+                &mut is_count_saturated,
+            );
         }
     }
-    let legacy_job_count = u32::try_from(logs.len()).unwrap_or(u32::MAX);
-    let legacy_chunk_count = u32::try_from(chunk_count).unwrap_or_else(|_| {
-        count_saturated = true;
-        u32::MAX
-    });
-    Ok(Some(RemoteLegacyLogMigrationSummary {
+    let legacy_job_count = match u32::try_from(logs.len()) {
+        Ok(count) => count,
+        Err(_) => {
+            is_count_saturated = true;
+            LEGACY_LOG_MIGRATION_COUNT_MAX_U32
+        }
+    };
+    let legacy_chunk_count = match u32::try_from(chunk_count) {
+        Ok(count) => count,
+        Err(_) => {
+            is_count_saturated = true;
+            LEGACY_LOG_MIGRATION_COUNT_MAX_U32
+        }
+    };
+    let summary = RemoteLegacyLogMigrationSummary {
         legacy_job_count,
         legacy_chunk_count,
         legacy_payload_bytes: payload_bytes,
-        count_saturated,
+        count_saturated: is_count_saturated,
         classification: LEGACY_LOG_MIGRATION_CLASSIFICATION.to_string(),
         non_claim: LEGACY_LOG_MIGRATION_NON_CLAIM.to_string(),
-    }))
+    };
+    debug_assert!(!summary.classification.is_empty());
+    debug_assert!(!summary.non_claim.is_empty());
+    Ok(Some(summary))
+}
+
+struct BoundedLegacyMigrationAddInput {
+    current: u64,
+    observed: u64,
+    maximum: u64,
+}
+
+fn bounded_legacy_migration_add(input: BoundedLegacyMigrationAddInput, is_saturated: &mut bool) -> u64 {
+    debug_assert!(input.current <= input.maximum);
+    debug_assert!(input.maximum > 0);
+    let Some(next) = input.current.checked_add(input.observed) else {
+        *is_saturated = true;
+        return input.maximum;
+    };
+    if next > input.maximum {
+        *is_saturated = true;
+        return input.maximum;
+    }
+    next
 }
 
 fn reconcile_coordinator_log_summaries(state_dir: &Path, state: &mut RemoteCoordinatorState) -> Result<bool, RunError> {
-    let mut changed = false;
+    let mut is_changed = false;
     for job in state.jobs.values_mut() {
         let Some(attempt) = job.current_attempt.as_ref() else {
             continue;
@@ -10495,14 +11769,16 @@ fn reconcile_coordinator_log_summaries(state_dir: &Path, state: &mut RemoteCoord
         let observed = remote_attempt_log_control_summary(&manifest, retention_policy);
         if job.immutable_log.as_ref() != Some(&observed) {
             job.immutable_log = Some(observed);
-            changed = true;
+            is_changed = true;
         }
     }
-    Ok(changed)
+    debug_assert!(state.jobs.len() <= MAX_REMOTE_STATUS_ITEMS);
+    debug_assert!(state.jobs.values().all(|job| job.current_attempt.is_none() || job.immutable_log.is_some()));
+    Ok(is_changed)
 }
 
 fn migrate_legacy_coordinator_state(state: &mut RemoteCoordinatorState) -> bool {
-    let mut migrated = false;
+    let mut is_migrated = false;
     for job in state.jobs.values_mut() {
         if coordinator_job_attempt_is_valid(job) {
             continue;
@@ -10513,12 +11789,14 @@ fn migrate_legacy_coordinator_state(state: &mut RemoteCoordinatorState) -> bool 
             RemoteAttemptReasonCode::LegacyStateRejected
         };
         fail_closed_coordinator_job(job, reason_code);
-        migrated = true;
+        is_migrated = true;
     }
-    if migrated {
+    if is_migrated {
         rebuild_live_output_claims(state);
     }
-    migrated
+    debug_assert!(state.jobs.values().all(coordinator_job_attempt_is_valid));
+    debug_assert!(state.live_output_claims.len() <= MAX_REMOTE_STATUS_ITEMS);
+    is_migrated
 }
 
 fn coordinator_job_attempt_is_valid(job: &RemoteCoordinatorJobSummary) -> bool {
@@ -10533,6 +11811,8 @@ fn coordinator_job_attempt_is_valid(job: &RemoteCoordinatorJobSummary) -> bool {
 }
 
 fn coordinator_attempt_identity_is_valid(job: &RemoteCoordinatorJobSummary, attempt: &RemoteAttemptState) -> bool {
+    debug_assert!(MAX_REMOTE_STATUS_ITEMS > 0);
+    debug_assert!(crunch_build::distributed::MAX_REMOTE_ATTEMPT_EVENTS > 0);
     if attempt.job_id != job.job_id {
         return false;
     }
@@ -10614,16 +11894,18 @@ fn coordinator_attempt_result_is_valid(attempt: &RemoteAttemptState) -> bool {
 }
 
 fn coordinator_attempt_projection_matches(job: &RemoteCoordinatorJobSummary, attempt: &RemoteAttemptState) -> bool {
-    let result_available = attempt.phase == RemoteAttemptPhase::Completed;
-    let output_admitted =
+    debug_assert!(crunch_build::distributed::MAX_REMOTE_ATTEMPTS > 0);
+    debug_assert!(crunch_build::distributed::MAX_REMOTE_ATTEMPT_EVENTS > 0);
+    let is_result_available = attempt.phase == RemoteAttemptPhase::Completed;
+    let is_output_admitted =
         matches!(attempt.phase, RemoteAttemptPhase::FinishedUndelivered | RemoteAttemptPhase::Completed);
     if job.phase != coordinator_phase_for_attempt(attempt.phase) {
         return false;
     }
-    if job.result_available != result_available {
+    if job.result_available != is_result_available {
         return false;
     }
-    if job.output_admission_completed != output_admitted {
+    if job.output_admission_completed != is_output_admitted {
         return false;
     }
     if job.transfer_checkpoint != attempt.transfer_checkpoint {
@@ -10646,6 +11928,8 @@ fn fail_closed_coordinator_job(job: &mut RemoteCoordinatorJobSummary, reason_cod
     job.resource_lease_id_blake3 = None;
     job.resource_fit = None;
     job.locality = None;
+    debug_assert_eq!(job.phase, RemoteCoordinatorJobPhase::Lost);
+    debug_assert!(job.current_attempt.is_none());
 }
 
 fn rebuild_live_output_claims(state: &mut RemoteCoordinatorState) {
@@ -10660,7 +11944,9 @@ fn rebuild_live_output_claims(state: &mut RemoteCoordinatorState) {
 
 pub fn save_coordinator_state(state_dir: &Path, state: &RemoteCoordinatorState) -> Result<(), RunError> {
     let path = coordinator_state_path(state_dir);
-    let parent = path.parent().expect("coordinator state path has parent");
+    let parent = path
+        .parent()
+        .ok_or_else(|| RunError::Internal("coordinator state path has no parent".to_string()))?;
     fs::create_dir_all(parent)
         .map_err(|err| RunError::Internal(format!("creating coordinator state dir {}: {err}", parent.display())))?;
     let rendered = serde_json::to_string_pretty(state)
@@ -10679,7 +11965,10 @@ pub fn save_coordinator_state(state_dir: &Path, state: &RemoteCoordinatorState) 
     drop(file);
     fs::rename(&tmp, &path)
         .map_err(|err| RunError::Internal(format!("committing coordinator state {}: {err}", path.display())))?;
-    sync_coordinator_state_parent(parent)
+    sync_coordinator_state_parent(parent)?;
+    debug_assert!(path.exists());
+    debug_assert!(!tmp.exists());
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -10696,23 +11985,17 @@ fn sync_coordinator_state_parent(_parent: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
-fn validate_ticket_limits(
-    display_name: &str,
-    ttl_secs: u64,
-    uses: u32,
-    max_build_time_secs: u64,
-    max_upload_bytes: u64,
-) -> Result<(), RunError> {
-    if display_name.is_empty() || display_name.len() > MAX_TICKET_DISPLAY_NAME_BYTES {
+fn validate_ticket_limits(input: &CreateTicketInput) -> Result<(), RunError> {
+    if input.display_name.is_empty() || input.display_name.len() > MAX_TICKET_DISPLAY_NAME_BYTES {
         return Err(RunError::Internal(format!("ticket display name exceeds {MAX_TICKET_DISPLAY_NAME_BYTES} bytes")));
     }
-    if ttl_secs == 0 || uses == 0 {
+    if input.ttl_secs == 0 || input.uses == 0 {
         return Err(RunError::Internal("ticket ttl and uses must be non-zero".to_string()));
     }
-    if max_build_time_secs == 0 || max_build_time_secs > MAX_REMOTE_BUILD_TIME_SECS {
+    if input.max_build_time_secs == 0 || input.max_build_time_secs > MAX_REMOTE_BUILD_TIME_SECS {
         return Err(RunError::Internal(format!("ticket build time limit must be 1..={MAX_REMOTE_BUILD_TIME_SECS}")));
     }
-    if max_upload_bytes > MAX_REMOTE_UPLOAD_BYTES {
+    if input.max_upload_bytes > MAX_REMOTE_UPLOAD_BYTES {
         return Err(RunError::Internal(format!("ticket upload limit exceeds {MAX_REMOTE_UPLOAD_BYTES}")));
     }
     Ok(())
@@ -10745,7 +12028,7 @@ pub fn cmd_remote(
             executor,
             present_input_refs,
             execution_state_dir,
-        } => cmd_remote_serve(
+        } => cmd_remote_serve(RemoteServeCommandInput {
             endpoint_id,
             binding,
             signing_key_id,
@@ -10753,33 +12036,37 @@ pub fn cmd_remote(
             present_input_refs,
             output_dir,
             state_dir,
-            execution_state_dir.as_deref().unwrap_or(state_dir),
+            execution_state_dir: execution_state_dir.as_deref().unwrap_or(state_dir),
             store_prefix,
             json_output,
-        ),
+        }),
     }
 }
 
-fn remote_serve_executor(
+struct RemoteServeExecutorInput<'a> {
     executor: crate::RemoteServeExecutor,
-    endpoint_id: &str,
+    endpoint_id: &'a str,
     fixture_signing_key_id: String,
-    output_dir: &Path,
-    coordinator_state_dir: &Path,
-    state_dir: &Path,
-    store_prefix: &str,
+    output_dir: &'a Path,
+    coordinator_state_dir: &'a Path,
+    state_dir: &'a Path,
+    store_prefix: &'a str,
+}
+
+fn remote_serve_executor(
+    input: RemoteServeExecutorInput<'_>,
 ) -> Result<(String, Option<RemoteLocalBuildExecutor>), RunError> {
-    match executor {
-        crate::RemoteServeExecutor::Fixture => Ok((fixture_signing_key_id, None)),
+    match input.executor {
+        crate::RemoteServeExecutor::Fixture => Ok((input.fixture_signing_key_id, None)),
         crate::RemoteServeExecutor::LocalBuild => {
-            let keypair = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir, false)?;
+            let keypair = crate::build_cmd::load_or_generate_signing_keypair(None, input.state_dir, false)?;
             let trusted_keys = vec![keypair.verifying_key.clone()];
             let local = RemoteLocalBuildExecutor {
-                endpoint_id: endpoint_id.to_string(),
-                coordinator_state_dir: coordinator_state_dir.to_path_buf(),
-                state_dir: state_dir.to_path_buf(),
-                output_dir: output_dir.to_path_buf(),
-                store_prefix: store_prefix.to_string(),
+                endpoint_id: input.endpoint_id.to_string(),
+                coordinator_state_dir: input.coordinator_state_dir.to_path_buf(),
+                state_dir: input.state_dir.to_path_buf(),
+                output_dir: input.output_dir.to_path_buf(),
+                store_prefix: input.store_prefix.to_string(),
                 keypair,
                 trusted_keys,
                 trust_unsigned: false,
@@ -10843,14 +12130,17 @@ fn production_transfer_report_from_runtime(
     if actual_mode == RemoteTransferMode::Streaming && fallback_reason.is_some() {
         return Err("remote-production-streaming-fallback-inconsistent".to_string());
     }
-    Ok(RemoteTransferReport {
+    let transfer_receipt = RemoteTransferReport {
         mode: actual_mode,
         mode_label: actual_mode.as_str().to_string(),
         transferred_bytes: runtime.transferred_bytes,
         reused_bytes: runtime.reused_bytes,
         fallback_reason,
         verified_builder_key: verified_builder_key.to_string(),
-    })
+    };
+    debug_assert_eq!(transfer_receipt.mode_label, actual_mode.as_str());
+    debug_assert!(!transfer_receipt.verified_builder_key.is_empty());
+    Ok(transfer_receipt)
 }
 
 fn validate_input_transfer_manifest_frame(
@@ -10870,14 +12160,7 @@ fn validate_input_transfer_manifest_frame(
         return Err(RemoteTransferReasonCode::ManifestIdentityMismatch.as_str().to_string());
     }
     let attempt = request.production_attempt.as_ref().ok_or_else(|| "remote-production-attempt-missing".to_string())?;
-    if canonical.manifest.job_id != attempt.job_id
-        || canonical.manifest.attempt_id != attempt.attempt_id
-        || canonical.manifest.fence_generation != attempt.fence_generation
-        || canonical.manifest.store_prefix != request.store_prefix
-        || canonical.manifest.requested_content_blake3 != remote_input_requested_content_digest(request)?
-    {
-        return Err("remote-input-transfer-manifest-binding-mismatch".to_string());
-    }
+    validate_input_transfer_manifest_binding(request, attempt, &canonical)?;
     let expected_ids = request
         .input_refs
         .iter()
@@ -10898,170 +12181,320 @@ fn validate_input_transfer_manifest_frame(
     {
         return Err("remote-input-transfer-manifest-artifact-mismatch".to_string());
     }
-    assert_eq!(canonical.artifact_count as usize, request.input_refs.len());
+    let artifact_count = usize::try_from(canonical.artifact_count)
+        .map_err(|_| "remote-input-transfer-artifact-count-overflow".to_string())?;
+    assert_eq!(artifact_count, request.input_refs.len());
     assert!(canonical.total_bytes <= policy.total_bytes_max);
     Ok(canonical)
+}
+
+fn validate_input_transfer_manifest_binding(
+    request: &ConcreteBuildRequest,
+    attempt: &RemoteProductionAttemptBinding,
+    canonical: &CanonicalRemoteTransferManifest,
+) -> Result<(), String> {
+    if canonical.manifest.job_id != attempt.job_id {
+        return Err("remote-input-transfer-manifest-binding-mismatch".to_string());
+    }
+    if canonical.manifest.attempt_id != attempt.attempt_id {
+        return Err("remote-input-transfer-manifest-binding-mismatch".to_string());
+    }
+    if canonical.manifest.fence_generation != attempt.fence_generation {
+        return Err("remote-input-transfer-manifest-binding-mismatch".to_string());
+    }
+    if canonical.manifest.store_prefix != request.store_prefix {
+        return Err("remote-input-transfer-manifest-binding-mismatch".to_string());
+    }
+    if canonical.manifest.requested_content_blake3 != remote_input_requested_content_digest(request)? {
+        return Err("remote-input-transfer-manifest-binding-mismatch".to_string());
+    }
+    debug_assert_eq!(canonical.manifest.job_id, attempt.job_id);
+    debug_assert_eq!(canonical.manifest.store_prefix, request.store_prefix);
+    Ok(())
+}
+
+struct RemoteProductionServerContext<'a> {
+    builder: &'a RemoteLoopbackBuilder,
+    ticket_state: &'a mut RemoteTicketState,
+    executor: &'a RemoteLocalBuildExecutor,
+    state_dir: &'a Path,
+}
+
+struct RemoteProductionServerOpening {
+    hello: RemoteHello,
+    auth: TicketAuthRequest,
+    request: ConcreteBuildRequest,
+    policy: RemoteTransferPolicy,
+    missing: Vec<String>,
 }
 
 fn serve_stdio_remote_production_once(
     reader: &mut impl Read,
     writer: &mut impl Write,
-    builder: &RemoteLoopbackBuilder,
-    ticket_state: &mut RemoteTicketState,
-    executor: &RemoteLocalBuildExecutor,
-    state_dir: &Path,
+    mut context: RemoteProductionServerContext<'_>,
 ) -> Result<(), String> {
-    let hello_frame = read_expected_remote_frame(reader, RemoteFrameKind::Hello)?;
-    let RemoteFrame::Hello { hello } = hello_frame else {
-        unreachable!("frame kind checked");
+    let opening = accept_remote_production_opening(reader, writer, &mut context)?;
+    let runtime = tokio::runtime::Runtime::new().map_err(|err| format!("remote production runtime: {err}"))?;
+    let uploaded_bytes = receive_remote_production_inputs(reader, writer, &mut context, &opening, &runtime)?;
+    send_remote_production_result(reader, writer, &context, RemoteProductionResultInput {
+        opening: &opening,
+        runtime: &runtime,
+        uploaded_bytes,
+    })?;
+    debug_assert!(!opening.request.request_id.is_empty());
+    debug_assert!(uploaded_bytes <= MAX_REMOTE_UPLOAD_BYTES);
+    Ok(())
+}
+
+fn accept_remote_production_opening(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    context: &mut RemoteProductionServerContext<'_>,
+) -> Result<RemoteProductionServerOpening, String> {
+    let hello = match read_expected_remote_frame(reader, RemoteFrameKind::Hello)? {
+        RemoteFrame::Hello { hello } => hello,
+        _ => return Err("remote-hello-frame-invalid".to_string()),
     };
-    let accepted = expect_accepted_hello(&hello, builder)?;
-    let trace_negotiated = accepted
+    let accepted = expect_accepted_hello(&hello, context.builder)?;
+    let is_trace_negotiated = accepted
         .accepted_capabilities
         .iter()
         .any(|capability| capability == REMOTE_TRACE_CONTEXT_CAPABILITY);
-    let trace_context_health = if trace_negotiated {
-        let trace_frame = read_expected_remote_frame(reader, RemoteFrameKind::TraceContext)?;
-        let RemoteFrame::TraceContext { context } = trace_frame else {
-            unreachable!("frame kind checked");
-        };
-        match context {
-            Some(context) => {
-                accept_remote_trace_context(true, Some(&context.traceparent), context.tracestate.as_deref()).1
-            }
-            None => accept_remote_trace_context(true, None, None).1,
-        }
-    } else {
-        accept_remote_trace_context(false, None, None).1
+    let trace_context_health = read_remote_server_trace_context(reader, is_trace_negotiated)?;
+    let auth = match read_expected_remote_frame(reader, RemoteFrameKind::AuthTicket)? {
+        RemoteFrame::AuthTicket { auth } => auth,
+        _ => return Err("remote-auth-ticket-frame-invalid".to_string()),
     };
-    let auth_frame = read_expected_remote_frame(reader, RemoteFrameKind::AuthTicket)?;
-    let RemoteFrame::AuthTicket { auth } = auth_frame else {
-        unreachable!("frame kind checked");
-    };
-    let ticket = ticket_state
+    let ticket = context
+        .ticket_state
         .tickets
-        .get_mut(&auth.ticket_id)
+        .get(&auth.ticket_id)
         .ok_or_else(|| format!("unknown-remote-ticket-{}", auth.ticket_id))?;
     expect_authorized_ticket(ticket, &auth)?;
     write_remote_control_frame(writer, &RemoteFrame::AuthOk {
         auth: RemoteAuthOk {
-            builder_signing_keys: vec![builder.signing_key_id.clone()],
+            builder_signing_keys: vec![context.builder.signing_key_id.clone()],
             accepted_capabilities: accepted.accepted_capabilities,
         },
     })?;
-    if trace_negotiated {
+    if is_trace_negotiated {
         write_remote_control_frame(writer, &RemoteFrame::TraceContextAck {
             acknowledgement: RemoteTraceContextAck {
-                health: trace_context_health,
+                health: trace_context_health.clone(),
             },
         })?;
     }
-    let request_frame = read_expected_remote_frame(reader, RemoteFrameKind::BuildRequest)?;
-    let RemoteFrame::BuildRequest { request } = request_frame else {
-        unreachable!("frame kind checked");
+    let request = match read_expected_remote_frame(reader, RemoteFrameKind::BuildRequest)? {
+        RemoteFrame::BuildRequest { request } => request,
+        _ => return Err("remote-build-request-frame-invalid".to_string()),
     };
     validate_concrete_request(&request, ticket)?;
     let policy = request.transfer_policy.ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
     policy.validate().map_err(|reason| reason.as_str().to_string())?;
-    let input_manifest_frame = read_expected_remote_frame(reader, RemoteFrameKind::InputManifest)?;
-    let RemoteFrame::InputManifest {
-        manifest: input_manifest,
-    } = input_manifest_frame
-    else {
-        unreachable!("frame kind checked");
+    let input_manifest = match read_expected_remote_frame(reader, RemoteFrameKind::InputManifest)? {
+        RemoteFrame::InputManifest { manifest } => manifest,
+        _ => return Err("remote-input-manifest-frame-invalid".to_string()),
     };
     validate_input_manifest(&input_manifest, &request)?;
-    let missing = derive_missing_inputs(&input_manifest.input_refs, &builder.present_input_refs)?;
+    let missing = derive_missing_inputs(&input_manifest.input_refs, &context.builder.present_input_refs)?;
     write_remote_control_frame(writer, &RemoteFrame::MissingInputs {
         request_id: request.request_id.clone(),
         refs: missing.clone(),
     })?;
-    let runtime = tokio::runtime::Runtime::new().map_err(|err| format!("remote production runtime: {err}"))?;
-    let uploaded_bytes = if request.input_refs.is_empty() {
+    debug_assert!(!trace_context_health.reason_code.is_empty());
+    debug_assert!(missing.len() <= MAX_REMOTE_INPUT_REFS);
+    Ok(RemoteProductionServerOpening {
+        hello,
+        auth,
+        request,
+        policy,
+        missing,
+    })
+}
+
+fn read_remote_server_trace_context(
+    reader: &mut impl Read,
+    is_trace_negotiated: bool,
+) -> Result<RemoteTraceContextHealth, String> {
+    if !is_trace_negotiated {
+        return Ok(accept_remote_trace_context(false, None, None).1);
+    }
+    let context = match read_expected_remote_frame(reader, RemoteFrameKind::TraceContext)? {
+        RemoteFrame::TraceContext { context } => context,
+        _ => return Err("remote-trace-context-frame-invalid".to_string()),
+    };
+    let health = match context {
+        Some(context) => accept_remote_trace_context(true, Some(&context.traceparent), context.tracestate.as_deref()).1,
+        None => accept_remote_trace_context(true, None, None).1,
+    };
+    debug_assert!(!health.reason_code.is_empty());
+    debug_assert!(is_trace_negotiated);
+    Ok(health)
+}
+
+fn receive_remote_production_inputs(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    context: &mut RemoteProductionServerContext<'_>,
+    opening: &RemoteProductionServerOpening,
+    runtime: &tokio::runtime::Runtime,
+) -> Result<u64, String> {
+    let max_upload_bytes = context
+        .ticket_state
+        .tickets
+        .get(&opening.auth.ticket_id)
+        .ok_or_else(|| "remote-production-ticket-disappeared".to_string())?
+        .max_upload_bytes;
+    let uploaded_bytes = if opening.request.input_refs.is_empty() {
         0
     } else {
-        let manifest_frame = read_expected_remote_frame(reader, RemoteFrameKind::TransferManifest)?;
-        let RemoteFrame::TransferManifest { transfer } = manifest_frame else {
-            unreachable!("frame kind checked");
-        };
-        let canonical = validate_input_transfer_manifest_frame(&request, &transfer, policy)?;
-        if canonical.total_bytes > ticket.max_upload_bytes {
-            return Err("upload-byte-limit-exceeded".to_string());
-        }
-        let receiver_root =
-            crate::remote_transfer::remote_transfer_receiver_root(state_dir, &canonical.manifest.session_id);
-        let lease_expires_unix_s = auth
-            .now_unix_s
-            .checked_add(REMOTE_TRANSFER_LEASE_DURATION_SECS)
-            .ok_or_else(|| "remote-transfer-lease-expiry-overflow".to_string())?;
-        let mut session = crate::remote_transfer::begin_remote_transfer_receive(
-            transfer.manifest,
-            &transfer.manifest_digest_blake3,
-            policy,
-            state_dir,
-            &receiver_root,
-            crate::remote_transfer::RemoteTransferRunOptions {
-                direction: crate::remote_transfer::RemoteTransferDirection::Upload,
-                interrupt_after_chunks: None,
-                now_unix_s: auth.now_unix_s,
-                lease_expires_unix_s,
-                admission: crate::remote_transfer::RemoteTransferAdmissionFacts {
-                    required_closure_metadata_verified: true,
-                    path_info_admitted: true,
-                },
-            },
-        )?;
-        receive_remote_transfer_interactively(
-            reader,
-            writer,
-            &mut session,
-            crate::remote_transfer::RemoteTransferDirection::Upload,
-            None,
-            None,
-            None,
-        )?;
-        let report = session.finish()?;
-        write_remote_control_frame(writer, &RemoteFrame::TransferComplete {
-            direction: crate::remote_transfer::RemoteTransferDirection::Upload,
-            report: report.clone(),
-        })?;
-        let store = runtime.block_on(open_remote_local_executor_store(executor))?;
-        runtime.block_on(materialize_streamed_remote_inputs(&store, &request, &canonical, &receiver_root))?;
-        report.transferred_bytes
+        receive_remote_production_input_transfer(reader, writer, context, RemoteProductionInputTransferInput {
+            opening,
+            runtime,
+            max_upload_bytes,
+        })?
     };
-    validate_missing_uploads(&missing, &missing, uploaded_bytes, ticket.max_upload_bytes)?;
+    validate_missing_uploads(&opening.missing, &opening.missing, uploaded_bytes, max_upload_bytes)?;
+    let ticket = context
+        .ticket_state
+        .tickets
+        .get_mut(&opening.auth.ticket_id)
+        .ok_or_else(|| "remote-production-ticket-disappeared".to_string())?;
+    let uses_before = ticket.uses_remaining;
     redeem_after_queue(ticket, true)?;
+    debug_assert!(uploaded_bytes <= max_upload_bytes);
+    debug_assert_eq!(ticket.uses_remaining.checked_add(1), Some(uses_before));
+    Ok(uploaded_bytes)
+}
+
+struct RemoteProductionInputTransferInput<'a> {
+    opening: &'a RemoteProductionServerOpening,
+    runtime: &'a tokio::runtime::Runtime,
+    max_upload_bytes: u64,
+}
+
+fn receive_remote_production_input_transfer(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    context: &RemoteProductionServerContext<'_>,
+    input: RemoteProductionInputTransferInput<'_>,
+) -> Result<u64, String> {
+    let opening = input.opening;
+    let transfer = match read_expected_remote_frame(reader, RemoteFrameKind::TransferManifest)? {
+        RemoteFrame::TransferManifest { transfer } => transfer,
+        _ => return Err("remote-transfer-manifest-frame-invalid".to_string()),
+    };
+    let canonical = validate_input_transfer_manifest_frame(&opening.request, &transfer, opening.policy)?;
+    if canonical.total_bytes > input.max_upload_bytes {
+        return Err("upload-byte-limit-exceeded".to_string());
+    }
+    let receiver_root =
+        crate::remote_transfer::remote_transfer_receiver_root(context.state_dir, &canonical.manifest.session_id);
+    let lease_expires_unix_s = opening
+        .auth
+        .now_unix_s
+        .checked_add(REMOTE_TRANSFER_LEASE_DURATION_SECS)
+        .ok_or_else(|| "remote-transfer-lease-expiry-overflow".to_string())?;
+    let mut session = crate::remote_transfer::begin_remote_transfer_receive(
+        transfer.manifest,
+        &transfer.manifest_digest_blake3,
+        opening.policy,
+        context.state_dir,
+        &receiver_root,
+        crate::remote_transfer::RemoteTransferRunOptions {
+            direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+            interrupt_after_chunks: None,
+            now_unix_s: opening.auth.now_unix_s,
+            lease_expires_unix_s,
+            admission: crate::remote_transfer::RemoteTransferAdmissionFacts {
+                required_closure_metadata_verified: true,
+                path_info_admitted: true,
+            },
+        },
+    )?;
+    receive_remote_transfer_interactively(reader, writer, &mut session, RemoteTransferReceiveInput {
+        direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+        state_dir: None,
+        attempt: None,
+        interrupt_after_chunks: None,
+    })?;
+    let runtime_transfer_receipt = session.finish()?;
+    write_remote_control_frame(writer, &RemoteFrame::TransferComplete {
+        direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+        report: runtime_transfer_receipt.clone(),
+    })?;
+    let store = input.runtime.block_on(open_remote_local_executor_store(context.executor))?;
+    input
+        .runtime
+        .block_on(materialize_streamed_remote_inputs(&store, &opening.request, &canonical, &receiver_root))?;
+    debug_assert!(runtime_transfer_receipt.transferred_bytes <= input.max_upload_bytes);
+    debug_assert!(canonical.total_bytes <= input.max_upload_bytes);
+    Ok(runtime_transfer_receipt.transferred_bytes)
+}
+
+struct RemoteProductionResultInput<'a> {
+    opening: &'a RemoteProductionServerOpening,
+    runtime: &'a tokio::runtime::Runtime,
+    uploaded_bytes: u64,
+}
+
+fn send_remote_production_result(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    context: &RemoteProductionServerContext<'_>,
+    input: RemoteProductionResultInput<'_>,
+) -> Result<(), String> {
+    let opening = input.opening;
+    let attempt = opening
+        .request
+        .production_attempt
+        .as_ref()
+        .ok_or_else(|| "remote-production-attempt-missing".to_string())?;
     write_remote_control_frame(writer, &RemoteFrame::BuildQueued {
-        request_id: request.request_id.clone(),
-        session_id: request
-            .production_attempt
-            .as_ref()
-            .ok_or_else(|| "remote-production-attempt-missing".to_string())?
-            .attempt_id
-            .as_str()
-            .to_string(),
+        request_id: opening.request.request_id.clone(),
+        session_id: attempt.attempt_id.as_str().to_string(),
     })?;
     write_remote_control_frame(writer, &RemoteFrame::BuildStarted {
-        request_id: request.request_id.clone(),
+        request_id: opening.request.request_id.clone(),
     })?;
-    let plan = plan_remote_executable_request(&request)?;
+    let plan = plan_remote_executable_request(&opening.request)?;
     let upload = RemoteInputUpload {
-        request_id: request.request_id.clone(),
-        refs: missing,
-        byte_count: uploaded_bytes,
+        request_id: opening.request.request_id.clone(),
+        refs: opening.missing.clone(),
+        byte_count: input.uploaded_bytes,
         artifacts: Vec::new(),
         streamed: true,
     };
-    let execution = executor.execute(&request, &plan, &upload)?;
-    validate_remote_execution_outcome(&execution, &request, &plan)?;
-    validate_remote_execution_output_pathinfos(&execution.outputs, &builder.signing_key_id, &request.store_prefix)?;
-    let prepared = runtime.block_on(prepare_remote_production_output(executor, &request, &execution))?;
+    let execution = context.executor.execute(&opening.request, &plan, &upload)?;
+    validate_remote_execution_outcome(&execution, &opening.request, &plan)?;
+    validate_remote_execution_output_pathinfos(
+        &execution.outputs,
+        &context.builder.signing_key_id,
+        &opening.request.store_prefix,
+    )?;
+    let prepared =
+        input
+            .runtime
+            .block_on(prepare_remote_production_output(context.executor, &opening.request, &execution))?;
+    send_remote_production_output_transfer(reader, writer, context, opening, &prepared)?;
+    debug_assert!(is_blake3_hex_digest(&execution.output_digest_blake3));
+    debug_assert_eq!(execution.outputs.len(), opening.request.expected_outputs.len());
+    Ok(())
+}
+
+fn send_remote_production_output_transfer(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    context: &RemoteProductionServerContext<'_>,
+    opening: &RemoteProductionServerOpening,
+    prepared: &PreparedRemoteProductionOutput,
+) -> Result<(), String> {
     write_remote_control_frame(writer, &RemoteFrame::BuildFinished {
         result: prepared.result.clone(),
     })?;
-    let client_transfer = remote_transfer_capabilities_from_labels(&hello.capabilities);
+    let client_transfer = remote_transfer_capabilities_from_labels(&opening.hello.capabilities);
     let (actual_mode, fallback_reason) =
-        production_output_transfer_selection(client_transfer, builder.transfer_capabilities)?;
+        production_output_transfer_selection(client_transfer, context.builder.transfer_capabilities)?;
     write_remote_control_frame(writer, &RemoteFrame::TransferManifest {
         transfer: RemoteTransferManifestFrame {
             direction: crate::remote_transfer::RemoteTransferDirection::Download,
@@ -11071,68 +12504,73 @@ fn serve_stdio_remote_production_once(
             fallback_reason: fallback_reason.clone(),
         },
     })?;
-    let demand_frame = read_expected_remote_frame(reader, RemoteFrameKind::TransferDemand)?;
-    let RemoteFrame::TransferDemand { transfer: demand } = demand_frame else {
-        unreachable!("frame kind checked");
+    let demand = match read_expected_remote_frame(reader, RemoteFrameKind::TransferDemand)? {
+        RemoteFrame::TransferDemand { transfer } => transfer,
+        _ => return Err("remote-transfer-demand-frame-invalid".to_string()),
     };
-    let runtime_report = send_prepared_remote_transfer(
-        reader,
-        writer,
-        &prepared.transfer,
-        policy,
-        crate::remote_transfer::RemoteTransferDirection::Download,
-        demand,
-    )?;
-    let transfer = production_transfer_report_from_runtime(
-        &runtime_report,
-        &builder.signing_key_id,
+    let runtime_transfer_receipt = send_prepared_remote_transfer(reader, writer, RemoteTransferSendInput {
+        prepared: &prepared.transfer,
+        policy: opening.policy,
+        direction: crate::remote_transfer::RemoteTransferDirection::Download,
+        demand_frame: demand,
+        interrupt_after_chunks: None,
+    })?;
+    let transfer_receipt = production_transfer_report_from_runtime(
+        &runtime_transfer_receipt,
+        &context.builder.signing_key_id,
         actual_mode,
         fallback_reason,
     )?;
-    write_remote_control_frame(writer, &RemoteFrame::OutputTransferDone { report: transfer })?;
-    write_remote_control_frame(writer, &RemoteFrame::Done {
-        request_id: request.request_id,
+    write_remote_control_frame(writer, &RemoteFrame::OutputTransferDone {
+        report: transfer_receipt,
     })?;
+    write_remote_control_frame(writer, &RemoteFrame::Done {
+        request_id: opening.request.request_id.clone(),
+    })?;
+    debug_assert!(is_blake3_hex_digest(&prepared.result.output_digest_blake3));
+    debug_assert_eq!(prepared.result.request_id, opening.request.request_id);
     Ok(())
 }
 
-fn cmd_remote_serve(
+struct RemoteServeCommandInput<'a> {
     endpoint_id: String,
     binding: crate::RemoteServeBinding,
     signing_key_id: String,
     executor: crate::RemoteServeExecutor,
     present_input_refs: Vec<String>,
-    output_dir: &Path,
-    state_dir: &Path,
-    execution_state_dir: &Path,
-    store_prefix: &str,
+    output_dir: &'a Path,
+    state_dir: &'a Path,
+    execution_state_dir: &'a Path,
+    store_prefix: &'a str,
     json_output: bool,
-) -> Result<(), RunError> {
-    match binding {
+}
+
+fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> {
+    match input.binding {
         crate::RemoteServeBinding::Metadata => {
-            print_json_or_human(&remote_serve_metadata_json(&endpoint_id, "metadata-only"), json_output)
+            print_json_or_human(&remote_serve_metadata_json((&input.endpoint_id, "metadata-only")), input.json_output)
         }
         crate::RemoteServeBinding::StdioOnce => {
-            let mut state = load_ticket_state(state_dir)?;
-            let (builder_signing_key_id, local_executor) = remote_serve_executor(
-                executor,
-                &endpoint_id,
-                signing_key_id,
-                output_dir,
-                state_dir,
-                execution_state_dir,
-                store_prefix,
-            )?;
+            let mut state = load_ticket_state(input.state_dir)?;
+            let (builder_signing_key_id, local_executor) = remote_serve_executor(RemoteServeExecutorInput {
+                executor: input.executor,
+                endpoint_id: &input.endpoint_id,
+                fixture_signing_key_id: input.signing_key_id,
+                output_dir: input.output_dir,
+                coordinator_state_dir: input.state_dir,
+                state_dir: input.execution_state_dir,
+                store_prefix: input.store_prefix,
+            })?;
             let builder = RemoteLoopbackBuilder {
-                endpoint_id,
-                store_prefix: store_prefix.to_string(),
+                endpoint_id: input.endpoint_id,
+                store_prefix: input.store_prefix.to_string(),
                 supported_capabilities: vec![
                     "delta".to_string(),
                     "full".to_string(),
                     "streaming".to_string(),
                     REMOTE_TRACE_CONTEXT_CAPABILITY.to_string(),
                 ],
-                present_input_refs,
+                present_input_refs: input.present_input_refs,
                 signing_key_id: builder_signing_key_id,
                 transfer_capabilities: RemoteTransferCapabilities::delta_and_full().with_streaming(),
             };
@@ -11140,16 +12578,14 @@ fn cmd_remote_serve(
                 Some(local_executor) => {
                     let mut stdin = std::io::stdin().lock();
                     let mut stdout = std::io::stdout().lock();
-                    serve_stdio_remote_production_once(
-                        &mut stdin,
-                        &mut stdout,
-                        &builder,
-                        &mut state,
-                        &local_executor,
-                        execution_state_dir,
-                    )
+                    serve_stdio_remote_production_once(&mut stdin, &mut stdout, RemoteProductionServerContext {
+                        builder: &builder,
+                        ticket_state: &mut state,
+                        executor: &local_executor,
+                        state_dir: input.execution_state_dir,
+                    })
                     .map_err(|err| RunError::Internal(format!("remote production stdio serve once: {err}")))?;
-                    save_ticket_state(state_dir, &state)?;
+                    save_ticket_state(input.state_dir, &state)?;
                     Ok(())
                 }
                 None => {
@@ -11160,7 +12596,7 @@ fn cmd_remote_serve(
                         RemoteTransferCapabilities::delta_and_full(),
                     )
                     .map_err(|err| RunError::Internal(format!("remote fixture stdio serve once: {err}")))?;
-                    save_ticket_state(state_dir, &state)?;
+                    save_ticket_state(input.state_dir, &state)?;
                     write_remote_response_frames(std::io::stdout().lock(), &response)
                         .map_err(|err| RunError::Internal(format!("remote fixture stdio serve once response: {err}")))
                 }
@@ -11169,7 +12605,8 @@ fn cmd_remote_serve(
     }
 }
 
-fn remote_serve_metadata_json(endpoint_id: &str, status: &str) -> serde_json::Value {
+fn remote_serve_metadata_json(input: (&str, &str)) -> serde_json::Value {
+    let (endpoint_id, status) = input;
     serde_json::json!({
         "protocol": REMOTE_PROTOCOL_ALPN,
         "endpoint_id": endpoint_id,
@@ -11200,6 +12637,8 @@ fn cmd_remote_status(
 }
 
 fn cmd_remote_ticket(action: crate::RemoteTicketAction, state_dir: &Path, json_output: bool) -> Result<(), RunError> {
+    debug_assert!(MAX_TICKET_DISPLAY_NAME_BYTES > 0);
+    debug_assert!(MAX_REMOTE_STATUS_ITEMS > 0);
     let mut state = load_ticket_state(state_dir)?;
     match action {
         crate::RemoteTicketAction::Create {
@@ -11633,8 +13072,12 @@ mod tests {
             &mut std::io::Cursor::new(incoming),
             &mut control,
             &mut session,
-            crate::remote_transfer::RemoteTransferDirection::Upload,
-            None,
+            RemoteTransferReceiveInput {
+                direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+                state_dir: None,
+                attempt: None,
+                interrupt_after_chunks: None,
+            },
             &mut validate,
         )
         .unwrap_err();
@@ -11680,11 +13123,13 @@ mod tests {
         let error = send_prepared_remote_transfer_with_fence_validator(
             &mut std::io::Cursor::new(control),
             &mut disclosed,
-            &prepared,
-            RemoteTransferPolicy::default(),
-            crate::remote_transfer::RemoteTransferDirection::Upload,
-            demand,
-            None,
+            RemoteTransferSendInput {
+                prepared: &prepared,
+                policy: RemoteTransferPolicy::default(),
+                direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+                demand_frame: demand,
+                interrupt_after_chunks: None,
+            },
             &mut || Err(RemoteAttemptReasonCode::StaleReportRejected.as_str().to_string()),
         )
         .unwrap_err();
@@ -11722,11 +13167,13 @@ mod tests {
         let error = send_prepared_remote_transfer_with_observer(
             &mut std::io::Cursor::new(control),
             &mut disclosed,
-            &prepared,
-            RemoteTransferPolicy::default(),
-            crate::remote_transfer::RemoteTransferDirection::Upload,
-            demand,
-            None,
+            RemoteTransferSendInput {
+                prepared: &prepared,
+                policy: RemoteTransferPolicy::default(),
+                direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+                demand_frame: demand,
+                interrupt_after_chunks: None,
+            },
             &mut || Ok(()),
             &mut |fact| observed.push(fact),
         )
@@ -11940,11 +13387,13 @@ mod tests {
         let error = send_prepared_remote_transfer_with_fence_validator(
             &mut reader,
             &mut Vec::new(),
-            &prepared,
-            RemoteTransferPolicy::default(),
-            crate::remote_transfer::RemoteTransferDirection::Upload,
-            demand,
-            None,
+            RemoteTransferSendInput {
+                prepared: &prepared,
+                policy: RemoteTransferPolicy::default(),
+                direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+                demand_frame: demand,
+                interrupt_after_chunks: None,
+            },
             &mut validate,
         )
         .unwrap_err();
@@ -16036,11 +17485,11 @@ mod tests {
                 | RemoteCoordinatorDispatchDecision::RedeliverResult { .. }
         ));
         let shared_key = normalized_remote_build_key(&request).unwrap();
-        let second_key = mutable_workspace_job_key(
+        let second_key = mutable_workspace_job_key((
             &shared_key,
             &request.request.request_id,
             &fixture_assignment_nonce("mutable-second"),
-        );
+        ));
         assert_ne!(first_key, second_key);
         assert!(state.live_output_claims.is_empty());
         assert!(state.jobs.values().all(|job| job.live_output_claims.is_empty()));
