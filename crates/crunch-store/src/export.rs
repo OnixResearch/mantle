@@ -28,6 +28,12 @@ enum ExportWorkItem {
     FinalizeDirectory { dest: String },
 }
 
+struct ExportNodeRequest {
+    node: Node,
+    dest: String,
+    depth: u32,
+}
+
 /// Export a castore Node to a filesystem path.
 ///
 /// Uses an explicit bounded worklist instead of recursion. Directories
@@ -50,7 +56,13 @@ pub async fn export_castore_to_disk(
     while let Some(item) = worklist.pop() {
         match item {
             ExportWorkItem::WriteNode { node, dest, depth } => {
-                export_node_to_disk(node, dest, depth, &mut worklist, blob_service, directory_service).await?;
+                export_node_to_disk(
+                    ExportNodeRequest { node, dest, depth },
+                    &mut worklist,
+                    blob_service,
+                    directory_service,
+                )
+                .await?;
             }
             ExportWorkItem::FinalizeDirectory { dest } => {
                 normalize_directory_metadata(&dest)?;
@@ -61,29 +73,29 @@ pub async fn export_castore_to_disk(
 }
 
 async fn export_node_to_disk(
-    node: Node,
-    dest: String,
-    depth: u32,
+    request: ExportNodeRequest,
     worklist: &mut Vec<ExportWorkItem>,
     blob_service: &(impl BlobService + Clone),
     directory_service: &(impl DirectoryService + Clone),
 ) -> Result<(), String> {
-    if depth >= MAX_EXPORT_DEPTH {
-        return Err(format!("directory depth limit ({MAX_EXPORT_DEPTH}) exceeded at {dest}"));
+    assert!(!request.dest.is_empty());
+    assert!(request.dest.starts_with('/'));
+    if request.depth >= MAX_EXPORT_DEPTH {
+        return Err(format!("directory depth limit ({MAX_EXPORT_DEPTH}) exceeded at {}", request.dest));
     }
-    match node {
+    match request.node {
         Node::File {
             digest,
             size,
             executable,
         } => {
-            export_file_to_disk(&digest, size, executable, &dest, blob_service).await?;
+            export_file_to_disk(&digest, size, executable, &request.dest, blob_service).await?;
         }
         Node::Symlink { target, .. } => {
-            export_symlink_to_disk(target.as_ref(), &dest)?;
+            export_symlink_to_disk(target.as_ref(), &request.dest)?;
         }
         Node::Directory { digest, .. } => {
-            export_directory_to_disk(&digest, &dest, depth, worklist, directory_service).await?;
+            export_directory_to_disk(&digest, &request.dest, request.depth, worklist, directory_service).await?;
         }
     }
     Ok(())
@@ -148,46 +160,52 @@ async fn export_file_to_disk(
     let mut buf = vec![0u8; EXPORT_READ_BUFFER_BYTES];
     let mut written_bytes: u64 = 0;
     let mut hasher = blake3::Hasher::new();
-    loop {
-        let n = reader.read(&mut buf).await.map_err(|e| format!("reading blob: {e}"))?;
-        if n == 0 {
+    for _read_index in 0..=expected_size {
+        let read_byte_count = reader.read(&mut buf).await.map_err(|e| format!("reading blob: {e}"))?;
+        if read_byte_count == 0 {
             break;
         }
-        hasher.update(&buf[..n]);
-        let n_u64 = match u64::try_from(n) {
-            Ok(v) => v,
-            Err(_) => return Err(format!("read size {n} overflows u64")),
-        };
+        hasher.update(&buf[..read_byte_count]);
+        let read_size_bytes =
+            u64::try_from(read_byte_count).map_err(|_| format!("read size {read_byte_count} overflows u64"))?;
         written_bytes = written_bytes
-            .checked_add(n_u64)
+            .checked_add(read_size_bytes)
             .ok_or_else(|| format!("blob {digest} write size overflow for {dest}"))?;
         if written_bytes > expected_size {
             drop(file);
-            let _ = std::fs::remove_file(&temp_dest);
-            return Err(format!(
+            let mismatch = format!(
                 "blob {digest} length mismatch for {dest}: expected {expected_size}, stream exceeded declared size"
-            ));
+            );
+            return Err(cleanup_failed_export(&temp_dest, mismatch));
         }
-        std::io::Write::write_all(&mut file, &buf[..n]).map_err(|e| format!("writing {temp_dest}: {e}"))?;
+        std::io::Write::write_all(&mut file, &buf[..read_byte_count])
+            .map_err(|e| format!("writing {temp_dest}: {e}"))?;
     }
     let observed_digest = snix_castore::B3Digest::from(hasher.finalize().as_bytes());
     if written_bytes != expected_size {
         drop(file);
-        let _ = std::fs::remove_file(&temp_dest);
-        return Err(format!(
-            "blob {digest} length mismatch for {dest}: expected {expected_size}, wrote {written_bytes}"
-        ));
+        let mismatch =
+            format!("blob {digest} length mismatch for {dest}: expected {expected_size}, wrote {written_bytes}");
+        return Err(cleanup_failed_export(&temp_dest, mismatch));
     }
     if observed_digest != *digest {
         drop(file);
-        let _ = std::fs::remove_file(&temp_dest);
-        return Err(format!("blob {digest} digest mismatch while exporting {dest}"));
+        let mismatch = format!("blob {digest} digest mismatch while exporting {dest}");
+        return Err(cleanup_failed_export(&temp_dest, mismatch));
     }
     std::io::Write::flush(&mut file).map_err(|e| format!("flushing {temp_dest}: {e}"))?;
     drop(file);
     normalize_file_metadata(&temp_dest, is_executable)?;
     std::fs::rename(&temp_dest, dest).map_err(|e| format!("renaming {temp_dest} to {dest}: {e}"))?;
     Ok(())
+}
+
+fn cleanup_failed_export(temp_path: &str, primary_error: String) -> String {
+    match std::fs::remove_file(temp_path) {
+        Ok(()) => primary_error,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => primary_error,
+        Err(error) => format!("{primary_error}; removing temporary export {temp_path}: {error}"),
+    }
 }
 
 fn temporary_export_file_path(dest: &str) -> Result<String, String> {

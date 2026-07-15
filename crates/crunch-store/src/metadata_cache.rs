@@ -134,7 +134,34 @@ pub const NEGATIVE_MISS_TTL_SECS: u64 = 300; // 5 minutes
 /// Maximum number of metadata cache entries allowed.
 pub const MAX_METADATA_CACHE_ENTRIES: usize = 10_000;
 
-/// Build a [`MetadataCacheKey`] from its required dimensions.
+/// Typed dimensions for an advisory metadata-cache key.
+#[derive(Debug, Clone, Copy)]
+pub struct MetadataCacheKeyInput<'a> {
+    pub cache_identity: &'a str,
+    pub trust_policy_digest: &'a str,
+    pub store_prefix: &'a str,
+    pub output_digest: &'a str,
+    pub metadata_class: MetadataClass,
+}
+
+/// Build a [`MetadataCacheKey`] from typed dimensions.
+pub fn metadata_cache_key(input: MetadataCacheKeyInput<'_>) -> MetadataCacheKey {
+    MetadataCacheKey {
+        cache_identity: input.cache_identity.to_string(),
+        trust_policy_digest: input.trust_policy_digest.to_string(),
+        store_prefix: input.store_prefix.to_string(),
+        output_digest: input.output_digest.to_string(),
+        metadata_class: input.metadata_class,
+        schema_version: MetadataSchemaVersion::CURRENT,
+    }
+}
+
+// Stable workspace callers still use the positional API; keep it as a thin
+// compatibility shell while all decision logic lives in the typed core above.
+#[allow(
+    tigerstyle::ambiguous_params,
+    reason = "stable public compatibility wrapper delegates immediately to typed input"
+)]
 pub fn build_metadata_cache_key(
     cache_identity: &str,
     trust_policy_digest: &str,
@@ -142,14 +169,13 @@ pub fn build_metadata_cache_key(
     output_digest: &str,
     metadata_class: MetadataClass,
 ) -> MetadataCacheKey {
-    MetadataCacheKey {
-        cache_identity: cache_identity.to_string(),
-        trust_policy_digest: trust_policy_digest.to_string(),
-        store_prefix: store_prefix.to_string(),
-        output_digest: output_digest.to_string(),
+    metadata_cache_key(MetadataCacheKeyInput {
+        cache_identity,
+        trust_policy_digest,
+        store_prefix,
+        output_digest,
         metadata_class,
-        schema_version: MetadataSchemaVersion::CURRENT,
-    }
+    })
 }
 
 /// Check whether a cached metadata entry is still valid under current policy.
@@ -159,6 +185,8 @@ pub fn check_metadata_validity(
     current_time_secs: u64,
     refresh_policy: RefreshPolicy,
 ) -> MetadataValidity {
+    assert_eq!(current_key.schema_version, MetadataSchemaVersion::CURRENT);
+    assert!(!current_key.store_prefix.is_empty());
     if matches!(refresh_policy, RefreshPolicy::ForceRefresh) {
         return MetadataValidity::ExplicitRefresh;
     }
@@ -193,11 +221,11 @@ pub fn metadata_ttl_for_class(class: MetadataClass) -> u64 {
 
 /// Create a fresh [`MetadataCacheEntry`] at the given time.
 pub fn new_metadata_entry(key: MetadataCacheKey, now_secs: u64, detail: String) -> MetadataCacheEntry {
-    let ttl = metadata_ttl_for_class(key.metadata_class);
+    let ttl_secs = metadata_ttl_for_class(key.metadata_class);
     MetadataCacheEntry {
         key,
         created_at_secs: now_secs,
-        expires_at_secs: now_secs.saturating_add(ttl),
+        expires_at_secs: now_secs.saturating_add(ttl_secs),
         detail,
     }
 }
@@ -329,15 +357,15 @@ impl AdvisoryMetadataCache {
     }
 
     /// Remove all expired entries and return the count removed.
-    pub fn evict_expired(&mut self, now_secs: u64) -> usize {
-        let len_before = self.entries.len();
+    pub fn evict_expired(&mut self, now_secs: u64) -> u64 {
+        let entry_count_before = self.entries.len();
         self.entries.retain(|e| e.expires_at_secs > now_secs);
-        len_before - self.entries.len()
+        fixed_entry_count(entry_count_before.saturating_sub(self.entries.len()))
     }
 
     /// Total number of entries (including expired, if not yet evicted).
-    pub fn len(&self) -> usize {
-        self.entries.len()
+    pub fn len(&self) -> u64 {
+        fixed_entry_count(self.entries.len())
     }
 
     /// Whether the cache is empty.
@@ -352,6 +380,16 @@ impl AdvisoryMetadataCache {
 
     fn file_path(state_dir: &Path) -> PathBuf {
         state_dir.join(METADATA_CACHE_FILENAME)
+    }
+}
+
+fn fixed_entry_count(entry_count: usize) -> u64 {
+    match u64::try_from(entry_count) {
+        Ok(entry_count) => entry_count,
+        Err(error) => {
+            tracing::error!(entry_count, error = %error, "metadata cache entry count does not fit u64");
+            std::process::abort();
+        }
     }
 }
 

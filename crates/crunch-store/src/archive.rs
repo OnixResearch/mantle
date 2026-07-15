@@ -43,6 +43,8 @@ const ARCHIVE_MAGIC: &[u8] = b"mantle-store-archive-v1\n";
 const FRAME_LEN_BYTES: usize = 4;
 const TEMP_ARCHIVE_RENDER_DIR: &str = "archive-render-tmp";
 const HASH_HEX_BYTES: usize = 64;
+const SHA256_DIGEST_BYTES: usize = 32;
+const STORE_PATH_DIGEST_BYTES: usize = 20;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchiveExportOptions {
@@ -161,27 +163,29 @@ pub struct ArchiveImportDecision {
     pub reason: &'static str,
 }
 
-pub fn plan_archive_import_action(
-    record: &ArchiveListedPath,
-    local_present: bool,
-    store_prefix_matches: bool,
-    signatures_trusted: bool,
-) -> ArchiveImportDecision {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArchiveImportFacts {
+    pub is_local_present: bool,
+    pub is_store_prefix_matching: bool,
+    pub are_signatures_trusted: bool,
+}
+
+pub fn plan_archive_import_action(record: &ArchiveListedPath, facts: ArchiveImportFacts) -> ArchiveImportDecision {
     assert!(!record.store_path.is_empty(), "archive import record path must be present");
     assert_eq!(record.nar_sha256_hex.len(), HASH_HEX_BYTES, "nar sha256 hex must be canonical length");
-    if !store_prefix_matches {
+    if !facts.is_store_prefix_matching {
         return ArchiveImportDecision {
             action: ArchiveImportAction::Reject,
             reason: "store-prefix-mismatch",
         };
     }
-    if !signatures_trusted {
+    if !facts.are_signatures_trusted {
         return ArchiveImportDecision {
             action: ArchiveImportAction::Reject,
             reason: "untrusted-signature",
         };
     }
-    if local_present {
+    if facts.is_local_present {
         return ArchiveImportDecision {
             action: ArchiveImportAction::SkipExisting,
             reason: "already-present",
@@ -200,6 +204,7 @@ pub async fn export_store_archive<W: AsyncWrite + Unpin + Send>(
     options: &ArchiveExportOptions,
 ) -> Result<ArchiveExportReport, Error> {
     assert!(roots.len() <= MAX_ARCHIVE_RECORDS, "archive root count exceeds limit");
+    assert!(!handle.store_dir().is_empty(), "archive store prefix must not be empty");
     if roots.is_empty() {
         return Err(Error::Export("archive export requires at least one root PathInfo".to_string()));
     }
@@ -224,7 +229,7 @@ pub async fn export_store_archive<W: AsyncWrite + Unpin + Send>(
     )
     .await?;
 
-    let mut report = ArchiveExportReport {
+    let mut archive_state = ArchiveExportReport {
         exported_count: 0,
         total_payload_bytes: 0,
         paths: Vec::with_capacity(planned.len()),
@@ -243,36 +248,39 @@ pub async fn export_store_archive<W: AsyncWrite + Unpin + Send>(
         )
         .await?;
         copy_payload_file(writer, &rendered.path).await?;
-        let _ = tokio::fs::remove_file(&rendered.path).await;
+        remove_rendered_payload(&rendered.path).await;
 
-        report.exported_count = report.exported_count.saturating_add(1);
-        report.total_payload_bytes = report.total_payload_bytes.saturating_add(rendered.payload_len);
-        report.paths.push(summary_for_pathinfo(path_info));
+        archive_state.exported_count = archive_state.exported_count.saturating_add(1);
+        archive_state.total_payload_bytes = archive_state.total_payload_bytes.saturating_add(rendered.payload_len);
+        archive_state.paths.push(summary_for_pathinfo(path_info));
     }
 
     write_frame(
         writer,
         &ArchiveFrame::End(ArchiveEndFrame {
-            record_count: report.exported_count,
-            total_payload_bytes: report.total_payload_bytes,
+            record_count: archive_state.exported_count,
+            total_payload_bytes: archive_state.total_payload_bytes,
             payload_len: 0,
         }),
     )
     .await?;
     writer.flush().await.map_err(write_archive_error("flushing archive"))?;
 
-    Ok(report)
+    Ok(archive_state)
 }
 
 pub async fn list_store_archive<R: AsyncRead + Unpin>(reader: &mut R) -> Result<ArchiveListReport, Error> {
     read_magic(reader).await?;
     let header = read_header(reader).await?;
-    let mut report = ArchiveListReport {
+    let planned_path_count = archive_record_capacity(header.record_count)?;
+    assert!(header.store_prefix.starts_with('/'));
+    assert!(planned_path_count <= MAX_ARCHIVE_RECORDS);
+    let mut list_result = ArchiveListReport {
         store_prefix: header.store_prefix,
         record_count: header.record_count,
         total_payload_bytes: 0,
         compatibility: header.compatibility,
-        paths: Vec::with_capacity(header.record_count as usize),
+        paths: Vec::with_capacity(planned_path_count),
     };
 
     let mut seen = BTreeSet::new();
@@ -285,18 +293,19 @@ pub async fn list_store_archive<R: AsyncRead + Unpin>(reader: &mut R) -> Result<
                     return Err(Error::Store(format!("archive contains duplicate path record {}", listed.store_path)));
                 }
                 drain_payload(reader, path_frame.payload_len).await?;
-                report.total_payload_bytes = report.total_payload_bytes.saturating_add(path_frame.payload_len);
-                report.paths.push(listed);
+                list_result.total_payload_bytes =
+                    list_result.total_payload_bytes.saturating_add(path_frame.payload_len);
+                list_result.paths.push(listed);
             }
             ArchiveFrame::End(end) => {
-                validate_end_frame(&report, &end)?;
-                return Ok(report);
+                validate_end_frame(&list_result, &end)?;
+                return Ok(list_result);
             }
             ArchiveFrame::Header(_) => {
                 return Err(Error::Store("archive header frame repeated after first frame".to_string()));
             }
         }
-        if record_index + 1 >= MAX_ARCHIVE_RECORDS {
+        if record_index == MAX_ARCHIVE_RECORDS.saturating_sub(1) {
             return Err(Error::Store(format!("archive record count exceeded {MAX_ARCHIVE_RECORDS}")));
         }
     }
@@ -309,15 +318,18 @@ pub async fn import_store_archive<R: AsyncRead + Unpin + Send>(
     reader: &mut R,
     options: &ArchiveImportOptions,
 ) -> Result<ArchiveImportReport, Error> {
+    assert!(!handle.store_dir().is_empty());
+    assert!(handle.store_dir().starts_with('/'));
     read_magic(reader).await?;
     let header = read_header(reader).await?;
     validate_header_store_prefix(&header, handle.store_dir())?;
 
-    let mut report = ArchiveImportReport {
+    let planned_path_count = archive_record_capacity(header.record_count)?;
+    let mut archive_state = ArchiveImportReport {
         imported_count: 0,
         skipped_already_present_count: 0,
         total_payload_bytes: 0,
-        paths: Vec::with_capacity(header.record_count as usize),
+        paths: Vec::with_capacity(planned_path_count),
     };
     let mut seen = BTreeSet::new();
 
@@ -329,17 +341,22 @@ pub async fn import_store_archive<R: AsyncRead + Unpin + Send>(
                 if !seen.insert(listed.store_path.clone()) {
                     return Err(Error::Store(format!("archive contains duplicate path record {}", listed.store_path)));
                 }
-                import_or_skip_path(handle, reader, path_frame, listed, options, &mut report).await?;
+                let mut context = ArchiveImportContext {
+                    handle,
+                    options,
+                    result: &mut archive_state,
+                };
+                import_or_skip_path(reader, ArchiveImportRecord { path_frame, listed }, &mut context).await?;
             }
             ArchiveFrame::End(end) => {
-                validate_import_end(&report, &end, header.record_count)?;
-                return Ok(report);
+                validate_import_end(&archive_state, &end, header.record_count)?;
+                return Ok(archive_state);
             }
             ArchiveFrame::Header(_) => {
                 return Err(Error::Store("archive header frame repeated after first frame".to_string()));
             }
         }
-        if record_index + 1 >= MAX_ARCHIVE_RECORDS {
+        if record_index == MAX_ARCHIVE_RECORDS.saturating_sub(1) {
             return Err(Error::Store(format!("archive record count exceeded {MAX_ARCHIVE_RECORDS}")));
         }
     }
@@ -352,12 +369,13 @@ async fn plan_export_closure(
     roots: &[PathInfo],
     options: &ArchiveExportOptions,
 ) -> Result<Vec<PathInfo>, Error> {
+    assert!(!roots.is_empty());
+    assert!(roots.len() <= MAX_ARCHIVE_RECORDS);
     let mut selected = BTreeMap::<String, PathInfo>::new();
     let mut queue = VecDeque::<StorePath<String>>::new();
     for root in roots {
         validate_export_candidate(root, options, handle).await?;
-        queue.push_back(root.store_path.clone());
-        selected.insert(root.store_path.to_string(), root.clone());
+        insert_export_candidate(&mut selected, &mut queue, root.clone())?;
     }
 
     while let Some(next) = queue.pop_front() {
@@ -367,19 +385,31 @@ async fn plan_export_closure(
             .cloned()
             .ok_or_else(|| Error::Export(format!("internal archive closure miss for {key}")))?;
         for reference in &path_info.references {
-            let reference_key = reference.to_string();
-            if selected.contains_key(&reference_key) {
+            if selected.contains_key(&reference.to_string()) {
                 continue;
             }
             let referenced = load_pathinfo(handle.pathinfo_service().as_ref(), reference).await?;
             validate_export_candidate(&referenced, options, handle).await?;
-            queue.push_back(reference.clone());
-            selected.insert(reference_key, referenced);
+            insert_export_candidate(&mut selected, &mut queue, referenced)?;
         }
     }
 
     assert!(selected.len() <= MAX_ARCHIVE_RECORDS, "archive closure size exceeds limit");
     Ok(selected.into_values().collect())
+}
+
+fn insert_export_candidate(
+    selected: &mut BTreeMap<String, PathInfo>,
+    queue: &mut VecDeque<StorePath<String>>,
+    path_info: PathInfo,
+) -> Result<(), Error> {
+    if selected.len() >= MAX_ARCHIVE_RECORDS {
+        return Err(Error::Export(format!("archive closure exceeded {MAX_ARCHIVE_RECORDS} records")));
+    }
+    let store_path = path_info.store_path.clone();
+    selected.insert(store_path.to_string(), path_info);
+    queue.push_back(store_path);
+    Ok(())
 }
 
 async fn validate_export_candidate(
@@ -401,6 +431,8 @@ async fn validate_export_candidate(
 }
 
 async fn load_pathinfo(pathinfo: &dyn PathInfoService, store_path: &StorePath<String>) -> Result<PathInfo, Error> {
+    assert!(!store_path.name().is_empty());
+    assert_eq!(store_path.digest().len(), STORE_PATH_DIGEST_BYTES);
     let loaded = pathinfo
         .get(*store_path.digest())
         .await
@@ -428,6 +460,8 @@ struct RenderedPayload {
 }
 
 async fn render_payload_to_temp(handle: &StoreHandle, path_info: &PathInfo) -> Result<RenderedPayload, Error> {
+    assert!(!handle.state_dir().as_os_str().is_empty());
+    assert!(!path_info.store_path.name().is_empty());
     let temp_dir = handle.state_dir().join(TEMP_ARCHIVE_RENDER_DIR);
     tokio::fs::create_dir_all(&temp_dir)
         .await
@@ -463,31 +497,62 @@ async fn copy_payload_file<W: AsyncWrite + Unpin>(writer: &mut W, payload_path: 
     Ok(())
 }
 
-async fn import_or_skip_path<R: AsyncRead + Unpin + Send>(
-    handle: &StoreHandle,
-    reader: &mut R,
+async fn remove_rendered_payload(payload_path: &std::path::Path) {
+    match tokio::fs::remove_file(payload_path).await {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            tracing::warn!(path = %payload_path.display(), error = %error, "failed to remove rendered archive payload")
+        }
+    }
+}
+
+struct ArchiveImportRecord {
     path_frame: ArchivePathFrame,
     listed: ArchiveListedPath,
-    options: &ArchiveImportOptions,
-    report: &mut ArchiveImportReport,
+}
+
+struct ArchiveImportContext<'a> {
+    handle: &'a StoreHandle,
+    options: &'a ArchiveImportOptions,
+    result: &'a mut ArchiveImportReport,
+}
+
+async fn import_or_skip_path<R: AsyncRead + Unpin + Send>(
+    reader: &mut R,
+    record: ArchiveImportRecord,
+    context: &mut ArchiveImportContext<'_>,
 ) -> Result<(), Error> {
-    let local_state = local_archive_path_state(handle, &path_frame.path_info).await?;
+    assert!(!record.listed.store_path.is_empty());
+    assert!(!context.handle.store_dir().is_empty());
+    let local_state = local_archive_path_state(context.handle, &record.path_frame.path_info).await?;
     if local_state == LocalArchivePathState::ConflictingMetadata {
-        return Err(Error::Store(format!("local PathInfo for {} conflicts with archive metadata", listed.store_path)));
+        return Err(Error::Store(format!(
+            "local PathInfo for {} conflicts with archive metadata",
+            record.listed.store_path
+        )));
     }
-    let local_present = local_state == LocalArchivePathState::Present;
-    let signatures_trusted = signatures_trusted(&path_frame.path_info, handle.store_dir(), options);
-    let decision = plan_archive_import_action(&listed, local_present, true, signatures_trusted);
+    let facts = ArchiveImportFacts {
+        is_local_present: local_state == LocalArchivePathState::Present,
+        is_store_prefix_matching: true,
+        are_signatures_trusted: signatures_trusted(
+            &record.path_frame.path_info,
+            context.handle.store_dir(),
+            context.options,
+        ),
+    };
+    let decision = plan_archive_import_action(&record.listed, facts);
     match decision.action {
         ArchiveImportAction::SkipExisting => {
-            drain_payload(reader, path_frame.payload_len).await?;
-            report.skipped_already_present_count = report.skipped_already_present_count.saturating_add(1);
+            drain_payload(reader, record.path_frame.payload_len).await?;
+            context.result.skipped_already_present_count =
+                context.result.skipped_already_present_count.saturating_add(1);
             Ok(())
         }
         ArchiveImportAction::Reject => {
-            Err(Error::Store(format!("archive record {} rejected: {}", listed.store_path, decision.reason)))
+            Err(Error::Store(format!("archive record {} rejected: {}", record.listed.store_path, decision.reason)))
         }
-        ArchiveImportAction::Import => import_missing_path(handle, reader, path_frame, listed, options, report).await,
+        ArchiveImportAction::Import => import_missing_path(reader, record, context).await,
     }
 }
 
@@ -500,6 +565,7 @@ enum LocalArchivePathState {
 
 async fn local_archive_path_state(handle: &StoreHandle, path_info: &PathInfo) -> Result<LocalArchivePathState, Error> {
     assert!(!path_info.store_path.name().is_empty(), "archive import path name must not be empty");
+    assert_eq!(path_info.store_path.digest().len(), STORE_PATH_DIGEST_BYTES);
     let local = handle
         .pathinfo_service()
         .get(*path_info.store_path.digest())
@@ -524,35 +590,41 @@ async fn local_archive_path_state(handle: &StoreHandle, path_info: &PathInfo) ->
 }
 
 async fn import_missing_path<R: AsyncRead + Unpin + Send>(
-    handle: &StoreHandle,
     reader: &mut R,
-    path_frame: ArchivePathFrame,
-    listed: ArchiveListedPath,
-    options: &ArchiveImportOptions,
-    report: &mut ArchiveImportReport,
+    record: ArchiveImportRecord,
+    context: &mut ArchiveImportContext<'_>,
 ) -> Result<(), Error> {
-    let blob_service = handle.blob_service();
-    let directory_service = handle.directory_service();
-    let mut limited_reader = Blake3AsyncReader::new(reader.take(path_frame.payload_len));
-    let (node, actual_nar_sha256, actual_nar_size) = ingest_nar_and_hash(
+    assert!(!record.listed.store_path.is_empty());
+    assert!(!context.handle.store_dir().is_empty());
+    let blob_service = context.handle.blob_service();
+    let directory_service = context.handle.directory_service();
+    let mut payload_reader = Blake3AsyncReader::new(reader.take(record.path_frame.payload_len));
+    let (node, actual_nar_sha256, actual_nar_size_bytes) = ingest_nar_and_hash(
         blob_service.clone(),
         directory_service.clone(),
-        &mut limited_reader,
-        &path_frame.path_info.ca,
+        &mut payload_reader,
+        &record.path_frame.path_info.ca,
     )
     .await
-    .map_err(|err| Error::Store(format!("ingesting archive payload for {}: {err}", listed.store_path)))?;
-    let (bytes_read, payload_blake3) = limited_reader.finish();
-    validate_imported_payload(&path_frame, &node, actual_nar_sha256, actual_nar_size, bytes_read, &payload_blake3)?;
-
-    let mut imported = path_frame.path_info.clone();
-    imported.node = node.clone();
-    handle.pathinfo_service().put(imported).await.map_err(|err| {
-        Error::PathInfoService(format!("persisting archive PathInfo for {}: {err}", listed.store_path))
+    .map_err(|err| Error::Store(format!("ingesting archive payload for {}: {err}", record.listed.store_path)))?;
+    let (bytes_read, payload_blake3) = payload_reader.finish();
+    validate_imported_payload(&record.path_frame, ImportedPayloadObservation {
+        node: &node,
+        nar_sha256: actual_nar_sha256,
+        nar_size_bytes: actual_nar_size_bytes,
+        bytes_read,
+        payload_blake3: &payload_blake3,
     })?;
 
-    if options.materialize {
-        let abs_path = path_frame.path_info.store_path.to_absolute_path_with_prefix(handle.output_dir_str());
+    let mut accepted_path_info = record.path_frame.path_info.clone();
+    accepted_path_info.node = node.clone();
+    context.handle.pathinfo_service().put(accepted_path_info).await.map_err(|err| {
+        Error::PathInfoService(format!("persisting archive PathInfo for {}: {err}", record.listed.store_path))
+    })?;
+
+    if context.options.materialize {
+        let abs_path =
+            record.path_frame.path_info.store_path.to_absolute_path_with_prefix(context.handle.output_dir_str());
         if !std::path::Path::new(&abs_path).exists() {
             export_castore_to_disk(&node, &abs_path, &blob_service, &directory_service)
                 .await
@@ -560,42 +632,50 @@ async fn import_missing_path<R: AsyncRead + Unpin + Send>(
         }
     }
 
-    report.imported_count = report.imported_count.saturating_add(1);
-    report.total_payload_bytes = report.total_payload_bytes.saturating_add(actual_nar_size);
-    report.paths.push(listed_summary(&listed));
+    context.result.imported_count = context.result.imported_count.saturating_add(1);
+    context.result.total_payload_bytes = context.result.total_payload_bytes.saturating_add(actual_nar_size_bytes);
+    context.result.paths.push(listed_summary(&record.listed));
     Ok(())
+}
+
+struct ImportedPayloadObservation<'a> {
+    node: &'a Node,
+    nar_sha256: [u8; 32],
+    nar_size_bytes: u64,
+    bytes_read: u64,
+    payload_blake3: &'a str,
 }
 
 fn validate_imported_payload(
     path_frame: &ArchivePathFrame,
-    node: &Node,
-    actual_nar_sha256: [u8; 32],
-    actual_nar_size: u64,
-    bytes_read: u64,
-    payload_blake3: &str,
+    observation: ImportedPayloadObservation<'_>,
 ) -> Result<(), Error> {
-    if bytes_read != path_frame.payload_len {
+    assert!(!path_frame.path_info.store_path.name().is_empty());
+    assert_eq!(observation.payload_blake3.len(), HASH_HEX_BYTES);
+    if observation.bytes_read != path_frame.payload_len {
         return Err(Error::Store(format!(
-            "archive payload length mismatch for {}: read {bytes_read}, expected {}",
-            path_frame.path_info.store_path, path_frame.payload_len
+            "archive payload length mismatch for {}: read {}, expected {}",
+            path_frame.path_info.store_path, observation.bytes_read, path_frame.payload_len
         )));
     }
-    if payload_blake3 != path_frame.payload_blake3 {
+    if observation.payload_blake3 != path_frame.payload_blake3 {
         return Err(Error::Store(format!("archive payload BLAKE3 mismatch for {}", path_frame.path_info.store_path)));
     }
-    if actual_nar_sha256 != path_frame.path_info.nar_sha256 {
+    if observation.nar_sha256 != path_frame.path_info.nar_sha256 {
         return Err(Error::Store(format!("archive payload SHA-256 mismatch for {}", path_frame.path_info.store_path)));
     }
-    if actual_nar_size != path_frame.path_info.nar_size {
+    if observation.nar_size_bytes != path_frame.path_info.nar_size {
         return Err(Error::Store(format!("archive payload NAR size mismatch for {}", path_frame.path_info.store_path)));
     }
-    if node != &path_frame.path_info.node {
+    if observation.node != &path_frame.path_info.node {
         return Err(Error::Store(format!("archive payload node mismatch for {}", path_frame.path_info.store_path)));
     }
     Ok(())
 }
 
 fn signatures_trusted(path_info: &PathInfo, store_dir: &str, options: &ArchiveImportOptions) -> bool {
+    assert!(!store_dir.is_empty());
+    assert!(store_dir.starts_with('/'));
     if options.trust_unsigned {
         return true;
     }
@@ -618,6 +698,8 @@ fn signatures_trusted(path_info: &PathInfo, store_dir: &str, options: &ArchiveIm
 }
 
 fn listed_path_from_frame(path_frame: &ArchivePathFrame) -> Result<ArchiveListedPath, Error> {
+    assert!(!path_frame.path_info.store_path.name().is_empty());
+    assert_eq!(path_frame.path_info.nar_sha256.len(), SHA256_DIGEST_BYTES);
     if path_frame.payload_blake3.len() != HASH_HEX_BYTES {
         return Err(Error::Store(format!(
             "archive record {} has invalid BLAKE3 digest length",
@@ -650,6 +732,9 @@ fn validate_header_store_prefix(header: &ArchiveHeaderFrame, expected_store_pref
 }
 
 fn validate_end_frame(report: &ArchiveListReport, end: &ArchiveEndFrame) -> Result<(), Error> {
+    let record_count_max = checked_store_record_count(MAX_ARCHIVE_RECORDS)?;
+    assert!(report.paths.len() <= MAX_ARCHIVE_RECORDS);
+    assert!(report.record_count <= record_count_max);
     if end.payload_len != 0 {
         return Err(Error::Store("archive end frame unexpectedly declares payload bytes".to_string()));
     }
@@ -659,7 +744,8 @@ fn validate_end_frame(report: &ArchiveListReport, end: &ArchiveEndFrame) -> Resu
             report.record_count, end.record_count
         )));
     }
-    if end.record_count != report.paths.len() as u32 {
+    let listed_record_count = checked_store_record_count(report.paths.len())?;
+    if end.record_count != listed_record_count {
         return Err(Error::Store(format!(
             "archive end record count mismatch: saw {}, end says {}",
             report.paths.len(),
@@ -745,7 +831,7 @@ fn validate_header(header: &ArchiveHeaderFrame) -> Result<(), Error> {
     if header.payload_len != 0 {
         return Err(Error::Store("archive header unexpectedly declares payload bytes".to_string()));
     }
-    if header.record_count as usize > MAX_ARCHIVE_RECORDS {
+    if archive_record_capacity(header.record_count)? > MAX_ARCHIVE_RECORDS {
         return Err(Error::Store(format!("archive record count exceeds {MAX_ARCHIVE_RECORDS}")));
     }
     if !header.store_prefix.starts_with('/') {
@@ -778,12 +864,15 @@ async fn read_frame<R: AsyncRead + Unpin>(reader: &mut R) -> Result<ArchiveFrame
         .read_exact(&mut len_bytes)
         .await
         .map_err(read_archive_error("reading archive frame length"))?;
-    let len = u32::from_le_bytes(len_bytes) as usize;
+    let len = usize::try_from(u32::from_le_bytes(len_bytes))
+        .map_err(|_| Error::Store("archive metadata frame length does not fit usize".to_string()))?;
     if len == 0 || len > MAX_ARCHIVE_METADATA_BYTES {
         return Err(Error::Store(format!(
             "archive metadata frame length {len} is outside 1..={MAX_ARCHIVE_METADATA_BYTES}"
         )));
     }
+    assert!(len > 0);
+    assert!(len <= MAX_ARCHIVE_METADATA_BYTES);
     let mut metadata = vec![0u8; len];
     reader
         .read_exact(&mut metadata)
@@ -793,18 +882,25 @@ async fn read_frame<R: AsyncRead + Unpin>(reader: &mut R) -> Result<ArchiveFrame
 }
 
 async fn drain_payload<R: AsyncRead + Unpin>(reader: &mut R, payload_len: u64) -> Result<(), Error> {
-    let mut remaining = payload_len;
+    let mut remaining_bytes = payload_len;
     let mut buffer = vec![0u8; ARCHIVE_IO_BUFFER_BYTES];
-    while remaining > 0 {
-        let read_limit = remaining.min(ARCHIVE_IO_BUFFER_BYTES as u64) as usize;
-        let n = reader
-            .read(&mut buffer[..read_limit])
+    let buffer_capacity_bytes = u64::try_from(ARCHIVE_IO_BUFFER_BYTES)
+        .map_err(|_| Error::Store("archive I/O buffer size does not fit u64".to_string()))?;
+    assert_eq!(buffer.len(), ARCHIVE_IO_BUFFER_BYTES);
+    assert!(buffer_capacity_bytes > 0);
+    while remaining_bytes > 0 {
+        let read_limit_bytes = usize::try_from(remaining_bytes.min(buffer_capacity_bytes))
+            .map_err(|_| Error::Store("archive payload read limit does not fit usize".to_string()))?;
+        let read_bytes = reader
+            .read(&mut buffer[..read_limit_bytes])
             .await
             .map_err(read_archive_error("draining archive payload"))?;
-        if n == 0 {
-            return Err(Error::Store(format!("archive ended while draining {remaining} payload bytes")));
+        if read_bytes == 0 {
+            return Err(Error::Store(format!("archive ended while draining {remaining_bytes} payload bytes")));
         }
-        remaining = remaining.saturating_sub(n as u64);
+        let read_bytes = u64::try_from(read_bytes)
+            .map_err(|_| Error::Store("archive payload read size does not fit u64".to_string()))?;
+        remaining_bytes = remaining_bytes.saturating_sub(read_bytes);
     }
     Ok(())
 }
@@ -815,6 +911,15 @@ fn checked_frame_len(len: usize) -> Result<u32, Error> {
 
 fn checked_record_count(count: usize) -> Result<u32, Error> {
     u32::try_from(count).map_err(|_| Error::Export(format!("archive record count does not fit in u32: {count}")))
+}
+
+fn checked_store_record_count(count: usize) -> Result<u32, Error> {
+    u32::try_from(count).map_err(|_| Error::Store(format!("archive record count does not fit in u32: {count}")))
+}
+
+fn archive_record_capacity(record_count: u32) -> Result<usize, Error> {
+    usize::try_from(record_count)
+        .map_err(|_| Error::Store(format!("archive record count does not fit usize: {record_count}")))
 }
 
 fn checked_reference_count(count: usize) -> Result<u32, Error> {
@@ -858,7 +963,8 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for HashingAsyncWriter<W> {
         let written = futures::ready!(Pin::new(&mut self.inner).poll_write(cx, buf))?;
         if written > 0 {
             self.hasher.update(&buf[..written]);
-            self.bytes_written = self.bytes_written.saturating_add(written as u64);
+            let written_bytes = u64::try_from(written).map_err(std::io::Error::other)?;
+            self.bytes_written = self.bytes_written.saturating_add(written_bytes);
         }
         Poll::Ready(Ok(written))
     }
@@ -900,7 +1006,8 @@ impl<R: AsyncRead + Unpin> AsyncRead for Blake3AsyncReader<R> {
         if filled_after > filled_before {
             let new_bytes = &buf.filled()[filled_before..filled_after];
             self.hasher.update(new_bytes);
-            self.bytes_read = self.bytes_read.saturating_add(new_bytes.len() as u64);
+            let new_byte_count = u64::try_from(new_bytes.len()).map_err(std::io::Error::other)?;
+            self.bytes_read = self.bytes_read.saturating_add(new_byte_count);
         }
         Poll::Ready(Ok(()))
     }
@@ -1203,10 +1310,18 @@ mod tests {
             root: true,
             payload_blake3: "1".repeat(HASH_HEX_BYTES),
         };
-        let rejected = plan_archive_import_action(&record, false, true, false);
+        let rejected = plan_archive_import_action(&record, ArchiveImportFacts {
+            is_local_present: false,
+            is_store_prefix_matching: true,
+            are_signatures_trusted: false,
+        });
         assert_eq!(rejected.action, ArchiveImportAction::Reject);
         assert_eq!(rejected.reason, "untrusted-signature");
-        let skipped = plan_archive_import_action(&record, true, true, true);
+        let skipped = plan_archive_import_action(&record, ArchiveImportFacts {
+            is_local_present: true,
+            is_store_prefix_matching: true,
+            are_signatures_trusted: true,
+        });
         assert_eq!(skipped.action, ArchiveImportAction::SkipExisting);
         assert_eq!(skipped.reason, "already-present");
     }

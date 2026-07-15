@@ -119,8 +119,7 @@ pub struct ActionResultGcPolicy {
 
 pub fn action_result_runtime_policy() -> &'static ActionResultRuntimePolicy {
     ACTION_RESULT_RUNTIME_POLICY.get_or_init(|| {
-        let policy: ActionResultRuntimePolicy = serde_json::from_str(ACTION_RESULT_POLICY_JSON)
-            .expect("checked-in action-result policy must be valid JSON");
+        let policy = parse_action_result_runtime_policy();
         assert_eq!(policy.schema, ACTION_RESULT_POLICY_SCHEMA);
         assert_eq!(policy.hash_algorithm, "BLAKE3");
         assert_eq!(policy.sources.allowed_classes, [LOCAL_ACTION_RESULT_SOURCE_CLASS, HTTP_ACTION_RESULT_SOURCE_CLASS]);
@@ -147,6 +146,16 @@ pub fn action_result_runtime_policy() -> &'static ActionResultRuntimePolicy {
         assert!(!policy.gc.candidate_metadata_roots_outputs);
         policy
     })
+}
+
+fn parse_action_result_runtime_policy() -> ActionResultRuntimePolicy {
+    match serde_json::from_str(ACTION_RESULT_POLICY_JSON) {
+        Ok(policy) => policy,
+        Err(error) => {
+            tracing::error!(error = %error, "checked-in action-result policy is invalid");
+            std::process::abort();
+        }
+    }
 }
 
 const ACTION_RESULTS_DIR: &str = "action-results";
@@ -245,17 +254,17 @@ impl LocalActionResultStore {
     }
 
     fn record_path(&self, result_ref: &str) -> Result<PathBuf, String> {
-        let digest = ref_digest(result_ref, ACTION_RESULT_REF_PREFIX)?;
+        let digest = ref_digest(result_ref, ActionResultRefKind::Result)?;
         Ok(self.root.join(RECORDS_DIR).join(format!("{digest}.{RECORD_EXTENSION}")))
     }
 
     fn index_dir(&self, action_ref: &str) -> Result<PathBuf, String> {
-        let digest = ref_digest(action_ref, ACTION_REF_PREFIX)?;
+        let digest = ref_digest(action_ref, ActionResultRefKind::Action)?;
         Ok(self.root.join(INDEXES_DIR).join(digest))
     }
 
     fn marker_path(&self, action_ref: &str, result_ref: &str) -> Result<PathBuf, String> {
-        let result_digest = ref_digest(result_ref, ACTION_RESULT_REF_PREFIX)?;
+        let result_digest = ref_digest(result_ref, ActionResultRefKind::Result)?;
         Ok(self.index_dir(action_ref)?.join(format!("{result_digest}.{INDEX_MARKER_EXTENSION}")))
     }
 
@@ -317,7 +326,7 @@ impl LocalActionResultStore {
                 .map_err(|_| "action-result-local-index-marker-not-utf8".to_string())?
                 .trim()
                 .to_string();
-            ref_digest(&result_ref, ACTION_RESULT_REF_PREFIX)?;
+            ref_digest(&result_ref, ActionResultRefKind::Result)?;
             result_refs.push(result_ref);
         }
         result_refs.sort();
@@ -346,6 +355,10 @@ fn collect_record_gc_candidates(
     candidates: &mut ActionResultGcCandidates,
     visited_entries: &mut usize,
 ) -> Result<(), String> {
+    let candidate_count_before = candidates.record_paths.len();
+    let retained_count_before = retained_result_refs.len();
+    assert!(*visited_entries <= action_result_runtime_policy().gc.max_metadata_entries);
+    assert!(candidate_count_before <= *visited_entries);
     let records_dir = store.root.join(RECORDS_DIR);
     let entries = match std::fs::read_dir(&records_dir) {
         Ok(entries) => entries,
@@ -368,13 +381,16 @@ fn collect_record_gc_candidates(
             candidates.record_paths.push(path);
             continue;
         };
-        let all_outputs_live = signed.record.outputs.iter().all(|output| live_store_paths.contains(&output.store_path));
-        if all_outputs_live {
+        let is_every_output_live =
+            signed.record.outputs.iter().all(|output| live_store_paths.contains(&output.store_path));
+        if is_every_output_live {
             retained_result_refs.insert(signed.record.result_ref);
         } else {
             candidates.record_paths.push(path);
         }
     }
+    assert!(candidates.record_paths.len() >= candidate_count_before);
+    assert!(retained_result_refs.len() >= retained_count_before);
     Ok(())
 }
 
@@ -407,6 +423,9 @@ fn collect_action_index_gc_candidates(
     candidates: &mut ActionResultGcCandidates,
     visited_entries: &mut usize,
 ) -> Result<(), String> {
+    let candidate_count_before = candidates.index_marker_paths.len();
+    assert!(!action_dir.as_os_str().is_empty());
+    assert!(*visited_entries <= action_result_runtime_policy().gc.max_metadata_entries);
     let markers = std::fs::read_dir(action_dir)
         .map_err(|error| format!("action-result-gc-action-index:{}:{error}", action_dir.display()))?;
     for marker in markers {
@@ -424,6 +443,8 @@ fn collect_action_index_gc_candidates(
             candidates.index_marker_paths.push(path);
         }
     }
+    assert!(candidates.index_marker_paths.len() >= candidate_count_before);
+    assert!(*visited_entries <= action_result_runtime_policy().gc.max_metadata_entries);
     Ok(())
 }
 
@@ -498,7 +519,7 @@ impl HttpActionResultStore {
     }
 
     fn index_url(&self, action_ref: &str) -> Result<Url, String> {
-        let digest = ref_digest(action_ref, ACTION_REF_PREFIX)?;
+        let digest = ref_digest(action_ref, ActionResultRefKind::Action)?;
         self.base_url
             .join(&format!(
                 "{ACTION_RESULTS_DIR}/{ACTION_RESULT_STORE_LAYOUT_VERSION}/{INDEXES_DIR}/{digest}.{HTTP_INDEX_FILE_EXTENSION}"
@@ -507,7 +528,7 @@ impl HttpActionResultStore {
     }
 
     fn record_url(&self, result_ref: &str) -> Result<Url, String> {
-        let digest = ref_digest(result_ref, ACTION_RESULT_REF_PREFIX)?;
+        let digest = ref_digest(result_ref, ActionResultRefKind::Result)?;
         self.base_url
             .join(&format!(
                 "{ACTION_RESULTS_DIR}/{ACTION_RESULT_STORE_LAYOUT_VERSION}/{RECORDS_DIR}/{digest}.{RECORD_EXTENSION}"
@@ -694,11 +715,11 @@ impl ActionResultStoreSet {
         if !self.publish_local_enabled {
             return Err("action-result-local-publication-policy-disabled".to_string());
         }
-        let mut reports = Vec::with_capacity(self.local.len());
+        let mut publication_results = Vec::with_capacity(self.local.len());
         for store in &self.local {
-            reports.push(store.publish(record).await?);
+            publication_results.push(store.publish(record).await?);
         }
-        Ok(reports)
+        Ok(publication_results)
     }
 
     pub async fn publish_remote(
@@ -711,94 +732,113 @@ impl ActionResultStoreSet {
         if self.offline {
             return Err("action-result-offline-remote-publication-rejected".to_string());
         }
-        let mut reports = Vec::with_capacity(self.remote.len());
+        let mut publication_results = Vec::with_capacity(self.remote.len());
         for store in &self.remote {
-            reports.push(store.publish(record).await?);
+            publication_results.push(store.publish(record).await?);
         }
-        Ok(reports)
+        Ok(publication_results)
     }
 
     pub async fn discover(&self, action_ref: &str) -> ActionResultDiscoveryReport {
-        let mut report = ActionResultDiscoveryReport {
+        let mut discovery_result = ActionResultDiscoveryReport {
             lookups: Vec::new(),
             diagnostics: Vec::new(),
             remote_sources_opened: 0,
         };
-        let mut attempted_sources = 0usize;
+        let discovery_constraints = DiscoveryLimits {
+            source_count_max: self.max_sources,
+            candidate_count_max: self.max_candidates,
+        };
+        let mut attempted_source_count = 0usize;
         discover_sources(
             &self.local,
-            action_ref,
-            false,
-            self.max_sources,
-            self.max_candidates,
-            &mut attempted_sources,
-            &mut report,
+            DiscoveryRequest {
+                action_ref,
+                is_remote: false,
+                limits: discovery_constraints,
+            },
+            &mut attempted_source_count,
+            &mut discovery_result,
         )
         .await;
         if self.offline {
             if !self.remote.is_empty() {
-                report.diagnostics.push("action-result-offline-remote-sources-skipped".to_string());
+                discovery_result.diagnostics.push("action-result-offline-remote-sources-skipped".to_string());
             }
-            return report;
+            return discovery_result;
         }
         discover_sources(
             &self.remote,
-            action_ref,
-            true,
-            self.max_sources,
-            self.max_candidates,
-            &mut attempted_sources,
-            &mut report,
+            DiscoveryRequest {
+                action_ref,
+                is_remote: true,
+                limits: discovery_constraints,
+            },
+            &mut attempted_source_count,
+            &mut discovery_result,
         )
         .await;
-        report
+        discovery_result
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DiscoveryLimits {
+    source_count_max: usize,
+    candidate_count_max: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DiscoveryRequest<'a> {
+    action_ref: &'a str,
+    is_remote: bool,
+    limits: DiscoveryLimits,
 }
 
 async fn discover_sources(
     stores: &[Box<dyn ActionResultStore>],
-    action_ref: &str,
-    is_remote: bool,
-    max_sources: usize,
-    max_candidates: usize,
-    attempted_sources: &mut usize,
-    report: &mut ActionResultDiscoveryReport,
+    request: DiscoveryRequest<'_>,
+    attempted_source_count: &mut usize,
+    discovery_result: &mut ActionResultDiscoveryReport,
 ) {
     for store in stores {
-        if *attempted_sources >= max_sources {
-            report.diagnostics.push("action-result-source-limit-exceeded".to_string());
+        if *attempted_source_count >= request.limits.source_count_max {
+            discovery_result.diagnostics.push("action-result-source-limit-exceeded".to_string());
             return;
         }
-        *attempted_sources = attempted_sources.saturating_add(1);
-        let current_candidates = report.lookups.iter().map(|lookup| lookup.records.len()).sum::<usize>();
-        if current_candidates >= max_candidates {
-            report.diagnostics.push("action-result-total-candidate-limit-exceeded".to_string());
+        *attempted_source_count = attempted_source_count.saturating_add(1);
+        let current_candidate_count = discovery_result.lookups.iter().map(|lookup| lookup.records.len()).sum::<usize>();
+        if current_candidate_count >= request.limits.candidate_count_max {
+            discovery_result.diagnostics.push("action-result-total-candidate-limit-exceeded".to_string());
             return;
         }
-        if is_remote {
-            report.remote_sources_opened = report.remote_sources_opened.saturating_add(1);
+        if request.is_remote {
+            discovery_result.remote_sources_opened = discovery_result.remote_sources_opened.saturating_add(1);
         }
-        match store.lookup(action_ref).await {
+        match store.lookup(request.action_ref).await {
             Ok(lookup) => {
-                let remaining = max_candidates.saturating_sub(current_candidates);
-                if lookup.records.len() > remaining {
-                    report.diagnostics.push(format!(
+                let remaining_candidate_count =
+                    request.limits.candidate_count_max.saturating_sub(current_candidate_count);
+                if lookup.records.len() > remaining_candidate_count {
+                    discovery_result.diagnostics.push(format!(
                         "action-result-source-rejected:{}:action-result-total-candidate-limit-exceeded",
                         store.source_id()
                     ));
                     continue;
                 }
-                report.lookups.push(lookup);
+                discovery_result.lookups.push(lookup);
             }
-            Err(error) => {
-                report.diagnostics.push(format!("action-result-source-rejected:{}:{error}", store.source_id()))
-            }
+            Err(error) => discovery_result
+                .diagnostics
+                .push(format!("action-result-source-rejected:{}:{error}", store.source_id())),
         }
     }
 }
 
 fn validate_signed_record(signed: &SignedActionResultRecord) -> Result<(), String> {
     validate_action_result(&signed.record)?;
+    assert!(!signed.record.action_ref.is_empty());
+    assert!(!signed.record.result_ref.is_empty());
     if signed.record_signatures.is_empty() {
         return Err("action-result-record-signature-missing".to_string());
     }
@@ -837,6 +877,8 @@ fn validate_detached_signature_shape(
 }
 
 fn publish_bytes_no_clobber(path: &Path, bytes: &[u8]) -> Result<ActionResultPublicationStatus, String> {
+    assert!(!path.as_os_str().is_empty());
+    assert!(!bytes.is_empty());
     let parent = path.parent().ok_or_else(|| "action-result-publication-parent-missing".to_string())?;
     std::fs::create_dir_all(parent)
         .map_err(|error| format!("action-result-publication-create-dir:{}:{error}", parent.display()))?;
@@ -863,6 +905,8 @@ fn write_and_link_no_clobber(
     final_path: &Path,
     bytes: &[u8],
 ) -> Result<ActionResultPublicationStatus, String> {
+    assert_ne!(temp_path, final_path);
+    assert!(!bytes.is_empty());
     temp.write_all(bytes)
         .map_err(|error| format!("action-result-publication-write-temp:{}:{error}", temp_path.display()))?;
     temp.sync_all()
@@ -909,29 +953,38 @@ fn read_bounded_file(path: &Path, byte_limit: usize) -> Result<Vec<u8>, String> 
     if !metadata.file_type().is_file() {
         return Err(format!("action-result-file-not-regular:{}", path.display()));
     }
-    let size = usize::try_from(metadata.len()).map_err(|_| "action-result-file-size-overflow".to_string())?;
-    if size > byte_limit {
+    let size_bytes = usize::try_from(metadata.len()).map_err(|_| "action-result-file-size-overflow".to_string())?;
+    if size_bytes > byte_limit {
         return Err(format!("action-result-file-too-large:{}", path.display()));
     }
     std::fs::read(path).map_err(|error| format!("action-result-file-read:{}:{error}", path.display()))
 }
 
 async fn read_bounded_response(response: reqwest::Response, byte_limit: usize) -> Result<Vec<u8>, String> {
-    if let Some(content_length) = response.headers().get(CONTENT_LENGTH) {
-        let content_length = content_length
+    let response_size_limit_bytes = action_result_runtime_policy()
+        .limits
+        .max_record_bytes
+        .max(action_result_runtime_policy().limits.max_index_bytes);
+    assert!(byte_limit > 0);
+    assert!(byte_limit <= response_size_limit_bytes);
+    if let Some(content_length_header) = response.headers().get(CONTENT_LENGTH) {
+        let content_length_bytes = content_length_header
             .to_str()
             .map_err(|_| "action-result-http-content-length-invalid".to_string())?
             .parse::<u64>()
             .map_err(|_| "action-result-http-content-length-invalid".to_string())?;
-        let byte_limit_u64 =
+        let byte_limit_bytes =
             u64::try_from(byte_limit).map_err(|_| "action-result-http-byte-limit-overflow".to_string())?;
-        if content_length > byte_limit_u64 {
+        if content_length_bytes > byte_limit_bytes {
             return Err("action-result-http-response-too-large".to_string());
         }
     }
-    let mut bytes = Vec::new();
+    let mut bytes = Vec::with_capacity(byte_limit);
     let mut stream = response.bytes_stream();
-    while let Some(chunk) = stream.next().await {
+    for _chunk_index in 0..=byte_limit {
+        let Some(chunk) = stream.next().await else {
+            return Ok(bytes);
+        };
         let chunk = chunk.map_err(|error| format!("action-result-http-response-read:{error}"))?;
         let next_len = bytes
             .len()
@@ -942,7 +995,7 @@ async fn read_bounded_response(response: reqwest::Response, byte_limit: usize) -
         }
         bytes.extend_from_slice(&chunk);
     }
-    Ok(bytes)
+    Err("action-result-http-response-chunk-limit-exceeded".to_string())
 }
 
 fn validate_http_url(url: &Url) -> Result<(), String> {
@@ -970,8 +1023,23 @@ fn http_write_succeeded(status: StatusCode) -> bool {
     status.is_success()
 }
 
-fn ref_digest<'a>(value: &'a str, prefix: &str) -> Result<&'a str, String> {
-    let Some(digest) = value.strip_prefix(prefix) else {
+#[derive(Debug, Clone, Copy)]
+enum ActionResultRefKind {
+    Action,
+    Result,
+}
+
+impl ActionResultRefKind {
+    fn prefix(self) -> &'static str {
+        match self {
+            Self::Action => ACTION_REF_PREFIX,
+            Self::Result => ACTION_RESULT_REF_PREFIX,
+        }
+    }
+}
+
+fn ref_digest(value: &str, kind: ActionResultRefKind) -> Result<&str, String> {
+    let Some(digest) = value.strip_prefix(kind.prefix()) else {
         return Err("action-result-ref-prefix-invalid".to_string());
     };
     if digest.len() != crunch_action_result_core::BLAKE3_HEX_CHARS

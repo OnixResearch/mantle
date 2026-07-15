@@ -5,6 +5,7 @@
 use std::collections::HashSet;
 use std::sync::LazyLock;
 use std::sync::Mutex;
+use std::sync::MutexGuard;
 
 use snix_castore::B3Digest;
 use snix_castore::Node;
@@ -15,15 +16,15 @@ use tokio::io::AsyncReadExt;
 use crate::Error;
 
 /// Maximum recursive node visits before aborting (safety bound).
-const MAX_RECURSIVE_NODES: usize = 100_000;
+const MAX_RECURSIVE_NODES: u32 = 100_000;
 /// Maximum directory tree depth before aborting.
-const MAX_DEPTH: usize = 128;
+const MAX_DEPTH: u32 = 128;
 const BLOB_COMPLETENESS_READ_BUFFER_BYTES: usize = 65_536;
 const INITIAL_COMPLETENESS_WORKLIST_CAPACITY: usize = 128;
 
 #[derive(Debug)]
 enum CompletenessWorkItem {
-    CheckNode(Node, usize),
+    CheckNode(Node, u32),
     MarkDirectoryComplete(B3Digest),
 }
 
@@ -47,23 +48,40 @@ impl CompletenessMarkerStore {
     }
 
     pub fn contains(&self, digest: &B3Digest) -> bool {
-        self.markers.lock().unwrap().contains(digest)
+        self.lock_markers().contains(digest)
     }
 
     pub fn insert(&self, digest: B3Digest) {
-        self.markers.lock().unwrap().insert(digest);
+        self.lock_markers().insert(digest);
     }
 
     pub fn clear(&self) {
-        self.markers.lock().unwrap().clear();
+        self.lock_markers().clear();
     }
 
-    pub fn len(&self) -> usize {
-        self.markers.lock().unwrap().len()
+    pub fn len(&self) -> u64 {
+        let marker_count = self.lock_markers().len();
+        match u64::try_from(marker_count) {
+            Ok(marker_count) => marker_count,
+            Err(error) => {
+                tracing::error!(marker_count, error = %error, "completeness marker count does not fit u64");
+                std::process::abort();
+            }
+        }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.markers.lock().unwrap().is_empty()
+        self.lock_markers().is_empty()
+    }
+
+    fn lock_markers(&self) -> MutexGuard<'_, HashSet<B3Digest>> {
+        match self.markers.lock() {
+            Ok(markers) => markers,
+            Err(poisoned) => {
+                tracing::warn!("recovering poisoned completeness marker lock");
+                poisoned.into_inner()
+            }
+        }
     }
 }
 
@@ -83,7 +101,9 @@ pub async fn recursive_castore_completeness(
     // Iterative stack-based traversal to avoid recursive async fn.
     let mut stack: Vec<CompletenessWorkItem> = Vec::with_capacity(INITIAL_COMPLETENESS_WORKLIST_CAPACITY);
     stack.push(CompletenessWorkItem::CheckNode(node.clone(), 0));
-    let mut visited = 0usize;
+    let mut visited_node_count = 0u32;
+    assert_eq!(stack.len(), 1);
+    assert_eq!(visited_node_count, 0);
 
     while let Some(item) = stack.pop() {
         let (current_node, depth) = match item {
@@ -96,10 +116,10 @@ pub async fn recursive_castore_completeness(
         if depth > MAX_DEPTH {
             return Ok(false);
         }
-        if visited > MAX_RECURSIVE_NODES {
+        if visited_node_count >= MAX_RECURSIVE_NODES {
             return Ok(false);
         }
-        visited += 1;
+        visited_node_count = visited_node_count.saturating_add(1);
 
         match &current_node {
             Node::File { digest, size, .. } => {
@@ -128,9 +148,23 @@ pub async fn recursive_castore_completeness(
 
                 // Mark only after all children have been checked. Pushing the
                 // marker first makes the LIFO worklist process it last.
+                if stack.len()
+                    >= usize::try_from(MAX_RECURSIVE_NODES).map_err(|_| {
+                        Error::DirectoryService("completeness node limit does not fit usize".to_string())
+                    })?
+                {
+                    return Ok(false);
+                }
                 stack.push(CompletenessWorkItem::MarkDirectoryComplete(*digest));
                 for child in dir.nodes() {
-                    stack.push(CompletenessWorkItem::CheckNode(child.1.clone(), depth + 1));
+                    if stack.len()
+                        >= usize::try_from(MAX_RECURSIVE_NODES).map_err(|_| {
+                            Error::DirectoryService("completeness node limit does not fit usize".to_string())
+                        })?
+                    {
+                        return Ok(false);
+                    }
+                    stack.push(CompletenessWorkItem::CheckNode(child.1.clone(), depth.saturating_add(1)));
                 }
             }
         }
@@ -144,6 +178,7 @@ async fn blob_has_declared_size(
     digest: &B3Digest,
     declared_size: u64,
 ) -> Result<bool, Error> {
+    assert_eq!(digest.as_slice().len(), B3Digest::LENGTH);
     let Some(chunks) = blob_service
         .chunks(digest)
         .await
@@ -155,21 +190,22 @@ async fn blob_has_declared_size(
     if chunks.is_empty() {
         return blob_reader_has_declared_size(blob_service, digest, declared_size).await;
     }
+    assert!(!chunks.is_empty());
 
-    let mut total_size = 0u64;
+    let mut total_size_bytes = 0u64;
     for chunk in chunks {
-        total_size = total_size
+        total_size_bytes = total_size_bytes
             .checked_add(chunk.size)
             .ok_or_else(|| Error::BlobService("completeness chunk check: chunk size overflow".to_string()))?;
         let chunk_digest: B3Digest = chunk
             .digest
             .try_into()
             .map_err(|_| Error::BlobService("completeness chunk check: invalid chunk digest".to_string()))?;
-        let chunk_present = blob_service
+        let is_chunk_present = blob_service
             .has(&chunk_digest)
             .await
             .map_err(|e| Error::BlobService(format!("completeness chunk check: {e}")))?;
-        if !chunk_present {
+        if !is_chunk_present {
             return Ok(false);
         }
         if !blob_reader_has_declared_size(blob_service, &chunk_digest, chunk.size).await? {
@@ -177,7 +213,7 @@ async fn blob_has_declared_size(
         }
     }
 
-    Ok(total_size == declared_size)
+    Ok(total_size_bytes == declared_size)
 }
 
 async fn blob_reader_has_declared_size(
@@ -185,6 +221,7 @@ async fn blob_reader_has_declared_size(
     digest: &B3Digest,
     declared_size: u64,
 ) -> Result<bool, Error> {
+    assert_eq!(digest.as_slice().len(), B3Digest::LENGTH);
     let Some(mut reader) = blob_service
         .open_read(digest)
         .await
@@ -194,29 +231,30 @@ async fn blob_reader_has_declared_size(
     };
 
     let mut buffer = vec![0u8; BLOB_COMPLETENESS_READ_BUFFER_BYTES];
-    let mut total_size = 0u64;
+    assert!(!buffer.is_empty());
+    let mut total_size_bytes = 0u64;
     let mut hasher = blake3::Hasher::new();
-    loop {
-        let read_bytes = reader
+    for _read_index in 0..=declared_size {
+        let read_byte_count = reader
             .read(&mut buffer)
             .await
             .map_err(|e| Error::BlobService(format!("completeness blob read: {e}")))?;
-        if read_bytes == 0 {
-            break;
+        if read_byte_count == 0 {
+            let observed_digest = B3Digest::from(hasher.finalize().as_bytes());
+            return Ok(total_size_bytes == declared_size && observed_digest == *digest);
         }
-        hasher.update(&buffer[..read_bytes]);
-        let read_bytes = u64::try_from(read_bytes)
+        hasher.update(&buffer[..read_byte_count]);
+        let read_byte_count = u64::try_from(read_byte_count)
             .map_err(|_| Error::BlobService("completeness blob read: read size overflow".to_string()))?;
-        total_size = total_size
-            .checked_add(read_bytes)
+        total_size_bytes = total_size_bytes
+            .checked_add(read_byte_count)
             .ok_or_else(|| Error::BlobService("completeness blob read: blob size overflow".to_string()))?;
-        if total_size > declared_size {
+        if total_size_bytes > declared_size {
             return Ok(false);
         }
     }
 
-    let observed_digest = B3Digest::from(hasher.finalize().as_bytes());
-    Ok(total_size == declared_size && observed_digest == *digest)
+    Ok(false)
 }
 
 #[cfg(test)]

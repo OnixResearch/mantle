@@ -63,7 +63,7 @@ pub async fn export_paths_to_cache_dir(
 
     write_nix_cache_info_if_absent(dest, handle.store_dir()).await?;
 
-    let mut report = PushReport {
+    let mut push_result = PushReport {
         pushed_count: 0,
         skipped_unsigned_count: 0,
         skipped_already_present_count: 0,
@@ -71,52 +71,69 @@ pub async fn export_paths_to_cache_dir(
         total_narinfo_bytes: 0,
         paths: Vec::with_capacity(paths.len()),
     };
+    let context = PushContext {
+        handle,
+        destination: dest,
+        nar_directory: &nar_dir,
+        options,
+        store_dir: handle.store_dir(),
+    };
 
-    for pi in paths {
-        push_single_path(handle, pi, dest, &nar_dir, options, &mut report, handle.store_dir()).await?;
+    for path_info in paths {
+        push_single_path(&context, path_info, &mut push_result).await?;
     }
 
-    Ok(report)
+    Ok(push_result)
 }
 
 const MAX_PUSH_PATHS: usize = 1_000_000;
 
+struct PushContext<'a> {
+    handle: &'a StoreHandle,
+    destination: &'a Path,
+    nar_directory: &'a Path,
+    options: &'a PushOptions,
+    store_dir: &'a str,
+}
+
 async fn push_single_path(
-    handle: &StoreHandle,
-    pi: &PathInfo,
-    dest: &Path,
-    nar_dir: &Path,
-    options: &PushOptions,
-    report: &mut PushReport,
-    store_dir: &str,
+    context: &PushContext<'_>,
+    path_info: &PathInfo,
+    result: &mut PushReport,
 ) -> Result<(), Error> {
+    assert!(!path_info.store_path.name().is_empty());
+    assert!(!context.store_dir.is_empty());
     // Skip unsigned unless trusted.
-    if pi.signatures.is_empty() && !options.trust_unsigned {
-        report.skipped_unsigned_count = report.skipped_unsigned_count.saturating_add(1);
+    if path_info.signatures.is_empty() && !context.options.trust_unsigned {
+        result.skipped_unsigned_count = result.skipped_unsigned_count.saturating_add(1);
         return Ok(());
     }
 
     // Idempotent: skip if narinfo already present.
-    let narinfo_filename = narinfo_filename_for(&pi.store_path);
-    let narinfo_path = dest.join(&narinfo_filename);
+    let narinfo_filename = narinfo_filename_for(&path_info.store_path);
+    let narinfo_path = context.destination.join(&narinfo_filename);
     if narinfo_path.exists() {
-        report.skipped_already_present_count = report.skipped_already_present_count.saturating_add(1);
+        result.skipped_already_present_count = result.skipped_already_present_count.saturating_add(1);
         return Ok(());
     }
 
     // Render NAR to a temp file in the nar directory, then rename.
-    let nar_hash_nixbase32 = nixbase32::encode(&pi.nar_sha256);
+    let nar_hash_nixbase32 = nixbase32::encode(&path_info.nar_sha256);
     let nar_filename = format!("{nar_hash_nixbase32}.nar");
-    let nar_path = nar_dir.join(&nar_filename);
+    let nar_path = context.nar_directory.join(&nar_filename);
 
     // NAR dedup: if the NAR already exists (shared content), skip rendering.
     if !nar_path.exists() {
-        render_nar_to_file(handle, pi, &nar_path).await?;
+        render_nar_to_file(context.handle, path_info, &nar_path).await?;
     }
 
     // Build narinfo text.
     let nar_url = format!("nar/{nar_filename}");
-    let narinfo_text = build_narinfo_text(pi, &nar_url, store_dir)?;
+    let narinfo_text = build_narinfo_text(NarinfoRenderInput {
+        path_info,
+        nar_url: &nar_url,
+        store_dir: context.store_dir,
+    })?;
     let narinfo_bytes = narinfo_text.as_bytes();
 
     // Write narinfo atomically via temp + rename.
@@ -128,13 +145,15 @@ async fn push_single_path(
         .await
         .map_err(|e| Error::Export(format!("renaming narinfo: {e}")))?;
 
-    report.pushed_count = report.pushed_count.saturating_add(1);
-    report.total_nar_bytes = report.total_nar_bytes.saturating_add(pi.nar_size);
-    report.total_narinfo_bytes = report.total_narinfo_bytes.saturating_add(narinfo_bytes.len() as u64);
-    report.paths.push(PushedPath {
-        store_path: pi.store_path.to_string(),
-        nar_hash_hex: data_encoding::HEXLOWER.encode(&pi.nar_sha256),
-        nar_size: pi.nar_size,
+    let narinfo_size_bytes = u64::try_from(narinfo_bytes.len())
+        .map_err(|_| Error::Export("narinfo byte length does not fit u64".to_string()))?;
+    result.pushed_count = result.pushed_count.saturating_add(1);
+    result.total_nar_bytes = result.total_nar_bytes.saturating_add(path_info.nar_size);
+    result.total_narinfo_bytes = result.total_narinfo_bytes.saturating_add(narinfo_size_bytes);
+    result.paths.push(PushedPath {
+        store_path: path_info.store_path.to_string(),
+        nar_hash_hex: data_encoding::HEXLOWER.encode(&path_info.nar_sha256),
+        nar_size: path_info.nar_size,
     });
 
     Ok(())
@@ -158,12 +177,18 @@ async fn render_nar_to_file(handle: &StoreHandle, pi: &PathInfo, nar_path: &Path
     Ok(())
 }
 
-fn build_narinfo_text(pi: &PathInfo, nar_url: &str, store_dir: &str) -> Result<String, Error> {
-    let mut narinfo = pi.to_narinfo();
-    narinfo.url = nar_url;
-    narinfo.file_hash = Some(pi.nar_sha256);
-    narinfo.file_size = Some(pi.nar_size);
-    Ok(narinfo.to_string_with_store_dir(store_dir))
+struct NarinfoRenderInput<'a> {
+    path_info: &'a PathInfo,
+    nar_url: &'a str,
+    store_dir: &'a str,
+}
+
+fn build_narinfo_text(input: NarinfoRenderInput<'_>) -> Result<String, Error> {
+    let mut narinfo = input.path_info.to_narinfo();
+    narinfo.url = input.nar_url;
+    narinfo.file_hash = Some(input.path_info.nar_sha256);
+    narinfo.file_size = Some(input.path_info.nar_size);
+    Ok(narinfo.to_string_with_store_dir(input.store_dir))
 }
 
 fn narinfo_filename_for<S: AsRef<str>>(store_path: &nix_compat::store_path::StorePath<S>) -> String {

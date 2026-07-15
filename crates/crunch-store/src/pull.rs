@@ -11,8 +11,7 @@ use nix_compat::nixbase32;
 use nix_compat::store_path::StorePath;
 use reqwest::StatusCode;
 use reqwest::redirect::Policy;
-use snix_castore::blobservice::BlobService;
-use snix_castore::directoryservice::DirectoryService;
+use snix_castore::Node;
 use snix_store::nar::ingest_nar_and_hash;
 use snix_store::path_info::PathInfo;
 use snix_store::pathinfoservice::PathInfoService;
@@ -100,7 +99,7 @@ pub async fn import_paths_from_cache_dir(
     let narinfo_files = scan_narinfo_files(source).await?;
     assert!(narinfo_files.len() <= MAX_PULL_PATHS, "pull scan exceeds limit of {MAX_PULL_PATHS}");
 
-    let mut report = PullReport {
+    let mut pull_result = PullReport {
         imported_count: 0,
         skipped_already_present_count: 0,
         skipped_untrusted_count: 0,
@@ -111,29 +110,18 @@ pub async fn import_paths_from_cache_dir(
         total_nar_bytes: 0,
         paths: Vec::with_capacity(narinfo_files.len().min(256)),
     };
-
-    let store_dir = handle.store_dir();
-    let blob_service = handle.blob_service();
-    let directory_service = handle.directory_service();
-    let pathinfo_service = handle.pathinfo_service();
+    let context = DirectoryPullContext {
+        handle,
+        source,
+        paths_filter,
+        options,
+    };
 
     for narinfo_path in &narinfo_files {
-        pull_single_narinfo(
-            narinfo_path,
-            source,
-            store_dir,
-            paths_filter,
-            options,
-            &blob_service,
-            &directory_service,
-            &pathinfo_service,
-            handle,
-            &mut report,
-        )
-        .await?;
+        pull_single_narinfo(&context, narinfo_path, &mut pull_result).await?;
     }
 
-    Ok(report)
+    Ok(pull_result)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -167,8 +155,7 @@ fn build_http_pull_client() -> Result<reqwest::Client, Error> {
 }
 
 fn validate_http_cache_url(cache_url: &Url) -> Result<(), Error> {
-    let supported_scheme = matches!(cache_url.scheme(), "http" | "https");
-    if !supported_scheme {
+    if !matches!(cache_url.scheme(), "http" | "https") {
         return Err(Error::Store(format!("HTTP pull requires http:// or https:// source, got {}", cache_url.scheme())));
     }
     if !cache_url.username().is_empty() || cache_url.password().is_some() {
@@ -314,7 +301,7 @@ pub async fn import_paths_from_http_cache(
     let normalized_cache_url = normalize_http_cache_base_url(cache_url);
     validate_remote_store_dir(&client, &normalized_cache_url, handle.store_dir()).await?;
 
-    let mut report = PullReport {
+    let mut pull_result = PullReport {
         imported_count: 0,
         skipped_already_present_count: 0,
         skipped_untrusted_count: 0,
@@ -325,100 +312,187 @@ pub async fn import_paths_from_http_cache(
         total_nar_bytes: 0,
         paths: Vec::with_capacity(paths.len().min(256)),
     };
+    let context = HttpPullContext {
+        handle,
+        client: &client,
+        cache_url: &normalized_cache_url,
+        options,
+    };
 
     for requested_path in paths {
-        pull_single_http_path(handle, &client, &normalized_cache_url, requested_path, options, &mut report).await?;
+        pull_single_http_path(&context, requested_path, &mut pull_result).await?;
     }
 
-    Ok(report)
+    Ok(pull_result)
+}
+
+struct HttpPullContext<'a> {
+    handle: &'a StoreHandle,
+    client: &'a reqwest::Client,
+    cache_url: &'a Url,
+    options: &'a PullOptions,
 }
 
 async fn pull_single_http_path(
-    handle: &StoreHandle,
-    client: &reqwest::Client,
-    cache_url: &Url,
+    context: &HttpPullContext<'_>,
     requested_path: &StorePath<String>,
-    options: &PullOptions,
-    report: &mut PullReport,
+    result: &mut PullReport,
 ) -> Result<(), Error> {
+    assert!(!requested_path.name().is_empty());
+    assert!(!context.handle.store_dir().is_empty());
     let requested_digest: [u8; 20] = *requested_path.digest();
     let requested_path_text = requested_path.to_string();
-    let pathinfo_service = handle.pathinfo_service();
-
-    if pathinfo_service
+    if context
+        .handle
+        .pathinfo_service()
         .get(requested_digest)
         .await
         .map_err(|e| Error::PathInfoService(format!("checking existing PathInfo: {e}")))?
         .is_some()
     {
-        report.skipped_already_present_count = report.skipped_already_present_count.saturating_add(1);
+        result.skipped_already_present_count = result.skipped_already_present_count.saturating_add(1);
         return Ok(());
     }
+    let Some(narinfo_text) = fetch_http_narinfo_for_path(context, requested_digest, &requested_path_text, result).await
+    else {
+        return Ok(());
+    };
+    let Some(narinfo) = parse_http_narinfo(
+        HttpNarinfoParseInput {
+            text: &narinfo_text,
+            requested_path_text: &requested_path_text,
+            store_dir: context.handle.store_dir(),
+            options: context.options,
+        },
+        result,
+    ) else {
+        return Ok(());
+    };
+    let Some(ingested) = ingest_http_nar(context, &narinfo, &requested_path_text, result).await? else {
+        return Ok(());
+    };
+    if ingested.nar_sha256 != narinfo.nar_hash {
+        result.skipped_hash_mismatch_count = result.skipped_hash_mismatch_count.saturating_add(1);
+        return Ok(());
+    }
+    let path_info = PathInfo {
+        store_path: requested_path.clone(),
+        node: ingested.node,
+        references: narinfo.references.iter().map(StorePath::to_owned).collect(),
+        nar_sha256: ingested.nar_sha256,
+        nar_size: ingested.nar_size_bytes,
+        signatures: narinfo.signatures.iter().map(|signature| signature.to_owned()).collect(),
+        deriver: narinfo.deriver.as_ref().map(StorePath::to_owned),
+        ca: narinfo.ca.clone(),
+    };
+    persist_pulled_admission(
+        context.handle,
+        PulledPathAdmission {
+            path_info,
+            transport: PullTransport::Http,
+        },
+        result,
+    )
+    .await
+}
 
-    let narinfo_text = match fetch_http_narinfo_text(client, cache_url, requested_digest).await {
-        Ok(Some(text)) => text,
+async fn fetch_http_narinfo_for_path(
+    context: &HttpPullContext<'_>,
+    requested_digest: [u8; 20],
+    requested_path_text: &str,
+    result: &mut PullReport,
+) -> Option<String> {
+    assert!(!requested_path_text.is_empty());
+    assert!(matches!(context.cache_url.scheme(), "http" | "https"));
+    match fetch_http_narinfo_text(context.client, context.cache_url, requested_digest).await {
+        Ok(Some(text)) => Some(text),
         Ok(None) => {
-            report.skipped_missing_nar_count = report.skipped_missing_nar_count.saturating_add(1);
-            return Ok(());
+            result.skipped_missing_nar_count = result.skipped_missing_nar_count.saturating_add(1);
+            None
         }
         Err(detail) => {
             tracing::warn!(requested_path = %requested_path_text, "failed to fetch HTTP narinfo: {detail}");
-            report.skipped_parse_error_count = report.skipped_parse_error_count.saturating_add(1);
-            return Ok(());
+            result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
+            None
         }
-    };
+    }
+}
 
-    let narinfo = match NarInfo::parse_with_store_dir(&narinfo_text, handle.store_dir()) {
+struct HttpNarinfoParseInput<'a> {
+    text: &'a str,
+    requested_path_text: &'a str,
+    store_dir: &'a str,
+    options: &'a PullOptions,
+}
+
+fn parse_http_narinfo<'a>(input: HttpNarinfoParseInput<'a>, result: &mut PullReport) -> Option<NarInfo<'a>> {
+    assert!(!input.requested_path_text.is_empty());
+    assert!(!input.store_dir.is_empty());
+    let narinfo = match NarInfo::parse_with_store_dir(input.text, input.store_dir) {
         Ok(narinfo) => narinfo,
-        Err(e) => {
-            if matches!(e, nix_compat::narinfo::Error::InvalidStorePath(_)) {
-                report.skipped_store_dir_mismatch_count = report.skipped_store_dir_mismatch_count.saturating_add(1);
+        Err(error) => {
+            if matches!(error, nix_compat::narinfo::Error::InvalidStorePath(_)) {
+                result.skipped_store_dir_mismatch_count = result.skipped_store_dir_mismatch_count.saturating_add(1);
             } else {
-                report.skipped_parse_error_count = report.skipped_parse_error_count.saturating_add(1);
+                result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
             }
-            tracing::warn!(requested_path = %requested_path_text, "failed to parse HTTP narinfo: {e}");
-            return Ok(());
+            tracing::warn!(requested_path = %input.requested_path_text, "failed to parse HTTP narinfo: {error}");
+            return None;
         }
     };
-
-    if narinfo.store_path.to_string() != requested_path_text {
-        tracing::warn!(requested_path = %requested_path_text, narinfo_store_path = %narinfo.store_path, "HTTP narinfo store path mismatch");
-        report.skipped_parse_error_count = report.skipped_parse_error_count.saturating_add(1);
-        return Ok(());
+    if narinfo.store_path.to_string() != input.requested_path_text {
+        tracing::warn!(requested_path = %input.requested_path_text, narinfo_store_path = %narinfo.store_path, "HTTP narinfo store path mismatch");
+        result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
+        return None;
     }
-    if !verify_narinfo_signatures(&narinfo, handle.store_dir(), options) {
-        report.skipped_untrusted_count = report.skipped_untrusted_count.saturating_add(1);
-        return Ok(());
+    if !verify_narinfo_signatures(&narinfo, input.store_dir, input.options) {
+        result.skipped_untrusted_count = result.skipped_untrusted_count.saturating_add(1);
+        return None;
     }
+    Some(narinfo)
+}
 
-    let nar_url = match resolve_relative_nar_url(cache_url, narinfo.url) {
+struct IngestedNar {
+    node: Node,
+    nar_sha256: [u8; 32],
+    nar_size_bytes: u64,
+}
+
+async fn ingest_http_nar(
+    context: &HttpPullContext<'_>,
+    narinfo: &NarInfo<'_>,
+    requested_path_text: &str,
+    result: &mut PullReport,
+) -> Result<Option<IngestedNar>, Error> {
+    assert!(!requested_path_text.is_empty());
+    assert!(matches!(context.cache_url.scheme(), "http" | "https"));
+    let nar_url = match resolve_relative_nar_url(context.cache_url, narinfo.url) {
         Ok(url) => url,
         Err(detail) => {
             tracing::warn!(requested_path = %requested_path_text, "rejecting HTTP narinfo URL: {detail}");
-            report.skipped_parse_error_count = report.skipped_parse_error_count.saturating_add(1);
-            return Ok(());
+            result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
+            return Ok(None);
         }
     };
-    let nar_response = match client.get(nar_url.clone()).send().await {
+    let nar_response = match context.client.get(nar_url.clone()).send().await {
         Ok(response) if response.status().is_success() => response,
         Ok(response) if response.status().is_redirection() => {
             tracing::warn!(requested_path = %requested_path_text, nar_url = %nar_url, "HTTP NAR redirect rejected with status {}", response.status());
-            report.skipped_parse_error_count = report.skipped_parse_error_count.saturating_add(1);
-            return Ok(());
+            result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
+            return Ok(None);
         }
         Ok(response) => {
             tracing::warn!(requested_path = %requested_path_text, nar_url = %nar_url, "HTTP NAR download failed with status {}", response.status());
-            report.skipped_missing_nar_count = report.skipped_missing_nar_count.saturating_add(1);
-            return Ok(());
+            result.skipped_missing_nar_count = result.skipped_missing_nar_count.saturating_add(1);
+            return Ok(None);
         }
-        Err(e) => {
-            tracing::warn!(requested_path = %requested_path_text, nar_url = %nar_url, "HTTP NAR request failed: {e}");
-            report.skipped_parse_error_count = report.skipped_parse_error_count.saturating_add(1);
-            return Ok(());
+        Err(error) => {
+            tracing::warn!(requested_path = %requested_path_text, nar_url = %nar_url, "HTTP NAR request failed: {error}");
+            result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
+            return Ok(None);
         }
     };
-
-    let response_stream = nar_response.bytes_stream().map_err(|e| std::io::Error::other(e.to_string()));
+    let response_stream = nar_response.bytes_stream().map_err(|error| std::io::Error::other(error.to_string()));
     let response_reader = tokio::io::BufReader::new(StreamReader::new(response_stream));
     let mut nar_reader: Box<dyn AsyncRead + Send + Unpin> = match narinfo.compression {
         None => Box::new(response_reader),
@@ -428,69 +502,102 @@ async fn pull_single_http_path(
         Some("zstd") => Box::new(async_compression::tokio::bufread::ZstdDecoder::new(response_reader)),
         Some(compression) => {
             tracing::warn!(requested_path = %requested_path_text, "unsupported HTTP NAR compression: {compression}");
-            report.skipped_parse_error_count = report.skipped_parse_error_count.saturating_add(1);
-            return Ok(());
+            result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
+            return Ok(None);
         }
     };
-
-    let blob_service = handle.blob_service();
-    let directory_service = handle.directory_service();
-    let (node, actual_nar_sha256, actual_nar_size) = match ingest_nar_and_hash(
-        blob_service.clone(),
-        directory_service.clone(),
+    let ingestion = ingest_nar_and_hash(
+        context.handle.blob_service(),
+        context.handle.directory_service(),
         &mut nar_reader,
         &narinfo.ca,
     )
-    .await
-    {
-        Ok(result) => result,
-        Err(e) => {
-            tracing::warn!(requested_path = %requested_path_text, nar_url = %nar_url, "HTTP NAR ingestion failed: {e}");
-            report.skipped_hash_mismatch_count = report.skipped_hash_mismatch_count.saturating_add(1);
-            return Ok(());
+    .await;
+    match ingestion {
+        Ok((node, nar_sha256, nar_size_bytes)) => Ok(Some(IngestedNar {
+            node,
+            nar_sha256,
+            nar_size_bytes,
+        })),
+        Err(error) => {
+            tracing::warn!(requested_path = %requested_path_text, nar_url = %nar_url, "HTTP NAR ingestion failed: {error}");
+            result.skipped_hash_mismatch_count = result.skipped_hash_mismatch_count.saturating_add(1);
+            Ok(None)
         }
-    };
+    }
+}
 
-    if actual_nar_sha256 != narinfo.nar_hash {
-        report.skipped_hash_mismatch_count = report.skipped_hash_mismatch_count.saturating_add(1);
-        return Ok(());
+#[derive(Debug, Clone, Copy)]
+enum PullTransport {
+    Directory,
+    Http,
+}
+
+impl PullTransport {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Directory => "directory",
+            Self::Http => "HTTP",
+        }
     }
 
-    let imported_path_info = PathInfo {
-        store_path: requested_path.clone(),
-        node: node.clone(),
-        references: narinfo.references.iter().map(StorePath::to_owned).collect(),
-        nar_sha256: actual_nar_sha256,
-        nar_size: actual_nar_size,
-        signatures: narinfo.signatures.iter().map(|signature| signature.to_owned()).collect(),
-        deriver: narinfo.deriver.as_ref().map(StorePath::to_owned),
-        ca: narinfo.ca.clone(),
-    };
-    pathinfo_service
-        .put(imported_path_info)
+    fn export_error(self, failure: PullExportFailure<'_>) -> Error {
+        match self {
+            Self::Directory => {
+                Error::Export(format!("exporting imported path {}: {}", failure.abs_path, failure.error))
+            }
+            Self::Http => {
+                Error::Export(format!("exporting imported HTTP path {}: {}", failure.abs_path, failure.error))
+            }
+        }
+    }
+}
+
+struct PullExportFailure<'a> {
+    abs_path: &'a str,
+    error: &'a str,
+}
+
+struct PulledPathAdmission {
+    path_info: PathInfo,
+    transport: PullTransport,
+}
+
+async fn persist_pulled_admission(
+    handle: &StoreHandle,
+    admission: PulledPathAdmission,
+    result: &mut PullReport,
+) -> Result<(), Error> {
+    assert!(!admission.path_info.store_path.name().is_empty());
+    assert_eq!(admission.path_info.store_path.digest().len(), 20);
+    let output_path = admission.path_info.store_path.clone();
+    let node = admission.path_info.node.clone();
+    handle
+        .pathinfo_service()
+        .put(admission.path_info.clone())
         .await
-        .map_err(|e| Error::PathInfoService(format!("persisting imported PathInfo: {e}")))?;
-
-    let output_dir_str = handle.output_dir_str();
-    let abs_path = requested_path.to_absolute_path_with_prefix(output_dir_str);
+        .map_err(|error| Error::PathInfoService(format!("persisting imported PathInfo: {error}")))?;
+    let abs_path = output_path.to_absolute_path_with_prefix(handle.output_dir_str());
     if !std::path::Path::new(&abs_path).exists() {
-        match export_castore_to_disk(&node, &abs_path, &blob_service, &directory_service).await {
+        match export_castore_to_disk(&node, &abs_path, &handle.blob_service(), &handle.directory_service()).await {
             Ok(()) => {}
-            Err(e) if e.contains("Read-only file system") || e.contains("Permission denied") => {
-                tracing::warn!(path = %abs_path, "could not export imported HTTP path to disk (read-only store)");
+            Err(error) if error.contains("Read-only file system") || error.contains("Permission denied") => {
+                tracing::warn!(path = %abs_path, source = admission.transport.label(), "could not export imported path to disk (read-only store)");
             }
-            Err(e) => {
-                return Err(Error::Export(format!("exporting imported HTTP path {abs_path}: {e}")));
+            Err(error) => {
+                return Err(admission.transport.export_error(PullExportFailure {
+                    abs_path: &abs_path,
+                    error: &error,
+                }));
             }
         }
     }
-
-    report.imported_count = report.imported_count.saturating_add(1);
-    report.total_nar_bytes = report.total_nar_bytes.saturating_add(actual_nar_size);
-    report.paths.push(PulledPath {
-        store_path: requested_path_text,
-        nar_hash_hex: data_encoding::HEXLOWER.encode(&actual_nar_sha256),
-        nar_size: actual_nar_size,
+    result.imported_count = result.imported_count.saturating_add(1);
+    result.total_nar_bytes = result.total_nar_bytes.saturating_add(admission.path_info.nar_size);
+    result.paths.push(PulledPath {
+        store_path: output_path.to_string(),
+        nar_hash_hex: data_encoding::HEXLOWER.encode(&admission.path_info.nar_sha256),
+        nar_size: admission.path_info.nar_size,
     });
     Ok(())
 }
@@ -515,178 +622,163 @@ async fn scan_narinfo_files(source: &Path) -> Result<Vec<std::path::PathBuf>, Er
     Ok(narinfo_files)
 }
 
-#[allow(clippy::too_many_arguments)]
+struct DirectoryPullContext<'a> {
+    handle: &'a StoreHandle,
+    source: &'a Path,
+    paths_filter: Option<&'a [String]>,
+    options: &'a PullOptions,
+}
+
 async fn pull_single_narinfo(
+    context: &DirectoryPullContext<'_>,
     narinfo_path: &Path,
-    source: &Path,
-    store_dir: &str,
-    paths_filter: Option<&[String]>,
-    options: &PullOptions,
-    blob_service: &(impl BlobService + Clone + 'static),
-    directory_service: &(impl DirectoryService + Clone),
-    pathinfo_service: &(impl PathInfoService + Clone),
-    handle: &StoreHandle,
-    report: &mut PullReport,
+    result: &mut PullReport,
 ) -> Result<(), Error> {
-    // 1. Read and parse narinfo.
+    assert!(!narinfo_path.as_os_str().is_empty());
+    assert!(!context.handle.store_dir().is_empty());
     let narinfo_text = match tokio::fs::read_to_string(narinfo_path).await {
         Ok(text) => text,
-        Err(e) => {
-            tracing::warn!(path = %narinfo_path.display(), "failed to read narinfo: {e}");
-            report.skipped_parse_error_count = report.skipped_parse_error_count.saturating_add(1);
+        Err(error) => {
+            tracing::warn!(path = %narinfo_path.display(), "failed to read narinfo: {error}");
+            result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
             return Ok(());
         }
     };
-
-    let narinfo = match NarInfo::parse_with_store_dir(&narinfo_text, store_dir) {
-        Ok(ni) => ni,
-        Err(e) => {
-            // Try to detect store-dir mismatch by attempting parse with default /nix/store.
-            // If the narinfo parses with a different prefix, it's a store-dir mismatch.
-            if store_dir != nix_compat::store_path::STORE_DIR && NarInfo::parse(&narinfo_text).is_ok() {
-                report.skipped_store_dir_mismatch_count = report.skipped_store_dir_mismatch_count.saturating_add(1);
-                return Ok(());
-            }
-            // Also try the reverse: we're /nix/store but the narinfo uses something else.
-            tracing::warn!(
-                path = %narinfo_path.display(),
-                "failed to parse narinfo: {e}"
-            );
-            // Check if it's a store dir mismatch from the error.
-            if matches!(e, nix_compat::narinfo::Error::InvalidStorePath(_)) {
-                report.skipped_store_dir_mismatch_count = report.skipped_store_dir_mismatch_count.saturating_add(1);
-            } else {
-                report.skipped_parse_error_count = report.skipped_parse_error_count.saturating_add(1);
-            }
-            return Ok(());
-        }
+    let Some(narinfo) = parse_directory_narinfo(
+        DirectoryNarinfoParseInput {
+            text: &narinfo_text,
+            path: narinfo_path,
+            store_dir: context.handle.store_dir(),
+        },
+        result,
+    ) else {
+        return Ok(());
     };
-
-    let store_path: StorePath<String> = narinfo.store_path.to_owned();
-    let store_path_str = store_path.to_string();
-
-    // 2. Apply path filter if provided.
-    if let Some(filter) = paths_filter
-        && !filter.iter().any(|sel| store_path_str.contains(sel.as_str()))
-    {
+    let Some(nar_file_path) = admitted_directory_nar_path(context, &narinfo, result).await? else {
+        return Ok(());
+    };
+    let Some(ingested) = ingest_directory_nar(context, &narinfo, &nar_file_path, result).await? else {
+        return Ok(());
+    };
+    if ingested.nar_sha256 != narinfo.nar_hash {
+        result.skipped_hash_mismatch_count = result.skipped_hash_mismatch_count.saturating_add(1);
         return Ok(());
     }
+    let path_info = PathInfo {
+        store_path: narinfo.store_path.to_owned(),
+        node: ingested.node,
+        references: narinfo.references.iter().map(StorePath::to_owned).collect(),
+        nar_sha256: ingested.nar_sha256,
+        nar_size: ingested.nar_size_bytes,
+        signatures: narinfo.signatures.iter().map(|signature| signature.to_owned()).collect(),
+        deriver: narinfo.deriver.map(|deriver| deriver.to_owned()),
+        ca: narinfo.ca.clone(),
+    };
+    persist_pulled_admission(
+        context.handle,
+        PulledPathAdmission {
+            path_info,
+            transport: PullTransport::Directory,
+        },
+        result,
+    )
+    .await
+}
 
-    // 3. Skip if already present in local PathInfo.
-    if pathinfo_service
-        .get(*store_path.digest())
+struct DirectoryNarinfoParseInput<'a> {
+    text: &'a str,
+    path: &'a Path,
+    store_dir: &'a str,
+}
+
+fn parse_directory_narinfo<'a>(input: DirectoryNarinfoParseInput<'a>, result: &mut PullReport) -> Option<NarInfo<'a>> {
+    assert!(!input.path.as_os_str().is_empty());
+    assert!(!input.store_dir.is_empty());
+    match NarInfo::parse_with_store_dir(input.text, input.store_dir) {
+        Ok(narinfo) => Some(narinfo),
+        Err(error) => {
+            if input.store_dir != nix_compat::store_path::STORE_DIR && NarInfo::parse(input.text).is_ok() {
+                result.skipped_store_dir_mismatch_count = result.skipped_store_dir_mismatch_count.saturating_add(1);
+                return None;
+            }
+            tracing::warn!(path = %input.path.display(), "failed to parse narinfo: {error}");
+            if matches!(error, nix_compat::narinfo::Error::InvalidStorePath(_)) {
+                result.skipped_store_dir_mismatch_count = result.skipped_store_dir_mismatch_count.saturating_add(1);
+            } else {
+                result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
+            }
+            None
+        }
+    }
+}
+
+async fn admitted_directory_nar_path(
+    context: &DirectoryPullContext<'_>,
+    narinfo: &NarInfo<'_>,
+    result: &mut PullReport,
+) -> Result<Option<PathBuf>, Error> {
+    let store_path_text = narinfo.store_path.to_string();
+    assert!(!store_path_text.is_empty());
+    assert!(!context.source.as_os_str().is_empty());
+    if let Some(filter) = context.paths_filter
+        && !filter.iter().any(|selector| store_path_text.contains(selector.as_str()))
+    {
+        return Ok(None);
+    }
+    if context
+        .handle
+        .pathinfo_service()
+        .get(*narinfo.store_path.digest())
         .await
-        .map_err(|e| Error::PathInfoService(format!("checking existing PathInfo: {e}")))?
+        .map_err(|error| Error::PathInfoService(format!("checking existing PathInfo: {error}")))?
         .is_some()
     {
-        report.skipped_already_present_count = report.skipped_already_present_count.saturating_add(1);
-        return Ok(());
+        result.skipped_already_present_count = result.skipped_already_present_count.saturating_add(1);
+        return Ok(None);
     }
-
-    // 4. Verify signatures.
-    if !options.trust_unsigned {
-        let fp = narinfo.fingerprint_with_store_dir(store_dir);
-        let has_trusted_sig = narinfo
-            .signatures
-            .iter()
-            .any(|sig| options.trusted_public_keys.iter().any(|key| key.verify(&fp, sig)));
-        if !has_trusted_sig {
-            report.skipped_untrusted_count = report.skipped_untrusted_count.saturating_add(1);
-            return Ok(());
-        }
+    if !verify_narinfo_signatures(narinfo, context.handle.store_dir(), context.options) {
+        result.skipped_untrusted_count = result.skipped_untrusted_count.saturating_add(1);
+        return Ok(None);
     }
-
-    // 5. Resolve NAR file path from URL field.
-    let nar_file_path = source.join(narinfo.url);
+    let nar_file_path = context.source.join(narinfo.url);
     if !nar_file_path.exists() {
-        report.skipped_missing_nar_count = report.skipped_missing_nar_count.saturating_add(1);
-        return Ok(());
+        result.skipped_missing_nar_count = result.skipped_missing_nar_count.saturating_add(1);
+        return Ok(None);
     }
+    Ok(Some(nar_file_path))
+}
 
-    // 6. Ingest the NAR.
-    let nar_file = tokio::fs::File::open(&nar_file_path)
+async fn ingest_directory_nar(
+    context: &DirectoryPullContext<'_>,
+    narinfo: &NarInfo<'_>,
+    nar_file_path: &Path,
+    result: &mut PullReport,
+) -> Result<Option<IngestedNar>, Error> {
+    assert!(!nar_file_path.as_os_str().is_empty());
+    assert!(!narinfo.store_path.name().is_empty());
+    let nar_file = tokio::fs::File::open(nar_file_path)
         .await
-        .map_err(|e| Error::Store(format!("opening NAR {}: {e}", nar_file_path.display())))?;
+        .map_err(|error| Error::Store(format!("opening NAR {}: {error}", nar_file_path.display())))?;
     let mut nar_reader = tokio::io::BufReader::new(nar_file);
-
-    let (node, actual_nar_sha256, actual_nar_size) = match ingest_nar_and_hash(
-        blob_service.clone(),
-        directory_service.clone(),
+    let ingestion = ingest_nar_and_hash(
+        context.handle.blob_service(),
+        context.handle.directory_service(),
         &mut nar_reader,
         &narinfo.ca,
     )
-    .await
-    {
-        Ok(result) => result,
-        Err(snix_store::nar::NarIngestionError::HashMismatch { .. }) => {
-            report.skipped_hash_mismatch_count = report.skipped_hash_mismatch_count.saturating_add(1);
-            return Ok(());
-        }
-        Err(e) => {
-            tracing::warn!(
-                path = %nar_file_path.display(),
-                "NAR ingestion failed (corrupt data?): {e}"
-            );
-            report.skipped_hash_mismatch_count = report.skipped_hash_mismatch_count.saturating_add(1);
-            return Ok(());
-        }
-    };
-
-    // 7. Verify NAR hash against narinfo NarHash.
-    if actual_nar_sha256 != narinfo.nar_hash {
-        report.skipped_hash_mismatch_count = report.skipped_hash_mismatch_count.saturating_add(1);
-        return Ok(());
-    }
-
-    // 8. Construct PathInfo from narinfo fields.
-    let references: Vec<StorePath<String>> = narinfo.references.iter().map(|r| r.to_owned()).collect();
-    let signatures: Vec<nix_compat::narinfo::Signature<String>> =
-        narinfo.signatures.iter().map(|s| s.to_owned()).collect();
-
-    let pi = PathInfo {
-        store_path: store_path.clone(),
-        node: node.clone(),
-        references,
-        nar_sha256: actual_nar_sha256,
-        nar_size: actual_nar_size,
-        signatures,
-        deriver: narinfo.deriver.map(|d| d.to_owned()),
-        ca: narinfo.ca.clone(),
-    };
-
-    // 9. Persist PathInfo.
-    pathinfo_service
-        .put(pi)
-        .await
-        .map_err(|e| Error::PathInfoService(format!("persisting imported PathInfo: {e}")))?;
-
-    // 10. Export castore node to disk.
-    let output_dir_str = handle.output_dir_str();
-    let abs_path = store_path.to_absolute_path_with_prefix(output_dir_str);
-    if !std::path::Path::new(&abs_path).exists() {
-        match export_castore_to_disk(&node, &abs_path, blob_service, directory_service).await {
-            Ok(()) => {}
-            Err(e) if e.contains("Read-only file system") || e.contains("Permission denied") => {
-                tracing::warn!(
-                    path = %abs_path,
-                    "could not export imported path to disk (read-only store)"
-                );
-            }
-            Err(e) => {
-                return Err(Error::Export(format!("exporting imported path {abs_path}: {e}")));
-            }
+    .await;
+    match ingestion {
+        Ok((node, nar_sha256, nar_size_bytes)) => Ok(Some(IngestedNar {
+            node,
+            nar_sha256,
+            nar_size_bytes,
+        })),
+        Err(error) => {
+            tracing::warn!(path = %nar_file_path.display(), "NAR ingestion failed (corrupt data?): {error}");
+            result.skipped_hash_mismatch_count = result.skipped_hash_mismatch_count.saturating_add(1);
+            Ok(None)
         }
     }
-
-    report.imported_count = report.imported_count.saturating_add(1);
-    report.total_nar_bytes = report.total_nar_bytes.saturating_add(actual_nar_size);
-    report.paths.push(PulledPath {
-        store_path: store_path_str,
-        nar_hash_hex: data_encoding::HEXLOWER.encode(&actual_nar_sha256),
-        nar_size: actual_nar_size,
-    });
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -714,7 +806,9 @@ mod tests {
     use futures::stream::BoxStream;
     use nix_compat::nixbase32;
     use snix_castore::Node;
+    use snix_castore::blobservice::BlobService;
     use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::directoryservice::DirectoryService;
     use snix_castore::directoryservice::RedbDirectoryService;
     use snix_castore::directoryservice::RedbDirectoryServiceConfig;
     use snix_store::pathinfoservice::LruPathInfoService;

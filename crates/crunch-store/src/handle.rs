@@ -64,10 +64,11 @@ use crate::completeness::recursive_castore_completeness;
 use crate::export::export_castore_to_disk;
 use crate::gc;
 use crate::metadata_cache::AdvisoryMetadataCache;
+use crate::metadata_cache::MetadataCacheKeyInput;
 use crate::metadata_cache::MetadataClass;
 use crate::metadata_cache::RefreshPolicy;
-use crate::metadata_cache::build_metadata_cache_key;
 use crate::metadata_cache::check_metadata_validity;
+use crate::metadata_cache::metadata_cache_key;
 use crate::metadata_cache::new_metadata_entry;
 use crate::roots;
 
@@ -372,22 +373,38 @@ pub struct ActionResultOutputProbe {
     pub reused_nar_bytes: u64,
 }
 
-fn account_action_result_nar_bytes(
+#[derive(Debug, Clone, Copy)]
+struct NarByteAccounting {
     transferred_nar_bytes: u64,
     reused_nar_bytes: u64,
-    nar_size: u64,
-    transferred: bool,
-) -> Result<(u64, u64), String> {
-    if transferred {
-        let transferred_nar_bytes = transferred_nar_bytes
-            .checked_add(nar_size)
+    nar_size_bytes: u64,
+    is_transferred: bool,
+}
+
+fn account_action_result_nar_bytes(accounting: NarByteAccounting) -> Result<(u64, u64), String> {
+    if accounting.is_transferred {
+        let transferred_nar_bytes = accounting
+            .transferred_nar_bytes
+            .checked_add(accounting.nar_size_bytes)
             .ok_or_else(|| "action-result-transferred-nar-bytes-overflow".to_string())?;
-        return Ok((transferred_nar_bytes, reused_nar_bytes));
+        return Ok((transferred_nar_bytes, accounting.reused_nar_bytes));
     }
-    let reused_nar_bytes = reused_nar_bytes
-        .checked_add(nar_size)
+    let reused_nar_bytes = accounting
+        .reused_nar_bytes
+        .checked_add(accounting.nar_size_bytes)
         .ok_or_else(|| "action-result-reused-nar-bytes-overflow".to_string())?;
-    Ok((transferred_nar_bytes, reused_nar_bytes))
+    Ok((accounting.transferred_nar_bytes, reused_nar_bytes))
+}
+
+#[allow(
+    tigerstyle::ambient_clock,
+    reason = "imperative store shell reads wall time for advisory metadata TTLs"
+)]
+fn advisory_metadata_time_now_secs() -> Result<u64, Error> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .map_err(|error| Error::Cache(format!("system clock precedes Unix epoch: {error}")))
 }
 
 /// Grouped parameters for persisting a build output.
@@ -401,6 +418,15 @@ pub struct PersistOutputRequest<'a> {
     pub root_source: Option<GcRootSource>,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct RemoteSubstitutionRequest<'a> {
+    digest: [u8; 20],
+    output_path: &'a StorePath<String>,
+    output_name: &'a str,
+    is_root: bool,
+    root_source: Option<GcRootSource>,
+}
+
 fn remove_existing_export_path(path: &Path) -> std::io::Result<()> {
     let metadata = std::fs::symlink_metadata(path)?;
     if metadata.is_dir() {
@@ -410,8 +436,55 @@ fn remove_existing_export_path(path: &Path) -> std::io::Result<()> {
     }
 }
 
+fn combine_blob_services(
+    overlay: Arc<dyn BlobService>,
+    base_services: Vec<Arc<dyn BlobService>>,
+) -> Result<Arc<dyn BlobService>, Error> {
+    assert!(!base_services.is_empty());
+    let mut bases = base_services.into_iter();
+    let Some(mut inner) = bases.next() else {
+        return Err(Error::Store("overlay blob service requires at least one base".to_string()));
+    };
+    for base in bases {
+        inner = Arc::new(CombinedBlobService::new("base-chain".to_string(), inner, base));
+    }
+    Ok(Arc::new(CombinedBlobService::new("overlay".to_string(), overlay, inner)))
+}
+
+fn combine_directory_services(
+    overlay: Arc<dyn DirectoryService>,
+    base_services: Vec<Arc<dyn DirectoryService>>,
+) -> Result<Arc<dyn DirectoryService>, Error> {
+    assert!(!base_services.is_empty());
+    let mut bases = base_services.into_iter();
+    let Some(mut inner) = bases.next() else {
+        return Err(Error::Store("overlay directory service requires at least one base".to_string()));
+    };
+    for base in bases {
+        inner = Arc::new(DirectoryCache::new_read_only_far("base-chain".to_string(), inner, base));
+    }
+    Ok(Arc::new(DirectoryCache::new_read_only_far("overlay".to_string(), overlay, inner)))
+}
+
+fn combine_pathinfo_services(
+    overlay: Arc<dyn PathInfoService>,
+    base_services: Vec<Arc<dyn PathInfoService>>,
+) -> Result<Arc<dyn PathInfoService>, Error> {
+    assert!(!base_services.is_empty());
+    let mut bases = base_services.into_iter();
+    let Some(mut inner) = bases.next() else {
+        return Err(Error::Store("overlay PathInfo service requires at least one base".to_string()));
+    };
+    for base in bases {
+        inner = Arc::new(PathInfoCache::new_read_only_far("base-chain".to_string(), inner, base));
+    }
+    Ok(Arc::new(PathInfoCache::new_read_only_far("overlay".to_string(), overlay, inner)))
+}
+
 fn configured_action_result_stores(state_dir: &Path, remote_urls: &[String]) -> ActionResultStoreSet {
     let policy = crate::action_result::action_result_runtime_policy();
+    assert!(policy.limits.max_sources > 0);
+    assert!(policy.limits.max_candidates > 0);
     let mut stores = ActionResultStoreSet::new(remote_urls.is_empty());
     if policy.sources.local_enabled {
         stores.add_local(Box::new(LocalActionResultStore::new(state_dir)));
@@ -642,52 +715,15 @@ impl StoreHandle {
             base_pathinfo_services.push(base_pathinfo);
         }
 
-        // Chain services: near=overlay, far=base_stack
-        // For multiple bases, wrap inner layers: overlay -> baseA -> baseB
-        // Blob: CombinedBlobService already has read-through (no backfill) semantics.
-        let combined_blob = if base_blob_services.len() == 1 {
-            let base = base_blob_services.into_iter().next().unwrap();
-            Arc::new(CombinedBlobService::new("overlay".to_string(), overlay_blob, base)) as Arc<dyn BlobService>
-        } else {
-            // Chain multiple bases: inner_blob = baseA combined with baseB, etc.
-            let mut iter = base_blob_services.into_iter();
-            let mut inner: Arc<dyn BlobService> = iter.next().unwrap();
-            for base in iter {
-                inner =
-                    Arc::new(CombinedBlobService::new("base-chain".to_string(), inner, base)) as Arc<dyn BlobService>;
-            }
-            Arc::new(CombinedBlobService::new("overlay".to_string(), overlay_blob, inner)) as Arc<dyn BlobService>
-        };
+        // Chain services: near=overlay, far=base_stack.
+        // For multiple bases, wrap inner layers: overlay -> baseA -> baseB.
+        let combined_blob = combine_blob_services(overlay_blob, base_blob_services)?;
+        let combined_directory = combine_directory_services(overlay_directory, base_directory_services)?;
 
-        // Directory: Cache with read_only_far=true
-        let combined_directory: Arc<dyn DirectoryService> = if base_directory_services.len() == 1 {
-            let base = base_directory_services.into_iter().next().unwrap();
-            Arc::new(DirectoryCache::new_read_only_far("overlay".to_string(), overlay_directory, base))
-        } else {
-            let mut iter = base_directory_services.into_iter();
-            let mut inner: Arc<dyn DirectoryService> = iter.next().unwrap();
-            for base in iter {
-                inner = Arc::new(DirectoryCache::new_read_only_far("base-chain".to_string(), inner, base))
-                    as Arc<dyn DirectoryService>;
-            }
-            Arc::new(DirectoryCache::new_read_only_far("overlay".to_string(), overlay_directory, inner))
-        };
-
-        // PathInfo: Cache with read_only_far=true
+        // PathInfo writes remain routed to the overlay while reads can fall through.
         #[cfg(test)]
         let overlay_pathinfo_for_writes = overlay_pathinfo.clone();
-        let combined_pathinfo: Arc<dyn PathInfoService> = if base_pathinfo_services.len() == 1 {
-            let base = base_pathinfo_services.into_iter().next().unwrap();
-            Arc::new(PathInfoCache::new_read_only_far("overlay".to_string(), overlay_pathinfo, base))
-        } else {
-            let mut iter = base_pathinfo_services.into_iter();
-            let mut inner: Arc<dyn PathInfoService> = iter.next().unwrap();
-            for base in iter {
-                inner = Arc::new(PathInfoCache::new_read_only_far("base-chain".to_string(), inner, base))
-                    as Arc<dyn PathInfoService>;
-            }
-            Arc::new(PathInfoCache::new_read_only_far("overlay".to_string(), overlay_pathinfo, inner))
-        };
+        let combined_pathinfo = combine_pathinfo_services(overlay_pathinfo, base_pathinfo_services)?;
 
         // Remote substitution (single cache URL, same as open() but added to combined pathinfo).
         let (remote_pathinfo, remote_cache_urls, remote_trusted_public_keys) = match config.remote_cache_urls.first() {
@@ -887,12 +923,12 @@ impl StoreHandle {
             {
                 return Err("action-result-output-object-incomplete".to_string());
             }
-            (transferred_nar_bytes, reused_nar_bytes) = account_action_result_nar_bytes(
+            (transferred_nar_bytes, reused_nar_bytes) = account_action_result_nar_bytes(NarByteAccounting {
                 transferred_nar_bytes,
                 reused_nar_bytes,
-                path_info.nar_size,
-                transferred,
-            )?;
+                nar_size_bytes: path_info.nar_size,
+                is_transferred: transferred,
+            })?;
             if outputs.insert(output.name.clone(), path_info).is_some() {
                 return Err("action-result-output-name-duplicate".to_string());
             }
@@ -2163,19 +2199,17 @@ impl StoreHandle {
         root_source: Option<GcRootSource>,
     ) -> Result<Option<PathInfo>, Error> {
         assert!(!output_name.is_empty(), "output_name must not be empty");
+        let request = RemoteSubstitutionRequest {
+            digest,
+            output_path,
+            output_name,
+            is_root,
+            root_source,
+        };
 
         // Try the primary remote PathInfo service (built from the first URL).
         if let Some(primary) = &self.remote_pathinfo.clone() {
-            let result = self
-                .try_substitute_remote_from_service(
-                    primary.as_ref(),
-                    digest,
-                    output_path,
-                    output_name,
-                    is_root,
-                    root_source,
-                )
-                .await?;
+            let result = self.try_substitute_remote_from_service(primary.as_ref(), request).await?;
             if result.is_some() {
                 return Ok(result);
             }
@@ -2195,16 +2229,7 @@ impl StoreHandle {
                     );
                     continue;
                 };
-                let result = self
-                    .try_substitute_remote_fallback(
-                        fallback_svc.as_ref(),
-                        digest,
-                        output_path,
-                        output_name,
-                        is_root,
-                        root_source,
-                    )
-                    .await?;
+                let result = self.try_substitute_remote_fallback(fallback_svc.as_ref(), request).await?;
                 if result.is_some() {
                     return Ok(result);
                 }
@@ -2219,26 +2244,28 @@ impl StoreHandle {
     async fn try_substitute_remote_from_service(
         &mut self,
         remote: &dyn PathInfoService,
-        digest: [u8; 20],
-        output_path: &StorePath<String>,
-        output_name: &str,
-        is_root: bool,
-        root_source: Option<GcRootSource>,
+        request: RemoteSubstitutionRequest<'_>,
     ) -> Result<Option<PathInfo>, Error> {
-        self.probe_remote_delta_capability_if_needed(output_path, output_name).await;
+        self.probe_remote_delta_capability_if_needed(request.output_path, request.output_name).await;
 
-        let delta_cap = match self.remote_delta_capability.clone() {
+        let delta_capability = match self.remote_delta_capability.clone() {
             Some(RemoteDeltaCapability::Supported(capability)) => Some(capability),
             Some(RemoteDeltaCapability::Unsupported) | None => None,
         };
         let mut delta_fallback_reason = None;
-        if let Some(capability) = delta_cap.as_ref() {
+        if let Some(capability) = delta_capability.as_ref() {
             match self
-                .attempt_delta_candidate_negotiation(output_path, output_name, capability, is_root, root_source)
+                .attempt_delta_candidate_negotiation(
+                    request.output_path,
+                    request.output_name,
+                    capability,
+                    request.is_root,
+                    request.root_source,
+                )
                 .await
             {
                 DeltaAttemptResult::Accepted { path_info, report } => {
-                    self.record_output_substitution_report(output_path, report);
+                    self.record_output_substitution_report(request.output_path, report);
                     return Ok(Some(*path_info));
                 }
                 DeltaAttemptResult::Fallback { reason } => {
@@ -2247,16 +2274,7 @@ impl StoreHandle {
             }
         }
 
-        self.try_substitute_remote_fetch(
-            remote,
-            digest,
-            output_path,
-            output_name,
-            is_root,
-            root_source,
-            delta_fallback_reason,
-        )
-        .await
+        self.try_substitute_remote_fetch(remote, request, delta_fallback_reason).await
     }
 
     /// Attempt substitution through a remote PathInfo service without
@@ -2264,14 +2282,9 @@ impl StoreHandle {
     async fn try_substitute_remote_fallback(
         &mut self,
         remote: &dyn PathInfoService,
-        digest: [u8; 20],
-        output_path: &StorePath<String>,
-        output_name: &str,
-        is_root: bool,
-        root_source: Option<GcRootSource>,
+        request: RemoteSubstitutionRequest<'_>,
     ) -> Result<Option<PathInfo>, Error> {
-        self.try_substitute_remote_fetch(remote, digest, output_path, output_name, is_root, root_source, None)
-            .await
+        self.try_substitute_remote_fetch(remote, request, None).await
     }
 
     /// Core NAR-fetch substitution for a single remote PathInfo service.
@@ -2287,30 +2300,31 @@ impl StoreHandle {
     async fn try_substitute_remote_fetch(
         &mut self,
         remote: &dyn PathInfoService,
-        digest: [u8; 20],
-        output_path: &StorePath<String>,
-        output_name: &str,
-        is_root: bool,
-        root_source: Option<GcRootSource>,
+        request: RemoteSubstitutionRequest<'_>,
         delta_fallback_reason: Option<String>,
     ) -> Result<Option<PathInfo>, Error> {
         // Build a metadata cache key for this cache identity + output.
         // Trust-policy digest is omitted (advisory-only; final verification
         // handles trust separately).
-        let cache_url = self.remote_cache_urls.first().map(|u| u.as_str().to_string()).unwrap_or_default();
-        let output_digest_hex = digest.iter().map(|b| format!("{b:02x}")).collect::<String>();
+        let cache_url = self.remote_cache_urls.first().map(|url| url.as_str().to_string()).unwrap_or_default();
+        let output_digest_hex = request.digest.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
 
-        let meta_key = build_metadata_cache_key(
-            &cache_url,
-            "", // trust_policy_digest: advisory only
-            &self.store_dir,
-            &output_digest_hex,
-            MetadataClass::Narinfo,
-        );
-        let miss_key =
-            build_metadata_cache_key(&cache_url, "", &self.store_dir, &output_digest_hex, MetadataClass::NegativeMiss);
+        let meta_key = metadata_cache_key(MetadataCacheKeyInput {
+            cache_identity: &cache_url,
+            trust_policy_digest: "", // advisory only; final verification owns trust
+            store_prefix: &self.store_dir,
+            output_digest: &output_digest_hex,
+            metadata_class: MetadataClass::Narinfo,
+        });
+        let miss_key = metadata_cache_key(MetadataCacheKeyInput {
+            cache_identity: &cache_url,
+            trust_policy_digest: "", // advisory only; final verification owns trust
+            store_prefix: &self.store_dir,
+            output_digest: &output_digest_hex,
+            metadata_class: MetadataClass::NegativeMiss,
+        });
 
-        let now_secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+        let now_secs = advisory_metadata_time_now_secs()?;
 
         // Check negative miss cache first.
         if let Some(entry) = self.advisory_metadata_cache.get(&miss_key) {
@@ -2318,7 +2332,7 @@ impl StoreHandle {
             if validity.is_reusable() {
                 tracing::debug!(
                     cache = %cache_url,
-                    path = %output_path,
+                    path = %request.output_path,
                     "advisory metadata: negative miss (skipping remote probe)"
                 );
                 return Ok(None);
@@ -2326,24 +2340,24 @@ impl StoreHandle {
         }
 
         // Check positive narinfo cache.
-        let mut metadata_reused = false;
+        let mut is_metadata_reused = false;
         if let Some(entry) = self.advisory_metadata_cache.get(&meta_key) {
             let validity = check_metadata_validity(entry, &meta_key, now_secs, RefreshPolicy::Normal);
             if validity.is_reusable() {
-                metadata_reused = true;
+                is_metadata_reused = true;
                 tracing::debug!(
                     cache = %cache_url,
-                    path = %output_path,
+                    path = %request.output_path,
                     "advisory metadata: narinfo known (reusing cached probe)"
                 );
             }
         }
 
-        match remote.get(digest).await {
+        match remote.get(request.digest).await {
             Ok(Some(remote_pi)) => {
                 trace_info!(
-                    path = %output_path,
-                    output = %output_name,
+                    path = %request.output_path,
+                    output = %request.output_name,
                     "substituting from remote cache"
                 );
 
@@ -2351,38 +2365,41 @@ impl StoreHandle {
                     .put(remote_pi.clone())
                     .await
                     .map_err(|e| Error::Cache(format!("persisting substituted PathInfo: {e}")))?;
-                persist_artifact_attestation(&self.state_dir, &self.store_dir, &remote_pi, output_name, None).await?;
+                persist_artifact_attestation(&self.state_dir, &self.store_dir, &remote_pi, request.output_name, None)
+                    .await?;
 
                 let transferred_bytes = match self.content_bytes_for_node(&remote_pi.node).await {
                     Ok(bytes) => bytes,
                     Err(err) => {
                         tracing::warn!(
-                            path = %output_path,
-                            output = %output_name,
+                            path = %request.output_path,
+                            output = %request.output_name,
                             err = %err,
                             "could not derive full substitution content-byte count from local castore; falling back to PathInfo.nar_size"
                         );
                         remote_pi.nar_size
                     }
                 };
-                self.record_output_substitution_report(output_path, OutputSubstitutionReport {
+                self.record_output_substitution_report(request.output_path, OutputSubstitutionReport {
                     mode: OutputSubstitutionMode::Full,
                     transferred_bytes,
                     reused_bytes: 0,
                     fallback_reason: delta_fallback_reason,
-                    metadata_reused,
+                    metadata_reused: is_metadata_reused,
                 });
-                self.output_nodes.insert(output_path.clone(), remote_pi.node.clone());
+                self.output_nodes.insert(request.output_path.clone(), remote_pi.node.clone());
                 self.built_outputs
-                    .insert(output_path.to_absolute_path_with_prefix(&self.output_dir_str), remote_pi.clone());
-                self.export_output_if_needed(output_path, &remote_pi.node, is_root).await?;
-                if is_root && let Some(source) = root_source {
-                    self.register_retained_root(output_path, source).await?;
+                    .insert(request.output_path.to_absolute_path_with_prefix(&self.output_dir_str), remote_pi.clone());
+                self.export_output_if_needed(request.output_path, &remote_pi.node, request.is_root).await?;
+                if request.is_root
+                    && let Some(source) = request.root_source
+                {
+                    self.register_retained_root(request.output_path, source).await?;
                 }
 
                 // Record successful hit in advisory cache (if metadata was not
                 // already known, or to refresh the entry).
-                if !metadata_reused {
+                if !is_metadata_reused {
                     let hit_entry = new_metadata_entry(meta_key, now_secs, "substituted".to_string());
                     self.advisory_metadata_cache.put(hit_entry);
                     self.advisory_metadata_cache.save(&self.state_dir);
@@ -2399,7 +2416,7 @@ impl StoreHandle {
             }
             Err(e) => {
                 tracing::warn!(
-                    path = %output_path,
+                    path = %request.output_path,
                     err = %e,
                     "remote cache query failed, building locally"
                 );
@@ -2878,14 +2895,40 @@ mod tests {
     fn action_result_nar_byte_accounting_distinguishes_transfer_reuse_and_overflow() {
         const NAR_SIZE: u64 = 7;
 
-        assert_eq!(account_action_result_nar_bytes(0, 0, NAR_SIZE, true), Ok((NAR_SIZE, 0)));
-        assert_eq!(account_action_result_nar_bytes(0, 0, NAR_SIZE, false), Ok((0, NAR_SIZE)));
         assert_eq!(
-            account_action_result_nar_bytes(u64::MAX, 0, 1, true),
+            account_action_result_nar_bytes(NarByteAccounting {
+                transferred_nar_bytes: 0,
+                reused_nar_bytes: 0,
+                nar_size_bytes: NAR_SIZE,
+                is_transferred: true,
+            }),
+            Ok((NAR_SIZE, 0))
+        );
+        assert_eq!(
+            account_action_result_nar_bytes(NarByteAccounting {
+                transferred_nar_bytes: 0,
+                reused_nar_bytes: 0,
+                nar_size_bytes: NAR_SIZE,
+                is_transferred: false,
+            }),
+            Ok((0, NAR_SIZE))
+        );
+        assert_eq!(
+            account_action_result_nar_bytes(NarByteAccounting {
+                transferred_nar_bytes: u64::MAX,
+                reused_nar_bytes: 0,
+                nar_size_bytes: 1,
+                is_transferred: true,
+            }),
             Err("action-result-transferred-nar-bytes-overflow".to_string())
         );
         assert_eq!(
-            account_action_result_nar_bytes(0, u64::MAX, 1, false),
+            account_action_result_nar_bytes(NarByteAccounting {
+                transferred_nar_bytes: 0,
+                reused_nar_bytes: u64::MAX,
+                nar_size_bytes: 1,
+                is_transferred: false,
+            }),
             Err("action-result-reused-nar-bytes-overflow".to_string())
         );
     }
@@ -5207,13 +5250,14 @@ mod tests {
         }
 
         // The metadata cache should now have a Narinfo entry for this output.
-        let meta_key = build_metadata_cache_key(
-            "",
-            "",
-            &handle.store_dir,
-            &output_path.digest().iter().map(|b| format!("{b:02x}")).collect::<String>(),
-            MetadataClass::Narinfo,
-        );
+        let output_digest_hex = output_path.digest().iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+        let meta_key = metadata_cache_key(MetadataCacheKeyInput {
+            cache_identity: "",
+            trust_policy_digest: "",
+            store_prefix: &handle.store_dir,
+            output_digest: &output_digest_hex,
+            metadata_class: MetadataClass::Narinfo,
+        });
         let cached = handle.advisory_metadata_cache.get(&meta_key);
         assert!(cached.is_some(), "Narinfo entry should be in metadata cache after substitution");
 
@@ -5243,13 +5287,14 @@ mod tests {
         }
 
         // Metadata cache should have a NegativeMiss entry.
-        let miss_key = build_metadata_cache_key(
-            "",
-            "",
-            &handle.store_dir,
-            &output_path.digest().iter().map(|b| format!("{b:02x}")).collect::<String>(),
-            MetadataClass::NegativeMiss,
-        );
+        let output_digest_hex = output_path.digest().iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+        let miss_key = metadata_cache_key(MetadataCacheKeyInput {
+            cache_identity: "",
+            trust_policy_digest: "",
+            store_prefix: &handle.store_dir,
+            output_digest: &output_digest_hex,
+            metadata_class: MetadataClass::NegativeMiss,
+        });
         let cached = handle.advisory_metadata_cache.get(&miss_key);
         assert!(cached.is_some(), "NegativeMiss entry should exist after failed probe");
     }
