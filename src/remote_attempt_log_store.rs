@@ -94,33 +94,64 @@ struct RemoteAttemptLogPaths {
     manifest: PathBuf,
 }
 
-pub fn append_remote_attempt_log(
-    state_dir: &Path,
-    current: &RemoteAttemptLogCurrentAttemptFacts,
-    event_id: RemoteEventId,
-    cursor: u64,
-    payload: &[u8],
-    policy: RemoteAttemptLogPolicy,
+pub struct RemoteAttemptLogAppendRequest<'a> {
+    pub state_dir: &'a Path,
+    pub current: &'a RemoteAttemptLogCurrentAttemptFacts,
+    pub event_id: RemoteEventId,
+    pub cursor: u64,
+    pub payload: &'a [u8],
+    pub policy: RemoteAttemptLogPolicy,
+}
+
+type AppendRemoteAttemptLogFn = fn(
+    &Path,
+    &RemoteAttemptLogCurrentAttemptFacts,
+    RemoteEventId,
+    u64,
+    &[u8],
+    RemoteAttemptLogPolicy,
+) -> Result<RemoteAttemptLogStoreAppendResult, String>;
+
+pub const APPEND_REMOTE_ATTEMPT_LOG: AppendRemoteAttemptLogFn =
+    |state_dir, current, event_id, cursor, payload, policy| {
+        append_remote_attempt_log_request(RemoteAttemptLogAppendRequest {
+            state_dir,
+            current,
+            event_id,
+            cursor,
+            payload,
+            policy,
+        })
+    };
+pub use APPEND_REMOTE_ATTEMPT_LOG as append_remote_attempt_log;
+
+fn append_remote_attempt_log_request(
+    request: RemoteAttemptLogAppendRequest<'_>,
 ) -> Result<RemoteAttemptLogStoreAppendResult, String> {
-    policy.validate().map_err(reason)?;
-    let loaded = load_remote_attempt_log(state_dir, &current.scope, policy)?;
-    let previous_record_blake3 = previous_record_for_append(&loaded, &event_id, cursor)?;
+    request.policy.validate().map_err(reason)?;
+    assert!(!request.current.scope.job_id.as_str().is_empty(), "attempt-log job identity must not be empty");
+    assert!(
+        !request.current.scope.attempt_id.as_str().is_empty(),
+        "attempt-log attempt identity must not be empty"
+    );
+    let loaded = load_remote_attempt_log(request.state_dir, &request.current.scope, request.policy)?;
+    let previous_record_blake3 = previous_record_for_append(&loaded, &request.event_id, request.cursor)?;
     let record = seal_remote_attempt_log_record(
         RemoteAttemptLogRecordInput {
-            scope: current.scope.clone(),
-            event_id,
-            sequence: cursor,
-            cursor,
-            phase: current.phase,
+            scope: request.current.scope.clone(),
+            event_id: request.event_id,
+            sequence: request.cursor,
+            cursor: request.cursor,
+            phase: request.current.phase,
             stream: RemoteAttemptLogStream::Stdout,
             kind: RemoteAttemptLogRecordKind::Output,
-            payload: payload.to_vec(),
+            payload: request.payload.to_vec(),
             previous_record_blake3,
         },
-        policy,
+        request.policy,
     )
     .map_err(reason)?;
-    apply_append_plan(loaded, current, &record, policy)
+    apply_append_plan(loaded, request.current, &record, request.policy)
 }
 
 pub fn replay_remote_attempt_log(
@@ -174,6 +205,12 @@ fn apply_retention(
     mut durability_steps: Vec<RemoteAttemptLogDurabilityStep>,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<RemoteAttemptLogStoreAppendResult, String> {
+    assert_eq!(
+        loaded.manifest.segments.len(),
+        loaded.segments.len(),
+        "loaded attempt-log segments must match manifest references"
+    );
+    assert!(durability_steps.len() <= 2, "append durability prefix must stay bounded");
     let retention = plan_remote_attempt_log_retention(&loaded.manifest, &loaded.segments, policy).map_err(reason)?;
     if retention.disposition == RemoteAttemptLogRetentionDisposition::Unchanged {
         return Ok(RemoteAttemptLogStoreAppendResult {
@@ -202,6 +239,8 @@ fn load_remote_attempt_log(
     scope: &RemoteAttemptLogScope,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<LoadedRemoteAttemptLog, String> {
+    assert!(!scope.job_id.as_str().is_empty(), "attempt-log job identity must not be empty");
+    assert!(!scope.attempt_id.as_str().is_empty(), "attempt-log attempt identity must not be empty");
     let paths = remote_attempt_log_paths(state_dir, scope);
     if path_is_absent_no_follow(&paths.manifest, "manifest")? {
         let manifest = empty_remote_attempt_log_manifest(scope.clone(), DEFAULT_REMOTE_ATTEMPT_LOG_POLICY_NAME, policy)
@@ -291,15 +330,11 @@ fn commit_manifest_with_hook(
     ensure_durable_dir(&paths.root)?;
     let temp = write_identity_owned_temp(&paths.manifest, manifest.manifest_blake3.as_str(), &bytes, hook)?;
     if let Err(error) = hook(PublicationHookPoint::BeforePublish, &temp, &paths.manifest) {
-        remove_private_temp(&temp);
-        return Err(error);
+        return Err(error_after_temp_cleanup(&temp, error));
     }
     match fs::rename(&temp, &paths.manifest) {
         Ok(()) => sync_directory(&paths.root),
-        Err(error) => {
-            remove_private_temp(&temp);
-            Err(format!("attempt-log-manifest-commit-failed: {error}"))
-        }
+        Err(error) => Err(error_after_temp_cleanup(&temp, format!("attempt-log-manifest-commit-failed: {error}"))),
     }
 }
 
@@ -314,6 +349,8 @@ fn publish_immutable_file_with_hook(
     hook: &mut impl FnMut(PublicationHookPoint, &Path, &Path) -> Result<(), String>,
 ) -> Result<(), String> {
     validate_serialized_size(bytes, bytes_max, "object")?;
+    assert!(!path.as_os_str().is_empty(), "immutable attempt-log path must not be empty");
+    assert!(u64::try_from(bytes.len()).is_ok_and(|byte_count| byte_count <= bytes_max));
     let parent = path.parent().ok_or_else(|| "attempt-log-object-parent-missing".to_string())?;
     ensure_durable_dir(parent)?;
     let identity = path
@@ -322,13 +359,12 @@ fn publish_immutable_file_with_hook(
         .ok_or_else(|| "attempt-log-object-identity-invalid".to_string())?;
     let temp = write_identity_owned_temp(path, identity, bytes, hook)?;
     if let Err(error) = hook(PublicationHookPoint::BeforePublish, &temp, path) {
-        remove_private_temp(&temp);
-        return Err(error);
+        return Err(error_after_temp_cleanup(&temp, error));
     }
     match rename_no_replace(&temp, path) {
         Ok(()) => sync_directory(parent),
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            remove_private_temp(&temp);
+            remove_private_temp(&temp)?;
             let existing = read_bounded_bytes(path, bytes_max, "immutable-object")?;
             if existing == bytes {
                 return Ok(());
@@ -336,8 +372,7 @@ fn publish_immutable_file_with_hook(
             Err("attempt-log-immutable-object-conflict".to_string())
         }
         Err(error) => {
-            remove_private_temp(&temp);
-            Err(format!("attempt-log-immutable-object-commit-failed: {error}"))
+            Err(error_after_temp_cleanup(&temp, format!("attempt-log-immutable-object-commit-failed: {error}")))
         }
     }
 }
@@ -358,6 +393,8 @@ fn write_identity_owned_temp(
     bytes: &[u8],
     hook: &mut impl FnMut(PublicationHookPoint, &Path, &Path) -> Result<(), String>,
 ) -> Result<PathBuf, String> {
+    assert!(!identity.is_empty(), "attempt-log temp identity must not be empty");
+    assert!(!destination.as_os_str().is_empty(), "attempt-log temp destination must not be empty");
     let parent = destination.parent().ok_or_else(|| "attempt-log-temp-parent-missing".to_string())?;
     for _ in 0..IDENTITY_TEMP_CREATE_ATTEMPTS_MAX {
         let temp = identity_owned_temp_path(destination, identity)?;
@@ -370,12 +407,10 @@ fn write_identity_owned_temp(
                     .and_then(|()| file.sync_all().map_err(|error| format!("attempt-log-temp-sync-failed: {error}")));
                 drop(file);
                 if let Err(error) = write_result {
-                    remove_private_temp(&temp);
-                    return Err(error);
+                    return Err(error_after_temp_cleanup(&temp, error));
                 }
                 if let Err(error) = sync_directory(parent) {
-                    remove_private_temp(&temp);
-                    return Err(error);
+                    return Err(error_after_temp_cleanup(&temp, error));
                 }
                 return Ok(temp);
             }
@@ -387,6 +422,8 @@ fn write_identity_owned_temp(
 }
 
 fn identity_owned_temp_path(destination: &Path, identity: &str) -> Result<PathBuf, String> {
+    assert!(!destination.as_os_str().is_empty(), "attempt-log temp destination must not be empty");
+    assert!(!identity.is_empty(), "attempt-log temp identity must not be empty");
     let file_name = destination
         .file_name()
         .and_then(|value| value.to_str())
@@ -395,15 +432,15 @@ fn identity_owned_temp_path(destination: &Path, identity: &str) -> Result<PathBu
     OsRng
         .try_fill_bytes(&mut random)
         .map_err(|error| format!("attempt-log-temp-random-failed: {error}"))?;
-    let random_hex_capacity = IDENTITY_TEMP_RANDOM_BYTES
+    let random_hex_size_bytes = IDENTITY_TEMP_RANDOM_BYTES
         .checked_mul(HEX_CHARS_PER_BYTE)
         .ok_or_else(|| "attempt-log-temp-random-capacity-overflow".to_string())?;
-    let mut random_hex = String::with_capacity(random_hex_capacity);
+    let mut random_hex = String::with_capacity(random_hex_size_bytes);
     for byte in random {
         use std::fmt::Write as _;
         write!(&mut random_hex, "{byte:02x}").map_err(|_| "attempt-log-temp-random-format-failed".to_string())?;
     }
-    if random_hex.len() != random_hex_capacity {
+    if random_hex.len() != random_hex_size_bytes {
         return Err("attempt-log-temp-random-length-invalid".to_string());
     }
     Ok(destination.with_file_name(format!(".{file_name}.{identity}.{random_hex}.tmp")))
@@ -452,8 +489,19 @@ fn rename_no_replace(_source: &Path, _destination: &Path) -> std::io::Result<()>
     ))
 }
 
-fn remove_private_temp(path: &Path) {
-    let _ = fs::remove_file(path);
+fn remove_private_temp(path: &Path) -> Result<(), String> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("attempt-log-private-temp-cleanup-failed: {error}")),
+    }
+}
+
+fn error_after_temp_cleanup(path: &Path, primary: String) -> String {
+    match remove_private_temp(path) {
+        Ok(()) => primary,
+        Err(cleanup) => format!("{primary}; {cleanup}"),
+    }
 }
 
 fn validate_serialized_size(bytes: &[u8], bytes_max: u64, kind: &str) -> Result<(), String> {
@@ -513,6 +561,8 @@ fn read_bounded_json<T: serde::de::DeserializeOwned>(path: &Path, bytes_max: u64
 }
 
 fn read_bounded_bytes(path: &Path, bytes_max: u64, kind: &str) -> Result<Vec<u8>, String> {
+    assert!(!path.as_os_str().is_empty(), "bounded attempt-log path must not be empty");
+    assert!(bytes_max > 0, "bounded attempt-log read limit must be positive");
     require_regular_path_no_follow(path, kind)?;
     let mut file = open_regular_no_follow(path, kind)?;
     let metadata = file.metadata().map_err(|error| format!("attempt-log-{kind}-opened-metadata-failed: {error}"))?;
@@ -522,13 +572,14 @@ fn read_bounded_bytes(path: &Path, bytes_max: u64, kind: &str) -> Result<Vec<u8>
     if metadata.len() > bytes_max {
         return Err(format!("attempt-log-{kind}-file-too-large"));
     }
-    let read_limit = bytes_max
+    let read_limit_bytes = bytes_max
         .checked_add(BOUNDED_READ_PROBE_BYTES)
         .ok_or_else(|| format!("attempt-log-{kind}-read-limit-overflow"))?;
-    let capacity = usize::try_from(metadata.len()).map_err(|_| format!("attempt-log-{kind}-capacity-overflow"))?;
-    let mut bytes = Vec::with_capacity(capacity);
+    let file_size_bytes =
+        usize::try_from(metadata.len()).map_err(|_| format!("attempt-log-{kind}-capacity-overflow"))?;
+    let mut bytes = Vec::with_capacity(file_size_bytes);
     Read::by_ref(&mut file)
-        .take(read_limit)
+        .take(read_limit_bytes)
         .read_to_end(&mut bytes)
         .map_err(|error| format!("attempt-log-{kind}-read-failed: {error}"))?;
     validate_serialized_size(&bytes, bytes_max, kind)?;
@@ -614,8 +665,14 @@ fn remote_attempt_log_scope_key(scope: &RemoteAttemptLogScope) -> String {
 }
 
 fn hash_scope_part(hasher: &mut blake3::Hasher, value: &str) {
-    let length = u64::try_from(value.len()).expect("bounded attempt-log scope length fits u64");
-    hasher.update(&length.to_le_bytes());
+    let length_bytes = match u64::try_from(value.len()) {
+        Ok(length_bytes) => length_bytes,
+        Err(_) => {
+            hasher.update(b"attempt-log-scope-length-overflow");
+            return;
+        }
+    };
+    hasher.update(&length_bytes.to_le_bytes());
     hasher.update(value.as_bytes());
 }
 

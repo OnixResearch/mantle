@@ -36,6 +36,20 @@ const STRICT_REGRESSION_SUMMARY_KIND: &str = "mantle-strict-hermeticity-regressi
 const DEFAULT_CONTINUOUS_REPORT_PATH: &str = "continuous-reproducibility-gauntlet-report.json";
 const DEFAULT_STRICT_REGRESSION_REPORT_PATH: &str = "strict-hermeticity-regression-suite-report.json";
 
+struct StrictRegressionCommand {
+    current_dir: PathBuf,
+    json: bool,
+    run_id: String,
+    plan: PathBuf,
+    evidence_paths: Vec<PathBuf>,
+    report_path: Option<PathBuf>,
+}
+
+struct JsonShapeLabels<'a> {
+    object: &'a str,
+    array: &'a str,
+}
+
 pub(crate) fn cmd_release_gauntlet(
     action: ReleaseGauntletAction,
     current_dir: &Path,
@@ -55,7 +69,14 @@ pub(crate) fn cmd_release_gauntlet(
             plan,
             evidence,
             report_path,
-        } => cmd_strict_hermeticity_regression(current_dir, json, run_id, plan, evidence, report_path),
+        } => cmd_strict_hermeticity_regression(StrictRegressionCommand {
+            current_dir: current_dir.to_path_buf(),
+            json,
+            run_id,
+            plan,
+            evidence_paths: evidence,
+            report_path,
+        }),
     }
 }
 
@@ -91,73 +112,72 @@ fn cmd_gauntlet_continuous(
         .unwrap_or_else(|| current_dir.join(DEFAULT_CONTINUOUS_REPORT_PATH));
     let context = read_json_file::<ContinuousGauntletContext>(&context_path)?;
     let tracks = read_track_evidence_files(&resolved_track_paths)?;
-    let report = evaluate_continuous_reproducibility_gauntlet(context, tracks)
+    let outcome = evaluate_continuous_reproducibility_gauntlet(context, tracks)
         .map_err(|err| RunError::Internal(format!("evaluating continuous gauntlet: {err}")))?;
-    let digest_blake3 = continuous_reproducibility_gauntlet_report_digest_blake3(report.clone())
+    let digest_blake3 = continuous_reproducibility_gauntlet_report_digest_blake3(outcome.clone())
         .map_err(|err| RunError::Internal(format!("digesting continuous gauntlet report: {err}")))?;
-    let canonical = continuous_reproducibility_gauntlet_report_canonical_bytes(report.clone())
+    let canonical = continuous_reproducibility_gauntlet_report_canonical_bytes(outcome.clone())
         .map_err(|err| RunError::Internal(format!("serializing continuous gauntlet report: {err}")))?;
     write_or_print_json(Some(&output_path), &canonical)?;
-    print_continuous_summary(json, &report, &output_path, &digest_blake3)?;
+    print_continuous_summary(json, &outcome, &output_path, &digest_blake3)?;
     Ok(())
 }
 
-fn cmd_strict_hermeticity_regression(
-    current_dir: &Path,
-    json: bool,
-    run_id: String,
-    plan: PathBuf,
-    evidence_paths: Vec<PathBuf>,
-    report_path: Option<PathBuf>,
-) -> Result<(), RunError> {
-    let plan_path = resolve_input_path(current_dir, plan);
-    let resolved_evidence_paths =
-        evidence_paths.into_iter().map(|path| resolve_input_path(current_dir, path)).collect::<Vec<_>>();
-    let output_path = report_path
-        .map(|path| resolve_input_path(current_dir, path))
-        .unwrap_or_else(|| current_dir.join(DEFAULT_STRICT_REGRESSION_REPORT_PATH));
+fn cmd_strict_hermeticity_regression(command: StrictRegressionCommand) -> Result<(), RunError> {
+    assert!(!STRICT_REGRESSION_SUMMARY_KIND.is_empty(), "strict regression summary kind must not be empty");
+    assert!(!DEFAULT_STRICT_REGRESSION_REPORT_PATH.is_empty(), "strict regression report path must not be empty");
+    let plan_path = resolve_input_path(&command.current_dir, command.plan);
+    let resolved_evidence_paths = command
+        .evidence_paths
+        .into_iter()
+        .map(|path| resolve_input_path(&command.current_dir, path))
+        .collect::<Vec<_>>();
+    let output_path = command
+        .report_path
+        .map(|path| resolve_input_path(&command.current_dir, path))
+        .unwrap_or_else(|| command.current_dir.join(DEFAULT_STRICT_REGRESSION_REPORT_PATH));
     let plan = read_json_file::<StrictHermeticityRegressionSuitePlan>(&plan_path)?;
     let evidence = read_strict_regression_evidence_files(&resolved_evidence_paths)?;
-    let report = evaluate_strict_hermeticity_regression_suite(run_id, plan, evidence)
+    let outcome = evaluate_strict_hermeticity_regression_suite(command.run_id, plan, evidence)
         .map_err(|err| RunError::Internal(format!("evaluating strict hermeticity regression suite: {err}")))?;
-    let digest_blake3 = strict_hermeticity_regression_suite_report_digest_blake3(report.clone())
+    let digest_blake3 = strict_hermeticity_regression_suite_report_digest_blake3(outcome.clone())
         .map_err(|err| RunError::Internal(format!("digesting strict hermeticity regression report: {err}")))?;
-    let canonical = strict_hermeticity_regression_suite_report_canonical_bytes(report.clone())
+    let canonical = strict_hermeticity_regression_suite_report_canonical_bytes(outcome.clone())
         .map_err(|err| RunError::Internal(format!("serializing strict hermeticity regression report: {err}")))?;
     write_or_print_json(Some(&output_path), &canonical)?;
-    print_strict_regression_summary(json, &report, &output_path, &digest_blake3)?;
+    print_strict_regression_summary(command.json, &outcome, &output_path, &digest_blake3)?;
     Ok(())
 }
 
 fn canonicalize_report_bytes(kind: GauntletReportKind, input: &[u8]) -> Result<Vec<u8>, RunError> {
     match kind {
         GauntletReportKind::AdversarialHermeticity => {
-            let report = parse_json_slice::<AdversarialHermeticityGauntletReport>(input, kind.as_str())?;
-            adversarial_hermeticity_gauntlet_report_canonical_bytes(report)
+            let parsed = parse_json_slice::<AdversarialHermeticityGauntletReport>(input, kind.as_str())?;
+            adversarial_hermeticity_gauntlet_report_canonical_bytes(parsed)
         }
         GauntletReportKind::BootstrapPressure => {
-            let report = parse_json_slice::<BootstrapPressureGauntletReport>(input, kind.as_str())?;
-            bootstrap_pressure_gauntlet_report_canonical_bytes(report)
+            let parsed = parse_json_slice::<BootstrapPressureGauntletReport>(input, kind.as_str())?;
+            bootstrap_pressure_gauntlet_report_canonical_bytes(parsed)
         }
         GauntletReportKind::SubstitutionCacheAttack => {
-            let report = parse_json_slice::<SubstitutionCacheAttackGauntletReport>(input, kind.as_str())?;
-            substitution_cache_attack_gauntlet_report_canonical_bytes(report)
+            let parsed = parse_json_slice::<SubstitutionCacheAttackGauntletReport>(input, kind.as_str())?;
+            substitution_cache_attack_gauntlet_report_canonical_bytes(parsed)
         }
         GauntletReportKind::NixMantleComparison => {
-            let report = parse_json_slice::<NixMantleComparisonCorpusReport>(input, kind.as_str())?;
-            nix_mantle_comparison_corpus_report_canonical_bytes(report)
+            let parsed = parse_json_slice::<NixMantleComparisonCorpusReport>(input, kind.as_str())?;
+            nix_mantle_comparison_corpus_report_canonical_bytes(parsed)
         }
         GauntletReportKind::ReleaseRepeatability => {
-            let report = parse_json_slice::<ReleaseRepeatabilityMatrixReport>(input, kind.as_str())?;
-            release_repeatability_matrix_report_canonical_bytes(report)
+            let parsed = parse_json_slice::<ReleaseRepeatabilityMatrixReport>(input, kind.as_str())?;
+            release_repeatability_matrix_report_canonical_bytes(parsed)
         }
         GauntletReportKind::Continuous => {
-            let report = parse_json_slice::<ContinuousReproducibilityGauntletReport>(input, kind.as_str())?;
-            continuous_reproducibility_gauntlet_report_canonical_bytes(report)
+            let parsed = parse_json_slice::<ContinuousReproducibilityGauntletReport>(input, kind.as_str())?;
+            continuous_reproducibility_gauntlet_report_canonical_bytes(parsed)
         }
         GauntletReportKind::StrictHermeticityRegression => {
-            let report = parse_json_slice::<StrictHermeticityRegressionSuiteReport>(input, kind.as_str())?;
-            strict_hermeticity_regression_suite_report_canonical_bytes(report)
+            let parsed = parse_json_slice::<StrictHermeticityRegressionSuiteReport>(input, kind.as_str())?;
+            strict_hermeticity_regression_suite_report_canonical_bytes(parsed)
         }
     }
     .map_err(|err| RunError::Internal(format!("canonicalizing {} gauntlet report: {err}", kind.as_str())))
@@ -177,7 +197,10 @@ fn read_track_evidence_files(paths: &[PathBuf]) -> Result<Vec<GauntletTrackEvide
 }
 
 fn parse_track_evidence_slice(bytes: &[u8], path: &Path) -> Result<Vec<GauntletTrackEvidence>, RunError> {
-    parse_object_or_array_json_slice(bytes, path, "track evidence", "track array")
+    parse_object_or_array_json_slice(bytes, path, JsonShapeLabels {
+        object: "track evidence",
+        array: "track array",
+    })
 }
 
 fn read_strict_regression_evidence_files(
@@ -201,23 +224,25 @@ fn parse_strict_regression_evidence_slice(
     bytes: &[u8],
     path: &Path,
 ) -> Result<Vec<StrictHermeticityRegressionCaseEvidence>, RunError> {
-    parse_object_or_array_json_slice(bytes, path, "strict regression evidence", "strict regression evidence array")
+    parse_object_or_array_json_slice(bytes, path, JsonShapeLabels {
+        object: "strict regression evidence",
+        array: "strict regression evidence array",
+    })
 }
 
 fn parse_object_or_array_json_slice<T: DeserializeOwned>(
     bytes: &[u8],
     path: &Path,
-    object_label: &str,
-    array_label: &str,
+    labels: JsonShapeLabels<'_>,
 ) -> Result<Vec<T>, RunError> {
     let value = serde_json::from_slice::<serde_json::Value>(bytes)
         .map_err(|err| RunError::Internal(format!("parsing {}: {err}", path.display())))?;
     if value.is_array() {
         return serde_json::from_value::<Vec<T>>(value)
-            .map_err(|err| RunError::Internal(format!("parsing {} {array_label}: {err}", path.display())));
+            .map_err(|err| RunError::Internal(format!("parsing {} {}: {err}", path.display(), labels.array)));
     }
     let item = serde_json::from_value::<T>(value)
-        .map_err(|err| RunError::Internal(format!("parsing {} {object_label}: {err}", path.display())))?;
+        .map_err(|err| RunError::Internal(format!("parsing {} {}: {err}", path.display(), labels.object)))?;
     Ok(vec![item])
 }
 
@@ -260,6 +285,8 @@ fn print_canonicalize_summary(
     let Some(output_path) = output_path else {
         return Ok(());
     };
+    assert!(!output_path.as_os_str().is_empty(), "canonical summary output path must not be empty");
+    assert!(!digest_blake3.is_empty(), "canonical summary digest must not be empty");
     if json {
         let rendered = serde_json::json!({
             "kind": CANONICALIZE_SUMMARY_KIND,
@@ -283,6 +310,8 @@ fn print_continuous_summary(
     output_path: &Path,
     digest_blake3: &str,
 ) -> Result<(), RunError> {
+    assert!(!output_path.as_os_str().is_empty(), "continuous summary output path must not be empty");
+    assert!(!digest_blake3.is_empty(), "continuous summary digest must not be empty");
     if json {
         let rendered = serde_json::json!({
             "kind": CONTINUOUS_SUMMARY_KIND,
@@ -309,6 +338,8 @@ fn print_strict_regression_summary(
     output_path: &Path,
     digest_blake3: &str,
 ) -> Result<(), RunError> {
+    assert!(!output_path.as_os_str().is_empty(), "strict regression summary output path must not be empty");
+    assert!(!digest_blake3.is_empty(), "strict regression summary digest must not be empty");
     if json {
         let rendered = serde_json::json!({
             "kind": STRICT_REGRESSION_SUMMARY_KIND,

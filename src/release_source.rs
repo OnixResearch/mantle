@@ -22,6 +22,7 @@ use crate::self_build::require_checked_vendor_inputs;
 const MAX_TRACKED_SOURCE_PATHS: u32 = 200_000;
 const MAX_VENDOR_SOURCE_PATHS: u32 = 200_000;
 const MAX_PARENT_DIRS: u32 = 200_000;
+const INITIAL_VENDOR_CHILD_CAPACITY: usize = 64;
 const TAR_MODE_DIR_DEFAULT: u32 = 0o755;
 const TAR_MODE_SYMLINK_DEFAULT: u32 = 0o777;
 const GIT_SOURCE_CHECKOUT_DIR_NAME: &str = "checkout";
@@ -29,8 +30,20 @@ const GIT_SUBMODULE_FILEMODE: &str = "160000";
 const GIT_HEAD_REF_PREFIX: &str = "refs/heads/";
 const GIT_REMOTE_ORIGIN_REF_PREFIX: &str = "refs/remotes/origin/";
 
+struct GitRefPolicy<'a> {
+    git_ref: &'a str,
+    expected_commit: &'a str,
+    policy_label: &'a str,
+}
+
+struct GitRefCandidateRequest<'a> {
+    git_ref: &'a str,
+    policy_label: &'a str,
+}
+
 pub(crate) fn write_tracked_source_archive(repo_root: &Path, archive_path: &Path) -> Result<(), RunError> {
     assert!(repo_root.is_dir(), "repo root must exist: {}", repo_root.display());
+    assert_ne!(repo_root, archive_path, "release source archive must not replace the repository root");
     require_checked_vendor_inputs(repo_root)?;
     let source_paths = source_archive_paths(repo_root)?;
     if source_paths.is_empty() {
@@ -57,6 +70,8 @@ pub(crate) fn write_git_source_archive(
     work_dir: &Path,
     archive_path: &Path,
 ) -> Result<(), RunError> {
+    assert!(!SOURCE_ACQUISITION_KIND_GIT.is_empty(), "Git acquisition kind must not be empty");
+    assert_ne!(work_dir, archive_path, "Git reconstruction workspace must not alias its archive");
     if source_acquisition.kind != SOURCE_ACQUISITION_KIND_GIT {
         return Err(RunError::Internal(format!(
             "Git source archive reconstruction requires source_acquisition.kind={SOURCE_ACQUISITION_KIND_GIT}, got {}",
@@ -77,10 +92,18 @@ pub(crate) fn write_git_source_archive(
     checkout_git_commit(&checkout_dir, commit)?;
     verify_git_head_commit(&checkout_dir, commit)?;
     if let Some(reference) = &source_acquisition.reference {
-        verify_git_ref_commit(&checkout_dir, reference, commit, "ref")?;
+        verify_git_ref_commit(&checkout_dir, GitRefPolicy {
+            git_ref: reference,
+            expected_commit: commit,
+            policy_label: "ref",
+        })?;
     }
     if let Some(tag) = &source_acquisition.tag {
-        verify_git_ref_commit(&checkout_dir, tag, commit, "tag")?;
+        verify_git_ref_commit(&checkout_dir, GitRefPolicy {
+            git_ref: tag,
+            expected_commit: commit,
+            policy_label: "tag",
+        })?;
     }
     write_tracked_source_archive(&checkout_dir, archive_path)
 }
@@ -115,35 +138,39 @@ fn verify_git_head_commit(checkout_dir: &Path, expected_commit: &str) -> Result<
     )))
 }
 
-fn verify_git_ref_commit(
-    checkout_dir: &Path,
-    git_ref: &str,
-    expected_commit: &str,
-    policy_label: &str,
-) -> Result<(), RunError> {
-    let candidates = git_ref_resolution_candidates(git_ref, policy_label);
-    let mut resolution_errors = Vec::new();
+fn verify_git_ref_commit(checkout_dir: &Path, policy: GitRefPolicy<'_>) -> Result<(), RunError> {
+    let candidates = git_ref_resolution_candidates(GitRefCandidateRequest {
+        git_ref: policy.git_ref,
+        policy_label: policy.policy_label,
+    });
+    assert!(!candidates.is_empty(), "Git ref verification requires at least one candidate");
+    assert_eq!(candidates[0], policy.git_ref, "Git ref verification must try the declared ref first");
+    let mut resolution_errors = Vec::with_capacity(candidates.len());
     for candidate in &candidates {
         match git_rev_parse_commit(checkout_dir, candidate) {
-            Ok(actual_commit) if actual_commit == expected_commit => return Ok(()),
+            Ok(actual_commit) if actual_commit == policy.expected_commit => return Ok(()),
             Ok(actual_commit) => {
                 return Err(RunError::Internal(format!(
-                    "Git source {policy_label} policy failed: {candidate} resolved to {actual_commit}, expected {expected_commit}"
+                    "Git source {} policy failed: {candidate} resolved to {actual_commit}, expected {}",
+                    policy.policy_label, policy.expected_commit
                 )));
             }
             Err(err) => resolution_errors.push(err.to_string()),
         }
     }
     Err(RunError::Internal(format!(
-        "Git source {policy_label} policy failed: {git_ref} did not resolve to expected commit {expected_commit}; attempts: {}",
+        "Git source {} policy failed: {} did not resolve to expected commit {}; attempts: {}",
+        policy.policy_label,
+        policy.git_ref,
+        policy.expected_commit,
         resolution_errors.join("; ")
     )))
 }
 
-fn git_ref_resolution_candidates(git_ref: &str, policy_label: &str) -> Vec<String> {
-    let mut candidates = vec![git_ref.to_string()];
-    if policy_label == "ref"
-        && let Some(branch_name) = git_ref.strip_prefix(GIT_HEAD_REF_PREFIX)
+fn git_ref_resolution_candidates(request: GitRefCandidateRequest<'_>) -> Vec<String> {
+    let mut candidates = vec![request.git_ref.to_string()];
+    if request.policy_label == "ref"
+        && let Some(branch_name) = request.git_ref.strip_prefix(GIT_HEAD_REF_PREFIX)
     {
         candidates.push(format!("{GIT_REMOTE_ORIGIN_REF_PREFIX}{branch_name}"));
     }
@@ -236,6 +263,8 @@ fn release_source_symlink_target(source_path: &Path) -> Result<String, RunError>
 }
 
 fn tracked_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
+    assert!(repo_root.is_dir(), "tracked source root must be a directory");
+    assert!(MAX_TRACKED_SOURCE_PATHS > 0, "tracked source path bound must be positive");
     let output = Command::new("git")
         .arg("ls-files")
         .arg("-s")
@@ -248,7 +277,9 @@ fn tracked_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
         return Err(RunError::Internal(format!("git ls-files failed in {}: {}", repo_root.display(), stderr.trim())));
     }
 
-    let mut tracked = Vec::new();
+    let tracked_path_count_max = usize::try_from(MAX_TRACKED_SOURCE_PATHS)
+        .map_err(|_| RunError::Internal("tracked source path bound overflowed usize".to_string()))?;
+    let mut tracked = Vec::with_capacity(tracked_path_count_max);
     for raw_record in output.stdout.split(|byte| *byte == 0) {
         if raw_record.is_empty() {
             continue;
@@ -288,7 +319,10 @@ fn parse_git_index_record(record: &[u8]) -> Result<GitIndexRecord<'_>, RunError>
         .position(|byte| *byte == b'\t')
         .ok_or_else(|| RunError::Internal("git ls-files --stage record missing path separator".to_string()))?;
     let header = &record[..tab_index];
-    let path = &record[tab_index + 1..];
+    let path_start = tab_index
+        .checked_add(1)
+        .ok_or_else(|| RunError::Internal("git ls-files --stage path offset overflowed usize".to_string()))?;
+    let path = &record[path_start..];
     if path.is_empty() {
         return Err(RunError::Internal("git ls-files --stage record has empty path".to_string()));
     }
@@ -301,6 +335,8 @@ fn parse_git_index_record(record: &[u8]) -> Result<GitIndexRecord<'_>, RunError>
     if file_mode.is_empty() {
         return Err(RunError::Internal("git ls-files --stage record has empty file mode".to_string()));
     }
+    assert!(!path.is_empty(), "parsed Git index path must not be empty");
+    assert!(!file_mode.is_empty(), "parsed Git index file mode must not be empty");
     Ok(GitIndexRecord { file_mode, path })
 }
 
@@ -316,12 +352,19 @@ fn vendored_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
 }
 
 fn collect_vendor_source_paths(repo_root: &Path, current_dir: &Path, paths: &mut Vec<PathBuf>) -> Result<(), RunError> {
-    let mut children = Vec::new();
+    assert!(INITIAL_VENDOR_CHILD_CAPACITY > 0, "vendor child capacity must be positive");
+    assert!(current_dir.starts_with(repo_root), "vendor traversal must remain below the repository root");
+    let child_count_max = usize::try_from(MAX_VENDOR_SOURCE_PATHS)
+        .map_err(|_| RunError::Internal("vendor source path bound overflowed usize".to_string()))?;
+    let mut children = Vec::with_capacity(INITIAL_VENDOR_CHILD_CAPACITY.min(child_count_max));
     let entries = std::fs::read_dir(current_dir)
         .map_err(|err| RunError::Internal(format!("read_dir {}: {err}", current_dir.display())))?;
     for entry in entries {
         let entry =
             entry.map_err(|err| RunError::Internal(format!("read_dir entry {}: {err}", current_dir.display())))?;
+        if children.len() >= child_count_max {
+            return Err(RunError::Internal(format!("vendor directory exceeds {MAX_VENDOR_SOURCE_PATHS} children")));
+        }
         children.push(entry.path());
     }
     children.sort();
@@ -332,6 +375,8 @@ fn collect_vendor_source_paths(repo_root: &Path, current_dir: &Path, paths: &mut
 }
 
 fn collect_vendor_source_child(repo_root: &Path, child: &Path, paths: &mut Vec<PathBuf>) -> Result<(), RunError> {
+    assert!(child.starts_with(repo_root), "vendor source child must remain below the repository root");
+    assert!(!child.as_os_str().is_empty(), "vendor source child path must not be empty");
     let metadata = std::fs::symlink_metadata(child)
         .map_err(|err| RunError::Internal(format!("symlink_metadata {}: {err}", child.display())))?;
     if metadata.file_type().is_symlink() {
@@ -385,16 +430,22 @@ fn append_parent_dirs(
     relative_path: &Path,
     appended_dirs: &mut BTreeSet<PathBuf>,
 ) -> Result<(), RunError> {
-    let mut parent_paths = Vec::new();
+    let parent_count_max = relative_path.components().count();
+    let mut parent_paths = Vec::with_capacity(parent_count_max);
     let mut cursor = relative_path.parent();
     while let Some(parent) = cursor {
         if parent.as_os_str().is_empty() {
             break;
         }
+        if parent_paths.len() >= parent_count_max {
+            return Err(RunError::Internal("archive parent path count exceeded component bound".to_string()));
+        }
         parent_paths.push(parent.to_path_buf());
         cursor = parent.parent();
     }
     parent_paths.reverse();
+    assert!(parent_paths.len() <= parent_count_max, "archive parent paths must stay bounded");
+    assert!(!relative_path.is_absolute(), "archive parent source path must remain relative");
 
     for parent_path in parent_paths {
         let dir_count_u32: u32 = appended_dirs
@@ -490,6 +541,8 @@ fn append_symlink_entry(
         RunError::Internal(format!("source archive symlink target is not valid utf-8: {}", source_path.display()))
     })?;
     validate_release_source_symlink_target(link_target_text).map_err(core_error_to_run_error)?;
+    assert!(!link_target_text.is_empty(), "release source symlink target must not be empty");
+    assert!(!relative_path.is_absolute(), "release source symlink path must remain relative");
     let mut header = tar::Header::new_gnu();
     header.set_entry_type(tar::EntryType::Symlink);
     header.set_size(0);

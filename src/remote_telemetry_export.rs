@@ -14,6 +14,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crunch_build::distributed::DEFAULT_REMOTE_TELEMETRY_BATCH_SIZE;
+use crunch_build::distributed::DEFAULT_REMOTE_TELEMETRY_EVENT_CAPACITY;
 use crunch_build::distributed::RemoteMetricDescriptor;
 use crunch_build::distributed::RemoteMetricKind;
 use crunch_build::distributed::RemoteTelemetryEvent;
@@ -37,19 +39,28 @@ const OTLP_METRICS_PATH_DEFAULT: &str = "/v1/metrics";
 const HTTP_STATUS_SUCCESS_MIN: u16 = 200;
 const HTTP_STATUS_SUCCESS_MAX_EXCLUSIVE: u16 = 300;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemotePrometheusConfig {
     #[serde(default)]
     pub enabled: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_optional_value", skip_serializing_if = "Option::is_none")]
     pub textfile_path: Option<PathBuf>,
+}
+
+impl Default for RemotePrometheusConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            textfile_path: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteOtlpConfig {
     #[serde(default)]
     pub enabled: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_optional_value", skip_serializing_if = "Option::is_none")]
     pub endpoint: Option<String>,
     #[serde(default = "default_otlp_timeout_ms")]
     pub timeout_ms: u32,
@@ -65,14 +76,24 @@ impl Default for RemoteOtlpConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteTelemetryExportConfig {
-    #[serde(default)]
+    #[serde(default = "default_remote_telemetry_policy")]
     pub telemetry: RemoteTelemetryPolicy,
-    #[serde(default)]
+    #[serde(default = "RemotePrometheusConfig::default")]
     pub prometheus: RemotePrometheusConfig,
-    #[serde(default)]
+    #[serde(default = "RemoteOtlpConfig::default")]
     pub otlp: RemoteOtlpConfig,
+}
+
+impl Default for RemoteTelemetryExportConfig {
+    fn default() -> Self {
+        Self {
+            telemetry: default_remote_telemetry_policy(),
+            prometheus: RemotePrometheusConfig::default(),
+            otlp: RemoteOtlpConfig::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -112,6 +133,8 @@ struct BoundedMetricAdmission {
 }
 
 pub fn validate_remote_telemetry_export_config(config: &RemoteTelemetryExportConfig) -> Result<(), String> {
+    assert!(DEFAULT_OTLP_TIMEOUT_MS > 0, "default OTLP timeout must be positive");
+    assert!(DEFAULT_OTLP_TIMEOUT_MS <= MAX_OTLP_TIMEOUT_MS, "default OTLP timeout must stay within policy");
     config.telemetry.validate().map_err(|reason| reason.as_str().to_string())?;
     if config.prometheus.enabled {
         let path = config
@@ -134,6 +157,8 @@ pub fn validate_remote_telemetry_export_config(config: &RemoteTelemetryExportCon
             .ok_or_else(|| "remote-telemetry-otlp-endpoint-required".to_string())?;
         validate_otlp_endpoint(endpoint)?;
     }
+    assert!(config.otlp.timeout_ms > 0, "validated OTLP timeout must be positive");
+    assert!(config.otlp.timeout_ms <= MAX_OTLP_TIMEOUT_MS, "validated OTLP timeout must stay bounded");
     Ok(())
 }
 
@@ -155,6 +180,11 @@ pub fn export_remote_telemetry(
     };
     let prometheus = export_prometheus(config, &admission.descriptors, config_error.as_deref());
     let otlp = export_otlp(config, &admission.descriptors, config_error.as_deref());
+    assert!(metrics_admitted <= admission.events_received, "admitted metrics cannot exceed received events");
+    assert!(
+        admission.events_dropped <= admission.events_received,
+        "dropped events cannot exceed received events"
+    );
     RemoteTelemetryExportReport {
         schema: REMOTE_TELEMETRY_EXPORT_REPORT_SCHEMA.to_string(),
         events_received: admission.events_received,
@@ -193,6 +223,8 @@ pub fn render_prometheus_metrics(descriptors: &[RemoteMetricDescriptor]) -> Resu
     if rendered.len() > MAX_OTLP_PAYLOAD_BYTES {
         return Err("remote-telemetry-prometheus-payload-oversized".to_string());
     }
+    assert!(rendered.len() <= MAX_OTLP_PAYLOAD_BYTES, "admitted Prometheus text must stay bounded");
+    assert_eq!(rendered.lines().count(), descriptors.len(), "each descriptor must render one metric line");
     Ok(rendered)
 }
 
@@ -248,6 +280,8 @@ pub fn render_otlp_metrics_json(descriptors: &[RemoteMetricDescriptor]) -> Resul
     if payload.len() > MAX_OTLP_PAYLOAD_BYTES {
         return Err("remote-telemetry-otlp-payload-oversized".to_string());
     }
+    assert!(!payload.is_empty(), "OTLP JSON payload must not be empty");
+    assert!(payload.len() <= MAX_OTLP_PAYLOAD_BYTES, "OTLP JSON payload must stay bounded");
     Ok(payload)
 }
 
@@ -256,7 +290,9 @@ fn bounded_metric_admission(
     events: &[RemoteTelemetryEvent],
     config_error: Option<&str>,
 ) -> BoundedMetricAdmission {
-    let events_received = checked_len_as_u64(events.len()).unwrap_or(u64::MAX);
+    let Some(events_received) = checked_len_as_u64(events.len()) else {
+        return failed_metric_admission(0, "remote-telemetry-intake-counter-overflow");
+    };
     let Some(capacity) = usize::try_from(config.telemetry.event_capacity).ok() else {
         return failed_metric_admission(events_received, "remote-telemetry-intake-capacity-invalid");
     };
@@ -267,6 +303,8 @@ fn bounded_metric_admission(
         return failed_metric_admission(events_received, reason);
     }
     let bounded_count = events.len().min(capacity).min(batch_size);
+    assert!(bounded_count <= events.len(), "bounded intake cannot exceed available events");
+    assert!(bounded_count <= capacity, "bounded intake cannot exceed configured capacity");
     let mut descriptors = Vec::with_capacity(bounded_count);
     let mut metrics_rejected = 0_u64;
     for event in events.iter().take(bounded_count) {
@@ -349,10 +387,17 @@ fn export_otlp(
     if let Some(reason) = config_error {
         return adapter_health(RemoteTelemetryAdapterStatus::Failed, reason);
     }
+    assert!(config.telemetry.batch_size > 0, "validated OTLP batch size must be positive");
+    assert!(config.otlp.timeout_ms > 0, "validated OTLP timeout must be positive");
     let Some(endpoint) = config.otlp.endpoint.as_deref() else {
         return adapter_health(RemoteTelemetryAdapterStatus::Failed, "remote-telemetry-otlp-endpoint-required");
     };
-    let result = export_otlp_batches(endpoint, config.otlp.timeout_ms, config.telemetry.batch_size, descriptors);
+    let result = export_otlp_batches(OtlpBatchRequest {
+        endpoint,
+        timeout_ms: config.otlp.timeout_ms,
+        batch_size: config.telemetry.batch_size,
+        descriptors,
+    });
     match result {
         Ok(()) => adapter_health(RemoteTelemetryAdapterStatus::Succeeded, "remote-telemetry-otlp-exported"),
         Err(error) => adapter_health(RemoteTelemetryAdapterStatus::Failed, bounded_otlp_error_reason(&error)),
@@ -369,6 +414,8 @@ fn write_prometheus_textfile(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let parent = path.parent().ok_or_else(|| "remote-telemetry-prometheus-parent-missing".to_string())?;
     let destination_name =
         path.file_name().ok_or_else(|| "remote-telemetry-prometheus-file-name-missing".to_string())?;
+    assert!(!parent.as_os_str().is_empty(), "Prometheus destination parent must not be empty");
+    assert!(!destination_name.is_empty(), "Prometheus destination name must not be empty");
     let destination_name = CString::new(destination_name.as_bytes())
         .map_err(|_| "remote-telemetry-prometheus-file-name-invalid".to_string())?;
     let directory = open_directory_no_symlinks(parent)?;
@@ -433,6 +480,8 @@ fn open_directory_no_symlinks(path: &Path) -> Result<fs::File, String> {
 
     let path = CString::new(path.as_os_str().as_bytes())
         .map_err(|_| "remote-telemetry-prometheus-parent-invalid".to_string())?;
+    assert!(!path.as_bytes().is_empty(), "Prometheus parent path must not be empty");
+    assert!(OPENAT2_RESOLVE_NO_SYMLINKS > 0, "openat2 no-symlink policy must be active");
     let how = OpenHow {
         flags: u64::try_from(libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC)
             .map_err(|_| "remote-telemetry-prometheus-open-flags-invalid".to_string())?,
@@ -462,23 +511,26 @@ fn write_prometheus_textfile(_path: &Path, _bytes: &[u8]) -> Result<(), String> 
     Err("remote-telemetry-prometheus-unsupported-platform".to_string())
 }
 
-fn export_otlp_batches(
-    endpoint: &str,
+struct OtlpBatchRequest<'a> {
+    endpoint: &'a str,
     timeout_ms: u32,
     batch_size: u32,
-    descriptors: &[RemoteMetricDescriptor],
-) -> Result<(), String> {
-    let batch_size = usize::try_from(batch_size).map_err(|_| "remote-telemetry-otlp-batch-size-invalid".to_string())?;
-    if batch_size == 0 {
+    descriptors: &'a [RemoteMetricDescriptor],
+}
+
+fn export_otlp_batches(request: OtlpBatchRequest<'_>) -> Result<(), String> {
+    let batch_event_count =
+        usize::try_from(request.batch_size).map_err(|_| "remote-telemetry-otlp-batch-size-invalid".to_string())?;
+    if batch_event_count == 0 {
         return Err("remote-telemetry-otlp-batch-size-invalid".to_string());
     }
-    if descriptors.is_empty() {
-        let payload = render_otlp_metrics_json(descriptors)?;
-        return post_otlp_http(endpoint, timeout_ms, &payload);
+    if request.descriptors.is_empty() {
+        let payload = render_otlp_metrics_json(request.descriptors)?;
+        return post_otlp_http(request.endpoint, request.timeout_ms, &payload);
     }
-    for batch in descriptors.chunks(batch_size) {
+    for batch in request.descriptors.chunks(batch_event_count) {
         let payload = render_otlp_metrics_json(batch)?;
-        post_otlp_http(endpoint, timeout_ms, &payload)?;
+        post_otlp_http(request.endpoint, request.timeout_ms, &payload)?;
     }
     Ok(())
 }
@@ -486,12 +538,14 @@ fn export_otlp_batches(
 fn post_otlp_http(endpoint: &str, timeout_ms: u32, payload: &[u8]) -> Result<(), String> {
     let url = validate_otlp_endpoint(endpoint)?;
     let host = url.host_str().ok_or_else(|| "remote-telemetry-otlp-host-missing".to_string())?;
-    let port = url.port_or_known_default().ok_or_else(|| "remote-telemetry-otlp-port-missing".to_string())?;
-    let timeout = Duration::from_millis(u64::from(timeout_ms));
-    let addresses = (host, port)
+    let service_number = url.port_or_known_default().ok_or_else(|| "remote-telemetry-otlp-port-missing".to_string())?;
+    let request_timeout_ms = Duration::from_millis(u64::from(timeout_ms));
+    let address_count_max = usize::try_from(MAX_OTLP_RESOLVED_ADDRESSES)
+        .map_err(|_| "remote-telemetry-otlp-address-limit-invalid".to_string())?;
+    let addresses = (host, service_number)
         .to_socket_addrs()
         .map_err(|_| "remote-telemetry-otlp-resolve-failed".to_string())?
-        .take(usize::try_from(MAX_OTLP_RESOLVED_ADDRESSES).unwrap_or(0))
+        .take(address_count_max)
         .collect::<Vec<_>>();
     if addresses.is_empty() {
         return Err("remote-telemetry-otlp-resolve-empty".to_string());
@@ -499,13 +553,18 @@ fn post_otlp_http(endpoint: &str, timeout_ms: u32, payload: &[u8]) -> Result<(),
     if addresses.iter().any(|address| !address.ip().is_loopback()) {
         return Err("remote-telemetry-otlp-resolved-non-loopback-rejected".to_string());
     }
+    assert!(addresses.len() <= address_count_max, "resolved OTLP addresses must stay bounded");
+    assert!(
+        addresses.iter().all(|address| address.ip().is_loopback()),
+        "admitted OTLP addresses must be loopback"
+    );
     let mut stream = addresses
         .iter()
-        .find_map(|address| TcpStream::connect_timeout(address, timeout).ok())
+        .find_map(|address| TcpStream::connect_timeout(address, request_timeout_ms).ok())
         .ok_or_else(|| "remote-telemetry-otlp-connect-failed".to_string())?;
     stream
-        .set_read_timeout(Some(timeout))
-        .and_then(|()| stream.set_write_timeout(Some(timeout)))
+        .set_read_timeout(Some(request_timeout_ms))
+        .and_then(|()| stream.set_write_timeout(Some(request_timeout_ms)))
         .map_err(|_| "remote-telemetry-otlp-timeout-config-failed".to_string())?;
     let path = if url.path().is_empty() || url.path() == "/" {
         OTLP_METRICS_PATH_DEFAULT
@@ -513,7 +572,7 @@ fn post_otlp_http(endpoint: &str, timeout_ms: u32, payload: &[u8]) -> Result<(),
         url.path()
     };
     let host_header = if url.port().is_some() {
-        format!("{host}:{port}")
+        format!("{host}:{service_number}")
     } else {
         host.to_string()
     };
@@ -555,18 +614,23 @@ fn validate_otlp_endpoint(endpoint: &str) -> Result<url::Url, String> {
     if url.scheme() != "http" {
         return Err("remote-telemetry-otlp-http-only".to_string());
     }
-    if !url.username().is_empty() || url.password().is_some() || url.query().is_some() || url.fragment().is_some() {
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("remote-telemetry-otlp-credentials-or-query-rejected".to_string());
+    }
+    if url.query().is_some() || url.fragment().is_some() {
         return Err("remote-telemetry-otlp-credentials-or-query-rejected".to_string());
     }
     let host = url.host().ok_or_else(|| "remote-telemetry-otlp-host-missing".to_string())?;
-    let loopback = match host {
+    let is_loopback = match host {
         url::Host::Ipv4(address) => address.is_loopback(),
         url::Host::Ipv6(address) => address.is_loopback(),
         url::Host::Domain(_) => false,
     };
-    if !loopback {
+    if !is_loopback {
         return Err("remote-telemetry-otlp-plaintext-non-loopback-rejected".to_string());
     }
+    assert_eq!(url.scheme(), "http", "validated OTLP endpoint must use HTTP");
+    assert!(is_loopback, "validated plaintext OTLP endpoint must be loopback");
     Ok(url)
 }
 
@@ -595,6 +659,17 @@ fn validate_metric_name(name: &str) -> Result<(), String> {
 
 fn escape_prometheus_label(value: &str) -> String {
     value.replace('\\', "\\\\").replace('\n', "\\n").replace('"', "\\\"")
+}
+
+fn no_optional_value<T>() -> Option<T> {
+    None
+}
+
+fn default_remote_telemetry_policy() -> RemoteTelemetryPolicy {
+    RemoteTelemetryPolicy {
+        event_capacity: DEFAULT_REMOTE_TELEMETRY_EVENT_CAPACITY,
+        batch_size: DEFAULT_REMOTE_TELEMETRY_BATCH_SIZE,
+    }
 }
 
 fn default_otlp_timeout_ms() -> u32 {

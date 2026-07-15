@@ -27,7 +27,12 @@ use crunch_release_core::rebuild_authority_plan_digest_blake3;
 use crate::errors::RunError;
 
 const HASH_BUFFER_BYTES: usize = 8_192;
-const RECIPE_SCAN_BYTES_MAX: u64 = 4 * 1_024 * 1_024;
+const BYTES_PER_MEBIBYTE: u64 = 1_048_576;
+const RECIPE_SCAN_MEBIBYTES_MAX: u64 = 4;
+const RECIPE_SCAN_BYTES_MAX: u64 = RECIPE_SCAN_MEBIBYTES_MAX.saturating_mul(BYTES_PER_MEBIBYTE);
+const DECLARED_PATH_FIXED_OBSERVATION_COUNT_MAX: usize = 4;
+const POLICY_OBSERVATION_COUNT: usize = 3;
+const HASH_EOF_PROBE_ATTEMPTS: u64 = 2;
 const FORBIDDEN_BUNDLE_ENV: &[u8] = b"MANTLE_REPRODUCE_BUNDLE_DIR";
 const SANDBOX_POLICY_IDENTITY: &str = "exact-declared-read-binds;network=none;bundle=absent";
 const NORMALIZATION_POLICY_IDENTITY: &str = "source-date-epoch=1;timezone=UTC;locale=C.UTF-8;umask=0022";
@@ -58,6 +63,31 @@ struct PathObservation {
     original_path: Option<PathBuf>,
 }
 
+pub(crate) struct RebuildAuthorityRequest<'a> {
+    pub manifest: &'a ReleaseEvidenceManifest,
+    pub bundle_dir: &'a Path,
+    pub rebuild_command: &'a Path,
+    pub rebuild_args: &'a [OsString],
+    pub proof_root: &'a Path,
+    pub ordinary_output_dir: &'a Path,
+    pub runs: &'a [RebuildRunPaths],
+}
+
+struct DeclaredPathRequest<'a> {
+    bundle_dir: &'a Path,
+    command_path: &'a Path,
+    rebuild_args: &'a [OsString],
+    source_path: &'a Path,
+    provider_path: &'a Path,
+    proof_root: &'a Path,
+    ordinary_output_dir: &'a Path,
+}
+
+struct ForbiddenRecipeFact<'a> {
+    name: &'a str,
+    detail: &'a str,
+}
+
 #[derive(Debug)]
 struct RebuildAuthorityMeasurements {
     command_path: PathBuf,
@@ -69,65 +99,73 @@ struct RebuildAuthorityMeasurements {
     descriptor_blake3: String,
 }
 
+type PrepareRebuildAuthorityFn = fn(
+    &ReleaseEvidenceManifest,
+    &Path,
+    &Path,
+    &[OsString],
+    &Path,
+    &Path,
+    &[RebuildRunPaths],
+) -> Result<PreparedRebuildAuthority, RunError>;
+
+pub(crate) const PREPARE_REBUILD_AUTHORITY: PrepareRebuildAuthorityFn =
+    |manifest, bundle_dir, rebuild_command, rebuild_args, proof_root, ordinary_output_dir, runs| {
+        prepare_rebuild_authority_request(RebuildAuthorityRequest {
+            manifest,
+            bundle_dir,
+            rebuild_command,
+            rebuild_args,
+            proof_root,
+            ordinary_output_dir,
+            runs,
+        })
+    };
+pub(crate) use PREPARE_REBUILD_AUTHORITY as prepare_rebuild_authority;
+
 // r[impl mantle.build_correctness.release_determinism.identity_binding]
 // r[impl mantle.build_correctness.release_determinism.fixtures.negative.identity_drift]
-pub(crate) fn prepare_rebuild_authority(
-    manifest: &ReleaseEvidenceManifest,
-    bundle_dir: &Path,
-    rebuild_command: &Path,
-    rebuild_args: &[OsString],
-    proof_root: &Path,
-    ordinary_output_dir: &Path,
-    runs: &[RebuildRunPaths],
+fn prepare_rebuild_authority_request(
+    request: RebuildAuthorityRequest<'_>,
 ) -> Result<PreparedRebuildAuthority, RunError> {
-    let measured = measure_rebuild_authority(
-        manifest,
-        bundle_dir,
-        rebuild_command,
-        rebuild_args,
-        proof_root,
-        ordinary_output_dir,
-        runs,
-    )?;
-    let preliminary_plan = authority_plan_for(&measured, &measured.path_observations, proof_root, ordinary_output_dir)?;
+    let measured = measure_rebuild_authority(&request)?;
+    let preliminary_plan =
+        authority_plan_for(&measured, &measured.path_observations, request.proof_root, request.ordinary_output_dir)?;
     fail_if_authority_blocked(&preliminary_plan)?;
 
-    let materialized = materialize_approved_inputs(proof_root, &measured.path_observations)?;
+    let materialized = materialize_approved_inputs(request.proof_root, &measured.path_observations)?;
     let materialized_observations = remap_observations(&measured.path_observations, &materialized)?;
-    let authority_plan = authority_plan_for(&measured, &materialized_observations, proof_root, ordinary_output_dir)?;
+    let authority_plan =
+        authority_plan_for(&measured, &materialized_observations, request.proof_root, request.ordinary_output_dir)?;
     fail_if_authority_blocked(&authority_plan)?;
-    finalize_prepared_authority(measured, rebuild_args, materialized, authority_plan)
+    finalize_prepared_authority(measured, request.rebuild_args, materialized, authority_plan)
 }
 
-fn measure_rebuild_authority(
-    manifest: &ReleaseEvidenceManifest,
-    bundle_dir: &Path,
-    rebuild_command: &Path,
-    rebuild_args: &[OsString],
-    proof_root: &Path,
-    ordinary_output_dir: &Path,
-    runs: &[RebuildRunPaths],
-) -> Result<RebuildAuthorityMeasurements, RunError> {
-    let bundle_dir = canonical_existing(bundle_dir, "release bundle")?;
-    let command_path = absolute_existing_no_follow(rebuild_command, "rebuild executable")?;
+fn measure_rebuild_authority(request: &RebuildAuthorityRequest<'_>) -> Result<RebuildAuthorityMeasurements, RunError> {
+    let bundle_dir = canonical_existing(request.bundle_dir, "release bundle")?;
+    let command_path = absolute_existing_no_follow(request.rebuild_command, "rebuild executable")?;
     let source_path =
-        canonical_existing(&bundle_dir.join(&manifest.source_archive.relative_path), "release source archive")?;
-    let provider_path =
-        canonical_existing(&bundle_dir.join(&manifest.prerequisite_inventory.relative_path), "provider inventory")?;
-    let target_observations = measure_targets(manifest, &bundle_dir)?;
-    let mut path_observations = measure_declared_paths(
-        &bundle_dir,
-        &command_path,
-        rebuild_args,
-        &source_path,
-        &provider_path,
-        proof_root,
-        ordinary_output_dir,
+        canonical_existing(&bundle_dir.join(&request.manifest.source_archive.relative_path), "release source archive")?;
+    let provider_path = canonical_existing(
+        &bundle_dir.join(&request.manifest.prerequisite_inventory.relative_path),
+        "provider inventory",
     )?;
+    let target_observations = measure_targets(request.manifest, &bundle_dir)?;
+    let mut path_observations = measure_declared_paths(DeclaredPathRequest {
+        bundle_dir: &bundle_dir,
+        command_path: &command_path,
+        rebuild_args: request.rebuild_args,
+        source_path: &source_path,
+        provider_path: &provider_path,
+        proof_root: request.proof_root,
+        ordinary_output_dir: request.ordinary_output_dir,
+    })?;
     append_policy_observations(&mut path_observations)?;
     append_recipe_authority_observations(&mut path_observations, &target_observations)?;
-    let run_roots = run_root_observations(runs)?;
-    let descriptor = build_descriptor(manifest, rebuild_args, &path_observations, &run_roots)?;
+    let run_roots = run_root_observations(request.runs)?;
+    assert!(!target_observations.is_empty(), "measured authority must retain published targets");
+    assert!(!path_observations.is_empty(), "measured authority must retain declared inputs");
+    let descriptor = build_descriptor(request.manifest, request.rebuild_args, &path_observations, &run_roots)?;
     let descriptor_blake3 = content_bound_rebuild_descriptor_digest_blake3(descriptor.clone()).map_err(|err| {
         RunError::Internal(format!(
             "deterministic genuine rebuild authority blocked: DescriptorInvalid:descriptor:{err}"
@@ -226,50 +264,52 @@ fn measure_targets(
     Ok(observations)
 }
 
-fn measure_declared_paths(
-    bundle_dir: &Path,
-    command_path: &Path,
-    rebuild_args: &[OsString],
-    source_path: &Path,
-    provider_path: &Path,
-    proof_root: &Path,
-    ordinary_output_dir: &Path,
-) -> Result<Vec<PathObservation>, RunError> {
-    let command_is_recipe = file_starts_with_shebang(command_path)?;
-    let recipe_arg = if command_is_recipe {
+fn measure_declared_paths(request: DeclaredPathRequest<'_>) -> Result<Vec<PathObservation>, RunError> {
+    let is_command_recipe = file_starts_with_shebang(request.command_path)?;
+    let recipe_arg = if is_command_recipe {
         None
     } else {
-        first_existing_regular_argument(rebuild_args)?
+        first_existing_regular_argument(request.rebuild_args)?
     };
-    let mut observations = Vec::new();
+    let observation_count_max = request
+        .rebuild_args
+        .len()
+        .checked_add(DECLARED_PATH_FIXED_OBSERVATION_COUNT_MAX)
+        .ok_or_else(|| RunError::Internal("declared rebuild observation count overflowed usize".to_string()))?;
+    let mut observations = Vec::with_capacity(observation_count_max);
     observations.push(path_observation(
-        measure_regular_file(command_path, "rebuild-executable", RebuildInputRole::Executable)?,
-        command_path,
+        measure_regular_file(request.command_path, "rebuild-executable", RebuildInputRole::Executable)?,
+        request.command_path,
     ));
-    if command_is_recipe {
+    if is_command_recipe {
         observations.push(path_observation(
-            measure_regular_file(command_path, "rebuild-recipe", RebuildInputRole::Recipe)?,
-            command_path,
+            measure_regular_file(request.command_path, "rebuild-recipe", RebuildInputRole::Recipe)?,
+            request.command_path,
         ));
     }
     observations.push(path_observation(
-        measure_regular_file(source_path, "release-source-archive", RebuildInputRole::Source)?,
-        source_path,
+        measure_regular_file(request.source_path, "release-source-archive", RebuildInputRole::Source)?,
+        request.source_path,
     ));
     observations.push(path_observation(
-        measure_regular_file(provider_path, "provider-inventory", RebuildInputRole::Provider)?,
-        provider_path,
+        measure_regular_file(request.provider_path, "provider-inventory", RebuildInputRole::Provider)?,
+        request.provider_path,
     ));
 
     let mut tool_index = 0_u32;
-    for arg in rebuild_args {
+    for arg in request.rebuild_args {
         let path = PathBuf::from(arg);
         if !path.is_absolute() || !path.exists() {
             continue;
         }
         let canonical = absolute_existing_no_follow(&path, "rebuild argument input")?;
-        let role =
-            classify_argument_role(&canonical, recipe_arg.as_deref(), bundle_dir, proof_root, ordinary_output_dir);
+        let role = classify_argument_role(
+            &canonical,
+            recipe_arg.as_deref(),
+            request.bundle_dir,
+            request.proof_root,
+            request.ordinary_output_dir,
+        );
         let name = match role {
             RebuildInputRole::Recipe => "rebuild-recipe".to_string(),
             RebuildInputRole::Tool => {
@@ -282,8 +322,13 @@ fn measure_declared_paths(
             _ => format!("forbidden-input-{tool_index:03}"),
         };
         let observation = measure_path(&canonical, &name, role)?;
+        if observations.len() >= observation_count_max {
+            return Err(RunError::Internal("declared rebuild observation count exceeded bound".to_string()));
+        }
         observations.push(path_observation(observation, &canonical));
     }
+    assert!(!observations.is_empty(), "declared rebuild paths must include fixed authority inputs");
+    assert!(observations.len() <= observation_count_max, "declared rebuild paths must stay bounded");
     Ok(observations)
 }
 
@@ -341,6 +386,7 @@ fn first_existing_regular_argument(args: &[OsString]) -> Result<Option<PathBuf>,
 }
 
 fn append_policy_observations(observations: &mut Vec<PathObservation>) -> Result<(), RunError> {
+    let initial_observation_count = observations.len();
     for (name, role, material) in [
         ("policy", RebuildInputRole::SandboxPolicy, SANDBOX_POLICY_IDENTITY),
         ("policy", RebuildInputRole::EffectPolicy, BUILD_EFFECT_POLICY_VERSION),
@@ -362,6 +408,12 @@ fn append_policy_observations(observations: &mut Vec<PathObservation>) -> Result
             original_path: None,
         });
     }
+    assert_eq!(
+        observations.len().checked_sub(initial_observation_count),
+        Some(POLICY_OBSERVATION_COUNT),
+        "every rebuild policy identity must be observed"
+    );
+    assert!(observations.len() >= POLICY_OBSERVATION_COUNT, "policy observations must be retained");
     Ok(())
 }
 
@@ -374,18 +426,24 @@ fn append_recipe_authority_observations(
         .find(|item| item.observation.identity.role == RebuildInputRole::Recipe)
         .and_then(|item| item.original_path.clone())
         .ok_or_else(|| RunError::Internal("genuine rebuild authority could not identify recipe bytes".to_string()))?;
+    assert!(recipe.is_file(), "measured rebuild recipe must remain a regular file");
+    assert!(
+        observations.iter().any(|item| item.observation.identity.role == RebuildInputRole::Recipe),
+        "recipe observation must remain in authority inputs"
+    );
     if recipe_contains(&recipe, FORBIDDEN_BUNDLE_ENV)? {
-        observations.push(forbidden_recipe_observation(
-            "recipe-reads-release-bundle",
-            "recipe references MANTLE_REPRODUCE_BUNDLE_DIR",
-        )?);
+        observations.push(forbidden_recipe_observation(ForbiddenRecipeFact {
+            name: "recipe-reads-release-bundle",
+            detail: "recipe references MANTLE_REPRODUCE_BUNDLE_DIR",
+        })?);
     }
     for target in targets {
         if recipe_contains(&recipe, target.observation_path_bytes())? {
-            observations.push(forbidden_recipe_observation(
-                &format!("recipe-target-path: {}", target.identity.name),
-                "recipe embeds a published target path",
-            )?);
+            let observation_name = format!("recipe-target-path: {}", target.identity.name);
+            observations.push(forbidden_recipe_observation(ForbiddenRecipeFact {
+                name: &observation_name,
+                detail: "recipe embeds a published target path",
+            })?);
         }
     }
     Ok(())
@@ -401,18 +459,18 @@ impl ObservationPathBytes for RebuildInputObservation {
     }
 }
 
-fn forbidden_recipe_observation(name: &str, detail: &str) -> Result<PathObservation, RunError> {
-    let digest_blake3 = blake3::hash(detail.as_bytes()).to_hex().to_string();
+fn forbidden_recipe_observation(fact: ForbiddenRecipeFact<'_>) -> Result<PathObservation, RunError> {
+    let digest_blake3 = blake3::hash(fact.detail.as_bytes()).to_hex().to_string();
     Ok(PathObservation {
         observation: RebuildInputObservation {
             identity: RebuildContentIdentity {
-                name: name.to_string(),
+                name: fact.name.to_string(),
                 role: RebuildInputRole::PublishedTarget,
                 kind: RebuildContentKind::SyntheticPolicy,
                 digest_blake3,
-                size_bytes: usize_to_u64(detail.len(), "recipe diagnostic size")?,
+                size_bytes: usize_to_u64(fact.detail.len(), "recipe diagnostic size")?,
             },
-            normalized_path: format!("recipe-observation:{name}"),
+            normalized_path: format!("recipe-observation:{}", fact.name),
             filesystem_object_identity: None,
         },
         original_path: None,
@@ -442,6 +500,8 @@ fn build_descriptor(
     observations: &[PathObservation],
     run_roots: &[RebuildRunRootObservation],
 ) -> Result<ContentBoundRebuildDescriptor, RunError> {
+    assert!(!manifest.binaries.is_empty(), "rebuild descriptor requires published targets");
+    assert!(!observations.is_empty(), "rebuild descriptor requires measured authority inputs");
     let identity_for = |role| {
         observations
             .iter()
@@ -492,13 +552,18 @@ fn build_descriptor(
 }
 
 fn descriptor_arguments(args: &[OsString], observations: &[PathObservation]) -> Result<Vec<String>, RunError> {
+    let path_count_max = observations.len();
     let mut by_path = BTreeMap::new();
     for item in observations {
         if let Some(path) = &item.original_path {
+            if by_path.len() >= path_count_max {
+                return Err(RunError::Internal("descriptor path identity count exceeded observations".to_string()));
+            }
             by_path.insert(path.clone(), item.observation.identity.clone());
         }
     }
-    args.iter()
+    let ordered_arguments = args
+        .iter()
         .map(|arg| {
             let text = arg
                 .to_str()
@@ -512,7 +577,10 @@ fn descriptor_arguments(args: &[OsString], observations: &[PathObservation]) -> 
             }
             Ok(format!("literal:{text}"))
         })
-        .collect()
+        .collect::<Result<Vec<_>, RunError>>()?;
+    assert_eq!(ordered_arguments.len(), args.len(), "descriptor arguments must preserve argument cardinality");
+    assert!(by_path.len() <= path_count_max, "descriptor path identities must stay bounded");
+    Ok(ordered_arguments)
 }
 
 fn run_root_observations(runs: &[RebuildRunPaths]) -> Result<Vec<RebuildRunRootObservation>, RunError> {
@@ -544,6 +612,7 @@ fn materialize_approved_inputs(
         .filter(|item| is_declared_rebuild_input(item.observation.identity.role))
         .filter_map(|item| item.original_path.clone())
         .collect::<BTreeSet<_>>();
+    let materialized_count_max = originals.len();
     let mut materialized = BTreeMap::new();
     for (index, original) in originals.iter().enumerate() {
         let index = u32::try_from(index)
@@ -556,8 +625,13 @@ fn materialize_approved_inputs(
         let destination = destination_dir.join(basename);
         copy_regular_file(original, &destination)?;
         validate_materialized_copy(original, &destination, observations)?;
+        if materialized.len() >= materialized_count_max {
+            return Err(RunError::Internal("materialized rebuild input count exceeded originals".to_string()));
+        }
         materialized.insert(original.clone(), destination);
     }
+    assert_eq!(materialized.len(), materialized_count_max, "every approved input must materialize once");
+    assert_eq!(materialized.len(), originals.len(), "materialized inputs must preserve approved identities");
     Ok(materialized)
 }
 
@@ -633,6 +707,8 @@ fn remap_command_args(args: &[OsString], materialized: &BTreeMap<PathBuf, PathBu
 }
 
 fn measure_path(path: &Path, name: &str, role: RebuildInputRole) -> Result<RebuildInputObservation, RunError> {
+    assert!(!path.as_os_str().is_empty(), "measured rebuild path must not be empty");
+    assert!(!name.is_empty(), "measured rebuild identity name must not be empty");
     let metadata = std::fs::symlink_metadata(path)
         .map_err(|err| RunError::Internal(format!("metadata rebuild input {}: {err}", path.display())))?;
     if metadata.file_type().is_symlink() {
@@ -691,17 +767,31 @@ fn measure_regular_file(path: &Path, name: &str, role: RebuildInputRole) -> Resu
 fn hash_file(path: &Path) -> Result<(u64, String), RunError> {
     let metadata =
         std::fs::metadata(path).map_err(|err| RunError::Internal(format!("metadata {}: {err}", path.display())))?;
+    assert!(HASH_BUFFER_BYTES > 0, "rebuild hash buffer must not be empty");
+    let buffer_size_bytes = u64::try_from(HASH_BUFFER_BYTES)
+        .map_err(|_| RunError::Internal("rebuild hash buffer size overflowed u64".to_string()))?;
+    let read_attempt_count_max = metadata
+        .len()
+        .checked_div(buffer_size_bytes)
+        .and_then(|count| count.checked_add(HASH_EOF_PROBE_ATTEMPTS))
+        .ok_or_else(|| RunError::Internal("rebuild hash read attempt count overflowed u64".to_string()))?;
+    assert!(read_attempt_count_max > 0, "rebuild hash read attempt count must be positive");
     let mut file = File::open(path).map_err(|err| RunError::Internal(format!("open {}: {err}", path.display())))?;
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0_u8; HASH_BUFFER_BYTES];
-    loop {
+    let mut is_complete = false;
+    for _ in 0..read_attempt_count_max {
         let bytes_read = file
             .read(&mut buffer)
             .map_err(|err| RunError::Internal(format!("read {}: {err}", path.display())))?;
         if bytes_read == 0 {
+            is_complete = true;
             break;
         }
         hasher.update(&buffer[..bytes_read]);
+    }
+    if !is_complete {
+        return Err(RunError::Internal(format!("rebuild input changed while hashing: {}", path.display())));
     }
     Ok((metadata.len(), hasher.finalize().to_hex().to_string()))
 }

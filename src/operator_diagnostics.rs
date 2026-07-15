@@ -1,7 +1,6 @@
 // machine-artifact-public: operator-diagnostics.doctor-report
 // machine-artifact-public: runtime.diagnostic-fingerprint
 use std::ffi::CString;
-use std::fmt::Write as _;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -169,8 +168,16 @@ pub fn summarize_runtime_secrets(input: RuntimeSecretInputs<'_>) -> RuntimeFinge
     }
 }
 
-pub fn bounded_runtime_count(count: usize) -> u32 {
-    u32::try_from(count).unwrap_or(MAX_REDACTED_SUMMARY_COUNT).min(MAX_REDACTED_SUMMARY_COUNT)
+pub fn bounded_runtime_count<Count>(count: Count) -> u32
+where Count: TryInto<u64> {
+    let Ok(count_u64) = count.try_into() else {
+        return MAX_REDACTED_SUMMARY_COUNT;
+    };
+    let bounded_count = count_u64.min(u64::from(MAX_REDACTED_SUMMARY_COUNT));
+    match u32::try_from(bounded_count) {
+        Ok(count_u32) => count_u32,
+        Err(_) => MAX_REDACTED_SUMMARY_COUNT,
+    }
 }
 
 pub fn count_substituters(value: &str) -> u32 {
@@ -240,13 +247,13 @@ pub fn collect_doctor_report(request: DoctorRequest<'_>) -> PreflightReport {
     checks.push(check_fusermount3_availability());
     checks.push(check_directory_writable("state-dir", request.state_dir, "state directory"));
     checks.push(check_directory_writable("store-dir", request.store_dir, "store directory"));
-    let ok = checks.iter().all(|check| check.status == PreflightStatus::Ok);
+    let is_ok = checks.iter().all(|check| check.status == PreflightStatus::Ok);
 
     PreflightReport {
         schema: "crunch-doctor-report-v1",
         command: "doctor",
         profile: request.profile,
-        ok,
+        ok: is_ok,
         checks,
     }
 }
@@ -256,16 +263,16 @@ impl PreflightReport {
         assert!(!self.checks.is_empty(), "doctor report must include at least one check");
         let failed_count = self.failed_count();
         let mut out = String::new();
-        let _ = writeln!(&mut out, "doctor profile: {}", self.profile.as_str());
+        out.push_str(&format!("doctor profile: {}\n", self.profile.as_str()));
         if self.ok {
-            let _ = writeln!(&mut out, "status: ok");
+            out.push_str("status: ok\n");
         } else {
             let noun = if failed_count == 1 {
                 "prerequisite"
             } else {
                 "prerequisites"
             };
-            let _ = writeln!(&mut out, "status: failed ({failed_count} {noun} failed)");
+            out.push_str(&format!("status: failed ({failed_count} {noun} failed)\n"));
         }
         for check in &self.checks {
             let marker = if check.status == PreflightStatus::Ok {
@@ -273,9 +280,9 @@ impl PreflightReport {
             } else {
                 "failed"
             };
-            let _ = writeln!(&mut out, "- [{marker}] {}: {}", check.id, check.summary);
+            out.push_str(&format!("- [{marker}] {}: {}\n", check.id, check.summary));
             if let Some(detail) = &check.detail {
-                let _ = writeln!(&mut out, "  {detail}");
+                out.push_str(&format!("  {detail}\n"));
             }
         }
         out
@@ -286,8 +293,8 @@ impl PreflightReport {
     }
 
     pub fn failed_count(&self) -> u32 {
-        let count = self.checks.iter().filter(|check| check.status == PreflightStatus::Failed).count();
-        u32::try_from(count).expect("preflight failure count must fit in u32")
+        let failed_count = self.checks.iter().filter(|check| check.status == PreflightStatus::Failed).count();
+        bounded_runtime_count(failed_count)
     }
 }
 
@@ -312,9 +319,9 @@ fn failed_check(id: &'static str, summary: String, detail: Option<String>) -> Pr
 }
 
 fn check_nightly_toolchain_visibility() -> PreflightCheck {
-    let cargo = command_supports_nightly("cargo");
-    let rustc = command_supports_nightly("rustc");
-    if cargo && rustc {
+    let is_cargo_ready = command_supports_nightly("cargo");
+    let is_rustc_ready = command_supports_nightly("rustc");
+    if is_cargo_ready && is_rustc_ready {
         return ok_check("nightly-toolchain", "cargo +nightly and rustc +nightly are visible".to_string(), None);
     }
 
@@ -385,6 +392,8 @@ fn find_bwrap() -> Option<PathBuf> {
 }
 
 fn check_sandbox_shell_availability() -> PreflightCheck {
+    assert!(!SANDBOX_SHELL_PLACEHOLDER.is_empty(), "sandbox shell placeholder must not be empty");
+    assert!(!BWRAP_PATH_ENV.is_empty(), "bwrap environment key must not be empty");
     if let Some(env_shell) = std::env::var_os("SNIX_BUILD_SANDBOX_SHELL")
         && env_shell != SANDBOX_SHELL_PLACEHOLDER
     {
@@ -512,17 +521,13 @@ fn writable_anchor(target_path: &Path) -> Result<PathBuf, String> {
 
 fn nearest_existing_ancestor(target_path: &Path) -> Option<PathBuf> {
     let mut current = target_path;
-    let mut ascents: u32 = 0;
-    loop {
+    for _ in 0..=MAX_PARENT_ASCENT {
         if current.exists() {
             return Some(current.to_path_buf());
         }
-        ascents = ascents.saturating_add(1);
-        if ascents > MAX_PARENT_ASCENT {
-            return None;
-        }
         current = current.parent()?;
     }
+    None
 }
 
 fn directory_is_effectively_writable(path: &Path) -> Result<bool, String> {
@@ -533,17 +538,20 @@ fn directory_is_effectively_writable(path: &Path) -> Result<bool, String> {
     }
     let c_path = CString::new(bytes).map_err(|e| format!("encoding {} for access(2): {e}", path.display()))?;
     let mode = libc::W_OK | libc::X_OK;
+    assert!(!c_path.as_bytes().is_empty(), "effective-write probe path must not be empty");
+    assert_ne!(mode, 0, "effective-write probe mode must request permissions");
     let rc = unsafe { libc::access(c_path.as_ptr(), mode) };
     if rc == 0 {
         return Ok(true);
     }
     let error = std::io::Error::last_os_error();
-    match error.raw_os_error() {
-        Some(libc::EACCES) => Ok(false),
-        Some(libc::EROFS) => Ok(false),
-        Some(libc::EPERM) => Ok(false),
-        _ => Err(format!("access {}: {error}", path.display())),
+    let Some(error_code) = error.raw_os_error() else {
+        return Err(format!("access {}: {error}", path.display()));
+    };
+    if matches!(error_code, libc::EACCES | libc::EROFS | libc::EPERM) {
+        return Ok(false);
     }
+    Err(format!("access {}: {error}", path.display()))
 }
 
 fn is_executable_file(path: &Path) -> bool {

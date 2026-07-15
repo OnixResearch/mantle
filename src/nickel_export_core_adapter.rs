@@ -91,6 +91,33 @@ pub struct AdapterFailure {
     pub drift: Option<Box<DualRunEvidence>>,
 }
 
+struct ComparisonRequest<'a> {
+    canonical_identity: &'a str,
+    legacy_identity: &'a str,
+    canonical_projection: &'a NickelExportReceipt,
+    legacy_projection: &'a NickelExportReceipt,
+    canonical: &'a ExportReceipt,
+    legacy: &'a ExportReceipt,
+}
+
+struct DriftMatchFacts {
+    identities_match: bool,
+    projections_match: bool,
+}
+
+struct FailureFact<'a> {
+    class: &'a str,
+    diagnostic_class: &'a str,
+    subject: &'a str,
+    message: &'a str,
+}
+
+struct DiagnosticFact<'a> {
+    class: &'a str,
+    subject: &'a str,
+    message: &'a str,
+}
+
 pub fn export_source_ref(path: &str, bytes: &[u8]) -> ExportSourceRef {
     ExportSourceRef {
         path: path.to_string(),
@@ -103,6 +130,8 @@ pub fn mantle_receipt_digest(receipt: &NickelExportReceipt) -> Result<String, Ad
 }
 
 pub fn normalize_adapter_request(request: &AdapterRequest<'_>) -> Result<ExportRequest, AdapterFailure> {
+    assert!(!FAMILY_ID.is_empty(), "Nickel export family identity must not be empty");
+    assert!(!nickel_export_core::REQUEST_SCHEMA.is_empty(), "Nickel export request schema must not be empty");
     let (format, mut diagnostics) = match parse_format(request.format) {
         Ok(format) => (format, Vec::new()),
         Err(failure) => (ExportFormat::Json, failure.diagnostics),
@@ -142,26 +171,28 @@ pub fn admit_and_compare(
     observation: &ExplicitObservation<'_>,
     legacy_receipt: &NickelExportReceipt,
 ) -> Result<CanonicalAdmission, AdapterFailure> {
+    assert!(!CANONICAL_RECEIPT_IDENTITY_SCHEMA.is_empty(), "dual-run evidence schema must not be empty");
     let request = normalize_adapter_request(&observation.request)?;
+    assert!(!request.destination.is_empty(), "normalized output target must not be empty");
     let evaluator = canonical_evaluator(observation.request.evaluator);
     let canonical = build_canonical_receipt(observation, &request, &evaluator)?;
     let projected = nickel_export_core::project_mantle_receipt(&canonical);
     let mantle_receipt = mantle_receipt(&projected);
     validate_claim_boundary(&canonical, &mantle_receipt)?;
 
-    let legacy_view = legacy_canonical_view(observation, &request, legacy_receipt, &canonical);
+    let legacy_view = legacy_canonical_view(observation, &request, legacy_receipt, &canonical)?;
     let canonical_manifest =
         nickel_export_core::build_manifest(core::slice::from_ref(&canonical)).map_err(adapter_failure_from_core)?;
     let legacy_manifest =
         nickel_export_core::build_manifest(core::slice::from_ref(&legacy_view)).map_err(adapter_failure_from_core)?;
-    let evidence = comparison_evidence(
-        bare_blake3(&canonical_manifest.manifest_identity),
-        bare_blake3(&legacy_manifest.manifest_identity),
-        &mantle_receipt,
-        legacy_receipt,
-        &canonical,
-        &legacy_view,
-    )?;
+    let evidence = comparison_evidence(ComparisonRequest {
+        canonical_identity: bare_blake3(&canonical_manifest.manifest_identity),
+        legacy_identity: bare_blake3(&legacy_manifest.manifest_identity),
+        canonical_projection: &mantle_receipt,
+        legacy_projection: legacy_receipt,
+        canonical: &canonical,
+        legacy: &legacy_view,
+    })?;
     let evidence = enforce_no_drift(evidence)?;
     verify_freshness(&canonical_manifest, &canonical_manifest)?;
     Ok(CanonicalAdmission {
@@ -175,7 +206,12 @@ pub fn admit_and_compare(
 pub fn compare_evaluator_failure(
     observation: &ExplicitObservation<'_>,
 ) -> Result<FailureParityEvidence, AdapterFailure> {
+    assert!(!FAMILY_ID.is_empty(), "evaluator failure comparison requires a family identity");
     let request = normalize_adapter_request(&observation.request)?;
+    assert_eq!(
+        request.source, observation.request.source,
+        "normalized evaluator failure source must retain its path"
+    );
     let evaluator = canonical_evaluator(observation.request.evaluator);
     let result = build_canonical_receipt(observation, &request, &evaluator);
     match result {
@@ -192,11 +228,11 @@ pub fn compare_evaluator_failure(
         }),
         Ok(_) => Err(AdapterFailure {
             class: "dual-run-drift".to_string(),
-            diagnostics: vec![adapter_diagnostic(
-                "unexpected-canonical-success",
-                observation.request.source,
-                "canonical admission emitted a receipt for evaluator error observations",
-            )],
+            diagnostics: vec![adapter_diagnostic(DiagnosticFact {
+                class: "unexpected-canonical-success",
+                subject: observation.request.source,
+                message: "canonical admission emitted a receipt for evaluator error observations",
+            })],
             drift: None,
         }),
     }
@@ -210,18 +246,18 @@ pub fn validate_claim_boundary(
     canonical: &ExportReceipt,
     projection: &NickelExportReceipt,
 ) -> Result<(), AdapterFailure> {
-    let canonical_valid = canonical.non_claim == nickel_export_core::NON_CLAIM;
-    let projection_valid = projection.non_claim == nickel_export_core::MANTLE_NON_CLAIM;
-    if canonical_valid && projection_valid {
+    let is_canonical_valid = canonical.non_claim == nickel_export_core::NON_CLAIM;
+    let is_projection_valid = projection.non_claim == nickel_export_core::MANTLE_NON_CLAIM;
+    if is_canonical_valid && is_projection_valid {
         return Ok(());
     }
     Err(AdapterFailure {
         class: "overclaim".to_string(),
-        diagnostics: vec![adapter_diagnostic(
-            "overclaim",
-            "non_claim",
-            "canonical or Mantle receipt weakened the required non-claim boundary",
-        )],
+        diagnostics: vec![adapter_diagnostic(DiagnosticFact {
+            class: "overclaim",
+            subject: "non_claim",
+            message: "canonical or Mantle receipt weakened the required non-claim boundary",
+        })],
         drift: None,
     })
 }
@@ -231,6 +267,8 @@ fn build_canonical_receipt(
     request: &ExportRequest,
     evaluator: &EvaluatorDescriptor,
 ) -> Result<ExportReceipt, AdapterFailure> {
+    assert_eq!(observation.source.path, request.source, "source material must match normalized request");
+    assert_eq!(observation.output.path, request.destination, "output material must match normalized request");
     let dependencies = observation
         .dependencies
         .iter()
@@ -277,11 +315,11 @@ fn parse_format(format: &str) -> Result<ExportFormat, AdapterFailure> {
     }
     Err(AdapterFailure {
         class: "validation".to_string(),
-        diagnostics: vec![adapter_diagnostic(
-            "unsupported-format",
-            format,
-            "Mantle currently admits only JSON Nickel exports",
-        )],
+        diagnostics: vec![adapter_diagnostic(DiagnosticFact {
+            class: "unsupported-format",
+            subject: format,
+            message: "Mantle currently admits only JSON Nickel exports",
+        })],
         drift: None,
     })
 }
@@ -319,23 +357,24 @@ fn legacy_canonical_view(
     request: &ExportRequest,
     legacy: &NickelExportReceipt,
     canonical: &ExportReceipt,
-) -> ExportReceipt {
-    let dependencies = legacy
-        .deps
-        .iter()
-        .map(|source| ArtifactIdentity {
+) -> Result<ExportReceipt, AdapterFailure> {
+    assert_eq!(request.family_id, FAMILY_ID, "legacy view must retain the Mantle export family");
+    assert_eq!(canonical.non_claim, nickel_export_core::NON_CLAIM, "canonical receipt must retain its non-claim");
+    let mut dependencies = Vec::with_capacity(legacy.deps.len());
+    for source in &legacy.deps {
+        dependencies.push(ArtifactIdentity {
             path: source.path.clone(),
             identity: tagged_blake3(&source.digest_blake3),
-            bytes: artifact_len(observation.dependencies, &source.path),
-        })
-        .collect::<Vec<_>>();
-    ExportReceipt {
+            bytes: artifact_len(observation.dependencies, &source.path)?,
+        });
+    }
+    Ok(ExportReceipt {
         schema: nickel_export_core::RECEIPT_SCHEMA.to_string(),
         family_id: request.family_id.clone(),
         source: ArtifactIdentity {
             path: legacy.root_source.path.clone(),
             identity: tagged_blake3(&legacy.root_source.digest_blake3),
-            bytes: byte_len(observation.source.bytes),
+            bytes: byte_len(observation.source.bytes)?,
         },
         dependencies,
         import_paths: legacy.import_paths.clone(),
@@ -345,7 +384,7 @@ fn legacy_canonical_view(
         output: ArtifactIdentity {
             path: legacy.output_target.clone(),
             identity: tagged_blake3(&legacy.output_digest_blake3),
-            bytes: byte_len(observation.output.bytes),
+            bytes: byte_len(observation.output.bytes)?,
         },
         evaluator: EvaluatorDescriptor {
             identity: legacy.evaluator.identity.clone(),
@@ -355,40 +394,35 @@ fn legacy_canonical_view(
         },
         diagnostics: canonical.diagnostics.clone(),
         non_claim: nickel_export_core::NON_CLAIM.to_string(),
-    }
+    })
 }
 
-fn comparison_evidence(
-    canonical_identity: &str,
-    legacy_identity: &str,
-    canonical_projection: &NickelExportReceipt,
-    legacy_projection: &NickelExportReceipt,
-    canonical: &ExportReceipt,
-    legacy: &ExportReceipt,
-) -> Result<DualRunEvidence, AdapterFailure> {
-    let canonical_projection_digest = projection_digest(canonical_projection)?;
-    let legacy_projection_digest = projection_digest(legacy_projection)?;
-    let identity_matches = canonical_identity == legacy_identity;
-    let projection_matches = canonical_projection == legacy_projection;
-    let drift_class = classify_drift(canonical, legacy, identity_matches, projection_matches);
+fn comparison_evidence(request: ComparisonRequest<'_>) -> Result<DualRunEvidence, AdapterFailure> {
+    assert!(!request.canonical_identity.is_empty(), "canonical comparison identity must not be empty");
+    assert!(!request.legacy_identity.is_empty(), "legacy comparison identity must not be empty");
+    let canonical_projection_digest = projection_digest(request.canonical_projection)?;
+    let legacy_projection_digest = projection_digest(request.legacy_projection)?;
+    let is_identity_match = request.canonical_identity == request.legacy_identity;
+    let is_projection_match = request.canonical_projection == request.legacy_projection;
+    let drift_class = classify_drift(request.canonical, request.legacy, DriftMatchFacts {
+        identities_match: is_identity_match,
+        projections_match: is_projection_match,
+    });
     Ok(DualRunEvidence {
         schema: CANONICAL_RECEIPT_IDENTITY_SCHEMA.to_string(),
-        canonical_receipt_identity_blake3: canonical_identity.to_string(),
-        legacy_receipt_identity_blake3: legacy_identity.to_string(),
+        canonical_receipt_identity_blake3: request.canonical_identity.to_string(),
+        legacy_receipt_identity_blake3: request.legacy_identity.to_string(),
         canonical_projection_digest_blake3: canonical_projection_digest,
         legacy_projection_digest_blake3: legacy_projection_digest,
-        identity_matches,
-        projection_matches,
+        identity_matches: is_identity_match,
+        projection_matches: is_projection_match,
         drift_class,
     })
 }
 
-fn classify_drift(
-    canonical: &ExportReceipt,
-    legacy: &ExportReceipt,
-    identity_matches: bool,
-    projection_matches: bool,
-) -> Option<String> {
+fn classify_drift(canonical: &ExportReceipt, legacy: &ExportReceipt, facts: DriftMatchFacts) -> Option<String> {
+    assert_eq!(canonical.schema, legacy.schema, "dual-run receipts must share a schema");
+    assert_eq!(canonical.family_id, legacy.family_id, "dual-run receipts must share a family");
     if canonical.source != legacy.source || canonical.output != legacy.output {
         return Some(DRIFT_REQUEST_NORMALIZATION.to_string());
     }
@@ -401,18 +435,23 @@ fn classify_drift(
     if canonical.non_claim != legacy.non_claim {
         return Some(DRIFT_MANTLE_POLICY.to_string());
     }
-    if !identity_matches {
+    if !facts.identities_match {
         return Some(DRIFT_SERIALIZATION.to_string());
     }
-    if !projection_matches {
+    if !facts.projections_match {
         return Some(DRIFT_PROJECTION.to_string());
     }
     None
 }
 
 fn enforce_no_drift(evidence: DualRunEvidence) -> Result<DualRunEvidence, AdapterFailure> {
-    if evidence.identity_matches && evidence.projection_matches && evidence.drift_class.is_none() {
-        return Ok(evidence);
+    let is_identity_match = evidence.identity_matches;
+    let is_projection_match = evidence.projection_matches;
+    let is_exact_match = is_identity_match && is_projection_match;
+    if is_exact_match {
+        if evidence.drift_class.is_none() {
+            return Ok(evidence);
+        }
     }
     Err(AdapterFailure {
         class: "dual-run-drift".to_string(),
@@ -429,57 +468,59 @@ fn projection_digest(receipt: &NickelExportReceipt) -> Result<String, AdapterFai
 fn serialization_failure() -> AdapterFailure {
     AdapterFailure {
         class: DRIFT_SERIALIZATION.to_string(),
-        diagnostics: vec![adapter_diagnostic(
-            DRIFT_SERIALIZATION,
-            "receipt",
-            "receipt serialization failed during dual-run comparison",
-        )],
+        diagnostics: vec![adapter_diagnostic(DiagnosticFact {
+            class: DRIFT_SERIALIZATION,
+            subject: "receipt",
+            message: "receipt serialization failed during dual-run comparison",
+        })],
         drift: None,
     }
 }
 
 fn adapter_failure_from_core(error: CoreError) -> AdapterFailure {
+    assert!(!FAMILY_ID.is_empty(), "adapter failure mapping requires a family identity");
+    assert!(!BLAKE3_PREFIX.is_empty(), "adapter failure mapping requires a digest prefix");
     match error {
         CoreError::InvalidRequest(diagnostics) => core_diagnostics_failure("validation", diagnostics),
         CoreError::MaterialMismatch(diagnostics) => core_diagnostics_failure("material", diagnostics),
         CoreError::EvaluationFailed(diagnostics) => core_diagnostics_failure("eval", diagnostics),
-        CoreError::UndeclaredDependency(path) => single_failure(
-            "dependency-closure",
-            "undeclared-dependency",
-            &path,
-            "evaluator observed an undeclared dependency",
-        ),
-        CoreError::DependencyClosureMismatch => single_failure(
-            "dependency-closure",
-            "dependency-closure-mismatch",
-            "dependencies",
-            "declared and evaluator-observed dependency closures differ",
-        ),
-        CoreError::SecretMaterial(path) => single_failure(
-            "secret-material",
-            "secret-marker",
-            &path,
-            "secret-like source material requires an explicit product-owned policy",
-        ),
-        CoreError::MixedEvaluators => single_failure(
-            "mixed-evaluator",
-            "mixed-evaluator",
-            "evaluator",
-            "canonical manifests cannot mix evaluator descriptors",
-        ),
-        CoreError::DuplicateOutput(path) => single_failure(
-            "duplicate-output",
-            "duplicate-output",
-            &path,
-            "canonical manifests cannot repeat an output target",
-        ),
+        CoreError::UndeclaredDependency(path) => single_failure(FailureFact {
+            class: "dependency-closure",
+            diagnostic_class: "undeclared-dependency",
+            subject: &path,
+            message: "evaluator observed an undeclared dependency",
+        }),
+        CoreError::DependencyClosureMismatch => single_failure(FailureFact {
+            class: "dependency-closure",
+            diagnostic_class: "dependency-closure-mismatch",
+            subject: "dependencies",
+            message: "declared and evaluator-observed dependency closures differ",
+        }),
+        CoreError::SecretMaterial(path) => single_failure(FailureFact {
+            class: "secret-material",
+            diagnostic_class: "secret-marker",
+            subject: &path,
+            message: "secret-like source material requires an explicit product-owned policy",
+        }),
+        CoreError::MixedEvaluators => single_failure(FailureFact {
+            class: "mixed-evaluator",
+            diagnostic_class: "mixed-evaluator",
+            subject: "evaluator",
+            message: "canonical manifests cannot mix evaluator descriptors",
+        }),
+        CoreError::DuplicateOutput(path) => single_failure(FailureFact {
+            class: "duplicate-output",
+            diagnostic_class: "duplicate-output",
+            subject: &path,
+            message: "canonical manifests cannot repeat an output target",
+        }),
         CoreError::Serialization => serialization_failure(),
-        CoreError::StaleManifest => single_failure(
-            "stale-output",
-            "stale-output",
-            "manifest",
-            "checked export evidence does not match current exact bytes",
-        ),
+        CoreError::StaleManifest => single_failure(FailureFact {
+            class: "stale-output",
+            diagnostic_class: "stale-output",
+            subject: "manifest",
+            message: "checked export evidence does not match current exact bytes",
+        }),
     }
 }
 
@@ -512,33 +553,37 @@ fn mapped_diagnostic_class(diagnostic: &Diagnostic) -> &str {
     &diagnostic.class
 }
 
-fn single_failure(class: &str, diagnostic_class: &str, subject: &str, message: &str) -> AdapterFailure {
+fn single_failure(fact: FailureFact<'_>) -> AdapterFailure {
     AdapterFailure {
-        class: class.to_string(),
-        diagnostics: vec![adapter_diagnostic(diagnostic_class, subject, message)],
+        class: fact.class.to_string(),
+        diagnostics: vec![adapter_diagnostic(DiagnosticFact {
+            class: fact.diagnostic_class,
+            subject: fact.subject,
+            message: fact.message,
+        })],
         drift: None,
     }
 }
 
 fn drift_diagnostics(evidence: &DualRunEvidence) -> Vec<NickelExportDiagnostic> {
-    vec![adapter_diagnostic(
-        "dual-run-drift",
-        evidence.drift_class.as_deref().unwrap_or("unknown"),
-        &format!(
+    vec![adapter_diagnostic(DiagnosticFact {
+        class: "dual-run-drift",
+        subject: evidence.drift_class.as_deref().unwrap_or("unknown"),
+        message: &format!(
             "canonical={} legacy={} canonical_projection={} legacy_projection={}",
             evidence.canonical_receipt_identity_blake3,
             evidence.legacy_receipt_identity_blake3,
             evidence.canonical_projection_digest_blake3,
             evidence.legacy_projection_digest_blake3
         ),
-    )]
+    })]
 }
 
-fn adapter_diagnostic(class: &str, subject: &str, message: &str) -> NickelExportDiagnostic {
+fn adapter_diagnostic(fact: DiagnosticFact<'_>) -> NickelExportDiagnostic {
     NickelExportDiagnostic {
-        class: class.to_string(),
-        subject: subject.to_string(),
-        message: message.to_string(),
+        class: fact.class.to_string(),
+        subject: fact.subject.to_string(),
+        message: fact.message.to_string(),
     }
 }
 
@@ -546,15 +591,27 @@ fn diagnostics_match(legacy: &[NickelExportDiagnostic], canonical: &[NickelExpor
     legacy == canonical
 }
 
-fn artifact_len(artifacts: &[ExplicitArtifact<'_>], path: &str) -> u64 {
-    artifacts
-        .iter()
-        .find(|artifact| artifact.path == path)
-        .map_or(u64::MAX, |artifact| byte_len(artifact.bytes))
+fn artifact_len(artifacts: &[ExplicitArtifact<'_>], path: &str) -> Result<u64, AdapterFailure> {
+    let artifact = artifacts.iter().find(|artifact| artifact.path == path).ok_or_else(|| {
+        single_failure(FailureFact {
+            class: "dependency-closure",
+            diagnostic_class: "missing-dependency-material",
+            subject: path,
+            message: "legacy projection names dependency material absent from the explicit observation",
+        })
+    })?;
+    byte_len(artifact.bytes)
 }
 
-fn byte_len(bytes: &[u8]) -> u64 {
-    u64::try_from(bytes.len()).unwrap_or(u64::MAX)
+fn byte_len(bytes: &[u8]) -> Result<u64, AdapterFailure> {
+    u64::try_from(bytes.len()).map_err(|_| {
+        single_failure(FailureFact {
+            class: "material",
+            diagnostic_class: "artifact-length-overflow",
+            subject: "bytes",
+            message: "artifact byte length exceeds the canonical receipt range",
+        })
+    })
 }
 
 fn tagged_blake3(digest: &str) -> String {
@@ -667,14 +724,14 @@ mod tests {
     #[test]
     fn unexplained_identity_drift_fails_closed_as_serialization_drift() {
         let admission = admitted(OUTPUT_BYTES, "mantle-embedded-crunch-eval");
-        let evidence = comparison_evidence(
-            CANONICAL_IDENTITY_FIXTURE,
-            LEGACY_IDENTITY_FIXTURE,
-            &admission.mantle_receipt,
-            &admission.mantle_receipt,
-            &admission.canonical_receipt,
-            &admission.canonical_receipt,
-        )
+        let evidence = comparison_evidence(ComparisonRequest {
+            canonical_identity: CANONICAL_IDENTITY_FIXTURE,
+            legacy_identity: LEGACY_IDENTITY_FIXTURE,
+            canonical_projection: &admission.mantle_receipt,
+            legacy_projection: &admission.mantle_receipt,
+            canonical: &admission.canonical_receipt,
+            legacy: &admission.canonical_receipt,
+        })
         .unwrap();
         let failure = enforce_no_drift(evidence).unwrap_err();
         assert_eq!(failure.class, "dual-run-drift");

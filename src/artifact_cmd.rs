@@ -35,6 +35,7 @@ use crate::oci_projection_shell::import_oci_layout;
 
 const PROVENANCE_PAIR_SEPARATOR: char = '=';
 const EXPORT_FAILURE_EXIT_CODE: u8 = 1;
+const CONTENT_PROVENANCE_ENTRY_COUNT_MAX: u32 = 4_096;
 
 pub fn cmd_artifact(
     action: crate::ArtifactAction,
@@ -83,7 +84,15 @@ pub fn cmd_artifact(
             spec_material,
             source_admissions,
             out,
-        } => cmd_oci_export(current_dir, state_dir, json, &projection, &spec_material, &source_admissions, &out),
+        } => cmd_oci_export(OciExportShellRequest {
+            current_dir,
+            state_dir,
+            json,
+            projection_path: &projection,
+            spec_material_path: &spec_material,
+            source_admissions_path: &source_admissions,
+            out_path: &out,
+        }),
         crate::ArtifactAction::OciImport { layout, report_out } => {
             cmd_oci_import(current_dir, state_dir, json, &layout, &report_out)
         }
@@ -115,6 +124,16 @@ struct ArtifactImportShellRequest<'a> {
     report_out: Option<&'a Path>,
 }
 
+struct OciExportShellRequest<'a> {
+    current_dir: &'a Path,
+    state_dir: &'a Path,
+    json: bool,
+    projection_path: &'a Path,
+    spec_material_path: &'a Path,
+    source_admissions_path: &'a Path,
+    out_path: &'a Path,
+}
+
 fn cmd_artifact_export(request: ArtifactExportShellRequest<'_>) -> Result<(), RunError> {
     let attestation_path = resolve_cli_path(request.current_dir, request.attestation_path);
     let receipt_out = request.receipt_out.map(|path| resolve_cli_path(request.current_dir, path));
@@ -134,6 +153,8 @@ fn cmd_artifact_export(request: ArtifactExportShellRequest<'_>) -> Result<(), Ru
         supported_destination_modes: supported_destination_modes(),
         no_hidden_fallback: true,
     };
+    assert_eq!(preflight.expectation.artifact_ref, request.artifact_ref);
+    assert!(preflight.no_hidden_fallback, "artifact export shell must fail closed on fallback");
     let preflight_diagnostics = validate_frontend_artifact_export_preflight(&preflight);
     if !preflight_diagnostics.is_empty() {
         return emit_export_report(&failed_report(preflight_diagnostics), receipt_out.as_deref(), request.json);
@@ -143,47 +164,39 @@ fn cmd_artifact_export(request: ArtifactExportShellRequest<'_>) -> Result<(), Ru
     }
     let content = resolve_export_content(&request, provenance)?;
     let content_ref = content.as_ref();
-    let export_request = FrontendArtifactExportRequest {
+    let artifact_request = FrontendArtifactExportRequest {
         preflight,
         content: content_ref,
     };
-    let report = export_frontend_artifact(&export_request);
-    emit_export_report(&report, receipt_out.as_deref(), request.json)
+    let outcome = export_frontend_artifact(&artifact_request);
+    emit_export_report(&outcome, receipt_out.as_deref(), request.json)
 }
 
 fn cmd_artifact_import(request: ArtifactImportShellRequest<'_>) -> Result<(), RunError> {
     let source_path = resolve_cli_path(request.current_dir, request.source_path);
-    let report_out = request.report_out.map(|path| resolve_cli_path(request.current_dir, path));
-    let report = import_frontend_artifact(&source_path, request.state_dir)
+    let summary_path = request.report_out.map(|path| resolve_cli_path(request.current_dir, path));
+    let outcome = import_frontend_artifact(&source_path, request.state_dir)
         .map_err(|err| RunError::Internal(format!("importing frontend artifact: {err}")))?;
-    if let Some(path) = report_out.as_deref() {
-        write_json_output(path, &report)?;
+    if let Some(path) = summary_path.as_deref() {
+        write_json_output(path, &outcome)?;
     }
-    emit_import_report(&report, report_out.as_deref(), request.json)
+    emit_import_report(&outcome, summary_path.as_deref(), request.json)
 }
 
-fn cmd_oci_export(
-    current_dir: &Path,
-    state_dir: &Path,
-    json: bool,
-    projection: &Path,
-    spec_material: &Path,
-    source_admissions: &Path,
-    out: &Path,
-) -> Result<(), RunError> {
-    let projection = resolve_cli_path(current_dir, projection);
-    let spec_material = resolve_cli_path(current_dir, spec_material);
-    let source_admissions = resolve_cli_path(current_dir, source_admissions);
-    let out = resolve_cli_path(current_dir, out);
-    let report = export_oci_layout(&OciExportRequest {
-        projection_path: &projection,
-        spec_material_path: &spec_material,
-        source_admissions_path: &source_admissions,
-        output_dir: &out,
-        state_dir,
+fn cmd_oci_export(request: OciExportShellRequest<'_>) -> Result<(), RunError> {
+    let projection_path = resolve_cli_path(request.current_dir, request.projection_path);
+    let spec_material_path = resolve_cli_path(request.current_dir, request.spec_material_path);
+    let source_admissions_path = resolve_cli_path(request.current_dir, request.source_admissions_path);
+    let out_path = resolve_cli_path(request.current_dir, request.out_path);
+    let outcome = export_oci_layout(&OciExportRequest {
+        projection_path: &projection_path,
+        spec_material_path: &spec_material_path,
+        source_admissions_path: &source_admissions_path,
+        output_dir: &out_path,
+        state_dir: request.state_dir,
     })
     .map_err(|error| RunError::Internal(format!("exporting OCI layout: {error}")))?;
-    emit_oci_export_report(&report, &out, json)
+    emit_oci_export_report(&outcome, &out_path, request.json)
 }
 
 fn cmd_oci_import(
@@ -194,14 +207,14 @@ fn cmd_oci_import(
     report_out: &Path,
 ) -> Result<(), RunError> {
     let layout = resolve_cli_path(current_dir, layout);
-    let report_out = resolve_cli_path(current_dir, report_out);
-    let report = import_oci_layout(&OciImportRequest {
+    let summary_path = resolve_cli_path(current_dir, report_out);
+    let outcome = import_oci_layout(&OciImportRequest {
         layout_dir: &layout,
-        report_path: &report_out,
+        report_path: &summary_path,
         state_dir,
     })
     .map_err(|error| RunError::Internal(format!("importing OCI layout: {error}")))?;
-    emit_oci_import_report(&report, &report_out, json)
+    emit_oci_import_report(&outcome, &summary_path, json)
 }
 
 fn emit_oci_export_report(report: &OciExportReport, out: &Path, json: bool) -> Result<(), RunError> {
@@ -234,12 +247,17 @@ fn resolve_export_content(
     request: &ArtifactExportShellRequest<'_>,
     provenance: BTreeMap<String, String>,
 ) -> Result<Option<FrontendArtifactExportContent>, RunError> {
+    assert!(
+        u32::try_from(provenance.len()).is_ok_and(|entry_count| entry_count <= CONTENT_PROVENANCE_ENTRY_COUNT_MAX),
+        "parsed provenance must stay within the shell bound"
+    );
+    assert!(!request.artifact_ref.is_empty(), "preflight-admitted artifact ref must not be empty");
     if let Some(materialized_path) = request.materialized_path {
         let materialized_path = resolve_cli_path(request.current_dir, materialized_path);
         return Ok(export_content_if_available(
             request.artifact_ref,
-            request.artifact_digest,
             &materialized_path,
+            request.artifact_digest,
             provenance,
         ));
     }
@@ -260,6 +278,8 @@ fn resolve_export_content(
 }
 
 fn storage_ref_diagnostics(request: &ArtifactExportShellRequest<'_>) -> Option<Vec<FrontendArtifactExportDiagnostic>> {
+    assert!(!FRONTEND_ARTIFACT_EXPORT_DIAG_UNSUPPORTED_REF_SCHEME.is_empty());
+    assert!(!FRONTEND_ARTIFACT_EXPORT_DIAG_DIGEST_MISMATCH.is_empty());
     if request.materialized_path.is_some() {
         return None;
     }
@@ -291,8 +311,8 @@ fn supported_destination_modes() -> &'static [&'static str] {
 
 fn export_content_if_available(
     artifact_ref: &str,
-    artifact_digest: &str,
     materialized_path: &Path,
+    artifact_digest: &str,
     provenance: BTreeMap<String, String>,
 ) -> Option<FrontendArtifactExportContent> {
     if !materialized_path.exists() {
@@ -317,6 +337,8 @@ fn emit_export_report(
     let Some(receipt) = report.receipt.as_ref() else {
         return Err(RunError::Internal("frontend artifact export reported success without a receipt".to_string()));
     };
+    assert!(report.exported, "receipt emission requires a successful export outcome");
+    assert!(!receipt.receipt_hash.is_empty(), "successful export receipt must carry identity");
     if let Some(path) = receipt_out {
         write_receipt(path, receipt)?;
     }
@@ -406,6 +428,17 @@ fn parse_attestation_value(value: Value) -> Result<FrontendArtifactAdmissionAtte
 }
 
 fn parse_content_provenance(entries: &[String]) -> Result<BTreeMap<String, String>, RunError> {
+    let entry_count = u32::try_from(entries.len())
+        .map_err(|_| RunError::Internal("content provenance entry count overflowed u32".to_string()))?;
+    if entry_count > CONTENT_PROVENANCE_ENTRY_COUNT_MAX {
+        return Err(RunError::Internal(format!(
+            "content provenance entry count exceeds {CONTENT_PROVENANCE_ENTRY_COUNT_MAX}"
+        )));
+    }
+    let entry_count_max = usize::try_from(CONTENT_PROVENANCE_ENTRY_COUNT_MAX)
+        .map_err(|_| RunError::Internal("content provenance bound overflowed usize".to_string()))?;
+    assert!(entry_count_max > 0, "content provenance entry bound must be positive");
+    assert!(entries.len() <= entry_count_max, "content provenance entries must stay bounded");
     let mut parsed = BTreeMap::new();
     for entry in entries {
         let Some((key, value)) = entry.split_once(PROVENANCE_PAIR_SEPARATOR) else {
@@ -413,6 +446,9 @@ fn parse_content_provenance(entries: &[String]) -> Result<BTreeMap<String, Strin
         };
         if key.is_empty() {
             return Err(RunError::Internal("content provenance entry key must not be empty".to_string()));
+        }
+        if parsed.len() >= entry_count_max {
+            return Err(RunError::Internal("content provenance map exceeded its admitted bound".to_string()));
         }
         parsed.insert(key.to_string(), value.to_string());
     }

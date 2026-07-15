@@ -163,6 +163,37 @@ struct ProducerArtifactReport {
     package_index_path: String,
 }
 
+struct ForeignPlanRequest<'a> {
+    graph_path: &'a Path,
+    index_path: &'a Path,
+    policy_path: &'a Path,
+    package: &'a str,
+    system: &'a str,
+    json: bool,
+}
+
+struct NixProducerRequest<'a> {
+    derivation_json_path: Option<&'a Path>,
+    drv_file_specs: &'a [String],
+    drv_dir: Option<&'a Path>,
+    root_derivation: &'a str,
+    package: &'a str,
+    system: &'a str,
+    producer_identity: &'a str,
+    producer_revision: &'a str,
+    cache_urls: &'a [String],
+    cache_trust_scope: &'a str,
+    unsupported_metadata_classes: &'a [String],
+    out_dir: &'a Path,
+    json: bool,
+}
+
+struct JsonReadRequest<'a> {
+    path: &'a Path,
+    artifact: &'a str,
+    command: &'a str,
+}
+
 pub(crate) fn cmd_foreign_import(action: ForeignImportAction, json: bool) -> Result<(), RunError> {
     match action {
         ForeignImportAction::Validate {
@@ -177,7 +208,14 @@ pub(crate) fn cmd_foreign_import(action: ForeignImportAction, json: bool) -> Res
             policy,
             package,
             system,
-        } => run_plan(&graph, &package_index, &policy, &package, &system, json),
+        } => run_plan(ForeignPlanRequest {
+            graph_path: &graph,
+            index_path: &package_index,
+            policy_path: &policy,
+            package: &package,
+            system: &system,
+            json,
+        }),
         ForeignImportAction::ProduceNix {
             derivation_json,
             drv_files,
@@ -191,21 +229,21 @@ pub(crate) fn cmd_foreign_import(action: ForeignImportAction, json: bool) -> Res
             cache_trust_scope,
             unsupported_metadata_classes,
             out_dir,
-        } => run_produce_nix(
-            derivation_json.as_deref(),
-            &drv_files,
-            drv_dir.as_deref(),
-            &root_derivation,
-            &package,
-            &system,
-            &producer_identity,
-            &producer_revision,
-            &cache_urls,
-            &cache_trust_scope,
-            &unsupported_metadata_classes,
-            &out_dir,
+        } => run_produce_nix(NixProducerRequest {
+            derivation_json_path: derivation_json.as_deref(),
+            drv_file_specs: &drv_files,
+            drv_dir: drv_dir.as_deref(),
+            root_derivation: &root_derivation,
+            package: &package,
+            system: &system,
+            producer_identity: &producer_identity,
+            producer_revision: &producer_revision,
+            cache_urls: &cache_urls,
+            cache_trust_scope: &cache_trust_scope,
+            unsupported_metadata_classes: &unsupported_metadata_classes,
+            out_dir: &out_dir,
             json,
-        ),
+        }),
     }
 }
 
@@ -216,7 +254,13 @@ fn run_validate(
     receipt_path: Option<&Path>,
     json: bool,
 ) -> Result<(), RunError> {
-    let graph = match read_json::<ForeignDerivationGraph>(graph_path, "graph", VALIDATE_COMMAND)? {
+    assert!(!VALIDATE_COMMAND.is_empty(), "foreign validation command identity must not be empty");
+    assert!(!CLI_REPORT_SCHEMA.is_empty(), "foreign import report schema must not be empty");
+    let graph = match read_json::<ForeignDerivationGraph>(JsonReadRequest {
+        path: graph_path,
+        artifact: "graph",
+        command: VALIDATE_COMMAND,
+    })? {
         Ok(graph) => graph,
         Err(report) => return emit_report(report, json),
     };
@@ -224,7 +268,11 @@ fn run_validate(
         Ok(index) => index,
         Err(report) => return emit_report(report, json),
     };
-    let policy = match read_json::<TranslationPolicy>(policy_path, "policy", VALIDATE_COMMAND)? {
+    let policy = match read_json::<TranslationPolicy>(JsonReadRequest {
+        path: policy_path,
+        artifact: "policy",
+        command: VALIDATE_COMMAND,
+    })? {
         Ok(policy) => policy,
         Err(report) => return emit_report(report, json),
     };
@@ -232,80 +280,81 @@ fn run_validate(
         Ok(receipt) => receipt,
         Err(report) => return emit_report(report, json),
     };
-    let report = validate_inputs(graph, index, policy, receipt);
-    emit_report(report, json)
+    let outcome = validate_inputs(graph, index, policy, receipt);
+    emit_report(outcome, json)
 }
 
-fn run_plan(
-    graph_path: &Path,
-    index_path: &Path,
-    policy_path: &Path,
-    package: &str,
-    system: &str,
-    json: bool,
-) -> Result<(), RunError> {
-    let graph = match read_json::<ForeignDerivationGraph>(graph_path, "graph", PLAN_COMMAND)? {
+fn run_plan(request: ForeignPlanRequest<'_>) -> Result<(), RunError> {
+    assert!(!PLAN_COMMAND.is_empty(), "foreign plan command identity must not be empty");
+    assert!(!CLI_REPORT_SCHEMA.is_empty(), "foreign plan report schema must not be empty");
+    let graph = match read_json::<ForeignDerivationGraph>(JsonReadRequest {
+        path: request.graph_path,
+        artifact: "graph",
+        command: PLAN_COMMAND,
+    })? {
         Ok(graph) => graph,
-        Err(report) => return emit_report(report, json),
+        Err(report) => return emit_report(report, request.json),
     };
-    let index = match read_json::<PackageIndex>(index_path, "package-index", PLAN_COMMAND)? {
+    let index = match read_json::<PackageIndex>(JsonReadRequest {
+        path: request.index_path,
+        artifact: "package-index",
+        command: PLAN_COMMAND,
+    })? {
         Ok(index) => index,
-        Err(report) => return emit_report(report, json),
+        Err(report) => return emit_report(report, request.json),
     };
-    let policy = match read_json::<TranslationPolicy>(policy_path, "policy", PLAN_COMMAND)? {
+    let policy = match read_json::<TranslationPolicy>(JsonReadRequest {
+        path: request.policy_path,
+        artifact: "policy",
+        command: PLAN_COMMAND,
+    })? {
         Ok(policy) => policy,
-        Err(report) => return emit_report(report, json),
+        Err(report) => return emit_report(report, request.json),
     };
-    let report = plan_inputs(graph, index, policy, package, system);
-    emit_report(report, json)
+    let outcome = plan_inputs(graph, index, request.package, policy, request.system);
+    emit_report(outcome, request.json)
 }
 
-fn run_produce_nix(
-    derivation_json_path: Option<&Path>,
-    drv_file_specs: &[String],
-    drv_dir: Option<&Path>,
-    root_derivation: &str,
-    package: &str,
-    system: &str,
-    producer_identity: &str,
-    producer_revision: &str,
-    cache_urls: &[String],
-    cache_trust_scope: &str,
-    unsupported_metadata_classes: &[String],
-    out_dir: &Path,
-    json: bool,
-) -> Result<(), RunError> {
-    let closure = match read_nix_producer_closure(derivation_json_path, drv_file_specs, drv_dir, root_derivation)? {
+fn run_produce_nix(request: NixProducerRequest<'_>) -> Result<(), RunError> {
+    assert!(!PRODUCE_NIX_COMMAND.is_empty(), "Nix producer command identity must not be empty");
+    assert_ne!(NIXPKGS_GRAPH_FILE, NIXPKGS_INDEX_FILE, "Nix producer artifact names must differ");
+    let closure = match read_nix_producer_closure(
+        request.derivation_json_path,
+        request.drv_file_specs,
+        request.drv_dir,
+        request.root_derivation,
+    )? {
         Ok(closure) => closure,
-        Err(report) => return emit_report(report, json),
+        Err(report) => return emit_report(report, request.json),
     };
     let config = NixProducerConfig {
-        package_name: package.to_string(),
-        system: system.to_string(),
-        root_derivation: root_derivation.to_string(),
-        producer_identity: producer_identity.to_string(),
-        producer_revision: producer_revision.to_string(),
-        cache_hints: cache_urls
+        package_name: request.package.to_string(),
+        system: request.system.to_string(),
+        root_derivation: request.root_derivation.to_string(),
+        producer_identity: request.producer_identity.to_string(),
+        producer_revision: request.producer_revision.to_string(),
+        cache_hints: request
+            .cache_urls
             .iter()
             .map(|cache_url| CacheHint {
                 cache_url: cache_url.clone(),
-                trust_scope: cache_trust_scope.to_string(),
+                trust_scope: request.cache_trust_scope.to_string(),
             })
             .collect(),
-        unsupported_metadata_classes: unsupported_metadata_classes.to_vec(),
+        unsupported_metadata_classes: request.unsupported_metadata_classes.to_vec(),
     };
     let artifacts = match lower_nix_derivation_json_closure(&closure, &config) {
         Ok(artifacts) => artifacts,
-        Err(diagnostic) => return emit_report(rejected_report(PRODUCE_NIX_COMMAND, diagnostic), json),
+        Err(diagnostic) => return emit_report(rejected_report(PRODUCE_NIX_COMMAND, diagnostic), request.json),
     };
-    fs::create_dir_all(out_dir).map_err(|error| {
-        RunError::Internal(format!("creating foreign import artifact directory {}: {error}", out_dir.display()))
+    fs::create_dir_all(request.out_dir).map_err(|error| {
+        RunError::Internal(format!("creating foreign import artifact directory {}: {error}", request.out_dir.display()))
     })?;
-    let graph_path = out_dir.join(NIXPKGS_GRAPH_FILE);
-    let index_path = out_dir.join(NIXPKGS_INDEX_FILE);
+    let graph_path = request.out_dir.join(NIXPKGS_GRAPH_FILE);
+    let index_path = request.out_dir.join(NIXPKGS_INDEX_FILE);
     write_json_file(&graph_path, &artifacts.graph)?;
     write_json_file(&index_path, &artifacts.package_index)?;
-    emit_report(producer_report(&graph_path, &index_path), json)
+    emit_report(producer_report(&graph_path, &index_path), request.json)
 }
 
 fn read_nix_producer_closure(
@@ -342,6 +391,8 @@ fn read_nix_producer_closure(
             ),
         )));
     }
+    assert_eq!(mode_count, 1, "admitted Nix producer input must select exactly one mode");
+    assert!(mode_count > 0, "admitted Nix producer input mode count must be positive");
     if let Some(path) = derivation_json_path {
         return read_nix_derivation_json_closure(path);
     }
@@ -354,12 +405,15 @@ fn read_nix_producer_closure(
 fn read_nix_derivation_json_closure(
     derivation_json_path: &Path,
 ) -> Result<Result<crate::foreign_derivation_import::NixDerivationJsonClosure, ForeignImportCliReport>, RunError> {
-    let export =
-        match read_json::<NixDerivationJsonExport>(derivation_json_path, "derivation-json", PRODUCE_NIX_COMMAND)? {
-            Ok(export) => export,
-            Err(report) => return Ok(Err(report)),
-        };
-    Ok(match normalize_nix_derivation_json_export(export) {
+    let json_input = match read_json::<NixDerivationJsonExport>(JsonReadRequest {
+        path: derivation_json_path,
+        artifact: "derivation-json",
+        command: PRODUCE_NIX_COMMAND,
+    })? {
+        Ok(json_input) => json_input,
+        Err(report) => return Ok(Err(report)),
+    };
+    Ok(match normalize_nix_derivation_json_export(json_input) {
         Ok(closure) => Ok(closure),
         Err(diagnostic) => Err(rejected_report(PRODUCE_NIX_COMMAND, diagnostic)),
     })
@@ -368,6 +422,8 @@ fn read_nix_derivation_json_closure(
 fn read_nix_aterm_drv_closure(
     drv_file_specs: &[String],
 ) -> Result<Result<crate::foreign_derivation_import::NixDerivationJsonClosure, ForeignImportCliReport>, RunError> {
+    assert!(!drv_file_specs.is_empty(), "explicit ATerm closure requires at least one drv file");
+    assert!(!NIX_LOGICAL_STORE_PREFIX.is_empty(), "Nix logical store prefix must not be empty");
     let mut derivations = BTreeMap::new();
     for spec in drv_file_specs {
         let (logical_path, file_path) = match parse_drv_file_spec(spec) {
@@ -409,6 +465,8 @@ fn read_nix_aterm_drv_dir_closure(
 fn read_nix_aterm_drv_dir(
     drv_dir: &Path,
 ) -> Result<Result<BTreeMap<String, nix_compat::derivation::Derivation>, ForeignImportCliReport>, RunError> {
+    assert!(!NIX_LOGICAL_STORE_PREFIX.is_empty(), "Nix logical store prefix must not be empty");
+    assert!(!DRV_FILE_EXTENSION.is_empty(), "ATerm drv extension must not be empty");
     let mut entries = fs::read_dir(drv_dir)
         .map_err(|error| RunError::Internal(format!("reading foreign import drv dir {}: {error}", drv_dir.display())))?
         .collect::<Result<Vec<_>, _>>()
@@ -416,6 +474,7 @@ fn read_nix_aterm_drv_dir(
             RunError::Internal(format!("reading foreign import drv dir {}: {error}", drv_dir.display()))
         })?;
     entries.sort_by_key(|entry| entry.path());
+    let derivation_count_max = entries.len();
     let mut derivations = BTreeMap::new();
     for entry in entries {
         let file_path = entry.path();
@@ -433,6 +492,9 @@ fn read_nix_aterm_drv_dir(
             Ok(derivation) => derivation,
             Err(report) => return Ok(Err(report)),
         };
+        if derivations.len() >= derivation_count_max {
+            return Err(RunError::Internal("ATerm derivation count exceeded directory entries".to_string()));
+        }
         derivations.insert(logical_path, derivation);
     }
     Ok(Ok(derivations))
@@ -504,8 +566,8 @@ fn validate_inputs(
 fn plan_inputs(
     graph: ForeignDerivationGraph,
     index: PackageIndex,
-    policy: TranslationPolicy,
     package: &str,
+    policy: TranslationPolicy,
     system: &str,
 ) -> ForeignImportCliReport {
     let (translated, receipt) = match translate_foreign_graph(&graph, Some(&index), &policy) {
@@ -526,7 +588,12 @@ fn read_optional_index(
     let Some(path) = path else {
         return Ok(Ok(None));
     };
-    read_json::<PackageIndex>(path, "package-index", command).map(|result| result.map(Some))
+    read_json::<PackageIndex>(JsonReadRequest {
+        path,
+        artifact: "package-index",
+        command,
+    })
+    .map(|result| result.map(Some))
 }
 
 fn read_optional_receipt(
@@ -536,22 +603,24 @@ fn read_optional_receipt(
     let Some(path) = path else {
         return Ok(Ok(None));
     };
-    read_json::<ImportReceipt>(path, "receipt", command).map(|result| result.map(Some))
+    read_json::<ImportReceipt>(JsonReadRequest {
+        path,
+        artifact: "receipt",
+        command,
+    })
+    .map(|result| result.map(Some))
 }
 
-fn read_json<T: DeserializeOwned>(
-    path: &Path,
-    artifact: &str,
-    command: &str,
-) -> Result<Result<T, ForeignImportCliReport>, RunError> {
-    let contents = fs::read_to_string(path).map_err(|error| {
-        RunError::Internal(format!("reading foreign import {artifact} {}: {error}", path.display()))
+fn read_json<T: DeserializeOwned>(request: JsonReadRequest<'_>) -> Result<Result<T, ForeignImportCliReport>, RunError> {
+    let contents = fs::read_to_string(request.path).map_err(|error| {
+        RunError::Internal(format!("reading foreign import {} {}: {error}", request.artifact, request.path.display()))
     })?;
     match serde_json::from_str::<T>(&contents) {
         Ok(value) => Ok(Ok(value)),
-        Err(error) => {
-            Ok(Err(rejected_report(command, diagnostic("malformed-json", None, &format!("{artifact}: {error}")))))
-        }
+        Err(error) => Ok(Err(rejected_report(
+            request.command,
+            diagnostic("malformed-json", None, &format!("{}: {error}", request.artifact)),
+        ))),
     }
 }
 
@@ -630,7 +699,10 @@ fn write_json_file<T: Serialize>(path: &Path, value: &T) -> Result<(), RunError>
 }
 
 fn human_report(report: &ForeignImportCliReport) -> String {
-    let mut lines = Vec::new();
+    assert_eq!(report.schema, CLI_REPORT_SCHEMA, "human output requires the CLI report schema");
+    assert!(!report.command.is_empty(), "human output requires a command identity");
+    let line_count_max = report.diagnostics.len().saturating_add(report.non_claims.len()).saturating_add(5);
+    let mut lines = Vec::with_capacity(line_count_max);
     lines.push(format!("foreign import {}: {}", report.command, report.verdict));
     if report.diagnostics.is_empty() {
         lines.push("diagnostics: none".to_string());
@@ -683,7 +755,7 @@ mod tests {
         let (graph, index) = crate::foreign_derivation_import::guix_like_hello_fixture();
         let policy = fixture_policy();
 
-        let report = plan_inputs(graph, index, policy, DEFAULT_PACKAGE_NAME, DEFAULT_SYSTEM);
+        let report = plan_inputs(graph, index, DEFAULT_PACKAGE_NAME, policy, DEFAULT_SYSTEM);
         let plan = report.plan.as_ref().expect("plan should be present");
 
         assert!(report.accepted);

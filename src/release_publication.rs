@@ -39,6 +39,11 @@ struct ReleaseStageOwnershipMarker {
     stage_name: String,
 }
 
+struct RenameChildRequest<'a> {
+    source_name: &'a str,
+    destination_name: &'a str,
+}
+
 #[derive(Debug)]
 pub(crate) struct ReleasePublicationStage {
     parent_root: ReleaseCapabilityRoot,
@@ -83,7 +88,11 @@ impl ReleasePublicationStage {
                 "release stage path must differ from final destination".to_string(),
             ));
         }
-        rename_child_no_replace(self.parent_root.dir(), &self.stage_name, &self.final_name).map_err(|error| {
+        rename_child_no_replace(self.parent_root.dir(), RenameChildRequest {
+            source_name: &self.stage_name,
+            destination_name: &self.final_name,
+        })
+        .map_err(|error| {
             if error.kind() == std::io::ErrorKind::AlreadyExists {
                 return PublicationCommitError::DestinationExists(format!(
                     "release publication destination appeared before commit: {}",
@@ -105,6 +114,8 @@ impl ReleasePublicationStage {
 }
 
 pub(crate) fn observe_publication_destination(path: &Path) -> Result<PublicationDestinationObservation, RunError> {
+    assert!(!RELEASE_STAGE_MARKER_SCHEMA.is_empty(), "release stage marker schema must not be empty");
+    assert!(!RELEASE_STAGE_PREFIX.is_empty(), "release stage prefix must not be empty");
     let metadata = match std::fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -126,13 +137,13 @@ pub(crate) fn observe_publication_destination(path: &Path) -> Result<Publication
     if !metadata.is_dir() {
         return Ok(PublicationDestinationObservation::Other);
     }
-    let empty = std::fs::read_dir(path)
+    let is_empty = std::fs::read_dir(path)
         .map_err(|error| {
             RunError::Internal(format!("reading release publication destination {}: {error}", path.display()))
         })?
         .next()
         .is_none();
-    Ok(if empty {
+    Ok(if is_empty {
         PublicationDestinationObservation::EmptyDirectory
     } else {
         PublicationDestinationObservation::NonEmptyDirectory
@@ -167,7 +178,7 @@ pub(crate) fn create_release_publication_stage(
     quarantine_matching_stale_stages(&parent_root, &parent_path, &final_name, plan)?;
     let (stage_name, stage_root) = create_private_stage_directory(&parent_root, plan)?;
     let stage_path = parent_path.join(&stage_name);
-    if let Err(marker_error) = write_stage_marker(&stage_root, plan, &final_name, &stage_name) {
+    if let Err(marker_error) = write_stage_marker(&stage_root, &final_name, plan, &stage_name) {
         let cleanup = parent_root.dir().remove_dir_all(&stage_name);
         if let Err(cleanup_error) = cleanup {
             return Err(RunError::Internal(format!(
@@ -194,8 +205,10 @@ fn create_private_stage_directory(
     plan: &PublicationPlan,
 ) -> Result<(String, ReleaseCapabilityRoot), RunError> {
     let prefix = stage_prefix(plan)?;
+    assert!(!prefix.is_empty(), "release stage prefix must not be empty");
+    assert_eq!(parent_root.kind(), ReleaseRootKind::ReleaseEvidence);
     for _attempt in 0..RELEASE_STAGE_CREATE_ATTEMPTS_MAX {
-        let stage_name = format!("{prefix}{}", random_hex_suffix());
+        let stage_name = format!("{prefix}{}", random_hex_suffix()?);
         match parent_root.dir().create_dir(&stage_name) {
             Ok(()) => {
                 let dir = match parent_root.dir().open_dir_nofollow(&stage_name) {
@@ -234,8 +247,8 @@ fn create_private_stage_directory(
 
 fn write_stage_marker(
     stage_root: &ReleaseCapabilityRoot,
-    plan: &PublicationPlan,
     final_name: &str,
+    plan: &PublicationPlan,
     stage_name: &str,
 ) -> Result<(), RunError> {
     let marker = ReleaseStageOwnershipMarker {
@@ -265,12 +278,21 @@ fn quarantine_matching_stale_stages(
     let prefix = stage_prefix(plan)?;
     let mut candidates = collect_parent_candidate_names(parent_root, &prefix)?;
     candidates.sort();
+    assert!(!prefix.is_empty(), "release stage quarantine prefix must not be empty");
+    assert!(
+        candidates.windows(2).all(|pair| pair[0] <= pair[1]),
+        "release stage quarantine candidates must be sorted"
+    );
     for stage_name in candidates {
-        if !valid_stage_marker(parent_root, &stage_name, final_name, plan)? {
+        if !valid_stage_marker(parent_root, &stage_name, plan, final_name)? {
             continue;
         }
-        let quarantine_name = format!("{RELEASE_QUARANTINE_PREFIX}{}-{}", plan_id_prefix(plan)?, random_hex_suffix());
-        rename_child_no_replace(parent_root.dir(), &stage_name, &quarantine_name).map_err(|error| {
+        let quarantine_name = format!("{RELEASE_QUARANTINE_PREFIX}{}-{}", plan_id_prefix(plan)?, random_hex_suffix()?);
+        rename_child_no_replace(parent_root.dir(), RenameChildRequest {
+            source_name: &stage_name,
+            destination_name: &quarantine_name,
+        })
+        .map_err(|error| {
             RunError::Internal(format!(
                 "quarantining Mantle-owned stale release stage {}: {error}",
                 parent_path.join(&stage_name).display()
@@ -281,7 +303,9 @@ fn quarantine_matching_stale_stages(
 }
 
 fn collect_parent_candidate_names(parent_root: &ReleaseCapabilityRoot, prefix: &str) -> Result<Vec<String>, RunError> {
-    let mut names = Vec::new();
+    let entry_count_max = usize::try_from(RELEASE_PARENT_ENTRIES_MAX)
+        .map_err(|_| RunError::Internal("release parent entry bound overflowed usize".to_string()))?;
+    let mut names = Vec::with_capacity(entry_count_max);
     let mut visited_count = 0_u32;
     let entries = parent_root
         .dir()
@@ -302,21 +326,25 @@ fn collect_parent_candidate_names(parent_root: &ReleaseCapabilityRoot, prefix: &
             continue;
         };
         if name.starts_with(prefix) {
+            if names.len() >= entry_count_max {
+                return Err(RunError::Internal("release publication candidate count exceeded bound".to_string()));
+            }
             names.push(name);
         }
     }
     assert!(visited_count <= RELEASE_PARENT_ENTRIES_MAX);
-    let entries_max = usize::try_from(RELEASE_PARENT_ENTRIES_MAX).expect("release parent entry bound must fit usize");
-    assert!(names.len() <= entries_max);
+    assert!(names.len() <= entry_count_max);
     Ok(names)
 }
 
 fn valid_stage_marker(
     parent_root: &ReleaseCapabilityRoot,
     stage_name: &str,
-    final_name: &str,
     plan: &PublicationPlan,
+    final_name: &str,
 ) -> Result<bool, RunError> {
+    assert!(!stage_name.is_empty(), "candidate release stage name must not be empty");
+    assert!(!final_name.is_empty(), "release destination name must not be empty");
     let metadata = match parent_root.dir().symlink_metadata(stage_name) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
@@ -340,6 +368,8 @@ fn valid_stage_marker(
 }
 
 fn read_stage_marker(stage_root: &ReleaseCapabilityRoot) -> Result<Option<ReleaseStageOwnershipMarker>, RunError> {
+    assert_eq!(stage_root.kind(), ReleaseRootKind::ReleaseEvidence);
+    assert!(RELEASE_STAGE_MARKER_BYTES_MAX > 0, "release stage marker byte bound must be positive");
     let path = ValidatedReleasePath::new(RELEASE_STAGE_MARKER_FILENAME)
         .map_err(|error| RunError::Internal(format!("invalid release stage marker path: {error:?}")))?;
     let mut file = match stage_root.open_file_read_nofollow(&path) {
@@ -353,9 +383,9 @@ fn read_stage_marker(stage_root: &ReleaseCapabilityRoot) -> Result<Option<Releas
     if !metadata.is_file() || metadata.len() > RELEASE_STAGE_MARKER_BYTES_MAX {
         return Ok(None);
     }
-    let capacity = usize::try_from(metadata.len())
+    let marker_size_bytes = usize::try_from(metadata.len())
         .map_err(|_| RunError::Internal("release stage marker length overflowed usize".to_string()))?;
-    let mut bytes = Vec::with_capacity(capacity);
+    let mut bytes = Vec::with_capacity(marker_size_bytes);
     file.read_to_end(&mut bytes)
         .map_err(|error| RunError::Internal(format!("reading release stage marker: {error}")))?;
     Ok(serde_json::from_slice(&bytes).ok())
@@ -371,18 +401,23 @@ fn plan_id_prefix(plan: &PublicationPlan) -> Result<&str, RunError> {
         .ok_or_else(|| RunError::Internal("release publication plan identity is too short".to_string()))
 }
 
-fn random_hex_suffix() -> String {
+fn random_hex_suffix() -> Result<String, RunError> {
     let mut bytes = [0_u8; RELEASE_STAGE_RANDOM_BYTES];
-    OsRng.fill_bytes(&mut bytes);
-    let rendered_capacity = RELEASE_STAGE_RANDOM_BYTES
+    OsRng
+        .try_fill_bytes(&mut bytes)
+        .map_err(|error| RunError::Internal(format!("generating release stage random suffix: {error}")))?;
+    let rendered_size_bytes = RELEASE_STAGE_RANDOM_BYTES
         .checked_mul(HEX_CHARS_PER_BYTE)
-        .expect("bounded release stage suffix capacity must fit usize");
-    let mut rendered = String::with_capacity(rendered_capacity);
+        .ok_or_else(|| RunError::Internal("release stage suffix capacity overflowed usize".to_string()))?;
+    let mut rendered = String::with_capacity(rendered_size_bytes);
     for byte in bytes {
-        rendered.push_str(&format!("{byte:02x}"));
+        use std::fmt::Write as _;
+        write!(&mut rendered, "{byte:02x}")
+            .map_err(|_| RunError::Internal("formatting release stage random suffix failed".to_string()))?;
     }
-    assert_eq!(rendered.len(), rendered_capacity);
-    rendered
+    assert_eq!(rendered.len(), rendered_size_bytes);
+    assert!(rendered.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    Ok(rendered)
 }
 
 #[cfg(unix)]
@@ -400,17 +435,15 @@ fn set_private_stage_mode(_dir: &cap_std::fs::Dir) -> Result<(), RunError> {
 }
 
 #[cfg(target_os = "linux")]
-fn rename_child_no_replace(
-    parent: &cap_std::fs::Dir,
-    source_name: &str,
-    destination_name: &str,
-) -> std::io::Result<()> {
+fn rename_child_no_replace(parent: &cap_std::fs::Dir, request: RenameChildRequest<'_>) -> std::io::Result<()> {
     use std::os::fd::AsRawFd;
 
-    let source = CString::new(source_name)
+    let source = CString::new(request.source_name)
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "release source name contains NUL"))?;
-    let destination = CString::new(destination_name)
+    let destination = CString::new(request.destination_name)
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "release destination name contains NUL"))?;
+    assert!(!source.as_bytes().is_empty(), "release rename source must not be empty");
+    assert!(!destination.as_bytes().is_empty(), "release rename destination must not be empty");
     // SAFETY: both names are relative NUL-terminated strings and both directory fds refer to the same
     // open parent.
     let result = unsafe {
@@ -429,11 +462,7 @@ fn rename_child_no_replace(
 }
 
 #[cfg(not(target_os = "linux"))]
-fn rename_child_no_replace(
-    _parent: &cap_std::fs::Dir,
-    _source_name: &str,
-    _destination_name: &str,
-) -> std::io::Result<()> {
+fn rename_child_no_replace(_parent: &cap_std::fs::Dir, _request: RenameChildRequest<'_>) -> std::io::Result<()> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
         "atomic no-replace release publication is unsupported on this platform",

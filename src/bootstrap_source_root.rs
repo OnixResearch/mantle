@@ -17,7 +17,9 @@ pub(crate) const PROVIDER_METADATA_ROLE: &str = "share/crunch-bootstrap/provider
 const MIN_REQUIRED_ITEM_COUNT: usize = 1;
 const MAX_MANIFEST_ITEM_COUNT: usize = 4_096;
 const DIGEST_HEX_BYTES: usize = 32;
-const BLAKE3_HEX_LEN: usize = DIGEST_HEX_BYTES * 2;
+const HEX_CHARS_PER_BYTE: usize = 2;
+const BLAKE3_HEX_LEN: usize = DIGEST_HEX_BYTES.saturating_mul(HEX_CHARS_PER_BYTE);
+const BOOTSTRAP_PROVIDER_MODE_COUNT_MAX: usize = 3;
 
 pub(crate) const REQUIRED_PROVIDER_TOOL_ROLES: &[&str] = &[
     "x86_64-linux-musl-gcc",
@@ -48,15 +50,15 @@ pub(crate) const REQUIRED_PROVIDER_TOOL_ROLES: &[&str] = &[
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct SourceRootManifest {
     pub version: Option<u32>,
-    #[serde(default)]
+    #[serde(default = "Vec::new")]
     pub artifacts: Vec<SourceArtifact>,
-    #[serde(default)]
+    #[serde(default = "Vec::new")]
     pub patches: Vec<SourcePatch>,
-    #[serde(default)]
+    #[serde(default = "Vec::new")]
     pub network_trust_roots: Vec<NetworkTrustRoot>,
-    #[serde(default)]
+    #[serde(default = "Vec::new")]
     pub trust_notes: Vec<TrustNote>,
-    #[serde(default)]
+    #[serde(default = "Vec::new")]
     pub expected_outputs: Vec<ExpectedProviderOutput>,
 }
 
@@ -64,7 +66,7 @@ pub(crate) struct SourceRootManifest {
 pub(crate) struct DigestSpec {
     pub algorithm: String,
     pub value: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_optional_value", skip_serializing_if = "Option::is_none")]
     pub non_blake3_reason: Option<String>,
 }
 
@@ -75,14 +77,14 @@ pub(crate) struct SourceArtifact {
     pub digest: DigestSpec,
     pub extraction: ExtractionRule,
     pub provenance: String,
-    #[serde(default)]
+    #[serde(default = "Vec::new")]
     pub patches: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ExtractionRule {
     pub kind: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_optional_value", skip_serializing_if = "Option::is_none")]
     pub strip_prefix: Option<String>,
 }
 
@@ -122,14 +124,18 @@ pub(crate) struct ExpectedProviderOutput {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ProviderDependencyTrace {
-    #[serde(default)]
+    #[serde(default = "Vec::new")]
     pub urls: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "Vec::new")]
     pub hashes: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "Vec::new")]
     pub emitted_output_roles: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "Vec::new")]
     pub provider_metadata: Vec<String>,
+}
+
+fn no_optional_value<T>() -> Option<T> {
+    None
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -201,8 +207,16 @@ pub(crate) fn select_bootstrap_provider(
     source_root: Option<&Path>,
     stagex_lineage: Option<&Path>,
 ) -> Result<BootstrapProviderMode, ManifestDiagnostic> {
-    let mode_count = u32::from(fetch) + u32::from(source_root.is_some()) + u32::from(stagex_lineage.is_some());
-    if mode_count > 1 {
+    let selected_mode_count = [fetch, source_root.is_some(), stagex_lineage.is_some()]
+        .into_iter()
+        .filter(|is_selected| *is_selected)
+        .count();
+    assert!(BOOTSTRAP_PROVIDER_MODE_COUNT_MAX > 0, "provider mode bound must be positive");
+    assert!(
+        selected_mode_count <= BOOTSTRAP_PROVIDER_MODE_COUNT_MAX,
+        "selected provider mode count must stay bounded"
+    );
+    if selected_mode_count > 1 {
         return Err(ManifestDiagnostic::new(
             "provider-selection",
             "ambiguous provider selection: only one of --fetch, --source-root, --stagex-lineage may be specified",
@@ -248,6 +262,10 @@ pub(crate) fn validate_source_root_manifest(
 
     if errors.is_empty() {
         assert!(!expected_output_roles.is_empty(), "valid manifest must expose expected output roles");
+        assert!(
+            expected_output_roles.len() >= REQUIRED_PROVIDER_TOOL_ROLES.len(),
+            "valid manifest must expose every required provider role"
+        );
         Ok(ManifestValidation {
             provider_name: PROVIDER_NAME,
             provider_target: PROVIDER_TARGET,
@@ -255,6 +273,7 @@ pub(crate) fn validate_source_root_manifest(
             expected_output_roles,
         })
     } else {
+        assert!(!errors.is_empty(), "invalid manifest must retain diagnostics");
         Err(errors)
     }
 }
@@ -305,10 +324,10 @@ fn validate_artifacts(artifacts: &[SourceArtifact], patches: &[SourcePatch], err
     let patch_names = patches.iter().map(|patch| patch.name.as_str()).collect::<BTreeSet<_>>();
     for (idx, artifact) in artifacts.iter().enumerate() {
         let path = format!("artifacts[{idx}]");
-        require_non_empty(&artifact.name, &format!("{path}.name"), errors);
-        require_non_empty(&artifact.source, &format!("{path}.source"), errors);
-        require_non_empty(&artifact.provenance, &format!("{path}.provenance"), errors);
-        require_non_empty(&artifact.extraction.kind, &format!("{path}.extraction.kind"), errors);
+        require_non_empty(&artifact.name, errors, &format!("{path}.name"));
+        require_non_empty(&artifact.source, errors, &format!("{path}.source"));
+        require_non_empty(&artifact.provenance, errors, &format!("{path}.provenance"));
+        require_non_empty(&artifact.extraction.kind, errors, &format!("{path}.extraction.kind"));
         validate_digest(&artifact.digest, &format!("{path}.digest"), errors);
         validate_patch_references(&artifact.patches, &patch_names, &path, errors);
     }
@@ -333,8 +352,8 @@ fn validate_patch_references(
 fn validate_patches(patches: &[SourcePatch], errors: &mut Vec<ManifestDiagnostic>) {
     for (idx, patch) in patches.iter().enumerate() {
         let path = format!("patches[{idx}]");
-        require_non_empty(&patch.name, &format!("{path}.name"), errors);
-        require_non_empty(&patch.provenance, &format!("{path}.provenance"), errors);
+        require_non_empty(&patch.name, errors, &format!("{path}.name"));
+        require_non_empty(&patch.provenance, errors, &format!("{path}.provenance"));
         validate_digest(&patch.digest, &format!("{path}.digest"), errors);
     }
 }
@@ -342,9 +361,9 @@ fn validate_patches(patches: &[SourcePatch], errors: &mut Vec<ManifestDiagnostic
 fn validate_network_trust_roots(roots: &[NetworkTrustRoot], errors: &mut Vec<ManifestDiagnostic>) {
     for (idx, root) in roots.iter().enumerate() {
         let path = format!("network_trust_roots[{idx}]");
-        require_non_empty(&root.authority, &format!("{path}.authority"), errors);
-        require_non_empty(&root.provenance, &format!("{path}.provenance"), errors);
-        require_non_empty(&root.rationale, &format!("{path}.rationale"), errors);
+        require_non_empty(&root.authority, errors, &format!("{path}.authority"));
+        require_non_empty(&root.provenance, errors, &format!("{path}.provenance"));
+        require_non_empty(&root.rationale, errors, &format!("{path}.rationale"));
         validate_digest(&root.digest, &format!("{path}.digest"), errors);
     }
 }
@@ -352,10 +371,10 @@ fn validate_network_trust_roots(roots: &[NetworkTrustRoot], errors: &mut Vec<Man
 fn validate_trust_notes(notes: &[TrustNote], errors: &mut Vec<ManifestDiagnostic>) {
     for (idx, note) in notes.iter().enumerate() {
         let path = format!("trust_notes[{idx}]");
-        require_non_empty(&note.name, &format!("{path}.name"), errors);
-        require_non_empty(&note.provenance, &format!("{path}.provenance"), errors);
-        require_non_empty(&note.scope, &format!("{path}.scope"), errors);
-        require_non_empty(&note.rationale, &format!("{path}.rationale"), errors);
+        require_non_empty(&note.name, errors, &format!("{path}.name"));
+        require_non_empty(&note.provenance, errors, &format!("{path}.provenance"));
+        require_non_empty(&note.scope, errors, &format!("{path}.scope"));
+        require_non_empty(&note.rationale, errors, &format!("{path}.rationale"));
         validate_digest(&note.digest, &format!("{path}.digest"), errors);
     }
 }
@@ -367,10 +386,10 @@ fn validate_expected_outputs(
     let mut roles = BTreeSet::new();
     for (idx, output) in outputs.iter().enumerate() {
         let path = format!("expected_outputs[{idx}]");
-        require_non_empty(&output.name, &format!("{path}.name"), errors);
-        require_non_empty(&output.kind, &format!("{path}.kind"), errors);
-        require_non_empty(&output.provenance, &format!("{path}.provenance"), errors);
-        require_non_empty(&output.contract_role, &format!("{path}.contract_role"), errors);
+        require_non_empty(&output.name, errors, &format!("{path}.name"));
+        require_non_empty(&output.kind, errors, &format!("{path}.kind"));
+        require_non_empty(&output.provenance, errors, &format!("{path}.provenance"));
+        require_non_empty(&output.contract_role, errors, &format!("{path}.contract_role"));
         validate_digest(&output.digest, &format!("{path}.digest"), errors);
         if !output.contract_role.trim().is_empty() {
             roles.insert(output.contract_role.clone());
@@ -392,10 +411,10 @@ fn require_provider_roles(roles: &BTreeSet<String>, errors: &mut Vec<ManifestDia
 }
 
 fn validate_digest(digest: &DigestSpec, path: &str, errors: &mut Vec<ManifestDiagnostic>) {
-    require_non_empty(&digest.algorithm, &format!("{path}.algorithm"), errors);
-    require_non_empty(&digest.value, &format!("{path}.value"), errors);
+    require_non_empty(&digest.algorithm, errors, &format!("{path}.algorithm"));
+    require_non_empty(&digest.value, errors, &format!("{path}.value"));
     if digest.algorithm == DIGEST_ALGORITHM_BLAKE3 {
-        validate_blake3_digest_value(&digest.value, path, errors);
+        validate_blake3_digest_value(&digest.value, errors, path);
         return;
     }
     if digest.non_blake3_reason.as_deref().unwrap_or_default().trim().is_empty() {
@@ -403,7 +422,7 @@ fn validate_digest(digest: &DigestSpec, path: &str, errors: &mut Vec<ManifestDia
     }
 }
 
-fn validate_blake3_digest_value(value: &str, path: &str, errors: &mut Vec<ManifestDiagnostic>) {
+fn validate_blake3_digest_value(value: &str, errors: &mut Vec<ManifestDiagnostic>, path: &str) {
     if value.len() != BLAKE3_HEX_LEN {
         errors.push(ManifestDiagnostic::new(path, format!("BLAKE3 digest must be {BLAKE3_HEX_LEN} hex chars")));
     }
@@ -412,7 +431,7 @@ fn validate_blake3_digest_value(value: &str, path: &str, errors: &mut Vec<Manife
     }
 }
 
-fn require_non_empty(value: &str, path: &str, errors: &mut Vec<ManifestDiagnostic>) {
+fn require_non_empty(value: &str, errors: &mut Vec<ManifestDiagnostic>, path: &str) {
     if value.trim().is_empty() {
         errors.push(ManifestDiagnostic::new(path, "must not be empty"));
     }

@@ -70,6 +70,8 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
     let lock_path = dir.join(LOCK_FILE);
     let inputs_dir = dir.join(INPUTS_DIR);
     let inputs_path = dir.join(INPUTS_FILE);
+    assert_ne!(manifest_path, lock_path, "project manifest and lockfile paths must differ");
+    assert!(inputs_path.starts_with(dir), "generated inputs must remain below the project root");
 
     if manifest_path.exists() {
         return Err(RunError::Internal(format!("{MANIFEST_FILE} already exists in {}", dir.display())));
@@ -99,7 +101,7 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
     write_retention_state_records(dir, Vec::new())?;
 
     // Add .mantle/ to .gitignore if not already there
-    add_gitignore_entry(dir);
+    add_gitignore_entry(dir)?;
 
     eprintln!("Initialized Mantle project:");
     eprintln!("  {MANIFEST_FILE}  (edit this)");
@@ -109,7 +111,20 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
 }
 
 /// `crunch check` — validate project state.
-pub fn cmd_check(dir: &Path, output: ProjectCheckOutput, probes: bool, trust: bool) -> Result<(), RunError> {
+pub fn cmd_check<Probes, Trust>(
+    dir: &Path,
+    output: ProjectCheckOutput,
+    probes: Probes,
+    trust: Trust,
+) -> Result<(), RunError>
+where
+    Probes: Into<bool>,
+    Trust: Into<bool>,
+{
+    let should_run_probes = probes.into();
+    let should_validate_trust = trust.into();
+    assert_ne!(MANIFEST_FILE, LOCK_FILE, "project manifest and lockfile names must differ");
+    assert_ne!(INPUTS_FILE, RETENTION_STATE_FILE, "generated inputs and retention state names must differ");
     reject_conflicting_legacy_project_files(dir)?;
     let manifest = match load_manifest(dir) {
         Ok(manifest) => manifest,
@@ -148,14 +163,14 @@ pub fn cmd_check(dir: &Path, output: ProjectCheckOutput, probes: bool, trust: bo
     });
     let mut supplemental_facts = retention_state.supplemental_facts;
     supplemental_facts.extend(retention_soundness_facts(&retention_plan));
-    let report = check_project_soundness(ProjectSoundnessInput {
+    let soundness = check_project_soundness(ProjectSoundnessInput {
         manifest,
         lock,
         generated_inputs,
         supplemental_facts,
-        mode: ProjectSoundnessMode::from_dynamic_requests(probes, trust),
+        mode: ProjectSoundnessMode::from_dynamic_requests(should_run_probes, should_validate_trust),
     });
-    finish_check_report(report, output)
+    finish_check_report(soundness, output)
 }
 
 fn finish_check_report(report: ProjectSoundnessReport, output: ProjectCheckOutput) -> Result<(), RunError> {
@@ -204,6 +219,8 @@ fn render_check_issue_human(issue: &ProjectSoundnessIssue) {
 
 /// `crunch show` — render resolved input state.
 pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
+    assert_ne!(MANIFEST_FILE, LOCK_FILE, "project manifest and lockfile names must differ");
+    assert_ne!(INPUTS_FILE, RETENTION_STATE_FILE, "generated inputs and retention state names must differ");
     reject_conflicting_legacy_project_files(dir)?;
     let manifest = load_manifest(dir)?;
     let lock = load_lockfile(dir)?;
@@ -224,44 +241,9 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
 
     for (name, entry) in &lock.inputs {
         let manifest_input = manifest.inputs.iter().find(|i| i.name == *name);
-        let frozen = manifest_input.is_some_and(|i| i.frozen);
-        let frozen_tag = if frozen { " [frozen]" } else { "" };
-
-        let kind_str = match &entry.kind {
-            crunch_project::LockedKind::File { url } => format!("file: {url}"),
-            crunch_project::LockedKind::Tarball { url } => format!("tarball: {url}"),
-            crunch_project::LockedKind::Git {
-                repository,
-                rev,
-                ref_name,
-            } => {
-                let ref_str = ref_name.as_deref().map(|r| format!(" ({r})")).unwrap_or_default();
-                format!("git: {repository} @ {rev}{ref_str}")
-            }
-            crunch_project::LockedKind::Darcs {
-                repository,
-                selector,
-                context,
-                weak_hash,
-            } => {
-                let identity = context.as_deref().or(weak_hash.as_deref()).unwrap_or("<unresolved>");
-                format!("darcs: {repository} @ {} ({identity})", selector.identity_fragment())
-            }
-            crunch_project::LockedKind::Pijul {
-                repository,
-                selector,
-                state,
-                change,
-            } => {
-                let change_str = change.as_deref().map(|value| format!(" change {value}")).unwrap_or_default();
-                format!("pijul: {repository} @ {} state {state}{change_str}", selector.identity_fragment())
-            }
-            crunch_project::LockedKind::Fossil {
-                repository,
-                selector,
-                checkin,
-            } => format!("fossil: {repository} @ {} check-in {checkin}", selector.identity_fragment()),
-        };
+        let is_frozen = manifest_input.is_some_and(|i| i.frozen);
+        let frozen_tag = if is_frozen { " [frozen]" } else { "" };
+        let kind_str = locked_kind_text(&entry.kind);
 
         println!("{name}{frozen_tag}");
         println!("  {kind_str}");
@@ -283,8 +265,51 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
+fn locked_kind_text(kind: &crunch_project::LockedKind) -> String {
+    let text = match kind {
+        crunch_project::LockedKind::File { url } => format!("file: {url}"),
+        crunch_project::LockedKind::Tarball { url } => format!("tarball: {url}"),
+        crunch_project::LockedKind::Git {
+            repository,
+            rev,
+            ref_name,
+        } => {
+            let ref_str = ref_name.as_deref().map(|value| format!(" ({value})")).unwrap_or_default();
+            format!("git: {repository} @ {rev}{ref_str}")
+        }
+        crunch_project::LockedKind::Darcs {
+            repository,
+            selector,
+            context,
+            weak_hash,
+        } => {
+            let identity = context.as_deref().or(weak_hash.as_deref()).unwrap_or("<unresolved>");
+            format!("darcs: {repository} @ {} ({identity})", selector.identity_fragment())
+        }
+        crunch_project::LockedKind::Pijul {
+            repository,
+            selector,
+            state,
+            change,
+        } => {
+            let change_str = change.as_deref().map(|value| format!(" change {value}")).unwrap_or_default();
+            format!("pijul: {repository} @ {} state {state}{change_str}", selector.identity_fragment())
+        }
+        crunch_project::LockedKind::Fossil {
+            repository,
+            selector,
+            checkin,
+        } => format!("fossil: {repository} @ {} check-in {checkin}", selector.identity_fragment()),
+    };
+    assert!(!text.is_empty(), "locked input kind rendering must not be empty");
+    assert!(text.contains(':'), "locked input kind rendering must include its type prefix");
+    text
+}
+
 /// `crunch refresh [names...]` — update inputs.
 pub fn cmd_refresh(dir: &Path, selected: &[String], no_network: bool) -> Result<(), RunError> {
+    assert_ne!(MANIFEST_FILE, LOCK_FILE, "project manifest and lockfile names must differ");
+    assert_ne!(INPUTS_FILE, RETENTION_STATE_FILE, "generated inputs and retention state names must differ");
     reject_conflicting_legacy_project_files(dir)?;
     let manifest = load_manifest(dir)?;
     let lock = load_lockfile(dir)?;
@@ -316,7 +341,10 @@ pub fn cmd_refresh(dir: &Path, selected: &[String], no_network: bool) -> Result<
         eprintln!("all inputs up to date");
     }
 
-    let failure_count = input_failures.len() + result.failures.len();
+    let failure_count = input_failures
+        .len()
+        .checked_add(result.failures.len())
+        .ok_or_else(|| RunError::Internal("refresh failure count overflowed usize".to_string()))?;
     if failure_count > 0 {
         return Err(RunError::Internal(format!("refresh failed for {failure_count} item(s)")));
     }
@@ -326,35 +354,39 @@ pub fn cmd_refresh(dir: &Path, selected: &[String], no_network: bool) -> Result<
 
 /// `crunch list-stale` — show which inputs would change.
 pub fn cmd_list_stale(dir: &Path, no_network: bool) -> Result<(), RunError> {
+    assert_ne!(MANIFEST_FILE, LOCK_FILE, "project manifest and lockfile names must differ");
+    assert_ne!(INPUTS_FILE, RETENTION_STATE_FILE, "generated inputs and retention state names must differ");
     reject_conflicting_legacy_project_files(dir)?;
     let manifest = load_manifest(dir)?;
     let lock = load_lockfile(dir)?;
     let resolver = LiveResolver::new(dir);
-    let report = list_stale_with_options(&manifest, &lock, &resolver, no_network);
+    let outcome = list_stale_with_options(&manifest, &lock, &resolver, no_network);
 
-    for name in &report.stale {
+    for name in &outcome.stale {
         println!("{name}");
     }
-    for name in &report.unchanged {
+    for name in &outcome.unchanged {
         eprintln!("unchanged: {name}");
     }
-    for skipped in &report.skipped {
+    for skipped in &outcome.skipped {
         eprintln!("skipped: {}: {}", skipped.name, skipped.reason);
     }
-    for blocked in &report.network_required {
+    for blocked in &outcome.network_required {
         eprintln!("network-required: {}: {}", blocked.name, blocked.reason);
     }
-    for failure in &report.failed {
+    for failure in &outcome.failed {
         eprintln!("failed: {}: {}", failure.name, failure.reason);
     }
-    if report.stale.is_empty()
-        && report.failed.is_empty()
-        && report.skipped.is_empty()
-        && report.network_required.is_empty()
-    {
+    let is_current_state_clean = outcome.stale.is_empty() && outcome.failed.is_empty();
+    let is_deferred_state_clean = outcome.skipped.is_empty() && outcome.network_required.is_empty();
+    if is_current_state_clean && is_deferred_state_clean {
         println!("all inputs up to date");
     }
-    let blocker_count = report.failed.len() + report.network_required.len();
+    let blocker_count = outcome
+        .failed
+        .len()
+        .checked_add(outcome.network_required.len())
+        .ok_or_else(|| RunError::Internal("stale-check blocker count overflowed usize".to_string()))?;
     if blocker_count > 0 {
         return Err(RunError::Internal(format!("stale check failed for {blocker_count} item(s)")));
     }
@@ -394,8 +426,8 @@ fn load_manifest(dir: &Path) -> Result<ProjectManifest, RunError> {
         )));
     }
 
-    let import_paths = vec![dir.as_os_str().to_owned()];
-    crunch_eval::evaluate_and_deserialize(&path, &import_paths)
+    let evaluation_paths = vec![dir.as_os_str().to_owned()];
+    crunch_eval::evaluate_and_deserialize(&path, &evaluation_paths)
         .map_err(|e| RunError::Eval(format!("loading {MANIFEST_FILE}: {e}")))
 }
 
@@ -485,8 +517,11 @@ fn retention_state_facts(dir: &Path, state: ProjectRetentionState, committed: bo
         .into_iter()
         .map(|mut record| {
             record.committed = committed && record.committed;
-            let root_exists = retention_root_path(dir, &record).is_file();
-            RetentionRootFact { record, root_exists }
+            let is_root_present = retention_root_path(dir, &record).is_file();
+            RetentionRootFact {
+                record,
+                root_exists: is_root_present,
+            }
         })
         .collect()
 }
@@ -611,6 +646,8 @@ fn atomic_tmp_path(path: &Path) -> PathBuf {
 }
 
 fn reject_conflicting_legacy_project_files(dir: &Path) -> Result<(), RunError> {
+    assert_ne!(MANIFEST_FILE, LEGACY_MANIFEST_FILE, "current and legacy manifest names must differ");
+    assert_ne!(LOCK_FILE, LEGACY_LOCK_FILE, "current and legacy lockfile names must differ");
     let conflicts = [
         (MANIFEST_FILE, LEGACY_MANIFEST_FILE),
         (LOCK_FILE, LEGACY_LOCK_FILE),
@@ -638,18 +675,24 @@ fn reject_conflicting_legacy_project_files(dir: &Path) -> Result<(), RunError> {
     }
 }
 
-fn add_gitignore_entry(dir: &Path) {
+fn add_gitignore_entry(dir: &Path) -> Result<(), RunError> {
     let gitignore = dir.join(".gitignore");
-    let content = std::fs::read_to_string(&gitignore).unwrap_or_default();
-    if !content.lines().any(|line| line.trim() == GITIGNORE_ENTRY) {
-        let mut new_content = content;
-        if !new_content.is_empty() && !new_content.ends_with('\n') {
-            new_content.push('\n');
-        }
-        new_content.push_str(GITIGNORE_ENTRY);
-        new_content.push('\n');
-        let _ = std::fs::write(&gitignore, &new_content);
+    let content = match std::fs::read_to_string(&gitignore) {
+        Ok(content) => content,
+        Err(error) if error.kind() == ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(RunError::Internal(format!("reading {}: {error}", gitignore.display()))),
+    };
+    if content.lines().any(|line| line.trim() == GITIGNORE_ENTRY) {
+        return Ok(());
     }
+    let mut new_content = content;
+    if !new_content.is_empty() && !new_content.ends_with('\n') {
+        new_content.push('\n');
+    }
+    new_content.push_str(GITIGNORE_ENTRY);
+    new_content.push('\n');
+    std::fs::write(&gitignore, &new_content)
+        .map_err(|error| RunError::Internal(format!("writing {}: {error}", gitignore.display())))
 }
 
 fn print_refresh_outcomes(outcomes: &[RefreshOutcome]) {

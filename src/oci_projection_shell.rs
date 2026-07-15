@@ -120,9 +120,9 @@ fn read_bounded_regular(path: &Path, max_bytes: u64) -> Result<Vec<u8>, String> 
     if metadata.len() > max_bytes {
         return Err(format!("{} exceeds the {max_bytes}-byte bound", path.display()));
     }
-    let capacity =
+    let file_size_bytes =
         usize::try_from(metadata.len()).map_err(|_| format!("{} is too large for this host", path.display()))?;
-    let mut bytes = Vec::with_capacity(capacity);
+    let mut bytes = Vec::with_capacity(file_size_bytes);
     file.take(bounded_read_limit(max_bytes)?)
         .read_to_end(&mut bytes)
         .map_err(|error| format!("reading {}: {error}", path.display()))?;
@@ -174,13 +174,14 @@ fn relative_string(root: &Path, path: &Path) -> Result<String, String> {
 }
 
 fn read_file_with_budget(path: &Path, remaining: &mut u64) -> Result<Vec<u8>, String> {
+    let remaining_before_bytes = *remaining;
     let (file, metadata) = open_regular_no_follow(path)?;
     if metadata.len() > *remaining {
         return Err(format!("materialized objects exceed the admitted byte bound at {}", path.display()));
     }
-    let capacity =
+    let file_size_bytes =
         usize::try_from(metadata.len()).map_err(|_| format!("{} is too large for this host", path.display()))?;
-    let mut bytes = Vec::with_capacity(capacity);
+    let mut bytes = Vec::with_capacity(file_size_bytes);
     file.take(bounded_read_limit(*remaining)?)
         .read_to_end(&mut bytes)
         .map_err(|error| format!("reading {}: {error}", path.display()))?;
@@ -191,6 +192,12 @@ fn read_file_with_budget(path: &Path, remaining: &mut u64) -> Result<Vec<u8>, St
     *remaining = remaining
         .checked_sub(bytes_read)
         .ok_or_else(|| "materialized object byte counter underflowed".to_string())?;
+    assert!(*remaining <= remaining_before_bytes, "materialized byte budget must not increase");
+    assert_eq!(
+        remaining_before_bytes.checked_sub(*remaining),
+        Some(bytes_read),
+        "materialized byte budget must account for exact bytes read"
+    );
     Ok(bytes)
 }
 
@@ -208,6 +215,8 @@ fn sorted_children(path: &Path) -> Result<Vec<PathBuf>, String> {
 }
 
 fn collect_object(root: &Path, artifact_ref: String, remaining_bytes: &mut u64) -> Result<MaterializedObject, String> {
+    assert!(!root.as_os_str().is_empty(), "materialized object root must not be empty");
+    assert!(!artifact_ref.is_empty(), "materialized object ref must not be empty");
     let mut entries = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY);
     let mut worklist = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY);
     worklist.push(root.to_path_buf());
@@ -253,6 +262,8 @@ fn collect_object(root: &Path, artifact_ref: String, remaining_bytes: &mut u64) 
         }
     }
     entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    assert!(!entries.is_empty(), "materialized object must include its root entry");
+    assert!(entries.len() <= MAX_OBJECT_ENTRIES, "materialized object entries must stay bounded");
     Ok(MaterializedObject { artifact_ref, entries })
 }
 
@@ -276,7 +287,9 @@ fn materialize_projection_objects(
             return Err(format!("projection object is absent from the Mantle CAS: {artifact_ref}"));
         }
     }
-    let mut remaining_bytes = projection.bounds.max_total_bytes;
+    let initial_budget_bytes = projection.bounds.max_total_bytes;
+    let mut remaining_bytes = initial_budget_bytes;
+    let object_count_max = references.len();
     let mut objects = BTreeMap::new();
     for (index, artifact_ref) in references.into_iter().enumerate() {
         let destination = temporary.path().join(format!("object-{index}"));
@@ -290,8 +303,13 @@ fn materialize_projection_objects(
             return Err(format!("materialized artifact identity mismatch: expected {artifact_ref}, got {recomputed}"));
         }
         let object = collect_object(&destination, artifact_ref.clone(), &mut remaining_bytes)?;
+        if objects.len() >= object_count_max {
+            return Err("projection object count exceeded admitted references".to_string());
+        }
         objects.insert(artifact_ref, object);
     }
+    assert_eq!(objects.len(), object_count_max, "every admitted projection ref must materialize exactly once");
+    assert!(remaining_bytes <= initial_budget_bytes, "projection materialization budget must not increase");
     Ok((temporary, objects))
 }
 
@@ -357,6 +375,8 @@ pub fn export_oci_layout(request: &ExportRequest<'_>) -> Result<OciExportReport,
     if request.output_dir.exists() {
         return Err(format!("OCI output already exists: {}", request.output_dir.display()));
     }
+    assert!(!request.output_dir.exists(), "OCI export requires an absent destination");
+    assert_ne!(request.output_dir, request.state_dir, "OCI export destination must not alias state storage");
     let projection = parse_projection(request.projection_path)?;
     let spec_material = read_bounded_regular(request.spec_material_path, OCI_INPUT_MAX_BYTES)?;
     let source_admissions = parse_source_admissions(request.source_admissions_path)?;
@@ -372,11 +392,11 @@ pub fn export_oci_layout(request: &ExportRequest<'_>) -> Result<OciExportReport,
     let plan = build_export_plan(&projection, &spec_material, &source_admissions, &objects).map_err(|issues| {
         format!("OCI projection planning failed: {}", serde_json::to_string(&issues).unwrap_or_default())
     })?;
-    let report = export_report(&plan)?;
-    if report.schema != EXPORT_REPORT_COPY_SCHEMA {
+    let outcome = export_report(&plan)?;
+    if outcome.schema != EXPORT_REPORT_COPY_SCHEMA {
         return Err("internal OCI export report schema disagreement".to_string());
     }
-    let report_bytes = serialize_pretty(&report)?;
+    let report_bytes = serialize_pretty(&outcome)?;
 
     let parent = request.output_dir.parent().unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent).map_err(|error| format!("creating OCI output parent {}: {error}", parent.display()))?;
@@ -387,10 +407,11 @@ pub fn export_oci_layout(request: &ExportRequest<'_>) -> Result<OciExportReport,
     write_export_plan(stage.path(), &plan)?;
     write_new_synced(&stage.path().join(OCI_EXPORT_REPORT_FILENAME), &report_bytes)?;
     let staged_facts = read_layout_facts(stage.path())?;
-    let staged_report = validate_import(&staged_facts).map_err(|issues| {
+    let staged_admission = validate_import(&staged_facts).map_err(|issues| {
         format!("staged OCI self-verification failed: {}", serde_json::to_string(&issues).unwrap_or_default())
     })?;
-    if staged_report.state != "admitted" || staged_report.projection_blake3.as_deref() != Some(&plan.projection_blake3)
+    if staged_admission.state != "admitted"
+        || staged_admission.projection_blake3.as_deref() != Some(&plan.projection_blake3)
     {
         return Err("staged OCI self-verification did not preserve admitted projection identity".to_string());
     }
@@ -401,7 +422,7 @@ pub fn export_oci_layout(request: &ExportRequest<'_>) -> Result<OciExportReport,
         return Err(error);
     }
     sync_directory(parent)?;
-    Ok(report)
+    Ok(outcome)
 }
 
 fn descriptor_blob_path(layout_dir: &Path, digest: &str) -> Result<PathBuf, String> {
@@ -424,6 +445,8 @@ fn read_descriptor_blob(layout_dir: &Path, digest: &str, total: &mut u64) -> Res
 }
 
 fn check_blob_directory(layout_dir: &Path, expected: &BTreeSet<String>) -> Result<(), String> {
+    assert!(!layout_dir.as_os_str().is_empty(), "OCI layout directory must not be empty");
+    assert!(!expected.is_empty(), "OCI layout must reference at least one descriptor blob");
     let directory = layout_dir.join(OCI_BLOB_DIR);
     let metadata = fs::symlink_metadata(&directory)
         .map_err(|error| format!("reading blob directory {}: {error}", directory.display()))?;
@@ -448,6 +471,8 @@ fn check_blob_directory(layout_dir: &Path, expected: &BTreeSet<String>) -> Resul
     if &actual != expected {
         return Err("OCI blob directory contains missing or unreferenced descriptors".to_string());
     }
+    assert_eq!(&actual, expected, "admitted blob directory must match descriptor closure");
+    assert!(!actual.is_empty(), "admitted blob directory must not be empty");
     Ok(())
 }
 
@@ -465,6 +490,8 @@ fn check_layout_root_entries(layout_dir: &Path) -> Result<(), String> {
 }
 
 pub fn read_layout_facts(layout_dir: &Path) -> Result<LayoutFacts, String> {
+    assert!(!layout_dir.as_os_str().is_empty(), "OCI layout path must not be empty");
+    assert!(!ALLOWED_LAYOUT_ROOT_ENTRIES.is_empty(), "OCI root allowlist must not be empty");
     let root_metadata = fs::symlink_metadata(layout_dir)
         .map_err(|error| format!("reading OCI layout root {}: {error}", layout_dir.display()))?;
     if !root_metadata.is_dir() || root_metadata.file_type().is_symlink() {
@@ -486,15 +513,16 @@ pub fn read_layout_facts(layout_dir: &Path) -> Result<LayoutFacts, String> {
     if manifest.layers.is_empty() || manifest.layers.len() > OCI_LAYER_MAX_COUNT {
         return Err(format!("OCI manifest layer count exceeds the {OCI_LAYER_MAX_COUNT}-layer bound"));
     }
-    let descriptor_capacity = manifest
+    let descriptor_count = manifest
         .layers
         .len()
         .checked_add(OCI_CONTROL_DESCRIPTOR_COUNT)
         .ok_or_else(|| "OCI descriptor count overflowed".to_string())?;
-    let mut descriptors = Vec::with_capacity(descriptor_capacity);
+    let mut descriptors = Vec::with_capacity(descriptor_count);
     descriptors.push(manifest_descriptor);
     descriptors.push(manifest.config);
     descriptors.extend(manifest.layers);
+    let descriptor_count_max = descriptors.len();
     let mut expected = BTreeSet::new();
     let mut blobs = BTreeMap::<String, Vec<u8>>::new();
     for descriptor in descriptors {
@@ -508,58 +536,77 @@ pub fn read_layout_facts(layout_dir: &Path) -> Result<LayoutFacts, String> {
         } else {
             read_descriptor_blob(layout_dir, &descriptor.digest, &mut total)?
         };
+        if blobs.len() >= descriptor_count_max {
+            return Err("OCI blob count exceeded descriptor closure".to_string());
+        }
         blobs.insert(descriptor.digest, bytes);
     }
     check_blob_directory(layout_dir, &expected)?;
-    let export_report_path = layout_dir.join(OCI_EXPORT_REPORT_FILENAME);
-    let export_report = match fs::symlink_metadata(&export_report_path) {
-        Ok(_) => {
-            let bytes = read_bounded_regular(&export_report_path, OCI_DOCUMENT_MAX_BYTES)?;
-            Some(serde_json::from_slice(&bytes).map_err(|error| format!("parsing Mantle OCI export report: {error}"))?)
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-        Err(error) => return Err(format!("checking Mantle OCI export report: {error}")),
-    };
+    let producer_summary = read_optional_export_report(layout_dir)?;
+    assert_eq!(blobs.len(), expected.len(), "every admitted descriptor must have one blob");
+    assert!(blobs.len() <= descriptor_count_max, "admitted descriptor blobs must stay bounded");
     Ok(LayoutFacts {
         oci_layout_bytes,
         index_bytes,
         blobs,
-        export_report,
+        export_report: producer_summary,
     })
 }
 
+fn read_optional_export_report(layout_dir: &Path) -> Result<Option<OciExportReport>, String> {
+    let producer_summary_path = layout_dir.join(OCI_EXPORT_REPORT_FILENAME);
+    match fs::symlink_metadata(&producer_summary_path) {
+        Ok(_) => {
+            let bytes = read_bounded_regular(&producer_summary_path, OCI_DOCUMENT_MAX_BYTES)?;
+            serde_json::from_slice(&bytes)
+                .map(Some)
+                .map_err(|error| format!("parsing Mantle OCI export report: {error}"))
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!("checking Mantle OCI export report: {error}")),
+    }
+}
+
 fn admit_blobs(facts: &LayoutFacts, state_dir: &Path) -> Result<BTreeMap<String, String>, String> {
+    assert!(!facts.blobs.is_empty(), "OCI admission requires descriptor blobs");
+    assert!(!state_dir.as_os_str().is_empty(), "OCI admission state directory must not be empty");
     let temporary = tempfile::tempdir().map_err(|error| format!("creating OCI import staging directory: {error}"))?;
+    let blob_count_max = facts.blobs.len();
     let mut refs = BTreeMap::new();
     for (index, (digest, bytes)) in facts.blobs.iter().enumerate() {
         let path = temporary.path().join(format!("blob-{index}"));
         write_new_synced(&path, bytes)?;
-        let imported = import_frontend_artifact(&path, state_dir)?;
+        let admission = import_frontend_artifact(&path, state_dir)?;
         let verification_path = temporary.path().join(format!("verified-blob-{index}"));
-        let materialized = materialize_frontend_artifact(state_dir, &imported.artifact_ref, &verification_path)?
+        let materialized = materialize_frontend_artifact(state_dir, &admission.artifact_ref, &verification_path)?
             .ok_or_else(|| format!("imported OCI blob disappeared before verification: {digest}"))?;
-        if frontend_artifact_identity(&verification_path)? != imported.artifact_ref
+        if frontend_artifact_identity(&verification_path)? != admission.artifact_ref
             || read_bounded_regular(&verification_path, OCI_BLOB_MAX_BYTES)? != *bytes
-            || materialized.artifact_ref != imported.artifact_ref
+            || materialized.artifact_ref != admission.artifact_ref
         {
             return Err(format!("imported OCI blob failed exact CAS verification: {digest}"));
         }
-        refs.insert(digest.clone(), imported.artifact_ref);
+        if refs.len() >= blob_count_max {
+            return Err("OCI admitted ref count exceeded descriptor blobs".to_string());
+        }
+        refs.insert(digest.clone(), admission.artifact_ref);
     }
+    assert_eq!(refs.len(), blob_count_max, "every descriptor blob must receive one admitted ref");
+    assert_eq!(refs.len(), facts.blobs.len(), "admitted refs must preserve descriptor closure cardinality");
     Ok(refs)
 }
 
 pub fn import_oci_layout(request: &ImportRequest<'_>) -> Result<OciImportReport, String> {
     let facts = read_layout_facts(request.layout_dir)?;
-    let mut report = validate_import(&facts).map_err(|issues| {
+    let mut outcome = validate_import(&facts).map_err(|issues| {
         format!("OCI import validation failed: {}", serde_json::to_string(&issues).unwrap_or_default())
     })?;
     let refs = admit_blobs(&facts, request.state_dir)?;
-    attach_imported_refs(&mut report, &refs)?;
-    verify_import_report(&report)?;
-    let report_bytes = serialize_pretty(&report)?;
+    attach_imported_refs(&mut outcome, &refs)?;
+    verify_import_report(&outcome)?;
+    let report_bytes = serialize_pretty(&outcome)?;
     write_atomic(request.report_path, &report_bytes)?;
-    Ok(report)
+    Ok(outcome)
 }
 
 #[cfg(test)]

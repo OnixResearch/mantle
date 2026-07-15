@@ -17,7 +17,6 @@ use std::process::Command;
 use std::process::Stdio;
 use std::thread;
 use std::time::Duration;
-use std::time::Instant;
 
 use crunch_build::distributed::EXTERNAL_BATCH_PROTOCOL_SCHEMA;
 use crunch_build::distributed::ExternalBatchJobState;
@@ -37,6 +36,7 @@ use crate::remote_farm_config::validate_remote_batch_dispatcher_profile;
 const EXECUTABLE_DIGEST_BUFFER_BYTES: usize = 65_536;
 const PROCESS_OUTPUT_BUFFER_BYTES: usize = 8_192;
 const PROCESS_POLL_INTERVAL_MS: u64 = 10;
+const MILLISECONDS_PER_SECOND: u64 = 1_000;
 const PROCESS_TEARDOWN_TIMEOUT_SECS: u64 = 5;
 const MAX_BATCH_ENVIRONMENT_VALUE_BYTES: usize = 65_536;
 const SLURM_MEMORY_SUFFIX: &str = "B";
@@ -45,6 +45,11 @@ const SLURM_STATE_RUNNING: [&str; 3] = ["COMPLETING", "R", "RUNNING"];
 const SLURM_STATE_SUCCEEDED: [&str; 2] = ["CD", "COMPLETED"];
 const SLURM_STATE_CANCELLED: [&str; 2] = ["CA", "CANCELLED"];
 const SLURM_STATE_FAILED: [&str; 7] = ["F", "FAILED", "NODE_FAIL", "NF", "OOM", "OUT_OF_MEMORY", "TIMEOUT"];
+
+struct BoundedReadAttemptFacts {
+    total_bytes: u64,
+    buffer_bytes: u64,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ConfinedProcessOutput {
@@ -304,10 +309,10 @@ fn run_confined_process(
     let stdin_writer = thread::spawn(move || write_child_stdin(child_stdin, &stdin_payload));
     let stdout = child.stdout.take().ok_or_else(|| "external-batch-stdout-pipe-missing".to_string())?;
     let stderr = child.stderr.take().ok_or_else(|| "external-batch-stderr-pipe-missing".to_string())?;
-    let stdout_limit = bounded_output_limit(profile.stdout_limit_bytes)?;
-    let stderr_limit = bounded_output_limit(profile.stderr_limit_bytes)?;
-    let stdout_reader = thread::spawn(move || read_bounded_output(stdout, stdout_limit));
-    let stderr_reader = thread::spawn(move || read_bounded_output(stderr, stderr_limit));
+    let stdout_limit_bytes = bounded_output_limit(profile.stdout_limit_bytes)?;
+    let stderr_limit_bytes = bounded_output_limit(profile.stderr_limit_bytes)?;
+    let stdout_reader = thread::spawn(move || read_bounded_output(stdout, stdout_limit_bytes));
+    let stderr_reader = thread::spawn(move || read_bounded_output(stderr, stderr_limit_bytes));
     let status = wait_for_child(&mut child, profile.timeout_secs)?;
     join_stdin_writer(stdin_writer)?;
     let stdout = join_output_reader(stdout_reader, "stdout")?;
@@ -315,21 +320,34 @@ fn run_confined_process(
     if !status.success() {
         return Err("external-batch-process-exit-failed".to_string());
     }
-    assert!(stdout.len() <= stdout_limit);
-    assert!(stderr.len() <= stderr_limit);
+    assert!(stdout.len() <= stdout_limit_bytes);
+    assert!(stderr.len() <= stderr_limit_bytes);
     Ok(ConfinedProcessOutput { stdout, stderr })
 }
 
 fn verify_executable_digest(program: &Path, expected_digest_blake3: &str) -> Result<(), String> {
     let mut file = std::fs::File::open(program).map_err(|_| "external-batch-executable-open-failed".to_string())?;
+    let executable_size_bytes =
+        file.metadata().map_err(|_| "external-batch-executable-metadata-failed".to_string())?.len();
+    let buffer_size_bytes = u64::try_from(EXECUTABLE_DIGEST_BUFFER_BYTES)
+        .map_err(|_| "external-batch-executable-buffer-size-invalid".to_string())?;
+    let read_attempt_count_max = bounded_read_attempt_count(BoundedReadAttemptFacts {
+        total_bytes: executable_size_bytes,
+        buffer_bytes: buffer_size_bytes,
+    })?;
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0_u8; EXECUTABLE_DIGEST_BUFFER_BYTES];
-    loop {
+    let mut is_complete = false;
+    for _ in 0..read_attempt_count_max {
         let read = file.read(&mut buffer).map_err(|_| "external-batch-executable-read-failed".to_string())?;
         if read == 0 {
+            is_complete = true;
             break;
         }
         hasher.update(&buffer[..read]);
+    }
+    if !is_complete {
+        return Err("external-batch-executable-changed-during-read".to_string());
     }
     let observed = hasher.finalize().to_hex().to_string();
     if observed != expected_digest_blake3 {
@@ -382,42 +400,68 @@ fn join_stdin_writer(writer: thread::JoinHandle<Result<(), String>>) -> Result<(
 }
 
 fn wait_for_child(child: &mut Child, timeout_secs: u64) -> Result<std::process::ExitStatus, String> {
-    let timeout = Duration::from_secs(timeout_secs);
-    let deadline = Instant::now().checked_add(timeout).ok_or_else(|| "external-batch-timeout-overflow".to_string())?;
-    loop {
+    let poll_attempt_count_max = process_poll_attempt_count(timeout_secs)?;
+    for _ in 0..poll_attempt_count_max {
         if let Some(status) = child.try_wait().map_err(|_| "external-batch-process-wait-failed".to_string())? {
             return Ok(status);
         }
-        if Instant::now() >= deadline {
-            terminate_child(child)?;
-            return Err("external-batch-process-timeout".to_string());
-        }
         thread::sleep(Duration::from_millis(PROCESS_POLL_INTERVAL_MS));
     }
+    terminate_child(child)?;
+    Err("external-batch-process-timeout".to_string())
 }
 
 fn terminate_child(child: &mut Child) -> Result<(), String> {
     child.kill().map_err(|_| "external-batch-process-kill-failed".to_string())?;
-    let teardown_deadline = Instant::now()
-        .checked_add(Duration::from_secs(PROCESS_TEARDOWN_TIMEOUT_SECS))
-        .ok_or_else(|| "external-batch-teardown-timeout-overflow".to_string())?;
-    loop {
+    let poll_attempt_count_max = process_poll_attempt_count(PROCESS_TEARDOWN_TIMEOUT_SECS)?;
+    for _ in 0..poll_attempt_count_max {
         if child.try_wait().map_err(|_| "external-batch-process-reap-failed".to_string())?.is_some() {
             return Ok(());
         }
-        if Instant::now() >= teardown_deadline {
-            return Err("external-batch-process-teardown-timeout".to_string());
-        }
         thread::sleep(Duration::from_millis(PROCESS_POLL_INTERVAL_MS));
     }
+    Err("external-batch-process-teardown-timeout".to_string())
+}
+
+fn process_poll_attempt_count(timeout_secs: u64) -> Result<u64, String> {
+    let timeout_ms = timeout_secs
+        .checked_mul(MILLISECONDS_PER_SECOND)
+        .ok_or_else(|| "external-batch-timeout-overflow".to_string())?;
+    timeout_ms
+        .checked_div(PROCESS_POLL_INTERVAL_MS)
+        .and_then(|count| count.checked_add(1))
+        .ok_or_else(|| "external-batch-poll-attempt-count-overflow".to_string())
+}
+
+fn bounded_read_attempt_count(facts: BoundedReadAttemptFacts) -> Result<u64, String> {
+    if facts.buffer_bytes == 0 {
+        return Err("external-batch-read-buffer-empty".to_string());
+    }
+    facts
+        .total_bytes
+        .checked_div(facts.buffer_bytes)
+        .and_then(|count| count.checked_add(2))
+        .ok_or_else(|| "external-batch-read-attempt-count-overflow".to_string())
 }
 
 fn read_bounded_output(mut reader: impl Read, limit_bytes: usize) -> Result<Vec<u8>, String> {
-    let mut output = Vec::new();
+    assert!(PROCESS_OUTPUT_BUFFER_BYTES > 0, "external batch read buffer must not be empty");
+    let read_limit_bytes =
+        u64::try_from(limit_bytes).map_err(|_| "external-batch-output-limit-overflow".to_string())?;
+    let buffer_size_bytes = u64::try_from(PROCESS_OUTPUT_BUFFER_BYTES)
+        .map_err(|_| "external-batch-output-buffer-size-invalid".to_string())?;
+    assert!(buffer_size_bytes > 0, "external batch read buffer conversion must stay positive");
+    let read_attempt_count_max = bounded_read_attempt_count(BoundedReadAttemptFacts {
+        total_bytes: read_limit_bytes,
+        buffer_bytes: buffer_size_bytes,
+    })?;
+    let mut output = Vec::with_capacity(limit_bytes.min(PROCESS_OUTPUT_BUFFER_BYTES));
     let mut buffer = [0_u8; PROCESS_OUTPUT_BUFFER_BYTES];
-    loop {
+    let mut is_complete = false;
+    for _ in 0..read_attempt_count_max {
         let read = reader.read(&mut buffer).map_err(|_| "external-batch-process-output-read-failed".to_string())?;
         if read == 0 {
+            is_complete = true;
             break;
         }
         let next_len =
@@ -426,6 +470,9 @@ fn read_bounded_output(mut reader: impl Read, limit_bytes: usize) -> Result<Vec<
             return Err("external-batch-process-output-limit-exceeded".to_string());
         }
         output.extend_from_slice(&buffer[..read]);
+    }
+    if !is_complete {
+        return Err("external-batch-process-output-limit-exceeded".to_string());
     }
     Ok(output)
 }
@@ -486,6 +533,8 @@ fn parse_slurm_submit_job_id(stdout: &[u8]) -> Result<String, String> {
 }
 
 fn parse_slurm_job_state(stdout: &[u8]) -> Result<ExternalBatchJobState, String> {
+    assert!(!SLURM_STATE_PENDING.is_empty(), "Slurm pending-state vocabulary must not be empty");
+    assert!(!SLURM_STATE_FAILED.is_empty(), "Slurm failed-state vocabulary must not be empty");
     let text = std::str::from_utf8(stdout).map_err(|_| "external-batch-slurm-state-non-utf8".to_string())?;
     let state = text.lines().next().unwrap_or_default().trim().to_ascii_uppercase();
     if state.is_empty() {
@@ -513,10 +562,10 @@ fn validate_slurm_job_id(external_job_id: &str) -> Result<(), String> {
     if external_job_id.is_empty() || external_job_id.len() > MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES {
         return Err("external-batch-slurm-job-id-length-invalid".to_string());
     }
-    let valid = external_job_id
+    let is_valid = external_job_id
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'));
-    if !valid {
+    if !is_valid {
         return Err("external-batch-slurm-job-id-invalid".to_string());
     }
     Ok(())
