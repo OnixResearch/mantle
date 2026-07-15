@@ -61,6 +61,7 @@ const ROOTFS_TYPE: &str = "layers";
 const MAX_IMPORT_ENTRIES: usize = 16_384;
 const MAX_IMPORT_DEPTH: usize = 64;
 const METADATA_BLOB_COUNT: usize = 2;
+const ADJACENT_BLOB_COUNT: usize = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct OciRootFs {
@@ -177,19 +178,27 @@ fn config_labels(projection: &OciProjection, projection_blake3: &str) -> BTreeMa
 
 fn deduplicate_blobs(mut blobs: Vec<PlannedBlob>) -> Result<Vec<PlannedBlob>, ProjectionIssue> {
     blobs.sort_by(|left, right| left.digest.cmp(&right.digest));
-    for pair in blobs.windows(2) {
-        if pair[0].digest == pair[1].digest {
-            if pair[0].bytes != pair[1].bytes {
-                return Err(issue(
-                    "digest-collision",
-                    &pair[0].digest,
-                    "two distinct blobs share one OCI SHA-256 descriptor",
-                ));
-            }
+    for pair in blobs.windows(ADJACENT_BLOB_COUNT) {
+        if adjacent_blobs_conflict(pair) {
+            return Err(issue(
+                "digest-collision",
+                &pair[0].digest,
+                "two distinct blobs share one OCI SHA-256 descriptor",
+            ));
         }
     }
     blobs.dedup_by(|left, right| left.digest == right.digest);
     Ok(blobs)
+}
+
+fn adjacent_blobs_conflict(pair: &[PlannedBlob]) -> bool {
+    debug_assert_eq!(pair.len(), ADJACENT_BLOB_COUNT);
+    debug_assert!(!pair[0].digest.is_empty());
+    debug_assert!(!pair[1].digest.is_empty());
+    if pair[0].digest != pair[1].digest {
+        return false;
+    }
+    pair[0].bytes != pair[1].bytes
 }
 
 fn layout_identity<'a>(
