@@ -31,7 +31,7 @@ mod linux {
     const SECCOMP_DATA_NR_OFFSET: u32 = 0;
     const SECCOMP_DATA_ARCH_OFFSET: u32 = 4;
     const MAX_REMOTE_PATH_BYTES: usize = 4096;
-    const FILTER_INSTRUCTION_COUNT: u16 = 8;
+    const FILTER_INSTRUCTION_COUNT: usize = 8;
     const EXECVE_PATH_ARG_INDEX: usize = 0;
     const EXECVEAT_DIRFD_ARG_INDEX: usize = 0;
     const EXECVEAT_PATH_ARG_INDEX: usize = 1;
@@ -58,6 +58,7 @@ mod linux {
 
     #[derive(Debug)]
     pub struct ProtectedSeccompSupervisor {
+        // Lock order: shared_policy -> audit_events. Never acquire these locks in reverse order.
         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
         shared_policy: Arc<RwLock<ProtectedExecPolicy>>,
         listener_fd: RawFd,
@@ -65,7 +66,10 @@ mod linux {
 
     impl ProtectedSeccompSupervisor {
         pub fn audit_events(&self) -> Vec<ProtectedSeccompAuditEvent> {
-            self.audit_events.lock().expect("seccomp audit mutex poisoned").clone()
+            match self.audit_events.lock() {
+                Ok(events) => events.clone(),
+                Err(poisoned) => poisoned.into_inner().clone(),
+            }
         }
 
         pub fn listener_fd(&self) -> RawFd {
@@ -78,11 +82,8 @@ mod linux {
             extraction_rules: &[String],
             executables: &[PromotedExecutable],
         ) -> Result<OutputPromotionRecord, ProtectedExecError> {
-            self.shared_policy.write().expect("seccomp policy rwlock poisoned").promote_verified_output(
-                source_entry_id,
-                extraction_rules,
-                executables,
-            )
+            let mut policy = self.shared_policy.write().map_err(|_| ProtectedExecError::PolicyLockPoisoned)?;
+            policy.promote_verified_output(source_entry_id, extraction_rules, executables)
         }
     }
 
@@ -103,8 +104,10 @@ mod linux {
     }
 
     fn verify_notification_sizes() -> Result<(), ProtectedSeccompError> {
-        let mut sizes: libc::seccomp_notif_sizes = unsafe { std::mem::zeroed() };
-        let rc = unsafe { libc::syscall(libc::SYS_seccomp, libc::SECCOMP_GET_NOTIF_SIZES, 0, &mut sizes) };
+        let mut notification_sizes_bytes: libc::seccomp_notif_sizes = unsafe { std::mem::zeroed() };
+        let rc = unsafe {
+            libc::syscall(libc::SYS_seccomp, libc::SECCOMP_GET_NOTIF_SIZES, 0, &mut notification_sizes_bytes)
+        };
         if rc == 0 {
             return Ok(());
         }
@@ -121,11 +124,15 @@ mod linux {
 
     fn install_exec_filter() -> Result<RawFd, ProtectedSeccompError> {
         let arch = require_supported_audit_arch(current_audit_arch())?;
-        let mut filter = exec_filter(arch);
+        let mut filter = exec_filter(arch)?;
+        let filter_len = u16::try_from(filter.len())
+            .map_err(|_| ProtectedSeccompError::Install("seccomp filter length exceeds u16".to_string()))?;
         let mut program = libc::sock_fprog {
-            len: FILTER_INSTRUCTION_COUNT,
+            len: filter_len,
             filter: filter.as_mut_ptr(),
         };
+        assert_eq!(filter.len(), FILTER_INSTRUCTION_COUNT);
+        assert!(!program.filter.is_null());
         let fd = unsafe {
             libc::syscall(
                 libc::SYS_seccomp,
@@ -134,41 +141,96 @@ mod linux {
                 &mut program,
             )
         };
-        if fd >= 0 {
-            return Ok(fd as RawFd);
+        if fd < 0 {
+            return Err(ProtectedSeccompError::Install(last_os_error("SECCOMP_SET_MODE_FILTER")));
         }
-        Err(ProtectedSeccompError::Install(last_os_error("SECCOMP_SET_MODE_FILTER")))
+        RawFd::try_from(fd).map_err(|_| ProtectedSeccompError::Install("seccomp listener fd exceeds i32".to_string()))
     }
 
-    fn exec_filter(arch: u32) -> [libc::sock_filter; FILTER_INSTRUCTION_COUNT as usize] {
-        [
-            bpf_stmt(libc::BPF_LD | libc::BPF_W | libc::BPF_ABS, SECCOMP_DATA_ARCH_OFFSET),
-            bpf_jump(libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K, arch, 1, 0),
-            bpf_stmt(libc::BPF_RET | libc::BPF_K, libc::SECCOMP_RET_KILL_PROCESS),
-            bpf_stmt(libc::BPF_LD | libc::BPF_W | libc::BPF_ABS, SECCOMP_DATA_NR_OFFSET),
-            bpf_jump(libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K, libc::SYS_execve as u32, 1, 0),
-            bpf_jump(libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K, libc::SYS_execveat as u32, 0, 1),
-            bpf_stmt(libc::BPF_RET | libc::BPF_K, libc::SECCOMP_RET_USER_NOTIF),
-            bpf_stmt(libc::BPF_RET | libc::BPF_K, libc::SECCOMP_RET_ALLOW),
-        ]
+    struct BpfStatement {
+        code: u32,
+        operand: u32,
     }
 
-    fn bpf_stmt(code: u32, k: u32) -> libc::sock_filter {
-        libc::sock_filter {
-            code: code as u16,
+    struct BpfJump {
+        code: u32,
+        operand: u32,
+        jump_true: u8,
+        jump_false: u8,
+    }
+
+    fn exec_filter(arch: u32) -> Result<[libc::sock_filter; FILTER_INSTRUCTION_COUNT], ProtectedSeccompError> {
+        let execve_nr = filter_syscall_number(libc::SYS_execve, "execve")?;
+        let execveat_nr = filter_syscall_number(libc::SYS_execveat, "execveat")?;
+        assert_ne!(arch, 0);
+        assert_ne!(execve_nr, execveat_nr);
+        Ok([
+            bpf_stmt(BpfStatement {
+                code: libc::BPF_LD | libc::BPF_W | libc::BPF_ABS,
+                operand: SECCOMP_DATA_ARCH_OFFSET,
+            })?,
+            bpf_jump(BpfJump {
+                code: libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K,
+                operand: arch,
+                jump_true: 1,
+                jump_false: 0,
+            })?,
+            bpf_stmt(BpfStatement {
+                code: libc::BPF_RET | libc::BPF_K,
+                operand: libc::SECCOMP_RET_KILL_PROCESS,
+            })?,
+            bpf_stmt(BpfStatement {
+                code: libc::BPF_LD | libc::BPF_W | libc::BPF_ABS,
+                operand: SECCOMP_DATA_NR_OFFSET,
+            })?,
+            bpf_jump(BpfJump {
+                code: libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K,
+                operand: execve_nr,
+                jump_true: 1,
+                jump_false: 0,
+            })?,
+            bpf_jump(BpfJump {
+                code: libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K,
+                operand: execveat_nr,
+                jump_true: 0,
+                jump_false: 1,
+            })?,
+            bpf_stmt(BpfStatement {
+                code: libc::BPF_RET | libc::BPF_K,
+                operand: libc::SECCOMP_RET_USER_NOTIF,
+            })?,
+            bpf_stmt(BpfStatement {
+                code: libc::BPF_RET | libc::BPF_K,
+                operand: libc::SECCOMP_RET_ALLOW,
+            })?,
+        ])
+    }
+
+    fn filter_syscall_number(syscall: libc::c_long, name: &'static str) -> Result<u32, ProtectedSeccompError> {
+        u32::try_from(syscall)
+            .map_err(|_| ProtectedSeccompError::Unsupported(format!("{name} syscall number is outside u32")))
+    }
+
+    fn bpf_stmt(statement: BpfStatement) -> Result<libc::sock_filter, ProtectedSeccompError> {
+        let code = u16::try_from(statement.code)
+            .map_err(|_| ProtectedSeccompError::Install("seccomp BPF statement code exceeds u16".to_string()))?;
+        Ok(libc::sock_filter {
+            code,
             jt: 0,
             jf: 0,
-            k,
-        }
+            k: statement.operand,
+        })
     }
 
-    fn bpf_jump(code: u32, k: u32, jt: u8, jf: u8) -> libc::sock_filter {
-        libc::sock_filter {
-            code: code as u16,
-            jt,
-            jf,
-            k,
-        }
+    fn bpf_jump(jump: BpfJump) -> Result<libc::sock_filter, ProtectedSeccompError> {
+        let code = u16::try_from(jump.code)
+            .map_err(|_| ProtectedSeccompError::Install("seccomp BPF jump code exceeds u16".to_string()))?;
+        Ok(libc::sock_filter {
+            code,
+            jt: jump.jump_true,
+            jf: jump.jump_false,
+            k: jump.operand,
+        })
     }
 
     fn require_supported_audit_arch(arch: Option<u32>) -> Result<u32, ProtectedSeccompError> {
@@ -204,7 +266,7 @@ mod linux {
         shared_policy: Arc<RwLock<ProtectedExecPolicy>>,
         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
     ) {
-        loop {
+        while listener_is_open(listener_fd) {
             let mut notif: libc::seccomp_notif = unsafe { std::mem::zeroed() };
             #[allow(clippy::unnecessary_cast)]
             let recv_rc = unsafe { libc::ioctl(listener_fd, SECCOMP_IOCTL_NOTIF_RECV as libc::Ioctl, &mut notif) };
@@ -218,12 +280,34 @@ mod linux {
                 }
                 return;
             }
-            let policy = shared_policy.read().expect("seccomp policy rwlock poisoned");
-            let decision = classify_notification(listener_fd, &policy, &notif);
-            drop(policy);
-            audit_events.lock().expect("seccomp audit mutex poisoned").push(decision.audit_event);
-            let _ = send_response(listener_fd, notif.id, decision.allowed);
+            let decision = match shared_policy.read() {
+                Ok(policy) => classify_notification(listener_fd, &policy, &notif),
+                Err(_) => denied_event(DeniedEventInput {
+                    pid: notif.pid,
+                    syscall_name: syscall_name(notif.data.nr),
+                    tracee_path: PathBuf::new(),
+                    resolved_host_path: PathBuf::new(),
+                    digest_hex: String::new(),
+                    reason: "protected exec policy lock is poisoned".to_string(),
+                    inventory_entry_id: None,
+                }),
+            };
+            match audit_events.lock() {
+                Ok(mut events) => events.push(decision.audit_event),
+                Err(poisoned) => poisoned.into_inner().push(decision.audit_event),
+            }
+            if send_response(listener_fd, notif.id, decision.allowed).is_err() {
+                continue;
+            }
         }
+    }
+
+    fn listener_is_open(listener_fd: RawFd) -> bool {
+        let rc = unsafe { libc::fcntl(listener_fd, libc::F_GETFD) };
+        if rc >= 0 {
+            return true;
+        }
+        io::Error::last_os_error().raw_os_error() != Some(libc::EBADF)
     }
 
     struct SupervisorDecision {
@@ -244,9 +328,15 @@ mod linux {
         let syscall_name = syscall_name(notif.data.nr);
         match exec_target(listener_fd, notif) {
             Ok(target) => classify_path(policy, notif.pid, syscall_name, target),
-            Err((path, reason)) => {
-                denied_event(notif.pid, syscall_name, path.clone(), PathBuf::new(), String::new(), reason, None)
-            }
+            Err((path, reason)) => denied_event(DeniedEventInput {
+                pid: notif.pid,
+                syscall_name,
+                tracee_path: path,
+                resolved_host_path: PathBuf::new(),
+                digest_hex: String::new(),
+                reason,
+                inventory_entry_id: None,
+            }),
         }
     }
 
@@ -264,15 +354,15 @@ mod linux {
         let digest_hex = match blake3_file_hex(&target.resolved_host_path) {
             Ok(digest) => digest,
             Err(err) => {
-                return denied_event(
+                return denied_event(DeniedEventInput {
                     pid,
                     syscall_name,
-                    target.tracee_path,
-                    target.resolved_host_path,
-                    String::new(),
-                    err.to_string(),
-                    None,
-                );
+                    tracee_path: target.tracee_path,
+                    resolved_host_path: target.resolved_host_path,
+                    digest_hex: String::new(),
+                    reason: err.to_string(),
+                    inventory_entry_id: None,
+                });
             }
         };
         match policy.decide_exec(&ExecRequest {
@@ -294,19 +384,19 @@ mod linux {
                     policy_decision: "allowed".to_string(),
                 },
             },
-            Err(err) => denied_event(
+            Err(err) => denied_event(DeniedEventInput {
                 pid,
                 syscall_name,
-                target.tracee_path,
-                target.resolved_host_path,
+                tracee_path: target.tracee_path,
+                resolved_host_path: target.resolved_host_path,
                 digest_hex,
-                err.to_string(),
-                inventory_entry_id(&err),
-            ),
+                reason: err.to_string(),
+                inventory_entry_id: None,
+            }),
         }
     }
 
-    fn denied_event(
+    struct DeniedEventInput {
         pid: u32,
         syscall_name: &'static str,
         tracee_path: PathBuf,
@@ -314,28 +404,23 @@ mod linux {
         digest_hex: String,
         reason: String,
         inventory_entry_id: Option<String>,
-    ) -> SupervisorDecision {
+    }
+
+    fn denied_event(input: DeniedEventInput) -> SupervisorDecision {
         SupervisorDecision {
             allowed: false,
             audit_event: ProtectedSeccompAuditEvent {
-                pid,
-                syscall: syscall_name.to_string(),
-                executable_path: resolved_host_path.clone(),
-                tracee_path,
-                resolved_host_path,
-                digest_hex,
-                reason,
+                pid: input.pid,
+                syscall: input.syscall_name.to_string(),
+                executable_path: input.resolved_host_path.clone(),
+                tracee_path: input.tracee_path,
+                resolved_host_path: input.resolved_host_path,
+                digest_hex: input.digest_hex,
+                reason: input.reason,
                 phase: PHASE_PROTECTED.to_string(),
-                inventory_entry_id,
+                inventory_entry_id: input.inventory_entry_id,
                 policy_decision: "denied".to_string(),
             },
-        }
-    }
-
-    fn inventory_entry_id(err: &ProtectedExecError) -> Option<String> {
-        match err {
-            ProtectedExecError::DigestMismatch { .. } => None,
-            _ => None,
         }
     }
 
@@ -343,11 +428,17 @@ mod linux {
         validate_execveat_form(notif)?;
         let arg_index = exec_path_arg_index(notif.data.nr)
             .ok_or_else(|| (PathBuf::new(), format!("unexpected syscall number {}", notif.data.nr)))?;
-        let addr = notif.data.args[arg_index];
-        if addr == 0 {
+        let address = notif.data.args[arg_index];
+        if address == 0 {
             return Err((PathBuf::new(), "exec path pointer is null".to_string()));
         }
-        let bytes = read_remote_cstring(listener_fd, notif.pid, notif.id, addr).map_err(|err| (PathBuf::new(), err))?;
+        let bytes = read_remote_cstring(RemoteCstringRequest {
+            listener_fd,
+            pid: notif.pid,
+            notification_id: notif.id,
+            address,
+        })
+        .map_err(|err| (PathBuf::new(), err))?;
         if bytes.is_empty() {
             return Err((PathBuf::new(), "empty execveat path is not supported".to_string()));
         }
@@ -357,6 +448,8 @@ mod linux {
         }
         let resolved_host_path = resolve_tracee_exec_path(listener_fd, notif.pid, notif.id, &tracee_path)
             .map_err(|err| (tracee_path.clone(), err))?;
+        assert!(tracee_path.is_absolute());
+        assert!(resolved_host_path.is_absolute());
         Ok(ExecTarget {
             tracee_path,
             resolved_host_path,
@@ -364,17 +457,23 @@ mod linux {
     }
 
     fn exec_path_arg_index(syscall_nr: libc::c_int) -> Option<usize> {
-        if syscall_nr == libc::SYS_execve as libc::c_int {
+        if checked_syscall_number(libc::SYS_execve) == Some(syscall_nr) {
             return Some(EXECVE_PATH_ARG_INDEX);
         }
-        if syscall_nr == libc::SYS_execveat as libc::c_int {
+        if checked_syscall_number(libc::SYS_execveat) == Some(syscall_nr) {
             return Some(EXECVEAT_PATH_ARG_INDEX);
         }
         None
     }
 
+    fn checked_syscall_number(syscall_nr: libc::c_long) -> Option<libc::c_int> {
+        libc::c_int::try_from(syscall_nr).ok()
+    }
+
     fn validate_execveat_form(notif: &libc::seccomp_notif) -> Result<(), (PathBuf, String)> {
-        if notif.data.nr != libc::SYS_execveat as libc::c_int {
+        let execveat_nr = checked_syscall_number(libc::SYS_execveat)
+            .ok_or_else(|| (PathBuf::new(), "execveat syscall number is outside i32".to_string()))?;
+        if notif.data.nr != execveat_nr {
             return Ok(());
         }
         let dirfd_raw = notif.data.args[EXECVEAT_DIRFD_ARG_INDEX];
@@ -385,9 +484,13 @@ mod linux {
     }
 
     fn is_at_fdcwd_arg(raw: u64) -> bool {
-        let signed_long = raw as i64;
-        let signed_int = raw as u32 as i32 as i64;
-        let at_fdcwd = libc::AT_FDCWD as i64;
+        let signed_long = i64::from_ne_bytes(raw.to_ne_bytes());
+        let low_int_bits = raw & u64::from(u32::MAX);
+        let Ok(unsigned_int) = u32::try_from(low_int_bits) else {
+            return false;
+        };
+        let signed_int = i64::from(i32::from_ne_bytes(unsigned_int.to_ne_bytes()));
+        let at_fdcwd = i64::from(libc::AT_FDCWD);
         signed_long == at_fdcwd || signed_int == at_fdcwd
     }
 
@@ -437,16 +540,26 @@ mod linux {
                 }
             }
         }
+        assert!(out.is_absolute());
+        assert!(out.starts_with(tracee_root));
         Ok(out)
     }
 
-    fn read_remote_cstring(listener_fd: RawFd, pid: u32, id: u64, addr: u64) -> Result<Vec<u8>, String> {
-        validate_notification_id(listener_fd, id)?;
-        let mem = File::open(format!("/proc/{pid}/mem")).map_err(|err| format!("open target memory: {err}"))?;
-        validate_notification_id(listener_fd, id)?;
+    struct RemoteCstringRequest {
+        listener_fd: RawFd,
+        pid: u32,
+        notification_id: u64,
+        address: u64,
+    }
+
+    fn read_remote_cstring(request: RemoteCstringRequest) -> Result<Vec<u8>, String> {
+        validate_notification_id(request.listener_fd, request.notification_id)?;
+        let mem =
+            File::open(format!("/proc/{}/mem", request.pid)).map_err(|err| format!("open target memory: {err}"))?;
+        validate_notification_id(request.listener_fd, request.notification_id)?;
         let mut buf = vec![0_u8; MAX_REMOTE_PATH_BYTES];
-        let nread = mem.read_at(&mut buf, addr).map_err(|err| format!("read target exec path: {err}"))?;
-        validate_notification_id(listener_fd, id)?;
+        let nread = mem.read_at(&mut buf, request.address).map_err(|err| format!("read target exec path: {err}"))?;
+        validate_notification_id(request.listener_fd, request.notification_id)?;
         if nread == 0 {
             return Err("target exec path read returned EOF".to_string());
         }
@@ -472,7 +585,8 @@ mod linux {
         let mut resp: libc::seccomp_notif_resp = unsafe { std::mem::zeroed() };
         resp.id = id;
         if allowed {
-            resp.flags = libc::SECCOMP_USER_NOTIF_FLAG_CONTINUE as u32;
+            resp.flags = u32::try_from(libc::SECCOMP_USER_NOTIF_FLAG_CONTINUE)
+                .map_err(|_| "seccomp continue flag exceeds u32".to_string())?;
         } else {
             resp.error = -libc::EACCES;
         }
@@ -485,10 +599,10 @@ mod linux {
     }
 
     fn syscall_name(syscall_nr: libc::c_int) -> &'static str {
-        if syscall_nr == libc::SYS_execve as libc::c_int {
+        if checked_syscall_number(libc::SYS_execve) == Some(syscall_nr) {
             return "execve";
         }
-        if syscall_nr == libc::SYS_execveat as libc::c_int {
+        if checked_syscall_number(libc::SYS_execveat) == Some(syscall_nr) {
             return "execveat";
         }
         "unknown"

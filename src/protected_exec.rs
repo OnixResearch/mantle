@@ -27,9 +27,15 @@ const PROVENANCE_HOST_PATH_DISCOVERY: &str = "host-path-discovery";
 const PROVENANCE_NIX_STORE_DISCOVERY: &str = "nix-store-discovery";
 pub(crate) const PHASE_PROTECTED: &str = "protected";
 const PATH_SEPARATOR: char = '/';
-const HASH_BUFFER_BYTES: usize = 64 * 1024;
+const HASH_BUFFER_KIB: usize = 64;
+const KIB_BYTES_USIZE: usize = 1024;
+const HASH_BUFFER_BYTES: usize = HASH_BUFFER_KIB.saturating_mul(KIB_BYTES_USIZE);
 const MAX_SEED_EXECUTABLES: u32 = 4096;
 const MAX_SEED_WALK_DEPTH: u32 = 16;
+const MAX_SEED_WALK_ENTRIES: u32 = MAX_SEED_EXECUTABLES.saturating_mul(MAX_SEED_WALK_DEPTH);
+const MAX_SOURCE_ENTRIES: u32 = MAX_SEED_EXECUTABLES;
+const MAX_SOURCE_URLS: u32 = MAX_SEED_EXECUTABLES;
+const INVALID_INVENTORY_DIGEST: &str = "stage0-inventory-serialization-error";
 const MAX_VERSION_EVIDENCE_BYTES: u32 = 4096;
 const MAX_VERSION_COMMAND_ARGS: u32 = 16;
 const MAX_VERSION_ARG_BYTES: u32 = 4096;
@@ -46,14 +52,14 @@ const EXTRACTION_RULE_FORMAT: &str = "format";
 const EXTRACTION_RULE_STRIP_COMPONENTS: &str = "strip-components";
 const EXTRACTION_RULE_ROOT: &str = "root";
 const KIB_BYTES: u64 = 1024;
-const MIB_BYTES: u64 = KIB_BYTES * KIB_BYTES;
+const MIB_BYTES: u64 = KIB_BYTES.saturating_mul(KIB_BYTES);
 const MAX_SEED_CLOSURE_RISK_SCAN_BYTES: u64 = MIB_BYTES;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DigestSpec {
     pub algorithm: String,
     pub hex: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub interoperability_reason: Option<String>,
 }
 
@@ -74,7 +80,7 @@ pub struct ExecutableSeedEntry {
     pub phase: String,
     pub executable_path: PathBuf,
     pub digest: DigestSpec,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub version_evidence: Option<BoundedVersionEvidence>,
     pub provenance_category: String,
     pub provenance: String,
@@ -244,6 +250,12 @@ pub enum ProtectedExecError {
     PromotionEmptySet {
         source_entry_id: String,
     },
+    InventoryCollectionLimitExceeded {
+        collection: &'static str,
+        limit: u32,
+    },
+    PolicyLockPoisoned,
+    InventorySerializationFailed,
 }
 
 impl fmt::Display for ProtectedExecError {
@@ -299,6 +311,11 @@ impl fmt::Display for ProtectedExecError {
             Self::PromotionEmptySet { source_entry_id } => {
                 write!(f, "promotion from source {source_entry_id} produced no executables")
             }
+            Self::InventoryCollectionLimitExceeded { collection, limit } => {
+                write!(f, "protected exec {collection} exceeds limit {limit}")
+            }
+            Self::PolicyLockPoisoned => write!(f, "protected exec policy lock is poisoned"),
+            Self::InventorySerializationFailed => write!(f, "stage0 inventory serialization failed"),
         }
     }
 }
@@ -307,14 +324,57 @@ impl std::error::Error for ProtectedExecError {}
 
 impl ProtectedExecPolicy {
     pub fn from_inventory(inventory: Stage0Inventory) -> Result<Self, ProtectedExecError> {
+        let max_executables = usize::try_from(MAX_SEED_EXECUTABLES).map_err(|_| {
+            ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "executable entries",
+                limit: MAX_SEED_EXECUTABLES,
+            }
+        })?;
+        if inventory.executable_entries.len() > max_executables {
+            return Err(ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "executable entries",
+                limit: MAX_SEED_EXECUTABLES,
+            });
+        }
+        let max_sources =
+            usize::try_from(MAX_SOURCE_ENTRIES).map_err(|_| ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "source entries",
+                limit: MAX_SOURCE_ENTRIES,
+            })?;
+        if inventory.source_entries.len() > max_sources {
+            return Err(ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "source entries",
+                limit: MAX_SOURCE_ENTRIES,
+            });
+        }
         validate_required_roles(&inventory.executable_entries)?;
+        let source_url_count = inventory_source_url_count(&inventory.source_entries)?;
+        if source_url_count > MAX_SOURCE_URLS {
+            return Err(ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "source URLs",
+                limit: MAX_SOURCE_URLS,
+            });
+        }
+        let max_source_urls =
+            usize::try_from(MAX_SOURCE_URLS).map_err(|_| ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "source URLs",
+                limit: MAX_SOURCE_URLS,
+            })?;
         let inventory_digest_blake3 = stage0_inventory_digest_blake3(&inventory);
+        if inventory_digest_blake3 == INVALID_INVENTORY_DIGEST {
+            return Err(ProtectedExecError::InventorySerializationFailed);
+        }
         let mut executables_by_path = BTreeMap::new();
         for entry in inventory.executable_entries {
+            if executables_by_path.len() >= max_executables {
+                return Err(ProtectedExecError::InventoryCollectionLimitExceeded {
+                    collection: "executable entries",
+                    limit: MAX_SEED_EXECUTABLES,
+                });
+            }
             validate_executable_entry(&entry)?;
-            let previous = executables_by_path.insert(entry.executable_path.clone(), entry);
-            if previous.is_some() {
-                let path = executables_by_path.keys().next_back().cloned().unwrap_or_default();
+            let path = entry.executable_path.clone();
+            if executables_by_path.insert(path.clone(), entry).is_some() {
                 return Err(ProtectedExecError::DuplicateExecutablePath { path });
             }
         }
@@ -323,14 +383,20 @@ impl ProtectedExecPolicy {
         for entry in inventory.source_entries {
             validate_source_entry(&entry)?;
             for url in &entry.urls {
-                let previous = sources_by_url.insert(url.clone(), entry.clone());
-                if previous.is_some() {
+                if sources_by_url.len() >= max_source_urls {
+                    return Err(ProtectedExecError::InventoryCollectionLimitExceeded {
+                        collection: "source URLs",
+                        limit: MAX_SOURCE_URLS,
+                    });
+                }
+                if sources_by_url.insert(url.clone(), entry.clone()).is_some() {
                     return Err(ProtectedExecError::DuplicateSourceUrl { url: url.clone() });
                 }
             }
         }
 
         assert!(!executables_by_path.is_empty(), "policy must contain required executables");
+        assert!(is_valid_hex_digest(&inventory_digest_blake3, BLAKE3_HEX_LEN));
         Ok(Self {
             executables_by_path,
             sources_by_url,
@@ -408,6 +474,26 @@ impl ProtectedExecPolicy {
                 source_entry_id: source_entry_id.to_string(),
             });
         }
+        let max_executables = usize::try_from(MAX_SEED_EXECUTABLES).map_err(|_| {
+            ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "executable entries",
+                limit: MAX_SEED_EXECUTABLES,
+            }
+        })?;
+        let resulting_entry_count = self
+            .executables_by_path
+            .len()
+            .checked_add(executables.len())
+            .filter(|entry_count| *entry_count <= max_executables)
+            .ok_or(ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "executable entries",
+                limit: MAX_SEED_EXECUTABLES,
+            })?;
+        let resulting_policy_entries =
+            u32::try_from(resulting_entry_count).map_err(|_| ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "executable entries",
+                limit: MAX_SEED_EXECUTABLES,
+            })?;
         for exe in executables {
             assert!(exe.path.is_absolute(), "promoted executable path must be absolute");
             assert!(!exe.digest_hex.is_empty(), "promoted executable digest must be present");
@@ -443,7 +529,7 @@ impl ProtectedExecPolicy {
             source_entry_id: source_entry_id.to_string(),
             extraction_rules: extraction_rules.to_vec(),
             promoted_executables: executables.to_vec(),
-            promoted_at_policy_size: self.executables_by_path.len() as u32,
+            promoted_at_policy_size: resulting_policy_entries,
         })
     }
 
@@ -462,9 +548,14 @@ impl ProtectedExecPolicy {
             return Err(ProtectedExecError::MissingRequiredSeedRole { role });
         }
         if matches.len() > 1 {
+            let count =
+                u32::try_from(matches.len()).map_err(|_| ProtectedExecError::InventoryCollectionLimitExceeded {
+                    collection: "required role matches",
+                    limit: MAX_SEED_EXECUTABLES,
+                })?;
             return Err(ProtectedExecError::AmbiguousRequiredSeedRole {
                 role: role.to_string(),
-                count: matches.len() as u32,
+                count,
             });
         }
         Ok(matches[0])
@@ -483,18 +574,53 @@ fn validate_required_roles(entries: &[ExecutableSeedEntry]) -> Result<(), Protec
     Ok(())
 }
 
+struct CommonFields<'entry> {
+    schema_version: &'entry str,
+    entry_id: &'entry str,
+    role: &'entry str,
+    phase: &'entry str,
+    digest: &'entry DigestSpec,
+    provenance_category: &'entry str,
+    provenance: &'entry str,
+    allowed_reason: &'entry str,
+    owner: &'entry str,
+}
+
+struct RequiredField<'entry> {
+    entry_id: &'entry str,
+    field: &'static str,
+    value: &'entry str,
+}
+
+#[derive(Clone, Copy)]
+struct ExtractionRuleInput<'rule> {
+    entry_id: &'rule str,
+    rule: &'rule str,
+}
+
+struct ExtractionRuleValue<'rule> {
+    input: ExtractionRuleInput<'rule>,
+    key: &'rule str,
+    value: &'rule str,
+}
+
+struct ProvenanceInput<'entry> {
+    entry_id: &'entry str,
+    category: &'entry str,
+}
+
 fn validate_executable_entry(entry: &ExecutableSeedEntry) -> Result<(), ProtectedExecError> {
-    validate_common_fields(
-        &entry.schema_version,
-        &entry.id,
-        &entry.role,
-        &entry.phase,
-        &entry.digest,
-        &entry.provenance_category,
-        &entry.provenance,
-        &entry.allowed_reason,
-        &entry.owner,
-    )?;
+    validate_common_fields(CommonFields {
+        schema_version: &entry.schema_version,
+        entry_id: &entry.id,
+        role: &entry.role,
+        phase: &entry.phase,
+        digest: &entry.digest,
+        provenance_category: &entry.provenance_category,
+        provenance: &entry.provenance,
+        allowed_reason: &entry.allowed_reason,
+        owner: &entry.owner,
+    })?;
     let version_evidence =
         entry.version_evidence.as_ref().ok_or_else(|| ProtectedExecError::MissingVersionEvidence {
             entry_id: entry.id.clone(),
@@ -518,67 +644,83 @@ fn validate_executable_entry(entry: &ExecutableSeedEntry) -> Result<(), Protecte
             path: entry.executable_path.clone(),
         });
     }
+    assert_eq!(entry.schema_version, SCHEMA_VERSION_V1);
+    assert!(entry.executable_path.is_absolute());
     Ok(())
 }
 
 fn validate_source_entry(entry: &SourceSeedEntry) -> Result<(), ProtectedExecError> {
-    validate_common_fields(
-        &entry.schema_version,
-        &entry.id,
-        &entry.role,
-        &entry.phase,
-        &entry.digest,
-        &entry.provenance_category,
-        &entry.provenance,
-        &entry.allowed_reason,
-        &entry.owner,
-    )?;
-    validate_non_empty(entry.id.as_str(), "urls", entry.urls.first().map(String::as_str).unwrap_or_default())?;
+    validate_common_fields(CommonFields {
+        schema_version: &entry.schema_version,
+        entry_id: &entry.id,
+        role: &entry.role,
+        phase: &entry.phase,
+        digest: &entry.digest,
+        provenance_category: &entry.provenance_category,
+        provenance: &entry.provenance,
+        allowed_reason: &entry.allowed_reason,
+        owner: &entry.owner,
+    })?;
+    let first_url = entry.urls.first().map_or("", String::as_str);
+    validate_non_empty(RequiredField {
+        entry_id: entry.id.as_str(),
+        field: "urls",
+        value: first_url,
+    })?;
     for url in &entry.urls {
-        validate_non_empty(entry.id.as_str(), "urls[]", url)?;
+        validate_non_empty(RequiredField {
+            entry_id: entry.id.as_str(),
+            field: "urls[]",
+            value: url,
+        })?;
     }
-    validate_non_empty(
-        entry.id.as_str(),
-        "extraction_rules",
-        entry.extraction_rules.first().map(String::as_str).unwrap_or_default(),
-    )?;
+    let first_rule = entry.extraction_rules.first().map_or("", String::as_str);
+    validate_non_empty(RequiredField {
+        entry_id: entry.id.as_str(),
+        field: "extraction_rules",
+        value: first_rule,
+    })?;
     for rule in &entry.extraction_rules {
-        validate_non_empty(entry.id.as_str(), "extraction_rules[]", rule)?;
+        validate_non_empty(RequiredField {
+            entry_id: entry.id.as_str(),
+            field: "extraction_rules[]",
+            value: rule,
+        })?;
     }
     validate_extraction_rules(entry.id.as_str(), &entry.extraction_rules)?;
+    assert!(!entry.urls.is_empty());
+    assert!(!entry.extraction_rules.is_empty());
     Ok(())
 }
 
 fn validate_extraction_rules(entry_id: &str, rules: &[String]) -> Result<(), ProtectedExecError> {
     let mut seen = BTreeSet::new();
     for rule in rules {
-        let (key, value) = parse_extraction_rule(entry_id, rule)?;
+        let input = ExtractionRuleInput { entry_id, rule };
+        let (key, value) = parse_extraction_rule(input)?;
         if !is_allowed_extraction_rule_key(key) {
-            return invalid_extraction_rule(entry_id, rule, format!("unsupported key {key}"));
+            return invalid_extraction_rule(input, format!("unsupported key {key}"));
         }
         if !seen.insert(key.to_string()) {
-            return invalid_extraction_rule(entry_id, rule, format!("duplicate key {key}"));
+            return invalid_extraction_rule(input, format!("duplicate key {key}"));
         }
-        validate_extraction_rule_value(entry_id, rule, key, value)?;
+        validate_extraction_rule_value(ExtractionRuleValue { input, key, value })?;
     }
     Ok(())
 }
 
-fn parse_extraction_rule<'rule>(
-    entry_id: &str,
-    rule: &'rule str,
-) -> Result<(&'rule str, &'rule str), ProtectedExecError> {
-    let mut parts = rule.split(EXTRACTION_RULE_SEPARATOR);
+fn parse_extraction_rule(input: ExtractionRuleInput<'_>) -> Result<(&str, &str), ProtectedExecError> {
+    let mut parts = input.rule.split(EXTRACTION_RULE_SEPARATOR);
     let key = parts.next().unwrap_or_default();
     let value = parts.next().unwrap_or_default();
     if parts.next().is_some() {
-        return invalid_extraction_rule(entry_id, rule, "multiple separators".to_string());
+        return invalid_extraction_rule(input, "multiple separators".to_string());
     }
     if key.is_empty() {
-        return invalid_extraction_rule(entry_id, rule, "empty key".to_string());
+        return invalid_extraction_rule(input, "empty key".to_string());
     }
     if value.is_empty() {
-        return invalid_extraction_rule(entry_id, rule, "empty value".to_string());
+        return invalid_extraction_rule(input, "empty value".to_string());
     }
     Ok((key, value))
 }
@@ -587,71 +729,105 @@ fn is_allowed_extraction_rule_key(key: &str) -> bool {
     matches!(key, EXTRACTION_RULE_FORMAT | EXTRACTION_RULE_STRIP_COMPONENTS | EXTRACTION_RULE_ROOT)
 }
 
-fn validate_extraction_rule_value(
-    entry_id: &str,
-    rule: &str,
-    key: &str,
-    value: &str,
-) -> Result<(), ProtectedExecError> {
-    if key == EXTRACTION_RULE_STRIP_COMPONENTS && value.parse::<u32>().is_err() {
-        return invalid_extraction_rule(entry_id, rule, "strip-components must be an unsigned integer".to_string());
+fn validate_extraction_rule_value(rule: ExtractionRuleValue<'_>) -> Result<(), ProtectedExecError> {
+    if rule.key == EXTRACTION_RULE_STRIP_COMPONENTS && rule.value.parse::<u32>().is_err() {
+        return invalid_extraction_rule(rule.input, "strip-components must be an unsigned integer".to_string());
     }
-    if key == EXTRACTION_RULE_ROOT && value.contains("..") {
-        return invalid_extraction_rule(entry_id, rule, "root must not contain parent traversal".to_string());
+    if rule.key == EXTRACTION_RULE_ROOT && rule.value.contains("..") {
+        return invalid_extraction_rule(rule.input, "root must not contain parent traversal".to_string());
     }
     Ok(())
 }
 
-fn invalid_extraction_rule<T>(entry_id: &str, rule: &str, reason: String) -> Result<T, ProtectedExecError> {
+fn invalid_extraction_rule<T>(input: ExtractionRuleInput<'_>, reason: String) -> Result<T, ProtectedExecError> {
     Err(ProtectedExecError::InvalidExtractionRule {
-        entry_id: entry_id.to_string(),
-        rule: rule.to_string(),
+        entry_id: input.entry_id.to_string(),
+        rule: input.rule.to_string(),
         reason,
     })
 }
 
-fn validate_common_fields(
-    schema_version: &str,
-    entry_id: &str,
-    role: &str,
-    phase: &str,
-    digest: &DigestSpec,
-    provenance_category: &str,
-    provenance: &str,
-    allowed_reason: &str,
-    owner: &str,
-) -> Result<(), ProtectedExecError> {
-    validate_non_empty(entry_id, "id", entry_id)?;
-    validate_non_empty(entry_id, "role", role)?;
-    validate_non_empty(entry_id, "phase", phase)?;
-    validate_non_empty(entry_id, "digest.algorithm", digest.algorithm.as_str())?;
-    validate_non_empty(entry_id, "digest.hex", digest.hex.as_str())?;
-    validate_non_empty(entry_id, "provenance_category", provenance_category)?;
-    validate_non_empty(entry_id, "provenance", provenance)?;
-    validate_non_empty(entry_id, "allowed_reason", allowed_reason)?;
-    validate_non_empty(entry_id, "owner", owner)?;
-    if schema_version != SCHEMA_VERSION_V1 {
+fn validate_common_fields(fields: CommonFields<'_>) -> Result<(), ProtectedExecError> {
+    validate_entry_id(fields.entry_id)?;
+    for field in [
+        RequiredField {
+            entry_id: fields.entry_id,
+            field: "role",
+            value: fields.role,
+        },
+        RequiredField {
+            entry_id: fields.entry_id,
+            field: "phase",
+            value: fields.phase,
+        },
+        RequiredField {
+            entry_id: fields.entry_id,
+            field: "digest.algorithm",
+            value: fields.digest.algorithm.as_str(),
+        },
+        RequiredField {
+            entry_id: fields.entry_id,
+            field: "digest.hex",
+            value: fields.digest.hex.as_str(),
+        },
+        RequiredField {
+            entry_id: fields.entry_id,
+            field: "provenance_category",
+            value: fields.provenance_category,
+        },
+        RequiredField {
+            entry_id: fields.entry_id,
+            field: "provenance",
+            value: fields.provenance,
+        },
+        RequiredField {
+            entry_id: fields.entry_id,
+            field: "allowed_reason",
+            value: fields.allowed_reason,
+        },
+        RequiredField {
+            entry_id: fields.entry_id,
+            field: "owner",
+            value: fields.owner,
+        },
+    ] {
+        validate_non_empty(field)?;
+    }
+    if fields.schema_version != SCHEMA_VERSION_V1 {
         return Err(ProtectedExecError::UnsupportedSchemaVersion {
-            entry_id: entry_id.to_string(),
-            actual: schema_version.to_string(),
+            entry_id: fields.entry_id.to_string(),
+            actual: fields.schema_version.to_string(),
         });
     }
-    if phase != PHASE_PROTECTED {
+    if fields.phase != PHASE_PROTECTED {
         return Err(ProtectedExecError::DisallowedRole {
-            entry_id: entry_id.to_string(),
-            role: phase.to_string(),
+            entry_id: fields.entry_id.to_string(),
+            role: fields.phase.to_string(),
         });
     }
-    validate_digest(entry_id, digest)?;
-    validate_provenance(entry_id, provenance_category)?;
+    validate_digest(fields.entry_id, fields.digest)?;
+    validate_provenance(ProvenanceInput {
+        entry_id: fields.entry_id,
+        category: fields.provenance_category,
+    })?;
+    assert_eq!(fields.schema_version, SCHEMA_VERSION_V1);
+    assert_eq!(fields.phase, PHASE_PROTECTED);
     Ok(())
 }
 
-fn validate_non_empty(entry_id: &str, field: &'static str, value: &str) -> Result<(), ProtectedExecError> {
-    if value.is_empty() {
+fn validate_entry_id(entry_id: &str) -> Result<(), ProtectedExecError> {
+    validate_non_empty(RequiredField {
+        entry_id,
+        field: "id",
+        value: entry_id,
+    })
+}
+
+fn validate_non_empty(field: RequiredField<'_>) -> Result<(), ProtectedExecError> {
+    if field.value.is_empty() {
         return Err(ProtectedExecError::EmptyField {
-            entry_id: entry_id.to_string(),
-            field,
+            entry_id: field.entry_id.to_string(),
+            field: field.field,
         });
     }
     Ok(())
@@ -669,7 +845,7 @@ fn validate_digest(entry_id: &str, digest: &DigestSpec) -> Result<(), ProtectedE
     }
     match &digest.interoperability_reason {
         Some(reason) if !reason.is_empty() => Ok(()),
-        _ => Err(ProtectedExecError::MissingInteroperabilityReason {
+        Some(_) | None => Err(ProtectedExecError::MissingInteroperabilityReason {
             entry_id: entry_id.to_string(),
             algorithm: digest.algorithm.clone(),
         }),
@@ -677,7 +853,11 @@ fn validate_digest(entry_id: &str, digest: &DigestSpec) -> Result<(), ProtectedE
 }
 
 fn validate_version_evidence(entry_id: &str, evidence: &BoundedVersionEvidence) -> Result<(), ProtectedExecError> {
-    let command_len = bounded_len_u32(evidence.command.len());
+    let command_len =
+        u32::try_from(evidence.command.len()).map_err(|_| ProtectedExecError::InvalidVersionEvidence {
+            entry_id: entry_id.to_string(),
+            reason: "command argument count cannot be represented as u32".to_string(),
+        })?;
     if command_len == 0 {
         return invalid_version_evidence(entry_id, "command must not be empty");
     }
@@ -691,7 +871,10 @@ fn validate_version_evidence(entry_id: &str, evidence: &BoundedVersionEvidence) 
         if arg.is_empty() {
             return invalid_version_evidence(entry_id, "command args must not be empty");
         }
-        let arg_len = bounded_len_u32(arg.len());
+        let arg_len = u32::try_from(arg.len()).map_err(|_| ProtectedExecError::InvalidVersionEvidence {
+            entry_id: entry_id.to_string(),
+            reason: "command argument length cannot be represented as u32".to_string(),
+        })?;
         if arg_len > MAX_VERSION_ARG_BYTES {
             return invalid_version_evidence(
                 entry_id,
@@ -705,7 +888,11 @@ fn validate_version_evidence(entry_id: &str, evidence: &BoundedVersionEvidence) 
             format!("byte_limit must be 1..={MAX_VERSION_EVIDENCE_BYTES}, got {}", evidence.byte_limit),
         );
     }
-    let sample_len = bounded_len_u32(evidence.output_sample.len());
+    let sample_len =
+        u32::try_from(evidence.output_sample.len()).map_err(|_| ProtectedExecError::InvalidVersionEvidence {
+            entry_id: entry_id.to_string(),
+            reason: "output sample length cannot be represented as u32".to_string(),
+        })?;
     if sample_len > evidence.byte_limit {
         return invalid_version_evidence(
             entry_id,
@@ -719,11 +906,9 @@ fn validate_version_evidence(entry_id: &str, evidence: &BoundedVersionEvidence) 
             return invalid_version_evidence(entry_id, "output digest does not match bounded output sample");
         }
     }
+    assert!(!evidence.command.is_empty());
+    assert!(evidence.byte_limit <= MAX_VERSION_EVIDENCE_BYTES);
     Ok(())
-}
-
-fn bounded_len_u32(len: usize) -> u32 {
-    u32::try_from(len).unwrap_or(u32::MAX)
 }
 
 fn invalid_version_evidence<T>(entry_id: &str, reason: impl Into<String>) -> Result<T, ProtectedExecError> {
@@ -733,23 +918,39 @@ fn invalid_version_evidence<T>(entry_id: &str, reason: impl Into<String>) -> Res
     })
 }
 
-fn validate_provenance(entry_id: &str, provenance_category: &str) -> Result<(), ProtectedExecError> {
-    if provenance_category == PROVENANCE_HOST_PATH_DISCOVERY || provenance_category == PROVENANCE_NIX_STORE_DISCOVERY {
+fn validate_provenance(input: ProvenanceInput<'_>) -> Result<(), ProtectedExecError> {
+    if input.category == PROVENANCE_HOST_PATH_DISCOVERY || input.category == PROVENANCE_NIX_STORE_DISCOVERY {
         return Err(ProtectedExecError::DisallowedProvenance {
-            entry_id: entry_id.to_string(),
-            provenance_category: provenance_category.to_string(),
+            entry_id: input.entry_id.to_string(),
+            provenance_category: input.category.to_string(),
         });
     }
     if matches!(
-        provenance_category,
+        input.category,
         PROVENANCE_OPERATOR_SOURCE_BUILD | PROVENANCE_OPERATOR_BOOTSTRAP_SEED | PROVENANCE_TEST_FIXTURE
     ) {
         return Ok(());
     }
     Err(ProtectedExecError::DisallowedProvenance {
-        entry_id: entry_id.to_string(),
-        provenance_category: provenance_category.to_string(),
+        entry_id: input.entry_id.to_string(),
+        provenance_category: input.category.to_string(),
     })
+}
+
+fn inventory_source_url_count(entries: &[SourceSeedEntry]) -> Result<u32, ProtectedExecError> {
+    let mut total = 0_u32;
+    for entry in entries {
+        let count =
+            u32::try_from(entry.urls.len()).map_err(|_| ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "source URLs",
+                limit: MAX_SOURCE_URLS,
+            })?;
+        total = total.checked_add(count).ok_or(ProtectedExecError::InventoryCollectionLimitExceeded {
+            collection: "source URLs",
+            limit: MAX_SOURCE_URLS,
+        })?;
+    }
+    Ok(total)
 }
 
 fn is_allowed_executable_role(role: &str) -> bool {
@@ -766,8 +967,8 @@ fn is_allowed_executable_role(role: &str) -> bool {
 fn is_forbidden_nix_executable(path: &Path) -> bool {
     match path.file_name().and_then(|name| name.to_str()) {
         Some("nix") | Some("nix-build") | Some("nix-store") | Some("nix-shell") | Some("nix-develop") => true,
-        Some(name) if name.starts_with("nix") && name.contains("develop") => true,
-        _ => false,
+        Some(name) => name.starts_with("nix") && name.contains("develop"),
+        None => false,
     }
 }
 
@@ -805,7 +1006,10 @@ pub fn stage0_inventory_digest_blake3(inventory: &Stage0Inventory) -> String {
     canonical
         .source_entries
         .sort_by(|left, right| left.id.cmp(&right.id).then_with(|| left.urls.cmp(&right.urls)));
-    let bytes = serde_json::to_vec(&canonical).expect("stage0 inventory must serialize for digest");
+    let bytes = match serde_json::to_vec(&canonical) {
+        Ok(bytes) => bytes,
+        Err(_) => return INVALID_INVENTORY_DIGEST.to_string(),
+    };
     blake3::hash(&bytes).to_hex().to_string()
 }
 
@@ -980,6 +1184,7 @@ pub enum Stage0InventoryGenerationError {
     NotExecutable { path: PathBuf },
     TooManySeedExecutables { limit: u32, actual: u32 },
     WalkDepthExceeded { path: PathBuf, limit: u32 },
+    WalkEntryLimitExceeded { path: PathBuf, limit: u32 },
     Io { path: PathBuf, message: String },
     Policy(ProtectedExecError),
 }
@@ -998,6 +1203,9 @@ impl fmt::Display for Stage0InventoryGenerationError {
             }
             Self::WalkDepthExceeded { path, limit } => {
                 write!(f, "seed executable walk exceeded depth {limit} at {}", path.display())
+            }
+            Self::WalkEntryLimitExceeded { path, limit } => {
+                write!(f, "seed executable walk exceeded entry limit {limit} at {}", path.display())
             }
             Self::Io { path, message } => write!(f, "I/O error at {}: {message}", path.display()),
             Self::Policy(err) => write!(f, "stage0 inventory policy error: {err}"),
@@ -1040,40 +1248,40 @@ pub fn build_stage0_inventory_from_seed_config(
     validate_absolute_existing_path(&config.sandbox_shell)?;
     validate_absolute_existing_path(&config.toolchain_root)?;
     let mut executable_entries = Vec::new();
-    executable_entries.push(seed_executable_entry(
-        "sandbox-entry",
-        ROLE_SANDBOX_ENTRY,
-        &config.sandbox_entry,
-        true,
-        "operator supplied protected sandbox entry",
-    )?);
-    executable_entries.push(seed_executable_entry(
-        "sandbox-shell",
-        ROLE_SANDBOX_SHELL,
-        &config.sandbox_shell,
-        true,
-        "operator supplied protected sandbox shell",
-    )?);
+    executable_entries.push(seed_executable_entry(SeedExecutableSpec {
+        id: "sandbox-entry",
+        role: ROLE_SANDBOX_ENTRY,
+        path: &config.sandbox_entry,
+        required: true,
+        allowed_reason: "operator supplied protected sandbox entry",
+    })?);
+    executable_entries.push(seed_executable_entry(SeedExecutableSpec {
+        id: "sandbox-shell",
+        role: ROLE_SANDBOX_SHELL,
+        path: &config.sandbox_shell,
+        required: true,
+        allowed_reason: "operator supplied protected sandbox shell",
+    })?);
 
     let toolchain_executables = collect_seed_executables(&config.toolchain_root)?;
-    append_seed_executable_entries(
-        &mut executable_entries,
-        ROLE_BOOTSTRAP_TOOLCHAIN_TOOL,
-        "toolchain",
-        &config.toolchain_root,
-        &toolchain_executables,
-    )?;
+    append_seed_executable_entries(SeedExecutableAppend {
+        entries: &mut executable_entries,
+        role: ROLE_BOOTSTRAP_TOOLCHAIN_TOOL,
+        prefix: "toolchain",
+        root: &config.toolchain_root,
+        executable_paths: &toolchain_executables,
+    })?;
 
     for input in &config.build_tool_inputs {
         validate_absolute_existing_path(input)?;
         let build_tools = collect_seed_executables(input)?;
-        append_seed_executable_entries(
-            &mut executable_entries,
-            ROLE_BOOTSTRAP_BUILD_TOOL,
-            "build-tool",
-            input,
-            &build_tools,
-        )?;
+        append_seed_executable_entries(SeedExecutableAppend {
+            entries: &mut executable_entries,
+            role: ROLE_BOOTSTRAP_BUILD_TOOL,
+            prefix: "build-tool",
+            root: input,
+            executable_paths: &build_tools,
+        })?;
     }
 
     executable_entries.sort_by(|left, right| left.id.cmp(&right.id));
@@ -1082,6 +1290,8 @@ pub fn build_stage0_inventory_from_seed_config(
         source_entries: Vec::new(),
     };
     ProtectedExecPolicy::from_inventory(inventory.clone())?;
+    assert!(inventory.executable_entries.len() >= 2);
+    assert!(inventory.source_entries.is_empty());
     Ok(inventory)
 }
 
@@ -1126,9 +1336,9 @@ fn classify_seed_closure_risk(path: &Path) -> SeedClosureRisk {
 
 fn read_seed_risk_prefix(path: &Path) -> io::Result<Vec<u8>> {
     let mut file = fs::File::open(path)?;
-    let mut limited = (&mut file).take(MAX_SEED_CLOSURE_RISK_SCAN_BYTES);
+    let mut limited_bytes = (&mut file).take(MAX_SEED_CLOSURE_RISK_SCAN_BYTES);
     let mut bytes = Vec::new();
-    limited.read_to_end(&mut bytes)?;
+    limited_bytes.read_to_end(&mut bytes)?;
     Ok(bytes)
 }
 
@@ -1231,50 +1441,71 @@ fn validate_executable_file(path: &Path) -> Result<(), Stage0InventoryGeneration
     Ok(())
 }
 
-fn append_seed_executable_entries(
-    entries: &mut Vec<ExecutableSeedEntry>,
-    role: &str,
-    prefix: &str,
-    root: &Path,
-    executable_paths: &[PathBuf],
-) -> Result<(), Stage0InventoryGenerationError> {
-    assert!(!role.is_empty(), "seed role must not be empty");
-    assert!(!prefix.is_empty(), "seed id prefix must not be empty");
-    for path in executable_paths {
-        let id = seed_id_for_path(prefix, root, path);
-        entries.push(seed_executable_entry(&id, role, path, true, "operator supplied protected bootstrap seed")?);
+struct SeedExecutableAppend<'seed> {
+    entries: &'seed mut Vec<ExecutableSeedEntry>,
+    role: &'seed str,
+    prefix: &'seed str,
+    root: &'seed Path,
+    executable_paths: &'seed [PathBuf],
+}
+
+struct SeedExecutableSpec<'seed> {
+    id: &'seed str,
+    role: &'seed str,
+    path: &'seed Path,
+    required: bool,
+    allowed_reason: &'seed str,
+}
+
+fn append_seed_executable_entries(input: SeedExecutableAppend<'_>) -> Result<(), Stage0InventoryGenerationError> {
+    assert!(!input.role.is_empty(), "seed role must not be empty");
+    assert!(!input.prefix.is_empty(), "seed id prefix must not be empty");
+    let max_entries =
+        usize::try_from(MAX_SEED_EXECUTABLES).map_err(|_| Stage0InventoryGenerationError::TooManySeedExecutables {
+            limit: MAX_SEED_EXECUTABLES,
+            actual: MAX_SEED_EXECUTABLES.saturating_add(1),
+        })?;
+    for path in input.executable_paths {
+        if input.entries.len() >= max_entries {
+            return Err(Stage0InventoryGenerationError::TooManySeedExecutables {
+                limit: MAX_SEED_EXECUTABLES,
+                actual: MAX_SEED_EXECUTABLES.saturating_add(1),
+            });
+        }
+        let id = seed_id_for_path(input.prefix, input.root, path);
+        input.entries.push(seed_executable_entry(SeedExecutableSpec {
+            id: &id,
+            role: input.role,
+            path,
+            required: true,
+            allowed_reason: "operator supplied protected bootstrap seed",
+        })?);
     }
     Ok(())
 }
 
-fn seed_executable_entry(
-    id: &str,
-    role: &str,
-    path: &Path,
-    required: bool,
-    allowed_reason: &str,
-) -> Result<ExecutableSeedEntry, Stage0InventoryGenerationError> {
-    assert!(!id.is_empty(), "seed id must not be empty");
-    assert!(!role.is_empty(), "seed role must not be empty");
-    validate_executable_file(path)?;
-    let digest_hex = blake3_file_hex(path)?;
+fn seed_executable_entry(input: SeedExecutableSpec<'_>) -> Result<ExecutableSeedEntry, Stage0InventoryGenerationError> {
+    assert!(!input.id.is_empty(), "seed id must not be empty");
+    assert!(!input.role.is_empty(), "seed role must not be empty");
+    validate_executable_file(input.path)?;
+    let digest_hex = blake3_file_hex(input.path)?;
     Ok(ExecutableSeedEntry {
         schema_version: SCHEMA_VERSION_V1.to_string(),
-        id: id.to_string(),
-        role: role.to_string(),
+        id: input.id.to_string(),
+        role: input.role.to_string(),
         phase: PHASE_PROTECTED.to_string(),
-        executable_path: path.to_path_buf(),
+        executable_path: input.path.to_path_buf(),
         digest: DigestSpec {
             algorithm: DIGEST_ALGORITHM_BLAKE3.to_string(),
             hex: digest_hex.clone(),
             interoperability_reason: None,
         },
-        version_evidence: Some(seed_version_evidence(path, &digest_hex)),
+        version_evidence: Some(seed_version_evidence(input.path, &digest_hex)),
         provenance_category: PROVENANCE_OPERATOR_BOOTSTRAP_SEED.to_string(),
         provenance: "explicit operator-supplied seed path".to_string(),
-        allowed_reason: allowed_reason.to_string(),
+        allowed_reason: input.allowed_reason.to_string(),
         owner: "bootstrap".to_string(),
-        required,
+        required: input.required,
     })
 }
 
@@ -1293,7 +1524,43 @@ fn promoted_version_evidence(path: &Path, digest_hex: &str) -> BoundedVersionEvi
 fn collect_seed_executables(root: &Path) -> Result<Vec<PathBuf>, Stage0InventoryGenerationError> {
     validate_absolute_existing_path(root)?;
     let mut paths = Vec::new();
-    collect_seed_executables_inner(root, 0, &mut paths)?;
+    let mut pending = vec![(root.to_path_buf(), 0_u32)];
+    let mut scheduled_entries = 1_u32;
+    while let Some((path, depth)) = pending.pop() {
+        if depth > MAX_SEED_WALK_DEPTH {
+            return Err(Stage0InventoryGenerationError::WalkDepthExceeded {
+                path,
+                limit: MAX_SEED_WALK_DEPTH,
+            });
+        }
+        let metadata = fs::metadata(&path).map_err(|err| io_error(&path, err))?;
+        if metadata.is_file() {
+            if is_executable_metadata(&metadata) {
+                push_bounded_seed_path(&mut paths, path)?;
+                continue;
+            }
+            return Err(Stage0InventoryGenerationError::NotExecutable { path });
+        }
+        if metadata.is_dir() {
+            let entries = fs::read_dir(&path).map_err(|err| io_error(&path, err))?;
+            for entry in entries {
+                let entry = entry.map_err(|err| io_error(&path, err))?;
+                scheduled_entries = scheduled_entries.checked_add(1).ok_or_else(|| {
+                    Stage0InventoryGenerationError::WalkEntryLimitExceeded {
+                        path: path.clone(),
+                        limit: MAX_SEED_WALK_ENTRIES,
+                    }
+                })?;
+                if scheduled_entries > MAX_SEED_WALK_ENTRIES {
+                    return Err(Stage0InventoryGenerationError::WalkEntryLimitExceeded {
+                        path,
+                        limit: MAX_SEED_WALK_ENTRIES,
+                    });
+                }
+                pending.push((entry.path(), depth.saturating_add(1)));
+            }
+        }
+    }
     paths.sort();
     paths.dedup();
     if paths.is_empty() {
@@ -1301,38 +1568,9 @@ fn collect_seed_executables(root: &Path) -> Result<Vec<PathBuf>, Stage0Inventory
             path: root.to_path_buf(),
         });
     }
+    assert!(root.is_absolute());
+    assert!(scheduled_entries <= MAX_SEED_WALK_ENTRIES);
     Ok(paths)
-}
-
-fn collect_seed_executables_inner(
-    path: &Path,
-    depth: u32,
-    paths: &mut Vec<PathBuf>,
-) -> Result<(), Stage0InventoryGenerationError> {
-    if depth > MAX_SEED_WALK_DEPTH {
-        return Err(Stage0InventoryGenerationError::WalkDepthExceeded {
-            path: path.to_path_buf(),
-            limit: MAX_SEED_WALK_DEPTH,
-        });
-    }
-    let metadata = fs::metadata(path).map_err(|err| io_error(path, err))?;
-    if metadata.is_file() {
-        if is_executable_metadata(&metadata) {
-            push_bounded_seed_path(paths, path.to_path_buf())?;
-            return Ok(());
-        }
-        return Err(Stage0InventoryGenerationError::NotExecutable {
-            path: path.to_path_buf(),
-        });
-    }
-    if metadata.is_dir() {
-        let entries = fs::read_dir(path).map_err(|err| io_error(path, err))?;
-        for entry in entries {
-            let entry = entry.map_err(|err| io_error(path, err))?;
-            collect_seed_executables_inner(&entry.path(), depth.saturating_add(1), paths)?;
-        }
-    }
-    Ok(())
 }
 
 fn push_bounded_seed_path(paths: &mut Vec<PathBuf>, path: PathBuf) -> Result<(), Stage0InventoryGenerationError> {
@@ -1365,16 +1603,43 @@ fn is_executable_metadata(_metadata: &fs::Metadata) -> bool {
 
 pub(crate) fn blake3_file_hex(path: &Path) -> Result<String, Stage0InventoryGenerationError> {
     let mut file = fs::File::open(path).map_err(|err| io_error(path, err))?;
+    let expected_bytes = file.metadata().map_err(|err| io_error(path, err))?.len();
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0_u8; HASH_BUFFER_BYTES];
-    loop {
+    let buffer_bytes =
+        u64::try_from(buffer.len()).map_err(|_| changed_file_error(path, "hash buffer length overflow"))?;
+    let rounded_bytes = expected_bytes
+        .checked_add(buffer_bytes.saturating_sub(1))
+        .ok_or_else(|| changed_file_error(path, "file length overflow"))?;
+    let data_reads = rounded_bytes
+        .checked_div(buffer_bytes)
+        .ok_or_else(|| changed_file_error(path, "hash buffer must not be empty"))?;
+    let max_reads = data_reads.checked_add(1).ok_or_else(|| changed_file_error(path, "file read bound overflow"))?;
+    let mut total_bytes = 0_u64;
+    for _ in 0..max_reads {
         let read = file.read(&mut buffer).map_err(|err| io_error(path, err))?;
         if read == 0 {
             break;
         }
+        let read_bytes = u64::try_from(read).map_err(|_| changed_file_error(path, "read length overflow"))?;
+        total_bytes = total_bytes
+            .checked_add(read_bytes)
+            .ok_or_else(|| changed_file_error(path, "total read length overflow"))?;
+        if total_bytes > expected_bytes {
+            return Err(changed_file_error(path, "file grew while its BLAKE3 digest was computed"));
+        }
         hasher.update(&buffer[..read]);
     }
+    if total_bytes != expected_bytes {
+        return Err(changed_file_error(path, "file changed while its BLAKE3 digest was computed"));
+    }
+    assert!(!buffer.is_empty());
+    assert!(max_reads > 0);
     Ok(hasher.finalize().to_hex().to_string())
+}
+
+fn changed_file_error(path: &Path, message: &'static str) -> Stage0InventoryGenerationError {
+    io_error(path, io::Error::new(io::ErrorKind::InvalidData, message))
 }
 
 fn seed_id_for_path(prefix: &str, root: &Path, path: &Path) -> String {
@@ -1392,54 +1657,125 @@ fn seed_id_for_path(prefix: &str, root: &Path, path: &Path) -> String {
     format!("{prefix}-{safe}")
 }
 
+struct NickelStringField<'field> {
+    out: &'field mut String,
+    name: &'field str,
+    value: &'field str,
+}
+
 fn push_executable_entry_nickel(
     out: &mut String,
     entry: &ExecutableSeedEntry,
 ) -> Result<(), Stage0InventoryGenerationError> {
+    let initial_bytes = out.len();
     out.push_str("    {\n");
-    push_nickel_field(out, "schema_version", &entry.schema_version);
-    push_nickel_field(out, "id", &entry.id);
-    push_nickel_field(out, "role", &entry.role);
-    push_nickel_field(out, "phase", &entry.phase);
-    push_nickel_field(out, "executable_path", path_to_str(&entry.executable_path)?);
+    push_nickel_field(NickelStringField {
+        out,
+        name: "schema_version",
+        value: &entry.schema_version,
+    });
+    push_nickel_field(NickelStringField {
+        out,
+        name: "id",
+        value: &entry.id,
+    });
+    push_nickel_field(NickelStringField {
+        out,
+        name: "role",
+        value: &entry.role,
+    });
+    push_nickel_field(NickelStringField {
+        out,
+        name: "phase",
+        value: &entry.phase,
+    });
+    push_nickel_field(NickelStringField {
+        out,
+        name: "executable_path",
+        value: path_to_str(&entry.executable_path)?,
+    });
     push_digest_nickel(out, &entry.digest);
     push_version_evidence_nickel(out, entry.version_evidence.as_ref());
-    push_nickel_field(out, "provenance_category", &entry.provenance_category);
-    push_nickel_field(out, "provenance", &entry.provenance);
-    push_nickel_field(out, "allowed_reason", &entry.allowed_reason);
-    push_nickel_field(out, "owner", &entry.owner);
+    push_nickel_field(NickelStringField {
+        out,
+        name: "provenance_category",
+        value: &entry.provenance_category,
+    });
+    push_nickel_field(NickelStringField {
+        out,
+        name: "provenance",
+        value: &entry.provenance,
+    });
+    push_nickel_field(NickelStringField {
+        out,
+        name: "allowed_reason",
+        value: &entry.allowed_reason,
+    });
+    push_nickel_field(NickelStringField {
+        out,
+        name: "owner",
+        value: &entry.owner,
+    });
     push_nickel_bool_field(out, "required", entry.required);
     out.push_str("    },\n");
+    assert!(out.len() > initial_bytes);
+    assert!(out.ends_with("    },\n"));
     Ok(())
 }
 
 fn push_source_entry_nickel(out: &mut String, entry: &SourceSeedEntry) {
+    let initial_bytes = out.len();
     out.push_str("    {\n");
-    push_nickel_field(out, "schema_version", &entry.schema_version);
-    push_nickel_field(out, "id", &entry.id);
-    push_nickel_field(out, "role", &entry.role);
-    push_nickel_field(out, "phase", &entry.phase);
+    for (name, value) in [
+        ("schema_version", entry.schema_version.as_str()),
+        ("id", entry.id.as_str()),
+        ("role", entry.role.as_str()),
+        ("phase", entry.phase.as_str()),
+    ] {
+        push_nickel_field(NickelStringField { out, name, value });
+    }
     push_nickel_string_array(out, "urls", &entry.urls);
     push_nickel_string_array(out, "extraction_rules", &entry.extraction_rules);
     push_digest_nickel(out, &entry.digest);
-    push_nickel_field(out, "provenance_category", &entry.provenance_category);
-    push_nickel_field(out, "provenance", &entry.provenance);
-    push_nickel_field(out, "allowed_reason", &entry.allowed_reason);
-    push_nickel_field(out, "owner", &entry.owner);
+    for (name, value) in [
+        ("provenance_category", entry.provenance_category.as_str()),
+        ("provenance", entry.provenance.as_str()),
+        ("allowed_reason", entry.allowed_reason.as_str()),
+        ("owner", entry.owner.as_str()),
+    ] {
+        push_nickel_field(NickelStringField { out, name, value });
+    }
     push_nickel_bool_field(out, "required", entry.required);
     out.push_str("    },\n");
+    assert!(out.len() > initial_bytes);
+    assert!(out.ends_with("    },\n"));
 }
 
 fn push_digest_nickel(out: &mut String, digest: &DigestSpec) {
+    let initial_bytes = out.len();
     out.push_str("      digest = {\n");
-    push_nickel_field(out, "algorithm", &digest.algorithm);
-    push_nickel_field(out, "hex", &digest.hex);
+    push_nickel_field(NickelStringField {
+        out,
+        name: "algorithm",
+        value: &digest.algorithm,
+    });
+    push_nickel_field(NickelStringField {
+        out,
+        name: "hex",
+        value: &digest.hex,
+    });
     if let Some(reason) = &digest.interoperability_reason {
-        push_nickel_field(out, "interoperability_reason", reason);
+        push_nickel_field(NickelStringField {
+            out,
+            name: "interoperability_reason",
+            value: reason,
+        });
     } else {
         out.push_str("        interoperability_reason = null,\n");
     }
     out.push_str("      },\n");
+    assert!(out.len() > initial_bytes);
+    assert!(out.ends_with("      },\n"));
 }
 
 fn push_version_evidence_nickel(out: &mut String, evidence: Option<&BoundedVersionEvidence>) {
@@ -1449,15 +1785,31 @@ fn push_version_evidence_nickel(out: &mut String, evidence: Option<&BoundedVersi
             push_nickel_string_array(out, "command", &evidence.command);
             push_nickel_u32_field(out, "byte_limit", evidence.byte_limit);
             out.push_str("        output_digest = {\n");
-            push_nickel_field(out, "algorithm", &evidence.output_digest.algorithm);
-            push_nickel_field(out, "hex", &evidence.output_digest.hex);
+            push_nickel_field(NickelStringField {
+                out,
+                name: "algorithm",
+                value: &evidence.output_digest.algorithm,
+            });
+            push_nickel_field(NickelStringField {
+                out,
+                name: "hex",
+                value: &evidence.output_digest.hex,
+            });
             if let Some(reason) = &evidence.output_digest.interoperability_reason {
-                push_nickel_field(out, "interoperability_reason", reason);
+                push_nickel_field(NickelStringField {
+                    out,
+                    name: "interoperability_reason",
+                    value: reason,
+                });
             } else {
                 out.push_str("          interoperability_reason = null,\n");
             }
             out.push_str("        },\n");
-            push_nickel_field(out, "output_sample", &evidence.output_sample);
+            push_nickel_field(NickelStringField {
+                out,
+                name: "output_sample",
+                value: &evidence.output_sample,
+            });
             push_nickel_i32_field(out, "exit_code", evidence.exit_code);
             out.push_str("      },\n");
         }
@@ -1465,12 +1817,12 @@ fn push_version_evidence_nickel(out: &mut String, evidence: Option<&BoundedVersi
     }
 }
 
-fn push_nickel_field(out: &mut String, name: &str, value: &str) {
-    out.push_str("      ");
-    out.push_str(name);
-    out.push_str(" = ");
-    out.push_str(&nickel_string(value));
-    out.push_str(",\n");
+fn push_nickel_field(field: NickelStringField<'_>) {
+    field.out.push_str("      ");
+    field.out.push_str(field.name);
+    field.out.push_str(" = ");
+    field.out.push_str(&nickel_string(field.value));
+    field.out.push_str(",\n");
 }
 
 fn push_nickel_bool_field(out: &mut String, name: &str, value: bool) {
@@ -2085,6 +2437,21 @@ mod tests {
         assert_eq!(err, ProtectedExecError::EmptyField {
             entry_id: "musl".to_string(),
             field: "extraction_rules"
+        });
+    }
+
+    #[test]
+    fn inventory_rejects_source_entry_count_above_bound() {
+        let mut inv = inventory();
+        let source_entry = inv.source_entries[0].clone();
+        let excessive_entry_count = usize::try_from(MAX_SOURCE_ENTRIES).unwrap().saturating_add(1);
+        inv.source_entries = vec![source_entry; excessive_entry_count];
+
+        let err = ProtectedExecPolicy::from_inventory(inv).unwrap_err();
+
+        assert_eq!(err, ProtectedExecError::InventoryCollectionLimitExceeded {
+            collection: "source entries",
+            limit: MAX_SOURCE_ENTRIES,
         });
     }
 
