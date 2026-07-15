@@ -148,56 +148,77 @@ pub fn validate_release_reproducibility_report_linkage(
     report: ReleaseReproducibilityReport,
     expected: ReleaseReproducibilityReportLinkage,
 ) -> Result<ReleaseReproducibilityReport, ReleaseEvidenceError> {
-    let report = canonical_release_reproducibility_report(report)?;
-    validate_linkage_field(&report.release_id, &expected.release_id, "release_id")?;
-    validate_linkage_field(
-        &report.source_archive_digest_blake3,
-        &expected.source_archive_digest_blake3,
-        "source_archive_digest_blake3",
-    )?;
-    validate_linkage_field(
-        &report.proof_bundle_digest_blake3,
-        &expected.proof_bundle_digest_blake3,
-        "proof_bundle_digest_blake3",
-    )?;
-    Ok(report)
+    let validated = canonical_release_reproducibility_report(report)?;
+    validate_linkage_field(LinkageField {
+        actual: &validated.release_id,
+        expected: &expected.release_id,
+        field_name: "release_id",
+    })?;
+    validate_linkage_field(LinkageField {
+        actual: &validated.source_archive_digest_blake3,
+        expected: &expected.source_archive_digest_blake3,
+        field_name: "source_archive_digest_blake3",
+    })?;
+    validate_linkage_field(LinkageField {
+        actual: &validated.proof_bundle_digest_blake3,
+        expected: &expected.proof_bundle_digest_blake3,
+        field_name: "proof_bundle_digest_blake3",
+    })?;
+    Ok(validated)
 }
 
 pub fn validate_release_reproducibility_report_artifact_names(
     report: ReleaseReproducibilityReport,
     expected_names: Vec<String>,
 ) -> Result<ReleaseReproducibilityReport, ReleaseEvidenceError> {
-    let report = canonical_release_reproducibility_report(report)?;
-    let actual_names = report.artifacts.iter().map(|artifact| artifact.name.clone()).collect::<Vec<_>>();
+    let validated = canonical_release_reproducibility_report(report)?;
+    let actual_names = validated.artifacts.iter().map(|artifact| artifact.name.clone()).collect::<Vec<_>>();
     let expected_names = normalize_expected_artifact_names(expected_names)?;
     if actual_names != expected_names {
         return Err(validation_error(format!(
             "release reproducibility report artifact set mismatch: expected {expected_names:?}, got {actual_names:?}"
         )));
     }
-    Ok(report)
+    Ok(validated)
 }
 
-fn validate_linkage_field(actual: &str, expected: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
-    if actual != expected {
+struct LinkageField<'a> {
+    actual: &'a str,
+    expected: &'a str,
+    field_name: &'a str,
+}
+
+fn validate_linkage_field(field: LinkageField<'_>) -> Result<(), ReleaseEvidenceError> {
+    if field.actual != field.expected {
         return Err(validation_error(format!(
-            "release reproducibility report {field_name} linkage mismatch: expected {expected}, got {actual}"
+            "release reproducibility report {} linkage mismatch: expected {}, got {}",
+            field.field_name, field.expected, field.actual
         )));
     }
     Ok(())
 }
 
 fn normalize_expected_artifact_names(mut names: Vec<String>) -> Result<Vec<String>, ReleaseEvidenceError> {
+    validate_expected_artifact_name_count(names.len())?;
+    names.sort();
+    validate_expected_artifact_name_set(&names)?;
+    Ok(names)
+}
+
+fn validate_expected_artifact_name_count(name_count: usize) -> Result<(), ReleaseEvidenceError> {
     let name_count =
-        u32_count(names.len(), "release reproducibility report expected artifact name count overflowed u32")?;
+        u32_count(name_count, "release reproducibility report expected artifact name count overflowed u32")?;
     if name_count == 0 {
         return Err(validation_error(
             "release reproducibility report expected artifact names must not be empty".to_string(),
         ));
     }
-    names.sort();
+    Ok(())
+}
+
+fn validate_expected_artifact_name_set(names: &[String]) -> Result<(), ReleaseEvidenceError> {
     let mut names_seen = BTreeSet::new();
-    for name in &names {
+    for name in names {
         validate_artifact_name(name)?;
         if !names_seen.insert(name.clone()) {
             return Err(validation_error(format!(
@@ -205,27 +226,40 @@ fn normalize_expected_artifact_names(mut names: Vec<String>) -> Result<Vec<Strin
             )));
         }
     }
-    Ok(names)
+    Ok(())
 }
 
 fn validate_report_header(report: &ReleaseReproducibilityReport) -> Result<(), ReleaseEvidenceError> {
-    if report.schema != RELEASE_REPRODUCIBILITY_REPORT_SCHEMA {
-        return Err(validation_error(format!(
-            "release reproducibility report schema must be {RELEASE_REPRODUCIBILITY_REPORT_SCHEMA}, got {}",
-            report.schema
-        )));
-    }
-    if report.release_id.trim().is_empty() {
-        return Err(validation_error("release reproducibility report release_id must not be empty".to_string()));
-    }
+    validate_report_schema(&report.schema)?;
+    validate_release_id(&report.release_id)?;
     validate_blake3_hex(&report.source_archive_digest_blake3, "source_archive_digest_blake3")?;
     validate_blake3_hex(&report.proof_bundle_digest_blake3, "proof_bundle_digest_blake3")?;
-    if report.rebuild_workflow.command.trim().is_empty() {
+    validate_rebuild_workflow(&report.rebuild_workflow)
+}
+
+fn validate_report_schema(schema: &str) -> Result<(), ReleaseEvidenceError> {
+    if schema != RELEASE_REPRODUCIBILITY_REPORT_SCHEMA {
+        return Err(validation_error(format!(
+            "release reproducibility report schema must be {RELEASE_REPRODUCIBILITY_REPORT_SCHEMA}, got {schema}"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_release_id(release_id: &str) -> Result<(), ReleaseEvidenceError> {
+    if release_id.trim().is_empty() {
+        return Err(validation_error("release reproducibility report release_id must not be empty".to_string()));
+    }
+    Ok(())
+}
+
+fn validate_rebuild_workflow(workflow: &RebuildWorkflowIdentity) -> Result<(), ReleaseEvidenceError> {
+    if workflow.command.trim().is_empty() {
         return Err(validation_error(
             "release reproducibility report rebuild_workflow.command must not be empty".to_string(),
         ));
     }
-    if report.rebuild_workflow.version.trim().is_empty() {
+    if workflow.version.trim().is_empty() {
         return Err(validation_error(
             "release reproducibility report rebuild_workflow.version must not be empty".to_string(),
         ));
@@ -238,23 +272,26 @@ fn validate_report_evidence(report: &ReleaseReproducibilityReport) -> Result<(),
     validate_non_empty_string_set(&report.clean_rebuild_store_identities, "clean_rebuild_store_identities")?;
     validate_digest_set(&report.evidence_artifact_digests_blake3, "evidence_artifact_digests_blake3")?;
     if is_rebuild_claim(report.proof_class) {
-        if has_impure_assumption(&report.environment_assumptions) {
-            return Err(validation_error(
-                "release reproducibility report rebuild proof classes reject impure hermeticity evidence".to_string(),
-            ));
-        }
-        if report.clean_rebuild_store_identities.is_empty() {
-            return Err(validation_error(
-                "release reproducibility report rebuild proof classes require clean_rebuild_store_identities"
-                    .to_string(),
-            ));
-        }
-        if report.evidence_artifact_digests_blake3.is_empty() {
-            return Err(validation_error(
-                "release reproducibility report rebuild proof classes require evidence_artifact_digests_blake3"
-                    .to_string(),
-            ));
-        }
+        validate_rebuild_claim_evidence(report)?;
+    }
+    Ok(())
+}
+
+fn validate_rebuild_claim_evidence(report: &ReleaseReproducibilityReport) -> Result<(), ReleaseEvidenceError> {
+    if has_impure_assumption(&report.environment_assumptions) {
+        return Err(validation_error(
+            "release reproducibility report rebuild proof classes reject impure hermeticity evidence".to_string(),
+        ));
+    }
+    if report.clean_rebuild_store_identities.is_empty() {
+        return Err(validation_error(
+            "release reproducibility report rebuild proof classes require clean_rebuild_store_identities".to_string(),
+        ));
+    }
+    if report.evidence_artifact_digests_blake3.is_empty() {
+        return Err(validation_error(
+            "release reproducibility report rebuild proof classes require evidence_artifact_digests_blake3".to_string(),
+        ));
     }
     Ok(())
 }
@@ -294,44 +331,58 @@ fn validate_digest_set(values: &[String], field_name: &str) -> Result<(), Releas
 }
 
 fn validate_report_verdict(report: &ReleaseReproducibilityReport) -> Result<(), ReleaseEvidenceError> {
-    let all_artifacts_matched =
+    let is_every_artifact_matched =
         report.artifacts.iter().all(|artifact| artifact.result == ReproducibilityComparisonResult::Matched);
-    let any_artifact_failed = report.artifacts.iter().any(|artifact| {
+    let has_any_artifact_failed = report.artifacts.iter().any(|artifact| {
         matches!(
             artifact.result,
             ReproducibilityComparisonResult::Mismatched | ReproducibilityComparisonResult::MissingRebuiltArtifact
         )
     });
     match report.comparison_verdict {
-        ReproducibilityComparisonVerdict::Matched => {
-            if !all_artifacts_matched {
-                return Err(validation_error(
-                    "release reproducibility report matched verdict requires all artifacts to match".to_string(),
-                ));
-            }
-        }
-        ReproducibilityComparisonVerdict::Failed => {
-            if !any_artifact_failed {
-                return Err(validation_error(
-                    "release reproducibility report failed verdict requires a mismatched or missing artifact"
-                        .to_string(),
-                ));
-            }
-            if is_rebuild_claim(report.proof_class) {
-                return Err(validation_error(
-                    "release reproducibility report failed verdict cannot claim a rebuild-match proof class"
-                        .to_string(),
-                ));
-            }
-        }
-        ReproducibilityComparisonVerdict::NotEvaluated => {
-            if is_rebuild_claim(report.proof_class) {
-                return Err(validation_error(
-                    "release reproducibility report rebuild proof classes require a matched verdict".to_string(),
-                ));
-            }
-        }
+        ReproducibilityComparisonVerdict::Matched => validate_matched_verdict(is_every_artifact_matched)?,
+        ReproducibilityComparisonVerdict::Failed => validate_failed_verdict(report, has_any_artifact_failed)?,
+        ReproducibilityComparisonVerdict::NotEvaluated => validate_not_evaluated_verdict(report)?,
     }
+    validate_rebuild_claim_verdict(report)
+}
+
+fn validate_matched_verdict(is_every_artifact_matched: bool) -> Result<(), ReleaseEvidenceError> {
+    if !is_every_artifact_matched {
+        return Err(validation_error(
+            "release reproducibility report matched verdict requires all artifacts to match".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_failed_verdict(
+    report: &ReleaseReproducibilityReport,
+    has_any_artifact_failed: bool,
+) -> Result<(), ReleaseEvidenceError> {
+    if !has_any_artifact_failed {
+        return Err(validation_error(
+            "release reproducibility report failed verdict requires a mismatched or missing artifact".to_string(),
+        ));
+    }
+    if is_rebuild_claim(report.proof_class) {
+        return Err(validation_error(
+            "release reproducibility report failed verdict cannot claim a rebuild-match proof class".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_not_evaluated_verdict(report: &ReleaseReproducibilityReport) -> Result<(), ReleaseEvidenceError> {
+    if is_rebuild_claim(report.proof_class) {
+        return Err(validation_error(
+            "release reproducibility report rebuild proof classes require a matched verdict".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_rebuild_claim_verdict(report: &ReleaseReproducibilityReport) -> Result<(), ReleaseEvidenceError> {
     if is_rebuild_claim(report.proof_class) && report.comparison_verdict != ReproducibilityComparisonVerdict::Matched {
         return Err(validation_error(
             "release reproducibility report rebuild proof classes require comparison_verdict=matched".to_string(),
@@ -350,16 +401,7 @@ fn is_rebuild_claim(proof_class: ReproducibilityProofClass) -> bool {
 }
 
 fn validate_report_artifacts(artifacts: &[ReproducibilityArtifactComparison]) -> Result<(), ReleaseEvidenceError> {
-    let artifact_count = u32_count(artifacts.len(), "release reproducibility report artifact count overflowed u32")?;
-    if artifact_count == 0 {
-        return Err(validation_error("release reproducibility report must record at least one artifact".to_string()));
-    }
-    if artifact_count > MAX_REPRODUCIBILITY_ARTIFACT_COUNT {
-        return Err(validation_error(format!(
-            "release reproducibility report records {artifact_count} artifacts, limit is {MAX_REPRODUCIBILITY_ARTIFACT_COUNT}"
-        )));
-    }
-
+    validate_artifact_count(artifacts.len())?;
     let mut names_seen = BTreeSet::new();
     for artifact in artifacts {
         validate_artifact_comparison(artifact)?;
@@ -369,6 +411,19 @@ fn validate_report_artifacts(artifacts: &[ReproducibilityArtifactComparison]) ->
                 artifact.name
             )));
         }
+    }
+    Ok(())
+}
+
+fn validate_artifact_count(artifact_count: usize) -> Result<(), ReleaseEvidenceError> {
+    let artifact_count = u32_count(artifact_count, "release reproducibility report artifact count overflowed u32")?;
+    if artifact_count == 0 {
+        return Err(validation_error("release reproducibility report must record at least one artifact".to_string()));
+    }
+    if artifact_count > MAX_REPRODUCIBILITY_ARTIFACT_COUNT {
+        return Err(validation_error(format!(
+            "release reproducibility report records {artifact_count} artifacts, limit is {MAX_REPRODUCIBILITY_ARTIFACT_COUNT}"
+        )));
     }
     Ok(())
 }
@@ -418,9 +473,7 @@ fn validate_observed_fields(artifact: &ReproducibilityArtifactComparison) -> Res
 }
 
 fn validate_result_consistency(artifact: &ReproducibilityArtifactComparison) -> Result<(), ReleaseEvidenceError> {
-    let has_observed_size = artifact.observed_size_bytes.is_some();
-    let has_observed_digest = artifact.observed_digest_blake3.is_some();
-    if has_observed_size != has_observed_digest {
+    if artifact.observed_size_bytes.is_some() != artifact.observed_digest_blake3.is_some() {
         return Err(validation_error(format!(
             "release reproducibility report artifact {} must record observed size and digest together",
             artifact.name
@@ -455,10 +508,9 @@ fn validate_matched_artifact(artifact: &ReproducibilityArtifactComparison) -> Re
 fn validate_mismatched_artifact(artifact: &ReproducibilityArtifactComparison) -> Result<(), ReleaseEvidenceError> {
     let observed_size_bytes = require_observed_size(artifact)?;
     let observed_digest_blake3 = require_observed_digest(artifact)?;
-    let size_matches = observed_size_bytes == artifact.expected_size_bytes;
-    let digest_matches = observed_digest_blake3 == artifact.expected_digest_blake3;
     // A mismatch may be length-only or digest-only; reject only the fully identical case.
-    if size_matches && digest_matches {
+    if observed_size_bytes == artifact.expected_size_bytes && observed_digest_blake3 == artifact.expected_digest_blake3
+    {
         return Err(validation_error(format!(
             "release reproducibility report artifact {} is mismatched but observed bytes match",
             artifact.name
