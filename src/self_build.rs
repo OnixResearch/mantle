@@ -39,23 +39,29 @@ use crate::protected_exec::select_declared_sandbox_seed;
 use crate::protected_exec_seccomp::ProtectedSeccompSupervisor;
 use crate::protected_exec_seccomp::install_current_thread_exec_supervisor;
 
+/// One mebibyte in bytes.
+const MEBIBYTE_BYTES: u64 = 1_u64 << 20;
+
 /// Maximum source tree size: 2 GiB.
-const MAX_SOURCE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const MAX_SOURCE_BYTES: u64 = 2_u64 << 30;
 
 /// Maximum number of source-tree entries copied during stage0 source staging.
-const MAX_STAGE_SOURCE_ENTRIES: u32 = 200_000;
+const MAX_STAGE_SOURCE_ENTRIES: usize = 200_000;
+
+/// Maximum stack-pop steps for the source-tree root plus accepted entries.
+const MAX_STAGE_SOURCE_WALK_STEPS: usize = MAX_STAGE_SOURCE_ENTRIES.saturating_add(1);
 
 /// Maximum recursion depth during stage0 source staging.
-const MAX_STAGE_SOURCE_DEPTH: u32 = 64;
+const MAX_STAGE_SOURCE_DEPTH: usize = 64;
 
 /// Maximum locked packages parsed from Cargo.lock during vendor validation.
-const MAX_CARGO_LOCK_PACKAGE_COUNT: u32 = 20_000;
+const MAX_CARGO_LOCK_PACKAGE_COUNT: usize = 20_000;
 
 /// Maximum top-level package directories accepted under vendor-deps/.
-const MAX_VENDOR_PACKAGE_COUNT: u32 = 20_000;
+const MAX_VENDOR_PACKAGE_COUNT: usize = 20_000;
 
 /// Maximum files accepted inside one vendored package checksum manifest.
-const MAX_VENDOR_PACKAGE_FILE_COUNT: u32 = 200_000;
+const MAX_VENDOR_PACKAGE_FILE_COUNT: usize = 200_000;
 
 /// Expected lowercase SHA-256 hex digest length in Cargo vendor metadata.
 ///
@@ -63,11 +69,23 @@ const MAX_VENDOR_PACKAGE_FILE_COUNT: u32 = 200_000;
 /// of Cargo's interoperability format. Mantle-owned hashes remain BLAKE3.
 const CARGO_SHA256_HEX_LEN: usize = 64;
 
-/// One kibibyte in bytes for fixed-size hashing buffers.
-const KIB_BYTES: usize = 1024;
-
 /// Read-buffer capacity for streaming Cargo SHA-256 over vendored package files.
-const CARGO_SHA256_READ_BUFFER_BYTES: usize = 64 * KIB_BYTES;
+const CARGO_SHA256_READ_BUFFER_BYTES: usize = 64_usize << 10;
+
+/// Read-buffer capacity for deterministic staged-tree BLAKE3 hashing.
+const TREE_FINGERPRINT_READ_BUFFER_BYTES: usize = 8_usize << 10;
+
+/// Maximum proof-line fallback events accepted by the parser.
+const MAX_PROOF_FALLBACK_EVENTS: usize = 16;
+
+/// Maximum protected seccomp events accepted by one proof report.
+const MAX_PROTECTED_SECCOMP_EVENTS: usize = 100_000;
+
+/// Maximum StageX bootstrap-tool digest rows accepted by one proof report.
+const MAX_STAGEX_BOOTSTRAP_TOOL_DIGESTS: usize = 256;
+
+/// Maximum StageX eligibility failures returned to a caller.
+const MAX_STAGEX_ELIGIBILITY_FAILURES: usize = 400_005;
 
 /// Top-level repo entries included in the staged source tree.
 pub(crate) const STAGED_SOURCE_TOP_LEVEL_ENTRIES: &[&str] = &[
@@ -86,7 +104,7 @@ pub(crate) const STAGED_SOURCE_TOP_LEVEL_ENTRIES: &[&str] = &[
 
 /// Maximum number of `*-mantle` output directories to scan before giving up.
 #[cfg_attr(not(test), allow(dead_code))]
-const MAX_CRUNCH_OUTPUTS: u32 = 4096;
+const MAX_CRUNCH_OUTPUTS: usize = 4096;
 
 /// Bootstrap tool NCL files that MUST be built as separate roots before
 /// the main mantle derivation. Adding or removing entries here changes
@@ -96,6 +114,9 @@ const REQUIRED_BOOTSTRAP_TOOLS: &[&str] = &["bwrap.ncl", "busybox.ncl"];
 /// Number of steps in `cmd_self_build`. Tests assert against this to
 /// catch step additions/removals.
 const SELF_BUILD_STEP_COUNT: u32 = 4;
+
+/// Maximum checkout ancestors inspected during host source discovery.
+const MAX_SOURCE_DISCOVERY_ANCESTORS: u32 = 8;
 
 /// Stable line prefix used by the proof runner to identify structured
 /// self-build evidence lines.
@@ -350,8 +371,9 @@ impl SelfBuildReport {
             out.push_str(&format!("{PROOF_PREFIX} protected-seccomp-event=none\n"));
         } else {
             for event in &self.protected_seccomp_events {
-                let json = serde_json::to_string(event).expect("protected seccomp audit event must serialize");
-                out.push_str(&format!("{PROOF_PREFIX} protected-seccomp-event={json}\n"));
+                if let Ok(event_json) = serde_json::to_string(event) {
+                    out.push_str(&format!("{PROOF_PREFIX} protected-seccomp-event={event_json}\n"));
+                }
             }
         }
         match &self.busybox_path {
@@ -417,7 +439,7 @@ impl SelfBuildReport {
         let mut fallback_events: Vec<SelfBuildFallbackEvent> = Vec::new();
         let mut stage0_inventory_digest_blake3: Option<String> = None;
         let mut protected_transition: Option<Option<ProtectedPhaseTransition>> = None;
-        let mut transition_marker_seen = false;
+        let mut has_transition_marker = false;
         let mut transition_bwrap_path: Option<PathBuf> = None;
         let mut transition_bwrap_digest: Option<String> = None;
         let mut transition_bwrap_store_name: Option<String> = None;
@@ -439,7 +461,7 @@ impl SelfBuildReport {
         let mut stagex_bootstrap_tool_digests: Vec<BootstrapToolDigestEntry> = Vec::new();
         let mut stagex_protected_exec_audit_digest: Option<String> = None;
         let mut stagex_proof_bundle_digest: Option<String> = None;
-        let mut stagex_metadata_none = false;
+        let mut has_stagex_metadata_none = false;
 
         for line in text.lines() {
             let trimmed = line.trim();
@@ -464,6 +486,9 @@ impl SelfBuildReport {
                 bwrap_source = BwrapSource::parse(val);
             } else if let Some(val) = rest.strip_prefix("fallback-event=") {
                 if val != "none" {
+                    if fallback_events.len() >= MAX_PROOF_FALLBACK_EVENTS {
+                        return None;
+                    }
                     let event = SelfBuildFallbackEvent::parse(val)?;
                     fallback_events.push(event);
                 }
@@ -475,7 +500,7 @@ impl SelfBuildReport {
                 if val == "none" {
                     protected_transition = Some(None);
                 } else if val == "bootstrap-tools-selected" {
-                    transition_marker_seen = true;
+                    has_transition_marker = true;
                 } else {
                     return None;
                 }
@@ -493,6 +518,9 @@ impl SelfBuildReport {
                 transition_busybox_store_name = Some(val.to_string());
             } else if let Some(val) = rest.strip_prefix("protected-seccomp-event=") {
                 if val != "none" {
+                    if protected_seccomp_events.len() >= MAX_PROTECTED_SECCOMP_EVENTS {
+                        return None;
+                    }
                     protected_seccomp_events.push(serde_json::from_str(val).ok()?);
                 }
             } else if let Some(val) = rest.strip_prefix("busybox-path=") {
@@ -523,6 +551,9 @@ impl SelfBuildReport {
                 stagex_stage2_binary_digest = Some(val.to_string());
             } else if let Some(val) = rest.strip_prefix("stagex-bootstrap-tool-digest=") {
                 if let Some((name, digest)) = val.split_once(':') {
+                    if stagex_bootstrap_tool_digests.len() >= MAX_STAGEX_BOOTSTRAP_TOOL_DIGESTS {
+                        return None;
+                    }
                     stagex_bootstrap_tool_digests.push(BootstrapToolDigestEntry {
                         name: name.to_string(),
                         digest_blake3: digest.to_string(),
@@ -533,11 +564,11 @@ impl SelfBuildReport {
             } else if let Some(val) = rest.strip_prefix("stagex-proof-bundle-digest=") {
                 stagex_proof_bundle_digest = Some(val.to_string());
             } else if rest.strip_prefix("stagex-metadata=").is_some() {
-                stagex_metadata_none = true;
+                has_stagex_metadata_none = true;
             }
         }
 
-        if protected_transition.is_none() && transition_marker_seen {
+        if protected_transition.is_none() && has_transition_marker {
             protected_transition = Some(Some(ProtectedPhaseTransition {
                 bwrap_path: transition_bwrap_path?,
                 bwrap_digest_hex: transition_bwrap_digest?,
@@ -560,7 +591,7 @@ impl SelfBuildReport {
             protected_seccomp_events,
             busybox_path: busybox_path?,
             output_binary: output_binary?,
-            stagex_metadata: if stagex_metadata_none {
+            stagex_metadata: if has_stagex_metadata_none {
                 None
             } else if stagex_seed_class.is_some() {
                 Some(StagexProofMetadata {
@@ -605,14 +636,15 @@ pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError
     eprintln!("  checking staged vendored cargo inputs...");
     require_checked_vendor_inputs(&stage_root)?;
 
-    let size = dir_size(&stage_root);
+    let source_size_bytes = dir_size(&stage_root);
+    assert!(MEBIBYTE_BYTES > 0, "mebibyte divisor must be nonzero");
     assert!(
-        size <= MAX_SOURCE_BYTES,
+        source_size_bytes <= MAX_SOURCE_BYTES,
         "source tree {} MiB exceeds {} MiB limit",
-        size / (1024 * 1024),
-        MAX_SOURCE_BYTES / (1024 * 1024),
+        source_size_bytes / MEBIBYTE_BYTES,
+        MAX_SOURCE_BYTES / MEBIBYTE_BYTES,
     );
-    eprintln!("  source tree: {} MiB", size / (1024 * 1024));
+    eprintln!("  source tree: {} MiB", source_size_bytes / MEBIBYTE_BYTES);
 
     let fingerprint = tree_fingerprint(&stage_root)?;
     let store_name = staged_source_store_name_from_fingerprint(&fingerprint)?;
@@ -623,7 +655,7 @@ pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError
         return Ok(store_name);
     }
 
-    let mut copied_entry_count: u32 = 0;
+    let mut copied_entry_count: usize = 0;
     copy_tree_root(&stage_root, &dest, &mut copied_entry_count)?;
     assert!(copied_entry_count > 0, "staged source copy must copy at least one entry");
 
@@ -902,16 +934,19 @@ WRAPEOF
 } | crunch.Derivation
 "#;
 
-pub fn generate_self_build_ncl(
-    src_store_path: &str,
-    bwrap_store_path: &str,
-    busybox_store_path: &str,
-    store_prefix: &str,
-) -> String {
-    assert!(!src_store_path.is_empty(), "staged source store path must not be empty");
-    assert!(!bwrap_store_path.is_empty(), "bwrap store path must not be empty");
-    assert!(!busybox_store_path.is_empty(), "busybox store path must not be empty");
-    assert!(store_prefix.starts_with('/'), "store prefix must be absolute");
+#[derive(Debug, Clone, Copy)]
+pub struct SelfBuildNclInput<'a> {
+    pub src_store_path: &'a str,
+    pub bwrap_store_path: &'a str,
+    pub busybox_store_path: &'a str,
+    pub store_prefix: &'a str,
+}
+
+pub fn generate_self_build_ncl(input: SelfBuildNclInput<'_>) -> String {
+    assert!(!input.src_store_path.is_empty(), "staged source store path must not be empty");
+    assert!(!input.bwrap_store_path.is_empty(), "bwrap store path must not be empty");
+    assert!(!input.busybox_store_path.is_empty(), "busybox store path must not be empty");
+    assert!(input.store_prefix.starts_with('/'), "store prefix must be absolute");
     SELF_BUILD_NCL_TEMPLATE
         .replace("__SELF_BUILD_BOOTSTRAP_ALIAS_ROOT__", SELF_BUILD_BOOTSTRAP_ALIAS_ROOT)
         .replace("__SELF_BUILD_LOGICAL_BOOTSTRAP_ROOT__", SELF_BUILD_LOGICAL_BOOTSTRAP_ROOT)
@@ -919,10 +954,10 @@ pub fn generate_self_build_ncl(
         .replace("__SELF_BUILD_LOGICAL_SOURCE_ROOT__", SELF_BUILD_LOGICAL_SOURCE_ROOT)
         .replace("__SELF_BUILD_LOGICAL_GENERATED_ROOT__", SELF_BUILD_LOGICAL_GENERATED_ROOT)
         .replace("__SELF_BUILD_RUSTC_WRAPPER_PATH__", SELF_BUILD_RUSTC_WRAPPER_PATH)
-        .replace("__STORE_PREFIX__", store_prefix)
-        .replace("__SRC_STORE_PATH__", src_store_path)
-        .replace("__BWRAP_STORE_PATH__", bwrap_store_path)
-        .replace("__BUSYBOX_STORE_PATH__", busybox_store_path)
+        .replace("__STORE_PREFIX__", input.store_prefix)
+        .replace("__SRC_STORE_PATH__", input.src_store_path)
+        .replace("__BWRAP_STORE_PATH__", input.bwrap_store_path)
+        .replace("__BUSYBOX_STORE_PATH__", input.busybox_store_path)
 }
 
 /// Verify the self-built binary by running `--help`.
@@ -1072,7 +1107,7 @@ fn push_locked_package(
     let Some(builder) = builder else {
         return Ok(());
     };
-    if packages.len() >= MAX_CARGO_LOCK_PACKAGE_COUNT as usize {
+    if packages.len() >= MAX_CARGO_LOCK_PACKAGE_COUNT {
         return Err(RunError::Internal(format!("Cargo.lock package count exceeds {}", MAX_CARGO_LOCK_PACKAGE_COUNT,)));
     }
     let name = builder.name.ok_or_else(|| RunError::Internal("Cargo.lock package missing name".to_string()))?;
@@ -1087,21 +1122,40 @@ fn push_locked_package(
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy)]
+enum CargoQuotedField {
+    Name,
+    Version,
+    Source,
+    Checksum,
+}
+
+impl CargoQuotedField {
+    fn key(self) -> &'static str {
+        match self {
+            Self::Name => "name",
+            Self::Version => "version",
+            Self::Source => "source",
+            Self::Checksum => "checksum",
+        }
+    }
+}
+
 fn apply_lock_package_field(builder: &mut LockedPackageBuilder, line: &str) -> Result<(), RunError> {
-    if let Some(value) = parse_quoted_field(line, "name")? {
+    if let Some(value) = parse_quoted_field(line, CargoQuotedField::Name)? {
         builder.name = Some(value);
         return Ok(());
     }
-    if let Some(value) = parse_quoted_field(line, "version")? {
+    if let Some(value) = parse_quoted_field(line, CargoQuotedField::Version)? {
         builder.version = Some(value);
         return Ok(());
     }
-    if let Some(value) = parse_quoted_field(line, "source")? {
+    if let Some(value) = parse_quoted_field(line, CargoQuotedField::Source)? {
         builder.source = Some(value);
         return Ok(());
     }
-    if let Some(value) = parse_quoted_field(line, "checksum")? {
-        ensure_cargo_sha256_hex("Cargo.lock checksum", &value)?;
+    if let Some(value) = parse_quoted_field(line, CargoQuotedField::Checksum)? {
+        ensure_cargo_sha256_hex(CargoChecksumKind::Lock, &value)?;
         builder.checksum = Some(value);
     }
     Ok(())
@@ -1110,6 +1164,8 @@ fn apply_lock_package_field(builder: &mut LockedPackageBuilder, line: &str) -> R
 fn expected_vendor_packages(
     packages: &[LockedPackage],
 ) -> Result<BTreeMap<PackageKey, ExpectedVendorPackage>, RunError> {
+    debug_assert!(packages.len() <= MAX_CARGO_LOCK_PACKAGE_COUNT);
+    debug_assert!(MAX_VENDOR_PACKAGE_COUNT > 0);
     let mut expected: BTreeMap<PackageKey, ExpectedVendorPackage> = BTreeMap::new();
     for package in packages {
         let Some(source) = package.source.as_ref() else {
@@ -1123,6 +1179,9 @@ fn expected_vendor_packages(
         }
         if is_registry_vendor_source(source) && package.checksum.is_none() {
             return Err(RunError::Internal(format!("registry package {} is missing Cargo.lock checksum", package.key)));
+        }
+        if expected.len() >= MAX_VENDOR_PACKAGE_COUNT {
+            return Err(RunError::Internal(format!("vendored package count exceeds {MAX_VENDOR_PACKAGE_COUNT}")));
         }
         let previous = expected.insert(package.key.clone(), ExpectedVendorPackage {
             source: source.clone(),
@@ -1140,6 +1199,9 @@ fn load_vendored_packages(vendor_dir: &Path) -> Result<BTreeMap<PackageKey, Vend
     let entries = std::fs::read_dir(vendor_dir)
         .map_err(|e| RunError::Internal(format!("read_dir {}: {e}", vendor_dir.display())))?;
     for entry in entries {
+        if children.len() >= MAX_VENDOR_PACKAGE_COUNT {
+            return Err(RunError::Internal(format!("vendor-deps package count exceeds {MAX_VENDOR_PACKAGE_COUNT}")));
+        }
         let entry = entry.map_err(|e| RunError::Internal(format!("read_dir entry {}: {e}", vendor_dir.display())))?;
         children.push(entry.path());
     }
@@ -1150,7 +1212,7 @@ fn load_vendored_packages(vendor_dir: &Path) -> Result<BTreeMap<PackageKey, Vend
 fn vendored_package_index(children: &[PathBuf]) -> Result<BTreeMap<PackageKey, VendoredPackage>, RunError> {
     let mut packages: BTreeMap<PackageKey, VendoredPackage> = BTreeMap::new();
     for child in children {
-        if packages.len() >= MAX_VENDOR_PACKAGE_COUNT as usize {
+        if packages.len() >= MAX_VENDOR_PACKAGE_COUNT {
             return Err(RunError::Internal(format!("vendor-deps package count exceeds {}", MAX_VENDOR_PACKAGE_COUNT)));
         }
         let metadata = std::fs::symlink_metadata(child)
@@ -1181,22 +1243,24 @@ fn read_vendored_package(package_dir: &Path) -> Result<(PackageKey, VendoredPack
 }
 
 fn parse_vendor_manifest_package(manifest_text: &str, manifest_path: &Path) -> Result<PackageKey, RunError> {
-    let mut in_package_section = false;
+    let mut is_package_section = false;
     let mut name: Option<String> = None;
     let mut version: Option<String> = None;
+    debug_assert!(name.is_none());
+    debug_assert!(version.is_none());
     for raw_line in manifest_text.lines() {
         let line = raw_line.trim();
         if line.starts_with('[') {
-            in_package_section = line == "[package]";
+            is_package_section = line == "[package]";
             continue;
         }
-        if !in_package_section {
+        if !is_package_section {
             continue;
         }
-        if let Some(value) = parse_quoted_field(line, "name")? {
+        if let Some(value) = parse_quoted_field(line, CargoQuotedField::Name)? {
             name = Some(value);
         }
-        if let Some(value) = parse_quoted_field(line, "version")? {
+        if let Some(value) = parse_quoted_field(line, CargoQuotedField::Version)? {
             version = Some(value);
         }
     }
@@ -1215,25 +1279,26 @@ fn read_vendor_checksum_manifest(checksum_path: &Path) -> Result<VendorChecksumM
     let manifest: VendorChecksumManifest = serde_json::from_slice(&bytes)
         .map_err(|e| RunError::Internal(format!("parse {}: {e}", checksum_path.display())))?;
     if let Some(package_checksum) = manifest.package.as_ref() {
-        ensure_cargo_sha256_hex("vendor package checksum", package_checksum)?;
+        ensure_cargo_sha256_hex(CargoChecksumKind::VendorPackage, package_checksum)?;
     }
     for digest in manifest.files.values() {
-        ensure_cargo_sha256_hex("vendor file checksum", digest)?;
+        ensure_cargo_sha256_hex(CargoChecksumKind::VendorFile, digest)?;
     }
     Ok(manifest)
 }
 
 fn verify_vendor_file_checksums(package_dir: &Path, manifest: &VendorChecksumManifest) -> Result<(), RunError> {
+    debug_assert!(MAX_VENDOR_PACKAGE_FILE_COUNT > 0);
+    debug_assert!(CARGO_SHA256_HEX_LEN > 0);
     let actual = vendor_file_hashes(package_dir)?;
     for (relative_path, expected_digest) in &manifest.files {
-        if !actual.contains_key(relative_path) {
+        let Some(actual_digest) = actual.get(relative_path) else {
             return Err(RunError::Internal(format!(
                 "vendor checksum lists missing file {} in {}",
                 relative_path,
                 package_dir.display(),
             )));
-        }
-        let actual_digest = actual.get(relative_path).expect("contains_key checked above");
+        };
         if actual_digest != expected_digest {
             return Err(RunError::Internal(format!(
                 "vendor file checksum mismatch: {}/{}",
@@ -1256,9 +1321,9 @@ fn verify_vendor_file_checksums(package_dir: &Path, manifest: &VendorChecksumMan
 
 fn vendor_file_hashes(package_dir: &Path) -> Result<BTreeMap<String, String>, RunError> {
     let mut hashes: BTreeMap<String, String> = BTreeMap::new();
-    let mut file_count: u32 = 0;
+    let mut file_count: usize = 0;
     collect_vendor_file_hashes(package_dir, package_dir, &mut hashes, &mut file_count)?;
-    assert!(file_count as usize == hashes.len(), "vendor file count must match hash map length");
+    assert!(file_count == hashes.len(), "vendor file count must match hash map length");
     Ok(hashes)
 }
 
@@ -1266,12 +1331,20 @@ fn collect_vendor_file_hashes(
     package_dir: &Path,
     current_dir: &Path,
     hashes: &mut BTreeMap<String, String>,
-    file_count: &mut u32,
+    file_count: &mut usize,
 ) -> Result<(), RunError> {
+    debug_assert!(MAX_VENDOR_PACKAGE_FILE_COUNT > 0);
+    debug_assert!(hashes.len() <= MAX_VENDOR_PACKAGE_FILE_COUNT);
     let mut children: Vec<PathBuf> = Vec::new();
     let entries = std::fs::read_dir(current_dir)
         .map_err(|e| RunError::Internal(format!("read_dir {}: {e}", current_dir.display())))?;
     for entry in entries {
+        if children.len() >= MAX_VENDOR_PACKAGE_FILE_COUNT {
+            return Err(RunError::Internal(format!(
+                "vendor package directory entry count exceeds {MAX_VENDOR_PACKAGE_FILE_COUNT} in {}",
+                current_dir.display()
+            )));
+        }
         let entry = entry.map_err(|e| RunError::Internal(format!("read_dir entry {}: {e}", current_dir.display())))?;
         children.push(entry.path());
     }
@@ -1286,7 +1359,7 @@ fn collect_vendor_child_hash(
     package_dir: &Path,
     child: &Path,
     hashes: &mut BTreeMap<String, String>,
-    file_count: &mut u32,
+    file_count: &mut usize,
 ) -> Result<(), RunError> {
     let metadata = std::fs::symlink_metadata(child)
         .map_err(|e| RunError::Internal(format!("symlink_metadata {}: {e}", child.display())))?;
@@ -1306,7 +1379,7 @@ fn collect_vendor_file_hash(
     package_dir: &Path,
     child: &Path,
     hashes: &mut BTreeMap<String, String>,
-    file_count: &mut u32,
+    file_count: &mut usize,
 ) -> Result<(), RunError> {
     let relative_path = vendor_relative_path(package_dir, child)?;
     if relative_path == ".cargo-checksum.json" {
@@ -1349,6 +1422,8 @@ fn verify_vendor_package_lock_checksum(
     expected: &ExpectedVendorPackage,
     actual: &VendoredPackage,
 ) -> Result<(), RunError> {
+    debug_assert!(CARGO_SHA256_HEX_LEN > 0);
+    debug_assert!(!expected.source.is_empty());
     if let Some(expected_checksum) = expected.checksum.as_ref() {
         let actual_checksum = actual
             .package_checksum
@@ -1370,11 +1445,11 @@ fn verify_vendor_package_lock_checksum(
     Ok(())
 }
 
-fn parse_quoted_field(line: &str, expected_key: &str) -> Result<Option<String>, RunError> {
+fn parse_quoted_field(line: &str, field: CargoQuotedField) -> Result<Option<String>, RunError> {
     let Some((key, raw_value)) = line.split_once('=') else {
         return Ok(None);
     };
-    if key.trim() != expected_key {
+    if key.trim() != field.key() {
         return Ok(None);
     }
     parse_basic_quoted_value(raw_value).map(Some)
@@ -1382,6 +1457,8 @@ fn parse_quoted_field(line: &str, expected_key: &str) -> Result<Option<String>, 
 
 fn parse_basic_quoted_value(raw_value: &str) -> Result<String, RunError> {
     let value = raw_value.trim();
+    debug_assert!(value.len() <= raw_value.len());
+    debug_assert_eq!(value.len(), raw_value.trim().len());
     if !value.starts_with('"') {
         return Err(RunError::Internal(format!("expected quoted Cargo value, got: {value}")));
     }
@@ -1391,7 +1468,10 @@ fn parse_basic_quoted_value(raw_value: &str) -> Result<String, RunError> {
     if value.len() < 2 {
         return Err(RunError::Internal(format!("empty quoted Cargo delimiter: {value}")));
     }
-    let inner = &value[1..value.len() - 1];
+    let inner = value
+        .strip_prefix('"')
+        .and_then(|without_prefix| without_prefix.strip_suffix('"'))
+        .ok_or_else(|| RunError::Internal(format!("invalid quoted Cargo value: {value}")))?;
     if inner.contains('\\') {
         return Err(RunError::Internal(format!(
             "escaped Cargo value is not supported by self-build validator: {value}"
@@ -1414,23 +1494,66 @@ fn hash_file_cargo_sha256_hex(path: &Path) -> Result<String, RunError> {
     let mut file = File::open(path).map_err(|e| RunError::Internal(format!("open {}: {e}", path.display())))?;
     let mut hasher = <Sha256 as sha2::Digest>::new();
     let mut buffer = [0_u8; CARGO_SHA256_READ_BUFFER_BYTES];
-    loop {
+    debug_assert!(!buffer.is_empty());
+    debug_assert_eq!(buffer.len(), CARGO_SHA256_READ_BUFFER_BYTES);
+    let read_iteration_count_max = file_read_limit(path, CARGO_SHA256_READ_BUFFER_BYTES)?;
+    let mut has_reached_eof = false;
+    for _ in 0..read_iteration_count_max {
         let bytes_read =
             file.read(&mut buffer).map_err(|e| RunError::Internal(format!("read {}: {e}", path.display())))?;
         if bytes_read == 0 {
+            has_reached_eof = true;
             break;
         }
         <Sha256 as sha2::Digest>::update(&mut hasher, &buffer[..bytes_read]);
+    }
+    if !has_reached_eof {
+        return Err(RunError::Internal(format!(
+            "file changed while hashing and exceeded read bound: {}",
+            path.display()
+        )));
     }
     let digest = <Sha256 as sha2::Digest>::finalize(hasher);
     Ok(data_encoding::HEXLOWER.encode(&digest))
 }
 
-fn ensure_cargo_sha256_hex(label: &str, value: &str) -> Result<(), RunError> {
+fn file_read_limit(path: &Path, buffer_capacity_bytes: usize) -> Result<u64, RunError> {
+    assert!(buffer_capacity_bytes > 0, "hash buffer capacity must be nonzero");
+    assert!(!path.as_os_str().is_empty(), "hashed path must not be empty");
+    let file_size_bytes = std::fs::metadata(path)
+        .map_err(|e| RunError::Internal(format!("metadata {}: {e}", path.display())))?
+        .len();
+    let buffer_capacity_bytes = u64::try_from(buffer_capacity_bytes)
+        .map_err(|_| RunError::Internal("hash buffer capacity does not fit in u64".to_string()))?;
+    file_size_bytes
+        .div_ceil(buffer_capacity_bytes)
+        .checked_add(1)
+        .ok_or_else(|| RunError::Internal(format!("hash read limit overflow for {}", path.display())))
+}
+
+#[derive(Debug, Clone, Copy)]
+enum CargoChecksumKind {
+    Lock,
+    VendorPackage,
+    VendorFile,
+}
+
+impl CargoChecksumKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Lock => "Cargo.lock checksum",
+            Self::VendorPackage => "vendor package checksum",
+            Self::VendorFile => "vendor file checksum",
+        }
+    }
+}
+
+fn ensure_cargo_sha256_hex(kind: CargoChecksumKind, value: &str) -> Result<(), RunError> {
+    let label = kind.label();
     if value.len() != CARGO_SHA256_HEX_LEN {
         return Err(RunError::Internal(format!("{label} must be {CARGO_SHA256_HEX_LEN} lowercase hex chars")));
     }
-    if !value.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) {
+    if !value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
         return Err(RunError::Internal(format!("{label} must be lowercase SHA-256 hex: {value}")));
     }
     Ok(())
@@ -1447,7 +1570,7 @@ fn is_registry_vendor_source(source: &str) -> bool {
 fn copy_selected_source_tree(src_dir: &Path, stage_root: &Path) -> Result<(), RunError> {
     assert!(src_dir.is_dir(), "source dir must exist: {}", src_dir.display());
     assert!(stage_root.is_dir(), "stage root must exist: {}", stage_root.display());
-    let mut copied_entry_count: u32 = 0;
+    let mut copied_entry_count: usize = 0;
     for entry_name in STAGED_SOURCE_TOP_LEVEL_ENTRIES {
         let source_path = src_dir.join(entry_name);
         let dest_path = stage_root.join(entry_name);
@@ -1474,7 +1597,8 @@ fn staged_source_path_is_copyable(relative_path: &Path) -> Result<bool, RunError
 
 fn staged_source_release_path(relative_path: &Path) -> Result<String, String> {
     assert!(relative_path.is_relative(), "staged source path must be relative: {}", relative_path.display());
-    let mut components = Vec::new();
+    assert!(MAX_STAGE_SOURCE_DEPTH > 0, "staged source depth limit must be nonzero");
+    let mut components = Vec::with_capacity(relative_path.components().count());
     for component in relative_path.components() {
         match component {
             Component::Normal(raw_component) => {
@@ -1483,6 +1607,9 @@ fn staged_source_release_path(relative_path: &Path) -> Result<String, String> {
                     .ok_or_else(|| format!("staged source path component is not UTF-8: {}", relative_path.display()))?;
                 if component_text.is_empty() {
                     return Err(format!("staged source path has empty component: {}", relative_path.display()));
+                }
+                if components.len() >= MAX_STAGE_SOURCE_DEPTH {
+                    return Err(format!("staged source path exceeds {MAX_STAGE_SOURCE_DEPTH} components"));
                 }
                 components.push(component_text.to_string());
             }
@@ -1504,20 +1631,29 @@ fn staged_source_release_path(relative_path: &Path) -> Result<String, String> {
     Ok(components.join("/"))
 }
 
-fn copy_tree_root(source: &Path, dest: &Path, copied_entry_count: &mut u32) -> Result<(), RunError> {
+fn copy_tree_root(source: &Path, dest: &Path, copied_entry_count: &mut usize) -> Result<(), RunError> {
     assert!(source.is_dir(), "source root must be a directory: {}", source.display());
     assert!(!dest.exists(), "destination root must not exist yet: {}", dest.display());
     let metadata = std::fs::symlink_metadata(source)
         .map_err(|e| RunError::Internal(format!("symlink_metadata {}: {e}", source.display())))?;
-    copy_dir_entry(source, dest, Path::new(""), 0, copied_entry_count, metadata.permissions())
+    copy_dir_entry(
+        CopyDirectoryRequest {
+            source,
+            dest,
+            relative_path: Path::new(""),
+            depth: 0,
+            permissions: metadata.permissions(),
+        },
+        copied_entry_count,
+    )
 }
 
 fn copy_tree_entry(
     source: &Path,
     dest: &Path,
     relative_path: &Path,
-    depth: u32,
-    copied_entry_count: &mut u32,
+    depth: usize,
+    copied_entry_count: &mut usize,
 ) -> Result<(), RunError> {
     assert!(source.exists(), "source entry must exist: {}", source.display());
     assert!(depth <= MAX_STAGE_SOURCE_DEPTH, "stage source recursion depth exceeded {MAX_STAGE_SOURCE_DEPTH}");
@@ -1543,7 +1679,16 @@ fn copy_tree_entry(
         return copy_file_entry(source, dest, metadata.permissions());
     }
     if metadata.is_dir() {
-        return copy_dir_entry(source, dest, relative_path, depth, copied_entry_count, metadata.permissions());
+        return copy_dir_entry(
+            CopyDirectoryRequest {
+                source,
+                dest,
+                relative_path,
+                depth,
+                permissions: metadata.permissions(),
+            },
+            copied_entry_count,
+        );
     }
 
     Err(RunError::Internal(format!("unsupported source entry type while staging {}", source.display(),)))
@@ -1561,20 +1706,31 @@ fn copy_file_entry(source: &Path, dest: &Path, permissions: std::fs::Permissions
     Ok(())
 }
 
-fn copy_dir_entry(
-    source: &Path,
-    dest: &Path,
-    relative_path: &Path,
-    depth: u32,
-    copied_entry_count: &mut u32,
+struct CopyDirectoryRequest<'a> {
+    source: &'a Path,
+    dest: &'a Path,
+    relative_path: &'a Path,
+    depth: usize,
     permissions: std::fs::Permissions,
-) -> Result<(), RunError> {
-    std::fs::create_dir_all(dest).map_err(|e| RunError::Internal(format!("mkdir {}: {e}", dest.display())))?;
+}
+
+fn copy_dir_entry(request: CopyDirectoryRequest<'_>, copied_entry_count: &mut usize) -> Result<(), RunError> {
+    assert!(request.depth <= MAX_STAGE_SOURCE_DEPTH, "staged source depth exceeded limit");
+    assert!(request.relative_path.is_relative(), "staged source directory path must be relative");
+    std::fs::create_dir_all(request.dest)
+        .map_err(|e| RunError::Internal(format!("mkdir {}: {e}", request.dest.display())))?;
     let mut children: Vec<PathBuf> = Vec::new();
-    let entries =
-        std::fs::read_dir(source).map_err(|e| RunError::Internal(format!("read_dir {}: {e}", source.display())))?;
+    let entries = std::fs::read_dir(request.source)
+        .map_err(|e| RunError::Internal(format!("read_dir {}: {e}", request.source.display())))?;
     for entry in entries {
-        let entry = entry.map_err(|e| RunError::Internal(format!("read_dir entry {}: {e}", source.display())))?;
+        if children.len() >= MAX_STAGE_SOURCE_ENTRIES {
+            return Err(RunError::Internal(format!(
+                "stage source directory entry count exceeded {MAX_STAGE_SOURCE_ENTRIES} in {}",
+                request.source.display()
+            )));
+        }
+        let entry =
+            entry.map_err(|e| RunError::Internal(format!("read_dir entry {}: {e}", request.source.display())))?;
         children.push(entry.path());
     }
     children.sort();
@@ -1582,17 +1738,17 @@ fn copy_dir_entry(
         let child_name = child
             .file_name()
             .ok_or_else(|| RunError::Internal(format!("staged child has no file name: {}", child.display())))?;
-        let child_relative_path = relative_path.join(child_name);
+        let child_relative_path = request.relative_path.join(child_name);
         copy_tree_entry(
             child,
-            &dest.join(child_name),
+            &request.dest.join(child_name),
             &child_relative_path,
-            depth.saturating_add(1),
+            request.depth.saturating_add(1),
             copied_entry_count,
         )?;
     }
-    std::fs::set_permissions(dest, permissions)
-        .map_err(|e| RunError::Internal(format!("chmod {}: {e}", dest.display())))?;
+    std::fs::set_permissions(request.dest, request.permissions)
+        .map_err(|e| RunError::Internal(format!("chmod {}: {e}", request.dest.display())))?;
     Ok(())
 }
 
@@ -1654,8 +1810,11 @@ fn expected_staged_source_store_name(source_dir: &Path) -> Result<String, RunErr
 
 fn hash_tree_entry(dir: &Path, entry: &Path, hasher: &mut blake3::Hasher) -> Result<(), RunError> {
     assert!(dir.is_dir(), "fingerprint root must be a directory: {}", dir.display());
+    assert!(entry.starts_with(dir), "fingerprint entry must stay under root: {}", entry.display());
 
-    let rel = entry.strip_prefix(dir).unwrap_or(entry);
+    let rel = entry.strip_prefix(dir).map_err(|error| {
+        RunError::Internal(format!("fingerprint entry {} escaped {}: {error}", entry.display(), dir.display()))
+    })?;
     let metadata = std::fs::symlink_metadata(entry)
         .map_err(|e| RunError::Internal(format!("symlink_metadata {}: {e}", entry.display())))?;
     let rel_bytes = rel.as_os_str().as_encoded_bytes();
@@ -1682,14 +1841,23 @@ fn hash_tree_entry(dir: &Path, entry: &Path, hasher: &mut blake3::Hasher) -> Res
         hasher.update(b"file\0");
         hasher.update(&metadata.len().to_le_bytes());
         let mut file = File::open(entry).map_err(|e| RunError::Internal(format!("open {}: {e}", entry.display())))?;
-        let mut buffer = [0_u8; 8192];
-        loop {
+        let mut buffer = [0_u8; TREE_FINGERPRINT_READ_BUFFER_BYTES];
+        let read_iteration_count_max = file_read_limit(entry, TREE_FINGERPRINT_READ_BUFFER_BYTES)?;
+        let mut has_reached_eof = false;
+        for _ in 0..read_iteration_count_max {
             let bytes_read =
                 file.read(&mut buffer).map_err(|e| RunError::Internal(format!("read {}: {e}", entry.display())))?;
             if bytes_read == 0 {
+                has_reached_eof = true;
                 break;
             }
             hasher.update(&buffer[..bytes_read]);
+        }
+        if !has_reached_eof {
+            return Err(RunError::Internal(format!(
+                "file changed while fingerprinting and exceeded read bound: {}",
+                entry.display()
+            )));
         }
         return Ok(());
     }
@@ -1711,28 +1879,52 @@ fn entry_mode_bits(_metadata: &std::fs::Metadata) -> u32 {
 }
 
 fn collect_paths_strict(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), RunError> {
-    let entries = std::fs::read_dir(dir).map_err(|e| RunError::Internal(format!("read_dir {}: {e}", dir.display())))?;
-    for entry in entries {
-        let entry = entry.map_err(|e| RunError::Internal(format!("read_dir entry {}: {e}", dir.display())))?;
-        let path = entry.path();
-        out.push(path.clone());
-        if path.is_dir() && !path.is_symlink() {
-            collect_paths_strict(&path, out)?;
+    assert!(out.is_empty(), "strict path collection requires an empty destination");
+    assert!(MAX_STAGE_SOURCE_WALK_STEPS > MAX_STAGE_SOURCE_ENTRIES);
+    let mut pending = vec![dir.to_path_buf()];
+    for _ in 0..MAX_STAGE_SOURCE_WALK_STEPS {
+        let Some(current_dir) = pending.pop() else {
+            return Ok(());
+        };
+        let entries = std::fs::read_dir(&current_dir)
+            .map_err(|e| RunError::Internal(format!("read_dir {}: {e}", current_dir.display())))?;
+        for entry in entries {
+            if out.len() >= MAX_STAGE_SOURCE_ENTRIES || pending.len() >= MAX_STAGE_SOURCE_ENTRIES {
+                return Err(RunError::Internal(format!("source tree walk exceeds {MAX_STAGE_SOURCE_ENTRIES} entries")));
+            }
+            let entry =
+                entry.map_err(|e| RunError::Internal(format!("read_dir entry {}: {e}", current_dir.display())))?;
+            let path = entry.path();
+            out.push(path.clone());
+            if path.is_dir() && !path.is_symlink() {
+                pending.push(path);
+            }
         }
     }
-    Ok(())
+    Err(RunError::Internal(format!("source tree walk exceeds {MAX_STAGE_SOURCE_WALK_STEPS} bounded steps")))
 }
 
 fn collect_paths(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries {
-        let Ok(entry) = entry else { continue };
-        let path = entry.path();
-        out.push(path.clone());
-        if path.is_dir() && !path.is_symlink() {
-            collect_paths(&path, out);
+    assert!(out.is_empty(), "best-effort path collection requires an empty destination");
+    assert!(MAX_STAGE_SOURCE_WALK_STEPS > MAX_STAGE_SOURCE_ENTRIES);
+    let mut pending = vec![dir.to_path_buf()];
+    for _ in 0..MAX_STAGE_SOURCE_WALK_STEPS {
+        let Some(current_dir) = pending.pop() else {
+            return;
+        };
+        let Ok(entries) = std::fs::read_dir(&current_dir) else {
+            continue;
+        };
+        for entry in entries {
+            if out.len() >= MAX_STAGE_SOURCE_ENTRIES || pending.len() >= MAX_STAGE_SOURCE_ENTRIES {
+                return;
+            }
+            let Ok(entry) = entry else { continue };
+            let path = entry.path();
+            out.push(path.clone());
+            if path.is_dir() && !path.is_symlink() {
+                pending.push(path);
+            }
         }
     }
 }
@@ -1815,6 +2007,8 @@ fn resolve_bwrap_source(
     output_dir: &Path,
     hermeticity_mode: crunch_pipeline::HermeticityMode,
 ) -> Result<BwrapSource, RunError> {
+    debug_assert!(!output_dir.as_os_str().is_empty());
+    debug_assert!(!REQUIRED_BOOTSTRAP_TOOLS.is_empty());
     // 1. Prefer mantle-built bwrap from the output store.
     if let Some(bwrap_dir) = find_crunch_bwrap(output_dir) {
         eprintln!("  bwrap: {} (mantle-built)", bwrap_dir.display());
@@ -1951,15 +2145,17 @@ pub fn find_crunch_busybox(output_dir: &Path) -> Option<PathBuf> {
 /// exists at `<dir>/bin/mantle`.
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn find_crunch_outputs(output_dir: &Path) -> Vec<(String, PathBuf)> {
+    debug_assert!(MAX_CRUNCH_OUTPUTS > 0);
+    debug_assert!(!output_dir.as_os_str().is_empty());
     let entries = match std::fs::read_dir(output_dir) {
         Ok(e) => e,
         Err(_) => return Vec::new(),
     };
-    let mut found: Vec<(String, PathBuf)> = Vec::new();
-    let mut scanned: u32 = 0;
+    let mut found: Vec<(String, PathBuf)> = Vec::with_capacity(MAX_CRUNCH_OUTPUTS);
+    let mut scanned: usize = 0;
     for entry in entries.flatten() {
         scanned = scanned.saturating_add(1);
-        if scanned > MAX_CRUNCH_OUTPUTS {
+        if scanned > MAX_CRUNCH_OUTPUTS || found.len() >= MAX_CRUNCH_OUTPUTS {
             break;
         }
         let name = entry.file_name();
@@ -1981,8 +2177,10 @@ pub fn find_crunch_outputs(output_dir: &Path) -> Vec<(String, PathBuf)> {
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn invalidate_crunch_outputs(output_dir: &Path) -> Result<u32, RunError> {
     let outputs = find_crunch_outputs(output_dir);
+    debug_assert!(outputs.len() <= MAX_CRUNCH_OUTPUTS);
+    debug_assert!(!output_dir.as_os_str().is_empty());
     let mut removed: u32 = 0;
-    let mut errors: Vec<String> = Vec::new();
+    let mut errors: Vec<String> = Vec::with_capacity(outputs.len());
     for (name, _binary) in &outputs {
         let dir = output_dir.join(name);
         match std::fs::remove_dir_all(&dir) {
@@ -2086,6 +2284,21 @@ fn verify_tools_on_disk(output_dir: &Path) -> Result<(BwrapSource, PathBuf), Run
     Ok((bwrap_source, busybox_path))
 }
 
+/// Shared immutable build settings for bootstrap-tool and Mantle roots.
+#[derive(Clone, Copy)]
+struct SelfBuildPipelineContext<'a> {
+    output_dir: &'a Path,
+    state_dir: &'a Path,
+    store_dir: &'a str,
+    verbose: bool,
+    max_jobs: u32,
+    no_substitute: bool,
+    keypair: &'a crunch_build::KeyPair,
+    trusted_keys: &'a [nix_compat::narinfo::VerifyingKey],
+    trust_unsigned: bool,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
+}
+
 /// Resolved bootstrap tool paths from step 2.
 struct BootstrapTools {
     bwrap_source: BwrapSource,
@@ -2095,119 +2308,134 @@ struct BootstrapTools {
     protected_transition: ProtectedPhaseTransition,
 }
 
-/// Build all required bootstrap tools and return their resolved paths.
-///
-/// Each tool is built as a separate root derivation and exported to disk.
-/// After all tools are built, the mantle-built bwrap is activated on PATH.
-#[allow(clippy::too_many_arguments)]
-fn build_all_bootstrap_tools(
-    bootstrap_dir: &Path,
-    import_paths: &[std::ffi::OsString],
-    output_dir: &Path,
-    state_dir: &Path,
-    store_dir: &str,
-    verbose: bool,
-    max_jobs: u32,
-    no_substitute: bool,
-    keypair: &crunch_build::KeyPair,
-    trusted_keys: &[nix_compat::narinfo::VerifyingKey],
-    trust_unsigned: bool,
-    hermeticity_mode: crunch_pipeline::HermeticityMode,
-    bootstrap_bwrap_source: Option<&BwrapSource>,
-    bootstrap_busybox_path: Option<&Path>,
-) -> Result<BootstrapTools, RunError> {
-    validate_bootstrap_tools(bootstrap_dir)?;
-    let mut built_bwrap_output_dir: Option<PathBuf> = None;
-    let mut built_busybox_output_dir: Option<PathBuf> = None;
+struct BootstrapToolsBuildRequest<'a> {
+    bootstrap_dir: &'a Path,
+    import_paths: &'a [std::ffi::OsString],
+    pipeline: SelfBuildPipelineContext<'a>,
+    bootstrap_bwrap_source: Option<&'a BwrapSource>,
+    bootstrap_busybox_path: Option<&'a Path>,
+}
 
+#[derive(Debug, Default)]
+struct BootstrapToolOutputs {
+    bwrap_output_dir: Option<PathBuf>,
+    busybox_output_dir: Option<PathBuf>,
+}
+
+/// Build all required bootstrap tools and return their resolved paths.
+fn build_all_bootstrap_tools(request: BootstrapToolsBuildRequest<'_>) -> Result<BootstrapTools, RunError> {
+    assert!(!request.import_paths.is_empty(), "bootstrap import paths must not be empty");
+    assert!(!request.pipeline.store_dir.is_empty(), "bootstrap store prefix must not be empty");
+    validate_bootstrap_tools(request.bootstrap_dir)?;
+    let outputs = build_required_bootstrap_outputs(&request)?;
+    finalize_bootstrap_tools(&request, outputs)
+}
+
+fn build_required_bootstrap_outputs(
+    request: &BootstrapToolsBuildRequest<'_>,
+) -> Result<BootstrapToolOutputs, RunError> {
+    assert!(!REQUIRED_BOOTSTRAP_TOOLS.is_empty(), "bootstrap tool list must not be empty");
+    assert!(REQUIRED_BOOTSTRAP_TOOLS.len() <= MAX_STAGE_SOURCE_ENTRIES);
+    let mut outputs = BootstrapToolOutputs::default();
     for tool_name in REQUIRED_BOOTSTRAP_TOOLS {
         emit_progress_marker(&format!("bootstrap-tool-start:{tool_name}"));
-        let reused_output_dir = match *tool_name {
-            "bwrap.ncl" => bootstrap_bwrap_source
-                .map(|source| source.bin_dir())
-                .transpose()?
-                .map(|dir| dir.parent().expect("bwrap bin dir must have store root parent").to_path_buf()),
-            "busybox.ncl" => bootstrap_busybox_path.map(|path| {
-                path.parent()
-                    .and_then(|bin_dir| bin_dir.parent())
-                    .expect("busybox path must have store root parent")
-                    .to_path_buf()
-            }),
-            _ => None,
-        };
-        let tool_output_dir = if let Some(dir) = reused_output_dir {
-            eprintln!("  reusing {tool_name} from {}...", dir.display());
-            dir
-        } else {
-            let tool_path = bootstrap_dir.join(tool_name);
-            eprintln!("  building {tool_name}...");
-            build_bootstrap_tool(
-                &tool_path,
-                import_paths,
-                output_dir,
-                state_dir,
-                store_dir,
-                verbose,
-                max_jobs,
-                no_substitute,
-                keypair,
-                trusted_keys,
-                trust_unsigned,
-                hermeticity_mode,
-            )?
-        };
-        if *tool_name == "bwrap.ncl" {
-            let bwrap_path = tool_output_dir.join("bin").join("bwrap");
-            ensure_executable_file(&bwrap_path, "mantle-built bwrap")?;
-            resolve_store_entry_name(&tool_output_dir, output_dir, "bwrap")?;
-            built_bwrap_output_dir = Some(tool_output_dir.clone());
-        }
-        if *tool_name == "busybox.ncl" {
-            let busybox_path = tool_output_dir.join("bin").join("busybox");
-            ensure_executable_file(&busybox_path, "mantle-built busybox")?;
-            resolve_store_entry_name(&tool_output_dir, output_dir, "busybox")?;
-            built_busybox_output_dir = Some(tool_output_dir.clone());
-        }
+        let output_dir = resolve_or_build_bootstrap_tool(tool_name, request)?;
+        record_bootstrap_tool_output(tool_name, output_dir, request.pipeline.output_dir, &mut outputs)?;
         emit_progress_marker(&format!("bootstrap-tool-done:{tool_name}"));
     }
+    Ok(outputs)
+}
 
-    let bwrap_output_dir = built_bwrap_output_dir.ok_or_else(|| {
-        RunError::Internal(
-            "bwrap was not found on disk after building bwrap.ncl. \
-             The bootstrap tool build may have failed silently."
-                .to_string(),
-        )
-    })?;
-    let busybox_output_dir = built_busybox_output_dir.ok_or_else(|| {
-        RunError::Internal(
-            "busybox was not found on disk after building busybox.ncl. \
-             The bootstrap tool build may have failed silently."
-                .to_string(),
-        )
-    })?;
+fn resolve_or_build_bootstrap_tool(
+    tool_name: &str,
+    request: &BootstrapToolsBuildRequest<'_>,
+) -> Result<PathBuf, RunError> {
+    if let Some(output_dir) = reused_bootstrap_tool_output(tool_name, request)? {
+        eprintln!("  reusing {tool_name} from {}...", output_dir.display());
+        return Ok(output_dir);
+    }
+    let tool_path = request.bootstrap_dir.join(tool_name);
+    eprintln!("  building {tool_name}...");
+    build_bootstrap_tool(&tool_path, request.import_paths, &request.pipeline)
+}
 
+fn reused_bootstrap_tool_output(
+    tool_name: &str,
+    request: &BootstrapToolsBuildRequest<'_>,
+) -> Result<Option<PathBuf>, RunError> {
+    match tool_name {
+        "bwrap.ncl" => request
+            .bootstrap_bwrap_source
+            .map(|source| {
+                let bin_dir = source.bin_dir()?;
+                bin_dir.parent().map(Path::to_path_buf).ok_or_else(|| {
+                    RunError::Internal(format!("bwrap bin dir has no store root parent: {}", bin_dir.display()))
+                })
+            })
+            .transpose(),
+        "busybox.ncl" => request
+            .bootstrap_busybox_path
+            .map(|path| {
+                path.parent().and_then(Path::parent).map(Path::to_path_buf).ok_or_else(|| {
+                    RunError::Internal(format!("busybox path has no store root parent: {}", path.display()))
+                })
+            })
+            .transpose(),
+        _ => Ok(None),
+    }
+}
+
+fn record_bootstrap_tool_output(
+    tool_name: &str,
+    tool_output_dir: PathBuf,
+    output_dir: &Path,
+    outputs: &mut BootstrapToolOutputs,
+) -> Result<(), RunError> {
+    match tool_name {
+        "bwrap.ncl" => {
+            ensure_executable_file(&tool_output_dir.join("bin").join("bwrap"), "mantle-built bwrap")?;
+            resolve_store_entry_name(&tool_output_dir, output_dir, "bwrap")?;
+            outputs.bwrap_output_dir = Some(tool_output_dir);
+        }
+        "busybox.ncl" => {
+            ensure_executable_file(&tool_output_dir.join("bin").join("busybox"), "mantle-built busybox")?;
+            resolve_store_entry_name(&tool_output_dir, output_dir, "busybox")?;
+            outputs.busybox_output_dir = Some(tool_output_dir);
+        }
+        _ => return Err(RunError::Internal(format!("unsupported bootstrap tool root: {tool_name}"))),
+    }
+    Ok(())
+}
+
+fn finalize_bootstrap_tools(
+    request: &BootstrapToolsBuildRequest<'_>,
+    outputs: BootstrapToolOutputs,
+) -> Result<BootstrapTools, RunError> {
+    assert!(!request.pipeline.output_dir.as_os_str().is_empty());
+    assert!(!REQUIRED_BOOTSTRAP_TOOLS.is_empty());
+    let bwrap_output_dir = outputs
+        .bwrap_output_dir
+        .ok_or_else(|| RunError::Internal("bwrap was not found after building bwrap.ncl".to_string()))?;
+    let busybox_output_dir = outputs
+        .busybox_output_dir
+        .ok_or_else(|| RunError::Internal("busybox was not found after building busybox.ncl".to_string()))?;
     let bwrap_path = bwrap_output_dir.join("bin").join("bwrap");
+    let busybox_built_path = busybox_output_dir.join("bin").join("busybox");
     ensure_executable_file(&bwrap_path, "mantle-built bwrap")?;
-    let bwrap_dir = bwrap_path
+    ensure_executable_file(&busybox_built_path, "mantle-built busybox")?;
+    let bwrap_bin_dir = bwrap_path
         .parent()
         .ok_or_else(|| RunError::Internal(format!("bwrap binary has no parent directory: {}", bwrap_path.display())))?;
-    let busybox_path = busybox_output_dir.join("bin").join("busybox");
-    ensure_executable_file(&busybox_path, "mantle-built busybox")?;
-
-    let bwrap_store_name = resolve_store_entry_name(&bwrap_output_dir, output_dir, "bwrap")?;
-    let busybox_store_name = resolve_store_entry_name(&busybox_output_dir, output_dir, "busybox")?;
+    let bwrap_store_name = resolve_store_entry_name(&bwrap_output_dir, request.pipeline.output_dir, "bwrap")?;
+    let busybox_store_name = resolve_store_entry_name(&busybox_output_dir, request.pipeline.output_dir, "busybox")?;
     let protected_transition =
-        build_protected_phase_transition(&bwrap_path, &bwrap_store_name, &busybox_path, &busybox_store_name)?;
-    let bwrap_source = match bootstrap_bwrap_source {
-        Some(source) => source.clone(),
-        None => BwrapSource::CrunchBuilt(bwrap_dir.to_path_buf()),
-    };
-    let busybox_path = match bootstrap_busybox_path {
-        Some(path) => path.to_path_buf(),
-        None => busybox_path,
-    };
+        build_protected_phase_transition(&bwrap_path, &bwrap_store_name, &busybox_built_path, &busybox_store_name)?;
+    let bwrap_source = request
+        .bootstrap_bwrap_source
+        .cloned()
+        .unwrap_or_else(|| BwrapSource::CrunchBuilt(bwrap_bin_dir.to_path_buf()));
+    let busybox_path = request.bootstrap_busybox_path.unwrap_or(&busybox_built_path).to_path_buf();
     activate_bwrap_source(&bwrap_source)?;
-
     Ok(BootstrapTools {
         bwrap_source,
         bwrap_store_name,
@@ -2239,122 +2467,109 @@ fn build_protected_phase_transition(
     })
 }
 
-/// Build crunch from source using the bootstrap toolchain.
-///
-/// Generates the self-build NCL, runs the build pipeline, and returns
-/// the output binary path.
-#[allow(clippy::too_many_arguments)]
-fn build_crunch_binary(
-    src_dir: &Path,
-    src_store_name: &str,
-    bwrap_store_name: &str,
-    busybox_store_name: &str,
-    output_dir: &Path,
-    state_dir: &Path,
-    store_dir: &str,
-    verbose: bool,
-    max_jobs: u32,
-    no_substitute: bool,
-    keypair: crunch_build::KeyPair,
-    trusted_keys: Vec<nix_compat::narinfo::VerifyingKey>,
-    trust_unsigned: bool,
-    hermeticity_mode: crunch_pipeline::HermeticityMode,
-) -> Result<PathBuf, RunError> {
-    let ncl_content = generate_self_build_ncl(src_store_name, bwrap_store_name, busybox_store_name, store_dir);
+struct MantleBinaryBuildRequest<'a> {
+    src_dir: &'a Path,
+    src_store_name: &'a str,
+    bwrap_store_name: &'a str,
+    busybox_store_name: &'a str,
+}
 
+/// Build Mantle from source using the bootstrap toolchain.
+fn build_crunch_binary(
+    request: MantleBinaryBuildRequest<'_>,
+    pipeline: &SelfBuildPipelineContext<'_>,
+) -> Result<PathBuf, RunError> {
+    assert!(request.src_dir.is_dir(), "self-build source dir must exist");
+    assert!(!request.src_store_name.is_empty(), "source store name must not be empty");
+    let ncl_content = generate_self_build_ncl(SelfBuildNclInput {
+        src_store_path: request.src_store_name,
+        bwrap_store_path: request.bwrap_store_name,
+        busybox_store_path: request.busybox_store_name,
+        store_prefix: pipeline.store_dir,
+    });
     let tmp_dir = tempfile::tempdir().map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
     let ncl_path = tmp_dir.path().join("self-build.ncl");
     std::fs::write(&ncl_path, &ncl_content).map_err(|e| RunError::Internal(format!("writing ncl: {e}")))?;
-
-    let stage3_import_paths = build_import_paths(&[src_dir.to_path_buf(), src_dir.join("lib")])?;
-    let config = crunch_pipeline::BuildConfig {
-        file: ncl_path.clone(),
-        import_paths: stage3_import_paths,
-        output_dir: output_dir.to_path_buf(),
-        state_dir: state_dir.to_path_buf(),
-        base_state_dirs: Vec::new(),
-        store_dir: store_dir.to_string(),
-        verbose,
-        max_jobs,
-        scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
-        substituter_urls: if no_substitute {
-            Vec::new()
-        } else {
-            vec!["https://cache.nixos.org".to_string()]
-        },
-        hermeticity_mode,
-        keypair,
-        trusted_keys,
-        trust_unsigned,
-        root_retention_source: Some(crunch_store::GcRootSource::SelfBuild),
-        source_fetch_overrides: Vec::new(),
-        remote_enabled: false,
-    };
-
+    let self_build_evaluator_inputs =
+        build_import_paths(&[request.src_dir.to_path_buf(), request.src_dir.join("lib")])?;
+    let config = self_build_pipeline_config(
+        ncl_path,
+        self_build_evaluator_inputs,
+        Some(crunch_store::GcRootSource::SelfBuild),
+        pipeline,
+    );
     let result = run_build(&config)?;
     report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human)?;
     emit_progress_marker("crunch-build-done");
-
-    let output_root_dir = resolve_single_root_output_dir(&result, &config.store_dir, output_dir, "mantle")?;
+    let output_root_dir = resolve_single_root_output_dir(&result, &config.store_dir, pipeline.output_dir, "mantle")?;
     let output_binary = output_root_dir.join("bin").join("mantle");
     ensure_executable_file(&output_binary, "self-built mantle binary")?;
     Ok(output_binary)
 }
 
 /// Build a single bootstrap tool (.ncl file) as a root derivation.
-///
-/// This exports the tool's output to the `--store` directory on disk,
-/// making it available for subsequent self-build stages to discover
-/// via `find_crunch_bwrap` / `find_crunch_busybox`.
-#[allow(clippy::too_many_arguments)]
 fn build_bootstrap_tool(
     tool_ncl: &Path,
     import_paths: &[std::ffi::OsString],
-    output_dir: &Path,
-    state_dir: &Path,
-    store_dir: &str,
-    verbose: bool,
-    max_jobs: u32,
-    no_substitute: bool,
-    keypair: &crunch_build::KeyPair,
-    trusted_keys: &[nix_compat::narinfo::VerifyingKey],
-    trust_unsigned: bool,
-    hermeticity_mode: crunch_pipeline::HermeticityMode,
+    pipeline: &SelfBuildPipelineContext<'_>,
 ) -> Result<PathBuf, RunError> {
     assert!(tool_ncl.exists(), "tool NCL must exist: {}", tool_ncl.display());
-    assert!(!import_paths.is_empty(), "import_paths must not be empty");
-
-    let config = crunch_pipeline::BuildConfig {
-        file: tool_ncl.to_path_buf(),
-        import_paths: import_paths.to_vec(),
-        output_dir: output_dir.to_path_buf(),
-        state_dir: state_dir.to_path_buf(),
-        base_state_dirs: Vec::new(),
-        store_dir: store_dir.to_string(),
-        verbose,
-        max_jobs,
-        scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
-        substituter_urls: if no_substitute {
-            Vec::new()
-        } else {
-            vec!["https://cache.nixos.org".to_string()]
-        },
-        hermeticity_mode,
-        keypair: keypair.clone(),
-        trusted_keys: trusted_keys.to_vec(),
-        trust_unsigned,
-        root_retention_source: None,
-        source_fetch_overrides: Vec::new(),
-        remote_enabled: false,
-    };
-
+    assert!(!import_paths.is_empty(), "import paths must not be empty");
+    let config = self_build_pipeline_config(tool_ncl.to_path_buf(), import_paths.to_vec(), None, pipeline);
     let result = run_build(&config)?;
     report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human)?;
     let tool_label = tool_ncl
         .file_stem()
         .and_then(|stem| stem.to_str())
         .ok_or_else(|| RunError::Internal(format!("tool NCL has no valid stem: {}", tool_ncl.display())))?;
-    resolve_single_root_output_dir(&result, &config.store_dir, output_dir, tool_label)
+    resolve_single_root_output_dir(&result, &config.store_dir, pipeline.output_dir, tool_label)
+}
+
+fn self_build_pipeline_config(
+    file: PathBuf,
+    import_paths: Vec<std::ffi::OsString>,
+    root_retention_source: Option<crunch_store::GcRootSource>,
+    pipeline: &SelfBuildPipelineContext<'_>,
+) -> crunch_pipeline::BuildConfig {
+    assert!(!pipeline.store_dir.is_empty(), "self-build store prefix must not be empty");
+    assert!(pipeline.max_jobs > 0, "self-build max jobs must be nonzero");
+    crunch_pipeline::BuildConfig {
+        file,
+        import_paths,
+        output_dir: pipeline.output_dir.to_path_buf(),
+        state_dir: pipeline.state_dir.to_path_buf(),
+        base_state_dirs: Vec::new(),
+        store_dir: pipeline.store_dir.to_string(),
+        verbose: pipeline.verbose,
+        max_jobs: pipeline.max_jobs,
+        scheduling_policy: self_build_scheduling_policy(),
+        substituter_urls: if pipeline.no_substitute {
+            Vec::new()
+        } else {
+            vec!["https://cache.nixos.org".to_string()]
+        },
+        hermeticity_mode: pipeline.hermeticity_mode,
+        keypair: pipeline.keypair.clone(),
+        trusted_keys: pipeline.trusted_keys.to_vec(),
+        trust_unsigned: pipeline.trust_unsigned,
+        root_retention_source,
+        source_fetch_overrides: Vec::new(),
+        remote_enabled: false,
+    }
+}
+
+fn self_build_scheduling_policy() -> crunch_pipeline::SchedulingPolicy {
+    crunch_pipeline::SchedulingPolicy {
+        schema: crunch_build::scheduling::SCHEDULING_POLICY_SCHEMA.to_string(),
+        policy_id: crunch_build::scheduling::DEFAULT_SCHEDULING_POLICY_ID.to_string(),
+        preference_order: vec![
+            crunch_build::scheduling::PreferenceField::KnownGraph,
+            crunch_build::scheduling::PreferenceField::ResourceFit,
+            crunch_build::scheduling::PreferenceField::LocalityTransfer,
+        ],
+        aged_after_epochs: crunch_build::scheduling::DEFAULT_AGED_AFTER_EPOCHS,
+        protected_after_epochs: crunch_build::scheduling::DEFAULT_PROTECTED_AFTER_EPOCHS,
+    }
 }
 
 fn resolve_single_root_output_dir(
@@ -2363,9 +2578,10 @@ fn resolve_single_root_output_dir(
     output_dir: &Path,
     expected_label: &str,
 ) -> Result<PathBuf, RunError> {
-    assert!(!expected_label.is_empty(), "expected_label must not be empty");
+    assert!(!expected_label.is_empty(), "expected label must not be empty");
+    assert!(!store_dir.is_empty(), "store prefix must not be empty");
 
-    let mut matched_output_dirs: Vec<PathBuf> = Vec::new();
+    let mut matched_output_dirs: Vec<PathBuf> = Vec::with_capacity(result.outcomes.len());
     let output_dir_str = output_dir.to_str().unwrap_or(store_dir);
     for outcome in &result.outcomes {
         let drv_key = crunch_pipeline::drv_key_for(store_dir, &outcome.drv_path);
@@ -2394,7 +2610,9 @@ fn resolve_single_root_output_dir(
             matched_output_dirs.len(),
         )));
     }
-    Ok(matched_output_dirs.pop().expect("checked len == 1"))
+    matched_output_dirs
+        .pop()
+        .ok_or_else(|| RunError::Internal(format!("root output disappeared for '{expected_label}'")))
 }
 
 fn ensure_executable_file(path: &Path, label: &str) -> Result<(), RunError> {
@@ -2410,6 +2628,7 @@ fn ensure_executable_file(path: &Path, label: &str) -> Result<(), RunError> {
 
 fn validate_staged_source_dir(source_dir: &Path, output_dir: &Path) -> Result<(), RunError> {
     assert!(output_dir.is_dir(), "output dir must exist: {}", output_dir.display());
+    assert!(!output_dir.as_os_str().is_empty(), "output dir must not be empty");
     if !source_dir.is_dir() {
         return Err(RunError::Internal(format!("staged source directory does not exist: {}", source_dir.display(),)));
     }
@@ -2519,12 +2738,32 @@ fn absolutize_path(path: &Path) -> Result<PathBuf, RunError> {
     Ok(cwd.join(path))
 }
 
+#[derive(Debug, Clone, Copy)]
+enum BootstrapExecutableKind {
+    Bwrap,
+    Busybox,
+}
+
+impl BootstrapExecutableKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Bwrap => "bwrap",
+            Self::Busybox => "busybox",
+        }
+    }
+
+    fn expected_file_name(self) -> &'static str {
+        self.label()
+    }
+}
+
 fn resolve_explicit_bootstrap_output_dir(
     binary_path: &Path,
     output_dir: &Path,
-    label: &str,
-    expected_file_name: &str,
+    kind: BootstrapExecutableKind,
 ) -> Result<(PathBuf, PathBuf), RunError> {
+    let label = kind.label();
+    let expected_file_name = kind.expected_file_name();
     assert!(!label.is_empty(), "label must not be empty");
     assert!(!expected_file_name.is_empty(), "expected file name must not be empty");
     let absolute_binary = absolutize_path(binary_path)?;
@@ -2555,7 +2794,8 @@ fn resolve_explicit_bootstrap_bwrap_source(
     let Some(path) = bootstrap_bwrap_path else {
         return Ok(None);
     };
-    let (_output_root, binary_path) = resolve_explicit_bootstrap_output_dir(path, output_dir, "bwrap", "bwrap")?;
+    let (_output_root, binary_path) =
+        resolve_explicit_bootstrap_output_dir(path, output_dir, BootstrapExecutableKind::Bwrap)?;
     let bin_dir = binary_path.parent().ok_or_else(|| {
         RunError::Internal(format!("exact bwrap path has no parent directory: {}", binary_path.display()))
     })?;
@@ -2569,7 +2809,8 @@ fn resolve_explicit_bootstrap_busybox_path(
     let Some(path) = bootstrap_busybox_path else {
         return Ok(None);
     };
-    let (_output_root, binary_path) = resolve_explicit_bootstrap_output_dir(path, output_dir, "busybox", "busybox")?;
+    let (_output_root, binary_path) =
+        resolve_explicit_bootstrap_output_dir(path, output_dir, BootstrapExecutableKind::Busybox)?;
     Ok(Some(binary_path))
 }
 
@@ -2643,24 +2884,29 @@ struct SelfBuildShared {
     trusted_keys: Vec<nix_compat::narinfo::VerifyingKey>,
 }
 
-fn initialize_self_build(
-    output_dir: &Path,
-    source_store_path: Option<&Path>,
+struct InitializeSelfBuildRequest<'a> {
+    output_dir: &'a Path,
+    source_store_path: Option<&'a Path>,
     hermeticity_mode: crunch_pipeline::HermeticityMode,
-    stage0_policy: Option<&ProtectedExecPolicy>,
-    bootstrap_bwrap_path: Option<&Path>,
-    bootstrap_busybox_path: Option<&Path>,
-) -> Result<SelfBuildSetup, RunError> {
+    stage0_policy: Option<&'a ProtectedExecPolicy>,
+    bootstrap_bwrap_path: Option<&'a Path>,
+    bootstrap_busybox_path: Option<&'a Path>,
+}
+
+fn initialize_self_build(request: InitializeSelfBuildRequest<'_>) -> Result<SelfBuildSetup, RunError> {
+    assert!(SELF_BUILD_STEP_COUNT > 0, "self-build step count must be nonzero");
+    assert!(!REQUIRED_BOOTSTRAP_TOOLS.is_empty(), "bootstrap tool list must not be empty");
     eprintln!("=== crunch self-build ===");
 
     let invoking_binary = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("crunch"));
     eprintln!("  invoking binary: {}", invoking_binary.display());
-    let output_dir = absolutize_path(output_dir)?;
+    let output_dir = absolutize_path(request.output_dir)?;
 
-    let explicit_bwrap_source = resolve_explicit_bootstrap_bwrap_source(&output_dir, bootstrap_bwrap_path)?;
-    let explicit_busybox_path = resolve_explicit_bootstrap_busybox_path(&output_dir, bootstrap_busybox_path)?;
-    let declared_seed_tools = stage0_policy.map(resolve_declared_seed_bootstrap_tools).transpose()?;
-    let protected_exec_supervisor = stage0_policy
+    let explicit_bwrap_source = resolve_explicit_bootstrap_bwrap_source(&output_dir, request.bootstrap_bwrap_path)?;
+    let explicit_busybox_path = resolve_explicit_bootstrap_busybox_path(&output_dir, request.bootstrap_busybox_path)?;
+    let declared_seed_tools = request.stage0_policy.map(resolve_declared_seed_bootstrap_tools).transpose()?;
+    let protected_exec_supervisor = request
+        .stage0_policy
         .map(|policy| {
             install_current_thread_exec_supervisor(policy.clone())
                 .map_err(|err| RunError::Build(format!("protected exec supervisor fail-closed: {err}")))
@@ -2670,7 +2916,7 @@ fn initialize_self_build(
     let initial_bwrap = match (&explicit_bwrap_source, &declared_seed_tools) {
         (Some(source), _) => source.clone(),
         (None, Some(tools)) => tools.bwrap_source.clone(),
-        (None, None) => resolve_bwrap_source(&output_dir, hermeticity_mode)?,
+        (None, None) => resolve_bwrap_source(&output_dir, request.hermeticity_mode)?,
     };
     let mut fallback_events = Vec::new();
     if explicit_bwrap_source.is_none()
@@ -2686,7 +2932,8 @@ fn initialize_self_build(
         activate_declared_sandbox_shell(&tools.sandbox_shell)?;
     }
 
-    let (src_dir, source_events) = resolve_self_build_source_dir(&output_dir, source_store_path, hermeticity_mode)?;
+    let (src_dir, source_events) =
+        resolve_self_build_source_dir(&output_dir, request.source_store_path, request.hermeticity_mode)?;
     fallback_events.extend(source_events);
     eprintln!("source: {}", src_dir.display());
     let bootstrap_dir = src_dir.join("bootstrap");
@@ -2727,7 +2974,7 @@ fn prepare_self_build_shared(
 ) -> Result<SelfBuildShared, RunError> {
     eprintln!("\n[1/{SELF_BUILD_STEP_COUNT}] Staging source...");
     let (store_name, staged_source) = prepare_self_build_source(&setup.src_dir, &setup.output_dir, source_store_path)?;
-    let import_paths = build_self_build_import_paths(&setup.src_dir, &setup.bootstrap_dir)?;
+    let self_build_evaluator_inputs = build_self_build_import_paths(&setup.src_dir, &setup.bootstrap_dir)?;
     let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
     let configured_trusted_keys = load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
     let trusted_keys = crunch_build::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
@@ -2735,7 +2982,7 @@ fn prepare_self_build_shared(
     Ok(SelfBuildShared {
         store_name,
         staged_source,
-        import_paths,
+        import_paths: self_build_evaluator_inputs,
         keypair,
         trusted_keys,
     })
@@ -2781,32 +3028,31 @@ pub struct StagexEligibilityFailure {
 
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn validate_stagex_proof_eligibility(report: &SelfBuildReport) -> Result<(), Vec<StagexEligibilityFailure>> {
+    assert!(MAX_PROTECTED_SECCOMP_EVENTS > 0, "seccomp event limit must be nonzero");
+    assert!(!FORBIDDEN_EXEC_BASENAMES.is_empty(), "forbidden executable set must not be empty");
     let mut failures = Vec::new();
-    let max_seccomp_events: u32 = 100_000;
 
     if !report.provider_mode.satisfies_stagex_requirement() {
-        failures.push(StagexEligibilityFailure {
-            reason: format!("provider mode '{}' does not satisfy StageX requirement", report.provider_mode.as_str()),
-        });
+        push_stagex_failure(
+            &mut failures,
+            format!("provider mode '{}' does not satisfy StageX requirement", report.provider_mode.as_str()),
+        );
     }
 
     if report.stagex_metadata.is_none() {
-        failures.push(StagexEligibilityFailure {
-            reason: "StageX lineage metadata is missing from proof".to_string(),
-        });
+        push_stagex_failure(&mut failures, "StageX lineage metadata is missing from proof".to_string());
     }
 
     if report.protected_transition.is_none() {
-        failures.push(StagexEligibilityFailure {
-            reason: "protected-phase transition to mantle-built tools is missing".to_string(),
-        });
+        push_stagex_failure(&mut failures, "protected-phase transition to mantle-built tools is missing".to_string());
     }
 
-    for (idx, event) in report.protected_seccomp_events.iter().enumerate() {
-        if idx as u32 >= max_seccomp_events {
-            failures.push(StagexEligibilityFailure {
-                reason: format!("seccomp event count exceeds limit {max_seccomp_events}"),
-            });
+    for (event_index, event) in report.protected_seccomp_events.iter().enumerate() {
+        if event_index >= MAX_PROTECTED_SECCOMP_EVENTS {
+            push_stagex_failure(
+                &mut failures,
+                format!("seccomp event count exceeds limit {MAX_PROTECTED_SECCOMP_EVENTS}"),
+            );
             break;
         }
         if event.policy_decision != "allowed" {
@@ -2814,37 +3060,36 @@ pub fn validate_stagex_proof_eligibility(report: &SelfBuildReport) -> Result<(),
         }
         let basename = std::path::Path::new(&event.executable_path).file_name().and_then(|n| n.to_str()).unwrap_or("");
         if FORBIDDEN_EXEC_BASENAMES.contains(&basename) {
-            failures.push(StagexEligibilityFailure {
-                reason: format!(
-                    "undeclared host tool execution observed: {} ({})",
-                    basename,
-                    event.executable_path.display()
-                ),
-            });
+            push_stagex_failure(
+                &mut failures,
+                format!("undeclared host tool execution observed: {} ({})", basename, event.executable_path.display()),
+            );
         }
         let path_str = event.executable_path.to_string_lossy();
         for pattern in FORBIDDEN_EXEC_PATH_PATTERNS {
             if path_str.contains(pattern) {
-                failures.push(StagexEligibilityFailure {
-                    reason: format!(
-                        "legacy provider executable observed: {} in {}",
-                        pattern,
-                        event.executable_path.display()
-                    ),
-                });
+                push_stagex_failure(
+                    &mut failures,
+                    format!("legacy provider executable observed: {} in {}", pattern, event.executable_path.display()),
+                );
             }
         }
     }
 
     if !report.fallback_events.is_empty() {
         for event in &report.fallback_events {
-            failures.push(StagexEligibilityFailure {
-                reason: format!("host fallback event observed: {event}"),
-            });
+            push_stagex_failure(&mut failures, format!("host fallback event observed: {event}"));
         }
     }
 
     if failures.is_empty() { Ok(()) } else { Err(failures) }
+}
+
+fn push_stagex_failure(failures: &mut Vec<StagexEligibilityFailure>, reason: String) {
+    if failures.len() >= MAX_STAGEX_ELIGIBILITY_FAILURES {
+        return;
+    }
+    failures.push(StagexEligibilityFailure { reason });
 }
 
 fn emit_self_build_completion(report: &SelfBuildReport) {
@@ -2852,98 +3097,169 @@ fn emit_self_build_completion(report: &SelfBuildReport) {
     eprintln!("\n=== self-build complete ===");
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn cmd_self_build(
-    output_dir: &Path,
-    state_dir: &Path,
-    store_dir: &str,
-    verbose: bool,
-    max_jobs: u32,
-    no_substitute: bool,
-    no_verify: bool,
-    signing_key_path: Option<&Path>,
-    trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
-    trust_unsigned: bool,
-    hermeticity_mode: crunch_pipeline::HermeticityMode,
-    source_store_path: Option<&Path>,
-    stage0_policy: Option<&ProtectedExecPolicy>,
-    stage0_inventory_digest_blake3: Option<String>,
-    bootstrap_bwrap_path: Option<&Path>,
-    bootstrap_busybox_path: Option<&Path>,
-    provider_mode: crate::bootstrap_source_root::BootstrapProviderMode,
-) -> Result<SelfBuildReport, RunError> {
-    let setup = initialize_self_build(
-        output_dir,
-        source_store_path,
-        hermeticity_mode,
-        stage0_policy,
-        bootstrap_bwrap_path,
-        bootstrap_busybox_path,
-    )?;
-    let shared =
-        prepare_self_build_shared(&setup, state_dir, signing_key_path, trusted_public_keys, source_store_path)?;
+pub struct SelfBuildCommandOptions<'a> {
+    pub output_dir: &'a Path,
+    pub state_dir: &'a Path,
+    pub store_dir: &'a str,
+    pub verbose: bool,
+    pub max_jobs: u32,
+    pub no_substitute: bool,
+    pub no_verify: bool,
+    pub signing_key_path: Option<&'a Path>,
+    pub trusted_public_keys: Option<&'a [nix_compat::narinfo::VerifyingKey]>,
+    pub trust_unsigned: bool,
+    pub hermeticity_mode: crunch_pipeline::HermeticityMode,
+    pub source_store_path: Option<&'a Path>,
+    pub stage0_policy: Option<&'a ProtectedExecPolicy>,
+    pub stage0_inventory_digest_blake3: Option<String>,
+    pub bootstrap_bwrap_path: Option<&'a Path>,
+    pub bootstrap_busybox_path: Option<&'a Path>,
+    pub provider_mode: crate::bootstrap_source_root::BootstrapProviderMode,
+}
 
-    eprintln!("\n[2/{SELF_BUILD_STEP_COUNT}] Building bootstrap tools...");
-    let tools = build_all_bootstrap_tools(
-        &setup.bootstrap_dir,
-        &shared.import_paths,
-        &setup.output_dir,
-        state_dir,
-        store_dir,
-        verbose,
-        max_jobs,
-        no_substitute,
-        &shared.keypair,
-        &shared.trusted_keys,
-        trust_unsigned,
-        hermeticity_mode,
-        setup.bootstrap_bwrap_source.as_ref(),
-        setup.bootstrap_busybox_path.as_deref(),
+fn execute_self_build(options: SelfBuildCommandOptions<'_>) -> Result<SelfBuildReport, RunError> {
+    assert!(options.max_jobs > 0, "self-build max jobs must be nonzero");
+    assert!(options.store_dir.starts_with('/'), "self-build store prefix must be absolute");
+    let setup = initialize_self_build(InitializeSelfBuildRequest {
+        output_dir: options.output_dir,
+        source_store_path: options.source_store_path,
+        hermeticity_mode: options.hermeticity_mode,
+        stage0_policy: options.stage0_policy,
+        bootstrap_bwrap_path: options.bootstrap_bwrap_path,
+        bootstrap_busybox_path: options.bootstrap_busybox_path,
+    })?;
+    let shared = prepare_self_build_shared(
+        &setup,
+        options.state_dir,
+        options.signing_key_path,
+        options.trusted_public_keys,
+        options.source_store_path,
     )?;
-
-    eprintln!("\n[3/{SELF_BUILD_STEP_COUNT}] Building mantle...");
-    emit_progress_marker("mantle-build-start");
-    let output_binary = build_crunch_binary(
-        &setup.src_dir,
-        &shared.store_name,
-        &tools.bwrap_store_name,
-        &tools.busybox_store_name,
-        &setup.output_dir,
-        state_dir,
-        store_dir,
-        verbose,
-        max_jobs,
-        no_substitute,
-        shared.keypair,
-        shared.trusted_keys,
-        trust_unsigned,
-        hermeticity_mode,
-    )?;
-    verify_self_build_output(&output_binary, no_verify)?;
-
+    let (tools, output_binary) = run_self_build_roots(&options, &setup, &shared)?;
+    verify_self_build_output(&output_binary, options.no_verify)?;
     let protected_seccomp_events = setup
         .protected_exec_supervisor
         .as_ref()
         .map(ProtectedSeccompSupervisor::audit_events)
         .unwrap_or_default();
-
-    let report = SelfBuildReport {
-        provider_mode,
-        hermeticity_mode,
+    let self_build_evidence = SelfBuildReport {
+        provider_mode: options.provider_mode,
+        hermeticity_mode: options.hermeticity_mode,
         invoking_binary: setup.invoking_binary,
         staged_source: shared.staged_source,
         bwrap_source: tools.bwrap_source,
         fallback_events: setup.fallback_events,
-        stage0_inventory_digest_blake3,
+        stage0_inventory_digest_blake3: options.stage0_inventory_digest_blake3,
         protected_transition: Some(tools.protected_transition),
         protected_seccomp_events,
         busybox_path: tools.busybox_path,
         output_binary,
         stagex_metadata: None,
     };
-    emit_self_build_completion(&report);
-    Ok(report)
+    emit_self_build_completion(&self_build_evidence);
+    Ok(self_build_evidence)
 }
+
+fn run_self_build_roots(
+    options: &SelfBuildCommandOptions<'_>,
+    setup: &SelfBuildSetup,
+    shared: &SelfBuildShared,
+) -> Result<(BootstrapTools, PathBuf), RunError> {
+    assert!(options.max_jobs > 0, "self-build max jobs must be nonzero");
+    assert!(!shared.import_paths.is_empty(), "self-build import paths must not be empty");
+    let pipeline = SelfBuildPipelineContext {
+        output_dir: &setup.output_dir,
+        state_dir: options.state_dir,
+        store_dir: options.store_dir,
+        verbose: options.verbose,
+        max_jobs: options.max_jobs,
+        no_substitute: options.no_substitute,
+        keypair: &shared.keypair,
+        trusted_keys: &shared.trusted_keys,
+        trust_unsigned: options.trust_unsigned,
+        hermeticity_mode: options.hermeticity_mode,
+    };
+    eprintln!("\n[2/{SELF_BUILD_STEP_COUNT}] Building bootstrap tools...");
+    let tools = build_all_bootstrap_tools(BootstrapToolsBuildRequest {
+        bootstrap_dir: &setup.bootstrap_dir,
+        import_paths: &shared.import_paths,
+        pipeline,
+        bootstrap_bwrap_source: setup.bootstrap_bwrap_source.as_ref(),
+        bootstrap_busybox_path: setup.bootstrap_busybox_path.as_deref(),
+    })?;
+    eprintln!("\n[3/{SELF_BUILD_STEP_COUNT}] Building mantle...");
+    emit_progress_marker("mantle-build-start");
+    let output_binary = build_crunch_binary(
+        MantleBinaryBuildRequest {
+            src_dir: &setup.src_dir,
+            src_store_name: &shared.store_name,
+            bwrap_store_name: &tools.bwrap_store_name,
+            busybox_store_name: &tools.busybox_store_name,
+        },
+        &pipeline,
+    )?;
+    Ok((tools, output_binary))
+}
+
+pub type CmdSelfBuildFn = for<'a> fn(
+    &'a Path,
+    &'a Path,
+    &'a str,
+    bool,
+    u32,
+    bool,
+    bool,
+    Option<&'a Path>,
+    Option<&'a [nix_compat::narinfo::VerifyingKey]>,
+    bool,
+    crunch_pipeline::HermeticityMode,
+    Option<&'a Path>,
+    Option<&'a ProtectedExecPolicy>,
+    Option<String>,
+    Option<&'a Path>,
+    Option<&'a Path>,
+    crate::bootstrap_source_root::BootstrapProviderMode,
+) -> Result<SelfBuildReport, RunError>;
+
+pub const CMD_SELF_BUILD: CmdSelfBuildFn = |output_dir,
+                                            state_dir,
+                                            store_dir,
+                                            verbose,
+                                            max_jobs,
+                                            no_substitute,
+                                            no_verify,
+                                            signing_key_path,
+                                            trusted_public_keys,
+                                            trust_unsigned,
+                                            hermeticity_mode,
+                                            source_store_path,
+                                            stage0_policy,
+                                            stage0_inventory_digest_blake3,
+                                            bootstrap_bwrap_path,
+                                            bootstrap_busybox_path,
+                                            provider_mode| {
+    execute_self_build(SelfBuildCommandOptions {
+        output_dir,
+        state_dir,
+        store_dir,
+        verbose,
+        max_jobs,
+        no_substitute,
+        no_verify,
+        signing_key_path,
+        trusted_public_keys,
+        trust_unsigned,
+        hermeticity_mode,
+        source_store_path,
+        stage0_policy,
+        stage0_inventory_digest_blake3,
+        bootstrap_bwrap_path,
+        bootstrap_busybox_path,
+        provider_mode,
+    })
+};
+
+pub use CMD_SELF_BUILD as cmd_self_build;
 
 fn find_source_dir() -> Result<PathBuf, RunError> {
     let cwd = std::env::current_dir().map_err(|e| RunError::Internal(format!("cwd: {e}")))?;
@@ -2953,7 +3269,7 @@ fn find_source_dir() -> Result<PathBuf, RunError> {
     }
 
     let mut dir = cwd.as_path();
-    for _ in 0..8_u32 {
+    for _ in 0..MAX_SOURCE_DISCOVERY_ANCESTORS {
         if dir.join("Cargo.toml").exists() && dir.join("bootstrap").exists() {
             return Ok(dir.to_path_buf());
         }
@@ -2977,7 +3293,12 @@ mod tests {
     const GCC_BOOTSTRAP_NCL: &str = include_str!("../bootstrap/gcc.ncl");
 
     fn test_self_build_ncl() -> String {
-        generate_self_build_ncl("abc123-mantle-src", "bwrap123-bwrap", "busybox123-busybox", "/nix/store")
+        generate_self_build_ncl(SelfBuildNclInput {
+            src_store_path: "abc123-mantle-src",
+            bwrap_store_path: "bwrap123-bwrap",
+            busybox_store_path: "busybox123-busybox",
+            store_prefix: "/nix/store",
+        })
     }
 
     fn cargo_visible_self_build_lines(ncl: &str) -> Vec<String> {
@@ -3198,7 +3519,12 @@ mod tests {
 
     #[test]
     fn generate_ncl_respects_store_prefix() {
-        let ncl = generate_self_build_ncl("abc-src", "uvw-bwrap", "xyz-busybox", "/crunch/store");
+        let ncl = generate_self_build_ncl(SelfBuildNclInput {
+            src_store_path: "abc-src",
+            bwrap_store_path: "uvw-bwrap",
+            busybox_store_path: "xyz-busybox",
+            store_prefix: "/crunch/store",
+        });
         // The input path in the Nickel record should use the prefix.
         assert!(ncl.contains("\"/crunch/store/abc-src\""));
         assert!(ncl.contains("\"/crunch/store/uvw-bwrap\""));
@@ -3231,8 +3557,18 @@ mod tests {
 
     #[test]
     fn generate_ncl_keeps_cargo_visible_values_stable_across_tool_store_paths() {
-        let first = generate_self_build_ncl("src-one", "left-bwrap", "left-busybox", "/nix/store");
-        let second = generate_self_build_ncl("src-two", "right-bwrap", "right-busybox", "/crunch/store");
+        let first = generate_self_build_ncl(SelfBuildNclInput {
+            src_store_path: "src-one",
+            bwrap_store_path: "left-bwrap",
+            busybox_store_path: "left-busybox",
+            store_prefix: "/nix/store",
+        });
+        let second = generate_self_build_ncl(SelfBuildNclInput {
+            src_store_path: "src-two",
+            bwrap_store_path: "right-bwrap",
+            busybox_store_path: "right-busybox",
+            store_prefix: "/crunch/store",
+        });
 
         let first_cargo_visible = cargo_visible_self_build_lines(&first);
         let second_cargo_visible = cargo_visible_self_build_lines(&second);

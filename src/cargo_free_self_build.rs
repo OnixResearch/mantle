@@ -92,6 +92,7 @@ const RUST_SOURCE_PROVIDER_BINDING_SCHEMA: &str = "mantle-cargo-free-rust-source
 const RUST_SOURCE_PROVIDER_STATUS_ABSENT: &str = "absent";
 const RUST_SOURCE_PROVIDER_STATUS_VALIDATED: &str = "validated";
 const RUST_SOURCE_PROVIDER_REQUIRED_ROLE_COUNT: usize = 1;
+const BASE_OBSERVED_TOOLCHAIN_INPUT_COUNT: usize = 2;
 const PROVIDER_FIXED_POINT_STATUS_ABSENT: &str = "absent";
 const PROVIDER_FIXED_POINT_STATUS_VALID: &str = "valid";
 const PROVIDER_FIXED_POINT_STATUS_INVALID: &str = "invalid";
@@ -164,9 +165,120 @@ struct ExecutionToolchain {
 }
 
 #[derive(Clone, Debug)]
-struct CCompilerAliasRuntimeInputs {
+struct CcCompilerAliasRuntimeInputs {
     unwind_archive: Option<PathBuf>,
     crt1_object: PathBuf,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ProofArtifactRequest<'a> {
+    pointer: &'a str,
+    label: &'a str,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ExpectedString<'a> {
+    pointer: &'a str,
+    value: &'a str,
+    label: &'a str,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ExpectedNull<'a> {
+    pointer: &'a str,
+    label: &'a str,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct FixedPointStageValidationRequest<'a> {
+    meta: &'a Value,
+    stage_name: &'a str,
+    actual_binary_digest: Option<&'a str>,
+    receipt: Option<&'a Value>,
+    expected_policy_digest: Option<&'a str>,
+}
+
+#[derive(Clone, Debug)]
+struct FixedPointStagePlanRequest<'a> {
+    name: &'static str,
+    root: &'a Path,
+    bundle_dir: &'a Path,
+    execution_dir: &'a Path,
+    rustc: &'a Path,
+    targets: &'a [String],
+    mantle_binary: FixedPointMantleBinary,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct RustPlanChildRequest<'a> {
+    paths: &'a BuildPaths,
+    rustc: &'a Path,
+    targets: &'a [String],
+    path_env: &'a OsStr,
+    c_compiler_route: Option<&'a crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+    policy_digest_blake3: Option<&'a str>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct MalformedBlockedTopologyRequest<'a> {
+    execution_status: &'a str,
+    classification: &'a str,
+    diagnostic: &'a str,
+}
+
+#[derive(Debug)]
+struct FixedPointStageAssembly<'a> {
+    stage: &'a FixedPointStagePlan,
+    status_code: Option<i32>,
+    receipt: Option<&'a Value>,
+    execution_status: String,
+    is_cargo_marker_absent: bool,
+    blocker: Option<String>,
+    blocker_diagnostic: Option<BlockedTopologyDiagnostic>,
+    produced: Option<FixedPointStageArtifact>,
+    policy_digest_blake3: Option<&'a str>,
+    c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+}
+
+#[derive(Debug)]
+struct BlockedFixedPointStageRequest<'a> {
+    stage: &'a FixedPointStagePlan,
+    execution_status: &'a str,
+    status_code: Option<i32>,
+    blocker: String,
+    policy_digest_blake3: Option<&'a str>,
+    c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct FixedPointSummaryContext<'a> {
+    plan: &'a FixedPointPlan,
+    compatibility: &'a RustcCompatibilitySummary,
+    toolchain_closure: &'a crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+    rust_source_provider: &'a RustSourceProviderBindingStatus,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct FixedPointFinishContext<'a> {
+    summary: FixedPointSummaryContext<'a>,
+    json_mode: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SelfBuildSummaryContext<'a> {
+    paths: &'a BuildPaths,
+    child: &'a ChildRun,
+    produced: Option<&'a ProducedBinary>,
+    toolchain_closure: &'a crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+    rust_source_provider: &'a RustSourceProviderBindingStatus,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SourceBuiltClosurePredicates {
+    has_complete_counts: bool,
+    has_zero_seed_exceptions: bool,
 }
 
 #[derive(Debug)]
@@ -443,17 +555,47 @@ pub(crate) fn verify_provider_fixed_point_proof_bundle(proof_dir: &Path) -> Prov
     let meta_path = proof_dir.join(META_FILE);
     let preflight_path = proof_dir.join(PRE_FLIGHT_FILE);
     let non_claims_path = proof_dir.join(NON_CLAIMS_FILE);
+    debug_assert_ne!(meta_path, preflight_path);
+    debug_assert_ne!(preflight_path, non_claims_path);
     let (meta, meta_digest_blake3) = read_json_with_digest(&meta_path, "fixed-point meta", &mut shell_blockers);
     let (preflight, _) = read_json_with_digest(&preflight_path, "fixed-point preflight", &mut shell_blockers);
     let non_claims_text = read_text_optional(&non_claims_path, "fixed-point non-claims", &mut shell_blockers);
-    let stage1_binary_digest_actual =
-        stage_binary_digest_from_meta(proof_dir, meta.as_ref(), "/stage1/binary", "stage1 binary", &mut shell_blockers);
-    let stage2_binary_digest_actual =
-        stage_binary_digest_from_meta(proof_dir, meta.as_ref(), "/stage2/binary", "stage2 binary", &mut shell_blockers);
-    let stage1_receipt =
-        stage_receipt_from_meta(proof_dir, meta.as_ref(), "/stage1/receipt", "stage1 receipt", &mut shell_blockers);
-    let stage2_receipt =
-        stage_receipt_from_meta(proof_dir, meta.as_ref(), "/stage2/receipt", "stage2 receipt", &mut shell_blockers);
+    let stage1_binary_digest_actual = stage_binary_digest_from_meta(
+        proof_dir,
+        meta.as_ref(),
+        ProofArtifactRequest {
+            pointer: "/stage1/binary",
+            label: "stage1 binary",
+        },
+        &mut shell_blockers,
+    );
+    let stage2_binary_digest_actual = stage_binary_digest_from_meta(
+        proof_dir,
+        meta.as_ref(),
+        ProofArtifactRequest {
+            pointer: "/stage2/binary",
+            label: "stage2 binary",
+        },
+        &mut shell_blockers,
+    );
+    let stage1_receipt = stage_receipt_from_meta(
+        proof_dir,
+        meta.as_ref(),
+        ProofArtifactRequest {
+            pointer: "/stage1/receipt",
+            label: "stage1 receipt",
+        },
+        &mut shell_blockers,
+    );
+    let stage2_receipt = stage_receipt_from_meta(
+        proof_dir,
+        meta.as_ref(),
+        ProofArtifactRequest {
+            pointer: "/stage2/receipt",
+            label: "stage2 receipt",
+        },
+        &mut shell_blockers,
+    );
     validate_provider_fixed_point_proof_evidence(ProviderFixedPointProofEvidence {
         proof_dir: proof_dir.to_path_buf(),
         meta,
@@ -471,6 +613,8 @@ pub(crate) fn verify_provider_fixed_point_proof_bundle(proof_dir: &Path) -> Prov
 fn validate_provider_fixed_point_proof_evidence(
     mut evidence: ProviderFixedPointProofEvidence,
 ) -> ProviderFixedPointProofVerification {
+    debug_assert_ne!(FIXED_POINT_SCHEMA, SCHEMA);
+    debug_assert!(evidence.shell_blockers.capacity() >= evidence.shell_blockers.len());
     let mut blockers = std::mem::take(&mut evidence.shell_blockers);
     let Some(meta) = evidence.meta.as_ref() else {
         blockers.push("fixed-point meta.json is missing or invalid".to_string());
@@ -482,19 +626,23 @@ fn validate_provider_fixed_point_proof_evidence(
     validate_fixed_point_non_claims(meta, evidence.non_claims_text.as_deref(), &mut blockers);
     let closure_policy_digest = fixed_point_closure_policy_digest(meta, &mut blockers);
     let stage1 = validate_fixed_point_stage(
-        meta,
-        "stage1",
-        evidence.stage1_binary_digest_actual.as_deref(),
-        evidence.stage1_receipt.as_ref(),
-        closure_policy_digest.as_deref(),
+        FixedPointStageValidationRequest {
+            meta,
+            stage_name: STAGE1_DIR,
+            actual_binary_digest: evidence.stage1_binary_digest_actual.as_deref(),
+            receipt: evidence.stage1_receipt.as_ref(),
+            expected_policy_digest: closure_policy_digest.as_deref(),
+        },
         &mut blockers,
     );
     let stage2 = validate_fixed_point_stage(
-        meta,
-        "stage2",
-        evidence.stage2_binary_digest_actual.as_deref(),
-        evidence.stage2_receipt.as_ref(),
-        closure_policy_digest.as_deref(),
+        FixedPointStageValidationRequest {
+            meta,
+            stage_name: STAGE2_DIR,
+            actual_binary_digest: evidence.stage2_binary_digest_actual.as_deref(),
+            receipt: evidence.stage2_receipt.as_ref(),
+            expected_policy_digest: closure_policy_digest.as_deref(),
+        },
         &mut blockers,
     );
     let matching_digest =
@@ -515,19 +663,21 @@ fn provider_fixed_point_result(
     stage_unit_counts: Option<(Option<u64>, Option<u64>)>,
     blockers: Vec<String>,
 ) -> ProviderFixedPointProofVerification {
-    let valid = blockers.is_empty();
+    let is_valid = blockers.is_empty();
+    debug_assert_eq!(is_valid, blockers.is_empty());
+    debug_assert_ne!(PROVIDER_FIXED_POINT_STATUS_VALID, PROVIDER_FIXED_POINT_STATUS_INVALID);
     let (stage1_unit_count, stage2_unit_count) = stage_unit_counts.unwrap_or((None, None));
     let non_claims = non_claims_from_meta(evidence.meta.as_ref());
     let proof_dir = evidence.proof_dir;
     let meta_digest_blake3 = evidence.meta_digest_blake3;
     ProviderFixedPointProofVerification {
-        status: if valid {
+        status: if is_valid {
             PROVIDER_FIXED_POINT_STATUS_VALID
         } else {
             PROVIDER_FIXED_POINT_STATUS_INVALID
         }
         .to_string(),
-        valid,
+        valid: is_valid,
         proof_source: "direct".to_string(),
         proof_dir: Some(proof_dir),
         proof_artifact_digest_blake3: None,
@@ -551,15 +701,42 @@ struct StageProofFacts {
 }
 
 fn validate_fixed_point_meta(meta: &Value, blockers: &mut Vec<String>) {
-    expect_string(meta, "/schema", FIXED_POINT_SCHEMA, "fixed-point schema", blockers);
-    expect_string(meta, "/status", SUCCESS_STATUS, "fixed-point status", blockers);
-    expect_bool(meta, "/fixed_point", true, "fixed-point flag", blockers);
-    expect_null(meta, "/blocker", "fixed-point blocker", blockers);
+    let blocker_count_before = blockers.len();
+    debug_assert_ne!(FIXED_POINT_SCHEMA, SCHEMA);
     expect_string(
         meta,
-        "/source_built_toolchain_closure/status",
-        ENFORCED_SOURCE_BUILT_STATUS,
-        "source-built closure status",
+        ExpectedString {
+            pointer: "/schema",
+            value: FIXED_POINT_SCHEMA,
+            label: "fixed-point schema",
+        },
+        blockers,
+    );
+    expect_string(
+        meta,
+        ExpectedString {
+            pointer: "/status",
+            value: SUCCESS_STATUS,
+            label: "fixed-point status",
+        },
+        blockers,
+    );
+    expect_bool(meta, "/fixed_point", true, "fixed-point flag", blockers);
+    expect_null(
+        meta,
+        ExpectedNull {
+            pointer: "/blocker",
+            label: "fixed-point blocker",
+        },
+        blockers,
+    );
+    expect_string(
+        meta,
+        ExpectedString {
+            pointer: "/source_built_toolchain_closure/status",
+            value: ENFORCED_SOURCE_BUILT_STATUS,
+            label: "source-built closure status",
+        },
         blockers,
     );
     expect_bool(meta, "/source_built_toolchain_closure/claim", true, "source-built closure claim", blockers);
@@ -572,9 +749,11 @@ fn validate_fixed_point_meta(meta: &Value, blockers: &mut Vec<String>) {
     );
     expect_string(
         meta,
-        "/rust_source_provider/status",
-        RUST_SOURCE_PROVIDER_STATUS_VALIDATED,
-        "Rust source provider status",
+        ExpectedString {
+            pointer: "/rust_source_provider/status",
+            value: RUST_SOURCE_PROVIDER_STATUS_VALIDATED,
+            label: "Rust source provider status",
+        },
         blockers,
     );
     let member_count = optional_u64(meta, "/source_built_toolchain_closure/member_count");
@@ -586,14 +765,15 @@ fn validate_fixed_point_meta(meta: &Value, blockers: &mut Vec<String>) {
         )),
         _ => blockers.push("source-built closure member counts are missing".to_string()),
     }
+    debug_assert!(blockers.len() >= blocker_count_before);
 }
 
 fn validate_fixed_point_proof_eligibility(meta: &Value, blockers: &mut Vec<String>) {
-    let report = fixed_point_proof_eligibility_report_from_meta(meta);
-    if report.strict_claim_satisfied {
+    let eligibility_decision = fixed_point_proof_eligibility_report_from_meta(meta);
+    if eligibility_decision.strict_claim_satisfied {
         return;
     }
-    blockers.extend(crunch_release_core::proof_eligibility_blocking_reasons(report));
+    blockers.extend(crunch_release_core::proof_eligibility_blocking_reasons(eligibility_decision));
 }
 
 fn fixed_point_proof_eligibility_report_from_meta(meta: &Value) -> crunch_release_core::StrictProofEligibilityReport {
@@ -609,26 +789,73 @@ fn fixed_point_proof_eligibility_report_from_meta(meta: &Value) -> crunch_releas
 }
 
 fn fixed_point_closure_fact_status_from_meta(meta: &Value) -> crunch_release_core::ProofFactStatus {
+    debug_assert!("/source_built_toolchain_closure/status".starts_with('/'));
+    debug_assert_ne!(ENFORCED_SOURCE_BUILT_STATUS, RUST_SOURCE_PROVIDER_STATUS_VALIDATED);
     let status = optional_str(meta, "/source_built_toolchain_closure/status");
     let claim = meta.pointer("/source_built_toolchain_closure/claim").and_then(Value::as_bool);
     let policy = optional_str(meta, "/source_built_toolchain_closure/policy_digest_blake3");
     let member_count = optional_u64(meta, "/source_built_toolchain_closure/member_count");
     let source_built_count = optional_u64(meta, "/source_built_toolchain_closure/source_built_member_count");
     let seed_exception_count = optional_u64(meta, "/source_built_toolchain_closure/seed_exception_count");
-    let complete_counts = matches!((member_count, source_built_count), (Some(member_count), Some(source_built_count)) if member_count > 0 && member_count == source_built_count);
-    if status == Some(ENFORCED_SOURCE_BUILT_STATUS)
-        && claim == Some(true)
-        && policy.is_some()
-        && complete_counts
-        && seed_exception_count == Some(0)
-    {
+    let has_complete_counts = source_built_counts_are_complete(member_count, source_built_count);
+    if source_built_meta_facts_are_satisfied(status, claim, policy, has_complete_counts, seed_exception_count) {
         return crunch_release_core::ProofFactStatus::Satisfied;
     }
-    if status.is_none() || claim.is_none() || policy.is_none() || member_count.is_none() || source_built_count.is_none()
-    {
+    if source_built_meta_facts_are_missing(status, claim, policy, member_count, source_built_count) {
         return crunch_release_core::ProofFactStatus::Missing;
     }
     crunch_release_core::ProofFactStatus::Degraded
+}
+
+fn source_built_counts_are_complete(member_count: Option<u64>, source_built_count: Option<u64>) -> bool {
+    matches!(
+        (member_count, source_built_count),
+        (Some(member_count), Some(source_built_count)) if member_count > 0 && member_count == source_built_count
+    )
+}
+
+fn source_built_meta_facts_are_satisfied(
+    status: Option<&str>,
+    claim: Option<bool>,
+    policy: Option<&str>,
+    has_complete_counts: bool,
+    seed_exception_count: Option<u64>,
+) -> bool {
+    if status != Some(ENFORCED_SOURCE_BUILT_STATUS) {
+        return false;
+    }
+    if claim != Some(true) {
+        return false;
+    }
+    if policy.is_none() {
+        return false;
+    }
+    if !has_complete_counts {
+        return false;
+    }
+    seed_exception_count == Some(0)
+}
+
+fn source_built_meta_facts_are_missing(
+    status: Option<&str>,
+    claim: Option<bool>,
+    policy: Option<&str>,
+    member_count: Option<u64>,
+    source_built_count: Option<u64>,
+) -> bool {
+    if status.is_none() {
+        return true;
+    }
+    if claim.is_none() {
+        return true;
+    }
+    if policy.is_none() {
+        return true;
+    }
+    if member_count.is_none() {
+        return true;
+    }
+    source_built_count.is_none()
 }
 
 fn fixed_point_protected_environment_status_from_meta(meta: &Value) -> crunch_release_core::ProofFactStatus {
@@ -678,11 +905,21 @@ fn collect_audit_events_from_object(value: &Value, events: &mut Vec<String>) {
 }
 
 fn validate_fixed_point_preflight(meta: &Value, preflight: Option<&Value>, blockers: &mut Vec<String>) {
+    debug_assert_ne!(FIXED_POINT_SCHEMA, SCHEMA);
+    debug_assert!(blockers.capacity() >= blockers.len());
     let Some(preflight) = preflight else {
         blockers.push("fixed-point preflight.json is missing or invalid".to_string());
         return;
     };
-    expect_string(preflight, "/schema", FIXED_POINT_SCHEMA, "preflight schema", blockers);
+    expect_string(
+        preflight,
+        ExpectedString {
+            pointer: "/schema",
+            value: FIXED_POINT_SCHEMA,
+            label: "preflight schema",
+        },
+        blockers,
+    );
     let meta_policy = optional_str(meta, "/source_built_toolchain_closure/policy_digest_blake3");
     let preflight_policy = optional_str(preflight, "/source_built_toolchain_closure/policy_digest_blake3");
     if meta_policy.is_none() {
@@ -697,6 +934,8 @@ fn validate_fixed_point_preflight(meta: &Value, preflight: Option<&Value>, block
 }
 
 fn validate_fixed_point_non_claims(meta: &Value, non_claims_text: Option<&str>, blockers: &mut Vec<String>) {
+    let blocker_count_before = blockers.len();
+    debug_assert_ne!(NOT_CRUNCH_BOOTSTRAP_NON_CLAIM, NOT_RELEASE_REPRODUCIBILITY_NON_CLAIM);
     let non_claims = non_claims_from_meta(Some(meta));
     for required in [
         NOT_CRUNCH_BOOTSTRAP_NON_CLAIM,
@@ -719,6 +958,7 @@ fn validate_fixed_point_non_claims(meta: &Value, non_claims_text: Option<&str>, 
             blockers.push(format!("fixed-point non-claims.txt missing phrase: {phrase}"));
         }
     }
+    debug_assert!(blockers.len() >= blocker_count_before);
 }
 
 fn fixed_point_closure_policy_digest(meta: &Value, blockers: &mut Vec<String>) -> Option<String> {
@@ -730,66 +970,137 @@ fn fixed_point_closure_policy_digest(meta: &Value, blockers: &mut Vec<String>) -
 }
 
 fn validate_fixed_point_stage(
-    meta: &Value,
-    stage_name: &str,
-    actual_binary_digest: Option<&str>,
-    receipt: Option<&Value>,
-    expected_policy_digest: Option<&str>,
+    request: FixedPointStageValidationRequest<'_>,
     blockers: &mut Vec<String>,
 ) -> StageProofFacts {
-    let prefix = format!("/{stage_name}");
-    expect_string(meta, &format!("{prefix}/name"), stage_name, "fixed-point stage name", blockers);
-    expect_bool(meta, &format!("{prefix}/success"), true, "fixed-point stage success", blockers);
-    expect_i64(
-        meta,
-        &format!("{prefix}/status_code"),
-        SUCCESS_EXIT_CODE as i64,
-        "fixed-point stage status code",
-        blockers,
-    );
-    expect_string(
-        meta,
-        &format!("{prefix}/execution_status"),
-        SUCCESS_STATUS,
-        "fixed-point stage execution status",
-        blockers,
-    );
-    expect_bool(meta, &format!("{prefix}/cargo_marker_absent"), true, "fixed-point stage Cargo guard", blockers);
-    expect_u64(meta, &format!("{prefix}/failed_unit_count"), 0, "fixed-point stage failed unit count", blockers);
-    expect_i64(
-        meta,
-        &format!("{prefix}/smoke_status_code"),
-        SUCCESS_EXIT_CODE as i64,
-        "fixed-point stage smoke status",
-        blockers,
-    );
-    expect_null(meta, &format!("{prefix}/blocker"), "fixed-point stage blocker", blockers);
-    let unit_count = optional_u64(meta, &format!("{prefix}/unit_count"));
+    let blocker_count_before = blockers.len();
+    debug_assert!(matches!(request.stage_name, STAGE1_DIR | STAGE2_DIR));
+    let prefix = format!("/{}", request.stage_name);
+    validate_fixed_point_stage_identity(request, &prefix, blockers);
+    validate_fixed_point_stage_execution(request, &prefix, blockers);
+    let unit_count = optional_u64(request.meta, &format!("{prefix}/unit_count"));
     if !matches!(unit_count, Some(count) if count > 0) {
-        blockers.push(format!("{stage_name} unit count is missing or zero"));
+        blockers.push(format!("{} unit count is missing or zero", request.stage_name));
     }
-    let declared_digest = optional_str(meta, &format!("{prefix}/binary_blake3")).map(ToOwned::to_owned);
-    match (declared_digest.as_deref(), actual_binary_digest) {
-        (Some(declared), Some(actual)) if declared == actual => {}
-        (Some(declared), Some(actual)) => {
-            blockers.push(format!("{stage_name} binary digest mismatch: declared {declared} actual {actual}"))
-        }
-        (Some(_), None) => blockers.push(format!("{stage_name} binary could not be hashed")),
-        (None, _) => blockers.push(format!("{stage_name} binary digest is missing")),
-    }
-    let stage_policy = optional_str(meta, &format!("{prefix}/{TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD}"));
-    if let (Some(stage_policy), Some(expected_policy)) = (stage_policy, expected_policy_digest) {
-        if stage_policy != expected_policy {
-            blockers.push(format!("{stage_name} closure policy digest does not match the proof closure digest"));
-        }
-    } else {
-        blockers.push(format!("{stage_name} closure policy digest is missing"));
-    }
-    validate_fixed_point_stage_receipt(stage_name, receipt, unit_count, blockers);
+    let declared_digest = optional_str(request.meta, &format!("{prefix}/binary_blake3")).map(ToOwned::to_owned);
+    validate_declared_stage_digest(
+        request.stage_name,
+        declared_digest.as_deref(),
+        request.actual_binary_digest,
+        blockers,
+    );
+    let stage_policy = optional_str(request.meta, &format!("{prefix}/{TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD}"));
+    validate_stage_policy_digest(request.stage_name, stage_policy, request.expected_policy_digest, blockers);
+    validate_fixed_point_stage_receipt(request.stage_name, request.receipt, unit_count, blockers);
+    debug_assert!(blockers.len() >= blocker_count_before);
     StageProofFacts {
         binary_digest: declared_digest,
         unit_count,
     }
+}
+
+fn validate_fixed_point_stage_identity(
+    request: FixedPointStageValidationRequest<'_>,
+    prefix: &str,
+    blockers: &mut Vec<String>,
+) {
+    debug_assert!(prefix.starts_with('/'));
+    debug_assert!(matches!(request.stage_name, STAGE1_DIR | STAGE2_DIR));
+    expect_string(
+        request.meta,
+        ExpectedString {
+            pointer: &format!("{prefix}/name"),
+            value: request.stage_name,
+            label: "fixed-point stage name",
+        },
+        blockers,
+    );
+    expect_bool(request.meta, &format!("{prefix}/success"), true, "fixed-point stage success", blockers);
+    expect_i64(
+        request.meta,
+        &format!("{prefix}/status_code"),
+        i64::from(SUCCESS_EXIT_CODE),
+        "fixed-point stage status code",
+        blockers,
+    );
+    expect_string(
+        request.meta,
+        ExpectedString {
+            pointer: &format!("{prefix}/execution_status"),
+            value: SUCCESS_STATUS,
+            label: "fixed-point stage execution status",
+        },
+        blockers,
+    );
+}
+
+fn validate_fixed_point_stage_execution(
+    request: FixedPointStageValidationRequest<'_>,
+    prefix: &str,
+    blockers: &mut Vec<String>,
+) {
+    debug_assert!(prefix.starts_with('/'));
+    debug_assert!(matches!(request.stage_name, STAGE1_DIR | STAGE2_DIR));
+    expect_bool(
+        request.meta,
+        &format!("{prefix}/cargo_marker_absent"),
+        true,
+        "fixed-point stage Cargo guard",
+        blockers,
+    );
+    expect_u64(
+        request.meta,
+        &format!("{prefix}/failed_unit_count"),
+        0,
+        "fixed-point stage failed unit count",
+        blockers,
+    );
+    expect_i64(
+        request.meta,
+        &format!("{prefix}/smoke_status_code"),
+        i64::from(SUCCESS_EXIT_CODE),
+        "fixed-point stage smoke status",
+        blockers,
+    );
+    expect_null(
+        request.meta,
+        ExpectedNull {
+            pointer: &format!("{prefix}/blocker"),
+            label: "fixed-point stage blocker",
+        },
+        blockers,
+    );
+}
+
+fn validate_declared_stage_digest(
+    stage_name: &str,
+    declared_digest: Option<&str>,
+    actual_binary_digest: Option<&str>,
+    blockers: &mut Vec<String>,
+) {
+    match (declared_digest, actual_binary_digest) {
+        (Some(declared), Some(actual)) if declared == actual => {}
+        (Some(declared), Some(actual)) => {
+            blockers.push(format!("{stage_name} binary digest mismatch: declared {declared} actual {actual}"));
+        }
+        (Some(_), None) => blockers.push(format!("{stage_name} binary could not be hashed")),
+        (None, _) => blockers.push(format!("{stage_name} binary digest is missing")),
+    }
+}
+
+fn validate_stage_policy_digest(
+    stage_name: &str,
+    stage_policy: Option<&str>,
+    expected_policy: Option<&str>,
+    blockers: &mut Vec<String>,
+) {
+    if let (Some(stage_policy), Some(expected_policy)) = (stage_policy, expected_policy) {
+        if stage_policy != expected_policy {
+            blockers.push(format!("{stage_name} closure policy digest does not match the proof closure digest"));
+        }
+        return;
+    }
+    blockers.push(format!("{stage_name} closure policy digest is missing"));
 }
 
 fn validate_fixed_point_stage_receipt(
@@ -798,15 +1109,19 @@ fn validate_fixed_point_stage_receipt(
     expected_unit_count: Option<u64>,
     blockers: &mut Vec<String>,
 ) {
+    debug_assert!(matches!(stage_name, STAGE1_DIR | STAGE2_DIR));
+    debug_assert_ne!(STAGE1_DIR, STAGE2_DIR);
     let Some(receipt) = receipt else {
         blockers.push(format!("{stage_name} receipt is missing or invalid"));
         return;
     };
     expect_string(
         receipt,
-        "/topology_execution/execution_status",
-        SUCCESS_STATUS,
-        "stage receipt execution status",
+        ExpectedString {
+            pointer: "/topology_execution/execution_status",
+            value: SUCCESS_STATUS,
+            label: "stage receipt execution status",
+        },
         blockers,
     );
     let Some(units) = receipt.pointer("/topology_execution/unit_executions").and_then(Value::as_array) else {
@@ -875,15 +1190,14 @@ fn read_text_optional(path: &Path, label: &str, blockers: &mut Vec<String>) -> O
 fn stage_binary_digest_from_meta(
     proof_dir: &Path,
     meta: Option<&Value>,
-    pointer: &str,
-    label: &str,
+    artifact: ProofArtifactRequest<'_>,
     blockers: &mut Vec<String>,
 ) -> Option<String> {
-    let path = proof_path_from_meta(proof_dir, meta, pointer, label, blockers)?;
+    let path = proof_path_from_meta(proof_dir, meta, artifact, blockers)?;
     match blake3_file(&path) {
         Ok(digest) => Some(digest),
         Err(err) => {
-            blockers.push(format!("hash {label} {}: {}", path.display(), err.message()));
+            blockers.push(format!("hash {} {}: {}", artifact.label, path.display(), err.message()));
             None
         }
     }
@@ -892,25 +1206,25 @@ fn stage_binary_digest_from_meta(
 fn stage_receipt_from_meta(
     proof_dir: &Path,
     meta: Option<&Value>,
-    pointer: &str,
-    label: &str,
+    artifact: ProofArtifactRequest<'_>,
     blockers: &mut Vec<String>,
 ) -> Option<Value> {
-    let path = proof_path_from_meta(proof_dir, meta, pointer, label, blockers)?;
-    let (value, _) = read_json_with_digest(&path, label, blockers);
+    let path = proof_path_from_meta(proof_dir, meta, artifact, blockers)?;
+    let (value, _) = read_json_with_digest(&path, artifact.label, blockers);
     value
 }
 
 fn proof_path_from_meta(
     proof_dir: &Path,
     meta: Option<&Value>,
-    pointer: &str,
-    label: &str,
+    artifact: ProofArtifactRequest<'_>,
     blockers: &mut Vec<String>,
 ) -> Option<PathBuf> {
+    debug_assert!(artifact.pointer.starts_with('/'));
+    debug_assert!(!artifact.label.is_empty());
     let meta = meta?;
-    let Some(raw) = optional_str(meta, pointer) else {
-        blockers.push(format!("fixed-point meta missing {label} path at {pointer}"));
+    let Some(raw) = optional_str(meta, artifact.pointer) else {
+        blockers.push(format!("fixed-point meta missing {} path at {}", artifact.label, artifact.pointer));
         return None;
     };
     let path = Path::new(raw);
@@ -949,11 +1263,13 @@ fn optional_u64(value: &Value, pointer: &str) -> Option<u64> {
     value.pointer(pointer).and_then(Value::as_u64)
 }
 
-fn expect_string(value: &Value, pointer: &str, expected: &str, label: &str, blockers: &mut Vec<String>) {
-    match optional_str(value, pointer) {
-        Some(actual) if actual == expected => {}
-        Some(actual) => blockers.push(format!("{label} expected {expected}, got {actual}")),
-        None => blockers.push(format!("{label} is missing at {pointer}")),
+fn expect_string(value: &Value, expected: ExpectedString<'_>, blockers: &mut Vec<String>) {
+    debug_assert!(expected.pointer.starts_with('/'));
+    debug_assert!(!expected.label.is_empty());
+    match optional_str(value, expected.pointer) {
+        Some(actual) if actual == expected.value => {}
+        Some(actual) => blockers.push(format!("{} expected {}, got {actual}", expected.label, expected.value)),
+        None => blockers.push(format!("{} is missing at {}", expected.label, expected.pointer)),
     }
 }
 
@@ -981,16 +1297,20 @@ fn expect_u64(value: &Value, pointer: &str, expected: u64, label: &str, blockers
     }
 }
 
-fn expect_null(value: &Value, pointer: &str, label: &str, blockers: &mut Vec<String>) {
-    match value.pointer(pointer) {
+fn expect_null(value: &Value, expected: ExpectedNull<'_>, blockers: &mut Vec<String>) {
+    debug_assert!(expected.pointer.starts_with('/'));
+    debug_assert!(!expected.label.is_empty());
+    match value.pointer(expected.pointer) {
         Some(value) if value.is_null() => {}
-        Some(value) => blockers.push(format!("{label} expected null, got {value}")),
-        None => blockers.push(format!("{label} is missing at {pointer}")),
+        Some(value) => blockers.push(format!("{} expected null, got {value}", expected.label)),
+        None => blockers.push(format!("{} is missing at {}", expected.label, expected.pointer)),
     }
 }
 
 pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) -> Result<(), RunError> {
     let paths = prepare_paths(options.root, options.out_dir)?;
+    debug_assert!(paths.root.is_absolute());
+    debug_assert!(!paths.out_dir.starts_with(&paths.root));
     prepare_output_dir(&paths)?;
     write_cargo_shim(&paths.explicit_cargo_shim, &paths.marker_path)?;
     write_cargo_shim(&paths.path_cargo_shim, &paths.marker_path)?;
@@ -1007,14 +1327,14 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
         &loaded_rust_provider,
     )?;
 
-    let mut child = run_rust_plan_child(
-        &paths,
-        &execution_toolchain.rustc,
-        options.targets,
-        &execution_toolchain.path_env,
-        execution_toolchain.c_compiler_route.as_ref(),
-        initial_toolchain_status.policy_digest_blake3.as_deref(),
-    )?;
+    let mut child = run_rust_plan_child(RustPlanChildRequest {
+        paths: &paths,
+        rustc: &execution_toolchain.rustc,
+        targets: options.targets,
+        path_env: &execution_toolchain.path_env,
+        c_compiler_route: execution_toolchain.c_compiler_route.as_ref(),
+        policy_digest_blake3: initial_toolchain_status.policy_digest_blake3.as_deref(),
+    })?;
     let produced = if child.blocker.is_none() {
         materialize_or_block(&paths, &mut child)?
     } else {
@@ -1023,14 +1343,14 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
     if child.blocker.is_some() && produced.is_none() {
         write_blocked_smoke_outputs(&paths, child.blocker.as_deref())?;
     }
-    let summary = summarize(
-        &paths,
-        &child,
-        produced.as_ref(),
-        execution_toolchain.status,
-        loaded_rust_provider.status,
-        options.hermeticity_mode,
-    );
+    let summary = summarize(SelfBuildSummaryContext {
+        paths: &paths,
+        child: &child,
+        produced: produced.as_ref(),
+        toolchain_closure: &execution_toolchain.status,
+        rust_source_provider: &loaded_rust_provider.status,
+        hermeticity_mode: options.hermeticity_mode,
+    });
     write_summary(&paths.meta_path, &summary)?;
     print_summary(&summary, options.json)?;
 
@@ -1044,6 +1364,8 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     let root = canonicalize_root(options.root)?;
     let bundle_dir = absolutize(&root, options.out_dir);
     ensure_outside_root(&bundle_dir, &root)?;
+    debug_assert!(root.is_absolute());
+    debug_assert!(!bundle_dir.starts_with(&root));
     prepare_fixed_point_output_dir(&bundle_dir)?;
     let loaded_rust_provider = load_rust_source_provider(options.rust_source_provider)?;
     let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
@@ -1058,7 +1380,16 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     )?;
     write_fixed_point_non_claims(&plan.bundle_dir, &toolchain_status)?;
     write_fixed_point_preflight(&plan, &compatibility.summary, &toolchain_status, &loaded_rust_provider.status)?;
-
+    let finish_context = FixedPointFinishContext {
+        summary: FixedPointSummaryContext {
+            plan: &plan,
+            compatibility: &compatibility.summary,
+            toolchain_closure: &toolchain_status,
+            rust_source_provider: &loaded_rust_provider.status,
+            hermeticity_mode: options.hermeticity_mode,
+        },
+        json_mode: options.json,
+    };
     let host_mantle = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
     let stage_policy_digest = toolchain_status.policy_digest_blake3.as_deref();
     let stage1 = execute_fixed_point_stage(
@@ -1068,31 +1399,11 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
         stage_policy_digest,
     )?;
     if !stage1.success {
-        return finish_fixed_point(
-            options.json,
-            &plan,
-            &compatibility.summary,
-            &toolchain_status,
-            &loaded_rust_provider.status,
-            options.hermeticity_mode,
-            stage1,
-            None,
-            BLOCKED_STATUS,
-        );
+        return finish_fixed_point(&finish_context, stage1, None, BLOCKED_STATUS);
     }
     let Some(stage1_binary) = stage1.binary.as_deref() else {
         let stage1 = blocked_fixed_point_stage(stage1, "stage1 succeeded without produced binary path".to_string());
-        return finish_fixed_point(
-            options.json,
-            &plan,
-            &compatibility.summary,
-            &toolchain_status,
-            &loaded_rust_provider.status,
-            options.hermeticity_mode,
-            stage1,
-            None,
-            BLOCKED_STATUS,
-        );
+        return finish_fixed_point(&finish_context, stage1, None, BLOCKED_STATUS);
     };
     let stage2 = execute_fixed_point_stage(
         &plan.stages[FIXED_POINT_STAGE2_INDEX],
@@ -1101,30 +1412,10 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
         stage_policy_digest,
     )?;
     if !stage2.success {
-        return finish_fixed_point(
-            options.json,
-            &plan,
-            &compatibility.summary,
-            &toolchain_status,
-            &loaded_rust_provider.status,
-            options.hermeticity_mode,
-            stage1,
-            Some(stage2),
-            BLOCKED_STATUS,
-        );
+        return finish_fixed_point(&finish_context, stage1, Some(stage2), BLOCKED_STATUS);
     }
     let status = fixed_point_status(&stage1, &stage2)?;
-    finish_fixed_point(
-        options.json,
-        &plan,
-        &compatibility.summary,
-        &toolchain_status,
-        &loaded_rust_provider.status,
-        options.hermeticity_mode,
-        stage1,
-        Some(stage2),
-        status,
-    )
+    finish_fixed_point(&finish_context, stage1, Some(stage2), status)
 }
 
 fn prepare_paths(root: &Path, out_dir: &Path) -> Result<BuildPaths, RunError> {
@@ -1132,6 +1423,8 @@ fn prepare_paths(root: &Path, out_dir: &Path) -> Result<BuildPaths, RunError> {
     let out_dir = absolutize(&root, out_dir);
     ensure_outside_root(&out_dir, &root)?;
     let execution_dir = out_dir.join(EXECUTION_DIR);
+    debug_assert!(root.is_absolute());
+    debug_assert_eq!(execution_dir.parent(), Some(out_dir.as_path()));
     Ok(BuildPaths {
         root,
         receipt_path: out_dir.join(RECEIPT_FILE),
@@ -1172,27 +1465,27 @@ pub(crate) fn plan_fixed_point_paths(
     let shared_execution_dir = bundle_dir.join(EXECUTION_DIR);
     let stage1_binary_path = bundle_dir.join(STAGE1_DIR).join(PRODUCED_MANTLE_FILE);
     let stages = [
-        fixed_point_stage_plan(
-            STAGE1_DIR,
+        fixed_point_stage_plan(FixedPointStagePlanRequest {
+            name: STAGE1_DIR,
             root,
-            &bundle_dir,
-            &shared_execution_dir,
+            bundle_dir: &bundle_dir,
+            execution_dir: &shared_execution_dir,
             rustc,
             targets,
-            FixedPointMantleBinary::Host,
-        ),
-        fixed_point_stage_plan(
-            STAGE2_DIR,
+            mantle_binary: FixedPointMantleBinary::Host,
+        }),
+        fixed_point_stage_plan(FixedPointStagePlanRequest {
+            name: STAGE2_DIR,
             root,
-            &bundle_dir,
-            &shared_execution_dir,
+            bundle_dir: &bundle_dir,
+            execution_dir: &shared_execution_dir,
             rustc,
             targets,
-            FixedPointMantleBinary::StageOutput {
+            mantle_binary: FixedPointMantleBinary::StageOutput {
                 stage_name: STAGE1_DIR,
                 path: stage1_binary_path,
             },
-        ),
+        }),
     ];
     debug_assert_eq!(stages.len(), FIXED_POINT_STAGE_COUNT);
     debug_assert_eq!(stages[FIXED_POINT_STAGE1_INDEX].name, STAGE1_DIR);
@@ -1209,33 +1502,25 @@ pub(crate) fn plan_fixed_point_paths(
     })
 }
 
-fn fixed_point_stage_plan(
-    name: &'static str,
-    root: &Path,
-    bundle_dir: &Path,
-    execution_dir: &Path,
-    rustc: &Path,
-    targets: &[String],
-    mantle_binary: FixedPointMantleBinary,
-) -> FixedPointStagePlan {
-    debug_assert!(!name.is_empty());
-    debug_assert!(root.is_absolute());
-    debug_assert!(bundle_dir.is_absolute());
-    let stage_dir = bundle_dir.join(name);
+fn fixed_point_stage_plan(request: FixedPointStagePlanRequest<'_>) -> FixedPointStagePlan {
+    debug_assert!(!request.name.is_empty());
+    debug_assert!(request.root.is_absolute());
+    debug_assert!(request.bundle_dir.is_absolute());
+    let stage_dir = request.bundle_dir.join(request.name);
     let explicit_cargo_shim = stage_dir.join(CARGO_SHIM_FILE);
     let guard_path_dir = stage_dir.join(CARGO_SHIM_DIR);
     let path_cargo_shim = guard_path_dir.join(CARGO_SHIM_NAME);
     let command = FixedPointStageCommandPlan {
-        mantle_binary,
-        args: rust_plan_args(root, &explicit_cargo_shim, rustc, targets, execution_dir),
-        current_dir: root.to_path_buf(),
+        mantle_binary: request.mantle_binary,
+        args: rust_plan_args(request.root, &explicit_cargo_shim, request.rustc, request.targets, request.execution_dir),
+        current_dir: request.root.to_path_buf(),
         cargo_env_value: path_cargo_shim.clone(),
         path_guard_dir: guard_path_dir.clone(),
     };
     FixedPointStagePlan {
-        name,
+        name: request.name,
         stage_dir: stage_dir.clone(),
-        execution_dir: execution_dir.to_path_buf(),
+        execution_dir: request.execution_dir.to_path_buf(),
         receipt_path: stage_dir.join(RECEIPT_FILE),
         stderr_path: stage_dir.join(STDERR_FILE),
         status_path: stage_dir.join(STATUS_FILE),
@@ -1307,10 +1592,12 @@ fn prepare_rustc_compatibility(
 ) -> Result<RustcCompatibility, RunError> {
     let requested_rustc = resolve_executable(requested, "rustc")?;
     let toolchain_dir = bundle_dir.join(TOOLCHAIN_DIR);
+    debug_assert_eq!(toolchain_dir.parent(), Some(bundle_dir));
+    debug_assert_ne!(toolchain_dir, requested_rustc);
     fs::create_dir_all(&toolchain_dir)
         .map_err(|err| internal(format!("create toolchain dir {}: {err}", toolchain_dir.display())))?;
     let probe_path_env = prepare_rustc_compatibility_path_env(&toolchain_dir, toolchain_closure)?;
-    if rustc_accepts_link_self_contained_no(&requested_rustc, &toolchain_dir, probe_path_env.as_deref()) {
+    if rustc_accepts_link_self_contained_no(&requested_rustc, &toolchain_dir, probe_path_env.as_deref())? {
         let summary = RustcCompatibilitySummary {
             requested_rustc: requested_rustc.clone(),
             stage_rustc: requested_rustc,
@@ -1383,19 +1670,20 @@ fn resolve_executable_on_path(path: &Path, name: &str) -> Result<PathBuf, RunErr
     Err(internal(format!("required tool not found on PATH: {name}")))
 }
 
-fn rustc_accepts_link_self_contained_no(rustc: &Path, toolchain_dir: &Path, path_env: Option<&OsStr>) -> bool {
+fn rustc_accepts_link_self_contained_no(
+    rustc: &Path,
+    toolchain_dir: &Path,
+    path_env: Option<&OsStr>,
+) -> Result<bool, RunError> {
     let probe_dir = toolchain_dir.join(RUSTC_PROBE_DIR);
     let probe_source = probe_dir.join(RUSTC_PROBE_SOURCE_FILE);
-    if remove_owned_path(&probe_dir).is_err() {
-        return false;
-    }
-    if fs::create_dir_all(&probe_dir).is_err() {
-        return false;
-    }
-    if fs::write(&probe_source, RUSTC_PROBE_SOURCE).is_err() {
-        let _ = remove_owned_path(&probe_dir);
-        return false;
-    }
+    debug_assert_eq!(probe_dir.parent(), Some(toolchain_dir));
+    debug_assert_eq!(probe_source.parent(), Some(probe_dir.as_path()));
+    remove_owned_path(&probe_dir)?;
+    fs::create_dir_all(&probe_dir)
+        .map_err(|err| internal(format!("create rustc compatibility probe dir {}: {err}", probe_dir.display())))?;
+    fs::write(&probe_source, RUSTC_PROBE_SOURCE)
+        .map_err(|err| internal(format!("write rustc compatibility probe {}: {err}", probe_source.display())))?;
     let mut command = Command::new(rustc);
     command
         .arg("--crate-type")
@@ -1408,9 +1696,9 @@ fn rustc_accepts_link_self_contained_no(rustc: &Path, toolchain_dir: &Path, path
     if let Some(path_env) = path_env {
         command.env("PATH", path_env);
     }
-    let success = command.output().is_ok_and(|output| output.status.success());
-    let _ = remove_owned_path(&probe_dir);
-    success
+    let is_accepted = command.output().is_ok_and(|output| output.status.success());
+    remove_owned_path(&probe_dir)?;
+    Ok(is_accepted)
 }
 
 fn write_rustc_wrapper(wrapper: &Path, real_rustc: &Path) -> Result<(), RunError> {
@@ -1433,6 +1721,8 @@ fn write_rustc_compatibility(path: &Path, summary: &RustcCompatibilitySummary) -
 }
 
 fn prepare_output_dir(paths: &BuildPaths) -> Result<(), RunError> {
+    debug_assert_eq!(paths.execution_dir.parent(), Some(paths.out_dir.as_path()));
+    debug_assert_eq!(paths.guard_path_dir.parent(), Some(paths.out_dir.as_path()));
     fs::create_dir_all(&paths.out_dir)
         .map_err(|err| internal(format!("create output dir {}: {err}", paths.out_dir.display())))?;
     remove_owned_path(&paths.execution_dir)?;
@@ -1488,29 +1778,25 @@ fn ensure_outside_root(out_dir: &Path, root: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
-fn run_rust_plan_child(
-    paths: &BuildPaths,
-    rustc: &Path,
-    targets: &[String],
-    path_env: &OsStr,
-    c_compiler_route: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
-    policy_digest_blake3: Option<&str>,
-) -> Result<ChildRun, RunError> {
+fn run_rust_plan_child(request: RustPlanChildRequest<'_>) -> Result<ChildRun, RunError> {
+    debug_assert!(request.paths.root.is_absolute());
+    debug_assert_ne!(request.paths.explicit_cargo_shim, request.paths.path_cargo_shim);
     let current_exe = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
     let mut command = Command::new(&current_exe);
     command
-        .arg("--json")
-        .arg("rust-plan")
-        .arg("--root")
-        .arg(&paths.root)
-        .arg("--cargo")
-        .arg(&paths.explicit_cargo_shim)
-        .arg("--rustc")
-        .arg(rustc);
-    for target in targets {
+        .arg(JSON_FLAG)
+        .arg(RUST_PLAN_COMMAND)
+        .arg(ROOT_FLAG)
+        .arg(&request.paths.root)
+        .arg(CARGO_FLAG)
+        .arg(&request.paths.explicit_cargo_shim)
+        .arg(RUSTC_FLAG)
+        .arg(request.rustc);
+    for target in request.targets {
         command.arg("--target").arg(target);
     }
-    let route_json = c_compiler_route
+    let route_json = request
+        .c_compiler_route
         .map(serde_json::to_string)
         .transpose()
         .map_err(|err| internal(format!("serialize receipt-bound C compiler route: {err}")))?;
@@ -1520,34 +1806,38 @@ fn run_rust_plan_child(
             .arg(&route_json)
             .env(crate::source_toolchain_closure::SOURCE_BUILT_C_COMPILER_ROUTE_ENV, route_json);
     }
-    if let Some(policy_digest_blake3) = policy_digest_blake3 {
+    if let Some(policy_digest_blake3) = request.policy_digest_blake3 {
         command.env(crate::rust_plan::RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV, policy_digest_blake3);
     }
     let output = command
-        .arg("--no-cargo-oracle")
-        .arg("--execute-topology")
-        .arg("--execution-output-root")
-        .arg(&paths.execution_dir)
-        .current_dir(&paths.root)
-        .env("CARGO", &paths.path_cargo_shim)
+        .arg(NO_CARGO_ORACLE_FLAG)
+        .arg(EXECUTE_TOPOLOGY_FLAG)
+        .arg(EXECUTION_OUTPUT_ROOT_FLAG)
+        .arg(&request.paths.execution_dir)
+        .current_dir(&request.paths.root)
+        .env("CARGO", &request.paths.path_cargo_shim)
         .env(RUSTC_BOOTSTRAP_ENV, "1")
-        .env("PATH", path_env)
+        .env("PATH", request.path_env)
         .output()
         .map_err(|err| internal(format!("launch {} rust-plan: {err}", current_exe.display())))?;
 
-    write_bytes(&paths.receipt_path, &output.stdout)?;
-    write_bytes(&paths.stderr_path, &output.stderr)?;
-    write_text(&paths.status_path, &status_text(output.status.code()))?;
-    let receipt = parse_receipt(&paths.receipt_path, output.status.success())?;
+    write_bytes(&request.paths.receipt_path, &output.stdout)?;
+    write_bytes(&request.paths.stderr_path, &output.stderr)?;
+    write_text(&request.paths.status_path, &status_text(output.status.code()))?;
+    let receipt = parse_receipt(&request.paths.receipt_path, output.status.success())?;
     let execution_status = receipt_execution_status(receipt.as_ref());
-    let cargo_marker_absent = !paths.marker_path.exists();
-    let (blocker, blocker_diagnostic) =
-        child_blocker_with_diagnostic(output.status.code(), &execution_status, cargo_marker_absent, receipt.as_ref());
+    let is_cargo_marker_absent = !request.paths.marker_path.exists();
+    let (blocker, blocker_diagnostic) = child_blocker_with_diagnostic(
+        output.status.code(),
+        &execution_status,
+        is_cargo_marker_absent,
+        receipt.as_ref(),
+    );
     Ok(ChildRun {
         status_code: output.status.code(),
         receipt,
         execution_status,
-        cargo_marker_absent,
+        cargo_marker_absent: is_cargo_marker_absent,
         blocker,
         blocker_diagnostic,
     })
@@ -1580,11 +1870,11 @@ fn child_blocker_with_diagnostic(
 fn classify_blocked_topology_receipt(receipt: Option<&Value>, execution_status: &str) -> BlockedTopologyDiagnostic {
     debug_assert!(execution_status != SUCCESS_STATUS);
     let Some(receipt) = receipt else {
-        return malformed_blocked_topology_diagnostic(
+        return malformed_blocked_topology_diagnostic(MalformedBlockedTopologyRequest {
             execution_status,
-            "missing-blocked-receipt",
-            "blocked topology execution did not produce a parseable receipt",
-        );
+            classification: "missing-blocked-receipt",
+            diagnostic: "blocked topology execution did not produce a parseable receipt",
+        });
     };
     let Some(units) = receipt.pointer("/topology_execution/unit_executions").and_then(Value::as_array) else {
         return topology_level_blocked_diagnostic(receipt, execution_status);
@@ -1597,11 +1887,14 @@ fn classify_blocked_topology_receipt(receipt: Option<&Value>, execution_status: 
     match blocked_units.as_slice() {
         [] => topology_level_blocked_diagnostic(receipt, execution_status),
         [(unit_index, unit)] => blocked_unit_diagnostic(execution_status, units, *unit_index, unit),
-        _ => malformed_blocked_topology_diagnostic(
+        _ => malformed_blocked_topology_diagnostic(MalformedBlockedTopologyRequest {
             execution_status,
-            "ambiguous-blocked-units",
-            &format!("blocked topology receipt contains {} non-success unit executions", blocked_units.len()),
-        ),
+            classification: "ambiguous-blocked-units",
+            diagnostic: &format!(
+                "blocked topology receipt contains {} non-success unit executions",
+                blocked_units.len()
+            ),
+        }),
     }
 }
 
@@ -1611,6 +1904,8 @@ fn blocked_unit_diagnostic(
     unit_index: usize,
     unit: &Value,
 ) -> BlockedTopologyDiagnostic {
+    debug_assert!(unit_index < units.len());
+    debug_assert_ne!(execution_status, SUCCESS_STATUS);
     let required = [
         ("unit_id", optional_str(unit, "/unit_id")),
         ("package_id", optional_str(unit, "/package_id")),
@@ -1619,11 +1914,11 @@ fn blocked_unit_diagnostic(
         ("target_kind", optional_str(unit, "/target_kind")),
     ];
     if let Some((field, _)) = required.iter().find(|(_, value)| value.is_none()) {
-        return malformed_blocked_topology_diagnostic(
+        return malformed_blocked_topology_diagnostic(MalformedBlockedTopologyRequest {
             execution_status,
-            "malformed-blocked-unit",
-            &format!("blocked unit at index {unit_index} is missing required field {field}"),
-        );
+            classification: "malformed-blocked-unit",
+            diagnostic: &format!("blocked unit at index {unit_index} is missing required field {field}"),
+        });
     }
     let blocker_class = optional_str(unit, "/blocker/class").map(ToOwned::to_owned);
     let diagnostic = match blocker_class.as_deref() {
@@ -1649,6 +1944,8 @@ fn blocked_unit_diagnostic(
 }
 
 fn topology_level_blocked_diagnostic(receipt: &Value, execution_status: &str) -> BlockedTopologyDiagnostic {
+    debug_assert_ne!(execution_status, SUCCESS_STATUS);
+    debug_assert!("/topology_execution/blocker/class".starts_with('/'));
     let top_class = optional_str(receipt, "/topology_execution/blocker/class").map(ToOwned::to_owned);
     let nested = first_nested_planner_blocker(receipt);
     let blocker_class = nested
@@ -1721,14 +2018,12 @@ fn topology_level_diagnostic_message(top_class: Option<&str>, nested: Option<&(&
     }
 }
 
-fn malformed_blocked_topology_diagnostic(
-    execution_status: &str,
-    classification: &str,
-    diagnostic: &str,
-) -> BlockedTopologyDiagnostic {
+fn malformed_blocked_topology_diagnostic(request: MalformedBlockedTopologyRequest<'_>) -> BlockedTopologyDiagnostic {
+    debug_assert_ne!(request.execution_status, SUCCESS_STATUS);
+    debug_assert!(!request.classification.is_empty());
     BlockedTopologyDiagnostic {
-        classification: classification.to_string(),
-        topology_execution_status: execution_status.to_string(),
+        classification: request.classification.to_string(),
+        topology_execution_status: request.execution_status.to_string(),
         root_blocked_unit: None,
         package_id: None,
         execution_role: None,
@@ -1736,16 +2031,14 @@ fn malformed_blocked_topology_diagnostic(
         target_kind: None,
         predecessor_status: None,
         blocker_class: None,
-        diagnostic: diagnostic.to_string(),
+        diagnostic: request.diagnostic.to_string(),
     }
 }
 
 fn predecessor_status(units: &[Value], unit_index: usize) -> Option<String> {
-    if unit_index == 0 {
-        return None;
-    }
+    let predecessor_index = unit_index.checked_sub(1)?;
     units
-        .get(unit_index - 1)
+        .get(predecessor_index)
         .and_then(|unit| optional_str(unit, "/execution_status"))
         .map(ToOwned::to_owned)
 }
@@ -1778,6 +2071,8 @@ fn execute_fixed_point_stage(
     toolchain_closure: &LoadedToolchainClosure,
     policy_digest_blake3: Option<&str>,
 ) -> Result<FixedPointStageRun, RunError> {
+    debug_assert!(matches!(stage.name, STAGE1_DIR | STAGE2_DIR));
+    debug_assert_eq!(stage.command.path_guard_dir, stage.guard_path_dir);
     prepare_fixed_point_stage(stage)?;
     let path_env = execution_path_env(&stage.guard_path_dir, toolchain_closure)?;
     let c_compiler_route = fixed_point_c_compiler_route(toolchain_closure)?;
@@ -1846,14 +2141,14 @@ fn blocked_fixed_point_launch(
     write_text(&stage.stderr_path, &format!("{blocker}\n"))?;
     write_text(&stage.status_path, "launch-failed\n")?;
     write_blocked_fixed_point_smoke_outputs(stage, &blocker)?;
-    Ok(blocked_fixed_point_stage_from_plan(
+    Ok(blocked_fixed_point_stage_from_plan(BlockedFixedPointStageRequest {
         stage,
-        "launch-failed",
-        None,
+        execution_status: "launch-failed",
+        status_code: None,
         blocker,
         policy_digest_blake3,
         c_compiler_route,
-    ))
+    }))
 }
 
 fn fixed_point_stage_from_output(
@@ -1863,6 +2158,8 @@ fn fixed_point_stage_from_output(
     policy_digest_blake3: Option<&str>,
     c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> Result<FixedPointStageRun, RunError> {
+    debug_assert!(matches!(stage.name, STAGE1_DIR | STAGE2_DIR));
+    debug_assert_eq!(stage.receipt_path.parent(), Some(stage.stage_dir.as_path()));
     let mut receipt = parse_receipt(&stage.receipt_path, status_code == Some(SUCCESS_EXIT_CODE))?;
     annotate_fixed_point_stage_receipt(
         &stage.receipt_path,
@@ -1871,11 +2168,11 @@ fn fixed_point_stage_from_output(
         c_compiler_route.as_ref(),
     )?;
     let execution_status = receipt_execution_status(receipt.as_ref());
-    let cargo_marker_absent = !stage.cargo_marker_path.exists();
+    let is_cargo_marker_absent = !stage.cargo_marker_path.exists();
     let mut blocker_diagnostic = None;
     if blocker.is_none() {
         let classified =
-            child_blocker_with_diagnostic(status_code, &execution_status, cargo_marker_absent, receipt.as_ref());
+            child_blocker_with_diagnostic(status_code, &execution_status, is_cargo_marker_absent, receipt.as_ref());
         blocker = classified.0;
         blocker_diagnostic = classified.1;
     }
@@ -1884,60 +2181,54 @@ fn fixed_point_stage_from_output(
     } else {
         None
     };
-    fixed_point_stage_with_artifact(
+    fixed_point_stage_with_artifact(FixedPointStageAssembly {
         stage,
         status_code,
-        receipt.as_ref(),
+        receipt: receipt.as_ref(),
         execution_status,
-        cargo_marker_absent,
+        is_cargo_marker_absent,
         blocker,
         blocker_diagnostic,
         produced,
         policy_digest_blake3,
         c_compiler_route,
-    )
+    })
 }
 
-fn fixed_point_stage_with_artifact(
-    stage: &FixedPointStagePlan,
-    status_code: Option<i32>,
-    receipt: Option<&Value>,
-    execution_status: String,
-    cargo_marker_absent: bool,
-    mut blocker: Option<String>,
-    blocker_diagnostic: Option<BlockedTopologyDiagnostic>,
-    produced: Option<FixedPointStageArtifact>,
-    policy_digest_blake3: Option<&str>,
-    c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
-) -> Result<FixedPointStageRun, RunError> {
-    if let Some(produced) = produced.as_ref()
+fn fixed_point_stage_with_artifact(mut request: FixedPointStageAssembly<'_>) -> Result<FixedPointStageRun, RunError> {
+    debug_assert!(request.receipt.is_some() || request.produced.is_none());
+    debug_assert!(request.produced.is_none() || request.blocker.is_none());
+    if let Some(produced) = request.produced.as_ref()
         && produced.smoke_status_code != SUCCESS_EXIT_CODE
     {
-        blocker = Some(format!("smoke check exited with {}", produced.smoke_status_code));
+        request.blocker = Some(format!("smoke check exited with {}", produced.smoke_status_code));
     }
-    if blocker.is_some() && produced.is_none() {
-        write_blocked_fixed_point_smoke_outputs(stage, blocker.as_deref().unwrap_or("blocked before binary"))?;
+    if request.blocker.is_some() && request.produced.is_none() {
+        write_blocked_fixed_point_smoke_outputs(
+            request.stage,
+            request.blocker.as_deref().unwrap_or("blocked before binary"),
+        )?;
     }
     Ok(FixedPointStageRun {
-        name: stage.name,
-        dir: stage.stage_dir.clone(),
-        execution_dir: stage.execution_dir.clone(),
-        receipt_path: stage.receipt_path.clone(),
-        stderr_path: stage.stderr_path.clone(),
-        status_path: stage.status_path.clone(),
-        status_code,
-        execution_status,
-        cargo_marker_absent,
-        success: blocker.is_none(),
-        unit_count: receipt.map(unit_count).unwrap_or_default(),
-        failed_unit_count: receipt.map(failed_unit_count).unwrap_or_default(),
-        binary: produced.as_ref().map(|value| value.binary.clone()),
-        binary_blake3: produced.as_ref().map(|value| value.digest.clone()),
-        smoke_status_code: produced.as_ref().map(|value| value.smoke_status_code),
-        source_built_toolchain_closure_policy_digest_blake3: policy_digest_blake3.map(ToOwned::to_owned),
-        selected_c_compiler: c_compiler_route,
-        blocker,
-        blocker_diagnostic,
+        name: request.stage.name,
+        dir: request.stage.stage_dir.clone(),
+        execution_dir: request.stage.execution_dir.clone(),
+        receipt_path: request.stage.receipt_path.clone(),
+        stderr_path: request.stage.stderr_path.clone(),
+        status_path: request.stage.status_path.clone(),
+        status_code: request.status_code,
+        execution_status: request.execution_status,
+        cargo_marker_absent: request.is_cargo_marker_absent,
+        success: request.blocker.is_none(),
+        unit_count: request.receipt.map(unit_count).unwrap_or_default(),
+        failed_unit_count: request.receipt.map(failed_unit_count).unwrap_or_default(),
+        binary: request.produced.as_ref().map(|value| value.binary.clone()),
+        binary_blake3: request.produced.as_ref().map(|value| value.digest.clone()),
+        smoke_status_code: request.produced.as_ref().map(|value| value.smoke_status_code),
+        source_built_toolchain_closure_policy_digest_blake3: request.policy_digest_blake3.map(ToOwned::to_owned),
+        selected_c_compiler: request.c_compiler_route,
+        blocker: request.blocker,
+        blocker_diagnostic: request.blocker_diagnostic,
     })
 }
 
@@ -1947,6 +2238,8 @@ fn annotate_fixed_point_stage_receipt(
     policy_digest_blake3: Option<&str>,
     c_compiler_route: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> Result<(), RunError> {
+    debug_assert_eq!(receipt_path.file_name(), Some(OsStr::new(RECEIPT_FILE)));
+    debug_assert_ne!(TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD, SELECTED_C_COMPILER_FIELD);
     if policy_digest_blake3.is_none() && c_compiler_route.is_none() {
         return Ok(());
     }
@@ -1974,6 +2267,8 @@ fn materialize_fixed_point_stage_artifact(
     stage: &FixedPointStagePlan,
     receipt: Option<&Value>,
 ) -> Result<Option<FixedPointStageArtifact>, RunError> {
+    debug_assert_eq!(stage.binary_path.parent(), Some(stage.stage_dir.as_path()));
+    debug_assert_ne!(stage.execution_dir, stage.stage_dir);
     let Some(receipt) = receipt else {
         return Ok(None);
     };
@@ -2004,23 +2299,18 @@ fn blocked_fixed_point_stage(mut stage: FixedPointStageRun, blocker: String) -> 
     stage
 }
 
-fn blocked_fixed_point_stage_from_plan(
-    stage: &FixedPointStagePlan,
-    execution_status: &str,
-    status_code: Option<i32>,
-    blocker: String,
-    policy_digest_blake3: Option<&str>,
-    c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
-) -> FixedPointStageRun {
+fn blocked_fixed_point_stage_from_plan(request: BlockedFixedPointStageRequest<'_>) -> FixedPointStageRun {
+    debug_assert!(!request.blocker.is_empty());
+    debug_assert_ne!(request.execution_status, SUCCESS_STATUS);
     FixedPointStageRun {
-        name: stage.name,
-        dir: stage.stage_dir.clone(),
-        execution_dir: stage.execution_dir.clone(),
-        receipt_path: stage.receipt_path.clone(),
-        stderr_path: stage.stderr_path.clone(),
-        status_path: stage.status_path.clone(),
-        status_code,
-        execution_status: execution_status.to_string(),
+        name: request.stage.name,
+        dir: request.stage.stage_dir.clone(),
+        execution_dir: request.stage.execution_dir.clone(),
+        receipt_path: request.stage.receipt_path.clone(),
+        stderr_path: request.stage.stderr_path.clone(),
+        status_path: request.stage.status_path.clone(),
+        status_code: request.status_code,
+        execution_status: request.execution_status.to_string(),
         cargo_marker_absent: true,
         success: false,
         unit_count: 0,
@@ -2028,14 +2318,16 @@ fn blocked_fixed_point_stage_from_plan(
         binary: None,
         binary_blake3: None,
         smoke_status_code: None,
-        source_built_toolchain_closure_policy_digest_blake3: policy_digest_blake3.map(ToOwned::to_owned),
-        selected_c_compiler: c_compiler_route,
-        blocker: Some(blocker),
+        source_built_toolchain_closure_policy_digest_blake3: request.policy_digest_blake3.map(ToOwned::to_owned),
+        selected_c_compiler: request.c_compiler_route,
+        blocker: Some(request.blocker),
         blocker_diagnostic: None,
     }
 }
 
 fn fixed_point_status(stage1: &FixedPointStageRun, stage2: &FixedPointStageRun) -> Result<&'static str, RunError> {
+    debug_assert_eq!(stage1.name, STAGE1_DIR);
+    debug_assert_eq!(stage2.name, STAGE2_DIR);
     if stage1.source_built_toolchain_closure_policy_digest_blake3
         != stage2.source_built_toolchain_closure_policy_digest_blake3
     {
@@ -2057,34 +2349,61 @@ fn fixed_point_status(stage1: &FixedPointStageRun, stage2: &FixedPointStageRun) 
 }
 
 fn finish_fixed_point(
-    json_mode: bool,
-    plan: &FixedPointPlan,
-    compatibility: &RustcCompatibilitySummary,
-    toolchain_closure: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
-    rust_source_provider: &RustSourceProviderBindingStatus,
-    hermeticity_mode: crunch_pipeline::HermeticityMode,
+    context: &FixedPointFinishContext<'_>,
     stage1: FixedPointStageRun,
     stage2: Option<FixedPointStageRun>,
     status: &str,
 ) -> Result<(), RunError> {
-    let summary = fixed_point_summary(
-        plan,
-        compatibility,
-        toolchain_closure,
-        rust_source_provider,
-        hermeticity_mode,
-        &stage1,
-        stage2.as_ref(),
-        status,
-    );
-    write_summary(&plan.meta_path, &summary)?;
-    print_fixed_point_summary(&summary, json_mode, &plan.bundle_dir)?;
+    debug_assert_eq!(stage1.name, STAGE1_DIR);
+    debug_assert!(matches!(status, SUCCESS_STATUS | BLOCKED_STATUS | MISMATCH_STATUS));
+    let summary = fixed_point_summary_from_context(&context.summary, &stage1, stage2.as_ref(), status);
+    write_summary(&context.summary.plan.meta_path, &summary)?;
+    print_fixed_point_summary(&summary, context.json_mode, &context.summary.plan.bundle_dir)?;
     if status == SUCCESS_STATUS {
         return Ok(());
     }
     Err(RunError::Build(fixed_point_error_message(&summary)))
 }
 
+fn fixed_point_summary_from_context(
+    context: &FixedPointSummaryContext<'_>,
+    stage1: &FixedPointStageRun,
+    stage2: Option<&FixedPointStageRun>,
+    status: &str,
+) -> FixedPointSummary {
+    debug_assert_eq!(context.plan.schema, FIXED_POINT_SCHEMA);
+    debug_assert_eq!(stage1.name, STAGE1_DIR);
+    let non_claims = fixed_point_non_claims(context.toolchain_closure);
+    FixedPointSummary {
+        schema: FIXED_POINT_SCHEMA,
+        status: status.to_string(),
+        root: context.plan.root.clone(),
+        bundle_dir: PathBuf::from(BUNDLE_ROOT_RELATIVE_PATH),
+        fixed_point: status == SUCCESS_STATUS,
+        hermeticity_mode: context.hermeticity_mode.as_str().to_string(),
+        proof_eligibility: fixed_point_proof_eligibility_report(
+            context.hermeticity_mode,
+            context.toolchain_closure,
+            context.rust_source_provider,
+        ),
+        stage1: stage_summary(stage1, &context.plan.bundle_dir),
+        stage2: stage2.map(|stage| stage_summary(stage, &context.plan.bundle_dir)),
+        rustc_compatibility: RustcCompatibilitySummary {
+            requested_rustc: context.compatibility.requested_rustc.clone(),
+            stage_rustc: context.compatibility.stage_rustc.clone(),
+            normalization: context.compatibility.normalization,
+            wrapper: context.compatibility.wrapper.clone(),
+            wrapper_blake3: context.compatibility.wrapper_blake3.clone(),
+        },
+        source_built_toolchain_closure: context.toolchain_closure.clone(),
+        rust_source_provider: context.rust_source_provider.clone(),
+        blocker: fixed_point_blocker(stage1, stage2, status),
+        blocker_diagnostic: fixed_point_blocker_diagnostic(stage1, stage2),
+        non_claims,
+    }
+}
+
+#[cfg(test)]
 fn fixed_point_summary(
     plan: &FixedPointPlan,
     compatibility: &RustcCompatibilitySummary,
@@ -2095,34 +2414,18 @@ fn fixed_point_summary(
     stage2: Option<&FixedPointStageRun>,
     status: &str,
 ) -> FixedPointSummary {
-    let non_claims = fixed_point_non_claims(toolchain_closure);
-    FixedPointSummary {
-        schema: FIXED_POINT_SCHEMA,
-        status: status.to_string(),
-        root: plan.root.clone(),
-        bundle_dir: PathBuf::from(BUNDLE_ROOT_RELATIVE_PATH),
-        fixed_point: status == SUCCESS_STATUS,
-        hermeticity_mode: hermeticity_mode.as_str().to_string(),
-        proof_eligibility: fixed_point_proof_eligibility_report(
-            hermeticity_mode,
+    fixed_point_summary_from_context(
+        &FixedPointSummaryContext {
+            plan,
+            compatibility,
             toolchain_closure,
             rust_source_provider,
-        ),
-        stage1: stage_summary(stage1, &plan.bundle_dir),
-        stage2: stage2.map(|stage| stage_summary(stage, &plan.bundle_dir)),
-        rustc_compatibility: RustcCompatibilitySummary {
-            requested_rustc: compatibility.requested_rustc.clone(),
-            stage_rustc: compatibility.stage_rustc.clone(),
-            normalization: compatibility.normalization,
-            wrapper: compatibility.wrapper.clone(),
-            wrapper_blake3: compatibility.wrapper_blake3.clone(),
+            hermeticity_mode,
         },
-        source_built_toolchain_closure: toolchain_closure.clone(),
-        rust_source_provider: rust_source_provider.clone(),
-        blocker: fixed_point_blocker(stage1, stage2, status),
-        blocker_diagnostic: fixed_point_blocker_diagnostic(stage1, stage2),
-        non_claims,
-    }
+        stage1,
+        stage2,
+        status,
+    )
 }
 
 fn fixed_point_proof_eligibility_report(
@@ -2144,23 +2447,44 @@ fn fixed_point_proof_eligibility_report(
 fn fixed_point_closure_fact_status(
     toolchain_closure: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
 ) -> crunch_release_core::ProofFactStatus {
-    let complete_counts = matches!(
-        (toolchain_closure.member_count, toolchain_closure.source_built_member_count),
-        (Some(member_count), Some(source_built_count)) if member_count > 0 && member_count == source_built_count
+    debug_assert_eq!(toolchain_closure.schema, crate::source_toolchain_closure::SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA);
+    debug_assert!(
+        toolchain_closure
+            .source_built_member_count
+            .is_none_or(|count| { toolchain_closure.member_count.is_some_and(|member_count| count <= member_count) })
     );
-    let no_seed_exceptions = toolchain_closure.seed_exception_count == Some(0);
-    if toolchain_closure.claim
-        && toolchain_closure.status == ENFORCED_SOURCE_BUILT_STATUS
-        && toolchain_closure.policy_digest_blake3.is_some()
-        && complete_counts
-        && no_seed_exceptions
-    {
+    let member_count = toolchain_closure.member_count.and_then(|count| u64::try_from(count).ok());
+    let source_built_count = toolchain_closure.source_built_member_count.and_then(|count| u64::try_from(count).ok());
+    let predicates = SourceBuiltClosurePredicates {
+        has_complete_counts: source_built_counts_are_complete(member_count, source_built_count),
+        has_zero_seed_exceptions: toolchain_closure.seed_exception_count == Some(0),
+    };
+    if source_built_closure_status_is_satisfied(toolchain_closure, predicates) {
         return crunch_release_core::ProofFactStatus::Satisfied;
     }
     if toolchain_closure.policy_digest_blake3.is_none() || toolchain_closure.member_count.is_none() {
         return crunch_release_core::ProofFactStatus::Missing;
     }
     crunch_release_core::ProofFactStatus::Degraded
+}
+
+fn source_built_closure_status_is_satisfied(
+    toolchain_closure: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+    predicates: SourceBuiltClosurePredicates,
+) -> bool {
+    if !toolchain_closure.claim {
+        return false;
+    }
+    if toolchain_closure.status != ENFORCED_SOURCE_BUILT_STATUS {
+        return false;
+    }
+    if toolchain_closure.policy_digest_blake3.is_none() {
+        return false;
+    }
+    if !predicates.has_complete_counts {
+        return false;
+    }
+    predicates.has_zero_seed_exceptions
 }
 
 fn fixed_point_host_tool_fact_status(
@@ -2247,6 +2571,8 @@ fn fixed_point_error_message(summary: &FixedPointSummary) -> String {
 }
 
 fn print_fixed_point_summary(summary: &FixedPointSummary, json_mode: bool, bundle_dir: &Path) -> Result<(), RunError> {
+    debug_assert_eq!(summary.schema, FIXED_POINT_SCHEMA);
+    debug_assert_eq!(summary.stage1.name, STAGE1_DIR);
     if json_mode {
         let rendered = serde_json::to_string(summary).map_err(|err| internal(format!("render summary: {err}")))?;
         println!("{rendered}");
@@ -2287,6 +2613,8 @@ fn materialize_or_block(paths: &BuildPaths, child: &mut ChildRun) -> Result<Opti
 }
 
 fn materialize_binary(paths: &BuildPaths, receipt: Option<&Value>) -> Result<ProducedBinary, RunError> {
+    debug_assert_eq!(paths.binary_path.parent(), Some(paths.out_dir.as_path()));
+    debug_assert_ne!(paths.execution_dir, paths.out_dir);
     let receipt = receipt.ok_or_else(|| internal("successful rust-plan produced no receipt".to_string()))?;
     let (unit_id, source_digest) = mantle_unit_from_receipt(receipt)?;
     let source_closure_digest_blake3 = receipt
@@ -2355,43 +2683,38 @@ fn is_successful_mantle_unit(unit: &Value) -> bool {
         && unit.get("execution_status").and_then(Value::as_str) == Some(SUCCESS_STATUS)
 }
 
-fn summarize(
-    paths: &BuildPaths,
-    child: &ChildRun,
-    produced: Option<&ProducedBinary>,
-    toolchain_closure: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
-    rust_source_provider: RustSourceProviderBindingStatus,
-    hermeticity_mode: crunch_pipeline::HermeticityMode,
-) -> SelfBuildSummary {
-    let receipt = child.receipt.as_ref();
-    let non_claims = self_build_non_claims(&toolchain_closure);
+fn summarize(context: SelfBuildSummaryContext<'_>) -> SelfBuildSummary {
+    debug_assert_eq!(context.paths.receipt_path.parent(), Some(context.paths.out_dir.as_path()));
+    debug_assert_eq!(context.paths.stderr_path.parent(), Some(context.paths.out_dir.as_path()));
+    let receipt = context.child.receipt.as_ref();
+    let non_claims = self_build_non_claims(context.toolchain_closure);
     SelfBuildSummary {
         schema: SCHEMA,
-        status: if child.blocker.is_none() {
+        status: if context.child.blocker.is_none() {
             SUCCESS_STATUS
         } else {
             BLOCKED_STATUS
         }
         .to_string(),
-        root: paths.root.clone(),
-        out_dir: paths.out_dir.clone(),
-        binary: produced.map(|value| value.path.clone()),
-        binary_blake3: produced.map(|value| value.blake3.clone()),
-        source_digest: produced.map(|value| value.source_digest.clone()),
-        source_closure_digest_blake3: produced.and_then(|value| value.source_closure_digest_blake3.clone()),
-        receipt: paths.receipt_path.clone(),
-        stderr: paths.stderr_path.clone(),
-        status_code: child.status_code,
-        execution_status: child.execution_status.clone(),
-        cargo_marker_absent: child.cargo_marker_absent,
+        root: context.paths.root.clone(),
+        out_dir: context.paths.out_dir.clone(),
+        binary: context.produced.map(|value| value.path.clone()),
+        binary_blake3: context.produced.map(|value| value.blake3.clone()),
+        source_digest: context.produced.map(|value| value.source_digest.clone()),
+        source_closure_digest_blake3: context.produced.and_then(|value| value.source_closure_digest_blake3.clone()),
+        receipt: context.paths.receipt_path.clone(),
+        stderr: context.paths.stderr_path.clone(),
+        status_code: context.child.status_code,
+        execution_status: context.child.execution_status.clone(),
+        cargo_marker_absent: context.child.cargo_marker_absent,
         unit_count: receipt.map(unit_count).unwrap_or_default(),
         failed_unit_count: receipt.map(failed_unit_count).unwrap_or_default(),
-        smoke_status_code: produced.and_then(|value| value.smoke_status_code),
-        hermeticity_mode: hermeticity_mode.as_str().to_string(),
-        blocker: child.blocker.clone(),
-        blocker_diagnostic: child.blocker_diagnostic.clone(),
-        source_built_toolchain_closure: toolchain_closure,
-        rust_source_provider,
+        smoke_status_code: context.produced.and_then(|value| value.smoke_status_code),
+        hermeticity_mode: context.hermeticity_mode.as_str().to_string(),
+        blocker: context.child.blocker.clone(),
+        blocker_diagnostic: context.child.blocker_diagnostic.clone(),
+        source_built_toolchain_closure: context.toolchain_closure.clone(),
+        rust_source_provider: context.rust_source_provider.clone(),
         non_claims,
     }
 }
@@ -2428,12 +2751,15 @@ fn parse_receipt(path: &Path, command_succeeded: bool) -> Result<Option<Value>, 
 }
 
 fn record_file_write(path: &Path, bytes: &[u8], blocker: &mut Option<String>) {
-    if blocker.is_some() {
-        let _ = fs::write(path, bytes);
-        return;
-    }
     if let Err(err) = fs::write(path, bytes) {
-        *blocker = Some(format!("write {}: {err}", path.display()));
+        let write_failure = format!("write {}: {err}", path.display());
+        match blocker {
+            Some(existing) => {
+                existing.push_str("; additional failure: ");
+                existing.push_str(&write_failure);
+            }
+            None => *blocker = Some(write_failure),
+        }
     }
 }
 
@@ -2479,24 +2805,28 @@ fn prepare_execution_toolchain(
     toolchain_closure: &LoadedToolchainClosure,
     rust_source_provider: &LoadedRustSourceProvider,
 ) -> Result<ExecutionToolchain, RunError> {
-    let Some(manifest) = &toolchain_closure.manifest else {
-        return Ok(ExecutionToolchain {
+    let execution_toolchain = if let Some(manifest) = &toolchain_closure.manifest {
+        let rustc = resolve_executable(requested_rustc, "rustc")?;
+        reject_undeclared_external_rustc_wrapper(&rustc, manifest)?;
+        let status = enforce_receipt_bound_toolchain(&rustc, toolchain_closure, manifest)?;
+        let c_compiler_route = Some(receipt_bound_c_compiler_route(manifest)?);
+        ExecutionToolchain {
+            rustc,
+            path_env: execution_path_env(guard_path_dir, toolchain_closure)?,
+            status,
+            c_compiler_route,
+        }
+    } else {
+        ExecutionToolchain {
             rustc: requested_rustc.to_path_buf(),
             path_env: guarded_path(guard_path_dir)?,
             status: effective_source_built_toolchain_closure(toolchain_closure, rust_source_provider),
             c_compiler_route: None,
-        });
+        }
     };
-    let rustc = resolve_executable(requested_rustc, "rustc")?;
-    reject_undeclared_external_rustc_wrapper(&rustc, manifest)?;
-    let status = enforce_receipt_bound_toolchain(&rustc, toolchain_closure, manifest)?;
-    let c_compiler_route = Some(receipt_bound_c_compiler_route(manifest)?);
-    Ok(ExecutionToolchain {
-        rustc,
-        path_env: execution_path_env(guard_path_dir, toolchain_closure)?,
-        status,
-        c_compiler_route,
-    })
+    debug_assert!(!execution_toolchain.rustc.as_os_str().is_empty());
+    debug_assert!(!execution_toolchain.path_env.is_empty());
+    Ok(execution_toolchain)
 }
 
 fn prepare_rustc_for_compatibility(
@@ -2607,7 +2937,14 @@ fn observed_toolchain_inputs(
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
 ) -> Result<Vec<crate::source_toolchain_closure::ToolchainObservedInput>, RunError> {
     use crate::source_toolchain_closure::ToolchainRole;
-    let mut observed = Vec::new();
+    let mut observed = Vec::with_capacity(
+        manifest
+            .members
+            .len()
+            .checked_add(BASE_OBSERVED_TOOLCHAIN_INPUT_COUNT)
+            .ok_or_else(|| RunError::Build("source-built toolchain closure input capacity overflow".to_string()))?,
+    );
+    debug_assert!(observed.capacity() >= BASE_OBSERVED_TOOLCHAIN_INPUT_COUNT);
     observed.push(observed_file_tool(ToolchainRole::Rustc, rustc)?);
     observed.push(observed_sysroot_tool(rustc)?);
     for role in [ToolchainRole::Linker, ToolchainRole::CCompiler] {
@@ -2620,6 +2957,7 @@ fn observed_toolchain_inputs(
     for member in declared_file_members(manifest) {
         observed.push(observed_member_file(member)?);
     }
+    debug_assert!(observed.len() <= observed.capacity());
     Ok(observed)
 }
 
@@ -2663,6 +3001,8 @@ fn observed_sysroot_tool(rustc: &Path) -> Result<crate::source_toolchain_closure
 }
 
 fn rustc_reported_sysroot(rustc: &Path) -> Result<PathBuf, RunError> {
+    debug_assert!(!rustc.as_os_str().is_empty());
+    debug_assert!(!RUSTC_SYSROOT_PRINT_ARG.is_empty());
     let output = Command::new(rustc).arg("--print").arg(RUSTC_SYSROOT_PRINT_ARG).output().map_err(|err| {
         RunError::Build(format!("source-built toolchain closure blocked: rustc --print sysroot failed: {err}"))
     })?;
@@ -2784,8 +3124,8 @@ fn c_compiler_alias_target(
 
 fn c_compiler_alias_runtime_inputs(
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
-) -> Result<CCompilerAliasRuntimeInputs, RunError> {
-    Ok(CCompilerAliasRuntimeInputs {
+) -> Result<CcCompilerAliasRuntimeInputs, RunError> {
+    Ok(CcCompilerAliasRuntimeInputs {
         unwind_archive: declared_unwind_archive(manifest)?,
         crt1_object: declared_target_crt1_object(manifest)?,
     })
@@ -2930,9 +3270,11 @@ fn write_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
 #[cfg(unix)]
 fn write_c_compiler_toolchain_alias(
     target: &Path,
-    runtime_inputs: &CCompilerAliasRuntimeInputs,
+    runtime_inputs: &CcCompilerAliasRuntimeInputs,
     link: &Path,
 ) -> Result<(), RunError> {
+    debug_assert_ne!(target, link);
+    debug_assert!(link.parent().is_some());
     let runtime_dir = link
         .parent()
         .ok_or_else(|| internal(format!("{} has no parent", link.display())))?
@@ -2979,7 +3321,7 @@ fn write_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
 #[cfg(not(unix))]
 fn write_c_compiler_toolchain_alias(
     target: &Path,
-    _runtime_inputs: &CCompilerAliasRuntimeInputs,
+    _runtime_inputs: &CcCompilerAliasRuntimeInputs,
     link: &Path,
 ) -> Result<(), RunError> {
     write_toolchain_alias(target, link)
@@ -3134,6 +3476,8 @@ fn selected_cargo_free_rustc<'a>(loaded_provider: &'a LoadedRustSourceProvider, 
 }
 
 fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSourceProvider, RunError> {
+    debug_assert_eq!(RUST_SOURCE_PROVIDER_REQUIRED_ROLE_COUNT, 1);
+    debug_assert_ne!(RUST_SOURCE_PROVIDER_STATUS_ABSENT, RUST_SOURCE_PROVIDER_STATUS_VALIDATED);
     let Some(provider_dir) = provider_dir else {
         return Ok(LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
@@ -3221,6 +3565,8 @@ fn rust_provider_role_path(
 }
 
 fn load_source_built_toolchain_closure(manifest_path: Option<&Path>) -> Result<LoadedToolchainClosure, RunError> {
+    debug_assert!(!crate::source_toolchain_closure::SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA.is_empty());
+    debug_assert_ne!(TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD, SELECTED_C_COMPILER_FIELD);
     let Some(manifest_path) = manifest_path else {
         return Ok(LoadedToolchainClosure {
             status: crate::source_toolchain_closure::absent_source_built_toolchain_closure(),

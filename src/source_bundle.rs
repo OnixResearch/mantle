@@ -42,6 +42,10 @@ pub const MAX_ADAPTER_METADATA_BYTES: usize = 8_192;
 pub const MAX_SOURCE_RECORD_METADATA_BYTES: usize = 16_384;
 pub const MAX_DERIVED_SOURCE_WALK_NODES: usize = 65_536;
 
+const MAX_DERIVED_SOURCE_WALK_ITEMS: usize = MAX_DERIVED_SOURCE_WALK_NODES.saturating_add(MAX_SOURCE_RECORDS);
+const MAX_GIT_REF_INDIRECTIONS: usize = 16;
+const BOOTSTRAP_BASE_RECORD_COUNT: usize = 2;
+const OFFLINE_BLOCKER_CLASS_COUNT: usize = 6;
 const BLAKE3_HEX_BYTES: usize = 64;
 const GIT_OBJECT_ID_HEX_BYTES: usize = 40;
 const SYMLINK_PAYLOAD_BYTES: u64 = 0;
@@ -150,6 +154,10 @@ pub enum SourceFileType {
     Symlink,
 }
 
+fn empty_source_record_metadata() -> BTreeMap<String, String> {
+    BTreeMap::new()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceRecord {
     pub kind: SourceRecordKind,
@@ -158,7 +166,7 @@ pub struct SourceRecord {
     pub store_prefix: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub adapter: Option<SourceAdapterMetadata>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default = "empty_source_record_metadata", skip_serializing_if = "BTreeMap::is_empty")]
     pub metadata: BTreeMap<String, String>,
     pub payload_bytes: u64,
     pub content_blake3: String,
@@ -361,6 +369,87 @@ pub struct SourceSpec {
     pub adapter: Option<SourceAdapterMetadata>,
 }
 
+struct SourceRecordPathRequest<'a> {
+    kind: SourceRecordKind,
+    identity: String,
+    path: &'a Path,
+    store_prefix: &'a str,
+    metadata: BTreeMap<String, String>,
+    adapter: Option<SourceAdapterMetadata>,
+    is_skipping_git_dir: bool,
+}
+
+struct BootstrapProfileRecordRequest<'a> {
+    kind: SourceRecordKind,
+    identity: String,
+    path: &'a Path,
+    mode: BootstrapSourceBundleMode,
+    class: &'a str,
+    provider_metadata: Option<&'a BootstrapProviderProfileMetadata>,
+    store_prefix: &'a str,
+}
+
+struct BootstrapProfileSequenceRequest<'a> {
+    paths: &'a [PathBuf],
+    kind: SourceRecordKind,
+    mode: BootstrapSourceBundleMode,
+    class: &'a str,
+    store_prefix: &'a str,
+}
+
+struct SourceEntryCollection {
+    files: Vec<SourceFileEntry>,
+    payload_bytes: u64,
+    visited_nodes_len: usize,
+}
+
+struct Blake3HexValidation<'a> {
+    value: &'a str,
+    label: &'a str,
+}
+
+struct OfflineBlockerSets<'a> {
+    missing_ids: &'a [String],
+    stale_ids: &'a [String],
+    unsupported_ids: &'a [String],
+    untrusted_ids: &'a [String],
+    network_required_ids: &'a [String],
+    unpinned_ids: &'a [String],
+}
+
+struct OfflineNextActionRule {
+    is_enabled: bool,
+    blocker_class: &'static str,
+    command_hint: &'static str,
+    description: &'static str,
+}
+
+struct GitPackedRefMatch<'a> {
+    line: &'a str,
+    revision: &'a str,
+}
+
+struct StorePathLookup<'a> {
+    store_prefix: &'a str,
+    logical_store_path: &'a str,
+}
+
+struct StorePathSourceRequest<'a> {
+    source_path: &'a str,
+    store_prefix: &'a str,
+}
+
+struct SourceBundleCliContext<'a> {
+    state_dir: &'a Path,
+    store_prefix: &'a str,
+    is_json_output: bool,
+}
+
+enum DerivationSourceWalkItem<'a> {
+    Derivation(&'a crunch_glue::CrunchDerivation),
+    StorePath(&'a str),
+}
+
 impl std::str::FromStr for SourceRecordKind {
     type Err = String;
 
@@ -415,83 +504,157 @@ pub fn plan_bootstrap_source_bundle_profile(
     store_prefix: &str,
 ) -> Result<SourceBundleManifest, RunError> {
     validate_bootstrap_profile_input(input, store_prefix)?;
+    assert!(store_prefix.starts_with('/'));
+    assert!(!input.bootstrap_sources.is_empty());
     let provider_metadata = read_bootstrap_provider_profile_metadata(&input.provider_manifest)?;
     validate_bootstrap_provider_kind(input.mode, &provider_metadata.provider_kind)?;
-    let mut records = Vec::new();
-    records.push(bootstrap_profile_record(
-        SourceRecordKind::BootstrapArchive,
-        "bootstrap-provider-archive".to_string(),
-        &input.provider_archive,
-        input.mode,
-        BOOTSTRAP_PROFILE_CLASS_PROVIDER_ARCHIVE,
-        None,
+    assert_eq!(provider_metadata.provider_kind, input.mode.expected_provider_kind());
+    let profile_entries = bootstrap_profile_records_capacity(input)?;
+    let mut records = Vec::with_capacity(profile_entries);
+    append_bootstrap_provider_records(&mut records, input, store_prefix, &provider_metadata)?;
+    append_bootstrap_profile_sequence(&mut records, BootstrapProfileSequenceRequest {
+        paths: &input.bootstrap_sources,
+        kind: SourceRecordKind::BootstrapArchive,
+        mode: input.mode,
+        class: BOOTSTRAP_PROFILE_CLASS_BOOTSTRAP_SOURCE,
         store_prefix,
-    )?);
-    records.push(bootstrap_profile_record(
-        SourceRecordKind::ProviderManifest,
-        "bootstrap-provider-manifest".to_string(),
-        &input.provider_manifest,
-        input.mode,
-        BOOTSTRAP_PROFILE_CLASS_PROVIDER_MANIFEST,
-        Some(&provider_metadata),
+    })?;
+    append_optional_bootstrap_profile_records(&mut records, input, store_prefix)?;
+    append_bootstrap_profile_sequence(&mut records, BootstrapProfileSequenceRequest {
+        paths: &input.proof_inputs,
+        kind: SourceRecordKind::ProofInput,
+        mode: input.mode,
+        class: BOOTSTRAP_PROFILE_CLASS_PROOF_INPUT,
         store_prefix,
-    )?);
-    for (index, path) in input.bootstrap_sources.iter().enumerate() {
-        records.push(bootstrap_profile_record(
-            SourceRecordKind::BootstrapArchive,
-            bootstrap_indexed_identity(BOOTSTRAP_PROFILE_CLASS_BOOTSTRAP_SOURCE, index)?,
-            path,
-            input.mode,
-            BOOTSTRAP_PROFILE_CLASS_BOOTSTRAP_SOURCE,
-            None,
-            store_prefix,
-        )?);
-    }
-    if let Some(path) = &input.mantle_source {
-        records.push(bootstrap_profile_record(
-            SourceRecordKind::LocalPath,
-            "mantle-source-tree".to_string(),
-            path,
-            input.mode,
-            BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE,
-            None,
-            store_prefix,
-        )?);
-    }
-    if let Some(path) = &input.vendor_deps {
-        records.push(bootstrap_profile_record(
-            SourceRecordKind::PackageMirror,
-            "vendored-cargo-inputs".to_string(),
-            path,
-            input.mode,
-            BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS,
-            None,
-            store_prefix,
-        )?);
-    }
-    if let Some(path) = &input.toolchain_source_root {
-        records.push(bootstrap_profile_record(
-            SourceRecordKind::ToolchainSourceRoot,
-            "bootstrap-toolchain-source-root".to_string(),
-            path,
-            input.mode,
-            BOOTSTRAP_PROFILE_CLASS_TOOLCHAIN_SOURCE_ROOT,
-            None,
-            store_prefix,
-        )?);
-    }
-    for (index, path) in input.proof_inputs.iter().enumerate() {
-        records.push(bootstrap_profile_record(
-            SourceRecordKind::ProofInput,
-            bootstrap_indexed_identity(BOOTSTRAP_PROFILE_CLASS_PROOF_INPUT, index)?,
-            path,
-            input.mode,
-            BOOTSTRAP_PROFILE_CLASS_PROOF_INPUT,
-            None,
-            store_prefix,
-        )?);
-    }
+    })?;
+    assert!(records.len() <= profile_entries);
     assemble_source_bundle(records, store_prefix)
+}
+
+fn bootstrap_profile_records_capacity(input: &BootstrapSourceBundleProfileInput) -> Result<usize, RunError> {
+    let mut profile_entries = BOOTSTRAP_BASE_RECORD_COUNT;
+    profile_entries = profile_entries
+        .checked_add(input.bootstrap_sources.len())
+        .ok_or_else(|| RunError::Internal("bootstrap profile record capacity overflow".to_string()))?;
+    profile_entries = profile_entries
+        .checked_add(input.proof_inputs.len())
+        .ok_or_else(|| RunError::Internal("bootstrap profile record capacity overflow".to_string()))?;
+    for is_present in [
+        input.mantle_source.is_some(),
+        input.vendor_deps.is_some(),
+        input.toolchain_source_root.is_some(),
+    ] {
+        if is_present {
+            profile_entries = profile_entries
+                .checked_add(1)
+                .ok_or_else(|| RunError::Internal("bootstrap profile record capacity overflow".to_string()))?;
+        }
+    }
+    if profile_entries > MAX_SOURCE_RECORDS {
+        return Err(RunError::Internal(format!("bootstrap profile source count exceeds {MAX_SOURCE_RECORDS}")));
+    }
+    assert!(profile_entries >= BOOTSTRAP_BASE_RECORD_COUNT);
+    assert!(profile_entries <= MAX_SOURCE_RECORDS);
+    Ok(profile_entries)
+}
+
+fn append_bootstrap_provider_records(
+    records: &mut Vec<SourceRecord>,
+    input: &BootstrapSourceBundleProfileInput,
+    store_prefix: &str,
+    provider_metadata: &BootstrapProviderProfileMetadata,
+) -> Result<(), RunError> {
+    assert!(records.is_empty());
+    records.push(bootstrap_profile_record(BootstrapProfileRecordRequest {
+        kind: SourceRecordKind::BootstrapArchive,
+        identity: "bootstrap-provider-archive".to_string(),
+        path: &input.provider_archive,
+        mode: input.mode,
+        class: BOOTSTRAP_PROFILE_CLASS_PROVIDER_ARCHIVE,
+        provider_metadata: None,
+        store_prefix,
+    })?);
+    records.push(bootstrap_profile_record(BootstrapProfileRecordRequest {
+        kind: SourceRecordKind::ProviderManifest,
+        identity: "bootstrap-provider-manifest".to_string(),
+        path: &input.provider_manifest,
+        mode: input.mode,
+        class: BOOTSTRAP_PROFILE_CLASS_PROVIDER_MANIFEST,
+        provider_metadata: Some(provider_metadata),
+        store_prefix,
+    })?);
+    assert_eq!(records.len(), BOOTSTRAP_BASE_RECORD_COUNT);
+    Ok(())
+}
+
+fn append_bootstrap_profile_sequence(
+    records: &mut Vec<SourceRecord>,
+    request: BootstrapProfileSequenceRequest<'_>,
+) -> Result<(), RunError> {
+    let initial_records_len = records.len();
+    records
+        .try_reserve(request.paths.len())
+        .map_err(|err| RunError::Internal(format!("reserving bootstrap profile records: {err}")))?;
+    for (index, path) in request.paths.iter().enumerate() {
+        records.push(bootstrap_profile_record(BootstrapProfileRecordRequest {
+            kind: request.kind.clone(),
+            identity: bootstrap_indexed_identity(request.class, index)?,
+            path,
+            mode: request.mode,
+            class: request.class,
+            provider_metadata: None,
+            store_prefix: request.store_prefix,
+        })?);
+    }
+    assert!(records.len() >= initial_records_len);
+    assert!(records.len() <= MAX_SOURCE_RECORDS);
+    Ok(())
+}
+
+fn append_optional_bootstrap_profile_records(
+    records: &mut Vec<SourceRecord>,
+    input: &BootstrapSourceBundleProfileInput,
+    store_prefix: &str,
+) -> Result<(), RunError> {
+    let initial_records_len = records.len();
+    let optional_records = [
+        (
+            SourceRecordKind::LocalPath,
+            "mantle-source-tree",
+            input.mantle_source.as_deref(),
+            BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE,
+        ),
+        (
+            SourceRecordKind::PackageMirror,
+            "vendored-cargo-inputs",
+            input.vendor_deps.as_deref(),
+            BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS,
+        ),
+        (
+            SourceRecordKind::ToolchainSourceRoot,
+            "bootstrap-toolchain-source-root",
+            input.toolchain_source_root.as_deref(),
+            BOOTSTRAP_PROFILE_CLASS_TOOLCHAIN_SOURCE_ROOT,
+        ),
+    ];
+    records
+        .try_reserve(optional_records.len())
+        .map_err(|err| RunError::Internal(format!("reserving optional bootstrap profile records: {err}")))?;
+    for (kind, identity, path, class) in optional_records {
+        let Some(path) = path else { continue };
+        records.push(bootstrap_profile_record(BootstrapProfileRecordRequest {
+            kind,
+            identity: identity.to_string(),
+            path,
+            mode: input.mode,
+            class,
+            provider_metadata: None,
+            store_prefix,
+        })?);
+    }
+    assert!(records.len() >= initial_records_len);
+    assert!(records.len() <= MAX_SOURCE_RECORDS);
+    Ok(())
 }
 
 pub fn bootstrap_source_bundle_profile_report(
@@ -499,6 +662,8 @@ pub fn bootstrap_source_bundle_profile_report(
     mode: BootstrapSourceBundleMode,
 ) -> Result<BootstrapSourceBundleProfileReport, RunError> {
     validate_manifest(manifest)?;
+    assert_eq!(manifest.format, SOURCE_BUNDLE_FORMAT);
+    assert_eq!(manifest.non_claim, SOURCE_BUNDLE_NON_CLAIM);
     let provider = manifest
         .records
         .iter()
@@ -537,8 +702,8 @@ pub fn export_source_bundle_from_derivations_with_state(
     store_prefix: &str,
     state_dir: &Path,
 ) -> Result<SourceBundleManifest, RunError> {
-    let imported_records = read_imported_source_records(state_dir)?;
-    export_source_bundle_from_derivations_with_imported(roots, specs, store_prefix, &imported_records)
+    let available_sources = read_imported_source_records(state_dir)?;
+    export_source_bundle_from_derivations_with_imported(roots, specs, store_prefix, &available_sources)
 }
 
 fn export_source_bundle_from_derivations_with_imported(
@@ -559,11 +724,21 @@ pub fn collect_build_source_records(
     if !store_prefix.starts_with('/') {
         return Err(RunError::Internal(format!("store prefix must be absolute: {store_prefix}")));
     }
-    let mut records = Vec::new();
-    let mut visited_count = 0usize;
-    for (_, root) in roots {
-        collect_derivation_source_records(root, store_prefix, &mut records, &mut visited_count)?;
+    if roots.len() > MAX_DERIVED_SOURCE_WALK_NODES {
+        return Err(RunError::Internal(format!(
+            "derived source roots exceed {MAX_DERIVED_SOURCE_WALK_NODES} derivation nodes"
+        )));
     }
+    assert!(store_prefix.starts_with('/'));
+    assert!(roots.len() <= MAX_DERIVED_SOURCE_WALK_NODES);
+    let mut pending = Vec::with_capacity(roots.len());
+    for (_, root) in roots.iter().rev() {
+        pending.push(DerivationSourceWalkItem::Derivation(root));
+    }
+    let mut records = Vec::new();
+    walk_derivation_source_records(&mut pending, store_prefix, &mut records)?;
+    assert!(pending.is_empty());
+    assert!(records.len() <= MAX_SOURCE_RECORDS);
     Ok(records)
 }
 
@@ -588,7 +763,8 @@ fn assemble_source_bundle(records: Vec<SourceRecord>, store_prefix: &str) -> Res
     if !store_prefix.starts_with('/') {
         return Err(RunError::Internal(format!("store prefix must be absolute: {store_prefix}")));
     }
-
+    assert!(!records.is_empty());
+    assert!(records.len() <= MAX_SOURCE_RECORDS);
     let records = normalize_source_records(records)?;
     let roots = records.iter().map(|record| record.identity.clone()).collect::<Vec<_>>();
     let mut manifest = SourceBundleManifest {
@@ -640,29 +816,36 @@ pub fn import_source_bundle(
     pin: bool,
 ) -> Result<SourceBundleImportReport, RunError> {
     validate_manifest(manifest)?;
+    assert!(manifest.records.len() <= MAX_SOURCE_RECORDS);
+    assert_eq!(manifest.non_claim, SOURCE_BUNDLE_NON_CLAIM);
     let records_dir = source_records_dir(state_dir);
     fs::create_dir_all(&records_dir)
         .map_err(|err| RunError::Internal(format!("creating source records dir {}: {err}", records_dir.display())))?;
-    let mut imported_count = 0u32;
-    let mut skipped_present_count = 0u32;
+    let mut written_records_len = 0u32;
+    let mut skipped_present_records_len = 0u32;
     let mut summaries = Vec::with_capacity(manifest.records.len());
     for record in &manifest.records {
         let summary = summary_for_record(record)?;
         let target = records_dir.join(format!("{}.json", record.content_blake3));
         if target.exists() {
-            skipped_present_count = skipped_present_count.saturating_add(1);
+            skipped_present_records_len = skipped_present_records_len
+                .checked_add(1)
+                .ok_or_else(|| RunError::Internal("present source record count overflow".to_string()))?;
         } else {
             write_record_atomically(&target, record)?;
-            imported_count = imported_count.saturating_add(1);
+            written_records_len = written_records_len
+                .checked_add(1)
+                .ok_or_else(|| RunError::Internal("imported source record count overflow".to_string()))?;
         }
         summaries.push(summary);
     }
     if pin {
         write_pin_atomically(state_dir, manifest)?;
     }
+    assert_eq!(summaries.len(), manifest.records.len());
     Ok(SourceBundleImportReport {
-        imported_count,
-        skipped_present_count,
+        imported_count: written_records_len,
+        skipped_present_count: skipped_present_records_len,
         pinned: pin,
         manifest_blake3: manifest.manifest_blake3.clone(),
         records: summaries,
@@ -675,30 +858,34 @@ pub fn verify_source_bundle_state(
     state_dir: &Path,
 ) -> Result<SourceBundleVerifyReport, RunError> {
     validate_manifest(manifest)?;
-    let mut missing_records = Vec::new();
-    let mut stale_records = Vec::new();
-    let mut unsupported_records = Vec::new();
-    let mut untrusted_records = Vec::new();
+    assert!(manifest.records.len() <= MAX_SOURCE_RECORDS);
+    assert_eq!(manifest.non_claim, SOURCE_BUNDLE_NON_CLAIM);
+    let manifest_entries = manifest.records.len();
+    let mut missing_record_ids = Vec::with_capacity(manifest_entries);
+    let mut stale_record_ids = Vec::with_capacity(manifest_entries);
+    let mut rejected_adapter_ids = Vec::with_capacity(manifest_entries);
+    let mut untrusted_record_ids = Vec::with_capacity(manifest_entries);
     for record in &manifest.records {
-        classify_adapter_readiness(record, &mut unsupported_records, &mut untrusted_records);
+        classify_adapter_readiness(record, &mut rejected_adapter_ids, &mut untrusted_record_ids);
         let record_path = source_records_dir(state_dir).join(format!("{}.json", record.content_blake3));
         if !record_path.exists() {
-            missing_records.push(record.identity.clone());
+            missing_record_ids.push(record.identity.clone());
             continue;
         }
         let stored = read_record(&record_path)?;
         if &stored != record {
-            stale_records.push(record.identity.clone());
+            stale_record_ids.push(record.identity.clone());
         }
     }
-    let ready_class = classify_source_state(&missing_records, &stale_records, &unsupported_records, &untrusted_records);
+    let ready_class =
+        classify_source_state(&missing_record_ids, &stale_record_ids, &rejected_adapter_ids, &untrusted_record_ids);
     Ok(SourceBundleVerifyReport {
         manifest_blake3: manifest.manifest_blake3.clone(),
         ready_class,
-        missing_records,
-        stale_records,
-        unsupported_records,
-        untrusted_records,
+        missing_records: missing_record_ids,
+        stale_records: stale_record_ids,
+        unsupported_records: rejected_adapter_ids,
+        untrusted_records: untrusted_record_ids,
         non_claim: SOURCE_BUNDLE_NON_CLAIM,
     })
 }
@@ -745,9 +932,9 @@ pub fn offline_preflight_for_manifest(
     state_dir: &Path,
 ) -> Result<SourceOfflinePreflightReport, RunError> {
     validate_manifest(manifest)?;
-    let imported_records = read_imported_source_records(state_dir)?;
-    let pinned_records = read_pinned_source_records(state_dir)?;
-    classify_offline_preflight(manifest, &imported_records, &pinned_records)
+    let available_sources = read_imported_source_records(state_dir)?;
+    let pinned_sources = read_pinned_source_records(state_dir)?;
+    classify_offline_preflight(manifest, &available_sources, &pinned_sources)
 }
 
 pub fn source_offline_preflight_is_ready(report: &SourceOfflinePreflightReport) -> bool {
@@ -772,13 +959,14 @@ pub fn bootstrap_legacy_seed_fetch_override_plan(
     if provider_raw_url.is_empty() {
         return Err(RunError::Internal("bootstrap provider raw URL must not be empty".to_string()));
     }
-    let imported_records = read_imported_source_records(state_dir)?;
-    let pinned_records = read_pinned_source_records(state_dir)?;
-    let record = imported_records
+    assert!(!provider_raw_url.is_empty());
+    let available_sources = read_imported_source_records(state_dir)?;
+    let pinned_sources = read_pinned_source_records(state_dir)?;
+    let record = available_sources
         .iter()
         .find(|record| bootstrap_provider_archive_record_matches(record, BootstrapSourceBundleMode::LegacySeed))
         .ok_or_else(|| RunError::Internal("missing bootstrap provider archive source state".to_string()))?;
-    if !source_record_is_pinned(record, record, &pinned_records) {
+    if !source_record_is_pinned(record, record, &pinned_sources) {
         return Err(RunError::Internal("unpinned bootstrap provider archive source state".to_string()));
     }
     if record.files.is_empty() {
@@ -786,6 +974,8 @@ pub fn bootstrap_legacy_seed_fetch_override_plan(
             "bootstrap provider archive source state has no materialized payload".to_string(),
         ));
     }
+    assert!(source_record_is_pinned(record, record, &pinned_sources));
+    assert!(!record.files.is_empty());
     let source_state_blake3 = digest_offline_preflight_state(None, std::slice::from_ref(record))?;
     let scratch_dir = tempfile::Builder::new()
         .prefix("mantle-bootstrap-source-fetch-")
@@ -793,7 +983,7 @@ pub fn bootstrap_legacy_seed_fetch_override_plan(
         .map_err(|err| RunError::Internal(format!("creating bootstrap source fetch scratch dir: {err}")))?;
     let payload_path = scratch_dir.path().join("payload");
     materialize_source_record_payload(record, &payload_path)?;
-    let report = SourceOfflinePreflightReport {
+    let preflight_receipt = SourceOfflinePreflightReport {
         format: SOURCE_OFFLINE_PREFLIGHT_FORMAT,
         manifest_blake3: None,
         source_state_blake3: source_state_blake3.clone(),
@@ -810,7 +1000,7 @@ pub fn bootstrap_legacy_seed_fetch_override_plan(
         non_claim: SOURCE_BUNDLE_NON_CLAIM,
     };
     Ok(SourceFetchOverridePlan {
-        report,
+        report: preflight_receipt,
         overrides: vec![crunch_build::FetchSourceOverride {
             url: provider_raw_url.to_string(),
             kind: crunch_build::FetchSourceOverrideKind::Tarball,
@@ -828,6 +1018,8 @@ pub fn source_fetch_override_plan_for_derivations(
     store_prefix: &str,
 ) -> Result<SourceFetchOverridePlan, RunError> {
     let records = collect_build_source_records(roots, store_prefix)?;
+    assert!(records.len() <= MAX_SOURCE_RECORDS);
+    assert!(store_prefix.starts_with('/'));
     if records.is_empty() {
         return Ok(SourceFetchOverridePlan {
             report: empty_offline_preflight_report()?,
@@ -836,57 +1028,52 @@ pub fn source_fetch_override_plan_for_derivations(
         });
     }
     let manifest = assemble_source_bundle(records, store_prefix)?;
-    let imported_records = read_imported_source_records(state_dir)?;
-    let pinned_records = read_pinned_source_records(state_dir)?;
-    let report = classify_offline_preflight(&manifest, &imported_records, &pinned_records)?;
-    if !source_offline_preflight_is_ready(&report) {
-        return Err(RunError::Internal(format!("offline source preflight is not ready: {:?}", report.ready_class)));
+    let available_sources = read_imported_source_records(state_dir)?;
+    let pinned_sources = read_pinned_source_records(state_dir)?;
+    let preflight_receipt = classify_offline_preflight(&manifest, &available_sources, &pinned_sources)?;
+    if !source_offline_preflight_is_ready(&preflight_receipt) {
+        return Err(RunError::Internal(format!(
+            "offline source preflight is not ready: {:?}",
+            preflight_receipt.ready_class
+        )));
     }
     let (overrides, scratch_dirs) = source_fetch_overrides_for_manifest(
         &manifest,
-        &imported_records,
-        &pinned_records,
-        &report.source_state_blake3,
+        &available_sources,
+        &pinned_sources,
+        &preflight_receipt.source_state_blake3,
     )?;
     Ok(SourceFetchOverridePlan {
-        report,
+        report: preflight_receipt,
         overrides,
         _scratch_dirs: scratch_dirs,
     })
 }
 
 fn canonicalize_source_spec(spec: &SourceSpec, store_prefix: &str) -> Result<SourceRecord, RunError> {
-    source_record_from_path(
-        spec.kind.clone(),
-        spec.identity.clone(),
-        &spec.path,
+    source_record_from_path(SourceRecordPathRequest {
+        kind: spec.kind.clone(),
+        identity: spec.identity.clone(),
+        path: &spec.path,
         store_prefix,
-        BTreeMap::new(),
-        spec.adapter.clone(),
-        false,
-    )
+        metadata: BTreeMap::new(),
+        adapter: spec.adapter.clone(),
+        is_skipping_git_dir: false,
+    })
 }
 
-fn source_record_from_path(
-    kind: SourceRecordKind,
-    identity: String,
-    path: &Path,
-    store_prefix: &str,
-    metadata: BTreeMap<String, String>,
-    adapter: Option<SourceAdapterMetadata>,
-    skip_git_dir: bool,
-) -> Result<SourceRecord, RunError> {
-    validate_identity(&identity)?;
-    validate_adapter_metadata(adapter.as_ref())?;
-    let (files, total_bytes) = canonicalize_payload_entries(path, skip_git_dir)?;
-    let content_blake3 = digest_source_record_content(&kind, &metadata, &files)?;
+fn source_record_from_path(request: SourceRecordPathRequest<'_>) -> Result<SourceRecord, RunError> {
+    validate_identity(&request.identity)?;
+    validate_adapter_metadata(request.adapter.as_ref())?;
+    let (files, payload_bytes) = canonicalize_payload_entries(request.path, request.is_skipping_git_dir)?;
+    let content_blake3 = digest_source_record_content(&request.kind, &request.metadata, &files)?;
     Ok(SourceRecord {
-        store_prefix: record_store_prefix(&kind, store_prefix),
-        kind,
-        identity,
-        adapter,
-        metadata,
-        payload_bytes: total_bytes,
+        store_prefix: record_store_prefix(&request.kind, request.store_prefix),
+        kind: request.kind,
+        identity: request.identity,
+        adapter: request.adapter,
+        metadata: request.metadata,
+        payload_bytes,
         content_blake3,
         files,
     })
@@ -915,30 +1102,35 @@ fn validate_bootstrap_profile_input(
             ));
         }
     }
-    if input.bootstrap_sources.len() > MAX_SOURCE_RECORDS || input.proof_inputs.len() > MAX_SOURCE_RECORDS {
+    if input.bootstrap_sources.len() > MAX_SOURCE_RECORDS {
         return Err(RunError::Internal(format!("bootstrap profile source count exceeds {MAX_SOURCE_RECORDS}")));
     }
+    if input.proof_inputs.len() > MAX_SOURCE_RECORDS {
+        return Err(RunError::Internal(format!("bootstrap profile source count exceeds {MAX_SOURCE_RECORDS}")));
+    }
+    assert!(store_prefix.starts_with('/'));
+    assert!(!input.bootstrap_sources.is_empty());
     Ok(())
 }
 
-fn bootstrap_profile_record(
-    kind: SourceRecordKind,
-    identity: String,
-    path: &Path,
-    mode: BootstrapSourceBundleMode,
-    class: &str,
-    provider_metadata: Option<&BootstrapProviderProfileMetadata>,
-    store_prefix: &str,
-) -> Result<SourceRecord, RunError> {
+fn bootstrap_profile_record(request: BootstrapProfileRecordRequest<'_>) -> Result<SourceRecord, RunError> {
     let mut metadata = BTreeMap::new();
-    metadata.insert(RECORD_METADATA_PROFILE_MODE_KEY.to_string(), mode.as_str().to_string());
-    metadata.insert(RECORD_METADATA_PROFILE_CLASS_KEY.to_string(), class.to_string());
-    if let Some(provider_metadata) = provider_metadata {
+    metadata.insert(RECORD_METADATA_PROFILE_MODE_KEY.to_string(), request.mode.as_str().to_string());
+    metadata.insert(RECORD_METADATA_PROFILE_CLASS_KEY.to_string(), request.class.to_string());
+    if let Some(provider_metadata) = request.provider_metadata {
         metadata.insert(RECORD_METADATA_PROVIDER_KIND_KEY.to_string(), provider_metadata.provider_kind.clone());
         metadata.insert(RECORD_METADATA_PROVIDER_SCHEMA_KEY.to_string(), provider_metadata.schema_version.clone());
     }
-    let skip_git_dir = class == BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE;
-    source_record_from_path(kind, identity, path, store_prefix, metadata, None, skip_git_dir)
+    let is_skipping_git_dir = request.class == BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE;
+    source_record_from_path(SourceRecordPathRequest {
+        kind: request.kind,
+        identity: request.identity,
+        path: request.path,
+        store_prefix: request.store_prefix,
+        metadata,
+        adapter: None,
+        is_skipping_git_dir,
+    })
 }
 
 fn bootstrap_indexed_identity(class: &str, index: usize) -> Result<String, RunError> {
@@ -1005,7 +1197,10 @@ fn validate_bootstrap_provider_kind(mode: BootstrapSourceBundleMode, provider_ki
     )))
 }
 
-fn canonicalize_payload_entries(path: &Path, skip_git_dir: bool) -> Result<(Vec<SourceFileEntry>, u64), RunError> {
+fn canonicalize_payload_entries(
+    path: &Path,
+    is_skipping_git_dir: bool,
+) -> Result<(Vec<SourceFileEntry>, u64), RunError> {
     let root = fs::canonicalize(path)
         .map_err(|err| RunError::Internal(format!("canonicalizing source path {}: {err}", path.display())))?;
     let metadata = fs::symlink_metadata(&root)
@@ -1017,84 +1212,166 @@ fn canonicalize_payload_entries(path: &Path, skip_git_dir: bool) -> Result<(Vec<
     } else {
         root.clone()
     };
-    let mut files = Vec::new();
-    let mut total_bytes = 0u64;
-    collect_source_entries(&relative_root, &root, &mut files, &mut total_bytes, skip_git_dir)?;
-    files.sort_by(|left, right| left.path.cmp(&right.path));
-    if files.len() > MAX_SOURCE_FILES_PER_RECORD {
-        return Err(RunError::Internal(format!("source file count exceeds {MAX_SOURCE_FILES_PER_RECORD}")));
-    }
-    Ok((files, total_bytes))
+    assert!(root.is_absolute());
+    assert!(relative_root.is_absolute());
+    let mut collection = SourceEntryCollection {
+        files: Vec::new(),
+        payload_bytes: 0,
+        visited_nodes_len: 0,
+    };
+    collect_source_entries(&relative_root, &root, is_skipping_git_dir, &mut collection)?;
+    collection.files.sort_by(|left, right| left.path.cmp(&right.path));
+    assert!(collection.files.len() <= MAX_SOURCE_FILES_PER_RECORD);
+    assert!(collection.payload_bytes <= MAX_SOURCE_TOTAL_BYTES);
+    Ok((collection.files, collection.payload_bytes))
 }
 
 fn collect_source_entries(
     root: &Path,
     current: &Path,
-    files: &mut Vec<SourceFileEntry>,
-    total_bytes: &mut u64,
-    skip_git_dir: bool,
+    is_skipping_git_dir: bool,
+    collection: &mut SourceEntryCollection,
 ) -> Result<(), RunError> {
-    let metadata = fs::symlink_metadata(current)
-        .map_err(|err| RunError::Internal(format!("reading source metadata {}: {err}", current.display())))?;
-    if metadata.is_dir() {
-        let mut entries = fs::read_dir(current)
-            .map_err(|err| RunError::Internal(format!("reading source dir {}: {err}", current.display())))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|err| RunError::Internal(format!("reading source dir entry {}: {err}", current.display())))?;
-        entries.sort_by_key(|entry| entry.path());
-        for entry in entries {
-            if skip_git_dir && entry.file_name().to_str() == Some(DOT_GIT_DIR_NAME) {
-                continue;
-            }
-            collect_source_entries(root, &entry.path(), files, total_bytes, skip_git_dir)?;
+    assert!(current.starts_with(root));
+    assert!(collection.files.len() <= MAX_SOURCE_FILES_PER_RECORD);
+    let mut pending_paths = Vec::with_capacity(1);
+    pending_paths.push(current.to_path_buf());
+    for _ in 0..MAX_SOURCE_FILES_PER_RECORD {
+        let Some(next_path) = pending_paths.pop() else {
+            assert!(pending_paths.is_empty());
+            assert!(collection.visited_nodes_len <= MAX_SOURCE_FILES_PER_RECORD);
+            return Ok(());
+        };
+        collection.visited_nodes_len = collection
+            .visited_nodes_len
+            .checked_add(1)
+            .ok_or_else(|| RunError::Internal("source entry walk count overflow".to_string()))?;
+        let metadata = fs::symlink_metadata(&next_path)
+            .map_err(|err| RunError::Internal(format!("reading source metadata {}: {err}", next_path.display())))?;
+        if metadata.is_dir() {
+            let children = read_sorted_source_children(&next_path, is_skipping_git_dir)?;
+            reserve_pending_source_paths(&mut pending_paths, children.len())?;
+            pending_paths.extend(children.into_iter().rev());
+            continue;
         }
-        return Ok(());
+        let file = source_file_entry(root, &next_path, &metadata)?;
+        append_source_file_entry(collection, file)?;
     }
+    Err(RunError::Internal(format!("source entry walk exceeds {MAX_SOURCE_FILES_PER_RECORD} nodes")))
+}
+
+fn read_sorted_source_children(current: &Path, is_skipping_git_dir: bool) -> Result<Vec<PathBuf>, RunError> {
+    assert!(current.is_absolute());
+    assert!(MAX_SOURCE_FILES_PER_RECORD > 0);
+    let entries = fs::read_dir(current)
+        .map_err(|err| RunError::Internal(format!("reading source dir {}: {err}", current.display())))?;
+    let mut children = Vec::new();
+    for entry in entries {
+        let entry = entry
+            .map_err(|err| RunError::Internal(format!("reading source dir entry {}: {err}", current.display())))?;
+        if is_skipping_git_dir && entry.file_name().to_str() == Some(DOT_GIT_DIR_NAME) {
+            continue;
+        }
+        if children.len() >= MAX_SOURCE_FILES_PER_RECORD {
+            return Err(RunError::Internal(format!("source entry count exceeds {MAX_SOURCE_FILES_PER_RECORD}")));
+        }
+        children
+            .try_reserve(1)
+            .map_err(|err| RunError::Internal(format!("reserving source directory entries: {err}")))?;
+        children.push(entry.path());
+    }
+    children.sort();
+    assert!(children.len() <= MAX_SOURCE_FILES_PER_RECORD);
+    Ok(children)
+}
+
+fn reserve_pending_source_paths(pending_paths: &mut Vec<PathBuf>, additional_len: usize) -> Result<(), RunError> {
+    let pending_len = pending_paths
+        .len()
+        .checked_add(additional_len)
+        .ok_or_else(|| RunError::Internal("pending source path count overflow".to_string()))?;
+    if pending_len > MAX_SOURCE_FILES_PER_RECORD {
+        return Err(RunError::Internal(format!("pending source path count exceeds {MAX_SOURCE_FILES_PER_RECORD}")));
+    }
+    pending_paths
+        .try_reserve(additional_len)
+        .map_err(|err| RunError::Internal(format!("reserving pending source paths: {err}")))?;
+    Ok(())
+}
+
+fn source_file_entry(root: &Path, current: &Path, metadata: &fs::Metadata) -> Result<SourceFileEntry, RunError> {
     let relative = safe_relative_path(root, current)?;
     if metadata.file_type().is_symlink() {
-        let target = fs::read_link(current)
-            .map_err(|err| RunError::Internal(format!("reading source symlink {}: {err}", current.display())))?;
-        let target_text = safe_symlink_target(&target)?;
-        let digest = blake3::hash(format!("symlink\0{relative}\0{target_text}").as_bytes());
-        files.push(SourceFileEntry {
-            path: relative,
-            file_type: SourceFileType::Symlink,
-            executable: false,
-            size: 0,
-            content_hex: None,
-            symlink_target: Some(target_text),
-            blake3: digest.to_hex().to_string(),
-        });
-        return Ok(());
+        return symlink_source_file_entry(current, relative);
     }
     if !metadata.is_file() {
         return Err(RunError::Internal(format!("unsupported source file kind at {}", current.display())));
     }
-    let size = metadata.len();
-    if size > MAX_SOURCE_FILE_BYTES {
+    regular_source_file_entry(current, relative, metadata)
+}
+
+fn symlink_source_file_entry(current: &Path, relative: String) -> Result<SourceFileEntry, RunError> {
+    let target = fs::read_link(current)
+        .map_err(|err| RunError::Internal(format!("reading source symlink {}: {err}", current.display())))?;
+    let target_text = safe_symlink_target(&target)?;
+    let digest = blake3::hash(format!("symlink\0{relative}\0{target_text}").as_bytes());
+    Ok(SourceFileEntry {
+        path: relative,
+        file_type: SourceFileType::Symlink,
+        executable: false,
+        size: SYMLINK_PAYLOAD_BYTES,
+        content_hex: None,
+        symlink_target: Some(target_text),
+        blake3: digest.to_hex().to_string(),
+    })
+}
+
+fn regular_source_file_entry(
+    current: &Path,
+    relative: String,
+    metadata: &fs::Metadata,
+) -> Result<SourceFileEntry, RunError> {
+    assert!(metadata.is_file());
+    assert!(!relative.is_empty());
+    let size_bytes = metadata.len();
+    if size_bytes > MAX_SOURCE_FILE_BYTES {
         return Err(RunError::Internal(format!(
-            "source file {} is {size} bytes, limit {MAX_SOURCE_FILE_BYTES}",
+            "source file {} is {size_bytes} bytes, limit {MAX_SOURCE_FILE_BYTES}",
             current.display()
         )));
-    }
-    *total_bytes = total_bytes
-        .checked_add(size)
-        .ok_or_else(|| RunError::Internal("source payload byte count overflow".to_string()))?;
-    if *total_bytes > MAX_SOURCE_TOTAL_BYTES {
-        return Err(RunError::Internal(format!("source payload bytes exceed {MAX_SOURCE_TOTAL_BYTES}")));
     }
     let content = fs::read(current)
         .map_err(|err| RunError::Internal(format!("reading source file {}: {err}", current.display())))?;
     let digest = blake3::hash(&content).to_hex().to_string();
-    files.push(SourceFileEntry {
+    Ok(SourceFileEntry {
         path: relative,
         file_type: SourceFileType::Regular,
-        executable: is_executable(&metadata),
-        size,
+        executable: is_executable(metadata),
+        size: size_bytes,
         content_hex: Some(HEXLOWER.encode(&content)),
         symlink_target: None,
         blake3: digest,
-    });
+    })
+}
+
+fn append_source_file_entry(collection: &mut SourceEntryCollection, file: SourceFileEntry) -> Result<(), RunError> {
+    if collection.files.len() >= MAX_SOURCE_FILES_PER_RECORD {
+        return Err(RunError::Internal(format!("source file count exceeds {MAX_SOURCE_FILES_PER_RECORD}")));
+    }
+    collection.payload_bytes = collection
+        .payload_bytes
+        .checked_add(file.size)
+        .ok_or_else(|| RunError::Internal("source payload byte count overflow".to_string()))?;
+    if collection.payload_bytes > MAX_SOURCE_TOTAL_BYTES {
+        return Err(RunError::Internal(format!("source payload bytes exceed {MAX_SOURCE_TOTAL_BYTES}")));
+    }
+    collection
+        .files
+        .try_reserve(1)
+        .map_err(|err| RunError::Internal(format!("reserving source file entry: {err}")))?;
+    collection.files.push(file);
+    assert!(collection.files.len() <= MAX_SOURCE_FILES_PER_RECORD);
+    assert!(collection.payload_bytes <= MAX_SOURCE_TOTAL_BYTES);
     Ok(())
 }
 
@@ -1105,10 +1382,24 @@ fn safe_relative_path(root: &Path, current: &Path) -> Result<String, RunError> {
     let text = relative
         .to_str()
         .ok_or_else(|| RunError::Internal(format!("source path is not UTF-8: {}", current.display())))?;
-    if text.is_empty() || text.starts_with('/') || text.contains("..") || text.contains('\\') {
+    validate_source_relative_path_text(text)?;
+    Ok(text.to_string())
+}
+
+fn validate_source_relative_path_text(text: &str) -> Result<(), RunError> {
+    if text.is_empty() {
         return Err(RunError::Internal(format!("unsafe source relative path '{text}'")));
     }
-    Ok(text.to_string())
+    if text.starts_with('/') {
+        return Err(RunError::Internal(format!("unsafe source relative path '{text}'")));
+    }
+    if text.contains("..") {
+        return Err(RunError::Internal(format!("unsafe source relative path '{text}'")));
+    }
+    if text.contains('\\') {
+        return Err(RunError::Internal(format!("unsafe source relative path '{text}'")));
+    }
+    Ok(())
 }
 
 fn safe_symlink_target(target: &Path) -> Result<String, RunError> {
@@ -1148,13 +1439,20 @@ fn validate_adapter_metadata(adapter: Option<&SourceAdapterMetadata>) -> Result<
     if rendered.len() > MAX_ADAPTER_METADATA_BYTES {
         return Err(RunError::Internal(format!("adapter metadata exceeds {MAX_ADAPTER_METADATA_BYTES} bytes")));
     }
-    if adapter.adapter.is_empty()
-        || adapter.lock_identity.is_empty()
-        || adapter.offline_control.is_empty()
-        || adapter.generated_source_boundary.is_empty()
-    {
+    if adapter.adapter.is_empty() {
         return Err(RunError::Internal("adapter metadata missing lock/offline/generated-source identity".to_string()));
     }
+    if adapter.lock_identity.is_empty() {
+        return Err(RunError::Internal("adapter metadata missing lock/offline/generated-source identity".to_string()));
+    }
+    if adapter.offline_control.is_empty() {
+        return Err(RunError::Internal("adapter metadata missing lock/offline/generated-source identity".to_string()));
+    }
+    if adapter.generated_source_boundary.is_empty() {
+        return Err(RunError::Internal("adapter metadata missing lock/offline/generated-source identity".to_string()));
+    }
+    assert!(!adapter.adapter.is_empty());
+    assert!(!adapter.lock_identity.is_empty());
     Ok(())
 }
 
@@ -1203,6 +1501,8 @@ fn digest_source_record_content(
     metadata: &BTreeMap<String, String>,
     files: &[SourceFileEntry],
 ) -> Result<String, RunError> {
+    assert!(metadata.len() <= MAX_SOURCE_RECORD_METADATA_BYTES);
+    assert!(files.len() <= MAX_SOURCE_FILES_PER_RECORD);
     if metadata.is_empty() {
         return digest_source_entries(files);
     }
@@ -1238,6 +1538,8 @@ fn validate_manifest(manifest: &SourceBundleManifest) -> Result<(), RunError> {
     if manifest.non_claim != SOURCE_BUNDLE_NON_CLAIM {
         return Err(RunError::Internal("source bundle non-claim boundary mismatch".to_string()));
     }
+    assert_eq!(manifest.format, SOURCE_BUNDLE_FORMAT);
+    assert_eq!(manifest.version, SOURCE_BUNDLE_VERSION);
     validate_manifest_roots(manifest)?;
     validate_manifest_record_order(&manifest.records)?;
     validate_manifest_store_prefix(manifest)?;
@@ -1354,6 +1656,8 @@ fn validate_source_record_files(record: &SourceRecord) -> Result<(), RunError> {
 }
 
 fn validate_no_symlink_descendants(record: &SourceRecord) -> Result<(), RunError> {
+    assert!(record.files.len() <= MAX_SOURCE_FILES_PER_RECORD);
+    assert!(!record.identity.is_empty());
     let symlink_paths = record
         .files
         .iter()
@@ -1377,7 +1681,10 @@ fn validate_no_symlink_descendants(record: &SourceRecord) -> Result<(), RunError
 
 fn validate_source_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
     validate_source_entry_path(&file.path)?;
-    validate_blake3_hex(&file.blake3, "source file digest")?;
+    validate_blake3_hex(Blake3HexValidation {
+        value: &file.blake3,
+        label: "source file digest",
+    })?;
     match file.file_type {
         SourceFileType::Regular => validate_regular_file_entry(file),
         SourceFileType::Symlink => validate_symlink_file_entry(file),
@@ -1385,10 +1692,7 @@ fn validate_source_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
 }
 
 fn validate_source_entry_path(path: &str) -> Result<(), RunError> {
-    if path.is_empty() || path.starts_with('/') || path.contains("..") || path.contains('\\') {
-        return Err(RunError::Internal(format!("unsafe source relative path '{path}'")));
-    }
-    Ok(())
+    validate_source_relative_path_text(path)
 }
 
 fn validate_regular_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
@@ -1428,6 +1732,8 @@ fn validate_symlink_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
     if file.size != SYMLINK_PAYLOAD_BYTES {
         return Err(RunError::Internal(format!("symlink source file {} size mismatch", file.path)));
     }
+    assert!(file.content_hex.is_none());
+    assert!(!file.executable);
     let target = file
         .symlink_target
         .as_ref()
@@ -1447,13 +1753,13 @@ fn validate_symlink_target_text(target: &str) -> Result<(), RunError> {
     Ok(())
 }
 
-fn validate_blake3_hex(value: &str, label: &str) -> Result<(), RunError> {
-    if value.len() != BLAKE3_HEX_BYTES {
-        return Err(RunError::Internal(format!("{label} must be {BLAKE3_HEX_BYTES} lowercase hex bytes")));
+fn validate_blake3_hex(request: Blake3HexValidation<'_>) -> Result<(), RunError> {
+    if request.value.len() != BLAKE3_HEX_BYTES {
+        return Err(RunError::Internal(format!("{} must be {BLAKE3_HEX_BYTES} lowercase hex bytes", request.label)));
     }
     HEXLOWER
-        .decode(value.as_bytes())
-        .map_err(|err| RunError::Internal(format!("{label} must be lowercase hex: {err}")))?;
+        .decode(request.value.as_bytes())
+        .map_err(|err| RunError::Internal(format!("{} must be lowercase hex: {err}", request.label)))?;
     Ok(())
 }
 
@@ -1494,69 +1800,64 @@ fn classify_source_state(
 
 fn classify_offline_preflight(
     manifest: &SourceBundleManifest,
-    imported_records: &[SourceRecord],
-    pinned_records: &[SourceRecord],
+    available_sources: &[SourceRecord],
+    pinned_sources: &[SourceRecord],
 ) -> Result<SourceOfflinePreflightReport, RunError> {
     validate_manifest(manifest)?;
-    let mut matching_records = Vec::new();
-    let mut missing_records = Vec::new();
-    let mut stale_records = Vec::new();
-    let mut unsupported_records = Vec::new();
-    let mut untrusted_records = Vec::new();
-    let mut network_required_records = Vec::new();
-    let mut unpinned_records = Vec::new();
-    let mut summaries = Vec::with_capacity(manifest.records.len());
-
+    assert!(manifest.records.len() <= MAX_SOURCE_RECORDS);
+    assert_eq!(manifest.non_claim, SOURCE_BUNDLE_NON_CLAIM);
+    let manifest_entries = manifest.records.len();
+    let mut matching_sources = Vec::with_capacity(manifest_entries);
+    let mut missing_source_ids = Vec::with_capacity(manifest_entries);
+    let mut stale_source_ids = Vec::with_capacity(manifest_entries);
+    let mut rejected_adapter_ids = Vec::with_capacity(manifest_entries);
+    let mut untrusted_source_ids = Vec::with_capacity(manifest_entries);
+    let mut network_required_source_ids = Vec::with_capacity(manifest_entries);
+    let mut unpinned_source_ids = Vec::with_capacity(manifest_entries);
+    let mut summaries = Vec::with_capacity(manifest_entries);
     for expected in &manifest.records {
         summaries.push(summary_for_record(expected)?);
-        classify_adapter_readiness(expected, &mut unsupported_records, &mut untrusted_records);
-        let imported = find_matching_source_record(expected, imported_records);
-        if source_record_requires_network(expected, imported) {
-            network_required_records.push(expected.identity.clone());
+        classify_adapter_readiness(expected, &mut rejected_adapter_ids, &mut untrusted_source_ids);
+        let stored_record = find_matching_source_record(expected, available_sources);
+        if source_record_requires_network(expected, stored_record) {
+            network_required_source_ids.push(expected.identity.clone());
             continue;
         }
-        let Some(imported) = imported else {
-            missing_records.push(expected.identity.clone());
+        let Some(stored_record) = stored_record else {
+            missing_source_ids.push(expected.identity.clone());
             continue;
         };
-        if source_record_is_stale_for_preflight(expected, imported) {
-            stale_records.push(expected.identity.clone());
+        if source_record_is_stale_for_preflight(expected, stored_record) {
+            stale_source_ids.push(expected.identity.clone());
             continue;
         }
-        if !source_record_is_pinned(expected, imported, pinned_records) {
-            unpinned_records.push(expected.identity.clone());
+        if !source_record_is_pinned(expected, stored_record, pinned_sources) {
+            unpinned_source_ids.push(expected.identity.clone());
         }
-        matching_records.push(imported.clone());
+        matching_sources.push(stored_record.clone());
     }
-
-    let ready_class = classify_offline_preflight_state(
-        &missing_records,
-        &stale_records,
-        &unsupported_records,
-        &untrusted_records,
-        &network_required_records,
-        &unpinned_records,
-    );
-    let next_actions = offline_preflight_next_actions(
-        &missing_records,
-        &stale_records,
-        &unsupported_records,
-        &untrusted_records,
-        &network_required_records,
-        &unpinned_records,
-    );
+    let blockers = OfflineBlockerSets {
+        missing_ids: &missing_source_ids,
+        stale_ids: &stale_source_ids,
+        unsupported_ids: &rejected_adapter_ids,
+        untrusted_ids: &untrusted_source_ids,
+        network_required_ids: &network_required_source_ids,
+        unpinned_ids: &unpinned_source_ids,
+    };
+    let ready_class = classify_offline_preflight_state(&blockers);
+    let next_actions = offline_preflight_next_actions(&blockers);
     Ok(SourceOfflinePreflightReport {
         format: SOURCE_OFFLINE_PREFLIGHT_FORMAT,
         manifest_blake3: Some(manifest.manifest_blake3.clone()),
-        source_state_blake3: digest_offline_preflight_state(Some(&manifest.manifest_blake3), &matching_records)?,
+        source_state_blake3: digest_offline_preflight_state(Some(&manifest.manifest_blake3), &matching_sources)?,
         ready_class,
-        record_count: checked_u32(manifest.records.len(), "source preflight record count")?,
-        missing_records,
-        stale_records,
-        unsupported_records,
-        untrusted_records,
-        network_required_records,
-        unpinned_records,
+        record_count: checked_u32(manifest_entries, "source preflight record count")?,
+        missing_records: missing_source_ids,
+        stale_records: stale_source_ids,
+        unsupported_records: rejected_adapter_ids,
+        untrusted_records: untrusted_source_ids,
+        network_required_records: network_required_source_ids,
+        unpinned_records: unpinned_source_ids,
         next_actions,
         records: summaries,
         non_claim: SOURCE_BUNDLE_NON_CLAIM,
@@ -1582,104 +1883,82 @@ fn empty_offline_preflight_report() -> Result<SourceOfflinePreflightReport, RunE
     })
 }
 
-fn classify_offline_preflight_state(
-    missing: &[String],
-    stale: &[String],
-    unsupported: &[String],
-    untrusted: &[String],
-    network_required: &[String],
-    unpinned: &[String],
-) -> SourceReadiness {
-    if !unsupported.is_empty() {
+fn classify_offline_preflight_state(blockers: &OfflineBlockerSets<'_>) -> SourceReadiness {
+    assert!(blockers.missing_ids.len() <= MAX_SOURCE_RECORDS);
+    assert!(blockers.stale_ids.len() <= MAX_SOURCE_RECORDS);
+    if !blockers.unsupported_ids.is_empty() {
         return SourceReadiness::Unsupported;
     }
-    if !stale.is_empty() {
+    if !blockers.stale_ids.is_empty() {
         return SourceReadiness::Stale;
     }
-    if !untrusted.is_empty() {
+    if !blockers.untrusted_ids.is_empty() {
         return SourceReadiness::Untrusted;
     }
-    if !network_required.is_empty() {
+    if !blockers.network_required_ids.is_empty() {
         return SourceReadiness::NetworkRequired;
     }
-    if !missing.is_empty() {
+    if !blockers.missing_ids.is_empty() {
         return SourceReadiness::Missing;
     }
-    if !unpinned.is_empty() {
+    if !blockers.unpinned_ids.is_empty() {
         return SourceReadiness::Unpinned;
     }
     SourceReadiness::Ready
 }
 
-fn offline_preflight_next_actions(
-    missing: &[String],
-    stale: &[String],
-    unsupported: &[String],
-    untrusted: &[String],
-    network_required: &[String],
-    unpinned: &[String],
-) -> Vec<SourceOfflinePreflightNextAction> {
-    let mut actions = Vec::new();
-    push_next_action_if(
-        &mut actions,
-        !missing.is_empty(),
-        "missing-source-state",
-        SOURCE_NEXT_ACTION_EXPORT_IMPORT_PIN,
-        "export, transfer, import, and pin the source bundle for the selected root",
-    );
-    push_next_action_if(
-        &mut actions,
-        !stale.is_empty(),
-        "stale-source-state",
-        SOURCE_NEXT_ACTION_REEXPORT_IMPORT_PIN,
-        "refresh stale source state from the current root inputs before retrying offline preflight",
-    );
-    push_next_action_if(
-        &mut actions,
-        !unsupported.is_empty(),
-        "unsupported-source-adapter",
-        SOURCE_NEXT_ACTION_INSPECT_ADAPTER,
-        "offline preflight rejects adapters outside the supported source-bundle surface",
-    );
-    push_next_action_if(
-        &mut actions,
-        !untrusted.is_empty(),
-        "untrusted-source-adapter",
-        SOURCE_NEXT_ACTION_TRUST_PROVENANCE,
-        "trusted-provenance metadata is required before source readiness can be accepted",
-    );
-    push_next_action_if(
-        &mut actions,
-        !network_required.is_empty(),
-        "network-required-source",
-        SOURCE_NEXT_ACTION_DECLARE_SOURCE,
-        "offline mode requires declared local source state instead of live fetches",
-    );
-    push_next_action_if(
-        &mut actions,
-        !unpinned.is_empty(),
-        "unpinned-source-state",
-        SOURCE_NEXT_ACTION_PIN_IMPORTED,
-        "pin imported source records before treating source readiness as current evidence",
-    );
-    actions
-}
-
-fn push_next_action_if(
-    actions: &mut Vec<SourceOfflinePreflightNextAction>,
-    enabled: bool,
-    blocker_class: &'static str,
-    command_hint: &'static str,
-    description: &'static str,
-) {
-    if !enabled {
-        return;
+fn offline_preflight_next_actions(blockers: &OfflineBlockerSets<'_>) -> Vec<SourceOfflinePreflightNextAction> {
+    let rules = [
+        OfflineNextActionRule {
+            is_enabled: !blockers.missing_ids.is_empty(),
+            blocker_class: "missing-source-state",
+            command_hint: SOURCE_NEXT_ACTION_EXPORT_IMPORT_PIN,
+            description: "export, transfer, import, and pin the source bundle for the selected root",
+        },
+        OfflineNextActionRule {
+            is_enabled: !blockers.stale_ids.is_empty(),
+            blocker_class: "stale-source-state",
+            command_hint: SOURCE_NEXT_ACTION_REEXPORT_IMPORT_PIN,
+            description: "refresh stale source state from the current root inputs before retrying offline preflight",
+        },
+        OfflineNextActionRule {
+            is_enabled: !blockers.unsupported_ids.is_empty(),
+            blocker_class: "unsupported-source-adapter",
+            command_hint: SOURCE_NEXT_ACTION_INSPECT_ADAPTER,
+            description: "offline preflight rejects adapters outside the supported source-bundle surface",
+        },
+        OfflineNextActionRule {
+            is_enabled: !blockers.untrusted_ids.is_empty(),
+            blocker_class: "untrusted-source-adapter",
+            command_hint: SOURCE_NEXT_ACTION_TRUST_PROVENANCE,
+            description: "trusted-provenance metadata is required before source readiness can be accepted",
+        },
+        OfflineNextActionRule {
+            is_enabled: !blockers.network_required_ids.is_empty(),
+            blocker_class: "network-required-source",
+            command_hint: SOURCE_NEXT_ACTION_DECLARE_SOURCE,
+            description: "offline mode requires declared local source state instead of live fetches",
+        },
+        OfflineNextActionRule {
+            is_enabled: !blockers.unpinned_ids.is_empty(),
+            blocker_class: "unpinned-source-state",
+            command_hint: SOURCE_NEXT_ACTION_PIN_IMPORTED,
+            description: "pin imported source records before treating source readiness as current evidence",
+        },
+    ];
+    assert_eq!(rules.len(), OFFLINE_BLOCKER_CLASS_COUNT);
+    let mut actions = Vec::with_capacity(OFFLINE_BLOCKER_CLASS_COUNT);
+    for rule in rules {
+        if rule.is_enabled {
+            actions.push(SourceOfflinePreflightNextAction {
+                blocker_class: rule.blocker_class,
+                command_hint: rule.command_hint,
+                description: rule.description,
+            });
+        }
     }
-    actions.push(SourceOfflinePreflightNextAction {
-        blocker_class,
-        command_hint,
-        description,
-    });
+    assert!(actions.len() <= OFFLINE_BLOCKER_CLASS_COUNT);
+    actions
 }
 
 fn source_record_requires_network(expected: &SourceRecord, imported: Option<&SourceRecord>) -> bool {
@@ -1826,6 +2105,8 @@ fn read_imported_source_records(state_dir: &Path) -> Result<Vec<SourceRecord>, R
 fn read_pinned_source_records(state_dir: &Path) -> Result<Vec<SourceRecord>, RunError> {
     let pins_dir = source_pins_dir(state_dir);
     let paths = sorted_json_paths(&pins_dir, "source pin")?;
+    assert!(paths.len() <= MAX_SOURCE_RECORDS);
+    assert!(pins_dir.starts_with(state_dir));
     let mut records = Vec::new();
     for path in &paths {
         let bytes = fs::read(path)
@@ -1833,11 +2114,25 @@ fn read_pinned_source_records(state_dir: &Path) -> Result<Vec<SourceRecord>, Run
         let manifest = serde_json::from_slice::<SourceBundleManifest>(&bytes)
             .map_err(|err| RunError::Internal(format!("parsing source pin {}: {err}", path.display())))?;
         validate_manifest(&manifest)?;
-        records.extend(manifest.records);
-        if records.len() > MAX_SOURCE_RECORDS {
+        let additional_len = manifest.records.len();
+        let next_len = records
+            .len()
+            .checked_add(additional_len)
+            .ok_or_else(|| RunError::Internal("source pin record count overflow".to_string()))?;
+        if next_len > MAX_SOURCE_RECORDS {
             return Err(RunError::Internal(format!("source pin records exceed {MAX_SOURCE_RECORDS}")));
         }
+        records
+            .try_reserve(additional_len)
+            .map_err(|err| RunError::Internal(format!("reserving pinned source records: {err}")))?;
+        for record in manifest.records {
+            if records.len() >= MAX_SOURCE_RECORDS {
+                return Err(RunError::Internal(format!("source pin records exceed {MAX_SOURCE_RECORDS}")));
+            }
+            records.push(record);
+        }
     }
+    assert!(records.len() <= MAX_SOURCE_RECORDS);
     Ok(records)
 }
 
@@ -1853,19 +2148,19 @@ fn read_source_records_from_dir(dir: &Path, label: &str) -> Result<Vec<SourceRec
 fn sorted_json_paths(dir: &Path, label: &str) -> Result<Vec<PathBuf>, RunError> {
     match fs::read_dir(dir) {
         Ok(entries) => {
-            let mut paths = Vec::new();
+            let mut paths = Vec::with_capacity(MAX_SOURCE_RECORDS);
             for entry in entries {
                 let entry =
                     entry.map_err(|err| RunError::Internal(format!("reading {label} dir {}: {err}", dir.display())))?;
                 let path = entry.path();
                 if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+                    if paths.len() >= MAX_SOURCE_RECORDS {
+                        return Err(RunError::Internal(format!("{label} count exceeds {MAX_SOURCE_RECORDS}")));
+                    }
                     paths.push(path);
                 }
             }
             paths.sort();
-            if paths.len() > MAX_SOURCE_RECORDS {
-                return Err(RunError::Internal(format!("{label} count exceeds {MAX_SOURCE_RECORDS}")));
-            }
             Ok(paths)
         }
         Err(err) if err.kind() == ErrorKind::NotFound => Ok(Vec::new()),
@@ -1875,19 +2170,20 @@ fn sorted_json_paths(dir: &Path, label: &str) -> Result<Vec<PathBuf>, RunError> 
 
 fn source_fetch_overrides_for_manifest(
     manifest: &SourceBundleManifest,
-    imported_records: &[SourceRecord],
-    pinned_records: &[SourceRecord],
+    available_sources: &[SourceRecord],
+    pinned_sources: &[SourceRecord],
     source_state_blake3: &str,
 ) -> Result<(Vec<crunch_build::FetchSourceOverride>, Vec<tempfile::TempDir>), RunError> {
-    let mut overrides = Vec::new();
-    let mut scratch_dirs = Vec::new();
+    let manifest_entries = manifest.records.len();
+    let mut overrides = Vec::with_capacity(manifest_entries);
+    let mut scratch_dirs = Vec::with_capacity(manifest_entries);
     for expected in &manifest.records {
         if !source_record_is_fetcher_input(expected) {
             continue;
         }
-        let imported = imported_source_record_satisfies_fetcher_input(expected, imported_records, pinned_records)
+        let stored_record = imported_source_record_satisfies_fetcher_input(expected, available_sources, pinned_sources)
             .map_err(|blocker| RunError::Internal(format!("{} for {}", blocker.reason_code(), expected.identity)))?;
-        let (source_override, scratch_dir) = source_fetch_override_for_record(imported, source_state_blake3)?;
+        let (source_override, scratch_dir) = source_fetch_override_for_record(stored_record, source_state_blake3)?;
         overrides.push(source_override);
         scratch_dirs.push(scratch_dir);
     }
@@ -1900,19 +2196,19 @@ fn source_record_is_fetcher_input(record: &SourceRecord) -> bool {
 
 fn bootstrap_provider_archive_record_matches(record: &SourceRecord, mode: BootstrapSourceBundleMode) -> bool {
     let record_mode = record.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).map(String::as_str);
-    let mode_matches = record_mode == Some(mode.as_str())
+    let is_mode_match = record_mode == Some(mode.as_str())
         || (mode == BootstrapSourceBundleMode::LegacySeed
             && record_mode == Some(BootstrapSourceBundleMode::SelfBuildProof.as_str()));
     record.kind == SourceRecordKind::BootstrapArchive
-        && mode_matches
+        && is_mode_match
         && record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
             == Some(BOOTSTRAP_PROFILE_CLASS_PROVIDER_ARCHIVE)
 }
 
 fn imported_source_record_satisfies_fetcher_input<'a>(
     expected: &SourceRecord,
-    imported_records: &'a [SourceRecord],
-    pinned_records: &[SourceRecord],
+    available_sources: &'a [SourceRecord],
+    pinned_sources: &[SourceRecord],
 ) -> Result<&'a SourceRecord, SourceFetchBlocker> {
     if adapter_declares_unsupported(expected) {
         return Err(SourceFetchBlocker::UnsupportedSourceAdapter);
@@ -1920,23 +2216,25 @@ fn imported_source_record_satisfies_fetcher_input<'a>(
     if adapter_declares_untrusted(expected) {
         return Err(SourceFetchBlocker::UntrustedSourceAdapter);
     }
-    let imported = find_matching_source_record(expected, imported_records);
-    if source_record_requires_network(expected, imported) {
+    let stored_record = find_matching_source_record(expected, available_sources);
+    if source_record_requires_network(expected, stored_record) {
         return Err(SourceFetchBlocker::NetworkRequiredSource);
     }
-    let Some(imported) = imported else {
+    let Some(stored_record) = stored_record else {
         return Err(SourceFetchBlocker::MissingSourceState);
     };
-    if source_record_is_stale_for_preflight(expected, imported) {
+    if source_record_is_stale_for_preflight(expected, stored_record) {
         return Err(SourceFetchBlocker::StaleSourceState);
     }
-    if !source_record_is_pinned(expected, imported, pinned_records) {
+    if !source_record_is_pinned(expected, stored_record, pinned_sources) {
         return Err(SourceFetchBlocker::UnpinnedSourceState);
     }
-    if imported.files.is_empty() {
+    if stored_record.files.is_empty() {
         return Err(SourceFetchBlocker::MissingMaterializedPayload);
     }
-    Ok(imported)
+    assert!(source_record_is_pinned(expected, stored_record, pinned_sources));
+    assert!(!stored_record.files.is_empty());
+    Ok(stored_record)
 }
 
 fn source_fetch_override_for_record(
@@ -1944,6 +2242,8 @@ fn source_fetch_override_for_record(
     source_state_blake3: &str,
 ) -> Result<(crunch_build::FetchSourceOverride, tempfile::TempDir), RunError> {
     validate_source_record(record)?;
+    assert!(!record.identity.is_empty());
+    assert!(record.files.len() <= MAX_SOURCE_FILES_PER_RECORD);
     let kind = source_fetch_override_kind(record)?;
     let url = record
         .metadata
@@ -1993,7 +2293,14 @@ fn source_fetch_override_kind(record: &SourceRecord) -> Result<crunch_build::Fet
             }
             Ok(crunch_build::FetchSourceOverrideKind::File)
         }
-        _ => Err(RunError::Internal(format!("source record {} is not a fixed fetcher input", record.identity))),
+        SourceRecordKind::LocalPath
+        | SourceRecordKind::PackageMirror
+        | SourceRecordKind::BootstrapArchive
+        | SourceRecordKind::ProviderManifest
+        | SourceRecordKind::ToolchainSourceRoot
+        | SourceRecordKind::ProofInput => {
+            Err(RunError::Internal(format!("source record {} is not a fixed fetcher input", record.identity)))
+        }
     }
 }
 
@@ -2047,13 +2354,13 @@ fn materialize_export_records(
 
 fn materialize_fetcher_record(
     record: &SourceRecord,
-    imported_records: &[SourceRecord],
-    skip_git_dir: bool,
+    available_sources: &[SourceRecord],
+    is_skipping_git_dir: bool,
 ) -> Result<SourceRecord, RunError> {
-    if let Some(imported) = find_matching_materialized_source_record(record, imported_records) {
-        return Ok(imported.clone());
+    if let Some(stored_record) = find_matching_materialized_source_record(record, available_sources) {
+        return Ok(stored_record.clone());
     }
-    materialize_file_url_record(record, skip_git_dir)
+    materialize_file_url_record(record, is_skipping_git_dir)
 }
 
 fn find_matching_materialized_source_record<'a>(
@@ -2065,7 +2372,7 @@ fn find_matching_materialized_source_record<'a>(
         .find(|stored| source_record_metadata_matches_preflight(expected, stored) && !stored.files.is_empty())
 }
 
-fn materialize_file_url_record(record: &SourceRecord, skip_git_dir: bool) -> Result<SourceRecord, RunError> {
+fn materialize_file_url_record(record: &SourceRecord, is_skipping_git_dir: bool) -> Result<SourceRecord, RunError> {
     let url_text = record
         .metadata
         .get(RECORD_METADATA_URL_KEY)
@@ -2079,7 +2386,7 @@ fn materialize_file_url_record(record: &SourceRecord, skip_git_dir: bool) -> Res
     if record.kind == SourceRecordKind::VcsSnapshot {
         verify_local_vcs_snapshot_revision(record, &payload_path)?;
     }
-    materialize_source_record_from_path(record, &payload_path, skip_git_dir)
+    materialize_source_record_from_path(record, &payload_path, is_skipping_git_dir)
 }
 
 fn verify_local_vcs_snapshot_revision(record: &SourceRecord, checkout_path: &Path) -> Result<(), RunError> {
@@ -2100,6 +2407,8 @@ fn verify_local_vcs_snapshot_revision(record: &SourceRecord, checkout_path: &Pat
 
 fn local_checkout_git_dir(checkout_path: &Path) -> Result<PathBuf, RunError> {
     let dot_git = checkout_path.join(DOT_GIT_DIR_NAME);
+    assert!(dot_git.starts_with(checkout_path));
+    assert!(dot_git.ends_with(DOT_GIT_DIR_NAME));
     let metadata = fs::symlink_metadata(&dot_git)
         .map_err(|err| RunError::Internal(format!("reading local VCS metadata {}: {err}", dot_git.display())))?;
     if metadata.is_dir() {
@@ -2124,19 +2433,29 @@ fn local_checkout_git_dir(checkout_path: &Path) -> Result<PathBuf, RunError> {
     Err(RunError::Internal(format!("local VCS metadata {} is not a file or dir", dot_git.display())))
 }
 
-fn resolve_git_revision(git_dir: &Path, rev: &str) -> Result<String, RunError> {
-    validate_git_revision_text(rev)?;
-    if is_git_object_id(rev) {
-        return Ok(rev.to_string());
+fn resolve_git_revision(git_dir: &Path, revision: &str) -> Result<String, RunError> {
+    validate_git_revision_text(revision)?;
+    assert!(!revision.is_empty());
+    assert!(MAX_GIT_REF_INDIRECTIONS > 0);
+    let mut current_revision = revision.to_string();
+    for _ in 0..MAX_GIT_REF_INDIRECTIONS {
+        validate_git_revision_text(&current_revision)?;
+        if is_git_object_id(&current_revision) {
+            return Ok(current_revision);
+        }
+        let ref_text = read_git_ref_text(git_dir, &current_revision)?;
+        if let Some(target_ref) = ref_text.strip_prefix(GIT_REF_PREFIX) {
+            current_revision = target_ref.trim().to_string();
+            continue;
+        }
+        if is_git_object_id(&ref_text) {
+            return Ok(ref_text);
+        }
+        return Err(RunError::Internal(format!("local VCS ref {current_revision} does not resolve to an object id")));
     }
-    let ref_text = read_git_ref_text(git_dir, rev)?;
-    if let Some(target_ref) = ref_text.strip_prefix(GIT_REF_PREFIX) {
-        return resolve_git_revision(git_dir, target_ref.trim());
-    }
-    if is_git_object_id(ref_text.as_str()) {
-        return Ok(ref_text);
-    }
-    Err(RunError::Internal(format!("local VCS ref {rev} does not resolve to an object id")))
+    Err(RunError::Internal(format!(
+        "local VCS ref {revision} exceeds {MAX_GIT_REF_INDIRECTIONS} symbolic indirections"
+    )))
 }
 
 fn read_git_ref_text(git_dir: &Path, rev: &str) -> Result<String, RunError> {
@@ -2157,7 +2476,7 @@ fn read_git_packed_ref(git_dir: &Path, rev: &str) -> Result<String, RunError> {
         RunError::Internal(format!("reading local VCS packed refs {} for {rev}: {err}", packed_refs_path.display()))
     })?;
     for line in text.lines() {
-        if git_packed_ref_line_matches(line, rev) {
+        if git_packed_ref_line_matches(GitPackedRefMatch { line, revision: rev }) {
             let object_id = line
                 .split_whitespace()
                 .next()
@@ -2169,27 +2488,41 @@ fn read_git_packed_ref(git_dir: &Path, rev: &str) -> Result<String, RunError> {
     Err(RunError::Internal(format!("local VCS ref {rev} was not found")))
 }
 
-fn git_packed_ref_line_matches(line: &str, rev: &str) -> bool {
-    if line.is_empty() {
+fn git_packed_ref_line_matches(request: GitPackedRefMatch<'_>) -> bool {
+    if request.line.is_empty() {
         return false;
     }
-    if line.starts_with(PACKED_REF_COMMENT_PREFIX) {
+    if request.line.starts_with(PACKED_REF_COMMENT_PREFIX) {
         return false;
     }
-    if line.starts_with(PACKED_REF_PEELED_PREFIX) {
+    if request.line.starts_with(PACKED_REF_PEELED_PREFIX) {
         return false;
     }
-    line.split_whitespace().nth(1) == Some(rev)
+    request.line.split_whitespace().nth(1) == Some(request.revision)
 }
 
-fn validate_git_revision_text(rev: &str) -> Result<(), RunError> {
-    if rev.is_empty() || rev.contains('\0') || rev.contains("..") || rev.contains('\\') || rev.starts_with('/') {
-        return Err(RunError::Internal(format!("unsafe local VCS revision '{rev}'")));
+fn validate_git_revision_text(revision: &str) -> Result<(), RunError> {
+    if revision.is_empty() {
+        return Err(RunError::Internal(format!("unsafe local VCS revision '{revision}'")));
     }
-    if rev == GIT_HEAD_REF || rev.starts_with(GIT_REFS_PREFIX) || is_git_object_id(rev) {
+    if revision.contains('\0') {
+        return Err(RunError::Internal(format!("unsafe local VCS revision '{revision}'")));
+    }
+    if revision.contains("..") {
+        return Err(RunError::Internal(format!("unsafe local VCS revision '{revision}'")));
+    }
+    if revision.contains('\\') {
+        return Err(RunError::Internal(format!("unsafe local VCS revision '{revision}'")));
+    }
+    if revision.starts_with('/') {
+        return Err(RunError::Internal(format!("unsafe local VCS revision '{revision}'")));
+    }
+    assert!(!revision.is_empty());
+    assert!(!revision.starts_with('/'));
+    if revision == GIT_HEAD_REF || revision.starts_with(GIT_REFS_PREFIX) || is_git_object_id(revision) {
         return Ok(());
     }
-    Err(RunError::Internal(format!("local VCS revision '{rev}' must be an object id or refs/* name")))
+    Err(RunError::Internal(format!("local VCS revision '{revision}' must be an object id or refs/* name")))
 }
 
 fn is_git_object_id(value: &str) -> bool {
@@ -2208,9 +2541,9 @@ fn validate_git_object_id(value: &str) -> Result<(), RunError> {
 pub(crate) fn materialize_source_record_from_path(
     record: &SourceRecord,
     payload_path: &Path,
-    skip_git_dir: bool,
+    is_skipping_git_dir: bool,
 ) -> Result<SourceRecord, RunError> {
-    let (files, payload_bytes) = canonicalize_payload_entries(payload_path, skip_git_dir)?;
+    let (files, payload_bytes) = canonicalize_payload_entries(payload_path, is_skipping_git_dir)?;
     let content_blake3 = digest_source_record_content(&record.kind, &record.metadata, &files)?;
     Ok(SourceRecord {
         payload_bytes,
@@ -2223,12 +2556,16 @@ pub(crate) fn materialize_source_record_from_path(
 pub(crate) fn materialize_imported_source_record_for_store_path(
     state_dir: &Path,
     store_prefix: &str,
-    logical_store_path: &str,
+    logical_store_path: impl AsRef<str>,
     target: &Path,
 ) -> Result<bool, RunError> {
-    let imported_records = read_imported_source_records(state_dir)?;
-    for record in &imported_records {
-        if imported_record_matches_store_path(record, store_prefix, logical_store_path) {
+    let lookup = StorePathLookup {
+        store_prefix,
+        logical_store_path: logical_store_path.as_ref(),
+    };
+    let available_sources = read_imported_source_records(state_dir)?;
+    for record in &available_sources {
+        if imported_record_matches_store_path(record, &lookup) {
             materialize_source_record_payload(record, target)?;
             return Ok(true);
         }
@@ -2236,14 +2573,14 @@ pub(crate) fn materialize_imported_source_record_for_store_path(
     Ok(false)
 }
 
-fn imported_record_matches_store_path(record: &SourceRecord, store_prefix: &str, logical_store_path: &str) -> bool {
+fn imported_record_matches_store_path(record: &SourceRecord, lookup: &StorePathLookup<'_>) -> bool {
     if record.files.is_empty() {
         return false;
     }
-    if record.store_prefix.as_deref() != Some(store_prefix) {
+    if record.store_prefix.as_deref() != Some(lookup.store_prefix) {
         return false;
     }
-    record.metadata.get(RECORD_METADATA_STORE_PATH_KEY).map(String::as_str) == Some(logical_store_path)
+    record.metadata.get(RECORD_METADATA_STORE_PATH_KEY).map(String::as_str) == Some(lookup.logical_store_path)
 }
 
 fn materialize_source_record_payload(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
@@ -2327,36 +2664,82 @@ fn local_file_url_path(raw_url: &str) -> Option<PathBuf> {
     parsed.to_file_path().ok()
 }
 
-fn collect_derivation_source_records(
-    derivation: &crunch_glue::CrunchDerivation,
+fn walk_derivation_source_records(
+    pending: &mut Vec<DerivationSourceWalkItem<'_>>,
     store_prefix: &str,
     records: &mut Vec<SourceRecord>,
-    visited_count: &mut usize,
 ) -> Result<(), RunError> {
-    *visited_count = visited_count
-        .checked_add(1)
-        .ok_or_else(|| RunError::Internal("derived source walk count overflow".to_string()))?;
-    if *visited_count > MAX_DERIVED_SOURCE_WALK_NODES {
-        return Err(RunError::Internal(format!(
-            "derived source walk exceeds {MAX_DERIVED_SOURCE_WALK_NODES} derivation nodes"
-        )));
-    }
-    if let Some(record) = fixed_fetcher_source_record(derivation)? {
-        records.push(record);
-    }
-    for input in &derivation.inputs {
-        match input {
-            crunch_glue::Input::Source(source_path) => {
-                records.push(store_path_source_record(source_path, store_prefix)?)
+    assert!(pending.len() <= MAX_DERIVED_SOURCE_WALK_ITEMS);
+    assert!(records.len() <= MAX_SOURCE_RECORDS);
+    let mut visited_nodes_len = 0usize;
+    for _ in 0..MAX_DERIVED_SOURCE_WALK_ITEMS {
+        let Some(item) = pending.pop() else { return Ok(()) };
+        match item {
+            DerivationSourceWalkItem::Derivation(derivation) => {
+                visited_nodes_len = visited_nodes_len
+                    .checked_add(1)
+                    .ok_or_else(|| RunError::Internal("derived source walk count overflow".to_string()))?;
+                if visited_nodes_len > MAX_DERIVED_SOURCE_WALK_NODES {
+                    return Err(RunError::Internal(format!(
+                        "derived source walk exceeds {MAX_DERIVED_SOURCE_WALK_NODES} derivation nodes"
+                    )));
+                }
+                if let Some(record) = fixed_fetcher_source_record(derivation)? {
+                    push_bounded_source_record(records, record)?;
+                }
+                queue_derivation_inputs(derivation, pending)?;
             }
-            crunch_glue::Input::OutputSelection(output) => {
-                collect_derivation_source_records(&output.drv, store_prefix, records, visited_count)?;
-            }
-            crunch_glue::Input::Derivation(input_derivation) => {
-                collect_derivation_source_records(input_derivation, store_prefix, records, visited_count)?;
+            DerivationSourceWalkItem::StorePath(source_path) => {
+                let record = store_path_source_record(StorePathSourceRequest {
+                    source_path,
+                    store_prefix,
+                })?;
+                push_bounded_source_record(records, record)?;
             }
         }
     }
+    Err(RunError::Internal(format!(
+        "derived source walk exceeds {MAX_DERIVED_SOURCE_WALK_ITEMS} total items"
+    )))
+}
+
+fn queue_derivation_inputs<'a>(
+    derivation: &'a crunch_glue::CrunchDerivation,
+    pending: &mut Vec<DerivationSourceWalkItem<'a>>,
+) -> Result<(), RunError> {
+    let next_len = pending
+        .len()
+        .checked_add(derivation.inputs.len())
+        .ok_or_else(|| RunError::Internal("derived source walk queue overflow".to_string()))?;
+    if next_len > MAX_DERIVED_SOURCE_WALK_ITEMS {
+        return Err(RunError::Internal(format!(
+            "derived source walk queue exceeds {MAX_DERIVED_SOURCE_WALK_ITEMS} items"
+        )));
+    }
+    pending
+        .try_reserve(derivation.inputs.len())
+        .map_err(|err| RunError::Internal(format!("reserving derived source walk queue: {err}")))?;
+    for input in derivation.inputs.iter().rev() {
+        let item = match input {
+            crunch_glue::Input::Source(source_path) => DerivationSourceWalkItem::StorePath(source_path),
+            crunch_glue::Input::OutputSelection(output) => DerivationSourceWalkItem::Derivation(&output.drv),
+            crunch_glue::Input::Derivation(input_derivation) => DerivationSourceWalkItem::Derivation(input_derivation),
+        };
+        pending.push(item);
+    }
+    assert_eq!(pending.len(), next_len);
+    assert!(pending.len() <= MAX_DERIVED_SOURCE_WALK_ITEMS);
+    Ok(())
+}
+
+fn push_bounded_source_record(records: &mut Vec<SourceRecord>, record: SourceRecord) -> Result<(), RunError> {
+    if records.len() >= MAX_SOURCE_RECORDS {
+        return Err(RunError::Internal(format!("source record count exceeds {MAX_SOURCE_RECORDS}")));
+    }
+    records
+        .try_reserve(1)
+        .map_err(|err| RunError::Internal(format!("reserving derived source record: {err}")))?;
+    records.push(record);
     Ok(())
 }
 
@@ -2364,6 +2747,7 @@ fn fixed_fetcher_source_record(derivation: &crunch_glue::CrunchDerivation) -> Re
     if derivation.builder != BUILTIN_FETCHURL_BUILDER {
         return Ok(None);
     }
+    assert_eq!(derivation.builder, BUILTIN_FETCHURL_BUILDER);
     let fixed_output = derivation.fixed_output.as_ref().ok_or_else(|| {
         RunError::Internal(format!("builtin fetcher {} cannot be source-bundled without fixed_output", derivation.name))
     })?;
@@ -2383,6 +2767,7 @@ fn fixed_fetcher_source_record(derivation: &crunch_glue::CrunchDerivation) -> Re
     copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_REV_KEY);
     copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_TYPE_KEY);
     copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_UNPACK_KEY);
+    assert_eq!(metadata.get(RECORD_METADATA_URL_KEY), Some(url));
     let kind = if derivation.env.get(FETCH_ENV_TYPE_KEY).map(String::as_str) == Some(FETCH_ENV_TYPE_GIT) {
         SourceRecordKind::VcsSnapshot
     } else {
@@ -2399,19 +2784,20 @@ fn fixed_fetcher_source_record(derivation: &crunch_glue::CrunchDerivation) -> Re
     Ok(Some(virtual_source_record(kind, id_prefix, None, metadata)?))
 }
 
-fn store_path_source_record(source_path: &str, store_prefix: &str) -> Result<SourceRecord, RunError> {
-    if !source_path.starts_with('/') {
+fn store_path_source_record(request: StorePathSourceRequest<'_>) -> Result<SourceRecord, RunError> {
+    if !request.source_path.starts_with('/') {
         return Err(RunError::Internal(format!(
-            "source input path must be absolute for source bundle planning: {source_path}"
+            "source input path must be absolute for source bundle planning: {}",
+            request.source_path
         )));
     }
     let mut metadata = BTreeMap::new();
     metadata.insert(RECORD_METADATA_SOURCE_KIND_KEY.to_string(), "pre-existing-store-path".to_string());
-    metadata.insert(RECORD_METADATA_STORE_PATH_KEY.to_string(), source_path.to_string());
+    metadata.insert(RECORD_METADATA_STORE_PATH_KEY.to_string(), request.source_path.to_string());
     virtual_source_record(
         SourceRecordKind::ToolchainSourceRoot,
         DERIVED_STORE_PATH_ID_PREFIX,
-        Some(store_prefix.to_string()),
+        Some(request.store_prefix.to_string()),
         metadata,
     )
 }
@@ -2460,10 +2846,15 @@ pub fn cmd_source(
     action: crate::SourceAction,
     state_dir: &Path,
     store_prefix: &str,
-    json_output: bool,
+    is_json_output: bool,
 ) -> Result<(), RunError> {
+    let context = SourceBundleCliContext {
+        state_dir,
+        store_prefix,
+        is_json_output,
+    };
     match action {
-        crate::SourceAction::Bundle { action } => cmd_source_bundle(action, state_dir, store_prefix, json_output),
+        crate::SourceAction::Bundle { action } => cmd_source_bundle(action, &context),
     }
 }
 
@@ -2482,9 +2873,7 @@ struct BootstrapProfileCliInput {
 
 fn cmd_bootstrap_profile(
     input: BootstrapProfileCliInput,
-    state_dir: &Path,
-    store_prefix: &str,
-    json_output: bool,
+    context: &SourceBundleCliContext<'_>,
 ) -> Result<(), RunError> {
     let mode = BootstrapSourceBundleMode::parse(&input.mode)?;
     let profile_input = BootstrapSourceBundleProfileInput {
@@ -2497,47 +2886,37 @@ fn cmd_bootstrap_profile(
         toolchain_source_root: input.toolchain_source_root,
         proof_inputs: input.proof_inputs,
     };
-    let manifest = plan_bootstrap_source_bundle_profile(&profile_input, store_prefix)?;
+    let manifest = plan_bootstrap_source_bundle_profile(&profile_input, context.store_prefix)?;
+    assert_eq!(manifest.format, SOURCE_BUNDLE_FORMAT);
+    assert_eq!(manifest.non_claim, SOURCE_BUNDLE_NON_CLAIM);
     if let Some(path) = input.to {
         write_source_bundle(&path, &manifest)?;
     }
     if input.preflight {
-        let report = offline_preflight_for_manifest(&manifest, state_dir)?;
-        print_offline_preflight_report(&report, json_output)?;
-        if source_offline_preflight_is_ready(&report) {
+        let preflight_receipt = offline_preflight_for_manifest(&manifest, context.state_dir)?;
+        print_offline_preflight_report(&preflight_receipt, context.is_json_output)?;
+        if source_offline_preflight_is_ready(&preflight_receipt) {
             return Ok(());
         }
         return Err(RunError::Reported(1));
     }
-    let report = bootstrap_source_bundle_profile_report(&manifest, mode)?;
-    print_bootstrap_profile_report(&report, json_output)
+    let profile_receipt = bootstrap_source_bundle_profile_report(&manifest, mode)?;
+    print_bootstrap_profile_report(&profile_receipt, context.is_json_output)
 }
 
-fn cmd_source_bundle(
-    action: crate::SourceBundleAction,
-    state_dir: &Path,
-    store_prefix: &str,
-    json_output: bool,
-) -> Result<(), RunError> {
+fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
     match action {
         crate::SourceBundleAction::Plan {
             sources,
             build_roots,
             import_paths,
-        } => {
-            let manifest = plan_from_cli_inputs(&sources, &build_roots, &import_paths, store_prefix)?;
-            print_plan_report(&plan_report(&manifest)?, json_output)
-        }
+        } => cmd_plan_source_bundle(&sources, &build_roots, &import_paths, context),
         crate::SourceBundleAction::Export {
             sources,
             build_roots,
             import_paths,
             to,
-        } => {
-            let manifest = export_from_cli_inputs(&sources, &build_roots, &import_paths, store_prefix, state_dir)?;
-            write_source_bundle(&to, &manifest)?;
-            print_plan_report(&plan_report(&manifest)?, json_output)
-        }
+        } => cmd_export_source_bundle(&sources, &build_roots, &import_paths, &to, context),
         crate::SourceBundleAction::BootstrapProfile {
             mode,
             provider_archive,
@@ -2562,48 +2941,81 @@ fn cmd_source_bundle(
                 to,
                 preflight,
             },
-            state_dir,
-            store_prefix,
-            json_output,
+            context,
         ),
-        crate::SourceBundleAction::List { from } => {
-            let manifest = read_source_bundle(&from)?;
-            print_plan_report(&list_source_bundle(&manifest)?, json_output)
-        }
-        crate::SourceBundleAction::Import { from, pin } => {
-            let manifest = read_source_bundle(&from)?;
-            let report = import_source_bundle(&manifest, state_dir, pin)?;
-            print_import_report(&report, json_output)
-        }
-        crate::SourceBundleAction::Verify { from, imported } => {
-            let manifest = read_source_bundle(&from)?;
-            let report = if imported {
-                verify_source_bundle_state(&manifest, state_dir)?
-            } else {
-                SourceBundleVerifyReport {
-                    manifest_blake3: manifest.manifest_blake3.clone(),
-                    ready_class: SourceReadiness::Ready,
-                    missing_records: Vec::new(),
-                    stale_records: Vec::new(),
-                    unsupported_records: Vec::new(),
-                    untrusted_records: Vec::new(),
-                    non_claim: SOURCE_BUNDLE_NON_CLAIM,
-                }
-            };
-            print_verify_report(&report, json_output)
-        }
+        crate::SourceBundleAction::List { from } => cmd_list_source_bundle(&from, context),
+        crate::SourceBundleAction::Import { from, pin } => cmd_import_source_bundle(&from, pin, context),
+        crate::SourceBundleAction::Verify { from, imported } => cmd_verify_source_bundle(&from, imported, context),
         crate::SourceBundleAction::Preflight {
             build_roots,
             import_paths,
-        } => {
-            let report = offline_preflight_for_build_roots(&build_roots, &import_paths, state_dir, store_prefix)?;
-            print_offline_preflight_report(&report, json_output)?;
-            if source_offline_preflight_is_ready(&report) {
-                return Ok(());
-            }
-            Err(RunError::Reported(1))
-        }
+        } => cmd_preflight_source_bundle(&build_roots, &import_paths, context),
     }
+}
+
+fn cmd_plan_source_bundle(
+    sources: &[String],
+    build_roots: &[PathBuf],
+    import_paths: &[PathBuf],
+    context: &SourceBundleCliContext<'_>,
+) -> Result<(), RunError> {
+    let manifest = plan_from_cli_inputs(sources, build_roots, import_paths, context.store_prefix)?;
+    print_plan_report(&plan_report(&manifest)?, context.is_json_output)
+}
+
+fn cmd_export_source_bundle(
+    sources: &[String],
+    build_roots: &[PathBuf],
+    import_paths: &[PathBuf],
+    to: &Path,
+    context: &SourceBundleCliContext<'_>,
+) -> Result<(), RunError> {
+    let manifest = export_from_cli_inputs(sources, build_roots, import_paths, context.store_prefix, context.state_dir)?;
+    write_source_bundle(to, &manifest)?;
+    print_plan_report(&plan_report(&manifest)?, context.is_json_output)
+}
+
+fn cmd_list_source_bundle(from: &Path, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
+    let manifest = read_source_bundle(from)?;
+    print_plan_report(&list_source_bundle(&manifest)?, context.is_json_output)
+}
+
+fn cmd_import_source_bundle(from: &Path, pin: bool, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
+    let manifest = read_source_bundle(from)?;
+    let operation_output = import_source_bundle(&manifest, context.state_dir, pin)?;
+    print_import_report(&operation_output, context.is_json_output)
+}
+
+fn cmd_verify_source_bundle(from: &Path, imported: bool, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
+    let manifest = read_source_bundle(from)?;
+    let verify_receipt = if imported {
+        verify_source_bundle_state(&manifest, context.state_dir)?
+    } else {
+        SourceBundleVerifyReport {
+            manifest_blake3: manifest.manifest_blake3.clone(),
+            ready_class: SourceReadiness::Ready,
+            missing_records: Vec::new(),
+            stale_records: Vec::new(),
+            unsupported_records: Vec::new(),
+            untrusted_records: Vec::new(),
+            non_claim: SOURCE_BUNDLE_NON_CLAIM,
+        }
+    };
+    print_verify_report(&verify_receipt, context.is_json_output)
+}
+
+fn cmd_preflight_source_bundle(
+    build_roots: &[PathBuf],
+    import_paths: &[PathBuf],
+    context: &SourceBundleCliContext<'_>,
+) -> Result<(), RunError> {
+    let preflight_receipt =
+        offline_preflight_for_build_roots(build_roots, import_paths, context.state_dir, context.store_prefix)?;
+    print_offline_preflight_report(&preflight_receipt, context.is_json_output)?;
+    if source_offline_preflight_is_ready(&preflight_receipt) {
+        return Ok(());
+    }
+    Err(RunError::Reported(1))
 }
 
 fn plan_from_cli_inputs(
@@ -2642,19 +3054,47 @@ fn evaluate_build_roots(
     if build_roots.is_empty() {
         return Ok(Vec::new());
     }
-    let full_import_paths = crate::build_cmd::build_import_paths(import_paths)?;
+    if build_roots.len() > MAX_DERIVED_SOURCE_WALK_NODES {
+        return Err(RunError::Internal(format!(
+            "evaluated build roots exceed {MAX_DERIVED_SOURCE_WALK_NODES} derivations"
+        )));
+    }
+    assert!(!build_roots.is_empty());
+    assert!(build_roots.len() <= MAX_DERIVED_SOURCE_WALK_NODES);
+    let evaluation_paths = crate::build_cmd::build_import_paths(import_paths)?;
     let mut derivations = Vec::new();
     for build_root in build_roots {
-        derivations.extend(evaluate_build_root_with_import_paths(build_root, &full_import_paths)?);
+        let root_derivations = evaluate_build_root_with_import_paths(build_root, &evaluation_paths)?;
+        let next_len = derivations
+            .len()
+            .checked_add(root_derivations.len())
+            .ok_or_else(|| RunError::Internal("evaluated build root count overflow".to_string()))?;
+        if next_len > MAX_DERIVED_SOURCE_WALK_NODES {
+            return Err(RunError::Internal(format!(
+                "evaluated build roots exceed {MAX_DERIVED_SOURCE_WALK_NODES} derivations"
+            )));
+        }
+        derivations
+            .try_reserve(root_derivations.len())
+            .map_err(|err| RunError::Internal(format!("reserving evaluated build roots: {err}")))?;
+        for derivation in root_derivations {
+            if derivations.len() >= MAX_DERIVED_SOURCE_WALK_NODES {
+                return Err(RunError::Internal(format!(
+                    "evaluated build roots exceed {MAX_DERIVED_SOURCE_WALK_NODES} derivations"
+                )));
+            }
+            derivations.push(derivation);
+        }
     }
+    assert!(derivations.len() <= MAX_DERIVED_SOURCE_WALK_NODES);
     Ok(derivations)
 }
 
 fn evaluate_build_root_with_import_paths(
     build_root: &Path,
-    full_import_paths: &[OsString],
+    resolved_import_paths: &[OsString],
 ) -> Result<Vec<(String, crunch_glue::CrunchDerivation)>, RunError> {
-    let mut session = crunch_eval::session::EvaluationSession::open_file(build_root, full_import_paths)
+    let mut session = crunch_eval::session::EvaluationSession::open_file(build_root, resolved_import_paths)
         .map_err(|err| RunError::Eval(format!("opening build root {}: {err}", build_root.display())))?;
     session
         .force_all_roots::<crunch_glue::CrunchDerivation>()
@@ -2736,9 +3176,11 @@ fn print_verify_report(report: &SourceBundleVerifyReport, json_output: bool) -> 
 
 pub fn print_offline_preflight_report(
     report: &SourceOfflinePreflightReport,
-    json_output: bool,
+    is_json_output: bool,
 ) -> Result<(), RunError> {
-    if json_output {
+    assert_eq!(report.format, SOURCE_OFFLINE_PREFLIGHT_FORMAT);
+    assert_eq!(report.non_claim, SOURCE_BUNDLE_NON_CLAIM);
+    if is_json_output {
         println!("{}", render_json(report)?);
         return Ok(());
     }

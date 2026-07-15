@@ -201,19 +201,284 @@ const GCC47_CXX_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-4.7-cxx-provid
 const GCC10_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-10-provider-contract.json";
 const FULL_MUSL_BINUTILS_PROVIDER_CONTRACT: &str = "bootstrap/evidence/full-musl-binutils-provider-contract.json";
 const BINUTILS_TCC_REQUIRED_TOOLS: &[&str] = &["as", "ld", "ar", "ranlib", "nm", "objcopy"];
+const BLAKE3_HEX_LENGTH: usize = 64;
+const CLEAN_REBUILD_ROOT_COUNT: usize = 2;
+
+#[derive(Debug, Copy, Clone)]
+struct StringFieldExpectation<'a> {
+    field: &'a str,
+    expected: &'a str,
+}
+
+#[derive(Debug, Copy, Clone)]
+struct ContractMarkerCheck<'a> {
+    receipt_field: &'a str,
+    label: &'a str,
+    derivation_path: &'a Path,
+    derivation_label: &'a str,
+}
+
+#[derive(Debug, Copy, Clone)]
+struct DerivationMarkerCheck<'a> {
+    content: &'a str,
+    marker: &'a str,
+}
+
+#[derive(Debug, Copy, Clone)]
+struct DigestFieldCheck<'a> {
+    digest: &'a str,
+    field: &'a str,
+}
+
+#[derive(Debug, Copy, Clone)]
+struct ProviderKindFieldCheck<'a> {
+    kind: &'a str,
+    field: &'a str,
+}
+
+#[derive(Debug, Copy, Clone)]
+struct Gcc40SmokeSpec {
+    slice: Option<&'static str>,
+    required_input_fragments: &'static [&'static str],
+    required_output_marker: &'static str,
+}
+
+#[derive(Debug, Copy, Clone)]
+struct GeneratorOutputCheck {
+    generator: &'static str,
+    required_fragments: &'static [&'static str],
+}
+
+#[derive(Debug, Copy, Clone)]
+struct DemangleIoExpectation {
+    field: &'static str,
+    mangled: &'static str,
+    demangled: &'static str,
+}
+
+const GCC40_DEMANGLE_IO_EXPECTATIONS: &[DemangleIoExpectation] = &[
+    DemangleIoExpectation {
+        field: "accepted_inputs",
+        mangled: "_ZN3foo3bar3bazEs",
+        demangled: "foo::bar::baz(short)",
+    },
+    DemangleIoExpectation {
+        field: "short_regressions",
+        mangled: "_ZN3foo3barEs",
+        demangled: "foo::bar(short)",
+    },
+    DemangleIoExpectation {
+        field: "flat_short_regressions",
+        mangled: "_Z3foos",
+        demangled: "foo(short)",
+    },
+    DemangleIoExpectation {
+        field: "long_regressions",
+        mangled: "_ZN3foo3bar3bazEl",
+        demangled: "foo::bar::baz(long)",
+    },
+    DemangleIoExpectation {
+        field: "long_regressions",
+        mangled: "_ZN3foo3barEl",
+        demangled: "foo::bar(long)",
+    },
+    DemangleIoExpectation {
+        field: "flat_long_regressions",
+        mangled: "_Z3fool",
+        demangled: "foo(long)",
+    },
+    DemangleIoExpectation {
+        field: "char_regressions",
+        mangled: "_ZN3foo3bar3bazEc",
+        demangled: "foo::bar::baz(char)",
+    },
+    DemangleIoExpectation {
+        field: "char_regressions",
+        mangled: "_ZN3foo3barEc",
+        demangled: "foo::bar(char)",
+    },
+    DemangleIoExpectation {
+        field: "flat_char_regressions",
+        mangled: "_Z3fooc",
+        demangled: "foo(char)",
+    },
+    DemangleIoExpectation {
+        field: "int_regressions",
+        mangled: "_ZN3foo3bar3bazEi",
+        demangled: "foo::bar::baz(int)",
+    },
+    DemangleIoExpectation {
+        field: "int_regressions",
+        mangled: "_ZN3foo3barEi",
+        demangled: "foo::bar(int)",
+    },
+    DemangleIoExpectation {
+        field: "flat_int_regressions",
+        mangled: "_Z3fooi",
+        demangled: "foo(int)",
+    },
+    DemangleIoExpectation {
+        field: "zero_arg_regressions",
+        mangled: "_ZN3foo3bar3bazEv",
+        demangled: "foo::bar::baz()",
+    },
+    DemangleIoExpectation {
+        field: "nested_regressions",
+        mangled: "_ZN3foo3barEv",
+        demangled: "foo::bar()",
+    },
+    DemangleIoExpectation {
+        field: "flat_regressions",
+        mangled: "_Z3foov",
+        demangled: "foo()",
+    },
+];
+
+const GCC40_DEMANGLE_REJECTED_INPUTS: &[&str] = &[
+    "_ZN3foo3bar3bazEf",
+    "_ZN3foo3bar3bazEx",
+    "_ZN3foo3bar3baz3quxEs",
+    "_ZN3foo3bar3baz3quxEl",
+    "_ZN3foo3bar3baz3quxEc",
+    "_ZN3foo3bar3baz3quxEi",
+    "_ZN3foo3bar3baz3quxEv",
+    "_ZN3fooE",
+    "_Z3fooss",
+    "_ZN3foo3bar3bazEss",
+    "not_mangled",
+];
+
+const GCC40_DEMANGLE_TRANSCRIPT_FRAGMENTS: &[&str] = &[
+    "_ZN3foo3bar3bazEs",
+    "foo::bar::baz(short)",
+    "_ZN3foo3barEs",
+    "foo::bar(short)",
+    "_Z3foos",
+    "foo(short)",
+    "_ZN3foo3bar3bazEl",
+    "foo::bar::baz(long)",
+    "_ZN3foo3barEl",
+    "foo::bar(long)",
+    "_Z3fool",
+    "foo(long)",
+    "_ZN3foo3bar3bazEc",
+    "foo::bar::baz(char)",
+    "_ZN3foo3barEc",
+    "foo::bar(char)",
+    "_Z3fooc",
+    "foo(char)",
+    "_ZN3foo3bar3bazEi",
+    "foo::bar::baz(int)",
+    "_ZN3foo3barEi",
+    "foo::bar(int)",
+    "_Z3fooi",
+    "foo(int)",
+    "_ZN3foo3bar3bazEv",
+    "foo::bar::baz()",
+    "_ZN3foo3barEv",
+    "foo::bar()",
+    "_Z3foov",
+    "full native cp-demangle",
+];
+
+const GCC40_GENERATOR_OUTPUT_CHECKS: &[GeneratorOutputCheck] = &[
+    GeneratorOutputCheck {
+        generator: "genattrtab",
+        required_fragments: &["gcc40_genattrtab_bounded_output_slice", "HAVE_ATTR_enabled"],
+    },
+    GeneratorOutputCheck {
+        generator: "genoutput",
+        required_fragments: &["gcc40_genoutput_bounded_output_slice", "GCC40_GENOUTPUT_BOUNDED"],
+    },
+    GeneratorOutputCheck {
+        generator: "genemit",
+        required_fragments: &["gcc40_genemit_bounded_output_slice", "GCC40_GENEMIT_BOUNDED"],
+    },
+    GeneratorOutputCheck {
+        generator: "genrecog",
+        required_fragments: &["gcc40_genrecog_bounded_output_slice", "GCC40_GENRECOG_BOUNDED"],
+    },
+    GeneratorOutputCheck {
+        generator: "genextract",
+        required_fragments: &["gcc40_genextract_bounded_output_slice", "GCC40_GENEXTRACT_BOUNDED"],
+    },
+];
+
+const GCC40_ARITHMETIC_SMOKE_SPECS: &[Gcc40SmokeSpec] = &[
+    Gcc40SmokeSpec {
+        slice: None,
+        required_input_fragments: &[
+            "int mantle_gcc40_pointer_slice(int x)",
+            "int value = x;",
+            "int *slot = &value;",
+            "*slot = x + 4;",
+            "return *slot + value;",
+        ],
+        required_output_marker: "MANTLE-GCC40-NATIVE-CC1-POINTER-DEREF-SLICE-V7",
+    },
+    Gcc40SmokeSpec {
+        slice: Some("arithmetic-control-flow-v1"),
+        required_input_fragments: &["int mantle_gcc40_arith_slice", "return y > 7 ? y - 3 : y + 3;"],
+        required_output_marker: "MANTLE-GCC40-NATIVE-CC1-ARITHMETIC-SLICE-V1",
+    },
+    Gcc40SmokeSpec {
+        slice: Some("logical-boolean-control-flow-v2"),
+        required_input_fragments: &["int mantle_gcc40_logic_slice", "if ((x > 0 && y > 0) || x == y)"],
+        required_output_marker: "MANTLE-GCC40-NATIVE-CC1-LOGICAL-SLICE-V2",
+    },
+    Gcc40SmokeSpec {
+        slice: Some("local-variable-assignment-v3"),
+        required_input_fragments: &["int mantle_gcc40_local_vars_slice", "int y = x + 1;", "y = y * 3;"],
+        required_output_marker: "MANTLE-GCC40-NATIVE-CC1-LOCAL-VARS-SLICE-V3",
+    },
+    Gcc40SmokeSpec {
+        slice: Some("function-call-v4"),
+        required_input_fragments: &[
+            "int mantle_gcc40_helper(int x)",
+            "int mantle_gcc40_function_call_slice(int x)",
+            "return mantle_gcc40_helper(x) + 1;",
+        ],
+        required_output_marker: "MANTLE-GCC40-NATIVE-CC1-FUNCTION-CALL-SLICE-V4",
+    },
+    Gcc40SmokeSpec {
+        slice: Some("array-index-v5"),
+        required_input_fragments: &[
+            "int mantle_gcc40_array_slice(int x)",
+            "int values[2];",
+            "values[0] = x;",
+            "return values[0] + values[1];",
+        ],
+        required_output_marker: "MANTLE-GCC40-NATIVE-CC1-ARRAY-INDEX-SLICE-V5",
+    },
+    Gcc40SmokeSpec {
+        slice: Some("struct-field-v6"),
+        required_input_fragments: &[
+            "struct mantle_gcc40_pair",
+            "struct mantle_gcc40_pair pair;",
+            "pair.left = x;",
+            "return pair.left + pair.right;",
+        ],
+        required_output_marker: "MANTLE-GCC40-NATIVE-CC1-STRUCT-FIELD-SLICE-V6",
+    },
+];
 
 pub fn cmd_bootstrap_parity_report(project_root: &Path, require: &[ParityAxis], json: bool) -> Result<(), RunError> {
-    let report = collect_bootstrap_parity_report(project_root);
+    let parity_document = collect_bootstrap_parity_report(project_root);
+    assert_eq!(parity_document.schema, REPORT_SCHEMA);
+    assert_eq!(parity_document.rows.len(), parity_stage_specs().count());
     if json {
-        let rendered = serde_json::to_string_pretty(&report)
+        let rendered = serde_json::to_string_pretty(&parity_document)
             .map_err(|err| RunError::Internal(format!("serializing bootstrap parity report: {err}")))?;
         println!("{rendered}");
     } else {
-        println!("{}", render_bootstrap_parity_report(&report));
+        println!("{}", render_bootstrap_parity_report(&parity_document));
     }
 
-    let failed_requirements: Vec<String> =
-        require.iter().filter(|axis| !axis_complete(&report, **axis)).map(ToString::to_string).collect();
+    let failed_requirements: Vec<String> = require
+        .iter()
+        .filter(|axis| !axis_complete(&parity_document, **axis))
+        .map(ToString::to_string)
+        .collect();
     if failed_requirements.is_empty() {
         Ok(())
     } else {
@@ -222,7 +487,7 @@ pub fn cmd_bootstrap_parity_report(project_root: &Path, require: &[ParityAxis], 
 }
 
 pub fn collect_bootstrap_parity_report(project_root: &Path) -> BootstrapParityReport {
-    let rows: Vec<ParityRow> = parity_stage_specs().iter().map(|spec| evaluate_stage(project_root, spec)).collect();
+    let rows: Vec<ParityRow> = parity_stage_specs().map(|spec| evaluate_stage(project_root, spec)).collect();
     let axes = [ParityAxis::LiveBootstrap, ParityAxis::Guix, ParityAxis::Stagex]
         .into_iter()
         .map(|axis| summarize_axis(axis, &rows))
@@ -264,6 +529,8 @@ pub fn render_bootstrap_parity_report(report: &BootstrapParityReport) -> String 
             out.push_str(&format!("  notes: {}\n", row.notes));
         }
     }
+    assert!(out.starts_with("Bootstrap parity gap report\n"));
+    assert!(out.contains("\nRows:\n"));
     out
 }
 
@@ -315,7 +582,7 @@ fn evaluate_stage(project_root: &Path, spec: &StageSpec) -> ParityRow {
     };
     let provider_kind = provider_kind_for(spec, status, proof_details.as_ref());
     let notes = row_notes(spec, status, path.as_deref(), evidence_failure, proof_details.as_ref());
-    ParityRow {
+    let row = ParityRow {
         id: spec.id,
         title: spec.title,
         axes: spec.axes.to_vec(),
@@ -328,7 +595,10 @@ fn evaluate_stage(project_root: &Path, spec: &StageSpec) -> ParityRow {
         proof_evidence: spec.proof_evidence,
         proof_details,
         notes,
-    }
+    };
+    assert_eq!(row.id, spec.id);
+    assert_eq!(row.axes.as_slice(), spec.axes);
+    row
 }
 
 fn provider_kind_for(
@@ -388,6 +658,10 @@ fn row_notes(
     if let Some(reason) = evidence_failure {
         notes.push(format!("evidence check failed: {reason}"));
     }
+    let has_evidence_failure_note = notes.iter().any(|note| note.starts_with("evidence check failed: "));
+    let has_proof_detail_note = notes.iter().any(|note| note.contains("genuine release rebuild evidence"));
+    assert_eq!(has_evidence_failure_note, evidence_failure.is_some());
+    assert_eq!(has_proof_detail_note, proof_details.is_some());
     notes.join("; ")
 }
 
@@ -441,72 +715,66 @@ fn validate_full_musl_binutils_provider_contract(project_root: &Path) -> Result<
     let receipt: serde_json::Value = serde_json::from_str(&receipt_content)
         .map_err(|err| format!("full musl/binutils provider contract is not valid JSON: {err}"))?;
 
-    require_provider_contract_string(
-        &receipt,
-        "full musl/binutils provider contract",
-        "schema",
-        "mantle-full-musl-binutils-provider-contract-v1",
-    )?;
-    require_provider_contract_string(
-        &receipt,
-        "full musl/binutils provider contract",
-        "musl_derivation",
-        "bootstrap/musl-full.ncl",
-    )?;
-    require_provider_contract_string(
-        &receipt,
-        "full musl/binutils provider contract",
-        "binutils_derivation",
-        "bootstrap/binutils-full.ncl",
-    )?;
-    require_provider_contract_string(&receipt, "full musl/binutils provider contract", "status", "contract-only")?;
-    require_provider_contract_string(
-        &receipt,
-        "full musl/binutils provider contract",
-        "parity_effect",
-        "evidence-backed partial; does not prove full musl/binutils correctness",
-    )?;
+    let label = "full musl/binutils provider contract";
+    require_labeled_string(&receipt, label, StringFieldExpectation {
+        field: "schema",
+        expected: "mantle-full-musl-binutils-provider-contract-v1",
+    })?;
+    require_labeled_string(&receipt, label, StringFieldExpectation {
+        field: "musl_derivation",
+        expected: "bootstrap/musl-full.ncl",
+    })?;
+    require_labeled_string(&receipt, label, StringFieldExpectation {
+        field: "binutils_derivation",
+        expected: "bootstrap/binutils-full.ncl",
+    })?;
+    require_labeled_string(&receipt, label, StringFieldExpectation {
+        field: "status",
+        expected: "contract-only",
+    })?;
+    require_labeled_string(&receipt, label, StringFieldExpectation {
+        field: "parity_effect",
+        expected: "evidence-backed partial; does not prove full musl/binutils correctness",
+    })?;
 
-    validate_contract_markers(
-        &receipt,
-        "musl_required_markers",
-        "full musl/binutils provider contract musl",
-        &project_root.join("bootstrap/musl-full.ncl"),
-        "bootstrap/musl-full.ncl",
-    )?;
-    validate_contract_markers(
-        &receipt,
-        "binutils_required_markers",
-        "full musl/binutils provider contract binutils",
-        &project_root.join("bootstrap/binutils-full.ncl"),
-        "bootstrap/binutils-full.ncl",
-    )?;
+    let musl_path = project_root.join("bootstrap/musl-full.ncl");
+    validate_contract_markers(&receipt, ContractMarkerCheck {
+        receipt_field: "musl_required_markers",
+        label: "full musl/binutils provider contract musl",
+        derivation_path: &musl_path,
+        derivation_label: "bootstrap/musl-full.ncl",
+    })?;
+    let binutils_path = project_root.join("bootstrap/binutils-full.ncl");
+    validate_contract_markers(&receipt, ContractMarkerCheck {
+        receipt_field: "binutils_required_markers",
+        label: "full musl/binutils provider contract binutils",
+        derivation_path: &binutils_path,
+        derivation_label: "bootstrap/binutils-full.ncl",
+    })?;
+    assert_eq!(receipt.get("status").and_then(serde_json::Value::as_str), Some("contract-only"));
+    assert!(musl_path.starts_with(project_root));
     Ok(())
 }
 
-fn validate_contract_markers(
-    receipt: &serde_json::Value,
-    field: &str,
-    label: &str,
-    derivation_path: &Path,
-    derivation_label: &str,
-) -> Result<(), String> {
-    let derivation_content = fs::read_to_string(derivation_path)
-        .map_err(|err| format!("read {label} derivation {}: {err}", derivation_path.display()))?;
+fn validate_contract_markers(receipt: &serde_json::Value, check: ContractMarkerCheck<'_>) -> Result<(), String> {
+    assert!(!check.receipt_field.is_empty());
+    assert!(!check.derivation_label.is_empty());
+    let derivation_content = fs::read_to_string(check.derivation_path)
+        .map_err(|err| format!("read {} derivation {}: {err}", check.label, check.derivation_path.display()))?;
     let markers = receipt
-        .get(field)
-        .and_then(|v| v.as_array())
-        .ok_or_else(|| format!("{label} missing array field `{field}`"))?;
+        .get(check.receipt_field)
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| format!("{} missing array field `{}`", check.label, check.receipt_field))?;
     if markers.is_empty() {
-        return Err(format!("{label} `{field}` must not be empty"));
+        return Err(format!("{} `{}` must not be empty", check.label, check.receipt_field));
     }
-    for marker in markers {
-        let marker = marker.as_str().ok_or_else(|| format!("{label} marker must be a string"))?;
+    for marker_value in markers {
+        let marker = marker_value.as_str().ok_or_else(|| format!("{} marker must be a string", check.label))?;
         if marker.trim().is_empty() {
-            return Err(format!("{label} marker must not be empty"));
+            return Err(format!("{} marker must not be empty", check.label));
         }
         if !derivation_content.contains(marker) {
-            return Err(format!("{label} marker not found in {derivation_label}: `{marker}`"));
+            return Err(format!("{} marker not found in {}: `{marker}`", check.label, check.derivation_label));
         }
     }
     Ok(())
@@ -532,14 +800,23 @@ fn validate_gcc47_cxx_provider_contract(project_root: &Path, derivation_path: &P
     })?;
     let receipt: serde_json::Value = serde_json::from_str(&receipt_content)
         .map_err(|err| format!("GCC 4.7 C++ provider contract is not valid JSON: {err}"))?;
-    require_gcc47_contract_string(&receipt, "schema", "mantle-gcc47-cxx-provider-contract-v1")?;
-    require_gcc47_contract_string(&receipt, "derivation", "bootstrap/gcc-4.7.ncl")?;
-    require_gcc47_contract_string(&receipt, "status", "contract-only")?;
-    require_gcc47_contract_string(
-        &receipt,
-        "parity_effect",
-        "evidence-backed partial; does not prove native/full GCC 4.7 correctness",
-    )?;
+    let label = "GCC 4.7 C++ provider contract";
+    require_labeled_string(&receipt, label, StringFieldExpectation {
+        field: "schema",
+        expected: "mantle-gcc47-cxx-provider-contract-v1",
+    })?;
+    require_labeled_string(&receipt, label, StringFieldExpectation {
+        field: "derivation",
+        expected: "bootstrap/gcc-4.7.ncl",
+    })?;
+    require_labeled_string(&receipt, label, StringFieldExpectation {
+        field: "status",
+        expected: "contract-only",
+    })?;
+    require_labeled_string(&receipt, label, StringFieldExpectation {
+        field: "parity_effect",
+        expected: "evidence-backed partial; does not prove native/full GCC 4.7 correctness",
+    })?;
 
     let derivation_content = fs::read_to_string(derivation_path)
         .map_err(|err| format!("read GCC 4.7 derivation {}: {err}", derivation_path.display()))?;
@@ -560,6 +837,8 @@ fn validate_gcc47_cxx_provider_contract(project_root: &Path, derivation_path: &P
             return Err(format!("GCC 4.7 C++ provider contract marker not found in bootstrap/gcc-4.7.ncl: `{marker}`"));
         }
     }
+    assert_eq!(receipt.get("status").and_then(serde_json::Value::as_str), Some("contract-only"));
+    assert!(derivation_path.ends_with("gcc-4.7.ncl"));
     Ok(())
 }
 
@@ -585,10 +864,22 @@ fn validate_provider_contract(
     })?;
     let receipt: serde_json::Value =
         serde_json::from_str(&receipt_content).map_err(|err| format!("{} is not valid JSON: {err}", spec.label))?;
-    require_provider_contract_string(&receipt, spec.label, "schema", spec.schema)?;
-    require_provider_contract_string(&receipt, spec.label, "derivation", spec.derivation)?;
-    require_provider_contract_string(&receipt, spec.label, "status", "contract-only")?;
-    require_provider_contract_string(&receipt, spec.label, "parity_effect", spec.parity_effect)?;
+    require_labeled_string(&receipt, spec.label, StringFieldExpectation {
+        field: "schema",
+        expected: spec.schema,
+    })?;
+    require_labeled_string(&receipt, spec.label, StringFieldExpectation {
+        field: "derivation",
+        expected: spec.derivation,
+    })?;
+    require_labeled_string(&receipt, spec.label, StringFieldExpectation {
+        field: "status",
+        expected: "contract-only",
+    })?;
+    require_labeled_string(&receipt, spec.label, StringFieldExpectation {
+        field: "parity_effect",
+        expected: spec.parity_effect,
+    })?;
 
     let derivation_content = fs::read_to_string(derivation_path)
         .map_err(|err| format!("read {} derivation {}: {err}", spec.label, derivation_path.display()))?;
@@ -608,32 +899,22 @@ fn validate_provider_contract(
             return Err(format!("{} marker not found in {}: `{marker}`", spec.label, spec.derivation));
         }
     }
+    assert_eq!(receipt.get("status").and_then(serde_json::Value::as_str), Some("contract-only"));
+    assert!(!markers.is_empty());
     Ok(())
 }
 
-fn require_provider_contract_string(
+fn require_labeled_string(
     value: &serde_json::Value,
     label: &str,
-    field: &str,
-    expected: &str,
+    expectation: StringFieldExpectation<'_>,
 ) -> Result<(), String> {
     let actual = value
-        .get(field)
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| format!("{label} missing string field `{field}`"))?;
-    if actual != expected {
-        return Err(format!("{label} `{field}` is `{actual}`, expected `{expected}`"));
-    }
-    Ok(())
-}
-
-fn require_gcc47_contract_string(value: &serde_json::Value, field: &str, expected: &str) -> Result<(), String> {
-    let actual = value
-        .get(field)
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| format!("GCC 4.7 C++ provider contract missing string field `{field}`"))?;
-    if actual != expected {
-        return Err(format!("GCC 4.7 C++ provider contract `{field}` is `{actual}`, expected `{expected}`"));
+        .get(expectation.field)
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| format!("{label} missing string field `{}`", expectation.field))?;
+    if actual != expectation.expected {
+        return Err(format!("{label} `{}` is `{actual}`, expected `{}`", expectation.field, expectation.expected));
     }
     Ok(())
 }
@@ -648,62 +929,91 @@ fn validate_gcc40_placeholder_inventory(project_root: &Path, derivation_path: &P
     })?;
     let receipt: serde_json::Value = serde_json::from_str(&receipt_content)
         .map_err(|err| format!("GCC 4.0 placeholder inventory is not valid JSON: {err}"))?;
-    require_gcc40_inventory_string(&receipt, "schema", "mantle-gcc40-placeholder-inventory-v1")?;
-    require_gcc40_inventory_string(&receipt, "derivation", "bootstrap/gcc-4.0.ncl")?;
-    require_gcc40_inventory_string(&receipt, "status", "inventory-only")?;
-    let actual_content = fs::read_to_string(derivation_path)
+    require_gcc40_inventory_string(&receipt, StringFieldExpectation {
+        field: "schema",
+        expected: "mantle-gcc40-placeholder-inventory-v1",
+    })?;
+    require_gcc40_inventory_string(&receipt, StringFieldExpectation {
+        field: "derivation",
+        expected: "bootstrap/gcc-4.0.ncl",
+    })?;
+    require_gcc40_inventory_string(&receipt, StringFieldExpectation {
+        field: "status",
+        expected: "inventory-only",
+    })?;
+    let derivation_content = fs::read_to_string(derivation_path)
         .map_err(|err| format!("read GCC 4.0 derivation {}: {err}", derivation_path.display()))?;
-    let actual = collect_placeholder_marker_occurrences(&actual_content);
+    let actual_markers = collect_placeholder_marker_occurrences(&derivation_content);
+    let expected_markers = parse_gcc40_placeholder_inventory(&receipt)?;
+    if actual_markers != expected_markers {
+        return Err(format!(
+            "GCC 4.0 placeholder inventory drift: expected {}, recomputed {}",
+            format_marker_occurrences(&expected_markers),
+            format_marker_occurrences(&actual_markers)
+        ));
+    }
+    assert_eq!(actual_markers, expected_markers);
+    assert_eq!(receipt.get("status").and_then(serde_json::Value::as_str), Some("inventory-only"));
+    validate_gcc40_native_boundary_receipt(project_root, &derivation_content)?;
+    validate_gcc40_native_cc1_arithmetic_receipt(project_root, &derivation_content)?;
+    validate_gcc40_native_generator_receipt(project_root, &derivation_content)?;
+    validate_gcc40_native_demangle_receipt(project_root, &derivation_content)?;
+    validate_gcc40_native_cc1_build_frontier_receipt(project_root, &derivation_content)?;
+    Ok(())
+}
+
+fn parse_gcc40_placeholder_inventory(receipt: &serde_json::Value) -> Result<Vec<PlaceholderMarkerOccurrence>, String> {
     let receipt_markers = receipt
         .get("markers")
-        .and_then(|v| v.as_array())
+        .and_then(serde_json::Value::as_array)
         .ok_or_else(|| "GCC 4.0 placeholder inventory missing array field `markers`".to_string())?;
-    let marker_count = receipt
+    let marker_count_u64 = receipt
         .get("marker_count")
-        .and_then(|v| v.as_u64())
+        .and_then(serde_json::Value::as_u64)
         .ok_or_else(|| "GCC 4.0 placeholder inventory missing integer field `marker_count`".to_string())?;
-    if marker_count as usize != receipt_markers.len() {
+    let marker_count = usize::try_from(marker_count_u64)
+        .map_err(|_| format!("GCC 4.0 placeholder inventory marker_count={marker_count_u64} exceeds this platform"))?;
+    if marker_count != receipt_markers.len() {
         return Err(format!(
             "GCC 4.0 placeholder inventory marker_count={} does not match markers length {}",
-            marker_count,
+            marker_count_u64,
             receipt_markers.len()
         ));
     }
-    let mut expected = Vec::new();
-    for marker in receipt_markers {
-        let line = marker
-            .get("line")
-            .and_then(|v| v.as_u64())
-            .ok_or_else(|| "GCC 4.0 placeholder inventory marker missing integer `line`".to_string())?;
-        let marker_name = marker
-            .get("marker")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| "GCC 4.0 placeholder inventory marker missing string `marker`".to_string())?;
-        let classification = marker
-            .get("classification")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| "GCC 4.0 placeholder inventory marker missing string `classification`".to_string())?;
-        if classification.trim().is_empty() {
-            return Err("GCC 4.0 placeholder inventory marker classification must not be empty".to_string());
-        }
-        expected.push(PlaceholderMarkerOccurrence {
-            line: line as usize,
-            marker: marker_name.to_string(),
-        });
+    let mut expected_markers = Vec::with_capacity(marker_count);
+    for marker_value in receipt_markers {
+        expected_markers.push(parse_gcc40_placeholder_marker(marker_value)?);
     }
-    if actual != expected {
-        return Err(format!(
-            "GCC 4.0 placeholder inventory drift: expected {}, recomputed {}",
-            format_marker_occurrences(&expected),
-            format_marker_occurrences(&actual)
-        ));
+    assert_eq!(expected_markers.len(), marker_count);
+    assert!(expected_markers.capacity() >= expected_markers.len());
+    Ok(expected_markers)
+}
+
+fn parse_gcc40_placeholder_marker(marker_value: &serde_json::Value) -> Result<PlaceholderMarkerOccurrence, String> {
+    let line_u64 = marker_value
+        .get("line")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| "GCC 4.0 placeholder inventory marker missing integer `line`".to_string())?;
+    let line = usize::try_from(line_u64)
+        .map_err(|_| format!("GCC 4.0 placeholder inventory marker line={line_u64} exceeds this platform"))?;
+    let marker = marker_value
+        .get("marker")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "GCC 4.0 placeholder inventory marker missing string `marker`".to_string())?;
+    let classification = marker_value
+        .get("classification")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "GCC 4.0 placeholder inventory marker missing string `classification`".to_string())?;
+    if classification.trim().is_empty() {
+        return Err("GCC 4.0 placeholder inventory marker classification must not be empty".to_string());
     }
-    validate_gcc40_native_boundary_receipt(project_root, &actual_content)?;
-    validate_gcc40_native_cc1_arithmetic_receipt(project_root, &actual_content)?;
-    validate_gcc40_native_generator_receipt(project_root, &actual_content)?;
-    validate_gcc40_native_demangle_receipt(project_root, &actual_content)?;
-    validate_gcc40_native_cc1_build_frontier_receipt(project_root, &actual_content)?;
-    Ok(())
+    let occurrence = PlaceholderMarkerOccurrence {
+        line,
+        marker: marker.to_string(),
+    };
+    assert_eq!(occurrence.line, line);
+    assert_eq!(occurrence.marker, marker);
+    Ok(occurrence)
 }
 
 fn validate_gcc40_native_boundary_receipt(project_root: &Path, derivation_content: &str) -> Result<(), String> {
@@ -716,60 +1026,105 @@ fn validate_gcc40_native_boundary_receipt(project_root: &Path, derivation_conten
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("GCC 4.0 native boundary receipt is not valid JSON: {err}"))?;
-    require_gcc40_boundary_string(&value, "schema", "mantle-gcc40-native-boundary-v1")?;
-    require_gcc40_boundary_string(&value, "derivation", "bootstrap/gcc-4.0.ncl")?;
-    require_gcc40_boundary_string(&value, "status", "boundary-only")?;
-    require_gcc40_boundary_string(&value, "boundary", "native-gcc-make-to-pass1-bridge")?;
+    validate_gcc40_boundary_identity(&value)?;
+    validate_gcc40_boundary_markers(&value, derivation_content)?;
+    validate_gcc40_boundary_frontier(&value, derivation_content)?;
+    require_gcc40_boundary_string(&value, StringFieldExpectation {
+        field: "parity_effect",
+        expected: "evidence-backed partial; does not prove native gcc.4.0 correctness",
+    })?;
+    assert_eq!(value.get("status").and_then(serde_json::Value::as_str), Some("boundary-only"));
+    assert!(path.starts_with(project_root));
+    Ok(())
+}
 
-    let native_attempt = require_gcc40_boundary_object(&value, "native_attempt")?;
+fn validate_gcc40_boundary_identity(value: &serde_json::Value) -> Result<(), String> {
+    for expectation in [
+        StringFieldExpectation {
+            field: "schema",
+            expected: "mantle-gcc40-native-boundary-v1",
+        },
+        StringFieldExpectation {
+            field: "derivation",
+            expected: "bootstrap/gcc-4.0.ncl",
+        },
+        StringFieldExpectation {
+            field: "status",
+            expected: "boundary-only",
+        },
+        StringFieldExpectation {
+            field: "boundary",
+            expected: "native-gcc-make-to-pass1-bridge",
+        },
+    ] {
+        require_gcc40_boundary_string(value, expectation)?;
+    }
+    assert_eq!(value.get("status").and_then(serde_json::Value::as_str), Some("boundary-only"));
+    assert_eq!(value.get("derivation").and_then(serde_json::Value::as_str), Some("bootstrap/gcc-4.0.ncl"));
+    Ok(())
+}
+
+fn validate_gcc40_boundary_markers(value: &serde_json::Value, derivation_content: &str) -> Result<(), String> {
+    let native_attempt = require_gcc40_boundary_object(value, "native_attempt")?;
     for field in ["command_marker", "diagnostic_marker"] {
         let marker = require_gcc40_boundary_object_string(native_attempt, field)?;
-        require_gcc40_derivation_marker(derivation_content, marker)?;
+        require_gcc40_derivation_marker(DerivationMarkerCheck {
+            content: derivation_content,
+            marker,
+        })?;
     }
-
-    let installed_bridge_markers = value
+    let installed_markers = value
         .get("installed_bridge_markers")
-        .and_then(|v| v.as_array())
+        .and_then(serde_json::Value::as_array)
         .ok_or_else(|| "GCC 4.0 native boundary receipt missing array field `installed_bridge_markers`".to_string())?;
-    if installed_bridge_markers.is_empty() {
+    if installed_markers.is_empty() {
         return Err("GCC 4.0 native boundary receipt `installed_bridge_markers` must not be empty".to_string());
     }
-    for marker in installed_bridge_markers {
-        let marker = marker
+    for marker_value in installed_markers {
+        let marker = marker_value
             .as_str()
             .ok_or_else(|| "GCC 4.0 native boundary receipt marker must be a string".to_string())?;
-        require_gcc40_derivation_marker(derivation_content, marker)?;
+        require_gcc40_derivation_marker(DerivationMarkerCheck {
+            content: derivation_content,
+            marker,
+        })?;
     }
-
-    let last_log = require_gcc40_boundary_object(&value, "last_observed_build_log")?;
+    let last_log = require_gcc40_boundary_object(value, "last_observed_build_log")?;
     require_gcc40_boundary_object_string(last_log, "status")?;
-    let log_markers = last_log.get("boundary_log_markers").and_then(|v| v.as_array()).ok_or_else(|| {
+    let log_markers = last_log.get("boundary_log_markers").and_then(serde_json::Value::as_array).ok_or_else(|| {
         "GCC 4.0 native boundary receipt missing array field `last_observed_build_log.boundary_log_markers`".to_string()
     })?;
     if log_markers.is_empty() {
         return Err("GCC 4.0 native boundary receipt `last_observed_build_log.boundary_log_markers` must not be empty"
             .to_string());
     }
+    assert!(!installed_markers.is_empty());
+    assert!(!log_markers.is_empty());
+    Ok(())
+}
 
-    let native_frontier = require_gcc40_boundary_object(&value, "native_frontier")?;
+fn validate_gcc40_boundary_frontier(value: &serde_json::Value, derivation_content: &str) -> Result<(), String> {
+    let native_frontier = require_gcc40_boundary_object(value, "native_frontier")?;
     require_gcc40_boundary_object_string(native_frontier, "status")?;
     let frontier_blockers = native_frontier
         .get("blockers")
-        .and_then(|v| v.as_array())
+        .and_then(serde_json::Value::as_array)
         .ok_or_else(|| "GCC 4.0 native boundary receipt missing array field `native_frontier.blockers`".to_string())?;
     if frontier_blockers.is_empty() {
         return Err("GCC 4.0 native boundary receipt `native_frontier.blockers` must not be empty".to_string());
     }
-    let mut frontier_ids = Vec::new();
-    for blocker in frontier_blockers {
-        let blocker = blocker.as_object().ok_or_else(|| {
+    let mut frontier_ids = Vec::with_capacity(frontier_blockers.len());
+    for blocker_value in frontier_blockers {
+        let blocker = blocker_value.as_object().ok_or_else(|| {
             "GCC 4.0 native boundary receipt `native_frontier.blockers` entries must be objects".to_string()
         })?;
-        let id = require_gcc40_boundary_object_string(blocker, "id")?;
-        frontier_ids.push(id.to_string());
+        frontier_ids.push(require_gcc40_boundary_object_string(blocker, "id")?.to_string());
         let marker = require_gcc40_boundary_object_string(blocker, "derivation_marker")?;
         require_gcc40_boundary_object_string(blocker, "frontier")?;
-        require_gcc40_derivation_marker(derivation_content, marker)?;
+        require_gcc40_derivation_marker(DerivationMarkerCheck {
+            content: derivation_content,
+            marker,
+        })?;
     }
     for required_id in [
         "cc1-bounded-pointer-deref",
@@ -780,12 +1135,8 @@ fn validate_gcc40_native_boundary_receipt(project_root: &Path, derivation_conten
             return Err(format!("GCC 4.0 native boundary receipt native_frontier.blockers missing `{required_id}`"));
         }
     }
-
-    require_gcc40_boundary_string(
-        &value,
-        "parity_effect",
-        "evidence-backed partial; does not prove native gcc.4.0 correctness",
-    )?;
+    assert_eq!(frontier_ids.len(), frontier_blockers.len());
+    assert!(!frontier_ids.is_empty());
     Ok(())
 }
 
@@ -802,36 +1153,83 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("GCC 4.0 native cc1 build-frontier receipt is not valid JSON: {err}"))?;
-    require_gcc40_boundary_string(&value, "schema", "mantle-gcc40-native-cc1-build-frontier-v1")?;
-    require_gcc40_boundary_string(&value, "derivation", "bootstrap/gcc-4.0.ncl")?;
-    require_gcc40_boundary_string(&value, "status", "frontier-only")?;
-    require_gcc40_boundary_string(
-        &value,
-        "parity_effect",
-        "evidence-backed partial; does not prove native/full GCC 4.0 correctness",
-    )?;
-    let native_attempt = require_gcc40_boundary_object(&value, "native_attempt")?;
+    validate_gcc40_build_frontier_identity(&value)?;
+    validate_gcc40_build_frontier_markers(&value, derivation_content)?;
+    let reduction = require_gcc40_boundary_object(&value, "source_frontier_reduction")?;
+    validate_gcc40_frontier_reduction(project_root, derivation_content, reduction)?;
+    let retirement = require_gcc40_boundary_object(&value, "retirement_condition")?;
+    require_gcc40_boundary_object_string(retirement, "replacement_evidence")?;
+    require_gcc40_boundary_object_string(retirement, "non_claim")?;
+    assert_eq!(value.get("status").and_then(serde_json::Value::as_str), Some("frontier-only"));
+    assert!(path.starts_with(project_root));
+    Ok(())
+}
+
+fn validate_gcc40_build_frontier_identity(value: &serde_json::Value) -> Result<(), String> {
+    for expectation in [
+        StringFieldExpectation {
+            field: "schema",
+            expected: "mantle-gcc40-native-cc1-build-frontier-v1",
+        },
+        StringFieldExpectation {
+            field: "derivation",
+            expected: "bootstrap/gcc-4.0.ncl",
+        },
+        StringFieldExpectation {
+            field: "status",
+            expected: "frontier-only",
+        },
+        StringFieldExpectation {
+            field: "parity_effect",
+            expected: "evidence-backed partial; does not prove native/full GCC 4.0 correctness",
+        },
+    ] {
+        require_gcc40_boundary_string(value, expectation)?;
+    }
+    assert_eq!(value.get("status").and_then(serde_json::Value::as_str), Some("frontier-only"));
+    assert_eq!(value.get("derivation").and_then(serde_json::Value::as_str), Some("bootstrap/gcc-4.0.ncl"));
+    Ok(())
+}
+
+fn validate_gcc40_build_frontier_markers(value: &serde_json::Value, derivation_content: &str) -> Result<(), String> {
+    let native_attempt = require_gcc40_boundary_object(value, "native_attempt")?;
     for field in ["make_marker", "diagnostic_marker", "pass1_bridge_marker"] {
         let marker = require_gcc40_boundary_object_string(native_attempt, field)?;
-        require_gcc40_derivation_marker(derivation_content, marker)?;
+        require_gcc40_derivation_marker(DerivationMarkerCheck {
+            content: derivation_content,
+            marker,
+        })?;
     }
-    let source_frontier = value.get("source_frontier_markers").and_then(|v| v.as_array()).ok_or_else(|| {
-        "GCC 4.0 native cc1 build-frontier receipt missing array field `source_frontier_markers`".to_string()
-    })?;
+    let source_frontier =
+        value.get("source_frontier_markers").and_then(serde_json::Value::as_array).ok_or_else(|| {
+            "GCC 4.0 native cc1 build-frontier receipt missing array field `source_frontier_markers`".to_string()
+        })?;
     if source_frontier.is_empty() {
         return Err("GCC 4.0 native cc1 build-frontier receipt `source_frontier_markers` must not be empty".to_string());
     }
-    for marker in source_frontier {
-        let marker = marker
+    for marker_value in source_frontier {
+        let marker = marker_value
             .as_str()
             .ok_or_else(|| "GCC 4.0 native cc1 build-frontier source frontier marker must be a string".to_string())?;
-        require_gcc40_derivation_marker(derivation_content, marker)?;
+        require_gcc40_derivation_marker(DerivationMarkerCheck {
+            content: derivation_content,
+            marker,
+        })?;
     }
-    let reduction = require_gcc40_boundary_object(&value, "source_frontier_reduction")?;
-    let reduction_schema = require_gcc40_boundary_object_string(reduction, "schema")?;
-    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v22" {
+    assert!(!source_frontier.is_empty());
+    assert!(value.get("source_frontier_markers").is_some());
+    Ok(())
+}
+
+fn validate_gcc40_frontier_reduction(
+    project_root: &Path,
+    derivation_content: &str,
+    reduction: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(), String> {
+    let schema = require_gcc40_boundary_object_string(reduction, "schema")?;
+    if schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v22" {
         return Err(format!(
-            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v22`"
+            "GCC 4.0 native cc1 source-frontier reduction schema is `{schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v22`"
         ));
     }
     for field in [
@@ -840,10 +1238,7 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         "observed_frontier",
         "retirement_condition",
     ] {
-        let value = require_gcc40_boundary_object_string(reduction, field)?;
-        if value.trim().is_empty() {
-            return Err(format!("GCC 4.0 native cc1 source-frontier reduction field `{field}` must not be empty"));
-        }
+        require_gcc40_boundary_object_string(reduction, field)?;
     }
     let observed_result = require_gcc40_boundary_object_string(reduction, "observed_result")?;
     if observed_result != "narrowed-stable-blocker" {
@@ -851,8 +1246,22 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
             "GCC 4.0 native cc1 source-frontier reduction observed_result is `{observed_result}`, expected `narrowed-stable-blocker`"
         ));
     }
-    let observed_frontier = require_gcc40_boundary_object_string(reduction, "observed_frontier")?;
-    for required_fragment in [
+    validate_gcc40_observed_frontier(require_gcc40_boundary_object_string(reduction, "observed_frontier")?)?;
+    let probe_marker = require_gcc40_boundary_object_string(reduction, "probe_marker")?;
+    require_gcc40_derivation_marker(DerivationMarkerCheck {
+        content: derivation_content,
+        marker: probe_marker,
+    })?;
+    require_gcc40_boundary_object_string(reduction, "non_claim")?;
+    require_gcc40_boundary_object_string(reduction, "diagnostic_derivation")?;
+    validate_gcc40_frontier_diagnostic_markers(project_root, reduction)?;
+    assert_eq!(schema, "mantle-gcc40-native-cc1-source-frontier-reduction-v22");
+    assert_eq!(observed_result, "narrowed-stable-blocker");
+    Ok(())
+}
+
+fn validate_gcc40_observed_frontier(observed_frontier: &str) -> Result<(), String> {
+    let required_fragments = [
         "cparse_auto_host_ssize_patch=present",
         "cparse_auto_host_ssize_disabled=present",
         "cparse_make_auto_host_ssize_cparse_o_rc=2",
@@ -861,14 +1270,15 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         "cparse_make_auto_host_ssize_include_flood_lines=2",
         "cparse_make_auto_host_ssize_include_flood_truncated_lines=2",
         "the blocker is not fixed by removing only the generated auto-host.h ssize_t define",
-    ] {
+    ];
+    for required_fragment in required_fragments {
         if !observed_frontier.contains(required_fragment) {
             return Err(format!(
                 "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v22 fragment `{required_fragment}`"
             ));
         }
     }
-    for stale_fragment in [
+    let stale_fragments = [
         "remaining runtime frontier is the copied fd_bad branch",
         "forcing the copied fd_bad branch false reaches fdopen pre/post markers",
         "autohost_defines_84_system fails while autohost_defines_84_skip84_system",
@@ -877,31 +1287,39 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         "remaining real c-parse.o/full-header source-build boundary",
         "captured real c-parse.o make-error boundary",
         "focused make-log summary boundary",
-    ] {
+    ];
+    for stale_fragment in stale_fragments {
         if observed_frontier.contains(stale_fragment) {
             return Err(format!(
                 "GCC 4.0 native cc1 source-frontier reduction observed_frontier contains stale pre-v9 frontier fragment `{stale_fragment}`"
             ));
         }
     }
-    let probe_marker = require_gcc40_boundary_object_string(reduction, "probe_marker")?;
-    require_gcc40_derivation_marker(derivation_content, probe_marker)?;
-    require_gcc40_boundary_object_string(reduction, "non_claim")?;
-    require_gcc40_boundary_object_string(reduction, "diagnostic_derivation")?;
-    let diagnostic_content = fs::read_to_string(project_root.join(GCC40_CPARSE_DIAGNOSTIC_DERIVATION)).map_err(|err| {
+    assert!(required_fragments.iter().all(|fragment| observed_frontier.contains(fragment)));
+    assert!(stale_fragments.iter().all(|fragment| !observed_frontier.contains(fragment)));
+    Ok(())
+}
+
+fn validate_gcc40_frontier_diagnostic_markers(
+    project_root: &Path,
+    reduction: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(), String> {
+    let diagnostic_path = project_root.join(GCC40_CPARSE_DIAGNOSTIC_DERIVATION);
+    let diagnostic_content = fs::read_to_string(&diagnostic_path).map_err(|err| {
         format!(
             "GCC 4.0 native cc1 source-frontier diagnostic derivation missing `{}` ({err}); expected checked c-parse/decl0 diagnostic markers",
             GCC40_CPARSE_DIAGNOSTIC_DERIVATION
         )
     })?;
-    let diagnostic_markers = reduction.get("diagnostic_markers").and_then(|v| v.as_array()).ok_or_else(|| {
-        "GCC 4.0 native cc1 source-frontier reduction missing array field `diagnostic_markers`".to_string()
-    })?;
+    let diagnostic_markers =
+        reduction.get("diagnostic_markers").and_then(serde_json::Value::as_array).ok_or_else(|| {
+            "GCC 4.0 native cc1 source-frontier reduction missing array field `diagnostic_markers`".to_string()
+        })?;
     if diagnostic_markers.is_empty() {
         return Err("GCC 4.0 native cc1 source-frontier reduction `diagnostic_markers` must not be empty".to_string());
     }
-    for marker in diagnostic_markers {
-        let marker = marker
+    for marker_value in diagnostic_markers {
+        let marker = marker_value
             .as_str()
             .ok_or_else(|| "GCC 4.0 native cc1 source-frontier diagnostic marker must be a string".to_string())?;
         if !diagnostic_content.contains(marker) {
@@ -911,13 +1329,8 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
             ));
         }
     }
-
-    let retirement = require_gcc40_boundary_object(&value, "retirement_condition")?;
-    let replacement = require_gcc40_boundary_object_string(retirement, "replacement_evidence")?;
-    if replacement.trim().is_empty() {
-        return Err("GCC 4.0 native cc1 build-frontier retirement replacement_evidence must not be empty".to_string());
-    }
-    require_gcc40_boundary_object_string(retirement, "non_claim")?;
+    assert!(!diagnostic_markers.is_empty());
+    assert!(diagnostic_path.starts_with(project_root));
     Ok(())
 }
 
@@ -931,159 +1344,125 @@ fn validate_gcc40_native_cc1_arithmetic_receipt(project_root: &Path, derivation_
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("GCC 4.0 native cc1 arithmetic receipt is not valid JSON: {err}"))?;
-    require_gcc40_arithmetic_string(&value, "schema", "mantle-gcc40-native-cc1-arithmetic-v7")?;
-    require_gcc40_arithmetic_string(&value, "derivation", "bootstrap/gcc-4.0.ncl")?;
-    require_gcc40_arithmetic_string(&value, "status", "bounded-native-slice")?;
-    require_gcc40_arithmetic_string(&value, "selected_slice", "pointer-deref-v7")?;
-    require_gcc40_arithmetic_string(
-        &value,
-        "parity_effect",
-        "evidence-backed partial; does not prove native/full GCC 4.0 correctness",
-    )?;
+    validate_gcc40_arithmetic_identity(&value)?;
+    let smokes = validate_gcc40_arithmetic_smokes(&value)?;
+    validate_gcc40_no_tinycc_delegation(&value, derivation_content, &smokes)?;
+    assert_eq!(smokes.len(), GCC40_ARITHMETIC_SMOKE_SPECS.len());
+    assert_eq!(value.get("status").and_then(serde_json::Value::as_str), Some("bounded-native-slice"));
+    Ok(())
+}
 
-    let smoke = value
+fn validate_gcc40_arithmetic_identity(value: &serde_json::Value) -> Result<(), String> {
+    for expectation in [
+        StringFieldExpectation {
+            field: "schema",
+            expected: "mantle-gcc40-native-cc1-arithmetic-v7",
+        },
+        StringFieldExpectation {
+            field: "derivation",
+            expected: "bootstrap/gcc-4.0.ncl",
+        },
+        StringFieldExpectation {
+            field: "status",
+            expected: "bounded-native-slice",
+        },
+        StringFieldExpectation {
+            field: "selected_slice",
+            expected: "pointer-deref-v7",
+        },
+        StringFieldExpectation {
+            field: "parity_effect",
+            expected: "evidence-backed partial; does not prove native/full GCC 4.0 correctness",
+        },
+    ] {
+        require_gcc40_arithmetic_string(value, expectation)?;
+    }
+    assert_eq!(value.get("selected_slice").and_then(serde_json::Value::as_str), Some("pointer-deref-v7"));
+    assert_eq!(value.get("derivation").and_then(serde_json::Value::as_str), Some("bootstrap/gcc-4.0.ncl"));
+    Ok(())
+}
+
+fn validate_gcc40_arithmetic_smokes<'a>(
+    value: &'a serde_json::Value,
+) -> Result<Vec<&'a serde_json::Map<String, serde_json::Value>>, String> {
+    let primary = value
         .get("smoke")
-        .and_then(|v| v.as_object())
+        .and_then(serde_json::Value::as_object)
         .ok_or_else(|| "GCC 4.0 native cc1 arithmetic receipt missing object field `smoke`".to_string())?;
-    validate_gcc40_cc1_smoke(
-        smoke,
-        &[
-            "int mantle_gcc40_pointer_slice(int x)",
-            "int value = x;",
-            "int *slot = &value;",
-            "*slot = x + 4;",
-            "return *slot + value;",
-        ],
-        "MANTLE-GCC40-NATIVE-CC1-POINTER-DEREF-SLICE-V7",
-    )?;
-
     let regressions = value
         .get("regressions")
-        .and_then(|v| v.as_array())
+        .and_then(serde_json::Value::as_array)
         .ok_or_else(|| "GCC 4.0 native cc1 arithmetic receipt missing array field `regressions`".to_string())?;
-    let arithmetic_regression = regressions
-        .iter()
-        .find(|entry| entry.get("slice").and_then(|v| v.as_str()) == Some("arithmetic-control-flow-v1"))
-        .and_then(|entry| entry.as_object())
-        .ok_or_else(|| {
-            "GCC 4.0 native cc1 arithmetic receipt missing arithmetic-control-flow-v1 regression".to_string()
-        })?;
-    validate_gcc40_cc1_smoke(
-        arithmetic_regression,
-        &["int mantle_gcc40_arith_slice", "return y > 7 ? y - 3 : y + 3;"],
-        "MANTLE-GCC40-NATIVE-CC1-ARITHMETIC-SLICE-V1",
-    )?;
+    let mut smokes = Vec::with_capacity(GCC40_ARITHMETIC_SMOKE_SPECS.len());
+    for spec in GCC40_ARITHMETIC_SMOKE_SPECS {
+        let smoke = match spec.slice {
+            None => primary,
+            Some(slice) => regressions
+                .iter()
+                .find(|entry| entry.get("slice").and_then(serde_json::Value::as_str) == Some(slice))
+                .and_then(serde_json::Value::as_object)
+                .ok_or_else(|| format!("GCC 4.0 native cc1 arithmetic receipt missing {slice} regression"))?,
+        };
+        validate_gcc40_cc1_smoke(smoke, spec.required_input_fragments, spec.required_output_marker)?;
+        smokes.push(smoke);
+    }
+    assert_eq!(smokes.len(), GCC40_ARITHMETIC_SMOKE_SPECS.len());
+    assert!(smokes.capacity() >= smokes.len());
+    Ok(smokes)
+}
 
-    let logical_regression = regressions
-        .iter()
-        .find(|entry| entry.get("slice").and_then(|v| v.as_str()) == Some("logical-boolean-control-flow-v2"))
-        .and_then(|entry| entry.as_object())
-        .ok_or_else(|| {
-            "GCC 4.0 native cc1 arithmetic receipt missing logical-boolean-control-flow-v2 regression".to_string()
-        })?;
-    validate_gcc40_cc1_smoke(
-        logical_regression,
-        &["int mantle_gcc40_logic_slice", "if ((x > 0 && y > 0) || x == y)"],
-        "MANTLE-GCC40-NATIVE-CC1-LOGICAL-SLICE-V2",
-    )?;
-
-    let local_vars_regression = regressions
-        .iter()
-        .find(|entry| entry.get("slice").and_then(|v| v.as_str()) == Some("local-variable-assignment-v3"))
-        .and_then(|entry| entry.as_object())
-        .ok_or_else(|| {
-            "GCC 4.0 native cc1 arithmetic receipt missing local-variable-assignment-v3 regression".to_string()
-        })?;
-    validate_gcc40_cc1_smoke(
-        local_vars_regression,
-        &["int mantle_gcc40_local_vars_slice", "int y = x + 1;", "y = y * 3;"],
-        "MANTLE-GCC40-NATIVE-CC1-LOCAL-VARS-SLICE-V3",
-    )?;
-
-    let function_call_regression = regressions
-        .iter()
-        .find(|entry| entry.get("slice").and_then(|v| v.as_str()) == Some("function-call-v4"))
-        .and_then(|entry| entry.as_object())
-        .ok_or_else(|| "GCC 4.0 native cc1 arithmetic receipt missing function-call-v4 regression".to_string())?;
-    validate_gcc40_cc1_smoke(
-        function_call_regression,
-        &[
-            "int mantle_gcc40_helper(int x)",
-            "int mantle_gcc40_function_call_slice(int x)",
-            "return mantle_gcc40_helper(x) + 1;",
-        ],
-        "MANTLE-GCC40-NATIVE-CC1-FUNCTION-CALL-SLICE-V4",
-    )?;
-
-    let array_index_regression = regressions
-        .iter()
-        .find(|entry| entry.get("slice").and_then(|v| v.as_str()) == Some("array-index-v5"))
-        .and_then(|entry| entry.as_object())
-        .ok_or_else(|| "GCC 4.0 native cc1 arithmetic receipt missing array-index-v5 regression".to_string())?;
-    validate_gcc40_cc1_smoke(
-        array_index_regression,
-        &[
-            "int mantle_gcc40_array_slice(int x)",
-            "int values[2];",
-            "values[0] = x;",
-            "return values[0] + values[1];",
-        ],
-        "MANTLE-GCC40-NATIVE-CC1-ARRAY-INDEX-SLICE-V5",
-    )?;
-
-    let struct_field_regression = regressions
-        .iter()
-        .find(|entry| entry.get("slice").and_then(|v| v.as_str()) == Some("struct-field-v6"))
-        .and_then(|entry| entry.as_object())
-        .ok_or_else(|| "GCC 4.0 native cc1 arithmetic receipt missing struct-field-v6 regression".to_string())?;
-    validate_gcc40_cc1_smoke(
-        struct_field_regression,
-        &[
-            "struct mantle_gcc40_pair",
-            "struct mantle_gcc40_pair pair;",
-            "pair.left = x;",
-            "return pair.left + pair.right;",
-        ],
-        "MANTLE-GCC40-NATIVE-CC1-STRUCT-FIELD-SLICE-V6",
-    )?;
-
-    let no_delegation = value.get("no_tinycc_delegation").and_then(|v| v.as_object()).ok_or_else(|| {
+fn validate_gcc40_no_tinycc_delegation(
+    value: &serde_json::Value,
+    derivation_content: &str,
+    smokes: &[&serde_json::Map<String, serde_json::Value>],
+) -> Result<(), String> {
+    let no_delegation = value.get("no_tinycc_delegation").and_then(serde_json::Value::as_object).ok_or_else(|| {
         "GCC 4.0 native cc1 arithmetic receipt missing object field `no_tinycc_delegation`".to_string()
     })?;
     let marker = require_gcc40_arithmetic_object_string(no_delegation, "derivation_marker")?;
-    require_gcc40_derivation_marker(derivation_content, marker)?;
-    let regression_markers = no_delegation.get("regression_markers").and_then(|v| v.as_array()).ok_or_else(|| {
-        "GCC 4.0 native cc1 arithmetic receipt missing array field `no_tinycc_delegation.regression_markers`"
-            .to_string()
+    require_gcc40_derivation_marker(DerivationMarkerCheck {
+        content: derivation_content,
+        marker,
     })?;
-    for regression_marker in regression_markers {
-        let regression_marker = regression_marker
+    let regression_markers =
+        no_delegation.get("regression_markers").and_then(serde_json::Value::as_array).ok_or_else(|| {
+            "GCC 4.0 native cc1 arithmetic receipt missing array field `no_tinycc_delegation.regression_markers`"
+                .to_string()
+        })?;
+    for marker_value in regression_markers {
+        let marker = marker_value
             .as_str()
             .ok_or_else(|| "GCC 4.0 native cc1 arithmetic receipt regression markers must be strings".to_string())?;
-        require_gcc40_derivation_marker(derivation_content, regression_marker)?;
+        require_gcc40_derivation_marker(DerivationMarkerCheck {
+            content: derivation_content,
+            marker,
+        })?;
     }
-    let forbidden = no_delegation.get("forbidden_markers").and_then(|v| v.as_array()).ok_or_else(|| {
+    validate_gcc40_forbidden_delegation_markers(no_delegation, smokes)?;
+    assert_eq!(smokes.len(), GCC40_ARITHMETIC_SMOKE_SPECS.len());
+    assert!(no_delegation.contains_key("regression_markers"));
+    Ok(())
+}
+
+fn validate_gcc40_forbidden_delegation_markers(
+    no_delegation: &serde_json::Map<String, serde_json::Value>,
+    smokes: &[&serde_json::Map<String, serde_json::Value>],
+) -> Result<(), String> {
+    let forbidden = no_delegation.get("forbidden_markers").and_then(serde_json::Value::as_array).ok_or_else(|| {
         "GCC 4.0 native cc1 arithmetic receipt missing array field `no_tinycc_delegation.forbidden_markers`".to_string()
     })?;
     if forbidden.is_empty() {
         return Err("GCC 4.0 native cc1 arithmetic receipt forbidden marker list must not be empty".to_string());
     }
-    for forbidden_marker in forbidden {
-        let forbidden_marker = forbidden_marker
+    for marker_value in forbidden {
+        let forbidden_marker = marker_value
             .as_str()
             .ok_or_else(|| "GCC 4.0 native cc1 arithmetic receipt forbidden markers must be strings".to_string())?;
         if forbidden_marker.trim().is_empty() {
             return Err("GCC 4.0 native cc1 arithmetic receipt forbidden markers must not be empty".to_string());
         }
-        for transcript in [
-            require_gcc40_arithmetic_object_string(smoke, "transcript")?,
-            require_gcc40_arithmetic_object_string(arithmetic_regression, "transcript")?,
-            require_gcc40_arithmetic_object_string(logical_regression, "transcript")?,
-            require_gcc40_arithmetic_object_string(local_vars_regression, "transcript")?,
-            require_gcc40_arithmetic_object_string(function_call_regression, "transcript")?,
-            require_gcc40_arithmetic_object_string(array_index_regression, "transcript")?,
-            require_gcc40_arithmetic_object_string(struct_field_regression, "transcript")?,
-        ] {
+        for smoke in smokes {
+            let transcript = require_gcc40_arithmetic_object_string(smoke, "transcript")?;
             if transcript.contains(forbidden_marker) {
                 return Err(format!(
                     "GCC 4.0 native cc1 arithmetic receipt transcript contains forbidden TinyCC delegation marker `{forbidden_marker}`"
@@ -1091,7 +1470,8 @@ fn validate_gcc40_native_cc1_arithmetic_receipt(project_root: &Path, derivation_
             }
         }
     }
-
+    assert!(!forbidden.is_empty());
+    assert_eq!(smokes.len(), GCC40_ARITHMETIC_SMOKE_SPECS.len());
     Ok(())
 }
 
@@ -1120,16 +1500,20 @@ fn validate_gcc40_cc1_smoke(
         ));
     }
     let expected_digest = require_gcc40_arithmetic_object_string(smoke, "transcript_digest_blake3")?;
-    let actual_digest = blake3::hash(transcript.as_bytes()).to_hex().to_string();
-    if expected_digest != actual_digest {
+    let recomputed_digest = blake3::hash(transcript.as_bytes()).to_hex().to_string();
+    if expected_digest != recomputed_digest {
         return Err(format!(
-            "GCC 4.0 native cc1 arithmetic receipt transcript digest is `{expected_digest}`, recomputed `{actual_digest}`"
+            "GCC 4.0 native cc1 arithmetic receipt transcript digest is `{expected_digest}`, recomputed `{recomputed_digest}`"
         ));
     }
     let expected_output_digest = require_gcc40_arithmetic_object_string(smoke, "output_digest_blake3")?;
-    if expected_output_digest.len() != 64 || !expected_output_digest.chars().all(|ch| ch.is_ascii_hexdigit()) {
+    if expected_output_digest.len() != BLAKE3_HEX_LENGTH
+        || !expected_output_digest.chars().all(|ch| ch.is_ascii_hexdigit())
+    {
         return Err("GCC 4.0 native cc1 arithmetic receipt output digest must be a BLAKE3 hex digest".to_string());
     }
+    assert_eq!(expected_digest, recomputed_digest);
+    assert_eq!(expected_output_digest.len(), BLAKE3_HEX_LENGTH);
     Ok(())
 }
 
@@ -1143,119 +1527,169 @@ fn validate_gcc40_native_generator_receipt(project_root: &Path, derivation_conte
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("GCC 4.0 native generator receipt is not valid JSON: {err}"))?;
-    require_gcc40_generator_string(&value, "schema", "mantle-gcc40-native-generator-slice-v5")?;
-    require_gcc40_generator_string(&value, "derivation", "bootstrap/gcc-4.0.ncl")?;
-    require_gcc40_generator_string(&value, "status", "bounded-native-generator-slices")?;
-    require_gcc40_generator_string(
-        &value,
-        "parity_effect",
-        "evidence-backed partial; does not prove native/full GCC 4.0 generator correctness",
-    )?;
+    validate_gcc40_generator_identity(&value)?;
+    validate_gcc40_selected_generators(&value)?;
+    validate_gcc40_generator_outputs(&value, derivation_content)?;
+    validate_gcc40_generator_forbidden_markers(&value, derivation_content)?;
+    assert_eq!(value.get("status").and_then(serde_json::Value::as_str), Some("bounded-native-generator-slices"));
+    assert!(path.starts_with(project_root));
+    Ok(())
+}
 
-    let selected = value
+fn validate_gcc40_generator_identity(value: &serde_json::Value) -> Result<(), String> {
+    for expectation in [
+        StringFieldExpectation {
+            field: "schema",
+            expected: "mantle-gcc40-native-generator-slice-v5",
+        },
+        StringFieldExpectation {
+            field: "derivation",
+            expected: "bootstrap/gcc-4.0.ncl",
+        },
+        StringFieldExpectation {
+            field: "status",
+            expected: "bounded-native-generator-slices",
+        },
+        StringFieldExpectation {
+            field: "parity_effect",
+            expected: "evidence-backed partial; does not prove native/full GCC 4.0 generator correctness",
+        },
+    ] {
+        require_gcc40_generator_string(value, expectation)?;
+    }
+    assert_eq!(value.get("derivation").and_then(serde_json::Value::as_str), Some("bootstrap/gcc-4.0.ncl"));
+    assert_eq!(value.get("status").and_then(serde_json::Value::as_str), Some("bounded-native-generator-slices"));
+    Ok(())
+}
+
+fn validate_gcc40_selected_generators(value: &serde_json::Value) -> Result<(), String> {
+    let selected_values = value
         .get("selected_generators")
-        .and_then(|v| v.as_array())
+        .and_then(serde_json::Value::as_array)
         .ok_or_else(|| "GCC 4.0 native generator receipt missing array field `selected_generators`".to_string())?;
-    let selected = selected
-        .iter()
-        .map(|v| {
-            v.as_str()
-                .ok_or_else(|| "GCC 4.0 native generator receipt selected generators must be strings".to_string())
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    for required in ["genattrtab", "genoutput", "genemit", "genrecog", "genextract"] {
-        if !selected.contains(&required) {
-            return Err(format!("GCC 4.0 native generator receipt selected generators missing `{required}`"));
+    let mut selected = Vec::with_capacity(selected_values.len());
+    for selected_value in selected_values {
+        selected.push(
+            selected_value
+                .as_str()
+                .ok_or_else(|| "GCC 4.0 native generator receipt selected generators must be strings".to_string())?,
+        );
+    }
+    for check in GCC40_GENERATOR_OUTPUT_CHECKS {
+        if !selected.contains(&check.generator) {
+            return Err(format!("GCC 4.0 native generator receipt selected generators missing `{}`", check.generator));
         }
     }
+    assert_eq!(selected.len(), selected_values.len());
+    assert!(GCC40_GENERATOR_OUTPUT_CHECKS.iter().all(|check| selected.contains(&check.generator)));
+    Ok(())
+}
 
+fn validate_gcc40_generator_outputs(value: &serde_json::Value, derivation_content: &str) -> Result<(), String> {
     let outputs = value
         .get("bounded_outputs")
-        .and_then(|v| v.as_object())
+        .and_then(serde_json::Value::as_object)
         .ok_or_else(|| "GCC 4.0 native generator receipt missing object field `bounded_outputs`".to_string())?;
-    validate_gcc40_generator_output(outputs, derivation_content, "genattrtab", &[
-        "gcc40_genattrtab_bounded_output_slice",
-        "HAVE_ATTR_enabled",
-    ])?;
-    validate_gcc40_generator_output(outputs, derivation_content, "genoutput", &[
-        "gcc40_genoutput_bounded_output_slice",
-        "GCC40_GENOUTPUT_BOUNDED",
-    ])?;
-    validate_gcc40_generator_output(outputs, derivation_content, "genemit", &[
-        "gcc40_genemit_bounded_output_slice",
-        "GCC40_GENEMIT_BOUNDED",
-    ])?;
-    validate_gcc40_generator_output(outputs, derivation_content, "genrecog", &[
-        "gcc40_genrecog_bounded_output_slice",
-        "GCC40_GENRECOG_BOUNDED",
-    ])?;
-    validate_gcc40_generator_output(outputs, derivation_content, "genextract", &[
-        "gcc40_genextract_bounded_output_slice",
-        "GCC40_GENEXTRACT_BOUNDED",
-    ])?;
+    for check in GCC40_GENERATOR_OUTPUT_CHECKS {
+        validate_gcc40_generator_output(outputs, derivation_content, *check)?;
+    }
+    assert!(!outputs.is_empty());
+    assert!(GCC40_GENERATOR_OUTPUT_CHECKS.iter().all(|check| outputs.contains_key(check.generator)));
+    Ok(())
+}
 
-    let forbidden = value.get("forbidden_boundary_markers").and_then(|v| v.as_array()).ok_or_else(|| {
+fn validate_gcc40_generator_forbidden_markers(
+    value: &serde_json::Value,
+    derivation_content: &str,
+) -> Result<(), String> {
+    let forbidden = value.get("forbidden_boundary_markers").and_then(serde_json::Value::as_array).ok_or_else(|| {
         "GCC 4.0 native generator receipt missing array field `forbidden_boundary_markers`".to_string()
     })?;
     if forbidden.is_empty() {
         return Err("GCC 4.0 native generator receipt forbidden boundary marker list must not be empty".to_string());
     }
-    for forbidden_marker in forbidden {
-        let forbidden_marker = forbidden_marker
+    for marker_value in forbidden {
+        let marker = marker_value
             .as_str()
             .ok_or_else(|| "GCC 4.0 native generator receipt forbidden boundary markers must be strings".to_string())?;
-        if forbidden_marker.trim().is_empty() {
+        if marker.trim().is_empty() {
             return Err("GCC 4.0 native generator receipt forbidden boundary markers must not be empty".to_string());
         }
-        if derivation_content.contains(forbidden_marker) {
+        if derivation_content.contains(marker) {
             return Err(format!(
-                "GCC 4.0 native generator receipt derivation still contains forbidden empty-boundary marker `{forbidden_marker}`"
+                "GCC 4.0 native generator receipt derivation still contains forbidden empty-boundary marker `{marker}`"
             ));
         }
     }
-
+    assert!(!forbidden.is_empty());
+    assert!(
+        forbidden
+            .iter()
+            .all(|value| value.as_str().is_some_and(|marker| !derivation_content.contains(marker)))
+    );
     Ok(())
 }
 
 fn validate_gcc40_generator_output(
     outputs: &serde_json::Map<String, serde_json::Value>,
     derivation_content: &str,
-    generator: &str,
-    required_fragments: &[&str],
+    check: GeneratorOutputCheck,
 ) -> Result<(), String> {
     let output = outputs
-        .get(generator)
-        .and_then(|v| v.as_object())
-        .ok_or_else(|| format!("GCC 4.0 native generator receipt missing bounded output `{generator}`"))?;
+        .get(check.generator)
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| format!("GCC 4.0 native generator receipt missing bounded output `{}`", check.generator))?;
     let marker = require_gcc40_generator_object_string(output, "derivation_marker")?;
-    require_gcc40_derivation_marker(derivation_content, marker)?;
+    require_gcc40_derivation_marker(DerivationMarkerCheck {
+        content: derivation_content,
+        marker,
+    })?;
     let contract = require_gcc40_generator_object_string(output, "contract")?;
-    if !contract.contains(generator) || !contract.contains("bounded") {
-        return Err(format!("GCC 4.0 native generator receipt contract must describe a bounded {generator} output"));
+    if !contract.contains(check.generator) || !contract.contains("bounded") {
+        return Err(format!(
+            "GCC 4.0 native generator receipt contract must describe a bounded {} output",
+            check.generator
+        ));
     }
     let fragment = require_gcc40_generator_object_string(output, "output_program_fragment")?;
-    for required in required_fragments {
+    for required in check.required_fragments {
         if !fragment.contains(required) {
             return Err(format!(
-                "GCC 4.0 native generator receipt {generator} output fragment missing required bounded fragment `{required}`"
+                "GCC 4.0 native generator receipt {} output fragment missing required bounded fragment `{required}`",
+                check.generator
             ));
         }
     }
+    validate_gcc40_generator_digests(output, fragment, check)?;
+    assert!(contract.contains(check.generator));
+    assert!(check.required_fragments.iter().all(|required| fragment.contains(required)));
+    Ok(())
+}
+
+fn validate_gcc40_generator_digests(
+    output: &serde_json::Map<String, serde_json::Value>,
+    fragment: &str,
+    check: GeneratorOutputCheck,
+) -> Result<(), String> {
     let expected_output_digest = require_gcc40_generator_object_string(output, "output_digest_blake3")?;
-    let actual_output_digest = blake3::hash(fragment.as_bytes()).to_hex().to_string();
-    if expected_output_digest != actual_output_digest {
+    let recomputed_output_digest = blake3::hash(fragment.as_bytes()).to_hex().to_string();
+    if expected_output_digest != recomputed_output_digest {
         return Err(format!(
-            "GCC 4.0 native generator receipt {generator} output digest is `{expected_output_digest}`, recomputed `{actual_output_digest}`"
+            "GCC 4.0 native generator receipt {} output digest is `{expected_output_digest}`, recomputed `{recomputed_output_digest}`",
+            check.generator
         ));
     }
     let transcript = require_gcc40_generator_object_string(output, "transcript")?;
     let expected_digest = require_gcc40_generator_object_string(output, "transcript_digest_blake3")?;
-    let actual_digest = blake3::hash(transcript.as_bytes()).to_hex().to_string();
-    if expected_digest != actual_digest {
+    let recomputed_digest = blake3::hash(transcript.as_bytes()).to_hex().to_string();
+    if expected_digest != recomputed_digest {
         return Err(format!(
-            "GCC 4.0 native generator receipt {generator} transcript digest is `{expected_digest}`, recomputed `{actual_digest}`"
+            "GCC 4.0 native generator receipt {} transcript digest is `{expected_digest}`, recomputed `{recomputed_digest}`",
+            check.generator
         ));
     }
+    assert_eq!(expected_output_digest, recomputed_output_digest);
+    assert_eq!(expected_digest, recomputed_digest);
     Ok(())
 }
 
@@ -1269,52 +1703,59 @@ fn validate_gcc40_native_demangle_receipt(project_root: &Path, derivation_conten
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("GCC 4.0 native demangle receipt is not valid JSON: {err}"))?;
-    require_gcc40_demangle_string(&value, "schema", "mantle-gcc40-native-demangle-slice-v6")?;
-    require_gcc40_demangle_string(&value, "derivation", "bootstrap/gcc-4.0.ncl")?;
-    require_gcc40_demangle_string(&value, "status", "bounded-native-demangle-slice")?;
-    require_gcc40_demangle_string(&value, "selected_shape", "single-short-arg-itanium-v6")?;
-    require_gcc40_demangle_string(
-        &value,
-        "parity_effect",
-        "evidence-backed partial; does not prove native/full GCC 4.0 demangler correctness",
-    )?;
+    validate_gcc40_demangle_identity(&value)?;
+    validate_gcc40_demangle_contract(&value)?;
+    validate_gcc40_demangle_source_markers(&value, derivation_content)?;
+    validate_gcc40_demangle_smoke(&value)?;
+    validate_gcc40_demangle_forbidden_markers(&value, derivation_content)?;
+    assert_eq!(value.get("status").and_then(serde_json::Value::as_str), Some("bounded-native-demangle-slice"));
+    assert!(path.starts_with(project_root));
+    Ok(())
+}
 
+fn validate_gcc40_demangle_identity(value: &serde_json::Value) -> Result<(), String> {
+    for expectation in [
+        StringFieldExpectation {
+            field: "schema",
+            expected: "mantle-gcc40-native-demangle-slice-v6",
+        },
+        StringFieldExpectation {
+            field: "derivation",
+            expected: "bootstrap/gcc-4.0.ncl",
+        },
+        StringFieldExpectation {
+            field: "status",
+            expected: "bounded-native-demangle-slice",
+        },
+        StringFieldExpectation {
+            field: "selected_shape",
+            expected: "single-short-arg-itanium-v6",
+        },
+        StringFieldExpectation {
+            field: "parity_effect",
+            expected: "evidence-backed partial; does not prove native/full GCC 4.0 demangler correctness",
+        },
+    ] {
+        require_gcc40_demangle_string(value, expectation)?;
+    }
+    assert_eq!(value.get("selected_shape").and_then(serde_json::Value::as_str), Some("single-short-arg-itanium-v6"));
+    assert_eq!(value.get("derivation").and_then(serde_json::Value::as_str), Some("bootstrap/gcc-4.0.ncl"));
+    Ok(())
+}
+
+fn validate_gcc40_demangle_contract(value: &serde_json::Value) -> Result<(), String> {
     let contract = value
         .get("bounded_contract")
-        .and_then(|v| v.as_object())
+        .and_then(serde_json::Value::as_object)
         .ok_or_else(|| "GCC 4.0 native demangle receipt missing object field `bounded_contract`".to_string())?;
-    require_gcc40_demangle_named_io(contract, "accepted_inputs", "_ZN3foo3bar3bazEs", "foo::bar::baz(short)")?;
-    require_gcc40_demangle_named_io(contract, "short_regressions", "_ZN3foo3barEs", "foo::bar(short)")?;
-    require_gcc40_demangle_named_io(contract, "flat_short_regressions", "_Z3foos", "foo(short)")?;
-    require_gcc40_demangle_named_io(contract, "long_regressions", "_ZN3foo3bar3bazEl", "foo::bar::baz(long)")?;
-    require_gcc40_demangle_named_io(contract, "long_regressions", "_ZN3foo3barEl", "foo::bar(long)")?;
-    require_gcc40_demangle_named_io(contract, "flat_long_regressions", "_Z3fool", "foo(long)")?;
-    require_gcc40_demangle_named_io(contract, "char_regressions", "_ZN3foo3bar3bazEc", "foo::bar::baz(char)")?;
-    require_gcc40_demangle_named_io(contract, "char_regressions", "_ZN3foo3barEc", "foo::bar(char)")?;
-    require_gcc40_demangle_named_io(contract, "flat_char_regressions", "_Z3fooc", "foo(char)")?;
-    require_gcc40_demangle_named_io(contract, "int_regressions", "_ZN3foo3bar3bazEi", "foo::bar::baz(int)")?;
-    require_gcc40_demangle_named_io(contract, "int_regressions", "_ZN3foo3barEi", "foo::bar(int)")?;
-    require_gcc40_demangle_named_io(contract, "flat_int_regressions", "_Z3fooi", "foo(int)")?;
-    require_gcc40_demangle_named_io(contract, "zero_arg_regressions", "_ZN3foo3bar3bazEv", "foo::bar::baz()")?;
-    require_gcc40_demangle_named_io(contract, "nested_regressions", "_ZN3foo3barEv", "foo::bar()")?;
-    require_gcc40_demangle_named_io(contract, "flat_regressions", "_Z3foov", "foo()")?;
-    let rejected = contract.get("rejected_inputs").and_then(|v| v.as_array()).ok_or_else(|| {
+    for expectation in GCC40_DEMANGLE_IO_EXPECTATIONS {
+        require_gcc40_demangle_named_io(contract, *expectation)?;
+    }
+    let rejected = contract.get("rejected_inputs").and_then(serde_json::Value::as_array).ok_or_else(|| {
         "GCC 4.0 native demangle receipt missing array field `bounded_contract.rejected_inputs`".to_string()
     })?;
-    for required in [
-        "_ZN3foo3bar3bazEf",
-        "_ZN3foo3bar3bazEx",
-        "_ZN3foo3bar3baz3quxEs",
-        "_ZN3foo3bar3baz3quxEl",
-        "_ZN3foo3bar3baz3quxEc",
-        "_ZN3foo3bar3baz3quxEi",
-        "_ZN3foo3bar3baz3quxEv",
-        "_ZN3fooE",
-        "_Z3fooss",
-        "_ZN3foo3bar3bazEss",
-        "not_mangled",
-    ] {
-        if !rejected.iter().any(|v| v.as_str() == Some(required)) {
+    for required in GCC40_DEMANGLE_REJECTED_INPUTS {
+        if !rejected.iter().any(|value| value.as_str() == Some(required)) {
             return Err(format!("GCC 4.0 native demangle receipt rejected inputs missing `{required}`"));
         }
     }
@@ -1322,75 +1763,69 @@ fn validate_gcc40_native_demangle_receipt(project_root: &Path, derivation_conten
     if !non_claim.contains("single-short") || !non_claim.contains("in scope") {
         return Err("GCC 4.0 native demangle receipt non-claim must bound the supported shape".to_string());
     }
+    assert!(
+        GCC40_DEMANGLE_REJECTED_INPUTS
+            .iter()
+            .all(|required| rejected.iter().any(|value| value.as_str() == Some(required)))
+    );
+    assert!(non_claim.contains("single-short"));
+    Ok(())
+}
 
+fn validate_gcc40_demangle_source_markers(value: &serde_json::Value, derivation_content: &str) -> Result<(), String> {
     let markers = value
         .get("source_markers")
-        .and_then(|v| v.as_object())
+        .and_then(serde_json::Value::as_object)
         .ok_or_else(|| "GCC 4.0 native demangle receipt missing object field `source_markers`".to_string())?;
     for field in ["cplus_demangle_marker", "cp_demangle_marker"] {
         let marker = require_gcc40_demangle_object_string(markers, field)?;
-        require_gcc40_derivation_marker(derivation_content, marker)?;
+        require_gcc40_derivation_marker(DerivationMarkerCheck {
+            content: derivation_content,
+            marker,
+        })?;
     }
+    assert!(markers.contains_key("cplus_demangle_marker"));
+    assert!(markers.contains_key("cp_demangle_marker"));
+    Ok(())
+}
 
+fn validate_gcc40_demangle_smoke(value: &serde_json::Value) -> Result<(), String> {
     let smoke = value
         .get("smoke")
-        .and_then(|v| v.as_object())
+        .and_then(serde_json::Value::as_object)
         .ok_or_else(|| "GCC 4.0 native demangle receipt missing object field `smoke`".to_string())?;
     let transcript = require_gcc40_demangle_object_string(smoke, "transcript")?;
-    for required in [
-        "_ZN3foo3bar3bazEs",
-        "foo::bar::baz(short)",
-        "_ZN3foo3barEs",
-        "foo::bar(short)",
-        "_Z3foos",
-        "foo(short)",
-        "_ZN3foo3bar3bazEl",
-        "foo::bar::baz(long)",
-        "_ZN3foo3barEl",
-        "foo::bar(long)",
-        "_Z3fool",
-        "foo(long)",
-        "_ZN3foo3bar3bazEc",
-        "foo::bar::baz(char)",
-        "_ZN3foo3barEc",
-        "foo::bar(char)",
-        "_Z3fooc",
-        "foo(char)",
-        "_ZN3foo3bar3bazEi",
-        "foo::bar::baz(int)",
-        "_ZN3foo3barEi",
-        "foo::bar(int)",
-        "_Z3fooi",
-        "foo(int)",
-        "_ZN3foo3bar3bazEv",
-        "foo::bar::baz()",
-        "_ZN3foo3barEv",
-        "foo::bar()",
-        "_Z3foov",
-        "full native cp-demangle",
-    ] {
+    for required in GCC40_DEMANGLE_TRANSCRIPT_FRAGMENTS {
         if !transcript.contains(required) {
             return Err(format!("GCC 4.0 native demangle receipt transcript missing `{required}`"));
         }
     }
     let expected_digest = require_gcc40_demangle_object_string(smoke, "transcript_digest_blake3")?;
-    let actual_digest = blake3::hash(transcript.as_bytes()).to_hex().to_string();
-    if expected_digest != actual_digest {
+    let recomputed_digest = blake3::hash(transcript.as_bytes()).to_hex().to_string();
+    if expected_digest != recomputed_digest {
         return Err(format!(
-            "GCC 4.0 native demangle receipt transcript digest is `{expected_digest}`, recomputed `{actual_digest}`"
+            "GCC 4.0 native demangle receipt transcript digest is `{expected_digest}`, recomputed `{recomputed_digest}`"
         ));
     }
     require_gcc40_demangle_object_string(smoke, "output_digest_blake3")?;
+    assert_eq!(expected_digest, recomputed_digest);
+    assert!(GCC40_DEMANGLE_TRANSCRIPT_FRAGMENTS.iter().all(|required| transcript.contains(required)));
+    Ok(())
+}
 
+fn validate_gcc40_demangle_forbidden_markers(
+    value: &serde_json::Value,
+    derivation_content: &str,
+) -> Result<(), String> {
     let forbidden = value
         .get("forbidden_stale_markers")
-        .and_then(|v| v.as_array())
+        .and_then(serde_json::Value::as_array)
         .ok_or_else(|| "GCC 4.0 native demangle receipt missing array field `forbidden_stale_markers`".to_string())?;
     if forbidden.is_empty() {
         return Err("GCC 4.0 native demangle receipt forbidden stale marker list must not be empty".to_string());
     }
-    for marker in forbidden {
-        let marker = marker
+    for marker_value in forbidden {
+        let marker = marker_value
             .as_str()
             .ok_or_else(|| "GCC 4.0 native demangle receipt forbidden stale markers must be strings".to_string())?;
         if marker.trim().is_empty() {
@@ -1402,43 +1837,48 @@ fn validate_gcc40_native_demangle_receipt(project_root: &Path, derivation_conten
             ));
         }
     }
-
+    assert!(!forbidden.is_empty());
+    assert!(
+        forbidden
+            .iter()
+            .all(|value| value.as_str().is_some_and(|marker| !derivation_content.contains(marker)))
+    );
     Ok(())
 }
 
 fn require_gcc40_demangle_named_io(
     contract: &serde_json::Map<String, serde_json::Value>,
-    field: &str,
-    expected_mangled: &str,
-    expected_demangled: &str,
+    expectation: DemangleIoExpectation,
 ) -> Result<(), String> {
-    let entries = contract
-        .get(field)
-        .and_then(|v| v.as_array())
-        .ok_or_else(|| format!("GCC 4.0 native demangle receipt missing array field `bounded_contract.{field}`"))?;
+    let entries = contract.get(expectation.field).and_then(serde_json::Value::as_array).ok_or_else(|| {
+        format!("GCC 4.0 native demangle receipt missing array field `bounded_contract.{}`", expectation.field)
+    })?;
     if entries.iter().any(|entry| {
-        entry.get("mangled").and_then(|v| v.as_str()) == Some(expected_mangled)
-            && entry.get("demangled").and_then(|v| v.as_str()) == Some(expected_demangled)
+        entry.get("mangled").and_then(serde_json::Value::as_str) == Some(expectation.mangled)
+            && entry.get("demangled").and_then(serde_json::Value::as_str) == Some(expectation.demangled)
     }) {
         Ok(())
     } else {
         Err(format!(
-            "GCC 4.0 native demangle receipt `{field}` missing `{expected_mangled} -> {expected_demangled}`"
+            "GCC 4.0 native demangle receipt `{}` missing `{} -> {}`",
+            expectation.field, expectation.mangled, expectation.demangled
         ))
     }
 }
 
 fn require_gcc40_demangle_string<'a>(
     value: &'a serde_json::Value,
-    field: &str,
-    expected: &str,
+    expectation: StringFieldExpectation<'_>,
 ) -> Result<&'a str, String> {
     let actual = value
-        .get(field)
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| format!("GCC 4.0 native demangle receipt missing string field `{field}`"))?;
-    if actual != expected {
-        return Err(format!("GCC 4.0 native demangle receipt `{field}` is `{actual}`, expected `{expected}`"));
+        .get(expectation.field)
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| format!("GCC 4.0 native demangle receipt missing string field `{}`", expectation.field))?;
+    if actual != expectation.expected {
+        return Err(format!(
+            "GCC 4.0 native demangle receipt `{}` is `{actual}`, expected `{}`",
+            expectation.field, expectation.expected
+        ));
     }
     Ok(actual)
 }
@@ -1459,15 +1899,17 @@ fn require_gcc40_demangle_object_string<'a>(
 
 fn require_gcc40_generator_string<'a>(
     value: &'a serde_json::Value,
-    field: &str,
-    expected: &str,
+    expectation: StringFieldExpectation<'_>,
 ) -> Result<&'a str, String> {
     let actual = value
-        .get(field)
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| format!("GCC 4.0 native generator receipt missing string field `{field}`"))?;
-    if actual != expected {
-        return Err(format!("GCC 4.0 native generator receipt `{field}` is `{actual}`, expected `{expected}`"));
+        .get(expectation.field)
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| format!("GCC 4.0 native generator receipt missing string field `{}`", expectation.field))?;
+    if actual != expectation.expected {
+        return Err(format!(
+            "GCC 4.0 native generator receipt `{}` is `{actual}`, expected `{}`",
+            expectation.field, expectation.expected
+        ));
     }
     Ok(actual)
 }
@@ -1488,15 +1930,17 @@ fn require_gcc40_generator_object_string<'a>(
 
 fn require_gcc40_arithmetic_string<'a>(
     value: &'a serde_json::Value,
-    field: &str,
-    expected: &str,
+    expectation: StringFieldExpectation<'_>,
 ) -> Result<&'a str, String> {
     let actual = value
-        .get(field)
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| format!("GCC 4.0 native cc1 arithmetic receipt missing string field `{field}`"))?;
-    if actual != expected {
-        return Err(format!("GCC 4.0 native cc1 arithmetic receipt `{field}` is `{actual}`, expected `{expected}`"));
+        .get(expectation.field)
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| format!("GCC 4.0 native cc1 arithmetic receipt missing string field `{}`", expectation.field))?;
+    if actual != expectation.expected {
+        return Err(format!(
+            "GCC 4.0 native cc1 arithmetic receipt `{}` is `{actual}`, expected `{}`",
+            expectation.field, expectation.expected
+        ));
     }
     Ok(actual)
 }
@@ -1515,27 +1959,29 @@ fn require_gcc40_arithmetic_object_string<'a>(
     Ok(actual)
 }
 
-fn require_gcc40_derivation_marker(content: &str, marker: &str) -> Result<(), String> {
-    if marker.trim().is_empty() {
+fn require_gcc40_derivation_marker(check: DerivationMarkerCheck<'_>) -> Result<(), String> {
+    if check.marker.trim().is_empty() {
         return Err("GCC 4.0 native boundary receipt marker must not be empty".to_string());
     }
-    if !content.contains(marker) {
-        return Err(format!("GCC 4.0 native boundary receipt marker not found in derivation: {marker}"));
+    if !check.content.contains(check.marker) {
+        return Err(format!("GCC 4.0 native boundary receipt marker not found in derivation: {}", check.marker));
     }
     Ok(())
 }
 
 fn require_gcc40_boundary_string<'a>(
     value: &'a serde_json::Value,
-    field: &str,
-    expected: &str,
+    expectation: StringFieldExpectation<'_>,
 ) -> Result<&'a str, String> {
     let actual = value
-        .get(field)
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| format!("GCC 4.0 native boundary receipt missing string field `{field}`"))?;
-    if actual != expected {
-        return Err(format!("GCC 4.0 native boundary receipt `{field}` is `{actual}`, expected `{expected}`"));
+        .get(expectation.field)
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| format!("GCC 4.0 native boundary receipt missing string field `{}`", expectation.field))?;
+    if actual != expectation.expected {
+        return Err(format!(
+            "GCC 4.0 native boundary receipt `{}` is `{actual}`, expected `{}`",
+            expectation.field, expectation.expected
+        ));
     }
     Ok(actual)
 }
@@ -1566,15 +2012,17 @@ fn require_gcc40_boundary_object_string<'a>(
 
 fn require_gcc40_inventory_string<'a>(
     value: &'a serde_json::Value,
-    field: &str,
-    expected: &str,
+    expectation: StringFieldExpectation<'_>,
 ) -> Result<&'a str, String> {
     let actual = value
-        .get(field)
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| format!("GCC 4.0 placeholder inventory missing string field `{field}`"))?;
-    if actual != expected {
-        return Err(format!("GCC 4.0 placeholder inventory `{field}` is `{actual}`, expected `{expected}`"));
+        .get(expectation.field)
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| format!("GCC 4.0 placeholder inventory missing string field `{}`", expectation.field))?;
+    if actual != expectation.expected {
+        return Err(format!(
+            "GCC 4.0 placeholder inventory `{}` is `{actual}`, expected `{}`",
+            expectation.field, expectation.expected
+        ));
     }
     Ok(actual)
 }
@@ -1586,17 +2034,26 @@ struct PlaceholderMarkerOccurrence {
 }
 
 fn collect_placeholder_marker_occurrences(content: &str) -> Vec<PlaceholderMarkerOccurrence> {
-    let mut occurrences = Vec::new();
-    for (idx, line) in content.lines().enumerate() {
+    let line_count = content.lines().count();
+    let Some(occurrence_capacity) = line_count.checked_mul(PLACEHOLDER_MARKERS.len()) else {
+        return Vec::new();
+    };
+    let mut occurrences = Vec::with_capacity(occurrence_capacity);
+    for (line_index, line) in content.lines().enumerate() {
+        let Some(line_number) = line_index.checked_add(1) else {
+            break;
+        };
         for marker in PLACEHOLDER_MARKERS {
-            if marker_is_standalone(line, marker) {
+            if marker_is_standalone(line, *marker) {
                 occurrences.push(PlaceholderMarkerOccurrence {
-                    line: idx + 1,
+                    line: line_number,
                     marker: (*marker).to_string(),
                 });
             }
         }
     }
+    assert!(occurrences.len() <= occurrence_capacity);
+    assert!(occurrences.capacity() >= occurrences.len());
     occurrences
 }
 
@@ -1618,9 +2075,18 @@ fn validate_stagex_lineage_provider_receipt(project_root: &Path) -> Result<(), S
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("StageX lineage provider receipt is not valid JSON: {err}"))?;
-    require_stagex_json_string(&value, "schema", "mantle-stagex-lineage-provider-receipt-v1")?;
-    require_stagex_json_string(&value, "provider_kind", "stagex-lineage")?;
-    require_stagex_json_string(&value, "lineage_receipt_status", "scaffold-only")?;
+    require_stagex_json_string(&value, StringFieldExpectation {
+        field: "schema",
+        expected: "mantle-stagex-lineage-provider-receipt-v1",
+    })?;
+    require_stagex_json_string(&value, StringFieldExpectation {
+        field: "provider_kind",
+        expected: "stagex-lineage",
+    })?;
+    require_stagex_json_string(&value, StringFieldExpectation {
+        field: "lineage_receipt_status",
+        expected: "scaffold-only",
+    })?;
     for field in [
         "audited_seed_digest",
         "lineage_manifest_digest",
@@ -1628,20 +2094,24 @@ fn validate_stagex_lineage_provider_receipt(project_root: &Path) -> Result<(), S
         "normalized_provider_digest",
     ] {
         let digest = require_stagex_non_empty_string(&value, field)?;
-        validate_lower_hex_digest(digest, field)?;
+        validate_lower_hex_digest(DigestFieldCheck { digest, field })?;
     }
     require_stagex_empty_array(&value, "fallback_events")?;
+    assert_eq!(value.get("provider_kind").and_then(serde_json::Value::as_str), Some("stagex-lineage"));
+    assert_eq!(value.get("lineage_receipt_status").and_then(serde_json::Value::as_str), Some("scaffold-only"));
     Ok(())
 }
 
 fn require_stagex_json_string<'a>(
     value: &'a serde_json::Value,
-    field: &str,
-    expected: &str,
+    expectation: StringFieldExpectation<'_>,
 ) -> Result<&'a str, String> {
-    let actual = require_stagex_non_empty_string(value, field)?;
-    if actual != expected {
-        return Err(format!("StageX lineage provider receipt `{field}` is `{actual}`, expected `{expected}`"));
+    let actual = require_stagex_non_empty_string(value, expectation.field)?;
+    if actual != expectation.expected {
+        return Err(format!(
+            "StageX lineage provider receipt `{}` is `{actual}`, expected `{}`",
+            expectation.field, expectation.expected
+        ));
     }
     Ok(actual)
 }
@@ -1657,9 +2127,14 @@ fn require_stagex_non_empty_string<'a>(value: &'a serde_json::Value, field: &str
     Ok(actual)
 }
 
-fn validate_lower_hex_digest(digest: &str, field: &str) -> Result<(), String> {
-    if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
-        return Err(format!("StageX lineage provider receipt `{field}` must be a 64-character lowercase hex digest"));
+fn validate_lower_hex_digest(check: DigestFieldCheck<'_>) -> Result<(), String> {
+    if check.digest.len() != BLAKE3_HEX_LENGTH
+        || !check.digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(format!(
+            "StageX lineage provider receipt `{}` must be a 64-character lowercase hex digest",
+            check.field
+        ));
     }
     Ok(())
 }
@@ -1675,6 +2150,42 @@ fn require_stagex_empty_array(value: &serde_json::Value, field: &str) -> Result<
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+struct DeterministicProofValidation {
+    rebuild_descriptor_blake3: String,
+    rebuild_authority_plan_blake3: String,
+    digest_blake3: String,
+    source_blake3: String,
+    vendor_blake3: String,
+}
+
+#[derive(Debug, Clone)]
+struct SandboxProofValidation {
+    digest_blake3: String,
+    profile_identity: String,
+}
+
+#[derive(Debug, Clone)]
+struct SummaryProofValidation {
+    json_digest_blake3: String,
+    markdown_digest_blake3: String,
+    bounded_claim: String,
+}
+
+#[derive(Debug, Copy, Clone)]
+struct VerifyReceiptLinkage<'a> {
+    proof_digest_blake3: &'a str,
+    sandbox_evidence_digest_blake3: &'a str,
+}
+
+#[derive(Debug, Copy, Clone)]
+struct SummaryLinkage<'a> {
+    release_id: &'a str,
+    proof_digest_blake3: &'a str,
+    sandbox_evidence_digest_blake3: &'a str,
+    selected_provider_kind: ProviderKind,
+}
+
 // r[impl mantle.release_provenance.deterministic_rebuild_admission.validation]
 fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result<EvidenceValidation, String> {
     validate_self_build_provider_kind_linkage(project_root)?;
@@ -1688,49 +2199,118 @@ fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result
     let evidence_digest_blake3 = blake3::hash(content.as_bytes()).to_hex().to_string();
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("real self-build proof parity receipt is not valid JSON: {err}"))?;
-
-    require_real_proof_string(&value, "schema", "mantle-real-self-build-proof-parity-evidence-v1")?;
-    let release_id = require_real_proof_non_empty_string(&value, "release_id")?.to_string();
-    let selected_provider_kind = parse_provider_kind(
-        require_real_proof_non_empty_string(&value, "selected_provider_kind")?,
-        "selected_provider_kind",
-    )?;
+    let (release_id, selected_provider_kind) = validate_real_proof_identity(&value)?;
     let provider_kind_linkage = require_real_proof_object(&value, "provider_kind_linkage")?;
-    let deterministic_proof = require_real_proof_object(&value, "deterministic_proof")?;
-    let verify_receipt = require_real_proof_object(&value, "verify_receipt")?;
-    let sandbox_evidence = require_real_proof_object(&value, "sandbox_evidence")?;
-    let summary = require_real_proof_object(&value, "summary")?;
-
-    require_real_proof_object_string(provider_kind_linkage, "receipt_path", SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT)?;
+    require_real_proof_object_string(provider_kind_linkage, StringFieldExpectation {
+        field: "receipt_path",
+        expected: SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT,
+    })?;
     require_real_proof_object_provider_kind(provider_kind_linkage, "selected_provider_kind", selected_provider_kind)?;
+    let deterministic = validate_real_deterministic_proof(&value, selected_provider_kind)?;
+    let sandbox = validate_real_sandbox_evidence(&value)?;
+    let verify_receipt_digest_blake3 = validate_real_verify_receipt(&value, VerifyReceiptLinkage {
+        proof_digest_blake3: &deterministic.digest_blake3,
+        sandbox_evidence_digest_blake3: &sandbox.digest_blake3,
+    })?;
+    let summary = validate_real_proof_summary(&value, SummaryLinkage {
+        release_id: &release_id,
+        proof_digest_blake3: &deterministic.digest_blake3,
+        sandbox_evidence_digest_blake3: &sandbox.digest_blake3,
+        selected_provider_kind,
+    })?;
+    require_real_proof_string(&value, StringFieldExpectation {
+        field: "source_blake3",
+        expected: &deterministic.source_blake3,
+    })?;
+    require_real_proof_string(&value, StringFieldExpectation {
+        field: "vendor_blake3",
+        expected: &deterministic.vendor_blake3,
+    })?;
+    assert_eq!(evidence_digest_blake3.len(), BLAKE3_HEX_LENGTH);
+    assert!(path.starts_with(project_root));
+    Ok(EvidenceValidation::with_proof(ParityProofDetails {
+        schema: "mantle-real-self-build-proof-parity-evidence-v1".to_string(),
+        release_id,
+        selected_provider_kind,
+        evidence_digest_blake3,
+        deterministic_proof_digest_blake3: deterministic.digest_blake3,
+        rebuild_descriptor_blake3: deterministic.rebuild_descriptor_blake3,
+        rebuild_authority_plan_blake3: deterministic.rebuild_authority_plan_blake3,
+        sandbox_evidence_digest_blake3: sandbox.digest_blake3,
+        verify_receipt_digest_blake3,
+        summary_json_digest_blake3: summary.json_digest_blake3,
+        summary_markdown_digest_blake3: summary.markdown_digest_blake3,
+        verdict: "self-rebuild-match".to_string(),
+        verify_status: "eligible".to_string(),
+        sandbox_profile_identity: sandbox.profile_identity,
+        bounded_claim: summary.bounded_claim,
+    }))
+}
 
-    require_real_proof_object_string(deterministic_proof, "workflow", "mantle-deterministic-proof-receipt-v2")?;
-    require_real_proof_object_string(deterministic_proof, "verdict", "self-rebuild-match")?;
-    require_real_proof_object_bool(deterministic_proof, "genuine_rebuild_authority", true)?;
-    let rebuild_descriptor_blake3 =
-        require_real_proof_object_digest(deterministic_proof, "rebuild_descriptor_blake3")?.to_string();
-    let rebuild_authority_plan_blake3 =
-        require_real_proof_object_digest(deterministic_proof, "rebuild_authority_plan_blake3")?.to_string();
-    require_real_proof_object_provider_kind(deterministic_proof, "selected_provider_kind", selected_provider_kind)?;
-    let deterministic_proof_digest_blake3 =
-        require_real_proof_object_digest(deterministic_proof, "digest_blake3")?.to_string();
-    let source_digest = require_real_proof_object_digest(deterministic_proof, "source_blake3")?;
-    let vendor_digest = require_real_proof_object_digest(deterministic_proof, "vendor_blake3")?;
+fn validate_real_proof_identity(value: &serde_json::Value) -> Result<(String, ProviderKind), String> {
+    require_real_proof_string(value, StringFieldExpectation {
+        field: "schema",
+        expected: "mantle-real-self-build-proof-parity-evidence-v1",
+    })?;
+    let release_id = require_real_proof_non_empty_string(value, "release_id")?.to_string();
+    let provider_kind_text = require_real_proof_non_empty_string(value, "selected_provider_kind")?;
+    let selected_provider_kind = parse_provider_kind(ProviderKindFieldCheck {
+        kind: provider_kind_text,
+        field: "selected_provider_kind",
+    })?;
+    assert!(!release_id.is_empty());
+    assert_ne!(selected_provider_kind, ProviderKind::Unknown);
+    Ok((release_id, selected_provider_kind))
+}
 
-    let roots = deterministic_proof.get("clean_rebuild_roots").and_then(|v| v.as_array()).ok_or_else(|| {
+fn validate_real_deterministic_proof(
+    value: &serde_json::Value,
+    selected_provider_kind: ProviderKind,
+) -> Result<DeterministicProofValidation, String> {
+    let proof = require_real_proof_object(value, "deterministic_proof")?;
+    require_real_proof_object_string(proof, StringFieldExpectation {
+        field: "workflow",
+        expected: "mantle-deterministic-proof-receipt-v2",
+    })?;
+    require_real_proof_object_string(proof, StringFieldExpectation {
+        field: "verdict",
+        expected: "self-rebuild-match",
+    })?;
+    require_real_proof_object_bool(proof, "genuine_rebuild_authority", true)?;
+    require_real_proof_object_provider_kind(proof, "selected_provider_kind", selected_provider_kind)?;
+    validate_real_clean_rebuild_roots(proof)?;
+    validate_real_artifact_digests(proof)?;
+    let validated = DeterministicProofValidation {
+        rebuild_descriptor_blake3: require_real_proof_object_digest(proof, "rebuild_descriptor_blake3")?.to_string(),
+        rebuild_authority_plan_blake3: require_real_proof_object_digest(proof, "rebuild_authority_plan_blake3")?
+            .to_string(),
+        digest_blake3: require_real_proof_object_digest(proof, "digest_blake3")?.to_string(),
+        source_blake3: require_real_proof_object_digest(proof, "source_blake3")?.to_string(),
+        vendor_blake3: require_real_proof_object_digest(proof, "vendor_blake3")?.to_string(),
+    };
+    assert_eq!(validated.digest_blake3.len(), BLAKE3_HEX_LENGTH);
+    assert_eq!(validated.source_blake3.len(), BLAKE3_HEX_LENGTH);
+    Ok(validated)
+}
+
+fn validate_real_clean_rebuild_roots(proof: &serde_json::Map<String, serde_json::Value>) -> Result<(), String> {
+    let roots = proof.get("clean_rebuild_roots").and_then(serde_json::Value::as_array).ok_or_else(|| {
         "real self-build proof parity receipt missing array field `deterministic_proof.clean_rebuild_roots`".to_string()
     })?;
-    if roots.len() != 2 {
+    if roots.len() != CLEAN_REBUILD_ROOT_COUNT {
         return Err(format!(
-            "real self-build proof parity receipt `deterministic_proof.clean_rebuild_roots` has length {}, expected 2",
-            roots.len()
+            "real self-build proof parity receipt `deterministic_proof.clean_rebuild_roots` has length {}, expected {}",
+            roots.len(),
+            CLEAN_REBUILD_ROOT_COUNT
         ));
     }
-    let first_root = roots[0]
-        .as_str()
+    let first_root = roots
+        .first()
+        .and_then(serde_json::Value::as_str)
         .ok_or_else(|| "real self-build proof clean rebuild root must be a string".to_string())?;
-    let second_root = roots[1]
-        .as_str()
+    let second_root = roots
+        .get(1)
+        .and_then(serde_json::Value::as_str)
         .ok_or_else(|| "real self-build proof clean rebuild root must be a string".to_string())?;
     if first_root.trim().is_empty() || second_root.trim().is_empty() {
         return Err("real self-build proof clean rebuild roots must not be empty".to_string());
@@ -1738,7 +2318,13 @@ fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result
     if first_root == second_root {
         return Err("real self-build proof clean rebuild roots must be distinct".to_string());
     }
-    let artifacts = deterministic_proof.get("artifact_digests_blake3").and_then(|v| v.as_array()).ok_or_else(|| {
+    assert_eq!(roots.len(), CLEAN_REBUILD_ROOT_COUNT);
+    assert_ne!(first_root, second_root);
+    Ok(())
+}
+
+fn validate_real_artifact_digests(proof: &serde_json::Map<String, serde_json::Value>) -> Result<(), String> {
+    let artifacts = proof.get("artifact_digests_blake3").and_then(serde_json::Value::as_array).ok_or_else(|| {
         "real self-build proof parity receipt missing array field `deterministic_proof.artifact_digests_blake3`"
             .to_string()
     })?;
@@ -1749,86 +2335,149 @@ fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result
         let digest = artifact
             .as_str()
             .ok_or_else(|| "real self-build proof artifact digest must be a string".to_string())?;
-        validate_blake3_digest(digest, "deterministic_proof.artifact_digests_blake3")?;
+        validate_blake3_digest(DigestFieldCheck {
+            digest,
+            field: "deterministic_proof.artifact_digests_blake3",
+        })?;
     }
+    assert!(!artifacts.is_empty());
+    assert!(artifacts.iter().all(serde_json::Value::is_string));
+    Ok(())
+}
 
-    let sandbox_evidence_digest_blake3 =
-        require_real_proof_object_digest(sandbox_evidence, "digest_blake3")?.to_string();
-    let sandbox_profile_identity =
-        require_real_proof_object_non_empty_string(sandbox_evidence, "profile_identity")?.to_string();
-    if !sandbox_profile_identity.starts_with("mantle-proof-sandbox-v1:") {
+fn validate_real_sandbox_evidence(value: &serde_json::Value) -> Result<SandboxProofValidation, String> {
+    let sandbox = require_real_proof_object(value, "sandbox_evidence")?;
+    let profile_identity = require_real_proof_object_non_empty_string(sandbox, "profile_identity")?.to_string();
+    if !profile_identity.starts_with("mantle-proof-sandbox-v1:") {
         return Err(format!(
-            "real self-build proof sandbox profile `{sandbox_profile_identity}` is unsupported; expected mantle-proof-sandbox-v1:*"
+            "real self-build proof sandbox profile `{profile_identity}` is unsupported; expected mantle-proof-sandbox-v1:*"
         ));
     }
+    let validated = SandboxProofValidation {
+        digest_blake3: require_real_proof_object_digest(sandbox, "digest_blake3")?.to_string(),
+        profile_identity,
+    };
+    assert_eq!(validated.digest_blake3.len(), BLAKE3_HEX_LENGTH);
+    assert!(validated.profile_identity.starts_with("mantle-proof-sandbox-v1:"));
+    Ok(validated)
+}
 
-    let verify_receipt_digest_blake3 = require_real_proof_object_digest(verify_receipt, "digest_blake3")?.to_string();
-    require_real_proof_object_string(verify_receipt, "deterministic_release_status", "eligible")?;
-    require_real_proof_object_string(verify_receipt, "proof_digest_blake3", &deterministic_proof_digest_blake3)?;
-    require_real_proof_object_string(
-        verify_receipt,
-        "sandbox_evidence_digest_blake3",
-        &sandbox_evidence_digest_blake3,
-    )?;
+fn validate_real_verify_receipt(
+    value: &serde_json::Value,
+    linkage: VerifyReceiptLinkage<'_>,
+) -> Result<String, String> {
+    let receipt = require_real_proof_object(value, "verify_receipt")?;
+    let digest = require_real_proof_object_digest(receipt, "digest_blake3")?.to_string();
+    for expectation in [
+        StringFieldExpectation {
+            field: "deterministic_release_status",
+            expected: "eligible",
+        },
+        StringFieldExpectation {
+            field: "proof_digest_blake3",
+            expected: linkage.proof_digest_blake3,
+        },
+        StringFieldExpectation {
+            field: "sandbox_evidence_digest_blake3",
+            expected: linkage.sandbox_evidence_digest_blake3,
+        },
+    ] {
+        require_real_proof_object_string(receipt, expectation)?;
+    }
+    assert_eq!(digest.len(), BLAKE3_HEX_LENGTH);
+    assert_eq!(receipt.get("deterministic_release_status").and_then(serde_json::Value::as_str), Some("eligible"));
+    Ok(digest)
+}
 
-    let summary_json_digest_blake3 = require_real_proof_object_digest(summary, "json_digest_blake3")?.to_string();
-    let summary_markdown_digest_blake3 =
-        require_real_proof_object_digest(summary, "markdown_digest_blake3")?.to_string();
-    require_real_proof_object_string(summary, "release_id", &release_id)?;
-    require_real_proof_object_provider_kind(summary, "selected_provider_kind", selected_provider_kind)?;
-    require_real_proof_object_string(summary, "verdict", "self-rebuild-match")?;
-    require_real_proof_object_string(summary, "verify_status", "eligible")?;
-    require_real_proof_object_string(summary, "proof_digest_blake3", &deterministic_proof_digest_blake3)?;
-    require_real_proof_object_string(summary, "sandbox_evidence_digest_blake3", &sandbox_evidence_digest_blake3)?;
+fn validate_real_proof_summary(
+    value: &serde_json::Value,
+    linkage: SummaryLinkage<'_>,
+) -> Result<SummaryProofValidation, String> {
+    let summary = require_real_proof_object(value, "summary")?;
+    for expectation in [
+        StringFieldExpectation {
+            field: "release_id",
+            expected: linkage.release_id,
+        },
+        StringFieldExpectation {
+            field: "verdict",
+            expected: "self-rebuild-match",
+        },
+        StringFieldExpectation {
+            field: "verify_status",
+            expected: "eligible",
+        },
+        StringFieldExpectation {
+            field: "proof_digest_blake3",
+            expected: linkage.proof_digest_blake3,
+        },
+        StringFieldExpectation {
+            field: "sandbox_evidence_digest_blake3",
+            expected: linkage.sandbox_evidence_digest_blake3,
+        },
+    ] {
+        require_real_proof_object_string(summary, expectation)?;
+    }
+    require_real_proof_object_provider_kind(summary, "selected_provider_kind", linkage.selected_provider_kind)?;
     let bounded_claim = require_real_proof_object_non_empty_string(summary, "bounded_claim")?.to_string();
     if !bounded_claim.contains("rebuilt twice") || !bounded_claim.contains("exact content") {
         return Err("real self-build proof bounded claim must state rebuilt-twice exact-content scope".to_string());
     }
+    validate_real_proof_non_claims(summary)?;
+    let validated = SummaryProofValidation {
+        json_digest_blake3: require_real_proof_object_digest(summary, "json_digest_blake3")?.to_string(),
+        markdown_digest_blake3: require_real_proof_object_digest(summary, "markdown_digest_blake3")?.to_string(),
+        bounded_claim,
+    };
+    assert!(validated.bounded_claim.contains("rebuilt twice"));
+    assert_eq!(validated.json_digest_blake3.len(), BLAKE3_HEX_LENGTH);
+    Ok(validated)
+}
+
+fn validate_real_proof_non_claims(summary: &serde_json::Map<String, serde_json::Value>) -> Result<(), String> {
     let non_claims = summary
         .get("non_claims")
-        .and_then(|v| v.as_array())
+        .and_then(serde_json::Value::as_array)
         .ok_or_else(|| "real self-build proof summary missing array field `non_claims`".to_string())?;
-    for required_non_claim in ["compiler or verifier soundness", "full bootstrap reproducibility"] {
-        if !non_claims.iter().any(|claim| claim.as_str().unwrap_or("").contains(required_non_claim)) {
+    let required_non_claims = ["compiler or verifier soundness", "full bootstrap reproducibility"];
+    for required_non_claim in required_non_claims {
+        let is_present =
+            non_claims.iter().any(|claim| claim.as_str().is_some_and(|text| text.contains(required_non_claim)));
+        if !is_present {
             return Err(format!("real self-build proof summary non_claims must reject {required_non_claim}"));
         }
     }
-
-    require_real_proof_string(&value, "source_blake3", source_digest)?;
-    require_real_proof_string(&value, "vendor_blake3", vendor_digest)?;
-
-    Ok(EvidenceValidation::with_proof(ParityProofDetails {
-        schema: "mantle-real-self-build-proof-parity-evidence-v1".to_string(),
-        release_id,
-        selected_provider_kind,
-        evidence_digest_blake3,
-        deterministic_proof_digest_blake3,
-        rebuild_descriptor_blake3,
-        rebuild_authority_plan_blake3,
-        sandbox_evidence_digest_blake3,
-        verify_receipt_digest_blake3,
-        summary_json_digest_blake3,
-        summary_markdown_digest_blake3,
-        verdict: "self-rebuild-match".to_string(),
-        verify_status: "eligible".to_string(),
-        sandbox_profile_identity,
-        bounded_claim,
-    }))
+    assert!(!non_claims.is_empty());
+    assert!(
+        required_non_claims.iter().all(|required| {
+            non_claims.iter().any(|claim| claim.as_str().is_some_and(|text| text.contains(required)))
+        })
+    );
+    Ok(())
 }
 
-fn parse_provider_kind(kind: &str, field: &str) -> Result<ProviderKind, String> {
-    match kind {
+fn parse_provider_kind(check: ProviderKindFieldCheck<'_>) -> Result<ProviderKind, String> {
+    match check.kind {
         "legacy-fetch" => Ok(ProviderKind::LegacyFetch),
         "source-root" => Ok(ProviderKind::SourceRoot),
         "stagex-lineage" => Ok(ProviderKind::StagexLineage),
-        other => Err(format!("real self-build proof parity receipt `{field}` has unknown provider kind `{other}`")),
+        other => Err(format!(
+            "real self-build proof parity receipt `{}` has unknown provider kind `{other}`",
+            check.field
+        )),
     }
 }
 
-fn require_real_proof_string<'a>(value: &'a serde_json::Value, field: &str, expected: &str) -> Result<&'a str, String> {
-    let actual = require_real_proof_non_empty_string(value, field)?;
-    if actual != expected {
-        return Err(format!("real self-build proof parity receipt `{field}` is `{actual}`, expected `{expected}`"));
+fn require_real_proof_string<'a>(
+    value: &'a serde_json::Value,
+    expectation: StringFieldExpectation<'_>,
+) -> Result<&'a str, String> {
+    let actual = require_real_proof_non_empty_string(value, expectation.field)?;
+    if actual != expectation.expected {
+        return Err(format!(
+            "real self-build proof parity receipt `{}` is `{actual}`, expected `{}`",
+            expectation.field, expectation.expected
+        ));
     }
     Ok(actual)
 }
@@ -1856,12 +2505,14 @@ fn require_real_proof_object<'a>(
 
 fn require_real_proof_object_string<'a>(
     object: &'a serde_json::Map<String, serde_json::Value>,
-    field: &str,
-    expected: &str,
+    expectation: StringFieldExpectation<'_>,
 ) -> Result<&'a str, String> {
-    let actual = require_real_proof_object_non_empty_string(object, field)?;
-    if actual != expected {
-        return Err(format!("real self-build proof parity receipt `{field}` is `{actual}`, expected `{expected}`"));
+    let actual = require_real_proof_object_non_empty_string(object, expectation.field)?;
+    if actual != expectation.expected {
+        return Err(format!(
+            "real self-build proof parity receipt `{}` is `{actual}`, expected `{}`",
+            expectation.field, expectation.expected
+        ));
     }
     Ok(actual)
 }
@@ -1885,7 +2536,7 @@ fn require_real_proof_object_digest<'a>(
     field: &str,
 ) -> Result<&'a str, String> {
     let digest = require_real_proof_object_non_empty_string(object, field)?;
-    validate_blake3_digest(digest, field)?;
+    validate_blake3_digest(DigestFieldCheck { digest, field })?;
     Ok(digest)
 }
 
@@ -1894,14 +2545,14 @@ fn require_real_proof_object_bool(
     field: &str,
     expected: bool,
 ) -> Result<(), String> {
-    let actual = object
+    let is_actual = object
         .get(field)
-        .and_then(|value| value.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .ok_or_else(|| format!("real self-build proof parity receipt missing boolean field `{field}`"))?;
-    if actual == expected {
+    if is_actual == expected {
         Ok(())
     } else {
-        Err(format!("real self-build proof parity receipt `{field}` is `{actual}`, expected `{expected}`"))
+        Err(format!("real self-build proof parity receipt `{field}` is `{is_actual}`, expected `{expected}`"))
     }
 }
 
@@ -1910,19 +2561,25 @@ fn require_real_proof_object_provider_kind(
     field: &str,
     expected: ProviderKind,
 ) -> Result<(), String> {
-    let actual = parse_provider_kind(require_real_proof_object_non_empty_string(object, field)?, field)?;
-    if actual != expected {
+    let actual_provider_kind = parse_provider_kind(ProviderKindFieldCheck {
+        kind: require_real_proof_object_non_empty_string(object, field)?,
+        field,
+    })?;
+    if actual_provider_kind != expected {
         return Err(format!(
-            "real self-build proof parity receipt provider kind mismatch in `{field}`: {actual}, expected {expected}"
+            "real self-build proof parity receipt provider kind mismatch in `{field}`: {actual_provider_kind}, expected {expected}"
         ));
     }
     Ok(())
 }
 
-fn validate_blake3_digest(digest: &str, field: &str) -> Result<(), String> {
-    if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+fn validate_blake3_digest(check: DigestFieldCheck<'_>) -> Result<(), String> {
+    if check.digest.len() != BLAKE3_HEX_LENGTH
+        || !check.digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
         return Err(format!(
-            "real self-build proof parity receipt `{field}` must be a 64-character lowercase BLAKE3 digest"
+            "real self-build proof parity receipt `{}` must be a 64-character lowercase BLAKE3 digest",
+            check.field
         ));
     }
     Ok(())
@@ -1939,7 +2596,10 @@ fn validate_self_build_provider_kind_linkage(project_root: &Path) -> Result<(), 
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("mantle self-build provider-kind linkage receipt is not valid JSON: {err}"))?;
 
-    require_self_build_json_string(&value, "schema", "mantle-self-build-provider-kind-linkage-v1")?;
+    require_self_build_json_string(&value, StringFieldExpectation {
+        field: "schema",
+        expected: "mantle-self-build-provider-kind-linkage-v1",
+    })?;
     let proof_identity = require_self_build_object(&value, "proof_identity")?;
     let proof_linkage = require_self_build_object(&value, "proof_linkage")?;
     let prerequisites = require_self_build_object(&value, "prerequisites")?;
@@ -1947,35 +2607,50 @@ fn validate_self_build_provider_kind_linkage(project_root: &Path) -> Result<(), 
     let proof_linkage_kind = require_self_build_object_string(proof_linkage, "selected_provider_kind")?;
     let prerequisites_kind = require_self_build_object_string(prerequisites, "provider_kind")?;
 
-    validate_closed_provider_kind(proof_identity_kind, "proof_identity.selected_provider_kind")?;
-    validate_closed_provider_kind(proof_linkage_kind, "proof_linkage.selected_provider_kind")?;
-    validate_closed_provider_kind(prerequisites_kind, "prerequisites.provider_kind")?;
+    validate_closed_provider_kind(ProviderKindFieldCheck {
+        kind: proof_identity_kind,
+        field: "proof_identity.selected_provider_kind",
+    })?;
+    validate_closed_provider_kind(ProviderKindFieldCheck {
+        kind: proof_linkage_kind,
+        field: "proof_linkage.selected_provider_kind",
+    })?;
+    validate_closed_provider_kind(ProviderKindFieldCheck {
+        kind: prerequisites_kind,
+        field: "prerequisites.provider_kind",
+    })?;
     if proof_identity_kind != proof_linkage_kind || proof_identity_kind != prerequisites_kind {
         return Err(format!(
             "crunch self-build provider-kind linkage mismatch: proof_identity.selected_provider_kind={proof_identity_kind}, proof_linkage.selected_provider_kind={proof_linkage_kind}, prerequisites.provider_kind={prerequisites_kind}"
         ));
     }
+    assert_eq!(proof_identity_kind, proof_linkage_kind);
+    assert_eq!(proof_identity_kind, prerequisites_kind);
     Ok(())
 }
 
-fn validate_closed_provider_kind(kind: &str, field: &str) -> Result<(), String> {
-    match kind {
+fn validate_closed_provider_kind(check: ProviderKindFieldCheck<'_>) -> Result<(), String> {
+    match check.kind {
         "legacy-fetch" | "source-root" | "stagex-lineage" => Ok(()),
-        other => Err(format!("crunch self-build provider-kind linkage `{field}` has unknown provider kind `{other}`")),
+        other => Err(format!(
+            "crunch self-build provider-kind linkage `{}` has unknown provider kind `{other}`",
+            check.field
+        )),
     }
 }
 
 fn require_self_build_json_string<'a>(
     value: &'a serde_json::Value,
-    field: &str,
-    expected: &str,
+    expectation: StringFieldExpectation<'_>,
 ) -> Result<&'a str, String> {
-    let actual = value
-        .get(field)
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| format!("crunch self-build provider-kind linkage missing string field `{field}`"))?;
-    if actual != expected {
-        return Err(format!("crunch self-build provider-kind linkage `{field}` is `{actual}`, expected `{expected}`"));
+    let actual = value.get(expectation.field).and_then(serde_json::Value::as_str).ok_or_else(|| {
+        format!("crunch self-build provider-kind linkage missing string field `{}`", expectation.field)
+    })?;
+    if actual != expectation.expected {
+        return Err(format!(
+            "crunch self-build provider-kind linkage `{}` is `{actual}`, expected `{}`",
+            expectation.field, expectation.expected
+        ));
     }
     Ok(actual)
 }
@@ -2038,6 +2713,8 @@ fn validate_seed_full_source_root_contract(path: &Path) -> Result<(), String> {
             return Err(format!("seed-full source-root contract contains legacy provider marker `{needle}`"));
         }
     }
+    assert!(required.iter().all(|needle| content.contains(needle)));
+    assert!(forbidden.iter().all(|needle| !content.contains(needle)));
     Ok(())
 }
 
@@ -2051,8 +2728,14 @@ fn validate_binutils_tcc_tool_transcript(project_root: &Path) -> Result<(), Stri
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("binutils-tcc tool transcript is not valid JSON: {err}"))?;
-    require_json_string(&value, "schema", "mantle-binutils-tcc-tool-smoke-v1")?;
-    require_json_string(&value, "derivation", "bootstrap/binutils-tcc.ncl")?;
+    require_json_string(&value, StringFieldExpectation {
+        field: "schema",
+        expected: "mantle-binutils-tcc-tool-smoke-v1",
+    })?;
+    require_json_string(&value, StringFieldExpectation {
+        field: "derivation",
+        expected: "bootstrap/binutils-tcc.ncl",
+    })?;
     require_non_empty_json_string(&value, "output_path")?;
     require_non_empty_json_string(&value, "provider_kind")?;
     require_json_bool(&value, "host_fallback", false)?;
@@ -2078,16 +2761,21 @@ fn validate_binutils_tcc_tool_transcript(project_root: &Path) -> Result<(), Stri
             ));
         }
     }
+    assert!(BINUTILS_TCC_REQUIRED_TOOLS.iter().all(|tool| tool_smokes.contains_key(*tool)));
+    assert_eq!(value.get("host_fallback").and_then(serde_json::Value::as_bool), Some(false));
     Ok(())
 }
 
-fn require_json_string(value: &serde_json::Value, field: &str, expected: &str) -> Result<(), String> {
+fn require_json_string(value: &serde_json::Value, expectation: StringFieldExpectation<'_>) -> Result<(), String> {
     let actual = value
-        .get(field)
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| format!("binutils-tcc transcript missing string field `{field}`"))?;
-    if actual != expected {
-        return Err(format!("binutils-tcc transcript `{field}` is `{actual}`, expected `{expected}`"));
+        .get(expectation.field)
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| format!("binutils-tcc transcript missing string field `{}`", expectation.field))?;
+    if actual != expectation.expected {
+        return Err(format!(
+            "binutils-tcc transcript `{}` is `{actual}`, expected `{}`",
+            expectation.field, expectation.expected
+        ));
     }
     Ok(())
 }
@@ -2104,12 +2792,12 @@ fn require_non_empty_json_string(value: &serde_json::Value, field: &str) -> Resu
 }
 
 fn require_json_bool(value: &serde_json::Value, field: &str, expected: bool) -> Result<(), String> {
-    let actual = value
+    let is_actual = value
         .get(field)
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .ok_or_else(|| format!("binutils-tcc transcript missing bool field `{field}`"))?;
-    if actual != expected {
-        return Err(format!("binutils-tcc transcript `{field}` is {actual}, expected {expected}"));
+    if is_actual != expected {
+        return Err(format!("binutils-tcc transcript `{field}` is {is_actual}, expected {expected}"));
     }
     Ok(())
 }
@@ -2150,45 +2838,42 @@ enum FileState {
 /// `stub/atan2.c`, `stub-objc.c`, `placeholders` in comment prose.
 /// Also rejects heredoc delimiters (`'STUB'`) and heredoc terminators
 /// (`STUB` on a line with only optional whitespace around it).
-fn marker_is_standalone(content: &str, marker: &str) -> bool {
+fn marker_is_standalone(content: &str, marker: impl AsRef<str>) -> bool {
     let lower = content.to_ascii_lowercase();
-    let search = marker.to_ascii_lowercase();
-    let mut start = 0;
-    while let Some(pos) = lower[start..].find(&search) {
-        let abs = start + pos;
-        let end = abs + search.len();
-        // Word boundary check: reject if adjacent to alphanumeric, underscore,
-        // dot, dash, or forward slash.
-        let prev_is_word = abs > 0
-            && (lower[..abs].chars().last().unwrap().is_ascii_alphanumeric()
-                || lower[..abs].ends_with('_')
-                || lower[..abs].ends_with('.')
-                || lower[..abs].ends_with('-'));
-        let next_is_word = end < lower.len()
-            && (lower[end..].chars().next().unwrap().is_ascii_alphanumeric()
-                || lower[end..].starts_with('_')
-                || lower[end..].starts_with('/')
-                || lower[end..].starts_with('-'));
-        // Reject quote-bounded matches: `'STUB'` is a heredoc delimiter,
-        // not a placeholder marker.
-        let prev_is_quote = abs > 0 && lower[..abs].ends_with('\'');
-        let next_is_quote = end < lower.len() && lower[end..].starts_with('\'');
-        // Reject heredoc terminators: marker where everything before it
-        // on the line is whitespace/newline, and everything after it on
-        // the line is whitespace/newline (marker is the sole non-whitespace).
-        // Find the start of the current line.
-        let line_start = lower[..abs].rfind('\n').map(|i| i + 1).unwrap_or(0);
-        let line_before = &lower[line_start..abs];
-        let prev_line_is_blank = line_before.chars().all(|c| c == ' ' || c == '\t');
-        let after = &lower[end..];
-        let next_line_is_blank = after.chars().take_while(|c| *c != '\n').all(|c| c == ' ' || c == '\t');
-        let is_heredoc_terminator = prev_line_is_blank && next_line_is_blank;
-        // Reject if any of these are word characters, quote-bounded,
-        // or a heredoc terminator.
-        if !(prev_is_word || next_is_word || (prev_is_quote && next_is_quote) || is_heredoc_terminator) {
+    let search = marker.as_ref().to_ascii_lowercase();
+    if search.is_empty() {
+        return false;
+    }
+    assert!(!search.is_empty());
+    assert_eq!(search, search.to_ascii_lowercase());
+    for (absolute_index, _) in lower.match_indices(&search) {
+        let Some(end_index) = absolute_index.checked_add(search.len()) else {
+            return false;
+        };
+        let before = lower.get(..absolute_index).unwrap_or("");
+        let after = lower.get(end_index..).unwrap_or("");
+        let is_prev_word = before.chars().last().is_some_and(|character| character.is_ascii_alphanumeric())
+            || before.ends_with('_')
+            || before.ends_with('.')
+            || before.ends_with('-');
+        let is_next_word = after.chars().next().is_some_and(|character| character.is_ascii_alphanumeric())
+            || after.starts_with('_')
+            || after.starts_with('/')
+            || after.starts_with('-');
+        let is_prev_quote = before.ends_with('\'');
+        let is_next_quote = after.starts_with('\'');
+        let line_start = before.rfind('\n').and_then(|index| index.checked_add(1)).unwrap_or(0);
+        let line_before = before.get(line_start..).unwrap_or("");
+        let is_prev_line_blank = line_before.chars().all(|character| character == ' ' || character == '\t');
+        let is_next_line_blank = after
+            .chars()
+            .take_while(|character| *character != '\n')
+            .all(|character| character == ' ' || character == '\t');
+        let is_heredoc_terminator = is_prev_line_blank && is_next_line_blank;
+        let is_rejected = is_prev_word || is_next_word || (is_prev_quote && is_next_quote) || is_heredoc_terminator;
+        if !is_rejected {
             return true;
         }
-        start = abs + 1;
     }
     false
 }
@@ -2201,7 +2886,7 @@ fn inspect_derivation(path: &Path) -> FileState {
             FileState::Missing
         };
     };
-    if PLACEHOLDER_MARKERS.iter().any(|marker| marker_is_standalone(&content, marker)) {
+    if PLACEHOLDER_MARKERS.iter().any(|marker| marker_is_standalone(&content, *marker)) {
         FileState::Placeholder
     } else {
         FileState::Present
@@ -2214,386 +2899,401 @@ const GUIX_STAGEX: &[ParityAxis] = &[ParityAxis::Guix, ParityAxis::Stagex];
 const GUIX_ONLY: &[ParityAxis] = &[ParityAxis::Guix];
 const STAGEX_ONLY: &[ParityAxis] = &[ParityAxis::Stagex];
 
-fn parity_stage_specs() -> &'static [StageSpec] {
-    &[
-        StageSpec {
-            id: "seed.hex0",
-            title: "Audited hex0 seed",
-            axes: ALL_AXES,
-            lineage: "stagex",
-            derivation: Some("stage0-posix.ncl"),
-            expected_complete: true,
-            graph_evidence: "stage0-posix derivation present",
-            semantic_evidence: "seed size/source audit required",
-            proof_evidence: "stagex lineage digest required",
-            notes: "root trust is environmental until audited-seed proof is bound",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "stage0.transition-tools",
-            title: "M0/M1/hex2/kaem transition tools",
-            axes: ALL_AXES,
-            lineage: "live-bootstrap",
-            derivation: Some("stage0-posix.ncl"),
-            expected_complete: true,
-            graph_evidence: "stage0-posix derivation present",
-            semantic_evidence: "stage0 toolchain smoke required",
-            proof_evidence: "stage graph digest required",
-            notes: "covers stage0-posix handoff rather than host compiler trust",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "mes",
-            title: "Mes bootstrap",
-            axes: ALL_AXES,
-            lineage: "live-bootstrap",
-            derivation: Some("mes.ncl"),
-            expected_complete: true,
-            graph_evidence: "mes derivation present",
-            semantic_evidence: "mes runtime smoke required",
-            proof_evidence: "source transcript required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "tinycc.mes",
-            title: "TinyCC Mes-linked handoff",
-            axes: ALL_AXES,
-            lineage: "live-bootstrap",
-            derivation: Some("tinycc-mes.ncl"),
-            expected_complete: true,
-            graph_evidence: "tinycc-mes derivation present",
-            semantic_evidence: "version/object smoke required",
-            proof_evidence: "source transcript required",
-            notes: "Mes runtime defects remain important gap-report details",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "tinycc.0.9.27",
-            title: "TinyCC 0.9.27 handoff",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("tinycc.ncl"),
-            expected_complete: true,
-            graph_evidence: "tinycc derivation present",
-            semantic_evidence: "compile/link smoke required",
-            proof_evidence: "source transcript required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "tcc-musl-prep",
-            title: "TCC musl preparation",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("tcc-musl-prep.ncl"),
-            expected_complete: true,
-            graph_evidence: "tcc-musl-prep derivation present",
-            semantic_evidence: "runtime validation required",
-            proof_evidence: "source transcript required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "musl.tcc",
-            title: "musl 1.1.24 via TCC",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("musl-1.1.24-tcc.ncl"),
-            expected_complete: true,
-            graph_evidence: "musl-tcc derivation present",
-            semantic_evidence: "libc startup smoke required",
-            proof_evidence: "source transcript required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "tcc-musl",
-            title: "TCC on musl",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("tcc-musl.ncl"),
-            expected_complete: true,
-            graph_evidence: "tcc-musl derivation present",
-            semantic_evidence: "runtime validation required",
-            proof_evidence: "source transcript required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "make.3.82",
-            title: "GNU Make 3.82",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("make-tcc.ncl"),
-            expected_complete: true,
-            graph_evidence: "make-tcc derivation present",
-            semantic_evidence: "real recipe smoke required",
-            proof_evidence: "source transcript required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "patch.2.5.9",
-            title: "patch 2.5.9",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("patch-tcc.ncl"),
-            expected_complete: true,
-            graph_evidence: "patch-tcc derivation present",
-            semantic_evidence: "runtime validation required",
-            proof_evidence: "source transcript required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "grep.2.4",
-            title: "grep 2.4",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("grep-2.4-musl.ncl"),
-            expected_complete: true,
-            graph_evidence: "grep derivation present",
-            semantic_evidence: "runtime validation required",
-            proof_evidence: "source transcript required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "sed.4.0.9",
-            title: "sed 4.0.9",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("sed-4.0.9-musl.ncl"),
-            expected_complete: true,
-            graph_evidence: "sed derivation present",
-            semantic_evidence: "runtime validation required",
-            proof_evidence: "source transcript required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "archive-tools",
-            title: "bzip2/gzip/tar archive tools",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("tar-tcc.ncl"),
-            expected_complete: true,
-            graph_evidence: "tar plus bzip2/gzip derivations present",
-            semantic_evidence: "archive round-trip smokes required",
-            proof_evidence: "source transcript required",
-            notes: "gap report also checks bzip2/gzip rows through explicit derivations",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "coreutils.5",
-            title: "coreutils 5.0",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("coreutils-5.0-musl.ncl"),
-            expected_complete: true,
-            graph_evidence: "coreutils 5.0 derivation present",
-            semantic_evidence: "runtime validation required",
-            proof_evidence: "source transcript required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "coreutils.6",
-            title: "coreutils 6.10",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("coreutils-6.10-musl.ncl"),
-            expected_complete: true,
-            graph_evidence: "coreutils 6.10 derivation present",
-            semantic_evidence: "runtime validation required",
-            proof_evidence: "source transcript required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "parser-generators",
-            title: "bison/flex/oyacc parser generators",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("bison-3.4.1-musl.ncl"),
-            expected_complete: true,
-            graph_evidence: "bison plus flex/oyacc derivations present",
-            semantic_evidence: "generator smoke required",
-            proof_evidence: "source transcript required",
-            notes: "gap report also requires flex and oyacc derivations in repository",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "autotools",
-            title: "m4/libtool/autoconf/automake ladder",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("autoconf-2.69.ncl"),
-            expected_complete: true,
-            graph_evidence: "autotools terminal derivation present",
-            semantic_evidence: "configure-generation smokes required",
-            proof_evidence: "source transcript required",
-            notes: "intermediate autoconf/automake versions remain part of map",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "perl.ladder",
-            title: "Perl ladder",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("perl-5.6.2-musl.ncl"),
-            expected_complete: true,
-            graph_evidence: "Perl terminal derivation present",
-            semantic_evidence: "Perl smoke required",
-            proof_evidence: "source transcript required",
-            notes: "Perl 5.000 through 5.6.2 are mapped",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "math-libs",
-            title: "GMP/MPFR/MPC",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("mpc-1.2.1.ncl"),
-            expected_complete: true,
-            graph_evidence: "MPC terminal derivation present",
-            semantic_evidence: "library link smokes required",
-            proof_evidence: "source transcript required",
-            notes: "MPC upstream heading mismatch remains documented",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "binutils.tcc",
-            title: "binutils TCC bridge",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("binutils-tcc.ncl"),
-            expected_complete: false,
-            graph_evidence: "binutils-tcc derivation present",
-            semantic_evidence: "checked binutils-tcc tool transcript required for as/ld/ar/ranlib/nm/objcopy",
-            proof_evidence: "source transcript plus no-host-fallback markers required",
-            notes: "bridge/omitted-member output must not count as full parity; transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json records schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses; row remains partial until native/full-source binutils correctness is proven",
-            evidence_check: EvidenceCheck::BinutilsTccToolTranscript,
-        },
-        StageSpec {
-            id: "gcc.4.0",
-            title: "GCC 4.0",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("gcc-4.0.ncl"),
-            expected_complete: false,
-            graph_evidence: "late graph completion recorded",
-            semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars+function-call+array-index+struct-field+pointer-deref, demangle single-short, and generator boundary smokes only; native compiler correctness not proven",
-            proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, native-demangle receipt, native-generator receipt, and native-cc1 build/source-frontier receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, array-index, struct-field, and pointer-deref slices, native-demangle receipt at bootstrap/evidence/gcc-4.0-native-demangle-slice.json records bounded single-short Itanium demangle semantics, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab, genoutput, genemit, genrecog, and genextract slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler/demangler correctness is still unproven",
-            evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
-        },
-        StageSpec {
-            id: "gcc.4.7",
-            title: "GCC 4.7",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("gcc-4.7.ncl"),
-            expected_complete: false,
-            graph_evidence: "derivation present",
-            semantic_evidence: "checked C/C++/C++11 provider contract only; native correctness evidence required",
-            proof_evidence: "source transcript and checked C++ provider contract required",
-            notes: "checked receipt at bootstrap/evidence/gcc-4.7-cxx-provider-contract.json validates the C/C++ configure/build/install/smoke contract; row remains partial until native/full GCC 4.7 correctness is proven",
-            evidence_check: EvidenceCheck::Gcc47CxxProviderContract,
-        },
-        StageSpec {
-            id: "gcc.10",
-            title: "GCC 10",
-            axes: LIVE_GUIX,
-            lineage: "live-bootstrap",
-            derivation: Some("gcc-10.ncl"),
-            expected_complete: false,
-            graph_evidence: "derivation present",
-            semantic_evidence: "checked C/C++/C++11 provider contract only; native correctness evidence required",
-            proof_evidence: "source transcript and checked GCC 10 provider contract required",
-            notes: "checked receipt at bootstrap/evidence/gcc-10-provider-contract.json validates the C/C++ configure/build/install/smoke contract; row remains partial until native/full GCC 10 correctness is proven",
-            evidence_check: EvidenceCheck::Gcc10ProviderContract,
-        },
-        StageSpec {
-            id: "full-musl-binutils",
-            title: "Full musl/binutils handoff",
-            axes: LIVE_GUIX,
-            lineage: "guix",
-            derivation: Some("binutils-full.ncl"),
-            expected_complete: false,
-            graph_evidence: "binutils-full plus musl-full derivations present",
-            semantic_evidence: "full toolchain smokes required",
-            proof_evidence: "source-root proof and checked full musl/binutils provider contract required",
-            notes: "checked receipt at bootstrap/evidence/full-musl-binutils-provider-contract.json validates the musl 1.2.5 and binutils 2.41 configure/build/install/smoke contract; row remains partial until full toolchain correctness and source-root proof are proven",
-            evidence_check: EvidenceCheck::FullMuslBinutilsProviderContract,
-        },
-        StageSpec {
-            id: "seed-full",
-            title: "Normalized full source seed provider",
-            axes: GUIX_ONLY,
-            lineage: "guix",
-            derivation: Some("seed-full.ncl"),
-            expected_complete: true,
-            graph_evidence: "seed-full derivation present",
-            semantic_evidence: "source-root provider contract validation present",
-            proof_evidence: "provider digest/transcript remains required before broader Guix parity",
-            notes: "source-root provider contract evidence only; does not satisfy StageX lineage evidence",
-            evidence_check: EvidenceCheck::SeedFullSourceRootContract,
-        },
-        StageSpec {
-            id: "seed-full.stagex-lineage",
-            title: "StageX lineage normalized seed provider",
-            axes: STAGEX_ONLY,
-            lineage: "stagex",
-            derivation: None,
-            expected_complete: false,
-            graph_evidence: "StageX lineage provider derivation/proof not yet bound",
-            semantic_evidence: "audited lineage provider contract validation required",
-            proof_evidence: "lineage provider digest and transcript required",
-            notes: "Guix source-root seed-full evidence must not satisfy this StageX row; checked scaffold receipt at bootstrap/evidence/stagex-lineage-provider-receipt.json records provider_kind=stagex-lineage but does not prove audited lineage",
-            evidence_check: EvidenceCheck::StagexLineageProviderReceipt,
-        },
-        StageSpec {
-            id: "selftest",
-            title: "Bootstrap selftest",
-            axes: GUIX_STAGEX,
-            lineage: "crunch",
-            derivation: Some("selftest.ncl"),
-            expected_complete: true,
-            graph_evidence: "selftest derivation present",
-            semantic_evidence: "bootstrap selftest transcript required",
-            proof_evidence: "proof bundle digest required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "integration-test",
-            title: "Bootstrap integration test",
-            axes: GUIX_STAGEX,
-            lineage: "crunch",
-            derivation: Some("integration-test.ncl"),
-            expected_complete: true,
-            graph_evidence: "integration-test derivation present",
-            semantic_evidence: "integration transcript required",
-            proof_evidence: "proof bundle digest required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
-        },
-        StageSpec {
-            id: "crunch.self-build",
-            title: "Crunch self-build proof",
-            axes: GUIX_STAGEX,
-            lineage: "crunch",
-            derivation: Some("crunch.ncl"),
-            expected_complete: false,
-            graph_evidence: "crunch derivation present",
-            semantic_evidence: "stage1/stage2 binary comparison required",
-            proof_evidence: "full proof bundle required",
-            notes: "release evidence must bind selected provider kind; checked receipt at bootstrap/evidence/crunch-self-build-provider-kind-linkage.json validates proof_identity/proof_linkage/prerequisites provider-kind equality but does not prove full self-build",
-            evidence_check: EvidenceCheck::RealSelfBuildProof,
-        },
-    ]
+const BOOTSTRAP_FOUNDATION_STAGE_SPECS: &[StageSpec] = &[
+    StageSpec {
+        id: "seed.hex0",
+        title: "Audited hex0 seed",
+        axes: ALL_AXES,
+        lineage: "stagex",
+        derivation: Some("stage0-posix.ncl"),
+        expected_complete: true,
+        graph_evidence: "stage0-posix derivation present",
+        semantic_evidence: "seed size/source audit required",
+        proof_evidence: "stagex lineage digest required",
+        notes: "root trust is environmental until audited-seed proof is bound",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "stage0.transition-tools",
+        title: "M0/M1/hex2/kaem transition tools",
+        axes: ALL_AXES,
+        lineage: "live-bootstrap",
+        derivation: Some("stage0-posix.ncl"),
+        expected_complete: true,
+        graph_evidence: "stage0-posix derivation present",
+        semantic_evidence: "stage0 toolchain smoke required",
+        proof_evidence: "stage graph digest required",
+        notes: "covers stage0-posix handoff rather than host compiler trust",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "mes",
+        title: "Mes bootstrap",
+        axes: ALL_AXES,
+        lineage: "live-bootstrap",
+        derivation: Some("mes.ncl"),
+        expected_complete: true,
+        graph_evidence: "mes derivation present",
+        semantic_evidence: "mes runtime smoke required",
+        proof_evidence: "source transcript required",
+        notes: "",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "tinycc.mes",
+        title: "TinyCC Mes-linked handoff",
+        axes: ALL_AXES,
+        lineage: "live-bootstrap",
+        derivation: Some("tinycc-mes.ncl"),
+        expected_complete: true,
+        graph_evidence: "tinycc-mes derivation present",
+        semantic_evidence: "version/object smoke required",
+        proof_evidence: "source transcript required",
+        notes: "Mes runtime defects remain important gap-report details",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "tinycc.0.9.27",
+        title: "TinyCC 0.9.27 handoff",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("tinycc.ncl"),
+        expected_complete: true,
+        graph_evidence: "tinycc derivation present",
+        semantic_evidence: "compile/link smoke required",
+        proof_evidence: "source transcript required",
+        notes: "",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "tcc-musl-prep",
+        title: "TCC musl preparation",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("tcc-musl-prep.ncl"),
+        expected_complete: true,
+        graph_evidence: "tcc-musl-prep derivation present",
+        semantic_evidence: "runtime validation required",
+        proof_evidence: "source transcript required",
+        notes: "",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "musl.tcc",
+        title: "musl 1.1.24 via TCC",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("musl-1.1.24-tcc.ncl"),
+        expected_complete: true,
+        graph_evidence: "musl-tcc derivation present",
+        semantic_evidence: "libc startup smoke required",
+        proof_evidence: "source transcript required",
+        notes: "",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "tcc-musl",
+        title: "TCC on musl",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("tcc-musl.ncl"),
+        expected_complete: true,
+        graph_evidence: "tcc-musl derivation present",
+        semantic_evidence: "runtime validation required",
+        proof_evidence: "source transcript required",
+        notes: "",
+        evidence_check: EvidenceCheck::None,
+    },
+];
+
+const BOOTSTRAP_TOOL_STAGE_SPECS: &[StageSpec] = &[
+    StageSpec {
+        id: "make.3.82",
+        title: "GNU Make 3.82",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("make-tcc.ncl"),
+        expected_complete: true,
+        graph_evidence: "make-tcc derivation present",
+        semantic_evidence: "real recipe smoke required",
+        proof_evidence: "source transcript required",
+        notes: "",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "patch.2.5.9",
+        title: "patch 2.5.9",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("patch-tcc.ncl"),
+        expected_complete: true,
+        graph_evidence: "patch-tcc derivation present",
+        semantic_evidence: "runtime validation required",
+        proof_evidence: "source transcript required",
+        notes: "",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "grep.2.4",
+        title: "grep 2.4",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("grep-2.4-musl.ncl"),
+        expected_complete: true,
+        graph_evidence: "grep derivation present",
+        semantic_evidence: "runtime validation required",
+        proof_evidence: "source transcript required",
+        notes: "",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "sed.4.0.9",
+        title: "sed 4.0.9",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("sed-4.0.9-musl.ncl"),
+        expected_complete: true,
+        graph_evidence: "sed derivation present",
+        semantic_evidence: "runtime validation required",
+        proof_evidence: "source transcript required",
+        notes: "",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "archive-tools",
+        title: "bzip2/gzip/tar archive tools",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("tar-tcc.ncl"),
+        expected_complete: true,
+        graph_evidence: "tar plus bzip2/gzip derivations present",
+        semantic_evidence: "archive round-trip smokes required",
+        proof_evidence: "source transcript required",
+        notes: "gap report also checks bzip2/gzip rows through explicit derivations",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "coreutils.5",
+        title: "coreutils 5.0",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("coreutils-5.0-musl.ncl"),
+        expected_complete: true,
+        graph_evidence: "coreutils 5.0 derivation present",
+        semantic_evidence: "runtime validation required",
+        proof_evidence: "source transcript required",
+        notes: "",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "coreutils.6",
+        title: "coreutils 6.10",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("coreutils-6.10-musl.ncl"),
+        expected_complete: true,
+        graph_evidence: "coreutils 6.10 derivation present",
+        semantic_evidence: "runtime validation required",
+        proof_evidence: "source transcript required",
+        notes: "",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "parser-generators",
+        title: "bison/flex/oyacc parser generators",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("bison-3.4.1-musl.ncl"),
+        expected_complete: true,
+        graph_evidence: "bison plus flex/oyacc derivations present",
+        semantic_evidence: "generator smoke required",
+        proof_evidence: "source transcript required",
+        notes: "gap report also requires flex and oyacc derivations in repository",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "autotools",
+        title: "m4/libtool/autoconf/automake ladder",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("autoconf-2.69.ncl"),
+        expected_complete: true,
+        graph_evidence: "autotools terminal derivation present",
+        semantic_evidence: "configure-generation smokes required",
+        proof_evidence: "source transcript required",
+        notes: "intermediate autoconf/automake versions remain part of map",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "perl.ladder",
+        title: "Perl ladder",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("perl-5.6.2-musl.ncl"),
+        expected_complete: true,
+        graph_evidence: "Perl terminal derivation present",
+        semantic_evidence: "Perl smoke required",
+        proof_evidence: "source transcript required",
+        notes: "Perl 5.000 through 5.6.2 are mapped",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "math-libs",
+        title: "GMP/MPFR/MPC",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("mpc-1.2.1.ncl"),
+        expected_complete: true,
+        graph_evidence: "MPC terminal derivation present",
+        semantic_evidence: "library link smokes required",
+        proof_evidence: "source transcript required",
+        notes: "MPC upstream heading mismatch remains documented",
+        evidence_check: EvidenceCheck::None,
+    },
+];
+
+const BOOTSTRAP_GAP_STAGE_SPECS: &[StageSpec] = &[
+    StageSpec {
+        id: "binutils.tcc",
+        title: "binutils TCC bridge",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("binutils-tcc.ncl"),
+        expected_complete: false,
+        graph_evidence: "binutils-tcc derivation present",
+        semantic_evidence: "checked binutils-tcc tool transcript required for as/ld/ar/ranlib/nm/objcopy",
+        proof_evidence: "source transcript plus no-host-fallback markers required",
+        notes: "bridge/omitted-member output must not count as full parity; transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json records schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses; row remains partial until native/full-source binutils correctness is proven",
+        evidence_check: EvidenceCheck::BinutilsTccToolTranscript,
+    },
+    StageSpec {
+        id: "gcc.4.0",
+        title: "GCC 4.0",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("gcc-4.0.ncl"),
+        expected_complete: false,
+        graph_evidence: "late graph completion recorded",
+        semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars+function-call+array-index+struct-field+pointer-deref, demangle single-short, and generator boundary smokes only; native compiler correctness not proven",
+        proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, native-demangle receipt, native-generator receipt, and native-cc1 build/source-frontier receipt required",
+        notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, array-index, struct-field, and pointer-deref slices, native-demangle receipt at bootstrap/evidence/gcc-4.0-native-demangle-slice.json records bounded single-short Itanium demangle semantics, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab, genoutput, genemit, genrecog, and genextract slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler/demangler correctness is still unproven",
+        evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
+    },
+    StageSpec {
+        id: "gcc.4.7",
+        title: "GCC 4.7",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("gcc-4.7.ncl"),
+        expected_complete: false,
+        graph_evidence: "derivation present",
+        semantic_evidence: "checked C/C++/C++11 provider contract only; native correctness evidence required",
+        proof_evidence: "source transcript and checked C++ provider contract required",
+        notes: "checked receipt at bootstrap/evidence/gcc-4.7-cxx-provider-contract.json validates the C/C++ configure/build/install/smoke contract; row remains partial until native/full GCC 4.7 correctness is proven",
+        evidence_check: EvidenceCheck::Gcc47CxxProviderContract,
+    },
+    StageSpec {
+        id: "gcc.10",
+        title: "GCC 10",
+        axes: LIVE_GUIX,
+        lineage: "live-bootstrap",
+        derivation: Some("gcc-10.ncl"),
+        expected_complete: false,
+        graph_evidence: "derivation present",
+        semantic_evidence: "checked C/C++/C++11 provider contract only; native correctness evidence required",
+        proof_evidence: "source transcript and checked GCC 10 provider contract required",
+        notes: "checked receipt at bootstrap/evidence/gcc-10-provider-contract.json validates the C/C++ configure/build/install/smoke contract; row remains partial until native/full GCC 10 correctness is proven",
+        evidence_check: EvidenceCheck::Gcc10ProviderContract,
+    },
+    StageSpec {
+        id: "full-musl-binutils",
+        title: "Full musl/binutils handoff",
+        axes: LIVE_GUIX,
+        lineage: "guix",
+        derivation: Some("binutils-full.ncl"),
+        expected_complete: false,
+        graph_evidence: "binutils-full plus musl-full derivations present",
+        semantic_evidence: "full toolchain smokes required",
+        proof_evidence: "source-root proof and checked full musl/binutils provider contract required",
+        notes: "checked receipt at bootstrap/evidence/full-musl-binutils-provider-contract.json validates the musl 1.2.5 and binutils 2.41 configure/build/install/smoke contract; row remains partial until full toolchain correctness and source-root proof are proven",
+        evidence_check: EvidenceCheck::FullMuslBinutilsProviderContract,
+    },
+    StageSpec {
+        id: "seed-full",
+        title: "Normalized full source seed provider",
+        axes: GUIX_ONLY,
+        lineage: "guix",
+        derivation: Some("seed-full.ncl"),
+        expected_complete: true,
+        graph_evidence: "seed-full derivation present",
+        semantic_evidence: "source-root provider contract validation present",
+        proof_evidence: "provider digest/transcript remains required before broader Guix parity",
+        notes: "source-root provider contract evidence only; does not satisfy StageX lineage evidence",
+        evidence_check: EvidenceCheck::SeedFullSourceRootContract,
+    },
+    StageSpec {
+        id: "seed-full.stagex-lineage",
+        title: "StageX lineage normalized seed provider",
+        axes: STAGEX_ONLY,
+        lineage: "stagex",
+        derivation: None,
+        expected_complete: false,
+        graph_evidence: "StageX lineage provider derivation/proof not yet bound",
+        semantic_evidence: "audited lineage provider contract validation required",
+        proof_evidence: "lineage provider digest and transcript required",
+        notes: "Guix source-root seed-full evidence must not satisfy this StageX row; checked scaffold receipt at bootstrap/evidence/stagex-lineage-provider-receipt.json records provider_kind=stagex-lineage but does not prove audited lineage",
+        evidence_check: EvidenceCheck::StagexLineageProviderReceipt,
+    },
+];
+
+const BOOTSTRAP_PROOF_STAGE_SPECS: &[StageSpec] = &[
+    StageSpec {
+        id: "selftest",
+        title: "Bootstrap selftest",
+        axes: GUIX_STAGEX,
+        lineage: "crunch",
+        derivation: Some("selftest.ncl"),
+        expected_complete: true,
+        graph_evidence: "selftest derivation present",
+        semantic_evidence: "bootstrap selftest transcript required",
+        proof_evidence: "proof bundle digest required",
+        notes: "",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "integration-test",
+        title: "Bootstrap integration test",
+        axes: GUIX_STAGEX,
+        lineage: "crunch",
+        derivation: Some("integration-test.ncl"),
+        expected_complete: true,
+        graph_evidence: "integration-test derivation present",
+        semantic_evidence: "integration transcript required",
+        proof_evidence: "proof bundle digest required",
+        notes: "",
+        evidence_check: EvidenceCheck::None,
+    },
+    StageSpec {
+        id: "crunch.self-build",
+        title: "Crunch self-build proof",
+        axes: GUIX_STAGEX,
+        lineage: "crunch",
+        derivation: Some("crunch.ncl"),
+        expected_complete: false,
+        graph_evidence: "crunch derivation present",
+        semantic_evidence: "stage1/stage2 binary comparison required",
+        proof_evidence: "full proof bundle required",
+        notes: "release evidence must bind selected provider kind; checked receipt at bootstrap/evidence/crunch-self-build-provider-kind-linkage.json validates proof_identity/proof_linkage/prerequisites provider-kind equality but does not prove full self-build",
+        evidence_check: EvidenceCheck::RealSelfBuildProof,
+    },
+];
+
+fn parity_stage_specs() -> impl Iterator<Item = &'static StageSpec> {
+    BOOTSTRAP_FOUNDATION_STAGE_SPECS
+        .iter()
+        .chain(BOOTSTRAP_TOOL_STAGE_SPECS)
+        .chain(BOOTSTRAP_GAP_STAGE_SPECS)
+        .chain(BOOTSTRAP_PROOF_STAGE_SPECS)
 }
 
 #[cfg(test)]
