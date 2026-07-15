@@ -5,8 +5,8 @@ use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub const MAX_DIAGNOSTICS: u32 = 256;
-const DIAGNOSTIC_LIMIT_INDEX: usize = 255;
+pub(crate) const MAX_DIAGNOSTIC_COUNT: usize = 256;
+const DIAGNOSTIC_LIMIT_INDEX: usize = MAX_DIAGNOSTIC_COUNT.saturating_sub(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -25,18 +25,20 @@ pub struct Diagnostic {
     pub message: String,
 }
 
-pub(crate) fn error(code: &str, subject: &str, message: &str) -> Diagnostic {
-    diagnostic(DiagnosticSeverity::Error, code, subject, message)
+pub(crate) struct ErrorDiagnostic<'a> {
+    pub code: &'a str,
+    pub subject: &'a str,
+    pub message: &'a str,
 }
 
-fn diagnostic(severity: DiagnosticSeverity, code: &str, subject: &str, message: &str) -> Diagnostic {
-    debug_assert!(!code.is_empty());
-    debug_assert!(!message.is_empty());
+pub(crate) fn error(input: ErrorDiagnostic<'_>) -> Diagnostic {
+    debug_assert!(!input.code.is_empty());
+    debug_assert!(!input.message.is_empty());
     Diagnostic {
-        severity,
-        code: String::from(code),
-        subject: String::from(subject),
-        message: String::from(message),
+        severity: DiagnosticSeverity::Error,
+        code: String::from(input.code),
+        subject: String::from(input.subject),
+        message: String::from(input.message),
     }
 }
 
@@ -45,15 +47,15 @@ pub(crate) fn ordered(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
     diagnostics.dedup();
     if diagnostics.len() > DIAGNOSTIC_LIMIT_INDEX {
         diagnostics.truncate(DIAGNOSTIC_LIMIT_INDEX);
-        diagnostics.extend(vec![error(
-            "diagnostic-limit-exceeded",
-            "diagnostics",
-            "diagnostic collection exceeded the fixed bound",
-        )]);
+        diagnostics.extend(vec![error(ErrorDiagnostic {
+            code: "diagnostic-limit-exceeded",
+            subject: "diagnostics",
+            message: "diagnostic collection exceeded the fixed bound",
+        })]);
         diagnostics.sort();
     }
     debug_assert!(diagnostics.windows(crate::ADJACENT_WINDOW_LENGTH).all(|pair| pair[0] <= pair[1]));
-    debug_assert!(u32::try_from(diagnostics.len()).unwrap_or(u32::MAX) <= MAX_DIAGNOSTICS);
+    debug_assert!(diagnostics.len() <= MAX_DIAGNOSTIC_COUNT);
     diagnostics
 }
 

@@ -9,6 +9,8 @@ use crate::Diagnostic;
 use crate::ReferenceProfile;
 use crate::SupportEntry;
 use crate::SupportStatus;
+use crate::diagnostic::ErrorDiagnostic;
+use crate::diagnostic::MAX_DIAGNOSTIC_COUNT;
 use crate::diagnostic::error;
 use crate::diagnostic::has_errors;
 use crate::diagnostic::ordered;
@@ -21,48 +23,57 @@ pub struct SupportComparison {
 }
 
 pub fn compare_support_matrix(profile: ReferenceProfile, observed: Vec<SupportEntry>) -> SupportComparison {
-    let mut diagnostics = Vec::new();
+    let reserved_diagnostic_count = profile
+        .support_matrix
+        .len()
+        .saturating_add(observed.len())
+        .saturating_add(profile.requested_features.len())
+        .min(MAX_DIAGNOSTIC_COUNT);
+    let mut diagnostics = Vec::with_capacity(reserved_diagnostic_count);
     let expected = support_map(&profile.support_matrix, "profile", &mut diagnostics);
     let actual = support_map(&observed, "observed", &mut diagnostics);
     for (feature, expected_status) in &expected {
         match actual.get(feature) {
             Some(actual_status) if actual_status == expected_status => {}
-            Some(_) => diagnostics.push(error(
-                "support-status-mismatch",
-                feature,
-                "observed support status differs from the reviewed profile",
-            )),
-            None => diagnostics.push(error(
-                "missing-support-observation",
-                feature,
-                "observed support matrix omits a reviewed feature",
-            )),
+            Some(_) => diagnostics.push(error(ErrorDiagnostic {
+                code: "support-status-mismatch",
+                subject: feature,
+                message: "observed support status differs from the reviewed profile",
+            })),
+            None => diagnostics.push(error(ErrorDiagnostic {
+                code: "missing-support-observation",
+                subject: feature,
+                message: "observed support matrix omits a reviewed feature",
+            })),
         }
     }
     for feature in actual.keys() {
         if !expected.contains_key(feature) {
-            diagnostics.push(error(
-                "unreviewed-support-observation",
-                feature,
-                "observed support matrix introduces an unreviewed feature",
-            ));
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "unreviewed-support-observation",
+                subject: feature,
+                message: "observed support matrix introduces an unreviewed feature",
+            }));
         }
     }
     for requested in &profile.requested_features {
         if actual.get(requested) != Some(&SupportStatus::Supported) {
-            diagnostics.push(error(
-                "unsupported-feature-requested",
-                requested,
-                "requested feature is not observed as supported",
-            ));
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "unsupported-feature-requested",
+                subject: requested,
+                message: "requested feature is not observed as supported",
+            }));
         }
     }
     let diagnostics = ordered(diagnostics);
-    let matches_profile = !has_errors(&diagnostics);
-    debug_assert_eq!(matches_profile, diagnostics.iter().all(|item| item.severity != crate::DiagnosticSeverity::Error));
+    let is_profile_match = !has_errors(&diagnostics);
+    debug_assert_eq!(
+        is_profile_match,
+        diagnostics.iter().all(|item| item.severity != crate::DiagnosticSeverity::Error)
+    );
     debug_assert!(diagnostics.iter().all(|item| !item.subject.is_empty()));
     SupportComparison {
-        matches_profile,
+        matches_profile: is_profile_match,
         diagnostics,
     }
 }
@@ -75,11 +86,11 @@ fn support_map(
     let mut map = BTreeMap::new();
     for entry in entries {
         if entry.feature.is_empty() || map.insert(entry.feature.clone(), entry.status).is_some() {
-            diagnostics.push(error(
-                "duplicate-support-entry",
-                subject,
-                "support feature names must be unique and non-empty",
-            ));
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "duplicate-support-entry",
+                subject: subject,
+                message: "support feature names must be unique and non-empty",
+            }));
         }
     }
     debug_assert!(map.len() <= entries.len());

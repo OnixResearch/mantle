@@ -12,6 +12,7 @@ use crate::Diagnostic;
 use crate::ReferenceProfile;
 use crate::SourceAdmission;
 use crate::SupportComparison;
+use crate::diagnostic::ErrorDiagnostic;
 use crate::diagnostic::error;
 use crate::diagnostic::has_errors;
 use crate::diagnostic::ordered;
@@ -70,11 +71,11 @@ pub fn build_materialization_report(mut input: ReportBuildInput) -> Result<Mater
     diagnostics.extend(input.source_admission.diagnostics.clone());
     diagnostics.extend(input.support_comparison.diagnostics.clone());
     if input.requested_claim_class != REFERENCE_CLAIM_CLASS {
-        diagnostics.push(error(
-            "unsupported-claim-promotion",
-            "report.claim-class",
-            "SpaceWasm reference evidence cannot be promoted beyond exact materialization facts",
-        ));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "unsupported-claim-promotion",
+            subject: "report.claim-class",
+            message: "SpaceWasm reference evidence cannot be promoted beyond exact materialization facts",
+        }));
     }
     input.checks.sort_by(|left, right| left.check_id.cmp(&right.check_id));
     let diagnostics = ordered(diagnostics);
@@ -97,12 +98,12 @@ pub fn build_materialization_report(mut input: ReportBuildInput) -> Result<Mater
     if has_errors(&diagnostics) && input.requested_claim_class != REFERENCE_CLAIM_CLASS {
         return Err(diagnostics);
     }
-    let report_identity_blake3 = canonical_identity(identity_input).map_err(|_| {
-        vec![error(
-            "report-identity-failed",
-            "report",
-            "materialization report could not be canonically identified",
-        )]
+    let identity = canonical_identity(identity_input).map_err(|_| {
+        vec![error(ErrorDiagnostic {
+            code: "report-identity-failed",
+            subject: "report",
+            message: "materialization report could not be canonically identified",
+        })]
     })?;
     debug_assert!(non_claims.windows(crate::ADJACENT_WINDOW_LENGTH).all(|pair| pair[0] <= pair[1]));
     debug_assert!(!input.requested_claim_class.is_empty());
@@ -118,37 +119,44 @@ pub fn build_materialization_report(mut input: ReportBuildInput) -> Result<Mater
         diagnostics,
         claim_class: input.requested_claim_class,
         non_claims,
-        report_identity_blake3,
+        report_identity_blake3: identity,
     })
 }
 
 pub fn validate_materialization_report(report: MaterializationReport) -> ReportValidation {
     let mut diagnostics = Vec::new();
     if report.schema != MATERIALIZATION_REPORT_SCHEMA {
-        diagnostics.push(error(
-            "unsupported-report-schema",
-            "report.schema",
-            "materialization report schema is unsupported",
-        ));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "unsupported-report-schema",
+            subject: "report.schema",
+            message: "materialization report schema is unsupported",
+        }));
     }
     if report.claim_class != REFERENCE_CLAIM_CLASS {
-        diagnostics.push(error(
-            "unsupported-claim-promotion",
-            "report.claim-class",
-            "report requests an unsupported claim class",
-        ));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "unsupported-claim-promotion",
+            subject: "report.claim-class",
+            message: "report requests an unsupported claim class",
+        }));
     }
     validate_report_non_claims(&report.non_claims, &mut diagnostics);
     let expected_identity = report.report_identity_blake3.clone();
     let identity = canonical_identity(identity_input_from_report(report.clone()));
     if identity.as_ref() != Ok(&expected_identity) {
-        diagnostics.push(error("report-tamper", "report", "report identity does not match canonical report fields"));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "report-tamper",
+            subject: "report",
+            message: "report identity does not match canonical report fields",
+        }));
     }
     let diagnostics = ordered(diagnostics);
-    let valid = !has_errors(&diagnostics);
-    debug_assert_eq!(valid, diagnostics.is_empty());
+    let is_valid = !has_errors(&diagnostics);
+    debug_assert_eq!(is_valid, diagnostics.is_empty());
     debug_assert!(diagnostics.iter().all(|item| !item.code.is_empty()));
-    ReportValidation { valid, diagnostics }
+    ReportValidation {
+        valid: is_valid,
+        diagnostics,
+    }
 }
 
 fn report_disposition(input: &ReportBuildInput, diagnostics: &[Diagnostic]) -> ReportDisposition {
@@ -165,11 +173,19 @@ fn validate_report_non_claims(non_claims: &[String], diagnostics: &mut Vec<Diagn
     let values: BTreeSet<_> = non_claims.iter().map(String::as_str).collect();
     for required in REQUIRED_NON_CLAIMS {
         if !values.contains(required) {
-            diagnostics.push(error("missing-required-non-claim", required, "report omits a required claim boundary"));
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "missing-required-non-claim",
+                subject: required,
+                message: "report omits a required claim boundary",
+            }));
         }
     }
     if values.len() != non_claims.len() {
-        diagnostics.push(error("duplicate-non-claim", "report.non-claims", "report non-claims must be unique"));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "duplicate-non-claim",
+            subject: "report.non-claims",
+            message: "report non-claims must be unique",
+        }));
     }
     debug_assert!(values.len() <= non_claims.len());
     debug_assert!(non_claims.is_empty() || !values.is_empty());

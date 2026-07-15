@@ -13,6 +13,8 @@ use crate::BundleRole;
 use crate::Diagnostic;
 use crate::ParentEdge;
 use crate::ReferenceProfile;
+use crate::diagnostic::ErrorDiagnostic;
+use crate::diagnostic::MAX_DIAGNOSTIC_COUNT;
 use crate::diagnostic::error;
 use crate::diagnostic::has_errors;
 use crate::diagnostic::ordered;
@@ -79,10 +81,18 @@ pub fn plan_bundle_parent_edges(
     let mut diagnostics = Vec::new();
     let member_paths: BTreeSet<String> = members.iter().map(|member| member.path.clone()).collect();
     if !member_paths.contains(&root_path) {
-        diagnostics.push(error("missing-parent-root", &root_path, "bundle parent root is not a declared member"));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "missing-parent-root",
+            subject: &root_path,
+            message: "bundle parent root is not a declared member",
+        }));
     }
     if members.iter().filter(|member| member.path == root_path).count() != 1 {
-        diagnostics.push(error("invalid-parent-root", &root_path, "bundle parent root must be unique"));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "invalid-parent-root",
+            subject: &root_path,
+            message: "bundle parent root must be unique",
+        }));
     }
     if has_errors(&diagnostics) {
         return Err(ordered(diagnostics));
@@ -118,11 +128,11 @@ pub fn build_bundle_manifest(mut input: BundleManifestInput) -> Result<BundleMan
         non_claims: input.non_claims.clone(),
     };
     let bundle_identity_blake3 = canonical_identity(identity_input).map_err(|_| {
-        vec![error(
-            "bundle-identity-failed",
-            "bundle",
-            "bundle manifest could not be canonically identified",
-        )]
+        vec![error(ErrorDiagnostic {
+            code: "bundle-identity-failed",
+            subject: "bundle",
+            message: "bundle manifest could not be canonically identified",
+        })]
     })?;
     debug_assert!(!input.members.is_empty());
     debug_assert!(!input.parent_edges.is_empty());
@@ -139,34 +149,50 @@ pub fn build_bundle_manifest(mut input: BundleManifestInput) -> Result<BundleMan
 }
 
 pub fn verify_bundle_manifest(manifest: BundleManifest, measured: Vec<BundleMember>) -> BundleVerification {
-    let mut diagnostics = Vec::new();
+    let reserved_diagnostic_count = manifest.members.len().saturating_add(measured.len()).min(MAX_DIAGNOSTIC_COUNT);
+    let mut diagnostics = Vec::with_capacity(reserved_diagnostic_count);
     if manifest.schema != BUNDLE_MANIFEST_SCHEMA {
-        diagnostics.push(error("unsupported-bundle-schema", "bundle.schema", "bundle manifest schema is unsupported"));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "unsupported-bundle-schema",
+            subject: "bundle.schema",
+            message: "bundle manifest schema is unsupported",
+        }));
     }
     let measured_by_path = member_map(&measured, "measured", &mut diagnostics);
     let declared_by_path = member_map(&manifest.members, "manifest", &mut diagnostics);
     for (path, declared) in &declared_by_path {
         match measured_by_path.get(path) {
             Some(actual) if actual == declared => {}
-            Some(_) => diagnostics.push(error(
-                "bundle-member-tamper",
-                path,
-                "measured member role, size, or BLAKE3 differs from the manifest",
-            )),
-            None => diagnostics.push(error("incomplete-bundle", path, "required bundle member is missing")),
+            Some(_) => diagnostics.push(error(ErrorDiagnostic {
+                code: "bundle-member-tamper",
+                subject: path,
+                message: "measured member role, size, or BLAKE3 differs from the manifest",
+            })),
+            None => diagnostics.push(error(ErrorDiagnostic {
+                code: "incomplete-bundle",
+                subject: path,
+                message: "required bundle member is missing",
+            })),
         }
     }
     for path in measured_by_path.keys() {
         if !declared_by_path.contains_key(path) {
-            diagnostics.push(error("undeclared-bundle-member", path, "bundle contains an undeclared portable member"));
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "undeclared-bundle-member",
+                subject: path,
+                message: "bundle contains an undeclared portable member",
+            }));
         }
     }
     validate_manifest_identity(&manifest, &mut diagnostics);
     let diagnostics = ordered(diagnostics);
-    let valid = !has_errors(&diagnostics);
-    debug_assert_eq!(valid, diagnostics.is_empty());
+    let is_valid = !has_errors(&diagnostics);
+    debug_assert_eq!(is_valid, diagnostics.is_empty());
     debug_assert!(diagnostics.iter().all(|item| !item.code.is_empty()));
-    BundleVerification { valid, diagnostics }
+    BundleVerification {
+        valid: is_valid,
+        diagnostics,
+    }
 }
 
 fn validate_bundle_input(input: &BundleManifestInput) -> Vec<Diagnostic> {
@@ -186,25 +212,29 @@ fn validate_bundle_bounds(input: &BundleManifestInput, diagnostics: &mut Vec<Dia
     if count_exceeds(input.members.len(), input.profile.bounds.max_bundle_members)
         || count_exceeds(input.parent_edges.len(), input.profile.bounds.max_parent_edges)
     {
-        diagnostics.push(error(
-            "bundle-limit",
-            "bundle",
-            "bundle member or parent-edge collection exceeds the profile bound",
-        ));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "bundle-limit",
+            subject: "bundle",
+            message: "bundle member or parent-edge collection exceeds the profile bound",
+        }));
     }
     let mut total_bytes = 0_u64;
     for member in &input.members {
         if member.size_bytes == 0 || member.size_bytes > input.profile.bounds.max_bundle_member_bytes {
-            diagnostics.push(error(
-                "bundle-member-size",
-                &member.path,
-                "bundle member size is zero or exceeds the profile bound",
-            ));
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "bundle-member-size",
+                subject: &member.path,
+                message: "bundle member size is zero or exceeds the profile bound",
+            }));
         }
         total_bytes = total_bytes.saturating_add(member.size_bytes);
     }
     if total_bytes > input.profile.bounds.max_bundle_total_bytes {
-        diagnostics.push(error("bundle-total-size", "bundle", "bundle total byte count exceeds the profile bound"));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "bundle-total-size",
+            subject: "bundle",
+            message: "bundle total byte count exceeds the profile bound",
+        }));
     }
     debug_assert!(total_bytes > 0 || !diagnostics.is_empty());
     debug_assert!(input.members.is_empty() || total_bytes >= input.members[0].size_bytes);
@@ -218,11 +248,11 @@ fn validate_required_roles(
     let role_counts = role_counts(members.values());
     for role in REQUIRED_SINGLETON_ROLES {
         if role_counts.get(&role) != Some(&1_u32) {
-            diagnostics.push(error(
-                "missing-or-duplicate-bundle-role",
-                &role_label(&role),
-                "bundle requires exactly one member for this role",
-            ));
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "missing-or-duplicate-bundle-role",
+                subject: &role_label(&role),
+                message: "bundle requires exactly one member for this role",
+            }));
         }
     }
     for role in [
@@ -233,7 +263,11 @@ fn validate_required_roles(
         BundleRole::CheckReceipt,
     ] {
         if role_counts.get(&role).copied().unwrap_or(0) == 0 {
-            diagnostics.push(error("missing-bundle-role", &role_label(&role), "bundle omits a required repeated role"));
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "missing-bundle-role",
+                subject: &role_label(&role),
+                message: "bundle omits a required repeated role",
+            }));
         }
     }
     debug_assert!(role_counts.len() <= input.members.len());
@@ -286,7 +320,11 @@ fn require_role_digest(
 ) {
     let matching: Vec<_> = members.values().filter(|member| member.role == role).collect();
     if matching.len() != 1 || matching.first().map(|member| &member.digest_blake3) != Some(expected) {
-        diagnostics.push(error(code, &role_label(&role), "bundle member digest differs from the selected profile"));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: code,
+            subject: &role_label(&role),
+            message: "bundle member digest differs from the selected profile",
+        }));
     }
     debug_assert!(matching.len() <= members.len());
     debug_assert!(!code.is_empty());
@@ -301,29 +339,29 @@ fn validate_fixture_and_corpus_members(
         require_path_role(members, &fixture.artifact_path, BundleRole::FixtureArtifact, diagnostics);
         require_path_role(members, &fixture.descriptor_path, BundleRole::FixtureDescriptor, diagnostics);
         if members.get(&fixture.artifact_path).map(|member| &member.digest_blake3) != Some(&fixture.artifact_blake3) {
-            diagnostics.push(error(
-                "fixture-digest-mismatch",
-                &fixture.fixture_id,
-                "fixture bytes differ from the profile",
-            ));
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "fixture-digest-mismatch",
+                subject: &fixture.fixture_id,
+                message: "fixture bytes differ from the profile",
+            }));
         }
         if members.get(&fixture.descriptor_path).map(|member| &member.digest_blake3) != Some(&fixture.descriptor_blake3)
         {
-            diagnostics.push(error(
-                "fixture-descriptor-drift",
-                &fixture.fixture_id,
-                "fixture descriptor bytes differ from the profile",
-            ));
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "fixture-descriptor-drift",
+                subject: &fixture.fixture_id,
+                message: "fixture descriptor bytes differ from the profile",
+            }));
         }
     }
     for corpus in &input.profile.corpora {
         require_path_role(members, &corpus.descriptor_path, BundleRole::CorpusDescriptor, diagnostics);
         if members.get(&corpus.descriptor_path).map(|member| &member.digest_blake3) != Some(&corpus.descriptor_blake3) {
-            diagnostics.push(error(
-                "corpus-drift",
-                &corpus.corpus_id,
-                "corpus descriptor bytes differ from the profile",
-            ));
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "corpus-drift",
+                subject: &corpus.corpus_id,
+                message: "corpus descriptor bytes differ from the profile",
+            }));
         }
     }
     debug_assert!(input.profile.fixtures.is_empty() || !members.is_empty());
@@ -352,23 +390,32 @@ fn validate_parent_edges(
 ) {
     let mut edges = BTreeSet::new();
     for edge in &input.parent_edges {
-        let valid_paths = members.contains_key(&edge.parent_path) && members.contains_key(&edge.child_path);
-        if !valid_paths
-            || edge.parent_path == edge.child_path
-            || edge.relation.is_empty()
-            || !edges.insert(edge.clone())
-        {
-            diagnostics.push(error(
-                "invalid-parent-edge",
-                &edge.child_path,
-                "parent edges must be unique, non-circular, and refer to declared members",
-            ));
+        let is_valid_paths = members.contains_key(&edge.parent_path) && members.contains_key(&edge.child_path);
+        let is_invalid_edge = if !is_valid_paths {
+            true
+        } else if edge.parent_path == edge.child_path {
+            true
+        } else if edge.relation.is_empty() {
+            true
+        } else {
+            !edges.insert(edge.clone())
+        };
+        if is_invalid_edge {
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "invalid-parent-edge",
+                subject: &edge.child_path,
+                message: "parent edges must be unique, non-circular, and refer to declared members",
+            }));
         }
     }
     let children: BTreeSet<_> = input.parent_edges.iter().map(|edge| edge.child_path.as_str()).collect();
-    for path in members.keys() {
-        if !children.contains(path.as_str()) && !is_root_member(members.get(path).expect("declared member")) {
-            diagnostics.push(error("missing-parent-edge", path, "non-root bundle member has no declared parent edge"));
+    for (path, member) in members {
+        if !children.contains(path.as_str()) && !is_root_member(member) {
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "missing-parent-edge",
+                subject: path,
+                message: "non-root bundle member has no declared parent edge",
+            }));
         }
     }
     debug_assert!(edges.len() <= input.parent_edges.len());
@@ -379,15 +426,19 @@ fn validate_non_claims(non_claims: &[String], diagnostics: &mut Vec<Diagnostic>)
     let values: BTreeSet<_> = non_claims.iter().map(String::as_str).collect();
     for required in REQUIRED_NON_CLAIMS {
         if !values.contains(required) {
-            diagnostics.push(error(
-                "missing-required-non-claim",
-                required,
-                "bundle omits a required SpaceWasm claim boundary",
-            ));
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "missing-required-non-claim",
+                subject: required,
+                message: "bundle omits a required SpaceWasm claim boundary",
+            }));
         }
     }
     if values.len() != non_claims.len() {
-        diagnostics.push(error("duplicate-non-claim", "bundle.non-claims", "bundle non-claims must be unique"));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "duplicate-non-claim",
+            subject: "bundle.non-claims",
+            message: "bundle non-claims must be unique",
+        }));
     }
     debug_assert!(values.len() <= non_claims.len());
     debug_assert!(non_claims.is_empty() || !values.is_empty());
@@ -405,11 +456,11 @@ fn validate_manifest_identity(manifest: &BundleManifest, diagnostics: &mut Vec<D
         non_claims: manifest.non_claims.clone(),
     };
     if canonical_identity(input).as_ref() != Ok(&expected) {
-        diagnostics.push(error(
-            "bundle-manifest-tamper",
-            "bundle.manifest",
-            "bundle manifest identity does not match canonical fields",
-        ));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "bundle-manifest-tamper",
+            subject: "bundle.manifest",
+            message: "bundle manifest identity does not match canonical fields",
+        }));
     }
     debug_assert!(!manifest.schema.is_empty());
     debug_assert!(!manifest.profile_id.is_empty());
@@ -431,11 +482,11 @@ fn member_map(
     let mut map = BTreeMap::new();
     for member in members {
         if !is_safe_relative_path(&member.path) || map.insert(member.path.clone(), member.clone()).is_some() {
-            diagnostics.push(error(
-                "invalid-bundle-member-path",
-                subject,
-                "bundle member paths must be unique safe relative paths",
-            ));
+            diagnostics.push(error(ErrorDiagnostic {
+                code: "invalid-bundle-member-path",
+                subject: subject,
+                message: "bundle member paths must be unique safe relative paths",
+            }));
         }
     }
     debug_assert!(map.len() <= members.len());
@@ -461,7 +512,11 @@ fn require_path_role(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     if members.get(path).map(|member| &member.role) != Some(&role) {
-        diagnostics.push(error("missing-or-wrong-role-member", path, "bundle member is missing or has the wrong role"));
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "missing-or-wrong-role-member",
+            subject: path,
+            message: "bundle member is missing or has the wrong role",
+        }));
     }
 }
 

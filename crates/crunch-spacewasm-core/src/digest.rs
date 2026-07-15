@@ -101,6 +101,10 @@ fn is_lower_hex(value: &str, expected_length: usize) -> bool {
     value.len() == expected_length && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
-pub(crate) fn count_exceeds(count: usize, maximum: u32) -> bool {
-    usize::try_from(maximum).is_ok_and(|maximum| count > maximum)
+pub(crate) fn count_exceeds(count_items: usize, maximum_items: u32) -> bool {
+    usize::try_from(maximum_items).is_ok_and(|maximum_items| count_items > maximum_items)
+}
+
+pub(crate) fn count_is_below(count_items: usize, minimum_items: u32) -> bool {
+    u32::try_from(count_items).is_ok_and(|count_items| count_items < minimum_items)
 }
