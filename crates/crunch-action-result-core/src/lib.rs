@@ -445,7 +445,7 @@ fn validate_candidate_trust(
         "candidate trust requires a validated policy schema"
     );
     assert!(
-        request.policy.allowed_source_classes.first().is_some(),
+        !request.policy.allowed_source_classes.is_empty(),
         "candidate trust requires an allowed source class"
     );
     let record = &signed.record;
@@ -513,7 +513,7 @@ fn validate_record_input(input: &ActionResultRecordInput) -> Result<(), String> 
     if input.outputs.is_empty() || input.outputs.len() > MAX_ACTION_RESULT_OUTPUTS {
         return Err("action-result-output-count-invalid".to_string());
     }
-    assert!(input.outputs.first().is_some(), "validated action result must declare an output");
+    assert!(!input.outputs.is_empty(), "validated action result must declare an output");
     assert!(
         input.outputs.len() <= MAX_ACTION_RESULT_OUTPUTS,
         "validated action result outputs must remain bounded"

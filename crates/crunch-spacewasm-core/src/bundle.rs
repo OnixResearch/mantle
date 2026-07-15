@@ -321,7 +321,7 @@ fn require_role_digest(
     let matching: Vec<_> = members.values().filter(|member| member.role == role).collect();
     if matching.len() != 1 || matching.first().map(|member| &member.digest_blake3) != Some(expected) {
         diagnostics.push(error(ErrorDiagnostic {
-            code: code,
+            code,
             subject: &role_label(&role),
             message: "bundle member digest differs from the selected profile",
         }));
@@ -390,17 +390,10 @@ fn validate_parent_edges(
 ) {
     let mut edges = BTreeSet::new();
     for edge in &input.parent_edges {
-        let is_valid_paths = members.contains_key(&edge.parent_path) && members.contains_key(&edge.child_path);
-        let is_invalid_edge = if !is_valid_paths {
-            true
-        } else if edge.parent_path == edge.child_path {
-            true
-        } else if edge.relation.is_empty() {
-            true
-        } else {
-            !edges.insert(edge.clone())
-        };
-        if is_invalid_edge {
+        let has_declared_paths = members.contains_key(&edge.parent_path) && members.contains_key(&edge.child_path);
+        let is_well_formed = has_declared_paths && edge.parent_path != edge.child_path && !edge.relation.is_empty();
+        let is_unique = is_well_formed && edges.insert(edge.clone());
+        if !is_unique {
             diagnostics.push(error(ErrorDiagnostic {
                 code: "invalid-parent-edge",
                 subject: &edge.child_path,
@@ -484,7 +477,7 @@ fn member_map(
         if !is_safe_relative_path(&member.path) || map.insert(member.path.clone(), member.clone()).is_some() {
             diagnostics.push(error(ErrorDiagnostic {
                 code: "invalid-bundle-member-path",
-                subject: subject,
+                subject,
                 message: "bundle member paths must be unique safe relative paths",
             }));
         }

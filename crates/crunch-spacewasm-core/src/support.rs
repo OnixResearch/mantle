@@ -88,7 +88,7 @@ fn support_map(
         if entry.feature.is_empty() || map.insert(entry.feature.clone(), entry.status).is_some() {
             diagnostics.push(error(ErrorDiagnostic {
                 code: "duplicate-support-entry",
-                subject: subject,
+                subject,
                 message: "support feature names must be unique and non-empty",
             }));
         }
