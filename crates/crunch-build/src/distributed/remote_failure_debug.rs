@@ -50,6 +50,7 @@ const INSPECT_IDENTITY_DOMAIN: &str = "mantle-remote-failure-inspect-identity-v1
 const REPLAY_PLAN_IDENTITY_DOMAIN: &str = "mantle-remote-failure-replay-plan-identity-v1";
 const REPLAY_COMPARISON_IDENTITY_DOMAIN: &str = "mantle-remote-failure-replay-comparison-identity-v1";
 const SECRET_REDACTION: &str = "<redacted>";
+const _: () = assert!(usize::BITS <= u64::BITS);
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -391,6 +392,13 @@ pub struct RemoteFailureRetentionPlan {
     pub delete: Vec<RemoteFailureDebugDigest>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RemoteFailureDebugTimestamps {
+    created_unix_s: u64,
+    expires_unix_s: u64,
+    retention_secs: u64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RemoteFailureDebugReasonCode {
@@ -523,6 +531,8 @@ pub fn seal_remote_failure_debug_bundle(
     };
     bundle.bundle_blake3 = bundle_identity(&bundle)?;
     validate_remote_failure_debug_bundle(&bundle, policy)?;
+    debug_assert!(is_blake3_hex_digest(bundle.bundle_blake3.as_str()));
+    debug_assert!(bundle.non_claims.iter().any(|non_claim| non_claim == REMOTE_FAILURE_DEBUG_NON_CLAIM));
     Ok(bundle)
 }
 
@@ -545,7 +555,11 @@ pub fn validate_remote_failure_debug_bundle(
     validate_optional_ref(bundle.captured_artifact_manifest_ref.as_ref(), policy)?;
     validate_attempt_and_log_binding(bundle)?;
     validate_failure_codes(bundle)?;
-    validate_timestamps(bundle.created_unix_s, bundle.expires_unix_s, policy.retention_secs)?;
+    validate_timestamps(RemoteFailureDebugTimestamps {
+        created_unix_s: bundle.created_unix_s,
+        expires_unix_s: bundle.expires_unix_s,
+        retention_secs: policy.retention_secs,
+    })?;
     if canonical_non_claims(bundle.non_claims.clone())? != bundle.non_claims {
         return Err(RemoteFailureDebugReasonCode::NonClaimInvalid);
     }
@@ -572,6 +586,7 @@ pub fn plan_remote_failure_capture(
     policy: &RemoteFailureCapturePolicy,
 ) -> Result<Vec<RemoteFailureCaptureRequest>, RemoteFailureDebugReasonCode> {
     validate_capture_policy(policy)?;
+    let file_count_max = capture_file_count_max_as_usize(policy)?;
     if !policy.enabled {
         if policy.allowed_relative_paths.is_empty() {
             return Ok(Vec::new());
@@ -592,7 +607,7 @@ pub fn plan_remote_failure_capture(
             sensitivity: policy.sensitivity,
         });
     }
-    debug_assert!(requests.len() <= usize::try_from(policy.file_count_max).unwrap_or(usize::MAX));
+    debug_assert!(requests.len() <= file_count_max);
     debug_assert!(requests.windows(2).all(|window| window[0].relative_path < window[1].relative_path));
     Ok(requests)
 }
@@ -603,14 +618,16 @@ pub fn admit_remote_failure_capture_observations(
     policy: &RemoteFailureCapturePolicy,
 ) -> Result<RemoteFailureCaptureAdmissionPlan, RemoteFailureDebugReasonCode> {
     validate_capture_policy(policy)?;
-    if observations.len() > usize::try_from(policy.file_count_max).unwrap_or(usize::MAX) {
+    let file_count_max = capture_file_count_max_as_usize(policy)?;
+    if observations.len() > file_count_max {
         return Err(RemoteFailureDebugReasonCode::CaptureCountExceeded);
     }
     let allowed = requests.iter().map(|request| request.relative_path.as_str()).collect::<BTreeSet<_>>();
     let mut ordered = observations;
     ordered.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-    let mut accepted_paths = Vec::new();
-    let mut rejected = Vec::new();
+    let observation_count = ordered.len();
+    let mut accepted_paths = Vec::with_capacity(observation_count);
+    let mut rejected = Vec::with_capacity(observation_count);
     let mut total_bytes = 0_u64;
     let mut seen = BTreeSet::new();
     for observation in ordered {
@@ -628,7 +645,7 @@ pub fn admit_remote_failure_capture_observations(
         accepted_paths.push(observation.relative_path);
     }
     debug_assert!(total_bytes <= policy.total_bytes_max);
-    debug_assert!(accepted_paths.len() <= usize::try_from(policy.file_count_max).unwrap_or(usize::MAX));
+    debug_assert!(accepted_paths.len() <= file_count_max);
     Ok(RemoteFailureCaptureAdmissionPlan {
         accepted_paths,
         rejected,
@@ -641,6 +658,7 @@ pub fn seal_remote_failure_captured_artifact_manifest(
     policy: &RemoteFailureCapturePolicy,
 ) -> Result<RemoteFailureCapturedArtifactManifest, RemoteFailureDebugReasonCode> {
     validate_capture_policy(policy)?;
+    let file_count_max = capture_file_count_max_as_usize(policy)?;
     artifacts.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
     let mut total_bytes = 0_u64;
     let mut seen = BTreeSet::new();
@@ -659,7 +677,7 @@ pub fn seal_remote_failure_captured_artifact_manifest(
             return Err(RemoteFailureDebugReasonCode::CaptureTotalBytesExceeded);
         }
     }
-    if artifacts.len() > usize::try_from(policy.file_count_max).unwrap_or(usize::MAX) {
+    if artifacts.len() > file_count_max {
         return Err(RemoteFailureDebugReasonCode::CaptureCountExceeded);
     }
     let mut manifest = RemoteFailureCapturedArtifactManifest {
@@ -671,7 +689,7 @@ pub fn seal_remote_failure_captured_artifact_manifest(
     };
     manifest.manifest_blake3 = capture_manifest_identity(&manifest)?;
     debug_assert!(manifest.total_bytes <= policy.total_bytes_max);
-    debug_assert!(manifest.artifacts.len() <= usize::try_from(policy.file_count_max).unwrap_or(usize::MAX));
+    debug_assert!(manifest.artifacts.len() <= file_count_max);
     Ok(manifest)
 }
 
@@ -712,7 +730,7 @@ pub fn plan_remote_failure_replay(
         &bundle.sandbox_policy_ref,
         &bundle.network_policy_ref,
     ];
-    let mut blockers = Vec::new();
+    let mut blockers = Vec::with_capacity(required.len().saturating_add(1));
     if !policy.replay_enabled || !availability.current_policy_allows_replay {
         blockers.push(RemoteFailureDebugReasonCode::ReplayPolicyDenied.as_str().to_string());
     }
@@ -810,9 +828,10 @@ pub fn plan_remote_failure_retention(
     }
     let mut ordered = records;
     ordered.sort_by(|left, right| left.bundle_blake3.cmp(&right.bundle_blake3));
+    let record_count = ordered.len();
     let mut seen = BTreeSet::new();
-    let mut preserve = Vec::new();
-    let mut delete = Vec::new();
+    let mut preserve = Vec::with_capacity(record_count);
+    let mut delete = Vec::with_capacity(record_count);
     for record in ordered {
         if !seen.insert(record.bundle_blake3.clone()) {
             return Err(RemoteFailureDebugReasonCode::ManifestIdentityMismatch);
@@ -865,7 +884,11 @@ fn validate_bundle_facts(
     validate_token(&facts.failure_reason_code).map_err(|_| RemoteFailureDebugReasonCode::FailureReasonInvalid)?;
     validate_token(&facts.capture_outcome_code).map_err(|_| RemoteFailureDebugReasonCode::FailureReasonInvalid)?;
     validate_token(&facts.cleanup_status_code).map_err(|_| RemoteFailureDebugReasonCode::CleanupStatusInvalid)?;
-    validate_timestamps(facts.created_unix_s, facts.expires_unix_s, policy.retention_secs)?;
+    validate_timestamps(RemoteFailureDebugTimestamps {
+        created_unix_s: facts.created_unix_s,
+        expires_unix_s: facts.expires_unix_s,
+        retention_secs: policy.retention_secs,
+    })?;
     if let Some(log) = &facts.immutable_log {
         validate_immutable_log(
             log,
@@ -874,6 +897,8 @@ fn validate_bundle_facts(
             facts.original_fence_generation,
         )?;
     }
+    debug_assert!(facts.action_ref.byte_count <= policy.object_bytes_max);
+    debug_assert!(facts.network_policy_ref.byte_count <= policy.object_bytes_max);
     Ok(())
 }
 
@@ -938,16 +963,19 @@ fn validate_failure_codes(bundle: &RemoteFailureDebugBundle) -> Result<(), Remot
     Ok(())
 }
 
-fn validate_timestamps(
-    created_unix_s: u64,
-    expires_unix_s: u64,
-    retention_secs: u64,
-) -> Result<(), RemoteFailureDebugReasonCode> {
-    let expected = created_unix_s.checked_add(retention_secs).ok_or(RemoteFailureDebugReasonCode::TimestampInvalid)?;
-    if expires_unix_s != expected {
+fn validate_timestamps(timestamps: RemoteFailureDebugTimestamps) -> Result<(), RemoteFailureDebugReasonCode> {
+    let expected_expires_unix_s = timestamps
+        .created_unix_s
+        .checked_add(timestamps.retention_secs)
+        .ok_or(RemoteFailureDebugReasonCode::TimestampInvalid)?;
+    if timestamps.expires_unix_s != expected_expires_unix_s {
         return Err(RemoteFailureDebugReasonCode::TimestampInvalid);
     }
     Ok(())
+}
+
+fn capture_file_count_max_as_usize(policy: &RemoteFailureCapturePolicy) -> Result<usize, RemoteFailureDebugReasonCode> {
+    usize::try_from(policy.file_count_max).map_err(|_| RemoteFailureDebugReasonCode::CaptureLimitInvalid)
 }
 
 fn validate_capture_policy(policy: &RemoteFailureCapturePolicy) -> Result<(), RemoteFailureDebugReasonCode> {
@@ -966,12 +994,15 @@ fn validate_capture_policy(policy: &RemoteFailureCapturePolicy) -> Result<(), Re
     if policy.depth_max == 0 || policy.depth_max > MAX_REMOTE_FAILURE_CAPTURE_DEPTH {
         return Err(RemoteFailureDebugReasonCode::CaptureLimitInvalid);
     }
-    if policy.allowed_relative_paths.len() > usize::try_from(policy.file_count_max).unwrap_or(usize::MAX) {
+    let file_count_max = capture_file_count_max_as_usize(policy)?;
+    if policy.allowed_relative_paths.len() > file_count_max {
         return Err(RemoteFailureDebugReasonCode::CaptureCountExceeded);
     }
     if !policy.enabled && !policy.allowed_relative_paths.is_empty() {
         return Err(RemoteFailureDebugReasonCode::CaptureDisabled);
     }
+    debug_assert!(policy.file_count_max > 0);
+    debug_assert!(policy.allowed_relative_paths.len() <= file_count_max);
     Ok(())
 }
 
@@ -997,6 +1028,8 @@ fn validate_capture_relative_path(path: &str, depth_max: u32) -> Result<(), Remo
     if depth == 0 || depth > depth_max {
         return Err(RemoteFailureDebugReasonCode::CapturePathInvalid);
     }
+    debug_assert!(depth > 0);
+    debug_assert!(depth <= depth_max);
     Ok(())
 }
 
@@ -1026,6 +1059,9 @@ fn capture_observation_rejection(
     if next_total > policy.total_bytes_max {
         return Ok(Some(RemoteFailureDebugReasonCode::CaptureTotalBytesExceeded));
     }
+    debug_assert!(seen.contains(&observation.relative_path));
+    debug_assert!(allowed.contains(observation.relative_path.as_str()));
+    debug_assert_eq!(observation.kind, RemoteFailureCaptureObservedKind::RegularFile);
     Ok(None)
 }
 
@@ -1037,15 +1073,24 @@ fn canonical_non_claims(mut non_claims: Vec<String>) -> Result<Vec<String>, Remo
         return Err(RemoteFailureDebugReasonCode::NonClaimInvalid);
     }
     for non_claim in &non_claims {
-        if non_claim.is_empty()
-            || non_claim.len() > MAX_REMOTE_FAILURE_REASON_BYTES
-            || non_claim.chars().any(char::is_control)
-            || text_looks_secret_bearing(non_claim)
-            || text_looks_host_path(non_claim)
-        {
+        if non_claim.is_empty() {
+            return Err(RemoteFailureDebugReasonCode::NonClaimInvalid);
+        }
+        if non_claim.len() > MAX_REMOTE_FAILURE_REASON_BYTES {
+            return Err(RemoteFailureDebugReasonCode::NonClaimInvalid);
+        }
+        if non_claim.chars().any(char::is_control) {
+            return Err(RemoteFailureDebugReasonCode::NonClaimInvalid);
+        }
+        if text_looks_secret_bearing(non_claim) {
+            return Err(RemoteFailureDebugReasonCode::NonClaimInvalid);
+        }
+        if text_looks_host_path(non_claim) {
             return Err(RemoteFailureDebugReasonCode::NonClaimInvalid);
         }
     }
+    debug_assert!(non_claims.windows(2).all(|window| window[0] < window[1]));
+    debug_assert!(non_claims.iter().any(|non_claim| non_claim == REMOTE_FAILURE_DEBUG_NON_CLAIM));
     Ok(non_claims)
 }
 
@@ -1112,8 +1157,8 @@ fn domain_digest(domain: &str, bytes: &[u8]) -> RemoteFailureDebugDigest {
 }
 
 fn hash_length_delimited(hasher: &mut blake3::Hasher, bytes: &[u8]) {
-    let length = u64::try_from(bytes.len()).expect("bounded debug input length fits u64");
-    hasher.update(&length.to_le_bytes());
+    let byte_count = bytes.len() as u64;
+    hasher.update(&byte_count.to_le_bytes());
     hasher.update(bytes);
 }
 
