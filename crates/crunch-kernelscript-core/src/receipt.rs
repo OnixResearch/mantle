@@ -137,6 +137,21 @@ struct ReceiptIdentityInput {
     non_claims: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ReceiptCollectionBounds {
+    max_output_files: u32,
+    max_receipt_blockers: u32,
+}
+
+struct CandidateReceiptValidation<'a> {
+    input: &'a ExperimentReceiptInput,
+    profile_identity: &'a Blake3Digest,
+    candidate: &'a CandidatePackProjection,
+    expected_members: &'a [OutputMember],
+    expected_inspections: &'a [Blake3Digest],
+    is_kind_unique: bool,
+}
+
 pub fn build_experiment_receipt(mut input: ExperimentReceiptInput) -> ExperimentReceiptResult {
     let validation = crate::validate_profile(input.profile.clone());
     let mut receipt_blockers = validation.blockers;
@@ -147,6 +162,12 @@ pub fn build_experiment_receipt(mut input: ExperimentReceiptInput) -> Experiment
         };
     };
     validate_receipt_bounds(&input, &mut receipt_blockers);
+    if !receipt_blockers.is_empty() {
+        return ExperimentReceiptResult {
+            receipt: None,
+            blockers: receipt_blockers,
+        };
+    }
     validate_receipt_relations(&input, &profile_identity, &mut receipt_blockers);
     validate_no_leaks(&input, &mut receipt_blockers);
     if !receipt_blockers.is_empty() {
@@ -166,19 +187,16 @@ pub fn build_experiment_receipt(mut input: ExperimentReceiptInput) -> Experiment
 }
 
 fn validate_receipt_bounds(input: &ExperimentReceiptInput, blockers: &mut Vec<ExperimentBlocker>) {
+    let initial_blocker_count: usize = blockers.len();
     let bounds = &input.profile.bounds;
-    if count_above_bound(input.blockers.len(), bounds.max_receipt_blockers)
-        || count_above_bound(input.output_classes.len(), bounds.max_output_files)
-        || count_above_bound(input.output_inspections.len(), bounds.max_output_files)
-        || count_above_bound(input.candidate_packs.len(), bounds.max_output_files)
-    {
+    if !receipt_collections_are_bounded(input) {
         blockers.push(blocker("receipt-collection-limit", "receipt", "receipt collections exceed the profile bounds"));
     }
     for class in &input.output_classes {
-        if count_above_bound(class.members.len(), bounds.max_output_files)
-            || count_above_bound(class.inspection_identities_blake3.len(), bounds.max_output_files)
-            || count_above_bound(class.blocker_codes.len(), bounds.max_receipt_blockers)
-        {
+        if !class_receipt_collections_are_bounded(class, ReceiptCollectionBounds {
+            max_output_files: bounds.max_output_files,
+            max_receipt_blockers: bounds.max_receipt_blockers,
+        }) {
             blockers.push(blocker(
                 "output-class-receipt-limit",
                 "receipt.output_classes",
@@ -186,6 +204,25 @@ fn validate_receipt_bounds(input: &ExperimentReceiptInput, blockers: &mut Vec<Ex
             ));
         }
     }
+    debug_assert!(bounds.max_output_files > 0);
+    debug_assert!(blockers.len() >= initial_blocker_count);
+}
+
+fn receipt_collections_are_bounded(input: &ExperimentReceiptInput) -> bool {
+    let bounds = &input.profile.bounds;
+    let is_blocker_count_bounded = !count_above_bound(input.blockers.len(), bounds.max_receipt_blockers);
+    let is_class_count_bounded = !count_above_bound(input.output_classes.len(), bounds.max_output_files);
+    let is_inspection_count_bounded = !count_above_bound(input.output_inspections.len(), bounds.max_output_files);
+    let is_candidate_count_bounded = !count_above_bound(input.candidate_packs.len(), bounds.max_output_files);
+    is_blocker_count_bounded && is_class_count_bounded && is_inspection_count_bounded && is_candidate_count_bounded
+}
+
+fn class_receipt_collections_are_bounded(class: &OutputClassReceipt, bounds: ReceiptCollectionBounds) -> bool {
+    let is_member_count_bounded = !count_above_bound(class.members.len(), bounds.max_output_files);
+    let is_inspection_count_bounded =
+        !count_above_bound(class.inspection_identities_blake3.len(), bounds.max_output_files);
+    let is_blocker_count_bounded = !count_above_bound(class.blocker_codes.len(), bounds.max_receipt_blockers);
+    is_member_count_bounded && is_inspection_count_bounded && is_blocker_count_bounded
 }
 
 fn validate_receipt_relations(
@@ -196,13 +233,13 @@ fn validate_receipt_relations(
     validate_optional_plan_relations(input, profile_identity, blockers);
     validate_output_relations(input, profile_identity, blockers);
     validate_stage_status(input, blockers);
-    let compiler_clean = input.compiler_admission.admitted
+    let is_compiler_clean = input.compiler_admission.admitted
         && input.compiler_admission.materialization_identity_blake3.is_some()
         && input.compiler_admission.blockers.is_empty();
-    let compiler_blocked = !input.compiler_admission.admitted
+    let is_compiler_blocked = !input.compiler_admission.admitted
         && input.compiler_admission.materialization_identity_blake3.is_none()
         && !input.compiler_admission.blockers.is_empty();
-    if !compiler_clean && !compiler_blocked {
+    if !is_compiler_clean && !is_compiler_blocked {
         blockers.push(blocker(
             "compiler-admission-inconsistent",
             "receipt.compiler",
@@ -216,6 +253,8 @@ fn validate_receipt_relations(
             "non-admitted compiler materialization requires a blocked receipt",
         ));
     }
+    debug_assert!(!profile_identity.as_str().is_empty());
+    debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
 }
 
 fn validate_optional_plan_relations(
@@ -223,10 +262,11 @@ fn validate_optional_plan_relations(
     profile_identity: &Blake3Digest,
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
+    let initial_blocker_count: usize = blockers.len();
     if let Some(codegen) = &input.codegen_plan {
-        let valid = &codegen.profile_identity_blake3 == profile_identity
+        let is_codegen_valid = &codegen.profile_identity_blake3 == profile_identity
             && crate::planner::expected_codegen_plan_identity(codegen).as_ref() == Some(&codegen.plan_identity_blake3);
-        if !valid {
+        if !is_codegen_valid {
             blockers.push(blocker(
                 "receipt-codegen-profile-mismatch",
                 "receipt.codegen",
@@ -235,10 +275,10 @@ fn validate_optional_plan_relations(
         }
     }
     if let Some(manifest) = &input.generated_manifest {
-        let valid = &manifest.profile_identity_blake3 == profile_identity
+        let is_manifest_valid = &manifest.profile_identity_blake3 == profile_identity
             && crate::generated::expected_generated_manifest_identity(manifest).as_ref()
                 == Some(&manifest.manifest_identity_blake3);
-        if !valid {
+        if !is_manifest_valid {
             blockers.push(blocker(
                 "receipt-generated-profile-mismatch",
                 "receipt.generated",
@@ -247,14 +287,14 @@ fn validate_optional_plan_relations(
         }
     }
     if let Some(plan) = &input.compilation_plan {
-        let manifest_matches = input.generated_manifest.as_ref().is_some_and(|manifest| {
+        let has_matching_manifest = input.generated_manifest.as_ref().is_some_and(|manifest| {
             plan.generated_manifest_identity_blake3 == manifest.manifest_identity_blake3
                 && plan.generated_members == manifest.members
         });
-        let valid = &plan.profile_identity_blake3 == profile_identity
+        let is_plan_valid = &plan.profile_identity_blake3 == profile_identity
             && crate::planner::expected_compilation_plan_identity(plan).as_ref() == Some(&plan.plan_identity_blake3)
-            && manifest_matches;
-        if !valid {
+            && has_matching_manifest;
+        if !is_plan_valid {
             blockers.push(blocker(
                 "receipt-compilation-profile-mismatch",
                 "receipt.compilation",
@@ -262,6 +302,8 @@ fn validate_optional_plan_relations(
             ));
         }
     }
+    debug_assert!(!profile_identity.as_str().is_empty());
+    debug_assert!(blockers.len() >= initial_blocker_count);
 }
 
 fn validate_output_relations(
@@ -289,6 +331,7 @@ fn validate_class_receipt(
     class: &OutputClassReceipt,
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
+    let initial_blocker_count: usize = blockers.len();
     let mut expected_members = input
         .output_inspections
         .iter()
@@ -307,19 +350,21 @@ fn validate_class_receipt(
     sort_output_members(&mut actual_members);
     expected_identities.sort();
     actual_identities.sort();
-    let passed_shape = class.status == OutputClassStatus::InspectionPassed
+    let is_passed_shape = class.status == OutputClassStatus::InspectionPassed
         && !expected_members.is_empty()
         && class.blocker_codes.is_empty()
         && actual_members == expected_members
         && actual_identities == expected_identities;
-    let non_passed_shape = class.status != OutputClassStatus::InspectionPassed && expected_members.is_empty();
-    if !passed_shape && !non_passed_shape {
+    let is_non_passed_shape = class.status != OutputClassStatus::InspectionPassed && expected_members.is_empty();
+    if !is_passed_shape && !is_non_passed_shape {
         blockers.push(blocker(
             "output-class-receipt-mismatch",
             "receipt.output_classes",
             "output class status, members, and inspection identities disagree",
         ));
     }
+    debug_assert_eq!(expected_members.len(), expected_identities.len());
+    debug_assert!(blockers.len() >= initial_blocker_count);
 }
 
 fn validate_inspection_receipts(
@@ -328,17 +373,7 @@ fn validate_inspection_receipts(
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
     for inspection in &input.output_inspections {
-        let plan_matches = input
-            .compilation_plan
-            .as_ref()
-            .is_some_and(|plan| inspection.plan_identity_blake3 == plan.plan_identity_blake3);
-        let identity_matches = crate::inspection::expected_inspection_identity(inspection).as_ref()
-            == Some(&inspection.inspection_identity_blake3);
-        if !inspection.accepted
-            || !plan_matches
-            || !identity_matches
-            || !receipt_classes.contains(&inspection.output_class)
-        {
+        if !inspection_receipt_is_valid(input, receipt_classes, inspection) {
             blockers.push(blocker(
                 "receipt-inspection-mismatch",
                 &inspection.relative_path,
@@ -348,11 +383,27 @@ fn validate_inspection_receipts(
     }
 }
 
+fn inspection_receipt_is_valid(
+    input: &ExperimentReceiptInput,
+    receipt_classes: &BTreeSet<ArtifactOutputClass>,
+    inspection: &OutputInspection,
+) -> bool {
+    let has_matching_plan = input
+        .compilation_plan
+        .as_ref()
+        .is_some_and(|plan| inspection.plan_identity_blake3 == plan.plan_identity_blake3);
+    let has_matching_identity = crate::inspection::expected_inspection_identity(inspection).as_ref()
+        == Some(&inspection.inspection_identity_blake3);
+    let has_class_receipt = receipt_classes.contains(&inspection.output_class);
+    inspection.accepted && has_matching_plan && has_matching_identity && has_class_receipt
+}
+
 fn validate_candidate_receipts(
     input: &ExperimentReceiptInput,
     profile_identity: &Blake3Digest,
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
+    let initial_blocker_count: usize = blockers.len();
     let mut kinds = BTreeSet::new();
     for candidate in &input.candidate_packs {
         let class = match candidate.kind {
@@ -361,26 +412,16 @@ fn validate_candidate_receipts(
         };
         let expected_members = candidate_members(input, class);
         let expected_inspections = candidate_inspection_identities(input, class);
-        let candidate_identity_matches = crate::handoff::expected_candidate_identity(candidate).as_ref()
-            == Some(&candidate.manifest_identity_blake3);
-        let plan_matches = input.compilation_plan.as_ref().is_some_and(|plan| {
-            candidate.compilation_plan_identity_blake3 == plan.plan_identity_blake3
-                && candidate.generated_manifest_identity_blake3 == plan.generated_manifest_identity_blake3
+        let is_kind_unique = kinds.insert(candidate.kind);
+        let is_candidate_valid = candidate_receipt_is_valid(CandidateReceiptValidation {
+            input,
+            profile_identity,
+            candidate,
+            expected_members: &expected_members,
+            expected_inspections: &expected_inspections,
+            is_kind_unique,
         });
-        let target_matches = candidate.profile_identity_blake3 == *profile_identity
-            && candidate.target_kernel_build_identity == input.profile.target.kernel_build_identity
-            && candidate.target_architecture == input.profile.target.architecture
-            && candidate.target_kernel_release == input.profile.target.kernel_release
-            && candidate.btf_blake3 == input.profile.target.btf.artifact.digest_blake3;
-        if expected_members.is_empty()
-            || !kinds.insert(candidate.kind)
-            || !crate::handoff::candidate_projection_is_bounded(candidate)
-            || !candidate_identity_matches
-            || !plan_matches
-            || !target_matches
-            || candidate.members != expected_members
-            || candidate.inspection_identities_blake3 != expected_inspections
-        {
+        if !is_candidate_valid {
             blockers.push(blocker(
                 "receipt-candidate-mismatch",
                 "receipt.candidates",
@@ -388,6 +429,34 @@ fn validate_candidate_receipts(
             ));
         }
     }
+    debug_assert!(kinds.len() <= input.candidate_packs.len());
+    debug_assert!(blockers.len() >= initial_blocker_count);
+}
+
+fn candidate_receipt_is_valid(validation: CandidateReceiptValidation<'_>) -> bool {
+    debug_assert!(!validation.profile_identity.as_str().is_empty());
+    debug_assert!(validation.expected_members.len() <= validation.input.output_inspections.len());
+    let has_matching_identity = crate::handoff::expected_candidate_identity(validation.candidate).as_ref()
+        == Some(&validation.candidate.manifest_identity_blake3);
+    let has_matching_plan = validation.input.compilation_plan.as_ref().is_some_and(|plan| {
+        validation.candidate.compilation_plan_identity_blake3 == plan.plan_identity_blake3
+            && validation.candidate.generated_manifest_identity_blake3 == plan.generated_manifest_identity_blake3
+    });
+    let has_matching_target = validation.candidate.profile_identity_blake3 == *validation.profile_identity
+        && validation.candidate.target_kernel_build_identity == validation.input.profile.target.kernel_build_identity
+        && validation.candidate.target_architecture == validation.input.profile.target.architecture
+        && validation.candidate.target_kernel_release == validation.input.profile.target.kernel_release
+        && validation.candidate.btf_blake3 == validation.input.profile.target.btf.artifact.digest_blake3;
+    let has_expected_members =
+        !validation.expected_members.is_empty() && validation.candidate.members == validation.expected_members;
+    let has_expected_inspections = validation.candidate.inspection_identities_blake3 == validation.expected_inspections;
+    validation.is_kind_unique
+        && crate::handoff::candidate_projection_is_bounded(validation.candidate)
+        && has_matching_identity
+        && has_matching_plan
+        && has_matching_target
+        && has_expected_members
+        && has_expected_inspections
 }
 
 fn candidate_members(input: &ExperimentReceiptInput, class: ArtifactOutputClass) -> Vec<OutputMember> {
@@ -424,41 +493,44 @@ fn sort_output_members(members: &mut [OutputMember]) {
 }
 
 fn validate_stage_status(input: &ExperimentReceiptInput, blockers: &mut Vec<ExperimentBlocker>) {
-    let codegen_present = input.codegen_plan.is_some();
-    let classified_present = input.generated_manifest.is_some() && input.compilation_plan.is_some();
-    let target_admitted = input
+    let initial_blocker_count: usize = blockers.len();
+    let is_codegen_present = input.codegen_plan.is_some();
+    let is_classified_present = input.generated_manifest.is_some() && input.compilation_plan.is_some();
+    let is_target_admitted = input
         .target_admission
         .as_ref()
         .is_some_and(|target| target.admitted && target.target_identity_blake3.is_some() && target.blockers.is_empty());
-    let inspections_clean = !input.output_inspections.is_empty()
+    let is_inspection_set_clean = !input.output_inspections.is_empty()
         && input.output_inspections.iter().all(|inspection| inspection.accepted)
         && input.blockers.is_empty();
-    let invalid = match input.stage_status {
+    let is_stage_invalid = match input.stage_status {
         ExperimentStageStatus::Blocked => input.blockers.is_empty(),
-        ExperimentStageStatus::Planned => !codegen_present || input.generated_manifest.is_some(),
-        ExperimentStageStatus::CodegenClassified => !codegen_present || !classified_present,
+        ExperimentStageStatus::Planned => !is_codegen_present || input.generated_manifest.is_some(),
+        ExperimentStageStatus::CodegenClassified => !is_codegen_present || !is_classified_present,
         ExperimentStageStatus::PartiallyInspected => {
-            !codegen_present || !classified_present || !target_admitted || input.output_inspections.is_empty()
+            !is_codegen_present || !is_classified_present || !is_target_admitted || input.output_inspections.is_empty()
         }
         ExperimentStageStatus::Inspected => {
-            !codegen_present || !classified_present || !target_admitted || !inspections_clean
+            !is_codegen_present || !is_classified_present || !is_target_admitted || !is_inspection_set_clean
         }
     };
-    if invalid {
+    if is_stage_invalid {
         blockers.push(blocker(
             "receipt-stage-status-overclaim",
             "receipt.stage_status",
             "receipt stage status exceeds its attached evidence",
         ));
     }
+    debug_assert!(blockers.len() >= initial_blocker_count);
+    debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
 }
 
 fn validate_no_leaks(input: &ExperimentReceiptInput, blockers: &mut Vec<ExperimentBlocker>) {
     for item in &input.blockers {
-        let leaked = FORBIDDEN_RECEIPT_FRAGMENTS
+        let has_forbidden_fragment = FORBIDDEN_RECEIPT_FRAGMENTS
             .iter()
             .any(|fragment| item.subject.contains(fragment) || item.message.contains(fragment));
-        if leaked || item.subject.starts_with('/') {
+        if has_forbidden_fragment || item.subject.starts_with('/') {
             blockers.push(blocker(
                 "receipt-sensitive-data",
                 "receipt.blockers",

@@ -67,6 +67,12 @@ struct ManifestIdentityInput {
     total_bytes: u64,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct GeneratedFileLimits {
+    declared_max_bytes: u64,
+    profile_max_bytes: u64,
+}
+
 pub fn classify_generated_project(facts: GeneratedProjectFacts) -> GeneratedProjectResult {
     let profile_validation = crate::validate_profile(facts.profile.clone());
     let mut blockers = profile_validation.blockers;
@@ -106,24 +112,14 @@ fn classify_files(
     facts: &GeneratedProjectFacts,
     blockers: &mut Vec<ExperimentBlocker>,
 ) -> (Vec<GeneratedFileMember>, u64) {
+    let initial_blocker_count: usize = blockers.len();
     let expected = expected_by_path(facts);
     let mut seen = BTreeSet::new();
     let mut members = Vec::with_capacity(facts.files.len());
-    let mut total_bytes = 0_u64;
+    let mut total_bytes: u64 = 0;
     for file in &facts.files {
         let Some(declaration) = expected.get(&file.relative_path) else {
-            blockers.push(blocker(
-                "unexpected-generated-file",
-                &file.relative_path,
-                "generated file is not in the exact profile allowlist",
-            ));
-            if !safe_relative_path(&file.relative_path) {
-                blockers.push(blocker(
-                    "generated-path-escape",
-                    &file.relative_path,
-                    "generated path is absolute, escaping, or non-canonical",
-                ));
-            }
+            reject_unexpected_file(file, blockers);
             continue;
         };
         if !seen.insert(file.relative_path.clone()) {
@@ -134,9 +130,23 @@ fn classify_files(
             ));
             continue;
         }
-        validate_observed_file(file, declaration.max_bytes, facts.profile.bounds.max_generated_file_bytes, blockers);
-        let size_bytes = u64::try_from(file.bytes.len()).unwrap_or(u64::MAX);
-        total_bytes = total_bytes.saturating_add(size_bytes);
+        let Some(size_bytes) = observed_file_size_bytes(file, blockers) else {
+            continue;
+        };
+        let limits_bytes = GeneratedFileLimits {
+            declared_max_bytes: declaration.max_bytes,
+            profile_max_bytes: facts.profile.bounds.max_generated_file_bytes,
+        };
+        validate_observed_file(file, limits_bytes, size_bytes, blockers);
+        let Some(next_total_bytes) = total_bytes.checked_add(size_bytes) else {
+            blockers.push(blocker(
+                "generated-total-byte-bound",
+                "generated-project",
+                "generated project aggregate byte count overflowed",
+            ));
+            continue;
+        };
+        total_bytes = next_total_bytes;
         members.push(GeneratedFileMember {
             relative_path: file.relative_path.clone(),
             class: declaration.class,
@@ -152,7 +162,38 @@ fn classify_files(
             "generated project exceeds the aggregate byte bound",
         ));
     }
+    debug_assert!(members.len() <= facts.files.len());
+    debug_assert!(blockers.len() >= initial_blocker_count);
     (members, total_bytes)
+}
+
+fn reject_unexpected_file(file: &ObservedGeneratedFile, blockers: &mut Vec<ExperimentBlocker>) {
+    blockers.push(blocker(
+        "unexpected-generated-file",
+        &file.relative_path,
+        "generated file is not in the exact profile allowlist",
+    ));
+    if !safe_relative_path(&file.relative_path) {
+        blockers.push(blocker(
+            "generated-path-escape",
+            &file.relative_path,
+            "generated path is absolute, escaping, or non-canonical",
+        ));
+    }
+}
+
+fn observed_file_size_bytes(file: &ObservedGeneratedFile, blockers: &mut Vec<ExperimentBlocker>) -> Option<u64> {
+    match u64::try_from(file.bytes.len()) {
+        Ok(size_bytes) => Some(size_bytes),
+        Err(_) => {
+            blockers.push(blocker(
+                "generated-file-byte-bound",
+                &file.relative_path,
+                "generated file byte count is not representable",
+            ));
+            None
+        }
+    }
 }
 
 fn expected_by_path(facts: &GeneratedProjectFacts) -> BTreeMap<String, crate::ExpectedGeneratedFile> {
@@ -167,10 +208,11 @@ fn expected_by_path(facts: &GeneratedProjectFacts) -> BTreeMap<String, crate::Ex
 
 fn validate_observed_file(
     file: &ObservedGeneratedFile,
-    declared_max_bytes: u64,
-    profile_max_bytes: u64,
+    limits_bytes: GeneratedFileLimits,
+    size_bytes: u64,
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
+    let initial_blocker_count: usize = blockers.len();
     if !safe_relative_path(&file.relative_path) {
         blockers.push(blocker(
             "generated-path-escape",
@@ -178,8 +220,9 @@ fn validate_observed_file(
             "generated path is absolute, escaping, or non-canonical",
         ));
     }
-    let size_bytes = u64::try_from(file.bytes.len()).unwrap_or(u64::MAX);
-    if size_bytes == 0 || size_bytes > declared_max_bytes || size_bytes > profile_max_bytes {
+    let is_declared_limit_exceeded_bytes = size_bytes > limits_bytes.declared_max_bytes;
+    let is_profile_limit_exceeded_bytes = size_bytes > limits_bytes.profile_max_bytes;
+    if size_bytes == 0 || is_declared_limit_exceeded_bytes || is_profile_limit_exceeded_bytes {
         blockers.push(blocker(
             "generated-file-byte-bound",
             &file.relative_path,
@@ -193,6 +236,8 @@ fn validate_observed_file(
             "generated project files must remain non-executable review inputs",
         ));
     }
+    debug_assert!(limits_bytes.declared_max_bytes <= limits_bytes.profile_max_bytes);
+    debug_assert!(blockers.len() >= initial_blocker_count);
 }
 
 fn validate_required_files(

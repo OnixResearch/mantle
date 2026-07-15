@@ -30,6 +30,7 @@ const BUILD_OUTPUT_ROOT: &str = "build";
 const MANTLE_MODULE_RECIPE: &str = "build/module/Kbuild";
 const MAX_EXECUTION_ARGUMENTS: u32 = 64;
 const MAX_EXECUTION_INPUTS: u32 = 16;
+const MAX_PLAN_STEPS: usize = 7;
 const PROGRAM_CLANG: &str = "clang";
 const PROGRAM_CC: &str = "cc";
 const PROGRAM_BPFTOOL: &str = "bpftool";
@@ -141,12 +142,28 @@ struct CompilationIdentityInput {
     steps: Vec<PlanStep>,
 }
 
+struct PlanStepInput {
+    step_id: &'static str,
+    output_class: ArtifactOutputClass,
+    tool_role: Option<ToolRole>,
+    action: PlanAction,
+    inputs: Vec<String>,
+    outputs: Vec<String>,
+    arguments: Vec<String>,
+}
+
 pub fn plan_codegen(profile: ExperimentProfile) -> Result<CodegenPlan, Vec<ExperimentBlocker>> {
     let validation = crate::validate_profile(profile.clone());
     if !validation.blockers.is_empty() {
         return Err(validation.blockers);
     }
-    let profile_identity = validation.profile_identity_blake3.expect("clean profile has identity");
+    let Some(profile_identity) = validation.profile_identity_blake3 else {
+        return Err(vec![blocker(
+            "codegen-profile-identity-missing",
+            "codegen",
+            "validated profile did not produce a canonical identity",
+        )]);
+    };
     let arguments = codegen_arguments(&profile);
     let input = CodegenIdentityInput {
         schema: String::from(CODEGEN_PLAN_SCHEMA),
@@ -261,6 +278,7 @@ fn validate_manifest_binding(
     manifest: &GeneratedProjectManifest,
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
+    let initial_blocker_count: usize = blockers.len();
     if &manifest.profile_identity_blake3 != profile_identity {
         blockers.push(blocker(
             "generated-profile-mismatch",
@@ -284,6 +302,8 @@ fn validate_manifest_binding(
             "generated manifest fields differ from their BLAKE3 identity",
         ));
     }
+    debug_assert!(!profile_identity.as_str().is_empty());
+    debug_assert!(blockers.len() >= initial_blocker_count);
 }
 
 fn build_steps(
@@ -291,7 +311,7 @@ fn build_steps(
     manifest: &GeneratedProjectManifest,
     blockers: &mut Vec<ExperimentBlocker>,
 ) -> Vec<PlanStep> {
-    let mut steps = Vec::new();
+    let mut steps = Vec::with_capacity(MAX_PLAN_STEPS);
     let base = source_stem(&profile.source.relative_path);
     let needs_bpf = profile.output_classes.iter().any(|class| {
         matches!(
@@ -311,6 +331,8 @@ fn build_steps(
     if profile.output_classes.contains(&ArtifactOutputClass::TestBinary) {
         append_test_step(profile, manifest, &base, &mut steps, blockers);
     }
+    debug_assert!(steps.len() <= MAX_PLAN_STEPS);
+    debug_assert!(steps.iter().all(|planned| !planned.outputs.is_empty()));
     steps
 }
 
@@ -321,46 +343,48 @@ fn append_bpf_steps(
     steps: &mut Vec<PlanStep>,
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
+    debug_assert!(steps.len() <= MAX_PLAN_STEPS);
+    debug_assert!(!base.is_empty());
     let Some(source) = unique_member_path(manifest, GeneratedFileClass::EbpfC, blockers) else {
         return;
     };
     let vmlinux_header = format!("{BUILD_OUTPUT_ROOT}/vmlinux.h");
     let object = format!("{BUILD_OUTPUT_ROOT}/{base}.ebpf.o");
     let skeleton = format!("{BUILD_OUTPUT_ROOT}/{base}.skel.h");
-    steps.push(step(
-        "01-vmlinux-header",
-        ArtifactOutputClass::EbpfObject,
-        Some(ToolRole::Bpftool),
-        PlanAction::GenerateVmlinuxHeader,
-        vec![profile.target.btf.artifact.artifact_ref.clone()],
-        vec![vmlinux_header.clone()],
-        vec![
+    steps.push(step(PlanStepInput {
+        step_id: "01-vmlinux-header",
+        output_class: ArtifactOutputClass::EbpfObject,
+        tool_role: Some(ToolRole::Bpftool),
+        action: PlanAction::GenerateVmlinuxHeader,
+        inputs: vec![profile.target.btf.artifact.artifact_ref.clone()],
+        outputs: vec![vmlinux_header.clone()],
+        arguments: vec![
             String::from("btf"),
             String::from("dump"),
             String::from("format"),
             String::from("c"),
         ],
-    ));
+    }));
     let mut bpf_arguments = profile.bpf_compiler_flags.clone();
     bpf_arguments.push(target_arch_define(profile.target.architecture));
-    steps.push(step(
-        "02-ebpf-object",
-        ArtifactOutputClass::EbpfObject,
-        Some(ToolRole::Clang),
-        PlanAction::CompileEbpf,
-        vec![source, vmlinux_header],
-        vec![object.clone()],
-        bpf_arguments,
-    ));
-    steps.push(step(
-        "03-bpf-skeleton",
-        ArtifactOutputClass::EbpfObject,
-        Some(ToolRole::Bpftool),
-        PlanAction::GenerateSkeleton,
-        vec![object],
-        vec![skeleton],
-        vec![String::from("gen"), String::from("skeleton")],
-    ));
+    steps.push(step(PlanStepInput {
+        step_id: "02-ebpf-object",
+        output_class: ArtifactOutputClass::EbpfObject,
+        tool_role: Some(ToolRole::Clang),
+        action: PlanAction::CompileEbpf,
+        inputs: vec![source, vmlinux_header],
+        outputs: vec![object.clone()],
+        arguments: bpf_arguments,
+    }));
+    steps.push(step(PlanStepInput {
+        step_id: "03-bpf-skeleton",
+        output_class: ArtifactOutputClass::EbpfObject,
+        tool_role: Some(ToolRole::Bpftool),
+        action: PlanAction::GenerateSkeleton,
+        inputs: vec![object],
+        outputs: vec![skeleton],
+        arguments: vec![String::from("gen"), String::from("skeleton")],
+    }));
 }
 
 fn append_userspace_step(
@@ -373,15 +397,15 @@ fn append_userspace_step(
     let Some(source) = unique_member_path(manifest, GeneratedFileClass::UserspaceC, blockers) else {
         return;
     };
-    steps.push(step(
-        "04-userspace-loader",
-        ArtifactOutputClass::UserspaceLoader,
-        Some(ToolRole::CCompiler),
-        PlanAction::CompileUserspace,
-        vec![source, format!("{BUILD_OUTPUT_ROOT}/{base}.skel.h")],
-        vec![format!("{BUILD_OUTPUT_ROOT}/{base}")],
-        profile.userspace_compiler_flags.clone(),
-    ));
+    steps.push(step(PlanStepInput {
+        step_id: "04-userspace-loader",
+        output_class: ArtifactOutputClass::UserspaceLoader,
+        tool_role: Some(ToolRole::CCompiler),
+        action: PlanAction::CompileUserspace,
+        inputs: vec![source, format!("{BUILD_OUTPUT_ROOT}/{base}.skel.h")],
+        outputs: vec![format!("{BUILD_OUTPUT_ROOT}/{base}")],
+        arguments: profile.userspace_compiler_flags.clone(),
+    }));
 }
 
 fn append_module_steps(
@@ -391,35 +415,37 @@ fn append_module_steps(
     steps: &mut Vec<PlanStep>,
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
+    debug_assert!(steps.len() <= MAX_PLAN_STEPS);
+    debug_assert!(!base.is_empty());
     let Some(source) = unique_member_path(manifest, GeneratedFileClass::ModuleC, blockers) else {
         return;
     };
     let recipe_content = format!("{MODULE_RECIPE_CONTENT_PREFIX}{base}.mod.o\n");
     let recipe_digest = Blake3Digest::from_slice(recipe_content.as_bytes());
-    steps.push(step(
-        "05-module-recipe",
-        ArtifactOutputClass::KernelModule,
-        None,
-        PlanAction::WriteMantleModuleRecipe,
-        Vec::new(),
-        vec![String::from(MANTLE_MODULE_RECIPE)],
-        vec![recipe_digest.into_hex()],
-    ));
+    steps.push(step(PlanStepInput {
+        step_id: "05-module-recipe",
+        output_class: ArtifactOutputClass::KernelModule,
+        tool_role: None,
+        action: PlanAction::WriteMantleModuleRecipe,
+        inputs: Vec::new(),
+        outputs: vec![String::from(MANTLE_MODULE_RECIPE)],
+        arguments: vec![recipe_digest.into_hex()],
+    }));
     let mut arguments = profile.module_compiler_flags.clone();
     arguments.push(String::from("modules"));
-    steps.push(step(
-        "06-kernel-module",
-        ArtifactOutputClass::KernelModule,
-        Some(ToolRole::KernelBuild),
-        PlanAction::CompileModule,
-        vec![
+    steps.push(step(PlanStepInput {
+        step_id: "06-kernel-module",
+        output_class: ArtifactOutputClass::KernelModule,
+        tool_role: Some(ToolRole::KernelBuild),
+        action: PlanAction::CompileModule,
+        inputs: vec![
             source,
             String::from(MANTLE_MODULE_RECIPE),
             profile.target.headers.artifact.artifact_ref.clone(),
         ],
-        vec![format!("{BUILD_OUTPUT_ROOT}/{base}.mod.ko")],
+        outputs: vec![format!("{BUILD_OUTPUT_ROOT}/{base}.mod.ko")],
         arguments,
-    ));
+    }));
 }
 
 fn append_test_step(
@@ -432,15 +458,15 @@ fn append_test_step(
     let Some(source) = unique_member_path(manifest, GeneratedFileClass::TestC, blockers) else {
         return;
     };
-    steps.push(step(
-        "07-test-binary",
-        ArtifactOutputClass::TestBinary,
-        Some(ToolRole::CCompiler),
-        PlanAction::CompileTest,
-        vec![source, format!("{BUILD_OUTPUT_ROOT}/{base}.ebpf.o")],
-        vec![format!("{BUILD_OUTPUT_ROOT}/{base}.test")],
-        profile.userspace_compiler_flags.clone(),
-    ));
+    steps.push(step(PlanStepInput {
+        step_id: "07-test-binary",
+        output_class: ArtifactOutputClass::TestBinary,
+        tool_role: Some(ToolRole::CCompiler),
+        action: PlanAction::CompileTest,
+        inputs: vec![source, format!("{BUILD_OUTPUT_ROOT}/{base}.ebpf.o")],
+        outputs: vec![format!("{BUILD_OUTPUT_ROOT}/{base}.test")],
+        arguments: profile.userspace_compiler_flags.clone(),
+    }));
 }
 
 fn unique_member_path(
@@ -461,6 +487,7 @@ fn unique_member_path(
 }
 
 fn validate_steps(profile: &ExperimentProfile, steps: &[PlanStep], blockers: &mut Vec<ExperimentBlocker>) {
+    let initial_blocker_count: usize = blockers.len();
     if steps.is_empty() || count_above_bound(steps.len(), profile.bounds.max_compilation_steps) {
         blockers.push(blocker(
             "compilation-step-limit",
@@ -489,6 +516,8 @@ fn validate_steps(profile: &ExperimentProfile, steps: &[PlanStep], blockers: &mu
             ));
         }
     }
+    debug_assert!(ids.len() <= steps.len());
+    debug_assert!(blockers.len() >= initial_blocker_count);
 }
 
 fn identify_compilation_plan(
@@ -498,6 +527,8 @@ fn identify_compilation_plan(
     steps: Vec<PlanStep>,
     blockers: &mut Vec<ExperimentBlocker>,
 ) -> Option<CompilationPlan> {
+    debug_assert!(!steps.is_empty());
+    debug_assert!(steps.len() <= MAX_PLAN_STEPS);
     let input = CompilationIdentityInput {
         schema: String::from(COMPILATION_PLAN_SCHEMA),
         profile_identity_blake3: profile_identity.clone(),
@@ -528,26 +559,17 @@ fn identify_compilation_plan(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
-fn step(
-    step_id: &str,
-    output_class: ArtifactOutputClass,
-    tool_role: Option<ToolRole>,
-    action: PlanAction,
-    inputs: Vec<String>,
-    outputs: Vec<String>,
-    arguments: Vec<String>,
-) -> PlanStep {
-    debug_assert!(!step_id.is_empty());
-    debug_assert!(!outputs.is_empty());
+fn step(input: PlanStepInput) -> PlanStep {
+    debug_assert!(!input.step_id.is_empty());
+    debug_assert!(!input.outputs.is_empty());
     PlanStep {
-        step_id: String::from(step_id),
-        output_class,
-        tool_role,
-        action,
-        inputs,
-        outputs,
-        arguments,
+        step_id: String::from(input.step_id),
+        output_class: input.output_class,
+        tool_role: input.tool_role,
+        action: input.action,
+        inputs: input.inputs,
+        outputs: input.outputs,
+        arguments: input.arguments,
     }
 }
 

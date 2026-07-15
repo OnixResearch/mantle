@@ -117,7 +117,7 @@ pub struct InspectionResult {
 
 struct ElfSectionFacts {
     name: String,
-    file_offset: usize,
+    file_offset_bytes: usize,
     size_bytes: usize,
 }
 
@@ -126,6 +126,49 @@ struct ElfFacts {
     elf_type: u16,
     elf_machine: u16,
     sections: Vec<ElfSectionFacts>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ElfEncoding {
+    class: u8,
+    data: u8,
+    version: u8,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SectionTableShape {
+    entry_size_bytes: usize,
+    section_count: usize,
+    names_index: usize,
+    maximum_section_count: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SectionTableLayout {
+    table_offset_bytes: usize,
+    entry_size_bytes: usize,
+    section_count: usize,
+    names_offset_bytes: usize,
+    names_end_bytes: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ByteRange {
+    start_bytes: usize,
+    end_bytes: usize,
+}
+
+struct ModuleElfValidation<'a> {
+    bytes: &'a [u8],
+    expected_machine: u16,
+    expected_release: &'a str,
+    max_text_bytes: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BtfRange {
+    offset_bytes: u32,
+    length_bytes: u32,
 }
 
 pub fn inspect_output(profile: ExperimentProfile, plan: CompilationPlan, observed: ObservedOutput) -> InspectionResult {
@@ -147,9 +190,10 @@ fn validate_observation_binding(
     observed: &ObservedOutput,
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
-    let plan_identity_matches =
+    let initial_blocker_count: usize = blockers.len();
+    let is_plan_identity_intact =
         crate::planner::expected_compilation_plan_identity(plan).as_ref() == Some(&plan.plan_identity_blake3);
-    if observed.plan_identity_blake3 != plan.plan_identity_blake3 || !plan_identity_matches {
+    if observed.plan_identity_blake3 != plan.plan_identity_blake3 || !is_plan_identity_intact {
         blockers.push(blocker(
             "stale-output-plan",
             &observed.relative_path,
@@ -191,6 +235,8 @@ fn validate_observation_binding(
         ));
     }
     validate_output_shape(profile, observed, blockers);
+    debug_assert!(blockers.len() >= initial_blocker_count);
+    debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
 }
 
 fn validate_output_shape(
@@ -198,7 +244,18 @@ fn validate_output_shape(
     observed: &ObservedOutput,
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
-    let size_bytes = u64::try_from(observed.bytes.len()).unwrap_or(u64::MAX);
+    let initial_blocker_count: usize = blockers.len();
+    let size_bytes = match u64::try_from(observed.bytes.len()) {
+        Ok(size_bytes) => size_bytes,
+        Err(_) => {
+            blockers.push(blocker(
+                "output-byte-bound",
+                &observed.relative_path,
+                "output byte count is not representable",
+            ));
+            return;
+        }
+    };
     if size_bytes == 0 || size_bytes > profile.bounds.max_output_bytes {
         blockers.push(blocker(
             "output-byte-bound",
@@ -213,15 +270,18 @@ fn validate_output_shape(
             "output path is absolute, escaping, or non-canonical",
         ));
     }
-    if observed.generated_source_members.is_empty()
-        || count_above_bound(observed.generated_source_members.len(), profile.bounds.max_generated_files)
-    {
+    let has_source_members = !observed.generated_source_members.is_empty();
+    let is_source_count_bounded =
+        !count_above_bound(observed.generated_source_members.len(), profile.bounds.max_generated_files);
+    if !has_source_members || !is_source_count_bounded {
         blockers.push(blocker(
             "output-source-binding",
             &observed.relative_path,
             "output must bind a bounded non-empty generated source set",
         ));
     }
+    debug_assert!(blockers.len() >= initial_blocker_count);
+    debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
 }
 
 fn plan_contains_output(plan: &CompilationPlan, class: ArtifactOutputClass, path: &str) -> bool {
@@ -253,14 +313,20 @@ pub(crate) fn expected_generated_source_members(
 }
 
 fn parse_elf(bytes: &[u8], profile: &ExperimentProfile, blockers: &mut Vec<ExperimentBlocker>) -> Option<ElfFacts> {
-    if bytes.len() < ELF64_HEADER_BYTES || bytes.get(0..ELF_MAGIC.len()) != Some(ELF_MAGIC.as_slice()) {
+    debug_assert!(ELF64_HEADER_BYTES >= ELF_MAGIC.len());
+    debug_assert!(ELF_MACHINE_OFFSET < ELF64_HEADER_BYTES);
+    if !has_complete_elf_header(bytes) {
         blockers.push(blocker("malformed-elf-header", "output", "output is not a complete ELF object"));
         return None;
     }
-    let elf_class = bytes[ELF_CLASS_OFFSET];
-    let elf_data = bytes[ELF_DATA_OFFSET];
-    let elf_version = bytes[ELF_IDENT_VERSION_OFFSET];
-    if elf_class != ELF_CLASS_64 || elf_data != ELF_DATA_LITTLE_ENDIAN || elf_version != ELF_IDENT_VERSION_CURRENT {
+    let elf_class: u8 = bytes[ELF_CLASS_OFFSET];
+    let elf_data: u8 = bytes[ELF_DATA_OFFSET];
+    let elf_version: u8 = bytes[ELF_IDENT_VERSION_OFFSET];
+    if !has_supported_elf_encoding(ElfEncoding {
+        class: elf_class,
+        data: elf_data,
+        version: elf_version,
+    }) {
         blockers.push(blocker(
             "unsupported-elf-encoding",
             "output",
@@ -276,9 +342,9 @@ fn parse_elf(bytes: &[u8], profile: &ExperimentProfile, blockers: &mut Vec<Exper
         blockers.push(blocker("malformed-elf-header", "output", "ELF machine is truncated"));
         return None;
     };
-    let blocker_count_before = blockers.len();
+    let initial_blocker_count: usize = blockers.len();
     let Some(sections) = parse_sections(bytes, profile, blockers) else {
-        if blockers.len() == blocker_count_before {
+        if blockers.len() == initial_blocker_count {
             blockers.push(blocker(
                 "malformed-elf-section-table",
                 "output",
@@ -295,21 +361,34 @@ fn parse_elf(bytes: &[u8], profile: &ExperimentProfile, blockers: &mut Vec<Exper
     })
 }
 
+fn has_complete_elf_header(bytes: &[u8]) -> bool {
+    bytes.len() >= ELF64_HEADER_BYTES && bytes.get(0..ELF_MAGIC.len()) == Some(ELF_MAGIC.as_slice())
+}
+
+fn has_supported_elf_encoding(encoding: ElfEncoding) -> bool {
+    encoding.class == ELF_CLASS_64
+        && encoding.data == ELF_DATA_LITTLE_ENDIAN
+        && encoding.version == ELF_IDENT_VERSION_CURRENT
+}
+
 fn parse_sections(
     bytes: &[u8],
     profile: &ExperimentProfile,
     blockers: &mut Vec<ExperimentBlocker>,
 ) -> Option<Vec<ElfSectionFacts>> {
-    let table_offset = usize_from_u64(read_u64(bytes, ELF_SECTION_TABLE_OFFSET)?)?;
-    let entry_size = usize::from(read_u16(bytes, ELF_SECTION_ENTRY_SIZE_OFFSET)?);
+    debug_assert!(bytes.len() >= ELF64_HEADER_BYTES);
+    debug_assert!(ELF64_SECTION_HEADER_BYTES > 0);
+    let table_offset_bytes = usize_from_u64(read_u64(bytes, ELF_SECTION_TABLE_OFFSET)?)?;
+    let entry_size_bytes = usize::from(read_u16(bytes, ELF_SECTION_ENTRY_SIZE_OFFSET)?);
     let section_count = usize::from(read_u16(bytes, ELF_SECTION_COUNT_OFFSET)?);
     let names_index = usize::from(read_u16(bytes, ELF_SECTION_NAMES_INDEX_OFFSET)?);
-    let max_sections = usize::try_from(profile.bounds.max_elf_sections).ok()?;
-    if entry_size != ELF64_SECTION_HEADER_BYTES
-        || section_count == 0
-        || section_count > max_sections
-        || names_index >= section_count
-    {
+    let maximum_section_count = usize::try_from(profile.bounds.max_elf_sections).ok()?;
+    if !has_valid_section_table_shape(SectionTableShape {
+        entry_size_bytes,
+        section_count,
+        names_index,
+        maximum_section_count,
+    }) {
         blockers.push(blocker(
             "invalid-elf-section-table",
             "output",
@@ -317,17 +396,19 @@ fn parse_sections(
         ));
         return None;
     }
-    let table_bytes = entry_size.checked_mul(section_count)?;
-    let table_end = table_offset.checked_add(table_bytes)?;
-    if table_end > bytes.len() {
+    let table_size_bytes = entry_size_bytes.checked_mul(section_count)?;
+    let table_end_bytes = table_offset_bytes.checked_add(table_size_bytes)?;
+    if table_end_bytes > bytes.len() {
         blockers.push(blocker("truncated-elf-section-table", "output", "ELF section table exceeds output bytes"));
         return None;
     }
-    let names_header = table_offset.checked_add(entry_size.checked_mul(names_index)?)?;
-    let names_offset = usize_from_u64(read_u64(bytes, names_header.checked_add(SECTION_FILE_OFFSET)?)?)?;
-    let names_size = usize_from_u64(read_u64(bytes, names_header.checked_add(SECTION_SIZE_OFFSET)?)?)?;
-    let names_end = names_offset.checked_add(names_size)?;
-    if names_end > bytes.len() {
+    let names_header_offset_bytes = table_offset_bytes.checked_add(entry_size_bytes.checked_mul(names_index)?)?;
+    let names_offset_bytes =
+        usize_from_u64(read_u64(bytes, names_header_offset_bytes.checked_add(SECTION_FILE_OFFSET)?)?)?;
+    let names_size_bytes =
+        usize_from_u64(read_u64(bytes, names_header_offset_bytes.checked_add(SECTION_SIZE_OFFSET)?)?)?;
+    let names_end_bytes = names_offset_bytes.checked_add(names_size_bytes)?;
+    if names_end_bytes > bytes.len() {
         blockers.push(blocker(
             "truncated-elf-string-table",
             "output",
@@ -335,60 +416,86 @@ fn parse_sections(
         ));
         return None;
     }
-    collect_sections(bytes, table_offset, entry_size, section_count, names_offset, names_end, profile, blockers)
+    collect_sections(
+        bytes,
+        SectionTableLayout {
+            table_offset_bytes,
+            entry_size_bytes,
+            section_count,
+            names_offset_bytes,
+            names_end_bytes,
+        },
+        profile,
+        blockers,
+    )
 }
 
-#[allow(clippy::too_many_arguments)]
+fn has_valid_section_table_shape(shape: SectionTableShape) -> bool {
+    let has_expected_entry_size_bytes = shape.entry_size_bytes == ELF64_SECTION_HEADER_BYTES;
+    let has_sections = shape.section_count > 0;
+    let is_section_count_bounded = shape.section_count <= shape.maximum_section_count;
+    let is_names_index_bounded = shape.names_index < shape.section_count;
+    has_expected_entry_size_bytes && has_sections && is_section_count_bounded && is_names_index_bounded
+}
+
 fn collect_sections(
     bytes: &[u8],
-    table_offset: usize,
-    entry_size: usize,
-    section_count: usize,
-    names_offset: usize,
-    names_end: usize,
+    layout: SectionTableLayout,
     profile: &ExperimentProfile,
     blockers: &mut Vec<ExperimentBlocker>,
 ) -> Option<Vec<ElfSectionFacts>> {
+    let initial_blocker_count: usize = blockers.len();
     let mut names = BTreeSet::new();
-    let mut sections = Vec::new();
-    for index in 0..section_count {
-        let header_offset = table_offset.checked_add(entry_size.checked_mul(index)?)?;
-        let name_index = usize::try_from(read_u32(bytes, header_offset.checked_add(SECTION_NAME_OFFSET)?)?).ok()?;
+    let mut sections = Vec::with_capacity(layout.section_count);
+    for index in 0..layout.section_count {
+        let header_offset_bytes = layout.table_offset_bytes.checked_add(layout.entry_size_bytes.checked_mul(index)?)?;
+        let name_index =
+            usize::try_from(read_u32(bytes, header_offset_bytes.checked_add(SECTION_NAME_OFFSET)?)?).ok()?;
         if name_index == 0 {
             continue;
         }
-        let start = names_offset.checked_add(name_index)?;
-        let name = section_name(bytes, start, names_end, profile.bounds.max_section_name_bytes)?;
+        let name_start_bytes = layout.names_offset_bytes.checked_add(name_index)?;
+        let name = section_name(
+            bytes,
+            ByteRange {
+                start_bytes: name_start_bytes,
+                end_bytes: layout.names_end_bytes,
+            },
+            profile.bounds.max_section_name_bytes,
+        )?;
         if !names.insert(name.clone()) {
             blockers.push(blocker("duplicate-elf-section-name", "output", "ELF section names contain duplicates"));
             return None;
         }
-        let file_offset = usize_from_u64(read_u64(bytes, header_offset.checked_add(SECTION_FILE_OFFSET)?)?)?;
-        let size_bytes = usize_from_u64(read_u64(bytes, header_offset.checked_add(SECTION_SIZE_OFFSET)?)?)?;
-        let section_end = file_offset.checked_add(size_bytes)?;
-        if section_end > bytes.len() {
+        let file_offset_bytes =
+            usize_from_u64(read_u64(bytes, header_offset_bytes.checked_add(SECTION_FILE_OFFSET)?)?)?;
+        let size_bytes = usize_from_u64(read_u64(bytes, header_offset_bytes.checked_add(SECTION_SIZE_OFFSET)?)?)?;
+        let section_end_bytes = file_offset_bytes.checked_add(size_bytes)?;
+        if section_end_bytes > bytes.len() {
             blockers.push(blocker("truncated-elf-section", &name, "ELF section exceeds output bytes"));
             return None;
         }
         sections.push(ElfSectionFacts {
             name,
-            file_offset,
+            file_offset_bytes,
             size_bytes,
         });
     }
     sections.sort_by(|left, right| left.name.cmp(&right.name));
+    debug_assert!(sections.len() <= layout.section_count);
+    debug_assert!(blockers.len() >= initial_blocker_count);
     Some(sections)
 }
 
-fn section_name(bytes: &[u8], start: usize, end: usize, max_name_bytes: u32) -> Option<String> {
-    if start >= end {
+fn section_name(bytes: &[u8], range: ByteRange, max_name_bytes: u32) -> Option<String> {
+    if range.start_bytes >= range.end_bytes {
         return None;
     }
-    let maximum = usize::try_from(max_name_bytes).ok()?;
-    let bounded_end = start.checked_add(maximum)?.min(end);
-    let relative_end = bytes.get(start..bounded_end)?.iter().position(|byte| *byte == 0)?;
-    let name_end = start.checked_add(relative_end)?;
-    let name = core::str::from_utf8(bytes.get(start..name_end)?).ok()?;
+    let maximum_name_bytes = usize::try_from(max_name_bytes).ok()?;
+    let bounded_end_bytes = range.start_bytes.checked_add(maximum_name_bytes)?.min(range.end_bytes);
+    let relative_end_bytes = bytes.get(range.start_bytes..bounded_end_bytes)?.iter().position(|byte| *byte == 0)?;
+    let name_end_bytes = range.start_bytes.checked_add(relative_end_bytes)?;
+    let name = core::str::from_utf8(bytes.get(range.start_bytes..name_end_bytes)?).ok()?;
     if name.is_empty() || name.chars().any(char::is_control) {
         return None;
     }
@@ -402,14 +509,18 @@ fn validate_elf_class(
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
     let expected_machine = target_machine(profile.target.architecture);
+    debug_assert_eq!(elf.elf_class, ELF_CLASS_64);
+    debug_assert!(expected_machine > 0);
     match observed.output_class {
         ArtifactOutputClass::EbpfObject => validate_bpf_elf(elf, &observed.bytes, blockers),
         ArtifactOutputClass::KernelModule => validate_module_elf(
             elf,
-            &observed.bytes,
-            expected_machine,
-            &profile.target.kernel_release,
-            profile.bounds.max_text_bytes,
+            ModuleElfValidation {
+                bytes: &observed.bytes,
+                expected_machine,
+                expected_release: &profile.target.kernel_release,
+                max_text_bytes: profile.bounds.max_text_bytes,
+            },
             blockers,
         ),
         ArtifactOutputClass::UserspaceLoader | ArtifactOutputClass::TestBinary => {
@@ -431,8 +542,8 @@ fn validate_bpf_elf(elf: &ElfFacts, bytes: &[u8], blockers: &mut Vec<ExperimentB
         blockers.push(blocker("missing-bpf-btf-section", "output", "eBPF output lacks required .BTF metadata"));
         return;
     };
-    let valid = section_bytes(bytes, section).is_some_and(valid_btf_header);
-    if !valid {
+    let is_valid_btf = section_bytes(bytes, section).is_some_and(valid_btf_header);
+    if !is_valid_btf {
         blockers.push(blocker(
             "malformed-bpf-btf-metadata",
             "output",
@@ -441,15 +552,10 @@ fn validate_bpf_elf(elf: &ElfFacts, bytes: &[u8], blockers: &mut Vec<ExperimentB
     }
 }
 
-fn validate_module_elf(
-    elf: &ElfFacts,
-    bytes: &[u8],
-    expected_machine: u16,
-    expected_release: &str,
-    max_text_bytes: u32,
-    blockers: &mut Vec<ExperimentBlocker>,
-) {
-    if elf.elf_type != ELF_TYPE_RELOCATABLE || elf.elf_machine != expected_machine {
+fn validate_module_elf(elf: &ElfFacts, validation: ModuleElfValidation<'_>, blockers: &mut Vec<ExperimentBlocker>) {
+    let initial_blocker_count: usize = blockers.len();
+    debug_assert!(validation.expected_machine > 0);
+    if elf.elf_type != ELF_TYPE_RELOCATABLE || elf.elf_machine != validation.expected_machine {
         blockers.push(blocker(
             "invalid-module-elf",
             "output",
@@ -460,15 +566,17 @@ fn validate_module_elf(
         blockers.push(blocker("missing-module-metadata", "output", "kernel module lacks required .modinfo metadata"));
         return;
     };
-    let valid = section_bytes(bytes, section)
-        .is_some_and(|metadata| valid_module_metadata(metadata, expected_release, max_text_bytes));
-    if !valid {
+    let is_valid_metadata = section_bytes(validation.bytes, section).is_some_and(|metadata| {
+        valid_module_metadata(metadata, validation.expected_release, validation.max_text_bytes)
+    });
+    if !is_valid_metadata {
         blockers.push(blocker(
             "malformed-module-metadata",
             "output",
             "kernel module metadata is malformed, unbounded, or names another kernel release",
         ));
     }
+    debug_assert!(blockers.len() >= initial_blocker_count);
 }
 
 fn find_section<'a>(elf: &'a ElfFacts, name: &str) -> Option<&'a ElfSectionFacts> {
@@ -476,8 +584,8 @@ fn find_section<'a>(elf: &'a ElfFacts, name: &str) -> Option<&'a ElfSectionFacts
 }
 
 fn section_bytes<'a>(bytes: &'a [u8], section: &ElfSectionFacts) -> Option<&'a [u8]> {
-    let end = section.file_offset.checked_add(section.size_bytes)?;
-    bytes.get(section.file_offset..end)
+    let end_bytes = section.file_offset_bytes.checked_add(section.size_bytes)?;
+    bytes.get(section.file_offset_bytes..end_bytes)
 }
 
 fn valid_btf_header(bytes: &[u8]) -> bool {
@@ -487,53 +595,77 @@ fn valid_btf_header(bytes: &[u8]) -> bool {
     if bytes[BTF_VERSION_OFFSET] != BTF_VERSION_CURRENT || bytes[BTF_FLAGS_OFFSET] != BTF_FLAGS_NONE {
         return false;
     }
-    let Some(header_length) = read_u32(bytes, BTF_HEADER_LENGTH_OFFSET).and_then(|value| usize::try_from(value).ok())
+    let Some(header_length_bytes) =
+        read_u32(bytes, BTF_HEADER_LENGTH_OFFSET).and_then(|value| usize::try_from(value).ok())
     else {
         return false;
     };
-    if header_length < BTF_HEADER_BYTES_MIN || header_length > bytes.len() {
+    if header_length_bytes < BTF_HEADER_BYTES_MIN || header_length_bytes > bytes.len() {
         return false;
     }
-    valid_btf_payload(bytes, header_length)
+    valid_btf_payload(bytes, header_length_bytes)
 }
 
-fn valid_btf_payload(bytes: &[u8], header_length: usize) -> bool {
-    let Some(type_offset) = read_u32(bytes, BTF_TYPE_OFFSET_OFFSET) else {
+fn valid_btf_payload(bytes: &[u8], header_length_bytes: usize) -> bool {
+    debug_assert!(header_length_bytes >= BTF_HEADER_BYTES_MIN);
+    debug_assert!(header_length_bytes <= bytes.len());
+    let Some(type_offset_bytes) = read_u32(bytes, BTF_TYPE_OFFSET_OFFSET) else {
         return false;
     };
-    let Some(type_length) = read_u32(bytes, BTF_TYPE_LENGTH_OFFSET) else {
+    let Some(type_length_bytes) = read_u32(bytes, BTF_TYPE_LENGTH_OFFSET) else {
         return false;
     };
-    let Some(string_offset) = read_u32(bytes, BTF_STRING_OFFSET_OFFSET) else {
+    let Some(string_offset_bytes) = read_u32(bytes, BTF_STRING_OFFSET_OFFSET) else {
         return false;
     };
-    let Some(string_length) = read_u32(bytes, BTF_STRING_LENGTH_OFFSET) else {
+    let Some(string_length_bytes) = read_u32(bytes, BTF_STRING_LENGTH_OFFSET) else {
         return false;
     };
-    let payload_length = bytes.len().saturating_sub(header_length);
-    let type_range_valid = btf_range_within_payload(type_offset, type_length, payload_length);
-    let string_range_valid = btf_range_within_payload(string_offset, string_length, payload_length);
-    let ranges_ordered = type_offset.checked_add(type_length).is_some_and(|type_end| type_end <= string_offset);
-    let string_start = usize::try_from(string_offset).ok().and_then(|offset| header_length.checked_add(offset));
-    let initial_null =
-        string_start.and_then(|offset| bytes.get(offset)).copied() == Some(BTF_STRING_TABLE_INITIAL_BYTE);
-    type_range_valid && string_range_valid && string_length > 0 && ranges_ordered && initial_null
+    let Some(payload_length_bytes) = bytes.len().checked_sub(header_length_bytes) else {
+        return false;
+    };
+    let is_type_range_valid = btf_range_within_payload(
+        BtfRange {
+            offset_bytes: type_offset_bytes,
+            length_bytes: type_length_bytes,
+        },
+        payload_length_bytes,
+    );
+    let is_string_range_valid = btf_range_within_payload(
+        BtfRange {
+            offset_bytes: string_offset_bytes,
+            length_bytes: string_length_bytes,
+        },
+        payload_length_bytes,
+    );
+    let has_ordered_ranges = type_offset_bytes
+        .checked_add(type_length_bytes)
+        .is_some_and(|type_end_bytes| type_end_bytes <= string_offset_bytes);
+    let string_start_bytes = usize::try_from(string_offset_bytes)
+        .ok()
+        .and_then(|offset_bytes| header_length_bytes.checked_add(offset_bytes));
+    let has_initial_null = string_start_bytes.and_then(|offset_bytes| bytes.get(offset_bytes)).copied()
+        == Some(BTF_STRING_TABLE_INITIAL_BYTE);
+    is_type_range_valid && is_string_range_valid && string_length_bytes > 0 && has_ordered_ranges && has_initial_null
 }
 
-fn btf_range_within_payload(offset: u32, length: u32, payload_length: usize) -> bool {
-    let Some(end) = offset.checked_add(length) else {
+fn btf_range_within_payload(range: BtfRange, payload_length_bytes: usize) -> bool {
+    let Some(end_bytes) = range.offset_bytes.checked_add(range.length_bytes) else {
         return false;
     };
-    usize::try_from(end).is_ok_and(|end| end <= payload_length)
+    usize::try_from(end_bytes).is_ok_and(|end_bytes| end_bytes <= payload_length_bytes)
 }
 
 fn valid_module_metadata(bytes: &[u8], expected_release: &str, max_text_bytes: u32) -> bool {
-    let bounded = usize::try_from(max_text_bytes).is_ok_and(|maximum| !bytes.is_empty() && bytes.len() <= maximum);
-    if !bounded || bytes.last().copied() != Some(0) {
+    debug_assert!(!MODULE_VERMAGIC_PREFIX.is_empty());
+    debug_assert!(MODULE_VERMAGIC_PREFIX.ends_with('='));
+    let is_bounded =
+        usize::try_from(max_text_bytes).is_ok_and(|maximum_bytes| !bytes.is_empty() && bytes.len() <= maximum_bytes);
+    if !is_bounded || bytes.last().copied() != Some(0) {
         return false;
     }
-    let mut saw_metadata = false;
-    let mut release_matches = false;
+    let mut has_metadata = false;
+    let mut has_matching_release = false;
     for raw in bytes.split(|byte| *byte == 0).filter(|segment| !segment.is_empty()) {
         let Ok(field) = core::str::from_utf8(raw) else {
             return false;
@@ -541,17 +673,17 @@ fn valid_module_metadata(bytes: &[u8], expected_release: &str, max_text_bytes: u
         if field.chars().any(char::is_control) {
             return false;
         }
-        saw_metadata = true;
+        has_metadata = true;
         if let Some(value) = field.strip_prefix(MODULE_VERMAGIC_PREFIX) {
-            release_matches = value.split_ascii_whitespace().next() == Some(expected_release);
+            has_matching_release = value.split_ascii_whitespace().next() == Some(expected_release);
         }
     }
-    saw_metadata && release_matches
+    has_metadata && has_matching_release
 }
 
 fn validate_executable_elf(elf: &ElfFacts, expected_machine: u16, blockers: &mut Vec<ExperimentBlocker>) {
-    let executable_type = elf.elf_type == ELF_TYPE_EXECUTABLE || elf.elf_type == ELF_TYPE_DYNAMIC;
-    if !executable_type || elf.elf_machine != expected_machine {
+    let is_executable_type = elf.elf_type == ELF_TYPE_EXECUTABLE || elf.elf_type == ELF_TYPE_DYNAMIC;
+    if !is_executable_type || elf.elf_machine != expected_machine {
         blockers.push(blocker(
             "invalid-userspace-elf",
             "output",
@@ -565,6 +697,8 @@ fn build_inspection(
     elf: Option<ElfFacts>,
     blockers: &mut Vec<ExperimentBlocker>,
 ) -> Option<OutputInspection> {
+    debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
+    debug_assert!(elf.as_ref().is_none_or(|facts| facts.elf_class == ELF_CLASS_64));
     if !blockers.is_empty() {
         return None;
     }

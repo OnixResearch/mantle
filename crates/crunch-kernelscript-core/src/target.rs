@@ -107,6 +107,7 @@ fn validate_target_artifacts(
     facts: &ResolvedKernelTargetFacts,
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
+    let initial_blocker_count: usize = blockers.len();
     if facts.btf.as_ref() != Some(&profile.target.btf.artifact) {
         blockers.push(blocker(
             "missing-or-mismatched-btf",
@@ -128,6 +129,8 @@ fn validate_target_artifacts(
             "kernel config is absent or differs from the target profile",
         ));
     }
+    debug_assert!(blockers.len() >= initial_blocker_count);
+    debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
 }
 
 fn validate_target_cohort(

@@ -1,5 +1,4 @@
 use alloc::collections::BTreeSet;
-use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -64,6 +63,24 @@ pub struct ProfileValidation {
     pub blockers: Vec<ExperimentBlocker>,
 }
 
+struct TextValidation<'a> {
+    value: &'a str,
+    subject: &'a str,
+    maximum_bytes: u32,
+}
+
+struct BoundU32Validation<'a> {
+    value: u32,
+    maximum: u32,
+    subject: &'a str,
+}
+
+struct BoundU64Validation<'a> {
+    value: u64,
+    maximum: u64,
+    subject: &'a str,
+}
+
 pub fn validate_profile(profile: ExperimentProfile) -> ProfileValidation {
     let mut blockers = Vec::new();
     validate_header(&profile, &mut blockers);
@@ -84,6 +101,7 @@ pub fn validate_profile(profile: ExperimentProfile) -> ProfileValidation {
 }
 
 fn validate_header(profile: &ExperimentProfile, blockers: &mut Vec<ExperimentBlocker>) {
+    let initial_blocker_count: usize = blockers.len();
     if profile.schema != EXPERIMENT_PROFILE_SCHEMA {
         blockers.push(blocker(
             "unsupported-profile-schema",
@@ -91,7 +109,14 @@ fn validate_header(profile: &ExperimentProfile, blockers: &mut Vec<ExperimentBlo
             "KernelScript profile schema is unsupported",
         ));
     }
-    validate_text(&profile.experiment_id, "profile.experiment_id", profile.bounds.max_text_bytes, blockers);
+    validate_text(
+        TextValidation {
+            value: &profile.experiment_id,
+            subject: "profile.experiment_id",
+            maximum_bytes: profile.bounds.max_text_bytes,
+        },
+        blockers,
+    );
     if !profile.beta || profile.enabled_by_default {
         blockers.push(blocker(
             "experiment-not-bounded-beta",
@@ -99,10 +124,15 @@ fn validate_header(profile: &ExperimentProfile, blockers: &mut Vec<ExperimentBlo
             "KernelScript must remain beta and disabled by default",
         ));
     }
+    debug_assert!(!EXPERIMENT_PROFILE_SCHEMA.is_empty());
+    debug_assert!(blockers.len() >= initial_blocker_count);
 }
 
 fn validate_source_and_compiler(profile: &ExperimentProfile, blockers: &mut Vec<ExperimentBlocker>) {
-    if !safe_relative_path(&profile.source.relative_path) || !profile.source.relative_path.ends_with(SOURCE_EXTENSION) {
+    let initial_blocker_count: usize = blockers.len();
+    let has_safe_source_path = safe_relative_path(&profile.source.relative_path);
+    let has_source_extension = profile.source.relative_path.ends_with(SOURCE_EXTENSION);
+    if !has_safe_source_path || !has_source_extension {
         blockers.push(blocker(
             "invalid-kernelscript-source-path",
             "profile.source",
@@ -117,7 +147,14 @@ fn validate_source_and_compiler(profile: &ExperimentProfile, blockers: &mut Vec<
         ));
     }
     let compiler = &profile.compiler;
-    validate_text(&compiler.version, "compiler.version", profile.bounds.max_text_bytes, blockers);
+    validate_text(
+        TextValidation {
+            value: &compiler.version,
+            subject: "compiler.version",
+            maximum_bytes: profile.bounds.max_text_bytes,
+        },
+        blockers,
+    );
     if !lower_hex(&compiler.source_revision, GIT_REVISION_HEX_LENGTH) {
         blockers.push(blocker(
             "invalid-compiler-revision",
@@ -125,7 +162,9 @@ fn validate_source_and_compiler(profile: &ExperimentProfile, blockers: &mut Vec<
             "compiler revision must be exact Git hex",
         ));
     }
-    if !compiler.source_archive_url.starts_with("https://") || compiler.source_archive_url.contains('@') {
+    let is_https_source = compiler.source_archive_url.starts_with("https://");
+    let has_embedded_credentials = compiler.source_archive_url.contains('@');
+    if !is_https_source || has_embedded_credentials {
         blockers.push(blocker(
             "invalid-compiler-source-url",
             "compiler.source_archive_url",
@@ -134,15 +173,13 @@ fn validate_source_and_compiler(profile: &ExperimentProfile, blockers: &mut Vec<
     }
     validate_dependency_lock(&compiler.dependency_lock, profile.bounds.max_text_bytes, blockers);
     validate_artifact(&compiler.compiler_executable, "compiler.executable", blockers);
+    debug_assert!(GIT_REVISION_HEX_LENGTH > 0);
+    debug_assert!(blockers.len() >= initial_blocker_count);
 }
 
 fn validate_dependency_lock(lock: &CompilerDependencyLock, text_bound: u32, blockers: &mut Vec<ExperimentBlocker>) {
-    let count_matches = usize::try_from(lock.dependency_count).ok() == Some(lock.dependencies.len());
-    if !matches!(lock.format.as_str(), OPAM_LOCK_FORMAT | NIX_CLOSURE_OBSERVATION_LOCK_FORMAT)
-        || lock.dependencies.is_empty()
-        || count_above_bound(lock.dependencies.len(), MAX_COMPILER_DEPENDENCIES)
-        || !count_matches
-    {
+    let initial_blocker_count: usize = blockers.len();
+    if !has_valid_dependency_lock_shape(lock) {
         blockers.push(blocker(
             "incomplete-compiler-dependency-lock",
             "compiler.dependency_lock",
@@ -153,8 +190,22 @@ fn validate_dependency_lock(lock: &CompilerDependencyLock, text_bound: u32, bloc
     let mut packages = BTreeSet::new();
     let mut artifacts = BTreeSet::new();
     for dependency in &lock.dependencies {
-        validate_text(&dependency.package, "compiler.dependency.package", text_bound, blockers);
-        validate_text(&dependency.version, "compiler.dependency.version", text_bound, blockers);
+        validate_text(
+            TextValidation {
+                value: &dependency.package,
+                subject: "compiler.dependency.package",
+                maximum_bytes: text_bound,
+            },
+            blockers,
+        );
+        validate_text(
+            TextValidation {
+                value: &dependency.version,
+                subject: "compiler.dependency.version",
+                maximum_bytes: text_bound,
+            },
+            blockers,
+        );
         validate_artifact(&dependency.artifact, "compiler.dependency.artifact", blockers);
         if !packages.insert(dependency.package.as_str()) {
             blockers.push(blocker(
@@ -171,32 +222,96 @@ fn validate_dependency_lock(lock: &CompilerDependencyLock, text_bound: u32, bloc
             ));
         }
     }
+    debug_assert!(packages.len() <= lock.dependencies.len());
+    debug_assert!(blockers.len() >= initial_blocker_count);
+}
+
+fn has_valid_dependency_lock_shape(lock: &CompilerDependencyLock) -> bool {
+    let has_recognized_lock_kind =
+        matches!(lock.format.as_str(), OPAM_LOCK_FORMAT | NIX_CLOSURE_OBSERVATION_LOCK_FORMAT);
+    let has_dependencies = !lock.dependencies.is_empty();
+    let is_dependency_count_bounded = !count_above_bound(lock.dependencies.len(), MAX_COMPILER_DEPENDENCIES);
+    let is_count_consistent = usize::try_from(lock.dependency_count).ok() == Some(lock.dependencies.len());
+    has_recognized_lock_kind && has_dependencies && is_dependency_count_bounded && is_count_consistent
 }
 
 fn validate_bounds(bounds: &ExperimentBounds, blockers: &mut Vec<ExperimentBlocker>) {
-    validate_bound_u32(bounds.max_generated_files, MAX_GENERATED_FILES_LIMIT, "max_generated_files", blockers);
-    validate_bound_u64(
-        bounds.max_generated_file_bytes,
-        MAX_GENERATED_FILE_BYTES_LIMIT,
-        "max_generated_file_bytes",
-        blockers,
-    );
-    validate_bound_u64(
-        bounds.max_generated_total_bytes,
-        MAX_GENERATED_TOTAL_BYTES_LIMIT,
-        "max_generated_total_bytes",
-        blockers,
-    );
-    validate_bound_u32(bounds.max_compilation_steps, MAX_COMPILATION_STEPS_LIMIT, "max_compilation_steps", blockers);
-    validate_bound_u32(bounds.max_output_files, MAX_OUTPUT_FILES_LIMIT, "max_output_files", blockers);
-    validate_bound_u64(bounds.max_output_bytes, MAX_OUTPUT_BYTES_LIMIT, "max_output_bytes", blockers);
-    validate_bound_u32(bounds.max_elf_sections, MAX_ELF_SECTIONS_LIMIT, "max_elf_sections", blockers);
-    validate_bound_u32(bounds.max_section_name_bytes, MAX_SECTION_NAME_BYTES_LIMIT, "max_section_name_bytes", blockers);
-    validate_bound_u32(bounds.max_receipt_blockers, MAX_RECEIPT_BLOCKERS_LIMIT, "max_receipt_blockers", blockers);
-    validate_bound_u32(bounds.max_text_bytes, MAX_TEXT_BYTES_LIMIT, "max_text_bytes", blockers);
+    debug_assert!(MAX_GENERATED_FILES_LIMIT > 0);
+    debug_assert!(MAX_GENERATED_FILE_BYTES_LIMIT > 0);
+    validate_u32_bounds(bounds, blockers);
+    validate_u64_bounds(bounds, blockers);
+}
+
+fn validate_u32_bounds(bounds: &ExperimentBounds, blockers: &mut Vec<ExperimentBlocker>) {
+    debug_assert!(MAX_COMPILATION_STEPS_LIMIT > 0);
+    debug_assert!(MAX_RECEIPT_BLOCKERS_LIMIT > 0);
+    for validation in [
+        BoundU32Validation {
+            value: bounds.max_generated_files,
+            maximum: MAX_GENERATED_FILES_LIMIT,
+            subject: "max_generated_files",
+        },
+        BoundU32Validation {
+            value: bounds.max_compilation_steps,
+            maximum: MAX_COMPILATION_STEPS_LIMIT,
+            subject: "max_compilation_steps",
+        },
+        BoundU32Validation {
+            value: bounds.max_output_files,
+            maximum: MAX_OUTPUT_FILES_LIMIT,
+            subject: "max_output_files",
+        },
+        BoundU32Validation {
+            value: bounds.max_elf_sections,
+            maximum: MAX_ELF_SECTIONS_LIMIT,
+            subject: "max_elf_sections",
+        },
+        BoundU32Validation {
+            value: bounds.max_section_name_bytes,
+            maximum: MAX_SECTION_NAME_BYTES_LIMIT,
+            subject: "max_section_name_bytes",
+        },
+        BoundU32Validation {
+            value: bounds.max_receipt_blockers,
+            maximum: MAX_RECEIPT_BLOCKERS_LIMIT,
+            subject: "max_receipt_blockers",
+        },
+        BoundU32Validation {
+            value: bounds.max_text_bytes,
+            maximum: MAX_TEXT_BYTES_LIMIT,
+            subject: "max_text_bytes",
+        },
+    ] {
+        validate_bound_u32(validation, blockers);
+    }
+}
+
+fn validate_u64_bounds(bounds: &ExperimentBounds, blockers: &mut Vec<ExperimentBlocker>) {
+    debug_assert!(MAX_GENERATED_TOTAL_BYTES_LIMIT > 0);
+    debug_assert!(MAX_OUTPUT_BYTES_LIMIT > 0);
+    for validation in [
+        BoundU64Validation {
+            value: bounds.max_generated_file_bytes,
+            maximum: MAX_GENERATED_FILE_BYTES_LIMIT,
+            subject: "max_generated_file_bytes",
+        },
+        BoundU64Validation {
+            value: bounds.max_generated_total_bytes,
+            maximum: MAX_GENERATED_TOTAL_BYTES_LIMIT,
+            subject: "max_generated_total_bytes",
+        },
+        BoundU64Validation {
+            value: bounds.max_output_bytes,
+            maximum: MAX_OUTPUT_BYTES_LIMIT,
+            subject: "max_output_bytes",
+        },
+    ] {
+        validate_bound_u64(validation, blockers);
+    }
 }
 
 fn validate_toolchain(profile: &ExperimentProfile, blockers: &mut Vec<ExperimentBlocker>) {
+    let initial_blocker_count: usize = blockers.len();
     if count_above_bound(profile.toolchain.len(), MAX_TOOLCHAIN_MEMBERS) {
         blockers.push(blocker(
             "toolchain-member-limit",
@@ -214,13 +329,22 @@ fn validate_toolchain(profile: &ExperimentProfile, blockers: &mut Vec<Experiment
     }
     for required in required_tool_roles(profile) {
         if !roles.contains(&required) {
-            blockers.push(blocker("missing-tool-role", &tool_role_name(required), "required toolchain role is absent"));
+            blockers.push(blocker("missing-tool-role", tool_role_name(required), "required toolchain role is absent"));
         }
     }
+    debug_assert!(roles.len() <= profile.toolchain.len());
+    debug_assert!(blockers.len() >= initial_blocker_count);
 }
 
 fn validate_tool(tool: &ToolIdentity, text_bound: u32, blockers: &mut Vec<ExperimentBlocker>) {
-    validate_text(&tool.version, "tool.version", text_bound, blockers);
+    validate_text(
+        TextValidation {
+            value: &tool.version,
+            subject: "tool.version",
+            maximum_bytes: text_bound,
+        },
+        blockers,
+    );
     validate_artifact(&tool.executable_or_library, "tool.artifact", blockers);
 }
 
@@ -265,6 +389,7 @@ fn validate_target_input(
     input: &TargetInputIdentity,
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
+    let initial_blocker_count: usize = blockers.len();
     validate_artifact(&input.artifact, "target.input", blockers);
     if input.role != expected_role {
         blockers.push(blocker(
@@ -273,16 +398,18 @@ fn validate_target_input(
             "kernel input occupies the wrong typed role",
         ));
     }
-    if input.architecture != target.architecture
-        || input.kernel_release != target.kernel_release
-        || input.kernel_build_identity != target.kernel_build_identity
-    {
+    let has_target_architecture = input.architecture == target.architecture;
+    let has_target_release = input.kernel_release == target.kernel_release;
+    let has_target_identity = input.kernel_build_identity == target.kernel_build_identity;
+    if !has_target_architecture || !has_target_release || !has_target_identity {
         blockers.push(blocker(
             "kernel-input-cohort-mismatch",
             "target.input",
             "kernel input does not bind the exact target cohort",
         ));
     }
+    debug_assert!(blockers.len() >= initial_blocker_count);
+    debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
 }
 
 fn validate_outputs(profile: &ExperimentProfile, blockers: &mut Vec<ExperimentBlocker>) {
@@ -303,6 +430,7 @@ fn validate_outputs(profile: &ExperimentProfile, blockers: &mut Vec<ExperimentBl
 }
 
 fn validate_expected_files(profile: &ExperimentProfile, blockers: &mut Vec<ExperimentBlocker>) {
+    let initial_blocker_count: usize = blockers.len();
     if profile.expected_generated_files.is_empty()
         || count_above_bound(profile.expected_generated_files.len(), profile.bounds.max_generated_files)
     {
@@ -315,10 +443,10 @@ fn validate_expected_files(profile: &ExperimentProfile, blockers: &mut Vec<Exper
     }
     let mut paths = BTreeSet::new();
     for expected in &profile.expected_generated_files {
-        if !safe_relative_path(&expected.relative_path)
-            || expected.max_bytes == 0
-            || expected.max_bytes > profile.bounds.max_generated_file_bytes
-        {
+        let has_safe_path = safe_relative_path(&expected.relative_path);
+        let has_positive_bound = expected.max_bytes > 0;
+        let is_bound_admitted = expected.max_bytes <= profile.bounds.max_generated_file_bytes;
+        if !has_safe_path || !has_positive_bound || !is_bound_admitted {
             blockers.push(blocker(
                 "invalid-expected-file",
                 &expected.relative_path,
@@ -333,6 +461,8 @@ fn validate_expected_files(profile: &ExperimentProfile, blockers: &mut Vec<Exper
             ));
         }
     }
+    debug_assert!(paths.len() <= profile.expected_generated_files.len());
+    debug_assert!(blockers.len() >= initial_blocker_count);
 }
 
 fn require_output_file_classes(profile: &ExperimentProfile, blockers: &mut Vec<ExperimentBlocker>) {
@@ -396,7 +526,7 @@ fn validate_non_claims(profile: &ExperimentProfile, blockers: &mut Vec<Experimen
         if !profile.non_claims.iter().any(|value| value == required) {
             blockers.push(blocker(
                 "missing-required-non-claim",
-                required,
+                *required,
                 "KernelScript profile omits a required non-claim",
             ));
         }
@@ -414,32 +544,34 @@ fn validate_artifact(artifact: &ArtifactIdentity, subject: &str, blockers: &mut 
     }
 }
 
-fn validate_text(value: &str, subject: &str, maximum_bytes: u32, blockers: &mut Vec<ExperimentBlocker>) {
-    let too_large = usize::try_from(maximum_bytes).is_ok_and(|maximum| value.len() > maximum);
-    if value.is_empty() || too_large || value.chars().any(char::is_control) {
+fn validate_text(validation: TextValidation<'_>, blockers: &mut Vec<ExperimentBlocker>) {
+    let is_too_large =
+        usize::try_from(validation.maximum_bytes).is_ok_and(|maximum_bytes| validation.value.len() > maximum_bytes);
+    let has_control_character = validation.value.chars().any(char::is_control);
+    if validation.value.is_empty() || is_too_large || has_control_character {
         blockers.push(blocker(
             "invalid-bounded-text",
-            subject,
+            validation.subject,
             "text must be non-empty, bounded UTF-8 without control characters",
         ));
     }
 }
 
-fn validate_bound_u32(value: u32, maximum: u32, subject: &str, blockers: &mut Vec<ExperimentBlocker>) {
-    if value == 0 || value > maximum {
+fn validate_bound_u32(validation: BoundU32Validation<'_>, blockers: &mut Vec<ExperimentBlocker>) {
+    if validation.value == 0 || validation.value > validation.maximum {
         blockers.push(blocker(
             "invalid-experiment-bound",
-            subject,
+            validation.subject,
             "profile bound is zero or exceeds the hard experiment ceiling",
         ));
     }
 }
 
-fn validate_bound_u64(value: u64, maximum: u64, subject: &str, blockers: &mut Vec<ExperimentBlocker>) {
-    if value == 0 || value > maximum {
+fn validate_bound_u64(validation: BoundU64Validation<'_>, blockers: &mut Vec<ExperimentBlocker>) {
+    if validation.value == 0 || validation.value > validation.maximum {
         blockers.push(blocker(
             "invalid-experiment-bound",
-            subject,
+            validation.subject,
             "profile bound is zero or exceeds the hard experiment ceiling",
         ));
     }
@@ -466,8 +598,9 @@ fn safe_relative_path(path: &str) -> bool {
 }
 
 fn safe_flag(flag: &str, maximum_bytes: u32) -> bool {
-    let within_bound = usize::try_from(maximum_bytes).is_ok_and(|maximum| !flag.is_empty() && flag.len() <= maximum);
-    within_bound && !flag.bytes().any(|byte| matches!(byte, b' ' | b'\t' | b'\n' | b';' | b'|' | b'&' | b'`' | b'$'))
+    let is_within_bound =
+        usize::try_from(maximum_bytes).is_ok_and(|maximum_bytes| !flag.is_empty() && flag.len() <= maximum_bytes);
+    is_within_bound && !flag.bytes().any(|byte| matches!(byte, b' ' | b'\t' | b'\n' | b';' | b'|' | b'&' | b'`' | b'$'))
 }
 
 fn valid_kernel_build_identity(value: &str) -> bool {
@@ -491,9 +624,17 @@ fn lower_hex(value: &str, length: usize) -> bool {
     value.len() == length && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
-fn tool_role_name(role: ToolRole) -> String {
-    serde_json::to_string(&role)
-        .unwrap_or_else(|_| String::from("unknown-tool-role"))
-        .trim_matches('"')
-        .to_string()
+fn tool_role_name(role: ToolRole) -> &'static str {
+    match role {
+        ToolRole::Ocaml => "ocaml",
+        ToolRole::Dune => "dune",
+        ToolRole::Menhir => "menhir",
+        ToolRole::Clang => "clang",
+        ToolRole::CCompiler => "c-compiler",
+        ToolRole::Bpftool => "bpftool",
+        ToolRole::Libbpf => "libbpf",
+        ToolRole::ElfLibrary => "elf-library",
+        ToolRole::Zlib => "zlib",
+        ToolRole::KernelBuild => "kernel-build",
+    }
 }

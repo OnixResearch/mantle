@@ -60,6 +60,8 @@ pub enum ToolRole {
     Dune,
     Menhir,
     Clang,
+    // Stable public and serde compatibility: `CCompiler` serializes as `c-compiler` in persisted profiles.
+    #[allow(tigerstyle::acronym_style)]
     CCompiler,
     Bpftool,
     Libbpf,

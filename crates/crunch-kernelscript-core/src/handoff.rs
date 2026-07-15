@@ -20,6 +20,7 @@ use crate::digest::canonical_identity;
 use crate::digest::count_above_bound;
 
 pub const CANDIDATE_PACK_SCHEMA: &str = "mantle-kernelscript-candidate-pack-v1";
+const CANDIDATE_PACK_KIND_COUNT: usize = 2;
 const CANDIDATE_PACK_NON_CLAIMS: &[&str] = &[
     "experimental-unverified",
     "not-bpf-verifier-acceptance",
@@ -88,6 +89,24 @@ struct CandidateIdentityInput {
     non_claims: Vec<String>,
 }
 
+struct ProjectionContext<'a> {
+    profile: &'a ExperimentProfile,
+    plan: &'a CompilationPlan,
+    inspections: &'a [OutputInspection],
+    profile_identity: &'a Blake3Digest,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CandidateSelection {
+    kind: CandidatePackKind,
+    class: ArtifactOutputClass,
+}
+
+struct CandidateMembers {
+    members: Vec<OutputMember>,
+    inspection_identities_blake3: Vec<Blake3Digest>,
+}
+
 pub fn project_candidate_packs(
     profile: ExperimentProfile,
     plan: CompilationPlan,
@@ -103,24 +122,34 @@ pub fn project_candidate_packs(
     };
     validate_plan_binding(&profile, &plan, &profile_identity, &mut blockers);
     validate_inspection_set(&profile, &plan, &inspections, &mut blockers);
-    let mut projections = Vec::new();
+    if count_above_bound(inspections.len(), profile.bounds.max_output_files) {
+        return CandidateProjectionResult {
+            projections: Vec::new(),
+            blockers,
+        };
+    }
+    let context = ProjectionContext {
+        profile: &profile,
+        plan: &plan,
+        inspections: &inspections,
+        profile_identity: &profile_identity,
+    };
+    let mut projections = Vec::with_capacity(CANDIDATE_PACK_KIND_COUNT);
     project_selected_kind(
-        &profile,
-        &plan,
-        &inspections,
-        &profile_identity,
-        CandidatePackKind::BpfPack,
-        ArtifactOutputClass::EbpfObject,
+        &context,
+        CandidateSelection {
+            kind: CandidatePackKind::BpfPack,
+            class: ArtifactOutputClass::EbpfObject,
+        },
         &mut projections,
         &mut blockers,
     );
     project_selected_kind(
-        &profile,
-        &plan,
-        &inspections,
-        &profile_identity,
-        CandidatePackKind::ModulePack,
-        ArtifactOutputClass::KernelModule,
+        &context,
+        CandidateSelection {
+            kind: CandidatePackKind::ModulePack,
+            class: ArtifactOutputClass::KernelModule,
+        },
         &mut projections,
         &mut blockers,
     );
@@ -140,13 +169,7 @@ fn validate_plan_binding(
     profile_identity: &Blake3Digest,
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
-    if &plan.profile_identity_blake3 != profile_identity
-        || crate::planner::expected_compilation_plan_identity(plan).as_ref() != Some(&plan.plan_identity_blake3)
-        || plan.target_kernel_build_identity != profile.target.kernel_build_identity
-        || plan.target_architecture != profile.target.architecture
-        || plan.target_kernel_release != profile.target.kernel_release
-        || !crate::profile::kernel_build_identity_has_onix_authority(&profile.target.kernel_build_identity)
-    {
+    if !compilation_plan_matches_profile(profile, plan, profile_identity) {
         blockers.push(blocker(
             "candidate-plan-mismatch",
             "candidate-pack",
@@ -155,12 +178,36 @@ fn validate_plan_binding(
     }
 }
 
+fn compilation_plan_matches_profile(
+    profile: &ExperimentProfile,
+    plan: &CompilationPlan,
+    profile_identity: &Blake3Digest,
+) -> bool {
+    debug_assert!(!profile_identity.as_str().is_empty());
+    debug_assert!(!profile.target.kernel_build_identity.is_empty());
+    let has_profile_identity = &plan.profile_identity_blake3 == profile_identity;
+    let has_plan_identity =
+        crate::planner::expected_compilation_plan_identity(plan).as_ref() == Some(&plan.plan_identity_blake3);
+    let has_target_identity = plan.target_kernel_build_identity == profile.target.kernel_build_identity;
+    let has_target_architecture = plan.target_architecture == profile.target.architecture;
+    let has_target_release = plan.target_kernel_release == profile.target.kernel_release;
+    let has_onix_authority =
+        crate::profile::kernel_build_identity_has_onix_authority(&profile.target.kernel_build_identity);
+    has_profile_identity
+        && has_plan_identity
+        && has_target_identity
+        && has_target_architecture
+        && has_target_release
+        && has_onix_authority
+}
+
 fn validate_inspection_set(
     profile: &ExperimentProfile,
     plan: &CompilationPlan,
     inspections: &[OutputInspection],
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
+    let initial_blocker_count: usize = blockers.len();
     if count_above_bound(inspections.len(), profile.bounds.max_output_files) {
         blockers.push(blocker(
             "candidate-inspection-limit",
@@ -195,69 +242,71 @@ fn validate_inspection_set(
             ));
         }
     }
+    debug_assert!(keys.len() <= inspections.len());
+    debug_assert!(blockers.len() >= initial_blocker_count);
 }
 
-#[allow(clippy::too_many_arguments)]
 fn project_selected_kind(
-    profile: &ExperimentProfile,
-    plan: &CompilationPlan,
-    inspections: &[OutputInspection],
-    profile_identity: &Blake3Digest,
-    kind: CandidatePackKind,
-    class: ArtifactOutputClass,
+    context: &ProjectionContext<'_>,
+    selection: CandidateSelection,
     projections: &mut Vec<CandidatePackProjection>,
     blockers: &mut Vec<ExperimentBlocker>,
 ) {
-    if !profile.output_classes.contains(&class) {
+    debug_assert!(context.profile.bounds.max_output_files > 0);
+    debug_assert!(projections.len() <= context.profile.output_classes.len());
+    if !context.profile.output_classes.contains(&selection.class) {
         return;
     }
-    let mut admitted = inspections
+    let mut admitted = context
+        .inspections
         .iter()
-        .filter(|inspection| inspection.output_class == class && inspection.accepted)
+        .filter(|inspection| inspection.output_class == selection.class && inspection.accepted)
         .collect::<Vec<_>>();
     admitted.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-    let members = admitted.iter().map(|inspection| output_member(inspection)).collect::<Vec<_>>();
-    let inspection_identities =
-        admitted.iter().map(|inspection| inspection.inspection_identity_blake3.clone()).collect::<Vec<_>>();
-    if members.is_empty() {
+    let mut candidate = CandidateMembers {
+        members: Vec::with_capacity(admitted.len()),
+        inspection_identities_blake3: Vec::with_capacity(admitted.len()),
+    };
+    for inspection in admitted {
+        candidate.members.push(output_member(inspection));
+        candidate.inspection_identities_blake3.push(inspection.inspection_identity_blake3.clone());
+    }
+    if candidate.members.is_empty() {
         blockers.push(blocker(
             "missing-candidate-members",
-            &candidate_kind_name(kind),
+            &candidate_kind_name(selection.kind),
             "selected candidate pack has no admitted members",
         ));
         return;
     }
-    if let Some(projection) =
-        identify_candidate(profile, plan, profile_identity, kind, members, inspection_identities, blockers)
-    {
+    if let Some(projection) = identify_candidate(context, selection.kind, candidate, blockers) {
         projections.push(projection);
     }
 }
 
 fn identify_candidate(
-    profile: &ExperimentProfile,
-    plan: &CompilationPlan,
-    profile_identity: &Blake3Digest,
+    context: &ProjectionContext<'_>,
     kind: CandidatePackKind,
-    members: Vec<OutputMember>,
-    inspection_identities_blake3: Vec<Blake3Digest>,
+    candidate: CandidateMembers,
     blockers: &mut Vec<ExperimentBlocker>,
 ) -> Option<CandidatePackProjection> {
+    debug_assert!(!candidate.members.is_empty());
+    debug_assert_eq!(candidate.members.len(), candidate.inspection_identities_blake3.len());
     let non_claims = CANDIDATE_PACK_NON_CLAIMS.iter().map(|value| String::from(*value)).collect::<Vec<_>>();
     let input = CandidateIdentityInput {
         schema: String::from(CANDIDATE_PACK_SCHEMA),
-        name: format!("{}-{}", profile.experiment_id, candidate_kind_name(kind)),
+        name: format!("{}-{}", context.profile.experiment_id, candidate_kind_name(kind)),
         kind,
         readiness: CandidateReadiness::ExperimentalUnverified,
-        target_kernel_build_identity: profile.target.kernel_build_identity.clone(),
-        target_architecture: profile.target.architecture,
-        target_kernel_release: profile.target.kernel_release.clone(),
-        btf_blake3: profile.target.btf.artifact.digest_blake3.clone(),
-        members: members.clone(),
-        inspection_identities_blake3: inspection_identities_blake3.clone(),
-        profile_identity_blake3: profile_identity.clone(),
-        generated_manifest_identity_blake3: plan.generated_manifest_identity_blake3.clone(),
-        compilation_plan_identity_blake3: plan.plan_identity_blake3.clone(),
+        target_kernel_build_identity: context.profile.target.kernel_build_identity.clone(),
+        target_architecture: context.profile.target.architecture,
+        target_kernel_release: context.profile.target.kernel_release.clone(),
+        btf_blake3: context.profile.target.btf.artifact.digest_blake3.clone(),
+        members: candidate.members.clone(),
+        inspection_identities_blake3: candidate.inspection_identities_blake3.clone(),
+        profile_identity_blake3: context.profile_identity.clone(),
+        generated_manifest_identity_blake3: context.plan.generated_manifest_identity_blake3.clone(),
+        compilation_plan_identity_blake3: context.plan.plan_identity_blake3.clone(),
         non_claims: non_claims.clone(),
     };
     let identity = match canonical_identity(&input) {
@@ -276,8 +325,8 @@ fn identify_candidate(
         target_architecture: input.target_architecture,
         target_kernel_release: input.target_kernel_release,
         btf_blake3: input.btf_blake3,
-        members,
-        inspection_identities_blake3,
+        members: candidate.members,
+        inspection_identities_blake3: candidate.inspection_identities_blake3,
         profile_identity_blake3: input.profile_identity_blake3,
         generated_manifest_identity_blake3: input.generated_manifest_identity_blake3,
         compilation_plan_identity_blake3: input.compilation_plan_identity_blake3,
