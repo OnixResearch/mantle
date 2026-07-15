@@ -243,6 +243,19 @@ pub(crate) fn core_receiver_manifest(manifest: &ReceiverManifest) -> crunch_delt
         .collect::<std::collections::BTreeSet<_>>();
     let known_outputs = manifest.known_outputs.iter().cloned().collect::<std::collections::BTreeSet<_>>();
 
+    debug_assert_eq!(
+        known_outputs.len(),
+        manifest.known_outputs.len(),
+        "output identities must survive core conversion"
+    );
+    debug_assert_eq!(
+        known_directories.len(),
+        manifest.known_directories.len(),
+        "directory digests must survive core conversion"
+    );
+    debug_assert_eq!(known_blobs.len(), manifest.known_blobs.len(), "blob digests must survive core conversion");
+    debug_assert_eq!(known_chunks.len(), manifest.known_chunks.len(), "chunk digests must survive core conversion");
+
     crunch_delta_core::ReceiverManifest {
         store_prefix: manifest.store_prefix.clone(),
         known_outputs,
@@ -330,6 +343,27 @@ mod tests {
         assert_eq!(profile.min_chunk_bytes, 131_072);
         assert_eq!(profile.avg_chunk_bytes, 262_144);
         assert_eq!(profile.max_chunk_bytes, 524_288);
+    }
+
+    #[test]
+    fn receiver_manifest_conversion_preserves_facade_sets() {
+        let directory_digest = test_digest("directory");
+        let blob_digest = test_digest("blob");
+        let chunk_digest = test_digest("chunk");
+        let output_id = "/mantle/store/output".to_string();
+        let mut manifest = ReceiverManifest::new("/mantle/store");
+        manifest.known_outputs.insert(output_id.clone());
+        manifest.known_directories.insert(directory_digest);
+        manifest.known_blobs.insert(blob_digest);
+        manifest.known_chunks.insert(chunk_digest);
+
+        let core_manifest = core_receiver_manifest(&manifest);
+
+        assert_eq!(core_manifest.store_prefix, manifest.store_prefix);
+        assert!(core_manifest.known_outputs.contains(&output_id));
+        assert!(core_manifest.known_directories.contains(&delta_digest_from_b3(directory_digest)));
+        assert!(core_manifest.known_blobs.contains(&delta_digest_from_b3(blob_digest)));
+        assert!(core_manifest.known_chunks.contains(&delta_digest_from_b3(chunk_digest)));
     }
 
     #[test]
