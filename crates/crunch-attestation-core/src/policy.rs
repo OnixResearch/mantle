@@ -131,6 +131,7 @@ pub fn evaluate_policy(input: PolicyEvaluationInput) -> Result<PolicyEvaluation,
         Err(_) => input.policy.min_matching_witnesses.saturating_add(matching_count),
     };
     assert!(matching_count <= active_witness_count, "matching count must fit active witnesses");
+    assert!(distinct_identities <= matching_count, "independence domains must fit matching witnesses");
 
     let technical_class = if matching_count > 0 {
         TechnicalClass::ExternalWitnessMatch
@@ -206,8 +207,8 @@ fn filter_active_witnesses(
         active_witnesses.push(witness);
     }
 
-    let witness_total =
-        count_with_overflow_marker(active_witnesses.len().saturating_add(revoked_count as usize), revoked_count);
+    let active_witness_count = count_with_overflow_marker(active_witnesses.len(), revoked_count);
+    let witness_total = active_witness_count.saturating_add(revoked_count);
     assert!(revoked_count <= witness_total, "revoked count must stay bounded");
     (revoked_count, active_witnesses)
 }
@@ -220,6 +221,8 @@ fn count_matching_witnesses(
 ) -> Result<(u32, u32), Error> {
     let mut matching_count: u32 = 0;
     let mut matching_domains: BTreeSet<&str> = BTreeSet::new();
+    assert_eq!(matching_count, 0, "matching witness count must start at zero");
+    assert!(matching_domains.is_empty(), "matching domains must start empty");
 
     for witness in active_witnesses {
         let is_release_digest_match = witness.attestation.release_attestation_digest_blake3 == *release_digest;
@@ -238,6 +241,7 @@ fn count_matching_witnesses(
     }
 
     let distinct_identities = count_with_overflow_marker(matching_domains.len(), matching_count);
+    assert!(distinct_identities <= matching_count, "distinct domains must not exceed matching witnesses");
     Ok((matching_count, distinct_identities))
 }
 
@@ -313,6 +317,7 @@ fn validate_revocations(revocations: &ReleaseRevocations) -> Result<(), Error> {
             actual: key_count,
         });
     }
+    assert!(key_count <= MAX_REVOCATION_COUNT, "validated revoked key count must fit the limit");
     let digest_count =
         count_with_overflow_marker(revocations.revoked_witness_attestation_digests_blake3.len(), MAX_REVOCATION_COUNT);
     if digest_count > MAX_REVOCATION_COUNT {
@@ -321,6 +326,7 @@ fn validate_revocations(revocations: &ReleaseRevocations) -> Result<(), Error> {
             actual: digest_count,
         });
     }
+    assert!(digest_count <= MAX_REVOCATION_COUNT, "validated revoked digest count must fit the limit");
     Ok(())
 }
 

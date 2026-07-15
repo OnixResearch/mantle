@@ -72,6 +72,7 @@ pub fn parse_detached_signature(line: String) -> Result<DetachedSignature, Error
     let colon_pos = line.find(':').ok_or_else(|| Error::InvalidDetachedSignature {
         message: "missing colon separator".to_string(),
     })?;
+    assert!(colon_pos < line.len(), "detached signature separator must be within the input");
     let key_name = &line[..colon_pos];
     let sig_b64 = &line[colon_pos.saturating_add(1)..];
 
@@ -95,6 +96,12 @@ pub fn parse_detached_signature(line: String) -> Result<DetachedSignature, Error
         decoded.try_into().map_err(|v: Vec<u8>| Error::InvalidDetachedSignature {
             message: alloc::format!("expected {ED25519_SIGNATURE_BYTES} signature bytes, got {}", v.len()),
         })?;
+    assert!(!key_name.is_empty(), "validated detached signature key name must not be empty");
+    assert_eq!(
+        signature_bytes.len(),
+        ED25519_SIGNATURE_BYTES,
+        "decoded detached signature must have the suite width"
+    );
 
     Ok(DetachedSignature {
         key_name: key_name.to_string(),
@@ -107,6 +114,12 @@ pub fn encode_detached_signature(signature: DetachedSignature) -> String {
     alloc::format!("{}:{encoded}", signature.key_name)
 }
 
+// Stable v1 compatibility: omitted optional effect arrays decode as `None`
+// without relying on the foreign `Option` default implementation.
+fn absent_optional_string_list() -> Option<Vec<String>> {
+    None
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ReleaseAttestation {
     pub schema: String,
@@ -114,9 +127,9 @@ pub struct ReleaseAttestation {
     pub release_evidence_manifest_digest_blake3: AttestationDigest,
     pub proof_bundle_digest_blake3: AttestationDigest,
     pub proof_mode: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional_string_list", skip_serializing_if = "Option::is_none")]
     pub declared_effect_claims: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional_string_list", skip_serializing_if = "Option::is_none")]
     pub observed_effect_facts: Option<Vec<String>>,
     pub workflow: Workflow,
     pub binary_digests: Vec<BinaryDigest>,
@@ -174,6 +187,9 @@ pub fn canonical_release_attestation(value: ReleaseAttestation) -> Result<Releas
     let binary_digests = normalize_binary_digests(value.binary_digests)?;
     let declared_effect_claims = normalize_optional_string_set(value.declared_effect_claims, "declared_effect_claims")?;
     let observed_effect_facts = normalize_optional_string_set(value.observed_effect_facts, "observed_effect_facts")?;
+    assert!(!value.release_id.is_empty(), "validated release identifier must not be empty");
+    assert!(!value.proof_mode.is_empty(), "validated proof mode must not be empty");
+    assert!(is_sorted(&binary_digests), "canonical release binary digests must be sorted");
 
     Ok(ReleaseAttestation {
         schema: RELEASE_ATTESTATION_SCHEMA.to_string(),
@@ -198,6 +214,12 @@ pub fn release_attestation_canonical_digest(value: ReleaseAttestation) -> Result
     Ok(AttestationDigest::from_canonical_bytes(bytes))
 }
 
+// Stable v1 compatibility: omitted source mode decodes as `None` without
+// relying on the foreign `Option` default implementation.
+fn absent_optional_string() -> Option<String> {
+    None
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct WitnessAttestation {
     pub schema: String,
@@ -205,7 +227,7 @@ pub struct WitnessAttestation {
     pub witness_identity: String,
     pub signature_suite: SignatureSuite,
     pub rebuilt_digests: Vec<BinaryDigest>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_optional_string", skip_serializing_if = "Option::is_none")]
     pub source_acquisition_mode: Option<String>,
     pub rebuild_environment_summary: RebuildEnvironmentSummary,
 }
@@ -257,6 +279,8 @@ pub fn canonical_witness_attestation(value: WitnessAttestation) -> Result<Witnes
     })?;
     let rebuilt_digests = normalize_binary_digests(value.rebuilt_digests)?;
     let source_acquisition_mode = normalize_optional_string(value.source_acquisition_mode, "source_acquisition_mode")?;
+    assert!(!value.witness_identity.is_empty(), "validated witness identity must not be empty");
+    assert!(is_sorted(&rebuilt_digests), "canonical witness binary digests must be sorted");
 
     Ok(WitnessAttestation {
         schema: WITNESS_ATTESTATION_SCHEMA.to_string(),
@@ -415,14 +439,16 @@ pub fn canonical_independent_agreement_report(
 fn normalize_agreement_witnesses(
     witnesses: Vec<AgreementWitnessClassification>,
 ) -> Result<Vec<AgreementWitnessClassification>, Error> {
-    let actual = count_with_overflow_marker(witnesses.len(), MAX_AGREEMENT_WITNESS_COUNT);
+    let witness_count = witnesses.len();
+    let actual = count_with_overflow_marker(witness_count, MAX_AGREEMENT_WITNESS_COUNT);
     if actual > MAX_AGREEMENT_WITNESS_COUNT {
         return Err(Error::CollectionTooLarge {
             limit: MAX_AGREEMENT_WITNESS_COUNT,
             actual,
         });
     }
-    let mut normalized = Vec::with_capacity(witnesses.len());
+    assert!(actual <= MAX_AGREEMENT_WITNESS_COUNT, "validated agreement witness count must fit the limit");
+    let mut normalized = Vec::with_capacity(witness_count);
     for witness in witnesses {
         normalized.push(normalize_agreement_witness(witness)?);
     }
@@ -440,6 +466,7 @@ fn normalize_agreement_witnesses(
                 &right.witness_digest_blake3,
             ))
     });
+    assert_eq!(normalized.len(), witness_count, "normalization must preserve the agreement witness count");
     Ok(normalized)
 }
 
@@ -479,6 +506,8 @@ fn normalize_agreement_witness(
         })?;
     }
     witness.rebuilt_output_digests = normalize_binary_digests(witness.rebuilt_output_digests)?;
+    assert!(!witness.witness_identity.is_empty(), "validated agreement witness identity must not be empty");
+    assert!(!witness.signer_key_name.is_empty(), "validated agreement signer key name must not be empty");
     Ok(witness)
 }
 
@@ -591,6 +620,7 @@ fn normalize_binary_digests(digests: Vec<BinaryDigest>) -> Result<Vec<BinaryDige
             actual,
         });
     }
+    assert!(actual <= MAX_BINARY_DIGEST_COUNT, "validated binary digest count must fit the limit");
     for digest in &digests {
         validate_non_empty(NamedField {
             name: "binary_digest.name",
@@ -607,6 +637,7 @@ fn normalize_binary_digests(digests: Vec<BinaryDigest>) -> Result<Vec<BinaryDige
     }
     let mut sorted = digests;
     sorted.sort();
+    assert!(is_sorted(&sorted), "normalized binary digests must be sorted");
     Ok(sorted)
 }
 
@@ -882,7 +913,9 @@ mod tests {
 
         let bytes = witness_attestation_canonical_bytes(attestation).unwrap();
         let json = core::str::from_utf8(&bytes).unwrap();
+        let parsed: WitnessAttestation = serde_json::from_str(json).unwrap();
 
+        assert_eq!(parsed.source_acquisition_mode, None);
         assert!(!json.contains("source_acquisition_mode"));
         assert!(json.contains("rebuild_environment_summary"));
     }
