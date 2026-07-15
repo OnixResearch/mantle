@@ -19,7 +19,9 @@ use crunch_spacewasm_core::ObservedCheck;
 use crunch_spacewasm_core::REFERENCE_CLAIM_CLASS;
 use crunch_spacewasm_core::ReferenceProfile;
 use crunch_spacewasm_core::ReportBuildInput;
+use crunch_spacewasm_core::SourceAdmission;
 use crunch_spacewasm_core::SourceFacts;
+use crunch_spacewasm_core::SupportComparison;
 use crunch_spacewasm_core::SupportEntry;
 use crunch_spacewasm_core::admit_source;
 use crunch_spacewasm_core::build_bundle_manifest;
@@ -42,7 +44,7 @@ const HARD_MAX_REQUEST_BYTES: u64 = 4_194_304;
 const HARD_MAX_PROFILE_BYTES: u64 = 1_048_576;
 const HARD_MAX_REPORT_BYTES: u64 = 16_777_216;
 const HARD_MAX_BUNDLE_FILES: u32 = 1_024;
-const HASH_BUFFER_BYTES: usize = 65_536;
+const READ_BUFFER_CAPACITY_BYTES: usize = 65_536;
 const MANIFEST_PATH: &str = "manifest.json";
 const REPORT_PATH: &str = "reports/materialization.json";
 const NON_CLAIMS_PATH: &str = "non-claims.json";
@@ -99,6 +101,11 @@ pub enum ShellError {
     Invalid(String),
     Json(String),
     Core(Vec<Diagnostic>),
+    Cleanup {
+        path: String,
+        materialization_error: Box<ShellError>,
+        cleanup_message: String,
+    },
 }
 
 impl fmt::Display for ShellError {
@@ -115,6 +122,11 @@ impl fmt::Display for ShellError {
                 let codes = diagnostics.iter().map(|item| item.code.as_str()).collect::<Vec<_>>().join(",");
                 write!(formatter, "SpaceWasm core rejected materialization: {codes}")
             }
+            Self::Cleanup {
+                path,
+                materialization_error,
+                cleanup_message,
+            } => write!(formatter, "{materialization_error}; removing incomplete bundle `{path}`: {cleanup_message}"),
         }
     }
 }
@@ -129,11 +141,11 @@ pub fn materialize(request: MaterializationRequest, output: &Path) -> Result<Mat
     if output.exists() {
         return Err(ShellError::Invalid(format!("bundle output already exists: {}", output.display())));
     }
-    let result = materialize_inner(request, output);
-    if result.is_err() {
-        let _ = fs::remove_dir_all(output);
+    fs::create_dir(output).map_err(|error| io_error("creating bundle root", output, error))?;
+    match materialize_inner(request, output) {
+        Ok(summary) => Ok(summary),
+        Err(error) => Err(cleanup_failed_materialization(output, error)),
     }
-    result
 }
 
 fn materialize_inner(request: MaterializationRequest, output: &Path) -> Result<MaterializationSummary, ShellError> {
@@ -143,25 +155,24 @@ fn materialize_inner(request: MaterializationRequest, output: &Path) -> Result<M
     let profile_identity = validation.profile_identity_blake3.ok_or(ShellError::Core(validation.diagnostics))?;
     let cohort_identity = cohort_identity(profile.clone()).map_err(|error| ShellError::Invalid(error.to_string()))?;
     let source_facts: SourceFacts = read_json(Path::new(&request.source_facts_path), HARD_MAX_REPORT_BYTES)?;
-    let observed_support: Vec<SupportEntry> =
-        read_json(Path::new(&request.support_matrix_path), HARD_MAX_REPORT_BYTES)?;
+    let matrix_entries: Vec<SupportEntry> = read_json(Path::new(&request.support_matrix_path), HARD_MAX_REPORT_BYTES)?;
     let observed_checks: Vec<ObservedCheck> = read_json(Path::new(&request.checks_path), HARD_MAX_REPORT_BYTES)?;
     let source_admission = admit_source(profile.clone(), source_facts);
-    let support_comparison = compare_support_matrix(profile.clone(), observed_support);
+    let matrix_evaluation = compare_support_matrix(profile.clone(), matrix_entries);
     let check_evaluation = evaluate_checks(profile.clone(), observed_checks);
-    fs::create_dir(output).map_err(|error| io_error("creating bundle root", output, error))?;
     let mut members = copy_input_members(&profile, &request.members, output)?;
-    let report = materialization_report(
-        profile.clone(),
-        profile_identity.clone(),
-        cohort_identity.clone(),
+    let materialization_artifact = assemble_materialization_artifact(ReportAssemblyInput {
+        profile: profile.clone(),
+        profile_identity_blake3: profile_identity.clone(),
+        cohort_identity_blake3: cohort_identity.clone(),
         source_admission,
-        support_comparison,
+        matrix_evaluation,
         check_evaluation,
-        request.requested_claim_class,
-    )?;
-    let report_bytes = serde_json::to_vec_pretty(&report).map_err(|error| ShellError::Json(error.to_string()))?;
-    write_bundle_file(output, REPORT_PATH, &report_bytes)?;
+        requested_claim_class: request.requested_claim_class,
+    })?;
+    let materialization_bytes =
+        serde_json::to_vec_pretty(&materialization_artifact).map_err(|error| ShellError::Json(error.to_string()))?;
+    write_bundle_file(output, REPORT_PATH, &materialization_bytes)?;
     members.push(measured_member(output, REPORT_PATH, BundleRole::MaterializationReport, &profile)?);
     let mut non_claims = profile.non_claims.clone();
     non_claims.sort();
@@ -196,7 +207,7 @@ fn materialize_inner(request: MaterializationRequest, output: &Path) -> Result<M
         schema: String::from(MATERIALIZATION_SUMMARY_SCHEMA),
         profile_identity_blake3: profile_identity,
         cohort_identity_blake3: cohort_identity,
-        report_identity_blake3: report.report_identity_blake3,
+        report_identity_blake3: materialization_artifact.report_identity_blake3,
         bundle_identity_blake3: manifest.bundle_identity_blake3,
         member_count,
         valid: true,
@@ -210,7 +221,7 @@ pub fn verify_bundle(root: &Path) -> Result<VerifySummary, ShellError> {
     let declared: BTreeMap<_, _> =
         manifest.members.iter().map(|member| (member.path.clone(), member.role.clone())).collect();
     let paths = collect_bundle_files(root, HARD_MAX_BUNDLE_FILES)?;
-    let mut measured = Vec::new();
+    let mut measured = Vec::with_capacity(paths.len());
     for relative in paths {
         if relative == MANIFEST_PATH {
             continue;
@@ -219,19 +230,31 @@ pub fn verify_bundle(root: &Path) -> Result<VerifySummary, ShellError> {
         measured.push(measured_member_unbounded(root, &relative, role, &manifest)?);
     }
     let mut diagnostics = verify_bundle_manifest(manifest.clone(), measured).diagnostics;
-    let report_path = root.join(REPORT_PATH);
-    match read_json::<crunch_spacewasm_core::MaterializationReport>(&report_path, HARD_MAX_REPORT_BYTES) {
-        Ok(report) => diagnostics.extend(validate_materialization_report(report).diagnostics),
-        Err(error) => diagnostics.push(shell_diagnostic("report-read-failed", REPORT_PATH, &error.to_string())),
+    let materialization_artifact_path = root.join(REPORT_PATH);
+    match read_json::<crunch_spacewasm_core::MaterializationReport>(
+        &materialization_artifact_path,
+        HARD_MAX_REPORT_BYTES,
+    ) {
+        Ok(materialization_artifact) => {
+            diagnostics.extend(validate_materialization_report(materialization_artifact).diagnostics);
+        }
+        Err(error) => {
+            let message = error.to_string();
+            diagnostics.push(shell_diagnostic(ShellDiagnosticInput {
+                code: "report-read-failed",
+                subject: REPORT_PATH,
+                message: &message,
+            }));
+        }
     }
     diagnostics.sort();
     diagnostics.dedup();
-    let valid = diagnostics.is_empty();
-    debug_assert_eq!(valid, diagnostics.is_empty());
+    let is_valid = diagnostics.is_empty();
+    debug_assert_eq!(is_valid, diagnostics.is_empty());
     debug_assert!(diagnostics.iter().all(|item| !item.code.is_empty()));
     Ok(VerifySummary {
         schema: String::from(VERIFY_SUMMARY_SCHEMA),
-        valid,
+        valid: is_valid,
         bundle_identity_blake3: Some(manifest.bundle_identity_blake3),
         diagnostics,
     })
@@ -240,38 +263,42 @@ pub fn verify_bundle(root: &Path) -> Result<VerifySummary, ShellError> {
 pub fn check_profile(path: &Path) -> Result<VerifySummary, ShellError> {
     let profile: ReferenceProfile = read_json(path, HARD_MAX_PROFILE_BYTES)?;
     let validation = validate_profile(profile);
-    let valid = validation.profile_identity_blake3.is_some();
-    debug_assert_eq!(valid, validation.diagnostics.is_empty());
+    let is_valid = validation.profile_identity_blake3.is_some();
+    debug_assert_eq!(is_valid, validation.diagnostics.is_empty());
     debug_assert!(validation.diagnostics.iter().all(|item| !item.code.is_empty()));
     Ok(VerifySummary {
         schema: String::from(VERIFY_SUMMARY_SCHEMA),
-        valid,
+        valid: is_valid,
         bundle_identity_blake3: validation.profile_identity_blake3,
         diagnostics: validation.diagnostics,
     })
 }
 
-fn materialization_report(
+struct ReportAssemblyInput {
     profile: ReferenceProfile,
     profile_identity_blake3: Blake3Digest,
     cohort_identity_blake3: Blake3Digest,
-    source_admission: crunch_spacewasm_core::SourceAdmission,
-    support_comparison: crunch_spacewasm_core::SupportComparison,
+    source_admission: SourceAdmission,
+    matrix_evaluation: SupportComparison,
     check_evaluation: CheckEvaluation,
     requested_claim_class: String,
+}
+
+fn assemble_materialization_artifact(
+    input: ReportAssemblyInput,
 ) -> Result<crunch_spacewasm_core::MaterializationReport, ShellError> {
-    let input = ReportBuildInput {
-        profile,
-        profile_identity_blake3,
-        cohort_identity_blake3,
-        source_admission,
-        support_comparison,
-        checks: check_evaluation.decisions,
-        check_evaluation_complete: check_evaluation.complete,
-        diagnostics: check_evaluation.diagnostics,
-        requested_claim_class,
+    let core_input = ReportBuildInput {
+        profile: input.profile,
+        profile_identity_blake3: input.profile_identity_blake3,
+        cohort_identity_blake3: input.cohort_identity_blake3,
+        source_admission: input.source_admission,
+        support_comparison: input.matrix_evaluation,
+        checks: input.check_evaluation.decisions,
+        check_evaluation_complete: input.check_evaluation.complete,
+        diagnostics: input.check_evaluation.diagnostics,
+        requested_claim_class: input.requested_claim_class,
     };
-    build_materialization_report(input).map_err(ShellError::Core)
+    build_materialization_report(core_input).map_err(ShellError::Core)
 }
 
 fn validate_request_header(request: &MaterializationRequest) -> Result<(), ShellError> {
@@ -281,8 +308,9 @@ fn validate_request_header(request: &MaterializationRequest) -> Result<(), Shell
     if request.requested_claim_class != REFERENCE_CLAIM_CLASS {
         return Err(ShellError::Invalid(String::from("request attempts unsupported SpaceWasm claim promotion")));
     }
-    let count = u32::try_from(request.members.len()).unwrap_or(u32::MAX);
-    if count == 0 || count > HARD_MAX_BUNDLE_FILES {
+    let member_count = u32::try_from(request.members.len())
+        .map_err(|_| ShellError::Invalid(String::from("request member count exceeds the hard bound")))?;
+    if member_count == 0 || member_count > HARD_MAX_BUNDLE_FILES {
         return Err(ShellError::Invalid(String::from("request member count exceeds the hard bound")));
     }
     debug_assert!(!request.profile_path.is_empty());
@@ -300,12 +328,14 @@ fn copy_input_members(
         require_safe_relative_path(&input.bundle_path)?;
         let source = Path::new(&input.source_path);
         let bytes = read_regular_file_bounded(source, profile.bounds.max_bundle_member_bytes)?;
+        let size_bytes = u64::try_from(bytes.len())
+            .map_err(|_| ShellError::Invalid(String::from("bundle member byte count does not fit u64")))?;
         write_bundle_file(output, &input.bundle_path, &bytes)?;
         members.push(BundleMember {
             path: input.bundle_path.clone(),
             role: input.role.clone(),
             digest_blake3: Blake3Digest::from_slice(&bytes),
-            size_bytes: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+            size_bytes,
         });
     }
     members.sort();
@@ -321,11 +351,13 @@ fn measured_member(
     profile: &ReferenceProfile,
 ) -> Result<BundleMember, ShellError> {
     let bytes = read_regular_file_bounded(&root.join(relative), profile.bounds.max_bundle_member_bytes)?;
+    let size_bytes = u64::try_from(bytes.len())
+        .map_err(|_| ShellError::Invalid(String::from("bundle member byte count does not fit u64")))?;
     Ok(BundleMember {
         path: String::from(relative),
         role,
         digest_blake3: Blake3Digest::from_slice(&bytes),
-        size_bytes: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+        size_bytes,
     })
 }
 
@@ -341,11 +373,13 @@ fn measured_member_unbounded(
         .find(|member| member.path == relative)
         .map_or(HARD_MAX_REPORT_BYTES, |member| member.size_bytes.max(1));
     let bytes = read_regular_file_bounded(&root.join(relative), maximum)?;
+    let size_bytes = u64::try_from(bytes.len())
+        .map_err(|_| ShellError::Invalid(String::from("bundle member byte count does not fit u64")))?;
     Ok(BundleMember {
         path: String::from(relative),
         role,
         digest_blake3: Blake3Digest::from_slice(&bytes),
-        size_bytes: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+        size_bytes,
     })
 }
 
@@ -371,8 +405,10 @@ fn write_bundle_file(root: &Path, relative: &str, bytes: &[u8]) -> Result<(), Sh
 }
 
 fn collect_bundle_files(root: &Path, maximum_files: u32) -> Result<Vec<String>, ShellError> {
+    let file_slots = usize::try_from(maximum_files)
+        .map_err(|_| ShellError::Invalid(String::from("bundle file bound does not fit memory bounds")))?;
     let mut pending = vec![PathBuf::from(root)];
-    let mut files = Vec::new();
+    let mut files = Vec::with_capacity(file_slots);
     while let Some(directory) = pending.pop() {
         let mut entries = fs::read_dir(&directory)
             .map_err(|error| io_error("reading bundle directory", &directory, error))?
@@ -393,8 +429,7 @@ fn collect_bundle_files(root: &Path, maximum_files: u32) -> Result<Vec<String>, 
             if !metadata.is_file() {
                 return Err(ShellError::Invalid(format!("bundle contains a special file: {}", path.display())));
             }
-            let count = u32::try_from(files.len()).unwrap_or(u32::MAX).saturating_add(1);
-            if count > maximum_files {
+            if files.len() >= file_slots {
                 return Err(ShellError::Invalid(String::from("bundle file count exceeds the hard bound")));
             }
             let relative = path
@@ -408,7 +443,7 @@ fn collect_bundle_files(root: &Path, maximum_files: u32) -> Result<Vec<String>, 
     }
     files.sort();
     debug_assert!(files.windows(crunch_spacewasm_core::ADJACENT_WINDOW_LENGTH).all(|pair| pair[0] <= pair[1]));
-    debug_assert!(u32::try_from(files.len()).unwrap_or(u32::MAX) <= maximum_files);
+    debug_assert!(files.len() <= file_slots);
     Ok(files)
 }
 
@@ -423,11 +458,11 @@ fn require_real_directory(path: &Path) -> Result<(), ShellError> {
 }
 
 fn require_safe_relative_path(path: &str) -> Result<(), ShellError> {
-    let safe = !path.is_empty()
+    let is_safe = !path.is_empty()
         && !path.starts_with('/')
         && !path.contains('\\')
         && path.split('/').all(|component| !component.is_empty() && component != "." && component != "..");
-    if !safe {
+    if !is_safe {
         return Err(ShellError::Invalid(format!("unsafe bundle member path `{path}`")));
     }
     Ok(())
@@ -440,33 +475,39 @@ where T: for<'de> Deserialize<'de> {
 }
 
 fn read_regular_file_bounded(path: &Path, maximum_bytes: u64) -> Result<Vec<u8>, ShellError> {
-    let (mut file, metadata) = open_regular_file_no_follow(path)?;
-    if metadata.len() == 0 || metadata.len() > maximum_bytes {
+    let (mut file, initial_metadata) = open_regular_file_no_follow(path)?;
+    let initial_size_bytes = initial_metadata.len();
+    if initial_size_bytes == 0 || initial_size_bytes > maximum_bytes {
         return Err(ShellError::Invalid(format!("input is empty or exceeds its byte bound: {}", path.display())));
     }
-    let capacity = usize::try_from(metadata.len())
+    let capacity_bytes = usize::try_from(initial_size_bytes)
         .map_err(|_| ShellError::Invalid(String::from("input byte count does not fit memory bounds")))?;
-    let mut bytes = Vec::with_capacity(capacity);
-    let mut buffer = [0_u8; HASH_BUFFER_BYTES];
-    let mut total = 0_u64;
-    loop {
-        let count = file.read(&mut buffer).map_err(|error| io_error("reading input", path, error))?;
-        if count == 0 {
+    let mut bytes = Vec::with_capacity(capacity_bytes);
+    let mut buffer = [0_u8; READ_BUFFER_CAPACITY_BYTES];
+    let mut bytes_read = 0_u64;
+    while bytes_read < initial_size_bytes {
+        let chunk_bytes = file.read(&mut buffer).map_err(|error| io_error("reading input", path, error))?;
+        if chunk_bytes == 0 {
             break;
         }
-        total = total
-            .checked_add(u64::try_from(count).unwrap_or(u64::MAX))
+        let chunk_size_bytes = u64::try_from(chunk_bytes)
+            .map_err(|_| ShellError::Invalid(String::from("input read byte count does not fit u64")))?;
+        bytes_read = bytes_read
+            .checked_add(chunk_size_bytes)
             .ok_or_else(|| ShellError::Invalid(String::from("input byte count overflow")))?;
-        if total > maximum_bytes {
+        if bytes_read > maximum_bytes {
             return Err(ShellError::Invalid(format!("input exceeds its byte bound: {}", path.display())));
         }
-        bytes.extend_from_slice(&buffer[..count]);
+        bytes.extend_from_slice(&buffer[..chunk_bytes]);
     }
-    if total != metadata.len() {
+    let final_size_bytes = file.metadata().map_err(|error| io_error("remeasuring input", path, error))?.len();
+    if bytes_read != initial_size_bytes || final_size_bytes != initial_size_bytes {
         return Err(ShellError::Invalid(format!("input changed while reading: {}", path.display())));
     }
-    debug_assert_eq!(total, u64::try_from(bytes.len()).unwrap_or(u64::MAX));
-    debug_assert!(total <= maximum_bytes);
+    let buffered_size_bytes = u64::try_from(bytes.len())
+        .map_err(|_| ShellError::Invalid(String::from("buffered input byte count does not fit u64")))?;
+    debug_assert_eq!(bytes_read, buffered_size_bytes);
+    debug_assert!(bytes_read <= maximum_bytes);
     Ok(bytes)
 }
 
@@ -488,12 +529,30 @@ fn open_regular_file_no_follow(path: &Path) -> Result<(File, fs::Metadata), Shel
     Ok((file, metadata))
 }
 
-fn shell_diagnostic(code: &str, subject: &str, message: &str) -> Diagnostic {
+struct ShellDiagnosticInput<'a> {
+    code: &'a str,
+    subject: &'a str,
+    message: &'a str,
+}
+
+fn shell_diagnostic(input: ShellDiagnosticInput<'_>) -> Diagnostic {
     Diagnostic {
         severity: crunch_spacewasm_core::DiagnosticSeverity::Error,
-        code: String::from(code),
-        subject: String::from(subject),
-        message: String::from(message),
+        code: String::from(input.code),
+        subject: String::from(input.subject),
+        message: String::from(input.message),
+    }
+}
+
+fn cleanup_failed_materialization(output: &Path, materialization_error: ShellError) -> ShellError {
+    match fs::remove_dir_all(output) {
+        Ok(()) => materialization_error,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => materialization_error,
+        Err(error) => ShellError::Cleanup {
+            path: output.display().to_string(),
+            materialization_error: Box::new(materialization_error),
+            cleanup_message: error.to_string(),
+        },
     }
 }
 
