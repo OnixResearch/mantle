@@ -1,7 +1,12 @@
 // machine-artifact-public: store.command-reports
 use std::path::Path;
+use std::path::PathBuf;
 
 use serde::Serialize;
+
+const PATHINFO_SCAN_COUNT_MAX: u32 = 1_000_000;
+const PATHINFO_SCAN_COUNT_MAX_USIZE: usize = 1_000_000;
+const PATHINFO_INITIAL_CAPACITY: usize = 256;
 
 use crate::build_cmd::load_configured_trusted_public_keys;
 use crate::build_cmd::load_or_generate_signing_keypair;
@@ -12,72 +17,80 @@ pub fn cmd_store(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
-    json_output: bool,
+    is_json_output: bool,
 ) -> Result<(), RunError> {
     let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
-    rt.block_on(async { cmd_store_async(action, output_dir, state_dir, store_dir, json_output).await })
+    rt.block_on(async {
+        cmd_store_async(action, StoreCommandContext {
+            output_dir,
+            state_dir,
+            store_dir,
+            is_json_output,
+        })
+        .await
+    })
 }
 
-async fn cmd_store_async(
-    action: crate::StoreAction,
-    output_dir: &Path,
-    state_dir: &Path,
-    store_dir: &str,
-    json_output: bool,
-) -> Result<(), RunError> {
+#[derive(Clone, Copy)]
+struct StoreCommandContext<'a> {
+    output_dir: &'a Path,
+    state_dir: &'a Path,
+    store_dir: &'a str,
+    is_json_output: bool,
+}
+
+async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContext<'_>) -> Result<(), RunError> {
     match action {
         crate::StoreAction::List => {
-            let svc = open_pathinfo_service(state_dir, true).await?;
+            let svc = open_pathinfo_service(context.state_dir, true).await?;
             cmd_store_list(&svc).await
         }
         crate::StoreAction::Info { path } => {
-            let svc = open_pathinfo_service(state_dir, true).await?;
+            let svc = open_pathinfo_service(context.state_dir, true).await?;
             cmd_store_info(&svc, &path).await
         }
         crate::StoreAction::Roots => {
-            let store = open_store(output_dir, state_dir, store_dir).await?;
+            let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
             cmd_store_roots(&store)
         }
+        other => cmd_store_mutation_or_transfer(other, context).await,
+    }
+}
+
+async fn cmd_store_mutation_or_transfer(
+    action: crate::StoreAction,
+    context: StoreCommandContext<'_>,
+) -> Result<(), RunError> {
+    match action {
         crate::StoreAction::Pin { path } => {
-            let _guard = crunch_store::StoreMutationGuard::acquire_wait(state_dir)
-                .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))?;
-            let store = open_store(output_dir, state_dir, store_dir).await?;
+            let _guard = store_mutation_guard(context.state_dir)?;
+            let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
             cmd_store_pin(&store, &path).await
         }
         crate::StoreAction::Unpin { path } => {
-            let _guard = crunch_store::StoreMutationGuard::acquire_wait(state_dir)
-                .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))?;
-            let store = open_store(output_dir, state_dir, store_dir).await?;
+            let _guard = store_mutation_guard(context.state_dir)?;
+            let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
             cmd_store_unpin(&store, &path)
         }
-        crate::StoreAction::Gc { is_dry_run } => {
-            let _guard = crunch_store::StoreMutationGuard::try_acquire(state_dir)
-                .map_err(|e| RunError::Build(format!("{e}")))?;
-            let mut store = open_store(output_dir, state_dir, store_dir).await?;
-            cmd_store_gc(&mut store, is_dry_run).await
-        }
+        crate::StoreAction::Gc { is_dry_run } => cmd_store_gc_action(context, is_dry_run).await,
         crate::StoreAction::Verify {
             path,
             signing_key,
             trusted_public_keys,
             trust_unsigned,
         } => {
-            let svc = open_pathinfo_service(state_dir, true).await?;
-            cmd_store_verify(
-                &svc,
-                path.as_deref(),
-                signing_key.as_deref(),
-                &trusted_public_keys,
-                trust_unsigned,
-                state_dir,
-            )
+            cmd_store_verify_action(context, StoreVerifyAction {
+                path_filter: path,
+                signing_key_path: signing_key,
+                trusted_public_keys,
+                is_trust_unsigned: trust_unsigned,
+            })
             .await
         }
         crate::StoreAction::Sign { path, all, signing_key } => {
-            let _guard = crunch_store::StoreMutationGuard::acquire_wait(state_dir)
-                .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))?;
-            let svc = open_pathinfo_service(state_dir, false).await?;
-            cmd_store_sign(&svc, path.as_deref(), all, signing_key.as_deref(), state_dir).await
+            let _guard = store_mutation_guard(context.state_dir)?;
+            let svc = open_pathinfo_service(context.state_dir, false).await?;
+            cmd_store_sign(&svc, path.as_deref(), all, signing_key.as_deref(), context.state_dir).await
         }
         crate::StoreAction::Push {
             to,
@@ -85,10 +98,13 @@ async fn cmd_store_async(
             trust_unsigned,
             paths,
         } => {
-            let _guard = crunch_store::StoreMutationGuard::acquire_wait(state_dir)
-                .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))?;
-            let store = open_store(output_dir, state_dir, store_dir).await?;
-            cmd_store_push(&store, &to, all, trust_unsigned, &paths).await
+            cmd_store_push_action(context, StorePushAction {
+                destination_dir: to,
+                is_all: all,
+                is_trust_unsigned: trust_unsigned,
+                paths,
+            })
+            .await
         }
         crate::StoreAction::Pull {
             from,
@@ -97,20 +113,97 @@ async fn cmd_store_async(
             trusted_public_keys,
             paths,
         } => {
-            let _guard = crunch_store::StoreMutationGuard::acquire_wait(state_dir)
-                .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))?;
-            let store = open_store(output_dir, state_dir, store_dir).await?;
-            cmd_store_pull(&store, &from, all, trust_unsigned, &trusted_public_keys, &paths, state_dir).await
+            cmd_store_pull_action(context, StorePullAction {
+                source_url: from,
+                is_all: all,
+                is_trust_unsigned: trust_unsigned,
+                trusted_public_keys,
+                paths,
+            })
+            .await
         }
-        crate::StoreAction::Archive { action } => {
-            cmd_store_archive(action, output_dir, state_dir, store_dir, json_output).await
+        crate::StoreAction::Archive { action } => cmd_store_archive(action, context).await,
+        crate::StoreAction::List | crate::StoreAction::Info { .. } | crate::StoreAction::Roots => {
+            Err(RunError::Internal("mutation dispatcher received a read-only store action".to_string()))
         }
     }
 }
 
+async fn cmd_store_gc_action(context: StoreCommandContext<'_>, is_dry_run: bool) -> Result<(), RunError> {
+    let _guard = crunch_store::StoreMutationGuard::try_acquire(context.state_dir)
+        .map_err(|e| RunError::Build(format!("{e}")))?;
+    let mut store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+    cmd_store_gc(&mut store, is_dry_run).await
+}
+
+fn store_mutation_guard(state_dir: &Path) -> Result<crunch_store::StoreMutationGuard, RunError> {
+    crunch_store::StoreMutationGuard::acquire_wait(state_dir)
+        .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))
+}
+
+struct StoreVerifyAction {
+    path_filter: Option<String>,
+    signing_key_path: Option<PathBuf>,
+    trusted_public_keys: Vec<String>,
+    is_trust_unsigned: bool,
+}
+
+struct StorePushAction {
+    destination_dir: PathBuf,
+    is_all: bool,
+    is_trust_unsigned: bool,
+    paths: Vec<String>,
+}
+
+struct StorePullAction {
+    source_url: String,
+    is_all: bool,
+    is_trust_unsigned: bool,
+    trusted_public_keys: Vec<String>,
+    paths: Vec<String>,
+}
+
+async fn cmd_store_verify_action(context: StoreCommandContext<'_>, action: StoreVerifyAction) -> Result<(), RunError> {
+    let svc = open_pathinfo_service(context.state_dir, true).await?;
+    cmd_store_verify(&svc, StoreVerifyRequest {
+        path_filter: action.path_filter.as_deref(),
+        signing_key_path: action.signing_key_path.as_deref(),
+        explicit_trusted_public_keys: &action.trusted_public_keys,
+        is_trust_unsigned: action.is_trust_unsigned,
+        state_dir: context.state_dir,
+    })
+    .await
+}
+
+async fn cmd_store_push_action(context: StoreCommandContext<'_>, action: StorePushAction) -> Result<(), RunError> {
+    let _guard = store_mutation_guard(context.state_dir)?;
+    let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+    cmd_store_push(&store, StorePushRequest {
+        destination_dir: &action.destination_dir,
+        is_all: action.is_all,
+        is_trust_unsigned: action.is_trust_unsigned,
+        paths: &action.paths,
+    })
+    .await
+}
+
+async fn cmd_store_pull_action(context: StoreCommandContext<'_>, action: StorePullAction) -> Result<(), RunError> {
+    let _guard = store_mutation_guard(context.state_dir)?;
+    let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+    cmd_store_pull(&store, StorePullRequest {
+        source_url: &action.source_url,
+        is_all: action.is_all,
+        is_trust_unsigned: action.is_trust_unsigned,
+        explicit_trusted_public_keys: &action.trusted_public_keys,
+        paths: &action.paths,
+        state_dir: context.state_dir,
+    })
+    .await
+}
+
 async fn open_pathinfo_service(
     state_dir: &Path,
-    read_only: bool,
+    is_read_only: bool,
 ) -> Result<snix_store::pathinfoservice::RedbPathInfoService, RunError> {
     use snix_store::pathinfoservice::RedbPathInfoService;
     use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
@@ -124,7 +217,7 @@ async fn open_pathinfo_service(
     }
     RedbPathInfoService::new("crunch".to_string(), RedbPathInfoServiceConfig {
         path: Some(db_path.clone()),
-        read_only,
+        read_only: is_read_only,
         cache_size: None,
     })
     .await
@@ -136,6 +229,13 @@ async fn open_store(
     state_dir: &Path,
     store_dir: &str,
 ) -> Result<crunch_store::StoreHandle, RunError> {
+    if store_dir.is_empty() || !Path::new(store_dir).is_absolute() {
+        return Err(RunError::Internal(format!(
+            "logical store directory must be absolute and non-empty: {store_dir:?}"
+        )));
+    }
+    debug_assert!(!store_dir.is_empty());
+    debug_assert!(Path::new(store_dir).is_absolute());
     crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
@@ -150,6 +250,8 @@ async fn open_store(
 
 async fn cmd_store_list(svc: &impl snix_store::pathinfoservice::PathInfoService) -> Result<(), RunError> {
     let entries = crunch_store::store_list(svc).await.map_err(|e| RunError::Internal(format!("{e}")))?;
+    debug_assert!(entries.iter().all(|(store_path, _, _)| !store_path.is_empty()));
+    debug_assert!(u32::try_from(entries.len()).is_ok());
     if entries.is_empty() {
         eprintln!("No paths in PathInfo database.");
     } else {
@@ -166,6 +268,8 @@ async fn cmd_store_info(svc: &impl snix_store::pathinfoservice::PathInfoService,
     if details.is_empty() {
         return Err(RunError::Internal(format!("no PathInfo matching '{path}'")));
     }
+    debug_assert!(details.iter().all(|detail| !detail.store_path.is_empty()));
+    debug_assert!(u32::try_from(details.len()).is_ok());
     for detail in &details {
         println!("store_path: {}", detail.store_path);
         println!("nar_size:   {}", detail.nar_size);
@@ -224,9 +328,11 @@ fn cmd_store_unpin(store: &crunch_store::StoreHandle, path: &str) -> Result<(), 
 }
 
 async fn cmd_store_gc(store: &mut crunch_store::StoreHandle, is_dry_run: bool) -> Result<(), RunError> {
-    let report = store.garbage_collect(is_dry_run).await.map_err(|e| RunError::Build(format!("{e}")))?;
-    if !gc_report_has_candidates(&report) {
-        println!("retained_roots={}  candidate_paths=0  reclaimable_bytes=0", report.retained_root_count);
+    debug_assert!(!store.store_dir().is_empty());
+    debug_assert!(Path::new(store.store_dir()).is_absolute());
+    let gc_evidence = store.garbage_collect(is_dry_run).await.map_err(|e| RunError::Build(format!("{e}")))?;
+    if !gc_report_has_candidates(&gc_evidence) {
+        println!("retained_roots={}  candidate_paths=0  reclaimable_bytes=0", gc_evidence.retained_root_count);
         if is_dry_run {
             eprintln!("dry-run: no changes made");
         } else {
@@ -237,30 +343,32 @@ async fn cmd_store_gc(store: &mut crunch_store::StoreHandle, is_dry_run: bool) -
 
     println!(
         "retained_roots={}  candidate_paths={}  reclaimable_bytes={}",
-        report.retained_root_count, report.candidate_path_count, report.reclaimable_bytes_total
+        gc_evidence.retained_root_count, gc_evidence.candidate_path_count, gc_evidence.reclaimable_bytes_total
     );
     println!(
         "candidate_exported_outputs={}  candidate_artifact_attestations={}  candidate_closure_attestations={}  candidate_blob_indexes={}  candidate_blob_chunks={}  candidate_action_result_records={}  candidate_action_result_indexes={}",
-        report.candidate_exported_output_count,
-        report.candidate_artifact_attestation_count,
-        report.candidate_closure_attestation_count,
-        report.candidate_blob_index_count,
-        report.candidate_blob_chunk_count,
-        report.candidate_action_result_record_count,
-        report.candidate_action_result_index_count,
+        gc_evidence.candidate_exported_output_count,
+        gc_evidence.candidate_artifact_attestation_count,
+        gc_evidence.candidate_closure_attestation_count,
+        gc_evidence.candidate_blob_index_count,
+        gc_evidence.candidate_blob_chunk_count,
+        gc_evidence.candidate_action_result_record_count,
+        gc_evidence.candidate_action_result_index_count,
     );
-    for path in &report.candidate_paths {
+    for path in &gc_evidence.candidate_paths {
         println!("DELETE {path}");
     }
     if is_dry_run {
         eprintln!("dry-run: no changes made");
     } else {
-        eprintln!("gc: removed {} candidate path(s)", report.candidate_path_count);
+        eprintln!("gc: removed {} candidate path(s)", gc_evidence.candidate_path_count);
     }
     Ok(())
 }
 
 fn gc_report_has_candidates(report: &crunch_store::GcReport) -> bool {
+    debug_assert_eq!(report.candidate_path_count == 0, report.candidate_paths.is_empty());
+    debug_assert!(report.candidate_paths.iter().all(|path| !path.is_empty()));
     if report.candidate_path_count > 0 {
         return true;
     }
@@ -288,22 +396,30 @@ fn gc_report_has_candidates(report: &crunch_store::GcReport) -> bool {
     false
 }
 
+struct StoreVerifyRequest<'a> {
+    path_filter: Option<&'a str>,
+    signing_key_path: Option<&'a Path>,
+    explicit_trusted_public_keys: &'a [String],
+    is_trust_unsigned: bool,
+    state_dir: &'a Path,
+}
+
 async fn cmd_store_verify(
     svc: &impl snix_store::pathinfoservice::PathInfoService,
-    path_filter: Option<&str>,
-    signing_key_path: Option<&std::path::Path>,
-    explicit_trusted_public_keys: &[String],
-    trust_unsigned: bool,
-    state_dir: &Path,
+    request: StoreVerifyRequest<'_>,
 ) -> Result<(), RunError> {
-    let trusted_keys = resolve_store_verify_keys(signing_key_path, explicit_trusted_public_keys, state_dir)?;
-    let hash_results =
-        crunch_store::store_verify(svc, path_filter).await.map_err(|e| RunError::Internal(format!("{e}")))?;
-    let signature_results = crunch_store::store_verify_signatures(svc, path_filter, &trusted_keys)
+    let trusted_keys =
+        resolve_store_verify_keys(request.signing_key_path, request.explicit_trusted_public_keys, request.state_dir)?;
+    let hash_results = crunch_store::store_verify(svc, request.path_filter)
+        .await
+        .map_err(|e| RunError::Internal(format!("{e}")))?;
+    let signature_results = crunch_store::store_verify_signatures(svc, request.path_filter, &trusted_keys)
         .await
         .map_err(|e| RunError::Internal(format!("{e}")))?;
     let signature_by_path = index_signature_results(signature_results)?;
-    let summary = print_store_verify_results(&hash_results, &signature_by_path, trust_unsigned)?;
+    debug_assert_eq!(hash_results.len(), signature_by_path.len());
+    debug_assert!(u32::try_from(hash_results.len()).is_ok());
+    let summary = print_store_verify_results(&hash_results, &signature_by_path, request.is_trust_unsigned)?;
 
     eprintln!("{} checked, {} mismatches", summary.checked, summary.mismatches);
     if summary.mismatches > 0 {
@@ -331,10 +447,15 @@ fn resolve_store_verify_keys(
 fn parse_trusted_public_keys(
     explicit_trusted_public_keys: &[String],
 ) -> Result<Option<Vec<nix_compat::narinfo::VerifyingKey>>, RunError> {
+    if explicit_trusted_public_keys.len() > PATHINFO_SCAN_COUNT_MAX_USIZE {
+        return Err(RunError::Internal(format!("trusted key count exceeds {PATHINFO_SCAN_COUNT_MAX_USIZE} entries")));
+    }
+    debug_assert!(u32::try_from(explicit_trusted_public_keys.len()).is_ok());
+    debug_assert!(explicit_trusted_public_keys.len() <= PATHINFO_SCAN_COUNT_MAX_USIZE);
     if explicit_trusted_public_keys.is_empty() {
         return Ok(None);
     }
-    let mut keys = Vec::new();
+    let mut keys = Vec::with_capacity(explicit_trusted_public_keys.len());
     for key_str in explicit_trusted_public_keys {
         let key = nix_compat::narinfo::VerifyingKey::parse(key_str)
             .map_err(|e| RunError::Internal(format!("invalid trusted public key '{key_str}': {e}")))?;
@@ -346,7 +467,7 @@ fn parse_trusted_public_keys(
 fn index_signature_results(
     signature_results: Vec<crunch_store::SignatureVerifyResult>,
 ) -> Result<std::collections::HashMap<String, crunch_store::SignatureVerifyResult>, RunError> {
-    let mut signature_by_path = std::collections::HashMap::new();
+    let mut signature_by_path = std::collections::HashMap::with_capacity(signature_results.len());
     for result in signature_results {
         let replaced = signature_by_path.insert(result.path.clone(), result);
         if replaced.is_some() {
@@ -359,15 +480,15 @@ fn index_signature_results(
 fn print_store_verify_results(
     hash_results: &[crunch_store::VerifyResult],
     signature_by_path: &std::collections::HashMap<String, crunch_store::SignatureVerifyResult>,
-    trust_unsigned: bool,
+    is_trust_unsigned: bool,
 ) -> Result<VerifySummary, RunError> {
     let mut summary = VerifySummary {
         checked: 0,
         mismatches: 0,
     };
     for result in hash_results {
-        let mismatched = print_store_verify_result(result, signature_by_path, trust_unsigned)?;
-        if mismatched {
+        let is_mismatched = print_store_verify_result(result, signature_by_path, is_trust_unsigned)?;
+        if is_mismatched {
             summary.mismatches = summary.mismatches.saturating_add(1);
         }
         summary.checked = summary.checked.saturating_add(1);
@@ -378,10 +499,10 @@ fn print_store_verify_results(
 fn print_store_verify_result(
     result: &crunch_store::VerifyResult,
     signature_by_path: &std::collections::HashMap<String, crunch_store::SignatureVerifyResult>,
-    trust_unsigned: bool,
+    is_trust_unsigned: bool,
 ) -> Result<bool, RunError> {
     match result {
-        crunch_store::VerifyResult::Ok(path) => print_verified_ok(path, signature_by_path, trust_unsigned),
+        crunch_store::VerifyResult::Ok(path) => print_verified_ok(path, signature_by_path, is_trust_unsigned),
         crunch_store::VerifyResult::Missing(path) => {
             println!("MISSING {path}");
             Ok(true)
@@ -400,12 +521,14 @@ fn print_store_verify_result(
 fn print_verified_ok(
     path: &str,
     signature_by_path: &std::collections::HashMap<String, crunch_store::SignatureVerifyResult>,
-    trust_unsigned: bool,
+    is_trust_unsigned: bool,
 ) -> Result<bool, RunError> {
     let sig_result = signature_by_path
         .get(path)
         .ok_or_else(|| RunError::Internal(format!("missing signature result for {path}")))?;
-    if trust_unsigned {
+    debug_assert_eq!(sig_result.path, path);
+    debug_assert!(sig_result.trusted_count <= sig_result.total_signatures);
+    if is_trust_unsigned {
         println!("OK {path}  signatures=skipped");
         return Ok(false);
     }
@@ -432,6 +555,8 @@ async fn cmd_store_sign(
     if path_filter.is_none() && !is_sign_all {
         return Err(RunError::Internal("provide a store path or use --all to sign all entries".to_string()));
     }
+    debug_assert!(path_filter.is_some() || is_sign_all);
+    debug_assert!(state_dir.components().next().is_some());
 
     let keypair = crate::build_cmd::load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
 
@@ -465,22 +590,25 @@ async fn cmd_store_sign(
     Ok(())
 }
 
-async fn cmd_store_push(
-    store: &crunch_store::StoreHandle,
-    dest: &Path,
-    is_push_all: bool,
-    trust_unsigned: bool,
-    path_selectors: &[String],
-) -> Result<(), RunError> {
-    if path_selectors.is_empty() && !is_push_all {
+struct StorePushRequest<'a> {
+    destination_dir: &'a Path,
+    is_all: bool,
+    is_trust_unsigned: bool,
+    paths: &'a [String],
+}
+
+async fn cmd_store_push(store: &crunch_store::StoreHandle, request: StorePushRequest<'_>) -> Result<(), RunError> {
+    if request.paths.is_empty() && !request.is_all {
         return Err(RunError::Internal("provide store paths or use --all".to_string()));
     }
+    debug_assert!(request.is_all || !request.paths.is_empty());
+    debug_assert!(Path::new(store.store_dir()).is_absolute());
 
     // Collect matching PathInfo entries.
-    let selected = if is_push_all {
+    let selected = if request.is_all {
         collect_all_pathinfos(store).await?
     } else {
-        collect_matching_pathinfos(store, path_selectors).await?
+        collect_matching_pathinfos(store, request.paths).await?
     };
 
     if selected.is_empty() {
@@ -488,29 +616,31 @@ async fn cmd_store_push(
         return Ok(());
     }
 
-    let options = crunch_store::PushOptions { trust_unsigned };
-    let report = crunch_store::export_paths_to_cache_dir(store, &selected, dest, &options)
+    let options = crunch_store::PushOptions {
+        trust_unsigned: request.is_trust_unsigned,
+    };
+    let push_evidence = crunch_store::export_paths_to_cache_dir(store, &selected, request.destination_dir, &options)
         .await
         .map_err(|e| RunError::Internal(format!("push: {e}")))?;
 
-    for pushed in &report.paths {
+    for pushed in &push_evidence.paths {
         println!("PUSH {}", pushed.store_path);
     }
 
-    if report.skipped_unsigned_count > 0 {
+    if push_evidence.skipped_unsigned_count > 0 {
         eprintln!(
             "warning: {} unsigned path(s) skipped (use --trust-unsigned to include)",
-            report.skipped_unsigned_count
+            push_evidence.skipped_unsigned_count
         );
     }
 
     eprintln!(
         "pushed={} skipped_unsigned={} skipped_present={} nar_bytes={} narinfo_bytes={}",
-        report.pushed_count,
-        report.skipped_unsigned_count,
-        report.skipped_already_present_count,
-        report.total_nar_bytes,
-        report.total_narinfo_bytes,
+        push_evidence.pushed_count,
+        push_evidence.skipped_unsigned_count,
+        push_evidence.skipped_already_present_count,
+        push_evidence.total_nar_bytes,
+        push_evidence.total_narinfo_bytes,
     );
     Ok(())
 }
@@ -552,20 +682,29 @@ fn parse_http_pull_paths(
     Ok(parsed_paths)
 }
 
-async fn cmd_store_pull(
-    store: &crunch_store::StoreHandle,
-    source: &str,
-    is_pull_all: bool,
-    trust_unsigned: bool,
-    explicit_trusted_public_keys: &[String],
-    path_selectors: &[String],
-    state_dir: &Path,
-) -> Result<(), RunError> {
-    let pull_source = parse_pull_source(source)?;
-    if matches!(&pull_source, crunch_store::PullSource::Http(_)) && is_pull_all {
+struct StorePullRequest<'a> {
+    source_url: &'a str,
+    is_all: bool,
+    is_trust_unsigned: bool,
+    explicit_trusted_public_keys: &'a [String],
+    paths: &'a [String],
+    state_dir: &'a Path,
+}
+
+async fn cmd_store_pull(store: &crunch_store::StoreHandle, request: StorePullRequest<'_>) -> Result<(), RunError> {
+    let pull_source = validate_pull_request(&request)?;
+    let options = resolve_pull_options(&request)?;
+    let pull_evidence = execute_pull(store, pull_source, &request, &options).await?;
+    print_pull_report(&pull_evidence);
+    Ok(())
+}
+
+fn validate_pull_request(request: &StorePullRequest<'_>) -> Result<crunch_store::PullSource, RunError> {
+    let pull_source = parse_pull_source(request.source_url)?;
+    if matches!(&pull_source, crunch_store::PullSource::Http(_)) && request.is_all {
         return Err(RunError::Internal("--all is not supported for HTTP caches; specify paths explicitly".to_string()));
     }
-    if path_selectors.is_empty() && !is_pull_all {
+    if request.paths.is_empty() && !request.is_all {
         let detail = if matches!(&pull_source, crunch_store::PullSource::Http(_)) {
             "HTTP pull requires explicit store path selectors"
         } else {
@@ -573,46 +712,55 @@ async fn cmd_store_pull(
         };
         return Err(RunError::Internal(detail.to_string()));
     }
-
     if let crunch_store::PullSource::Directory(source_dir) = &pull_source
         && !source_dir.exists()
     {
         return Err(RunError::Internal(format!("pull source directory does not exist: {}", source_dir.display())));
     }
+    debug_assert!(request.is_all || !request.paths.is_empty());
+    debug_assert!(request.state_dir.components().next().is_some());
+    Ok(pull_source)
+}
 
-    // Resolve trusted keys: explicit CLI keys + store-configured keys.
-    let parsed_explicit = parse_trusted_public_keys(explicit_trusted_public_keys)?;
-    let keypair = load_or_generate_signing_keypair(None, state_dir, true)?;
-    let configured_keys = load_configured_trusted_public_keys(parsed_explicit.as_deref(), state_dir)?;
+fn resolve_pull_options(request: &StorePullRequest<'_>) -> Result<crunch_store::PullOptions, RunError> {
+    let parsed_explicit = parse_trusted_public_keys(request.explicit_trusted_public_keys)?;
+    let keypair = load_or_generate_signing_keypair(None, request.state_dir, true)?;
+    let configured_keys = load_configured_trusted_public_keys(parsed_explicit.as_deref(), request.state_dir)?;
     let trusted_keys = crunch_build::build_trusted_keys(&keypair, configured_keys.as_deref());
-    let options = crunch_store::PullOptions {
-        trust_unsigned,
+    Ok(crunch_store::PullOptions {
+        trust_unsigned: request.is_trust_unsigned,
         trusted_public_keys: trusted_keys,
-    };
+    })
+}
 
-    let report = match pull_source {
+async fn execute_pull(
+    store: &crunch_store::StoreHandle,
+    pull_source: crunch_store::PullSource,
+    request: &StorePullRequest<'_>,
+    options: &crunch_store::PullOptions,
+) -> Result<crunch_store::PullReport, RunError> {
+    match pull_source {
         crunch_store::PullSource::Directory(source_dir) => {
-            let paths_filter = if is_pull_all {
-                None
-            } else {
-                Some(path_selectors.to_vec())
-            };
-            crunch_store::import_paths_from_cache_dir(store, &source_dir, paths_filter.as_deref(), &options)
+            let paths_filter = (!request.is_all).then(|| request.paths.to_vec());
+            crunch_store::import_paths_from_cache_dir(store, &source_dir, paths_filter.as_deref(), options)
                 .await
-                .map_err(|e| RunError::Internal(format!("pull: {e}")))?
+                .map_err(|e| RunError::Internal(format!("pull: {e}")))
         }
         crunch_store::PullSource::Http(cache_url) => {
-            let requested_paths = parse_http_pull_paths(path_selectors, store.store_dir())?;
-            crunch_store::import_paths_from_http_cache(store, &cache_url, &requested_paths, &options)
+            let requested_paths = parse_http_pull_paths(request.paths, store.store_dir())?;
+            crunch_store::import_paths_from_http_cache(store, &cache_url, &requested_paths, options)
                 .await
-                .map_err(|e| RunError::Internal(format!("pull: {e}")))?
+                .map_err(|e| RunError::Internal(format!("pull: {e}")))
         }
-    };
+    }
+}
 
+fn print_pull_report(report: &crunch_store::PullReport) {
+    debug_assert_eq!(u32::try_from(report.paths.len()).ok(), Some(report.imported_count));
+    debug_assert!(report.paths.iter().all(|path| !path.store_path.is_empty()));
     for pulled in &report.paths {
         println!("PULL {}", pulled.store_path);
     }
-
     if report.skipped_untrusted_count > 0 {
         eprintln!(
             "warning: {} path(s) skipped (untrusted signature, use --trust-unsigned to include)",
@@ -625,7 +773,6 @@ async fn cmd_store_pull(
             report.skipped_store_dir_mismatch_count
         );
     }
-
     eprintln!(
         "imported={} skipped_present={} skipped_untrusted={} skipped_hash_mismatch={} skipped_missing_nar={} skipped_parse_error={} nar_bytes={}",
         report.imported_count,
@@ -636,15 +783,11 @@ async fn cmd_store_pull(
         report.skipped_parse_error_count,
         report.total_nar_bytes,
     );
-    Ok(())
 }
 
 async fn cmd_store_archive(
     action: crate::StoreArchiveAction,
-    output_dir: &Path,
-    state_dir: &Path,
-    store_dir: &str,
-    json_output: bool,
+    context: StoreCommandContext<'_>,
 ) -> Result<(), RunError> {
     match action {
         crate::StoreArchiveAction::Export {
@@ -653,8 +796,15 @@ async fn cmd_store_archive(
             trust_unsigned,
             paths,
         } => {
-            let store = open_store(output_dir, state_dir, store_dir).await?;
-            cmd_store_archive_export(&store, &to, all, trust_unsigned, &paths, json_output).await
+            let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+            cmd_store_archive_export(&store, StoreArchiveExportRequest {
+                destination: &to,
+                is_all: all,
+                is_trust_unsigned: trust_unsigned,
+                paths: &paths,
+                is_json_output: context.is_json_output,
+            })
+            .await
         }
         crate::StoreArchiveAction::Import {
             from,
@@ -662,103 +812,118 @@ async fn cmd_store_archive(
             trusted_public_keys,
             no_materialize,
         } => {
-            let _guard = crunch_store::StoreMutationGuard::acquire_wait(state_dir)
-                .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))?;
-            let store = open_store(output_dir, state_dir, store_dir).await?;
-            cmd_store_archive_import(
-                &store,
-                &from,
-                trust_unsigned,
-                &trusted_public_keys,
-                !no_materialize,
-                state_dir,
-                json_output,
-            )
+            let _guard = store_mutation_guard(context.state_dir)?;
+            let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+            cmd_store_archive_import(&store, StoreArchiveImportRequest {
+                source: &from,
+                is_trust_unsigned: trust_unsigned,
+                explicit_trusted_public_keys: &trusted_public_keys,
+                is_materialize: !no_materialize,
+                state_dir: context.state_dir,
+                is_json_output: context.is_json_output,
+            })
             .await
         }
-        crate::StoreArchiveAction::List { from } => cmd_store_archive_list(&from, json_output).await,
+        crate::StoreArchiveAction::List { from } => cmd_store_archive_list(&from, context.is_json_output).await,
     }
+}
+
+struct StoreArchiveExportRequest<'a> {
+    destination: &'a Path,
+    is_all: bool,
+    is_trust_unsigned: bool,
+    paths: &'a [String],
+    is_json_output: bool,
 }
 
 async fn cmd_store_archive_export(
     store: &crunch_store::StoreHandle,
-    dest: &Path,
-    is_export_all: bool,
-    trust_unsigned: bool,
-    path_selectors: &[String],
-    json_output: bool,
+    request: StoreArchiveExportRequest<'_>,
 ) -> Result<(), RunError> {
-    if path_selectors.is_empty() && !is_export_all {
+    if request.paths.is_empty() && !request.is_all {
         return Err(RunError::Internal("provide store paths or use --all".to_string()));
     }
-    let selected = if is_export_all {
+    let selected = if request.is_all {
         collect_all_pathinfos(store).await?
     } else {
-        collect_matching_pathinfos(store, path_selectors).await?
+        collect_matching_pathinfos(store, request.paths).await?
     };
     if selected.is_empty() {
         return Err(RunError::Internal("no matching paths found".to_string()));
     }
-    let options = crunch_store::ArchiveExportOptions { trust_unsigned };
-    let writes_archive_to_stdout = is_stdio_path(dest);
-    if writes_archive_to_stdout && json_output {
+    debug_assert!(request.is_all || !request.paths.is_empty());
+    debug_assert!(!selected.is_empty());
+    let options = crunch_store::ArchiveExportOptions {
+        trust_unsigned: request.is_trust_unsigned,
+    };
+    let is_archive_stdout = is_stdio_path(request.destination);
+    if is_archive_stdout && request.is_json_output {
         return Err(RunError::Internal("--json cannot be combined with archive export --to -".to_string()));
     }
-    let report = if writes_archive_to_stdout {
+    let archive_write_summary = if is_archive_stdout {
         let mut stdout = tokio::io::stdout();
         crunch_store::export_store_archive(store, &selected, &mut stdout, &options)
             .await
             .map_err(|e| RunError::Internal(format!("archive export: {e}")))?
     } else {
-        let file = tokio::fs::File::create(dest)
+        let file = tokio::fs::File::create(request.destination)
             .await
-            .map_err(|e| RunError::Internal(format!("creating archive {}: {e}", dest.display())))?;
+            .map_err(|e| RunError::Internal(format!("creating archive {}: {e}", request.destination.display())))?;
         let mut writer = tokio::io::BufWriter::new(file);
         crunch_store::export_store_archive(store, &selected, &mut writer, &options)
             .await
             .map_err(|e| RunError::Internal(format!("archive export: {e}")))?
     };
-    if writes_archive_to_stdout {
-        eprintln!("exported={} payload_bytes={}", report.exported_count, report.total_payload_bytes);
+    if is_archive_stdout {
+        eprintln!(
+            "exported={} payload_bytes={}",
+            archive_write_summary.exported_count, archive_write_summary.total_payload_bytes
+        );
         return Ok(());
     }
-    print_archive_export_report(&report, json_output)
+    print_archive_export_report(&archive_write_summary, request.is_json_output)
+}
+
+struct StoreArchiveImportRequest<'a> {
+    source: &'a Path,
+    is_trust_unsigned: bool,
+    explicit_trusted_public_keys: &'a [String],
+    is_materialize: bool,
+    state_dir: &'a Path,
+    is_json_output: bool,
 }
 
 async fn cmd_store_archive_import(
     store: &crunch_store::StoreHandle,
-    source: &Path,
-    trust_unsigned: bool,
-    explicit_trusted_public_keys: &[String],
-    materialize: bool,
-    state_dir: &Path,
-    json_output: bool,
+    request: StoreArchiveImportRequest<'_>,
 ) -> Result<(), RunError> {
-    let trusted_public_keys = resolve_store_verify_keys(None, explicit_trusted_public_keys, state_dir)?;
+    let trusted_public_keys = resolve_store_verify_keys(None, request.explicit_trusted_public_keys, request.state_dir)?;
     let options = crunch_store::ArchiveImportOptions {
-        trust_unsigned,
+        trust_unsigned: request.is_trust_unsigned,
         trusted_public_keys,
-        materialize,
+        materialize: request.is_materialize,
     };
-    let report = if is_stdio_path(source) {
+    debug_assert_eq!(options.materialize, request.is_materialize);
+    debug_assert!(u32::try_from(options.trusted_public_keys.len()).is_ok());
+    let archive_read_summary = if is_stdio_path(request.source) {
         let mut stdin = tokio::io::stdin();
         crunch_store::import_store_archive(store, &mut stdin, &options)
             .await
             .map_err(|e| RunError::Internal(format!("archive import: {e}")))?
     } else {
-        let file = tokio::fs::File::open(source)
+        let file = tokio::fs::File::open(request.source)
             .await
-            .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", source.display())))?;
+            .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", request.source.display())))?;
         let mut reader = tokio::io::BufReader::new(file);
         crunch_store::import_store_archive(store, &mut reader, &options)
             .await
             .map_err(|e| RunError::Internal(format!("archive import: {e}")))?
     };
-    print_archive_import_report(&report, json_output)
+    print_archive_import_report(&archive_read_summary, request.is_json_output)
 }
 
-async fn cmd_store_archive_list(source: &Path, json_output: bool) -> Result<(), RunError> {
-    let report = if is_stdio_path(source) {
+async fn cmd_store_archive_list(source: &Path, is_json_output: bool) -> Result<(), RunError> {
+    let archive_list_evidence = if is_stdio_path(source) {
         let mut stdin = tokio::io::stdin();
         crunch_store::list_store_archive(&mut stdin)
             .await
@@ -772,11 +937,14 @@ async fn cmd_store_archive_list(source: &Path, json_output: bool) -> Result<(), 
             .await
             .map_err(|e| RunError::Internal(format!("archive list: {e}")))?
     };
-    print_archive_list_report(&report, json_output)
+    print_archive_list_report(&archive_list_evidence, is_json_output)
 }
 
-fn print_archive_export_report(report: &crunch_store::ArchiveExportReport, json_output: bool) -> Result<(), RunError> {
-    if json_output {
+fn print_archive_export_report(
+    report: &crunch_store::ArchiveExportReport,
+    is_json_output: bool,
+) -> Result<(), RunError> {
+    if is_json_output {
         return print_json_report(report, "serializing archive export report");
     }
     for path in &report.paths {
@@ -786,8 +954,11 @@ fn print_archive_export_report(report: &crunch_store::ArchiveExportReport, json_
     Ok(())
 }
 
-fn print_archive_import_report(report: &crunch_store::ArchiveImportReport, json_output: bool) -> Result<(), RunError> {
-    if json_output {
+fn print_archive_import_report(
+    report: &crunch_store::ArchiveImportReport,
+    is_json_output: bool,
+) -> Result<(), RunError> {
+    if is_json_output {
         return print_json_report(report, "serializing archive import report");
     }
     for path in &report.paths {
@@ -800,8 +971,10 @@ fn print_archive_import_report(report: &crunch_store::ArchiveImportReport, json_
     Ok(())
 }
 
-fn print_archive_list_report(report: &crunch_store::ArchiveListReport, json_output: bool) -> Result<(), RunError> {
-    if json_output {
+fn print_archive_list_report(report: &crunch_store::ArchiveListReport, is_json_output: bool) -> Result<(), RunError> {
+    debug_assert!(!report.store_prefix.is_empty());
+    debug_assert!(u32::try_from(report.paths.len()).is_ok());
+    if is_json_output {
         return print_json_report(report, "serializing archive list report");
     }
     println!(
@@ -843,15 +1016,19 @@ async fn collect_all_pathinfos(
     use futures::StreamExt;
     use snix_store::pathinfoservice::PathInfoService;
 
-    const MAX_PUSH_SCAN: usize = 1_000_000;
     let mut stream = store.pathinfo_service().list();
-    let mut results = Vec::with_capacity(256);
-    for _ in 0..MAX_PUSH_SCAN {
-        let Some(result) = stream.next().await else { break };
-        let pi = result.map_err(|e| RunError::Internal(format!("listing pathinfo: {e}")))?;
-        results.push(pi);
+    let mut results = Vec::with_capacity(PATHINFO_INITIAL_CAPACITY);
+    for _ in 0..PATHINFO_SCAN_COUNT_MAX {
+        let Some(result) = stream.next().await else {
+            return Ok(results);
+        };
+        let path_info = result.map_err(|e| RunError::Internal(format!("listing pathinfo: {e}")))?;
+        results.push(path_info);
     }
-    Ok(results)
+    if stream.next().await.is_none() {
+        return Ok(results);
+    }
+    Err(RunError::Internal(format!("pathinfo scan exceeds {PATHINFO_SCAN_COUNT_MAX} entries")))
 }
 
 async fn collect_matching_pathinfos(
@@ -861,16 +1038,25 @@ async fn collect_matching_pathinfos(
     use futures::StreamExt;
     use snix_store::pathinfoservice::PathInfoService;
 
-    const MAX_PUSH_SCAN: usize = 1_000_000;
+    if selectors.is_empty() || selectors.iter().any(String::is_empty) {
+        return Err(RunError::Internal("matching path selectors must be non-empty".to_string()));
+    }
+    debug_assert!(!selectors.is_empty());
+    debug_assert!(selectors.iter().all(|selector| !selector.is_empty()));
     let mut stream = store.pathinfo_service().list();
     let mut results = Vec::with_capacity(selectors.len());
-    for _ in 0..MAX_PUSH_SCAN {
-        let Some(result) = stream.next().await else { break };
-        let pi = result.map_err(|e| RunError::Internal(format!("listing pathinfo: {e}")))?;
-        let sp_str = pi.store_path.to_string();
-        if selectors.iter().any(|sel| sp_str.contains(sel.as_str())) {
-            results.push(pi);
+    for _ in 0..PATHINFO_SCAN_COUNT_MAX {
+        let Some(result) = stream.next().await else {
+            return Ok(results);
+        };
+        let path_info = result.map_err(|e| RunError::Internal(format!("listing pathinfo: {e}")))?;
+        let store_path = path_info.store_path.to_string();
+        if selectors.iter().any(|selector| store_path.contains(selector.as_str())) {
+            results.push(path_info);
         }
     }
-    Ok(results)
+    if stream.next().await.is_none() {
+        return Ok(results);
+    }
+    Err(RunError::Internal(format!("pathinfo scan exceeds {PATHINFO_SCAN_COUNT_MAX} entries")))
 }

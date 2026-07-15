@@ -23,10 +23,9 @@ const VALIDATED_ENFORCED_STATUS: &str = "validated-enforced";
 const ENFORCED_SOURCE_BUILT_STATUS: &str = "enforced-source-built";
 const PROVIDED_CLOSURE_STATUS: &str = "provided";
 const POLICY_DIGEST_CONTEXT: &str = "mantle-source-built-toolchain-policy-digest-v1";
-const MAX_TOOLCHAIN_MEMBERS: usize = 128;
-const MAX_SEED_EXCEPTIONS: usize = 32;
-const HEX_CHARS_PER_BYTE: usize = 2;
-const BLAKE3_HEX_CHAR_COUNT: usize = blake3::OUT_LEN * HEX_CHARS_PER_BYTE;
+const MAX_TOOLCHAIN_MEMBERS: u32 = 128;
+const MAX_SEED_EXCEPTIONS: u32 = 32;
+const BLAKE3_HEX_CHAR_COUNT: usize = 64;
 const REQUIRED_TOOLCHAIN_ROLES: [ToolchainRole; 4] = [
     ToolchainRole::Rustc,
     ToolchainRole::Linker,
@@ -41,15 +40,15 @@ pub(crate) const RUST_SOURCE_PROVIDER_RECEIPTS_DIR: &str = "share/mantle-rust-pr
 const RUST_PROVIDER_POLICY_DIGEST_CONTEXT: &str = "mantle-rust-source-provider-policy-digest-v1";
 const RUST_PROVIDER_BOOTSTRAP_PLAN_SCHEMA: &str = "mantle-rust-source-provider-bootstrap-plan-v1";
 const RUST_PROVIDER_BOOTSTRAP_PLAN_DIGEST_CONTEXT: &str = "mantle-rust-source-provider-bootstrap-plan-digest-v1";
-const MAX_RUST_PROVIDER_ARTIFACTS: usize = 256;
-const MAX_RUST_PROVIDER_SOURCES: usize = 64;
-const MAX_RUST_PROVIDER_RECEIPTS: usize = 64;
-const MAX_RUST_PROVIDER_RECEIPT_STEPS: usize = 128;
-const MAX_RUST_PROVIDER_RECEIPT_ARGUMENTS: usize = 64;
-const MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_SOURCES: usize = 16;
-const MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_STAGES: usize = 16;
-const MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_OUTPUTS: usize = 16;
-const MAX_RUST_PROVIDER_BOOTSTRAP_STAGE_NOTES: usize = 16;
+const MAX_RUST_PROVIDER_ARTIFACTS: u32 = 256;
+const MAX_RUST_PROVIDER_SOURCES: u32 = 64;
+const MAX_RUST_PROVIDER_RECEIPTS: u32 = 64;
+const MAX_RUST_PROVIDER_RECEIPT_STEPS: u32 = 128;
+const MAX_RUST_PROVIDER_RECEIPT_ARGUMENTS: u32 = 64;
+const MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_SOURCES: u32 = 16;
+const MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_STAGES: u32 = 16;
+const MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_OUTPUTS: u32 = 16;
+const MAX_RUST_PROVIDER_BOOTSTRAP_STAGE_NOTES: u32 = 16;
 const SHA256_HEX_CHAR_COUNT: usize = 64;
 const REQUIRED_RUST_PROVIDER_ROLES: [RustProviderRole; 5] = [
     RustProviderRole::Rustc,
@@ -173,13 +172,20 @@ pub(crate) struct ToolchainSeedException {
 pub(crate) enum ToolchainRole {
     Rustc,
     Linker,
-    CCompiler,
+    #[serde(rename = "c-compiler")]
+    Ccompiler,
     CxxCompiler,
     PkgConfig,
     Sysroot,
     CrtObject,
     RuntimeLibrary,
     NativeHelper,
+}
+
+impl ToolchainRole {
+    // Compatibility name retained because sibling root-package modules still pattern-match this role.
+    #[allow(non_upper_case_globals)]
+    pub(crate) const CCompiler: Self = Self::Ccompiler;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -403,7 +409,7 @@ pub(crate) struct NativeClosureCandidateMember {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct ReceiptBoundCCompilerRoute {
+pub(crate) struct ReceiptBoundCcompilerRoute {
     pub(crate) role: ToolchainRole,
     pub(crate) name: String,
     pub(crate) execution_path: String,
@@ -412,6 +418,8 @@ pub(crate) struct ReceiptBoundCCompilerRoute {
     pub(crate) build_receipt: ToolchainBuildReceiptIdentity,
     pub(crate) compiler_family: String,
 }
+
+pub(crate) use ReceiptBoundCcompilerRoute as ReceiptBoundCCompilerRoute;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct NativeClosureMaterialization {
@@ -446,7 +454,7 @@ pub(crate) enum ToolchainClosureErrorKind {
     MissingSource,
     MissingBuildReceipt,
     MissingSeedException,
-    AmbiguousCCompilerRoute,
+    AmbiguousCcompilerRoute,
     PlaceholderSeedException,
     HostToolLeakage,
     InvalidRustProvider,
@@ -455,6 +463,12 @@ pub(crate) enum ToolchainClosureErrorKind {
     DuplicateRustProviderItem,
     DigestMismatch,
     Serialization,
+}
+
+impl ToolchainClosureErrorKind {
+    // Compatibility name retained for existing error classification checks in sibling modules.
+    #[allow(non_upper_case_globals)]
+    pub(crate) const AmbiguousCCompilerRoute: Self = Self::AmbiguousCcompilerRoute;
 }
 
 pub(crate) fn absent_source_built_toolchain_closure() -> SourceBuiltToolchainClosureStatus {
@@ -846,6 +860,8 @@ fn require_observed_input_declared(
             format!("host-tool-leakage: {:?} uses undeclared path {}", input.role, input.execution_path),
         ));
     };
+    debug_assert_eq!(member.role, input.role);
+    debug_assert_eq!(member.execution_path, input.execution_path);
     if let Some(digest) = &input.content_digest_blake3
         && member.content_digest_blake3 != *digest
     {
@@ -871,10 +887,12 @@ fn validate_collection_limits(manifest: &ToolchainClosureManifest) -> Result<(),
     if manifest.members.is_empty() {
         return Err(error(ToolchainClosureErrorKind::EmptyMembers, "toolchain closure has no members"));
     }
-    if manifest.members.len() > MAX_TOOLCHAIN_MEMBERS {
+    let member_count = checked_collection_len("toolchain closure members", manifest.members.len())?;
+    let seed_count = checked_collection_len("toolchain closure seed exceptions", manifest.seed_exceptions.len())?;
+    if member_count > MAX_TOOLCHAIN_MEMBERS {
         return Err(error(ToolchainClosureErrorKind::TooManyMembers, "too many toolchain closure members"));
     }
-    if manifest.seed_exceptions.len() > MAX_SEED_EXCEPTIONS {
+    if seed_count > MAX_SEED_EXCEPTIONS {
         return Err(error(ToolchainClosureErrorKind::TooManySeeds, "too many toolchain seed exceptions"));
     }
     Ok(())
@@ -1081,6 +1099,7 @@ fn validate_rust_provider_bootstrap_plan_policy(
     policy: &RustSourceProviderBootstrapPolicy,
 ) -> Result<(), ToolchainClosureError> {
     validate_non_empty("rust provider bootstrap reference", &policy.reference)?;
+    debug_assert!(!policy.reference.trim().is_empty());
     if !policy.source_built {
         return Err(error(
             ToolchainClosureErrorKind::PrebuiltRustProvider,
@@ -1094,6 +1113,8 @@ fn validate_rust_provider_bootstrap_plan_policy(
         ));
     }
     if policy.forbids_prebuilt_rust {
+        debug_assert!(policy.source_built);
+        debug_assert!(!policy.uses_prebuilt_rust);
         return Ok(());
     }
     Err(error(
@@ -1150,6 +1171,8 @@ fn validate_rust_provider_bootstrap_stages(
         plan.stages.len(),
         MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_STAGES,
     )?;
+    debug_assert!(!plan.stages.is_empty());
+    debug_assert!(u32::try_from(plan.stages.len()).is_ok_and(|count| count <= MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_STAGES));
     let mut seen_stage_ids = BTreeSet::new();
     let mut final_stage_count = 0usize;
     for stage in &plan.stages {
@@ -1167,6 +1190,8 @@ fn validate_rust_provider_bootstrap_stages(
         }
     }
     if final_stage_count == 1 {
+        debug_assert_eq!(seen_stage_ids.len(), plan.stages.len());
+        debug_assert_eq!(final_stage_count, 1);
         return Ok(());
     }
     Err(error(
@@ -1199,6 +1224,10 @@ fn validate_rust_provider_bootstrap_stage_sources(
         stage.source_ids.len(),
         MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_SOURCES,
     )?;
+    debug_assert!(!stage.source_ids.is_empty());
+    debug_assert!(
+        u32::try_from(stage.source_ids.len()).is_ok_and(|count| count <= MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_SOURCES)
+    );
     let mut stage_source_ids = BTreeSet::new();
     for source_id in &stage.source_ids {
         validate_non_empty("rust provider bootstrap stage source_id", source_id)?;
@@ -1380,21 +1409,32 @@ fn validate_rust_provider_provenance(provenance: &RustSourceProviderProvenance) 
     Ok(())
 }
 
-fn validate_collection_count(label: &str, len: usize, max: usize) -> Result<(), ToolchainClosureError> {
-    if len == 0 {
+fn validate_collection_count(label: &str, len: usize, max: u32) -> Result<(), ToolchainClosureError> {
+    let count = checked_collection_len(label, len)?;
+    if count == 0 {
         return Err(error(ToolchainClosureErrorKind::InvalidRustProvider, format!("{label} is empty")));
     }
     validate_max_collection_count(label, len, max)
 }
 
-fn validate_max_collection_count(label: &str, len: usize, max: usize) -> Result<(), ToolchainClosureError> {
-    if len > max {
+fn validate_max_collection_count(label: &str, len: usize, max: u32) -> Result<(), ToolchainClosureError> {
+    let count = checked_collection_len(label, len)?;
+    if count > max {
         return Err(error(
             ToolchainClosureErrorKind::InvalidRustProvider,
             format!("{label} has more than {max} entries"),
         ));
     }
     Ok(())
+}
+
+fn checked_collection_len(label: &str, len: usize) -> Result<u32, ToolchainClosureError> {
+    u32::try_from(len).map_err(|_| {
+        error(
+            ToolchainClosureErrorKind::InvalidRustProvider,
+            format!("{label} count exceeds the supported u32 range"),
+        )
+    })
 }
 
 fn validate_rust_provider_sources(
@@ -1466,6 +1506,8 @@ fn validate_rust_provider_artifact(
     receipt_ids: &BTreeSet<String>,
 ) -> Result<(), ToolchainClosureError> {
     validate_non_empty("rust provider artifact name", &artifact.name)?;
+    debug_assert!(!metadata.provider_id.is_empty());
+    debug_assert!(!artifact.name.is_empty());
     validate_no_disallowed_rust_provider_text("rust provider artifact name", &artifact.name)?;
     validate_provider_relative_path("rust provider artifact path", &artifact.path)?;
     validate_rust_provider_role_path(metadata, artifact)?;
@@ -1491,6 +1533,8 @@ fn validate_rust_provider_artifact(
 fn validate_rust_provider_receipt_artifact_links(
     metadata: &RustSourceProviderMetadata,
 ) -> Result<(), ToolchainClosureError> {
+    debug_assert!(metadata.build_receipts.len() <= metadata.artifacts.len());
+    debug_assert!(!metadata.provider_id.is_empty());
     for receipt in &metadata.build_receipts {
         let Some(artifact) = metadata
             .artifacts
@@ -1551,7 +1595,13 @@ fn validate_rust_provider_role_path(
     }
 }
 
-fn require_provider_path(path: &str, expected: &str, role: RustProviderRole) -> Result<(), ToolchainClosureError> {
+fn require_provider_path<P: AsRef<str>, E: AsRef<str>>(
+    path: P,
+    expected: E,
+    role: RustProviderRole,
+) -> Result<(), ToolchainClosureError> {
+    let path = path.as_ref();
+    let expected = expected.as_ref();
     if path == expected {
         return Ok(());
     }
@@ -1561,7 +1611,13 @@ fn require_provider_path(path: &str, expected: &str, role: RustProviderRole) -> 
     ))
 }
 
-fn require_provider_path_prefix(path: &str, prefix: &str, role: RustProviderRole) -> Result<(), ToolchainClosureError> {
+fn require_provider_path_prefix<P: AsRef<str>, E: AsRef<str>>(
+    path: P,
+    prefix: E,
+    role: RustProviderRole,
+) -> Result<(), ToolchainClosureError> {
+    let path = path.as_ref();
+    let prefix = prefix.as_ref();
     if path == prefix || path.starts_with(&format!("{prefix}/")) {
         return Ok(());
     }
@@ -1592,7 +1648,12 @@ fn validate_provider_receipt_path(path: &str) -> Result<(), ToolchainClosureErro
     ))
 }
 
-fn validate_provider_relative_path(label: &str, value: &str) -> Result<(), ToolchainClosureError> {
+fn validate_provider_relative_path<L: AsRef<str>, V: AsRef<str>>(
+    label: L,
+    value: V,
+) -> Result<(), ToolchainClosureError> {
+    let label = label.as_ref();
+    let value = value.as_ref();
     validate_non_empty(label, value)?;
     let path = Path::new(value);
     if path.is_absolute() {
@@ -1722,6 +1783,8 @@ fn validate_rust_provider_receipt_sources(
     receipt: &RustSourceProviderBuildReceipt,
 ) -> Result<(), ToolchainClosureError> {
     validate_collection_count("rust provider receipt source_ids", receipt.source_ids.len(), MAX_RUST_PROVIDER_SOURCES)?;
+    debug_assert!(!metadata.sources.is_empty());
+    debug_assert!(!receipt.source_ids.is_empty());
     let declared_sources: BTreeSet<String> = metadata.sources.iter().map(|source| source.id.clone()).collect();
     let mut receipt_sources = BTreeSet::new();
     for source_id in &receipt.source_ids {
@@ -1752,7 +1815,9 @@ fn validate_rust_provider_receipt_artifacts(
         receipt.output_artifacts.len(),
         MAX_RUST_PROVIDER_ARTIFACTS,
     )?;
+    debug_assert!(!receipt.output_artifacts.is_empty());
     let expected = metadata_artifacts_for_receipt(metadata, &receipt.receipt_id);
+    debug_assert!(!expected.is_empty());
     let mut actual = BTreeSet::new();
     for artifact in &receipt.output_artifacts {
         validate_non_empty("rust provider receipt artifact name", &artifact.name)?;
@@ -1781,6 +1846,8 @@ fn validate_rust_provider_receipt_steps(receipt: &RustSourceProviderBuildReceipt
         receipt.build_steps.len(),
         MAX_RUST_PROVIDER_RECEIPT_STEPS,
     )?;
+    debug_assert!(!receipt.build_steps.is_empty());
+    debug_assert!(u32::try_from(receipt.build_steps.len()).is_ok_and(|count| count <= MAX_RUST_PROVIDER_RECEIPT_STEPS));
     for step in &receipt.build_steps {
         validate_non_empty("rust provider receipt step name", &step.name)?;
         validate_non_empty("rust provider receipt step program", &step.program)?;
@@ -1818,7 +1885,14 @@ fn receipt_artifact_key(artifact: &RustProviderReceiptArtifact) -> (RustProvider
     (artifact.role, artifact.name.clone(), artifact.path.clone(), artifact.content_digest_blake3.clone())
 }
 
-fn require_equal(label: &str, actual: &str, expected: &str) -> Result<(), ToolchainClosureError> {
+fn require_equal<L: AsRef<str>, A: AsRef<str>, E: AsRef<str>>(
+    label: L,
+    actual: A,
+    expected: E,
+) -> Result<(), ToolchainClosureError> {
+    let label = label.as_ref();
+    let actual = actual.as_ref();
+    let expected = expected.as_ref();
     if actual == expected {
         return Ok(());
     }
@@ -1828,15 +1902,18 @@ fn require_equal(label: &str, actual: &str, expected: &str) -> Result<(), Toolch
     ))
 }
 
-fn validate_non_empty(label: &str, value: &str) -> Result<(), ToolchainClosureError> {
+fn validate_non_empty<L: AsRef<str>, V: AsRef<str>>(label: L, value: V) -> Result<(), ToolchainClosureError> {
+    let label = label.as_ref();
+    let value = value.as_ref();
     if !value.trim().is_empty() {
         return Ok(());
     }
     Err(error(ToolchainClosureErrorKind::EmptyField, format!("{label} is empty")))
 }
 
-fn validate_seed_exception_text(label: &str, value: &str) -> Result<(), ToolchainClosureError> {
-    let normalized = value.to_ascii_lowercase();
+fn validate_seed_exception_text<L: AsRef<str>, V: AsRef<str>>(label: L, value: V) -> Result<(), ToolchainClosureError> {
+    let label = label.as_ref();
+    let normalized = value.as_ref().to_ascii_lowercase();
     for marker in DISALLOWED_SEED_EXCEPTION_MARKERS {
         if contains_disallowed_seed_exception_marker(&normalized, marker) {
             return Err(error(
@@ -1848,8 +1925,12 @@ fn validate_seed_exception_text(label: &str, value: &str) -> Result<(), Toolchai
     Ok(())
 }
 
-fn validate_no_disallowed_rust_provider_text(label: &str, value: &str) -> Result<(), ToolchainClosureError> {
-    if let Some(marker) = disallowed_rust_provider_marker(value) {
+fn validate_no_disallowed_rust_provider_text<L: AsRef<str>, V: AsRef<str>>(
+    label: L,
+    value: V,
+) -> Result<(), ToolchainClosureError> {
+    let label = label.as_ref();
+    if let Some(marker) = disallowed_rust_provider_marker(value.as_ref()) {
         return Err(error(
             ToolchainClosureErrorKind::PrebuiltRustProvider,
             format!("{label} contains disallowed Rust provider marker '{marker}'"),
@@ -1866,7 +1947,9 @@ pub(crate) fn disallowed_rust_provider_marker(value: &str) -> Option<&'static st
         .find(|marker| contains_disallowed_rust_provider_marker(&normalized, marker))
 }
 
-fn contains_disallowed_rust_provider_marker(value: &str, marker: &str) -> bool {
+fn contains_disallowed_rust_provider_marker<V: AsRef<str>, M: AsRef<str>>(value: V, marker: M) -> bool {
+    let value = value.as_ref();
+    let marker = marker.as_ref();
     debug_assert!(!marker.is_empty());
     if marker.bytes().any(|byte| !byte.is_ascii_alphanumeric() && byte != b'_') {
         return value.contains(marker);
@@ -1874,13 +1957,19 @@ fn contains_disallowed_rust_provider_marker(value: &str, marker: &str) -> bool {
     contains_disallowed_seed_exception_marker(value, marker)
 }
 
-fn contains_disallowed_seed_exception_marker(value: &str, marker: &str) -> bool {
+fn contains_disallowed_seed_exception_marker<V: AsRef<str>, M: AsRef<str>>(value: V, marker: M) -> bool {
+    let value = value.as_ref();
+    let marker = marker.as_ref();
     debug_assert!(!marker.is_empty());
     let mut search_start = 0;
     while let Some(relative_start) = value[search_start..].find(marker) {
-        let marker_start = search_start + relative_start;
-        let marker_end = marker_start + marker.len();
-        if has_marker_boundaries(value, marker_start, marker_end) {
+        let Some(marker_start) = search_start.checked_add(relative_start) else {
+            return false;
+        };
+        let Some(marker_end) = marker_start.checked_add(marker.len()) else {
+            return false;
+        };
+        if has_marker_boundaries(value, marker_start..marker_end) {
             return true;
         }
         search_start = marker_end;
@@ -1888,11 +1977,11 @@ fn contains_disallowed_seed_exception_marker(value: &str, marker: &str) -> bool 
     false
 }
 
-fn has_marker_boundaries(value: &str, marker_start: usize, marker_end: usize) -> bool {
-    debug_assert!(marker_start <= marker_end);
-    debug_assert!(marker_end <= value.len());
-    let before = value[..marker_start].chars().next_back();
-    let after = value[marker_end..].chars().next();
+fn has_marker_boundaries(value: &str, marker_range: std::ops::Range<usize>) -> bool {
+    debug_assert!(marker_range.start <= marker_range.end);
+    debug_assert!(marker_range.end <= value.len());
+    let before = value[..marker_range.start].chars().next_back();
+    let after = value[marker_range.end..].chars().next();
     !is_seed_marker_word_char(before) && !is_seed_marker_word_char(after)
 }
 
@@ -1900,7 +1989,9 @@ fn is_seed_marker_word_char(value: Option<char>) -> bool {
     value.is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
-fn validate_absolute_path(label: &str, value: &str) -> Result<(), ToolchainClosureError> {
+fn validate_absolute_path<L: AsRef<str>, V: AsRef<str>>(label: L, value: V) -> Result<(), ToolchainClosureError> {
+    let label = label.as_ref();
+    let value = value.as_ref();
     validate_non_empty(label, value)?;
     if Path::new(value).is_absolute() {
         return Ok(());
@@ -1908,21 +1999,27 @@ fn validate_absolute_path(label: &str, value: &str) -> Result<(), ToolchainClosu
     Err(error(ToolchainClosureErrorKind::InvalidExecutionPath, format!("{label} must be absolute: {value}")))
 }
 
-fn validate_blake3_hex(label: &str, value: &str) -> Result<(), ToolchainClosureError> {
+fn validate_blake3_hex<L: AsRef<str>, V: AsRef<str>>(label: L, value: V) -> Result<(), ToolchainClosureError> {
+    let label = label.as_ref();
+    let value = value.as_ref();
     if value.len() != BLAKE3_HEX_CHAR_COUNT {
         return Err(error(ToolchainClosureErrorKind::InvalidDigest, format!("{label} has invalid length")));
     }
     validate_lowercase_hex(label, value)
 }
 
-fn validate_sha256_hex(label: &str, value: &str) -> Result<(), ToolchainClosureError> {
+fn validate_sha256_hex<L: AsRef<str>, V: AsRef<str>>(label: L, value: V) -> Result<(), ToolchainClosureError> {
+    let label = label.as_ref();
+    let value = value.as_ref();
     if value.len() != SHA256_HEX_CHAR_COUNT {
         return Err(error(ToolchainClosureErrorKind::InvalidDigest, format!("{label} has invalid length")));
     }
     validate_lowercase_hex(label, value)
 }
 
-fn validate_lowercase_hex(label: &str, value: &str) -> Result<(), ToolchainClosureError> {
+fn validate_lowercase_hex<L: AsRef<str>, V: AsRef<str>>(label: L, value: V) -> Result<(), ToolchainClosureError> {
+    let label = label.as_ref();
+    let value = value.as_ref();
     if value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
         return Ok(());
     }

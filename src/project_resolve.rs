@@ -6,7 +6,6 @@ use std::process::Command;
 use std::process::Stdio;
 use std::thread;
 use std::time::Duration;
-use std::time::Instant;
 
 use crunch_project::CommandFreshnessProbe;
 use crunch_project::DarcsSelector;
@@ -37,7 +36,11 @@ use crunch_project::trust_signature_payload;
 use digest::Digest;
 use nix_compat::nixhash::NixHash;
 use snix_castore::Node;
-use snix_castore::blobservice::MemoryBlobService;
+use snix_castore::blobservice::BlobService;
+use snix_castore::blobservice::MemoryBlobServiceConfig;
+use snix_castore::composition::CompositionContext;
+use snix_castore::composition::REG;
+use snix_castore::composition::ServiceBuilder;
 use snix_castore::directoryservice::RedbDirectoryService;
 use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 use snix_castore::import::fs::ingest_path;
@@ -45,26 +48,25 @@ use snix_store::nar::write_nar;
 use snix_store::utils::AsyncIoBridge;
 use tempfile::tempdir;
 
-const KIB_BYTES_USIZE: usize = 1024;
-const KIB_BYTES: u64 = KIB_BYTES_USIZE as u64;
-const MIB_BYTES: u64 = KIB_BYTES * KIB_BYTES;
-const GIB_BYTES: u64 = KIB_BYTES * MIB_BYTES;
-const MAX_DOWNLOAD_BYTES: u64 = 4 * GIB_BYTES;
-const MAX_TREE_BYTES: u64 = 4 * GIB_BYTES;
+const MIB_BYTES: u64 = 1_048_576;
+const MAX_DOWNLOAD_BYTES: u64 = 4_294_967_296;
+const MAX_TREE_BYTES: u64 = 4_294_967_296;
 const MAX_TREE_ENTRIES: u32 = 500_000;
 const FETCH_CONNECT_TIMEOUT_SECS: u64 = 60;
 const FETCH_READ_TIMEOUT_SECS: u64 = 600;
-const FRESHNESS_LOCAL_TREE_MAX_BYTES: u64 = 4 * GIB_BYTES;
+const FRESHNESS_LOCAL_TREE_MAX_BYTES: u64 = 4_294_967_296;
 const FRESHNESS_LOCAL_TREE_MAX_ENTRIES: u32 = 500_000;
 const FRESHNESS_HTTP_MAX_BYTES: u64 = MIB_BYTES;
 const FRESHNESS_STDERR_LIMIT_BYTES: u32 = 16_384;
+const FRESHNESS_STDERR_LIMIT_BYTES_USIZE: usize = 16_384;
 const COMMAND_POLL_INTERVAL_MS: u64 = 10;
 const GIT_REV_HEX_BYTES: usize = 40;
 const BLAKE3_HEX_BYTES: usize = 64;
-const PROJECT_READ_BUFFER_BYTES: usize = 64 * KIB_BYTES_USIZE;
+const PROJECT_READ_BUFFER_BYTES: usize = 65_536;
+const PROJECT_READ_CHUNK_COUNT_MAX: u32 = 65_537;
 const FRESHNESS_DIGEST_PREFIX: &str = "blake3:";
 const HTTP_JSON_POINTER_ROOT: &str = "";
-const MAX_PROJECT_TRUST_SIGNATURE_BYTES: u64 = 16 * KIB_BYTES;
+const MAX_PROJECT_TRUST_SIGNATURE_BYTES: u64 = 16_384;
 
 pub struct LiveResolver {
     project_root: PathBuf,
@@ -209,7 +211,11 @@ fn verify_project_trust_policy(
     };
     let payload = trust_signature_payload(subject, policy.digest_binding, &hash.algo, &hash.value);
     let trusted_keys = parse_trusted_project_keys(&policy.trusted_public_keys)?;
-    let mut facts = Vec::new();
+    let fact_slot_count =
+        policy.signatures.len().checked_mul(trusted_keys.len()).ok_or_else(|| {
+            crunch_project::Error::Manifest("project trust fact capacity overflowed usize".to_string())
+        })?;
+    let mut facts = Vec::with_capacity(fact_slot_count);
     for signature_ref in &policy.signatures {
         let signature_text = read_project_trust_signature(project_root, signature_ref)?;
         let signature = nix_compat::narinfo::SignatureRef::parse(signature_text.trim()).map_err(|err| {
@@ -287,92 +293,113 @@ fn observe_freshness_probe(
     assert!(!input_name.is_empty(), "freshness input name must not be empty");
     assert!(project_root.components().next().is_some(), "project root must not be empty");
     let kind = freshness_probe_kind(probe);
-    let requires_network = freshness_probe_requires_network(probe);
-    let identity_digest = freshness_probe_identity_digest(probe);
-    if no_network && requires_network {
-        return freshness_status(
+    let is_network_required = freshness_probe_requires_network(probe);
+    let identity_digest = match freshness_probe_identity_digest(probe) {
+        Ok(digest) => Some(digest),
+        Err(error) => {
+            let diagnostic = match error {
+                FreshnessProbeShellError::Failed(message) | FreshnessProbeShellError::Unavailable(message) => message,
+            };
+            return freshness_status(FreshnessStatusRequest {
+                input_name,
+                probe_kind: kind,
+                is_network_required,
+                status: FreshnessObservationStatus::Failed,
+                value: None,
+                diagnostic,
+                probe_identity_digest: None,
+            });
+        }
+    };
+    if no_network && is_network_required {
+        return freshness_status(FreshnessStatusRequest {
             input_name,
-            kind,
-            requires_network,
-            FreshnessObservationStatus::NetworkRequired,
-            None,
-            "network disabled for freshness probe".to_string(),
-            Some(identity_digest),
-        );
+            probe_kind: kind,
+            is_network_required,
+            status: FreshnessObservationStatus::NetworkRequired,
+            value: None,
+            diagnostic: "network disabled for freshness probe".to_string(),
+            probe_identity_digest: identity_digest,
+        });
     }
-    match run_freshness_probe(project_root, probe) {
-        Ok(value) if value.is_empty() => freshness_status(
-            input_name,
-            kind,
-            requires_network,
-            FreshnessObservationStatus::Failed,
-            None,
-            "freshness probe produced empty value".to_string(),
-            Some(identity_digest),
-        ),
-        Ok(value) => freshness_status(
-            input_name,
-            kind,
-            requires_network,
-            FreshnessObservationStatus::Observed,
-            Some(value),
-            String::new(),
-            Some(identity_digest),
-        ),
-        Err(FreshnessProbeShellError::Unavailable(message)) => freshness_status(
-            input_name,
-            kind,
-            requires_network,
-            FreshnessObservationStatus::ProbeUnavailable,
-            None,
-            message,
-            Some(identity_digest),
-        ),
-        Err(FreshnessProbeShellError::Failed(message)) => freshness_status(
-            input_name,
-            kind,
-            requires_network,
-            FreshnessObservationStatus::Failed,
-            None,
-            message,
-            Some(identity_digest),
-        ),
-    }
+    let (status, value, diagnostic) = match run_freshness_probe(project_root, probe) {
+        Ok(value) if value.is_empty() => {
+            (FreshnessObservationStatus::Failed, None, "freshness probe produced empty value".to_string())
+        }
+        Ok(value) => (FreshnessObservationStatus::Observed, Some(value), String::new()),
+        Err(FreshnessProbeShellError::Unavailable(message)) => {
+            (FreshnessObservationStatus::ProbeUnavailable, None, message)
+        }
+        Err(FreshnessProbeShellError::Failed(message)) => (FreshnessObservationStatus::Failed, None, message),
+    };
+    freshness_status(FreshnessStatusRequest {
+        input_name,
+        probe_kind: kind,
+        is_network_required,
+        status,
+        value,
+        diagnostic,
+        probe_identity_digest: identity_digest,
+    })
 }
 
-fn freshness_status(
-    input_name: &str,
+struct FreshnessStatusRequest<'a> {
+    input_name: &'a str,
     probe_kind: FreshnessProbeKind,
-    requires_network: bool,
+    is_network_required: bool,
     status: FreshnessObservationStatus,
     value: Option<String>,
     diagnostic: String,
     probe_identity_digest: Option<String>,
-) -> FreshnessObservation {
-    let request = FreshnessObservationRequest {
+}
+
+fn freshness_status(request: FreshnessStatusRequest<'_>) -> FreshnessObservation {
+    debug_assert!(!request.input_name.is_empty());
+    debug_assert_eq!(request.status == FreshnessObservationStatus::Observed, request.value.is_some());
+    let core_request = FreshnessObservationRequest {
         version: FRESHNESS_PROBE_VERSION,
-        input_name: input_name.to_string(),
-        probe_kind,
-        requires_network,
-        status,
-        value,
-        diagnostic,
-        probe_identity_digest: probe_identity_digest.clone(),
+        input_name: request.input_name.to_string(),
+        probe_kind: request.probe_kind,
+        requires_network: request.is_network_required,
+        status: request.status,
+        value: request.value.clone(),
+        diagnostic: request.diagnostic.clone(),
+        probe_identity_digest: request.probe_identity_digest.clone(),
     };
-    match normalize_freshness_observation(request) {
+    match normalize_freshness_observation(core_request) {
         Ok(observation) => observation,
-        Err(err) => normalize_freshness_observation(FreshnessObservationRequest {
-            version: FRESHNESS_PROBE_VERSION,
-            input_name: input_name.to_string(),
-            probe_kind,
-            requires_network,
-            status: FreshnessObservationStatus::Failed,
-            value: None,
-            diagnostic: format!("freshness observation rejected: {err}"),
-            probe_identity_digest,
-        })
-        .expect("fallback freshness failure observation must normalize"),
+        Err(error) => failed_freshness_observation(request, error),
     }
+}
+
+fn failed_freshness_observation(
+    request: FreshnessStatusRequest<'_>,
+    error: crunch_project::FreshnessError,
+) -> FreshnessObservation {
+    debug_assert!(!request.input_name.is_empty());
+    debug_assert!(!error.to_string().is_empty());
+    let diagnostic = format!("freshness observation rejected: {error}");
+    let fallback_request = FreshnessObservationRequest {
+        version: FRESHNESS_PROBE_VERSION,
+        input_name: request.input_name.to_string(),
+        probe_kind: request.probe_kind,
+        requires_network: request.is_network_required,
+        status: FreshnessObservationStatus::Failed,
+        value: None,
+        diagnostic: diagnostic.clone(),
+        probe_identity_digest: request.probe_identity_digest,
+    };
+    normalize_freshness_observation(fallback_request).unwrap_or(FreshnessObservation {
+        version: FRESHNESS_PROBE_VERSION,
+        input_name: request.input_name.to_string(),
+        probe_kind: request.probe_kind,
+        requires_network: request.is_network_required,
+        status: FreshnessObservationStatus::Failed,
+        value: None,
+        value_digest: None,
+        diagnostic,
+        probe_identity_digest: None,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -410,12 +437,18 @@ fn freshness_probe_requires_network(probe: &FreshnessProbe) -> bool {
     }
 }
 
-fn freshness_probe_identity_digest(probe: &FreshnessProbe) -> String {
-    let bytes = serde_json::to_vec(probe).expect("freshness probes must serialize for identity digest");
-    blake3_hex_digest(&bytes)
+fn freshness_probe_identity_digest(probe: &FreshnessProbe) -> Result<String, FreshnessProbeShellError> {
+    let bytes = serde_json::to_vec(probe)
+        .map_err(|error| FreshnessProbeShellError::Failed(format!("serializing freshness probe identity: {error}")))?;
+    Ok(blake3_hex_digest(&bytes))
 }
 
-fn observe_git_ref(repository: &str, reference: &str) -> Result<String, FreshnessProbeShellError> {
+fn observe_git_ref<R: AsRef<str>, F: AsRef<str>>(
+    repository: R,
+    reference: F,
+) -> Result<String, FreshnessProbeShellError> {
+    let repository = repository.as_ref();
+    let reference = reference.as_ref();
     let git = find_git_binary().map_err(|err| FreshnessProbeShellError::Unavailable(err.to_string()))?;
     let output = Command::new(&git)
         .arg("ls-remote")
@@ -426,13 +459,18 @@ fn observe_git_ref(repository: &str, reference: &str) -> Result<String, Freshnes
     if !output.status.success() {
         return Err(FreshnessProbeShellError::Failed(format!(
             "git ls-remote failed: {}",
-            bounded_utf8_lossy(&output.stderr, FRESHNESS_STDERR_LIMIT_BYTES)
+            bounded_stderr_utf8_lossy(&output.stderr)
         )));
     }
     parse_git_ref_probe_output(&String::from_utf8_lossy(&output.stdout), reference)
 }
 
-fn parse_git_ref_probe_output(output: &str, reference: &str) -> Result<String, FreshnessProbeShellError> {
+fn parse_git_ref_probe_output<O: AsRef<str>, F: AsRef<str>>(
+    output: O,
+    reference: F,
+) -> Result<String, FreshnessProbeShellError> {
+    let output = output.as_ref();
+    let reference = reference.as_ref();
     for line in output.lines() {
         let Some((rev, found_ref)) = line.split_once('\t') else {
             continue;
@@ -454,7 +492,9 @@ fn observe_http_text(url: &str) -> Result<String, FreshnessProbeShellError> {
         .map_err(|err| FreshnessProbeShellError::Failed(format!("HTTP text freshness value is not UTF-8: {err}")))
 }
 
-fn observe_http_json(url: &str, pointer: &str) -> Result<String, FreshnessProbeShellError> {
+fn observe_http_json<U: AsRef<str>, P: AsRef<str>>(url: U, pointer: P) -> Result<String, FreshnessProbeShellError> {
+    let url = url.as_ref();
+    let pointer = pointer.as_ref();
     let bytes = read_url_limited(url, FRESHNESS_HTTP_MAX_BYTES)?;
     let json: serde_json::Value = serde_json::from_slice(&bytes)
         .map_err(|err| FreshnessProbeShellError::Failed(format!("HTTP JSON freshness body did not parse: {err}")))?;
@@ -514,6 +554,7 @@ fn trim_freshness_text(value: String) -> String {
 
 fn observe_command(project_root: &Path, command: &CommandFreshnessProbe) -> Result<String, FreshnessProbeShellError> {
     assert!(!command.argv.is_empty(), "validated command probe must have argv");
+    assert!(project_root.components().next().is_some(), "project root must not be empty");
     let cwd = resolve_local_path(project_root, &command.cwd);
     let mut child = spawn_freshness_command(&cwd, command)?;
     let stdout = child
@@ -524,8 +565,8 @@ fn observe_command(project_root: &Path, command: &CommandFreshnessProbe) -> Resu
         .stderr
         .take()
         .ok_or_else(|| FreshnessProbeShellError::Failed("command stderr pipe unavailable".to_string()))?;
-    let stdout_limit = command.output_limit_bytes;
-    let stdout_handle = thread::spawn(move || read_pipe_limited(stdout, stdout_limit, "stdout"));
+    let stdout_limit_bytes = command.output_limit_bytes;
+    let stdout_handle = thread::spawn(move || read_pipe_limited(stdout, stdout_limit_bytes, "stdout"));
     let stderr_handle = thread::spawn(move || read_pipe_limited(stderr, FRESHNESS_STDERR_LIMIT_BYTES, "stderr"));
     let status = wait_for_freshness_command(&mut child, command.timeout_ms)?;
     let stdout_bytes = join_reader_thread(stdout_handle, "stdout")?;
@@ -536,7 +577,7 @@ fn observe_command(project_root: &Path, command: &CommandFreshnessProbe) -> Resu
     if !command.success_statuses.contains(&code) {
         return Err(FreshnessProbeShellError::Failed(format!(
             "command exited {code}: {}",
-            bounded_utf8_lossy(&stderr_bytes, FRESHNESS_STDERR_LIMIT_BYTES)
+            bounded_stderr_utf8_lossy(&stderr_bytes)
         )));
     }
     command_output_value(command, stdout_bytes)
@@ -568,23 +609,32 @@ fn wait_for_freshness_command(
     child: &mut std::process::Child,
     timeout_ms: u32,
 ) -> Result<std::process::ExitStatus, FreshnessProbeShellError> {
-    let deadline = Instant::now()
-        .checked_add(Duration::from_millis(timeout_ms as u64))
-        .ok_or_else(|| FreshnessProbeShellError::Failed("command timeout overflow".to_string()))?;
-    loop {
+    let poll_interval_ms = u32::try_from(COMMAND_POLL_INTERVAL_MS)
+        .map_err(|_| FreshnessProbeShellError::Failed("command poll interval exceeds u32".to_string()))?;
+    let poll_count_max = timeout_ms.div_ceil(poll_interval_ms).max(1);
+    for _ in 0..poll_count_max {
         if let Some(status) = child
             .try_wait()
             .map_err(|err| FreshnessProbeShellError::Failed(format!("waiting for command probe: {err}")))?
         {
             return Ok(status);
         }
-        if Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(FreshnessProbeShellError::Failed(format!("command timed out after {timeout_ms} ms")));
-        }
         thread::sleep(Duration::from_millis(COMMAND_POLL_INTERVAL_MS));
     }
+    terminate_timed_out_child(child, timeout_ms)
+}
+
+fn terminate_timed_out_child(
+    child: &mut std::process::Child,
+    timeout_ms: u32,
+) -> Result<std::process::ExitStatus, FreshnessProbeShellError> {
+    child
+        .kill()
+        .map_err(|error| FreshnessProbeShellError::Failed(format!("killing timed-out command probe: {error}")))?;
+    child
+        .wait()
+        .map_err(|error| FreshnessProbeShellError::Failed(format!("reaping timed-out command probe: {error}")))?;
+    Err(FreshnessProbeShellError::Failed(format!("command timed out after {timeout_ms} ms")))
 }
 
 fn command_output_value(
@@ -635,8 +685,10 @@ fn hash_local_directory_freshness(path: &Path) -> Result<String, FreshnessProbeS
             path.display()
         )));
     }
+    debug_assert!(path.exists());
+    debug_assert!(path.is_dir());
     let mut files = Vec::new();
-    collect_freshness_files(path, path, &mut files)?;
+    collect_freshness_files(path, &mut files)?;
     files.sort();
     let mut hasher = blake3::Hasher::new();
     let mut bytes_total: u64 = 0;
@@ -653,44 +705,52 @@ fn hash_local_directory_freshness(path: &Path) -> Result<String, FreshnessProbeS
     Ok(format!("{FRESHNESS_DIGEST_PREFIX}{}", blake3::Hasher::finalize(&hasher).to_hex()))
 }
 
-fn collect_freshness_files(
-    root: &Path,
-    current: &Path,
-    files: &mut Vec<PathBuf>,
-) -> Result<(), FreshnessProbeShellError> {
-    if files.len() as u64 > FRESHNESS_LOCAL_TREE_MAX_ENTRIES as u64 {
-        return Err(FreshnessProbeShellError::Failed(format!(
-            "local freshness directory exceeds {FRESHNESS_LOCAL_TREE_MAX_ENTRIES} entries: {}",
-            root.display()
-        )));
-    }
-    let mut children = std::fs::read_dir(current)
-        .map_err(|err| FreshnessProbeShellError::Failed(format!("read_dir {}: {err}", current.display())))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| FreshnessProbeShellError::Failed(format!("walking {}: {err}", current.display())))?;
-    children.sort_by_key(|entry| entry.path());
-    for child in children {
-        let path = child.path();
-        let metadata = std::fs::symlink_metadata(&path)
-            .map_err(|err| FreshnessProbeShellError::Failed(format!("stat {}: {err}", path.display())))?;
-        if metadata.is_dir() {
-            collect_freshness_files(root, &path, files)?;
-            continue;
+fn collect_freshness_files(root: &Path, files: &mut Vec<PathBuf>) -> Result<(), FreshnessProbeShellError> {
+    debug_assert!(root.is_dir());
+    debug_assert!(files.is_empty());
+    let mut pending = vec![root.to_path_buf()];
+    for _ in 0..FRESHNESS_LOCAL_TREE_MAX_ENTRIES {
+        let Some(current) = pending.pop() else {
+            return Ok(());
+        };
+        let children = std::fs::read_dir(&current)
+            .map_err(|err| FreshnessProbeShellError::Failed(format!("read_dir {}: {err}", current.display())))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| FreshnessProbeShellError::Failed(format!("walking {}: {err}", current.display())))?;
+        let projected_entry_count = pending
+            .len()
+            .checked_add(files.len())
+            .and_then(|count| count.checked_add(children.len()))
+            .and_then(|count| u32::try_from(count).ok())
+            .ok_or_else(|| {
+                FreshnessProbeShellError::Failed("local freshness entry count overflowed u32".to_string())
+            })?;
+        if projected_entry_count > FRESHNESS_LOCAL_TREE_MAX_ENTRIES {
+            return Err(FreshnessProbeShellError::Failed(format!(
+                "local freshness directory exceeds {FRESHNESS_LOCAL_TREE_MAX_ENTRIES} entries: {}",
+                root.display()
+            )));
         }
-        if metadata.is_file() {
-            if files.len() as u64 >= FRESHNESS_LOCAL_TREE_MAX_ENTRIES as u64 {
-                return Err(FreshnessProbeShellError::Failed(format!(
-                    "local freshness directory exceeds {FRESHNESS_LOCAL_TREE_MAX_ENTRIES} entries: {}",
-                    root.display()
-                )));
+        for child in children {
+            let path = child.path();
+            let metadata = std::fs::symlink_metadata(&path)
+                .map_err(|err| FreshnessProbeShellError::Failed(format!("stat {}: {err}", path.display())))?;
+            if metadata.is_dir() {
+                pending.push(path);
+                continue;
             }
-            let relative = path
-                .strip_prefix(root)
-                .map_err(|err| FreshnessProbeShellError::Failed(format!("relativizing {}: {err}", path.display())))?;
-            files.push(relative.to_path_buf());
+            if metadata.is_file() {
+                let relative = path.strip_prefix(root).map_err(|err| {
+                    FreshnessProbeShellError::Failed(format!("relativizing {}: {err}", path.display()))
+                })?;
+                files.push(relative.to_path_buf());
+            }
         }
     }
-    Ok(())
+    Err(FreshnessProbeShellError::Failed(format!(
+        "local freshness directory exceeds {FRESHNESS_LOCAL_TREE_MAX_ENTRIES} entries: {}",
+        root.display()
+    )))
 }
 
 fn update_directory_freshness_hash(
@@ -731,7 +791,7 @@ fn hash_reader_into_blake3<R: Read>(
     label: &str,
 ) -> Result<(), FreshnessProbeShellError> {
     let mut buffer = [0u8; PROJECT_READ_BUFFER_BYTES];
-    loop {
+    for _ in 0..PROJECT_READ_CHUNK_COUNT_MAX {
         let read = reader
             .read(&mut buffer)
             .map_err(|err| FreshnessProbeShellError::Failed(format!("reading {label}: {err}")))?;
@@ -740,6 +800,9 @@ fn hash_reader_into_blake3<R: Read>(
         }
         hasher.update(&buffer[..read]);
     }
+    Err(FreshnessProbeShellError::Failed(format!(
+        "reading {label} exceeded {PROJECT_READ_CHUNK_COUNT_MAX} chunks"
+    )))
 }
 
 fn blake3_hex_digest(bytes: &[u8]) -> String {
@@ -748,8 +811,8 @@ fn blake3_hex_digest(bytes: &[u8]) -> String {
     format!("{FRESHNESS_DIGEST_PREFIX}{digest}")
 }
 
-fn bounded_utf8_lossy(bytes: &[u8], max_bytes: u32) -> String {
-    let max_len = bytes.len().min(max_bytes as usize);
+fn bounded_stderr_utf8_lossy(bytes: &[u8]) -> String {
+    let max_len = bytes.len().min(FRESHNESS_STDERR_LIMIT_BYTES_USIZE);
     String::from_utf8_lossy(&bytes[..max_len]).into_owned()
 }
 
@@ -797,7 +860,9 @@ fn run_git_ls_remote(repository: &str, refs: &[&str]) -> Result<String, crunch_p
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-fn parse_branch_output(output: &str, branch: &str) -> Result<String, crunch_project::Error> {
+fn parse_branch_output<O: AsRef<str>, B: AsRef<str>>(output: O, branch: B) -> Result<String, crunch_project::Error> {
+    let output = output.as_ref();
+    let branch = branch.as_ref();
     let wanted = format!("refs/heads/{branch}");
     for line in output.lines() {
         let Some((rev, reference)) = line.split_once('\t') else {
@@ -811,9 +876,13 @@ fn parse_branch_output(output: &str, branch: &str) -> Result<String, crunch_proj
     Err(crunch_project::Error::Manifest(format!("git branch not found: {branch}")))
 }
 
-fn parse_tag_output(output: &str, tag: &str) -> Result<String, crunch_project::Error> {
+fn parse_tag_output<O: AsRef<str>, T: AsRef<str>>(output: O, tag: T) -> Result<String, crunch_project::Error> {
+    let output = output.as_ref();
+    let tag = tag.as_ref();
     let direct = format!("refs/tags/{tag}");
     let peeled = format!("refs/tags/{tag}^{{}}");
+    debug_assert!(direct.starts_with("refs/tags/"));
+    debug_assert!(peeled.ends_with("^{}"));
     let mut direct_rev: Option<String> = None;
     for line in output.lines() {
         let Some((rev, reference)) = line.split_once('\t') else {
@@ -850,7 +919,13 @@ fn hash_tarball_url(url: &str, algo: &HashAlgo) -> Result<String, crunch_project
     hash_recursive_path(dir.path(), algo)
 }
 
-fn hash_git_tree(repository: &str, rev: &str, algo: &HashAlgo) -> Result<String, crunch_project::Error> {
+fn hash_git_tree<R: AsRef<str>, V: AsRef<str>>(
+    repository: R,
+    rev: V,
+    algo: &HashAlgo,
+) -> Result<String, crunch_project::Error> {
+    let repository = repository.as_ref();
+    let rev = rev.as_ref();
     let git = find_git_binary()?;
     let dir = tempdir()?;
     let bare = dir.path().join("source.git");
@@ -976,12 +1051,14 @@ fn hash_fossil_tree(
     hash_recursive_path(&checkout, algo)
 }
 
-fn run_darcs_clone_tag(
+fn run_darcs_clone_tag<R: AsRef<str>, T: AsRef<str>>(
     darcs: &Path,
-    repository: &str,
-    tag: &str,
+    repository: R,
+    tag: T,
     checkout: &Path,
 ) -> Result<(), crunch_project::Error> {
+    let repository = repository.as_ref();
+    let tag = tag.as_ref();
     let mut command = Command::new(darcs);
     command.args(["clone", "--quiet", "--tag", tag, repository]).arg(checkout);
     run_status_command(command, &format!("darcs clone tag {tag} from {repository}"))
@@ -1005,12 +1082,14 @@ fn darcs_context_for_checkout(darcs: &Path, checkout: &Path) -> Result<String, c
     require_nonempty_command_value(context, "darcs context")
 }
 
-fn run_pijul_clone(
+fn run_pijul_clone<R: AsRef<str>, C: AsRef<str>>(
     pijul: &Path,
-    repository: &str,
-    channel: &str,
+    repository: R,
+    channel: C,
     checkout: &Path,
 ) -> Result<(), crunch_project::Error> {
+    let repository = repository.as_ref();
+    let channel = channel.as_ref();
     let mut command = Command::new(pijul);
     command.arg("clone");
     if !channel.is_empty() {
@@ -1033,7 +1112,12 @@ fn pijul_channel_state(pijul: &Path, checkout: &Path, channel: &str) -> Result<S
     parse_pijul_channel_state(&output, channel)
 }
 
-fn parse_pijul_channel_state(output: &str, channel: &str) -> Result<String, crunch_project::Error> {
+fn parse_pijul_channel_state<O: AsRef<str>, C: AsRef<str>>(
+    output: O,
+    channel: C,
+) -> Result<String, crunch_project::Error> {
+    let output = output.as_ref();
+    let channel = channel.as_ref();
     for line in output.lines() {
         if !line.contains(channel) {
             continue;
@@ -1045,10 +1129,12 @@ fn parse_pijul_channel_state(output: &str, channel: &str) -> Result<String, crun
     Err(crunch_project::Error::Manifest(format!("pijul channel state not found for channel '{channel}'")))
 }
 
-fn resolve_fossil_named_selector(
-    repository: &str,
-    selector: &str,
+fn resolve_fossil_named_selector<R: AsRef<str>, S: AsRef<str>>(
+    repository: R,
+    selector: S,
 ) -> Result<ResolvedFossilIdentity, crunch_project::Error> {
+    let repository = repository.as_ref();
+    let selector = selector.as_ref();
     let fossil = find_vcs_binary("fossil", &["/usr/bin/fossil", "/bin/fossil", "/run/current-system/sw/bin/fossil"])?;
     let dir = tempdir()?;
     let checkout = dir.path().join("checkout");
@@ -1057,12 +1143,14 @@ fn resolve_fossil_named_selector(
     Ok(ResolvedFossilIdentity { checkin })
 }
 
-fn materialize_fossil_checkout(
+fn materialize_fossil_checkout<R: AsRef<str>, S: AsRef<str>>(
     fossil: &Path,
-    repository: &str,
-    selector: &str,
+    repository: R,
+    selector: S,
     checkout: &Path,
 ) -> Result<(), crunch_project::Error> {
+    let repository = repository.as_ref();
+    let selector = selector.as_ref();
     let repo_file = checkout.with_extension("fossil");
     let mut clone = Command::new(fossil);
     clone.args(["clone", repository]).arg(&repo_file);
@@ -1102,7 +1190,7 @@ fn run_status_command(mut command: Command, label: &str) -> Result<(), crunch_pr
     }
     Err(crunch_project::Error::Manifest(format!(
         "{label} failed: {}",
-        bounded_utf8_lossy(&output.stderr, FRESHNESS_STDERR_LIMIT_BYTES)
+        bounded_stderr_utf8_lossy(&output.stderr)
     )))
 }
 
@@ -1111,7 +1199,7 @@ fn run_stdout_command(mut command: Command, label: &str) -> Result<String, crunc
     if !output.status.success() {
         return Err(crunch_project::Error::Manifest(format!(
             "{label} failed: {}",
-            bounded_utf8_lossy(&output.stderr, FRESHNESS_STDERR_LIMIT_BYTES)
+            bounded_stderr_utf8_lossy(&output.stderr)
         )));
     }
     String::from_utf8(output.stdout)
@@ -1163,7 +1251,9 @@ fn hash_flat_file(path: &Path, algo: &HashAlgo) -> Result<String, crunch_project
 }
 
 fn hash_reader_to_sri<R: Read>(mut reader: R, algo: &HashAlgo, label: &str) -> Result<String, crunch_project::Error> {
+    assert!(!label.is_empty(), "hash input label must not be empty");
     let mut buffer = [0u8; PROJECT_READ_BUFFER_BYTES];
+    assert!(!buffer.is_empty(), "hash read buffer must not be empty");
     match algo {
         HashAlgo::Sha256 => {
             let mut hasher = sha2::Sha256::new();
@@ -1179,16 +1269,18 @@ fn hash_reader_to_sri<R: Read>(mut reader: R, algo: &HashAlgo, label: &str) -> R
         }
         HashAlgo::Blake3 => {
             let mut hasher = blake3::Hasher::new();
-            loop {
+            for _ in 0..PROJECT_READ_CHUNK_COUNT_MAX {
                 let read = reader
                     .read(&mut buffer)
                     .map_err(|err| crunch_project::Error::Manifest(format!("reading {label}: {err}")))?;
                 if read == 0 {
-                    break;
+                    return Ok(NixHash::Blake3(*blake3::Hasher::finalize(&hasher).as_bytes()).to_sri_string());
                 }
                 hasher.update(&buffer[..read]);
             }
-            Ok(NixHash::Blake3(*blake3::Hasher::finalize(&hasher).as_bytes()).to_sri_string())
+            Err(crunch_project::Error::Manifest(format!(
+                "reading {label} exceeded {PROJECT_READ_CHUNK_COUNT_MAX} chunks"
+            )))
         }
     }
 }
@@ -1199,7 +1291,7 @@ fn read_into_hasher<R: Read, H: Digest>(
     hasher: &mut H,
     label: &str,
 ) -> Result<(), crunch_project::Error> {
-    loop {
+    for _ in 0..PROJECT_READ_CHUNK_COUNT_MAX {
         let read = reader
             .read(buffer)
             .map_err(|err| crunch_project::Error::Manifest(format!("reading {label}: {err}")))?;
@@ -1208,21 +1300,31 @@ fn read_into_hasher<R: Read, H: Digest>(
         }
         hasher.update(&buffer[..read]);
     }
+    Err(crunch_project::Error::Manifest(format!(
+        "reading {label} exceeded {PROJECT_READ_CHUNK_COUNT_MAX} chunks"
+    )))
 }
 
 fn hash_recursive_path(path: &Path, algo: &HashAlgo) -> Result<String, crunch_project::Error> {
     let root = path.to_path_buf();
+    debug_assert_eq!(root.as_path(), path);
+    debug_assert_eq!(root.is_absolute(), path.is_absolute());
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|err| crunch_project::Error::Manifest(format!("creating hash runtime: {err}")))?;
     rt.block_on(async move {
-        let blob_service = MemoryBlobService::default();
-        let directory_service = RedbDirectoryService::new_temporary(
-            "project-refresh".to_string(),
-            RedbDirectoryServiceConfig::default(),
-        )
-        .map_err(|err| crunch_project::Error::Manifest(format!("creating temporary directory service: {err}")))?;
+        let blob_service = MemoryBlobServiceConfig {}
+            .build("project-refresh", &CompositionContext::blank(&REG))
+            .await
+            .map_err(|err| crunch_project::Error::Manifest(format!("creating temporary blob service: {err}")))?;
+        let directory_service =
+            RedbDirectoryService::new_temporary("project-refresh".to_string(), RedbDirectoryServiceConfig {
+                path: None,
+                cache_size: None,
+                read_only: false,
+            })
+            .map_err(|err| crunch_project::Error::Manifest(format!("creating temporary directory service: {err}")))?;
         let node = ingest_path::<_, _, _, &[u8]>(blob_service.clone(), directory_service.clone(), &root, None)
             .await
             .map_err(|err| crunch_project::Error::Manifest(format!("ingesting {}: {err}", root.display())))?;
@@ -1233,7 +1335,7 @@ fn hash_recursive_path(path: &Path, algo: &HashAlgo) -> Result<String, crunch_pr
 async fn nar_hash_to_sri(
     node: &Node,
     algo: &HashAlgo,
-    blob_service: MemoryBlobService,
+    blob_service: std::sync::Arc<dyn BlobService>,
     directory_service: RedbDirectoryService,
 ) -> Result<String, crunch_project::Error> {
     let nix_hash = match algo {
@@ -1261,7 +1363,10 @@ async fn nar_hash_to_sri(
             NixHash::Blake3(*blake3::Hasher::finalize(&hasher).as_bytes())
         }
     };
-    Ok(nix_hash.to_sri_string())
+    let sri = nix_hash.to_sri_string();
+    debug_assert!(!sri.is_empty());
+    debug_assert!(sri.contains('-'));
+    Ok(sri)
 }
 
 fn ensure_tree_within_limits(path: &Path) -> Result<(), crunch_project::Error> {
@@ -1299,6 +1404,8 @@ fn ensure_tree_within_limits(path: &Path) -> Result<(), crunch_project::Error> {
             pending.push(child.path());
         }
     }
+    debug_assert!(entries_seen <= MAX_TREE_ENTRIES);
+    debug_assert!(bytes_total <= MAX_TREE_BYTES);
     Ok(())
 }
 
@@ -1327,6 +1434,10 @@ fn find_git_binary() -> Result<PathBuf, crunch_project::Error> {
 
 fn find_vcs_binary(name: &str, absolute_candidates: &[&str]) -> Result<PathBuf, crunch_project::Error> {
     assert!(!name.is_empty(), "VCS tool name must not be empty");
+    assert!(
+        absolute_candidates.iter().all(|candidate| Path::new(candidate).is_absolute()),
+        "VCS fixed candidates must be absolute"
+    );
     for candidate in absolute_candidates {
         let path = Path::new(candidate);
         if path.exists() {
@@ -1402,9 +1513,15 @@ impl<R: Read> Read for BoundedReader<R> {
             return Err(io::Error::other(format!("download exceeds {} bytes: {}", self.limit_bytes, self.label)));
         }
         let remaining = self.limit_bytes.saturating_sub(self.seen_bytes);
-        let allowed = remaining.min(buf.len() as u64) as usize;
+        let buffer_len_u64 = u64::try_from(buf.len())
+            .map_err(|_| io::Error::other(format!("read buffer size does not fit u64: {}", self.label)))?;
+        let allowed_u64 = remaining.min(buffer_len_u64);
+        let allowed = usize::try_from(allowed_u64)
+            .map_err(|_| io::Error::other(format!("read bound does not fit usize: {}", self.label)))?;
         let read = self.inner.read(&mut buf[..allowed])?;
-        self.seen_bytes = self.seen_bytes.saturating_add(read as u64);
+        let read_u64 =
+            u64::try_from(read).map_err(|_| io::Error::other(format!("read size does not fit u64: {}", self.label)))?;
+        self.seen_bytes = self.seen_bytes.saturating_add(read_u64);
         Ok(read)
     }
 }
@@ -1439,21 +1556,38 @@ mod tests {
     #[test]
     fn oversized_shell_observation_becomes_failed_observation() {
         let too_large_value = "x".repeat(crunch_project::MAX_FRESHNESS_VALUE_BYTES as usize + 1);
-        let observation = freshness_status(
-            "pkg",
-            FreshnessProbeKind::HttpText,
-            true,
-            FreshnessObservationStatus::Observed,
-            Some(too_large_value),
-            String::new(),
-            Some("blake3:probe".to_string()),
-        );
+        let observation = freshness_status(FreshnessStatusRequest {
+            input_name: "pkg",
+            probe_kind: FreshnessProbeKind::HttpText,
+            is_network_required: true,
+            status: FreshnessObservationStatus::Observed,
+            value: Some(too_large_value),
+            diagnostic: String::new(),
+            probe_identity_digest: Some("blake3:probe".to_string()),
+        });
 
         assert_eq!(observation.input_name, "pkg");
         assert_eq!(observation.status, FreshnessObservationStatus::Failed);
         assert_eq!(observation.value, None);
         assert!(observation.value_digest.is_none());
         assert!(observation.diagnostic.contains("rejected"));
+    }
+
+    #[test]
+    fn bounded_stderr_preserves_valid_text_within_limit() {
+        let rendered = bounded_stderr_utf8_lossy(b"freshness-ok");
+
+        assert_eq!(rendered, "freshness-ok");
+        assert_eq!(rendered.len(), "freshness-ok".len());
+    }
+
+    #[test]
+    fn bounded_stderr_replaces_malformed_utf8_without_exceeding_limit() {
+        let malformed = vec![0xff; FRESHNESS_STDERR_LIMIT_BYTES_USIZE + 1];
+        let rendered = bounded_stderr_utf8_lossy(&malformed);
+
+        assert!(rendered.contains('\u{fffd}'));
+        assert!(rendered.len() <= FRESHNESS_STDERR_LIMIT_BYTES_USIZE.saturating_mul(3));
     }
 
     #[test]

@@ -42,6 +42,7 @@ use crate::release_nix_witness::ReleaseNixWitnessRequest;
 use crate::release_nix_witness::write_release_nix_cross_builder_witness;
 use crate::release_reproducibility::DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION;
 use crate::release_reproducibility::ReleaseReproduceRequest;
+use crate::release_reproducibility::ReleaseReproduceSummary;
 use crate::release_reproducibility::ReproducibilityStatus;
 use crate::release_reproducibility::VerifiedReproducibilityReport;
 use crate::release_reproducibility::load_bundle_reproducibility_report;
@@ -77,223 +78,214 @@ pub(crate) fn cmd_release(
     state_dir: &Path,
     json: bool,
 ) -> Result<(), RunError> {
+    let context = ReleaseCommandContext {
+        current_dir,
+        state_dir,
+        is_json_output: json,
+    };
+    debug_assert_eq!(context.current_dir, current_dir);
+    debug_assert_eq!(context.state_dir, state_dir);
     match action {
-        crate::ReleaseAction::Create {
-            release_id,
-            bundle_dir,
-            binary,
-            proof_bundle,
-            provider_fixed_point_proof,
-            reproducibility_report,
-            source_acquisition_url,
-            git_source_url,
-            git_source_commit,
-            git_source_ref,
-            git_source_tag,
-            cairn_handoff,
-            external_evidence,
-            external_evidence_role,
-            external_evidence_schema,
-            external_evidence_claim_scope,
-            external_evidence_non_claim,
-            kani_toolchain_evidence,
-            stack_provenance_sidecar,
-            stack_provenance_valence_receipt,
-            stack_provenance_binary,
-            workflow_command,
-            workflow_version,
-        } => cmd_release_create(
-            current_dir,
-            json,
-            release_id,
-            bundle_dir,
-            binary,
-            proof_bundle,
-            provider_fixed_point_proof,
-            reproducibility_report,
-            source_acquisition_url,
-            git_source_url,
-            git_source_commit,
-            git_source_ref,
-            git_source_tag,
-            cairn_handoff,
-            external_evidence,
-            external_evidence_role,
-            external_evidence_schema,
-            external_evidence_claim_scope,
-            external_evidence_non_claim,
-            kani_toolchain_evidence,
-            stack_provenance_sidecar,
-            stack_provenance_valence_receipt,
-            stack_provenance_binary,
-            workflow_command,
-            workflow_version,
-        ),
-        crate::ReleaseAction::Verify {
-            bundle_dir,
-            require_reproducible,
-            require_stagex_no_quorum,
-            deterministic_proof,
-            deterministic_sandbox_isolation_evidence,
-            require_deterministic_release,
-            provider_fixed_point_proof,
-            require_external_evidence_role,
-            require_provider_fixed_point_proof,
-            release_profile,
-            stack_provenance,
-        } => cmd_release_verify(
-            current_dir,
-            json,
-            bundle_dir,
-            require_reproducible,
-            require_stagex_no_quorum,
-            deterministic_proof,
-            deterministic_sandbox_isolation_evidence,
-            require_deterministic_release,
-            provider_fixed_point_proof,
-            require_external_evidence_role,
-            require_provider_fixed_point_proof,
-            release_profile,
-            stack_provenance,
-        ),
-        crate::ReleaseAction::FunctionAddressBind {
-            bundle_dir,
-            mode,
-            from_preserves_binding,
-            sidecar,
-            valence_receipt,
-            kamacite_receipt,
-            release_binary,
-            receipt_out,
-        } => cmd_function_address_binding(current_dir, json, FunctionAddressBindingCommand {
-            bundle_dir,
-            mode,
-            from_preserves_binding,
-            sidecar_relative_path: sidecar,
-            valence_receipt_relative_path: valence_receipt,
-            kamacite_receipt_relative_path: kamacite_receipt,
-            release_binary_relative_path: release_binary,
-            receipt_out,
-        }),
-        crate::ReleaseAction::Reproduce {
-            bundle_dir,
-            rebuild_output_dir,
-            rebuild_command,
-            rebuild_args,
-            workflow_version,
-            report_path,
-            deterministic_proof_runs,
-            deterministic_proof_dir,
-        } => cmd_release_reproduce(
-            current_dir,
-            json,
-            bundle_dir,
-            rebuild_output_dir,
-            rebuild_command,
-            rebuild_args,
-            workflow_version,
-            report_path,
-            deterministic_proof_runs,
-            deterministic_proof_dir,
-        ),
-        crate::ReleaseAction::GlobalReproducibility {
-            universe,
-            policy,
-            evidence,
-            report_path,
-        } => cmd_global_reproducibility(current_dir, json, universe, policy, evidence, report_path),
-        crate::ReleaseAction::GlobalReproducibilityEvidence {
-            universe,
-            policy,
-            bundle_dir,
-            verification_dir,
-            release_verify_json,
-            evidence_path,
-        } => cmd_global_reproducibility_release_evidence(
-            current_dir,
-            json,
-            universe,
-            policy,
-            bundle_dir,
-            verification_dir,
-            release_verify_json,
-            evidence_path,
-        ),
-        crate::ReleaseAction::Gauntlet { action } => cmd_release_gauntlet(action, current_dir, json),
-        crate::ReleaseAction::NixWitness {
-            bundle_dir,
-            nix_output_dir,
-            deterministic_proof,
-            receipt_path,
-            rust_toolchain_identity,
-            target_triple,
-            build_flags,
-            linker_identity,
-            strip_debug_policy,
-            source_date_epoch_policy,
-            nix_derivation_identity,
-            nix_output_identity,
-            require_match,
-        } => cmd_release_nix_witness(
-            current_dir,
-            json,
-            bundle_dir,
-            nix_output_dir,
-            deterministic_proof,
-            receipt_path,
-            rust_toolchain_identity,
-            target_triple,
-            build_flags,
-            linker_identity,
-            strip_debug_policy,
-            source_date_epoch_policy,
-            nix_derivation_identity,
-            nix_output_identity,
-            require_match,
-        ),
-        crate::ReleaseAction::Attest {
-            bundle_dir,
-            verification_dir,
-            signing_key,
-        } => cmd_release_attest(current_dir, state_dir, json, bundle_dir, verification_dir, signing_key),
-        crate::ReleaseAction::WitnessExport {
-            bundle_dir,
-            verification_dir,
-            request_dir,
-        } => cmd_release_witness_export(current_dir, json, bundle_dir, verification_dir, request_dir),
-        crate::ReleaseAction::WitnessRebuild {
-            request_dir,
-            scratch_dir,
-            check,
-            require_independent_source,
-            require_git_source,
-            identity,
-            system,
-            toolchain,
-            host_class,
-            signing_key,
-        } => cmd_release_witness_rebuild(
-            current_dir,
-            state_dir,
-            json,
-            request_dir,
-            scratch_dir,
-            check,
-            require_independent_source,
-            require_git_source,
-            identity,
-            system,
-            toolchain,
-            host_class,
-            signing_key,
-        ),
+        crate::ReleaseAction::Create { .. } => cmd_release_create(context, release_create_command(action)?),
+        crate::ReleaseAction::Verify { .. } => {
+            cmd_release_verify(release_verify_request(action, current_dir)?, context.is_json_output)
+        }
+        crate::ReleaseAction::Reproduce { .. } => cmd_release_reproduce(context, release_reproduce_command(action)?),
+        crate::ReleaseAction::FunctionAddressBind { .. } => cmd_release_function_address_action(action, context),
+        crate::ReleaseAction::GlobalReproducibility { .. } => cmd_global_reproducibility_action(action, context),
+        crate::ReleaseAction::GlobalReproducibilityEvidence { .. } => {
+            cmd_global_reproducibility_evidence_action(action, context)
+        }
+        crate::ReleaseAction::Gauntlet { action } => {
+            cmd_release_gauntlet(action, context.current_dir, context.is_json_output)
+        }
+        crate::ReleaseAction::NixWitness { .. } => cmd_release_nix_witness_action(action, context),
+        crate::ReleaseAction::Attest { .. } => cmd_release_attest_action(action, context),
+        crate::ReleaseAction::WitnessExport { .. } => cmd_release_witness_export_action(action, context),
+        crate::ReleaseAction::WitnessRebuild { .. } => {
+            cmd_release_witness_rebuild(context, release_witness_rebuild_command(action)?)
+        }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn cmd_release_create(
-    current_dir: &Path,
-    json: bool,
+#[derive(Clone, Copy)]
+struct ReleaseCommandContext<'a> {
+    current_dir: &'a Path,
+    state_dir: &'a Path,
+    is_json_output: bool,
+}
+
+fn cmd_release_function_address_action(
+    action: crate::ReleaseAction,
+    context: ReleaseCommandContext<'_>,
+) -> Result<(), RunError> {
+    let crate::ReleaseAction::FunctionAddressBind {
+        bundle_dir,
+        mode,
+        from_preserves_binding,
+        sidecar,
+        valence_receipt,
+        kamacite_receipt,
+        release_binary,
+        receipt_out,
+    } = action
+    else {
+        return Err(RunError::Internal("expected function-address release action".to_string()));
+    };
+    debug_assert!(context.current_dir.components().next().is_some());
+    debug_assert!(context.state_dir.components().next().is_some());
+    cmd_function_address_binding(context.current_dir, context.is_json_output, FunctionAddressBindingCommand {
+        bundle_dir,
+        mode,
+        from_preserves_binding,
+        sidecar_relative_path: sidecar,
+        valence_receipt_relative_path: valence_receipt,
+        kamacite_receipt_relative_path: kamacite_receipt,
+        release_binary_relative_path: release_binary,
+        receipt_out,
+    })
+}
+
+fn cmd_global_reproducibility_action(
+    action: crate::ReleaseAction,
+    context: ReleaseCommandContext<'_>,
+) -> Result<(), RunError> {
+    let crate::ReleaseAction::GlobalReproducibility {
+        universe,
+        policy,
+        evidence,
+        report_path,
+    } = action
+    else {
+        return Err(RunError::Internal("expected global reproducibility action".to_string()));
+    };
+    cmd_global_reproducibility(context.current_dir, context.is_json_output, universe, policy, evidence, report_path)
+}
+
+fn cmd_global_reproducibility_evidence_action(
+    action: crate::ReleaseAction,
+    context: ReleaseCommandContext<'_>,
+) -> Result<(), RunError> {
+    let crate::ReleaseAction::GlobalReproducibilityEvidence {
+        universe,
+        policy,
+        bundle_dir,
+        verification_dir,
+        release_verify_json,
+        evidence_path,
+    } = action
+    else {
+        return Err(RunError::Internal("expected global reproducibility evidence action".to_string()));
+    };
+    debug_assert!(context.current_dir.components().next().is_some());
+    debug_assert!(context.state_dir.components().next().is_some());
+    cmd_global_reproducibility_release_evidence(
+        context.current_dir,
+        context.is_json_output,
+        universe,
+        policy,
+        bundle_dir,
+        verification_dir,
+        release_verify_json,
+        evidence_path,
+    )
+}
+
+fn cmd_release_nix_witness_action(
+    action: crate::ReleaseAction,
+    context: ReleaseCommandContext<'_>,
+) -> Result<(), RunError> {
+    cmd_release_nix_witness(context, release_nix_witness_command(action)?)
+}
+
+fn cmd_release_attest_action(action: crate::ReleaseAction, context: ReleaseCommandContext<'_>) -> Result<(), RunError> {
+    let crate::ReleaseAction::Attest {
+        bundle_dir,
+        verification_dir,
+        signing_key,
+    } = action
+    else {
+        return Err(RunError::Internal("expected release attest action".to_string()));
+    };
+    cmd_release_attest(context, bundle_dir, verification_dir, signing_key)
+}
+
+fn cmd_release_witness_export_action(
+    action: crate::ReleaseAction,
+    context: ReleaseCommandContext<'_>,
+) -> Result<(), RunError> {
+    let crate::ReleaseAction::WitnessExport {
+        bundle_dir,
+        verification_dir,
+        request_dir,
+    } = action
+    else {
+        return Err(RunError::Internal("expected witness export action".to_string()));
+    };
+    debug_assert!(context.current_dir.components().next().is_some());
+    debug_assert!(context.state_dir.components().next().is_some());
+    cmd_release_witness_export(context.current_dir, context.is_json_output, bundle_dir, verification_dir, request_dir)
+}
+
+fn release_create_command(action: crate::ReleaseAction) -> Result<ReleaseCreateCommand, RunError> {
+    let crate::ReleaseAction::Create {
+        release_id,
+        bundle_dir,
+        binary,
+        proof_bundle,
+        provider_fixed_point_proof,
+        reproducibility_report,
+        source_acquisition_url,
+        git_source_url,
+        git_source_commit,
+        git_source_ref,
+        git_source_tag,
+        cairn_handoff,
+        external_evidence,
+        external_evidence_role,
+        external_evidence_schema,
+        external_evidence_claim_scope,
+        external_evidence_non_claim,
+        kani_toolchain_evidence,
+        stack_provenance_sidecar,
+        stack_provenance_valence_receipt,
+        stack_provenance_binary,
+        workflow_command,
+        workflow_version,
+    } = action
+    else {
+        return Err(RunError::Internal("expected release create action".to_string()));
+    };
+    debug_assert!(binary.capacity() >= binary.len());
+    debug_assert!(external_evidence.capacity() >= external_evidence.len());
+    Ok(ReleaseCreateCommand {
+        release_id,
+        bundle_dir,
+        binary,
+        proof_bundle,
+        provider_fixed_point_proof,
+        reproducibility_report,
+        source_acquisition_url,
+        git_source_url,
+        git_source_commit,
+        git_source_ref,
+        git_source_tag,
+        cairn_handoff,
+        external_evidence,
+        external_evidence_role,
+        external_evidence_schema,
+        external_evidence_claim_scope,
+        external_evidence_non_claim,
+        kani_toolchain_evidence,
+        stack_provenance_sidecar,
+        stack_provenance_valence_receipt,
+        stack_provenance_binary,
+        workflow_command,
+        workflow_version,
+    })
+}
+
+struct ReleaseCreateCommand {
     release_id: String,
     bundle_dir: Option<PathBuf>,
     binary: Vec<PathBuf>,
@@ -317,27 +309,50 @@ fn cmd_release_create(
     stack_provenance_binary: Option<PathBuf>,
     workflow_command: String,
     workflow_version: String,
-) -> Result<(), RunError> {
-    let resolved_bundle_dir = resolve_bundle_dir(current_dir, &release_id, bundle_dir);
-    let normalized_workflow_command = normalize_workflow_value(&workflow_command, DEFAULT_PROOF_WORKFLOW_COMMAND);
-    let normalized_workflow_version = normalize_workflow_value(&workflow_version, DEFAULT_PROOF_WORKFLOW_VERSION);
-    let git_source = release_create_git_source(git_source_url, git_source_commit, git_source_ref, git_source_tag)?;
-    let external_evidence = release_create_external_evidence(
-        current_dir,
-        external_evidence,
-        external_evidence_role,
-        external_evidence_schema,
-        external_evidence_claim_scope,
-        external_evidence_non_claim,
+}
+
+fn cmd_release_create(context: ReleaseCommandContext<'_>, command: ReleaseCreateCommand) -> Result<(), RunError> {
+    let prepared = prepare_release_create(context.current_dir, command)?;
+    let manifest = create_release_evidence_bundle(&prepared.request)?;
+    emit_release_create_result(&prepared.request, &manifest, context.is_json_output)
+}
+
+struct PreparedReleaseCreate {
+    request: ReleaseBundleCreateRequest,
+    _source_archive_file: tempfile::NamedTempFile,
+}
+
+fn prepare_release_create(
+    current_dir: &Path,
+    command: ReleaseCreateCommand,
+) -> Result<PreparedReleaseCreate, RunError> {
+    debug_assert!(command.binary.capacity() >= command.binary.len());
+    debug_assert!(command.workflow_command.capacity() >= command.workflow_command.len());
+    let resolved_bundle_dir = resolve_bundle_dir(current_dir, &command.release_id, command.bundle_dir);
+    let workflow_command = normalize_workflow_value(&command.workflow_command, DEFAULT_PROOF_WORKFLOW_COMMAND);
+    let workflow_version = normalize_workflow_value(&command.workflow_version, DEFAULT_PROOF_WORKFLOW_VERSION);
+    let git_source = release_create_git_source(
+        command.git_source_url,
+        command.git_source_commit,
+        command.git_source_ref,
+        command.git_source_tag,
     )?;
-    let kani_toolchain_evidence = release_create_kani_toolchain_evidence(current_dir, kani_toolchain_evidence)?;
+    let external_evidence = release_create_external_evidence(ExternalEvidenceCommand {
+        current_dir,
+        paths: command.external_evidence,
+        roles: command.external_evidence_role,
+        schemas: command.external_evidence_schema,
+        claim_scopes: command.external_evidence_claim_scope,
+        non_claims: command.external_evidence_non_claim,
+    })?;
+    let kani_toolchain_evidence = release_create_kani_toolchain_evidence(current_dir, command.kani_toolchain_evidence)?;
     let stack_provenance = release_create_stack_provenance(
         current_dir,
-        stack_provenance_sidecar,
-        stack_provenance_valence_receipt,
-        stack_provenance_binary,
+        command.stack_provenance_sidecar,
+        command.stack_provenance_valence_receipt,
+        command.stack_provenance_binary,
     )?;
-    if source_acquisition_url.is_some() && git_source.is_some() {
+    if command.source_acquisition_url.is_some() && git_source.is_some() {
         return Err(RunError::Internal(
             "release create Git source flags conflict with --source-acquisition-url".to_string(),
         ));
@@ -346,58 +361,78 @@ fn cmd_release_create(
         .map_err(|err| RunError::Internal(format!("creating temp source archive file: {err}")))?;
     write_tracked_source_archive(current_dir, source_archive_file.path())?;
     let request = ReleaseBundleCreateRequest {
-        release_id,
-        bundle_dir: resolved_bundle_dir.clone(),
+        release_id: command.release_id,
+        bundle_dir: resolved_bundle_dir,
         source_archive_path: source_archive_file.path().to_path_buf(),
-        binary_paths: resolve_input_paths(current_dir, binary),
-        proof_bundle_dir: resolve_input_path(current_dir, proof_bundle),
-        workflow_command: normalized_workflow_command,
-        workflow_version: normalized_workflow_version,
-        reproducibility_report_path: reproducibility_report.map(|path| resolve_input_path(current_dir, path)),
-        provider_fixed_point_proof_dir: provider_fixed_point_proof.map(|path| resolve_input_path(current_dir, path)),
-        source_acquisition_url,
+        binary_paths: resolve_input_paths(current_dir, command.binary),
+        proof_bundle_dir: resolve_input_path(current_dir, command.proof_bundle),
+        workflow_command,
+        workflow_version,
+        reproducibility_report_path: command.reproducibility_report.map(|path| resolve_input_path(current_dir, path)),
+        provider_fixed_point_proof_dir: command
+            .provider_fixed_point_proof
+            .map(|path| resolve_input_path(current_dir, path)),
+        source_acquisition_url: command.source_acquisition_url,
         git_source,
         external_evidence,
         kani_toolchain_evidence,
         stack_provenance,
-        cairn_handoff_descriptor_path: cairn_handoff.map(|path| resolve_input_path(current_dir, path)),
+        cairn_handoff_descriptor_path: command.cairn_handoff.map(|path| resolve_input_path(current_dir, path)),
     };
-    let manifest = create_release_evidence_bundle(&request)?;
-    if json {
-        let rendered = serde_json::to_string(&manifest)
+    Ok(PreparedReleaseCreate {
+        request,
+        _source_archive_file: source_archive_file,
+    })
+}
+
+fn emit_release_create_result(
+    request: &ReleaseBundleCreateRequest,
+    manifest: &crate::release_evidence::ReleaseEvidenceManifest,
+    is_json_output: bool,
+) -> Result<(), RunError> {
+    debug_assert_eq!(request.release_id, manifest.release_id);
+    debug_assert!(!manifest.binaries.is_empty());
+    if is_json_output {
+        let rendered = serde_json::to_string(manifest)
             .map_err(|err| RunError::Internal(format!("serializing release evidence manifest: {err}")))?;
         println!("{rendered}");
-    } else {
-        println!("release evidence bundle: {}", request.bundle_dir.display());
-        println!("release id: {}", manifest.release_id);
-        println!("source archive: {}", manifest.source_archive.relative_path);
-        println!("proof bundle: {}", manifest.proof_bundle.relative_path);
-        println!("binaries: {}", manifest.binaries.len());
-        if let Some(proof) = &manifest.provider_fixed_point_proof {
-            println!("provider fixed-point proof: {}", proof.relative_path);
-        }
-        if let Some(report) = &manifest.reproducibility_report {
-            println!("reproducibility report: {}", report.relative_path);
-        }
-        if !manifest.external_evidence.is_empty() {
-            println!("external evidence: {}", manifest.external_evidence.len());
-        }
-        if !manifest.kani_toolchain_evidence.is_empty() {
-            println!("Kani toolchain evidence: {}", manifest.kani_toolchain_evidence.len());
-        }
-        if let Some(receipt) = &manifest.cairn_handoff_validation {
-            println!("Cairn handoff validation: {}", receipt.validation_status);
-            println!("Cairn handoff authentication: {}", receipt.authentication_status);
-        }
-        if let Some(source_acquisition) = &manifest.source_acquisition {
-            println!("source acquisition: {} ({})", source_acquisition.url, source_acquisition.kind);
-            if let Some(commit) = &source_acquisition.commit {
-                println!("source acquisition commit: {commit}");
-            }
-        }
-        println!("manifest: manifest.json");
+        return Ok(());
     }
+    println!("release evidence bundle: {}", request.bundle_dir.display());
+    println!("release id: {}", manifest.release_id);
+    println!("source archive: {}", manifest.source_archive.relative_path);
+    println!("proof bundle: {}", manifest.proof_bundle.relative_path);
+    println!("binaries: {}", manifest.binaries.len());
+    emit_optional_release_create_result(manifest);
+    println!("manifest: manifest.json");
     Ok(())
+}
+
+fn emit_optional_release_create_result(manifest: &crate::release_evidence::ReleaseEvidenceManifest) {
+    debug_assert!(!manifest.release_id.is_empty());
+    debug_assert!(manifest.external_evidence.capacity() >= manifest.external_evidence.len());
+    if let Some(proof) = &manifest.provider_fixed_point_proof {
+        println!("provider fixed-point proof: {}", proof.relative_path);
+    }
+    if let Some(report) = &manifest.reproducibility_report {
+        println!("reproducibility report: {}", report.relative_path);
+    }
+    if !manifest.external_evidence.is_empty() {
+        println!("external evidence: {}", manifest.external_evidence.len());
+    }
+    if !manifest.kani_toolchain_evidence.is_empty() {
+        println!("Kani toolchain evidence: {}", manifest.kani_toolchain_evidence.len());
+    }
+    if let Some(receipt) = &manifest.cairn_handoff_validation {
+        println!("Cairn handoff validation: {}", receipt.validation_status);
+        println!("Cairn handoff authentication: {}", receipt.authentication_status);
+    }
+    if let Some(source_acquisition) = &manifest.source_acquisition {
+        println!("source acquisition: {} ({})", source_acquisition.url, source_acquisition.kind);
+        if let Some(commit) = &source_acquisition.commit {
+            println!("source acquisition commit: {commit}");
+        }
+    }
 }
 
 fn release_create_git_source(
@@ -425,14 +460,26 @@ fn release_create_git_source(
     }))
 }
 
-fn release_create_external_evidence(
-    current_dir: &Path,
+struct ExternalEvidenceCommand<'a> {
+    current_dir: &'a Path,
     paths: Vec<PathBuf>,
     roles: Vec<String>,
     schemas: Vec<String>,
     claim_scopes: Vec<String>,
     non_claims: Vec<String>,
+}
+
+fn release_create_external_evidence(
+    command: ExternalEvidenceCommand<'_>,
 ) -> Result<Vec<ExternalEvidenceCreateRequest>, RunError> {
+    let ExternalEvidenceCommand {
+        current_dir,
+        paths,
+        roles,
+        schemas,
+        claim_scopes,
+        non_claims,
+    } = command;
     if paths.is_empty() {
         if !(roles.is_empty() && schemas.is_empty() && claim_scopes.is_empty() && non_claims.is_empty()) {
             return Err(RunError::Internal(
@@ -441,9 +488,23 @@ fn release_create_external_evidence(
         }
         return Ok(vec![]);
     }
-    validate_external_evidence_metadata_count(paths.len(), roles.len(), "--external-evidence-role")?;
-    validate_external_evidence_metadata_count(paths.len(), schemas.len(), "--external-evidence-schema")?;
-    validate_external_evidence_metadata_count(paths.len(), claim_scopes.len(), "--external-evidence-claim-scope")?;
+    debug_assert!(!paths.is_empty());
+    debug_assert!(current_dir.components().next().is_some());
+    validate_external_evidence_metadata_count(EvidenceMetadataCount {
+        expected_count: paths.len(),
+        actual_count: roles.len(),
+        flag_name: "--external-evidence-role",
+    })?;
+    validate_external_evidence_metadata_count(EvidenceMetadataCount {
+        expected_count: paths.len(),
+        actual_count: schemas.len(),
+        flag_name: "--external-evidence-schema",
+    })?;
+    validate_external_evidence_metadata_count(EvidenceMetadataCount {
+        expected_count: paths.len(),
+        actual_count: claim_scopes.len(),
+        flag_name: "--external-evidence-claim-scope",
+    })?;
     if non_claims.is_empty() {
         return Err(RunError::Internal(
             "release create --external-evidence-non-claim is required when external evidence is bundled".to_string(),
@@ -532,7 +593,8 @@ fn release_create_kani_toolchain_evidence(
     current_dir: &Path,
     paths: Vec<PathBuf>,
 ) -> Result<Vec<KaniToolchainEvidenceCreateRequest>, RunError> {
-    let mut records = Vec::with_capacity(paths.len());
+    let evidence_path_count = paths.len();
+    let mut records = Vec::with_capacity(evidence_path_count);
     for path in paths {
         let resolved = resolve_input_path(current_dir, path);
         let bytes = std::fs::read(&resolved)
@@ -551,17 +613,22 @@ fn release_create_kani_toolchain_evidence(
             non_claims: file.non_claims,
         });
     }
+    debug_assert_eq!(records.len(), evidence_path_count);
+    debug_assert!(records.capacity() >= records.len());
     Ok(records)
 }
 
-fn validate_external_evidence_metadata_count(
-    evidence_count: usize,
+struct EvidenceMetadataCount<'a> {
+    expected_count: usize,
     actual_count: usize,
-    flag_name: &str,
-) -> Result<(), RunError> {
-    if actual_count != evidence_count {
+    flag_name: &'a str,
+}
+
+fn validate_external_evidence_metadata_count(counts: EvidenceMetadataCount<'_>) -> Result<(), RunError> {
+    if counts.actual_count != counts.expected_count {
         return Err(RunError::Internal(format!(
-            "release create {flag_name} count {actual_count} must match --external-evidence count {evidence_count}"
+            "release create {} count {} must match --external-evidence count {}",
+            counts.flag_name, counts.actual_count, counts.expected_count
         )));
     }
     Ok(())
@@ -598,23 +665,26 @@ struct ReleaseVerifyEvaluation {
     decision: ReleaseVerificationDecision,
 }
 
-#[allow(clippy::too_many_arguments)]
-fn cmd_release_verify(
-    current_dir: &Path,
-    json: bool,
-    bundle_dir: PathBuf,
-    require_reproducible: bool,
-    require_stagex_no_quorum: bool,
-    deterministic_proof: Option<PathBuf>,
-    deterministic_sandbox_isolation_evidence: Option<PathBuf>,
-    require_deterministic_release: bool,
-    provider_fixed_point_proof: Option<PathBuf>,
-    require_external_evidence_role: Vec<String>,
-    require_provider_fixed_point_proof: bool,
-    release_profile: String,
-    stack_provenance_mode: String,
-) -> Result<(), RunError> {
-    let request = ReleaseVerifyRequest {
+fn release_verify_request(action: crate::ReleaseAction, current_dir: &Path) -> Result<ReleaseVerifyRequest, RunError> {
+    let crate::ReleaseAction::Verify {
+        bundle_dir,
+        require_reproducible,
+        require_stagex_no_quorum,
+        deterministic_proof,
+        deterministic_sandbox_isolation_evidence,
+        require_deterministic_release,
+        provider_fixed_point_proof,
+        require_external_evidence_role,
+        require_provider_fixed_point_proof,
+        release_profile,
+        stack_provenance,
+    } = action
+    else {
+        return Err(RunError::Internal("expected release verify action".to_string()));
+    };
+    debug_assert!(require_external_evidence_role.capacity() >= require_external_evidence_role.len());
+    debug_assert!(release_profile.capacity() >= release_profile.len());
+    Ok(ReleaseVerifyRequest {
         current_dir: current_dir.to_path_buf(),
         bundle_dir,
         require_reproducible,
@@ -626,24 +696,29 @@ fn cmd_release_verify(
         require_external_evidence_role,
         require_provider_fixed_point_proof,
         release_profile,
-        stack_provenance_mode,
-    };
+        stack_provenance_mode: stack_provenance,
+    })
+}
+
+fn cmd_release_verify(request: ReleaseVerifyRequest, is_json_output: bool) -> Result<(), RunError> {
     let evaluation = evaluate_release_verification(request)?;
-    emit_release_verification(&evaluation, json)
+    emit_release_verification(&evaluation, is_json_output)
 }
 
 // r[impl mantle.release_provenance.verification_decision.complete]
 fn evaluate_release_verification(request: ReleaseVerifyRequest) -> Result<ReleaseVerifyEvaluation, RunError> {
     let resolved_bundle_dir = resolve_input_path(&request.current_dir, request.bundle_dir.clone());
-    let onix_release = request.release_profile == crunch_release_core::RELEASE_PROFILE_ONIX_STACK;
-    let deterministic_required = request.require_deterministic_release || onix_release;
+    let is_onix_release = request.release_profile == crunch_release_core::RELEASE_PROFILE_ONIX_STACK;
+    let is_deterministic_required = request.require_deterministic_release || is_onix_release;
     let deterministic_request = DeterministicVerifyRequest::new(
         &request.current_dir,
         request.deterministic_proof.clone(),
         request.deterministic_sandbox_isolation_evidence.clone(),
-        deterministic_required,
+        is_deterministic_required,
     );
     let manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
+    debug_assert!(!manifest.release_id.is_empty());
+    debug_assert!(resolved_bundle_dir.components().next().is_some());
     let provider_fixed_point_result = evaluate_provider_fixed_point_proof(
         &request.current_dir,
         &resolved_bundle_dir,
@@ -667,7 +742,7 @@ fn evaluate_release_verification(request: ReleaseVerifyRequest) -> Result<Releas
     let cairn_handoff_result = crunch_release_core::evaluate_cairn_handoff_release_evidence(
         manifest.cairn_handoff_validation.as_ref(),
         &cairn_binding,
-        onix_release,
+        is_onix_release,
     );
     let stagex_result = selected_stagex_result(
         request.require_stagex_no_quorum,
@@ -724,6 +799,8 @@ struct ReleaseVerifyDecisionInput<'a> {
 }
 
 fn aggregate_release_verify_decision(input: ReleaseVerifyDecisionInput<'_>) -> ReleaseVerificationDecision {
+    debug_assert!(!input.manifest.release_id.is_empty());
+    debug_assert!(!input.effective_stack_mode.is_empty());
     let facts = ReleaseVerificationFacts {
         manifest_integrity: ReleaseVerificationFact::satisfied(),
         reproducibility: reproducibility_fact(input.reproducibility_status, input.request.require_reproducible),
@@ -867,14 +944,21 @@ fn external_evidence_roles_fact(
     if required_roles.is_empty() {
         return ReleaseVerificationFact::not_evaluated();
     }
-    let role_limit = crunch_release_core::MAX_RELEASE_VERIFICATION_REQUIRED_EXTERNAL_ROLES as usize;
-    if required_roles.len() > role_limit {
+    let Ok(role_count_max) = usize::try_from(crunch_release_core::MAX_RELEASE_VERIFICATION_REQUIRED_EXTERNAL_ROLES)
+    else {
+        return ReleaseVerificationFact::rejected(vec![
+            "required external evidence role limit does not fit usize".to_string(),
+        ]);
+    };
+    if required_roles.len() > role_count_max {
         return ReleaseVerificationFact::rejected(vec![format!(
             "required external evidence role count exceeds limit {}: observed {}",
             crunch_release_core::MAX_RELEASE_VERIFICATION_REQUIRED_EXTERNAL_ROLES,
             required_roles.len()
         )]);
     }
+    debug_assert!(required_roles.len() <= role_count_max);
+    debug_assert!(!manifest.release_id.is_empty());
 
     let missing = required_roles
         .iter()
@@ -961,6 +1045,8 @@ fn evaluate_provider_fixed_point_proof(
     proof_path: Option<PathBuf>,
     required: bool,
 ) -> crate::cargo_free_self_build::ProviderFixedPointProofVerification {
+    debug_assert!(current_dir.components().next().is_some());
+    debug_assert!(bundle_dir.components().next().is_some());
     if let Some(proof_path) = proof_path {
         let resolved = resolve_input_path(current_dir, proof_path);
         return verify_provider_fixed_point_with_release_context(
@@ -1011,6 +1097,8 @@ fn bind_provider_fixed_point_release_artifact(
         result.blockers.push("provider fixed-point proof stage binary digest is missing".to_string());
         return invalidate_provider_fixed_point_result(result);
     };
+    debug_assert!(result.valid);
+    debug_assert!(!stage_digest.is_empty());
     match validate_provider_fixed_point_release_artifact_binding(release_binaries, stage_digest) {
         Ok(binding) => {
             result.release_artifact_relative_path = Some(binding.relative_path);
@@ -1074,14 +1162,16 @@ fn evaluate_deterministic_release_claim(
     let isolation_evidence = load_canonical_deterministic_isolation_evidence(&resolved.isolation_evidence_path)?;
     let release_digest_set =
         manifest.binaries.iter().map(|artifact| artifact.digest_blake3.clone()).collect::<Vec<_>>();
-    let genuine_rebuild = deterministic_build_proof_has_genuine_rebuild_authority(proof.value.clone())
+    let is_genuine_rebuild = deterministic_build_proof_has_genuine_rebuild_authority(proof.value.clone())
         .map_err(|err| RunError::Internal(format!("deterministic rebuild authority validation failed: {err}")))?;
-    let eligible =
+    let is_eligible =
         deterministic_release_claim_eligible(&release_digest_set, &[proof.value], Some(&isolation_evidence.value))
             .map_err(|err| RunError::Internal(format!("deterministic release claim validation failed: {err}")))?;
-    let blockers = if eligible {
+    debug_assert!(resolved.proof_path.components().next().is_some());
+    debug_assert!(resolved.isolation_evidence_path.components().next().is_some());
+    let blockers = if is_eligible {
         Vec::new()
-    } else if !genuine_rebuild {
+    } else if !is_genuine_rebuild {
         vec![
             "missing-genuine-rebuild-evidence: legacy path-bound or incomplete deterministic receipt is non-promoting"
                 .to_string(),
@@ -1090,8 +1180,8 @@ fn evaluate_deterministic_release_claim(
         vec!["deterministic proof artifacts do not prove the release artifact digest set".to_string()]
     };
     Ok(DeterministicReleaseVerifyResult {
-        status: if eligible { "eligible" } else { "blocked" },
-        eligible,
+        status: if is_eligible { "eligible" } else { "blocked" },
+        eligible: is_eligible,
         proof_path: Some(resolved.proof_path),
         proof_digest_blake3: Some(proof.digest_blake3),
         isolation_evidence_path: Some(resolved.isolation_evidence_path),
@@ -1206,20 +1296,20 @@ fn load_canonical_deterministic_isolation_evidence(
 
 // r[impl mantle.operator_diagnostics.release_verification.render_boundary]
 // r[impl mantle.operator_diagnostics.release_verification.json_contract]
-fn emit_release_verification(evaluation: &ReleaseVerifyEvaluation, json: bool) -> Result<(), RunError> {
-    let valid = evaluation.decision.valid;
-    if json {
+fn emit_release_verification(evaluation: &ReleaseVerifyEvaluation, is_json_output: bool) -> Result<(), RunError> {
+    let is_valid = evaluation.decision.valid;
+    if is_json_output {
         let rendered = render_release_verify_json(evaluation)?;
         println!("{rendered}");
     } else {
-        let rendered = render_release_verify_human(evaluation);
-        if valid {
+        let rendered = render_release_verify_human(evaluation)?;
+        if is_valid {
             print!("{rendered}");
         } else {
             eprint!("{rendered}");
         }
     }
-    if valid {
+    if is_valid {
         Ok(())
     } else {
         Err(RunError::Reported(RELEASE_VERIFICATION_REJECTED_EXIT_CODE))
@@ -1227,7 +1317,9 @@ fn emit_release_verification(evaluation: &ReleaseVerifyEvaluation, json: bool) -
 }
 
 fn render_release_verify_json(evaluation: &ReleaseVerifyEvaluation) -> Result<String, RunError> {
-    let report_json = evaluation.reproducibility.as_ref().map(|report| {
+    debug_assert!(!evaluation.manifest.release_id.is_empty());
+    debug_assert!(!evaluation.decision.schema.is_empty());
+    let reproducibility_value = evaluation.reproducibility.as_ref().map(|report| {
         serde_json::json!({
             "path": report.path.display().to_string(),
             "digest_blake3": report.digest_blake3,
@@ -1258,7 +1350,7 @@ fn render_release_verify_json(evaluation: &ReleaseVerifyEvaluation) -> Result<St
         "release_id": evaluation.manifest.release_id,
         "manifest": evaluation.manifest,
         "reproducibility_status": evaluation.reproducibility_status.as_str(),
-        "reproducibility_report": report_json,
+        "reproducibility_report": reproducibility_value,
         "deterministic_release": deterministic_json,
         "provider_fixed_point_proof": evaluation.provider_fixed_point_result,
         "release_profile": evaluation.release_profile,
@@ -1275,14 +1367,16 @@ fn render_release_verify_json(evaluation: &ReleaseVerifyEvaluation) -> Result<St
 }
 
 // r[impl mantle.operator_diagnostics.release_verification.terminal_verdict]
-fn render_release_verify_human(evaluation: &ReleaseVerifyEvaluation) -> String {
+fn render_release_verify_human(evaluation: &ReleaseVerifyEvaluation) -> Result<String, RunError> {
     let mut output = String::new();
     append_release_verify_human(&mut output, evaluation)
-        .expect("writing release verification output to String cannot fail");
-    output
+        .map_err(|error| RunError::Internal(format!("rendering release verification output: {error}")))?;
+    Ok(output)
 }
 
 fn append_release_verify_human(output: &mut String, evaluation: &ReleaseVerifyEvaluation) -> std::fmt::Result {
+    debug_assert!(!evaluation.manifest.release_id.is_empty());
+    debug_assert!(output.capacity() >= output.len());
     writeln!(output, "release verification verdict: {}", evaluation.decision.disposition.as_str())?;
     writeln!(output, "release id: {}", evaluation.manifest.release_id)?;
     writeln!(output, "binaries: {}", evaluation.manifest.binaries.len())?;
@@ -1330,6 +1424,8 @@ fn append_provider_fixed_point_summary(
     output: &mut String,
     result: &crate::cargo_free_self_build::ProviderFixedPointProofVerification,
 ) -> std::fmt::Result {
+    debug_assert!(!result.status.is_empty());
+    debug_assert!(!result.proof_source.is_empty());
     writeln!(output, "provider fixed-point proof: {}", result.status)?;
     writeln!(output, "provider fixed-point proof source: {}", result.proof_source)?;
     if let Some(path) = &result.proof_dir {
@@ -1424,6 +1520,8 @@ fn append_deterministic_release_summary(
     output: &mut String,
     result: &DeterministicReleaseVerifyResult,
 ) -> std::fmt::Result {
+    debug_assert!(!result.status.is_empty());
+    debug_assert!(result.blockers.capacity() >= result.blockers.len());
     writeln!(output, "deterministic release: {}", result.status)?;
     if let Some(path) = &result.proof_path {
         writeln!(output, "deterministic proof: {}", path.display())?;
@@ -1478,13 +1576,13 @@ fn evaluate_stagex_profile(
     reproducibility: Option<&VerifiedReproducibilityReport>,
 ) -> crunch_bootstrap_core::StagexNoQuorumResult {
     let proof_block = extract_stagex_proof_block(manifest, bundle_dir);
-    let repro_verified = reproducibility.map(|r| r.status == ReproducibilityStatus::Matched).unwrap_or(false);
+    let is_repro_verified = reproducibility.map(|r| r.status == ReproducibilityStatus::Matched).unwrap_or(false);
     let repro_digest = reproducibility.map(|r| r.digest_blake3.as_str()).unwrap_or("");
     let artifact_set_digest = compute_artifact_set_digest(&manifest.binaries);
     crunch_bootstrap_core::evaluate_stagex_no_quorum(
         true, // bundle already verified by verify_release_evidence_bundle
         proof_block.as_ref(),
-        repro_verified,
+        is_repro_verified,
         repro_digest,
         &manifest.release_id,
         &artifact_set_digest,
@@ -1495,11 +1593,13 @@ fn extract_stagex_proof_block(
     manifest: &crate::release_evidence::ReleaseEvidenceManifest,
     bundle_dir: &Path,
 ) -> Option<crunch_bootstrap_core::StagexLineageProofBlock> {
+    debug_assert!(bundle_dir.components().next().is_some());
+    debug_assert!(!manifest.proof_bundle.relative_path.is_empty());
     let proof_bundle_dir = bundle_dir.join(&manifest.proof_bundle.relative_path);
     let summary_path = proof_bundle_dir.join("summary.txt");
     let summary_text = std::fs::read_to_string(&summary_path).ok()?;
-    let report = crate::self_build::SelfBuildReport::parse_proof_lines(&summary_text)?;
-    let meta = report.stagex_metadata?;
+    let self_build_evidence = crate::self_build::SelfBuildReport::parse_proof_lines(&summary_text)?;
+    let meta = self_build_evidence.stagex_metadata?;
     Some(crunch_bootstrap_core::StagexLineageProofBlock {
         seed_class: meta.seed_class,
         audit_seed_max_bytes: meta.audit_seed_max_bytes,
@@ -1534,10 +1634,7 @@ fn compute_artifact_set_digest(binaries: &[crate::release_evidence::BundledArtif
     hasher.finalize().to_hex().to_string()
 }
 
-#[allow(clippy::too_many_arguments)]
-fn cmd_release_reproduce(
-    current_dir: &Path,
-    json: bool,
+struct ReleaseReproduceCommand {
     bundle_dir: PathBuf,
     rebuild_output_dir: PathBuf,
     rebuild_command: PathBuf,
@@ -1546,46 +1643,94 @@ fn cmd_release_reproduce(
     report_path: Option<PathBuf>,
     deterministic_proof_runs: u32,
     deterministic_proof_dir: Option<PathBuf>,
-) -> Result<(), RunError> {
-    let normalized_workflow_version =
-        normalize_workflow_value(&workflow_version, DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION);
-    let request = ReleaseReproduceRequest {
-        bundle_dir: resolve_input_path(current_dir, bundle_dir),
-        rebuild_output_dir: resolve_input_path(current_dir, rebuild_output_dir),
-        rebuild_command: resolve_input_path(current_dir, rebuild_command),
+}
+
+fn release_reproduce_command(action: crate::ReleaseAction) -> Result<ReleaseReproduceCommand, RunError> {
+    let crate::ReleaseAction::Reproduce {
+        bundle_dir,
+        rebuild_output_dir,
+        rebuild_command,
         rebuild_args,
-        workflow_version: normalized_workflow_version,
-        report_path: report_path.map(|path| resolve_input_path(current_dir, path)),
+        workflow_version,
+        report_path,
         deterministic_proof_runs,
-        deterministic_proof_dir: deterministic_proof_dir.map(|path| resolve_input_path(current_dir, path)),
+        deterministic_proof_dir,
+    } = action
+    else {
+        return Err(RunError::Internal("expected release reproduce action".to_string()));
+    };
+    debug_assert!(rebuild_args.capacity() >= rebuild_args.len());
+    debug_assert!(workflow_version.capacity() >= workflow_version.len());
+    Ok(ReleaseReproduceCommand {
+        bundle_dir,
+        rebuild_output_dir,
+        rebuild_command,
+        rebuild_args,
+        workflow_version,
+        report_path,
+        deterministic_proof_runs,
+        deterministic_proof_dir,
+    })
+}
+
+fn cmd_release_reproduce(context: ReleaseCommandContext<'_>, command: ReleaseReproduceCommand) -> Result<(), RunError> {
+    let request = ReleaseReproduceRequest {
+        bundle_dir: resolve_input_path(context.current_dir, command.bundle_dir),
+        rebuild_output_dir: resolve_input_path(context.current_dir, command.rebuild_output_dir),
+        rebuild_command: resolve_input_path(context.current_dir, command.rebuild_command),
+        rebuild_args: command.rebuild_args,
+        workflow_version: normalize_workflow_value(&command.workflow_version, DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION),
+        report_path: command.report_path.map(|path| resolve_input_path(context.current_dir, path)),
+        deterministic_proof_runs: command.deterministic_proof_runs,
+        deterministic_proof_dir: command
+            .deterministic_proof_dir
+            .map(|path| resolve_input_path(context.current_dir, path)),
     };
     let summary = reproduce_release_artifacts(&request)?;
-    if json {
-        let rendered = serde_json::json!({
-            "release_id": summary.release_id,
-            "report_path": summary.report_path.display().to_string(),
-            "report_digest_blake3": summary.report_digest_blake3,
-            "matched_count": summary.matched_count,
-            "mismatched_count": summary.mismatched_count,
-            "missing_count": summary.missing_count,
-            "deterministic_proof_path": summary.deterministic_proof_path.as_ref().map(|path| path.display().to_string()),
-            "deterministic_proof_digest_blake3": summary.deterministic_proof_digest_blake3,
-            "deterministic_sandbox_isolation_evidence_path": summary.deterministic_sandbox_isolation_evidence_path.as_ref().map(|path| path.display().to_string()),
-            "deterministic_sandbox_isolation_evidence_digest_blake3": summary.deterministic_sandbox_isolation_evidence_digest_blake3,
-            "deterministic_proof_unit": summary.deterministic_proof_unit,
-            "deterministic_proof_run_roots": summary.deterministic_proof_run_roots,
-            "deterministic_proof_sandbox_profiles": summary.deterministic_proof_sandbox_profiles,
-            "deterministic_proof_verdict": summary.deterministic_proof_verdict,
-            "deterministic_proof_blockers": summary.deterministic_proof_blockers,
-        });
-        println!(
-            "{}",
-            serde_json::to_string(&rendered)
-                .map_err(|err| RunError::Internal(format!("serializing reproducibility output: {err}")))?
-        );
-        return Ok(());
-    }
+    emit_release_reproduce_result(&summary, context.is_json_output)
+}
 
+fn emit_release_reproduce_result(summary: &ReleaseReproduceSummary, is_json_output: bool) -> Result<(), RunError> {
+    debug_assert!(!summary.release_id.is_empty());
+    debug_assert!(!summary.report_digest_blake3.is_empty());
+    if is_json_output {
+        return emit_release_reproduce_json(summary);
+    }
+    emit_release_reproduce_human(summary);
+    Ok(())
+}
+
+fn emit_release_reproduce_json(summary: &ReleaseReproduceSummary) -> Result<(), RunError> {
+    debug_assert!(!summary.release_id.is_empty());
+    debug_assert!(!summary.report_digest_blake3.is_empty());
+    let rendered = serde_json::json!({
+        "release_id": summary.release_id,
+        "report_path": summary.report_path.display().to_string(),
+        "report_digest_blake3": summary.report_digest_blake3,
+        "matched_count": summary.matched_count,
+        "mismatched_count": summary.mismatched_count,
+        "missing_count": summary.missing_count,
+        "deterministic_proof_path": summary.deterministic_proof_path.as_ref().map(|path| path.display().to_string()),
+        "deterministic_proof_digest_blake3": summary.deterministic_proof_digest_blake3,
+        "deterministic_sandbox_isolation_evidence_path": summary.deterministic_sandbox_isolation_evidence_path.as_ref().map(|path| path.display().to_string()),
+        "deterministic_sandbox_isolation_evidence_digest_blake3": summary.deterministic_sandbox_isolation_evidence_digest_blake3,
+        "deterministic_proof_unit": summary.deterministic_proof_unit,
+        "deterministic_proof_run_roots": summary.deterministic_proof_run_roots,
+        "deterministic_proof_sandbox_profiles": summary.deterministic_proof_sandbox_profiles,
+        "deterministic_proof_verdict": summary.deterministic_proof_verdict,
+        "deterministic_proof_blockers": summary.deterministic_proof_blockers,
+    });
+    println!(
+        "{}",
+        serde_json::to_string(&rendered)
+            .map_err(|err| RunError::Internal(format!("serializing reproducibility output: {err}")))?
+    );
+    Ok(())
+}
+
+fn emit_release_reproduce_human(summary: &ReleaseReproduceSummary) {
+    debug_assert!(!summary.release_id.is_empty());
+    debug_assert!(!summary.report_digest_blake3.is_empty());
     println!("release reproducibility report: {}", summary.report_path.display());
     println!("release id: {}", summary.release_id);
     println!("report digest: {}", summary.report_digest_blake3);
@@ -1604,6 +1749,10 @@ fn cmd_release_reproduce(
     if let Some(digest) = &summary.deterministic_sandbox_isolation_evidence_digest_blake3 {
         println!("deterministic sandbox isolation evidence digest: {digest}");
     }
+    emit_optional_release_reproduce_human(summary);
+}
+
+fn emit_optional_release_reproduce_human(summary: &ReleaseReproduceSummary) {
     if let Some(verdict) = &summary.deterministic_proof_verdict {
         println!("deterministic proof verdict: {verdict}");
     }
@@ -1621,13 +1770,47 @@ fn cmd_release_reproduce(
     {
         println!("deterministic proof blockers: {}", blockers.join("; "));
     }
-    Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
-fn cmd_release_nix_witness(
-    current_dir: &Path,
-    json: bool,
+fn release_nix_witness_command(action: crate::ReleaseAction) -> Result<ReleaseNixWitnessCommand, RunError> {
+    let crate::ReleaseAction::NixWitness {
+        bundle_dir,
+        nix_output_dir,
+        deterministic_proof,
+        receipt_path,
+        rust_toolchain_identity,
+        target_triple,
+        build_flags,
+        linker_identity,
+        strip_debug_policy,
+        source_date_epoch_policy,
+        nix_derivation_identity,
+        nix_output_identity,
+        require_match,
+    } = action
+    else {
+        return Err(RunError::Internal("expected release Nix witness action".to_string()));
+    };
+    debug_assert!(build_flags.capacity() >= build_flags.len());
+    debug_assert!(rust_toolchain_identity.capacity() >= rust_toolchain_identity.len());
+    Ok(ReleaseNixWitnessCommand {
+        bundle_dir,
+        nix_output_dir,
+        deterministic_proof,
+        receipt_path,
+        rust_toolchain_identity,
+        target_triple,
+        build_flags,
+        linker_identity,
+        strip_debug_policy,
+        source_date_epoch_policy,
+        nix_derivation_identity,
+        nix_output_identity,
+        is_require_match: require_match,
+    })
+}
+
+struct ReleaseNixWitnessCommand {
     bundle_dir: PathBuf,
     nix_output_dir: PathBuf,
     deterministic_proof: PathBuf,
@@ -1640,25 +1823,32 @@ fn cmd_release_nix_witness(
     source_date_epoch_policy: String,
     nix_derivation_identity: String,
     nix_output_identity: String,
-    require_match: bool,
+    is_require_match: bool,
+}
+
+fn cmd_release_nix_witness(
+    context: ReleaseCommandContext<'_>,
+    command: ReleaseNixWitnessCommand,
 ) -> Result<(), RunError> {
     let request = ReleaseNixWitnessRequest {
-        bundle_dir: resolve_input_path(current_dir, bundle_dir),
-        nix_output_dir: resolve_input_path(current_dir, nix_output_dir),
-        deterministic_proof_path: resolve_input_path(current_dir, deterministic_proof),
-        output_path: receipt_path.map(|path| resolve_input_path(current_dir, path)),
-        rust_toolchain_identity,
-        target_triple,
-        build_flags,
-        linker_identity,
-        strip_debug_policy,
-        source_date_epoch_policy,
-        nix_derivation_identity,
-        nix_output_identity,
-        require_match,
+        bundle_dir: resolve_input_path(context.current_dir, command.bundle_dir),
+        nix_output_dir: resolve_input_path(context.current_dir, command.nix_output_dir),
+        deterministic_proof_path: resolve_input_path(context.current_dir, command.deterministic_proof),
+        output_path: command.receipt_path.map(|path| resolve_input_path(context.current_dir, path)),
+        rust_toolchain_identity: command.rust_toolchain_identity,
+        target_triple: command.target_triple,
+        build_flags: command.build_flags,
+        linker_identity: command.linker_identity,
+        strip_debug_policy: command.strip_debug_policy,
+        source_date_epoch_policy: command.source_date_epoch_policy,
+        nix_derivation_identity: command.nix_derivation_identity,
+        nix_output_identity: command.nix_output_identity,
+        require_match: command.is_require_match,
     };
     let summary = write_release_nix_cross_builder_witness(&request)?;
-    if json {
+    debug_assert!(!summary.release_id.is_empty());
+    debug_assert!(!summary.receipt_digest_blake3.is_empty());
+    if context.is_json_output {
         let rendered = serde_json::json!({
             "kind": "mantle-nix-cross-builder-witness-run-v1",
             "release_id": summary.release_id,
@@ -1691,22 +1881,27 @@ fn cmd_release_nix_witness(
 }
 
 fn cmd_release_attest(
-    current_dir: &Path,
-    state_dir: &Path,
-    json: bool,
+    context: ReleaseCommandContext<'_>,
     bundle_dir: PathBuf,
     verification_dir: Option<PathBuf>,
     signing_key: Option<PathBuf>,
 ) -> Result<(), RunError> {
+    let current_dir = context.current_dir;
     let resolved_bundle_dir = resolve_input_path(current_dir, bundle_dir);
     let verified_manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
     let resolved_verification_dir = match verification_dir {
         Some(path) => resolve_input_path(current_dir, path),
         None => default_verification_dir(current_dir, &verified_manifest.release_id),
     };
-    let created =
-        create_release_attestation(&verified_manifest, &resolved_verification_dir, signing_key.as_deref(), state_dir)?;
-    if json {
+    debug_assert!(!verified_manifest.release_id.is_empty());
+    debug_assert!(resolved_bundle_dir.components().next().is_some());
+    let created = create_release_attestation(
+        &verified_manifest,
+        &resolved_verification_dir,
+        signing_key.as_deref(),
+        context.state_dir,
+    )?;
+    if context.is_json_output {
         let rendered = serde_json::json!({
             "release_id": created.attestation.release_id,
             "digest": created.digest_hex,
@@ -1732,7 +1927,7 @@ fn cmd_release_attest(
 
 fn cmd_release_witness_export(
     current_dir: &Path,
-    json: bool,
+    is_json_output: bool,
     bundle_dir: PathBuf,
     verification_dir: Option<PathBuf>,
     request_dir: Option<PathBuf>,
@@ -1747,13 +1942,15 @@ fn cmd_release_witness_export(
         Some(path) => resolve_input_path(current_dir, path),
         None => default_witness_request_dir(current_dir, &verified_manifest.release_id),
     };
+    debug_assert!(!verified_manifest.release_id.is_empty());
+    debug_assert!(resolved_request_dir.components().next().is_some());
     let created = create_witness_request_directory(
         &verified_manifest,
         &resolved_bundle_dir,
         &resolved_verification_dir,
         &resolved_request_dir,
     )?;
-    if json {
+    if is_json_output {
         let rendered = serde_json::json!({
             "kind": "mantle-witness-request",
             "release_id": created.release_id,
@@ -1780,35 +1977,71 @@ fn cmd_release_witness_export(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
-fn cmd_release_witness_rebuild(
-    current_dir: &Path,
-    state_dir: &Path,
-    json: bool,
+fn release_witness_rebuild_command(action: crate::ReleaseAction) -> Result<ReleaseWitnessRebuildCommand, RunError> {
+    let crate::ReleaseAction::WitnessRebuild {
+        request_dir,
+        scratch_dir,
+        check,
+        require_independent_source,
+        require_git_source,
+        identity,
+        system,
+        toolchain,
+        host_class,
+        signing_key,
+    } = action
+    else {
+        return Err(RunError::Internal("expected release witness rebuild action".to_string()));
+    };
+    debug_assert!(identity.as_ref().is_none_or(|value| value.capacity() >= value.len()));
+    debug_assert!(host_class.as_ref().is_none_or(|value| value.capacity() >= value.len()));
+    Ok(ReleaseWitnessRebuildCommand {
+        request_dir,
+        scratch_dir,
+        is_check: check,
+        is_require_independent_source: require_independent_source,
+        is_require_git_source: require_git_source,
+        identity,
+        system,
+        toolchain,
+        host_class,
+        signing_key,
+    })
+}
+
+struct ReleaseWitnessRebuildCommand {
     request_dir: PathBuf,
     scratch_dir: Option<PathBuf>,
-    check: bool,
-    require_independent_source: bool,
-    require_git_source: bool,
+    is_check: bool,
+    is_require_independent_source: bool,
+    is_require_git_source: bool,
     identity: Option<String>,
     system: Option<String>,
     toolchain: Option<String>,
     host_class: Option<String>,
     signing_key: Option<PathBuf>,
+}
+
+fn cmd_release_witness_rebuild(
+    context: ReleaseCommandContext<'_>,
+    command: ReleaseWitnessRebuildCommand,
 ) -> Result<(), RunError> {
-    let resolved_request_dir = resolve_input_path(current_dir, request_dir);
-    let resolved_scratch_dir = resolve_witness_scratch_dir(current_dir, &resolved_request_dir, scratch_dir)?;
+    let resolved_request_dir = resolve_input_path(context.current_dir, command.request_dir);
+    let resolved_scratch_dir =
+        resolve_witness_scratch_dir(context.current_dir, &resolved_request_dir, command.scratch_dir)?;
     let plan = plan_witness_rebuild(
         &resolved_request_dir,
         &resolved_scratch_dir,
-        require_independent_source,
-        require_git_source,
+        command.is_require_independent_source,
+        command.is_require_git_source,
     )?;
-    if check {
-        return print_witness_rebuild_check(&plan, json);
+    debug_assert!(!plan.release_id.is_empty());
+    debug_assert!(plan.request_dir.components().next().is_some());
+    if command.is_check {
+        return print_witness_rebuild_check(&plan, context.is_json_output);
     }
 
-    let metadata = required_witness_rebuild_metadata(system, toolchain, host_class)?;
+    let metadata = required_witness_rebuild_metadata(command.system, command.toolchain, command.host_class)?;
     if let Err(err) = prepare_witness_rebuild_scratch(&plan) {
         let failure_meta = build_prelaunch_failure_audit_meta(&plan, err.message())?;
         write_audit_meta(&audit_meta_path(&plan), &failure_meta)?;
@@ -1837,17 +2070,23 @@ fn cmd_release_witness_rebuild(
     let created = create_witness_attestation(
         &plan.scratch_layout.verification_dir,
         &success.rebuilt_output_paths,
-        identity.as_deref(),
+        command.identity.as_deref(),
         &metadata.system,
         &metadata.toolchain,
         &metadata.host_class,
         source_acquisition_mode_for_plan(&plan),
-        signing_key.as_deref(),
-        state_dir,
+        command.signing_key.as_deref(),
+        context.state_dir,
     )?;
     let audit_meta = build_success_audit_meta(&plan, &success, &created.attestation_path, &created.signature_path)?;
     write_audit_meta(&audit_meta_path(&plan), &audit_meta)?;
-    print_witness_rebuild_success(&plan, &success, &created.attestation_path, &created.signature_path, json)
+    print_witness_rebuild_success(
+        &plan,
+        &success,
+        &created.attestation_path,
+        &created.signature_path,
+        context.is_json_output,
+    )
 }
 
 fn resolve_bundle_dir(current_dir: &Path, release_id: &str, bundle_dir: Option<PathBuf>) -> PathBuf {
@@ -1883,7 +2122,9 @@ fn resolve_witness_scratch_dir(
     default_witness_scratch_dir(request_dir)
 }
 
-fn normalize_workflow_value(value: &str, default_value: &str) -> String {
+fn normalize_workflow_value<V: AsRef<str>, D: AsRef<str>>(value: V, default_value: D) -> String {
+    let value = value.as_ref();
+    let default_value = default_value.as_ref();
     if value.trim().is_empty() {
         default_value.to_string()
     } else {
@@ -1924,9 +2165,14 @@ fn require_metadata_value(value: Option<String>, flag_name: &str) -> Result<Stri
     Ok(trimmed.to_string())
 }
 
-fn print_witness_rebuild_check(plan: &crate::witness_rebuild::WitnessRebuildPlan, json: bool) -> Result<(), RunError> {
+fn print_witness_rebuild_check(
+    plan: &crate::witness_rebuild::WitnessRebuildPlan,
+    is_json_output: bool,
+) -> Result<(), RunError> {
+    debug_assert!(!plan.release_id.is_empty());
+    debug_assert!(plan.scratch_layout.scratch_root.components().next().is_some());
     let audit_path = audit_meta_path(plan);
-    if json {
+    if is_json_output {
         let rendered = serde_json::json!({
             "kind": "mantle-witness-rebuild",
             "check_only": true,
@@ -1976,10 +2222,12 @@ fn print_witness_rebuild_success(
     success: &WitnessRebuildSuccess,
     attestation_path: &Path,
     signature_path: &Path,
-    json: bool,
+    is_json_output: bool,
 ) -> Result<(), RunError> {
+    debug_assert!(!plan.release_id.is_empty());
+    debug_assert!(!success.rebuilt_output_paths.is_empty());
     let audit_path = audit_meta_path(plan);
-    if json {
+    if is_json_output {
         let rebuilt_outputs =
             success.rebuilt_output_paths.iter().map(|path| path.display().to_string()).collect::<Vec<_>>();
         let rendered = serde_json::json!({
@@ -2048,23 +2296,23 @@ mod tests {
             crunch_release_core::AST_GREP_NON_CLAIM_RELEASE_ELIGIBILITY.to_string(),
         ];
 
-        let valid = release_create_external_evidence(
-            temp.path(),
-            vec![relative_path.clone()],
-            vec![AST_GREP_EXTERNAL_EVIDENCE_ROLE.to_string()],
-            vec![AST_GREP_STRUCTURAL_EVIDENCE_SCHEMA.to_string()],
-            vec![AST_GREP_STRUCTURAL_CLAIM_SCOPE.to_string()],
-            non_claims.clone(),
-        )
+        let valid = release_create_external_evidence(ExternalEvidenceCommand {
+            current_dir: temp.path(),
+            paths: vec![relative_path.clone()],
+            roles: vec![AST_GREP_EXTERNAL_EVIDENCE_ROLE.to_string()],
+            schemas: vec![AST_GREP_STRUCTURAL_EVIDENCE_SCHEMA.to_string()],
+            claim_scopes: vec![AST_GREP_STRUCTURAL_CLAIM_SCOPE.to_string()],
+            non_claims: non_claims.clone(),
+        })
         .unwrap();
-        let invalid = release_create_external_evidence(
-            temp.path(),
-            vec![relative_path],
-            vec![AST_GREP_EXTERNAL_EVIDENCE_ROLE.to_string()],
-            vec![AST_GREP_STRUCTURAL_EVIDENCE_SCHEMA.to_string()],
-            vec!["release-eligible".to_string()],
+        let invalid = release_create_external_evidence(ExternalEvidenceCommand {
+            current_dir: temp.path(),
+            paths: vec![relative_path],
+            roles: vec![AST_GREP_EXTERNAL_EVIDENCE_ROLE.to_string()],
+            schemas: vec![AST_GREP_STRUCTURAL_EVIDENCE_SCHEMA.to_string()],
+            claim_scopes: vec!["release-eligible".to_string()],
             non_claims,
-        )
+        })
         .unwrap_err();
 
         assert_eq!(valid.len(), 1);
@@ -2400,7 +2648,7 @@ mod tests {
     fn release_verify_renderers_preserve_completed_decision_and_terminal_verdict() {
         let accepted = test_release_verify_evaluation(false);
         let accepted_before = accepted.decision.clone();
-        let accepted_human = render_release_verify_human(&accepted);
+        let accepted_human = render_release_verify_human(&accepted).unwrap();
         let accepted_json: serde_json::Value =
             serde_json::from_str(&render_release_verify_json(&accepted).unwrap()).unwrap();
 
@@ -2412,7 +2660,7 @@ mod tests {
 
         let rejected = test_release_verify_evaluation(true);
         let rejected_before = rejected.decision.clone();
-        let rejected_human = render_release_verify_human(&rejected);
+        let rejected_human = render_release_verify_human(&rejected).unwrap();
         let rejected_json: serde_json::Value =
             serde_json::from_str(&render_release_verify_json(&rejected).unwrap()).unwrap();
 

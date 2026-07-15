@@ -36,6 +36,9 @@ const MAX_REMOTE_BATCH_RECONCILE_ATTEMPTS: u32 = 1_024;
 const MAX_REMOTE_BATCH_ENVIRONMENT_HANDLES: usize = 32;
 const REMOTE_BATCH_ENVIRONMENT_HANDLE_PREFIX: &str = "MANTLE_BATCH_HANDLE_";
 const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
+const DEFAULT_REMOTE_RETRY_ATTEMPTS: u32 = 3;
+const DEFAULT_REMOTE_RETRY_DELAY_SECS: u64 = 5;
+const DEFAULT_REMOTE_ATTEMPT_TIMEOUT_SECS: u64 = 3_600;
 const FORBIDDEN_REMOTE_BATCH_SECRET_MARKERS: [&str; 6] =
     ["credential", "password", "private-key", "secret", "ticket", "token="];
 const FORBIDDEN_REMOTE_BATCH_SHELL_FRAGMENTS: [&str; 7] = ["$(", "`", ";", "&&", "||", ">", "<"];
@@ -179,21 +182,21 @@ pub struct RemoteCapabilityProfile {
     pub sandbox_mode: RemoteSandboxMode,
     #[serde(default = "default_network_mode")]
     pub network_mode: RemoteNetworkMode,
-    #[serde(default)]
+    #[serde(default = "empty_strings")]
     pub features: Vec<String>,
     #[serde(default = "default_worker_generation")]
     pub worker_generation: u64,
     #[serde(default = "default_concurrency")]
     pub max_concurrency: u32,
-    #[serde(default)]
+    #[serde(default = "absent_resource_inventory")]
     pub resource_inventory: Option<crunch_build::distributed::RemoteWorkerResourceInventory>,
     #[serde(default = "default_upload_bytes")]
     pub max_upload_bytes: u64,
     #[serde(default = "default_build_time_secs")]
     pub max_build_time_secs: u64,
-    #[serde(default)]
+    #[serde(default = "default_retry_policy")]
     pub retry_policy: RemoteAttemptRetryPolicy,
-    #[serde(default)]
+    #[serde(default = "default_transfer_policy")]
     pub transfer_policy: RemoteTransferPolicy,
     #[serde(default)]
     pub workspace_policy: RemoteWorkspacePolicy,
@@ -221,6 +224,90 @@ fn default_build_time_secs() -> u64 {
     DEFAULT_REMOTE_MAX_BUILD_TIME_SECS
 }
 
+fn empty_strings() -> Vec<String> {
+    Vec::new()
+}
+
+fn empty_trust_roots() -> Vec<TrustRoot> {
+    Vec::new()
+}
+
+fn empty_remote_endpoints() -> Vec<RemoteEndpoint> {
+    Vec::new()
+}
+
+fn empty_publisher_profiles() -> Vec<PublisherProfile> {
+    Vec::new()
+}
+
+fn empty_remote_builder_pools() -> Vec<RemoteBuilderPool> {
+    Vec::new()
+}
+
+fn empty_remote_batch_dispatchers() -> Vec<RemoteBatchDispatcherProfile> {
+    Vec::new()
+}
+
+fn empty_external_batch_operations() -> Vec<ExternalBatchOperationKind> {
+    Vec::new()
+}
+
+fn empty_environment_handles() -> Vec<RemoteBatchEnvironmentHandle> {
+    Vec::new()
+}
+
+fn absent_resource_inventory() -> Option<crunch_build::distributed::RemoteWorkerResourceInventory> {
+    None
+}
+
+fn empty_string() -> String {
+    String::new()
+}
+
+fn default_retry_policy() -> RemoteAttemptRetryPolicy {
+    RemoteAttemptRetryPolicy {
+        max_attempts: DEFAULT_REMOTE_RETRY_ATTEMPTS,
+        retry_delay_secs: DEFAULT_REMOTE_RETRY_DELAY_SECS,
+        attempt_timeout_secs: DEFAULT_REMOTE_ATTEMPT_TIMEOUT_SECS,
+    }
+}
+
+fn default_transfer_policy() -> RemoteTransferPolicy {
+    RemoteTransferPolicy {
+        chunk_bytes_max: crunch_build::distributed::DEFAULT_REMOTE_TRANSFER_CHUNK_BYTES,
+        in_flight_bytes_max: crunch_build::distributed::DEFAULT_REMOTE_TRANSFER_IN_FLIGHT_BYTES,
+        in_flight_chunks_max: crunch_build::distributed::DEFAULT_REMOTE_TRANSFER_IN_FLIGHT_CHUNKS,
+        buffered_chunks_max: crunch_build::distributed::DEFAULT_REMOTE_TRANSFER_BUFFERED_CHUNKS,
+        artifact_count_max: crunch_build::distributed::DEFAULT_REMOTE_TRANSFER_ARTIFACTS,
+        chunk_count_max: crunch_build::distributed::DEFAULT_REMOTE_TRANSFER_CHUNKS,
+        total_bytes_max: crunch_build::distributed::DEFAULT_REMOTE_TRANSFER_TOTAL_BYTES,
+        checkpoint_bytes_max: crunch_build::distributed::DEFAULT_REMOTE_TRANSFER_CHECKPOINT_BYTES,
+        idle_progress_steps_max: crunch_build::distributed::DEFAULT_REMOTE_TRANSFER_IDLE_PROGRESS_STEPS,
+        replay_rounds_max: crunch_build::distributed::DEFAULT_REMOTE_TRANSFER_REPLAY_ROUNDS,
+        control_bytes_max: crunch_build::distributed::DEFAULT_REMOTE_TRANSFER_CONTROL_BYTES,
+    }
+}
+
+fn default_failure_debug_policy() -> RemoteFailureDebugPolicy {
+    RemoteFailureDebugPolicy {
+        policy_name: crunch_build::distributed::REMOTE_FAILURE_DEBUG_POLICY_NAME.to_string(),
+        metadata_bytes_max: crunch_build::distributed::MAX_REMOTE_FAILURE_METADATA_BYTES,
+        object_bytes_max: crunch_build::distributed::MAX_REMOTE_FAILURE_OBJECT_BYTES,
+        retention_secs: crunch_build::distributed::DEFAULT_REMOTE_FAILURE_RETENTION_SECS,
+        replay_enabled: false,
+        capture: crunch_build::distributed::RemoteFailureCapturePolicy {
+            enabled: false,
+            allowed_relative_paths: Vec::new(),
+            sensitivity: crunch_build::distributed::RemoteFailureCaptureSensitivity::RestrictedDiagnostic,
+            file_count_max: crunch_build::distributed::MAX_REMOTE_FAILURE_CAPTURE_FILES,
+            total_bytes_max: crunch_build::distributed::MAX_REMOTE_FAILURE_CAPTURE_TOTAL_BYTES,
+            file_bytes_max: crunch_build::distributed::MAX_REMOTE_FAILURE_CAPTURE_FILE_BYTES,
+            depth_max: crunch_build::distributed::MAX_REMOTE_FAILURE_CAPTURE_DEPTH,
+            failure_mode: crunch_build::distributed::RemoteFailureCaptureFailureMode::DiagnosticOnly,
+        },
+    }
+}
+
 impl Default for RemoteCapabilityProfile {
     fn default() -> Self {
         Self {
@@ -233,8 +320,8 @@ impl Default for RemoteCapabilityProfile {
             resource_inventory: None,
             max_upload_bytes: DEFAULT_REMOTE_MAX_UPLOAD_BYTES,
             max_build_time_secs: DEFAULT_REMOTE_MAX_BUILD_TIME_SECS,
-            retry_policy: RemoteAttemptRetryPolicy::default(),
-            transfer_policy: RemoteTransferPolicy::default(),
+            retry_policy: default_retry_policy(),
+            transfer_policy: default_transfer_policy(),
             workspace_policy: RemoteWorkspacePolicy::default(),
         }
     }
@@ -280,9 +367,9 @@ fn default_publisher_mode() -> PublisherMode {
 pub struct PublisherProfile {
     #[serde(default = "default_publisher_mode")]
     pub mode: PublisherMode,
-    #[serde(default)]
+    #[serde(default = "empty_string")]
     pub target_url: String,
-    #[serde(default)]
+    #[serde(default = "empty_trust_roots")]
     pub trusted_public_keys: Vec<TrustRoot>,
 }
 
@@ -290,13 +377,13 @@ pub struct PublisherProfile {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Default)]
 pub struct RemoteBuilderPool {
     pub pool_id: String,
-    #[serde(default)]
+    #[serde(default = "empty_remote_endpoints")]
     pub endpoints: Vec<RemoteEndpoint>,
     #[serde(default = "default_fallback_policy")]
     pub fallback_policy: RemoteFallbackPolicy,
-    #[serde(default)]
+    #[serde(default = "empty_trust_roots")]
     pub output_trust_roots: Vec<TrustRoot>,
-    #[serde(default)]
+    #[serde(default = "empty_publisher_profiles")]
     pub publishers: Vec<PublisherProfile>,
 }
 
@@ -327,7 +414,7 @@ pub struct RemoteBatchEnvironmentHandle {
 pub struct RemoteBatchDispatcherCommandProfile {
     pub program: std::path::PathBuf,
     pub expected_digest_blake3: String,
-    #[serde(default)]
+    #[serde(default = "empty_strings")]
     pub args: Vec<String>,
     pub timeout_secs: u64,
     pub stdout_limit_bytes: u64,
@@ -340,6 +427,7 @@ pub struct RemoteBatchDispatcherProfile {
     pub generation: u64,
     pub adapter: RemoteBatchDispatcherAdapter,
     pub protocol_schema: String,
+    #[serde(default = "empty_external_batch_operations")]
     pub allowed_operations: Vec<ExternalBatchOperationKind>,
     pub provider_class: String,
     pub submit: RemoteBatchDispatcherCommandProfile,
@@ -348,9 +436,9 @@ pub struct RemoteBatchDispatcherProfile {
     pub reconcile: RemoteBatchDispatcherCommandProfile,
     pub worker_program: std::path::PathBuf,
     pub worker_program_digest_blake3: String,
-    #[serde(default)]
+    #[serde(default = "empty_strings")]
     pub worker_args: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "empty_environment_handles")]
     pub environment_handles: Vec<RemoteBatchEnvironmentHandle>,
     pub bootstrap_policy: RemoteBatchBootstrapPolicy,
     pub redact_provider_output: bool,
@@ -392,15 +480,15 @@ struct RemoteBatchProfileIdentity<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Default)]
 pub struct RemoteBuildFarmConfig {
-    #[serde(default)]
+    #[serde(default = "empty_remote_builder_pools")]
     pub pools: Vec<RemoteBuilderPool>,
-    #[serde(default)]
+    #[serde(default = "empty_remote_batch_dispatchers")]
     pub dispatchers: Vec<RemoteBatchDispatcherProfile>,
     #[serde(default)]
     pub telemetry: RemoteTelemetryExportConfig,
     #[serde(default)]
     pub trace_context: RemoteTraceContextConfig,
-    #[serde(default)]
+    #[serde(default = "default_failure_debug_policy")]
     pub failure_debug: RemoteFailureDebugPolicy,
 }
 
@@ -487,7 +575,7 @@ pub(crate) const fn remote_batch_command_arg_limit() -> usize {
 fn validate_remote_batch_dispatchers(dispatchers: &[RemoteBatchDispatcherProfile]) -> Result<(), String> {
     let mut instance_ids = std::collections::BTreeSet::new();
     for dispatcher in dispatchers {
-        validate_remote_batch_identifier("instance", &dispatcher.instance_id)?;
+        validate_remote_batch_identifier(ConfigField::new("instance", &dispatcher.instance_id))?;
         if !instance_ids.insert(dispatcher.instance_id.clone()) {
             return Err(format!("duplicate remote batch dispatcher instance id {:?}", dispatcher.instance_id));
         }
@@ -501,26 +589,29 @@ fn validate_remote_batch_dispatchers(dispatchers: &[RemoteBatchDispatcherProfile
 pub(crate) fn validate_remote_batch_dispatcher_profile(
     dispatcher: &RemoteBatchDispatcherProfile,
 ) -> Result<(), String> {
-    validate_remote_batch_identifier("instance", &dispatcher.instance_id)?;
-    validate_remote_batch_identifier("provider class", &dispatcher.provider_class)?;
+    validate_remote_batch_identifier(ConfigField::new("instance", &dispatcher.instance_id))?;
+    validate_remote_batch_identifier(ConfigField::new("provider class", &dispatcher.provider_class))?;
     if dispatcher.generation == 0 {
         return Err(format!("remote batch dispatcher {:?} generation must be positive", dispatcher.instance_id));
     }
     if dispatcher.protocol_schema != EXTERNAL_BATCH_PROTOCOL_SCHEMA {
         return Err(format!("remote batch dispatcher {:?} protocol schema is unsupported", dispatcher.instance_id));
     }
+    debug_assert!(!dispatcher.instance_id.is_empty());
+    debug_assert!(!dispatcher.provider_class.is_empty());
     validate_remote_batch_allowed_operations(dispatcher)?;
-    validate_remote_batch_command(&dispatcher.instance_id, "submit", &dispatcher.submit)?;
-    validate_remote_batch_command(&dispatcher.instance_id, "observe", &dispatcher.observe)?;
-    validate_remote_batch_command(&dispatcher.instance_id, "cancel", &dispatcher.cancel)?;
-    validate_remote_batch_command(&dispatcher.instance_id, "reconcile", &dispatcher.reconcile)?;
-    validate_absolute_program(&dispatcher.instance_id, "worker", &dispatcher.worker_program)?;
-    validate_blake3_digest(
+    validate_remote_batch_command(RemoteBatchCommandValidation::new(dispatcher, "submit", &dispatcher.submit))?;
+    validate_remote_batch_command(RemoteBatchCommandValidation::new(dispatcher, "observe", &dispatcher.observe))?;
+    validate_remote_batch_command(RemoteBatchCommandValidation::new(dispatcher, "cancel", &dispatcher.cancel))?;
+    validate_remote_batch_command(RemoteBatchCommandValidation::new(dispatcher, "reconcile", &dispatcher.reconcile))?;
+    let worker_context = RemoteBatchOperationContext::new(&dispatcher.instance_id, "worker");
+    validate_absolute_program(worker_context, &dispatcher.worker_program)?;
+    validate_blake3_digest(ConfigField::new(
         &format!("remote batch dispatcher {:?} worker executable", dispatcher.instance_id),
         &dispatcher.worker_program_digest_blake3,
-    )?;
-    validate_remote_batch_args(&dispatcher.instance_id, "worker", &dispatcher.worker_args)?;
-    validate_remote_batch_secret_free_args(&dispatcher.instance_id, "worker", &dispatcher.worker_args)?;
+    ))?;
+    validate_remote_batch_args(worker_context, &dispatcher.worker_args)?;
+    validate_remote_batch_secret_free_args(worker_context, &dispatcher.worker_args)?;
     validate_remote_batch_environment_handles(dispatcher)?;
     if !dispatcher.redact_provider_output {
         return Err(format!(
@@ -552,11 +643,12 @@ fn validate_remote_batch_environment_handles(dispatcher: &RemoteBatchDispatcherP
             dispatcher.instance_id
         ));
     }
+    debug_assert!(dispatcher.environment_handles.len() <= MAX_REMOTE_BATCH_ENVIRONMENT_HANDLES);
     let mut names = std::collections::BTreeSet::new();
     for handle in &dispatcher.environment_handles {
-        let valid = handle.name.starts_with(REMOTE_BATCH_ENVIRONMENT_HANDLE_PREFIX)
+        let is_valid = handle.name.starts_with(REMOTE_BATCH_ENVIRONMENT_HANDLE_PREFIX)
             && handle.name.bytes().all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_');
-        if !valid {
+        if !is_valid {
             return Err(format!(
                 "remote batch dispatcher {:?} environment handle name is invalid",
                 dispatcher.instance_id
@@ -569,11 +661,14 @@ fn validate_remote_batch_environment_handles(dispatcher: &RemoteBatchDispatcherP
             ));
         }
     }
+    debug_assert_eq!(names.len(), dispatcher.environment_handles.len());
     Ok(())
 }
 
 pub(crate) fn remote_batch_dispatcher_profile_ref(dispatcher: &RemoteBatchDispatcherProfile) -> Result<String, String> {
     validate_remote_batch_dispatcher_profile(dispatcher)?;
+    debug_assert!(dispatcher.generation > 0);
+    debug_assert!(dispatcher.redact_provider_output);
     let identity = RemoteBatchProfileIdentity {
         instance_id: &dispatcher.instance_id,
         generation: dispatcher.generation,
@@ -617,62 +712,137 @@ pub(crate) fn remote_batch_worker_bootstrap_ref(dispatcher: &RemoteBatchDispatch
     Ok(blake3::hash(&bytes).to_hex().to_string())
 }
 
-fn validate_remote_batch_command(
-    instance_id: &str,
-    operation: &str,
-    command: &RemoteBatchDispatcherCommandProfile,
-) -> Result<(), String> {
-    validate_absolute_program(instance_id, operation, &command.program)?;
-    validate_blake3_digest(
-        &format!("remote batch dispatcher {instance_id:?} {operation} executable"),
+#[derive(Clone, Copy)]
+struct RemoteBatchOperationContext<'a> {
+    instance_id: &'a str,
+    operation: &'a str,
+}
+
+impl<'a> RemoteBatchOperationContext<'a> {
+    fn new(instance_id: &'a str, operation: &'a str) -> Self {
+        Self { instance_id, operation }
+    }
+}
+
+struct RemoteBatchCommandValidation<'a> {
+    context: RemoteBatchOperationContext<'a>,
+    command: &'a RemoteBatchDispatcherCommandProfile,
+}
+
+impl<'a> RemoteBatchCommandValidation<'a> {
+    fn new(
+        dispatcher: &'a RemoteBatchDispatcherProfile,
+        operation: &'a str,
+        command: &'a RemoteBatchDispatcherCommandProfile,
+    ) -> Self {
+        Self {
+            context: RemoteBatchOperationContext::new(&dispatcher.instance_id, operation),
+            command,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ConfigField<'a> {
+    label: &'a str,
+    value: &'a str,
+}
+
+impl<'a> ConfigField<'a> {
+    fn new(label: &'a str, value: &'a str) -> Self {
+        Self { label, value }
+    }
+}
+
+fn validate_remote_batch_command(request: RemoteBatchCommandValidation<'_>) -> Result<(), String> {
+    let context = request.context;
+    let command = request.command;
+    validate_absolute_program(context, &command.program)?;
+    validate_blake3_digest(ConfigField::new(
+        &format!("remote batch dispatcher {:?} {} executable", context.instance_id, context.operation),
         &command.expected_digest_blake3,
-    )?;
-    validate_remote_batch_args(instance_id, operation, &command.args)?;
-    validate_remote_batch_secret_free_args(instance_id, operation, &command.args)?;
+    ))?;
+    validate_remote_batch_args(context, &command.args)?;
+    validate_remote_batch_secret_free_args(context, &command.args)?;
+    debug_assert!(command.program.is_absolute());
+    debug_assert!(!command.expected_digest_blake3.is_empty());
     if command.timeout_secs == 0 || command.timeout_secs > MAX_REMOTE_BATCH_TIMEOUT_SECS {
-        return Err(format!("remote batch dispatcher {instance_id:?} {operation} timeout is invalid"));
+        return Err(format!(
+            "remote batch dispatcher {:?} {} timeout is invalid",
+            context.instance_id, context.operation
+        ));
     }
     if command.stdout_limit_bytes == 0 || command.stdout_limit_bytes > MAX_REMOTE_BATCH_OUTPUT_BYTES {
-        return Err(format!("remote batch dispatcher {instance_id:?} {operation} stdout limit is invalid"));
+        return Err(format!(
+            "remote batch dispatcher {:?} {} stdout limit is invalid",
+            context.instance_id, context.operation
+        ));
     }
     if command.stderr_limit_bytes == 0 || command.stderr_limit_bytes > MAX_REMOTE_BATCH_OUTPUT_BYTES {
-        return Err(format!("remote batch dispatcher {instance_id:?} {operation} stderr limit is invalid"));
+        return Err(format!(
+            "remote batch dispatcher {:?} {} stderr limit is invalid",
+            context.instance_id, context.operation
+        ));
     }
     Ok(())
 }
 
-fn validate_absolute_program(instance_id: &str, operation: &str, program: &std::path::Path) -> Result<(), String> {
+fn validate_absolute_program(
+    context: RemoteBatchOperationContext<'_>,
+    program: &std::path::Path,
+) -> Result<(), String> {
     if !program.is_absolute() {
-        return Err(format!("remote batch dispatcher {instance_id:?} {operation} program must be absolute"));
+        return Err(format!(
+            "remote batch dispatcher {:?} {} program must be absolute",
+            context.instance_id, context.operation
+        ));
     }
     if program.as_os_str().is_empty() {
-        return Err(format!("remote batch dispatcher {instance_id:?} {operation} program is empty"));
+        return Err(format!(
+            "remote batch dispatcher {:?} {} program is empty",
+            context.instance_id, context.operation
+        ));
     }
     Ok(())
 }
 
-fn validate_remote_batch_args(instance_id: &str, operation: &str, args: &[String]) -> Result<(), String> {
+fn validate_remote_batch_args(context: RemoteBatchOperationContext<'_>, args: &[String]) -> Result<(), String> {
     if args.len() > MAX_REMOTE_BATCH_COMMAND_ARGS {
         return Err(format!(
-            "remote batch dispatcher {instance_id:?} {operation} argument count exceeds {MAX_REMOTE_BATCH_COMMAND_ARGS}"
+            "remote batch dispatcher {:?} {} argument count exceeds {MAX_REMOTE_BATCH_COMMAND_ARGS}",
+            context.instance_id, context.operation
         ));
     }
     for arg in args {
         if arg.len() > MAX_REMOTE_BATCH_ARGUMENT_BYTES || arg.chars().any(char::is_control) {
-            return Err(format!("remote batch dispatcher {instance_id:?} {operation} argument is invalid"));
+            return Err(format!(
+                "remote batch dispatcher {:?} {} argument is invalid",
+                context.instance_id, context.operation
+            ));
         }
         if FORBIDDEN_REMOTE_BATCH_SHELL_FRAGMENTS.iter().any(|fragment| arg.contains(fragment)) {
-            return Err(format!("remote batch dispatcher {instance_id:?} {operation} argument contains shell syntax"));
+            return Err(format!(
+                "remote batch dispatcher {:?} {} argument contains shell syntax",
+                context.instance_id, context.operation
+            ));
         }
     }
+    debug_assert!(args.len() <= MAX_REMOTE_BATCH_COMMAND_ARGS);
+    debug_assert!(args.iter().all(|arg| arg.len() <= MAX_REMOTE_BATCH_ARGUMENT_BYTES));
     Ok(())
 }
 
-fn validate_remote_batch_secret_free_args(instance_id: &str, operation: &str, args: &[String]) -> Result<(), String> {
+fn validate_remote_batch_secret_free_args(
+    context: RemoteBatchOperationContext<'_>,
+    args: &[String],
+) -> Result<(), String> {
     for arg in args {
         let normalized = arg.to_ascii_lowercase();
         if FORBIDDEN_REMOTE_BATCH_SECRET_MARKERS.iter().any(|marker| normalized.contains(marker)) {
-            return Err(format!("remote batch dispatcher {instance_id:?} {operation} arguments may not embed secrets"));
+            return Err(format!(
+                "remote batch dispatcher {:?} {} arguments may not embed secrets",
+                context.instance_id, context.operation
+            ));
         }
     }
     Ok(())
@@ -692,18 +862,21 @@ fn validate_remote_batch_limits(dispatcher: &RemoteBatchDispatcherProfile) -> Re
     Ok(())
 }
 
-fn validate_remote_batch_identifier(label: &str, value: &str) -> Result<(), String> {
-    if value.is_empty() || value.len() > MAX_REMOTE_BATCH_ARGUMENT_BYTES || value.chars().any(char::is_control) {
-        return Err(format!("remote batch dispatcher {label} is invalid"));
+fn validate_remote_batch_identifier(field: ConfigField<'_>) -> Result<(), String> {
+    if field.value.is_empty()
+        || field.value.len() > MAX_REMOTE_BATCH_ARGUMENT_BYTES
+        || field.value.chars().any(char::is_control)
+    {
+        return Err(format!("remote batch dispatcher {} is invalid", field.label));
     }
     Ok(())
 }
 
-fn validate_blake3_digest(label: &str, value: &str) -> Result<(), String> {
-    let valid = value.len() == BLAKE3_HEX_LENGTH_CHARS
-        && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
-    if !valid {
-        return Err(format!("{label} digest is not lowercase BLAKE3 hex"));
+fn validate_blake3_digest(field: ConfigField<'_>) -> Result<(), String> {
+    let is_valid = field.value.len() == BLAKE3_HEX_LENGTH_CHARS
+        && field.value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
+    if !is_valid {
+        return Err(format!("{} digest is not lowercase BLAKE3 hex", field.label));
     }
     Ok(())
 }
@@ -712,6 +885,8 @@ pub(crate) fn validate_remote_workspace_policy(policy: &RemoteWorkspacePolicy) -
     if policy.modes.is_empty() || policy.authority_class.is_empty() || policy.guest_paths.is_empty() {
         return Err("modes, authority_class, and guest_paths must be non-empty".to_string());
     }
+    debug_assert!(!policy.modes.is_empty());
+    debug_assert!(!policy.guest_paths.is_empty());
     let mode_count = policy.modes.iter().copied().collect::<std::collections::BTreeSet<_>>().len();
     let guest_count = policy.guest_paths.iter().collect::<std::collections::BTreeSet<_>>().len();
     if mode_count != policy.modes.len() || guest_count != policy.guest_paths.len() {
@@ -724,22 +899,22 @@ pub(crate) fn validate_remote_workspace_policy(policy: &RemoteWorkspacePolicy) -
     {
         return Err("workspace guest paths must be clean paths beneath /build".to_string());
     }
-    let nonzero = policy.workspace_count_max > 0
+    let is_nonzero = policy.workspace_count_max > 0
         && policy.bytes_max > 0
         && policy.files_max > 0
         && policy.snapshots_max > 0
         && policy.idle_generations_max > 0
         && policy.age_generations_max > 0
         && policy.quarantine_count_max > 0;
-    if !nonzero {
+    if !is_nonzero {
         return Err("workspace quotas and retention limits must be positive".to_string());
     }
     Ok(())
 }
 
 pub fn load_remote_build_farm_config(path: &std::path::Path) -> Result<RemoteBuildFarmConfig, String> {
-    let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
-    let config = crunch_eval::evaluate_and_deserialize::<RemoteBuildFarmConfig>(path, &import_paths)
+    let nickel_search_dirs = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+    let config = crunch_eval::evaluate_and_deserialize::<RemoteBuildFarmConfig>(path, &nickel_search_dirs)
         .map_err(|error| format!("evaluating remote build farm configuration: {error}"))?;
     config.validate()?;
     debug_assert!(config.pools.len() <= RemoteBuildFarmConfig::MAX_POOLS);
