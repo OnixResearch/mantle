@@ -34,8 +34,8 @@ pub const OCI_EXPORT_REPORT_FILENAME: &str = "mantle-oci-export-report.json";
 const MEBIBYTE_BYTES: u64 = 1_048_576;
 const OCI_INPUT_LIMIT_MEBIBYTES: u64 = 4;
 const OCI_DOCUMENT_LIMIT_MEBIBYTES: u64 = 4;
-pub const OCI_INPUT_MAX_BYTES: u64 = OCI_INPUT_LIMIT_MEBIBYTES * MEBIBYTE_BYTES;
-pub const OCI_DOCUMENT_MAX_BYTES: u64 = OCI_DOCUMENT_LIMIT_MEBIBYTES * MEBIBYTE_BYTES;
+pub const OCI_INPUT_MAX_BYTES: u64 = OCI_INPUT_LIMIT_MEBIBYTES.saturating_mul(MEBIBYTE_BYTES);
+pub const OCI_DOCUMENT_MAX_BYTES: u64 = OCI_DOCUMENT_LIMIT_MEBIBYTES.saturating_mul(MEBIBYTE_BYTES);
 pub const OCI_BLOB_MAX_BYTES: u64 = 1_073_741_824;
 pub const MANTLE_REF_PREFIX: &str = "mantle://blake3/";
 pub const GENERIC_BLAKE3_REF_PREFIX: &str = "blake3:";
@@ -65,8 +65,8 @@ pub(crate) const FRONTEND_SPEC_HASH_ANNOTATION: &str = "org.mantle.frontend.spec
 
 const HEX_CHARS_PER_BYTE: usize = 2;
 const SHA256_DIGEST_BYTES: usize = 32;
-const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN * HEX_CHARS_PER_BYTE;
-const SHA256_HEX_LENGTH: usize = SHA256_DIGEST_BYTES * HEX_CHARS_PER_BYTE;
+const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE);
+const SHA256_HEX_LENGTH: usize = SHA256_DIGEST_BYTES.saturating_mul(HEX_CHARS_PER_BYTE);
 pub(crate) const OCI_LAYER_MAX_COUNT: usize = 64;
 const MAX_ENTRIES_HARD: usize = 16_384;
 const MAX_DEPTH_HARD: usize = 64;
@@ -119,6 +119,22 @@ const REQUIRED_NON_CLAIMS: &[&str] = &[
     "no signature policy claim",
     "frontend semantics remain external",
 ];
+
+fn absent_string() -> Option<String> {
+    None
+}
+
+fn absent_oci_platform() -> Option<OciPlatform> {
+    None
+}
+
+fn empty_string_map() -> BTreeMap<String, String> {
+    BTreeMap::new()
+}
+
+fn empty_string_list() -> Vec<String> {
+    Vec::new()
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -271,7 +287,7 @@ pub struct ProjectionObjectAdmission {
 #[serde(deny_unknown_fields)]
 pub struct ProjectionAdmission {
     pub validation_result: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_string", skip_serializing_if = "Option::is_none")]
     pub projection_blake3: Option<String>,
     pub no_hidden_fallback: bool,
 }
@@ -292,9 +308,9 @@ pub struct ProjectionLayer {
     pub media_type: String,
     pub mode: LayerMode,
     pub entries: Vec<ProjectionEntry>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_string", skip_serializing_if = "Option::is_none")]
     pub pack_identity: Option<String>,
-    #[serde(default)]
+    #[serde(default = "empty_string_map")]
     pub annotations: BTreeMap<String, String>,
 }
 
@@ -327,11 +343,11 @@ pub struct OciProjection {
     pub archive_policy: ArchivePolicy,
     pub object_admissions: Vec<ProjectionObjectAdmission>,
     pub layers: Vec<ProjectionLayer>,
-    #[serde(default)]
+    #[serde(default = "empty_string_map")]
     pub required_annotations: BTreeMap<String, String>,
     pub expected_external_digests: Vec<ExternalDigestExpectation>,
     pub round_trip: RoundTripExpectation,
-    #[serde(default)]
+    #[serde(default = "empty_string_list")]
     pub non_claims: Vec<String>,
 }
 
@@ -363,9 +379,9 @@ pub struct OciDescriptor {
     pub media_type: String,
     pub digest: String,
     pub size: u64,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default = "empty_string_map", skip_serializing_if = "BTreeMap::is_empty")]
     pub annotations: BTreeMap<String, String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_oci_platform", skip_serializing_if = "Option::is_none")]
     pub platform: Option<OciPlatform>,
 }
 
@@ -398,7 +414,7 @@ pub struct OciManifestDocument {
     pub media_type: String,
     pub config: OciDescriptor,
     pub layers: Vec<OciDescriptor>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default = "empty_string_map", skip_serializing_if = "BTreeMap::is_empty")]
     pub annotations: BTreeMap<String, String>,
 }
 
@@ -475,7 +491,7 @@ pub struct ImportedObjectRecord {
     pub blob_blake3: String,
     pub size_bytes: u64,
     pub archive_profile: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "absent_string", skip_serializing_if = "Option::is_none")]
     pub artifact_ref: Option<String>,
 }
 
@@ -554,17 +570,31 @@ fn safe_text(value: &str) -> bool {
     !value.is_empty() && value.len() <= MAX_TEXT_BYTES && !value.bytes().any(|byte| byte.is_ascii_control())
 }
 
-pub fn safe_relative_path(value: &str, max_depth: usize) -> bool {
-    if value.is_empty()
-        || value.starts_with('/')
-        || value.ends_with('/')
-        || value.contains('\0')
-        || value.contains('\\')
-    {
+fn has_unsafe_path_shape(value: &str) -> bool {
+    if value.is_empty() {
+        return true;
+    }
+    if value.starts_with('/') || value.ends_with('/') {
+        return true;
+    }
+    value.contains('\0') || value.contains('\\')
+}
+
+pub(crate) fn safe_relative_path(value: &str, max_depth: usize) -> bool {
+    if has_unsafe_path_shape(value) {
         return false;
     }
-    let components = value.split('/').collect::<Vec<_>>();
-    components.len() <= max_depth && components.iter().all(|part| !part.is_empty() && *part != "." && *part != "..")
+    let mut component_count = 0_usize;
+    for component in value.split('/') {
+        if component.is_empty() || component == "." || component == ".." {
+            return false;
+        }
+        component_count = component_count.saturating_add(1);
+        if component_count > max_depth {
+            return false;
+        }
+    }
+    true
 }
 
 fn valid_media_type(value: &str) -> bool {
@@ -592,18 +622,27 @@ fn contains_sensitive_fragment(value: &str) -> bool {
     SENSITIVE_ANNOTATION_FRAGMENTS.iter().any(|fragment| lowered.contains(fragment))
 }
 
+struct AnnotationCandidate<'a> {
+    key: &'a str,
+    value: &'a str,
+}
+
+fn is_unsafe_annotation(candidate: AnnotationCandidate<'_>) -> bool {
+    if !safe_text(candidate.key) || !safe_text(candidate.value) {
+        return true;
+    }
+    if contains_sensitive_fragment(candidate.key) || RESERVED_ANNOTATION_KEYS.contains(&candidate.key) {
+        return true;
+    }
+    if candidate.value.starts_with('/') || candidate.value.starts_with("file://") {
+        return true;
+    }
+    contains_overclaim(candidate.value)
+}
+
 fn validate_annotations(annotations: &BTreeMap<String, String>, path: &str, issues: &mut Vec<ProjectionIssue>) {
     for (key, value) in annotations {
-        let sensitive_key = contains_sensitive_fragment(key);
-        let reserved_key = RESERVED_ANNOTATION_KEYS.contains(&key.as_str());
-        let path_like_value = value.starts_with('/') || value.starts_with("file://");
-        if !safe_text(key)
-            || !safe_text(value)
-            || sensitive_key
-            || reserved_key
-            || path_like_value
-            || contains_overclaim(value)
-        {
+        if is_unsafe_annotation(AnnotationCandidate { key, value }) {
             push(
                 issues,
                 issue(
@@ -617,8 +656,11 @@ fn validate_annotations(annotations: &BTreeMap<String, String>, path: &str, issu
 }
 
 fn validate_archive_policy(policy: &ArchivePolicy, issues: &mut Vec<ProjectionIssue>) {
+    assert!(issues.len() <= MAX_ISSUES, "issue collection must remain bounded");
     let expected = ArchivePolicy::default();
-    let valid = policy.schema == expected.schema
+    assert_eq!(expected.schema, CANONICAL_ARCHIVE_SCHEMA);
+    assert!(expected.relative_symlinks_only, "canonical symlinks must stay relative");
+    let is_valid = policy.schema == expected.schema
         && policy.uid == expected.uid
         && policy.gid == expected.gid
         && policy.mtime == expected.mtime
@@ -626,7 +668,7 @@ fn validate_archive_policy(policy: &ArchivePolicy, issues: &mut Vec<ProjectionIs
         && policy.directory_mode == expected.directory_mode
         && policy.symlink_mode == expected.symlink_mode
         && policy.relative_symlinks_only == expected.relative_symlinks_only;
-    if !valid {
+    if !is_valid {
         push(
             issues,
             issue(
@@ -636,10 +678,11 @@ fn validate_archive_policy(policy: &ArchivePolicy, issues: &mut Vec<ProjectionIs
             ),
         );
     }
+    assert!(issues.len() <= MAX_ISSUES, "archive validation must remain bounded");
 }
 
 fn validate_bounds(bounds: &ProjectionBounds, issues: &mut Vec<ProjectionIssue>) {
-    let valid = bounds.max_layers > 0
+    let is_valid = bounds.max_layers > 0
         && bounds.max_layers <= OCI_LAYER_MAX_COUNT
         && bounds.max_entries_per_layer > 0
         && bounds.max_entries_per_layer <= MAX_ENTRIES_HARD
@@ -647,7 +690,7 @@ fn validate_bounds(bounds: &ProjectionBounds, issues: &mut Vec<ProjectionIssue>)
         && bounds.max_depth <= MAX_DEPTH_HARD
         && bounds.max_total_bytes > 0
         && bounds.max_total_bytes <= MAX_TOTAL_BYTES_HARD;
-    if !valid {
+    if !is_valid {
         push(issues, issue("invalid-bounds", "bounds", "projection bounds exceed Mantle hard limits"));
     }
 }
@@ -716,7 +759,9 @@ pub fn reduce_source_admission(admission: &SourceArtifactAdmission) -> Result<Pr
 }
 
 pub fn validate_source_admissions(projection: &OciProjection, bundle: &SourceAdmissionBundle) -> Vec<ProjectionIssue> {
-    let mut issues = Vec::new();
+    let mut issues = Vec::with_capacity(MAX_ISSUES);
+    assert!(issues.is_empty(), "source admission validation must start empty");
+    assert!(issues.capacity() >= MAX_ISSUES, "source admission issues must reserve their bound");
     if bundle.schema != SOURCE_ADMISSION_BUNDLE_SCHEMA {
         push(
             &mut issues,
@@ -746,8 +791,8 @@ pub fn validate_source_admissions(projection: &OciProjection, bundle: &SourceAdm
     let mut source_set = BTreeSet::new();
     for (index, admission) in bundle.admissions.iter().enumerate() {
         let path = format!("source_admissions.admissions[{index}]");
-        let build_root_is_safe = safe_text(&admission.build_root);
-        if !build_root_is_safe || !source_set.insert(admission.artifact_ref.as_str()) {
+        let has_safe_build_root = safe_text(&admission.build_root);
+        if !has_safe_build_root || !source_set.insert(admission.artifact_ref.as_str()) {
             push(
                 &mut issues,
                 issue(
@@ -784,14 +829,25 @@ pub fn validate_source_admissions(projection: &OciProjection, bundle: &SourceAdm
     issues
 }
 
-pub fn validate_projection_structure(projection: &OciProjection) -> Vec<ProjectionIssue> {
-    let mut issues = Vec::new();
+struct ProjectionStructureFacts<'a> {
+    projected_refs: BTreeSet<&'a str>,
+    projected_identities: BTreeMap<&'a str, BTreeSet<&'a str>>,
+    projected_identity_set: BTreeSet<&'a str>,
+}
+
+struct LayerValidationState {
+    roles: BTreeSet<String>,
+    total_declared_bytes: u64,
+}
+
+fn validate_projection_header(projection: &OciProjection, issues: &mut Vec<ProjectionIssue>) {
+    assert!(issues.len() <= MAX_ISSUES, "projection issues must start bounded");
     if projection.schema != OCI_PROJECTION_SCHEMA {
-        push(&mut issues, issue("unknown-schema", "schema", "projection schema is unsupported"));
+        push(issues, issue("unknown-schema", "schema", "projection schema is unsupported"));
     }
     if projection.frontend_spec.hash_algorithm != "blake3" || !is_blake3_hex(&projection.frontend_spec.hash) {
         push(
-            &mut issues,
+            issues,
             issue(
                 "spec-hash-mismatch",
                 "frontend_spec.hash",
@@ -801,20 +857,20 @@ pub fn validate_projection_structure(projection: &OciProjection) -> Vec<Projecti
     }
     if !safe_text(&projection.frontend_spec.id) || !safe_text(&projection.frontend_spec.version) {
         push(
-            &mut issues,
+            issues,
             issue("invalid-spec-binding", "frontend_spec", "spec id and version must be bounded safe text"),
         );
     }
     if projection.admission.validation_result != STATUS_ADMITTED || !projection.admission.no_hidden_fallback {
         push(
-            &mut issues,
+            issues,
             issue("frontend-not-admitted", "admission", "frontend admission and no-hidden-fallback are required"),
         );
     }
     match (projection_identity(projection), projection.admission.projection_blake3.as_deref()) {
         (Ok(actual), Some(declared)) if actual == declared => {}
         _ => push(
-            &mut issues,
+            issues,
             issue(
                 "projection-hash-mismatch",
                 "admission.projection_blake3",
@@ -822,21 +878,22 @@ pub fn validate_projection_structure(projection: &OciProjection) -> Vec<Projecti
             ),
         ),
     }
-    validate_bounds(&projection.bounds, &mut issues);
-    validate_archive_policy(&projection.archive_policy, &mut issues);
+    validate_bounds(&projection.bounds, issues);
+    validate_archive_policy(&projection.archive_policy, issues);
     if !safe_text(&projection.platform.architecture) || !safe_text(&projection.platform.os) {
-        push(&mut issues, issue("invalid-platform", "platform", "OCI platform values must be bounded safe text"));
+        push(issues, issue("invalid-platform", "platform", "OCI platform values must be bounded safe text"));
     }
     if projection.layers.is_empty() || projection.layers.len() > projection.bounds.max_layers {
-        push(
-            &mut issues,
-            issue("invalid-layer-count", "layers", "layer count is empty or exceeds the admitted bound"),
-        );
+        push(issues, issue("invalid-layer-count", "layers", "layer count is empty or exceeds the admitted bound"));
     }
     if projection.required_annotations.len() > MAX_ANNOTATIONS {
-        push(&mut issues, issue("annotation-bound", "required_annotations", "too many annotations"));
+        push(issues, issue("annotation-bound", "required_annotations", "too many annotations"));
     }
-    validate_annotations(&projection.required_annotations, "required_annotations", &mut issues);
+    validate_annotations(&projection.required_annotations, "required_annotations", issues);
+    assert!(issues.len() <= MAX_ISSUES, "projection header issues must remain bounded");
+}
+
+fn projection_structure_facts(projection: &OciProjection) -> ProjectionStructureFacts<'_> {
     let projected_refs = projection
         .layers
         .iter()
@@ -851,14 +908,42 @@ pub fn validate_projection_structure(projection: &OciProjection) -> Vec<Projecti
         .values()
         .flat_map(|identities| identities.iter().copied())
         .collect::<BTreeSet<_>>();
-    let expected_digest_subjects = projection
+    assert!(projected_identities.values().all(|identities| !identities.is_empty()));
+    assert!(projected_identities.keys().all(|object_ref| projected_refs.contains(object_ref)));
+    ProjectionStructureFacts {
+        projected_refs,
+        projected_identities,
+        projected_identity_set,
+    }
+}
+
+fn is_valid_external_digest(expectation: &ExternalDigestExpectation, facts: &ProjectionStructureFacts<'_>) -> bool {
+    if expectation.role != EXPECTED_DIGEST_ROLE_OCI_LAYER_BLOB {
+        return false;
+    }
+    if !safe_text(&expectation.subject_identity) {
+        return false;
+    }
+    if !facts.projected_identity_set.contains(expectation.subject_identity.as_str()) {
+        return false;
+    }
+    is_sha256_digest(&expectation.digest)
+}
+
+fn validate_external_digests(
+    projection: &OciProjection,
+    facts: &ProjectionStructureFacts<'_>,
+    issues: &mut Vec<ProjectionIssue>,
+) {
+    assert!(issues.len() <= MAX_ISSUES, "external digest issues must start bounded");
+    let subjects = projection
         .expected_external_digests
         .iter()
         .map(|expectation| expectation.subject_identity.as_str())
         .collect::<Vec<_>>();
-    if !expected_digest_subjects.windows(PAIR_WINDOW).all(|pair| pair[0] < pair[1]) {
+    if !subjects.windows(PAIR_WINDOW).all(|pair| pair[0] < pair[1]) {
         push(
-            &mut issues,
+            issues,
             issue(
                 "non-canonical-external-digest-order",
                 "expected_external_digests",
@@ -867,13 +952,9 @@ pub fn validate_projection_structure(projection: &OciProjection) -> Vec<Projecti
         );
     }
     for (index, expectation) in projection.expected_external_digests.iter().enumerate() {
-        if expectation.role != EXPECTED_DIGEST_ROLE_OCI_LAYER_BLOB
-            || !safe_text(&expectation.subject_identity)
-            || !projected_identity_set.contains(expectation.subject_identity.as_str())
-            || !is_sha256_digest(&expectation.digest)
-        {
+        if !is_valid_external_digest(expectation, facts) {
             push(
-                &mut issues,
+                issues,
                 issue(
                     "invalid-external-digest",
                     format!("expected_external_digests[{index}]"),
@@ -882,6 +963,72 @@ pub fn validate_projection_structure(projection: &OciProjection) -> Vec<Projecti
             );
         }
     }
+    assert!(issues.len() <= MAX_ISSUES, "external digest issues must remain bounded");
+}
+
+fn has_matching_spec(admission: &ProjectionObjectAdmission, binding: &FrontendSpecBinding) -> bool {
+    admission.spec_id == binding.id
+        && admission.spec_version == binding.version
+        && admission.spec_hash_algorithm == binding.hash_algorithm
+        && admission.spec_hash == binding.hash
+}
+
+fn has_matching_artifact_ref(admission: &ProjectionObjectAdmission) -> bool {
+    let expected_digest = artifact_ref_digest(&admission.artifact_ref).map(|digest| format!("blake3:{digest}"));
+    if admission.artifact_digest.as_ref() != expected_digest.as_ref() {
+        return false;
+    }
+    canonical_mantle_ref(&admission.artifact_ref).as_deref() == Some(admission.artifact_ref.as_str())
+}
+
+fn has_matching_target(admission: &ProjectionObjectAdmission, facts: &ProjectionStructureFacts<'_>) -> bool {
+    admission.target_identity.as_deref().is_some_and(|identity| {
+        facts
+            .projected_identities
+            .get(admission.artifact_ref.as_str())
+            .is_some_and(|identities| identities.contains(identity))
+    })
+}
+
+fn has_safe_validator(admission: &ProjectionObjectAdmission) -> bool {
+    if !safe_text(&admission.validator_kind) || !safe_text(&admission.validator_ref) {
+        return false;
+    }
+    if contains_sensitive_fragment(&admission.validator_ref) {
+        return false;
+    }
+    if admission.validator_ref.starts_with('/') || admission.validator_ref.starts_with("file://") {
+        return false;
+    }
+    true
+}
+
+fn is_valid_object_admission(
+    admission: &ProjectionObjectAdmission,
+    projection: &OciProjection,
+    facts: &ProjectionStructureFacts<'_>,
+) -> bool {
+    if admission.validation_result != STATUS_ADMITTED || !admission.no_hidden_fallback {
+        return false;
+    }
+    if !has_matching_artifact_ref(admission) || !has_matching_spec(admission, &projection.frontend_spec) {
+        return false;
+    }
+    if !has_matching_target(admission, facts) || !has_safe_validator(admission) {
+        return false;
+    }
+    if !safe_text(&admission.artifact_kind) {
+        return false;
+    }
+    is_blake3_hex(&admission.source_attestation_blake3)
+}
+
+fn validate_object_admissions(
+    projection: &OciProjection,
+    facts: &ProjectionStructureFacts<'_>,
+    issues: &mut Vec<ProjectionIssue>,
+) {
+    assert!(issues.len() <= MAX_ISSUES, "object admission issues must start bounded");
     let admission_refs = projection
         .object_admissions
         .iter()
@@ -889,7 +1036,7 @@ pub fn validate_projection_structure(projection: &OciProjection) -> Vec<Projecti
         .collect::<Vec<_>>();
     if !admission_refs.windows(PAIR_WINDOW).all(|pair| pair[0] < pair[1]) {
         push(
-            &mut issues,
+            issues,
             issue(
                 "non-canonical-admission-order",
                 "object_admissions",
@@ -899,46 +1046,22 @@ pub fn validate_projection_structure(projection: &OciProjection) -> Vec<Projecti
     }
     let mut admitted_refs = BTreeSet::new();
     for (index, admission) in projection.object_admissions.iter().enumerate() {
-        let path = format!("object_admissions[{index}]");
-        let expected_digest = artifact_ref_digest(&admission.artifact_ref).map(|digest| format!("blake3:{digest}"));
-        let digest_matches = admission.artifact_digest.as_ref() == expected_digest.as_ref();
-        let spec_matches = admission.spec_id == projection.frontend_spec.id
-            && admission.spec_version == projection.frontend_spec.version
-            && admission.spec_hash_algorithm == projection.frontend_spec.hash_algorithm
-            && admission.spec_hash == projection.frontend_spec.hash;
-        let target_matches = admission.target_identity.as_deref().is_some_and(|identity| {
-            projected_identities
-                .get(admission.artifact_ref.as_str())
-                .is_some_and(|identities| identities.contains(identity))
-        });
-        if admission.validation_result != STATUS_ADMITTED
-            || !admission.no_hidden_fallback
-            || canonical_mantle_ref(&admission.artifact_ref).as_deref() != Some(admission.artifact_ref.as_str())
-            || !digest_matches
-            || !spec_matches
-            || !target_matches
-            || !safe_text(&admission.validator_kind)
-            || !safe_text(&admission.validator_ref)
-            || contains_sensitive_fragment(&admission.validator_ref)
-            || admission.validator_ref.starts_with('/')
-            || admission.validator_ref.starts_with("file://")
-            || !safe_text(&admission.artifact_kind)
-            || !is_blake3_hex(&admission.source_attestation_blake3)
-            || !admitted_refs.insert(admission.artifact_ref.as_str())
-        {
+        let has_valid_fields = is_valid_object_admission(admission, projection, facts);
+        let is_unique = has_valid_fields && admitted_refs.insert(admission.artifact_ref.as_str());
+        if !has_valid_fields || !is_unique {
             push(
-                &mut issues,
+                issues,
                 issue(
                     "invalid-object-admission",
-                    path,
+                    format!("object_admissions[{index}]"),
                     "object admission must uniquely bind the exact spec, Mantle ref, BLAKE3 digest, validator, and no-fallback result",
                 ),
             );
         }
     }
-    if admitted_refs != projected_refs {
+    if admitted_refs != facts.projected_refs {
         push(
-            &mut issues,
+            issues,
             issue(
                 "object-admission-set-mismatch",
                 "object_admissions",
@@ -946,153 +1069,203 @@ pub fn validate_projection_structure(projection: &OciProjection) -> Vec<Projecti
             ),
         );
     }
-    let mut roles = BTreeSet::new();
-    let mut total_declared = 0_u64;
-    let layer_roles = projection.layers.iter().map(|layer| layer.role.as_str()).collect::<Vec<_>>();
-    if !layer_roles.windows(PAIR_WINDOW).all(|pair| pair[0] < pair[1]) {
-        push(&mut issues, issue("non-canonical-layer-order", "layers", "layers must be strictly ordered by role"));
-    }
-    for (layer_index, layer) in projection.layers.iter().enumerate() {
-        let layer_path = format!("layers[{layer_index}]");
-        if !safe_text(&layer.role) || !roles.insert(layer.role.clone()) {
-            push(
-                &mut issues,
-                issue("duplicate-or-invalid-role", &layer_path, "layer roles must be unique bounded text"),
-            );
-        }
-        if !valid_media_type(&layer.media_type) {
-            push(
-                &mut issues,
-                issue("invalid-media-type", format!("{layer_path}.media_type"), "layer media type is invalid"),
-            );
-        }
-        let tar_media = layer.media_type.ends_with(".tar") || layer.media_type.ends_with("+gzip");
-        let archive_media_matches = match projection.archive_policy.compression {
+    assert!(issues.len() <= MAX_ISSUES, "object admission issues must remain bounded");
+}
+
+fn has_matching_layer_media(layer: &ProjectionLayer, compression: CompressionProfile) -> bool {
+    let is_tar_media = layer.media_type.ends_with(".tar") || layer.media_type.ends_with("+gzip");
+    match layer.mode {
+        LayerMode::ExactBlob => !is_tar_media,
+        LayerMode::CanonicalArchive => match compression {
             CompressionProfile::None => layer.media_type.ends_with(".tar"),
             CompressionProfile::GzipDeterministicV1 => layer.media_type.ends_with("+gzip"),
-        };
-        if (layer.mode == LayerMode::CanonicalArchive && !archive_media_matches)
-            || (layer.mode == LayerMode::ExactBlob && tar_media)
-        {
-            push(
-                &mut issues,
-                issue(
-                    "layer-mode-media-mismatch",
-                    format!("{layer_path}.media_type"),
-                    "layer mode, archive compression, and media type disagree",
-                ),
-            );
-        }
-        if layer.annotations.len() > MAX_ANNOTATIONS {
-            push(
-                &mut issues,
-                issue("annotation-bound", format!("{layer_path}.annotations"), "too many layer annotations"),
-            );
-        }
-        validate_annotations(&layer.annotations, &format!("{layer_path}.annotations"), &mut issues);
-        if layer.entries.is_empty() || layer.entries.len() > projection.bounds.max_entries_per_layer {
-            push(
-                &mut issues,
-                issue(
-                    "invalid-entry-count",
-                    format!("{layer_path}.entries"),
-                    "layer entry count is empty or exceeds the admitted bound",
-                ),
-            );
-        }
-        if layer.mode == LayerMode::ExactBlob && layer.entries.len() != 1 {
-            push(
-                &mut issues,
-                issue(
-                    "exact-blob-cardinality",
-                    format!("{layer_path}.entries"),
-                    "exact blob layers require exactly one entry",
-                ),
-            );
-        }
-        let mut paths = BTreeSet::new();
-        let entry_paths = layer.entries.iter().map(|entry| entry.relative_path.as_str()).collect::<Vec<_>>();
-        if !entry_paths.windows(PAIR_WINDOW).all(|pair| pair[0] < pair[1]) {
-            push(
-                &mut issues,
-                issue(
-                    "non-canonical-entry-order",
-                    format!("{layer_path}.entries"),
-                    "entries must be strictly ordered by relative path",
-                ),
-            );
-        }
-        for (entry_index, entry) in layer.entries.iter().enumerate() {
-            let entry_path = format!("{layer_path}.entries[{entry_index}]");
-            if !safe_relative_path(&entry.relative_path, projection.bounds.max_depth)
-                || !paths.insert(entry.relative_path.clone())
-            {
-                push(
-                    &mut issues,
-                    issue("duplicate-or-unsafe-path", entry_path.clone(), "entry path is duplicate or unsafe"),
-                );
-            }
-            if canonical_mantle_ref(&entry.object_ref).as_deref() != Some(entry.object_ref.as_str()) {
-                push(
-                    &mut issues,
-                    issue(
-                        "unsafe-object-ref",
-                        format!("{entry_path}.object_ref"),
-                        "object ref must use mantle://blake3/<lowercase-hex>",
-                    ),
-                );
-            }
-            if !safe_text(&entry.identity) {
-                push(
-                    &mut issues,
-                    issue(
-                        "invalid-frontend-identity",
-                        format!("{entry_path}.identity"),
-                        "frontend identity must be bounded safe text",
-                    ),
-                );
-            }
-            total_declared = total_declared.saturating_add(entry.size_bytes);
-        }
+        },
     }
-    if total_declared > projection.bounds.max_total_bytes {
+}
+
+fn validate_layer_header(
+    layer: &ProjectionLayer,
+    compression: CompressionProfile,
+    layer_path: &str,
+    state: &mut LayerValidationState,
+    issues: &mut Vec<ProjectionIssue>,
+) {
+    assert!(issues.len() <= MAX_ISSUES, "layer header issues must start bounded");
+    let has_safe_role = safe_text(&layer.role);
+    let is_unique_role = has_safe_role && state.roles.insert(layer.role.clone());
+    if !has_safe_role || !is_unique_role {
+        push(issues, issue("duplicate-or-invalid-role", layer_path, "layer roles must be unique bounded text"));
+    }
+    if !valid_media_type(&layer.media_type) {
         push(
-            &mut issues,
+            issues,
+            issue("invalid-media-type", format!("{layer_path}.media_type"), "layer media type is invalid"),
+        );
+    }
+    if !has_matching_layer_media(layer, compression) {
+        push(
+            issues,
+            issue(
+                "layer-mode-media-mismatch",
+                format!("{layer_path}.media_type"),
+                "layer mode, archive compression, and media type disagree",
+            ),
+        );
+    }
+    if layer.annotations.len() > MAX_ANNOTATIONS {
+        push(issues, issue("annotation-bound", format!("{layer_path}.annotations"), "too many layer annotations"));
+    }
+    validate_annotations(&layer.annotations, &format!("{layer_path}.annotations"), issues);
+    assert!(issues.len() <= MAX_ISSUES, "layer header issues must remain bounded");
+}
+
+fn validate_layer_entries(
+    layer: &ProjectionLayer,
+    bounds: &ProjectionBounds,
+    layer_path: &str,
+    state: &mut LayerValidationState,
+    issues: &mut Vec<ProjectionIssue>,
+) {
+    assert!(issues.len() <= MAX_ISSUES, "layer entry issues must start bounded");
+    if layer.entries.is_empty() || layer.entries.len() > bounds.max_entries_per_layer {
+        push(
+            issues,
+            issue(
+                "invalid-entry-count",
+                format!("{layer_path}.entries"),
+                "layer entry count is empty or exceeds the admitted bound",
+            ),
+        );
+    }
+    if layer.mode == LayerMode::ExactBlob && layer.entries.len() != 1 {
+        push(
+            issues,
+            issue(
+                "exact-blob-cardinality",
+                format!("{layer_path}.entries"),
+                "exact blob layers require exactly one entry",
+            ),
+        );
+    }
+    let mut paths = BTreeSet::new();
+    let entry_paths = layer.entries.iter().map(|entry| entry.relative_path.as_str()).collect::<Vec<_>>();
+    if !entry_paths.windows(PAIR_WINDOW).all(|pair| pair[0] < pair[1]) {
+        push(
+            issues,
+            issue(
+                "non-canonical-entry-order",
+                format!("{layer_path}.entries"),
+                "entries must be strictly ordered by relative path",
+            ),
+        );
+    }
+    for (entry_index, entry) in layer.entries.iter().enumerate() {
+        let entry_path = format!("{layer_path}.entries[{entry_index}]");
+        let has_safe_path = safe_relative_path(&entry.relative_path, bounds.max_depth);
+        let is_unique_path = has_safe_path && paths.insert(entry.relative_path.clone());
+        if !has_safe_path || !is_unique_path {
+            push(issues, issue("duplicate-or-unsafe-path", entry_path.clone(), "entry path is duplicate or unsafe"));
+        }
+        if canonical_mantle_ref(&entry.object_ref).as_deref() != Some(entry.object_ref.as_str()) {
+            push(
+                issues,
+                issue(
+                    "unsafe-object-ref",
+                    format!("{entry_path}.object_ref"),
+                    "object ref must use mantle://blake3/<lowercase-hex>",
+                ),
+            );
+        }
+        if !safe_text(&entry.identity) {
+            push(
+                issues,
+                issue(
+                    "invalid-frontend-identity",
+                    format!("{entry_path}.identity"),
+                    "frontend identity must be bounded safe text",
+                ),
+            );
+        }
+        state.total_declared_bytes = state.total_declared_bytes.saturating_add(entry.size_bytes);
+    }
+    assert!(issues.len() <= MAX_ISSUES, "layer entry issues must remain bounded");
+}
+
+fn validate_layers(projection: &OciProjection, issues: &mut Vec<ProjectionIssue>) {
+    assert!(issues.len() <= MAX_ISSUES, "layer issues must start bounded");
+    let layer_roles = projection.layers.iter().map(|layer| layer.role.as_str()).collect::<Vec<_>>();
+    if !layer_roles.windows(PAIR_WINDOW).all(|pair| pair[0] < pair[1]) {
+        push(issues, issue("non-canonical-layer-order", "layers", "layers must be strictly ordered by role"));
+    }
+    let mut state = LayerValidationState {
+        roles: BTreeSet::new(),
+        total_declared_bytes: 0,
+    };
+    for (layer_index, layer) in projection.layers.iter().enumerate() {
+        let layer_path = format!("layers[{layer_index}]");
+        validate_layer_header(layer, projection.archive_policy.compression, &layer_path, &mut state, issues);
+        validate_layer_entries(layer, &projection.bounds, &layer_path, &mut state, issues);
+    }
+    if state.total_declared_bytes > projection.bounds.max_total_bytes {
+        push(
+            issues,
             issue("declared-size-bound", "layers", "declared source bytes exceed the admitted total bound"),
         );
     }
-    let round_trip_identities = std::iter::once(projection.round_trip.kernel_build_identity.as_str())
+    assert!(issues.len() <= MAX_ISSUES, "layer issues must remain bounded");
+}
+
+fn is_strictly_ordered(values: &[String]) -> bool {
+    values.windows(PAIR_WINDOW).all(|pair| pair[0] < pair[1])
+}
+
+fn validate_round_trip(projection: &OciProjection, issues: &mut Vec<ProjectionIssue>) {
+    assert!(issues.len() <= MAX_ISSUES, "round-trip issues must start bounded");
+    let identities = std::iter::once(projection.round_trip.kernel_build_identity.as_str())
         .chain(std::iter::once(projection.round_trip.bundle_identity.as_str()))
         .chain(std::iter::once(projection.round_trip.manifest_identity.as_str()))
         .chain(projection.round_trip.component_identities.iter().map(String::as_str))
-        .chain(projection.round_trip.pack_identities.iter().map(String::as_str))
-        .collect::<Vec<_>>();
-    if round_trip_identities.iter().any(|identity| !safe_text(identity)) {
+        .chain(projection.round_trip.pack_identities.iter().map(String::as_str));
+    if identities.into_iter().any(|identity| !safe_text(identity)) {
         push(
-            &mut issues,
+            issues,
             issue("unsafe-round-trip-identity", "round_trip", "round-trip identities must be bounded safe text"),
         );
     }
-    if !projection.round_trip.component_identities.windows(PAIR_WINDOW).all(|pair| pair[0] < pair[1])
-        || !projection.round_trip.pack_identities.windows(PAIR_WINDOW).all(|pair| pair[0] < pair[1])
-        || !projection.non_claims.windows(PAIR_WINDOW).all(|pair| pair[0] < pair[1])
-    {
+    let has_ordered_components = is_strictly_ordered(&projection.round_trip.component_identities);
+    let has_ordered_packs = is_strictly_ordered(&projection.round_trip.pack_identities);
+    let has_ordered_non_claims = is_strictly_ordered(&projection.non_claims);
+    if !has_ordered_components || !has_ordered_packs || !has_ordered_non_claims {
         push(
-            &mut issues,
+            issues,
             issue("non-canonical-list-order", "round_trip", "identity and non-claim lists must be sorted and unique"),
         );
     }
     for required in REQUIRED_NON_CLAIMS {
         if !projection.non_claims.iter().any(|claim| claim == required) {
-            push(&mut issues, issue("missing-non-claim", "non_claims", required));
+            push(issues, issue("missing-non-claim", "non_claims", required));
         }
     }
     if projection.non_claims.iter().any(|claim| !safe_text(claim) || contains_overclaim(claim)) {
         push(
-            &mut issues,
+            issues,
             issue("unsafe-non-claim", "non_claims", "non-claims must be bounded, safe, and non-promotional text"),
         );
     }
+    assert!(issues.len() <= MAX_ISSUES, "round-trip issues must remain bounded");
+}
+
+pub fn validate_projection_structure(projection: &OciProjection) -> Vec<ProjectionIssue> {
+    let mut issues = Vec::with_capacity(MAX_ISSUES);
+    assert!(issues.is_empty(), "projection validation must start empty");
+    assert!(issues.capacity() >= MAX_ISSUES, "projection issues must reserve their bound");
+    validate_projection_header(projection, &mut issues);
+    let facts = projection_structure_facts(projection);
+    validate_external_digests(projection, &facts, &mut issues);
+    validate_object_admissions(projection, &facts, &mut issues);
+    validate_layers(projection, &mut issues);
+    validate_round_trip(projection, &mut issues);
+    assert!(issues.len() <= MAX_ISSUES, "projection issues must remain bounded");
     issues
 }
 
@@ -1118,7 +1291,11 @@ pub fn build_export_plan(
     objects: &BTreeMap<String, MaterializedObject>,
 ) -> Result<ExportPlan, Vec<ProjectionIssue>> {
     let mut issues = validate_projection(projection, spec_material);
-    issues.extend(validate_source_admissions(projection, source_admissions));
+    assert!(issues.len() <= MAX_ISSUES, "projection issues must be bounded before source admission");
+    for source_issue in validate_source_admissions(projection, source_admissions) {
+        push(&mut issues, source_issue);
+    }
+    assert!(issues.len() <= MAX_ISSUES, "combined admission issues must remain bounded");
     let expected_refs = projection
         .layers
         .iter()
@@ -1170,7 +1347,9 @@ pub fn export_report(plan: &ExportPlan) -> Result<OciExportReport, String> {
     let object_admissions_blake3 = domain_hash(OBJECT_ADMISSION_HASH_DOMAIN, &[&admission_bytes]);
     let mut non_claims = REQUIRED_NON_CLAIMS.iter().map(ToString::to_string).collect::<Vec<_>>();
     non_claims.sort();
-    let mut report = OciExportReport {
+    assert!(!non_claims.is_empty(), "export reports must retain explicit non-claims");
+    assert!(is_strictly_ordered(&non_claims), "export report non-claims must be canonical");
+    let mut document = OciExportReport {
         schema: OCI_EXPORT_REPORT_SCHEMA.to_string(),
         schema_version: SCHEMA_VERSION,
         exported: true,
@@ -1189,8 +1368,8 @@ pub fn export_report(plan: &ExportPlan) -> Result<OciExportReport, String> {
         non_claims,
         receipt_blake3: String::new(),
     };
-    report.receipt_blake3 = report_identity(EXPORT_HASH_DOMAIN, &report)?;
-    Ok(report)
+    document.receipt_blake3 = report_identity(EXPORT_HASH_DOMAIN, &document)?;
+    Ok(document)
 }
 
 pub fn report_identity<T>(domain: &str, report: &T) -> Result<String, String>
@@ -1199,85 +1378,192 @@ where T: Serialize {
     Ok(domain_hash(domain, &[&bytes]))
 }
 
+fn has_matching_projection_header(report: &OciExportReport) -> bool {
+    if !validate_projection_structure(&report.projection).is_empty() {
+        return false;
+    }
+    if !projection_identity(&report.projection).is_ok_and(|identity| identity == report.projection_blake3) {
+        return false;
+    }
+    if report.projection.schema != OCI_PROJECTION_SCHEMA || report.projection.frontend_spec != report.frontend_spec {
+        return false;
+    }
+    if report.projection.admission.projection_blake3.as_deref() != Some(report.projection_blake3.as_str()) {
+        return false;
+    }
+    report.projection.admission.no_hidden_fallback == report.no_hidden_fallback
+}
+
+fn has_matching_projection_counts(report: &OciExportReport, admissions_identity: &str) -> bool {
+    if report.projection.object_admissions.len() != report.admission_count {
+        return false;
+    }
+    if admissions_identity != report.object_admissions_blake3 {
+        return false;
+    }
+    if report.projection.round_trip != report.round_trip {
+        return false;
+    }
+    report.projection.layers.len() == report.layers.len()
+}
+
+fn has_matching_layer_sources(projection_layer: &ProjectionLayer, report_layer: &LayerDigestRecord) -> bool {
+    let has_matching_refs = projection_layer
+        .entries
+        .iter()
+        .map(|entry| entry.object_ref.as_str())
+        .eq(report_layer.source_object_refs.iter().map(String::as_str));
+    let has_matching_identities = projection_layer
+        .entries
+        .iter()
+        .map(|entry| entry.identity.as_str())
+        .eq(report_layer.source_identities.iter().map(String::as_str));
+    has_matching_refs && has_matching_identities
+}
+
+fn has_matching_layer_record(
+    projection_layer: &ProjectionLayer,
+    report_layer: &LayerDigestRecord,
+    compression: CompressionProfile,
+) -> bool {
+    if projection_layer.role != report_layer.role || projection_layer.media_type != report_layer.media_type {
+        return false;
+    }
+    if !has_matching_layer_sources(projection_layer, report_layer) {
+        return false;
+    }
+    let is_expected_archive = projection_layer.mode == LayerMode::CanonicalArchive;
+    let expected_compression = if is_expected_archive {
+        compression
+    } else {
+        CompressionProfile::None
+    };
+    is_expected_archive == report_layer.canonical_archive && expected_compression == report_layer.compression
+}
+
+fn has_matching_layer_records(report: &OciExportReport) -> bool {
+    if report.projection.layers.len() != report.layers.len() {
+        return false;
+    }
+    let compression = report.projection.archive_policy.compression;
+    report
+        .projection
+        .layers
+        .iter()
+        .zip(&report.layers)
+        .all(|(projection_layer, report_layer)| has_matching_layer_record(projection_layer, report_layer, compression))
+}
+
+fn has_matching_external_digest(expectation: &ExternalDigestExpectation, layers: &[LayerDigestRecord]) -> bool {
+    let mut matching_layers =
+        layers.iter().filter(|layer| layer.source_identities.contains(&expectation.subject_identity));
+    let Some(matching_layer) = matching_layers.next() else {
+        return false;
+    };
+    if matching_layers.next().is_some() {
+        return false;
+    }
+    matching_layer.blob_sha256 == expectation.digest
+}
+
+fn has_matching_external_digests(report: &OciExportReport) -> bool {
+    report
+        .projection
+        .expected_external_digests
+        .iter()
+        .all(|expectation| has_matching_external_digest(expectation, &report.layers))
+}
+
+fn has_valid_projection_material(report: &OciExportReport, admissions_identity: &str) -> bool {
+    if !has_matching_projection_header(report) || !has_matching_projection_counts(report, admissions_identity) {
+        return false;
+    }
+    if !has_matching_layer_records(report) {
+        return false;
+    }
+    has_matching_external_digests(report)
+}
+
+fn has_valid_layer_sources(layer: &LayerDigestRecord) -> bool {
+    if layer.source_object_refs.is_empty() || layer.source_object_refs.len() != layer.source_identities.len() {
+        return false;
+    }
+    if !layer
+        .source_object_refs
+        .iter()
+        .all(|value| canonical_mantle_ref(value).as_deref() == Some(value.as_str()))
+    {
+        return false;
+    }
+    layer.source_identities.iter().all(|value| safe_text(value))
+}
+
+fn has_valid_layer_record(layer: &LayerDigestRecord) -> bool {
+    if !safe_text(&layer.role) || !valid_media_type(&layer.media_type) {
+        return false;
+    }
+    if !is_sha256_digest(&layer.uncompressed_sha256) || !is_sha256_digest(&layer.blob_sha256) {
+        return false;
+    }
+    if !is_blake3_hex(&layer.blob_blake3) {
+        return false;
+    }
+    has_valid_layer_sources(layer)
+}
+
+fn has_valid_layer_records(report: &OciExportReport) -> bool {
+    !report.layers.is_empty() && report.layers.iter().all(has_valid_layer_record)
+}
+
+fn has_required_non_claims(non_claims: &[String]) -> bool {
+    let has_required = REQUIRED_NON_CLAIMS.iter().all(|required| non_claims.iter().any(|value| value == required));
+    let has_safe_values = non_claims.iter().all(|value| safe_text(value) && !contains_overclaim(value));
+    has_required && has_safe_values
+}
+
+fn has_valid_export_status(report: &OciExportReport) -> bool {
+    if report.schema != OCI_EXPORT_REPORT_SCHEMA || report.schema_version != SCHEMA_VERSION {
+        return false;
+    }
+    if !report.exported || report.admission_count == 0 {
+        return false;
+    }
+    if !report.no_hidden_fallback {
+        return false;
+    }
+    report.issues.is_empty()
+}
+
+fn has_valid_export_digests(report: &OciExportReport) -> bool {
+    if report.frontend_spec.hash_algorithm != "blake3" || !is_blake3_hex(&report.frontend_spec.hash) {
+        return false;
+    }
+    if !is_blake3_hex(&report.projection_blake3) || !is_blake3_hex(&report.layout_blake3) {
+        return false;
+    }
+    if !is_blake3_hex(&report.object_admissions_blake3) {
+        return false;
+    }
+    is_sha256_digest(&report.manifest_descriptor.digest) && is_sha256_digest(&report.config_descriptor.digest)
+}
+
+fn has_valid_export_report(report: &OciExportReport, admissions_identity: &str) -> bool {
+    if !has_valid_export_status(report) || !has_valid_export_digests(report) {
+        return false;
+    }
+    if !has_valid_projection_material(report, admissions_identity) || !has_valid_layer_records(report) {
+        return false;
+    }
+    has_required_non_claims(&report.non_claims)
+}
+
 pub fn verify_export_report(report: &OciExportReport) -> Result<(), ProjectionIssue> {
+    assert!(!OBJECT_ADMISSION_HASH_DOMAIN.is_empty(), "admission hash domain must stay explicit");
+    assert!(!EXPORT_HASH_DOMAIN.is_empty(), "export hash domain must stay explicit");
     let admission_bytes = serde_json::to_vec(&report.projection.object_admissions)
         .map_err(|error| issue("report-serialization", OCI_EXPORT_REPORT_FILENAME, &error.to_string()))?;
     let admissions_identity = domain_hash(OBJECT_ADMISSION_HASH_DOMAIN, &[&admission_bytes]);
-    let projection_material_valid = validate_projection_structure(&report.projection).is_empty()
-        && projection_identity(&report.projection).is_ok_and(|identity| identity == report.projection_blake3)
-        && report.projection.schema == OCI_PROJECTION_SCHEMA
-        && report.projection.frontend_spec == report.frontend_spec
-        && report.projection.admission.projection_blake3.as_deref() == Some(report.projection_blake3.as_str())
-        && report.projection.admission.no_hidden_fallback == report.no_hidden_fallback
-        && report.projection.object_admissions.len() == report.admission_count
-        && admissions_identity == report.object_admissions_blake3
-        && report.projection.round_trip == report.round_trip
-        && report.projection.layers.len() == report.layers.len()
-        && report.projection.layers.iter().zip(&report.layers).all(|(projection_layer, report_layer)| {
-            let expected_archive = projection_layer.mode == LayerMode::CanonicalArchive;
-            let expected_compression = if expected_archive {
-                report.projection.archive_policy.compression
-            } else {
-                CompressionProfile::None
-            };
-            projection_layer.role == report_layer.role
-                && projection_layer.media_type == report_layer.media_type
-                && projection_layer
-                    .entries
-                    .iter()
-                    .map(|entry| entry.object_ref.as_str())
-                    .eq(report_layer.source_object_refs.iter().map(String::as_str))
-                && projection_layer
-                    .entries
-                    .iter()
-                    .map(|entry| entry.identity.as_str())
-                    .eq(report_layer.source_identities.iter().map(String::as_str))
-                && expected_archive == report_layer.canonical_archive
-                && expected_compression == report_layer.compression
-        })
-        && report.projection.expected_external_digests.iter().all(|expectation| {
-            let matching_layers = report
-                .layers
-                .iter()
-                .filter(|layer| layer.source_identities.contains(&expectation.subject_identity))
-                .collect::<Vec<_>>();
-            matching_layers.len() == 1 && matching_layers[0].blob_sha256 == expectation.digest
-        });
-    let layer_fields_valid = !report.layers.is_empty()
-        && report.layers.iter().all(|layer| {
-            safe_text(&layer.role)
-                && valid_media_type(&layer.media_type)
-                && is_sha256_digest(&layer.uncompressed_sha256)
-                && is_sha256_digest(&layer.blob_sha256)
-                && is_blake3_hex(&layer.blob_blake3)
-                && !layer.source_object_refs.is_empty()
-                && layer.source_object_refs.len() == layer.source_identities.len()
-                && layer
-                    .source_object_refs
-                    .iter()
-                    .all(|value| canonical_mantle_ref(value).as_deref() == Some(value.as_str()))
-                && layer.source_identities.iter().all(|value| safe_text(value))
-        });
-    let non_claims_valid =
-        REQUIRED_NON_CLAIMS.iter().all(|required| report.non_claims.iter().any(|value| value == required))
-            && report.non_claims.iter().all(|value| safe_text(value) && !contains_overclaim(value));
-    if report.schema != OCI_EXPORT_REPORT_SCHEMA
-        || report.schema_version != SCHEMA_VERSION
-        || !report.exported
-        || report.frontend_spec.hash_algorithm != "blake3"
-        || !is_blake3_hex(&report.frontend_spec.hash)
-        || !is_blake3_hex(&report.projection_blake3)
-        || !is_blake3_hex(&report.layout_blake3)
-        || report.admission_count == 0
-        || !is_blake3_hex(&report.object_admissions_blake3)
-        || !report.no_hidden_fallback
-        || !projection_material_valid
-        || !is_sha256_digest(&report.manifest_descriptor.digest)
-        || !is_sha256_digest(&report.config_descriptor.digest)
-        || !layer_fields_valid
-        || !non_claims_valid
-        || !report.issues.is_empty()
-    {
+    if !has_valid_export_report(report, &admissions_identity) {
         return Err(issue(
             "invalid-export-report",
             OCI_EXPORT_REPORT_FILENAME,
@@ -1321,44 +1607,77 @@ pub fn attach_imported_refs(
     Ok(())
 }
 
-pub fn verify_import_report(report: &OciImportReport) -> Result<(), String> {
-    let state_fields_valid = if report.state == STATUS_ADMITTED {
-        report.frontend_spec.is_some()
-            && report.object_admissions_blake3.as_deref().is_some_and(is_blake3_hex)
-            && report.projection_blake3.as_deref().is_some_and(is_blake3_hex)
-            && report.round_trip.is_some()
-    } else if report.state == STATUS_COMPATIBILITY_ONLY {
-        report.frontend_spec.is_none()
-            && report.object_admissions_blake3.is_none()
-            && report.projection_blake3.is_none()
-            && report.round_trip.is_none()
-    } else {
-        false
+fn has_admitted_import_fields(report: &OciImportReport) -> bool {
+    if report.frontend_spec.is_none() || report.round_trip.is_none() {
+        return false;
+    }
+    if !report.object_admissions_blake3.as_deref().is_some_and(is_blake3_hex) {
+        return false;
+    }
+    report.projection_blake3.as_deref().is_some_and(is_blake3_hex)
+}
+
+fn has_compatibility_import_fields(report: &OciImportReport) -> bool {
+    if report.frontend_spec.is_some() || report.round_trip.is_some() {
+        return false;
+    }
+    if report.object_admissions_blake3.is_some() {
+        return false;
+    }
+    report.projection_blake3.is_none()
+}
+
+fn has_valid_import_state(report: &OciImportReport) -> bool {
+    match report.state.as_str() {
+        STATUS_ADMITTED => has_admitted_import_fields(report),
+        STATUS_COMPATIBILITY_ONLY => has_compatibility_import_fields(report),
+        _ => false,
+    }
+}
+
+fn has_valid_import_object(object: &ImportedObjectRecord) -> bool {
+    if !safe_text(&object.role) || !valid_media_type(&object.media_type) {
+        return false;
+    }
+    if !is_sha256_digest(&object.oci_sha256) || !is_blake3_hex(&object.blob_blake3) {
+        return false;
+    }
+    object
+        .artifact_ref
+        .as_deref()
+        .is_some_and(|value| canonical_mantle_ref(value).as_deref() == Some(value))
+}
+
+fn has_valid_import_status(report: &OciImportReport) -> bool {
+    if report.schema != OCI_IMPORT_REPORT_SCHEMA || report.schema_version != SCHEMA_VERSION {
+        return false;
+    }
+    if !report.imported || !is_blake3_hex(&report.layout_blake3) {
+        return false;
+    }
+    let Some(manifest_descriptor) = report.manifest_descriptor.as_ref() else {
+        return false;
     };
-    let objects_valid = !report.objects.is_empty()
-        && report.objects.iter().all(|object| {
-            safe_text(&object.role)
-                && valid_media_type(&object.media_type)
-                && is_sha256_digest(&object.oci_sha256)
-                && is_blake3_hex(&object.blob_blake3)
-                && object
-                    .artifact_ref
-                    .as_deref()
-                    .is_some_and(|value| canonical_mantle_ref(value).as_deref() == Some(value))
-        });
-    let non_claims_valid =
-        REQUIRED_NON_CLAIMS.iter().all(|required| report.non_claims.iter().any(|value| value == required))
-            && report.non_claims.iter().all(|value| safe_text(value) && !contains_overclaim(value));
-    if report.schema != OCI_IMPORT_REPORT_SCHEMA
-        || report.schema_version != SCHEMA_VERSION
-        || !report.imported
-        || !is_blake3_hex(&report.layout_blake3)
-        || report.manifest_descriptor.as_ref().is_none_or(|descriptor| !is_sha256_digest(&descriptor.digest))
-        || !state_fields_valid
-        || !objects_valid
-        || !non_claims_valid
-        || !report.issues.is_empty()
-    {
+    if !is_sha256_digest(&manifest_descriptor.digest) {
+        return false;
+    }
+    report.issues.is_empty()
+}
+
+fn has_valid_import_report(report: &OciImportReport) -> bool {
+    if !has_valid_import_status(report) || !has_valid_import_state(report) {
+        return false;
+    }
+    if report.objects.is_empty() || !report.objects.iter().all(has_valid_import_object) {
+        return false;
+    }
+    has_required_non_claims(&report.non_claims)
+}
+
+pub fn verify_import_report(report: &OciImportReport) -> Result<(), String> {
+    assert!(!OCI_IMPORT_REPORT_SCHEMA.is_empty(), "import report schema must stay explicit");
+    assert!(!IMPORT_HASH_DOMAIN.is_empty(), "import hash domain must stay explicit");
+    if !has_valid_import_report(report) {
         return Err("import report structure or state fields are invalid".to_string());
     }
     let mut material = report.clone();
