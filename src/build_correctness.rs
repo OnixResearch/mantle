@@ -279,20 +279,41 @@ pub(crate) struct ReuseAdmissionReport {
     pub(crate) diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Copy)]
+struct ValidationField<'a> {
+    name: &'a str,
+    value: &'a str,
+}
+
 pub(crate) fn canonical_action_spec(input: MantleActionSpecInput) -> Result<MantleActionSpec, String> {
-    validate_required("action_kind", &input.action_kind)?;
-    validate_required("platform", &input.platform)?;
+    validate_required(ValidationField {
+        name: "action_kind",
+        value: &input.action_kind,
+    })?;
+    validate_required(ValidationField {
+        name: "platform",
+        value: &input.platform,
+    })?;
     validate_ref_list("toolchain_refs", &input.toolchain_refs)?;
     validate_ref_list("input_object_refs", &input.input_object_refs)?;
-    validate_digest("args_digest_blake3", &input.args_digest_blake3)?;
-    validate_digest("env_digest_blake3", &input.env_digest_blake3)?;
+    validate_digest(ValidationField {
+        name: "args_digest_blake3",
+        value: &input.args_digest_blake3,
+    })?;
+    validate_digest(ValidationField {
+        name: "env_digest_blake3",
+        value: &input.env_digest_blake3,
+    })?;
     if let Some(digest) = &input.determinism_policy_digest_blake3 {
-        validate_digest("determinism_policy_digest_blake3", digest)?;
+        validate_digest(ValidationField {
+            name: "determinism_policy_digest_blake3",
+            value: digest,
+        })?;
     }
     let output_declarations = sorted_unique_structs(input.output_declarations.clone());
     let hashable = action_hashable(&input, &output_declarations);
-    let action_ref = prefixed_digest(ACTION_REF_PREFIX, &hashable)?;
-    Ok(MantleActionSpec {
+    let action_ref = prefixed_digest(ACTION_REF_PREFIX, &hashable);
+    let action_spec = MantleActionSpec {
         schema: ACTION_SPEC_SCHEMA.to_string(),
         action_ref,
         action_kind: input.action_kind,
@@ -308,7 +329,10 @@ pub(crate) fn canonical_action_spec(input: MantleActionSpecInput) -> Result<Mant
         expected_reference_policy: normalize_reference_policy(input.expected_reference_policy),
         frontend_spec_refs: sorted_unique_strings(input.frontend_spec_refs),
         nickel_eval_ref: input.nickel_eval_ref,
-    })
+    };
+    debug_assert_eq!(action_spec.schema, ACTION_SPEC_SCHEMA);
+    debug_assert!(action_spec.action_ref.starts_with(ACTION_REF_PREFIX));
+    Ok(action_spec)
 }
 
 fn action_hashable(input: &MantleActionSpecInput, output_declarations: &[OutputDeclaration]) -> serde_json::Value {
@@ -331,11 +355,23 @@ fn action_hashable(input: &MantleActionSpecInput, output_declarations: &[OutputD
 }
 
 pub(crate) fn canonical_nickel_eval_receipt(input: NickelEvalReceiptInput) -> Result<NickelEvalReceipt, String> {
-    validate_ref("root_src_ref", &input.root_src_ref)?;
+    validate_ref(ValidationField {
+        name: "root_src_ref",
+        value: &input.root_src_ref,
+    })?;
     validate_ref_list("transitive_dep_refs", &input.transitive_dep_refs)?;
-    validate_ref("evaluator_ref", &input.evaluator_ref)?;
-    validate_required("export_format", &input.export_format)?;
-    validate_digest("output_digest_blake3", &input.output_digest_blake3)?;
+    validate_ref(ValidationField {
+        name: "evaluator_ref",
+        value: &input.evaluator_ref,
+    })?;
+    validate_required(ValidationField {
+        name: "export_format",
+        value: &input.export_format,
+    })?;
+    validate_digest(ValidationField {
+        name: "output_digest_blake3",
+        value: &input.output_digest_blake3,
+    })?;
     let hashable = serde_json::json!({
         "schema": NICKEL_EVAL_RECEIPT_SCHEMA,
         "root_src_ref": input.root_src_ref,
@@ -345,8 +381,8 @@ pub(crate) fn canonical_nickel_eval_receipt(input: NickelEvalReceiptInput) -> Re
         "export_format": input.export_format,
         "output_digest_blake3": input.output_digest_blake3,
     });
-    let eval_ref = prefixed_digest(NICKEL_EVAL_REF_PREFIX, &hashable)?;
-    Ok(NickelEvalReceipt {
+    let eval_ref = prefixed_digest(NICKEL_EVAL_REF_PREFIX, &hashable);
+    let eval_receipt = NickelEvalReceipt {
         schema: NICKEL_EVAL_RECEIPT_SCHEMA.to_string(),
         eval_ref,
         root_src_ref: input.root_src_ref,
@@ -355,12 +391,23 @@ pub(crate) fn canonical_nickel_eval_receipt(input: NickelEvalReceiptInput) -> Re
         evaluator_ref: input.evaluator_ref,
         export_format: input.export_format,
         output_digest_blake3: input.output_digest_blake3,
-    })
+    };
+    debug_assert_eq!(eval_receipt.schema, NICKEL_EVAL_RECEIPT_SCHEMA);
+    debug_assert!(eval_receipt.eval_ref.starts_with(NICKEL_EVAL_REF_PREFIX));
+    Ok(eval_receipt)
 }
 
 pub(crate) fn validate_nickel_imports(declared_refs: &[String], observed_refs: &[String]) -> Result<(), Vec<String>> {
+    if declared_refs.len() > MAX_DECLARED_REFS {
+        return Err(vec!["too-many-declared-imports".to_string()]);
+    }
+    if observed_refs.len() > MAX_REFERENCE_OBSERVATIONS {
+        return Err(vec!["too-many-observed-imports".to_string()]);
+    }
+    debug_assert!(declared_refs.len() <= MAX_DECLARED_REFS);
+    debug_assert!(observed_refs.len() <= MAX_REFERENCE_OBSERVATIONS);
     let declared = declared_refs.iter().collect::<BTreeSet<_>>();
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(observed_refs.len());
     for observed in observed_refs {
         if !declared.contains(observed) {
             diagnostics.push(format!("undeclared-import:{observed}"));
@@ -378,8 +425,8 @@ pub(crate) fn admit_cas_object(input: CasObjectManifestInput) -> Result<CasObjec
     validate_path_views(&input.path_views)?;
     let children = sorted_unique_structs(input.children.clone());
     let hashable = object_hashable(&input, &children);
-    let object_ref = prefixed_digest(OBJECT_REF_PREFIX, &hashable)?;
-    Ok(CasObjectManifest {
+    let object_ref = prefixed_digest(OBJECT_REF_PREFIX, &hashable);
+    let object_manifest = CasObjectManifest {
         schema: OBJECT_MANIFEST_SCHEMA.to_string(),
         object_ref,
         kind: input.kind,
@@ -391,7 +438,10 @@ pub(crate) fn admit_cas_object(input: CasObjectManifestInput) -> Result<CasObjec
         children,
         secret_descriptor: input.secret_descriptor,
         path_views: sorted_unique_strings(input.path_views),
-    })
+    };
+    debug_assert_eq!(object_manifest.schema, OBJECT_MANIFEST_SCHEMA);
+    debug_assert!(object_manifest.object_ref.starts_with(OBJECT_REF_PREFIX));
+    Ok(object_manifest)
 }
 
 fn object_hashable(input: &CasObjectManifestInput, children: &[DirectoryChild]) -> serde_json::Value {
@@ -409,15 +459,22 @@ fn object_hashable(input: &CasObjectManifestInput, children: &[DirectoryChild]) 
 }
 
 fn validate_object_identity(input: &CasObjectManifestInput) -> Result<(), String> {
-    validate_required("kind", &input.kind)?;
-    match input.kind.as_str() {
+    validate_required(ValidationField {
+        name: "kind",
+        value: &input.kind,
+    })?;
+    let validation = match input.kind.as_str() {
         FILE_OBJECT_KIND | GENERATED_PAYLOAD_OBJECT_KIND => {
             let digest = input.content_digest_blake3.as_deref().ok_or("path-only identity is not accepted")?;
-            validate_digest("content_digest_blake3", digest)?;
+            validate_digest(ValidationField {
+                name: "content_digest_blake3",
+                value: digest,
+            })?;
             if input.byte_count.is_none() {
-                return Err("byte_count is required for byte objects".to_string());
+                Err("byte_count is required for byte objects".to_string())
+            } else {
+                Ok(())
             }
-            Ok(())
         }
         DIRECTORY_OBJECT_KIND => {
             if input.children.is_empty() {
@@ -428,22 +485,44 @@ fn validate_object_identity(input: &CasObjectManifestInput) -> Result<(), String
                 &input.children.iter().map(|child| child.object_ref.clone()).collect(),
             )
         }
-        SYMLINK_OBJECT_KIND => {
-            validate_required("symlink_target", input.symlink_target.as_deref().unwrap_or(EMPTY_DIGEST_INPUT))
-        }
+        SYMLINK_OBJECT_KIND => validate_required(ValidationField {
+            name: "symlink_target",
+            value: input.symlink_target.as_deref().unwrap_or(EMPTY_DIGEST_INPUT),
+        }),
         SECRET_DESCRIPTOR_KIND => input
             .secret_descriptor
             .as_ref()
             .map(validate_secret_descriptor)
             .unwrap_or_else(|| Err("redacted secret object requires descriptor metadata".to_string())),
         _ => Err(format!("unsupported object kind `{}`", input.kind)),
+    };
+    if validation.is_ok() {
+        debug_assert!(!input.kind.is_empty());
+        debug_assert!(matches!(
+            input.kind.as_str(),
+            FILE_OBJECT_KIND
+                | GENERATED_PAYLOAD_OBJECT_KIND
+                | DIRECTORY_OBJECT_KIND
+                | SYMLINK_OBJECT_KIND
+                | SECRET_DESCRIPTOR_KIND
+        ));
     }
+    validation
 }
 
 fn validate_secret_descriptor(descriptor: &RedactedSecretDescriptor) -> Result<(), String> {
-    validate_ref("secret_descriptor.descriptor_ref", &descriptor.descriptor_ref)?;
-    validate_required("secret_descriptor.purpose", &descriptor.purpose)?;
-    validate_required("secret_descriptor.redaction", &descriptor.redaction)
+    validate_ref(ValidationField {
+        name: "secret_descriptor.descriptor_ref",
+        value: &descriptor.descriptor_ref,
+    })?;
+    validate_required(ValidationField {
+        name: "secret_descriptor.purpose",
+        value: &descriptor.purpose,
+    })?;
+    validate_required(ValidationField {
+        name: "secret_descriptor.redaction",
+        value: &descriptor.redaction,
+    })
 }
 
 pub(crate) fn validate_hermetic_policy(
@@ -481,8 +560,7 @@ fn sandbox_report(
     });
     SandboxReport {
         schema: SANDBOX_REPORT_SCHEMA.to_string(),
-        sandbox_report_ref: prefixed_digest(SANDBOX_REPORT_REF_PREFIX, &hashable)
-            .expect("sandbox report is serializable"),
+        sandbox_report_ref: prefixed_digest(SANDBOX_REPORT_REF_PREFIX, &hashable),
         sandbox_policy,
         network_policy,
         enforcement_status: enforcement_status.to_string(),
@@ -496,11 +574,11 @@ pub(crate) fn validate_reference_scan(
     let diagnostics = reference_scan_diagnostics(&input);
     let accepted_refs = accepted_reference_values(&input.observations);
     let status = if diagnostics.is_empty() { "accepted" } else { "rejected" };
-    let report = reference_scan_report(input, status, accepted_refs, diagnostics);
-    if report.diagnostics.is_empty() {
-        Ok(report)
+    let scan_result = reference_scan_report(input, status, accepted_refs, diagnostics);
+    if scan_result.diagnostics.is_empty() {
+        Ok(scan_result)
     } else {
-        Err(Box::new(report))
+        Err(Box::new(scan_result))
     }
 }
 
@@ -562,30 +640,42 @@ fn reference_scan_report(
         "accepted_refs": sorted_unique_strings(accepted_refs.clone()),
         "diagnostics": sorted_unique_strings(diagnostics.clone()),
     });
-    OutputReferenceScanReport {
+    let scan_result = OutputReferenceScanReport {
         schema: REFERENCE_SCAN_SCHEMA.to_string(),
-        scan_ref: prefixed_digest(REFERENCE_SCAN_REF_PREFIX, &hashable).expect("reference scan is serializable"),
+        scan_ref: prefixed_digest(REFERENCE_SCAN_REF_PREFIX, &hashable),
         output_object_ref: input.output_object_ref,
         scan_root_ref: input.scan_root_ref,
         scanner_kind: input.scanner_kind,
         status: status.to_string(),
         accepted_refs: sorted_unique_strings(accepted_refs),
         diagnostics: sorted_unique_strings(diagnostics),
-    }
+    };
+    debug_assert_eq!(scan_result.schema, REFERENCE_SCAN_SCHEMA);
+    debug_assert!(scan_result.scan_ref.starts_with(REFERENCE_SCAN_REF_PREFIX));
+    scan_result
 }
 
 pub(crate) fn action_receipt(input: MantleActionReceiptInput) -> Result<MantleActionReceipt, String> {
-    validate_ref("action_ref", &input.action_ref)?;
+    validate_ref(ValidationField {
+        name: "action_ref",
+        value: &input.action_ref,
+    })?;
     validate_ref_list("input_object_refs", &input.input_object_refs)?;
     validate_ref_list("toolchain_refs", &input.toolchain_refs)?;
     validate_ref_list("produced_object_refs", &input.produced_object_refs)?;
-    validate_required("producer_identity", &input.producer_identity)?;
+    validate_required(ValidationField {
+        name: "producer_identity",
+        value: &input.producer_identity,
+    })?;
     if let Some(digest) = &input.determinism_policy_digest_blake3 {
-        validate_digest("determinism_policy_digest_blake3", digest)?;
+        validate_digest(ValidationField {
+            name: "determinism_policy_digest_blake3",
+            value: digest,
+        })?;
     }
     let hashable = action_receipt_hashable(&input);
-    let receipt_ref = prefixed_digest(ACTION_RECEIPT_REF_PREFIX, &hashable)?;
-    Ok(MantleActionReceipt {
+    let receipt_ref = prefixed_digest(ACTION_RECEIPT_REF_PREFIX, &hashable);
+    let receipt = MantleActionReceipt {
         schema: ACTION_RECEIPT_SCHEMA.to_string(),
         receipt_ref,
         action_ref: input.action_ref,
@@ -606,7 +696,10 @@ pub(crate) fn action_receipt(input: MantleActionReceiptInput) -> Result<MantleAc
         reuse_basis: input.reuse_basis,
         claim: STRONG_CLAIM.to_string(),
         non_claims: receipt_non_claims(),
-    })
+    };
+    debug_assert_eq!(receipt.schema, ACTION_RECEIPT_SCHEMA);
+    debug_assert!(receipt.receipt_ref.starts_with(ACTION_RECEIPT_REF_PREFIX));
+    Ok(receipt)
 }
 
 fn action_receipt_hashable(input: &MantleActionReceiptInput) -> serde_json::Value {
@@ -655,10 +748,13 @@ pub(crate) fn admit_reuse(request: ReuseAdmissionRequest) -> ReuseAdmissionRepor
     {
         diagnostics.push("unsupported-producer-identity".to_string());
     }
-    ReuseAdmissionReport {
+    let reuse_result = ReuseAdmissionReport {
         admitted: diagnostics.is_empty(),
         diagnostics: sorted_unique_strings(diagnostics),
-    }
+    };
+    debug_assert_eq!(reuse_result.admitted, reuse_result.diagnostics.is_empty());
+    debug_assert_eq!(reuse_result.diagnostics, sorted_unique_strings(reuse_result.diagnostics.clone()));
+    reuse_result
 }
 
 pub(crate) fn receipt_json(receipt: &MantleActionReceipt) -> Result<String, String> {
@@ -704,9 +800,9 @@ fn accepted_reference_values(observations: &[ReferenceObservation]) -> Vec<Strin
     sorted_unique_strings(observations.iter().map(|observation| observation.ref_value.clone()).collect())
 }
 
-fn validate_required(field: &str, value: &str) -> Result<(), String> {
-    if value.is_empty() {
-        return Err(format!("{field} must not be empty"));
+fn validate_required(input: ValidationField<'_>) -> Result<(), String> {
+    if input.value.is_empty() {
+        return Err(format!("{} must not be empty", input.name));
     }
     Ok(())
 }
@@ -716,25 +812,28 @@ fn validate_ref_list(field: &str, refs: &Vec<String>) -> Result<(), String> {
         return Err(format!("{field} must not be empty"));
     }
     for item in refs {
-        validate_ref(field, item)?;
+        validate_ref(ValidationField {
+            name: field,
+            value: item,
+        })?;
     }
     Ok(())
 }
 
-fn validate_ref(field: &str, value: &str) -> Result<(), String> {
-    validate_required(field, value)?;
-    if !value.contains(REF_PREFIX_SEPARATOR) {
-        return Err(format!("{field} must be a content-addressed ref, got `{value}`"));
+fn validate_ref(input: ValidationField<'_>) -> Result<(), String> {
+    validate_required(input)?;
+    if !input.value.contains(REF_PREFIX_SEPARATOR) {
+        return Err(format!("{} must be a content-addressed ref, got `{}`", input.name, input.value));
     }
     Ok(())
 }
 
-fn validate_digest(field: &str, value: &str) -> Result<(), String> {
-    if value.len() != BLAKE3_HEX_CHARS {
-        return Err(format!("{field} must be {BLAKE3_HEX_CHARS} lowercase hex chars"));
+fn validate_digest(input: ValidationField<'_>) -> Result<(), String> {
+    if input.value.len() != BLAKE3_HEX_CHARS {
+        return Err(format!("{} must be {BLAKE3_HEX_CHARS} lowercase hex chars", input.name));
     }
-    if !value.chars().all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase()) {
-        return Err(format!("{field} must be lowercase hex"));
+    if !input.value.chars().all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase()) {
+        return Err(format!("{} must be lowercase hex", input.name));
     }
     Ok(())
 }
@@ -752,9 +851,9 @@ fn contains_path_traversal(value: &str) -> bool {
     value.split('/').any(|segment| segment == PATH_TRAVERSAL_SEGMENT)
 }
 
-fn prefixed_digest(prefix: &str, value: &serde_json::Value) -> Result<String, String> {
-    let canonical = serde_json::to_vec(value).map_err(|error| format!("canonicalize value: {error}"))?;
-    Ok(format!("{prefix}{}", blake3::hash(&canonical).to_hex()))
+fn prefixed_digest(prefix: &str, value: &serde_json::Value) -> String {
+    let canonical = value.to_string();
+    format!("{prefix}{}", blake3::hash(canonical.as_bytes()).to_hex())
 }
 
 #[cfg(test)]
@@ -925,6 +1024,36 @@ mod tests {
         assert!(receipt.eval_ref.starts_with(NICKEL_EVAL_REF_PREFIX));
         assert_eq!(receipt.transitive_dep_refs, vec![declared[1].clone()]);
         assert_eq!(diagnostics, vec![format!("undeclared-import:{}", object_ref("undeclared"))]);
+    }
+
+    #[test]
+    fn build_correctness_nickel_import_validation_rejects_inputs_above_local_bounds() {
+        let declared = vec![object_ref("declared")];
+        let observed_over_limit = vec![object_ref("observed"); MAX_REFERENCE_OBSERVATIONS.saturating_add(1)];
+        let declared_over_limit = vec![object_ref("declared"); MAX_DECLARED_REFS.saturating_add(1)];
+
+        assert_eq!(
+            validate_nickel_imports(&declared, &observed_over_limit),
+            Err(vec!["too-many-observed-imports".to_string()])
+        );
+        assert_eq!(
+            validate_nickel_imports(&declared_over_limit, &[]),
+            Err(vec!["too-many-declared-imports".to_string()])
+        );
+    }
+
+    #[test]
+    fn build_correctness_prefixed_digest_preserves_compact_json_identity() {
+        let value = serde_json::json!({
+            "schema": ACTION_SPEC_SCHEMA,
+            "items": ["alpha", "beta"],
+        });
+        let canonical = serde_json::to_vec(&value).unwrap();
+        let expected = format!("{ACTION_REF_PREFIX}{}", blake3::hash(&canonical).to_hex());
+        let actual = prefixed_digest(ACTION_REF_PREFIX, &value);
+
+        assert_eq!(actual, expected);
+        assert!(actual.starts_with(ACTION_REF_PREFIX));
     }
 
     #[test]
