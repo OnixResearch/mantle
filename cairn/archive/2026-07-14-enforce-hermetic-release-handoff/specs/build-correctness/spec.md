@@ -4,7 +4,7 @@
 
 Makes source-root capability reporting honest and requires strict hermetic execution for Onix release evidence.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Advertised source-root capability is executable or explicitly unsupported
 r[mantle.build_correctness.source_root_capability] Mantle MUST NOT advertise a source-root operation as executable when every invocation unconditionally returns unavailable. The operation MUST either execute a bounded receipt-producing implementation or be omitted from executable command discovery and reported as an explicit unsupported capability with a deterministic reason.

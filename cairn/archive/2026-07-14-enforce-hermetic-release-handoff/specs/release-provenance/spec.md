@@ -4,7 +4,7 @@
 
 Requires production Cairn handoff validation over measured bytes and blocks release paths that bypass the validator.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Cairn handoff inputs bind measured bytes
 r[mantle.release_provenance.cairn_evidence_handoff.measured_inputs] Mantle MUST measure explicitly supplied Cairn handoff artifact bytes in the shell and pass typed measured identities to the pure handoff validator.
@@ -58,14 +58,6 @@ r[mantle.release_provenance.cairn_evidence_handoff.docs] Mantle documentation an
 - WHEN Mantle renders the result
 - THEN it MUST NOT claim Cairn correctness, source correctness, build correctness, semantic equivalence, deployment safety, or universal release fitness.
 
-### Requirement: Production handoff verification rail
-r[mantle.release_provenance.cairn_evidence_handoff.final_validation] The change MUST include positive and negative evidence that exercises real production call paths, measured-byte comparison, bypass protection, and release-bundle binding.
-
-#### Scenario: Production fixture detects bypass and tampering
-- GIVEN valid, bypassed, stale, and tampered release fixtures
-- WHEN focused validation runs
-- THEN valid production wiring MUST pass and every bypassed or mismatched fixture MUST fail closed.
-
 ### Requirement: Flake-check CI is checked in
 r[mantle.release_provenance.cairn_evidence_handoff.flake_check_ci] Mantle MUST include a checked-in CI workflow for this remediation whose verification command is `nix flake check`.
 
@@ -73,3 +65,13 @@ r[mantle.release_provenance.cairn_evidence_handoff.flake_check_ci] Mantle MUST i
 - GIVEN a change is evaluated by checked-in CI
 - WHEN the remediation workflow runs
 - THEN it MUST execute `nix flake check` without requiring a separate expanded CI command matrix in this change.
+
+## MODIFIED Requirements
+
+### Requirement: Production handoff verification rail
+r[mantle.release_provenance.cairn_evidence_handoff.final_validation] The change MUST include positive and negative evidence that exercises real production call paths, measured-byte comparison, bypass protection, and release-bundle binding.
+
+#### Scenario: Production fixture detects bypass and tampering
+- GIVEN valid, bypassed, stale, and tampered release fixtures
+- WHEN focused validation runs
+- THEN valid production wiring MUST pass and every bypassed or mismatched fixture MUST fail closed.

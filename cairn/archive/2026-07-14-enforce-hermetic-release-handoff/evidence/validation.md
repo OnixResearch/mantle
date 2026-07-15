@@ -227,3 +227,122 @@ produce a strict self-rebuild match and now carry `denies-clock-syscalls`
 isolation evidence. This is bounded syscall-enforcement evidence; it does not
 claim interception of non-syscall hardware or vDSO time sources, compiler
 correctness, or universal reproducibility.
+
+## Final flake and lifecycle closeout
+
+Recorded: 2026-07-14
+
+The independent Tiger Style and sequential package-test frontiers were repaired
+without demoting lint levels, shrinking the first-party package scope, removing
+negative tests, weakening Cargo checksum validation, or promoting host
+observations into product claims.
+
+The package rail completed successfully after exercising the complete Mantle
+package test suite:
+
+```text
+$ nix build path:$PWD#checks.x86_64-linux.crunch --no-link -L \
+    --option secret-key-files '' --option builders ''
+PASS
+```
+
+The bounded full flake command then built and passed all 13 checks:
+
+```text
+$ nix flake check path:$PWD -L \
+    --option secret-key-files '' --option builders ''
+running 13 flake checks...
+all checks passed!
+```
+
+A same-tree exact host-configured rerun completed from the realized check set
+without requesting the absent signing key:
+
+```text
+$ nix flake check path:$PWD -L
+running 0 flake checks...
+all checks passed!
+```
+
+The exact rerun proves that the current realized check graph is accepted by the
+host configuration. It does not prove that this host can publish a newly built
+uncached output while its configured signing-key path is absent, and it does
+not promote remote-builder availability into a Mantle claim.
+
+Fresh lifecycle validation used the canonical Cairn binary and policy rather
+than Mantle's stale generated policy:
+
+```text
+$ /home/brittonr/git/OnixResearch/cairn/target/debug/cairn validate \
+    --root . \
+    --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+valid: true; issues: []
+
+$ /home/brittonr/git/OnixResearch/cairn/target/debug/cairn gate proposal \
+    enforce-hermetic-release-handoff --root . --policy <canonical-policy>
+verdict: PASS; valid: true; issues: []
+
+$ /home/brittonr/git/OnixResearch/cairn/target/debug/cairn gate design \
+    enforce-hermetic-release-handoff --root . --policy <canonical-policy>
+verdict: PASS; valid: true; issues: []
+
+$ /home/brittonr/git/OnixResearch/cairn/target/debug/cairn gate tasks \
+    enforce-hermetic-release-handoff --root . --policy <canonical-policy>
+verdict: PASS; valid: true; issues: []
+```
+
+The direct first-party quality rails also passed on the closeout tree:
+
+```text
+$ ./scripts/check-first-party-tigerstyle.sh
+Finished `dev` profile
+
+$ ./scripts/check-first-party-clippy.sh
+Finished `dev` profile
+
+$ cargo fmt --check <workspace.metadata.tigerstyle.default_scope>
+PASS
+
+$ nixfmt --check flake.nix
+PASS
+
+$ cargo test --release -p mantle --bin mantle -- --test-threads=1
+test result: ok. 1536 passed; 0 failed; 0 ignored; 0 measured
+```
+
+The root libtest rail is deliberately serialized because subprocess-heavy
+fixtures exercise executable replacement and isolated environment seams; the
+Nix package and nextest rails independently cover their configured parallel
+execution shapes.
+
+The initial sync dry-run correctly failed closed because both change specs were
+legacy full accepted-spec projections. After converting them to explicit
+`ADDED` operations, release provenance still failed closed on the existing
+`final_validation` ID. That operation was reviewed as `MODIFIED`, preserving
+its requirement identity while replacing its earlier narrower fixture text.
+The final sync dry-run reported `blocked: false` with two actions, and execution
+reported `mutated: true`, `blocked: false`, no reasons, and receipt hash
+`7fbfa1b9389e6db934d0b4ab543fe0f38048f67607ec3975c9170f0456a01949`.
+The accepted specs were then inspected for every added ID and the modified
+`final_validation` text before post-sync validation.
+
+The previously archived authentication dependency remains an explicit bounded
+input. This closeout does not claim Cairn producer correctness, universal
+reproducibility, full-source bootstrap closure, unavailable remote-builder
+execution, or uncached host publication through an absent signing key.
+
+## Post-archive validation
+
+The exact post-archive command was:
+
+```text
+$ /home/brittonr/git/OnixResearch/cairn/target/debug/cairn validate \
+    --root . \
+    --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+```
+
+Its complete unedited JSON output is committed beside this file as
+`post-archive-validation.json`. It reports `valid: true`, empty repository,
+spec, substance, and cross-repository issue lists, 28 accepted specs validated,
+and one remaining active change: the intentionally blocked bounded
+KernelScript experiment.
