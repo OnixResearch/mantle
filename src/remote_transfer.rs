@@ -52,6 +52,7 @@ const COPY_BUFFER_BYTES: u32 = 65_536;
 const REMOTE_TRANSFER_DATA_HEADER_BYTES: usize = 4;
 const FIRST_CHUNK_COUNT: u32 = 1;
 const INITIAL_PROGRESS_STEP: u64 = 0;
+const FILE_HASH_BLOCK_COUNT_MAX: u64 = 16_777_217;
 
 static ATOMIC_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -150,6 +151,18 @@ pub enum RemoteTransferStateLoad {
     ExpiredInvalidated,
 }
 
+fn empty_remote_transfer_credit_state() -> RemoteTransferCreditState {
+    RemoteTransferCreditState {
+        granted_bytes_remaining: 0,
+        granted_chunks_remaining: 0,
+        in_flight: BTreeMap::new(),
+        acknowledged_chunk_digests: BTreeSet::new(),
+        transferred_bytes: 0,
+        next_sequence: 0,
+        last_progress_step: 0,
+    }
+}
+
 /// Receiver-owned interactive session state. The session lock remains held
 /// from receiver reprobe through the final checkpoint so a second process
 /// cannot race acknowledgement or admission facts for the same fence.
@@ -173,8 +186,21 @@ pub struct RemoteTransferDataFrameHeader {
     pub chunk: RemoteTransferChunkHeader,
 }
 
+pub struct WriteRemoteTransferDataChunkRequest<'a> {
+    prepared: &'a PreparedRemoteTransfer,
+    policy: RemoteTransferPolicy,
+    demand: &'a RemoteTransferDemand,
+    state: &'a RemoteTransferCreditState,
+    receiver_grant: RemoteTransferCreditGrant,
+    missing: &'a RemoteTransferChunkDemand,
+}
+
 /// Write one demanded chunk to a socket/stdio-compatible stream. Credit and
 /// demand are checked before the source read or payload write.
+#[expect(
+    tigerstyle::too_many_parameters,
+    reason = "stable transport shell API delegates immediately to the named data-chunk request"
+)]
 pub fn write_remote_transfer_data_chunk(
     mut writer: impl Write,
     prepared: &PreparedRemoteTransfer,
@@ -184,6 +210,26 @@ pub fn write_remote_transfer_data_chunk(
     receiver_grant: RemoteTransferCreditGrant,
     missing: &RemoteTransferChunkDemand,
 ) -> Result<RemoteTransferCreditState, String> {
+    write_remote_transfer_data_chunk_request(&mut writer, WriteRemoteTransferDataChunkRequest {
+        prepared,
+        policy,
+        demand,
+        state,
+        receiver_grant,
+        missing,
+    })
+}
+
+fn write_remote_transfer_data_chunk_request(
+    writer: &mut impl Write,
+    request: WriteRemoteTransferDataChunkRequest<'_>,
+) -> Result<RemoteTransferCreditState, String> {
+    let prepared = request.prepared;
+    let policy = request.policy;
+    let demand = request.demand;
+    let state = request.state;
+    let receiver_grant = request.receiver_grant;
+    let missing = request.missing;
     validate_prepared_remote_transfer(prepared, policy)?;
     if receiver_grant.bytes != u64::from(missing.chunk.size_bytes) || receiver_grant.chunks != FIRST_CHUNK_COUNT {
         return Err(reason(RemoteTransferReasonCode::CreditGrantInvalid));
@@ -215,13 +261,28 @@ pub fn write_remote_transfer_data_chunk(
         .and_then(|()| writer.write_all(&payload))
         .and_then(|()| writer.flush())
         .map_err(|err| format!("writing bounded transfer data frame: {err}"))?;
-    assert_eq!(payload.len(), usize::try_from(missing.chunk.size_bytes).unwrap_or(usize::MAX));
+    let expected_payload_bytes =
+        usize::try_from(missing.chunk.size_bytes).map_err(|_| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
+    assert_eq!(payload.len(), expected_payload_bytes);
     assert!(encoded_len <= policy.control_bytes_max);
     Ok(reserved)
 }
 
+pub struct ReceiveRemoteTransferDataChunkRequest<'a> {
+    receiver_root: &'a Path,
+    manifest: &'a CanonicalRemoteTransferManifest,
+    policy: RemoteTransferPolicy,
+    demand: &'a RemoteTransferDemand,
+    state: &'a RemoteTransferCreditState,
+    progress_step: u64,
+}
+
 /// Receive one socket/stdio data chunk. The fixed header and bounded control
 /// header are read first; receiver credit is reserved before payload allocation.
+#[expect(
+    tigerstyle::too_many_parameters,
+    reason = "stable transport shell API delegates immediately to the named receive-chunk request"
+)]
 pub fn receive_remote_transfer_data_chunk(
     mut reader: impl Read,
     receiver_root: &Path,
@@ -231,6 +292,26 @@ pub fn receive_remote_transfer_data_chunk(
     state: &RemoteTransferCreditState,
     progress_step: u64,
 ) -> Result<(RemoteTransferCreditState, RemoteTransferAcknowledgement), String> {
+    receive_remote_transfer_data_chunk_request(&mut reader, ReceiveRemoteTransferDataChunkRequest {
+        receiver_root,
+        manifest,
+        policy,
+        demand,
+        state,
+        progress_step,
+    })
+}
+
+fn receive_remote_transfer_data_chunk_request(
+    reader: &mut impl Read,
+    request: ReceiveRemoteTransferDataChunkRequest<'_>,
+) -> Result<(RemoteTransferCreditState, RemoteTransferAcknowledgement), String> {
+    let receiver_root = request.receiver_root;
+    let manifest = request.manifest;
+    let policy = request.policy;
+    let demand = request.demand;
+    let state = request.state;
+    let progress_step = request.progress_step;
     validate_canonical_remote_transfer_manifest(manifest, policy)?;
     let mut length_bytes = [0_u8; REMOTE_TRANSFER_DATA_HEADER_BYTES];
     reader
@@ -326,40 +407,58 @@ pub fn prepare_remote_transfer(
     Ok(PreparedRemoteTransfer { manifest, sources })
 }
 
+pub struct FileTransferArtifactRequest<'a> {
+    pub artifact_id: RemoteTransferArtifactId,
+    pub artifact_kind: RemoteTransferArtifactKind,
+    pub source_path: &'a Path,
+    pub is_required_for_completion: bool,
+    pub nar_sha256_hex: Option<String>,
+    pub policy: RemoteTransferPolicy,
+}
+
 /// Scan a file once and produce bounded chunk descriptors without buffering it.
 pub fn prepare_file_transfer_artifact(
-    artifact_id: RemoteTransferArtifactId,
-    artifact_kind: RemoteTransferArtifactKind,
-    source_path: &Path,
-    required_for_completion: bool,
-    nar_sha256_hex: Option<String>,
-    policy: RemoteTransferPolicy,
+    request: FileTransferArtifactRequest<'_>,
 ) -> Result<PreparedRemoteTransferArtifact, String> {
-    policy.validate().map_err(reason)?;
-    let metadata = fs::metadata(source_path)
-        .map_err(|err| format!("remote-transfer-source-metadata {}: {err}", source_path.display()))?;
-    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > policy.total_bytes_max {
+    request.policy.validate().map_err(reason)?;
+    let metadata = fs::metadata(request.source_path)
+        .map_err(|err| format!("remote-transfer-source-metadata {}: {err}", request.source_path.display()))?;
+    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > request.policy.total_bytes_max {
         return Err(reason(RemoteTransferReasonCode::TotalBytesExceeded));
     }
-    let scan = scan_artifact_file(source_path, policy)?;
+    let scan = scan_artifact_file(request.source_path, request.policy)?;
     let descriptor = RemoteTransferArtifact {
-        artifact_id,
-        artifact_kind,
+        artifact_id: request.artifact_id,
+        artifact_kind: request.artifact_kind,
         digest_blake3: scan.digest_blake3,
         size_bytes: scan.size_bytes,
-        required_for_completion,
-        nar_sha256_hex,
+        required_for_completion: request.is_required_for_completion,
+        nar_sha256_hex: request.nar_sha256_hex,
         chunks: scan.chunks,
     };
     assert_eq!(descriptor.size_bytes, metadata.len());
     assert!(!descriptor.chunks.is_empty());
     Ok(PreparedRemoteTransferArtifact {
         descriptor,
-        source_path: source_path.to_path_buf(),
+        source_path: request.source_path.to_path_buf(),
     })
 }
 
+pub struct InlineTransferArtifactRequest<'a> {
+    capability: RemoteInlinePayloadCapability,
+    artifact_id: RemoteTransferArtifactId,
+    artifact_kind: RemoteTransferArtifactKind,
+    bytes: &'a [u8],
+    spool_dir: &'a Path,
+    is_required_for_completion: bool,
+    policy: RemoteTransferPolicy,
+}
+
 /// The only inline path is explicit and hard-capped for fixtures/bootstrap.
+#[expect(
+    tigerstyle::too_many_parameters,
+    reason = "stable fixture/bootstrap API delegates immediately to the named inline artifact request"
+)]
 pub fn prepare_inline_fixture_or_bootstrap_artifact(
     capability: RemoteInlinePayloadCapability,
     artifact_id: RemoteTransferArtifactId,
@@ -369,77 +468,158 @@ pub fn prepare_inline_fixture_or_bootstrap_artifact(
     required_for_completion: bool,
     policy: RemoteTransferPolicy,
 ) -> Result<PreparedRemoteTransferArtifact, String> {
-    let byte_count = u64::try_from(bytes.len()).map_err(|_| "remote-inline-size-overflow".to_string())?;
+    prepare_inline_transfer_artifact(InlineTransferArtifactRequest {
+        capability,
+        artifact_id,
+        artifact_kind,
+        bytes,
+        spool_dir,
+        is_required_for_completion: required_for_completion,
+        policy,
+    })
+}
+
+fn prepare_inline_transfer_artifact(
+    request: InlineTransferArtifactRequest<'_>,
+) -> Result<PreparedRemoteTransferArtifact, String> {
+    debug_assert!(!request.artifact_id.as_str().is_empty());
+    debug_assert!(!request.spool_dir.as_os_str().is_empty());
+    let byte_count = u64::try_from(request.bytes.len()).map_err(|_| "remote-inline-size-overflow".to_string())?;
     if byte_count == 0 || byte_count > MAX_REMOTE_INLINE_FIXTURE_BOOTSTRAP_BYTES {
         return Err("remote-inline-fixture-bootstrap-payload-too-large".to_string());
     }
-    let label = match capability {
+    let label = match request.capability {
         RemoteInlinePayloadCapability::Fixture => "fixture",
         RemoteInlinePayloadCapability::Bootstrap => "bootstrap",
     };
-    let path = safe_spool_path(spool_dir, artifact_id.as_str(), label)?;
-    write_atomic_bytes(&path, bytes)?;
-    prepare_file_transfer_artifact(artifact_id, artifact_kind, &path, required_for_completion, None, policy)
+    let path = safe_spool_path(request.spool_dir, request.artifact_id.as_str(), label)?;
+    write_atomic_bytes(&path, request.bytes)?;
+    prepare_file_transfer_artifact(FileTransferArtifactRequest {
+        artifact_id: request.artifact_id,
+        artifact_kind: request.artifact_kind,
+        source_path: &path,
+        is_required_for_completion: request.is_required_for_completion,
+        nar_sha256_hex: None,
+        policy: request.policy,
+    })
+}
+
+pub struct NarNodeTransferArtifactRequest<'a> {
+    store: &'a crunch_store::StoreHandle,
+    node: &'a snix_castore::Node,
+    artifact_id: RemoteTransferArtifactId,
+    spool_dir: &'a Path,
+    is_required_for_completion: bool,
+    policy: RemoteTransferPolicy,
 }
 
 /// Render a castore node directly into a spool file; no whole-NAR `Vec`
 /// exists. Input transfers use this when no PathInfo exists yet.
+#[expect(
+    tigerstyle::too_many_parameters,
+    reason = "stable NAR shell API delegates immediately to the named node artifact request"
+)]
 pub async fn prepare_nar_node_transfer_artifact(
     store: &crunch_store::StoreHandle,
     node: &snix_castore::Node,
     artifact_id: RemoteTransferArtifactId,
     spool_dir: &Path,
-    required_for_completion: bool,
+    is_required_for_completion: bool,
     policy: RemoteTransferPolicy,
 ) -> Result<PreparedRemoteTransferArtifact, String> {
-    policy.validate().map_err(reason)?;
-    let path = safe_spool_path(spool_dir, artifact_id.as_str(), "nar")?;
+    prepare_nar_node_transfer_artifact_request(NarNodeTransferArtifactRequest {
+        store,
+        node,
+        artifact_id,
+        spool_dir,
+        is_required_for_completion,
+        policy,
+    })
+    .await
+}
+
+async fn prepare_nar_node_transfer_artifact_request(
+    request: NarNodeTransferArtifactRequest<'_>,
+) -> Result<PreparedRemoteTransferArtifact, String> {
+    request.policy.validate().map_err(reason)?;
+    let path = safe_spool_path(request.spool_dir, request.artifact_id.as_str(), "nar")?;
     let mut file = tokio::fs::File::create(&path)
         .await
         .map_err(|err| format!("creating NAR spool {}: {err}", path.display()))?;
-    store.render_nar(node, &mut file).await.map_err(|err| format!("rendering transfer NAR: {err}"))?;
+    request
+        .store
+        .render_nar(request.node, &mut file)
+        .await
+        .map_err(|err| format!("rendering transfer NAR: {err}"))?;
     file.flush().await.map_err(|err| format!("flushing NAR spool: {err}"))?;
     drop(file);
     let nar_sha256_hex = hash_file_sha256_hex(&path)?;
-    let prepared = prepare_file_transfer_artifact(
-        artifact_id,
-        RemoteTransferArtifactKind::Nar,
-        &path,
-        required_for_completion,
-        Some(nar_sha256_hex),
-        policy,
-    )?;
+    let prepared = prepare_file_transfer_artifact(FileTransferArtifactRequest {
+        artifact_id: request.artifact_id,
+        artifact_kind: RemoteTransferArtifactKind::Nar,
+        source_path: &path,
+        is_required_for_completion: request.is_required_for_completion,
+        nar_sha256_hex: Some(nar_sha256_hex),
+        policy: request.policy,
+    })?;
     assert!(prepared.descriptor.size_bytes > 0);
     assert!(prepared.descriptor.nar_sha256_hex.is_some());
     Ok(prepared)
 }
 
+pub struct NarTransferArtifactRequest<'a> {
+    store: &'a crunch_store::StoreHandle,
+    path_info: &'a PathInfo,
+    artifact_id: RemoteTransferArtifactId,
+    spool_dir: &'a Path,
+    is_required_for_completion: bool,
+    policy: RemoteTransferPolicy,
+}
+
 /// Render a PathInfo-backed NAR directly into a spool file and check the Nix
 /// interoperability SHA-256/size facts before advertising the manifest.
+#[expect(
+    tigerstyle::too_many_parameters,
+    reason = "stable PathInfo NAR API delegates immediately to the named artifact request"
+)]
 pub async fn prepare_nar_transfer_artifact(
     store: &crunch_store::StoreHandle,
     path_info: &PathInfo,
     artifact_id: RemoteTransferArtifactId,
     spool_dir: &Path,
-    required_for_completion: bool,
+    is_required_for_completion: bool,
     policy: RemoteTransferPolicy,
 ) -> Result<PreparedRemoteTransferArtifact, String> {
-    if path_info.nar_size == 0 || path_info.nar_size > policy.total_bytes_max {
-        return Err(reason(RemoteTransferReasonCode::TotalBytesExceeded));
-    }
-    let prepared = prepare_nar_node_transfer_artifact(
+    prepare_nar_transfer_artifact_request(NarTransferArtifactRequest {
         store,
-        &path_info.node,
+        path_info,
         artifact_id,
         spool_dir,
-        required_for_completion,
+        is_required_for_completion,
         policy,
-    )
+    })
+    .await
+}
+
+async fn prepare_nar_transfer_artifact_request(
+    request: NarTransferArtifactRequest<'_>,
+) -> Result<PreparedRemoteTransferArtifact, String> {
+    if request.path_info.nar_size == 0 || request.path_info.nar_size > request.policy.total_bytes_max {
+        return Err(reason(RemoteTransferReasonCode::TotalBytesExceeded));
+    }
+    let prepared = prepare_nar_node_transfer_artifact_request(NarNodeTransferArtifactRequest {
+        store: request.store,
+        node: &request.path_info.node,
+        artifact_id: request.artifact_id,
+        spool_dir: request.spool_dir,
+        is_required_for_completion: request.is_required_for_completion,
+        policy: request.policy,
+    })
     .await?;
-    if prepared.descriptor.size_bytes != path_info.nar_size {
+    if prepared.descriptor.size_bytes != request.path_info.nar_size {
         return Err("remote-transfer-nar-size-mismatch".to_string());
     }
-    verify_nar_sha256(&prepared.source_path, path_info)?;
+    verify_nar_sha256(&prepared.source_path, request.path_info)?;
     Ok(prepared)
 }
 
@@ -447,10 +627,12 @@ pub async fn prepare_castore_blob_transfer_artifact(
     store: &crunch_store::StoreHandle,
     digest: snix_castore::B3Digest,
     spool_dir: &Path,
-    required_for_completion: bool,
+    is_required_for_completion: bool,
     policy: RemoteTransferPolicy,
 ) -> Result<PreparedRemoteTransferArtifact, String> {
     let digest_hex = data_encoding::HEXLOWER.encode(digest.as_ref());
+    debug_assert!(!digest_hex.is_empty());
+    debug_assert!(!spool_dir.as_os_str().is_empty());
     let id = RemoteTransferArtifactId::new(format!("castore-blob:{digest_hex}")).map_err(reason)?;
     let path = safe_spool_path(spool_dir, id.as_str(), "blob")?;
     let reader = store
@@ -460,14 +642,14 @@ pub async fn prepare_castore_blob_transfer_artifact(
         .map_err(|err| format!("opening castore blob {digest_hex}: {err}"))?
         .ok_or_else(|| format!("castore blob missing: {digest_hex}"))?;
     copy_async_reader_bounded(reader, &path, policy.total_bytes_max).await?;
-    let prepared = prepare_file_transfer_artifact(
-        id,
-        RemoteTransferArtifactKind::CastoreBlob,
-        &path,
-        required_for_completion,
-        None,
+    let prepared = prepare_file_transfer_artifact(FileTransferArtifactRequest {
+        artifact_id: id,
+        artifact_kind: RemoteTransferArtifactKind::CastoreBlob,
+        source_path: &path,
+        is_required_for_completion,
+        nar_sha256_hex: None,
         policy,
-    )?;
+    })?;
     if prepared.descriptor.digest_blake3.as_str() != digest_hex {
         return Err("castore-blob-transfer-digest-mismatch".to_string());
     }
@@ -478,10 +660,12 @@ pub async fn prepare_castore_directory_transfer_artifact(
     store: &crunch_store::StoreHandle,
     digest: snix_castore::B3Digest,
     spool_dir: &Path,
-    required_for_completion: bool,
+    is_required_for_completion: bool,
     policy: RemoteTransferPolicy,
 ) -> Result<PreparedRemoteTransferArtifact, String> {
     let digest_hex = data_encoding::HEXLOWER.encode(digest.as_ref());
+    debug_assert!(!digest_hex.is_empty());
+    debug_assert!(!spool_dir.as_os_str().is_empty());
     let directory = store
         .directory_service()
         .get(&digest)
@@ -496,14 +680,14 @@ pub async fn prepare_castore_directory_transfer_artifact(
     let id = RemoteTransferArtifactId::new(format!("castore-directory:{digest_hex}")).map_err(reason)?;
     let path = safe_spool_path(spool_dir, id.as_str(), "directory")?;
     write_atomic_bytes(&path, &bytes)?;
-    prepare_file_transfer_artifact(
-        id,
-        RemoteTransferArtifactKind::CastoreDirectory,
-        &path,
-        required_for_completion,
-        None,
+    prepare_file_transfer_artifact(FileTransferArtifactRequest {
+        artifact_id: id,
+        artifact_kind: RemoteTransferArtifactKind::CastoreDirectory,
+        source_path: &path,
+        is_required_for_completion,
+        nar_sha256_hex: None,
         policy,
-    )
+    })
 }
 
 pub fn prepare_pathinfo_transfer_artifact(
@@ -526,14 +710,14 @@ pub fn prepare_pathinfo_transfer_artifact_with_id(
     let bytes = serde_json::to_vec(path_info).map_err(|err| format!("serializing transfer PathInfo: {err}"))?;
     let path = safe_spool_path(spool_dir, artifact_id.as_str(), "pathinfo")?;
     write_atomic_bytes(&path, &bytes)?;
-    prepare_file_transfer_artifact(
+    prepare_file_transfer_artifact(FileTransferArtifactRequest {
         artifact_id,
-        RemoteTransferArtifactKind::PathInfo,
-        &path,
-        required_for_completion,
-        None,
+        artifact_kind: RemoteTransferArtifactKind::PathInfo,
+        source_path: &path,
+        is_required_for_completion: required_for_completion,
+        nar_sha256_hex: None,
         policy,
-    )
+    })
 }
 
 pub fn prepare_attestation_transfer_artifact(
@@ -551,14 +735,14 @@ pub fn prepare_attestation_transfer_artifact(
     let id = RemoteTransferArtifactId::new(format!("attestation:{identity_blake3}")).map_err(reason)?;
     let path = safe_spool_path(spool_dir, id.as_str(), "attestation")?;
     write_atomic_bytes(&path, canonical_bytes)?;
-    prepare_file_transfer_artifact(
-        id,
-        RemoteTransferArtifactKind::Attestation,
-        &path,
-        required_for_completion,
-        None,
+    prepare_file_transfer_artifact(FileTransferArtifactRequest {
+        artifact_id: id,
+        artifact_kind: RemoteTransferArtifactKind::Attestation,
+        source_path: &path,
+        is_required_for_completion: required_for_completion,
+        nar_sha256_hex: None,
         policy,
-    )
+    })
 }
 
 pub fn prepare_source_bundle_transfer_artifact(
@@ -571,14 +755,14 @@ pub fn prepare_source_bundle_transfer_artifact(
     let id = RemoteTransferArtifactId::new(format!("source-bundle:{source_identity}")).map_err(reason)?;
     let path = safe_spool_path(spool_dir, id.as_str(), "source-bundle")?;
     copy_file_bounded(bundle_path, &path, policy.total_bytes_max)?;
-    prepare_file_transfer_artifact(
-        id,
-        RemoteTransferArtifactKind::SourceBundle,
-        &path,
-        required_for_completion,
-        None,
+    prepare_file_transfer_artifact(FileTransferArtifactRequest {
+        artifact_id: id,
+        artifact_kind: RemoteTransferArtifactKind::SourceBundle,
+        source_path: &path,
+        is_required_for_completion: required_for_completion,
+        nar_sha256_hex: None,
         policy,
-    )
+    })
 }
 
 pub fn prepare_delta_transfer_artifacts(
@@ -587,27 +771,31 @@ pub fn prepare_delta_transfer_artifacts(
     policy: RemoteTransferPolicy,
 ) -> Result<Vec<PreparedRemoteTransferArtifact>, String> {
     policy.validate().map_err(reason)?;
-    let mut prepared = Vec::new();
+    let artifact_bound_entries =
+        usize::try_from(policy.artifact_count_max).map_err(|_| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
+    debug_assert!(frames.len() <= artifact_bound_entries);
+    debug_assert!(!spool_dir.as_os_str().is_empty());
+    let mut prepared = Vec::with_capacity(frames.len());
     for frame in frames {
         let artifact = match frame {
-            crunch_delta::DeltaTransferFrame::Blob { digest, bytes } => prepare_delta_bytes(
-                "delta-blob",
-                digest,
-                RemoteTransferArtifactKind::DeltaBlob,
+            crunch_delta::DeltaTransferFrame::Blob { digest, bytes } => prepare_delta_bytes(DeltaBytesRequest {
+                prefix: "delta-blob",
+                expected: digest,
+                kind: RemoteTransferArtifactKind::DeltaBlob,
                 bytes,
                 spool_dir,
                 policy,
-            )?,
+            })?,
             crunch_delta::DeltaTransferFrame::Chunk {
                 chunk_digest, bytes, ..
-            } => prepare_delta_bytes(
-                "delta-chunk",
-                chunk_digest,
-                RemoteTransferArtifactKind::DeltaChunk,
+            } => prepare_delta_bytes(DeltaBytesRequest {
+                prefix: "delta-chunk",
+                expected: chunk_digest,
+                kind: RemoteTransferArtifactKind::DeltaChunk,
                 bytes,
                 spool_dir,
                 policy,
-            )?,
+            })?,
             crunch_delta::DeltaTransferFrame::FinalPathInfo { path_info } => {
                 let bytes =
                     serde_json::to_vec(path_info).map_err(|err| format!("serializing delta PathInfo: {err}"))?;
@@ -615,7 +803,14 @@ pub fn prepare_delta_transfer_artifacts(
                 let id = RemoteTransferArtifactId::new(format!("delta-pathinfo:{digest}")).map_err(reason)?;
                 let path = safe_spool_path(spool_dir, id.as_str(), "delta-pathinfo")?;
                 write_atomic_bytes(&path, &bytes)?;
-                prepare_file_transfer_artifact(id, RemoteTransferArtifactKind::PathInfo, &path, true, None, policy)?
+                prepare_file_transfer_artifact(FileTransferArtifactRequest {
+                    artifact_id: id,
+                    artifact_kind: RemoteTransferArtifactKind::PathInfo,
+                    source_path: &path,
+                    is_required_for_completion: true,
+                    nar_sha256_hex: None,
+                    policy,
+                })?
             }
         };
         prepared.push(artifact);
@@ -631,15 +826,19 @@ struct ArtifactFileScan {
 }
 
 fn scan_artifact_file(path: &Path, policy: RemoteTransferPolicy) -> Result<ArtifactFileScan, String> {
-    let capacity =
+    debug_assert!(!path.as_os_str().is_empty());
+    debug_assert!(policy.chunk_bytes_max > 0);
+    let buffer_capacity_bytes =
         usize::try_from(policy.chunk_bytes_max).map_err(|_| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
+    let initial_reserved_chunks = usize::try_from(policy.buffered_chunks_max)
+        .map_err(|_| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
     let mut file = File::open(path).map_err(|err| format!("opening transfer source {}: {err}", path.display()))?;
-    let mut buffer = vec![0_u8; capacity];
+    let mut buffer = vec![0_u8; buffer_capacity_bytes];
     let mut hasher = blake3::Hasher::new();
-    let mut chunks = Vec::new();
+    let mut chunks = Vec::with_capacity(initial_reserved_chunks);
     let mut offset_bytes = 0_u64;
     let mut index = 0_u32;
-    loop {
+    for _scan_step in 0..=policy.chunk_count_max {
         let read_bytes = file.read(&mut buffer).map_err(|err| format!("reading transfer source: {err}"))?;
         if read_bytes == 0 {
             break;
@@ -677,38 +876,64 @@ async fn copy_async_reader_bounded<R: AsyncRead + Unpin>(reader: R, path: &Path,
         .await
         .map_err(|err| format!("copying transfer spool: {err}"))?;
     if copied > max_bytes {
-        let _ = tokio::fs::remove_file(path).await;
+        match tokio::fs::remove_file(path).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("removing oversized transfer spool: {error}")),
+        }
         return Err(reason(RemoteTransferReasonCode::TotalBytesExceeded));
     }
     file.flush().await.map_err(|err| format!("flushing transfer spool: {err}"))
 }
 
-fn prepare_delta_bytes(
-    prefix: &str,
-    expected: &snix_castore::B3Digest,
+struct DeltaBytesRequest<'a> {
+    prefix: &'a str,
+    expected: &'a snix_castore::B3Digest,
     kind: RemoteTransferArtifactKind,
-    bytes: &[u8],
-    spool_dir: &Path,
+    bytes: &'a [u8],
+    spool_dir: &'a Path,
     policy: RemoteTransferPolicy,
-) -> Result<PreparedRemoteTransferArtifact, String> {
-    let digest = data_encoding::HEXLOWER.encode(expected.as_ref());
-    if blake3::hash(bytes).to_hex().as_str() != digest {
-        return Err("delta-transfer-frame-digest-mismatch".to_string());
-    }
-    let id = RemoteTransferArtifactId::new(format!("{prefix}:{digest}")).map_err(reason)?;
-    let path = safe_spool_path(spool_dir, id.as_str(), "delta")?;
-    write_atomic_bytes(&path, bytes)?;
-    prepare_file_transfer_artifact(id, kind, &path, true, None, policy)
 }
 
-fn safe_spool_path(root: &Path, identity: &str, extension: &str) -> Result<PathBuf, String> {
+fn prepare_delta_bytes(request: DeltaBytesRequest<'_>) -> Result<PreparedRemoteTransferArtifact, String> {
+    let digest = data_encoding::HEXLOWER.encode(request.expected.as_ref());
+    if blake3::hash(request.bytes).to_hex().as_str() != digest {
+        return Err("delta-transfer-frame-digest-mismatch".to_string());
+    }
+    let id = RemoteTransferArtifactId::new(format!("{}:{digest}", request.prefix)).map_err(reason)?;
+    let path = safe_spool_path(request.spool_dir, id.as_str(), "delta")?;
+    write_atomic_bytes(&path, request.bytes)?;
+    prepare_file_transfer_artifact(FileTransferArtifactRequest {
+        artifact_id: id,
+        artifact_kind: request.kind,
+        source_path: &path,
+        is_required_for_completion: true,
+        nar_sha256_hex: None,
+        policy: request.policy,
+    })
+}
+
+fn safe_spool_path(root: &Path, identity: &str, extension: impl AsRef<str>) -> Result<PathBuf, String> {
     fs::create_dir_all(root).map_err(|err| format!("creating spool {}: {err}", root.display()))?;
-    Ok(root.join(format!("{}.{}", blake3::hash(identity.as_bytes()).to_hex(), extension)))
+    Ok(root.join(format!("{}.{}", blake3::hash(identity.as_bytes()).to_hex(), extension.as_ref())))
+}
+
+pub struct BeginRemoteTransferReceiveRequest<'a> {
+    manifest: RemoteTransferManifest,
+    expected_manifest_digest: &'a RemoteTransferDigest,
+    policy: RemoteTransferPolicy,
+    state_dir: &'a Path,
+    receiver_root: &'a Path,
+    options: RemoteTransferRunOptions,
 }
 
 /// Begin an interactive receive from a wire manifest. Canonicalization,
 /// current-scope checkpoint validation, receiver reprobe, and resume planning
 /// all complete before any payload credit can be issued.
+#[expect(
+    tigerstyle::too_many_parameters,
+    reason = "stable interactive receive API delegates immediately to the named session request"
+)]
 pub fn begin_remote_transfer_receive(
     manifest: RemoteTransferManifest,
     expected_manifest_digest: &RemoteTransferDigest,
@@ -717,10 +942,27 @@ pub fn begin_remote_transfer_receive(
     receiver_root: &Path,
     options: RemoteTransferRunOptions,
 ) -> Result<RemoteTransferReceiveSession, String> {
+    begin_remote_transfer_receive_request(BeginRemoteTransferReceiveRequest {
+        manifest,
+        expected_manifest_digest,
+        policy,
+        state_dir,
+        receiver_root,
+        options,
+    })
+}
+
+fn begin_remote_transfer_receive_request(
+    request: BeginRemoteTransferReceiveRequest<'_>,
+) -> Result<RemoteTransferReceiveSession, String> {
+    let policy = request.policy;
+    let state_dir = request.state_dir;
+    let receiver_root = request.receiver_root;
+    let options = request.options;
     policy.validate().map_err(reason)?;
     validate_run_options(options)?;
-    let manifest = canonicalize_remote_transfer_manifest(manifest, policy).map_err(reason)?;
-    if &manifest.digest_blake3 != expected_manifest_digest {
+    let manifest = canonicalize_remote_transfer_manifest(request.manifest, policy).map_err(reason)?;
+    if &manifest.digest_blake3 != request.expected_manifest_digest {
         return Err(reason(RemoteTransferReasonCode::ManifestIdentityMismatch));
     }
     let scope = remote_transfer_scope(&manifest);
@@ -743,11 +985,13 @@ pub fn begin_remote_transfer_receive(
     let last_progress_step =
         previous.as_ref().map(|state| state.lease.last_progress_step).unwrap_or(INITIAL_PROGRESS_STEP);
     let credit = RemoteTransferCreditState {
+        granted_bytes_remaining: 0,
+        granted_chunks_remaining: 0,
+        in_flight: BTreeMap::new(),
         acknowledged_chunk_digests: resume.acknowledged_chunk_digests,
         transferred_bytes: resume.transferred_bytes,
         next_sequence: resume.next_sequence,
         last_progress_step,
-        ..RemoteTransferCreditState::default()
     };
     let lease = transfer_lease_from_manifest(&manifest, options, &scope)?;
     let checkpoint_path = remote_transfer_state_path(state_dir, &scope.session_id);
@@ -781,10 +1025,13 @@ impl RemoteTransferReceiveSession {
     /// cursor but never treats the cursor as proof of receiver content.
     pub fn sender_credit_state(&self) -> RemoteTransferCreditState {
         RemoteTransferCreditState {
+            granted_bytes_remaining: 0,
+            granted_chunks_remaining: 0,
+            in_flight: BTreeMap::new(),
+            acknowledged_chunk_digests: BTreeSet::new(),
             transferred_bytes: self.credit.transferred_bytes,
             next_sequence: self.credit.next_sequence,
             last_progress_step: self.credit.last_progress_step,
-            ..RemoteTransferCreditState::default()
         }
     }
 
@@ -823,14 +1070,14 @@ impl RemoteTransferReceiveSession {
             &self.credit,
             progress_step,
         )?;
-        persist_transfer_progress(
-            &self.state_dir,
-            self.policy,
-            &self.demand.scope,
-            &next,
-            self.reused_bytes,
-            &self.lease,
-        )?;
+        persist_transfer_progress(PersistTransferProgressRequest {
+            state_dir: &self.state_dir,
+            policy: self.policy,
+            scope: &self.demand.scope,
+            credit: &next,
+            reused_bytes: self.reused_bytes,
+            base_lease: &self.lease,
+        })?;
         self.credit = next;
         assert!(self.credit.in_flight.is_empty());
         assert_eq!(acknowledgement.transferred_bytes, self.credit.transferred_bytes);
@@ -842,7 +1089,7 @@ impl RemoteTransferReceiveSession {
     pub fn invalidate_fenced_progress(&mut self) -> Result<(), String> {
         remove_file_if_present(&self.checkpoint_path, "invalidating fenced transfer checkpoint")?;
         remove_directory_if_present(&self.receiver_root, "invalidating fenced transfer receiver")?;
-        self.credit = RemoteTransferCreditState::default();
+        self.credit = empty_remote_transfer_credit_state();
         assert!(!path_entry_exists_no_follow(&self.checkpoint_path));
         assert!(!path_entry_exists_no_follow(&self.receiver_root));
         Ok(())
@@ -868,14 +1115,14 @@ impl RemoteTransferReceiveSession {
                 return Err(reason(RemoteTransferReasonCode::TransferRejected));
             }
         };
-        persist_transfer_progress(
-            &self.state_dir,
-            self.policy,
-            &self.demand.scope,
-            &self.credit,
-            self.reused_bytes,
-            &self.lease,
-        )?;
+        persist_transfer_progress(PersistTransferProgressRequest {
+            state_dir: &self.state_dir,
+            policy: self.policy,
+            scope: &self.demand.scope,
+            credit: &self.credit,
+            reused_bytes: self.reused_bytes,
+            base_lease: &self.lease,
+        })?;
         let sent_chunk_digests = self
             .demand
             .missing_chunks
@@ -884,18 +1131,18 @@ impl RemoteTransferReceiveSession {
             .collect();
         assert!(receiver.requested_content_identity_verified);
         assert!(!completion.output_admission_claimed);
-        Ok(shell_report(
-            self.options.direction,
+        shell_report(ShellReportInput {
+            direction: self.options.direction,
             disposition,
-            &PreparedRemoteTransfer {
+            prepared: &PreparedRemoteTransfer {
                 manifest: self.manifest.clone(),
                 sources: BTreeMap::new(),
             },
-            self.credit.transferred_bytes,
-            completion.reused_bytes,
+            transferred_bytes: self.credit.transferred_bytes,
+            reused_bytes: completion.reused_bytes,
             sent_chunk_digests,
-            &self.checkpoint_path,
-        ))
+            checkpoint_path: &self.checkpoint_path,
+        })
     }
 }
 
@@ -910,6 +1157,8 @@ pub fn execute_prepared_remote_transfer(
     policy.validate().map_err(reason)?;
     validate_run_options(options)?;
     validate_prepared_remote_transfer(prepared, policy)?;
+    debug_assert!(!prepared.sources.is_empty());
+    debug_assert!(!prepared.manifest.canonical_bytes.is_empty());
     let scope = remote_transfer_scope(&prepared.manifest);
     let _session_lock = acquire_remote_transfer_session_lock(state_dir, &scope.session_id)?;
     let checkpoint_path = remote_transfer_state_path(state_dir, &scope.session_id);
@@ -936,81 +1185,143 @@ pub fn execute_prepared_remote_transfer(
         resume.transferred_bytes,
     );
     if initial.disposition == RemoteTransferCompletionDisposition::AlreadyPresent {
-        return Ok(shell_report(
-            options.direction,
-            RemoteTransferShellDisposition::AlreadyPresent,
+        return shell_report(ShellReportInput {
+            direction: options.direction,
+            disposition: RemoteTransferShellDisposition::AlreadyPresent,
             prepared,
-            0,
-            initial.reused_bytes,
-            Vec::new(),
-            &checkpoint_path,
-        ));
+            transferred_bytes: 0,
+            reused_bytes: initial.reused_bytes,
+            sent_chunk_digests: Vec::new(),
+            checkpoint_path: &checkpoint_path,
+        });
     }
-    run_missing_chunks(prepared, policy, state_dir, receiver_root, options, previous, receiver_before, resume)
+    run_missing_chunks(RunMissingChunksRequest {
+        prepared,
+        policy,
+        state_dir,
+        receiver_root,
+        options,
+        previous,
+        receiver_before,
+        resume,
+    })
 }
 
-fn run_missing_chunks(
-    prepared: &PreparedRemoteTransfer,
+struct RunMissingChunksRequest<'a> {
+    prepared: &'a PreparedRemoteTransfer,
     policy: RemoteTransferPolicy,
-    state_dir: &Path,
-    receiver_root: &Path,
+    state_dir: &'a Path,
+    receiver_root: &'a Path,
     options: RemoteTransferRunOptions,
     previous: Option<RemoteTransferDurableState>,
     receiver_before: RemoteTransferReceiverFacts,
     resume: RemoteTransferResumePlan,
-) -> Result<RemoteTransferShellReport, String> {
+}
+
+fn run_missing_chunks(request: RunMissingChunksRequest<'_>) -> Result<RemoteTransferShellReport, String> {
+    debug_assert!(!request.prepared.sources.is_empty());
+    debug_assert!(request.resume.demand.missing_bytes <= request.prepared.manifest.total_bytes);
+    let prepared = request.prepared;
+    let policy = request.policy;
+    let state_dir = request.state_dir;
+    let receiver_root = request.receiver_root;
+    let options = request.options;
+    let previous = request.previous;
+    let receiver_before = request.receiver_before;
+    let mut resume = request.resume;
     let scope = remote_transfer_scope(&prepared.manifest);
     let checkpoint_path = remote_transfer_state_path(state_dir, &scope.session_id);
     let lease = transfer_lease(prepared, options, &scope)?;
-    let mut credit = RemoteTransferCreditState {
-        acknowledged_chunk_digests: resume.acknowledged_chunk_digests,
-        transferred_bytes: resume.transferred_bytes,
-        next_sequence: resume.next_sequence,
-        last_progress_step: previous
-            .as_ref()
-            .map(|state| state.lease.last_progress_step)
-            .unwrap_or(INITIAL_PROGRESS_STEP),
-        ..RemoteTransferCreditState::default()
-    };
-    let mut sent = Vec::new();
+    let mut credit = initial_transfer_credit(&mut resume, previous.as_ref());
+    let mut sent = Vec::with_capacity(resume.demand.missing_chunks.len());
     for missing in &resume.demand.missing_chunks {
         let progress_step = credit
             .last_progress_step
             .checked_add(1)
             .ok_or_else(|| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
-        credit = transfer_one_chunk(
+        credit = transfer_one_chunk(TransferChunkRequest {
             prepared,
             policy,
             state_dir,
             receiver_root,
-            &resume.demand,
+            demand: &resume.demand,
             missing,
-            credit,
-            resume.reused_bytes,
-            &lease,
+            state: credit,
+            reused_bytes: resume.reused_bytes,
+            lease: &lease,
             progress_step,
-        )?;
+        })?;
         sent.push(missing.chunk.digest_blake3.as_str().to_string());
         if should_interrupt(options.interrupt_after_chunks, sent.len())? {
-            return Ok(shell_report(
-                options.direction,
-                RemoteTransferShellDisposition::Interrupted,
+            return shell_report(ShellReportInput {
+                direction: options.direction,
+                disposition: RemoteTransferShellDisposition::Interrupted,
                 prepared,
-                credit.transferred_bytes,
-                resume.reused_bytes,
-                sent,
-                &checkpoint_path,
-            ));
+                transferred_bytes: credit.transferred_bytes,
+                reused_bytes: resume.reused_bytes,
+                sent_chunk_digests: sent,
+                checkpoint_path: &checkpoint_path,
+            });
         }
     }
-    assemble_remote_transfer_artifacts(receiver_root, &prepared.manifest)?;
-    let receiver_after = probe_remote_transfer_receiver(receiver_root, &prepared.manifest, options.admission)?;
+    finish_missing_chunks(FinishMissingChunksRequest {
+        prepared,
+        policy,
+        state_dir,
+        receiver_root,
+        options,
+        receiver_before,
+        demand: &resume.demand,
+        reused_bytes: resume.reused_bytes,
+        scope: &scope,
+        lease: &lease,
+        credit,
+        sent,
+        checkpoint_path: &checkpoint_path,
+    })
+}
+
+fn initial_transfer_credit(
+    resume: &mut RemoteTransferResumePlan,
+    previous: Option<&RemoteTransferDurableState>,
+) -> RemoteTransferCreditState {
+    RemoteTransferCreditState {
+        granted_bytes_remaining: 0,
+        granted_chunks_remaining: 0,
+        in_flight: BTreeMap::new(),
+        acknowledged_chunk_digests: std::mem::take(&mut resume.acknowledged_chunk_digests),
+        transferred_bytes: resume.transferred_bytes,
+        next_sequence: resume.next_sequence,
+        last_progress_step: previous.map(|state| state.lease.last_progress_step).unwrap_or(INITIAL_PROGRESS_STEP),
+    }
+}
+
+struct FinishMissingChunksRequest<'a> {
+    prepared: &'a PreparedRemoteTransfer,
+    policy: RemoteTransferPolicy,
+    state_dir: &'a Path,
+    receiver_root: &'a Path,
+    options: RemoteTransferRunOptions,
+    receiver_before: RemoteTransferReceiverFacts,
+    demand: &'a RemoteTransferDemand,
+    reused_bytes: u64,
+    scope: &'a RemoteTransferScope,
+    lease: &'a RemoteTransferLease,
+    credit: RemoteTransferCreditState,
+    sent: Vec<String>,
+    checkpoint_path: &'a Path,
+}
+
+fn finish_missing_chunks(request: FinishMissingChunksRequest<'_>) -> Result<RemoteTransferShellReport, String> {
+    assemble_remote_transfer_artifacts(request.receiver_root, &request.prepared.manifest)?;
+    let receiver_after =
+        probe_remote_transfer_receiver(request.receiver_root, &request.prepared.manifest, request.options.admission)?;
     let completion = decide_remote_transfer_cutoff(
-        &prepared.manifest,
-        &resume.demand,
+        &request.prepared.manifest,
+        request.demand,
         &receiver_after,
-        &credit.acknowledged_chunk_digests,
-        credit.transferred_bytes,
+        &request.credit.acknowledged_chunk_digests,
+        request.credit.transferred_bytes,
     );
     let disposition = match completion.disposition {
         RemoteTransferCompletionDisposition::AlreadyPresent => RemoteTransferShellDisposition::AlreadyPresent,
@@ -1020,53 +1331,63 @@ fn run_missing_chunks(
             return Err(reason(RemoteTransferReasonCode::TransferRejected));
         }
     };
-    persist_transfer_progress(state_dir, policy, &scope, &credit, resume.reused_bytes, &lease)?;
-    assert!(receiver_after.complete_artifact_ids.len() >= receiver_before.complete_artifact_ids.len());
+    persist_transfer_progress(PersistTransferProgressRequest {
+        state_dir: request.state_dir,
+        policy: request.policy,
+        scope: request.scope,
+        credit: &request.credit,
+        reused_bytes: request.reused_bytes,
+        base_lease: request.lease,
+    })?;
+    assert!(receiver_after.complete_artifact_ids.len() >= request.receiver_before.complete_artifact_ids.len());
     assert!(receiver_after.requested_content_identity_verified);
     assert!(!completion.output_admission_claimed);
-    Ok(shell_report(
-        options.direction,
+    shell_report(ShellReportInput {
+        direction: request.options.direction,
         disposition,
-        prepared,
-        credit.transferred_bytes,
-        completion.reused_bytes,
-        sent,
-        &checkpoint_path,
-    ))
+        prepared: request.prepared,
+        transferred_bytes: request.credit.transferred_bytes,
+        reused_bytes: completion.reused_bytes,
+        sent_chunk_digests: request.sent,
+        checkpoint_path: request.checkpoint_path,
+    })
 }
 
-#[allow(clippy::too_many_arguments)]
-fn transfer_one_chunk(
-    prepared: &PreparedRemoteTransfer,
+struct TransferChunkRequest<'a> {
+    prepared: &'a PreparedRemoteTransfer,
     policy: RemoteTransferPolicy,
-    state_dir: &Path,
-    receiver_root: &Path,
-    demand: &RemoteTransferDemand,
-    missing: &RemoteTransferChunkDemand,
+    state_dir: &'a Path,
+    receiver_root: &'a Path,
+    demand: &'a RemoteTransferDemand,
+    missing: &'a RemoteTransferChunkDemand,
     state: RemoteTransferCreditState,
     reused_bytes: u64,
-    lease: &RemoteTransferLease,
+    lease: &'a RemoteTransferLease,
     progress_step: u64,
-) -> Result<RemoteTransferCreditState, String> {
+}
+
+fn transfer_one_chunk(request: TransferChunkRequest<'_>) -> Result<RemoteTransferCreditState, String> {
+    let missing = request.missing;
     let grant = RemoteTransferCreditGrant {
         bytes: u64::from(missing.chunk.size_bytes),
         chunks: FIRST_CHUNK_COUNT,
     };
-    let available_storage_bytes = available_storage_bytes(receiver_root)?;
-    let granted = grant_remote_transfer_credit(policy, &state, grant, available_storage_bytes).map_err(reason)?;
+    let available_storage_bytes = available_storage_bytes(request.receiver_root)?;
+    let granted =
+        grant_remote_transfer_credit(request.policy, &request.state, grant, available_storage_bytes).map_err(reason)?;
     let header = RemoteTransferChunkHeader {
-        scope: demand.scope.clone(),
+        scope: request.demand.scope.clone(),
         artifact_id: missing.artifact_id.clone(),
         artifact_kind: missing.artifact_kind,
         chunk: missing.chunk.clone(),
         sequence: granted.next_sequence,
     };
     let reserved =
-        reserve_remote_transfer_chunk(&prepared.manifest, policy, demand, &granted, &header).map_err(reason)?;
-    // The only chunk allocation occurs after the bounded credit reservation.
-    let bytes = read_prepared_chunk_after_reservation(prepared, &header)?;
+        reserve_remote_transfer_chunk(&request.prepared.manifest, request.policy, request.demand, &granted, &header)
+            .map_err(reason)?;
+    let bytes = read_prepared_chunk_after_reservation(request.prepared, &header)?;
     let observed = RemoteTransferDigest::new(blake3::hash(&bytes).to_hex().to_string()).map_err(reason)?;
-    persist_verified_chunk(receiver_root, &header.chunk, &bytes, &observed)?;
+    persist_verified_chunk(request.receiver_root, &header.chunk, &bytes, &observed)?;
     let transferred_bytes = reserved
         .transferred_bytes
         .checked_add(u64::from(header.chunk.size_bytes))
@@ -1077,9 +1398,22 @@ fn transfer_one_chunk(
         sequence: header.sequence,
         transferred_bytes,
     };
-    let acknowledged = acknowledge_remote_transfer_chunk(policy, &reserved, &acknowledgement, &observed, progress_step)
-        .map_err(reason)?;
-    persist_transfer_progress(state_dir, policy, &demand.scope, &acknowledged, reused_bytes, lease)?;
+    let acknowledged = acknowledge_remote_transfer_chunk(
+        request.policy,
+        &reserved,
+        &acknowledgement,
+        &observed,
+        request.progress_step,
+    )
+    .map_err(reason)?;
+    persist_transfer_progress(PersistTransferProgressRequest {
+        state_dir: request.state_dir,
+        policy: request.policy,
+        scope: &request.demand.scope,
+        credit: &acknowledged,
+        reused_bytes: request.reused_bytes,
+        base_lease: request.lease,
+    })?;
     assert!(acknowledged.acknowledged_chunk_digests.contains(&observed));
     assert!(acknowledged.in_flight.is_empty());
     Ok(acknowledged)
@@ -1092,9 +1426,11 @@ pub fn probe_remote_transfer_receiver(
     admission: RemoteTransferAdmissionFacts,
 ) -> Result<RemoteTransferReceiverFacts, String> {
     let mut facts = RemoteTransferReceiverFacts {
+        complete_artifact_ids: BTreeSet::new(),
+        complete_chunk_digests: BTreeSet::new(),
+        requested_content_identity_verified: false,
         required_closure_metadata_verified: admission.required_closure_metadata_verified,
         path_info_admitted: admission.path_info_admitted,
-        ..RemoteTransferReceiverFacts::default()
     };
     for artifact in &manifest.manifest.artifacts {
         if receiver_artifact_is_valid(receiver_root, artifact)? {
@@ -1107,15 +1443,17 @@ pub fn probe_remote_transfer_receiver(
             }
         }
     }
-    let required_complete = manifest
+    let is_required_set_complete = manifest
         .manifest
         .artifacts
         .iter()
         .filter(|artifact| artifact.required_for_completion)
         .all(|artifact| facts.complete_artifact_ids.contains(&artifact.artifact_id));
-    facts.requested_content_identity_verified = required_complete;
+    facts.requested_content_identity_verified = is_required_set_complete;
     assert!(facts.complete_artifact_ids.len() <= manifest.manifest.artifacts.len());
-    assert!(!facts.requested_content_identity_verified || required_complete);
+    if facts.requested_content_identity_verified {
+        assert!(is_required_set_complete);
+    }
     Ok(facts)
 }
 
@@ -1179,19 +1517,23 @@ pub fn load_remote_transfer_state(
 }
 
 fn read_transfer_checkpoint_bounded(file: File, capacity_hint_bytes: u64) -> Result<Vec<u8>, String> {
-    let checkpoint_read_limit = MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD
+    let checkpoint_read_limit_bytes = MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD
         .checked_add(1)
         .ok_or_else(|| "remote-transfer-checkpoint-read-limit-overflow".to_string())?;
-    let bounded_capacity = std::cmp::min(capacity_hint_bytes, MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD);
-    let mut bytes = Vec::with_capacity(usize::try_from(bounded_capacity).unwrap_or(0));
-    file.take(checkpoint_read_limit)
+    let bounded_capacity_bytes = std::cmp::min(capacity_hint_bytes, MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD);
+    let allocation_bytes = usize::try_from(bounded_capacity_bytes)
+        .map_err(|_| "remote-transfer-checkpoint-capacity-overflow".to_string())?;
+    let mut bytes = Vec::with_capacity(allocation_bytes);
+    file.take(checkpoint_read_limit_bytes)
         .read_to_end(&mut bytes)
         .map_err(|err| format!("reading bounded transfer checkpoint: {err}"))?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD {
+    let observed_bytes =
+        u64::try_from(bytes.len()).map_err(|_| "remote-transfer-checkpoint-size-overflow".to_string())?;
+    if observed_bytes > MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD {
         return Err("remote-transfer-checkpoint-grew-beyond-limit".to_string());
     }
-    assert!(u64::try_from(bytes.len()).unwrap_or(u64::MAX) <= MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD);
-    assert!(bounded_capacity <= MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD);
+    assert!(observed_bytes <= MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD);
+    assert!(bounded_capacity_bytes <= MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD);
     Ok(bytes)
 }
 
@@ -1364,35 +1706,39 @@ fn transfer_lease_from_manifest(
     })
 }
 
-fn persist_transfer_progress(
-    state_dir: &Path,
+struct PersistTransferProgressRequest<'a> {
+    state_dir: &'a Path,
     policy: RemoteTransferPolicy,
-    scope: &RemoteTransferScope,
-    credit: &RemoteTransferCreditState,
+    scope: &'a RemoteTransferScope,
+    credit: &'a RemoteTransferCreditState,
     reused_bytes: u64,
-    base_lease: &RemoteTransferLease,
-) -> Result<(), String> {
+    base_lease: &'a RemoteTransferLease,
+}
+
+fn persist_transfer_progress(request: PersistTransferProgressRequest<'_>) -> Result<(), String> {
+    debug_assert_eq!(request.scope, &request.base_lease.scope);
+    debug_assert!(request.credit.transferred_bytes <= request.policy.total_bytes_max);
     let checkpoint = seal_remote_transfer_checkpoint(
         RemoteTransferCheckpoint {
             schema: REMOTE_TRANSFER_CHECKPOINT_SCHEMA.to_string(),
-            scope: scope.clone(),
-            acknowledged_chunk_digests: credit.acknowledged_chunk_digests.clone(),
-            next_sequence: credit.next_sequence,
-            transferred_bytes: credit.transferred_bytes,
-            reused_bytes,
+            scope: request.scope.clone(),
+            acknowledged_chunk_digests: request.credit.acknowledged_chunk_digests.clone(),
+            next_sequence: request.credit.next_sequence,
+            transferred_bytes: request.credit.transferred_bytes,
+            reused_bytes: request.reused_bytes,
             checkpoint_digest_blake3: RemoteTransferDigest::new("0".repeat(64)).map_err(reason)?,
         },
-        policy,
+        request.policy,
     )
     .map_err(reason)?;
-    let mut lease = base_lease.clone();
-    lease.last_progress_step = credit.last_progress_step;
+    let mut lease = request.base_lease.clone();
+    lease.last_progress_step = request.credit.last_progress_step;
     let durable = RemoteTransferDurableState {
         schema: REMOTE_TRANSFER_DURABLE_STATE_SCHEMA.to_string(),
         checkpoint,
         lease,
     };
-    save_remote_transfer_state(state_dir, policy, &durable)?;
+    save_remote_transfer_state(request.state_dir, request.policy, &durable)?;
     Ok(())
 }
 
@@ -1408,9 +1754,10 @@ fn validate_durable_state(state: &RemoteTransferDurableState, policy: RemoteTran
     }
     let count = u32::try_from(state.lease.artifact_ids.len())
         .map_err(|_| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
+    let maximum_acknowledged_chunks =
+        usize::try_from(policy.chunk_count_max).map_err(|_| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
     if count > MAX_REMOTE_TRANSFER_LEASE_REFS_HARD
-        || state.checkpoint.acknowledged_chunk_digests.len()
-            > usize::try_from(policy.chunk_count_max).unwrap_or(usize::MAX)
+        || state.checkpoint.acknowledged_chunk_digests.len() > maximum_acknowledged_chunks
     {
         return Err(reason(RemoteTransferReasonCode::CheckpointTooLarge));
     }
@@ -1436,27 +1783,30 @@ fn should_interrupt(limit: Option<u32>, sent_count: usize) -> Result<bool, Strin
     Ok(limit.is_some_and(|limit| sent >= limit))
 }
 
-fn shell_report(
+struct ShellReportInput<'a> {
     direction: RemoteTransferDirection,
     disposition: RemoteTransferShellDisposition,
-    prepared: &PreparedRemoteTransfer,
+    prepared: &'a PreparedRemoteTransfer,
     transferred_bytes: u64,
     reused_bytes: u64,
     sent_chunk_digests: Vec<String>,
-    checkpoint_path: &Path,
-) -> RemoteTransferShellReport {
-    let chunks_sent = u32::try_from(sent_chunk_digests.len()).unwrap_or(u32::MAX);
-    RemoteTransferShellReport {
-        direction,
-        disposition,
-        manifest_digest_blake3: prepared.manifest.digest_blake3.as_str().to_string(),
-        transferred_bytes,
-        reused_bytes,
+    checkpoint_path: &'a Path,
+}
+
+fn shell_report(input: ShellReportInput<'_>) -> Result<RemoteTransferShellReport, String> {
+    let chunks_sent = u32::try_from(input.sent_chunk_digests.len())
+        .map_err(|_| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
+    Ok(RemoteTransferShellReport {
+        direction: input.direction,
+        disposition: input.disposition,
+        manifest_digest_blake3: input.prepared.manifest.digest_blake3.as_str().to_string(),
+        transferred_bytes: input.transferred_bytes,
+        reused_bytes: input.reused_bytes,
         chunks_sent,
-        sent_chunk_digests,
-        checkpoint_path: checkpoint_path.display().to_string(),
+        sent_chunk_digests: input.sent_chunk_digests,
+        checkpoint_path: input.checkpoint_path.display().to_string(),
         output_admission_claimed: false,
-    }
+    })
 }
 
 fn read_prepared_chunk_after_reservation(
@@ -1467,9 +1817,9 @@ fn read_prepared_chunk_after_reservation(
         .sources
         .get(&header.artifact_id)
         .ok_or_else(|| "remote-transfer-source-binding-missing".to_string())?;
-    let capacity =
+    let capacity_bytes =
         usize::try_from(header.chunk.size_bytes).map_err(|_| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
-    let mut bytes = vec![0_u8; capacity];
+    let mut bytes = vec![0_u8; capacity_bytes];
     let mut file = File::open(path).map_err(|err| format!("opening transfer chunk source: {err}"))?;
     file.seek(SeekFrom::Start(header.chunk.offset_bytes))
         .map_err(|err| format!("seeking transfer chunk source: {err}"))?;
@@ -1478,7 +1828,7 @@ fn read_prepared_chunk_after_reservation(
     if observed != header.chunk.digest_blake3.as_str() {
         return Err(reason(RemoteTransferReasonCode::ChunkDigestMismatch));
     }
-    assert_eq!(bytes.len(), capacity);
+    assert_eq!(bytes.len(), capacity_bytes);
     assert!(!bytes.is_empty());
     Ok(bytes)
 }
@@ -1492,12 +1842,14 @@ fn persist_verified_chunk(
     if observed != &descriptor.digest_blake3 {
         return Err(reason(RemoteTransferReasonCode::ChunkDigestMismatch));
     }
-    if bytes.len() != usize::try_from(descriptor.size_bytes).unwrap_or(usize::MAX) {
+    let expected_size_bytes =
+        usize::try_from(descriptor.size_bytes).map_err(|_| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
+    if bytes.len() != expected_size_bytes {
         return Err(reason(RemoteTransferReasonCode::ChunkSizeInvalid));
     }
     write_atomic_bytes(&receiver_chunk_path(receiver_root, observed), bytes)?;
     assert_eq!(observed, &descriptor.digest_blake3);
-    assert_eq!(bytes.len(), usize::try_from(descriptor.size_bytes).unwrap_or(usize::MAX));
+    assert_eq!(bytes.len(), expected_size_bytes);
     Ok(())
 }
 
@@ -1522,11 +1874,13 @@ fn assemble_remote_transfer_artifacts(
         }
         commit_atomic_file(writer, &temporary, &target)?;
         if !receiver_artifact_is_valid(receiver_root, artifact)? {
-            let _ = fs::remove_file(&target);
+            remove_file_if_present(&target, "removing invalid assembled transfer artifact")?;
             return Err(reason(RemoteTransferReasonCode::ArtifactDigestConflict));
         }
     }
-    assert!(manifest.manifest.artifacts.len() <= usize::try_from(manifest.artifact_count).unwrap_or(usize::MAX));
+    let assembled_artifact_count = u32::try_from(manifest.manifest.artifacts.len())
+        .map_err(|_| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
+    assert!(assembled_artifact_count <= manifest.artifact_count);
     assert!(manifest.total_bytes > 0);
     Ok(())
 }
@@ -1544,6 +1898,8 @@ fn receiver_chunk_is_valid(root: &Path, descriptor: &RemoteTransferChunkDescript
 }
 
 fn receiver_artifact_is_valid(root: &Path, artifact: &RemoteTransferArtifact) -> Result<bool, String> {
+    debug_assert!(!root.as_os_str().is_empty());
+    debug_assert!(artifact.size_bytes > 0);
     let path = receiver_artifact_path(root, &artifact.artifact_id);
     let Some(mut file) = open_regular_file_no_follow(&path, "receiver artifact")? else {
         return Ok(false);
@@ -1581,15 +1937,17 @@ fn hash_file_blake3(path: &Path) -> Result<RemoteTransferDigest, String> {
 
 fn hash_reader_blake3(file: &mut File) -> Result<RemoteTransferDigest, String> {
     let mut hasher = blake3::Hasher::new();
-    let mut buffer = vec![0_u8; usize::try_from(COPY_BUFFER_BYTES).unwrap_or(1)];
-    loop {
+    let buffer_capacity_bytes =
+        usize::try_from(COPY_BUFFER_BYTES).map_err(|_| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
+    let mut buffer = vec![0_u8; buffer_capacity_bytes];
+    for _block_index in 0..FILE_HASH_BLOCK_COUNT_MAX {
         let read_bytes = file.read(&mut buffer).map_err(|err| format!("reading content for BLAKE3: {err}"))?;
         if read_bytes == 0 {
-            break;
+            return RemoteTransferDigest::new(hasher.finalize().to_hex().to_string()).map_err(reason);
         }
         hasher.update(&buffer[..read_bytes]);
     }
-    RemoteTransferDigest::new(hasher.finalize().to_hex().to_string()).map_err(reason)
+    Err(reason(RemoteTransferReasonCode::TotalBytesExceeded))
 }
 
 fn hash_file_sha256_hex(path: &Path) -> Result<String, String> {
@@ -1599,15 +1957,17 @@ fn hash_file_sha256_hex(path: &Path) -> Result<String, String> {
 
 fn hash_reader_sha256_hex(file: &mut File) -> Result<String, String> {
     let mut hasher = <sha2::Sha256 as sha2::Digest>::new();
-    let mut buffer = vec![0_u8; usize::try_from(COPY_BUFFER_BYTES).unwrap_or(1)];
-    loop {
+    let buffer_capacity_bytes =
+        usize::try_from(COPY_BUFFER_BYTES).map_err(|_| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
+    let mut buffer = vec![0_u8; buffer_capacity_bytes];
+    for _block_index in 0..FILE_HASH_BLOCK_COUNT_MAX {
         let read_bytes = file.read(&mut buffer).map_err(|err| format!("reading content for SHA-256: {err}"))?;
         if read_bytes == 0 {
-            break;
+            return Ok(data_encoding::HEXLOWER.encode(&sha2::Digest::finalize(hasher)));
         }
         sha2::Digest::update(&mut hasher, &buffer[..read_bytes]);
     }
-    Ok(data_encoding::HEXLOWER.encode(&sha2::Digest::finalize(hasher)))
+    Err(reason(RemoteTransferReasonCode::TotalBytesExceeded))
 }
 
 fn verify_nar_sha256(path: &Path, path_info: &PathInfo) -> Result<(), String> {
@@ -1629,7 +1989,7 @@ fn copy_file_bounded(source: &Path, target: &Path, max_bytes: u64) -> Result<(),
     let copied = std::io::copy(&mut std::io::Read::by_ref(&mut reader).take(max_bytes.saturating_add(1)), &mut writer)
         .map_err(|err| format!("copying bounded source: {err}"))?;
     if copied != metadata.len() || copied > max_bytes {
-        let _ = fs::remove_file(&temporary);
+        remove_file_if_present(&temporary, "removing invalid bounded copy temp")?;
         return Err(reason(RemoteTransferReasonCode::TotalBytesExceeded));
     }
     commit_atomic_file(writer, &temporary, target)
@@ -1638,7 +1998,7 @@ fn copy_file_bounded(source: &Path, target: &Path, max_bytes: u64) -> Result<(),
 fn write_atomic_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let (mut file, temporary) = create_owned_atomic_temp(path)?;
     if let Err(error) = file.write_all(bytes) {
-        let _ = fs::remove_file(&temporary);
+        remove_file_if_present(&temporary, "removing failed atomic write temp")?;
         return Err(format!("writing owned atomic temp: {error}"));
     }
     commit_atomic_file(file, &temporary, path)
@@ -1728,7 +2088,7 @@ fn commit_atomic_file(mut file: File, temporary: &Path, target: &Path) -> Result
     }
     drop(file);
     if let Err(error) = fs::rename(temporary, target) {
-        let _ = fs::remove_file(temporary);
+        remove_file_if_present(temporary, "removing failed atomic commit temp")?;
         return Err(format!("committing atomic file {}: {error}", target.display()));
     }
     let published = open_regular_file_no_follow(target, "published atomic file")?
@@ -1761,7 +2121,7 @@ fn sync_parent_directory_no_follow(parent: &Path) -> Result<(), String> {
         .sync_all()
         .map_err(|error| format!("syncing atomic parent {}: {error}", parent.display()))?;
     assert!(metadata.is_dir());
-    assert!(parent.file_name().is_some() || parent.parent().is_none());
+    assert!(!parent.as_os_str().is_empty());
     Ok(())
 }
 
@@ -1960,14 +2320,14 @@ mod tests {
         let source = root.join("source.bin");
         write_test_pattern(&source, data_bytes);
         let policy = RemoteTransferPolicy::default();
-        let artifact = prepare_file_transfer_artifact(
-            RemoteTransferArtifactId::new("fixture:root").unwrap(),
-            RemoteTransferArtifactKind::SourceBundle,
-            &source,
-            true,
-            None,
+        let artifact = prepare_file_transfer_artifact(FileTransferArtifactRequest {
+            artifact_id: RemoteTransferArtifactId::new("fixture:root").unwrap(),
+            artifact_kind: RemoteTransferArtifactKind::SourceBundle,
+            source_path: &source,
+            is_required_for_completion: true,
+            nar_sha256_hex: None,
             policy,
-        )
+        })
         .unwrap();
         let requested_content_blake3 = artifact.descriptor.digest_blake3.clone();
         prepare_remote_transfer(
@@ -2359,14 +2719,14 @@ mod tests {
         let mut tiny_total_policy = policy;
         tiny_total_policy.total_bytes_max = 1;
         let source = root.path().join("source.bin");
-        let error = prepare_file_transfer_artifact(
-            RemoteTransferArtifactId::new("source:over-total").unwrap(),
-            RemoteTransferArtifactKind::SourceBundle,
-            &source,
-            true,
-            None,
-            tiny_total_policy,
-        )
+        let error = prepare_file_transfer_artifact(FileTransferArtifactRequest {
+            artifact_id: RemoteTransferArtifactId::new("source:over-total").unwrap(),
+            artifact_kind: RemoteTransferArtifactKind::SourceBundle,
+            source_path: &source,
+            is_required_for_completion: true,
+            nar_sha256_hex: None,
+            policy: tiny_total_policy,
+        })
         .unwrap_err();
         assert_eq!(error, RemoteTransferReasonCode::TotalBytesExceeded.as_str());
         assert!(!receiver.exists());

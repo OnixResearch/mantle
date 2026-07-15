@@ -5,8 +5,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Output;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use crunch_attestation::ReleaseAttestation;
 use serde::Deserialize;
@@ -32,6 +30,7 @@ use crate::witness_handoff::WitnessRequestDocument;
 pub(crate) const WITNESS_REBUILD_AUDIT_SCHEMA: &str = "mantle-witness-rebuild-audit-v1";
 pub(crate) const WITNESS_SCRATCH_ENV: &str = "MANTLE_WITNESS_SCRATCH_DIR";
 const MAX_EXPECTED_OUTPUTS: u32 = 16;
+const MAX_EXPECTED_OUTPUTS_USIZE: usize = 16;
 const PROOF_BINARY_CANDIDATE_LIMIT: usize = 5;
 const DIAGNOSTIC_EXCERPT_LIMIT: usize = 5;
 const DIAGNOSTIC_MARKERS: &[&str] = &[
@@ -115,14 +114,10 @@ const SOURCE_ACQUISITION_MODE_COPIED: &str = "copied-source";
 const SOURCE_ACQUISITION_MODE_EXTERNAL_ARCHIVE: &str = "external-archive-source";
 const SOURCE_ACQUISITION_MODE_GIT: &str = "git-derived-source";
 const SOURCE_ACQUISITION_STATUS_VERIFIED: &str = "verified";
-const BYTES_PER_KIB: u64 = 1024;
-const KIB_PER_MIB: u64 = 1024;
-const MIB_PER_GIB: u64 = 1024;
-const MAX_SOURCE_ARCHIVE_FETCH_GIB: u64 = 4;
-const MAX_SOURCE_ARCHIVE_FETCH_BYTES: u64 = MAX_SOURCE_ARCHIVE_FETCH_GIB * MIB_PER_GIB * KIB_PER_MIB * BYTES_PER_KIB;
-const SOURCE_FETCH_BUFFER_KIB: usize = 64;
-const BYTES_PER_KIB_USIZE: usize = 1024;
-const SOURCE_FETCH_BUFFER_BYTES: usize = SOURCE_FETCH_BUFFER_KIB * BYTES_PER_KIB_USIZE;
+const MAX_SOURCE_ARCHIVE_FETCH_BYTES: u64 = 4_294_967_296;
+const SOURCE_FETCH_BUFFER_BYTES: usize = 65_536;
+const MAX_SCRATCH_ROOT_ENTRIES: usize = 16;
+const MILLISECONDS_PER_SECOND: u64 = 1000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ExpectedRebuiltOutput {
@@ -282,17 +277,25 @@ struct RequestArtifactPaths {
 
 #[derive(Debug, Deserialize)]
 struct ProofBundleManifest {
-    #[serde(default)]
+    #[serde(default = "no_proof_bundle_binaries")]
     binaries: Option<ProofBundleBinaries>,
     stage2: ProofBundleStage,
 }
 
 #[derive(Debug, Deserialize)]
 struct ProofBundleBinaries {
-    #[serde(default)]
+    #[serde(default = "no_proof_bundle_binary")]
     stage1: Option<ProofBundleBinary>,
-    #[serde(default)]
+    #[serde(default = "no_proof_bundle_binary")]
     stage2: Option<ProofBundleBinary>,
+}
+
+fn no_proof_bundle_binaries() -> Option<ProofBundleBinaries> {
+    None
+}
+
+fn no_proof_bundle_binary() -> Option<ProofBundleBinary> {
+    None
 }
 
 #[derive(Debug, Deserialize)]
@@ -328,13 +331,42 @@ pub(crate) fn default_witness_scratch_dir(request_dir: &Path) -> Result<PathBuf,
     Ok(parent.join(format!("{file_name}.work")))
 }
 
+struct WitnessRebuildPlanRequest<'a> {
+    request_dir: &'a Path,
+    scratch_root: &'a Path,
+    require_independent_source: bool,
+    require_git_source: bool,
+}
+
+#[expect(
+    tigerstyle::ambiguous_params,
+    reason = "stable release command boundary delegates immediately to the named witness plan request"
+)]
 pub(crate) fn plan_witness_rebuild(
     request_dir: &Path,
     scratch_root: &Path,
     require_independent_source: bool,
     require_git_source: bool,
 ) -> Result<WitnessRebuildPlan, RunError> {
-    validate_source_replay_flags(require_independent_source, require_git_source)?;
+    plan_witness_rebuild_request(WitnessRebuildPlanRequest {
+        request_dir,
+        scratch_root,
+        require_independent_source,
+        require_git_source,
+    })
+}
+
+fn plan_witness_rebuild_request(request: WitnessRebuildPlanRequest<'_>) -> Result<WitnessRebuildPlan, RunError> {
+    debug_assert!(!request.request_dir.as_os_str().is_empty());
+    debug_assert!(!request.scratch_root.as_os_str().is_empty());
+    let request_dir = request.request_dir;
+    let scratch_root = request.scratch_root;
+    let is_independent_source_required = request.require_independent_source;
+    let is_git_source_required = request.require_git_source;
+    validate_source_replay_flags(SourceReplayRequirements {
+        require_independent_source: is_independent_source_required,
+        require_git_source: is_git_source_required,
+    })?;
     let request = load_witness_request_document(request_dir)?;
     validate_request_schema(&request)?;
     let paths = resolve_request_artifact_paths(request_dir, &request)?;
@@ -344,7 +376,10 @@ pub(crate) fn plan_witness_rebuild(
     validate_supported_workflow_identity(&manifest.workflow.command, &manifest.workflow.version)?;
     let expected_outputs = build_expected_outputs(&manifest, &release_attestation)?;
     let request_source_archive_path = source_archive_path(&paths.bundle_dir, &manifest)?;
-    let source_acquisition = source_acquisition_for_plan(&manifest, require_independent_source, require_git_source)?;
+    let source_acquisition = source_acquisition_for_plan(&manifest, SourceReplayRequirements {
+        require_independent_source: is_independent_source_required,
+        require_git_source: is_git_source_required,
+    })?;
     let scratch_layout = derive_witness_rebuild_layout(scratch_root, &request.release_id)?;
     let request_path = paths.request_path;
     Ok(WitnessRebuildPlan {
@@ -360,8 +395,8 @@ pub(crate) fn plan_witness_rebuild(
         workflow_version: manifest.workflow.version,
         proof_mode: manifest.proof_linkage.proof_mode,
         expected_outputs,
-        require_independent_source,
-        require_git_source,
+        require_independent_source: is_independent_source_required,
+        require_git_source: is_git_source_required,
         source_acquisition,
         scratch_layout,
     })
@@ -375,6 +410,8 @@ pub(crate) fn prepare_witness_rebuild_scratch(plan: &WitnessRebuildPlan) -> Resu
 }
 
 pub(crate) fn run_witness_rebuild_workflow(plan: &WitnessRebuildPlan) -> Result<WitnessRebuildExecution, RunError> {
+    debug_assert!(!plan.release_id.is_empty());
+    debug_assert!(plan.scratch_layout.repo_dir.is_dir());
     let workflow_driver_path = resolve_workflow_driver_path(plan)?;
     let workflow_args = workflow_args_for_proof_mode(&plan.proof_mode)?;
     let mut command = Command::new(&workflow_driver_path);
@@ -438,21 +475,35 @@ pub(crate) fn build_success_audit_meta(
     attestation_path: &Path,
     signature_path: &Path,
 ) -> Result<WitnessRebuildAuditMeta, RunError> {
-    build_audit_meta(
+    build_audit_meta(AuditMetaInput {
         plan,
-        &success.workflow_driver_path,
-        &success.rebuilt_output_paths,
-        success.started_unix_ms,
-        success.finished_unix_ms,
-        audit_status_success(),
-        Some(attestation_path),
-        Some(signature_path),
-        None,
-        None,
-        None,
-    )
+        workflow_driver_path: &success.workflow_driver_path,
+        rebuilt_output_paths: &success.rebuilt_output_paths,
+        started_unix_ms: success.started_unix_ms,
+        finished_unix_ms: success.finished_unix_ms,
+        status: audit_status_success(),
+        attestation_path: Some(attestation_path),
+        signature_path: Some(signature_path),
+        failure_message: None,
+        diagnostics: None,
+        source_acquisition_error: None,
+    })
 }
 
+struct FailureAuditMetaRequest<'a> {
+    plan: &'a WitnessRebuildPlan,
+    workflow_driver_path: &'a Path,
+    rebuilt_output_paths: &'a [PathBuf],
+    started_unix_ms: u64,
+    finished_unix_ms: u64,
+    failure_message: &'a str,
+}
+
+#[expect(
+    tigerstyle::too_many_parameters,
+    tigerstyle::ambiguous_params,
+    reason = "stable release command boundary delegates immediately to the named failure audit request"
+)]
 pub(crate) fn build_failure_audit_meta(
     plan: &WitnessRebuildPlan,
     workflow_driver_path: &Path,
@@ -461,19 +512,30 @@ pub(crate) fn build_failure_audit_meta(
     finished_unix_ms: u64,
     failure_message: &str,
 ) -> Result<WitnessRebuildAuditMeta, RunError> {
-    build_audit_meta(
+    build_failure_audit_meta_request(FailureAuditMetaRequest {
         plan,
         workflow_driver_path,
         rebuilt_output_paths,
         started_unix_ms,
         finished_unix_ms,
-        audit_status_failed(),
-        None,
-        None,
-        Some(failure_message.to_string()),
-        Some(build_failure_diagnostics(plan, failure_message)),
-        None,
-    )
+        failure_message,
+    })
+}
+
+fn build_failure_audit_meta_request(request: FailureAuditMetaRequest<'_>) -> Result<WitnessRebuildAuditMeta, RunError> {
+    build_audit_meta(AuditMetaInput {
+        plan: request.plan,
+        workflow_driver_path: request.workflow_driver_path,
+        rebuilt_output_paths: request.rebuilt_output_paths,
+        started_unix_ms: request.started_unix_ms,
+        finished_unix_ms: request.finished_unix_ms,
+        status: audit_status_failed(),
+        attestation_path: None,
+        signature_path: None,
+        failure_message: Some(request.failure_message.to_string()),
+        diagnostics: Some(build_failure_diagnostics(request.plan, request.failure_message)),
+        source_acquisition_error: None,
+    })
 }
 
 pub(crate) fn build_prelaunch_failure_audit_meta(
@@ -481,19 +543,19 @@ pub(crate) fn build_prelaunch_failure_audit_meta(
     failure_message: &str,
 ) -> Result<WitnessRebuildAuditMeta, RunError> {
     let timestamp_ms = unix_time_ms_now()?;
-    build_audit_meta(
+    build_audit_meta(AuditMetaInput {
         plan,
-        Path::new("<not-launched>"),
-        &[],
-        timestamp_ms,
-        timestamp_ms,
-        audit_status_failed(),
-        None,
-        None,
-        Some(failure_message.to_string()),
-        Some(build_failure_diagnostics(plan, failure_message)),
-        Some(failure_message),
-    )
+        workflow_driver_path: Path::new("<not-launched>"),
+        rebuilt_output_paths: &[],
+        started_unix_ms: timestamp_ms,
+        finished_unix_ms: timestamp_ms,
+        status: audit_status_failed(),
+        attestation_path: None,
+        signature_path: None,
+        failure_message: Some(failure_message.to_string()),
+        diagnostics: Some(build_failure_diagnostics(plan, failure_message)),
+        source_acquisition_error: Some(failure_message),
+    })
 }
 
 pub(crate) fn write_audit_meta(path: &Path, meta: &WitnessRebuildAuditMeta) -> Result<(), RunError> {
@@ -543,7 +605,8 @@ fn resolve_request_artifact_paths(
     })
 }
 
-fn parse_request_relative_path(path_text: &str, label: &str) -> Result<PathBuf, RunError> {
+fn parse_request_relative_path(path_text: &str, label: impl AsRef<str>) -> Result<PathBuf, RunError> {
+    let label = label.as_ref();
     let candidate = PathBuf::from(path_text);
     if candidate.as_os_str().is_empty() {
         return Err(RunError::Internal(format!("{label} path must not be empty")));
@@ -582,7 +645,11 @@ fn validate_release_ids(
     Ok(())
 }
 
-fn validate_supported_workflow_identity(workflow_command: &str, workflow_version: &str) -> Result<(), RunError> {
+fn validate_supported_workflow_identity(
+    workflow_command: &str,
+    workflow_version: impl AsRef<str>,
+) -> Result<(), RunError> {
+    let workflow_version = workflow_version.as_ref();
     if workflow_command != DEFAULT_PROOF_WORKFLOW_COMMAND || workflow_version != DEFAULT_PROOF_WORKFLOW_VERSION {
         return Err(RunError::Internal(format!(
             "unsupported witness rebuild workflow '{}'/ '{}': expected '{}'/ '{}'",
@@ -614,6 +681,8 @@ fn build_expected_outputs(
         )));
     }
     let mut outputs = Vec::with_capacity(manifest.binaries.len());
+    debug_assert_eq!(manifest_count_u32, attestation_count_u32);
+    debug_assert!(manifest_count_u32 <= MAX_EXPECTED_OUTPUTS);
     for (index_usize, (manifest_binary, attested_binary)) in
         manifest.binaries.iter().zip(release_attestation.binary_digests.iter()).enumerate()
     {
@@ -629,7 +698,12 @@ fn build_expected_outputs(
     Ok(outputs)
 }
 
-fn validate_output_name_match(index_u32: u32, manifest_name: &str, attested_name: &str) -> Result<(), RunError> {
+fn validate_output_name_match(
+    index_u32: u32,
+    manifest_name: &str,
+    attested_name: impl AsRef<str>,
+) -> Result<(), RunError> {
+    let attested_name = attested_name.as_ref();
     if manifest_name == attested_name {
         return Ok(());
     }
@@ -639,7 +713,12 @@ fn validate_output_name_match(index_u32: u32, manifest_name: &str, attested_name
     )))
 }
 
-fn validate_output_digest_match(index_u32: u32, manifest_digest: &str, attested_digest: &str) -> Result<(), RunError> {
+fn validate_output_digest_match(
+    index_u32: u32,
+    manifest_digest: &str,
+    attested_digest: impl AsRef<str>,
+) -> Result<(), RunError> {
+    let attested_digest = attested_digest.as_ref();
     if manifest_digest == attested_digest {
         return Ok(());
     }
@@ -651,6 +730,8 @@ fn validate_output_digest_match(index_u32: u32, manifest_digest: &str, attested_
 
 fn derive_witness_rebuild_layout(scratch_root: &Path, release_id: &str) -> Result<WitnessRebuildLayout, RunError> {
     validate_release_id(release_id)?;
+    debug_assert!(!scratch_root.as_os_str().is_empty());
+    debug_assert!(!release_id.is_empty());
     let audit_dir = scratch_root.join(SCRATCH_AUDIT_DIR_NAME);
     Ok(WitnessRebuildLayout {
         scratch_root: scratch_root.to_path_buf(),
@@ -686,8 +767,14 @@ fn source_archive_path(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest) ->
     Ok(bundle_dir.join(relative))
 }
 
-fn validate_source_replay_flags(require_independent_source: bool, require_git_source: bool) -> Result<(), RunError> {
-    if require_independent_source && require_git_source {
+#[derive(Clone, Copy)]
+struct SourceReplayRequirements {
+    require_independent_source: bool,
+    require_git_source: bool,
+}
+
+fn validate_source_replay_flags(requirements: SourceReplayRequirements) -> Result<(), RunError> {
+    if requirements.require_independent_source && requirements.require_git_source {
         return Err(RunError::Internal(
             "--require-independent-source and --require-git-source are mutually exclusive".to_string(),
         ));
@@ -697,13 +784,12 @@ fn validate_source_replay_flags(require_independent_source: bool, require_git_so
 
 fn source_acquisition_for_plan(
     manifest: &ReleaseEvidenceManifest,
-    require_independent_source: bool,
-    require_git_source: bool,
+    requirements: SourceReplayRequirements,
 ) -> Result<Option<SourceAcquisition>, RunError> {
-    if require_git_source {
+    if requirements.require_git_source {
         return required_source_acquisition_kind(manifest, SOURCE_ACQUISITION_KIND_GIT, "Git source").map(Some);
     }
-    if require_independent_source {
+    if requirements.require_independent_source {
         return required_source_acquisition_kind(
             manifest,
             SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE,
@@ -717,8 +803,9 @@ fn source_acquisition_for_plan(
 fn required_source_acquisition_kind(
     manifest: &ReleaseEvidenceManifest,
     expected_kind: &str,
-    requirement_label: &str,
+    requirement_label: impl AsRef<str>,
 ) -> Result<SourceAcquisition, RunError> {
+    let requirement_label = requirement_label.as_ref();
     let source_acquisition = manifest.source_acquisition.as_ref().ok_or_else(|| {
         RunError::Internal(format!("{requirement_label} required but release manifest has no source_acquisition entry"))
     })?;
@@ -740,6 +827,8 @@ fn prepare_witness_rebuild_root(layout: &WitnessRebuildLayout) -> Result<(), Run
 }
 
 fn validate_existing_scratch_root(path: &Path) -> Result<(), RunError> {
+    debug_assert!(path.exists());
+    debug_assert!(!path.as_os_str().is_empty());
     let metadata = std::fs::symlink_metadata(path)
         .map_err(|err| RunError::Internal(format!("reading {} metadata: {err}", path.display())))?;
     if metadata.file_type().is_symlink() {
@@ -763,7 +852,9 @@ fn validate_existing_scratch_root(path: &Path) -> Result<(), RunError> {
 }
 
 fn unexpected_scratch_root_entries(path: &Path) -> Result<Vec<String>, RunError> {
-    let mut unexpected_entries = Vec::new();
+    debug_assert!(path.is_dir());
+    debug_assert!(MAX_SCRATCH_ROOT_ENTRIES > 0);
+    let mut unexpected_entries = Vec::with_capacity(MAX_SCRATCH_ROOT_ENTRIES);
     for entry_result in
         std::fs::read_dir(path).map_err(|err| RunError::Internal(format!("reading {}: {err}", path.display())))?
     {
@@ -775,6 +866,12 @@ fn unexpected_scratch_root_entries(path: &Path) -> Result<Vec<String>, RunError>
         if is_helper_owned_scratch_entry(&entry_name) {
             validate_helper_owned_scratch_entry(&entry.path())?;
             continue;
+        }
+        if unexpected_entries.len() >= MAX_SCRATCH_ROOT_ENTRIES {
+            return Err(RunError::Internal(format!(
+                "witness rebuild scratch root entry count exceeds {MAX_SCRATCH_ROOT_ENTRIES}: {}",
+                path.display()
+            )));
         }
         unexpected_entries.push(entry_name);
     }
@@ -823,6 +920,8 @@ fn extract_source_archive(plan: &WitnessRebuildPlan) -> Result<(), RunError> {
 }
 
 fn source_archive_for_extraction(plan: &WitnessRebuildPlan) -> Result<PathBuf, RunError> {
+    debug_assert!(!plan.request_source_archive_path.as_os_str().is_empty());
+    debug_assert!(!plan.scratch_layout.source_acquisition_archive_path.as_os_str().is_empty());
     if plan.require_git_source {
         let source_acquisition = plan.source_acquisition.as_ref().ok_or_else(|| {
             RunError::Internal("Git source required but release manifest has no source_acquisition entry".to_string())
@@ -890,6 +989,8 @@ fn fetch_and_verify_source_acquisition(
 }
 
 fn fetch_source_archive_to_path(url: &str, destination_path: &Path) -> Result<(), RunError> {
+    debug_assert!(!url.is_empty());
+    debug_assert!(!destination_path.as_os_str().is_empty());
     if let Some(parent) = destination_path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|err| RunError::Internal(format!("creating {}: {err}", parent.display())))?;
@@ -932,9 +1033,17 @@ fn copy_source_archive_with_limit(
     writer: &mut dyn Write,
     limit_bytes: u64,
 ) -> Result<u64, RunError> {
+    debug_assert!(limit_bytes > 0);
+    debug_assert!(SOURCE_FETCH_BUFFER_BYTES > 0);
     let mut total_bytes = 0u64;
     let mut buffer = [0u8; SOURCE_FETCH_BUFFER_BYTES];
-    loop {
+    let buffer_size_bytes = u64::try_from(SOURCE_FETCH_BUFFER_BYTES)
+        .map_err(|_| RunError::Internal("source fetch buffer size overflowed u64".to_string()))?;
+    let maximum_read_steps = limit_bytes
+        .checked_div(buffer_size_bytes)
+        .and_then(|quotient| quotient.checked_add(2))
+        .ok_or_else(|| RunError::Internal("source archive read iteration limit overflowed u64".to_string()))?;
+    for _read_step in 0..maximum_read_steps {
         let read_bytes = reader
             .read(&mut buffer)
             .map_err(|err| RunError::Internal(format!("reading independent source archive: {err}")))?;
@@ -956,6 +1065,7 @@ fn copy_source_archive_with_limit(
             .map_err(|err| RunError::Internal(format!("writing independent source archive: {err}")))?;
         total_bytes = next_total;
     }
+    Err(RunError::Internal(format!("independent source archive exceeds {limit_bytes} byte download limit")))
 }
 
 fn resolve_workflow_driver_path(plan: &WitnessRebuildPlan) -> Result<PathBuf, RunError> {
@@ -1048,6 +1158,8 @@ fn collect_provider_fixed_point_candidates(
     provider_proof_dir: &Path,
     candidates: &mut Vec<RebuiltOutputCandidate>,
 ) -> Result<(), RunError> {
+    debug_assert!(!provider_proof_dir.as_os_str().is_empty());
+    debug_assert!(candidates.len() <= PROOF_BINARY_CANDIDATE_LIMIT);
     if !provider_proof_dir.exists() {
         return Ok(());
     }
@@ -1086,8 +1198,9 @@ fn push_provider_stage_candidate(
     provider_proof_dir: &Path,
     meta: &Value,
     stage_name: &'static str,
-    stage_digest: &str,
+    stage_digest: impl AsRef<str>,
 ) -> Result<(), RunError> {
+    let stage_digest = stage_digest.as_ref();
     let role = provider_fixed_point_stage_role(stage_name)?;
     let path = resolve_provider_fixed_point_stage_binary(provider_proof_dir, meta, stage_name, role)?;
     push_verified_candidate(candidates, role, path, Some(stage_digest))
@@ -1107,8 +1220,9 @@ fn resolve_provider_fixed_point_stage_binary(
     provider_proof_dir: &Path,
     meta: &Value,
     stage_name: &str,
-    role: &str,
+    role: impl AsRef<str>,
 ) -> Result<PathBuf, RunError> {
+    let role = role.as_ref();
     let pointer = format!("/{stage_name}/binary");
     let recorded_path = meta.pointer(&pointer).and_then(Value::as_str).ok_or_else(|| {
         RunError::Build(format!("provider fixed-point proof metadata missing {role} binary path at {pointer}"))
@@ -1129,8 +1243,11 @@ fn validate_provider_candidate_containment(
     provider_proof_dir: &Path,
     candidate_path: &Path,
     recorded_path: &str,
-    role: &str,
+    role: impl AsRef<str>,
 ) -> Result<(), RunError> {
+    let role = role.as_ref();
+    debug_assert!(!recorded_path.is_empty());
+    debug_assert!(!role.is_empty());
     if !candidate_path.is_file() {
         return Err(RunError::Build(format!(
             "witness rebuild proof candidate {role} is missing: {}",
@@ -1212,8 +1329,9 @@ fn validate_recorded_candidate_digest(
     role: &str,
     path: &Path,
     recorded_digest: &str,
-    actual_digest: &str,
+    actual_digest: impl AsRef<str>,
 ) -> Result<(), RunError> {
+    let actual_digest = actual_digest.as_ref();
     if recorded_digest == actual_digest {
         return Ok(());
     }
@@ -1276,8 +1394,9 @@ fn resolve_proof_bundle_artifact_path(proof_bundle_dir: &Path, recorded_path: &s
 fn resolve_labeled_proof_bundle_artifact_path(
     proof_bundle_dir: &Path,
     recorded_path: &str,
-    label: &str,
+    label: impl AsRef<str>,
 ) -> Result<PathBuf, RunError> {
+    let label = label.as_ref();
     validate_non_empty_recorded_path(recorded_path, label)?;
     let path = PathBuf::from(recorded_path);
     if path.is_absolute() {
@@ -1290,8 +1409,9 @@ fn resolve_labeled_proof_bundle_artifact_path(
 fn resolve_contained_proof_bundle_artifact_path(
     proof_bundle_dir: &Path,
     recorded_path: &str,
-    label: &str,
+    label: impl AsRef<str>,
 ) -> Result<PathBuf, RunError> {
+    let label = label.as_ref();
     validate_non_empty_recorded_path(recorded_path, label)?;
     let path = PathBuf::from(recorded_path);
     if path.is_absolute() {
@@ -1301,18 +1421,21 @@ fn resolve_contained_proof_bundle_artifact_path(
     Ok(proof_bundle_dir.join(path))
 }
 
-fn validate_non_empty_recorded_path(recorded_path: &str, label: &str) -> Result<(), RunError> {
+fn validate_non_empty_recorded_path(recorded_path: &str, label: impl AsRef<str>) -> Result<(), RunError> {
+    let label = label.as_ref();
     if recorded_path.trim().is_empty() {
         return Err(RunError::Build(format!("{label} is empty")));
     }
     Ok(())
 }
 
-fn reject_absolute_proof_bundle_path(recorded_path: &str, label: &str) -> Result<PathBuf, RunError> {
+fn reject_absolute_proof_bundle_path(recorded_path: &str, label: impl AsRef<str>) -> Result<PathBuf, RunError> {
+    let label = label.as_ref();
     Err(RunError::Build(format!("{label} must stay inside proof bundle: {recorded_path}")))
 }
 
-fn reject_escaping_relative_path(path: &Path, recorded_path: &str, label: &str) -> Result<(), RunError> {
+fn reject_escaping_relative_path(path: &Path, recorded_path: &str, label: impl AsRef<str>) -> Result<(), RunError> {
+    let label = label.as_ref();
     for component in path.components() {
         if matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_)) {
             return Err(RunError::Build(format!("{label} must stay inside proof bundle: {recorded_path}")));
@@ -1337,6 +1460,8 @@ fn validate_rebuilt_output_digests(
     expected_outputs: &[ExpectedRebuiltOutput],
     rebuilt_output_paths: &[PathBuf],
 ) -> Result<(), RunError> {
+    debug_assert!(expected_outputs.len() <= MAX_EXPECTED_OUTPUTS_USIZE);
+    debug_assert!(rebuilt_output_paths.len() <= MAX_EXPECTED_OUTPUTS_USIZE);
     let expected_count_u32 = u32::try_from(expected_outputs.len())
         .map_err(|_| RunError::Internal("expected rebuilt output count overflowed u32".to_string()))?;
     let actual_count_u32 = u32::try_from(rebuilt_output_paths.len())
@@ -1378,22 +1503,26 @@ fn render_exit_status(output: &Output) -> String {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn build_audit_meta(
-    plan: &WitnessRebuildPlan,
-    workflow_driver_path: &Path,
-    rebuilt_output_paths: &[PathBuf],
+struct AuditMetaInput<'a> {
+    plan: &'a WitnessRebuildPlan,
+    workflow_driver_path: &'a Path,
+    rebuilt_output_paths: &'a [PathBuf],
     started_unix_ms: u64,
     finished_unix_ms: u64,
-    status: &str,
-    attestation_path: Option<&Path>,
-    signature_path: Option<&Path>,
+    status: &'a str,
+    attestation_path: Option<&'a Path>,
+    signature_path: Option<&'a Path>,
     failure_message: Option<String>,
     diagnostics: Option<WitnessRebuildDiagnostics>,
-    source_acquisition_error: Option<&str>,
-) -> Result<WitnessRebuildAuditMeta, RunError> {
-    let rebuilt_outputs = build_audit_outputs(&plan.expected_outputs, rebuilt_output_paths)?;
-    let launched_command = launched_workflow_command(workflow_driver_path, &plan.proof_mode)?;
+    source_acquisition_error: Option<&'a str>,
+}
+
+fn build_audit_meta(input: AuditMetaInput<'_>) -> Result<WitnessRebuildAuditMeta, RunError> {
+    let plan = input.plan;
+    debug_assert!(input.finished_unix_ms >= input.started_unix_ms);
+    debug_assert!(!input.status.is_empty());
+    let rebuilt_outputs = build_audit_outputs(&plan.expected_outputs, input.rebuilt_output_paths)?;
+    let launched_command = launched_workflow_command(input.workflow_driver_path, &plan.proof_mode)?;
     Ok(WitnessRebuildAuditMeta {
         schema: WITNESS_REBUILD_AUDIT_SCHEMA.to_string(),
         release_id: plan.release_id.clone(),
@@ -1413,15 +1542,15 @@ fn build_audit_meta(
         stdout_log_path: plan.scratch_layout.stdout_log_path.display().to_string(),
         stderr_log_path: plan.scratch_layout.stderr_log_path.display().to_string(),
         launched_command,
-        started_unix_ms,
-        finished_unix_ms,
-        status: status.to_string(),
+        started_unix_ms: input.started_unix_ms,
+        finished_unix_ms: input.finished_unix_ms,
+        status: input.status.to_string(),
         rebuilt_outputs,
-        witness_attestation_path: attestation_path.map(|path| path.display().to_string()),
-        witness_signature_path: signature_path.map(|path| path.display().to_string()),
-        failure_message,
-        diagnostics,
-        source_acquisition: source_acquisition_audit(plan, source_acquisition_error),
+        witness_attestation_path: input.attestation_path.map(|path| path.display().to_string()),
+        witness_signature_path: input.signature_path.map(|path| path.display().to_string()),
+        failure_message: input.failure_message,
+        diagnostics: input.diagnostics,
+        source_acquisition: source_acquisition_audit(plan, input.source_acquisition_error),
     })
 }
 
@@ -1439,6 +1568,8 @@ fn source_acquisition_audit(
     plan: &WitnessRebuildPlan,
     source_acquisition_error: Option<&str>,
 ) -> Option<WitnessSourceAcquisitionAudit> {
+    debug_assert!(!plan.release_id.is_empty());
+    debug_assert!(!plan.request_source_archive_path.as_os_str().is_empty());
     let status = if source_acquisition_error.is_some() {
         audit_status_failed()
     } else {
@@ -1536,6 +1667,8 @@ fn expected_output_diagnostics(expected_outputs: &[ExpectedRebuiltOutput]) -> Ve
 }
 
 fn collect_available_proof_digest_diagnostics(plan: &WitnessRebuildPlan) -> Vec<WitnessAvailableProofDigest> {
+    debug_assert!(PROOF_BINARY_CANDIDATE_LIMIT > 0);
+    debug_assert!(!plan.scratch_layout.proof_bundle_dir.as_os_str().is_empty());
     let mut candidates = Vec::with_capacity(PROOF_BINARY_CANDIDATE_LIMIT);
     if let Ok(proof_manifest) = load_proof_bundle_manifest(&plan.scratch_layout.proof_bundle_dir)
         && let Ok(mut proof_candidates) =
@@ -1624,6 +1757,8 @@ fn explicit_bootstrap_divergence(
     proof_manifest: Option<&Value>,
     path_leak_scan_summary: &[String],
 ) -> Option<WitnessBootstrapDivergenceDiagnostic> {
+    debug_assert!(DIAGNOSTIC_EXCERPT_LIMIT > 0);
+    debug_assert!(!BOOTSTRAP_DIVERGENCE_ROOT_POINTER.is_empty());
     let manifest = proof_manifest?;
     let root = manifest.pointer(BOOTSTRAP_DIVERGENCE_ROOT_POINTER).and_then(Value::as_str)?;
     if root.is_empty() {
@@ -1648,6 +1783,8 @@ fn derived_bootstrap_divergence(
     proof_manifest: Option<&Value>,
     path_leak_scan_summary: &[String],
 ) -> Option<WitnessBootstrapDivergenceDiagnostic> {
+    debug_assert!(DIAGNOSTIC_EXCERPT_LIMIT > 0);
+    debug_assert!(!BOOTSTRAP_STAGE1_EQUALS_STAGE2_POINTER.is_empty());
     let manifest = proof_manifest?;
     if manifest.pointer(BOOTSTRAP_BWRAP_EQUALS_POINTER).and_then(Value::as_bool) == Some(false) {
         return Some(bootstrap_tool_divergence(
@@ -1699,9 +1836,10 @@ fn bootstrap_tool_divergence(
     root: &str,
     manifest: &Value,
     stage1_digest_pointer: &str,
-    stage2_digest_pointer: &str,
+    stage2_digest_pointer: impl AsRef<str>,
     path_leak_scan_summary: &[String],
 ) -> WitnessBootstrapDivergenceDiagnostic {
+    let stage2_digest_pointer = stage2_digest_pointer.as_ref();
     WitnessBootstrapDivergenceDiagnostic {
         status: BOOTSTRAP_DIVERGENCE_DIVERGED.to_string(),
         root: Some(root.to_string()),
@@ -1716,6 +1854,8 @@ fn bootstrap_stage_divergence(
     manifest: &Value,
     path_leak_scan_summary: &[String],
 ) -> WitnessBootstrapDivergenceDiagnostic {
+    debug_assert!(DIAGNOSTIC_EXCERPT_LIMIT > 0);
+    debug_assert!(!BOOTSTRAP_STAGE1_DIGEST_POINTER.is_empty());
     let resolved_root = if root.is_empty() {
         BOOTSTRAP_DIVERGENCE_UNKNOWN_ROOT
     } else {
@@ -1782,11 +1922,9 @@ fn collect_matching_excerpt_lines(text: &str, excerpts: &mut Vec<String>) {
 }
 
 fn unix_time_ms_now() -> Result<u64, RunError> {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|err| RunError::Internal(format!("system clock before unix epoch: {err}")))?;
-    u64::try_from(duration.as_millis())
-        .map_err(|_| RunError::Internal("unix time overflowed u64 milliseconds".to_string()))
+    crate::unix_time_now_s()?
+        .checked_mul(MILLISECONDS_PER_SECOND)
+        .ok_or_else(|| RunError::Internal("unix time overflowed u64 milliseconds".to_string()))
 }
 
 fn audit_status_success() -> &'static str {
@@ -2727,7 +2865,12 @@ mod tests {
         let mut manifest = release_manifest_without_source_acquisition();
         manifest.source_acquisition = Some(SourceAcquisition::external_archive(source_url.to_string(), digest));
 
-        let planned = source_acquisition_for_plan(&manifest, true, false).unwrap().unwrap();
+        let planned = source_acquisition_for_plan(&manifest, SourceReplayRequirements {
+            require_independent_source: true,
+            require_git_source: false,
+        })
+        .unwrap()
+        .unwrap();
 
         assert_eq!(planned.url, source_url);
         assert_eq!(planned.kind, crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE);
@@ -2737,7 +2880,11 @@ mod tests {
     fn source_acquisition_for_plan_requires_metadata_when_flagged() {
         let manifest = release_manifest_without_source_acquisition();
 
-        let err = source_acquisition_for_plan(&manifest, true, false).unwrap_err();
+        let err = source_acquisition_for_plan(&manifest, SourceReplayRequirements {
+            require_independent_source: true,
+            require_git_source: false,
+        })
+        .unwrap_err();
 
         assert!(err.message().contains("independent source acquisition required"));
     }
@@ -2749,7 +2896,11 @@ mod tests {
         manifest.source_acquisition =
             Some(SourceAcquisition::external_archive("https://example.invalid/mantle-src.tar".to_string(), digest));
 
-        let err = source_acquisition_for_plan(&manifest, false, true).unwrap_err();
+        let err = source_acquisition_for_plan(&manifest, SourceReplayRequirements {
+            require_independent_source: false,
+            require_git_source: true,
+        })
+        .unwrap_err();
 
         assert!(err.message().contains("Git source required"));
         assert!(err.message().contains(SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE));
@@ -2757,7 +2908,11 @@ mod tests {
 
     #[test]
     fn validate_source_replay_flags_rejects_conflicting_strict_modes() {
-        let err = validate_source_replay_flags(true, true).unwrap_err();
+        let err = validate_source_replay_flags(SourceReplayRequirements {
+            require_independent_source: true,
+            require_git_source: true,
+        })
+        .unwrap_err();
 
         assert!(err.message().contains("mutually exclusive"));
     }

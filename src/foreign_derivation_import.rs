@@ -59,6 +59,38 @@ const MAX_HASH_DOMAIN_RECORDS: usize = 4096;
 const EMPTY_OUTPUT_COUNT: usize = 0;
 const EMPTY_COMMAND_INVOCATION_COUNT: usize = 0;
 const REQUIRED_HELLO_ROOT_COUNT: usize = 1;
+const RECEIPT_HASH_DOMAIN_ADDITIONS: usize = 3;
+
+fn empty_hash_domain_records() -> Vec<HashDomainRecord> {
+    Vec::new()
+}
+
+fn empty_substitution_audit_events() -> Vec<SubstitutionAuditEvent> {
+    Vec::new()
+}
+
+fn empty_strings() -> Vec<String> {
+    Vec::new()
+}
+
+fn empty_string_map() -> BTreeMap<String, String> {
+    BTreeMap::new()
+}
+
+fn empty_nix_input_map() -> BTreeMap<String, NixDerivationJsonInput> {
+    BTreeMap::new()
+}
+
+fn absent_string() -> Option<String> {
+    None
+}
+
+fn empty_versioned_inputs() -> NixDerivationJsonVersionedInputs {
+    NixDerivationJsonVersionedInputs {
+        drvs: BTreeMap::new(),
+        srcs: Vec::new(),
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct ForeignDerivationGraph {
@@ -71,7 +103,7 @@ pub(crate) struct ForeignDerivationGraph {
     pub(crate) source_payloads: Vec<SourcePayload>,
     pub(crate) unsupported_features: Vec<UnsupportedFeature>,
     pub(crate) frontend_metadata: Vec<FrontendMetadata>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default = "empty_hash_domain_records", skip_serializing_if = "Vec::is_empty")]
     pub(crate) hash_domains: Vec<HashDomainRecord>,
 }
 
@@ -224,7 +256,7 @@ pub(crate) struct ImportReceipt {
     pub(crate) package_index_digest: Option<String>,
     pub(crate) fetch_cache_policy_digest: String,
     pub(crate) sandbox_policy_digest: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default = "empty_hash_domain_records", skip_serializing_if = "Vec::is_empty")]
     pub(crate) hash_domains: Vec<HashDomainRecord>,
     pub(crate) diagnostics: Vec<ImportDiagnostic>,
     pub(crate) non_claims: Vec<String>,
@@ -236,7 +268,7 @@ pub(crate) struct MantleForeignPlan {
     pub(crate) roots: Vec<MantleForeignRoot>,
     pub(crate) source_payloads: Vec<SourcePayload>,
     pub(crate) sandbox_audit: Vec<SandboxAuditEvent>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default = "empty_substitution_audit_events", skip_serializing_if = "Vec::is_empty")]
     pub(crate) substitution_audit: Vec<SubstitutionAuditEvent>,
     pub(crate) forbidden_process_invocations: Vec<String>,
     pub(crate) non_claims: Vec<String>,
@@ -270,30 +302,30 @@ pub(crate) struct NixDerivationJsonNode {
     pub(crate) name: String,
     pub(crate) system: String,
     pub(crate) builder: String,
-    #[serde(default)]
+    #[serde(default = "empty_strings")]
     pub(crate) args: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "empty_string_map")]
     pub(crate) env: BTreeMap<String, String>,
     pub(crate) outputs: BTreeMap<String, NixDerivationJsonOutput>,
-    #[serde(rename = "inputDrvs", default)]
+    #[serde(rename = "inputDrvs", default = "empty_nix_input_map")]
     pub(crate) input_drvs: BTreeMap<String, NixDerivationJsonInput>,
-    #[serde(rename = "inputSrcs", default)]
+    #[serde(rename = "inputSrcs", default = "empty_strings")]
     pub(crate) input_srcs: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct NixDerivationJsonOutput {
-    #[serde(default)]
+    #[serde(default = "absent_string")]
     pub(crate) path: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_string")]
     pub(crate) hash: Option<String>,
-    #[serde(rename = "hashAlgo", default)]
+    #[serde(rename = "hashAlgo", default = "absent_string")]
     pub(crate) hash_algo: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct NixDerivationJsonInput {
-    #[serde(default)]
+    #[serde(default = "empty_strings")]
     pub(crate) outputs: Vec<String>,
 }
 
@@ -317,20 +349,20 @@ pub(crate) struct NixDerivationJsonVersionedNode {
     pub(crate) name: String,
     pub(crate) system: String,
     pub(crate) builder: String,
-    #[serde(default)]
+    #[serde(default = "empty_strings")]
     pub(crate) args: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "empty_string_map")]
     pub(crate) env: BTreeMap<String, String>,
     pub(crate) outputs: BTreeMap<String, NixDerivationJsonOutput>,
-    #[serde(default)]
+    #[serde(default = "empty_versioned_inputs")]
     pub(crate) inputs: NixDerivationJsonVersionedInputs,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 pub(crate) struct NixDerivationJsonVersionedInputs {
-    #[serde(default)]
+    #[serde(default = "empty_nix_input_map")]
     pub(crate) drvs: BTreeMap<String, NixDerivationJsonInput>,
-    #[serde(default)]
+    #[serde(default = "empty_strings")]
     pub(crate) srcs: Vec<String>,
 }
 
@@ -376,6 +408,8 @@ pub(crate) fn translate_foreign_graph(
         diagnostics,
     };
     let receipt = import_receipt(graph, package_index, policy, &translated_graph)?;
+    debug_assert_eq!(translated_graph.nodes.len(), graph.nodes.len());
+    debug_assert_eq!(receipt.producer_identity, graph.producer.identity);
     Ok((translated_graph, receipt))
 }
 
@@ -383,7 +417,7 @@ pub(crate) fn plan_mantle_foreign_import(
     translated_graph: &TranslatedGraph,
     package_index: &PackageIndex,
     package_name: &str,
-    system: &str,
+    system: impl AsRef<str>,
 ) -> Result<MantleForeignPlan, ImportDiagnostic> {
     let entry = lookup_package(package_index, package_name, system)?;
     let root = translated_graph
@@ -434,9 +468,10 @@ pub(crate) fn plan_mantle_foreign_import(
 pub(crate) fn lookup_package<'a>(
     index: &'a PackageIndex,
     package_name: &str,
-    system: &str,
+    system: impl AsRef<str>,
 ) -> Result<&'a PackageIndexEntry, ImportDiagnostic> {
     validate_package_index_shape(index)?;
+    let system = system.as_ref();
     let matches = index
         .entries
         .iter()
@@ -489,6 +524,8 @@ pub(crate) fn admit_translated_graph(
             "receipt hash-domain summary does not match current graph and policy",
         ));
     }
+    debug_assert_eq!(expected.raw_graph_digest, receipt.raw_graph_digest);
+    debug_assert_eq!(expected.translated_graph_digest, receipt.translated_graph_digest);
     Ok(())
 }
 
@@ -511,10 +548,12 @@ pub(crate) fn normalize_nix_aterm_derivation_closure(
             "Nix derivation closure size is outside supported limits",
         ));
     }
+    let derivation_count = derivations.len();
     let mut closure = BTreeMap::new();
     for (drv_key, derivation) in derivations {
         let drv_path = normalize_nix_store_key(&drv_key)?;
         let normalized_node = normalize_nix_aterm_derivation_node(&drv_path, derivation)?;
+        debug_assert!(closure.len() < derivation_count);
         if closure.insert(drv_path, normalized_node).is_some() {
             return Err(diagnostic(
                 "duplicate-nix-derivation-path",
@@ -523,6 +562,8 @@ pub(crate) fn normalize_nix_aterm_derivation_closure(
             ));
         }
     }
+    debug_assert_eq!(closure.len(), derivation_count);
+    debug_assert!(closure.len() <= MAX_GRAPH_NODES);
     Ok(closure)
 }
 
@@ -563,15 +604,19 @@ pub(crate) fn lower_nix_derivation_json_closure(
     })?;
     let mut source_payloads = BTreeMap::new();
     let mut nodes = Vec::with_capacity(closure.len());
+    let lowering_context = NixLoweringContext {
+        path_to_node_id: &path_to_node_id,
+        closure,
+        root_cache_hints: &config.cache_hints,
+    };
     for (drv_path, derivation) in closure {
-        let is_root = drv_path == &config.root_derivation;
         let node = lower_nix_derivation_node(
-            drv_path,
-            derivation,
-            &path_to_node_id,
-            closure,
-            is_root,
-            &config.cache_hints,
+            NixNodeLoweringRequest {
+                drv_path,
+                derivation,
+                is_root: drv_path == &config.root_derivation,
+            },
+            &lowering_context,
             &mut source_payloads,
         )?;
         nodes.push(node);
@@ -604,50 +649,72 @@ pub(crate) fn lower_nix_derivation_json_closure(
             unsupported_metadata_classes: sorted_strings(config.unsupported_metadata_classes.clone()),
         }],
     };
+    debug_assert_eq!(graph.nodes.len(), closure.len());
+    debug_assert_eq!(package_index.entries.len(), REQUIRED_HELLO_ROOT_COUNT);
     Ok(NixProducerArtifacts { graph, package_index })
 }
 
 pub(crate) fn guix_like_hello_fixture() -> (ForeignDerivationGraph, PackageIndex) {
-    hello_fixture("guix", GUIX_SOURCE_PREFIX, GUIX_HELLO_NODE_ID, "guix-time-machine:hello")
+    hello_fixture(HelloFixtureSpec {
+        producer_kind: "guix",
+        source_prefix: GUIX_SOURCE_PREFIX,
+        node_id: GUIX_HELLO_NODE_ID,
+        producer_identity: "guix-time-machine:hello",
+    })
 }
 
 pub(crate) fn nix_like_hello_fixture() -> (ForeignDerivationGraph, PackageIndex) {
-    hello_fixture("nix", NIX_SOURCE_PREFIX, NIX_HELLO_NODE_ID, "nix-derivation-json:hello")
+    hello_fixture(HelloFixtureSpec {
+        producer_kind: "nix",
+        source_prefix: NIX_SOURCE_PREFIX,
+        node_id: NIX_HELLO_NODE_ID,
+        producer_identity: "nix-derivation-json:hello",
+    })
 }
 
-fn hello_fixture(
-    producer_kind: &str,
-    source_prefix: &str,
-    node_id: &str,
-    producer_identity: &str,
-) -> (ForeignDerivationGraph, PackageIndex) {
-    let payload_id = format!("{producer_kind}-hello-source");
-    let store_source = format!("{source_prefix}/00000000000000000000000000000000-hello-source");
-    let output_path = format!("{source_prefix}/11111111111111111111111111111111-hello");
-    let mut outputs = BTreeMap::new();
-    outputs.insert(OUT_OUTPUT_NAME.to_string(), OutputDeclaration {
+struct HelloFixtureSpec<'a> {
+    producer_kind: &'a str,
+    source_prefix: &'a str,
+    node_id: &'a str,
+    producer_identity: &'a str,
+}
+
+fn hello_fixture(spec: HelloFixtureSpec<'_>) -> (ForeignDerivationGraph, PackageIndex) {
+    let graph = hello_fixture_graph(&spec);
+    let index = hello_fixture_index(&spec);
+    debug_assert_eq!(graph.root_derivation_ids.len(), REQUIRED_HELLO_ROOT_COUNT);
+    debug_assert_eq!(index.entries.len(), REQUIRED_HELLO_ROOT_COUNT);
+    (graph, index)
+}
+
+fn hello_fixture_graph(spec: &HelloFixtureSpec<'_>) -> ForeignDerivationGraph {
+    let payload_id = format!("{}-hello-source", spec.producer_kind);
+    let store_source = format!("{}/00000000000000000000000000000000-hello-source", spec.source_prefix);
+    let output_path = format!("{}/11111111111111111111111111111111-hello", spec.source_prefix);
+    let outputs = BTreeMap::from([(OUT_OUTPUT_NAME.to_string(), OutputDeclaration {
         path: output_path.clone(),
         hash: None,
-    });
-    let mut env = BTreeMap::new();
-    env.insert("src".to_string(), store_source.clone());
-    env.insert("out".to_string(), output_path.clone());
+    })]);
+    let env = BTreeMap::from([
+        ("src".to_string(), store_source.clone()),
+        ("out".to_string(), output_path.clone()),
+    ]);
     let graph = ForeignDerivationGraph {
         schema: GRAPH_SCHEMA.to_string(),
         producer: ProducerSummary {
-            kind: producer_kind.to_string(),
-            identity: producer_identity.to_string(),
+            kind: spec.producer_kind.to_string(),
+            identity: spec.producer_identity.to_string(),
             revision: "fixture-revision".to_string(),
         },
-        source_store_prefixes: vec![source_prefix.to_string()],
+        source_store_prefixes: vec![spec.source_prefix.to_string()],
         target_store_prefix: None,
-        root_derivation_ids: vec![node_id.to_string()],
+        root_derivation_ids: vec![spec.node_id.to_string()],
         nodes: vec![ForeignDerivationNode {
-            node_id: node_id.to_string(),
-            original_derivation: format!("{source_prefix}/22222222222222222222222222222222-hello.drv"),
+            node_id: spec.node_id.to_string(),
+            original_derivation: format!("{}/22222222222222222222222222222222-hello.drv", spec.source_prefix),
             name: HELLO_PACKAGE_NAME.to_string(),
             system: HELLO_SYSTEM.to_string(),
-            builder: format!("{source_prefix}/33333333333333333333333333333333-bash/bin/bash"),
+            builder: format!("{}/33333333333333333333333333333333-bash/bin/bash", spec.source_prefix),
             args: vec!["-c".to_string(), format!("cp {store_source} $out")],
             env,
             outputs,
@@ -678,19 +745,24 @@ fn hello_fixture(
         frontend_metadata: Vec::new(),
         hash_domains: Vec::new(),
     };
-    let index = PackageIndex {
+    debug_assert_eq!(graph.nodes.len(), REQUIRED_HELLO_ROOT_COUNT);
+    debug_assert_eq!(graph.source_payloads.len(), REQUIRED_HELLO_ROOT_COUNT);
+    graph
+}
+
+fn hello_fixture_index(spec: &HelloFixtureSpec<'_>) -> PackageIndex {
+    PackageIndex {
         schema: PACKAGE_INDEX_SCHEMA.to_string(),
         entries: vec![PackageIndexEntry {
             name: HELLO_PACKAGE_NAME.to_string(),
             system: HELLO_SYSTEM.to_string(),
-            root_derivation_id: node_id.to_string(),
-            aliases: vec![format!("{producer_kind}-hello")],
-            provenance_ref: producer_identity.to_string(),
-            metadata_digest: blake3_hex(producer_identity),
+            root_derivation_id: spec.node_id.to_string(),
+            aliases: vec![format!("{}-hello", spec.producer_kind)],
+            provenance_ref: spec.producer_identity.to_string(),
+            metadata_digest: blake3_hex(spec.producer_identity),
             unsupported_metadata_classes: Vec::new(),
         }],
-    };
-    (graph, index)
+    }
 }
 
 fn normalize_versioned_nix_derivations(
@@ -703,6 +775,7 @@ fn normalize_versioned_nix_derivations(
             "Nix derivation export size is outside supported limits",
         ));
     }
+    let derivation_count = export.derivations.len();
     let mut closure = BTreeMap::new();
     for (drv_key, node) in export.derivations {
         let drv_path = normalize_nix_store_key(&drv_key)?;
@@ -718,6 +791,9 @@ fn normalize_versioned_nix_derivations(
             input_drvs: normalize_versioned_input_drvs(node.inputs.drvs)?,
             input_srcs: normalize_nix_store_paths(node.inputs.srcs)?,
         };
+        if closure.len() >= derivation_count {
+            return Err(diagnostic("nix-derivation-count-out-of-range", None, "versioned Nix closure exceeded input"));
+        }
         if closure.insert(drv_path, normalized_node).is_some() {
             return Err(diagnostic(
                 "duplicate-nix-derivation-path",
@@ -726,15 +802,21 @@ fn normalize_versioned_nix_derivations(
             ));
         }
     }
+    debug_assert_eq!(closure.len(), derivation_count);
+    debug_assert!(closure.len() <= MAX_GRAPH_NODES);
     Ok(closure)
 }
 
 fn normalize_versioned_input_drvs(
     input_drvs: BTreeMap<String, NixDerivationJsonInput>,
 ) -> Result<BTreeMap<String, NixDerivationJsonInput>, ImportDiagnostic> {
+    let input_count = input_drvs.len();
     let mut normalized = BTreeMap::new();
     for (input_drv, input) in input_drvs {
         let drv_path = normalize_nix_store_key(&input_drv)?;
+        if normalized.len() >= input_count {
+            return Err(diagnostic("nix-derivation-count-out-of-range", None, "normalized Nix inputs exceeded input"));
+        }
         normalized.insert(drv_path, input);
     }
     Ok(normalized)
@@ -744,6 +826,7 @@ fn normalize_nix_outputs(
     outputs: BTreeMap<String, NixDerivationJsonOutput>,
     env: &BTreeMap<String, String>,
 ) -> Result<BTreeMap<String, NixDerivationJsonOutput>, ImportDiagnostic> {
+    let output_count = outputs.len();
     let mut normalized = BTreeMap::new();
     for (output_name, mut output) in outputs {
         let path = output
@@ -759,8 +842,13 @@ fn normalize_nix_outputs(
             })
             .ok_or_else(|| diagnostic("missing-nix-output-path", None, "Nix output is missing a path"))?;
         output.path = Some(normalize_nix_path_field(path)?);
+        if normalized.len() >= output_count {
+            return Err(diagnostic("nix-output-count-out-of-range", None, "normalized Nix outputs exceeded input"));
+        }
         normalized.insert(output_name, output);
     }
+    debug_assert_eq!(normalized.len(), output_count);
+    debug_assert!(normalized.len() <= MAX_GRAPH_NODES);
     Ok(normalized)
 }
 
@@ -791,10 +879,22 @@ fn select_reachable_nix_derivations(
             )
         })?;
         for input_drv in derivation.input_drvs.keys() {
+            if pending.len() >= MAX_GRAPH_NODES {
+                return Err(diagnostic(
+                    "nix-derivation-count-out-of-range",
+                    None,
+                    "reachable Nix closure exceeds limit",
+                ));
+            }
             pending.push(input_drv.clone());
+        }
+        if selected.len() >= closure.len() {
+            return Err(diagnostic("nix-derivation-count-out-of-range", None, "reachable Nix closure exceeds input"));
         }
         selected.insert(drv_path, derivation.clone());
     }
+    debug_assert!(selected.contains_key(root_derivation));
+    debug_assert!(selected.len() <= closure.len());
     Ok(selected)
 }
 
@@ -821,11 +921,19 @@ fn normalize_nix_aterm_derivation_node(
 fn nix_aterm_environment_to_strings(
     derivation: &nix_compat::derivation::Derivation,
 ) -> Result<BTreeMap<String, String>, ImportDiagnostic> {
+    let environment_count = derivation.environment.len();
     let mut env = BTreeMap::new();
     for (key, value) in &derivation.environment {
         let value = std::str::from_utf8(value.as_ref()).map_err(|_| {
             diagnostic("non-utf8-nix-derivation-env", None, "Nix derivation environment contains non-UTF-8 bytes")
         })?;
+        if env.len() >= environment_count {
+            return Err(diagnostic(
+                "nix-environment-count-out-of-range",
+                None,
+                "normalized Nix environment exceeded input",
+            ));
+        }
         env.insert(key.clone(), value.to_string());
     }
     Ok(env)
@@ -881,8 +989,9 @@ fn nix_derivation_name_from_path(drv_path: &str) -> String {
     let component = basename.strip_suffix(NIX_DERIVATION_SUFFIX).unwrap_or(basename);
     if component.len() > NIX_STORE_BASENAME_HASH_CHARS
         && component.as_bytes().get(NIX_STORE_BASENAME_HASH_CHARS) == Some(&b'-')
+        && let Some(name) = component.get(NIX_STORE_BASENAME_HASH_CHARS.saturating_add(1)..)
     {
-        return component[NIX_STORE_BASENAME_HASH_CHARS + 1..].to_string();
+        return name.to_string();
     }
     component.to_string()
 }
@@ -965,6 +1074,8 @@ fn validate_nix_producer_inputs(
             "selected root derivation is absent from the concrete Nix closure",
         ));
     }
+    debug_assert!(!closure.is_empty());
+    debug_assert!(closure.len() <= MAX_GRAPH_NODES);
     Ok(())
 }
 
@@ -976,33 +1087,50 @@ fn nix_node_id_map(closure: &NixDerivationJsonClosure) -> Result<BTreeMap<String
         if !node_ids.insert(node_id.clone()) {
             return Err(diagnostic("duplicate-nix-node-id", None, "Nix derivation paths produce duplicate node IDs"));
         }
+        if path_to_node_id.len() >= closure.len() {
+            return Err(diagnostic("nix-derivation-count-out-of-range", None, "Nix node IDs exceeded closure"));
+        }
         path_to_node_id.insert(drv_path.clone(), node_id);
     }
     Ok(path_to_node_id)
 }
 
-fn lower_nix_derivation_node(
-    drv_path: &str,
-    derivation: &NixDerivationJsonNode,
-    path_to_node_id: &BTreeMap<String, String>,
-    closure: &NixDerivationJsonClosure,
+struct NixLoweringContext<'a> {
+    path_to_node_id: &'a BTreeMap<String, String>,
+    closure: &'a NixDerivationJsonClosure,
+    root_cache_hints: &'a [CacheHint],
+}
+
+struct NixNodeLoweringRequest<'a> {
+    drv_path: &'a str,
+    derivation: &'a NixDerivationJsonNode,
     is_root: bool,
-    root_cache_hints: &[CacheHint],
+}
+
+fn lower_nix_derivation_node(
+    request: NixNodeLoweringRequest<'_>,
+    context: &NixLoweringContext<'_>,
     source_payloads: &mut BTreeMap<String, SourcePayload>,
 ) -> Result<ForeignDerivationNode, ImportDiagnostic> {
-    let node_id = path_to_node_id
-        .get(drv_path)
+    let node_id = context
+        .path_to_node_id
+        .get(request.drv_path)
         .cloned()
         .ok_or_else(|| diagnostic("missing-nix-node-id", None, "Nix derivation path was not assigned a node ID"))?;
+    let derivation = request.derivation;
     let outputs = lower_nix_outputs(&derivation.outputs)?;
     let fixed_output = nix_fixed_output_metadata(&derivation.outputs)?;
-    let input_derivations = lower_nix_input_derivations(&derivation.input_drvs, path_to_node_id)?;
+    let input_derivations = lower_nix_input_derivations(&derivation.input_drvs, context.path_to_node_id)?;
     let source_refs = lower_nix_source_refs(&derivation.input_srcs, source_payloads)?;
-    let declared_references = nix_declared_references(&derivation.input_drvs, &derivation.input_srcs, closure)?;
-    let cache_hints = if is_root { root_cache_hints.to_vec() } else { Vec::new() };
-    Ok(ForeignDerivationNode {
+    let declared_references = nix_declared_references(&derivation.input_drvs, &derivation.input_srcs, context.closure)?;
+    let cache_hints = if request.is_root {
+        context.root_cache_hints.to_vec()
+    } else {
+        Vec::new()
+    };
+    let lowered = ForeignDerivationNode {
         node_id,
-        original_derivation: drv_path.to_string(),
+        original_derivation: request.drv_path.to_string(),
         name: derivation.name.clone(),
         system: derivation.system.clone(),
         builder: derivation.builder.clone(),
@@ -1021,7 +1149,10 @@ fn lower_nix_derivation_node(
         sandbox_capabilities: Vec::new(),
         unsupported_features: Vec::new(),
         cache_hints,
-    })
+    };
+    debug_assert_eq!(lowered.original_derivation, request.drv_path);
+    debug_assert_eq!(lowered.outputs.len(), derivation.outputs.len());
+    Ok(lowered)
 }
 
 fn lower_nix_outputs(
@@ -1030,10 +1161,14 @@ fn lower_nix_outputs(
     if outputs.is_empty() {
         return Err(diagnostic("missing-output-declaration", None, "Nix derivation has no outputs"));
     }
+    let output_count = outputs.len();
     let mut lowered = BTreeMap::new();
     for (name, output) in outputs {
         let path = nix_output_path(output)?;
         validate_nix_store_path(path)?;
+        if lowered.len() >= output_count {
+            return Err(diagnostic("nix-output-count-out-of-range", None, "lowered Nix outputs exceeded input"));
+        }
         lowered.insert(name.clone(), OutputDeclaration {
             path: path.to_string(),
             hash: output.hash.clone(),
@@ -1053,7 +1188,7 @@ fn lower_nix_input_derivations(
     input_drvs: &BTreeMap<String, NixDerivationJsonInput>,
     path_to_node_id: &BTreeMap<String, String>,
 ) -> Result<Vec<InputDerivationEdge>, ImportDiagnostic> {
-    let mut edges = Vec::new();
+    let mut edges = Vec::with_capacity(MAX_GRAPH_EDGES);
     for (input_drv, input) in input_drvs {
         let input_node_id = path_to_node_id.get(input_drv).ok_or_else(|| {
             diagnostic("dangling-nix-input-derivation", None, "Nix input derivation is absent from closure")
@@ -1062,6 +1197,9 @@ fn lower_nix_input_derivations(
             return Err(diagnostic("missing-nix-input-output", None, "Nix input derivation has no output names"));
         }
         for output_name in sorted_strings(input.outputs.clone()) {
+            if edges.len() >= MAX_GRAPH_EDGES {
+                return Err(diagnostic("edge-limit-exceeded", None, "Nix input derivation edge count exceeds limit"));
+            }
             edges.push(InputDerivationEdge {
                 node_id: input_node_id.clone(),
                 output_name,
@@ -1069,6 +1207,8 @@ fn lower_nix_input_derivations(
         }
     }
     edges.sort();
+    debug_assert!(edges.len() <= MAX_GRAPH_EDGES);
+    debug_assert!(edges.iter().all(|edge| path_to_node_id.values().any(|node_id| node_id == &edge.node_id)));
     Ok(edges)
 }
 
@@ -1076,7 +1216,7 @@ fn lower_nix_source_refs(
     input_srcs: &[String],
     source_payloads: &mut BTreeMap<String, SourcePayload>,
 ) -> Result<Vec<SourceRef>, ImportDiagnostic> {
-    let mut refs = Vec::new();
+    let mut refs = Vec::with_capacity(input_srcs.len());
     for input_src in sorted_strings(input_srcs.to_vec()) {
         validate_nix_store_path(&input_src)?;
         let payload_id = nix_source_payload_id(&input_src);
@@ -1087,12 +1227,15 @@ fn lower_nix_source_refs(
             embedded_text: None,
             mirrors: Vec::new(),
         });
+        debug_assert!(refs.len() < input_srcs.len());
         refs.push(SourceRef {
             payload_id,
             field: SOURCE_REF_FIELD.to_string(),
         });
     }
     refs.sort();
+    debug_assert_eq!(refs.len(), input_srcs.len());
+    debug_assert!(refs.len() <= MAX_SOURCE_PAYLOADS);
     Ok(refs)
 }
 
@@ -1123,6 +1266,8 @@ fn nix_fixed_output_metadata(
             metadata = Some(candidate);
         }
     }
+    debug_assert!(metadata.is_none() || !outputs.is_empty());
+    debug_assert!(metadata.as_ref().is_none_or(|value| !value.digest.is_empty()));
     Ok(metadata)
 }
 
@@ -1256,6 +1401,8 @@ fn translate_node(
         node_id: Some(node.node_id.clone()),
         message: format!("capability {capability} is explicitly policy-allowed for this derivation"),
     }));
+    debug_assert_eq!(translated.node_id, node.node_id);
+    debug_assert_eq!(translated.outputs.len(), node.outputs.len());
     Ok(translated)
 }
 
@@ -1295,6 +1442,8 @@ fn validate_node_policy(node: &ForeignDerivationNode, policy: &TranslationPolicy
             ));
         }
     }
+    debug_assert!(node.cache_hints.len() <= MAX_CACHE_HINTS);
+    debug_assert!(node.sandbox_capabilities.len() <= MAX_SANDBOX_CAPABILITIES);
     Ok(())
 }
 
@@ -1325,6 +1474,8 @@ fn translate_source_payloads(
             payload.embedded_text = Some(rewrite_value(text, policy, None, "embedded-source-payload")?);
         }
     }
+    debug_assert_eq!(payloads.len(), graph.source_payloads.len());
+    debug_assert!(payloads.len() <= MAX_SOURCE_PAYLOADS);
     Ok(payloads)
 }
 
@@ -1342,16 +1493,26 @@ fn recompute_outputs(
     if node.outputs.len() == EMPTY_OUTPUT_COUNT {
         return Err(diagnostic("missing-output-declaration", Some(&node.node_id), "node has no output declarations"));
     }
+    let output_count = node.outputs.len();
     let mut outputs = BTreeMap::new();
     for (output_name, output) in &node.outputs {
         let digest_input = format!("{}:{}:{}:{}", node.node_id, node.name, output_name, policy.target_prefix);
         let digest = blake3_hex(&digest_input);
         let short_digest = &digest[..OUTPUT_HASH_HEX_CHARS];
+        if outputs.len() >= output_count {
+            return Err(diagnostic(
+                "output-count-out-of-range",
+                Some(&node.node_id),
+                "recomputed outputs exceeded input",
+            ));
+        }
         outputs.insert(output_name.clone(), OutputDeclaration {
             path: format!("{}/{short_digest}-{}", policy.target_prefix, node.name),
             hash: output.hash.clone(),
         });
     }
+    debug_assert_eq!(outputs.len(), output_count);
+    debug_assert!(!outputs.is_empty());
     Ok(outputs)
 }
 
@@ -1391,6 +1552,8 @@ fn validate_graph(graph: &ForeignDerivationGraph) -> Result<(), ImportDiagnostic
     validate_roots(graph)?;
     validate_source_refs(graph)?;
     validate_field_limits(graph)?;
+    debug_assert!(!graph.nodes.is_empty());
+    debug_assert!(graph.nodes.len() <= MAX_GRAPH_NODES);
     Ok(())
 }
 
@@ -1436,6 +1599,10 @@ fn validate_hash_domains(graph: &ForeignDerivationGraph) -> Result<(), ImportDia
             "nixpkgs producer graph is missing Nix-compatible derivation identity records",
         ));
     }
+    debug_assert!(graph.hash_domains.len() <= MAX_HASH_DOMAIN_RECORDS);
+    if graph.producer.kind == NIXPKGS_PRODUCER_KIND {
+        debug_assert!(has_nix_identity);
+    }
     Ok(())
 }
 
@@ -1458,6 +1625,8 @@ fn validate_unique_ids(graph: &ForeignDerivationGraph) -> Result<(), ImportDiagn
             return Err(diagnostic("duplicate-source-payload-id", None, "duplicate source payload id"));
         }
     }
+    debug_assert_eq!(node_ids.len(), graph.nodes.len());
+    debug_assert_eq!(payload_ids.len(), graph.source_payloads.len());
     Ok(())
 }
 
@@ -1493,6 +1662,8 @@ fn validate_roots(graph: &ForeignDerivationGraph) -> Result<(), ImportDiagnostic
             }
         }
     }
+    debug_assert!(!graph.root_derivation_ids.is_empty());
+    debug_assert!(graph.root_derivation_ids.iter().all(|root| node_ids.contains(root.as_str())));
     Ok(())
 }
 
@@ -1589,6 +1760,8 @@ fn validate_package_index_shape(index: &PackageIndex) -> Result<(), ImportDiagno
             ));
         }
     }
+    debug_assert_eq!(keys.len(), index.entries.len());
+    debug_assert!(index.entries.len() <= MAX_PACKAGE_INDEX_ENTRIES);
     Ok(())
 }
 
@@ -1602,9 +1775,13 @@ fn import_receipt(
     let translation_policy_digest = canonical_digest(policy)?;
     let translated_graph_digest = canonical_digest(translated_graph)?;
     let package_index_digest = package_index.map(canonical_digest).transpose()?;
-    let hash_domains =
-        receipt_hash_domains(graph, &raw_graph_digest, &translation_policy_digest, &translated_graph_digest);
-    Ok(ImportReceipt {
+    let hash_domains = receipt_hash_domains(graph, ReceiptDigests {
+        raw_graph: &raw_graph_digest,
+        translation_policy: &translation_policy_digest,
+        translated_graph: &translated_graph_digest,
+    });
+    debug_assert!(!translated_graph_digest.is_empty());
+    let receipt = ImportReceipt {
         schema: IMPORT_RECEIPT_SCHEMA.to_string(),
         producer_identity: graph.producer.identity.clone(),
         raw_graph_digest,
@@ -1616,15 +1793,18 @@ fn import_receipt(
         hash_domains,
         diagnostics: translated_graph.diagnostics.clone(),
         non_claims: foreign_import_non_claims(),
-    })
+    };
+    debug_assert_eq!(receipt.producer_identity, graph.producer.identity);
+    Ok(receipt)
 }
 
-fn receipt_hash_domains(
-    graph: &ForeignDerivationGraph,
-    raw_graph_digest: &str,
-    translation_policy_digest: &str,
-    translated_graph_digest: &str,
-) -> Vec<HashDomainRecord> {
+struct ReceiptDigests<'a> {
+    raw_graph: &'a str,
+    translation_policy: &'a str,
+    translated_graph: &'a str,
+}
+
+fn receipt_hash_domains(graph: &ForeignDerivationGraph, digests: ReceiptDigests<'_>) -> Vec<HashDomainRecord> {
     if graph.hash_domains.is_empty() {
         return Vec::new();
     }
@@ -1633,22 +1813,24 @@ fn receipt_hash_domains(
         domain: MANTLE_RECEIPT_HASH_DOMAIN.to_string(),
         kind: RAW_GRAPH_HASH_KIND.to_string(),
         algorithm: DIGEST_ALGORITHM.to_string(),
-        value: raw_graph_digest.to_string(),
+        value: digests.raw_graph.to_string(),
     });
     records.push(HashDomainRecord {
         domain: MANTLE_RECEIPT_HASH_DOMAIN.to_string(),
         kind: TRANSLATION_POLICY_HASH_KIND.to_string(),
         algorithm: DIGEST_ALGORITHM.to_string(),
-        value: translation_policy_digest.to_string(),
+        value: digests.translation_policy.to_string(),
     });
     records.push(HashDomainRecord {
         domain: MANTLE_RECEIPT_HASH_DOMAIN.to_string(),
         kind: TRANSLATED_GRAPH_HASH_KIND.to_string(),
         algorithm: DIGEST_ALGORITHM.to_string(),
-        value: translated_graph_digest.to_string(),
+        value: digests.translated_graph.to_string(),
     });
     records.sort();
     records.dedup();
+    debug_assert!(records.len() >= graph.hash_domains.len());
+    debug_assert!(records.len() <= MAX_HASH_DOMAIN_RECORDS.saturating_add(RECEIPT_HASH_DOMAIN_ADDITIONS));
     records
 }
 
