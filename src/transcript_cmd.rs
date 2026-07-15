@@ -13,6 +13,9 @@ use crate::errors::RunError;
 const TRANSCRIPT_TMP_ENV: &str = "MANTLE_TRANSCRIPT_TMP";
 const MANTLE_PREFIX: &str = "mantle";
 const TEMP_PLACEHOLDER: &str = "${MANTLE_TRANSCRIPT_TMP}";
+const MAX_TRANSCRIPT_BYTES: u64 = 16_777_216;
+const MAX_TRANSCRIPT_LINES: usize = 100_000;
+const MAX_TRANSCRIPT_BLOCKS: usize = 10_000;
 
 #[derive(Debug, Clone)]
 pub struct TranscriptRunOptions {
@@ -110,6 +113,15 @@ pub fn cmd_transcript_run(options: TranscriptRunOptions) -> Result<(), RunError>
 }
 
 fn run_transcript(options: TranscriptRunOptions) -> Result<TranscriptRunSummary, RunError> {
+    let metadata = fs::metadata(&options.transcript).map_err(|err| {
+        RunError::Internal(format!("reading transcript `{}` metadata: {err}", options.transcript.display()))
+    })?;
+    if metadata.len() > MAX_TRANSCRIPT_BYTES {
+        return Err(RunError::Internal(format!(
+            "transcript `{}` exceeds {MAX_TRANSCRIPT_BYTES} bytes",
+            options.transcript.display()
+        )));
+    }
     let text = fs::read_to_string(&options.transcript)
         .map_err(|err| RunError::Internal(format!("reading transcript `{}`: {err}", options.transcript.display())))?;
     let transcript = parse_transcript(&text)?;
@@ -118,125 +130,229 @@ fn run_transcript(options: TranscriptRunOptions) -> Result<TranscriptRunSummary,
             "transcript requests in_place=true; rerun with --allow-in-place to execute it".to_string(),
         ));
     }
+    debug_assert!(!transcript.blocks.is_empty());
+    debug_assert!(transcript.blocks.len() <= MAX_TRANSCRIPT_BLOCKS);
 
     let output_path = options.output.unwrap_or_else(|| default_output_path(&options.transcript));
-    let work_dir = options
-        .transcript
-        .parent()
-        .filter(|path| !path.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."))
-        .to_path_buf();
+    let work_dir = transcript_work_dir(&options.transcript);
     let mantle_bin = options.mantle_bin.unwrap_or_else(default_mantle_bin);
     let scratch = TranscriptScratch::new(transcript.options.in_place)?;
-    let mut visible_runs = Vec::new();
-    let mut last_run: Option<CommandRun> = None;
-    let mut last_error_needs_expectation = false;
-    let mut pending_setups = Vec::<String>::new();
-    let mut cleanups = Vec::<String>::new();
-    let mut hidden_setups = Vec::<HiddenRun>::new();
-    let mut hidden_cleanups = Vec::<HiddenRun>::new();
-    let mut result: Result<(), RunError> = Ok(());
-
-    for block in &transcript.blocks {
-        if result.is_err() {
-            break;
-        }
-        match block.kind {
-            BlockKind::Options => {}
-            BlockKind::SetupHide => pending_setups.push(block.body.clone()),
-            BlockKind::CleanupHide => cleanups.push(block.body.clone()),
-            BlockKind::Expect | BlockKind::ExpectJson => {
-                let run = match last_run.as_ref() {
-                    Some(run) => run,
-                    None => {
-                        result =
-                            Err(RunError::Internal("transcript expect block must follow a mantle command".to_string()));
-                        continue;
-                    }
-                };
-                result = verify_expectation(run, block);
-                if result.is_ok() {
-                    last_error_needs_expectation = false;
-                }
-            }
-            BlockKind::Mantle | BlockKind::MantleError => {
-                if last_error_needs_expectation {
-                    result = Err(RunError::Internal(
-                        "mantle:error block must be followed by an expect or expect:json block".to_string(),
-                    ));
-                    continue;
-                }
-                for setup in pending_setups.drain(..) {
-                    match run_hidden_shell(&setup, &scratch, &work_dir, "setup") {
-                        Ok(hidden) => hidden_setups.push(hidden),
-                        Err(err) => {
-                            result = Err(err);
-                            break;
-                        }
-                    }
-                }
-                if result.is_err() {
-                    continue;
-                }
-                let expect_failure = matches!(block.kind, BlockKind::MantleError);
-                match run_visible_mantle(
-                    &mantle_bin,
-                    &block.body,
-                    expect_failure,
-                    &scratch,
-                    &work_dir,
-                    transcript.options.in_place,
-                    visible_runs.len() + 1,
-                ) {
-                    Ok(run) => {
-                        last_error_needs_expectation = run.expected_failure;
-                        last_run = Some(run.clone());
-                        visible_runs.push(run);
-                    }
-                    Err(err) => result = Err(err),
-                }
-            }
-        }
-    }
-
-    if result.is_ok() && last_error_needs_expectation {
-        result = Err(RunError::Internal(
-            "mantle:error block must be followed by an expect or expect:json block".to_string(),
-        ));
-    }
-
-    if result.is_ok() && !pending_setups.is_empty() {
-        result =
-            Err(RunError::Internal("transcript has setup:hide block without a following mantle command".to_string()));
-    }
-
-    let mut cleanup_failures = Vec::new();
-    for cleanup in cleanups {
-        match run_hidden_shell(&cleanup, &scratch, &work_dir, "cleanup") {
-            Ok(hidden) => hidden_cleanups.push(hidden),
-            Err(err) => cleanup_failures.push(err.to_string()),
-        }
-    }
-    if result.is_ok() && !cleanup_failures.is_empty() {
-        result = Err(RunError::Build(format!("hidden transcript cleanup failed: {}", cleanup_failures.join("; "))));
-    }
+    let execution = execute_transcript(&transcript, &mantle_bin, &scratch, &work_dir);
+    debug_assert!(execution.result.is_err() || !execution.visible_runs.is_empty());
+    debug_assert!(execution.visible_runs.len() <= transcript.blocks.len());
 
     write_evidence(&output_path, TranscriptEvidence {
         schema: "mantle-transcript-output-v1",
         transcript: options.transcript.display().to_string(),
         in_place: transcript.options.in_place,
-        visible_steps: visible_runs.len(),
-        hidden_setups: hidden_setups.iter().map(HiddenRunEvidence::from).collect(),
-        hidden_cleanups: hidden_cleanups.iter().map(HiddenRunEvidence::from).collect(),
-        runs: visible_runs.iter().map(RunEvidence::from).collect(),
-        cleanup_failures,
+        visible_steps: execution.visible_runs.len(),
+        hidden_setups: execution.hidden_setups.iter().map(HiddenRunEvidence::from).collect(),
+        hidden_cleanups: execution.hidden_cleanups.iter().map(HiddenRunEvidence::from).collect(),
+        runs: execution.visible_runs.iter().map(RunEvidence::from).collect(),
+        cleanup_failures: execution.cleanup_failures,
     })?;
 
-    result?;
+    execution.result?;
     Ok(TranscriptRunSummary {
-        visible_steps: visible_runs.len(),
+        visible_steps: execution.visible_runs.len(),
         output: output_path,
     })
+}
+
+fn transcript_work_dir(transcript_path: &Path) -> PathBuf {
+    transcript_path
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf()
+}
+
+struct TranscriptExecution {
+    visible_runs: Vec<CommandRun>,
+    hidden_setups: Vec<HiddenRun>,
+    hidden_cleanups: Vec<HiddenRun>,
+    cleanup_failures: Vec<String>,
+    result: Result<(), RunError>,
+}
+
+struct TranscriptBlockContext<'a> {
+    transcript: &'a Transcript,
+    mantle_bin: &'a Path,
+    scratch: &'a TranscriptScratch,
+    work_dir: &'a Path,
+}
+
+struct VisibleBlockContext<'a> {
+    block: &'a Block,
+    is_in_place: bool,
+    mantle_bin: &'a Path,
+    scratch: &'a TranscriptScratch,
+    work_dir: &'a Path,
+}
+
+struct TranscriptExecutionState {
+    visible_runs: Vec<CommandRun>,
+    last_run: Option<CommandRun>,
+    is_last_error_pending: bool,
+    pending_setups: Vec<String>,
+    cleanups: Vec<String>,
+    hidden_setups: Vec<HiddenRun>,
+    result: Result<(), RunError>,
+}
+
+fn execute_transcript(
+    transcript: &Transcript,
+    mantle_bin: &Path,
+    scratch: &TranscriptScratch,
+    work_dir: &Path,
+) -> TranscriptExecution {
+    let block_count_max = transcript.blocks.len();
+    let mut state = TranscriptExecutionState {
+        visible_runs: Vec::with_capacity(block_count_max),
+        last_run: None,
+        is_last_error_pending: false,
+        pending_setups: Vec::with_capacity(block_count_max),
+        cleanups: Vec::with_capacity(block_count_max),
+        hidden_setups: Vec::with_capacity(block_count_max),
+        result: Ok(()),
+    };
+    let block_context = TranscriptBlockContext {
+        transcript,
+        mantle_bin,
+        scratch,
+        work_dir,
+    };
+    for block in &transcript.blocks {
+        if state.result.is_err() {
+            break;
+        }
+        if let Err(error) = execute_transcript_block(block, &block_context, &mut state) {
+            state.result = Err(error);
+        }
+    }
+    validate_transcript_completion(&mut state);
+    debug_assert!(state.visible_runs.len() <= transcript.blocks.len());
+    debug_assert!(state.hidden_setups.len() <= transcript.blocks.len());
+    let (hidden_cleanups, cleanup_failures) = run_transcript_cleanups(state.cleanups, scratch, work_dir);
+    if state.result.is_ok() && !cleanup_failures.is_empty() {
+        state.result =
+            Err(RunError::Build(format!("hidden transcript cleanup failed: {}", cleanup_failures.join("; "))));
+    }
+    TranscriptExecution {
+        visible_runs: state.visible_runs,
+        hidden_setups: state.hidden_setups,
+        hidden_cleanups,
+        cleanup_failures,
+        result: state.result,
+    }
+}
+
+fn execute_transcript_block(
+    block: &Block,
+    context: &TranscriptBlockContext<'_>,
+    state: &mut TranscriptExecutionState,
+) -> Result<(), RunError> {
+    match block.kind {
+        BlockKind::Options => Ok(()),
+        BlockKind::SetupHide => {
+            state.pending_setups.push(block.body.clone());
+            Ok(())
+        }
+        BlockKind::CleanupHide => {
+            state.cleanups.push(block.body.clone());
+            Ok(())
+        }
+        BlockKind::Expect | BlockKind::ExpectJson => {
+            let run = state.last_run.as_ref().ok_or_else(|| {
+                RunError::Internal("transcript expect block must follow a mantle command".to_string())
+            })?;
+            verify_expectation(run, block)?;
+            state.is_last_error_pending = false;
+            Ok(())
+        }
+        BlockKind::Mantle | BlockKind::MantleError => execute_visible_block(
+            VisibleBlockContext {
+                block,
+                is_in_place: context.transcript.options.in_place,
+                mantle_bin: context.mantle_bin,
+                scratch: context.scratch,
+                work_dir: context.work_dir,
+            },
+            state,
+        ),
+    }
+}
+
+fn execute_visible_block(
+    context: VisibleBlockContext<'_>,
+    state: &mut TranscriptExecutionState,
+) -> Result<(), RunError> {
+    let VisibleBlockContext {
+        block,
+        is_in_place,
+        mantle_bin,
+        scratch,
+        work_dir,
+    } = context;
+    if state.is_last_error_pending {
+        return Err(RunError::Internal(
+            "mantle:error block must be followed by an expect or expect:json block".to_string(),
+        ));
+    }
+    for setup in state.pending_setups.drain(..) {
+        state.hidden_setups.push(run_hidden_shell(&setup, scratch, work_dir, "setup")?);
+    }
+    let visible_index = state
+        .visible_runs
+        .len()
+        .checked_add(1)
+        .ok_or_else(|| RunError::Internal("transcript visible step index overflowed usize".to_string()))?;
+    let run = run_visible_mantle(VisibleRunRequest {
+        mantle_bin,
+        command: &block.body,
+        is_expected_failure: matches!(block.kind, BlockKind::MantleError),
+        scratch,
+        work_dir,
+        is_in_place,
+        visible_index,
+    })?;
+    state.is_last_error_pending = run.expected_failure;
+    state.last_run = Some(run.clone());
+    state.visible_runs.push(run);
+    debug_assert!(state.last_run.is_some());
+    debug_assert!(!state.visible_runs.is_empty());
+    Ok(())
+}
+
+fn validate_transcript_completion(state: &mut TranscriptExecutionState) {
+    if state.result.is_ok() && state.is_last_error_pending {
+        state.result = Err(RunError::Internal(
+            "mantle:error block must be followed by an expect or expect:json block".to_string(),
+        ));
+    }
+    if state.result.is_ok() && !state.pending_setups.is_empty() {
+        state.result =
+            Err(RunError::Internal("transcript has setup:hide block without a following mantle command".to_string()));
+    }
+}
+
+fn run_transcript_cleanups(
+    cleanups: Vec<String>,
+    scratch: &TranscriptScratch,
+    work_dir: &Path,
+) -> (Vec<HiddenRun>, Vec<String>) {
+    let cleanup_count_max = cleanups.len();
+    let mut hidden_cleanups = Vec::with_capacity(cleanup_count_max);
+    let mut cleanup_failures = Vec::with_capacity(cleanup_count_max);
+    for cleanup in cleanups {
+        match run_hidden_shell(&cleanup, scratch, work_dir, "cleanup") {
+            Ok(hidden) => hidden_cleanups.push(hidden),
+            Err(error) => cleanup_failures.push(error.to_string()),
+        }
+    }
+    debug_assert!(hidden_cleanups.len() <= cleanup_count_max);
+    debug_assert!(cleanup_failures.len() <= cleanup_count_max);
+    (hidden_cleanups, cleanup_failures)
 }
 
 impl From<&CommandRun> for RunEvidence {
@@ -323,6 +439,8 @@ fn run_hidden_shell(
     work_dir: &Path,
     label: &'static str,
 ) -> Result<HiddenRun, RunError> {
+    debug_assert!(label == "setup" || label == "cleanup");
+    debug_assert!(!work_dir.as_os_str().is_empty());
     let output = Command::new("/bin/sh")
         .arg("-c")
         .arg(expand_temp(script, scratch))
@@ -348,55 +466,67 @@ fn run_hidden_shell(
     )))
 }
 
-fn run_visible_mantle(
-    mantle_bin: &Path,
-    command: &str,
-    expect_failure: bool,
-    scratch: &TranscriptScratch,
-    work_dir: &Path,
-    in_place: bool,
+struct VisibleRunRequest<'a> {
+    mantle_bin: &'a Path,
+    command: &'a str,
+    is_expected_failure: bool,
+    scratch: &'a TranscriptScratch,
+    work_dir: &'a Path,
+    is_in_place: bool,
     visible_index: usize,
-) -> Result<CommandRun, RunError> {
-    let tokens = split_command(command)?;
-    if tokens.first().map(String::as_str) != Some(MANTLE_PREFIX) {
-        return Err(RunError::Internal(format!("visible transcript command must start with `mantle`: `{command}`")));
-    }
+}
 
-    let mut cmd = Command::new(mantle_bin);
-    if !in_place {
+fn run_visible_mantle(request: VisibleRunRequest<'_>) -> Result<CommandRun, RunError> {
+    let tokens = split_command(request.command)?;
+    if tokens.first().map(String::as_str) != Some(MANTLE_PREFIX) {
+        return Err(RunError::Internal(format!(
+            "visible transcript command must start with `mantle`: `{}`",
+            request.command
+        )));
+    }
+    debug_assert_eq!(tokens.first().map(String::as_str), Some(MANTLE_PREFIX));
+    debug_assert!(request.visible_index > 0);
+
+    let mut cmd = Command::new(request.mantle_bin);
+    if !request.is_in_place {
         if !tokens.iter().any(|token| token == "--store" || token.starts_with("--store=")) {
-            cmd.arg("--store").arg(&scratch.store);
+            cmd.arg("--store").arg(&request.scratch.store);
         }
         if !tokens.iter().any(|token| token == "--state-dir" || token.starts_with("--state-dir=")) {
-            cmd.arg("--state-dir").arg(&scratch.state_dir);
+            cmd.arg("--state-dir").arg(&request.scratch.state_dir);
         }
     }
     for token in tokens.iter().skip(1) {
-        cmd.arg(expand_temp(token, scratch));
+        cmd.arg(expand_temp(token, request.scratch));
     }
-    cmd.current_dir(work_dir).env(TRANSCRIPT_TMP_ENV, scratch.tmp_path());
+    cmd.current_dir(request.work_dir).env(TRANSCRIPT_TMP_ENV, request.scratch.tmp_path());
     let output = cmd.output().map_err(|err| {
-        RunError::Internal(format!("running transcript command `{command}` via `{}`: {err}", mantle_bin.display()))
+        RunError::Internal(format!(
+            "running transcript command `{}` via `{}`: {err}",
+            request.command,
+            request.mantle_bin.display()
+        ))
     })?;
     let mut combined = String::new();
     combined.push_str(&String::from_utf8_lossy(&output.stdout));
     combined.push_str(&String::from_utf8_lossy(&output.stderr));
-    if expect_failure && output.status.success() {
-        return Err(RunError::Build(format!("transcript command `{command}` unexpectedly succeeded")));
+    if request.is_expected_failure && output.status.success() {
+        return Err(RunError::Build(format!("transcript command `{}` unexpectedly succeeded", request.command)));
     }
-    if !expect_failure && !output.status.success() {
+    if !request.is_expected_failure && !output.status.success() {
         return Err(RunError::Build(format!(
-            "transcript command `{command}` failed with status {:?}\n{}",
+            "transcript command `{}` failed with status {:?}\n{}",
+            request.command,
             output.status.code(),
             combined
         )));
     }
     Ok(CommandRun {
-        visible_index,
-        command: command.to_string(),
-        expected_failure: expect_failure,
+        visible_index: request.visible_index,
+        command: request.command.to_string(),
+        expected_failure: request.is_expected_failure,
         exit_code: output.status.code(),
-        normalized_output: normalize_output(&combined, scratch),
+        normalized_output: normalize_output(&combined, request.scratch),
         raw_output: combined,
     })
 }
@@ -405,30 +535,41 @@ fn verify_expectation(run: &CommandRun, expectation: &Block) -> Result<(), RunEr
     match expectation.kind {
         BlockKind::Expect => verify_text_expectation(run, &expectation.body),
         BlockKind::ExpectJson => verify_json_expectation(run, &expectation.body),
-        _ => unreachable!("only expectation blocks are verified"),
+        BlockKind::Mantle
+        | BlockKind::MantleError
+        | BlockKind::SetupHide
+        | BlockKind::CleanupHide
+        | BlockKind::Options => Err(RunError::Internal("only expectation blocks may be verified".to_string())),
     }
 }
 
 fn verify_text_expectation(run: &CommandRun, body: &str) -> Result<(), RunError> {
     let mut search_from = 0;
-    let mut saw_expectation = false;
+    let mut is_expectation_seen = false;
     for expected in expectation_lines(body) {
-        saw_expectation = true;
+        is_expectation_seen = true;
         let Some(relative_index) = run.normalized_output[search_from..].find(expected) else {
             return Err(RunError::Build(format!(
                 "transcript step {} output did not contain expected fragment `{}` for command `{}`\nnormalized output:\n{}",
                 run.visible_index, expected, run.command, run.normalized_output
             )));
         };
-        search_from += relative_index + expected.len();
+        search_from = search_from
+            .checked_add(relative_index)
+            .and_then(|offset| offset.checked_add(expected.len()))
+            .ok_or_else(|| RunError::Internal("transcript expectation search offset overflowed usize".to_string()))?;
     }
-    if !saw_expectation {
+    if !is_expectation_seen {
         return Err(RunError::Internal("expect block must contain at least one expected fragment".to_string()));
     }
+    debug_assert!(is_expectation_seen);
+    debug_assert!(search_from <= run.normalized_output.len());
     Ok(())
 }
 
 fn verify_json_expectation(run: &CommandRun, body: &str) -> Result<(), RunError> {
+    debug_assert!(run.visible_index > 0);
+    debug_assert!(!run.command.is_empty());
     let json_source = json_output_slice(&run.raw_output);
     let value: serde_json::Value = serde_json::from_str(json_source).map_err(|err| {
         RunError::Build(format!(
@@ -436,9 +577,9 @@ fn verify_json_expectation(run: &CommandRun, body: &str) -> Result<(), RunError>
             run.visible_index, run.command
         ))
     })?;
-    let mut saw_expectation = false;
+    let mut is_expectation_seen = false;
     for line in expectation_lines(body) {
-        saw_expectation = true;
+        is_expectation_seen = true;
         let Some((path, expected)) = line.split_once('=') else {
             return Err(RunError::Internal(format!("expect:json line must use dotted.path = value syntax: `{line}`")));
         };
@@ -454,7 +595,7 @@ fn verify_json_expectation(run: &CommandRun, body: &str) -> Result<(), RunError>
             )));
         }
     }
-    if !saw_expectation {
+    if !is_expectation_seen {
         return Err(RunError::Internal("expect:json block must contain at least one expected field".to_string()));
     }
     Ok(())
@@ -501,17 +642,19 @@ fn normalize_output(output: &str, scratch: &TranscriptScratch) -> String {
         .replace(&store, "${MANTLE_TRANSCRIPT_STORE}")
         .replace(&state, "${MANTLE_TRANSCRIPT_STATE}")
         .replace(&temp, "${MANTLE_TRANSCRIPT_TMP}");
-    let mut out = String::new();
-    let mut previous_blank = false;
+    debug_assert!(!normalized.contains('\r'));
+    debug_assert!(!normalized.contains(&temp));
+    let mut out = String::with_capacity(normalized.len());
+    let mut is_previous_line_blank = false;
     for line in normalized.lines() {
         let trimmed = line.trim_end();
-        let blank = trimmed.is_empty();
-        if blank && previous_blank {
+        let is_blank = trimmed.is_empty();
+        if is_blank && is_previous_line_blank {
             continue;
         }
         out.push_str(trimmed);
         out.push('\n');
-        previous_blank = blank;
+        is_previous_line_blank = is_blank;
     }
     out.trim_end().to_string()
 }
@@ -546,34 +689,55 @@ fn parse_transcript(text: &str) -> Result<Transcript, RunError> {
 }
 
 fn parse_blocks(text: &str) -> Result<Vec<Block>, RunError> {
-    let mut blocks = Vec::new();
-    let mut lines = text.lines();
-    while let Some(line) = lines.next() {
+    let lines = text.lines().take(MAX_TRANSCRIPT_LINES.saturating_add(1)).collect::<Vec<_>>();
+    if lines.len() > MAX_TRANSCRIPT_LINES {
+        return Err(RunError::Internal(format!("transcript exceeds {MAX_TRANSCRIPT_LINES} lines")));
+    }
+    let mut blocks = Vec::with_capacity(lines.len().min(MAX_TRANSCRIPT_BLOCKS));
+    let mut open_block: Option<(String, String)> = None;
+    for line in lines {
+        if open_block.is_some() {
+            if line.starts_with("```") {
+                close_transcript_block(&mut open_block, &mut blocks)?;
+            } else if let Some((_info, body)) = open_block.as_mut() {
+                body.push_str(line);
+                body.push('\n');
+            }
+            continue;
+        }
         if !line.starts_with("```") {
             continue;
         }
         let info = line.trim_start_matches("```").trim();
-        if info.is_empty() {
-            continue;
-        }
-        let mut body = String::new();
-        let mut closed = false;
-        for body_line in lines.by_ref() {
-            if body_line.starts_with("```") {
-                closed = true;
-                break;
-            }
-            body.push_str(body_line);
-            body.push('\n');
-        }
-        if !closed {
-            return Err(RunError::Internal(format!("transcript block `{info}` is missing closing fence")));
-        }
-        if let Some(kind) = parse_block_kind(info)? {
-            blocks.push(Block { kind, body });
+        if !info.is_empty() {
+            open_block = Some((info.to_string(), String::new()));
         }
     }
+    if let Some((info, _body)) = open_block {
+        return Err(RunError::Internal(format!("transcript block `{info}` is missing closing fence")));
+    }
+    debug_assert!(blocks.len() <= MAX_TRANSCRIPT_BLOCKS);
+    debug_assert!(blocks.capacity() >= blocks.len());
     Ok(blocks)
+}
+
+fn close_transcript_block(open_block: &mut Option<(String, String)>, blocks: &mut Vec<Block>) -> Result<(), RunError> {
+    let (closed_info, closed_body) = open_block
+        .take()
+        .ok_or_else(|| RunError::Internal("transcript close requested without an open block".to_string()))?;
+    let Some(kind) = parse_block_kind(&closed_info)? else {
+        return Ok(());
+    };
+    if blocks.len() >= MAX_TRANSCRIPT_BLOCKS {
+        return Err(RunError::Internal(format!("transcript exceeds {MAX_TRANSCRIPT_BLOCKS} executable blocks")));
+    }
+    blocks.push(Block {
+        kind,
+        body: closed_body,
+    });
+    debug_assert!(blocks.len() <= MAX_TRANSCRIPT_BLOCKS);
+    debug_assert!(open_block.is_none());
+    Ok(())
 }
 
 fn parse_block_kind(info: &str) -> Result<Option<BlockKind>, RunError> {

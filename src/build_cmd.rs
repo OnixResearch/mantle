@@ -42,7 +42,13 @@ impl BuildOutputMode {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+// Stable CLI shell: dispatch supplies independently typed build policy and path fields.
+#[allow(
+    clippy::too_many_arguments,
+    tigerstyle::ambiguous_params,
+    tigerstyle::too_many_parameters,
+    reason = "stable positional CLI adapter delegates immediately to the named BuildConfig boundary"
+)]
 pub fn cmd_build(
     file: &Path,
     import_paths: &[OsString],
@@ -79,7 +85,13 @@ pub fn cmd_build(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+// Stable CLI shell: source-fetch overrides extend the same compatibility boundary.
+#[allow(
+    clippy::too_many_arguments,
+    tigerstyle::ambiguous_params,
+    tigerstyle::too_many_parameters,
+    reason = "stable positional CLI adapter delegates immediately to the named BuildConfig boundary"
+)]
 pub fn cmd_build_with_source_fetch_overrides(
     file: &Path,
     import_paths: &[OsString],
@@ -110,7 +122,17 @@ pub fn cmd_build_with_source_fetch_overrides(
         store_dir: store_dir.to_string(),
         verbose,
         max_jobs,
-        scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
+        scheduling_policy: crunch_pipeline::SchedulingPolicy {
+            schema: crunch_build::scheduling::SCHEDULING_POLICY_SCHEMA.to_string(),
+            policy_id: crunch_build::scheduling::DEFAULT_SCHEDULING_POLICY_ID.to_string(),
+            preference_order: vec![
+                crunch_build::PreferenceField::KnownGraph,
+                crunch_build::PreferenceField::ResourceFit,
+                crunch_build::PreferenceField::LocalityTransfer,
+            ],
+            aged_after_epochs: crunch_build::scheduling::DEFAULT_AGED_AFTER_EPOCHS,
+            protected_after_epochs: crunch_build::scheduling::DEFAULT_PROTECTED_AFTER_EPOCHS,
+        },
         substituter_urls: substituter_urls.to_vec(),
         hermeticity_mode,
         keypair,
@@ -122,6 +144,8 @@ pub fn cmd_build_with_source_fetch_overrides(
         base_state_dirs,
     };
 
+    debug_assert_eq!(config.file.as_path(), file);
+    debug_assert_eq!(config.hermeticity_mode, hermeticity_mode);
     let result = run_build(&config)?;
     report_build_result(&config, &result, fix, output_mode)
 }
@@ -138,8 +162,10 @@ pub fn report_build_result(
     output_mode: BuildOutputMode,
 ) -> Result<(), RunError> {
     let logs_dir = log_dir();
+    debug_assert_eq!(output_mode.is_json(), !output_mode.is_human());
+    debug_assert!(!config.store_dir.is_empty());
     let mut diagnostic_persistence_failures = Vec::new();
-    let log_dir_ready = match prepare_logs_dir(&logs_dir) {
+    let is_log_dir_ready = match prepare_logs_dir(&logs_dir) {
         Ok(()) => true,
         Err(failure) => {
             diagnostic_persistence_failures.push(failure);
@@ -147,7 +173,7 @@ pub fn report_build_result(
         }
     };
 
-    if log_dir_ready {
+    if is_log_dir_ready {
         diagnostic_persistence_failures.extend(write_success_logs(config, result, &logs_dir, output_mode));
     }
     if output_mode.is_human() {
@@ -169,7 +195,7 @@ pub fn report_build_result(
         return Ok(());
     }
 
-    if log_dir_ready {
+    if is_log_dir_ready {
         diagnostic_persistence_failures.extend(write_failure_logs(config, result, &logs_dir));
     }
     if output_mode.is_json() {
@@ -201,6 +227,8 @@ fn maybe_single_fod_mismatch(
         return None;
     }
 
+    debug_assert_eq!(result.failed.len(), 1);
+    debug_assert_eq!(result.fod_mismatches.len(), 1);
     let failed = &result.failed[0];
     let mismatch = &result.fod_mismatches[0];
     let drv_path = parse_drv_key(&config.store_dir, &failed.drv_key)?;
@@ -222,7 +250,7 @@ fn write_success_logs(
     logs_dir: &Path,
     output_mode: BuildOutputMode,
 ) -> Vec<DiagnosticPersistenceFailure> {
-    let mut failures = Vec::new();
+    let mut failures = Vec::with_capacity(result.outcomes.len());
     for outcome in &result.outcomes {
         let drv_key = drv_key_for(&config.store_dir, &outcome.drv_path);
         let label = label_for_key(result, &drv_key).unwrap_or(outcome.drv_path.name());
@@ -242,6 +270,8 @@ fn write_success_logs(
             failures.push(failure);
         }
     }
+    debug_assert!(failures.len() <= result.outcomes.len());
+    debug_assert_eq!(output_mode.is_json(), !output_mode.is_human());
     failures
 }
 
@@ -249,20 +279,20 @@ fn print_success_outputs(config: &BuildConfig, result: &PipelineResult) {
     let output_dir_str = config.output_dir.to_str().unwrap_or(&config.store_dir);
 
     for outcome in &result.outcomes {
-        let multi = outcome.outputs.len() > 1;
+        let is_multi = outcome.outputs.len() > 1;
         let mut outputs: Vec<_> = outcome.outputs.iter().collect();
         outputs.sort_by(|left, right| left.0.cmp(right.0));
         for (output_name, path_info) in outputs {
             let path = path_info.store_path.to_absolute_path_with_prefix(output_dir_str);
-            let suffix = format_output_suffix(outcome, output_name, multi);
+            let suffix = format_output_suffix(outcome, output_name, is_multi);
             println!("{path}{suffix}");
         }
     }
 }
 
-fn format_output_suffix(outcome: &crunch_build::BuildOutcome, output_name: &str, multi: bool) -> String {
+fn format_output_suffix(outcome: &crunch_build::BuildOutcome, output_name: &str, is_multi: bool) -> String {
     let mut parts = Vec::<String>::new();
-    if multi && output_name != "out" {
+    if is_multi && output_name != "out" {
         parts.push(output_name.to_string());
     }
     if outcome.cached {
@@ -279,6 +309,8 @@ fn format_output_suffix(outcome: &crunch_build::BuildOutcome, output_name: &str,
             parts.push(format!("fallback_reason={reason}"));
         }
     }
+    debug_assert!(!output_name.is_empty());
+    debug_assert!(parts.len() <= outcome.substitutions.len().saturating_add(3));
     if parts.is_empty() {
         return String::new();
     }
@@ -291,9 +323,9 @@ fn print_json_report(
     logs_dir: &Path,
     diagnostic_persistence_failures: &[DiagnosticPersistenceFailure],
 ) -> Result<(), RunError> {
-    let report = render_build_json_report(config, result, logs_dir, diagnostic_persistence_failures)
+    let serialized_build_document = render_build_json_report(config, result, logs_dir, diagnostic_persistence_failures)
         .map_err(|e| RunError::Internal(format!("serializing build report: {e}")))?;
-    println!("{report}");
+    println!("{serialized_build_document}");
     Ok(())
 }
 
@@ -316,7 +348,10 @@ fn print_action_result_summary(result: &PipelineResult) {
 }
 
 fn format_action_result_summary(reports: &[crunch_build::ActionResultRuntimeReport]) -> Vec<String> {
-    let mut lines = Vec::new();
+    let rejected_count_max =
+        reports.iter().map(|report| report.candidate_decisions.len()).fold(0_usize, usize::saturating_add);
+    let line_count_max = reports.len().saturating_add(rejected_count_max);
+    let mut lines = Vec::with_capacity(line_count_max);
     for report in reports {
         let selected = report.selected_result_ref.as_deref().unwrap_or("none");
         let source = report.selected_source_class.as_deref().unwrap_or("none");
@@ -352,6 +387,8 @@ fn format_action_result_summary(reports: &[crunch_build::ActionResultRuntimeRepo
             ));
         }
     }
+    debug_assert!(lines.len() >= reports.len());
+    debug_assert!(lines.capacity() >= lines.len());
     lines
 }
 
@@ -437,7 +474,7 @@ fn write_failure_logs(
     result: &PipelineResult,
     logs_dir: &Path,
 ) -> Vec<DiagnosticPersistenceFailure> {
-    let mut failures = Vec::new();
+    let mut failures = Vec::with_capacity(result.failed.len());
     for failed in &result.failed {
         if !should_write_failure_log(&failed.error) {
             continue;
@@ -572,6 +609,8 @@ pub fn load_or_generate_signing_keypair(
             .map_err(|e| RunError::Internal(format!("writing signing key {}: {e}", default_path.display())))?;
     }
 
+    debug_assert!(!line.is_empty());
+    debug_assert!(!keypair.verifying_key.name().is_empty());
     if emit_human {
         eprintln!("Generated signing key: {} ({})", keypair.verifying_key.name(), default_path.display());
     }
@@ -606,7 +645,8 @@ pub fn load_configured_trusted_public_keys(
     let contents = std::fs::read_to_string(&default_path)
         .map_err(|e| RunError::Internal(format!("reading trusted public keys {}: {e}", default_path.display())))?;
 
-    let mut parsed = Vec::new();
+    let trusted_key_count_max = contents.split(',').count();
+    let mut parsed = Vec::with_capacity(trusted_key_count_max);
     for raw_line in contents.lines() {
         let line = raw_line.trim();
         if line.is_empty() {
@@ -633,7 +673,8 @@ pub fn load_configured_trusted_public_keys(
     if parsed.is_empty() {
         return Ok(None);
     }
-
+    debug_assert!(!parsed.is_empty());
+    debug_assert!(parsed.iter().all(|key| !key.name().is_empty()));
     Ok(Some(parsed))
 }
 

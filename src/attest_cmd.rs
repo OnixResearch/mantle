@@ -41,6 +41,72 @@ use crate::witness_handoff::import_witness_material;
 
 const MANIFEST_FILE: &str = "crunch-project.ncl";
 const LOCK_FILE: &str = "crunch.lock";
+const MAX_DIFF_ROWS_PER_LINE: usize = 2;
+
+#[derive(Clone, Copy)]
+struct AttestCommandContext<'a> {
+    current_dir: &'a Path,
+    output_dir: &'a Path,
+    state_dir: &'a Path,
+    store_dir: &'a str,
+    is_json: bool,
+}
+
+struct ShowRequest<'a> {
+    output_dir: &'a Path,
+    state_dir: &'a Path,
+    store_dir: &'a str,
+    selector: &'a str,
+}
+
+struct DiffRequest<'a> {
+    output_dir: &'a Path,
+    state_dir: &'a Path,
+    store_dir: &'a str,
+    left: &'a str,
+    right: &'a str,
+}
+
+struct WitnessCreateCommand<'a> {
+    current_dir: &'a Path,
+    state_dir: &'a Path,
+    is_json: bool,
+    verification_dir: &'a Path,
+    rebuilt_binary: &'a [PathBuf],
+    identity: Option<&'a str>,
+    system: &'a str,
+    toolchain: &'a str,
+    host_class: &'a str,
+    signing_key: Option<&'a Path>,
+}
+
+struct PolicyInitCommand<'a> {
+    current_dir: &'a Path,
+    is_json: bool,
+    verification_dir: &'a Path,
+    profile: PolicyInitProfile,
+    trusted_release_signers: &'a [String],
+    trusted_witness_identities: &'a [String],
+    is_force: bool,
+}
+
+struct TrustedPublicKeyOutput<'a> {
+    trusted_public_key: &'a str,
+    key_name: &'a str,
+    source_path: &'a Path,
+    is_json: bool,
+}
+
+struct StorePathInput<'a> {
+    selector: &'a str,
+    store_dir: &'a str,
+    output_dir: &'a str,
+}
+
+struct LineDiffInput<'a> {
+    left: &'a str,
+    right: &'a str,
+}
 
 #[derive(Debug)]
 enum AttestationDocument {
@@ -54,7 +120,7 @@ enum AttestationDocument {
 #[derive(Debug, Deserialize)]
 struct AttestationEnvelopeInput {
     kind: String,
-    #[serde(default)]
+    #[serde(default = "absent_digest")]
     digest: Option<String>,
     attestation: Value,
 }
@@ -68,67 +134,83 @@ struct AttestationEnvelopeOutput {
     attestation: Value,
 }
 
+fn absent_digest() -> Option<String> {
+    None
+}
+
+// Stable CLI dispatch compatibility: `main.rs` supplies these independently
+// typed fields positionally, while the implementation immediately names them.
+#[allow(
+    tigerstyle::too_many_parameters,
+    reason = "stable CLI shell preserved while the internal command uses AttestCommandContext"
+)]
 pub fn cmd_attest(
     action: crate::AttestAction,
     current_dir: &Path,
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
-    json: bool,
+    is_json: bool,
 ) -> Result<(), RunError> {
     let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
-    rt.block_on(cmd_attest_async(action, current_dir, output_dir, state_dir, store_dir, json))
+    rt.block_on(cmd_attest_async(action, AttestCommandContext {
+        current_dir,
+        output_dir,
+        state_dir,
+        store_dir,
+        is_json,
+    }))
 }
 
-async fn cmd_attest_async(
-    action: crate::AttestAction,
-    current_dir: &Path,
-    output_dir: &Path,
-    state_dir: &Path,
-    store_dir: &str,
-    json: bool,
-) -> Result<(), RunError> {
+// Exhaustive enum dispatch is intentionally centralized so every attestation
+// action shares the same path, store, and output-mode context.
+#[allow(
+    tigerstyle::function_length,
+    reason = "single exhaustive AttestAction dispatcher keeps CLI authority centralized"
+)]
+async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandContext<'_>) -> Result<(), RunError> {
+    let AttestCommandContext {
+        current_dir,
+        output_dir,
+        state_dir,
+        store_dir,
+        is_json,
+    } = context;
+    debug_assert!(!store_dir.is_empty());
+    debug_assert!(Path::new(store_dir).is_absolute());
     match action {
         crate::AttestAction::Show { path } => {
-            let store = open_store(output_dir, state_dir, store_dir).await?;
-            let (document, stored_path) = load_artifact_document(&store, &path).await?;
-            print_document(&document, Some(stored_path))
+            cmd_show(ShowRequest {
+                output_dir,
+                state_dir,
+                store_dir,
+                selector: &path,
+            })
+            .await
         }
-        crate::AttestAction::Closure { roots } => {
-            let store = open_store(output_dir, state_dir, store_dir).await?;
-            let root_paths = resolve_roots(&roots, store_dir, output_dir)?;
-            let stored = store
-                .runtime_closure_attestation(&root_paths)
-                .await
-                .map_err(|e| RunError::Internal(format!("loading closure attestation: {e}")))?;
-            let path = closure_attestation_file_path(
-                store.state_dir(),
-                store.store_dir(),
-                &root_paths,
-                ClosureSemantics::Runtime,
-            );
-            print_document(&AttestationDocument::Closure(stored.attestation), Some(path))
-        }
+        crate::AttestAction::Closure { roots } => cmd_closure(output_dir, state_dir, store_dir, &roots).await,
         crate::AttestAction::Verify { target } => {
             cmd_verify(target, current_dir, output_dir, state_dir, store_dir).await
         }
         crate::AttestAction::Diff { left, right } => {
-            let store = open_store(output_dir, state_dir, store_dir).await?;
-            let left_document = load_document_input(Some(&store), &left).await?;
-            let right_document = load_document_input(Some(&store), &right).await?;
-            print_diff(&left, &left_document, &right, &right_document)
+            cmd_diff(DiffRequest {
+                output_dir,
+                state_dir,
+                store_dir,
+                left: &left,
+                right: &right,
+            })
+            .await
         }
         crate::AttestAction::Project { roots } => {
-            let store = open_store(output_dir, state_dir, store_dir).await?;
-            let document = load_project_document(current_dir, &store, &roots).await?;
-            print_document(&document, None)
+            cmd_project(current_dir, output_dir, state_dir, store_dir, &roots).await
         }
         crate::AttestAction::ReleaseShow { verification_dir } => {
             let (attestation, stored_path) = load_release_attestation_document(&verification_dir)?;
             print_document(&AttestationDocument::Release(attestation), Some(stored_path))
         }
         crate::AttestAction::KeyShow { signing_key } => {
-            cmd_key_show(current_dir, state_dir, json, signing_key.as_deref())
+            cmd_key_show(current_dir, state_dir, is_json, signing_key.as_deref())
         }
         crate::AttestAction::WitnessCreate {
             verification_dir,
@@ -138,18 +220,18 @@ async fn cmd_attest_async(
             toolchain,
             host_class,
             signing_key,
-        } => cmd_witness_create(
+        } => cmd_witness_create(WitnessCreateCommand {
             current_dir,
             state_dir,
-            json,
-            &verification_dir,
-            &rebuilt_binary,
-            identity.as_deref(),
-            &system,
-            &toolchain,
-            &host_class,
-            signing_key.as_deref(),
-        ),
+            is_json,
+            verification_dir: &verification_dir,
+            rebuilt_binary: &rebuilt_binary,
+            identity: identity.as_deref(),
+            system: &system,
+            toolchain: &toolchain,
+            host_class: &host_class,
+            signing_key: signing_key.as_deref(),
+        }),
         crate::AttestAction::WitnessShow {
             verification_dir,
             identity,
@@ -157,27 +239,64 @@ async fn cmd_attest_async(
         crate::AttestAction::WitnessImport {
             verification_dir,
             source,
-        } => cmd_witness_import(current_dir, json, &verification_dir, &source),
+        } => cmd_witness_import(current_dir, is_json, &verification_dir, &source),
         crate::AttestAction::PolicyInit {
             verification_dir,
             profile,
             trusted_release_signer,
             trusted_witness_identity,
             force,
-        } => cmd_policy_init(
+        } => cmd_policy_init(PolicyInitCommand {
             current_dir,
-            json,
-            &verification_dir,
-            map_policy_profile(profile),
-            &trusted_release_signer,
-            &trusted_witness_identity,
-            force,
-        ),
+            is_json,
+            verification_dir: &verification_dir,
+            profile: map_policy_profile(profile),
+            trusted_release_signers: &trusted_release_signer,
+            trusted_witness_identities: &trusted_witness_identity,
+            is_force: force,
+        }),
         crate::AttestAction::ReleaseVerify {
             verification_dir,
             trusted_public_keys,
         } => cmd_release_verify(&verification_dir, &trusted_public_keys, state_dir),
     }
+}
+
+async fn cmd_show(request: ShowRequest<'_>) -> Result<(), RunError> {
+    let store = open_store(request.output_dir, request.state_dir, request.store_dir).await?;
+    let (document, stored_path) = load_artifact_document(&store, request.selector).await?;
+    print_document(&document, Some(stored_path))
+}
+
+async fn cmd_closure(output_dir: &Path, state_dir: &Path, store_dir: &str, roots: &[String]) -> Result<(), RunError> {
+    let store = open_store(output_dir, state_dir, store_dir).await?;
+    let root_paths = resolve_roots(roots, store_dir, output_dir)?;
+    let stored = store
+        .runtime_closure_attestation(&root_paths)
+        .await
+        .map_err(|e| RunError::Internal(format!("loading closure attestation: {e}")))?;
+    let path =
+        closure_attestation_file_path(store.state_dir(), store.store_dir(), &root_paths, ClosureSemantics::Runtime);
+    print_document(&AttestationDocument::Closure(stored.attestation), Some(path))
+}
+
+async fn cmd_diff(request: DiffRequest<'_>) -> Result<(), RunError> {
+    let store = open_store(request.output_dir, request.state_dir, request.store_dir).await?;
+    let left_document = load_document_input(Some(&store), request.left).await?;
+    let right_document = load_document_input(Some(&store), request.right).await?;
+    print_diff(request.left, &left_document, request.right, &right_document)
+}
+
+async fn cmd_project(
+    current_dir: &Path,
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+    roots: &[String],
+) -> Result<(), RunError> {
+    let store = open_store(output_dir, state_dir, store_dir).await?;
+    let document = load_project_document(current_dir, &store, roots).await?;
+    print_document(&document, None)
 }
 
 async fn cmd_verify(
@@ -219,47 +338,46 @@ async fn cmd_verify(
 fn cmd_key_show(current_dir: &Path, state_dir: &Path, json: bool, signing_key: Option<&Path>) -> Result<(), RunError> {
     let resolved_signing_key = signing_key.map(|path| resolve_cli_path(current_dir, path));
     let (keypair, source_path) = load_existing_signing_keypair(resolved_signing_key.as_deref(), state_dir)?;
-    print_trusted_public_key(&keypair.verifying_key.to_string(), keypair.verifying_key.name(), &source_path, json)
+    let trusted_public_key = keypair.verifying_key.to_string();
+    print_trusted_public_key(TrustedPublicKeyOutput {
+        trusted_public_key: &trusted_public_key,
+        key_name: keypair.verifying_key.name(),
+        source_path: &source_path,
+        is_json: json,
+    })
 }
 
-fn cmd_witness_create(
-    current_dir: &Path,
-    state_dir: &Path,
-    json: bool,
-    verification_dir: &Path,
-    rebuilt_binary: &[PathBuf],
-    identity: Option<&str>,
-    system: &str,
-    toolchain: &str,
-    host_class: &str,
-    signing_key: Option<&Path>,
-) -> Result<(), RunError> {
-    let resolved_verification_dir = resolve_cli_path(current_dir, verification_dir);
-    let resolved_binaries = resolve_cli_paths(current_dir, rebuilt_binary);
+fn cmd_witness_create(request: WitnessCreateCommand<'_>) -> Result<(), RunError> {
+    let resolved_verification_dir = resolve_cli_path(request.current_dir, request.verification_dir);
+    let resolved_binaries = resolve_cli_paths(request.current_dir, request.rebuilt_binary);
     let created = create_witness_attestation(
         &resolved_verification_dir,
         &resolved_binaries,
-        identity,
-        system,
-        toolchain,
-        host_class,
+        request.identity,
+        request.system,
+        request.toolchain,
+        request.host_class,
         WITNESS_SOURCE_ACQUISITION_MODE_MANUAL,
-        signing_key,
-        state_dir,
+        request.signing_key,
+        request.state_dir,
     )?;
-    print_created_witness_attestation(&created, json)
+    print_created_witness_attestation(&created, request.is_json)
 }
 
 fn cmd_witness_import(current_dir: &Path, json: bool, verification_dir: &Path, source: &Path) -> Result<(), RunError> {
     let resolved_verification_dir = resolve_cli_path(current_dir, verification_dir);
     let resolved_source = resolve_cli_path(current_dir, source);
-    let imported = import_witness_material(&resolved_verification_dir, &resolved_source)?;
+    let handoff_receipt = import_witness_material(&resolved_verification_dir, &resolved_source)?;
+    debug_assert_eq!(handoff_receipt.verification_dir, resolved_verification_dir);
+    debug_assert!(
+        handoff_receipt.imported_witness_identities.capacity() >= handoff_receipt.imported_witness_identities.len()
+    );
     if json {
         let rendered = serde_json::json!({
             "kind": "mantle-witness-import",
-            "verification_dir": imported.verification_dir.display().to_string(),
-            "imported_witness_identities": imported.imported_witness_identities,
-            "skipped_duplicate_identities": imported.skipped_duplicate_identities,
+            "verification_dir": handoff_receipt.verification_dir.display().to_string(),
+            "imported_witness_identities": handoff_receipt.imported_witness_identities,
+            "skipped_duplicate_identities": handoff_receipt.skipped_duplicate_identities,
         });
         println!(
             "{}",
@@ -269,44 +387,36 @@ fn cmd_witness_import(current_dir: &Path, json: bool, verification_dir: &Path, s
         return Ok(());
     }
 
-    println!("verification dir: {}", imported.verification_dir.display());
+    println!("verification dir: {}", handoff_receipt.verification_dir.display());
     println!(
         "imported witness identities: {}",
-        if imported.imported_witness_identities.is_empty() {
+        if handoff_receipt.imported_witness_identities.is_empty() {
             "(none)".to_string()
         } else {
-            imported.imported_witness_identities.join(", ")
+            handoff_receipt.imported_witness_identities.join(", ")
         }
     );
     println!(
         "skipped exact duplicates: {}",
-        if imported.skipped_duplicate_identities.is_empty() {
+        if handoff_receipt.skipped_duplicate_identities.is_empty() {
             "(none)".to_string()
         } else {
-            imported.skipped_duplicate_identities.join(", ")
+            handoff_receipt.skipped_duplicate_identities.join(", ")
         }
     );
     Ok(())
 }
 
-fn cmd_policy_init(
-    current_dir: &Path,
-    json: bool,
-    verification_dir: &Path,
-    profile: PolicyInitProfile,
-    trusted_release_signers: &[String],
-    trusted_witness_identities: &[String],
-    force: bool,
-) -> Result<(), RunError> {
-    let resolved_verification_dir = resolve_cli_path(current_dir, verification_dir);
+fn cmd_policy_init(request: PolicyInitCommand<'_>) -> Result<(), RunError> {
+    let resolved_verification_dir = resolve_cli_path(request.current_dir, request.verification_dir);
     let created = create_policy_files(
         &resolved_verification_dir,
-        profile,
-        trusted_release_signers,
-        trusted_witness_identities,
-        force,
+        request.profile,
+        request.trusted_release_signers,
+        request.trusted_witness_identities,
+        request.is_force,
     )?;
-    print_created_policy_files(&created, json)
+    print_created_policy_files(&created, request.is_json)
 }
 
 fn map_policy_profile(profile: crate::AttestPolicyProfileArg) -> PolicyInitProfile {
@@ -318,6 +428,8 @@ fn map_policy_profile(profile: crate::AttestPolicyProfileArg) -> PolicyInitProfi
 
 fn cmd_witness_show(verification_dir: &Path, requested_identity: Option<&str>) -> Result<(), RunError> {
     let documents = load_witness_documents(verification_dir)?;
+    debug_assert!(documents.capacity() >= documents.len());
+    debug_assert!(!verification_dir.as_os_str().is_empty());
     if let Some(identity) = requested_identity {
         let document = documents
             .into_iter()
@@ -332,7 +444,8 @@ fn cmd_witness_show(verification_dir: &Path, requested_identity: Option<&str>) -
         return print_document(&AttestationDocument::Witness(document.attestation), Some(document.attestation_path));
     }
 
-    let mut rendered = Vec::with_capacity(documents.len());
+    let document_count = documents.len();
+    let mut rendered = Vec::with_capacity(document_count);
     for document in documents {
         let text = render_document(
             &AttestationDocument::Witness(document.attestation),
@@ -342,6 +455,8 @@ fn cmd_witness_show(verification_dir: &Path, requested_identity: Option<&str>) -
             .map_err(|err| RunError::Internal(format!("parsing witness envelope json: {err}")))?;
         rendered.push(envelope);
     }
+    debug_assert_eq!(rendered.len(), document_count);
+    debug_assert!(rendered.capacity() >= rendered.len());
     println!(
         "{}",
         serde_json::to_string_pretty(&rendered)
@@ -402,18 +517,13 @@ fn parse_release_trusted_public_keys(
     Ok(Some(keys))
 }
 
-fn print_trusted_public_key(
-    trusted_public_key: &str,
-    key_name: &str,
-    source_path: &Path,
-    json: bool,
-) -> Result<(), RunError> {
-    if json {
+fn print_trusted_public_key(output: TrustedPublicKeyOutput<'_>) -> Result<(), RunError> {
+    if output.is_json {
         let rendered = serde_json::json!({
             "kind": "crunch-trusted-public-key",
-            "trusted_public_key": trusted_public_key,
-            "key_name": key_name,
-            "source_path": source_path.display().to_string(),
+            "trusted_public_key": output.trusted_public_key,
+            "key_name": output.key_name,
+            "source_path": output.source_path.display().to_string(),
         });
         println!(
             "{}",
@@ -423,11 +533,13 @@ fn print_trusted_public_key(
         return Ok(());
     }
 
-    println!("{trusted_public_key}");
+    println!("{}", output.trusted_public_key);
     Ok(())
 }
 
 fn print_created_witness_attestation(created: &CreatedWitnessAttestation, json: bool) -> Result<(), RunError> {
+    debug_assert!(!created.digest_hex.is_empty());
+    debug_assert!(!created.signer_key_name.is_empty());
     if json {
         let attestation = serde_json::to_value(&created.attestation)
             .map_err(|err| RunError::Internal(format!("serializing witness attestation: {err}")))?;
@@ -456,6 +568,8 @@ fn print_created_witness_attestation(created: &CreatedWitnessAttestation, json: 
 }
 
 fn print_created_policy_files(created: &CreatedPolicyFiles, json: bool) -> Result<(), RunError> {
+    debug_assert!(!created.policy_path.as_os_str().is_empty());
+    debug_assert!(!created.revocations_path.as_os_str().is_empty());
     if json {
         let policy = serde_json::to_value(&created.policy)
             .map_err(|err| RunError::Internal(format!("serializing policy json: {err}")))?;
@@ -509,7 +623,11 @@ async fn load_artifact_document(
     store: &StoreHandle,
     selector: &str,
 ) -> Result<(AttestationDocument, PathBuf), RunError> {
-    let store_path = resolve_store_path(selector, store.store_dir(), store.output_dir_str())?;
+    let store_path = resolve_store_path(StorePathInput {
+        selector,
+        store_dir: store.store_dir(),
+        output_dir: store.output_dir_str(),
+    })?;
     let stored = store
         .get_artifact_attestation(&store_path)
         .await
@@ -543,9 +661,13 @@ async fn load_selected_roots(store: &StoreHandle, roots: &[String]) -> Result<Ve
         return Err(RunError::Internal("provide at least one root path".to_string()));
     }
 
-    let mut selected = Vec::new();
+    let mut selected = Vec::with_capacity(roots.len());
     for root in roots {
-        let store_path = resolve_store_path(root, store.store_dir(), store.output_dir_str())?;
+        let store_path = resolve_store_path(StorePathInput {
+            selector: root,
+            store_dir: store.store_dir(),
+            output_dir: store.output_dir_str(),
+        })?;
         let stored = store
             .get_artifact_attestation(&store_path)
             .await
@@ -557,6 +679,8 @@ async fn load_selected_roots(store: &StoreHandle, roots: &[String]) -> Result<Ve
             attestation_digest: stored.digest,
         });
     }
+    debug_assert_eq!(selected.len(), roots.len());
+    debug_assert!(selected.capacity() >= selected.len());
     Ok(selected)
 }
 
@@ -564,8 +688,8 @@ fn load_manifest(current_dir: &Path) -> Result<(String, ProjectManifest), RunErr
     let path = current_dir.join(MANIFEST_FILE);
     let text =
         std::fs::read_to_string(&path).map_err(|e| RunError::Internal(format!("reading {}: {e}", path.display())))?;
-    let import_paths = vec![current_dir.as_os_str().to_owned()];
-    let manifest = crunch_eval::evaluate_and_deserialize(&path, &import_paths)
+    let evaluator_search_paths = vec![current_dir.as_os_str().to_owned()];
+    let manifest = crunch_eval::evaluate_and_deserialize(&path, &evaluator_search_paths)
         .map_err(|e| RunError::Eval(format!("loading {MANIFEST_FILE}: {e}")))?;
     Ok((text, manifest))
 }
@@ -586,29 +710,37 @@ fn resolve_roots(roots: &[String], store_dir: &str, output_dir: &Path) -> Result
 
     roots
         .iter()
-        .map(|root| resolve_store_path(root, store_dir, &output_dir.display().to_string()))
+        .map(|root| {
+            let output_dir_text = output_dir.display().to_string();
+            resolve_store_path(StorePathInput {
+                selector: root,
+                store_dir,
+                output_dir: &output_dir_text,
+            })
+        })
         .collect()
 }
 
-fn resolve_store_path(selector: &str, store_dir: &str, output_dir: &str) -> Result<StorePath<String>, RunError> {
-    if let Ok(store_path) = StorePath::from_absolute_path_with_prefix(selector.as_bytes(), store_dir) {
+fn resolve_store_path(input: StorePathInput<'_>) -> Result<StorePath<String>, RunError> {
+    if let Ok(store_path) = StorePath::from_absolute_path_with_prefix(input.selector.as_bytes(), input.store_dir) {
         return Ok(store_path);
     }
 
-    if let Ok(store_path) = StorePath::from_absolute_path_with_prefix(selector.as_bytes(), output_dir) {
+    if let Ok(store_path) = StorePath::from_absolute_path_with_prefix(input.selector.as_bytes(), input.output_dir) {
         return Ok(store_path);
     }
 
-    if let Ok(store_path) = StorePath::from_absolute_path(selector.as_bytes()) {
+    if let Ok(store_path) = StorePath::from_absolute_path(input.selector.as_bytes()) {
         return Ok(store_path);
     }
 
-    if let Ok(store_path) = StorePath::from_bytes(selector.as_bytes()) {
+    if let Ok(store_path) = StorePath::from_bytes(input.selector.as_bytes()) {
         return Ok(store_path);
     }
 
     Err(RunError::Internal(format!(
-        "could not parse '{selector}' as a store path; use a logical path under {store_dir} or an exported path under {output_dir}"
+        "could not parse '{}' as a store path; use a logical path under {} or an exported path under {}",
+        input.selector, input.store_dir, input.output_dir
     )))
 }
 
@@ -658,6 +790,8 @@ fn verify_project_document(
                 path.display()
             )));
         }
+        debug_assert_eq!(expected_document.kind(), document.kind());
+        debug_assert_eq!(expected_canonical, actual_canonical);
 
         let actual_digest = document_digest_hex(document)?;
         if let Some(envelope_digest) = envelope_digest
@@ -718,6 +852,8 @@ fn load_document_file_with_digest(path: &Path) -> Result<(AttestationDocument, O
 fn parse_document_text(text: &str) -> Result<(AttestationDocument, Option<String>), RunError> {
     if let Ok(envelope) = serde_json::from_str::<AttestationEnvelopeInput>(text) {
         let document = parse_document_value(&envelope.kind, envelope.attestation)?;
+        debug_assert!(!envelope.kind.is_empty());
+        debug_assert_eq!(document.kind(), envelope.kind);
         return Ok((document, envelope.digest));
     }
 
@@ -853,7 +989,10 @@ fn print_diff(
 
     println!("--- {left_label}");
     println!("+++ {right_label}");
-    for line in render_line_diff(&left_text, &right_text) {
+    for line in render_line_diff(LineDiffInput {
+        left: &left_text,
+        right: &right_text,
+    }) {
         println!("{line}");
     }
     Ok(())
@@ -866,11 +1005,12 @@ fn canonical_pretty_json(document: &AttestationDocument) -> Result<String, RunEr
     serde_json::to_string_pretty(&value).map_err(|e| RunError::Internal(format!("formatting canonical json: {e}")))
 }
 
-fn render_line_diff(left: &str, right: &str) -> Vec<String> {
-    let left_lines: Vec<&str> = left.lines().collect();
-    let right_lines: Vec<&str> = right.lines().collect();
+fn render_line_diff(input: LineDiffInput<'_>) -> Vec<String> {
+    let left_lines: Vec<&str> = input.left.lines().collect();
+    let right_lines: Vec<&str> = input.right.lines().collect();
     let max_lines = left_lines.len().max(right_lines.len());
-    let mut diff = Vec::new();
+    let diff_row_count_max = max_lines.saturating_mul(MAX_DIFF_ROWS_PER_LINE);
+    let mut diff = Vec::with_capacity(diff_row_count_max);
 
     for index in 0..max_lines {
         let left_line = left_lines.get(index).copied();
@@ -885,7 +1025,8 @@ fn render_line_diff(left: &str, right: &str) -> Vec<String> {
             diff.push(format!("+{line}"));
         }
     }
-
+    debug_assert!(diff.len() <= diff_row_count_max);
+    debug_assert!(diff.capacity() >= diff.len());
     diff
 }
 

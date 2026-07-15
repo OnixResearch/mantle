@@ -82,6 +82,24 @@ const RANDOM_BYTES: usize = 16;
 const MAX_REPLAY_ACTION_JSON_NODES: usize = 65_536;
 const TEMP_CREATE_ATTEMPTS_MAX: u32 = 16;
 const BOUNDED_READ_PROBE_BYTES: u64 = 1;
+const BOUNDED_READ_PROBE_CAPACITY: usize = 1;
+const SECRET_KEY_MARKERS: &[&str] = &[
+    "password",
+    "secret",
+    "token",
+    "credential",
+    "access_key",
+    "api_key",
+    "private_key",
+    "private-key",
+];
+const SECRET_TEXT_MARKERS: &[&str] = &[
+    "bearer ",
+    "token=",
+    "secret=",
+    "begin private key",
+    "begin openssh private key",
+];
 #[cfg(unix)]
 const PRIVATE_FILE_MODE: u32 = 0o600;
 #[cfg(unix)]
@@ -270,6 +288,12 @@ pub fn load_remote_failure_replay_request(bundle_dir: &Path) -> Result<ConcreteB
     Ok(replay)
 }
 
+// Public lease API preserves the established timestamp/duration ordering used
+// by the CLI and tests; units are explicit in both parameter names.
+#[allow(
+    tigerstyle::ambiguous_params,
+    reason = "public compatibility boundary uses explicit unix-second and duration-second names"
+)]
 pub fn acquire_remote_failure_debug_lease(
     bundle_dir: &Path,
     now_unix_s: u64,
@@ -294,6 +318,8 @@ pub fn acquire_remote_failure_debug_lease(
         expires_unix_s,
     };
     write_new_private_file(&path, &serde_json::to_vec(&record).map_err(|error| error.to_string())?)?;
+    debug_assert!(expires_unix_s > now_unix_s);
+    debug_assert!(path.starts_with(&leases));
     Ok(RemoteFailureDebugLease { path })
 }
 
@@ -321,8 +347,9 @@ pub fn retain_remote_failure_debug_bundles(
             ordinary_build_output: false,
         });
     }
+    let record_count = records.len();
     let plan = plan_remote_failure_retention(records, now_unix_s).map_err(reason)?;
-    let mut failed_deletions = Vec::new();
+    let mut failed_deletions = Vec::with_capacity(plan.delete.len());
     let mut deleted_count = 0_u32;
     for digest in &plan.delete {
         let path = bundles_root.join(digest.as_str());
@@ -332,11 +359,24 @@ pub fn retain_remote_failure_debug_bundles(
         }
     }
     let preserved_count = u32::try_from(plan.preserve.len()).map_err(|_| "remote-failure-preserve-count-overflow")?;
+    debug_assert!(plan.preserve.len() <= record_count);
+    debug_assert!(failed_deletions.len() <= plan.delete.len());
     Ok(RemoteFailureDebugRetentionReport {
         preserved_count,
         deleted_count,
         failed_deletions,
     })
+}
+
+struct BundleObjectRefs {
+    action: RemoteFailureDebugRef,
+    route: RemoteFailureDebugRef,
+    worker_capability: RemoteFailureDebugRef,
+    input_manifest: RemoteFailureDebugRef,
+    sandbox_policy: RemoteFailureDebugRef,
+    network_policy: RemoteFailureDebugRef,
+    transfer: Option<RemoteFailureDebugRef>,
+    admission: Option<RemoteFailureDebugRef>,
 }
 
 fn assemble_bundle_stage(
@@ -345,8 +385,35 @@ fn assemble_bundle_stage(
 ) -> Result<(RemoteFailureDebugBundle, String), String> {
     ensure_private_directory(&stage.stage_path.join(OBJECTS_DIR))?;
     ensure_private_directory(&stage.stage_path.join(CAPTURE_CAS_DIR))?;
-    let action_ref = write_replay_action_object(&stage.stage_path, &request.facts.request, &request.policy)?;
-    let route_ref = write_json_object(
+    let object_refs = write_bundle_object_refs(stage, request)?;
+    let (captured_artifact_manifest_ref, capture_outcome_code) = capture_failed_artifacts(stage, request)?;
+    let immutable_log = request.facts.immutable_log.as_ref().map(immutable_log_ref_from_summary).transpose()?;
+    let expires_unix_s = request
+        .facts
+        .created_unix_s
+        .checked_add(request.policy.retention_secs)
+        .ok_or_else(|| "remote-failure-expiry-overflow".to_string())?;
+    let facts = assemble_bundle_facts(BundleFactsInput {
+        request,
+        refs: object_refs,
+        immutable_log,
+        captured_artifact_manifest_ref,
+        capture_outcome_code: capture_outcome_code.clone(),
+        expires_unix_s,
+    });
+    let bundle = seal_remote_failure_debug_bundle(facts, &request.policy).map_err(reason)?;
+    write_bundle_documents(stage, request, &bundle)?;
+    debug_assert!(stage.stage_path.join(POLICY_FILE).is_file());
+    debug_assert!(stage.stage_path.join(MANIFEST_FILE).is_file());
+    Ok((bundle, capture_outcome_code))
+}
+
+fn write_bundle_object_refs(
+    stage: &BundleStage,
+    request: &RemoteFailureDebugPublishRequest<'_>,
+) -> Result<BundleObjectRefs, String> {
+    let action = write_replay_action_object(&stage.stage_path, &request.facts.request, &request.policy)?;
+    let route = write_json_object(
         &stage.stage_path,
         "route-assignment",
         &RemoteFailureRouteObject {
@@ -357,18 +424,8 @@ fn assemble_bundle_stage(
         },
         &request.policy,
     )?;
-    let mut capabilities = request.facts.worker_capability_classes.clone();
-    capabilities.sort();
-    capabilities.dedup();
-    let worker_capability_ref = write_json_object(
-        &stage.stage_path,
-        "worker-capabilities",
-        &RemoteFailureWorkerObject {
-            capability_classes: capabilities,
-        },
-        &request.policy,
-    )?;
-    let input_manifest_ref = write_json_object(
+    let worker_capability = write_worker_capability_object(stage, request)?;
+    let input_manifest = write_json_object(
         &stage.stage_path,
         "declared-inputs",
         &RemoteFailureInputObject {
@@ -378,39 +435,91 @@ fn assemble_bundle_stage(
         },
         &request.policy,
     )?;
-    let sandbox_policy_ref =
-        write_class_object(&stage.stage_path, "sandbox-policy", &request.facts.sandbox_policy_class, &request.policy)?;
-    let network_policy_ref =
-        write_class_object(&stage.stage_path, "network-policy", &request.facts.network_policy_class, &request.policy)?;
-    let transfer_ref = optional_class_object(
+    let sandbox_policy = write_class_object(ClassObjectInput {
+        stage_path: &stage.stage_path,
+        kind: "sandbox-policy",
+        class: &request.facts.sandbox_policy_class,
+        policy: &request.policy,
+    })?;
+    let network_policy = write_class_object(ClassObjectInput {
+        stage_path: &stage.stage_path,
+        kind: "network-policy",
+        class: &request.facts.network_policy_class,
+        policy: &request.policy,
+    })?;
+    let transfer = optional_class_object(ClassObjectInput {
+        stage_path: &stage.stage_path,
+        kind: "transfer-state",
+        class: &request.facts.transfer_status_class,
+        policy: &request.policy,
+    })?;
+    let admission = optional_class_object(ClassObjectInput {
+        stage_path: &stage.stage_path,
+        kind: "admission-state",
+        class: &request.facts.admission_status_class,
+        policy: &request.policy,
+    })?;
+    debug_assert!(!action.kind.is_empty());
+    debug_assert!(!route.kind.is_empty());
+    Ok(BundleObjectRefs {
+        action,
+        route,
+        worker_capability,
+        input_manifest,
+        sandbox_policy,
+        network_policy,
+        transfer,
+        admission,
+    })
+}
+
+struct BundleFactsInput<'a> {
+    request: &'a RemoteFailureDebugPublishRequest<'a>,
+    refs: BundleObjectRefs,
+    immutable_log: Option<RemoteFailureImmutableLogRef>,
+    captured_artifact_manifest_ref: Option<RemoteFailureDebugRef>,
+    capture_outcome_code: String,
+    expires_unix_s: u64,
+}
+
+fn write_worker_capability_object(
+    stage: &BundleStage,
+    request: &RemoteFailureDebugPublishRequest<'_>,
+) -> Result<RemoteFailureDebugRef, String> {
+    let mut capabilities = request.facts.worker_capability_classes.clone();
+    capabilities.sort();
+    capabilities.dedup();
+    write_json_object(
         &stage.stage_path,
-        "transfer-state",
-        &request.facts.transfer_status_class,
+        "worker-capabilities",
+        &RemoteFailureWorkerObject {
+            capability_classes: capabilities,
+        },
         &request.policy,
-    )?;
-    let admission_ref = optional_class_object(
-        &stage.stage_path,
-        "admission-state",
-        &request.facts.admission_status_class,
-        &request.policy,
-    )?;
-    let (captured_artifact_manifest_ref, capture_outcome_code) = capture_failed_artifacts(stage, request)?;
-    let immutable_log = request.facts.immutable_log.as_ref().map(immutable_log_ref_from_summary).transpose()?;
-    let expires_unix_s = request
-        .facts
-        .created_unix_s
-        .checked_add(request.policy.retention_secs)
-        .ok_or_else(|| "remote-failure-expiry-overflow".to_string())?;
-    let facts = RemoteFailureDebugBundleFacts {
-        action_ref,
-        route_ref,
-        worker_capability_ref,
-        input_manifest_ref,
-        sandbox_policy_ref,
-        network_policy_ref,
+    )
+}
+
+fn assemble_bundle_facts(input: BundleFactsInput<'_>) -> RemoteFailureDebugBundleFacts {
+    let BundleFactsInput {
+        request,
+        refs,
         immutable_log,
-        transfer_ref,
-        admission_ref,
+        captured_artifact_manifest_ref,
+        capture_outcome_code,
+        expires_unix_s,
+    } = input;
+    debug_assert!(expires_unix_s >= request.facts.created_unix_s);
+    debug_assert!(!capture_outcome_code.is_empty());
+    RemoteFailureDebugBundleFacts {
+        action_ref: refs.action,
+        route_ref: refs.route,
+        worker_capability_ref: refs.worker_capability,
+        input_manifest_ref: refs.input_manifest,
+        sandbox_policy_ref: refs.sandbox_policy,
+        network_policy_ref: refs.network_policy,
+        immutable_log,
+        transfer_ref: refs.transfer,
+        admission_ref: refs.admission,
         captured_artifact_manifest_ref,
         original_job_id: request.facts.attempt.job_id.clone(),
         original_attempt_id: request.facts.attempt.attempt_id.clone(),
@@ -418,13 +527,19 @@ fn assemble_bundle_stage(
         workspace_mode: request.facts.workspace_mode,
         failure_phase: request.facts.failure_phase,
         failure_reason_code: request.facts.failure_reason_code.clone(),
-        capture_outcome_code: capture_outcome_code.clone(),
+        capture_outcome_code,
         cleanup_status_code: request.facts.cleanup_status_code.clone(),
         created_unix_s: request.facts.created_unix_s,
         expires_unix_s,
         non_claims: Vec::new(),
-    };
-    let bundle = seal_remote_failure_debug_bundle(facts, &request.policy).map_err(reason)?;
+    }
+}
+
+fn write_bundle_documents(
+    stage: &BundleStage,
+    request: &RemoteFailureDebugPublishRequest<'_>,
+    bundle: &RemoteFailureDebugBundle,
+) -> Result<(), String> {
     write_new_private_file(
         &stage.stage_path.join(POLICY_FILE),
         &serde_json::to_vec(&request.policy)
@@ -432,10 +547,9 @@ fn assemble_bundle_stage(
     )?;
     write_new_private_file(
         &stage.stage_path.join(MANIFEST_FILE),
-        &serde_json::to_vec(&bundle).map_err(|error| format!("remote-failure-manifest-serialize-failed:{error}"))?,
+        &serde_json::to_vec(bundle).map_err(|error| format!("remote-failure-manifest-serialize-failed:{error}"))?,
     )?;
-    sync_directory(&stage.stage_path)?;
-    Ok((bundle, capture_outcome_code))
+    sync_directory(&stage.stage_path)
 }
 
 fn commit_bundle_stage(
@@ -443,13 +557,14 @@ fn commit_bundle_stage(
     bundle: RemoteFailureDebugBundle,
     capture_outcome_code: String,
 ) -> Result<RemoteFailureDebugPublishOutcome, String> {
-    stage.final_path = stage
+    let final_parent = stage
         .final_path
         .parent()
         .ok_or_else(|| "remote-failure-final-parent-missing".to_string())?
-        .join(bundle.bundle_blake3.as_str());
+        .to_path_buf();
+    stage.final_path = final_parent.join(bundle.bundle_blake3.as_str());
     match rename_no_replace(&stage.stage_path, &stage.final_path) {
-        Ok(()) => sync_directory(stage.final_path.parent().expect("bundle final has parent"))?,
+        Ok(()) => sync_directory(&final_parent)?,
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
             fs::remove_dir_all(&stage.stage_path)
                 .map_err(|cleanup| format!("remote-failure-idempotent-stage-cleanup-failed:{cleanup}"))?;
@@ -459,10 +574,16 @@ fn commit_bundle_stage(
             }
         }
         Err(error) => {
-            let _ = fs::remove_dir_all(&stage.stage_path);
+            if let Err(cleanup_error) = fs::remove_dir_all(&stage.stage_path) {
+                return Err(format!(
+                    "remote-failure-bundle-publish-failed:{error}; stage-cleanup-failed:{cleanup_error}"
+                ));
+            }
             return Err(format!("remote-failure-bundle-publish-failed:{error}"));
         }
     }
+    debug_assert!(stage.final_path.starts_with(&final_parent));
+    debug_assert!(!bundle.bundle_blake3.as_str().is_empty());
     Ok(RemoteFailureDebugPublishOutcome {
         bundle_ref: format!("remote-failure-debug:{}", bundle.bundle_blake3.as_str()),
         bundle_blake3: bundle.bundle_blake3,
@@ -510,6 +631,8 @@ fn capture_failed_artifacts(
     }
     let manifest =
         seal_remote_failure_captured_artifact_manifest(artifacts, &request.policy.capture).map_err(reason)?;
+    debug_assert_eq!(manifest.artifacts.len(), admission.accepted_paths.len());
+    debug_assert!(!manifest.artifacts.is_empty());
     let manifest_ref = write_json_object(&stage.stage_path, "captured-artifact-manifest", &manifest, &request.policy)?;
     Ok((Some(manifest_ref), "captured".to_string()))
 }
@@ -555,18 +678,22 @@ fn read_capture_file_nofollow(root: &Path, relative_path: &str, bytes_max: u64) 
     if !opened.is_file() || opened.len() != observed.len() {
         return Err("remote-failure-capture-type-or-size-drift".to_string());
     }
-    let read_limit = bytes_max
+    let read_limit_bytes = bytes_max
         .checked_add(BOUNDED_READ_PROBE_BYTES)
         .ok_or_else(|| "remote-failure-capture-read-limit-overflow".to_string())?;
-    let capacity = usize::try_from(opened.len()).map_err(|_| "remote-failure-capture-capacity-overflow".to_string())?;
-    let mut bytes = Vec::with_capacity(capacity);
+    let capacity_bytes =
+        usize::try_from(opened.len()).map_err(|_| "remote-failure-capture-capacity-overflow".to_string())?;
+    let mut bytes = Vec::with_capacity(capacity_bytes);
     Read::by_ref(&mut file)
-        .take(read_limit)
+        .take(read_limit_bytes)
         .read_to_end(&mut bytes)
         .map_err(|error| format!("remote-failure-capture-read-failed:{error}"))?;
     if u64::try_from(bytes.len()).map_err(|_| "remote-failure-capture-size-overflow".to_string())? > bytes_max {
         return Err("remote-failure-capture-too-large".to_string());
     }
+    let probed_capacity_bytes = capacity_bytes.saturating_add(BOUNDED_READ_PROBE_CAPACITY);
+    debug_assert!(bytes.len() <= probed_capacity_bytes);
+    debug_assert!(bytes.capacity() >= bytes.len());
     Ok(bytes)
 }
 
@@ -607,32 +734,29 @@ fn immutable_log_ref_from_summary(
     })
 }
 
-fn write_class_object(
-    stage_path: &Path,
-    kind: &str,
-    class: &str,
-    policy: &RemoteFailureDebugPolicy,
-) -> Result<RemoteFailureDebugRef, String> {
+struct ClassObjectInput<'a> {
+    stage_path: &'a Path,
+    kind: &'a str,
+    class: &'a str,
+    policy: &'a RemoteFailureDebugPolicy,
+}
+
+fn write_class_object(input: ClassObjectInput<'_>) -> Result<RemoteFailureDebugRef, String> {
     write_json_object(
-        stage_path,
-        kind,
+        input.stage_path,
+        input.kind,
         &RemoteFailureClassObject {
-            class: class.to_string(),
+            class: input.class.to_string(),
         },
-        policy,
+        input.policy,
     )
 }
 
-fn optional_class_object(
-    stage_path: &Path,
-    kind: &str,
-    class: &str,
-    policy: &RemoteFailureDebugPolicy,
-) -> Result<Option<RemoteFailureDebugRef>, String> {
-    if class == "not-available" {
+fn optional_class_object(input: ClassObjectInput<'_>) -> Result<Option<RemoteFailureDebugRef>, String> {
+    if input.class == "not-available" {
         return Ok(None);
     }
-    write_class_object(stage_path, kind, class, policy).map(Some)
+    write_class_object(input).map(Some)
 }
 
 fn write_replay_action_object(
@@ -651,6 +775,8 @@ fn write_replay_action_object(
     let request_blake3 = RemoteFailureDebugDigest::new(hasher.finalize().to_hex().to_string()).map_err(reason)?;
     let expected_output_count = u32::try_from(request.expected_outputs.len())
         .map_err(|_| "remote-failure-action-output-count-overflow".to_string())?;
+    debug_assert!(!request_bytes.is_empty());
+    debug_assert_eq!(usize::try_from(expected_output_count).ok(), Some(request.expected_outputs.len()));
     write_json_object(
         stage_path,
         "action-request-redacted",
@@ -688,19 +814,8 @@ fn json_contains_secret_material(value: &serde_json::Value, visited: &mut usize)
         match current {
             serde_json::Value::Object(fields) => {
                 for (key, value) in fields {
-                    let key = key.to_ascii_lowercase();
-                    let nonempty_environment =
-                        key == "env" && value.as_object().is_some_and(|environment| !environment.is_empty());
-                    if nonempty_environment
-                        || key.contains("password")
-                        || key.contains("secret")
-                        || key.contains("token")
-                        || key.contains("credential")
-                        || key.contains("access_key")
-                        || key.contains("api_key")
-                        || key.contains("private_key")
-                        || key.contains("private-key")
-                    {
+                    let normalized_key = key.to_ascii_lowercase();
+                    if object_field_has_secret(&normalized_key, value) {
                         return Ok(true);
                     }
                     pending.push(value);
@@ -708,20 +823,40 @@ fn json_contains_secret_material(value: &serde_json::Value, visited: &mut usize)
             }
             serde_json::Value::Array(values) => pending.extend(values),
             serde_json::Value::String(text) => {
-                let lower = text.to_ascii_lowercase();
-                if lower.contains("bearer ")
-                    || lower.contains("token=")
-                    || lower.contains("secret=")
-                    || lower.contains("begin private key")
-                    || lower.contains("begin openssh private key")
-                {
+                if text_has_secret(text) {
                     return Ok(true);
                 }
             }
             serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
         }
     }
+    debug_assert!(*visited <= MAX_REPLAY_ACTION_JSON_NODES);
+    debug_assert!(pending.is_empty());
     Ok(false)
+}
+
+fn object_field_has_secret(normalized_key: &str, value: &serde_json::Value) -> bool {
+    if normalized_key == "env" {
+        if value.as_object().is_some_and(|environment| !environment.is_empty()) {
+            return true;
+        }
+    }
+    for marker in SECRET_KEY_MARKERS {
+        if normalized_key.contains(marker) {
+            return true;
+        }
+    }
+    false
+}
+
+fn text_has_secret(text: &str) -> bool {
+    let normalized_text = text.to_ascii_lowercase();
+    for marker in SECRET_TEXT_MARKERS {
+        if normalized_text.contains(marker) {
+            return true;
+        }
+    }
+    false
 }
 
 fn write_json_object(
@@ -801,6 +936,8 @@ fn validate_capture_manifest_and_objects(
             return Err("remote-failure-capture-object-identity-mismatch".to_string());
         }
     }
+    debug_assert_eq!(resealed, manifest);
+    debug_assert!(manifest.artifacts.len() <= manifest.artifacts.capacity());
     Ok(())
 }
 
@@ -871,7 +1008,7 @@ fn create_bundle_stage(bundles_root: &Path) -> Result<BundleStage, String> {
 }
 
 fn collect_bundle_directories(root: &Path) -> Result<Vec<PathBuf>, String> {
-    let mut paths = Vec::new();
+    let mut paths = Vec::with_capacity(crunch_build::distributed::MAX_REMOTE_FAILURE_RETENTION_RECORDS);
     for entry in fs::read_dir(root).map_err(|error| format!("remote-failure-bundles-read-failed:{error}"))? {
         let entry = entry.map_err(|error| format!("remote-failure-bundle-entry-failed:{error}"))?;
         if paths.len() >= crunch_build::distributed::MAX_REMOTE_FAILURE_RETENTION_RECORDS {
@@ -892,6 +1029,8 @@ fn collect_bundle_directories(root: &Path) -> Result<Vec<PathBuf>, String> {
         }
     }
     paths.sort();
+    debug_assert!(paths.len() <= crunch_build::distributed::MAX_REMOTE_FAILURE_RETENTION_RECORDS);
+    debug_assert!(paths.capacity() >= paths.len());
     Ok(paths)
 }
 
@@ -1009,18 +1148,22 @@ fn read_bounded_bytes(path: &Path, bytes_max: u64, kind: &str) -> Result<Vec<u8>
     if !opened.is_file() || opened.len() != metadata.len() {
         return Err(format!("remote-failure-{kind}-type-or-size-drift"));
     }
-    let read_limit = bytes_max
+    let read_limit_bytes = bytes_max
         .checked_add(BOUNDED_READ_PROBE_BYTES)
         .ok_or_else(|| format!("remote-failure-{kind}-read-limit-overflow"))?;
-    let capacity = usize::try_from(opened.len()).map_err(|_| format!("remote-failure-{kind}-capacity-overflow"))?;
-    let mut bytes = Vec::with_capacity(capacity);
+    let capacity_bytes =
+        usize::try_from(opened.len()).map_err(|_| format!("remote-failure-{kind}-capacity-overflow"))?;
+    let mut bytes = Vec::with_capacity(capacity_bytes);
     Read::by_ref(&mut file)
-        .take(read_limit)
+        .take(read_limit_bytes)
         .read_to_end(&mut bytes)
         .map_err(|error| format!("remote-failure-{kind}-read-failed:{error}"))?;
     if u64::try_from(bytes.len()).map_err(|_| format!("remote-failure-{kind}-size-overflow"))? > bytes_max {
         return Err(format!("remote-failure-{kind}-too-large"));
     }
+    let probed_capacity_bytes = capacity_bytes.saturating_add(BOUNDED_READ_PROBE_CAPACITY);
+    debug_assert!(bytes.len() <= probed_capacity_bytes);
+    debug_assert!(bytes.capacity() >= bytes.len());
     Ok(bytes)
 }
 
@@ -1101,83 +1244,102 @@ pub fn cmd_remote_failure_debug(
 ) -> Result<(), crate::RunError> {
     match action {
         crate::RemoteFailureDebugAction::Inspect { bundle } => {
-            let bundle_dir = resolve_bundle_selector(state_dir, &bundle)?;
-            let summary =
-                inspect_remote_failure_debug_bundle_from_disk(&bundle_dir).map_err(crate::RunError::Internal)?;
-            if json_output {
-                println!(
-                    "{}",
-                    serde_json::to_string(&summary).map_err(|error| {
-                        crate::RunError::Internal(format!("serializing remote failure inspect summary: {error}"))
-                    })?
-                );
-            } else {
-                println!("bundle: {}", summary.bundle_blake3.as_str());
-                println!("phase: {:?}", summary.failure_phase);
-                println!("reason: {}", summary.failure_reason_code);
-                println!("immutable-log: {}", summary.immutable_log_available);
-                println!("captured-artifacts: {}", summary.captured_artifact_count);
-                println!("replay-policy: {}", summary.replay_allowed_by_policy);
-                println!("non-claim: {}", summary.non_claims.join(","));
-            }
-            Ok(())
+            cmd_remote_failure_inspect(state_dir, &bundle, json_output)
         }
         crate::RemoteFailureDebugAction::ReplayPlan { bundle } => {
-            let bundle_dir = resolve_bundle_selector(state_dir, &bundle)?;
-            let plan = plan_remote_failure_replay_from_disk(&bundle_dir).map_err(crate::RunError::Internal)?;
-            if json_output {
-                println!(
-                    "{}",
-                    serde_json::to_string(&plan).map_err(|error| {
-                        crate::RunError::Internal(format!("serializing remote failure replay plan: {error}"))
-                    })?
-                );
-            } else {
-                println!("replay-plan: {}", plan.replay_plan_blake3.as_str());
-                println!("source-bundle: {}", plan.source_bundle_blake3.as_str());
-                println!("executable: {}", plan.executable);
-                println!("new-authority-required: {}", plan.new_authority_required);
-                println!("ordinary-route-required: {}", plan.ordinary_route_required);
-                println!("ordinary-output-admission-required: {}", plan.ordinary_output_admission_required);
-                println!("blockers: {}", plan.blockers.join(","));
-            }
-            Ok(())
+            cmd_remote_failure_replay_plan(state_dir, &bundle, json_output)
         }
         crate::RemoteFailureDebugAction::Replay { .. } => {
             Err(crate::RunError::Internal("remote-failure-replay-dispatch-must-use-main-shell".to_string()))
         }
-        crate::RemoteFailureDebugAction::Gc { now_unix_s } => {
-            let now_unix_s = now_unix_s.map_or_else(crate::unix_time_now_s, Ok)?;
-            let report =
-                retain_remote_failure_debug_bundles(state_dir, now_unix_s).map_err(crate::RunError::Internal)?;
-            if json_output {
-                println!(
-                    "{}",
-                    serde_json::to_string(&serde_json::json!({
-                        "schema": "mantle-remote-failure-debug-gc-report-v1",
-                        "preserved_count": report.preserved_count,
-                        "deleted_count": report.deleted_count,
-                        "failed_deletion_count": report.failed_deletions.len(),
-                    }))
-                    .map_err(|error| crate::RunError::Internal(format!(
-                        "serializing remote failure gc report: {error}"
-                    )))?
-                );
-            } else {
-                println!("preserved: {}", report.preserved_count);
-                println!("deleted: {}", report.deleted_count);
-                println!("failed-deletions: {}", report.failed_deletions.len());
-            }
-            if report.failed_deletions.is_empty() {
-                Ok(())
-            } else {
-                Err(crate::RunError::Internal("remote-failure-debug-gc-partial-failure".to_string()))
-            }
-        }
+        crate::RemoteFailureDebugAction::Gc { now_unix_s } => cmd_remote_failure_gc(state_dir, now_unix_s, json_output),
+    }
+}
+
+fn cmd_remote_failure_inspect(state_dir: &Path, selector: &str, json_output: bool) -> Result<(), crate::RunError> {
+    let bundle_dir = resolve_bundle_selector(state_dir, selector)?;
+    let summary = inspect_remote_failure_debug_bundle_from_disk(&bundle_dir).map_err(crate::RunError::Internal)?;
+    debug_assert!(!summary.bundle_blake3.as_str().is_empty());
+    debug_assert!(!summary.non_claims.is_empty());
+    if json_output {
+        println!(
+            "{}",
+            serde_json::to_string(&summary).map_err(|error| {
+                crate::RunError::Internal(format!("serializing remote failure inspect summary: {error}"))
+            })?
+        );
+    } else {
+        println!("bundle: {}", summary.bundle_blake3.as_str());
+        println!("phase: {:?}", summary.failure_phase);
+        println!("reason: {}", summary.failure_reason_code);
+        println!("immutable-log: {}", summary.immutable_log_available);
+        println!("captured-artifacts: {}", summary.captured_artifact_count);
+        println!("replay-policy: {}", summary.replay_allowed_by_policy);
+        println!("non-claim: {}", summary.non_claims.join(","));
+    }
+    Ok(())
+}
+
+fn cmd_remote_failure_replay_plan(state_dir: &Path, selector: &str, json_output: bool) -> Result<(), crate::RunError> {
+    let bundle_dir = resolve_bundle_selector(state_dir, selector)?;
+    let plan = plan_remote_failure_replay_from_disk(&bundle_dir).map_err(crate::RunError::Internal)?;
+    debug_assert!(!plan.replay_plan_blake3.as_str().is_empty());
+    debug_assert!(!plan.source_bundle_blake3.as_str().is_empty());
+    if json_output {
+        println!(
+            "{}",
+            serde_json::to_string(&plan).map_err(|error| {
+                crate::RunError::Internal(format!("serializing remote failure replay plan: {error}"))
+            })?
+        );
+    } else {
+        println!("replay-plan: {}", plan.replay_plan_blake3.as_str());
+        println!("source-bundle: {}", plan.source_bundle_blake3.as_str());
+        println!("executable: {}", plan.executable);
+        println!("new-authority-required: {}", plan.new_authority_required);
+        println!("ordinary-route-required: {}", plan.ordinary_route_required);
+        println!("ordinary-output-admission-required: {}", plan.ordinary_output_admission_required);
+        println!("blockers: {}", plan.blockers.join(","));
+    }
+    Ok(())
+}
+
+fn cmd_remote_failure_gc(
+    state_dir: &Path,
+    requested_now_unix_s: Option<u64>,
+    json_output: bool,
+) -> Result<(), crate::RunError> {
+    let now_unix_s = requested_now_unix_s.map_or_else(crate::unix_time_now_s, Ok)?;
+    let retention_summary =
+        retain_remote_failure_debug_bundles(state_dir, now_unix_s).map_err(crate::RunError::Internal)?;
+    debug_assert!(retention_summary.failed_deletions.capacity() >= retention_summary.failed_deletions.len());
+    debug_assert!(!state_dir.as_os_str().is_empty());
+    if json_output {
+        println!(
+            "{}",
+            serde_json::to_string(&serde_json::json!({
+                "schema": "mantle-remote-failure-debug-gc-report-v1",
+                "preserved_count": retention_summary.preserved_count,
+                "deleted_count": retention_summary.deleted_count,
+                "failed_deletion_count": retention_summary.failed_deletions.len(),
+            }))
+            .map_err(|error| crate::RunError::Internal(format!("serializing remote failure gc report: {error}")))?
+        );
+    } else {
+        println!("preserved: {}", retention_summary.preserved_count);
+        println!("deleted: {}", retention_summary.deleted_count);
+        println!("failed-deletions: {}", retention_summary.failed_deletions.len());
+    }
+    if retention_summary.failed_deletions.is_empty() {
+        Ok(())
+    } else {
+        Err(crate::RunError::Internal("remote-failure-debug-gc-partial-failure".to_string()))
     }
 }
 
 pub fn resolve_bundle_selector(state_dir: &Path, selector: &str) -> Result<PathBuf, crate::RunError> {
+    debug_assert!(!REMOTE_FAILURE_DEBUG_STORE_DIR.is_empty());
+    debug_assert!(MAX_REMOTE_WORKER_STATE_DIRS > 0);
     let digest = selector.strip_prefix("remote-failure-debug:").unwrap_or(selector);
     if is_blake3_hex(digest) {
         let coordinator = state_dir.join(REMOTE_FAILURE_DEBUG_STORE_DIR).join(BUNDLES_DIR).join(digest);

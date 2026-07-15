@@ -35,6 +35,9 @@ const UNKNOWN_ARTIFACT_UNSUPPORTED_REASON: &str =
 const UNRECOGNIZED_ARTIFACT_UNSUPPORTED_REASON: &str =
     "release artifact does not match a recognized strict self-hosting stage2 proof surface";
 const LEGACY_WITNESS_METADATA_NOT_RECORDED: &str = "not-recorded";
+const MAX_RELEASE_SURFACES: usize = 4_096;
+const MAX_RELEASE_ARTIFACTS: usize = 4_096;
+const MAX_RELEASE_WITNESSES: usize = 4_096;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ReleaseSurfaceEvidenceCommandOutput {
@@ -75,9 +78,9 @@ struct ReleaseManifestSubset {
     source_archive: ManifestArtifactSubset,
     binaries: Vec<ManifestArtifactSubset>,
     proof_bundle: ManifestArtifactSubset,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     provider_fixed_point_proof: Option<ManifestArtifactSubset>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     proof_linkage: Option<ProofLinkageSubset>,
 }
 
@@ -115,7 +118,7 @@ struct FinalWitnessSubset {
     witness_identity: String,
     #[serde(default = "legacy_witness_metadata_not_recorded")]
     signer_key_name: String,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     release_attestation_digest_blake3: Option<String>,
     signature_valid: bool,
     digest_match: bool,
@@ -127,6 +130,10 @@ struct FinalWitnessSubset {
 
 fn legacy_witness_metadata_not_recorded() -> String {
     LEGACY_WITNESS_METADATA_NOT_RECORDED.to_string()
+}
+
+fn absent_value<T>() -> Option<T> {
+    None
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -179,6 +186,8 @@ struct SurfaceClassification {
     unsupported_reason: Option<String>,
 }
 
+// CLI compatibility shell: main dispatch supplies these independently named paths.
+#[allow(tigerstyle::too_many_parameters)]
 pub(crate) fn cmd_global_reproducibility_release_evidence(
     current_dir: &Path,
     json: bool,
@@ -189,7 +198,7 @@ pub(crate) fn cmd_global_reproducibility_release_evidence(
     release_verify_json: PathBuf,
     evidence_path: PathBuf,
 ) -> Result<(), RunError> {
-    let output = derive_release_surface_evidence_from_paths(
+    let output = derive_release_surface_evidence_from_paths(ReleaseSurfacePaths {
         current_dir,
         universe_path,
         policy_path,
@@ -197,7 +206,7 @@ pub(crate) fn cmd_global_reproducibility_release_evidence(
         verification_dir,
         release_verify_json,
         evidence_path,
-    )?;
+    })?;
     if json {
         print_release_surface_evidence_json(&output)?;
     } else {
@@ -206,23 +215,29 @@ pub(crate) fn cmd_global_reproducibility_release_evidence(
     Ok(())
 }
 
-fn derive_release_surface_evidence_from_paths(
-    current_dir: &Path,
+struct ReleaseSurfacePaths<'a> {
+    current_dir: &'a Path,
     universe_path: PathBuf,
     policy_path: PathBuf,
     bundle_dir: PathBuf,
     verification_dir: PathBuf,
     release_verify_json: PathBuf,
     evidence_path: PathBuf,
+}
+
+fn derive_release_surface_evidence_from_paths(
+    paths: ReleaseSurfacePaths<'_>,
 ) -> Result<ReleaseSurfaceEvidenceCommandOutput, RunError> {
-    let universe = read_json_file::<GlobalReproducibilityUniverse>(&resolve_input_path(current_dir, universe_path))?;
-    let policy = read_json_file::<GlobalReproducibilityPolicy>(&resolve_input_path(current_dir, policy_path))?;
+    let universe =
+        read_json_file::<GlobalReproducibilityUniverse>(&resolve_input_path(paths.current_dir, paths.universe_path))?;
+    let policy =
+        read_json_file::<GlobalReproducibilityPolicy>(&resolve_input_path(paths.current_dir, paths.policy_path))?;
     let universe_digest_blake3 = global_reproducibility_universe_digest_blake3(universe.clone()).map_err(core_error)?;
     let policy_digest_blake3 = global_reproducibility_policy_digest_blake3(policy.clone()).map_err(core_error)?;
-    let bundle_dir = resolve_input_path(current_dir, bundle_dir);
-    let verification_dir = resolve_input_path(current_dir, verification_dir);
-    let release_verify_json = resolve_input_path(current_dir, release_verify_json);
-    let evidence_path = resolve_input_path(current_dir, evidence_path);
+    let bundle_dir = resolve_input_path(paths.current_dir, paths.bundle_dir);
+    let verification_dir = resolve_input_path(paths.current_dir, paths.verification_dir);
+    let release_verify_json = resolve_input_path(paths.current_dir, paths.release_verify_json);
+    let evidence_path = resolve_input_path(paths.current_dir, paths.evidence_path);
     let manifest = read_json_file::<ReleaseManifestSubset>(&bundle_dir.join(RELEASE_MANIFEST_RELATIVE_PATH))?;
     let release_attestation =
         read_json_file::<ReleaseAttestationSubset>(&verification_dir.join(RELEASE_ATTESTATION_RELATIVE_PATH))?;
@@ -254,6 +269,8 @@ fn derive_release_surface_evidence_from_paths(
         provider_fixed_point_verification,
     })?;
     write_surface_evidence(&evidence_path, &evidence)?;
+    debug_assert!(!universe_digest_blake3.is_empty());
+    debug_assert!(!policy_digest_blake3.is_empty());
     Ok(ReleaseSurfaceEvidenceCommandOutput {
         universe_digest_blake3,
         policy_digest_blake3,
@@ -268,7 +285,10 @@ fn derive_release_surface_evidence(
     validate_policy_is_bound(&input.policy)?;
     let binary_digests = release_binary_digest_map(&input.manifest, &input.release_attestation)?;
     let counted_witnesses = counted_witness_map(&input.final_verify, &input.witness_attestations)?;
-    let mut evidence = Vec::new();
+    if input.universe.included_surfaces.len() > MAX_RELEASE_SURFACES {
+        return Err(internal(format!("release surface count exceeds {MAX_RELEASE_SURFACES}")));
+    }
+    let mut evidence = Vec::with_capacity(input.universe.included_surfaces.len());
     for surface in &input.universe.included_surfaces {
         let output_digest = binary_digests.get(&surface.release_artifact_set).cloned();
         let classification = classify_release_surface(&input, output_digest.as_deref());
@@ -292,6 +312,7 @@ fn derive_release_surface_evidence(
         });
         assert!(!classification.kind.is_empty(), "surface classification kind must be named");
     }
+    debug_assert_eq!(evidence.len(), input.universe.included_surfaces.len());
     evidence.sort_by(|left, right| left.surface_id.cmp(&right.surface_id));
     Ok(evidence)
 }
@@ -310,18 +331,23 @@ fn release_binary_digest_map(
     manifest: &ReleaseManifestSubset,
     attestation: &ReleaseAttestationSubset,
 ) -> Result<BTreeMap<String, String>, RunError> {
-    let mut attested = BTreeMap::new();
-    for digest in &attestation.binary_digests {
+    if attestation.binary_digests.len() > MAX_RELEASE_ARTIFACTS {
+        return Err(internal(format!("release attestation binary count exceeds {MAX_RELEASE_ARTIFACTS}")));
+    }
+    if manifest.binaries.len() > MAX_RELEASE_ARTIFACTS {
+        return Err(internal(format!("release manifest binary count exceeds {MAX_RELEASE_ARTIFACTS}")));
+    }
+    let attested = attestation.binary_digests.iter().try_fold(BTreeMap::new(), |mut digests, digest| {
         if digest.algorithm != DIGEST_ALGORITHM_BLAKE3 {
             return Err(internal(format!("release attestation digest for {} is not BLAKE3", digest.name)));
         }
-        let previous = attested.insert(digest.name.clone(), digest.digest.clone());
+        let previous = digests.insert(digest.name.clone(), digest.digest.clone());
         if previous.is_some() {
             return Err(internal(format!("duplicate release attestation digest for {}", digest.name)));
         }
-    }
-    let mut binaries = BTreeMap::new();
-    for binary in &manifest.binaries {
+        Ok(digests)
+    })?;
+    let binaries = manifest.binaries.iter().try_fold(BTreeMap::new(), |mut binaries, binary| {
         let Some(attested_digest) = attested.get(&binary.relative_path) else {
             return Err(internal(format!("release attestation is missing binary {}", binary.relative_path)));
         };
@@ -332,7 +358,10 @@ fn release_binary_digest_map(
         if previous.is_some() {
             return Err(internal(format!("duplicate release binary {}", binary.relative_path)));
         }
-    }
+        Ok(binaries)
+    })?;
+    debug_assert!(binaries.len() <= manifest.binaries.len());
+    debug_assert!(attested.len() <= attestation.binary_digests.len());
     Ok(binaries)
 }
 
@@ -340,36 +369,45 @@ fn counted_witness_map(
     final_verify: &FinalReleaseVerifySubset,
     witnesses: &[WitnessAttestationSubset],
 ) -> Result<BTreeMap<String, CountedWitness>, RunError> {
+    if witnesses.len() > MAX_RELEASE_WITNESSES {
+        return Err(internal(format!("witness sidecar count exceeds {MAX_RELEASE_WITNESSES}")));
+    }
+    if final_verify.independent_agreement_witnesses.len() > MAX_RELEASE_WITNESSES {
+        return Err(internal(format!("counted witness count exceeds {MAX_RELEASE_WITNESSES}")));
+    }
     let witness_by_identity = witnesses
         .iter()
         .map(|witness| (witness.witness_identity.clone(), witness))
         .collect::<BTreeMap<_, _>>();
-    let mut counted = BTreeMap::new();
-    for witness in &final_verify.independent_agreement_witnesses {
-        if !witness.policy_counted {
-            continue;
-        }
-        if !witness.signature_valid {
-            continue;
-        }
-        if !witness.digest_match {
-            continue;
-        }
-        let Some(attestation) = witness_by_identity.get(&witness.witness_identity) else {
-            return Err(internal(format!("counted witness {} has no witness sidecar", witness.witness_identity)));
-        };
-        counted.insert(witness.witness_identity.clone(), CountedWitness {
-            identity: witness.witness_identity.clone(),
-            signer_key_name: witness.signer_key_name.clone(),
-            release_attestation_digest_blake3: witness.release_attestation_digest_blake3.clone(),
-            operator_domain: witness.independence_domain.clone(),
-            host_class: attestation.rebuild_environment_summary.host_class.clone(),
-            source_acquisition_mode: witness.source_acquisition_mode.clone(),
-            digest_match: witness.digest_match,
-            policy_counted: witness.policy_counted,
-            rebuilt_digests: witness_digest_map(attestation)?,
-        });
-    }
+    let counted =
+        final_verify
+            .independent_agreement_witnesses
+            .iter()
+            .try_fold(BTreeMap::new(), |mut counted, witness| {
+                if !witness.policy_counted || !witness.signature_valid || !witness.digest_match {
+                    return Ok(counted);
+                }
+                let Some(attestation) = witness_by_identity.get(&witness.witness_identity) else {
+                    return Err(internal(format!(
+                        "counted witness {} has no witness sidecar",
+                        witness.witness_identity
+                    )));
+                };
+                counted.insert(witness.witness_identity.clone(), CountedWitness {
+                    identity: witness.witness_identity.clone(),
+                    signer_key_name: witness.signer_key_name.clone(),
+                    release_attestation_digest_blake3: witness.release_attestation_digest_blake3.clone(),
+                    operator_domain: witness.independence_domain.clone(),
+                    host_class: attestation.rebuild_environment_summary.host_class.clone(),
+                    source_acquisition_mode: witness.source_acquisition_mode.clone(),
+                    digest_match: witness.digest_match,
+                    policy_counted: witness.policy_counted,
+                    rebuilt_digests: witness_digest_map(attestation)?,
+                });
+                Ok(counted)
+            })?;
+    debug_assert!(counted.len() <= final_verify.independent_agreement_witnesses.len());
+    debug_assert!(counted.len() <= witnesses.len());
     Ok(counted)
 }
 
@@ -387,8 +425,10 @@ struct CountedWitness {
 }
 
 fn witness_digest_map(witness: &WitnessAttestationSubset) -> Result<BTreeMap<String, String>, RunError> {
-    let mut digests = BTreeMap::new();
-    for digest in &witness.rebuilt_digests {
+    if witness.rebuilt_digests.len() > MAX_RELEASE_ARTIFACTS {
+        return Err(internal(format!("witness rebuilt digest count exceeds {MAX_RELEASE_ARTIFACTS}")));
+    }
+    witness.rebuilt_digests.iter().try_fold(BTreeMap::new(), |mut digests, digest| {
         if digest.algorithm != DIGEST_ALGORITHM_BLAKE3 {
             return Err(internal(format!("witness digest for {} is not BLAKE3", digest.name)));
         }
@@ -396,8 +436,8 @@ fn witness_digest_map(witness: &WitnessAttestationSubset) -> Result<BTreeMap<Str
         if previous.is_some() {
             return Err(internal(format!("duplicate witness digest for {}", digest.name)));
         }
-    }
-    Ok(digests)
+        Ok(digests)
+    })
 }
 
 fn classify_release_surface(
@@ -405,7 +445,10 @@ fn classify_release_surface(
     output_digest: Option<&str>,
 ) -> SurfaceClassification {
     let Some(output_digest) = output_digest else {
-        return unsupported_classification(UNKNOWN_RELEASE_SURFACE_KIND, UNKNOWN_ARTIFACT_UNSUPPORTED_REASON);
+        return unsupported_classification(UnsupportedClassification {
+            kind: UNKNOWN_RELEASE_SURFACE_KIND,
+            reason: UNKNOWN_ARTIFACT_UNSUPPORTED_REASON,
+        });
     };
     if is_self_hosting_stage2_surface(input, output_digest) {
         return self_hosting_stage2_classification(input);
@@ -413,7 +456,10 @@ fn classify_release_surface(
     if is_provider_fixed_point_surface(input, output_digest) {
         return provider_fixed_point_classification(input, output_digest);
     }
-    unsupported_classification(UNKNOWN_RELEASE_SURFACE_KIND, UNRECOGNIZED_ARTIFACT_UNSUPPORTED_REASON)
+    unsupported_classification(UnsupportedClassification {
+        kind: UNKNOWN_RELEASE_SURFACE_KIND,
+        reason: UNRECOGNIZED_ARTIFACT_UNSUPPORTED_REASON,
+    })
 }
 
 fn is_self_hosting_stage2_surface(input: &ReleaseSurfaceEvidenceDerivationInput, output_digest: &str) -> bool {
@@ -426,14 +472,14 @@ fn is_self_hosting_stage2_surface(input: &ReleaseSurfaceEvidenceDerivationInput,
 
 fn self_hosting_stage2_classification(input: &ReleaseSurfaceEvidenceDerivationInput) -> SurfaceClassification {
     let proof_linkage = input.manifest.proof_linkage.as_ref();
-    let stage2_fresh = input.self_hosting_manifest.as_ref().is_some_and(|manifest| {
+    let is_stage2_fresh = input.self_hosting_manifest.as_ref().is_some_and(|manifest| {
         !manifest.state_dirs.stage2.is_empty() && manifest.state_dirs.stage2 != manifest.state_dirs.stage0
     });
-    let strict = input.self_hosting_summary.stage2_strict && input.self_hosting_summary.stage2_no_fallbacks;
+    let is_strict = input.self_hosting_summary.stage2_strict && input.self_hosting_summary.stage2_no_fallbacks;
     SurfaceClassification {
         kind: SELF_HOSTING_STAGE2_SURFACE_KIND,
-        strict_hermeticity: strict,
-        fresh_rebuild_store: stage2_fresh,
+        strict_hermeticity: is_strict,
+        fresh_rebuild_store: is_stage2_fresh,
         toolchain_provenance_digest_blake3: Some(input.manifest.proof_bundle.digest_blake3.clone()),
         hermeticity_evidence_digest_blake3: proof_linkage.map(|linkage| linkage.proof_manifest_digest_blake3.clone()),
         unsupported_reason: None,
@@ -480,14 +526,17 @@ fn provider_fixed_point_classification(
             "provider fixed-point meta digest is missing",
         );
     };
-    SurfaceClassification {
+    let classification = SurfaceClassification {
         kind: PROVIDER_FIXED_POINT_SURFACE_KIND,
         strict_hermeticity: true,
         fresh_rebuild_store: true,
         toolchain_provenance_digest_blake3: Some(toolchain_digest),
         hermeticity_evidence_digest_blake3: Some(hermeticity_digest),
         unsupported_reason: None,
-    }
+    };
+    debug_assert!(classification.strict_hermeticity);
+    debug_assert!(classification.unsupported_reason.is_none());
+    classification
 }
 
 fn invalid_provider_fixed_point_classification(proof_digest: Option<String>, reason: &str) -> SurfaceClassification {
@@ -506,14 +555,19 @@ fn invalid_provider_fixed_point_classification(proof_digest: Option<String>, rea
     }
 }
 
-fn unsupported_classification(kind: &'static str, reason: &str) -> SurfaceClassification {
+struct UnsupportedClassification<'a> {
+    kind: &'static str,
+    reason: &'a str,
+}
+
+fn unsupported_classification(input: UnsupportedClassification<'_>) -> SurfaceClassification {
     SurfaceClassification {
-        kind,
+        kind: input.kind,
         strict_hermeticity: false,
         fresh_rebuild_store: false,
         toolchain_provenance_digest_blake3: None,
         hermeticity_evidence_digest_blake3: None,
-        unsupported_reason: Some(reason.to_string()),
+        unsupported_reason: Some(input.reason.to_string()),
     }
 }
 
@@ -521,10 +575,12 @@ fn witnesses_for_surface(
     output_digest: Option<&str>,
     counted_witnesses: &BTreeMap<String, CountedWitness>,
 ) -> Vec<GlobalWitnessEvidence> {
-    let mut evidence = Vec::new();
+    let mut evidence = Vec::with_capacity(counted_witnesses.len());
     let Some(output_digest) = output_digest else {
         return evidence;
     };
+    debug_assert!(evidence.capacity() >= counted_witnesses.len());
+    debug_assert!(!output_digest.is_empty());
     for witness in counted_witnesses.values() {
         if witness.rebuilt_digests.values().any(|digest| digest == output_digest) {
             evidence.push(GlobalWitnessEvidence {
@@ -560,22 +616,28 @@ fn read_witness_attestations(witness_dir: &Path) -> Result<Vec<WitnessAttestatio
     if !witness_dir.is_dir() {
         return Ok(Vec::new());
     }
-    let mut paths = Vec::new();
-    for entry in std::fs::read_dir(witness_dir)
+    let entries = std::fs::read_dir(witness_dir)
         .map_err(|err| RunError::Internal(format!("reading {}: {err}", witness_dir.display())))?
-    {
-        let entry =
-            entry.map_err(|err| RunError::Internal(format!("reading {} entry: {err}", witness_dir.display())))?;
+        .take(MAX_RELEASE_WITNESSES.saturating_add(1))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| RunError::Internal(format!("reading {} entry: {err}", witness_dir.display())))?;
+    if entries.len() > MAX_RELEASE_WITNESSES {
+        return Err(internal(format!("witness directory exceeds {MAX_RELEASE_WITNESSES} entries")));
+    }
+    let mut paths = Vec::with_capacity(entries.len());
+    for entry in entries {
         let path = entry.path();
         if path.extension().and_then(|extension| extension.to_str()) == Some("json") {
             paths.push(path);
         }
     }
     paths.sort();
-    let mut witnesses = Vec::new();
+    let mut witnesses = Vec::with_capacity(paths.len());
     for path in paths {
         witnesses.push(read_json_file::<WitnessAttestationSubset>(&path)?);
     }
+    debug_assert!(witnesses.len() <= MAX_RELEASE_WITNESSES);
+    debug_assert!(witnesses.capacity() >= witnesses.len());
     Ok(witnesses)
 }
 
@@ -585,24 +647,27 @@ fn read_self_hosting_summary(path: &Path) -> Result<SelfHostingSummaryFacts, Run
 }
 
 fn parse_self_hosting_summary(text: &str) -> SelfHostingSummaryFacts {
-    let mut stage2_strict = false;
-    let mut stage2_no_fallbacks = false;
+    let mut is_stage2_strict = false;
+    let mut is_stage2_no_fallbacks = false;
     for line in text.lines() {
         let Some((key, value)) = line.split_once(':') else {
             continue;
         };
         let value = value.trim();
         if key == "stage2_hermeticity_mode" {
-            stage2_strict = value == STRICT_HERMETICITY_MODE;
+            is_stage2_strict = value == STRICT_HERMETICITY_MODE;
         }
         if key == "stage2_fallback_events" {
-            stage2_no_fallbacks = value == EMPTY_FALLBACK_EVENTS;
+            is_stage2_no_fallbacks = value == EMPTY_FALLBACK_EVENTS;
         }
     }
-    SelfHostingSummaryFacts {
-        stage2_strict,
-        stage2_no_fallbacks,
-    }
+    let facts = SelfHostingSummaryFacts {
+        stage2_strict: is_stage2_strict,
+        stage2_no_fallbacks: is_stage2_no_fallbacks,
+    };
+    debug_assert_eq!(facts.stage2_strict, is_stage2_strict);
+    debug_assert_eq!(facts.stage2_no_fallbacks, is_stage2_no_fallbacks);
+    facts
 }
 
 fn read_optional_json_file<T>(path: &Path) -> Result<Option<T>, RunError>

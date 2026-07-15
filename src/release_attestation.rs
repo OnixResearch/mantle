@@ -55,6 +55,7 @@ const INDEPENDENCE_FIELD_REBUILD_HOST_CLASS: &str = "rebuild_environment_summary
 const INDEPENDENT_AGREEMENT_CLASS: &str = "independent-rebuild-agreement";
 const AGREEMENT_REPORT_FILE_NAME: &str = "agreement-report.json";
 const MAX_AGREEMENT_REPORT_CANDIDATES: usize = 32;
+const MAX_AGREEMENT_REPORT_DIRECTORY_COUNT: usize = 1_024;
 pub(crate) const WITNESS_SOURCE_ACQUISITION_MODE_MANUAL: &str = "manual-operator-supplied";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,6 +164,8 @@ pub(crate) fn create_release_attestation(
         .map_err(|err| RunError::Internal(format!("writing {}: {err}", attestation_path.display())))?;
     std::fs::write(&signature_path, format!("{}\n", encode_detached_signature(&signature)))
         .map_err(|err| RunError::Internal(format!("writing {}: {err}", signature_path.display())))?;
+    debug_assert!(!canonical_bytes.is_empty());
+    debug_assert!(attestation_path.starts_with(verification_dir));
 
     Ok(CreatedReleaseAttestation {
         attestation,
@@ -173,6 +176,13 @@ pub(crate) fn create_release_attestation(
     })
 }
 
+// Compatibility boundary shared by CLI release and attestation commands; each
+// caller names the values before crossing into this persisted-schema shell.
+#[allow(
+    tigerstyle::ambiguous_params,
+    tigerstyle::too_many_parameters,
+    reason = "preserve the existing cross-command witness creation boundary"
+)]
 pub(crate) fn create_witness_attestation(
     verification_dir: &Path,
     rebuilt_binary_paths: &[PathBuf],
@@ -212,6 +222,8 @@ pub(crate) fn create_witness_attestation(
         .map_err(|err| RunError::Internal(format!("writing {}: {err}", attestation_path.display())))?;
     std::fs::write(&signature_path, format!("{}\n", encode_detached_signature(&signature)))
         .map_err(|err| RunError::Internal(format!("writing {}: {err}", signature_path.display())))?;
+    debug_assert!(!canonical_bytes.is_empty());
+    debug_assert!(attestation_path.starts_with(verification_dir));
 
     Ok(CreatedWitnessAttestation {
         attestation,
@@ -281,6 +293,8 @@ fn normalize_policy_witness_identities(
     trusted_witness_identities: &[String],
 ) -> Result<Vec<String>, RunError> {
     let normalized = normalize_policy_name_set(trusted_witness_identities, "trusted witness identity", 0)?;
+    debug_assert!(normalized.len() <= trusted_witness_identities.len());
+    debug_assert!(normalized.windows(2).all(|window| window[0] < window[1]));
     match profile {
         PolicyInitProfile::SelfProofOnly => {
             if normalized.is_empty() {
@@ -307,7 +321,10 @@ fn normalize_policy_name_set(
 ) -> Result<Vec<String>, RunError> {
     let mut normalized_values = BTreeSet::new();
     for requested_value in requested_values {
-        let normalized_value = normalize_policy_name(requested_value, field_label)?;
+        let normalized_value = normalize_policy_name(PolicyNameInput {
+            requested_value,
+            field_label,
+        })?;
         normalized_values.insert(normalized_value);
     }
     let normalized = normalized_values.into_iter().collect::<Vec<_>>();
@@ -318,15 +335,20 @@ fn normalize_policy_name_set(
     Ok(normalized)
 }
 
-fn normalize_policy_name(requested_value: &str, field_label: &str) -> Result<String, RunError> {
-    let normalized = requested_value.trim();
+struct PolicyNameInput<'a> {
+    requested_value: &'a str,
+    field_label: &'a str,
+}
+
+fn normalize_policy_name(input: PolicyNameInput<'_>) -> Result<String, RunError> {
+    let normalized = input.requested_value.trim();
     if normalized.is_empty() {
-        return Err(RunError::Internal(format!("{field_label} must not be empty")));
+        return Err(RunError::Internal(format!("{} must not be empty", input.field_label)));
     }
     if normalized.chars().any(|character| character.is_control()) {
         return Err(RunError::Internal(format!(
-            "{field_label} must not contain control characters: {:?}",
-            requested_value
+            "{} must not contain control characters: {:?}",
+            input.field_label, input.requested_value
         )));
     }
     Ok(normalized.to_string())
@@ -370,8 +392,9 @@ pub(crate) fn load_release_attestation_document(dir: &Path) -> Result<(ReleaseAt
 }
 
 pub(crate) fn load_witness_documents(dir: &Path) -> Result<Vec<WitnessDocument>, RunError> {
-    let mut documents = Vec::new();
-    for path in witness_json_paths(dir)? {
+    let witness_paths = witness_json_paths(dir)?;
+    let mut documents = Vec::with_capacity(witness_paths.len());
+    for path in witness_paths {
         let attestation = read_witness_attestation_file(&path)?;
         documents.push(WitnessDocument {
             attestation,
@@ -414,20 +437,22 @@ fn evaluate_release_verification(
         .map_err(|_| RunError::Internal("release verification witness count overflowed u32".to_string()))?;
     let considered_witness_count = u32::try_from(validated_witnesses.len())
         .map_err(|_| RunError::Internal("release verification considered witness count overflowed u32".to_string()))?;
-    let agreement_report = build_independent_agreement_report(material, trusted_public_keys)?;
-    verify_optional_agreement_report_attachment(verification_dir, &agreement_report)?;
-    let independent_agreement_report_digest =
-        crunch_attestation::independent_agreement_report_canonical_digest(agreement_report.clone())
+    let agreement_evidence = build_independent_agreement_report(material, trusted_public_keys)?;
+    verify_optional_agreement_report_attachment(verification_dir, &agreement_evidence)?;
+    let agreement_digest_blake3 =
+        crunch_attestation::independent_agreement_report_canonical_digest(agreement_evidence.clone())
             .map_err(|err| RunError::Build(format!("independent agreement report digest: {err}")))?
             .to_hex();
-    let independent_agreement_status = agreement_report.status();
+    let independent_agreement_status = agreement_evidence.status();
     let independent_agreement_class = if independent_agreement_status == IndependentAgreementStatus::Satisfied {
         Some(INDEPENDENT_AGREEMENT_CLASS)
     } else {
         None
     };
     let independent_agreement_witnesses =
-        agreement_report.witnesses.iter().map(agreement_witness_output).collect::<Vec<_>>();
+        agreement_evidence.witnesses.iter().map(agreement_witness_output).collect::<Vec<_>>();
+    debug_assert_eq!(independent_agreement_witnesses.len(), agreement_evidence.witnesses.len());
+    debug_assert!(considered_witness_count <= discovered_witness_count);
 
     Ok(ReleaseVerificationOutput {
         release_attestation_digest,
@@ -444,10 +469,10 @@ fn evaluate_release_verification(
         policy_required_witness_count: material.policy.min_matching_witnesses,
         independent_agreement_status,
         independent_agreement_class,
-        independent_agreement_report_digest,
-        independent_agreement_counted_witness_count: agreement_report.counted_witness_count,
-        independent_agreement_skipped_witness_count: agreement_report.skipped_witness_count,
-        independent_agreement_failed_witness_count: agreement_report.failed_witness_count,
+        independent_agreement_report_digest: agreement_digest_blake3,
+        independent_agreement_counted_witness_count: agreement_evidence.counted_witness_count,
+        independent_agreement_skipped_witness_count: agreement_evidence.skipped_witness_count,
+        independent_agreement_failed_witness_count: agreement_evidence.failed_witness_count,
         independent_agreement_witnesses,
         policy_failure_reason: evaluation.policy_failure_reason,
     })
@@ -467,21 +492,21 @@ fn verify_optional_agreement_report_attachment(
             candidates.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join(", ")
         )));
     }
-    let report_path = &candidates[0];
+    let attachment_path = &candidates[0];
     let expected_path = verification_dir.join(AGREEMENT_REPORT_FILE_NAME);
-    if report_path != &expected_path {
+    if attachment_path != &expected_path {
         return Err(RunError::Build(format!(
             "independent agreement report must be stored at {}, got {}",
             expected_path.display(),
-            report_path.display()
+            attachment_path.display()
         )));
     }
-    let attached_bytes = std::fs::read(report_path)
-        .map_err(|err| RunError::Internal(format!("reading {}: {err}", report_path.display())))?;
-    let attached_report: IndependentAgreementReport = serde_json::from_slice(&attached_bytes).map_err(|err| {
-        RunError::Build(format!("parsing independent agreement report {}: {err}", report_path.display()))
+    let attached_bytes = std::fs::read(attachment_path)
+        .map_err(|err| RunError::Internal(format!("reading {}: {err}", attachment_path.display())))?;
+    let attached_evidence: IndependentAgreementReport = serde_json::from_slice(&attached_bytes).map_err(|err| {
+        RunError::Build(format!("parsing independent agreement report {}: {err}", attachment_path.display()))
     })?;
-    let canonical_attached = crunch_attestation::independent_agreement_report_canonical_bytes(attached_report)
+    let canonical_attached = crunch_attestation::independent_agreement_report_canonical_bytes(attached_evidence)
         .map_err(|err| RunError::Build(format!("canonicalizing independent agreement report: {err}")))?;
     if attached_bytes != canonical_attached {
         return Err(RunError::Build("independent agreement report is not canonical compact JSON".to_string()));
@@ -495,40 +520,61 @@ fn verify_optional_agreement_report_attachment(
             "independent agreement report digest mismatch: attached {attached_digest} derived {derived_digest}"
         )));
     }
+    debug_assert_eq!(canonical_attached, canonical_derived);
+    debug_assert_eq!(attachment_path, expected_path.as_path());
     Ok(())
 }
 
 fn agreement_report_candidates(verification_dir: &Path) -> Result<Vec<PathBuf>, RunError> {
-    let mut candidates = Vec::new();
+    let mut candidates = Vec::with_capacity(MAX_AGREEMENT_REPORT_CANDIDATES);
     collect_agreement_report_candidates(verification_dir, &mut candidates)?;
     candidates.sort();
     candidates.dedup();
-    if candidates.len() > MAX_AGREEMENT_REPORT_CANDIDATES {
-        return Err(RunError::Build(format!(
-            "too many independent agreement report candidates: {} > {}",
-            candidates.len(),
-            MAX_AGREEMENT_REPORT_CANDIDATES
-        )));
-    }
+    debug_assert!(candidates.len() <= MAX_AGREEMENT_REPORT_CANDIDATES);
+    debug_assert!(candidates.capacity() >= candidates.len());
     Ok(candidates)
 }
 
 fn collect_agreement_report_candidates(dir: &Path, candidates: &mut Vec<PathBuf>) -> Result<(), RunError> {
-    for entry in
-        std::fs::read_dir(dir).map_err(|err| RunError::Internal(format!("reading {}: {err}", dir.display())))?
-    {
-        let entry = entry.map_err(|err| RunError::Internal(format!("reading {} entry: {err}", dir.display())))?;
-        let path = entry.path();
-        let file_type = entry
-            .file_type()
-            .map_err(|err| RunError::Internal(format!("reading {} type: {err}", path.display())))?;
-        if file_type.is_file() && path.file_name().and_then(|name| name.to_str()) == Some(AGREEMENT_REPORT_FILE_NAME) {
-            candidates.push(path);
-        } else if file_type.is_dir() {
-            collect_agreement_report_candidates(&path, candidates)?;
+    debug_assert!(!dir.as_os_str().is_empty());
+    debug_assert!(candidates.capacity() >= MAX_AGREEMENT_REPORT_CANDIDATES);
+    let mut pending_directories = Vec::with_capacity(MAX_AGREEMENT_REPORT_DIRECTORY_COUNT);
+    pending_directories.push(dir.to_path_buf());
+    for _directory_index in 0..MAX_AGREEMENT_REPORT_DIRECTORY_COUNT {
+        let Some(current_dir) = pending_directories.pop() else {
+            return Ok(());
+        };
+        for entry in std::fs::read_dir(&current_dir)
+            .map_err(|err| RunError::Internal(format!("reading {}: {err}", current_dir.display())))?
+        {
+            let entry =
+                entry.map_err(|err| RunError::Internal(format!("reading {} entry: {err}", current_dir.display())))?;
+            let path = entry.path();
+            let file_type = entry
+                .file_type()
+                .map_err(|err| RunError::Internal(format!("reading {} type: {err}", path.display())))?;
+            if file_type.is_file()
+                && path.file_name().and_then(|name| name.to_str()) == Some(AGREEMENT_REPORT_FILE_NAME)
+            {
+                if candidates.len() >= MAX_AGREEMENT_REPORT_CANDIDATES {
+                    return Err(RunError::Build(format!(
+                        "too many independent agreement report candidates: more than {MAX_AGREEMENT_REPORT_CANDIDATES}"
+                    )));
+                }
+                candidates.push(path);
+            } else if file_type.is_dir() {
+                if pending_directories.len() >= MAX_AGREEMENT_REPORT_DIRECTORY_COUNT {
+                    return Err(RunError::Build(format!(
+                        "independent agreement report directory traversal exceeds {MAX_AGREEMENT_REPORT_DIRECTORY_COUNT}"
+                    )));
+                }
+                pending_directories.push(path);
+            }
         }
     }
-    Ok(())
+    Err(RunError::Build(format!(
+        "independent agreement report directory traversal exceeds {MAX_AGREEMENT_REPORT_DIRECTORY_COUNT}"
+    )))
 }
 
 fn build_independent_agreement_report(
@@ -553,6 +599,8 @@ fn build_independent_agreement_report(
             &mut used_domains,
         )?);
     }
+    debug_assert_eq!(witnesses.len(), material.witnesses.len());
+    debug_assert!(used_domains.len() <= witnesses.len());
     IndependentAgreementReport::new(IndependentAgreementReportInit {
         release_attestation_digest_blake3: release_digest,
         policy_digest_blake3: policy_digest,
@@ -581,32 +629,37 @@ fn classify_agreement_witness(
     if signature_valid && is_revoked {
         reason = WitnessClassificationReason::Revoked;
     }
-    let digest_match =
+    let is_digest_match =
         witness_digest_matches_release(&material.release_attestation, &witness.attestation, release_digest);
-    if signature_valid && !is_revoked && is_identity_trusted && !digest_match {
+    let independence_domain = agreement_independence_domain(&material.policy, &witness.attestation, &signer_key_name);
+    let policy_facts = WitnessPolicyFacts {
+        signature_valid,
+        is_identity_trusted,
+        is_revoked,
+        digest_match: is_digest_match,
+        has_independence_domain: !independence_domain.is_empty(),
+    };
+    if policy_facts.is_digest_mismatch() {
         reason = WitnessClassificationReason::DigestMismatch;
     }
-    let independence_domain = agreement_independence_domain(&material.policy, &witness.attestation, &signer_key_name);
-    if signature_valid && !is_revoked && is_identity_trusted && digest_match && independence_domain.is_empty() {
+    if policy_facts.is_missing_independence() {
         reason = WitnessClassificationReason::MissingIndependenceEvidence;
     }
-    let policy_counted = signature_valid
-        && is_identity_trusted
-        && !is_revoked
-        && digest_match
-        && !independence_domain.is_empty()
-        && mark_domain_if_new(used_domains, &independence_domain);
-    if signature_valid
-        && is_identity_trusted
-        && !is_revoked
-        && digest_match
-        && !independence_domain.is_empty()
-        && !policy_counted
-    {
+    let is_countable = policy_facts.is_countable();
+    let is_policy_counted = if is_countable {
+        mark_domain_if_new(used_domains, &independence_domain)
+    } else {
+        false
+    };
+    if is_countable && !is_policy_counted {
         reason = WitnessClassificationReason::DuplicateIndependenceDomain;
     }
-    if policy_counted {
+    if is_policy_counted {
         reason = WitnessClassificationReason::Counted;
+    }
+    debug_assert_eq!(is_policy_counted, reason == WitnessClassificationReason::Counted);
+    if is_policy_counted {
+        debug_assert!(!independence_domain.is_empty());
     }
 
     Ok(AgreementWitnessClassification {
@@ -615,14 +668,62 @@ fn classify_agreement_witness(
         witness_digest_blake3: witness_digest,
         release_attestation_digest_blake3: witness.attestation.release_attestation_digest_blake3,
         signature_valid,
-        digest_match,
+        digest_match: is_digest_match,
         independence_domain,
         source_acquisition_mode: witness_source_acquisition_mode(&witness.attestation),
-        policy_counted,
+        policy_counted: is_policy_counted,
         classification_reason: reason,
         rebuilt_output_digests: witness.attestation.rebuilt_digests.clone(),
         environment_summary: witness.attestation.rebuild_environment_summary.clone(),
     })
+}
+
+#[derive(Clone, Copy)]
+struct WitnessPolicyFacts {
+    signature_valid: bool,
+    is_identity_trusted: bool,
+    is_revoked: bool,
+    digest_match: bool,
+    has_independence_domain: bool,
+}
+
+impl WitnessPolicyFacts {
+    fn is_eligible_before_digest(self) -> bool {
+        if !self.signature_valid {
+            return false;
+        }
+        if !self.is_identity_trusted {
+            return false;
+        }
+        !self.is_revoked
+    }
+
+    fn is_digest_mismatch(self) -> bool {
+        if !self.is_eligible_before_digest() {
+            return false;
+        }
+        !self.digest_match
+    }
+
+    fn is_missing_independence(self) -> bool {
+        if !self.is_eligible_before_digest() {
+            return false;
+        }
+        if !self.digest_match {
+            return false;
+        }
+        !self.has_independence_domain
+    }
+
+    fn is_countable(self) -> bool {
+        if !self.is_eligible_before_digest() {
+            return false;
+        }
+        if !self.digest_match {
+            return false;
+        }
+        self.has_independence_domain
+    }
 }
 
 fn witness_source_acquisition_mode(witness: &WitnessAttestation) -> String {
@@ -647,6 +748,8 @@ fn classify_witness_signature(
         }
         Err(err) => return Err(err),
     };
+    debug_assert!(!canonical_bytes.is_empty());
+    debug_assert!(!witness.signature.key_name.is_empty());
     match verify_signature_bytes(&canonical_bytes, &witness.signature, trusted_public_keys, "witness attestation") {
         Ok(signer_key_name) => Ok((true, signer_key_name, WitnessClassificationReason::Counted)),
         Err(RunError::Build(message)) => {
@@ -765,6 +868,8 @@ fn validate_witness_for_policy(
     if !is_trusted_witness_identity(&material.policy, &witness.attestation) {
         return Ok(None);
     }
+    debug_assert!(!canonical_bytes.is_empty());
+    debug_assert!(!signer_key_name.is_empty());
 
     let attestation_digest = witness
         .attestation
@@ -828,19 +933,21 @@ fn verify_signature_bytes(
     let signature_text = encode_detached_signature(signature);
     let signature_ref = SignatureRef::parse(&signature_text)
         .map_err(|err| RunError::Internal(format!("encoding {context} signature: {err}")))?;
+    debug_assert!(!canonical_text.is_empty());
+    debug_assert!(!signature.key_name.is_empty());
 
-    let mut found_named_key = false;
+    let mut is_named_key_found = false;
     for trusted_key in trusted_public_keys {
         if trusted_key.name() != signature.key_name {
             continue;
         }
-        found_named_key = true;
+        is_named_key_found = true;
         if trusted_key.verify(canonical_text, &signature_ref) {
             return Ok(signature.key_name.clone());
         }
     }
 
-    if !found_named_key {
+    if !is_named_key_found {
         return Err(RunError::Build(format!(
             "{context} signer '{}' is missing from the trusted public key set",
             signature.key_name
@@ -856,11 +963,16 @@ fn verify_signature_bytes(
 fn build_release_attestation_from_bundle(manifest: &ReleaseEvidenceManifest) -> Result<ReleaseAttestation, RunError> {
     let release_evidence_manifest_digest_blake3 = release_manifest_digest(manifest)?;
     let binary_digests = published_binary_digests(manifest);
+    debug_assert!(!manifest.release_id.is_empty());
+    debug_assert_eq!(binary_digests.len(), manifest.binaries.len());
 
     Ok(ReleaseAttestation::new(ReleaseAttestationInit {
         release_id: manifest.release_id.clone(),
         release_evidence_manifest_digest_blake3,
-        proof_bundle_digest_blake3: parse_attestation_digest(&manifest.proof_bundle.digest_blake3, "proof_bundle")?,
+        proof_bundle_digest_blake3: parse_attestation_digest(AttestationDigestInput {
+            value: &manifest.proof_bundle.digest_blake3,
+            field_name: "proof_bundle",
+        })?,
         proof_mode: manifest.proof_linkage.proof_mode.clone(),
         declared_effect_claims: None,
         observed_effect_facts: None,
@@ -878,9 +990,14 @@ fn release_manifest_digest(manifest: &ReleaseEvidenceManifest) -> Result<Attesta
     Ok(AttestationDigest::from_canonical_bytes(canonical_bytes))
 }
 
-fn parse_attestation_digest(value: &str, field_name: &str) -> Result<AttestationDigest, RunError> {
-    AttestationDigest::parse_hex(value.to_string())
-        .map_err(|err| RunError::Internal(format!("parsing {field_name} digest '{value}': {err}")))
+struct AttestationDigestInput<'a> {
+    value: &'a str,
+    field_name: &'a str,
+}
+
+fn parse_attestation_digest(input: AttestationDigestInput<'_>) -> Result<AttestationDigest, RunError> {
+    AttestationDigest::parse_hex(input.value.to_string())
+        .map_err(|err| RunError::Internal(format!("parsing {} digest '{}': {err}", input.field_name, input.value)))
 }
 
 fn published_binary_digests(manifest: &ReleaseEvidenceManifest) -> Vec<BinaryDigest> {
@@ -953,6 +1070,8 @@ pub(crate) fn validate_witness_identity(identity: &str) -> Result<(), RunError> 
             MAX_WITNESS_IDENTITY_BYTES, identity_len_bytes
         )));
     }
+    debug_assert!(!identity.is_empty());
+    debug_assert!(identity_len_bytes <= MAX_WITNESS_IDENTITY_BYTES);
     Ok(())
 }
 
@@ -1015,7 +1134,9 @@ fn witness_json_paths(dir: &Path) -> Result<Vec<PathBuf>, RunError> {
         )));
     }
 
-    let mut paths = Vec::new();
+    let witness_path_count_max = usize::try_from(MAX_WITNESS_SHOW_FILES)
+        .map_err(|_| RunError::Internal("witness show limit overflowed usize".to_string()))?;
+    let mut paths = Vec::with_capacity(witness_path_count_max);
     for entry_result in std::fs::read_dir(&witnesses_dir)
         .map_err(|err| RunError::Internal(format!("reading {}: {err}", witnesses_dir.display())))?
     {
@@ -1034,6 +1155,8 @@ fn witness_json_paths(dir: &Path) -> Result<Vec<PathBuf>, RunError> {
         }
     }
     paths.sort();
+    debug_assert!(paths.len() <= witness_path_count_max);
+    debug_assert!(paths.capacity() >= paths.len());
     Ok(paths)
 }
 

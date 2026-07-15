@@ -32,10 +32,9 @@ const FORMAT_JSON: &str = "json";
 const OUTPUT_TARGET_STDOUT: &str = "stdout";
 const DEFAULT_EVALUATOR_ID: &str = "mantle-embedded-crunch-eval";
 const EXPORT_FAILURE_EXIT_CODE: u8 = 3;
-const KIB_BYTES: u64 = 1024;
-const MIB_BYTES: u64 = KIB_BYTES * KIB_BYTES;
-const MAX_EXPORT_SOURCE_BYTES: u64 = 16 * MIB_BYTES;
-const MAX_EXPORT_OUTPUT_BYTES: usize = 64 * MIB_BYTES as usize;
+const MAX_EXPORT_SOURCE_BYTES: u64 = 16_777_216;
+const MAX_EXPORT_OUTPUT_BYTES: usize = 67_108_864;
+const EXPORT_OPTION_DIAGNOSTIC_BASE_CAPACITY: usize = 4;
 #[cfg(unix)]
 const NO_FOLLOW_OPEN_FLAGS: i32 = libc::O_NOFOLLOW;
 
@@ -142,17 +141,21 @@ pub fn cmd_nickel_export(options: NickelExportOptions<'_>) -> Result<(), RunErro
     let normalized = match normalize_export_options(&options) {
         Ok(normalized) => normalized,
         Err(diagnostics) => {
-            let report = failed_report(options.format, output_target_label(options.out), "validation", diagnostics);
-            render_report(&report, options.json)?;
+            let failure_summary =
+                failed_report(options.format, output_target_label(options.out), "validation", diagnostics);
+            render_report(&failure_summary, options.json)?;
             return Err(RunError::Reported(EXPORT_FAILURE_EXIT_CODE));
         }
     };
+    debug_assert_eq!(normalized.format, FORMAT_JSON);
+    debug_assert!(!normalized.file.is_empty());
 
     let captured = match capture_sources(options.root, &normalized) {
         Ok(captured) => captured,
         Err(diagnostics) => {
-            let report = failed_report(&normalized.format, normalized.output_target.clone(), "source", diagnostics);
-            render_report(&report, options.json)?;
+            let failure_summary =
+                failed_report(&normalized.format, normalized.output_target.clone(), "source", diagnostics);
+            render_report(&failure_summary, options.json)?;
             return Err(RunError::Reported(EXPORT_FAILURE_EXIT_CODE));
         }
     };
@@ -164,17 +167,19 @@ pub fn cmd_nickel_export(options: NickelExportOptions<'_>) -> Result<(), RunErro
         }
     };
     if output.len() > MAX_EXPORT_OUTPUT_BYTES {
-        let report = failed_report(&normalized.format, normalized.output_target.clone(), "eval", vec![diagnostic(
-            "output-bound",
-            &normalized.file,
-            format!("Nickel export output exceeds {MAX_EXPORT_OUTPUT_BYTES} bytes"),
-        )]);
-        render_report(&report, options.json)?;
+        let failure_summary =
+            failed_report(&normalized.format, normalized.output_target.clone(), "eval", vec![diagnostic(
+                "output-bound",
+                &normalized.file,
+                format!("Nickel export output exceeds {MAX_EXPORT_OUTPUT_BYTES} bytes"),
+            )]);
+        render_report(&failure_summary, options.json)?;
         return Err(RunError::Reported(EXPORT_FAILURE_EXIT_CODE));
     }
     if let Err(diagnostics) = verify_captured_sources_unchanged(options.root, &captured) {
-        let report = failed_report(&normalized.format, normalized.output_target.clone(), "source-changed", diagnostics);
-        render_report(&report, options.json)?;
+        let failure_summary =
+            failed_report(&normalized.format, normalized.output_target.clone(), "source-changed", diagnostics);
+        render_report(&failure_summary, options.json)?;
         return Err(RunError::Reported(EXPORT_FAILURE_EXIT_CODE));
     }
 
@@ -183,13 +188,13 @@ pub fn cmd_nickel_export(options: NickelExportOptions<'_>) -> Result<(), RunErro
     let receipt = match select_authoritative_receipt(active_cutover_authority(), &legacy_receipt, canonical_result) {
         Ok(receipt) => receipt,
         Err(failure) => {
-            let report = failed_report(
+            let failure_summary = failed_report(
                 &normalized.format,
                 normalized.output_target.clone(),
                 &failure.class,
                 failure.diagnostics,
             );
-            render_report(&report, options.json)?;
+            render_report(&failure_summary, options.json)?;
             return Err(RunError::Reported(EXPORT_FAILURE_EXIT_CODE));
         }
     };
@@ -198,17 +203,22 @@ pub fn cmd_nickel_export(options: NickelExportOptions<'_>) -> Result<(), RunErro
     if normalized.output_target != OUTPUT_TARGET_STDOUT {
         write_output_file(options.root, Path::new(&normalized.output_target), output.as_bytes())?;
     }
-    let report = success_report(normalized, receipt, receipt_digest, output);
-    render_success(&report, options.json)
+    let success_summary = success_report(normalized, receipt, receipt_digest, output);
+    render_success(&success_summary, options.json)
 }
 
 fn normalize_export_options(
     options: &NickelExportOptions<'_>,
 ) -> Result<NormalizedExportRequest, Vec<NickelExportDiagnostic>> {
-    let mut diagnostics = Vec::new();
+    let diagnostic_count_max = options
+        .deps
+        .len()
+        .saturating_add(options.import_paths.len())
+        .saturating_add(EXPORT_OPTION_DIAGNOSTIC_BASE_CAPACITY);
+    let mut diagnostics = Vec::with_capacity(diagnostic_count_max);
     let file = path_text(options.file, "non-utf8-source-path", &mut diagnostics);
     let deps = path_text_list(options.deps, "non-utf8-dependency-path", &mut diagnostics);
-    let import_paths = path_text_list(options.import_paths, "non-utf8-import-path", &mut diagnostics);
+    let evaluator_search_paths = path_text_list(options.import_paths, "non-utf8-import-path", &mut diagnostics);
     let output_target = output_target_text(options.out, &mut diagnostics);
     if options.evaluator_id.trim().is_empty() {
         diagnostics.push(diagnostic(
@@ -233,34 +243,37 @@ fn normalize_export_options(
         version: options.evaluator_version.to_string(),
         options: vec![
             format!("format={}", options.format),
-            format!("import-paths={}", import_paths.len()),
+            format!("import-paths={}", evaluator_search_paths.len()),
         ],
     };
     let adapter_request = AdapterRequest {
         source: &file,
         dependencies: &deps,
-        import_paths: &import_paths,
+        import_paths: &evaluator_search_paths,
         format: options.format,
         output_target: &output_target,
         evaluator: &evaluator,
     };
     let canonical = crate::nickel_export_core_adapter::normalize_adapter_request(&adapter_request)
         .map_err(|failure| failure.diagnostics)?;
-    Ok(NormalizedExportRequest {
+    let normalized = NormalizedExportRequest {
         file: canonical.source,
         deps: canonical.dependencies,
         import_paths: canonical.import_paths,
         format: canonical.format.as_str().to_string(),
         output_target: canonical.destination,
         evaluator,
-    })
+    };
+    debug_assert_eq!(normalized.format, FORMAT_JSON);
+    debug_assert!(!normalized.file.is_empty());
+    Ok(normalized)
 }
 
 fn capture_sources(
     root: &Path,
     request: &NormalizedExportRequest,
 ) -> Result<CapturedSources, Vec<NickelExportDiagnostic>> {
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(request.deps.len().saturating_add(1));
     let root_source = match capture_source(root, &request.file) {
         Ok(source) => Some(source),
         Err(failure) => {
@@ -285,6 +298,8 @@ fn capture_sources(
             "root source capture failed without a diagnostic".to_string(),
         )]);
     };
+    debug_assert_eq!(deps.len(), request.deps.len());
+    debug_assert!(!root_source.source_ref.path.is_empty());
     Ok(CapturedSources { root_source, deps })
 }
 
@@ -293,7 +308,9 @@ fn verify_captured_sources_unchanged(
     captured: &CapturedSources,
 ) -> Result<(), Vec<NickelExportDiagnostic>> {
     let sources = core::iter::once(&captured.root_source).chain(captured.deps.iter());
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(captured.deps.len().saturating_add(1));
+    debug_assert!(!captured.root_source.source_ref.path.is_empty());
+    debug_assert!(diagnostics.capacity() >= captured.deps.len());
     for expected in sources {
         match capture_source(root, &expected.source_ref.path) {
             Ok(actual) if actual.bytes == expected.bytes && actual.source_ref == expected.source_ref => {}
@@ -345,7 +362,14 @@ fn capture_source(root: &Path, relative_path: &str) -> Result<CapturedSource, Ni
             format!("declared Nickel export source `{relative_path}` could not be opened: {error}"),
         )
     })?;
-    let mut bytes = Vec::with_capacity(usize::try_from(metadata.len()).unwrap_or(0));
+    let capacity_bytes = usize::try_from(metadata.len()).map_err(|_| {
+        diagnostic(
+            "source-bound",
+            relative_path,
+            "declared Nickel export source size does not fit this platform".to_string(),
+        )
+    })?;
+    let mut bytes = Vec::with_capacity(capacity_bytes);
     file.read_to_end(&mut bytes).map_err(|error| {
         diagnostic(
             "source-read",
@@ -353,13 +377,18 @@ fn capture_source(root: &Path, relative_path: &str) -> Result<CapturedSource, Ni
             format!("declared Nickel export source `{relative_path}` could not be read: {error}"),
         )
     })?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) != metadata.len() {
+    let observed_bytes = u64::try_from(bytes.len()).map_err(|_| {
+        diagnostic("source-bound", relative_path, "declared Nickel export source byte count overflowed u64".to_string())
+    })?;
+    if observed_bytes != metadata.len() {
         return Err(diagnostic(
             "source-changed",
             relative_path,
             "declared Nickel export source changed while it was captured".to_string(),
         ));
     }
+    debug_assert!(observed_bytes <= MAX_EXPORT_SOURCE_BYTES);
+    debug_assert_eq!(observed_bytes, metadata.len());
     Ok(CapturedSource {
         source_ref: crate::nickel_export_core_adapter::export_source_ref(relative_path, &bytes),
         bytes,
@@ -369,9 +398,9 @@ fn capture_source(root: &Path, relative_path: &str) -> Result<CapturedSource, Ni
 fn evaluate_export_output(root: &Path, request: &NormalizedExportRequest) -> Result<String, String> {
     assert_eq!(request.format, FORMAT_JSON, "caller validates export format");
     let file = root.join(&request.file);
-    let import_paths =
+    let evaluator_search_paths =
         request.import_paths.iter().map(|path| root.join(path).into_os_string()).collect::<Vec<OsString>>();
-    crunch_eval::evaluate_to_json(&file, &import_paths).map_err(|error| error.to_string())
+    crunch_eval::evaluate_to_json(&file, &evaluator_search_paths).map_err(|error| error.to_string())
 }
 
 fn handle_evaluator_failure(
@@ -380,6 +409,8 @@ fn handle_evaluator_failure(
     message: String,
     json: bool,
 ) -> Result<(), RunError> {
+    debug_assert_eq!(request.format, FORMAT_JSON);
+    debug_assert!(!captured.root_source.source_ref.path.is_empty());
     let legacy_diagnostic = diagnostic("eval", &request.file, message);
     let diagnostics = [legacy_diagnostic.clone()];
     let dependency_artifacts = explicit_dependencies(captured);
@@ -410,8 +441,9 @@ fn handle_evaluator_failure(
             "evaluator failure comparison did not preserve the expected failure boundary".to_string(),
         )]),
     };
-    let report = failed_report(&request.format, request.output_target.clone(), &failure_class, report_diagnostics);
-    render_report(&report, json)?;
+    let failure_summary =
+        failed_report(&request.format, request.output_target.clone(), &failure_class, report_diagnostics);
+    render_report(&failure_summary, json)?;
     Err(RunError::Reported(EXPORT_FAILURE_EXIT_CODE))
 }
 
@@ -537,6 +569,8 @@ fn failed_report(
 }
 
 fn render_success(report: &NickelExportReport, json: bool) -> Result<(), RunError> {
+    debug_assert!(report.success);
+    debug_assert!(report.receipt.is_some());
     if json {
         render_report(report, true)?;
         return Ok(());
@@ -593,6 +627,8 @@ fn create_output_parents(root: &Path, out: &Path) -> Result<(), RunError> {
     let Some(parent) = out.parent() else {
         return Ok(());
     };
+    debug_assert!(!out.is_absolute());
+    debug_assert!(!root.as_os_str().is_empty());
     let mut cursor = root.to_path_buf();
     for component in parent.components() {
         let Component::Normal(name) = component else {
@@ -635,6 +671,8 @@ fn reject_symlink_components(root: &Path, relative: &Path, allow_missing: bool) 
     if root_metadata.file_type().is_symlink() || !root_metadata.is_dir() {
         return Err(format!("export root is not a real directory: {}", root.display()));
     }
+    debug_assert!(root_metadata.is_dir());
+    debug_assert!(!root_metadata.file_type().is_symlink());
     let mut cursor = root.to_path_buf();
     for component in relative.components() {
         let Component::Normal(name) = component else {
@@ -691,7 +729,8 @@ fn output_target_label(out: Option<&Path>) -> String {
     out.map(|path| path.display().to_string()).unwrap_or_else(|| OUTPUT_TARGET_STDOUT.to_string())
 }
 
-fn diagnostic(class: &str, subject: &str, message: String) -> NickelExportDiagnostic {
+fn diagnostic(class: impl AsRef<str>, subject: &str, message: String) -> NickelExportDiagnostic {
+    let class = class.as_ref();
     assert!(!class.is_empty(), "diagnostic class must not be empty");
     assert!(!subject.is_empty(), "diagnostic subject must not be empty");
     assert!(!message.is_empty(), "diagnostic message must not be empty");

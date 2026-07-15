@@ -33,11 +33,11 @@ impl<'a> PinImportShellOptions<'a> {
 
 #[derive(Debug, Deserialize)]
 struct NixtamalFixture {
-    #[serde(default)]
+    #[serde(default = "empty_list")]
     unsupported_semantics: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "empty_list")]
     inputs: Vec<NixtamalInput>,
-    #[serde(default)]
+    #[serde(default = "empty_list")]
     patches: Vec<NixtamalPatch>,
 }
 
@@ -46,33 +46,33 @@ struct NixtamalInput {
     name: String,
     #[serde(alias = "source_kind")]
     kind: String,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     url: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     repository: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     reference: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     rev: Option<String>,
     #[serde(default = "default_hash_algo")]
     hash_algo: String,
-    #[serde(default, alias = "expected_hash")]
+    #[serde(default = "absent_value", alias = "expected_hash")]
     hash: Option<String>,
     #[serde(default)]
     frozen: bool,
-    #[serde(default)]
+    #[serde(default = "empty_list")]
     mirrors: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "empty_list")]
     patches: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     freshness: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     fetch_policy: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     trust_policy: Option<String>,
-    #[serde(default)]
+    #[serde(default = "empty_list")]
     composition_semantics: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     lock_identity: Option<String>,
 }
 
@@ -81,40 +81,51 @@ struct NixtamalPatch {
     name: String,
     #[serde(alias = "source_kind")]
     kind: String,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     path: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     url: Option<String>,
     #[serde(default = "default_hash_algo")]
     hash_algo: String,
-    #[serde(default, alias = "expected_hash")]
+    #[serde(default = "absent_value", alias = "expected_hash")]
     hash: Option<String>,
 }
 
 pub fn run_pin_import(options: PinImportShellOptions<'_>) -> Result<(), RunError> {
-    let import_options = crunch_project::PinImportOptions {
+    let plan_options = crunch_project::PinImportOptions {
         importer: options.importer.to_string(),
         project_file: options.project_file.to_string(),
         lock_file: options.lock_file.to_string(),
         inputs_file: options.inputs_file.to_string(),
     };
-    let pin_set = load_pin_set(options.root, options.pins_file, &import_options)?;
-    let plan = crunch_project::build_pin_import_plan(pin_set, import_options);
+    let pin_set = load_pin_set(options.root, options.pins_file, &plan_options)?;
+    let plan = crunch_project::build_pin_import_plan(pin_set, plan_options);
+    debug_assert_eq!(plan.importer, options.importer);
+    debug_assert_eq!(plan.source_label, options.pins_file.display().to_string());
 
     if options.apply {
         if !plan.can_apply() {
-            emit_pin_import_plan(&plan, false, options.json)?;
+            emit_pin_import_plan(&plan, PinImportDisplay {
+                is_applied: false,
+                is_json: options.json,
+            })?;
             return Err(RunError::Internal(format!(
                 "refusing to apply pin import plan with {} blocker(s)",
                 plan.blockers.len()
             )));
         }
         apply_pin_import_plan(options.root, &plan)?;
-        emit_pin_import_plan(&plan, true, options.json)?;
+        emit_pin_import_plan(&plan, PinImportDisplay {
+            is_applied: true,
+            is_json: options.json,
+        })?;
         return Ok(());
     }
 
-    emit_pin_import_plan(&plan, false, options.json)?;
+    emit_pin_import_plan(&plan, PinImportDisplay {
+        is_applied: false,
+        is_json: options.json,
+    })?;
     if plan.can_apply() {
         return Ok(());
     }
@@ -205,8 +216,10 @@ fn nixtamal_fixture_to_pin_set(
 }
 
 fn nixtamal_input_to_external_pin(input: NixtamalInput) -> crunch_project::ExternalPin {
+    let expected_name = input.name.clone();
+    let expected_hash_algo = input.hash_algo.clone();
     let kind = nixtamal_input_kind(&input);
-    crunch_project::ExternalPin {
+    let pin = crunch_project::ExternalPin {
         name: input.name,
         kind,
         hash: crunch_project::ExternalHash {
@@ -223,7 +236,10 @@ fn nixtamal_input_to_external_pin(input: NixtamalInput) -> crunch_project::Exter
             composition_semantics: input.composition_semantics,
         },
         lock_identity: input.lock_identity,
-    }
+    };
+    debug_assert_eq!(pin.name, expected_name);
+    debug_assert_eq!(pin.hash.algo, expected_hash_algo);
+    pin
 }
 
 fn nixtamal_input_kind(input: &NixtamalInput) -> crunch_project::ExternalPinKind {
@@ -280,6 +296,8 @@ fn apply_pin_import_plan(root: &Path, plan: &crunch_project::PinImportPlan) -> R
             return Err(RunError::Internal(format!("refusing unsafe planned path {}", operation.path)));
         }
     }
+    debug_assert!(plan.can_apply());
+    debug_assert!(plan.file_operations.iter().all(|operation| is_safe_relative_path(&operation.path)));
     for operation in &plan.file_operations {
         let path = root.join(&operation.path);
         if let Some(parent) = path.parent() {
@@ -292,14 +310,22 @@ fn apply_pin_import_plan(root: &Path, plan: &crunch_project::PinImportPlan) -> R
     Ok(())
 }
 
-fn emit_pin_import_plan(plan: &crunch_project::PinImportPlan, applied: bool, json: bool) -> Result<(), RunError> {
-    if json {
+#[derive(Clone, Copy)]
+struct PinImportDisplay {
+    is_applied: bool,
+    is_json: bool,
+}
+
+fn emit_pin_import_plan(plan: &crunch_project::PinImportPlan, display: PinImportDisplay) -> Result<(), RunError> {
+    debug_assert!(!display.is_applied || plan.can_apply());
+    debug_assert!(plan.file_operations.len() <= plan.file_operations.capacity());
+    if display.is_json {
         let rendered = serde_json::to_string_pretty(plan)
             .map_err(|err| RunError::Internal(format!("rendering pin import plan: {err}")))?;
         println!("{rendered}");
         return Ok(());
     }
-    let mode = if applied { "applied" } else { "plan" };
+    let mode = if display.is_applied { "applied" } else { "plan" };
     println!("pin import {mode}: {} ({})", plan.importer, plan.source_label);
     println!("planned files:");
     for operation in &plan.file_operations {
@@ -324,6 +350,14 @@ fn emit_pin_import_plan(plan: &crunch_project::PinImportPlan, applied: bool, jso
         println!("  {non_claim}");
     }
     Ok(())
+}
+
+fn empty_list<T>() -> Vec<T> {
+    Vec::new()
+}
+
+fn absent_value<T>() -> Option<T> {
+    None
 }
 
 fn default_hash_algo() -> String {

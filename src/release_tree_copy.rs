@@ -75,8 +75,10 @@ fn prepare_tree_copy_with_limits(source_dir: &Path, limits: TreeCopyLimits) -> R
         })?;
     let observations = observe_tree_entries(&source_root, limits)?;
     let plan = plan_tree_copy(observations, limits).map_err(tree_plan_error)?;
+    let entries_count_max = usize::try_from(limits.entries_count_max)
+        .map_err(|_| RunError::Internal("tree copy entry limit does not fit usize".to_string()))?;
     assert_eq!(source_root.kind(), ReleaseRootKind::ReleaseTreeSource);
-    assert!(plan.entries.len() <= usize::try_from(limits.entries_count_max).unwrap_or(usize::MAX));
+    assert!(plan.entries.len() <= entries_count_max);
     Ok(PreparedTreeCopy { source_root, plan })
 }
 
@@ -156,7 +158,7 @@ fn copy_capability_file(
     let mut destination = destination_root
         .open_new_file_nofollow(&validated)
         .map_err(|error| tree_io_error("creating no-follow bundle file", &relative, error))?;
-    copy_open_file_bytes(&mut source, &mut destination, &relative)?;
+    copy_open_file_bytes(&mut source, &mut destination, &relative, opened.len())?;
     set_file_mode(&destination, expected_mode, &relative)?;
     assert_eq!(source_root.kind(), ReleaseRootKind::ReleaseTreeSource);
     assert_eq!(destination_root.kind(), ReleaseRootKind::ReleaseEvidence);
@@ -195,7 +197,9 @@ pub(crate) fn hash_file_nofollow(path: &Path) -> Result<(u64, String), RunError>
         return Err(RunError::Internal(format!("expected regular file artifact: {}", path.display())));
     }
     let mut hasher = blake3::Hasher::new();
-    hash_open_file(&mut file, &mut hasher, path.to_string_lossy().as_ref())?;
+    hash_open_file(&mut file, &mut hasher, path.to_string_lossy().as_ref(), metadata.len())?;
+    debug_assert_eq!(parent.kind(), ReleaseRootKind::ReleaseTreeSource);
+    debug_assert!(metadata.is_file());
     Ok((metadata.len(), hasher.finalize().to_hex().to_string()))
 }
 
@@ -224,41 +228,70 @@ fn observe_directory_children(
     observations: &mut Vec<TreeEntryObservation>,
     pending: &mut Vec<PendingDirectory>,
 ) -> Result<(), RunError> {
-    let mut children = collect_sorted_child_names(&directory.dir, &directory.relative_path)?;
+    let mut children = collect_sorted_child_names(&directory.dir, &directory.relative_path, limits.entries_count_max)?;
+    debug_assert!(observations.len() <= observations.capacity());
+    debug_assert!(pending.len() <= pending.capacity());
     children.reverse();
     for child_name in children {
         ensure_observation_capacity(observations.len(), limits.entries_count_max)?;
-        let child_path = join_relative_path(&directory.relative_path, &child_name)?;
+        let child_path = join_relative_path(RelativePathParts {
+            parent: &directory.relative_path,
+            child: &child_name,
+        })?;
         let metadata = directory
             .dir
             .symlink_metadata(&child_name)
             .map_err(|error| tree_io_error("reading no-follow source metadata", &child_path, error))?;
         let kind = metadata_kind(&metadata);
-        let target = read_observed_symlink_target(&directory.dir, &child_name, &child_path, kind)?;
+        let target = read_observed_symlink_target(&directory.dir, SymlinkObservationRequest {
+            child_name: &child_name,
+            child_path: &child_path,
+            kind,
+        })?;
         observations.push(TreeEntryObservation {
             relative_path: child_path.clone(),
             kind,
             mode: metadata_mode(&metadata),
             symlink_target: target,
         });
-        enqueue_child_directory(&directory, child_name, child_path, kind, limits, pending)?;
+        enqueue_child_directory(
+            EnqueueDirectoryRequest {
+                parent: &directory,
+                child_name,
+                child_path,
+                kind,
+                limits,
+            },
+            pending,
+        )?;
     }
     Ok(())
 }
 
-fn collect_sorted_child_names(dir: &Dir, relative_path: &str) -> Result<Vec<String>, RunError> {
-    let mut names = Vec::new();
-    for entry_result in
-        dir.entries().map_err(|error| tree_io_error("reading source directory", relative_path, error))?
-    {
-        let entry =
-            entry_result.map_err(|error| tree_io_error("reading source directory entry", relative_path, error))?;
+fn collect_sorted_child_names(dir: &Dir, relative_path: &str, entries_count_max: u32) -> Result<Vec<String>, RunError> {
+    let entries_count_max_items = usize::try_from(entries_count_max)
+        .map_err(|_| RunError::Internal("tree copy child limit does not fit usize".to_string()))?;
+    let entries = dir
+        .entries()
+        .map_err(|error| tree_io_error("reading source directory", relative_path, error))?
+        .take(entries_count_max_items.saturating_add(1))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| tree_io_error("reading source directory entry", relative_path, error))?;
+    if entries.len() > entries_count_max_items {
+        return Err(RunError::Internal(format!(
+            "tree copy directory exceeds {entries_count_max} children under {relative_path}"
+        )));
+    }
+    let mut names = Vec::with_capacity(entries.len());
+    for entry in entries {
         let name = entry.file_name().into_string().map_err(|_| {
             RunError::Internal(format!("tree copy source entry is not valid UTF-8 under {relative_path}"))
         })?;
         names.push(name);
     }
     names.sort();
+    debug_assert!(names.len() <= entries_count_max_items);
+    debug_assert!(names.capacity() >= names.len());
     Ok(names)
 }
 
@@ -273,62 +306,75 @@ fn ensure_observation_capacity(entries_count: usize, entries_count_max: u32) -> 
     Ok(())
 }
 
-fn join_relative_path(parent: &str, child: &str) -> Result<String, RunError> {
-    if child.is_empty() || child.contains('/') || child.contains('\\') {
-        return Err(RunError::Internal(format!("invalid tree copy child name under {parent}")));
-    }
-    if parent.is_empty() {
-        return Ok(child.to_string());
-    }
-    Ok(format!("{parent}/{child}"))
+struct RelativePathParts<'a> {
+    parent: &'a str,
+    child: &'a str,
 }
 
-fn read_observed_symlink_target(
-    dir: &Dir,
-    child_name: &str,
-    child_path: &str,
+fn join_relative_path(parts: RelativePathParts<'_>) -> Result<String, RunError> {
+    if parts.child.is_empty() || parts.child.contains('/') || parts.child.contains('\\') {
+        return Err(RunError::Internal(format!("invalid tree copy child name under {}", parts.parent)));
+    }
+    if parts.parent.is_empty() {
+        return Ok(parts.child.to_string());
+    }
+    Ok(format!("{}/{}", parts.parent, parts.child))
+}
+
+struct SymlinkObservationRequest<'a> {
+    child_name: &'a str,
+    child_path: &'a str,
     kind: TreeEntryKind,
-) -> Result<Option<String>, RunError> {
-    if kind != TreeEntryKind::Symlink {
+}
+
+fn read_observed_symlink_target(dir: &Dir, request: SymlinkObservationRequest<'_>) -> Result<Option<String>, RunError> {
+    if request.kind != TreeEntryKind::Symlink {
         return Ok(None);
     }
     let target = dir
-        .read_link_contents(child_name)
-        .map_err(|error| tree_io_error("reading source symlink target", child_path, error))?;
-    let target = target
-        .into_os_string()
-        .into_string()
-        .map_err(|_| RunError::Internal(format!("tree copy symlink target is not valid UTF-8: {child_path}")))?;
+        .read_link_contents(request.child_name)
+        .map_err(|error| tree_io_error("reading source symlink target", request.child_path, error))?;
+    let target = target.into_os_string().into_string().map_err(|_| {
+        RunError::Internal(format!("tree copy symlink target is not valid UTF-8: {}", request.child_path))
+    })?;
     Ok(Some(target))
 }
 
-fn enqueue_child_directory(
-    parent: &PendingDirectory,
+struct EnqueueDirectoryRequest<'a> {
+    parent: &'a PendingDirectory,
     child_name: String,
     child_path: String,
     kind: TreeEntryKind,
     limits: TreeCopyLimits,
+}
+
+fn enqueue_child_directory(
+    request: EnqueueDirectoryRequest<'_>,
     pending: &mut Vec<PendingDirectory>,
 ) -> Result<(), RunError> {
-    if kind != TreeEntryKind::Directory {
+    if request.kind != TreeEntryKind::Directory {
         return Ok(());
     }
-    let depth_count = parent
+    let depth_count = request
+        .parent
         .depth_count
         .checked_add(1)
         .ok_or_else(|| RunError::Internal("tree copy discovery depth overflowed u32".to_string()))?;
-    if depth_count > limits.depth_count_max {
+    if depth_count > request.limits.depth_count_max {
         return Ok(());
     }
-    let dir = parent
+    let dir = request
+        .parent
         .dir
-        .open_dir_nofollow(&child_name)
-        .map_err(|error| tree_io_error("opening no-follow source directory", &child_path, error))?;
+        .open_dir_nofollow(&request.child_name)
+        .map_err(|error| tree_io_error("opening no-follow source directory", &request.child_path, error))?;
     pending.push(PendingDirectory {
-        relative_path: child_path,
+        relative_path: request.child_path,
         dir,
         depth_count,
     });
+    debug_assert!(depth_count > request.parent.depth_count);
+    debug_assert!(depth_count <= request.limits.depth_count_max);
     Ok(())
 }
 
@@ -393,7 +439,11 @@ fn execute_tree_copy_operation(
             target,
         } => {
             revalidate_source_path(&prepared.source_root, relative_path, TreeEntryKind::Symlink, *mode, Some(target))?;
-            create_destination_symlink(destination_root, relative_path, target)
+            create_destination_symlink(DestinationSymlink {
+                destination_root,
+                relative_path,
+                target,
+            })
         }
     }
 }
@@ -405,20 +455,23 @@ fn revalidate_source_path(
     expected_mode: u32,
     expected_target: Option<&String>,
 ) -> Result<(), RunError> {
-    let (parent, name) = open_parent_directory_nofollow(source_root.dir(), relative_path, "source")?;
+    let (parent, name) = open_parent_directory_nofollow(source_root.dir(), relative_path, TreePathRole::Source)?;
     let metadata = parent
         .symlink_metadata(&name)
         .map_err(|error| tree_io_error("revalidating source entry", relative_path, error))?;
     validate_source_metadata(relative_path, &metadata, expected_kind, expected_mode)?;
     if expected_kind == TreeEntryKind::Symlink {
         let actual_target = read_symlink_target(&parent, &name, relative_path)?;
-        let expected_target = expected_target.expect("planned symlink target");
+        let expected_target = expected_target
+            .ok_or_else(|| RunError::Internal(format!("planned symlink target missing for {relative_path}")))?;
         if &actual_target != expected_target {
             return Err(RunError::Internal(format!(
                 "tree copy source target drift for {relative_path}: expected {expected_target}, found {actual_target}"
             )));
         }
     }
+    debug_assert_eq!(metadata_kind(&metadata), expected_kind);
+    debug_assert_eq!(metadata_mode(&metadata), expected_mode);
     Ok(())
 }
 
@@ -444,7 +497,8 @@ fn validate_source_metadata(
 }
 
 fn create_destination_directory(destination_root: &ReleaseCapabilityRoot, relative_path: &str) -> Result<(), RunError> {
-    let (parent, name) = open_parent_directory_nofollow(destination_root.dir(), relative_path, "destination")?;
+    let (parent, name) =
+        open_parent_directory_nofollow(destination_root.dir(), relative_path, TreePathRole::Destination)?;
     require_destination_entry_absent(&parent, &name, relative_path)?;
     parent
         .create_dir(&name)
@@ -461,7 +515,8 @@ fn copy_regular_file(
     relative_path: &str,
     expected_mode: u32,
 ) -> Result<(), RunError> {
-    let (source_parent, source_name) = open_parent_directory_nofollow(source_root.dir(), relative_path, "source")?;
+    let (source_parent, source_name) =
+        open_parent_directory_nofollow(source_root.dir(), relative_path, TreePathRole::Source)?;
     let observed_metadata = source_parent
         .symlink_metadata(&source_name)
         .map_err(|error| tree_io_error("revalidating source file", relative_path, error))?;
@@ -475,24 +530,32 @@ fn copy_regular_file(
     validate_source_metadata(relative_path, &source_metadata, TreeEntryKind::File, expected_mode)?;
 
     let (destination_parent, destination_name) =
-        open_parent_directory_nofollow(destination_root.dir(), relative_path, "destination")?;
+        open_parent_directory_nofollow(destination_root.dir(), relative_path, TreePathRole::Destination)?;
     require_destination_entry_absent(&destination_parent, &destination_name, relative_path)?;
     let mut destination = open_file_nofollow(&destination_parent, &destination_name, true, expected_mode)
         .map_err(|error| tree_io_error("creating no-follow destination file", relative_path, error))?;
-    copy_open_file_bytes(&mut source, &mut destination, relative_path)?;
+    copy_open_file_bytes(&mut source, &mut destination, relative_path, source_metadata.len())?;
     set_file_mode(&destination, expected_mode, relative_path)?;
+    debug_assert!(source_metadata.is_file());
+    debug_assert_eq!(metadata_mode(&source_metadata), expected_mode);
     Ok(())
 }
 
-fn create_destination_symlink(
-    destination_root: &ReleaseCapabilityRoot,
-    relative_path: &str,
-    target: &str,
-) -> Result<(), RunError> {
-    let (parent, name) = open_parent_directory_nofollow(destination_root.dir(), relative_path, "destination")?;
-    require_destination_entry_absent(&parent, &name, relative_path)?;
-    DirExt::symlink(&parent, target, &name)
-        .map_err(|error| tree_io_error("creating destination symlink", relative_path, error))
+struct DestinationSymlink<'a> {
+    destination_root: &'a ReleaseCapabilityRoot,
+    relative_path: &'a str,
+    target: &'a str,
+}
+
+fn create_destination_symlink(request: DestinationSymlink<'_>) -> Result<(), RunError> {
+    let (parent, name) = open_parent_directory_nofollow(
+        request.destination_root.dir(),
+        request.relative_path,
+        TreePathRole::Destination,
+    )?;
+    require_destination_entry_absent(&parent, &name, request.relative_path)?;
+    DirExt::symlink(&parent, request.target, &name)
+        .map_err(|error| tree_io_error("creating destination symlink", request.relative_path, error))
 }
 
 fn require_destination_entry_absent(parent: &Dir, name: &OsString, relative_path: &str) -> Result<(), RunError> {
@@ -521,6 +584,8 @@ fn finalize_directory_modes(
             .cmp(&relative_depth_count(&left.relative_path))
             .then_with(|| right.relative_path.cmp(&left.relative_path))
     });
+    debug_assert!(directories.len() <= prepared.plan.entries.len());
+    debug_assert!(directories.iter().all(|entry| entry.kind == TreeEntryKind::Directory));
     for entry in directories {
         revalidate_source_path(
             &prepared.source_root,
@@ -529,13 +594,34 @@ fn finalize_directory_modes(
             entry.mode,
             None,
         )?;
-        let dir = open_directory_relative_nofollow(destination_root.dir(), &entry.relative_path, "destination")?;
+        let dir =
+            open_directory_relative_nofollow(destination_root.dir(), &entry.relative_path, TreePathRole::Destination)?;
         set_directory_mode(&dir, entry.mode, &entry.relative_path)?;
     }
     Ok(())
 }
 
-fn open_parent_directory_nofollow(root: &Dir, relative_path: &str, label: &str) -> Result<(Dir, OsString), RunError> {
+#[derive(Clone, Copy)]
+enum TreePathRole {
+    Source,
+    Destination,
+}
+
+impl TreePathRole {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Source => "source",
+            Self::Destination => "destination",
+        }
+    }
+}
+
+fn open_parent_directory_nofollow(
+    root: &Dir,
+    relative_path: &str,
+    role: TreePathRole,
+) -> Result<(Dir, OsString), RunError> {
+    let label = role.as_str();
     ValidatedReleasePath::new(relative_path).map_err(|error| {
         RunError::Internal(format!("invalid planned tree copy {label} path {relative_path}: {error:?}"))
     })?;
@@ -554,8 +640,9 @@ fn open_parent_directory_nofollow(root: &Dir, relative_path: &str, label: &str) 
     Ok((current, OsString::from(name)))
 }
 
-fn open_directory_relative_nofollow(root: &Dir, relative_path: &str, label: &str) -> Result<Dir, RunError> {
-    let (parent, name) = open_parent_directory_nofollow(root, relative_path, label)?;
+fn open_directory_relative_nofollow(root: &Dir, relative_path: &str, role: TreePathRole) -> Result<Dir, RunError> {
+    let label = role.as_str();
+    let (parent, name) = open_parent_directory_nofollow(root, relative_path, role)?;
     parent
         .open_dir_nofollow(name)
         .map_err(|error| tree_io_error(&format!("opening no-follow {label} directory"), relative_path, error))
@@ -582,15 +669,30 @@ fn copy_open_file_bytes(
     source: &mut cap_std::fs::File,
     destination: &mut cap_std::fs::File,
     relative_path: &str,
+    expected_bytes: u64,
 ) -> Result<u64, RunError> {
     let mut buffer = [0_u8; TREE_COPY_BUFFER_BYTES];
+    let buffer_bytes = u64::try_from(TREE_COPY_BUFFER_BYTES)
+        .map_err(|_| RunError::Internal("tree copy buffer size overflowed u64".to_string()))?;
     let mut copied_bytes = 0_u64;
-    loop {
+    while copied_bytes < expected_bytes {
+        let remaining_bytes = expected_bytes
+            .checked_sub(copied_bytes)
+            .ok_or_else(|| RunError::Internal(format!("tree copy remaining bytes underflowed for {relative_path}")))?;
+        let read_capacity_bytes = if remaining_bytes >= buffer_bytes {
+            TREE_COPY_BUFFER_BYTES
+        } else {
+            usize::try_from(remaining_bytes).map_err(|_| {
+                RunError::Internal(format!("tree copy remaining bytes overflowed usize for {relative_path}"))
+            })?
+        };
         let read_count = source
-            .read(&mut buffer)
+            .read(&mut buffer[..read_capacity_bytes])
             .map_err(|error| tree_io_error("reading source file", relative_path, error))?;
         if read_count == 0 {
-            break;
+            return Err(RunError::Internal(format!(
+                "tree copy source size drift for {relative_path}: expected {expected_bytes}, read {copied_bytes}"
+            )));
         }
         destination
             .write_all(&buffer[..read_count])
@@ -602,9 +704,17 @@ fn copy_open_file_bytes(
                 })?)
                 .ok_or_else(|| RunError::Internal(format!("tree copy byte count overflowed for {relative_path}")))?;
     }
+    let extra_count = source
+        .read(&mut buffer[..1])
+        .map_err(|error| tree_io_error("checking source file growth", relative_path, error))?;
+    if extra_count != 0 {
+        return Err(RunError::Internal(format!("tree copy source grew while reading {relative_path}")));
+    }
     destination
         .flush()
         .map_err(|error| tree_io_error("flushing destination file", relative_path, error))?;
+    debug_assert_eq!(copied_bytes, expected_bytes);
+    debug_assert_eq!(extra_count, 0);
     Ok(copied_bytes)
 }
 
@@ -627,7 +737,9 @@ fn hash_prepared_tree_entry(
     entry: &TreeEntryObservation,
     hasher: &mut blake3::Hasher,
 ) -> Result<u64, RunError> {
-    update_entry_identity_hash(hasher, entry);
+    update_entry_identity_hash(hasher, entry)?;
+    debug_assert!(!entry.relative_path.is_empty());
+    debug_assert_ne!(entry.kind, TreeEntryKind::Unsupported);
     match entry.kind {
         TreeEntryKind::Directory => {
             revalidate_source_path(
@@ -648,11 +760,14 @@ fn hash_prepared_tree_entry(
     }
 }
 
-fn update_entry_identity_hash(hasher: &mut blake3::Hasher, entry: &TreeEntryObservation) {
+fn update_entry_identity_hash(hasher: &mut blake3::Hasher, entry: &TreeEntryObservation) -> Result<(), RunError> {
     let relative_bytes = entry.relative_path.as_bytes();
-    hasher.update(&u64::try_from(relative_bytes.len()).unwrap_or(u64::MAX).to_le_bytes());
+    let relative_len_bytes = u64::try_from(relative_bytes.len())
+        .map_err(|_| RunError::Internal("tree entry relative path length overflowed u64".to_string()))?;
+    hasher.update(&relative_len_bytes.to_le_bytes());
     hasher.update(relative_bytes);
     hasher.update(&entry.mode.to_le_bytes());
+    Ok(())
 }
 
 fn hash_prepared_file_entry(
@@ -660,7 +775,8 @@ fn hash_prepared_file_entry(
     entry: &TreeEntryObservation,
     hasher: &mut blake3::Hasher,
 ) -> Result<u64, RunError> {
-    let (parent, name) = open_parent_directory_nofollow(prepared.source_root.dir(), &entry.relative_path, "source")?;
+    let (parent, name) =
+        open_parent_directory_nofollow(prepared.source_root.dir(), &entry.relative_path, TreePathRole::Source)?;
     let mut file = open_file_nofollow(&parent, name, false, 0)
         .map_err(|error| tree_io_error("opening no-follow tree hash file", &entry.relative_path, error))?;
     let metadata = file
@@ -669,7 +785,9 @@ fn hash_prepared_file_entry(
     validate_source_metadata(&entry.relative_path, &metadata, TreeEntryKind::File, entry.mode)?;
     hasher.update(b"file\0");
     hasher.update(&metadata.len().to_le_bytes());
-    hash_open_file(&mut file, hasher, &entry.relative_path)?;
+    hash_open_file(&mut file, hasher, &entry.relative_path, metadata.len())?;
+    debug_assert!(metadata.is_file());
+    debug_assert_eq!(metadata_mode(&metadata), entry.mode);
     Ok(metadata.len())
 }
 
@@ -678,7 +796,10 @@ fn hash_prepared_symlink_entry(
     entry: &TreeEntryObservation,
     hasher: &mut blake3::Hasher,
 ) -> Result<u64, RunError> {
-    let target = entry.symlink_target.as_ref().expect("planned symlink target");
+    let target = entry
+        .symlink_target
+        .as_ref()
+        .ok_or_else(|| RunError::Internal(format!("planned symlink target missing for {}", entry.relative_path)))?;
     revalidate_source_path(
         &prepared.source_root,
         &entry.relative_path,
@@ -687,22 +808,60 @@ fn hash_prepared_symlink_entry(
         Some(target),
     )?;
     let target_bytes = target.as_bytes();
+    debug_assert!(!entry.relative_path.is_empty());
+    debug_assert!(!target_bytes.is_empty());
     hasher.update(b"symlink\0");
-    hasher.update(&u64::try_from(target_bytes.len()).unwrap_or(u64::MAX).to_le_bytes());
+    let target_len_bytes = u64::try_from(target_bytes.len())
+        .map_err(|_| RunError::Internal("tree symlink target length overflowed u64".to_string()))?;
+    hasher.update(&target_len_bytes.to_le_bytes());
     hasher.update(target_bytes);
     Ok(0)
 }
 
-fn hash_open_file(file: &mut cap_std::fs::File, hasher: &mut blake3::Hasher, label: &str) -> Result<(), RunError> {
+fn hash_open_file(
+    file: &mut cap_std::fs::File,
+    hasher: &mut blake3::Hasher,
+    label: &str,
+    expected_bytes: u64,
+) -> Result<(), RunError> {
     let mut buffer = [0_u8; TREE_COPY_BUFFER_BYTES];
-    loop {
-        let bytes_read =
-            file.read(&mut buffer).map_err(|error| RunError::Internal(format!("reading {label}: {error}")))?;
+    let buffer_bytes = u64::try_from(TREE_COPY_BUFFER_BYTES)
+        .map_err(|_| RunError::Internal("tree hash buffer size overflowed u64".to_string()))?;
+    let mut hashed_bytes = 0_u64;
+    while hashed_bytes < expected_bytes {
+        let remaining_bytes = expected_bytes
+            .checked_sub(hashed_bytes)
+            .ok_or_else(|| RunError::Internal(format!("hash remaining bytes underflowed for {label}")))?;
+        let read_capacity_bytes = if remaining_bytes >= buffer_bytes {
+            TREE_COPY_BUFFER_BYTES
+        } else {
+            usize::try_from(remaining_bytes)
+                .map_err(|_| RunError::Internal(format!("hash remaining bytes overflowed usize for {label}")))?
+        };
+        let bytes_read = file
+            .read(&mut buffer[..read_capacity_bytes])
+            .map_err(|error| RunError::Internal(format!("reading {label}: {error}")))?;
         if bytes_read == 0 {
-            break;
+            return Err(RunError::Internal(format!(
+                "tree hash source size drift for {label}: expected {expected_bytes}, read {hashed_bytes}"
+            )));
         }
         hasher.update(&buffer[..bytes_read]);
+        hashed_bytes = hashed_bytes
+            .checked_add(
+                u64::try_from(bytes_read)
+                    .map_err(|_| RunError::Internal(format!("tree hash byte count overflowed u64 for {label}")))?,
+            )
+            .ok_or_else(|| RunError::Internal(format!("tree hash byte count overflowed for {label}")))?;
     }
+    let extra_count = file
+        .read(&mut buffer[..1])
+        .map_err(|error| RunError::Internal(format!("checking source file growth for {label}: {error}")))?;
+    if extra_count != 0 {
+        return Err(RunError::Internal(format!("tree hash source grew while reading {label}")));
+    }
+    debug_assert_eq!(hashed_bytes, expected_bytes);
+    debug_assert_eq!(extra_count, 0);
     Ok(())
 }
 
@@ -739,8 +898,13 @@ fn metadata_mode(_metadata: &Metadata) -> u32 {
 }
 
 fn relative_depth_count(path: &str) -> u32 {
-    let separator_count = path.bytes().filter(|byte| *byte == b'/').count();
-    u32::try_from(separator_count).unwrap_or(u32::MAX).saturating_add(1)
+    path.bytes().fold(1_u32, |depth_count, byte| {
+        if byte == b'/' {
+            depth_count.saturating_add(1)
+        } else {
+            depth_count
+        }
+    })
 }
 
 #[cfg(unix)]
@@ -785,8 +949,8 @@ fn set_directory_mode(_dir: &Dir, _mode: u32, _relative_path: &str) -> Result<()
     Ok(())
 }
 
-fn tree_io_error(action: &str, relative_path: &str, error: std::io::Error) -> RunError {
-    RunError::Internal(format!("{action} {relative_path}: {error}"))
+fn tree_io_error(action: impl AsRef<str>, relative_path: &str, error: std::io::Error) -> RunError {
+    RunError::Internal(format!("{} {relative_path}: {error}", action.as_ref()))
 }
 
 #[cfg(test)]

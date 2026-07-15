@@ -350,9 +350,9 @@ pub fn render_build_json_report_with_frontend_artifact_attestations(
     diagnostic_persistence_failures: &[DiagnosticPersistenceFailure],
     frontend_artifact_attestations: &[FrontendArtifactAdmissionAttestation],
 ) -> Result<String, serde_json::Error> {
-    let report =
+    let build_document =
         build_json_report(config, result, logs_dir, diagnostic_persistence_failures, frontend_artifact_attestations);
-    serde_json::to_string_pretty(&report)
+    serde_json::to_string_pretty(&build_document)
 }
 
 fn build_json_report(
@@ -363,12 +363,12 @@ fn build_json_report(
     frontend_artifact_attestations: &[FrontendArtifactAdmissionAttestation],
 ) -> BuildJsonReport {
     debug_assert_eq!(config.hermeticity_mode, result.hermeticity_mode, "config/result hermeticity modes must match");
-    let outcome_reports = build_outcome_reports(config, result, logs_dir);
+    let outcome_rows = build_outcome_reports(config, result, logs_dir);
     let (ast_grep_structural_evidence, ast_grep_structural_evidence_diagnostics) =
-        build_ast_grep_structural_evidence_reports(&outcome_reports);
-    let (cargo_build_evidence, cargo_build_evidence_diagnostics) = build_cargo_build_evidence_reports(&outcome_reports);
-    let failure_reports = build_failure_envelopes(result, &config.store_dir, logs_dir);
-    let counts = build_counts(&outcome_reports, &failure_reports);
+        build_ast_grep_structural_evidence_reports(&outcome_rows);
+    let (cargo_build_evidence, cargo_build_evidence_diagnostics) = build_cargo_build_evidence_reports(&outcome_rows);
+    let failure_rows = build_failure_envelopes(result, &config.store_dir, logs_dir);
+    let counts = build_counts(&outcome_rows, &failure_rows);
     let hermeticity_audit_events = result
         .hermeticity_audit_events
         .iter()
@@ -386,10 +386,10 @@ fn build_json_report(
             actual_sri: mismatch.actual_sri.clone(),
         })
         .collect();
-    let build_environment_reports = build_environment_reports(result);
-    let network_policy_reports = build_network_policy_reports(result);
-    let workspace_reports = result.workspace_reports.clone();
-    let action_result_reports = result.action_result_reports.clone();
+    let build_environment_rows = build_environment_reports(result);
+    let network_policy_rows = build_network_policy_reports(result);
+    let workspace_rows = result.workspace_reports.clone();
+    let action_result_rows = result.action_result_reports.clone();
     let native_dynamic_plans = build_native_dynamic_plan_reports(result, &config.store_dir);
     let scheduler_priority_decisions = result.priority_decisions.clone();
     let remote_telemetry_events = result
@@ -407,10 +407,10 @@ fn build_json_report(
         scheduler_policy: config.scheduling_policy.clone(),
         hermeticity_mode: result.hermeticity_mode.as_str().to_string(),
         hermeticity_audit_events,
-        build_environment_reports,
-        network_policy_reports,
-        workspace_reports,
-        action_result_reports,
+        build_environment_reports: build_environment_rows,
+        network_policy_reports: network_policy_rows,
+        workspace_reports: workspace_rows,
+        action_result_reports: action_result_rows,
         native_dynamic_plans,
         scheduler_priority_decisions,
         remote_telemetry_events,
@@ -422,8 +422,8 @@ fn build_json_report(
         cargo_build_evidence_diagnostics,
         diagnostic_persistence_failures: diagnostic_persistence_failures.to_vec(),
         counts,
-        outcomes: outcome_reports,
-        failed: failure_reports,
+        outcomes: outcome_rows,
+        failed: failure_rows,
         fod_mismatches,
     }
 }
@@ -554,7 +554,7 @@ fn build_counts(outcomes: &[BuildJsonOutcome], failed: &[BuildFailureEnvelope]) 
 
 fn build_outcome_reports(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) -> Vec<BuildJsonOutcome> {
     let output_dir_str = config.output_dir.to_str().unwrap_or(&config.store_dir);
-    let mut reports: Vec<BuildJsonOutcome> = result
+    let mut outcome_rows: Vec<BuildJsonOutcome> = result
         .outcomes
         .iter()
         .map(|outcome| {
@@ -598,27 +598,33 @@ fn build_outcome_reports(config: &BuildConfig, result: &PipelineResult, logs_dir
             }
         })
         .collect();
-    reports.sort_by(|left, right| left.label.cmp(&right.label).then(left.drv_key.cmp(&right.drv_key)));
-    reports
+    outcome_rows.sort_by(|left, right| left.label.cmp(&right.label).then(left.drv_key.cmp(&right.drv_key)));
+    debug_assert_eq!(outcome_rows.len(), result.outcomes.len());
+    debug_assert!(outcome_rows.capacity() >= outcome_rows.len());
+    outcome_rows
 }
 
 fn build_ast_grep_structural_evidence_reports(
     outcomes: &[BuildJsonOutcome],
 ) -> (Vec<BuildJsonAstGrepStructuralEvidence>, Vec<BuildJsonAstGrepStructuralEvidenceDiagnostic>) {
-    let mut reports = Vec::new();
-    let mut diagnostics = Vec::new();
+    let output_count_max = outcomes.iter().map(|outcome| outcome.outputs.len()).fold(0_usize, usize::saturating_add);
+    let mut evidence_rows = Vec::with_capacity(output_count_max);
+    let mut diagnostics = Vec::with_capacity(output_count_max);
     for outcome in outcomes {
         for output in &outcome.outputs {
             match ast_grep_structural_evidence_for_output(outcome, output) {
                 AstGrepStructuralEvidenceOutcome::Absent => {}
-                AstGrepStructuralEvidenceOutcome::Valid(report) => reports.push(report),
+                AstGrepStructuralEvidenceOutcome::Valid(report) => evidence_rows.push(report),
                 AstGrepStructuralEvidenceOutcome::Invalid(diagnostic) => diagnostics.push(diagnostic),
             }
         }
     }
-    reports.sort_by(|left, right| left.label.cmp(&right.label).then(left.output_name.cmp(&right.output_name)));
+    evidence_rows.sort_by(|left, right| left.label.cmp(&right.label).then(left.output_name.cmp(&right.output_name)));
     diagnostics.sort_by(|left, right| left.label.cmp(&right.label).then(left.output_name.cmp(&right.output_name)));
-    (reports, diagnostics)
+    debug_assert!(evidence_rows.len().saturating_add(diagnostics.len()) <= output_count_max);
+    debug_assert!(evidence_rows.capacity() >= evidence_rows.len());
+    debug_assert!(diagnostics.capacity() >= diagnostics.len());
+    (evidence_rows, diagnostics)
 }
 
 fn ast_grep_structural_evidence_for_output(
@@ -626,6 +632,8 @@ fn ast_grep_structural_evidence_for_output(
     output: &BuildJsonOutput,
 ) -> AstGrepStructuralEvidenceOutcome {
     let evidence_path = Path::new(&output.path).join(AST_GREP_EVIDENCE_RELATIVE_PATH);
+    debug_assert!(!outcome.label.is_empty());
+    debug_assert!(!output.name.is_empty());
     match read_ast_grep_evidence(&evidence_path) {
         AstGrepEvidenceRead::Missing => AstGrepStructuralEvidenceOutcome::Absent,
         AstGrepEvidenceRead::Valid(loaded) => {
@@ -654,24 +662,30 @@ fn ast_grep_structural_evidence_for_output(
 fn build_cargo_build_evidence_reports(
     outcomes: &[BuildJsonOutcome],
 ) -> (Vec<BuildJsonCargoBuildEvidence>, Vec<BuildJsonCargoBuildEvidenceDiagnostic>) {
-    let mut reports = Vec::new();
-    let mut diagnostics = Vec::new();
+    let output_count_max = outcomes.iter().map(|outcome| outcome.outputs.len()).fold(0_usize, usize::saturating_add);
+    let mut evidence_rows = Vec::with_capacity(output_count_max);
+    let mut diagnostics = Vec::with_capacity(output_count_max);
     for outcome in outcomes {
         for output in &outcome.outputs {
             match cargo_build_evidence_for_output(outcome, output) {
                 CargoBuildEvidenceOutcome::Absent => {}
-                CargoBuildEvidenceOutcome::Valid(report) => reports.push(report),
+                CargoBuildEvidenceOutcome::Valid(report) => evidence_rows.push(report),
                 CargoBuildEvidenceOutcome::Invalid(diagnostic) => diagnostics.push(diagnostic),
             }
         }
     }
-    reports.sort_by(|left, right| left.label.cmp(&right.label).then(left.output_name.cmp(&right.output_name)));
+    evidence_rows.sort_by(|left, right| left.label.cmp(&right.label).then(left.output_name.cmp(&right.output_name)));
     diagnostics.sort_by(|left, right| left.label.cmp(&right.label).then(left.output_name.cmp(&right.output_name)));
-    (reports, diagnostics)
+    debug_assert!(evidence_rows.len().saturating_add(diagnostics.len()) <= output_count_max);
+    debug_assert!(evidence_rows.capacity() >= evidence_rows.len());
+    debug_assert!(diagnostics.capacity() >= diagnostics.len());
+    (evidence_rows, diagnostics)
 }
 
 fn cargo_build_evidence_for_output(outcome: &BuildJsonOutcome, output: &BuildJsonOutput) -> CargoBuildEvidenceOutcome {
     let evidence_path = Path::new(&output.path).join(crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_RELATIVE_PATH);
+    debug_assert!(!outcome.label.is_empty());
+    debug_assert!(!output.name.is_empty());
     match read_offline_cargo_evidence(&evidence_path) {
         OfflineCargoEvidenceRead::Missing => CargoBuildEvidenceOutcome::Absent,
         OfflineCargoEvidenceRead::Valid(evidence) => CargoBuildEvidenceOutcome::Valid(BuildJsonCargoBuildEvidence {
@@ -711,6 +725,8 @@ fn read_offline_cargo_evidence(path: &Path) -> OfflineCargoEvidenceRead {
     if !path.is_file() {
         return OfflineCargoEvidenceRead::Missing;
     }
+    debug_assert!(path.is_file());
+    debug_assert!(!path.as_os_str().is_empty());
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(error) => {
@@ -754,6 +770,8 @@ fn read_legacy_offline_cargo_evidence(value: serde_json::Value) -> OfflineCargoE
     if !blockers.is_empty() {
         return blockers_to_invalid(blockers);
     }
+    debug_assert!(blockers.is_empty());
+    debug_assert_eq!(evidence.schema, crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA_V1);
     OfflineCargoEvidenceRead::Valid(OfflineCargoEvidenceReport {
         claim_class: evidence.claim_class,
         project_build_status: evidence.project_build_status,
@@ -790,6 +808,8 @@ fn read_digest_bound_offline_cargo_evidence(value: serde_json::Value) -> Offline
     if !blockers.is_empty() {
         return blockers_to_invalid(blockers);
     }
+    debug_assert!(blockers.is_empty());
+    debug_assert_eq!(evidence.schema, crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA_V2);
     OfflineCargoEvidenceRead::Valid(OfflineCargoEvidenceReport {
         claim_class: evidence.claim_class,
         project_build_status: evidence.project_build_status,
@@ -948,7 +968,7 @@ fn success_log_file(logs_dir: &Path, outcome: &crunch_build::BuildOutcome) -> Op
 }
 
 fn count_as_u32(count: usize) -> u32 {
-    assert!(count <= u32::MAX as usize, "count must fit in u32");
+    assert!(u32::try_from(count).is_ok(), "count must fit in u32");
     count as u32
 }
 

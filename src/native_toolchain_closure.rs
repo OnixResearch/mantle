@@ -50,6 +50,10 @@ const DIRECTORY_ENTRY_KIND_SYMLINK: &str = "symlink";
 const DIRECTORY_ENTRY_KIND_OTHER: &str = "other";
 const DIRECTORY_DIGEST_CONTEXT: &str = "mantle-native-toolchain-directory-digest-v1";
 const DIRECTORY_ENTRY_LIMIT: usize = 1_000_000;
+const DIRECTORY_DIGEST_INITIAL_CAPACITY: usize = 4_096;
+const MAX_GCC_RUNTIME_VERSION_DIRS: usize = 1_024;
+const ADVERTISED_TRIPLE_CAPACITY: usize = 3;
+const NATIVE_CLOSURE_MEMBER_CAPACITY: usize = 17;
 
 pub(crate) struct NativeToolchainClosureOptions<'a> {
     pub(crate) rust_source_provider: &'a Path,
@@ -88,28 +92,36 @@ struct NativeRootIdentity {
 
 #[derive(Debug, Deserialize)]
 struct ProviderMetadataSummary {
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     schema: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     provider_id: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     target: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     host_triple: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     target_triple: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     source_built: Option<bool>,
-    #[serde(default)]
+    #[serde(default = "empty_list")]
     capabilities: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     provenance: Option<ProviderMetadataProvenance>,
 }
 
 #[derive(Debug, Deserialize)]
 struct ProviderMetadataProvenance {
-    #[serde(default)]
+    #[serde(default = "absent_value")]
     source_built: Option<bool>,
+}
+
+fn absent_value<T>() -> Option<T> {
+    None
+}
+
+fn empty_list<T>() -> Vec<T> {
+    Vec::new()
 }
 
 pub(crate) fn cmd_materialize_native_toolchain_closure(
@@ -131,14 +143,14 @@ pub(crate) fn cmd_materialize_native_toolchain_closure(
         NativeRootRole::Target,
         &rust_identity.target_triple,
     )?;
-    let candidates = collect_native_closure_candidates(
-        options.rust_source_provider,
-        options.host_root,
-        options.target_root,
-        &rust_identity.identity,
-        &host_identity,
-        &target_identity,
-    )?;
+    let candidates = collect_native_closure_candidates(NativeClosureRoots {
+        rust_provider: options.rust_source_provider,
+        host_root: options.host_root,
+        target_root: options.target_root,
+        rust_identity: &rust_identity.identity,
+        host_identity: &host_identity,
+        target_identity: &target_identity,
+    })?;
     let materialized = crate::source_toolchain_closure::materialize_source_built_native_closure(&candidates)
         .map_err(|err| RunError::Build(format!("source-built native toolchain closure blocked: {}", err.message())))?;
     if !materialized.manifest.seed_exceptions.is_empty() {
@@ -147,6 +159,8 @@ pub(crate) fn cmd_materialize_native_toolchain_closure(
     if materialized.validation.seed_exception_count != 0 {
         return Err(RunError::Internal("native materializer validation counted seed exceptions".to_string()));
     }
+    debug_assert!(materialized.manifest.seed_exceptions.is_empty());
+    debug_assert_eq!(materialized.validation.seed_exception_count, 0);
     if let Some(parent) = options.output.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| RunError::Internal(format!("creating {}: {err}", parent.display())))?;
@@ -170,6 +184,8 @@ fn rust_provider_identity(provider_root: &Path) -> Result<RustProviderIdentity, 
             ))
         })?;
     let digest = validation.validation.policy_digest_blake3;
+    debug_assert!(!validation.metadata.host_triple.is_empty());
+    debug_assert!(!validation.metadata.target_triple.is_empty());
     Ok(RustProviderIdentity {
         identity: ProviderIdentity {
             source: ToolchainSourceIdentity {
@@ -211,6 +227,8 @@ fn native_root_identity(
         ))
     })?;
     let digest = blake3::hash(&bytes).to_hex().to_string();
+    debug_assert!(metadata_path.starts_with(root));
+    debug_assert_eq!(digest.len(), blake3::OUT_LEN.saturating_mul(2));
     Ok(NativeRootIdentity {
         identity: ProviderIdentity {
             source: ToolchainSourceIdentity {
@@ -329,7 +347,7 @@ fn metadata_triple_matches(metadata: &ProviderMetadataSummary, role: NativeRootR
 }
 
 fn advertised_triples(metadata: &ProviderMetadataSummary) -> Vec<String> {
-    let mut triples = Vec::new();
+    let mut triples = Vec::with_capacity(ADVERTISED_TRIPLE_CAPACITY);
     for candidate in [&metadata.host_triple, &metadata.target_triple, &metadata.target] {
         if let Some(triple) = candidate.as_deref()
             && !triple.trim().is_empty()
@@ -348,7 +366,8 @@ fn triple_matches_role(candidate: &str, role: NativeRootRole, expected_triple: &
     }
 }
 
-fn target_matches_expected(candidate: &str, expected_triple: &str) -> bool {
+fn target_matches_expected(candidate: impl AsRef<str>, expected_triple: &str) -> bool {
+    let candidate = candidate.as_ref();
     accepted_target_triples(expected_triple).into_iter().any(|accepted| candidate == accepted)
 }
 
@@ -415,12 +434,20 @@ fn source_root_gcc_runtime_archive(root: &Path, archive_name: &str) -> Result<Pa
     }
     let gcc_root = root.join(SOURCE_ROOT_GCC_LIB_DIR).join(TARGET_TRIPLE);
     let entries = fs::read_dir(&gcc_root)
-        .map_err(|err| RunError::Build(format!("read source-root GCC runtime dir {}: {err}", gcc_root.display())))?;
-    let mut candidates = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|err| {
+        .map_err(|err| RunError::Build(format!("read source-root GCC runtime dir {}: {err}", gcc_root.display())))?
+        .take(MAX_GCC_RUNTIME_VERSION_DIRS.saturating_add(1))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| {
             RunError::Build(format!("read source-root GCC runtime entry under {}: {err}", gcc_root.display()))
         })?;
+    if entries.len() > MAX_GCC_RUNTIME_VERSION_DIRS {
+        return Err(RunError::Build(format!(
+            "source-root GCC runtime dir exceeds {MAX_GCC_RUNTIME_VERSION_DIRS} entries under {}",
+            gcc_root.display()
+        )));
+    }
+    let mut candidates = Vec::with_capacity(entries.len());
+    for entry in entries {
         let file_type = entry.file_type().map_err(|err| {
             RunError::Build(format!("stat source-root GCC runtime entry {}: {err}", entry.path().display()))
         })?;
@@ -433,6 +460,8 @@ fn source_root_gcc_runtime_archive(root: &Path, archive_name: &str) -> Result<Pa
         }
     }
     candidates.sort();
+    debug_assert!(!archive_name.is_empty());
+    debug_assert!(candidates.len() <= MAX_GCC_RUNTIME_VERSION_DIRS);
     match candidates.as_slice() {
         [candidate] => Ok(candidate.clone()),
         [] => Err(RunError::Build(format!(
@@ -455,161 +484,164 @@ fn target_libunwind_path(root: &Path, layout: NativeRootLayout) -> Result<PathBu
     }
 }
 
-fn collect_native_closure_candidates(
-    rust_provider: &Path,
-    host_root: &Path,
-    target_root: &Path,
-    rust_identity: &ProviderIdentity,
-    host_identity: &NativeRootIdentity,
-    target_identity: &NativeRootIdentity,
-) -> Result<Vec<NativeClosureCandidateMember>, RunError> {
-    let mut missing = Vec::new();
-    let mut candidates = Vec::new();
-    push_candidate(
-        &mut candidates,
-        &mut missing,
-        ToolchainRole::Rustc,
-        NATIVE_RUSTC_NAME,
-        &rust_provider.join("bin").join("rustc"),
-        rust_identity,
-    )?;
-    push_candidate(
-        &mut candidates,
-        &mut missing,
-        ToolchainRole::Sysroot,
-        NATIVE_HOST_SYSROOT_NAME,
-        rust_provider,
-        rust_identity,
-    )?;
-    let host_paths = host_member_paths(host_root, host_identity.layout)?;
-    push_candidate(
-        &mut candidates,
-        &mut missing,
-        ToolchainRole::CCompiler,
-        NATIVE_HOST_CC_NAME,
-        &host_paths.c_compiler,
-        &host_identity.identity,
-    )?;
-    push_candidate(
-        &mut candidates,
-        &mut missing,
-        ToolchainRole::Linker,
-        NATIVE_HOST_LINKER_NAME,
-        &host_paths.linker,
-        &host_identity.identity,
-    )?;
-    push_candidate(
-        &mut candidates,
-        &mut missing,
-        ToolchainRole::CrtObject,
-        NATIVE_HOST_CRT1_NAME,
-        &host_paths.crt1,
-        &host_identity.identity,
-    )?;
-    push_candidate(
-        &mut candidates,
-        &mut missing,
-        ToolchainRole::RuntimeLibrary,
-        NATIVE_HOST_LIBGCC_NAME,
-        &host_paths.libgcc_s,
-        &host_identity.identity,
-    )?;
-    push_candidate(
-        &mut candidates,
-        &mut missing,
-        ToolchainRole::RuntimeLibrary,
-        NATIVE_HOST_LIBUNWIND_NAME,
-        &host_paths.libunwind,
-        &host_identity.identity,
-    )?;
-    push_candidate(
-        &mut candidates,
-        &mut missing,
-        ToolchainRole::RuntimeLibrary,
-        NATIVE_HOST_LIBC_NAME,
-        &host_paths.libc,
-        &host_identity.identity,
-    )?;
-    for (name, file_name) in [
-        (NATIVE_TARGET_GCC_NAME, NATIVE_TARGET_GCC_NAME),
-        (NATIVE_TARGET_GXX_NAME, NATIVE_TARGET_GXX_NAME),
-        (NATIVE_TARGET_LD_NAME, NATIVE_TARGET_LD_NAME),
-        (NATIVE_TARGET_AR_NAME, NATIVE_TARGET_AR_NAME),
-        (NATIVE_TARGET_RANLIB_NAME, NATIVE_TARGET_RANLIB_NAME),
-    ] {
-        push_candidate(
-            &mut candidates,
-            &mut missing,
-            ToolchainRole::NativeHelper,
-            name,
-            &target_root.join("bin").join(file_name),
-            &target_identity.identity,
-        )?;
-    }
-    let target_lib = target_root.join(TARGET_TRIPLE).join("lib");
-    push_candidate(
-        &mut candidates,
-        &mut missing,
-        ToolchainRole::CrtObject,
-        NATIVE_TARGET_CRT1_NAME,
-        &target_lib.join("crt1.o"),
-        &target_identity.identity,
-    )?;
-    push_candidate(
-        &mut candidates,
-        &mut missing,
-        ToolchainRole::RuntimeLibrary,
-        NATIVE_TARGET_LIBGCC_NAME,
-        &target_lib.join("libgcc_s.so.1"),
-        &target_identity.identity,
-    )?;
-    push_candidate(
-        &mut candidates,
-        &mut missing,
-        ToolchainRole::RuntimeLibrary,
-        NATIVE_TARGET_LIBUNWIND_NAME,
-        &target_libunwind_path(target_root, target_identity.layout)?,
-        &target_identity.identity,
-    )?;
-    push_candidate(
-        &mut candidates,
-        &mut missing,
-        ToolchainRole::RuntimeLibrary,
-        NATIVE_TARGET_LIBC_NAME,
-        &target_lib.join("libc.so"),
-        &target_identity.identity,
-    )?;
-    if !missing.is_empty() {
-        return Err(RunError::Build(format!(
-            "source-built native toolchain closure blocked: missing native closure members: {}",
-            missing.join(", ")
-        )));
-    }
-    Ok(candidates)
+struct NativeClosureRoots<'a> {
+    rust_provider: &'a Path,
+    host_root: &'a Path,
+    target_root: &'a Path,
+    rust_identity: &'a ProviderIdentity,
+    host_identity: &'a NativeRootIdentity,
+    target_identity: &'a NativeRootIdentity,
 }
 
-fn push_candidate(
-    candidates: &mut Vec<NativeClosureCandidateMember>,
-    missing: &mut Vec<String>,
+struct NativeCandidateInput<'a> {
     role: ToolchainRole,
-    name: &str,
-    path: &Path,
-    identity: &ProviderIdentity,
-) -> Result<(), RunError> {
-    if !path.exists() {
-        missing.push(name.to_string());
-        return Ok(());
+    name: &'a str,
+    path: &'a Path,
+    identity: &'a ProviderIdentity,
+}
+
+struct NativeCandidateAccumulator {
+    candidates: Vec<NativeClosureCandidateMember>,
+    missing: Vec<String>,
+}
+
+impl NativeCandidateAccumulator {
+    fn new() -> Self {
+        Self {
+            candidates: Vec::with_capacity(NATIVE_CLOSURE_MEMBER_CAPACITY),
+            missing: Vec::with_capacity(NATIVE_CLOSURE_MEMBER_CAPACITY),
+        }
     }
-    let execution_path = canonical_path(path)?;
-    let digest = path_blake3(&execution_path)?;
-    candidates.push(NativeClosureCandidateMember {
-        role,
-        name: name.to_string(),
-        execution_path: execution_path.display().to_string(),
-        content_digest_blake3: digest,
-        source: identity.source.clone(),
-        build_receipt: identity.receipt.clone(),
-    });
+
+    fn push(&mut self, input: NativeCandidateInput<'_>) -> Result<(), RunError> {
+        if !input.path.exists() {
+            self.missing.push(input.name.to_string());
+            return Ok(());
+        }
+        let execution_path = canonical_path(input.path)?;
+        let digest = path_blake3(&execution_path)?;
+        self.candidates.push(NativeClosureCandidateMember {
+            role: input.role,
+            name: input.name.to_string(),
+            execution_path: execution_path.display().to_string(),
+            content_digest_blake3: digest,
+            source: input.identity.source.clone(),
+            build_receipt: input.identity.receipt.clone(),
+        });
+        Ok(())
+    }
+}
+
+fn collect_native_closure_candidates(
+    roots: NativeClosureRoots<'_>,
+) -> Result<Vec<NativeClosureCandidateMember>, RunError> {
+    let mut accumulator = NativeCandidateAccumulator::new();
+    push_rust_candidates(&mut accumulator, &roots)?;
+    push_host_candidates(&mut accumulator, &roots)?;
+    push_target_helper_candidates(&mut accumulator, &roots)?;
+    push_target_runtime_candidates(&mut accumulator, &roots)?;
+    if !accumulator.missing.is_empty() {
+        return Err(RunError::Build(format!(
+            "source-built native toolchain closure blocked: missing native closure members: {}",
+            accumulator.missing.join(", ")
+        )));
+    }
+    debug_assert!(accumulator.candidates.len() <= NATIVE_CLOSURE_MEMBER_CAPACITY);
+    debug_assert!(accumulator.missing.is_empty());
+    Ok(accumulator.candidates)
+}
+
+fn push_rust_candidates(
+    accumulator: &mut NativeCandidateAccumulator,
+    roots: &NativeClosureRoots<'_>,
+) -> Result<(), RunError> {
+    let rustc_path = roots.rust_provider.join("bin").join("rustc");
+    accumulator.push(NativeCandidateInput {
+        role: ToolchainRole::Rustc,
+        name: NATIVE_RUSTC_NAME,
+        path: &rustc_path,
+        identity: roots.rust_identity,
+    })?;
+    accumulator.push(NativeCandidateInput {
+        role: ToolchainRole::Sysroot,
+        name: NATIVE_HOST_SYSROOT_NAME,
+        path: roots.rust_provider,
+        identity: roots.rust_identity,
+    })
+}
+
+fn push_host_candidates(
+    accumulator: &mut NativeCandidateAccumulator,
+    roots: &NativeClosureRoots<'_>,
+) -> Result<(), RunError> {
+    let paths = host_member_paths(roots.host_root, roots.host_identity.layout)?;
+    let candidates_before_count = accumulator.candidates.len();
+    let missing_before_count = accumulator.missing.len();
+    for (role, name, path) in [
+        (ToolchainRole::CCompiler, NATIVE_HOST_CC_NAME, paths.c_compiler),
+        (ToolchainRole::Linker, NATIVE_HOST_LINKER_NAME, paths.linker),
+        (ToolchainRole::CrtObject, NATIVE_HOST_CRT1_NAME, paths.crt1),
+        (ToolchainRole::RuntimeLibrary, NATIVE_HOST_LIBGCC_NAME, paths.libgcc_s),
+        (ToolchainRole::RuntimeLibrary, NATIVE_HOST_LIBUNWIND_NAME, paths.libunwind),
+        (ToolchainRole::RuntimeLibrary, NATIVE_HOST_LIBC_NAME, paths.libc),
+    ] {
+        accumulator.push(NativeCandidateInput {
+            role,
+            name,
+            path: &path,
+            identity: &roots.host_identity.identity,
+        })?;
+    }
+    debug_assert!(accumulator.candidates.len() >= candidates_before_count);
+    debug_assert!(accumulator.missing.len() >= missing_before_count);
+    Ok(())
+}
+
+fn push_target_helper_candidates(
+    accumulator: &mut NativeCandidateAccumulator,
+    roots: &NativeClosureRoots<'_>,
+) -> Result<(), RunError> {
+    for name in [
+        NATIVE_TARGET_GCC_NAME,
+        NATIVE_TARGET_GXX_NAME,
+        NATIVE_TARGET_LD_NAME,
+        NATIVE_TARGET_AR_NAME,
+        NATIVE_TARGET_RANLIB_NAME,
+    ] {
+        let path = roots.target_root.join("bin").join(name);
+        accumulator.push(NativeCandidateInput {
+            role: ToolchainRole::NativeHelper,
+            name,
+            path: &path,
+            identity: &roots.target_identity.identity,
+        })?;
+    }
+    Ok(())
+}
+
+fn push_target_runtime_candidates(
+    accumulator: &mut NativeCandidateAccumulator,
+    roots: &NativeClosureRoots<'_>,
+) -> Result<(), RunError> {
+    let target_lib = roots.target_root.join(TARGET_TRIPLE).join("lib");
+    let target_libunwind = target_libunwind_path(roots.target_root, roots.target_identity.layout)?;
+    let candidates_before_count = accumulator.candidates.len();
+    let missing_before_count = accumulator.missing.len();
+    for (role, name, path) in [
+        (ToolchainRole::CrtObject, NATIVE_TARGET_CRT1_NAME, target_lib.join("crt1.o")),
+        (ToolchainRole::RuntimeLibrary, NATIVE_TARGET_LIBGCC_NAME, target_lib.join("libgcc_s.so.1")),
+        (ToolchainRole::RuntimeLibrary, NATIVE_TARGET_LIBUNWIND_NAME, target_libunwind),
+        (ToolchainRole::RuntimeLibrary, NATIVE_TARGET_LIBC_NAME, target_lib.join("libc.so")),
+    ] {
+        accumulator.push(NativeCandidateInput {
+            role,
+            name,
+            path: &path,
+            identity: &roots.target_identity.identity,
+        })?;
+    }
+    debug_assert!(accumulator.candidates.len() >= candidates_before_count);
+    debug_assert!(accumulator.missing.len() >= missing_before_count);
     Ok(())
 }
 
@@ -632,7 +664,7 @@ fn file_blake3(path: &Path) -> Result<String, RunError> {
 }
 
 fn directory_blake3(root: &Path) -> Result<String, RunError> {
-    let mut entries = Vec::new();
+    let mut entries = Vec::with_capacity(DIRECTORY_DIGEST_INITIAL_CAPACITY);
     collect_directory_digest_entries(root, root, &mut entries)?;
     entries.sort();
     let mut hasher = blake3::Hasher::new();
@@ -645,39 +677,54 @@ fn directory_blake3(root: &Path) -> Result<String, RunError> {
 }
 
 fn collect_directory_digest_entries(root: &Path, path: &Path, entries: &mut Vec<String>) -> Result<(), RunError> {
-    if entries.len() > DIRECTORY_ENTRY_LIMIT {
+    let mut pending = Vec::with_capacity(DIRECTORY_DIGEST_INITIAL_CAPACITY);
+    pending.push(path.to_path_buf());
+    for _iteration in 0..DIRECTORY_ENTRY_LIMIT {
+        let Some(directory) = pending.pop() else {
+            break;
+        };
+        let mut children = fs::read_dir(&directory)
+            .map_err(|err| RunError::Build(format!("read directory {}: {err}", directory.display())))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| RunError::Build(format!("read directory entry under {}: {err}", directory.display())))?;
+        children.sort_by_key(|entry| entry.path());
+        for child in children.into_iter().rev() {
+            if entries.len() >= DIRECTORY_ENTRY_LIMIT {
+                return Err(RunError::Build(format!(
+                    "native closure directory digest exceeded {DIRECTORY_ENTRY_LIMIT} entries under {}",
+                    root.display()
+                )));
+            }
+            let child_path = child.path();
+            let relative = child_path.strip_prefix(root).map_err(|err| {
+                RunError::Internal(format!("strip {} from {}: {err}", root.display(), child_path.display()))
+            })?;
+            let relative = relative.display().to_string();
+            let metadata = fs::symlink_metadata(&child_path)
+                .map_err(|err| RunError::Build(format!("stat {}: {err}", child_path.display())))?;
+            let file_type = metadata.file_type();
+            if file_type.is_dir() {
+                entries.push(format!("{DIRECTORY_ENTRY_KIND_DIR}:{relative}"));
+                pending.push(child_path);
+            } else if file_type.is_file() {
+                entries.push(format!("{DIRECTORY_ENTRY_KIND_FILE}:{relative}:{}", file_blake3(&child_path)?));
+            } else if file_type.is_symlink() {
+                let target = fs::read_link(&child_path)
+                    .map_err(|err| RunError::Build(format!("read symlink {}: {err}", child_path.display())))?;
+                entries.push(format!("{DIRECTORY_ENTRY_KIND_SYMLINK}:{relative}:{}", target.display()));
+            } else {
+                entries.push(format!("{DIRECTORY_ENTRY_KIND_OTHER}:{relative}"));
+            }
+        }
+    }
+    if !pending.is_empty() {
         return Err(RunError::Build(format!(
-            "native closure directory digest exceeded {DIRECTORY_ENTRY_LIMIT} entries under {}",
+            "native closure directory traversal exceeded {DIRECTORY_ENTRY_LIMIT} iterations under {}",
             root.display()
         )));
     }
-    let mut children = fs::read_dir(path)
-        .map_err(|err| RunError::Build(format!("read directory {}: {err}", path.display())))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| RunError::Build(format!("read directory entry under {}: {err}", path.display())))?;
-    children.sort_by_key(|entry| entry.path());
-    for child in children {
-        let child_path = child.path();
-        let relative = child_path.strip_prefix(root).map_err(|err| {
-            RunError::Internal(format!("strip {} from {}: {err}", root.display(), child_path.display()))
-        })?;
-        let relative = relative.display().to_string();
-        let metadata = fs::symlink_metadata(&child_path)
-            .map_err(|err| RunError::Build(format!("stat {}: {err}", child_path.display())))?;
-        let file_type = metadata.file_type();
-        if file_type.is_dir() {
-            entries.push(format!("{DIRECTORY_ENTRY_KIND_DIR}:{relative}"));
-            collect_directory_digest_entries(root, &child_path, entries)?;
-        } else if file_type.is_file() {
-            entries.push(format!("{DIRECTORY_ENTRY_KIND_FILE}:{relative}:{}", file_blake3(&child_path)?));
-        } else if file_type.is_symlink() {
-            let target = fs::read_link(&child_path)
-                .map_err(|err| RunError::Build(format!("read symlink {}: {err}", child_path.display())))?;
-            entries.push(format!("{DIRECTORY_ENTRY_KIND_SYMLINK}:{relative}:{}", target.display()));
-        } else {
-            entries.push(format!("{DIRECTORY_ENTRY_KIND_OTHER}:{relative}"));
-        }
-    }
+    debug_assert!(entries.len() <= DIRECTORY_ENTRY_LIMIT);
+    debug_assert!(pending.is_empty());
     Ok(())
 }
 

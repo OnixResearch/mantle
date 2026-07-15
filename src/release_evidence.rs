@@ -7,6 +7,7 @@ pub(crate) use crunch_release_core::BLAKE3_HEX_LENGTH_CHARS as BLAKE3_HEX_LEN;
 pub(crate) use crunch_release_core::BundledArtifact;
 pub(crate) use crunch_release_core::BundledArtifactKind;
 pub(crate) use crunch_release_core::CLAIM_SCOPE_PACKAGED_INTEGRITY;
+use crunch_release_core::CairnReleaseEvidenceHandoff;
 pub(crate) use crunch_release_core::DEFAULT_PROOF_WORKFLOW_COMMAND;
 pub(crate) use crunch_release_core::DEFAULT_PROOF_WORKFLOW_VERSION;
 use crunch_release_core::ExternalEvidence;
@@ -76,6 +77,7 @@ use crate::release_tree_copy::PreparedTreeCopy;
 const PROOF_INVENTORY_RELATIVE_PATH: &str = "stage0-prerequisites/inventory.md";
 const MAX_BINARY_ARTIFACTS: u32 = 16;
 const PUBLICATION_POLICY_INDEX_WIDTH: usize = 3;
+const STACK_PROVENANCE_EXTERNAL_ARTIFACT_COUNT: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FullSelfHostingProofIdentity {
@@ -303,31 +305,47 @@ fn expected_publication_artifacts(
     artifacts.push(proof_bundle.clone());
     artifacts.push(inventory);
     append_optional_expected_artifacts(
-        request,
-        prepared_provider_fixed_point,
-        &source_archive,
-        &binaries,
-        &proof_bundle,
+        OptionalExpectedArtifacts {
+            request,
+            prepared_provider: prepared_provider_fixed_point,
+            source_archive: &source_archive,
+            binaries: &binaries,
+            proof_bundle: &proof_bundle,
+        },
         &mut artifacts,
     )?;
     append_expected_external_artifacts(request, &mut artifacts)?;
     append_expected_cairn_handoff_artifacts(request, &mut artifacts)?;
+    debug_assert!(!artifacts.is_empty());
+    debug_assert!(artifacts.capacity() >= artifacts.len());
     Ok(artifacts)
 }
 
+struct OptionalExpectedArtifacts<'a> {
+    request: &'a ReleaseBundleCreateRequest,
+    prepared_provider: Option<&'a PreparedTreeCopy>,
+    source_archive: &'a BundledArtifact,
+    binaries: &'a [BundledArtifact],
+    proof_bundle: &'a BundledArtifact,
+}
+
 fn append_optional_expected_artifacts(
-    request: &ReleaseBundleCreateRequest,
-    prepared_provider: Option<&PreparedTreeCopy>,
-    source_archive: &BundledArtifact,
-    binaries: &[BundledArtifact],
-    proof_bundle: &BundledArtifact,
+    input: OptionalExpectedArtifacts<'_>,
     artifacts: &mut Vec<BundledArtifact>,
 ) -> Result<(), RunError> {
-    if let Some(prepared) = prepared_provider {
+    debug_assert!(!artifacts.is_empty());
+    debug_assert!(artifacts.capacity() >= artifacts.len());
+    if let Some(prepared) = input.prepared_provider {
         artifacts.push(prepared_directory_artifact(prepared, Path::new("proof/provider-fixed-point"))?);
     }
-    if let Some(report_path) = &request.reproducibility_report_path {
-        validate_reproducibility_report_for_bundle(request, report_path, source_archive, binaries, proof_bundle)?;
+    if let Some(report_path) = &input.request.reproducibility_report_path {
+        validate_reproducibility_report_for_bundle(
+            input.request,
+            report_path,
+            input.source_archive,
+            input.binaries,
+            input.proof_bundle,
+        )?;
         artifacts.push(build_artifact_record(
             report_path,
             Path::new("reproducibility/reproducibility-report.json"),
@@ -342,6 +360,7 @@ fn append_expected_external_artifacts(
     artifacts: &mut Vec<BundledArtifact>,
 ) -> Result<(), RunError> {
     let mut external_count = 0_u32;
+    let artifacts_before_count = artifacts.len();
     for evidence in &request.external_evidence {
         external_count = external_count
             .checked_add(1)
@@ -358,6 +377,8 @@ fn append_expected_external_artifacts(
             artifacts.push(build_artifact_record(path, &relative, BundledArtifactKind::File)?);
         }
     }
+    debug_assert!(artifacts.len() >= artifacts_before_count);
+    debug_assert!(artifacts.capacity() >= artifacts.len());
     Ok(())
 }
 
@@ -469,6 +490,7 @@ fn append_external_policy_facts(
     request: &ReleaseBundleCreateRequest,
     facts: &mut Vec<PublicationPolicyFact>,
 ) -> Result<(), RunError> {
+    let facts_before_count = facts.len();
     for (index, evidence) in request.external_evidence.iter().enumerate() {
         let index_u32 = u32::try_from(index)
             .map_err(|_| RunError::Internal("release external policy index overflowed u32".to_string()))?;
@@ -499,9 +521,17 @@ fn append_external_policy_facts(
             &value,
         ));
     }
+    debug_assert!(facts.len() >= facts_before_count);
+    debug_assert!(facts.capacity() >= facts.len());
     Ok(())
 }
 
+// Policy facts are always constructed at labeled call sites as name/value
+// pairs; preserving this tiny constructor keeps the policy ordering obvious.
+#[allow(
+    tigerstyle::ambiguous_params,
+    reason = "two-field policy fact constructor is reviewed as an ordered name/value pair"
+)]
 fn policy_fact(name: &str, value: &str) -> PublicationPolicyFact {
     PublicationPolicyFact {
         name: name.to_string(),
@@ -531,6 +561,8 @@ fn publish_prepared_release(
     state: PublicationState,
     shell: &mut dyn PublicationShellAdapter,
 ) -> Result<ReleaseEvidenceManifest, PublicationAttemptFailure> {
+    debug_assert!(!prepared.plan.artifacts.is_empty());
+    debug_assert_ne!(stage.stage_path(), stage.final_path());
     let state = advance_publication(state, PublicationEvent::StageCreated)?;
     let state = observe_publication_phase(shell, stage, &prepared.plan, state, PublicationShellPhase::StageCreated)?;
     let mut staged_request = request.clone();
@@ -562,6 +594,8 @@ fn serialize_verify_and_commit(
     state: PublicationState,
     shell: &mut dyn PublicationShellAdapter,
 ) -> Result<ReleaseEvidenceManifest, PublicationAttemptFailure> {
+    debug_assert!(!plan.artifacts.is_empty());
+    debug_assert_ne!(stage.stage_path(), stage.final_path());
     let bytes = canonical_release_evidence_manifest(manifest.clone())
         .map_err(core_error_to_run_error)
         .map_err(|error| fail_publication(state.clone(), PublicationFailurePhase::ManifestSerialization, error))?;
@@ -656,36 +690,73 @@ fn assemble_release_manifest(
     let inventory_path = request.proof_bundle_dir.join(PROOF_INVENTORY_RELATIVE_PATH);
     let prerequisite_inventory =
         copy_file_into_bundle(&inventory_path, stage_root, &request.bundle_dir, Path::new("proof/inventory.md"))?;
-    build_release_manifest(
-        request,
-        stage_root,
+    debug_assert_eq!(source_archive.kind, BundledArtifactKind::File);
+    debug_assert_eq!(proof_bundle.kind, BundledArtifactKind::Directory);
+    build_release_manifest(request, stage_root, ReleaseManifestInputs {
         proof_identity,
         prepared_provider_fixed_point,
         source_archive,
         binaries,
         proof_bundle,
         prerequisite_inventory,
-    )
+    })
 }
 
-#[allow(clippy::too_many_arguments)]
-fn build_release_manifest(
-    request: &ReleaseBundleCreateRequest,
-    stage_root: &ReleaseCapabilityRoot,
+struct ReleaseManifestInputs {
     proof_identity: FullSelfHostingProofIdentity,
     prepared_provider_fixed_point: Option<PreparedTreeCopy>,
     source_archive: BundledArtifact,
     binaries: Vec<BundledArtifact>,
     proof_bundle: BundledArtifact,
     prerequisite_inventory: BundledArtifact,
+}
+
+struct ReleaseManifestEvidence {
+    provider_fixed_point_proof: Option<ProviderFixedPointProofArtifact>,
+    reproducibility_report: Option<BundledArtifact>,
+    external_evidence: Vec<ExternalEvidence>,
+    kani_toolchain_evidence: Vec<KaniToolchainEvidence>,
+    stack_provenance: Option<StackProvenanceReleaseEvidence>,
+    cairn_handoff: Option<CairnReleaseEvidenceHandoff>,
+}
+
+fn build_release_manifest(
+    request: &ReleaseBundleCreateRequest,
+    stage_root: &ReleaseCapabilityRoot,
+    mut inputs: ReleaseManifestInputs,
 ) -> Result<ReleaseEvidenceManifest, RunError> {
+    let mut evidence = collect_release_manifest_evidence(request, stage_root, &mut inputs)?;
+    let source_archive_digest_blake3 = inputs.source_archive.digest_blake3.clone();
+    let source_acquisition = build_source_acquisition(request, &source_archive_digest_blake3);
+    let cairn_handoff = evidence.cairn_handoff.take();
+    let mut manifest = compose_release_manifest(request, inputs, evidence, source_acquisition);
+    if let Some(handoff) = cairn_handoff {
+        let binding = release_evidence_cairn_bundle_binding(&manifest).map_err(core_error_to_run_error)?;
+        manifest.cairn_handoff_validation =
+            Some(cairn_release_evidence_validation_receipt(binding, handoff).map_err(core_error_to_run_error)?);
+    }
+    debug_assert_eq!(manifest.schema, RELEASE_EVIDENCE_SCHEMA);
+    debug_assert!(!manifest.binaries.is_empty());
+    Ok(manifest)
+}
+
+fn collect_release_manifest_evidence(
+    request: &ReleaseBundleCreateRequest,
+    stage_root: &ReleaseCapabilityRoot,
+    inputs: &mut ReleaseManifestInputs,
+) -> Result<ReleaseManifestEvidence, RunError> {
     let provider_fixed_point_proof =
-        copy_optional_provider_fixed_point_proof(request, stage_root, prepared_provider_fixed_point)?;
-    let reproducibility_report =
-        copy_optional_reproducibility_report(request, stage_root, &source_archive, &binaries, &proof_bundle)?;
+        copy_optional_provider_fixed_point_proof(request, stage_root, inputs.prepared_provider_fixed_point.take())?;
+    let reproducibility_artifact = copy_optional_reproducibility_report(
+        request,
+        stage_root,
+        &inputs.source_archive,
+        &inputs.binaries,
+        &inputs.proof_bundle,
+    )?;
     let mut external_evidence = copy_external_evidence(request, stage_root)?;
     let stack_provenance =
-        copy_optional_stack_provenance_evidence(request, stage_root, &mut external_evidence, &binaries)?;
+        copy_optional_stack_provenance_evidence(request, stage_root, &mut external_evidence, &inputs.binaries)?;
     let kani_toolchain_evidence = build_kani_toolchain_evidence(request, &external_evidence)?;
     let cairn_handoff = request
         .cairn_handoff_descriptor_path
@@ -694,9 +765,29 @@ fn build_release_manifest(
             crate::cairn_release_handoff::prepare_cairn_handoff_for_bundle(descriptor, &request.bundle_dir)
         })
         .transpose()?;
-    let source_archive_digest_blake3 = source_archive.digest_blake3.clone();
-    let source_acquisition = build_source_acquisition(request, &source_archive_digest_blake3);
-    let mut manifest = ReleaseEvidenceManifest {
+    let stack_provenance_artifact_count =
+        stack_provenance.as_ref().map_or(0, |_| STACK_PROVENANCE_EXTERNAL_ARTIFACT_COUNT);
+    let expected_external_evidence_count =
+        request.external_evidence.len().saturating_add(stack_provenance_artifact_count);
+    debug_assert_eq!(external_evidence.len(), expected_external_evidence_count);
+    debug_assert_eq!(kani_toolchain_evidence.len(), request.kani_toolchain_evidence.len());
+    Ok(ReleaseManifestEvidence {
+        provider_fixed_point_proof,
+        reproducibility_report: reproducibility_artifact,
+        external_evidence,
+        kani_toolchain_evidence,
+        stack_provenance,
+        cairn_handoff,
+    })
+}
+
+fn compose_release_manifest(
+    request: &ReleaseBundleCreateRequest,
+    inputs: ReleaseManifestInputs,
+    evidence: ReleaseManifestEvidence,
+    source_acquisition: Option<SourceAcquisition>,
+) -> ReleaseEvidenceManifest {
+    ReleaseEvidenceManifest {
         schema: RELEASE_EVIDENCE_SCHEMA.to_string(),
         release_id: request.release_id.clone(),
         claim_scope: CLAIM_SCOPE_PACKAGED_INTEGRITY.to_string(),
@@ -704,41 +795,35 @@ fn build_release_manifest(
             command: request.workflow_command.clone(),
             version: request.workflow_version.clone(),
         },
-        source_archive,
+        source_archive: inputs.source_archive.clone(),
         source_acquisition,
-        binaries,
-        proof_bundle,
-        prerequisite_inventory,
-        provider_fixed_point_proof,
-        reproducibility_report,
+        binaries: inputs.binaries,
+        proof_bundle: inputs.proof_bundle,
+        prerequisite_inventory: inputs.prerequisite_inventory,
+        provider_fixed_point_proof: evidence.provider_fixed_point_proof,
+        reproducibility_report: evidence.reproducibility_report,
         deterministic_build_proof: None,
         deterministic_sandbox_isolation_evidence: None,
         independent_agreement_report: None,
-        external_evidence,
-        kani_toolchain_evidence,
-        stack_provenance,
+        external_evidence: evidence.external_evidence,
+        kani_toolchain_evidence: evidence.kani_toolchain_evidence,
+        stack_provenance: evidence.stack_provenance,
         opaque_evidence_sidecar_bindings: vec![],
         cairn_handoff_validation: None,
         function_address_evidence: None,
         proof_linkage: ReleaseProofLinkage {
             release_id: request.release_id.clone(),
-            source_archive_digest_blake3,
-            proof_bundle_schema: proof_identity.schema,
-            proof_mode: proof_identity.proof_mode,
-            selected_provider_kind: proof_identity.selected_provider_kind,
-            staged_source: proof_identity.staged_source,
-            stage2_binary_digest_blake3: proof_identity.stage2_binary_digest_blake3,
-            prerequisite_inventory_digest_blake3: proof_identity.prerequisite_inventory_digest_blake3,
-            proof_manifest_digest_blake3: proof_identity.proof_manifest_digest_blake3,
+            source_archive_digest_blake3: inputs.source_archive.digest_blake3,
+            proof_bundle_schema: inputs.proof_identity.schema,
+            proof_mode: inputs.proof_identity.proof_mode,
+            selected_provider_kind: inputs.proof_identity.selected_provider_kind,
+            staged_source: inputs.proof_identity.staged_source,
+            stage2_binary_digest_blake3: inputs.proof_identity.stage2_binary_digest_blake3,
+            prerequisite_inventory_digest_blake3: inputs.proof_identity.prerequisite_inventory_digest_blake3,
+            proof_manifest_digest_blake3: inputs.proof_identity.proof_manifest_digest_blake3,
         },
         provenance_coverage: None,
-    };
-    if let Some(handoff) = cairn_handoff {
-        let binding = release_evidence_cairn_bundle_binding(&manifest).map_err(core_error_to_run_error)?;
-        manifest.cairn_handoff_validation =
-            Some(cairn_release_evidence_validation_receipt(binding, handoff).map_err(core_error_to_run_error)?);
     }
-    Ok(manifest)
 }
 
 fn manifest_publication_artifacts(
@@ -772,6 +857,8 @@ fn manifest_publication_artifacts(
         let measured = build_artifact_record(&path, Path::new(&evidence.relative_path), BundledArtifactKind::File)?;
         artifacts.push(publication_artifact_input(&measured));
     }
+    debug_assert!(!artifacts.is_empty());
+    debug_assert!(artifacts.capacity() >= artifacts.len());
     Ok(artifacts)
 }
 
@@ -847,10 +934,21 @@ fn fail_publication(
     phase: PublicationFailurePhase,
     error: RunError,
 ) -> PublicationAttemptFailure {
-    let failed = transition_publication_state(state, PublicationEvent::Failed(phase))
-        .expect("non-committed publication failure transition must be valid");
+    let original_state = state.clone();
+    let failed_state = match transition_publication_state(state, PublicationEvent::Failed(phase)) {
+        Ok(failed_state) => failed_state,
+        Err(transition_error) => {
+            return PublicationAttemptFailure {
+                state: original_state,
+                error: RunError::Internal(format!(
+                    "release publication failure transition rejected at {:?} for {:?}: {error}",
+                    transition_error.phase, transition_error.event
+                )),
+            };
+        }
+    };
     PublicationAttemptFailure {
-        state: failed,
+        state: failed_state,
         error: publication_phase_error(phase, error),
     }
 }
@@ -870,18 +968,32 @@ fn cleanup_failed_publication(
         plan_identity_blake3: &failure.state.plan_identity_blake3,
     };
     if let Err(cleanup_error) = shell.after_phase(PublicationShellPhase::Cleanup, &context) {
-        let cleanup_state =
-            transition_publication_state(failure.state, PublicationEvent::Failed(PublicationFailurePhase::Cleanup))
-                .expect("cleanup failure must extend one publication failure");
+        let cleanup_state = transition_publication_state(
+            failure.state.clone(),
+            PublicationEvent::Failed(PublicationFailurePhase::Cleanup),
+        )
+        .map_err(|transition_error| {
+            RunError::Internal(format!(
+                "{}; cleanup failure state transition rejected at {:?} for {:?}",
+                failure.error, transition_error.phase, transition_error.event
+            ))
+        })?;
         assert_eq!(cleanup_state.phase, crunch_release_core::PublicationPhase::Failed);
         assert_eq!(cleanup_state.failures.last(), Some(&PublicationFailurePhase::Cleanup));
         let combined = format!("{}; release publication cleanup failed: {cleanup_error}", failure.error);
         return Err(RunError::Internal(combined));
     }
     if let Err(cleanup_error) = stage.cleanup_current_stage() {
-        let cleanup_state =
-            transition_publication_state(failure.state, PublicationEvent::Failed(PublicationFailurePhase::Cleanup))
-                .expect("filesystem cleanup failure must extend one publication failure");
+        let cleanup_state = transition_publication_state(
+            failure.state.clone(),
+            PublicationEvent::Failed(PublicationFailurePhase::Cleanup),
+        )
+        .map_err(|transition_error| {
+            RunError::Internal(format!(
+                "{}; filesystem cleanup failure state transition rejected at {:?} for {:?}",
+                failure.error, transition_error.phase, transition_error.event
+            ))
+        })?;
         assert_eq!(cleanup_state.phase, crunch_release_core::PublicationPhase::Failed);
         assert_eq!(cleanup_state.failures.last(), Some(&PublicationFailurePhase::Cleanup));
         let combined = format!("{}; release publication cleanup failed: {cleanup_error}", failure.error);
@@ -931,6 +1043,8 @@ pub(crate) fn load_full_self_hosting_proof_identity(
         .map_err(|err| RunError::Internal(format!("reading {}: {err}", manifest_path.display())))?;
     let proof_manifest_digest_blake3 = blake3::hash(&manifest_bytes).to_hex().to_string();
     let manifest = extract_full_self_hosting_proof_identity_fields(manifest_bytes).map_err(core_error_to_run_error)?;
+    debug_assert!(!manifest.schema.is_empty());
+    debug_assert!(!proof_manifest_digest_blake3.is_empty());
     Ok(FullSelfHostingProofIdentity {
         schema: manifest.schema,
         proof_mode: manifest.proof_mode,
@@ -1021,6 +1135,8 @@ fn validate_create_request(request: &ReleaseBundleCreateRequest) -> Result<(), R
             descriptor.display()
         )));
     }
+    debug_assert!(!request.release_id.trim().is_empty());
+    debug_assert!(binary_count > 0);
     Ok(())
 }
 
@@ -1045,6 +1161,8 @@ fn validate_stack_provenance_create_request(request: &StackProvenanceCreateReque
             binary_path.display()
         )));
     }
+    debug_assert!(request.sidecar_path.is_file());
+    debug_assert!(request.valence_receipt_path.is_file());
     Ok(())
 }
 
@@ -1074,6 +1192,8 @@ fn validate_external_evidence_request(evidence: &ExternalEvidenceCreateRequest) 
             ));
         }
     }
+    debug_assert!(!evidence.role.trim().is_empty());
+    debug_assert!(!evidence.non_claims.is_empty());
     Ok(())
 }
 
@@ -1099,6 +1219,8 @@ fn validate_kani_toolchain_evidence_request(evidence: &KaniToolchainEvidenceCrea
     if evidence.non_claims.is_empty() {
         return Err(RunError::Internal("release evidence Kani non-claims must not be empty".to_string()));
     }
+    debug_assert!(!evidence.receipt_role.trim().is_empty());
+    debug_assert!(!evidence.non_claims.is_empty());
     Ok(())
 }
 
@@ -1230,6 +1352,8 @@ fn copy_optional_provider_fixed_point_proof(
         &request.bundle_dir,
         Path::new("proof/provider-fixed-point"),
     )?;
+    debug_assert_eq!(artifact.kind, BundledArtifactKind::Directory);
+    debug_assert_eq!(artifact.relative_path, "proof/provider-fixed-point");
     Ok(Some(ProviderFixedPointProofArtifact {
         kind: artifact.kind,
         relative_path: artifact.relative_path,
@@ -1306,6 +1430,7 @@ fn copy_optional_stack_provenance_evidence(
     let Some(stack_request) = &request.stack_provenance else {
         return Ok(None);
     };
+    let evidence_before_count = external_evidence.len();
     let sidecar = ExternalEvidenceCreateRequest {
         path: stack_request.sidecar_path.clone(),
         role: STACK_PROVENANCE_EVIDENCE_ROLE.to_string(),
@@ -1334,6 +1459,9 @@ fn copy_optional_stack_provenance_evidence(
         next_external_evidence_index(external_evidence.len())?,
     )?;
     external_evidence.push(receipt_artifact.clone());
+    let expected_evidence_count = evidence_before_count.saturating_add(STACK_PROVENANCE_EXTERNAL_ARTIFACT_COUNT);
+    debug_assert_eq!(external_evidence.len(), expected_evidence_count);
+    debug_assert!(external_evidence.capacity() >= external_evidence.len());
     let binary_artifact = select_stack_provenance_binary_artifact(request, binaries)?;
     Ok(Some(StackProvenanceReleaseEvidence {
         sidecar_role: sidecar_artifact.role,
@@ -1361,13 +1489,18 @@ fn select_stack_provenance_binary_artifact<'a>(
                 "release evidence stack provenance binary must match one --binary input".to_string(),
             ));
         };
-        return binaries.get(binary_index).ok_or_else(|| {
+        let binary = binaries.get(binary_index).ok_or_else(|| {
             RunError::Internal(
                 "release evidence stack provenance binary index did not match copied binaries".to_string(),
             )
-        });
+        })?;
+        debug_assert!(binary_index < binaries.len());
+        debug_assert!(!binary.relative_path.is_empty());
+        return Ok(binary);
     }
     if binaries.len() == 1 {
+        debug_assert_eq!(binaries.len(), 1);
+        debug_assert!(!binaries[0].relative_path.is_empty());
         return Ok(&binaries[0]);
     }
     Err(RunError::Internal(
@@ -1405,6 +1538,8 @@ fn build_kani_toolchain_evidence(
             non_claims: evidence.non_claims.clone(),
         });
     }
+    debug_assert_eq!(records.len(), request.kani_toolchain_evidence.len());
+    debug_assert!(records.capacity() >= records.len());
     Ok(records)
 }
 
@@ -1417,10 +1552,10 @@ fn validate_reproducibility_report_for_bundle(
 ) -> Result<(), RunError> {
     let report_bytes = std::fs::read(report_path)
         .map_err(|err| RunError::Internal(format!("reading {}: {err}", report_path.display())))?;
-    let report: ReleaseReproducibilityReport = serde_json::from_slice(&report_bytes)
+    let reproducibility_evidence: ReleaseReproducibilityReport = serde_json::from_slice(&report_bytes)
         .map_err(|err| RunError::Internal(format!("parsing {}: {err}", report_path.display())))?;
-    let canonical_bytes =
-        release_reproducibility_report_canonical_bytes(report.clone()).map_err(core_error_to_run_error)?;
+    let canonical_bytes = release_reproducibility_report_canonical_bytes(reproducibility_evidence.clone())
+        .map_err(core_error_to_run_error)?;
     if report_bytes != canonical_bytes {
         return Err(RunError::Internal(
             "release evidence reproducibility report is not canonical compact JSON".to_string(),
@@ -1431,9 +1566,14 @@ fn validate_reproducibility_report_for_bundle(
         source_archive_digest_blake3: source_archive.digest_blake3.clone(),
         proof_bundle_digest_blake3: proof_bundle.digest_blake3.clone(),
     };
-    let report = validate_release_reproducibility_report_linkage(report, expected).map_err(core_error_to_run_error)?;
+    let linked_evidence = validate_release_reproducibility_report_linkage(reproducibility_evidence, expected)
+        .map_err(core_error_to_run_error)?;
     let expected_names = binaries.iter().map(|artifact| artifact.relative_path.clone()).collect::<Vec<_>>();
-    validate_release_reproducibility_report_artifact_names(report, expected_names).map_err(core_error_to_run_error)?;
+    let expected_name_count = expected_names.len();
+    validate_release_reproducibility_report_artifact_names(linked_evidence, expected_names)
+        .map_err(core_error_to_run_error)?;
+    debug_assert_eq!(report_bytes, canonical_bytes);
+    debug_assert_eq!(expected_name_count, binaries.len());
     Ok(())
 }
 
@@ -1550,6 +1690,8 @@ fn verify_manifest_artifacts(manifest: &ReleaseEvidenceManifest, bundle_dir: &Pa
         })?;
         verify_external_evidence_matches_bundle(evidence, bundle_dir, &format!("external_evidence[{index_u32}]"))?;
     }
+    debug_assert!(!manifest.binaries.is_empty());
+    debug_assert_eq!(manifest.source_archive.kind, BundledArtifactKind::File);
     Ok(())
 }
 
@@ -1647,6 +1789,8 @@ fn verify_manifest_proof_linkage(manifest: &ReleaseEvidenceManifest, bundle_dir:
     if proof_identity.proof_manifest_digest_blake3 != manifest.proof_linkage.proof_manifest_digest_blake3 {
         return Err(RunError::Internal("release evidence proof linkage proof manifest digest mismatch".to_string()));
     }
+    debug_assert_eq!(manifest.proof_linkage.release_id, manifest.release_id);
+    debug_assert_eq!(proof_identity.proof_mode, manifest.proof_linkage.proof_mode);
     Ok(())
 }
 

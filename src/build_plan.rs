@@ -51,6 +51,8 @@ use crate::operator_diagnostics::DoctorRequest;
 use crate::operator_diagnostics::collect_doctor_report;
 
 const PLAN_REPORT_SCHEMA: &str = "crunch-build-plan-v1";
+const MAX_LABELED_EVAL_ERROR_DEPTH: u32 = 64;
+const EMPTY_PATHINFO_ENTRY_COUNT: usize = 32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
@@ -169,6 +171,8 @@ fn render_action_result_plan_human(report: &crunch_build::ActionResultRuntimeRep
             decision.diagnostics.join(",")
         ));
     }
+    debug_assert!(!report.action_ref.is_empty());
+    debug_assert!(!rendered.is_empty());
     rendered
 }
 
@@ -188,13 +192,13 @@ pub struct BuildPlanConfig<'a> {
 }
 
 pub fn cmd_build_plan(config: BuildPlanConfig<'_>) -> Result<(), RunError> {
-    let report = run_build_plan(&config)?;
+    let plan_document = run_build_plan(&config)?;
     let rendered = match config.output_mode {
-        BuildOutputMode::Human => report.render_human(),
-        BuildOutputMode::Json => report.render_json()?,
+        BuildOutputMode::Human => plan_document.render_human(),
+        BuildOutputMode::Json => plan_document.render_json()?,
     };
 
-    if report.has_preflight_errors() {
+    if plan_document.has_preflight_errors() {
         match config.output_mode {
             BuildOutputMode::Human => eprintln!("{rendered}"),
             BuildOutputMode::Json => println!("{rendered}"),
@@ -213,8 +217,9 @@ fn run_build_plan(config: &BuildPlanConfig<'_>) -> Result<BuildPlanReport, RunEr
 
 async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanReport, RunError> {
     let roots = evaluate_roots(config.file, config.import_paths, config.store_dir)?;
+    let root_count = roots.len();
     let preflight_error = validate_plan_config(config);
-    let doctor_report = collect_doctor_report(DoctorRequest {
+    let doctor_preflight = collect_doctor_report(DoctorRequest {
         profile: DoctorProfile::Build,
         store_dir: config.output_dir,
         state_dir: config.state_dir,
@@ -225,19 +230,21 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
 
     let mut entries = Vec::with_capacity(roots.len());
     for root in roots {
-        let action = plan_root_action(
-            &plan_store,
-            &trust,
-            &doctor_report,
-            preflight_error.as_deref(),
-            config.remote_builder,
-            config.source_preflight,
-            &root,
-        )
+        let action = plan_root_action(PlanRootRequest {
+            plan_store: &plan_store,
+            trust: &trust,
+            doctor_report: &doctor_preflight,
+            preflight_error: preflight_error.as_deref(),
+            remote_builder: config.remote_builder,
+            source_preflight: config.source_preflight,
+            root: &root,
+        })
         .await?;
         entries.push(action);
     }
     entries.sort_by(|left, right| left.label.cmp(&right.label).then(left.drv_key.cmp(&right.drv_key)));
+    debug_assert_eq!(entries.len(), root_count);
+    debug_assert!(entries.capacity() >= entries.len());
 
     Ok(BuildPlanReport {
         schema: PLAN_REPORT_SCHEMA,
@@ -250,11 +257,15 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
 }
 
 fn eval_error_is_build(err: &crunch_eval::Error) -> bool {
-    match err {
-        crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => false,
-        crunch_eval::Error::Boundary(_) | crunch_eval::Error::Serde(_) => true,
-        crunch_eval::Error::Labeled { source, .. } => eval_error_is_build(source),
+    let mut current = err;
+    for _depth in 0..MAX_LABELED_EVAL_ERROR_DEPTH {
+        match current {
+            crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => return false,
+            crunch_eval::Error::Boundary(_) | crunch_eval::Error::Serde(_) => return true,
+            crunch_eval::Error::Labeled { source, .. } => current = source,
+        }
     }
+    true
 }
 
 fn evaluate_roots(file: &Path, import_paths: &[OsString], store_dir: &str) -> Result<Vec<PlannedRoot>, RunError> {
@@ -266,8 +277,9 @@ fn evaluate_roots(file: &Path, import_paths: &[OsString], store_dir: &str) -> Re
         }
         RunError::Eval(format!("{e}"))
     })?;
+    let derivation_count = derivations.len();
     let mut cache = ConversionCache::new(store_dir);
-    let mut roots = Vec::with_capacity(derivations.len());
+    let mut roots = Vec::with_capacity(derivation_count);
     for (label, drv) in derivations {
         let (drv_path, derivation) =
             crunch_glue::convert(&drv, &mut cache).map_err(|e| RunError::Build(format!("{label}: {e}")))?;
@@ -277,6 +289,8 @@ fn evaluate_roots(file: &Path, import_paths: &[OsString], store_dir: &str) -> Re
             derivation,
         });
     }
+    debug_assert_eq!(roots.len(), derivation_count);
+    debug_assert!(roots.capacity() >= roots.len());
     Ok(roots)
 }
 
@@ -293,15 +307,35 @@ fn validate_plan_config(config: &BuildPlanConfig<'_>) -> Option<String> {
     None
 }
 
-async fn plan_root_action(
-    plan_store: &PlanStore,
-    trust: &PlanTrust,
-    doctor_report: &crate::operator_diagnostics::PreflightReport,
-    preflight_error: Option<&str>,
-    remote_builder: Option<&crate::realization_routing::RemoteBuilderPlanFacts>,
-    source_preflight: Option<&crate::source_bundle::SourceOfflinePreflightReport>,
-    root: &PlannedRoot,
-) -> Result<BuildPlanEntry, RunError> {
+struct PlanRootRequest<'a> {
+    plan_store: &'a PlanStore,
+    trust: &'a PlanTrust,
+    doctor_report: &'a crate::operator_diagnostics::PreflightReport,
+    preflight_error: Option<&'a str>,
+    remote_builder: Option<&'a crate::realization_routing::RemoteBuilderPlanFacts>,
+    source_preflight: Option<&'a crate::source_bundle::SourceOfflinePreflightReport>,
+    root: &'a PlannedRoot,
+}
+
+struct CacheActionRequest<'a> {
+    plan_store: &'a PlanStore,
+    doctor_report: &'a crate::operator_diagnostics::PreflightReport,
+    remote_builder: Option<&'a crate::realization_routing::RemoteBuilderPlanFacts>,
+    source_preflight: Option<&'a crate::source_bundle::SourceOfflinePreflightReport>,
+    root: &'a PlannedRoot,
+    cache_status: CachePlanStatus,
+}
+
+async fn plan_root_action(request: PlanRootRequest<'_>) -> Result<BuildPlanEntry, RunError> {
+    let PlanRootRequest {
+        plan_store,
+        trust,
+        doctor_report,
+        preflight_error,
+        remote_builder,
+        source_preflight,
+        root,
+    } = request;
     if let Some(detail) = preflight_error {
         return Ok(root.remote_aware_preflight_entry(
             &plan_store.store_dir,
@@ -312,6 +346,8 @@ async fn plan_root_action(
     }
 
     let action_result = plan_store.plan_action_result(root, trust).await?;
+    debug_assert!(!root.drv_path.name().is_empty());
+    debug_assert!(!action_result.action_ref.is_empty());
     if action_result.conflict_class.is_some() {
         let mut entry = root.remote_aware_preflight_entry(
             &plan_store.store_dir,
@@ -335,21 +371,30 @@ async fn plan_root_action(
     }
 
     let cache_status = plan_store.classify_cache(root, trust).await?;
-    let mut entry =
-        plan_cache_or_build_action(plan_store, doctor_report, remote_builder, source_preflight, root, cache_status);
+    let mut entry = plan_cache_or_build_action(CacheActionRequest {
+        plan_store,
+        doctor_report,
+        remote_builder,
+        source_preflight,
+        root,
+        cache_status,
+    });
     entry.action_result = Some(action_result);
     Ok(entry)
 }
 
-fn plan_cache_or_build_action(
-    plan_store: &PlanStore,
-    doctor_report: &crate::operator_diagnostics::PreflightReport,
-    remote_builder: Option<&crate::realization_routing::RemoteBuilderPlanFacts>,
-    source_preflight: Option<&crate::source_bundle::SourceOfflinePreflightReport>,
-    root: &PlannedRoot,
-    cache_status: CachePlanStatus,
-) -> BuildPlanEntry {
+fn plan_cache_or_build_action(request: CacheActionRequest<'_>) -> BuildPlanEntry {
+    let CacheActionRequest {
+        plan_store,
+        doctor_report,
+        remote_builder,
+        source_preflight,
+        root,
+        cache_status,
+    } = request;
     if cache_status.all_local {
+        debug_assert!(!cache_status.any_build);
+        debug_assert!(!cache_status.any_remote);
         return root.plan_entry(
             &plan_store.store_dir,
             PlanAction::Cached,
@@ -438,11 +483,11 @@ impl PlannedRoot {
 fn source_bundle_route_facts(
     report: &crate::source_bundle::SourceOfflinePreflightReport,
 ) -> crate::realization_routing::SourceBundleRouteFacts {
-    let required = report.record_count > 0;
-    let ready = required && report.ready_class == crate::source_bundle::SourceReadiness::Ready;
+    let is_required = report.record_count > 0;
+    let is_ready = is_required && report.ready_class == crate::source_bundle::SourceReadiness::Ready;
     crate::realization_routing::SourceBundleRouteFacts {
-        required,
-        ready,
+        required: is_required,
+        ready: is_ready,
         reason_code: source_readiness_reason_code(report.ready_class),
         detail: Some(format!(
             "source_state_blake3={}; records={}; non_claim={}",
@@ -530,7 +575,12 @@ impl PlanStore {
     ) -> Result<crunch_build::ActionResultRuntimeReport, RunError> {
         let action_ref = action_ref_for_derivation(&root.derivation, &self.store_dir);
         let discovery = self.action_result_stores.discover(&action_ref).await;
-        let mut candidates = Vec::new();
+        let candidate_count_max = discovery
+            .lookups
+            .iter()
+            .try_fold(0_usize, |count, lookup| count.checked_add(lookup.records.len()))
+            .ok_or_else(|| RunError::Internal("shared action-result candidate count overflowed usize".to_string()))?;
+        let mut candidates = Vec::with_capacity(candidate_count_max);
         let mut sources = BTreeMap::new();
         for lookup in discovery.lookups {
             for signed_record in lookup.records {
@@ -605,19 +655,24 @@ impl PlanStore {
     }
 
     async fn classify_cache(&self, root: &PlannedRoot, trust: &PlanTrust) -> Result<CachePlanStatus, RunError> {
-        let mut all_local = true;
-        let mut any_remote = false;
-        let mut any_build = false;
-        let mut detail_parts = Vec::new();
+        let mut is_all_local = true;
+        let mut is_any_remote = false;
+        let mut is_any_build = false;
+        let mut detail_parts = Vec::with_capacity(root.derivation.outputs.len());
         let is_fod = root.derivation.outputs.values().any(|output| output.ca_hash.is_some());
         let drv_abs = root.drv_path.to_absolute_path_with_prefix(&self.store_dir);
 
         for (output_name, output) in &root.derivation.outputs {
-            let Some(output_path) =
-                resolve_output_path(&drv_abs, output_name, output, &self.ca_mappings, &self.store_dir)?
+            let Some(output_path) = resolve_output_path(ResolveOutputRequest {
+                drv_abs: &drv_abs,
+                output_name,
+                output,
+                ca_mappings: &self.ca_mappings,
+                store_dir: &self.store_dir,
+            })?
             else {
-                all_local = false;
-                any_build = true;
+                is_all_local = false;
+                is_any_build = true;
                 detail_parts.push(format!("{output_name}=build"));
                 continue;
             };
@@ -628,17 +683,17 @@ impl PlanStore {
                     detail_parts.push(format!("{output_name}=cached"));
                 }
                 OutputPlan::Build(reason) => {
-                    all_local = false;
-                    any_build = true;
+                    is_all_local = false;
+                    is_any_build = true;
                     detail_parts.push(format!("{output_name}=build ({reason})"));
                 }
                 OutputPlan::Missing => {
-                    all_local = false;
+                    is_all_local = false;
                     if !is_fod && self.remote_output_available(&output_path).await? {
-                        any_remote = true;
+                        is_any_remote = true;
                         detail_parts.push(format!("{output_name}=substitute"));
                     } else {
-                        any_build = true;
+                        is_any_build = true;
                         detail_parts.push(format!("{output_name}=build"));
                     }
                 }
@@ -651,9 +706,9 @@ impl PlanStore {
             Some(detail_parts.join(", "))
         };
         Ok(CachePlanStatus {
-            all_local,
-            any_remote,
-            any_build,
+            all_local: is_all_local,
+            any_remote: is_any_remote,
+            any_build: is_any_build,
             detail,
         })
     }
@@ -764,20 +819,22 @@ fn config_dir_or(state_dir: &Path) -> PathBuf {
     std::env::var("CRUNCH_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|_| state_dir.to_path_buf())
 }
 
-fn resolve_output_path(
-    drv_abs: &str,
-    output_name: &str,
-    output: &nix_compat::derivation::Output,
-    ca_mappings: &CaMappings,
-    store_dir: &str,
-) -> Result<Option<StorePath<String>>, RunError> {
-    if let Some(path) = &output.path {
+struct ResolveOutputRequest<'a> {
+    drv_abs: &'a str,
+    output_name: &'a str,
+    output: &'a nix_compat::derivation::Output,
+    ca_mappings: &'a CaMappings,
+    store_dir: &'a str,
+}
+
+fn resolve_output_path(request: ResolveOutputRequest<'_>) -> Result<Option<StorePath<String>>, RunError> {
+    if let Some(path) = &request.output.path {
         return Ok(Some(path.clone()));
     }
-    let Some(mapped) = ca_mappings.get(drv_abs, output_name) else {
+    let Some(mapped) = request.ca_mappings.get(request.drv_abs, request.output_name) else {
         return Ok(None);
     };
-    let path = StorePath::from_absolute_path_with_prefix(mapped.as_bytes(), store_dir)
+    let path = StorePath::from_absolute_path_with_prefix(mapped.as_bytes(), request.store_dir)
         .map_err(|_| RunError::Internal(format!("invalid CA mapping path: {mapped}")))?;
     Ok(Some(path))
 }
@@ -785,20 +842,31 @@ fn resolve_output_path(
 fn open_blob_service(state_dir: &Path) -> Result<Arc<dyn BlobService>, RunError> {
     let blob_dir = state_dir.join("blobs");
     if !blob_dir.is_dir() {
-        return Ok(Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>);
+        return Ok(Arc::new(empty_memory_blob_service()) as Arc<dyn BlobService>);
     }
     let svc = ObjectStoreBlobService::new_local(&blob_dir)
         .map_err(|e| RunError::Internal(format!("opening blob dir {}: {e}", blob_dir.display())))?;
     Ok(Arc::new(svc) as Arc<dyn BlobService>)
 }
 
+#[allow(
+    tigerstyle::explicit_defaults,
+    reason = "MemoryBlobService has private fields and exposes Default as its only direct constructor"
+)]
+fn empty_memory_blob_service() -> MemoryBlobService {
+    MemoryBlobService::default()
+}
+
 async fn open_directory_service(state_dir: &Path) -> Result<Arc<dyn DirectoryService>, RunError> {
+    debug_assert!(!state_dir.as_os_str().is_empty());
     let path = state_dir.join("directories.redb");
+    debug_assert!(path.starts_with(state_dir));
     if !path.is_file() {
-        let svc = RedbDirectoryService::new_temporary(
-            "plan-empty-directory".to_string(),
-            RedbDirectoryServiceConfig::default(),
-        )
+        let svc = RedbDirectoryService::new_temporary("plan-empty-directory".to_string(), RedbDirectoryServiceConfig {
+            path: None,
+            cache_size: None,
+            read_only: false,
+        })
         .map_err(|e| RunError::Internal(format!("creating empty directory service: {e}")))?;
         return Ok(Arc::new(svc) as Arc<dyn DirectoryService>);
     }
@@ -816,10 +884,9 @@ async fn open_directory_service(state_dir: &Path) -> Result<Arc<dyn DirectorySer
 async fn open_pathinfo_service(state_dir: &Path) -> Result<Arc<dyn PathInfoService>, RunError> {
     let path = state_dir.join("pathinfo.redb");
     if !path.is_file() {
-        let svc = LruPathInfoService::with_capacity(
-            "plan-empty-pathinfo".to_string(),
-            NonZeroUsize::new(32).expect("non-zero pathinfo capacity"),
-        );
+        let pathinfo_entry_count_max = NonZeroUsize::new(EMPTY_PATHINFO_ENTRY_COUNT)
+            .ok_or_else(|| RunError::Internal("empty plan PathInfo capacity must be non-zero".to_string()))?;
+        let svc = LruPathInfoService::with_capacity("plan-empty-pathinfo".to_string(), pathinfo_entry_count_max);
         return Ok(Arc::new(svc) as Arc<dyn PathInfoService>);
     }
 
