@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 
 use crunch_action_result_core::ACTION_RECEIPT_REF_PREFIX;
 use crunch_action_result_core::ACTION_REF_PREFIX;
+use crunch_action_result_core::ACTION_RESULT_POLICY_SCHEMA;
 use crunch_action_result_core::ActionResultOutput;
 use crunch_action_result_core::ActionResultRecord;
 use crunch_action_result_core::ActionResultRecordInput;
@@ -59,6 +60,7 @@ const SIGNATURE_DOMAIN: &[u8] = b"mantle.action-result.signature.v1";
 const DOMAIN_SEPARATOR: u8 = 0;
 const PRODUCER_POLICY_ID: &str = "ed25519-record-and-pathinfo-v1";
 const PUBLICATION_POLICY_ID: &str = "record-before-index-atomic-no-clobber-v1";
+const ACTION_RESULT_TRUST_POLICY_ID: &str = "mantle-action-result-default-v1";
 const NO_TRUSTED_SIGNER_SENTINEL: &str = "no-trusted-action-result-signer-configured";
 const NON_CLAIM_CA_MAPPING: &str = "ca-mapping-presence-is-not-output-trust";
 const NON_CLAIM_EXECUTOR: &str = "executor-correctness";
@@ -98,6 +100,20 @@ pub struct ActionResultRuntimeReport {
     pub non_claims: Vec<String>,
 }
 
+struct PathInfoRefInput<'a> {
+    object_ref: &'a str,
+    store_dir: &'a str,
+}
+
+struct ActionReceiptRefInput<'a> {
+    action_ref: &'a str,
+    outputs: &'a [ActionResultOutput],
+    reference_scan_refs: &'a [String],
+    policy_refs: &'a ActionPolicyRefs,
+    producer_identity: &'a str,
+    signature_refs: &'a [String],
+}
+
 pub fn action_ref_for_derivation(derivation: &Derivation, store_dir: &str) -> String {
     assert!(!store_dir.is_empty(), "store_dir must not be empty");
     assert!(store_dir.starts_with('/'), "store_dir must be absolute");
@@ -124,7 +140,7 @@ pub fn policy_refs_for_derivation(
         "hermeticity_mode": hermeticity_mode.as_str(),
     }))
     .map_err(|error| format!("action-result-network-policy-json:{error}"))?;
-    Ok(ActionPolicyRefs {
+    let policy_refs = ActionPolicyRefs {
         sandbox_policy_ref: domain_ref(SANDBOX_POLICY_REF_PREFIX, SANDBOX_POLICY_DOMAIN, &sandbox_bytes),
         network_policy_ref: domain_ref(NETWORK_POLICY_REF_PREFIX, NETWORK_POLICY_DOMAIN, &network_bytes),
         producer_policy_ref: domain_ref(
@@ -137,7 +153,10 @@ pub fn policy_refs_for_derivation(
             PUBLICATION_POLICY_DOMAIN,
             PUBLICATION_POLICY_ID.as_bytes(),
         ),
-    })
+    };
+    debug_assert!(policy_refs.sandbox_policy_ref.starts_with(SANDBOX_POLICY_REF_PREFIX));
+    debug_assert!(policy_refs.network_policy_ref.starts_with(NETWORK_POLICY_REF_PREFIX));
+    Ok(policy_refs)
 }
 
 pub fn signed_record_for_outputs(
@@ -159,15 +178,22 @@ pub fn signed_record_for_outputs(
     )?;
     let record = canonical_action_result(input)?;
     let signature = keypair.signing_key.sign(record.result_ref.as_bytes()).to_owned();
-    Ok(SignedActionResultRecord {
+    let signed_record = SignedActionResultRecord {
         record,
         record_signatures: vec![DetachedRecordSignature {
             key_name: producer_identity,
             signature: signature.to_string(),
         }],
-    })
+    };
+    debug_assert_eq!(signed_record.record.action_ref, action_ref_for_derivation(derivation, store_dir));
+    debug_assert_eq!(signed_record.record_signatures.len(), 1);
+    Ok(signed_record)
 }
 
+#[expect(
+    tigerstyle::too_many_parameters,
+    reason = "stable public adapter signature; named private inputs remove ambiguity below this boundary"
+)]
 pub fn record_input_for_outputs(
     action_ref: String,
     derivation: &Derivation,
@@ -186,15 +212,15 @@ pub fn record_input_for_outputs(
     let result_outputs = canonical_outputs(outputs, store_dir)?;
     let signature_refs = output_signature_refs(outputs);
     let reference_scan_refs = reference_scan_refs(outputs, &result_outputs, store_dir)?;
-    let action_receipt_ref = action_receipt_ref(
-        &action_ref,
-        &result_outputs,
-        &reference_scan_refs,
-        &policy_refs,
-        &producer_identity,
-        &signature_refs,
-    )?;
-    Ok(ActionResultRecordInput {
+    let action_receipt_ref = action_receipt_ref(ActionReceiptRefInput {
+        action_ref: &action_ref,
+        outputs: &result_outputs,
+        reference_scan_refs: &reference_scan_refs,
+        policy_refs: &policy_refs,
+        producer_identity: &producer_identity,
+        signature_refs: &signature_refs,
+    })?;
+    let record_input = ActionResultRecordInput {
         action_ref,
         outputs: result_outputs,
         action_receipt_ref,
@@ -206,9 +232,16 @@ pub fn record_input_for_outputs(
         signature_refs,
         publication_policy_ref: policy_refs.publication_policy_ref,
         non_claims: runtime_non_claims(),
-    })
+    };
+    debug_assert_eq!(record_input.outputs.len(), outputs.len());
+    debug_assert!(!record_input.outputs.is_empty());
+    Ok(record_input)
 }
 
+#[expect(
+    tigerstyle::too_many_parameters,
+    reason = "stable public admission API; all internal multi-value helpers use named inputs"
+)]
 pub fn candidate_admission_facts(
     source_id: String,
     source_class: String,
@@ -231,14 +264,14 @@ pub fn candidate_admission_facts(
         )
         .ok()
     });
-    let path_info_signatures_verified =
+    let is_path_info_signatures_verified =
         outputs.map(|outputs| all_path_info_signatures_verified(outputs, trusted_keys)).unwrap_or(false);
-    let producer_policy_admitted = expected.as_ref().is_some_and(|input| {
+    let is_producer_policy_admitted = expected.as_ref().is_some_and(|input| {
         input.producer_policy_ref == signed.record.producer_policy_ref
             && input.producer_identity == signed.record.producer_identity
             && verified_record_signers.contains(&signed.record.producer_identity)
     });
-    CandidateAdmissionFacts {
+    let facts = CandidateAdmissionFacts {
         source_id,
         source_class,
         verified_record_signers,
@@ -247,8 +280,8 @@ pub fn candidate_admission_facts(
             .is_some_and(|input| input.action_receipt_ref == signed.record.action_receipt_ref),
         object_refs_complete: expected.as_ref().is_some_and(|input| same_object_refs(input, &signed.record)),
         path_info_refs_linked: expected.as_ref().is_some_and(|input| same_path_info_refs(input, &signed.record)),
-        path_info_signatures_verified,
-        producer_policy_admitted,
+        path_info_signatures_verified: is_path_info_signatures_verified,
+        producer_policy_admitted: is_producer_policy_admitted,
         publication_policy_admitted: expected
             .as_ref()
             .is_some_and(|input| input.publication_policy_ref == signed.record.publication_policy_ref),
@@ -262,7 +295,10 @@ pub fn candidate_admission_facts(
             .as_ref()
             .is_some_and(|input| input.reference_scan_refs == signed.record.reference_scan_refs),
         claim_strength: STRONG_CLAIM.to_string(),
-    }
+    };
+    debug_assert!(facts.verified_record_signers.len() <= signed.record_signatures.len());
+    debug_assert_eq!(facts.claim_strength, STRONG_CLAIM);
+    facts
 }
 
 pub fn trust_policy_for_action(
@@ -275,16 +311,27 @@ pub fn trust_policy_for_action(
     if signer_names.is_empty() {
         signer_names.push(NO_TRUSTED_SIGNER_SENTINEL.to_string());
     }
-    ActionResultTrustPolicy {
+    let trust_policy = ActionResultTrustPolicy {
+        schema: ACTION_RESULT_POLICY_SCHEMA.to_string(),
+        policy_id: ACTION_RESULT_TRUST_POLICY_ID.to_string(),
         trusted_producers: signer_names.clone(),
         trusted_record_signers: signer_names,
         allowed_source_classes: crunch_store::action_result_runtime_policy().sources.allowed_classes.clone(),
         allowed_sandbox_policy_refs: vec![policy_refs.sandbox_policy_ref.clone()],
         allowed_network_policy_refs: vec![policy_refs.network_policy_ref.clone()],
-        ..ActionResultTrustPolicy::default()
-    }
+        required_non_claims: runtime_non_claims(),
+        require_record_signature: true,
+        require_path_info_signature: true,
+    };
+    debug_assert!(trust_policy.require_record_signature);
+    debug_assert!(trust_policy.require_path_info_signature);
+    trust_policy
 }
 
+#[expect(
+    tigerstyle::too_many_parameters,
+    reason = "stable public report adapter signature retained for existing plan and runtime callers"
+)]
 pub fn discovery_runtime_report(
     action_ref: String,
     disposition: &str,
@@ -293,13 +340,15 @@ pub fn discovery_runtime_report(
     transfer: Option<ActionResultTransferEvidence>,
     diagnostics: Vec<String>,
 ) -> ActionResultRuntimeReport {
+    let candidate_decision_count = plan.candidate_decisions.len();
+    let non_claim_count = plan.non_claims.len();
     let trust_basis = plan
         .candidate_decisions
         .iter()
         .find(|decision| Some(&decision.result_ref) == plan.selected_result_ref.as_ref())
         .map(|decision| decision.trust_basis.clone())
         .unwrap_or_default();
-    ActionResultRuntimeReport {
+    let runtime_evidence = ActionResultRuntimeReport {
         schema: ACTION_RESULT_RUNTIME_REPORT_SCHEMA.to_string(),
         phase: ACTION_RESULT_PHASE_DISCOVERY.to_string(),
         action_ref,
@@ -314,7 +363,10 @@ pub fn discovery_runtime_report(
         transfer,
         diagnostics,
         non_claims: plan.non_claims,
-    }
+    };
+    debug_assert_eq!(runtime_evidence.candidate_decisions.len(), candidate_decision_count);
+    debug_assert_eq!(runtime_evidence.non_claims.len(), non_claim_count);
+    runtime_evidence
 }
 
 pub fn publication_runtime_report(
@@ -360,7 +412,10 @@ fn canonical_outputs(outputs: &BTreeMap<String, PathInfo>, store_dir: &str) -> R
             name: name.clone(),
             object_ref: object_ref.clone(),
             store_path: path_info.store_path.to_absolute_path_with_prefix(store_dir),
-            path_info_ref: path_info_ref(path_info, &object_ref, store_dir)?,
+            path_info_ref: path_info_ref(path_info, PathInfoRefInput {
+                object_ref: &object_ref,
+                store_dir,
+            })?,
         });
     }
     Ok(result)
@@ -371,24 +426,26 @@ fn object_ref_for_node(node: &Node) -> Result<String, String> {
     Ok(domain_ref(OBJECT_REF_PREFIX, OBJECT_DOMAIN, &bytes))
 }
 
-fn path_info_ref(path_info: &PathInfo, object_ref: &str, store_dir: &str) -> Result<String, String> {
+fn path_info_ref(path_info: &PathInfo, input: PathInfoRefInput<'_>) -> Result<String, String> {
     let mut references = path_info
         .references
         .iter()
-        .map(|reference| reference.to_absolute_path_with_prefix(store_dir))
+        .map(|reference| reference.to_absolute_path_with_prefix(input.store_dir))
         .collect::<Vec<_>>();
     references.sort();
     let mut signatures = path_info.signatures.iter().map(ToString::to_string).collect::<Vec<_>>();
     signatures.sort();
+    debug_assert!(references.windows(2).all(|window| window[0] <= window[1]));
+    debug_assert!(signatures.windows(2).all(|window| window[0] <= window[1]));
     let bytes = serde_json::to_vec(&serde_json::json!({
         "schema": "mantle-action-result-pathinfo-v1",
-        "store_path": path_info.store_path.to_absolute_path_with_prefix(store_dir),
-        "object_ref": object_ref,
+        "store_path": path_info.store_path.to_absolute_path_with_prefix(input.store_dir),
+        "object_ref": input.object_ref,
         "references": references,
         "nar_size": path_info.nar_size,
         "nar_sha256": data_encoding::HEXLOWER.encode(&path_info.nar_sha256),
         "signatures": signatures,
-        "deriver": path_info.deriver.as_ref().map(|path| path.to_absolute_path_with_prefix(store_dir)),
+        "deriver": path_info.deriver.as_ref().map(|path| path.to_absolute_path_with_prefix(input.store_dir)),
     }))
     .map_err(|error| format!("action-result-pathinfo-json:{error}"))?;
     Ok(domain_ref(PATH_INFO_REF_PREFIX, PATH_INFO_DOMAIN, &bytes))
@@ -434,28 +491,23 @@ fn reference_scan_refs(
     }
     refs.sort();
     refs.dedup();
+    debug_assert!(refs.len() <= outputs.len());
+    debug_assert!(refs.windows(2).all(|window| window[0] < window[1]));
     Ok(refs)
 }
 
-fn action_receipt_ref(
-    action_ref: &str,
-    outputs: &[ActionResultOutput],
-    reference_scan_refs: &[String],
-    policy_refs: &ActionPolicyRefs,
-    producer_identity: &str,
-    signature_refs: &[String],
-) -> Result<String, String> {
+fn action_receipt_ref(input: ActionReceiptRefInput<'_>) -> Result<String, String> {
     let bytes = serde_json::to_vec(&serde_json::json!({
         "schema": "mantle-action-receipt-v1",
-        "action_ref": action_ref,
-        "outputs": outputs,
-        "reference_scan_refs": reference_scan_refs,
-        "sandbox_policy_ref": policy_refs.sandbox_policy_ref,
-        "network_policy_ref": policy_refs.network_policy_ref,
-        "producer_identity": producer_identity,
-        "producer_policy_ref": policy_refs.producer_policy_ref,
-        "publication_policy_ref": policy_refs.publication_policy_ref,
-        "signature_refs": signature_refs,
+        "action_ref": input.action_ref,
+        "outputs": input.outputs,
+        "reference_scan_refs": input.reference_scan_refs,
+        "sandbox_policy_ref": input.policy_refs.sandbox_policy_ref,
+        "network_policy_ref": input.policy_refs.network_policy_ref,
+        "producer_identity": input.producer_identity,
+        "producer_policy_ref": input.policy_refs.producer_policy_ref,
+        "publication_policy_ref": input.policy_refs.publication_policy_ref,
+        "signature_refs": input.signature_refs,
         "execution_status": "success",
     }))
     .map_err(|error| format!("action-result-receipt-json:{error}"))?;
@@ -463,7 +515,7 @@ fn action_receipt_ref(
 }
 
 fn verify_record_signatures(signed: &SignedActionResultRecord, trusted_keys: &[VerifyingKey]) -> Vec<String> {
-    let mut verified = Vec::new();
+    let mut verified = Vec::with_capacity(signed.record_signatures.len());
     for detached in &signed.record_signatures {
         let Ok(signature) = Signature::<String>::parse(&detached.signature) else {
             continue;
@@ -697,10 +749,13 @@ mod tests {
         let refs = policy_refs_for_derivation(&derivation, "/mantle/store", HermeticityMode::Strict).unwrap();
         let policy = trust_policy_for_action(&refs, std::slice::from_ref(&keypair().verifying_key));
 
+        assert_eq!(policy.schema, ACTION_RESULT_POLICY_SCHEMA);
+        assert_eq!(policy.policy_id, ACTION_RESULT_TRUST_POLICY_ID);
         assert_eq!(policy.trusted_producers, vec!["builder-key-1".to_string()]);
         assert!(policy.allowed_source_classes.contains(&SOURCE_CLASS_LOCAL.to_string()));
         assert!(policy.allowed_source_classes.contains(&SOURCE_CLASS_HTTP.to_string()));
-        assert!(policy.required_non_claims.contains(&NON_CLAIM_CA_MAPPING.to_string()));
-        assert!(policy.required_non_claims.contains(&NON_CLAIM_INDEX.to_string()));
+        assert_eq!(policy.required_non_claims, runtime_non_claims());
+        assert!(policy.require_record_signature);
+        assert!(policy.require_path_info_signature);
     }
 }

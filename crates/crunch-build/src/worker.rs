@@ -86,6 +86,31 @@ struct DynamicPlaceholderBindings {
     unit_outputs: BTreeMap<(String, String), String>,
 }
 
+struct NativePlanIdentity<'a> {
+    producer_key: &'a str,
+    output_name: &'a str,
+}
+
+struct AcceptedNativePlanInput<'a> {
+    identity: NativePlanIdentity<'a>,
+    plan_artifact_path: StorePath<String>,
+    raw_artifact_digest: String,
+    plan: CanonicalDynamicPlanV1,
+}
+
+struct NativePlanRejectionInput<'a> {
+    identity: NativePlanIdentity<'a>,
+    plan_artifact_path: Option<StorePath<String>>,
+    raw_artifact_digest: Option<String>,
+    kind: NativeDynamicPlanRejectionKind,
+    detail: String,
+}
+
+struct DynamicStorePathInput<'a> {
+    path: &'a str,
+    store_dir: &'a str,
+}
+
 /// A derivation arriving from the eval thread.
 ///
 /// Contains the root drv_path plus all newly-converted entries
@@ -225,22 +250,16 @@ fn blake3_hex(bytes: &[u8]) -> String {
     blake3::hash(bytes).to_hex().to_string()
 }
 
-fn accepted_native_plan(
-    producer_key: &str,
-    output_name: &str,
-    plan_artifact_path: StorePath<String>,
-    raw_artifact_digest: String,
-    plan: CanonicalDynamicPlanV1,
-) -> NativeDynamicPlanAccepted {
-    let accepted_unit_ids = plan.plan.units.iter().map(|unit| unit.id.clone()).collect();
+fn accepted_native_plan(input: AcceptedNativePlanInput<'_>) -> NativeDynamicPlanAccepted {
+    let accepted_unit_ids = input.plan.plan.units.iter().map(|unit| unit.id.clone()).collect();
     NativeDynamicPlanAccepted {
-        producer_key: producer_key.to_string(),
-        output_name: output_name.to_string(),
-        plan_artifact_path,
-        raw_artifact_digest,
-        canonical_plan_digest: plan.digest.clone(),
+        producer_key: input.identity.producer_key.to_string(),
+        output_name: input.identity.output_name.to_string(),
+        plan_artifact_path: input.plan_artifact_path,
+        raw_artifact_digest: input.raw_artifact_digest,
+        canonical_plan_digest: input.plan.digest.clone(),
         accepted_unit_ids,
-        plan,
+        plan: input.plan,
     }
 }
 
@@ -273,11 +292,11 @@ fn native_plan_report_from_rejection(rejected: &NativeDynamicPlanRejection) -> N
 }
 
 fn native_plan_reports_from_scan(scan: &NativeDynamicPlanScan) -> Vec<NativeDynamicPlanReport> {
-    let mut reports = Vec::with_capacity(scan.accepted.len().saturating_add(scan.rejected.len()));
-    reports.extend(scan.accepted.iter().map(native_plan_report_from_accepted));
-    reports.extend(scan.rejected.iter().map(native_plan_report_from_rejection));
-    sort_native_dynamic_plan_reports(&mut reports);
-    reports
+    let mut native_plan_rows = Vec::with_capacity(scan.accepted.len().saturating_add(scan.rejected.len()));
+    native_plan_rows.extend(scan.accepted.iter().map(native_plan_report_from_accepted));
+    native_plan_rows.extend(scan.rejected.iter().map(native_plan_report_from_rejection));
+    sort_native_dynamic_plan_reports(&mut native_plan_rows);
+    native_plan_rows
 }
 
 fn finish_worker_result(
@@ -312,36 +331,40 @@ fn sort_native_dynamic_plan_reports(reports: &mut [NativeDynamicPlanReport]) {
     });
 }
 
-fn native_plan_rejection(
-    producer_key: &str,
-    output_name: &str,
-    plan_artifact_path: Option<StorePath<String>>,
-    raw_artifact_digest: Option<String>,
-    kind: NativeDynamicPlanRejectionKind,
-    detail: String,
-) -> NativeDynamicPlanRejection {
+fn native_plan_rejection(input: NativePlanRejectionInput<'_>) -> NativeDynamicPlanRejection {
     NativeDynamicPlanRejection {
-        producer_key: producer_key.to_string(),
-        output_name: output_name.to_string(),
-        plan_artifact_path,
-        raw_artifact_digest,
-        kind,
-        detail,
+        producer_key: input.identity.producer_key.to_string(),
+        output_name: input.identity.output_name.to_string(),
+        plan_artifact_path: input.plan_artifact_path,
+        raw_artifact_digest: input.raw_artifact_digest,
+        kind: input.kind,
+        detail: input.detail,
     }
 }
 
-fn parse_dynamic_store_path(path: &str, store_dir: &str) -> Result<StorePath<String>, Error> {
-    StorePath::from_absolute_path_with_prefix(path.as_bytes(), store_dir)
-        .map_err(|_| Error::Store(format!("native dynamic plan store path is invalid for prefix {store_dir}: {path}")))
+fn parse_dynamic_store_path(input: DynamicStorePathInput<'_>) -> Result<StorePath<String>, Error> {
+    StorePath::from_absolute_path_with_prefix(input.path.as_bytes(), input.store_dir).map_err(|_| {
+        Error::Store(format!(
+            "native dynamic plan store path is invalid for prefix {}: {}",
+            input.store_dir, input.path
+        ))
+    })
 }
 
 fn dynamic_sources_by_id(
     sources: &[DeclaredSourceInput],
     store_dir: &str,
 ) -> Result<BTreeMap<String, StorePath<String>>, Error> {
+    let source_count_max = sources.len();
     let mut by_id = BTreeMap::new();
     for source in sources {
-        let path = parse_dynamic_store_path(&source.path, store_dir)?;
+        let path = parse_dynamic_store_path(DynamicStorePathInput {
+            path: &source.path,
+            store_dir,
+        })?;
+        if by_id.len() >= source_count_max {
+            return Err(Error::Store("native dynamic source map exceeded declared source bound".to_string()));
+        }
         by_id.insert(source.id.clone(), path);
     }
     Ok(by_id)
@@ -368,10 +391,13 @@ fn parse_dynamic_fixed_output(spec: &FixedOutputSpec) -> Result<CAHash, Error> {
         NixHash::from_algo_and_digest(algo, &digest)
             .map_err(|err| Error::Store(format!("invalid native dynamic fixed-output digest: {err}")))?
     };
-    match spec.mode {
-        FixedOutputMode::Flat => Ok(CAHash::Flat(hash)),
-        FixedOutputMode::Recursive => Ok(CAHash::Nar(hash)),
-    }
+    let ca_hash = match spec.mode {
+        FixedOutputMode::Flat => CAHash::Flat(hash),
+        FixedOutputMode::Recursive => CAHash::Nar(hash),
+    };
+    debug_assert_eq!(ca_hash.hash().algo(), algo);
+    debug_assert_eq!(matches!(&ca_hash, CAHash::Flat(_)), matches!(spec.mode, FixedOutputMode::Flat));
+    Ok(ca_hash)
 }
 
 fn dynamic_plan_outputs_are_declared(unit: &DynamicUnit) -> bool {
@@ -395,10 +421,12 @@ fn register_native_dynamic_plan_units(
     let units_by_id: BTreeMap<String, &DynamicUnit> =
         accepted.plan.plan.units.iter().map(|unit| (unit.id.clone(), unit)).collect();
     let mut pending: BTreeSet<String> = units_by_id.keys().cloned().collect();
+    let registered_unit_count_max = units_by_id.len();
+    let unit_iteration_count_max = accepted.plan.plan.units.len();
     let mut registered = BTreeMap::new();
-    let iteration_limit = accepted.plan.plan.units.len();
+    debug_assert_eq!(pending.len(), registered_unit_count_max);
 
-    for _ in 0..iteration_limit {
+    for _ in 0..unit_iteration_count_max {
         if pending.is_empty() {
             break;
         }
@@ -413,6 +441,9 @@ fn register_native_dynamic_plan_units(
         for unit_id in ready_units {
             let unit = units_by_id[unit_id.as_str()];
             let drv_path = register_native_dynamic_unit(unit, &sources, &registered, known_paths, &store_dir)?;
+            if registered.len() >= registered_unit_count_max {
+                return Err(Error::Store("native dynamic unit map exceeded validated plan bound".to_string()));
+            }
             registered.insert(unit_id.clone(), drv_path);
             pending.remove(&unit_id);
         }
@@ -426,6 +457,8 @@ fn register_native_dynamic_plan_units(
         )));
     }
 
+    debug_assert_eq!(registered.len(), registered_unit_count_max);
+    debug_assert!(accepted.plan.plan.roots.len() <= registered.len());
     let mut root_drv_paths = Vec::with_capacity(accepted.plan.plan.roots.len());
     for root in &accepted.plan.plan.roots {
         let drv_path = registered
@@ -483,6 +516,11 @@ fn register_native_dynamic_unit(
     let drv_path = derivation
         .calculate_derivation_path_with_store_dir(&unit.derivation.name, store_dir)
         .map_err(|err| Error::Store(format!("computing native dynamic derivation path for '{}': {err}", unit.id)))?;
+    debug_assert_eq!(derivation.outputs.len(), unit.derivation.outputs.len());
+    debug_assert!(derivation.input_derivations.keys().all(|parent_drv_path| {
+        let parent_abs = parent_drv_path.to_absolute_path_with_prefix(store_dir);
+        known_paths.get_hdm_by_drv_path(&parent_abs).is_some()
+    }));
     known_paths.insert_with_dynamic_plan_outputs(
         drv_path.clone(),
         hdm,
@@ -570,6 +608,7 @@ fn dynamic_placeholder_bindings(
             DynamicPlaceholder::Source { .. } => None,
         })
         .collect::<BTreeSet<_>>();
+    let binding_count_max = unit.derivation.inputs.len();
     let mut source_bindings = BTreeMap::new();
     let mut output_bindings = BTreeMap::new();
     for input in &unit.derivation.inputs {
@@ -578,6 +617,9 @@ fn dynamic_placeholder_bindings(
                 let path = sources.get(source).ok_or_else(|| {
                     Error::Store(format!("native dynamic unit '{}' references unknown source {source}", unit.id))
                 })?;
+                if source_bindings.len() >= binding_count_max {
+                    return Err(Error::Store("native dynamic source bindings exceeded input bound".to_string()));
+                }
                 source_bindings.insert(source.clone(), path.to_absolute_path_with_prefix(store_dir));
             }
             DynamicInput::UnitOutput {
@@ -593,6 +635,9 @@ fn dynamic_placeholder_bindings(
                 let drv_abs = drv_path.to_absolute_path_with_prefix(store_dir);
                 let binding_key = (dependency.clone(), output.clone());
                 if let Some(path) = known_paths.get_output_path(&drv_abs, output) {
+                    if output_bindings.len() >= binding_count_max {
+                        return Err(Error::Store("native dynamic output bindings exceeded input bound".to_string()));
+                    }
                     output_bindings.insert(binding_key, path.to_absolute_path_with_prefix(store_dir));
                 } else if required_outputs.contains(&binding_key) {
                     return Err(Error::Store(format!(
@@ -636,7 +681,7 @@ fn resolve_native_dynamic_inputs(
     for input in &unit.derivation.inputs {
         match input {
             DynamicInput::StorePath { path } => {
-                input_sources.insert(parse_dynamic_store_path(path, store_dir)?);
+                input_sources.insert(parse_dynamic_store_path(DynamicStorePathInput { path, store_dir })?);
             }
             DynamicInput::Source { source } => {
                 let path = sources.get(source).ok_or_else(|| {
@@ -658,6 +703,8 @@ fn resolve_native_dynamic_inputs(
             }
         }
     }
+    debug_assert!(input_derivations.len() <= unit.derivation.inputs.len());
+    debug_assert!(input_sources.len() <= unit.derivation.inputs.len());
     Ok((input_derivations, input_sources))
 }
 
@@ -1376,68 +1423,82 @@ impl Worker {
         BServ: BuildService + 'static,
     {
         let Some(path_info) = outcome.outputs.get(output_name) else {
-            return Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(
-                producer_key,
-                output_name,
-                None,
-                None,
-                NativeDynamicPlanRejectionKind::MissingOutput,
-                "declared dynamic-plan output is missing from build result".to_string(),
-            )));
+            return Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(NativePlanRejectionInput {
+                identity: NativePlanIdentity {
+                    producer_key,
+                    output_name,
+                },
+                plan_artifact_path: None,
+                raw_artifact_digest: None,
+                kind: NativeDynamicPlanRejectionKind::MissingOutput,
+                detail: "declared dynamic-plan output is missing from build result".to_string(),
+            })));
         };
 
         let Some(size) = node_file_size(&path_info.node) else {
-            return Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(
-                producer_key,
-                output_name,
-                Some(path_info.store_path.clone()),
-                None,
-                NativeDynamicPlanRejectionKind::NonRegularOutput,
-                "declared dynamic-plan output is not a regular file".to_string(),
-            )));
+            return Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(NativePlanRejectionInput {
+                identity: NativePlanIdentity {
+                    producer_key,
+                    output_name,
+                },
+                plan_artifact_path: Some(path_info.store_path.clone()),
+                raw_artifact_digest: None,
+                kind: NativeDynamicPlanRejectionKind::NonRegularOutput,
+                detail: "declared dynamic-plan output is not a regular file".to_string(),
+            })));
         };
 
         if size > MAX_DYNAMIC_PLAN_BYTES {
-            return Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(
-                producer_key,
-                output_name,
-                Some(path_info.store_path.clone()),
-                None,
-                NativeDynamicPlanRejectionKind::PlanTooLarge,
-                format!("declared dynamic-plan output is {size} bytes; limit is {MAX_DYNAMIC_PLAN_BYTES}"),
-            )));
+            return Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(NativePlanRejectionInput {
+                identity: NativePlanIdentity {
+                    producer_key,
+                    output_name,
+                },
+                plan_artifact_path: Some(path_info.store_path.clone()),
+                raw_artifact_digest: None,
+                kind: NativeDynamicPlanRejectionKind::PlanTooLarge,
+                detail: format!("declared dynamic-plan output is {size} bytes; limit is {MAX_DYNAMIC_PLAN_BYTES}"),
+            })));
         }
 
         let content = match builder.read_blob(&path_info.node).await {
             Ok(content) => content,
             Err(err) => {
-                return Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(
-                    producer_key,
-                    output_name,
-                    Some(path_info.store_path.clone()),
-                    None,
-                    NativeDynamicPlanRejectionKind::ReadFailed,
-                    err.to_string(),
-                )));
+                return Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(NativePlanRejectionInput {
+                    identity: NativePlanIdentity {
+                        producer_key,
+                        output_name,
+                    },
+                    plan_artifact_path: Some(path_info.store_path.clone()),
+                    raw_artifact_digest: None,
+                    kind: NativeDynamicPlanRejectionKind::ReadFailed,
+                    detail: err.to_string(),
+                })));
             }
         };
         let raw_digest = blake3_hex(&content);
         match decode_validated_plan_v1(&content, store_prefix) {
-            Ok(plan) => Ok(NativeDynamicPlanOutputScan::Accepted(Box::new(accepted_native_plan(
-                producer_key,
-                output_name,
-                path_info.store_path.clone(),
-                raw_digest,
-                plan,
-            )))),
-            Err(err) => Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(
-                producer_key,
-                output_name,
-                Some(path_info.store_path.clone()),
-                Some(raw_digest),
-                NativeDynamicPlanRejectionKind::InvalidPlan,
-                err.to_string(),
-            ))),
+            Ok(plan) => {
+                Ok(NativeDynamicPlanOutputScan::Accepted(Box::new(accepted_native_plan(AcceptedNativePlanInput {
+                    identity: NativePlanIdentity {
+                        producer_key,
+                        output_name,
+                    },
+                    plan_artifact_path: path_info.store_path.clone(),
+                    raw_artifact_digest: raw_digest,
+                    plan,
+                }))))
+            }
+            Err(err) => Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(NativePlanRejectionInput {
+                identity: NativePlanIdentity {
+                    producer_key,
+                    output_name,
+                },
+                plan_artifact_path: Some(path_info.store_path.clone()),
+                raw_artifact_digest: Some(raw_digest),
+                kind: NativeDynamicPlanRejectionKind::InvalidPlan,
+                detail: err.to_string(),
+            }))),
         }
     }
 

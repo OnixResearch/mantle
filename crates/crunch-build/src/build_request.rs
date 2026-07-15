@@ -47,7 +47,7 @@ const INITIAL_WORKSPACE_FENCE_GENERATION: u64 = 1;
 const PATH_ENTRY_SEPARATOR: char = ':';
 const STORE_PATH_HASH_CHARS: usize = 32;
 const STORE_COMPONENT_NAME_SEPARATOR_CHARS: usize = 1;
-const MIN_STORE_COMPONENT_CHARS: usize = STORE_PATH_HASH_CHARS + STORE_COMPONENT_NAME_SEPARATOR_CHARS;
+const MIN_STORE_COMPONENT_CHARS: usize = STORE_PATH_HASH_CHARS.saturating_add(STORE_COMPONENT_NAME_SEPARATOR_CHARS);
 const STRICT_DETERMINISM_CONTROL_COUNT: usize = 8;
 const DETERMINISM_POLICY_FIXED_ENV: &str = "fixed-env";
 const DETERMINISM_POLICY_FIXED_EXECUTOR: &str = "fixed-executor";
@@ -114,6 +114,31 @@ pub struct BuildRequestEnvelope {
     pub network_policy_report: crate::BuildNetworkPolicyReport,
 }
 
+struct StrictProtectedOverrideInput<'a> {
+    derivation: &'a Derivation,
+    store_dir: &'a str,
+    accepted_variable_count: usize,
+    key: &'a str,
+    sandbox_value: &'a [u8],
+    value: &'a [u8],
+}
+
+struct DeterminismControlInput<'a> {
+    surface: &'a str,
+    policy: &'a str,
+    value: String,
+}
+
+struct ReceiptBoundSearchPathInput<'a> {
+    value: &'a str,
+    store_dir: &'a str,
+}
+
+struct DeclaredToolPathInput<'a> {
+    entry: &'a str,
+    store_dir: &'a str,
+}
+
 pub fn derivation_to_build_request(
     derivation: &Derivation,
     inputs: &BTreeMap<StorePath<String>, Node>,
@@ -164,23 +189,9 @@ fn workspace_request_from_derivation(
         .map(|raw| serde_json::from_slice::<StatefulWorkspaceLeaseBinding>(raw.as_ref()))
         .transpose()
         .map_err(|error| crate::Error::Store(format!("invalid stateful workspace lease: {error}")))?;
-    let lease = if mode == StatefulWorkspaceMode::MutableSession {
-        Some(declared_lease.unwrap_or_else(|| StatefulWorkspaceLeaseBinding {
-            worker_id: LOCAL_WORKSPACE_WORKER_ID.to_string(),
-            authority_class: policy.compatibility.authority_class.clone(),
-            job_id: sanitize_workspace_identity(&action_name),
-            attempt_id: LOCAL_WORKSPACE_ATTEMPT_ID.to_string(),
-            fence_generation: INITIAL_WORKSPACE_FENCE_GENERATION,
-        }))
-    } else {
-        if declared_lease.is_some() {
-            return Err(crate::Error::Store(
-                "stateful workspace lease is only valid for mutable-session mode".to_string(),
-            ));
-        }
-        None
-    };
-    Ok(Some(StatefulWorkspaceRequest {
+    let lease = workspace_lease_binding(mode, &policy, &action_name, declared_lease)?;
+    let is_mutable_session = mode == StatefulWorkspaceMode::MutableSession;
+    let workspace_request = StatefulWorkspaceRequest {
         mode,
         workspace_id: policy.workspace_id,
         guest_path: PathBuf::from(policy.guest_path),
@@ -205,7 +216,38 @@ fn workspace_request_from_derivation(
         clean_rebuild_enabled: policy.clean_rebuild.enabled,
         clean_rebuild_require_declared_inputs: policy.clean_rebuild.require_declared_inputs,
         runtime_host_path: None,
-    }))
+    };
+    debug_assert_eq!(workspace_request.lease.is_some(), is_mutable_session);
+    debug_assert_eq!(
+        workspace_request.generation,
+        workspace_request
+            .lease
+            .as_ref()
+            .map(|binding| binding.fence_generation)
+            .unwrap_or(INITIAL_WORKSPACE_GENERATION)
+    );
+    Ok(Some(workspace_request))
+}
+
+fn workspace_lease_binding(
+    mode: StatefulWorkspaceMode,
+    policy: &crate::WorkspacePolicy,
+    action_name: &str,
+    declared_lease: Option<StatefulWorkspaceLeaseBinding>,
+) -> Result<Option<StatefulWorkspaceLeaseBinding>, crate::Error> {
+    if mode == StatefulWorkspaceMode::MutableSession {
+        return Ok(Some(declared_lease.unwrap_or_else(|| StatefulWorkspaceLeaseBinding {
+            worker_id: LOCAL_WORKSPACE_WORKER_ID.to_string(),
+            authority_class: policy.compatibility.authority_class.clone(),
+            job_id: sanitize_workspace_identity(action_name),
+            attempt_id: LOCAL_WORKSPACE_ATTEMPT_ID.to_string(),
+            fence_generation: INITIAL_WORKSPACE_FENCE_GENERATION,
+        })));
+    }
+    if declared_lease.is_some() {
+        return Err(crate::Error::Store("stateful workspace lease is only valid for mutable-session mode".to_string()));
+    }
+    Ok(None)
 }
 
 fn snapshot_input_name(value: &str) -> Result<PathBuf, crate::Error> {
@@ -254,14 +296,14 @@ pub fn normalize_build_environment(
     let action_name = environment_policy::action_name_from_environment(&derivation.environment);
     let search_path = strict_search_path_report(&environment_vars, store_dir, hermeticity_mode)?;
     let determinism = strict_determinism_report(&environment_vars, hermeticity_mode)?;
-    let mut report = environment_policy::success_report(action_name, &environment_vars);
-    report.search_path = search_path;
-    report.determinism = determinism;
+    let mut build_environment_evidence = environment_policy::success_report(action_name, &environment_vars);
+    build_environment_evidence.search_path = search_path;
+    build_environment_evidence.determinism = determinism;
 
     Ok(NormalizedBuildEnvironment {
         environment_vars,
         audit_events,
-        report,
+        report: build_environment_evidence,
     })
 }
 
@@ -357,14 +399,14 @@ fn overlay_derivation_environment(
         {
             let sandbox_value = sandbox_value.clone();
             if hermeticity_mode.is_strict() {
-                validate_strict_protected_override(
+                validate_strict_protected_override(StrictProtectedOverrideInput {
                     derivation,
                     store_dir,
-                    environment_vars.len(),
+                    accepted_variable_count: environment_vars.len(),
                     key,
-                    &sandbox_value,
-                    replaced.as_ref(),
-                )?;
+                    sandbox_value: &sandbox_value,
+                    value: replaced.as_ref(),
+                })?;
             } else {
                 audit_events.push(HermeticityAuditEvent::new(
                     HermeticityAuditKind::EnvironmentOverride,
@@ -396,26 +438,28 @@ fn reject_denied_strict_environment_key(
     Ok(())
 }
 
-fn validate_strict_protected_override(
-    derivation: &Derivation,
-    store_dir: &str,
-    accepted_variable_count: usize,
-    key: &str,
-    sandbox_value: &[u8],
-    value: &[u8],
-) -> Result<(), crate::Error> {
-    if key != PATH_VARIABLE {
+fn validate_strict_protected_override(input: StrictProtectedOverrideInput<'_>) -> Result<(), crate::Error> {
+    if input.key != PATH_VARIABLE {
         return Err(crate::Error::UnsafeEnvOverride {
-            key: key.to_string(),
-            sandbox_value: format_env_value(sandbox_value),
-            derivation_value: format_env_value(value),
+            key: input.key.to_string(),
+            sandbox_value: format_env_value(input.sandbox_value),
+            derivation_value: format_env_value(input.value),
         });
     }
-    let value = std::str::from_utf8(value).map_err(|_| {
-        search_path_denied_error(derivation, accepted_variable_count, "receipt-bound-path-non-utf8".to_string())
+    let value = std::str::from_utf8(input.value).map_err(|_| {
+        search_path_denied_error(
+            input.derivation,
+            input.accepted_variable_count,
+            "receipt-bound-path-non-utf8".to_string(),
+        )
     })?;
-    receipt_bound_search_path_from_value(value, store_dir)
-        .map_err(|err| search_path_denied_error(derivation, accepted_variable_count, err.to_string()))?;
+    let search_path_evidence = receipt_bound_search_path_from_value(ReceiptBoundSearchPathInput {
+        value,
+        store_dir: input.store_dir,
+    })
+    .map_err(|err| search_path_denied_error(input.derivation, input.accepted_variable_count, err.to_string()))?;
+    debug_assert!(search_path_evidence.digest_blake3.is_some());
+    debug_assert!(!search_path_evidence.entries.is_empty());
     Ok(())
 }
 
@@ -432,9 +476,12 @@ fn strict_search_path_report(
         .ok_or_else(|| crate::Error::Store("strict search path missing PATH".to_string()))?;
     let path_value = std::str::from_utf8(path_value)
         .map_err(|_| crate::Error::Store("strict search path contains non-UTF-8 bytes".to_string()))?;
-    let report = receipt_bound_search_path_from_value(path_value, store_dir)
-        .map_err(|err| crate::Error::Store(err.to_string()))?;
-    Ok(Some(report))
+    let search_path_evidence = receipt_bound_search_path_from_value(ReceiptBoundSearchPathInput {
+        value: path_value,
+        store_dir,
+    })
+    .map_err(|err| crate::Error::Store(err.to_string()))?;
+    Ok(Some(search_path_evidence))
 }
 
 fn strict_determinism_report(
@@ -445,80 +492,84 @@ fn strict_determinism_report(
         return Ok(None);
     }
     let controls = strict_determinism_controls(environment_vars)?;
-    let report =
+    let determinism_evidence =
         environment_policy::plan_determinism_normalization(environment_policy::DeterminismNormalizationRequest {
             controls,
             unsupported_controls: Vec::new(),
             divergence: None,
         })
         .map_err(|err| crate::Error::Store(err.to_string()))?;
-    Ok(Some(report))
+    Ok(Some(determinism_evidence))
 }
 
 fn strict_determinism_controls(
     environment_vars: &BTreeMap<String, Vec<u8>>,
 ) -> Result<Vec<environment_policy::BuildDeterminismControl>, crate::Error> {
     let mut controls = Vec::with_capacity(STRICT_DETERMINISM_CONTROL_COUNT);
-    controls.push(determinism_control(
-        DETERMINISM_SURFACE_TIME,
-        DETERMINISM_POLICY_FIXED_ENV,
-        format!("SOURCE_DATE_EPOCH={}", env_value(environment_vars, "SOURCE_DATE_EPOCH")?),
-    ));
-    controls.push(determinism_control(
-        DETERMINISM_SURFACE_TIMEZONE,
-        DETERMINISM_POLICY_FIXED_ENV,
-        format!("TZ={}", env_value(environment_vars, "TZ")?),
-    ));
-    controls.push(determinism_control(
-        DETERMINISM_SURFACE_LOCALE,
-        DETERMINISM_POLICY_FIXED_ENV,
-        format!("LANG={};LC_ALL={}", env_value(environment_vars, "LANG")?, env_value(environment_vars, "LC_ALL")?),
-    ));
-    controls.push(determinism_control(
-        DETERMINISM_SURFACE_TEMP_ROOTS,
-        DETERMINISM_POLICY_FIXED_ENV,
-        format!(
+    controls.push(determinism_control(DeterminismControlInput {
+        surface: DETERMINISM_SURFACE_TIME,
+        policy: DETERMINISM_POLICY_FIXED_ENV,
+        value: format!("SOURCE_DATE_EPOCH={}", env_value(environment_vars, "SOURCE_DATE_EPOCH")?),
+    }));
+    controls.push(determinism_control(DeterminismControlInput {
+        surface: DETERMINISM_SURFACE_TIMEZONE,
+        policy: DETERMINISM_POLICY_FIXED_ENV,
+        value: format!("TZ={}", env_value(environment_vars, "TZ")?),
+    }));
+    controls.push(determinism_control(DeterminismControlInput {
+        surface: DETERMINISM_SURFACE_LOCALE,
+        policy: DETERMINISM_POLICY_FIXED_ENV,
+        value: format!(
+            "LANG={};LC_ALL={}",
+            env_value(environment_vars, "LANG")?,
+            env_value(environment_vars, "LC_ALL")?
+        ),
+    }));
+    controls.push(determinism_control(DeterminismControlInput {
+        surface: DETERMINISM_SURFACE_TEMP_ROOTS,
+        policy: DETERMINISM_POLICY_FIXED_ENV,
+        value: format!(
             "TEMP={};TEMPDIR={};TMP={};TMPDIR={}",
             env_value(environment_vars, "TEMP")?,
             env_value(environment_vars, "TEMPDIR")?,
             env_value(environment_vars, "TMP")?,
             env_value(environment_vars, "TMPDIR")?
         ),
-    ));
-    controls.push(determinism_control(
-        DETERMINISM_SURFACE_HOST_USER,
-        DETERMINISM_POLICY_FIXED_ENV,
-        format!(
+    }));
+    controls.push(determinism_control(DeterminismControlInput {
+        surface: DETERMINISM_SURFACE_HOST_USER,
+        policy: DETERMINISM_POLICY_FIXED_ENV,
+        value: format!(
             "HOME={};LOGNAME={};USER={}",
             env_value(environment_vars, "HOME")?,
             env_value(environment_vars, "LOGNAME")?,
             env_value(environment_vars, "USER")?
         ),
-    ));
-    controls.push(determinism_control(
-        DETERMINISM_SURFACE_UMASK,
-        DETERMINISM_POLICY_FIXED_EXECUTOR,
-        STRICT_UMASK_VALUE.to_string(),
-    ));
-    controls.push(determinism_control(
-        DETERMINISM_SURFACE_RANDOMNESS,
-        DETERMINISM_POLICY_MODELED,
-        STRICT_RANDOMNESS_VALUE.to_string(),
-    ));
-    controls.push(determinism_control(
-        DETERMINISM_SURFACE_ORDERING,
-        DETERMINISM_POLICY_MODELED,
-        STRICT_ORDERING_VALUE.to_string(),
-    ));
+    }));
+    controls.push(determinism_control(DeterminismControlInput {
+        surface: DETERMINISM_SURFACE_UMASK,
+        policy: DETERMINISM_POLICY_FIXED_EXECUTOR,
+        value: STRICT_UMASK_VALUE.to_string(),
+    }));
+    controls.push(determinism_control(DeterminismControlInput {
+        surface: DETERMINISM_SURFACE_RANDOMNESS,
+        policy: DETERMINISM_POLICY_MODELED,
+        value: STRICT_RANDOMNESS_VALUE.to_string(),
+    }));
+    controls.push(determinism_control(DeterminismControlInput {
+        surface: DETERMINISM_SURFACE_ORDERING,
+        policy: DETERMINISM_POLICY_MODELED,
+        value: STRICT_ORDERING_VALUE.to_string(),
+    }));
     debug_assert_eq!(controls.len(), STRICT_DETERMINISM_CONTROL_COUNT);
     Ok(controls)
 }
 
-fn determinism_control(surface: &str, policy: &str, value: String) -> environment_policy::BuildDeterminismControl {
+fn determinism_control(input: DeterminismControlInput<'_>) -> environment_policy::BuildDeterminismControl {
     environment_policy::BuildDeterminismControl {
-        surface: surface.to_string(),
-        policy: policy.to_string(),
-        value,
+        surface: input.surface.to_string(),
+        policy: input.policy.to_string(),
+        value: input.value,
         enforcement: environment_policy::DETERMINISM_ENFORCEMENT_ENFORCED.to_string(),
     }
 }
@@ -531,16 +582,21 @@ fn env_value(environment_vars: &BTreeMap<String, Vec<u8>>, key: &str) -> Result<
 }
 
 fn receipt_bound_search_path_from_value(
-    value: &str,
-    store_dir: &str,
+    input: ReceiptBoundSearchPathInput<'_>,
 ) -> Result<environment_policy::BuildSearchPathReport, environment_policy::SearchPathPlanError> {
-    if value == SANDBOX_PATH_NOT_SET {
+    let entry_count_max = input.value.split(PATH_ENTRY_SEPARATOR).count();
+    debug_assert!(entry_count_max > 0);
+    debug_assert!(entry_count_max <= input.value.len().saturating_add(1));
+    if input.value == SANDBOX_PATH_NOT_SET {
         return environment_policy::plan_receipt_bound_search_path(environment_policy::SearchPathPlanRequest::default());
     }
-    let mut entries = Vec::new();
-    let mut ambient_entries = Vec::new();
-    for entry in value.split(PATH_ENTRY_SEPARATOR) {
-        match declared_tool_path_entry(entry, store_dir) {
+    let mut entries = Vec::with_capacity(entry_count_max);
+    let mut ambient_entries = Vec::with_capacity(entry_count_max);
+    for entry in input.value.split(PATH_ENTRY_SEPARATOR) {
+        match declared_tool_path_entry(DeclaredToolPathInput {
+            entry,
+            store_dir: input.store_dir,
+        }) {
             Some(real_tool_ref) => entries.push(environment_policy::SearchPathEntryDeclaration {
                 path: entry.to_string(),
                 kind: environment_policy::SEARCH_PATH_ENTRY_DECLARED_TOOL.to_string(),
@@ -555,12 +611,12 @@ fn receipt_bound_search_path_from_value(
     })
 }
 
-fn declared_tool_path_entry(entry: &str, store_dir: &str) -> Option<String> {
-    if entry.is_empty() || has_non_normal_path_segment(entry) {
+fn declared_tool_path_entry(input: DeclaredToolPathInput<'_>) -> Option<String> {
+    if input.entry.is_empty() || has_non_normal_path_segment(input.entry) {
         return None;
     }
-    let store_prefix = format!("{store_dir}/");
-    let rest = entry.strip_prefix(&store_prefix)?;
+    let store_prefix = format!("{}/", input.store_dir);
+    let rest = input.entry.strip_prefix(&store_prefix)?;
     let component = rest.split('/').next()?;
     if component.len() < MIN_STORE_COMPONENT_CHARS {
         return None;
@@ -1546,10 +1602,40 @@ mod tests {
             .unwrap()
             .build_request;
         let workspace = request.workspace.unwrap();
+        let lease = workspace.lease.as_ref().unwrap();
         assert_eq!(workspace.mode, StatefulWorkspaceMode::MutableSession);
         assert_eq!(workspace.workspace_id.as_deref(), Some("cargo-cache"));
-        assert!(workspace.lease.is_some());
+        assert_eq!(lease.worker_id, LOCAL_WORKSPACE_WORKER_ID);
+        assert_eq!(lease.attempt_id, LOCAL_WORKSPACE_ATTEMPT_ID);
+        assert_eq!(workspace.generation, INITIAL_WORKSPACE_FENCE_GENERATION);
         assert!(request.environment_vars.iter().all(|item| item.key != WORKSPACE_POLICY_ENV));
+    }
+
+    #[test]
+    fn non_mutable_workspace_rejects_declared_lease() {
+        const TEST_FENCE_GENERATION: u64 = 7;
+
+        let mut drv = test_derivation();
+        let policy = crate::WorkspacePolicy {
+            mode: crate::WorkspaceMode::None,
+            ..crate::WorkspacePolicy::default()
+        };
+        let lease = StatefulWorkspaceLeaseBinding {
+            worker_id: "worker-a".to_string(),
+            authority_class: "tenant-a".to_string(),
+            job_id: "job-a".to_string(),
+            attempt_id: "attempt-a".to_string(),
+            fence_generation: TEST_FENCE_GENERATION,
+        };
+        drv.environment
+            .insert(WORKSPACE_POLICY_ENV.to_string(), serde_json::to_vec(&policy).unwrap().into());
+        drv.environment.insert(WORKSPACE_LEASE_ENV.to_string(), serde_json::to_vec(&lease).unwrap().into());
+
+        let error =
+            derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical).unwrap_err();
+
+        assert_eq!(error.to_string(), "store error: stateful workspace lease is only valid for mutable-session mode");
+        assert!(!error.to_string().contains("runtime_host_path"));
     }
 
     #[test]
