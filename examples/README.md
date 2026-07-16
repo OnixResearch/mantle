@@ -24,6 +24,9 @@ Begin with the local seed-free stages, then continue into pinned network inputs 
 | Output hygiene | `examples/projects/multi-output-sdk/mantle-project.ncl` | runtime, development, documentation, and debug outputs with selected consumers |
 | Language boundary | `examples/projects/schema-codegen/mantle-project.ncl` | one schema generating checked C and Rust applications |
 | Release artifact | `examples/projects/reproducible-release/mantle-project.ncl` | normalized archives, BLAKE3 identity, and tamper detection |
+| Offline handoff | `examples/projects/offline-source-bundle/mantle-project.ncl` | source-bundle planning, pinned import, readiness, and tamper rejection |
+| Reviewed generation | `examples/projects/reviewed-file-generation/mantle-project.ncl` | non-mutating plans, drift-checked apply, and managed file identity |
+| Developer loop | `examples/projects/developer-shell-run/mantle-project.ncl` | package execution and named shell activation |
 
 ## Beginner
 
@@ -87,6 +90,9 @@ Project examples show selector syntax after package composition. See `examples/p
 | `examples/projects/reproducible-release/mantle-project.ncl` | `cd examples/projects/reproducible-release && mantle build .#checks.reproducible` | byte-identical normalized archives and a BLAKE3 sidecar | local + fast |
 | `examples/projects/signed-cache-roundtrip/mantle-project.ncl` | follow the project-local runbook | signed NAR publication, fresh-store substitution, and rejected untrusted/corrupt entries | heavy + loopback HTTP |
 | `examples/projects/locked-dependency-lifecycle/mantle-project.ncl` | `cd examples/projects/locked-dependency-lifecycle && mantle check` | checked lock/generated-input state with offline stale/refresh lifecycle | local + fast |
+| `examples/projects/offline-source-bundle/mantle-project.ncl` | follow the project-local runbook | source-bundle plan/export/verify/import/preflight with tamper rejection | local + fast |
+| `examples/projects/reviewed-file-generation/mantle-project.ncl` | `cd examples/projects/reviewed-file-generation && mantle filegen plan --plan-out /tmp/filegen-plan.json` | non-mutating plan and drift-checked generated config apply | local + fast |
+| `examples/projects/developer-shell-run/mantle-project.ncl` | `cd examples/projects/developer-shell-run && mantle run .#tool -- Mantle` | runnable package plus `dev` and `minimal` shell profiles | local + fast |
 | `examples/projects/cross-compiled-host-tool/mantle-project.ncl` | `cd examples/projects/cross-compiled-host-tool && mantle build .#target` | host-generated header consumed by an `x86_64-linux-musl` executable | heavy + first-build network |
 | `examples/projects/store-gc-lifecycle/mantle-project.ncl` | follow the project-local runbook | persistent roots, dry-run candidates, collected unreachable output, and mutation-lock rejection | heavy + local state |
 | `examples/projects/delta-substitution/mantle-project.ncl` | `cargo run -p mantle --example delta_substitution` | partial chunk transfer, full fallback, and fail-closed missing-chunk rejection | Rust adaptor |
@@ -119,6 +125,9 @@ These commands inspect local build evidence. They are not release or witness pro
 | JSON build report for `examples/hello.ncl` | `mantle --json build examples/hello.ncl --store /tmp/mantle-examples-store --state-dir /tmp/mantle-examples-state --no-substitute` | build-report JSON with `outputs[].artifact_attestation.path` | proves only local build/report shape |
 | `examples/crunch.ncl` | `mantle eval examples/crunch.ncl -I examples` | self-build derivation skeleton shape | does not prove release, witness, or fixed-point self-hosting success |
 | `examples/projects/signed-cache-roundtrip/mantle-project.ncl` | follow its README producer/cache/consumer workflow | narinfo signature and content-hash acceptance | does not prove producer correctness or upstream trust |
+| `examples/projects/offline-source-bundle/mantle-project.ncl` | follow its README producer/consumer source-state workflow | BLAKE3-bound source records and offline readiness | does not prove build success, source trust, or output correctness |
+| `examples/projects/reviewed-file-generation/mantle-project.ncl` | plan then apply in a scratch project copy | reviewed content identity and managed-file ownership | does not prove deployability or downstream semantic correctness |
+| `examples/projects/developer-shell-run/mantle-project.ncl` | run the package and activate both shell profiles | explicit package arguments and sidecar environment activation | does not prove hermeticity or release reproducibility |
 | `examples/projects/store-gc-lifecycle/mantle-project.ncl` | follow its README root/GC workflow | state-scoped root and collection report | does not prove distributed retention |
 | `examples/projects/delta-substitution/mantle-project.ncl` | `cargo run -p mantle --example delta_substitution` | in-memory delta/fallback transfer report | does not prove HTTP cache interoperability |
 | `examples/projects/release-witness-handoff/mantle-project.ncl` | `cargo run -p mantle --example release_witness_handoff` | synthetic signed attestation directory and policy result | does not prove release evidence or an independent rebuild |

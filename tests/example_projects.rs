@@ -21,6 +21,14 @@ const CROSS_COMPILED_PROJECT: &str = "cross-compiled-host-tool";
 const STORE_GC_PROJECT: &str = "store-gc-lifecycle";
 const DELTA_SUBSTITUTION_PROJECT: &str = "delta-substitution";
 const RELEASE_WITNESS_PROJECT: &str = "release-witness-handoff";
+const OFFLINE_SOURCE_BUNDLE_PROJECT: &str = "offline-source-bundle";
+const REVIEWED_FILEGEN_PROJECT: &str = "reviewed-file-generation";
+const DEVELOPER_SHELL_RUN_PROJECT: &str = "developer-shell-run";
+const SOURCE_BUNDLE_RECORDS_RELATIVE: &str = "source-bundles/records";
+const SOURCE_BUNDLE_RECORD_COUNT: u64 = 1;
+const SOURCE_BUNDLE_RECORD_COUNT_USIZE: usize = 1;
+const GENERATED_FILE_COUNT: usize = 2;
+const HEX_BYTE_TEXT_WIDTH: usize = 2;
 const LOCK_RETENTION_ROOT_RECORD: &str =
     ".mantle/retention-roots/9dcaf0da80828fc8c2c8d41160c0d12f98bb1abc03c1d1f611bc534b579c00ad.json";
 const SITE_TITLE: &str = "Mantle Project Gallery";
@@ -109,23 +117,12 @@ fn run_project_build_verbose(project: &str, selector: &str) -> ProjectRun {
     run_project_build_with_verbosity(project, selector, true)
 }
 
-fn run_project_build_with_verbosity(project: &str, selector: &str, verbose: bool) -> ProjectRun {
-    let store = tempfile::tempdir().unwrap();
-    let state = tempfile::tempdir().unwrap();
+fn project_command_with_build_environment(project: &str) -> Command {
+    assert!(!project.is_empty(), "project name must not be empty");
+    let root = project_root(project);
+    assert!(root.is_dir(), "project root must exist: {}", root.display());
     let mut command = mantle_cmd();
-    command.current_dir(project_root(project));
-    if verbose {
-        command.arg("--verbose");
-    }
-    command.args([
-        "build",
-        selector,
-        "--store",
-        store.path().to_str().unwrap(),
-        "--state-dir",
-        state.path().to_str().unwrap(),
-        "--no-substitute",
-    ]);
+    command.current_dir(root);
     if let Some(bwrap) = find_bwrap() {
         let path = std::env::join_paths(
             std::iter::once(bwrap.parent().unwrap().to_path_buf())
@@ -138,6 +135,25 @@ fn run_project_build_with_verbosity(project: &str, selector: &str, verbose: bool
         command.env("SNIX_BUILD_SANDBOX_SHELL", busybox);
     }
     command.env("CRUNCH_NO_FUSE", "1");
+    command
+}
+
+fn run_project_build_with_verbosity(project: &str, selector: &str, verbose: bool) -> ProjectRun {
+    let store = tempfile::tempdir().unwrap();
+    let state = tempfile::tempdir().unwrap();
+    let mut command = project_command_with_build_environment(project);
+    if verbose {
+        command.arg("--verbose");
+    }
+    command.args([
+        "build",
+        selector,
+        "--store",
+        store.path().to_str().unwrap(),
+        "--state-dir",
+        state.path().to_str().unwrap(),
+        "--no-substitute",
+    ]);
     let output = command.output().expect("project build should run");
     ProjectRun {
         _store: store,
@@ -228,11 +244,54 @@ fn copy_locked_dependency_project(destination: &Path) {
     }
 }
 
+fn copy_reviewed_filegen_project(destination: &Path) {
+    const PROJECT_FILES: &[&str] = &[
+        "mantle-project.ncl",
+        "filegen-schema.ncl",
+        "fixtures/missing-required-field.ncl",
+        "fixtures/target-escape.ncl",
+    ];
+    assert!(destination.is_dir(), "fixture destination must exist");
+    assert!(!PROJECT_FILES.is_empty(), "filegen fixture must copy project files");
+    let source = project_root(REVIEWED_FILEGEN_PROJECT);
+    for relative_path in PROJECT_FILES {
+        let target = destination.join(relative_path);
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::copy(source.join(relative_path), target).unwrap();
+    }
+}
+
+fn write_source_bundle_build_root(destination: &Path) {
+    assert!(destination.is_absolute(), "source bundle build root must be absolute");
+    assert!(destination.parent().is_some(), "source bundle build root must have a parent");
+    let project = project_root(OFFLINE_SOURCE_BUNDLE_PROJECT);
+    let constructor = project.join("source-root.ncl").canonicalize().unwrap();
+    let payload = project.join("sources/payload.txt").canonicalize().unwrap();
+    let source = format!(
+        "let make_source = import \"{}\" in\nmake_source \"file://{}\"\n",
+        constructor.display(),
+        payload.display()
+    );
+    std::fs::write(destination, source).unwrap();
+}
+
 fn run_project_command(current_dir: &Path, args: &[&str]) -> std::process::Output {
     assert!(current_dir.is_dir(), "project command directory must exist");
     assert!(!args.is_empty(), "project command arguments must not be empty");
     let mut command = mantle_cmd();
     command.current_dir(current_dir).args(args).output().unwrap()
+}
+
+fn parse_successful_json(output: std::process::Output, label: &str) -> serde_json::Value {
+    assert!(!label.is_empty(), "JSON command label must not be empty");
+    assert!(output.status.success(), "{label} failed: {}", String::from_utf8_lossy(&output.stderr));
+    serde_json::from_slice(&output.stdout).unwrap_or_else(|error| panic!("{label} stdout was not JSON: {error}"))
+}
+
+fn parse_failed_json(output: std::process::Output, label: &str) -> serde_json::Value {
+    assert!(!label.is_empty(), "JSON command label must not be empty");
+    assert!(!output.status.success(), "{label} unexpectedly succeeded");
+    serde_json::from_slice(&output.stdout).unwrap_or_else(|error| panic!("{label} stdout was not JSON: {error}"))
 }
 
 fn check_result(run: &ProjectRun) -> String {
@@ -263,6 +322,9 @@ fn production_workflow_projects_evaluate_and_keep_negative_paths() {
         (STORE_GC_PROJECT, "store GC project"),
         (DELTA_SUBSTITUTION_PROJECT, "delta substitution project"),
         (RELEASE_WITNESS_PROJECT, "release witness project"),
+        (OFFLINE_SOURCE_BUNDLE_PROJECT, "offline source bundle project"),
+        (REVIEWED_FILEGEN_PROJECT, "reviewed file generation project"),
+        (DEVELOPER_SHELL_RUN_PROJECT, "developer shell and run project"),
     ] {
         assert_project_evaluates(project, label);
     }
@@ -282,6 +344,374 @@ fn production_workflow_projects_evaluate_and_keep_negative_paths() {
     let release = std::fs::read_to_string(project_root(RELEASE_WITNESS_PROJECT).join("demo.rs")).unwrap();
     assert!(release.contains("InsufficientQuorum"));
     assert!(release.contains("ReleaseRevocations"));
+    let source_bundle = std::fs::read_to_string(project_root(OFFLINE_SOURCE_BUNDLE_PROJECT).join("README.md")).unwrap();
+    assert!(source_bundle.contains("digest mismatch"));
+    assert!(source_bundle.contains("route execution is future work"));
+    let filegen = std::fs::read_to_string(project_root(REVIEWED_FILEGEN_PROJECT).join("README.md")).unwrap();
+    assert!(filegen.contains("stale reviewed plan"));
+    assert!(filegen.contains("target-escape.ncl"));
+    let developer_loop =
+        std::fs::read_to_string(project_root(DEVELOPER_SHELL_RUN_PROJECT).join("mantle-project.ncl")).unwrap();
+    assert!(developer_loop.contains("MANTLE_EXAMPLE_PROFILE"));
+    assert!(developer_loop.contains("usage: operator-demo NAME"));
+}
+
+struct SourceBundleWorkflow {
+    _root: tempfile::TempDir,
+    project: PathBuf,
+    build_root: PathBuf,
+    bundle: PathBuf,
+    producer_state: PathBuf,
+    consumer_state: PathBuf,
+    tampered_state: PathBuf,
+}
+
+impl SourceBundleWorkflow {
+    fn new() -> Self {
+        let root = tempfile::tempdir().unwrap();
+        let build_root = root.path().join("source-root.ncl");
+        write_source_bundle_build_root(&build_root);
+        let workflow = Self {
+            project: project_root(OFFLINE_SOURCE_BUNDLE_PROJECT),
+            build_root,
+            bundle: root.path().join("source-bundle.json"),
+            producer_state: root.path().join("producer-state"),
+            consumer_state: root.path().join("consumer-state"),
+            tampered_state: root.path().join("tampered-state"),
+            _root: root,
+        };
+        assert!(workflow.project.is_dir());
+        assert!(workflow.build_root.is_file());
+        workflow
+    }
+
+    fn command(&self, state: &Path) -> Command {
+        assert!(self.project.is_dir());
+        assert!(state.is_absolute());
+        let mut command = mantle_cmd();
+        command.current_dir(&self.project).arg("--json").arg("--state-dir").arg(state);
+        command
+    }
+
+    fn plan(&self) -> serde_json::Value {
+        let output = self
+            .command(&self.producer_state)
+            .args(["source", "bundle", "plan", "--build-root"])
+            .arg(&self.build_root)
+            .output()
+            .unwrap();
+        parse_successful_json(output, "source bundle plan")
+    }
+
+    fn export(&self) -> serde_json::Value {
+        let output = self
+            .command(&self.producer_state)
+            .args(["source", "bundle", "export", "--build-root"])
+            .arg(&self.build_root)
+            .arg("--to")
+            .arg(&self.bundle)
+            .output()
+            .unwrap();
+        parse_successful_json(output, "source bundle export")
+    }
+
+    fn list(&self) -> serde_json::Value {
+        let output = self
+            .command(&self.consumer_state)
+            .args(["source", "bundle", "list", "--from"])
+            .arg(&self.bundle)
+            .output()
+            .unwrap();
+        parse_successful_json(output, "source bundle list")
+    }
+
+    fn verify(&self) -> serde_json::Value {
+        let output = self
+            .command(&self.consumer_state)
+            .args(["source", "bundle", "verify", "--from"])
+            .arg(&self.bundle)
+            .arg("--imported")
+            .output()
+            .unwrap();
+        parse_successful_json(output, "source bundle verify")
+    }
+
+    fn import_and_pin(&self) -> serde_json::Value {
+        let output = self
+            .command(&self.consumer_state)
+            .args(["source", "bundle", "import", "--from"])
+            .arg(&self.bundle)
+            .arg("--pin")
+            .output()
+            .unwrap();
+        parse_successful_json(output, "source bundle import")
+    }
+
+    fn preflight(&self) -> serde_json::Value {
+        let output = self
+            .command(&self.consumer_state)
+            .args(["source", "bundle", "preflight", "--build-root"])
+            .arg(&self.build_root)
+            .output()
+            .unwrap();
+        parse_successful_json(output, "source bundle preflight")
+    }
+
+    fn import_tampered_bundle(&self) -> std::process::Output {
+        let mut tampered: serde_json::Value = serde_json::from_slice(&std::fs::read(&self.bundle).unwrap()).unwrap();
+        let content_hex = tampered["records"][0]["files"][0]["content_hex"].as_str().unwrap().to_string();
+        assert!(content_hex.len() >= HEX_BYTE_TEXT_WIDTH);
+        let replacement = if content_hex.starts_with("00") { "ff" } else { "00" };
+        let mut changed_hex = content_hex;
+        changed_hex.replace_range(..HEX_BYTE_TEXT_WIDTH, replacement);
+        tampered["records"][0]["files"][0]["content_hex"] = serde_json::Value::String(changed_hex);
+        let tampered_bundle = self._root.path().join("tampered-source-bundle.json");
+        std::fs::write(&tampered_bundle, serde_json::to_vec_pretty(&tampered).unwrap()).unwrap();
+        self.command(&self.tampered_state)
+            .args(["source", "bundle", "import", "--from"])
+            .arg(tampered_bundle)
+            .output()
+            .unwrap()
+    }
+}
+
+#[test]
+fn offline_source_bundle_round_trips_and_rejects_tampering() {
+    let workflow = SourceBundleWorkflow::new();
+    let plan = workflow.plan();
+    assert_eq!(plan["ready_class"], "ready");
+    assert_eq!(plan["record_count"].as_u64(), Some(SOURCE_BUNDLE_RECORD_COUNT));
+    assert!(!workflow.producer_state.join(SOURCE_BUNDLE_RECORDS_RELATIVE).exists());
+
+    let exported = workflow.export();
+    assert_eq!(exported["ready_class"], "ready");
+    assert_eq!(exported["record_count"].as_u64(), Some(SOURCE_BUNDLE_RECORD_COUNT));
+    assert!(workflow.bundle.is_file());
+    let listed = workflow.list();
+    assert_eq!(listed["record_count"].as_u64(), Some(SOURCE_BUNDLE_RECORD_COUNT));
+    assert!(!workflow.consumer_state.join(SOURCE_BUNDLE_RECORDS_RELATIVE).exists());
+
+    let missing = workflow.verify();
+    assert_eq!(missing["ready_class"], "missing");
+    assert_eq!(missing["missing_records"].as_array().unwrap().len(), SOURCE_BUNDLE_RECORD_COUNT_USIZE);
+    let imported = workflow.import_and_pin();
+    assert_eq!(imported["imported_count"].as_u64(), Some(SOURCE_BUNDLE_RECORD_COUNT));
+    assert_eq!(imported["pinned"], true);
+    let verified = workflow.verify();
+    assert_eq!(verified["ready_class"], "ready");
+    assert!(verified["missing_records"].as_array().unwrap().is_empty());
+
+    let preflight = workflow.preflight();
+    assert_eq!(preflight["ready_class"], "ready");
+    assert_eq!(preflight["record_count"].as_u64(), Some(SOURCE_BUNDLE_RECORD_COUNT));
+    assert!(preflight["source_state_blake3"].as_str().is_some_and(|digest| !digest.is_empty()));
+    let tampered = workflow.import_tampered_bundle();
+    assert!(!tampered.status.success(), "tampered source bundle unexpectedly imported");
+    assert!(String::from_utf8_lossy(&tampered.stderr).contains("digest mismatch"));
+    assert!(!workflow.tampered_state.join(SOURCE_BUNDLE_RECORDS_RELATIVE).exists());
+}
+
+#[test]
+fn reviewed_file_generation_applies_current_plan_and_tracks_state() {
+    let fixture = tempfile::tempdir().unwrap();
+    copy_reviewed_filegen_project(fixture.path());
+    let target_dir = fixture.path().join("target");
+    std::fs::create_dir_all(&target_dir).unwrap();
+    let plan_path = target_dir.join("filegen-plan.json");
+    let plan = parse_successful_json(
+        run_project_command(fixture.path(), &["--json", "filegen", "plan", "--plan-out", plan_path.to_str().unwrap()]),
+        "filegen plan",
+    );
+    assert_eq!(plan["operations"].as_array().unwrap().len(), GENERATED_FILE_COUNT);
+    assert!(plan["operations"].as_array().unwrap().iter().all(|operation| operation["action"] == "create"));
+    assert!(!fixture.path().join("generated").exists(), "filegen plan must not write generated files");
+
+    let applied = parse_successful_json(
+        run_project_command(fixture.path(), &["--json", "filegen", "apply", "--plan", plan_path.to_str().unwrap()]),
+        "filegen apply",
+    );
+    assert_eq!(applied["operations"].as_array().unwrap().len(), GENERATED_FILE_COUNT);
+    let config: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(fixture.path().join("generated/app-config.json")).unwrap()).unwrap();
+    assert_eq!(config["name"], "mantle-filegen-demo");
+    assert_eq!(config["mode"], "reviewed");
+    assert_eq!(
+        std::fs::read_to_string(fixture.path().join("generated/README.txt")).unwrap(),
+        "generated only after a reviewed Mantle plan\n"
+    );
+    let state: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(fixture.path().join(".mantle/filegen-state.json")).unwrap()).unwrap();
+    assert_eq!(state["files"].as_object().unwrap().len(), GENERATED_FILE_COUNT);
+
+    let second_plan = parse_successful_json(
+        run_project_command(fixture.path(), &["--json", "filegen", "plan"]),
+        "second filegen plan",
+    );
+    assert!(
+        second_plan["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|operation| operation["action"] == "unchanged")
+    );
+}
+
+#[test]
+fn reviewed_file_generation_rejects_drift_conflict_and_escape() {
+    let drift_fixture = tempfile::tempdir().unwrap();
+    copy_reviewed_filegen_project(drift_fixture.path());
+    let plan_path = drift_fixture.path().join("filegen-plan.json");
+    parse_successful_json(
+        run_project_command(drift_fixture.path(), &[
+            "--json",
+            "filegen",
+            "plan",
+            "--plan-out",
+            plan_path.to_str().unwrap(),
+        ]),
+        "filegen drift plan",
+    );
+    let manifest_path = drift_fixture.path().join("mantle-project.ncl");
+    let manifest = std::fs::read_to_string(&manifest_path).unwrap();
+    let changed = manifest.replace("\"mode\":\"reviewed\"", "\"mode\":\"changed\"");
+    assert_ne!(changed, manifest, "drift fixture replacement must change the manifest");
+    std::fs::write(&manifest_path, changed).unwrap();
+    let drift = parse_failed_json(
+        run_project_command(drift_fixture.path(), &[
+            "--json",
+            "filegen",
+            "apply",
+            "--plan",
+            plan_path.to_str().unwrap(),
+        ]),
+        "stale filegen apply",
+    );
+    assert!(drift.as_array().unwrap().iter().any(|blocker| blocker["code"] == "plan-drift"));
+    assert!(!drift_fixture.path().join("generated").exists());
+
+    let conflict_fixture = tempfile::tempdir().unwrap();
+    copy_reviewed_filegen_project(conflict_fixture.path());
+    std::fs::create_dir_all(conflict_fixture.path().join("generated")).unwrap();
+    std::fs::write(conflict_fixture.path().join("generated/app-config.json"), b"unmanaged\n").unwrap();
+    let conflict = parse_failed_json(
+        run_project_command(conflict_fixture.path(), &["--json", "filegen", "plan"]),
+        "filegen conflict plan",
+    );
+    assert!(
+        conflict["blockers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|blocker| blocker["code"] == "existing-file-conflict")
+    );
+
+    let escape_workspace = tempfile::tempdir().unwrap();
+    let escape_project = escape_workspace.path().join("project");
+    std::fs::create_dir_all(&escape_project).unwrap();
+    copy_reviewed_filegen_project(&escape_project);
+    let escape = parse_failed_json(
+        run_project_command(&escape_project, &[
+            "--json",
+            "filegen",
+            "plan",
+            "--manifest",
+            "fixtures/target-escape.ncl",
+        ]),
+        "filegen target escape plan",
+    );
+    assert!(escape["blockers"].as_array().unwrap().iter().any(|blocker| blocker["code"] == "target-escape"));
+    assert!(!escape_workspace.path().join("escaped-config.json").exists());
+}
+
+#[test]
+fn reviewed_file_generation_rejects_missing_contract_field() {
+    let fixture = tempfile::tempdir().unwrap();
+    copy_reviewed_filegen_project(fixture.path());
+    let invalid = parse_failed_json(
+        run_project_command(fixture.path(), &[
+            "--json",
+            "filegen",
+            "plan",
+            "--manifest",
+            "fixtures/missing-required-field.ncl",
+        ]),
+        "filegen missing field plan",
+    );
+    assert!(
+        invalid["blockers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|blocker| blocker["code"] == "contract-invalid-content")
+    );
+    assert!(!fixture.path().join("generated/incomplete.json").exists());
+}
+
+fn developer_workflow_command(store: &Path, state: &Path) -> Command {
+    assert!(store.is_dir(), "developer workflow store must exist");
+    assert!(state.is_dir(), "developer workflow state must exist");
+    let mut command = project_command_with_build_environment(DEVELOPER_SHELL_RUN_PROJECT);
+    command.arg("--store").arg(store).arg("--state-dir").arg(state);
+    command
+}
+
+#[test]
+fn developer_shell_and_run_loop_executes_named_profiles() {
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: developer shell/run project requires Linux, bwrap, and static BusyBox");
+        return;
+    }
+    let store = tempfile::tempdir().unwrap();
+    let state = tempfile::tempdir().unwrap();
+    let run = developer_workflow_command(store.path(), state.path())
+        .args(["run", ".#tool", "--no-substitute", "--", "Mantle"])
+        .output()
+        .unwrap();
+    assert!(run.status.success(), "mantle run failed: {}", String::from_utf8_lossy(&run.stderr));
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "operator-demo: hello, Mantle");
+
+    let dev = developer_workflow_command(store.path(), state.path())
+        .env("MANTLE_EXAMPLE_PROFILE", "ambient")
+        .args(["shell", "--no-substitute", "--command", "env"])
+        .output()
+        .unwrap();
+    assert!(dev.status.success(), "default shell failed: {}", String::from_utf8_lossy(&dev.stderr));
+    let dev_stdout = String::from_utf8_lossy(&dev.stdout);
+    assert!(dev_stdout.contains("MANTLE_EXAMPLE_PROFILE=dev"));
+    assert!(dev_stdout.contains("MANTLE_EXAMPLE_MESSAGE=development tools are active"));
+    assert!(!dev_stdout.contains("MANTLE_EXAMPLE_PROFILE=ambient"));
+    assert!(String::from_utf8_lossy(&dev.stderr).contains("developer-shell-hook: active"));
+
+    let minimal = developer_workflow_command(store.path(), state.path())
+        .args(["shell", ".#minimal", "--no-substitute", "--command", "env"])
+        .output()
+        .unwrap();
+    assert!(minimal.status.success(), "minimal shell failed: {}", String::from_utf8_lossy(&minimal.stderr));
+    assert!(String::from_utf8_lossy(&minimal.stdout).contains("MANTLE_EXAMPLE_PROFILE=minimal"));
+    assert!(!String::from_utf8_lossy(&minimal.stderr).contains("developer-shell-hook: active"));
+}
+
+#[test]
+fn developer_shell_and_run_loop_rejects_invalid_selection_and_arguments() {
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: developer shell/run project requires Linux, bwrap, and static BusyBox");
+        return;
+    }
+    let store = tempfile::tempdir().unwrap();
+    let state = tempfile::tempdir().unwrap();
+    let missing = developer_workflow_command(store.path(), state.path())
+        .args(["shell", ".#missing", "--no-substitute", "--command", "env"])
+        .output()
+        .unwrap();
+    assert!(!missing.status.success(), "missing shell profile unexpectedly activated");
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("missing"));
+
+    let invalid_run = developer_workflow_command(store.path(), state.path())
+        .args(["run", ".#tool", "--no-substitute"])
+        .output()
+        .unwrap();
+    assert!(!invalid_run.status.success(), "missing tool argument unexpectedly succeeded");
+    assert!(String::from_utf8_lossy(&invalid_run.stderr).contains("usage: operator-demo NAME"));
 }
 
 #[test]

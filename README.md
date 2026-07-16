@@ -536,6 +536,9 @@ Fast local examples:
 - [`examples/projects/codegen-pipeline/mantle-project.ncl`](examples/projects/codegen-pipeline/mantle-project.ncl) — model-to-generated-source application project
 - [`examples/projects/reproducible-release/mantle-project.ncl`](examples/projects/reproducible-release/mantle-project.ncl) — independently built normalized release archives with BLAKE3 and tamper checks
 - [`examples/projects/locked-dependency-lifecycle/mantle-project.ncl`](examples/projects/locked-dependency-lifecycle/mantle-project.ncl) — offline check, stale detection, selected refresh, and lock upgrade lifecycle
+- [`examples/projects/offline-source-bundle/mantle-project.ncl`](examples/projects/offline-source-bundle/mantle-project.ncl) — fresh-state source bundle export, pinned import, preflight, and tamper rejection
+- [`examples/projects/reviewed-file-generation/mantle-project.ncl`](examples/projects/reviewed-file-generation/mantle-project.ncl) — non-mutating filegen planning and drift-checked reviewed apply
+- [`examples/projects/developer-shell-run/mantle-project.ncl`](examples/projects/developer-shell-run/mantle-project.ncl) — runnable package with named `dev` and `minimal` shell profiles
 - [`examples/fail.ncl`](examples/fail.ncl) — intentional failure for diagnostics
 
 Cookbook and advanced examples:

@@ -14,6 +14,9 @@ These directories combine source/configuration, package selectors, checks, and p
 | `reproducible-release/` | `mantle build` | `mantle build .#checks.reproducible` | local + fast |
 | `signed-cache-roundtrip/` | `mantle build .#payload` | signed publication and fresh-store substitution runbook | heavy + loopback HTTP |
 | `locked-dependency-lifecycle/` | `mantle check` | offline stale detection, selected refresh, and upgrade | local + fast |
+| `offline-source-bundle/` | `mantle source bundle export` | fresh-state verify, pinned import, preflight, and tamper rejection | local + fast |
+| `reviewed-file-generation/` | `mantle filegen plan` | reviewed apply, state tracking, drift/conflict/escape rejection | local + fast |
+| `developer-shell-run/` | `mantle run .#tool -- Mantle` | named shell activation and invalid-invocation rejection | local + fast |
 | `cross-compiled-host-tool/` | `mantle build .#target` | `mantle build .#role-mismatch` must fail | heavy + first-build network |
 | `store-gc-lifecycle/` | `mantle build .#retained` | persistent root, dry-run, GC, and mutation-lock runbook | heavy + local state |
 | `delta-substitution/` | `mantle build .#source` | `cargo run -p mantle --example delta_substitution` | Rust adaptor |
@@ -23,6 +26,6 @@ The C, Rust, and SDK projects expose source or generated-source selectors that c
 
 The fetched project pins both its unpacked upstream source and local patch. The reproducible release project builds independently named normalized archives, records the expected BLAKE3 digest, and includes a tamper-detection check.
 
-The workflow tier adds signed cache exchange, lock refresh, host/target role separation, persistent garbage collection, delta transfer policy, and signed witness quorum. The Rust adaptor projects package their exact source through a BLAKE3-fixed `.#source` selector while executing against the shipped Mantle libraries.
+The workflow tier adds signed cache exchange, lock refresh, offline source handoff, reviewed file generation, named development shells, host/target role separation, persistent garbage collection, delta transfer policy, and signed witness quorum. The Rust adaptor projects package their exact source through a BLAKE3-fixed `.#source` selector while executing against the shipped Mantle libraries.
 
-Project checks cover successful behavior and explicit invalid-input rejection. Build success proves only the selected local build and check; it does not prove compiler correctness, general cross-language equivalence, upstream trust, release signatures, or cross-platform reproducibility.
+Source-bundle readiness proves only declared source availability, filegen plans prove only bounded generated-content identity, and shell activation is non-mutating convenience evidence. Project checks cover successful behavior and explicit invalid-input rejection. Build success proves only the selected local build and check; it does not prove compiler correctness, general cross-language equivalence, upstream trust, release signatures, or cross-platform reproducibility.
