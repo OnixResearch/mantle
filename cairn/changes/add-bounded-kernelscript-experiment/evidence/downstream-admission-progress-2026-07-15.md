@@ -2,17 +2,20 @@
 
 - Date: 2026-07-15
 - Question: Did the downstream OnixOS/ChaosControl path accept Mantle's exact private-kfunc cohort with bounded identities?
-- Decision: **partial downstream admission exists, but final authority is still blocked**. ChaosControl now has a pure `kernel-bundle/vm-compat-smoke` profile/receipt binding the exact Onix bundle identities and Mantle module/BPF byte identities, plus a local KVM-shell/structured-marker receipt path that still lacks the exact private-kfunc guest loader. OnixOS now has a pure BPF runtime admission receipt binding that ChaosControl receipt, exact target facts, scoped abilities, loader identity, bounds, and non-claims. Neither downstream change is archive-ready: ChaosControl still lacks exact selected KVM execution of the module/BPF loader, and OnixOS still lacks target shell/generation/restart/rollback enforcement.
+- Decision: **partial downstream admission exists, but final authority is still blocked**. ChaosControl now has a pure `kernel-bundle/vm-compat-smoke` profile/receipt binding the exact Onix bundle identities and Mantle module/BPF byte identities, a transcript-only marker classifier, a blocked-input KVM shell receipt, and a new digest-bound exact KVM receipt that boots a repo-owned initrd and executes the selected private-kfunc module/BPF artifacts. OnixOS still has only a pure BPF runtime admission receipt binding the earlier ChaosControl receipt, exact target facts, scoped abilities, loader identity, bounds, and non-claims. The Mantle change remains active because OnixOS still lacks target shell/generation/restart/rollback enforcement and the downstream ChaosControl change has remaining negative fixture/docs work before archive.
 - Owner: Mantle records this as dependent evidence only; downstream repositories own acceptance and final authority.
-- Next action: wait for archived/accepted ChaosControl KVM and OnixOS runtime-adapter evidence before archiving this Mantle change.
+- Next action: wait for accepted ChaosControl KVM negative-fixture closeout and OnixOS target runtime-adapter evidence before archiving this Mantle change.
 
 ## Newly produced downstream identities
 
 ```text
 chaoscontrol.kernel_bundle_vm_compat_smoke_profile = 216bd1a6c5461209f340a9c4f4d00aacf5c2312679bb9cb5808d329c619fc589
 chaoscontrol.kernel_bundle_vm_compat_smoke_receipt = fb37d05d6ee328b05d8f1bdc80ae0d622dcdef590f0dbf7e2721bb3993e76119
-chaoscontrol.kvm_marker_pass_receipt = ef38c2f41862b9a4c0cf3be09dd50290780004897b307278fc2f41c4380f9ee6
-chaoscontrol.kvm_blocked_input_receipt = c9798576d1425d456dd6a544c0e2b6d332347ee608e7771c7de0ae2c719cadab
+chaoscontrol.kvm_marker_pass_receipt = 3fa7cf844e3c815ab5d31adebce82072bc91b92c6f6985c263c47a9b1938c628
+chaoscontrol.kvm_blocked_input_receipt = 59f0b3425fe465a95b38456c0af9ba8abcacdcec6e14e67e0f2373677dc23f60
+chaoscontrol.exact_kvm_receipt = b0273764265f5beea526aa56acbf5f723a0d193af1e54626c5bf0062e4856cb0
+chaoscontrol.exact_kvm_kernel_image_blake3 = 223a6b61393b8956124a574d0fac00057fc45171dd7bb56a7711ca1a224de5d7
+chaoscontrol.exact_kvm_initrd_image_blake3 = 9ac442589b7f9e35b610961e67e236461dab8150d5ec1c8139b8a43c9ae1a29a
 onixos.bpf_runtime_admission_receipt = 30e011f64315879f3bd666390229882d0e3311b6c22052d2da85461c60cac39a
 ```
 
@@ -39,7 +42,7 @@ test kernel_bundle_validation::tests::unavailable_kvm_is_blocked_not_passed ... 
 test kernel_bundle_validation::tests::kvm_markers_emit_passed_rail_receipt ... ok
 ```
 
-ChaosControl local commit `95afb9d` (`Bind kernel-bundle receipts to KVM rail shell`) records this as a partial KVM-shell rail only. The marker-pass receipt is structured transcript classification, and the blocked-input receipt proves fail-closed unavailable-loader behavior; neither receipt is final KVM authority.
+ChaosControl local follow-up now records a repo-owned initrd/loader path in addition to commit `95afb9d`'s KVM shell. The exact receipt `b0273764265f5beea526aa56acbf5f723a0d193af1e54626c5bf0062e4856cb0` has `execution_mode = chaoscontrol-vmm-kvm`, binds kernel image `223a6b61393b8956124a574d0fac00057fc45171dd7bb56a7711ca1a224de5d7` and initrd image `9ac442589b7f9e35b610961e67e236461dab8150d5ec1c8139b8a43c9ae1a29a`, and records boot/module/BPF verify/attach/detach/cleanup observations with no issues. The marker-pass receipt remains structured transcript classification, and the blocked-input receipt proves fail-closed unavailable-loader behavior.
 
 OnixOS:
 
@@ -61,4 +64,4 @@ Focused Cairn tasks gate with the canonical generated policy passed during this 
 
 ## Non-claim boundary
 
-Mantle must not reinterpret these active-change pure receipts or the ChaosControl marker-pass receipt as final OnixOS target authority or exact ChaosControl deterministic VMM evidence. This change remains active until downstream owners accept and archive the runtime/KVM rails or provide an equivalent accepted receipt.
+Mantle must not reinterpret these active-change pure receipts, the ChaosControl transcript receipt, or the exact positive KVM receipt as final OnixOS target authority. The exact KVM receipt is bounded ChaosControl disposable-VM evidence for this cohort only; it is not physical readiness, Onix lifecycle replay, build correctness, security, or release eligibility. This Mantle change remains active until downstream owners accept and archive the remaining KVM negative-fixture work and OnixOS provides target runtime-adapter authority or an equivalent accepted receipt.
