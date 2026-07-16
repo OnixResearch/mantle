@@ -5,7 +5,7 @@
 - Inspected evidence: current focused Rust/Nix checks, package-scoped cargo-deny results, exact Mantle artifact identities, archived ChaosControl runtime receipt, committed OnixOS target lifecycle receipts, and the active Cairn change package.
 - Decision: **focused implementation and external-evidence validation pass**. The experiment remains non-default and its build-time outputs remain candidate evidence; closeout links exact external receipts rather than mutating Mantle's historical build receipts or granting Mantle kernel authority.
 - Owner: Mantle KernelScript experiment maintainers.
-- Next action: commit the complete implementation/evidence packet, then run canonical Cairn sync/archive plans and execute only if they remain unblocked.
+- Next action: none for this bounded change; preserve the accepted spec and archived evidence without promoting the experiment.
 
 ## Focused Rust and shape checks
 
@@ -101,9 +101,31 @@ cross-repository evidence issues = 0
 substance issues = 0
 ```
 
-The remaining task is the mutation step itself. No manual accepted-spec or
-archive-directory edit is permitted; Cairn must produce and execute an
-unblocked deterministic plan.
+The remaining task was the mutation step itself. No manual accepted-spec or
+archive-directory edit was used; Cairn produced and executed unblocked
+deterministic plans.
+
+## Sync and archive execution
+
+```text
+sync blocked = false
+sync mutated = true
+sync input_hash = 21e4e34b9268a7edadcaffc193d97661e25700bdeec5bcc6efdb20974516f4f7
+sync plan_hash = 2334082f190fa8656f1bdad77ae605067a9406ded00e13702c15c0b8b63cae6c
+sync receipt_hash = 74eef1ca1d66490cd02941a67099c50a1e9eee2cf1c1c941adaad54963accbb5
+
+archive blocked = false
+archive mutated = true
+archive input_hash = bbde3d76f2ee18fa84a3fc4bad0c7db3943a6d46889f2daad4a37db0ff3d384d
+archive plan_hash = 627efe38724069f5cf00b329875b929f5e7a6250699c51a0f228561f7bde7a78
+archive receipt_hash = 90ace153e38292bbff9eb9d46ef63fd33e4c803c2f1d97619e2082c7a8706732
+```
+
+Accepted spec `cairn/specs/kernelscript-experiment/spec.md` contains all eight
+`r[kernelscript_experiment.*]` requirements. The change archive is
+`cairn/archive/2026-07-16-add-bounded-kernelscript-experiment/`.
+Exact post-archive validation is preserved in
+`post-archive-validation-2026-07-16.md`.
 
 ## Non-claims
 
