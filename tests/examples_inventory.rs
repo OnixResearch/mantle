@@ -10,6 +10,8 @@ const CATALOG_PATH: &str = "examples/catalog.ncl";
 const EXAMPLES_README_PATH: &str = "examples/README.md";
 const ROOT_README_PATH: &str = "README.md";
 const EXAMPLES_PREFIX: &str = "examples/";
+const PROJECTS_PREFIX: &str = "examples/projects/";
+const PROJECT_ENTRYPOINT_SUFFIX: &str = "/mantle-project.ncl";
 const NICKEL_EXTENSION: &str = "ncl";
 const RUST_EXTENSION: &str = "rs";
 const SUPPORT_TIER_FAST: &str = "fast";
@@ -170,7 +172,7 @@ fn collect_user_facing_example_paths_inner(root: &Path, dir: &Path, paths: &mut 
             continue;
         }
         let relative = path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
-        if SUPPORT_FILES.contains(&relative.as_str()) {
+        if SUPPORT_FILES.contains(&relative.as_str()) || is_project_support_source(&relative) {
             continue;
         }
         paths.insert(relative);
@@ -182,6 +184,10 @@ fn is_user_facing_example_path(path: &Path) -> bool {
         return false;
     };
     extension == NICKEL_EXTENSION || extension == RUST_EXTENSION
+}
+
+fn is_project_support_source(relative_path: &str) -> bool {
+    relative_path.starts_with(PROJECTS_PREFIX) && !relative_path.ends_with(PROJECT_ENTRYPOINT_SUFFIX)
 }
 
 fn catalog_paths(catalog: &Catalog) -> BTreeSet<String> {
@@ -504,6 +510,14 @@ fn readme_for(paths: &[&str]) -> String {
         lines.push(format!("- `{path}`"));
     }
     lines.join("\n")
+}
+
+#[test]
+fn project_sources_are_grouped_under_their_mantle_entrypoint() {
+    assert!(is_project_support_source("examples/projects/rust-workspace/greeting/src/lib.rs"));
+    assert!(is_project_support_source("examples/projects/demo/support.ncl"));
+    assert!(!is_project_support_source("examples/projects/demo/mantle-project.ncl"));
+    assert!(!is_project_support_source("examples/standalone.rs"));
 }
 
 #[test]

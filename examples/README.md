@@ -2,6 +2,25 @@
 
 This directory is a supported examples gallery. `examples/catalog.ncl` is the source of truth for support tiers, prerequisites, and validation rails.
 
+## Gradual local build path
+
+Follow this seed-free path in order. Each stage keeps the earlier concepts and introduces one new build concern.
+
+| Stage | Example | New concept |
+|---|---|---|
+| Foundation | `examples/hello.ncl` | one derivation and one flat output |
+| Structure | `examples/multi-step.ncl` | multi-command builder script |
+| Configuration | `examples/build-environment.ncl` | declarative builder environment and directory output |
+| Executable | `examples/cowsay.ncl` | installing and executing an output script |
+| Artifact | `examples/static-site.ncl` | multi-file directory artifact |
+| Parallel roots | `examples/multiple-roots.ncl` | independent top-level derivations |
+| Named outputs | `examples/local-output-layout.ncl` | one derivation with runtime, development, and documentation outputs |
+| Dependency | `examples/dependency-chain.ncl` | producer-to-consumer build ordering and mounted inputs |
+| Selection | `examples/selected-output.ncl` | mounting one named output with `mantle.select` |
+| Graph | `examples/diamond-dependency.ncl` | shared dependency reuse across converging branches |
+| Project package | `examples/projects/generated-site/mantle-project.ncl` | default package and separately selectable check |
+| Project pipeline | `examples/projects/codegen-pipeline/mantle-project.ncl` | model, code generation, application, and check selectors |
+
 ## Beginner
 
 Start here. These examples are local, fast, and do not need generated seed material unless the capability column says so.
@@ -10,6 +29,9 @@ Start here. These examples are local, fast, and do not need generated seed mater
 |---|---|---|---|
 | `examples/hello.ncl` | `mantle build examples/hello.ncl --no-substitute` | flat file containing `Hello, mantle!` | local + fast |
 | `examples/multi-step.ncl` | `mantle build examples/multi-step.ncl --no-substitute` | flat file containing `name: multi-step` | local + fast |
+| `examples/build-environment.ncl` | `mantle build examples/build-environment.ncl --no-substitute` | directory containing a configured message and build-mode metadata | local + fast |
+| `examples/cowsay.ncl` | `mantle build examples/cowsay.ncl --no-substitute` | runnable `bin/cowsay` script with default and custom messages | local + fast |
+| `examples/static-site.ncl` | `mantle build examples/static-site.ncl --no-substitute` | directory containing `index.html` and `assets/site.css` | local + fast |
 | `examples/mk-hello.ncl` | `mantle build examples/mk-hello.ncl -I examples -I builders --no-substitute` | store path containing `bin/hello` | generated seed |
 
 ## Diagnostics
@@ -35,7 +57,11 @@ After basic derivations and fetchers, move to output layouts and package relatio
 
 | File | Command | Expected output shape | Capability |
 |---|---|---|---|
+| `examples/multiple-roots.ncl` | `mantle build examples/multiple-roots.ncl --no-substitute` | two independent flat output paths | local + fast |
 | `examples/local-output-layout.ncl` | `mantle build examples/local-output-layout.ncl --no-substitute` | named outputs with `bin/show-layout`, `include/local_output_layout.h`, and `share/doc/local-output-layout/README` | local + fast |
+| `examples/dependency-chain.ncl` | `mantle build examples/dependency-chain.ncl --no-substitute` | `result.txt` combining producer and consumer messages | local + fast |
+| `examples/selected-output.ncl` | `mantle build examples/selected-output.ncl --no-substitute` | selected development header copied into the consumer artifact | local + fast |
+| `examples/diamond-dependency.ncl` | `mantle build examples/diamond-dependency.ncl --no-substitute` | `graph.txt` combining both branches built from one shared input | local + fast |
 | `examples/build-from-source.ncl` | `mantle build examples/build-from-source.ncl -I examples --no-substitute` | installed library and binary | generated seed |
 | `examples/multi-output.ncl` | `mantle build examples/multi-output.ncl -I examples --no-substitute` | named outputs: `out`, `dev`, and `man` | generated seed |
 | `examples/override.ncl` | `mantle eval examples/override.ncl -I examples -I builders` | overridden derivation metadata | generated seed |
@@ -43,10 +69,14 @@ After basic derivations and fetchers, move to output layouts and package relatio
 
 ## Project workflow
 
-Project examples show selector syntax after package composition. See `examples/project/README.md` for the full command table.
+Project examples show selector syntax after package composition. See `examples/projects/README.md` for the complete project index and `examples/project/README.md` for the compatibility project command table.
 
 | File | Command | Expected output shape | Capability |
 |---|---|---|---|
+| `examples/projects/generated-site/mantle-project.ncl` | `cd examples/projects/generated-site && mantle build` | generated site with `index.html`, CSS, and manifest | local + fast |
+| `examples/projects/codegen-pipeline/mantle-project.ncl` | `cd examples/projects/codegen-pipeline && mantle build .#checks.app` | model-to-generated-source application graph and check result | local + fast |
+| `examples/projects/c-library-cli/mantle-project.ncl` | `cd examples/projects/c-library-cli && mantle build .#checks.test-greet` | static C library, CLI, public header, unit test, and project check | heavy + first-build network |
+| `examples/projects/rust-workspace/mantle-project.ncl` | `cd examples/projects/rust-workspace && mantle build .#workspace-app` | offline Cargo-built library/CLI workspace | heavy + first-build network |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build` | default package store path with `bin/hello` | generated seed |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#hello` | named package store path with `bin/hello` | generated seed |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#goodbye` | named package store path with `bin/goodbye` | generated seed |

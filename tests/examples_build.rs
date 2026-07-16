@@ -6,6 +6,23 @@ use assert_cmd::Command;
 
 const HELLO_OUTPUT: &str = "Hello, mantle!";
 const MULTI_STEP_MARKER: &str = "name: multi-step";
+const BUILD_ENVIRONMENT_MESSAGE: &str = "Hello from Mantle's build environment!";
+const BUILD_ENVIRONMENT_MODE: &str = "tutorial";
+const MULTIPLE_ROOT_OUTPUT_COUNT: usize = 2;
+const MULTIPLE_ROOT_ALPHA: &str = "alpha root built independently";
+const MULTIPLE_ROOT_BETA: &str = "beta root built independently";
+const COWSAY_DEFAULT_MESSAGE: &str = "< Moo from Mantle! >";
+const COWSAY_CUSTOM_MESSAGE: &str = "< hello examples >";
+const STATIC_SITE_TITLE: &str = "<title>Built by Mantle</title>";
+const STATIC_SITE_STYLESHEET_MARKER: &str = "font-family: sans-serif";
+const DEPENDENCY_PRODUCER_MESSAGE: &str = "Hello from the producer.";
+const DEPENDENCY_CONSUMER_MESSAGE: &str = "Consumed by the dependency-chain root.";
+const SELECTED_OUTPUT_HEADER: &str = "#define EXAMPLE_API \"selected-dev-output\"";
+const DIAMOND_BRANCH_COUNT: usize = 2;
+const DIAMOND_SHARED_MESSAGE: &str = "shared foundation";
+const DIAMOND_LEFT_MESSAGE: &str = "left branch";
+const DIAMOND_RIGHT_MESSAGE: &str = "right branch";
+const INVALID_OUTPUT_NAME: &str = "missing";
 const FAIL_MARKER: &str = "this will fail";
 const PROJECT_CHECK_RESULT: &str = "ok";
 const LOCAL_LAYOUT_HEADER: &str = "#define LOCAL_OUTPUT_LAYOUT 1";
@@ -68,6 +85,21 @@ EOF
     $BB echo '#define HELLO_VERSION "1.0"' > $dev/include/hello.h
     $BB echo '.TH HELLO 1' > $man/share/man/man1/hello.1
   "%],
+} | mantle.Derivation
+"#;
+const INVALID_OUTPUT_SELECTION_FIXTURE: &str = r#"
+let mantle = import "lib.ncl" in
+let producer = {
+  name = "invalid-selection-producer",
+  builder = "/bin/sh",
+  outputs = ["out"],
+  args = ["-c", "printf '%s\\n' producer > \"$out\""],
+} | mantle.Derivation in
+{
+  name = "invalid-selection-consumer",
+  builder = "/bin/sh",
+  inputs = [mantle.select producer "missing"],
+  args = ["-c", "printf '%s\\n' consumer > \"$out\""],
 } | mantle.Derivation
 "#;
 
@@ -451,6 +483,137 @@ fn multi_step_example_builds_structured_output() {
 }
 
 #[test]
+fn build_environment_example_persists_configured_values() {
+    if !can_build() {
+        eprintln!("SKIP: example build requires Linux + bwrap + /nix/store");
+        return;
+    }
+
+    let run = build_example("examples/build-environment.ncl");
+    assert_success(&run, "build environment example");
+
+    let output = build_stdout_path(&run);
+    let message = std::fs::read_to_string(output.join("message.txt")).unwrap();
+    let mode = std::fs::read_to_string(output.join("metadata/mode.txt")).unwrap();
+    assert_eq!(message.trim(), BUILD_ENVIRONMENT_MESSAGE);
+    assert_eq!(mode.trim(), BUILD_ENVIRONMENT_MODE);
+}
+
+#[test]
+fn cowsay_example_builds_and_runs_default_and_custom_messages() {
+    if !can_build() {
+        eprintln!("SKIP: example build requires Linux + bwrap + /nix/store");
+        return;
+    }
+
+    let run = build_example("examples/cowsay.ncl");
+    assert_success(&run, "cowsay example");
+
+    let binary = build_stdout_path(&run).join("bin/cowsay");
+    assert!(binary.is_file(), "cowsay binary should exist: {}", binary.display());
+
+    let default_output = StdCommand::new(&binary).output().unwrap();
+    assert!(default_output.status.success(), "default cowsay invocation should succeed");
+    let default_stdout = String::from_utf8(default_output.stdout).unwrap();
+    assert!(
+        default_stdout.contains(COWSAY_DEFAULT_MESSAGE),
+        "unexpected default cowsay output: {default_stdout}"
+    );
+
+    let custom_output = StdCommand::new(&binary).args(["hello", "examples"]).output().unwrap();
+    assert!(custom_output.status.success(), "custom cowsay invocation should succeed");
+    let custom_stdout = String::from_utf8(custom_output.stdout).unwrap();
+    assert!(custom_stdout.contains(COWSAY_CUSTOM_MESSAGE), "unexpected custom cowsay output: {custom_stdout}");
+}
+
+#[test]
+fn static_site_example_builds_html_and_stylesheet() {
+    if !can_build() {
+        eprintln!("SKIP: example build requires Linux + bwrap + /nix/store");
+        return;
+    }
+
+    let run = build_example("examples/static-site.ncl");
+    assert_success(&run, "static site example");
+
+    let output = build_stdout_path(&run);
+    let html = std::fs::read_to_string(output.join("index.html")).unwrap();
+    let stylesheet = std::fs::read_to_string(output.join("assets/site.css")).unwrap();
+    assert!(html.contains(STATIC_SITE_TITLE), "unexpected static site HTML: {html}");
+    assert!(stylesheet.contains(STATIC_SITE_STYLESHEET_MARKER), "unexpected stylesheet: {stylesheet}");
+}
+
+#[test]
+fn multiple_roots_example_builds_each_independent_root() {
+    if !can_build() {
+        eprintln!("SKIP: example build requires Linux + bwrap + /nix/store");
+        return;
+    }
+
+    let run = build_example("examples/multiple-roots.ncl");
+    assert_success(&run, "multiple roots example");
+
+    let outputs = build_stdout_paths(&run);
+    assert_eq!(outputs.len(), MULTIPLE_ROOT_OUTPUT_COUNT, "unexpected roots: {outputs:?}");
+    assert!(
+        outputs.iter().all(|path| path.starts_with(run.store.path())),
+        "multiple roots should use the temp store: {outputs:?}"
+    );
+    let rendered: Vec<String> = outputs.iter().map(|path| std::fs::read_to_string(path).unwrap()).collect();
+    assert!(rendered.iter().any(|text| text.contains(MULTIPLE_ROOT_ALPHA)), "alpha root missing: {rendered:?}");
+    assert!(rendered.iter().any(|text| text.contains(MULTIPLE_ROOT_BETA)), "beta root missing: {rendered:?}");
+}
+
+#[test]
+fn dependency_chain_example_consumes_producer_output() {
+    if !can_build() {
+        eprintln!("SKIP: example build requires Linux + bwrap + /nix/store");
+        return;
+    }
+
+    let run = build_example("examples/dependency-chain.ncl");
+    assert_success(&run, "dependency chain example");
+
+    let result = std::fs::read_to_string(build_stdout_path(&run).join("result.txt")).unwrap();
+    assert!(result.contains(DEPENDENCY_PRODUCER_MESSAGE), "producer message missing: {result}");
+    assert!(result.contains(DEPENDENCY_CONSUMER_MESSAGE), "consumer message missing: {result}");
+}
+
+#[test]
+fn selected_output_example_mounts_the_requested_development_output() {
+    if !can_build() {
+        eprintln!("SKIP: example build requires Linux + bwrap + /nix/store");
+        return;
+    }
+
+    let run = build_example("examples/selected-output.ncl");
+    assert_success(&run, "selected output example");
+
+    let header = std::fs::read_to_string(build_stdout_path(&run).join("selected-header.txt")).unwrap();
+    assert_eq!(header.trim(), SELECTED_OUTPUT_HEADER);
+    assert!(
+        !header.contains("runtime payload"),
+        "runtime output leaked into selected development output: {header}"
+    );
+}
+
+#[test]
+fn diamond_dependency_example_joins_both_shared_branches() {
+    if !can_build() {
+        eprintln!("SKIP: example build requires Linux + bwrap + /nix/store");
+        return;
+    }
+
+    let run = build_example("examples/diamond-dependency.ncl");
+    assert_success(&run, "diamond dependency example");
+
+    let graph = std::fs::read_to_string(build_stdout_path(&run).join("graph.txt")).unwrap();
+    assert_eq!(graph.matches(DIAMOND_SHARED_MESSAGE).count(), DIAMOND_BRANCH_COUNT);
+    assert!(graph.contains(DIAMOND_LEFT_MESSAGE), "left branch missing: {graph}");
+    assert!(graph.contains(DIAMOND_RIGHT_MESSAGE), "right branch missing: {graph}");
+}
+
+#[test]
 fn local_output_layout_example_builds_named_outputs() {
     if !can_build() {
         eprintln!("SKIP: example build requires Linux + bwrap + /nix/store");
@@ -520,6 +683,19 @@ fn fail_example_reports_expected_failure() {
 
     assert!(!run.output.status.success(), "fail example should not build successfully");
     assert!(stderr.contains(FAIL_MARKER), "failure stderr should include marker:\n{stderr}");
+}
+
+#[test]
+fn invalid_output_selection_fails_before_builder_execution() {
+    let dir = tempfile::tempdir().unwrap();
+    let fixture = write_fixture(&dir, "invalid-output-selection.ncl", INVALID_OUTPUT_SELECTION_FIXTURE);
+    let run = build_path(&fixture);
+    let stderr = String::from_utf8_lossy(&run.output.stderr);
+
+    assert!(!run.output.status.success(), "invalid output selection should fail");
+    assert!(stderr.contains("invalid output selection"), "unexpected selection error: {stderr}");
+    assert!(stderr.contains(INVALID_OUTPUT_NAME), "selection error should name invalid output: {stderr}");
+    assert_store_has_no_entries(&run.store, "invalid output selection");
 }
 
 #[test]

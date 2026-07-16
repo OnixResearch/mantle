@@ -524,7 +524,16 @@ Fast local examples:
 
 - [`examples/hello.ncl`](examples/hello.ncl) — smallest derivation
 - [`examples/multi-step.ncl`](examples/multi-step.ncl) — multi-line output using shell builtins only
+- [`examples/build-environment.ncl`](examples/build-environment.ncl) — declarative environment values persisted in a directory artifact
+- [`examples/cowsay.ncl`](examples/cowsay.ncl) — runnable cowsay-compatible script with default and custom messages
+- [`examples/static-site.ncl`](examples/static-site.ncl) — HTML and CSS directory artifact without network access
+- [`examples/multiple-roots.ncl`](examples/multiple-roots.ncl) — independent top-level derivations in one build
 - [`examples/local-output-layout.ncl`](examples/local-output-layout.ncl) — named output layout without generated seed material
+- [`examples/dependency-chain.ncl`](examples/dependency-chain.ncl) — a producer derivation consumed by a root derivation
+- [`examples/selected-output.ncl`](examples/selected-output.ncl) — one selected named output mounted downstream
+- [`examples/diamond-dependency.ncl`](examples/diamond-dependency.ncl) — a shared dependency reused by converging branches
+- [`examples/projects/generated-site/mantle-project.ncl`](examples/projects/generated-site/mantle-project.ncl) — complete generated-site package with a content check
+- [`examples/projects/codegen-pipeline/mantle-project.ncl`](examples/projects/codegen-pipeline/mantle-project.ncl) — model-to-generated-source application project
 - [`examples/fail.ncl`](examples/fail.ncl) — intentional failure for diagnostics
 
 Cookbook and advanced examples:
@@ -532,6 +541,8 @@ Cookbook and advanced examples:
 - [`examples/fetch-crate-crc64.ncl`](examples/fetch-crate-crc64.ncl) — fetch a real crates.io source tarball (`crc64` 2.0.0)
 - [`examples/build-crate-crc64.ncl`](examples/build-crate-crc64.ncl) — build that real crate with Mantle's bootstrap Rust toolchain and shared reduced seed provider
 - [`examples/build-from-source.ncl`](examples/build-from-source.ncl) — build a multi-file C project with `make`
+- [`examples/projects/c-library-cli/mantle-project.ncl`](examples/projects/c-library-cli/mantle-project.ncl) — fixed local C sources built as a tested library and CLI project
+- [`examples/projects/rust-workspace/mantle-project.ncl`](examples/projects/rust-workspace/mantle-project.ncl) — dependency-free multi-package Rust workspace built with offline Cargo
 - [`examples/bootstrap-no-nix.ncl`](examples/bootstrap-no-nix.ncl) — compile C with the shared reduced bootstrap seed provider
 - [`examples/project/crunch.ncl`](examples/project/crunch.ncl) — project-aware `mantle build .#name` layout
 - [`examples/hardware_simulation_plan.rs`](examples/hardware_simulation_plan.rs) — frontend-owned hardware request lowering to generic `mantle-plan-v1`; real Verilator execution is capability-gated
