@@ -29,14 +29,16 @@ const FIXED_OUTPUT_NEGATIVE_RAIL: &str = "fixed-output-negative";
 const EXAMPLES_SECTION_HEADER: &str = "## Examples";
 const NEXT_SECTION_PREFIX: &str = "## ";
 const CRUNCH_IDENTIFIER_ALLOWLIST: &[&str] = &["crunch.ncl"];
+const PROJECT_README_PATH: &str = "examples/project/README.md";
+const PROJECTS_README_PATH: &str = "examples/projects/README.md";
 const SUPPORT_FILES: &[&str] = &[
     "examples/README.md",
     "examples/benchmark_support.rs",
     "examples/catalog.ncl",
     PROJECT_README_PATH,
+    PROJECTS_README_PATH,
 ];
 const GENERATED_DOC_ONLY_PATHS: &[&str] = &["examples/project/seed.ncl"];
-const PROJECT_README_PATH: &str = "examples/project/README.md";
 const TRUST_SECTION_HEADER: &str = "## Trust/provenance";
 const PROGRESSIVE_LANE_HEADERS: &[&str] = &[
     "## Beginner",
@@ -518,6 +520,13 @@ fn project_sources_are_grouped_under_their_mantle_entrypoint() {
     assert!(is_project_support_source("examples/projects/demo/support.ncl"));
     assert!(!is_project_support_source("examples/projects/demo/mantle-project.ncl"));
     assert!(!is_project_support_source("examples/standalone.rs"));
+}
+
+#[test]
+fn project_indexes_are_documentation_support_files() {
+    assert!(SUPPORT_FILES.contains(&PROJECT_README_PATH));
+    assert!(SUPPORT_FILES.contains(&PROJECTS_README_PATH));
+    assert!(!SUPPORT_FILES.contains(&"examples/projects/demo/mantle-project.ncl"));
 }
 
 #[test]
