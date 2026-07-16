@@ -1,5 +1,10 @@
 # Downstream admission progress for private-kfunc cohort
 
+> Historical checkpoint. The capability and credential blockers recorded here
+> were subsequently closed by the exact target evidence in
+> `downstream-target-authority-2026-07-16.md`; this file remains unchanged below
+> as evidence of the earlier fail-closed boundary.
+
 - Date: 2026-07-15
 - Question: Did the downstream OnixOS/ChaosControl path accept Mantle's exact private-kfunc cohort with bounded identities?
 - Current decision: **substantial downstream implementation exists, but final authority remains blocked**. ChaosControl's exact positive/negative KVM rail is accepted under `cairn/archive/2026-07-16-add-kernel-bundle-validation-rail/` at commit `c6d8ec9`. OnixOS now has typed intent, real per-operation UCAN checks, a capability-rooted target shell, generation lifecycle/reconciliation, system wiring, degraded target receipts, and exact `BpfCleanup`-authorized failed-load compensation. Its exact Linux 6.18.20 run reaches authorized private-kfunc module load but cannot resolve module BTF for BPF load under the required service profile without `CAP_SYS_ADMIN`. The same object loads when that forbidden capability is added, so the result is a bounded capability blocker, not target authority.
