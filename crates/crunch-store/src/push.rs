@@ -4,6 +4,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use nix_compat::nixbase32;
+use nix_compat::store_path::StorePath;
 use snix_store::path_info::PathInfo;
 use tokio::io::AsyncWriteExt;
 
@@ -184,11 +185,22 @@ struct NarinfoRenderInput<'a> {
 }
 
 fn build_narinfo_text(input: NarinfoRenderInput<'_>) -> Result<String, Error> {
+    let normalized_deriver = input.path_info.deriver.as_ref().map(normalize_narinfo_deriver).transpose()?;
     let mut narinfo = input.path_info.to_narinfo();
+    narinfo.deriver = normalized_deriver.as_ref().map(StorePath::as_ref);
     narinfo.url = input.nar_url;
     narinfo.file_hash = Some(input.path_info.nar_sha256);
     narinfo.file_size = Some(input.path_info.nar_size);
     Ok(narinfo.to_string_with_store_dir(input.store_dir))
+}
+
+fn normalize_narinfo_deriver(deriver: &StorePath<String>) -> Result<StorePath<String>, Error> {
+    let normalized_name = deriver.name().strip_suffix(".drv").unwrap_or_else(|| deriver.name());
+    if normalized_name.is_empty() {
+        return Err(Error::Export("deriver name is empty after removing the .drv suffix".to_string()));
+    }
+    StorePath::from_name_and_digest_fixed(normalized_name, *deriver.digest())
+        .map_err(|error| Error::Export(format!("normalizing narinfo deriver {}: {error}", deriver)))
 }
 
 fn narinfo_filename_for<S: AsRef<str>>(store_path: &nix_compat::store_path::StorePath<S>) -> String {
@@ -230,6 +242,9 @@ mod tests {
     use super::*;
     use crate::StoreConfig;
     use crate::StoreFallbackMode;
+
+    const DERIVER_DIGEST_BYTE: u8 = 9;
+    const STORE_PATH_DIGEST_BYTES: usize = 20;
 
     /// Build a minimal signed PathInfo with a single blob in the store.
     async fn make_signed_pathinfo(handle: &StoreHandle, name: &str, content: &[u8]) -> PathInfo {
@@ -361,6 +376,43 @@ mod tests {
             sha2::Sha256::digest(&nar_bytes).into()
         };
         assert_eq!(actual_sha256, pi.nar_sha256, "NAR sha256 must match PathInfo");
+    }
+
+    #[tokio::test]
+    async fn push_normalizes_deriver_suffix_and_writes_parseable_narinfo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let handle = open_test_store(tmp.path()).await;
+        let mut path_info = make_signed_pathinfo(&handle, "deriver-roundtrip", b"roundtrip").await;
+        path_info.deriver = Some(
+            StorePath::from_name_and_digest_fixed(
+                "example-package.drv",
+                [DERIVER_DIGEST_BYTE; STORE_PATH_DIGEST_BYTES],
+            )
+            .unwrap(),
+        );
+
+        let destination = tmp.path().join("cache");
+        export_paths_to_cache_dir(&handle, &[path_info.clone()], &destination, &PushOptions { trust_unsigned: false })
+            .await
+            .unwrap();
+
+        let digest = nixbase32::encode(path_info.store_path.digest());
+        let text = std::fs::read_to_string(destination.join(format!("{digest}.narinfo"))).unwrap();
+        let parsed = nix_compat::narinfo::NarInfo::parse(&text).expect("pushed narinfo must parse");
+        assert!(text.contains("Deriver:"));
+        assert!(!text.contains(".drv.drv"), "deriver suffix must not be duplicated: {text}");
+        assert_eq!(*parsed.deriver.unwrap().name(), "example-package");
+    }
+
+    #[test]
+    fn deriver_normalization_rejects_an_empty_base_name() {
+        let deriver =
+            StorePath::from_name_and_digest_fixed(".drv", [DERIVER_DIGEST_BYTE; STORE_PATH_DIGEST_BYTES]).unwrap();
+
+        let error = normalize_narinfo_deriver(&deriver).unwrap_err();
+
+        assert!(error.to_string().contains("deriver name is empty"));
+        assert_eq!(deriver.name(), ".drv");
     }
 
     #[tokio::test]

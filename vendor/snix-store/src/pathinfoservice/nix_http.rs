@@ -45,6 +45,7 @@ use crate::pathinfoservice;
 pub struct NixHTTPPathInfoService<BS, DS> {
     instance_name: String,
     base_url: url::Url,
+    store_dir: String,
     http_client: reqwest_middleware::ClientWithMiddleware,
 
     blob_service: BS,
@@ -63,6 +64,7 @@ impl<BS, DS> NixHTTPPathInfoService<BS, DS> {
         blob_service: BS,
         directory_service: DS,
     ) -> Result<Self, Error> {
+        validate_store_dir(&config.params.store_dir)?;
         let mut trusted_public_keys = Vec::new();
         for s in config.params.trusted_public_keys {
             trusted_public_keys.push(narinfo::VerifyingKey::parse(&s).map_err(|e| Error::ParseTrustedPublicKey(s, e))?)
@@ -71,6 +73,7 @@ impl<BS, DS> NixHTTPPathInfoService<BS, DS> {
         Ok(Self {
             instance_name,
             base_url: config.base_url,
+            store_dir: config.params.store_dir,
             http_client: reqwest_middleware::ClientBuilder::new(
                 reqwest::Client::builder()
                     .user_agent(crate::USER_AGENT)
@@ -107,7 +110,7 @@ impl<BS, DS> NixHTTPPathInfoService<BS, DS> {
     }
 
     fn parse_and_verify_narinfo<'a>(&self, narinfo_str: &'a str) -> Result<NarInfo<'a>, Error> {
-        let narinfo = NarInfo::parse(narinfo_str).map_err(Error::ParseNARInfo)?;
+        let narinfo = NarInfo::parse_with_store_dir(narinfo_str, &self.store_dir).map_err(Error::ParseNARInfo)?;
 
         if !self.trusted_public_keys.is_empty() {
             let fingerprint = narinfo.fingerprint();
@@ -308,6 +311,8 @@ pub struct NixHTTPPathInfoServiceConfig {
 #[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct NixHTTPPathInfoServiceParams {
+    #[serde(default = "default_store_dir")]
+    store_dir: String,
     #[serde(default = "default_blob_service")]
     blob_service: String,
     #[serde(default = "default_directory_service")]
@@ -319,11 +324,32 @@ struct NixHTTPPathInfoServiceParams {
     trusted_public_keys: Vec<String>,
 }
 
+fn default_store_dir() -> String {
+    nix_compat::store_path::STORE_DIR.to_string()
+}
 fn default_blob_service() -> String {
     "&root".to_string()
 }
 fn default_directory_service() -> String {
     "&root".to_string()
+}
+
+fn validate_store_dir(store_dir: &str) -> Result<(), Error> {
+    if !store_dir.starts_with('/') {
+        return Err(Error::WrongConfig("store_dir must be absolute"));
+    }
+    if store_dir.ends_with('/') {
+        return Err(Error::WrongConfig("store_dir must not end with a slash"));
+    }
+    Ok(())
+}
+
+impl NixHTTPPathInfoServiceConfig {
+    pub fn with_store_dir(mut self, store_dir: String) -> Result<Self, Error> {
+        validate_store_dir(&store_dir)?;
+        self.params.store_dir = store_dir;
+        Ok(self)
+    }
 }
 
 impl TryFrom<Url> for NixHTTPPathInfoServiceConfig {
@@ -404,6 +430,7 @@ mod tests {
     use super::NixHTTPPathInfoService;
     use super::NixHTTPPathInfoServiceConfig;
     use super::NixHTTPPathInfoServiceParams;
+    use super::default_store_dir;
     use crate::pathinfoservice::PathInfoService;
 
     const TEST_NARINFO: &str = r#"StorePath: /nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-net-tools-1.60_p20170221182432
@@ -429,6 +456,7 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
         NixHTTPPathInfoServiceConfig {
             base_url,
             params: NixHTTPPathInfoServiceParams {
+                store_dir: default_store_dir(),
                 blob_service: "&root".to_string(),
                 directory_service: "&root".to_string(),
                 trusted_public_keys: vec![],
@@ -506,6 +534,47 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
             .expect("reference path")
     }
 
+    #[test]
+    fn narinfo_parsing_uses_the_configured_store_directory() {
+        const MANTLE_STORE_DIR: &str = "/mantle/store";
+        let body = TEST_NARINFO.replace(nix_compat::store_path::STORE_DIR, MANTLE_STORE_DIR);
+        let base_url: Url = "http://127.0.0.1/".parse().unwrap();
+        let custom_config = test_service_config(base_url.clone()).with_store_dir(MANTLE_STORE_DIR.to_string()).unwrap();
+        let custom_service = NixHTTPPathInfoService::try_build(
+            "custom-store".to_string(),
+            custom_config,
+            MemoryBlobService::default(),
+            RedbDirectoryService::new_temporary("custom-store".to_string(), RedbDirectoryServiceConfig::default())
+                .unwrap(),
+        )
+        .unwrap();
+        let parsed = custom_service.parse_and_verify_narinfo(&body).unwrap();
+        assert_eq!(
+            parsed.store_path.to_absolute_path_with_prefix(MANTLE_STORE_DIR),
+            "/mantle/store/00bgd045z0d4icpbc2yyz4gx48ak44la-net-tools-1.60_p20170221182432"
+        );
+
+        let default_service = NixHTTPPathInfoService::try_build(
+            "default-store".to_string(),
+            test_service_config(base_url),
+            MemoryBlobService::default(),
+            RedbDirectoryService::new_temporary("default-store".to_string(), RedbDirectoryServiceConfig::default())
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(default_service.parse_and_verify_narinfo(&body).is_err());
+        assert!(
+            test_service_config("http://127.0.0.1/".parse().unwrap())
+                .with_store_dir("relative".to_string())
+                .is_err()
+        );
+        assert!(
+            test_service_config("http://127.0.0.1/".parse().unwrap())
+                .with_store_dir("/mantle/store/".to_string())
+                .is_err()
+        );
+    }
+
     #[tokio::test]
     async fn get_references_fetches_only_narinfo_metadata() {
         let (base_url, counts, stop, handle) = spawn_test_server(TEST_NARINFO);
@@ -557,6 +626,7 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
         NixHTTPPathInfoServiceConfig {
             base_url: "https://cache.nixos.org".try_into().unwrap(),
             params: NixHTTPPathInfoServiceParams {
+                store_dir: default_store_dir(),
                 blob_service: "&root".to_string(),
                 directory_service: "&root".to_string(),
                 trusted_public_keys: vec![]
@@ -568,6 +638,7 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
         NixHTTPPathInfoServiceConfig {
             base_url: "http://cache.nixos.org".try_into().unwrap(),
             params: NixHTTPPathInfoServiceParams {
+                store_dir: default_store_dir(),
                 blob_service: "&root".to_string(),
                 directory_service: "&root".to_string(),
                 trusted_public_keys: vec![]
@@ -579,6 +650,7 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
         NixHTTPPathInfoServiceConfig {
             base_url: "http://192.0.2.1/foo".try_into().unwrap(),
             params: NixHTTPPathInfoServiceParams {
+                store_dir: default_store_dir(),
                 blob_service: "&root".to_string(),
                 directory_service: "&root".to_string(),
                 trusted_public_keys: vec![]
@@ -590,6 +662,7 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
         NixHTTPPathInfoServiceConfig {
             base_url: "http://[::1]:8080/foo".try_into().unwrap(),
             params: NixHTTPPathInfoServiceParams {
+                store_dir: default_store_dir(),
                 blob_service: "&root".to_string(),
                 directory_service: "&root".to_string(),
                 trusted_public_keys: vec![]
@@ -605,6 +678,7 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
             params: NixHTTPPathInfoServiceParams {
                 blob_service: "&root".to_string(),
                 directory_service: "&root".to_string(),
+                store_dir: default_store_dir(),
                 trusted_public_keys: vec![
                     "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=".to_string()
                 ]
@@ -619,6 +693,7 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
             params: NixHTTPPathInfoServiceParams {
                 blob_service: "&root".to_string(),
                 directory_service: "&root".to_string(),
+                store_dir: default_store_dir(),
                 trusted_public_keys: vec![
                     "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=".to_string(),
                     "foo:jp4fCEx9tBEId/L0ZsVJ26k0wC0fu7vJqLjjIGFkup8=".to_string()

@@ -36,6 +36,8 @@ use crate::roots::GcRootRecord;
 
 const MAX_GC_BYTES_WALK_ENTRIES: u32 = 100_000;
 const MAX_GC_FILE_SCAN_ENTRIES: u32 = 200_000;
+#[cfg(unix)]
+const OWNER_WRITE_PERMISSION_MODE: u32 = 0o200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GcOperationKind {
@@ -594,9 +596,61 @@ fn remove_path(path: &Path) -> Result<(), Error> {
         return Ok(());
     }
     if metadata.is_dir() {
+        prepare_directory_tree_for_removal(path)?;
         std::fs::remove_dir_all(path).map_err(|err| Error::Gc(format!("removing {}: {err}", path.display())))?;
     }
     Ok(())
+}
+
+fn prepare_directory_tree_for_removal(root: &Path) -> Result<(), Error> {
+    if !root.is_dir() {
+        return Err(Error::Gc(format!("removal preparation root is not a directory: {}", root.display())));
+    }
+    let mut pending = vec![root.to_path_buf()];
+    let mut scanned_count = 0_u32;
+    while let Some(path) = pending.pop() {
+        if scanned_count >= MAX_GC_FILE_SCAN_ENTRIES {
+            return Err(Error::Gc(format!(
+                "removal preparation exceeded {MAX_GC_FILE_SCAN_ENTRIES} entries under {}",
+                root.display()
+            )));
+        }
+        scanned_count = scanned_count.saturating_add(1);
+        let metadata = std::fs::symlink_metadata(&path)
+            .map_err(|err| Error::Gc(format!("reading metadata for {}: {err}", path.display())))?;
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            continue;
+        }
+        make_directory_owner_writable(&path, &metadata)?;
+        for entry in
+            std::fs::read_dir(&path).map_err(|err| Error::Gc(format!("reading directory {}: {err}", path.display())))?
+        {
+            let entry = entry.map_err(|err| Error::Gc(format!("reading {} entry: {err}", path.display())))?;
+            pending.push(entry.path());
+        }
+    }
+    assert!(scanned_count >= 1, "removal preparation must inspect its root");
+    assert!(pending.is_empty(), "removal preparation must drain its worklist");
+    Ok(())
+}
+
+#[cfg(unix)]
+fn make_directory_owner_writable(path: &Path, metadata: &std::fs::Metadata) -> Result<(), Error> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let current_mode = metadata.permissions().mode();
+    let writable_mode = current_mode | OWNER_WRITE_PERMISSION_MODE;
+    assert_ne!(writable_mode & OWNER_WRITE_PERMISSION_MODE, 0);
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(writable_mode))
+        .map_err(|err| Error::Gc(format!("making {} removable: {err}", path.display())))
+}
+
+#[cfg(not(unix))]
+fn make_directory_owner_writable(path: &Path, metadata: &std::fs::Metadata) -> Result<(), Error> {
+    let mut permissions = metadata.permissions();
+    permissions.set_readonly(false);
+    std::fs::set_permissions(path, permissions)
+        .map_err(|err| Error::Gc(format!("making {} removable: {err}", path.display())))
 }
 
 async fn rewrite_pathinfo_db(state_dir: &Path, live_pathinfos: &[PathInfo]) -> Result<(), Error> {
@@ -1001,6 +1055,60 @@ mod tests {
         let report = reopened.garbage_collect(false).await.unwrap();
         assert_eq!(report.candidate_path_count, 0);
         assert!(output_dir.path().join(dir_path.to_string()).join("hello.txt").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn remove_path_removes_nested_read_only_export_tree() {
+        use std::os::unix::fs::PermissionsExt;
+
+        const READ_EXECUTE_MODE: u32 = 0o555;
+        const READ_ONLY_MODE: u32 = 0o444;
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("read-only-output");
+        let nested = root.join("share/data");
+        std::fs::create_dir_all(&nested).unwrap();
+        let payload = nested.join("payload.txt");
+        std::fs::write(&payload, b"payload").unwrap();
+        std::fs::set_permissions(&payload, std::fs::Permissions::from_mode(READ_ONLY_MODE)).unwrap();
+        std::fs::set_permissions(&nested, std::fs::Permissions::from_mode(READ_EXECUTE_MODE)).unwrap();
+        std::fs::set_permissions(nested.parent().unwrap(), std::fs::Permissions::from_mode(READ_EXECUTE_MODE)).unwrap();
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(READ_EXECUTE_MODE)).unwrap();
+
+        remove_path(&root).unwrap();
+
+        assert!(!root.exists());
+        assert!(!payload.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn remove_path_does_not_follow_a_symlink_outside_the_export_tree() {
+        use std::os::unix::fs::symlink;
+
+        let parent = tempfile::tempdir().unwrap();
+        let external = tempfile::tempdir().unwrap();
+        let external_payload = external.path().join("keep.txt");
+        std::fs::write(&external_payload, b"keep").unwrap();
+        let root = parent.path().join("output-with-link");
+        std::fs::create_dir(&root).unwrap();
+        symlink(external.path(), root.join("external-link")).unwrap();
+
+        remove_path(&root).unwrap();
+
+        assert!(!root.exists());
+        assert!(external_payload.exists());
+    }
+
+    #[test]
+    fn remove_path_accepts_an_already_missing_export() {
+        let parent = tempfile::tempdir().unwrap();
+        let missing = parent.path().join("missing-output");
+        assert!(!missing.exists());
+
+        remove_path(&missing).unwrap();
+
+        assert!(!missing.exists());
     }
 
     #[derive(Clone, Default)]
