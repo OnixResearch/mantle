@@ -85,6 +85,12 @@ Project examples show selector syntax after package composition. See `examples/p
 | `examples/projects/multi-output-sdk/mantle-project.ncl` | `cd examples/projects/multi-output-sdk && mantle build .#checks.development` | selected runtime/dev consumers plus SDK `out`, `dev`, `doc`, and `debug` outputs | heavy + first-build network |
 | `examples/projects/schema-codegen/mantle-project.ncl` | `cd examples/projects/schema-codegen && mantle build .#checks.integration` | generated C/Rust bindings, two CLIs, and cross-language behavior check | heavy + first-build network |
 | `examples/projects/reproducible-release/mantle-project.ncl` | `cd examples/projects/reproducible-release && mantle build .#checks.reproducible` | byte-identical normalized archives and a BLAKE3 sidecar | local + fast |
+| `examples/projects/signed-cache-roundtrip/mantle-project.ncl` | follow the project-local runbook | signed NAR publication, fresh-store substitution, and rejected untrusted/corrupt entries | heavy + loopback HTTP |
+| `examples/projects/locked-dependency-lifecycle/mantle-project.ncl` | `cd examples/projects/locked-dependency-lifecycle && mantle check` | checked lock/generated-input state with offline stale/refresh lifecycle | local + fast |
+| `examples/projects/cross-compiled-host-tool/mantle-project.ncl` | `cd examples/projects/cross-compiled-host-tool && mantle build .#target` | host-generated header consumed by an `x86_64-linux-musl` executable | heavy + first-build network |
+| `examples/projects/store-gc-lifecycle/mantle-project.ncl` | follow the project-local runbook | persistent roots, dry-run candidates, collected unreachable output, and mutation-lock rejection | heavy + local state |
+| `examples/projects/delta-substitution/mantle-project.ncl` | `cargo run -p mantle --example delta_substitution` | partial chunk transfer, full fallback, and fail-closed missing-chunk rejection | Rust adaptor |
+| `examples/projects/release-witness-handoff/mantle-project.ncl` | `cargo run -p mantle --example release_witness_handoff` | signed release/witness handoff with quorum and revocation outcomes | Rust adaptor |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build` | default package store path with `bin/hello` | generated seed |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#hello` | named package store path with `bin/hello` | generated seed |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#goodbye` | named package store path with `bin/goodbye` | generated seed |
@@ -112,6 +118,10 @@ These commands inspect local build evidence. They are not release or witness pro
 |---|---|---|---|
 | JSON build report for `examples/hello.ncl` | `mantle --json build examples/hello.ncl --store /tmp/mantle-examples-store --state-dir /tmp/mantle-examples-state --no-substitute` | build-report JSON with `outputs[].artifact_attestation.path` | proves only local build/report shape |
 | `examples/crunch.ncl` | `mantle eval examples/crunch.ncl -I examples` | self-build derivation skeleton shape | does not prove release, witness, or fixed-point self-hosting success |
+| `examples/projects/signed-cache-roundtrip/mantle-project.ncl` | follow its README producer/cache/consumer workflow | narinfo signature and content-hash acceptance | does not prove producer correctness or upstream trust |
+| `examples/projects/store-gc-lifecycle/mantle-project.ncl` | follow its README root/GC workflow | state-scoped root and collection report | does not prove distributed retention |
+| `examples/projects/delta-substitution/mantle-project.ncl` | `cargo run -p mantle --example delta_substitution` | in-memory delta/fallback transfer report | does not prove HTTP cache interoperability |
+| `examples/projects/release-witness-handoff/mantle-project.ncl` | `cargo run -p mantle --example release_witness_handoff` | synthetic signed attestation directory and policy result | does not prove release evidence or an independent rebuild |
 
 ## Advanced bootstrap
 

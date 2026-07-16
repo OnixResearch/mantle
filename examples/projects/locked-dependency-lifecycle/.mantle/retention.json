@@ -1,0 +1,15 @@
+{
+  "schema": "mantle-project-retention-state-v1",
+  "records": [
+    {
+      "input_name": "message-source",
+      "lock_digest": "9a4e7cd36a56115f7525990361f109acd5b5b506788bc11d1ca140a1f3de224f",
+      "source_identity": "file:file://./sources/message.txt",
+      "content_digest": "sha256-XGINfU3brMRLhXK30Y/SmDkpU8gTWKGpjegOKEn9074=",
+      "generation": 1,
+      "root_kind": "source-material",
+      "root_id": "9dcaf0da80828fc8c2c8d41160c0d12f98bb1abc03c1d1f611bc534b579c00ad",
+      "committed": true
+    }
+  ]
+}

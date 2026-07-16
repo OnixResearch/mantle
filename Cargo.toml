@@ -110,6 +110,14 @@ path = "examples/benchmark_scheduler_priority.rs"
 name = "hardware_simulation_plan"
 path = "examples/hardware_simulation_plan.rs"
 
+[[example]]
+name = "delta_substitution"
+path = "examples/projects/delta-substitution/demo.rs"
+
+[[example]]
+name = "release_witness_handoff"
+path = "examples/projects/release-witness-handoff/demo.rs"
+
 [dependencies]
 crunch-pipeline = { path = "crates/crunch-pipeline" }
 crunch-eval = { path = "crates/crunch-eval" }

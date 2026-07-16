@@ -535,6 +535,7 @@ Fast local examples:
 - [`examples/projects/generated-site/mantle-project.ncl`](examples/projects/generated-site/mantle-project.ncl) — complete generated-site package with a content check
 - [`examples/projects/codegen-pipeline/mantle-project.ncl`](examples/projects/codegen-pipeline/mantle-project.ncl) — model-to-generated-source application project
 - [`examples/projects/reproducible-release/mantle-project.ncl`](examples/projects/reproducible-release/mantle-project.ncl) — independently built normalized release archives with BLAKE3 and tamper checks
+- [`examples/projects/locked-dependency-lifecycle/mantle-project.ncl`](examples/projects/locked-dependency-lifecycle/mantle-project.ncl) — offline check, stale detection, selected refresh, and lock upgrade lifecycle
 - [`examples/fail.ncl`](examples/fail.ncl) — intentional failure for diagnostics
 
 Cookbook and advanced examples:
@@ -547,6 +548,11 @@ Cookbook and advanced examples:
 - [`examples/projects/fetched-and-patched/mantle-project.ncl`](examples/projects/fetched-and-patched/mantle-project.ncl) — pinned crates.io source with BLAKE3-fixed positive and negative patches
 - [`examples/projects/multi-output-sdk/mantle-project.ncl`](examples/projects/multi-output-sdk/mantle-project.ncl) — C SDK split into runtime, development, documentation, and debug outputs
 - [`examples/projects/schema-codegen/mantle-project.ncl`](examples/projects/schema-codegen/mantle-project.ncl) — one bounded schema generating tested C and Rust applications
+- [`examples/projects/signed-cache-roundtrip/mantle-project.ncl`](examples/projects/signed-cache-roundtrip/mantle-project.ncl) — signed publication and fresh-store substitution with untrusted/corrupt negative paths
+- [`examples/projects/cross-compiled-host-tool/mantle-project.ncl`](examples/projects/cross-compiled-host-tool/mantle-project.ncl) — host code generator separated from a musl target compiler and artifact role
+- [`examples/projects/store-gc-lifecycle/mantle-project.ncl`](examples/projects/store-gc-lifecycle/mantle-project.ncl) — persistent roots, dry-run collection, garbage collection, and mutation locking
+- [`examples/projects/delta-substitution/mantle-project.ncl`](examples/projects/delta-substitution/mantle-project.ncl) — partial chunk reuse, full fallback, and fail-closed sender-data validation
+- [`examples/projects/release-witness-handoff/mantle-project.ncl`](examples/projects/release-witness-handoff/mantle-project.ncl) — canonical signed attestation handoff, witness quorum, wrong-release, and revocation policy paths
 - [`examples/bootstrap-no-nix.ncl`](examples/bootstrap-no-nix.ncl) — compile C with the shared reduced bootstrap seed provider
 - [`examples/project/crunch.ncl`](examples/project/crunch.ncl) — project-aware `mantle build .#name` layout
 - [`examples/hardware_simulation_plan.rs`](examples/hardware_simulation_plan.rs) — frontend-owned hardware request lowering to generic `mantle-plan-v1`; real Verilator execution is capability-gated

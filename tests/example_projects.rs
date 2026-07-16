@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command as StdCommand;
@@ -14,6 +15,14 @@ const FETCHED_PATCHED_PROJECT: &str = "fetched-and-patched";
 const MULTI_OUTPUT_SDK_PROJECT: &str = "multi-output-sdk";
 const SCHEMA_CODEGEN_PROJECT: &str = "schema-codegen";
 const REPRODUCIBLE_RELEASE_PROJECT: &str = "reproducible-release";
+const SIGNED_CACHE_PROJECT: &str = "signed-cache-roundtrip";
+const LOCKED_DEPENDENCY_PROJECT: &str = "locked-dependency-lifecycle";
+const CROSS_COMPILED_PROJECT: &str = "cross-compiled-host-tool";
+const STORE_GC_PROJECT: &str = "store-gc-lifecycle";
+const DELTA_SUBSTITUTION_PROJECT: &str = "delta-substitution";
+const RELEASE_WITNESS_PROJECT: &str = "release-witness-handoff";
+const LOCK_RETENTION_ROOT_RECORD: &str =
+    ".mantle/retention-roots/9dcaf0da80828fc8c2c8d41160c0d12f98bb1abc03c1d1f611bc534b579c00ad.json";
 const SITE_TITLE: &str = "Mantle Project Gallery";
 const SITE_CHECK_RESULT: &str = "generated-site-check: ok";
 const CODEGEN_MESSAGE: &str = "Hello from generated project code";
@@ -198,6 +207,34 @@ fn assert_project_evaluates(project: &str, label: &str) {
     assert!(!output.stdout.is_empty(), "{label} evaluation should export JSON");
 }
 
+fn copy_locked_dependency_project(destination: &Path) {
+    const PROJECT_FILES: &[&str] = &[
+        "mantle-project.ncl",
+        "mantle.lock",
+        ".mantle/inputs.ncl",
+        ".mantle/retention.json",
+        LOCK_RETENTION_ROOT_RECORD,
+        "fixtures/unresolved-revision.ncl",
+        "patches/message.patch",
+        "sources/message.txt",
+    ];
+    assert!(destination.is_dir(), "fixture destination must exist");
+    assert!(!PROJECT_FILES.is_empty(), "locked fixture must copy project files");
+    let source = project_root(LOCKED_DEPENDENCY_PROJECT);
+    for relative_path in PROJECT_FILES {
+        let target = destination.join(relative_path);
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::copy(source.join(relative_path), target).unwrap();
+    }
+}
+
+fn run_project_command(current_dir: &Path, args: &[&str]) -> std::process::Output {
+    assert!(current_dir.is_dir(), "project command directory must exist");
+    assert!(!args.is_empty(), "project command arguments must not be empty");
+    let mut command = mantle_cmd();
+    command.current_dir(current_dir).args(args).output().unwrap()
+}
+
 fn check_result(run: &ProjectRun) -> String {
     std::fs::read_to_string(output_path(run).join("result.txt")).unwrap().trim().to_string()
 }
@@ -215,6 +252,120 @@ fn project_output_parser_accepts_named_outputs_and_rejects_duplicates() {
     assert!(duplicate.contains("duplicate output label"), "unexpected duplicate error: {duplicate}");
     let relative = parse_output_paths(b"relative-output\n").unwrap_err();
     assert!(relative.contains("not absolute"), "unexpected relative path error: {relative}");
+}
+
+#[test]
+fn production_workflow_projects_evaluate_and_keep_negative_paths() {
+    for (project, label) in [
+        (SIGNED_CACHE_PROJECT, "signed cache project"),
+        (LOCKED_DEPENDENCY_PROJECT, "locked dependency project"),
+        (CROSS_COMPILED_PROJECT, "cross-compiled project"),
+        (STORE_GC_PROJECT, "store GC project"),
+        (DELTA_SUBSTITUTION_PROJECT, "delta substitution project"),
+        (RELEASE_WITNESS_PROJECT, "release witness project"),
+    ] {
+        assert_project_evaluates(project, label);
+    }
+
+    let cache = std::fs::read_to_string(project_root(SIGNED_CACHE_PROJECT).join("README.md")).unwrap();
+    assert!(cache.contains("unknown signer is skipped"));
+    assert!(cache.contains("wrong key material fails signature verification"));
+    assert!(cache.contains("corrupted NAR is rejected"));
+    let cross = std::fs::read_to_string(project_root(CROSS_COMPILED_PROJECT).join("mantle-project.ncl")).unwrap();
+    assert!(cross.contains("host/target role mismatch"));
+    assert!(cross.contains("-x c -std=c11"));
+    let gc = std::fs::read_to_string(project_root(STORE_GC_PROJECT).join("mantle-project.ncl")).unwrap();
+    assert!(gc.contains("lock-holder"));
+    let delta = std::fs::read_to_string(project_root(DELTA_SUBSTITUTION_PROJECT).join("demo.rs")).unwrap();
+    assert!(delta.contains("FullArtifactFallback"));
+    assert!(delta.contains("MissingSenderChunk"));
+    let release = std::fs::read_to_string(project_root(RELEASE_WITNESS_PROJECT).join("demo.rs")).unwrap();
+    assert!(release.contains("InsufficientQuorum"));
+    assert!(release.contains("ReleaseRevocations"));
+}
+
+#[test]
+fn locked_dependency_lifecycle_detects_staleness_refreshes_and_upgrades() {
+    let fixture = tempfile::tempdir().unwrap();
+    copy_locked_dependency_project(fixture.path());
+    let check = run_project_command(fixture.path(), &["check"]);
+    assert!(check.status.success(), "initial check failed: {}", String::from_utf8_lossy(&check.stderr));
+
+    let lock_before = std::fs::read(fixture.path().join("mantle.lock")).unwrap();
+    let retention_path = fixture.path().join(".mantle/retention.json");
+    assert!(fixture.path().join(LOCK_RETENTION_ROOT_RECORD).is_file());
+    let retention_before: serde_json::Value = serde_json::from_slice(&std::fs::read(&retention_path).unwrap()).unwrap();
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(fixture.path().join("sources/message.txt"))
+        .unwrap()
+        .write_all(b"changed locally\n")
+        .unwrap();
+    let stale = run_project_command(fixture.path(), &["list-stale", "--no-network"]);
+    assert!(stale.status.success(), "stale listing failed: {}", String::from_utf8_lossy(&stale.stderr));
+    assert!(String::from_utf8_lossy(&stale.stdout).contains("message-source"));
+    assert_eq!(std::fs::read(fixture.path().join("mantle.lock")).unwrap(), lock_before);
+
+    let refresh = run_project_command(fixture.path(), &["refresh", "--no-network", "message-source"]);
+    assert!(refresh.status.success(), "refresh failed: {}", String::from_utf8_lossy(&refresh.stderr));
+    assert_ne!(std::fs::read(fixture.path().join("mantle.lock")).unwrap(), lock_before);
+    let retention_after: serde_json::Value = serde_json::from_slice(&std::fs::read(&retention_path).unwrap()).unwrap();
+    assert_ne!(retention_after["records"][0]["content_digest"], retention_before["records"][0]["content_digest"]);
+    assert_eq!(
+        retention_after["records"][0]["generation"].as_u64(),
+        retention_before["records"][0]["generation"]
+            .as_u64()
+            .and_then(|generation| generation.checked_add(1))
+    );
+    let no_stale = run_project_command(fixture.path(), &["list-stale", "--no-network"]);
+    assert!(no_stale.status.success());
+    assert_eq!(String::from_utf8_lossy(&no_stale.stdout).trim(), "all inputs up to date");
+
+    let lock_path = fixture.path().join("mantle.lock");
+    let mut old_lock: serde_json::Value = serde_json::from_slice(&std::fs::read(&lock_path).unwrap()).unwrap();
+    old_lock["version"] = serde_json::Value::String("0.9.0".to_string());
+    std::fs::write(&lock_path, serde_json::to_vec_pretty(&old_lock).unwrap()).unwrap();
+    let upgrade = run_project_command(fixture.path(), &["upgrade"]);
+    assert!(upgrade.status.success(), "upgrade failed: {}", String::from_utf8_lossy(&upgrade.stderr));
+    let upgraded: serde_json::Value = serde_json::from_slice(&std::fs::read(&lock_path).unwrap()).unwrap();
+    assert_eq!(upgraded["version"], "1.0.0");
+}
+
+#[test]
+fn locked_dependency_refresh_rejects_a_missing_local_patch() {
+    let fixture = tempfile::tempdir().unwrap();
+    copy_locked_dependency_project(fixture.path());
+    let lock_path = fixture.path().join("mantle.lock");
+    let mut lock: serde_json::Value = serde_json::from_slice(&std::fs::read(&lock_path).unwrap()).unwrap();
+    lock["patches"] = serde_json::json!({});
+    std::fs::write(&lock_path, serde_json::to_vec_pretty(&lock).unwrap()).unwrap();
+    std::fs::remove_file(fixture.path().join("patches/message.patch")).unwrap();
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(fixture.path().join("sources/message.txt"))
+        .unwrap()
+        .write_all(b"force refresh\n")
+        .unwrap();
+
+    let refresh = run_project_command(fixture.path(), &["refresh", "--no-network", "message-source"]);
+
+    assert!(!refresh.status.success(), "missing patch unexpectedly refreshed");
+    let stderr = String::from_utf8_lossy(&refresh.stderr);
+    assert!(stderr.contains("message.patch"), "missing patch diagnostic omitted its path: {stderr}");
+}
+
+#[test]
+fn locked_dependency_refresh_rejects_an_unresolved_revision() {
+    let fixture = tempfile::tempdir().unwrap();
+    copy_locked_dependency_project(fixture.path());
+    std::fs::copy(fixture.path().join("fixtures/unresolved-revision.ncl"), fixture.path().join("mantle-project.ncl"))
+        .unwrap();
+
+    let refresh = run_project_command(fixture.path(), &["refresh", "--no-network", "unresolved-revision"]);
+
+    assert!(!refresh.status.success(), "empty Git revision unexpectedly refreshed");
+    let stderr = String::from_utf8_lossy(&refresh.stderr);
+    assert!(stderr.contains("git rev must be 40 hex characters"), "unexpected revision diagnostic: {stderr}");
 }
 
 #[test]
@@ -273,6 +424,16 @@ fn fixed_source_projects_assemble_authoritative_files() {
     let rust_output = output_path(&rust_source);
     assert!(rust_output.join("Cargo.lock").is_file(), "assembled Rust lockfile missing");
     assert!(rust_output.join("greeting/src/lib.rs").is_file(), "assembled Rust library missing");
+
+    let delta_source = run_project_build(DELTA_SUBSTITUTION_PROJECT, ".#source");
+    assert_success(&delta_source, "delta adaptor source assembly");
+    let delta_text = std::fs::read_to_string(output_path(&delta_source).join("demo.rs")).unwrap();
+    assert!(delta_text.contains("DeltaAcceptanceMode::Delta"));
+
+    let release_source = run_project_build(RELEASE_WITNESS_PROJECT, ".#source");
+    assert_success(&release_source, "release witness source assembly");
+    let release_text = std::fs::read_to_string(output_path(&release_source).join("demo.rs")).unwrap();
+    assert!(release_text.contains("VerificationDirectory"));
 }
 
 #[test]
