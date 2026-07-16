@@ -2,9 +2,9 @@
 
 - Date: 2026-07-15
 - Question: Did the downstream OnixOS/ChaosControl path accept Mantle's exact private-kfunc cohort with bounded identities?
-- Current decision: **substantial downstream implementation exists, but final authority remains blocked**. ChaosControl's exact positive/negative KVM rail is accepted under `cairn/archive/2026-07-16-add-kernel-bundle-validation-rail/` at commit `c6d8ec9`. OnixOS now has typed intent, real per-operation UCAN checks, a capability-rooted target shell, generation lifecycle/reconciliation, system wiring, and degraded target receipts. Its exact Linux 6.18.20 run reaches authorized private-kfunc module load but cannot resolve module BTF for BPF load under the required service profile without `CAP_SYS_ADMIN`. The same object loads when that forbidden capability is added, so the result is a bounded capability blocker, not target authority.
+- Current decision: **substantial downstream implementation exists, but final authority remains blocked**. ChaosControl's exact positive/negative KVM rail is accepted under `cairn/archive/2026-07-16-add-kernel-bundle-validation-rail/` at commit `c6d8ec9`. OnixOS now has typed intent, real per-operation UCAN checks, a capability-rooted target shell, generation lifecycle/reconciliation, system wiring, degraded target receipts, and exact `BpfCleanup`-authorized failed-load compensation. Its exact Linux 6.18.20 run reaches authorized private-kfunc module load but cannot resolve module BTF for BPF load under the required service profile without `CAP_SYS_ADMIN`. The same object loads when that forbidden capability is added, so the result is a bounded capability blocker, not target authority.
 - Owner: Mantle records this as dependent evidence only; downstream repositories own acceptance and final authority.
-- Next action: keep this Mantle change active while OnixOS implements a reviewed non-init-user-namespace BPF token or equivalent narrow broker, target-local credential injection, and automatic compensation, then reruns the full lifecycle without `CAP_SYS_ADMIN`.
+- Next action: keep this Mantle change active while OnixOS implements a reviewed non-init-user-namespace BPF token or equivalent narrow broker and target-local credential injection, then reruns successful activation/restart/replacement/rollback/cleanup without `CAP_SYS_ADMIN`.
 
 ## Newly produced downstream identities
 
@@ -17,7 +17,8 @@ chaoscontrol.exact_kvm_receipt = 40f624ff0ff51e46bbab3813a4122ff5329be9019c1a4d7
 chaoscontrol.exact_kvm_kernel_image_blake3 = 223a6b61393b8956124a574d0fac00057fc45171dd7bb56a7711ca1a224de5d7
 chaoscontrol.exact_kvm_initrd_image_blake3 = 48bd470f32f96bc26d3d2599f1ab0dba4b3c2dac6eab658bcbce382e21d8c9e8
 onixos.historical_bpf_runtime_admission_receipt = 30e011f64315879f3bd666390229882d0e3311b6c22052d2da85461c60cac39a
-onixos.exact_capability_boundary_receipt = 2f2e23413707fd79ca60932019a4eb96743b870d9e622322483e55b577eece21
+onixos.historical_capability_boundary_receipt = 2f2e23413707fd79ca60932019a4eb96743b870d9e622322483e55b577eece21
+onixos.compensated_capability_boundary_receipt = b5824e26aaceccbbefe71dab05d8806e920d26476cee91ddadee981e4ec38956
 ```
 
 These identities bind the already-recorded Mantle cohort:
@@ -45,7 +46,7 @@ test kernel_bundle_validation::tests::kvm_markers_emit_passed_rail_receipt ... o
 
 ChaosControl local follow-up records a repo-owned initrd/loader path in addition to commit `95afb9d`'s KVM shell. The persisted exact receipt `40f624ff0ff51e46bbab3813a4122ff5329be9019c1a4d73f44d11cb242daae8` has `execution_mode = chaoscontrol-vmm-kvm`, binds kernel image `223a6b61393b8956124a574d0fac00057fc45171dd7bb56a7711ca1a224de5d7` and initrd image `48bd470f32f96bc26d3d2599f1ab0dba4b3c2dac6eab658bcbce382e21d8c9e8`, and records boot/module/BPF verify/attach/detach/cleanup observations with no issues. The marker transcript receipt is explicitly rejected as failed exact-KVM evidence, and the blocked-input receipt proves fail-closed unavailable-loader behavior.
 
-OnixOS focused suites now cover admission, lifecycle, target shell, real UCAN, target agent, and exact dotted-name cleanup. The exact capability-boundary VM also passed its expected-negative assertions:
+OnixOS focused suites now cover admission, lifecycle, target shell, real UCAN, target agent, and exact dotted-name cleanup. The exact capability-boundary VM rerun also passed its expected-negative and automatic-compensation assertions:
 
 ```text
 private_kfunc kfunc module loaded successfully
@@ -54,8 +55,11 @@ onix-bpf-runtime: operation=LoadBpf class=target-effect-failed ... process_value
 "kind": "load-bpf"
 "succeeded": false
 CAP_BPF present; CAP_SYS_ADMIN absent
-private_kfunc kfunc module unloaded successfully
-test script finished in 9.18s
+"kind": "cleanup"
+"succeeded": true
+"cleanup_class": "succeeded"
+private_kfunc.mod absent from /proc/modules
+test script finished in 5.39s
 ```
 
 OnixOS evidence: `cairn/changes/realize-linux-bpf-pack-adapter/evidence/exact-kernel-capability-boundary-2026-07-16.md` in the sibling repository.
@@ -74,4 +78,4 @@ Focused Cairn tasks gate with the canonical generated policy passed during this 
 
 ## Non-claim boundary
 
-Mantle must not reinterpret these active-change receipts, the ChaosControl transcript receipt, the exact positive KVM receipt, or OnixOS receipt `2f2e23413707fd79ca60932019a4eb96743b870d9e622322483e55b577eece21` as final target authority. The OnixOS receipt is explicitly degraded and proves fail-closed behavior at the least-privilege kernel boundary. Its temporary VM credential fixture also passed through Nix test inputs, so it does not satisfy the production target-local secret boundary. This Mantle change remains active; no sync or archive is justified.
+Mantle must not reinterpret these active-change receipts, the ChaosControl transcript receipt, the exact positive KVM receipt, or OnixOS receipt `b5824e26aaceccbbefe71dab05d8806e920d26476cee91ddadee981e4ec38956` as final target authority. The OnixOS receipt is explicitly degraded and proves fail-closed behavior plus authorized compensation at the least-privilege kernel boundary. Its temporary VM credential fixture also passed through Nix test inputs, so it does not satisfy the production target-local secret boundary. This Mantle change remains active; no sync or archive is justified.
