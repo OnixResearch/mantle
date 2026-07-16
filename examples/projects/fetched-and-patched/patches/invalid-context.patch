@@ -1,0 +1,7 @@
+diff --git a/DOES-NOT-EXIST b/DOES-NOT-EXIST
+index 1111111..2222222 100644
+--- a/DOES-NOT-EXIST
++++ b/DOES-NOT-EXIST
+@@ -1 +1 @@
+-this file is intentionally absent
++this patch must fail closed

@@ -2,9 +2,9 @@
 
 This directory is a supported examples gallery. `examples/catalog.ncl` is the source of truth for support tiers, prerequisites, and validation rails.
 
-## Gradual local build path
+## Gradual build path
 
-Follow this seed-free path in order. Each stage keeps the earlier concepts and introduces one new build concern.
+Begin with the local seed-free stages, then continue into pinned network inputs and source-built toolchains. Each stage keeps the earlier concepts and introduces one new build concern.
 
 | Stage | Example | New concept |
 |---|---|---|
@@ -20,6 +20,10 @@ Follow this seed-free path in order. Each stage keeps the earlier concepts and i
 | Graph | `examples/diamond-dependency.ncl` | shared dependency reuse across converging branches |
 | Project package | `examples/projects/generated-site/mantle-project.ncl` | default package and separately selectable check |
 | Project pipeline | `examples/projects/codegen-pipeline/mantle-project.ncl` | model, code generation, application, and check selectors |
+| External source | `examples/projects/fetched-and-patched/mantle-project.ncl` | fixed-output fetch, local patching, and rejected invalid context |
+| Output hygiene | `examples/projects/multi-output-sdk/mantle-project.ncl` | runtime, development, documentation, and debug outputs with selected consumers |
+| Language boundary | `examples/projects/schema-codegen/mantle-project.ncl` | one schema generating checked C and Rust applications |
+| Release artifact | `examples/projects/reproducible-release/mantle-project.ncl` | normalized archives, BLAKE3 identity, and tamper detection |
 
 ## Beginner
 
@@ -77,6 +81,10 @@ Project examples show selector syntax after package composition. See `examples/p
 | `examples/projects/codegen-pipeline/mantle-project.ncl` | `cd examples/projects/codegen-pipeline && mantle build .#checks.app` | model-to-generated-source application graph and check result | local + fast |
 | `examples/projects/c-library-cli/mantle-project.ncl` | `cd examples/projects/c-library-cli && mantle build .#checks.test-greet` | static C library, CLI, public header, unit test, and project check | heavy + first-build network |
 | `examples/projects/rust-workspace/mantle-project.ncl` | `cd examples/projects/rust-workspace && mantle build .#workspace-app` | offline Cargo-built library/CLI workspace | heavy + first-build network |
+| `examples/projects/fetched-and-patched/mantle-project.ncl` | `cd examples/projects/fetched-and-patched && mantle build .#checks.patch` | verified upstream source with a BLAKE3-fixed local patch | real network |
+| `examples/projects/multi-output-sdk/mantle-project.ncl` | `cd examples/projects/multi-output-sdk && mantle build .#checks.development` | selected runtime/dev consumers plus SDK `out`, `dev`, `doc`, and `debug` outputs | heavy + first-build network |
+| `examples/projects/schema-codegen/mantle-project.ncl` | `cd examples/projects/schema-codegen && mantle build .#checks.integration` | generated C/Rust bindings, two CLIs, and cross-language behavior check | heavy + first-build network |
+| `examples/projects/reproducible-release/mantle-project.ncl` | `cd examples/projects/reproducible-release && mantle build .#checks.reproducible` | byte-identical normalized archives and a BLAKE3 sidecar | local + fast |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build` | default package store path with `bin/hello` | generated seed |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#hello` | named package store path with `bin/hello` | generated seed |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#goodbye` | named package store path with `bin/goodbye` | generated seed |

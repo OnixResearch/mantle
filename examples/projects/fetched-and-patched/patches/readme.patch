@@ -1,0 +1,12 @@
+diff --git a/README.md b/README.md
+index 8ec9d61..c4f0177 100644
+--- a/README.md
++++ b/README.md
+@@ -1,5 +1,7 @@
+ # CRC64
+ 
++> This source tree was patched reproducibly by the Mantle example project.
++
+ [![crates.io](https://img.shields.io/crates/v/crc64.svg?style=flat-square)](https://crates.io/crates/crc64)
+ [![docs.rs docs](https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square)](https://docs.rs/crc64)
+ [![License: MIT](https://img.shields.io/github/license/badboy/crc64-rs?style=flat-square)](LICENSE)

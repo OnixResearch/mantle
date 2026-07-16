@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command as StdCommand;
@@ -9,6 +10,10 @@ const GENERATED_SITE_PROJECT: &str = "generated-site";
 const CODEGEN_PROJECT: &str = "codegen-pipeline";
 const C_PROJECT: &str = "c-library-cli";
 const RUST_PROJECT: &str = "rust-workspace";
+const FETCHED_PATCHED_PROJECT: &str = "fetched-and-patched";
+const MULTI_OUTPUT_SDK_PROJECT: &str = "multi-output-sdk";
+const SCHEMA_CODEGEN_PROJECT: &str = "schema-codegen";
+const REPRODUCIBLE_RELEASE_PROJECT: &str = "reproducible-release";
 const SITE_TITLE: &str = "Mantle Project Gallery";
 const SITE_CHECK_RESULT: &str = "generated-site-check: ok";
 const CODEGEN_MESSAGE: &str = "Hello from generated project code";
@@ -21,7 +26,17 @@ const RUST_POSITIVE_TEST: &str = "renders_a_normalized_name";
 const RUST_NEGATIVE_TEST: &str = "rejects_an_empty_name";
 const RUST_GREETING: &str = "Hello, Mantle!";
 const RUST_CHECK_RESULT: &str = "rust-workspace-smoke-check: ok";
+const FETCHED_PATCHED_CHECK_RESULT: &str = "fetched-and-patched-check: ok";
+const MULTI_OUTPUT_RUNTIME_CHECK_RESULT: &str = "multi-output-sdk-runtime-check: ok";
+const MULTI_OUTPUT_DEVELOPMENT_CHECK_RESULT: &str = "multi-output-sdk-development-check: ok";
+const SCHEMA_CODEGEN_CHECK_RESULT: &str = "schema-codegen-integration-check: ok";
+const RELEASE_CHECK_RESULT: &str = "reproducible-release-check: ok";
+const RELEASE_TAMPER_CHECK_RESULT: &str = "reproducible-release-tamper-check: ok";
+const RELEASE_ARCHIVE_BLAKE3: &str = "blake3-Roawb3qp5wK7exFYdIBJiEwtIjGz2YivY1sVtEI+YDI=";
 const MISSING_SELECTOR: &str = ".#missing-package";
+const DEFAULT_OUTPUT_LABEL: &str = "out";
+const CACHED_OUTPUT_ANNOTATION: &str = "cached";
+const MAX_PROJECT_OUTPUTS: usize = 16;
 
 fn mantle_cmd() -> Command {
     Command::cargo_bin("mantle").expect("mantle binary should be built")
@@ -78,10 +93,21 @@ struct ProjectRun {
 }
 
 fn run_project_build(project: &str, selector: &str) -> ProjectRun {
+    run_project_build_with_verbosity(project, selector, false)
+}
+
+fn run_project_build_verbose(project: &str, selector: &str) -> ProjectRun {
+    run_project_build_with_verbosity(project, selector, true)
+}
+
+fn run_project_build_with_verbosity(project: &str, selector: &str, verbose: bool) -> ProjectRun {
     let store = tempfile::tempdir().unwrap();
     let state = tempfile::tempdir().unwrap();
     let mut command = mantle_cmd();
     command.current_dir(project_root(project));
+    if verbose {
+        command.arg("--verbose");
+    }
     command.args([
         "build",
         selector,
@@ -111,16 +137,84 @@ fn run_project_build(project: &str, selector: &str) -> ProjectRun {
     }
 }
 
+fn parse_output_paths(stdout: &[u8]) -> Result<BTreeMap<String, PathBuf>, String> {
+    let text = std::str::from_utf8(stdout).map_err(|error| format!("build output is not UTF-8: {error}"))?;
+    let mut paths = BTreeMap::new();
+    for line in text.lines().filter(|line| !line.trim().is_empty()) {
+        if paths.len() >= MAX_PROJECT_OUTPUTS {
+            return Err(format!("build reported more than {MAX_PROJECT_OUTPUTS} outputs"));
+        }
+        let (path, label) = match line.rsplit_once(" (") {
+            Some((path, suffix)) => {
+                let annotations = suffix.strip_suffix(')').ok_or_else(|| format!("malformed output label: {line}"))?;
+                let first_annotation = annotations.split(',').next().unwrap_or_default().trim();
+                let label = if first_annotation == CACHED_OUTPUT_ANNOTATION {
+                    DEFAULT_OUTPUT_LABEL
+                } else {
+                    first_annotation
+                };
+                (path, label)
+            }
+            None => (line, DEFAULT_OUTPUT_LABEL),
+        };
+        if path.is_empty() || label.is_empty() {
+            return Err(format!("empty output path or label: {line}"));
+        }
+        let path = PathBuf::from(path);
+        if !path.is_absolute() {
+            return Err(format!("output path is not absolute: {}", path.display()));
+        }
+        if paths.insert(label.to_string(), path).is_some() {
+            return Err(format!("duplicate output label: {label}"));
+        }
+    }
+    if paths.is_empty() {
+        return Err("build did not report an output path".to_string());
+    }
+    Ok(paths)
+}
+
+fn output_path_for_label(run: &ProjectRun, label: &str) -> PathBuf {
+    parse_output_paths(&run.output.stdout)
+        .unwrap()
+        .remove(label)
+        .unwrap_or_else(|| panic!("missing output label {label}"))
+}
+
 fn output_path(run: &ProjectRun) -> PathBuf {
-    let stdout = String::from_utf8(run.output.stdout.clone()).unwrap();
-    let line = stdout.lines().next().expect("project build should print an output path");
-    PathBuf::from(line.split_once(" (").map(|(path, _label)| path).unwrap_or(line))
+    output_path_for_label(run, DEFAULT_OUTPUT_LABEL)
 }
 
 fn assert_success(run: &ProjectRun, label: &str) {
     let stderr = String::from_utf8_lossy(&run.output.stderr);
     assert!(run.output.status.success(), "{label} failed:\n{stderr}");
     assert!(!run.output.stdout.is_empty(), "{label} should print an output path");
+}
+
+fn assert_project_evaluates(project: &str, label: &str) {
+    let mut command = mantle_cmd();
+    let output = command.current_dir(project_root(project)).args(["eval", "mantle-project.ncl"]).output().unwrap();
+    assert!(output.status.success(), "{label} should evaluate: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.stdout.is_empty(), "{label} evaluation should export JSON");
+}
+
+fn check_result(run: &ProjectRun) -> String {
+    std::fs::read_to_string(output_path(run).join("result.txt")).unwrap().trim().to_string()
+}
+
+#[test]
+fn project_output_parser_accepts_named_outputs_and_rejects_duplicates() {
+    let parsed =
+        parse_output_paths(b"/tmp/example-dev (dev, cached)\n/tmp/example-doc (doc)\n/tmp/example-out (cached)\n")
+            .unwrap();
+    assert_eq!(parsed.get("dev"), Some(&PathBuf::from("/tmp/example-dev")));
+    assert_eq!(parsed.get("doc"), Some(&PathBuf::from("/tmp/example-doc")));
+    assert_eq!(parsed.get(DEFAULT_OUTPUT_LABEL), Some(&PathBuf::from("/tmp/example-out")));
+
+    let duplicate = parse_output_paths(b"/tmp/first\n/tmp/second\n").unwrap_err();
+    assert!(duplicate.contains("duplicate output label"), "unexpected duplicate error: {duplicate}");
+    let relative = parse_output_paths(b"relative-output\n").unwrap_err();
+    assert!(relative.contains("not absolute"), "unexpected relative path error: {relative}");
 }
 
 #[test]
@@ -253,6 +347,163 @@ fn rust_workspace_project_builds_package_and_smoke_check() {
     assert_success(&check, "Rust workspace check");
     let result = std::fs::read_to_string(output_path(&check).join("result.txt")).unwrap();
     assert_eq!(result.trim(), RUST_CHECK_RESULT);
+}
+
+#[test]
+fn fetched_and_patched_project_declares_fixed_positive_and_negative_patches() {
+    let project = project_root(FETCHED_PATCHED_PROJECT);
+    let project_source = std::fs::read_to_string(project.join("mantle-project.ncl")).unwrap();
+    let positive_patch = std::fs::read_to_string(project.join("patches/readme.patch")).unwrap();
+    let negative_patch = std::fs::read_to_string(project.join("patches/invalid-context.patch")).unwrap();
+    assert!(project_source.contains("crc64-2.0.0.crate"), "pinned upstream crate missing");
+    assert!(project_source.contains("sha256-G2t3VkrTsVRXQrfE4NYeYPnQUgnzxpGz2eI3QlVE/rA="));
+    assert!(project_source.contains("sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="));
+    assert!(positive_patch.contains("patched reproducibly by the Mantle example project"));
+    assert!(negative_patch.contains("DOES-NOT-EXIST"));
+    assert_project_evaluates(FETCHED_PATCHED_PROJECT, "fetched and patched project");
+}
+
+#[test]
+#[ignore = "uses the live crates.io fixed-output source"]
+fn fetched_and_patched_project_builds_check_and_rejects_invalid_patch() {
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: fetched project requires Linux, bwrap, and static BusyBox");
+        return;
+    }
+
+    let check = run_project_build(FETCHED_PATCHED_PROJECT, ".#checks.patch");
+    assert_success(&check, "fetched and patched check");
+    assert_eq!(check_result(&check), FETCHED_PATCHED_CHECK_RESULT);
+
+    let invalid = run_project_build_verbose(FETCHED_PATCHED_PROJECT, ".#invalid-patch");
+    let stderr = String::from_utf8_lossy(&invalid.output.stderr);
+    assert!(!invalid.output.status.success(), "invalid patch unexpectedly succeeded");
+    assert!(stderr.contains("DOES-NOT-EXIST"), "invalid patch error missing failed target: {stderr}");
+
+    let invalid_hash = run_project_build_verbose(FETCHED_PATCHED_PROJECT, ".#invalid-hash");
+    let stderr = String::from_utf8_lossy(&invalid_hash.output.stderr);
+    assert!(!invalid_hash.output.status.success(), "invalid fixed-output hash unexpectedly succeeded");
+    assert!(stderr.contains("hash mismatch"), "fixed-output mismatch diagnostic missing: {stderr}");
+}
+
+#[test]
+fn multi_output_sdk_source_assembles_and_project_evaluates() {
+    assert_project_evaluates(MULTI_OUTPUT_SDK_PROJECT, "multi-output SDK project");
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: SDK source assembly requires Linux, bwrap, and static BusyBox");
+        return;
+    }
+
+    let source = run_project_build(MULTI_OUTPUT_SDK_PROJECT, ".#source");
+    assert_success(&source, "multi-output SDK source assembly");
+    let output = output_path(&source);
+    assert!(output.join("include/mantle_sdk.h").is_file(), "SDK header missing");
+    assert!(output.join("tests/test_sdk.c").is_file(), "SDK negative tests missing");
+    assert!(output.join("docs/mantle-sdk.1").is_file(), "SDK manual page missing");
+}
+
+#[test]
+#[ignore = "realizes the pinned bootstrap C toolchain and all selected SDK outputs"]
+fn multi_output_sdk_builds_outputs_and_selected_consumers() {
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: SDK project build requires Linux, bwrap, and static BusyBox");
+        return;
+    }
+
+    let package = run_project_build(MULTI_OUTPUT_SDK_PROJECT, ".#sdk");
+    assert_success(&package, "multi-output SDK package");
+    let runtime = output_path_for_label(&package, "out");
+    let development = output_path_for_label(&package, "dev");
+    let documentation = output_path_for_label(&package, "doc");
+    let debug = output_path_for_label(&package, "debug");
+    assert!(runtime.join("bin/mantle-sdk-greet").is_file());
+    assert!(development.join("include/mantle_sdk.h").is_file());
+    assert!(development.join("lib/libmantle_sdk.a").is_file());
+    assert!(documentation.join("share/man/man1/mantle-sdk-greet.1").is_file());
+    assert!(debug.join("lib/debug/mantle-sdk-greet").is_file());
+    let execution = StdCommand::new(runtime.join("bin/mantle-sdk-greet")).arg("Mantle").output().unwrap();
+    assert!(execution.status.success(), "SDK runtime should execute");
+    assert_eq!(String::from_utf8(execution.stdout).unwrap().trim(), "Hello, Mantle!");
+
+    let runtime_check = run_project_build(MULTI_OUTPUT_SDK_PROJECT, ".#checks.runtime");
+    assert_success(&runtime_check, "SDK runtime consumer");
+    assert_eq!(check_result(&runtime_check), MULTI_OUTPUT_RUNTIME_CHECK_RESULT);
+    let development_check = run_project_build(MULTI_OUTPUT_SDK_PROJECT, ".#checks.development");
+    assert_success(&development_check, "SDK development consumer");
+    assert_eq!(check_result(&development_check), MULTI_OUTPUT_DEVELOPMENT_CHECK_RESULT);
+}
+
+#[test]
+fn schema_codegen_builds_bindings_and_rejects_invalid_schema() {
+    assert_project_evaluates(SCHEMA_CODEGEN_PROJECT, "schema codegen project");
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: schema generation requires Linux, bwrap, and static BusyBox");
+        return;
+    }
+
+    let bindings = run_project_build(SCHEMA_CODEGEN_PROJECT, ".#bindings");
+    assert_success(&bindings, "schema generated bindings");
+    let output = output_path(&bindings);
+    assert!(output.join("c/greeting.h").is_file(), "generated C header missing");
+    assert!(output.join("rust/greeting.rs").is_file(), "generated Rust module missing");
+    let manifest = std::fs::read_to_string(output.join("bindings.manifest")).unwrap();
+    assert!(manifest.contains("schema_version=1"));
+    assert!(manifest.contains("default_name=World"));
+
+    let invalid = run_project_build_verbose(SCHEMA_CODEGEN_PROJECT, ".#invalid-schema");
+    let stderr = String::from_utf8_lossy(&invalid.output.stderr);
+    assert!(!invalid.output.status.success(), "invalid schema unexpectedly generated bindings");
+    assert!(
+        stderr.contains("requires non-empty prefix and default_name"),
+        "invalid schema error missing: {stderr}"
+    );
+
+    let unsafe_schema = run_project_build_verbose(SCHEMA_CODEGEN_PROJECT, ".#unsafe-schema");
+    let stderr = String::from_utf8_lossy(&unsafe_schema.output.stderr);
+    assert!(!unsafe_schema.output.status.success(), "unsafe schema unexpectedly generated source");
+    assert!(stderr.contains("unsupported characters"), "unsafe schema error missing: {stderr}");
+}
+
+#[test]
+#[ignore = "realizes both bootstrap C and source-built Rust toolchains"]
+fn schema_codegen_builds_both_languages_and_integration_check() {
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: schema integration requires Linux, bwrap, and static BusyBox");
+        return;
+    }
+
+    let check = run_project_build(SCHEMA_CODEGEN_PROJECT, ".#checks.integration");
+    assert_success(&check, "schema C/Rust integration check");
+    assert_eq!(check_result(&check), SCHEMA_CODEGEN_CHECK_RESULT);
+}
+
+#[test]
+fn reproducible_release_matches_blake3_and_detects_tampering() {
+    assert_project_evaluates(REPRODUCIBLE_RELEASE_PROJECT, "reproducible release project");
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: release project requires Linux, bwrap, and static BusyBox");
+        return;
+    }
+
+    let release_a = run_project_build(REPRODUCIBLE_RELEASE_PROJECT, ".#release-a");
+    let release_b = run_project_build(REPRODUCIBLE_RELEASE_PROJECT, ".#release-b");
+    assert_success(&release_a, "release A");
+    assert_success(&release_b, "release B");
+    let archive_a = std::fs::read(output_path(&release_a).join("release-demo.tar")).unwrap();
+    let archive_b = std::fs::read(output_path(&release_b).join("release-demo.tar")).unwrap();
+    assert_eq!(archive_a, archive_b, "independent release archives differ");
+    let digest = blake3::hash(&archive_a);
+    let digest_sri = format!("blake3-{}", data_encoding::BASE64.encode(digest.as_bytes()));
+    assert_eq!(digest_sri, RELEASE_ARCHIVE_BLAKE3);
+    let sidecar = std::fs::read_to_string(output_path(&release_a).join("release-demo.tar.blake3")).unwrap();
+    assert_eq!(sidecar.trim(), RELEASE_ARCHIVE_BLAKE3);
+
+    let reproducibility = run_project_build(REPRODUCIBLE_RELEASE_PROJECT, ".#checks.reproducible");
+    assert_success(&reproducibility, "reproducibility check");
+    assert_eq!(check_result(&reproducibility), RELEASE_CHECK_RESULT);
+    let tamper = run_project_build(REPRODUCIBLE_RELEASE_PROJECT, ".#checks.tamper-detection");
+    assert_success(&tamper, "release tamper detection");
+    assert_eq!(check_result(&tamper), RELEASE_TAMPER_CHECK_RESULT);
 }
 
 #[test]
