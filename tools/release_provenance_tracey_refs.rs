@@ -62,14 +62,22 @@
 // r[verify mantle.release_provenance.preserves_carriers.final_validation]
 
 // Cairn release-evidence handoff rows.
-// Implementation and tests: `src/cairn_release_handoff.rs`.
+// Implementation and tests: `src/cairn_release_handoff.rs`,
+// `src/release_evidence.rs`, `crates/crunch-release-core`, release CLI fixtures,
+// and `.github/workflows/flake-check.yml`.
 // Archived validation:
-// `cairn/archive/2026-07-09-mantle-cairn-release-evidence-handoff/evidence/manual-validation.md`.
+// `cairn/archive/2026-07-09-mantle-cairn-release-evidence-handoff/evidence/manual-validation.md`
+// and `cairn/archive/2026-07-14-enforce-hermetic-release-handoff/evidence/validation.md`.
 // r[impl mantle.release_provenance.cairn_evidence_handoff.contract]
+// r[impl mantle.release_provenance.cairn_evidence_handoff.measured_inputs]
+// r[impl mantle.release_provenance.cairn_evidence_handoff.production_wiring]
+// r[impl mantle.release_provenance.cairn_evidence_handoff.bypass_protection]
+// r[impl mantle.release_provenance.cairn_evidence_handoff.cross_repo_dependency]
 // r[verify mantle.release_provenance.cairn_evidence_handoff.fixtures.positive]
 // r[verify mantle.release_provenance.cairn_evidence_handoff.fixtures.negative]
 // r[impl mantle.release_provenance.cairn_evidence_handoff.validation]
 // r[impl mantle.release_provenance.cairn_evidence_handoff.docs]
+// r[verify mantle.release_provenance.cairn_evidence_handoff.flake_check_ci]
 // r[verify mantle.release_provenance.cairn_evidence_handoff.final_validation]
 
 // Nix evidence normalization.
