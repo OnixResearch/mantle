@@ -115,7 +115,7 @@ fn byte_len_u64(bytes: &[u8]) -> Result<u64, String> {
     u64::try_from(bytes.len()).map_err(|_| "byte length does not fit u64".to_string())
 }
 
-fn read_bounded_regular(path: &Path, max_bytes: u64) -> Result<Vec<u8>, String> {
+pub(crate) fn read_bounded_regular(path: &Path, max_bytes: u64) -> Result<Vec<u8>, String> {
     let (file, metadata) = open_regular_no_follow(path)?;
     if metadata.len() > max_bytes {
         return Err(format!("{} exceeds the {max_bytes}-byte bound", path.display()));
@@ -320,6 +320,21 @@ fn write_export_plan(stage: &Path, plan: &crate::oci_projection::ExportPlan) -> 
         let hex = digest
             .strip_prefix(SHA256_PREFIX)
             .ok_or_else(|| format!("planned blob lacks SHA-256 prefix: {digest}"))?;
+        write_new_synced(&stage.join(OCI_BLOB_DIR).join(hex), bytes)?;
+    }
+    sync_directory(&stage.join(OCI_BLOB_DIR))?;
+    sync_directory(&stage.join("blobs"))?;
+    Ok(())
+}
+
+fn write_pulled_layout(stage: &Path, plan: &crate::oci_registry::RegistryPullPlan) -> Result<(), String> {
+    write_new_synced(&stage.join(OCI_LAYOUT_FILENAME), &plan.oci_layout_bytes)?;
+    write_new_synced(&stage.join(OCI_INDEX_FILENAME), &plan.index_bytes)?;
+    write_new_synced(&stage.join(OCI_EXPORT_REPORT_FILENAME), &plan.export_report_bytes)?;
+    for (digest, bytes) in &plan.descriptor_blobs {
+        let hex = digest
+            .strip_prefix(SHA256_PREFIX)
+            .ok_or_else(|| format!("pulled blob lacks SHA-256 prefix: {digest}"))?;
         write_new_synced(&stage.join(OCI_BLOB_DIR).join(hex), bytes)?;
     }
     sync_directory(&stage.join(OCI_BLOB_DIR))?;
@@ -594,6 +609,39 @@ fn admit_blobs(facts: &LayoutFacts, state_dir: &Path) -> Result<BTreeMap<String,
     assert_eq!(refs.len(), blob_count_max, "every descriptor blob must receive one admitted ref");
     assert_eq!(refs.len(), facts.blobs.len(), "admitted refs must preserve descriptor closure cardinality");
     Ok(refs)
+}
+
+pub fn publish_pulled_layout(plan: &crate::oci_registry::RegistryPullPlan, output_dir: &Path) -> Result<(), String> {
+    if output_dir.exists() {
+        return Err(format!("OCI pull output already exists: {}", output_dir.display()));
+    }
+    if plan.descriptor_blobs.is_empty() || plan.export_report_bytes.is_empty() {
+        return Err("OCI pull plan is missing descriptor or export-report bytes".to_string());
+    }
+    let parent = output_dir.parent().unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("creating OCI pull output parent {}: {error}", parent.display()))?;
+    let stage = tempfile::Builder::new()
+        .prefix(".mantle-oci-pull-")
+        .tempdir_in(parent)
+        .map_err(|error| format!("creating OCI pull staging directory: {error}"))?;
+    write_pulled_layout(stage.path(), plan)?;
+    let facts = read_layout_facts(stage.path())?;
+    let preview = validate_import(&facts).map_err(|issues| {
+        format!("pulled OCI self-verification failed: {}", serde_json::to_string(&issues).unwrap_or_default())
+    })?;
+    if preview.state != "admitted" || preview.layout_blake3 != plan.layout_blake3 {
+        return Err("pulled OCI self-verification did not preserve admitted layout identity".to_string());
+    }
+    assert_eq!(preview.projection_blake3.as_deref(), Some(plan.projection_blake3.as_str()));
+    assert_eq!(facts.blobs.len(), plan.descriptor_blobs.len(), "pulled descriptor closure must stay exact");
+    sync_directory(stage.path())?;
+    let stage_path = stage.keep();
+    if let Err(error) = publish_directory_no_replace(&stage_path, output_dir) {
+        let _cleanup_result = fs::remove_dir_all(&stage_path);
+        return Err(error);
+    }
+    sync_directory(parent)
 }
 
 pub fn import_oci_layout(request: &ImportRequest<'_>) -> Result<OciImportReport, String> {

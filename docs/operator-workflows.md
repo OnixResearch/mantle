@@ -472,6 +472,49 @@ REAPI compatibility, independent-machine behavior, exactly-once delivery,
 worker honesty, or release reproducibility. Provider and cluster-control details
 remain outside the core scheduler contract.
 
+## Publish and recover an admitted OCI layout
+
+First produce a verified local layout with `mantle artifact oci-export`. Then
+publish its ordinary image plus subject-bound Mantle metadata:
+
+```sh
+mantle --json artifact oci-push \
+  --layout ./bundle.oci \
+  --registry https://registry.example.test \
+  --repository onix/kernel-bundle \
+  --reference reviewed \
+  --bearer-token-file ./registry-token \
+  --receipt-out push.json
+```
+
+Use both manifest SHA-256 values from `push.json` for a fresh-state pull:
+
+```sh
+mantle --json --state-dir ./fresh-state artifact oci-pull \
+  --registry https://registry.example.test \
+  --repository onix/kernel-bundle \
+  --reference reviewed \
+  --expected-manifest-digest "$(jq -r .manifest_digest push.json)" \
+  --expected-metadata-manifest-digest "$(jq -r .metadata_manifest_digest push.json)" \
+  --bearer-token-file ./registry-token \
+  --out ./pulled.oci \
+  --report-out import.json \
+  --receipt-out pull.json
+```
+
+Pull success requires exact image and metadata tags, subject linkage, verified
+descriptor bytes, atomic local layout publication, and ordinary OCI import with
+`admitted` state. HTTPS is the default; controlled local registries require
+explicit `--allow-http`. Mantle does not read ambient Docker credentials or
+proxies and does not follow redirects.
+
+See [`kernel-bundle-oci.md`](kernel-bundle-oci.md) and the
+[`kernel-bundle-oci-registry`](../examples/projects/kernel-bundle-oci-registry/)
+runbook. These receipts prove bounded publication and byte/admission linkage,
+not registry trust, authorization, tag immutability, signatures, exactly-once
+publication, upload resumption, kernel compatibility, deployability, or release
+eligibility.
+
 ## Explain ready-goal priority
 
 Mantle preserves its lazy goal graph while ranking eligible ready goals from

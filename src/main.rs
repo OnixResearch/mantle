@@ -60,6 +60,8 @@ mod nix_free_demo_bundle;
 mod nix_free_demo_cmd;
 mod oci_projection;
 mod oci_projection_shell;
+mod oci_registry;
+mod oci_registry_shell;
 #[allow(dead_code)]
 mod offline_cargo;
 mod operator_diagnostics;
@@ -1677,6 +1679,80 @@ pub enum ArtifactAction {
         /// Atomic destination for the import/reconstruction report.
         #[arg(long = "report-out")]
         report_out: PathBuf,
+    },
+
+    /// Publish an admitted local OCI layout through a bounded registry transport.
+    OciPush {
+        /// Verified local OCI image-layout directory to publish.
+        #[arg(long)]
+        layout: PathBuf,
+
+        /// Registry origin; HTTPS is required unless --allow-http is explicit.
+        #[arg(long)]
+        registry: String,
+
+        /// Lowercase OCI repository path.
+        #[arg(long)]
+        repository: String,
+
+        /// Image tag; Mantle also publishes TAG.mantle-metadata.
+        #[arg(long)]
+        reference: String,
+
+        /// Optional bounded file containing one bearer token; its path and bytes are not receipted.
+        #[arg(long = "bearer-token-file")]
+        bearer_token_file: Option<PathBuf>,
+
+        /// Permit explicit plain HTTP, intended only for controlled local registries.
+        #[arg(long)]
+        allow_http: bool,
+
+        /// New destination for the contracted registry push receipt.
+        #[arg(long = "receipt-out")]
+        receipt_out: PathBuf,
+    },
+
+    /// Pull immutable OCI image and Mantle metadata manifests, then admit the exact layout.
+    OciPull {
+        /// Registry origin; HTTPS is required unless --allow-http is explicit.
+        #[arg(long)]
+        registry: String,
+
+        /// Lowercase OCI repository path.
+        #[arg(long)]
+        repository: String,
+
+        /// Image tag; Mantle also resolves TAG.mantle-metadata.
+        #[arg(long)]
+        reference: String,
+
+        /// Immutable image-manifest SHA-256 from the push receipt.
+        #[arg(long = "expected-manifest-digest")]
+        expected_manifest_digest: String,
+
+        /// Immutable Mantle metadata-manifest SHA-256 from the push receipt.
+        #[arg(long = "expected-metadata-manifest-digest")]
+        expected_metadata_manifest_digest: String,
+
+        /// Optional bounded file containing one bearer token; its path and bytes are not receipted.
+        #[arg(long = "bearer-token-file")]
+        bearer_token_file: Option<PathBuf>,
+
+        /// Permit explicit plain HTTP, intended only for controlled local registries.
+        #[arg(long)]
+        allow_http: bool,
+
+        /// New destination for the reconstructed verified OCI image layout.
+        #[arg(long)]
+        out: PathBuf,
+
+        /// New destination for the ordinary OCI import/admission report.
+        #[arg(long = "report-out")]
+        report_out: PathBuf,
+
+        /// New destination for the contracted registry pull receipt.
+        #[arg(long = "receipt-out")]
+        receipt_out: PathBuf,
     },
 }
 

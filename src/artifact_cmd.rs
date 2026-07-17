@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -32,6 +33,14 @@ use crate::oci_projection_shell::ExportRequest as OciExportRequest;
 use crate::oci_projection_shell::ImportRequest as OciImportRequest;
 use crate::oci_projection_shell::export_oci_layout;
 use crate::oci_projection_shell::import_oci_layout;
+use crate::oci_registry::OciRegistryPullReport;
+use crate::oci_registry::OciRegistryPushReport;
+use crate::oci_registry::RegistryTargetInput;
+use crate::oci_registry::validate_registry_target;
+use crate::oci_registry_shell::RegistryPullRequest;
+use crate::oci_registry_shell::RegistryPushRequest;
+use crate::oci_registry_shell::pull_registry_layout;
+use crate::oci_registry_shell::push_registry_layout;
 
 const PROVENANCE_PAIR_SEPARATOR: char = '=';
 const EXPORT_FAILURE_EXIT_CODE: u8 = 1;
@@ -96,6 +105,51 @@ pub fn cmd_artifact(
         crate::ArtifactAction::OciImport { layout, report_out } => {
             cmd_oci_import(current_dir, state_dir, json, &layout, &report_out)
         }
+        crate::ArtifactAction::OciPush {
+            layout,
+            registry,
+            repository,
+            reference,
+            bearer_token_file,
+            allow_http,
+            receipt_out,
+        } => cmd_oci_push(OciPushShellRequest {
+            current_dir,
+            json,
+            layout: &layout,
+            registry: &registry,
+            repository: &repository,
+            reference: &reference,
+            bearer_token_file: bearer_token_file.as_deref(),
+            allow_http,
+            receipt_out: &receipt_out,
+        }),
+        crate::ArtifactAction::OciPull {
+            registry,
+            repository,
+            reference,
+            expected_manifest_digest,
+            expected_metadata_manifest_digest,
+            bearer_token_file,
+            allow_http,
+            out,
+            report_out,
+            receipt_out,
+        } => cmd_oci_pull(OciPullShellRequest {
+            current_dir,
+            state_dir,
+            json,
+            registry: &registry,
+            repository: &repository,
+            reference: &reference,
+            expected_manifest_digest: &expected_manifest_digest,
+            expected_metadata_manifest_digest: &expected_metadata_manifest_digest,
+            bearer_token_file: bearer_token_file.as_deref(),
+            allow_http,
+            output_dir: &out,
+            import_report_out: &report_out,
+            receipt_out: &receipt_out,
+        }),
     }
 }
 
@@ -132,6 +186,34 @@ struct OciExportShellRequest<'a> {
     spec_material_path: &'a Path,
     source_admissions_path: &'a Path,
     out_path: &'a Path,
+}
+
+struct OciPushShellRequest<'a> {
+    current_dir: &'a Path,
+    json: bool,
+    layout: &'a Path,
+    registry: &'a str,
+    repository: &'a str,
+    reference: &'a str,
+    bearer_token_file: Option<&'a Path>,
+    allow_http: bool,
+    receipt_out: &'a Path,
+}
+
+struct OciPullShellRequest<'a> {
+    current_dir: &'a Path,
+    state_dir: &'a Path,
+    json: bool,
+    registry: &'a str,
+    repository: &'a str,
+    reference: &'a str,
+    expected_manifest_digest: &'a str,
+    expected_metadata_manifest_digest: &'a str,
+    bearer_token_file: Option<&'a Path>,
+    allow_http: bool,
+    output_dir: &'a Path,
+    import_report_out: &'a Path,
+    receipt_out: &'a Path,
 }
 
 fn cmd_artifact_export(request: ArtifactExportShellRequest<'_>) -> Result<(), RunError> {
@@ -215,6 +297,84 @@ fn cmd_oci_import(
     })
     .map_err(|error| RunError::Internal(format!("importing OCI layout: {error}")))?;
     emit_oci_import_report(&outcome, &summary_path, json)
+}
+
+fn registry_target(
+    registry: &str,
+    repository: &str,
+    reference: &str,
+    allow_http: bool,
+) -> Result<crate::oci_registry::RegistryTarget, RunError> {
+    validate_registry_target(RegistryTargetInput {
+        registry,
+        repository,
+        reference,
+        allow_http,
+    })
+    .map_err(|error| RunError::Internal(format!("validating OCI registry target: {error}")))
+}
+
+fn cmd_oci_push(request: OciPushShellRequest<'_>) -> Result<(), RunError> {
+    let layout = resolve_cli_path(request.current_dir, request.layout);
+    let receipt_out = resolve_cli_path(request.current_dir, request.receipt_out);
+    require_absent_output(&receipt_out, "OCI registry push receipt")?;
+    let bearer_token_file = request.bearer_token_file.map(|path| resolve_cli_path(request.current_dir, path));
+    let target = registry_target(request.registry, request.repository, request.reference, request.allow_http)?;
+    let report = push_registry_layout(RegistryPushRequest {
+        target: &target,
+        layout_dir: &layout,
+        bearer_token_file: bearer_token_file.as_deref(),
+    })
+    .map_err(|error| RunError::Internal(format!("pushing OCI registry layout: {error}")))?;
+    write_json_output_new(&receipt_out, &report)?;
+    emit_oci_registry_push_report(&report, request.json)
+}
+
+fn cmd_oci_pull(request: OciPullShellRequest<'_>) -> Result<(), RunError> {
+    let output_dir = resolve_cli_path(request.current_dir, request.output_dir);
+    let import_report_out = resolve_cli_path(request.current_dir, request.import_report_out);
+    let receipt_out = resolve_cli_path(request.current_dir, request.receipt_out);
+    require_absent_output(&receipt_out, "OCI registry pull receipt")?;
+    let bearer_token_file = request.bearer_token_file.map(|path| resolve_cli_path(request.current_dir, path));
+    let target = registry_target(request.registry, request.repository, request.reference, request.allow_http)?;
+    let report = pull_registry_layout(RegistryPullRequest {
+        target: &target,
+        expected_manifest_digest: request.expected_manifest_digest,
+        expected_metadata_manifest_digest: request.expected_metadata_manifest_digest,
+        output_dir: &output_dir,
+        state_dir: request.state_dir,
+        import_report_path: &import_report_out,
+        bearer_token_file: bearer_token_file.as_deref(),
+    })
+    .map_err(|error| RunError::Internal(format!("pulling OCI registry layout: {error}")))?;
+    write_json_output_new(&receipt_out, &report)?;
+    emit_oci_registry_pull_report(&report, request.json)
+}
+
+fn emit_oci_registry_push_report(report: &OciRegistryPushReport, json: bool) -> Result<(), RunError> {
+    if json {
+        let rendered = serde_json::to_string_pretty(report)
+            .map_err(|error| RunError::Internal(format!("serializing OCI registry push report: {error}")))?;
+        println!("{rendered}");
+    } else {
+        println!("published OCI registry image {}:{}", report.repository, report.reference);
+        println!("manifest_digest: {}", report.manifest_digest);
+        println!("metadata_manifest_digest: {}", report.metadata_manifest_digest);
+    }
+    Ok(())
+}
+
+fn emit_oci_registry_pull_report(report: &OciRegistryPullReport, json: bool) -> Result<(), RunError> {
+    if json {
+        let rendered = serde_json::to_string_pretty(report)
+            .map_err(|error| RunError::Internal(format!("serializing OCI registry pull report: {error}")))?;
+        println!("{rendered}");
+    } else {
+        println!("pulled OCI registry image {}:{}", report.repository, report.reference);
+        println!("manifest_digest: {}", report.resolved_manifest_digest);
+        println!("import_state: {}", report.import_state);
+    }
+    Ok(())
 }
 
 fn emit_oci_export_report(report: &OciExportReport, out: &Path, json: bool) -> Result<(), RunError> {
@@ -403,6 +563,37 @@ fn write_json_output(path: &Path, value: &impl Serialize) -> Result<(), RunError
     let rendered = serde_json::to_string_pretty(value)
         .map_err(|err| RunError::Internal(format!("serializing {}: {err}", path.display())))?;
     write_text_output(path, &rendered)
+}
+
+fn require_absent_output(path: &Path, label: &str) -> Result<(), RunError> {
+    if path.exists() {
+        return Err(RunError::Internal(format!("{label} already exists: {}", path.display())));
+    }
+    assert!(!label.is_empty(), "output label must be explicit");
+    assert!(!path.as_os_str().is_empty(), "output path must not be empty");
+    Ok(())
+}
+
+fn write_json_output_new(path: &Path, value: &impl Serialize) -> Result<(), RunError> {
+    require_absent_output(path, "registry receipt")?;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent)
+        .map_err(|error| RunError::Internal(format!("creating {}: {error}", parent.display())))?;
+    let mut rendered = serde_json::to_vec_pretty(value)
+        .map_err(|error| RunError::Internal(format!("serializing {}: {error}", path.display())))?;
+    rendered.push(b'\n');
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|error| RunError::Internal(format!("creating temporary receipt in {}: {error}", parent.display())))?;
+    temporary
+        .write_all(&rendered)
+        .and_then(|()| temporary.as_file().sync_all())
+        .map_err(|error| RunError::Internal(format!("writing temporary receipt for {}: {error}", path.display())))?;
+    temporary
+        .persist_noclobber(path)
+        .map_err(|error| RunError::Internal(format!("publishing {}: {}", path.display(), error.error)))?;
+    assert!(path.is_file(), "published registry receipt must be a file");
+    assert!(!rendered.is_empty(), "published registry receipt bytes must not be empty");
+    Ok(())
 }
 
 fn write_text_output(path: &Path, rendered: &str) -> Result<(), RunError> {

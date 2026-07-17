@@ -73,6 +73,8 @@ let Registry = {
     "attestation.release-envelope",
     "oci.export-report",
     "oci.import-report",
+    "oci.registry-push-report",
+    "oci.registry-pull-report",
     "release.function-address-binding"
   ],
   "surfaces"= [
@@ -124,7 +126,7 @@ let Registry = {
         "contract_blake3"= "1e26a6fd898d7bb8091f51b15baed11d1f0779399f21bcd3f03e839ab2bf78b3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "b2c0eee0dfbf01929d3f4b3aca13cab3695a693053e5249ca5d79c186966b586",
-        "producer_identity_blake3"= "c16c10e8d1cee02eff583fed1a5baa898be17a7088bcb9cd7252a231637a85a0",
+        "producer_identity_blake3"= "02b2b7a1d2ac2f7a488d820236d6a85d32643b52dc9390a624a2103a03fdb4b3",
         "consumer_policy_blake3"= "9e1b4b671ba1ac277a6faee85e944fee5bc1b51ce308638f9a977b9b75606b82"
       },
       "non_claims"= [
@@ -191,7 +193,7 @@ let Registry = {
         "contract_blake3"= "91470a788e37a61ac82f21b5579642735ea681787a7ed3a1fdd38ac43313a9e7",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "85b288de31a968fb972c8e096988e19b5d14a00348ef87939cdb0382940c408b",
-        "producer_identity_blake3"= "6e39f3bc84333c290393250c0ef74f2bc57c695a633c925e8860b83606e400c6",
+        "producer_identity_blake3"= "895f4279c8cdf40b994f92ed2a571bae281179fcab3d02ef20c036dc8a881115",
         "consumer_policy_blake3"= "d4d7d58e21738c707f6071b435807382c28939a76da4cbb88e9c32c6b80af72b"
       },
       "non_claims"= [
@@ -245,7 +247,7 @@ let Registry = {
         "contract_blake3"= "16ccc6644e6a2b74b1b4db20014818bb73028343e9c3da8a92a0711ed520d434",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "576b0cc4dbed5d3c850a408c032411c180e9a0446507ec333606c25c4b15f719",
-        "producer_identity_blake3"= "6dd03f3881f6e1dab8fef44f29f211a3ce5b9a18544814068c44ddc0b12441af",
+        "producer_identity_blake3"= "0b14efeb8608a022a0cd517a88585610fdaa8fb115f8323bbf9b44eda23f00fb",
         "consumer_policy_blake3"= "d9c1ccf9e8d250b9ce0b12e6b0b73a2e13db503096b5d725ac3a16e9d65061ed"
       },
       "non_claims"= [
@@ -299,7 +301,7 @@ let Registry = {
         "contract_blake3"= "f09c325341006353625ff640041cfbdcbad15f13e22e1a3e1dc1f6fa282aff5c",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "326f83bf601b7aaf442cadcde8c09e8274e606b510e83a7b327cb8e1debc45a0",
-        "producer_identity_blake3"= "740336ddd321c66b8497ae171556a02b9f6ee802e9ff16d445324a0515073931",
+        "producer_identity_blake3"= "c068ecc789d41091b414b029a5660afe3bed1e906a67e7d8a4ee76bb34997eeb",
         "consumer_policy_blake3"= "7660bcc9154bd8b4e2e5f317f88b8a276523f64e31aad9c2fef0bb68d5f89dc1"
       },
       "non_claims"= [
@@ -353,7 +355,7 @@ let Registry = {
         "contract_blake3"= "5b922a6b7066bce68131419ccfb95619022698e170375d2669c21d9408165129",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "f8efd884abc9b6beffd9527db139ab53356b198331c91adb4b41259ca6684c88",
-        "producer_identity_blake3"= "f1b076d65e16a17d1044b433a5095598ab2acc98fe8eecf0edf32840288cb243",
+        "producer_identity_blake3"= "15b6c031f2a6b7243e1ead66ac8d3353f35ebfdc51a5f26a07409691aa53736c",
         "consumer_policy_blake3"= "499fa604950b42de900457a05728162a807c3d38acaa39f691602bcf30d5ef06"
       },
       "non_claims"= [
@@ -407,7 +409,7 @@ let Registry = {
         "contract_blake3"= "ebdd22a938ddc93c38f7fd0d27594be7456374e379227206e7a357fe46d4a00d",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "a9cd57d937da9107de66d87888629c51f19a07dc585beda5192baa817bf77ec9",
-        "producer_identity_blake3"= "1450f540025a1d50d417e72d08707c40a74b6ab7ebce1f8f5ed495965d429c71",
+        "producer_identity_blake3"= "249feb66a6670b7497c278c33b8c1d41b9316bf1bf84766819f1dcfc39a8e84d",
         "consumer_policy_blake3"= "c8b7b1c63ebb54254bf7cce2d855df6a7e48601089a7102d3698e757827e974e"
       },
       "non_claims"= [
@@ -460,7 +462,7 @@ let Registry = {
         "contract_blake3"= "acef59d7e93e39b8b3be1d791e5a3615cec92dbae6735153b0fc1aa9147be32e",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "6788977d15737936e07f67f8cc3ee1c5fd7acbe275762801e54e680681de19d2",
-        "producer_identity_blake3"= "a6eefff6b9aa191e6999d7a5d4d551d31d3127c11d1c6d6862ed0d0421fbe006",
+        "producer_identity_blake3"= "1bc82801f62297565bf276adf78302a06b52badb0788e6a99841648d73df318e",
         "consumer_policy_blake3"= "15cedc21de51570e0fa4d214d357f33de4adafa7d8674274eec0285d6f18d7fd"
       },
       "non_claims"= [
@@ -514,7 +516,7 @@ let Registry = {
         "contract_blake3"= "d3b07cd0d3396e6798ec94d68d37cf06a5ee35f81866016fbf1f18e0f401c7ae",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "996d0ea5521663d8180e90e955fcba9c92b4570b8935e13b2e57af45c81260e2",
-        "producer_identity_blake3"= "14985581d9bdcf2700c5864405548957c2d4259b743c785be7f81947e92d0007",
+        "producer_identity_blake3"= "6acf3b43ca3fe18fb37a9a54a58718fc90bf0886941abcc6106791cf9a1917a7",
         "consumer_policy_blake3"= "b41da07fbbd17d793f07c51876465ca6e73d83db0dc79b9beb02c8a8110b59d1"
       },
       "non_claims"= [
@@ -568,7 +570,7 @@ let Registry = {
         "contract_blake3"= "1c816681434e8114cd6c4bab4a48fd5c5f86ce7c9f33c187ab609ec73f814fd8",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "1ad119357b7d7217396fe2f47598b14cb8d87bc105982a428e3924e7c3213c11",
-        "producer_identity_blake3"= "fe153853781ad0ac365db6e23ab93e98842054b6e0da3377fd02d84de6dc2859",
+        "producer_identity_blake3"= "7f48f92c890338cbb9b8513d05da1f50b2188321d52c236513930b195d62de42",
         "consumer_policy_blake3"= "edc96af15dd9073d7cd0178ed0d617acd41c8cf91c6719a674dd1422a7e285e4"
       },
       "non_claims"= [
@@ -622,7 +624,7 @@ let Registry = {
         "contract_blake3"= "d7b30efe0e40442383eb7c654a3bb0c88b508f059b88008085fd59f0a88b0f23",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "74b65baffbfcfb59d5557a99ea0ed63c02711ee4c865c5f7be1eb14ad57071c8",
-        "producer_identity_blake3"= "b10636cbd30334c3280dd6a29124f2bb3546b5ca6ce4502143d346ef820af95d",
+        "producer_identity_blake3"= "af27dc57df597b3531026b0ab04eb3c932918f0b29c183903b16943390f6c247",
         "consumer_policy_blake3"= "2604bdd4cb6aa3824e00fa515e64f68a01ab5df84d2f2342ee0f1e7029f91f07"
       },
       "non_claims"= [
@@ -676,7 +678,7 @@ let Registry = {
         "contract_blake3"= "c476dbe914a257fd0f752bd7036ceb9e3361898761a025d77c191654bc6065e0",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "3cf4824049a7e2294fe7aa79115d67f79739889171e3e022cb7c07da622af610",
-        "producer_identity_blake3"= "97f75dac034a8b7d4f2128a75b4f31bba6788bc934c5bc270d7f170995d1322c",
+        "producer_identity_blake3"= "dc6191652ea87147ab0ad393819debc5d79d18a876f22c06390690a4e3504a70",
         "consumer_policy_blake3"= "197e7e60804e37ca2cbb8548b889953f4392802d4f04d0f1a56fc5d346528442"
       },
       "non_claims"= [
@@ -731,7 +733,7 @@ let Registry = {
         "contract_blake3"= "3810c6aaa46851ddef9d4288ebb83e6fca65fea69b82c45ab4d19b9614dddfbb",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "e39044713ad33d6d6153018742b25fa6b1da7c3b5b013537854684078292a2c8",
-        "producer_identity_blake3"= "395ae71635f7a01a980c7e529e2e3fcdde3e1ff96adbe2f899746471d3222962",
+        "producer_identity_blake3"= "59c5fab4fac7c0a1b74a8cb9cd76ba7a26a14d5e2843048a4e36ea38fe32ce36",
         "consumer_policy_blake3"= "dc57ec430384237cfec878c7eb95770c629a3afa911374a8de998780d26b0842"
       },
       "non_claims"= [
@@ -787,7 +789,7 @@ let Registry = {
         "contract_blake3"= "be18229bed1953b7b3e36b535acd910192ff9759a54cc0b7c6fd2b38132fd9a4",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "67d9e9232706f73f157c68abea93383ffa5af8ef83a924ecc2fb8fadce10a357",
-        "producer_identity_blake3"= "da3cb30f7be5aeba2634b3f6b3afc0aa73063722b9c26b97bded402723839045",
+        "producer_identity_blake3"= "8d982fb5602d6d592fb82533e88ac3f3dbaf5d0793fe17ba039b1dd9bdc67544",
         "consumer_policy_blake3"= "fce9cfc511ed3931f6804f5e99cd0ae3d6d325a2a6e47899b8f027ccaa6787ec"
       },
       "non_claims"= [
@@ -853,7 +855,7 @@ let Registry = {
         "contract_blake3"= "43a06bea0e9950c5d9e4e1ee7f84eaa3d716f8386d02003f655dda393707f644",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "76599ed52294ac203020c80c063c840e475c0d41e66841650c3e26192be9d259",
-        "producer_identity_blake3"= "da8216a8ab056d522179ed29dc0daeac19041dbbfd3236670fd85c02d8a70fe9",
+        "producer_identity_blake3"= "3d33c4270577a686c56d41186ebdee47a7ea8459cef42277878e55d8d137568d",
         "consumer_policy_blake3"= "d2045dba8cfd1dea820752fb60f94beb4cd88674ba02fabca73b2fbe53ffb251"
       },
       "non_claims"= [
@@ -918,13 +920,136 @@ let Registry = {
         "contract_blake3"= "ce21d8ae6b38624e8cda66d54822e5d0eef0ba0328b92461174f748b17b26c21",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "04a452fb28f5bbcc589051a9901f352f3411f14665ec1002232433f7d7ac01c9",
-        "producer_identity_blake3"= "f6f86629afcc633baa0c4df23ed6fda70271ef97c3667a4f21dbdb78b8594352",
+        "producer_identity_blake3"= "18d4e0b21296fdd8bce0d6e371eedddb10ca20910829607b0714141bb2c16c39",
         "consumer_policy_blake3"= "d9734a8c052a4e80a65917ca0a08b68273017dfe057ab8f7bbd59d423b66d963"
       },
       "non_claims"= [
         "report conformance does not recover frontend semantics or prove signature trust, kernel compatibility, bootability, deployability, publication, or release eligibility"
       ],
       "rationale"= "The stable import report distinguishes admitted and compatibility-only layouts without granting frontend semantic authority to Mantle."
+    },
+    {
+      "id"= "oci.registry-push-report",
+      "class"= "contracted",
+      "rust_owner"= "src/oci_registry.rs::OciRegistryPushReport",
+      "producer"= {
+        "command_or_api"= "mantle --json artifact oci-push",
+        "marker"= "oci.registry-push-report",
+        "source_paths"= [
+          "src/oci_registry.rs",
+          "src/oci_registry_shell.rs",
+          "src/artifact_cmd.rs",
+          "src/main.rs"
+        ]
+      },
+      "consumers"= [
+        "registry publication operators",
+        "subsequent immutable OCI pulls",
+        "audit and handoff tooling"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/oci-registry-push-report.schema.json",
+        "generated_contract"= "schemas/machine-contracts/oci-registry-push-report.contract.ncl",
+        "positive_fixtures"= [
+          "tests/fixtures/kernel-bundle-oci/registry-push-report.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/oci-registry-push-report.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-oci-registry-push-report-v1",
+        "supported"= [
+          "mantle-oci-registry-push-report-v1"
+        ],
+        "unknown_version_behavior"= "reject before using publication facts for pull or audit",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "nix develop -c cargo test -p mantle --lib oci_registry::tests::registry_report_golden_fixtures_match_rust_serialization"
+      ],
+      "fixture_coverage"= [
+        "version",
+        "digest",
+        "enum",
+        "bounds",
+        "redaction",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds the Rust push report, exact OCI/Mantle digest-role schema, generated contract, reviewed fixtures, credential-mode policy, and consumer non-claims",
+      "freshness"= {
+        "schema_blake3"= "8290e034a7db72531dd11862d6855bea847bde57f6dc75761598afe185b31765",
+        "contract_blake3"= "0842eb28bda7b7080beddab5cd8eb036a681dc7d212fecd4c96cf7bed48e6977",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "cf6c2a03b03bdeb8229fc42d4b195c6f8bc826879a96b26e1fe8a8ff692d3845",
+        "producer_identity_blake3"= "483ff3ad911789a292de20390428df7a9abf484ba17ee81a959e46c27849c94b",
+        "consumer_policy_blake3"= "f08b3506353ac0fb92702009288403f0e93c2dd9a128de0e506c059874171b24"
+      },
+      "non_claims"= [
+        "report conformance does not prove registry trust, authorization, tag immutability, signature verification, exactly-once publication, upload resumption, kernel compatibility, bootability, deployability, or release eligibility"
+      ],
+      "rationale"= "The push receipt is the immutable operator handoff from local admitted layout identity to registry manifest identities."
+    },
+    {
+      "id"= "oci.registry-pull-report",
+      "class"= "contracted",
+      "rust_owner"= "src/oci_registry.rs::OciRegistryPullReport",
+      "producer"= {
+        "command_or_api"= "mantle --json artifact oci-pull",
+        "marker"= "oci.registry-pull-report",
+        "source_paths"= [
+          "src/oci_registry.rs",
+          "src/oci_registry_shell.rs",
+          "src/artifact_cmd.rs",
+          "src/main.rs"
+        ]
+      },
+      "consumers"= [
+        "registry pull operators",
+        "frontend reconstruction adapters",
+        "audit and handoff tooling"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/oci-registry-pull-report.schema.json",
+        "generated_contract"= "schemas/machine-contracts/oci-registry-pull-report.contract.ncl",
+        "positive_fixtures"= [
+          "tests/fixtures/kernel-bundle-oci/registry-pull-report.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/oci-registry-pull-report.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-oci-registry-pull-report-v1",
+        "supported"= [
+          "mantle-oci-registry-pull-report-v1"
+        ],
+        "unknown_version_behavior"= "reject before treating registry bytes as an admitted local OCI handoff",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "nix develop -c cargo test -p mantle --lib oci_registry::tests::registry_report_golden_fixtures_match_rust_serialization"
+      ],
+      "fixture_coverage"= [
+        "version",
+        "digest",
+        "enum",
+        "bounds",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds the Rust pull report, dual immutable manifest expectations, local admission linkage, generated contract, reviewed fixtures, and consumer non-claims",
+      "freshness"= {
+        "schema_blake3"= "23677bd3a01e07462b5428011142e409cc2b40243af52c3a5c5974db51db66a5",
+        "contract_blake3"= "698a4e53e00cae9a4920cee8f1542d1afac3f579615267a5c9e7d55e9a037303",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "af709035fc0f0ce628d31a1673dbcab08d3f16115be4b4ba70075c74d2199aa5",
+        "producer_identity_blake3"= "a2413f1cbdb3bf47cb3f1d32a13f3b46f15852bb81cabe69f01eb03d7dedec38",
+        "consumer_policy_blake3"= "9fad49626058cfa58799687a2e22ac2a6ae951363fbe75c2d29ef857e4c7da21"
+      },
+      "non_claims"= [
+        "report conformance does not prove registry trust, authorization, tag immutability, signature verification, kernel compatibility, bootability, deployability, publication atomicity, or release eligibility"
+      ],
+      "rationale"= "The pull receipt binds mutable registry routing to two expected manifest identities and the ordinary admitted OCI import receipt."
     },
     {
       "id"= "release.function-address-binding",
@@ -981,7 +1106,7 @@ let Registry = {
         "contract_blake3"= "ca290b374f6b2987e6bd56f541a4ac2539df2fcc55878eb9572e25734783f16f",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "3d447dccbcf05cc8bdf1875896266084327a7ae352416e319d7408125dd9cd41",
-        "producer_identity_blake3"= "6d1618b3abcd3df6dbdeafc52d72b296615390038c9591526a5c9035470abe0c",
+        "producer_identity_blake3"= "e77db811b6a33c0b504389f471b5938c296d915e229f68c21bab410069714afe",
         "consumer_policy_blake3"= "f1fe25ad7bf31510a0d970cabe8f0eea37b17342b7743bcd39c3858a4e5adb0a"
       },
       "non_claims"= [
@@ -1879,7 +2004,10 @@ let Registry = {
         "marker"= "remote.execution-reports",
         "source_paths"= [
           "src/remote_build.rs",
-          "src/remote_failure_debug.rs"
+          "src/remote_build/tests/external_batch_hardware_tests.rs",
+          "src/remote_failure_debug.rs",
+          "src/external_batch_dispatch.rs",
+          "src/remote_farm_config.rs"
         ]
       },
       "consumers"= [
@@ -1901,7 +2029,9 @@ let Registry = {
       },
       "validation_commands"= [
         "cargo test -p mantle remote_build::tests",
-        "cargo test -p mantle remote_failure_debug::tests"
+        "cargo test -p mantle remote_failure_debug::tests",
+        "cargo test -p mantle external_batch_dispatch::tests",
+        "cargo test -p mantle remote_farm_config::tests"
       ],
       "fixture_coverage"= [
         "classification"

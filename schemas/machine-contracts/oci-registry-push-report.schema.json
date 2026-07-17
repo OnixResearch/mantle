@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/oci-registry-push-report-v1",
+  "x-mantle-rust-owner": "src/oci_registry.rs::OciRegistryPushReport",
+  "$defs": {
+    "registry_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "x-mantle-bound-name": { "minLength": "MIN_OCI_REGISTRY_TEXT_BYTES", "maxLength": "MAX_OCI_REGISTRY_TEXT_BYTES" },
+      "x-mantle-length-unit": "utf8-bytes",
+      "x-mantle-semantic": "redaction-safe"
+    },
+    "target_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "x-mantle-bound-name": { "minLength": "MIN_OCI_REGISTRY_TARGET_BYTES", "maxLength": "MAX_OCI_REGISTRY_TARGET_BYTES" },
+      "x-mantle-length-unit": "utf8-bytes",
+      "x-mantle-semantic": "redaction-safe"
+    },
+    "non_claims": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "x-mantle-bound-name": { "minItems": "OCI_REGISTRY_NON_CLAIM_COUNT", "maxItems": "OCI_REGISTRY_NON_CLAIM_COUNT" },
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "x-mantle-bound-name": { "minLength": "MIN_OCI_REGISTRY_NON_CLAIM_BYTES", "maxLength": "MAX_OCI_REGISTRY_NON_CLAIM_BYTES" },
+        "x-mantle-length-unit": "utf8-bytes",
+        "x-mantle-semantic": "redaction-safe"
+      }
+    }
+  },
+  "type": "object",
+  "required": [
+    "schema",
+    "schema_version",
+    "published",
+    "registry",
+    "repository",
+    "reference",
+    "metadata_reference",
+    "manifest_digest",
+    "metadata_manifest_digest",
+    "layout_blake3",
+    "projection_blake3",
+    "export_receipt_blake3",
+    "uploaded_blobs",
+    "reused_blobs",
+    "transferred_bytes",
+    "credential_mode",
+    "non_claims",
+    "receipt_blake3"
+  ],
+  "properties": {
+    "schema": { "type": "string", "const": "mantle-oci-registry-push-report-v1", "x-mantle-issue-class": "version" },
+    "schema_version": { "type": "integer", "const": 1, "x-mantle-issue-class": "version" },
+    "published": { "type": "boolean", "const": true },
+    "registry": { "$ref": "#/$defs/registry_text" },
+    "repository": { "$ref": "#/$defs/target_text" },
+    "reference": { "$ref": "#/$defs/target_text" },
+    "metadata_reference": { "$ref": "#/$defs/target_text" },
+    "manifest_digest": { "type": "string", "x-mantle-semantic": "sha256-digest" },
+    "metadata_manifest_digest": { "type": "string", "x-mantle-semantic": "sha256-digest" },
+    "layout_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "projection_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "export_receipt_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "uploaded_blobs": { "type": "integer", "minimum": 0, "maximum": 1000000, "x-mantle-bound-name": { "minimum": "MIN_OCI_REGISTRY_BLOBS", "maximum": "MAX_OCI_REGISTRY_BLOBS" } },
+    "reused_blobs": { "type": "integer", "minimum": 0, "maximum": 1000000, "x-mantle-bound-name": { "minimum": "MIN_OCI_REGISTRY_BLOBS", "maximum": "MAX_OCI_REGISTRY_BLOBS" } },
+    "transferred_bytes": { "type": "integer", "minimum": 0, "maximum": 1099511627776, "x-mantle-bound-name": { "minimum": "MIN_OCI_REGISTRY_TRANSFER_BYTES", "maximum": "MAX_OCI_REGISTRY_TRANSFER_BYTES" } },
+    "credential_mode": { "type": "string", "enum": ["anonymous", "explicit-bearer-file"] },
+    "non_claims": { "$ref": "#/$defs/non_claims" },
+    "receipt_blake3": { "type": "string", "x-mantle-semantic": "blake3" }
+  },
+  "additionalProperties": false
+}

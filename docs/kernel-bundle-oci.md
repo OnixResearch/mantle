@@ -110,13 +110,64 @@ mantle --state-dir ./state artifact oci-import \
   --report-out import-report.json
 ```
 
-Export never contacts or publishes to a registry. A Mantle-produced layout with
-an exact valid export report imports as `admitted`; that state means only that
-the Mantle projection and exact canonical bytes round-tripped. A safe external
-OCI/KBI layout imports as `compatibility-only`, keeps its exact OCI SHA-256 and
-blob BLAKE3 identities, and returns fresh Mantle object refs. It does not regain
-Onix identity without full frontend canonical reconstruction.
+Local export never contacts or publishes to a registry. A Mantle-produced
+layout with an exact valid export report imports as `admitted`; that state means
+only that the Mantle projection and exact canonical bytes round-tripped. A safe
+external OCI/KBI layout imports as `compatibility-only`, keeps its exact OCI
+SHA-256 and blob BLAKE3 identities, and returns fresh Mantle object refs. It
+does not regain Onix identity without full frontend canonical reconstruction.
 
-Neither report proves bootability, kernel/hardware compatibility, module or BPF
-safety, signature trust, deployability, release eligibility, registry
-publication, or authorization to mutate a target.
+## Registry publication and pull
+
+The production registry shell implements a bounded OCI Distribution subset over
+the already-verified local layout:
+
+```console
+mantle --json artifact oci-push \
+  --layout ./kernel-bundle.oci \
+  --registry https://registry.example.test \
+  --repository onix/kernel-bundle \
+  --reference reviewed \
+  --bearer-token-file ./registry-token \
+  --receipt-out push-report.json
+
+mantle --json --state-dir ./fresh-state artifact oci-pull \
+  --registry https://registry.example.test \
+  --repository onix/kernel-bundle \
+  --reference reviewed \
+  --expected-manifest-digest sha256:<from-push-report> \
+  --expected-metadata-manifest-digest sha256:<from-push-report> \
+  --bearer-token-file ./registry-token \
+  --out ./pulled-kernel-bundle.oci \
+  --report-out import-report.json \
+  --receipt-out pull-report.json
+```
+
+Push uploads or reuses exact descriptor blobs. Because registries do not store
+local `oci-layout`, `index.json`, or Mantle export-report sidecars, Mantle also
+publishes `<reference>.mantle-metadata`: an OCI artifact manifest whose subject
+is the exact image manifest and whose three blobs are those exact local metadata
+files. The companion is published first; the user-facing image tag is published
+last. Both are re-read by immutable digest before success.
+
+Pull requires expected SHA-256 values for both manifests. Requiring only the
+image digest would allow replacement of the unsigned Mantle metadata while
+retaining the image bytes. After verifying both tags, subject linkage, every
+metadata/content descriptor, and the exact reconstructed layout, pull invokes
+the ordinary local importer and succeeds only with `state = "admitted"`.
+Credentials are read only from the explicit bounded bearer-token file and
+neither its path nor bytes enter reports. Redirects and ambient proxies are
+disabled. HTTP requires explicit `--allow-http` for controlled local registries.
+
+The contracted `mantle-oci-registry-push-report-v1` and
+`mantle-oci-registry-pull-report-v1` receipts bind mutable routing names to OCI
+SHA-256 manifests, Mantle layout/projection BLAKE3 identities, transfer/reuse
+accounting, credential mode, and local import receipt identity.
+
+Local export/import and registry reports do not prove bootability,
+kernel/hardware compatibility, module or BPF safety, registry trust,
+authorization, tag immutability, signature or transparency verification,
+exactly-once publication, upload resumption, deployability, release eligibility,
+or authorization to mutate a target. A failed push may leave unreferenced blobs
+or a companion tag; an exact rerun may reuse verified blobs but is not a
+transactional rollback claim.

@@ -443,6 +443,11 @@ Building derivations (not just compiling crunch) requires:
 - `StoreHandle::get_artifact_attestation()` and `StoreHandle::runtime_closure_attestation()` are the retrieval entry points.
 - The cheapest real substitution e2e for attestations is: build once locally, reopen the signed `PathInfo` from `state_dir/pathinfo.redb`, render a NAR from `state_dir/blobs`, serve that `.narinfo` + NAR from a tiny local HTTP server, then rebuild in a fresh `state_dir` with `--substituters <url>` and the first build's verifying key. That exercises `NixHTTPPathInfoService`, remote sidecar persistence, and `crunch attest verify artifact|closure` without an external cache.
 
+## OCI registry publication (2026-07-16)
+- `mantle artifact oci-push` publishes the ordinary image manifest plus a deterministic `<tag>.mantle-metadata` OCI artifact whose subject is the image manifest and whose blobs are the exact `oci-layout`, `index.json`, and Mantle export report bytes. Keep the image tag last so the public tag is not visible before required metadata.
+- `mantle artifact oci-pull` must require both the expected image-manifest and metadata-manifest SHA-256 values. The image digest alone does not prevent unsigned companion-report substitution. Pull must reconstruct the exact layout and route it through ordinary OCI import before emitting a successful registry receipt.
+- Registry credentials come only from the explicit bounded bearer-token file. Redirects and ambient proxies stay disabled; HTTP requires `--allow-http`. Deterministic coverage lives in `tests/kernel_bundle_oci_registry_cli.rs` with the in-process server under `tests/support/oci_registry.rs`.
+
 ## System-config removal (2026-05-30)
 - `mantle system eval` / `mantle system build` and the in-tree `crunch-system` module layer were removed. Mantle should stay a build tool like Nix: frontends such as Onix own module evaluation/lowering and hand Mantle concrete derivations, build plans, source inputs, or opaque evaluated data. ADR `adr/0010-keep-mantle-build-tool-boundary.md` records this boundary, and `tests/removed_system_cli.rs` has persistent CLI/docs/stdlib/implementation guards against reintroducing an in-tree Onix/NixOS-style module layer.
 

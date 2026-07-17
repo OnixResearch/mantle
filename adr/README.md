@@ -34,3 +34,4 @@ compatibility surface, crate name, or historical decision.
 | [0025](0025-reserve-remote-resources-with-fenced-leases.md) | Reserve remote resources with fenced leases and verified locality | Accepted |
 | [0026](0026-adopt-standalone-nickel-export-core-with-mantle-owned-authority.md) | Adopt the standalone Nickel export core without transferring Mantle authority | Accepted |
 | [0027](0027-distinguish-transfer-content-from-chunk-occurrence.md) | Distinguish transfer content identity from chunk occurrence identity | Accepted |
+| [0028](0028-bind-registry-oci-metadata-with-a-second-immutable-manifest.md) | Bind registry OCI metadata with a second immutable manifest | Accepted |

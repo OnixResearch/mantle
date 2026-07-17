@@ -24,6 +24,16 @@ classification alone never proves implementation. Current resumable-transfer
 production evidence is owned by the Rust client/server path and the validation
 rails in [`remote-transfer.md`](remote-transfer.md), not by registry presence.
 
+OCI registry push/pull receipts are contracted separately from local OCI
+export/import reports. The push receipt binds the image and subject-metadata
+manifest SHA-256 values needed for immutable pull. The pull receipt binds both
+expected/resolved manifest pairs to the reconstructed layout/projection BLAKE3
+and ordinary OCI import receipt. Their `credential_mode` records only
+`anonymous` or `explicit-bearer-file`; credential paths and bytes are forbidden
+from the DTOs and negative fixtures. Contract conformance does not grant
+registry trust, authorization, tag immutability, signature verification, or
+release eligibility.
+
 ## Authority flow
 
 Authority is one-way:

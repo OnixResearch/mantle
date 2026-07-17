@@ -39,6 +39,10 @@ const REMOTE_TRANSFER_DOC_PATH: &str = "docs/remote-transfer.md";
 const REMOTE_PROJECT_README_PATH: &str = "examples/projects/remote-build-loopback/README.md";
 const REMOTE_PROJECT_ID: &str = "project-remote-build-loopback";
 const REMOTE_RESUMABLE_TRANSFER_RAIL: &str = "remote-resumable-transfer-production";
+const OCI_REGISTRY_DOC_PATH: &str = "docs/kernel-bundle-oci.md";
+const OCI_REGISTRY_PROJECT_README_PATH: &str = "examples/projects/kernel-bundle-oci-registry/README.md";
+const OCI_REGISTRY_PROJECT_ID: &str = "project-kernel-bundle-oci-registry";
+const OCI_REGISTRY_ROUNDTRIP_RAIL: &str = "kernel-oci-registry-roundtrip";
 const SUPPORT_FILES: &[&str] = &[
     "examples/README.md",
     "examples/benchmark_support.rs",
@@ -113,6 +117,7 @@ const ALLOWED_RAILS: &[&str] = &[
     "remote-stdio-cli",
     "remote-resumable-transfer-production",
     "kernel-oci-roundtrip",
+    "kernel-oci-registry-roundtrip",
     "transcript-cli",
     "representative-offline-cargo-rail",
     "representative-rust-plan-rail",
@@ -132,6 +137,7 @@ const REQUIRED_WORKFLOW_RAILS: &[(&str, &[&str])] = &[
     ("project-wasm-component-hello", &["wasm-component-cli"]),
     ("project-remote-build-loopback", &["remote-stdio-cli", "remote-resumable-transfer-production"]),
     ("project-kernel-bundle-oci-local", &["kernel-oci-roundtrip"]),
+    ("project-kernel-bundle-oci-registry", &["kernel-oci-registry-roundtrip"]),
     ("transcript-hello-eval", &["transcript-cli"]),
 ];
 
@@ -643,6 +649,39 @@ fn remote_resumable_workflow_catalog_and_docs_name_the_production_boundary() {
         errors
             .iter()
             .any(|error| error.contains("missing required workflow rail `remote-resumable-transfer-production`"))
+    );
+}
+
+#[test]
+fn registry_oci_workflow_catalog_and_docs_preserve_immutable_admission_boundary() {
+    let catalog = load_catalog();
+    let registry = catalog
+        .examples
+        .iter()
+        .find(|example| example.id == OCI_REGISTRY_PROJECT_ID)
+        .expect("OCI registry project catalog entry");
+    let oci_doc = read_repo_file(OCI_REGISTRY_DOC_PATH);
+    let project_readme = read_repo_file(OCI_REGISTRY_PROJECT_README_PATH);
+
+    assert!(registry.requirements.network);
+    assert_eq!(registry.support_tier, SUPPORT_TIER_REAL_NETWORK);
+    assert!(registry.validation_rails.iter().any(|rail| rail == OCI_REGISTRY_ROUNDTRIP_RAIL));
+    assert!(registry.validation_rails.iter().any(|rail| rail == "negative-build"));
+    assert!(oci_doc.contains("<reference>.mantle-metadata"));
+    assert!(oci_doc.contains("--expected-metadata-manifest-digest"));
+    assert!(project_readme.contains("kernel_bundle_oci_registry_cli"));
+    assert!(project_readme.contains("image digest alone cannot prevent"));
+    assert!(project_readme.contains("does **not** establish registry trust"));
+    assert!(!project_readme.contains("registry publication proves release eligibility"));
+
+    let mut missing_registry_rail = registry.clone();
+    missing_registry_rail.validation_rails.retain(|rail| rail != OCI_REGISTRY_ROUNDTRIP_RAIL);
+    let mut errors = Vec::new();
+    validate_required_workflow_rails(&missing_registry_rail, &mut errors);
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.contains("missing required workflow rail `kernel-oci-registry-roundtrip`"))
     );
 }
 

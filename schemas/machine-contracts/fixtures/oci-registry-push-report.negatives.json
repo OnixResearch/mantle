@@ -1,0 +1,53 @@
+{
+  "surface_id": "oci.registry-push-report",
+  "cases": [
+    {
+      "id": "unsupported-schema",
+      "issue_class": "version",
+      "expected_path": "/schema",
+      "artifact": { "schema": "mantle-oci-registry-push-report-v2" }
+    },
+    {
+      "id": "malformed-manifest-digest",
+      "issue_class": "digest",
+      "expected_path": "/manifest_digest",
+      "artifact": { "manifest_digest": "blake3:wrong-role" }
+    },
+    {
+      "id": "malformed-layout-identity",
+      "issue_class": "digest",
+      "expected_path": "/layout_blake3",
+      "artifact": { "layout_blake3": "sha256:wrong-role" }
+    },
+    {
+      "id": "unknown-credential-mode",
+      "issue_class": "enum",
+      "expected_path": "/credential_mode",
+      "artifact": { "credential_mode": "ambient-docker-config" }
+    },
+    {
+      "id": "missing-non-claim-boundary",
+      "issue_class": "bounds",
+      "expected_path": "/non_claims",
+      "artifact": { "non_claims": [] }
+    },
+    {
+      "id": "credential-leak-in-registry",
+      "issue_class": "redaction",
+      "expected_path": "/registry",
+      "artifact": { "registry": "https://Bearer secret-token@registry.example.test" }
+    },
+    {
+      "id": "blob-count-over-bound",
+      "issue_class": "bounds",
+      "expected_path": "/uploaded_blobs",
+      "artifact": { "uploaded_blobs": 1000001 }
+    },
+    {
+      "id": "unknown-root-field",
+      "issue_class": "unknown-field",
+      "expected_path": "/credential_path",
+      "artifact": { "credential_path": "/run/secrets/registry" }
+    }
+  ]
+}

@@ -702,6 +702,18 @@ let Example = {
       skip_reason = "",
     },
     {
+      id = "project-kernel-bundle-oci-registry",
+      path = "examples/projects/kernel-bundle-oci-registry/workflow.ncl",
+      title = "Registry-backed kernel-bundle OCI handoff",
+      summary = "Publishes authenticated image and subject-metadata manifests, pulls both by expected SHA-256, restores the exact admitted layout, and rejects drift, tampering, denial, and interrupted publication.",
+      lane = "trust-provenance",
+      kind = "nickel-workflow",
+      support_tier = "real-network",
+      requirements = { network = true, generated_seed = false, linux_bwrap = false, heavyweight = false, benchmark = false },
+      validation_rails = ["eval", "kernel-oci-registry-roundtrip", "inspect-output", "negative-build", "non-claim-doc"],
+      skip_reason = "operator execution requires an explicit OCI Distribution-compatible registry; deterministic validation uses an authenticated in-process loopback registry",
+    },
+    {
       id = "transcript-hello-eval",
       path = "examples/transcripts/hello-eval.md",
       title = "Executable hello evaluation transcript",

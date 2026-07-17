@@ -1,0 +1,53 @@
+{
+  "surface_id": "oci.registry-pull-report",
+  "cases": [
+    {
+      "id": "unsupported-schema",
+      "issue_class": "version",
+      "expected_path": "/schema",
+      "artifact": { "schema": "mantle-oci-registry-pull-report-v2" }
+    },
+    {
+      "id": "malformed-expected-manifest-digest",
+      "issue_class": "digest",
+      "expected_path": "/expected_manifest_digest",
+      "artifact": { "expected_manifest_digest": "not-a-sha256-digest" }
+    },
+    {
+      "id": "malformed-expected-metadata-digest",
+      "issue_class": "digest",
+      "expected_path": "/expected_metadata_manifest_digest",
+      "artifact": { "expected_metadata_manifest_digest": "blake3:wrong-role" }
+    },
+    {
+      "id": "non-admitted-import-state",
+      "issue_class": "version",
+      "expected_path": "/import_state",
+      "artifact": { "import_state": "compatibility-only" }
+    },
+    {
+      "id": "unknown-credential-mode",
+      "issue_class": "enum",
+      "expected_path": "/credential_mode",
+      "artifact": { "credential_mode": "ambient-docker-config" }
+    },
+    {
+      "id": "missing-non-claim-boundary",
+      "issue_class": "bounds",
+      "expected_path": "/non_claims",
+      "artifact": { "non_claims": [] }
+    },
+    {
+      "id": "download-count-under-bound",
+      "issue_class": "bounds",
+      "expected_path": "/downloaded_blobs",
+      "artifact": { "downloaded_blobs": 0 }
+    },
+    {
+      "id": "unknown-root-field",
+      "issue_class": "unknown-field",
+      "expected_path": "/bearer_token",
+      "artifact": { "bearer_token": "secret-token" }
+    }
+  ]
+}
