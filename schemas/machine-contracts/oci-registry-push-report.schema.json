@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "mantle://schemas/oci-registry-push-report-v1",
+  "$id": "mantle://schemas/oci-registry-push-report-v2",
   "x-mantle-rust-owner": "src/oci_registry.rs::OciRegistryPushReport",
   "$defs": {
     "registry_text": {
@@ -19,10 +19,24 @@
       "x-mantle-length-unit": "utf8-bytes",
       "x-mantle-semantic": "redaction-safe"
     },
+    "verified_signers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "x-mantle-bound-name": { "minItems": "MIN_OCI_REGISTRY_VERIFIED_SIGNERS", "maxItems": "MAX_OCI_REGISTRY_VERIFIED_SIGNERS" },
+      "items": { "$ref": "#/$defs/target_text" }
+    },
+    "verified_public_keys": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "x-mantle-bound-name": { "minItems": "MIN_OCI_REGISTRY_VERIFIED_KEYS", "maxItems": "MAX_OCI_REGISTRY_VERIFIED_KEYS" },
+      "items": { "type": "string", "x-mantle-semantic": "blake3" }
+    },
     "non_claims": {
       "type": "array",
-      "minItems": 10,
-      "maxItems": 10,
+      "minItems": 11,
+      "maxItems": 11,
       "x-mantle-bound-name": { "minItems": "OCI_REGISTRY_NON_CLAIM_COUNT", "maxItems": "OCI_REGISTRY_NON_CLAIM_COUNT" },
       "items": {
         "type": "string",
@@ -43,8 +57,14 @@
     "repository",
     "reference",
     "metadata_reference",
+    "signature_reference",
     "manifest_digest",
     "metadata_manifest_digest",
+    "signature_manifest_digest",
+    "trust_domain",
+    "policy_blake3",
+    "verified_signers",
+    "verified_public_key_blake3",
     "layout_blake3",
     "projection_blake3",
     "export_receipt_blake3",
@@ -56,15 +76,21 @@
     "receipt_blake3"
   ],
   "properties": {
-    "schema": { "type": "string", "const": "mantle-oci-registry-push-report-v1", "x-mantle-issue-class": "version" },
-    "schema_version": { "type": "integer", "const": 1, "x-mantle-issue-class": "version" },
+    "schema": { "type": "string", "const": "mantle-oci-registry-push-report-v2", "x-mantle-issue-class": "version" },
+    "schema_version": { "type": "integer", "const": 2, "x-mantle-issue-class": "version" },
     "published": { "type": "boolean", "const": true },
     "registry": { "$ref": "#/$defs/registry_text" },
     "repository": { "$ref": "#/$defs/target_text" },
     "reference": { "$ref": "#/$defs/target_text" },
     "metadata_reference": { "$ref": "#/$defs/target_text" },
+    "signature_reference": { "$ref": "#/$defs/target_text" },
     "manifest_digest": { "type": "string", "x-mantle-semantic": "sha256-digest" },
     "metadata_manifest_digest": { "type": "string", "x-mantle-semantic": "sha256-digest" },
+    "signature_manifest_digest": { "type": "string", "x-mantle-semantic": "sha256-digest" },
+    "trust_domain": { "$ref": "#/$defs/target_text" },
+    "policy_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "verified_signers": { "$ref": "#/$defs/verified_signers" },
+    "verified_public_key_blake3": { "$ref": "#/$defs/verified_public_keys" },
     "layout_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
     "projection_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
     "export_receipt_blake3": { "type": "string", "x-mantle-semantic": "blake3" },

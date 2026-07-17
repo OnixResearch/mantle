@@ -1696,9 +1696,17 @@ pub enum ArtifactAction {
         #[arg(long)]
         repository: String,
 
-        /// Image tag; Mantle also publishes TAG.mantle-metadata.
+        /// Image tag; Mantle also publishes metadata and signature companion tags.
         #[arg(long)]
         reference: String,
+
+        /// Typed Nickel trust policy authorizing this repository and signer set.
+        #[arg(long = "trust-policy")]
+        trust_policy: PathBuf,
+
+        /// Existing Ed25519 signing key; repeat to satisfy multi-key policy.
+        #[arg(long = "signing-key", required = true)]
+        signing_keys: Vec<PathBuf>,
 
         /// Optional bounded file containing one bearer token; its path and bytes are not receipted.
         #[arg(long = "bearer-token-file")]
@@ -1734,6 +1742,14 @@ pub enum ArtifactAction {
         /// Immutable Mantle metadata-manifest SHA-256 from the push receipt.
         #[arg(long = "expected-metadata-manifest-digest")]
         expected_metadata_manifest_digest: String,
+
+        /// Immutable Mantle signature-manifest SHA-256 from the push receipt.
+        #[arg(long = "expected-signature-manifest-digest")]
+        expected_signature_manifest_digest: String,
+
+        /// Typed Nickel trust policy authorizing this repository and signer set.
+        #[arg(long = "trust-policy")]
+        trust_policy: PathBuf,
 
         /// Optional bounded file containing one bearer token; its path and bytes are not receipted.
         #[arg(long = "bearer-token-file")]

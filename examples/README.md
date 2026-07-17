@@ -31,7 +31,7 @@ Begin with the local seed-free stages, then continue into pinned network inputs 
 | Foreign handoff | `examples/projects/foreign-import-handoff/workflow.ncl` | frontend-free validation and receipt-bound planning |
 | Portable evidence | `examples/projects/portable-receipt-handoff/mantle-project.ncl` | receipt archive verification/import plus semantic graph queries |
 | OCI projection | `examples/projects/kernel-bundle-oci-local/workflow.ncl` | admitted local objects, atomic OCI export, fresh-state import, and descriptor-tamper rejection |
-| OCI registry handoff | `examples/projects/kernel-bundle-oci-registry/workflow.ncl` | authenticated publication, dual-digest immutable pull, exact layout recovery, and fresh-state admission |
+| OCI registry handoff | `examples/projects/kernel-bundle-oci-registry/workflow.ncl` | bearer-authenticated transport plus Nickel-policy Ed25519 verification of the immutable image/metadata pair before exact recovery and fresh-state admission |
 | Remote realization | `examples/projects/remote-build-loopback/mantle-project.ncl` | one-use ticket plus production multi-chunk interruption/resume, tamper rejection, signed admission, and redacted status |
 | WebAssembly component | `examples/projects/wasm-component-hello/workflow.ncl` | typed export plus pinned materialization and drift rails |
 

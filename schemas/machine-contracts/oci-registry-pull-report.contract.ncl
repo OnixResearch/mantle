@@ -7,13 +7,17 @@ let MAX_OCI_REGISTRY_OBJECTS = 1000000 in
 let MAX_OCI_REGISTRY_TARGET_BYTES = 255 in
 let MAX_OCI_REGISTRY_TEXT_BYTES = 2048 in
 let MAX_OCI_REGISTRY_TRANSFER_BYTES = 1099511627776 in
+let MAX_OCI_REGISTRY_VERIFIED_KEYS = 64 in
+let MAX_OCI_REGISTRY_VERIFIED_SIGNERS = 64 in
 let MIN_OCI_REGISTRY_BLOBS = 1 in
 let MIN_OCI_REGISTRY_NON_CLAIM_BYTES = 1 in
 let MIN_OCI_REGISTRY_OBJECTS = 1 in
 let MIN_OCI_REGISTRY_TARGET_BYTES = 1 in
 let MIN_OCI_REGISTRY_TEXT_BYTES = 1 in
 let MIN_OCI_REGISTRY_TRANSFER_BYTES = 1 in
-let OCI_REGISTRY_NON_CLAIM_COUNT = 10 in
+let MIN_OCI_REGISTRY_VERIFIED_KEYS = 1 in
+let MIN_OCI_REGISTRY_VERIFIED_SIGNERS = 1 in
+let OCI_REGISTRY_NON_CLAIM_COUNT = 11 in
 let is_non_claims = fun value => ((std.is_array (value)
   && std.array.length (value) >= OCI_REGISTRY_NON_CLAIM_COUNT
   && std.array.length (value) <= OCI_REGISTRY_NON_CLAIM_COUNT
@@ -29,8 +33,17 @@ let is_target_text = fun value => ((std.is_string (value)
   && C.Utf8ByteLength (value) >= MIN_OCI_REGISTRY_TARGET_BYTES
   && C.Utf8ByteLength (value) <= MAX_OCI_REGISTRY_TARGET_BYTES
   && C.IsRedactionSafe (value))) in
+let is_verified_public_keys = fun value => ((std.is_array (value)
+  && std.array.length (value) >= MIN_OCI_REGISTRY_VERIFIED_KEYS
+  && std.array.length (value) <= MAX_OCI_REGISTRY_VERIFIED_KEYS
+  && std.array.all (fun item_1 => ((std.is_string (item_1)
+  && C.IsBlake3Hex (item_1)))) (value))) in
+let is_verified_signers = fun value => ((std.is_array (value)
+  && std.array.length (value) >= MIN_OCI_REGISTRY_VERIFIED_SIGNERS
+  && std.array.length (value) <= MAX_OCI_REGISTRY_VERIFIED_SIGNERS
+  && std.array.all (fun item_1 => is_target_text (item_1)) (value))) in
 C.FromPredicate (fun value => ((std.is_record (value)
-  && std.array.all (fun field_1 => std.array.elem field_1 ["credential_mode","downloaded_blobs","downloaded_bytes","expected_manifest_digest","expected_metadata_manifest_digest","import_receipt_blake3","import_state","imported_objects","layout_blake3","metadata_reference","non_claims","projection_blake3","pulled","receipt_blake3","reference","registry","repository","resolved_manifest_digest","resolved_metadata_manifest_digest","schema","schema_version"]) (std.record.fields (value))
+  && std.array.all (fun field_1 => std.array.elem field_1 ["credential_mode","downloaded_blobs","downloaded_bytes","expected_manifest_digest","expected_metadata_manifest_digest","expected_signature_manifest_digest","import_receipt_blake3","import_state","imported_objects","layout_blake3","metadata_reference","non_claims","policy_blake3","projection_blake3","pulled","receipt_blake3","reference","registry","repository","resolved_manifest_digest","resolved_metadata_manifest_digest","resolved_signature_manifest_digest","schema","schema_version","signature_reference","trust_domain","verified_public_key_blake3","verified_signers"]) (std.record.fields (value))
   && (std.record.has_field "credential_mode" (value) && ((std.array.elem (std.record.get "credential_mode" (value)) ["anonymous","explicit-bearer-file"]
   && (std.is_string (std.record.get "credential_mode" (value))))))
   && (std.record.has_field "downloaded_blobs" (value) && (((std.is_number (std.record.get "downloaded_blobs" (value))
@@ -45,6 +58,8 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && C.IsSha256Digest (std.record.get "expected_manifest_digest" (value))))))
   && (std.record.has_field "expected_metadata_manifest_digest" (value) && (((std.is_string (std.record.get "expected_metadata_manifest_digest" (value))
   && C.IsSha256Digest (std.record.get "expected_metadata_manifest_digest" (value))))))
+  && (std.record.has_field "expected_signature_manifest_digest" (value) && (((std.is_string (std.record.get "expected_signature_manifest_digest" (value))
+  && C.IsSha256Digest (std.record.get "expected_signature_manifest_digest" (value))))))
   && (std.record.has_field "import_receipt_blake3" (value) && (((std.is_string (std.record.get "import_receipt_blake3" (value))
   && C.IsBlake3Hex (std.record.get "import_receipt_blake3" (value))))))
   && (std.record.has_field "import_state" (value) && (((std.record.get "import_state" (value)) == "admitted"
@@ -57,6 +72,8 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && C.IsBlake3Hex (std.record.get "layout_blake3" (value))))))
   && (std.record.has_field "metadata_reference" (value) && (is_target_text (std.record.get "metadata_reference" (value))))
   && (std.record.has_field "non_claims" (value) && (is_non_claims (std.record.get "non_claims" (value))))
+  && (std.record.has_field "policy_blake3" (value) && (((std.is_string (std.record.get "policy_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "policy_blake3" (value))))))
   && (std.record.has_field "projection_blake3" (value) && (((std.is_string (std.record.get "projection_blake3" (value))
   && C.IsBlake3Hex (std.record.get "projection_blake3" (value))))))
   && (std.record.has_field "pulled" (value) && (((std.record.get "pulled" (value)) == true
@@ -70,8 +87,14 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && C.IsSha256Digest (std.record.get "resolved_manifest_digest" (value))))))
   && (std.record.has_field "resolved_metadata_manifest_digest" (value) && (((std.is_string (std.record.get "resolved_metadata_manifest_digest" (value))
   && C.IsSha256Digest (std.record.get "resolved_metadata_manifest_digest" (value))))))
-  && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-oci-registry-pull-report-v1"
+  && (std.record.has_field "resolved_signature_manifest_digest" (value) && (((std.is_string (std.record.get "resolved_signature_manifest_digest" (value))
+  && C.IsSha256Digest (std.record.get "resolved_signature_manifest_digest" (value))))))
+  && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-oci-registry-pull-report-v2"
   && (std.is_string (std.record.get "schema" (value))))))
-  && (std.record.has_field "schema_version" (value) && (((std.record.get "schema_version" (value)) == 1
+  && (std.record.has_field "schema_version" (value) && (((std.record.get "schema_version" (value)) == 2
   && (std.is_number (std.record.get "schema_version" (value))
-  && std.number.is_integer (std.record.get "schema_version" (value)))))))))
+  && std.number.is_integer (std.record.get "schema_version" (value))))))
+  && (std.record.has_field "signature_reference" (value) && (is_target_text (std.record.get "signature_reference" (value))))
+  && (std.record.has_field "trust_domain" (value) && (is_target_text (std.record.get "trust_domain" (value))))
+  && (std.record.has_field "verified_public_key_blake3" (value) && (is_verified_public_keys (std.record.get "verified_public_key_blake3" (value))))
+  && (std.record.has_field "verified_signers" (value) && (is_verified_signers (std.record.get "verified_signers" (value)))))))

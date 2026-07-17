@@ -117,10 +117,12 @@ external OCI/KBI layout imports as `compatibility-only`, keeps its exact OCI
 SHA-256 and blob BLAKE3 identities, and returns fresh Mantle object refs. It
 does not regain Onix identity without full frontend canonical reconstruction.
 
-## Registry publication and pull
+## Registry publication, signature trust, and pull
 
 The production registry shell implements a bounded OCI Distribution subset over
-the already-verified local layout:
+the already-verified local layout. Registry trust policy is typed Nickel, while
+Rust owns bounded policy normalization, Ed25519 verification, signature-artifact
+linkage, and receipt identity:
 
 ```console
 mantle --json artifact oci-push \
@@ -128,6 +130,8 @@ mantle --json artifact oci-push \
   --registry https://registry.example.test \
   --repository onix/kernel-bundle \
   --reference reviewed \
+  --trust-policy ./registry-trust-policy.ncl \
+  --signing-key /secure/registry-signing-key \
   --bearer-token-file ./registry-token \
   --receipt-out push-report.json
 
@@ -137,37 +141,51 @@ mantle --json --state-dir ./fresh-state artifact oci-pull \
   --reference reviewed \
   --expected-manifest-digest sha256:<from-push-report> \
   --expected-metadata-manifest-digest sha256:<from-push-report> \
+  --expected-signature-manifest-digest sha256:<from-push-report> \
+  --trust-policy ./registry-trust-policy.ncl \
   --bearer-token-file ./registry-token \
   --out ./pulled-kernel-bundle.oci \
   --report-out import-report.json \
   --receipt-out pull-report.json
 ```
 
-Push uploads or reuses exact descriptor blobs. Because registries do not store
-local `oci-layout`, `index.json`, or Mantle export-report sidecars, Mantle also
-publishes `<reference>.mantle-metadata`: an OCI artifact manifest whose subject
-is the exact image manifest and whose three blobs are those exact local metadata
-files. The companion is published first; the user-facing image tag is published
-last. Both are re-read by immutable digest before success.
+Push uploads or reuses exact descriptor blobs. `<reference>.mantle-metadata`
+retains exact `oci-layout`, `index.json`, and export-report bytes. A third
+`<reference>.mantle-signature` OCI artifact contains a deterministic detached-
+signature document over the exact image-manifest and metadata-manifest SHA-256
+pair plus the policy trust domain. Metadata and signature companions are
+published before the user-facing image tag; all three are re-read by immutable
+digest before success.
 
-Pull requires expected SHA-256 values for both manifests. Requiring only the
-image digest would allow replacement of the unsigned Mantle metadata while
-retaining the image bytes. After verifying both tags, subject linkage, every
-metadata/content descriptor, and the exact reconstructed layout, pull invokes
-the ordinary local importer and succeeds only with `state = "admitted"`.
-Credentials are read only from the explicit bounded bearer-token file and
-neither its path nor bytes enter reports. Redirects and ambient proxies are
-disabled. HTTP requires explicit `--allow-http` for controlled local registries.
+The policy authorizes an exact repository set, trusted public keys, required
+signer names, minimum distinct-key threshold, and revoked full-key BLAKE3
+identities. Signer names are labels: verification tries every matching trusted
+key and counts only distinct verified full-key identities. Registry URL,
+repository/tag routing, credentials, key material, and credential/key/policy
+paths remain outside signed identity. Repository authorization is a separate
+verifier-local policy decision, permitting byte-identical mirroring only when
+the destination repository is explicitly authorized.
 
-The contracted `mantle-oci-registry-push-report-v1` and
-`mantle-oci-registry-pull-report-v1` receipts bind mutable routing names to OCI
-SHA-256 manifests, Mantle layout/projection BLAKE3 identities, transfer/reuse
-accounting, credential mode, and local import receipt identity.
+Pull requires expected SHA-256 values for all three manifests. It verifies tag
+resolution, signature artifact subject/metadata/domain linkage, the signature
+document descriptor, required signers, threshold, revocations, and detached
+Ed25519 signatures after downloading only the signature document. Image and
+metadata content blobs are downloaded only after that trust decision succeeds.
+Exact reconstruction then invokes the ordinary local importer and succeeds only
+with `state = "admitted"`. Redirects and ambient proxies are disabled; HTTP
+requires explicit `--allow-http` for controlled local registries.
 
-Local export/import and registry reports do not prove bootability,
-kernel/hardware compatibility, module or BPF safety, registry trust,
-authorization, tag immutability, signature or transparency verification,
-exactly-once publication, upload resumption, deployability, release eligibility,
-or authorization to mutate a target. A failed push may leave unreferenced blobs
-or a companion tag; an exact rerun may reuse verified blobs but is not a
-transactional rollback claim.
+The contracted `mantle-oci-registry-push-report-v2` and
+`mantle-oci-registry-pull-report-v2` receipts bind mutable routing names to three
+OCI SHA-256 manifests, trust domain, policy BLAKE3, verified signer names,
+verified public-key BLAKE3 identities, Mantle layout/projection identities,
+transfer/reuse accounting, credential mode, and local import receipt identity.
+
+Successful signature verification authenticates only the immutable digest pair
+under the supplied local policy. It does not prove registry authorization,
+transparency, revocation freshness, tag immutability, arbitrary registry
+compatibility, artifact correctness, kernel/hardware compatibility, module or
+BPF safety, bootability, deployability, exactly-once publication, upload
+resumption, release eligibility, or authorization to mutate a target. A failed
+push may leave unreferenced blobs or companion tags; exact reruns may reuse
+verified blobs but are not transactional rollback claims.

@@ -29,18 +29,26 @@ use crate::oci_registry::PullReportFacts;
 use crate::oci_registry::PushReportFacts;
 use crate::oci_registry::RegistryLayoutInput;
 use crate::oci_registry::RegistryPullInput;
+use crate::oci_registry::RegistrySignatureVerificationInput;
 use crate::oci_registry::RegistryTarget;
+use crate::oci_registry::RegistryTrustPolicy;
+use crate::oci_registry::ValidatedRegistryTrustPolicy;
 use crate::oci_registry::build_pull_report;
 use crate::oci_registry::build_push_report;
 use crate::oci_registry::build_registry_pull_plan;
 use crate::oci_registry::build_registry_push_plan;
+use crate::oci_registry::build_registry_signature_plan;
 use crate::oci_registry::finalize_upload_url;
 use crate::oci_registry::inspect_metadata_manifest;
+use crate::oci_registry::inspect_signature_manifest;
 use crate::oci_registry::pull_blob_descriptors;
 use crate::oci_registry::registry_blob_url;
 use crate::oci_registry::registry_manifest_url;
 use crate::oci_registry::registry_upload_url;
 use crate::oci_registry::registry_v2_url;
+use crate::oci_registry::require_policy_repository;
+use crate::oci_registry::validate_registry_trust_policy;
+use crate::oci_registry::verify_registry_signature_document;
 
 const AUTHORIZATION_HEADER: &str = "Authorization";
 const CONTENT_TYPE_HEADER: &str = "Content-Type";
@@ -56,17 +64,22 @@ const HTTP_STATUS_CREATED: u16 = 201;
 const HTTP_STATUS_ACCEPTED: u16 = 202;
 const HTTP_STATUS_NOT_FOUND: u16 = 404;
 const OCI_BLOB_CONTENT_TYPE: &str = "application/octet-stream";
+const SIGNATURE_DOCUMENT_DOWNLOAD_COUNT: u32 = 1;
 
 pub struct RegistryPushRequest<'a> {
     pub target: &'a RegistryTarget,
     pub layout_dir: &'a Path,
     pub bearer_token_file: Option<&'a Path>,
+    pub trust_policy: &'a ValidatedRegistryTrustPolicy,
+    pub signing_keys: &'a [crunch_build::KeyPair],
 }
 
 pub struct RegistryPullRequest<'a> {
     pub target: &'a RegistryTarget,
     pub expected_manifest_digest: &'a str,
     pub expected_metadata_manifest_digest: &'a str,
+    pub expected_signature_manifest_digest: &'a str,
+    pub trust_policy: &'a ValidatedRegistryTrustPolicy,
     pub output_dir: &'a Path,
     pub state_dir: &'a Path,
     pub import_report_path: &'a Path,
@@ -140,6 +153,21 @@ fn read_credentials(path: Option<&Path>) -> Result<RegistryCredentials, String> 
         authorization: Some(authorization),
         mode: CREDENTIAL_MODE_BEARER_FILE,
     })
+}
+
+pub fn load_registry_trust_policy(path: &Path) -> Result<ValidatedRegistryTrustPolicy, String> {
+    if path.extension().and_then(std::ffi::OsStr::to_str) != Some("ncl") {
+        return Err("OCI registry trust policy must be an explicit .ncl file".to_string());
+    }
+    let stdlib_dir = crunch_eval::stdlib::stdlib_import_path()
+        .map_err(|error| format!("resolving Nickel stdlib for OCI registry trust policy: {error}"))?;
+    let import_paths = vec![stdlib_dir.into_os_string()];
+    let policy = crunch_eval::evaluate_and_deserialize::<RegistryTrustPolicy>(path, &import_paths)
+        .map_err(|error| format!("evaluating OCI registry trust policy: {error}"))?;
+    let validated = validate_registry_trust_policy(policy)?;
+    assert!(!validated.policy.trust_domain.is_empty());
+    assert!(!validated.policy_blake3.is_empty());
+    Ok(validated)
 }
 
 impl RegistryHttpClient {
@@ -435,6 +463,7 @@ fn verify_published_manifests(
     client: &RegistryHttpClient,
     target: &RegistryTarget,
     plan: &crate::oci_registry::RegistryPushPlan,
+    signature_plan: &crate::oci_registry::RegistrySignaturePlan,
 ) -> Result<(), String> {
     let metadata = get_manifest(
         client,
@@ -443,6 +472,13 @@ fn verify_published_manifests(
         OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
         Some(&plan.metadata_manifest_descriptor.digest),
     )?;
+    let signature = get_manifest(
+        client,
+        target,
+        &signature_plan.manifest_descriptor.digest,
+        OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+        Some(&signature_plan.manifest_descriptor.digest),
+    )?;
     let main = get_manifest(
         client,
         target,
@@ -450,20 +486,40 @@ fn verify_published_manifests(
         &plan.main_manifest_descriptor.media_type,
         Some(&plan.main_manifest_descriptor.digest),
     )?;
-    if metadata.bytes != plan.metadata_manifest_bytes || main.bytes != plan.main_manifest_bytes {
+    if metadata.bytes != plan.metadata_manifest_bytes
+        || signature.bytes != signature_plan.manifest_bytes
+        || main.bytes != plan.main_manifest_bytes
+    {
         return Err("registry immutable manifest verification returned different bytes".to_string());
     }
-    assert_eq!(metadata.digest, plan.metadata_manifest_descriptor.digest);
+    assert_eq!(signature.digest, signature_plan.manifest_descriptor.digest);
     assert_eq!(main.digest, plan.main_manifest_descriptor.digest);
     Ok(())
 }
 
+fn signed_push_blobs(
+    plan: &crate::oci_registry::RegistryPushPlan,
+    signature_plan: &crate::oci_registry::RegistrySignaturePlan,
+) -> Vec<crate::oci_registry::RegistryBlob> {
+    let mut blobs = plan.blobs.clone();
+    blobs.push(crate::oci_registry::RegistryBlob {
+        digest: signature_plan.document_descriptor.digest.clone(),
+        bytes: signature_plan.document_bytes.clone(),
+    });
+    assert_eq!(blobs.len(), plan.blobs.len().saturating_add(1));
+    assert!(blobs.iter().all(|blob| blob.digest == sha256_digest(&blob.bytes)));
+    blobs
+}
+
 pub fn push_registry_layout(request: RegistryPushRequest<'_>) -> Result<OciRegistryPushReport, String> {
+    require_policy_repository(request.trust_policy, &request.target.repository)?;
+    let plan = load_push_plan(request.layout_dir)?;
+    let signature_plan = build_registry_signature_plan(&plan, request.trust_policy, request.signing_keys)?;
     let credentials = read_credentials(request.bearer_token_file)?;
     let client = RegistryHttpClient::new(&credentials);
     ping(&client, request.target)?;
-    let plan = load_push_plan(request.layout_dir)?;
-    let mut accounting = publish_blobs(&client, request.target, &plan.blobs)?;
+    let blobs = signed_push_blobs(&plan, &signature_plan);
+    let mut accounting = publish_blobs(&client, request.target, &blobs)?;
     let metadata_digest = publish_manifest(
         &client,
         request.target,
@@ -475,6 +531,17 @@ pub fn push_registry_layout(request: RegistryPushRequest<'_>) -> Result<OciRegis
         return Err("published Mantle metadata manifest identity drifted".to_string());
     }
     checked_add_bytes(&mut accounting.transferred_bytes, plan.metadata_manifest_bytes.len() as u64)?;
+    let signature_digest = publish_manifest(
+        &client,
+        request.target,
+        &request.target.signature_reference,
+        OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+        &signature_plan.manifest_bytes,
+    )?;
+    if signature_digest != signature_plan.manifest_descriptor.digest {
+        return Err("published Mantle signature manifest identity drifted".to_string());
+    }
+    checked_add_bytes(&mut accounting.transferred_bytes, signature_plan.manifest_bytes.len() as u64)?;
     let main_digest = publish_manifest(
         &client,
         request.target,
@@ -486,10 +553,11 @@ pub fn push_registry_layout(request: RegistryPushRequest<'_>) -> Result<OciRegis
         return Err("published OCI image manifest identity drifted".to_string());
     }
     checked_add_bytes(&mut accounting.transferred_bytes, plan.main_manifest_bytes.len() as u64)?;
-    verify_published_manifests(&client, request.target, &plan)?;
+    verify_published_manifests(&client, request.target, &plan, &signature_plan)?;
     build_push_report(PushReportFacts {
         target: request.target,
         plan: &plan,
+        signature_plan: &signature_plan,
         uploaded_blobs: accounting.uploaded_blobs,
         reused_blobs: accounting.reused_blobs,
         transferred_bytes: accounting.transferred_bytes,
@@ -500,7 +568,7 @@ pub fn push_registry_layout(request: RegistryPushRequest<'_>) -> Result<OciRegis
 fn pull_manifests(
     client: &RegistryHttpClient,
     request: &RegistryPullRequest<'_>,
-) -> Result<(ManifestResponse, ManifestResponse), String> {
+) -> Result<(ManifestResponse, ManifestResponse, ManifestResponse), String> {
     let main = get_manifest(
         client,
         request.target,
@@ -515,9 +583,16 @@ fn pull_manifests(
         OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
         Some(request.expected_metadata_manifest_digest),
     )?;
+    let signature = get_manifest(
+        client,
+        request.target,
+        &request.target.signature_reference,
+        OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+        Some(request.expected_signature_manifest_digest),
+    )?;
     assert_eq!(main.digest, request.expected_manifest_digest, "main tag must resolve immutably");
-    assert_eq!(metadata.digest, request.expected_metadata_manifest_digest, "metadata tag must resolve immutably");
-    Ok((main, metadata))
+    assert_eq!(signature.digest, request.expected_signature_manifest_digest, "signature tag must resolve immutably");
+    Ok((main, metadata, signature))
 }
 
 fn response_descriptor(response: &ManifestResponse) -> OciDescriptor {
@@ -532,15 +607,63 @@ fn response_descriptor(response: &ManifestResponse) -> OciDescriptor {
     }
 }
 
+struct TrustedPullManifests {
+    main: ManifestResponse,
+    metadata: ManifestResponse,
+    metadata_document: crate::oci_registry::OciArtifactManifest,
+    signature_manifest_descriptor: OciDescriptor,
+    trust_verification: crate::oci_registry::RegistryTrustVerification,
+    signature_document_bytes: u64,
+}
+
+fn verify_pull_trust(
+    client: &RegistryHttpClient,
+    request: &RegistryPullRequest<'_>,
+    main: ManifestResponse,
+    metadata: ManifestResponse,
+    signature: ManifestResponse,
+) -> Result<TrustedPullManifests, String> {
+    let main_descriptor = response_descriptor(&main);
+    let (metadata_document, _) =
+        inspect_metadata_manifest(&metadata.bytes, request.expected_metadata_manifest_digest, &main_descriptor)?;
+    let (_, signature_manifest_descriptor, document_descriptor) = inspect_signature_manifest(
+        &signature.bytes,
+        request.expected_signature_manifest_digest,
+        &main_descriptor,
+        request.expected_metadata_manifest_digest,
+        request.trust_policy,
+    )?;
+    let document_bytes = get_blob(client, request.target, &document_descriptor)?;
+    let (_, trust_verification) = verify_registry_signature_document(RegistrySignatureVerificationInput {
+        bytes: &document_bytes,
+        manifest_digest: request.expected_manifest_digest,
+        metadata_manifest_digest: request.expected_metadata_manifest_digest,
+        policy: request.trust_policy,
+    })?;
+    let signature_document_bytes = u64::try_from(document_bytes.len())
+        .map_err(|_| "registry signature document length overflowed u64".to_string())?;
+    assert_eq!(trust_verification.policy_blake3, request.trust_policy.policy_blake3);
+    assert!(signature_document_bytes > 0);
+    Ok(TrustedPullManifests {
+        main,
+        metadata,
+        metadata_document,
+        signature_manifest_descriptor,
+        trust_verification,
+        signature_document_bytes,
+    })
+}
+
 fn download_pull_blobs(
     client: &RegistryHttpClient,
     target: &RegistryTarget,
     descriptors: &[OciDescriptor],
     initial_bytes: u64,
+    initial_blobs: u32,
 ) -> Result<(BTreeMap<String, Vec<u8>>, PullAccounting), String> {
     let mut output = BTreeMap::new();
     let mut accounting = PullAccounting {
-        downloaded_blobs: 0,
+        downloaded_blobs: initial_blobs,
         downloaded_bytes: initial_bytes,
     };
     for descriptor in descriptors {
@@ -552,7 +675,11 @@ fn download_pull_blobs(
     if output.len() != descriptors.len() {
         return Err("registry pull descriptor list contained duplicate digests".to_string());
     }
-    assert_eq!(accounting.downloaded_blobs as usize, output.len(), "pull accounting must cover each blob");
+    assert_eq!(
+        accounting.downloaded_blobs as usize,
+        output.len().saturating_add(initial_blobs as usize),
+        "pull accounting must cover each blob"
+    );
     assert!(accounting.downloaded_bytes >= initial_bytes, "pull byte accounting must be monotonic");
     Ok((output, accounting))
 }
@@ -566,24 +693,27 @@ pub fn pull_registry_layout(request: RegistryPullRequest<'_>) -> Result<OciRegis
     if request.output_dir.exists() || request.import_report_path.exists() {
         return Err("OCI registry pull requires absent layout and import-report destinations".to_string());
     }
+    require_policy_repository(request.trust_policy, &request.target.repository)?;
     let credentials = read_credentials(request.bearer_token_file)?;
     let client = RegistryHttpClient::new(&credentials);
     ping(&client, request.target)?;
-    let (main, metadata) = pull_manifests(&client, &request)?;
-    let main_descriptor = response_descriptor(&main);
-    let (metadata_document, _) =
-        inspect_metadata_manifest(&metadata.bytes, request.expected_metadata_manifest_digest, &main_descriptor)?;
-    let descriptors = pull_blob_descriptors(&main.bytes, &metadata_document)?;
-    let initial_bytes = (main.bytes.len() as u64)
-        .checked_add(metadata.bytes.len() as u64)
+    let (main, metadata, signature) = pull_manifests(&client, &request)?;
+    let signature_manifest_bytes = signature.bytes.len() as u64;
+    let trusted = verify_pull_trust(&client, &request, main, metadata, signature)?;
+    let descriptors = pull_blob_descriptors(&trusted.main.bytes, &trusted.metadata_document)?;
+    let mut initial_bytes = (trusted.main.bytes.len() as u64)
+        .checked_add(trusted.metadata.bytes.len() as u64)
+        .and_then(|total| total.checked_add(signature_manifest_bytes))
         .ok_or_else(|| "registry manifest byte accounting overflowed".to_string())?;
-    let (downloaded_blobs, accounting) = download_pull_blobs(&client, request.target, &descriptors, initial_bytes)?;
+    checked_add_bytes(&mut initial_bytes, trusted.signature_document_bytes)?;
+    let (downloaded_blobs, accounting) =
+        download_pull_blobs(&client, request.target, &descriptors, initial_bytes, SIGNATURE_DOCUMENT_DOWNLOAD_COUNT)?;
     let plan = build_registry_pull_plan(RegistryPullInput {
         expected_manifest_digest: request.expected_manifest_digest.to_string(),
-        main_manifest_media_type: main.media_type,
-        main_manifest_bytes: main.bytes,
+        main_manifest_media_type: trusted.main.media_type,
+        main_manifest_bytes: trusted.main.bytes,
         metadata_manifest_digest: request.expected_metadata_manifest_digest.to_string(),
-        metadata_manifest_bytes: metadata.bytes,
+        metadata_manifest_bytes: trusted.metadata.bytes,
         downloaded_blobs,
     })?;
     publish_pulled_layout(&plan, request.output_dir)?;
@@ -603,6 +733,9 @@ pub fn pull_registry_layout(request: RegistryPullRequest<'_>) -> Result<OciRegis
         plan: &plan,
         expected_manifest_digest: request.expected_manifest_digest,
         expected_metadata_manifest_digest: request.expected_metadata_manifest_digest,
+        expected_signature_manifest_digest: request.expected_signature_manifest_digest,
+        signature_manifest_descriptor: &trusted.signature_manifest_descriptor,
+        trust_verification: &trusted.trust_verification,
         downloaded_blobs: accounting.downloaded_blobs,
         downloaded_bytes: accounting.downloaded_bytes,
         credential_mode: credentials.mode,
@@ -613,6 +746,44 @@ pub fn pull_registry_layout(request: RegistryPullRequest<'_>) -> Result<OciRegis
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TEST_KEYPAIR: &str =
+        "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
+
+    fn nickel_policy(verifying_key: &str, minimum_signatures: &str) -> String {
+        format!(
+            r#"let trust = import "oci_registry_trust.ncl" in
+({{
+  schema = "mantle-oci-registry-trust-policy-v1",
+  schema_version = 1,
+  trust_domain = "onix-kernel-bundle",
+  allowed_repositories = ["onix/kernel-bundle"],
+  trusted_public_keys = ["{verifying_key}"],
+  required_signers = ["cache.example.com-1"],
+  minimum_signatures = {minimum_signatures},
+  revoked_public_key_blake3 = [],
+}} | trust.RegistryTrustPolicy)
+"#
+        )
+    }
+
+    #[test]
+    fn typed_nickel_registry_policy_accepts_valid_shape_and_rejects_type_mismatch() {
+        let temporary = tempfile::tempdir().unwrap();
+        let keypair = crunch_build::load_keypair(TEST_KEYPAIR).unwrap();
+        let valid = temporary.path().join("valid-policy.ncl");
+        let invalid = temporary.path().join("invalid-policy.ncl");
+        fs::write(&valid, nickel_policy(&keypair.verifying_key.to_string(), "1")).unwrap();
+        fs::write(&invalid, nickel_policy(&keypair.verifying_key.to_string(), "\"one\"")).unwrap();
+        let policy = load_registry_trust_policy(&valid).expect("typed registry policy should load");
+        assert_eq!(policy.policy.minimum_signatures, 1);
+        assert!(policy.policy_blake3.len() > 1);
+        let error = load_registry_trust_policy(&invalid)
+            .err()
+            .expect("Nickel contract should reject a string threshold");
+        assert!(error.contains("contract"));
+        assert!(error.contains("minimum_signatures"));
+    }
 
     #[test]
     fn credential_reader_rejects_whitespace_and_accepts_bounded_token() {

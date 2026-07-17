@@ -5,7 +5,7 @@
       "id": "unsupported-schema",
       "issue_class": "version",
       "expected_path": "/schema",
-      "artifact": { "schema": "mantle-oci-registry-pull-report-v2" }
+      "artifact": { "schema": "mantle-oci-registry-pull-report-v1" }
     },
     {
       "id": "malformed-expected-manifest-digest",
@@ -18,6 +18,30 @@
       "issue_class": "digest",
       "expected_path": "/expected_metadata_manifest_digest",
       "artifact": { "expected_metadata_manifest_digest": "blake3:wrong-role" }
+    },
+    {
+      "id": "malformed-expected-signature-digest",
+      "issue_class": "digest",
+      "expected_path": "/expected_signature_manifest_digest",
+      "artifact": { "expected_signature_manifest_digest": "blake3:wrong-role" }
+    },
+    {
+      "id": "malformed-policy-identity",
+      "issue_class": "digest",
+      "expected_path": "/policy_blake3",
+      "artifact": { "policy_blake3": "sha256:wrong-role" }
+    },
+    {
+      "id": "missing-verified-signers",
+      "issue_class": "bounds",
+      "expected_path": "/verified_signers",
+      "artifact": { "verified_signers": [] }
+    },
+    {
+      "id": "missing-verified-public-keys",
+      "issue_class": "bounds",
+      "expected_path": "/verified_public_key_blake3",
+      "artifact": { "verified_public_key_blake3": [] }
     },
     {
       "id": "non-admitted-import-state",
@@ -46,8 +70,8 @@
     {
       "id": "unknown-root-field",
       "issue_class": "unknown-field",
-      "expected_path": "/bearer_token",
-      "artifact": { "bearer_token": "secret-token" }
+      "expected_path": "/trust_policy_path",
+      "artifact": { "trust_policy_path": "/run/policy/registry.ncl" }
     }
   ]
 }

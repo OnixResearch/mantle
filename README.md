@@ -556,7 +556,7 @@ Fast local examples:
 - [`examples/projects/foreign-import-handoff/workflow.ncl`](examples/projects/foreign-import-handoff/workflow.ncl) — Guix-like and Nix-like validation/planning without foreign frontend commands
 - [`examples/projects/portable-receipt-handoff/mantle-project.ncl`](examples/projects/portable-receipt-handoff/mantle-project.ncl) — receipt archive handoff, idempotent import, and complete/incomplete semantic graph queries
 - [`examples/projects/kernel-bundle-oci-local/workflow.ncl`](examples/projects/kernel-bundle-oci-local/workflow.ncl) — admitted fixture objects projected into a local OCI layout, reimported into fresh state, and rejected after descriptor tampering
-- [`examples/projects/kernel-bundle-oci-registry/workflow.ncl`](examples/projects/kernel-bundle-oci-registry/workflow.ncl) — authenticated registry publication plus dual-digest immutable pull, exact layout recovery, fresh-state admission, interruption reuse, and drift/tamper rejection
+- [`examples/projects/kernel-bundle-oci-registry/workflow.ncl`](examples/projects/kernel-bundle-oci-registry/workflow.ncl) — bearer-authenticated registry transport plus Nickel-policy Ed25519 authentication of the immutable image/metadata pair before exact layout recovery and fresh-state admission
 - [`examples/transcripts/hello-eval.md`](examples/transcripts/hello-eval.md) — isolated executable Markdown evaluation transcript
 - [`examples/fail.ncl`](examples/fail.ncl) — intentional failure for diagnostics
 
@@ -1952,10 +1952,10 @@ mantle artifact oci-export --projection <projection.json> --spec-material <spec>
                                  Project admitted frontend objects into an atomic local OCI image layout
 mantle artifact oci-import --layout <layout> --report-out <report.json>
                                  Verify descriptors and admit exact OCI blobs; external layouts remain compatibility-only
-mantle artifact oci-push --layout <layout> --registry <https-origin> --repository <name> --reference <tag> --receipt-out <push.json>
-                                 Publish exact blobs, subject-bound Mantle metadata, then the user-facing image tag
-mantle artifact oci-pull --registry <https-origin> --repository <name> --reference <tag> --expected-manifest-digest <sha256> --expected-metadata-manifest-digest <sha256> --out <layout> --report-out <import.json> --receipt-out <pull.json>
-                                 Verify both immutable manifests, reconstruct the exact layout, and require admitted import state
+mantle artifact oci-push --layout <layout> --registry <https-origin> --repository <name> --reference <tag> --trust-policy <policy.ncl> --signing-key <key> --receipt-out <push.json>
+                                 Publish exact blobs, metadata and detached-signature companions, then the user-facing image tag
+mantle artifact oci-pull --registry <https-origin> --repository <name> --reference <tag> --expected-manifest-digest <sha256> --expected-metadata-manifest-digest <sha256> --expected-signature-manifest-digest <sha256> --trust-policy <policy.ncl> --out <layout> --report-out <import.json> --receipt-out <pull.json>
+                                 Verify the signed immutable image/metadata pair before exact reconstruction and admitted import
 mantle wasm-component build <request.ncl> --out <evidence-dir>
                                  Build, validate, Octet-check, and materialize an exact component evidence bundle
 

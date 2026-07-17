@@ -855,7 +855,7 @@ let Registry = {
         "contract_blake3"= "43a06bea0e9950c5d9e4e1ee7f84eaa3d716f8386d02003f655dda393707f644",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "76599ed52294ac203020c80c063c840e475c0d41e66841650c3e26192be9d259",
-        "producer_identity_blake3"= "3d33c4270577a686c56d41186ebdee47a7ea8459cef42277878e55d8d137568d",
+        "producer_identity_blake3"= "5d09f6768ca34b29866a48a3216242824adde95f20b17b541b1d0818d442644d",
         "consumer_policy_blake3"= "d2045dba8cfd1dea820752fb60f94beb4cd88674ba02fabca73b2fbe53ffb251"
       },
       "non_claims"= [
@@ -920,7 +920,7 @@ let Registry = {
         "contract_blake3"= "ce21d8ae6b38624e8cda66d54822e5d0eef0ba0328b92461174f748b17b26c21",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "04a452fb28f5bbcc589051a9901f352f3411f14665ec1002232433f7d7ac01c9",
-        "producer_identity_blake3"= "18d4e0b21296fdd8bce0d6e371eedddb10ca20910829607b0714141bb2c16c39",
+        "producer_identity_blake3"= "5c858ab8a964e492e76341cfe101ab8255c33349fa657316aa00c5ea1dd8b5d1",
         "consumer_policy_blake3"= "d9734a8c052a4e80a65917ca0a08b68273017dfe057ab8f7bbd59d423b66d963"
       },
       "non_claims"= [
@@ -956,9 +956,9 @@ let Registry = {
         "negative_fixture_set"= "schemas/machine-contracts/fixtures/oci-registry-push-report.negatives.json"
       },
       "version_policy"= {
-        "current"= "mantle-oci-registry-push-report-v1",
+        "current"= "mantle-oci-registry-push-report-v2",
         "supported"= [
-          "mantle-oci-registry-push-report-v1"
+          "mantle-oci-registry-push-report-v2"
         ],
         "unknown_version_behavior"= "reject before using publication facts for pull or audit",
         "compatibility_converter"= "",
@@ -976,19 +976,19 @@ let Registry = {
         "redaction",
         "unknown-field"
       ],
-      "freshness_strategy"= "BLAKE3 binds the Rust push report, exact OCI/Mantle digest-role schema, generated contract, reviewed fixtures, credential-mode policy, and consumer non-claims",
+      "freshness_strategy"= "BLAKE3 binds the Rust push report, three immutable OCI manifest identities, verified signer/key evidence, local policy identity, generated contract, reviewed fixtures, credential-mode policy, and consumer non-claims",
       "freshness"= {
-        "schema_blake3"= "8290e034a7db72531dd11862d6855bea847bde57f6dc75761598afe185b31765",
-        "contract_blake3"= "0842eb28bda7b7080beddab5cd8eb036a681dc7d212fecd4c96cf7bed48e6977",
+        "schema_blake3"= "1a8f2b78efd9676b0011370651b0f0dbe4eb4efba1a276c7276c88f1a7b0b62d",
+        "contract_blake3"= "d158d85e21edcccbf6d6ae7bc6d3d59aea4acb8f1dc8a52438be38567d4c50f2",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
-        "fixture_set_blake3"= "cf6c2a03b03bdeb8229fc42d4b195c6f8bc826879a96b26e1fe8a8ff692d3845",
-        "producer_identity_blake3"= "483ff3ad911789a292de20390428df7a9abf484ba17ee81a959e46c27849c94b",
-        "consumer_policy_blake3"= "f08b3506353ac0fb92702009288403f0e93c2dd9a128de0e506c059874171b24"
+        "fixture_set_blake3"= "8e91fcc9e05d01c01acc79b47fbf35b764569b52ba1333489e2de78c49500c71",
+        "producer_identity_blake3"= "03dceccf21953499b16d42abef3beaa5ae1b5e34586762961b609ca7f4a46587",
+        "consumer_policy_blake3"= "c81ddbc9befcf012a5b42b3f44c2f17fe44f890ce0dfcc228b2cfefd5eb30dd4"
       },
       "non_claims"= [
-        "report conformance does not prove registry trust, authorization, tag immutability, signature verification, exactly-once publication, upload resumption, kernel compatibility, bootability, deployability, or release eligibility"
+        "report conformance proves neither registry authorization, transparency, revocation freshness, tag immutability, exactly-once publication, upload resumption, kernel compatibility, bootability, deployability, nor release eligibility; signature evidence authenticates only the digest pair under supplied local policy"
       ],
-      "rationale"= "The push receipt is the immutable operator handoff from local admitted layout identity to registry manifest identities."
+      "rationale"= "The push receipt is the immutable operator handoff from local admitted layout identity to three registry manifests and bounded signature-policy evidence."
     },
     {
       "id"= "oci.registry-pull-report",
@@ -1018,9 +1018,9 @@ let Registry = {
         "negative_fixture_set"= "schemas/machine-contracts/fixtures/oci-registry-pull-report.negatives.json"
       },
       "version_policy"= {
-        "current"= "mantle-oci-registry-pull-report-v1",
+        "current"= "mantle-oci-registry-pull-report-v2",
         "supported"= [
-          "mantle-oci-registry-pull-report-v1"
+          "mantle-oci-registry-pull-report-v2"
         ],
         "unknown_version_behavior"= "reject before treating registry bytes as an admitted local OCI handoff",
         "compatibility_converter"= "",
@@ -1037,19 +1037,19 @@ let Registry = {
         "bounds",
         "unknown-field"
       ],
-      "freshness_strategy"= "BLAKE3 binds the Rust pull report, dual immutable manifest expectations, local admission linkage, generated contract, reviewed fixtures, and consumer non-claims",
+      "freshness_strategy"= "BLAKE3 binds the Rust pull report, three immutable manifest expectations, verified signer/key and local policy evidence, local admission linkage, generated contract, reviewed fixtures, and consumer non-claims",
       "freshness"= {
-        "schema_blake3"= "23677bd3a01e07462b5428011142e409cc2b40243af52c3a5c5974db51db66a5",
-        "contract_blake3"= "698a4e53e00cae9a4920cee8f1542d1afac3f579615267a5c9e7d55e9a037303",
+        "schema_blake3"= "2eeaa551333a6fe6f7e044c7b2f49e115cebfc2c0d739f726204616c4b0c2840",
+        "contract_blake3"= "723027e965189230cabb05b8ba069effec984e9bd527625a4320c8bd3cbe1af3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
-        "fixture_set_blake3"= "af709035fc0f0ce628d31a1673dbcab08d3f16115be4b4ba70075c74d2199aa5",
-        "producer_identity_blake3"= "a2413f1cbdb3bf47cb3f1d32a13f3b46f15852bb81cabe69f01eb03d7dedec38",
-        "consumer_policy_blake3"= "9fad49626058cfa58799687a2e22ac2a6ae951363fbe75c2d29ef857e4c7da21"
+        "fixture_set_blake3"= "31375975b6ec3d674ffe1cdb68e5ba68f023e5a6fa7af128a90873b739425f5a",
+        "producer_identity_blake3"= "8817209f1b9992f4289c03bda4ee5c17c6fc2716e5d2c30c245e6e774e0645dc",
+        "consumer_policy_blake3"= "e81324a18c19a70aaa2bec634d4a0b7dccceede6f048bbd332b432a9938adefe"
       },
       "non_claims"= [
-        "report conformance does not prove registry trust, authorization, tag immutability, signature verification, kernel compatibility, bootability, deployability, publication atomicity, or release eligibility"
+        "report conformance proves neither registry authorization, transparency, revocation freshness, tag immutability, arbitrary-registry compatibility, kernel compatibility, bootability, deployability, publication atomicity, nor release eligibility; signature evidence authenticates only the digest pair under supplied local policy"
       ],
-      "rationale"= "The pull receipt binds mutable registry routing to two expected manifest identities and the ordinary admitted OCI import receipt."
+      "rationale"= "The pull receipt binds mutable registry routing to three expected manifest identities, bounded signature-policy evidence, and the ordinary admitted OCI import receipt."
     },
     {
       "id"= "release.function-address-binding",

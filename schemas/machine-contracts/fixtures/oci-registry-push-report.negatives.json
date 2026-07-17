@@ -5,7 +5,7 @@
       "id": "unsupported-schema",
       "issue_class": "version",
       "expected_path": "/schema",
-      "artifact": { "schema": "mantle-oci-registry-push-report-v2" }
+      "artifact": { "schema": "mantle-oci-registry-push-report-v1" }
     },
     {
       "id": "malformed-manifest-digest",
@@ -14,10 +14,34 @@
       "artifact": { "manifest_digest": "blake3:wrong-role" }
     },
     {
+      "id": "malformed-signature-manifest-digest",
+      "issue_class": "digest",
+      "expected_path": "/signature_manifest_digest",
+      "artifact": { "signature_manifest_digest": "blake3:wrong-role" }
+    },
+    {
+      "id": "malformed-policy-identity",
+      "issue_class": "digest",
+      "expected_path": "/policy_blake3",
+      "artifact": { "policy_blake3": "sha256:wrong-role" }
+    },
+    {
       "id": "malformed-layout-identity",
       "issue_class": "digest",
       "expected_path": "/layout_blake3",
       "artifact": { "layout_blake3": "sha256:wrong-role" }
+    },
+    {
+      "id": "missing-verified-signers",
+      "issue_class": "bounds",
+      "expected_path": "/verified_signers",
+      "artifact": { "verified_signers": [] }
+    },
+    {
+      "id": "missing-verified-public-keys",
+      "issue_class": "bounds",
+      "expected_path": "/verified_public_key_blake3",
+      "artifact": { "verified_public_key_blake3": [] }
     },
     {
       "id": "unknown-credential-mode",
@@ -46,8 +70,8 @@
     {
       "id": "unknown-root-field",
       "issue_class": "unknown-field",
-      "expected_path": "/credential_path",
-      "artifact": { "credential_path": "/run/secrets/registry" }
+      "expected_path": "/signing_key_path",
+      "artifact": { "signing_key_path": "/run/secrets/registry-signing-key" }
     }
   ]
 }

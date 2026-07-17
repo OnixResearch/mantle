@@ -39,6 +39,7 @@ use crate::oci_registry::RegistryTargetInput;
 use crate::oci_registry::validate_registry_target;
 use crate::oci_registry_shell::RegistryPullRequest;
 use crate::oci_registry_shell::RegistryPushRequest;
+use crate::oci_registry_shell::load_registry_trust_policy;
 use crate::oci_registry_shell::pull_registry_layout;
 use crate::oci_registry_shell::push_registry_layout;
 
@@ -110,16 +111,21 @@ pub fn cmd_artifact(
             registry,
             repository,
             reference,
+            trust_policy,
+            signing_keys,
             bearer_token_file,
             allow_http,
             receipt_out,
         } => cmd_oci_push(OciPushShellRequest {
             current_dir,
+            state_dir,
             json,
             layout: &layout,
             registry: &registry,
             repository: &repository,
             reference: &reference,
+            trust_policy: &trust_policy,
+            signing_keys: &signing_keys,
             bearer_token_file: bearer_token_file.as_deref(),
             allow_http,
             receipt_out: &receipt_out,
@@ -130,6 +136,8 @@ pub fn cmd_artifact(
             reference,
             expected_manifest_digest,
             expected_metadata_manifest_digest,
+            expected_signature_manifest_digest,
+            trust_policy,
             bearer_token_file,
             allow_http,
             out,
@@ -144,6 +152,8 @@ pub fn cmd_artifact(
             reference: &reference,
             expected_manifest_digest: &expected_manifest_digest,
             expected_metadata_manifest_digest: &expected_metadata_manifest_digest,
+            expected_signature_manifest_digest: &expected_signature_manifest_digest,
+            trust_policy: &trust_policy,
             bearer_token_file: bearer_token_file.as_deref(),
             allow_http,
             output_dir: &out,
@@ -190,11 +200,14 @@ struct OciExportShellRequest<'a> {
 
 struct OciPushShellRequest<'a> {
     current_dir: &'a Path,
+    state_dir: &'a Path,
     json: bool,
     layout: &'a Path,
     registry: &'a str,
     repository: &'a str,
     reference: &'a str,
+    trust_policy: &'a Path,
+    signing_keys: &'a [PathBuf],
     bearer_token_file: Option<&'a Path>,
     allow_http: bool,
     receipt_out: &'a Path,
@@ -209,6 +222,8 @@ struct OciPullShellRequest<'a> {
     reference: &'a str,
     expected_manifest_digest: &'a str,
     expected_metadata_manifest_digest: &'a str,
+    expected_signature_manifest_digest: &'a str,
+    trust_policy: &'a Path,
     bearer_token_file: Option<&'a Path>,
     allow_http: bool,
     output_dir: &'a Path,
@@ -314,16 +329,41 @@ fn registry_target(
     .map_err(|error| RunError::Internal(format!("validating OCI registry target: {error}")))
 }
 
+fn load_registry_signing_keys(
+    current_dir: &Path,
+    state_dir: &Path,
+    paths: &[PathBuf],
+) -> Result<Vec<crunch_build::KeyPair>, RunError> {
+    if paths.is_empty() {
+        return Err(RunError::Internal("OCI registry push requires at least one explicit signing key".to_string()));
+    }
+    let mut keys = Vec::with_capacity(paths.len());
+    for path in paths {
+        let resolved = resolve_cli_path(current_dir, path);
+        let (keypair, _source_path) = crate::build_cmd::load_existing_signing_keypair(Some(&resolved), state_dir)?;
+        keys.push(keypair);
+    }
+    assert_eq!(keys.len(), paths.len());
+    assert!(!keys.is_empty(), "registry signing keys must not be empty");
+    Ok(keys)
+}
+
 fn cmd_oci_push(request: OciPushShellRequest<'_>) -> Result<(), RunError> {
     let layout = resolve_cli_path(request.current_dir, request.layout);
     let receipt_out = resolve_cli_path(request.current_dir, request.receipt_out);
     require_absent_output(&receipt_out, "OCI registry push receipt")?;
+    let policy_path = resolve_cli_path(request.current_dir, request.trust_policy);
+    let trust_policy = load_registry_trust_policy(&policy_path)
+        .map_err(|error| RunError::Internal(format!("loading OCI registry trust policy: {error}")))?;
+    let signing_keys = load_registry_signing_keys(request.current_dir, request.state_dir, request.signing_keys)?;
     let bearer_token_file = request.bearer_token_file.map(|path| resolve_cli_path(request.current_dir, path));
     let target = registry_target(request.registry, request.repository, request.reference, request.allow_http)?;
     let report = push_registry_layout(RegistryPushRequest {
         target: &target,
         layout_dir: &layout,
         bearer_token_file: bearer_token_file.as_deref(),
+        trust_policy: &trust_policy,
+        signing_keys: &signing_keys,
     })
     .map_err(|error| RunError::Internal(format!("pushing OCI registry layout: {error}")))?;
     write_json_output_new(&receipt_out, &report)?;
@@ -335,12 +375,17 @@ fn cmd_oci_pull(request: OciPullShellRequest<'_>) -> Result<(), RunError> {
     let import_report_out = resolve_cli_path(request.current_dir, request.import_report_out);
     let receipt_out = resolve_cli_path(request.current_dir, request.receipt_out);
     require_absent_output(&receipt_out, "OCI registry pull receipt")?;
+    let policy_path = resolve_cli_path(request.current_dir, request.trust_policy);
+    let trust_policy = load_registry_trust_policy(&policy_path)
+        .map_err(|error| RunError::Internal(format!("loading OCI registry trust policy: {error}")))?;
     let bearer_token_file = request.bearer_token_file.map(|path| resolve_cli_path(request.current_dir, path));
     let target = registry_target(request.registry, request.repository, request.reference, request.allow_http)?;
     let report = pull_registry_layout(RegistryPullRequest {
         target: &target,
         expected_manifest_digest: request.expected_manifest_digest,
         expected_metadata_manifest_digest: request.expected_metadata_manifest_digest,
+        expected_signature_manifest_digest: request.expected_signature_manifest_digest,
+        trust_policy: &trust_policy,
         output_dir: &output_dir,
         state_dir: request.state_dir,
         import_report_path: &import_report_out,
@@ -360,6 +405,7 @@ fn emit_oci_registry_push_report(report: &OciRegistryPushReport, json: bool) -> 
         println!("published OCI registry image {}:{}", report.repository, report.reference);
         println!("manifest_digest: {}", report.manifest_digest);
         println!("metadata_manifest_digest: {}", report.metadata_manifest_digest);
+        println!("signature_manifest_digest: {}", report.signature_manifest_digest);
     }
     Ok(())
 }
@@ -372,6 +418,7 @@ fn emit_oci_registry_pull_report(report: &OciRegistryPullReport, json: bool) -> 
     } else {
         println!("pulled OCI registry image {}:{}", report.repository, report.reference);
         println!("manifest_digest: {}", report.resolved_manifest_digest);
+        println!("signature_manifest_digest: {}", report.resolved_signature_manifest_digest);
         println!("import_state: {}", report.import_state);
     }
     Ok(())

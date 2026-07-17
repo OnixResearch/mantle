@@ -653,7 +653,7 @@ fn remote_resumable_workflow_catalog_and_docs_name_the_production_boundary() {
 }
 
 #[test]
-fn registry_oci_workflow_catalog_and_docs_preserve_immutable_admission_boundary() {
+fn registry_oci_workflow_catalog_and_docs_preserve_signed_immutable_admission_boundary() {
     let catalog = load_catalog();
     let registry = catalog
         .examples
@@ -668,10 +668,12 @@ fn registry_oci_workflow_catalog_and_docs_preserve_immutable_admission_boundary(
     assert!(registry.validation_rails.iter().any(|rail| rail == OCI_REGISTRY_ROUNDTRIP_RAIL));
     assert!(registry.validation_rails.iter().any(|rail| rail == "negative-build"));
     assert!(oci_doc.contains("<reference>.mantle-metadata"));
-    assert!(oci_doc.contains("--expected-metadata-manifest-digest"));
+    assert!(oci_doc.contains("<reference>.mantle-signature"));
+    assert!(oci_doc.contains("--expected-signature-manifest-digest"));
     assert!(project_readme.contains("kernel_bundle_oci_registry_cli"));
-    assert!(project_readme.contains("image digest alone cannot prevent"));
-    assert!(project_readme.contains("does **not** establish registry trust"));
+    assert!(project_readme.contains("unknown/revoked keys"));
+    assert!(project_readme.contains("authenticates only the immutable image/metadata digest pair"));
+    assert!(project_readme.contains("does **not** establish registry authorization"));
     assert!(!project_readme.contains("registry publication proves release eligibility"));
 
     let mut missing_registry_rail = registry.clone();

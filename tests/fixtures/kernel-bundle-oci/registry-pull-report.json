@@ -1,15 +1,26 @@
 {
-  "schema": "mantle-oci-registry-pull-report-v1",
-  "schema_version": 1,
+  "schema": "mantle-oci-registry-pull-report-v2",
+  "schema_version": 2,
   "pulled": true,
   "registry": "https://registry.example.test",
   "repository": "onix/kernel-bundle",
   "reference": "reviewed",
   "metadata_reference": "reviewed.mantle-metadata",
+  "signature_reference": "reviewed.mantle-signature",
   "expected_manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "resolved_manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "expected_metadata_manifest_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "resolved_metadata_manifest_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "expected_signature_manifest_digest": "sha256:d1799c870c4ebc69370c6c26b4eb0af835e83622b84065ada5429f2b4cac6ccc",
+  "resolved_signature_manifest_digest": "sha256:d1799c870c4ebc69370c6c26b4eb0af835e83622b84065ada5429f2b4cac6ccc",
+  "trust_domain": "onix-kernel-bundle",
+  "policy_blake3": "ad45c4728f086ed75a4e8e625847126a24437842cfe5bca80dba88a7d9ef39ab",
+  "verified_signers": [
+    "cache.example.com-1"
+  ],
+  "verified_public_key_blake3": [
+    "cad153db7d4f564bbfab4e10b6f31460ec672cdd5f296ab1a33d19371f028fab"
+  ],
   "layout_blake3": "1111111111111111111111111111111111111111111111111111111111111111",
   "projection_blake3": "2222222222222222222222222222222222222222222222222222222222222222",
   "downloaded_blobs": 6,
@@ -24,11 +35,12 @@
     "no deployability claim",
     "no exactly-once publication",
     "no kernel compatibility decision",
-    "no registry trust claim",
+    "no registry authorization claim",
     "no release eligibility claim",
-    "no signature verification",
+    "no revocation freshness or transparency claim",
     "no tag immutability claim",
-    "no upload resumption"
+    "no upload resumption",
+    "signature verification authenticates only the immutable digest pair under supplied local policy"
   ],
-  "receipt_blake3": "063e2d6fb4b2c2f68a79907edd89f995579737c5f58b3e5d99b1ffbfa103deb1"
+  "receipt_blake3": "c8189ba19bc8a2d380cd178e027bab625bdf18a0474744ccf1d035317945b817"
 }

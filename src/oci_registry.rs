@@ -10,6 +10,8 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use nix_compat::narinfo::SignatureRef;
+use nix_compat::narinfo::VerifyingKey;
 use serde::Deserialize;
 use serde::Serialize;
 use url::Url;
@@ -29,10 +31,15 @@ use crate::oci_projection::validate_import;
 use crate::oci_projection::verify_export_report;
 use crate::oci_projection::verify_import_report;
 
-pub const OCI_REGISTRY_PUSH_REPORT_SCHEMA: &str = "mantle-oci-registry-push-report-v1";
-pub const OCI_REGISTRY_PULL_REPORT_SCHEMA: &str = "mantle-oci-registry-pull-report-v1";
+pub const OCI_REGISTRY_PUSH_REPORT_SCHEMA: &str = "mantle-oci-registry-push-report-v2";
+pub const OCI_REGISTRY_PULL_REPORT_SCHEMA: &str = "mantle-oci-registry-pull-report-v2";
+pub const OCI_REGISTRY_TRUST_POLICY_SCHEMA: &str = "mantle-oci-registry-trust-policy-v1";
+pub const OCI_REGISTRY_SIGNATURE_DOCUMENT_SCHEMA: &str = "mantle-oci-registry-signature-document-v1";
+pub const OCI_REGISTRY_TRUST_STATEMENT_SCHEMA: &str = "mantle-oci-registry-trust-statement-v1";
 pub const OCI_ARTIFACT_MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.artifact.manifest.v1+json";
 pub const MANTLE_METADATA_ARTIFACT_TYPE: &str = "application/vnd.mantle.oci-metadata.v1";
+pub const MANTLE_SIGNATURE_ARTIFACT_TYPE: &str = "application/vnd.mantle.oci-signature.v1";
+pub const MANTLE_SIGNATURE_DOCUMENT_MEDIA_TYPE: &str = "application/vnd.mantle.oci-signature.v1+json";
 pub const MANTLE_OCI_LAYOUT_MEDIA_TYPE: &str = "application/vnd.mantle.oci-layout.v1+json";
 pub const MANTLE_OCI_INDEX_MEDIA_TYPE: &str = "application/vnd.mantle.oci-index.v1+json";
 pub const MANTLE_OCI_EXPORT_REPORT_MEDIA_TYPE: &str = "application/vnd.mantle.oci-export-report.v1+json";
@@ -41,24 +48,40 @@ pub const METADATA_LAYOUT_ROLE: &str = "oci-layout";
 pub const METADATA_INDEX_ROLE: &str = "index";
 pub const METADATA_EXPORT_REPORT_ROLE: &str = "export-report";
 pub const METADATA_REFERENCE_SUFFIX: &str = ".mantle-metadata";
+pub const SIGNATURE_REFERENCE_SUFFIX: &str = ".mantle-signature";
 pub const CREDENTIAL_MODE_ANONYMOUS: &str = "anonymous";
 pub const CREDENTIAL_MODE_BEARER_FILE: &str = "explicit-bearer-file";
 
-const REGISTRY_SCHEMA_VERSION: u16 = 1;
+const REGISTRY_SCHEMA_VERSION: u16 = 2;
+const TRUST_POLICY_SCHEMA_VERSION: u16 = 1;
+const TRUST_STATEMENT_SCHEMA_VERSION: u16 = 1;
+const SIGNATURE_DOCUMENT_SCHEMA_VERSION: u16 = 1;
 const OCI_DOCUMENT_SCHEMA_VERSION: u16 = 2;
 const REGISTRY_BYTES_MAX: usize = 2_048;
 const REPOSITORY_BYTES_MAX: usize = 255;
 const REPOSITORY_SEGMENT_BYTES_MAX: usize = 128;
 const TAG_BYTES_MAX: usize = 128;
 const TAG_BYTES_MIN: usize = 1;
+const TRUST_DOMAIN_BYTES_MAX: usize = 128;
+const SIGNER_NAME_BYTES_MAX: usize = 255;
+const TRUST_POLICY_ENTRY_COUNT_MAX: usize = 64;
+const SIGNATURE_COUNT_MAX: usize = 64;
 const METADATA_BLOB_COUNT: usize = 3;
+const SIGNATURE_BLOB_COUNT: usize = 1;
 const REGISTRY_RECEIPT_BLOB_COUNT_MAX: u32 = 1_000_000;
 const REGISTRY_RECEIPT_OBJECT_COUNT_MAX: u32 = 1_000_000;
 const REGISTRY_RECEIPT_TRANSFER_BYTES_MAX: u64 = 1_099_511_627_776;
-const REGISTRY_PUSH_RECEIPT_DOMAIN: &str = "mantle/oci/registry-push-report/v1";
-const REGISTRY_PULL_RECEIPT_DOMAIN: &str = "mantle/oci/registry-pull-report/v1";
+const REGISTRY_PUSH_RECEIPT_DOMAIN: &str = "mantle/oci/registry-push-report/v2";
+const REGISTRY_PULL_RECEIPT_DOMAIN: &str = "mantle/oci/registry-pull-report/v2";
+const TRUST_POLICY_DIGEST_DOMAIN: &str = "mantle/oci/registry-trust-policy/v1";
+const PUBLIC_KEY_DIGEST_DOMAIN: &str = "mantle/oci/registry-public-key/v1";
+const SIGNATURE_SUITE: &str = "ed25519-detached-v1";
 const LAYOUT_DIGEST_ANNOTATION: &str = "org.mantle.layout.blake3";
 const PROJECTION_DIGEST_ANNOTATION: &str = "org.mantle.projection.blake3";
+const SIGNATURE_ROLE_ANNOTATION: &str = "org.mantle.signature.role";
+const SIGNATURE_DOCUMENT_ROLE: &str = "signature-document";
+const SIGNATURE_METADATA_DIGEST_ANNOTATION: &str = "org.mantle.signature.metadata-digest";
+const SIGNATURE_TRUST_DOMAIN_ANNOTATION: &str = "org.mantle.signature.trust-domain";
 
 const REQUIRED_NON_CLAIMS: &[&str] = &[
     "credential possession is not authorization proof",
@@ -66,11 +89,12 @@ const REQUIRED_NON_CLAIMS: &[&str] = &[
     "no deployability claim",
     "no exactly-once publication",
     "no kernel compatibility decision",
-    "no registry trust claim",
+    "no registry authorization claim",
     "no release eligibility claim",
-    "no signature verification",
+    "no revocation freshness or transparency claim",
     "no tag immutability claim",
     "no upload resumption",
+    "signature verification authenticates only the immutable digest pair under supplied local policy",
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -79,6 +103,7 @@ pub struct RegistryTarget {
     pub repository: String,
     pub reference: String,
     pub metadata_reference: String,
+    pub signature_reference: String,
 }
 
 pub struct RegistryTargetInput<'a> {
@@ -100,6 +125,98 @@ pub struct OciArtifactManifest {
     pub blobs: Vec<OciDescriptor>,
     pub subject: OciDescriptor,
     pub annotations: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RegistryTrustPolicy {
+    pub schema: String,
+    pub schema_version: u16,
+    pub trust_domain: String,
+    pub allowed_repositories: Vec<String>,
+    pub trusted_public_keys: Vec<String>,
+    pub required_signers: Vec<String>,
+    pub minimum_signatures: u16,
+    pub revoked_public_key_blake3: Vec<String>,
+}
+
+pub struct ValidatedRegistryTrustPolicy {
+    pub policy: RegistryTrustPolicy,
+    pub policy_blake3: String,
+    verifying_keys: Vec<VerifyingKey>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RegistryTrustStatement {
+    pub schema: String,
+    pub schema_version: u16,
+    pub signature_suite: String,
+    pub trust_domain: String,
+    pub manifest_digest: String,
+    pub metadata_manifest_digest: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RegistryDetachedSignature {
+    pub signer: String,
+    pub signature: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RegistrySignatureDocument {
+    pub schema: String,
+    pub schema_version: u16,
+    pub statement: RegistryTrustStatement,
+    pub signatures: Vec<RegistryDetachedSignature>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RegistryTrustVerification {
+    pub trust_domain: String,
+    pub policy_blake3: String,
+    pub verified_signers: Vec<String>,
+    pub verified_public_key_blake3: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RegistrySignaturePlan {
+    pub document: RegistrySignatureDocument,
+    pub document_descriptor: OciDescriptor,
+    pub document_bytes: Vec<u8>,
+    pub manifest: OciArtifactManifest,
+    pub manifest_descriptor: OciDescriptor,
+    pub manifest_bytes: Vec<u8>,
+    pub verification: RegistryTrustVerification,
+}
+
+pub struct RegistrySignatureVerificationInput<'a> {
+    pub bytes: &'a [u8],
+    pub manifest_digest: &'a str,
+    pub metadata_manifest_digest: &'a str,
+    pub policy: &'a ValidatedRegistryTrustPolicy,
+}
+
+struct TrustStatementExpectation<'a> {
+    manifest_digest: &'a str,
+    metadata_manifest_digest: &'a str,
+    policy: &'a ValidatedRegistryTrustPolicy,
+}
+
+struct SignatureManifestInput<'a> {
+    main: &'a OciDescriptor,
+    metadata_digest: &'a str,
+    trust_domain: &'a str,
+    document_descriptor: &'a OciDescriptor,
+}
+
+struct ReportTrustEvidenceInput<'a> {
+    trust_domain: &'a str,
+    policy_blake3: &'a str,
+    verified_signers: &'a [String],
+    verified_public_key_blake3: &'a [String],
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -160,8 +277,14 @@ pub struct OciRegistryPushReport {
     pub repository: String,
     pub reference: String,
     pub metadata_reference: String,
+    pub signature_reference: String,
     pub manifest_digest: String,
     pub metadata_manifest_digest: String,
+    pub signature_manifest_digest: String,
+    pub trust_domain: String,
+    pub policy_blake3: String,
+    pub verified_signers: Vec<String>,
+    pub verified_public_key_blake3: Vec<String>,
     pub layout_blake3: String,
     pub projection_blake3: String,
     pub export_receipt_blake3: String,
@@ -183,10 +306,17 @@ pub struct OciRegistryPullReport {
     pub repository: String,
     pub reference: String,
     pub metadata_reference: String,
+    pub signature_reference: String,
     pub expected_manifest_digest: String,
     pub resolved_manifest_digest: String,
     pub expected_metadata_manifest_digest: String,
     pub resolved_metadata_manifest_digest: String,
+    pub expected_signature_manifest_digest: String,
+    pub resolved_signature_manifest_digest: String,
+    pub trust_domain: String,
+    pub policy_blake3: String,
+    pub verified_signers: Vec<String>,
+    pub verified_public_key_blake3: Vec<String>,
     pub layout_blake3: String,
     pub projection_blake3: String,
     pub downloaded_blobs: u32,
@@ -202,6 +332,7 @@ pub struct OciRegistryPullReport {
 pub struct PushReportFacts<'a> {
     pub target: &'a RegistryTarget,
     pub plan: &'a RegistryPushPlan,
+    pub signature_plan: &'a RegistrySignaturePlan,
     pub uploaded_blobs: u32,
     pub reused_blobs: u32,
     pub transferred_bytes: u64,
@@ -213,6 +344,9 @@ pub struct PullReportFacts<'a> {
     pub plan: &'a RegistryPullPlan,
     pub expected_manifest_digest: &'a str,
     pub expected_metadata_manifest_digest: &'a str,
+    pub expected_signature_manifest_digest: &'a str,
+    pub signature_manifest_descriptor: &'a OciDescriptor,
+    pub trust_verification: &'a RegistryTrustVerification,
     pub downloaded_blobs: u32,
     pub downloaded_bytes: u64,
     pub credential_mode: &'a str,
@@ -289,16 +423,20 @@ pub fn validate_registry_target(input: RegistryTargetInput<'_>) -> Result<Regist
         return Err("registry reference is not a bounded OCI tag".to_string());
     }
     let metadata_reference = format!("{}{METADATA_REFERENCE_SUFFIX}", input.reference);
-    if !tag_is_valid(&metadata_reference) {
-        return Err("registry reference leaves no room for the Mantle metadata suffix".to_string());
+    let signature_reference = format!("{}{SIGNATURE_REFERENCE_SUFFIX}", input.reference);
+    if !tag_is_valid(&metadata_reference) || !tag_is_valid(&signature_reference) {
+        return Err("registry reference leaves no room for Mantle companion suffixes".to_string());
     }
     assert_ne!(input.reference, metadata_reference, "metadata reference must be distinct");
+    assert_ne!(input.reference, signature_reference, "signature reference must be distinct");
     assert!(metadata_reference.ends_with(METADATA_REFERENCE_SUFFIX), "metadata suffix must be preserved");
+    assert!(signature_reference.ends_with(SIGNATURE_REFERENCE_SUFFIX), "signature suffix must be preserved");
     Ok(RegistryTarget {
         registry,
         repository,
         reference: input.reference.to_string(),
         metadata_reference,
+        signature_reference,
     })
 }
 
@@ -428,6 +566,254 @@ fn canonical_json<T: Serialize>(value: &T) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+fn bounded_identifier(value: &str, bytes_max: usize) -> bool {
+    if value.is_empty() || value.len() > bytes_max {
+        return false;
+    }
+    value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+}
+
+fn domain_blake3(domain: &str, bytes: &[u8]) -> String {
+    assert!(!domain.is_empty(), "BLAKE3 domain must be explicit");
+    assert!(!bytes.is_empty(), "BLAKE3 input must not be empty");
+    let mut hasher = blake3::Hasher::new_derive_key(domain);
+    hasher.update(bytes);
+    hasher.finalize().to_hex().to_string()
+}
+
+pub fn registry_public_key_blake3(key: &VerifyingKey) -> String {
+    let encoded = key.to_string();
+    let separator_index = key.name().len();
+    assert_eq!(encoded.as_bytes().get(separator_index), Some(&b':'));
+    let key_material = &encoded[separator_index.saturating_add(1)..];
+    let digest = domain_blake3(PUBLIC_KEY_DIGEST_DOMAIN, key_material.as_bytes());
+    assert!(is_blake3_hex(&digest), "public-key identity must be BLAKE3");
+    assert!(!key.name().is_empty(), "public key must retain a signer name");
+    digest
+}
+
+fn normalize_unique(values: &mut [String], label: &str) -> Result<(), String> {
+    if values.is_empty() || values.len() > TRUST_POLICY_ENTRY_COUNT_MAX {
+        return Err(format!("registry trust policy {label} count is outside the named bound"));
+    }
+    values.sort();
+    if values.windows(2).any(|pair| pair[0] == pair[1]) {
+        return Err(format!("registry trust policy {label} contains duplicates"));
+    }
+    assert!(!values.is_empty(), "normalized policy collection must not be empty");
+    assert!(values.len() <= TRUST_POLICY_ENTRY_COUNT_MAX, "normalized policy collection must stay bounded");
+    Ok(())
+}
+
+fn normalize_policy(mut policy: RegistryTrustPolicy) -> Result<RegistryTrustPolicy, String> {
+    normalize_unique(&mut policy.allowed_repositories, "allowed repositories")?;
+    normalize_unique(&mut policy.trusted_public_keys, "trusted public keys")?;
+    normalize_unique(&mut policy.required_signers, "required signers")?;
+    policy.revoked_public_key_blake3.sort();
+    if policy.revoked_public_key_blake3.len() > TRUST_POLICY_ENTRY_COUNT_MAX
+        || policy.revoked_public_key_blake3.windows(2).any(|pair| pair[0] == pair[1])
+    {
+        return Err("registry trust policy revoked-key identities are duplicated or exceed the named bound".to_string());
+    }
+    assert!(policy.allowed_repositories.windows(2).all(|pair| pair[0] < pair[1]));
+    assert!(policy.trusted_public_keys.windows(2).all(|pair| pair[0] < pair[1]));
+    Ok(policy)
+}
+
+fn parse_policy_keys(policy: &RegistryTrustPolicy) -> Result<Vec<VerifyingKey>, String> {
+    let mut keys = Vec::with_capacity(policy.trusted_public_keys.len());
+    for encoded in &policy.trusted_public_keys {
+        let key = VerifyingKey::parse(encoded)
+            .map_err(|error| format!("invalid OCI registry trusted public key '{encoded}': {error}"))?;
+        if !bounded_identifier(key.name(), SIGNER_NAME_BYTES_MAX) {
+            return Err("OCI registry trusted public key has an invalid signer name".to_string());
+        }
+        keys.push(key);
+    }
+    assert_eq!(keys.len(), policy.trusted_public_keys.len());
+    assert!(!keys.is_empty(), "validated trust policy must retain public keys");
+    Ok(keys)
+}
+
+fn validate_policy_shape(policy: &RegistryTrustPolicy) -> Result<(), String> {
+    if policy.schema != OCI_REGISTRY_TRUST_POLICY_SCHEMA || policy.schema_version != TRUST_POLICY_SCHEMA_VERSION {
+        return Err("OCI registry trust policy schema is unsupported".to_string());
+    }
+    if !bounded_identifier(&policy.trust_domain, TRUST_DOMAIN_BYTES_MAX) {
+        return Err("OCI registry trust policy domain is invalid".to_string());
+    }
+    if !policy.allowed_repositories.iter().all(|value| validate_repository(value).is_ok()) {
+        return Err("OCI registry trust policy contains an invalid repository".to_string());
+    }
+    if !policy.required_signers.iter().all(|value| bounded_identifier(value, SIGNER_NAME_BYTES_MAX)) {
+        return Err("OCI registry trust policy contains an invalid required signer".to_string());
+    }
+    if !policy.revoked_public_key_blake3.iter().all(|value| is_blake3_hex(value)) {
+        return Err("OCI registry trust policy contains an invalid revoked-key BLAKE3".to_string());
+    }
+    Ok(())
+}
+
+fn validate_policy_authority(policy: &RegistryTrustPolicy, keys: &[VerifyingKey]) -> Result<(), String> {
+    let key_digests = keys.iter().map(registry_public_key_blake3).collect::<BTreeSet<_>>();
+    if key_digests.len() != keys.len() {
+        return Err("OCI registry trust policy repeats one full public-key identity".to_string());
+    }
+    let revoked = policy.revoked_public_key_blake3.iter().collect::<BTreeSet<_>>();
+    let active = keys.iter().filter(|key| !revoked.contains(&registry_public_key_blake3(key))).collect::<Vec<_>>();
+    let minimum = usize::from(policy.minimum_signatures);
+    if minimum == 0 || minimum > active.len() || minimum > SIGNATURE_COUNT_MAX {
+        return Err(
+            "OCI registry trust policy minimum signature count is unsatisfied or outside the named bound".to_string()
+        );
+    }
+    for signer in &policy.required_signers {
+        if !active.iter().any(|key| key.name() == signer) {
+            return Err(format!("OCI registry trust policy required signer has no active trusted key: {signer}"));
+        }
+    }
+    assert!(active.len() <= TRUST_POLICY_ENTRY_COUNT_MAX);
+    assert!(minimum <= active.len());
+    Ok(())
+}
+
+pub fn validate_registry_trust_policy(policy: RegistryTrustPolicy) -> Result<ValidatedRegistryTrustPolicy, String> {
+    let policy = normalize_policy(policy)?;
+    validate_policy_shape(&policy)?;
+    let verifying_keys = parse_policy_keys(&policy)?;
+    validate_policy_authority(&policy, &verifying_keys)?;
+    let canonical = canonical_json(&policy)?;
+    let policy_blake3 = domain_blake3(TRUST_POLICY_DIGEST_DOMAIN, &canonical);
+    assert!(is_blake3_hex(&policy_blake3), "policy identity must be BLAKE3");
+    assert!(!verifying_keys.is_empty(), "validated policy must retain trust roots");
+    Ok(ValidatedRegistryTrustPolicy {
+        policy,
+        policy_blake3,
+        verifying_keys,
+    })
+}
+
+pub fn require_policy_repository(policy: &ValidatedRegistryTrustPolicy, repository: &str) -> Result<(), String> {
+    let repository = validate_repository(repository)?;
+    if policy.policy.allowed_repositories.binary_search(&repository).is_err() {
+        return Err(format!("OCI registry trust policy does not authorize repository: {repository}"));
+    }
+    assert!(!policy.policy.trust_domain.is_empty());
+    assert!(!policy.policy.allowed_repositories.is_empty());
+    Ok(())
+}
+
+fn trust_statement(plan: &RegistryPushPlan, policy: &ValidatedRegistryTrustPolicy) -> RegistryTrustStatement {
+    assert!(is_sha256_digest(&plan.main_manifest_descriptor.digest));
+    assert!(is_sha256_digest(&plan.metadata_manifest_descriptor.digest));
+    RegistryTrustStatement {
+        schema: OCI_REGISTRY_TRUST_STATEMENT_SCHEMA.to_string(),
+        schema_version: TRUST_STATEMENT_SCHEMA_VERSION,
+        signature_suite: SIGNATURE_SUITE.to_string(),
+        trust_domain: policy.policy.trust_domain.clone(),
+        manifest_digest: plan.main_manifest_descriptor.digest.clone(),
+        metadata_manifest_digest: plan.metadata_manifest_descriptor.digest.clone(),
+    }
+}
+
+fn verify_statement(
+    statement: &RegistryTrustStatement,
+    expectation: TrustStatementExpectation<'_>,
+) -> Result<(), String> {
+    if statement.schema != OCI_REGISTRY_TRUST_STATEMENT_SCHEMA
+        || statement.schema_version != TRUST_STATEMENT_SCHEMA_VERSION
+        || statement.signature_suite != SIGNATURE_SUITE
+    {
+        return Err("OCI registry signed statement schema or signature suite is unsupported".to_string());
+    }
+    if statement.trust_domain != expectation.policy.policy.trust_domain
+        || statement.manifest_digest != expectation.manifest_digest
+        || statement.metadata_manifest_digest != expectation.metadata_manifest_digest
+    {
+        return Err("OCI registry signed statement domain or immutable digest pair drifted".to_string());
+    }
+    if !is_sha256_digest(expectation.manifest_digest) || !is_sha256_digest(expectation.metadata_manifest_digest) {
+        return Err("OCI registry signed statement requires SHA-256 manifest identities".to_string());
+    }
+    assert!(bounded_identifier(&statement.trust_domain, TRUST_DOMAIN_BYTES_MAX));
+    assert_eq!(statement.signature_suite, SIGNATURE_SUITE);
+    Ok(())
+}
+
+fn detached_signatures(
+    statement_bytes: &[u8],
+    signing_keys: &[crunch_build::KeyPair],
+) -> Result<Vec<RegistryDetachedSignature>, String> {
+    if signing_keys.is_empty() || signing_keys.len() > SIGNATURE_COUNT_MAX {
+        return Err("OCI registry signing-key count is outside the named bound".to_string());
+    }
+    let mut signatures = signing_keys
+        .iter()
+        .map(|keypair| {
+            let signature = keypair.signing_key.sign(statement_bytes).to_owned().to_string();
+            RegistryDetachedSignature {
+                signer: keypair.verifying_key.name().to_string(),
+                signature,
+            }
+        })
+        .collect::<Vec<_>>();
+    signatures.sort_by(|left, right| (&left.signer, &left.signature).cmp(&(&right.signer, &right.signature)));
+    if signatures.windows(2).any(|pair| pair[0] == pair[1]) {
+        return Err("OCI registry signature document contains duplicate signatures".to_string());
+    }
+    assert!(!signatures.is_empty());
+    assert!(signatures.len() <= SIGNATURE_COUNT_MAX);
+    Ok(signatures)
+}
+
+fn verify_detached_signatures(
+    statement_bytes: &[u8],
+    signatures: &[RegistryDetachedSignature],
+    policy: &ValidatedRegistryTrustPolicy,
+) -> Result<RegistryTrustVerification, String> {
+    if signatures.is_empty() || signatures.len() > SIGNATURE_COUNT_MAX {
+        return Err("OCI registry signature count is outside the named bound".to_string());
+    }
+    let statement =
+        std::str::from_utf8(statement_bytes).map_err(|_| "OCI registry signed statement is not UTF-8".to_string())?;
+    let revoked = policy.policy.revoked_public_key_blake3.iter().collect::<BTreeSet<_>>();
+    let mut signers = BTreeSet::new();
+    let mut key_digests = BTreeSet::new();
+    for detached in signatures {
+        let signature = SignatureRef::parse(&detached.signature)
+            .map_err(|error| format!("invalid OCI registry detached signature: {error}"))?;
+        if *signature.name() != detached.signer.as_str() {
+            return Err("OCI registry detached signature signer label drifted".to_string());
+        }
+        let matching = policy.verifying_keys.iter().filter(|key| key.name() == detached.signer);
+        let mut is_verified = false;
+        for key in matching {
+            let digest = registry_public_key_blake3(key);
+            if !revoked.contains(&digest) && key.verify(statement, &signature) {
+                is_verified = true;
+                signers.insert(detached.signer.clone());
+                key_digests.insert(digest);
+            }
+        }
+        if !is_verified {
+            return Err(format!("OCI registry signature is not trusted for signer: {}", detached.signer));
+        }
+    }
+    let minimum = usize::from(policy.policy.minimum_signatures);
+    if key_digests.len() < minimum || !policy.policy.required_signers.iter().all(|required| signers.contains(required))
+    {
+        return Err("OCI registry signatures do not satisfy required signers or distinct-key threshold".to_string());
+    }
+    assert!(key_digests.len() >= minimum);
+    assert!(!signers.is_empty());
+    Ok(RegistryTrustVerification {
+        trust_domain: policy.policy.trust_domain.clone(),
+        policy_blake3: policy.policy_blake3.clone(),
+        verified_signers: signers.into_iter().collect(),
+        verified_public_key_blake3: key_digests.into_iter().collect(),
+    })
+}
+
 fn required_non_claims() -> Vec<String> {
     let mut output = REQUIRED_NON_CLAIMS.iter().map(ToString::to_string).collect::<Vec<_>>();
     output.sort();
@@ -532,6 +918,157 @@ fn build_metadata_manifest(
     assert_eq!(manifest.blobs.len(), METADATA_BLOB_COUNT, "metadata manifest blob count must stay fixed");
     assert_eq!(manifest.subject.digest, input.main.digest, "metadata subject must bind the image manifest");
     Ok((manifest, bytes, manifest_descriptor))
+}
+
+fn signature_document_descriptor(bytes: &[u8]) -> Result<OciDescriptor, String> {
+    let mut output = descriptor(MANTLE_SIGNATURE_DOCUMENT_MEDIA_TYPE, bytes)?;
+    output
+        .annotations
+        .insert(SIGNATURE_ROLE_ANNOTATION.to_string(), SIGNATURE_DOCUMENT_ROLE.to_string());
+    assert_eq!(output.annotations.len(), 1);
+    assert_eq!(output.annotations.get(SIGNATURE_ROLE_ANNOTATION).map(String::as_str), Some(SIGNATURE_DOCUMENT_ROLE));
+    Ok(output)
+}
+
+fn build_signature_manifest(
+    input: SignatureManifestInput<'_>,
+) -> Result<(OciArtifactManifest, Vec<u8>, OciDescriptor), String> {
+    if !is_sha256_digest(input.metadata_digest) || !bounded_identifier(input.trust_domain, TRUST_DOMAIN_BYTES_MAX) {
+        return Err("OCI registry signature artifact input is invalid".to_string());
+    }
+    let manifest = OciArtifactManifest {
+        schema_version: OCI_DOCUMENT_SCHEMA_VERSION,
+        media_type: OCI_ARTIFACT_MANIFEST_MEDIA_TYPE.to_string(),
+        artifact_type: MANTLE_SIGNATURE_ARTIFACT_TYPE.to_string(),
+        blobs: vec![input.document_descriptor.clone()],
+        subject: input.main.clone(),
+        annotations: BTreeMap::from([
+            (SIGNATURE_METADATA_DIGEST_ANNOTATION.to_string(), input.metadata_digest.to_string()),
+            (SIGNATURE_TRUST_DOMAIN_ANNOTATION.to_string(), input.trust_domain.to_string()),
+        ]),
+    };
+    let bytes = canonical_json(&manifest)?;
+    let descriptor = descriptor(OCI_ARTIFACT_MANIFEST_MEDIA_TYPE, &bytes)?;
+    assert_eq!(manifest.blobs.len(), SIGNATURE_BLOB_COUNT);
+    assert_eq!(manifest.subject.digest, input.main.digest);
+    Ok((manifest, bytes, descriptor))
+}
+
+pub fn verify_registry_signature_document(
+    input: RegistrySignatureVerificationInput<'_>,
+) -> Result<(RegistrySignatureDocument, RegistryTrustVerification), String> {
+    let document: RegistrySignatureDocument = serde_json::from_slice(input.bytes)
+        .map_err(|error| format!("parsing OCI registry signature document: {error}"))?;
+    if document.schema != OCI_REGISTRY_SIGNATURE_DOCUMENT_SCHEMA
+        || document.schema_version != SIGNATURE_DOCUMENT_SCHEMA_VERSION
+        || canonical_json(&document)? != input.bytes
+    {
+        return Err("OCI registry signature document schema or canonical bytes are invalid".to_string());
+    }
+    verify_statement(&document.statement, TrustStatementExpectation {
+        manifest_digest: input.manifest_digest,
+        metadata_manifest_digest: input.metadata_manifest_digest,
+        policy: input.policy,
+    })?;
+    if document
+        .signatures
+        .windows(2)
+        .any(|pair| (&pair[0].signer, &pair[0].signature) >= (&pair[1].signer, &pair[1].signature))
+    {
+        return Err("OCI registry detached signatures are duplicated or not canonical".to_string());
+    }
+    let statement_bytes = canonical_json(&document.statement)?;
+    let verification = verify_detached_signatures(&statement_bytes, &document.signatures, input.policy)?;
+    assert_eq!(verification.trust_domain, document.statement.trust_domain);
+    assert!(is_blake3_hex(&verification.policy_blake3));
+    Ok((document, verification))
+}
+
+pub fn build_registry_signature_plan(
+    plan: &RegistryPushPlan,
+    policy: &ValidatedRegistryTrustPolicy,
+    signing_keys: &[crunch_build::KeyPair],
+) -> Result<RegistrySignaturePlan, String> {
+    let statement = trust_statement(plan, policy);
+    let statement_bytes = canonical_json(&statement)?;
+    let signatures = detached_signatures(&statement_bytes, signing_keys)?;
+    let document = RegistrySignatureDocument {
+        schema: OCI_REGISTRY_SIGNATURE_DOCUMENT_SCHEMA.to_string(),
+        schema_version: SIGNATURE_DOCUMENT_SCHEMA_VERSION,
+        statement,
+        signatures,
+    };
+    let document_bytes = canonical_json(&document)?;
+    let (_, verification) = verify_registry_signature_document(RegistrySignatureVerificationInput {
+        bytes: &document_bytes,
+        manifest_digest: &plan.main_manifest_descriptor.digest,
+        metadata_manifest_digest: &plan.metadata_manifest_descriptor.digest,
+        policy,
+    })?;
+    let document_descriptor = signature_document_descriptor(&document_bytes)?;
+    let (manifest, manifest_bytes, manifest_descriptor) = build_signature_manifest(SignatureManifestInput {
+        main: &plan.main_manifest_descriptor,
+        metadata_digest: &plan.metadata_manifest_descriptor.digest,
+        trust_domain: &policy.policy.trust_domain,
+        document_descriptor: &document_descriptor,
+    })?;
+    assert_eq!(verification.policy_blake3, policy.policy_blake3);
+    assert_eq!(manifest.blobs[0].digest, document_descriptor.digest);
+    Ok(RegistrySignaturePlan {
+        document,
+        document_descriptor,
+        document_bytes,
+        manifest,
+        manifest_descriptor,
+        manifest_bytes,
+        verification,
+    })
+}
+
+pub fn inspect_signature_manifest(
+    bytes: &[u8],
+    expected_digest: &str,
+    main: &OciDescriptor,
+    metadata_digest: &str,
+    policy: &ValidatedRegistryTrustPolicy,
+) -> Result<(OciArtifactManifest, OciDescriptor, OciDescriptor), String> {
+    if sha256_digest(bytes) != expected_digest {
+        return Err("Mantle signature manifest digest mismatch".to_string());
+    }
+    let manifest: OciArtifactManifest =
+        serde_json::from_slice(bytes).map_err(|error| format!("parsing Mantle signature manifest: {error}"))?;
+    let is_subject_match = manifest.subject.digest == main.digest
+        && manifest.subject.size == main.size
+        && manifest.subject.media_type == main.media_type;
+    let is_annotation_set_valid = manifest.annotations.len() == 2
+        && manifest.annotations.get(SIGNATURE_METADATA_DIGEST_ANNOTATION).map(String::as_str) == Some(metadata_digest)
+        && manifest.annotations.get(SIGNATURE_TRUST_DOMAIN_ANNOTATION).map(String::as_str)
+            == Some(policy.policy.trust_domain.as_str());
+    let is_manifest_identity_valid = manifest.schema_version == OCI_DOCUMENT_SCHEMA_VERSION
+        && manifest.media_type == OCI_ARTIFACT_MANIFEST_MEDIA_TYPE
+        && manifest.artifact_type == MANTLE_SIGNATURE_ARTIFACT_TYPE;
+    if !is_manifest_identity_valid {
+        return Err("Mantle signature manifest identity is invalid".to_string());
+    }
+    if !is_subject_match || !is_annotation_set_valid {
+        return Err("Mantle signature manifest subject or annotations are invalid".to_string());
+    }
+    if manifest.blobs.len() != SIGNATURE_BLOB_COUNT {
+        return Err("Mantle signature manifest must contain exactly one signature document".to_string());
+    }
+    let document = manifest.blobs[0].clone();
+    let is_document_identity_valid = document.media_type == MANTLE_SIGNATURE_DOCUMENT_MEDIA_TYPE
+        && document.size > 0
+        && is_sha256_digest(&document.digest);
+    let is_document_role_valid = document.annotations.len() == 1
+        && document.annotations.get(SIGNATURE_ROLE_ANNOTATION).map(String::as_str) == Some(SIGNATURE_DOCUMENT_ROLE);
+    if !is_document_identity_valid || !is_document_role_valid {
+        return Err("Mantle signature document descriptor is invalid".to_string());
+    }
+    let manifest_descriptor = descriptor(OCI_ARTIFACT_MANIFEST_MEDIA_TYPE, bytes)?;
+    assert_eq!(manifest_descriptor.digest, expected_digest);
+    assert_eq!(manifest.blobs.len(), SIGNATURE_BLOB_COUNT);
+    Ok((manifest, manifest_descriptor, document))
 }
 
 fn insert_blob(blobs: &mut BTreeMap<String, Vec<u8>>, digest: String, bytes: Vec<u8>) -> Result<(), String> {
@@ -813,6 +1350,33 @@ fn receipt_hash<T: Serialize>(domain: &str, value: &T) -> Result<String, String>
     Ok(digest)
 }
 
+fn verify_report_trust_evidence(input: ReportTrustEvidenceInput<'_>) -> Result<(), String> {
+    if !bounded_identifier(input.trust_domain, TRUST_DOMAIN_BYTES_MAX) || !is_blake3_hex(input.policy_blake3) {
+        return Err("registry report trust domain or policy identity is invalid".to_string());
+    }
+    if input.verified_signers.is_empty() || input.verified_signers.len() > SIGNATURE_COUNT_MAX {
+        return Err("registry report verified signer count is invalid".to_string());
+    }
+    if !input.verified_signers.windows(2).all(|pair| pair[0] < pair[1]) {
+        return Err("registry report verified signers are duplicated or unsorted".to_string());
+    }
+    if !input.verified_signers.iter().all(|value| bounded_identifier(value, SIGNER_NAME_BYTES_MAX)) {
+        return Err("registry report verified signer name is invalid".to_string());
+    }
+    if input.verified_public_key_blake3.is_empty() || input.verified_public_key_blake3.len() > SIGNATURE_COUNT_MAX {
+        return Err("registry report verified public-key count is invalid".to_string());
+    }
+    if !input.verified_public_key_blake3.windows(2).all(|pair| pair[0] < pair[1]) {
+        return Err("registry report verified public-key identities are duplicated or unsorted".to_string());
+    }
+    if !input.verified_public_key_blake3.iter().all(|value| is_blake3_hex(value)) {
+        return Err("registry report verified public-key identity is invalid".to_string());
+    }
+    assert!(!input.verified_signers.is_empty());
+    assert!(!input.verified_public_key_blake3.is_empty());
+    Ok(())
+}
+
 pub fn build_push_report(facts: PushReportFacts<'_>) -> Result<OciRegistryPushReport, String> {
     if !validate_credential_mode(facts.credential_mode) {
         return Err("registry push credential mode is unsupported".to_string());
@@ -828,8 +1392,14 @@ pub fn build_push_report(facts: PushReportFacts<'_>) -> Result<OciRegistryPushRe
         repository: facts.target.repository.clone(),
         reference: facts.target.reference.clone(),
         metadata_reference: facts.target.metadata_reference.clone(),
+        signature_reference: facts.target.signature_reference.clone(),
         manifest_digest: facts.plan.main_manifest_descriptor.digest.clone(),
         metadata_manifest_digest: facts.plan.metadata_manifest_descriptor.digest.clone(),
+        signature_manifest_digest: facts.signature_plan.manifest_descriptor.digest.clone(),
+        trust_domain: facts.signature_plan.verification.trust_domain.clone(),
+        policy_blake3: facts.signature_plan.verification.policy_blake3.clone(),
+        verified_signers: facts.signature_plan.verification.verified_signers.clone(),
+        verified_public_key_blake3: facts.signature_plan.verification.verified_public_key_blake3.clone(),
         layout_blake3: facts.plan.layout_blake3.clone(),
         projection_blake3: facts.plan.projection_blake3.clone(),
         export_receipt_blake3: facts.plan.export_receipt_blake3.clone(),
@@ -860,12 +1430,24 @@ pub fn verify_push_report(report: &OciRegistryPushReport) -> Result<(), String> 
         reference: &report.reference,
         allow_http: true,
     })?;
-    if target.metadata_reference != report.metadata_reference || !validate_credential_mode(&report.credential_mode) {
+    if target.metadata_reference != report.metadata_reference
+        || target.signature_reference != report.signature_reference
+        || !validate_credential_mode(&report.credential_mode)
+    {
         return Err("registry push report target or credential mode is invalid".to_string());
     }
-    if !is_sha256_digest(&report.manifest_digest) || !is_sha256_digest(&report.metadata_manifest_digest) {
+    if !is_sha256_digest(&report.manifest_digest)
+        || !is_sha256_digest(&report.metadata_manifest_digest)
+        || !is_sha256_digest(&report.signature_manifest_digest)
+    {
         return Err("registry push report manifest digest is invalid".to_string());
     }
+    verify_report_trust_evidence(ReportTrustEvidenceInput {
+        trust_domain: &report.trust_domain,
+        policy_blake3: &report.policy_blake3,
+        verified_signers: &report.verified_signers,
+        verified_public_key_blake3: &report.verified_public_key_blake3,
+    })?;
     if ![
         &report.layout_blake3,
         &report.projection_blake3,
@@ -916,10 +1498,17 @@ pub fn build_pull_report(facts: PullReportFacts<'_>) -> Result<OciRegistryPullRe
         repository: facts.target.repository.clone(),
         reference: facts.target.reference.clone(),
         metadata_reference: facts.target.metadata_reference.clone(),
+        signature_reference: facts.target.signature_reference.clone(),
         expected_manifest_digest: facts.expected_manifest_digest.to_string(),
         resolved_manifest_digest: facts.plan.main_manifest_descriptor.digest.clone(),
         expected_metadata_manifest_digest: facts.expected_metadata_manifest_digest.to_string(),
         resolved_metadata_manifest_digest: facts.plan.metadata_manifest_descriptor.digest.clone(),
+        expected_signature_manifest_digest: facts.expected_signature_manifest_digest.to_string(),
+        resolved_signature_manifest_digest: facts.signature_manifest_descriptor.digest.clone(),
+        trust_domain: facts.trust_verification.trust_domain.clone(),
+        policy_blake3: facts.trust_verification.policy_blake3.clone(),
+        verified_signers: facts.trust_verification.verified_signers.clone(),
+        verified_public_key_blake3: facts.trust_verification.verified_public_key_blake3.clone(),
         layout_blake3: facts.plan.layout_blake3.clone(),
         projection_blake3: facts.plan.projection_blake3.clone(),
         downloaded_blobs: facts.downloaded_blobs,
@@ -938,43 +1527,27 @@ pub fn build_pull_report(facts: PullReportFacts<'_>) -> Result<OciRegistryPullRe
     Ok(outcome)
 }
 
-pub fn verify_pull_report(report: &OciRegistryPullReport) -> Result<(), String> {
-    if report.schema != OCI_REGISTRY_PULL_REPORT_SCHEMA
-        || report.schema_version != REGISTRY_SCHEMA_VERSION
-        || !report.pulled
-    {
-        return Err("registry pull report schema or status is invalid".to_string());
-    }
-    let target = validate_registry_target(RegistryTargetInput {
-        registry: &report.registry,
-        repository: &report.repository,
-        reference: &report.reference,
-        allow_http: true,
-    })?;
-    if target.metadata_reference != report.metadata_reference || !validate_credential_mode(&report.credential_mode) {
-        return Err("registry pull report target or credential mode is invalid".to_string());
-    }
+fn verify_pull_manifest_bindings(report: &OciRegistryPullReport) -> Result<(), String> {
     if report.expected_manifest_digest != report.resolved_manifest_digest {
         return Err("registry pull report image manifest binding is mutable".to_string());
     }
     if report.expected_metadata_manifest_digest != report.resolved_metadata_manifest_digest {
         return Err("registry pull report metadata manifest binding is mutable".to_string());
     }
-    if !is_sha256_digest(&report.expected_manifest_digest)
-        || !is_sha256_digest(&report.expected_metadata_manifest_digest)
-    {
+    if report.expected_signature_manifest_digest != report.resolved_signature_manifest_digest {
+        return Err("registry pull report signature manifest binding is mutable".to_string());
+    }
+    let is_primary_digest_pair_valid = is_sha256_digest(&report.expected_manifest_digest)
+        && is_sha256_digest(&report.expected_metadata_manifest_digest);
+    if !is_primary_digest_pair_valid || !is_sha256_digest(&report.expected_signature_manifest_digest) {
         return Err("registry pull report immutable manifest binding is invalid".to_string());
     }
-    if ![
-        &report.layout_blake3,
-        &report.projection_blake3,
-        &report.import_receipt_blake3,
-    ]
-    .into_iter()
-    .all(|value| is_blake3_hex(value))
-    {
-        return Err("registry pull report Mantle digest is invalid".to_string());
-    }
+    assert_eq!(report.expected_manifest_digest, report.resolved_manifest_digest);
+    assert_eq!(report.expected_signature_manifest_digest, report.resolved_signature_manifest_digest);
+    Ok(())
+}
+
+fn verify_pull_report_accounting(report: &OciRegistryPullReport) -> Result<(), String> {
     if report.import_state != "admitted" {
         return Err("registry pull report admission state is invalid".to_string());
     }
@@ -990,6 +1563,12 @@ pub fn verify_pull_report(report: &OciRegistryPullReport) -> Result<(), String> 
     if report.non_claims != required_non_claims() {
         return Err("registry pull report non-claims are invalid".to_string());
     }
+    assert!(report.imported_objects > 0);
+    assert!(report.downloaded_bytes > 0);
+    Ok(())
+}
+
+fn verify_pull_report_receipt(report: &OciRegistryPullReport) -> Result<(), String> {
     let mut canonical = report.clone();
     canonical.receipt_blake3.clear();
     if !is_blake3_hex(&report.receipt_blake3)
@@ -997,6 +1576,49 @@ pub fn verify_pull_report(report: &OciRegistryPullReport) -> Result<(), String> 
     {
         return Err("registry pull report receipt BLAKE3 is invalid".to_string());
     }
+    assert!(is_blake3_hex(&report.receipt_blake3));
+    assert!(canonical.receipt_blake3.is_empty());
+    Ok(())
+}
+
+pub fn verify_pull_report(report: &OciRegistryPullReport) -> Result<(), String> {
+    if report.schema != OCI_REGISTRY_PULL_REPORT_SCHEMA
+        || report.schema_version != REGISTRY_SCHEMA_VERSION
+        || !report.pulled
+    {
+        return Err("registry pull report schema or status is invalid".to_string());
+    }
+    let target = validate_registry_target(RegistryTargetInput {
+        registry: &report.registry,
+        repository: &report.repository,
+        reference: &report.reference,
+        allow_http: true,
+    })?;
+    if target.metadata_reference != report.metadata_reference
+        || target.signature_reference != report.signature_reference
+        || !validate_credential_mode(&report.credential_mode)
+    {
+        return Err("registry pull report target or credential mode is invalid".to_string());
+    }
+    verify_pull_manifest_bindings(report)?;
+    verify_report_trust_evidence(ReportTrustEvidenceInput {
+        trust_domain: &report.trust_domain,
+        policy_blake3: &report.policy_blake3,
+        verified_signers: &report.verified_signers,
+        verified_public_key_blake3: &report.verified_public_key_blake3,
+    })?;
+    if ![
+        &report.layout_blake3,
+        &report.projection_blake3,
+        &report.import_receipt_blake3,
+    ]
+    .into_iter()
+    .all(|value| is_blake3_hex(value))
+    {
+        return Err("registry pull report Mantle digest is invalid".to_string());
+    }
+    verify_pull_report_accounting(report)?;
+    verify_pull_report_receipt(report)?;
     assert_eq!(target.repository, report.repository, "verified pull repository must be canonical");
     assert_eq!(
         report.expected_manifest_digest, report.resolved_manifest_digest,
@@ -1014,6 +1636,10 @@ mod tests {
     const UPDATE_FIXTURES_ENV: &str = "MANTLE_UPDATE_OCI_REGISTRY_REPORT_FIXTURES";
     const PUSH_FIXTURE_PATH: &str = "tests/fixtures/kernel-bundle-oci/registry-push-report.json";
     const PULL_FIXTURE_PATH: &str = "tests/fixtures/kernel-bundle-oci/registry-pull-report.json";
+    const TEST_KEYPAIR: &str =
+        "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
+    const SECOND_KEYPAIR: &str =
+        "do.not.use:sGPzxuK5WvWPraytx+6sjtaff866sYlfvErE6x0hFEhy5eqe7OVZ8ZMqZ/ME/HaRdKGNGvJkyGKXYTaeA6lR3A==";
 
     fn sha(byte: char) -> String {
         format!("sha256:{}", std::iter::repeat_n(byte, SHA256_HEX_LENGTH).collect::<String>())
@@ -1031,6 +1657,24 @@ mod tests {
             allow_http: false,
         })
         .expect("target should validate")
+    }
+
+    fn test_keypair(encoded: &str) -> crunch_build::KeyPair {
+        crunch_build::load_keypair(encoded).expect("test registry keypair should parse")
+    }
+
+    fn trust_policy(keypairs: &[crunch_build::KeyPair], minimum_signatures: u16) -> ValidatedRegistryTrustPolicy {
+        let policy = RegistryTrustPolicy {
+            schema: OCI_REGISTRY_TRUST_POLICY_SCHEMA.to_string(),
+            schema_version: TRUST_POLICY_SCHEMA_VERSION,
+            trust_domain: "onix-kernel-bundle".to_string(),
+            allowed_repositories: vec!["onix/kernel-bundle".to_string()],
+            trusted_public_keys: keypairs.iter().map(|keypair| keypair.verifying_key.to_string()).collect(),
+            required_signers: keypairs.iter().map(|keypair| keypair.verifying_key.name().to_string()).collect(),
+            minimum_signatures,
+            revoked_public_key_blake3: Vec::new(),
+        };
+        validate_registry_trust_policy(policy).expect("test registry trust policy should validate")
     }
 
     fn push_plan() -> RegistryPushPlan {
@@ -1066,6 +1710,7 @@ mod tests {
         let secure = target();
         assert_eq!(secure.registry, "https://registry.example.test");
         assert_eq!(secure.metadata_reference, "reviewed.mantle-metadata");
+        assert_eq!(secure.signature_reference, "reviewed.mantle-signature");
         let local = validate_registry_target(RegistryTargetInput {
             registry: "http://127.0.0.1:5000/",
             repository: "onix/kernel-bundle",
@@ -1075,6 +1720,7 @@ mod tests {
         .expect("explicit local HTTP should validate");
         assert_eq!(local.registry, "http://127.0.0.1:5000");
         assert_eq!(local.metadata_reference, "gallery_1.mantle-metadata");
+        assert_eq!(local.signature_reference, "gallery_1.mantle-signature");
     }
 
     #[test]
@@ -1162,9 +1808,13 @@ mod tests {
     fn push_report_binds_accounting_and_rejects_receipt_tamper() {
         let target = target();
         let plan = push_plan();
+        let keys = vec![test_keypair(TEST_KEYPAIR)];
+        let policy = trust_policy(&keys, 1);
+        let signature_plan = build_registry_signature_plan(&plan, &policy, &keys).unwrap();
         let report = build_push_report(PushReportFacts {
             target: &target,
             plan: &plan,
+            signature_plan: &signature_plan,
             uploaded_blobs: 2,
             reused_blobs: 3,
             transferred_bytes: 42,
@@ -1193,10 +1843,17 @@ mod tests {
             repository: target.repository.clone(),
             reference: target.reference.clone(),
             metadata_reference: target.metadata_reference.clone(),
+            signature_reference: target.signature_reference.clone(),
             expected_manifest_digest: plan.main_manifest_descriptor.digest.clone(),
             resolved_manifest_digest: plan.main_manifest_descriptor.digest,
             expected_metadata_manifest_digest: plan.metadata_manifest_descriptor.digest.clone(),
             resolved_metadata_manifest_digest: plan.metadata_manifest_descriptor.digest,
+            expected_signature_manifest_digest: sha('c'),
+            resolved_signature_manifest_digest: sha('c'),
+            trust_domain: "onix-kernel-bundle".to_string(),
+            policy_blake3: b3('5'),
+            verified_signers: vec!["cache.example.com-1".to_string()],
+            verified_public_key_blake3: vec![b3('6')],
             layout_blake3: plan.layout_blake3,
             projection_blake3: plan.projection_blake3,
             downloaded_blobs: 4,
@@ -1217,6 +1874,158 @@ mod tests {
         assert!(verify_pull_report(&report).is_err());
     }
 
+    #[test]
+    fn signature_plan_satisfies_two_key_policy_and_binds_both_manifest_digests() {
+        let plan = push_plan();
+        let keys = vec![test_keypair(TEST_KEYPAIR), test_keypair(SECOND_KEYPAIR)];
+        let policy = trust_policy(&keys, 2);
+        let signature_plan = build_registry_signature_plan(&plan, &policy, &keys).unwrap();
+        let (_, verification) = verify_registry_signature_document(RegistrySignatureVerificationInput {
+            bytes: &signature_plan.document_bytes,
+            manifest_digest: &plan.main_manifest_descriptor.digest,
+            metadata_manifest_digest: &plan.metadata_manifest_descriptor.digest,
+            policy: &policy,
+        })
+        .unwrap();
+        assert_eq!(verification.verified_signers.len(), 2);
+        assert_eq!(verification.verified_public_key_blake3.len(), 2);
+        assert_eq!(signature_plan.manifest.subject, plan.main_manifest_descriptor);
+        assert_eq!(
+            signature_plan.manifest.annotations.get(SIGNATURE_METADATA_DIGEST_ANNOTATION),
+            Some(&plan.metadata_manifest_descriptor.digest)
+        );
+        assert!(
+            verify_registry_signature_document(RegistrySignatureVerificationInput {
+                bytes: &signature_plan.document_bytes,
+                manifest_digest: &sha('f'),
+                metadata_manifest_digest: &plan.metadata_manifest_descriptor.digest,
+                policy: &policy,
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn same_name_key_rotation_counts_distinct_keys_without_inflating_required_signers() {
+        let plan = push_plan();
+        let (_, second_material) = SECOND_KEYPAIR.split_once(':').unwrap();
+        let rotated = format!("cache.example.com-1:{second_material}");
+        let keys = vec![test_keypair(TEST_KEYPAIR), test_keypair(&rotated)];
+        let policy = validate_registry_trust_policy(RegistryTrustPolicy {
+            schema: OCI_REGISTRY_TRUST_POLICY_SCHEMA.to_string(),
+            schema_version: TRUST_POLICY_SCHEMA_VERSION,
+            trust_domain: "onix-kernel-bundle".to_string(),
+            allowed_repositories: vec!["onix/kernel-bundle".to_string()],
+            trusted_public_keys: keys.iter().map(|keypair| keypair.verifying_key.to_string()).collect(),
+            required_signers: vec!["cache.example.com-1".to_string()],
+            minimum_signatures: 2,
+            revoked_public_key_blake3: Vec::new(),
+        })
+        .unwrap();
+        let signature_plan = build_registry_signature_plan(&plan, &policy, &keys).unwrap();
+        assert_eq!(signature_plan.verification.verified_signers, vec!["cache.example.com-1"]);
+        assert_eq!(signature_plan.verification.verified_public_key_blake3.len(), 2);
+        assert!(build_registry_signature_plan(&plan, &policy, &keys[..1]).is_err());
+
+        let (_, duplicate_material) = TEST_KEYPAIR.split_once(':').unwrap();
+        let duplicate_key = test_keypair(&format!("rotation-alias:{duplicate_material}"));
+        let duplicate_policy = RegistryTrustPolicy {
+            schema: OCI_REGISTRY_TRUST_POLICY_SCHEMA.to_string(),
+            schema_version: TRUST_POLICY_SCHEMA_VERSION,
+            trust_domain: "onix-kernel-bundle".to_string(),
+            allowed_repositories: vec!["onix/kernel-bundle".to_string()],
+            trusted_public_keys: vec![
+                keys[0].verifying_key.to_string(),
+                duplicate_key.verifying_key.to_string(),
+            ],
+            required_signers: vec!["cache.example.com-1".to_string(), "rotation-alias".to_string()],
+            minimum_signatures: 2,
+            revoked_public_key_blake3: Vec::new(),
+        };
+        assert!(validate_registry_trust_policy(duplicate_policy).is_err());
+    }
+
+    #[test]
+    fn signature_verification_rejects_unknown_revoked_domain_and_duplicate_evidence() {
+        let plan = push_plan();
+        let signer = vec![test_keypair(TEST_KEYPAIR)];
+        let policy = trust_policy(&signer, 1);
+        let signature_plan = build_registry_signature_plan(&plan, &policy, &signer).unwrap();
+
+        let unknown = vec![test_keypair(SECOND_KEYPAIR)];
+        let unknown_policy = trust_policy(&unknown, 1);
+        assert!(
+            verify_registry_signature_document(RegistrySignatureVerificationInput {
+                bytes: &signature_plan.document_bytes,
+                manifest_digest: &plan.main_manifest_descriptor.digest,
+                metadata_manifest_digest: &plan.metadata_manifest_descriptor.digest,
+                policy: &unknown_policy,
+            })
+            .is_err()
+        );
+
+        let mut revoked_policy = policy.policy.clone();
+        revoked_policy.revoked_public_key_blake3 = vec![registry_public_key_blake3(&signer[0].verifying_key)];
+        assert!(validate_registry_trust_policy(revoked_policy).is_err());
+
+        let mut wrong_domain = signature_plan.document.clone();
+        wrong_domain.statement.trust_domain = "another-domain".to_string();
+        let wrong_domain_bytes = canonical_json(&wrong_domain).unwrap();
+        assert!(
+            verify_registry_signature_document(RegistrySignatureVerificationInput {
+                bytes: &wrong_domain_bytes,
+                manifest_digest: &plan.main_manifest_descriptor.digest,
+                metadata_manifest_digest: &plan.metadata_manifest_descriptor.digest,
+                policy: &policy,
+            })
+            .is_err()
+        );
+
+        let mut duplicate = signature_plan.document;
+        duplicate.signatures.push(duplicate.signatures[0].clone());
+        let duplicate_bytes = canonical_json(&duplicate).unwrap();
+        assert!(
+            verify_registry_signature_document(RegistrySignatureVerificationInput {
+                bytes: &duplicate_bytes,
+                manifest_digest: &plan.main_manifest_descriptor.digest,
+                metadata_manifest_digest: &plan.metadata_manifest_descriptor.digest,
+                policy: &policy,
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn signature_manifest_rejects_subject_metadata_and_domain_drift() {
+        let plan = push_plan();
+        let keys = vec![test_keypair(TEST_KEYPAIR)];
+        let policy = trust_policy(&keys, 1);
+        let signature_plan = build_registry_signature_plan(&plan, &policy, &keys).unwrap();
+        inspect_signature_manifest(
+            &signature_plan.manifest_bytes,
+            &signature_plan.manifest_descriptor.digest,
+            &plan.main_manifest_descriptor,
+            &plan.metadata_manifest_descriptor.digest,
+            &policy,
+        )
+        .unwrap();
+
+        let mut drifted = signature_plan.manifest;
+        drifted.annotations.insert(SIGNATURE_METADATA_DIGEST_ANNOTATION.to_string(), sha('f'));
+        let drifted_bytes = canonical_json(&drifted).unwrap();
+        let drifted_digest = sha256_digest(&drifted_bytes);
+        assert!(
+            inspect_signature_manifest(
+                &drifted_bytes,
+                &drifted_digest,
+                &plan.main_manifest_descriptor,
+                &plan.metadata_manifest_descriptor.digest,
+                &policy,
+            )
+            .is_err()
+        );
+    }
+
     fn update_or_assert_fixture(path: &str, value: &impl Serialize) {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(path);
         let mut bytes = serde_json::to_vec_pretty(value).expect("registry fixture should serialize");
@@ -1232,9 +2041,13 @@ mod tests {
     fn registry_report_golden_fixtures_match_rust_serialization() {
         let target = target();
         let plan = push_plan();
+        let keys = vec![test_keypair(TEST_KEYPAIR)];
+        let policy = trust_policy(&keys, 1);
+        let signature_plan = build_registry_signature_plan(&plan, &policy, &keys).unwrap();
         let push = build_push_report(PushReportFacts {
             target: &target,
             plan: &plan,
+            signature_plan: &signature_plan,
             uploaded_blobs: 2,
             reused_blobs: 3,
             transferred_bytes: 42,
@@ -1249,10 +2062,17 @@ mod tests {
             repository: target.repository.clone(),
             reference: target.reference.clone(),
             metadata_reference: target.metadata_reference.clone(),
+            signature_reference: target.signature_reference.clone(),
             expected_manifest_digest: plan.main_manifest_descriptor.digest.clone(),
             resolved_manifest_digest: plan.main_manifest_descriptor.digest.clone(),
             expected_metadata_manifest_digest: plan.metadata_manifest_descriptor.digest.clone(),
             resolved_metadata_manifest_digest: plan.metadata_manifest_descriptor.digest.clone(),
+            expected_signature_manifest_digest: signature_plan.manifest_descriptor.digest.clone(),
+            resolved_signature_manifest_digest: signature_plan.manifest_descriptor.digest.clone(),
+            trust_domain: signature_plan.verification.trust_domain.clone(),
+            policy_blake3: signature_plan.verification.policy_blake3.clone(),
+            verified_signers: signature_plan.verification.verified_signers.clone(),
+            verified_public_key_blake3: signature_plan.verification.verified_public_key_blake3.clone(),
             layout_blake3: plan.layout_blake3.clone(),
             projection_blake3: plan.projection_blake3.clone(),
             downloaded_blobs: 6,

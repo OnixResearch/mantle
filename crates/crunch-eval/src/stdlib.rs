@@ -19,6 +19,7 @@ const STDLIB_FILES: &[(&str, &str)] = &[
     ("helpers.ncl", include_str!("../../../lib/helpers.ncl")),
     ("kernelscript_experiment.ncl", include_str!("../../../lib/kernelscript_experiment.ncl")),
     ("offline_cargo.ncl", include_str!("../../../lib/offline_cargo.ncl")),
+    ("oci_registry_trust.ncl", include_str!("../../../lib/oci_registry_trust.ncl")),
     ("project.ncl", include_str!("../../../lib/project.ncl")),
     ("project_outputs.ncl", include_str!("../../../lib/project_outputs.ncl")),
     ("seed.ncl", include_str!("../../../lib/seed.ncl")),
@@ -213,6 +214,7 @@ mod tests {
         assert_eq!(actual, expected);
         assert!(actual.contains("fetch.ncl"));
         assert!(actual.contains("kernelscript_experiment.ncl"));
+        assert!(actual.contains("oci_registry_trust.ncl"));
         assert!(actual.contains("scheduling.ncl"));
     }
 
@@ -226,6 +228,7 @@ mod tests {
         assert_eq!(expr.as_str(), Some("ok"));
         assert!(dir.path().join("fetch.ncl").exists());
         assert!(dir.path().join("kernelscript_experiment.ncl").exists());
+        assert!(dir.path().join("oci_registry_trust.ncl").exists());
     }
 
     #[test]

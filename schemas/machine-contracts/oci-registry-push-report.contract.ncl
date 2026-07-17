@@ -6,12 +6,16 @@ let MAX_OCI_REGISTRY_NON_CLAIM_BYTES = 4096 in
 let MAX_OCI_REGISTRY_TARGET_BYTES = 255 in
 let MAX_OCI_REGISTRY_TEXT_BYTES = 2048 in
 let MAX_OCI_REGISTRY_TRANSFER_BYTES = 1099511627776 in
+let MAX_OCI_REGISTRY_VERIFIED_KEYS = 64 in
+let MAX_OCI_REGISTRY_VERIFIED_SIGNERS = 64 in
 let MIN_OCI_REGISTRY_BLOBS = 0 in
 let MIN_OCI_REGISTRY_NON_CLAIM_BYTES = 1 in
 let MIN_OCI_REGISTRY_TARGET_BYTES = 1 in
 let MIN_OCI_REGISTRY_TEXT_BYTES = 1 in
 let MIN_OCI_REGISTRY_TRANSFER_BYTES = 0 in
-let OCI_REGISTRY_NON_CLAIM_COUNT = 10 in
+let MIN_OCI_REGISTRY_VERIFIED_KEYS = 1 in
+let MIN_OCI_REGISTRY_VERIFIED_SIGNERS = 1 in
+let OCI_REGISTRY_NON_CLAIM_COUNT = 11 in
 let is_non_claims = fun value => ((std.is_array (value)
   && std.array.length (value) >= OCI_REGISTRY_NON_CLAIM_COUNT
   && std.array.length (value) <= OCI_REGISTRY_NON_CLAIM_COUNT
@@ -27,8 +31,17 @@ let is_target_text = fun value => ((std.is_string (value)
   && C.Utf8ByteLength (value) >= MIN_OCI_REGISTRY_TARGET_BYTES
   && C.Utf8ByteLength (value) <= MAX_OCI_REGISTRY_TARGET_BYTES
   && C.IsRedactionSafe (value))) in
+let is_verified_public_keys = fun value => ((std.is_array (value)
+  && std.array.length (value) >= MIN_OCI_REGISTRY_VERIFIED_KEYS
+  && std.array.length (value) <= MAX_OCI_REGISTRY_VERIFIED_KEYS
+  && std.array.all (fun item_1 => ((std.is_string (item_1)
+  && C.IsBlake3Hex (item_1)))) (value))) in
+let is_verified_signers = fun value => ((std.is_array (value)
+  && std.array.length (value) >= MIN_OCI_REGISTRY_VERIFIED_SIGNERS
+  && std.array.length (value) <= MAX_OCI_REGISTRY_VERIFIED_SIGNERS
+  && std.array.all (fun item_1 => is_target_text (item_1)) (value))) in
 C.FromPredicate (fun value => ((std.is_record (value)
-  && std.array.all (fun field_1 => std.array.elem field_1 ["credential_mode","export_receipt_blake3","layout_blake3","manifest_digest","metadata_manifest_digest","metadata_reference","non_claims","projection_blake3","published","receipt_blake3","reference","registry","repository","reused_blobs","schema","schema_version","transferred_bytes","uploaded_blobs"]) (std.record.fields (value))
+  && std.array.all (fun field_1 => std.array.elem field_1 ["credential_mode","export_receipt_blake3","layout_blake3","manifest_digest","metadata_manifest_digest","metadata_reference","non_claims","policy_blake3","projection_blake3","published","receipt_blake3","reference","registry","repository","reused_blobs","schema","schema_version","signature_manifest_digest","signature_reference","transferred_bytes","trust_domain","uploaded_blobs","verified_public_key_blake3","verified_signers"]) (std.record.fields (value))
   && (std.record.has_field "credential_mode" (value) && ((std.array.elem (std.record.get "credential_mode" (value)) ["anonymous","explicit-bearer-file"]
   && (std.is_string (std.record.get "credential_mode" (value))))))
   && (std.record.has_field "export_receipt_blake3" (value) && (((std.is_string (std.record.get "export_receipt_blake3" (value))
@@ -41,6 +54,8 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && C.IsSha256Digest (std.record.get "metadata_manifest_digest" (value))))))
   && (std.record.has_field "metadata_reference" (value) && (is_target_text (std.record.get "metadata_reference" (value))))
   && (std.record.has_field "non_claims" (value) && (is_non_claims (std.record.get "non_claims" (value))))
+  && (std.record.has_field "policy_blake3" (value) && (((std.is_string (std.record.get "policy_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "policy_blake3" (value))))))
   && (std.record.has_field "projection_blake3" (value) && (((std.is_string (std.record.get "projection_blake3" (value))
   && C.IsBlake3Hex (std.record.get "projection_blake3" (value))))))
   && (std.record.has_field "published" (value) && (((std.record.get "published" (value)) == true
@@ -54,16 +69,22 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && std.number.is_integer (std.record.get "reused_blobs" (value))
   && (std.record.get "reused_blobs" (value)) >= MIN_OCI_REGISTRY_BLOBS
   && (std.record.get "reused_blobs" (value)) <= MAX_OCI_REGISTRY_BLOBS))))
-  && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-oci-registry-push-report-v1"
+  && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-oci-registry-push-report-v2"
   && (std.is_string (std.record.get "schema" (value))))))
-  && (std.record.has_field "schema_version" (value) && (((std.record.get "schema_version" (value)) == 1
+  && (std.record.has_field "schema_version" (value) && (((std.record.get "schema_version" (value)) == 2
   && (std.is_number (std.record.get "schema_version" (value))
   && std.number.is_integer (std.record.get "schema_version" (value))))))
+  && (std.record.has_field "signature_manifest_digest" (value) && (((std.is_string (std.record.get "signature_manifest_digest" (value))
+  && C.IsSha256Digest (std.record.get "signature_manifest_digest" (value))))))
+  && (std.record.has_field "signature_reference" (value) && (is_target_text (std.record.get "signature_reference" (value))))
   && (std.record.has_field "transferred_bytes" (value) && (((std.is_number (std.record.get "transferred_bytes" (value))
   && std.number.is_integer (std.record.get "transferred_bytes" (value))
   && (std.record.get "transferred_bytes" (value)) >= MIN_OCI_REGISTRY_TRANSFER_BYTES
   && (std.record.get "transferred_bytes" (value)) <= MAX_OCI_REGISTRY_TRANSFER_BYTES))))
+  && (std.record.has_field "trust_domain" (value) && (is_target_text (std.record.get "trust_domain" (value))))
   && (std.record.has_field "uploaded_blobs" (value) && (((std.is_number (std.record.get "uploaded_blobs" (value))
   && std.number.is_integer (std.record.get "uploaded_blobs" (value))
   && (std.record.get "uploaded_blobs" (value)) >= MIN_OCI_REGISTRY_BLOBS
-  && (std.record.get "uploaded_blobs" (value)) <= MAX_OCI_REGISTRY_BLOBS)))))))
+  && (std.record.get "uploaded_blobs" (value)) <= MAX_OCI_REGISTRY_BLOBS))))
+  && (std.record.has_field "verified_public_key_blake3" (value) && (is_verified_public_keys (std.record.get "verified_public_key_blake3" (value))))
+  && (std.record.has_field "verified_signers" (value) && (is_verified_signers (std.record.get "verified_signers" (value)))))))

@@ -35,3 +35,4 @@ compatibility surface, crate name, or historical decision.
 | [0026](0026-adopt-standalone-nickel-export-core-with-mantle-owned-authority.md) | Adopt the standalone Nickel export core without transferring Mantle authority | Accepted |
 | [0027](0027-distinguish-transfer-content-from-chunk-occurrence.md) | Distinguish transfer content identity from chunk occurrence identity | Accepted |
 | [0028](0028-bind-registry-oci-metadata-with-a-second-immutable-manifest.md) | Bind registry OCI metadata with a second immutable manifest | Accepted |
+| [0029](0029-authenticate-registry-digest-pairs-with-a-signature-artifact.md) | Authenticate registry digest pairs with a signature artifact | Accepted |

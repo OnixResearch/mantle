@@ -1,13 +1,23 @@
 {
-  "schema": "mantle-oci-registry-push-report-v1",
-  "schema_version": 1,
+  "schema": "mantle-oci-registry-push-report-v2",
+  "schema_version": 2,
   "published": true,
   "registry": "https://registry.example.test",
   "repository": "onix/kernel-bundle",
   "reference": "reviewed",
   "metadata_reference": "reviewed.mantle-metadata",
+  "signature_reference": "reviewed.mantle-signature",
   "manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "metadata_manifest_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "signature_manifest_digest": "sha256:d1799c870c4ebc69370c6c26b4eb0af835e83622b84065ada5429f2b4cac6ccc",
+  "trust_domain": "onix-kernel-bundle",
+  "policy_blake3": "ad45c4728f086ed75a4e8e625847126a24437842cfe5bca80dba88a7d9ef39ab",
+  "verified_signers": [
+    "cache.example.com-1"
+  ],
+  "verified_public_key_blake3": [
+    "cad153db7d4f564bbfab4e10b6f31460ec672cdd5f296ab1a33d19371f028fab"
+  ],
   "layout_blake3": "1111111111111111111111111111111111111111111111111111111111111111",
   "projection_blake3": "2222222222222222222222222222222222222222222222222222222222222222",
   "export_receipt_blake3": "3333333333333333333333333333333333333333333333333333333333333333",
@@ -21,11 +31,12 @@
     "no deployability claim",
     "no exactly-once publication",
     "no kernel compatibility decision",
-    "no registry trust claim",
+    "no registry authorization claim",
     "no release eligibility claim",
-    "no signature verification",
+    "no revocation freshness or transparency claim",
     "no tag immutability claim",
-    "no upload resumption"
+    "no upload resumption",
+    "signature verification authenticates only the immutable digest pair under supplied local policy"
   ],
-  "receipt_blake3": "d1159e49b8db8261eacf6fcf4bd68217f0a4dcc323657acc83251c3c54fa7306"
+  "receipt_blake3": "9f5ba4d9e9a6d15e3b1a56c7599ef110911d3cfefc9ced3ae39b3caff3455af5"
 }

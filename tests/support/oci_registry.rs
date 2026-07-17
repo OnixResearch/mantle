@@ -14,7 +14,10 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use mantle::oci_projection::sha256_digest;
+use mantle::oci_registry::MANTLE_SIGNATURE_DOCUMENT_MEDIA_TYPE;
+use mantle::oci_registry::OCI_ARTIFACT_MANIFEST_MEDIA_TYPE;
 use mantle::oci_registry::OciArtifactManifest;
+use mantle::oci_registry::RegistrySignatureDocument;
 use url::Url;
 
 const ACCEPT_POLL_DELAY_MS: u64 = 2;
@@ -53,6 +56,7 @@ struct RegistryState {
     uploads: BTreeMap<String, String>,
     next_upload_id: u64,
     fail_manifest_once: Option<String>,
+    blob_gets: Vec<String>,
 }
 
 struct HttpRequest {
@@ -242,13 +246,14 @@ fn upload_digest(target: &Url) -> Option<String> {
 
 fn handle_blob(request: &HttpRequest, repository: &str, digest: &str, state: &mut RegistryState) -> HttpResponse {
     let _repository = repository;
-    let Some(bytes) = state.blobs.get(digest) else {
+    let Some(bytes) = state.blobs.get(digest).cloned() else {
         return HttpResponse::empty(HTTP_STATUS_NOT_FOUND);
     };
     match request.method.as_str() {
         "HEAD" => HttpResponse::empty(HTTP_STATUS_OK).with_header(DIGEST_HEADER, digest),
         "GET" => {
-            HttpResponse::bytes(HTTP_STATUS_OK, OCI_BLOB_CONTENT_TYPE, bytes.clone()).with_header(DIGEST_HEADER, digest)
+            state.blob_gets.push(digest.to_string());
+            HttpResponse::bytes(HTTP_STATUS_OK, OCI_BLOB_CONTENT_TYPE, bytes).with_header(DIGEST_HEADER, digest)
         }
         _ => HttpResponse::empty(HTTP_STATUS_NOT_FOUND),
     }
@@ -434,6 +439,21 @@ impl TestRegistry {
         assert!(!reference.is_empty());
     }
 
+    pub fn replace_artifact_tag_with_drift(&self, repository: &str, reference: &str) {
+        let bytes =
+            br#"{"schemaVersion":2,"mediaType":"application/vnd.oci.artifact.manifest.v1+json","drift":true}"#.to_vec();
+        let digest = sha256_digest(&bytes);
+        let stored = StoredManifest {
+            media_type: OCI_ARTIFACT_MANIFEST_MEDIA_TYPE.to_string(),
+            digest,
+            bytes,
+        };
+        let mut state = self.state.lock().expect("registry test state should lock");
+        state.manifests.insert((repository.to_string(), reference.to_string()), stored);
+        assert!(state.manifests.contains_key(&(repository.to_string(), reference.to_string())));
+        assert!(!reference.is_empty());
+    }
+
     pub fn tamper_metadata_blob(&self, repository: &str, metadata_manifest_digest: &str) {
         let mut state = self.state.lock().expect("registry test state should lock");
         let stored = state
@@ -449,6 +469,58 @@ impl TestRegistry {
         *first ^= 1;
         assert_ne!(sha256_digest(bytes), descriptor.digest);
         assert_eq!(manifest.subject.media_type, OCI_IMAGE_MANIFEST_MEDIA_TYPE);
+    }
+
+    pub fn replace_signature_with_invalid_bytes(
+        &self,
+        repository: &str,
+        signature_reference: &str,
+        signature_manifest_digest: &str,
+    ) -> String {
+        let mut state = self.state.lock().expect("registry test state should lock");
+        let stored = state
+            .manifests
+            .get(&(repository.to_string(), signature_manifest_digest.to_string()))
+            .cloned()
+            .expect("signature manifest should exist by digest");
+        let mut manifest: OciArtifactManifest =
+            serde_json::from_slice(&stored.bytes).expect("signature manifest should parse");
+        let old_descriptor = manifest.blobs.first().expect("signature manifest should contain a document").clone();
+        let document_bytes = state.blobs.get(&old_descriptor.digest).expect("signature document should exist");
+        let mut document: RegistrySignatureDocument =
+            serde_json::from_slice(document_bytes).expect("signature document should parse");
+        let encoded = &mut document.signatures[0].signature;
+        let mut bytes = encoded.as_bytes().to_vec();
+        let mutation_index = bytes.len().checked_sub(3).expect("signature text should be bounded");
+        bytes[mutation_index] = if bytes[mutation_index] == b'A' { b'B' } else { b'A' };
+        *encoded = String::from_utf8(bytes).expect("mutated signature should remain UTF-8");
+        let new_document_bytes = serde_json::to_vec(&document).expect("mutated signature document should serialize");
+        let new_document_digest = sha256_digest(&new_document_bytes);
+        manifest.blobs[0].digest = new_document_digest.clone();
+        manifest.blobs[0].size = new_document_bytes.len() as u64;
+        manifest.blobs[0].media_type = MANTLE_SIGNATURE_DOCUMENT_MEDIA_TYPE.to_string();
+        let manifest_bytes = serde_json::to_vec(&manifest).expect("mutated signature manifest should serialize");
+        let manifest_digest = sha256_digest(&manifest_bytes);
+        state.blobs.insert(new_document_digest, new_document_bytes);
+        let replacement = StoredManifest {
+            media_type: stored.media_type,
+            digest: manifest_digest.clone(),
+            bytes: manifest_bytes,
+        };
+        state
+            .manifests
+            .insert((repository.to_string(), signature_reference.to_string()), replacement.clone());
+        state.manifests.insert((repository.to_string(), manifest_digest.clone()), replacement);
+        assert!(state.manifests.contains_key(&(repository.to_string(), manifest_digest.clone())));
+        assert_ne!(manifest_digest, signature_manifest_digest);
+        manifest_digest
+    }
+
+    pub fn blob_get_count(&self) -> usize {
+        let state = self.state.lock().expect("registry test state should lock");
+        assert!(state.blob_gets.len() <= REQUEST_BODY_BYTES_MAX);
+        assert!(state.next_upload_id > 0 || state.blob_gets.is_empty());
+        state.blob_gets.len()
     }
 }
 

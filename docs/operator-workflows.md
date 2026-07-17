@@ -475,7 +475,8 @@ remain outside the core scheduler contract.
 ## Publish and recover an admitted OCI layout
 
 First produce a verified local layout with `mantle artifact oci-export`. Then
-publish its ordinary image plus subject-bound Mantle metadata:
+publish its ordinary image, subject-bound Mantle metadata, and a detached-
+signature artifact under an explicit typed Nickel trust policy:
 
 ```sh
 mantle --json artifact oci-push \
@@ -483,11 +484,14 @@ mantle --json artifact oci-push \
   --registry https://registry.example.test \
   --repository onix/kernel-bundle \
   --reference reviewed \
+  --trust-policy ./registry-trust-policy.ncl \
+  --signing-key /secure/registry-signing-key \
   --bearer-token-file ./registry-token \
   --receipt-out push.json
 ```
 
-Use both manifest SHA-256 values from `push.json` for a fresh-state pull:
+Use all three manifest SHA-256 values from `push.json` and the reviewed policy
+for a fresh-state pull:
 
 ```sh
 mantle --json --state-dir ./fresh-state artifact oci-pull \
@@ -496,24 +500,29 @@ mantle --json --state-dir ./fresh-state artifact oci-pull \
   --reference reviewed \
   --expected-manifest-digest "$(jq -r .manifest_digest push.json)" \
   --expected-metadata-manifest-digest "$(jq -r .metadata_manifest_digest push.json)" \
+  --expected-signature-manifest-digest "$(jq -r .signature_manifest_digest push.json)" \
+  --trust-policy ./registry-trust-policy.ncl \
   --bearer-token-file ./registry-token \
   --out ./pulled.oci \
   --report-out import.json \
   --receipt-out pull.json
 ```
 
-Pull success requires exact image and metadata tags, subject linkage, verified
-descriptor bytes, atomic local layout publication, and ordinary OCI import with
-`admitted` state. HTTPS is the default; controlled local registries require
-explicit `--allow-http`. Mantle does not read ambient Docker credentials or
-proxies and does not follow redirects.
+Pull verifies exact image, metadata, and signature tags; signature artifact
+subject/metadata/domain linkage; required non-revoked signers; distinct full-key
+threshold; and detached Ed25519 signatures before downloading the content
+closure. Success then requires verified descriptor bytes, atomic local layout
+publication, and ordinary OCI import with `admitted` state. HTTPS is the default;
+controlled local registries require explicit `--allow-http`. Mantle does not read
+ambient Docker credentials or proxies and does not follow redirects.
 
 See [`kernel-bundle-oci.md`](kernel-bundle-oci.md) and the
 [`kernel-bundle-oci-registry`](../examples/projects/kernel-bundle-oci-registry/)
-runbook. These receipts prove bounded publication and byte/admission linkage,
-not registry trust, authorization, tag immutability, signatures, exactly-once
-publication, upload resumption, kernel compatibility, deployability, or release
-eligibility.
+runbook. Signature evidence authenticates only the immutable image/metadata
+digest pair under supplied local policy. It does not prove registry authorization,
+transparency, revocation freshness, tag immutability, arbitrary-registry
+compatibility, exactly-once publication, upload resumption, artifact correctness,
+kernel compatibility, deployability, or release eligibility.
 
 ## Explain ready-goal priority
 
