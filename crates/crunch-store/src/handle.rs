@@ -572,12 +572,12 @@ impl StoreHandle {
 
         let (remote_pathinfo, remote_cache_urls, remote_trusted_public_keys) = match config.remote_cache_urls.first() {
             Some(ref url_str) => match Url::parse(url_str) {
-                Ok(parsed_url) => match build_remote_pathinfo(
-                    url_str,
-                    &config.store_dir,
-                    blob_service.clone(),
-                    directory_service.clone(),
-                ) {
+                Ok(parsed_url) => match build_remote_pathinfo(RemotePathInfoOptions {
+                    cache_url: url_str,
+                    store_dir: &config.store_dir,
+                    blob_service: blob_service.clone(),
+                    directory_service: directory_service.clone(),
+                }) {
                     Ok(svc) => match parse_remote_trusted_public_keys(url_str) {
                         Ok(trusted_public_keys) => {
                             info!(url = %url_str, "binary cache substitution enabled");
@@ -733,12 +733,12 @@ impl StoreHandle {
         let (remote_pathinfo, remote_cache_urls, remote_trusted_public_keys) = match config.remote_cache_urls.first() {
             Some(ref url_str) => match Url::parse(url_str) {
                 Ok(parsed_url) => {
-                    match build_remote_pathinfo(
-                        url_str,
-                        &config.store_dir,
-                        combined_blob.clone(),
-                        combined_directory.clone(),
-                    ) {
+                    match build_remote_pathinfo(RemotePathInfoOptions {
+                        cache_url: url_str,
+                        store_dir: &config.store_dir,
+                        blob_service: combined_blob.clone(),
+                        directory_service: combined_directory.clone(),
+                    }) {
                         Ok(svc) => match parse_remote_trusted_public_keys(url_str) {
                             Ok(trusted_public_keys) => {
                                 info!(url = %url_str, "binary cache substitution enabled (overlay mode)");
@@ -2229,12 +2229,12 @@ impl StoreHandle {
         if self.remote_cache_urls.len() > 1 {
             for fallback_idx in 1..self.remote_cache_urls.len() {
                 let url_str = self.remote_cache_urls[fallback_idx].as_str().to_string();
-                let Ok(fallback_svc) = build_remote_pathinfo(
-                    &url_str,
-                    &self.store_dir,
-                    self.blob_service.clone(),
-                    self.directory_service.clone(),
-                ) else {
+                let Ok(fallback_svc) = build_remote_pathinfo(RemotePathInfoOptions {
+                    cache_url: &url_str,
+                    store_dir: &self.store_dir,
+                    blob_service: self.blob_service.clone(),
+                    directory_service: self.directory_service.clone(),
+                }) else {
                     tracing::warn!(
                         url = %url_str,
                         "failed to build fallback remote cache PathInfo service, skipping"
@@ -2852,29 +2852,39 @@ async fn open_pathinfo_service_read_only(
     }
 }
 
-fn build_remote_pathinfo(
-    url_str: &str,
-    store_dir: &str,
+struct RemotePathInfoOptions<'a> {
+    cache_url: &'a str,
+    store_dir: &'a str,
     blob_service: Arc<dyn BlobService>,
     directory_service: Arc<dyn DirectoryService>,
-) -> Result<Arc<dyn PathInfoService>, Error> {
+}
+
+fn build_remote_pathinfo(options: RemotePathInfoOptions<'_>) -> Result<Arc<dyn PathInfoService>, Error> {
+    assert!(!options.cache_url.is_empty(), "remote cache URL must not be empty");
+    assert!(!options.store_dir.is_empty(), "remote cache store prefix must not be empty");
+
     // NixHTTPPathInfoServiceConfig::try_from expects "nix+https://..." scheme.
-    let nix_url_str = format!("nix+{url_str}");
+    let nix_url_str = format!("nix+{}", options.cache_url);
     let nix_url: url::Url = nix_url_str
         .parse()
-        .map_err(|e| Error::PathInfoService(format!("invalid substituter URL '{url_str}': {e}")))?;
+        .map_err(|error| Error::PathInfoService(format!("invalid substituter URL '{}': {error}", options.cache_url)))?;
 
     let config: NixHTTPPathInfoServiceConfig = nix_url
         .try_into()
-        .map_err(|e| Error::PathInfoService(format!("remote cache config for '{url_str}': {e}")))?;
-    let config = config
-        .with_store_dir(store_dir.to_string())
-        .map_err(|error| Error::PathInfoService(format!("remote cache store prefix '{store_dir}': {error}")))?;
+        .map_err(|error| Error::PathInfoService(format!("remote cache config for '{}': {error}", options.cache_url)))?;
+    let config = config.with_store_dir(options.store_dir.to_string()).map_err(|error| {
+        Error::PathInfoService(format!("remote cache store prefix '{}': {error}", options.store_dir))
+    })?;
 
-    let svc = NixHTTPPathInfoService::try_build("crunch-remote".to_string(), config, blob_service, directory_service)
-        .map_err(|e| Error::PathInfoService(format!("building remote cache client: {e}")))?;
+    let service = NixHTTPPathInfoService::try_build(
+        "crunch-remote".to_string(),
+        config,
+        options.blob_service,
+        options.directory_service,
+    )
+    .map_err(|error| Error::PathInfoService(format!("building remote cache client: {error}")))?;
 
-    Ok(Arc::new(svc))
+    Ok(Arc::new(service))
 }
 
 #[cfg(test)]
