@@ -42,4 +42,14 @@ Task `22` reran the complete first-party Tiger Style rail and diff hygiene after
 
 Task `29` is the final pre-archive packet: diff hygiene passed, validation returned `valid: true`, all three gates returned `PASS`, tasks reported 6/6 complete with zero remaining, and Tracey remained `145/145 referenced`.
 
-Archive execution, exact post-archive receipts, commit, and push remain the final V3 operations.
+## Archive and exact post-archive state
+
+Task `32` ran archive dry-run/execution with `CAIRN_ARCHIVE_DATE=2026-07-17`; execute receipt `a47ae38324cb67fc4fb7cdcf4f34e7addcb17e15d73baa3e87de7d770e8e86d9`.
+
+Task `33` produced exact machine-readable receipts beside this transcript:
+
+- `post-archive-validation.json` reports `"changes": 0`, empty issue/finding lists, and `"valid": true`.
+- `post-archive-change-list.json` reports an empty `changes` array.
+- `post-archive-tracey.txt` reports `traceability coverage ok: 145/145 referenced (profile mantle-default)`.
+
+Archive commit and push are the remaining mechanical V3 operations.
