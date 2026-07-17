@@ -370,15 +370,8 @@ fn publish_directory_no_replace(staging: &Path, destination: &Path) -> Result<()
         CString::new(staging.as_os_str().as_bytes()).map_err(|_| "OCI staging path contains a NUL byte".to_string())?;
     let destination = CString::new(destination.as_os_str().as_bytes())
         .map_err(|_| "OCI destination path contains a NUL byte".to_string())?;
-    // SAFETY: both pointers come from live CStrings, use AT_FDCWD, and the
-    // no-replace flag makes the publication a single race-free filesystem step.
-    let result = unsafe {
-        libc::renameat2(libc::AT_FDCWD, staging.as_ptr(), libc::AT_FDCWD, destination.as_ptr(), libc::RENAME_NOREPLACE)
-    };
-    if result == 0 {
-        return Ok(());
-    }
-    Err(format!("atomically publishing OCI layout without replacement: {}", std::io::Error::last_os_error()))
+    crate::linux_rename::rename_no_replace(libc::AT_FDCWD, &staging, libc::AT_FDCWD, &destination)
+        .map_err(|error| format!("atomically publishing OCI layout without replacement: {error}"))
 }
 
 #[cfg(not(target_os = "linux"))]

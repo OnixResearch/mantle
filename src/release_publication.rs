@@ -449,21 +449,7 @@ fn rename_child_no_replace(parent: &cap_std::fs::Dir, request: RenameChildReques
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "release destination name contains NUL"))?;
     assert!(!source.as_bytes().is_empty(), "release rename source must not be empty");
     assert!(!destination.as_bytes().is_empty(), "release rename destination must not be empty");
-    // SAFETY: both names are relative NUL-terminated strings and both directory fds refer to the same
-    // open parent.
-    let result = unsafe {
-        libc::renameat2(
-            parent.as_raw_fd(),
-            source.as_ptr(),
-            parent.as_raw_fd(),
-            destination.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
-    if result == 0 {
-        return Ok(());
-    }
-    Err(std::io::Error::last_os_error())
+    crate::linux_rename::rename_no_replace(parent.as_raw_fd(), &source, parent.as_raw_fd(), &destination)
 }
 
 #[cfg(not(target_os = "linux"))]

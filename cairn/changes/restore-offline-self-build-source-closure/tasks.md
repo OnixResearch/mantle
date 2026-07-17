@@ -6,6 +6,8 @@
   - Evidence: task `81` exposed the pinned-nightly compile failure; task `89` passed Rustfmt and all 10 focused remote-failure-debug tests after the stable expression repair.
 - [x] [serial] I3 Add the tracked `config/` policy payload to the fixed staged-source closure and prove it is copied without widening excluded roots. r[bootstrap_inventory.self_build_source_closure]
   - Evidence: task `97` exposed the missing compile-time policy path; task `22` passed the positive allowlist copy test and both staged-path policy tests while retaining exclusions for `target/`, arbitrary scratch files, private `.pi` content, parent traversal, and empty paths.
+- [x] [serial] I4 Preserve atomic no-replace publication across glibc and bootstrap musl targets through one syscall-backed Linux shell with positive and negative race coverage. r[bootstrap_inventory.self_build_source_closure]
+  - Evidence: task `24` exposed the missing musl `libc::renameat2` binding at all four production call sites; task `26` passed the new direct success/existing-destination tests plus OCI, release-publication, attempt-log, and remote-failure no-clobber fixtures.
 
 ## Validation and lifecycle
 

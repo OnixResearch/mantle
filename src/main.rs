@@ -42,6 +42,7 @@ mod frontend_artifact_store;
 mod function_address_binding_cmd;
 mod global_reproducibility_cmd;
 mod global_reproducibility_release;
+mod linux_rename;
 mod log_cmd;
 #[cfg(test)]
 mod machine_contract_producer_tests;

@@ -18,6 +18,13 @@ WHEN Mantle stages the fixed source tree for self-build
 THEN the exact policy bytes MUST be present at the same relative path in staged source
 AND unrelated roots such as `target/`, arbitrary scratch files, and private `.pi` content MUST remain excluded.
 
+#### Scenario: Bootstrap target preserves no-clobber publication
+
+GIVEN the bootstrap Rust target uses Linux with libc bindings that do not expose the `renameat2` function symbol
+WHEN Mantle compiles and exercises OCI, release, attempt-log, or remote-failure publication
+THEN the shared Linux shell MUST invoke the kernel no-replace rename operation without depending on that function binding
+AND an existing destination MUST remain unchanged together with the unpublished source.
+
 #### Scenario: Proof encounters an intermediate frontier
 
 GIVEN offline metadata, vendor checksum validation, proof preflight, bootstrap tools, or stage1 compilation succeeds

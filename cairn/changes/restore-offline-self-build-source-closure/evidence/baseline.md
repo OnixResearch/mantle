@@ -55,7 +55,13 @@ The exact compiler diagnostic was:
 error: couldn't read `crates/crunch-store/src/../../../config/action-result-policy/generated/action-result-policy.json`: No such file or directory
 ```
 
-This proves the fixed top-level staging allowlist, not the ordinary checkout build or vendor payload, owns the next blocker.
+This proves the fixed top-level staging allowlist, not the ordinary checkout build or vendor payload, owns that blocker.
+
+### Bootstrap musl libc binding frontier
+
+After adding `config/`, pueue task `24` again built both bootstrap tools and compiled the staged workspace through the root package. The bootstrap musl target then rejected all four direct `libc::renameat2` calls because that target's Rust `libc` bindings expose the Linux syscall number and `RENAME_NOREPLACE` flag but not the function symbol. Ordinary glibc tests had hidden this target-specific API-shape gap.
+
+The repair must preserve the kernel's one-step no-clobber operation. An ordinary rename or check-then-rename fallback would compile but would violate the existing publication race contract.
 
 ## Portfolio registry
 
@@ -66,6 +72,8 @@ This proves the fixed top-level staging allowlist, not the ordinary checkout bui
 | Full `cargo vendor --locked` refresh | Empty-home locked offline metadata passes | active |
 | Stage unrestricted checkout | Closes omissions by weakening source authority | rejected |
 | Add fixed `config/` root | Preserves the allowlist while supplying observed compile input | active |
+| Ordinary rename fallback | Compiles but weakens no-clobber publication | rejected |
+| Shared `SYS_renameat2` shell | Preserves Linux no-clobber semantics across libc binding shapes | active |
 
 ## Claim boundary
 

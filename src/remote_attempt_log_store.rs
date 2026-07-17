@@ -470,15 +470,7 @@ fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "attempt-log source contains NUL"))?;
     let destination = CString::new(destination.as_os_str().as_bytes())
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "attempt-log destination contains NUL"))?;
-    // SAFETY: both pointers come from live CStrings. RENAME_NOREPLACE makes
-    // publication a single race-free filesystem operation.
-    let result = unsafe {
-        libc::renameat2(libc::AT_FDCWD, source.as_ptr(), libc::AT_FDCWD, destination.as_ptr(), libc::RENAME_NOREPLACE)
-    };
-    if result == 0 {
-        return Ok(());
-    }
-    Err(std::io::Error::last_os_error())
+    crate::linux_rename::rename_no_replace(libc::AT_FDCWD, &source, libc::AT_FDCWD, &destination)
 }
 
 #[cfg(not(target_os = "linux"))]

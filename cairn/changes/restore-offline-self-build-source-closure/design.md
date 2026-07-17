@@ -41,11 +41,17 @@ That design is sound only when the explicit vendor directory is complete and the
 
 **Rationale:** The expressions have the same semantic bound, while the latter compiles on the pinned proof nightly without adding an unstable feature gate or a magic numeric literal.
 
-### 4. Treat only the full proof as self-build success
+### 4. Preserve Linux no-clobber semantics through the syscall ABI
+
+**Choice:** Route the four root-package `RENAME_NOREPLACE` call sites through one `linux_rename` shell helper that invokes the Linux `renameat2` syscall number directly. Keep path-to-`CStr` validation and caller-specific diagnostics at each boundary. Test both successful movement and an existing-destination race that preserves both files.
+
+**Rationale:** The bootstrap musl target's `libc` Rust bindings expose the syscall number and flag but not the `renameat2` function symbol. Falling back to ordinary rename, check-then-rename, or link/unlink would weaken reviewed no-clobber semantics. A shared safe wrapper isolates the unsafe ABI call and removes four copies.
+
+### 5. Treat only the full proof as self-build success
 
 **Choice:** Offline metadata, checksum validation, proof preflight, bootstrap-tool success, and stage1 compilation are intermediate evidence. The self-build claim requires the canonical ignored proof to finish and its bundle to report stage1/stage2 equality. On this host, `CRUNCH_NO_FUSE=1` is an explicit materialized-input transport selection, not a semantic relaxation.
 
-**Rationale:** Earlier attempts failed first at compiler compatibility, then FUSE setup, then omitted source. Recording each frontier prevents partial progress from being promoted into fixed-point evidence.
+**Rationale:** Earlier attempts failed first at compiler compatibility, then FUSE setup, omitted source, and target-libc API shape. Recording each frontier prevents partial progress from being promoted into fixed-point evidence.
 
 ## Approach registry
 
@@ -56,11 +62,13 @@ That design is sound only when the explicit vendor directory is complete and the
 | Cargo-authored full refresh | `cargo vendor --locked` into a fresh tree | Reconstructs the complete locked directory source | Active | Empty-`CARGO_HOME` offline metadata plus self-build checksum validation. |
 | Unrestricted source copy | Stage the whole checkout | Avoids future missing roots | Rejected | Widens source authority and admits unrelated/private/generated paths. |
 | Fixed allowlist repair | Add only current build-required `config/` | Closes the observed compile-time source gap | Active | Positive policy-file staging and existing negative exclusion tests. |
+| Weakened rename fallback | Check destination then call ordinary rename | Compiles on musl | Rejected | Reintroduces a race that can clobber another publisher. |
+| Shared syscall shell | Call Linux `SYS_renameat2` with `RENAME_NOREPLACE` | Preserves no-clobber semantics across libc targets | Active | Direct positive/existing-destination tests plus production race fixtures. |
 
 ## Validation budget
 
 - **Source budget:** `Cargo.lock`, Cargo vendor output, `.cargo/vendor-config.toml`, `src/self_build.rs`, the compile-time `include_str!`, current proof logs, and accepted bootstrap/proof requirements.
-- **Mechanism budget:** five families above, with two complementary surviving repairs.
+- **Mechanism budget:** seven families above, with three complementary surviving repairs.
 - **Round budget:** failing baseline; empty-home offline metadata; focused staging/checksum tests; proof preflight; materialized-input fixed-point proof; focused/full quality; Cairn sync/archive.
 - **Allowed terminal outcomes:** validated current fixed point; exact proof blocker with durable diagnostics; exhausted bounded repair; or user decision required for a broader source-distribution model.
 
