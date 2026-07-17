@@ -539,6 +539,10 @@ Fast local examples:
 - [`examples/projects/offline-source-bundle/mantle-project.ncl`](examples/projects/offline-source-bundle/mantle-project.ncl) — fresh-state source bundle export, pinned import, preflight, and tamper rejection
 - [`examples/projects/reviewed-file-generation/mantle-project.ncl`](examples/projects/reviewed-file-generation/mantle-project.ncl) — non-mutating filegen planning and drift-checked reviewed apply
 - [`examples/projects/developer-shell-run/mantle-project.ncl`](examples/projects/developer-shell-run/mantle-project.ncl) — runnable package with named `dev` and `minimal` shell profiles
+- [`examples/projects/cargo-import-offline/workflow.ncl`](examples/projects/cargo-import-offline/workflow.ncl) — review-first Cargo plan/apply with ambiguity, lock, vendor, and conflict blockers
+- [`examples/projects/foreign-import-handoff/workflow.ncl`](examples/projects/foreign-import-handoff/workflow.ncl) — Guix-like and Nix-like validation/planning without foreign frontend commands
+- [`examples/projects/portable-receipt-handoff/mantle-project.ncl`](examples/projects/portable-receipt-handoff/mantle-project.ncl) — receipt archive handoff, idempotent import, and complete/incomplete semantic graph queries
+- [`examples/transcripts/hello-eval.md`](examples/transcripts/hello-eval.md) — isolated executable Markdown evaluation transcript
 - [`examples/fail.ncl`](examples/fail.ncl) — intentional failure for diagnostics
 
 Cookbook and advanced examples:
@@ -559,6 +563,8 @@ Cookbook and advanced examples:
 - [`examples/projects/store-gc-lifecycle/mantle-project.ncl`](examples/projects/store-gc-lifecycle/mantle-project.ncl) — persistent roots, dry-run collection, garbage collection, and mutation locking
 - [`examples/projects/delta-substitution/mantle-project.ncl`](examples/projects/delta-substitution/mantle-project.ncl) — partial chunk reuse, full fallback, and fail-closed sender-data validation
 - [`examples/projects/release-witness-handoff/mantle-project.ncl`](examples/projects/release-witness-handoff/mantle-project.ncl) — canonical signed attestation handoff, witness quorum, wrong-release, and revocation policy paths
+- [`examples/projects/remote-build-loopback/mantle-project.ncl`](examples/projects/remote-build-loopback/mantle-project.ncl) — one-use ticket, framed stdio dispatch, signed output admission, and redacted status
+- [`examples/projects/wasm-component-hello/workflow.ncl`](examples/projects/wasm-component-hello/workflow.ncl) — typed component export backed by the pinned materialization, execution, rehash, and drift rail
 - [`examples/bootstrap-no-nix.ncl`](examples/bootstrap-no-nix.ncl) — compile C with the shared reduced bootstrap seed provider
 - [`examples/project/crunch.ncl`](examples/project/crunch.ncl) — project-aware `mantle build .#name` layout
 - [`examples/hardware_simulation_plan.rs`](examples/hardware_simulation_plan.rs) — frontend-owned hardware request lowering to generic `mantle-plan-v1`; real Verilator execution is capability-gated

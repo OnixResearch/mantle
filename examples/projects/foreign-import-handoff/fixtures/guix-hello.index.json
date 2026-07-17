@@ -1,0 +1,14 @@
+{
+  "schema": "foreign-package-index-v1",
+  "entries": [
+    {
+      "name": "hello",
+      "system": "x86_64-linux",
+      "root_derivation_id": "guix:hello",
+      "aliases": ["guix-hello"],
+      "provenance_ref": "guix-time-machine:hello",
+      "metadata_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "unsupported_metadata_classes": []
+    }
+  ]
+}

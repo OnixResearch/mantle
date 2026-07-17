@@ -1,0 +1,51 @@
+{
+  "schema": "foreign-derivation-graph-v1",
+  "producer": {
+    "kind": "nix",
+    "identity": "nix-derivation-json:hello",
+    "revision": "gallery-fixture-revision"
+  },
+  "source_store_prefixes": ["/nix/store"],
+  "target_store_prefix": null,
+  "root_derivation_ids": ["nix:hello"],
+  "nodes": [
+    {
+      "node_id": "nix:hello",
+      "original_derivation": "/nix/store/22222222222222222222222222222222-hello.drv",
+      "name": "hello",
+      "system": "x86_64-linux",
+      "builder": "/nix/store/33333333333333333333333333333333-bash/bin/bash",
+      "args": ["-c", "cp /nix/store/00000000000000000000000000000000-hello-source $out"],
+      "env": {
+        "out": "/nix/store/11111111111111111111111111111111-hello",
+        "src": "/nix/store/00000000000000000000000000000000-hello-source"
+      },
+      "outputs": {
+        "out": { "path": "/nix/store/11111111111111111111111111111111-hello", "hash": null }
+      },
+      "input_derivations": [],
+      "source_refs": [{ "payload_id": "nix-hello-source", "field": "source-ref" }],
+      "fixed_output": {
+        "algorithm": "blake3",
+        "digest": "e0e1e2e3e4e5e6e7e8e9eaebecedeeef000102030405060708090a0b0c0d0e0f10111213",
+        "recursive": true
+      },
+      "builtin": "fixed-output-fetch",
+      "declared_references": ["/nix/store/00000000000000000000000000000000-hello-source"],
+      "sandbox_capabilities": [],
+      "unsupported_features": [],
+      "cache_hints": []
+    }
+  ],
+  "source_payloads": [
+    {
+      "payload_id": "nix-hello-source",
+      "kind": "fixed-output-source",
+      "content_ref": "/nix/store/00000000000000000000000000000000-hello-source",
+      "embedded_text": null,
+      "mirrors": ["https://cache.example.invalid/hello.tar.gz"]
+    }
+  ],
+  "unsupported_features": [],
+  "frontend_metadata": []
+}

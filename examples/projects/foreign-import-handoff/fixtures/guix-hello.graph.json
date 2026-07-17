@@ -1,0 +1,51 @@
+{
+  "schema": "foreign-derivation-graph-v1",
+  "producer": {
+    "kind": "guix",
+    "identity": "guix-time-machine:hello",
+    "revision": "gallery-fixture-revision"
+  },
+  "source_store_prefixes": ["/gnu/store"],
+  "target_store_prefix": null,
+  "root_derivation_ids": ["guix:hello"],
+  "nodes": [
+    {
+      "node_id": "guix:hello",
+      "original_derivation": "/gnu/store/22222222222222222222222222222222-hello.drv",
+      "name": "hello",
+      "system": "x86_64-linux",
+      "builder": "/gnu/store/33333333333333333333333333333333-bash/bin/bash",
+      "args": ["-c", "cp /gnu/store/00000000000000000000000000000000-hello-source $out"],
+      "env": {
+        "out": "/gnu/store/11111111111111111111111111111111-hello",
+        "src": "/gnu/store/00000000000000000000000000000000-hello-source"
+      },
+      "outputs": {
+        "out": { "path": "/gnu/store/11111111111111111111111111111111-hello", "hash": null }
+      },
+      "input_derivations": [],
+      "source_refs": [{ "payload_id": "guix-hello-source", "field": "source-ref" }],
+      "fixed_output": {
+        "algorithm": "blake3",
+        "digest": "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f10111213",
+        "recursive": true
+      },
+      "builtin": "fixed-output-fetch",
+      "declared_references": ["/gnu/store/00000000000000000000000000000000-hello-source"],
+      "sandbox_capabilities": [],
+      "unsupported_features": [],
+      "cache_hints": []
+    }
+  ],
+  "source_payloads": [
+    {
+      "payload_id": "guix-hello-source",
+      "kind": "fixed-output-source",
+      "content_ref": "/gnu/store/00000000000000000000000000000000-hello-source",
+      "embedded_text": null,
+      "mirrors": ["https://mirror.example.invalid/hello.tar.gz"]
+    }
+  ],
+  "unsupported_features": [],
+  "frontend_metadata": []
+}

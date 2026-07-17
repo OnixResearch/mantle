@@ -1,0 +1,32 @@
+{
+  "schema": "mantle-semantic-build-graph-v1",
+  "nodes": [
+    {
+      "id": "output:portable-receipt-gallery",
+      "kind": "store-output",
+      "digest": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "metadata": { "scope": "gallery-fixture" }
+    },
+    {
+      "id": "source:portable-receipt-gallery",
+      "kind": "source-tree",
+      "digest": "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "metadata": {}
+    }
+  ],
+  "edges": [
+    {
+      "from": "output:portable-receipt-gallery",
+      "to": "source:portable-receipt-gallery",
+      "kind": "uses-source",
+      "metadata": {}
+    }
+  ],
+  "aliases": [
+    {
+      "alias": "gallery-output",
+      "target": "output:portable-receipt-gallery",
+      "metadata": { "label": "portable receipt gallery" }
+    }
+  ]
+}

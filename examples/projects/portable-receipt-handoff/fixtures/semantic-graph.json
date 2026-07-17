@@ -1,0 +1,74 @@
+{
+  "schema": "mantle-semantic-build-graph-v1",
+  "nodes": [
+    {
+      "id": "output:portable-receipt-gallery",
+      "kind": "store-output",
+      "digest": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "metadata": { "scope": "gallery-fixture" }
+    },
+    {
+      "id": "recipe:portable-receipt-gallery",
+      "kind": "recipe",
+      "digest": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "metadata": {}
+    },
+    {
+      "id": "source:portable-receipt-gallery",
+      "kind": "source-tree",
+      "digest": "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "metadata": {}
+    },
+    {
+      "id": "sandbox:portable-receipt-gallery",
+      "kind": "sandbox-profile",
+      "digest": "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "metadata": {}
+    },
+    {
+      "id": "provider:portable-receipt-gallery",
+      "kind": "provider",
+      "digest": "blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "metadata": {}
+    }
+  ],
+  "edges": [
+    {
+      "from": "output:portable-receipt-gallery",
+      "to": "recipe:portable-receipt-gallery",
+      "kind": "produced-by",
+      "metadata": {}
+    },
+    {
+      "from": "output:portable-receipt-gallery",
+      "to": "source:portable-receipt-gallery",
+      "kind": "uses-source",
+      "metadata": {}
+    },
+    {
+      "from": "output:portable-receipt-gallery",
+      "to": "sandbox:portable-receipt-gallery",
+      "kind": "uses-sandbox",
+      "metadata": {}
+    },
+    {
+      "from": "output:portable-receipt-gallery",
+      "to": "provider:portable-receipt-gallery",
+      "kind": "uses-provider",
+      "metadata": {}
+    },
+    {
+      "from": "recipe:portable-receipt-gallery",
+      "to": "source:portable-receipt-gallery",
+      "kind": "depends-on",
+      "metadata": {}
+    }
+  ],
+  "aliases": [
+    {
+      "alias": "gallery-output",
+      "target": "output:portable-receipt-gallery",
+      "metadata": { "label": "portable receipt gallery" }
+    }
+  ]
+}

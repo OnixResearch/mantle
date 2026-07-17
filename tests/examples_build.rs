@@ -25,6 +25,7 @@ const DIAMOND_RIGHT_MESSAGE: &str = "right branch";
 const INVALID_OUTPUT_NAME: &str = "missing";
 const FAIL_MARKER: &str = "this will fail";
 const PROJECT_CHECK_RESULT: &str = "ok";
+const PORTABLE_RECEIPT_PAYLOAD: &str = "portable receipt gallery payload";
 const LOCAL_LAYOUT_HEADER: &str = "#define LOCAL_OUTPUT_LAYOUT 1";
 const LOCAL_LAYOUT_DOC: &str = "local output layout docs";
 const BUILD_REPORT_SCHEMA: &str = "crunch-build-report-v1";
@@ -740,6 +741,25 @@ fn project_check_fixture_builds_result_output() {
     assert!(out_path.starts_with(store.path()), "output should land in temp store: {}", out_path.display());
     let result = std::fs::read_to_string(out_path.join("result")).unwrap();
     assert_eq!(result.trim(), PROJECT_CHECK_RESULT);
+}
+
+#[test]
+fn portable_receipt_project_builds_payload_for_handoff() {
+    if !can_build() {
+        eprintln!("SKIP: portable receipt project build requires Linux + bwrap + /nix/store");
+        return;
+    }
+
+    let project = repo_root().join("examples/projects/portable-receipt-handoff");
+    let (store, _state, output) = project_command(&project, ".#payload");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "portable receipt payload failed:\n{stderr}");
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let out_path = PathBuf::from(stdout.trim());
+    assert!(out_path.starts_with(store.path()), "output should land in temp store: {}", out_path.display());
+    let payload = std::fs::read_to_string(out_path.join("payload.txt")).unwrap();
+    assert_eq!(payload.trim(), PORTABLE_RECEIPT_PAYLOAD);
 }
 
 #[test]

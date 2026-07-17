@@ -135,6 +135,8 @@
               || pathString == toString ./examples/catalog.ncl
               || pathString == toString ./examples/README.md
               || pathString == toString ./examples/project/README.md
+              || pkgs.lib.hasPrefix "${toString ./examples/projects}/" pathString
+              || pkgs.lib.hasPrefix "${toString ./examples/transcripts}/" pathString
               || pkgs.lib.hasPrefix "${toString ./schemas/machine-contracts}/" pathString
               || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" pathString
               || pkgs.lib.hasPrefix "${toString ./packages/kernelscript-experiment}/" pathString

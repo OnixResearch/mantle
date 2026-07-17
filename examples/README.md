@@ -27,6 +27,11 @@ Begin with the local seed-free stages, then continue into pinned network inputs 
 | Offline handoff | `examples/projects/offline-source-bundle/mantle-project.ncl` | source-bundle planning, pinned import, readiness, and tamper rejection |
 | Reviewed generation | `examples/projects/reviewed-file-generation/mantle-project.ncl` | non-mutating plans, drift-checked apply, and managed file identity |
 | Developer loop | `examples/projects/developer-shell-run/mantle-project.ncl` | package execution and named shell activation |
+| Existing Cargo migration | `examples/projects/cargo-import-offline/workflow.ncl` | review-first Cargo plan/apply with explicit input placeholders |
+| Foreign handoff | `examples/projects/foreign-import-handoff/workflow.ncl` | frontend-free validation and receipt-bound planning |
+| Portable evidence | `examples/projects/portable-receipt-handoff/mantle-project.ncl` | receipt archive verification/import plus semantic graph queries |
+| Remote realization | `examples/projects/remote-build-loopback/mantle-project.ncl` | one-use ticket, framed stdio dispatch, signed admission, and redacted status |
+| WebAssembly component | `examples/projects/wasm-component-hello/workflow.ncl` | typed export plus pinned materialization and drift rails |
 
 ## Beginner
 
@@ -40,6 +45,7 @@ Start here. These examples are local, fast, and do not need generated seed mater
 | `examples/cowsay.ncl` | `mantle build examples/cowsay.ncl --no-substitute` | runnable `bin/cowsay` script with default and custom messages | local + fast |
 | `examples/static-site.ncl` | `mantle build examples/static-site.ncl --no-substitute` | directory containing `index.html` and `assets/site.css` | local + fast |
 | `examples/mk-hello.ncl` | `mantle build examples/mk-hello.ncl -I examples -I builders --no-substitute` | store path containing `bin/hello` | generated seed |
+| `examples/transcripts/hello-eval.md` | `mantle transcript run examples/transcripts/hello-eval.md --output /tmp/mantle-hello-transcript.json` | versioned transcript evidence containing the evaluated `hello` derivation | local + fast |
 
 ## Diagnostics
 
@@ -93,6 +99,11 @@ Project examples show selector syntax after package composition. See `examples/p
 | `examples/projects/offline-source-bundle/mantle-project.ncl` | follow the project-local runbook | source-bundle plan/export/verify/import/preflight with tamper rejection | local + fast |
 | `examples/projects/reviewed-file-generation/mantle-project.ncl` | `cd examples/projects/reviewed-file-generation && mantle filegen plan --plan-out /tmp/filegen-plan.json` | non-mutating plan and drift-checked generated config apply | local + fast |
 | `examples/projects/developer-shell-run/mantle-project.ncl` | `cd examples/projects/developer-shell-run && mantle run .#tool -- Mantle` | runnable package plus `dev` and `minimal` shell profiles | local + fast |
+| `examples/projects/cargo-import-offline/workflow.ncl` | follow the project-local scratch-copy runbook | deterministic Cargo import plan/apply and explicit unresolved input roles | local + fast |
+| `examples/projects/foreign-import-handoff/workflow.ncl` | `cd examples/projects/foreign-import-handoff && mantle --json foreign-import plan ...` | accepted receipt-bound adapter plan without Guix or Nix commands | local + fast |
+| `examples/projects/portable-receipt-handoff/mantle-project.ncl` | follow the project-local archive/receipt/graph runbook | diagnostic receipt verify/import reports and bounded graph explanations | local build + fast CLI |
+| `examples/projects/remote-build-loopback/mantle-project.ncl` | follow the project-local one-use ticket runbook | framed stdio remote result, signed admission, redacted status, and exhausted-ticket rejection | heavy + local bwrap |
+| `examples/projects/wasm-component-hello/workflow.ncl` | `cd examples/projects/wasm-component-hello && mantle eval workflow.ncl` | typed generated-input export; production rail publishes rehashable component evidence | typed export fast; production heavy |
 | `examples/projects/cross-compiled-host-tool/mantle-project.ncl` | `cd examples/projects/cross-compiled-host-tool && mantle build .#target` | host-generated header consumed by an `x86_64-linux-musl` executable | heavy + first-build network |
 | `examples/projects/store-gc-lifecycle/mantle-project.ncl` | follow the project-local runbook | persistent roots, dry-run candidates, collected unreachable output, and mutation-lock rejection | heavy + local state |
 | `examples/projects/delta-substitution/mantle-project.ncl` | `cargo run -p mantle --example delta_substitution` | partial chunk transfer, full fallback, and fail-closed missing-chunk rejection | Rust adaptor |
@@ -105,6 +116,8 @@ Project examples show selector syntax after package composition. See `examples/p
 | `examples/hardware_simulation_plan.rs` | `cargo run -p mantle --example hardware_simulation_plan -- request.json plan.json` | bounded generic `mantle-plan-v1` JSON with independent compile, link, and smoke units | fast planning; real Verilator rail is heavy + bwrap |
 
 The hardware plan generator consumes a JSON `HardwarePlanRequest`; it does not interpret HDL in Mantle core. The exact request construction, tool cohort, real execution command, evidence shape, seed boundary, and non-claims are documented in [`docs/hardware-simulation.md`](../docs/hardware-simulation.md).
+
+The Cargo import workflow stops at generated, reviewable Mantle files with explicit failing source/toolchain placeholders; the existing Rust workspace project owns the separately supported offline build lane. The Wasm workflow's checked-in Nickel file proves typed authoring/export only, while `tests/wasm_component_cli.rs` owns production execution against the pinned cohort.
 
 The representative Rust compatibility rail is lane-scoped evidence, not proof of
 full Cargo compatibility, compiler correctness, release reproducibility, or
@@ -134,6 +147,11 @@ These commands inspect local build evidence. They are not release or witness pro
 | `examples/projects/store-gc-lifecycle/mantle-project.ncl` | follow its README root/GC workflow | state-scoped root and collection report | does not prove distributed retention |
 | `examples/projects/delta-substitution/mantle-project.ncl` | `cargo run -p mantle --example delta_substitution` | in-memory delta/fallback transfer report | does not prove HTTP cache interoperability |
 | `examples/projects/release-witness-handoff/mantle-project.ncl` | `cargo run -p mantle --example release_witness_handoff` | synthetic signed attestation directory and policy result | does not prove release evidence or an independent rebuild |
+| `examples/projects/foreign-import-handoff/workflow.ncl` | validate and plan the checked Guix-like and Nix-like fixtures | raw-graph digest plus receipt-bound adapter plan | does not prove output trust, frontend correctness, or rebuild success |
+| `examples/projects/portable-receipt-handoff/mantle-project.ncl` | verify/import the receipt against a store archive, then query both graph fixtures | diagnostic receipt matches plus complete/incomplete graph results | does not prove execution, compiler, payload-transfer, or release correctness |
+| `examples/projects/remote-build-loopback/mantle-project.ncl` | dispatch with a one-use ticket through the default local stdio worker | remote route, signed output admission, artifact reference, and redacted status | does not prove production P2P, restart, SSH, or resumable-transfer deployment |
+| `examples/projects/wasm-component-hello/workflow.ncl` | evaluate the typed export, then run the pinned production CLI rail | generated-input ownership and rehashable materialization bundle | does not prove behavior correctness, runtime authority, compiler correctness, or release eligibility |
+| `examples/transcripts/hello-eval.md` | run through `mantle transcript run` | isolated versioned command transcript | does not prove the evaluated derivation was built |
 
 ## Advanced bootstrap
 

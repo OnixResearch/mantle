@@ -1,0 +1,14 @@
+{
+  "schema": "foreign-package-index-v1",
+  "entries": [
+    {
+      "name": "hello",
+      "system": "x86_64-linux",
+      "root_derivation_id": "nix:hello",
+      "aliases": ["nix-hello"],
+      "provenance_ref": "nix-derivation-json:hello",
+      "metadata_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "unsupported_metadata_classes": []
+    }
+  ]
+}

@@ -9,11 +9,15 @@ use serde::Deserialize;
 const CATALOG_PATH: &str = "examples/catalog.ncl";
 const EXAMPLES_README_PATH: &str = "examples/README.md";
 const ROOT_README_PATH: &str = "README.md";
+const FLAKE_PATH: &str = "flake.nix";
 const EXAMPLES_PREFIX: &str = "examples/";
 const PROJECTS_PREFIX: &str = "examples/projects/";
 const PROJECT_ENTRYPOINT_SUFFIX: &str = "/mantle-project.ncl";
+const WORKFLOW_ENTRYPOINT_SUFFIX: &str = "/workflow.ncl";
+const TRANSCRIPTS_PREFIX: &str = "examples/transcripts/";
 const NICKEL_EXTENSION: &str = "ncl";
 const RUST_EXTENSION: &str = "rs";
+const MARKDOWN_EXTENSION: &str = "md";
 const SUPPORT_TIER_FAST: &str = "fast";
 const SUPPORT_TIER_NEGATIVE: &str = "negative";
 const SUPPORT_TIER_REAL_NETWORK: &str = "real-network";
@@ -66,6 +70,8 @@ const ALLOWED_KINDS: &[&str] = &[
     "nickel-package-set",
     "nickel-project",
     "nickel-skeleton",
+    "nickel-workflow",
+    "markdown-transcript",
     "rust-example",
 ];
 const ALLOWED_LANES: &[&str] = &[
@@ -95,6 +101,13 @@ const ALLOWED_RAILS: &[&str] = &[
     "manual-seed-eval",
     "negative-build",
     "non-claim-doc",
+    "foreign-import-cli",
+    "portable-receipt-cli",
+    "semantic-graph-cli",
+    "cargo-import-cli",
+    "wasm-component-cli",
+    "remote-stdio-cli",
+    "transcript-cli",
     "representative-offline-cargo-rail",
     "representative-rust-plan-rail",
     "representative-claim-non-overreach",
@@ -105,6 +118,14 @@ const ALLOWED_RAILS: &[&str] = &[
     OFFLINE_FETCH_TARBALL_RAIL,
     OFFLINE_FETCHGIT_RAIL,
     FIXED_OUTPUT_NEGATIVE_RAIL,
+];
+const REQUIRED_WORKFLOW_RAILS: &[(&str, &[&str])] = &[
+    ("project-foreign-import-handoff", &["foreign-import-cli"]),
+    ("project-portable-receipt-handoff", &["portable-receipt-cli", "semantic-graph-cli"]),
+    ("project-cargo-import-offline", &["cargo-import-cli"]),
+    ("project-wasm-component-hello", &["wasm-component-cli"]),
+    ("project-remote-build-loopback", &["remote-stdio-cli"]),
+    ("transcript-hello-eval", &["transcript-cli"]),
 ];
 
 #[derive(Debug, Clone, Deserialize)]
@@ -170,7 +191,7 @@ fn collect_user_facing_example_paths_inner(root: &Path, dir: &Path, paths: &mut 
             collect_user_facing_example_paths_inner(root, &path, paths);
             continue;
         }
-        if !is_user_facing_example_path(&path) {
+        if !is_user_facing_example_path(root, &path) {
             continue;
         }
         let relative = path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
@@ -181,15 +202,27 @@ fn collect_user_facing_example_paths_inner(root: &Path, dir: &Path, paths: &mut 
     }
 }
 
-fn is_user_facing_example_path(path: &Path) -> bool {
+fn is_user_facing_example_path(root: &Path, path: &Path) -> bool {
     let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
         return false;
     };
-    extension == NICKEL_EXTENSION || extension == RUST_EXTENSION
+    if extension == NICKEL_EXTENSION || extension == RUST_EXTENSION {
+        return true;
+    }
+    if extension != MARKDOWN_EXTENSION {
+        return false;
+    }
+    let Ok(relative) = path.strip_prefix(root) else {
+        return false;
+    };
+    relative.to_string_lossy().replace('\\', "/").starts_with(TRANSCRIPTS_PREFIX)
 }
 
 fn is_project_support_source(relative_path: &str) -> bool {
-    relative_path.starts_with(PROJECTS_PREFIX) && !relative_path.ends_with(PROJECT_ENTRYPOINT_SUFFIX)
+    if !relative_path.starts_with(PROJECTS_PREFIX) {
+        return false;
+    }
+    !relative_path.ends_with(PROJECT_ENTRYPOINT_SUFFIX) && !relative_path.ends_with(WORKFLOW_ENTRYPOINT_SUFFIX)
 }
 
 fn catalog_paths(catalog: &Catalog) -> BTreeSet<String> {
@@ -223,6 +256,7 @@ fn validate_catalog_shape(catalog: &Catalog, errors: &mut Vec<String>) {
         validate_allowed_value("kind", &example.kind, ALLOWED_KINDS, errors);
         validate_allowed_value("lane", &example.lane, ALLOWED_LANES, errors);
         validate_rails(example, errors);
+        validate_required_workflow_rails(example, errors);
         validate_skip_reason(example, errors);
         validate_requirement_consistency(example, errors);
 
@@ -266,6 +300,17 @@ fn validate_rails(example: &ExampleEntry, errors: &mut Vec<String>) {
     }
     for rail in &example.validation_rails {
         validate_allowed_value("validation_rail", rail, ALLOWED_RAILS, errors);
+    }
+}
+
+fn validate_required_workflow_rails(example: &ExampleEntry, errors: &mut Vec<String>) {
+    let Some((_, required_rails)) = REQUIRED_WORKFLOW_RAILS.iter().find(|(id, _)| *id == example.id) else {
+        return;
+    };
+    for required_rail in *required_rails {
+        if !example.validation_rails.iter().any(|rail| rail == required_rail) {
+            errors.push(format!("example `{}` missing required workflow rail `{required_rail}`", example.id));
+        }
     }
 }
 
@@ -519,7 +564,16 @@ fn project_sources_are_grouped_under_their_mantle_entrypoint() {
     assert!(is_project_support_source("examples/projects/rust-workspace/greeting/src/lib.rs"));
     assert!(is_project_support_source("examples/projects/demo/support.ncl"));
     assert!(!is_project_support_source("examples/projects/demo/mantle-project.ncl"));
+    assert!(!is_project_support_source("examples/projects/demo/workflow.ncl"));
     assert!(!is_project_support_source("examples/standalone.rs"));
+}
+
+#[test]
+fn only_transcript_markdown_is_a_user_facing_markdown_example() {
+    let root = Path::new("/repo");
+    assert!(is_user_facing_example_path(root, &root.join("examples/transcripts/demo.md")));
+    assert!(!is_user_facing_example_path(root, &root.join("examples/projects/demo/README.md")));
+    assert!(!is_user_facing_example_path(root, &root.join("docs/demo.md")));
 }
 
 #[test]
@@ -527,6 +581,14 @@ fn project_indexes_are_documentation_support_files() {
     assert!(SUPPORT_FILES.contains(&PROJECT_README_PATH));
     assert!(SUPPORT_FILES.contains(&PROJECTS_README_PATH));
     assert!(!SUPPORT_FILES.contains(&"examples/projects/demo/mantle-project.ncl"));
+}
+
+#[test]
+fn flake_source_keeps_project_and_transcript_support_trees() {
+    let flake = read_repo_file(FLAKE_PATH);
+    assert!(flake.contains("${toString ./examples/projects}/"));
+    assert!(flake.contains("${toString ./examples/transcripts}/"));
+    assert!(flake.contains("builtins.elem pathString catalogExamplePaths"));
 }
 
 #[test]
@@ -553,6 +615,21 @@ fn examples_catalog_rejects_duplicate_ids_and_paths() {
 
     assert!(errors.iter().any(|error| error.contains("duplicate example id")), "errors: {errors:?}");
     assert!(errors.iter().any(|error| error.contains("duplicate example path")), "errors: {errors:?}");
+}
+
+#[test]
+fn examples_catalog_rejects_missing_required_workflow_rail() {
+    let mut workflow =
+        example("project-foreign-import-handoff", "examples/projects/foreign-import-handoff/workflow.ncl");
+    workflow.kind = "nickel-workflow".to_string();
+    workflow.lane = "trust-provenance".to_string();
+    let catalog = catalog_with_entries(vec![workflow]);
+    let paths = BTreeSet::from(["examples/projects/foreign-import-handoff/workflow.ncl".to_string()]);
+    let docs = progressive_readme_for(&["examples/projects/foreign-import-handoff/workflow.ncl"]);
+
+    let errors = validate_catalog(&catalog, &paths, &docs, &docs);
+
+    assert!(errors.iter().any(|error| error.contains("missing required workflow rail")), "errors: {errors:?}");
 }
 
 #[test]

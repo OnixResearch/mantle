@@ -1,0 +1,5 @@
+package demo:app@0.1.0;
+
+world app {
+  export run: func() -> u32;
+}
