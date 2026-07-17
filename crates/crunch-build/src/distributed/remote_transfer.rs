@@ -547,6 +547,7 @@ pub fn plan_remote_transfer_demand(
     let mut missing_chunks = Vec::new();
     let mut missing_bytes = 0_u64;
     let mut reused_bytes = 0_u64;
+    let mut available_chunks = receiver.complete_chunk_digests.clone();
     for artifact in &manifest.manifest.artifacts {
         if receiver.complete_artifact_ids.contains(&artifact.artifact_id) {
             reused_bytes = reused_bytes.checked_add_bytes(artifact.size_bytes)?;
@@ -554,7 +555,7 @@ pub fn plan_remote_transfer_demand(
         }
         append_artifact_demand(
             artifact,
-            &receiver.complete_chunk_digests,
+            &mut available_chunks,
             &mut missing_chunks,
             &mut missing_bytes,
             &mut reused_bytes,
@@ -979,13 +980,13 @@ fn validate_receiver_facts(
 
 fn append_artifact_demand(
     artifact: &RemoteTransferArtifact,
-    present_chunks: &BTreeSet<RemoteTransferDigest>,
+    available_chunks: &mut BTreeSet<RemoteTransferDigest>,
     missing_chunks: &mut Vec<RemoteTransferChunkDemand>,
     missing_bytes: &mut u64,
     reused_bytes: &mut u64,
 ) -> Result<(), RemoteTransferReasonCode> {
     for chunk in &artifact.chunks {
-        if present_chunks.contains(&chunk.digest_blake3) {
+        if !available_chunks.insert(chunk.digest_blake3.clone()) {
             *reused_bytes = (*reused_bytes).checked_add_bytes(u64::from(chunk.size_bytes))?;
             continue;
         }
@@ -1215,9 +1216,13 @@ fn demanded_chunk<'a>(
     demand: &'a RemoteTransferDemand,
     header: &RemoteTransferChunkHeader,
 ) -> Option<&'a RemoteTransferChunkDemand> {
-    demand.missing_chunks.iter().find(|candidate| {
-        candidate.artifact_id == header.artifact_id && candidate.chunk.digest_blake3 == header.chunk.digest_blake3
-    })
+    // A content digest may occur at multiple offsets in one artifact. The
+    // artifact-local chunk index identifies the occurrence; the caller then
+    // compares the full descriptor and kind before reserving receiver credit.
+    demand
+        .missing_chunks
+        .iter()
+        .find(|candidate| candidate.artifact_id == header.artifact_id && candidate.chunk.index == header.chunk.index)
 }
 
 fn in_flight_bytes(state: &RemoteTransferCreditState) -> Result<u64, RemoteTransferReasonCode> {
@@ -1665,6 +1670,57 @@ mod tests {
         assert_eq!(reserved.in_flight.len(), 1);
         assert_eq!(reserved.transferred_bytes, 0);
         assert_eq!(reserved.next_sequence, TEST_SEQUENCE_ONE);
+    }
+
+    #[test]
+    fn repeated_chunk_digests_are_disambiguated_by_artifact_local_index() {
+        let mut repeated = artifact("repeated", RemoteTransferArtifactKind::CastoreBlob);
+        repeated.chunks[1].digest_blake3 = repeated.chunks[0].digest_blake3.clone();
+        let manifest = manifest_with_artifacts(vec![repeated]);
+        let demand = plan_remote_transfer_demand(&manifest, &empty_receiver()).unwrap();
+        let repeated_artifact = &manifest.manifest.artifacts[0];
+        let second = RemoteTransferChunkDemand {
+            artifact_id: repeated_artifact.artifact_id.clone(),
+            artifact_kind: repeated_artifact.artifact_kind,
+            chunk: repeated_artifact.chunks[1].clone(),
+        };
+        let second_only_demand = RemoteTransferDemand {
+            scope: demand.scope.clone(),
+            missing_chunks: vec![second.clone()],
+            missing_bytes: u64::from(second.chunk.size_bytes),
+            reused_bytes: u64::from(repeated_artifact.chunks[0].size_bytes),
+        };
+        let state = grant_remote_transfer_credit(
+            policy(),
+            &RemoteTransferCreditState::default(),
+            RemoteTransferCreditGrant {
+                bytes: TEST_CHUNK_BYTES.into(),
+                chunks: 1,
+            },
+            TEST_CHUNK_BYTES.into(),
+        )
+        .unwrap();
+        let header = RemoteTransferChunkHeader {
+            scope: demand.scope.clone(),
+            artifact_id: second.artifact_id.clone(),
+            artifact_kind: second.artifact_kind,
+            chunk: second.chunk.clone(),
+            sequence: INITIAL_CHUNK_SEQUENCE,
+        };
+        let reserved =
+            reserve_remote_transfer_chunk(&manifest, policy(), &second_only_demand, &state, &header).unwrap();
+
+        let mut wrong_offset = header;
+        wrong_offset.chunk.offset_bytes = INITIAL_CHUNK_OFFSET_BYTES;
+        let wrong_error =
+            reserve_remote_transfer_chunk(&manifest, policy(), &second_only_demand, &state, &wrong_offset).unwrap_err();
+
+        assert_eq!(demand.missing_chunks.len(), 1);
+        assert_eq!(demand.missing_bytes, u64::from(TEST_CHUNK_BYTES));
+        assert_eq!(demand.reused_bytes, u64::from(TEST_CHUNK_BYTES));
+        assert_eq!(reserved.in_flight.len(), 1);
+        assert_eq!(reserved.next_sequence, TEST_SEQUENCE_ONE);
+        assert_eq!(wrong_error, RemoteTransferReasonCode::ChunkDigestMismatch);
     }
 
     #[test]

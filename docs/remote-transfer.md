@@ -1,6 +1,6 @@
 # Resumable remote transfer
 
-Mantle contains a bounded resumable-transfer core and standalone shell for existing castore blobs/directories, NARs, source bundles, PathInfo records, attestations, and delta blobs/chunks. It does not introduce another CAS or replace output admission. This shell is not yet wired into the production remote client/server protocol.
+Mantle uses one bounded resumable-transfer core for existing castore blobs/directories, NARs, source bundles, PathInfo records, attestations, and delta blobs/chunks. The production local stdio client/server path is wired through `run_stdio_remote_child` and `cmd_remote_serve`; it does not introduce another CAS or replace ordinary output admission.
 
 ## Policy
 
@@ -22,15 +22,25 @@ A canonical manifest binds the session to the job, attempt, fence generation, po
 <state-dir>/remote-transfers/<session-id>.json
 ```
 
-A per-session exclusive lock rejects concurrent writers before progress. On reconnect, Mantle probes receiver-owned bytes and recomputes demand. A checkpoint cursor is never proof of content. Wrong-session, wrong-manifest, stale-attempt/fence, expired, regressed, forged, or content-missing checkpoints fail closed. Reassignment invalidates session authority while already verified content remains reusable through ordinary digest probing and GC ownership.
+A per-session exclusive lock rejects concurrent writers before progress. On reconnect, Mantle probes receiver-owned bytes and recomputes demand. A checkpoint cursor is never proof of content. Wrong-session, wrong-manifest, stale-attempt/fence, expired, regressed, forged, content-missing, or tampered checkpoints fail closed or are invalidated before demand is recomputed. Reassignment invalidates session authority while already verified content remains reusable through ordinary digest probing and GC ownership.
 
-## Data plane and fallback
+Chunk content identity and chunk occurrence identity are distinct. Equal bytes may produce the same BLAKE3 digest at multiple offsets in one artifact. Mantle selects a demanded occurrence by canonical artifact id plus artifact-local chunk index, then verifies the complete kind/index/offset/size/digest descriptor before granting or consuming credit.
 
-Bounded control DTOs carry manifests, demand, acknowledgement, checkpoint, and completion state. `mantle-remote-transfer-data-frame-v1` carries one credit-reserved chunk over any `Read`/`Write` transport such as stdio or a socket. The receiver validates the bounded header and reserves credit before allocating the payload buffer.
+## Production data plane and fallback
 
-A streaming report can only be constructed from a completed standalone runtime transfer report. Negotiating a `streaming` capability label alone is not implementation evidence. The production remote path still carries whole NAR/PathInfo payloads in `RemoteOutputTransferArtifact::payload`; those frames are not yet confined to a compatibility-only capability.
+Bounded control DTOs carry manifests, demand, acknowledgement, checkpoint, and completion state. `mantle-remote-transfer-data-frame-v1` carries one credit-reserved chunk over an ordered `Read`/`Write` transport such as stdio or a socket. The receiver validates the bounded header and reserves credit before allocating the payload buffer.
 
-The standalone shell models delta failure falling back to full NAR with stable reasons (`delta-transfer-failed`, `delta-unavailable`, or `full-nar-unavailable`). Production composition of that streaming fallback with ordinary PathInfo/output admission remains incomplete.
+The production local stdio route performs this sequence for both directions:
+
+1. `run_stdio_remote_child` launches the checked production client protocol.
+2. `cmd_remote_serve --binding stdio-once --executor local-build` runs the production server path.
+3. The client streams only receiver-demanded input artifacts before sandbox execution.
+4. The server streams the built output manifest and receiver-demanded chunks.
+5. Transfer completion remains non-authoritative until the client admits signed PathInfo, content, requested output, logical store prefix, and artifact-attestation evidence through the ordinary store path.
+
+`RemoteInputUploadArtifact::payload` and `RemoteOutputTransferArtifact::payload` remain compatibility DTOs for bounded fixture/bootstrap and full-artifact seams. Their presence is not streaming evidence. A `streaming` report can be constructed only from a completed runtime transfer report.
+
+The production `--remote-delta` option advertises delta/full/streaming capability. A production delta hit is not yet bound. When delta is unavailable, Mantle records `mode = "full"` with `fallback_reason = "delta-unavailable"`, transfers the full NAR through the same bounded chunk data plane, and still performs ordinary output admission. It does not report a delta hit.
 
 ## Completion semantics
 
@@ -41,6 +51,27 @@ The standalone shell models delta failure falling back to full NAR with stable r
 
 Transfer reports always set `output_admission_claimed` to false. Signed PathInfo, store-prefix, requested-output, artifact-attestation, producer-policy, and claim-strength checks remain separate.
 
-## Validation boundary
+## Operator and validation workflow
 
-Focused tests cover the standalone shell's multi-chunk upload and download interruption, process restart, no-resend resume, receiver preseed cutoff, socket framing helpers, stale/expired state, tampering, policy limits, castore/NAR/source/PathInfo/attestation/delta adapters, and delta-to-full fallback. They do not exercise the production `run_stdio_remote_child` / `cmd_remote_serve` payload path. Kani source harnesses cover the pure transfer core; Kani execution remains unclaimed when `cargo-kani` is unavailable.
+The supported local production workflow is under
+[`examples/projects/remote-build-loopback/`](../examples/projects/remote-build-loopback/).
+Its default selector remains a small one-use-ticket example; `.#resumable-payload`
+produces deterministic repeated-content bytes large enough to cross multiple
+production chunks.
+
+The canonical deterministic rail uses a debug-build-only interruption seam:
+
+```bash
+nix develop -c cargo test -p mantle --test remote_transfer_production \
+  'gallery_resumable_remote_transfer_' -- --nocapture --test-threads=1
+```
+
+The positive fixture interrupts after one durable output acknowledgement, starts fresh client/server processes, checks the same manifest BLAKE3, verifies reused bytes and missing-chunk progress, and admits one byte-checked output. The negative fixture changes the acknowledged receiver chunk and proves resume fails with `acknowledged-chunk-missing` before client output admission.
+
+`MANTLE_TEST_REMOTE_INTERRUPT_AFTER_OUTPUT_CHUNKS` and its input counterpart are debug-test seams, not release operator controls. Release binaries ignore them. They provide deterministic cutoff evidence; they do not prove arbitrary process-kill timing or crash consistency beyond the recorded checkpoint boundary.
+
+Focused production regressions also cover multi-chunk input resume, ticket quota rejection before checkpoints/admission, delta-unavailable full fallback, and an 8 MiB output crossing more than one hundred acknowledged chunks.
+
+## Claim boundary
+
+This evidence proves bounded local production stdio client/server composition, verified receiver-state resume, repeated-content chunk handling, stable manifest identity, quota/backpressure behavior, and ordinary output admission for the checked fixtures. It does not prove exactly-once network delivery, arbitrary kill-point recovery, a production P2P listener, SSH deployment, independent-machine behavior, hostile-worker honesty, compiler correctness, output trust from transfer alone, release reproducibility, or Kani execution.

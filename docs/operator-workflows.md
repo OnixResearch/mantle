@@ -451,16 +451,26 @@ Missing legacy graph data is fail-closed: queries return a typed `mantle-incompl
 ## Remote realization adapter boundary
 
 Remote derivation realization uses a provider-neutral hash-negotiated handshake
-before any transport-specific adapter is selected. The scheduler sends the
-handshake version, realization key, recipe digest, root input digests,
-platform/profile facts, and declared capabilities. A worker either reports an
-unsupported profile/capability denial or returns the exact missing content set
-keyed by digest and kind (`recipe`, `blob`, `directory`, or `proof-input`).
-Transferred content is BLAKE3-verified before execution, and the returned
-receipt binds the negotiated input digest set, declared/observed capabilities,
-worker profile, realization key, and output digests. SSH, REAPI, S3, HTTP, or
-cluster-control details stay inside future adapters and are not part of the core
-scheduler contract.
+before transport-specific execution. The scheduler sends the handshake version,
+realization key, recipe digest, root input digests, platform/profile facts, and
+declared capabilities. A worker either reports an unsupported
+profile/capability denial or returns the exact receiver-missing content set.
+
+The supported local production path carries that protocol through framed stdio:
+the client launches `remote serve --binding stdio-once --executor local-build`,
+streams bounded BLAKE3-verified input artifacts before execution, receives the
+output through receiver-issued chunk credit, and admits it only after ordinary
+signed PathInfo/content/store-prefix/attestation checks. Fenced checkpoints are
+receiver-reprobed on retry; equal-content chunks may share a digest while their
+artifact positions remain distinct canonical indices.
+
+See [`remote-transfer.md`](remote-transfer.md) and the checked
+[`remote-build-loopback`](../examples/projects/remote-build-loopback/) workflow
+for the deterministic interruption/resume and receiver-tamper rails. Those
+local stdio fixtures do not prove a production P2P listener, SSH deployment,
+REAPI compatibility, independent-machine behavior, exactly-once delivery,
+worker honesty, or release reproducibility. Provider and cluster-control details
+remain outside the core scheduler contract.
 
 ## Explain ready-goal priority
 

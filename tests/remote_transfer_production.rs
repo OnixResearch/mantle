@@ -8,6 +8,8 @@ use base64::Engine;
 use serde_json::Value;
 use sha2::Digest;
 
+// r[verify examples.resumable_remote_transfer_workflow]
+
 const STORE_PREFIX: &str = "/mantle/store";
 const INPUT_STORE_PATH: &str = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-production-input";
 const INPUT_BYTES: usize = 196_608;
@@ -50,6 +52,12 @@ const BLAKE3_HEX_CHARS: usize = 64;
 const REJECTING_CAPTURE_FILE_BYTES: u64 = 4;
 const ACCEPTING_CAPTURE_FILE_BYTES: u64 = 4_096;
 const TEST_REAL_BWRAP_ENV: &str = "MANTLE_TEST_REAL_BWRAP";
+const GALLERY_PROJECT_RELATIVE_PATH: &str = "examples/projects/remote-build-loopback";
+const GALLERY_RESUMABLE_SELECTOR: &str = ".#resumable-payload";
+const GALLERY_PAYLOAD_BYTES: usize = 262_144;
+const REMOTE_TRANSFER_RECEIVER_DIR: &str = "remote-transfer-receiver";
+const REMOTE_TRANSFER_CHUNK_DIR: &str = "chunks";
+const ACKNOWLEDGED_CHUNK_MISSING_REASON: &str = "acknowledged-chunk-missing";
 
 #[test]
 fn production_stdio_resumes_missing_chunks_and_imports_output() {
@@ -264,6 +272,99 @@ fn production_stdio_streams_and_admits_8_mib_output() {
     let output_checkpoint = output_checkpoint_with_most_acknowledgements(&fixture.state_dir);
     assert!(output_checkpoint.acknowledged_chunks > MIN_PRODUCTION_SCALE_OUTPUT_CHUNKS);
     assert!(output_checkpoint.transferred_bytes > u64::try_from(PRODUCTION_SCALE_OUTPUT_BYTES).unwrap());
+}
+
+#[test]
+fn gallery_resumable_remote_transfer_resumes_verified_chunks_and_admits_once() {
+    if !cfg!(debug_assertions) {
+        eprintln!("SKIP: the deterministic transfer-interruption seam is disabled in release binaries");
+        return;
+    }
+    let root = tempfile::tempdir().expect("gallery resumable transfer tempdir");
+    let state_dir = root.path().join("state");
+    let store_dir = root.path().join("store");
+    fs::create_dir_all(&state_dir).expect("gallery state dir");
+    fs::create_dir_all(&store_dir).expect("gallery store dir");
+    write_ticket_state(&state_dir);
+
+    let interrupted = remote_gallery_build_command(&state_dir, &store_dir)
+        .env(INTERRUPT_ENV, INTERRUPT_AFTER_CHUNKS)
+        .output()
+        .expect("interrupt gallery production transfer");
+    assert!(!interrupted.status.success(), "first gallery run must interrupt after a durable chunk");
+    assert!(
+        String::from_utf8_lossy(&interrupted.stderr)
+            .contains("remote-production-transfer-interrupted-after-checkpoint")
+    );
+    assert_eq!(fs::read_dir(&store_dir).unwrap().count(), 0);
+    assert!(!state_diagnostics_contain(&state_dir, "output-admitted"));
+    let partial = partial_output_checkpoint(&state_dir);
+    assert_eq!(partial.acknowledged_chunks, 1);
+    assert!(partial.transferred_bytes > 0);
+    assert_eq!(partial.manifest_digest_blake3.len(), BLAKE3_HEX_CHARS);
+
+    let resumed = remote_gallery_build_command(&state_dir, &store_dir)
+        .output()
+        .expect("resume gallery production transfer");
+    assert!(resumed.status.success(), "gallery resume stderr={}", String::from_utf8_lossy(&resumed.stderr));
+    let report: Value = serde_json::from_slice(&resumed.stdout).expect("gallery production JSON report");
+    let substitution = &report["outcomes"][0]["outputs"][0]["substitution"];
+    assert_eq!(substitution["mode"], "streaming");
+    assert!(substitution["reused_bytes"].as_u64().unwrap_or(0) >= partial.transferred_bytes);
+    assert_production_lifecycle_sequence(&report, true);
+
+    let output_path = PathBuf::from(report["outcomes"][0]["outputs"][0]["path"].as_str().expect("gallery output path"));
+    assert_eq!(
+        fs::read_to_string(output_path.join("payload.txt")).unwrap(),
+        "resumable remote transfer gallery payload\n"
+    );
+    let payload = fs::read(output_path.join("payload.bin")).expect("gallery payload bytes");
+    assert_eq!(payload.len(), GALLERY_PAYLOAD_BYTES);
+    assert_eq!(blake3::hash(&payload), blake3::hash(&vec![0_u8; GALLERY_PAYLOAD_BYTES]));
+    assert_eq!(fs::read_dir(&store_dir).unwrap().count(), 1);
+
+    let completed = read_checkpoint_summary(&partial.path);
+    assert_eq!(completed.session_id, partial.session_id);
+    assert_eq!(completed.manifest_digest_blake3, partial.manifest_digest_blake3);
+    assert!(completed.acknowledged_chunks > partial.acknowledged_chunks);
+    assert!(completed.transferred_bytes > partial.transferred_bytes);
+}
+
+#[test]
+fn gallery_resumable_remote_transfer_rejects_tampered_acknowledged_content() {
+    if !cfg!(debug_assertions) {
+        eprintln!("SKIP: the deterministic transfer-interruption seam is disabled in release binaries");
+        return;
+    }
+    let root = tempfile::tempdir().expect("gallery tampered transfer tempdir");
+    let state_dir = root.path().join("state");
+    let store_dir = root.path().join("store");
+    fs::create_dir_all(&state_dir).expect("gallery state dir");
+    fs::create_dir_all(&store_dir).expect("gallery store dir");
+    write_ticket_state(&state_dir);
+
+    let interrupted = remote_gallery_build_command(&state_dir, &store_dir)
+        .env(INTERRUPT_ENV, INTERRUPT_AFTER_CHUNKS)
+        .output()
+        .expect("interrupt gallery transfer before tamper");
+    assert!(!interrupted.status.success());
+    let partial = partial_output_checkpoint(&state_dir);
+    let acknowledged_digest = partial.acknowledged_chunk_digests.first().expect("acknowledged chunk digest");
+    let receiver_chunk = state_dir
+        .join(REMOTE_TRANSFER_RECEIVER_DIR)
+        .join(&partial.session_id)
+        .join(REMOTE_TRANSFER_CHUNK_DIR)
+        .join(acknowledged_digest);
+    assert!(receiver_chunk.is_file());
+    fs::write(&receiver_chunk, b"tampered acknowledged gallery chunk").expect("tamper acknowledged chunk");
+
+    let rejected = remote_gallery_build_command(&state_dir, &store_dir)
+        .output()
+        .expect("retry tampered gallery transfer");
+    assert!(!rejected.status.success(), "tampered acknowledged content must block resume");
+    assert!(String::from_utf8_lossy(&rejected.stderr).contains(ACKNOWLEDGED_CHUNK_MISSING_REASON));
+    assert_eq!(fs::read_dir(&store_dir).unwrap().count(), 0);
+    assert!(!state_diagnostics_contain(&state_dir, "output-admitted"));
 }
 
 #[test]
@@ -642,6 +743,9 @@ fn assert_production_lifecycle_sequence(report: &Value, expect_resume: bool) {
 #[derive(Debug)]
 struct CheckpointSummary {
     path: PathBuf,
+    session_id: String,
+    manifest_digest_blake3: String,
+    acknowledged_chunk_digests: Vec<String>,
     acknowledged_chunks: usize,
     transferred_bytes: u64,
 }
@@ -830,12 +934,21 @@ fn json_diagnostic_contains(root: &Value, needle: &str) -> bool {
 
 fn read_checkpoint_summary(path: &Path) -> CheckpointSummary {
     let value: Value = serde_json::from_slice(&fs::read(path).expect("checkpoint bytes")).expect("checkpoint JSON");
+    let acknowledged_chunk_digests = value["checkpoint"]["acknowledged_chunk_digests"]
+        .as_array()
+        .expect("acknowledged chunk array")
+        .iter()
+        .map(|digest| digest.as_str().expect("acknowledged chunk digest").to_string())
+        .collect::<Vec<_>>();
     CheckpointSummary {
         path: path.to_path_buf(),
-        acknowledged_chunks: value["checkpoint"]["acknowledged_chunk_digests"]
-            .as_array()
-            .expect("acknowledged chunk array")
-            .len(),
+        session_id: value["checkpoint"]["scope"]["session_id"].as_str().expect("checkpoint session id").to_string(),
+        manifest_digest_blake3: value["checkpoint"]["scope"]["manifest_digest_blake3"]
+            .as_str()
+            .expect("checkpoint manifest digest")
+            .to_string(),
+        acknowledged_chunks: acknowledged_chunk_digests.len(),
+        acknowledged_chunk_digests,
         transferred_bytes: value["checkpoint"]["transferred_bytes"].as_u64().expect("transferred byte count"),
     }
 }
@@ -881,6 +994,15 @@ fn remote_build_command(state_dir: &Path, store_dir: &Path, build_file: &Path) -
         "--remote-build-time-secs",
         &MAX_BUILD_TIME_SECS.to_string(),
     ]);
+    command
+}
+
+fn remote_gallery_build_command(state_dir: &Path, store_dir: &Path) -> Command {
+    let project_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(GALLERY_PROJECT_RELATIVE_PATH);
+    assert!(project_dir.join("mantle-project.ncl").is_file());
+    assert!(project_dir.join("README.md").is_file());
+    let mut command = remote_build_command(state_dir, store_dir, Path::new(GALLERY_RESUMABLE_SELECTOR));
+    command.current_dir(project_dir);
     command
 }
 

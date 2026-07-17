@@ -19,9 +19,10 @@ producer annotation disappears or moves outside its declared owner sources. It
 also scans root-package Rust sources that serialize JSON through the standard
 string/vector helpers (compact or pretty) and requires each such module to
 belong to at least one classified producer family.
-Planned remote-attempt, observability, resumable-transfer, and Wasm-component
-surfaces are classification-only entries: registration does not claim those
-active changes are implemented.
+Registry entries may be added before their producer workflow is complete, so
+classification alone never proves implementation. Current resumable-transfer
+production evidence is owned by the Rust client/server path and the validation
+rails in [`remote-transfer.md`](remote-transfer.md), not by registry presence.
 
 ## Authority flow
 

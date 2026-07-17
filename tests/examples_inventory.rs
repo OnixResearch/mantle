@@ -35,6 +35,10 @@ const NEXT_SECTION_PREFIX: &str = "## ";
 const CRUNCH_IDENTIFIER_ALLOWLIST: &[&str] = &["crunch.ncl"];
 const PROJECT_README_PATH: &str = "examples/project/README.md";
 const PROJECTS_README_PATH: &str = "examples/projects/README.md";
+const REMOTE_TRANSFER_DOC_PATH: &str = "docs/remote-transfer.md";
+const REMOTE_PROJECT_README_PATH: &str = "examples/projects/remote-build-loopback/README.md";
+const REMOTE_PROJECT_ID: &str = "project-remote-build-loopback";
+const REMOTE_RESUMABLE_TRANSFER_RAIL: &str = "remote-resumable-transfer-production";
 const SUPPORT_FILES: &[&str] = &[
     "examples/README.md",
     "examples/benchmark_support.rs",
@@ -107,6 +111,7 @@ const ALLOWED_RAILS: &[&str] = &[
     "cargo-import-cli",
     "wasm-component-cli",
     "remote-stdio-cli",
+    "remote-resumable-transfer-production",
     "kernel-oci-roundtrip",
     "transcript-cli",
     "representative-offline-cargo-rail",
@@ -125,7 +130,7 @@ const REQUIRED_WORKFLOW_RAILS: &[(&str, &[&str])] = &[
     ("project-portable-receipt-handoff", &["portable-receipt-cli", "semantic-graph-cli"]),
     ("project-cargo-import-offline", &["cargo-import-cli"]),
     ("project-wasm-component-hello", &["wasm-component-cli"]),
-    ("project-remote-build-loopback", &["remote-stdio-cli"]),
+    ("project-remote-build-loopback", &["remote-stdio-cli", "remote-resumable-transfer-production"]),
     ("project-kernel-bundle-oci-local", &["kernel-oci-roundtrip"]),
     ("transcript-hello-eval", &["transcript-cli"]),
 ];
@@ -603,6 +608,42 @@ fn examples_catalog_covers_checked_in_user_facing_examples() {
     let errors = validate_catalog(&catalog, &user_facing_paths, &examples_readme, &root_readme);
 
     assert!(errors.is_empty(), "examples catalog invalid:\n{}", errors.join("\n"));
+}
+
+#[test]
+fn remote_resumable_workflow_catalog_and_docs_name_the_production_boundary() {
+    let catalog = load_catalog();
+    let remote = catalog
+        .examples
+        .iter()
+        .find(|example| example.id == REMOTE_PROJECT_ID)
+        .expect("remote project catalog entry");
+    let transfer_doc = read_repo_file(REMOTE_TRANSFER_DOC_PATH);
+    let project_readme = read_repo_file(REMOTE_PROJECT_README_PATH);
+
+    assert!(remote.validation_rails.iter().any(|rail| rail == REMOTE_RESUMABLE_TRANSFER_RAIL));
+    assert!(remote.validation_rails.iter().any(|rail| rail == "negative-build"));
+    assert!(transfer_doc.contains("run_stdio_remote_child"));
+    assert!(transfer_doc.contains("cmd_remote_serve"));
+    assert!(transfer_doc.contains("debug-test seams, not release operator controls"));
+    assert!(project_readme.contains("gallery_resumable_remote_transfer_"));
+    assert!(project_readme.contains("acknowledged-chunk-missing"));
+    assert!(project_readme.contains("does not prove exactly-once delivery"));
+    assert!(!transfer_doc.contains("not yet wired into the production remote client/server protocol"));
+    assert!(
+        !project_readme
+            .contains("does not prove production P2P deployment, SSH configuration, restart-safe coordination")
+    );
+
+    let mut missing_production_rail = remote.clone();
+    missing_production_rail.validation_rails.retain(|rail| rail != REMOTE_RESUMABLE_TRANSFER_RAIL);
+    let mut errors = Vec::new();
+    validate_required_workflow_rails(&missing_production_rail, &mut errors);
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.contains("missing required workflow rail `remote-resumable-transfer-production`"))
+    );
 }
 
 #[test]

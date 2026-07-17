@@ -680,14 +680,14 @@ let Example = {
     {
       id = "project-remote-build-loopback",
       path = "examples/projects/remote-build-loopback/mantle-project.ncl",
-      title = "Local stdio remote-build loopback",
-      summary = "Creates a bounded ticket, dispatches a concrete payload through framed stdio, admits signed output, and reports redacted status.",
+      title = "Local production stdio remote-build loopback",
+      summary = "Creates bounded tickets, streams a repeated-content multi-chunk payload, resumes verified receiver state, rejects tampering, admits signed output, and reports redacted status.",
       lane = "trust-provenance",
       kind = "nickel-project",
       support_tier = "heavy",
       requirements = { network = false, generated_seed = false, linux_bwrap = true, heavyweight = true, benchmark = false },
-      validation_rails = ["eval", "remote-stdio-cli", "manual-project-build", "inspect-output", "non-claim-doc"],
-      skip_reason = "full loopback dispatch runs a nested Linux sandbox and one-use ticket workflow",
+      validation_rails = ["eval", "remote-stdio-cli", "remote-resumable-transfer-production", "manual-project-build", "inspect-output", "negative-build", "non-claim-doc"],
+      skip_reason = "production loopback dispatch runs nested Linux sandboxes; deterministic interruption is a debug-test-only validation seam",
     },
     {
       id = "project-kernel-bundle-oci-local",
