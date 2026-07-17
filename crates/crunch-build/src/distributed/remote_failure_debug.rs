@@ -860,7 +860,7 @@ pub fn redact_remote_failure_diagnostic(value: &str) -> Result<String, RemoteFai
     let rendered: String =
         value.chars().map(|character| if character.is_control() { '�' } else { character }).collect();
     debug_assert!(!rendered.contains('\0'));
-    debug_assert!(rendered.len() <= MAX_REMOTE_FAILURE_REASON_BYTES.saturating_mul(char::MAX_LEN_UTF8));
+    debug_assert!(rendered.len() <= MAX_REMOTE_FAILURE_REASON_BYTES.saturating_mul(char::MAX.len_utf8()));
     Ok(rendered)
 }
 

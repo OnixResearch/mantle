@@ -94,6 +94,7 @@ pub(crate) const STAGED_SOURCE_TOP_LEVEL_ENTRIES: &[&str] = &[
     "Cargo.toml",
     "bootstrap",
     "builders",
+    "config",
     "crates",
     "lib",
     "rust-toolchain.toml",
@@ -3391,6 +3392,7 @@ mod tests {
         std::fs::create_dir_all(dir.join(".cargo")).unwrap();
         std::fs::create_dir_all(dir.join("bootstrap")).unwrap();
         std::fs::create_dir_all(dir.join("builders")).unwrap();
+        std::fs::create_dir_all(dir.join("config").join("action-result-policy").join("generated")).unwrap();
         std::fs::create_dir_all(dir.join("crates").join("crate-a")).unwrap();
         std::fs::create_dir_all(dir.join("lib")).unwrap();
         std::fs::create_dir_all(dir.join("src")).unwrap();
@@ -3415,6 +3417,11 @@ mod tests {
         std::fs::write(dir.join(".cargo").join("config.toml"), "[build]\n").unwrap();
         std::fs::write(dir.join("bootstrap").join("seed.ncl"), "{}").unwrap();
         std::fs::write(dir.join("builders").join("mk.ncl"), "{}").unwrap();
+        std::fs::write(
+            dir.join("config").join("action-result-policy").join("generated").join("action-result-policy.json"),
+            "{}",
+        )
+        .unwrap();
         std::fs::write(dir.join("crates").join("crate-a").join("lib.rs"), "pub fn x() {}\n").unwrap();
         std::fs::write(dir.join("lib").join("lib.ncl"), "{}").unwrap();
         std::fs::write(dir.join("src").join("main.rs"), "fn main() {}\n").unwrap();
@@ -3802,6 +3809,15 @@ mod tests {
         copy_selected_source_tree(repo.path(), stage.path()).unwrap();
 
         assert!(stage.path().join("Cargo.toml").is_file());
+        assert!(
+            stage
+                .path()
+                .join("config")
+                .join("action-result-policy")
+                .join("generated")
+                .join("action-result-policy.json")
+                .is_file()
+        );
         assert!(stage.path().join("vendor").join("patched").join("README").is_file());
         assert!(stage.path().join("vendor-deps").join("dep-a").join("Cargo.toml").is_file());
         assert!(stage.path().join(".cargo").join("vendor-config.toml").is_file());
@@ -3813,6 +3829,12 @@ mod tests {
     #[test]
     fn staged_source_path_policy_matches_release_archive_policy() {
         assert!(staged_source_path_is_copyable(Path::new("vendor/patched/README")).unwrap());
+        assert!(
+            staged_source_path_is_copyable(Path::new(
+                "config/action-result-policy/generated/action-result-policy.json"
+            ))
+            .unwrap()
+        );
         assert!(staged_source_path_is_copyable(Path::new(".cargo/vendor-config.toml")).unwrap());
         assert!(staged_source_path_is_copyable(Path::new("vendor-deps/cc/src/target/apple.rs")).unwrap());
         assert!(!staged_source_path_is_copyable(Path::new("vendor/.pi/prompt-history.jsonl")).unwrap());
