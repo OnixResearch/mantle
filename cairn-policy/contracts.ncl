@@ -98,6 +98,10 @@ let PositiveNumber = std.contract.from_predicate (fun value =>
   std.is_number value && value > 0
 ) in
 
+let DependencyTargetClass = std.contract.from_predicate (fun value =>
+  std.is_string value && value == "lifecycle-id"
+) in
+
 {
   Artifact = {
     id | NonEmptyString,
@@ -133,10 +137,22 @@ let PositiveNumber = std.contract.from_predicate (fun value =>
     promoted | Promoted,
   },
 
+  ArtifactSubstancePolicy = {
+    proposal_minimum_substantive_lines | PositiveNumber,
+    design_minimum_substantive_lines | PositiveNumber,
+    minimum_requirement_blocks | PositiveNumber,
+    minimum_substantive_tasks | PositiveNumber,
+    placeholder_tokens | NonEmptyArray | Array NonEmptyString,
+    normative_tokens | NonEmptyArray | Array NonEmptyString,
+    dependency_marker_id | NonEmptyString,
+    dependency_target_class | DependencyTargetClass,
+  },
+
   GatePolicy = {
     stages | NonEmptyArray | Array Stage,
     ignore_archives | Bool,
     finding | FindingPolicy,
+    substance | ArtifactSubstancePolicy,
   },
 
   ReportContract = {

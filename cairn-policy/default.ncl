@@ -55,6 +55,16 @@ let PolicyFieldSetDigest = "c5b71f15de4175d9ff01f7cb4b82eed898a71e55f6d1fa5e24a9
       route = "auto-fix",
       promoted = "no",
     },
+    substance = {
+      proposal_minimum_substantive_lines = 1,
+      design_minimum_substantive_lines = 1,
+      minimum_requirement_blocks = 1,
+      minimum_substantive_tasks = 1,
+      placeholder_tokens = ["cairn_placeholder", "tbd", "describe why", "describe the user-visible", "describe the current state", "implement the change", "verify and archive the change"],
+      normative_tokens = ["MUST", "SHALL", "SHOULD", "MAY"],
+      dependency_marker_id = "depends",
+      dependency_target_class = "lifecycle-id",
+    },
   },
 
   report_contract = {

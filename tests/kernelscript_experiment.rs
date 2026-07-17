@@ -3,11 +3,11 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crunch_glue::CrunchDerivation;
-use crunch_kernelscript_core::classify_generated_project;
-use crunch_kernelscript_core::validate_profile;
 use crunch_kernelscript_core::ExperimentProfile;
 use crunch_kernelscript_core::GeneratedProjectFacts;
 use crunch_kernelscript_core::ObservedGeneratedFile;
+use crunch_kernelscript_core::classify_generated_project;
+use crunch_kernelscript_core::validate_profile;
 use serde_json::Value;
 
 const FIXTURE_ROOT: &str = "tests/fixtures/kernelscript-experiment";
