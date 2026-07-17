@@ -78,4 +78,14 @@ Successful evidence authenticates only the immutable image/metadata digest pair 
 
 Task `102` is the final pre-archive packet: diff hygiene passed, validation returned `valid: true`, all three gates returned `PASS`, tasks reported 8/8 complete with zero remaining, and Tracey remained `145/145 referenced`.
 
-Archive execution, exact post-archive receipts, commit, and push remain the final V4 operations.
+## Archive and exact post-archive state
+
+Task `105` ran archive dry-run/execution with `CAIRN_ARCHIVE_DATE=2026-07-17`; the execute receipt hash is `22b25ad4df82520bf5b767a865168ec269d34951e162cb3d77fa5973f5a3b1e7`.
+
+Task `106` produced the exact machine-readable receipts beside this transcript:
+
+- `post-archive-validation.json` reports `"changes": 0`, empty issue/finding lists, and `"valid": true`.
+- `post-archive-change-list.json` reports an empty `changes` array.
+- `post-archive-tracey.txt` reports `traceability coverage ok: 145/145 referenced (profile mantle-default)`.
+
+Archive commit and push are the remaining mechanical V4 operations.
