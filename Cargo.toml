@@ -118,6 +118,10 @@ path = "examples/projects/delta-substitution/demo.rs"
 name = "release_witness_handoff"
 path = "examples/projects/release-witness-handoff/demo.rs"
 
+[[example]]
+name = "shared_action_result_publish"
+path = "examples/projects/shared-action-result-roundtrip/publish.rs"
+
 [dependencies]
 crunch-pipeline = { path = "crates/crunch-pipeline" }
 crunch-eval = { path = "crates/crunch-eval" }

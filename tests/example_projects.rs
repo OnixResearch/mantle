@@ -1,10 +1,26 @@
 use std::collections::BTreeMap;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::io::Write;
+use std::net::Shutdown;
+use std::net::TcpListener;
+use std::net::TcpStream;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command as StdCommand;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::thread;
+use std::thread::JoinHandle;
+use std::time::Duration;
 
 use assert_cmd::Command;
+use crunch_attestation::Canonicalize;
+use crunch_attestation::ClosureAttestation;
 
 const PROJECTS_ROOT: &str = "examples/projects";
 const GENERATED_SITE_PROJECT: &str = "generated-site";
@@ -24,6 +40,9 @@ const RELEASE_WITNESS_PROJECT: &str = "release-witness-handoff";
 const OFFLINE_SOURCE_BUNDLE_PROJECT: &str = "offline-source-bundle";
 const REVIEWED_FILEGEN_PROJECT: &str = "reviewed-file-generation";
 const DEVELOPER_SHELL_RUN_PROJECT: &str = "developer-shell-run";
+const ARTIFACT_PROVENANCE_PROJECT: &str = "artifact-provenance-walkthrough";
+const HERMETIC_PLAN_REBUILD_PROJECT: &str = "hermetic-plan-rebuild";
+const SHARED_ACTION_RESULT_PROJECT: &str = "shared-action-result-roundtrip";
 const SOURCE_BUNDLE_RECORDS_RELATIVE: &str = "source-bundles/records";
 const SOURCE_BUNDLE_RECORD_COUNT: u64 = 1;
 const SOURCE_BUNDLE_RECORD_COUNT_USIZE: usize = 1;
@@ -54,6 +73,16 @@ const MISSING_SELECTOR: &str = ".#missing-package";
 const DEFAULT_OUTPUT_LABEL: &str = "out";
 const CACHED_OUTPUT_ANNOTATION: &str = "cached";
 const MAX_PROJECT_OUTPUTS: usize = 16;
+const EXECUTABLE_MODE: u32 = 0o755;
+const MAX_HTTP_HEADER_LINES: usize = 128;
+const MAX_HTTP_REQUESTS: u32 = 256;
+const HTTP_POLL_INTERVAL_MS: u64 = 10;
+const _: () = {
+    assert!(MAX_HTTP_HEADER_LINES > 1);
+    assert!(MAX_HTTP_REQUESTS > 1);
+};
+const ACTION_RESULT_TRUSTED_KEY: &str = "action.example.com-1:yKUSiqP9yaMSduDmGtw8U9iVVd/Coyv9csB1rjHtiRM=";
+const ACTION_RESULT_UNKNOWN_SIGNER_KEY: &str = "unknown.example.com-1:yKUSiqP9yaMSduDmGtw8U9iVVd/Coyv9csB1rjHtiRM=";
 
 fn mantle_cmd() -> Command {
     Command::cargo_bin("mantle").expect("mantle binary should be built")
@@ -103,6 +132,95 @@ fn can_build_fast_projects() -> bool {
         && find_static_busybox().is_some()
 }
 
+struct StaticCacheServer {
+    base_url: String,
+    stop: Arc<AtomicBool>,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl StaticCacheServer {
+    fn start(root: &Path) -> Self {
+        assert!(root.is_dir(), "static cache root must exist");
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_thread = Arc::clone(&stop);
+        let root = root.to_path_buf();
+        let handle = thread::spawn(move || {
+            let mut served_requests = 0u32;
+            while !stop_thread.load(Ordering::SeqCst) && served_requests < MAX_HTTP_REQUESTS {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        serve_static_cache_request(&root, &mut stream);
+                        served_requests = served_requests.saturating_add(1);
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(HTTP_POLL_INTERVAL_MS));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+        Self {
+            base_url: format!("http://{address}"),
+            stop,
+            handle: Some(handle),
+        }
+    }
+}
+
+impl Drop for StaticCacheServer {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        let _ = TcpStream::connect(self.base_url.trim_start_matches("http://"));
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+fn serve_static_cache_request(root: &Path, stream: &mut TcpStream) {
+    assert!(root.is_dir(), "static cache root must remain available");
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    let mut request_line = String::new();
+    if reader.read_line(&mut request_line).unwrap_or(0) == 0 {
+        return;
+    }
+    for _ in 0..MAX_HTTP_HEADER_LINES {
+        let mut header = String::new();
+        if reader.read_line(&mut header).unwrap_or(0) == 0 || header == "\r\n" {
+            break;
+        }
+    }
+    let mut parts = request_line.split_whitespace();
+    let method = parts.next().unwrap_or_default();
+    let request_target = parts.next().unwrap_or_default();
+    let body = static_cache_relative_path(request_target).and_then(|path| std::fs::read(root.join(path)).ok());
+    let (status, body) = match body {
+        Some(body) if method == "GET" || method == "HEAD" => ("HTTP/1.1 200 OK", body),
+        _ => ("HTTP/1.1 404 Not Found", b"not found\n".to_vec()),
+    };
+    write!(stream, "{status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).unwrap();
+    if method != "HEAD" {
+        stream.write_all(&body).unwrap();
+    }
+    stream.flush().unwrap();
+    let _ = stream.shutdown(Shutdown::Both);
+}
+
+fn static_cache_relative_path(request_target: &str) -> Option<PathBuf> {
+    let path = request_target.split('?').next()?.strip_prefix('/')?;
+    let mut relative = PathBuf::new();
+    for component in Path::new(path).components() {
+        match component {
+            Component::Normal(segment) => relative.push(segment),
+            _ => return None,
+        }
+    }
+    (!relative.as_os_str().is_empty()).then_some(relative)
+}
+
 struct ProjectRun {
     _store: tempfile::TempDir,
     _state: tempfile::TempDir,
@@ -124,8 +242,10 @@ fn project_command_with_build_environment(project: &str) -> Command {
     let mut command = mantle_cmd();
     command.current_dir(root);
     if let Some(bwrap) = find_bwrap() {
+        let wrappers = PathBuf::from("/run/wrappers/bin");
         let path = std::env::join_paths(
             std::iter::once(bwrap.parent().unwrap().to_path_buf())
+                .chain(wrappers.is_dir().then_some(wrappers))
                 .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())),
         )
         .unwrap();
@@ -282,6 +402,22 @@ fn run_project_command(current_dir: &Path, args: &[&str]) -> std::process::Outpu
     command.current_dir(current_dir).args(args).output().unwrap()
 }
 
+fn workflow_build_command(project: &str, store: &Path, state: &Path) -> Command {
+    assert!(store.is_dir(), "workflow store must exist");
+    assert!(state.is_dir(), "workflow state must exist");
+    let mut command = project_command_with_build_environment(project);
+    command.arg("--json").arg("--store").arg(store).arg("--state-dir").arg(state).arg("build");
+    command
+}
+
+fn workflow_attest_command(project: &str, store: &Path, state: &Path) -> Command {
+    assert!(store.is_dir(), "attestation store must exist");
+    assert!(state.is_dir(), "attestation state must exist");
+    let mut command = project_command_with_build_environment(project);
+    command.arg("--store").arg(store).arg("--state-dir").arg(state).arg("attest");
+    command
+}
+
 fn parse_successful_json(output: std::process::Output, label: &str) -> serde_json::Value {
     assert!(!label.is_empty(), "JSON command label must not be empty");
     assert!(output.status.success(), "{label} failed: {}", String::from_utf8_lossy(&output.stderr));
@@ -325,6 +461,9 @@ fn production_workflow_projects_evaluate_and_keep_negative_paths() {
         (OFFLINE_SOURCE_BUNDLE_PROJECT, "offline source bundle project"),
         (REVIEWED_FILEGEN_PROJECT, "reviewed file generation project"),
         (DEVELOPER_SHELL_RUN_PROJECT, "developer shell and run project"),
+        (ARTIFACT_PROVENANCE_PROJECT, "artifact provenance project"),
+        (HERMETIC_PLAN_REBUILD_PROJECT, "hermetic plan and rebuild project"),
+        (SHARED_ACTION_RESULT_PROJECT, "shared action-result project"),
     ] {
         assert_project_evaluates(project, label);
     }
@@ -354,6 +493,15 @@ fn production_workflow_projects_evaluate_and_keep_negative_paths() {
         std::fs::read_to_string(project_root(DEVELOPER_SHELL_RUN_PROJECT).join("mantle-project.ncl")).unwrap();
     assert!(developer_loop.contains("MANTLE_EXAMPLE_PROFILE"));
     assert!(developer_loop.contains("usage: operator-demo NAME"));
+    let provenance = std::fs::read_to_string(project_root(ARTIFACT_PROVENANCE_PROJECT).join("README.md")).unwrap();
+    assert!(provenance.contains("not release or witness proofs"));
+    assert!(provenance.contains("canonical verification fails"));
+    let hermetic = std::fs::read_to_string(project_root(HERMETIC_PLAN_REBUILD_PROJECT).join("README.md")).unwrap();
+    assert!(hermetic.contains("matching BLAKE3 child-environment digests"));
+    assert!(hermetic.contains("does not prove compiler correctness"));
+    let action_result = std::fs::read_to_string(project_root(SHARED_ACTION_RESULT_PROJECT).join("README.md")).unwrap();
+    assert!(action_result.contains("Index presence is discovery only"));
+    assert!(action_result.contains("unknown signer is rejected"));
 }
 
 struct SourceBundleWorkflow {
@@ -712,6 +860,588 @@ fn developer_shell_and_run_loop_rejects_invalid_selection_and_arguments() {
         .unwrap();
     assert!(!invalid_run.status.success(), "missing tool argument unexpectedly succeeded");
     assert!(String::from_utf8_lossy(&invalid_run.stderr).contains("usage: operator-demo NAME"));
+}
+
+struct ArtifactProvenanceWorkflow {
+    _root: tempfile::TempDir,
+    store: PathBuf,
+    state: PathBuf,
+}
+
+impl ArtifactProvenanceWorkflow {
+    fn new() -> Self {
+        let root = tempfile::tempdir().unwrap();
+        let store = root.path().join("store");
+        let state = root.path().join("state");
+        std::fs::create_dir_all(&store).unwrap();
+        std::fs::create_dir_all(&state).unwrap();
+        assert!(store.is_dir());
+        assert!(state.is_dir());
+        Self {
+            _root: root,
+            store,
+            state,
+        }
+    }
+
+    fn build(&self) -> serde_json::Value {
+        parse_successful_json(
+            workflow_build_command(ARTIFACT_PROVENANCE_PROJECT, &self.store, &self.state)
+                .args(["--no-substitute", ".#artifact"])
+                .output()
+                .unwrap(),
+            "artifact provenance build",
+        )
+    }
+
+    fn attest(&self, args: &[&str]) -> std::process::Output {
+        assert!(!args.is_empty(), "attestation arguments must not be empty");
+        workflow_attest_command(ARTIFACT_PROVENANCE_PROJECT, &self.store, &self.state)
+            .args(args)
+            .output()
+            .unwrap()
+    }
+}
+
+#[test]
+fn artifact_provenance_walkthrough_inspects_verifies_and_diffs_evidence() {
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: artifact provenance workflow requires Linux, bwrap, and static BusyBox");
+        return;
+    }
+    let workflow = ArtifactProvenanceWorkflow::new();
+    let build = workflow.build();
+    assert_eq!(build["counts"]["succeeded_total"], 1);
+    let artifact_path = build["outcomes"][0]["outputs"][0]["path"].as_str().unwrap();
+    assert!(
+        std::fs::read_to_string(Path::new(artifact_path).join("artifact.txt"))
+            .unwrap()
+            .contains("assembled")
+    );
+
+    let show = parse_successful_json(workflow.attest(&["show", artifact_path]), "attest show");
+    assert_eq!(show["kind"], "artifact");
+    assert!(show["attestation"]["edges"].as_array().unwrap().iter().any(|edge| edge["kind"] == "build-input"));
+    let source_logical = show["attestation"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|node| {
+            node["attributes"]["logical_path"]
+                .as_str()
+                .filter(|path| path.contains("-provenance-walkthrough-source"))
+        })
+        .unwrap();
+    let closure = parse_successful_json(workflow.attest(&["closure", artifact_path]), "attest closure");
+    assert_eq!(closure["attestation"]["facts"]["members"].as_array().unwrap().len(), 2);
+
+    for (kind, selector) in [("artifact", artifact_path), ("closure", artifact_path)] {
+        let verify = workflow.attest(&["verify", kind, selector]);
+        assert!(verify.status.success(), "{kind} verify failed: {}", String::from_utf8_lossy(&verify.stderr));
+        assert!(String::from_utf8_lossy(&verify.stdout).contains(&format!("OK {kind} digest=")));
+    }
+    let diff = workflow.attest(&["diff", source_logical, artifact_path]);
+    assert!(diff.status.success(), "attestation diff failed: {}", String::from_utf8_lossy(&diff.stderr));
+    let diff_stdout = String::from_utf8_lossy(&diff.stdout);
+    assert!(diff_stdout.contains("---") && diff_stdout.contains("+++"));
+}
+
+#[test]
+fn artifact_provenance_walkthrough_rejects_tampered_and_missing_evidence() {
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: artifact provenance workflow requires Linux, bwrap, and static BusyBox");
+        return;
+    }
+    let workflow = ArtifactProvenanceWorkflow::new();
+    let build = workflow.build();
+    let artifact_path = build["outcomes"][0]["outputs"][0]["path"].as_str().unwrap();
+    let show = parse_successful_json(workflow.attest(&["show", artifact_path]), "attest show before tamper");
+    let sidecar = PathBuf::from(show["stored_path"].as_str().unwrap());
+    let original = std::fs::read(&sidecar).unwrap();
+    std::fs::OpenOptions::new().append(true).open(&sidecar).unwrap().write_all(b"tampered").unwrap();
+    let artifact_verify = workflow.attest(&["verify", "artifact", artifact_path]);
+    assert!(!artifact_verify.status.success(), "tampered artifact sidecar unexpectedly verified");
+    assert!(!String::from_utf8_lossy(&artifact_verify.stderr).trim().is_empty());
+    std::fs::write(&sidecar, original).unwrap();
+
+    let closure = parse_successful_json(workflow.attest(&["closure", artifact_path]), "attest closure before tamper");
+    let closure_sidecar = PathBuf::from(closure["stored_path"].as_str().unwrap());
+    let original_closure = std::fs::read(&closure_sidecar).unwrap();
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(&closure_sidecar)
+        .unwrap()
+        .write_all(b"tampered")
+        .unwrap();
+    let closure_verify = workflow.attest(&["verify", "closure", artifact_path]);
+    assert!(!closure_verify.status.success(), "tampered closure sidecar unexpectedly verified");
+    assert!(!String::from_utf8_lossy(&closure_verify.stderr).trim().is_empty());
+
+    let mut stale_membership: serde_json::Value = serde_json::from_slice(&original_closure).unwrap();
+    let root_node_id = stale_membership["facts"]["root_node_ids"][0].as_str().unwrap().to_string();
+    let members = stale_membership["facts"]["members"].as_array_mut().unwrap();
+    assert_eq!(members.len(), 2);
+    let root_member_index = members.iter().position(|member| member["node_id"] == root_node_id).unwrap();
+    members.remove(root_member_index);
+    assert_eq!(members.len(), 1);
+    let stale_attestation: ClosureAttestation = serde_json::from_value(stale_membership.clone()).unwrap();
+    let stale_error = stale_attestation.canonical_bytes().unwrap_err();
+    assert!(stale_error.to_string().contains("member"));
+    std::fs::write(&closure_sidecar, serde_json::to_vec(&stale_membership).unwrap()).unwrap();
+    let stale_verify = workflow.attest(&["verify", "closure", artifact_path]);
+    assert!(!stale_verify.status.success(), "stale closure root membership unexpectedly verified");
+    assert!(String::from_utf8_lossy(&stale_verify.stderr).contains("closure root missing from members"));
+
+    let missing = workflow.attest(&["show", "/mantle/store/00000000000000000000000000000000-missing"]);
+    assert!(!missing.status.success(), "missing artifact selector unexpectedly resolved");
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("no artifact attestation"));
+}
+
+struct HermeticPlanWorkflow {
+    _root: tempfile::TempDir,
+    plan_store: PathBuf,
+    plan_state: PathBuf,
+    plan_tools: PathBuf,
+    first_store: PathBuf,
+    first_state: PathBuf,
+    second_store: PathBuf,
+    second_state: PathBuf,
+}
+
+impl HermeticPlanWorkflow {
+    fn new() -> Self {
+        let root = tempfile::tempdir().unwrap();
+        let make_dir = |name: &str| {
+            let path = root.path().join(name);
+            std::fs::create_dir_all(&path).unwrap();
+            path
+        };
+        let plan_tools = make_dir("plan-tools");
+        let fusermount = plan_tools.join("fusermount3");
+        std::fs::write(&fusermount, b"#!/bin/sh\nexit 0\n").unwrap();
+        #[cfg(unix)]
+        std::fs::set_permissions(&fusermount, std::fs::Permissions::from_mode(EXECUTABLE_MODE)).unwrap();
+        let workflow = Self {
+            plan_store: make_dir("plan-store"),
+            plan_state: make_dir("plan-state"),
+            plan_tools,
+            first_store: make_dir("first-store"),
+            first_state: make_dir("first-state"),
+            second_store: make_dir("second-store"),
+            second_state: make_dir("second-state"),
+            _root: root,
+        };
+        assert!(workflow.plan_store.is_dir());
+        assert!(workflow.second_state.is_dir());
+        workflow
+    }
+
+    fn plan(&self, target: &str, nix_compat: bool) -> serde_json::Value {
+        let mut command = workflow_build_command(HERMETIC_PLAN_REBUILD_PROJECT, &self.plan_store, &self.plan_state);
+        let path = std::env::join_paths(
+            std::iter::once(self.plan_tools.clone())
+                .chain(find_bwrap().and_then(|path| path.parent().map(Path::to_path_buf)))
+                .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())),
+        )
+        .unwrap();
+        command.env("PATH", path);
+        if nix_compat {
+            command.arg("--nix-compat");
+        }
+        parse_successful_json(
+            command.args(["--plan", "--strict-hermetic", "--no-substitute", target]).output().unwrap(),
+            "strict build plan",
+        )
+    }
+
+    fn build(&self, store: &Path, state: &Path, host_token: &str) -> serde_json::Value {
+        parse_successful_json(
+            workflow_build_command(HERMETIC_PLAN_REBUILD_PROJECT, store, state)
+                .env("MANTLE_EXAMPLE_HOST_TOKEN", host_token)
+                .args(["--strict-hermetic", "--no-substitute", ".#payload"])
+                .output()
+                .unwrap(),
+            "strict clean build",
+        )
+    }
+}
+
+#[test]
+fn hermetic_plan_and_rebuild_match_across_ambient_host_changes() {
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: hermetic plan workflow requires Linux, bwrap, and static BusyBox");
+        return;
+    }
+    let workflow = HermeticPlanWorkflow::new();
+    let plan = workflow.plan(".#payload", false);
+    assert_eq!(plan["entries"][0]["action"], "build");
+    assert_eq!(std::fs::read_dir(&workflow.plan_store).unwrap().count(), 0);
+    let first = workflow.build(&workflow.first_store, &workflow.first_state, "first-host-value");
+    let second = workflow.build(&workflow.second_store, &workflow.second_state, "second-host-value");
+    assert_eq!(first["hermeticity_mode"], "strict");
+    assert_eq!(second["hermeticity_audit_events"], serde_json::json!([]));
+    assert_eq!(plan["entries"][0]["drv_key"], first["outcomes"][0]["drv_key"]);
+    assert_eq!(first["outcomes"][0]["drv_key"], second["outcomes"][0]["drv_key"]);
+    assert_eq!(
+        first["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"],
+        second["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"]
+    );
+    assert_eq!(
+        first["build_environment_reports"][0]["digest_blake3"],
+        second["build_environment_reports"][0]["digest_blake3"]
+    );
+    assert_eq!(first["build_environment_reports"][0]["determinism"]["strong_claim_blocked"], false);
+    let first_output = PathBuf::from(first["outcomes"][0]["outputs"][0]["path"].as_str().unwrap());
+    let second_output = PathBuf::from(second["outcomes"][0]["outputs"][0]["path"].as_str().unwrap());
+    assert_eq!(
+        std::fs::read(first_output.join("payload.txt")).unwrap(),
+        std::fs::read(second_output.join("payload.txt")).unwrap()
+    );
+    assert_eq!(
+        std::fs::read(first_output.join("environment.txt")).unwrap(),
+        std::fs::read(second_output.join("environment.txt")).unwrap()
+    );
+}
+
+#[test]
+fn hermetic_plan_rejects_impure_mode_and_scopes_identity_to_inputs_and_store_prefix() {
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: hermetic plan workflow requires Linux, bwrap, and static BusyBox");
+        return;
+    }
+    let workflow = HermeticPlanWorkflow::new();
+    let default_plan = workflow.plan(".#payload", false);
+    let changed_plan = workflow.plan("fixtures/changed-payload.ncl", false);
+    let nix_plan = workflow.plan(".#payload", true);
+    assert_ne!(default_plan["entries"][0]["drv_key"], changed_plan["entries"][0]["drv_key"]);
+    assert_ne!(default_plan["entries"][0]["drv_key"], nix_plan["entries"][0]["drv_key"]);
+    assert_eq!(default_plan["store_dir"], "/mantle/store");
+    assert_eq!(nix_plan["store_dir"], "/nix/store");
+
+    let conflict = workflow_build_command(HERMETIC_PLAN_REBUILD_PROJECT, &workflow.plan_store, &workflow.plan_state)
+        .args(["--strict-hermetic", "--impure", "--no-substitute", ".#payload"])
+        .output()
+        .unwrap();
+    assert!(!conflict.status.success(), "strict plus impure unexpectedly executed");
+    assert!(String::from_utf8_lossy(&conflict.stderr).contains("cannot be used with"));
+    assert_eq!(std::fs::read_dir(&workflow.plan_store).unwrap().count(), 0);
+}
+
+fn project_action_result_http_layout(producer_state: &Path, cache: &Path) {
+    assert!(producer_state.is_dir());
+    assert!(cache.is_dir());
+    let local_root = producer_state.join("action-results/v1");
+    let mut records = std::fs::read_dir(local_root.join("records"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    let mut action_dirs = std::fs::read_dir(local_root.join("indexes"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    records.sort();
+    action_dirs.sort();
+    assert_eq!(records.len(), 1, "fixture must publish exactly one record");
+    assert_eq!(action_dirs.len(), 1, "fixture must publish exactly one action index");
+    let signed: crunch_action_result_core::SignedActionResultRecord =
+        serde_json::from_slice(&std::fs::read(&records[0]).unwrap()).unwrap();
+    let result_digest =
+        signed.record.result_ref.strip_prefix(crunch_action_result_core::ACTION_RESULT_REF_PREFIX).unwrap();
+    let marker = action_dirs[0].join(format!("{result_digest}.ref"));
+    assert_eq!(std::fs::read_to_string(marker).unwrap().trim(), signed.record.result_ref);
+    let index = crunch_action_result_core::canonical_action_result_index(signed.record.action_ref.clone(), vec![
+        signed.record.result_ref.clone(),
+    ])
+    .unwrap();
+    let http_root = cache.join("action-results/v1");
+    std::fs::create_dir_all(http_root.join("records")).unwrap();
+    std::fs::create_dir_all(http_root.join("indexes")).unwrap();
+    let action_digest = signed.record.action_ref.strip_prefix(crunch_action_result_core::ACTION_REF_PREFIX).unwrap();
+    std::fs::write(
+        http_root.join("indexes").join(format!("{action_digest}.json")),
+        crunch_action_result_core::canonical_index_bytes(&index).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        http_root.join("records").join(format!("{result_digest}.json")),
+        crunch_action_result_core::canonical_signed_record_bytes(&signed).unwrap(),
+    )
+    .unwrap();
+}
+
+struct ActionResultWorkflow {
+    _root: tempfile::TempDir,
+    producer_store: PathBuf,
+    producer_state: PathBuf,
+    cache: PathBuf,
+}
+
+struct ActionResultConsumer {
+    store: tempfile::TempDir,
+    state: tempfile::TempDir,
+    report: serde_json::Value,
+}
+
+impl ActionResultWorkflow {
+    fn new() -> Self {
+        let root = tempfile::tempdir().unwrap();
+        let producer_store = root.path().join("producer-store");
+        let producer_state = root.path().join("producer-state");
+        let cache = root.path().join("cache");
+        for path in [&producer_store, &producer_state, &cache] {
+            std::fs::create_dir_all(path).unwrap();
+        }
+        assert!(producer_store.is_dir());
+        assert!(cache.is_dir());
+        Self {
+            _root: root,
+            producer_store,
+            producer_state,
+            cache,
+        }
+    }
+
+    fn publish(&self) -> serde_json::Value {
+        let key = project_root(SHARED_ACTION_RESULT_PROJECT).join("fixtures/action.key");
+        let report = parse_successful_json(
+            workflow_build_command(SHARED_ACTION_RESULT_PROJECT, &self.producer_store, &self.producer_state)
+                .args(["--nix-compat", "--no-substitute", "--signing-key"])
+                .arg(&key)
+                .arg(".#payload")
+                .output()
+                .unwrap(),
+            "shared action-result producer build",
+        );
+        let mut push = project_command_with_build_environment(SHARED_ACTION_RESULT_PROJECT);
+        let pushed = push
+            .arg("--store")
+            .arg(&self.producer_store)
+            .arg("--state-dir")
+            .arg(&self.producer_state)
+            .arg("--nix-compat")
+            .args(["store", "push", "--to"])
+            .arg(&self.cache)
+            .arg("--all")
+            .output()
+            .unwrap();
+        assert!(pushed.status.success(), "cache push failed: {}", String::from_utf8_lossy(&pushed.stderr));
+        project_action_result_http_layout(&self.producer_state, &self.cache);
+        report
+    }
+
+    fn consume(&self, server: &StaticCacheServer, selector: &str, trusted_key: &str) -> ActionResultConsumer {
+        assert!(server.base_url.starts_with("http://"));
+        assert!(!trusted_key.is_empty());
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+        let report = parse_successful_json(
+            workflow_build_command(SHARED_ACTION_RESULT_PROJECT, store.path(), state.path())
+                .args([
+                    "--nix-compat",
+                    "--substituters",
+                    &server.base_url,
+                    "--trusted-public-keys",
+                    trusted_key,
+                    selector,
+                ])
+                .output()
+                .unwrap(),
+            "shared action-result consumer build",
+        );
+        ActionResultConsumer { store, state, report }
+    }
+
+    fn only_nar(&self) -> PathBuf {
+        let nar_dir = self.cache.join("nar");
+        let mut nars = std::fs::read_dir(&nar_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.extension().is_some_and(|extension| extension == "nar"))
+            .collect::<Vec<_>>();
+        nars.sort();
+        assert!(nar_dir.is_dir());
+        assert_eq!(nars.len(), 1, "fixture must publish exactly one NAR");
+        nars.pop().unwrap()
+    }
+
+    fn corrupt_only_nar(&self) {
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(self.only_nar())
+            .unwrap()
+            .write_all(b"corrupted")
+            .unwrap();
+    }
+
+    fn remove_only_nar(&self) {
+        std::fs::remove_file(self.only_nar()).unwrap();
+        assert!(std::fs::read_dir(self.cache.join("nar")).unwrap().next().is_none());
+    }
+}
+
+fn load_workflow_path_info(state: &Path, logical_path: &str, store_prefix: &str) -> snix_store::path_info::PathInfo {
+    let (store_path, suffix) =
+        nix_compat::store_path::StorePath::<String>::from_absolute_path_full_with_prefix(logical_path, store_prefix)
+            .unwrap();
+    assert!(suffix.as_os_str().is_empty());
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let service = snix_store::pathinfoservice::RedbPathInfoService::new(
+            "example-pathinfo-verification".to_string(),
+            snix_store::pathinfoservice::RedbPathInfoServiceConfig {
+                path: Some(state.join("pathinfo.redb")),
+                read_only: true,
+                cache_size: None,
+            },
+        )
+        .await
+        .unwrap();
+        snix_store::pathinfoservice::PathInfoService::get(&service, *store_path.digest())
+            .await
+            .unwrap()
+            .unwrap()
+    })
+}
+
+fn action_result_report_with_disposition<'a>(
+    report: &'a serde_json::Value,
+    disposition: &str,
+) -> &'a serde_json::Value {
+    assert!(!disposition.is_empty());
+    assert!(report["action_result_reports"].is_array());
+    report["action_result_reports"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["disposition"] == disposition)
+        .unwrap_or_else(|| {
+            panic!("missing action-result disposition {disposition}: {}", report["action_result_reports"])
+        })
+}
+
+#[test]
+fn shared_action_result_roundtrip_reuses_trusted_http_result_and_separates_action_identity() {
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: shared action-result workflow requires Linux, bwrap, static BusyBox, and loopback HTTP");
+        return;
+    }
+    let workflow = ActionResultWorkflow::new();
+    let producer = workflow.publish();
+    assert_eq!(producer["counts"]["built_total"], 1);
+    assert!(action_result_report_with_disposition(&producer, "published")["publication_result_refs"].is_array());
+    let server = StaticCacheServer::start(&workflow.cache);
+
+    let trusted = workflow.consume(&server, ".#payload", ACTION_RESULT_TRUSTED_KEY);
+    assert_eq!(trusted.report["counts"]["built_total"], 0);
+    assert_eq!(trusted.report["counts"]["cached_total"], 1);
+    let producer_logical =
+        producer["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"].as_str().unwrap();
+    let consumer_logical = trusted.report["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"]
+        .as_str()
+        .unwrap();
+    let producer_path_info = load_workflow_path_info(&workflow.producer_state, producer_logical, "/nix/store");
+    let consumer_path_info = load_workflow_path_info(trusted.state.path(), consumer_logical, "/nix/store");
+    assert_eq!(producer_path_info.store_path, consumer_path_info.store_path);
+    assert_eq!(producer_path_info.node, consumer_path_info.node);
+    assert_eq!(producer_path_info.references, consumer_path_info.references);
+    assert_eq!(producer_path_info.nar_size, consumer_path_info.nar_size);
+    assert_eq!(producer_path_info.nar_sha256, consumer_path_info.nar_sha256);
+    assert_eq!(producer_path_info.signatures, consumer_path_info.signatures);
+    assert_eq!(producer_path_info.deriver, consumer_path_info.deriver);
+    let reused = action_result_report_with_disposition(&trusted.report, "reused");
+    assert_eq!(reused["selected_source_class"], "http");
+    assert!(reused["trust_basis"].as_array().unwrap().iter().any(|basis| basis == "action.example.com-1"));
+    let output_path = trusted.report["outcomes"][0]["outputs"][0]["path"].as_str().unwrap();
+    assert_eq!(
+        std::fs::read_to_string(Path::new(output_path).join("result.txt")).unwrap(),
+        "shared-action-result: original action\n"
+    );
+    let verify = workflow_attest_command(SHARED_ACTION_RESULT_PROJECT, trusted.store.path(), trusted.state.path())
+        .args(["--nix-compat", "verify", "artifact", output_path])
+        .output()
+        .unwrap();
+    assert!(
+        verify.status.success(),
+        "reused artifact verification failed: {}",
+        String::from_utf8_lossy(&verify.stderr)
+    );
+
+    for target in [".#changed_command", ".#changed_environment"] {
+        let changed = workflow.consume(&server, target, ACTION_RESULT_TRUSTED_KEY);
+        assert_eq!(changed.report["counts"]["built_total"], 1);
+        let miss = action_result_report_with_disposition(&changed.report, "miss");
+        assert_ne!(miss["action_ref"], reused["action_ref"]);
+        assert!(
+            !changed.report["action_result_reports"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row["disposition"] == "reused")
+        );
+    }
+}
+
+#[test]
+fn shared_action_result_roundtrip_rejects_unknown_signer_missing_output_and_corrupt_artifact() {
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: shared action-result workflow requires Linux, bwrap, static BusyBox, and loopback HTTP");
+        return;
+    }
+    let workflow = ActionResultWorkflow::new();
+    workflow.publish();
+    let server = StaticCacheServer::start(&workflow.cache);
+    let untrusted = workflow.consume(&server, ".#payload", ACTION_RESULT_UNKNOWN_SIGNER_KEY);
+    assert_eq!(untrusted.report["counts"]["built_total"], 1);
+    assert!(
+        untrusted.report["action_result_reports"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|row| row["candidate_decisions"].as_array().into_iter().flatten())
+            .flat_map(|candidate| candidate["diagnostics"].as_array().into_iter().flatten())
+            .any(|diagnostic| diagnostic == "action-result-record-signature-untrusted")
+    );
+
+    workflow.corrupt_only_nar();
+    let corrupt = workflow.consume(&server, ".#payload", ACTION_RESULT_TRUSTED_KEY);
+    assert_eq!(corrupt.report["counts"]["built_total"], 1);
+    assert!(
+        !corrupt.report["action_result_reports"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["disposition"] == "reused")
+    );
+    assert!(
+        corrupt.report["action_result_reports"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|row| row["candidate_decisions"].as_array().into_iter().flatten())
+            .flat_map(|candidate| candidate["diagnostics"].as_array().into_iter().flatten())
+            .any(|diagnostic| diagnostic == "action-result-object-incomplete")
+    );
+
+    workflow.remove_only_nar();
+    let missing = workflow.consume(&server, ".#payload", ACTION_RESULT_TRUSTED_KEY);
+    assert_eq!(missing.report["counts"]["built_total"], 1);
+    assert!(
+        missing.report["action_result_reports"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|row| row["candidate_decisions"].as_array().into_iter().flatten())
+            .flat_map(|candidate| candidate["diagnostics"].as_array().into_iter().flatten())
+            .any(|diagnostic| diagnostic == "action-result-object-incomplete")
+    );
+}
+
+#[test]
+fn static_cache_request_paths_accept_normal_files_and_reject_escape() {
+    assert_eq!(static_cache_relative_path("/nar/example.nar"), Some(PathBuf::from("nar/example.nar")));
+    assert_eq!(static_cache_relative_path("/index.json?ignored=true"), Some(PathBuf::from("index.json")));
+    assert_eq!(static_cache_relative_path("/../secret"), None);
+    assert_eq!(static_cache_relative_path("//absolute"), None);
 }
 
 #[test]
