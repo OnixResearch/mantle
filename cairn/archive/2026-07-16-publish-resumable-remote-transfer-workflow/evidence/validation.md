@@ -112,9 +112,27 @@ traceability coverage ok: 145/145 referenced (profile mantle-default)
 
 The profile count remains 145 because the default profile's accepted-spec selection is unchanged; no missing or dangling reference is inferred from the stable total.
 
+## Archive and exact post-archive validation
+
+Pueue task `127` ran archive dry-run and execute with `CAIRN_ARCHIVE_DATE=2026-07-16`. It created `cairn/archive/2026-07-16-publish-resumable-remote-transfer-workflow/` with no blockers and receipt hash `d96f1506ef560efa8f2d9fe30a637496ec6ad8142ee0c50a51e0fc1faf8d0845`.
+
+Pueue task `128` then ran these exact commands against the archived tree:
+
+```text
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- change list --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- tracey coverage --root .
+```
+
+The complete unedited validation JSON is committed as `post-archive-validation.json`. It reports zero changes, empty issue/finding/substance/cross-repository lists, 28 specs validated, and `valid: true`. The exact change-list output is committed as `post-archive-change-list.json` and contains an empty `changes` array. Tracey printed:
+
+```text
+traceability coverage ok: 145/145 referenced (profile mantle-default)
+```
+
 ## Budget and terminal state
 
-The declared search budget used four mechanism families, two baseline rounds, one repeated-content counterexample, one receiver-tamper counterexample, focused repository tests, one full quality gate, and one full Tiger Style/Tracey pass. No external network authority was needed. The implementation route, accepted requirement, and pre-archive packet are validated; archive and exact post-archive validation remain before terminal completion.
+The declared search budget used four mechanism families, two baseline rounds, one repeated-content counterexample, one receiver-tamper counterexample, focused repository tests, one full quality gate, one full Tiger Style pass, and pre/post-archive lifecycle/Tracey checks. No external network authority was needed. The terminal reason is validated completion with an archived change and no active Cairn packages.
 
 ## Non-claims
 
