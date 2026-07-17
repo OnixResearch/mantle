@@ -59,6 +59,40 @@ Inspected evidence:
 
 The proof establishes a current seed-assisted fixed point for the staged checkout and explicit checkout-local Cargo directory source under the selected materialized-input transport. It does not establish fresh-clone offline completeness, compiler correctness, seed trust removal, release reproducibility, independent rebuild agreement, deployment success, or full Cargo compatibility.
 
-## Quality and lifecycle
+## Quality and dependency rails
 
-Pending V4.
+Pueue task `63` ran `nix develop -c ./scripts/check-first-party-quality.sh` and passed all three configured legs:
+
+```text
+[1/3] rustfmt
+running: cargo fmt --check -p mantle -p crunch-attestation -p crunch-build -p crunch-delta -p crunch-eval -p crunch-glue -p crunch-pipeline -p crunch-project -p crunch-shell -p crunch-store
+[2/3] clippy
+running: cargo clippy --workspace --all-targets --no-deps --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- -D warnings
+[3/3] first-party workspace tests (serialized; vendored members excluded)
+running: cargo test --workspace --lib --tests --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- --test-threads 1
+test result: ok. 1547 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.57s
+test result: ok. 1547 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 20.32s
+```
+
+Task `64` ran the documented dependency policy command:
+
+```text
+SNIX_BUILD_SANDBOX_SHELL=/bin/sh nix develop -c cargo-deny check --config deny.toml
+```
+
+It finished with:
+
+```text
+advisories ok, bans ok, licenses ok, sources ok
+```
+
+Task `72` passed `nix develop -c ./scripts/check-first-party-tigerstyle.sh` and `git diff --check`.
+
+## Lifecycle
+
+- Task `62` returned `valid: true` for Cairn validation and `PASS` for proposal, design, and tasks gates before sync. It reported 8/9 tasks complete, with only lifecycle closeout open.
+- Task `74` ran sync dry-run and execution. The execute receipt hash was `9adc8089061f8b8d9fdd06a7d306c9cf00f69800a5421de18b6c8ad2dded6174`.
+- The accepted requirement `r[bootstrap_inventory.self_build_source_closure]` was inspected in `cairn/specs/bootstrap-inventory/spec.md`; all six scenarios and the original spec wrapper are present.
+- Evidence-backed implementation and verification bridges were added to `tools/tracey_refs.rs` only after accepted requirement and proof evidence existed.
+- Task `76` reran Tracey, Cairn validation, and all three gates. Tracey reported `145/145 referenced`; validation returned `valid: true`; proposal, design, and tasks gates all returned `PASS`.
+- Task `79` was the final pre-archive packet after all task evidence was recorded. `git diff --check` passed, validation remained `valid: true`, all three gates remained `PASS`, the tasks gate reported 9/9 complete with zero remaining, and Tracey remained `145/145 referenced`.

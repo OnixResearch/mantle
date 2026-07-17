@@ -145,6 +145,24 @@
 // publication, content-addressed retry, redaction, bounds, and explicit
 // non-claims without promoting registry possession into trust.
 
+// Self-build source-closure bridge.
+//
+// r[impl bootstrap_inventory.self_build_source_closure]
+// Implemented by the locked Cargo directory-source validator and fixed staging
+// boundary in `src/self_build.rs`, stable diagnostic bound in
+// `crates/crunch-build/src/distributed/remote_failure_debug.rs`, shared Linux
+// no-replace shell in `src/linux_rename.rs`, and source-or-embedded Nickel
+// import resolution in `src/remote_farm_config.rs`.
+//
+// r[verify bootstrap_inventory.self_build_source_closure]
+// Verified by the source-staging/vendor-checksum unit tests, positive/negative
+// no-clobber and typed Nickel config tests, the complete first-party quality and
+// dependency rails, and the current fixed-point proof summary in
+// `cairn/changes/restore-offline-self-build-source-closure/evidence/`.
+// Evidence is limited to the explicit checkout-local vendor input and selected
+// materialized-input proof transport; it does not imply fresh-clone offline
+// completeness, compiler correctness, seed trust removal, or release eligibility.
+
 // r[impl rust_package_planning.source_built_toolchain_closure]
 // Implemented by `src/source_toolchain_closure.rs`, `src/cargo_free_self_build.rs`,
 // `src/rust_plan.rs`, and `src/main.rs`.
