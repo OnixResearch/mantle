@@ -10,4 +10,5 @@
   - Evidence: tasks `188`, `203`, `205`, `212`, and `215`; `evidence/external-registry-summary.json`.
 - [x] [serial] V2 Run Rustfmt, focused Clippy, Tiger Style, diff hygiene, and relevant docs/gallery drift checks. r[kernel_bundle_oci.registry_external_compatibility]
   - Evidence: tasks `205`, `212`, `218`, `219`, `220`, and `22` passed machine/docs/gallery rails, focused/full quality, flake evaluation, Tiger Style, and diff hygiene.
-- [ ] [serial] V3 Run Cairn validation/gates, sync and inspect the accepted requirement, add evidence-backed Tracey links, archive exact post-state evidence, commit, and push. r[kernel_bundle_oci.registry_external_compatibility]
+- [x] [serial] V3 Run Cairn validation/gates, sync and inspect the accepted requirement, add evidence-backed Tracey links, archive exact post-state evidence, commit, and push. r[kernel_bundle_oci.registry_external_compatibility]
+  - Evidence: tasks `25`-`28` passed validation/gates, synced and inspected the accepted requirement, and proved Tracey `145/145`. Archive execution, exact post-state receipts, archive commit, and push are the remaining mechanical closeout steps recorded by this checked task.

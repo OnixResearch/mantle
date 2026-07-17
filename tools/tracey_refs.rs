@@ -127,17 +127,21 @@
 // r[impl kernel_bundle_oci.registry_receipts]
 // r[impl kernel_bundle_oci.registry_verification]
 // r[impl kernel_bundle_oci.registry_signature_trust]
+// r[impl kernel_bundle_oci.registry_external_compatibility]
 // Implemented by the pure target/manifest/linkage/accounting/receipt core in
 // `src/oci_registry.rs`, the bounded ureq/filesystem shell in
-// `src/oci_registry_shell.rs`, and public dispatch in `src/artifact_cmd.rs`.
-// Existing `oci_projection` and `oci_projection_shell` remain authoritative for
-// exact layout validation and admitted import.
+// `src/oci_registry_shell.rs`, public dispatch in `src/artifact_cmd.rs`, and the
+// pinned independent Distribution package/test shell in `flake.nix` plus
+// `tests/support/distribution_registry.rs`. Existing `oci_projection` and
+// `oci_projection_shell` remain authoritative for exact layout validation and
+// admitted import.
 //
 // r[verify kernel_bundle_oci.registry_transport]
 // r[verify kernel_bundle_oci.registry_admission]
 // r[verify kernel_bundle_oci.registry_receipts]
 // r[verify kernel_bundle_oci.registry_verification]
 // r[verify kernel_bundle_oci.registry_signature_trust]
+// r[verify kernel_bundle_oci.registry_external_compatibility]
 // Verified by positive/negative core and shell tests, the authenticated
 // in-process registry cases in `tests/kernel_bundle_oci_registry_cli.rs`, the
 // generated machine-contract rail, and catalog/docs drift checks in
@@ -147,7 +151,10 @@
 // same-name key rotation, full-key revocation/quorum, pre-admission signature
 // verification, denied credentials, interruption, content-addressed retry,
 // redaction, bounds, and explicit non-claims without promoting registry
-// possession or bearer authorization into global trust.
+// possession or bearer authorization into global trust. The explicit ignored
+// compatibility test additionally proves signed push/pull against pinned OCI
+// Distribution v3.1.0 and wrong-signature-digest no-output behavior without
+// promoting one implementation/version into arbitrary compatibility.
 
 // Self-build source-closure bridge.
 //

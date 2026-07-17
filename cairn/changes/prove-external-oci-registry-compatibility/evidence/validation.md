@@ -32,4 +32,14 @@ Task `220` ran `nix flake check --no-build -L`; every x86_64-linux package/check
 
 Task `22` reran the complete first-party Tiger Style rail and diff hygiene after the final source/test edits; both passed.
 
-Lifecycle sync, Tracey, archive, commit, and push remain V3 work.
+## Lifecycle pre-archive
+
+- Task `25` passed Cairn validation, proposal/design/tasks gates, and diff hygiene with 5/6 tasks complete and only archive closeout open.
+- Task `26` ran sync dry-run/execution; execute receipt `9deec19990270287da31a2177f42bb58dd2e971562fb9f660cc243aa63457493`.
+- The accepted `cairn/specs/kernel-bundle-oci/spec.md` was inspected after sync. It contains all three independent-compatibility scenarios, explicitly requires OCI image-manifest schema version 2, and preserves the earlier bounded signature-policy non-claims.
+- Evidence-backed implementation/verification links were added to `tools/tracey_refs.rs` only after implementation, focused/full tests, accepted requirement text, and durable external summary existed.
+- Tasks `27` and `28` passed Tracey `145/145`, Cairn validation, all three gates, and diff hygiene with only V3 still open.
+
+Task `29` is the final pre-archive packet: diff hygiene passed, validation returned `valid: true`, all three gates returned `PASS`, tasks reported 6/6 complete with zero remaining, and Tracey remained `145/145 referenced`.
+
+Archive execution, exact post-archive receipts, commit, and push remain the final V3 operations.
