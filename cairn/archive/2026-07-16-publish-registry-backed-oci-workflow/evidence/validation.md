@@ -113,6 +113,25 @@ traceability coverage ok: 145/145 referenced (profile mantle-default)
 
 The stable profile total is consistent with the profile's accepted-spec selection; the run reported no missing or dangling reference.
 
+## Archive and exact post-archive validation
+
+Pueue task `26` ran archive dry-run and execute with `CAIRN_ARCHIVE_DATE=2026-07-16`. It created `cairn/archive/2026-07-16-publish-registry-backed-oci-workflow/` with no reasons and execute receipt hash `1623b47c5e0c602f52d73ba0c425e00a36f19f75b8861f96ed0c4aea7a6c4b15`.
+
+Pueue task `28` then ran these exact commands against the archived tree:
+
+```text
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- change list --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- tracey coverage --root .
+git diff --check
+```
+
+The complete validation JSON is committed as `post-archive-validation.json`; it reports zero active changes, empty issue/finding/cross-repository/substance lists, and `valid: true`. The exact change list is committed as `post-archive-change-list.json` and contains an empty `changes` array. Tracey reported:
+
+```text
+traceability coverage ok: 145/145 referenced (profile mantle-default)
+```
+
 ## Claim boundary
 
 This evidence proves only the reviewed explicit-bearer/anonymous Distribution endpoint subset and deterministic in-process registry behavior. It does not prove registry trust, authorization, credential validity beyond the tested exchange, tag immutability, signatures, transparency, exactly-once publication, transactional rollback, upload resumption, arbitrary-registry compatibility, kernel compatibility, bootability, deployability, release eligibility, or offline self-build completeness.
