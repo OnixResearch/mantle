@@ -40,12 +40,42 @@ The Rust-owned v2 push/pull DTOs, JSON schemas, generated Nickel review contract
 
 Task `65` also passed 17 example-inventory tests, 11 workflow-gallery tests, and 10 focused embedded-stdlib tests. The checked gallery policy contains only a public demonstration key; matching private material is absent. README, runbook, operator docs, catalog, workflow metadata, and ADR 0029 agree on three immutable digests and the bounded signature claim.
 
-## Structural quality
+## Structural and repository-wide quality
 
 Task `63` passed focused root-package Clippy with `-D warnings` and the complete configured first-party Tiger Style rail after decomposing compound conditions, long receipt validation, ambiguous same-type interfaces, and key-identity handling.
+
+Pueue task `77` ran `nix develop -c ./scripts/check-first-party-quality.sh` and passed all configured legs:
+
+```text
+[1/3] rustfmt
+running: cargo fmt --check -p mantle -p crunch-attestation -p crunch-build -p crunch-delta -p crunch-eval -p crunch-glue -p crunch-pipeline -p crunch-project -p crunch-shell -p crunch-store
+[2/3] clippy
+running: cargo clippy --workspace --all-targets --no-deps --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- -D warnings
+[3/3] first-party workspace tests (serialized; vendored members excluded)
+running: cargo test --workspace --lib --tests --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- --test-threads 1
+test result: ok. 1552 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.77s
+test result: ok. 1552 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.37s
+```
+
+Task `79` ran the configured dependency policy:
+
+```text
+SNIX_BUILD_SANDBOX_SHELL=/bin/sh nix develop -c cargo-deny check --config deny.toml
+advisories ok, bans ok, licenses ok, sources ok
+```
 
 ## Claim boundary
 
 Successful evidence authenticates only the immutable image/metadata digest pair under supplied local policy. It does not prove registry authorization, transparency, revocation freshness, tag immutability, arbitrary-registry compatibility, artifact correctness, exactly-once publication, upload resumption, kernel compatibility, bootability, deployability, or release eligibility.
 
-Full first-party quality, dependency policy, lifecycle sync/Tracey, archival, and push remain V3/V4 work.
+## Lifecycle pre-archive
+
+- Task `87` passed diff hygiene, Cairn validation, and proposal/design/tasks gates with 7/8 tasks complete and only archive closeout open.
+- Tasks `89` and `92` ran sync dry-run/execution. The final execute receipt is `042115aa64531839b414ebf8e612fcd788189a96985bb18ac773d3d7631a8974`.
+- The accepted `cairn/specs/kernel-bundle-oci/spec.md` was inspected after sync. It contains all six `registry_signature_trust` scenarios and updates `registry_verification` so its historical no-signature boundary no longer contradicts the new bounded policy-verification claim.
+- Evidence-backed implementation/verification links were added to `tools/tracey_refs.rs` only after implementation, focused/full tests, accepted requirement text, and durable evidence existed.
+- Tasks `94` and `98` passed Tracey `145/145`, Cairn validation, all three gates, and diff hygiene with only V4 still open.
+
+Task `102` is the final pre-archive packet: diff hygiene passed, validation returned `valid: true`, all three gates returned `PASS`, tasks reported 8/8 complete with zero remaining, and Tracey remained `145/145 referenced`.
+
+Archive execution, exact post-archive receipts, commit, and push remain the final V4 operations.

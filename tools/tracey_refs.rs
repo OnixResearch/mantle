@@ -126,6 +126,7 @@
 // r[impl kernel_bundle_oci.registry_admission]
 // r[impl kernel_bundle_oci.registry_receipts]
 // r[impl kernel_bundle_oci.registry_verification]
+// r[impl kernel_bundle_oci.registry_signature_trust]
 // Implemented by the pure target/manifest/linkage/accounting/receipt core in
 // `src/oci_registry.rs`, the bounded ureq/filesystem shell in
 // `src/oci_registry_shell.rs`, and public dispatch in `src/artifact_cmd.rs`.
@@ -136,14 +137,17 @@
 // r[verify kernel_bundle_oci.registry_admission]
 // r[verify kernel_bundle_oci.registry_receipts]
 // r[verify kernel_bundle_oci.registry_verification]
+// r[verify kernel_bundle_oci.registry_signature_trust]
 // Verified by positive/negative core and shell tests, the authenticated
 // in-process registry cases in `tests/kernel_bundle_oci_registry_cli.rs`, the
 // generated machine-contract rail, and catalog/docs drift checks in
 // `tests/examples_inventory.rs` and `tests/examples_workflow_gallery.rs`.
-// These checks cover dual immutable digest resolution, exact fresh-state
-// admission, tag/blob/metadata drift, denied credentials, interrupted
-// publication, content-addressed retry, redaction, bounds, and explicit
-// non-claims without promoting registry possession into trust.
+// These checks cover three immutable manifest digests, exact fresh-state
+// admission, tag/blob/metadata/signature drift, typed Nickel policy,
+// same-name key rotation, full-key revocation/quorum, pre-admission signature
+// verification, denied credentials, interruption, content-addressed retry,
+// redaction, bounds, and explicit non-claims without promoting registry
+// possession or bearer authorization into global trust.
 
 // Self-build source-closure bridge.
 //

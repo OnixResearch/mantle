@@ -45,3 +45,16 @@ GIVEN signature verification succeeds
 WHEN a receipt, gallery, runbook, or lifecycle summary reports the result
 THEN the claim MUST be limited to authentication of the immutable digest pair under the supplied local policy
 AND it MUST NOT infer registry authorization, transparency, revocation freshness, tag immutability, arbitrary-registry compatibility, artifact correctness, kernel compatibility, bootability, deployability, or release eligibility.
+
+## MODIFIED Requirements
+
+### Requirement: Registry publication has positive and negative evidence
+
+r[kernel_bundle_oci.registry_verification] The registry lane MUST include deterministic pure-core, HTTP-shell, public CLI, fresh-state admission, gallery, schema/contract, documentation, and lifecycle evidence covering authenticated round trip, immutable digest resolution, digest-role separation, signature-policy verification, tag drift, metadata/signature/blob tampering, unknown and revoked keys, denied credentials, interrupted publication, content-addressed retry, redaction, and non-claims.
+
+#### Scenario: Registry workflow is ready to publish
+
+GIVEN maintainers intend to advertise and archive the registry-backed OCI workflow
+WHEN closeout validation runs
+THEN focused positive/negative checks, first-party quality, Tiger Style, machine-contract validation, dependency audit, documentation drift checks, Tracey coverage, and Cairn proposal/design/tasks gates MUST pass before sync, archive, commit, and push
+AND evidence MUST retain the bounded compatibility and signature-policy claim scopes and MUST NOT infer registry authorization, transparency, revocation freshness, tag immutability, exactly-once publication, arbitrary registry compatibility, kernel compatibility, bootability, deployability, or release eligibility.
