@@ -116,9 +116,34 @@
 // import, admitted reconstruction, and compatibility-only external import.
 //
 // r[related kernel_bundle_oci.reports]
-// Export/import DTOs and redaction-safe writers exist, but registry linkage is
-// intentionally deferred to active dependency
-// `cairn/changes/expand-machine-artifact-contract-registry/`.
+// Local export/import reports remain distinct from the registry handoff reports;
+// registry pull links back to the ordinary admitted import receipt rather than
+// duplicating projection or CAS authority in the transport shell.
+//
+// Registry-backed OCI publication bridge.
+//
+// r[impl kernel_bundle_oci.registry_transport]
+// r[impl kernel_bundle_oci.registry_admission]
+// r[impl kernel_bundle_oci.registry_receipts]
+// r[impl kernel_bundle_oci.registry_verification]
+// Implemented by the pure target/manifest/linkage/accounting/receipt core in
+// `src/oci_registry.rs`, the bounded ureq/filesystem shell in
+// `src/oci_registry_shell.rs`, and public dispatch in `src/artifact_cmd.rs`.
+// Existing `oci_projection` and `oci_projection_shell` remain authoritative for
+// exact layout validation and admitted import.
+//
+// r[verify kernel_bundle_oci.registry_transport]
+// r[verify kernel_bundle_oci.registry_admission]
+// r[verify kernel_bundle_oci.registry_receipts]
+// r[verify kernel_bundle_oci.registry_verification]
+// Verified by positive/negative core and shell tests, the authenticated
+// in-process registry cases in `tests/kernel_bundle_oci_registry_cli.rs`, the
+// generated machine-contract rail, and catalog/docs drift checks in
+// `tests/examples_inventory.rs` and `tests/examples_workflow_gallery.rs`.
+// These checks cover dual immutable digest resolution, exact fresh-state
+// admission, tag/blob/metadata drift, denied credentials, interrupted
+// publication, content-addressed retry, redaction, bounds, and explicit
+// non-claims without promoting registry possession into trust.
 
 // r[impl rust_package_planning.source_built_toolchain_closure]
 // Implemented by `src/source_toolchain_closure.rs`, `src/cargo_free_self_build.rs`,

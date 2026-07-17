@@ -94,6 +94,25 @@ The new active requirements were not yet accepted at that point. Their root-pack
 
 Pueue task `157` ran current Cairn validation plus proposal, design, and tasks gates over the staged implementation and evidence. Validation returned `valid: true`; every gate returned `valid: true` and `verdict: "PASS"`. The task packet reported 10 substantive tasks, 9 complete, and only the sync/Tracey/archive closeout task remaining.
 
+## Accepted requirement and pre-archive packet
+
+Pueue task `161` ran sync dry-run and execute for `publish-registry-backed-oci-workflow`. The execute plan had no reasons and receipt hash `fcabbb0051b84d01be220cff38de77d891c16f7ccff576942aca412f79ddb566`. Inspection confirmed all four reviewed IDs and their scenarios landed in `cairn/specs/kernel-bundle-oci/spec.md`:
+
+```text
+r[kernel_bundle_oci.registry_transport]
+r[kernel_bundle_oci.registry_admission]
+r[kernel_bundle_oci.registry_receipts]
+r[kernel_bundle_oci.registry_verification]
+```
+
+After sync, `tools/tracey_refs.rs` linked implementation to the pure registry core, bounded shell, ordinary OCI admission, and public CLI; verification links to the core/shell, authenticated in-process registry, machine-contract, gallery, and documentation-drift rails. Pueue task `168` reran Cairn validation and all three gates; validation was `valid: true` and every verdict was `PASS`. Tracey reported:
+
+```text
+traceability coverage ok: 145/145 referenced (profile mantle-default)
+```
+
+The stable profile total is consistent with the profile's accepted-spec selection; the run reported no missing or dangling reference.
+
 ## Claim boundary
 
 This evidence proves only the reviewed explicit-bearer/anonymous Distribution endpoint subset and deterministic in-process registry behavior. It does not prove registry trust, authorization, credential validity beyond the tested exchange, tag immutability, signatures, transparency, exactly-once publication, transactional rollback, upload resumption, arbitrary-registry compatibility, kernel compatibility, bootability, deployability, release eligibility, or offline self-build completeness.
