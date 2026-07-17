@@ -25,6 +25,13 @@ WHEN Mantle compiles and exercises OCI, release, attempt-log, or remote-failure 
 THEN the shared Linux shell MUST invoke the kernel no-replace rename operation without depending on that function binding
 AND an existing destination MUST remain unchanged together with the unpublished source.
 
+#### Scenario: Installed runtime configuration does not retain staged source identity
+
+GIVEN a production Nickel configuration loader needs Mantle's standard library
+WHEN Mantle compiles inside a transient staged source root
+THEN runtime import resolution MUST use a discovered source stdlib or the embedded stdlib materialization path
+AND the final installed binary MUST NOT retain the transient staged source root as runtime data.
+
 #### Scenario: Proof encounters an intermediate frontier
 
 GIVEN offline metadata, vendor checksum validation, proof preflight, bootstrap tools, or stage1 compilation succeeds

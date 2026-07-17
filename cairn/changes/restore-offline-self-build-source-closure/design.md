@@ -12,6 +12,7 @@ That design is sound only when the explicit vendor directory is complete and the
 - Prove metadata resolution without ambient registry/git caches or network access.
 - Stage the tracked `config/` policy payload without widening staging to arbitrary checkout roots.
 - Preserve positive and negative staging/checksum tests.
+- Remove transient staged-source paths from production runtime configuration lookup.
 - Produce current fixed-point evidence before making a success claim.
 
 ## Non-goals
@@ -47,11 +48,17 @@ That design is sound only when the explicit vendor directory is complete and the
 
 **Rationale:** The bootstrap musl target's `libc` Rust bindings expose the syscall number and flag but not the `renameat2` function symbol. Falling back to ordinary rename, check-then-rename, or link/unlink would weaken reviewed no-clobber semantics. A shared safe wrapper isolates the unsafe ABI call and removes four copies.
 
-### 5. Treat only the full proof as self-build success
+### 5. Resolve runtime Nickel imports without a compile-time checkout root
+
+**Choice:** Replace the production `CARGO_MANIFEST_DIR/lib` lookup in `load_remote_build_farm_config` with `crunch_eval::stdlib::stdlib_import_path()`. Development can still use a discovered source-tree stdlib, while installed binaries materialize the compile-time embedded Nickel files through the existing bounded resolver.
+
+**Rationale:** `--remap-path-prefix` covers compiler path metadata but does not rewrite a source path captured as runtime data by `env!("CARGO_MANIFEST_DIR")`. The canonical path-leak scan correctly rejected that transient `/tmp/build/crunch` value after compilation otherwise succeeded.
+
+### 6. Treat only the full proof as self-build success
 
 **Choice:** Offline metadata, checksum validation, proof preflight, bootstrap-tool success, and stage1 compilation are intermediate evidence. The self-build claim requires the canonical ignored proof to finish and its bundle to report stage1/stage2 equality. On this host, `CRUNCH_NO_FUSE=1` is an explicit materialized-input transport selection, not a semantic relaxation.
 
-**Rationale:** Earlier attempts failed first at compiler compatibility, then FUSE setup, omitted source, and target-libc API shape. Recording each frontier prevents partial progress from being promoted into fixed-point evidence.
+**Rationale:** Earlier attempts failed first at compiler compatibility, then FUSE setup, omitted source, target-libc API shape, and transient source-path retention. Recording each frontier prevents partial progress from being promoted into fixed-point evidence.
 
 ## Approach registry
 
@@ -64,11 +71,13 @@ That design is sound only when the explicit vendor directory is complete and the
 | Fixed allowlist repair | Add only current build-required `config/` | Closes the observed compile-time source gap | Active | Positive policy-file staging and existing negative exclusion tests. |
 | Weakened rename fallback | Check destination then call ordinary rename | Compiles on musl | Rejected | Reintroduces a race that can clobber another publisher. |
 | Shared syscall shell | Call Linux `SYS_renameat2` with `RENAME_NOREPLACE` | Preserves no-clobber semantics across libc targets | Active | Direct positive/existing-destination tests plus production race fixtures. |
+| Compile-time checkout lookup | Keep `CARGO_MANIFEST_DIR/lib` as the production Nickel import path | Locates source-tree stdlib only | Rejected | Embeds the transient staged root and fails the canonical path-leak scan. |
+| Source-or-embedded stdlib resolver | Discover development stdlib or materialize embedded Nickel files | Keeps runtime imports independent of the build checkout | Active | Focused typed-config tests plus canonical binary path-leak scan. |
 
 ## Validation budget
 
-- **Source budget:** `Cargo.lock`, Cargo vendor output, `.cargo/vendor-config.toml`, `src/self_build.rs`, the compile-time `include_str!`, current proof logs, and accepted bootstrap/proof requirements.
-- **Mechanism budget:** seven families above, with three complementary surviving repairs.
+- **Source budget:** `Cargo.lock`, Cargo vendor output, `.cargo/vendor-config.toml`, `src/self_build.rs`, the compile-time `include_str!`, `src/remote_farm_config.rs`, current proof logs, and accepted bootstrap/proof requirements.
+- **Mechanism budget:** nine families above, with four complementary surviving repairs.
 - **Round budget:** failing baseline; empty-home offline metadata; focused staging/checksum tests; proof preflight; materialized-input fixed-point proof; focused/full quality; Cairn sync/archive.
 - **Allowed terminal outcomes:** validated current fixed point; exact proof blocker with durable diagnostics; exhausted bounded repair; or user decision required for a broader source-distribution model.
 

@@ -63,6 +63,16 @@ After adding `config/`, pueue task `24` again built both bootstrap tools and com
 
 The repair must preserve the kernel's one-step no-clobber operation. An ordinary rename or check-then-rename fallback would compile but would violate the existing publication race contract.
 
+### Transient staged-source path retention
+
+After the syscall-backed no-clobber repair, pueue task `30` used `CRUNCH_NO_FUSE=1`, built the bootstrap tools, compiled the complete staged workspace, and produced the final optimized binary. The unchanged path-leak scan then rejected runtime data containing:
+
+```text
+/tmp/build/crunch
+```
+
+Inspection of the failed binary tied the value to the production remote-farm Nickel loader's `env!("CARGO_MANIFEST_DIR")` lookup. This was not debug metadata: the compile-time checkout root was embedded as runtime import-path data, so intermediate compilation success remained insufficient.
+
 ## Portfolio registry
 
 | Family | Result | State |
@@ -74,6 +84,8 @@ The repair must preserve the kernel's one-step no-clobber operation. An ordinary
 | Add fixed `config/` root | Preserves the allowlist while supplying observed compile input | active |
 | Ordinary rename fallback | Compiles but weakens no-clobber publication | rejected |
 | Shared `SYS_renameat2` shell | Preserves Linux no-clobber semantics across libc binding shapes | active |
+| Keep production `CARGO_MANIFEST_DIR` lookup | Retains a transient build path as runtime data | rejected |
+| Source-or-embedded stdlib resolver | Removes checkout identity while preserving installed Nickel imports | active |
 
 ## Claim boundary
 

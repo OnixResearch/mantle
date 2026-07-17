@@ -913,7 +913,9 @@ pub(crate) fn validate_remote_workspace_policy(policy: &RemoteWorkspacePolicy) -
 }
 
 pub fn load_remote_build_farm_config(path: &std::path::Path) -> Result<RemoteBuildFarmConfig, String> {
-    let nickel_search_dirs = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+    let stdlib_dir = crunch_eval::stdlib::stdlib_import_path()
+        .map_err(|error| format!("resolving embedded Nickel stdlib: {error}"))?;
+    let nickel_search_dirs = vec![stdlib_dir.into_os_string()];
     let config = crunch_eval::evaluate_and_deserialize::<RemoteBuildFarmConfig>(path, &nickel_search_dirs)
         .map_err(|error| format!("evaluating remote build farm configuration: {error}"))?;
     config.validate()?;
