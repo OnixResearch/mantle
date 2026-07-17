@@ -415,9 +415,22 @@ cargo fmt --check \
   -p crunch-shell \
   -p crunch-store
 ./scripts/check-first-party-clippy.sh
-cargo test --workspace --lib --tests
+cargo test --workspace --lib --tests \
+  --exclude fuse-backend-rs \
+  --exclude nix-compat \
+  --exclude nix-compat-derive \
+  --exclude snix-build \
+  --exclude snix-castore \
+  --exclude snix-store \
+  --exclude snix-tracing \
+  -- --test-threads 1
 ```
 
+The test leg excludes vendored workspace-member test binaries, whose focused
+rails may require host capabilities such as a usable FUSE mount. Dependencies
+still compile through first-party consumers. Serialized libtest execution
+prevents process-global environment, lock, and resource-pressure fixtures from
+interfering while preserving concurrency exercised explicitly inside tests.
 The root `-p mantle` rustfmt leg covers the root package's `src/`,
 `examples/`, and `tests/`, including `tests/benchmark_harness.rs`.
 The strict clippy helper excludes vendored workspace members
@@ -542,6 +555,7 @@ Fast local examples:
 - [`examples/projects/cargo-import-offline/workflow.ncl`](examples/projects/cargo-import-offline/workflow.ncl) — review-first Cargo plan/apply with ambiguity, lock, vendor, and conflict blockers
 - [`examples/projects/foreign-import-handoff/workflow.ncl`](examples/projects/foreign-import-handoff/workflow.ncl) — Guix-like and Nix-like validation/planning without foreign frontend commands
 - [`examples/projects/portable-receipt-handoff/mantle-project.ncl`](examples/projects/portable-receipt-handoff/mantle-project.ncl) — receipt archive handoff, idempotent import, and complete/incomplete semantic graph queries
+- [`examples/projects/kernel-bundle-oci-local/workflow.ncl`](examples/projects/kernel-bundle-oci-local/workflow.ncl) — admitted fixture objects projected into a local OCI layout, reimported into fresh state, and rejected after descriptor tampering
 - [`examples/transcripts/hello-eval.md`](examples/transcripts/hello-eval.md) — isolated executable Markdown evaluation transcript
 - [`examples/fail.ncl`](examples/fail.ncl) — intentional failure for diagnostics
 

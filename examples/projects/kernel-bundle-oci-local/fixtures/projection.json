@@ -1,0 +1,130 @@
+{
+  "schema": "mantle-oci-projection-v1",
+  "frontend_spec": {
+    "id": "kernel-bundles",
+    "version": "1",
+    "hash_algorithm": "blake3",
+    "hash": "ca70b7fdc5d0d688e062295c5524d852dadfb233be3aeae0a678aafbf24ff888"
+  },
+  "admission": {
+    "validation_result": "admitted",
+    "projection_blake3": "cec86ba4b91675a585ff95f578c32d3e49a3dde55fc23889e1658fc992682e7d",
+    "no_hidden_fallback": true
+  },
+  "platform": {
+    "architecture": "x86_64",
+    "os": "linux"
+  },
+  "bounds": {
+    "max_layers": 64,
+    "max_entries_per_layer": 16384,
+    "max_depth": 64,
+    "max_total_bytes": 1073741824
+  },
+  "archive_policy": {
+    "schema": "mantle-canonical-archive-v1",
+    "compression": "none",
+    "uid": 0,
+    "gid": 0,
+    "mtime": 0,
+    "file_mode": 420,
+    "directory_mode": 493,
+    "symlink_mode": 511,
+    "relative_symlinks_only": true
+  },
+  "object_admissions": [
+    {
+      "spec_id": "kernel-bundles",
+      "spec_version": "1",
+      "spec_hash_algorithm": "blake3",
+      "spec_hash": "ca70b7fdc5d0d688e062295c5524d852dadfb233be3aeae0a678aafbf24ff888",
+      "validator_kind": "onix-kernel-bundle-v1",
+      "validator_ref": "builtin:onix-kernel-bundle-v1",
+      "artifact_kind": "kernel-bundle-component",
+      "artifact_ref": "mantle://blake3/2df9419c3487c641142e94e8080ffe282dbc0133dfddac2e24edb110809900f6",
+      "artifact_digest": "blake3:2df9419c3487c641142e94e8080ffe282dbc0133dfddac2e24edb110809900f6",
+      "target_identity": "onix:component:blake3:1111111111111111111111111111111111111111111111111111111111111111",
+      "source_attestation_blake3": "8784abc3e24ca4c5c8b46cf71226c2ded3dd3e7f08ec106a8d2ac10b4e952ed7",
+      "validation_result": "admitted",
+      "no_hidden_fallback": true
+    },
+    {
+      "spec_id": "kernel-bundles",
+      "spec_version": "1",
+      "spec_hash_algorithm": "blake3",
+      "spec_hash": "ca70b7fdc5d0d688e062295c5524d852dadfb233be3aeae0a678aafbf24ff888",
+      "validator_kind": "onix-kernel-bundle-v1",
+      "validator_ref": "builtin:onix-kernel-bundle-v1",
+      "artifact_kind": "kernel-bundle-component",
+      "artifact_ref": "mantle://blake3/5a8e18533446321cee6d2e87cb44fa917ba14f07bb4c0c93c9a2e5bbf9017e27",
+      "artifact_digest": "blake3:5a8e18533446321cee6d2e87cb44fa917ba14f07bb4c0c93c9a2e5bbf9017e27",
+      "target_identity": "onix:component:blake3:2222222222222222222222222222222222222222222222222222222222222222",
+      "source_attestation_blake3": "f98a9180d8d4fa6fca32bb071eff7b8375c5b38323abfc36cd1c90e2daa0965d",
+      "validation_result": "admitted",
+      "no_hidden_fallback": true
+    }
+  ],
+  "layers": [
+    {
+      "role": "base-kernel",
+      "media_type": "application/vnd.onix.kernel.v1",
+      "mode": "exact_blob",
+      "entries": [
+        {
+          "relative_path": "boot/vmlinuz",
+          "object_ref": "mantle://blake3/2df9419c3487c641142e94e8080ffe282dbc0133dfddac2e24edb110809900f6",
+          "identity": "onix:component:blake3:1111111111111111111111111111111111111111111111111111111111111111",
+          "size_bytes": 20
+        }
+      ],
+      "annotations": {}
+    },
+    {
+      "role": "module-pack",
+      "media_type": "application/vnd.onix.module-pack.v1.tar",
+      "mode": "canonical_archive",
+      "entries": [
+        {
+          "relative_path": "usr/lib/modules",
+          "object_ref": "mantle://blake3/5a8e18533446321cee6d2e87cb44fa917ba14f07bb4c0c93c9a2e5bbf9017e27",
+          "identity": "onix:component:blake3:2222222222222222222222222222222222222222222222222222222222222222",
+          "size_bytes": 14
+        }
+      ],
+      "pack_identity": "onix:module-pack:blake3:3333333333333333333333333333333333333333333333333333333333333333",
+      "annotations": {}
+    }
+  ],
+  "required_annotations": {
+    "io.multikernel.kbi.id": "kbi:sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "org.onix.bundle.schema": "onix-kernel-bundle-v1"
+  },
+  "expected_external_digests": [
+    {
+      "role": "oci_layer_blob_sha256",
+      "subject_identity": "onix:component:blake3:1111111111111111111111111111111111111111111111111111111111111111",
+      "digest": "sha256:9fd38bf9e11275aaad416b02d24e198f1a9859057600678213853654d0eacd3a"
+    }
+  ],
+  "round_trip": {
+    "kernel_build_identity": "onix:kernel-build:blake3:4444444444444444444444444444444444444444444444444444444444444444",
+    "bundle_identity": "onix:kernel-bundle:blake3:5555555555555555555555555555555555555555555555555555555555555555",
+    "manifest_identity": "onix:manifest:blake3:6666666666666666666666666666666666666666666666666666666666666666",
+    "component_identities": [
+      "onix:component:blake3:1111111111111111111111111111111111111111111111111111111111111111",
+      "onix:component:blake3:2222222222222222222222222222222222222222222222222222222222222222"
+    ],
+    "pack_identities": [
+      "onix:module-pack:blake3:3333333333333333333333333333333333333333333333333333333333333333"
+    ]
+  },
+  "non_claims": [
+    "frontend semantics remain external",
+    "no bootability claim",
+    "no deployability claim",
+    "no kernel compatibility decision",
+    "no registry publication",
+    "no release eligibility claim",
+    "no signature policy claim"
+  ]
+}

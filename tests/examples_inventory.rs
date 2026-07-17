@@ -107,6 +107,7 @@ const ALLOWED_RAILS: &[&str] = &[
     "cargo-import-cli",
     "wasm-component-cli",
     "remote-stdio-cli",
+    "kernel-oci-roundtrip",
     "transcript-cli",
     "representative-offline-cargo-rail",
     "representative-rust-plan-rail",
@@ -125,6 +126,7 @@ const REQUIRED_WORKFLOW_RAILS: &[(&str, &[&str])] = &[
     ("project-cargo-import-offline", &["cargo-import-cli"]),
     ("project-wasm-component-hello", &["wasm-component-cli"]),
     ("project-remote-build-loopback", &["remote-stdio-cli"]),
+    ("project-kernel-bundle-oci-local", &["kernel-oci-roundtrip"]),
     ("transcript-hello-eval", &["transcript-cli"]),
 ];
 

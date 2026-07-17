@@ -10,6 +10,7 @@ const CARGO_ROOT: &str = "examples/projects/cargo-import-offline";
 const RECEIPT_ROOT: &str = "examples/projects/portable-receipt-handoff";
 const REMOTE_ROOT: &str = "examples/projects/remote-build-loopback";
 const WASM_ROOT: &str = "examples/projects/wasm-component-hello";
+const OCI_ROOT: &str = "examples/projects/kernel-bundle-oci-local";
 const TRANSCRIPT_PATH: &str = "examples/transcripts/hello-eval.md";
 const POLICY_HASH: &str = "gallery-policy-v1";
 const TEST_NOW_UNIX_S: u64 = 1_000;
@@ -70,6 +71,7 @@ fn workflow_entrypoints_evaluate_to_their_declared_shapes() {
         (format!("{RECEIPT_ROOT}/mantle-project.ncl"), "portable-receipt-payload"),
         (format!("{REMOTE_ROOT}/mantle-project.ncl"), "remote-loopback-payload"),
         (format!("{WASM_ROOT}/workflow.ncl"), "mantle-wasm-component-export-v1"),
+        (format!("{OCI_ROOT}/workflow.ncl"), "mantle-example-workflow-v1"),
     ];
 
     for (path, expected) in cases {

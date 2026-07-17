@@ -1,0 +1,1 @@
+accepted kernel bundle specification

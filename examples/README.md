@@ -30,6 +30,7 @@ Begin with the local seed-free stages, then continue into pinned network inputs 
 | Existing Cargo migration | `examples/projects/cargo-import-offline/workflow.ncl` | review-first Cargo plan/apply with explicit input placeholders |
 | Foreign handoff | `examples/projects/foreign-import-handoff/workflow.ncl` | frontend-free validation and receipt-bound planning |
 | Portable evidence | `examples/projects/portable-receipt-handoff/mantle-project.ncl` | receipt archive verification/import plus semantic graph queries |
+| OCI projection | `examples/projects/kernel-bundle-oci-local/workflow.ncl` | admitted local objects, atomic OCI export, fresh-state import, and descriptor-tamper rejection |
 | Remote realization | `examples/projects/remote-build-loopback/mantle-project.ncl` | one-use ticket, framed stdio dispatch, signed admission, and redacted status |
 | WebAssembly component | `examples/projects/wasm-component-hello/workflow.ncl` | typed export plus pinned materialization and drift rails |
 
@@ -102,6 +103,7 @@ Project examples show selector syntax after package composition. See `examples/p
 | `examples/projects/cargo-import-offline/workflow.ncl` | follow the project-local scratch-copy runbook | deterministic Cargo import plan/apply and explicit unresolved input roles | local + fast |
 | `examples/projects/foreign-import-handoff/workflow.ncl` | `cd examples/projects/foreign-import-handoff && mantle --json foreign-import plan ...` | accepted receipt-bound adapter plan without Guix or Nix commands | local + fast |
 | `examples/projects/portable-receipt-handoff/mantle-project.ncl` | follow the project-local archive/receipt/graph runbook | diagnostic receipt verify/import reports and bounded graph explanations | local build + fast CLI |
+| `examples/projects/kernel-bundle-oci-local/workflow.ncl` | follow the project-local import/export/import runbook | sealed projection, OCI descriptor identities, admitted fresh-state object refs, and tamper rejection | local + fast |
 | `examples/projects/remote-build-loopback/mantle-project.ncl` | follow the project-local one-use ticket runbook | framed stdio remote result, signed admission, redacted status, and exhausted-ticket rejection | heavy + local bwrap |
 | `examples/projects/wasm-component-hello/workflow.ncl` | `cd examples/projects/wasm-component-hello && mantle eval workflow.ncl` | typed generated-input export; production rail publishes rehashable component evidence | typed export fast; production heavy |
 | `examples/projects/cross-compiled-host-tool/mantle-project.ncl` | `cd examples/projects/cross-compiled-host-tool && mantle build .#target` | host-generated header consumed by an `x86_64-linux-musl` executable | heavy + first-build network |
@@ -149,6 +151,7 @@ These commands inspect local build evidence. They are not release or witness pro
 | `examples/projects/release-witness-handoff/mantle-project.ncl` | `cargo run -p mantle --example release_witness_handoff` | synthetic signed attestation directory and policy result | does not prove release evidence or an independent rebuild |
 | `examples/projects/foreign-import-handoff/workflow.ncl` | validate and plan the checked Guix-like and Nix-like fixtures | raw-graph digest plus receipt-bound adapter plan | does not prove output trust, frontend correctness, or rebuild success |
 | `examples/projects/portable-receipt-handoff/mantle-project.ncl` | verify/import the receipt against a store archive, then query both graph fixtures | diagnostic receipt matches plus complete/incomplete graph results | does not prove execution, compiler, payload-transfer, or release correctness |
+| `examples/projects/kernel-bundle-oci-local/workflow.ncl` | import the fixture objects, export the sealed projection, then import into fresh state | BLAKE3 object refs plus separate OCI SHA-256 descriptors and a round-trip response | does not publish a registry artifact or prove kernel compatibility, bootability, deployability, signatures, or release eligibility |
 | `examples/projects/remote-build-loopback/mantle-project.ncl` | dispatch with a one-use ticket through the default local stdio worker | remote route, signed output admission, artifact reference, and redacted status | does not prove production P2P, restart, SSH, or resumable-transfer deployment |
 | `examples/projects/wasm-component-hello/workflow.ncl` | evaluate the typed export, then run the pinned production CLI rail | generated-input ownership and rehashable materialization bundle | does not prove behavior correctness, runtime authority, compiler correctness, or release eligibility |
 | `examples/transcripts/hello-eval.md` | run through `mantle transcript run` | isolated versioned command transcript | does not prove the evaluated derivation was built |

@@ -690,6 +690,18 @@ let Example = {
       skip_reason = "full loopback dispatch runs a nested Linux sandbox and one-use ticket workflow",
     },
     {
+      id = "project-kernel-bundle-oci-local",
+      path = "examples/projects/kernel-bundle-oci-local/workflow.ncl",
+      title = "Local kernel-bundle OCI round trip",
+      summary = "Imports admitted fixture objects, exports an atomic local OCI layout, reimports it into fresh state, and rejects descriptor tampering.",
+      lane = "trust-provenance",
+      kind = "nickel-workflow",
+      support_tier = "fast",
+      requirements = { network = false, generated_seed = false, linux_bwrap = false, heavyweight = false, benchmark = false },
+      validation_rails = ["eval", "kernel-oci-roundtrip", "inspect-output", "negative-build", "non-claim-doc"],
+      skip_reason = "",
+    },
+    {
       id = "transcript-hello-eval",
       path = "examples/transcripts/hello-eval.md",
       title = "Executable hello evaluation transcript",
