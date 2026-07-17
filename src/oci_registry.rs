@@ -36,7 +36,7 @@ pub const OCI_REGISTRY_PULL_REPORT_SCHEMA: &str = "mantle-oci-registry-pull-repo
 pub const OCI_REGISTRY_TRUST_POLICY_SCHEMA: &str = "mantle-oci-registry-trust-policy-v1";
 pub const OCI_REGISTRY_SIGNATURE_DOCUMENT_SCHEMA: &str = "mantle-oci-registry-signature-document-v1";
 pub const OCI_REGISTRY_TRUST_STATEMENT_SCHEMA: &str = "mantle-oci-registry-trust-statement-v1";
-pub const OCI_ARTIFACT_MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.artifact.manifest.v1+json";
+pub const OCI_EMPTY_CONFIG_MEDIA_TYPE: &str = "application/vnd.oci.empty.v1+json";
 pub const MANTLE_METADATA_ARTIFACT_TYPE: &str = "application/vnd.mantle.oci-metadata.v1";
 pub const MANTLE_SIGNATURE_ARTIFACT_TYPE: &str = "application/vnd.mantle.oci-signature.v1";
 pub const MANTLE_SIGNATURE_DOCUMENT_MEDIA_TYPE: &str = "application/vnd.mantle.oci-signature.v1+json";
@@ -82,6 +82,7 @@ const SIGNATURE_ROLE_ANNOTATION: &str = "org.mantle.signature.role";
 const SIGNATURE_DOCUMENT_ROLE: &str = "signature-document";
 const SIGNATURE_METADATA_DIGEST_ANNOTATION: &str = "org.mantle.signature.metadata-digest";
 const SIGNATURE_TRUST_DOMAIN_ANNOTATION: &str = "org.mantle.signature.trust-domain";
+const OCI_EMPTY_CONFIG_BYTES: &[u8] = b"{}";
 
 const REQUIRED_NON_CLAIMS: &[&str] = &[
     "credential possession is not authorization proof",
@@ -115,14 +116,15 @@ pub struct RegistryTargetInput<'a> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct OciArtifactManifest {
+pub struct OciCompanionManifest {
     #[serde(rename = "schemaVersion")]
     pub schema_version: u16,
     #[serde(rename = "mediaType")]
     pub media_type: String,
     #[serde(rename = "artifactType")]
     pub artifact_type: String,
-    pub blobs: Vec<OciDescriptor>,
+    pub config: OciDescriptor,
+    pub layers: Vec<OciDescriptor>,
     pub subject: OciDescriptor,
     pub annotations: BTreeMap<String, String>,
 }
@@ -186,7 +188,7 @@ pub struct RegistrySignaturePlan {
     pub document: RegistrySignatureDocument,
     pub document_descriptor: OciDescriptor,
     pub document_bytes: Vec<u8>,
-    pub manifest: OciArtifactManifest,
+    pub manifest: OciCompanionManifest,
     pub manifest_descriptor: OciDescriptor,
     pub manifest_bytes: Vec<u8>,
     pub verification: RegistryTrustVerification,
@@ -548,6 +550,13 @@ fn descriptor(media_type: &str, bytes: &[u8]) -> Result<OciDescriptor, String> {
     Ok(output)
 }
 
+fn empty_config_descriptor() -> Result<OciDescriptor, String> {
+    let output = descriptor(OCI_EMPTY_CONFIG_MEDIA_TYPE, OCI_EMPTY_CONFIG_BYTES)?;
+    assert_eq!(output.media_type, OCI_EMPTY_CONFIG_MEDIA_TYPE);
+    assert_eq!(output.size, OCI_EMPTY_CONFIG_BYTES.len() as u64);
+    Ok(output)
+}
+
 fn metadata_descriptor(input: MetadataDescriptorInput<'_>) -> Result<OciDescriptor, String> {
     let mut output = descriptor(input.media_type, input.bytes)?;
     output.annotations.insert(METADATA_ROLE_ANNOTATION.to_string(), input.role.to_string());
@@ -883,8 +892,8 @@ fn main_manifest(facts: &LayoutFacts, export_report: &OciExportReport) -> Result
 
 fn build_metadata_manifest(
     input: MetadataManifestInput<'_>,
-) -> Result<(OciArtifactManifest, Vec<u8>, OciDescriptor), String> {
-    let blobs = vec![
+) -> Result<(OciCompanionManifest, Vec<u8>, OciDescriptor), String> {
+    let layers = vec![
         metadata_descriptor(MetadataDescriptorInput {
             role: METADATA_LAYOUT_ROLE,
             media_type: MANTLE_OCI_LAYOUT_MEDIA_TYPE,
@@ -905,17 +914,18 @@ fn build_metadata_manifest(
         (LAYOUT_DIGEST_ANNOTATION.to_string(), input.layout_blake3.to_string()),
         (PROJECTION_DIGEST_ANNOTATION.to_string(), input.projection_blake3.to_string()),
     ]);
-    let manifest = OciArtifactManifest {
+    let manifest = OciCompanionManifest {
         schema_version: OCI_DOCUMENT_SCHEMA_VERSION,
-        media_type: OCI_ARTIFACT_MANIFEST_MEDIA_TYPE.to_string(),
+        media_type: OCI_MANIFEST_MEDIA_TYPE.to_string(),
         artifact_type: MANTLE_METADATA_ARTIFACT_TYPE.to_string(),
-        blobs,
+        config: empty_config_descriptor()?,
+        layers,
         subject: input.main.clone(),
         annotations,
     };
     let bytes = canonical_json(&manifest)?;
-    let manifest_descriptor = descriptor(OCI_ARTIFACT_MANIFEST_MEDIA_TYPE, &bytes)?;
-    assert_eq!(manifest.blobs.len(), METADATA_BLOB_COUNT, "metadata manifest blob count must stay fixed");
+    let manifest_descriptor = descriptor(OCI_MANIFEST_MEDIA_TYPE, &bytes)?;
+    assert_eq!(manifest.layers.len(), METADATA_BLOB_COUNT, "metadata manifest layer count must stay fixed");
     assert_eq!(manifest.subject.digest, input.main.digest, "metadata subject must bind the image manifest");
     Ok((manifest, bytes, manifest_descriptor))
 }
@@ -932,15 +942,16 @@ fn signature_document_descriptor(bytes: &[u8]) -> Result<OciDescriptor, String> 
 
 fn build_signature_manifest(
     input: SignatureManifestInput<'_>,
-) -> Result<(OciArtifactManifest, Vec<u8>, OciDescriptor), String> {
+) -> Result<(OciCompanionManifest, Vec<u8>, OciDescriptor), String> {
     if !is_sha256_digest(input.metadata_digest) || !bounded_identifier(input.trust_domain, TRUST_DOMAIN_BYTES_MAX) {
         return Err("OCI registry signature artifact input is invalid".to_string());
     }
-    let manifest = OciArtifactManifest {
+    let manifest = OciCompanionManifest {
         schema_version: OCI_DOCUMENT_SCHEMA_VERSION,
-        media_type: OCI_ARTIFACT_MANIFEST_MEDIA_TYPE.to_string(),
+        media_type: OCI_MANIFEST_MEDIA_TYPE.to_string(),
         artifact_type: MANTLE_SIGNATURE_ARTIFACT_TYPE.to_string(),
-        blobs: vec![input.document_descriptor.clone()],
+        config: empty_config_descriptor()?,
+        layers: vec![input.document_descriptor.clone()],
         subject: input.main.clone(),
         annotations: BTreeMap::from([
             (SIGNATURE_METADATA_DIGEST_ANNOTATION.to_string(), input.metadata_digest.to_string()),
@@ -948,8 +959,8 @@ fn build_signature_manifest(
         ]),
     };
     let bytes = canonical_json(&manifest)?;
-    let descriptor = descriptor(OCI_ARTIFACT_MANIFEST_MEDIA_TYPE, &bytes)?;
-    assert_eq!(manifest.blobs.len(), SIGNATURE_BLOB_COUNT);
+    let descriptor = descriptor(OCI_MANIFEST_MEDIA_TYPE, &bytes)?;
+    assert_eq!(manifest.layers.len(), SIGNATURE_BLOB_COUNT);
     assert_eq!(manifest.subject.digest, input.main.digest);
     Ok((manifest, bytes, descriptor))
 }
@@ -1013,7 +1024,7 @@ pub fn build_registry_signature_plan(
         document_descriptor: &document_descriptor,
     })?;
     assert_eq!(verification.policy_blake3, policy.policy_blake3);
-    assert_eq!(manifest.blobs[0].digest, document_descriptor.digest);
+    assert_eq!(manifest.layers[0].digest, document_descriptor.digest);
     Ok(RegistrySignaturePlan {
         document,
         document_descriptor,
@@ -1031,11 +1042,11 @@ pub fn inspect_signature_manifest(
     main: &OciDescriptor,
     metadata_digest: &str,
     policy: &ValidatedRegistryTrustPolicy,
-) -> Result<(OciArtifactManifest, OciDescriptor, OciDescriptor), String> {
+) -> Result<(OciCompanionManifest, OciDescriptor, OciDescriptor), String> {
     if sha256_digest(bytes) != expected_digest {
         return Err("Mantle signature manifest digest mismatch".to_string());
     }
-    let manifest: OciArtifactManifest =
+    let manifest: OciCompanionManifest =
         serde_json::from_slice(bytes).map_err(|error| format!("parsing Mantle signature manifest: {error}"))?;
     let is_subject_match = manifest.subject.digest == main.digest
         && manifest.subject.size == main.size
@@ -1045,18 +1056,19 @@ pub fn inspect_signature_manifest(
         && manifest.annotations.get(SIGNATURE_TRUST_DOMAIN_ANNOTATION).map(String::as_str)
             == Some(policy.policy.trust_domain.as_str());
     let is_manifest_identity_valid = manifest.schema_version == OCI_DOCUMENT_SCHEMA_VERSION
-        && manifest.media_type == OCI_ARTIFACT_MANIFEST_MEDIA_TYPE
-        && manifest.artifact_type == MANTLE_SIGNATURE_ARTIFACT_TYPE;
+        && manifest.media_type == OCI_MANIFEST_MEDIA_TYPE
+        && manifest.artifact_type == MANTLE_SIGNATURE_ARTIFACT_TYPE
+        && manifest.config == empty_config_descriptor()?;
     if !is_manifest_identity_valid {
         return Err("Mantle signature manifest identity is invalid".to_string());
     }
     if !is_subject_match || !is_annotation_set_valid {
         return Err("Mantle signature manifest subject or annotations are invalid".to_string());
     }
-    if manifest.blobs.len() != SIGNATURE_BLOB_COUNT {
+    if manifest.layers.len() != SIGNATURE_BLOB_COUNT {
         return Err("Mantle signature manifest must contain exactly one signature document".to_string());
     }
-    let document = manifest.blobs[0].clone();
+    let document = manifest.layers[0].clone();
     let is_document_identity_valid = document.media_type == MANTLE_SIGNATURE_DOCUMENT_MEDIA_TYPE
         && document.size > 0
         && is_sha256_digest(&document.digest);
@@ -1065,9 +1077,9 @@ pub fn inspect_signature_manifest(
     if !is_document_identity_valid || !is_document_role_valid {
         return Err("Mantle signature document descriptor is invalid".to_string());
     }
-    let manifest_descriptor = descriptor(OCI_ARTIFACT_MANIFEST_MEDIA_TYPE, bytes)?;
+    let manifest_descriptor = descriptor(OCI_MANIFEST_MEDIA_TYPE, bytes)?;
     assert_eq!(manifest_descriptor.digest, expected_digest);
-    assert_eq!(manifest.blobs.len(), SIGNATURE_BLOB_COUNT);
+    assert_eq!(manifest.layers.len(), SIGNATURE_BLOB_COUNT);
     Ok((manifest, manifest_descriptor, document))
 }
 
@@ -1106,7 +1118,8 @@ pub fn build_registry_push_plan(input: RegistryLayoutInput) -> Result<RegistryPu
         })?;
     let mut blob_map = facts.blobs.clone();
     blob_map.remove(&main_manifest_descriptor.digest);
-    for (value, bytes) in metadata.blobs.iter().zip([
+    insert_blob(&mut blob_map, metadata.config.digest.clone(), OCI_EMPTY_CONFIG_BYTES.to_vec())?;
+    for (value, bytes) in metadata.layers.iter().zip([
         facts.oci_layout_bytes.clone(),
         facts.index_bytes.clone(),
         input.export_report_bytes,
@@ -1157,16 +1170,17 @@ pub fn inspect_metadata_manifest(
     bytes: &[u8],
     expected_digest: &str,
     main: &OciDescriptor,
-) -> Result<(OciArtifactManifest, OciDescriptor), String> {
+) -> Result<(OciCompanionManifest, OciDescriptor), String> {
     if sha256_digest(bytes) != expected_digest {
         return Err("Mantle metadata manifest digest mismatch".to_string());
     }
-    let manifest: OciArtifactManifest =
+    let manifest: OciCompanionManifest =
         serde_json::from_slice(bytes).map_err(|error| format!("parsing Mantle metadata manifest: {error}"))?;
-    if manifest.schema_version != OCI_DOCUMENT_SCHEMA_VERSION
-        || manifest.media_type != OCI_ARTIFACT_MANIFEST_MEDIA_TYPE
-        || manifest.artifact_type != MANTLE_METADATA_ARTIFACT_TYPE
-    {
+    let is_manifest_identity_valid = manifest.schema_version == OCI_DOCUMENT_SCHEMA_VERSION
+        && manifest.media_type == OCI_MANIFEST_MEDIA_TYPE
+        && manifest.artifact_type == MANTLE_METADATA_ARTIFACT_TYPE
+        && manifest.config == empty_config_descriptor()?;
+    if !is_manifest_identity_valid {
         return Err("Mantle metadata manifest version or media type is unsupported".to_string());
     }
     if manifest.subject.digest != main.digest
@@ -1175,11 +1189,11 @@ pub fn inspect_metadata_manifest(
     {
         return Err("Mantle metadata subject does not match the resolved image manifest".to_string());
     }
-    let roles = manifest.blobs.iter().filter_map(metadata_role).collect::<BTreeSet<_>>();
+    let roles = manifest.layers.iter().filter_map(metadata_role).collect::<BTreeSet<_>>();
     let required = BTreeSet::from([METADATA_LAYOUT_ROLE, METADATA_INDEX_ROLE, METADATA_EXPORT_REPORT_ROLE]);
-    if manifest.blobs.len() != METADATA_BLOB_COUNT
+    if manifest.layers.len() != METADATA_BLOB_COUNT
         || roles != required
-        || !manifest.blobs.iter().all(metadata_descriptor_is_valid)
+        || !manifest.layers.iter().all(metadata_descriptor_is_valid)
     {
         return Err("Mantle metadata manifest roles, media types, or descriptors are invalid".to_string());
     }
@@ -1191,7 +1205,7 @@ pub fn inspect_metadata_manifest(
     {
         return Err("Mantle metadata manifest identity annotations are invalid".to_string());
     }
-    let descriptor = descriptor(OCI_ARTIFACT_MANIFEST_MEDIA_TYPE, bytes)?;
+    let descriptor = descriptor(OCI_MANIFEST_MEDIA_TYPE, bytes)?;
     assert_eq!(descriptor.digest, expected_digest, "verified metadata digest must match expected digest");
     assert_eq!(roles.len(), METADATA_BLOB_COUNT, "verified metadata roles must be unique");
     Ok((manifest, descriptor))
@@ -1199,14 +1213,16 @@ pub fn inspect_metadata_manifest(
 
 pub fn pull_blob_descriptors(
     main_manifest_bytes: &[u8],
-    metadata: &OciArtifactManifest,
+    metadata: &OciCompanionManifest,
 ) -> Result<Vec<OciDescriptor>, String> {
     let manifest: OciManifestDocument = serde_json::from_slice(main_manifest_bytes)
         .map_err(|error| format!("parsing registry image manifest: {error}"))?;
-    let descriptor_count_max = OCI_LAYER_MAX_COUNT.saturating_add(METADATA_BLOB_COUNT).saturating_add(1);
+    let descriptor_count_max =
+        OCI_LAYER_MAX_COUNT.saturating_add(METADATA_BLOB_COUNT).saturating_add(1).saturating_add(1);
     let candidates = std::iter::once(manifest.config)
         .chain(manifest.layers)
-        .chain(metadata.blobs.iter().cloned())
+        .chain(std::iter::once(metadata.config.clone()))
+        .chain(metadata.layers.iter().cloned())
         .collect::<Vec<_>>();
     if candidates.is_empty() || candidates.len() > descriptor_count_max {
         return Err("registry pull descriptor closure exceeds the named bound".to_string());
@@ -1234,12 +1250,12 @@ pub fn pull_blob_descriptors(
 }
 
 fn role_bytes(
-    manifest: &OciArtifactManifest,
+    manifest: &OciCompanionManifest,
     role: &str,
     downloaded: &BTreeMap<String, Vec<u8>>,
 ) -> Result<Vec<u8>, String> {
     let descriptor = manifest
-        .blobs
+        .layers
         .iter()
         .find(|value| metadata_role(value) == Some(role))
         .ok_or_else(|| format!("Mantle metadata role is missing: {role}"))?;
@@ -1688,7 +1704,7 @@ mod tests {
             },
             main_manifest_bytes: b"manifest-a".to_vec(),
             metadata_manifest_descriptor: OciDescriptor {
-                media_type: OCI_ARTIFACT_MANIFEST_MEDIA_TYPE.to_string(),
+                media_type: OCI_MANIFEST_MEDIA_TYPE.to_string(),
                 digest: sha('b'),
                 size: 10,
                 annotations: BTreeMap::new(),
@@ -2010,6 +2026,21 @@ mod tests {
         )
         .unwrap();
 
+        let mut wrong_config = signature_plan.manifest.clone();
+        wrong_config.config.digest = sha('e');
+        let wrong_config_bytes = canonical_json(&wrong_config).unwrap();
+        let wrong_config_digest = sha256_digest(&wrong_config_bytes);
+        assert!(
+            inspect_signature_manifest(
+                &wrong_config_bytes,
+                &wrong_config_digest,
+                &plan.main_manifest_descriptor,
+                &plan.metadata_manifest_descriptor.digest,
+                &policy,
+            )
+            .is_err()
+        );
+
         let mut drifted = signature_plan.manifest;
         drifted.annotations.insert(SIGNATURE_METADATA_DIGEST_ANNOTATION.to_string(), sha('f'));
         let drifted_bytes = canonical_json(&drifted).unwrap();
@@ -2109,26 +2140,32 @@ mod tests {
         let valid_digest = sha256_digest(&valid_bytes);
         inspect_metadata_manifest(&valid_bytes, &valid_digest, &main).unwrap();
 
+        let mut wrong_config = manifest.clone();
+        wrong_config.config.digest = sha('e');
+        let wrong_config_bytes = canonical_json(&wrong_config).unwrap();
+        let wrong_config_digest = sha256_digest(&wrong_config_bytes);
+        assert!(inspect_metadata_manifest(&wrong_config_bytes, &wrong_config_digest, &main).is_err());
+
         let mut wrong_subject = manifest.clone();
         wrong_subject.subject.digest = sha('f');
         let wrong_subject_bytes = canonical_json(&wrong_subject).unwrap();
         let wrong_subject_digest = sha256_digest(&wrong_subject_bytes);
         assert!(inspect_metadata_manifest(&wrong_subject_bytes, &wrong_subject_digest, &main).is_err());
 
-        manifest.blobs[1].annotations = manifest.blobs[0].annotations.clone();
+        manifest.layers[1].annotations = manifest.layers[0].annotations.clone();
         let duplicate = canonical_json(&manifest).unwrap();
         let duplicate_digest = sha256_digest(&duplicate);
         assert!(inspect_metadata_manifest(&duplicate, &duplicate_digest, &main).is_err());
 
         let mut wrong_media = wrong_subject;
         wrong_media.subject = main.clone();
-        wrong_media.blobs[0].media_type = MANTLE_OCI_INDEX_MEDIA_TYPE.to_string();
+        wrong_media.layers[0].media_type = MANTLE_OCI_INDEX_MEDIA_TYPE.to_string();
         let wrong_media_bytes = canonical_json(&wrong_media).unwrap();
         let wrong_media_digest = sha256_digest(&wrong_media_bytes);
         assert!(inspect_metadata_manifest(&wrong_media_bytes, &wrong_media_digest, &main).is_err());
 
         let mut extra_annotation = wrong_media;
-        extra_annotation.blobs[0].media_type = MANTLE_OCI_LAYOUT_MEDIA_TYPE.to_string();
+        extra_annotation.layers[0].media_type = MANTLE_OCI_LAYOUT_MEDIA_TYPE.to_string();
         extra_annotation.annotations.insert("org.onix.mantle.unexpected".to_string(), b3('3'));
         let extra_annotation_bytes = canonical_json(&extra_annotation).unwrap();
         let extra_annotation_digest = sha256_digest(&extra_annotation_bytes);

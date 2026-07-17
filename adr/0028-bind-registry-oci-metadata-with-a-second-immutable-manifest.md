@@ -4,6 +4,8 @@
 
 Accepted (2026-07-16)
 
+ADR 0030 supersedes only the companion-manifest wire encoding; this ADR's identity, subject-linkage, publication-order, and admission boundaries remain in force.
+
 ## Context
 
 Mantle's admitted local OCI layout includes four classes of material: the ordinary image manifest and its descriptor blobs, `oci-layout`, `index.json`, and `mantle-oci-export-report.json`. OCI registries store manifests and blobs but do not preserve those local sidecar files automatically.

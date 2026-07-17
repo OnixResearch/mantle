@@ -741,6 +741,7 @@
           release-nix-witness-quality = releaseNixWitnessQuality;
         }
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          oci-distribution-registry = pkgs.distribution;
           kernelscript-compiler = kernelscriptExperiment.compiler;
           kernelscript-core-adapter = kernelscriptCoreAdapter;
           kernelscript-production = kernelscriptExperiment.artifacts;

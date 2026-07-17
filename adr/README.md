@@ -36,3 +36,4 @@ compatibility surface, crate name, or historical decision.
 | [0027](0027-distinguish-transfer-content-from-chunk-occurrence.md) | Distinguish transfer content identity from chunk occurrence identity | Accepted |
 | [0028](0028-bind-registry-oci-metadata-with-a-second-immutable-manifest.md) | Bind registry OCI metadata with a second immutable manifest | Accepted |
 | [0029](0029-authenticate-registry-digest-pairs-with-a-signature-artifact.md) | Authenticate registry digest pairs with a signature artifact | Accepted |
+| [0030](0030-encode-companion-artifacts-as-oci-image-manifests.md) | Encode companion artifacts as OCI image manifests | Accepted |

@@ -1,3 +1,5 @@
+#[path = "support/distribution_registry.rs"]
+mod distribution_registry;
 mod support;
 
 use std::collections::BTreeMap;
@@ -6,6 +8,7 @@ use std::path::PathBuf;
 use std::process::Output;
 
 use assert_cmd::Command;
+use distribution_registry::DistributionRegistry;
 use mantle::oci_projection::OCI_EXPORT_REPORT_FILENAME;
 use mantle::oci_projection::OciImportReport;
 use mantle::oci_registry::OciRegistryPullReport;
@@ -29,6 +32,9 @@ const TEST_KEYPAIR: &str =
 const SECOND_KEYPAIR: &str =
     "do.not.use:sGPzxuK5WvWPraytx+6sjtaff866sYlfvErE6x0hFEhy5eqe7OVZ8ZMqZ/ME/HaRdKGNGvJkyGKXYTaeA6lR3A==";
 const TRUST_DOMAIN: &str = "onix-kernel-bundle";
+const EXTERNAL_REGISTRY_BINARY_ENV: &str = "MANTLE_TEST_DISTRIBUTION_REGISTRY";
+const EXTERNAL_REGISTRY_EVIDENCE_ENV: &str = "MANTLE_EXTERNAL_REGISTRY_EVIDENCE_DIR";
+const WRONG_SIGNATURE_MANIFEST_DIGEST: &str = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
 
 struct PublishedFixture {
     _root: TempDir,
@@ -144,7 +150,7 @@ fn write_trust_inputs(root: &Path) -> (PathBuf, PathBuf) {
 
 fn push_command(
     layout: &Path,
-    registry: &TestRegistry,
+    registry_url: &str,
     token_file: Option<&Path>,
     trust_policy_file: &Path,
     signing_key_file: &Path,
@@ -156,7 +162,7 @@ fn push_command(
         .args(["artifact", "oci-push", "--layout"])
         .arg(layout)
         .arg("--registry")
-        .arg(registry.url())
+        .arg(registry_url)
         .arg("--repository")
         .arg(REPOSITORY)
         .arg("--reference")
@@ -243,7 +249,7 @@ fn publish_fixture() -> PublishedFixture {
     let output = run(
         &mut push_command(
             &source_layout,
-            &registry,
+            &registry.url(),
             Some(&token_file),
             &trust_policy_file,
             &signing_key_file,
@@ -295,6 +301,88 @@ fn assert_failed_pull_has_no_outputs(root: &Path) {
     for name in ["pulled-layout", "pull-state", "import-report.json", "pull-receipt.json"] {
         assert!(!root.join(name).exists(), "failed pull unexpectedly created {name}");
     }
+}
+
+fn external_pull_command(
+    registry_url: &str,
+    push_report: &OciRegistryPushReport,
+    trust_policy_file: &Path,
+    expected_signature_manifest_digest: &str,
+    root: &Path,
+) -> Command {
+    assert!(registry_url.starts_with("http://127.0.0.1:"));
+    assert!(root.is_dir(), "external pull root must exist");
+    let mut command = mantle_cmd();
+    command
+        .arg("--json")
+        .arg("--state-dir")
+        .arg(root.join("pull-state"))
+        .args(["artifact", "oci-pull", "--registry"])
+        .arg(registry_url)
+        .arg("--repository")
+        .arg(REPOSITORY)
+        .arg("--reference")
+        .arg(REFERENCE)
+        .arg("--expected-manifest-digest")
+        .arg(&push_report.manifest_digest)
+        .arg("--expected-metadata-manifest-digest")
+        .arg(&push_report.metadata_manifest_digest)
+        .arg("--expected-signature-manifest-digest")
+        .arg(expected_signature_manifest_digest)
+        .arg("--trust-policy")
+        .arg(trust_policy_file)
+        .arg("--allow-http")
+        .arg("--out")
+        .arg(root.join("pulled-layout"))
+        .arg("--report-out")
+        .arg(root.join("import-report.json"))
+        .arg("--receipt-out")
+        .arg(root.join("pull-receipt.json"));
+    command
+}
+
+fn write_external_registry_evidence(
+    fixture_version: &str,
+    push: &OciRegistryPushReport,
+    pull: &OciRegistryPullReport,
+    imported: &OciImportReport,
+) {
+    let Some(evidence_dir) = std::env::var_os(EXTERNAL_REGISTRY_EVIDENCE_ENV) else {
+        return;
+    };
+    assert!(!fixture_version.is_empty());
+    assert_eq!(imported.state, "admitted");
+    let evidence_dir = PathBuf::from(evidence_dir);
+    std::fs::create_dir_all(&evidence_dir).expect("external compatibility evidence dir should exist");
+    let summary = serde_json::json!({
+        "schema": "mantle-oci-external-registry-compatibility-v1",
+        "fixture_version": fixture_version,
+        "manifest_digest": push.manifest_digest,
+        "metadata_manifest_digest": push.metadata_manifest_digest,
+        "signature_manifest_digest": push.signature_manifest_digest,
+        "policy_blake3": push.policy_blake3,
+        "verified_signers": pull.verified_signers,
+        "verified_public_key_blake3": pull.verified_public_key_blake3,
+        "import_receipt_blake3": pull.import_receipt_blake3,
+        "import_state": imported.state,
+        "exact_layout_match": true,
+        "wrong_signature_manifest_digest_rejected_without_outputs": true,
+        "non_claims": [
+            "arbitrary registry compatibility",
+            "authenticated registry deployment",
+            "registry authorization",
+            "redirect or proxy behavior",
+            "TLS or PKI correctness",
+            "tag immutability",
+            "OCI Referrers API support",
+            "artifact correctness",
+            "bootability",
+            "deployability",
+            "release eligibility"
+        ]
+    });
+    let bytes = serde_json::to_vec_pretty(&summary).expect("external compatibility summary should serialize");
+    std::fs::write(evidence_dir.join("summary.json"), bytes).expect("external compatibility summary should be written");
 }
 
 #[test]
@@ -478,7 +566,7 @@ fn registry_push_requires_credentials_and_reuses_blobs_after_interruption() {
     let registry = TestRegistry::start(BEARER_TOKEN);
     let (signing_key_file, trust_policy_file) = write_trust_inputs(root.path());
     let missing_receipt = root.path().join("missing-credential-receipt.json");
-    let denied = push_command(&layout, &registry, None, &trust_policy_file, &signing_key_file, &missing_receipt)
+    let denied = push_command(&layout, &registry.url(), None, &trust_policy_file, &signing_key_file, &missing_receipt)
         .output()
         .expect("anonymous push should run");
     assert!(!denied.status.success(), "missing registry credentials must fail");
@@ -492,7 +580,7 @@ fn registry_push_requires_credentials_and_reuses_blobs_after_interruption() {
     let interrupted_receipt = root.path().join("interrupted-receipt.json");
     let interrupted = push_command(
         &layout,
-        &registry,
+        &registry.url(),
         Some(&token_file),
         &trust_policy_file,
         &signing_key_file,
@@ -507,7 +595,14 @@ fn registry_push_requires_credentials_and_reuses_blobs_after_interruption() {
 
     let retry_receipt = root.path().join("retry-receipt.json");
     let retry = run(
-        &mut push_command(&layout, &registry, Some(&token_file), &trust_policy_file, &signing_key_file, &retry_receipt),
+        &mut push_command(
+            &layout,
+            &registry.url(),
+            Some(&token_file),
+            &trust_policy_file,
+            &signing_key_file,
+            &retry_receipt,
+        ),
         "registry push retry",
     );
     let report: OciRegistryPushReport = serde_json::from_slice(&retry.stdout).expect("retry receipt should parse");
@@ -516,4 +611,71 @@ fn registry_push_requires_credentials_and_reuses_blobs_after_interruption() {
     assert!(report.reused_blobs > 0, "retry should reuse previously verified blobs");
     assert!(retry_receipt.is_file(), "successful retry must publish a receipt");
     assert!(!String::from_utf8_lossy(&retry.stdout).contains(BEARER_TOKEN));
+}
+
+#[test]
+#[ignore = "requires the repository-pinned independent OCI Distribution registry binary"]
+fn registry_cli_interoperates_with_pinned_distribution_and_rejects_wrong_signature_digest() {
+    let registry_binary = std::env::var_os(EXTERNAL_REGISTRY_BINARY_ENV)
+        .map(PathBuf::from)
+        .expect("MANTLE_TEST_DISTRIBUTION_REGISTRY must name the pinned registry binary");
+    let root = TempDir::new().expect("external compatibility fixture root should exist");
+    let registry = DistributionRegistry::start(&registry_binary, &root.path().join("distribution"));
+    let source_layout = export_gallery_layout(root.path());
+    let (signing_key_file, trust_policy_file) = write_trust_inputs(root.path());
+    let push_receipt_path = root.path().join("external-push-receipt.json");
+    let push_output = run(
+        &mut push_command(
+            &source_layout,
+            registry.url(),
+            None,
+            &trust_policy_file,
+            &signing_key_file,
+            &push_receipt_path,
+        ),
+        "external distribution registry push",
+    );
+    let push: OciRegistryPushReport =
+        serde_json::from_slice(&push_output.stdout).expect("external push receipt should parse");
+    verify_push_report(&push).expect("external push receipt should verify");
+    assert!(push_receipt_path.is_file());
+    assert!(!push.manifest_digest.is_empty());
+
+    let positive_root = root.path().join("positive-pull");
+    std::fs::create_dir_all(&positive_root).expect("positive pull root should exist");
+    let pull_output = run(
+        &mut external_pull_command(
+            registry.url(),
+            &push,
+            &trust_policy_file,
+            &push.signature_manifest_digest,
+            &positive_root,
+        ),
+        "external distribution registry pull",
+    );
+    let pull: OciRegistryPullReport =
+        serde_json::from_slice(&pull_output.stdout).expect("external pull receipt should parse");
+    verify_pull_report(&pull).expect("external pull receipt should verify");
+    let imported: OciImportReport = serde_json::from_slice(
+        &std::fs::read(positive_root.join("import-report.json")).expect("external import receipt should exist"),
+    )
+    .expect("external import receipt should parse");
+    assert_eq!(imported.state, "admitted");
+    assert_eq!(pull.expected_signature_manifest_digest, push.signature_manifest_digest);
+    assert_eq!(collect_layout_files(&source_layout), collect_layout_files(&positive_root.join("pulled-layout")));
+
+    let negative_root = root.path().join("negative-pull");
+    std::fs::create_dir_all(&negative_root).expect("negative pull root should exist");
+    let rejected = external_pull_command(
+        registry.url(),
+        &push,
+        &trust_policy_file,
+        WRONG_SIGNATURE_MANIFEST_DIGEST,
+        &negative_root,
+    )
+    .output()
+    .expect("wrong-signature-digest pull should run");
+    assert!(!rejected.status.success(), "wrong signature-manifest digest must fail");
+    assert_failed_pull_has_no_outputs(&negative_root);
+    write_external_registry_evidence(registry.version(), &push, &pull, &imported);
 }

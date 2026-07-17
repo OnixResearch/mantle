@@ -4,6 +4,8 @@
 
 Accepted (2026-07-17)
 
+ADR 0030 supersedes only the signature companion's wire encoding; this ADR's signed identity, local-policy, distinct-key, publication-order, and pre-admission verification boundaries remain in force.
+
 ## Context
 
 ADR 0028 keeps an ordinary OCI image unchanged and preserves Mantle's exact layout/index/export evidence in a second subject-bound metadata manifest. Requiring both immutable manifest SHA-256 values detects tag and metadata drift relative to an operator handoff, but neither manifest authenticates who authorized the pair. Registry bearer credentials authenticate a request to one server; they are not durable artifact authority and must not become content identity.

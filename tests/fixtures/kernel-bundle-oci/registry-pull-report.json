@@ -11,8 +11,8 @@
   "resolved_manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "expected_metadata_manifest_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "resolved_metadata_manifest_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "expected_signature_manifest_digest": "sha256:d1799c870c4ebc69370c6c26b4eb0af835e83622b84065ada5429f2b4cac6ccc",
-  "resolved_signature_manifest_digest": "sha256:d1799c870c4ebc69370c6c26b4eb0af835e83622b84065ada5429f2b4cac6ccc",
+  "expected_signature_manifest_digest": "sha256:6cddbb1a26110692cb528c110396291cea7c02127595400e9f11d905613c3739",
+  "resolved_signature_manifest_digest": "sha256:6cddbb1a26110692cb528c110396291cea7c02127595400e9f11d905613c3739",
   "trust_domain": "onix-kernel-bundle",
   "policy_blake3": "ad45c4728f086ed75a4e8e625847126a24437842cfe5bca80dba88a7d9ef39ab",
   "verified_signers": [
@@ -42,5 +42,5 @@
     "no upload resumption",
     "signature verification authenticates only the immutable digest pair under supplied local policy"
   ],
-  "receipt_blake3": "c8189ba19bc8a2d380cd178e027bab625bdf18a0474744ccf1d035317945b817"
+  "receipt_blake3": "30a1cc34e8a7d37da28b8297c8780eb34c9b76d9ba948d1a111d289e3017fa55"
 }

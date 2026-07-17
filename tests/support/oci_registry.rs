@@ -15,8 +15,7 @@ use std::time::Duration;
 
 use mantle::oci_projection::sha256_digest;
 use mantle::oci_registry::MANTLE_SIGNATURE_DOCUMENT_MEDIA_TYPE;
-use mantle::oci_registry::OCI_ARTIFACT_MANIFEST_MEDIA_TYPE;
-use mantle::oci_registry::OciArtifactManifest;
+use mantle::oci_registry::OciCompanionManifest;
 use mantle::oci_registry::RegistrySignatureDocument;
 use url::Url;
 
@@ -441,10 +440,10 @@ impl TestRegistry {
 
     pub fn replace_artifact_tag_with_drift(&self, repository: &str, reference: &str) {
         let bytes =
-            br#"{"schemaVersion":2,"mediaType":"application/vnd.oci.artifact.manifest.v1+json","drift":true}"#.to_vec();
+            br#"{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","drift":true}"#.to_vec();
         let digest = sha256_digest(&bytes);
         let stored = StoredManifest {
-            media_type: OCI_ARTIFACT_MANIFEST_MEDIA_TYPE.to_string(),
+            media_type: OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_string(),
             digest,
             bytes,
         };
@@ -461,9 +460,9 @@ impl TestRegistry {
             .get(&(repository.to_string(), metadata_manifest_digest.to_string()))
             .cloned()
             .expect("metadata manifest should exist by digest");
-        let manifest: OciArtifactManifest =
+        let manifest: OciCompanionManifest =
             serde_json::from_slice(&stored.bytes).expect("metadata manifest should parse");
-        let descriptor = manifest.blobs.first().expect("metadata manifest should contain blobs");
+        let descriptor = manifest.layers.first().expect("metadata manifest should contain layers");
         let bytes = state.blobs.get_mut(&descriptor.digest).expect("metadata blob should exist");
         let first = bytes.first_mut().expect("metadata blob should not be empty");
         *first ^= 1;
@@ -483,9 +482,9 @@ impl TestRegistry {
             .get(&(repository.to_string(), signature_manifest_digest.to_string()))
             .cloned()
             .expect("signature manifest should exist by digest");
-        let mut manifest: OciArtifactManifest =
+        let mut manifest: OciCompanionManifest =
             serde_json::from_slice(&stored.bytes).expect("signature manifest should parse");
-        let old_descriptor = manifest.blobs.first().expect("signature manifest should contain a document").clone();
+        let old_descriptor = manifest.layers.first().expect("signature manifest should contain a document").clone();
         let document_bytes = state.blobs.get(&old_descriptor.digest).expect("signature document should exist");
         let mut document: RegistrySignatureDocument =
             serde_json::from_slice(document_bytes).expect("signature document should parse");
@@ -496,9 +495,9 @@ impl TestRegistry {
         *encoded = String::from_utf8(bytes).expect("mutated signature should remain UTF-8");
         let new_document_bytes = serde_json::to_vec(&document).expect("mutated signature document should serialize");
         let new_document_digest = sha256_digest(&new_document_bytes);
-        manifest.blobs[0].digest = new_document_digest.clone();
-        manifest.blobs[0].size = new_document_bytes.len() as u64;
-        manifest.blobs[0].media_type = MANTLE_SIGNATURE_DOCUMENT_MEDIA_TYPE.to_string();
+        manifest.layers[0].digest = new_document_digest.clone();
+        manifest.layers[0].size = new_document_bytes.len() as u64;
+        manifest.layers[0].media_type = MANTLE_SIGNATURE_DOCUMENT_MEDIA_TYPE.to_string();
         let manifest_bytes = serde_json::to_vec(&manifest).expect("mutated signature manifest should serialize");
         let manifest_digest = sha256_digest(&manifest_bytes);
         state.blobs.insert(new_document_digest, new_document_bytes);

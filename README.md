@@ -556,7 +556,7 @@ Fast local examples:
 - [`examples/projects/foreign-import-handoff/workflow.ncl`](examples/projects/foreign-import-handoff/workflow.ncl) — Guix-like and Nix-like validation/planning without foreign frontend commands
 - [`examples/projects/portable-receipt-handoff/mantle-project.ncl`](examples/projects/portable-receipt-handoff/mantle-project.ncl) — receipt archive handoff, idempotent import, and complete/incomplete semantic graph queries
 - [`examples/projects/kernel-bundle-oci-local/workflow.ncl`](examples/projects/kernel-bundle-oci-local/workflow.ncl) — admitted fixture objects projected into a local OCI layout, reimported into fresh state, and rejected after descriptor tampering
-- [`examples/projects/kernel-bundle-oci-registry/workflow.ncl`](examples/projects/kernel-bundle-oci-registry/workflow.ncl) — bearer-authenticated registry transport plus Nickel-policy Ed25519 authentication of the immutable image/metadata pair before exact layout recovery and fresh-state admission
+- [`examples/projects/kernel-bundle-oci-registry/workflow.ncl`](examples/projects/kernel-bundle-oci-registry/workflow.ncl) — bearer-authenticated registry transport plus Nickel-policy Ed25519 authentication of the immutable image/metadata pair before exact layout recovery and fresh-state admission; the companion runbook includes a pinned OCI Distribution v3.1.0 compatibility rail
 - [`examples/transcripts/hello-eval.md`](examples/transcripts/hello-eval.md) — isolated executable Markdown evaluation transcript
 - [`examples/fail.ncl`](examples/fail.ncl) — intentional failure for diagnostics
 

@@ -110,10 +110,10 @@
       "no signature policy claim"
     ]
   },
-  "layout_blake3": "700f2de2dbc4588a4b62e251dc6ea094ac3ce81f1b72bba00cc787a1928b5b0c",
+  "layout_blake3": "be91fd61414c7cd34dedb3be65104f48e6e5a443ef180775c5a487ce2218e978",
   "manifest_descriptor": {
     "mediaType": "application/vnd.oci.image.manifest.v1+json",
-    "digest": "sha256:09c3a52127db0e7e496d50a1da420df0909397a17221b76d176694a4c1fc0f59",
+    "digest": "sha256:e667b0fc17688080a1927e7f7b830a32a4ed57cb64bc0f797a1c16f5a0421245",
     "size": 788,
     "annotations": {
       "io.multikernel.kbi.id": "kbi:sha256:7777777777777777777777777777777777777777777777777777777777777777",
@@ -167,5 +167,5 @@
     "no release eligibility claim",
     "no signature policy claim"
   ],
-  "receipt_blake3": "82287feee9e89cf73bf0669cc032ddc77a5973994ffbc4bd6f79ee6dd9820629"
+  "receipt_blake3": "cc2ce3c9f9bd31a05f1fb6bfc7f245fca62b8845e91231a79c88756d1bbdd97b"
 }

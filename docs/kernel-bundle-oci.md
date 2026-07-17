@@ -153,9 +153,13 @@ Push uploads or reuses exact descriptor blobs. `<reference>.mantle-metadata`
 retains exact `oci-layout`, `index.json`, and export-report bytes. A third
 `<reference>.mantle-signature` OCI artifact contains a deterministic detached-
 signature document over the exact image-manifest and metadata-manifest SHA-256
-pair plus the policy trust domain. Metadata and signature companions are
-published before the user-facing image tag; all three are re-read by immutable
-digest before success.
+pair plus the policy trust domain. Both companions use OCI image-manifest schema
+version 2 with explicit `artifactType`, the ordinary image-manifest `subject`, a
+canonical empty config descriptor, and role-annotated payload `layers`. Ordinary
+image/index documents also use OCI schema version 2; Mantle report schema
+versions remain independent. Metadata and signature companions are published
+before the user-facing image tag; all three are re-read by immutable digest
+before success.
 
 The policy authorizes an exact repository set, trusted public keys, required
 signer names, minimum distinct-key threshold, and revoked full-key BLAKE3
@@ -189,3 +193,30 @@ BPF safety, bootability, deployability, exactly-once publication, upload
 resumption, release eligibility, or authorization to mutate a target. A failed
 push may leave unreferenced blobs or companion tags; exact reruns may reuse
 verified blobs but are not transactional rollback claims.
+
+### Independent registry compatibility rail
+
+The default unit/CLI suite uses Mantle's deterministic in-process registry for
+adversarial control. The separate executable rail below resolves the repository-
+pinned OCI Distribution v3.1.0 package, launches that independent server on
+loopback, runs signed production push and fresh-state immutable-digest pull,
+compares exact layout bytes, validates push/pull/import reports, and proves a
+wrong signature-manifest digest publishes no output:
+
+```console
+registry_bin="$(nix build --no-link --print-out-paths .#oci-distribution-registry)/bin/registry"
+MANTLE_TEST_DISTRIBUTION_REGISTRY="$registry_bin" \
+MANTLE_EXTERNAL_REGISTRY_EVIDENCE_DIR=target/test-audit/oci-distribution \
+  nix develop -c cargo test --test kernel_bundle_oci_registry_cli \
+    registry_cli_interoperates_with_pinned_distribution_and_rejects_wrong_signature_digest \
+    -- --ignored --nocapture
+```
+
+The sanitized result is
+`target/test-audit/oci-distribution/summary.json`; it records the normalized
+fixture version, immutable digests, policy/key identities, admitted import
+receipt, exact-layout result, negative-path result, and explicit non-claims.
+This proves only the pinned local-HTTP Distribution v3.1.0 interaction. It does
+not prove arbitrary registry compatibility, authentication/authorization,
+redirect/proxy behavior, TLS/PKI correctness, tag immutability, or Referrers API
+support.

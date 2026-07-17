@@ -3,10 +3,10 @@
   "schema_version": 1,
   "imported": true,
   "state": "admitted",
-  "layout_blake3": "8ffa3efaa52819f292c3bc4f4ccd5610cb03fe37afb0a071d0bf05f3de6451b3",
+  "layout_blake3": "91ba2b52b5cbcced687a71bce2ac5c4158c52a13fd75341d7b3ab0dea3b44f3b",
   "manifest_descriptor": {
     "mediaType": "application/vnd.oci.image.manifest.v1+json",
-    "digest": "sha256:bca3accc2441446c577d47f0af5ecfcbbd760e64b4975ebef5a9f1ba675f4928",
+    "digest": "sha256:356a437342f3fff5d56af0ccd9c8b0974a6652aab7fcd3c9754c20129027a1bb",
     "size": 1272,
     "annotations": {
       "io.multikernel.kbi.id": "kbi:sha256:7777777777777777777777777777777777777777777777777777777777777777",
@@ -49,8 +49,8 @@
     {
       "role": "oci-manifest",
       "media_type": "application/vnd.oci.image.manifest.v1+json",
-      "oci_sha256": "sha256:bca3accc2441446c577d47f0af5ecfcbbd760e64b4975ebef5a9f1ba675f4928",
-      "blob_blake3": "49e87978927c5a98d6ca17bad69696a7b2d9bf640fafd0c023614204c584149a",
+      "oci_sha256": "sha256:356a437342f3fff5d56af0ccd9c8b0974a6652aab7fcd3c9754c20129027a1bb",
+      "blob_blake3": "1d95f0c85a3e41955792e143e76bf91809506a4e71f784c26236e9f3f88d4135",
       "size_bytes": 1272,
       "archive_profile": "exact-json",
       "artifact_ref": "mantle://blake3/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
@@ -90,5 +90,5 @@
     "no release eligibility claim",
     "no signature policy claim"
   ],
-  "receipt_blake3": "43fa582c55e3bdda30ff9986527914352b3b4fcbee0a39effabd57d1e2d5794a"
+  "receipt_blake3": "fe065693571e6307f550df21ffdec3e33905f5d4ee96169fac9584512278958b"
 }

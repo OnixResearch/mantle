@@ -47,6 +47,7 @@ pub(crate) const OCI_MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.image.mani
 pub(crate) const OCI_CONFIG_MEDIA_TYPE: &str = "application/vnd.oci.image.config.v1+json";
 pub(crate) const OCI_INDEX_MEDIA_TYPE: &str = "application/vnd.oci.image.index.v1+json";
 pub(crate) const SCHEMA_VERSION: u16 = 1;
+pub(crate) const OCI_SCHEMA_VERSION: u16 = 2;
 pub(crate) const PROJECTION_HASH_DOMAIN: &str = "mantle/oci/projection/v1";
 pub(crate) const LAYOUT_HASH_DOMAIN: &str = "mantle/oci/layout/v1";
 pub(crate) const EXPORT_HASH_DOMAIN: &str = "mantle/oci/export-report/v1";

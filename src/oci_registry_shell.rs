@@ -12,6 +12,7 @@ use std::time::Duration;
 use crate::oci_projection::OCI_BLOB_MAX_BYTES;
 use crate::oci_projection::OCI_DOCUMENT_MAX_BYTES;
 use crate::oci_projection::OCI_EXPORT_REPORT_FILENAME;
+use crate::oci_projection::OCI_MANIFEST_MEDIA_TYPE;
 use crate::oci_projection::OciDescriptor;
 use crate::oci_projection::sha256_digest;
 use crate::oci_projection_shell::ImportRequest;
@@ -22,7 +23,6 @@ use crate::oci_projection_shell::read_layout_facts;
 use crate::oci_registry::CREDENTIAL_MODE_ANONYMOUS;
 use crate::oci_registry::CREDENTIAL_MODE_BEARER_FILE;
 use crate::oci_registry::FinalizeUploadInput;
-use crate::oci_registry::OCI_ARTIFACT_MANIFEST_MEDIA_TYPE;
 use crate::oci_registry::OciRegistryPullReport;
 use crate::oci_registry::OciRegistryPushReport;
 use crate::oci_registry::PullReportFacts;
@@ -469,14 +469,14 @@ fn verify_published_manifests(
         client,
         target,
         &plan.metadata_manifest_descriptor.digest,
-        OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+        OCI_MANIFEST_MEDIA_TYPE,
         Some(&plan.metadata_manifest_descriptor.digest),
     )?;
     let signature = get_manifest(
         client,
         target,
         &signature_plan.manifest_descriptor.digest,
-        OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+        OCI_MANIFEST_MEDIA_TYPE,
         Some(&signature_plan.manifest_descriptor.digest),
     )?;
     let main = get_manifest(
@@ -524,7 +524,7 @@ pub fn push_registry_layout(request: RegistryPushRequest<'_>) -> Result<OciRegis
         &client,
         request.target,
         &request.target.metadata_reference,
-        OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+        OCI_MANIFEST_MEDIA_TYPE,
         &plan.metadata_manifest_bytes,
     )?;
     if metadata_digest != plan.metadata_manifest_descriptor.digest {
@@ -535,7 +535,7 @@ pub fn push_registry_layout(request: RegistryPushRequest<'_>) -> Result<OciRegis
         &client,
         request.target,
         &request.target.signature_reference,
-        OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+        OCI_MANIFEST_MEDIA_TYPE,
         &signature_plan.manifest_bytes,
     )?;
     if signature_digest != signature_plan.manifest_descriptor.digest {
@@ -580,14 +580,14 @@ fn pull_manifests(
         client,
         request.target,
         &request.target.metadata_reference,
-        OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+        OCI_MANIFEST_MEDIA_TYPE,
         Some(request.expected_metadata_manifest_digest),
     )?;
     let signature = get_manifest(
         client,
         request.target,
         &request.target.signature_reference,
-        OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+        OCI_MANIFEST_MEDIA_TYPE,
         Some(request.expected_signature_manifest_digest),
     )?;
     assert_eq!(main.digest, request.expected_manifest_digest, "main tag must resolve immutably");
@@ -610,7 +610,7 @@ fn response_descriptor(response: &ManifestResponse) -> OciDescriptor {
 struct TrustedPullManifests {
     main: ManifestResponse,
     metadata: ManifestResponse,
-    metadata_document: crate::oci_registry::OciArtifactManifest,
+    metadata_document: crate::oci_registry::OciCompanionManifest,
     signature_manifest_descriptor: OciDescriptor,
     trust_verification: crate::oci_registry::RegistryTrustVerification,
     signature_document_bytes: u64,

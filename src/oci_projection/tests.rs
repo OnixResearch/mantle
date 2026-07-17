@@ -262,6 +262,8 @@ fn deterministic_projection_round_trips_as_admitted() {
     let first = build_export_plan(&projection, spec, &objects()).expect("projection should build");
     let second = build_export_plan(&projection, spec, &objects()).expect("projection should rebuild");
     assert_eq!(first.index_bytes, second.index_bytes);
+    let index: OciIndexDocument = serde_json::from_slice(&first.index_bytes).expect("OCI index should parse");
+    assert_eq!(index.schema_version, OCI_SCHEMA_VERSION);
     assert_eq!(first.blobs, second.blobs);
     assert_eq!(first.layout_blake3, second.layout_blake3);
     assert_eq!(first.layers.len(), projection.layers.len());
@@ -275,6 +277,7 @@ fn deterministic_projection_round_trips_as_admitted() {
         .find(|blob| blob.digest == first.manifest_descriptor.digest)
         .expect("manifest blob should exist");
     let manifest: OciManifestDocument = serde_json::from_slice(&manifest_bytes.bytes).expect("manifest should parse");
+    assert_eq!(manifest.schema_version, OCI_SCHEMA_VERSION);
     let module_descriptor = manifest
         .layers
         .iter()
@@ -510,6 +513,21 @@ fn rejects_duplicate_descriptors_and_wrong_import_media_types() {
     });
     let media_issues = validate_import(&wrong_media).expect_err("wrong layer media type must fail");
     assert!(media_issues.iter().any(|value| value.code == "invalid-media-type"));
+
+    let mut wrong_index_schema = layout_facts(&plan, None);
+    let mut index: OciIndexDocument =
+        serde_json::from_slice(&wrong_index_schema.index_bytes).expect("fixture index should parse");
+    index.schema_version = SCHEMA_VERSION;
+    wrong_index_schema.index_bytes = serde_json::to_vec(&index).expect("mutated index should serialize");
+    let index_issues = validate_import(&wrong_index_schema).expect_err("wrong OCI index schema must fail");
+    assert!(index_issues.iter().any(|value| value.code == "oci-index-shape"));
+
+    let mut wrong_manifest_schema = layout_facts(&plan, None);
+    rewrite_manifest(&mut wrong_manifest_schema, |manifest| {
+        manifest.schema_version = SCHEMA_VERSION;
+    });
+    let manifest_issues = validate_import(&wrong_manifest_schema).expect_err("wrong manifest schema must fail");
+    assert!(manifest_issues.iter().any(|value| value.code == "manifest-shape"));
 
     let mut wrong_diff_id = layout_facts(&plan, None);
     rewrite_config_diff_id(&mut wrong_diff_id, format!("sha256:{}", digest_hex('9')));

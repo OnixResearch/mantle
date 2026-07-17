@@ -24,6 +24,7 @@ use super::OCI_INDEX_MEDIA_TYPE;
 use super::OCI_LAYER_MAX_COUNT;
 use super::OCI_LAYOUT_VERSION;
 use super::OCI_MANIFEST_MEDIA_TYPE;
+use super::OCI_SCHEMA_VERSION;
 use super::OciDescriptor;
 use super::OciImportReport;
 use super::OciIndexDocument;
@@ -341,7 +342,7 @@ fn build_manifest_blob(
     layer_descriptors: Vec<OciDescriptor>,
 ) -> Result<(OciDescriptor, PlannedBlob), ProjectionIssue> {
     let manifest = OciManifestDocument {
-        schema_version: SCHEMA_VERSION,
+        schema_version: OCI_SCHEMA_VERSION,
         media_type: OCI_MANIFEST_MEDIA_TYPE.to_string(),
         config: config_descriptor.clone(),
         layers: layer_descriptors,
@@ -370,7 +371,7 @@ fn build_manifest_blob(
 fn build_index_bytes(manifest_descriptor: &OciDescriptor) -> Result<Vec<u8>, ProjectionIssue> {
     canonical_json(
         &OciIndexDocument {
-            schema_version: SCHEMA_VERSION,
+            schema_version: OCI_SCHEMA_VERSION,
             media_type: OCI_INDEX_MEDIA_TYPE.to_string(),
             manifests: vec![manifest_descriptor.clone()],
         },
@@ -472,7 +473,7 @@ fn validate_config(
 }
 
 fn index_has_supported_shape(index: &OciIndexDocument) -> bool {
-    if index.schema_version != SCHEMA_VERSION {
+    if index.schema_version != OCI_SCHEMA_VERSION {
         return false;
     }
     if index.media_type != OCI_INDEX_MEDIA_TYPE {
@@ -482,7 +483,7 @@ fn index_has_supported_shape(index: &OciIndexDocument) -> bool {
 }
 
 fn manifest_has_supported_shape(manifest: &OciManifestDocument) -> bool {
-    if manifest.schema_version != SCHEMA_VERSION {
+    if manifest.schema_version != OCI_SCHEMA_VERSION {
         return false;
     }
     if manifest.media_type != OCI_MANIFEST_MEDIA_TYPE {
@@ -549,7 +550,7 @@ fn parse_manifest(facts: &LayoutFacts) -> Result<ParsedManifest<'_>, ProjectionI
     }
     validate_descriptor_closure(facts, &manifest_descriptor, &manifest)?;
     debug_assert_eq!(index.manifests.len(), 1);
-    debug_assert_eq!(manifest.schema_version, SCHEMA_VERSION);
+    debug_assert_eq!(manifest.schema_version, OCI_SCHEMA_VERSION);
     Ok(ParsedManifest {
         descriptor: manifest_descriptor,
         bytes: manifest_bytes,

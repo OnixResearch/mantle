@@ -9,7 +9,7 @@
   "signature_reference": "reviewed.mantle-signature",
   "manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "metadata_manifest_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "signature_manifest_digest": "sha256:d1799c870c4ebc69370c6c26b4eb0af835e83622b84065ada5429f2b4cac6ccc",
+  "signature_manifest_digest": "sha256:6cddbb1a26110692cb528c110396291cea7c02127595400e9f11d905613c3739",
   "trust_domain": "onix-kernel-bundle",
   "policy_blake3": "ad45c4728f086ed75a4e8e625847126a24437842cfe5bca80dba88a7d9ef39ab",
   "verified_signers": [
@@ -38,5 +38,5 @@
     "no upload resumption",
     "signature verification authenticates only the immutable digest pair under supplied local policy"
   ],
-  "receipt_blake3": "9f5ba4d9e9a6d15e3b1a56c7599ef110911d3cfefc9ced3ae39b3caff3455af5"
+  "receipt_blake3": "7f5fed1960229272032dcd0123fd5195c4786fded89ab7bbfc86ba2882721408"
 }
