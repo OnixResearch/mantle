@@ -96,3 +96,13 @@ Task `72` passed `nix develop -c ./scripts/check-first-party-tigerstyle.sh` and 
 - Evidence-backed implementation and verification bridges were added to `tools/tracey_refs.rs` only after accepted requirement and proof evidence existed.
 - Task `76` reran Tracey, Cairn validation, and all three gates. Tracey reported `145/145 referenced`; validation returned `valid: true`; proposal, design, and tasks gates all returned `PASS`.
 - Task `79` was the final pre-archive packet after all task evidence was recorded. `git diff --check` passed, validation remained `valid: true`, all three gates remained `PASS`, the tasks gate reported 9/9 complete with zero remaining, and Tracey remained `145/145 referenced`.
+
+## Archive and exact post-archive state
+
+Task `84` ran archive dry-run and execution with `CAIRN_ARCHIVE_DATE=2026-07-17`. The execute receipt hash was `c8d6e0254472a6f787e3a5ea7d6d5d597f5301d133d6c473f1033671961dae39`.
+
+Task `85` produced the first exact machine-readable post-archive receipts. After this transcript was updated, task `87` refreshed those receipts and added the exact Tracey result beside them:
+
+- `post-archive-validation.json` reports `"changes": 0`, empty issue/finding lists, and `"valid": true`.
+- `post-archive-change-list.json` reports an empty `changes` array.
+- `post-archive-tracey.txt` reports `traceability coverage ok: 145/145 referenced (profile mantle-default)`.
