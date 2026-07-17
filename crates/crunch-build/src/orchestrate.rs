@@ -89,6 +89,20 @@ fn output_ca_field(
     }
 }
 
+const DERIVATION_SUFFIX: &str = ".drv";
+
+fn path_info_deriver(drv_path: &StorePath<String>) -> Result<StorePath<String>, Error> {
+    let name = drv_path.name().strip_suffix(DERIVATION_SUFFIX).unwrap_or_else(|| drv_path.name());
+    if name.is_empty() {
+        return Err(Error::Store("PathInfo deriver name is empty after normalization".to_string()));
+    }
+    let deriver = StorePath::<String>::from_name_and_digest_fixed(name, *drv_path.digest())
+        .map_err(|error| Error::Store(format!("normalizing PathInfo deriver {drv_path}: {error}")))?;
+    debug_assert!(!deriver.name().is_empty());
+    debug_assert_eq!(deriver.digest(), drv_path.digest());
+    Ok(deriver)
+}
+
 fn push_unique_store_paths(
     ordered_paths: &mut Vec<StorePath<String>>,
     seen_paths: &mut HashSet<StorePath<String>>,
@@ -1313,7 +1327,7 @@ where BServ: BuildService + 'static
             nar_size,
             nar_sha256,
             signatures: vec![],
-            deriver: Some(drv_path.clone()),
+            deriver: Some(path_info_deriver(drv_path)?),
             ca,
         };
 
@@ -1655,6 +1669,47 @@ mod tests {
     use tokio::io::AsyncWriteExt;
 
     use super::*;
+
+    const DERIVER_DIGEST_BYTE: u8 = 7;
+
+    #[test]
+    fn path_info_deriver_uses_suffix_free_internal_identity() {
+        let drv_path = StorePath::from_name_and_digest_fixed(
+            "example-package.drv",
+            [DERIVER_DIGEST_BYTE; nix_compat::store_path::DIGEST_SIZE],
+        )
+        .unwrap();
+        let deriver = path_info_deriver(&drv_path).unwrap();
+
+        assert_eq!(deriver.name(), "example-package");
+        assert_eq!(deriver.digest(), drv_path.digest());
+    }
+
+    #[test]
+    fn path_info_deriver_removes_only_the_outer_suffix() {
+        let drv_path = StorePath::from_name_and_digest_fixed(
+            "dynamic-package.drv.drv",
+            [DERIVER_DIGEST_BYTE; nix_compat::store_path::DIGEST_SIZE],
+        )
+        .unwrap();
+        let deriver = path_info_deriver(&drv_path).unwrap();
+
+        assert_eq!(deriver.name(), "dynamic-package.drv");
+        assert_eq!(deriver.digest(), drv_path.digest());
+    }
+
+    #[test]
+    fn path_info_deriver_rejects_empty_name_after_suffix_removal() {
+        let drv_path = StorePath::from_name_and_digest_fixed(
+            DERIVATION_SUFFIX,
+            [DERIVER_DIGEST_BYTE; nix_compat::store_path::DIGEST_SIZE],
+        )
+        .unwrap();
+        let error = path_info_deriver(&drv_path).unwrap_err();
+
+        assert!(error.to_string().contains("deriver name is empty"));
+        assert_eq!(drv_path.name(), DERIVATION_SUFFIX);
+    }
 
     fn tmp_ds() -> RedbDirectoryService {
         RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default()).unwrap()
