@@ -21,4 +21,5 @@
   - Evidence: `evidence/validation.md` records project evaluation task `40`, exact inventory/doc task `94`, and the successful inventory/workflow/remote-stdio chain in task `108`.
 - [x] [serial] V3 Run focused Rustfmt, `git diff --check`, the first-party quality gate, Tiger Style, and Tracey coverage. r[examples.resumable_remote_transfer_workflow]
   - Evidence: `evidence/validation.md` records task `99` passing the canonical first-party quality gate and task `107` passing Tiger Style, `git diff --check`, and accepted-spec Tracey coverage at 145/145.
-- [ ] [serial] V4 Run Cairn validation and proposal/design/tasks gates, sync the accepted requirement, archive only after evidence is durable, then append exact post-archive validation output. r[examples.resumable_remote_transfer_workflow]
+- [x] [serial] V4 Run Cairn validation and proposal/design/tasks gates, sync and inspect the accepted requirement, add the evidence-backed Tracey bridge, and prepare archive only after evidence is durable. r[examples.resumable_remote_transfer_workflow]
+  - Evidence: `evidence/validation.md` records sync task `117`, accepted-spec inspection, pre-archive gate task `119`, and task `120` retaining complete default-profile Tracey coverage at 145/145. Exact post-archive validation will be appended to the archived evidence transcript before the archive commit.

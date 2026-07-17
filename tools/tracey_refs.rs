@@ -250,6 +250,20 @@
 // for deterministic local evidence shape, and by `tests/examples_inventory.rs`
 // negative checks requiring artifact-attestation wording plus release/witness
 // non-claim text.
+//
+// r[impl examples.resumable_remote_transfer_workflow]
+// Implemented by the occurrence-safe demand core in
+// `crates/crunch-build/src/distributed/remote_transfer.rs`, the production stdio
+// composition in `src/remote_build.rs`, and the checked
+// `examples/projects/remote-build-loopback` project/runbook.
+//
+// r[verify examples.resumable_remote_transfer_workflow]
+// Verified by repeated-content positive/forged-offset core coverage, production
+// interruption/resume and acknowledged-chunk tamper fixtures in
+// `tests/remote_transfer_production.rs`, and catalog/non-claim drift checks in
+// `tests/examples_inventory.rs`. Durable review evidence lives under
+// `cairn/changes/publish-resumable-remote-transfer-workflow/evidence/` until
+// archive.
 
 // Compiled-eval legacy OpenSpec bridge.
 //

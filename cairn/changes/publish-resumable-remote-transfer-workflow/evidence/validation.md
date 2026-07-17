@@ -100,9 +100,21 @@ The new active requirement is not yet part of the accepted-spec count; its imple
 
 Pueue tasks `37` and `98` ran current Cairn validation plus proposal, design, and tasks gates. Both packets reported `valid: true`; proposal/design/tasks verdicts were `PASS`. Task `98` saw 10 substantive tasks, 5 done, and 5 remaining before the final validation markers were updated.
 
+## Accepted requirement and pre-archive packet
+
+Pueue task `117` ran Cairn sync dry-run and execute for `publish-resumable-remote-transfer-workflow`. The execute receipt had no reasons and receipt hash `f550ff1b2200842792113c7783b1cb3991494af9f638dba3458b951d33bab9cb`. Inspection confirmed `r[examples.resumable_remote_transfer_workflow]` plus all three reviewed scenarios were appended to `cairn/specs/examples/spec.md`.
+
+After sync, `tools/tracey_refs.rs` linked implementation to the occurrence-safe core/production gallery and verification to the pure-core, production positive/negative, and inventory drift tests. Pueue task `119` passed focused Rustfmt, `git diff --check`, Cairn validation, and all three gates. Pueue task `120` reported:
+
+```text
+traceability coverage ok: 145/145 referenced (profile mantle-default)
+```
+
+The profile count remains 145 because the default profile's accepted-spec selection is unchanged; no missing or dangling reference is inferred from the stable total.
+
 ## Budget and terminal state
 
-The declared search budget used four mechanism families, two baseline rounds, one repeated-content counterexample, one receiver-tamper counterexample, focused repository tests, one full quality gate, and one full Tiger Style/Tracey pass. No external network authority was needed. The implementation route is validated; lifecycle sync/archive remains before terminal completion.
+The declared search budget used four mechanism families, two baseline rounds, one repeated-content counterexample, one receiver-tamper counterexample, focused repository tests, one full quality gate, and one full Tiger Style/Tracey pass. No external network authority was needed. The implementation route, accepted requirement, and pre-archive packet are validated; archive and exact post-archive validation remain before terminal completion.
 
 ## Non-claims
 
