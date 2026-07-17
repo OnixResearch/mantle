@@ -41,10 +41,25 @@ cargo fmt --check \
   -p crunch-shell \
   -p crunch-store
 ./scripts/check-first-party-clippy.sh
-cargo test --workspace --lib --tests
+cargo test --workspace --lib --tests \
+  --exclude fuse-backend-rs \
+  --exclude nix-compat \
+  --exclude nix-compat-derive \
+  --exclude snix-build \
+  --exclude snix-castore \
+  --exclude snix-store \
+  --exclude snix-tracing \
+  -- --test-threads 1
 ```
 
 Notes:
+
+- Vendored workspace-member test binaries stay on their focused rails because
+  some require host capabilities such as a usable FUSE mount. Their libraries
+  still compile through first-party consumers.
+- The wrapper serializes libtest cases so process-global environment, lock,
+  and resource-pressure fixtures cannot interfere across otherwise unrelated
+  tests. Tests that own concurrency still exercise it internally.
 
 - The root `-p mantle` rustfmt leg covers the root package's `src/`,
   `examples/`, and `tests/`, including `tests/benchmark_harness.rs`.

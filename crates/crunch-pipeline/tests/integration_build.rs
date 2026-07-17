@@ -72,6 +72,7 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
 }
 
 const DETERMINISM_PROBE_PREFIX: &str = "determinism-probe:";
+const STRICT_PATH_BLOCKER_CLASS: &str = "denied-search-path:PATH";
 
 #[derive(Debug, Clone, Copy)]
 struct AmbientCase {
@@ -847,7 +848,7 @@ fn pipeline_determinism_strict_blocker_stable_across_ambient_state() {
 
     assert_blocker_probe_stability(
         "pipeline_determinism_probe_strict_environment_override_blocker",
-        "unsafe-env-override:PATH",
+        STRICT_PATH_BLOCKER_CLASS,
     );
 }
 
@@ -1021,9 +1022,18 @@ async fn pipeline_determinism_probe_strict_environment_override_blocker() {
 
     let result = build(&config).await.unwrap();
     assert!(result.hermeticity_audit_events.is_empty(), "strict blocker must not degrade into audit events");
-    assert!(result.failed[0].error.contains("unsafe sandbox environment override"));
-    assert!(result.failed[0].error.contains("PATH"));
-    emit_probe(&blocker_probe(&result, "unsafe-env-override:PATH"));
+    assert!(
+        result.failed[0].error.contains("build environment denied"),
+        "unexpected strict blocker: {}",
+        result.failed[0].error
+    );
+    assert!(
+        result.failed[0].error.contains("receipt-bound-path-ambient-entry"),
+        "strict blocker omitted receipt-bound PATH diagnostic: {}",
+        result.failed[0].error
+    );
+    assert!(result.failed[0].error.contains("PATH"), "strict blocker omitted PATH: {}", result.failed[0].error);
+    emit_probe(&blocker_probe(&result, STRICT_PATH_BLOCKER_CLASS));
 }
 
 #[tokio::test]
@@ -1103,8 +1113,21 @@ async fn pipeline_strict_mode_rejects_environment_override() {
         result.hermeticity_audit_events.is_empty(),
         "strict rejection should not downgrade to an audit event"
     );
-    assert!(result.failed[0].error.contains("unsafe sandbox environment override"));
-    assert!(result.failed[0].error.contains("PATH"));
+    assert!(
+        result.failed[0].error.contains("build environment denied"),
+        "unexpected strict-mode failure: {}",
+        result.failed[0].error
+    );
+    assert!(
+        result.failed[0].error.contains("receipt-bound-path-ambient-entry"),
+        "strict-mode failure omitted receipt-bound PATH diagnostic: {}",
+        result.failed[0].error
+    );
+    assert!(
+        result.failed[0].error.contains("PATH"),
+        "strict-mode failure omitted PATH: {}",
+        result.failed[0].error
+    );
 }
 
 #[tokio::test]

@@ -445,8 +445,11 @@ mod tests {
         assert!(recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
     }
 
+    static COMPLETENESS_MARKER_TEST_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
     #[tokio::test]
     async fn empty_directory_requires_existence() {
+        let _marker_guard = COMPLETENESS_MARKER_TEST_MUTEX.lock().await;
         GLOBAL_COMPLETENESS_MARKERS.clear();
         let blob = MemoryBlobService::default();
         let dir = StubDirectoryService::new();
@@ -476,6 +479,7 @@ mod tests {
 
     #[tokio::test]
     async fn directory_with_missing_blob_child_is_incomplete() {
+        let _marker_guard = COMPLETENESS_MARKER_TEST_MUTEX.lock().await;
         GLOBAL_COMPLETENESS_MARKERS.clear();
         let blob = MemoryBlobService::default();
         let dir = StubDirectoryService::new();
@@ -515,6 +519,7 @@ mod tests {
 
     #[tokio::test]
     async fn completeness_marker_skips_redundant_traversal() {
+        let _marker_guard = COMPLETENESS_MARKER_TEST_MUTEX.lock().await;
         GLOBAL_COMPLETENESS_MARKERS.clear();
         let blob = MemoryBlobService::default();
         let dir = StubDirectoryService::new();
@@ -533,6 +538,7 @@ mod tests {
 
     #[tokio::test]
     async fn bounded_depth_rejects_extremely_deep_trees() {
+        let _marker_guard = COMPLETENESS_MARKER_TEST_MUTEX.lock().await;
         GLOBAL_COMPLETENESS_MARKERS.clear();
         let blob = MemoryBlobService::default();
         let dir = StubDirectoryService::new();

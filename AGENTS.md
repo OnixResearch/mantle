@@ -722,7 +722,10 @@ When claiming test results, status, completion, or feature support in commit mes
   continue when FUSE mounts are unavailable without masking unrelated
   sandbox setup errors. If a fresh validation run hangs after `FUSE INIT`
   with no bwrap child, rerun with `CRUNCH_NO_FUSE=1` to force materialized
-  inputs and keep the bootstrap evidence moving.
+  inputs and keep the bootstrap evidence moving. The synchronous sandbox
+  callback materializes through an isolated named current-thread runtime;
+  `tokio::task::block_in_place` panics when this fallback is reached from a
+  current-thread caller such as the pipeline integration tests.
 - Vendored `snix-build` treats `SNIX_BUILD_SANDBOX_SHELL=/bin/sh`
   (or a compile-time default of `/bin/sh`) as a placeholder, not a real
   sandbox shell. It auto-discovers a `busybox-static` binary under

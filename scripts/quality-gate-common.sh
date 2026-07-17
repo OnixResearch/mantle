@@ -3,6 +3,7 @@ set -euo pipefail
 
 readonly QUALITY_GATE_SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly QUALITY_GATE_REPO_ROOT="$(cd -- "$QUALITY_GATE_SCRIPT_DIR/.." && pwd)"
+readonly QUALITY_GATE_TEST_THREAD_COUNT=1
 
 # Keep first-party package scope in one checked-in place.
 readonly -a FIRST_PARTY_PACKAGES=(
@@ -92,6 +93,14 @@ cargo_clippy_first_party() {
 
 cargo_test_workspace_lib_tests() {
   local -a args=(test --workspace --lib --tests)
+  local package_name
+
+  # Vendored workspace members have their own focused rails and may require
+  # host capabilities such as a usable FUSE mount. Keep this gate first-party.
+  for package_name in "${VENDORED_WORKSPACE_EXCLUDES[@]}"; do
+    args+=(--exclude "$package_name")
+  done
+  args+=(-- --test-threads "$QUALITY_GATE_TEST_THREAD_COUNT")
 
   print_command cargo "${args[@]}"
   cargo "${args[@]}"

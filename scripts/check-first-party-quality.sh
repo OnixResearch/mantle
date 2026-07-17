@@ -26,5 +26,5 @@ note "[1/3] rustfmt"
 cargo_fmt_first_party
 note "[2/3] clippy"
 "$SCRIPT_DIR/check-first-party-clippy.sh"
-note "[3/3] cargo test --workspace --lib --tests"
+note "[3/3] first-party workspace tests (serialized; vendored members excluded)"
 cargo_test_workspace_lib_tests

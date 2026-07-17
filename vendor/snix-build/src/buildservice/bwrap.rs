@@ -260,6 +260,9 @@ where
     Ok(())
 }
 
+const MATERIALIZATION_WORKER_NAME: &str = "snix-build-input-materializer";
+const MATERIALIZATION_WORKER_PANIC: &str = "input materialization worker panicked";
+
 fn materialize_inputs_blocking<BS, DS>(
     inputs_root: &Path,
     root_nodes: &BTreeMap<PathComponent, Node>,
@@ -267,13 +270,18 @@ fn materialize_inputs_blocking<BS, DS>(
     directory_service: &DS,
 ) -> std::io::Result<()>
 where
-    BS: BlobService + Clone,
-    DS: DirectoryService + Clone,
+    BS: BlobService + Clone + Send + 'static,
+    DS: DirectoryService + Clone + Send + 'static,
 {
-    let runtime_handle = tokio::runtime::Handle::current();
-    tokio::task::block_in_place(|| {
-        runtime_handle.block_on(materialize_inputs_to_disk(inputs_root, root_nodes, blob_service, directory_service))
-    })
+    let inputs_root = inputs_root.to_path_buf();
+    let root_nodes = root_nodes.clone();
+    let blob_service = blob_service.clone();
+    let directory_service = directory_service.clone();
+    let worker = std::thread::Builder::new().name(MATERIALIZATION_WORKER_NAME.to_string()).spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+        runtime.block_on(materialize_inputs_to_disk(&inputs_root, &root_nodes, &blob_service, &directory_service))
+    })?;
+    worker.join().map_err(|_| std::io::Error::other(MATERIALIZATION_WORKER_PANIC))?
 }
 
 pub struct BubblewrapBuildService<BS, DS> {
@@ -654,6 +662,20 @@ mod tests {
         assert!(!mutable_mounts[0].read_only);
         mutable.runtime_host_path = None;
         assert!(workspace_mounts(host, Some(&mutable)).is_err());
+    }
+
+    #[tokio::test]
+    async fn materialize_inputs_blocking_supports_current_thread_runtime() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let file_node = insert_blob(&bs, b"current-thread", false).await;
+        let root_nodes = BTreeMap::from([(PathComponent::try_from("input").unwrap(), file_node)]);
+        let dest = tempfile::tempdir().unwrap();
+
+        materialize_inputs_blocking(dest.path(), &root_nodes, &bs, &ds).unwrap();
+
+        assert_eq!(std::fs::read(dest.path().join("input")).unwrap(), b"current-thread");
+        assert!(dest.path().join("input").is_file());
     }
 
     #[tokio::test]

@@ -25,6 +25,8 @@ use audit_support::write_command_audit;
 use serde::Deserialize;
 
 const DEFAULT_LOGICAL_STORE_PREFIX: &str = "/mantle/store";
+const DISABLE_FUSE_ENV: &str = "CRUNCH_NO_FUSE";
+const DISABLE_FUSE_ENV_VALUE: &str = "1";
 const LOOPBACK_PROBE_TIMEOUT: Duration = Duration::from_millis(100);
 
 fn require_loopback_network(test_name: &str) -> bool {
@@ -50,7 +52,9 @@ fn loopback_network_available() -> bool {
 }
 
 fn crunch_cmd() -> Command {
-    Command::cargo_bin("crunch").expect("crunch binary should be built")
+    let mut command = Command::cargo_bin("crunch").expect("crunch binary should be built");
+    command.env(DISABLE_FUSE_ENV, DISABLE_FUSE_ENV_VALUE);
+    command
 }
 
 #[derive(Debug, Clone)]
@@ -498,7 +502,7 @@ fn smoke_build_failure_reports_error() {
     assert!(report.failed[0].message.contains("42") || report.failed[0].message.contains("will-fail"));
     assert!(report.failed[0].saved_log_path.is_some(), "build failure should record a saved log path");
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.trim().is_empty(), "reported build failures should not print a second JSON error");
+    assert!(stderr.trim().is_empty(), "reported build failures should not print a second JSON error: {stderr}");
 }
 
 #[test]
