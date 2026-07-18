@@ -12,6 +12,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use data_encoding::HEXLOWER;
+use nix_compat::nixhash::HashAlgo;
+use nix_compat::nixhash::NixHash;
 use serde::Deserialize;
 use serde::Serialize;
 use url::Url;
@@ -262,6 +264,7 @@ pub enum BootstrapSourceBundleMode {
     SourceRoot,
     SelfBuildProof,
     FreshCloneInputs,
+    FreshCloneFixedPoint,
 }
 
 impl BootstrapSourceBundleMode {
@@ -271,6 +274,7 @@ impl BootstrapSourceBundleMode {
             "source-root" => Ok(Self::SourceRoot),
             "self-build-proof" => Ok(Self::SelfBuildProof),
             "fresh-clone-inputs" => Ok(Self::FreshCloneInputs),
+            "fresh-clone-fixed-point" => Ok(Self::FreshCloneFixedPoint),
             other => Err(RunError::Internal(format!("unsupported bootstrap source profile mode '{other}'"))),
         }
     }
@@ -281,12 +285,15 @@ impl BootstrapSourceBundleMode {
             Self::SourceRoot => "source-root",
             Self::SelfBuildProof => "self-build-proof",
             Self::FreshCloneInputs => "fresh-clone-inputs",
+            Self::FreshCloneFixedPoint => "fresh-clone-fixed-point",
         }
     }
 
     fn expected_provider_kind(self) -> &'static str {
         match self {
-            Self::LegacySeed | Self::SelfBuildProof | Self::FreshCloneInputs => BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED,
+            Self::LegacySeed | Self::SelfBuildProof | Self::FreshCloneInputs | Self::FreshCloneFixedPoint => {
+                BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED
+            }
             Self::SourceRoot => BOOTSTRAP_PROVIDER_KIND_SOURCE_ROOT,
         }
     }
@@ -296,11 +303,15 @@ impl BootstrapSourceBundleMode {
     }
 
     fn requires_vendor_inputs(self) -> bool {
-        matches!(self, Self::SelfBuildProof | Self::FreshCloneInputs)
+        matches!(self, Self::SelfBuildProof | Self::FreshCloneInputs | Self::FreshCloneFixedPoint)
     }
 
     fn requires_bootstrap_sources(self) -> bool {
-        !matches!(self, Self::FreshCloneInputs)
+        !matches!(self, Self::FreshCloneInputs | Self::FreshCloneFixedPoint)
+    }
+
+    fn requires_supplemental_fetch_closure(self) -> bool {
+        matches!(self, Self::FreshCloneFixedPoint)
     }
 }
 
@@ -314,6 +325,7 @@ pub struct BootstrapSourceBundleProfileInput {
     pub vendor_deps: Option<PathBuf>,
     pub toolchain_source_root: Option<PathBuf>,
     pub proof_inputs: Vec<PathBuf>,
+    pub supplemental_records: Vec<SourceRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -556,6 +568,7 @@ pub fn plan_bootstrap_source_bundle_profile(
         store_prefix,
     })?;
     append_optional_bootstrap_profile_records(&mut records, input, store_prefix)?;
+    append_supplemental_profile_records(&mut records, input)?;
     append_bootstrap_profile_sequence(&mut records, BootstrapProfileSequenceRequest {
         paths: &input.proof_inputs,
         kind: SourceRecordKind::ProofInput,
@@ -575,6 +588,9 @@ fn bootstrap_profile_records_capacity(input: &BootstrapSourceBundleProfileInput)
     profile_entries = profile_entries
         .checked_add(input.proof_inputs.len())
         .ok_or_else(|| RunError::Internal("bootstrap profile record capacity overflow".to_string()))?;
+    profile_entries = profile_entries
+        .checked_add(input.supplemental_records.len())
+        .ok_or_else(|| RunError::Internal("bootstrap profile record capacity overflow".to_string()))?;
     for is_present in [
         input.mantle_source.is_some(),
         input.vendor_deps.is_some(),
@@ -592,6 +608,20 @@ fn bootstrap_profile_records_capacity(input: &BootstrapSourceBundleProfileInput)
     assert!(profile_entries >= BOOTSTRAP_BASE_RECORD_COUNT);
     assert!(profile_entries <= MAX_SOURCE_RECORDS);
     Ok(profile_entries)
+}
+
+fn append_supplemental_profile_records(
+    records: &mut Vec<SourceRecord>,
+    input: &BootstrapSourceBundleProfileInput,
+) -> Result<(), RunError> {
+    let initial_len = records.len();
+    records
+        .try_reserve(input.supplemental_records.len())
+        .map_err(|error| RunError::Internal(format!("reserving supplemental profile records: {error}")))?;
+    records.extend(input.supplemental_records.iter().cloned());
+    assert_eq!(records.len(), initial_len.saturating_add(input.supplemental_records.len()));
+    assert!(records.len() <= MAX_SOURCE_RECORDS);
+    Ok(())
 }
 
 fn append_bootstrap_provider_records(
@@ -740,6 +770,19 @@ pub fn export_source_bundle_from_derivations_with_state(
 ) -> Result<SourceBundleManifest, RunError> {
     let available_sources = read_imported_source_records(state_dir)?;
     export_source_bundle_from_derivations_with_imported(roots, specs, store_prefix, &available_sources)
+}
+
+pub fn export_source_bundle_from_derivations_with_connected_fetch(
+    roots: &[(String, crunch_glue::CrunchDerivation)],
+    specs: &[SourceSpec],
+    store_prefix: &str,
+    state_dir: &Path,
+) -> Result<SourceBundleManifest, RunError> {
+    let available_sources = read_imported_source_records(state_dir)?;
+    let mut records = canonicalize_source_specs(specs, store_prefix)?;
+    let expected = collect_build_source_records(roots, store_prefix)?;
+    records.extend(materialize_export_records_with_connected_fetch(&expected, &available_sources)?);
+    assemble_source_bundle(records, store_prefix)
 }
 
 fn export_source_bundle_from_derivations_with_imported(
@@ -909,9 +952,10 @@ fn validate_hydration_profile_linkage(
         BootstrapSourceBundleMode::LegacySeed
             | BootstrapSourceBundleMode::SelfBuildProof
             | BootstrapSourceBundleMode::FreshCloneInputs
+            | BootstrapSourceBundleMode::FreshCloneFixedPoint
     ) {
         return Err(RunError::Internal(format!(
-            "self-build hydration requires a legacy-seed, self-build-proof, or fresh-clone-inputs profile, got {}",
+            "self-build hydration requires a legacy-seed, self-build-proof, fresh-clone-inputs, or fresh-clone-fixed-point profile, got {}",
             mode.as_str()
         )));
     }
@@ -1222,6 +1266,61 @@ pub fn source_fetch_override_plan_for_file(
 }
 
 // r[impl source_transports.source_bundle_realizes_fetcher_inputs]
+pub fn full_proof_source_fetch_override_plan(
+    state_dir: &Path,
+    manifest_blake3: &str,
+) -> Result<SourceFetchOverridePlan, RunError> {
+    validate_blake3_hex(Blake3HexValidation {
+        value: manifest_blake3,
+        label: "full-proof source manifest BLAKE3",
+    })?;
+    let pin_path = source_pins_dir(state_dir).join(format!("{manifest_blake3}.json"));
+    let manifest = read_source_bundle(&pin_path).map_err(|error| {
+        RunError::Internal(format!("reading pinned full-proof source manifest {}: {error}", pin_path.display()))
+    })?;
+    let hydration_plan = plan_self_build_hydration(&manifest, manifest_blake3)?;
+    let mode = hydration_profile_mode(&manifest, &hydration_plan)?;
+    if mode != BootstrapSourceBundleMode::FreshCloneFixedPoint {
+        return Err(RunError::Internal(format!(
+            "self-build offline source policy requires fresh-clone-fixed-point profile, got {}",
+            mode.as_str()
+        )));
+    }
+    let available_sources = read_imported_source_records(state_dir)?;
+    let pinned_sources = read_pinned_source_records(state_dir)?;
+    let report = classify_offline_preflight(&manifest, &available_sources, &pinned_sources)?;
+    if !source_offline_preflight_is_ready(&report) {
+        return Err(RunError::Internal(format!("full-proof source preflight is not ready: {:?}", report.ready_class)));
+    }
+    let (overrides, scratch_dirs) = source_fetch_overrides_for_manifest(
+        &manifest,
+        &available_sources,
+        &pinned_sources,
+        &report.source_state_blake3,
+    )?;
+    if overrides.is_empty() {
+        return Err(RunError::Internal("full-proof source manifest has no fixed fetcher records".to_string()));
+    }
+    assert!(!overrides.is_empty());
+    assert_eq!(report.manifest_blake3.as_deref(), Some(manifest_blake3));
+    Ok(SourceFetchOverridePlan {
+        report,
+        overrides,
+        _scratch_dirs: scratch_dirs,
+    })
+}
+
+fn hydration_profile_mode(
+    manifest: &SourceBundleManifest,
+    plan: &SelfBuildHydrationPlan,
+) -> Result<BootstrapSourceBundleMode, RunError> {
+    let mode = manifest.records[plan.vendor_record_index]
+        .metadata
+        .get(RECORD_METADATA_PROFILE_MODE_KEY)
+        .ok_or_else(|| RunError::Internal("self-build hydration vendor record is missing profile mode".to_string()))?;
+    BootstrapSourceBundleMode::parse(mode)
+}
+
 pub fn bootstrap_legacy_seed_fetch_override_plan(
     state_dir: &Path,
     provider_raw_url: &str,
@@ -1375,12 +1474,38 @@ fn validate_bootstrap_profile_input(
     if input.bootstrap_sources.len() > MAX_SOURCE_RECORDS {
         return Err(RunError::Internal(format!("bootstrap profile source count exceeds {MAX_SOURCE_RECORDS}")));
     }
-    if input.proof_inputs.len() > MAX_SOURCE_RECORDS {
+    if input.proof_inputs.len() > MAX_SOURCE_RECORDS || input.supplemental_records.len() > MAX_SOURCE_RECORDS {
         return Err(RunError::Internal(format!("bootstrap profile source count exceeds {MAX_SOURCE_RECORDS}")));
     }
+    validate_supplemental_profile_records(input)?;
     assert!(store_prefix.starts_with('/'));
     assert!(!input.mode.requires_bootstrap_sources() || !input.bootstrap_sources.is_empty());
     assert!(!input.mode.requires_vendor_inputs() || input.vendor_deps.is_some());
+    assert!(!input.mode.requires_supplemental_fetch_closure() || !input.supplemental_records.is_empty());
+    Ok(())
+}
+
+fn validate_supplemental_profile_records(input: &BootstrapSourceBundleProfileInput) -> Result<(), RunError> {
+    if input.mode.requires_supplemental_fetch_closure() && input.supplemental_records.is_empty() {
+        return Err(RunError::Internal(
+            "fresh-clone-fixed-point profile requires materialized --include-bundle fetch records".to_string(),
+        ));
+    }
+    if !input.mode.requires_supplemental_fetch_closure() && !input.supplemental_records.is_empty() {
+        return Err(RunError::Internal(format!(
+            "{} profile does not accept supplemental source bundles",
+            input.mode.as_str()
+        )));
+    }
+    for record in &input.supplemental_records {
+        if !source_record_is_fetcher_input(record) || record.files.is_empty() {
+            return Err(RunError::Internal(format!(
+                "supplemental full-proof record {} must be a materialized fixed fetcher input",
+                record.identity
+            )));
+        }
+        validate_source_record(record)?;
+    }
     Ok(())
 }
 
@@ -2454,6 +2579,7 @@ fn source_fetch_overrides_for_manifest(
     let manifest_entries = manifest.records.len();
     let mut overrides = Vec::with_capacity(manifest_entries);
     let mut scratch_dirs = Vec::with_capacity(manifest_entries);
+    let mut override_keys = BTreeSet::new();
     for expected in &manifest.records {
         if !source_record_is_fetcher_input(expected) {
             continue;
@@ -2461,10 +2587,26 @@ fn source_fetch_overrides_for_manifest(
         let stored_record = imported_source_record_satisfies_fetcher_input(expected, available_sources, pinned_sources)
             .map_err(|blocker| RunError::Internal(format!("{} for {}", blocker.reason_code(), expected.identity)))?;
         let (source_override, scratch_dir) = source_fetch_override_for_record(stored_record, source_state_blake3)?;
+        let override_key = source_fetch_override_key(&source_override);
+        if !override_keys.insert(override_key) {
+            return Err(RunError::Internal(format!("duplicate source override mapping for {}", source_override.url)));
+        }
         overrides.push(source_override);
         scratch_dirs.push(scratch_dir);
     }
     Ok((overrides, scratch_dirs))
+}
+
+fn source_fetch_override_key(
+    source_override: &crunch_build::FetchSourceOverride,
+) -> (&'static str, String, Option<String>) {
+    let kind = match source_override.kind {
+        crunch_build::FetchSourceOverrideKind::File => "file",
+        crunch_build::FetchSourceOverrideKind::Tarball => "tarball",
+        crunch_build::FetchSourceOverrideKind::Executable => "executable",
+        crunch_build::FetchSourceOverrideKind::Git => "git",
+    };
+    (kind, source_override.url.clone(), source_override.rev.clone())
 }
 
 fn source_record_is_fetcher_input(record: &SourceRecord) -> bool {
@@ -2474,7 +2616,8 @@ fn source_record_is_fetcher_input(record: &SourceRecord) -> bool {
 fn bootstrap_provider_archive_record_matches(record: &SourceRecord, mode: BootstrapSourceBundleMode) -> bool {
     let record_mode = record.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).map(String::as_str);
     let is_legacy_compatible_mode = record_mode == Some(BootstrapSourceBundleMode::SelfBuildProof.as_str())
-        || record_mode == Some(BootstrapSourceBundleMode::FreshCloneInputs.as_str());
+        || record_mode == Some(BootstrapSourceBundleMode::FreshCloneInputs.as_str())
+        || record_mode == Some(BootstrapSourceBundleMode::FreshCloneFixedPoint.as_str());
     let is_mode_match = record_mode == Some(mode.as_str())
         || (mode == BootstrapSourceBundleMode::LegacySeed && is_legacy_compatible_mode);
     record.kind == SourceRecordKind::BootstrapArchive
@@ -2628,6 +2771,150 @@ fn materialize_export_records(
         });
     }
     Ok(materialized)
+}
+
+fn materialize_export_records_with_connected_fetch(
+    records: &[SourceRecord],
+    imported_records: &[SourceRecord],
+) -> Result<Vec<SourceRecord>, RunError> {
+    let mut materialized = Vec::with_capacity(records.len());
+    let mut reusable_records = imported_records.to_vec();
+    for record in records {
+        let captured = match record.kind {
+            SourceRecordKind::FixedUrl | SourceRecordKind::VcsSnapshot => {
+                if let Some(stored) = find_matching_materialized_source_record(record, &reusable_records) {
+                    verify_imported_record_fixed_output(record, stored)?;
+                    stored.clone()
+                } else {
+                    let fetched = fetch_and_materialize_source_record(record)?;
+                    reusable_records.push(fetched.clone());
+                    fetched
+                }
+            }
+            _ => record.clone(),
+        };
+        materialized.push(captured);
+    }
+    Ok(materialized)
+}
+
+fn verify_imported_record_fixed_output(expected: &SourceRecord, stored: &SourceRecord) -> Result<(), RunError> {
+    let expected_hash = expected_source_record_hash(expected)?;
+    let kind = source_fetch_override_kind(stored)?;
+    let scratch = tempfile::Builder::new()
+        .prefix("mantle-source-imported-verify-")
+        .tempdir()
+        .map_err(|error| RunError::Internal(format!("creating imported source verification scratch: {error}")))?;
+    let output = scratch.path().join("output");
+    materialize_source_record_for_fetch_override(stored, kind, &output)?;
+    verify_captured_source_record(expected, &output, &expected_hash)
+}
+
+fn fetch_and_materialize_source_record(record: &SourceRecord) -> Result<SourceRecord, RunError> {
+    let expected_hash = expected_source_record_hash(record)?;
+    let fetch = fetch_from_source_record(record, &expected_hash)?;
+    let scratch = tempfile::Builder::new()
+        .prefix("mantle-source-connected-fetch-")
+        .tempdir()
+        .map_err(|error| RunError::Internal(format!("creating connected source fetch scratch: {error}")))?;
+    let output = scratch.path().join("output");
+    let output_text = output
+        .to_str()
+        .ok_or_else(|| RunError::Internal("connected source fetch path is not UTF-8".to_string()))?;
+    crunch_build::fetcher::fetch_to_store(&fetch, output_text)
+        .map_err(|error| RunError::Internal(format!("capturing source record {}: {error}", record.identity)))?;
+    verify_captured_source_record(record, &output, &expected_hash)?;
+    materialize_source_record_from_path(record, &output, record.kind == SourceRecordKind::VcsSnapshot)
+}
+
+fn expected_source_record_hash(record: &SourceRecord) -> Result<NixHash, RunError> {
+    let algo_text = record
+        .metadata
+        .get(RECORD_METADATA_HASH_ALGO_KEY)
+        .ok_or_else(|| RunError::Internal(format!("source record {} is missing hash algorithm", record.identity)))?;
+    let algo = HashAlgo::try_from(algo_text.as_str()).map_err(|error| {
+        RunError::Internal(format!("source record {} has invalid hash algorithm: {error}", record.identity))
+    })?;
+    let hash_text = record
+        .metadata
+        .get(RECORD_METADATA_HASH_KEY)
+        .ok_or_else(|| RunError::Internal(format!("source record {} is missing expected hash", record.identity)))?;
+    if hash_text.contains('-') {
+        return NixHash::from_sri(hash_text).map_err(|error| {
+            RunError::Internal(format!("source record {} has invalid SRI hash: {error}", record.identity))
+        });
+    }
+    let digest = HEXLOWER.decode(hash_text.as_bytes()).map_err(|error| {
+        RunError::Internal(format!("source record {} has invalid hex hash: {error}", record.identity))
+    })?;
+    NixHash::from_algo_and_digest(algo, &digest).map_err(|error| {
+        RunError::Internal(format!("source record {} has invalid hash digest: {error}", record.identity))
+    })
+}
+
+fn fetch_from_source_record(record: &SourceRecord, expected_hash: &NixHash) -> Result<crunch_build::Fetch, RunError> {
+    let url_text = record
+        .metadata
+        .get(RECORD_METADATA_URL_KEY)
+        .ok_or_else(|| RunError::Internal(format!("source record {} is missing URL", record.identity)))?;
+    if record.kind == SourceRecordKind::VcsSnapshot {
+        let rev = record
+            .metadata
+            .get(FETCH_ENV_REV_KEY)
+            .ok_or_else(|| RunError::Internal(format!("source record {} is missing Git revision", record.identity)))?;
+        return Ok(crunch_build::Fetch::Git {
+            url: url_text.clone(),
+            rev: rev.clone(),
+            exp_hash: Some(expected_hash.clone()),
+        });
+    }
+    let url = Url::parse(url_text)
+        .map_err(|error| RunError::Internal(format!("source record {} has invalid URL: {error}", record.identity)))?;
+    if record.metadata.get(FETCH_ENV_UNPACK_KEY).map(String::as_str) == Some("1") {
+        return Ok(crunch_build::Fetch::Tarball {
+            url,
+            exp_nar_sha256: None,
+        });
+    }
+    if record.metadata.get(FETCH_ENV_EXECUTABLE_KEY).map(String::as_str) == Some("1") {
+        return Ok(crunch_build::Fetch::Executable {
+            url,
+            hash: expected_hash.clone(),
+        });
+    }
+    Ok(crunch_build::Fetch::Url {
+        url,
+        exp_hash: Some(expected_hash.clone()),
+    })
+}
+
+fn verify_captured_source_record(
+    record: &SourceRecord,
+    output: &Path,
+    expected_hash: &NixHash,
+) -> Result<(), RunError> {
+    let mode = record
+        .metadata
+        .get(RECORD_METADATA_HASH_MODE_KEY)
+        .ok_or_else(|| RunError::Internal(format!("source record {} is missing hash mode", record.identity)))?;
+    let verification = match mode.as_str() {
+        "flat" => crunch_build::fetcher::verify_flat_hash(
+            output
+                .to_str()
+                .ok_or_else(|| RunError::Internal("connected source output path is not UTF-8".to_string()))?,
+            expected_hash,
+            &record.identity,
+        ),
+        "recursive" => crunch_build::fetcher::verify_recursive_hash(output, expected_hash, &record.identity),
+        other => {
+            return Err(RunError::Internal(format!(
+                "source record {} has unsupported hash mode {other}",
+                record.identity
+            )));
+        }
+    };
+    verification
+        .map_err(|error| RunError::Internal(format!("validating captured source record {}: {error}", record.identity)))
 }
 
 fn materialize_fetcher_record(
@@ -3154,6 +3441,7 @@ struct BootstrapProfileCliInput {
     vendor_deps: Option<PathBuf>,
     toolchain_source_root: Option<PathBuf>,
     proof_inputs: Vec<PathBuf>,
+    include_bundles: Vec<PathBuf>,
     to: Option<PathBuf>,
     preflight: bool,
 }
@@ -3163,6 +3451,7 @@ fn cmd_bootstrap_profile(
     context: &SourceBundleCliContext<'_>,
 ) -> Result<(), RunError> {
     let mode = BootstrapSourceBundleMode::parse(&input.mode)?;
+    let supplemental_records = read_supplemental_bundle_records(&input.include_bundles)?;
     let profile_input = BootstrapSourceBundleProfileInput {
         mode,
         provider_archive: input.provider_archive,
@@ -3172,6 +3461,7 @@ fn cmd_bootstrap_profile(
         vendor_deps: input.vendor_deps,
         toolchain_source_root: input.toolchain_source_root,
         proof_inputs: input.proof_inputs,
+        supplemental_records,
     };
     let manifest = plan_bootstrap_source_bundle_profile(&profile_input, context.store_prefix)?;
     assert_eq!(manifest.format, SOURCE_BUNDLE_FORMAT);
@@ -3191,6 +3481,23 @@ fn cmd_bootstrap_profile(
     print_bootstrap_profile_report(&profile_receipt, context.is_json_output)
 }
 
+fn read_supplemental_bundle_records(paths: &[PathBuf]) -> Result<Vec<SourceRecord>, RunError> {
+    let mut records = Vec::new();
+    for path in paths {
+        let manifest = read_source_bundle(path)?;
+        let next_len = records
+            .len()
+            .checked_add(manifest.records.len())
+            .ok_or_else(|| RunError::Internal("supplemental source record count overflow".to_string()))?;
+        if next_len > MAX_SOURCE_RECORDS {
+            return Err(RunError::Internal(format!("supplemental source record count exceeds {MAX_SOURCE_RECORDS}")));
+        }
+        records.extend(manifest.records);
+    }
+    assert!(records.len() <= MAX_SOURCE_RECORDS);
+    Ok(records)
+}
+
 fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
     match action {
         crate::SourceBundleAction::Plan {
@@ -3203,7 +3510,8 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             build_roots,
             import_paths,
             to,
-        } => cmd_export_source_bundle(&sources, &build_roots, &import_paths, &to, context),
+            fetch_missing,
+        } => cmd_export_source_bundle(&sources, &build_roots, &import_paths, &to, fetch_missing, context),
         crate::SourceBundleAction::BootstrapProfile {
             mode,
             provider_archive,
@@ -3213,6 +3521,7 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             vendor_deps,
             toolchain_source_root,
             proof_inputs,
+            include_bundles,
             to,
             preflight,
         } => cmd_bootstrap_profile(
@@ -3225,6 +3534,7 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
                 vendor_deps,
                 toolchain_source_root,
                 proof_inputs,
+                include_bundles,
                 to,
                 preflight,
             },
@@ -3260,9 +3570,17 @@ fn cmd_export_source_bundle(
     build_roots: &[PathBuf],
     import_paths: &[PathBuf],
     to: &Path,
+    fetch_missing: bool,
     context: &SourceBundleCliContext<'_>,
 ) -> Result<(), RunError> {
-    let manifest = export_from_cli_inputs(sources, build_roots, import_paths, context.store_prefix, context.state_dir)?;
+    let manifest = export_from_cli_inputs(
+        sources,
+        build_roots,
+        import_paths,
+        context.store_prefix,
+        context.state_dir,
+        fetch_missing,
+    )?;
     write_source_bundle(to, &manifest)?;
     print_plan_report(&plan_report(&manifest)?, context.is_json_output)
 }
@@ -3341,12 +3659,16 @@ fn export_from_cli_inputs(
     import_paths: &[PathBuf],
     store_prefix: &str,
     state_dir: &Path,
+    fetch_missing: bool,
 ) -> Result<SourceBundleManifest, RunError> {
     let specs = sources.iter().map(|source| parse_source_spec(source)).collect::<Result<Vec<_>, _>>()?;
     if build_roots.is_empty() {
         return plan_source_bundle(&specs, store_prefix);
     }
     let roots = evaluate_build_roots(build_roots, import_paths)?;
+    if fetch_missing {
+        return export_source_bundle_from_derivations_with_connected_fetch(&roots, &specs, store_prefix, state_dir);
+    }
     export_source_bundle_from_derivations_with_state(&roots, &specs, store_prefix, state_dir)
 }
 
@@ -3569,6 +3891,17 @@ mod tests {
         }
     }
 
+    fn fixed_fetcher_with_flat_blake3(name: &str, url: &str, content: &[u8]) -> crunch_glue::CrunchDerivation {
+        let mut derivation = fixed_fetcher(name, url);
+        let hash = NixHash::Blake3(*blake3::hash(content).as_bytes()).to_sri_string();
+        derivation.fixed_output = Some(crunch_glue::FixedOutput {
+            hash,
+            algo: "blake3".to_string(),
+            mode: "flat".to_string(),
+        });
+        derivation
+    }
+
     fn root_derivation(inputs: Vec<crunch_glue::Input>) -> crunch_glue::CrunchDerivation {
         crunch_glue::CrunchDerivation {
             name: "root".to_string(),
@@ -3678,6 +4011,7 @@ mod tests {
             vendor_deps: Some(vendor_deps),
             toolchain_source_root: Some(toolchain),
             proof_inputs: vec![proof],
+            supplemental_records: Vec::new(),
         }
     }
 
@@ -4267,6 +4601,82 @@ mod tests {
     }
 
     #[test]
+    fn fresh_clone_fixed_point_profile_adds_materialized_fetches_without_widening_three_record_profile() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut base_input = bootstrap_profile_fixture(temp.path());
+        base_input.mode = BootstrapSourceBundleMode::FreshCloneInputs;
+        base_input.bootstrap_sources.clear();
+        base_input.mantle_source = None;
+        base_input.toolchain_source_root = None;
+        base_input.proof_inputs.clear();
+        let base_manifest = plan_bootstrap_source_bundle_profile(&base_input, "/mantle/store").unwrap();
+        assert_eq!(base_manifest.records.len(), REQUIRED_HYDRATION_RECORD_CLASS_COUNT);
+
+        let payload = temp.path().join("fixed-payload.txt");
+        fs::write(&payload, b"fixed payload").unwrap();
+        let fetcher = fixed_fetcher("fixed-src", &file_url(&payload));
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let planned =
+            plan_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap();
+        let supplemental = materialized_record_from_payload(&planned.records[0], &payload, false);
+        let mut fixed_point_input = base_input;
+        fixed_point_input.mode = BootstrapSourceBundleMode::FreshCloneFixedPoint;
+        fixed_point_input.supplemental_records = vec![supplemental.clone()];
+
+        let fixed_point_manifest = plan_bootstrap_source_bundle_profile(&fixed_point_input, "/mantle/store").unwrap();
+
+        assert_eq!(fixed_point_manifest.records.len(), REQUIRED_HYDRATION_RECORD_CLASS_COUNT + 1);
+        assert!(fixed_point_manifest.records.contains(&supplemental));
+        assert_eq!(base_manifest.records.len(), REQUIRED_HYDRATION_RECORD_CLASS_COUNT);
+    }
+
+    #[test]
+    fn full_proof_source_override_plan_uses_pinned_fixed_point_profile() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("fixed-payload.txt");
+        fs::write(&payload, b"fixed payload").unwrap();
+        let fetcher = fixed_fetcher("fixed-src", &file_url(&payload));
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let planned =
+            plan_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap();
+        let supplemental = materialized_record_from_payload(&planned.records[0], &payload, false);
+        let mut input = bootstrap_profile_fixture(temp.path());
+        input.mode = BootstrapSourceBundleMode::FreshCloneFixedPoint;
+        input.bootstrap_sources.clear();
+        input.mantle_source = None;
+        input.toolchain_source_root = None;
+        input.proof_inputs.clear();
+        input.supplemental_records = vec![supplemental];
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let state_dir = temp.path().join("state");
+        import_source_bundle(&manifest, &state_dir, true).unwrap();
+
+        let plan = full_proof_source_fetch_override_plan(&state_dir, &manifest.manifest_blake3).unwrap();
+
+        assert_eq!(plan.report.ready_class, SourceReadiness::Ready);
+        assert_eq!(plan.report.source_state_blake3, plan.overrides[0].source_state_blake3);
+        assert_eq!(plan.overrides.len(), 1);
+        assert_eq!(fs::read(&plan.overrides[0].payload_path).unwrap(), b"fixed payload");
+    }
+
+    #[test]
+    fn fresh_clone_fixed_point_profile_rejects_missing_materialized_fetch_closure() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut input = bootstrap_profile_fixture(temp.path());
+        input.mode = BootstrapSourceBundleMode::FreshCloneFixedPoint;
+        input.bootstrap_sources.clear();
+        input.mantle_source = None;
+        input.toolchain_source_root = None;
+        input.proof_inputs.clear();
+        input.supplemental_records.clear();
+
+        let error = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap_err();
+
+        assert!(error.to_string().contains("requires materialized --include-bundle fetch records"));
+        assert!(error.to_string().contains("fresh-clone-fixed-point"));
+    }
+
+    #[test]
     fn bootstrap_source_profile_rejects_missing_vendor_for_self_build() {
         let temp = tempfile::tempdir().unwrap();
         let mut input = bootstrap_profile_fixture(temp.path());
@@ -4675,6 +5085,54 @@ mod tests {
         assert_eq!(report.next_actions[0].command_hint, SOURCE_NEXT_ACTION_PIN_IMPORTED);
     }
 
+    #[test]
+    fn connected_export_fetches_and_fixed_output_validates_missing_file_payload() {
+        const PAYLOAD: &[u8] = b"connected source payload";
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, PAYLOAD).unwrap();
+        let fetcher = fixed_fetcher_with_flat_blake3("connected-src", &file_url(&payload), PAYLOAD);
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let roots = [("default".to_string(), root)];
+
+        let manifest = export_source_bundle_from_derivations_with_connected_fetch(
+            &roots,
+            &[],
+            "/mantle/store",
+            &temp.path().join("empty-state"),
+        )
+        .unwrap();
+
+        assert_eq!(manifest.records.len(), 1);
+        assert_eq!(manifest.records[0].files.len(), 1);
+        assert_eq!(manifest.records[0].payload_bytes, u64::try_from(PAYLOAD.len()).unwrap());
+        assert!(manifest.records[0].files[0].content_hex.is_some());
+    }
+
+    #[test]
+    fn connected_export_rejects_fixed_output_hash_mismatch() {
+        const PAYLOAD: &[u8] = b"connected source payload";
+        const WRONG_PAYLOAD: &[u8] = b"wrong source payload";
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, PAYLOAD).unwrap();
+        let fetcher = fixed_fetcher_with_flat_blake3("connected-src", &file_url(&payload), WRONG_PAYLOAD);
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let roots = [("default".to_string(), root)];
+
+        let error = export_source_bundle_from_derivations_with_connected_fetch(
+            &roots,
+            &[],
+            "/mantle/store",
+            &temp.path().join("empty-state"),
+        )
+        .unwrap_err();
+
+        let diagnostic = error.to_string();
+        assert!(diagnostic.contains("hash mismatch"), "unexpected diagnostic: {diagnostic}");
+        assert!(diagnostic.contains("validating captured source record"), "unexpected diagnostic: {diagnostic}");
+    }
+
     // r[verify source_transports.source_bundle_realizes_fetcher_inputs]
     #[test]
     fn source_fetch_override_plan_materializes_pinned_file_fetcher_payload() {
@@ -4696,6 +5154,29 @@ mod tests {
         assert_eq!(plan.overrides[0].url, file_url(&payload));
         assert_eq!(fs::read(&plan.overrides[0].payload_path).unwrap(), b"payload");
         assert!(plan.overrides[0].source_state_blake3.len() == BLAKE3_HEX_BYTES);
+    }
+
+    #[test]
+    fn source_fetch_override_plan_rejects_duplicate_url_kind_mappings() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, b"payload").unwrap();
+        let payload_url = file_url(&payload);
+        let first = fixed_fetcher("first-src", &payload_url);
+        let second = fixed_fetcher("second-src", &payload_url);
+        let root = root_derivation(vec![
+            crunch_glue::Input::Derivation(Box::new(first)),
+            crunch_glue::Input::Derivation(Box::new(second)),
+        ]);
+        let roots = [("default".to_string(), root.clone())];
+        let exported = export_source_bundle_from_derivations(&roots, &[], "/mantle/store").unwrap();
+        let state_dir = temp.path().join("state");
+        import_source_bundle(&exported, &state_dir, true).unwrap();
+
+        let error = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store").unwrap_err();
+
+        assert!(error.to_string().contains("duplicate source override mapping"));
+        assert!(error.to_string().contains(&payload_url));
     }
 
     #[test]

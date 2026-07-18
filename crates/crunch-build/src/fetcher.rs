@@ -16,6 +16,10 @@ use nix_compat::derivation::Derivation;
 use nix_compat::nixhash::CAHash;
 use nix_compat::nixhash::HashAlgo;
 use nix_compat::nixhash::NixHash;
+use snix_castore::blobservice::MemoryBlobService;
+use snix_castore::directoryservice::RedbDirectoryService;
+use snix_castore::directoryservice::RedbDirectoryServiceConfig;
+use snix_castore::import::fs::ingest_path;
 use tracing::info;
 use tracing::warn;
 use url::Url;
@@ -239,51 +243,72 @@ pub fn fetch_to_store(fetch: &Fetch, out_path: &str) -> Result<(), FetchError> {
 /// provides the NAR computation since it requires async castore services.
 /// For flat hashes, this function reads the file directly.
 pub fn verify_flat_hash(out_path: &str, expected: &NixHash, name: &str) -> Result<(), FetchError> {
-    use sha2::Digest;
     assert!(!out_path.is_empty(), "output path must not be empty");
     assert!(!name.is_empty(), "name must not be empty for hash verification");
 
     let content = std::fs::read(out_path)?;
+    let actual_bytes = flat_hash_bytes(&content, expected.algo());
+    verify_hash_bytes(out_path, expected, name, &actual_bytes)
+}
 
-    let actual_bytes: Vec<u8> = match expected.algo() {
-        HashAlgo::Sha256 => {
-            let h = sha2::Sha256::digest(&content);
-            h.to_vec()
-        }
-        HashAlgo::Sha512 => {
-            let h = sha2::Sha512::digest(&content);
-            h.to_vec()
-        }
-        HashAlgo::Sha1 => {
-            let h = sha1::Sha1::digest(&content);
-            h.to_vec()
-        }
-        HashAlgo::Md5 => {
-            let h = md5::Md5::digest(&content);
-            h.to_vec()
-        }
-        HashAlgo::Blake3 => {
-            let h = blake3::hash(&content);
-            h.as_bytes().to_vec()
-        }
-    };
-
-    if actual_bytes.as_slice() != expected.digest_as_bytes() {
-        // Best-effort cleanup of bad output.
-        if let Err(e) = std::fs::remove_file(out_path) {
-            tracing::debug!(path = %out_path, error = %e, "cleanup after hash mismatch: remove_file failed");
-        }
-        if let Err(e) = std::fs::remove_dir_all(out_path) {
-            tracing::debug!(path = %out_path, error = %e, "cleanup after hash mismatch: remove_dir_all failed");
-        }
-        return Err(FetchError::HashMismatch {
-            name: name.to_string(),
-            expected: nix_hash_to_sri(expected),
-            actual: format!("{}-{}", hash_algo_prefix(expected.algo()), data_encoding::BASE64.encode(&actual_bytes),),
-        });
+fn flat_hash_bytes(content: &[u8], algo: HashAlgo) -> Vec<u8> {
+    use sha2::Digest;
+    match algo {
+        HashAlgo::Sha256 => sha2::Sha256::digest(content).to_vec(),
+        HashAlgo::Sha512 => sha2::Sha512::digest(content).to_vec(),
+        HashAlgo::Sha1 => sha1::Sha1::digest(content).to_vec(),
+        HashAlgo::Md5 => md5::Md5::digest(content).to_vec(),
+        HashAlgo::Blake3 => blake3::hash(content).as_bytes().to_vec(),
     }
+}
 
-    Ok(())
+pub fn verify_recursive_hash(out_path: &Path, expected: &NixHash, name: &str) -> Result<(), FetchError> {
+    assert!(!out_path.as_os_str().is_empty(), "output path must not be empty");
+    assert!(!name.is_empty(), "name must not be empty for hash verification");
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| FetchError::Io(io::Error::other(format!("creating recursive hash runtime: {error}"))))?;
+    let actual = runtime.block_on(recursive_path_hash(out_path, expected.algo()))?;
+    verify_hash_bytes(&out_path.display().to_string(), expected, name, actual.digest_as_bytes())
+}
+
+async fn recursive_path_hash(out_path: &Path, algo: HashAlgo) -> Result<NixHash, FetchError> {
+    let blob_service = MemoryBlobService::default();
+    let directory_service =
+        RedbDirectoryService::new_temporary("fetch-capture-hash".to_string(), RedbDirectoryServiceConfig::default())
+            .map_err(|error| {
+                FetchError::Io(io::Error::other(format!("creating recursive hash directory service: {error}")))
+            })?;
+    let node = ingest_path::<_, _, _, &[u8]>(blob_service.clone(), directory_service.clone(), out_path, None)
+        .await
+        .map_err(|error| FetchError::Io(io::Error::other(format!("ingesting recursive hash path: {error}"))))?;
+    crate::hash::nar_hash(&node, algo, blob_service, directory_service)
+        .await
+        .map_err(|error| FetchError::Io(io::Error::other(format!("hashing recursive fetch output: {error}"))))
+}
+
+fn verify_hash_bytes(out_path: &str, expected: &NixHash, name: &str, actual_bytes: &[u8]) -> Result<(), FetchError> {
+    assert!(!out_path.is_empty(), "output path must not be empty");
+    assert!(!name.is_empty(), "name must not be empty for hash verification");
+    if actual_bytes == expected.digest_as_bytes() {
+        return Ok(());
+    }
+    cleanup_hash_mismatch_output(out_path);
+    Err(FetchError::HashMismatch {
+        name: name.to_string(),
+        expected: nix_hash_to_sri(expected),
+        actual: format!("{}-{}", hash_algo_prefix(expected.algo()), data_encoding::BASE64.encode(actual_bytes)),
+    })
+}
+
+fn cleanup_hash_mismatch_output(out_path: &str) {
+    if let Err(error) = std::fs::remove_file(out_path) {
+        tracing::debug!(path = out_path, error = %error, "cleanup after hash mismatch: remove_file failed");
+    }
+    if let Err(error) = std::fs::remove_dir_all(out_path) {
+        tracing::debug!(path = out_path, error = %error, "cleanup after hash mismatch: remove_dir_all failed");
+    }
 }
 
 /// Format a NixHash as an SRI string (e.g., "sha256-base64...").
@@ -2368,6 +2393,33 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(matches!(err, FetchError::HashMismatch { .. }));
+    }
+
+    #[test]
+    fn verify_recursive_hash_blake3_ok() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("source.txt"), b"recursive source").unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let expected = runtime.block_on(recursive_path_hash(tmp.path(), HashAlgo::Blake3)).unwrap();
+
+        verify_recursive_hash(tmp.path(), &expected, "recursive-source").unwrap();
+
+        assert!(tmp.path().join("source.txt").is_file());
+        assert_eq!(expected.algo(), HashAlgo::Blake3);
+    }
+
+    #[test]
+    fn verify_recursive_hash_mismatch_removes_bad_output() {
+        let parent = tempfile::tempdir().unwrap();
+        let output = parent.path().join("output");
+        std::fs::create_dir(&output).unwrap();
+        std::fs::write(output.join("source.txt"), b"tampered source").unwrap();
+        let expected = NixHash::Sha256([0xFF; 32]);
+
+        let error = verify_recursive_hash(&output, &expected, "recursive-source").unwrap_err();
+
+        assert!(matches!(error, FetchError::HashMismatch { .. }));
+        assert!(!output.exists());
     }
 
     // ── nix_hash_to_sri tests ──────────────────────────────────────

@@ -832,8 +832,14 @@ async fn fetch_raw_seed(request: FetchRawSeedRequest<'_>) -> Result<String, RunE
     .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
 
     let pathinfo_service = open_bootstrap_pathinfo(&state_dir).await?;
+    let source_policy = if request.source_fetch_overrides.is_empty() {
+        crunch_build::FetchSourcePolicy::AllowNetwork
+    } else {
+        crunch_build::FetchSourcePolicy::RequireOverride
+    };
     let fetch_service = crunch_build::FetchBuildService::new(blob_service.clone(), directory_service.clone())
-        .with_source_overrides(request.source_fetch_overrides);
+        .with_source_overrides(request.source_fetch_overrides)
+        .with_source_policy(source_policy);
 
     let (bootstrap_keypair, _bootstrap_key_line) = crunch_build::generate_keypair();
     let bootstrap_trusted = crunch_build::build_trusted_keys(&bootstrap_keypair, None);

@@ -6,6 +6,7 @@ pub mod bootstrap;
 #[allow(dead_code)]
 pub mod build_correctness;
 pub mod errors;
+pub mod fresh_clone_fixed_point;
 pub mod oci_projection;
 pub mod oci_registry;
 pub mod protected_exec;

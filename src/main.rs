@@ -640,6 +640,16 @@ enum Command {
         #[arg(long, hide = true)]
         bootstrap_busybox_path: Option<PathBuf>,
 
+        /// Require all builtin fetches to resolve from this pinned full-proof source manifest
+        /// BLAKE3.
+        #[arg(long, requires = "offline_source_state_dir")]
+        offline_source_manifest_blake3: Option<String>,
+
+        /// Read the pinned full-proof source closure from this independently hydrated source-only
+        /// state.
+        #[arg(long, requires = "offline_source_manifest_blake3")]
+        offline_source_state_dir: Option<PathBuf>,
+
         /// Build Mantle through native Rust topology execution without invoking Cargo.
         #[arg(long)]
         cargo_free: bool,
@@ -2393,10 +2403,16 @@ pub enum SourceBundleAction {
         /// Bundle output path
         #[arg(long)]
         to: std::path::PathBuf,
+
+        /// Explicitly fetch and fixed-output-validate non-local declared sources missing from
+        /// imported state
+        #[arg(long)]
+        fetch_missing: bool,
     },
     /// Build a named bootstrap source-bundle profile from local inputs
     BootstrapProfile {
-        /// Profile mode: legacy-seed, source-root, self-build-proof, or fresh-clone-inputs
+        /// Profile mode: legacy-seed, source-root, self-build-proof, fresh-clone-inputs, or
+        /// fresh-clone-fixed-point
         #[arg(long, default_value = "legacy-seed")]
         mode: String,
 
@@ -2427,6 +2443,11 @@ pub enum SourceBundleAction {
         /// Proof input payload; repeat for multiple proof inputs
         #[arg(long = "proof-input")]
         proof_inputs: Vec<std::path::PathBuf>,
+
+        /// Materialized source bundle whose records are merged into the profile; repeat for
+        /// multiple bundles
+        #[arg(long = "include-bundle")]
+        include_bundles: Vec<std::path::PathBuf>,
 
         /// Bundle output path. If omitted, print the profile plan report.
         #[arg(long)]
@@ -6612,6 +6633,8 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             source_store_path,
             bootstrap_bwrap_path,
             bootstrap_busybox_path,
+            offline_source_manifest_blake3,
+            offline_source_state_dir,
             cargo_free,
             fixed_point,
             out,
@@ -6636,6 +6659,8 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             source_store_path: source_store_path.as_deref(),
             bootstrap_bwrap_path: bootstrap_bwrap_path.as_deref(),
             bootstrap_busybox_path: bootstrap_busybox_path.as_deref(),
+            offline_source_manifest_blake3: offline_source_manifest_blake3.as_deref(),
+            offline_source_state_dir: offline_source_state_dir.as_deref(),
             cargo_free: *cargo_free,
             fixed_point: *fixed_point,
             out: out.as_deref(),
@@ -6662,6 +6687,8 @@ struct SelfBuildCommandRequest<'a> {
     source_store_path: Option<&'a Path>,
     bootstrap_bwrap_path: Option<&'a Path>,
     bootstrap_busybox_path: Option<&'a Path>,
+    offline_source_manifest_blake3: Option<&'a str>,
+    offline_source_state_dir: Option<&'a Path>,
     cargo_free: bool,
     fixed_point: bool,
     out: Option<&'a Path>,
@@ -6696,6 +6723,8 @@ fn run_cargo_free_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<()
         source_store_path: request.source_store_path,
         bootstrap_bwrap_path: request.bootstrap_bwrap_path,
         bootstrap_busybox_path: request.bootstrap_busybox_path,
+        offline_source_manifest_blake3: request.offline_source_manifest_blake3,
+        offline_source_state_dir: request.offline_source_state_dir,
     })?;
     let out_dir = request.out.ok_or_else(|| RunError::Build("--cargo-free requires --out <dir>".to_string()))?;
     let root = current_dir_or_error()?;
@@ -6722,6 +6751,20 @@ fn run_legacy_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<(), Ru
     validate_stage0_inventory_args(request.no_host_tools, request.stage0_inventory)?;
     let loaded_stage0_policy = request.stage0_inventory.map(load_stage0_inventory_policy).transpose()?;
     let parsed_trusted = parse_trusted_keys(request.trusted_public_keys)?;
+    let source_override_plan = request
+        .offline_source_manifest_blake3
+        .map(|manifest_blake3| {
+            let source_state_dir = request.offline_source_state_dir.ok_or_else(|| {
+                RunError::Build("--offline-source-manifest-blake3 requires --offline-source-state-dir".to_string())
+            })?;
+            source_bundle::full_proof_source_fetch_override_plan(source_state_dir, manifest_blake3)
+        })
+        .transpose()?;
+    let source_evidence = source_override_plan
+        .as_ref()
+        .map(|plan| self_build::SelfBuildSourceEvidence::from_override_plan(&plan.report, plan.overrides.len()))
+        .transpose()?;
+    let source_fetch_overrides = source_override_plan.as_ref().map(|plan| plan.overrides.as_slice()).unwrap_or(&[]);
     self_build::cmd_self_build(
         &request.ctx.store,
         &request.ctx.resolved_state_dir,
@@ -6740,6 +6783,8 @@ fn run_legacy_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<(), Ru
         request.bootstrap_bwrap_path,
         request.bootstrap_busybox_path,
         bootstrap_source_root::BootstrapProviderMode::LegacyFetch,
+        source_fetch_overrides,
+        source_evidence,
     )
     .map(|_report| ())
 }
@@ -6757,6 +6802,8 @@ struct CargoFreeLegacyOptions<'a> {
     source_store_path: Option<&'a Path>,
     bootstrap_bwrap_path: Option<&'a Path>,
     bootstrap_busybox_path: Option<&'a Path>,
+    offline_source_manifest_blake3: Option<&'a str>,
+    offline_source_state_dir: Option<&'a Path>,
 }
 
 fn validate_cargo_free_legacy_self_build_args(options: CargoFreeLegacyOptions<'_>) -> Result<(), RunError> {
@@ -6771,7 +6818,9 @@ fn validate_cargo_free_legacy_self_build_args(options: CargoFreeLegacyOptions<'_
         || options.stage0_inventory.is_some()
         || options.source_store_path.is_some()
         || options.bootstrap_bwrap_path.is_some()
-        || options.bootstrap_busybox_path.is_some();
+        || options.bootstrap_busybox_path.is_some()
+        || options.offline_source_manifest_blake3.is_some()
+        || options.offline_source_state_dir.is_some();
     if has_legacy_option {
         return Err(RunError::Build(
             "--cargo-free self-build cannot be combined with legacy stage0/store self-build options".to_string(),
@@ -8983,6 +9032,35 @@ let Plan = {
     }
 
     #[test]
+    fn self_build_offline_source_manifest_requires_source_state() {
+        const MANIFEST_BLAKE3: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let error = parse_args_with_cli_test_stack(vec![
+            "crunch",
+            "self-build",
+            "--offline-source-manifest-blake3",
+            MANIFEST_BLAKE3,
+        ])
+        .unwrap_err();
+
+        assert!(error.contains("--offline-source-state-dir"));
+        assert!(error.contains("required"));
+    }
+
+    #[test]
+    fn self_build_offline_source_state_requires_manifest() {
+        let error = parse_args_with_cli_test_stack(vec![
+            "crunch",
+            "self-build",
+            "--offline-source-state-dir",
+            "/tmp/source-state",
+        ])
+        .unwrap_err();
+
+        assert!(error.contains("--offline-source-manifest-blake3"));
+        assert!(error.contains("required"));
+    }
+
+    #[test]
     fn cargo_free_self_build_rejects_legacy_options() {
         let err = validate_cargo_free_legacy_self_build_args(CargoFreeLegacyOptions {
             jobs: Some(1),
@@ -8997,6 +9075,8 @@ let Plan = {
             source_store_path: None,
             bootstrap_bwrap_path: None,
             bootstrap_busybox_path: None,
+            offline_source_manifest_blake3: None,
+            offline_source_state_dir: None,
         })
         .unwrap_err();
         assert_eq!(

@@ -307,6 +307,68 @@ merging or replacing it. The JSON report is contracted as
 provider archive BLAKE3 identities without embedding checkout or temporary
 paths.
 
+### Hydrated fresh-clone fixed-point proof
+
+The three-record `fresh-clone-inputs` profile remains unchanged. To prove the
+stronger fixed point without live builtin fetches, a connected producer first
+captures the complete evaluated fixed-fetch closure through Mantle's ordinary
+fixed-output verifier:
+
+```bash
+mantle --state-dir ./producer-source-state source bundle export \
+  --build-root bootstrap/bwrap.ncl \
+  --build-root bootstrap/busybox.ncl \
+  --build-root bootstrap/rust.ncl \
+  --import-path lib \
+  --fetch-missing \
+  --to evaluated-self-build-fetches.json
+
+mantle source bundle bootstrap-profile \
+  --mode fresh-clone-fixed-point \
+  --provider-archive ./unpacked-legacy-provider \
+  --provider-manifest ./provider.json \
+  --vendor-deps ./vendor-deps \
+  --include-bundle evaluated-self-build-fetches.json \
+  --to fresh-clone-fixed-point.json
+```
+
+Publish the resulting `manifest_blake3` through an independent authenticated
+channel. On a Git clone that starts without `vendor-deps/`, source state, Cargo
+cache, or prior proof outputs, hydrate the full profile and keep the JSON report:
+
+```bash
+mantle --json --state-dir ./source-only-state source bundle hydrate-self-build \
+  --from /media/handoff/fresh-clone-fixed-point.json \
+  --expected-manifest-blake3 <manifest-blake3> \
+  --checkout . > self-build-source-hydration.json
+
+empty_cargo_home="$(mktemp -d)"
+CARGO_HOME="$empty_cargo_home" CARGO_NET_OFFLINE=true \
+  cargo metadata --offline --locked --format-version 1 \
+  --config .cargo/vendor-config.toml
+
+CARGO_NET_OFFLINE=true CRUNCH_NO_FUSE=1 \
+  ./scripts/prove-self-hosting.sh \
+  --source-state ./source-only-state \
+  --source-manifest-blake3 <manifest-blake3> \
+  --hydration-report ./self-build-source-hydration.json
+```
+
+The helper copies only the authenticated `source-bundles/records` and
+`source-bundles/pins` into each fresh stage state. Both stages run with
+`require-override`: an unmatched builtin URL, fetch kind, or Git revision fails
+before URL, proxy, DNS, Git, or HTTP acquisition. Successful stage reports bind
+the same source-state BLAKE3 and zero live-fetch events. The proof bundle retains
+the hydration receipt and emits the path-redacted contracted
+`fresh-clone-fixed-point.json` report with stage1/stage2 binary BLAKE3 equality.
+Do not use `latest` or cite success unless that report has `fixed_point: true`.
+
+This evidence is bounded to the committed evaluated closure, legacy provider,
+recorded platform, checkout stage0, and proof tool boundary. It does not prove
+full-source bootstrap, compiler correctness, seed trust removal, bit-for-bit
+release reproducibility, independent rebuild agreement, deployment success, or
+full Cargo compatibility. See [ADR 0032](../adr/0032-deny-live-source-acquisition-in-hydrated-fixed-point-proofs.md).
+
 For a prepared checkout that already has its explicit vendor directory, import,
 pin, and preflight the bundle directly:
 

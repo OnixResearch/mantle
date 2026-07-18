@@ -1,6 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
 
+use mantle::fresh_clone_fixed_point::HydratedFreshCloneFixedPointReport;
+use mantle::fresh_clone_fixed_point::HydratedFreshCloneReportInput;
+use mantle::fresh_clone_fixed_point::HydratedFreshCloneStageReport;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -43,7 +46,10 @@ const NICKEL_NON_CLAIM: &str = "Nickel export success proves only the declared e
 const DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const DIGEST_C: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+const DIGEST_D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 const SOURCE_PAYLOAD_BYTES: u64 = 12;
+const FRESH_SOURCE_OVERRIDE_COUNT: u32 = 12;
+const STAGE0_FALLBACK_EVENT_COUNT: u32 = 2;
 const SCHEDULER_FIXTURE_SELECTED_GOAL: &str = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-selected.drv";
 const SCHEDULER_FIXTURE_RUNNER_UP_GOAL: &str = "/mantle/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-runner.drv";
 const SCHEDULER_FIXTURE_EPOCH: u32 = 1;
@@ -305,6 +311,36 @@ fn source_reports_serialize_to_registered_positive_fixtures() {
         non_claim: SOURCE_NON_CLAIM,
     };
     assert_fixture("self-build-source-hydration-report.valid.json", &hydration);
+
+    let stage0 = HydratedFreshCloneStageReport {
+        source_policy: "require-override".to_string(),
+        source_override_count: FRESH_SOURCE_OVERRIDE_COUNT,
+        live_fetch_events: 0,
+        hermeticity_mode: "practical".to_string(),
+        fallback_event_count: STAGE0_FALLBACK_EVENT_COUNT,
+    };
+    let stage2 = HydratedFreshCloneStageReport {
+        source_policy: "require-override".to_string(),
+        source_override_count: FRESH_SOURCE_OVERRIDE_COUNT,
+        live_fetch_events: 0,
+        hermeticity_mode: "strict".to_string(),
+        fallback_event_count: 0,
+    };
+    let fixed_point = HydratedFreshCloneFixedPointReport::from_input(HydratedFreshCloneReportInput {
+        expected_manifest_blake3: DIGEST_A.to_string(),
+        source_state_blake3: DIGEST_B.to_string(),
+        hydration_report_blake3: DIGEST_C.to_string(),
+        staged_source_store_name: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-mantle-src".to_string(),
+        provider_kind: "musl.cc-native-reduced-v1".to_string(),
+        platform: "x86_64-linux".to_string(),
+        proof_mode: "fixed-point".to_string(),
+        stage0,
+        stage2,
+        stage1_binary_blake3: DIGEST_D.to_string(),
+        stage2_binary_blake3: DIGEST_D.to_string(),
+    })
+    .unwrap();
+    assert_fixture("hydrated-fresh-clone-fixed-point-report.valid.json", &fixed_point);
 
     let preflight = SourceOfflinePreflightReport {
         format: "mantle-source-offline-preflight-v1",

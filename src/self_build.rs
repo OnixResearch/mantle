@@ -310,8 +310,41 @@ pub struct SelfBuildReport {
     pub busybox_path: Option<PathBuf>,
     /// Path to the produced output binary.
     pub output_binary: PathBuf,
+    /// Source acquisition policy and identity used by this stage.
+    pub source_evidence: Option<SelfBuildSourceEvidence>,
     /// Optional StageX-class lineage proof metadata.
     pub stagex_metadata: Option<StagexProofMetadata>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelfBuildSourceEvidence {
+    pub policy: crunch_build::FetchSourcePolicy,
+    pub manifest_blake3: String,
+    pub source_state_blake3: String,
+    pub override_count: u32,
+}
+
+impl SelfBuildSourceEvidence {
+    pub fn from_override_plan(
+        report: &crate::source_bundle::SourceOfflinePreflightReport,
+        override_count: usize,
+    ) -> Result<Self, RunError> {
+        let manifest_blake3 = report
+            .manifest_blake3
+            .clone()
+            .ok_or_else(|| RunError::Internal("full-proof source preflight omitted manifest identity".to_string()))?;
+        let override_count = u32::try_from(override_count)
+            .map_err(|_| RunError::Internal("full-proof source override count exceeds u32".to_string()))?;
+        if override_count == 0 {
+            return Err(RunError::Internal("full-proof source override plan is empty".to_string()));
+        }
+        Ok(Self {
+            policy: crunch_build::FetchSourcePolicy::RequireOverride,
+            manifest_blake3,
+            source_state_blake3: report.source_state_blake3.clone(),
+            override_count,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -382,6 +415,22 @@ impl SelfBuildReport {
             None => out.push_str(&format!("{PROOF_PREFIX} busybox-path=none\n",)),
         }
         out.push_str(&format!("{PROOF_PREFIX} output-binary={}\n", self.output_binary.display(),));
+        match &self.source_evidence {
+            Some(evidence) => {
+                out.push_str(&format!("{PROOF_PREFIX} source-policy={}\n", evidence.policy.as_str()));
+                out.push_str(&format!("{PROOF_PREFIX} source-manifest-blake3={}\n", evidence.manifest_blake3));
+                out.push_str(&format!("{PROOF_PREFIX} source-state-blake3={}\n", evidence.source_state_blake3));
+                out.push_str(&format!("{PROOF_PREFIX} source-override-count={}\n", evidence.override_count));
+                out.push_str(&format!("{PROOF_PREFIX} source-live-fetches=0\n"));
+            }
+            None => {
+                out.push_str(&format!("{PROOF_PREFIX} source-policy=allow-network\n"));
+                out.push_str(&format!("{PROOF_PREFIX} source-manifest-blake3=none\n"));
+                out.push_str(&format!("{PROOF_PREFIX} source-state-blake3=none\n"));
+                out.push_str(&format!("{PROOF_PREFIX} source-override-count=0\n"));
+                out.push_str(&format!("{PROOF_PREFIX} source-live-fetches=not-enforced\n"));
+            }
+        }
         match &self.stagex_metadata {
             Some(meta) => {
                 out.push_str(&format!("{PROOF_PREFIX} stagex-seed-class={}\n", meta.seed_class));
@@ -450,6 +499,11 @@ impl SelfBuildReport {
         let mut protected_seccomp_events: Vec<ProtectedSeccompAuditEvent> = Vec::new();
         let mut busybox_path: Option<Option<PathBuf>> = None;
         let mut output_binary: Option<PathBuf> = None;
+        let mut source_policy: Option<crunch_build::FetchSourcePolicy> = None;
+        let mut source_manifest_blake3: Option<String> = None;
+        let mut source_state_blake3: Option<String> = None;
+        let mut source_override_count: Option<u32> = None;
+        let mut source_live_fetches: Option<String> = None;
         let mut stagex_seed_class: Option<String> = None;
         let mut stagex_audit_seed_max_bytes: Option<u32> = None;
         let mut stagex_seed_digest: Option<String> = None;
@@ -532,6 +586,20 @@ impl SelfBuildReport {
                 }
             } else if let Some(val) = rest.strip_prefix("output-binary=") {
                 output_binary = Some(PathBuf::from(val));
+            } else if let Some(val) = rest.strip_prefix("source-policy=") {
+                source_policy = crunch_build::FetchSourcePolicy::parse(val);
+            } else if let Some(val) = rest.strip_prefix("source-manifest-blake3=") {
+                if val != "none" {
+                    source_manifest_blake3 = Some(val.to_string());
+                }
+            } else if let Some(val) = rest.strip_prefix("source-state-blake3=") {
+                if val != "none" {
+                    source_state_blake3 = Some(val.to_string());
+                }
+            } else if let Some(val) = rest.strip_prefix("source-override-count=") {
+                source_override_count = val.parse().ok();
+            } else if let Some(val) = rest.strip_prefix("source-live-fetches=") {
+                source_live_fetches = Some(val.to_string());
             } else if let Some(val) = rest.strip_prefix("stagex-seed-class=") {
                 stagex_seed_class = Some(val.to_string());
             } else if let Some(val) = rest.strip_prefix("stagex-audit-seed-max-bytes=") {
@@ -592,6 +660,13 @@ impl SelfBuildReport {
             protected_seccomp_events,
             busybox_path: busybox_path?,
             output_binary: output_binary?,
+            source_evidence: parse_source_evidence(
+                source_policy.unwrap_or(crunch_build::FetchSourcePolicy::AllowNetwork),
+                source_manifest_blake3,
+                source_state_blake3,
+                source_override_count.unwrap_or(0),
+                source_live_fetches.as_deref().unwrap_or("not-enforced"),
+            )?,
             stagex_metadata: if has_stagex_metadata_none {
                 None
             } else if stagex_seed_class.is_some() {
@@ -613,6 +688,40 @@ impl SelfBuildReport {
                 None
             },
         })
+    }
+}
+
+fn parse_source_evidence(
+    policy: crunch_build::FetchSourcePolicy,
+    manifest_blake3: Option<String>,
+    source_state_blake3: Option<String>,
+    override_count: u32,
+    live_fetches: &str,
+) -> Option<Option<SelfBuildSourceEvidence>> {
+    match policy {
+        crunch_build::FetchSourcePolicy::AllowNetwork => {
+            if manifest_blake3.is_some()
+                || source_state_blake3.is_some()
+                || override_count != 0
+                || live_fetches != "not-enforced"
+            {
+                return None;
+            }
+            Some(None)
+        }
+        crunch_build::FetchSourcePolicy::RequireOverride => {
+            let manifest_blake3 = manifest_blake3?;
+            let source_state_blake3 = source_state_blake3?;
+            if override_count == 0 || live_fetches != "0" {
+                return None;
+            }
+            Some(Some(SelfBuildSourceEvidence {
+                policy,
+                manifest_blake3,
+                source_state_blake3,
+                override_count,
+            }))
+        }
     }
 }
 
@@ -2295,6 +2404,7 @@ struct SelfBuildPipelineContext<'a> {
     trusted_keys: &'a [nix_compat::narinfo::VerifyingKey],
     trust_unsigned: bool,
     hermeticity_mode: crunch_pipeline::HermeticityMode,
+    source_fetch_overrides: &'a [crunch_build::FetchSourceOverride],
 }
 
 /// Resolved bootstrap tool paths from step 2.
@@ -2551,7 +2661,7 @@ fn self_build_pipeline_config(
         trusted_keys: pipeline.trusted_keys.to_vec(),
         trust_unsigned: pipeline.trust_unsigned,
         root_retention_source,
-        source_fetch_overrides: Vec::new(),
+        source_fetch_overrides: pipeline.source_fetch_overrides.to_vec(),
         remote_enabled: false,
     }
 }
@@ -3113,6 +3223,8 @@ pub struct SelfBuildCommandOptions<'a> {
     pub bootstrap_bwrap_path: Option<&'a Path>,
     pub bootstrap_busybox_path: Option<&'a Path>,
     pub provider_mode: crate::bootstrap_source_root::BootstrapProviderMode,
+    pub source_fetch_overrides: &'a [crunch_build::FetchSourceOverride],
+    pub source_evidence: Option<SelfBuildSourceEvidence>,
 }
 
 fn execute_self_build(options: SelfBuildCommandOptions<'_>) -> Result<SelfBuildReport, RunError> {
@@ -3152,6 +3264,7 @@ fn execute_self_build(options: SelfBuildCommandOptions<'_>) -> Result<SelfBuildR
         protected_seccomp_events,
         busybox_path: tools.busybox_path,
         output_binary,
+        source_evidence: options.source_evidence,
         stagex_metadata: None,
     };
     emit_self_build_completion(&self_build_evidence);
@@ -3176,6 +3289,7 @@ fn run_self_build_roots(
         trusted_keys: &shared.trusted_keys,
         trust_unsigned: options.trust_unsigned,
         hermeticity_mode: options.hermeticity_mode,
+        source_fetch_overrides: options.source_fetch_overrides,
     };
     eprintln!("\n[2/{SELF_BUILD_STEP_COUNT}] Building bootstrap tools...");
     let tools = build_all_bootstrap_tools(BootstrapToolsBuildRequest {
@@ -3217,6 +3331,8 @@ pub type CmdSelfBuildFn = for<'a> fn(
     Option<&'a Path>,
     Option<&'a Path>,
     crate::bootstrap_source_root::BootstrapProviderMode,
+    &'a [crunch_build::FetchSourceOverride],
+    Option<SelfBuildSourceEvidence>,
 ) -> Result<SelfBuildReport, RunError>;
 
 pub const CMD_SELF_BUILD: CmdSelfBuildFn = |output_dir,
@@ -3235,7 +3351,9 @@ pub const CMD_SELF_BUILD: CmdSelfBuildFn = |output_dir,
                                             stage0_inventory_digest_blake3,
                                             bootstrap_bwrap_path,
                                             bootstrap_busybox_path,
-                                            provider_mode| {
+                                            provider_mode,
+                                            source_fetch_overrides,
+                                            source_evidence| {
     execute_self_build(SelfBuildCommandOptions {
         output_dir,
         state_dir,
@@ -3254,6 +3372,8 @@ pub const CMD_SELF_BUILD: CmdSelfBuildFn = |output_dir,
         bootstrap_bwrap_path,
         bootstrap_busybox_path,
         provider_mode,
+        source_fetch_overrides,
+        source_evidence,
     })
 };
 
@@ -4674,6 +4794,7 @@ mod tests {
 
     #[test]
     fn report_format_roundtrip_with_protected_transition() {
+        const EXPECTED_SOURCE_OVERRIDE_COUNT: u32 = 12;
         let transition = sample_protected_transition();
         let seccomp_event = sample_protected_seccomp_event();
         let report = SelfBuildReport {
@@ -4688,6 +4809,12 @@ mod tests {
             protected_seccomp_events: vec![seccomp_event.clone()],
             busybox_path: Some(PathBuf::from("/store/bbb-busybox/bin/busybox")),
             output_binary: PathBuf::from("/store/out/bin/mantle"),
+            source_evidence: Some(SelfBuildSourceEvidence {
+                policy: crunch_build::FetchSourcePolicy::RequireOverride,
+                manifest_blake3: "e".repeat(64),
+                source_state_blake3: "f".repeat(64),
+                override_count: EXPECTED_SOURCE_OVERRIDE_COUNT,
+            }),
             stagex_metadata: None,
         };
 
@@ -4702,6 +4829,37 @@ mod tests {
         assert_eq!(parsed.provider_mode, crate::bootstrap_source_root::BootstrapProviderMode::LegacyFetch);
         assert_eq!(parsed.protected_transition, Some(transition));
         assert_eq!(parsed.protected_seccomp_events, vec![seccomp_event]);
+        assert_eq!(parsed.source_evidence, report.source_evidence);
+        assert!(lines.contains("source-policy=require-override"));
+        assert!(lines.contains("source-live-fetches=0"));
+    }
+
+    #[test]
+    fn report_parse_rejects_false_zero_live_fetch_claim() {
+        let report = SelfBuildReport {
+            provider_mode: crate::bootstrap_source_root::BootstrapProviderMode::LegacyFetch,
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
+            invoking_binary: PathBuf::from("/bin/mantle"),
+            staged_source: PathBuf::from("/store/src"),
+            bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/store/bwrap/bin")),
+            fallback_events: Vec::new(),
+            stage0_inventory_digest_blake3: None,
+            protected_transition: None,
+            protected_seccomp_events: Vec::new(),
+            busybox_path: Some(PathBuf::from("/store/busybox/bin/busybox")),
+            output_binary: PathBuf::from("/store/mantle/bin/mantle"),
+            source_evidence: Some(SelfBuildSourceEvidence {
+                policy: crunch_build::FetchSourcePolicy::RequireOverride,
+                manifest_blake3: "a".repeat(64),
+                source_state_blake3: "b".repeat(64),
+                override_count: 1,
+            }),
+            stagex_metadata: None,
+        };
+        let tampered = report.format_proof_lines().replace("source-live-fetches=0", "source-live-fetches=1");
+
+        assert!(SelfBuildReport::parse_proof_lines(&tampered).is_none());
+        assert!(tampered.contains("source-policy=require-override"));
     }
 
     #[test]
@@ -4746,6 +4904,7 @@ mod tests {
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/seed/bin/busybox")),
             output_binary: PathBuf::from("/store/out/bin/mantle"),
+            source_evidence: None,
             stagex_metadata: None,
         };
 
@@ -4779,6 +4938,7 @@ mod tests {
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/tmp/store/xyz-busybox/bin/busybox")),
             output_binary: PathBuf::from("/tmp/store/def-mantle/bin/mantle"),
+            source_evidence: None,
             stagex_metadata: None,
         };
         let lines = report.format_proof_lines();
@@ -4815,6 +4975,7 @@ mod tests {
             protected_seccomp_events: Vec::new(),
             busybox_path: None,
             output_binary: PathBuf::from("/tmp/store/out-mantle/bin/mantle"),
+            source_evidence: None,
             stagex_metadata: None,
         };
         let lines = report.format_proof_lines();
@@ -4865,6 +5026,7 @@ mod tests {
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/store/busybox/bin/busybox")),
             output_binary: PathBuf::from("/store/crunch/bin/mantle"),
+            source_evidence: None,
             stagex_metadata: Some(meta.clone()),
         };
         let lines = report.format_proof_lines();
@@ -4947,6 +5109,7 @@ mod tests {
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/store/busybox/bin/busybox")),
             output_binary: PathBuf::from("/store/crunch/bin/mantle"),
+            source_evidence: None,
             stagex_metadata: Some(StagexProofMetadata {
                 seed_class: "hex0-seed".to_string(),
                 audit_seed_max_bytes: 4096,

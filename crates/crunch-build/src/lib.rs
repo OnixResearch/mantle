@@ -83,6 +83,7 @@ pub use fetch_build_service::FETCH_BUILDER;
 pub use fetch_build_service::FetchBuildService;
 pub use fetch_build_service::FetchSourceOverride;
 pub use fetch_build_service::FetchSourceOverrideKind;
+pub use fetch_build_service::FetchSourcePolicy;
 pub use fetch_build_service::is_fetch_request;
 pub use fetcher::Fetch;
 pub use fetcher::FetchError;

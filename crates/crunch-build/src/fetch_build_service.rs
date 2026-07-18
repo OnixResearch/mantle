@@ -58,6 +58,41 @@ enum FetchKind {
     Git { url: String, rev: String },
 }
 
+impl FetchKind {
+    fn source_identity(&self) -> String {
+        match self {
+            Self::File { url } => format!("kind=file url={url}"),
+            Self::Tarball { url } => format!("kind=tarball url={url}"),
+            Self::Executable { url } => format!("kind=executable url={url}"),
+            Self::Git { url, rev } => format!("kind=git url={url} rev={rev}"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FetchSourcePolicy {
+    #[default]
+    AllowNetwork,
+    RequireOverride,
+}
+
+impl FetchSourcePolicy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::AllowNetwork => "allow-network",
+            Self::RequireOverride => "require-override",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "allow-network" => Some(Self::AllowNetwork),
+            "require-override" => Some(Self::RequireOverride),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FetchSourceOverrideKind {
     File,
@@ -298,6 +333,7 @@ pub struct FetchBuildService<BS, DS> {
     blob_service: BS,
     directory_service: DS,
     source_overrides: Vec<FetchSourceOverride>,
+    source_policy: FetchSourcePolicy,
 }
 
 impl<BS, DS> FetchBuildService<BS, DS> {
@@ -306,12 +342,18 @@ impl<BS, DS> FetchBuildService<BS, DS> {
             blob_service,
             directory_service,
             source_overrides: Vec::new(),
+            source_policy: FetchSourcePolicy::AllowNetwork,
         }
     }
 
     pub fn with_source_overrides(mut self, source_overrides: Vec<FetchSourceOverride>) -> Self {
         assert!(source_overrides.len() <= MAX_SOURCE_OVERRIDES, "source override list exceeds fixed bound");
         self.source_overrides = source_overrides;
+        self
+    }
+
+    pub fn with_source_policy(mut self, source_policy: FetchSourcePolicy) -> Self {
+        self.source_policy = source_policy;
         self
     }
 }
@@ -340,6 +382,11 @@ where
                 "materializing fetcher input from source state"
             );
             materialize_source_override(source_override, &out_path).map_err(io::Error::other)?;
+        } else if self.source_policy == FetchSourcePolicy::RequireOverride {
+            return Err(io::Error::other(format!(
+                "offline source policy rejected unmatched builtin fetch before network acquisition: {}",
+                kind.source_identity()
+            )));
         } else {
             // Blocking download on a dedicated thread.
             let kind_clone = kind.clone();
@@ -576,6 +623,19 @@ mod tests {
         if let Node::File { size, .. } = &result.outputs[0].node {
             assert_eq!(*size, u64::try_from(OFFLINE_PAYLOAD.len()).unwrap());
         }
+    }
+
+    #[tokio::test]
+    async fn required_source_override_rejects_unmatched_fetch_before_network() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let svc = FetchBuildService::new(bs, ds).with_source_policy(FetchSourcePolicy::RequireOverride);
+        let req = fetch_request(vec![env("url", "https://example.invalid/missing.txt")]);
+
+        let error = svc.do_build(req).await.unwrap_err();
+
+        assert!(error.to_string().contains("offline source policy rejected unmatched builtin fetch"));
+        assert!(error.to_string().contains("example.invalid/missing.txt"));
     }
 
     #[test]

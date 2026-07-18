@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://onix.systems/schemas/mantle/hydrated-fresh-clone-fixed-point-report-v1.json",
+  "title": "Mantle hydrated fresh-clone fixed-point report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "version",
+    "expected_manifest_blake3",
+    "source_state_blake3",
+    "hydration_report_blake3",
+    "staged_source_store_name",
+    "provider_kind",
+    "platform",
+    "proof_mode",
+    "stage0",
+    "stage2",
+    "stage1_binary_blake3",
+    "stage2_binary_blake3",
+    "fixed_point",
+    "non_claim"
+  ],
+  "properties": {
+    "format": { "const": "mantle-hydrated-fresh-clone-fixed-point-v1" },
+    "version": { "const": 1 },
+    "expected_manifest_blake3": { "$ref": "#/$defs/blake3" },
+    "source_state_blake3": { "$ref": "#/$defs/blake3" },
+    "hydration_report_blake3": { "$ref": "#/$defs/blake3" },
+    "staged_source_store_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "x-mantle-bound-name": {
+        "minLength": "MIN_STAGED_SOURCE_STORE_NAME_BYTES",
+        "maxLength": "MAX_STAGED_SOURCE_STORE_NAME_BYTES"
+      },
+      "x-mantle-length-unit": "utf8-bytes",
+      "x-mantle-semantic": "redaction-safe"
+    },
+    "provider_kind": { "$ref": "#/$defs/bounded_text" },
+    "platform": { "$ref": "#/$defs/bounded_text" },
+    "proof_mode": { "enum": ["fixed-point", "non-nix-host"] },
+    "stage0": { "$ref": "#/$defs/stage" },
+    "stage2": { "$ref": "#/$defs/stage" },
+    "stage1_binary_blake3": { "$ref": "#/$defs/blake3" },
+    "stage2_binary_blake3": { "$ref": "#/$defs/blake3" },
+    "fixed_point": { "type": "boolean" },
+    "non_claim": {
+      "const": "This report proves one hydrated legacy-provider fixed point for the recorded source authority and platform; it does not prove full-source bootstrap, compiler correctness, seed trust removal, release reproducibility, independent rebuild agreement, deployment success, or full Cargo compatibility."
+    }
+  },
+  "$defs": {
+    "blake3": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "bounded_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "x-mantle-bound-name": {
+        "minLength": "MIN_FRESH_CLONE_REPORT_TEXT_BYTES",
+        "maxLength": "MAX_FRESH_CLONE_REPORT_TEXT_BYTES"
+      },
+      "x-mantle-length-unit": "utf8-bytes",
+      "x-mantle-semantic": "redaction-safe"
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_policy",
+        "source_override_count",
+        "live_fetch_events",
+        "hermeticity_mode",
+        "fallback_event_count"
+      ],
+      "properties": {
+        "source_policy": { "const": "require-override" },
+        "source_override_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536,
+          "x-mantle-bound-name": {
+            "minimum": "MIN_SOURCE_OVERRIDE_COUNT",
+            "maximum": "MAX_SOURCE_OVERRIDE_COUNT"
+          }
+        },
+        "live_fetch_events": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 0,
+          "x-mantle-bound-name": {
+            "minimum": "MIN_LIVE_FETCH_EVENTS",
+            "maximum": "MAX_LIVE_FETCH_EVENTS"
+          }
+        },
+        "hermeticity_mode": { "enum": ["practical", "strict"] },
+        "fallback_event_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65536,
+          "x-mantle-bound-name": {
+            "minimum": "MIN_FALLBACK_EVENT_COUNT",
+            "maximum": "MAX_FALLBACK_EVENT_COUNT"
+          }
+        }
+      }
+    }
+  }
+}

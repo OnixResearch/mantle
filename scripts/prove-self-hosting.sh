@@ -17,6 +17,10 @@ readonly PROOF_NO_HOST_TOOLS_ENV="CRUNCH_SELF_HOSTING_NO_HOST_TOOLS"
 readonly PROOF_STAGE0_INVENTORY_ENV="CRUNCH_SELF_HOSTING_STAGE0_INVENTORY"
 readonly PROOF_BLOCKED_HOST_TOOLS_ENV="CRUNCH_SELF_HOSTING_BLOCKED_HOST_TOOLS"
 readonly PROOF_LATER_STAGE_HERMETICITY_ENV="CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE"
+readonly PROOF_SOURCE_STATE_ENV="CRUNCH_SELF_HOSTING_SOURCE_STATE_DIR"
+readonly PROOF_SOURCE_MANIFEST_ENV="CRUNCH_SELF_HOSTING_SOURCE_MANIFEST_BLAKE3"
+readonly PROOF_HYDRATION_REPORT_ENV="CRUNCH_SELF_HOSTING_HYDRATION_REPORT"
+readonly BLAKE3_HEX_LENGTH=64
 readonly PROOF_MODE_FIXED_POINT="fixed-point"
 readonly PROOF_MODE_NON_NIX_HOST="non-nix-host"
 readonly PROOF_PROVIDER_KIND_LEGACY_FETCH="legacy-fetch"
@@ -47,11 +51,14 @@ proof_later_stage_hermeticity="$PROOF_LATER_STAGE_HERMETICITY_DEFAULT"
 no_host_tools="0"
 stage0_inventory=""
 generate_stage0_inventory="0"
+proof_source_state=""
+proof_source_manifest_blake3=""
+proof_hydration_report=""
 proof_cargo=""
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/prove-self-hosting.sh [--check] [--non-nix-host] [--no-host-tools] [--stage0-inventory FILE] [--generate-stage0-inventory FILE] [--bundle-dir DIR]
+Usage: ./scripts/prove-self-hosting.sh [--check] [--non-nix-host] [--no-host-tools] [--stage0-inventory FILE] [--generate-stage0-inventory FILE] [--source-state DIR --source-manifest-blake3 DIGEST --hydration-report FILE] [--bundle-dir DIR]
 
   --check                   validate prerequisites, print the proof command, and exit
   --non-nix-host            run proof with proof PATH scrubbed of nix-build/nix-store/nix-shell/nix
@@ -59,6 +66,10 @@ Usage: ./scripts/prove-self-hosting.sh [--check] [--non-nix-host] [--no-host-too
   --stage0-inventory FILE   stage0 inventory used by --no-host-tools
   --generate-stage0-inventory FILE
                             generate the no-host-tools inventory from explicit CRUNCH_STAGE0_SEED_* paths, then use it
+  --source-state DIR        copy this independently hydrated source-only state into each proof stage
+  --source-manifest-blake3 DIGEST
+                            require this externally authenticated full-proof source manifest in both stages
+  --hydration-report FILE   retain the contracted hydrate-self-build report that produced the source state
   --bundle-dir DIR          write the proof bundle to DIR (default: target/self-hosting-proof/run-...)
 EOF
 }
@@ -620,6 +631,10 @@ show_scratch_summary() {
   if [[ -n "$bundle_dir" ]]; then
     note "proof bundle dir: $bundle_dir"
   fi
+  if [[ -n "$proof_source_state" ]]; then
+    note "offline source policy: require-override"
+    note "offline source manifest BLAKE3: $proof_source_manifest_blake3"
+  fi
   if [[ "$proof_mode" == "$PROOF_MODE_NON_NIX_HOST" || "$no_host_tools" == "1" ]]; then
     note "proof PATH dir: $proof_path_dir"
   fi
@@ -690,6 +705,9 @@ parse_args() {
   no_host_tools="0"
   stage0_inventory=""
   generate_stage0_inventory="0"
+  proof_source_state=""
+  proof_source_manifest_blake3=""
+  proof_hydration_report=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -722,6 +740,27 @@ parse_args() {
         stage0_inventory="$1"
         shift
         ;;
+      --source-state)
+        shift
+        [[ $# -gt 0 ]] || die "--source-state requires a directory"
+        [[ "$1" != -* ]] || die "--source-state requires a directory, got option-like value: $1"
+        proof_source_state="$1"
+        shift
+        ;;
+      --source-manifest-blake3)
+        shift
+        [[ $# -gt 0 ]] || die "--source-manifest-blake3 requires a digest"
+        [[ "$1" != -* ]] || die "--source-manifest-blake3 requires a digest, got option-like value: $1"
+        proof_source_manifest_blake3="$1"
+        shift
+        ;;
+      --hydration-report)
+        shift
+        [[ $# -gt 0 ]] || die "--hydration-report requires a file"
+        [[ "$1" != -* ]] || die "--hydration-report requires a file, got option-like value: $1"
+        proof_hydration_report="$1"
+        shift
+        ;;
       --bundle-dir)
         shift
         [[ $# -gt 0 ]] || die "--bundle-dir requires a directory"
@@ -739,6 +778,18 @@ parse_args() {
     esac
   done
 
+  if [[ -n "$proof_source_state" || -n "$proof_source_manifest_blake3" || -n "$proof_hydration_report" ]]; then
+    [[ -n "$proof_source_state" ]] || die "offline source proof requires --source-state DIR"
+    [[ -n "$proof_source_manifest_blake3" ]] || die "offline source proof requires --source-manifest-blake3 DIGEST"
+    [[ -n "$proof_hydration_report" ]] || die "offline source proof requires --hydration-report FILE"
+    proof_source_state="$(normalize_repo_relative_path "$proof_source_state")"
+    [[ -d "$proof_source_state/source-bundles/records" ]] || die "source state records are missing: $proof_source_state"
+    [[ -d "$proof_source_state/source-bundles/pins" ]] || die "source state pins are missing: $proof_source_state"
+    [[ ${#proof_source_manifest_blake3} -eq $BLAKE3_HEX_LENGTH ]] || die "source manifest must be $BLAKE3_HEX_LENGTH lowercase hex characters"
+    [[ "$proof_source_manifest_blake3" =~ ^[0-9a-f]+$ ]] || die "source manifest must be $BLAKE3_HEX_LENGTH lowercase hex characters"
+    proof_hydration_report="$(normalize_repo_relative_path "$proof_hydration_report")"
+    [[ -f "$proof_hydration_report" ]] || die "hydration report file does not exist: $proof_hydration_report"
+  fi
   if [[ "$no_host_tools" != "1" && -n "$stage0_inventory" ]]; then
     die "--stage0-inventory requires --no-host-tools"
   fi
@@ -812,6 +863,15 @@ main() {
   export "$PROOF_PROVIDER_KIND_ENV=$proof_provider_kind"
   export "$PROOF_STAGE0_INVENTORY_DOC_ENV=$REPO_ROOT/docs/bootstrap-stage0-inventory.md"
   export "$PROOF_LATER_STAGE_HERMETICITY_ENV=$proof_later_stage_hermeticity"
+  if [[ -n "$proof_source_state" ]]; then
+    export "$PROOF_SOURCE_STATE_ENV=$proof_source_state"
+    export "$PROOF_SOURCE_MANIFEST_ENV=$proof_source_manifest_blake3"
+    export "$PROOF_HYDRATION_REPORT_ENV=$proof_hydration_report"
+  else
+    unset "$PROOF_SOURCE_STATE_ENV"
+    unset "$PROOF_SOURCE_MANIFEST_ENV"
+    unset "$PROOF_HYDRATION_REPORT_ENV"
+  fi
   if [[ "$no_host_tools" == "1" ]]; then
     export "$PROOF_NO_HOST_TOOLS_ENV=1"
     export "$PROOF_STAGE0_INVENTORY_ENV=$stage0_inventory"

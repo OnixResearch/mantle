@@ -24,6 +24,7 @@ use crunch_build::EvalMessage;
 use crunch_build::FailedGoal;
 use crunch_build::FetchBuildService;
 use crunch_build::FetchSourceOverride;
+use crunch_build::FetchSourcePolicy;
 pub use crunch_build::FixedOutputNetworkDeclaration;
 pub use crunch_build::HermeticityAuditEvent;
 pub use crunch_build::HermeticityAuditKind;
@@ -278,8 +279,14 @@ fn create_pipeline_builder(
     let directory_service = store.directory_service();
     let workdir = std::env::temp_dir().join("crunch-builds");
     std::fs::create_dir_all(&workdir).map_err(|error| Error::Internal(format!("create workdir: {error}")))?;
+    let source_policy = if config.source_fetch_overrides.is_empty() {
+        FetchSourcePolicy::AllowNetwork
+    } else {
+        FetchSourcePolicy::RequireOverride
+    };
     let fetch_service = FetchBuildService::new(blob_service.clone(), directory_service.clone())
-        .with_source_overrides(config.source_fetch_overrides.clone());
+        .with_source_overrides(config.source_fetch_overrides.clone())
+        .with_source_policy(source_policy);
 
     // Keep remote dispatch inside the lazy scheduler so dedupe, waiter
     // notification, job bounds, fallback, and terminal propagation stay shared.

@@ -42,6 +42,16 @@ Cargo caches, and credentials are excluded. Report conformance proves neither
 that the expected digest came from a trusted publisher nor that a later
 fixed-point self-build succeeds.
 
+The heavier hydrated proof emits the separate contracted
+`mantle-hydrated-fresh-clone-fixed-point-v1` report. It links the hydration
+receipt BLAKE3 to the independently supplied source manifest, source-state
+identity, staged source store name, provider/platform/proof mode, enforced
+stage policies, zero live-fetch counts, and stage binary BLAKE3 values. It
+excludes checkout, source-state, cache, credential, executable, and temporary
+paths. `fixed_point: true` means only that the recorded stage1/stage2 binary
+digests match under this bounded proof; it does not promote compiler, seed,
+release, independent-rebuild, deployment, or full-Cargo claims.
+
 ## Authority flow
 
 Authority is one-way:

@@ -5,7 +5,8 @@
 //!   - git, cargo, tar, xz, cp on PATH
 //!   - ~4 GiB free disk in the proof scratch filesystem (`target/self-hosting-proof/work/` by
 //!     default, or `CRUNCH_PROOF_SCRATCH_DIR`)
-//!   - Internet access (for initial bootstrap fetch)
+//!   - Internet access for the default path, or a complete authenticated source-state closure for
+//!     enforced offline mode
 //!
 //! Run with:
 //!   ./scripts/prove-self-hosting.sh
@@ -43,6 +44,9 @@ use std::time::UNIX_EPOCH;
 use assert_cmd::cargo::cargo_bin;
 use audit_support::AuditArtifact;
 use audit_support::write_command_audit;
+use mantle::fresh_clone_fixed_point::HydratedFreshCloneFixedPointReport;
+use mantle::fresh_clone_fixed_point::HydratedFreshCloneReportInput;
+use mantle::fresh_clone_fixed_point::HydratedFreshCloneStageReport;
 use mantle::protected_exec::DigestSpec;
 use mantle::protected_exec::ExecutableSeedEntry;
 use mantle::protected_exec::ProtectedSeccompAuditEvent;
@@ -71,6 +75,16 @@ const PROOF_STAGE0_INVENTORY_DOC_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTO
 const PROOF_NO_HOST_TOOLS_ENV: &str = "CRUNCH_SELF_HOSTING_NO_HOST_TOOLS";
 const PROOF_STAGE0_INVENTORY_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTORY";
 const PROOF_LATER_STAGE_HERMETICITY_ENV: &str = "CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE";
+const PROOF_SOURCE_STATE_ENV: &str = "CRUNCH_SELF_HOSTING_SOURCE_STATE_DIR";
+const PROOF_SOURCE_MANIFEST_ENV: &str = "CRUNCH_SELF_HOSTING_SOURCE_MANIFEST_BLAKE3";
+const PROOF_HYDRATION_REPORT_ENV: &str = "CRUNCH_SELF_HOSTING_HYDRATION_REPORT";
+const PROOF_HYDRATION_REPORT_RELATIVE_PATH: &str = "source-authority/hydration-report.json";
+const PROOF_FRESH_CLONE_REPORT_RELATIVE_PATH: &str = "fresh-clone-fixed-point.json";
+const SOURCE_BUNDLES_DIR: &str = "source-bundles";
+const SOURCE_RECORDS_DIR: &str = "records";
+const SOURCE_PINS_DIR: &str = "pins";
+const BLAKE3_HEX_LENGTH: usize = 64;
+const MAX_SOURCE_STATE_FILES: usize = 65_536;
 const TEST_SCRIPT_SHELL_ENV: &str = "MANTLE_TEST_SCRIPT_SHELL";
 const PROOF_BUNDLE_SCHEMA: &str = "mantle-self-hosting-proof-v2";
 const PROOF_STAGE1_BINARY_RELATIVE_PATH: &str = "binaries/stage1-mantle";
@@ -128,6 +142,12 @@ struct CapturedStageOutput {
     stderr_file: PathBuf,
 }
 
+#[derive(Debug, Clone)]
+struct OfflineProofSourceAuthority {
+    state_dir: PathBuf,
+    manifest_blake3: String,
+}
+
 #[derive(Debug, Serialize)]
 struct ProofBundleManifest {
     schema: &'static str,
@@ -142,6 +162,7 @@ struct ProofBundleManifest {
     binaries: ProofBinarySet,
     tools: ProofToolSet,
     fixed_point: ProofFixedPointAnalysis,
+    hydration_report: Option<ProofHashedPath>,
     stage0: ProofStageManifest,
     stage2: ProofStageManifest,
 }
@@ -290,6 +311,11 @@ struct ProofReportManifest {
     protected_seccomp_events: Vec<ProtectedSeccompAuditEvent>,
     busybox_path: Option<String>,
     output_binary: String,
+    source_policy: String,
+    source_manifest_blake3: Option<String>,
+    source_state_blake3: Option<String>,
+    source_override_count: u32,
+    source_live_fetches: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -897,6 +923,35 @@ fn assert_stage_success(stage: &StageEvidence) {
     );
 }
 
+fn assert_offline_source_stage(
+    stage: &StageEvidence,
+    authority: Option<&OfflineProofSourceAuthority>,
+) -> Option<String> {
+    let source_policy = extract_proof_field(&stage.stderr, "source-policy");
+    if authority.is_none() {
+        assert_eq!(source_policy, Some("allow-network"));
+        return None;
+    }
+    let authority = authority.expect("source authority checked above");
+    assert_eq!(source_policy, Some("require-override"), "{} did not enforce source overrides", stage.stage_name);
+    assert_eq!(
+        extract_proof_field(&stage.stderr, "source-manifest-blake3"),
+        Some(authority.manifest_blake3.as_str()),
+        "{} used the wrong source manifest",
+        stage.stage_name,
+    );
+    assert_eq!(extract_proof_field(&stage.stderr, "source-live-fetches"), Some("0"));
+    let override_count: u32 = extract_proof_field(&stage.stderr, "source-override-count")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0);
+    assert!(override_count > 0, "{} must report at least one source override", stage.stage_name);
+    let source_state = extract_proof_field(&stage.stderr, "source-state-blake3")
+        .unwrap_or_else(|| panic!("{} omitted source-state-blake3", stage.stage_name));
+    assert_eq!(source_state.len(), BLAKE3_HEX_LENGTH);
+    assert!(source_state.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+    Some(source_state.to_string())
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -947,6 +1002,13 @@ impl ProofMode {
         }
     }
 
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::FixedPoint => PROOF_MODE_FIXED_POINT,
+            Self::NonNixHost => PROOF_MODE_NON_NIX_HOST,
+        }
+    }
+
     fn stage0_path_is_scrubbed(self) -> bool {
         matches!(self, Self::NonNixHost)
     }
@@ -977,6 +1039,73 @@ fn proof_stage0_inventory() -> Option<PathBuf> {
         .unwrap_or_else(|| panic!("{PROOF_STAGE0_INVENTORY_ENV} must be set when {PROOF_NO_HOST_TOOLS_ENV}=1"));
     assert!(path.exists(), "stage0 inventory must exist: {}", path.display());
     Some(path)
+}
+
+fn proof_source_authority() -> Option<OfflineProofSourceAuthority> {
+    let state_dir = std::env::var_os(PROOF_SOURCE_STATE_ENV).map(PathBuf::from);
+    let manifest_blake3 = std::env::var(PROOF_SOURCE_MANIFEST_ENV).ok();
+    match (state_dir, manifest_blake3) {
+        (None, None) => None,
+        (Some(state_dir), Some(manifest_blake3)) => {
+            assert!(state_dir.is_dir(), "proof source state must be a directory: {}", state_dir.display());
+            assert_eq!(manifest_blake3.len(), BLAKE3_HEX_LENGTH, "proof source manifest must be BLAKE3 hex");
+            assert!(manifest_blake3.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+            Some(OfflineProofSourceAuthority {
+                state_dir,
+                manifest_blake3,
+            })
+        }
+        _ => panic!("{PROOF_SOURCE_STATE_ENV} and {PROOF_SOURCE_MANIFEST_ENV} must be set together"),
+    }
+}
+
+fn copy_source_state_json_dir(source: &Path, destination: &Path) {
+    assert!(source.is_dir(), "source state directory must exist: {}", source.display());
+    assert!(!destination.exists(), "destination source state must be fresh: {}", destination.display());
+    let mut entries: Vec<_> = std::fs::read_dir(source)
+        .unwrap_or_else(|err| panic!("read source state {}: {err}", source.display()))
+        .map(|entry| entry.unwrap_or_else(|err| panic!("read source state entry: {err}")))
+        .collect();
+    entries.sort_by_key(|entry| entry.file_name());
+    assert!(entries.len() <= MAX_SOURCE_STATE_FILES, "source state file count exceeds bound");
+    std::fs::create_dir_all(destination)
+        .unwrap_or_else(|err| panic!("create stage source state {}: {err}", destination.display()));
+    for entry in entries {
+        let file_type = entry.file_type().unwrap_or_else(|err| panic!("source state file type: {err}"));
+        assert!(file_type.is_file(), "source state entry must be a regular file: {}", entry.path().display());
+        let destination_file = destination.join(entry.file_name());
+        if let Err(link_error) = std::fs::hard_link(entry.path(), &destination_file) {
+            std::fs::copy(entry.path(), &destination_file).unwrap_or_else(|copy_error| {
+                panic!(
+                    "seed source state at {}: hard-link failed ({link_error}); copy failed ({copy_error})",
+                    destination_file.display()
+                )
+            });
+        }
+    }
+}
+
+fn seed_stage_source_state(authority: &OfflineProofSourceAuthority, stage_state_dir: &Path) {
+    assert!(stage_state_dir.is_dir(), "stage state directory must exist: {}", stage_state_dir.display());
+    let source_root = authority.state_dir.join(SOURCE_BUNDLES_DIR);
+    let destination_root = stage_state_dir.join(SOURCE_BUNDLES_DIR);
+    assert!(!destination_root.exists(), "stage source state must start empty");
+    copy_source_state_json_dir(&source_root.join(SOURCE_RECORDS_DIR), &destination_root.join(SOURCE_RECORDS_DIR));
+    copy_source_state_json_dir(&source_root.join(SOURCE_PINS_DIR), &destination_root.join(SOURCE_PINS_DIR));
+}
+
+fn append_offline_source_args(
+    command: &mut Vec<String>,
+    authority: Option<&OfflineProofSourceAuthority>,
+    state_dir: &Path,
+) {
+    assert!(!command.is_empty(), "self-build command must not be empty");
+    if let Some(authority) = authority {
+        command.push("--offline-source-manifest-blake3".to_string());
+        command.push(authority.manifest_blake3.clone());
+        command.push("--offline-source-state-dir".to_string());
+        command.push(state_dir.display().to_string());
+    }
 }
 
 fn blocked_host_tool_name(tool: &str) -> bool {
@@ -1233,6 +1362,17 @@ fn parse_stage_report(stage: &StageEvidence) -> ProofReportManifest {
         .unwrap_or_else(|| panic!("{} missing bwrap-source proof line.\n{}", stage.stage_name, stage_context(stage),));
     let output_binary = extract_proof_field(&stage.stderr, "output-binary")
         .unwrap_or_else(|| panic!("{} missing output-binary proof line.\n{}", stage.stage_name, stage_context(stage),));
+    let source_policy = extract_proof_field(&stage.stderr, "source-policy").unwrap_or("allow-network");
+    let source_manifest_blake3 = extract_proof_field(&stage.stderr, "source-manifest-blake3")
+        .filter(|value| *value != "none")
+        .map(str::to_string);
+    let source_state_blake3 = extract_proof_field(&stage.stderr, "source-state-blake3")
+        .filter(|value| *value != "none")
+        .map(str::to_string);
+    let source_override_count = extract_proof_field(&stage.stderr, "source-override-count")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0);
+    let source_live_fetches = extract_proof_field(&stage.stderr, "source-live-fetches").unwrap_or("not-enforced");
     let stage0_inventory_digest_blake3 = extract_proof_field(&stage.stderr, "stage0-inventory-digest")
         .filter(|digest| *digest != "none")
         .map(str::to_string);
@@ -1260,6 +1400,11 @@ fn parse_stage_report(stage: &StageEvidence) -> ProofReportManifest {
         protected_seccomp_events: parse_protected_seccomp_events(stage),
         busybox_path: extract_optional_path_field(&stage.stderr, "busybox-path").map(|path| path.display().to_string()),
         output_binary: output_binary.to_string(),
+        source_policy: source_policy.to_string(),
+        source_manifest_blake3,
+        source_state_blake3,
+        source_override_count,
+        source_live_fetches: source_live_fetches.to_string(),
     }
 }
 
@@ -1518,6 +1663,22 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: 
     out.push_str(&format!("staged_source: {}\n", manifest.staged_source));
     out.push_str(&format!("proof_mode: {:?}\n", manifest.prerequisites.mode));
     out.push_str(&format!("selected_provider_kind: {}\n", manifest.prerequisites.provider_kind));
+    out.push_str(&format!("stage0_source_policy: {}\n", manifest.stage0.report.source_policy));
+    out.push_str(&format!("stage2_source_policy: {}\n", manifest.stage2.report.source_policy));
+    out.push_str(&format!(
+        "source_manifest_blake3: {}\n",
+        manifest.stage0.report.source_manifest_blake3.as_deref().unwrap_or("none")
+    ));
+    out.push_str(&format!(
+        "source_state_blake3: {}\n",
+        manifest.stage0.report.source_state_blake3.as_deref().unwrap_or("none")
+    ));
+    out.push_str(&format!("stage0_source_live_fetches: {}\n", manifest.stage0.report.source_live_fetches));
+    out.push_str(&format!("stage2_source_live_fetches: {}\n", manifest.stage2.report.source_live_fetches));
+    out.push_str(&format!(
+        "hydration_report_blake3: {}\n",
+        manifest.hydration_report.as_ref().map(|record| record.digest_blake3.as_str()).unwrap_or("none")
+    ));
     out.push_str(&format!("protected_exec_result: {}\n", derived_proof_result(manifest)));
     out.push_str(&format!("protected_exec_audit: {} {}\n", protected_audit.digest_blake3, protected_audit.path));
     match bundled_inventory {
@@ -1617,6 +1778,72 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: 
     out
 }
 
+fn copy_hydration_report_into_bundle(bundle_dir: &Path) -> Option<ProofHashedPath> {
+    let source = std::env::var_os(PROOF_HYDRATION_REPORT_ENV).map(PathBuf::from)?;
+    assert!(source.is_file(), "hydration report must exist: {}", source.display());
+    Some(copy_bundle_file(&source, bundle_dir, PROOF_HYDRATION_REPORT_RELATIVE_PATH))
+}
+
+fn fresh_clone_stage_report(report: &ProofReportManifest) -> HydratedFreshCloneStageReport {
+    assert_eq!(report.source_policy, "require-override");
+    assert_eq!(report.source_live_fetches, "0");
+    assert!(report.source_override_count > 0);
+    HydratedFreshCloneStageReport {
+        source_policy: report.source_policy.clone(),
+        source_override_count: report.source_override_count,
+        live_fetch_events: 0,
+        hermeticity_mode: report.hermeticity_mode.clone(),
+        fallback_event_count: u32::try_from(report.fallback_events.len()).unwrap_or(u32::MAX),
+    }
+}
+
+fn write_fresh_clone_fixed_point_report(bundle_dir: &Path, manifest: &ProofBundleManifest) {
+    if manifest.stage0.report.source_policy != "require-override" {
+        assert_eq!(manifest.stage0.report.source_policy, "allow-network");
+        return;
+    }
+    let hydration_report =
+        manifest.hydration_report.as_ref().expect("offline source proof must retain its hydration report");
+    let expected_manifest_blake3 = manifest
+        .stage0
+        .report
+        .source_manifest_blake3
+        .clone()
+        .expect("offline source proof must identify its source manifest");
+    let source_state_blake3 = manifest
+        .stage0
+        .report
+        .source_state_blake3
+        .clone()
+        .expect("offline source proof must identify its source state");
+    assert_eq!(manifest.stage2.report.source_manifest_blake3.as_deref(), Some(expected_manifest_blake3.as_str()));
+    assert_eq!(manifest.stage2.report.source_state_blake3.as_deref(), Some(source_state_blake3.as_str()));
+    let staged_source_store_name = Path::new(&manifest.staged_source)
+        .file_name()
+        .and_then(OsStr::to_str)
+        .expect("staged source must have a UTF-8 store name")
+        .to_string();
+    let report = HydratedFreshCloneFixedPointReport::from_input(HydratedFreshCloneReportInput {
+        expected_manifest_blake3,
+        source_state_blake3,
+        hydration_report_blake3: hydration_report.digest_blake3.clone(),
+        staged_source_store_name,
+        provider_kind: manifest.prerequisites.provider_kind.clone(),
+        platform: format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS),
+        proof_mode: manifest.prerequisites.mode.as_str().to_string(),
+        stage0: fresh_clone_stage_report(&manifest.stage0.report),
+        stage2: fresh_clone_stage_report(&manifest.stage2.report),
+        stage1_binary_blake3: manifest.binaries.stage1.digest_blake3.clone(),
+        stage2_binary_blake3: manifest.binaries.stage2.digest_blake3.clone(),
+    })
+    .expect("fresh-clone fixed-point report must satisfy its machine contract");
+    assert_eq!(report.fixed_point, manifest.fixed_point.stage1_equals_stage2);
+    let report_path = bundle_dir.join(PROOF_FRESH_CLONE_REPORT_RELATIVE_PATH);
+    let bytes = serde_json::to_vec_pretty(&report).expect("serialize fresh-clone fixed-point report");
+    std::fs::write(&report_path, bytes)
+        .unwrap_or_else(|err| panic!("write fresh-clone report {}: {err}", report_path.display()));
+}
+
 fn write_proof_bundle(
     bundle_dir: &Path,
     stage0: &StageEvidence,
@@ -1683,6 +1910,7 @@ fn write_proof_bundle(
         stage2_embedded_store_paths: collect_embedded_store_paths(stage2_binary),
     };
     let prerequisites = collect_prerequisites(bundle_dir, proof_mode, stage0_path_dir);
+    let hydration_report = copy_hydration_report_into_bundle(bundle_dir);
 
     let manifest = ProofBundleManifest {
         schema: PROOF_BUNDLE_SCHEMA,
@@ -1700,6 +1928,7 @@ fn write_proof_bundle(
         binaries,
         tools,
         fixed_point,
+        hydration_report,
         stage0: ProofStageManifest {
             name: stage0.stage_name.clone(),
             original_audit_dir: stage0.audit_dir.display().to_string(),
@@ -1721,6 +1950,7 @@ fn write_proof_bundle(
         serde_json::to_vec_pretty(&manifest).unwrap_or_else(|err| panic!("serialize proof manifest: {err}"));
     std::fs::write(&manifest_path, manifest_json)
         .unwrap_or_else(|err| panic!("write proof manifest {}: {err}", manifest_path.display()));
+    write_fresh_clone_fixed_point_report(bundle_dir, &manifest);
     let summary = render_proof_bundle_summary(&manifest, &protected_audit);
     std::fs::write(&summary_path, summary)
         .unwrap_or_else(|err| panic!("write proof summary {}: {err}", summary_path.display()));
@@ -2263,6 +2493,7 @@ struct ProofScriptFixture {
 #[cfg(unix)]
 impl ProofScriptFixture {
     fn new() -> Self {
+        let _lock = lock_proof_env();
         let temp = tempfile::tempdir().unwrap();
         let repo_dir = temp.path().join("repo");
         let tool_dir = temp.path().join("tools");
@@ -2314,6 +2545,9 @@ printf '%s\n' "${CRUNCH_SELF_HOSTING_NO_HOST_TOOLS:-}" > "$CRUNCH_SELF_HOSTING_P
 printf '%s\n' "${CRUNCH_SELF_HOSTING_STAGE0_INVENTORY:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/stage0-inventory.txt"
 printf '%s\n' "${CRUNCH_SELF_HOSTING_BLOCKED_HOST_TOOLS:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/blocked-host-tools.txt"
 printf '%s\n' "${CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/later-stage-hermeticity.txt"
+printf '%s\n' "${CRUNCH_SELF_HOSTING_SOURCE_STATE_DIR:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/source-state.txt"
+printf '%s\n' "${CRUNCH_SELF_HOSTING_SOURCE_MANIFEST_BLAKE3:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/source-manifest.txt"
+printf '%s\n' "${CRUNCH_SELF_HOSTING_HYDRATION_REPORT:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/hydration-report.txt"
 printf '%s\n' "${SNIX_BUILD_SANDBOX_SHELL:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/sandbox-shell.txt"
 printf '%s\n' "${TMPDIR:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/tmpdir.txt"
 printf '%s\n' "${CARGO_TARGET_DIR:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cargo-target-dir.txt"
@@ -3092,6 +3326,59 @@ fn prove_self_hosting_script_exports_strict_later_stage_hermeticity_by_default()
 
 #[cfg(unix)]
 #[test]
+fn prove_self_hosting_script_exports_authenticated_source_authority() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let source_state = fixture._temp.path().join("hydrated-source-state");
+    std::fs::create_dir_all(source_state.join(SOURCE_BUNDLES_DIR).join(SOURCE_RECORDS_DIR)).unwrap();
+    std::fs::create_dir_all(source_state.join(SOURCE_BUNDLES_DIR).join(SOURCE_PINS_DIR)).unwrap();
+    let manifest_blake3 = "a".repeat(BLAKE3_HEX_LENGTH);
+    let hydration_report = fixture._temp.path().join("hydration-report.json");
+    std::fs::write(&hydration_report, "{\"format\":\"mantle-self-build-source-hydration-v1\"}\n").unwrap();
+    let bundle_dir = fixture.repo_dir.join("target/offline-source-proof");
+
+    let output = fixture.run_args(&[
+        "--source-state",
+        source_state.to_str().unwrap(),
+        "--source-manifest-blake3",
+        &manifest_blake3,
+        "--hydration-report",
+        hydration_report.to_str().unwrap(),
+        "--bundle-dir",
+        "target/offline-source-proof",
+    ]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(output.status.success(), "script should succeed, stderr:\n{stderr}");
+    assert_eq!(fixture.read_bundle_text(&bundle_dir, "source-state.txt"), source_state.display().to_string());
+    assert_eq!(fixture.read_bundle_text(&bundle_dir, "source-manifest.txt"), manifest_blake3);
+    assert_eq!(
+        fixture.read_bundle_text(&bundle_dir, "hydration-report.txt"),
+        hydration_report.display().to_string()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_script_rejects_unpaired_source_authority_before_launch() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let launch_sentinel = fixture.proof_launch_sentinel("unpaired-source-authority");
+    let manifest_blake3 = "b".repeat(BLAKE3_HEX_LENGTH);
+
+    let output = fixture.run_args_with_envs(&["--source-manifest-blake3", &manifest_blake3], &[(
+        PROOF_COMMAND_SENTINEL_ENV,
+        launch_sentinel.display().to_string(),
+    )]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("offline source proof requires --source-state DIR"));
+    assert!(!launch_sentinel.exists(), "proof command must not launch without complete source authority");
+}
+
+#[cfg(unix)]
+#[test]
 fn prove_self_hosting_script_discovers_repo_local_default_sandbox_shell_when_env_is_bin_sh() {
     let fixture = ProofScriptFixture::new();
     std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
@@ -3357,6 +3644,7 @@ fn self_hosting_stage0_stage1_stage2() {
 
     let proof_mode = ProofMode::current();
     let no_host_tools_inventory = proof_stage0_inventory();
+    let source_authority = proof_source_authority();
     let later_stage_hermeticity = proof_later_stage_hermeticity_mode();
     let proof_dir = tempfile::tempdir().unwrap_or_else(|err| panic!("tempdir for proof: {err}"));
     eprintln!("proof dir: {}", proof_dir.path().display());
@@ -3376,6 +3664,9 @@ fn self_hosting_stage0_stage1_stage2() {
 
     let stage0_state = proof_dir.path().join("state0");
     std::fs::create_dir_all(&stage0_state).unwrap();
+    if let Some(authority) = source_authority.as_ref() {
+        seed_stage_source_state(authority, &stage0_state);
+    }
 
     let mut stage0_command = vec![
         "crunch".to_string(),
@@ -3393,6 +3684,7 @@ fn self_hosting_stage0_stage1_stage2() {
         "4".to_string(),
     ];
     append_no_host_tools_stage0_args(&mut stage0_command, no_host_tools_inventory.as_deref());
+    append_offline_source_args(&mut stage0_command, source_authority.as_ref(), &stage0_state);
     if proof_mode.stage0_path_is_scrubbed() || no_host_tools_inventory.is_some() {
         let helper_path = std::env::var_os("PATH").expect("proof PATH must be set");
         if proof_mode.stage0_path_is_scrubbed() {
@@ -3433,6 +3725,7 @@ fn self_hosting_stage0_stage1_stage2() {
     eprintln!("stage0 stdout: {}", stage0_evidence.stdout_file.display());
     eprintln!("stage0 stderr: {}", stage0_evidence.stderr_file.display());
     assert_stage_success(&stage0_evidence);
+    let stage0_source_state = assert_offline_source_stage(&stage0_evidence, source_authority.as_ref());
 
     let s0_mode = extract_proof_field(&stage0_evidence.stderr, "hermeticity-mode");
     assert_eq!(
@@ -3562,6 +3855,9 @@ fn self_hosting_stage0_stage1_stage2() {
     // on the final mantle output.
     let stage2_state = proof_dir.path().join("state2");
     std::fs::create_dir_all(&stage2_state).unwrap();
+    if let Some(authority) = source_authority.as_ref() {
+        seed_stage_source_state(authority, &stage2_state);
+    }
 
     // ── Stage 2: stage1 binary rebuilds crunch ──────────────────
 
@@ -3591,6 +3887,7 @@ fn self_hosting_stage0_stage1_stage2() {
     if later_stage_hermeticity.is_strict() {
         stage2_command.push("--strict-hermetic".to_string());
     }
+    append_offline_source_args(&mut stage2_command, source_authority.as_ref(), &stage2_state);
     eprintln!("stage2 store: {}", store.display());
     eprintln!("stage2 state: {}", stage2_state.display());
     let mut stage2_process = std::process::Command::new(&stage1_binary);
@@ -3613,6 +3910,8 @@ fn self_hosting_stage0_stage1_stage2() {
     eprintln!("stage2 stdout: {}", stage2_evidence.stdout_file.display());
     eprintln!("stage2 stderr: {}", stage2_evidence.stderr_file.display());
     assert_stage_success(&stage2_evidence);
+    let stage2_source_state = assert_offline_source_stage(&stage2_evidence, source_authority.as_ref());
+    assert_eq!(stage2_source_state, stage0_source_state, "proof stages must use the same source-state identity");
 
     // ── Verify stage2 output ────────────────────────────────────
 

@@ -1176,6 +1176,10 @@ Obtain `<manifest-blake3>` independently from the bundle. Hydration validates
 before atomic no-replace publication and refuses an existing `vendor-deps/`.
 See the [offline bootstrap source-bundle runbook](docs/operator-workflows.md#offline-bootstrap-source-bundle-profile)
 and [ADR 0031](adr/0031-hydrate-fresh-clone-inputs-from-source-bundles.md).
+The stronger `fresh-clone-fixed-point` profile adds the complete evaluated
+fixed-fetch closure without changing that three-record hydration contract; see
+the [hydrated fixed-point runbook](docs/operator-workflows.md#hydrated-fresh-clone-fixed-point-proof)
+and [ADR 0032](adr/0032-deny-live-source-acquisition-in-hydrated-fixed-point-proofs.md).
 It also requires `bwrap` and a static sandbox shell on `PATH`.
 After the first self-build, the mantle-built `bwrap` and `busybox` are used
 for subsequent builds.
@@ -1188,6 +1192,25 @@ the repo root:
 ```bash
 ./scripts/prove-self-hosting.sh
 ```
+
+For a fresh clone hydrated from a `fresh-clone-fixed-point` source bundle, bind
+the independently authenticated manifest, source-only state, and contracted
+hydration receipt into both proof stages:
+
+```bash
+CARGO_NET_OFFLINE=true CRUNCH_NO_FUSE=1 \
+  ./scripts/prove-self-hosting.sh \
+  --source-state ./source-only-state \
+  --source-manifest-blake3 <manifest-blake3> \
+  --hydration-report ./self-build-source-hydration.json
+```
+
+The helper copies only authenticated source records and pins into each fresh
+stage state. Every unmatched builtin fixed fetch fails at the fetch-service
+boundary before URL, proxy, DNS, Git, or HTTP acquisition. Successful runs
+record the same source-state BLAKE3 and zero live-fetch events for stage0 and
+stage2, retain the hydration receipt, and emit the path-redacted contracted
+`fresh-clone-fixed-point.json` report beside the ordinary proof manifest.
 
 The helper sets the nightly Rust toolchain, `CC`, linker or tool lookup,
 `pkg-config` or OpenSSL lookup, and `SNIX_BUILD_SANDBOX_SHELL` before it
@@ -1231,9 +1254,14 @@ undeclared executable, digest mismatch, unsupported supervisor setup, relative
 or unreadable exec path, or forbidden host helper fails closed before execution.
 
 This helper still does not prove a full-source bootstrap root or reproducible
-release artifacts. It proves either a fixed-point self-hosting rebuild, the same
-rebuild under the stricter non-Nix-host command-availability contract, or the
-host-tool-free stage0 boundary against explicitly declared seed artifacts.
+release artifacts. It proves either a fixed-point self-hosting rebuild, that
+rebuild from an authenticated hydrated fixed-fetch closure with live acquisition
+denied, the same rebuild under the stricter non-Nix-host command-availability
+contract, or the host-tool-free stage0 boundary against explicitly declared seed
+artifacts. The hydrated result remains bounded to the legacy seed, selected
+platform, checkout stage0, and recorded proof tools; it does not establish
+compiler correctness, seed trust removal, independent rebuild agreement,
+deployment success, or full Cargo compatibility.
 
 Successful runs write a proof bundle to `target/self-hosting-proof/run-...`
 and refresh `target/self-hosting-proof/latest` to point at that bundle. Pass
