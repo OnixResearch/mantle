@@ -2369,7 +2369,7 @@ fn source_record_requires_network(expected: &SourceRecord, imported: Option<&Sou
     {
         return false;
     }
-    if !matches!(expected.kind, SourceRecordKind::FixedUrl | SourceRecordKind::VcsSnapshot) {
+    if !source_record_is_fetcher_input(expected) {
         return false;
     }
     let Some(url) = expected.metadata.get(RECORD_METADATA_URL_KEY) else {
@@ -2611,6 +2611,15 @@ fn source_fetch_override_key(
 
 fn source_record_is_fetcher_input(record: &SourceRecord) -> bool {
     matches!(record.kind, SourceRecordKind::FixedUrl | SourceRecordKind::VcsSnapshot)
+        || source_record_is_legacy_provider_fetch(record)
+}
+
+fn source_record_is_legacy_provider_fetch(record: &SourceRecord) -> bool {
+    record.kind == SourceRecordKind::BootstrapArchive
+        && record.metadata.get(RECORD_METADATA_URL_KEY).map(String::as_str)
+            == Some(crate::bootstrap_source_root::LEGACY_MUSL_CC_URL)
+        && record.metadata.get(RECORD_METADATA_HASH_KEY).map(String::as_str)
+            == Some(crate::bootstrap_source_root::LEGACY_MUSL_CC_HASH)
 }
 
 fn bootstrap_provider_archive_record_matches(record: &SourceRecord, mode: BootstrapSourceBundleMode) -> bool {
@@ -2714,6 +2723,15 @@ fn source_fetch_override_kind(record: &SourceRecord) -> Result<crunch_build::Fet
             }
             Ok(crunch_build::FetchSourceOverrideKind::File)
         }
+        SourceRecordKind::BootstrapArchive if source_record_is_legacy_provider_fetch(record) => {
+            if record.metadata.get(FETCH_ENV_UNPACK_KEY).map(String::as_str) != Some("1") {
+                return Err(RunError::Internal(format!(
+                    "legacy provider source record {} is not an unpacked fetch",
+                    record.identity
+                )));
+            }
+            Ok(crunch_build::FetchSourceOverrideKind::Tarball)
+        }
         SourceRecordKind::LocalPath
         | SourceRecordKind::PackageMirror
         | SourceRecordKind::BootstrapArchive
@@ -2764,11 +2782,16 @@ fn materialize_export_records(
 ) -> Result<Vec<SourceRecord>, RunError> {
     let mut materialized = Vec::with_capacity(records.len());
     for record in records {
-        materialized.push(match record.kind {
-            SourceRecordKind::FixedUrl => materialize_fetcher_record(record, imported_records, false)?,
-            SourceRecordKind::VcsSnapshot => materialize_fetcher_record(record, imported_records, true)?,
-            _ => record.clone(),
-        });
+        let captured = if source_record_is_legacy_provider_fetch(record) {
+            materialize_fetcher_record(record, imported_records, false)?
+        } else {
+            match record.kind {
+                SourceRecordKind::FixedUrl => materialize_fetcher_record(record, imported_records, false)?,
+                SourceRecordKind::VcsSnapshot => materialize_fetcher_record(record, imported_records, true)?,
+                _ => record.clone(),
+            }
+        };
+        materialized.push(captured);
     }
     Ok(materialized)
 }
@@ -2780,18 +2803,17 @@ fn materialize_export_records_with_connected_fetch(
     let mut materialized = Vec::with_capacity(records.len());
     let mut reusable_records = imported_records.to_vec();
     for record in records {
-        let captured = match record.kind {
-            SourceRecordKind::FixedUrl | SourceRecordKind::VcsSnapshot => {
-                if let Some(stored) = find_matching_materialized_source_record(record, &reusable_records) {
-                    verify_imported_record_fixed_output(record, stored)?;
-                    stored.clone()
-                } else {
-                    let fetched = fetch_and_materialize_source_record(record)?;
-                    reusable_records.push(fetched.clone());
-                    fetched
-                }
+        let captured = if source_record_is_fetcher_input(record) {
+            if let Some(stored) = find_matching_materialized_source_record(record, &reusable_records) {
+                verify_imported_record_fixed_output(record, stored)?;
+                stored.clone()
+            } else {
+                let fetched = fetch_and_materialize_source_record(record)?;
+                reusable_records.push(fetched.clone());
+                fetched
             }
-            _ => record.clone(),
+        } else {
+            record.clone()
         };
         materialized.push(captured);
     }
@@ -3344,6 +3366,12 @@ fn fixed_fetcher_source_record(derivation: &crunch_glue::CrunchDerivation) -> Re
     assert_eq!(metadata.get(RECORD_METADATA_URL_KEY), Some(url));
     let kind = if derivation.env.get(FETCH_ENV_TYPE_KEY).map(String::as_str) == Some(FETCH_ENV_TYPE_GIT) {
         SourceRecordKind::VcsSnapshot
+    } else if metadata.get(RECORD_METADATA_URL_KEY).map(String::as_str)
+        == Some(crate::bootstrap_source_root::LEGACY_MUSL_CC_URL)
+        && metadata.get(RECORD_METADATA_HASH_KEY).map(String::as_str)
+            == Some(crate::bootstrap_source_root::LEGACY_MUSL_CC_HASH)
+    {
+        SourceRecordKind::BootstrapArchive
     } else {
         SourceRecordKind::FixedUrl
     };
@@ -4150,6 +4178,30 @@ mod tests {
 
         assert_eq!(manifest.records[0].files.len(), 2);
         assert!(error.to_string().contains("path case collision"));
+    }
+
+    #[test]
+    fn exact_legacy_provider_fetch_is_a_case_sensitive_override_input() {
+        let mut derivation =
+            fixed_fetcher("legacy-provider", crate::bootstrap_source_root::LEGACY_MUSL_CC_URL);
+        derivation.env.insert(FETCH_ENV_UNPACK_KEY.to_string(), "1".to_string());
+        derivation.fixed_output = Some(crunch_glue::FixedOutput {
+            hash: crate::bootstrap_source_root::LEGACY_MUSL_CC_HASH.to_string(),
+            algo: "sha256".to_string(),
+            mode: "recursive".to_string(),
+        });
+
+        let record = fixed_fetcher_source_record(&derivation).unwrap().unwrap();
+        let mut wrong_hash_record = record.clone();
+        wrong_hash_record
+            .metadata
+            .insert(RECORD_METADATA_HASH_KEY.to_string(), "sha256-wrong".to_string());
+
+        assert_eq!(record.kind, SourceRecordKind::BootstrapArchive);
+        assert!(source_record_is_fetcher_input(&record));
+        assert_eq!(source_fetch_override_kind(&record).unwrap(), crunch_build::FetchSourceOverrideKind::Tarball);
+        assert!(!source_record_is_legacy_provider_fetch(&wrong_hash_record));
+        assert!(source_fetch_override_kind(&wrong_hash_record).is_err());
     }
 
     #[test]
