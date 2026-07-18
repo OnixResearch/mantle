@@ -93,7 +93,24 @@ Coverage includes valid hydration, wrong external manifest identity, missing ven
 - Machine contracts: pueue task `300` reported `machine schema contract generation: PASS (19 contracted, 48 classified)` and `machine schema contract check: PASS (19 contracted, 48 classified)`.
 - First-party quality: pueue task `292` passed Rustfmt, strict Clippy, and serialized first-party tests. Both root binary suites reported `1570 passed; 0 failed`; focused integration suites, including machine schemas, runbook docs, source-bundle CLI, and hydration CLI, also passed.
 - Nix evaluation: pueue task `300` ended with `all checks passed!`; incompatible non-host systems were explicitly omitted by Nix.
+- Cairn pre-sync validation and proposal/design/tasks gates passed in task `322`.
+- Executed sync receipt: `1d4e3bebe778445f2c73a180d488c48499b32c3df26894fc406a8a25b236da7a`; the accepted requirement was inspected in `cairn/specs/bootstrap-inventory/spec.md`.
+- Pre-archive validation remained valid and Tracey reported `145/145` referenced.
+- Implementation commit: `86e9d3a7`.
 
 ## Corrections discovered by real payload validation
 
 The real provider exposed constraints that synthetic fixtures had not exercised: compiler files above 16 MiB, legitimate Cargo names containing `..` within a component, case-distinct Linux kernel headers, runtime metadata using `provider_id`, read-only source directories, fresh-profile compatibility with legacy provider lookup, and tempdir ownership across asynchronous fetch execution. Each correction is bounded by a positive and negative/unit assertion, and the final real-provider preflight was rerun after the last implementation change.
+
+## Archive and exact post-archive state
+
+Archive dry-run/execution used `CAIRN_ARCHIVE_DATE=2026-07-17`; execute receipt:
+`4ffac6b1f63f7da771758b22d8533bc32310a746d414a3247ecbc7f88b6c0bda`.
+
+Pueue task `329` produced exact command outputs beside this transcript:
+
+- `post-archive-validation.json` reports `"changes": 0`, empty issue/finding lists, and `"valid": true`.
+- `post-archive-change-list.json` reports an empty `changes` array.
+- `post-archive-tracey.txt` reports `traceability coverage ok: 145/145 referenced (profile mantle-default)`.
+
+The implementation commit is `86e9d3a7`; the archive/evidence commit and push are the remaining mechanical operations.
