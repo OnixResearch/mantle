@@ -273,13 +273,25 @@ pub fn verify_recursive_hash(out_path: &Path, expected: &NixHash, name: &str) ->
     verify_hash_bytes(&out_path.display().to_string(), expected, name, actual.digest_as_bytes())
 }
 
+#[allow(
+    tigerstyle::explicit_defaults,
+    reason = "MemoryBlobService has private fields and exposes Default as its only direct constructor"
+)]
+fn empty_recursive_hash_blob_service() -> MemoryBlobService {
+    MemoryBlobService::default()
+}
+
 async fn recursive_path_hash(out_path: &Path, algo: HashAlgo) -> Result<NixHash, FetchError> {
-    let blob_service = MemoryBlobService::default();
+    let blob_service = empty_recursive_hash_blob_service();
     let directory_service =
-        RedbDirectoryService::new_temporary("fetch-capture-hash".to_string(), RedbDirectoryServiceConfig::default())
-            .map_err(|error| {
-                FetchError::Io(io::Error::other(format!("creating recursive hash directory service: {error}")))
-            })?;
+        RedbDirectoryService::new_temporary("fetch-capture-hash".to_string(), RedbDirectoryServiceConfig {
+            path: None,
+            cache_size: None,
+            read_only: false,
+        })
+        .map_err(|error| {
+            FetchError::Io(io::Error::other(format!("creating recursive hash directory service: {error}")))
+        })?;
     let node = ingest_path::<_, _, _, &[u8]>(blob_service.clone(), directory_service.clone(), out_path, None)
         .await
         .map_err(|error| FetchError::Io(io::Error::other(format!("ingesting recursive hash path: {error}"))))?;

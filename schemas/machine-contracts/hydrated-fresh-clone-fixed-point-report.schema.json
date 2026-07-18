@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://onix.systems/schemas/mantle/hydrated-fresh-clone-fixed-point-report-v1.json",
   "title": "Mantle hydrated fresh-clone fixed-point report",
+  "x-mantle-rust-owner": "src/fresh_clone_fixed_point.rs::HydratedFreshCloneFixedPointReport",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -22,8 +23,8 @@
     "non_claim"
   ],
   "properties": {
-    "format": { "const": "mantle-hydrated-fresh-clone-fixed-point-v1" },
-    "version": { "const": 1 },
+    "format": { "type": "string", "const": "mantle-hydrated-fresh-clone-fixed-point-v1" },
+    "version": { "type": "integer", "const": 1 },
     "expected_manifest_blake3": { "$ref": "#/$defs/blake3" },
     "source_state_blake3": { "$ref": "#/$defs/blake3" },
     "hydration_report_blake3": { "$ref": "#/$defs/blake3" },
@@ -40,13 +41,14 @@
     },
     "provider_kind": { "$ref": "#/$defs/bounded_text" },
     "platform": { "$ref": "#/$defs/bounded_text" },
-    "proof_mode": { "enum": ["fixed-point", "non-nix-host"] },
+    "proof_mode": { "type": "string", "enum": ["fixed-point", "non-nix-host"] },
     "stage0": { "$ref": "#/$defs/stage" },
     "stage2": { "$ref": "#/$defs/stage" },
     "stage1_binary_blake3": { "$ref": "#/$defs/blake3" },
     "stage2_binary_blake3": { "$ref": "#/$defs/blake3" },
     "fixed_point": { "type": "boolean" },
     "non_claim": {
+      "type": "string",
       "const": "This report proves one hydrated legacy-provider fixed point for the recorded source authority and platform; it does not prove full-source bootstrap, compiler correctness, seed trust removal, release reproducibility, independent rebuild agreement, deployment success, or full Cargo compatibility."
     }
   },
@@ -77,7 +79,7 @@
         "fallback_event_count"
       ],
       "properties": {
-        "source_policy": { "const": "require-override" },
+        "source_policy": { "type": "string", "const": "require-override" },
         "source_override_count": {
           "type": "integer",
           "minimum": 1,
@@ -96,7 +98,7 @@
             "maximum": "MAX_LIVE_FETCH_EVENTS"
           }
         },
-        "hermeticity_mode": { "enum": ["practical", "strict"] },
+        "hermeticity_mode": { "type": "string", "enum": ["practical", "strict"] },
         "fallback_event_count": {
           "type": "integer",
           "minimum": 0,

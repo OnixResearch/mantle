@@ -539,7 +539,9 @@ fn reduction_directory_permissions(permissions: std::fs::Permissions) -> std::fs
 
     let mode = permissions.mode() | UNIX_OWNER_DIRECTORY_ACCESS_MODE;
     assert_eq!(mode & UNIX_OWNER_DIRECTORY_ACCESS_MODE, UNIX_OWNER_DIRECTORY_ACCESS_MODE);
-    assert!(!permissions.readonly() || mode != permissions.mode());
+    if permissions.readonly() {
+        assert_ne!(mode, permissions.mode());
+    }
     std::fs::Permissions::from_mode(mode)
 }
 
@@ -869,23 +871,29 @@ async fn fetch_raw_seed(request: FetchRawSeedRequest<'_>) -> Result<String, RunE
         .await
         .map_err(|e| RunError::Build(format!("fetching bootstrap raw seed: {e}")))?;
 
-    let outcome = outcomes
-        .into_iter()
-        .next()
-        .ok_or_else(|| RunError::Build("bootstrap raw seed fetch produced no outcomes".to_string()))?;
-
-    let out_info = outcome
-        .outputs
-        .get("out")
-        .ok_or_else(|| RunError::Build("bootstrap raw seed fetch produced no 'out' output".to_string()))?;
-
-    let raw_display_path = out_info.store_path.to_absolute_path_with_prefix(request.display_prefix);
-    if outcome.cached {
+    let (raw_display_path, is_cached) = raw_seed_outcome_path(outcomes, request.display_prefix)?;
+    if is_cached {
         eprintln!("  {} (cached)", raw_display_path);
     } else {
         eprintln!("  {} (fetched)", raw_display_path);
     }
     Ok(raw_display_path)
+}
+
+fn raw_seed_outcome_path(
+    outcomes: Vec<crunch_build::BuildOutcome>,
+    display_prefix: &str,
+) -> Result<(String, bool), RunError> {
+    let outcome = outcomes
+        .into_iter()
+        .next()
+        .ok_or_else(|| RunError::Build("bootstrap raw seed fetch produced no outcomes".to_string()))?;
+    let out_info = outcome
+        .outputs
+        .get("out")
+        .ok_or_else(|| RunError::Build("bootstrap raw seed fetch produced no 'out' output".to_string()))?;
+    let raw_display_path = out_info.store_path.to_absolute_path_with_prefix(display_prefix);
+    Ok((raw_display_path, outcome.cached))
 }
 
 /// Return the pinned raw seed provider URL without fetching it.

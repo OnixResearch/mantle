@@ -51,6 +51,12 @@ pub struct HydratedFreshCloneReportInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct StringFieldValidation<'a> {
+    field: &'static str,
+    value: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HydratedFreshCloneReportError {
     InvalidBlake3 { field: &'static str },
     EmptyField { field: &'static str },
@@ -81,18 +87,42 @@ impl std::error::Error for HydratedFreshCloneReportError {}
 
 impl HydratedFreshCloneFixedPointReport {
     pub fn from_input(input: HydratedFreshCloneReportInput) -> Result<Self, HydratedFreshCloneReportError> {
-        validate_blake3("expected_manifest_blake3", &input.expected_manifest_blake3)?;
-        validate_blake3("source_state_blake3", &input.source_state_blake3)?;
-        validate_blake3("hydration_report_blake3", &input.hydration_report_blake3)?;
-        validate_blake3("stage1_binary_blake3", &input.stage1_binary_blake3)?;
-        validate_blake3("stage2_binary_blake3", &input.stage2_binary_blake3)?;
+        validate_blake3(StringFieldValidation {
+            field: "expected_manifest_blake3",
+            value: &input.expected_manifest_blake3,
+        })?;
+        validate_blake3(StringFieldValidation {
+            field: "source_state_blake3",
+            value: &input.source_state_blake3,
+        })?;
+        validate_blake3(StringFieldValidation {
+            field: "hydration_report_blake3",
+            value: &input.hydration_report_blake3,
+        })?;
+        validate_blake3(StringFieldValidation {
+            field: "stage1_binary_blake3",
+            value: &input.stage1_binary_blake3,
+        })?;
+        validate_blake3(StringFieldValidation {
+            field: "stage2_binary_blake3",
+            value: &input.stage2_binary_blake3,
+        })?;
         validate_staged_source_store_name(&input.staged_source_store_name)?;
-        validate_non_empty("provider_kind", &input.provider_kind)?;
-        validate_non_empty("platform", &input.platform)?;
-        validate_non_empty("proof_mode", &input.proof_mode)?;
+        validate_non_empty(StringFieldValidation {
+            field: "provider_kind",
+            value: &input.provider_kind,
+        })?;
+        validate_non_empty(StringFieldValidation {
+            field: "platform",
+            value: &input.platform,
+        })?;
+        validate_non_empty(StringFieldValidation {
+            field: "proof_mode",
+            value: &input.proof_mode,
+        })?;
         validate_stage("stage0", &input.stage0)?;
         validate_stage("stage2", &input.stage2)?;
-        let fixed_point = input.stage1_binary_blake3 == input.stage2_binary_blake3;
+        let is_fixed_point = input.stage1_binary_blake3 == input.stage2_binary_blake3;
         Ok(Self {
             format: HYDRATED_FRESH_CLONE_FIXED_POINT_FORMAT.to_string(),
             version: HYDRATED_FRESH_CLONE_FIXED_POINT_VERSION,
@@ -107,32 +137,44 @@ impl HydratedFreshCloneFixedPointReport {
             stage2: input.stage2,
             stage1_binary_blake3: input.stage1_binary_blake3,
             stage2_binary_blake3: input.stage2_binary_blake3,
-            fixed_point,
+            fixed_point: is_fixed_point,
             non_claim: HYDRATED_FRESH_CLONE_FIXED_POINT_NON_CLAIM.to_string(),
         })
     }
 }
 
-fn validate_blake3(field: &'static str, value: &str) -> Result<(), HydratedFreshCloneReportError> {
-    let has_expected_length = value.len() == BLAKE3_HEX_LENGTH;
-    let is_lowercase_hex = value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
-    if !has_expected_length || !is_lowercase_hex {
-        return Err(HydratedFreshCloneReportError::InvalidBlake3 { field });
+fn validate_blake3(request: StringFieldValidation<'_>) -> Result<(), HydratedFreshCloneReportError> {
+    let has_expected_length_bytes = request.value.len() == BLAKE3_HEX_LENGTH;
+    let is_lowercase_hex = request.value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
+    if !has_expected_length_bytes || !is_lowercase_hex {
+        return Err(HydratedFreshCloneReportError::InvalidBlake3 { field: request.field });
     }
     Ok(())
 }
 
 fn validate_staged_source_store_name(value: &str) -> Result<(), HydratedFreshCloneReportError> {
-    validate_non_empty("staged_source_store_name", value)?;
-    if value.contains('/') || value.contains('\\') || value == "." || value == ".." {
+    validate_non_empty(StringFieldValidation {
+        field: "staged_source_store_name",
+        value,
+    })?;
+    if value.contains('/') {
+        return Err(HydratedFreshCloneReportError::UnsafeStagedSourceStoreName);
+    }
+    if value.contains('\\') {
+        return Err(HydratedFreshCloneReportError::UnsafeStagedSourceStoreName);
+    }
+    if value == "." {
+        return Err(HydratedFreshCloneReportError::UnsafeStagedSourceStoreName);
+    }
+    if value == ".." {
         return Err(HydratedFreshCloneReportError::UnsafeStagedSourceStoreName);
     }
     Ok(())
 }
 
-fn validate_non_empty(field: &'static str, value: &str) -> Result<(), HydratedFreshCloneReportError> {
-    if value.is_empty() {
-        return Err(HydratedFreshCloneReportError::EmptyField { field });
+fn validate_non_empty(request: StringFieldValidation<'_>) -> Result<(), HydratedFreshCloneReportError> {
+    if request.value.is_empty() {
+        return Err(HydratedFreshCloneReportError::EmptyField { field: request.field });
     }
     Ok(())
 }
@@ -150,7 +192,10 @@ fn validate_stage(
     if report.live_fetch_events != 0 {
         return Err(HydratedFreshCloneReportError::LiveFetchObserved { stage });
     }
-    validate_non_empty("hermeticity_mode", &report.hermeticity_mode)
+    validate_non_empty(StringFieldValidation {
+        field: "hermeticity_mode",
+        value: &report.hermeticity_mode,
+    })
 }
 
 #[cfg(test)]
