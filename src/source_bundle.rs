@@ -780,7 +780,7 @@ pub fn export_source_bundle_from_derivations_with_connected_fetch(
 ) -> Result<SourceBundleManifest, RunError> {
     let available_sources = read_imported_source_records(state_dir)?;
     let mut records = canonicalize_source_specs(specs, store_prefix)?;
-    let expected = collect_build_source_records(roots, store_prefix)?;
+    let expected = normalize_source_records(collect_build_source_records(roots, store_prefix)?)?;
     records.extend(materialize_export_records_with_connected_fetch(&expected, &available_sources)?);
     assemble_source_bundle(records, store_prefix)
 }
@@ -792,7 +792,8 @@ fn export_source_bundle_from_derivations_with_imported(
     imported_records: &[SourceRecord],
 ) -> Result<SourceBundleManifest, RunError> {
     let mut records = canonicalize_source_specs(specs, store_prefix)?;
-    records.extend(materialize_export_records(&collect_build_source_records(roots, store_prefix)?, imported_records)?);
+    let expected = normalize_source_records(collect_build_source_records(roots, store_prefix)?)?;
+    records.extend(materialize_export_records(&expected, imported_records)?);
     assemble_source_bundle(records, store_prefix)
 }
 
