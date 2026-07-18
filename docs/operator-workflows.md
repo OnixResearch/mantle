@@ -312,7 +312,10 @@ paths.
 The three-record `fresh-clone-inputs` profile remains unchanged. To prove the
 stronger fixed point without live builtin fetches, a connected producer first
 captures the complete evaluated fixed-fetch closure through Mantle's ordinary
-fixed-output verifier:
+fixed-output verifier. Tarball records retain the compressed acquisition bytes;
+offline use replays the same bounded extractor and recursive verifier. Files
+larger than 64 MiB are represented by deterministic contiguous entries without
+raising the 64 MiB per-entry limit:
 
 ```bash
 mantle --state-dir ./producer-source-state source bundle export \

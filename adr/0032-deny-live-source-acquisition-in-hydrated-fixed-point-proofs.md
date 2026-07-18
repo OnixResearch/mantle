@@ -22,7 +22,7 @@ Environmental network blocking detects some missing inputs late, but it does not
 
 ## Decision
 
-Mantle adds the distinct `fresh-clone-fixed-point` source profile. A connected producer evaluates the selected self-build roots and uses `source bundle export --fetch-missing` to materialize every missing fixed URL or Git payload through Mantle's ordinary fetch implementation and fixed-output verification. The full profile combines those materialized records with the vendored Cargo record, unpacked legacy-provider archive, and runtime provider manifest. It does not replace or widen the established three-record profile.
+Mantle adds the distinct `fresh-clone-fixed-point` source profile. A connected producer evaluates the selected self-build roots and uses `source bundle export --fetch-missing` to materialize every missing fixed URL or Git payload through Mantle's ordinary fetch implementation and fixed-output verification. Tarball records retain the compressed acquisition bytes rather than duplicating their expanded trees; consumers unpack those bytes with the same bounded extractor and rerun recursive fixed-output verification before the override is admitted. Payload files larger than 64 MiB use deterministic contiguous entries while every individual entry remains within the existing 64 MiB bound. The full profile combines those materialized records with the vendored Cargo record, unpacked legacy-provider archive, and runtime provider manifest. It does not replace or widen the established three-record profile.
 
 The consumer hydrates that full profile with `hydrate-self-build` and an expected manifest BLAKE3 obtained independently from the bundle. The proof helper copies only `source-bundles/records` and `source-bundles/pins` from that source-only state into each fresh stage state. Both self-build invocations pass the same manifest authority.
 
@@ -48,10 +48,14 @@ Rejected because it proves an environmental failure mode, not that Mantle struct
 
 Rejected because that profile's exact three-record contract is already an accepted compatibility and review boundary. The stronger proof needs a distinct profile.
 
+### Store expanded tarball trees in the handoff
+
+Rejected because it duplicates large toolchain trees and makes single-file JSON handoffs needlessly expensive. Retaining acquisition bytes is smaller while replaying the same extractor and fixed-output verifier before use.
+
 ## Consequences
 
 - A successful hydrated proof demonstrates byte-identical stage1 and stage2 binaries without live fixed-source fallback for the recorded evaluated closure.
 - The connected export remains network-dependent and can fail on unavailable upstreams or fixed-output mismatch.
-- Full source bundles are large because the current JSON representation hex-encodes payload bytes.
+- Full source bundles remain large because the current JSON representation hex-encodes payload bytes, but compressed tarball acquisition bytes avoid duplicating expanded toolchain trees and deterministic chunks preserve the per-entry bound.
 - The proof still trusts the legacy musl.cc seed provider, checkout stage0 binary, selected platform, and recorded tool boundary.
 - This decision does not establish full-source bootstrap, compiler correctness, seed trust removal, bit-for-bit release reproducibility, independent rebuild agreement, deployment success, or full Cargo compatibility.

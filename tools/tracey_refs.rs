@@ -189,6 +189,24 @@
 // preflight/reduction evidence preserved in the archived Cairn change. This does
 // not promote hydration to fixed-point, compiler, seed-trust, or release proof.
 
+// Hydrated fresh-clone fixed-point bridge.
+//
+// r[impl bootstrap_inventory.hydrated_fresh_clone_fixed_point]
+// Implemented by exact evaluated-source capture and hydration in
+// `src/source_bundle.rs`, pre-acquisition enforcement in
+// `crates/crunch-build/src/fetch_build_service.rs`, source evidence in
+// `src/{self_build,fresh_clone_fixed_point}.rs`, and source-only stage wiring in
+// `scripts/prove-self-hosting.sh` plus `tests/self_hosting.rs`.
+//
+// r[verify bootstrap_inventory.hydrated_fresh_clone_fixed_point]
+// Verified by `cairn/changes/prove-hydrated-fresh-clone-fixed-point/evidence/`:
+// a 15-record authenticated handoff hydrated committed clone `9106845c`, locked
+// metadata passed with an empty offline Cargo home, both stages enforced 12
+// overrides with zero live fetches, and stage1/stage2 matched at BLAKE3
+// `162b38afe3022d34b480621614782376926ac4c70b954a0c1a5e7cc889f3769d`.
+// The contracted report preserves the bounded legacy-provider/platform
+// non-claims and does not promote this fixed point to compiler or seed trust.
+
 // r[impl rust_package_planning.source_built_toolchain_closure]
 // Implemented by `src/source_toolchain_closure.rs`, `src/cargo_free_self_build.rs`,
 // `src/rust_plan.rs`, and `src/main.rs`.

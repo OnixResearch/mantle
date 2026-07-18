@@ -298,6 +298,12 @@ Building derivations (not just compiling crunch) requires:
   routes between `FetchBuildService` and `BubblewrapBuildService` based on
   `command_args[0]`. The orchestrator treats all derivations the same: prepare →
   dispatch → finish. `build_fetcher()` was removed from Builder.
+- **Offline fixed-fetch handoff**: connected source export stores compressed
+  tarball acquisition bytes, then offline overrides unpack them with the same
+  bounded extractor and rerun recursive fixed-output verification. Do not
+  regress to expanded-tree JSON records. `SourceFileEntry` chunks keep each
+  payload entry at or below 64 MiB; chunk indexes must be contiguous and the
+  final materialized tree must recanonicalize to the same record.
 - **Pipeline FOD mismatch tests**: the cheapest end-to-end coverage is two
   `crunch.fetchurl` roots using `file://` URLs — one correct hash, one wrong.
   That exercises `PipelineResult.fod_mismatches` and sibling-root continuation
