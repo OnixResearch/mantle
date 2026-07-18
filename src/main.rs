@@ -2396,7 +2396,7 @@ pub enum SourceBundleAction {
     },
     /// Build a named bootstrap source-bundle profile from local inputs
     BootstrapProfile {
-        /// Profile mode: legacy-seed, source-root, or self-build-proof
+        /// Profile mode: legacy-seed, source-root, self-build-proof, or fresh-clone-inputs
         #[arg(long, default_value = "legacy-seed")]
         mode: String,
 
@@ -2451,6 +2451,20 @@ pub enum SourceBundleAction {
         /// Pin imported records for planned use
         #[arg(long)]
         pin: bool,
+    },
+    /// Hydrate a fresh checkout's explicit self-build inputs from a verified bundle
+    HydrateSelfBuild {
+        /// Bundle input path
+        #[arg(long)]
+        from: std::path::PathBuf,
+
+        /// Expected manifest BLAKE3 obtained independently of the bundle
+        #[arg(long)]
+        expected_manifest_blake3: String,
+
+        /// Fresh checkout whose absent vendor-deps directory will be published
+        #[arg(long)]
+        checkout: std::path::PathBuf,
     },
     /// Verify a bundle and optionally imported source state
     Verify {
@@ -2747,6 +2761,7 @@ fn source_bundle_command_label(action: &SourceBundleAction) -> &'static str {
         SourceBundleAction::BootstrapProfile { .. } => "source.bundle.bootstrap-profile",
         SourceBundleAction::List { .. } => "source.bundle.list",
         SourceBundleAction::Import { .. } => "source.bundle.import",
+        SourceBundleAction::HydrateSelfBuild { .. } => "source.bundle.hydrate-self-build",
         SourceBundleAction::Verify { .. } => "source.bundle.verify",
         SourceBundleAction::Preflight { .. } => "source.bundle.preflight",
     }
@@ -7301,7 +7316,7 @@ fn cmd_bootstrap_fetch(request: BootstrapFetchRequest<'_>) -> Result<(), RunErro
         )));
     }
 
-    let source_fetch_overrides = if request.offline_source_preflight {
+    let source_fetch_plan = if request.offline_source_preflight {
         let state_dir = build_cmd::state_dir();
         let provider_url = bootstrap::fetch_seed_provider_raw_url()?;
         let plan = source_bundle::bootstrap_legacy_seed_fetch_override_plan(&state_dir, &provider_url)?;
@@ -7309,16 +7324,17 @@ fn cmd_bootstrap_fetch(request: BootstrapFetchRequest<'_>) -> Result<(), RunErro
             "  offline bootstrap source profile ready: records={} source_state_blake3={}",
             plan.report.record_count, plan.report.source_state_blake3
         );
-        plan.overrides
+        Some(plan)
     } else {
-        Vec::new()
+        None
     };
-
+    let source_fetch_overrides = source_fetch_plan.as_ref().map(|plan| plan.overrides.clone()).unwrap_or_default();
     let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
-
-    rt.block_on(async {
+    let result = rt.block_on(async {
         bootstrap::bootstrap_fetch(request.store_dir, request.output, request.verbose, source_fetch_overrides).await
-    })
+    });
+    drop(source_fetch_plan);
+    result
 }
 
 fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), RunError> {
@@ -7985,6 +8001,39 @@ mod tests {
             panic!("expected source bundle bootstrap-profile");
         };
         assert_eq!(mode, "legacy-seed");
+    }
+
+    #[test]
+    fn source_bundle_hydrate_self_build_subcommand_requires_explicit_identity() {
+        const EXPECTED_MANIFEST_BLAKE3: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let args = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "source",
+            "bundle",
+            "hydrate-self-build",
+            "--from",
+            "/tmp/source-bundle.json",
+            "--expected-manifest-blake3",
+            EXPECTED_MANIFEST_BLAKE3,
+            "--checkout",
+            "/tmp/fresh-clone",
+        ]))
+        .expect("CLI parser test");
+
+        let Command::Source {
+            action:
+                SourceAction::Bundle {
+                    action:
+                        SourceBundleAction::HydrateSelfBuild {
+                            expected_manifest_blake3: parsed,
+                            ..
+                        },
+                },
+        } = args.command
+        else {
+            panic!("expected source bundle hydrate-self-build");
+        };
+        assert_eq!(parsed, EXPECTED_MANIFEST_BLAKE3);
     }
 
     #[test]

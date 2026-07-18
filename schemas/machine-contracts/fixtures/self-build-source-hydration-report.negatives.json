@@ -1,0 +1,35 @@
+{
+  "surface_id": "source-bundle.self-build-hydration-report",
+  "cases": [
+    {
+      "id": "unpinned-success-report",
+      "issue_class": "version",
+      "expected_path": "/pinned",
+      "artifact": {
+        "format": "mantle-self-build-source-hydration-v1",
+        "manifest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "vendor_content_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "provider_archive_content_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "imported_record_count": 3,
+        "existing_record_count": 0,
+        "pinned": false,
+        "non_claim": "source bundle evidence proves declared source/input availability and identity only"
+      }
+    },
+    {
+      "id": "wrong-format-version",
+      "issue_class": "version",
+      "expected_path": "/format",
+      "artifact": {
+        "format": "mantle-self-build-source-hydration-v2",
+        "manifest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "vendor_content_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "provider_archive_content_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "imported_record_count": 3,
+        "existing_record_count": 0,
+        "pinned": true,
+        "non_claim": "source bundle evidence proves declared source/input availability and identity only"
+      }
+    }
+  ]
+}

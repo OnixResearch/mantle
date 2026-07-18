@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/source-bundle/self-build-hydration-report-v1",
+  "title": "Mantle self-build source hydration report",
+  "x-mantle-rust-owner": "src/source_bundle.rs::SelfBuildHydrationReport",
+  "type": "object",
+  "required": [
+    "format",
+    "manifest_blake3",
+    "vendor_content_blake3",
+    "provider_archive_content_blake3",
+    "imported_record_count",
+    "existing_record_count",
+    "pinned",
+    "non_claim"
+  ],
+  "properties": {
+    "format": {
+      "type": "string",
+      "const": "mantle-self-build-source-hydration-v1"
+    },
+    "manifest_blake3": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "vendor_content_blake3": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "provider_archive_content_blake3": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "imported_record_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65536,
+      "x-mantle-bound-name": {
+        "minimum": "MIN_IMPORTED_SOURCE_RECORDS",
+        "maximum": "MAX_SOURCE_RECORDS"
+      }
+    },
+    "existing_record_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65536,
+      "x-mantle-bound-name": {
+        "minimum": "MIN_EXISTING_SOURCE_RECORDS",
+        "maximum": "MAX_SOURCE_RECORDS"
+      }
+    },
+    "pinned": {
+      "type": "boolean",
+      "const": true
+    },
+    "non_claim": {
+      "type": "string",
+      "const": "source bundle evidence proves declared source/input availability and identity only"
+    }
+  },
+  "additionalProperties": false
+}

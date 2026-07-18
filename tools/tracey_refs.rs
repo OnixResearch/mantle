@@ -174,6 +174,21 @@
 // materialized-input proof transport; it does not imply fresh-clone offline
 // completeness, compiler correctness, seed trust removal, or release eligibility.
 
+// Fresh-clone source hydration bridge.
+//
+// r[impl bootstrap_inventory.fresh_clone_source_hydration]
+// Implemented by the deterministic profile/hydration plan in
+// `src/source_bundle.rs`, the bounded hydration and provider-reduction shells in
+// `src/{source_bundle,bootstrap,main,linux_rename}.rs`, and the contracted
+// `mantle-self-build-source-hydration-v1` machine report.
+//
+// r[verify bootstrap_inventory.fresh_clone_source_hydration]
+// Verified by the positive and adversarial core/public CLI tests, a real
+// 2,216,806,169-byte three-record handoff into a local fresh clone, locked Cargo
+// metadata with an initially empty offline Cargo home, and strict legacy-provider
+// preflight/reduction evidence preserved in the archived Cairn change. This does
+// not promote hydration to fixed-point, compiler, seed-trust, or release proof.
+
 // r[impl rust_package_planning.source_built_toolchain_closure]
 // Implemented by `src/source_toolchain_closure.rs`, `src/cargo_free_self_build.rs`,
 // `src/rust_plan.rs`, and `src/main.rs`.

@@ -1162,6 +1162,20 @@ bootstrap works on a host with Nix commands absent from `PATH`.
 First bootstrap requires the source tree with `vendor-deps/` and
 `.cargo/vendor-config.toml`; `mantle self-build` validates the staged vendored
 inputs against `Cargo.lock` and Cargo checksum metadata before building them.
+A fresh clone can reconstruct the ignored Cargo directory and pin the legacy
+provider source state from an identity-bound bootstrap source bundle:
+
+```bash
+mantle --json --state-dir ./offline-state source bundle hydrate-self-build \
+  --from /media/handoff/bootstrap-source-bundle.json \
+  --expected-manifest-blake3 <manifest-blake3> \
+  --checkout . > self-build-source-hydration.json
+```
+
+Obtain `<manifest-blake3>` independently from the bundle. Hydration validates
+before atomic no-replace publication and refuses an existing `vendor-deps/`.
+See the [offline bootstrap source-bundle runbook](docs/operator-workflows.md#offline-bootstrap-source-bundle-profile)
+and [ADR 0031](adr/0031-hydrate-fresh-clone-inputs-from-source-bundles.md).
 It also requires `bwrap` and a static sandbox shell on `PATH`.
 After the first self-build, the mantle-built `bwrap` and `busybox` are used
 for subsequent builds.
@@ -1845,8 +1859,9 @@ Inspect `ready_class`, `source_state_blake3`, and `next_actions[]` from source
 preflight, plus `network_policy_reports[]`, `cargo_build_evidence[]`, and
 `cargo_build_evidence_diagnostics[]` in `build-report.json`. The source bundle
 evidence proves declared source/input availability and identity only;
-source-bundle route execution is future work. Do not treat source readiness,
-route eligibility, source import, or offline Cargo evidence as build success,
+source-bundle input realization remains bounded to the declared records and
+ordinary fixed-output verification. Do not treat source readiness, route
+eligibility, source import, hydration, or offline Cargo evidence as build success,
 output trust, Cargo-free execution, full Cargo compatibility, compiler
 correctness, release reproducibility, or bootstrap correctness without separate
 evidence.
@@ -1928,7 +1943,7 @@ mantle doctor                    No-mutate preflight for build or self-build hos
 mantle build [file.ncl|.#name]   Evaluate and build
 mantle build --plan <target>     Preview cached/substitute/build/preflight-error
 mantle build --fix <file>        Build and rewrite FOD mismatches in source
-mantle source bundle <action>    Plan, export, import, verify, or preflight source/input bundles
+mantle source bundle <action>    Plan, export, import, hydrate, verify, or preflight source/input bundles
 mantle eval <file.ncl>           Evaluate and print JSON
 mantle bootstrap [-o seed.ncl]   Generate a seed file (`--fetch` for Nix-free)
 mantle self-build                Rebuild mantle from source

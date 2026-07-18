@@ -8,7 +8,16 @@
 #[cfg(target_os = "linux")]
 use std::ffi::CStr;
 #[cfg(target_os = "linux")]
+use std::ffi::CString;
+#[cfg(target_os = "linux")]
+use std::fs::File;
+#[cfg(target_os = "linux")]
+use std::os::fd::AsRawFd;
+#[cfg(target_os = "linux")]
 use std::os::fd::RawFd;
+#[cfg(target_os = "linux")]
+use std::os::unix::ffi::OsStrExt;
+use std::path::Path;
 
 #[cfg(target_os = "linux")]
 pub(crate) fn rename_no_replace(
@@ -37,6 +46,39 @@ pub(crate) fn rename_no_replace(
         return Ok(());
     }
     Err(std::io::Error::last_os_error())
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn rename_path_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    assert!(!source.as_os_str().is_empty(), "rename source path must not be empty");
+    assert!(!destination.as_os_str().is_empty(), "rename destination path must not be empty");
+    let source_parent = source
+        .parent()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "rename source has no parent"))?;
+    let destination_parent = destination
+        .parent()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "rename destination has no parent"))?;
+    let source_name = source
+        .file_name()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "rename source has no file name"))?;
+    let destination_name = destination
+        .file_name()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "rename destination has no file name"))?;
+    let source_directory = File::open(source_parent)?;
+    let destination_directory = File::open(destination_parent)?;
+    let source_name = CString::new(source_name.as_bytes())
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "rename source contains NUL"))?;
+    let destination_name = CString::new(destination_name.as_bytes())
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "rename destination contains NUL"))?;
+    rename_no_replace(source_directory.as_raw_fd(), &source_name, destination_directory.as_raw_fd(), &destination_name)
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn rename_path_no_replace(_source: &Path, _destination: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "atomic no-replace path publication requires Linux renameat2",
+    ))
 }
 
 #[cfg(all(test, target_os = "linux"))]

@@ -27,6 +27,7 @@ use crate::realization_routing::RouteClass;
 use crate::realization_routing::RoutePlanReport;
 use crate::realization_routing::RoutePolicyReport;
 use crate::realization_routing::RouteRejection;
+use crate::source_bundle::SelfBuildHydrationReport;
 use crate::source_bundle::SourceBundlePlanReport;
 use crate::source_bundle::SourceBundleVerifyReport;
 use crate::source_bundle::SourceOfflinePreflightReport;
@@ -292,6 +293,18 @@ fn source_reports_serialize_to_registered_positive_fixtures() {
         non_claim: SOURCE_NON_CLAIM,
     };
     assert_fixture("source-bundle-verify-report.valid.json", &verify);
+
+    let hydration = SelfBuildHydrationReport {
+        format: "mantle-self-build-source-hydration-v1",
+        manifest_blake3: DIGEST_A.to_string(),
+        vendor_content_blake3: DIGEST_B.to_string(),
+        provider_archive_content_blake3: DIGEST_C.to_string(),
+        imported_record_count: 3,
+        existing_record_count: 0,
+        pinned: true,
+        non_claim: SOURCE_NON_CLAIM,
+    };
+    assert_fixture("self-build-source-hydration-report.valid.json", &hydration);
 
     let preflight = SourceOfflinePreflightReport {
         format: "mantle-source-offline-preflight-v1",

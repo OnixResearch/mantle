@@ -1,0 +1,10 @@
+{
+  "format": "mantle-self-build-source-hydration-v1",
+  "manifest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "vendor_content_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "provider_archive_content_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "imported_record_count": 3,
+  "existing_record_count": 0,
+  "pinned": true,
+  "non_claim": "source bundle evidence proves declared source/input availability and identity only"
+}

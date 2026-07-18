@@ -263,8 +263,52 @@ mantle source bundle bootstrap-profile \
   --to bootstrap-source-bundle.json
 ```
 
-Copy `bootstrap-source-bundle.json` to the offline host, then import, pin, and
-preflight it:
+For a bounded handoff containing only the two inputs absent from a fresh clone,
+use the dedicated profile mode:
+
+```bash
+mantle source bundle bootstrap-profile \
+  --mode fresh-clone-inputs \
+  --provider-archive ./unpacked-legacy-provider \
+  --provider-manifest ./provider.json \
+  --vendor-deps ./vendor-deps \
+  --to fresh-clone-inputs.json
+```
+
+`--provider-archive` is the unpacked payload expected by the legacy
+`fetchTarball` input, not the reduced provider output. The pinned provider has
+case-distinct Linux kernel header names, so export and hydration require a
+case-sensitive filesystem; post-materialization identity validation fails
+closed if those names cannot coexist. Record the reported
+`manifest_blake3` through an independent channel from the bundle itself. For a
+fresh clone whose ignored `vendor-deps/` is absent, hydrate
+the Cargo directory source and legacy-provider source state in one no-clobber
+operation:
+
+```bash
+mantle --json --state-dir ./offline-state source bundle hydrate-self-build \
+  --from /media/handoff/bootstrap-source-bundle.json \
+  --expected-manifest-blake3 <manifest-blake3> \
+  --checkout . > self-build-source-hydration.json
+
+empty_cargo_home="$(mktemp -d)"
+CARGO_HOME="$empty_cargo_home" CARGO_NET_OFFLINE=true \
+  cargo metadata --offline --locked --format-version 1 \
+  --config .cargo/vendor-config.toml
+```
+
+Hydration validates the out-of-band manifest identity, requires one vendor
+record plus the legacy provider archive and provider manifest, validates every
+vendored package/file checksum against the fresh clone's `Cargo.lock`, publishes
+`vendor-deps/` with atomic no-replace semantics, and imports and pins the bundle
+under `./offline-state`. It refuses an existing `vendor-deps/` rather than
+merging or replacing it. The JSON report is contracted as
+`mantle-self-build-source-hydration-v1` and binds the manifest, vendor, and
+provider archive BLAKE3 identities without embedding checkout or temporary
+paths.
+
+For a prepared checkout that already has its explicit vendor directory, import,
+pin, and preflight the bundle directly:
 
 ```bash
 mantle --state-dir ./offline-state source bundle import --from bootstrap-source-bundle.json --pin
@@ -287,10 +331,11 @@ tarball is materialized from source state instead of fetched live:
 mantle --state-dir ./offline-state bootstrap --fetch --offline-source-preflight --output seed.ncl
 ```
 
-Do not report bootstrap source-bundle readiness as provider trust removal,
-compiler correctness, self-build success, release reproducibility, or full
-bootstrap correctness. Those claims still require the existing proof commands
-and evidence gates.
+Do not report bootstrap source-bundle readiness or fresh-clone hydration as
+provider trust removal, compiler correctness, fixed-point self-build success,
+completeness for undeclared future bootstrap sources, release reproducibility,
+independent rebuild agreement, or full bootstrap correctness. Those claims still
+require the existing proof commands and evidence gates.
 
 ## Offline Cargo project-build lane
 

@@ -18,6 +18,9 @@ use serde::Deserialize;
 use crate::errors::RunError;
 
 const MAX_SOURCE_TREE_SEARCH_ANCESTORS: usize = 12;
+const MAX_REDUCTION_PERMISSION_ENTRIES: usize = 65_536;
+#[cfg(unix)]
+const UNIX_OWNER_DIRECTORY_ACCESS_MODE: u32 = 0o700;
 
 /// Resolve packages to store paths using the given resolver function.
 ///
@@ -412,6 +415,7 @@ fn copy_symlink(src: &Path, dst: &Path) -> Result<(), RunError> {
         std::fs::create_dir_all(parent)
             .map_err(|e| RunError::Internal(format!("creating {}: {e}", parent.display())))?;
     }
+    remove_path_if_exists(dst)?;
     #[cfg(unix)]
     {
         std::os::unix::fs::symlink(&target, dst)
@@ -440,6 +444,7 @@ fn copy_path_recursively(src: &Path, dst: &Path) -> Result<(), RunError> {
             std::fs::create_dir_all(parent)
                 .map_err(|e| RunError::Internal(format!("creating {}: {e}", parent.display())))?;
         }
+        remove_path_if_exists(dst)?;
         std::fs::copy(src, dst).map_err(|e| RunError::Internal(format!("copying {}: {e}", src.display())))?;
         std::fs::set_permissions(dst, metadata.permissions())
             .map_err(|e| RunError::Internal(format!("chmod {}: {e}", dst.display())))?;
@@ -447,13 +452,12 @@ fn copy_path_recursively(src: &Path, dst: &Path) -> Result<(), RunError> {
     }
 
     std::fs::create_dir_all(dst).map_err(|e| RunError::Internal(format!("creating {}: {e}", dst.display())))?;
-    std::fs::set_permissions(dst, metadata.permissions())
-        .map_err(|e| RunError::Internal(format!("chmod {}: {e}", dst.display())))?;
-
     for entry in std::fs::read_dir(src).map_err(|e| RunError::Internal(format!("reading {}: {e}", src.display())))? {
         let entry = entry.map_err(|e| RunError::Internal(format!("reading {}: {e}", src.display())))?;
         copy_path_recursively(&entry.path(), &dst.join(entry.file_name()))?;
     }
+    std::fs::set_permissions(dst, metadata.permissions())
+        .map_err(|e| RunError::Internal(format!("chmod {}: {e}", dst.display())))?;
     Ok(())
 }
 
@@ -498,6 +502,54 @@ fn copy_if_exists(src: &Path, dst: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
+fn make_reduction_directories_writable(root: &Path) -> Result<(), RunError> {
+    let mut pending = vec![root.to_path_buf()];
+    for _ in 0..MAX_REDUCTION_PERMISSION_ENTRIES {
+        let Some(directory) = pending.pop() else {
+            assert!(pending.is_empty());
+            assert!(root.is_dir());
+            return Ok(());
+        };
+        let permissions = std::fs::symlink_metadata(&directory)
+            .map_err(|err| RunError::Internal(format!("stat {}: {err}", directory.display())))?
+            .permissions();
+        let writable_permissions = reduction_directory_permissions(permissions);
+        std::fs::set_permissions(&directory, writable_permissions)
+            .map_err(|err| RunError::Internal(format!("chmod {}: {err}", directory.display())))?;
+        for entry in std::fs::read_dir(&directory)
+            .map_err(|err| RunError::Internal(format!("reading {}: {err}", directory.display())))?
+        {
+            let entry = entry.map_err(|err| RunError::Internal(format!("reading {}: {err}", directory.display())))?;
+            let metadata = entry
+                .file_type()
+                .map_err(|err| RunError::Internal(format!("stat {}: {err}", entry.path().display())))?;
+            if metadata.is_dir() && !metadata.is_symlink() {
+                pending.push(entry.path());
+            }
+        }
+    }
+    Err(RunError::Internal(format!(
+        "bootstrap reduction directory walk exceeds {MAX_REDUCTION_PERMISSION_ENTRIES} entries"
+    )))
+}
+
+#[cfg(unix)]
+fn reduction_directory_permissions(permissions: std::fs::Permissions) -> std::fs::Permissions {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let mode = permissions.mode() | UNIX_OWNER_DIRECTORY_ACCESS_MODE;
+    assert_eq!(mode & UNIX_OWNER_DIRECTORY_ACCESS_MODE, UNIX_OWNER_DIRECTORY_ACCESS_MODE);
+    assert!(!permissions.readonly() || mode != permissions.mode());
+    std::fs::Permissions::from_mode(mode)
+}
+
+#[cfg(not(unix))]
+fn reduction_directory_permissions(mut permissions: std::fs::Permissions) -> std::fs::Permissions {
+    permissions.set_readonly(false);
+    assert!(!permissions.readonly());
+    permissions
+}
+
 fn stage_reduced_seed_provider(
     raw_root: &Path,
     stage_root: &Path,
@@ -519,6 +571,7 @@ fn stage_reduced_seed_provider(
     copy_if_exists(&raw_root.join("lib"), &stage_root.join("lib"))?;
     copy_if_exists(&raw_root.join("libexec"), &stage_root.join("libexec"))?;
     copy_if_exists(&raw_root.join(&provider.target), &target_dir)?;
+    make_reduction_directories_writable(stage_root)?;
 
     let raw_bin = raw_root.join("bin");
     if raw_bin.exists() {
@@ -1119,6 +1172,52 @@ mod tests {
         assert_eq!(json["reduction"]["reduced_size_bytes"].as_u64(), Some(8));
         assert!(json["reduction"]["retained_tools"].is_array());
         assert!(json["notes"].is_array());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn copy_path_recursively_materializes_read_only_source_directory() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        const PERMISSION_BITS_MASK: u32 = 0o777;
+        const READ_ONLY_DIRECTORY_MODE: u32 = 0o555;
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source");
+        let destination = dir.path().join("destination");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("payload"), b"payload\n").unwrap();
+        std::fs::set_permissions(&source, std::fs::Permissions::from_mode(READ_ONLY_DIRECTORY_MODE)).unwrap();
+
+        copy_path_recursively(&source, &destination).unwrap();
+
+        assert_eq!(std::fs::read(destination.join("payload")).unwrap(), b"payload\n");
+        assert_eq!(
+            std::fs::symlink_metadata(&destination).unwrap().permissions().mode() & PERMISSION_BITS_MASK,
+            READ_ONLY_DIRECTORY_MODE
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reduction_directory_preparation_makes_nested_read_only_tree_mutable() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        const PERMISSION_BITS_MASK: u32 = 0o777;
+        const READ_ONLY_DIRECTORY_MODE: u32 = 0o555;
+        const OWNER_WRITABLE_MASK: u32 = 0o200;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("root");
+        let nested = root.join("nested");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::set_permissions(&nested, std::fs::Permissions::from_mode(READ_ONLY_DIRECTORY_MODE)).unwrap();
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(READ_ONLY_DIRECTORY_MODE)).unwrap();
+
+        make_reduction_directories_writable(&root).unwrap();
+
+        let root_mode = std::fs::symlink_metadata(&root).unwrap().permissions().mode() & PERMISSION_BITS_MASK;
+        let nested_mode = std::fs::symlink_metadata(&nested).unwrap().permissions().mode() & PERMISSION_BITS_MASK;
+        assert_ne!(root_mode & OWNER_WRITABLE_MASK, 0);
+        assert_ne!(nested_mode & OWNER_WRITABLE_MASK, 0);
     }
 
     #[test]

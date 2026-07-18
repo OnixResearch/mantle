@@ -34,6 +34,14 @@ from the DTOs and negative fixtures. Contract conformance does not grant
 registry trust, authorization, tag immutability, signature verification, or
 release eligibility.
 
+Fresh-clone source hydration has its own contracted
+`mantle-self-build-source-hydration-v1` report. It binds the externally checked
+source-bundle manifest BLAKE3, hydrated vendor BLAKE3, legacy provider archive
+BLAKE3, import counts, and pin state. Checkout paths, temporary staging paths,
+Cargo caches, and credentials are excluded. Report conformance proves neither
+that the expected digest came from a trusted publisher nor that a later
+fixed-point self-build succeeds.
+
 ## Authority flow
 
 Authority is one-way:

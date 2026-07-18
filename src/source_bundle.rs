@@ -2,6 +2,7 @@
 // machine-artifact-public: source-bundle.verify-report
 // machine-artifact-public: source-bundle.offline-preflight-report
 // machine-artifact-public: source-bundle.manifest-artifacts
+// machine-artifact-public: source-bundle.self-build-hydration-report
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::ffi::OsString;
@@ -20,6 +21,7 @@ use crate::errors::RunError;
 pub const SOURCE_BUNDLE_FORMAT: &str = "mantle-source-bundle-v1";
 pub const SOURCE_OFFLINE_PREFLIGHT_FORMAT: &str = "mantle-source-offline-preflight-v1";
 pub const BOOTSTRAP_SOURCE_PROFILE_FORMAT: &str = "mantle-bootstrap-source-profile-v1";
+pub const SELF_BUILD_HYDRATION_REPORT_FORMAT: &str = "mantle-self-build-source-hydration-v1";
 pub const SOURCE_BUNDLE_VERSION: u32 = 1;
 pub const SOURCE_BUNDLE_NON_CLAIM: &str =
     "source bundle evidence proves declared source/input availability and identity only";
@@ -35,7 +37,7 @@ pub const SOURCE_NEXT_ACTION_TRUST_PROVENANCE: &str =
 pub const SOURCE_NEXT_ACTION_DECLARE_SOURCE: &str = "export/import/pin the required source bundle, or rerun without --offline-source-preflight when live fetches are intended";
 pub const MAX_SOURCE_RECORDS: usize = 65_536;
 pub const MAX_SOURCE_FILES_PER_RECORD: usize = 262_144;
-pub const MAX_SOURCE_FILE_BYTES: u64 = 16_777_216;
+pub const MAX_SOURCE_FILE_BYTES: u64 = 67_108_864;
 pub const MAX_SOURCE_TOTAL_BYTES: u64 = 1_099_511_627_776;
 pub const MAX_SOURCE_ID_BYTES: usize = 512;
 pub const MAX_ADAPTER_METADATA_BYTES: usize = 8_192;
@@ -45,6 +47,8 @@ pub const MAX_DERIVED_SOURCE_WALK_NODES: usize = 65_536;
 const MAX_DERIVED_SOURCE_WALK_ITEMS: usize = MAX_DERIVED_SOURCE_WALK_NODES.saturating_add(MAX_SOURCE_RECORDS);
 const MAX_GIT_REF_INDIRECTIONS: usize = 16;
 const BOOTSTRAP_BASE_RECORD_COUNT: usize = 2;
+const REQUIRED_HYDRATION_RECORD_CLASS_COUNT: usize = 3;
+const REQUIRED_HYDRATION_RECORD_COUNT_PER_CLASS: usize = 1;
 const OFFLINE_BLOCKER_CLASS_COUNT: usize = 6;
 const BLAKE3_HEX_BYTES: usize = 64;
 const GIT_OBJECT_ID_HEX_BYTES: usize = 40;
@@ -111,6 +115,8 @@ const SOURCE_STATE_DIR: &str = "source-bundles";
 const SOURCE_RECORDS_DIR: &str = "records";
 const SOURCE_PINS_DIR: &str = "pins";
 const TEMP_FILE_EXTENSION: &str = "tmp";
+const HYDRATION_STAGING_PREFIX: &str = ".mantle-self-build-hydration-";
+const VENDOR_DEPS_DIR_NAME: &str = "vendor-deps";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
@@ -255,6 +261,7 @@ pub enum BootstrapSourceBundleMode {
     LegacySeed,
     SourceRoot,
     SelfBuildProof,
+    FreshCloneInputs,
 }
 
 impl BootstrapSourceBundleMode {
@@ -263,6 +270,7 @@ impl BootstrapSourceBundleMode {
             "legacy-seed" => Ok(Self::LegacySeed),
             "source-root" => Ok(Self::SourceRoot),
             "self-build-proof" => Ok(Self::SelfBuildProof),
+            "fresh-clone-inputs" => Ok(Self::FreshCloneInputs),
             other => Err(RunError::Internal(format!("unsupported bootstrap source profile mode '{other}'"))),
         }
     }
@@ -272,18 +280,27 @@ impl BootstrapSourceBundleMode {
             Self::LegacySeed => "legacy-seed",
             Self::SourceRoot => "source-root",
             Self::SelfBuildProof => "self-build-proof",
+            Self::FreshCloneInputs => "fresh-clone-inputs",
         }
     }
 
     fn expected_provider_kind(self) -> &'static str {
         match self {
-            Self::LegacySeed | Self::SelfBuildProof => BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED,
+            Self::LegacySeed | Self::SelfBuildProof | Self::FreshCloneInputs => BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED,
             Self::SourceRoot => BOOTSTRAP_PROVIDER_KIND_SOURCE_ROOT,
         }
     }
 
-    fn requires_self_build_inputs(self) -> bool {
+    fn requires_full_self_build_inputs(self) -> bool {
         matches!(self, Self::SelfBuildProof)
+    }
+
+    fn requires_vendor_inputs(self) -> bool {
+        matches!(self, Self::SelfBuildProof | Self::FreshCloneInputs)
+    }
+
+    fn requires_bootstrap_sources(self) -> bool {
+        !matches!(self, Self::FreshCloneInputs)
     }
 }
 
@@ -307,6 +324,25 @@ pub struct BootstrapSourceBundleProfileReport {
     pub required_record_count: u32,
     pub provider_kind: String,
     pub non_claim: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SelfBuildHydrationReport {
+    pub format: &'static str,
+    pub manifest_blake3: String,
+    pub vendor_content_blake3: String,
+    pub provider_archive_content_blake3: String,
+    pub imported_record_count: u32,
+    pub existing_record_count: u32,
+    pub pinned: bool,
+    pub non_claim: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SelfBuildHydrationPlan {
+    vendor_record_index: usize,
+    provider_archive_record_index: usize,
+    provider_manifest_record_index: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -505,7 +541,7 @@ pub fn plan_bootstrap_source_bundle_profile(
 ) -> Result<SourceBundleManifest, RunError> {
     validate_bootstrap_profile_input(input, store_prefix)?;
     assert!(store_prefix.starts_with('/'));
-    assert!(!input.bootstrap_sources.is_empty());
+    assert!(!input.mode.requires_bootstrap_sources() || !input.bootstrap_sources.is_empty());
     let provider_metadata = read_bootstrap_provider_profile_metadata(&input.provider_manifest)?;
     validate_bootstrap_provider_kind(input.mode, &provider_metadata.provider_kind)?;
     assert_eq!(provider_metadata.provider_kind, input.mode.expected_provider_kind());
@@ -780,6 +816,124 @@ fn assemble_source_bundle(records: Vec<SourceRecord>, store_prefix: &str) -> Res
     Ok(manifest)
 }
 
+fn plan_self_build_hydration(
+    manifest: &SourceBundleManifest,
+    expected_manifest_blake3: &str,
+) -> Result<SelfBuildHydrationPlan, RunError> {
+    validate_manifest(manifest)?;
+    validate_blake3_hex(Blake3HexValidation {
+        value: expected_manifest_blake3,
+        label: "expected source bundle manifest BLAKE3",
+    })?;
+    if manifest.manifest_blake3 != expected_manifest_blake3 {
+        return Err(RunError::Internal(format!(
+            "source bundle manifest BLAKE3 mismatch: expected {expected_manifest_blake3}, got {}",
+            manifest.manifest_blake3
+        )));
+    }
+    let vendor_record_index =
+        unique_hydration_record_index(manifest, BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS, SourceRecordKind::PackageMirror)?;
+    let provider_archive_record_index = unique_hydration_record_index(
+        manifest,
+        BOOTSTRAP_PROFILE_CLASS_PROVIDER_ARCHIVE,
+        SourceRecordKind::BootstrapArchive,
+    )?;
+    let provider_manifest_record_index = unique_hydration_record_index(
+        manifest,
+        BOOTSTRAP_PROFILE_CLASS_PROVIDER_MANIFEST,
+        SourceRecordKind::ProviderManifest,
+    )?;
+    let plan = SelfBuildHydrationPlan {
+        vendor_record_index,
+        provider_archive_record_index,
+        provider_manifest_record_index,
+    };
+    validate_hydration_profile_linkage(manifest, &plan)?;
+    assert!(plan.vendor_record_index < manifest.records.len());
+    assert!(plan.provider_archive_record_index < manifest.records.len());
+    Ok(plan)
+}
+
+fn unique_hydration_record_index(
+    manifest: &SourceBundleManifest,
+    profile_class: &str,
+    expected_kind: SourceRecordKind,
+) -> Result<usize, RunError> {
+    let matches = manifest
+        .records
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| {
+            record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str) == Some(profile_class)
+        })
+        .collect::<Vec<_>>();
+    if matches.len() != REQUIRED_HYDRATION_RECORD_COUNT_PER_CLASS {
+        return Err(RunError::Internal(format!(
+            "self-build hydration requires exactly one {profile_class} record; found {}",
+            matches.len()
+        )));
+    }
+    let (index, record) = matches[0];
+    if record.kind != expected_kind {
+        return Err(RunError::Internal(format!(
+            "self-build hydration {profile_class} record has wrong source kind: {:?}",
+            record.kind
+        )));
+    }
+    if record.files.is_empty() {
+        return Err(RunError::Internal(format!(
+            "self-build hydration {profile_class} record has no materialized payload"
+        )));
+    }
+    assert!(index < manifest.records.len());
+    assert!(!record.files.is_empty());
+    Ok(index)
+}
+
+fn validate_hydration_profile_linkage(
+    manifest: &SourceBundleManifest,
+    plan: &SelfBuildHydrationPlan,
+) -> Result<(), RunError> {
+    let records = [
+        &manifest.records[plan.vendor_record_index],
+        &manifest.records[plan.provider_archive_record_index],
+        &manifest.records[plan.provider_manifest_record_index],
+    ];
+    let mode_text = records[0]
+        .metadata
+        .get(RECORD_METADATA_PROFILE_MODE_KEY)
+        .ok_or_else(|| RunError::Internal("self-build hydration vendor record is missing profile mode".to_string()))?;
+    let mode = BootstrapSourceBundleMode::parse(mode_text)?;
+    if !matches!(
+        mode,
+        BootstrapSourceBundleMode::LegacySeed
+            | BootstrapSourceBundleMode::SelfBuildProof
+            | BootstrapSourceBundleMode::FreshCloneInputs
+    ) {
+        return Err(RunError::Internal(format!(
+            "self-build hydration requires a legacy-seed, self-build-proof, or fresh-clone-inputs profile, got {}",
+            mode.as_str()
+        )));
+    }
+    for record in records {
+        if record.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).map(String::as_str) != Some(mode.as_str()) {
+            return Err(RunError::Internal(
+                "self-build hydration profile records do not share one profile mode".to_string(),
+            ));
+        }
+    }
+    let provider_kind = manifest.records[plan.provider_manifest_record_index]
+        .metadata
+        .get(RECORD_METADATA_PROVIDER_KIND_KEY)
+        .ok_or_else(|| {
+            RunError::Internal("self-build hydration provider manifest is missing provider kind".to_string())
+        })?;
+    validate_bootstrap_provider_kind(mode, provider_kind)?;
+    assert_eq!(records.len(), REQUIRED_HYDRATION_RECORD_CLASS_COUNT);
+    assert!(records.iter().all(|record| !record.files.is_empty()));
+    Ok(())
+}
+
 pub fn plan_report(manifest: &SourceBundleManifest) -> Result<SourceBundlePlanReport, RunError> {
     validate_manifest(manifest)?;
     Ok(SourceBundlePlanReport {
@@ -851,6 +1005,122 @@ pub fn import_source_bundle(
         records: summaries,
         non_claim: SOURCE_BUNDLE_NON_CLAIM,
     })
+}
+
+// r[impl bootstrap_inventory.fresh_clone_source_hydration]
+pub fn hydrate_self_build_source_bundle(
+    manifest: &SourceBundleManifest,
+    expected_manifest_blake3: &str,
+    checkout: &Path,
+    state_dir: &Path,
+) -> Result<SelfBuildHydrationReport, RunError> {
+    let plan = plan_self_build_hydration(manifest, expected_manifest_blake3)?;
+    let checkout = fs::canonicalize(checkout).map_err(|err| {
+        RunError::Internal(format!("canonicalizing hydration checkout {}: {err}", checkout.display()))
+    })?;
+    if !checkout.is_dir() {
+        return Err(RunError::Internal(format!("hydration checkout is not a directory: {}", checkout.display())));
+    }
+    let vendor_destination = checkout.join(VENDOR_DEPS_DIR_NAME);
+    if vendor_destination.exists() {
+        return Err(RunError::Internal(format!(
+            "self-build hydration refuses to replace existing {}",
+            vendor_destination.display()
+        )));
+    }
+    validate_existing_source_state_for_hydration(manifest, state_dir)?;
+    let staging = prepare_hydrated_vendor(&checkout, &manifest.records[plan.vendor_record_index])?;
+    publish_hydrated_vendor(staging.path(), &vendor_destination)?;
+    let import_report = match import_source_bundle(manifest, state_dir, true) {
+        Ok(report) => report,
+        Err(error) => return rollback_hydrated_vendor(&vendor_destination, error),
+    };
+    assert!(vendor_destination.is_dir());
+    assert!(import_report.pinned);
+    Ok(SelfBuildHydrationReport {
+        format: SELF_BUILD_HYDRATION_REPORT_FORMAT,
+        manifest_blake3: manifest.manifest_blake3.clone(),
+        vendor_content_blake3: manifest.records[plan.vendor_record_index].content_blake3.clone(),
+        provider_archive_content_blake3: manifest.records[plan.provider_archive_record_index].content_blake3.clone(),
+        imported_record_count: import_report.imported_count,
+        existing_record_count: import_report.skipped_present_count,
+        pinned: import_report.pinned,
+        non_claim: SOURCE_BUNDLE_NON_CLAIM,
+    })
+}
+
+fn validate_existing_source_state_for_hydration(
+    manifest: &SourceBundleManifest,
+    state_dir: &Path,
+) -> Result<(), RunError> {
+    for record in &manifest.records {
+        let target = source_records_dir(state_dir).join(format!("{}.json", record.content_blake3));
+        if target.exists() && read_record(&target)? != *record {
+            return Err(RunError::Internal(format!(
+                "existing source state conflicts with hydration record {}",
+                record.identity
+            )));
+        }
+    }
+    let pin_path = source_pins_dir(state_dir).join(format!("{}.json", manifest.manifest_blake3));
+    if pin_path.exists() && read_source_bundle(&pin_path)? != *manifest {
+        return Err(RunError::Internal("existing source pin conflicts with self-build hydration manifest".to_string()));
+    }
+    Ok(())
+}
+
+fn prepare_hydrated_vendor(checkout: &Path, vendor_record: &SourceRecord) -> Result<tempfile::TempDir, RunError> {
+    assert!(checkout.is_dir());
+    assert_eq!(vendor_record.kind, SourceRecordKind::PackageMirror);
+    let staging = tempfile::Builder::new()
+        .prefix(HYDRATION_STAGING_PREFIX)
+        .tempdir_in(checkout)
+        .map_err(|err| RunError::Internal(format!("creating vendor hydration staging root: {err}")))?;
+    let cargo_dir = staging.path().join(".cargo");
+    fs::create_dir(&cargo_dir)
+        .map_err(|err| RunError::Internal(format!("creating hydration Cargo config dir: {err}")))?;
+    copy_hydration_input(&checkout.join("Cargo.lock"), &staging.path().join("Cargo.lock"))?;
+    copy_hydration_input(&checkout.join(".cargo").join("vendor-config.toml"), &cargo_dir.join("vendor-config.toml"))?;
+    materialize_source_record_payload(vendor_record, &staging.path().join(VENDOR_DEPS_DIR_NAME))?;
+    crate::self_build::require_checked_vendor_inputs(staging.path())?;
+    assert!(staging.path().join(VENDOR_DEPS_DIR_NAME).is_dir());
+    Ok(staging)
+}
+
+fn copy_hydration_input(source: &Path, destination: &Path) -> Result<(), RunError> {
+    if !source.is_file() {
+        return Err(RunError::Internal(format!("self-build hydration input is missing: {}", source.display())));
+    }
+    fs::copy(source, destination)
+        .map_err(|err| RunError::Internal(format!("copying hydration input {}: {err}", source.display())))?;
+    Ok(())
+}
+
+fn publish_hydrated_vendor(staging_root: &Path, destination: &Path) -> Result<(), RunError> {
+    let staged_vendor = staging_root.join(VENDOR_DEPS_DIR_NAME);
+    assert!(staged_vendor.is_dir());
+    assert!(!destination.as_os_str().is_empty());
+    crate::linux_rename::rename_path_no_replace(&staged_vendor, destination).map_err(|err| {
+        RunError::Internal(format!(
+            "publishing hydrated vendor directory without replacement to {}: {err}",
+            destination.display()
+        ))
+    })
+}
+
+fn rollback_hydrated_vendor(
+    vendor_destination: &Path,
+    import_error: RunError,
+) -> Result<SelfBuildHydrationReport, RunError> {
+    assert!(vendor_destination.is_dir());
+    assert!(!vendor_destination.as_os_str().is_empty());
+    match fs::remove_dir_all(vendor_destination) {
+        Ok(()) => Err(import_error),
+        Err(rollback_error) => Err(RunError::Internal(format!(
+            "{import_error}; hydration rollback failed for {}: {rollback_error}",
+            vendor_destination.display()
+        ))),
+    }
 }
 
 pub fn verify_source_bundle_state(
@@ -1086,21 +1356,21 @@ fn validate_bootstrap_profile_input(
     if !store_prefix.starts_with('/') {
         return Err(RunError::Internal(format!("store prefix must be absolute: {store_prefix}")));
     }
-    if input.bootstrap_sources.is_empty() {
+    if input.mode.requires_bootstrap_sources() && input.bootstrap_sources.is_empty() {
         return Err(RunError::Internal("bootstrap profile requires at least one bootstrap source archive".to_string()));
     }
-    if input.mode.requires_self_build_inputs() {
+    if input.mode.requires_full_self_build_inputs() {
         if input.mantle_source.is_none() {
             return Err(RunError::Internal("self-build bootstrap profile requires --mantle-source".to_string()));
-        }
-        if input.vendor_deps.is_none() {
-            return Err(RunError::Internal("self-build bootstrap profile requires --vendor-deps".to_string()));
         }
         if input.proof_inputs.is_empty() {
             return Err(RunError::Internal(
                 "self-build bootstrap profile requires at least one --proof-input".to_string(),
             ));
         }
+    }
+    if input.mode.requires_vendor_inputs() && input.vendor_deps.is_none() {
+        return Err(RunError::Internal(format!("{} bootstrap profile requires --vendor-deps", input.mode.as_str())));
     }
     if input.bootstrap_sources.len() > MAX_SOURCE_RECORDS {
         return Err(RunError::Internal(format!("bootstrap profile source count exceeds {MAX_SOURCE_RECORDS}")));
@@ -1109,7 +1379,8 @@ fn validate_bootstrap_profile_input(
         return Err(RunError::Internal(format!("bootstrap profile source count exceeds {MAX_SOURCE_RECORDS}")));
     }
     assert!(store_prefix.starts_with('/'));
-    assert!(!input.bootstrap_sources.is_empty());
+    assert!(!input.mode.requires_bootstrap_sources() || !input.bootstrap_sources.is_empty());
+    assert!(!input.mode.requires_vendor_inputs() || input.vendor_deps.is_some());
     Ok(())
 }
 
@@ -1162,6 +1433,7 @@ fn provider_kind_from_json(value: &serde_json::Value) -> Option<String> {
     value
         .get("provider_kind")
         .and_then(serde_json::Value::as_str)
+        .or_else(|| value.get("provider_id").and_then(serde_json::Value::as_str))
         .or_else(|| value.get("provider").and_then(|provider| provider.get("id")).and_then(serde_json::Value::as_str))
         .map(str::to_string)
 }
@@ -1392,12 +1664,16 @@ fn validate_source_relative_path_text(text: &str) -> Result<(), RunError> {
     if text.starts_with('/') {
         return Err(RunError::Internal(format!("unsafe source relative path '{text}'")));
     }
-    if text.contains("..") {
-        return Err(RunError::Internal(format!("unsafe source relative path '{text}'")));
-    }
     if text.contains('\\') {
         return Err(RunError::Internal(format!("unsafe source relative path '{text}'")));
     }
+    for component in text.split('/') {
+        if component.is_empty() || matches!(component, "." | "..") {
+            return Err(RunError::Internal(format!("unsafe source relative path '{text}'")));
+        }
+    }
+    assert!(!text.is_empty());
+    assert!(!text.starts_with('/'));
     Ok(())
 }
 
@@ -1637,10 +1913,12 @@ fn validate_source_record(record: &SourceRecord) -> Result<(), RunError> {
 fn validate_source_record_files(record: &SourceRecord) -> Result<(), RunError> {
     let mut total_bytes = 0u64;
     let mut case_folded_paths = BTreeSet::new();
+    let requires_case_sensitive_paths = matches!(record.kind, SourceRecordKind::BootstrapArchive);
     for file in &record.files {
         validate_source_file_entry(file)?;
         let case_key = file.path.to_lowercase();
-        if !case_folded_paths.insert(case_key) {
+        let is_new_case_key = case_folded_paths.insert(case_key);
+        if !is_new_case_key && !requires_case_sensitive_paths {
             return Err(RunError::Internal(format!("source record {} has a path case collision", record.identity)));
         }
         total_bytes = total_bytes.checked_add(file.size).ok_or_else(|| {
@@ -2195,9 +2473,10 @@ fn source_record_is_fetcher_input(record: &SourceRecord) -> bool {
 
 fn bootstrap_provider_archive_record_matches(record: &SourceRecord, mode: BootstrapSourceBundleMode) -> bool {
     let record_mode = record.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).map(String::as_str);
+    let is_legacy_compatible_mode = record_mode == Some(BootstrapSourceBundleMode::SelfBuildProof.as_str())
+        || record_mode == Some(BootstrapSourceBundleMode::FreshCloneInputs.as_str());
     let is_mode_match = record_mode == Some(mode.as_str())
-        || (mode == BootstrapSourceBundleMode::LegacySeed
-            && record_mode == Some(BootstrapSourceBundleMode::SelfBuildProof.as_str()));
+        || (mode == BootstrapSourceBundleMode::LegacySeed && is_legacy_compatible_mode);
     record.kind == SourceRecordKind::BootstrapArchive
         && is_mode_match
         && record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
@@ -2592,6 +2871,15 @@ fn materialize_source_record_payload(record: &SourceRecord, target: &Path) -> Re
     for file in &record.files {
         materialize_source_file_entry(file, target)?;
     }
+    let observed = materialize_source_record_from_path(record, target, false)?;
+    if observed.files != record.files || observed.content_blake3 != record.content_blake3 {
+        return Err(RunError::Internal(format!(
+            "materialized source record {} does not preserve declared files and identity",
+            record.identity
+        )));
+    }
+    assert_eq!(observed.payload_bytes, record.payload_bytes);
+    assert_eq!(observed.files.len(), record.files.len());
     Ok(())
 }
 
@@ -2944,6 +3232,11 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
         ),
         crate::SourceBundleAction::List { from } => cmd_list_source_bundle(&from, context),
         crate::SourceBundleAction::Import { from, pin } => cmd_import_source_bundle(&from, pin, context),
+        crate::SourceBundleAction::HydrateSelfBuild {
+            from,
+            expected_manifest_blake3,
+            checkout,
+        } => cmd_hydrate_self_build_source_bundle(&from, &expected_manifest_blake3, &checkout, context),
         crate::SourceBundleAction::Verify { from, imported } => cmd_verify_source_bundle(&from, imported, context),
         crate::SourceBundleAction::Preflight {
             build_roots,
@@ -2983,6 +3276,17 @@ fn cmd_import_source_bundle(from: &Path, pin: bool, context: &SourceBundleCliCon
     let manifest = read_source_bundle(from)?;
     let operation_output = import_source_bundle(&manifest, context.state_dir, pin)?;
     print_import_report(&operation_output, context.is_json_output)
+}
+
+fn cmd_hydrate_self_build_source_bundle(
+    from: &Path,
+    expected_manifest_blake3: &str,
+    checkout: &Path,
+    context: &SourceBundleCliContext<'_>,
+) -> Result<(), RunError> {
+    let manifest = read_source_bundle(from)?;
+    let report = hydrate_self_build_source_bundle(&manifest, expected_manifest_blake3, checkout, context.state_dir)?;
+    print_self_build_hydration_report(&report, context.is_json_output)
 }
 
 fn cmd_verify_source_bundle(from: &Path, imported: bool, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
@@ -3115,6 +3419,25 @@ fn print_bootstrap_profile_report(
         report.required_record_count,
         report.manifest_blake3,
         report.provider_kind
+    );
+    eprintln!("non_claim={}", report.non_claim);
+    Ok(())
+}
+
+fn print_self_build_hydration_report(report: &SelfBuildHydrationReport, json_output: bool) -> Result<(), RunError> {
+    if json_output {
+        println!("{}", render_json(report)?);
+        return Ok(());
+    }
+    println!(
+        "format={} manifest_blake3={} vendor_blake3={} provider_archive_blake3={} imported={} existing={} pinned={}",
+        report.format,
+        report.manifest_blake3,
+        report.vendor_content_blake3,
+        report.provider_archive_content_blake3,
+        report.imported_record_count,
+        report.existing_record_count,
+        report.pinned,
     );
     eprintln!("non_claim={}", report.non_claim);
     Ok(())
@@ -3358,6 +3681,62 @@ mod tests {
         }
     }
 
+    fn cargo_sha256_hex(bytes: &[u8]) -> String {
+        use sha2::Digest as _;
+        data_encoding::HEXLOWER.encode(&sha2::Sha256::digest(bytes))
+    }
+
+    fn write_hydration_checkout(checkout: &Path) {
+        const PACKAGE_CHECKSUM: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        fs::create_dir_all(checkout.join(".cargo")).unwrap();
+        fs::write(
+            checkout.join(".cargo/vendor-config.toml"),
+            "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"vendor-deps\"\n",
+        )
+        .unwrap();
+        fs::write(
+            checkout.join("Cargo.lock"),
+            format!(
+                "version = 4\n\n[[package]]\nname = \"dep-a\"\nversion = \"0.1.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"{PACKAGE_CHECKSUM}\"\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    fn write_hydration_vendor(vendor: &Path, is_tampered: bool) {
+        const PACKAGE_CHECKSUM: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let package = vendor.join("dep-a");
+        let manifest = b"[package]\nname = \"dep-a\"\nversion = \"0.1.0\"\n";
+        let valid_lib = b"pub fn dep_a() {}\n";
+        let materialized_lib = if is_tampered {
+            b"pub fn tampered() {}\n".as_slice()
+        } else {
+            valid_lib.as_slice()
+        };
+        fs::create_dir_all(package.join("src")).unwrap();
+        fs::write(package.join("Cargo.toml"), manifest).unwrap();
+        fs::write(package.join("src/lib.rs"), materialized_lib).unwrap();
+        let checksum = serde_json::json!({
+            "files": {
+                "Cargo.toml": cargo_sha256_hex(manifest),
+                "src/lib.rs": cargo_sha256_hex(valid_lib),
+            },
+            "package": PACKAGE_CHECKSUM,
+        });
+        fs::write(package.join(".cargo-checksum.json"), serde_json::to_vec(&checksum).unwrap()).unwrap();
+    }
+
+    fn hydration_fixture(temp: &Path, is_vendor_tampered: bool) -> (SourceBundleManifest, PathBuf) {
+        let input = bootstrap_profile_fixture(&temp.join("profile"));
+        let vendor = input.vendor_deps.as_ref().unwrap();
+        fs::remove_dir_all(vendor).unwrap();
+        write_hydration_vendor(vendor, is_vendor_tampered);
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let checkout = temp.join("fresh-clone");
+        write_hydration_checkout(&checkout);
+        (manifest, checkout)
+    }
+
     #[test]
     fn source_bundle_canonicalizes_equivalent_traversal() {
         let temp = tempfile::tempdir().unwrap();
@@ -3372,6 +3751,25 @@ mod tests {
         let second = plan_source_bundle(&[spec], "/mantle/store").unwrap();
         assert_eq!(first.manifest_blake3, second.manifest_blake3);
         assert_eq!(first.records[0].files[0].path, "src/main.txt");
+    }
+
+    #[test]
+    fn source_relative_path_accepts_double_dot_inside_safe_cargo_fixture_name() {
+        let path = "json_scanner/tests/inputs/n_number_-1.0..json";
+
+        validate_source_relative_path_text(path).unwrap();
+
+        assert!(path.contains(".."));
+        assert!(!path.split('/').any(|component| component == ".."));
+    }
+
+    #[test]
+    fn source_relative_path_rejects_parent_and_empty_components() {
+        let parent = validate_source_relative_path_text("package/../outside").unwrap_err();
+        let empty = validate_source_relative_path_text("package//file").unwrap_err();
+
+        assert!(parent.to_string().contains("unsafe source relative path"));
+        assert!(empty.to_string().contains("unsafe source relative path"));
     }
 
     #[test]
@@ -3390,6 +3788,74 @@ mod tests {
         assert_eq!(manifest.records[0].files.len(), 1);
         assert_eq!(manifest.records[0].files[0].path, "payload.txt");
         assert_eq!(manifest.records[0].payload_bytes, 7);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn source_bundle_allows_case_sensitive_kernel_headers_only_for_bootstrap_archives() {
+        let temp = tempfile::tempdir().unwrap();
+        let headers = temp.path().join("headers");
+        fs::create_dir_all(&headers).unwrap();
+        fs::write(headers.join("xt_MARK.h"), b"upper\n").unwrap();
+        fs::write(headers.join("xt_mark.h"), b"lower\n").unwrap();
+        let bootstrap_spec = SourceSpec {
+            kind: SourceRecordKind::BootstrapArchive,
+            identity: "legacy-provider-headers".to_string(),
+            path: headers.clone(),
+            adapter: None,
+        };
+        let portable_spec = SourceSpec {
+            kind: SourceRecordKind::LocalPath,
+            identity: "portable-input".to_string(),
+            path: headers,
+            adapter: None,
+        };
+
+        let manifest = plan_source_bundle(&[bootstrap_spec], "/mantle/store").unwrap();
+        let error = plan_source_bundle(&[portable_spec], "/mantle/store").unwrap_err();
+
+        assert_eq!(manifest.records[0].files.len(), 2);
+        assert!(error.to_string().contains("path case collision"));
+    }
+
+    #[test]
+    fn source_bundle_accepts_bounded_legacy_provider_compiler_payload() {
+        const LEGACY_PROVIDER_COMPILER_BYTES: u64 = 16_777_217;
+        let temp = tempfile::tempdir().unwrap();
+        let compiler = temp.path().join("cc1plus");
+        fs::File::create(&compiler).unwrap().set_len(LEGACY_PROVIDER_COMPILER_BYTES).unwrap();
+        let spec = SourceSpec {
+            kind: SourceRecordKind::BootstrapArchive,
+            identity: "legacy-provider-compiler".to_string(),
+            path: compiler,
+            adapter: None,
+        };
+
+        let manifest = plan_source_bundle(&[spec], "/mantle/store").unwrap();
+
+        assert_eq!(manifest.records[0].payload_bytes, LEGACY_PROVIDER_COMPILER_BYTES);
+        assert!(manifest.records[0].payload_bytes < MAX_SOURCE_FILE_BYTES);
+    }
+
+    #[test]
+    fn source_bundle_rejects_payload_above_named_file_limit() {
+        let temp = tempfile::tempdir().unwrap();
+        let oversized = temp.path().join("oversized");
+        fs::File::create(&oversized)
+            .unwrap()
+            .set_len(MAX_SOURCE_FILE_BYTES.checked_add(1).unwrap())
+            .unwrap();
+        let spec = SourceSpec {
+            kind: SourceRecordKind::BootstrapArchive,
+            identity: "oversized-provider-file".to_string(),
+            path: oversized,
+            adapter: None,
+        };
+
+        let error = plan_source_bundle(&[spec], "/mantle/store").unwrap_err();
+
+        assert!(error.to_string().contains("limit"));
+        assert!(error.to_string().contains(&MAX_SOURCE_FILE_BYTES.to_string()));
     }
 
     #[test]
@@ -3597,6 +4063,117 @@ mod tests {
         assert!(preflight.source_state_blake3.len() == BLAKE3_HEX_BYTES);
     }
 
+    // r[verify bootstrap_inventory.fresh_clone_source_hydration]
+    #[test]
+    fn self_build_hydration_materializes_valid_vendor_and_pins_provider_state() {
+        let temp = tempfile::tempdir().unwrap();
+        let (manifest, checkout) = hydration_fixture(temp.path(), false);
+        let state_dir = temp.path().join("state");
+
+        let report =
+            hydrate_self_build_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state_dir).unwrap();
+        let provider =
+            bootstrap_legacy_seed_fetch_override_plan(&state_dir, "https://example.invalid/provider.tgz").unwrap();
+
+        assert_eq!(report.format, SELF_BUILD_HYDRATION_REPORT_FORMAT);
+        assert_eq!(report.manifest_blake3, manifest.manifest_blake3);
+        assert!(report.imported_record_count > 0);
+        assert!(report.pinned);
+        assert!(checkout.join(VENDOR_DEPS_DIR_NAME).is_dir());
+        crate::self_build::require_checked_vendor_inputs(&checkout).unwrap();
+        assert_eq!(provider.report.ready_class, SourceReadiness::Ready);
+        assert_eq!(provider.overrides.len(), 1);
+        assert!(provider.overrides[0].payload_path.join("src/main.txt").is_file());
+    }
+
+    // r[verify bootstrap_inventory.fresh_clone_source_hydration]
+    #[test]
+    fn self_build_hydration_rejects_wrong_manifest_identity_without_outputs() {
+        let temp = tempfile::tempdir().unwrap();
+        let (manifest, checkout) = hydration_fixture(temp.path(), false);
+        let state_dir = temp.path().join("state");
+        let wrong_digest = "f".repeat(BLAKE3_HEX_BYTES);
+
+        let error = hydrate_self_build_source_bundle(&manifest, &wrong_digest, &checkout, &state_dir).unwrap_err();
+
+        assert!(error.to_string().contains("manifest BLAKE3 mismatch"));
+        assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
+        assert!(!state_dir.exists());
+    }
+
+    // r[verify bootstrap_inventory.fresh_clone_source_hydration]
+    #[test]
+    fn self_build_hydration_rejects_missing_vendor_record_without_outputs() {
+        let temp = tempfile::tempdir().unwrap();
+        let (manifest, checkout) = hydration_fixture(temp.path(), false);
+        let records = manifest
+            .records
+            .into_iter()
+            .filter(|record| {
+                record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+                    != Some(BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS)
+            })
+            .collect::<Vec<_>>();
+        let incomplete = assemble_source_bundle(records, "/mantle/store").unwrap();
+        let state_dir = temp.path().join("state");
+
+        let error = hydrate_self_build_source_bundle(&incomplete, &incomplete.manifest_blake3, &checkout, &state_dir)
+            .unwrap_err();
+
+        assert!(error.to_string().contains("exactly one vendored-cargo-inputs"));
+        assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
+        assert!(!state_dir.exists());
+    }
+
+    // r[verify bootstrap_inventory.fresh_clone_source_hydration]
+    #[test]
+    fn self_build_hydration_preserves_existing_vendor_without_importing_state() {
+        let temp = tempfile::tempdir().unwrap();
+        let (manifest, checkout) = hydration_fixture(temp.path(), false);
+        let destination = checkout.join(VENDOR_DEPS_DIR_NAME);
+        fs::create_dir(&destination).unwrap();
+        fs::write(destination.join("sentinel"), b"preserve").unwrap();
+        let state_dir = temp.path().join("state");
+
+        let error =
+            hydrate_self_build_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state_dir).unwrap_err();
+
+        assert!(error.to_string().contains("refuses to replace"));
+        assert_eq!(fs::read(destination.join("sentinel")).unwrap(), b"preserve");
+        assert!(!state_dir.exists());
+    }
+
+    // r[verify bootstrap_inventory.fresh_clone_source_hydration]
+    #[test]
+    fn self_build_hydration_rejects_vendor_checksum_drift_before_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        let (manifest, checkout) = hydration_fixture(temp.path(), true);
+        let state_dir = temp.path().join("state");
+
+        let error =
+            hydrate_self_build_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state_dir).unwrap_err();
+
+        assert!(error.to_string().contains("vendor file checksum mismatch"));
+        assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
+        assert!(!state_dir.exists());
+    }
+
+    // r[verify bootstrap_inventory.fresh_clone_source_hydration]
+    #[test]
+    fn self_build_hydration_rolls_back_vendor_when_state_persistence_fails() {
+        let temp = tempfile::tempdir().unwrap();
+        let (manifest, checkout) = hydration_fixture(temp.path(), false);
+        let state_dir = temp.path().join("state-file");
+        fs::write(&state_dir, b"not-a-directory").unwrap();
+
+        let error =
+            hydrate_self_build_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state_dir).unwrap_err();
+
+        assert!(error.to_string().contains("creating source records dir"));
+        assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
+        assert!(state_dir.is_file());
+    }
+
     #[test]
     fn bootstrap_source_profile_fetch_override_consumes_pinned_provider_archive() {
         let temp = tempfile::tempdir().unwrap();
@@ -3616,6 +4193,45 @@ mod tests {
     }
 
     #[test]
+    fn fresh_clone_source_profile_fetch_override_consumes_pinned_provider_archive() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut input = bootstrap_profile_fixture(temp.path());
+        input.mode = BootstrapSourceBundleMode::FreshCloneInputs;
+        input.bootstrap_sources.clear();
+        input.mantle_source = None;
+        input.toolchain_source_root = None;
+        input.proof_inputs.clear();
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let state_dir = temp.path().join("state");
+        import_source_bundle(&manifest, &state_dir, true).unwrap();
+
+        let plan =
+            bootstrap_legacy_seed_fetch_override_plan(&state_dir, "https://example.invalid/provider.tgz").unwrap();
+
+        assert_eq!(plan.report.ready_class, SourceReadiness::Ready);
+        assert_eq!(plan.overrides.len(), 1);
+        assert!(plan.overrides[0].payload_path.join("src/main.txt").exists());
+    }
+
+    #[test]
+    fn bootstrap_fetch_override_scratch_lives_until_plan_drop() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = bootstrap_profile_fixture(temp.path());
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let state_dir = temp.path().join("state");
+        import_source_bundle(&manifest, &state_dir, true).unwrap();
+        let plan =
+            bootstrap_legacy_seed_fetch_override_plan(&state_dir, "https://example.invalid/provider.tgz").unwrap();
+        let payload_path = plan.overrides[0].payload_path.clone();
+        let retained_overrides = plan.overrides.clone();
+
+        assert!(payload_path.is_dir());
+        assert_eq!(retained_overrides[0].payload_path, payload_path);
+        drop(plan);
+        assert!(!payload_path.exists());
+    }
+
+    #[test]
     fn bootstrap_source_profile_fetch_override_rejects_unpinned_provider_archive() {
         let temp = tempfile::tempdir().unwrap();
         let input = bootstrap_profile_fixture(temp.path());
@@ -3630,6 +4246,27 @@ mod tests {
     }
 
     #[test]
+    fn fresh_clone_source_profile_requires_vendor_but_not_unrelated_proof_inputs() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut input = bootstrap_profile_fixture(temp.path());
+        input.mode = BootstrapSourceBundleMode::FreshCloneInputs;
+        input.bootstrap_sources.clear();
+        input.mantle_source = None;
+        input.toolchain_source_root = None;
+        input.proof_inputs.clear();
+
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let report = bootstrap_source_bundle_profile_report(&manifest, input.mode).unwrap();
+
+        assert_eq!(report.mode, BootstrapSourceBundleMode::FreshCloneInputs);
+        assert_eq!(report.required_record_count, u32::try_from(REQUIRED_HYDRATION_RECORD_CLASS_COUNT).unwrap());
+        assert!(manifest.records.iter().any(|record| {
+            record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+                == Some(BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS)
+        }));
+    }
+
+    #[test]
     fn bootstrap_source_profile_rejects_missing_vendor_for_self_build() {
         let temp = tempfile::tempdir().unwrap();
         let mut input = bootstrap_profile_fixture(temp.path());
@@ -3638,6 +4275,32 @@ mod tests {
         let err = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap_err();
 
         assert!(err.to_string().contains("requires --vendor-deps"));
+    }
+
+    #[test]
+    fn fresh_clone_source_profile_accepts_runtime_generated_provider_manifest() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut input = bootstrap_profile_fixture(temp.path());
+        input.mode = BootstrapSourceBundleMode::FreshCloneInputs;
+        input.bootstrap_sources.clear();
+        input.mantle_source = None;
+        input.toolchain_source_root = None;
+        input.proof_inputs.clear();
+        let runtime_manifest = serde_json::json!({
+            "provider_id": BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED,
+            "target": "x86_64-linux-musl",
+            "reduction": {
+                "retained_tools": ["cc", "ar"],
+                "dropped_components": ["locale-catalogs"]
+            }
+        });
+        fs::write(&input.provider_manifest, serde_json::to_vec_pretty(&runtime_manifest).unwrap()).unwrap();
+
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let report = bootstrap_source_bundle_profile_report(&manifest, input.mode).unwrap();
+
+        assert_eq!(report.provider_kind, BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED);
+        assert_eq!(report.mode, BootstrapSourceBundleMode::FreshCloneInputs);
     }
 
     #[test]
