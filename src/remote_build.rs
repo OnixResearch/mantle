@@ -14432,6 +14432,8 @@ mod tests {
             size: 1,
             content_hex: None,
             symlink_target: None,
+            chunk_index: None,
+            chunk_count: None,
             blake3: blake3::hash(b"x").to_hex().to_string(),
         }];
         record

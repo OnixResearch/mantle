@@ -8,6 +8,8 @@ use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::fs;
 use std::io::ErrorKind;
+use std::io::Read;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -55,6 +57,7 @@ const OFFLINE_BLOCKER_CLASS_COUNT: usize = 6;
 const BLAKE3_HEX_BYTES: usize = 64;
 const GIT_OBJECT_ID_HEX_BYTES: usize = 40;
 const SYMLINK_PAYLOAD_BYTES: u64 = 0;
+const MIN_SOURCE_FILE_CHUNK_COUNT: u32 = 2;
 #[cfg(unix)]
 const UNIX_EXECUTABLE_FILE_MODE: u32 = 0o755;
 #[cfg(unix)]
@@ -152,6 +155,10 @@ pub struct SourceFileEntry {
     pub content_hex: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symlink_target: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chunk_index: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chunk_count: Option<u32>,
     pub blake3: String,
 }
 
@@ -1599,6 +1606,21 @@ fn canonicalize_payload_entries(
     path: &Path,
     is_skipping_git_dir: bool,
 ) -> Result<(Vec<SourceFileEntry>, u64), RunError> {
+    canonicalize_payload_entries_with_policy(path, is_skipping_git_dir, false)
+}
+
+fn canonicalize_fetch_payload_entries(
+    path: &Path,
+    is_skipping_git_dir: bool,
+) -> Result<(Vec<SourceFileEntry>, u64), RunError> {
+    canonicalize_payload_entries_with_policy(path, is_skipping_git_dir, true)
+}
+
+fn canonicalize_payload_entries_with_policy(
+    path: &Path,
+    is_skipping_git_dir: bool,
+    allow_large_file_chunks: bool,
+) -> Result<(Vec<SourceFileEntry>, u64), RunError> {
     let root = fs::canonicalize(path)
         .map_err(|err| RunError::Internal(format!("canonicalizing source path {}: {err}", path.display())))?;
     let metadata = fs::symlink_metadata(&root)
@@ -1617,8 +1639,10 @@ fn canonicalize_payload_entries(
         payload_bytes: 0,
         visited_nodes_len: 0,
     };
-    collect_source_entries(&relative_root, &root, is_skipping_git_dir, &mut collection)?;
-    collection.files.sort_by(|left, right| left.path.cmp(&right.path));
+    collect_source_entries(&relative_root, &root, is_skipping_git_dir, allow_large_file_chunks, &mut collection)?;
+    collection
+        .files
+        .sort_by(|left, right| left.path.cmp(&right.path).then(left.chunk_index.cmp(&right.chunk_index)));
     assert!(collection.files.len() <= MAX_SOURCE_FILES_PER_RECORD);
     assert!(collection.payload_bytes <= MAX_SOURCE_TOTAL_BYTES);
     Ok((collection.files, collection.payload_bytes))
@@ -1628,6 +1652,7 @@ fn collect_source_entries(
     root: &Path,
     current: &Path,
     is_skipping_git_dir: bool,
+    allow_large_file_chunks: bool,
     collection: &mut SourceEntryCollection,
 ) -> Result<(), RunError> {
     assert!(current.starts_with(root));
@@ -1652,8 +1677,10 @@ fn collect_source_entries(
             pending_paths.extend(children.into_iter().rev());
             continue;
         }
-        let file = source_file_entry(root, &next_path, &metadata)?;
-        append_source_file_entry(collection, file)?;
+        let files = source_file_entries(root, &next_path, &metadata, allow_large_file_chunks)?;
+        for file in files {
+            append_source_file_entry(collection, file)?;
+        }
     }
     Err(RunError::Internal(format!("source entry walk exceeds {MAX_SOURCE_FILES_PER_RECORD} nodes")))
 }
@@ -1696,15 +1723,20 @@ fn reserve_pending_source_paths(pending_paths: &mut Vec<PathBuf>, additional_len
     Ok(())
 }
 
-fn source_file_entry(root: &Path, current: &Path, metadata: &fs::Metadata) -> Result<SourceFileEntry, RunError> {
+fn source_file_entries(
+    root: &Path,
+    current: &Path,
+    metadata: &fs::Metadata,
+    allow_large_file_chunks: bool,
+) -> Result<Vec<SourceFileEntry>, RunError> {
     let relative = safe_relative_path(root, current)?;
     if metadata.file_type().is_symlink() {
-        return symlink_source_file_entry(current, relative);
+        return Ok(vec![symlink_source_file_entry(current, relative)?]);
     }
     if !metadata.is_file() {
         return Err(RunError::Internal(format!("unsupported source file kind at {}", current.display())));
     }
-    regular_source_file_entry(current, relative, metadata)
+    regular_source_file_entries(current, relative, metadata, allow_large_file_chunks)
 }
 
 fn symlink_source_file_entry(current: &Path, relative: String) -> Result<SourceFileEntry, RunError> {
@@ -1719,36 +1751,124 @@ fn symlink_source_file_entry(current: &Path, relative: String) -> Result<SourceF
         size: SYMLINK_PAYLOAD_BYTES,
         content_hex: None,
         symlink_target: Some(target_text),
+        chunk_index: None,
+        chunk_count: None,
         blake3: digest.to_hex().to_string(),
     })
 }
 
-fn regular_source_file_entry(
+fn regular_source_file_entries(
     current: &Path,
     relative: String,
     metadata: &fs::Metadata,
-) -> Result<SourceFileEntry, RunError> {
+    allow_large_file_chunks: bool,
+) -> Result<Vec<SourceFileEntry>, RunError> {
     assert!(metadata.is_file());
     assert!(!relative.is_empty());
     let size_bytes = metadata.len();
-    if size_bytes > MAX_SOURCE_FILE_BYTES {
+    if size_bytes <= MAX_SOURCE_FILE_BYTES {
+        let content = fs::read(current)
+            .map_err(|err| RunError::Internal(format!("reading source file {}: {err}", current.display())))?;
+        return Ok(vec![regular_source_file_entry_from_content(
+            relative,
+            is_executable(metadata),
+            content,
+            None,
+        )]);
+    }
+    if !allow_large_file_chunks {
         return Err(RunError::Internal(format!(
             "source file {} is {size_bytes} bytes, limit {MAX_SOURCE_FILE_BYTES}",
             current.display()
         )));
     }
-    let content = fs::read(current)
-        .map_err(|err| RunError::Internal(format!("reading source file {}: {err}", current.display())))?;
+    chunked_source_file_entries(current, relative, metadata, size_bytes)
+}
+
+fn regular_source_file_entry_from_content(
+    path: String,
+    executable: bool,
+    content: Vec<u8>,
+    chunk: Option<(u32, u32)>,
+) -> SourceFileEntry {
+    let size = u64::try_from(content.len()).expect("source chunk length fits in u64");
     let digest = blake3::hash(&content).to_hex().to_string();
-    Ok(SourceFileEntry {
-        path: relative,
+    let (chunk_index, chunk_count) = chunk.map_or((None, None), |(index, count)| (Some(index), Some(count)));
+    SourceFileEntry {
+        path,
         file_type: SourceFileType::Regular,
-        executable: is_executable(metadata),
-        size: size_bytes,
+        executable,
+        size,
         content_hex: Some(HEXLOWER.encode(&content)),
         symlink_target: None,
+        chunk_index,
+        chunk_count,
         blake3: digest,
-    })
+    }
+}
+
+fn source_file_chunk_sizes(size_bytes: u64, chunk_size_bytes_max: u64) -> Result<Vec<u64>, RunError> {
+    if size_bytes == 0 || chunk_size_bytes_max == 0 {
+        return Err(RunError::Internal("source file chunk sizes require positive inputs".to_string()));
+    }
+    let chunk_count = size_bytes
+        .checked_add(chunk_size_bytes_max - 1)
+        .ok_or_else(|| RunError::Internal("source file chunk count overflow".to_string()))?
+        / chunk_size_bytes_max;
+    let chunk_count_usize = usize::try_from(chunk_count)
+        .map_err(|_| RunError::Internal("source file chunk count does not fit in usize".to_string()))?;
+    if chunk_count_usize > MAX_SOURCE_FILES_PER_RECORD {
+        return Err(RunError::Internal(format!("source file chunk count exceeds {MAX_SOURCE_FILES_PER_RECORD}")));
+    }
+    let mut sizes = Vec::with_capacity(chunk_count_usize);
+    let mut remaining_bytes = size_bytes;
+    for _ in 0..chunk_count_usize {
+        let chunk_size = remaining_bytes.min(chunk_size_bytes_max);
+        sizes.push(chunk_size);
+        remaining_bytes = remaining_bytes.saturating_sub(chunk_size);
+    }
+    assert_eq!(remaining_bytes, 0);
+    Ok(sizes)
+}
+
+fn chunked_source_file_entries(
+    current: &Path,
+    relative: String,
+    metadata: &fs::Metadata,
+    size_bytes: u64,
+) -> Result<Vec<SourceFileEntry>, RunError> {
+    let chunk_sizes = source_file_chunk_sizes(size_bytes, MAX_SOURCE_FILE_BYTES)?;
+    let chunk_count = u32::try_from(chunk_sizes.len())
+        .map_err(|_| RunError::Internal(format!("source file chunk count overflow for {}", current.display())))?;
+    if chunk_count < MIN_SOURCE_FILE_CHUNK_COUNT {
+        return Err(RunError::Internal(format!("source file chunk count is invalid for {}", current.display())));
+    }
+    let mut input = fs::File::open(current)
+        .map_err(|err| RunError::Internal(format!("opening source file {}: {err}", current.display())))?;
+    let mut entries = Vec::with_capacity(chunk_sizes.len());
+    for (chunk_index, chunk_size) in chunk_sizes.into_iter().enumerate() {
+        let chunk_index = u32::try_from(chunk_index)
+            .map_err(|_| RunError::Internal(format!("source file chunk index overflow for {}", current.display())))?;
+        let mut content = vec![0; usize::try_from(chunk_size).expect("bounded source chunk size fits in usize")];
+        input
+            .read_exact(&mut content)
+            .map_err(|err| RunError::Internal(format!("reading source file chunk {}: {err}", current.display())))?;
+        entries.push(regular_source_file_entry_from_content(
+            relative.clone(),
+            is_executable(metadata),
+            content,
+            Some((chunk_index, chunk_count)),
+        ));
+    }
+    let mut trailing = [0u8; 1];
+    if input
+        .read(&mut trailing)
+        .map_err(|err| RunError::Internal(format!("checking source file end {}: {err}", current.display())))?
+        != 0
+    {
+        return Err(RunError::Internal(format!("source file {} grew during chunking", current.display())));
+    }
+    Ok(entries)
 }
 
 fn append_source_file_entry(collection: &mut SourceEntryCollection, file: SourceFileEntry) -> Result<(), RunError> {
@@ -2038,22 +2158,94 @@ fn validate_source_record(record: &SourceRecord) -> Result<(), RunError> {
 
 fn validate_source_record_files(record: &SourceRecord) -> Result<(), RunError> {
     let mut total_bytes = 0u64;
-    let mut case_folded_paths = BTreeSet::new();
+    let mut case_folded_paths = BTreeMap::<String, String>::new();
+    let mut previous_key: Option<(&str, Option<u32>)> = None;
     let requires_case_sensitive_paths = matches!(record.kind, SourceRecordKind::BootstrapArchive);
     for file in &record.files {
         validate_source_file_entry(file)?;
+        let current_key = (file.path.as_str(), file.chunk_index);
+        if previous_key.is_some_and(|previous| previous > current_key) {
+            return Err(RunError::Internal(format!(
+                "source record {} files are not in canonical order",
+                record.identity
+            )));
+        }
+        previous_key = Some(current_key);
         let case_key = file.path.to_lowercase();
-        let is_new_case_key = case_folded_paths.insert(case_key);
-        if !is_new_case_key && !requires_case_sensitive_paths {
-            return Err(RunError::Internal(format!("source record {} has a path case collision", record.identity)));
+        if let Some(first_path) = case_folded_paths.get(&case_key) {
+            let is_exact_path = first_path == &file.path;
+            if !is_exact_path && !requires_case_sensitive_paths {
+                return Err(RunError::Internal(format!("source record {} has a path case collision", record.identity)));
+            }
+        } else {
+            case_folded_paths.insert(case_key, file.path.clone());
         }
         total_bytes = total_bytes.checked_add(file.size).ok_or_else(|| {
             RunError::Internal(format!("source record {} payload byte count overflow", record.identity))
         })?;
     }
+    validate_source_file_chunk_sequences(record)?;
     validate_no_symlink_descendants(record)?;
     if total_bytes != record.payload_bytes {
         return Err(RunError::Internal(format!("source record {} payload byte count mismatch", record.identity)));
+    }
+    Ok(())
+}
+
+fn validate_source_file_chunk_sequences(record: &SourceRecord) -> Result<(), RunError> {
+    let mut group_start = 0usize;
+    while group_start < record.files.len() {
+        let path = record.files[group_start].path.as_str();
+        let mut group_end = group_start + 1;
+        while group_end < record.files.len() && record.files[group_end].path == path {
+            group_end += 1;
+        }
+        validate_source_file_chunk_group(record, &record.files[group_start..group_end])?;
+        group_start = group_end;
+    }
+    Ok(())
+}
+
+fn validate_source_file_chunk_group(record: &SourceRecord, files: &[SourceFileEntry]) -> Result<(), RunError> {
+    assert!(!files.is_empty());
+    let path = files[0].path.as_str();
+    if files.len() == 1 && files[0].chunk_index.is_none() && files[0].chunk_count.is_none() {
+        return Ok(());
+    }
+    let chunk_count = u32::try_from(files.len()).map_err(|_| {
+        RunError::Internal(format!("source record {} chunk count overflow for {path}", record.identity))
+    })?;
+    if chunk_count < MIN_SOURCE_FILE_CHUNK_COUNT {
+        return Err(RunError::Internal(format!(
+            "source record {} has invalid chunk count for {path}",
+            record.identity
+        )));
+    }
+    let executable = files[0].executable;
+    let mut logical_size_bytes = 0u64;
+    for (expected_index, file) in files.iter().enumerate() {
+        let expected_index = u32::try_from(expected_index).map_err(|_| {
+            RunError::Internal(format!("source record {} chunk index overflow for {path}", record.identity))
+        })?;
+        let is_final_chunk = expected_index.checked_add(1) == Some(chunk_count);
+        let invalid_chunk_size = file.size == 0 || (!is_final_chunk && file.size != MAX_SOURCE_FILE_BYTES);
+        if file.file_type != SourceFileType::Regular
+            || file.chunk_index != Some(expected_index)
+            || file.chunk_count != Some(chunk_count)
+            || file.executable != executable
+            || invalid_chunk_size
+        {
+            return Err(RunError::Internal(format!(
+                "source record {} has a non-canonical chunk sequence for {path}",
+                record.identity
+            )));
+        }
+        logical_size_bytes = logical_size_bytes.checked_add(file.size).ok_or_else(|| {
+            RunError::Internal(format!("source record {} chunk size overflow for {path}", record.identity))
+        })?;
+    }
+    if logical_size_bytes <= MAX_SOURCE_FILE_BYTES {
+        return Err(RunError::Internal(format!("source record {} has unnecessary chunks for {path}", record.identity)));
     }
     Ok(())
 }
@@ -2102,6 +2294,15 @@ fn validate_regular_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
     if file.symlink_target.is_some() {
         return Err(RunError::Internal(format!("regular source file {} carries a symlink target", file.path)));
     }
+    if file.size > MAX_SOURCE_FILE_BYTES {
+        return Err(RunError::Internal(format!(
+            "regular source file entry {} exceeds {MAX_SOURCE_FILE_BYTES} bytes",
+            file.path
+        )));
+    }
+    if file.chunk_index.is_some() != file.chunk_count.is_some() {
+        return Err(RunError::Internal(format!("regular source file {} has incomplete chunk metadata", file.path)));
+    }
     let content = decode_regular_file_content(file)?;
     let content_len = u64::try_from(content.len())
         .map_err(|_| RunError::Internal(format!("regular source file {} length does not fit in u64", file.path)))?;
@@ -2126,6 +2327,9 @@ fn decode_regular_file_content(file: &SourceFileEntry) -> Result<Vec<u8>, RunErr
 }
 
 fn validate_symlink_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
+    if file.chunk_index.is_some() || file.chunk_count.is_some() {
+        return Err(RunError::Internal(format!("symlink source file {} carries chunk metadata", file.path)));
+    }
     if file.content_hex.is_some() {
         return Err(RunError::Internal(format!("symlink source file {} carries payload bytes", file.path)));
     }
@@ -2761,20 +2965,45 @@ fn materialize_source_record_for_fetch_override(
 
 fn materialize_flat_fetch_record_payload(record: &SourceRecord, payload_path: &Path) -> Result<(), RunError> {
     validate_source_record(record)?;
+    if record.files.is_empty() {
+        return Err(RunError::Internal(format!("flat source record {} has no file payload", record.identity)));
+    }
+    let path = record.files[0].path.as_str();
+    if record.files.iter().any(|file| file.path != path || file.file_type != SourceFileType::Regular) {
+        return Err(RunError::Internal(format!(
+            "flat source record {} must contain exactly one logical regular file payload",
+            record.identity
+        )));
+    }
+    if record.files[0].chunk_index.is_some() {
+        return materialize_chunked_regular_file_entries_at_path(&record.files, payload_path);
+    }
     if record.files.len() != 1 {
         return Err(RunError::Internal(format!(
             "flat source record {} must contain exactly one file payload",
             record.identity
         )));
     }
-    let file = &record.files[0];
-    if file.file_type != SourceFileType::Regular {
-        return Err(RunError::Internal(format!(
-            "flat source record {} must contain a regular file payload",
-            record.identity
-        )));
+    materialize_regular_file_entry(&record.files[0], payload_path)
+}
+
+fn materialize_chunked_regular_file_entries_at_path(
+    files: &[SourceFileEntry],
+    output_path: &Path,
+) -> Result<(), RunError> {
+    assert!(files.len() >= usize::try_from(MIN_SOURCE_FILE_CHUNK_COUNT).expect("chunk count fits in usize"));
+    let mut output = fs::File::create(output_path)
+        .map_err(|err| RunError::Internal(format!("creating chunked source file {}: {err}", output_path.display())))?;
+    for file in files {
+        let content = decode_regular_file_content(file)?;
+        output.write_all(&content).map_err(|err| {
+            RunError::Internal(format!("writing chunked source file {}: {err}", output_path.display()))
+        })?;
     }
-    materialize_regular_file_entry(file, payload_path)
+    output
+        .flush()
+        .map_err(|err| RunError::Internal(format!("flushing chunked source file {}: {err}", output_path.display())))?;
+    set_materialized_file_permissions(output_path, files[0].executable)
 }
 
 fn materialize_export_records(
@@ -3131,7 +3360,11 @@ pub(crate) fn materialize_source_record_from_path(
     payload_path: &Path,
     is_skipping_git_dir: bool,
 ) -> Result<SourceRecord, RunError> {
-    let (files, payload_bytes) = canonicalize_payload_entries(payload_path, is_skipping_git_dir)?;
+    let (files, payload_bytes) = if source_record_is_fetcher_input(record) {
+        canonicalize_fetch_payload_entries(payload_path, is_skipping_git_dir)?
+    } else {
+        canonicalize_payload_entries(payload_path, is_skipping_git_dir)?
+    };
     let content_blake3 = digest_source_record_content(&record.kind, &record.metadata, &files)?;
     Ok(SourceRecord {
         payload_bytes,
@@ -3178,9 +3411,7 @@ fn materialize_source_record_payload(record: &SourceRecord, target: &Path) -> Re
     }
     fs::create_dir_all(target)
         .map_err(|err| RunError::Internal(format!("creating materialized source root {}: {err}", target.display())))?;
-    for file in &record.files {
-        materialize_source_file_entry(file, target)?;
-    }
+    materialize_source_record_files(record, target)?;
     let observed = materialize_source_record_from_path(record, target, false)?;
     if observed.files != record.files || observed.content_blake3 != record.content_blake3 {
         return Err(RunError::Internal(format!(
@@ -3193,8 +3424,26 @@ fn materialize_source_record_payload(record: &SourceRecord, target: &Path) -> Re
     Ok(())
 }
 
-fn materialize_source_file_entry(file: &SourceFileEntry, target: &Path) -> Result<(), RunError> {
-    validate_source_file_entry(file)?;
+fn materialize_source_record_files(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
+    let mut group_start = 0usize;
+    while group_start < record.files.len() {
+        let path = record.files[group_start].path.as_str();
+        let mut group_end = group_start + 1;
+        while group_end < record.files.len() && record.files[group_end].path == path {
+            group_end += 1;
+        }
+        let files = &record.files[group_start..group_end];
+        if files[0].chunk_index.is_some() {
+            materialize_chunked_regular_file_entries(files, target)?;
+        } else {
+            materialize_source_file_entry(&files[0], target)?;
+        }
+        group_start = group_end;
+    }
+    Ok(())
+}
+
+fn prepare_source_output_path(file: &SourceFileEntry, target: &Path) -> Result<PathBuf, RunError> {
     let output_path = target.join(&file.path);
     if !output_path.starts_with(target) {
         return Err(RunError::Internal(format!("source file {} escapes materialization root", file.path)));
@@ -3203,10 +3452,26 @@ fn materialize_source_file_entry(file: &SourceFileEntry, target: &Path) -> Resul
         fs::create_dir_all(parent)
             .map_err(|err| RunError::Internal(format!("creating source payload dir {}: {err}", parent.display())))?;
     }
+    Ok(output_path)
+}
+
+fn materialize_source_file_entry(file: &SourceFileEntry, target: &Path) -> Result<(), RunError> {
+    validate_source_file_entry(file)?;
+    if file.chunk_index.is_some() {
+        return Err(RunError::Internal(format!("source file chunk {} requires grouped materialization", file.path)));
+    }
+    let output_path = prepare_source_output_path(file, target)?;
     match file.file_type {
         SourceFileType::Regular => materialize_regular_file_entry(file, &output_path),
         SourceFileType::Symlink => materialize_symlink_file_entry(file, &output_path),
     }
+}
+
+fn materialize_chunked_regular_file_entries(files: &[SourceFileEntry], target: &Path) -> Result<(), RunError> {
+    assert!(files.len() >= usize::try_from(MIN_SOURCE_FILE_CHUNK_COUNT).expect("chunk count fits in usize"));
+    assert!(files.iter().all(|file| file.path == files[0].path));
+    let output_path = prepare_source_output_path(&files[0], target)?;
+    materialize_chunked_regular_file_entries_at_path(files, &output_path)
 }
 
 fn materialize_regular_file_entry(file: &SourceFileEntry, output_path: &Path) -> Result<(), RunError> {
@@ -3959,7 +4224,11 @@ mod tests {
         payload_path: &Path,
         skip_git_dir: bool,
     ) -> SourceRecord {
-        let (files, payload_bytes) = canonicalize_payload_entries(payload_path, skip_git_dir).unwrap();
+        let (files, payload_bytes) = if source_record_is_fetcher_input(record) {
+            canonicalize_fetch_payload_entries(payload_path, skip_git_dir).unwrap()
+        } else {
+            canonicalize_payload_entries(payload_path, skip_git_dir).unwrap()
+        };
         let content_blake3 = digest_source_record_content(&record.kind, &record.metadata, &files).unwrap();
         SourceRecord {
             payload_bytes,
@@ -4183,8 +4452,7 @@ mod tests {
 
     #[test]
     fn exact_legacy_provider_fetch_is_a_case_sensitive_override_input() {
-        let mut derivation =
-            fixed_fetcher("legacy-provider", crate::bootstrap_source_root::LEGACY_MUSL_CC_URL);
+        let mut derivation = fixed_fetcher("legacy-provider", crate::bootstrap_source_root::LEGACY_MUSL_CC_URL);
         derivation.env.insert(FETCH_ENV_UNPACK_KEY.to_string(), "1".to_string());
         derivation.fixed_output = Some(crunch_glue::FixedOutput {
             hash: crate::bootstrap_source_root::LEGACY_MUSL_CC_HASH.to_string(),
@@ -4194,9 +4462,7 @@ mod tests {
 
         let record = fixed_fetcher_source_record(&derivation).unwrap().unwrap();
         let mut wrong_hash_record = record.clone();
-        wrong_hash_record
-            .metadata
-            .insert(RECORD_METADATA_HASH_KEY.to_string(), "sha256-wrong".to_string());
+        wrong_hash_record.metadata.insert(RECORD_METADATA_HASH_KEY.to_string(), "sha256-wrong".to_string());
 
         assert_eq!(record.kind, SourceRecordKind::BootstrapArchive);
         assert!(source_record_is_fetcher_input(&record));
@@ -4243,6 +4509,34 @@ mod tests {
 
         assert!(error.to_string().contains("limit"));
         assert!(error.to_string().contains(&MAX_SOURCE_FILE_BYTES.to_string()));
+    }
+
+    #[test]
+    fn source_file_chunk_layout_is_bounded_exact_and_has_no_empty_tail() {
+        const TEST_CHUNK_SIZE_BYTES_MAX: u64 = 8;
+        const TEST_CHUNK_COUNT: u64 = 2;
+        let exact_size_bytes = TEST_CHUNK_SIZE_BYTES_MAX.checked_mul(TEST_CHUNK_COUNT).unwrap();
+        let partial_size_bytes = exact_size_bytes.checked_add(1).unwrap();
+
+        let partial_tail = source_file_chunk_sizes(partial_size_bytes, TEST_CHUNK_SIZE_BYTES_MAX).unwrap();
+        let exact_tail = source_file_chunk_sizes(exact_size_bytes, TEST_CHUNK_SIZE_BYTES_MAX).unwrap();
+
+        assert_eq!(partial_tail, vec![TEST_CHUNK_SIZE_BYTES_MAX, TEST_CHUNK_SIZE_BYTES_MAX, 1]);
+        assert_eq!(exact_tail, vec![TEST_CHUNK_SIZE_BYTES_MAX, TEST_CHUNK_SIZE_BYTES_MAX]);
+        assert!(partial_tail.iter().all(|size| *size <= TEST_CHUNK_SIZE_BYTES_MAX));
+        assert!(exact_tail.iter().all(|size| *size > 0));
+    }
+
+    #[test]
+    fn source_file_chunk_layout_rejects_zero_and_excessive_counts() {
+        let error_zero_size = source_file_chunk_sizes(0, MAX_SOURCE_FILE_BYTES).unwrap_err();
+        let error_zero_bound = source_file_chunk_sizes(1, 0).unwrap_err();
+        let excessive_size = u64::try_from(MAX_SOURCE_FILES_PER_RECORD).unwrap().checked_add(1).unwrap();
+        let error_excessive_count = source_file_chunk_sizes(excessive_size, 1).unwrap_err();
+
+        assert!(error_zero_size.to_string().contains("positive inputs"));
+        assert!(error_zero_bound.to_string().contains("positive inputs"));
+        assert!(error_excessive_count.to_string().contains("chunk count exceeds"));
     }
 
     #[test]
@@ -5414,6 +5708,8 @@ mod tests {
             size: u64::try_from(content.len()).unwrap(),
             content_hex: Some(HEXLOWER.encode(content)),
             symlink_target: None,
+            chunk_index: None,
+            chunk_count: None,
             blake3: blake3::hash(content).to_hex().to_string(),
         };
         let symlink = SourceFileEntry {
@@ -5423,6 +5719,8 @@ mod tests {
             size: SYMLINK_PAYLOAD_BYTES,
             content_hex: None,
             symlink_target: Some("safe-target".to_string()),
+            chunk_index: None,
+            chunk_count: None,
             blake3: blake3::hash(b"symlink\0link\0safe-target").to_hex().to_string(),
         };
         let files = vec![symlink, regular];
