@@ -96,6 +96,7 @@ const RECORD_METADATA_HASH_ALGO_KEY: &str = "hash_algo";
 const RECORD_METADATA_HASH_KEY: &str = "hash";
 const RECORD_METADATA_HASH_MODE_KEY: &str = "hash_mode";
 const RECORD_METADATA_NAME_KEY: &str = "name";
+const RECORD_METADATA_PAYLOAD_ENCODING_KEY: &str = "payload_encoding";
 const RECORD_METADATA_SOURCE_KIND_KEY: &str = "source_kind";
 const RECORD_METADATA_STORE_PATH_KEY: &str = "store_path";
 const RECORD_METADATA_URL_KEY: &str = "url";
@@ -103,6 +104,7 @@ const RECORD_METADATA_PROFILE_MODE_KEY: &str = "bootstrap_profile_mode";
 const RECORD_METADATA_PROFILE_CLASS_KEY: &str = "bootstrap_profile_class";
 const RECORD_METADATA_PROVIDER_KIND_KEY: &str = "provider_kind";
 const RECORD_METADATA_PROVIDER_SCHEMA_KEY: &str = "provider_schema_version";
+const TARBALL_ARCHIVE_PAYLOAD_ENCODING: &str = "tarball-archive-v1";
 
 const BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED: &str = "musl.cc-native-reduced-v1";
 const BOOTSTRAP_PROVIDER_KIND_SOURCE_ROOT: &str = "source-root-v1";
@@ -2141,6 +2143,7 @@ fn reject_duplicate_records(records: &[SourceRecord]) -> Result<(), RunError> {
 fn validate_source_record(record: &SourceRecord) -> Result<(), RunError> {
     validate_identity(&record.identity)?;
     validate_adapter_metadata(record.adapter.as_ref())?;
+    validate_source_record_payload_encoding(record)?;
     let rendered_metadata = serde_json::to_vec(&record.metadata)
         .map_err(|err| RunError::Internal(format!("serializing source metadata: {err}")))?;
     if rendered_metadata.len() > MAX_SOURCE_RECORD_METADATA_BYTES {
@@ -2154,6 +2157,30 @@ fn validate_source_record(record: &SourceRecord) -> Result<(), RunError> {
         return Err(RunError::Internal(format!("source record {} content digest mismatch", record.identity)));
     }
     Ok(())
+}
+
+fn validate_source_record_payload_encoding(record: &SourceRecord) -> Result<(), RunError> {
+    let Some(encoding) = record.metadata.get(RECORD_METADATA_PAYLOAD_ENCODING_KEY) else {
+        return Ok(());
+    };
+    if encoding != TARBALL_ARCHIVE_PAYLOAD_ENCODING {
+        return Err(RunError::Internal(format!("source record {} has unsupported payload encoding", record.identity)));
+    }
+    let is_tarball_fetch = matches!(record.kind, SourceRecordKind::FixedUrl | SourceRecordKind::BootstrapArchive)
+        && record.metadata.get(FETCH_ENV_UNPACK_KEY).map(String::as_str) == Some("1")
+        && record.metadata.contains_key(RECORD_METADATA_URL_KEY);
+    if !is_tarball_fetch {
+        return Err(RunError::Internal(format!(
+            "source record {} uses tarball archive encoding outside a tarball fetch",
+            record.identity
+        )));
+    }
+    Ok(())
+}
+
+fn source_record_uses_tarball_archive_payload(record: &SourceRecord) -> bool {
+    record.metadata.get(RECORD_METADATA_PAYLOAD_ENCODING_KEY).map(String::as_str)
+        == Some(TARBALL_ARCHIVE_PAYLOAD_ENCODING)
 }
 
 fn validate_source_record_files(record: &SourceRecord) -> Result<(), RunError> {
@@ -2957,10 +2984,28 @@ fn materialize_source_record_for_fetch_override(
         crunch_build::FetchSourceOverrideKind::File | crunch_build::FetchSourceOverrideKind::Executable => {
             materialize_flat_fetch_record_payload(record, payload_path)
         }
+        crunch_build::FetchSourceOverrideKind::Tarball if source_record_uses_tarball_archive_payload(record) => {
+            materialize_tarball_archive_fetch_record(record, payload_path)
+        }
         crunch_build::FetchSourceOverrideKind::Tarball | crunch_build::FetchSourceOverrideKind::Git => {
             materialize_source_record_payload(record, payload_path)
         }
     }
+}
+
+fn materialize_tarball_archive_fetch_record(record: &SourceRecord, payload_path: &Path) -> Result<(), RunError> {
+    validate_source_record(record)?;
+    let url = record
+        .metadata
+        .get(RECORD_METADATA_URL_KEY)
+        .ok_or_else(|| RunError::Internal(format!("source record {} is missing URL", record.identity)))?;
+    let archive_path = payload_path.with_extension("source-archive");
+    materialize_flat_fetch_record_payload(record, &archive_path)?;
+    let payload_text = payload_path
+        .to_str()
+        .ok_or_else(|| RunError::Internal("offline tarball output path is not UTF-8".to_string()))?;
+    crunch_build::fetcher::unpack_archive_file(url, &archive_path, payload_text)
+        .map_err(|error| RunError::Internal(format!("unpacking offline source archive {}: {error}", record.identity)))
 }
 
 fn materialize_flat_fetch_record_payload(record: &SourceRecord, payload_path: &Path) -> Result<(), RunError> {
@@ -3064,11 +3109,14 @@ fn verify_imported_record_fixed_output(expected: &SourceRecord, stored: &SourceR
 
 fn fetch_and_materialize_source_record(record: &SourceRecord) -> Result<SourceRecord, RunError> {
     let expected_hash = expected_source_record_hash(record)?;
-    let fetch = fetch_from_source_record(record, &expected_hash)?;
     let scratch = tempfile::Builder::new()
         .prefix("mantle-source-connected-fetch-")
         .tempdir()
         .map_err(|error| RunError::Internal(format!("creating connected source fetch scratch: {error}")))?;
+    if source_record_uses_tarball_archive_payload(record) {
+        return capture_tarball_archive_source_record(record, &expected_hash, scratch.path());
+    }
+    let fetch = fetch_from_source_record(record, &expected_hash)?;
     let output = scratch.path().join("output");
     let output_text = output
         .to_str()
@@ -3077,6 +3125,32 @@ fn fetch_and_materialize_source_record(record: &SourceRecord) -> Result<SourceRe
         .map_err(|error| RunError::Internal(format!("capturing source record {}: {error}", record.identity)))?;
     verify_captured_source_record(record, &output, &expected_hash)?;
     materialize_source_record_from_path(record, &output, record.kind == SourceRecordKind::VcsSnapshot)
+}
+
+fn capture_tarball_archive_source_record(
+    record: &SourceRecord,
+    expected_hash: &NixHash,
+    scratch: &Path,
+) -> Result<SourceRecord, RunError> {
+    let url = record
+        .metadata
+        .get(RECORD_METADATA_URL_KEY)
+        .ok_or_else(|| RunError::Internal(format!("source record {} is missing URL", record.identity)))?;
+    let archive = scratch.join("archive");
+    let output = scratch.join("output");
+    let archive_text = archive
+        .to_str()
+        .ok_or_else(|| RunError::Internal("connected source archive path is not UTF-8".to_string()))?;
+    let output_text = output
+        .to_str()
+        .ok_or_else(|| RunError::Internal("connected source output path is not UTF-8".to_string()))?;
+    crunch_build::fetcher::fetch_raw_to_file(url, archive_text)
+        .map_err(|error| RunError::Internal(format!("capturing source archive {}: {error}", record.identity)))?;
+    crunch_build::fetcher::unpack_archive_file(url, &archive, output_text).map_err(|error| {
+        RunError::Internal(format!("unpacking captured source archive {}: {error}", record.identity))
+    })?;
+    verify_captured_source_record(record, &output, expected_hash)?;
+    materialize_source_record_from_path(record, &archive, false)
 }
 
 fn expected_source_record_hash(record: &SourceRecord) -> Result<NixHash, RunError> {
@@ -3629,6 +3703,9 @@ fn fixed_fetcher_source_record(derivation: &crunch_glue::CrunchDerivation) -> Re
     copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_REV_KEY);
     copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_TYPE_KEY);
     copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_UNPACK_KEY);
+    if metadata.get(FETCH_ENV_UNPACK_KEY).map(String::as_str) == Some("1") {
+        metadata.insert(RECORD_METADATA_PAYLOAD_ENCODING_KEY.to_string(), TARBALL_ARCHIVE_PAYLOAD_ENCODING.to_string());
+    }
     assert_eq!(metadata.get(RECORD_METADATA_URL_KEY), Some(url));
     let kind = if derivation.env.get(FETCH_ENV_TYPE_KEY).map(String::as_str) == Some(FETCH_ENV_TYPE_GIT) {
         SourceRecordKind::VcsSnapshot
@@ -4161,6 +4238,13 @@ mod tests {
     fn write_fixture(root: &Path) {
         fs::create_dir_all(root.join("src")).unwrap();
         fs::write(root.join("src/main.txt"), b"hello").unwrap();
+    }
+
+    fn write_test_tar_archive(source: &Path, archive: &Path) {
+        let file = fs::File::create(archive).unwrap();
+        let mut builder = tar::Builder::new(file);
+        builder.append_dir_all("source", source).unwrap();
+        builder.finish().unwrap();
     }
 
     fn fixed_fetcher(name: &str, url: &str) -> crunch_glue::CrunchDerivation {
@@ -5549,10 +5633,12 @@ mod tests {
     fn source_fetch_override_plan_materializes_tarball_and_vcs_payloads() {
         let temp = tempfile::tempdir().unwrap();
         let tar_payload = temp.path().join("tar-payload");
+        let tar_archive = temp.path().join("source.tar");
         let vcs_payload = temp.path().join("vcs-payload");
         write_fixture(&tar_payload);
+        write_test_tar_archive(&tar_payload, &tar_archive);
         write_fixture(&vcs_payload);
-        let mut tarball = fixed_fetcher("tar-src", "https://example.invalid/source.tar.gz");
+        let mut tarball = fixed_fetcher("tar-src", "https://example.invalid/source.tar");
         tarball.env.insert(FETCH_ENV_UNPACK_KEY.to_string(), "1".to_string());
         let mut vcs = fixed_fetcher("repo-src", "https://example.invalid/repo.git");
         vcs.env.insert(FETCH_ENV_TYPE_KEY.to_string(), FETCH_ENV_TYPE_GIT.to_string());
@@ -5567,7 +5653,7 @@ mod tests {
         let tar_record = planned.records.iter().find(|record| record.kind == SourceRecordKind::FixedUrl).unwrap();
         let vcs_record = planned.records.iter().find(|record| record.kind == SourceRecordKind::VcsSnapshot).unwrap();
         let imported = vec![
-            materialized_record_from_payload(tar_record, &tar_payload, false),
+            materialized_record_from_payload(tar_record, &tar_archive, false),
             materialized_record_from_payload(vcs_record, &vcs_payload, true),
         ];
         let state_dir = temp.path().join("state");

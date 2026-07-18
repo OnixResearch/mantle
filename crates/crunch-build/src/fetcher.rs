@@ -385,6 +385,12 @@ struct FetchOnceRequest<'a> {
     out: &'a str,
 }
 
+/// Download acquisition bytes without interpreting their archive format.
+#[allow(tigerstyle::ambiguous_params)] // url vs filesystem output path: distinct domains
+pub fn fetch_raw_to_file(url: &str, out: &str) -> Result<(), FetchError> {
+    fetch_flat(url, out)
+}
+
 fn fetch_flat_once(request: FetchOnceRequest<'_>) -> Result<(), FetchError> {
     let reader: Box<dyn Read + Send> = open_url_reader(request.url)?;
     let mut bounded_reader = reader.take(MAX_DOWNLOAD_BYTES);
@@ -414,6 +420,16 @@ fn fetch_and_unpack_once(request: FetchOnceRequest<'_>) -> Result<(), FetchError
     let decompressed = decompress_reader(request.url, reader)?;
     extract_tar(decompressed, request.out)?;
     Ok(())
+}
+
+/// Unpack already-acquired archive bytes using the same bounded extractor as a live fetch.
+#[allow(tigerstyle::ambiguous_params)] // url identity, archive input, and output path are distinct domains
+pub fn unpack_archive_file(url: &str, archive_path: &Path, out: &str) -> Result<(), FetchError> {
+    assert!(!url.is_empty(), "archive URL identity must not be empty");
+    assert!(!archive_path.as_os_str().is_empty(), "archive path must not be empty");
+    let reader = std::fs::File::open(archive_path)?;
+    let decompressed = decompress_reader(url, reader)?;
+    extract_tar(decompressed, out)
 }
 
 fn fetch_with_retry<F, S>(mut operation: F, mut sleep_ms: S) -> Result<(), FetchError>
@@ -2122,6 +2138,35 @@ mod tests {
         let resolved = resolve_relative_within_root(Path::new("sub"), Path::new("../real.txt"), "probe").unwrap();
 
         assert_eq!(resolved, PathBuf::from("real.txt"));
+    }
+
+    #[test]
+    fn unpack_archive_file_replays_acquired_tar_bytes() {
+        const ARCHIVE_URL: &str = "https://example.invalid/source.tar";
+        let tar_data = build_raw_tar(&[RawTarEntry::file("source/payload.txt", b"payload")]);
+        let tmp = tempfile::tempdir().unwrap();
+        let archive = tmp.path().join("source.tar");
+        let out = tmp.path().join("out");
+        std::fs::write(&archive, tar_data).unwrap();
+
+        unpack_archive_file(ARCHIVE_URL, &archive, out.to_str().unwrap()).unwrap();
+
+        assert_eq!(std::fs::read(out.join("payload.txt")).unwrap(), b"payload");
+        assert!(archive.is_file());
+    }
+
+    #[test]
+    fn unpack_archive_file_rejects_malformed_acquisition_bytes() {
+        const ARCHIVE_URL: &str = "https://example.invalid/source.tar";
+        let tmp = tempfile::tempdir().unwrap();
+        let archive = tmp.path().join("source.tar");
+        let out = tmp.path().join("out");
+        std::fs::write(&archive, b"not a tar archive").unwrap();
+
+        let error = unpack_archive_file(ARCHIVE_URL, &archive, out.to_str().unwrap()).unwrap_err();
+
+        assert!(matches!(error, FetchError::TarError(_)));
+        assert!(!out.join("payload.txt").exists());
     }
 
     #[test]
