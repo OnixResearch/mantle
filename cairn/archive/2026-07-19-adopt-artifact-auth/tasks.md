@@ -12,4 +12,4 @@
 ## Phase 3: Verification
 
 - [x] [parallel] V1 Add positive tests for valid OCI pair binding, distinct full-key threshold, required labels, and bounded non-claims plus negative tests for wrong OCI digest/domain/purpose, duplicate-label inflation, revoked/unknown keys, malformed signatures, registry/repository authority promotion, and weakened non-claims. r[mantle.artifact_auth_adoption.authority] r[mantle.artifact_auth_adoption.cutover]
-- [ ] [serial] V2 Run focused signature/action-result tests, exact-source checks, first-party quality, Tiger Style, Cargo/Nix builds, lifecycle validation/gates, accepted-spec sync, and archive with exact bounded evidence. r[mantle.artifact_auth_adoption.source] r[mantle.artifact_auth_adoption.cutover]
+- [x] [serial] V2 Run focused signature/action-result tests, exact-source checks, first-party quality, Tiger Style, Cargo/Nix builds, lifecycle validation/gates, accepted-spec sync, and archive with exact bounded evidence. r[mantle.artifact_auth_adoption.source] r[mantle.artifact_auth_adoption.cutover]
