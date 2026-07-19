@@ -25,6 +25,10 @@
       url = "github:OnixResearch/nickel-export/257fafc1c746f1faf156207043a4c826bfb16d49";
       flake = false;
     };
+    artifactAuthSource = {
+      url = "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa";
+      flake = false;
+    };
     octet.url = "github:OnixResearch/octet/86ee46b3b9257b145d2dbeb6ce9d9897607db99c";
   };
 
@@ -39,6 +43,7 @@
       tigerstyle,
       wasi-virt,
       nickelExportCore,
+      artifactAuthSource,
       octet,
       ...
     }:
@@ -78,6 +83,25 @@
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
         cargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+        artifactAuthRevision = "799459346d5416fbd7b9f55840a7371441b55afa";
+        artifactAuthCargoDependency =
+          (builtins.fromTOML (builtins.readFile ./crates/crunch-action-result-core/Cargo.toml)).dependencies.artifact-auth-core;
+        artifactAuthLockPackages = builtins.filter (
+          package: package.name == "artifact-auth-core"
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        artifactAuthExpectedLockSource =
+          "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=${artifactAuthRevision}#${artifactAuthRevision}";
+        artifactAuthWorkspace = builtins.fromTOML (builtins.readFile (artifactAuthSource + "/Cargo.toml"));
+        artifactAuthSourceAdmitted =
+          assert pkgs.lib.assertMsg (
+            artifactAuthCargoDependency.git == "ssh://git@github.com/OnixResearch/artifact-auth.git"
+            && artifactAuthCargoDependency.rev == artifactAuthRevision
+            && artifactAuthSource.rev == artifactAuthRevision
+            && builtins.length artifactAuthLockPackages == 1
+            && (builtins.head artifactAuthLockPackages).source == artifactAuthExpectedLockSource
+            && artifactAuthWorkspace.workspace.package.license == "MIT OR Apache-2.0"
+          ) "Mantle artifact-auth Cargo/Nix source identity, uniqueness, or license drifted";
+          true;
         nickelExportCoreRevision = "257fafc1c746f1faf156207043a4c826bfb16d49";
         nickelExportCoreSource =
           assert pkgs.lib.assertMsg (
@@ -145,6 +169,19 @@
               || pkgs.lib.hasPrefix "${toString ./scripts}/" pathString
               || pkgs.lib.hasPrefix "${toString ./openspec}/" pathString
             );
+        };
+
+        artifactAuthCargoVendorDir = craneLib.vendorCargoDeps {
+          inherit src;
+          cargoLock = ./Cargo.lock;
+          overrideVendorGitCheckout =
+            packages: checkout:
+            if artifactAuthSourceAdmitted && builtins.any (package: package.name == "artifact-auth-core") packages then
+              checkout.overrideAttrs (_old: {
+                src = artifactAuthSource;
+              })
+            else
+              checkout;
         };
 
         # Common build inputs
@@ -574,6 +611,7 @@
         # Build just the cargo dependencies for caching
         cargoArtifacts = craneLib.buildDepsOnly {
           inherit src nativeBuildInputs buildInputs;
+          cargoVendorDir = artifactAuthCargoVendorDir;
         };
 
         # Build the actual package
@@ -584,6 +622,7 @@
             nativeBuildInputs
             buildInputs
             ;
+          cargoVendorDir = artifactAuthCargoVendorDir;
           SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
           GIT = "${pkgs.git}/bin/git";
           SSL_CERT_FILE = caCertificateBundlePath;

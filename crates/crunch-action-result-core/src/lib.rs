@@ -6,6 +6,8 @@
 //! access. Shells supply verified facts; the core canonicalizes immutable
 //! records and decides whether strong reuse is admissible.
 
+pub mod artifact_auth;
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
