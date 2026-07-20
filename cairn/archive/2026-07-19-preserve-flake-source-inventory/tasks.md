@@ -7,4 +7,4 @@
 ## Phase 2: Verification
 
 - [x] [parallel] V1 Run focused host tests, rustfmt, strict first-party Clippy, and Tiger Style without touching unrelated bootstrap work. r[mantle.flake_source_inventory.self_description]
-- [ ] [serial] V2 Run the clean-commit Nix `nextest` and full flake checks, Cairn validation/gates, accepted-spec sync, and archive with bounded evidence. r[mantle.flake_source_inventory.self_description]
+- [x] [serial] V2 Run the clean-commit Nix `nextest` and full flake checks, Cairn validation/gates, accepted-spec sync, and archive with bounded evidence. r[mantle.flake_source_inventory.self_description]

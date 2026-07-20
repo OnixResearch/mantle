@@ -9,3 +9,5 @@ The working tree also contains independent `promote-full-source-seed-provider` f
 ## Focused result
 
 The shared filter now admits only the exact `flake.nix` path in addition to its prior inventory. The focused test requires positive flake self-description and negative exact/prefix Git-metadata exclusions. Focused host execution, package rustfmt, strict first-party Clippy, and the repository Tiger Style rail pass. No Cargo/Nix dependency or lock changed.
+
+Clean task commit `2565e836` passes `checks.x86_64-linux.nextest`, advancing through the former 263-test failure and completing the full partition. Full `nix flake check` against the same immutable local Git revision also passes on `x86_64-linux`. This validates only filtered-source completeness and repository checks; it does not claim bootstrap/source-seed correctness or include the unrelated dirty worktree.
