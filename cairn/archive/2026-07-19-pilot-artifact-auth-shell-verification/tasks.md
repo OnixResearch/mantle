@@ -8,5 +8,5 @@
 ## Phase 2: Verification and readiness
 
 - [x] [parallel] V1 Run focused rustfmt, core/shell tests, strict Clippy, Tiger Style, and an advisory adversarial review; fix deterministic findings. r[mantle.artifact_auth_shell.adversarial]
-- [ ] [serial] V2 Run full workspace, Nix, and native Cairn gates from the isolated worktree, then sync and archive accepted evidence. r[mantle.artifact_auth_shell.evidence]
-- [ ] [serial] V3 Compare immutable Molten, Valence, and Mantle evidence, evaluate authority admission, and create an admission change only if every operational prerequisite is proved. r[mantle.artifact_auth_shell.authority]
+- [x] [serial] V2 Run full workspace, Nix, and native Cairn gates from the isolated worktree, then sync and archive accepted evidence. r[mantle.artifact_auth_shell.evidence]
+- [x] [serial] V3 Compare immutable Molten, Valence, and Mantle evidence, evaluate authority admission, and create an admission change only if every operational prerequisite is proved. r[mantle.artifact_auth_shell.authority]
