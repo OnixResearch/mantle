@@ -8,4 +8,4 @@
 ## Phase 2: Validation
 
 - [x] [parallel] V1 Run focused tests, rustfmt, strict first-party Clippy, and Tiger Style. r[mantle.artifact_auth_operational_receipt.replay]
-- [ ] [serial] V2 Run full workspace, Cairn, and Nix gates; sync and archive accepted requirements. r[mantle.artifact_auth_operational_receipt.authority]
+- [x] [serial] V2 Run full workspace, Cairn, and Nix gates; sync and archive accepted requirements. r[mantle.artifact_auth_operational_receipt.authority]
