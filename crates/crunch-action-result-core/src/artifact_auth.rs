@@ -50,6 +50,17 @@ pub struct MantleSignerObservation {
     pub standalone_cryptographic: CryptographicObservation,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MantleArtifactAuthStatementInput<'a> {
+    pub profile_id: &'a str,
+    pub record: &'a ActionResultRecord,
+    pub producer_id: &'a str,
+    pub key_id: &'a str,
+    pub key_identity_blake3: &'a str,
+    pub oci_manifest_sha256: Option<&'a str>,
+    pub metadata_manifest_sha256: Option<&'a str>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MantleArtifactAuthObservation<'a> {
     pub profile_id: &'a str,
@@ -89,6 +100,43 @@ pub struct MantleArtifactAuthReport {
     pub build_authority_retained: bool,
     pub release_authority_retained: bool,
     pub authority_boundary: String,
+}
+
+// r[impl mantle.artifact_auth_shell.exact_verification]
+/// Map one action-result signer to the exact standalone statement preimage.
+///
+/// This pure mapping never consumes legacy or standalone cryptographic results.
+pub fn map_mantle_artifact_auth_statement(
+    input: &MantleArtifactAuthStatementInput<'_>,
+) -> Result<ArtifactStatement, Vec<String>> {
+    validate_action_result(input.record).map_err(|error| vec![error])?;
+    if input.profile_id.is_empty() {
+        return Err(vec!["profile-id-empty".to_string()]);
+    }
+    if input.producer_id.is_empty() {
+        return Err(vec!["producer-id-empty".to_string()]);
+    }
+    if input.key_id.is_empty() {
+        return Err(vec!["key-id-empty".to_string()]);
+    }
+    if !valid_digest(input.key_identity_blake3) {
+        return Err(vec!["key-identity-malformed".to_string()]);
+    }
+    let scope = map_scope(input.profile_id, input.record, input.oci_manifest_sha256, input.metadata_manifest_sha256)?;
+    let statement = ArtifactStatement {
+        schema: STATEMENT_SCHEMA_V1.to_string(),
+        scope,
+        producer_id: input.producer_id.to_string(),
+        key_id: input.key_id.to_string(),
+        key_identity: ArtifactRef {
+            profile: ED25519_PUBLIC_KEY_PROFILE_V1.to_string(),
+            algorithm: ALGORITHM_BLAKE3.to_string(),
+            digest_hex: input.key_identity_blake3.to_string(),
+        },
+    };
+    debug_assert_eq!(statement.producer_id, input.producer_id);
+    debug_assert_eq!(statement.key_id, input.key_id);
+    Ok(statement)
 }
 
 // r[impl mantle.artifact_auth_adoption.authority]
@@ -133,25 +181,13 @@ struct Sha256RefInput<'a> {
 
 fn map_observation(observation: &MantleArtifactAuthObservation<'_>) -> Result<MappedAuthentication, Vec<String>> {
     validate_mapping_inputs(observation)?;
-    let subject = typed_blake3_ref(TypedBlake3RefInput {
-        profile: ACTION_RESULT_PROFILE,
-        prefix: ACTION_RESULT_REF_PREFIX,
-        value: &observation.record.result_ref,
-    })?;
-    let verifier_context = typed_blake3_ref(TypedBlake3RefInput {
-        profile: PUBLICATION_POLICY_PROFILE,
-        prefix: PUBLICATION_POLICY_REF_PREFIX,
-        value: &observation.record.publication_policy_ref,
-    })?;
-    let scope = AuthenticationScope {
-        domain: ARTIFACT_AUTH_DOMAIN.to_string(),
-        purpose: ARTIFACT_AUTH_PURPOSE.to_string(),
-        profile_id: observation.profile_id.to_string(),
-        subject,
-        parents: map_parent_identities(observation)?,
-        verifier_context,
-    };
-    let (trusted_keys, evidence) = map_signers(observation, &scope)?;
+    let scope = map_scope(
+        observation.profile_id,
+        observation.record,
+        observation.oci_manifest_sha256,
+        observation.metadata_manifest_sha256,
+    )?;
+    let (trusted_keys, evidence) = map_signers(observation)?;
     let policy = AuthenticationPolicy {
         schema: POLICY_SCHEMA_V1.to_string(),
         profile_id: observation.profile_id.to_string(),
@@ -186,10 +222,42 @@ fn validate_mapping_inputs(observation: &MantleArtifactAuthObservation<'_>) -> R
     Ok(())
 }
 
-fn map_parent_identities(observation: &MantleArtifactAuthObservation<'_>) -> Result<Vec<ArtifactRef>, Vec<String>> {
-    let mut parents = Vec::with_capacity(observation.record.outputs.len().saturating_add(OCI_PARENT_COUNT));
+fn map_scope(
+    profile_id: &str,
+    record: &ActionResultRecord,
+    oci_manifest_sha256: Option<&str>,
+    metadata_manifest_sha256: Option<&str>,
+) -> Result<AuthenticationScope, Vec<String>> {
+    let subject = typed_blake3_ref(TypedBlake3RefInput {
+        profile: ACTION_RESULT_PROFILE,
+        prefix: ACTION_RESULT_REF_PREFIX,
+        value: &record.result_ref,
+    })?;
+    let verifier_context = typed_blake3_ref(TypedBlake3RefInput {
+        profile: PUBLICATION_POLICY_PROFILE,
+        prefix: PUBLICATION_POLICY_REF_PREFIX,
+        value: &record.publication_policy_ref,
+    })?;
+    let scope = AuthenticationScope {
+        domain: ARTIFACT_AUTH_DOMAIN.to_string(),
+        purpose: ARTIFACT_AUTH_PURPOSE.to_string(),
+        profile_id: profile_id.to_string(),
+        subject,
+        parents: map_parent_identities(record, oci_manifest_sha256, metadata_manifest_sha256)?,
+        verifier_context,
+    };
+    debug_assert_eq!(scope.profile_id, profile_id);
+    Ok(scope)
+}
+
+fn map_parent_identities(
+    record: &ActionResultRecord,
+    oci_manifest_sha256: Option<&str>,
+    metadata_manifest_sha256: Option<&str>,
+) -> Result<Vec<ArtifactRef>, Vec<String>> {
+    let mut parents = Vec::with_capacity(record.outputs.len().saturating_add(OCI_PARENT_COUNT));
     let mut parent_identities = BTreeSet::new();
-    for output in &observation.record.outputs {
+    for output in &record.outputs {
         let parent = typed_blake3_ref(TypedBlake3RefInput {
             profile: OBJECT_PROFILE,
             prefix: OBJECT_REF_PREFIX,
@@ -200,7 +268,7 @@ fn map_parent_identities(observation: &MantleArtifactAuthObservation<'_>) -> Res
         }
         parents.push(parent);
     }
-    match (observation.oci_manifest_sha256, observation.metadata_manifest_sha256) {
+    match (oci_manifest_sha256, metadata_manifest_sha256) {
         (Some(oci), Some(metadata)) => {
             parents.push(sha256_ref(Sha256RefInput {
                 profile: OCI_MANIFEST_PROFILE,
@@ -214,14 +282,13 @@ fn map_parent_identities(observation: &MantleArtifactAuthObservation<'_>) -> Res
         (None, None) => {}
         _ => return Err(vec!["oci-manifest-pair-incomplete".to_string()]),
     }
-    debug_assert_eq!(parent_identities.len(), observation.record.outputs.len());
-    debug_assert!(parents.len() >= observation.record.outputs.len());
+    debug_assert_eq!(parent_identities.len(), record.outputs.len());
+    debug_assert!(parents.len() >= record.outputs.len());
     Ok(parents)
 }
 
 fn map_signers(
     observation: &MantleArtifactAuthObservation<'_>,
-    scope: &AuthenticationScope,
 ) -> Result<(Vec<TrustedKeyObservation>, Vec<SignatureEvidence>), Vec<String>> {
     let mut trusted_keys = Vec::with_capacity(observation.signers.len());
     let mut evidence = Vec::with_capacity(observation.signers.len());
@@ -233,11 +300,16 @@ fn map_signers(
         if !full_key_identities.insert(signer.key_identity_blake3.as_str()) {
             return Err(vec!["duplicate-full-key-identity".to_string()]);
         }
-        let key_identity = ArtifactRef {
-            profile: ED25519_PUBLIC_KEY_PROFILE_V1.to_string(),
-            algorithm: ALGORITHM_BLAKE3.to_string(),
-            digest_hex: signer.key_identity_blake3.clone(),
-        };
+        let statement = map_mantle_artifact_auth_statement(&MantleArtifactAuthStatementInput {
+            profile_id: observation.profile_id,
+            record: observation.record,
+            producer_id: &signer.producer_id,
+            key_id: &signer.key_id,
+            key_identity_blake3: &signer.key_identity_blake3,
+            oci_manifest_sha256: observation.oci_manifest_sha256,
+            metadata_manifest_sha256: observation.metadata_manifest_sha256,
+        })?;
+        let key_identity = statement.key_identity.clone();
         trusted_keys.push(TrustedKeyObservation {
             producer_id: signer.producer_id.clone(),
             key_id: signer.key_id.clone(),
@@ -252,13 +324,7 @@ fn map_signers(
             },
         });
         evidence.push(SignatureEvidence {
-            statement: ArtifactStatement {
-                schema: STATEMENT_SCHEMA_V1.to_string(),
-                scope: scope.clone(),
-                producer_id: signer.producer_id.clone(),
-                key_id: signer.key_id.clone(),
-                key_identity,
-            },
+            statement,
             generation: signer.generation,
             cryptographic: signer.standalone_cryptographic.clone(),
         });
@@ -483,6 +549,62 @@ mod tests {
             trust_basis: vec![SIGNER_LABEL.to_string()],
             output_set_digest_blake3: admitted.then(|| digest('e')),
         }
+    }
+
+    // r[verify mantle.artifact_auth_shell.exact_verification]
+    #[test]
+    fn standalone_statement_mapping_binds_action_result_key_and_policy_identities() {
+        let record = record();
+        let signer = signer(true);
+        let statement = map_mantle_artifact_auth_statement(&MantleArtifactAuthStatementInput {
+            profile_id: PROFILE_ID,
+            record: &record,
+            producer_id: &signer.producer_id,
+            key_id: &signer.key_id,
+            key_identity_blake3: &signer.key_identity_blake3,
+            oci_manifest_sha256: Some(&digest('f')),
+            metadata_manifest_sha256: Some(&digest('0')),
+        })
+        .expect("valid statement mapping");
+
+        assert!(artifact_auth_core::canonical_statement_bytes(&statement).is_ok());
+        assert_eq!(statement.producer_id, signer.producer_id);
+        assert_eq!(statement.key_id, signer.key_id);
+        assert_eq!(statement.key_identity.digest_hex, signer.key_identity_blake3);
+        assert_eq!(statement.scope.subject.digest_hex, record.result_ref[ACTION_RESULT_REF_PREFIX.len()..]);
+        assert_eq!(
+            statement.scope.verifier_context.digest_hex,
+            record.publication_policy_ref[PUBLICATION_POLICY_REF_PREFIX.len()..]
+        );
+        assert_eq!(statement.scope.parents.len(), record.outputs.len().saturating_add(OCI_PARENT_COUNT));
+    }
+
+    // r[verify mantle.artifact_auth_shell.exact_verification]
+    // r[verify mantle.artifact_auth_shell.adversarial]
+    #[test]
+    fn standalone_statement_mapping_rejects_malformed_key_and_incomplete_oci_pair() {
+        let record = record();
+        let malformed_key = map_mantle_artifact_auth_statement(&MantleArtifactAuthStatementInput {
+            profile_id: PROFILE_ID,
+            record: &record,
+            producer_id: "builder",
+            key_id: SIGNER_LABEL,
+            key_identity_blake3: "short",
+            oci_manifest_sha256: None,
+            metadata_manifest_sha256: None,
+        });
+        assert_eq!(malformed_key, Err(vec!["key-identity-malformed".to_string()]));
+
+        let incomplete_oci = map_mantle_artifact_auth_statement(&MantleArtifactAuthStatementInput {
+            profile_id: PROFILE_ID,
+            record: &record,
+            producer_id: "builder",
+            key_id: SIGNER_LABEL,
+            key_identity_blake3: &digest('b'),
+            oci_manifest_sha256: Some(&digest('f')),
+            metadata_manifest_sha256: None,
+        });
+        assert_eq!(incomplete_oci, Err(vec!["oci-manifest-pair-incomplete".to_string()]));
     }
 
     // r[verify mantle.artifact_auth_adoption.authority]

@@ -8,6 +8,7 @@
 //! Pipeline: `Derivation` → `BuildRequest` → sandbox → `BuildResult` → `PathInfo`
 
 pub mod action_result;
+pub mod artifact_auth;
 mod build_request;
 pub mod ca_mapping;
 pub mod ca_plan;

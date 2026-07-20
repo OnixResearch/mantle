@@ -155,6 +155,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "artifact-auth-ed25519"
+version = "0.1.0"
+source = "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#799459346d5416fbd7b9f55840a7371441b55afa"
+dependencies = [
+ "artifact-auth-core",
+ "blake3",
+ "ed25519-dalek",
+]
+
+[[package]]
 name = "ascii-canvas"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1305,6 +1315,8 @@ dependencies = [
 name = "crunch-build"
 version = "0.1.0"
 dependencies = [
+ "artifact-auth-core",
+ "artifact-auth-ed25519",
  "async-trait",
  "blake3",
  "bstr",
@@ -5599,7 +5611,7 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "343d3bd7056eda839b03204e68deff7d1b13aba7af2b2fd16890697274262ee7"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -5670,7 +5682,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe500dc80e757a75e1e8fb7290e448d62dfba3105ece1d058579cb00b58151cd"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "prost 0.14.3",
  "prost-build",
  "prost-types",

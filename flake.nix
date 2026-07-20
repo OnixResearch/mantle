@@ -84,23 +84,41 @@
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
         cargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         artifactAuthRevision = "799459346d5416fbd7b9f55840a7371441b55afa";
-        artifactAuthCargoDependency =
-          (builtins.fromTOML (builtins.readFile ./crates/crunch-action-result-core/Cargo.toml)).dependencies.artifact-auth-core;
+        artifactAuthExpectedPackages = [
+          "artifact-auth-core"
+          "artifact-auth-ed25519"
+        ];
+        artifactAuthCoreManifest =
+          builtins.fromTOML (builtins.readFile ./crates/crunch-action-result-core/Cargo.toml);
+        artifactAuthShellManifest =
+          builtins.fromTOML (builtins.readFile ./crates/crunch-build/Cargo.toml);
+        artifactAuthCargoDependencies = [
+          artifactAuthCoreManifest.dependencies.artifact-auth-core
+          artifactAuthShellManifest.dependencies.artifact-auth-core
+          artifactAuthShellManifest.dependencies.artifact-auth-ed25519
+        ];
         artifactAuthLockPackages = builtins.filter (
-          package: package.name == "artifact-auth-core"
+          package: builtins.elem package.name artifactAuthExpectedPackages
         ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
         artifactAuthExpectedLockSource =
           "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=${artifactAuthRevision}#${artifactAuthRevision}";
         artifactAuthWorkspace = builtins.fromTOML (builtins.readFile (artifactAuthSource + "/Cargo.toml"));
         artifactAuthSourceAdmitted =
           assert pkgs.lib.assertMsg (
-            artifactAuthCargoDependency.git == "ssh://git@github.com/OnixResearch/artifact-auth.git"
-            && artifactAuthCargoDependency.rev == artifactAuthRevision
+            builtins.all (
+              dependency:
+              dependency.git == "ssh://git@github.com/OnixResearch/artifact-auth.git"
+              && dependency.rev == artifactAuthRevision
+            ) artifactAuthCargoDependencies
             && artifactAuthSource.rev == artifactAuthRevision
-            && builtins.length artifactAuthLockPackages == 1
-            && (builtins.head artifactAuthLockPackages).source == artifactAuthExpectedLockSource
+            && map (package: package.name) artifactAuthLockPackages == artifactAuthExpectedPackages
+            && builtins.all (
+              package: package.source == artifactAuthExpectedLockSource
+            ) artifactAuthLockPackages
+            && builtins.elem "crates/artifact-auth-core" artifactAuthWorkspace.workspace.members
+            && builtins.elem "crates/artifact-auth-ed25519" artifactAuthWorkspace.workspace.members
             && artifactAuthWorkspace.workspace.package.license == "MIT OR Apache-2.0"
-          ) "Mantle artifact-auth Cargo/Nix source identity, uniqueness, or license drifted";
+          ) "Mantle artifact-auth Cargo/Nix source identity, package set, or license drifted";
           true;
         nickelExportCoreRevision = "257fafc1c746f1faf156207043a4c826bfb16d49";
         nickelExportCoreSource =
@@ -177,7 +195,10 @@
           cargoLock = ./Cargo.lock;
           overrideVendorGitCheckout =
             packages: checkout:
-            if artifactAuthSourceAdmitted && builtins.any (package: package.name == "artifact-auth-core") packages then
+            if
+              artifactAuthSourceAdmitted
+              && builtins.any (package: builtins.elem package.name artifactAuthExpectedPackages) packages
+            then
               checkout.overrideAttrs (_old: {
                 src = artifactAuthSource;
               })
