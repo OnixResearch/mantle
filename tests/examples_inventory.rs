@@ -602,6 +602,9 @@ fn flake_source_keeps_project_and_transcript_support_trees() {
     assert!(flake.contains("${toString ./examples/projects}/"));
     assert!(flake.contains("${toString ./examples/transcripts}/"));
     assert!(flake.contains("builtins.elem pathString catalogExamplePaths"));
+    assert!(flake.contains("pathString == toString ./flake.nix"));
+    assert!(flake.contains("pathString != gitMetadataPath"));
+    assert!(flake.contains("!pkgs.lib.hasPrefix \"${gitMetadataPath}/\" pathString"));
 }
 
 #[test]

@@ -148,6 +148,7 @@
             && (
               (craneLib.filterCargoSources path type)
               || pathString == toString ./README.md
+              || pathString == toString ./flake.nix
               || pkgs.lib.hasPrefix "${toString ./.github/workflows}/" pathString
               || pkgs.lib.hasPrefix "${toString ./lib}/" pathString
               || pkgs.lib.hasPrefix "${toString ./bootstrap}/" pathString
