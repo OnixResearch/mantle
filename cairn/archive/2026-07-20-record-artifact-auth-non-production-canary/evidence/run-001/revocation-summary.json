@@ -1,0 +1,8 @@
+{
+  "error": "standalone signing requires a current key",
+  "phase": "revocation",
+  "result": "expected-denial",
+  "rollback_available": true,
+  "schema": "mantle-artifact-auth-canary-summary-v1",
+  "standalone_authority_admitted": false
+}
