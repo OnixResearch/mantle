@@ -18,15 +18,23 @@ The legacy signature authorizes use of the existing product key but is never reu
 
 The pilot uses supplied in-memory product observations and keys. It performs no key-file discovery, filesystem/network access, currentness refresh, registry authorization, publication, persistence, deployment, or release decision. Deterministic tests therefore do not admit standalone authority.
 
+## Local operational receipt
+
+`crunch_build::artifact_auth` now captures a bounded operational receipt only after separate standalone signing and verification pass. The product shell derives signer currentness from the full trusted verifying keys, validity window, expected policy identity, and revoked full-key digests in a Mantle trust snapshot. `portable_receipt::artifact_auth_trust_snapshot` maps the repository-owned `ReceiptBundle` and `TrustVerificationContext` into that snapshot; same-name key substitution, stale validity windows, policy drift, unknown keys, and revocation fail closed.
+
+The receipt is created immutably at `action-results/v1/artifact-auth/<statement-digest>.json`, is bounded to one MiB, rejects symlink or non-regular-file substitution, and is reopened and validated before capture returns. Replay reloads the receipt, recomputes trust/currentness from a fresh context, independently reruns exact standalone verification, and requires every persisted carrier, decision, authority flag, non-claim, and BLAKE3 identity to match.
+
+This is real local action-result persistence, not remote trust discovery or proof of revocation freshness. Registry publication, cache/build admission, deployment, release eligibility, and standalone authority remain outside the receipt. Passing replay keeps `legacy_authoritative = true`, `standalone_authority_admitted = false`, and `rollback_available = true`.
+
 ## Cross-consumer readiness
 
 | Consumer | Exact separate signature | Product authorization guard | Independent verifier | Current operational receipt | Standalone authority |
 |---|---:|---:|---:|---:|---:|
 | Molten | yes | capability/key-currentness guard | yes | no | unadmitted |
 | Valence | yes | Radicle actor/operation guard | yes | no | unadmitted |
-| Mantle | yes | action-result decision/signature/currentness guard | yes | no | unadmitted |
+| Mantle | yes | action-result decision/signature/currentness guard | yes | local action-result receipt | unadmitted |
 
-All three pilots reject legacy-preimage signature reuse and retain rollback. None proves live trust discovery, revocation/currentness freshness, durable publication, or release operation. A cross-consumer authority-admission change remains blocked until those product-owned operational receipts exist.
+All three pilots reject legacy-preimage signature reuse and retain rollback. Mantle now proves bounded local persistence and fresh-context replay, but it does not prove remote trust discovery, revocation freshness, registry publication, or release operation. Published Molten and Valence operational receipts plus cross-consumer parity review remain required before any authority-admission change.
 
 ## Update and rollback
 

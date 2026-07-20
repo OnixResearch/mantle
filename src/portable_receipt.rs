@@ -535,6 +535,24 @@ impl TrustVerificationContext {
     }
 }
 
+// r[impl mantle.artifact_auth_operational_receipt.trust]
+pub fn artifact_auth_trust_snapshot<'a>(
+    bundle: &'a ReceiptBundle,
+    context: &'a TrustVerificationContext,
+) -> crunch_build::artifact_auth::MantleArtifactAuthTrustSnapshot<'a> {
+    crunch_build::artifact_auth::MantleArtifactAuthTrustSnapshot {
+        policy_hash: &bundle.trust_snapshot.policy_hash,
+        expected_policy_hash: &context.expected_policy_hash,
+        valid_after_unix_s: bundle.trust_snapshot.valid_after_unix_s,
+        valid_before_unix_s: bundle.trust_snapshot.valid_before_unix_s,
+        valid_at_unix_s: context.valid_at_unix_s,
+        revocation_ref: bundle.trust_snapshot.revocation_ref.as_deref(),
+        expected_revocation_ref: context.expected_revocation_ref.as_deref(),
+        trusted_public_keys: &context.trusted_public_keys,
+        revoked_public_key_digests: &context.revoked_public_key_digests,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TrustSnapshotValidation {
     public_key_digests: Vec<String>,
