@@ -16,7 +16,7 @@ use std::process::Command;
 use std::process::ExitCode;
 
 const DEFAULT_ROOT: &str = ".";
-const DEFAULT_CAIRN: &str = "path:/home/brittonr/git/cairn#cairn";
+const DEFAULT_CAIRN: &str = "path:../cairn#cairn";
 const DEFAULT_ARCHIVE_DATE: &str = "2026-07-03";
 const EVIDENCE_FILE_NAME: &str = "lifecycle-runner.md";
 const COMMANDS_FILE_NAME: &str = "commands.txt";

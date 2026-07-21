@@ -1621,16 +1621,16 @@ mod tests {
         let mut command = ProcessCommand::new("bwrap");
 
         append_bwrap_parent_dirs(&mut command, [
-            Path::new("/home/brittonr/.cargo-target/repo-targets/crunch__crunch/release/rebuild.sh"),
-            Path::new("/home/brittonr/.cargo-target/repo-targets/crunch__crunch/proof/run-000/store"),
+            Path::new("/home/example/.cargo-target/repo-targets/mantle__mantle/release/rebuild.sh"),
+            Path::new("/home/example/.cargo-target/repo-targets/mantle__mantle/proof/run-000/store"),
         ]);
 
         let args: Vec<_> = command.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
         assert!(args.windows(2).any(|pair| pair == ["--dir", "/home"]));
-        assert!(args.windows(2).any(|pair| pair == ["--dir", "/home/brittonr/.cargo-target"]));
+        assert!(args.windows(2).any(|pair| pair == ["--dir", "/home/example/.cargo-target"]));
         assert!(
             args.windows(2)
-                .any(|pair| pair == ["--dir", "/home/brittonr/.cargo-target/repo-targets/crunch__crunch"])
+                .any(|pair| pair == ["--dir", "/home/example/.cargo-target/repo-targets/mantle__mantle"])
         );
         assert!(!args.windows(2).any(|pair| pair == ["--dir", "/"]));
     }

@@ -6,14 +6,14 @@ Release ID: `provider-bound-release-evidence-2026-06-28-provider-remap-fixed`
 
 Mantle has a provider-bound release evidence bundle with a successful provider fixed-point proof and a successful local/provider-bound witness replay. The configured single-witness policy verified as `quorum-satisfied`.
 
-This is a bounded provider-bound claim. Do not describe it as an external independent rebuild unless the `britton-desktop-provider-witness` identity is operated independently from the publisher.
+This is a bounded provider-bound claim. Do not describe it as an external independent rebuild unless the provider-witness identity is operated independently from the publisher.
 
 ## Durable artifact storage
 
 A durable local copy of the ignored runtime artifacts is stored at:
 
 ```text
-/home/brittonr/releases/mantle/provider-bound-release-evidence-2026-06-28-provider-remap-fixed
+<private-release-archive>/provider-bound-release-evidence-2026-06-28-provider-remap-fixed
 ```
 
 Contents:

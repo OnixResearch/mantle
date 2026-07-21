@@ -511,13 +511,8 @@ fn resolve_mantle_bin(explicit: Option<&Path>) -> Result<PathBuf, String> {
         require_executable(&resolved)?;
         return Ok(resolved);
     }
-    if let Ok(path) = resolve_tool(None, "mantle") {
-        return Ok(path);
-    }
-    let fallback = PathBuf::from("/home/brittonr/.cargo-target/debug/mantle");
-    let resolved = canonicalize_existing(&fallback, "fallback mantle binary")?;
-    require_executable(&resolved)?;
-    Ok(resolved)
+    resolve_tool(None, "mantle")
+        .map_err(|_| "Mantle binary not found on PATH; pass --mantle-bin or set MANTLE_BIN".to_string())
 }
 
 fn resolve_tool(explicit: Option<&Path>, name: &str) -> Result<PathBuf, String> {

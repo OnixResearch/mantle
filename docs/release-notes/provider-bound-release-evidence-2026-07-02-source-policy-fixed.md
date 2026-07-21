@@ -13,7 +13,7 @@ This supersedes the blocked `provider-bound-release-evidence-2026-06-28-provider
 A durable local copy of the ignored runtime artifacts is stored at:
 
 ```text
-/home/brittonr/releases/mantle/provider-bound-release-evidence-2026-07-02-source-policy-fixed
+<private-release-archive>/provider-bound-release-evidence-2026-07-02-source-policy-fixed
 ```
 
 Contents:
@@ -29,7 +29,7 @@ Contents:
 Final verification record:
 
 ```text
-/home/brittonr/releases/mantle/provider-bound-release-evidence-2026-07-02-source-policy-fixed/final-release-verify.json
+<private-release-archive>/provider-bound-release-evidence-2026-07-02-source-policy-fixed/final-release-verify.json
 ```
 
 Key fields:
@@ -111,8 +111,8 @@ accepted_witness: aspen1-external-witness
 Durable generated artifacts live under the release copy:
 
 ```text
-/home/brittonr/releases/mantle/provider-bound-release-evidence-2026-07-02-source-policy-fixed/global-reproducibility-stage2-strict
-/home/brittonr/releases/mantle/provider-bound-release-evidence-2026-07-02-source-policy-fixed/global-reproducibility-full-release
+<private-release-archive>/provider-bound-release-evidence-2026-07-02-source-policy-fixed/global-reproducibility-stage2-strict
+<private-release-archive>/provider-bound-release-evidence-2026-07-02-source-policy-fixed/global-reproducibility-full-release
 ```
 
 These reports do not change the broader non-claims: the stage2 report is scoped to the single stage2 surface, and the full-release report is scoped only to the two published release binaries. Neither report claims compiler correctness, deploy success, future code, physical-target determinism, undeclared frontends or target systems, or all other Mantle build surfaces.

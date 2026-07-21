@@ -74,7 +74,7 @@ A structurally complete failed verification may render as `valid = false`, `verd
 The stack smoke first exercises the real CLI integration test with `MANTLE_FUNCTION_ADDRESS_CLI_RECEIPT_OUT=/tmp/mantle-function-address-cli-cairn-binding.json`, then passes that generated receipt directly to Cairn:
 
 ```sh
-nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- release-readiness \
+nix run path:../cairn#cairn -- release-readiness \
   --root . \
   --policy cairn-policy/generated/cairn-policy.json \
   --function-address-valence tests/fixtures/function-address-release-binding/valence-receipt.valid.json \

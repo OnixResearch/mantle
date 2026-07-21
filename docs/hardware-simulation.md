@@ -55,7 +55,7 @@ The output is ordinary `mantle-plan-v1` JSON. A producer derivation declares tha
 
 ## Real-tool and four-run evidence
 
-The 2026-07-14 capability runs used the baseline state at `/home/brittonr/.local/state/mantle-hardware-proof-20260714-fresh` and a separate clean-client state at `/home/brittonr/.local/state/mantle-hardware-proof-20260714-full-shared`. They proved:
+The 2026-07-14 capability runs used separate baseline and clean-client state roots under the operator's private state directory. They proved:
 
 - deterministic strict-sandbox Verilator generation: 16 normalized files, 190,187 bytes, BLAKE3 `dc3f36f05ec76104bc500f00764b06345df810bd8c76bb99dc776da11fbac552`;
 - generic plan digest `b1e30af6fd30c080a993e3d4505cd602bc962c484764ad4e3aa5591f82c202df`, with nine independent compile units, one link unit, two smoke units, and three dynamic roots;

@@ -18,8 +18,8 @@ REPEAT_COUNT="${REPEAT_COUNT:-$DEFAULT_REPEAT_COUNT}"
 BUNDLE_OUT="${BUNDLE_OUT:-$DEFAULT_BUNDLE_OUT}"
 CARGO_TARGET_ROOT="${CARGO_TARGET_ROOT:-$DEFAULT_CARGO_TARGET_ROOT}"
 
-export PATH="$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:$HOME/.cargo/bin:/nix/store/6jafhh81cf85d0vqwrnhl5yfc4wibxvq-protobuf-29.6/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/1sw8whfl5gfblp6r9qdkiw1b4j9fgwar-mold-2.40.4/bin:/nix/store/rvp7qlpf5jqvdckjy1afjb6aha6j8dxg-pkg-config-wrapper-0.29.2/bin:$PATH"
-export PKG_CONFIG_PATH="/nix/store/1l5jgzy26hkjz1y3apn1051asvn42sfn-openssl-3.6.1-dev/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+# Resolve tools from the caller's declared development environment instead of
+# embedding one workstation's Nix store paths.
 export SNIX_BUILD_SANDBOX_SHELL="${SNIX_BUILD_SANDBOX_SHELL:-/bin/sh}"
 
 mkdir -p "$(dirname "$BUNDLE_OUT")"

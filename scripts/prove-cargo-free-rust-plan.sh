@@ -83,8 +83,8 @@ resolve_mantle_bin() {
     command -v mantle
     return
   fi
-  if [[ -x "/home/brittonr/.cargo-target/debug/mantle" ]]; then
-    printf '%s\n' "/home/brittonr/.cargo-target/debug/mantle"
+  if [[ -n "${CARGO_TARGET_DIR:-}" && -x "$CARGO_TARGET_DIR/debug/mantle" ]]; then
+    printf '%s\n' "$CARGO_TARGET_DIR/debug/mantle"
     return
   fi
   if [[ -x "target/debug/mantle" ]]; then

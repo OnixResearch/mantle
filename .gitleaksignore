@@ -1,0 +1,15 @@
+# Reviewed false positives from the full-history Gitleaks 8.30.1 scan.
+# Each exception is bound to one commit, file, rule, and line. Do not replace
+# these with path-wide or rule-wide exclusions.
+b0ff83acddf5e733aa36223403d46b0c2cc2e5f1:cairn/changes/capture-artifact-auth-operational-receipt/tasks.md:generic-api-key:5
+55fb02decfa42325ed192ac1249e8a6432844d50:cairn/archive/2026-07-19-capture-artifact-auth-operational-receipt/validation.md:generic-api-key:7
+2b3c99c1aed99b93ab4fe2bb7d77af6139e2b791:cairn/archive/2026-07-20-record-artifact-auth-non-production-canary/evidence/run-001/manifest.ncl:generic-api-key:34
+2b3c99c1aed99b93ab4fe2bb7d77af6139e2b791:cairn/archive/2026-07-20-record-artifact-auth-non-production-canary/evidence/run-001/operational-receipt.json:generic-api-key:9
+2b3c99c1aed99b93ab4fe2bb7d77af6139e2b791:cairn/archive/2026-07-20-record-artifact-auth-non-production-canary/evidence/run-001/build.json:generic-api-key:91
+f986ce204274b1cc83b4148c93cd4d398234c59e:cairn/changes/adopt-artifact-auth/tasks.md:generic-api-key:3
+f986ce204274b1cc83b4148c93cd4d398234c59e:flake.nix:generic-api-key:86
+52a0c6579b14e0f0ba00023f00aad623b2c719ba:cairn/changes/adopt-artifact-auth/tasks.md:generic-api-key:3
+96b642de343412c5af6d51bfc9b84206fc97c684:schemas/machine-contracts/fixtures/build-json-report.valid.json:generic-api-key:25
+96b642de343412c5af6d51bfc9b84206fc97c684:schemas/machine-contracts/fixtures/build-json-report.valid.json:generic-api-key:29
+96b642de343412c5af6d51bfc9b84206fc97c684:schemas/machine-contracts/fixtures/build-json-report.negatives.json:generic-api-key:106
+f1cde3919550362f96a0ea7dd037285e785f93f6:openspec/changes/archive/2026-04-23-add-http-store-pull/proposal.md:generic-api-key:103

@@ -225,7 +225,7 @@ The current inspected Cargo-free fixed-point evidence succeeds for the bounded
 Cargo-free proof mode. Use this as the current status until a newer same-tree
 bundle supersedes it:
 
-- Command: `mantle --json self-build --cargo-free --fixed-point --out /tmp/mantle-cargo-free-fixed-point-vendor-repair-20260703T204500Z --rustc /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc --target x86_64-unknown-linux-gnu`
+- Command shape: `mantle --json self-build --cargo-free --fixed-point --out "$PROOF_OUTPUT_DIR" --rustc "$(command -v rustc)" --target x86_64-unknown-linux-gnu`
 - Output bundle: `/tmp/mantle-cargo-free-fixed-point-vendor-repair-20260703T204500Z`
 - Verdict: `status = "success"`, `fixed_point = true`; stage1 and stage2 both reported `execution_status = "success"`.
 - Stage binary BLAKE3: stage1 and stage2 both produced `ca00cd5866b0128434f95a0e0cf63ff2e5cc947eb90b60206cb9078bfe44215d`.

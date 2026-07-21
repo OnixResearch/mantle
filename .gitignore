@@ -24,3 +24,6 @@ autoresearch.config.json
 
 .pi/
 /.agent
+
+# Local agent permissions
+.claude/settings.local.json
