@@ -1,0 +1,57 @@
+{
+  "surface_id": "bootstrap.full-source-provider-admission-report",
+  "cases": [
+    {
+      "id": "unknown-schema-version",
+      "issue_class": "version",
+      "expected_path": "/schema",
+      "artifact": {
+        "schema": "mantle-full-source-provider-admission-v1",
+        "status": "admitted",
+        "provider_id": "full-source-v1",
+        "provider_path": "/proof/store/provider",
+        "metadata_path": "/proof/store/provider/share/crunch-bootstrap/provider.json",
+        "metadata_digest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "output_digest_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "expected_output_digest_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "source_closure_path": "/proof/source/closure.json",
+        "source_closure_manifest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "expected_source_closure_manifest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "source_closure_record_count": 51,
+        "observed_entry_count": 1173,
+        "required_tool_count": 18,
+        "required_runtime_count": 10,
+        "runtime_surfaces": ["c-static", "c-dynamic", "cxx-static", "cxx-dynamic", "assembly-link", "archive-index", "object-inspection", "malformed-c", "malformed-cxx", "malformed-assembly"],
+        "runtime_smoke_steps": ["c-static-compile", "c-static-run", "c-dynamic-compile", "c-dynamic-run", "cxx-static-compile", "cxx-static-run", "cxx-dynamic-compile", "cxx-dynamic-run", "assembly", "link", "assembly-run", "archive", "archive-index", "readelf", "nm", "objdump", "size", "strings", "objcopy", "strip", "malformed-c", "malformed-cxx", "malformed-assembly", "undefined-assembly", "undefined-link"],
+        "source_outputs": {"binutils": "/mantle/store/binutils", "gcc": "/mantle/store/gcc", "musl": "/mantle/store/musl"},
+        "non_claims": ["compiler-correctness", "bootstrap-seed-correctness", "independent-rebuild-agreement", "release-reproducibility", "deployment-success", "full-cargo-compatibility"]
+      }
+    },
+    {
+      "id": "zero-required-tool-count",
+      "issue_class": "bounds",
+      "expected_path": "/required_tool_count",
+      "artifact": {
+        "schema": "mantle-full-source-provider-admission-v2",
+        "status": "admitted",
+        "provider_id": "full-source-v1",
+        "provider_path": "/proof/store/provider",
+        "metadata_path": "/proof/store/provider/share/crunch-bootstrap/provider.json",
+        "metadata_digest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "output_digest_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "expected_output_digest_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "source_closure_path": "/proof/source/closure.json",
+        "source_closure_manifest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "expected_source_closure_manifest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "source_closure_record_count": 51,
+        "observed_entry_count": 1173,
+        "required_tool_count": 0,
+        "required_runtime_count": 10,
+        "runtime_surfaces": ["c-static", "c-dynamic", "cxx-static", "cxx-dynamic", "assembly-link", "archive-index", "object-inspection", "malformed-c", "malformed-cxx", "malformed-assembly"],
+        "runtime_smoke_steps": ["c-static-compile", "c-static-run", "c-dynamic-compile", "c-dynamic-run", "cxx-static-compile", "cxx-static-run", "cxx-dynamic-compile", "cxx-dynamic-run", "assembly", "link", "assembly-run", "archive", "archive-index", "readelf", "nm", "objdump", "size", "strings", "objcopy", "strip", "malformed-c", "malformed-cxx", "malformed-assembly", "undefined-assembly", "undefined-link"],
+        "source_outputs": {"binutils": "/mantle/store/binutils", "gcc": "/mantle/store/gcc", "musl": "/mantle/store/musl"},
+        "non_claims": ["compiler-correctness", "bootstrap-seed-correctness", "independent-rebuild-agreement", "release-reproducibility", "deployment-success", "full-cargo-compatibility"]
+      }
+    }
+  ]
+}

@@ -35,19 +35,13 @@ fn eval_bootstrap(name: &str) -> CrunchDerivation {
 }
 
 #[derive(Debug, Deserialize)]
-struct SeedRawArtifact {
-    name: String,
-    url: String,
-    hash: String,
-}
-
-#[derive(Debug, Deserialize)]
 struct SeedProviderMetadata {
     id: String,
+    mode: String,
     summary: String,
-    raw: SeedRawArtifact,
     retained_tools: Vec<String>,
     dropped_components: Vec<String>,
+    notes: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,7 +73,7 @@ fn eval_make_bootstrap_imports_shared_seed() {
     let input_names = input_derivation_names(&drv);
 
     assert_eq!(drv.name, "gnumake");
-    assert!(input_names.contains(&"musl-seed-toolchain".to_string()));
+    assert!(input_names.contains(&"full-source-seed-toolchain".to_string()));
     assert!(input_names.contains(&"make-src".to_string()));
 }
 
@@ -89,26 +83,27 @@ fn eval_crunch_bootstrap_imports_shared_seed() {
     let input_names = input_derivation_names(&drv);
 
     assert_eq!(drv.name, "crunch");
-    assert!(input_names.contains(&"musl-seed-toolchain".to_string()));
+    assert!(input_names.contains(&"full-source-seed-toolchain".to_string()));
     assert!(input_names.contains(&"gcc".to_string()));
     assert!(input_names.contains(&"rust".to_string()));
 }
 
 #[test]
-fn eval_seed_module_exposes_reduced_provider_metadata() {
+fn eval_seed_module_exposes_selected_full_source_provider_metadata() {
     let seed = eval_seed_module();
 
-    assert_eq!(seed.name, "musl-seed-toolchain");
-    assert_eq!(seed.toolchain.name, "musl-seed-toolchain");
+    assert_eq!(seed.name, "full-source-seed-toolchain");
+    assert_eq!(seed.toolchain.name, "full-source-seed-toolchain");
     assert_eq!(seed.target, "x86_64-linux-musl");
     assert_eq!(seed.dynamic_linker, "ld-musl-x86_64.so.1");
-    assert_eq!(seed.provider.id, "musl.cc-native-reduced-v1");
-    assert!(seed.provider.summary.contains("Reduced C/C++ bootstrap seed"));
-    assert_eq!(seed.provider.raw.name, "musl-gcc-raw");
-    assert!(seed.provider.raw.url.contains("musl.cc"));
-    assert!(seed.provider.raw.hash.starts_with("sha256-"));
+    assert_eq!(seed.provider.id, "full-source-v1");
+    assert_eq!(seed.provider.mode, "source-built");
+    assert!(seed.provider.summary.contains("Selected runtime-admitted final GCC 10.5.0"));
     assert!(seed.provider.retained_tools.contains(&"x86_64-linux-musl-gcc".to_string()));
-    assert!(seed.provider.dropped_components.iter().any(|item| item.contains("Fortran")));
+    assert!(seed.provider.retained_tools.contains(&"x86_64-linux-musl-g++".to_string()));
+    assert!(seed.provider.retained_tools.contains(&"x86_64-linux-musl-ld".to_string()));
+    assert!(seed.provider.dropped_components.contains(&"fortran".to_string()));
+    assert!(seed.provider.notes.iter().any(|note| note.contains("complete source-closure admission")));
 }
 
 #[test]
@@ -134,12 +129,15 @@ fn legacy_seed_derivation_writes_shared_provider_metadata_schema() {
 }
 
 #[test]
-fn seed_selector_delegates_to_legacy_without_self_recursion() {
+fn seed_selector_selects_full_source_without_legacy_fallback_or_self_recursion() {
     let selector_text = std::fs::read_to_string(bootstrap_path("seed.ncl")).unwrap();
+    let full_text = std::fs::read_to_string(bootstrap_path("seed-full.ncl")).unwrap();
     let legacy_text = std::fs::read_to_string(bootstrap_path("seed-legacy.ncl")).unwrap();
 
-    assert!(selector_text.contains("import \"seed-legacy.ncl\""));
-    assert!(selector_text.contains("legacy"));
+    assert!(selector_text.contains("import \"seed-full.ncl\""));
+    assert!(!selector_text.contains("import \"seed-legacy.ncl\""));
+    assert!(!selector_text.contains("CRUNCH_LEGACY_SEED"));
+    assert!(!full_text.contains("import \"seed-full.ncl\""));
     assert!(!legacy_text.contains("import \"seed-legacy.ncl\""));
     assert!(legacy_text.contains("musl.cc-native-reduced-v1"));
 }
@@ -379,7 +377,7 @@ fn gcc_native_diagnostic_uses_runtime_tcc_without_autotools_claims() {
 }
 
 #[test]
-fn full_source_provider_records_authenticated_closure_before_selection() {
+fn full_source_provider_records_authenticated_closure_and_is_selected() {
     let candidate = std::fs::read_to_string(bootstrap_path("seed-full.ncl")).unwrap();
     let final_gcc = std::fs::read_to_string(bootstrap_path("gcc-10-final.ncl")).unwrap();
     let selected_seed = std::fs::read_to_string(bootstrap_path("seed.ncl")).unwrap();
@@ -396,8 +394,20 @@ fn full_source_provider_records_authenticated_closure_before_selection() {
     assert!(final_gcc.contains("-l:\\$dynamic_library_name"));
     assert!(final_gcc.contains("NEEDED.*\\[libc.so\\]"));
     assert!(!final_gcc.contains("libc_library=\"\\${MANTLE_GCC_LINK_LIBC:-$MUSL/lib/libc.so}\""));
-    assert!(selected_seed.contains("import \"seed-legacy.ncl\""));
-    assert!(!selected_seed.lines().any(|line| line.starts_with("let full =")));
+    assert!(selected_seed.contains("import \"seed-full.ncl\""));
+    assert!(!selected_seed.contains("import \"seed-legacy.ncl\""));
+    assert!(!selected_seed.contains("CRUNCH_LEGACY_SEED"));
+}
+
+#[test]
+fn self_hosting_proof_defaults_to_full_source_provider_identity() {
+    let proof_helper =
+        std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/prove-self-hosting.sh"))
+            .unwrap();
+
+    assert!(proof_helper.contains("readonly PROOF_PROVIDER_KIND_FULL_SOURCE=\"full-source\""));
+    assert!(proof_helper.contains("proof_provider_kind=\"$PROOF_PROVIDER_KIND_FULL_SOURCE\""));
+    assert!(!proof_helper.contains("proof_provider_kind=\"$PROOF_PROVIDER_KIND_LEGACY_FETCH\""));
 }
 
 #[test]

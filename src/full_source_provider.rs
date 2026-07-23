@@ -199,6 +199,7 @@ struct RuntimeSmokeStep {
     expectation: RuntimeSmokeExpectation,
 }
 
+// machine-artifact-public: bootstrap.full-source-provider-admission-report
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub(crate) struct FullSourceProviderAdmissionReport {
     pub(crate) schema: &'static str,

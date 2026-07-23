@@ -144,6 +144,7 @@ fn no_optional_value<T>() -> Option<T> {
 pub(crate) enum BootstrapProviderMode {
     NixPackages,
     LegacyFetch,
+    FullSource,
     SourceRoot,
     StagexLineage,
 }
@@ -153,6 +154,7 @@ impl BootstrapProviderMode {
         match self {
             Self::NixPackages => "nix-packages",
             Self::LegacyFetch => "legacy-fetch",
+            Self::FullSource => "full-source",
             Self::SourceRoot => "source-root",
             Self::StagexLineage => "stagex-lineage",
         }
@@ -162,6 +164,7 @@ impl BootstrapProviderMode {
         match s {
             "nix-packages" => Some(Self::NixPackages),
             "legacy-fetch" => Some(Self::LegacyFetch),
+            "full-source" => Some(Self::FullSource),
             "source-root" => Some(Self::SourceRoot),
             "stagex-lineage" => Some(Self::StagexLineage),
             _ => None,
@@ -843,6 +846,7 @@ mod tests {
     #[test]
     fn provider_mode_legacy_does_not_satisfy_stagex() {
         assert!(!BootstrapProviderMode::LegacyFetch.satisfies_stagex_requirement());
+        assert!(!BootstrapProviderMode::FullSource.satisfies_stagex_requirement());
         assert!(!BootstrapProviderMode::SourceRoot.satisfies_stagex_requirement());
         assert!(!BootstrapProviderMode::NixPackages.satisfies_stagex_requirement());
     }
@@ -852,6 +856,7 @@ mod tests {
         for mode in [
             BootstrapProviderMode::NixPackages,
             BootstrapProviderMode::LegacyFetch,
+            BootstrapProviderMode::FullSource,
             BootstrapProviderMode::SourceRoot,
             BootstrapProviderMode::StagexLineage,
         ] {

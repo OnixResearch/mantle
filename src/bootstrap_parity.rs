@@ -74,6 +74,7 @@ impl fmt::Display for StageStatus {
 #[serde(rename_all = "kebab-case")]
 pub enum ProviderKind {
     LegacyFetch,
+    FullSource,
     SourceRoot,
     StagexLineage,
     Unknown,
@@ -83,6 +84,7 @@ impl fmt::Display for ProviderKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::LegacyFetch => write!(f, "legacy-fetch"),
+            Self::FullSource => write!(f, "full-source"),
             Self::SourceRoot => write!(f, "source-root"),
             Self::StagexLineage => write!(f, "stagex-lineage"),
             Self::Unknown => write!(f, "unknown"),
@@ -2459,6 +2461,7 @@ fn validate_real_proof_non_claims(summary: &serde_json::Map<String, serde_json::
 fn parse_provider_kind(check: ProviderKindFieldCheck<'_>) -> Result<ProviderKind, String> {
     match check.kind {
         "legacy-fetch" => Ok(ProviderKind::LegacyFetch),
+        "full-source" => Ok(ProviderKind::FullSource),
         "source-root" => Ok(ProviderKind::SourceRoot),
         "stagex-lineage" => Ok(ProviderKind::StagexLineage),
         other => Err(format!(
@@ -2631,7 +2634,7 @@ fn validate_self_build_provider_kind_linkage(project_root: &Path) -> Result<(), 
 
 fn validate_closed_provider_kind(check: ProviderKindFieldCheck<'_>) -> Result<(), String> {
     match check.kind {
-        "legacy-fetch" | "source-root" | "stagex-lineage" => Ok(()),
+        "legacy-fetch" | "full-source" | "source-root" | "stagex-lineage" => Ok(()),
         other => Err(format!(
             "crunch self-build provider-kind linkage `{}` has unknown provider kind `{other}`",
             check.field

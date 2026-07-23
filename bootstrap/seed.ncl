@@ -1,20 +1,12 @@
-# Bootstrap seed selector.
+# Selected bootstrap seed provider.
 #
-# Delegates to either the full-source live-bootstrap chain or the legacy
-# musl.cc-fetched seed depending on `CRUNCH_LEGACY_SEED`.
+# The normalized full-source provider passed committed-source construction,
+# runtime admission, complete source-closure authentication, and independent
+# BLAKE3 binding before this selector changed. Its own derivation still fails
+# closed if any required compiler, C++, binutils, CRT, libc, libgcc, shared
+# runtime, relocation, or rejection surface is absent.
 #
-# Once the full-source chain is validated (selftest + integration-test +
-# self-build all pass), the legacy path can be removed.
-#
-# The public contract is unchanged: callers get { name, target,
-# dynamic_linker, toolchain, provider }.
+# The legacy musl.cc provider remains available only through the explicit
+# `mantle bootstrap --fetch` compatibility path; it is not a selector fallback.
 
-let legacy = import "seed-legacy.ncl" in
-
-# The full-source chain is not yet functional (placeholder derivations
-# still exit with errors). Default to legacy until the chain is complete.
-#
-# TODO: once seed-full.ncl builds successfully, switch the default:
-#   let full = import "seed-full.ncl" in
-#   full
-legacy
+import "seed-full.ncl"

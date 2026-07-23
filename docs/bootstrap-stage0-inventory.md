@@ -86,7 +86,8 @@ extracted trees must match the declared digest.
 
 | Item | Used by | Why it is trusted today | Notes |
 |---|---|---|---|
-| musl.cc native tarball `https://musl.cc/x86_64-linux-musl-native.tgz` | `mantle bootstrap --fetch`, `mantle self-build`, `./scripts/prove-self-hosting.sh` | fetched by mantle with recursive hash `sha256-ZtQZncMvugqmS7OMvMtdhY5MMtem4KXBhamxWbHUDkY=` and reduced to the normalized `musl-seed-toolchain` provider | still a trusted binary bootstrap seed, but smaller than the full raw tarball surface; inspect `<seed>/share/mantle-bootstrap/provider.json` for provenance and dropped payload |
+| Authenticated full-source provider closure | `mantle self-build`, `./scripts/prove-self-hosting.sh` | 51 materialized fixed-fetch records are bound by source-closure BLAKE3 `2bd4fb6404fd0b3ac208fb1d8f9d2e1f28aa164a48f7470cfe199f17456a70cb`; the normalized provider is bound by output BLAKE3 `f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f` | selected through `bootstrap/seed.ncl`; admission remains bounded by `bootstrap/evidence/full-source-provider-admission.json` |
+| musl.cc native tarball `https://musl.cc/x86_64-linux-musl-native.tgz` | explicit `mantle bootstrap --fetch` compatibility only | fetched by Mantle with recursive hash `sha256-ZtQZncMvugqmS7OMvMtdhY5MMtem4KXBhamxWbHUDkY=` and reduced to the normalized `musl-seed-toolchain` provider | not a fallback from the selected self-build seed |
 
 ### Mantle-built outputs
 
@@ -130,8 +131,9 @@ What the checked-in self-hosting proof demonstrates today:
   `sandbox-entry` and `sandbox-shell` seeds are digest-checked with bounded
   version evidence, and the seccomp supervisor denies undeclared child exec
   attempts before execution
-- successful proof bundles copy this inventory, durable stage1/stage2 binary
-  artifacts, and the resolved stage0 prerequisite paths they used
+- successful full-source proof bundles copy the committed create-new provider
+  admission report, durable stage1/stage2 binary artifacts, this inventory, and
+  the resolved stage0 prerequisite paths they used
 - successful proof bundles also write `protected-exec-audit.json` with the
   stage0 inventory digest when no-host-tools mode is active, blocked host
   command set, fallback-event markers, protected transition records, and final
@@ -169,11 +171,11 @@ Remaining environmental assumptions:
 - Linux kernel and bwrap/FUSE sandbox runtime are trusted host components
 - Network transport for bootstrap fetches is trusted
 
-## Trust-root separation: full-source chain impact
+## Trust-root separation: selected full-source chain
 
-When the live-bootstrap source chain (`bootstrap/seed-full.ncl`) passes
-validation and replaces the legacy musl.cc seed, the trust-root picture
-changes:
+The admitted live-bootstrap source chain in `bootstrap/seed-full.ncl` now backs
+`bootstrap/seed.ncl`. The legacy musl.cc path remains explicit compatibility
+behavior under `mantle bootstrap --fetch`; it is not selected by self-build.
 
 ### Eliminated by full-source chain
 
@@ -197,16 +199,17 @@ changes:
 ### Status promotion rules
 
 Bootstrap maturity status reads proof fields from `SelfBuildReport`:
-- `provider_mode` must be `source-root` or `stagex-lineage` for full-source claims
+- the selected provider reports `provider_mode=full-source`; source-root and
+  StageX remain separate explicit provider classes
 - `stagex_metadata` must include lineage manifest digest, stage graph digest,
   normalized provider digest, and all mantle-built tool digests
 - Stage transcript index must cover all stages from `stage0-posix` through `seed-full`
 - Placeholder, deferred, or archived partial-scaffolding evidence is always rejected
 - Missing proof fields or transcripts block promotion and name the missing item
 
-What it does not demonstrate yet:
+What it does not demonstrate:
 
-- a full-source bootstrap root smaller than the current reduced musl.cc-derived seed provider
+- compiler correctness or bootstrap-seed correctness
 - independent rebuild agreement by itself; that status is derived later by
   `mantle attest release-verify --json` from accepted witness sidecars,
   verifier-local policy, revocations, and trusted keys

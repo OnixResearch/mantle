@@ -25,5 +25,5 @@
   "stage1_binary_blake3": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   "stage2_binary_blake3": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   "fixed_point": true,
-  "non_claim": "This report proves one hydrated legacy-provider fixed point for the recorded source authority and platform; it does not prove full-source bootstrap, compiler correctness, seed trust removal, release reproducibility, independent rebuild agreement, deployment success, or full Cargo compatibility."
+  "non_claim": "This report proves one hydrated fixed point for the recorded provider, source authority, and platform; it does not prove compiler correctness, bootstrap-seed correctness, independent rebuild agreement, release reproducibility, deployment success, or full Cargo compatibility."
 }

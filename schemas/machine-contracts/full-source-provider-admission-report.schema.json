@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://onix.systems/schemas/mantle/full-source-provider-admission-report-v2.json",
+  "title": "Mantle full-source provider admission report",
+  "x-mantle-rust-owner": "src/full_source_provider.rs::FullSourceProviderAdmissionReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "status",
+    "provider_id",
+    "provider_path",
+    "metadata_path",
+    "metadata_digest_blake3",
+    "output_digest_blake3",
+    "expected_output_digest_blake3",
+    "source_closure_path",
+    "source_closure_manifest_blake3",
+    "expected_source_closure_manifest_blake3",
+    "source_closure_record_count",
+    "observed_entry_count",
+    "required_tool_count",
+    "required_runtime_count",
+    "runtime_surfaces",
+    "runtime_smoke_steps",
+    "source_outputs",
+    "non_claims"
+  ],
+  "properties": {
+    "schema": { "type": "string", "const": "mantle-full-source-provider-admission-v2" },
+    "status": { "type": "string", "const": "admitted" },
+    "provider_id": { "type": "string", "const": "full-source-v1" },
+    "provider_path": { "$ref": "#/$defs/bounded_path" },
+    "metadata_path": { "$ref": "#/$defs/bounded_path" },
+    "metadata_digest_blake3": { "$ref": "#/$defs/blake3" },
+    "output_digest_blake3": { "$ref": "#/$defs/blake3" },
+    "expected_output_digest_blake3": { "$ref": "#/$defs/blake3" },
+    "source_closure_path": { "$ref": "#/$defs/bounded_path" },
+    "source_closure_manifest_blake3": { "$ref": "#/$defs/blake3" },
+    "expected_source_closure_manifest_blake3": { "$ref": "#/$defs/blake3" },
+    "source_closure_record_count": { "$ref": "#/$defs/positive_count" },
+    "observed_entry_count": { "$ref": "#/$defs/positive_count" },
+    "required_tool_count": { "$ref": "#/$defs/positive_count" },
+    "required_runtime_count": { "$ref": "#/$defs/positive_count" },
+    "runtime_surfaces": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "x-mantle-bound-name": {
+        "minItems": "MIN_FULL_SOURCE_RUNTIME_SURFACE_COUNT",
+        "maxItems": "MAX_FULL_SOURCE_RUNTIME_SURFACE_COUNT"
+      },
+      "items": { "$ref": "#/$defs/bounded_text" }
+    },
+    "runtime_smoke_steps": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "x-mantle-bound-name": {
+        "minItems": "MIN_FULL_SOURCE_RUNTIME_SMOKE_STEP_COUNT",
+        "maxItems": "MAX_FULL_SOURCE_RUNTIME_SMOKE_STEP_COUNT"
+      },
+      "items": { "$ref": "#/$defs/bounded_text" }
+    },
+    "source_outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binutils", "gcc", "musl"],
+      "properties": {
+        "binutils": { "$ref": "#/$defs/bounded_path" },
+        "gcc": { "$ref": "#/$defs/bounded_path" },
+        "musl": { "$ref": "#/$defs/bounded_path" }
+      }
+    },
+    "non_claims": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "x-mantle-bound-name": {
+        "minItems": "MIN_FULL_SOURCE_NON_CLAIM_COUNT",
+        "maxItems": "MAX_FULL_SOURCE_NON_CLAIM_COUNT"
+      },
+      "items": { "$ref": "#/$defs/bounded_text" }
+    }
+  },
+  "$defs": {
+    "blake3": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "bounded_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "x-mantle-bound-name": {
+        "minLength": "MIN_FULL_SOURCE_ADMISSION_PATH_BYTES",
+        "maxLength": "MAX_FULL_SOURCE_ADMISSION_PATH_BYTES"
+      },
+      "x-mantle-length-unit": "utf8-bytes"
+    },
+    "bounded_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "x-mantle-bound-name": {
+        "minLength": "MIN_FULL_SOURCE_ADMISSION_TEXT_BYTES",
+        "maxLength": "MAX_FULL_SOURCE_ADMISSION_TEXT_BYTES"
+      },
+      "x-mantle-length-unit": "utf8-bytes"
+    },
+    "positive_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1048576,
+      "x-mantle-bound-name": {
+        "minimum": "MIN_FULL_SOURCE_ADMISSION_COUNT",
+        "maximum": "MAX_FULL_SOURCE_ADMISSION_COUNT"
+      }
+    }
+  }
+}

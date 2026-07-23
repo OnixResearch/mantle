@@ -3,8 +3,9 @@
 //! Two modes:
 //! - `--from-nix` (default): shells out to `nix-build` to resolve package names to `/nix/store`
 //!   paths.
-//! - `--fetch`: evaluates the shared `bootstrap/seed.ncl` provider, builds its normalized seed
-//!   derivation, and writes a generated `seed.ncl`. No Nix required.
+//! - `--fetch`: evaluates the explicit legacy compatibility provider in
+//!   `bootstrap/seed-legacy.ncl`, builds its normalized seed derivation, and writes a generated
+//!   `seed.ncl`. The selected self-build provider remains `bootstrap/seed.ncl`.
 //!
 //! The resolution step is parameterized by a closure so tests can
 //! supply a mock resolver instead of shelling out to nix-build.
@@ -211,7 +212,7 @@ fn find_source_tree_file(current_dir: Option<&Path>, relative_path: &Path) -> Op
 }
 
 fn fetch_seed_provider_path() -> PathBuf {
-    let relative_path = Path::new("bootstrap").join("seed.ncl");
+    let relative_path = Path::new("bootstrap").join("seed-legacy.ncl");
     let current_dir = std::env::current_dir().ok();
     find_source_tree_file(current_dir.as_deref(), &relative_path).unwrap_or(relative_path)
 }
@@ -904,11 +905,12 @@ pub fn fetch_seed_provider_raw_url() -> Result<String, RunError> {
 
 /// Download the shared bootstrap seed provider, persist it, and generate seed.ncl.
 ///
-/// This is the `crunch bootstrap --fetch` implementation. It evaluates the
-/// checked-in `bootstrap/seed.ncl`, fetches the pinned raw tarball through the
-/// normal fixed-output pipeline, reduces that raw tree on the host into the
-/// normalized provider shape, and writes a small generated `seed.ncl` that
-/// points at the resulting store path.
+/// This is the explicit legacy-compatibility `mantle bootstrap --fetch`
+/// implementation. It evaluates `bootstrap/seed-legacy.ncl`, fetches the pinned
+/// raw tarball through the normal fixed-output pipeline, reduces that raw tree
+/// on the host into the normalized provider shape, and writes a small generated
+/// `seed.ncl` that points at the resulting store path. It never changes the
+/// checked-in full-source selector.
 pub async fn bootstrap_fetch(
     store_dir: &Path,
     output: &Path,
@@ -1088,7 +1090,7 @@ mod tests {
     }
 
     #[test]
-    fn fetch_seed_provider_loads_shared_seed_module() {
+    fn fetch_seed_provider_loads_explicit_legacy_compatibility_module() {
         let provider = load_fetch_seed_provider().unwrap();
         assert_eq!(provider.name, "musl-seed-toolchain");
         assert_eq!(provider.toolchain.name, "musl-seed-toolchain");

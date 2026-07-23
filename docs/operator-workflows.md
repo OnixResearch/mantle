@@ -309,10 +309,13 @@ paths.
 
 ### Hydrated fresh-clone fixed-point proof
 
-The three-record `fresh-clone-inputs` profile remains unchanged. To prove the
-stronger fixed point without live builtin fetches, a connected producer first
-captures the complete evaluated fixed-fetch closure through Mantle's ordinary
-fixed-output verifier. Tarball records retain the compressed acquisition bytes;
+The three-record `fresh-clone-inputs` compatibility profile remains unchanged.
+The selected self-build seed is the admitted full-source provider; the legacy
+archive and manifest records retained by the profile are hydration compatibility
+inputs, not selected-provider fallback. To prove the stronger fixed point
+without live builtin fetches, a connected producer first captures the complete
+evaluated full-source fixed-fetch closure through Mantle's ordinary fixed-output
+verifier. Tarball records retain the compressed acquisition bytes;
 offline use replays the same bounded extractor and recursive verifier. Files
 larger than 64 MiB are represented by deterministic contiguous entries without
 raising the 64 MiB per-entry limit:
@@ -362,15 +365,16 @@ The helper copies only the authenticated `source-bundles/records` and
 `require-override`: an unmatched builtin URL, fetch kind, or Git revision fails
 before URL, proxy, DNS, Git, or HTTP acquisition. Successful stage reports bind
 the same source-state BLAKE3 and zero live-fetch events. The proof bundle retains
-the hydration receipt and emits the path-redacted contracted
-`fresh-clone-fixed-point.json` report with stage1/stage2 binary BLAKE3 equality.
+the hydration receipt, the committed full-source provider-admission report, and
+emits the path-redacted contracted `fresh-clone-fixed-point.json` report with
+`provider_kind=full-source` and stage1/stage2 binary BLAKE3 equality.
 Do not use `latest` or cite success unless that report has `fixed_point: true`.
 
-This evidence is bounded to the committed evaluated closure, legacy provider,
-recorded platform, checkout stage0, and proof tool boundary. It does not prove
-full-source bootstrap, compiler correctness, seed trust removal, bit-for-bit
-release reproducibility, independent rebuild agreement, deployment success, or
-full Cargo compatibility. See [ADR 0032](../adr/0032-deny-live-source-acquisition-in-hydrated-fixed-point-proofs.md).
+This evidence is bounded to the committed evaluated closure, admitted
+full-source provider, recorded platform, checkout stage0, and proof tool
+boundary. It does not prove compiler correctness, bootstrap-seed correctness,
+bit-for-bit release reproducibility, independent rebuild agreement, deployment
+success, or full Cargo compatibility. See [ADR 0032](../adr/0032-deny-live-source-acquisition-in-hydrated-fixed-point-proofs.md).
 
 For a prepared checkout that already has its explicit vendor directory, import,
 pin, and preflight the bundle directly:

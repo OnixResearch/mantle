@@ -1,9 +1,9 @@
-# Runtime-admitted full-source bootstrap provider candidate.
+# Selected runtime-admitted full-source bootstrap provider.
 #
-# Selection remains separate in seed.ncl. This expression normalizes the final
-# GCC 10/musl 1.2.5/binutils 2.41 artifacts and executes the complete bounded
-# tool/runtime smoke surface. External admission binds the resulting tree to a
-# BLAKE3 output identity because an output cannot contain its own content hash.
+# This expression normalizes the final GCC 10/musl 1.2.5/binutils 2.41
+# artifacts and executes the complete bounded tool/runtime smoke surface.
+# External admission binds the resulting tree to a BLAKE3 output identity
+# because an output cannot contain its own content hash.
 
 let crunch = import "lib.ncl" in
 let gcc10 = crunch.derivationFile "gcc-10-final.ncl" in
@@ -329,7 +329,7 @@ EOF
   provider = {
     id = "full-source-v1",
     mode = "source-built",
-    summary = "Runtime-admitted final GCC 10.5.0, musl 1.2.5, and binutils 2.41 normalized provider candidate",
+    summary = "Selected runtime-admitted final GCC 10.5.0, musl 1.2.5, and binutils 2.41 normalized provider",
     retained_tools = provider_retained_tools,
     dropped_components = [
       "fortran",
@@ -341,7 +341,7 @@ EOF
       "gprofng",
     ],
     notes = [
-      "Construction remains separate from bootstrap/seed.ncl selection until external BLAKE3 and closure admission pass.",
+      "Selection followed committed-source runtime, external BLAKE3, and complete source-closure admission.",
       "The runtime builder validates C, C++, assembly/link, archive, object inspection, static/dynamic libc, shared libgcc, malformed input, and compiler internals.",
       "Provider claims remain bounded by the explicit non_claims in provider.json.",
     ],

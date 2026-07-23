@@ -68,6 +68,7 @@ let Registry = {
     "source-bundle.plan-report",
     "source-bundle.verify-report",
     "source-bundle.self-build-hydration-report",
+    "bootstrap.full-source-provider-admission-report",
     "self-build.hydrated-fresh-clone-fixed-point-report",
     "source-bundle.offline-preflight-report",
     "nickel-export.report",
@@ -357,7 +358,7 @@ let Registry = {
         "contract_blake3"= "5b922a6b7066bce68131419ccfb95619022698e170375d2669c21d9408165129",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "f8efd884abc9b6beffd9527db139ab53356b198331c91adb4b41259ca6684c88",
-        "producer_identity_blake3"= "15b6c031f2a6b7243e1ead66ac8d3353f35ebfdc51a5f26a07409691aa53736c",
+        "producer_identity_blake3"= "b208d5dd7091adca9625a69ecd03862270de12cd8c89762e4c57bba40652a755",
         "consumer_policy_blake3"= "499fa604950b42de900457a05728162a807c3d38acaa39f691602bcf30d5ef06"
       },
       "non_claims"= [
@@ -411,7 +412,7 @@ let Registry = {
         "contract_blake3"= "ebdd22a938ddc93c38f7fd0d27594be7456374e379227206e7a357fe46d4a00d",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "a9cd57d937da9107de66d87888629c51f19a07dc585beda5192baa817bf77ec9",
-        "producer_identity_blake3"= "249feb66a6670b7497c278c33b8c1d41b9316bf1bf84766819f1dcfc39a8e84d",
+        "producer_identity_blake3"= "348a932b56b43f83970b37545b51f3b10de25740e79abb150b58b0dc9b329b93",
         "consumer_policy_blake3"= "c8b7b1c63ebb54254bf7cce2d855df6a7e48601089a7102d3698e757827e974e"
       },
       "non_claims"= [
@@ -464,7 +465,7 @@ let Registry = {
         "contract_blake3"= "acef59d7e93e39b8b3be1d791e5a3615cec92dbae6735153b0fc1aa9147be32e",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "6788977d15737936e07f67f8cc3ee1c5fd7acbe275762801e54e680681de19d2",
-        "producer_identity_blake3"= "1bc82801f62297565bf276adf78302a06b52badb0788e6a99841648d73df318e",
+        "producer_identity_blake3"= "0c8f1425eaaa9b96104f1203588974326f7b48825d572552d4e0fe0f009e7f9f",
         "consumer_policy_blake3"= "15cedc21de51570e0fa4d214d357f33de4adafa7d8674274eec0285d6f18d7fd"
       },
       "non_claims"= [
@@ -518,7 +519,7 @@ let Registry = {
         "contract_blake3"= "d3b07cd0d3396e6798ec94d68d37cf06a5ee35f81866016fbf1f18e0f401c7ae",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "996d0ea5521663d8180e90e955fcba9c92b4570b8935e13b2e57af45c81260e2",
-        "producer_identity_blake3"= "1942bfd04a3a51f541ad203888b49d73a62046f20a8357f4bca70a356d121b86",
+        "producer_identity_blake3"= "357aea2eb01446d67522b2b7dacddcd9b1ed010047c58c507522604b69e1e6fb",
         "consumer_policy_blake3"= "b41da07fbbd17d793f07c51876465ca6e73d83db0dc79b9beb02c8a8110b59d1"
       },
       "non_claims"= [
@@ -572,7 +573,7 @@ let Registry = {
         "contract_blake3"= "1c816681434e8114cd6c4bab4a48fd5c5f86ce7c9f33c187ab609ec73f814fd8",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "1ad119357b7d7217396fe2f47598b14cb8d87bc105982a428e3924e7c3213c11",
-        "producer_identity_blake3"= "8dc07767b7f3017f351b10747817ce7e12d25b8c4ba87fd7fa9f4b9582ae7476",
+        "producer_identity_blake3"= "30d5ecfd080965159bf436e5fe39dd743ab84f90a3f092946ead547db9a9186e",
         "consumer_policy_blake3"= "edc96af15dd9073d7cd0178ed0d617acd41c8cf91c6719a674dd1422a7e285e4"
       },
       "non_claims"= [
@@ -626,7 +627,7 @@ let Registry = {
         "contract_blake3"= "953be8500e8110bc2682b8d4aa14136c274f675dc951126f0b6a165f062c5bd3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "cad5f96d2366110d1a790d5ab644163380b9af4f0a5b2be947ceaa39ee03fbd6",
-        "producer_identity_blake3"= "617f5873491e4ce0729a78f574e2898394a7c4940c40baf634a7880a8ff267c4",
+        "producer_identity_blake3"= "b4362fcfe5d68f83b2631ee9a83d15cff081ffdf13b7111657dfa4d3d276dbac",
         "consumer_policy_blake3"= "8af50ac86145048afc879ae1b6722e155ee6960c6261186014bb505db83b6cb8"
       },
       "non_claims"= [
@@ -634,6 +635,63 @@ let Registry = {
         "bundle identity does not prove compiler correctness, seed trust removal, or release reproducibility"
       ],
       "rationale"= "Fresh-clone mutation requires a contracted identity-bound success receipt."
+    },
+    {
+      "id"= "bootstrap.full-source-provider-admission-report",
+      "class"= "contracted",
+      "rust_owner"= "src/full_source_provider.rs::FullSourceProviderAdmissionReport",
+      "producer"= {
+        "command_or_api"= "mantle bootstrap full-source-provider-admit --provider-dir ... --expected-output-blake3 ... --source-closure ... --expected-source-closure-blake3 ... --report ...",
+        "marker"= "bootstrap.full-source-provider-admission-report",
+        "source_paths"= [
+          "src/full_source_provider.rs"
+        ]
+      },
+      "consumers"= [
+        "full-source bootstrap operators",
+        "self-hosting proof bundles",
+        "Cairn evidence"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/full-source-provider-admission-report.schema.json",
+        "generated_contract"= "schemas/machine-contracts/full-source-provider-admission-report.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/full-source-provider-admission-report.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/full-source-provider-admission-report.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-full-source-provider-admission-v2",
+        "supported"= [
+          "mantle-full-source-provider-admission-v2"
+        ],
+        "unknown_version_behavior"= "reject before selecting or citing the provider",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "nix develop -c cargo test -p mantle --bin mantle full_source_provider::tests",
+        "nix develop -c cargo test -p mantle --test self_hosting -- --skip self_hosting_stage0_stage1_stage2"
+      ],
+      "fixture_coverage"= [
+        "version",
+        "bounds"
+      ],
+      "freshness_strategy"= "BLAKE3 binds provider output, provider metadata, complete source closure, producer, and consumer policy identities",
+      "freshness"= {
+        "schema_blake3"= "e9f1440954ebe8f5e56eb4ab7ea6f2a0f3985e87d3954de9bcbe7720e667ed4d",
+        "contract_blake3"= "dca78b427a831e803eac4c9d94f2f209ad93cedf041941e2cd688cf1ac8c34f2",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "18dbdaece5c99497cbd663230682e0b5bce9bf0fcb22a0e2a0664377c445ff0f",
+        "producer_identity_blake3"= "daf9f4cef25de25eb6d92d779d1e8da17f815359a96cc5a576018eb234ec042f",
+        "consumer_policy_blake3"= "aa2b9979ef6f03d98bbe0861e19fd9ab0c88af64d6b803fce04789e58904e123"
+      },
+      "non_claims"= [
+        "provider admission does not prove compiler correctness or bootstrap-seed correctness",
+        "one provider build does not prove independent rebuild agreement, release reproducibility, deployment success, or full Cargo compatibility"
+      ],
+      "rationale"= "Bootstrap authority changes require a contracted runtime-tested provider and source/output identity receipt."
     },
     {
       "id"= "self-build.hydrated-fresh-clone-fixed-point-report",
@@ -679,16 +737,16 @@ let Registry = {
       ],
       "freshness_strategy"= "BLAKE3 binds source authority, hydration linkage, stage policy, fixed-point binaries, producer, and consumer policy",
       "freshness"= {
-        "schema_blake3"= "cda5646c4a1bfa8eb7f7f7501a726d73fec083a36504c24cf765a98f86d38add",
-        "contract_blake3"= "9ad57c43239f5d477f751acff7df168a6d9af18e3ece5f4592c9772b217993b4",
+        "schema_blake3"= "7b713d5f7c12350a9ce62605b11d04c56c2e4a13ad4696d4596ccc05ffac3c12",
+        "contract_blake3"= "80d0cbf9eba66de7deac1d2248d4d34ce7d6cc84ca4498baa3647cf12f9acc19",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
-        "fixture_set_blake3"= "b7397358c11d0973a7862ad7083f190b682a882da1e4f46ac3d3824fd43eec75",
-        "producer_identity_blake3"= "e267ec8178b990c04bc81ff751a6021ea29d156a3b2b1d8d6ed76e041a58a502",
-        "consumer_policy_blake3"= "e78e73577259b926752adaec7d4ed60deafdd6b37ca00b1a05cf2dda550c067e"
+        "fixture_set_blake3"= "1270ca65f6528bae5f8ecd3510bd43f5891ad31bd4931e001bdf5fdf33259027",
+        "producer_identity_blake3"= "b626cd01696185971961ca75eb9a946837a939212d4b192f6acb1bb3a203049d",
+        "consumer_policy_blake3"= "cf90ceab2c26008ceb2d2c66ea079113c0f6c989aa8600d4c5d0f01177ac605c"
       },
       "non_claims"= [
-        "one hydrated legacy-provider fixed point does not prove full-source bootstrap or compiler correctness",
-        "shape conformance does not prove source trust, independent rebuild agreement, deployment success, or full Cargo compatibility"
+        "one hydrated fixed point does not prove compiler correctness or bootstrap-seed correctness",
+        "shape conformance does not prove source trust, independent rebuild agreement, release reproducibility, deployment success, or full Cargo compatibility"
       ],
       "rationale"= "The source-authority and binary-equality claim needs a path-redacted contracted success report."
     },
@@ -738,7 +796,7 @@ let Registry = {
         "contract_blake3"= "d7b30efe0e40442383eb7c654a3bb0c88b508f059b88008085fd59f0a88b0f23",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "74b65baffbfcfb59d5557a99ea0ed63c02711ee4c865c5f7be1eb14ad57071c8",
-        "producer_identity_blake3"= "79bb2b0c9bfab86a0d3a83629b6e6874fb165c4fe13d6e96ca37674b5fb92aac",
+        "producer_identity_blake3"= "3a800a79629a63cb738ecc366a34d3cc232d97cedc550a03f960b9b39b74eed9",
         "consumer_policy_blake3"= "2604bdd4cb6aa3824e00fa515e64f68a01ab5df84d2f2342ee0f1e7029f91f07"
       },
       "non_claims"= [
@@ -1096,7 +1154,7 @@ let Registry = {
         "contract_blake3"= "d158d85e21edcccbf6d6ae7bc6d3d59aea4acb8f1dc8a52438be38567d4c50f2",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "230228d02be1df38f427caa0f6ca4cd7c1ec8666c2350508d409aef177ccd494",
-        "producer_identity_blake3"= "714040d8c84288ccefe6261c57a2731247577be7f336cc54bad3bdc0e6619c33",
+        "producer_identity_blake3"= "73b12cbbb166d2f5f703840e1860d74a63dbf8c5c8051a48002639343988282a",
         "consumer_policy_blake3"= "c81ddbc9befcf012a5b42b3f44c2f17fe44f890ce0dfcc228b2cfefd5eb30dd4"
       },
       "non_claims"= [
@@ -1157,7 +1215,7 @@ let Registry = {
         "contract_blake3"= "723027e965189230cabb05b8ba069effec984e9bd527625a4320c8bd3cbe1af3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "9acb57b93f3b9150f79d59ff8a46ca3b5c2e5b98e83320b0308d57334a13d4a3",
-        "producer_identity_blake3"= "92280ad4adb8477f30daaa861247783f7753ccf556c4e369b0bbf68897799b69",
+        "producer_identity_blake3"= "ad96f256bd22fd0789462e83ada98bcc9ba46c830fd7f6164eb8b346f7545cf6",
         "consumer_policy_blake3"= "e81324a18c19a70aaa2bec634d4a0b7dccceede6f048bbd332b432a9938adefe"
       },
       "non_claims"= [

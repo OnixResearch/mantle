@@ -3,7 +3,7 @@ use serde::Serialize;
 
 pub const HYDRATED_FRESH_CLONE_FIXED_POINT_FORMAT: &str = "mantle-hydrated-fresh-clone-fixed-point-v1";
 pub const HYDRATED_FRESH_CLONE_FIXED_POINT_VERSION: u32 = 1;
-pub const HYDRATED_FRESH_CLONE_FIXED_POINT_NON_CLAIM: &str = "This report proves one hydrated legacy-provider fixed point for the recorded source authority and platform; it does not prove full-source bootstrap, compiler correctness, seed trust removal, release reproducibility, independent rebuild agreement, deployment success, or full Cargo compatibility.";
+pub const HYDRATED_FRESH_CLONE_FIXED_POINT_NON_CLAIM: &str = "This report proves one hydrated fixed point for the recorded provider, source authority, and platform; it does not prove compiler correctness, bootstrap-seed correctness, independent rebuild agreement, release reproducibility, deployment success, or full Cargo compatibility.";
 const BLAKE3_HEX_LENGTH: usize = 64;
 
 // machine-artifact-public: self-build.hydrated-fresh-clone-fixed-point-report

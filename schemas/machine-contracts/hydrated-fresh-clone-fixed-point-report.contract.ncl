@@ -42,7 +42,7 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && (std.record.has_field "format" (value) && (((std.record.get "format" (value)) == "mantle-hydrated-fresh-clone-fixed-point-v1"
   && (std.is_string (std.record.get "format" (value))))))
   && (std.record.has_field "hydration_report_blake3" (value) && (is_blake3 (std.record.get "hydration_report_blake3" (value))))
-  && (std.record.has_field "non_claim" (value) && (((std.record.get "non_claim" (value)) == "This report proves one hydrated legacy-provider fixed point for the recorded source authority and platform; it does not prove full-source bootstrap, compiler correctness, seed trust removal, release reproducibility, independent rebuild agreement, deployment success, or full Cargo compatibility."
+  && (std.record.has_field "non_claim" (value) && ((std.array.elem (std.record.get "non_claim" (value)) ["This report proves one hydrated legacy-provider fixed point for the recorded source authority and platform; it does not prove full-source bootstrap, compiler correctness, seed trust removal, release reproducibility, independent rebuild agreement, deployment success, or full Cargo compatibility.","This report proves one hydrated fixed point for the recorded provider, source authority, and platform; it does not prove compiler correctness, bootstrap-seed correctness, independent rebuild agreement, release reproducibility, deployment success, or full Cargo compatibility."]
   && (std.is_string (std.record.get "non_claim" (value))))))
   && (std.record.has_field "platform" (value) && (is_bounded_text (std.record.get "platform" (value))))
   && (std.record.has_field "proof_mode" (value) && ((std.array.elem (std.record.get "proof_mode" (value)) ["fixed-point","non-nix-host"]

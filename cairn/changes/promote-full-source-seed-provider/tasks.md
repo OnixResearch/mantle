@@ -6,7 +6,8 @@
   - Evidence: committed implementation `0acc862a` builds genuine regenerated GCC 4.0 C/C++ artifacts and records the exact construction boundary in `evidence/validation.md`.
 - [x] [serial] I3 Build and smoke the real GCC 4.0 → GCC 4.7 → GCC 10 → musl/binutils chain and normalize its complete provider contract without legacy-provider closure members. r[bootstrap_inventory.source_built_seed_provider]
   - Evidence: `evidence/full-source-provider-admission.json` admits the normalized 18-tool/10-runtime provider against the 51-record authenticated source closure.
-- [ ] [serial] I4 Switch `bootstrap/seed.ncl` to the source-built provider only after runtime admission evidence is durable and fail closed when any required tool/runtime surface is absent or bridged. r[bootstrap_inventory.source_built_seed_provider]
+- [x] [serial] I4 Switch `bootstrap/seed.ncl` to the source-built provider only after runtime admission evidence is durable and fail closed when any required tool/runtime surface is absent or bridged. r[bootstrap_inventory.source_built_seed_provider]
+  - Evidence: `bootstrap/seed.ncl` directly selects `seed-full.ncl` with no environment or legacy fallback; 16 bootstrap selector/evaluation tests and 11 admission-core tests pass, and proof bundles retain `bootstrap/evidence/full-source-provider-admission.json`.
 
 ## Phase 2: Verification
 

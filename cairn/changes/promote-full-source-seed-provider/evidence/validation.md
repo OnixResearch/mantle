@@ -44,7 +44,7 @@ provider_output_blake3=f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e155310
 provider_metadata_blake3=107a4a6d7d17b7da362b4bb64830cbb4ffc64ba3ce68772aabfe05584781be23
 ```
 
-`mantle bootstrap full-source-provider-admit` then observed the materialized provider and complete source bundle, matched both independently supplied BLAKE3 identities, executed all 25 positive/rejection runtime steps, and wrote the create-new report `evidence/full-source-provider-admission.json`. Its admitted facts are:
+`mantle bootstrap full-source-provider-admit` then observed the materialized provider and complete source bundle, matched both independently supplied BLAKE3 identities, executed all 25 positive/rejection runtime steps, and wrote the create-new report `evidence/full-source-provider-admission.json`. The admitted bytes are also preserved at the archive-stable bootstrap path `bootstrap/evidence/full-source-provider-admission.json` for selected-provider proof bundles. Its admitted facts are:
 
 ```text
 schema=mantle-full-source-provider-admission-v2
@@ -79,6 +79,28 @@ test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 1585 filtered out; 
 ```
 
 `git diff --check` also passed before the evidence commit.
+
+## Selector promotion validation
+
+After the admission evidence commit, `bootstrap/seed.ncl` was changed to a direct `seed-full.ncl` import with no environment branch or legacy fallback. `mantle bootstrap --fetch` now loads `bootstrap/seed-legacy.ncl` explicitly as a compatibility command, separate from selected self-build authority. The self-hosting proof identity defaults to `full-source`, and every full-source proof bundle copies the archive-stable admission report from `bootstrap/evidence/full-source-provider-admission.json`.
+
+Post-selector focused results:
+
+```text
+pueue task 301: bootstrap_eval — 17 passed; 0 failed
+pueue task 302: explicit legacy fetch compatibility — 3 passed; 0 failed
+pueue task 303: non-expensive self-hosting harness — 55 passed; 0 failed; 1 expensive proof filtered
+pueue task 291: full-source admission core — 11 passed; 0 failed
+pueue task 293: fresh-clone fixed-point report core — 4 passed; 0 failed
+pueue task 295: machine-schema integration — 4 passed; 0 failed
+machine schema generation: PASS (21 contracted, 50 classified)
+cargo fmt --check -p mantle: PASS
+git diff --check: PASS
+```
+
+The bootstrap-stable admission copy is byte-identical to the create-new Cairn evidence report. The old `source-boundary-only` selector receipt was retired rather than retained with false legacy-selection claims.
+
+The pre-proof blocker inventory self-test remains intentionally non-green: task `299` reports 25 source-marker findings after stale selector-boundary suppression was removed. Those findings are not being relabeled as clean before the selected-provider fixed-point proof; V4 remains open until the post-proof inventory is reclassified against current evidence.
 
 ## Adversarial audit and claim boundary
 

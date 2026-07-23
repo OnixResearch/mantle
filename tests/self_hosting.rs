@@ -52,6 +52,7 @@ use mantle::protected_exec::ExecutableSeedEntry;
 use mantle::protected_exec::ProtectedSeccompAuditEvent;
 use mantle::protected_exec::Stage0Inventory;
 use mantle::protected_exec::render_stage0_inventory_nickel;
+use serde::Deserialize;
 use serde::Serialize;
 
 const MAX_DIAGNOSTIC_LINES: u32 = 60;
@@ -79,6 +80,8 @@ const PROOF_SOURCE_STATE_ENV: &str = "CRUNCH_SELF_HOSTING_SOURCE_STATE_DIR";
 const PROOF_SOURCE_MANIFEST_ENV: &str = "CRUNCH_SELF_HOSTING_SOURCE_MANIFEST_BLAKE3";
 const PROOF_HYDRATION_REPORT_ENV: &str = "CRUNCH_SELF_HOSTING_HYDRATION_REPORT";
 const PROOF_HYDRATION_REPORT_RELATIVE_PATH: &str = "source-authority/hydration-report.json";
+const PROOF_PROVIDER_ADMISSION_SOURCE_PATH: &str = "bootstrap/evidence/full-source-provider-admission.json";
+const PROOF_PROVIDER_ADMISSION_RELATIVE_PATH: &str = "provider-admission/full-source-provider-admission.json";
 const PROOF_FRESH_CLONE_REPORT_RELATIVE_PATH: &str = "fresh-clone-fixed-point.json";
 const SOURCE_BUNDLES_DIR: &str = "source-bundles";
 const SOURCE_RECORDS_DIR: &str = "records";
@@ -93,8 +96,13 @@ const PROOF_STAGE0_INVENTORY_RELATIVE_PATH: &str = "stage0-prerequisites/stage0-
 const PROOF_MODE_FIXED_POINT: &str = "fixed-point";
 const PROOF_MODE_NON_NIX_HOST: &str = "non-nix-host";
 const PROOF_PROVIDER_KIND_LEGACY_FETCH: &str = "legacy-fetch";
+const PROOF_PROVIDER_KIND_FULL_SOURCE: &str = "full-source";
 const PROOF_PROVIDER_KIND_SOURCE_ROOT: &str = "source-root";
 const PROOF_PROVIDER_KIND_STAGEX_LINEAGE: &str = "stagex-lineage";
+const FULL_SOURCE_PROVIDER_ADMISSION_SCHEMA: &str = "mantle-full-source-provider-admission-v2";
+const FULL_SOURCE_PROVIDER_ADMISSION_STATUS: &str = "admitted";
+const FULL_SOURCE_PROVIDER_ID: &str = "full-source-v1";
+const PROVIDER_ADMISSION_BLOCKER_COUNT_MAX: usize = 9;
 const DEFAULT_PROOF_SCRATCH_SOURCE: &str = "default repo-local policy";
 const HELPER_PROOF_TOOL_NAMES: [&str; 13] = [
     "cargo",
@@ -163,6 +171,7 @@ struct ProofBundleManifest {
     tools: ProofToolSet,
     fixed_point: ProofFixedPointAnalysis,
     hydration_report: Option<ProofHashedPath>,
+    provider_admission: Option<ProofHashedPath>,
     stage0: ProofStageManifest,
     stage2: ProofStageManifest,
 }
@@ -193,6 +202,17 @@ struct ProofToolSet {
 enum ProofMode {
     FixedPoint,
     NonNixHost,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct FullSourceProviderAdmissionEvidence {
+    schema: String,
+    status: String,
+    provider_id: String,
+    output_digest_blake3: String,
+    expected_output_digest_blake3: String,
+    source_closure_manifest_blake3: String,
+    expected_source_closure_manifest_blake3: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -1243,11 +1263,12 @@ fn collect_absent_binaries(path_var: &OsStr, blocked_binaries: &[&str]) -> Vec<S
 
 fn selected_provider_kind() -> String {
     let provider_kind =
-        std::env::var(PROOF_PROVIDER_KIND_ENV).unwrap_or_else(|_| PROOF_PROVIDER_KIND_LEGACY_FETCH.to_string());
+        std::env::var(PROOF_PROVIDER_KIND_ENV).unwrap_or_else(|_| PROOF_PROVIDER_KIND_FULL_SOURCE.to_string());
     match provider_kind.as_str() {
-        PROOF_PROVIDER_KIND_LEGACY_FETCH | PROOF_PROVIDER_KIND_SOURCE_ROOT | PROOF_PROVIDER_KIND_STAGEX_LINEAGE => {
-            provider_kind
-        }
+        PROOF_PROVIDER_KIND_LEGACY_FETCH
+        | PROOF_PROVIDER_KIND_FULL_SOURCE
+        | PROOF_PROVIDER_KIND_SOURCE_ROOT
+        | PROOF_PROVIDER_KIND_STAGEX_LINEAGE => provider_kind,
         other => panic!("unsupported self-hosting provider kind: {other}"),
     }
 }
@@ -1663,6 +1684,12 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: 
     out.push_str(&format!("staged_source: {}\n", manifest.staged_source));
     out.push_str(&format!("proof_mode: {:?}\n", manifest.prerequisites.mode));
     out.push_str(&format!("selected_provider_kind: {}\n", manifest.prerequisites.provider_kind));
+    if let Some(admission) = &manifest.provider_admission {
+        out.push_str(&format!("provider_admission: {}\n", admission.path));
+        out.push_str(&format!("provider_admission_blake3: {}\n", admission.digest_blake3));
+    } else {
+        out.push_str("provider_admission: none\n");
+    }
     out.push_str(&format!("stage0_source_policy: {}\n", manifest.stage0.report.source_policy));
     out.push_str(&format!("stage2_source_policy: {}\n", manifest.stage2.report.source_policy));
     out.push_str(&format!(
@@ -1776,6 +1803,55 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: 
     out.push_str(&format!("stage2_report: {}\n", manifest.stage2.report.bwrap_source));
     out.push_str(&format!("stage2_protected_transition: {:?}\n", manifest.stage2.report.protected_transition));
     out
+}
+
+fn is_lowercase_blake3_hex(value: &str) -> bool {
+    value.len() == BLAKE3_HEX_LENGTH && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+fn full_source_provider_admission_blockers(evidence: &FullSourceProviderAdmissionEvidence) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if evidence.schema != FULL_SOURCE_PROVIDER_ADMISSION_SCHEMA {
+        blockers.push(format!("provider-admission-schema:{}", evidence.schema));
+    }
+    if evidence.status != FULL_SOURCE_PROVIDER_ADMISSION_STATUS {
+        blockers.push(format!("provider-admission-status:{}", evidence.status));
+    }
+    if evidence.provider_id != FULL_SOURCE_PROVIDER_ID {
+        blockers.push(format!("provider-admission-id:{}", evidence.provider_id));
+    }
+    for (field, value) in [
+        ("output", evidence.output_digest_blake3.as_str()),
+        ("expected-output", evidence.expected_output_digest_blake3.as_str()),
+        ("source-closure", evidence.source_closure_manifest_blake3.as_str()),
+        ("expected-source-closure", evidence.expected_source_closure_manifest_blake3.as_str()),
+    ] {
+        if !is_lowercase_blake3_hex(value) {
+            blockers.push(format!("provider-admission-{field}-digest-invalid"));
+        }
+    }
+    if evidence.output_digest_blake3 != evidence.expected_output_digest_blake3 {
+        blockers.push("provider-admission-output-digest-mismatch".to_string());
+    }
+    if evidence.source_closure_manifest_blake3 != evidence.expected_source_closure_manifest_blake3 {
+        blockers.push("provider-admission-source-closure-digest-mismatch".to_string());
+    }
+    debug_assert!(blockers.len() <= PROVIDER_ADMISSION_BLOCKER_COUNT_MAX);
+    blockers
+}
+
+fn copy_provider_admission_into_bundle(bundle_dir: &Path, provider_kind: &str) -> Option<ProofHashedPath> {
+    if provider_kind != PROOF_PROVIDER_KIND_FULL_SOURCE {
+        return None;
+    }
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join(PROOF_PROVIDER_ADMISSION_SOURCE_PATH);
+    let bytes = std::fs::read(&source)
+        .unwrap_or_else(|error| panic!("read full-source provider admission {}: {error}", source.display()));
+    let evidence: FullSourceProviderAdmissionEvidence = serde_json::from_slice(&bytes)
+        .unwrap_or_else(|error| panic!("parse full-source provider admission {}: {error}", source.display()));
+    let blockers = full_source_provider_admission_blockers(&evidence);
+    assert!(blockers.is_empty(), "full-source provider admission is not proof-eligible: {blockers:?}");
+    Some(copy_bundle_file(&source, bundle_dir, PROOF_PROVIDER_ADMISSION_RELATIVE_PATH))
 }
 
 fn copy_hydration_report_into_bundle(bundle_dir: &Path) -> Option<ProofHashedPath> {
@@ -1911,6 +1987,7 @@ fn write_proof_bundle(
     };
     let prerequisites = collect_prerequisites(bundle_dir, proof_mode, stage0_path_dir);
     let hydration_report = copy_hydration_report_into_bundle(bundle_dir);
+    let provider_admission = copy_provider_admission_into_bundle(bundle_dir, &prerequisites.provider_kind);
 
     let manifest = ProofBundleManifest {
         schema: PROOF_BUNDLE_SCHEMA,
@@ -1929,6 +2006,7 @@ fn write_proof_bundle(
         tools,
         fixed_point,
         hydration_report,
+        provider_admission,
         stage0: ProofStageManifest {
             name: stage0.stage_name.clone(),
             original_audit_dir: stage0.audit_dir.display().to_string(),
@@ -3633,6 +3711,36 @@ fn self_hosting_controlled_failure_reports_breadcrumbs() {
     assert!(combined.contains("diagnostics:"));
     assert!(combined.contains("saved diagnostics snapshot:"));
     assert!(combined.contains("self-build-proof: output-binary=/tmp/fake-out"));
+}
+
+fn full_source_provider_admission_fixture() -> FullSourceProviderAdmissionEvidence {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(PROOF_PROVIDER_ADMISSION_SOURCE_PATH);
+    let bytes = std::fs::read(&path)
+        .unwrap_or_else(|error| panic!("read full-source provider admission fixture {}: {error}", path.display()));
+    serde_json::from_slice(&bytes)
+        .unwrap_or_else(|error| panic!("parse full-source provider admission fixture {}: {error}", path.display()))
+}
+
+#[test]
+fn full_source_provider_admission_preserves_authenticated_source_authority() {
+    let evidence = full_source_provider_admission_fixture();
+    let blockers = full_source_provider_admission_blockers(&evidence);
+
+    assert!(blockers.is_empty(), "unexpected admission blockers: {blockers:?}");
+    assert_eq!(evidence.provider_id, FULL_SOURCE_PROVIDER_ID);
+}
+
+#[test]
+fn full_source_provider_admission_rejects_tampered_status_output_and_source_authority() {
+    let mut evidence = full_source_provider_admission_fixture();
+    evidence.status = "blocked".to_string();
+    evidence.expected_output_digest_blake3 = "0".repeat(BLAKE3_HEX_LENGTH);
+    evidence.expected_source_closure_manifest_blake3 = "1".repeat(BLAKE3_HEX_LENGTH);
+    let blockers = full_source_provider_admission_blockers(&evidence);
+
+    assert!(blockers.iter().any(|blocker| blocker.starts_with("provider-admission-status:")));
+    assert!(blockers.iter().any(|blocker| blocker == "provider-admission-output-digest-mismatch"));
+    assert!(blockers.iter().any(|blocker| blocker == "provider-admission-source-closure-digest-mismatch"));
 }
 
 #[test]

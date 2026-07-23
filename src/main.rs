@@ -6123,6 +6123,9 @@ fn run_bootstrap_command(request: BootstrapCommandRequest<'_>) -> Result<(), Run
                 .ok_or_else(|| RunError::Internal("stagex-lineage mode requires a manifest path".to_string()))?;
             cmd_bootstrap_stagex_lineage(request.output, manifest_path)
         }
+        bootstrap_source_root::BootstrapProviderMode::FullSource => Err(RunError::Internal(
+            "full-source mode is selected by bootstrap/seed.ncl, not the compatibility bootstrap command".to_string(),
+        )),
         bootstrap_source_root::BootstrapProviderMode::NixPackages => cmd_bootstrap(request.output, request.packages),
     }
 }
@@ -6821,7 +6824,7 @@ fn run_legacy_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<(), Ru
         loaded_stage0_policy.as_ref().map(|loaded| loaded.digest_blake3.clone()),
         request.bootstrap_bwrap_path,
         request.bootstrap_busybox_path,
-        bootstrap_source_root::BootstrapProviderMode::LegacyFetch,
+        bootstrap_source_root::BootstrapProviderMode::FullSource,
         source_fetch_overrides,
         source_evidence,
     )

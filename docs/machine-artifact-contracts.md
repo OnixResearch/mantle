@@ -34,6 +34,14 @@ from the DTOs and negative fixtures. Contract conformance does not grant
 registry trust, authorization, tag immutability, signature verification, or
 release eligibility.
 
+Full-source provider promotion has a contracted
+`mantle-full-source-provider-admission-v2` report. It binds the normalized
+provider tree, provider metadata, and complete materialized source closure to
+independently supplied BLAKE3 values after positive and rejection runtime smoke.
+Contract conformance does not prove compiler correctness, bootstrap-seed
+correctness, independent rebuild agreement, release reproducibility,
+deployment success, or full Cargo compatibility.
+
 Fresh-clone source hydration has its own contracted
 `mantle-self-build-source-hydration-v1` report. It binds the externally checked
 source-bundle manifest BLAKE3, hydrated vendor BLAKE3, legacy provider archive

@@ -49,7 +49,10 @@
     "fixed_point": { "type": "boolean" },
     "non_claim": {
       "type": "string",
-      "const": "This report proves one hydrated legacy-provider fixed point for the recorded source authority and platform; it does not prove full-source bootstrap, compiler correctness, seed trust removal, release reproducibility, independent rebuild agreement, deployment success, or full Cargo compatibility."
+      "enum": [
+        "This report proves one hydrated legacy-provider fixed point for the recorded source authority and platform; it does not prove full-source bootstrap, compiler correctness, seed trust removal, release reproducibility, independent rebuild agreement, deployment success, or full Cargo compatibility.",
+        "This report proves one hydrated fixed point for the recorded provider, source authority, and platform; it does not prove compiler correctness, bootstrap-seed correctness, independent rebuild agreement, release reproducibility, deployment success, or full Cargo compatibility."
+      ]
     }
   },
   "$defs": {
