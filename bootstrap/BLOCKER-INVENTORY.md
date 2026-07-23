@@ -43,3 +43,5 @@ Use this when refreshing inventory evidence or choosing the next repair target. 
 ## Retiring a marker
 
 Retire or narrow a marker class only when the corresponding blocker has positive source-built evidence. The same change should keep a negative promotion-drift fixture proving that any remaining blocker class still rejects overclaiming full-source readiness.
+
+Selected full-source predecessor markers are classified only when both archive-stable reports pass exact checks: `full-source-provider-admission.json` must bind the admitted provider/output/source-closure identities, and `full-source-provider-fixed-point.json` must bind the full-source provider kind, complete override count, zero live fetches, and matching stage binaries. The classifier then accepts only the named path/class/excerpt tuples. Missing, stale, tampered, or new marker text remains actionable. Lexical uses such as the mkstemp filename placeholder, successful GCC static-link progress labels, and the explicit-only legacy compatibility comment are classified separately from proof-backed predecessor boundaries.

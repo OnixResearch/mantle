@@ -86,6 +86,15 @@ const MARKERS: &[MarkerClass] = &[
     },
 ];
 
+const FULL_SOURCE_ADMISSION_PATH: &str = "bootstrap/evidence/full-source-provider-admission.json";
+const FULL_SOURCE_FIXED_POINT_PATH: &str = "bootstrap/evidence/full-source-provider-fixed-point.json";
+const FULL_SOURCE_OUTPUT_BLAKE3: &str = "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f";
+const FULL_SOURCE_CLOSURE_BLAKE3: &str = "2bd4fb6404fd0b3ac208fb1d8f9d2e1f28aa164a48f7470cfe199f17456a70cb";
+const FULL_SOURCE_PROOF_MANIFEST_BLAKE3: &str = "0c963d0dd76ffc89c95a5a8b63395332b6d33ecbb7840e906caa195e3879612a";
+const FULL_SOURCE_OVERRIDE_COUNT: &str = "62";
+const BLAKE3_HEX_BYTES: usize = 64;
+const FIXED_POINT_STAGE_COUNT: usize = 2;
+
 const PROMOTION_CLAIM_NEEDLES: &[&str] = &[
     "full-source bootstrap status: promoted",
     "full-source bootstrap status = promoted",
@@ -138,6 +147,91 @@ struct PromotionClaim {
     line: usize,
     excerpt: String,
 }
+
+#[derive(Debug, Clone, Copy)]
+struct ProvenPredecessorMarker {
+    path: &'static str,
+    class_id: &'static str,
+    excerpt: &'static str,
+}
+
+const FULL_SOURCE_PREDECESSOR_MARKERS: &[ProvenPredecessorMarker] = &[
+    ProvenPredecessorMarker {
+        path: "bootstrap/binutils-2.30-gas-source.ncl",
+        class_id: "bridge-output",
+        excerpt: "runnable source-built `as`; its other tools may still be predecessor bridges",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/binutils-2.30-gas-source.ncl",
+        class_id: "bridge-output",
+        excerpt: "continuing with bootstrap bridges where available",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/flex-2.5.36-gcc.ncl",
+        class_id: "bridge-output",
+        excerpt: "gcc release-source scanner checks passed; bootstrap bridge only",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/flex-2.6.4-gcc.ncl",
+        class_id: "bridge-output",
+        excerpt: "conventional bison/m4 bridge",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/gawk-3.0.4-gcc-factory.ncl",
+        class_id: "bridge-output",
+        excerpt: "tinycc-era bridge has incomplete string-length and hexadecimal-format",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/gcc-4.0-native.ncl",
+        class_id: "bridge-output",
+        excerpt: "configure-only diagnostic bridge",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/gcc-4.0-native.ncl",
+        class_id: "bridge-output",
+        excerpt: "bounded diagnostic handoff; admission still forbids this bridge",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/gcc-4.0-native.ncl",
+        class_id: "bridge-output",
+        excerpt: "invocation remains bound explicitly with -b and this bridge is not",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/grep-2.4-gcc.ncl",
+        class_id: "bridge-output",
+        excerpt: "intentionally bounded shell bridge",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/heirloom-devtools-gcc.ncl",
+        class_id: "bridge-output",
+        excerpt: "gcc-built heirloom yacc/lex bridge",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/heirloom-devtools-gcc.ncl",
+        class_id: "bridge-output",
+        excerpt: "generation and rejection checks passed; bootstrap bridge only",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/musl-1.1.24-native.ncl",
+        class_id: "bridge-output",
+        excerpt: "diagnostic bridge only: the current tinycc miscompiles floatscan",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/musl-1.1.24-native.ncl",
+        class_id: "bridge-output",
+        excerpt: "diagnostic bridge only: the current tinycc front end emits alloca",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/musl-1.1.24-native.ncl",
+        class_id: "bridge-output",
+        excerpt: "diagnostic bridge only: both source-built tinycc front ends fail",
+    },
+    ProvenPredecessorMarker {
+        path: "bootstrap/tcc-musl-native.ncl",
+        class_id: "compiler-runtime-crash-boundary",
+        excerpt: "avoids hiding frontend failures behind a diagnostic segfault",
+    },
+];
 
 #[derive(Default)]
 struct Config {
@@ -774,6 +868,53 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test rejected suppression of a real legacy fallback".to_string());
     }
+    let admission_fixture = valid_full_source_admission_fixture();
+    let fixed_point_fixture = valid_full_source_fixed_point_fixture();
+    if !full_source_provider_fixed_point_evidence_is_valid(&admission_fixture, &fixed_point_fixture) {
+        return Err("self-test expected valid full-source fixed-point evidence".to_string());
+    }
+    let wrong_provider =
+        fixed_point_fixture.replace("\"provider_kind\": \"full-source\"", "\"provider_kind\": \"legacy-fetch\"");
+    if full_source_provider_fixed_point_evidence_is_valid(&admission_fixture, &wrong_provider) {
+        return Err("self-test accepted wrong fixed-point provider kind".to_string());
+    }
+    let live_fetch = fixed_point_fixture.replace("\"live_fetch_events\": 0", "\"live_fetch_events\": 1");
+    if full_source_provider_fixed_point_evidence_is_valid(&admission_fixture, &live_fetch) {
+        return Err("self-test accepted fixed-point live fetches".to_string());
+    }
+    let mismatched_stage = fixed_point_fixture.replace(
+        &format!("\"stage2_binary_blake3\": \"{}\"", "a".repeat(BLAKE3_HEX_BYTES)),
+        &format!("\"stage2_binary_blake3\": \"{}\"", "b".repeat(BLAKE3_HEX_BYTES)),
+    );
+    if full_source_provider_fixed_point_evidence_is_valid(&admission_fixture, &mismatched_stage) {
+        return Err("self-test accepted mismatched fixed-point stage binaries".to_string());
+    }
+    let proven_evidence = EvidenceState {
+        full_source_provider_fixed_point_checked: true,
+        ..EvidenceState::default()
+    };
+    for proven in FULL_SOURCE_PREDECESSOR_MARKERS {
+        let Some(marker) = MARKERS.iter().copied().find(|marker| marker.id == proven.class_id) else {
+            return Err(format!("self-test predecessor marker class is unknown: {}", proven.class_id));
+        };
+        if source_marker_suppression_reason(Path::new(proven.path), marker, proven.excerpt, &proven_evidence).is_none()
+        {
+            return Err(format!("self-test expected proven predecessor suppression: {}", proven.path));
+        }
+        if source_marker_suppression_reason(Path::new(proven.path), marker, proven.excerpt, &no_evidence).is_some() {
+            return Err(format!("self-test accepted predecessor suppression without proof: {}", proven.path));
+        }
+    }
+    if source_marker_suppression_reason(
+        Path::new("bootstrap/new-bridge.ncl"),
+        MARKERS[0],
+        "new unclassified bridge output",
+        &proven_evidence,
+    )
+    .is_some()
+    {
+        return Err("self-test accepted an unknown bridge after full-source proof".to_string());
+    }
 
     Ok(())
 }
@@ -797,6 +938,7 @@ struct EvidenceState {
     tinycc_0927_mes_handoff_boundary_checked: bool,
     diagnostic_derivation_boundary_inventory_checked: bool,
     gcc40_native_cc1_build_frontier_checked: bool,
+    full_source_provider_fixed_point_checked: bool,
 }
 
 impl EvidenceState {
@@ -819,6 +961,7 @@ impl EvidenceState {
             tcc_musl_handoff_bridge_boundaries_checked: checked_tcc_musl_handoff_bridge_boundaries(),
             tinycc_0927_mes_handoff_boundary_checked: checked_tinycc_0927_mes_handoff_boundary(),
             diagnostic_derivation_boundary_inventory_checked: checked_diagnostic_derivation_boundary_inventory(),
+            full_source_provider_fixed_point_checked: checked_full_source_provider_fixed_point(),
         }
     }
 }
@@ -826,6 +969,132 @@ impl EvidenceState {
 fn checked_evidence_file(path: &str, needles: &[&str]) -> Option<String> {
     let content = fs::read_to_string(path).ok()?;
     needles.iter().all(|needle| content.contains(needle)).then_some(content)
+}
+
+fn valid_full_source_admission_fixture() -> String {
+    format!(
+        "{{\n  \"schema\": \"mantle-full-source-provider-admission-v2\",\n  \"status\": \"admitted\",\n  \"provider_id\": \"full-source-v1\",\n  \"output_digest_blake3\": \"{FULL_SOURCE_OUTPUT_BLAKE3}\",\n  \"expected_output_digest_blake3\": \"{FULL_SOURCE_OUTPUT_BLAKE3}\",\n  \"source_closure_manifest_blake3\": \"{FULL_SOURCE_CLOSURE_BLAKE3}\",\n  \"expected_source_closure_manifest_blake3\": \"{FULL_SOURCE_CLOSURE_BLAKE3}\",\n  \"runtime_smoke_steps\": [\"undefined-link\"]\n}}"
+    )
+}
+
+fn valid_full_source_fixed_point_fixture() -> String {
+    let stage_blake3 = "a".repeat(BLAKE3_HEX_BYTES);
+    let source_state_blake3 = "b".repeat(BLAKE3_HEX_BYTES);
+    format!(
+        "{{\n  \"format\": \"mantle-hydrated-fresh-clone-fixed-point-v1\",\n  \"expected_manifest_blake3\": \"{FULL_SOURCE_PROOF_MANIFEST_BLAKE3}\",\n  \"source_state_blake3\": \"{source_state_blake3}\",\n  \"provider_kind\": \"full-source\",\n  \"proof_mode\": \"fixed-point\",\n  \"stage0\": {{\"source_policy\": \"require-override\", \"source_override_count\": {FULL_SOURCE_OVERRIDE_COUNT}, \"live_fetch_events\": 0}},\n  \"stage2\": {{\"source_policy\": \"require-override\", \"source_override_count\": {FULL_SOURCE_OVERRIDE_COUNT}, \"live_fetch_events\": 0}},\n  \"stage1_binary_blake3\": \"{stage_blake3}\",\n  \"stage2_binary_blake3\": \"{stage_blake3}\",\n  \"fixed_point\": true,\n  \"non_claim\": \"This report proves one hydrated fixed point for the recorded provider, source authority, and platform; it does not prove compiler correctness.\"\n}}"
+    )
+}
+
+fn checked_full_source_provider_fixed_point() -> bool {
+    let Ok(admission) = fs::read_to_string(FULL_SOURCE_ADMISSION_PATH) else {
+        return false;
+    };
+    let Ok(fixed_point) = fs::read_to_string(FULL_SOURCE_FIXED_POINT_PATH) else {
+        return false;
+    };
+    full_source_provider_fixed_point_evidence_is_valid(&admission, &fixed_point)
+}
+
+fn full_source_provider_fixed_point_evidence_is_valid(admission: &str, fixed_point: &str) -> bool {
+    if json_string_field(admission, "schema") != Some("mantle-full-source-provider-admission-v2") {
+        return false;
+    }
+    if json_string_field(admission, "status") != Some("admitted") {
+        return false;
+    }
+    if json_string_field(admission, "provider_id") != Some("full-source-v1") {
+        return false;
+    }
+    if json_string_field(admission, "output_digest_blake3") != Some(FULL_SOURCE_OUTPUT_BLAKE3) {
+        return false;
+    }
+    if json_string_field(admission, "expected_output_digest_blake3") != Some(FULL_SOURCE_OUTPUT_BLAKE3) {
+        return false;
+    }
+    if json_string_field(admission, "source_closure_manifest_blake3") != Some(FULL_SOURCE_CLOSURE_BLAKE3) {
+        return false;
+    }
+    if json_string_field(admission, "expected_source_closure_manifest_blake3") != Some(FULL_SOURCE_CLOSURE_BLAKE3) {
+        return false;
+    }
+    if !admission.contains("\"undefined-link\"") {
+        return false;
+    }
+    full_source_fixed_point_report_is_valid(fixed_point)
+}
+
+fn full_source_fixed_point_report_is_valid(fixed_point: &str) -> bool {
+    if json_string_field(fixed_point, "format") != Some("mantle-hydrated-fresh-clone-fixed-point-v1") {
+        return false;
+    }
+    if json_string_field(fixed_point, "expected_manifest_blake3") != Some(FULL_SOURCE_PROOF_MANIFEST_BLAKE3) {
+        return false;
+    }
+    if json_string_field(fixed_point, "provider_kind") != Some("full-source") {
+        return false;
+    }
+    if json_string_field(fixed_point, "proof_mode") != Some("fixed-point") {
+        return false;
+    }
+    let Some(source_state_blake3) = json_string_field(fixed_point, "source_state_blake3") else {
+        return false;
+    };
+    if !is_blake3_hex(source_state_blake3) {
+        return false;
+    }
+    let Some(stage1_blake3) = json_string_field(fixed_point, "stage1_binary_blake3") else {
+        return false;
+    };
+    let Some(stage2_blake3) = json_string_field(fixed_point, "stage2_binary_blake3") else {
+        return false;
+    };
+    if !is_blake3_hex(stage1_blake3) {
+        return false;
+    }
+    if stage1_blake3 != stage2_blake3 {
+        return false;
+    }
+    let override_needle = format!("\"source_override_count\": {FULL_SOURCE_OVERRIDE_COUNT}");
+    if fixed_point.matches(&override_needle).count() != FIXED_POINT_STAGE_COUNT {
+        return false;
+    }
+    if fixed_point.matches("\"source_policy\": \"require-override\"").count() != FIXED_POINT_STAGE_COUNT {
+        return false;
+    }
+    if fixed_point.matches("\"live_fetch_events\": 0").count() != FIXED_POINT_STAGE_COUNT {
+        return false;
+    }
+    if !fixed_point.contains("\"fixed_point\": true") {
+        return false;
+    }
+    fixed_point.contains(
+        "This report proves one hydrated fixed point for the recorded provider, source authority, and platform",
+    )
+}
+
+fn json_string_field<'a>(content: &'a str, field: &str) -> Option<&'a str> {
+    if field.is_empty() {
+        return None;
+    }
+    let prefix = format!("\"{field}\": \"");
+    let value_offset = content.find(&prefix)?.checked_add(prefix.len())?;
+    let value_tail = content.get(value_offset..)?;
+    let value_bytes = value_tail.find('"')?;
+    value_tail.get(..value_bytes)
+}
+
+fn is_blake3_hex(value: &str) -> bool {
+    if value.len() != BLAKE3_HEX_BYTES {
+        return false;
+    }
+    value.bytes().all(is_lower_hex_byte)
+}
+
+fn is_lower_hex_byte(byte: u8) -> bool {
+    if byte.is_ascii_digit() {
+        return true;
+    }
+    (b'a'..=b'f').contains(&byte)
 }
 
 fn checked_binutils_tcc_tool_smoke() -> bool {
@@ -1221,7 +1490,7 @@ fn source_marker_suppression_reason(
     path: &Path,
     marker: MarkerClass,
     source_line: &str,
-    _evidence: &EvidenceState,
+    evidence: &EvidenceState,
 ) -> Option<&'static str> {
     let path_s = path.to_string_lossy();
     let lower_line = source_line.to_lowercase();
@@ -1252,6 +1521,23 @@ fn source_marker_suppression_reason(
         && lower_line.contains("legacy musl.cc provider remains available only through the explicit")
     {
         return Some("selected seed documents explicit legacy compatibility without a selection fallback");
+    }
+    if !evidence.full_source_provider_fixed_point_checked {
+        return None;
+    }
+    for proven in FULL_SOURCE_PREDECESSOR_MARKERS {
+        if path_s.as_ref() != proven.path {
+            continue;
+        }
+        if marker.id != proven.class_id {
+            continue;
+        }
+        if !lower_line.contains(proven.excerpt) {
+            continue;
+        }
+        return Some(
+            "full-source admission and fixed-point evidence bound this marker to a pre-admission predecessor, not the selected provider output",
+        );
     }
     None
 }
