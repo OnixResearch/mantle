@@ -28,10 +28,13 @@ use url::Url;
 /// from a misbehaving or malicious server.
 const MAX_DOWNLOAD_BYTES: u64 = 4_294_967_296;
 
+/// One castore root node is added around the bounded archive entries.
+const CASTORE_ROOT_NODE_ALLOWANCE: u32 = 1;
 /// Maximum number of entries to extract from a tar archive.
-/// Prevents zip-bomb style attacks and accidental extraction of
-/// enormous archives.
-const MAX_TAR_ENTRIES: u32 = 500_000;
+/// Prevents zip-bomb style attacks and accidental extraction of enormous
+/// archives while keeping every accepted tree representable by the store's
+/// recursive completeness checker.
+const MAX_TAR_ENTRIES: u32 = crunch_store::MAX_CASTORE_TREE_NODES - CASTORE_ROOT_NODE_ALLOWANCE;
 
 /// Maximum number of symlink expansions while validating existing paths in the
 /// extraction tree. Bounds attacker-controlled symlink cycles.
@@ -1474,6 +1477,13 @@ mod tests {
             input_sources: std::collections::BTreeSet::new(),
             outputs,
         }
+    }
+
+    #[test]
+    fn tar_entry_limit_fits_recursive_castore_completeness_bound() {
+        let represented_node_count = MAX_TAR_ENTRIES.saturating_add(CASTORE_ROOT_NODE_ALLOWANCE);
+        assert_eq!(represented_node_count, crunch_store::MAX_CASTORE_TREE_NODES);
+        assert!(MAX_TAR_ENTRIES < crunch_store::MAX_CASTORE_TREE_NODES);
     }
 
     static PATH_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());

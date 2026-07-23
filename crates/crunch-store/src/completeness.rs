@@ -11,7 +11,11 @@ use tokio::io::AsyncReadExt;
 use crate::Error;
 
 /// Maximum recursive node visits before aborting (safety bound).
-const MAX_RECURSIVE_NODES: u32 = 100_000;
+///
+/// This admits the fetcher's bounded 500,000 archive entries plus the castore
+/// root node. Keeping one shared public limit prevents authenticated large
+/// source trees from being fetched successfully and then rejected as missing.
+pub const MAX_CASTORE_TREE_NODES: u32 = 500_001;
 /// Maximum directory tree depth before aborting.
 const MAX_DEPTH: u32 = 128;
 const BLOB_COMPLETENESS_READ_BUFFER_BYTES: usize = 65_536;
@@ -38,7 +42,7 @@ pub async fn recursive_castore_completeness(
         if depth > MAX_DEPTH {
             return Ok(false);
         }
-        if visited_node_count >= MAX_RECURSIVE_NODES {
+        if !node_visit_is_within_limit(visited_node_count) {
             return Ok(false);
         }
         visited_node_count = visited_node_count.saturating_add(1);
@@ -65,7 +69,7 @@ pub async fn recursive_castore_completeness(
 
                 for child in dir.nodes() {
                     if stack.len()
-                        >= usize::try_from(MAX_RECURSIVE_NODES).map_err(|_| {
+                        >= usize::try_from(MAX_CASTORE_TREE_NODES).map_err(|_| {
                             Error::DirectoryService("completeness node limit does not fit usize".to_string())
                         })?
                     {
@@ -78,6 +82,10 @@ pub async fn recursive_castore_completeness(
     }
 
     Ok(true)
+}
+
+fn node_visit_is_within_limit(visited_node_count: u32) -> bool {
+    visited_node_count < MAX_CASTORE_TREE_NODES
 }
 
 async fn blob_has_declared_size(
@@ -343,6 +351,13 @@ mod tests {
         assert!(!recursive_castore_completeness(&complete_blob, &dir, &mismatched).await.unwrap());
         assert!(!recursive_castore_completeness(&short_blob, &dir, &matching).await.unwrap());
         assert!(!recursive_castore_completeness(&wrong_digest_blob, &dir, &matching).await.unwrap());
+    }
+
+    #[test]
+    fn node_visit_limit_accepts_last_supported_node_and_rejects_overflow() {
+        let last_supported_node = MAX_CASTORE_TREE_NODES.saturating_sub(1);
+        assert!(node_visit_is_within_limit(last_supported_node));
+        assert!(!node_visit_is_within_limit(MAX_CASTORE_TREE_NODES));
     }
 
     #[tokio::test]

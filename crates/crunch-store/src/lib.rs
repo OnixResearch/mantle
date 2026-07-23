@@ -68,6 +68,7 @@ pub use ca_mapping::OutputMap;
 pub use closure::ClosureResolution;
 pub use closure::MAX_CLOSURE_DEPTH;
 pub use closure::resolve_closure;
+pub use completeness::MAX_CASTORE_TREE_NODES;
 pub use completeness::recursive_castore_completeness;
 pub use error::Error;
 pub use export::MAX_EXPORT_DEPTH;
