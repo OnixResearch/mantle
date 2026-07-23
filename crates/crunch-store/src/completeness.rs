@@ -1,11 +1,6 @@
-//! Recursive castore completeness checking with immutable completeness markers.
+//! Recursive castore completeness checking against the active storage services.
 //!
 //! r[impl cache_substitution.castore_completeness]
-
-use std::collections::HashSet;
-use std::sync::LazyLock;
-use std::sync::Mutex;
-use std::sync::MutexGuard;
 
 use snix_castore::B3Digest;
 use snix_castore::Node;
@@ -22,97 +17,24 @@ const MAX_DEPTH: u32 = 128;
 const BLOB_COMPLETENESS_READ_BUFFER_BYTES: usize = 65_536;
 const INITIAL_COMPLETENESS_WORKLIST_CAPACITY: usize = 128;
 
-#[derive(Debug)]
-enum CompletenessWorkItem {
-    CheckNode(Node, u32),
-    MarkDirectoryComplete(B3Digest),
-}
-
-/// Thread-safe in-memory store of completeness markers keyed by
-/// finalized directory node digest (BLAKE3).
-pub struct CompletenessMarkerStore {
-    markers: Mutex<HashSet<B3Digest>>,
-}
-
-impl Default for CompletenessMarkerStore {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl CompletenessMarkerStore {
-    pub fn new() -> Self {
-        Self {
-            markers: Mutex::new(HashSet::new()),
-        }
-    }
-
-    pub fn contains(&self, digest: &B3Digest) -> bool {
-        self.lock_markers().contains(digest)
-    }
-
-    pub fn insert(&self, digest: B3Digest) {
-        self.lock_markers().insert(digest);
-    }
-
-    pub fn clear(&self) {
-        self.lock_markers().clear();
-    }
-
-    pub fn len(&self) -> u64 {
-        let marker_count = self.lock_markers().len();
-        match u64::try_from(marker_count) {
-            Ok(marker_count) => marker_count,
-            Err(error) => {
-                tracing::error!(marker_count, error = %error, "completeness marker count does not fit u64");
-                std::process::abort();
-            }
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.lock_markers().is_empty()
-    }
-
-    fn lock_markers(&self) -> MutexGuard<'_, HashSet<B3Digest>> {
-        match self.markers.lock() {
-            Ok(markers) => markers,
-            Err(poisoned) => {
-                tracing::warn!("recovering poisoned completeness marker lock");
-                poisoned.into_inner()
-            }
-        }
-    }
-}
-
-/// Global completeness marker store shared across all StoreHandles.
-pub static GLOBAL_COMPLETENESS_MARKERS: LazyLock<CompletenessMarkerStore> = LazyLock::new(CompletenessMarkerStore::new);
-
 /// Recursively check that a node's full castore tree is present.
 ///
 /// Checks every child blob and directory under `node` root. Symlinks
-/// are always complete (target inline).  Uses the global completeness
-/// marker store to skip already-verified directory nodes.
+/// are always complete because their targets are inline. Every call checks
+/// the active services so stale process-global facts cannot admit missing data.
 pub async fn recursive_castore_completeness(
     blob_service: &dyn BlobService,
     directory_service: &dyn DirectoryService,
     node: &Node,
 ) -> Result<bool, Error> {
     // Iterative stack-based traversal to avoid recursive async fn.
-    let mut stack: Vec<CompletenessWorkItem> = Vec::with_capacity(INITIAL_COMPLETENESS_WORKLIST_CAPACITY);
-    stack.push(CompletenessWorkItem::CheckNode(node.clone(), 0));
+    let mut stack: Vec<(Node, u32)> = Vec::with_capacity(INITIAL_COMPLETENESS_WORKLIST_CAPACITY);
+    stack.push((node.clone(), 0));
     let mut visited_node_count = 0u32;
     assert_eq!(stack.len(), 1);
     assert_eq!(visited_node_count, 0);
 
-    while let Some(item) = stack.pop() {
-        let (current_node, depth) = match item {
-            CompletenessWorkItem::CheckNode(current_node, depth) => (current_node, depth),
-            CompletenessWorkItem::MarkDirectoryComplete(digest) => {
-                GLOBAL_COMPLETENESS_MARKERS.insert(digest);
-                continue;
-            }
-        };
+    while let Some((current_node, depth)) = stack.pop() {
         if depth > MAX_DEPTH {
             return Ok(false);
         }
@@ -131,12 +53,7 @@ pub async fn recursive_castore_completeness(
                 // Symlinks are always complete.
             }
             Node::Directory { digest, .. } => {
-                // Completeness marker: skip if already verified.
-                if GLOBAL_COMPLETENESS_MARKERS.contains(digest) {
-                    continue;
-                }
-
-                // Fetch the directory node's children.
+                // Fetch the directory node's children from the active service.
                 let dir = match directory_service
                     .get(digest)
                     .await
@@ -146,16 +63,6 @@ pub async fn recursive_castore_completeness(
                     None => return Ok(false),
                 };
 
-                // Mark only after all children have been checked. Pushing the
-                // marker first makes the LIFO worklist process it last.
-                if stack.len()
-                    >= usize::try_from(MAX_RECURSIVE_NODES).map_err(|_| {
-                        Error::DirectoryService("completeness node limit does not fit usize".to_string())
-                    })?
-                {
-                    return Ok(false);
-                }
-                stack.push(CompletenessWorkItem::MarkDirectoryComplete(*digest));
                 for child in dir.nodes() {
                     if stack.len()
                         >= usize::try_from(MAX_RECURSIVE_NODES).map_err(|_| {
@@ -164,7 +71,7 @@ pub async fn recursive_castore_completeness(
                     {
                         return Ok(false);
                     }
-                    stack.push(CompletenessWorkItem::CheckNode(child.1.clone(), depth.saturating_add(1)));
+                    stack.push((child.1.clone(), depth.saturating_add(1)));
                 }
             }
         }
@@ -260,6 +167,9 @@ async fn blob_reader_has_declared_size(
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    const DEPTH_OVERFLOW_MARGIN: u32 = 5;
 
     use async_trait::async_trait;
     use snix_castore::Directory;
@@ -445,12 +355,8 @@ mod tests {
         assert!(recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
     }
 
-    static COMPLETENESS_MARKER_TEST_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
     #[tokio::test]
     async fn empty_directory_requires_existence() {
-        let _marker_guard = COMPLETENESS_MARKER_TEST_MUTEX.lock().await;
-        GLOBAL_COMPLETENESS_MARKERS.clear();
         let blob = MemoryBlobService::default();
         let dir = StubDirectoryService::new();
         // Use a non-empty directory with a unique child to avoid digest
@@ -474,13 +380,10 @@ mod tests {
         // Insert and recheck
         dir.put(unique_dir).await.unwrap();
         assert!(recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
-        assert!(GLOBAL_COMPLETENESS_MARKERS.contains(&digest));
     }
 
     #[tokio::test]
     async fn directory_with_missing_blob_child_is_incomplete() {
-        let _marker_guard = COMPLETENESS_MARKER_TEST_MUTEX.lock().await;
-        GLOBAL_COMPLETENESS_MARKERS.clear();
         let blob = MemoryBlobService::default();
         let dir = StubDirectoryService::new();
 
@@ -513,14 +416,11 @@ mod tests {
             size: 2,
         };
         assert!(!recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
-        assert!(!GLOBAL_COMPLETENESS_MARKERS.contains(&parent_digest));
-        assert!(!GLOBAL_COMPLETENESS_MARKERS.contains(&child_digest));
+        assert_ne!(parent_digest, child_digest);
     }
 
     #[tokio::test]
-    async fn completeness_marker_skips_redundant_traversal() {
-        let _marker_guard = COMPLETENESS_MARKER_TEST_MUTEX.lock().await;
-        GLOBAL_COMPLETENESS_MARKERS.clear();
+    async fn completeness_rechecks_and_rejects_removed_directory() {
         let blob = MemoryBlobService::default();
         let dir = StubDirectoryService::new();
         let empty = Directory::new();
@@ -529,17 +429,13 @@ mod tests {
 
         let node = Node::Directory { digest, size: 0 };
         assert!(recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
-        assert!(GLOBAL_COMPLETENESS_MARKERS.contains(&digest));
 
-        // Second check uses marker — should still return true even if directory removed
         dir.dirs.lock().unwrap().clear();
-        assert!(recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
+        assert!(!recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
     }
 
     #[tokio::test]
     async fn bounded_depth_rejects_extremely_deep_trees() {
-        let _marker_guard = COMPLETENESS_MARKER_TEST_MUTEX.lock().await;
-        GLOBAL_COMPLETENESS_MARKERS.clear();
         let blob = MemoryBlobService::default();
         let dir = StubDirectoryService::new();
 
@@ -548,7 +444,7 @@ mod tests {
         dir.put(current.clone()).await.unwrap();
 
         let name = PathComponent::try_from("sub").unwrap();
-        for _ in 0..MAX_DEPTH + 5 {
+        for _ in 0..MAX_DEPTH + DEPTH_OVERFLOW_MARGIN {
             let mut parent = Directory::new();
             parent
                 .add(name.clone(), Node::Directory {

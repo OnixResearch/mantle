@@ -21,10 +21,11 @@ const COMMON_BWRAP_ARGS: &[&str] = &[
     "localhost",
     "--unshare-ipc",
     "--unshare-pid",
-    // NOTE: --die-with-parent removed because PR_SET_PDEATHSIG(SIGKILL)
+    // NOTE: --die-with-parent remains omitted because PR_SET_PDEATHSIG(SIGKILL)
     // fires when the spawning tokio worker thread exits, killing long-running
-    // sandbox builds. The parent (tokio process) already waits on the child.
-    "--as-pid-1",
+    // sandbox builds. Keep --as-pid-1 omitted too: bubblewrap's PID-1 reaper
+    // must own command teardown, especially for short-lived builders inside a
+    // nested user namespace.
     "--unshare-user",
     "--unshare-cgroup-try",
     // Prevent sandbox from gaining new privileges via setuid/setgid binaries
@@ -502,6 +503,12 @@ mod tests {
     #[test]
     fn common_bwrap_args_contains_hostname() {
         assert!(COMMON_BWRAP_ARGS.windows(2).any(|w| w == ["--hostname", "localhost"]));
+    }
+
+    #[test]
+    fn common_bwrap_args_install_pid_namespace_reaper() {
+        assert!(COMMON_BWRAP_ARGS.contains(&"--unshare-pid"));
+        assert!(!COMMON_BWRAP_ARGS.contains(&"--as-pid-1"));
     }
 
     #[test]

@@ -183,7 +183,7 @@ AFTERKAEM
       fi
 
       # mescc-tools-extra
-      for tool in cp chmod mkdir untar ungz unbz2 unxz sha256sum match replace wrap; do
+      for tool in cp chmod mkdir rm untar ungz unbz2 unxz sha256sum match replace wrap; do
         if [ -x "AMD64/bin/$tool" ]; then
           $BB cp "AMD64/bin/$tool" "$out/bin/$tool"
         fi
@@ -201,6 +201,7 @@ AFTERKAEM
       test -x "$out/bin/kaem"
       test -x "$out/bin/M2-Planet"
       test -x "$out/bin/blood-elf"
+      test -x "$out/bin/rm"
 
       $BB chmod -R 0555 "$out/bin"
     "%,

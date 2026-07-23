@@ -26,7 +26,11 @@ pub struct CombinedBlobService<BL, BR> {
 
 impl<BL, BR> CombinedBlobService<BL, BR> {
     pub fn new(instance_name: String, near: BL, far: BR) -> Self {
-        Self { instance_name, near, far }
+        Self {
+            instance_name,
+            near,
+            far,
+        }
     }
 }
 

@@ -7,9 +7,9 @@
 
 let crunch = import "lib.ncl" in
 
-let stage0 = import "stage0-posix.ncl" in
-let mes = import "mes.ncl" in
-let tcc = import "tinycc.ncl" in
+let stage0 = crunch.derivationFile "stage0-posix.ncl" in
+let mes = crunch.derivationFile "mes.ncl" in
+let tcc = crunch.derivationFile "tinycc.ncl" in
 
 let make_src = crunch.fetchTarball {
   # first-consumer: bootstrap/make-tcc.ncl

@@ -67,6 +67,16 @@ let scheduling = import "scheduling.ncl" in
   schedulingKnownGraphBounds = scheduling.default_known_graph_bounds,
   schedulingHistoryPolicy = scheduling.default_history_policy,
 
+  # Lazy derivation file edge. The pipeline resolves this relative path before
+  # conversion, keeping large derivation DAGs out of one Nickel value.
+  derivationFile
+    | doc "Reference a relative .ncl derivation file without embedding its transitive value."
+    = fun relative_path => { derivation_file = relative_path },
+
+  derivationFileOutput
+    | doc "Reference one output from a relative .ncl derivation file."
+    = fun relative_path output_name => { derivation_file = relative_path, output = output_name },
+
   # Output selection
   select
     | doc "Select a single output from a multi-output derivation. Returns a record suitable for the `inputs` array."

@@ -1,94 +1,148 @@
-# Build MPC 1.2.1 using GCC 4.7.4 + GMP + MPFR.
-#
-# MPC is the last math library prerequisite for GCC 10.
-#
-# Adapted from live-bootstrap steps/mpc-1.2.1.
+# Diagnostic MPC 1.2.1 build with regenerated GCC 4.0, GMP, and MPFR.
+# This closes the math-library prerequisites required by GCC 4.7's upstream
+# compile recipe.  It remains non-admission while predecessor paths are pinned.
 
 let crunch = import "lib.ncl" in
-
-let gcc47 = import "gcc-4.7.ncl" in
-let binutils = import "binutils-tcc.ncl" in
-let musl = import "musl-1.1.24-tcc-musl.ncl" in
-let make = import "make-tcc.ncl" in
-let bash = import "bash-2.05b-tcc.ncl" in
-let coreutils = import "coreutils-6.10-musl.ncl" in
-let sed = import "sed-4.0.9-musl.ncl" in
-let grep = import "grep-2.4-musl.ncl" in
-let gmp = import "gmp-6.2.1.ncl" in
-let mpfr = import "mpfr-4.1.0.ncl" in
-let stage0 = import "stage0-posix.ncl" in
 
 let mpc_src = crunch.fetchTarball {
   # provenance: fosslinux/live-bootstrap steps/mpc-1.2.1/sources
   # first-consumer: bootstrap/mpc-1.2.1.ncl
-  # upstream parts.rst currently labels this section "mpc 3.2.1"; steps/manifest and sources use mpc-1.2.1.
+  # Upstream parts.rst labels this section 3.2.1, while its manifest and
+  # implemented step both select mpc-1.2.1.
   url = "https://ftpmirror.gnu.org/mpc/mpc-1.2.1.tar.gz",
   hash = "sha256-nyt5XHt58wWilbLRlIDuECmD3qBqmKTx4jiGL/7n5Ws=",
   name = "mpc-1.2.1-src",
 } in
 
 {
-  name = "mpc-1.2.1",
+  name = "mpc-1.2.1-gcc40-v1",
   builder = "/bin/sh",
   args = [
     "-c",
     m%"
       set -eu
       BB=/bin/busybox
+      TARGET=x86_64-unknown-linux-musl
+      GCC_VERSION=4.0.4
+      EXPECTED_REAL=42
 
       find_input() {
-        for d in $NIX_STORE/*-"$1"; do
-          if [ -d "$d" ]; then echo "$d"; return; fi
+        for candidate in $NIX_STORE/*-"$1"; do
+          if [ -d "$candidate" ]; then echo "$candidate"; return; fi
         done
-        echo "ERROR: input $1 not found" >&2; exit 1
+        echo "ERROR: input $1 not found" >&2
+        exit 1
       }
 
-      GCC=$(find_input gcc-4.7.4)
-      BINUTILS=$(find_input binutils-2.30-tcc)
-      MUSL=$(find_input musl-1.1.24-tcc-musl)
+      GCC=$(find_input gcc-4.0.4-musl-cxx-v7)
+      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v16)
+      MUSL=$(find_input musl-1.1.24-gcc-pass5-v1)
       MAKE=$(find_input make-3.82-tcc)
-      BASH=$(find_input bash-2.05b-tcc)
-      CU=$(find_input coreutils-6.10-musl)
-      SED=$(find_input sed-4.0.9-musl)
-      GREP=$(find_input grep-2.4-musl)
-      GMP=$(find_input gmp-6.2.1)
-      MPFR=$(find_input mpfr-4.1.0)
+      STAGE0=$(find_input stage0-posix)
+      GREP=$(find_input grep-2.4-gcc-v10)
+      GMP=$(find_input gmp-6.2.1-gcc40-v1)
+      MPFR=$(find_input mpfr-4.1.0-gcc40-v1)
       SRC=$(find_input mpc-1.2.1-src)
 
-      export PATH="$GCC/bin:$BINUTILS/bin:$MAKE/bin:$BASH/bin:$CU/bin:$SED/bin:$GREP/bin:$PATH"
-      export CONFIG_SHELL="$BASH/bin/bash"
-      export SHELL="$BASH/bin/bash"
+      WORK=/tmp/mpc-1.2.1-gcc40
+      TOOLBIN="$WORK/tools"
+      $BB rm -rf "$WORK"
+      $BB mkdir -p "$TOOLBIN"
+      for applet in awk basename cat chmod cmp cp cut diff dirname echo expr find head ln ls mkdir mv od printf pwd rm rmdir sed sh sleep sort tail test touch tr true uname uniq wc; do
+        $BB ln -sf "$BB" "$TOOLBIN/$applet"
+      done
+      export PATH="$GREP/bin:$TOOLBIN:$MAKE/bin:$BINUTILS/bin:$STAGE0/bin:$PATH"
+      export CONFIG_SHELL=/bin/sh
+      export SHELL=/bin/sh
+      unset MAKEFLAGS MFLAGS MAKELEVEL
 
-      WORK=/tmp/mpc-build
-      $BB mkdir -p "$WORK"
-      cd "$WORK"
-      $BB cp -r "$SRC" mpc-1.2.1
-      $BB chmod -R u+w mpc-1.2.1
-      cd mpc-1.2.1
+      CC_WRAPPER="$TOOLBIN/gcc40"
+      $BB cat > "$CC_WRAPPER" <<EOF
+#!/bin/sh
+MANTLE_GCC_ASSEMBLER="$BINUTILS/bin/as" \
+MANTLE_GCC_LINKER="$BINUTILS/bin/ld" \
+MANTLE_GCC_LINK_LIBC="$MUSL/lib/libc.a" \
+MANTLE_GCC_LINK_LIBM="$MUSL/lib/libm.a" \
+MANTLE_GCC_LINK_LIBGCC="$GCC/lib/gcc/$TARGET/$GCC_VERSION/libgcc.a" \
+MANTLE_GCC_LINK_CRT="$MUSL/lib" \
+exec "$GCC/bin/gcc" \
+  -B"$GCC/bin/" \
+  -B"$GCC/lib/gcc/$TARGET/$GCC_VERSION/" \
+  "\$@"
+EOF
+      $BB chmod 755 "$CC_WRAPPER"
 
-      "$BASH/bin/bash" ./configure \
-        --prefix="$out" \
-        --build=x86_64-unknown-linux-musl \
-        --host=x86_64-unknown-linux-musl \
-        --disable-shared \
-        --enable-static \
-        --with-gmp="$GMP" \
-        --with-mpfr="$MPFR" \
-        CC="$GCC/bin/gcc" \
-        CFLAGS="-I$MUSL/include -I$GMP/include -I$MPFR/include -D_GNU_SOURCE -O2" \
-        LDFLAGS="-static -L$MUSL/lib -L$GMP/lib -L$MPFR/lib" \
-        2>&1
+      $BB cp -R "$SRC" "$WORK/src"
+      $BB chmod -R u+w "$WORK/src"
+      cd "$WORK/src"
+      CC="$CC_WRAPPER" \
+      AR="$BINUTILS/bin/ar" \
+      RANLIB="$BINUTILS/bin/ranlib" \
+      CFLAGS="-O2 -fno-common -I$MUSL/include -I$GMP/include -I$MPFR/include" \
+      LDFLAGS="-static -L$MUSL/lib -L$GMP/lib -L$MPFR/lib" \
+        ./configure \
+          --prefix="$out" \
+          --build="$TARGET" \
+          --host="$TARGET" \
+          --disable-shared \
+          --enable-static \
+          --with-gmp="$GMP" \
+          --with-mpfr="$MPFR"
+      make -j1
+      make -j1 install
 
-      make -j1 2>&1
-      make -j1 install 2>&1
+      test -s "$out/lib/libmpc.a"
+      test -s "$out/include/mpc.h"
+      "$BINUTILS/bin/ar" t "$out/lib/libmpc.a" > "$WORK/archive-members.txt"
+      test -s "$WORK/archive-members.txt"
 
-      test -f "$out/lib/libmpc.a" || { echo "ERROR: libmpc.a not built" >&2; exit 1; }
-      test -f "$out/include/mpc.h" || { echo "ERROR: mpc.h not installed" >&2; exit 1; }
-      echo "mpc-1.2.1 build complete"
-    "%,
+      $BB cat > "$WORK/positive.c" <<EOF
+#include <mpc.h>
+int main(void) {
+  mpc_t value;
+  mpc_init2(value, 128);
+  mpc_set_ui(value, $EXPECTED_REAL, MPC_RNDNN);
+  int real_matches = mpfr_cmp_ui(mpc_realref(value), $EXPECTED_REAL) == 0;
+  int imaginary_is_zero = mpfr_zero_p(mpc_imagref(value)) != 0;
+  int matches = real_matches && imaginary_is_zero;
+  mpc_clear(value);
+  return matches ? 0 : 1;
+}
+EOF
+      "$CC_WRAPPER" -static \
+        -I"$out/include" -I"$MPFR/include" -I"$GMP/include" -I"$MUSL/include" \
+        "$WORK/positive.c" "$out/lib/libmpc.a" "$MPFR/lib/libmpfr.a" \
+        "$GMP/lib/libgmp.a" -lm -o "$WORK/positive"
+      test -s "$WORK/positive"
+      $BB chmod 755 "$WORK/positive"
+      "$WORK/positive"
+
+      $BB printf '%s\n' 'int main(' > "$WORK/rejected.c"
+      $BB rm -f "$WORK/rejected.o"
+      if "$CC_WRAPPER" -I"$out/include" -I"$MPFR/include" \
+        -I"$GMP/include" -I"$MUSL/include" \
+        -c "$WORK/rejected.c" -o "$WORK/rejected.o"; then
+        echo "ERROR: GCC/MPC frontier accepted malformed C" >&2
+        exit 1
+      fi
+      test ! -e "$WORK/rejected.o"
+
+      $BB mkdir -p "$out/share/mpc-gcc40-frontier"
+      $BB printf '%s\n' \
+        'NON_ADMISSION: GCC 4.0 math prerequisite has component-level runtime evidence; normalized-provider admission remains separate' \
+        > "$out/share/mpc-gcc40-frontier/NON_ADMISSION"
+      echo "MPC 1.2.1 GCC 4.0 runtime and rejection checks passed; not provider admission"
+    "%
   ],
   inputs = [
-    gcc47, binutils, musl, make, bash, coreutils, sed, grep,
-    gmp, mpfr, stage0, mpc_src,
+    crunch.derivationFile "gcc-4.0-musl-cxx.ncl",
+    crunch.derivationFile "binutils-2.30-gcc.ncl",
+    crunch.derivationFile "musl-1.1.24-gcc-pass5.ncl",
+    crunch.derivationFile "make-tcc.ncl",
+    crunch.derivationFile "stage0-posix.ncl",
+    crunch.derivationFile "grep-2.4-gcc.ncl",
+    crunch.derivationFile "gmp-6.2.1.ncl",
+    crunch.derivationFile "mpfr-4.1.0.ncl",
+    mpc_src,
   ],
 } | crunch.Derivation

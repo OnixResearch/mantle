@@ -9,13 +9,13 @@
 
 let crunch = import "lib.ncl" in
 
-let stage0 = import "stage0-posix.ncl" in
-let mes = import "mes.ncl" in
-let tcc26 = import "tinycc-mes.ncl" in
-let tcc_prep = import "tcc-musl-prep.ncl" in
-let musl = import "musl-1.1.24-tcc-musl.ncl" in
-let make = import "make-tcc.ncl" in
-let sed = import "sed-tcc.ncl" in
+let stage0 = crunch.derivationFile "stage0-posix.ncl" in
+let mes = crunch.derivationFile "mes.ncl" in
+let tcc26 = crunch.derivationFile "tinycc-mes.ncl" in
+let tcc_prep = crunch.derivationFile "tcc-musl-prep.ncl" in
+let musl = crunch.derivationFile "musl-1.1.24-tcc-musl.ncl" in
+let make = crunch.derivationFile "make-tcc.ncl" in
+let sed = crunch.derivationFile "sed-tcc.ncl" in
 
 let tcc27_src = crunch.fetchTarball {
   # first-consumer: bootstrap/tcc-musl-v2.ncl
@@ -385,6 +385,18 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
       $BB cp tcc-musl "$out/bin/tcc"
       $BB cp tcc-musl "$out/bin/tcc-0.9.27-musl-v2"
       $BB chmod 755 "$out/bin/tcc" "$out/bin/tcc-0.9.27-musl-v2"
+
+      # Preserve the exact normalized C source that produced this compiler so
+      # the next self-host pass cannot drift from predecessor-specific repairs.
+      $BB mkdir -p "$out/share/tcc-source"
+      for source_file in *.c *.h *.def; do
+        test -f "$source_file" || continue
+        $BB cp "$source_file" "$out/share/tcc-source/$source_file"
+      done
+      $BB cp -r include "$out/share/tcc-source/include"
+      test -f "$out/share/tcc-source/tcc.c"
+      test -f "$out/share/tcc-source/x86_64-gen.c"
+      test -f "$out/share/tcc-source/include/stdarg.h"
 
       # libtcc1.a is part of the compiler runtime contract.  The first musl
       # stage can use the predecessor runtime archive until a later self-hosted

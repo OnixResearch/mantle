@@ -131,6 +131,26 @@ fn resolve_inputs(
                 })?;
                 input_sources.insert(store_path);
             }
+            Input::DerivationFile(reference) => {
+                return Err(Error::UnresolvedDerivationFile {
+                    path: reference.path.clone(),
+                });
+            }
+            Input::ResolvedDerivation(reference) => {
+                let drv_path = parse_store_path(StorePathText {
+                    path_text: &reference.drv_path,
+                    store_dir,
+                })?;
+                let output_names = reference.outputs.iter().cloned().collect::<BTreeSet<_>>();
+                if output_names.is_empty() {
+                    return Err(Error::InvalidOutputSelection {
+                        drv_name: reference.drv_path.clone(),
+                        output: "<all>".to_string(),
+                        available: "<none>".to_string(),
+                    });
+                }
+                input_derivations.entry(drv_path).or_default().extend(output_names);
+            }
             Input::OutputSelection(output_ref) => {
                 // Validate the selected output exists.
                 if !output_ref.drv.outputs.contains(&output_ref.output) {

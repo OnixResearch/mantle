@@ -1,209 +1,330 @@
-# Build GCC 10.5.0 using GCC 4.7.4 + GMP + MPFR + MPC.
+# Diagnostic GCC 10.5.0 C/C++ frontier over the source-built GCC 4.7 line.
 #
-# GCC 10 is the modern compiler that produces the final seed toolchain.
-# It builds both C and C++ with full optimization support.
-#
-# Adapted from live-bootstrap steps/gcc-10.5.0/pass1.sh.
+# This root intentionally uses authenticated release-generated GCC sources. It
+# proves the conventional compiler/runtime handoff only; source regeneration,
+# derivational closure, provider normalization, and admission remain open.
 
 let crunch = import "lib.ncl" in
 
-let stage0 = import "stage0-posix.ncl" in
-let tcc = import "tcc-musl-v2.ncl" in
-let musl = import "musl-1.1.24-tcc-musl.ncl" in
-let make = import "make-tcc.ncl" in
-let binutils = import "binutils-tcc.ncl" in
-let gcc47 = import "gcc-4.7.ncl" in
-let gmp = import "gmp-6.2.1.ncl" in
-let mpfr = import "mpfr-4.1.0.ncl" in
-let mpc = import "mpc-1.2.1.ncl" in
-let sed = import "sed-4.0.9-musl.ncl" in
-let m4 = import "m4-1.4.7-musl.ncl" in
-let flex = import "flex-2.6.4-musl.ncl" in
-let bison = import "bison-3.4.1-musl.ncl" in
-let perl = import "perl-5.6.2-musl.ncl" in
-let coreutils = import "coreutils-6.10-musl.ncl" in
-let gawk = import "gawk-3.0.4-musl.ncl" in
-let grep = import "grep-2.4-musl.ncl" in
-let diffutils = import "diffutils-2.7-musl.ncl" in
-let bash = import "bash-2.05b-tcc.ncl" in
-let autoconf = import "autoconf-2.69.ncl" in
-let automake = import "automake-1.15.1.ncl" in
-let libtool = import "libtool-2.2.4.ncl" in
-let patch = import "patch-tcc.ncl" in
-let tar = import "tar-tcc.ncl" in
-let bzip2 = import "bzip2-1.0.8-musl.ncl" in
-
-let gcc10_src = crunch.fetchTarball {
-  # provenance: fosslinux/live-bootstrap steps/gcc-10.5.0/sources and pass1.sh
-  # first-consumer: bootstrap/gcc-10.ncl
-  url = "https://ftpmirror.gnu.org/gcc/gcc-10.5.0/gcc-10.5.0.tar.xz",
-  hash = "sha256-t4vO308XvqCAgwrl2jS1llkIvHHfSV4wlkdLMkYfrkU=",
-  name = "gcc-10.5.0-src",
-} in
+let gcc10_src = crunch.derivationFile "gcc-10.5.0-regenerated-source.ncl" in
 
 {
-  name = "gcc-10.5.0",
+  name = "gcc-10.5.0-musl-gcc47-v2",
   builder = "/bin/sh",
+  # GCC embeds its configured prefix in drivers and internal tools.
+  addressing_mode = 'input-addressed,
   args = [
     "-c",
     m%"
       set -eu
       BB=/bin/busybox
+      TARGET=x86_64-unknown-linux-musl
+      SEED_GCC_VERSION=4.7.4
+      OUTPUT_GCC_VERSION=10.5.0
+      JOB_COUNT=1
+      BUILD_FLAGS='-O2 -fno-common'
+      WORK=/tmp/gcc-10.5.0-musl-gcc47
+      TOOLBIN="$WORK/tools"
 
       find_input() {
-        for d in $NIX_STORE/*-"$1"; do
-          if [ -d "$d" ]; then echo "$d"; return; fi
+        input_suffix=$1
+        for input_path in $NIX_STORE/*-"$input_suffix"; do
+          if [ -e "$input_path" ]; then
+            echo "$input_path"
+            return 0
+          fi
         done
-        echo "ERROR: input $1 not found" >&2; exit 1
+        echo "ERROR: input $input_suffix not found" >&2
+        exit 1
       }
 
-      GCC47=$(find_input gcc-4.7.4)
-      BINUTILS=$(find_input binutils-2.30-tcc)
-      MUSL=$(find_input musl-1.1.24-tcc-musl)
+      GCC47=$(find_input gcc-4.7.4-musl-gcc40-v1)
+      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v16)
+      MUSL=$(find_input musl-1.1.24-gcc-pass5-v1)
       MAKE=$(find_input make-3.82-tcc)
-      GMP=$(find_input gmp-6.2.1)
-      MPFR=$(find_input mpfr-4.1.0)
-      MPC=$(find_input mpc-1.2.1)
       STAGE0=$(find_input stage0-posix)
-      SED=$(find_input sed-4.0.9-musl)
-      M4=$(find_input m4-1.4.7-musl)
-      FLEX=$(find_input flex-2.6.4-musl)
-      BISON=$(find_input bison-3.4.1-musl)
-      PERL=$(find_input perl-5.6.2-musl)
-      CU=$(find_input coreutils-6.10-musl)
-      GAWK=$(find_input gawk-3.0.4-musl)
-      GREP=$(find_input grep-2.4-musl)
-      DIFF=$(find_input diffutils-2.7-musl)
-      BASH=$(find_input bash-2.05b-tcc)
-      AC=$(find_input autoconf-2.69)
-      AM=$(find_input automake-1.15.1)
-      LT=$(find_input libtool-2.2.4)
-      PATCH=$(find_input patch-2.5.9-tcc)
-      TAR=$(find_input tar-1.12-tcc)
-      BZIP2=$(find_input bzip2-1.0.8-musl)
-      SRC=$(find_input gcc-10.5.0-src)
+      GREP=$(find_input grep-2.4-gcc-v10)
+      GAWK=$(find_input gawk-3.0.4-gcc-v4)
+      GMP=$(find_input gmp-6.2.1-gcc40-v1)
+      MPFR=$(find_input mpfr-4.1.0-gcc40-v1)
+      MPC=$(find_input mpc-1.2.1-gcc40-v1)
+      SRC=$(find_input gcc-10.5.0-regenerated-source-v1)
 
-      export PATH="$GCC47/bin:$BINUTILS/bin:$MAKE/bin:$SED/bin:$M4/bin:$FLEX/bin:$BISON/bin:$PERL/bin:$CU/bin:$GAWK/bin:$GREP/bin:$DIFF/bin:$BASH/bin:$AC/bin:$AM/bin:$LT/bin:$PATCH/bin:$TAR/bin:$BZIP2/bin:$STAGE0/bin:$PATH"
-      export CONFIG_SHELL="$BASH/bin/bash"
-      export SHELL="$BASH/bin/bash"
+      $BB rm -rf "$WORK"
+      $BB mkdir -p "$TOOLBIN" "$out/bin"
+      for applet in basename cat chmod cmp cp cut date diff dirname echo egrep env expr false find grep head install ln ls mkdir mv od printf pwd readlink rm rmdir sed sh sleep sort tail tar test touch tr true uname uniq wc xargs; do
+        $BB ln -sf "$BB" "$TOOLBIN/$applet"
+      done
+      $BB ln -sf "$GREP/bin/grep" "$TOOLBIN/grep"
+      $BB ln -sf "$GAWK/bin/awk" "$TOOLBIN/awk"
+      $BB ln -sf "$GAWK/bin/awk" "$TOOLBIN/gawk"
+      $BB ln -sf "$MAKE/bin/make" "$TOOLBIN/make"
+      export PATH="$TOOLBIN:$BINUTILS/bin:$STAGE0/bin"
+      export CONFIG_SHELL=/bin/sh
+      export SHELL=/bin/sh
+      export MAKEFLAGS=
 
-      WORK=/tmp/gcc10-build
+      $BB cat > "$TOOLBIN/gcc47" <<EOF
+#!/bin/sh
+export MANTLE_GCC_ASSEMBLER="$BINUTILS/bin/as"
+export MANTLE_GCC_LINKER="$BINUTILS/bin/ld"
+export MANTLE_GCC_LINK_LIBC="$MUSL/lib/libc.a"
+export MANTLE_GCC_LINK_LIBM="$MUSL/lib/libm.a"
+export MANTLE_GCC_LINK_LIBGCC="$GCC47/lib/gcc/$TARGET/$SEED_GCC_VERSION/libgcc.a"
+export MANTLE_GCC_LINK_CRT="$MUSL/lib"
+exec "$GCC47/bin/gcc" -B"$GCC47/bin/" -B"$GCC47/lib/gcc/$TARGET/$SEED_GCC_VERSION/" "\$@"
+EOF
+      $BB cat > "$TOOLBIN/gxx47" <<EOF
+#!/bin/sh
+export MANTLE_GCC_ASSEMBLER="$BINUTILS/bin/as"
+export MANTLE_GCC_LINKER="$BINUTILS/bin/ld"
+export MANTLE_GCC_LINK_LIBC="$MUSL/lib/libc.a"
+export MANTLE_GCC_LINK_LIBM="$MUSL/lib/libm.a"
+export MANTLE_GCC_LINK_LIBGCC="$GCC47/lib/gcc/$TARGET/$SEED_GCC_VERSION/libgcc.a"
+export MANTLE_GCC_LINK_CRT="$MUSL/lib"
+exec "$GCC47/bin/g++" -B"$GCC47/bin/" -B"$GCC47/lib/gcc/$TARGET/$SEED_GCC_VERSION/" "\$@"
+EOF
+      $BB chmod 755 "$TOOLBIN/gcc47" "$TOOLBIN/gxx47"
+      HOST_CC="$TOOLBIN/gcc47"
+      HOST_CXX="$TOOLBIN/gxx47"
+
+      $BB cat > "$out/bin/as" <<EOF
+#!/bin/sh
+exec "\${MANTLE_GCC_ASSEMBLER:-$BINUTILS/bin/as}" "\$@"
+EOF
+      $BB chmod 755 "$out/bin/as"
+
+      $BB cat > "$out/bin/ld" <<EOF
+#!/bin/sh
+libc_archive="\${MANTLE_GCC_LINK_LIBC:-$MUSL/lib/libc.a}"
+libm_archive="\${MANTLE_GCC_LINK_LIBM:-$MUSL/lib/libm.a}"
+libgcc_archive="\${MANTLE_GCC_LINK_LIBGCC:-$GCC47/lib/gcc/$TARGET/$SEED_GCC_VERSION/libgcc.a}"
+zlib_archive="\${MANTLE_GCC_LINK_ZLIB:-$WORK/build/zlib/libz.a}"
+crt_dir="\${MANTLE_GCC_LINK_CRT:-$MUSL/lib}"
+linker="\${MANTLE_GCC_LINKER:-$BINUTILS/bin/ld}"
+link_arguments=
+for link_argument in "\$@"; do
+  case "\$link_argument" in
+    -lgcc|-lgcc_eh) link_arguments="\$link_arguments \$libgcc_archive" ;;
+    -lgcc_s) ;;
+    crt1.o|Scrt1.o|rcrt1.o|crti.o|crtn.o) link_arguments="\$link_arguments \$crt_dir/\$link_argument" ;;
+    -lc) link_arguments="\$link_arguments \$libc_archive" ;;
+    -lm) link_arguments="\$link_arguments \$libm_archive" ;;
+    -lpthread|-ldl|-lrt|-lutil) link_arguments="\$link_arguments \$libc_archive" ;;
+    -lz) link_arguments="\$link_arguments \$zlib_archive" ;;
+    *) link_arguments="\$link_arguments \$link_argument" ;;
+  esac
+done
+echo "gcc10-final-ld: \$linker \$link_arguments" >&2
+exec "\$linker" \$link_arguments
+EOF
+      $BB chmod 755 "$out/bin/ld"
+
+      $BB cp -R "$SRC" "$WORK/src"
+      $BB chmod -R u+w "$WORK/src"
+      test -s "$WORK/src/.mantle-regeneration/gcc-10.5.0-files.txt"
+      for regenerated_file in $($BB cat "$WORK/src/.mantle-regeneration/gcc-10.5.0-files.txt"); do
+        test -s "$WORK/src/$regenerated_file"
+        $BB touch "$WORK/src/$regenerated_file"
+      done
       $BB mkdir -p "$WORK/build"
-      cd "$WORK"
-
-      $BB cp -r "$SRC" gcc-10.5.0
-      $BB chmod -R u+w gcc-10.5.0
-
-      export AS="$BINUTILS/bin/as"
-      export LD="$BINUTILS/bin/ld"
-      export AR="$BINUTILS/bin/ar"
-      export RANLIB="$BINUTILS/bin/ranlib"
-      export NM="$BINUTILS/bin/nm"
-
       cd "$WORK/build"
 
-      "$BASH/bin/bash" "$WORK/gcc-10.5.0/configure" \
+      CC="$HOST_CC" \
+      CXX="$HOST_CXX" \
+      AR="$BINUTILS/bin/ar" \
+      RANLIB="$BINUTILS/bin/ranlib" \
+      "$WORK/src/configure" \
         --prefix="$out" \
-        --build=x86_64-unknown-linux-musl \
-        --host=x86_64-unknown-linux-musl \
-        --target=x86_64-unknown-linux-musl \
+        --libdir="$out/lib" \
+        --build="$TARGET" \
+        --host="$TARGET" \
+        --target="$TARGET" \
         --enable-languages=c,c++ \
         --disable-bootstrap \
-        --disable-shared \
-        --disable-nls \
+        --disable-dependency-tracking \
         --disable-multilib \
-        --disable-decimal-float \
-        --disable-libmudflap \
+        --disable-nls \
+        --disable-shared \
+        --enable-static \
         --disable-libssp \
         --disable-libgomp \
-        --disable-threads \
         --disable-libquadmath \
         --disable-libatomic \
         --disable-libstdcxx-pch \
         --disable-libsanitizer \
+        --disable-libvtv \
+        --disable-libmpx \
+        --disable-libcc1 \
+        --disable-lto \
         --disable-plugin \
+        --disable-threads \
+        --without-isl \
+        --without-zstd \
+        --without-system-zlib \
         --with-sysroot="$MUSL" \
-        --with-native-system-header-dir=/include \
         --with-build-sysroot="$MUSL" \
+        --with-native-system-header-dir=/include \
+        --with-as="$out/bin/as" \
+        --with-ld="$out/bin/ld" \
         --with-gmp="$GMP" \
         --with-mpfr="$MPFR" \
         --with-mpc="$MPC" \
-        CC="$GCC47/bin/gcc" \
-        CXX="$GCC47/bin/g++" \
-        CFLAGS="-I$MUSL/include -D_GNU_SOURCE -O2" \
-        CXXFLAGS="-I$MUSL/include -D_GNU_SOURCE -O2" \
-        CFLAGS_FOR_TARGET="-I$MUSL/include -D_GNU_SOURCE -O2" \
-        LDFLAGS="-static -L$MUSL/lib" \
-        MAKEINFO=true \
-        2>&1
+        CPPFLAGS="-I$WORK/src/zlib" \
+        CFLAGS="-std=gnu11 $BUILD_FLAGS -I$MUSL/include -I$WORK/src/zlib" \
+        CXXFLAGS="-std=gnu++11 $BUILD_FLAGS -I$MUSL/include -I$WORK/src/zlib" \
+        CFLAGS_FOR_TARGET="$BUILD_FLAGS -I$MUSL/include" \
+        CXXFLAGS_FOR_TARGET="$BUILD_FLAGS -I$MUSL/include" \
+        LDFLAGS="-static -L$MUSL/lib -L$GMP/lib -L$MPFR/lib -L$MPC/lib -L$WORK/build/zlib" \
+        MAKEINFO=true
 
-      make -j1 all-gcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc all-gcc failed" >&2; exit 1; }
-      make -j1 all-target-libgcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc all-target-libgcc failed" >&2; exit 1; }
+      make -j"$JOB_COUNT" all-gcc \
+        CC="$HOST_CC" CXX="$HOST_CXX" \
+        AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" \
+        CFLAGS="-std=gnu11 $BUILD_FLAGS -I$MUSL/include -I$WORK/src/zlib" \
+        CXXFLAGS="-std=gnu++11 $BUILD_FLAGS -I$MUSL/include -I$WORK/src/zlib" \
+        BOOT_CFLAGS="$BUILD_FLAGS -I$MUSL/include -I$WORK/src/zlib" \
+        GMPLIBS="$MPC/lib/libmpc.a $MPFR/lib/libmpfr.a $GMP/lib/libgmp.a" \
+        MAKEINFO=true || {
+          build_status=$?
+          if [ -f "$WORK/build/gcc/config.log" ]; then
+            $BB cat "$WORK/build/gcc/config.log" >&2
+          fi
+          exit "$build_status"
+        }
+      make -j"$JOB_COUNT" all-target-libgcc \
+        AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true
+      make -j"$JOB_COUNT" all-target-libstdc++-v3 \
+        AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true
+      make -j"$JOB_COUNT" install-gcc \
+        AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true
+      make -j"$JOB_COUNT" install-target-libgcc \
+        AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true
+      make -j"$JOB_COUNT" install-target-libstdc++-v3 \
+        AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true
 
-      $BB mkdir -p "$out/bin" "$out/lib" "$out/libexec"
-      make -j1 install-gcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc install-gcc failed" >&2; exit 1; }
-      make -j1 install-target-libgcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc install-target-libgcc failed" >&2; exit 1; }
-
-      # Create symlinks
-      if [ -x "$out/bin/x86_64-unknown-linux-musl-gcc" ] && [ ! -x "$out/bin/gcc" ]; then
-        $BB ln -sf x86_64-unknown-linux-musl-gcc "$out/bin/gcc"
-        $BB ln -sf x86_64-unknown-linux-musl-gcc "$out/bin/cc"
-      elif [ -x "$out/bin/gcc" ]; then
-        $BB ln -sf gcc "$out/bin/cc"
+      if [ -x "$out/bin/$TARGET-gcc" ] && [ ! -x "$out/bin/gcc" ]; then
+        $BB ln -s "$TARGET-gcc" "$out/bin/gcc"
       fi
-      if [ -x "$out/bin/x86_64-unknown-linux-musl-g++" ] && [ ! -x "$out/bin/g++" ]; then
-        $BB ln -sf x86_64-unknown-linux-musl-g++ "$out/bin/g++"
-        $BB ln -sf x86_64-unknown-linux-musl-g++ "$out/bin/c++"
-      elif [ -x "$out/bin/g++" ]; then
-        $BB ln -sf g++ "$out/bin/c++"
+      if [ -x "$out/bin/$TARGET-g++" ] && [ ! -x "$out/bin/g++" ]; then
+        $BB ln -s "$TARGET-g++" "$out/bin/g++"
+      fi
+      if [ -x "$out/bin/gcc" ] && [ ! -x "$out/bin/cc" ]; then
+        $BB ln -s gcc "$out/bin/cc"
+      fi
+      if [ -x "$out/bin/g++" ] && [ ! -x "$out/bin/c++" ]; then
+        $BB ln -s g++ "$out/bin/c++"
       fi
 
-      # Verify required compiler entrypoints and fail closed if the C/C++
-      # output contract is incomplete.
-      test -x "$out/bin/gcc" || test -x "$out/bin/x86_64-unknown-linux-musl-gcc" || {
-        echo "ERROR: no gcc binary" >&2; exit 1
-      }
-      test -x "$out/bin/cc" || { echo "ERROR: installed cc missing" >&2; exit 1; }
-      test -x "$out/bin/g++" || test -x "$out/bin/x86_64-unknown-linux-musl-g++" || {
-        echo "ERROR: no g++ binary" >&2; exit 1
-      }
-      test -x "$out/bin/c++" || { echo "ERROR: installed c++ missing" >&2; exit 1; }
-      find "$out" -name libgcc.a -type f | $BB grep -q libgcc.a || { echo "ERROR: installed libgcc.a missing" >&2; exit 1; }
+      test -x "$out/bin/gcc"
+      test -x "$out/bin/g++"
+      test -x "$out/libexec/gcc/$TARGET/$OUTPUT_GCC_VERSION/cc1"
+      test -x "$out/libexec/gcc/$TARGET/$OUTPUT_GCC_VERSION/cc1plus"
+      test -s "$out/lib/gcc/$TARGET/$OUTPUT_GCC_VERSION/libgcc.a"
+      LIBSTDCXX=$($BB find "$out" -type f -name libstdc++.a | $BB head -n 1)
+      LIBSUPCXX=$($BB find "$out" -type f -name libsupc++.a | $BB head -n 1)
+      test -n "$LIBSTDCXX"
+      test -n "$LIBSUPCXX"
+      test -d "$out/include/c++/$OUTPUT_GCC_VERSION"
 
-      # C smoke test
-      $BB cat > /tmp/smoke.c << 'EOF'
+      $BB sed -i \
+        -e "s#libgcc_archive=\".*#libgcc_archive=\"\\\${MANTLE_GCC_LINK_LIBGCC:-$out/lib/gcc/$TARGET/$OUTPUT_GCC_VERSION/libgcc.a}\"#" \
+        -e 's#zlib_archive=".*#zlib_archive="${MANTLE_GCC_LINK_ZLIB:--lz}"#' \
+        "$out/bin/ld"
+
+      $BB cat > "$WORK/positive.c" <<'EOF'
 int main(void) { return 0; }
 EOF
-      "$out/bin/gcc" -I"$MUSL/include" -L"$MUSL/lib" -static \
-        -B"$BINUTILS/bin/" -o /tmp/smoke_c /tmp/smoke.c 2>&1 || {
-        echo "ERROR: C smoke test failed" >&2; exit 1
-      }
-      test -x /tmp/smoke_c || { echo "ERROR: C smoke output missing" >&2; exit 1; }
+      MANTLE_GCC_LINK_LIBGCC="$out/lib/gcc/$TARGET/$OUTPUT_GCC_VERSION/libgcc.a" \
+        "$out/bin/gcc" -B"$out/bin/" \
+          -B"$out/lib/gcc/$TARGET/$OUTPUT_GCC_VERSION/" \
+          -I"$MUSL/include" -static "$WORK/positive.c" -o "$WORK/positive-c"
+      test -s "$WORK/positive-c"
+      $BB chmod 755 "$WORK/positive-c"
+      "$WORK/positive-c"
+      "$BINUTILS/bin/readelf" -h "$WORK/positive-c" | "$GREP/bin/grep" -q 'ELF64'
 
-      # C++ smoke test
-      $BB cat > /tmp/smoke.cpp << 'EOF'
-#include <cstddef>
-auto add(int a, int b) -> int { return a + b; }
+      $BB cat > "$WORK/positive.cpp" <<'EOF'
+struct base_value { virtual ~base_value() { } };
+struct derived_value final : base_value { int value = 42; };
+constexpr int identity(int value) { return value; }
 int main() {
-  int arr[] = {1, 2, 3};
-  int sum = 0;
-  for (auto& x : arr) sum += x;
-  return sum == 6 ? 0 : 1;
+  base_value *base = new derived_value();
+  derived_value *derived = dynamic_cast<derived_value *>(base);
+  int result = 1;
+  try {
+    if (derived != nullptr) throw identity(derived->value);
+  } catch (int value) {
+    result = value == 42 ? 0 : 1;
+  }
+  delete base;
+  return result;
 }
 EOF
-      "$out/bin/g++" -std=c++11 -I"$MUSL/include" -L"$MUSL/lib" -static \
-        -B"$BINUTILS/bin/" -o /tmp/smoke_cpp /tmp/smoke.cpp 2>&1 || {
-        echo "ERROR: C++ smoke test failed" >&2; exit 1
-      }
-      test -x /tmp/smoke_cpp || { echo "ERROR: C++ smoke output missing" >&2; exit 1; }
+      MANTLE_GCC_LINK_LIBGCC="$out/lib/gcc/$TARGET/$OUTPUT_GCC_VERSION/libgcc.a" \
+        "$out/bin/g++" -std=c++17 -B"$out/bin/" \
+          -B"$out/lib/gcc/$TARGET/$OUTPUT_GCC_VERSION/" \
+          -I"$MUSL/include" -static "$WORK/positive.cpp" -o "$WORK/positive-cxx"
+      test -s "$WORK/positive-cxx"
+      $BB chmod 755 "$WORK/positive-cxx"
+      "$WORK/positive-cxx"
 
-      echo "gcc-10.5.0 build complete"
-    "%,
+      $BB printf '%s\n' 'int main( {' > "$WORK/rejected.c"
+      $BB rm -f "$WORK/rejected-c.o"
+      if "$out/bin/gcc" -B"$out/bin/" \
+        -B"$out/lib/gcc/$TARGET/$OUTPUT_GCC_VERSION/" \
+        -I"$MUSL/include" -c "$WORK/rejected.c" -o "$WORK/rejected-c.o"; then
+        echo "ERROR: GCC 10 accepted malformed C" >&2
+        exit 1
+      fi
+      test ! -e "$WORK/rejected-c.o"
+
+      $BB printf '%s\n' 'template <typename T> int main(' > "$WORK/rejected.cpp"
+      $BB rm -f "$WORK/rejected-cxx.o"
+      if "$out/bin/g++" -std=c++17 -B"$out/bin/" \
+        -B"$out/lib/gcc/$TARGET/$OUTPUT_GCC_VERSION/" \
+        -I"$MUSL/include" -c "$WORK/rejected.cpp" -o "$WORK/rejected-cxx.o"; then
+        echo "ERROR: GCC 10 accepted malformed C++" >&2
+        exit 1
+      fi
+      test ! -e "$WORK/rejected-cxx.o"
+
+      RELOCATED_GCC="$WORK/relocated-gcc10"
+      $BB cp -R "$out" "$RELOCATED_GCC"
+      MANTLE_GCC_ASSEMBLER="$BINUTILS/bin/as" \
+      MANTLE_GCC_LINKER="$BINUTILS/bin/ld" \
+      MANTLE_GCC_LINK_LIBC="$MUSL/lib/libc.a" \
+      MANTLE_GCC_LINK_LIBM="$MUSL/lib/libm.a" \
+      MANTLE_GCC_LINK_LIBGCC="$RELOCATED_GCC/lib/gcc/$TARGET/$OUTPUT_GCC_VERSION/libgcc.a" \
+      MANTLE_GCC_LINK_CRT="$MUSL/lib" \
+        "$RELOCATED_GCC/bin/g++" -std=c++17 \
+          -B"$RELOCATED_GCC/bin/" \
+          -B"$RELOCATED_GCC/lib/gcc/$TARGET/$OUTPUT_GCC_VERSION/" \
+          -I"$MUSL/include" -static "$WORK/positive.cpp" \
+          -o "$WORK/relocated-positive"
+      test -s "$WORK/relocated-positive"
+      $BB chmod 755 "$WORK/relocated-positive"
+      "$WORK/relocated-positive"
+
+      $BB mkdir -p "$out/share/gcc10-frontier"
+      $BB cp "$WORK/src/.mantle-regeneration/gcc-10.5.0-files.txt" "$out/share/gcc10-frontier/regenerated-files.txt"
+      $BB printf '%s\n' \
+        'NON_ADMISSION: source-built regeneration is compiled, but complete generated-source coverage and provider closure remain open' \
+        > "$out/share/gcc10-frontier/NON_ADMISSION"
+      echo "GCC 10.5.0 locally regenerated C/C++17 runtime, ELF, relocation, and rejection checks passed; not provider admission"
+    "%
   ],
   inputs = [
-    stage0, tcc, musl, make, binutils, gcc47, gmp, mpfr, mpc,
-    sed, m4, flex, bison, perl, coreutils, gawk, grep, diffutils,
-    bash, autoconf, automake, libtool, patch, tar, bzip2,
+    crunch.derivationFile "gcc-4.7.ncl",
+    crunch.derivationFile "binutils-2.30-gcc.ncl",
+    crunch.derivationFile "musl-1.1.24-gcc-pass5.ncl",
+    crunch.derivationFile "make-tcc.ncl",
+    crunch.derivationFile "stage0-posix.ncl",
+    crunch.derivationFile "grep-2.4-gcc.ncl",
+    crunch.derivationFile "gawk-3.0.4-gcc.ncl",
+    crunch.derivationFile "gmp-6.2.1.ncl",
+    crunch.derivationFile "mpfr-4.1.0.ncl",
+    crunch.derivationFile "mpc-1.2.1.ncl",
     gcc10_src,
   ],
 } | crunch.Derivation

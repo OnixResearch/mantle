@@ -1,23 +1,10 @@
-# Build GMP 6.2.1 using GCC 4.7.4.
+# Diagnostic GMP 6.2.1 build with the regenerated GCC 4.0 C/C++ frontier.
 #
-# GMP is a prerequisite for MPFR and MPC, which GCC 10 requires.
-#
-# Adapted from live-bootstrap steps/gmp-6.2.1.
+# GMP precedes GCC 4.7: the upstream GCC 4.7 compile recipe links
+# -lmpc -lmpfr -lgmp. Keep this component isolated from provider selection;
+# closure and normalized-provider admission remain separate evidence.
 
 let crunch = import "lib.ncl" in
-
-let gcc47 = import "gcc-4.7.ncl" in
-let binutils = import "binutils-tcc.ncl" in
-let musl = import "musl-1.1.24-tcc-musl.ncl" in
-let make = import "make-tcc.ncl" in
-let bash = import "bash-2.05b-tcc.ncl" in
-let coreutils = import "coreutils-6.10-musl.ncl" in
-let sed = import "sed-4.0.9-musl.ncl" in
-let grep = import "grep-2.4-musl.ncl" in
-let diffutils = import "diffutils-2.7-musl.ncl" in
-let gawk = import "gawk-3.0.4-musl.ncl" in
-let m4 = import "m4-1.4.7-musl.ncl" in
-let stage0 = import "stage0-posix.ncl" in
 
 let gmp_src = crunch.fetchTarball {
   # provenance: fosslinux/live-bootstrap steps/gmp-6.2.1/sources
@@ -28,82 +15,125 @@ let gmp_src = crunch.fetchTarball {
 } in
 
 {
-  name = "gmp-6.2.1",
+  name = "gmp-6.2.1-gcc40-v1",
   builder = "/bin/sh",
   args = [
     "-c",
     m%"
       set -eu
       BB=/bin/busybox
+      TARGET=x86_64-unknown-linux-musl
+      GCC_VERSION=4.0.4
+      EXPECTED_VALUE=42
 
       find_input() {
-        for d in $NIX_STORE/*-"$1"; do
-          if [ -d "$d" ]; then echo "$d"; return; fi
+        for candidate in $NIX_STORE/*-"$1"; do
+          if [ -d "$candidate" ]; then echo "$candidate"; return; fi
         done
-        echo "ERROR: input $1 not found" >&2; exit 1
+        echo "ERROR: input $1 not found" >&2
+        exit 1
       }
 
-      GCC=$(find_input gcc-4.7.4)
-      BINUTILS=$(find_input binutils-2.30-tcc)
-      MUSL=$(find_input musl-1.1.24-tcc-musl)
+      GCC=$(find_input gcc-4.0.4-musl-cxx-v7)
+      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v16)
+      MUSL=$(find_input musl-1.1.24-gcc-pass5-v1)
       MAKE=$(find_input make-3.82-tcc)
-      BASH=$(find_input bash-2.05b-tcc)
-      CU=$(find_input coreutils-6.10-musl)
-      SED=$(find_input sed-4.0.9-musl)
-      GREP=$(find_input grep-2.4-musl)
-      DIFF=$(find_input diffutils-2.7-musl)
-      GAWK=$(find_input gawk-3.0.4-musl)
-      M4=$(find_input m4-1.4.7-musl)
+      STAGE0=$(find_input stage0-posix)
+      GREP=$(find_input grep-2.4-gcc-v10)
+      M4TOOL=$(find_input m4-1.4.7-gcc-v5)
       SRC=$(find_input gmp-6.2.1-src)
 
-      export PATH="$GCC/bin:$BINUTILS/bin:$MAKE/bin:$BASH/bin:$CU/bin:$SED/bin:$GREP/bin:$DIFF/bin:$GAWK/bin:$M4/bin:$PATH"
-      export CONFIG_SHELL="$BASH/bin/bash"
-      export SHELL="$BASH/bin/bash"
+      WORK=/tmp/gmp-6.2.1-gcc40
+      TOOLBIN="$WORK/tools"
+      $BB rm -rf "$WORK"
+      $BB mkdir -p "$TOOLBIN"
+      for applet in awk basename cat chmod cmp cp cut diff dirname echo expr find head ln ls mkdir mv od printf pwd rm rmdir sed sh sleep sort tail test touch tr true uname uniq wc; do
+        $BB ln -sf "$BB" "$TOOLBIN/$applet"
+      done
+      export PATH="$GREP/bin:$M4TOOL/bin:$TOOLBIN:$MAKE/bin:$BINUTILS/bin:$STAGE0/bin:$PATH"
+      export CONFIG_SHELL=/bin/sh
+      export SHELL=/bin/sh
+      unset MAKEFLAGS MFLAGS MAKELEVEL
 
-      WORK=/tmp/gmp-build
-      $BB mkdir -p "$WORK"
-      cd "$WORK"
-      $BB cp -r "$SRC" gmp-6.2.1
-      $BB chmod -R u+w gmp-6.2.1
-      cd gmp-6.2.1
+      CC_WRAPPER="$TOOLBIN/gcc40"
+      $BB cat > "$CC_WRAPPER" <<EOF
+#!/bin/sh
+MANTLE_GCC_ASSEMBLER="$BINUTILS/bin/as" \
+MANTLE_GCC_LINKER="$BINUTILS/bin/ld" \
+MANTLE_GCC_LINK_LIBC="$MUSL/lib/libc.a" \
+MANTLE_GCC_LINK_LIBM="$MUSL/lib/libm.a" \
+MANTLE_GCC_LINK_LIBGCC="$GCC/lib/gcc/$TARGET/$GCC_VERSION/libgcc.a" \
+MANTLE_GCC_LINK_CRT="$MUSL/lib" \
+exec "$GCC/bin/gcc" \
+  -B"$GCC/bin/" \
+  -B"$GCC/lib/gcc/$TARGET/$GCC_VERSION/" \
+  "\$@"
+EOF
+      $BB chmod 755 "$CC_WRAPPER"
 
-      "$BASH/bin/bash" ./configure \
-        --prefix="$out" \
-        --build=x86_64-unknown-linux-musl \
-        --host=x86_64-unknown-linux-musl \
-        --disable-shared \
-        --enable-static \
-        CC="$GCC/bin/gcc" \
-        CFLAGS="-I$MUSL/include -D_GNU_SOURCE -O2" \
-        LDFLAGS="-static -L$MUSL/lib" \
-        2>&1
+      $BB cp -R "$SRC" "$WORK/src"
+      $BB chmod -R u+w "$WORK/src"
+      cd "$WORK/src"
+      CC="$CC_WRAPPER" \
+      AR="$BINUTILS/bin/ar" \
+      RANLIB="$BINUTILS/bin/ranlib" \
+      CFLAGS="-O2 -fno-common -I$MUSL/include" \
+      LDFLAGS="-static -L$MUSL/lib" \
+        ./configure \
+          --prefix="$out" \
+          --build="$TARGET" \
+          --host="$TARGET" \
+          --disable-shared \
+          --enable-static \
+          --disable-assembly
+      make -j1
+      make -j1 install
 
-      make -j1 2>&1
-      make -j1 install 2>&1
+      test -s "$out/lib/libgmp.a"
+      test -s "$out/include/gmp.h"
+      "$BINUTILS/bin/ar" t "$out/lib/libgmp.a" > "$WORK/archive-members.txt"
+      test -s "$WORK/archive-members.txt"
 
-      test -f "$out/lib/libgmp.a" || { echo "ERROR: libgmp.a not built" >&2; exit 1; }
-      test -f "$out/include/gmp.h" || { echo "ERROR: gmp.h not installed" >&2; exit 1; }
-
-      $BB cat > /tmp/gmp-smoke.c << 'EOF'
+      $BB cat > "$WORK/positive.c" <<EOF
 #include <gmp.h>
 int main(void) {
-  mpz_t x;
-  mpz_init_set_ui(x, 42);
-  int ok = (mpz_cmp_ui(x, 42) == 0);
-  mpz_clear(x);
-  return ok ? 0 : 1;
+  mpz_t value;
+  mpz_init_set_ui(value, $EXPECTED_VALUE);
+  int matches = mpz_cmp_ui(value, $EXPECTED_VALUE) == 0;
+  mpz_clear(value);
+  return matches ? 0 : 1;
 }
 EOF
-      "$GCC/bin/gcc" -I"$out/include" -I"$MUSL/include" -L"$out/lib" -L"$MUSL/lib" \
-        -static -o /tmp/gmp-smoke /tmp/gmp-smoke.c -lgmp 2>&1 || {
-        echo "ERROR: gmp compile smoke failed" >&2; exit 1
-      }
-      /tmp/gmp-smoke || { echo "ERROR: gmp smoke binary failed" >&2; exit 1; }
-      echo "gmp-6.2.1 build complete"
-    "%,
+      "$CC_WRAPPER" -static -I"$out/include" -I"$MUSL/include" \
+        "$WORK/positive.c" "$out/lib/libgmp.a" -o "$WORK/positive"
+      test -s "$WORK/positive"
+      $BB chmod 755 "$WORK/positive"
+      "$WORK/positive"
+
+      $BB printf '%s\n' 'int main(' > "$WORK/rejected.c"
+      $BB rm -f "$WORK/rejected.o"
+      if "$CC_WRAPPER" -I"$out/include" -I"$MUSL/include" \
+        -c "$WORK/rejected.c" -o "$WORK/rejected.o"; then
+        echo "ERROR: GCC/GMP frontier accepted malformed C" >&2
+        exit 1
+      fi
+      test ! -e "$WORK/rejected.o"
+
+      $BB mkdir -p "$out/share/gmp-gcc40-frontier"
+      $BB printf '%s\n' \
+        'NON_ADMISSION: GCC 4.0 math prerequisite has component-level runtime evidence; normalized-provider admission remains separate' \
+        > "$out/share/gmp-gcc40-frontier/NON_ADMISSION"
+      echo "GMP 6.2.1 GCC 4.0 runtime and rejection checks passed; not provider admission"
+    "%
   ],
   inputs = [
-    gcc47, binutils, musl, make, bash, coreutils, sed, grep,
-    diffutils, gawk, m4, stage0, gmp_src,
+    crunch.derivationFile "gcc-4.0-musl-cxx.ncl",
+    crunch.derivationFile "binutils-2.30-gcc.ncl",
+    crunch.derivationFile "musl-1.1.24-gcc-pass5.ncl",
+    crunch.derivationFile "make-tcc.ncl",
+    crunch.derivationFile "stage0-posix.ncl",
+    crunch.derivationFile "grep-2.4-gcc.ncl",
+    crunch.derivationFile "m4-1.4.7-gcc.ncl",
+    gmp_src,
   ],
 } | crunch.Derivation

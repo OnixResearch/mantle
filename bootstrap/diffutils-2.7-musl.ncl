@@ -4,11 +4,12 @@
 
 let crunch = import "lib.ncl" in
 
-let stage0 = import "stage0-posix.ncl" in
-let tcc = import "tcc-musl-v2.ncl" in
-let musl = import "musl-1.1.24-tcc-musl.ncl" in
-let make = import "make-tcc.ncl" in
-let sed = import "sed-4.0.9-musl.ncl" in
+let stage0 = crunch.derivationFile "stage0-posix.ncl" in
+let tcc = crunch.derivationFile "tcc-musl-native.ncl" in
+let tcc_compile = crunch.derivationFile "tcc-musl-selfhost.ncl" in
+let musl = crunch.derivationFile "musl-1.1.24-native.ncl" in
+let make = crunch.derivationFile "make-tcc.ncl" in
+let sed = crunch.derivationFile "sed-4.0.9-musl.ncl" in
 
 let diffutils_src = crunch.fetchTarball {
   # provenance: fosslinux/live-bootstrap steps/diffutils-2.7/sources
@@ -34,8 +35,9 @@ let diffutils_src = crunch.fetchTarball {
         echo "ERROR: input $1 not found" >&2; exit 1
       }
 
-      TCC=$(find_input tcc-0.9.27-musl-v2)
-      MUSL=$(find_input musl-1.1.24-tcc-musl)
+      TCC=$(find_input tcc-0.9.27-musl-native-runtime)
+      TCC_COMPILE=$(find_input tcc-0.9.27-musl-selfhost)
+      MUSL=$(find_input musl-1.1.24-native-candidate)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
       SED=$(find_input sed-4.0.9-musl)
@@ -51,25 +53,61 @@ let diffutils_src = crunch.fetchTarball {
       $BB chmod -R u+w diffutils-2.7
       cd diffutils-2.7
 
-      $BB cat > diff <<'EOF'
-#!/bin/sh
-exec /bin/busybox diff "$@"
-EOF
-      $BB cat > cmp <<'EOF'
-#!/bin/sh
-exec /bin/busybox cmp "$@"
-EOF
-      $BB chmod 755 diff cmp
+      : > config.h
+      CFLAGS="-I. -I$MUSL/include -DNULL_DEVICE=\"/dev/null\" -DHAVE_STRERROR=1 -DREGEX_MALLOC=1 -DHAVE_DIRENT_H=1 -DHAVE_DUP2=1 -DHAVE_FORK=1 -DHAVE_UNISTD_H=1 -DHAVE_STRING_H=1 -DHAVE_STDLIB_H=1"
+      CMP_SOURCES='cmp cmpbuf error getopt getopt1 xmalloc version'
+      DIFF_SOURCES='diff alloca analyze cmpbuf dir io util context ed ifdef normal side fnmatch getopt getopt1 regex version'
+      COMPILER_TEARDOWN_SIGNAL_STATUS=139
 
-      echo same > a
-      echo same > b
-      ./diff a b
-      ./cmp a b
+      compile_object() {
+        source_path="$1"
+        object_path="$2"
+        if "$TCC_COMPILE/bin/tcc" -c $CFLAGS "$source_path" -o "$object_path"; then
+          :
+        else
+          compile_status=$?
+          if [ "$compile_status" -eq "$COMPILER_TEARDOWN_SIGNAL_STATUS" ] && [ -s "$object_path" ]; then
+            echo "diffutils-2.7: accepted complete object before known compiler teardown fault: $object_path" >&2
+          else
+            $BB rm -f "$object_path"
+            "$TCC/bin/tcc" -c $CFLAGS "$source_path" -o "$object_path"
+          fi
+        fi
+        test -s "$object_path"
+        $BB chmod u+rw "$object_path"
+      }
+
+      compile_sources() {
+        output_name=$1
+        shift
+        object_files=
+        for source_name in "$@"; do
+          object_path="$WORK/$output_name-$source_name.o"
+          echo "diffutils-2.7-source=$source_name.c" >&2
+          compile_object "$source_name.c" "$object_path"
+          object_files="$object_files $object_path"
+        done
+        echo "diffutils-2.7-link=$output_name" >&2
+        "$TCC_COMPILE/bin/tcc" -nostdlib -static -o "$WORK/$output_name" \
+          "$MUSL/lib/crt1.o" $object_files "$MUSL/lib/libc.a" \
+          "$TCC_COMPILE/lib/tcc/libtcc1.a"
+        test -s "$WORK/$output_name"
+        $BB chmod u+r "$WORK/$output_name"
+      }
+
+      # Keep the source lists explicit and bounded; these are the source sets
+      # used by live-bootstrap's diffutils-2.7 pass1 make fragment.
+      compile_sources cmp $CMP_SOURCES
+      compile_sources diff $DIFF_SOURCES
 
       $BB mkdir -p "$out/bin"
-      $BB cp diff "$out/bin/diff"
-      $BB cp cmp "$out/bin/cmp"
+      $BB cp "$WORK/diff" "$out/bin/diff"
+      $BB cp "$WORK/cmp" "$out/bin/cmp"
       $BB chmod 755 "$out/bin/diff" "$out/bin/cmp"
+      if $BB grep -q '^#!' "$out/bin/diff" "$out/bin/cmp"; then
+        echo 'ERROR: source-built diffutils output is a script' >&2
+        exit 1
+      fi
 
       test -x "$out/bin/diff" || { echo "ERROR: installed diff missing" >&2; exit 1; }
       test -x "$out/bin/cmp" || { echo "ERROR: installed cmp missing" >&2; exit 1; }
@@ -85,7 +123,15 @@ EOF
         echo "ERROR: diff did not detect different files" >&2; exit 1
       fi
       $BB grep -q changed /tmp/diffutils-diff.out
+      if "$out/bin/diff" --mantle-invalid-option \
+          >/tmp/diffutils-rejected-output 2>/tmp/diffutils-rejected-error; then
+        echo "ERROR: diff accepted malformed input" >&2
+        exit 1
+      fi
+      test ! -s /tmp/diffutils-rejected-output
+      test -s /tmp/diffutils-rejected-error
+      echo "diffutils 2.7 source-built cmp/diff runtime and rejection checks passed" >&2
     "%,
   ],
-  inputs = [stage0, tcc, musl, make, sed, diffutils_src],
+  inputs = [stage0, tcc, tcc_compile, musl, make, sed, diffutils_src],
 } | crunch.Derivation

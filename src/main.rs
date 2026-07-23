@@ -39,6 +39,7 @@ mod foreign_import_cmd;
 mod frontend_artifact_export;
 mod frontend_artifact_spec;
 mod frontend_artifact_store;
+mod full_source_provider;
 mod function_address_binding_cmd;
 mod global_reproducibility_cmd;
 mod global_reproducibility_release;
@@ -1141,6 +1142,29 @@ enum BootstrapAction {
         /// Planned output directory for the Rust provider
         #[arg(long)]
         output_dir: PathBuf,
+    },
+
+    /// Bind a normalized full-source C/C++ provider to an expected BLAKE3 identity
+    FullSourceProviderAdmit {
+        /// Materialized normalized provider directory
+        #[arg(long)]
+        provider_dir: PathBuf,
+
+        /// Independently authenticated expected provider-tree BLAKE3
+        #[arg(long)]
+        expected_output_blake3: String,
+
+        /// Complete materialized fixed-fetch source closure for this provider graph
+        #[arg(long)]
+        source_closure: PathBuf,
+
+        /// Independently authenticated expected source-closure manifest BLAKE3
+        #[arg(long)]
+        expected_source_closure_blake3: String,
+
+        /// New admission report path; existing files are never replaced
+        #[arg(long)]
+        report: PathBuf,
     },
 
     /// Materialize a zero-seed source-built native toolchain closure manifest
@@ -2724,6 +2748,7 @@ fn bootstrap_command_label(action: Option<&BootstrapAction>) -> &'static str {
         Some(BootstrapAction::Capabilities) => "bootstrap.capabilities",
         Some(BootstrapAction::ParityReport { .. }) => "bootstrap.parity-report",
         Some(BootstrapAction::RustSourceProvider { .. }) => "bootstrap.rust-source-provider",
+        Some(BootstrapAction::FullSourceProviderAdmit { .. }) => "bootstrap.full-source-provider-admit",
         Some(BootstrapAction::NativeToolchainClosure { .. }) => "bootstrap.native-toolchain-closure",
         Some(BootstrapAction::Validate { .. }) => "bootstrap.validate",
         None => "bootstrap",
@@ -5901,6 +5926,20 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
             smoke: *smoke,
             smoke_evidence_dir: smoke_evidence_dir.as_deref(),
         }),
+        BootstrapAction::FullSourceProviderAdmit {
+            provider_dir,
+            expected_output_blake3,
+            source_closure,
+            expected_source_closure_blake3,
+            report,
+        } => full_source_provider::cmd_admit_full_source_provider(
+            provider_dir,
+            expected_output_blake3,
+            source_closure,
+            expected_source_closure_blake3,
+            report,
+            ctx.json,
+        ),
         BootstrapAction::NativeToolchainClosure {
             rust_source_provider,
             host_root,

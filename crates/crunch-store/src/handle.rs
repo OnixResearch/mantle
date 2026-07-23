@@ -1082,8 +1082,8 @@ impl StoreHandle {
     /// Returns `true` if the full tree rooted at `node` is present in
     /// local castore storage.  Checks all child blobs/directories
     /// recursively (bounded by `MAX_RECURSIVE_NODES` and `MAX_DEPTH`).
-    /// Uses an in-memory completeness marker so repeat checks of the
-    /// same finalized node skip redundant probing.
+    /// Every call checks the active services so stale process-global state
+    /// cannot admit an action result whose data was removed or never imported.
     pub async fn castore_has_complete_content(&self, node: &Node) -> Result<bool, Error> {
         recursive_castore_completeness(&*self.blob_service, &*self.directory_service, node).await
     }

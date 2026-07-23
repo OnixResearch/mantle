@@ -5,11 +5,11 @@
 
 let crunch = import "lib.ncl" in
 
-let stage0 = import "stage0-posix.ncl" in
-let tcc = import "tcc-musl-v2.ncl" in
-let musl = import "musl-1.1.24-tcc-musl.ncl" in
-let make = import "make-tcc.ncl" in
-let sed_old = import "sed-tcc.ncl" in
+let stage0 = crunch.derivationFile "stage0-posix.ncl" in
+let tcc = crunch.derivationFile "tcc-musl-v2.ncl" in
+let musl = crunch.derivationFile "musl-1.1.24-tcc-musl.ncl" in
+let make = crunch.derivationFile "make-tcc.ncl" in
+let sed_old = crunch.derivationFile "sed-tcc.ncl" in
 
 let sed_src = crunch.fetchTarball {
   # provenance: fosslinux/live-bootstrap steps/sed-4.0.9/sources

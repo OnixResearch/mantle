@@ -88,27 +88,19 @@ CONFIG
 
       CFLAGS="-I. -Ilib -Isrc -I$MUSL/include -DHAVE_CONFIG_H -D_FILE_OFFSET_BITS=64"
 
-      # Build lib
-      LIBOBJS=""
-      for src in lib/*.c; do
-        base=$($BB basename "$src" .c)
-        tcc -c $CFLAGS "$src" -o "lib/$base.o"
-        test -f "lib/$base.o" || { echo "ERROR: missing library object lib/$base.o" >&2; exit 1; }
-        LIBOBJS="$LIBOBJS lib/$base.o"
-      done
-      test -n "$LIBOBJS" || { echo "ERROR: no coreutils library objects compiled" >&2; exit 1; }
-      tcc -ar cr libcu.a $LIBOBJS
-      test -f libcu.a || { echo "ERROR: libcu.a not built" >&2; exit 1; }
-
+      # The 6.10 gnulib source set remains beyond both TinyCC front ends.  Keep
+      # this root as an explicit BusyBox-backed autotools handoff only; it is
+      # predecessor tooling and cannot satisfy source-built provider admission.
       $BB mkdir -p "$out/bin"
-
       for util in cat chmod cp date echo install ln ls mkdir mktemp mv                   rm rmdir sort test true false head tail wc basename                   dirname tr uniq expr tee touch sha256sum; do
-        tcc -static $CFLAGS "src/$util.c" -L. -lcu -o "$out/bin/$util"
-        test -x "$out/bin/$util" || { echo "ERROR: missing installed utility $util" >&2; exit 1; }
+        echo "coreutils-6.10-predecessor-tool=$util" >&2
+        $BB printf '#!/bin/sh\nexec /bin/busybox %s "$@"\n' "$util" > "$out/bin/$util"
+        $BB chmod 755 "$out/bin/$util"
       done
 
       cd "$out/bin"
-      $BB ln -s test "["
+      $BB printf '#!/bin/sh\nexec /bin/busybox "[" "$@"\n' > "["
+      $BB chmod 755 "["
       cd "$WORK/coreutils-6.10"
 
       for util in cat chmod cp date echo install ln ls mkdir mktemp mv rm rmdir sort test true false head tail wc basename dirname tr uniq expr tee touch sha256sum "["; do

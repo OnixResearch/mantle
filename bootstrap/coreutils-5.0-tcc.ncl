@@ -1,22 +1,20 @@
-# Build coreutils 5.0 subset using tinycc 0.9.27.
+# Build coreutils 5.0 with the source-built TinyCC stage.
 #
-# Provides early shell utilities needed by later bootstrap stages:
-# cat, chmod, cp, echo, install, ln, ls, mkdir, mv, rm, rmdir,
-# sort, test, true, false, head, tail, wc, basename, dirname,
-# tr, uniq, expr, tee, touch.
+# Adapted from live-bootstrap steps/coreutils-5.0 (tcc build).
+# This provides standard POSIX utilities needed by autotools.
 #
-# The configure system is bypassed; each utility is compiled directly.
-# Adapted from live-bootstrap steps/coreutils-5.0.
+# Source: https://github.com/fosslinux/live-bootstrap
+# Licensed under GPL-3.0-or-later.
 
 let crunch = import "lib.ncl" in
 
-let stage0 = import "stage0-posix.ncl" in
-let mes = import "mes.ncl" in
-let tcc = import "tinycc.ncl" in
-let make = import "make-tcc.ncl" in
-let sed = import "sed-tcc.ncl" in
-let tar = import "tar-tcc.ncl" in
-let bzip2 = import "bzip2-tcc.ncl" in
+let stage0 = crunch.derivationFile "stage0-posix.ncl" in
+let mes = crunch.derivationFile "mes.ncl" in
+let tcc = crunch.derivationFile "tinycc.ncl" in
+let make = crunch.derivationFile "make-tcc.ncl" in
+let sed = crunch.derivationFile "sed-tcc.ncl" in
+let tar = crunch.derivationFile "tar-tcc.ncl" in
+let bzip2 = crunch.derivationFile "bzip2-tcc.ncl" in
 
 let coreutils_src = crunch.fetchTarball {
   # provenance: fosslinux/live-bootstrap steps/coreutils-5.0/sources (tcc build)
@@ -61,7 +59,9 @@ let coreutils_src = crunch.fetchTarball {
       $BB chmod -R u+w coreutils-5.0
       cd coreutils-5.0
 
-      # Generate minimal config.h
+      # The live-bootstrap source carries generated parser/headers.  Compile the
+      # bounded utility set directly so this stage does not depend on host
+      # configure, Automake, or shell wrappers.
       $BB cat > config.h << 'CONFIG'
 #define PACKAGE "coreutils"
 #define PACKAGE_NAME "coreutils"
@@ -72,6 +72,7 @@ let coreutils_src = crunch.fetchTarball {
 #define HAVE_STRING_H 1
 #define HAVE_DIRENT_H 1
 #define HAVE_LIMITS_H 1
+#define HAVE_INTTYPES_H 1
 #define HAVE_SYS_STAT_H 1
 #define HAVE_SYS_TYPES_H 1
 #define HAVE_LOCALE_H 1
@@ -90,17 +91,14 @@ let coreutils_src = crunch.fetchTarball {
 #define HAVE_FTRUNCATE 1
 #define STDC_HEADERS 1
 #define _GNU_SOURCE 1
-#define DEFAULT_TMPDIR "/tmp"
 CONFIG
 
       CFLAGS="-I. -Ilib -Isrc -DHAVE_CONFIG_H -D_FILE_OFFSET_BITS=64"
-
-      # Compile libcoreutils support files
       LIBSRCS="lib/error lib/xmalloc lib/xstrdup lib/getopt lib/getopt1 lib/closeout lib/quotearg lib/quote lib/exitfail lib/hard-locale lib/xstrtol lib/xstrtoul lib/human lib/idcache lib/filemode lib/basename lib/stripslash lib/full-write lib/safe-read lib/safe-write lib/version-etc lib/long-options"
-
       OBJS=""
       for src in $LIBSRCS; do
-        tcc -c $CFLAGS $src.c -o $src.o
+        echo "coreutils-5.0-library-source=$src.c" >&2
+        tcc -c $CFLAGS "$src.c" -o "$src.o"
         test -f "$src.o" || { echo "ERROR: missing library object $src.o" >&2; exit 1; }
         OBJS="$OBJS $src.o"
       done
@@ -108,9 +106,7 @@ CONFIG
       tcc -ar cr libcu.a $OBJS
       test -f libcu.a || { echo "ERROR: libcu.a not built" >&2; exit 1; }
 
-      # Build individual coreutils programs
       $BB mkdir -p "$out/bin"
-
       build_util() {
         name=$1
         shift
@@ -119,26 +115,49 @@ CONFIG
         $BB chmod 755 "$out/bin/$name"
       }
 
-      # Simple single-source utilities
-      for util in cat chmod cp echo install ln ls mkdir mv rm rmdir                   sort test true false head tail wc basename dirname                   tr uniq expr tee touch; do
-        build_util "$util" "src/$util.c"
-      done
+      build_util cat src/cat.c
+      build_util chmod src/chmod.c
+      build_util cp src/cp.c src/copy.c src/cp-hash.c
+      build_util echo src/echo.c
+      build_util install src/install.c src/copy.c src/cp-hash.c
+      build_util ln src/ln.c
+      build_util ls src/ls.c src/ls-ls.c
+      build_util mkdir src/mkdir.c
+      build_util mv src/mv.c src/copy.c src/cp-hash.c src/remove.c
+      build_util rm src/rm.c src/remove.c
+      build_util rmdir src/rmdir.c
+      build_util sort src/sort.c
+      build_util test src/test.c
+      build_util true src/true.c
+      build_util false src/false.c
+      build_util head src/head.c
+      build_util tail src/tail.c
+      build_util wc src/wc.c
+      build_util basename src/basename.c
+      build_util dirname src/dirname.c
+      build_util tr src/tr.c
+      build_util uniq src/uniq.c
+      build_util expr src/expr.c
+      build_util tee src/tee.c
+      build_util touch src/touch.c
 
-      # Create [ as a link to test
-      cd "$out/bin"
-      $BB ln -s test "["
-      cd "$WORK/coreutils-5.0"
+      $BB cp "$out/bin/test" "$out/bin/["
+      $BB chmod 755 "$out/bin/["
 
-      # Verify the full declared utility subset and smoke it
       for util in cat chmod cp echo install ln ls mkdir mv rm rmdir sort test true false head tail wc basename dirname tr uniq expr tee touch "["; do
         test -x "$out/bin/$util" || { echo "ERROR: output contract missing $util" >&2; exit 1; }
+        if $BB head -c 2 "$out/bin/$util" | $BB grep -q '^#!'; then
+          echo "ERROR: source-built coreutils output is a script: $util" >&2
+          exit 1
+        fi
       done
-      "$out/bin/mkdir" /tmp/coreutils-tcc-smoke
-      "$out/bin/echo" smoke-ok > /tmp/coreutils-tcc-smoke/input
-      "$out/bin/cp" /tmp/coreutils-tcc-smoke/input /tmp/coreutils-tcc-smoke/output
-      "$out/bin/cat" /tmp/coreutils-tcc-smoke/output | $BB grep -q smoke-ok
-      "$out/bin/test" -f /tmp/coreutils-tcc-smoke/output
-      "$out/bin/[" -f /tmp/coreutils-tcc-smoke/output "]"
+
+      "$out/bin/mkdir" /tmp/coreutils-smoke-dir
+      "$out/bin/echo" smoke-ok > /tmp/coreutils-smoke-dir/input
+      "$out/bin/cp" /tmp/coreutils-smoke-dir/input /tmp/coreutils-smoke-dir/output
+      "$out/bin/cat" /tmp/coreutils-smoke-dir/output | $BB grep -q smoke-ok
+      "$out/bin/test" -f /tmp/coreutils-smoke-dir/output
+      "$out/bin/[" -f /tmp/coreutils-smoke-dir/output "]"
     "%,
   ],
   inputs = [stage0, mes, tcc, make, sed, tar, bzip2, coreutils_src],

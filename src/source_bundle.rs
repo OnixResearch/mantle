@@ -10,6 +10,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Write;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -48,6 +49,12 @@ pub const MAX_ADAPTER_METADATA_BYTES: usize = 8_192;
 pub const MAX_SOURCE_RECORD_METADATA_BYTES: usize = 16_384;
 pub const MAX_DERIVED_SOURCE_WALK_NODES: usize = 65_536;
 
+const DERIVATION_FILE_DEPTH_MAX: u32 = 128;
+const DERIVATION_FILE_COUNT_MAX: u32 = 4_096;
+const DERIVATION_FILE_PATH_BYTES_MAX: usize = 4_096;
+const DERIVATION_FILE_EXTENSION: &str = "ncl";
+const SINGLE_DERIVATION_FILE_ROOT_COUNT: usize = 1;
+#[cfg(test)]
 const MAX_DERIVED_SOURCE_WALK_ITEMS: usize = MAX_DERIVED_SOURCE_WALK_NODES.saturating_add(MAX_SOURCE_RECORDS);
 const MAX_GIT_REF_INDIRECTIONS: usize = 16;
 const BOOTSTRAP_BASE_RECORD_COUNT: usize = 2;
@@ -502,9 +509,20 @@ struct SourceBundleCliContext<'a> {
     is_json_output: bool,
 }
 
+#[cfg(test)]
 enum DerivationSourceWalkItem<'a> {
     Derivation(&'a crunch_glue::CrunchDerivation),
     StorePath(&'a str),
+}
+
+struct DerivationFileSourceWalker<'a> {
+    import_paths: &'a [OsString],
+    store_prefix: &'a str,
+    records: Vec<SourceRecord>,
+    visiting: BTreeSet<PathBuf>,
+    completed_outputs: BTreeMap<PathBuf, BTreeSet<String>>,
+    visited_derivation_count: usize,
+    resolved_file_count: u32,
 }
 
 impl std::str::FromStr for SourceRecordKind {
@@ -545,6 +563,7 @@ pub fn plan_source_bundle(specs: &[SourceSpec], store_prefix: &str) -> Result<So
     assemble_source_bundle(records, store_prefix)
 }
 
+#[cfg(test)]
 pub fn plan_source_bundle_from_derivations(
     roots: &[(String, crunch_glue::CrunchDerivation)],
     specs: &[SourceSpec],
@@ -771,6 +790,7 @@ fn export_source_bundle_from_derivations(
     export_source_bundle_from_derivations_with_imported(roots, specs, store_prefix, &[])
 }
 
+#[cfg(test)]
 pub fn export_source_bundle_from_derivations_with_state(
     roots: &[(String, crunch_glue::CrunchDerivation)],
     specs: &[SourceSpec],
@@ -781,6 +801,7 @@ pub fn export_source_bundle_from_derivations_with_state(
     export_source_bundle_from_derivations_with_imported(roots, specs, store_prefix, &available_sources)
 }
 
+#[cfg(test)]
 pub fn export_source_bundle_from_derivations_with_connected_fetch(
     roots: &[(String, crunch_glue::CrunchDerivation)],
     specs: &[SourceSpec],
@@ -794,6 +815,7 @@ pub fn export_source_bundle_from_derivations_with_connected_fetch(
     assemble_source_bundle(records, store_prefix)
 }
 
+#[cfg(test)]
 fn export_source_bundle_from_derivations_with_imported(
     roots: &[(String, crunch_glue::CrunchDerivation)],
     specs: &[SourceSpec],
@@ -806,6 +828,7 @@ fn export_source_bundle_from_derivations_with_imported(
     assemble_source_bundle(records, store_prefix)
 }
 
+#[cfg(test)]
 pub fn collect_build_source_records(
     roots: &[(String, crunch_glue::CrunchDerivation)],
     store_prefix: &str,
@@ -1218,6 +1241,7 @@ pub fn list_source_bundle(manifest: &SourceBundleManifest) -> Result<SourceBundl
     plan_report(manifest)
 }
 
+#[cfg(test)]
 pub fn offline_preflight_for_derivations(
     roots: &[(String, crunch_glue::CrunchDerivation)],
     state_dir: &Path,
@@ -1237,8 +1261,8 @@ pub fn offline_preflight_for_file(
     state_dir: &Path,
     store_prefix: &str,
 ) -> Result<SourceOfflinePreflightReport, RunError> {
-    let roots = evaluate_build_root_with_import_paths(file, import_paths)?;
-    offline_preflight_for_derivations(&roots, state_dir, store_prefix)
+    let records = collect_build_source_records_from_files(&[file.to_path_buf()], import_paths, store_prefix)?;
+    offline_preflight_for_records(records, state_dir, store_prefix)
 }
 
 pub fn offline_preflight_for_build_roots(
@@ -1247,8 +1271,21 @@ pub fn offline_preflight_for_build_roots(
     state_dir: &Path,
     store_prefix: &str,
 ) -> Result<SourceOfflinePreflightReport, RunError> {
-    let roots = evaluate_build_roots(build_roots, import_paths)?;
-    offline_preflight_for_derivations(&roots, state_dir, store_prefix)
+    let evaluation_paths = crate::build_cmd::build_import_paths(import_paths)?;
+    let records = collect_build_source_records_from_files(build_roots, &evaluation_paths, store_prefix)?;
+    offline_preflight_for_records(records, state_dir, store_prefix)
+}
+
+fn offline_preflight_for_records(
+    records: Vec<SourceRecord>,
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<SourceOfflinePreflightReport, RunError> {
+    if records.is_empty() {
+        return empty_offline_preflight_report();
+    }
+    let manifest = assemble_source_bundle(records, store_prefix)?;
+    offline_preflight_for_manifest(&manifest, state_dir)
 }
 
 pub fn offline_preflight_for_manifest(
@@ -1271,8 +1308,8 @@ pub fn source_fetch_override_plan_for_file(
     state_dir: &Path,
     store_prefix: &str,
 ) -> Result<SourceFetchOverridePlan, RunError> {
-    let roots = evaluate_build_root_with_import_paths(file, import_paths)?;
-    source_fetch_override_plan_for_derivations(&roots, state_dir, store_prefix)
+    let records = collect_build_source_records_from_files(&[file.to_path_buf()], import_paths, store_prefix)?;
+    source_fetch_override_plan_for_records(records, state_dir, store_prefix)
 }
 
 // r[impl source_transports.source_bundle_realizes_fetcher_inputs]
@@ -1391,12 +1428,21 @@ pub fn bootstrap_legacy_seed_fetch_override_plan(
     })
 }
 
+#[cfg(test)]
 pub fn source_fetch_override_plan_for_derivations(
     roots: &[(String, crunch_glue::CrunchDerivation)],
     state_dir: &Path,
     store_prefix: &str,
 ) -> Result<SourceFetchOverridePlan, RunError> {
     let records = collect_build_source_records(roots, store_prefix)?;
+    source_fetch_override_plan_for_records(records, state_dir, store_prefix)
+}
+
+fn source_fetch_override_plan_for_records(
+    records: Vec<SourceRecord>,
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<SourceFetchOverridePlan, RunError> {
     assert!(records.len() <= MAX_SOURCE_RECORDS);
     assert!(store_prefix.starts_with('/'));
     if records.is_empty() {
@@ -2811,17 +2857,18 @@ fn source_fetch_overrides_for_manifest(
     let manifest_entries = manifest.records.len();
     let mut overrides = Vec::with_capacity(manifest_entries);
     let mut scratch_dirs = Vec::with_capacity(manifest_entries);
-    let mut override_keys = BTreeSet::new();
+    let mut override_payloads = BTreeMap::new();
     for expected in &manifest.records {
         if !source_record_is_fetcher_input(expected) {
             continue;
         }
         let stored_record = imported_source_record_satisfies_fetcher_input(expected, available_sources, pinned_sources)
             .map_err(|blocker| RunError::Internal(format!("{} for {}", blocker.reason_code(), expected.identity)))?;
+        let payload_digest = digest_source_entries(&stored_record.files)?;
         let (source_override, scratch_dir) = source_fetch_override_for_record(stored_record, source_state_blake3)?;
         let override_key = source_fetch_override_key(&source_override);
-        if !override_keys.insert(override_key) {
-            return Err(RunError::Internal(format!("duplicate source override mapping for {}", source_override.url)));
+        if !admit_source_override_mapping(&mut override_payloads, override_key, payload_digest, &source_override.url)? {
+            continue;
         }
         overrides.push(source_override);
         scratch_dirs.push(scratch_dir);
@@ -2829,9 +2876,27 @@ fn source_fetch_overrides_for_manifest(
     Ok((overrides, scratch_dirs))
 }
 
-fn source_fetch_override_key(
-    source_override: &crunch_build::FetchSourceOverride,
-) -> (&'static str, String, Option<String>) {
+type SourceOverrideKey = (&'static str, String, Option<String>);
+
+fn admit_source_override_mapping(
+    override_payloads: &mut BTreeMap<SourceOverrideKey, String>,
+    key: SourceOverrideKey,
+    payload_digest: String,
+    url: &str,
+) -> Result<bool, RunError> {
+    if let Some(existing_digest) = override_payloads.get(&key) {
+        if existing_digest != &payload_digest {
+            return Err(RunError::Internal(format!("conflicting source override mapping for {url}")));
+        }
+        return Ok(false);
+    }
+    override_payloads.insert(key, payload_digest);
+    assert!(!override_payloads.is_empty());
+    debug_assert!(override_payloads.len() <= MAX_SOURCE_RECORDS);
+    Ok(true)
+}
+
+fn source_fetch_override_key(source_override: &crunch_build::FetchSourceOverride) -> SourceOverrideKey {
     let kind = match source_override.kind {
         crunch_build::FetchSourceOverrideKind::File => "file",
         crunch_build::FetchSourceOverrideKind::Tarball => "tarball",
@@ -3600,6 +3665,7 @@ fn local_file_url_path(raw_url: &str) -> Option<PathBuf> {
     parsed.to_file_path().ok()
 }
 
+#[cfg(test)]
 fn walk_derivation_source_records(
     pending: &mut Vec<DerivationSourceWalkItem<'_>>,
     store_prefix: &str,
@@ -3639,6 +3705,7 @@ fn walk_derivation_source_records(
     )))
 }
 
+#[cfg(test)]
 fn queue_derivation_inputs<'a>(
     derivation: &'a crunch_glue::CrunchDerivation,
     pending: &mut Vec<DerivationSourceWalkItem<'a>>,
@@ -3658,6 +3725,18 @@ fn queue_derivation_inputs<'a>(
     for input in derivation.inputs.iter().rev() {
         let item = match input {
             crunch_glue::Input::Source(source_path) => DerivationSourceWalkItem::StorePath(source_path),
+            crunch_glue::Input::DerivationFile(reference) => {
+                return Err(RunError::Internal(format!(
+                    "derived source walk requires pipeline resolution for derivation-file input {}",
+                    reference.path
+                )));
+            }
+            crunch_glue::Input::ResolvedDerivation(reference) => {
+                return Err(RunError::Internal(format!(
+                    "derived source walk cannot recover source records from preconverted derivation {}",
+                    reference.drv_path
+                )));
+            }
             crunch_glue::Input::OutputSelection(output) => DerivationSourceWalkItem::Derivation(&output.drv),
             crunch_glue::Input::Derivation(input_derivation) => DerivationSourceWalkItem::Derivation(input_derivation),
         };
@@ -4020,8 +4099,10 @@ fn plan_from_cli_inputs(
     if build_roots.is_empty() {
         return plan_source_bundle(&specs, store_prefix);
     }
-    let roots = evaluate_build_roots(build_roots, import_paths)?;
-    plan_source_bundle_from_derivations(&roots, &specs, store_prefix)
+    let evaluation_paths = crate::build_cmd::build_import_paths(import_paths)?;
+    let mut records = canonicalize_source_specs(&specs, store_prefix)?;
+    records.extend(collect_build_source_records_from_files(build_roots, &evaluation_paths, store_prefix)?);
+    assemble_source_bundle(records, store_prefix)
 }
 
 fn export_from_cli_inputs(
@@ -4036,54 +4117,243 @@ fn export_from_cli_inputs(
     if build_roots.is_empty() {
         return plan_source_bundle(&specs, store_prefix);
     }
-    let roots = evaluate_build_roots(build_roots, import_paths)?;
+    let evaluation_paths = crate::build_cmd::build_import_paths(import_paths)?;
+    let derived_records = collect_build_source_records_from_files(build_roots, &evaluation_paths, store_prefix)?;
+    let available_sources = read_imported_source_records(state_dir)?;
+    let mut records = canonicalize_source_specs(&specs, store_prefix)?;
+    let expected = normalize_source_records(derived_records)?;
     if fetch_missing {
-        return export_source_bundle_from_derivations_with_connected_fetch(&roots, &specs, store_prefix, state_dir);
+        records.extend(materialize_export_records_with_connected_fetch(&expected, &available_sources)?);
+    } else {
+        records.extend(materialize_export_records(&expected, &available_sources)?);
     }
-    export_source_bundle_from_derivations_with_state(&roots, &specs, store_prefix, state_dir)
+    assemble_source_bundle(records, store_prefix)
 }
 
-fn evaluate_build_roots(
+fn collect_build_source_records_from_files(
     build_roots: &[PathBuf],
-    import_paths: &[PathBuf],
-) -> Result<Vec<(String, crunch_glue::CrunchDerivation)>, RunError> {
-    if build_roots.is_empty() {
-        return Ok(Vec::new());
-    }
-    if build_roots.len() > MAX_DERIVED_SOURCE_WALK_NODES {
+    resolved_import_paths: &[OsString],
+    store_prefix: &str,
+) -> Result<Vec<SourceRecord>, RunError> {
+    if build_roots.is_empty() || build_roots.len() > MAX_DERIVED_SOURCE_WALK_NODES {
         return Err(RunError::Internal(format!(
-            "evaluated build roots exceed {MAX_DERIVED_SOURCE_WALK_NODES} derivations"
+            "source bundle build-root count must be within 1..={MAX_DERIVED_SOURCE_WALK_NODES}"
         )));
     }
-    assert!(!build_roots.is_empty());
-    assert!(build_roots.len() <= MAX_DERIVED_SOURCE_WALK_NODES);
-    let evaluation_paths = crate::build_cmd::build_import_paths(import_paths)?;
-    let mut derivations = Vec::new();
+    let mut walker = DerivationFileSourceWalker::new(resolved_import_paths, store_prefix);
     for build_root in build_roots {
-        let root_derivations = evaluate_build_root_with_import_paths(build_root, &evaluation_paths)?;
-        let next_len = derivations
-            .len()
-            .checked_add(root_derivations.len())
-            .ok_or_else(|| RunError::Internal("evaluated build root count overflow".to_string()))?;
-        if next_len > MAX_DERIVED_SOURCE_WALK_NODES {
-            return Err(RunError::Internal(format!(
-                "evaluated build roots exceed {MAX_DERIVED_SOURCE_WALK_NODES} derivations"
-            )));
-        }
-        derivations
-            .try_reserve(root_derivations.len())
-            .map_err(|err| RunError::Internal(format!("reserving evaluated build roots: {err}")))?;
-        for derivation in root_derivations {
-            if derivations.len() >= MAX_DERIVED_SOURCE_WALK_NODES {
-                return Err(RunError::Internal(format!(
-                    "evaluated build roots exceed {MAX_DERIVED_SOURCE_WALK_NODES} derivations"
-                )));
-            }
-            derivations.push(derivation);
+        walker.walk_root_file(build_root)?;
+    }
+    assert!(walker.visiting.is_empty());
+    assert!(walker.records.len() <= MAX_SOURCE_RECORDS);
+    Ok(walker.records)
+}
+
+impl<'a> DerivationFileSourceWalker<'a> {
+    fn new(import_paths: &'a [OsString], store_prefix: &'a str) -> Self {
+        assert!(store_prefix.starts_with('/'));
+        assert!(DERIVATION_FILE_COUNT_MAX > 1);
+        Self {
+            import_paths,
+            store_prefix,
+            records: Vec::new(),
+            visiting: BTreeSet::new(),
+            completed_outputs: BTreeMap::new(),
+            visited_derivation_count: 0,
+            resolved_file_count: 0,
         }
     }
-    assert!(derivations.len() <= MAX_DERIVED_SOURCE_WALK_NODES);
-    Ok(derivations)
+
+    fn walk_root_file(&mut self, root_file: &Path) -> Result<(), RunError> {
+        let canonical_root = root_file.canonicalize().map_err(|error| {
+            RunError::Internal(format!("canonicalizing source-bundle root {}: {error}", root_file.display()))
+        })?;
+        let root_dir = canonical_root
+            .parent()
+            .ok_or_else(|| {
+                RunError::Internal(format!("source-bundle root has no parent: {}", canonical_root.display()))
+            })?
+            .to_path_buf();
+        let roots = evaluate_build_root_with_import_paths(&canonical_root, self.import_paths)?;
+        for (_, derivation) in roots {
+            self.walk_derivation(&root_dir, &canonical_root, &derivation, 0)?;
+        }
+        assert!(canonical_root.starts_with(&root_dir));
+        debug_assert!(self.visiting.is_empty());
+        Ok(())
+    }
+
+    fn walk_derivation(
+        &mut self,
+        root_dir: &Path,
+        owner_file: &Path,
+        derivation: &crunch_glue::CrunchDerivation,
+        depth: u32,
+    ) -> Result<(), RunError> {
+        self.require_depth_and_node_capacity(depth)?;
+        if let Some(record) = fixed_fetcher_source_record(derivation)? {
+            push_bounded_source_record(&mut self.records, record)?;
+        }
+        for input in &derivation.inputs {
+            self.walk_input(root_dir, owner_file, input, depth.saturating_add(1))?;
+        }
+        assert!(self.visited_derivation_count <= MAX_DERIVED_SOURCE_WALK_NODES);
+        debug_assert!(self.records.len() <= MAX_SOURCE_RECORDS);
+        Ok(())
+    }
+
+    fn walk_input(
+        &mut self,
+        root_dir: &Path,
+        owner_file: &Path,
+        input: &crunch_glue::Input,
+        depth: u32,
+    ) -> Result<(), RunError> {
+        match input {
+            crunch_glue::Input::Source(source_path) => {
+                let record = store_path_source_record(StorePathSourceRequest {
+                    source_path,
+                    store_prefix: self.store_prefix,
+                })?;
+                push_bounded_source_record(&mut self.records, record)
+            }
+            crunch_glue::Input::DerivationFile(reference) => {
+                self.walk_derivation_file(root_dir, owner_file, reference, depth)
+            }
+            crunch_glue::Input::ResolvedDerivation(reference) => Err(RunError::Internal(format!(
+                "source-bundle walk cannot recover sources from resolved derivation {}",
+                reference.drv_path
+            ))),
+            crunch_glue::Input::OutputSelection(output) => {
+                self.walk_derivation(root_dir, owner_file, &output.drv, depth)
+            }
+            crunch_glue::Input::Derivation(derivation) => self.walk_derivation(root_dir, owner_file, derivation, depth),
+        }
+    }
+
+    fn walk_derivation_file(
+        &mut self,
+        root_dir: &Path,
+        owner_file: &Path,
+        reference: &crunch_glue::DerivationFileRef,
+        depth: u32,
+    ) -> Result<(), RunError> {
+        self.require_file_capacity(depth)?;
+        let path = resolve_source_derivation_file(root_dir, owner_file, &reference.path)?;
+        if let Some(outputs) = self.completed_outputs.get(&path) {
+            return validate_source_derivation_output(&path, reference.output.as_deref(), outputs);
+        }
+        if !self.visiting.insert(path.clone()) {
+            return Err(RunError::Internal(format!(
+                "source-bundle derivation-file cycle detected at {}",
+                path.display()
+            )));
+        }
+        self.resolved_file_count = self.resolved_file_count.saturating_add(1);
+        let roots = evaluate_build_root_with_import_paths(&path, self.import_paths)?;
+        if roots.len() != SINGLE_DERIVATION_FILE_ROOT_COUNT {
+            return Err(RunError::Internal(format!(
+                "source-bundle derivation-file {} must evaluate to exactly one root, observed {}",
+                path.display(),
+                roots.len()
+            )));
+        }
+        let (_, derivation) = roots.into_iter().next().ok_or_else(|| {
+            RunError::Internal(format!("source-bundle derivation-file {} returned no root", path.display()))
+        })?;
+        let outputs = derivation.outputs.iter().cloned().collect::<BTreeSet<_>>();
+        validate_source_derivation_output(&path, reference.output.as_deref(), &outputs)?;
+        let result = self.walk_derivation(root_dir, &path, &derivation, depth.saturating_add(1));
+        let removed = self.visiting.remove(&path);
+        assert!(removed, "visited source-bundle derivation file must be removed");
+        result?;
+        self.completed_outputs.insert(path, outputs);
+        Ok(())
+    }
+
+    fn require_depth_and_node_capacity(&mut self, depth: u32) -> Result<(), RunError> {
+        if depth > DERIVATION_FILE_DEPTH_MAX {
+            return Err(RunError::Internal(format!(
+                "source-bundle derivation depth exceeds {DERIVATION_FILE_DEPTH_MAX}"
+            )));
+        }
+        self.visited_derivation_count = self
+            .visited_derivation_count
+            .checked_add(1)
+            .ok_or_else(|| RunError::Internal("source-bundle derivation count overflow".to_string()))?;
+        if self.visited_derivation_count > MAX_DERIVED_SOURCE_WALK_NODES {
+            return Err(RunError::Internal(format!(
+                "source-bundle derivation walk exceeds {MAX_DERIVED_SOURCE_WALK_NODES} nodes"
+            )));
+        }
+        Ok(())
+    }
+
+    fn require_file_capacity(&self, depth: u32) -> Result<(), RunError> {
+        if depth > DERIVATION_FILE_DEPTH_MAX || self.resolved_file_count >= DERIVATION_FILE_COUNT_MAX {
+            return Err(RunError::Internal(format!(
+                "source-bundle derivation-file bounds exceeded: depth={depth}, files={}",
+                self.resolved_file_count
+            )));
+        }
+        assert!(self.resolved_file_count < DERIVATION_FILE_COUNT_MAX);
+        debug_assert!(depth <= DERIVATION_FILE_DEPTH_MAX);
+        Ok(())
+    }
+}
+
+fn validate_source_derivation_output(
+    path: &Path,
+    requested_output: Option<&str>,
+    outputs: &BTreeSet<String>,
+) -> Result<(), RunError> {
+    if outputs.is_empty() {
+        return Err(RunError::Internal(format!("source-bundle derivation-file {} has no outputs", path.display())));
+    }
+    if let Some(output) = requested_output
+        && !outputs.contains(output)
+    {
+        return Err(RunError::Internal(format!(
+            "source-bundle derivation-file {} does not declare requested output {output}",
+            path.display()
+        )));
+    }
+    assert!(!outputs.is_empty());
+    debug_assert!(requested_output.is_none_or(|output| outputs.contains(output)));
+    Ok(())
+}
+
+fn resolve_source_derivation_file(root_dir: &Path, owner_file: &Path, reference: &str) -> Result<PathBuf, RunError> {
+    let reference_path = Path::new(reference);
+    let normalized = reference_path.components().all(|component| matches!(component, Component::Normal(_)));
+    let expected_extension =
+        reference_path.extension().and_then(|extension| extension.to_str()) == Some(DERIVATION_FILE_EXTENSION);
+    if reference.is_empty()
+        || reference.len() > DERIVATION_FILE_PATH_BYTES_MAX
+        || reference_path.is_absolute()
+        || !normalized
+        || !expected_extension
+    {
+        return Err(RunError::Internal(format!(
+            "source-bundle derivation-file input must be a bounded normalized relative .ncl path: {reference}"
+        )));
+    }
+    let owner_dir = owner_file.parent().ok_or_else(|| {
+        RunError::Internal(format!("source-bundle derivation-file owner has no parent: {}", owner_file.display()))
+    })?;
+    let candidate = owner_dir.join(reference_path);
+    let canonical = candidate.canonicalize().map_err(|error| {
+        RunError::Internal(format!("resolving source-bundle derivation-file {}: {error}", candidate.display()))
+    })?;
+    if !canonical.starts_with(root_dir) || !canonical.is_file() {
+        return Err(RunError::Internal(format!(
+            "source-bundle derivation-file escapes its root or is not a file: {}",
+            canonical.display()
+        )));
+    }
+    assert!(canonical.starts_with(root_dir));
+    debug_assert_eq!(canonical.extension().and_then(|extension| extension.to_str()), Some(DERIVATION_FILE_EXTENSION));
+    Ok(canonical)
 }
 
 fn evaluate_build_root_with_import_paths(
@@ -5588,7 +5858,7 @@ mod tests {
     }
 
     #[test]
-    fn source_fetch_override_plan_rejects_duplicate_url_kind_mappings() {
+    fn source_fetch_override_plan_deduplicates_identical_url_kind_payloads() {
         let temp = tempfile::tempdir().unwrap();
         let payload = temp.path().join("payload.txt");
         fs::write(&payload, b"payload").unwrap();
@@ -5604,10 +5874,23 @@ mod tests {
         let state_dir = temp.path().join("state");
         import_source_bundle(&exported, &state_dir, true).unwrap();
 
-        let error = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store").unwrap_err();
+        let plan = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store").unwrap();
 
-        assert!(error.to_string().contains("duplicate source override mapping"));
-        assert!(error.to_string().contains(&payload_url));
+        assert_eq!(plan.overrides.len(), 1);
+        assert_eq!(plan.overrides[0].url, payload_url);
+    }
+
+    #[test]
+    fn source_fetch_override_mapping_rejects_conflicting_payloads() {
+        let url = "https://example.invalid/source.tar";
+        let key: SourceOverrideKey = ("tarball", url.to_string(), None);
+        let mut mappings = BTreeMap::new();
+
+        assert!(admit_source_override_mapping(&mut mappings, key.clone(), "digest-a".to_string(), url).unwrap());
+        let error = admit_source_override_mapping(&mut mappings, key, "digest-b".to_string(), url).unwrap_err();
+
+        assert!(error.to_string().contains("conflicting source override mapping"));
+        assert!(error.to_string().contains(url));
     }
 
     #[test]
@@ -5766,6 +6049,54 @@ mod tests {
         assert_eq!(report.record_count, 0);
         assert!(report.manifest_blake3.is_none());
         assert!(report.next_actions.is_empty());
+    }
+
+    #[test]
+    fn source_bundle_walks_lazy_derivation_files_without_recursive_expansion() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("root.ncl");
+        let source = temp.path().join("source.ncl");
+        fs::write(&root, r#"{ name = "root", builder = "/bin/sh", inputs = [{ derivation_file = "source.ncl" }] }"#)
+            .unwrap();
+        fs::write(
+            &source,
+            r#"{
+              name = "fixture-source",
+              builder = "builtin:fetchurl",
+              env = { url = "https://example.invalid/source.tar" },
+              fixed_output = {
+                hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                algo = "sha256",
+                mode = "flat",
+              },
+            }"#,
+        )
+        .unwrap();
+
+        let records = collect_build_source_records_from_files(&[root], &[], "/mantle/store").unwrap();
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].metadata.get(RECORD_METADATA_NAME_KEY).map(String::as_str), Some("fixture-source"));
+        assert_eq!(
+            records[0].metadata.get(RECORD_METADATA_URL_KEY).map(String::as_str),
+            Some("https://example.invalid/source.tar")
+        );
+    }
+
+    #[test]
+    fn source_bundle_rejects_lazy_derivation_file_cycles() {
+        let temp = tempfile::tempdir().unwrap();
+        let first = temp.path().join("first.ncl");
+        let second = temp.path().join("second.ncl");
+        fs::write(&first, r#"{ name = "first", builder = "/bin/sh", inputs = [{ derivation_file = "second.ncl" }] }"#)
+            .unwrap();
+        fs::write(&second, r#"{ name = "second", builder = "/bin/sh", inputs = [{ derivation_file = "first.ncl" }] }"#)
+            .unwrap();
+
+        let error = collect_build_source_records_from_files(&[first], &[], "/mantle/store").unwrap_err();
+
+        assert!(error.to_string().contains("derivation-file cycle detected"));
+        assert!(!error.to_string().contains("resolved derivation"));
     }
 
     #[test]

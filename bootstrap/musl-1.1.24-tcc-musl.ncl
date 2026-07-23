@@ -8,11 +8,11 @@
 
 let crunch = import "lib.ncl" in
 
-let stage0 = import "stage0-posix.ncl" in
-let tcc_musl = import "tcc-musl.ncl" in
-let musl_prev = import "musl-1.1.24-tcc.ncl" in
-let make = import "make-tcc.ncl" in
-let sed = import "sed-tcc.ncl" in
+let stage0 = crunch.derivationFile "stage0-posix.ncl" in
+let tcc_musl = crunch.derivationFile "tcc-musl.ncl" in
+let musl_prev = crunch.derivationFile "musl-1.1.24-tcc.ncl" in
+let make = crunch.derivationFile "make-tcc.ncl" in
+let sed = crunch.derivationFile "sed-tcc.ncl" in
 
 let musl_src = crunch.fetchTarball {
   # first-consumer: bootstrap/musl-1.1.24-tcc-musl.ncl

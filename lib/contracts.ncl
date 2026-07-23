@@ -50,7 +50,8 @@ let store_path_regex = "^(/[A-Za-z0-9._+-]+)+/[a-z0-9]{32}-.+$" in
   Input
     | doc m%"
       A build input: a StorePath string, a Derivation record (all outputs),
-      or an output selection record `{ drv, output }` (single output).
+      a lazy derivation-file record `{ derivation_file }`, or an output
+      selection record `{ drv, output }` (single output).
     "%
     = std.contract.from_validator (fun value =>
       if std.is_string value then
@@ -58,7 +59,17 @@ let store_path_regex = "^(/[A-Za-z0-9._+-]+)+/[a-z0-9]{32}-.+$" in
         then 'Ok
         else 'Error { message = "input string must be a valid absolute store path, got: %{value}" }
       else if std.is_record value then
-        if std.record.has_field "drv" value && std.record.has_field "output" value then
+        if std.record.has_field "derivation_file" value then
+          if std.is_string value.derivation_file
+            && (!std.record.has_field "output" value || std.is_string value.output)
+            && std.array.all
+              (fun field => field == "derivation_file" || field == "output")
+              (std.record.fields value)
+          then
+            'Ok
+          else
+            'Error { message = "derivation-file input must contain a string 'derivation_file' and optional string 'output'" }
+        else if std.record.has_field "drv" value && std.record.has_field "output" value then
           # Output selection: { drv = <Derivation>, output = "dev" }
           if std.is_record value.drv && std.is_string value.output then
             'Ok
@@ -67,6 +78,6 @@ let store_path_regex = "^(/[A-Za-z0-9._+-]+)+/[a-z0-9]{32}-.+$" in
         else
           'Ok  # Bare derivation record
       else
-        'Error { message = "input must be a Derivation record, output selection { drv, output }, or a StorePath string" }
+        'Error { message = "input must be a Derivation record, derivation-file record, output selection { drv, output }, or a StorePath string" }
     ),
 }

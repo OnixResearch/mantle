@@ -1,6 +1,8 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
 
+mod derivation_file;
+
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -238,6 +240,8 @@ async fn build_linux(
         config.max_jobs,
         &config.store_dir,
         RootForceExecutionPolicy::PreferThreaded,
+        &config.file,
+        &config.import_paths,
         &session,
         tx,
     );
@@ -436,6 +440,8 @@ async fn stream_roots_into_worker(
     max_jobs: u32,
     store_dir: &str,
     root_force_policy: RootForceExecutionPolicy,
+    root_file: &std::path::Path,
+    import_paths: &[OsString],
     session: &crunch_eval::session::EvaluationSession,
     tx: mpsc::Sender<EvalMessage>,
 ) -> Result<EvalStreamResult, Error> {
@@ -447,6 +453,7 @@ async fn stream_roots_into_worker(
     let mut join_set = JoinSet::new();
     let mut next_label_index: usize = 0;
     let mut cache = ConversionCache::new(store_dir);
+    let mut file_resolver = derivation_file::DerivationFileResolver::new(root_file, import_paths)?;
     let mut root_drv_paths = Vec::with_capacity(requested_labels.len());
     let mut first_failure: Option<EvalFailure> = None;
 
@@ -462,10 +469,11 @@ async fn stream_roots_into_worker(
         let worker_result = join_result.map_err(|e| Error::Internal(format!("eval worker panicked: {e}")))?;
 
         match worker_result {
-            Ok((label, drv)) => {
+            Ok((label, mut drv)) => {
                 if first_failure.is_some() {
                     continue;
                 }
+                file_resolver.resolve_root_inputs(root_file, &mut drv, &mut cache)?;
                 let (drv_path, _nix_drv) =
                     crunch_glue::convert(&drv, &mut cache).map_err(|e| Error::Convert(format!("{label}: {e}")))?;
                 let new_entries = cache.drain_pending();
@@ -794,8 +802,18 @@ mod tests {
         assert_eq!(store_fallback_mode(HermeticityMode::Strict), crunch_store::StoreFallbackMode::Strict);
     }
 
+    fn resolver_fixture_file() -> (tempfile::TempDir, PathBuf) {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("root.ncl");
+        std::fs::write(&file, "{}").unwrap();
+        assert!(file.is_file());
+        assert!(file.starts_with(directory.path()));
+        (directory, file)
+    }
+
     #[tokio::test]
     async fn stream_roots_into_worker_matches_across_root_force_policies() {
+        let (_directory, root_file) = resolver_fixture_file();
         let session = crunch_eval::session::EvaluationSession::open_str(
             r#"{
   alpha = { name = "alpha", builder = "/bin/sh" },
@@ -805,10 +823,17 @@ mod tests {
         )
         .unwrap();
         let (inline_tx, inline_rx) = mpsc::channel::<EvalMessage>(16);
-        let inline_result =
-            stream_roots_into_worker(4, "/crunch/store", RootForceExecutionPolicy::Inline, &session, inline_tx)
-                .await
-                .unwrap();
+        let inline_result = stream_roots_into_worker(
+            4,
+            "/crunch/store",
+            RootForceExecutionPolicy::Inline,
+            &root_file,
+            &[],
+            &session,
+            inline_tx,
+        )
+        .await
+        .unwrap();
         let inline_labels = collect_eval_message_labels(inline_rx).await;
 
         let (preferred_tx, preferred_rx) = mpsc::channel::<EvalMessage>(16);
@@ -816,6 +841,8 @@ mod tests {
             4,
             "/crunch/store",
             RootForceExecutionPolicy::PreferThreaded,
+            &root_file,
+            &[],
             &session,
             preferred_tx,
         )
@@ -841,6 +868,7 @@ mod tests {
 
     #[tokio::test]
     async fn stream_roots_into_worker_reports_same_labeled_failure_across_policies() {
+        let (_directory, root_file) = resolver_fixture_file();
         let session = crunch_eval::session::EvaluationSession::open_str(
             r#"{
   good = { name = "good", builder = "/bin/sh" },
@@ -850,10 +878,17 @@ mod tests {
         )
         .unwrap();
         let (inline_tx, inline_rx) = mpsc::channel::<EvalMessage>(16);
-        let inline_result =
-            stream_roots_into_worker(4, "/crunch/store", RootForceExecutionPolicy::Inline, &session, inline_tx)
-                .await
-                .unwrap();
+        let inline_result = stream_roots_into_worker(
+            4,
+            "/crunch/store",
+            RootForceExecutionPolicy::Inline,
+            &root_file,
+            &[],
+            &session,
+            inline_tx,
+        )
+        .await
+        .unwrap();
         let inline_labels = collect_eval_message_labels(inline_rx).await;
 
         let (preferred_tx, preferred_rx) = mpsc::channel::<EvalMessage>(16);
@@ -861,6 +896,8 @@ mod tests {
             4,
             "/crunch/store",
             RootForceExecutionPolicy::PreferThreaded,
+            &root_file,
+            &[],
             &session,
             preferred_tx,
         )

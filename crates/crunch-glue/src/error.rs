@@ -29,6 +29,9 @@ pub enum Error {
     #[error("invalid dynamic plan outputs: {0}")]
     InvalidDynamicPlanOutputs(String),
 
+    #[error("unresolved derivation-file input reached conversion: {path}")]
+    UnresolvedDerivationFile { path: String },
+
     #[error("invalid output selection: derivation '{drv_name}' has no output '{output}' (available: {available})")]
     InvalidOutputSelection {
         drv_name: String,

@@ -180,16 +180,21 @@ pub fn validate_dynamic_plan_outputs(outputs: &[String], dynamic_plan_outputs: &
     Ok(())
 }
 
-/// An input is either a derivation to be built, a pre-existing store path,
-/// or a selected output of a multi-output derivation.
+/// An input is a derivation, a lazy derivation-file reference, a pre-existing
+/// store path, or a selected output of a multi-output derivation.
 ///
-/// JSON and Nickel direct deserialization both support three shapes:
-/// a string → `Source`, a record with `drv` + `output` → `OutputSelection`,
-/// and a record with `name` + `builder` → `Derivation`.
+/// JSON and Nickel direct deserialization support four shapes: a string →
+/// `Source`, `{ derivation_file = "relative.ncl", output? }` → `DerivationFile`,
+/// a record with `drv` + `output` → `OutputSelection`, and a record with `name`
+/// + `builder` → `Derivation`.
 #[derive(Debug, Clone)]
 pub enum Input {
     /// A pre-existing store path (e.g., from the seed toolchain).
     Source(String),
+    /// A relative Nickel file resolved by the pipeline before conversion.
+    DerivationFile(DerivationFileRef),
+    /// Pipeline-internal preconverted derivation edge.
+    ResolvedDerivation(ResolvedDerivationRef),
     /// A specific output of a multi-output derivation.
     OutputSelection(Box<OutputRef>),
     /// A derivation that must be built first (all outputs).
@@ -198,6 +203,7 @@ pub enum Input {
 
 #[derive(Debug, Clone)]
 struct RawInputRecord {
+    derivation_file: Option<String>,
     drv: Option<CrunchDerivation>,
     output: Option<String>,
     name: Option<String>,
@@ -215,6 +221,7 @@ struct RawInputRecord {
 
 #[derive(Deserialize)]
 struct RawInputRecordFields {
+    derivation_file: Option<String>,
     drv: Option<CrunchDerivation>,
     output: Option<String>,
     name: Option<String>,
@@ -238,6 +245,7 @@ impl<'de> Deserialize<'de> for RawInputRecord {
         let dynamic_plan_outputs = raw.dynamic_plan_outputs.unwrap_or_else(Vec::new);
         validate_dynamic_plan_outputs(&outputs, &dynamic_plan_outputs).map_err(de::Error::custom)?;
         Ok(Self {
+            derivation_file: raw.derivation_file,
             drv: raw.drv,
             output: raw.output,
             name: raw.name,
@@ -286,6 +294,15 @@ impl RawInputRecord {
     }
 
     fn into_input<E: de::Error>(self) -> Result<Input, E> {
+        if let Some(path) = self.derivation_file.as_ref() {
+            if self.drv.is_some() || self.name.is_some() || self.builder.is_some() {
+                return Err(E::custom("derivation-file input cannot mix derivation_file with derivation fields"));
+            }
+            return Ok(Input::DerivationFile(DerivationFileRef {
+                path: path.clone(),
+                output: self.output,
+            }));
+        }
         if self.drv.is_some() || self.output.is_some() {
             return self.into_output_selection();
         }
@@ -300,7 +317,7 @@ impl<'de> Visitor<'de> for InputVisitor {
     type Value = Input;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("string source path, output selection record, or derivation record")
+        formatter.write_str("string source path, derivation-file record, output selection record, or derivation record")
     }
 
     fn visit_str<E: de::Error>(self, value: &str) -> Result<Input, E> {
@@ -330,10 +347,28 @@ impl Serialize for Input {
     where S: Serializer {
         match self {
             Self::Source(path) => serializer.serialize_str(path),
+            Self::DerivationFile(reference) => reference.serialize(serializer),
+            Self::ResolvedDerivation(reference) => reference.serialize(serializer),
             Self::OutputSelection(output_ref) => output_ref.serialize(serializer),
             Self::Derivation(derivation) => derivation.serialize(serializer),
         }
     }
+}
+
+/// Relative Nickel file reference resolved by the imperative pipeline shell.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct DerivationFileRef {
+    #[serde(rename = "derivation_file")]
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
+}
+
+/// Pipeline-internal edge to a derivation already converted into the shared cache.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ResolvedDerivationRef {
+    pub drv_path: String,
+    pub outputs: Vec<String>,
 }
 
 /// Reference to a specific output of a derivation.

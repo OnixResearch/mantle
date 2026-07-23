@@ -55,7 +55,11 @@ let perl_src = crunch.fetchTarball {
       $BB mkdir -p "$WORK"
       cd "$WORK"
 
-      $BB cp -r "$SRC" perl-5.000
+      PERL_AV=$($BB find "$SRC" -type f -name av.c | $BB head -n 1)
+      test -n "$PERL_AV" || { echo "ERROR: Perl source root missing av.c" >&2; exit 1; }
+      PERL_ROOT=$($BB dirname "$PERL_AV")
+      $BB mkdir -p perl-5.000
+      $BB cp -r "$PERL_ROOT/." perl-5.000/
       $BB chmod -R u+w perl-5.000
       cd perl-5.000
 

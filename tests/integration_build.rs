@@ -539,7 +539,10 @@ fn eval_hello_world_with_seed() {
             Input::Source(p) => {
                 assert!(p.starts_with("/nix/store/"), "source input should be a store path: {p}");
             }
-            Input::Derivation(_) | Input::OutputSelection(_) => {
+            Input::Derivation(_)
+            | Input::DerivationFile(_)
+            | Input::ResolvedDerivation(_)
+            | Input::OutputSelection(_) => {
                 panic!("hello-world should only have source inputs from seed");
             }
         }

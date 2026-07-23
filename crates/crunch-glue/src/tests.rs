@@ -183,6 +183,74 @@ fn dynamic_plan_outputs_do_not_change_derivation_hash_by_default() {
 }
 
 #[test]
+fn derivation_file_input_deserializes_and_roundtrips() {
+    let json = r#"{"derivation_file":"bootstrap/stage0-posix.ncl"}"#;
+    let input: Input = serde_json::from_str(json).unwrap();
+    match &input {
+        Input::DerivationFile(reference) => {
+            assert_eq!(reference.path, "bootstrap/stage0-posix.ncl");
+            assert!(reference.output.is_none());
+            assert!(!reference.path.starts_with('/'));
+        }
+        other => panic!("expected derivation-file input, got {other:?}"),
+    }
+    assert_eq!(serde_json::to_string(&input).unwrap(), json);
+}
+
+#[test]
+fn derivation_file_input_deserializes_selected_output() {
+    let json = r#"{"derivation_file":"dep.ncl","output":"dev"}"#;
+    let input: Input = serde_json::from_str(json).unwrap();
+    match &input {
+        Input::DerivationFile(reference) => {
+            assert_eq!(reference.path, "dep.ncl");
+            assert_eq!(reference.output.as_deref(), Some("dev"));
+        }
+        other => panic!("expected selected derivation-file input, got {other:?}"),
+    }
+    assert_eq!(serde_json::to_string(&input).unwrap(), json);
+}
+
+#[test]
+fn derivation_file_input_rejects_mixed_derivation_fields() {
+    let json = r#"{"derivation_file":"dep.ncl","name":"dep","builder":"/bin/sh"}"#;
+    let error = serde_json::from_str::<Input>(json).unwrap_err().to_string();
+    assert!(error.contains("cannot mix"));
+    assert!(error.contains("derivation_file"));
+}
+
+#[test]
+fn conversion_rejects_unresolved_derivation_file() {
+    let drv = CrunchDerivation {
+        inputs: vec![Input::DerivationFile(DerivationFileRef {
+            path: "dep.ncl".to_string(),
+            output: None,
+        })],
+        ..minimal_drv("unresolved", "/bin/sh")
+    };
+    let error = convert(&drv, &mut ConversionCache::default()).unwrap_err().to_string();
+    assert!(error.contains("unresolved derivation-file input"));
+    assert!(error.contains("dep.ncl"));
+}
+
+#[test]
+fn conversion_accepts_pipeline_resolved_derivation_edge() {
+    let dep = minimal_drv("resolved-dep", "/bin/sh");
+    let mut cache = ConversionCache::default();
+    let (dep_path, _) = convert(&dep, &mut cache).unwrap();
+    let drv = CrunchDerivation {
+        inputs: vec![Input::ResolvedDerivation(ResolvedDerivationRef {
+            drv_path: dep_path.to_absolute_path(),
+            outputs: vec!["out".to_string()],
+        })],
+        ..minimal_drv("resolved-root", "/bin/sh")
+    };
+    let (_, converted) = convert(&drv, &mut cache).unwrap();
+    assert_eq!(converted.input_derivations.len(), 1);
+    assert!(converted.input_derivations.contains_key(&dep_path));
+}
+
+#[test]
 fn convert_with_source_input() {
     let drv = CrunchDerivation {
         name: "hello".to_string(),
