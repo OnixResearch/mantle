@@ -713,6 +713,67 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected diagnostic derivation inventory receipt metadata suppression".to_string());
     }
+    let no_evidence = EvidenceState::default();
+    if source_marker_suppression_reason(
+        Path::new("bootstrap/gcc-4.0-musl-pass3.ncl"),
+        MARKERS[1],
+        "echo 'gcc40-pass3-check: final-static-link' >&2",
+        &no_evidence,
+    )
+    .is_none()
+    {
+        return Err("self-test expected GCC static-link progress marker suppression".to_string());
+    }
+    if source_marker_suppression_reason(
+        Path::new("bootstrap/gcc-4.0-musl-pass3.ncl"),
+        MARKERS[1],
+        "echo 'ERROR: gcc40 pass3 static link failed' >&2",
+        &no_evidence,
+    )
+    .is_some()
+    {
+        return Err("self-test rejected suppression of a real GCC static-link failure".to_string());
+    }
+    if source_marker_suppression_reason(
+        Path::new("bootstrap/binutils-2.30-gas-source.ncl"),
+        MARKERS[4],
+        "enum { PLACEHOLDER_BYTES = 6, MAX_ATTEMPTS = 1024 };",
+        &no_evidence,
+    )
+    .is_none()
+    {
+        return Err("self-test expected mkstemp placeholder identifier suppression".to_string());
+    }
+    if source_marker_suppression_reason(
+        Path::new("bootstrap/binutils-2.30-gas-source.ncl"),
+        MARKERS[4],
+        "echo 'ERROR: placeholder assembler installed' >&2",
+        &no_evidence,
+    )
+    .is_some()
+    {
+        return Err("self-test rejected suppression of a real placeholder diagnostic".to_string());
+    }
+    if source_marker_suppression_reason(
+        Path::new("bootstrap/seed.ncl"),
+        MARKERS[2],
+        "# The legacy musl.cc provider remains available only through the explicit",
+        &no_evidence,
+    )
+    .is_none()
+    {
+        return Err("self-test expected explicit-only legacy compatibility comment suppression".to_string());
+    }
+    if source_marker_suppression_reason(
+        Path::new("bootstrap/seed.ncl"),
+        MARKERS[2],
+        "# Fall back to the legacy musl.cc provider when selection fails.",
+        &no_evidence,
+    )
+    .is_some()
+    {
+        return Err("self-test rejected suppression of a real legacy fallback".to_string());
+    }
 
     Ok(())
 }
@@ -1156,6 +1217,45 @@ fn checked_diagnostic_derivation_boundary_inventory() -> bool {
         ])
 }
 
+fn source_marker_suppression_reason(
+    path: &Path,
+    marker: MarkerClass,
+    source_line: &str,
+    _evidence: &EvidenceState,
+) -> Option<&'static str> {
+    let path_s = path.to_string_lossy();
+    let lower_line = source_line.to_lowercase();
+    if marker.id == "compiler-runtime-crash-boundary"
+        && matches!(
+            path_s.as_ref(),
+            "bootstrap/gcc-4.0-musl-pass3.ncl"
+                | "bootstrap/gcc-4.0-musl-pass4.ncl"
+                | "bootstrap/gcc-4.0-musl-pass5.ncl"
+                | "bootstrap/gcc-4.0-musl-pass6.ncl"
+        )
+        && lower_line.contains("gcc40-pass")
+        && lower_line.contains("-check:")
+        && (lower_line.contains("static-link") || lower_line.contains("static link"))
+    {
+        return Some("GCC pass progress output names a successful static-link check, not a crash boundary");
+    }
+    if marker.id == "placeholder-deferred"
+        && path_s.ends_with("bootstrap/binutils-2.30-gas-source.ncl")
+        && ["placeholder_bytes", "char *placeholder", "placeholder[index]"]
+            .iter()
+            .any(|identifier| lower_line.contains(identifier))
+    {
+        return Some("mkstemp compatibility code uses placeholder as a bounded filename-template identifier");
+    }
+    if marker.id == "legacy-provider-fallback"
+        && path_s.ends_with("bootstrap/seed.ncl")
+        && lower_line.contains("legacy musl.cc provider remains available only through the explicit")
+    {
+        return Some("selected seed documents explicit legacy compatibility without a selection fallback");
+    }
+    None
+}
+
 fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &EvidenceState) -> Option<&'static str> {
     let path_s = path.to_string_lossy();
     if marker.id == "bridge-output"
@@ -1494,7 +1594,9 @@ fn scan_file(
         let lower = line.to_lowercase();
         for marker in MARKERS {
             if marker.matches_line(&lower) {
-                if let Some(reason) = suppression_reason(path, idx + 1, *marker, evidence) {
+                let reason = source_marker_suppression_reason(path, *marker, line, evidence)
+                    .or_else(|| suppression_reason(path, idx + 1, *marker, evidence));
+                if let Some(reason) = reason {
                     suppressions.push(Suppression {
                         class_id: marker.id,
                         path: path_s.clone(),
