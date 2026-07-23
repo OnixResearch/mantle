@@ -10,5 +10,10 @@ git = "https://github.com/OnixResearch/nickel-export"
 rev = "257fafc1c746f1faf156207043a4c826bfb16d49"
 replace-with = "vendored-sources"
 
+[source."git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa"]
+git = "ssh://git@github.com/OnixResearch/artifact-auth.git"
+rev = "799459346d5416fbd7b9f55840a7371441b55afa"
+replace-with = "vendored-sources"
+
 [source.vendored-sources]
 directory = "vendor-deps"
