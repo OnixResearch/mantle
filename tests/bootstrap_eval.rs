@@ -143,6 +143,20 @@ fn seed_selector_selects_full_source_without_legacy_fallback_or_self_recursion()
 }
 
 #[test]
+fn gzip_marks_generated_crc_helper_executable_before_running_it() {
+    let text = std::fs::read_to_string(bootstrap_path("gzip-tcc.ncl")).unwrap();
+    let compile_offset = text.find("tcc -static -o makecrc /tmp/makecrc_patch.c").unwrap();
+    let chmod_offset = text.find("$BB chmod \"$EXECUTABLE_MODE\" makecrc").unwrap();
+    let run_offset = text.find("./makecrc").unwrap();
+
+    assert!(text.contains("EXECUTABLE_MODE=755"));
+    assert!(compile_offset < chmod_offset);
+    assert!(chmod_offset < run_offset);
+    assert!(!text.contains("\n      chmod 755 makecrc"));
+    assert!(!text.contains("\n      ./makecrc\n      $BB chmod"));
+}
+
+#[test]
 fn selfhosted_tinycc_candidate_rebuilds_compiler_source() {
     let text = std::fs::read_to_string(bootstrap_path("tcc-musl-selfhost.ncl")).unwrap();
 

@@ -29,6 +29,7 @@ let gzip_src = crunch.fetchTarball {
     m%"
       set -eu
       BB=/bin/busybox
+      EXECUTABLE_MODE=755
 
       find_input() {
         for d in $NIX_STORE/*-"$1"; do
@@ -87,6 +88,7 @@ int main() {
 }
 MKPATCH
       tcc -static -o makecrc /tmp/makecrc_patch.c
+      $BB chmod "$EXECUTABLE_MODE" makecrc
       ./makecrc
       test -s crc.c || { echo "ERROR: makecrc did not produce crc.c" >&2; exit 1; }
       $BB cat util.c crc.c > util.c.new
@@ -106,7 +108,7 @@ MKPATCH
 
       # Link
       tcc -static $OBJS -o gzip
-      $BB chmod 755 gzip
+      $BB chmod "$EXECUTABLE_MODE" gzip
 
       # Verify
       ./gzip --help >/dev/null
@@ -115,7 +117,7 @@ MKPATCH
       $BB mkdir -p "$out/bin"
       $BB cp gzip "$out/bin/gzip"
       $BB cp gzip "$out/bin/gunzip"
-      $BB chmod 755 "$out/bin/gzip" "$out/bin/gunzip"
+      $BB chmod "$EXECUTABLE_MODE" "$out/bin/gzip" "$out/bin/gunzip"
 
       test -x "$out/bin/gzip" || { echo "ERROR: gzip output missing" >&2; exit 1; }
       test -x "$out/bin/gunzip" || { echo "ERROR: gunzip output missing" >&2; exit 1; }
