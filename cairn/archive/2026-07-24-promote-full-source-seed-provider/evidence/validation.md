@@ -174,8 +174,235 @@ tasks:    8b841c7c7a237e14fe71ef607695beca3557efae33a6cf3c7d372ec61e29ef95 PASS
 
 Cairn sync executed with receipt `cdf40cb0d792155a824d59114c2fa8097efe0807f4034550ca095f21bde66345`. The merged accepted requirement was inspected intact at `cairn/specs/bootstrap-inventory/spec.md` lines 210–247.
 
+Cairn archive executed to `cairn/archive/2026-07-24-promote-full-source-seed-provider` with receipt `e192e11c6589a380832bab7b3337803f1ecb4fe22c971c13b6378118a370aa6c` and mutation-manifest hash `0634852ebb2ba677efc59ecfe933c61d4c6b06970c7bd928ac61a0a40c2a2914`.
+
 ## Adversarial audit and claim boundary
 
 Static metadata, executable bits, version output, diagnostic private overlays, source-probe roots, and downstream compiler success were not accepted as provider admission. The surviving mechanism binds a real runtime-tested provider tree and a fully materialized source closure to independent BLAKE3 identities after the implementation commit. Selection remains a separate change so a failed or incomplete candidate cannot silently fall back or become bootstrap authority.
 
 This evidence proves the recorded provider construction, bounded runtime surfaces, source/output identity, and one authenticated stage0 → stage1 → stage2 fixed point on the recorded x86_64-linux orchestration boundary. It does not prove compiler correctness, bootstrap-seed correctness, independent rebuild agreement, release reproducibility, deployment success, or full Cargo compatibility.
+
+## Post-archive validation transcript
+
+Command: `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .`
+
+```text
+{
+  "change_issues": [],
+  "changes": 0,
+  "cross_repo_dependencies": [],
+  "cross_repo_evidence_issues": [],
+  "findings": [],
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_findings": [],
+  "spec_issues": [],
+  "spec_substance": [
+    {
+      "path": "./cairn/specs/artifact-auth-adoption/spec.md",
+      "requirement_blocks": 3,
+      "scenario_blocks": 3,
+      "substantive_requirement_blocks": 3
+    },
+    {
+      "path": "./cairn/specs/artifact-auth-operational-receipt/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./cairn/specs/artifact-auth-shell-verification/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./cairn/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 30,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/specs/build-correctness/spec.md",
+      "requirement_blocks": 25,
+      "scenario_blocks": 59,
+      "substantive_requirement_blocks": 25
+    },
+    {
+      "path": "./cairn/specs/build-scheduling/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/specs/build-tool-boundary/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 23,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/cache-substitution/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./cairn/specs/examples/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 24,
+      "substantive_requirement_blocks": 11
+    },
+    {
+      "path": "./cairn/specs/external-batch-dispatchers/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 18,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/flake-source-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 1,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./cairn/specs/foreign-derivation-import/spec.md",
+      "requirement_blocks": 22,
+      "scenario_blocks": 52,
+      "substantive_requirement_blocks": 22
+    },
+    {
+      "path": "./cairn/specs/gcc40-bridge/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 3,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./cairn/specs/hardware-simulation-builds/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 17,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/i386-tinycc27/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 4,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./cairn/specs/kani-toolchain-evidence/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/specs/kernel-bundle-oci/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 30,
+      "substantive_requirement_blocks": 14
+    },
+    {
+      "path": "./cairn/specs/kernelscript-experiment/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./cairn/specs/machine-artifact-contracts/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 9,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/nickel-export-infrastructure/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 12,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./cairn/specs/operator-diagnostics/spec.md",
+      "requirement_blocks": 13,
+      "scenario_blocks": 32,
+      "substantive_requirement_blocks": 13
+    },
+    {
+      "path": "./cairn/specs/portable-build-receipts/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/specs/project-workflows/spec.md",
+      "requirement_blocks": 24,
+      "scenario_blocks": 80,
+      "substantive_requirement_blocks": 24
+    },
+    {
+      "path": "./cairn/specs/realization-routing/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 21,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/release-provenance/spec.md",
+      "requirement_blocks": 66,
+      "scenario_blocks": 93,
+      "substantive_requirement_blocks": 66
+    },
+    {
+      "path": "./cairn/specs/remote-builds/spec.md",
+      "requirement_blocks": 35,
+      "scenario_blocks": 109,
+      "substantive_requirement_blocks": 35
+    },
+    {
+      "path": "./cairn/specs/rust-package-planning/spec.md",
+      "requirement_blocks": 129,
+      "scenario_blocks": 447,
+      "substantive_requirement_blocks": 129
+    },
+    {
+      "path": "./cairn/specs/source-transports/spec.md",
+      "requirement_blocks": 12,
+      "scenario_blocks": 25,
+      "substantive_requirement_blocks": 12
+    },
+    {
+      "path": "./cairn/specs/spacewasm-reference-materialization/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/store-transports/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 19,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./cairn/specs/verification-evidence/spec.md",
+      "requirement_blocks": 58,
+      "scenario_blocks": 164,
+      "substantive_requirement_blocks": 58
+    },
+    {
+      "path": "./cairn/specs/wasm-component-builds/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 25,
+      "substantive_requirement_blocks": 14
+    }
+  ],
+  "specs_validated": 32,
+  "substance": [],
+  "substance_findings": [],
+  "substance_issues": [],
+  "valid": true
+}
+```
+
+Post-archive companion rails:
+
+```text
+traceability coverage ok: 145/145 referenced (profile mantle-default)
+bootstrap blocker inventory: 0 findings across 0 classes, 436 evidence-backed suppressions, 0 promotion claims, enforce=true
+```
