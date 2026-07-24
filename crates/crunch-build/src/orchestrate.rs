@@ -76,19 +76,6 @@ async fn apply_input_rewrites(
     Ok(current)
 }
 
-/// Compute the CA field stored in PathInfo for an output.
-fn output_ca_field(
-    is_ca: bool,
-    output: &nix_compat::derivation::Output,
-    nar_sha256: [u8; 32],
-) -> Option<nix_compat::nixhash::CAHash> {
-    if is_ca {
-        Some(nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(nar_sha256)))
-    } else {
-        output.ca_hash.clone()
-    }
-}
-
 const DERIVATION_SUFFIX: &str = ".drv";
 
 fn path_info_deriver(drv_path: &StorePath<String>) -> Result<StorePath<String>, Error> {
@@ -189,8 +176,41 @@ struct CaOutputIntermediate {
     name: String,
     marked_node: Node,
     ca_path: StorePath<String>,
-    nar_size: u64,
-    nar_sha256: [u8; 32],
+    marker_nar_size: u64,
+    marker_nar_sha256: [u8; 32],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FinalCaPathInfoFacts {
+    final_nar_size: u64,
+    final_nar_sha256: [u8; 32],
+    path_identity_ca: nix_compat::nixhash::CAHash,
+}
+
+struct ResolvedOutput {
+    output_path: StorePath<String>,
+    final_node: Node,
+    final_nar_size: u64,
+    final_nar_sha256: [u8; 32],
+    ca: Option<nix_compat::nixhash::CAHash>,
+}
+
+// r[impl store_transports.archive_export_closure]
+// r[impl store_transports.archive_import_idempotent]
+fn final_ca_path_info_facts(
+    marker_nar_size: u64,
+    marker_nar_sha256: [u8; 32],
+    final_nar_size: u64,
+    final_nar_sha256: [u8; 32],
+) -> FinalCaPathInfoFacts {
+    assert!(marker_nar_size > 0, "marker-normalized CA NAR size must be positive");
+    assert!(final_nar_size > 0, "final CA NAR size must be positive");
+    assert_eq!(marker_nar_sha256.len(), final_nar_sha256.len());
+    FinalCaPathInfoFacts {
+        final_nar_size,
+        final_nar_sha256,
+        path_identity_ca: nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(marker_nar_sha256)),
+    }
 }
 
 pub(crate) struct PreparedBuild {
@@ -745,7 +765,6 @@ where BServ: BuildService + 'static
         build_result: &snix_build::buildservice::BuildResult,
         ca_plans: &[crate::ca_plan::CaOutputPlan],
     ) -> Result<Vec<CaOutputIntermediate>, Error> {
-        let nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
         let mut intermediates: Vec<CaOutputIntermediate> = Vec::with_capacity(prepared.derivation.outputs.len());
 
         for (i, (output_name, _output)) in prepared.derivation.outputs.iter().enumerate() {
@@ -776,8 +795,9 @@ where BServ: BuildService + 'static
                 node = rewritten;
             }
 
+            let marker_nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
             let (nar_size, nar_sha256) =
-                nar_renderer.calculate_nar(&node).await.map_err(|e| Error::NarCalculation(e.to_string()))?;
+                marker_nar_renderer.calculate_nar(&node).await.map_err(|e| Error::NarCalculation(e.to_string()))?;
 
             let plan = ca_plans
                 .iter()
@@ -789,8 +809,8 @@ where BServ: BuildService + 'static
                 name: output_name.clone(),
                 marked_node: node,
                 ca_path,
-                nar_size,
-                nar_sha256,
+                marker_nar_size: nar_size,
+                marker_nar_sha256: nar_sha256,
             });
         }
 
@@ -848,8 +868,13 @@ where BServ: BuildService + 'static
                 &prepared.sandbox_inputs,
             );
 
-            let ca_field =
-                Some(nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(intermediate.nar_sha256)));
+            let facts = self
+                .measure_final_ca_path_info_facts(
+                    &final_node,
+                    intermediate.marker_nar_size,
+                    intermediate.marker_nar_sha256,
+                )
+                .await?;
 
             let path_info = self
                 .persist_and_export_output(
@@ -858,9 +883,9 @@ where BServ: BuildService + 'static
                     &intermediate.ca_path,
                     final_node,
                     references,
-                    intermediate.nar_size,
-                    intermediate.nar_sha256,
-                    ca_field,
+                    facts.final_nar_size,
+                    facts.final_nar_sha256,
+                    Some(facts.path_identity_ca),
                     Some(artifact_provenance.clone()),
                     prepared.is_root,
                 )
@@ -870,6 +895,18 @@ where BServ: BuildService + 'static
         }
 
         Ok(output_infos)
+    }
+
+    async fn measure_final_ca_path_info_facts(
+        &self,
+        final_node: &Node,
+        marker_nar_size: u64,
+        marker_nar_sha256: [u8; 32],
+    ) -> Result<FinalCaPathInfoFacts, Error> {
+        let renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
+        let (final_nar_size, final_nar_sha256) =
+            renderer.calculate_nar(final_node).await.map_err(|error| Error::NarCalculation(error.to_string()))?;
+        Ok(final_ca_path_info_facts(marker_nar_size, marker_nar_sha256, final_nar_size, final_nar_sha256))
     }
 
     /// Rewrite all same-length CA markers to their final absolute paths.
@@ -1112,7 +1149,6 @@ where BServ: BuildService + 'static
         artifact_provenance: &ArtifactProvenance,
         is_root: bool,
     ) -> Result<PathInfo, Error> {
-        let nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
         let working_node = apply_input_rewrites(
             &build_output.node,
             input_rewrites,
@@ -1120,32 +1156,28 @@ where BServ: BuildService + 'static
             &self.store.directory_service(),
         )
         .await?;
-        let (output_path, final_node, nar_size, nar_sha256) = self
-            .resolve_output_node(
-                drv_path,
-                drv_name,
-                output_name,
-                output,
-                build_output,
-                &working_node,
-                derivation,
-                known_paths,
-                is_ca,
-                &nar_renderer,
-            )
+        let resolved = self
+            .resolve_output_node(drv_path, drv_name, output_name, output, &working_node, derivation, known_paths, is_ca)
             .await?;
-        self.verify_output_hash_if_needed(drv_name, output_name, output, nar_size, &nar_sha256, &final_node)
-            .await?;
+        self.verify_output_hash_if_needed(
+            drv_name,
+            output_name,
+            output,
+            resolved.final_nar_size,
+            &resolved.final_nar_sha256,
+            &resolved.final_node,
+        )
+        .await?;
         let references = resolve_references(&build_output.output_needles, refscan_needles, derivation, sandbox_inputs);
         self.persist_and_export_output(
             drv_path,
             output_name,
-            &output_path,
-            final_node,
+            &resolved.output_path,
+            resolved.final_node,
             references,
-            nar_size,
-            nar_sha256,
-            output_ca_field(is_ca, output, nar_sha256),
+            resolved.final_nar_size,
+            resolved.final_nar_sha256,
+            resolved.ca,
             Some(artifact_provenance.clone()),
             is_root,
         )
@@ -1162,20 +1194,18 @@ where BServ: BuildService + 'static
         drv_name: &str,
         output_name: &str,
         output: &nix_compat::derivation::Output,
-        build_output: &snix_build::buildservice::BuildOutput,
         working_node: &Node,
         derivation: &Derivation,
         known_paths: &mut DerivationRegistry,
         is_ca: bool,
-        nar_renderer: &SimpleRenderer<Arc<dyn BlobService>, Arc<dyn DirectoryService>>,
-    ) -> Result<(StorePath<String>, Node, u64, [u8; 32]), Error> {
+    ) -> Result<ResolvedOutput, Error> {
         if is_ca {
             return self
-                .compute_ca_output(drv_path, drv_name, output_name, working_node, derivation, known_paths, nar_renderer)
+                .compute_ca_output(drv_path, drv_name, output_name, working_node, derivation, known_paths)
                 .await;
         }
 
-        let path = output
+        let output_path = output
             .path
             .as_ref()
             .ok_or_else(|| Error::OutputNoPath {
@@ -1183,11 +1213,18 @@ where BServ: BuildService + 'static
                 drv_name: drv_name.to_string(),
             })?
             .clone();
-        let (nar_size, nar_sha256) = nar_renderer
-            .calculate_nar(&build_output.node)
+        let final_nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
+        let (final_nar_size, final_nar_sha256) = final_nar_renderer
+            .calculate_nar(working_node)
             .await
-            .map_err(|e| Error::NarCalculation(e.to_string()))?;
-        Ok((path, working_node.clone(), nar_size, nar_sha256))
+            .map_err(|error| Error::NarCalculation(error.to_string()))?;
+        Ok(ResolvedOutput {
+            output_path,
+            final_node: working_node.clone(),
+            final_nar_size,
+            final_nar_sha256,
+            ca: output.ca_hash.clone(),
+        })
     }
 
     /// Verify a fixed-output hash when the output declares one.
@@ -1233,8 +1270,7 @@ where BServ: BuildService + 'static
         working_node: &Node,
         derivation: &Derivation,
         known_paths: &mut DerivationRegistry,
-        nar_renderer: &SimpleRenderer<Arc<dyn BlobService>, Arc<dyn DirectoryService>>,
-    ) -> Result<(StorePath<String>, Node, u64, [u8; 32]), Error> {
+    ) -> Result<ResolvedOutput, Error> {
         // 1. Get the provisional (input-addressed) path from the env.
         let provisional = derivation
             .environment
@@ -1255,8 +1291,11 @@ where BServ: BuildService + 'static
         .await?;
 
         // 3. Compute NAR hash of marker-replaced content (canonical form).
-        let (marker_nar_size, marker_nar_sha256) =
-            nar_renderer.calculate_nar(&marked_node).await.map_err(|e| Error::NarCalculation(e.to_string()))?;
+        let marker_nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
+        let (marker_nar_size, marker_nar_sha256) = marker_nar_renderer
+            .calculate_nar(&marked_node)
+            .await
+            .map_err(|error| Error::NarCalculation(error.to_string()))?;
 
         // 4. Compute CA store path from marker-replaced hash.
         let path_name = crate::ca_plan::ca_output_path_name(drv_name, output_name);
@@ -1279,10 +1318,18 @@ where BServ: BuildService + 'static
             marked_node
         };
 
+        let facts = self.measure_final_ca_path_info_facts(&final_node, marker_nar_size, marker_nar_sha256).await?;
+
         let drv_abs = drv_path.to_absolute_path_with_prefix(self.store.store_dir());
         self.register_ca_output(&drv_abs, drv_name, output_name, &ca_path, known_paths)?;
 
-        Ok((ca_path, final_node, marker_nar_size, marker_nar_sha256))
+        Ok(ResolvedOutput {
+            output_path: ca_path,
+            final_node,
+            final_nar_size: facts.final_nar_size,
+            final_nar_sha256: facts.final_nar_sha256,
+            ca: Some(facts.path_identity_ca),
+        })
     }
 
     /// Register a resolved CA output path, persist the CA mapping, and log it.
@@ -1743,6 +1790,47 @@ mod tests {
         crate::signing::build_trusted_keys(&test_keypair(), None)
     }
 
+    async fn assert_builder_path_info_archive_round_trip(source: &crunch_store::StoreHandle, path_info: &PathInfo) {
+        assert!(!path_info.signatures.is_empty());
+        assert!(path_info.ca.is_some());
+        let mut archive = Vec::new();
+        let export_report = crunch_store::export_store_archive(
+            source,
+            std::slice::from_ref(path_info),
+            &mut archive,
+            &crunch_store::ArchiveExportOptions { trust_unsigned: false },
+        )
+        .await
+        .unwrap();
+        let destination_root = tempfile::tempdir().unwrap();
+        let destination = crunch_store::StoreHandle::from_services_with_store_dir(
+            crunch_store::StoreHandleServices {
+                blob_service: Arc::new(MemoryBlobService::default()),
+                directory_service: Arc::new(tmp_ds()),
+                pathinfo_service: Arc::new(test_pis()),
+                remote_pathinfo: None,
+                state_dir: destination_root.path().join("state"),
+                output_dir_str: destination_root.path().join("store").to_string_lossy().into_owned(),
+                publishers: Vec::new(),
+            },
+            nix_compat::store_path::STORE_DIR.to_string(),
+        );
+        let mut reader = std::io::Cursor::new(archive);
+        let import_report =
+            crunch_store::import_store_archive(&destination, &mut reader, &crunch_store::ArchiveImportOptions {
+                trust_unsigned: false,
+                trusted_public_keys: test_trusted_keys(),
+                materialize: false,
+            })
+            .await
+            .unwrap();
+        let persisted = destination.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap().unwrap();
+
+        assert_eq!(export_report.exported_count, 1);
+        assert_eq!(import_report.imported_count, 1);
+        assert_eq!(persisted, *path_info);
+    }
+
     const STATIC_HTTP_READ_CAPACITY_BYTES: usize = 16_384;
     const STATIC_HTTP_MAX_FILES: usize = 64;
     const STATIC_HTTP_POLL_MS: u64 = 5;
@@ -1894,6 +1982,48 @@ mod tests {
                 })
                 .collect();
 
+            Ok(BuildResult { outputs, log: None })
+        }
+    }
+
+    struct OutputPathEchoBuildService {
+        blob_service: MemoryBlobService,
+        output_names: Vec<String>,
+    }
+
+    #[async_trait]
+    impl BuildService for OutputPathEchoBuildService {
+        async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult> {
+            assert!(!self.output_names.is_empty());
+            assert_eq!(request.outputs.len(), self.output_names.len());
+            let mut output_names = self.output_names.clone();
+            output_names.sort();
+            let mut outputs = Vec::with_capacity(output_names.len());
+            for output_name in output_names {
+                let output_value = request
+                    .environment_vars
+                    .iter()
+                    .find(|variable| variable.key == output_name)
+                    .ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!("missing {output_name} environment"),
+                        )
+                    })?
+                    .value
+                    .clone();
+                let mut writer = BlobService::open_write(&self.blob_service).await;
+                writer.write_all(&output_value).await?;
+                let digest = writer.close().await?;
+                outputs.push(BuildOutput {
+                    node: Node::File {
+                        digest,
+                        size: u64::try_from(output_value.len()).map_err(std::io::Error::other)?,
+                        executable: false,
+                    },
+                    output_needles: BTreeSet::new(),
+                });
+            }
             Ok(BuildResult { outputs, log: None })
         }
     }
@@ -2644,16 +2774,30 @@ mod tests {
         name: &str,
         kp: &mut crate::registry::DerivationRegistry,
     ) -> (StorePath<String>, Derivation) {
+        build_and_register_multi_ca(name, &["out"], kp)
+    }
+
+    fn build_and_register_multi_ca(
+        name: &str,
+        output_names: &[&str],
+        kp: &mut crate::registry::DerivationRegistry,
+    ) -> (StorePath<String>, Derivation) {
+        const TEST_CA_OUTPUT_COUNT_MAX: usize = 16;
+        assert!(!output_names.is_empty());
+        assert!(output_names.len() <= TEST_CA_OUTPUT_COUNT_MAX);
         let mut outputs = BTreeMap::new();
-        outputs.insert("out".to_string(), nix_compat::derivation::Output {
-            path: None,
-            ca_hash: None,
-        });
         let mut environment = BTreeMap::new();
         environment.insert("name".to_string(), name.into());
         environment.insert("system".to_string(), "x86_64-linux".into());
         environment.insert("builder".to_string(), "/bin/sh".into());
-        environment.insert("out".to_string(), "".into());
+        environment.insert("outputs".to_string(), output_names.join(" ").into());
+        for output_name in output_names {
+            outputs.insert((*output_name).to_string(), nix_compat::derivation::Output {
+                path: None,
+                ca_hash: None,
+            });
+            environment.insert((*output_name).to_string(), "".into());
+        }
 
         let mut drv = Derivation {
             arguments: vec!["-c".into(), format!("echo {name} > $out")],
@@ -2664,20 +2808,12 @@ mod tests {
             outputs,
             system: "x86_64-linux".to_string(),
         };
-
         let hdm = drv.hash_derivation_modulo(|_| panic!("CA drv has no input derivations"));
-
         drv.calculate_output_paths(name, &hdm).unwrap();
-        for (_, output) in drv.outputs.iter_mut() {
+        for output in drv.outputs.values_mut() {
             output.path = None;
         }
-
         let drv_path = drv.calculate_derivation_path(name).unwrap();
-
-        let mut fake_hash = [0u8; 32];
-        for (i, b) in name.bytes().enumerate().take(32) {
-            fake_hash[i] = b;
-        }
         kp.insert(drv_path.clone(), hdm, drv.clone(), true, None);
 
         (drv_path, drv)
@@ -2897,6 +3033,120 @@ mod tests {
         std::fs::create_dir_all(record_path.parent().unwrap()).unwrap();
         std::fs::write(index_path, crunch_action_result_core::canonical_index_bytes(index).unwrap()).unwrap();
         std::fs::write(record_path, crunch_action_result_core::canonical_signed_record_bytes(signed).unwrap()).unwrap();
+    }
+
+    // r[verify store_transports.archive_export_closure]
+    // r[verify store_transports.archive_import_idempotent]
+    #[test]
+    fn final_ca_path_info_facts_separate_path_identity_from_final_nar() {
+        const MARKER_HASH_BYTE: u8 = 0xA5;
+        const FINAL_HASH_BYTE: u8 = 0x5A;
+        const MARKER_NAR_SIZE: u64 = 80;
+        const FINAL_NAR_SIZE: u64 = 96;
+        let marker_nar_sha256 = [MARKER_HASH_BYTE; 32];
+        let final_nar_sha256 = [FINAL_HASH_BYTE; 32];
+
+        let facts = final_ca_path_info_facts(MARKER_NAR_SIZE, marker_nar_sha256, FINAL_NAR_SIZE, final_nar_sha256);
+
+        assert_eq!(facts.final_nar_size, FINAL_NAR_SIZE);
+        assert_eq!(facts.final_nar_sha256, final_nar_sha256);
+        assert_eq!(
+            facts.path_identity_ca,
+            nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(marker_nar_sha256)),
+        );
+        assert_ne!(marker_nar_sha256, facts.final_nar_sha256);
+    }
+
+    // r[verify store_transports.archive_export_closure]
+    // r[verify store_transports.archive_import_idempotent]
+    #[tokio::test]
+    async fn self_referential_ca_persists_final_nar_facts_and_marker_path_identity() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let service = OutputPathEchoBuildService {
+            blob_service: bs.clone(),
+            output_names: vec!["out".to_string()],
+        };
+        let mut builder = Builder::new(
+            bs.clone(),
+            ds.clone(),
+            service,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut known_paths = DerivationRegistry::default();
+        let (drv_path, _) = build_and_register_ca("ca-self-reference", &mut known_paths);
+
+        let outcome = builder.build(&drv_path, &mut known_paths).await.unwrap();
+        let path_info = &outcome.outputs["out"];
+        let final_bytes = builder.read_blob(&path_info.node).await.unwrap();
+        let final_path = path_info.store_path.to_absolute_path();
+        assert_eq!(final_bytes, final_path.as_bytes());
+        let renderer = SimpleRenderer::new(builder.store.blob_service(), builder.store.directory_service());
+        let (final_nar_size, final_nar_sha256) = renderer.calculate_nar(&path_info.node).await.unwrap();
+        let Some(nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(path_identity_hash))) =
+            &path_info.ca
+        else {
+            panic!("self-referential CA output must preserve marker path identity");
+        };
+
+        assert_ne!(&path_info.nar_sha256, path_identity_hash);
+        assert_eq!(path_info.nar_size, final_nar_size);
+        assert_eq!(path_info.nar_sha256, final_nar_sha256);
+        assert_ne!(path_identity_hash, &final_nar_sha256);
+        assert!(path_info.store_path.to_absolute_path().starts_with("/nix/store/"));
+        assert_builder_path_info_archive_round_trip(&builder.store, path_info).await;
+    }
+
+    // r[verify store_transports.archive_export_closure]
+    #[tokio::test]
+    async fn multi_ca_outputs_persist_final_nar_facts_and_marker_path_identities() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let output_names = ["out", "dev"];
+        let service = OutputPathEchoBuildService {
+            blob_service: bs.clone(),
+            output_names: output_names.iter().map(ToString::to_string).collect(),
+        };
+        let mut builder = Builder::new(
+            bs,
+            ds,
+            service,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut known_paths = DerivationRegistry::default();
+        let (drv_path, _) = build_and_register_multi_ca("multi-ca-self-reference", &output_names, &mut known_paths);
+
+        let outcome = builder.build(&drv_path, &mut known_paths).await.unwrap();
+        let renderer = SimpleRenderer::new(builder.store.blob_service(), builder.store.directory_service());
+
+        assert_eq!(outcome.outputs.len(), output_names.len());
+        for path_info in outcome.outputs.values() {
+            let final_bytes = builder.read_blob(&path_info.node).await.unwrap();
+            let final_path = path_info.store_path.to_absolute_path();
+            let (final_nar_size, final_nar_sha256) = renderer.calculate_nar(&path_info.node).await.unwrap();
+            let Some(nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(path_identity_hash))) =
+                &path_info.ca
+            else {
+                panic!("multi-CA output must preserve marker path identity");
+            };
+
+            assert_eq!(final_bytes, final_path.as_bytes());
+            assert_eq!(path_info.nar_size, final_nar_size);
+            assert_eq!(path_info.nar_sha256, final_nar_sha256);
+            assert_ne!(path_identity_hash, &final_nar_sha256);
+        }
     }
 
     #[tokio::test]

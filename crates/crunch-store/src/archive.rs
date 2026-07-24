@@ -16,9 +16,12 @@ use std::task::Poll;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
 use nix_compat::store_path::StorePathRef;
+use nix_compat::store_path::build_ca_path_with_store_dir;
 use serde::Deserialize;
 use serde::Serialize;
 use snix_castore::Node;
+use snix_store::nar::NarCalculationService;
+use snix_store::nar::SimpleRenderer;
 use snix_store::nar::ingest_nar_and_hash;
 use snix_store::path_info::PathInfo;
 use snix_store::pathinfoservice::PathInfoService;
@@ -412,6 +415,7 @@ fn insert_export_candidate(
     Ok(())
 }
 
+// r[impl store_transports.archive_export_closure]
 async fn validate_export_candidate(
     path_info: &PathInfo,
     options: &ArchiveExportOptions,
@@ -427,7 +431,61 @@ async fn validate_export_candidate(
     if !handle.castore_has_content(&path_info.node).await? {
         return Err(Error::Export(format!("archive export missing payload for {}", path_info.store_path)));
     }
+    require_ca_path_identity(path_info, handle.store_dir()).map_err(Error::Export)?;
+    require_current_final_nar_facts(path_info, handle).await.map_err(Error::Export)
+}
+
+async fn require_current_final_nar_facts(path_info: &PathInfo, handle: &StoreHandle) -> Result<(), String> {
+    assert!(path_info.nar_size > 0, "archive PathInfo NAR size must be positive");
+    assert_eq!(path_info.nar_sha256.len(), SHA256_DIGEST_BYTES);
+    let renderer = SimpleRenderer::new(handle.blob_service(), handle.directory_service());
+    let (observed_size, observed_sha256) = renderer
+        .calculate_nar(&path_info.node)
+        .await
+        .map_err(|error| format!("rendering final NAR for {}: {error}", path_info.store_path))?;
+    if observed_size != path_info.nar_size || observed_sha256 != path_info.nar_sha256 {
+        return Err(format!(
+            "stale final NAR facts for {}: recorded size {} sha256 {}, observed size {} sha256 {}",
+            path_info.store_path,
+            path_info.nar_size,
+            data_encoding::HEXLOWER.encode(&path_info.nar_sha256),
+            observed_size,
+            data_encoding::HEXLOWER.encode(&observed_sha256),
+        ));
+    }
     Ok(())
+}
+
+fn require_ca_path_identity(path_info: &PathInfo, store_dir: &str) -> Result<(), String> {
+    assert!(!path_info.store_path.name().is_empty());
+    assert!(store_dir.starts_with('/'));
+    if ca_path_identity_matches(path_info, store_dir)? {
+        return Ok(());
+    }
+    Err(format!("CA metadata for {} does not derive its signed store-path identity", path_info.store_path))
+}
+
+fn ca_path_identity_matches(path_info: &PathInfo, store_dir: &str) -> Result<bool, String> {
+    let Some(ca_hash) = path_info.ca.as_ref() else {
+        return Ok(true);
+    };
+    let marker_path: StorePath<String> =
+        build_ca_path_with_store_dir(path_info.store_path.name(), ca_hash, Vec::<String>::new(), false, store_dir)
+            .map_err(|error| format!("deriving marker-normalized CA path for {}: {error}", path_info.store_path))?;
+    if marker_path == path_info.store_path {
+        return Ok(true);
+    }
+
+    let self_reference = path_info.references.iter().any(|reference| reference == &path_info.store_path);
+    let references = path_info
+        .references
+        .iter()
+        .filter(|reference| *reference != &path_info.store_path)
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    let standard_path: Result<StorePath<String>, _> =
+        build_ca_path_with_store_dir(path_info.store_path.name(), ca_hash, references, self_reference, store_dir);
+    Ok(standard_path.is_ok_and(|candidate| candidate == path_info.store_path))
 }
 
 async fn load_pathinfo(pathinfo: &dyn PathInfoService, store_path: &StorePath<String>) -> Result<PathInfo, Error> {
@@ -518,6 +576,7 @@ struct ArchiveImportContext<'a> {
     result: &'a mut ArchiveImportReport,
 }
 
+// r[impl store_transports.archive_import_idempotent]
 async fn import_or_skip_path<R: AsyncRead + Unpin + Send>(
     reader: &mut R,
     record: ArchiveImportRecord,
@@ -525,6 +584,7 @@ async fn import_or_skip_path<R: AsyncRead + Unpin + Send>(
 ) -> Result<(), Error> {
     assert!(!record.listed.store_path.is_empty());
     assert!(!context.handle.store_dir().is_empty());
+    require_ca_path_identity(&record.path_frame.path_info, context.handle.store_dir()).map_err(Error::Store)?;
     let local_state = local_archive_path_state(context.handle, &record.path_frame.path_info).await?;
     if local_state == LocalArchivePathState::ConflictingMetadata {
         return Err(Error::Store(format!(
@@ -584,6 +644,9 @@ async fn local_archive_path_state(handle: &StoreHandle, path_info: &PathInfo) ->
         return Ok(LocalArchivePathState::ConflictingMetadata);
     }
     if handle.castore_has_content(&local.node).await? {
+        require_current_final_nar_facts(&local, handle)
+            .await
+            .map_err(|message| Error::Store(format!("archive import rejects local {message}")))?;
         return Ok(LocalArchivePathState::Present);
     }
     Ok(LocalArchivePathState::Missing)
@@ -599,11 +662,12 @@ async fn import_missing_path<R: AsyncRead + Unpin + Send>(
     let blob_service = context.handle.blob_service();
     let directory_service = context.handle.directory_service();
     let mut payload_reader = Blake3AsyncReader::new(reader.take(record.path_frame.payload_len));
+    let expected_ca_content_hash = None;
     let (node, actual_nar_sha256, actual_nar_size_bytes) = ingest_nar_and_hash(
         blob_service.clone(),
         directory_service.clone(),
         &mut payload_reader,
-        &record.path_frame.path_info.ca,
+        &expected_ca_content_hash,
     )
     .await
     .map_err(|err| Error::Store(format!("ingesting archive payload for {}: {err}", record.listed.store_path)))?;
@@ -1072,6 +1136,21 @@ mod tests {
         path_info
     }
 
+    async fn marker_ca_pathinfo(handle: &StoreHandle, name: &str, content: &[u8]) -> PathInfo {
+        const MARKER_CA_HASH_BYTE: u8 = 0xA5;
+        let mut path_info = signed_pathinfo(handle, name, content).await;
+        let ca_hash = nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(
+            [MARKER_CA_HASH_BYTE; SHA256_DIGEST_BYTES],
+        ));
+        path_info.store_path =
+            build_ca_path_with_store_dir(name, &ca_hash, Vec::<String>::new(), false, handle.store_dir()).unwrap();
+        path_info.ca = Some(ca_hash);
+        path_info.signatures.clear();
+        sign_pathinfo(&mut path_info);
+        assert_ne!(path_info.ca.as_ref().unwrap().hash().digest_as_bytes(), path_info.nar_sha256.as_slice(),);
+        path_info
+    }
+
     async fn render_nar_bytes(handle: &StoreHandle, node: &Node) -> Vec<u8> {
         use snix_store::nar::write_nar;
         use tokio::io::AsyncReadExt;
@@ -1257,6 +1336,73 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn ca_path_identity_accepts_reference_aware_standard_path() {
+        const CA_HASH_BYTE: u8 = 0x31;
+        const REFERENCE_DIGEST_BYTE: u8 = 0x42;
+        let temp = tempfile::tempdir().unwrap();
+        let store = open_test_store(temp.path(), "/mantle/store").await;
+        let mut path_info = signed_pathinfo(&store, "reference-aware-ca", b"reference-aware bytes").await;
+        let reference =
+            StorePath::from_name_and_digest_fixed("reference-input", [REFERENCE_DIGEST_BYTE; STORE_PATH_DIGEST_BYTES])
+                .unwrap();
+        let ca_hash =
+            nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256([CA_HASH_BYTE; SHA256_DIGEST_BYTES]));
+        let marker_path: StorePath<String> = build_ca_path_with_store_dir(
+            path_info.store_path.name(),
+            &ca_hash,
+            Vec::<String>::new(),
+            false,
+            store.store_dir(),
+        )
+        .unwrap();
+        let standard_path = build_ca_path_with_store_dir(
+            path_info.store_path.name(),
+            &ca_hash,
+            [reference.to_string()],
+            false,
+            store.store_dir(),
+        )
+        .unwrap();
+        path_info.store_path = standard_path;
+        path_info.references = vec![reference];
+        path_info.ca = Some(ca_hash);
+
+        assert_ne!(path_info.store_path, marker_path);
+        assert_eq!(ca_path_identity_matches(&path_info, store.store_dir()), Ok(true));
+    }
+
+    // r[verify store_transports.archive_import_idempotent]
+    #[tokio::test]
+    async fn archive_round_trip_preserves_distinct_marker_ca_and_final_nar_identities() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_store = open_test_store(temp.path(), "/mantle/store").await;
+        let path_info = marker_ca_pathinfo(&source_store, "marker-ca-root", b"final rewritten bytes").await;
+        source_store.pathinfo_service().put(path_info.clone()).await.unwrap();
+        let mut archive = Vec::new();
+        export_store_archive(&source_store, std::slice::from_ref(&path_info), &mut archive, &ArchiveExportOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+
+        let dest_temp = tempfile::tempdir().unwrap();
+        let dest_store = open_test_store(dest_temp.path(), "/mantle/store").await;
+        let mut reader = std::io::Cursor::new(archive);
+        let report = import_store_archive(&dest_store, &mut reader, &ArchiveImportOptions {
+            trust_unsigned: false,
+            trusted_public_keys: vec![test_keypair().1],
+            materialize: false,
+        })
+        .await
+        .unwrap();
+        let persisted = dest_store.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap().unwrap();
+
+        assert_eq!(report.imported_count, 1);
+        assert_eq!(persisted, path_info);
+        assert_ne!(persisted.ca.as_ref().unwrap().hash().digest_as_bytes(), persisted.nar_sha256.as_slice(),);
+    }
+
+    #[tokio::test]
     async fn archive_import_round_trip_and_skip_existing_are_idempotent() {
         let temp = tempfile::tempdir().unwrap();
         let source_store = open_test_store(temp.path(), "/mantle/store").await;
@@ -1403,6 +1549,104 @@ mod tests {
                 .await
                 .unwrap_err();
         assert!(err.to_string().contains("missing closure facts"));
+    }
+
+    // r[verify store_transports.archive_export_closure]
+    #[tokio::test]
+    async fn archive_export_rejects_stale_final_nar_facts_before_writing() {
+        const STALE_HASH_MASK: u8 = 1;
+        let temp = tempfile::tempdir().unwrap();
+        let store = open_test_store(temp.path(), "/mantle/store").await;
+        let mut path_info = signed_pathinfo(&store, "stale-final-nar", b"fresh final bytes").await;
+        path_info.nar_sha256[0] ^= STALE_HASH_MASK;
+        path_info.signatures.clear();
+        sign_pathinfo(&mut path_info);
+        store.pathinfo_service().put(path_info.clone()).await.unwrap();
+
+        let mut archive = Vec::new();
+        let error =
+            export_store_archive(&store, std::slice::from_ref(&path_info), &mut archive, &ArchiveExportOptions {
+                trust_unsigned: false,
+            })
+            .await
+            .unwrap_err();
+
+        assert!(error.to_string().contains("stale final NAR facts"));
+        assert!(archive.is_empty(), "stale PathInfo must fail before archive magic");
+    }
+
+    #[tokio::test]
+    async fn archive_import_rejects_existing_path_with_stale_final_nar_facts() {
+        const STALE_HASH_MASK: u8 = 1;
+        let temp = tempfile::tempdir().unwrap();
+        let source_store = open_test_store(temp.path(), "/mantle/store").await;
+        let path_info = signed_pathinfo(&source_store, "stale-local-hit", b"final local bytes").await;
+        source_store.pathinfo_service().put(path_info.clone()).await.unwrap();
+        let mut archive = Vec::new();
+        export_store_archive(&source_store, std::slice::from_ref(&path_info), &mut archive, &ArchiveExportOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let mut stale_path_info = path_info.clone();
+        stale_path_info.nar_sha256[0] ^= STALE_HASH_MASK;
+        stale_path_info.signatures.clear();
+        replace_first_path_frame_metadata(&mut archive, |frame| {
+            frame["path_info"] = serde_json::to_value(&stale_path_info).unwrap();
+        });
+
+        let dest_temp = tempfile::tempdir().unwrap();
+        let dest_store = open_test_store(dest_temp.path(), "/mantle/store").await;
+        let dest_path_info = signed_pathinfo(&dest_store, "stale-local-hit", b"final local bytes").await;
+        assert_eq!(dest_path_info.node, stale_path_info.node);
+        dest_store.pathinfo_service().put(stale_path_info).await.unwrap();
+        let mut reader = std::io::Cursor::new(archive);
+        let error = import_store_archive(&dest_store, &mut reader, &ArchiveImportOptions {
+            trust_unsigned: true,
+            trusted_public_keys: Vec::new(),
+            materialize: false,
+        })
+        .await
+        .unwrap_err();
+
+        assert!(error.to_string().contains("rejects local stale final NAR facts"));
+        assert!(reader.position() < u64::try_from(reader.get_ref().len()).unwrap());
+    }
+
+    // r[verify store_transports.archive_import_idempotent]
+    #[tokio::test]
+    async fn archive_import_rejects_ca_metadata_for_another_store_path() {
+        const WRONG_CA_HASH_BYTE: u8 = 0x5A;
+        let temp = tempfile::tempdir().unwrap();
+        let source_store = open_test_store(temp.path(), "/mantle/store").await;
+        let path_info = marker_ca_pathinfo(&source_store, "wrong-ca-root", b"trusted final bytes").await;
+        source_store.pathinfo_service().put(path_info.clone()).await.unwrap();
+        let mut archive = Vec::new();
+        export_store_archive(&source_store, std::slice::from_ref(&path_info), &mut archive, &ArchiveExportOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let wrong_ca = nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(
+            [WRONG_CA_HASH_BYTE; SHA256_DIGEST_BYTES],
+        ));
+        replace_first_path_frame_metadata(&mut archive, |frame| {
+            frame["path_info"]["ca"] = serde_json::to_value(wrong_ca).unwrap();
+        });
+
+        let dest_temp = tempfile::tempdir().unwrap();
+        let dest_store = open_test_store(dest_temp.path(), "/mantle/store").await;
+        let mut reader = std::io::Cursor::new(archive);
+        let error = import_store_archive(&dest_store, &mut reader, &ArchiveImportOptions {
+            trust_unsigned: true,
+            trusted_public_keys: Vec::new(),
+            materialize: false,
+        })
+        .await
+        .unwrap_err();
+
+        assert!(error.to_string().contains("does not derive its signed store-path identity"));
+        assert!(dest_store.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap().is_none());
     }
 
     #[tokio::test]
