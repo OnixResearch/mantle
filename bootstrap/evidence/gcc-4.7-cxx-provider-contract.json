@@ -3,17 +3,16 @@
   "derivation": "bootstrap/gcc-4.7.ncl",
   "status": "contract-only",
   "required_markers": [
+    "GCC4=$(find_input gcc-4.0.4-musl-cxx-v7)",
+    "test -x \"$GCC4/libexec/gcc/$TARGET/$SEED_GCC_VERSION/cc1plus\"",
     "--enable-languages=c,c++",
-    "CC=\"$GCC4/bin/gcc\"",
-    "CXX=\"$GCC4/bin/g++\"",
-    "make -j1 all-gcc",
-    "make -j1 all-target-libgcc",
-    "make -j1 install-gcc",
-    "make -j1 install-target-libgcc",
-    "ERROR: installed cc1plus missing",
-    "ERROR: C++ smoke test failed",
-    "ERROR: C++11 smoke test failed",
-    "-std=c++11"
+    "make -j\"$JOB_COUNT\" all-gcc",
+    "make -j\"$JOB_COUNT\" all-target-libgcc",
+    "make -j\"$JOB_COUNT\" install-gcc",
+    "make -j\"$JOB_COUNT\" install-target-libgcc",
+    "test -x \"$out/libexec/gcc/$TARGET/$OUTPUT_GCC_VERSION/cc1plus\"",
+    "-std=c++11",
+    "ERROR: GCC 4.7 accepted malformed C++"
   ],
   "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.7 correctness"
 }

@@ -1483,7 +1483,7 @@ mod tests {
     fn tar_entry_limit_fits_recursive_castore_completeness_bound() {
         let represented_node_count = MAX_TAR_ENTRIES.saturating_add(CASTORE_ROOT_NODE_ALLOWANCE);
         assert_eq!(represented_node_count, crunch_store::MAX_CASTORE_TREE_NODES);
-        assert!(MAX_TAR_ENTRIES < crunch_store::MAX_CASTORE_TREE_NODES);
+        const { assert!(MAX_TAR_ENTRIES < crunch_store::MAX_CASTORE_TREE_NODES) };
     }
 
     static PATH_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());

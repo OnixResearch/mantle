@@ -4152,7 +4152,7 @@ fn collect_build_source_records_from_files(
 impl<'a> DerivationFileSourceWalker<'a> {
     fn new(import_paths: &'a [OsString], store_prefix: &'a str) -> Self {
         assert!(store_prefix.starts_with('/'));
-        assert!(DERIVATION_FILE_COUNT_MAX > 1);
+        const { assert!(DERIVATION_FILE_COUNT_MAX > 1) };
         Self {
             import_paths,
             store_prefix,

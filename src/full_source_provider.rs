@@ -372,7 +372,7 @@ fn validate_expected_digest(digest: &str) -> Result<(), RunError> {
             "expected output BLAKE3 must be {BLAKE3_HEX_LENGTH} lowercase hexadecimal characters"
         )));
     }
-    assert!(BLAKE3_HEX_LENGTH > 1);
+    const { assert!(BLAKE3_HEX_LENGTH > 1) };
     debug_assert!(valid_length);
     Ok(())
 }
@@ -456,7 +456,7 @@ fn ensure_observation_capacity(observed_count: usize) -> Result<(), RunError> {
     if observed_count >= TREE_ENTRY_COUNT_MAX {
         return Err(admission_error(format!("provider entry count exceeds bounded maximum {TREE_ENTRY_COUNT_MAX}")));
     }
-    assert!(TREE_ENTRY_COUNT_MAX > 1);
+    const { assert!(TREE_ENTRY_COUNT_MAX > 1) };
     debug_assert!(observed_count < TREE_ENTRY_COUNT_MAX);
     Ok(())
 }
@@ -670,7 +670,7 @@ fn validate_source_closure(source_closure: &SourceClosureObservation, blockers: 
             source_closure.record_count, source_closure.materialized_record_count
         ));
     }
-    assert!(SOURCE_CLOSURE_RECORD_COUNT_MIN > 0);
+    const { assert!(SOURCE_CLOSURE_RECORD_COUNT_MIN > 0) };
     debug_assert!(source_closure.materialized_record_count <= source_closure.record_count);
 }
 

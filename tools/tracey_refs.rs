@@ -207,6 +207,25 @@
 // The contracted report preserves the bounded legacy-provider/platform
 // non-claims and does not promote this fixed point to compiler or seed trust.
 
+// Source-built bootstrap provider promotion bridge.
+//
+// r[impl bootstrap_inventory.source_built_seed_provider]
+// Implemented by the declared source ladder and normalized provider under
+// `bootstrap/`, runtime/closure admission in `src/full_source_provider.rs`,
+// selected-provider source authority in `src/{source_bundle,self_build}.rs`,
+// and bounded lazy derivation resolution in
+// `crates/crunch-pipeline/src/derivation_file.rs`.
+//
+// r[verify bootstrap_inventory.source_built_seed_provider]
+// Verified by positive and adversarial provider-admission tests, bootstrap
+// evaluation tests, the 51-record independently authenticated provider closure,
+// archive-stable provider admission, and the 66-record hydrated fixed-point
+// profile. `bootstrap/evidence/full-source-provider-fixed-point.json` records 61
+// exact runtime overrides per stage, zero live fetches, and matching stage1 /
+// stage2 Mantle BLAKE3 `91ac5f2179a87b0114d4600b37f25100f8fb2b92aa7d99255c101bc520d8f12b`.
+// The evidence remains bounded by its explicit compiler/seed correctness,
+// independent rebuild, release reproducibility, deployment, and Cargo non-claims.
+
 // r[impl rust_package_planning.source_built_toolchain_closure]
 // Implemented by `src/source_toolchain_closure.rs`, `src/cargo_free_self_build.rs`,
 // `src/rust_plan.rs`, and `src/main.rs`.

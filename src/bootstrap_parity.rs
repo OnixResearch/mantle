@@ -2687,16 +2687,17 @@ fn validate_seed_full_source_root_contract(path: &Path) -> Result<(), String> {
     let required = [
         "share/crunch-bootstrap/provider.json",
         "\"provider_id\": \"full-source-v1\"",
-        "\"target\": \"x86_64-linux-musl\"",
-        "\"dynamic_linker\": \"ld-musl-x86_64.so.1\"",
-        "\"source_root\"",
-        "\"manifest_digest\"",
-        "\"reduction\"",
-        "\"retained_tools\"",
+        "\"target\": \"$PUBLIC_TARGET\"",
+        "\"dynamic_linker\": \"$DYNAMIC_LINKER\"",
+        "\"source_authority\": \"declared-mantle-derivation-closure\"",
+        "\"output_identity\"",
+        "\"runtime_admission\"",
+        "\"closure_admission\"",
+        "\"state_pinned_inputs\": false",
+        "\"legacy_members\": []",
         "x86_64-linux-musl-gcc",
         "x86_64-linux-musl-as",
         "x86_64-linux-musl-ld",
-        "x86_64-linux-musl-include",
         "libc.a",
     ];
     for needle in required {
@@ -3228,10 +3229,10 @@ const BOOTSTRAP_GAP_STAGE_SPECS: &[StageSpec] = &[
         lineage: "guix",
         derivation: Some("seed-full.ncl"),
         expected_complete: true,
-        graph_evidence: "seed-full derivation present",
-        semantic_evidence: "source-root provider contract validation present",
-        proof_evidence: "provider digest/transcript remains required before broader Guix parity",
-        notes: "source-root provider contract evidence only; does not satisfy StageX lineage evidence",
+        graph_evidence: "selected seed-full derivation present",
+        semantic_evidence: "runtime-admitted full-source provider contract present",
+        proof_evidence: "authenticated source closure and fixed-point report preserved separately",
+        notes: "full-source provider contract evidence satisfies this Guix row; it does not satisfy StageX lineage evidence",
         evidence_check: EvidenceCheck::SeedFullSourceRootContract,
     },
     StageSpec {
@@ -3319,10 +3320,10 @@ mod tests {
             lineage: "guix",
             derivation: Some("seed-full.ncl"),
             expected_complete: true,
-            graph_evidence: "seed-full derivation present",
-            semantic_evidence: "source-root provider contract validation present",
-            proof_evidence: "provider digest/transcript remains required before broader Guix parity",
-            notes: "source-root provider contract evidence only; does not satisfy StageX lineage evidence",
+            graph_evidence: "selected seed-full derivation present",
+            semantic_evidence: "runtime-admitted full-source provider contract present",
+            proof_evidence: "authenticated source closure and fixed-point report preserved separately",
+            notes: "full-source provider contract evidence satisfies this Guix row; it does not satisfy StageX lineage evidence",
             evidence_check: EvidenceCheck::SeedFullSourceRootContract,
         }
     }
@@ -4269,13 +4270,17 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         r#"
         share/crunch-bootstrap/provider.json
         "provider_id": "full-source-v1"
-        "target": "x86_64-linux-musl"
-        "dynamic_linker": "ld-musl-x86_64.so.1"
-        "source_root" { "manifest_digest": "pending" }
-        "reduction" { "retained_tools": [
-          "x86_64-linux-musl-gcc", "x86_64-linux-musl-as", "x86_64-linux-musl-ld",
-          "x86_64-linux-musl-include"
-        ] }
+        "target": "$PUBLIC_TARGET"
+        "dynamic_linker": "$DYNAMIC_LINKER"
+        "source_authority": "declared-mantle-derivation-closure"
+        "output_identity"
+        "runtime_admission"
+        "closure_admission"
+        "state_pinned_inputs": false
+        "legacy_members": []
+        "retained_tools": [
+          "x86_64-linux-musl-gcc", "x86_64-linux-musl-as", "x86_64-linux-musl-ld"
+        ]
         libc.a
         "#
     }

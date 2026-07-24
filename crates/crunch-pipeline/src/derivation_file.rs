@@ -41,7 +41,7 @@ impl DerivationFileResolver {
             return Err(Error::Eval(format!("derivation-file root is not a directory: {}", root_dir.display())));
         }
         let import_roots = canonical_import_roots(import_paths)?;
-        assert!(DERIVATION_FILE_COUNT_MAX > 1);
+        const { assert!(DERIVATION_FILE_COUNT_MAX > 1) };
         assert!(import_roots.len() <= DERIVATION_FILE_IMPORT_ROOT_COUNT_MAX);
         debug_assert!(!root_dir.as_os_str().is_empty());
         Ok(Self {
@@ -308,7 +308,7 @@ fn ensure_depth(depth: u32) -> Result<(), Error> {
     if depth > DERIVATION_FILE_DEPTH_MAX {
         return Err(Error::Eval(format!("derivation-file depth exceeds bounded maximum {DERIVATION_FILE_DEPTH_MAX}")));
     }
-    assert!(DERIVATION_FILE_DEPTH_MAX > 1);
+    const { assert!(DERIVATION_FILE_DEPTH_MAX > 1) };
     debug_assert!(depth <= DERIVATION_FILE_DEPTH_MAX);
     Ok(())
 }
@@ -317,7 +317,7 @@ fn ensure_file_capacity(file_count: u32) -> Result<(), Error> {
     if file_count >= DERIVATION_FILE_COUNT_MAX {
         return Err(Error::Eval(format!("derivation-file count exceeds bounded maximum {DERIVATION_FILE_COUNT_MAX}")));
     }
-    assert!(DERIVATION_FILE_COUNT_MAX > 1);
+    const { assert!(DERIVATION_FILE_COUNT_MAX > 1) };
     debug_assert!(file_count < DERIVATION_FILE_COUNT_MAX);
     Ok(())
 }

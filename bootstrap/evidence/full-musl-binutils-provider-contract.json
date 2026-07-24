@@ -4,29 +4,25 @@
   "binutils_derivation": "bootstrap/binutils-full.ncl",
   "status": "contract-only",
   "musl_required_markers": [
-    "./configure \\",
-    "--host=x86_64-unknown-linux-musl",
-    "CC=\"$GCC/bin/gcc\"",
-    "make -j1 2>&1",
-    "make -j1 install 2>&1",
-    "ERROR: libc.a not built",
-    "ERROR: stdio.h not installed",
-    "ERROR: crt1.o not installed",
-    "ERROR: dynamic linker symlink missing",
-    "musl-1.2.5 build complete"
+    "GCC=$(find_input gcc-10.5.0-musl-gcc47-v2)",
+    "CLEAN_CC=\"$TOOLBIN/gcc10\"",
+    "CC=\"$CLEAN_CC\"",
+    "test -s \"$out/usr/lib/libc.a\"",
+    "test -e \"$out/lib/ld-musl-x86_64.so.1\"",
+    "gcc10-musl-1.2.5-smoke-ok",
+    "ERROR: GCC 10/musl 1.2.5 accepted malformed C"
   ],
   "binutils_required_markers": [
-    "binutils-2.41/configure",
+    "GCC=$(find_input gcc-10.5.0-musl-final-v1)",
+    "MUSL=$(find_input musl-1.2.5-gcc10-v1)",
+    "CC=\"$HOST_CC\"",
+    "CXX=\"$HOST_CXX\"",
     "--with-sysroot=\"$MUSL\"",
-    "CC=\"$GCC/bin/gcc\"",
-    "CXX=\"$GCC/bin/g++\"",
-    "make -j1 MAKEINFO=true 2>&1",
-    "make -j1 install MAKEINFO=true 2>&1",
-    "ERROR: $tool not found",
-    "binutils241-smoke.s",
-    "\"$AS\" -o /tmp/binutils241-smoke.o",
-    "\"$LD\" -o /tmp/binutils241-smoke-bin",
-    "binutils-2.41 build complete"
+    "make -j\"$JOB_COUNT\" MAKEINFO=true",
+    "make -j\"$JOB_COUNT\" install MAKEINFO=true",
+    "for required_tool in as ld ar ranlib nm objcopy objdump readelf size strings strip; do",
+    "\"$out/bin/readelf\" -h \"$WORK/positive.o\"",
+    "\"$out/bin/objcopy\" \"$WORK/positive.o\" \"$WORK/positive-copy.o\""
   ],
   "parity_effect": "evidence-backed partial; does not prove full musl/binutils correctness"
 }
