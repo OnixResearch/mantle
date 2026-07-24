@@ -466,6 +466,8 @@ fn require_ca_path_identity(path_info: &PathInfo, store_dir: &str) -> Result<(),
 }
 
 fn ca_path_identity_matches(path_info: &PathInfo, store_dir: &str) -> Result<bool, String> {
+    assert!(!path_info.store_path.name().is_empty());
+    assert!(store_dir.starts_with('/'));
     let Some(ca_hash) = path_info.ca.as_ref() else {
         return Ok(true);
     };
@@ -476,7 +478,7 @@ fn ca_path_identity_matches(path_info: &PathInfo, store_dir: &str) -> Result<boo
         return Ok(true);
     }
 
-    let self_reference = path_info.references.iter().any(|reference| reference == &path_info.store_path);
+    let is_self_reference = path_info.references.iter().any(|reference| reference == &path_info.store_path);
     let references = path_info
         .references
         .iter()
@@ -484,7 +486,7 @@ fn ca_path_identity_matches(path_info: &PathInfo, store_dir: &str) -> Result<boo
         .map(ToString::to_string)
         .collect::<Vec<_>>();
     let standard_path: Result<StorePath<String>, _> =
-        build_ca_path_with_store_dir(path_info.store_path.name(), ca_hash, references, self_reference, store_dir);
+        build_ca_path_with_store_dir(path_info.store_path.name(), ca_hash, references, is_self_reference, store_dir);
     Ok(standard_path.is_ok_and(|candidate| candidate == path_info.store_path))
 }
 
