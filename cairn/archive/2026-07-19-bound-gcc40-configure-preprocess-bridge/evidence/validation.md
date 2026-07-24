@@ -59,3 +59,14 @@ Finished `dev` profile [unoptimized + debuginfo] target(s) in 40.94s
 [4/4] first-party workspace tests (serialized; vendored members excluded)
 test result: ok. 1596 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.36s
 ```
+
+## Post-archive lifecycle validation
+
+The accepted requirement was synchronized to `cairn/specs/gcc40-bridge/spec.md`, the complete packet was archived at `cairn/archive/2026-07-19-bound-gcc40-configure-preprocess-bridge/`, and the post-archive Cairn validation command completed successfully. Exact filtered command output:
+
+```text
+  "change_issues": [],
+  "findings": [],
+  "issues": [],
+  "valid": true
+```

@@ -15,4 +15,5 @@
   - Evidence: checker self-tests admit the exact boundary and reject ten runtime fact failures plus source-marker and provider-eligibility drift; the source-order check requires durable audit before the first compiler marker.
 - [x] [serial] V2 Run focused bootstrap, Tiger Style, first-party quality, blocker, machine-contract, Cairn, Tracey, and full Nix gates; preserve exact broad-gate blockers. r[gcc40_bridge.configure_preprocess_confinement]
   - Evidence: `evidence/validation.md` records the 19-test bootstrap rail, bounded checker negatives, 437 evidence-backed blocker suppressions with zero findings, strict machine-contract freshness, 145/145 Tracey coverage, first-party Rustfmt/Clippy/serialized tests, and the full build-mode Nix result (`4048 passed`, `all checks passed!`).
-- [ ] [serial] V3 Sync, inspect, archive, and commit the accepted bounded non-claim with exact evidence. r[gcc40_bridge.configure_preprocess_confinement]
+- [x] [serial] V3 Sync, inspect, archive, and commit the accepted bounded non-claim with exact evidence. r[gcc40_bridge.configure_preprocess_confinement]
+  - Evidence: the accepted requirement was dry-run reviewed, synchronized into `cairn/specs/gcc40-bridge/spec.md`, archived with the complete change packet, and revalidated after archive.
