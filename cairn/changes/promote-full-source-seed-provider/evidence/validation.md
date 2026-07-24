@@ -100,10 +100,82 @@ git diff --check: PASS
 
 The bootstrap-stable admission copy is byte-identical to the create-new Cairn evidence report. The old `source-boundary-only` selector receipt was retired rather than retained with false legacy-selection claims.
 
-The pre-proof blocker inventory self-test remains intentionally non-green: task `299` reports 25 source-marker findings after stale selector-boundary suppression was removed. Those findings are not being relabeled as clean before the selected-provider fixed-point proof; V4 remains open until the post-proof inventory is reclassified against current evidence.
+The pre-proof blocker inventory self-test remained intentionally non-green: task `299` reported 25 source-marker findings after stale selector-boundary suppression was removed. Those findings were not relabeled as clean before fixed-point evidence existed.
+
+## Authenticated selected-provider fixed point
+
+The selected self-build source graph was regenerated after adding explicit pinned Linux 6.6 UAPI headers for bwrap and BusyBox. The final 66-record `fresh-clone-fixed-point` profile has independently supplied manifest BLAKE3:
+
+```text
+edfe4135f4573f680dfcfcd87ea6fe592c8575c41d095a1203c953cbcc5c4fa0
+```
+
+A fresh checkout at final committed implementation `dd7702f0` was hydrated from that profile after the ordinary first-party quality repairs. Pueue task `131` then ran the full authenticated offline proof with `provider_kind=full-source`, `require-override` source policy, strict later-stage hermeticity, and `CRUNCH_NO_FUSE=1`:
+
+```text
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 55 filtered out; finished in 12112.35s
+```
+
+The proof bundle at `/home/brittonr/.cache/mantle-full-source-proof-20260723/proof-bundle-v7` retains both binaries, stage audits, the copied admission report, hydration authority, protected-exec audit, summary, and fixed-point report. The archive-stable report is `bootstrap/evidence/full-source-provider-fixed-point.json`:
+
+```text
+source_state_blake3=4142c316fae5eba69259bfa7ddeaf3f49df917c90b210e18d68f558921e930ed
+stage0_source_policy=require-override
+stage0_source_override_count=61
+stage0_live_fetch_events=0
+stage2_source_policy=require-override
+stage2_source_override_count=61
+stage2_live_fetch_events=0
+staged_source_store_name=kgy2phj3qnhrzbn57v11h30p3qgbkgxz-mantle-src
+stage1_binary_blake3=e83fc910caad3db332160b56b4eb9b35ef50600a906b3f24d35f7cbd68bba2bb
+stage2_binary_blake3=e83fc910caad3db332160b56b4eb9b35ef50600a906b3f24d35f7cbd68bba2bb
+fixed_point=true
+```
+
+The two fewer runtime override keys than selected source records are exact acquisition-key deduplications accepted only after payload identity matching; the proof report records the actual installed override authority. No undeclared live acquisition occurred.
+
+After binding the exact manifest, override count, provider kind, fixed-point identity, and stage digests, the enforced blocker inventory reports `0 findings across 0 classes, 436 evidence-backed suppressions, 0 promotion claims`. Missing, stale, tampered, or unknown predecessor markers remain actionable through the negative checker fixtures.
+
+## Final quality and lifecycle rails
+
+The final product tree passed the ordinary first-party quality gate in pueue task `125`:
+
+```text
+[1/3] rustfmt
+[2/3] clippy
+[3/3] first-party workspace tests (serialized; vendored members excluded)
+test result: ok. 1596 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.80s
+test result: ok. 1596 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.83s
+```
+
+Focused closeout evidence:
+
+```text
+pueue task 138: bootstrap_eval — 19 passed; 0 failed
+pueue task 139: full_source_provider::tests — 11 passed; 0 failed
+pueue task 142: derivation_file — 8 passed; 0 failed
+pueue task 145: fresh_clone_fixed_point — 4 passed; 0 failed
+pueue task 140: machine_schema_contracts — 4 passed; 0 failed
+pueue task 152: machine schema generation/check — PASS (21 contracted, 50 classified)
+pueue task 137: blocker inventory — 0 findings, 436 evidence-backed suppressions, 0 promotion claims
+pueue task 147: nix flake check --no-build -L — all checks passed
+pueue task 149: Tracey — 145/145 referenced (profile mantle-default)
+```
+
+The Nix evaluation explicitly omitted incompatible `aarch64-darwin`, `aarch64-linux`, and `x86_64-darwin` systems. It does not claim the unavailable full build rail: configured remote signing/build infrastructure remains absent on this host. `git diff --check` passed after the evidence update.
+
+Final pre-sync Cairn validation had no issues or findings. All eight tasks were complete, and the gates passed with receipts:
+
+```text
+proposal: 377cee7c305e2900c5e2d3d13001e3b9decf11009cbec721d633ec1569cc1b63 PASS
+design:   6df319e4fe4394a551eb2e3664b1e6e56d98cd790fcefde50ccf550e2c7830a1 PASS
+tasks:    8b841c7c7a237e14fe71ef607695beca3557efae33a6cf3c7d372ec61e29ef95 PASS
+```
+
+Cairn sync executed with receipt `cdf40cb0d792155a824d59114c2fa8097efe0807f4034550ca095f21bde66345`. The merged accepted requirement was inspected intact at `cairn/specs/bootstrap-inventory/spec.md` lines 210–247.
 
 ## Adversarial audit and claim boundary
 
 Static metadata, executable bits, version output, diagnostic private overlays, source-probe roots, and downstream compiler success were not accepted as provider admission. The surviving mechanism binds a real runtime-tested provider tree and a fully materialized source closure to independent BLAKE3 identities after the implementation commit. Selection remains a separate change so a failed or incomplete candidate cannot silently fall back or become bootstrap authority.
 
-This evidence proves the recorded provider construction, bounded runtime surfaces, and source/output identity on the recorded x86_64-linux orchestration boundary. It does not prove compiler correctness, bootstrap-seed correctness, independent rebuild agreement, release reproducibility, deployment success, or full Cargo compatibility. The selected-provider authenticated stage0 → stage1 → stage2 fixed-point proof remains pending.
+This evidence proves the recorded provider construction, bounded runtime surfaces, source/output identity, and one authenticated stage0 → stage1 → stage2 fixed point on the recorded x86_64-linux orchestration boundary. It does not prove compiler correctness, bootstrap-seed correctness, independent rebuild agreement, release reproducibility, deployment success, or full Cargo compatibility.

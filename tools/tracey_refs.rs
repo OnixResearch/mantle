@@ -222,7 +222,7 @@
 // archive-stable provider admission, and the 66-record hydrated fixed-point
 // profile. `bootstrap/evidence/full-source-provider-fixed-point.json` records 61
 // exact runtime overrides per stage, zero live fetches, and matching stage1 /
-// stage2 Mantle BLAKE3 `91ac5f2179a87b0114d4600b37f25100f8fb2b92aa7d99255c101bc520d8f12b`.
+// stage2 Mantle BLAKE3 `e83fc910caad3db332160b56b4eb9b35ef50600a906b3f24d35f7cbd68bba2bb`.
 // The evidence remains bounded by its explicit compiler/seed correctness,
 // independent rebuild, release reproducibility, deployment, and Cargo non-claims.
 
