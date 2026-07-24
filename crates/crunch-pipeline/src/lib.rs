@@ -53,6 +53,10 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tracing::info;
 
+const EVAL_MESSAGE_CHANNEL_CAPACITY: usize = 16;
+#[cfg(test)]
+const EVAL_POLICY_TEST_MAX_JOBS: u32 = 4;
+
 pub struct BuildConfig {
     pub file: PathBuf,
     pub import_paths: Vec<OsString>,
@@ -231,20 +235,20 @@ async fn build_linux(
 
     let (mut builder, workspace_evidence_sink) = create_pipeline_builder(config, store)?;
 
-    let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
+    let (tx, mut rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
     let mut known_paths = DerivationRegistry::new(&config.store_dir);
     let mut worker = Worker::with_scheduling_policy(config.max_jobs, config.scheduling_policy.clone())
         .map_err(|error| Error::Build(format!("scheduler policy: {error}")))?;
     let worker_run = worker.run_streaming(&mut builder, &mut known_paths, &mut rx);
-    let eval_stream = stream_roots_into_worker(
-        config.max_jobs,
-        &config.store_dir,
-        RootForceExecutionPolicy::PreferThreaded,
-        &config.file,
-        &config.import_paths,
-        &session,
+    let eval_stream = stream_roots_into_worker(EvalStreamRequest {
+        max_jobs: config.max_jobs,
+        store_dir: &config.store_dir,
+        root_force_policy: RootForceExecutionPolicy::PreferThreaded,
+        root_file: &config.file,
+        import_paths: &config.import_paths,
+        session: &session,
         tx,
-    );
+    });
     let (worker_run, eval_stream) = tokio::join!(worker_run, eval_stream);
     let worker_result = match worker_run {
         Ok(result) => result,
@@ -436,24 +440,27 @@ struct EvalFailure {
     error: String,
 }
 
-async fn stream_roots_into_worker(
+struct EvalStreamRequest<'a> {
     max_jobs: u32,
-    store_dir: &str,
+    store_dir: &'a str,
     root_force_policy: RootForceExecutionPolicy,
-    root_file: &std::path::Path,
-    import_paths: &[OsString],
-    session: &crunch_eval::session::EvaluationSession,
+    root_file: &'a std::path::Path,
+    import_paths: &'a [OsString],
+    session: &'a crunch_eval::session::EvaluationSession,
     tx: mpsc::Sender<EvalMessage>,
-) -> Result<EvalStreamResult, Error> {
-    let requested_labels = session.root_labels().iter().map(|root_label| root_label.label.clone()).collect::<Vec<_>>();
+}
+
+async fn stream_roots_into_worker(request: EvalStreamRequest<'_>) -> Result<EvalStreamResult, Error> {
+    let requested_labels =
+        request.session.root_labels().iter().map(|root_label| root_label.label.clone()).collect::<Vec<_>>();
     debug_assert!(!requested_labels.is_empty(), "must have at least one root label");
 
-    let eval_parallelism = resolve_eval_parallelism(max_jobs, requested_labels.len() as u32);
-    let worker_input = session.isolated_worker_input();
+    let eval_parallelism = resolve_eval_parallelism(request.max_jobs, requested_labels.len() as u32);
+    let worker_input = request.session.isolated_worker_input();
     let mut join_set = JoinSet::new();
     let mut next_label_index: usize = 0;
-    let mut cache = ConversionCache::new(store_dir);
-    let mut file_resolver = derivation_file::DerivationFileResolver::new(root_file, import_paths)?;
+    let mut cache = ConversionCache::new(request.store_dir);
+    let mut file_resolver = derivation_file::DerivationFileResolver::new(request.root_file, request.import_paths)?;
     let mut root_drv_paths = Vec::with_capacity(requested_labels.len());
     let mut first_failure: Option<EvalFailure> = None;
 
@@ -463,7 +470,7 @@ async fn stream_roots_into_worker(
         &requested_labels,
         &mut next_label_index,
         eval_parallelism,
-        root_force_policy,
+        request.root_force_policy,
     );
     while let Some(join_result) = join_set.join_next().await {
         let worker_result = join_result.map_err(|e| Error::Internal(format!("eval worker panicked: {e}")))?;
@@ -473,18 +480,20 @@ async fn stream_roots_into_worker(
                 if first_failure.is_some() {
                     continue;
                 }
-                file_resolver.resolve_root_inputs(root_file, &mut drv, &mut cache)?;
+                file_resolver.resolve_root_inputs(request.root_file, &mut drv, &mut cache)?;
                 let (drv_path, _nix_drv) =
                     crunch_glue::convert(&drv, &mut cache).map_err(|e| Error::Convert(format!("{label}: {e}")))?;
                 let new_entries = cache.drain_pending();
                 info!(drv = %drv_path, label = %label, entries = new_entries.len(), "converted, sending to worker");
-                tx.send(EvalMessage {
-                    label: label.clone(),
-                    drv_path: drv_path.clone(),
-                    new_entries,
-                })
-                .await
-                .map_err(|e| Error::Internal(format!("channel send: {e}")))?;
+                request
+                    .tx
+                    .send(EvalMessage {
+                        label: label.clone(),
+                        drv_path: drv_path.clone(),
+                        new_entries,
+                    })
+                    .await
+                    .map_err(|e| Error::Internal(format!("channel send: {e}")))?;
                 root_drv_paths.push((label, drv_path));
             }
             Err((label, error)) => {
@@ -501,12 +510,12 @@ async fn stream_roots_into_worker(
                 &requested_labels,
                 &mut next_label_index,
                 eval_parallelism,
-                root_force_policy,
+                request.root_force_policy,
             );
         }
     }
 
-    drop(tx);
+    drop(request.tx);
     Ok(EvalStreamResult {
         root_drv_paths,
         eval_failure: first_failure,
@@ -822,30 +831,30 @@ mod tests {
             &[],
         )
         .unwrap();
-        let (inline_tx, inline_rx) = mpsc::channel::<EvalMessage>(16);
-        let inline_result = stream_roots_into_worker(
-            4,
-            "/crunch/store",
-            RootForceExecutionPolicy::Inline,
-            &root_file,
-            &[],
-            &session,
-            inline_tx,
-        )
+        let (inline_tx, inline_rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+        let inline_result = stream_roots_into_worker(EvalStreamRequest {
+            max_jobs: EVAL_POLICY_TEST_MAX_JOBS,
+            store_dir: "/crunch/store",
+            root_force_policy: RootForceExecutionPolicy::Inline,
+            root_file: &root_file,
+            import_paths: &[],
+            session: &session,
+            tx: inline_tx,
+        })
         .await
         .unwrap();
         let inline_labels = collect_eval_message_labels(inline_rx).await;
 
-        let (preferred_tx, preferred_rx) = mpsc::channel::<EvalMessage>(16);
-        let preferred_result = stream_roots_into_worker(
-            4,
-            "/crunch/store",
-            RootForceExecutionPolicy::PreferThreaded,
-            &root_file,
-            &[],
-            &session,
-            preferred_tx,
-        )
+        let (preferred_tx, preferred_rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+        let preferred_result = stream_roots_into_worker(EvalStreamRequest {
+            max_jobs: EVAL_POLICY_TEST_MAX_JOBS,
+            store_dir: "/crunch/store",
+            root_force_policy: RootForceExecutionPolicy::PreferThreaded,
+            root_file: &root_file,
+            import_paths: &[],
+            session: &session,
+            tx: preferred_tx,
+        })
         .await
         .unwrap();
         let preferred_labels = collect_eval_message_labels(preferred_rx).await;
@@ -877,30 +886,30 @@ mod tests {
             &[],
         )
         .unwrap();
-        let (inline_tx, inline_rx) = mpsc::channel::<EvalMessage>(16);
-        let inline_result = stream_roots_into_worker(
-            4,
-            "/crunch/store",
-            RootForceExecutionPolicy::Inline,
-            &root_file,
-            &[],
-            &session,
-            inline_tx,
-        )
+        let (inline_tx, inline_rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+        let inline_result = stream_roots_into_worker(EvalStreamRequest {
+            max_jobs: EVAL_POLICY_TEST_MAX_JOBS,
+            store_dir: "/crunch/store",
+            root_force_policy: RootForceExecutionPolicy::Inline,
+            root_file: &root_file,
+            import_paths: &[],
+            session: &session,
+            tx: inline_tx,
+        })
         .await
         .unwrap();
         let inline_labels = collect_eval_message_labels(inline_rx).await;
 
-        let (preferred_tx, preferred_rx) = mpsc::channel::<EvalMessage>(16);
-        let preferred_result = stream_roots_into_worker(
-            4,
-            "/crunch/store",
-            RootForceExecutionPolicy::PreferThreaded,
-            &root_file,
-            &[],
-            &session,
-            preferred_tx,
-        )
+        let (preferred_tx, preferred_rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+        let preferred_result = stream_roots_into_worker(EvalStreamRequest {
+            max_jobs: EVAL_POLICY_TEST_MAX_JOBS,
+            store_dir: "/crunch/store",
+            root_force_policy: RootForceExecutionPolicy::PreferThreaded,
+            root_file: &root_file,
+            import_paths: &[],
+            session: &session,
+            tx: preferred_tx,
+        })
         .await
         .unwrap();
         let preferred_labels = collect_eval_message_labels(preferred_rx).await;

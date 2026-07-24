@@ -34,7 +34,8 @@ const CASTORE_ROOT_NODE_ALLOWANCE: u32 = 1;
 /// Prevents zip-bomb style attacks and accidental extraction of enormous
 /// archives while keeping every accepted tree representable by the store's
 /// recursive completeness checker.
-const MAX_TAR_ENTRIES: u32 = crunch_store::MAX_CASTORE_TREE_NODES - CASTORE_ROOT_NODE_ALLOWANCE;
+const MAX_TAR_ENTRIES: u32 = crunch_store::MAX_CASTORE_TREE_NODES.saturating_sub(CASTORE_ROOT_NODE_ALLOWANCE);
+const _: () = assert!(crunch_store::MAX_CASTORE_TREE_NODES >= CASTORE_ROOT_NODE_ALLOWANCE);
 
 /// Maximum number of symlink expansions while validating existing paths in the
 /// extraction tree. Bounds attacker-controlled symlink cycles.

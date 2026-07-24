@@ -93,6 +93,12 @@ let gcc_src = crunch.fetchTarball {
       export CONFIG_SHELL=/bin/sh
       export SHELL=/bin/sh
 
+      CONFIGURE_PROBE_SOURCE_BYTES_MAX=65536
+      CONFIGURE_PROBE_INVOCATION_COUNT_MAX=4096
+      CONFIGURE_PROBE_AUDIT=/tmp/gcc40-configure-preprocess.audit
+      CONFIGURE_PROBE_COUNT=/tmp/gcc40-configure-preprocess.count
+      $BB rm -f "$CONFIGURE_PROBE_AUDIT" "$CONFIGURE_PROBE_COUNT"
+
       TCC_WRAPPER=/tmp/gcc40-tcc-wrapper
       $BB cat > "$TCC_WRAPPER" <<EOF
 #!/bin/sh
@@ -121,41 +127,87 @@ for argument in "\$@"; do
 done
 if [ "\$mode" = preprocess ]; then
   # Configure-only diagnostic bridge: TinyCC's -E parses Autoconf's deliberate
-  # syntax-error sentinel and can finish without a preprocessed artifact. Compile
-  # the sentinel-free probe to preserve positive/negative header detection. The
-  # one macro-output probe is CHAR_BIT; bind it to the declared musl header before
-  # emitting the token Autoconf expects. This is not a provider preprocessor.
-  test -n "\$source_file" || exit 1
+  # syntax-error sentinel and can finish without a preprocessed artifact. This
+  # branch is admitted only for bounded conftest.c probes under authority supplied
+  # by the active configure child. It is not a provider preprocessor.
+  CONFIGURE_PROBE_SOURCE_BYTES_MAX=$CONFIGURE_PROBE_SOURCE_BYTES_MAX
+  CONFIGURE_PROBE_INVOCATION_COUNT_MAX=$CONFIGURE_PROBE_INVOCATION_COUNT_MAX
+  probe_dir="\${MANTLE_GCC40_CONFIGURE_PROBE_DIR:-}"
+  probe_class="\${MANTLE_GCC40_CONFIGURE_PROBE_CLASS:-}"
+  probe_audit="\${MANTLE_GCC40_CONFIGURE_PROBE_AUDIT:-}"
+  probe_count_file="\${MANTLE_GCC40_CONFIGURE_PROBE_COUNT:-}"
+  reject_probe() {
+    echo "gcc40-tcc-wrapper: configure preprocess probe rejected: \$1" >&2
+    exit 1
+  }
+  test -n "\$probe_dir" || reject_probe missing-authority-directory
+  test -n "\$probe_audit" || reject_probe missing-audit-path
+  test -n "\$probe_count_file" || reject_probe missing-count-path
+  case "\$probe_class" in
+    libiberty|libcpp|gcc) ;;
+    *) reject_probe unknown-configure-class ;;
+  esac
+  current_dir=$(/bin/busybox pwd -P) || reject_probe current-directory-unavailable
+  test "\$current_dir" = "\$probe_dir" || reject_probe current-directory-mismatch
+  case "\$source_file" in
+    conftest.c|./conftest.c) ;;
+    *) reject_probe non-conftest-source ;;
+  esac
+  test -z "\$output_file" || reject_probe explicit-output-forbidden
+  source_canonical=$(/bin/busybox readlink -f "\$source_file") || reject_probe source-canonicalization-failed
+  source_parent=$(/bin/busybox dirname "\$source_canonical") || reject_probe source-parent-unavailable
+  test "\$source_parent" = "\$probe_dir" || reject_probe source-escape
+  source_bytes=$(/bin/busybox wc -c < "\$source_canonical") || reject_probe source-size-unavailable
+  case "\$source_bytes" in
+    ''|*[!0-9]*) reject_probe invalid-source-size ;;
+  esac
+  test "\$source_bytes" -le "\$CONFIGURE_PROBE_SOURCE_BYTES_MAX" || reject_probe source-too-large
+  probe_count=0
+  if [ -f "\$probe_count_file" ]; then
+    probe_count=$(/bin/busybox cat "\$probe_count_file") || reject_probe count-read-failed
+  fi
+  case "\$probe_count" in
+    ''|*[!0-9]*) reject_probe invalid-count ;;
+  esac
+  test "\$probe_count" -lt "\$CONFIGURE_PROBE_INVOCATION_COUNT_MAX" || reject_probe invocation-budget-exhausted
+  next_probe_count=\$((probe_count + 1))
+  test "\$next_probe_count" -le "\$CONFIGURE_PROBE_INVOCATION_COUNT_MAX" || reject_probe invocation-budget-exhausted
+  /bin/busybox printf '%s\n' "\$next_probe_count" > "\$probe_count_file" || reject_probe count-write-failed
+  /bin/busybox printf '%s\t%s\t%s\t%s\n' \
+    "\$next_probe_count" "\$probe_class" "\$probe_dir" "\$source_canonical" >> "\$probe_audit" || reject_probe audit-write-failed
+
+  # The one macro-output probe is CHAR_BIT; bind it to the declared musl header
+  # before emitting the token Autoconf expects.
   CHAR_BIT_EXPECTED=8
-  if /bin/busybox grep -q '^#ifdef CHAR_BIT' "\$source_file"; then
+  if /bin/busybox grep -q '^#ifdef CHAR_BIT' "\$source_canonical"; then
     /bin/busybox grep -Eq "^#define[[:space:]]+CHAR_BIT[[:space:]]+\$CHAR_BIT_EXPECTED([[:space:]]|$)" "\$MUSL_INCLUDE/limits.h" || exit 1
     /bin/busybox printf 'found\n'
     exit 0
   fi
   scratch_source="/tmp/gcc40-cpp-source-\$\$.c"
   scratch_object="/tmp/gcc40-cpp-object-\$\$.o"
-  /bin/busybox sed '/^[[:space:]]*Syntax error[[:space:]]*$/d' "\$source_file" > "\$scratch_source"
+  /bin/busybox sed '/^[[:space:]]*Syntax error[[:space:]]*$/d' "\$source_canonical" > "\$scratch_source"
   /bin/busybox printf '\nint mantle_configure_cpp_probe(void) { return 0; }\n' >> "\$scratch_source"
   "\$REAL_TCC" -c -I"\$MUSL_INCLUDE" "\$scratch_source" -o "\$scratch_object"
   compiler_status=\$?
   if ! { [ "\$compiler_status" -eq 0 ] || [ "\$compiler_status" -eq "\$TEARDOWN_STATUS" ]; } || [ ! -s "\$scratch_object" ]; then
     /bin/busybox rm -f "\$scratch_object"
-    echo "gcc40-tcc-wrapper: retry self-host compiler for preprocess probe \$source_file" >&2
+    echo "gcc40-tcc-wrapper: retry self-host compiler for preprocess probe \$source_canonical" >&2
     "\$REAL_CPP_COMPILER" -c -I"\$MUSL_INCLUDE" "\$scratch_source" -o "\$scratch_object"
     compiler_status=\$?
   fi
   if ! { [ "\$compiler_status" -eq 0 ] || [ "\$compiler_status" -eq "\$TEARDOWN_STATUS" ]; } || [ ! -s "\$scratch_object" ]; then
     /bin/busybox rm -f "\$scratch_object"
-    echo "gcc40-tcc-wrapper: retry older compiler for preprocess probe \$source_file" >&2
+    echo "gcc40-tcc-wrapper: retry older compiler for preprocess probe \$source_canonical" >&2
     "\$REAL_OLD_COMPILER" -c -I"\$MUSL_INCLUDE" "\$scratch_source" -o "\$scratch_object"
     compiler_status=\$?
   fi
   if { [ "\$compiler_status" -eq 0 ] || [ "\$compiler_status" -eq "\$TEARDOWN_STATUS" ]; } && [ -s "\$scratch_object" ]; then
-    /bin/busybox cat "\$source_file"
+    /bin/busybox cat "\$source_canonical"
     /bin/busybox rm -f "\$scratch_source" "\$scratch_object"
     exit 0
   fi
-  echo "gcc40-tcc-wrapper: preprocess probe failed status=\$compiler_status source=\$source_file" >&2
+  echo "gcc40-tcc-wrapper: preprocess probe failed status=\$compiler_status source=\$source_canonical" >&2
   /bin/busybox cat "\$scratch_source" >&2
   /bin/busybox ls -l "\$scratch_object" >&2 || true
   /bin/busybox rm -f "\$scratch_source" "\$scratch_object"
@@ -579,8 +631,13 @@ EOF
         for dir in libiberty libcpp gcc; do
           $BB mkdir -p "$dir"
           cd "$dir"
+          configure_probe_dir=$($BB pwd -P)
           set +e
           ac_cv_c_bigendian=no \
+            MANTLE_GCC40_CONFIGURE_PROBE_DIR="$configure_probe_dir" \
+            MANTLE_GCC40_CONFIGURE_PROBE_CLASS="$dir" \
+            MANTLE_GCC40_CONFIGURE_PROBE_AUDIT="$CONFIGURE_PROBE_AUDIT" \
+            MANTLE_GCC40_CONFIGURE_PROBE_COUNT="$CONFIGURE_PROBE_COUNT" \
             CC="$compiler" \
             CPP="$compiler -E $compiler_include_flags -I$MUSL/include" \
             CPPFLAGS="$compiler_include_flags -I$MUSL/include" \
@@ -606,6 +663,34 @@ EOF
           fi
           cd ..
         done
+
+        if [ "$compiler" = "$TCC_WRAPPER" ]; then
+          test -s "$CONFIGURE_PROBE_AUDIT" || {
+            echo "ERROR: GCC configure preprocess probe produced no audit" >&2
+            exit 1
+          }
+          configure_probe_audit_count=$($BB wc -l < "$CONFIGURE_PROBE_AUDIT")
+          test "$configure_probe_audit_count" -le "$CONFIGURE_PROBE_INVOCATION_COUNT_MAX" || {
+            echo "ERROR: GCC configure preprocess probe audit exceeds invocation bound" >&2
+            exit 1
+          }
+          while IFS="$($BB printf '\t')" read -r audit_index audit_class audit_dir audit_source; do
+            case "$audit_class" in
+              libiberty|libcpp|gcc) ;;
+              *) echo "ERROR: unknown GCC configure probe audit class: $audit_class" >&2; exit 1 ;;
+            esac
+            expected_audit_dir="$build_dir/$audit_class"
+            test "$audit_dir" = "$expected_audit_dir" || {
+              echo "ERROR: GCC configure probe audit directory mismatch: $audit_dir" >&2
+              exit 1
+            }
+            test "$audit_source" = "$expected_audit_dir/conftest.c" || {
+              echo "ERROR: GCC configure probe audit source mismatch: $audit_source" >&2
+              exit 1
+            }
+            test -n "$audit_index" || { echo "ERROR: GCC configure probe audit index missing" >&2; exit 1; }
+          done < "$CONFIGURE_PROBE_AUDIT"
+        fi
 
         # The compile-backed configure preprocessor cannot expand config.status
         # templates faithfully.  Bind the target-derived 64-bit host integer

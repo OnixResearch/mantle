@@ -226,6 +226,15 @@
 // The evidence remains bounded by its explicit compiler/seed correctness,
 // independent rebuild, release reproducibility, deployment, and Cargo non-claims.
 
+// r[impl gcc40_bridge.configure_preprocess_confinement]
+// Implemented by the runtime authority, canonical-source, output, byte, class,
+// count, and audit guards in `bootstrap/gcc-4.0-native.ncl`.
+//
+// r[verify gcc40_bridge.configure_preprocess_confinement]
+// Verified by `scripts/check-gcc40-configure-bridge.rs` positive/negative core
+// fixtures and source/evidence order checks bound to
+// `bootstrap/evidence/gcc-4.0-configure-preprocess-bridge.json`.
+
 // r[impl rust_package_planning.source_built_toolchain_closure]
 // Implemented by `src/source_toolchain_closure.rs`, `src/cargo_free_self_build.rs`,
 // `src/rust_plan.rs`, and `src/main.rs`.

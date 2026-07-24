@@ -541,6 +541,27 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected gcc-4.0 native boundary bridge-output suppression".to_string());
     }
+    if evidence.gcc40_configure_preprocess_bridge_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/gcc-4.0-configure-preprocess-bridge.json"),
+            2,
+            MARKERS[0],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected checked gcc-4.0 configure bridge receipt suppression".to_string());
+    }
+    if suppression_reason(
+        Path::new("bootstrap/evidence/gcc-4.0-configure-preprocess-bridge.json"),
+        2,
+        MARKERS[0],
+        &EvidenceState::default(),
+    )
+    .is_some()
+    {
+        return Err("self-test accepted unchecked gcc-4.0 configure bridge receipt suppression".to_string());
+    }
     if evidence.gcc40_placeholder_inventory_checked
         && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1385, MARKERS[0], &evidence).is_none()
     {
@@ -924,6 +945,7 @@ struct EvidenceState {
     binutils_tcc_tool_smoke_checked: bool,
     gcc40_placeholder_inventory_checked: bool,
     gcc40_native_boundary_checked: bool,
+    gcc40_configure_preprocess_bridge_checked: bool,
     tcc_musl_contracts_checked: bool,
     sed409_musl_bridge_boundary_checked: bool,
     m4_147_musl_bridge_boundary_checked: bool,
@@ -947,6 +969,7 @@ impl EvidenceState {
             binutils_tcc_tool_smoke_checked: checked_binutils_tcc_tool_smoke(),
             gcc40_placeholder_inventory_checked: checked_gcc40_placeholder_inventory(),
             gcc40_native_boundary_checked: checked_gcc40_native_boundary(),
+            gcc40_configure_preprocess_bridge_checked: checked_gcc40_configure_preprocess_bridge(),
             gcc40_native_cc1_build_frontier_checked: checked_gcc40_native_cc1_build_frontier(),
             tcc_musl_contracts_checked: checked_tcc_musl_contracts(),
             sed409_musl_bridge_boundary_checked: checked_sed409_musl_bridge_boundary(),
@@ -1158,6 +1181,20 @@ fn checked_gcc40_native_cc1_build_frontier() -> bool {
             "This remains a bridge until native cc1 builds.",
             "the validated musl TinyCC toolchain",
         ])
+}
+
+fn checked_gcc40_configure_preprocess_bridge() -> bool {
+    checked_evidence_file("bootstrap/evidence/gcc-4.0-configure-preprocess-bridge.json", &[
+        "\"schema\": \"mantle-gcc40-configure-preprocess-bridge-v1\"",
+        "\"derivation\": \"bootstrap/gcc-4.0-native.ncl\"",
+        "\"status\": \"bounded-provisional\"",
+        "\"source_bytes_max\": 65536",
+        "\"count_max\": 4096",
+        "\"provider_eligible\": false",
+        "\"general preprocessing correctness\"",
+        "\"native GCC 4.0 correctness\"",
+    ])
+    .is_some()
 }
 
 fn checked_gcc40_native_boundary() -> bool {
@@ -1588,6 +1625,14 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         && evidence.gcc40_placeholder_inventory_checked
     {
         return Some("gcc-4.0 placeholder inventory is checked blocker metadata, not an additional bridge blocker");
+    }
+    if marker.id == "bridge-output"
+        && path_s.ends_with("bootstrap/evidence/gcc-4.0-configure-preprocess-bridge.json")
+        && evidence.gcc40_configure_preprocess_bridge_checked
+    {
+        return Some(
+            "gcc-4.0 configure preprocessing receipt is checked bounded metadata, not an additional bridge blocker",
+        );
     }
     if matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
         && path_s.ends_with("bootstrap/evidence/gcc-4.0-native-boundary.json")

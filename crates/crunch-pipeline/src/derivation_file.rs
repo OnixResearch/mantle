@@ -22,7 +22,7 @@ const SINGLE_FILE_ROOT_COUNT: usize = 1;
 
 pub(crate) struct DerivationFileResolver {
     root_dir: PathBuf,
-    import_roots: Vec<PathBuf>,
+    import_authority_catalog: Vec<PathBuf>,
     import_paths: Vec<OsString>,
     resolved: BTreeMap<PathBuf, ResolvedDerivationRef>,
     visiting: BTreeSet<PathBuf>,
@@ -40,18 +40,18 @@ impl DerivationFileResolver {
         if !root_dir.is_dir() {
             return Err(Error::Eval(format!("derivation-file root is not a directory: {}", root_dir.display())));
         }
-        let import_roots = canonical_import_roots(import_paths)?;
         const { assert!(DERIVATION_FILE_COUNT_MAX > 1) };
-        assert!(import_roots.len() <= DERIVATION_FILE_IMPORT_ROOT_COUNT_MAX);
         debug_assert!(!root_dir.as_os_str().is_empty());
-        Ok(Self {
+        let resolver = Self {
             root_dir,
-            import_roots,
+            import_authority_catalog: canonical_import_roots(import_paths)?,
             import_paths: import_paths.to_vec(),
             resolved: BTreeMap::new(),
             visiting: BTreeSet::new(),
             resolved_file_count: 0,
-        })
+        };
+        assert!(resolver.import_authority_catalog.len() <= DERIVATION_FILE_IMPORT_ROOT_COUNT_MAX);
+        Ok(resolver)
     }
 
     pub(crate) fn resolve_root_inputs(
@@ -121,7 +121,7 @@ impl DerivationFileResolver {
         depth: u32,
     ) -> Result<ResolvedDerivationRef, Error> {
         ensure_depth(depth)?;
-        let path = resolve_reference_path(&self.root_dir, &self.import_roots, owner_file, reference)?;
+        let path = resolve_reference_path(&self.root_dir, &self.import_authority_catalog, owner_file, reference)?;
         if let Some(resolved) = self.resolved.get(&path) {
             return Ok(resolved.clone());
         }
@@ -137,8 +137,8 @@ impl DerivationFileResolver {
             "resolving lazy derivation-file input"
         );
         let result = self.load_resolve_and_convert_file(&path, cache, depth);
-        let removed = self.visiting.remove(&path);
-        assert!(removed, "visited derivation file must be removed explicitly");
+        let was_removed = self.visiting.remove(&path);
+        assert!(was_removed, "visited derivation file must be removed explicitly");
         let resolved = result?;
         tracing::info!(
             path = %path.display(),
@@ -201,17 +201,19 @@ fn canonical_import_roots(import_paths: &[OsString]) -> Result<Vec<PathBuf>, Err
 
 fn resolve_reference_path(
     root_dir: &Path,
-    import_roots: &[PathBuf],
+    import_authority_catalog: &[PathBuf],
     owner_file: &Path,
     reference: &str,
 ) -> Result<PathBuf, Error> {
+    assert!(!root_dir.as_os_str().is_empty());
+    assert!(!owner_file.as_os_str().is_empty());
     validate_reference_text(reference)?;
     let owner_dir = owner_file
         .parent()
         .ok_or_else(|| Error::Eval(format!("derivation-file owner has no parent: {}", owner_file.display())))?;
-    let owner_root = admitted_owner_root(root_dir, import_roots, owner_dir)?;
+    let owner_root = admitted_owner_root(root_dir, import_authority_catalog, owner_dir)?;
     let mut candidates = vec![(owner_root, owner_dir.join(reference))];
-    candidates.extend(import_roots.iter().map(|root| (root.as_path(), root.join(reference))));
+    candidates.extend(import_authority_catalog.iter().map(|root| (root.as_path(), root.join(reference))));
     for (admitted_root, candidate) in candidates {
         match resolve_admitted_candidate(admitted_root, &candidate)? {
             Some(canonical) => return Ok(canonical),
@@ -222,19 +224,19 @@ fn resolve_reference_path(
         "resolving derivation-file input {} from owner {} and {} import roots: no such file",
         reference,
         owner_file.display(),
-        import_roots.len()
+        import_authority_catalog.len()
     )))
 }
 
 fn admitted_owner_root<'a>(
     root_dir: &'a Path,
-    import_roots: &'a [PathBuf],
+    import_authority_catalog: &'a [PathBuf],
     owner_dir: &Path,
 ) -> Result<&'a Path, Error> {
     if owner_dir.starts_with(root_dir) {
         return Ok(root_dir);
     }
-    import_roots
+    import_authority_catalog
         .iter()
         .find(|root| owner_dir.starts_with(root))
         .map(PathBuf::as_path)
@@ -265,23 +267,32 @@ fn resolve_admitted_candidate(admitted_root: &Path, candidate: &Path) -> Result<
 }
 
 fn validate_reference_text(reference: &str) -> Result<(), Error> {
+    if reference.is_empty() {
+        return Err(invalid_reference_error(reference));
+    }
+    if reference.len() > DERIVATION_FILE_PATH_BYTES_MAX {
+        return Err(invalid_reference_error(reference));
+    }
     let path = Path::new(reference);
-    let normalized_components = path.components().all(|component| matches!(component, Component::Normal(_)));
-    let expected_extension =
+    if path.is_absolute() {
+        return Err(invalid_reference_error(reference));
+    }
+    let has_normal_components = path.components().all(|component| matches!(component, Component::Normal(_)));
+    if !has_normal_components {
+        return Err(invalid_reference_error(reference));
+    }
+    let has_expected_extension =
         path.extension().and_then(|extension| extension.to_str()) == Some(DERIVATION_FILE_EXTENSION);
-    if reference.is_empty()
-        || reference.len() > DERIVATION_FILE_PATH_BYTES_MAX
-        || path.is_absolute()
-        || !normalized_components
-        || !expected_extension
-    {
-        return Err(Error::Eval(format!(
-            "derivation-file input must be a bounded normalized relative .ncl path: {reference}"
-        )));
+    if !has_expected_extension {
+        return Err(invalid_reference_error(reference));
     }
     assert!(!reference.is_empty());
     debug_assert!(reference.len() <= DERIVATION_FILE_PATH_BYTES_MAX);
     Ok(())
+}
+
+fn invalid_reference_error(reference: &str) -> Error {
+    Error::Eval(format!("derivation-file input must be a bounded normalized relative .ncl path: {reference}"))
 }
 
 fn select_requested_output(
@@ -376,7 +387,8 @@ mod tests {
         write_fixture(&dep, r#"{ name = "dep", builder = "/bin/sh" }"#);
         let import_paths = vec![import_dir.path().as_os_str().to_owned()];
         let resolver = DerivationFileResolver::new(&root, &import_paths).unwrap();
-        let resolved = resolve_reference_path(&resolver.root_dir, &resolver.import_roots, &root, "dep.ncl").unwrap();
+        let resolved =
+            resolve_reference_path(&resolver.root_dir, &resolver.import_authority_catalog, &root, "dep.ncl").unwrap();
         assert_eq!(resolved, dep.canonicalize().unwrap());
         assert!(resolved.starts_with(import_dir.path()));
     }
@@ -420,7 +432,8 @@ mod tests {
         symlink(&outside, import_dir.path().join("dep.ncl")).unwrap();
         let import_paths = vec![import_dir.path().as_os_str().to_owned()];
         let resolver = DerivationFileResolver::new(&root, &import_paths).unwrap();
-        let error = resolve_reference_path(&resolver.root_dir, &resolver.import_roots, &root, "dep.ncl").unwrap_err();
+        let error = resolve_reference_path(&resolver.root_dir, &resolver.import_authority_catalog, &root, "dep.ncl")
+            .unwrap_err();
         assert!(error.to_string().contains("escapes admitted root"));
         assert!(error.to_string().contains(&outside.display().to_string()));
     }

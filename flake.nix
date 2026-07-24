@@ -741,6 +741,7 @@
               export CARGO_HOME="$TMPDIR/cargo-home"
               export RUSTUP_HOME="$TMPDIR/rustup-home"
 
+              "${rustToolchain}/bin/cargo" -q -Zscript scripts/check-gcc40-configure-bridge.rs --self-test
               bash scripts/check-bootstrap-blocker-inventory.sh \
                 --self-test \
                 --json "$TMPDIR/bootstrap-blocker-inventory.json" \
