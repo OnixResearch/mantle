@@ -2598,8 +2598,11 @@ fn build_crunch_binary(
     let tmp_dir = tempfile::tempdir().map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
     let ncl_path = tmp_dir.path().join("self-build.ncl");
     std::fs::write(&ncl_path, &ncl_content).map_err(|e| RunError::Internal(format!("writing ncl: {e}")))?;
-    let self_build_evaluator_inputs =
-        build_import_paths(&[request.src_dir.to_path_buf(), request.src_dir.join("lib")])?;
+    let self_build_evaluator_inputs = build_import_paths(&[
+        request.src_dir.to_path_buf(),
+        request.src_dir.join("lib"),
+        request.src_dir.join("bootstrap"),
+    ])?;
     let config = self_build_pipeline_config(
         ncl_path,
         self_build_evaluator_inputs,

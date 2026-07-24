@@ -16,11 +16,13 @@ use crate::map_eval_error;
 const DERIVATION_FILE_DEPTH_MAX: u32 = 128;
 const DERIVATION_FILE_COUNT_MAX: u32 = 4_096;
 const DERIVATION_FILE_PATH_BYTES_MAX: usize = 4_096;
+const DERIVATION_FILE_IMPORT_ROOT_COUNT_MAX: usize = 256;
 const DERIVATION_FILE_EXTENSION: &str = "ncl";
 const SINGLE_FILE_ROOT_COUNT: usize = 1;
 
 pub(crate) struct DerivationFileResolver {
     root_dir: PathBuf,
+    import_roots: Vec<PathBuf>,
     import_paths: Vec<OsString>,
     resolved: BTreeMap<PathBuf, ResolvedDerivationRef>,
     visiting: BTreeSet<PathBuf>,
@@ -38,10 +40,13 @@ impl DerivationFileResolver {
         if !root_dir.is_dir() {
             return Err(Error::Eval(format!("derivation-file root is not a directory: {}", root_dir.display())));
         }
+        let import_roots = canonical_import_roots(import_paths)?;
         assert!(DERIVATION_FILE_COUNT_MAX > 1);
+        assert!(import_roots.len() <= DERIVATION_FILE_IMPORT_ROOT_COUNT_MAX);
         debug_assert!(!root_dir.as_os_str().is_empty());
         Ok(Self {
             root_dir,
+            import_roots,
             import_paths: import_paths.to_vec(),
             resolved: BTreeMap::new(),
             visiting: BTreeSet::new(),
@@ -116,7 +121,7 @@ impl DerivationFileResolver {
         depth: u32,
     ) -> Result<ResolvedDerivationRef, Error> {
         ensure_depth(depth)?;
-        let path = resolve_reference_path(&self.root_dir, owner_file, reference)?;
+        let path = resolve_reference_path(&self.root_dir, &self.import_roots, owner_file, reference)?;
         if let Some(resolved) = self.resolved.get(&path) {
             return Ok(resolved.clone());
         }
@@ -174,28 +179,89 @@ impl DerivationFileResolver {
     }
 }
 
-fn resolve_reference_path(root_dir: &Path, owner_file: &Path, reference: &str) -> Result<PathBuf, Error> {
+fn canonical_import_roots(import_paths: &[OsString]) -> Result<Vec<PathBuf>, Error> {
+    if import_paths.len() > DERIVATION_FILE_IMPORT_ROOT_COUNT_MAX {
+        return Err(Error::Eval(format!(
+            "derivation-file import root count exceeds bounded maximum {DERIVATION_FILE_IMPORT_ROOT_COUNT_MAX}"
+        )));
+    }
+    let mut roots = BTreeSet::new();
+    for import_path in import_paths {
+        let path = PathBuf::from(import_path);
+        if path.is_dir() {
+            let canonical = path.canonicalize().map_err(|error| {
+                Error::Eval(format!("canonicalizing derivation-file import root {}: {error}", path.display()))
+            })?;
+            roots.insert(canonical);
+        }
+    }
+    assert!(roots.len() <= DERIVATION_FILE_IMPORT_ROOT_COUNT_MAX);
+    Ok(roots.into_iter().collect())
+}
+
+fn resolve_reference_path(
+    root_dir: &Path,
+    import_roots: &[PathBuf],
+    owner_file: &Path,
+    reference: &str,
+) -> Result<PathBuf, Error> {
     validate_reference_text(reference)?;
     let owner_dir = owner_file
         .parent()
         .ok_or_else(|| Error::Eval(format!("derivation-file owner has no parent: {}", owner_file.display())))?;
-    let candidate = owner_dir.join(reference);
-    let canonical = candidate
-        .canonicalize()
-        .map_err(|error| Error::Eval(format!("resolving derivation-file input {}: {error}", candidate.display())))?;
-    if !canonical.starts_with(root_dir) {
+    let owner_root = admitted_owner_root(root_dir, import_roots, owner_dir)?;
+    let mut candidates = vec![(owner_root, owner_dir.join(reference))];
+    candidates.extend(import_roots.iter().map(|root| (root.as_path(), root.join(reference))));
+    for (admitted_root, candidate) in candidates {
+        match resolve_admitted_candidate(admitted_root, &candidate)? {
+            Some(canonical) => return Ok(canonical),
+            None => continue,
+        }
+    }
+    Err(Error::Eval(format!(
+        "resolving derivation-file input {} from owner {} and {} import roots: no such file",
+        reference,
+        owner_file.display(),
+        import_roots.len()
+    )))
+}
+
+fn admitted_owner_root<'a>(
+    root_dir: &'a Path,
+    import_roots: &'a [PathBuf],
+    owner_dir: &Path,
+) -> Result<&'a Path, Error> {
+    if owner_dir.starts_with(root_dir) {
+        return Ok(root_dir);
+    }
+    import_roots
+        .iter()
+        .find(|root| owner_dir.starts_with(root))
+        .map(PathBuf::as_path)
+        .ok_or_else(|| Error::Eval(format!("derivation-file owner escapes admitted roots: {}", owner_dir.display())))
+}
+
+fn resolve_admitted_candidate(admitted_root: &Path, candidate: &Path) -> Result<Option<PathBuf>, Error> {
+    let canonical = match candidate.canonicalize() {
+        Ok(canonical) => canonical,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(Error::Eval(format!("resolving derivation-file input {}: {error}", candidate.display())));
+        }
+    };
+    if !canonical.starts_with(admitted_root) {
         return Err(Error::Eval(format!(
-            "derivation-file input escapes root {}: {}",
-            root_dir.display(),
+            "derivation-file input escapes admitted root {}: {}",
+            admitted_root.display(),
             canonical.display()
         )));
     }
     if !canonical.is_file() {
         return Err(Error::Eval(format!("derivation-file input is not a file: {}", canonical.display())));
     }
-    assert!(canonical.starts_with(root_dir));
+    assert!(canonical.starts_with(admitted_root));
     debug_assert_eq!(canonical.extension().and_then(|extension| extension.to_str()), Some(DERIVATION_FILE_EXTENSION));
-    Ok(canonical)
+    Ok(Some(canonical))
 }
 
 fn validate_reference_text(reference: &str) -> Result<(), Error> {
@@ -298,6 +364,65 @@ mod tests {
         assert!(matches!(derivation.inputs.as_slice(), [Input::ResolvedDerivation(_)]));
         crunch_glue::convert(&derivation, &mut cache).unwrap();
         assert_eq!(cache.drain_pending().len(), EXPECTED_PENDING_DERIVATION_COUNT);
+    }
+
+    #[test]
+    fn resolver_falls_back_to_explicit_import_root() {
+        let root_dir = tempfile::tempdir().unwrap();
+        let import_dir = tempfile::tempdir().unwrap();
+        let root = root_dir.path().join("root.ncl");
+        let dep = import_dir.path().join("dep.ncl");
+        write_fixture(&root, r#"{ name = "root", builder = "/bin/sh" }"#);
+        write_fixture(&dep, r#"{ name = "dep", builder = "/bin/sh" }"#);
+        let import_paths = vec![import_dir.path().as_os_str().to_owned()];
+        let resolver = DerivationFileResolver::new(&root, &import_paths).unwrap();
+        let resolved = resolve_reference_path(&resolver.root_dir, &resolver.import_roots, &root, "dep.ncl").unwrap();
+        assert_eq!(resolved, dep.canonicalize().unwrap());
+        assert!(resolved.starts_with(import_dir.path()));
+    }
+
+    #[test]
+    fn resolver_preserves_imported_derivation_file_authority() {
+        let root_dir = tempfile::tempdir().unwrap();
+        let import_dir = tempfile::tempdir().unwrap();
+        let root = root_dir.path().join("root.ncl");
+        let seed = import_dir.path().join("seed.ncl");
+        let dep = import_dir.path().join("dep.ncl");
+        write_fixture(&root, r#"let seed = import "seed.ncl" in seed.toolchain"#);
+        write_fixture(
+            &seed,
+            r#"{ toolchain = { name = "toolchain", builder = "/bin/sh", inputs = [{ derivation_file = "dep.ncl" }] } }"#,
+        );
+        write_fixture(&dep, r#"{ name = "dep", builder = "/bin/sh" }"#);
+        let import_paths = vec![import_dir.path().as_os_str().to_owned()];
+        let mut roots =
+            crunch_eval::evaluate_and_extract_named_roots::<CrunchDerivation>(&root, &import_paths).unwrap();
+        let (_, mut derivation) = roots.pop().unwrap();
+        let mut cache = ConversionCache::default();
+        let mut resolver = DerivationFileResolver::new(&root, &import_paths).unwrap();
+        resolver.resolve_root_inputs(&root, &mut derivation, &mut cache).unwrap();
+        assert!(matches!(derivation.inputs.as_slice(), [Input::ResolvedDerivation(_)]));
+        assert_eq!(cache.drain_pending().len(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolver_rejects_import_root_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let root_dir = tempfile::tempdir().unwrap();
+        let import_dir = tempfile::tempdir().unwrap();
+        let outside_dir = tempfile::tempdir().unwrap();
+        let root = root_dir.path().join("root.ncl");
+        let outside = outside_dir.path().join("dep.ncl");
+        write_fixture(&root, r#"{ name = "root", builder = "/bin/sh" }"#);
+        write_fixture(&outside, r#"{ name = "outside", builder = "/bin/sh" }"#);
+        symlink(&outside, import_dir.path().join("dep.ncl")).unwrap();
+        let import_paths = vec![import_dir.path().as_os_str().to_owned()];
+        let resolver = DerivationFileResolver::new(&root, &import_paths).unwrap();
+        let error = resolve_reference_path(&resolver.root_dir, &resolver.import_roots, &root, "dep.ncl").unwrap_err();
+        assert!(error.to_string().contains("escapes admitted root"));
+        assert!(error.to_string().contains(&outside.display().to_string()));
     }
 
     #[test]
