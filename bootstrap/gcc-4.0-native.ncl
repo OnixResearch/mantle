@@ -147,24 +147,24 @@ if [ "\$mode" = preprocess ]; then
     libiberty|libcpp|gcc) ;;
     *) reject_probe unknown-configure-class ;;
   esac
-  current_dir=$(/bin/busybox pwd -P) || reject_probe current-directory-unavailable
+  current_dir=\$(/bin/busybox pwd -P) || reject_probe current-directory-unavailable
   test "\$current_dir" = "\$probe_dir" || reject_probe current-directory-mismatch
   case "\$source_file" in
     conftest.c|./conftest.c) ;;
     *) reject_probe non-conftest-source ;;
   esac
   test -z "\$output_file" || reject_probe explicit-output-forbidden
-  source_canonical=$(/bin/busybox readlink -f "\$source_file") || reject_probe source-canonicalization-failed
-  source_parent=$(/bin/busybox dirname "\$source_canonical") || reject_probe source-parent-unavailable
+  source_canonical=\$(/bin/busybox readlink -f "\$source_file") || reject_probe source-canonicalization-failed
+  source_parent=\$(/bin/busybox dirname "\$source_canonical") || reject_probe source-parent-unavailable
   test "\$source_parent" = "\$probe_dir" || reject_probe source-escape
-  source_bytes=$(/bin/busybox wc -c < "\$source_canonical") || reject_probe source-size-unavailable
+  source_bytes=\$(/bin/busybox wc -c < "\$source_canonical") || reject_probe source-size-unavailable
   case "\$source_bytes" in
     ''|*[!0-9]*) reject_probe invalid-source-size ;;
   esac
   test "\$source_bytes" -le "\$CONFIGURE_PROBE_SOURCE_BYTES_MAX" || reject_probe source-too-large
   probe_count=0
   if [ -f "\$probe_count_file" ]; then
-    probe_count=$(/bin/busybox cat "\$probe_count_file") || reject_probe count-read-failed
+    probe_count=\$(/bin/busybox cat "\$probe_count_file") || reject_probe count-read-failed
   fi
   case "\$probe_count" in
     ''|*[!0-9]*) reject_probe invalid-count ;;

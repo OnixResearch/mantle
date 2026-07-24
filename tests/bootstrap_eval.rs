@@ -405,6 +405,11 @@ fn gcc_native_diagnostic_uses_runtime_tcc_without_autotools_claims() {
     assert!(text.contains("export CONFIG_SHELL=/bin/sh"));
     assert!(text.contains("build_pass \"$WORK/pass1-src\""));
     assert!(text.contains("build_pass \"$WORK/pass2-src\""));
+    assert!(text.contains("current_dir=\\$(/bin/busybox pwd -P)"));
+    assert!(text.contains("source_canonical=\\$(/bin/busybox readlink -f"));
+    assert!(text.contains("probe_count=\\$(/bin/busybox cat"));
+    assert!(!text.contains("current_dir=$(/bin/busybox pwd -P)"));
+    assert!(!text.contains("source_canonical=$(/bin/busybox readlink -f"));
     assert!(!text.contains("find_input perl-5.6.2-musl"));
     assert!(!text.contains("find_input automake-1.9.6"));
     assert!(!selected_seed.contains("gcc-4.0-native.ncl"));

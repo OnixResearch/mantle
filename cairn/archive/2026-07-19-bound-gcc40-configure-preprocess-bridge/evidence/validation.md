@@ -70,3 +70,27 @@ The accepted requirement was synchronized to `cairn/specs/gcc40-bridge/spec.md`,
   "issues": [],
   "valid": true
 ```
+
+## Committed-source fixed-point follow-up
+
+The first authenticated committed-source fixed-point attempt after the CA archive repair exposed a bridge-generation bug that the original static checker missed. Pueue task `259` failed in stage0 after 3,883.01 seconds while building `gcc-4.0.4-native-gas-v45.drv`:
+
+```text
+/bin/sh: can't open $source_canonical: no such file
+cat: can't open '$probe_count_file': No such file or directory
+gcc40-tcc-wrapper: configure preprocess probe rejected: current-directory-mismatch
+ERROR: libiberty configure failed with status 1
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 55 filtered out; finished in 3883.01s
+```
+
+The unquoted wrapper heredoc escaped inner variable references but did not escape five command-substitution openers. The outer build shell therefore executed `pwd`, `readlink`, `dirname`, `wc`, and `cat` while generating the wrapper instead of deferring them to the configure child. The repair escapes those command substitutions, adds required checker markers plus an eager-substitution negative drift fixture, and adds positive/negative bootstrap source assertions.
+
+Focused post-repair evidence:
+
+```text
+gcc40 configure preprocess bridge: PASS (classes=3, source_spellings=2, source_bytes_max=65536, invocation_count_max=4096)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+bootstrap blocker inventory: 0 findings across 0 classes, 437 evidence-backed suppressions, 0 promotion claims, enforce=true
+```
+
+This failed attempt is not fixed-point evidence. A new committed-source proof is required after the repair commit.

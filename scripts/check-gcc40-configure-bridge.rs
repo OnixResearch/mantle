@@ -30,6 +30,11 @@ const REQUIRED_DERIVATION_MARKERS: &[&str] = &[
     "MANTLE_GCC40_CONFIGURE_PROBE_COUNT=\"$CONFIGURE_PROBE_COUNT\"",
     "libiberty|libcpp|gcc) ;;",
     "conftest.c|./conftest.c) ;;",
+    "current_dir=\\$(/bin/busybox pwd -P)",
+    "source_canonical=\\$(/bin/busybox readlink -f \"\\$source_file\")",
+    "source_parent=\\$(/bin/busybox dirname \"\\$source_canonical\")",
+    "source_bytes=\\$(/bin/busybox wc -c < \"\\$source_canonical\")",
+    "probe_count=\\$(/bin/busybox cat \"\\$probe_count_file\")",
     "test -z \"\\$output_file\" || reject_probe explicit-output-forbidden",
     "test \"\\$source_parent\" = \"\\$probe_dir\" || reject_probe source-escape",
     "test \"\\$source_bytes\" -le \"\\$CONFIGURE_PROBE_SOURCE_BYTES_MAX\" || reject_probe source-too-large",
@@ -282,6 +287,10 @@ fn run_self_tests(derivation: &str, receipt: &str) -> Result<(), String> {
     let drifted_derivation = derivation.replacen("audit-write-failed", "audit-disabled", 1);
     if validate_contract(&drifted_derivation, receipt).is_ok() {
         return Err("negative source-marker drift was accepted".to_string());
+    }
+    let eager_substitution_derivation = derivation.replacen("current_dir=\\$(", "current_dir=$(", 1);
+    if validate_contract(&eager_substitution_derivation, receipt).is_ok() {
+        return Err("negative eager-heredoc-command-substitution drift was accepted".to_string());
     }
     let drifted_receipt = receipt.replacen("\"provider_eligible\": false", "\"provider_eligible\": true", 1);
     if validate_contract(derivation, &drifted_receipt).is_ok() {
