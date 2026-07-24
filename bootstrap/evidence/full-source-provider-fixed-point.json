@@ -1,0 +1,29 @@
+{
+  "format": "mantle-hydrated-fresh-clone-fixed-point-v1",
+  "version": 1,
+  "expected_manifest_blake3": "edfe4135f4573f680dfcfcd87ea6fe592c8575c41d095a1203c953cbcc5c4fa0",
+  "source_state_blake3": "4142c316fae5eba69259bfa7ddeaf3f49df917c90b210e18d68f558921e930ed",
+  "hydration_report_blake3": "7d993e60dc0220c4e99907bafb262dca6a5e49a7ccf96e6f5209b821e8e6c120",
+  "staged_source_store_name": "zx8v35f0if1vbh0l6ma2dwva9879gz6x-mantle-src",
+  "provider_kind": "full-source",
+  "platform": "x86_64-linux",
+  "proof_mode": "fixed-point",
+  "stage0": {
+    "source_policy": "require-override",
+    "source_override_count": 61,
+    "live_fetch_events": 0,
+    "hermeticity_mode": "practical",
+    "fallback_event_count": 2
+  },
+  "stage2": {
+    "source_policy": "require-override",
+    "source_override_count": 61,
+    "live_fetch_events": 0,
+    "hermeticity_mode": "strict",
+    "fallback_event_count": 0
+  },
+  "stage1_binary_blake3": "91ac5f2179a87b0114d4600b37f25100f8fb2b92aa7d99255c101bc520d8f12b",
+  "stage2_binary_blake3": "91ac5f2179a87b0114d4600b37f25100f8fb2b92aa7d99255c101bc520d8f12b",
+  "fixed_point": true,
+  "non_claim": "This report proves one hydrated fixed point for the recorded provider, source authority, and platform; it does not prove compiler correctness, bootstrap-seed correctness, independent rebuild agreement, release reproducibility, deployment success, or full Cargo compatibility."
+}

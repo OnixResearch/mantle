@@ -90,8 +90,8 @@ const FULL_SOURCE_ADMISSION_PATH: &str = "bootstrap/evidence/full-source-provide
 const FULL_SOURCE_FIXED_POINT_PATH: &str = "bootstrap/evidence/full-source-provider-fixed-point.json";
 const FULL_SOURCE_OUTPUT_BLAKE3: &str = "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f";
 const FULL_SOURCE_CLOSURE_BLAKE3: &str = "2bd4fb6404fd0b3ac208fb1d8f9d2e1f28aa164a48f7470cfe199f17456a70cb";
-const FULL_SOURCE_PROOF_MANIFEST_BLAKE3: &str = "0c963d0dd76ffc89c95a5a8b63395332b6d33ecbb7840e906caa195e3879612a";
-const FULL_SOURCE_OVERRIDE_COUNT: &str = "62";
+const FULL_SOURCE_PROOF_MANIFEST_BLAKE3: &str = "edfe4135f4573f680dfcfcd87ea6fe592c8575c41d095a1203c953cbcc5c4fa0";
+const FULL_SOURCE_OVERRIDE_COUNT: &str = "61";
 const BLAKE3_HEX_BYTES: usize = 64;
 const FIXED_POINT_STAGE_COUNT: usize = 2;
 
