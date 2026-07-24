@@ -93,4 +93,13 @@ test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fin
 bootstrap blocker inventory: 0 findings across 0 classes, 437 evidence-backed suppressions, 0 promotion claims, enforce=true
 ```
 
-This failed attempt is not fixed-point evidence. A new committed-source proof is required after the repair commit.
+This failed attempt is not fixed-point evidence.
+
+After committing the deferred command-substitution repair as `8744faa7`, pueue task `427` reran the authenticated offline proof from that clean committed source. The wrapper passed the prior `gcc-4.0.4-native-gas-v45.drv` boundary and the complete proof finished:
+
+```text
+test self_hosting_stage0_stage1_stage2 ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 55 filtered out; finished in 11163.89s
+```
+
+The proof bundle is `/home/brittonr/.cache/mantle-full-source-proof-20260723/proof-bundle-v9-ca-archive`. Its exact fixed-point report records stage1 and stage2 BLAKE3 `eac97c4e997b3ab498be10156f6b58caebf812da6af4112f08e7ad57777f138c`, 61 authenticated source overrides in each stage, zero live fetches, strict stage2 hermeticity with zero fallback events, and `fixed_point=true`.
