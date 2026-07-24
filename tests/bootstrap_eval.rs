@@ -157,6 +157,26 @@ fn gzip_marks_generated_crc_helper_executable_before_running_it() {
 }
 
 #[test]
+fn source_built_linux_headers_replace_legacy_seed_header_assumption() {
+    let source = std::fs::read_to_string(bootstrap_path("linux-6.6-source.ncl")).unwrap();
+    let headers = std::fs::read_to_string(bootstrap_path("linux-headers.ncl")).unwrap();
+    let bwrap = std::fs::read_to_string(bootstrap_path("bwrap.ncl")).unwrap();
+    let busybox = std::fs::read_to_string(bootstrap_path("busybox.ncl")).unwrap();
+
+    assert!(source.contains("https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.6.tar.xz"));
+    assert!(source.contains("sha256-+GqM1/8Qw0N6Z2t45jjapVZrG0JysMs9PVi79GIK1Ec="));
+    assert!(headers.contains("headers_install"));
+    assert!(headers.contains("linux/capability.h"));
+    assert!(headers.contains("linux/loop.h"));
+    assert!(bwrap.contains("derivationFile \"linux-headers.ncl\""));
+    assert!(busybox.contains("derivationFile \"linux-headers.ncl\""));
+    assert!(bwrap.contains("$LINUX_HEADERS/include"));
+    assert!(busybox.contains("$LINUX_HEADERS/include"));
+    assert!(!bwrap.contains("SEED_INC"));
+    assert!(!busybox.contains("SEED_INC"));
+}
+
+#[test]
 fn selfhosted_tinycc_candidate_rebuilds_compiler_source() {
     let text = std::fs::read_to_string(bootstrap_path("tcc-musl-selfhost.ncl")).unwrap();
 
@@ -425,12 +445,17 @@ fn self_hosting_proof_defaults_to_full_source_provider_identity() {
 }
 
 #[test]
-fn busybox_and_bwrap_use_normalized_seed_sysroot_headers_only() {
-    for entrypoint in ["busybox.ncl", "bwrap.ncl"] {
-        let text = std::fs::read_to_string(bootstrap_path(entrypoint)).unwrap();
-        assert!(text.contains("$SEED_ROOT/%{seed_target}/include"), "missing target include in {entrypoint}");
-        assert!(!text.contains("$SEED_ROOT/include"), "unexpected top-level include fallback in {entrypoint}");
-    }
+fn linux_header_derivation_evaluates_with_direct_runtime_inputs() {
+    const EXPECTED_DERIVATION_INPUT_COUNT: usize = 1;
+    const EXPECTED_LAZY_INPUT_COUNT: usize = 2;
+    let drv = eval_bootstrap("linux-headers.ncl");
+    let derivation_input_count = drv.inputs.iter().filter(|input| matches!(input, Input::Derivation(_))).count();
+    let lazy_input_count = drv.inputs.iter().filter(|input| matches!(input, Input::DerivationFile(_))).count();
+
+    assert_eq!(drv.name, "linux-headers-6.6");
+    assert_eq!(derivation_input_count, EXPECTED_DERIVATION_INPUT_COUNT);
+    assert_eq!(lazy_input_count, EXPECTED_LAZY_INPUT_COUNT);
+    assert!(!drv.args.join(" ").contains("SEED_ROOT"));
 }
 
 #[test]

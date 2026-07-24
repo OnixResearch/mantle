@@ -24,6 +24,7 @@ let dash = (import "dash.ncl") in
 let binutils = (import "binutils.ncl") in
 let musl = (import "musl.ncl") in
 let gcc = (import "gcc.ncl") in
+let linux_headers = crunch.derivationFile "linux-headers.ncl" in
 
 let busybox_src = crunch.fetchTarball {
   url = "https://busybox.net/downloads/busybox-1.37.0.tar.bz2",
@@ -162,17 +163,20 @@ let busybox_src = crunch.fetchTarball {
       # kernel >=6.x; disable it to compile with modern headers.
       sed -i 's/CONFIG_TC=y/# CONFIG_TC is not set/' .config
 
-      # Add seed include path for kernel headers the bootstrap GCC is
-      # missing (linux/kd.h, linux/vt.h, etc.). The normalized seed
-      # contract materializes those headers in the target sysroot.
-      SEED_ROOT=""
-      for d in $NIX_STORE/*-%{seed_name}; do
-        if [ -d "$d/%{seed_target}/include" ]; then SEED_ROOT="$d"; break; fi
+      # Bind raw kernel UAPI headers from their pinned source derivation.
+      # musl owns libc headers; it intentionally does not vendor linux/*.h.
+      LINUX_HEADERS=""
+      for d in $NIX_STORE/*-linux-headers-6.6; do
+        if [ -s "$d/include/linux/kd.h" ] && [ -s "$d/include/linux/vt.h" ]; then
+          LINUX_HEADERS="$d"
+          break
+        fi
       done
-      SEED_INC=""
-      if [ -n "$SEED_ROOT" ]; then
-        SEED_INC="-I$SEED_ROOT/%{seed_target}/include"
+      if [ -z "$LINUX_HEADERS" ]; then
+        echo "ERROR: source-built Linux UAPI headers not found" >&2
+        exit 1
       fi
+      LINUX_INC="-I$LINUX_HEADERS/include"
 
       echo "Building busybox with static musl linking..."
       $MAKE -j$JOBS \
@@ -180,7 +184,7 @@ let busybox_src = crunch.fetchTarball {
         HOSTCC=gcc \
         HOSTLDFLAGS="-static" \
         LDFLAGS="-static" \
-        CFLAGS="-Os -pipe $SEED_INC" \
+        CFLAGS="-Os -pipe $LINUX_INC" \
         V=0 || { echo "ERROR: busybox build failed" >&2; exit 1; }
 
       # Verify the binary was produced.
@@ -207,5 +211,5 @@ let busybox_src = crunch.fetchTarball {
     "%
   ],
   system = "x86_64-linux",
-  inputs = [toolchain, gnumake, dash, binutils, musl, gcc, busybox_src],
+  inputs = [toolchain, gnumake, dash, binutils, musl, gcc, linux_headers, busybox_src],
 }

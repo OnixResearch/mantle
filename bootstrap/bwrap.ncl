@@ -21,6 +21,7 @@ let seed_dynamic_linker = seed.dynamic_linker in
 let binutils = (import "binutils.ncl") in
 let musl = (import "musl.ncl") in
 let gcc = (import "gcc.ncl") in
+let linux_headers = crunch.derivationFile "linux-headers.ncl" in
 
 let bwrap_src = crunch.fetchTarball {
   url = "https://github.com/containers/bubblewrap/releases/download/v0.11.0/bubblewrap-0.11.0.tar.xz",
@@ -136,23 +137,25 @@ static inline int cap_from_name(const char *name __attribute__((unused)),
 #endif
 CAPEOF
 
-      # Find the bootstrap seed toolchain for kernel headers.
-      # The rebuilt musl sysroot has libc headers, but bwrap also needs
-      # raw kernel headers like <linux/capability.h> and <linux/loop.h>.
-      # The normalized seed contract puts those headers in the target sysroot.
-      SEED_ROOT=""
-      for d in $NIX_STORE/*-%{seed_name}; do
-        if [ -d "$d/%{seed_target}/include" ]; then SEED_ROOT="$d"; break; fi
+      # Bind raw kernel UAPI headers from their pinned source derivation.
+      # musl owns libc headers; it intentionally does not vendor linux/*.h.
+      LINUX_HEADERS=""
+      for d in $NIX_STORE/*-linux-headers-6.6; do
+        if [ -s "$d/include/linux/capability.h" ] && [ -s "$d/include/linux/loop.h" ]; then
+          LINUX_HEADERS="$d"
+          break
+        fi
       done
-      SEED_INC=""
-      if [ -n "$SEED_ROOT" ]; then
-        SEED_INC="-I$SEED_ROOT/%{seed_target}/include"
+      if [ -z "$LINUX_HEADERS" ]; then
+        echo "ERROR: source-built Linux UAPI headers not found" >&2
+        exit 1
       fi
+      LINUX_INC="-I$LINUX_HEADERS/include"
 
       echo "Compiling bubblewrap..."
       gcc -static -Os -pipe \
         -D_GNU_SOURCE \
-        -I. $SEED_INC \
+        -I. $LINUX_INC \
         -o bwrap \
         bubblewrap.c bind-mount.c network.c utils.c \
         || { echo "ERROR: bwrap compilation failed" >&2; exit 1; }
@@ -174,5 +177,5 @@ CAPEOF
     "%
   ],
   system = "x86_64-linux",
-  inputs = [toolchain, binutils, musl, gcc, bwrap_src],
+  inputs = [toolchain, binutils, musl, gcc, linux_headers, bwrap_src],
 }
