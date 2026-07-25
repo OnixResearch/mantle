@@ -75,6 +75,62 @@ archive_bytes=0
 
 The original retained state was intentionally not executed in place because it is the durable negative fixture. Store/CLI tests execute the same migration mechanism on isolated state and prove archive export succeeds afterward.
 
-## Pending broad evidence
+## Broad committed-source evidence
 
-First-party quality, machine-contract/blocker validation, final Cairn/Tracey gates, and full `nix flake check -L` are recorded only after the implementation commit. No broad completion claim is made by this interim transcript.
+Pueue task `260` ran the first-party quality script, machine-contract self-test/freshness/integration test, blocker inventory, Cairn validation, and Tracey coverage from committed implementation plus refreshed machine identity. Results:
+
+```text
+machine schema contract self-test: PASS
+machine schema contract check: PASS (21 contracted, 50 classified)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.84s
+bootstrap blocker inventory: 0 findings across 0 classes, 437 evidence-backed suppressions, 0 promotion claims, enforce=true
+"valid": true
+traceability coverage ok: 145/145 referenced (profile mantle-default)
+```
+
+The first-party quality script completed Rustfmt, strict first-party Clippy, serialized package tests, and policy checks. The first broad chain correctly failed before this final run because `main.rs`/`store_cmd.rs` changed two machine-contract producer identities. `--generate` changed only those two BLAKE3 bindings; commit `c2b8fb49` records the refreshed authority and the check then passed.
+
+Pueue task `261` ran the full host-compatible Nix gate:
+
+```text
+mantle-nextest>      Summary [  78.069s] 4051 tests run: 4051 passed, 8 skipped
+mantle> test result: ok. 1596 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.62s
+all checks passed!
+warning: The check omitted these incompatible systems: aarch64-darwin, aarch64-linux, x86_64-darwin
+```
+
+The unavailable SSH builder warning fell back locally; the complete compatible system set passed.
+
+## Authenticated committed-source fixed point
+
+Pueue task `263` ran the authenticated offline full-source proof from clean commit `c2b8fb49` after preflight task `262` passed:
+
+```text
+test self_hosting_stage0_stage1_stage2 ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 55 filtered out; finished in 10839.84s
+```
+
+Proof bundle: `/home/brittonr/.cache/mantle-full-source-proof-20260723/proof-bundle-v10-pathinfo-repair`.
+
+Exact fixed-point identities:
+
+```text
+expected_manifest_blake3=edfe4135f4573f680dfcfcd87ea6fe592c8575c41d095a1203c953cbcc5c4fa0
+source_state_blake3=4142c316fae5eba69259bfa7ddeaf3f49df917c90b210e18d68f558921e930ed
+hydration_report_blake3=7d993e60dc0220c4e99907bafb262dca6a5e49a7ccf96e6f5209b821e8e6c120
+staged_source_store_name=5gv0jy6zm493fwi6abw3v3abhxhnnzp7-mantle-src
+provider_kind=full-source
+stage0_source_override_count=61
+stage0_live_fetch_events=0
+stage0_hermeticity_mode=practical
+stage0_fallback_event_count=2
+stage2_source_override_count=61
+stage2_live_fetch_events=0
+stage2_hermeticity_mode=strict
+stage2_fallback_event_count=0
+stage1_binary_blake3=93f2b76239b45703e81878850c816d143da5f93f902833aea9a06245c01489d8
+stage2_binary_blake3=93f2b76239b45703e81878850c816d143da5f93f902833aea9a06245c01489d8
+fixed_point=true
+```
+
+`bootstrap/evidence/full-source-provider-fixed-point.json` is byte-identical to the generated proof report. This proves one hydrated fixed point for the recorded provider, source authority, platform, and implementation; it does not prove compiler correctness, historical PathInfo authority, arbitrary migration safety, independent reproducibility, or release eligibility.

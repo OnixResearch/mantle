@@ -4,7 +4,7 @@
   "expected_manifest_blake3": "edfe4135f4573f680dfcfcd87ea6fe592c8575c41d095a1203c953cbcc5c4fa0",
   "source_state_blake3": "4142c316fae5eba69259bfa7ddeaf3f49df917c90b210e18d68f558921e930ed",
   "hydration_report_blake3": "7d993e60dc0220c4e99907bafb262dca6a5e49a7ccf96e6f5209b821e8e6c120",
-  "staged_source_store_name": "6cr91zd9dg5vyir0ml1zwa9hgmjbmzss-mantle-src",
+  "staged_source_store_name": "5gv0jy6zm493fwi6abw3v3abhxhnnzp7-mantle-src",
   "provider_kind": "full-source",
   "platform": "x86_64-linux",
   "proof_mode": "fixed-point",
@@ -22,8 +22,8 @@
     "hermeticity_mode": "strict",
     "fallback_event_count": 0
   },
-  "stage1_binary_blake3": "eac97c4e997b3ab498be10156f6b58caebf812da6af4112f08e7ad57777f138c",
-  "stage2_binary_blake3": "eac97c4e997b3ab498be10156f6b58caebf812da6af4112f08e7ad57777f138c",
+  "stage1_binary_blake3": "93f2b76239b45703e81878850c816d143da5f93f902833aea9a06245c01489d8",
+  "stage2_binary_blake3": "93f2b76239b45703e81878850c816d143da5f93f902833aea9a06245c01489d8",
   "fixed_point": true,
   "non_claim": "This report proves one hydrated fixed point for the recorded provider, source authority, and platform; it does not prove compiler correctness, bootstrap-seed correctness, independent rebuild agreement, release reproducibility, deployment success, or full Cargo compatibility."
 }
