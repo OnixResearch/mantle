@@ -34,16 +34,23 @@ let perl_src = crunch.fetchTarball {
       exit 1
     }
 
-    GCC=$(find_input gcc-4.0.4-musl-pass4-v5)
-    MUSL=$(find_input musl-1.1.24-gcc-pass4-v2)
-    BINUTILS=$(find_input binutils-2.30-gcc-pass4-v16)
+    BASE=$(find_input gcc-generator-base-v4)
+    GCC="$BASE/gcc"
+    MUSL="$BASE/musl"
+    BINUTILS="$BASE/binutils"
+    STAGE0="$BASE/stage0"
+    SED="$BASE/sed"
     BISON=$(find_input bison-2.3-gcc-v9)
     M4=$(find_input m4-1.4.7-gcc-v5)
-    STAGE0=$(find_input stage0-posix)
-    SED=$(find_input sed-4.0.9-musl)
     GAWK=$(find_input gawk-3.0.4-gcc-v4)
     GREP=$(find_input grep-2.4-gcc-v10)
     SRC=$(find_input perl-5.000-src)
+
+    test -x "$GCC/bin/gcc"
+    test -s "$MUSL/lib/libc.a"
+    test -x "$BINUTILS/bin/ld"
+    test -d "$STAGE0/bin"
+    test -x "$SED/bin/sed"
 
     WORK=/tmp/perl-5.000-gcc
     TOOLBIN="$WORK/tools"
@@ -57,7 +64,14 @@ let perl_src = crunch.fetchTarball {
 #!/bin/sh
 MANTLE_GCC_ASSEMBLER="$BINUTILS/bin/as" \
 MANTLE_GCC_LINKER="$BINUTILS/bin/ld" \
-exec "$GCC/bin/gcc" "\$@"
+MANTLE_GCC_LINK_LIBC="$MUSL/lib/libc.a" \
+MANTLE_GCC_LINK_LIBM="$MUSL/lib/libm.a" \
+MANTLE_GCC_LINK_CRT="$MUSL/lib" \
+exec "$GCC/bin/gcc" \
+  -B"$GCC/bin/" \
+  -B"$GCC/libexec/gcc/$TARGET/$GCC_VERSION/" \
+  -B"$GCC/lib/gcc/$TARGET/$GCC_VERSION/" \
+  "\$@"
 EOF
     $BB chmod 755 "$CC"
     export PATH="$TOOLBIN:$BISON/bin:$M4/bin:$SED/bin:$GAWK/bin:$GREP/bin:$BINUTILS/bin:$STAGE0/bin:$PATH"
@@ -258,8 +272,8 @@ EOF
 
     echo 'Perl 5.000 GCC regeneration and runtime checks passed'
   "%],
-  # Bison already declares every shared compiler/runtime/generator input used
-  # above. Flatten those inputs here so they remain direct sandbox inputs; Gawk
-  # stays a direct tool while its overlapping build closure is not remounted.
+  # Bison's inputs include the normalized generator base plus M4 and Grep.
+  # Consume compiler/runtime tools from that base instead of depending on its
+  # intentionally hidden raw inputs; Gawk remains a direct generator tool.
   inputs = bison.inputs @ [bison, gawk, perl_src],
 } | crunch.Derivation

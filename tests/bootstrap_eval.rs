@@ -67,6 +67,24 @@ fn input_derivation_names(drv: &CrunchDerivation) -> Vec<String> {
     names
 }
 
+fn contract_violations<'a>(source: &str, required: &'a [&'a str], forbidden: &'a [&'a str]) -> Vec<&'a str> {
+    assert!(!required.is_empty());
+    assert!(!forbidden.is_empty());
+
+    let mut violations = Vec::new();
+    for marker in required {
+        if !source.contains(marker) {
+            violations.push(*marker);
+        }
+    }
+    for marker in forbidden {
+        if source.contains(marker) {
+            violations.push(*marker);
+        }
+    }
+    violations
+}
+
 #[test]
 fn eval_make_bootstrap_imports_shared_seed() {
     let drv = eval_bootstrap("make.ncl");
@@ -461,6 +479,50 @@ fn linux_header_derivation_evaluates_with_direct_runtime_inputs() {
     assert_eq!(derivation_input_count, EXPECTED_DERIVATION_INPUT_COUNT);
     assert_eq!(lazy_input_count, EXPECTED_LAZY_INPUT_COUNT);
     assert!(!drv.args.join(" ").contains("SEED_ROOT"));
+}
+
+#[test]
+fn perl_gcc_generators_keep_normalized_inputs_and_runtime_rails() {
+    let perl_5000 = std::fs::read_to_string(bootstrap_path("perl-5.000-gcc.ncl")).unwrap();
+    let perl_500503 = std::fs::read_to_string(bootstrap_path("perl-5.005_03-gcc.ncl")).unwrap();
+
+    let perl_5000_required = [
+        "BASE=$(find_input gcc-generator-base-v4)",
+        "GCC=\"$BASE/gcc\"",
+        "MANTLE_GCC_LINK_LIBC=\"$MUSL/lib/libc.a\"",
+        "-B\"$GCC/bin/\"",
+    ];
+    let perl_5000_forbidden = [
+        "GCC=$(find_input gcc-4.0.4-musl-pass4-v5)",
+        "MUSL=$(find_input musl-1.1.24-gcc-pass4-v2)",
+    ];
+    let perl_500503_required = [
+        "version 5.005_03",
+        "perl500503-gcc-ok",
+        "ERROR: Perl 5.005_03 accepted malformed source",
+        "test ! -s \"$WORK/rejected.out\"",
+        "ELF64",
+    ];
+    let perl_500503_forbidden = ["ERROR: Perl 5.003 accepted malformed source", "-O0", "gcc-10.5.0"];
+
+    let perl_5000_violations = contract_violations(&perl_5000, &perl_5000_required, &perl_5000_forbidden);
+    let perl_500503_violations = contract_violations(&perl_500503, &perl_500503_required, &perl_500503_forbidden);
+
+    assert!(perl_5000_violations.is_empty(), "Perl 5.000 contract violations: {perl_5000_violations:?}");
+    assert!(perl_500503_violations.is_empty(), "Perl 5.005_03 contract violations: {perl_500503_violations:?}");
+}
+
+#[test]
+fn perl_gcc_runtime_contract_rejects_stale_malformed_source_diagnostic() {
+    let source = std::fs::read_to_string(bootstrap_path("perl-5.005_03-gcc.ncl")).unwrap();
+    let required = ["ERROR: Perl 5.005_03 accepted malformed source"];
+    let forbidden = ["ERROR: Perl 5.003 accepted malformed source"];
+    let invalid_source = source.replace(required[0], forbidden[0]);
+
+    let violations = contract_violations(&invalid_source, &required, &forbidden);
+
+    assert_eq!(violations, vec![required[0], forbidden[0]]);
+    assert!(!invalid_source.contains(required[0]));
 }
 
 #[test]

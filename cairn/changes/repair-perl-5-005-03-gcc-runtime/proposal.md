@@ -1,18 +1,18 @@
 ## Why
 
-`bootstrap/perl-5.005_03-gcc.ncl` is the generator boundary consumed by the GCC-built Perl 5.6.2 and downstream autotools ladder, but its committed runtime success is not independently proven. Three untracked one-variable diagnostics test plausible causes—optimization sensitivity, missing LP64 configuration, and predecessor-compiler sensitivity—without durable evidence or a reviewed promotion rule.
+`bootstrap/perl-5.005_03-gcc.ncl` is the generator boundary consumed by the GCC-built Perl 5.6.2 and downstream autotools ladder, but its committed runtime success was not independently proven. Three untracked one-variable diagnostics suggested optimization sensitivity, missing LP64 configuration, or predecessor-compiler sensitivity, while the first reachable failure actually occurred earlier: Perl 5.000 searched for raw compiler inputs that `gcc-generator-base-v4` intentionally encapsulates.
 
-Leaving those variants as loose files risks either losing useful causal evidence or promoting a coincidental workaround. Mantle needs a bounded comparison that reaches the Perl builder, preserves the first exact failure for every candidate, and changes the canonical derivation only when positive execution and malformed-source rejection both pass.
+Leaving the predecessor boundary broken while promoting a target-local workaround would misclassify a closure failure as Perl behavior. Mantle needs a bounded comparison that first reaches the Perl builder, preserves exact precursor failures, repairs the smallest causal boundary, and accepts the canonical target only when positive execution and malformed-source rejection both pass.
 
 ## What Changes
 
-- Capture the canonical Perl 5.005_03 GCC build baseline and distinguish precursor/store-identity failures from Perl runtime failures.
-- Compare the canonical construction against `-O0`, explicit `LONGSIZE=8`, and final GCC 10 variants while holding other declared inputs constant.
-- Promote only the smallest evidence-backed correction into `bootstrap/perl-5.005_03-gcc.ncl`; delete temporary diagnostic variants after their outcomes are recorded.
-- Add a deterministic regression rail covering version output, arithmetic execution, malformed-source rejection, and ELF shape.
-- Preserve explicit non-claims about compiler correctness, provider admission, whole-chain reproducibility, and downstream Perl 5.6.2 success.
+- Capture the canonical Perl 5.005_03 GCC build baseline and distinguish environment, store-identity, and predecessor failures from target runtime behavior.
+- Repair Perl 5.000's normalized generator-base handoff without flattening hidden raw inputs or changing compiler lineage.
+- Establish that canonical Perl 5.005_03 succeeds at GCC 4.0.4 and `-O2`; reject `-O0`, explicit `LONGSIZE=8`, and GCC 10 as unnecessary target mutations, then delete the temporary variants.
+- Add deterministic positive and negative regression coverage for the predecessor handoff and target runtime contract.
+- Preserve explicit non-claims about compiler correctness, provider admission, whole-chain reproducibility, and downstream behavior beyond the separately executed focused Perl 5.6.2 build.
 
 ## Impact
 
-- **Files**: `bootstrap/perl-5.005_03-gcc.ncl`, temporary diagnostic variants under `bootstrap/`, focused validation code or fixtures if needed, and lifecycle evidence under this change.
-- **Testing**: canonical pre-change build, bounded diagnostic matrix, positive runtime smoke, negative malformed-source rejection, source-pin/evaluation checks, Cairn validation/gates, and focused downstream Perl 5.6.2 evaluation or an exact blocker.
+- **Files**: `bootstrap/perl-5.000-gcc.ncl`, `bootstrap/perl-5.005_03-gcc.ncl`, `tests/bootstrap_eval.rs`, removal of temporary diagnostic variants, and lifecycle evidence under this change.
+- **Testing**: precursor isolation, canonical default-prefix build, positive runtime smoke, negative malformed-source rejection, source-pin/evaluation checks, focused downstream Perl 5.6.2 build, and Cairn validation/gates.

@@ -205,7 +205,7 @@ EOF
     runtime_output=$("$out/bin/perl" -e "print(($RUNTIME_LEFT+$RUNTIME_RIGHT)==$EXPECTED_RUNTIME_SUM ? \"perl500503-gcc-ok\\n\" : \"bad\\n\")")
     test "$runtime_output" = perl500503-gcc-ok
     if "$out/bin/perl" -e 'sub {' > "$WORK/rejected.out" 2> "$WORK/rejected.err"; then
-      echo "ERROR: Perl 5.003 accepted malformed source" >&2
+      echo "ERROR: Perl 5.005_03 accepted malformed source" >&2
       exit 1
     fi
     test ! -s "$WORK/rejected.out"
