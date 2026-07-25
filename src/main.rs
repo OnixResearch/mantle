@@ -2338,6 +2338,19 @@ pub enum StoreAction {
         #[arg(long)]
         signing_key: Option<std::path::PathBuf>,
     },
+    /// Repair stale signed final-NAR metadata for one exact local path
+    RepairFinalNar {
+        /// Exact full logical store path to inspect or repair
+        path: String,
+
+        /// Persist freshly measured facts and replace stale signatures
+        #[arg(long)]
+        execute: bool,
+
+        /// Path to a Nix-format ed25519 signing keypair file (execute mode only)
+        #[arg(long)]
+        signing_key: Option<std::path::PathBuf>,
+    },
     /// Push store paths to a binary cache directory
     Push {
         /// Target directory for the binary cache
@@ -2823,6 +2836,7 @@ fn store_command_label(action: &StoreAction) -> &'static str {
         StoreAction::Gc { .. } => "store.gc",
         StoreAction::Verify { .. } => "store.verify",
         StoreAction::Sign { .. } => "store.sign",
+        StoreAction::RepairFinalNar { .. } => "store.repair-final-nar",
         StoreAction::Push { .. } => "store.push",
         StoreAction::Pull { .. } => "store.pull",
         StoreAction::Archive { action } => store_archive_command_label(action),
@@ -3037,7 +3051,9 @@ fn apply_store_mode_fields(modes: &mut RuntimeFingerprintModeFields, action: &St
                 Some(operator_diagnostics::bounded_runtime_count(trusted_public_keys.len()));
             modes.trust_unsigned = Some(*trust_unsigned);
         }
-        StoreAction::Sign { signing_key, .. } => modes.signing_key_selected = Some(signing_key.is_some()),
+        StoreAction::Sign { signing_key, .. } | StoreAction::RepairFinalNar { signing_key, .. } => {
+            modes.signing_key_selected = Some(signing_key.is_some());
+        }
         StoreAction::Push { trust_unsigned, .. } => {
             modes.trust_unsigned = Some(*trust_unsigned);
         }

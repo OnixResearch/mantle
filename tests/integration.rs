@@ -38,6 +38,7 @@ const CLAP_USAGE_ERROR_CODE: i32 = 2;
 const LOOPBACK_PROBE_TIMEOUT: Duration = Duration::from_millis(100);
 const HTTP_FIXTURE_ACCEPT_TIMEOUT: Duration = Duration::from_secs(5);
 const HTTP_FIXTURE_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(10);
+const TEST_STORE_PATH_DIGEST_BYTES: usize = 20;
 
 fn require_loopback_network(test_name: &str) -> bool {
     debug_assert!(!test_name.is_empty());
@@ -931,6 +932,202 @@ fn store_sign_all_signs_existing_unsigned_entries() {
         assert_eq!(unsigned_count, 2);
         assert_eq!(already_signed_count, 1);
     });
+}
+
+fn seed_stale_final_nar_pathinfo(state_dir: &Path) -> (String, snix_store::path_info::PathInfo) {
+    use nix_compat::store_path::StorePath;
+    use snix_castore::Node;
+    use snix_castore::SymlinkTarget;
+    use snix_store::path_info::PathInfo;
+    use snix_store::pathinfoservice::PathInfoService;
+    use snix_store::pathinfoservice::RedbPathInfoService;
+    use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
+
+    const STORE_DIGEST_BYTE: u8 = 0x2A;
+    const STALE_NAR_HASH_BYTE: u8 = 0x5A;
+    const STALE_NAR_SIZE_BYTES: u64 = 1;
+    const SHA256_DIGEST_BYTES: usize = 32;
+    const STORE_PREFIX: &str = "/mantle/store";
+    let keypair = crunch_build::load_keypair(
+        "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",
+    )
+    .unwrap();
+    let mut path_info = PathInfo {
+        store_path: StorePath::from_name_and_digest_fixed(
+            "stale-final-nar",
+            [STORE_DIGEST_BYTE; TEST_STORE_PATH_DIGEST_BYTES],
+        )
+        .unwrap(),
+        node: Node::Symlink {
+            target: SymlinkTarget::try_from("target").unwrap(),
+        },
+        references: Vec::new(),
+        nar_size: STALE_NAR_SIZE_BYTES,
+        nar_sha256: [STALE_NAR_HASH_BYTE; SHA256_DIGEST_BYTES],
+        signatures: Vec::new(),
+        deriver: None,
+        ca: None,
+    };
+    crunch_build::sign_pathinfo_with_store_dir(&mut path_info, &keypair.signing_key, STORE_PREFIX);
+    let logical_path = path_info.store_path.to_absolute_path_with_prefix(STORE_PREFIX);
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let service = RedbPathInfoService::new("repair-seed".to_string(), RedbPathInfoServiceConfig {
+            path: Some(state_dir.join("pathinfo.redb")),
+            read_only: false,
+            cache_size: None,
+        })
+        .await
+        .unwrap();
+        service.put(path_info.clone()).await.unwrap();
+    });
+    (logical_path, path_info)
+}
+
+fn load_pathinfo_for_test(
+    state_dir: &Path,
+    digest: [u8; TEST_STORE_PATH_DIGEST_BYTES],
+) -> snix_store::path_info::PathInfo {
+    use snix_store::pathinfoservice::PathInfoService;
+    use snix_store::pathinfoservice::RedbPathInfoService;
+    use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
+
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let service = RedbPathInfoService::new("repair-verify".to_string(), RedbPathInfoServiceConfig {
+            path: Some(state_dir.join("pathinfo.redb")),
+            read_only: true,
+            cache_size: None,
+        })
+        .await
+        .unwrap();
+        service.get(digest).await.unwrap().unwrap()
+    })
+}
+
+#[test]
+fn store_repair_final_nar_dry_run_then_execute_is_explicit_and_idempotent() {
+    const SIGNING_KEY_TEXT: &str = "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==\n";
+    let state = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let config = tempfile::tempdir().unwrap();
+    let key_file = state.path().join("repair.key");
+    std::fs::write(&key_file, SIGNING_KEY_TEXT).unwrap();
+    let (logical_path, original) = seed_stale_final_nar_pathinfo(state.path());
+
+    crunch_cmd()
+        .env("CRUNCH_STATE_DIR", state.path())
+        .env("CRUNCH_CONFIG_DIR", config.path())
+        .arg("--store")
+        .arg(store.path())
+        .arg("--json")
+        .arg("store")
+        .arg("repair-final-nar")
+        .arg(&logical_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"status\": \"would-repair\""))
+        .stdout(predicate::str::contains("\"execution_requested\": false"))
+        .stdout(predicate::str::contains("\"mutated\": false"));
+    let after_dry_run = load_pathinfo_for_test(state.path(), *original.store_path.digest());
+    assert_eq!(after_dry_run, original);
+    assert!(!config.path().join("signing-key").exists());
+
+    crunch_cmd()
+        .env("CRUNCH_STATE_DIR", state.path())
+        .env("CRUNCH_CONFIG_DIR", config.path())
+        .arg("--store")
+        .arg(store.path())
+        .arg("store")
+        .arg("repair-final-nar")
+        .arg(&logical_path)
+        .arg("--execute")
+        .arg("--signing-key")
+        .arg(&key_file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("FINAL_NAR_REPAIR status=repaired"));
+    let repaired = load_pathinfo_for_test(state.path(), *original.store_path.digest());
+    assert_ne!(repaired.nar_sha256, original.nar_sha256);
+    assert_eq!(repaired.signatures.len(), 1);
+    assert_eq!(repaired.node, original.node);
+    assert_eq!(repaired.store_path, original.store_path);
+
+    crunch_cmd()
+        .env("CRUNCH_STATE_DIR", state.path())
+        .env("CRUNCH_CONFIG_DIR", config.path())
+        .arg("--store")
+        .arg(store.path())
+        .arg("store")
+        .arg("repair-final-nar")
+        .arg(&logical_path)
+        .arg("--execute")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("FINAL_NAR_REPAIR status=current"));
+    assert!(!config.path().join("signing-key").exists());
+}
+
+#[test]
+fn store_repair_final_nar_enables_archive_export_after_execution() {
+    const SIGNING_KEY_TEXT: &str = "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==\n";
+    let state = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let key_file = state.path().join("repair.key");
+    let archive_file = state.path().join("repaired.msa");
+    std::fs::write(&key_file, SIGNING_KEY_TEXT).unwrap();
+    let (logical_path, original) = seed_stale_final_nar_pathinfo(state.path());
+
+    crunch_cmd()
+        .env("CRUNCH_STATE_DIR", state.path())
+        .arg("--store")
+        .arg(store.path())
+        .arg("store")
+        .arg("repair-final-nar")
+        .arg(&logical_path)
+        .arg("--execute")
+        .arg("--signing-key")
+        .arg(&key_file)
+        .assert()
+        .success();
+    crunch_cmd()
+        .env("CRUNCH_STATE_DIR", state.path())
+        .arg("--store")
+        .arg(store.path())
+        .arg("store")
+        .arg("archive")
+        .arg("export")
+        .arg("--to")
+        .arg(&archive_file)
+        .arg(original.store_path.to_string())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ARCHIVE_EXPORT"));
+
+    assert!(archive_file.metadata().unwrap().len() > 0);
+    assert_ne!(load_pathinfo_for_test(state.path(), *original.store_path.digest()).nar_sha256, original.nar_sha256);
+}
+
+#[test]
+fn store_repair_final_nar_rejects_fragment_without_mutation() {
+    let state = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let (logical_path, original) = seed_stale_final_nar_pathinfo(state.path());
+
+    crunch_cmd()
+        .env("CRUNCH_STATE_DIR", state.path())
+        .arg("--store")
+        .arg(store.path())
+        .arg("store")
+        .arg("repair-final-nar")
+        .arg(original.store_path.to_string())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("expected exact logical store path"));
+    let persisted = load_pathinfo_for_test(state.path(), *original.store_path.digest());
+
+    assert!(logical_path.starts_with("/mantle/store/"));
+    assert_eq!(persisted, original);
 }
 
 // ── Phase 5: Error and edge cases ───────────────────────────────

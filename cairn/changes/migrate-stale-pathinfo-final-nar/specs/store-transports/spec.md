@@ -10,7 +10,7 @@ Mantle MUST provide an explicit dry-run-first migration for a single exact signe
 - AND a fresh final NAR render differs from its recorded size or SHA-256
 - WHEN the operator runs `store repair-final-nar` without `--execute`
 - THEN Mantle MUST report old and observed final-NAR facts, signature count, sidecar disposition, and `would-repair`
-- AND it MUST NOT write PathInfo, artifact sidecars, signing keys, output bytes, or other store state.
+- AND it MUST NOT write PathInfo, artifact sidecars, signing keys, or output bytes.
 
 #### Scenario: Execution replaces stale facts and authority [r[store_transports.pathinfo_final_nar_migration.scenario.execute]]
 

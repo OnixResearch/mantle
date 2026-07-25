@@ -120,6 +120,20 @@ hash algorithms remain available where compatibility requires them. Mantle signs
 PathInfo records with Ed25519 keys and rechecks signatures, content hashes, and
 castore completeness before admitting cached outputs.
 
+Historical signed PathInfo created before final-NAR metadata fixes can be inspected
+and explicitly migrated one exact path at a time:
+
+```bash
+mantle store repair-final-nar /mantle/store/<digest>-<name>
+mantle store repair-final-nar /mantle/store/<digest>-<name> \
+  --execute --signing-key ./cache.key
+```
+
+The first command is a non-signing dry run. Execution requires complete local
+castore content, preserves CA/path/node/reference identity, discards signatures
+bound to stale facts, and emits a replacement local signature. This does not
+recover historical signer authority or prove output correctness.
+
 ## Project workflow
 
 A Mantle project uses `mantle-project.ncl`, `mantle.lock`, and generated

@@ -92,6 +92,23 @@ async fn cmd_store_mutation_or_transfer(
             let svc = open_pathinfo_service(context.state_dir, false).await?;
             cmd_store_sign(&svc, path.as_deref(), all, signing_key.as_deref(), context.state_dir).await
         }
+        crate::StoreAction::RepairFinalNar {
+            path,
+            execute,
+            signing_key,
+        } => {
+            let _guard = store_mutation_guard(context.state_dir)?;
+            let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+            cmd_store_repair_final_nar(
+                &store,
+                &path,
+                execute,
+                signing_key.as_deref(),
+                context.state_dir,
+                context.is_json_output,
+            )
+            .await
+        }
         crate::StoreAction::Push {
             to,
             all,
@@ -543,6 +560,57 @@ fn print_verified_ok(
     let untrusted = sig_result.untrusted_names.join(",");
     println!("UNTRUSTED {path}  trusted_signatures=0/{}  signers={}", sig_result.total_signatures, untrusted);
     Ok(true)
+}
+
+async fn cmd_store_repair_final_nar(
+    store: &crunch_store::StoreHandle,
+    logical_store_path: &str,
+    is_execute: bool,
+    signing_key_path: Option<&Path>,
+    state_dir: &Path,
+    is_json_output: bool,
+) -> Result<(), RunError> {
+    assert!(!logical_store_path.is_empty(), "repair path must not be empty");
+    assert!(!store.store_dir().is_empty(), "logical store prefix must not be empty");
+    let inspection = crunch_store::inspect_final_nar_repair(store, logical_store_path)
+        .await
+        .map_err(|error| RunError::Internal(error.to_string()))?;
+    let report = if is_execute && inspection.is_repair_required() {
+        let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
+        crunch_store::execute_final_nar_repair(store, inspection, &keypair.signing_key)
+            .await
+            .map_err(|error| RunError::Internal(error.to_string()))?
+    } else {
+        inspection.report(is_execute)
+    };
+    print_final_nar_repair_report(&report, is_json_output)
+}
+
+fn print_final_nar_repair_report(
+    report: &crunch_store::FinalNarRepairReport,
+    is_json_output: bool,
+) -> Result<(), RunError> {
+    if is_json_output {
+        return print_json_report(report, "serializing final NAR repair report");
+    }
+    println!(
+        "FINAL_NAR_REPAIR status={} path={} recorded_size={} recorded_sha256={} observed_size={} observed_sha256={} signatures={}->{} attestation={} execution_requested={} mutated={}",
+        report.status.as_str(),
+        report.store_path,
+        report.recorded_nar_size,
+        report.recorded_nar_sha256,
+        report.observed_nar_size,
+        report.observed_nar_sha256,
+        report.old_signature_count,
+        report.new_signature_count,
+        report.artifact_attestation.as_str(),
+        report.execution_requested,
+        report.mutated,
+    );
+    if let Some(signer) = report.signer.as_deref() {
+        eprintln!("repaired final NAR metadata with signer {signer}");
+    }
+    Ok(())
 }
 
 async fn cmd_store_sign(

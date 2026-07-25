@@ -16,7 +16,6 @@ use std::task::Poll;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
 use nix_compat::store_path::StorePathRef;
-use nix_compat::store_path::build_ca_path_with_store_dir;
 use serde::Deserialize;
 use serde::Serialize;
 use snix_castore::Node;
@@ -34,6 +33,7 @@ use tokio::io::ReadBuf;
 use crate::Error;
 use crate::export::export_castore_to_disk;
 use crate::handle::StoreHandle;
+use crate::path_identity::require_ca_path_identity;
 
 pub const ARCHIVE_FORMAT_NAME: &str = "mantle-store-archive-v1";
 pub const ARCHIVE_VERSION: u32 = 1;
@@ -454,40 +454,6 @@ async fn require_current_final_nar_facts(path_info: &PathInfo, handle: &StoreHan
         ));
     }
     Ok(())
-}
-
-fn require_ca_path_identity(path_info: &PathInfo, store_dir: &str) -> Result<(), String> {
-    assert!(!path_info.store_path.name().is_empty());
-    assert!(store_dir.starts_with('/'));
-    if ca_path_identity_matches(path_info, store_dir)? {
-        return Ok(());
-    }
-    Err(format!("CA metadata for {} does not derive its signed store-path identity", path_info.store_path))
-}
-
-fn ca_path_identity_matches(path_info: &PathInfo, store_dir: &str) -> Result<bool, String> {
-    assert!(!path_info.store_path.name().is_empty());
-    assert!(store_dir.starts_with('/'));
-    let Some(ca_hash) = path_info.ca.as_ref() else {
-        return Ok(true);
-    };
-    let marker_path: StorePath<String> =
-        build_ca_path_with_store_dir(path_info.store_path.name(), ca_hash, Vec::<String>::new(), false, store_dir)
-            .map_err(|error| format!("deriving marker-normalized CA path for {}: {error}", path_info.store_path))?;
-    if marker_path == path_info.store_path {
-        return Ok(true);
-    }
-
-    let is_self_reference = path_info.references.iter().any(|reference| reference == &path_info.store_path);
-    let references = path_info
-        .references
-        .iter()
-        .filter(|reference| *reference != &path_info.store_path)
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
-    let standard_path: Result<StorePath<String>, _> =
-        build_ca_path_with_store_dir(path_info.store_path.name(), ca_hash, references, is_self_reference, store_dir);
-    Ok(standard_path.is_ok_and(|candidate| candidate == path_info.store_path))
 }
 
 async fn load_pathinfo(pathinfo: &dyn PathInfoService, store_path: &StorePath<String>) -> Result<PathInfo, Error> {
@@ -1087,6 +1053,7 @@ mod tests {
 
     use nix_compat::narinfo::SigningKey;
     use nix_compat::store_path::StorePath;
+    use nix_compat::store_path::build_ca_path_with_store_dir;
     use sha2::Digest;
     use snix_castore::Node;
     use snix_store::pathinfoservice::LruPathInfoService;
@@ -1370,7 +1337,7 @@ mod tests {
         path_info.ca = Some(ca_hash);
 
         assert_ne!(path_info.store_path, marker_path);
-        assert_eq!(ca_path_identity_matches(&path_info, store.store_dir()), Ok(true));
+        assert!(require_ca_path_identity(&path_info, store.store_dir()).is_ok());
     }
 
     // r[verify store_transports.archive_import_idempotent]
