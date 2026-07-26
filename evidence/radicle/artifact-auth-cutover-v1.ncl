@@ -156,7 +156,7 @@ let receipt | CutoverReceipt = {
     "release-readiness",
   ],
   evidence = [
-    "cairn/changes/consume-artifact-auth-from-radicle/evidence/source-cutover-2026-07-25.md",
+    "cairn/archive/2026-07-25-consume-artifact-auth-from-radicle/evidence/source-cutover-2026-07-25.md",
     "evidence/radicle/artifact-auth-cutover-v1.json",
     "artifact-auth:evidence/radicle/publication-v1.json",
     "onix-core:evidence/radicle/source-admission-v1.json",

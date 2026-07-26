@@ -7,4 +7,4 @@
 
 - [x] [parallel] Run focused action-result and shell artifact-auth tests before and after cutover without Rust implementation changes. r[mantle.artifact_auth_adoption.behavior]
 - [x] [serial] Prove GitHub fallback, mismatched RID/revision, duplicate or missing packages, and changed lock identity are rejected. r[mantle.artifact_auth_adoption.fallback]
-- [ ] [serial] Emit typed BLAKE3 cutover evidence, run focused Nix and Cairn checks, sync the accepted spec, and archive at the bounded claim boundary. r[mantle.artifact_auth_adoption.radicle_evidence]
+- [x] [serial] Emit typed BLAKE3 cutover evidence, run focused Nix and Cairn checks, sync the accepted spec, and archive at the bounded claim boundary. r[mantle.artifact_auth_adoption.radicle_evidence]
