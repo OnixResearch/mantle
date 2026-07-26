@@ -238,6 +238,9 @@ Mantle keeps build observations separate from stronger claims:
   frontend correctness, realization success, or output trust.
 - Bootstrap and fixed-point evidence applies only to the recorded seed,
   source, tools, platform, and proof mode.
+- AeneasVerif proof and translation policy remains owned by Octet. Mantle can
+  build tools and generated artifacts, but it does not promote their claims.
+  See [ADR 0034](adr/0034-keep-aeneasverif-proof-and-translation-authority-in-octet.md).
 
 The representative Rust compatibility rail uses
 [`examples/rust_compatibility_surface_matrix.ncl`](examples/rust_compatibility_surface_matrix.ncl)
@@ -336,3 +339,10 @@ Nix-backed compatibility workflow.
 Repository-owned Mantle source is licensed under
 [AGPL-3.0-or-later](LICENSE). Vendored code retains its upstream licenses and
 notices.
+
+## References
+
+- [OnixResearch/octet](https://github.com/OnixResearch/octet) owns checked Rust proof and translation execution policy.
+- [OnixResearch/valence](https://github.com/OnixResearch/valence) owns canonical evidence identities, links, roles, and non-claims.
+- [AeneasVerif/aeneas](https://github.com/AeneasVerif/aeneas) and [AeneasVerif/charon](https://github.com/AeneasVerif/charon) provide the current Rust-to-proof-model toolchain reference.
+- [AeneasVerif/eurydice](https://github.com/AeneasVerif/eurydice) and [AeneasVerif/scylla](https://github.com/AeneasVerif/scylla) provide deferred code-generation and migration references.

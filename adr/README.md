@@ -40,3 +40,4 @@ compatibility surface, crate name, or historical decision.
 | [0031](0031-hydrate-fresh-clone-inputs-from-source-bundles.md) | Hydrate fresh-clone inputs from source bundles | Accepted |
 | [0032](0032-deny-live-source-acquisition-in-hydrated-fixed-point-proofs.md) | Deny live source acquisition in hydrated fixed-point proofs | Accepted |
 | [0033](0033-preserve-history-when-publishing-mantle.md) | Preserve history when publishing Mantle | Accepted |
+| [0034](0034-keep-aeneasverif-proof-and-translation-authority-in-octet.md) | Keep AeneasVerif proof and translation authority in Octet | Accepted |
