@@ -1,6 +1,6 @@
 # Artifact-auth compatibility for action results
 
-Mantle pins `artifact-auth-core` and `artifact-auth-ed25519` from `ssh://git@github.com/OnixResearch/artifact-auth.git` at revision `799459346d5416fbd7b9f55840a7371441b55afa`. Cargo and the non-flake Nix input must resolve that full revision. Flake evaluation requires exactly that two-package set, rejects source mismatch or an incompatible standalone license, and makes Crane vendor the exact reviewed input without a sibling checkout. SSH credentials authorize retrieval only.
+Mantle pins `artifact-auth-core` and `artifact-auth-ed25519` from the governed public Radicle HTTPS source `https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git` at revision `799459346d5416fbd7b9f55840a7371441b55afa`. Cargo and the non-flake Nix input must resolve that full revision. Flake evaluation requires exactly that two-package set, rejects source mismatch or an incompatible standalone license, and makes Crane vendor the exact reviewed input without a sibling checkout. There is no executable GitHub fallback.
 
 ## Pure dual-run boundary
 

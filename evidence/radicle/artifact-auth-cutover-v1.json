@@ -1,0 +1,86 @@
+{
+  "authority_boundary": {
+    "legacy_authoritative": true,
+    "product_authority_retained": true,
+    "standalone_authority_admitted": false
+  },
+  "cargo": {
+    "core_manifest_blake3": "496123770c3e21dea731262771046424fc3b534f7279004d3ca52b05bc8a7c79",
+    "crate_graph_changed": false,
+    "lock_blake3": "19daded89bc2d1e15bb2f4d44b827a9f2a7b3be8909e0bbd7d06efeb0fc6d535",
+    "lock_source": "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#799459346d5416fbd7b9f55840a7371441b55afa",
+    "package_version": "0.1.0",
+    "packages": [
+      "artifact-auth-core",
+      "artifact-auth-ed25519"
+    ],
+    "shell_manifest_blake3": "9c72bc4929f9f836c0b767d6b604b5e6d3fb97e4f1b61505dbc28238b107b6ce"
+  },
+  "evidence": [
+    "cairn/changes/consume-artifact-auth-from-radicle/evidence/source-cutover-2026-07-25.md",
+    "evidence/radicle/artifact-auth-cutover-v1.json",
+    "artifact-auth:evidence/radicle/publication-v1.json",
+    "onix-core:evidence/radicle/source-admission-v1.json",
+    "valence:evidence/radicle/artifact-auth-cutover-v1.json"
+  ],
+  "fallback": {
+    "automatic_fallback": false,
+    "cargo_lock_github_source": false,
+    "manifest_github_source": false,
+    "nix_input_github_source": false,
+    "nix_lock_github_source": false,
+    "outage_result": "visible-resolution-failure"
+  },
+  "nix": {
+    "flake_blake3": "495ef4816453fc6ab58617dde209735e55953485c8c4c45d600d42c14b0560b3",
+    "lock_blake3": "44015a40ba7858db1fa8df4f2bcca11499b04b90be1f8eb8ae3c353009203274",
+    "locked_rev": "799459346d5416fbd7b9f55840a7371441b55afa",
+    "locked_url": "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git",
+    "nar_hash": "sha256-nEgz2FtVuDesX95yyxidp0vhjxL4INB6Ve8rkpLyJk0=",
+    "nar_hash_preserved": true,
+    "original_rev": "799459346d5416fbd7b9f55840a7371441b55afa",
+    "original_url": "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git"
+  },
+  "non_claims": [
+    "artifact-auth-source-correctness",
+    "whole-mantle-behavior-correctness",
+    "forge-availability",
+    "automatic-fallback",
+    "standalone-authority-admission",
+    "whole-stack-github-independence",
+    "release-readiness"
+  ],
+  "observed_date": "2026-07-25",
+  "publication": {
+    "receipt_blake3": "e58a3de4d6b3b32a547c3cfe5c3e829292cda73891c7776f214f5d4edce10b1c",
+    "receipt_type": "artifact-auth.radicle-publication.v1",
+    "revision": "e41340bec587b6d049b5cc518ec7db925dde84be",
+    "status": "accepted"
+  },
+  "receipt_type": "mantle.artifact-auth-radicle-cutover.v1",
+  "rollback": {
+    "automatic": false,
+    "requires_owning_tool_lock_regeneration": true,
+    "requires_source_identity_review": true
+  },
+  "schema_version": 1,
+  "source": {
+    "https_git": "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git",
+    "reviewed_commit": "799459346d5416fbd7b9f55840a7371441b55afa",
+    "rid": "rad:z4JGYYW7WsesXUq7MXVdx16Fawu2f",
+    "source_archive_blake3": "246a7cad91e7e8a158e22da21f3bff3e61aa0431a58936b5a739178bc62064c7"
+  },
+  "status": "accepted",
+  "validation": {
+    "baseline_core": "passed-5",
+    "baseline_revision": "ece3be0ab1ecfa0e0375b3f08ecceaaee37a643d",
+    "baseline_shell": "passed-14",
+    "focused_clippy": "passed",
+    "formatting": "passed",
+    "post_cutover_core": "passed-5",
+    "post_cutover_shell": "passed-14",
+    "rust_implementation_changed": false,
+    "source_agreement_negative": "passed",
+    "source_agreement_positive": "passed"
+  }
+}
