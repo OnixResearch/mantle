@@ -40,10 +40,41 @@ const BINUTILS_ARTIFACT_PATH: &str = "bootstrap/evidence/early-native-binutils-a
 const BINUTILS_ACCEPTANCE_PATH: &str = "bootstrap/evidence/early-native-binutils-acceptance-v1.json";
 const BISON_PREDECESSOR_PATH: &str = "bootstrap/evidence/early-native-predecessors/bison-2.3.json";
 
+const FINAL_ROW_FIXTURE_PATHS: &[&str] = &[
+    "bootstrap/gcc-10-final.ncl",
+    "bootstrap/gcc-10.5.0-regenerated-source.ncl",
+    "bootstrap/musl-full.ncl",
+    "bootstrap/binutils-full.ncl",
+    "bootstrap/binutils-2.41-regeneration-ready-source.ncl",
+    "bootstrap/evidence/final-native-musl-binutils-row-v1.json",
+    "bootstrap/evidence/final-native-binutils-artifact.json",
+    "bootstrap/evidence/final-native-musl-binutils-acceptance-v1.json",
+    "bootstrap/evidence/final-native-predecessors/gcc10.json",
+    "bootstrap/evidence/final-native-predecessors/gcc10-final.json",
+    "bootstrap/evidence/final-native-predecessors/musl-final.json",
+];
+const FINAL_SOURCE_PATH: &str = "bootstrap/binutils-full.ncl";
+const FINAL_RECEIPT_PATH: &str = "bootstrap/evidence/final-native-musl-binutils-row-v1.json";
+const FINAL_ACCEPTANCE_PATH: &str = "bootstrap/evidence/final-native-musl-binutils-acceptance-v1.json";
+
 fn copy_binutils_row_fixture() -> TempDir {
     let fixture = TempDir::new().unwrap();
     let repository = Path::new(env!("CARGO_MANIFEST_DIR"));
     for relative in BINUTILS_ROW_FIXTURE_PATHS {
+        let source = repository.join(relative);
+        let destination = fixture.path().join(relative);
+        fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        fs::copy(&source, &destination).unwrap();
+        assert!(destination.is_file());
+        assert!(fs::metadata(&destination).unwrap().len() > 0);
+    }
+    fixture
+}
+
+fn copy_final_row_fixture() -> TempDir {
+    let fixture = TempDir::new().unwrap();
+    let repository = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for relative in FINAL_ROW_FIXTURE_PATHS {
         let source = repository.join(relative);
         let destination = fixture.path().join(relative);
         fs::create_dir_all(destination.parent().unwrap()).unwrap();
@@ -79,14 +110,18 @@ fn mutate_json(path: &Path, mutation: impl FnOnce(&mut Value)) {
     assert!(fs::metadata(path).unwrap().len() > 0);
 }
 
-fn refresh_binutils_source_digest(root: &Path) {
-    let source = fs::read(root.join(BINUTILS_SOURCE_PATH)).unwrap();
+fn refresh_source_digest(root: &Path, source_path: &str, receipt_path: &str) {
+    let source = fs::read(root.join(source_path)).unwrap();
     let digest = blake3::hash(&source).to_hex().to_string();
-    mutate_json(&root.join(BINUTILS_RECEIPT_PATH), |receipt| {
+    mutate_json(&root.join(receipt_path), |receipt| {
         let records = receipt["source_records"].as_array_mut().unwrap();
-        let record = records.iter_mut().find(|record| record["path"] == BINUTILS_SOURCE_PATH).unwrap();
+        let record = records.iter_mut().find(|record| record["path"] == source_path).unwrap();
         record["blake3"] = Value::String(digest);
     });
+}
+
+fn refresh_binutils_source_digest(root: &Path) {
+    refresh_source_digest(root, BINUTILS_SOURCE_PATH, BINUTILS_RECEIPT_PATH);
 }
 
 #[test]
@@ -243,6 +278,47 @@ fn bootstrap_parity_report_rejects_stale_generated_artifact_status() {
 }
 
 #[test]
+fn bootstrap_parity_report_rejects_cross_row_final_receipt_substitution() {
+    let fixture = copy_final_row_fixture();
+    mutate_json(&fixture.path().join(FINAL_RECEIPT_PATH), |receipt| {
+        receipt["row_id"] = Value::String("gcc.10".to_string());
+    });
+
+    let report = parity_report(fixture.path());
+    let row = row_by_id(&report, "full-musl-binutils");
+    assert_eq!(row["status"], "partial");
+    assert!(row["notes"].as_str().unwrap().contains("row_id"));
+}
+
+#[test]
+fn bootstrap_parity_report_rejects_state_pinned_final_source() {
+    let fixture = copy_final_row_fixture();
+    let source_path = fixture.path().join(FINAL_SOURCE_PATH);
+    let mut source = fs::read_to_string(&source_path).unwrap();
+    source.push_str("\n# forbidden .pi/cairn-drain/state input\n");
+    fs::write(&source_path, source).unwrap();
+    refresh_source_digest(fixture.path(), FINAL_SOURCE_PATH, FINAL_RECEIPT_PATH);
+
+    let report = parity_report(fixture.path());
+    let row = row_by_id(&report, "full-musl-binutils");
+    assert_eq!(row["status"], "partial");
+    assert!(row["notes"].as_str().unwrap().contains("forbidden policy marker `.pi/cairn-drain/`"));
+}
+
+#[test]
+fn bootstrap_parity_report_rejects_missing_final_runtime_member() {
+    let fixture = copy_final_row_fixture();
+    mutate_json(&fixture.path().join(FINAL_ACCEPTANCE_PATH), |acceptance| {
+        acceptance["fallback"]["omitted_artifacts"] = Value::Array(vec![Value::String("libgcc_s.so.1".to_string())]);
+    });
+
+    let report = parity_report(fixture.path());
+    let row = row_by_id(&report, "full-musl-binutils");
+    assert_eq!(row["status"], "partial");
+    assert!(row["notes"].as_str().unwrap().contains("observed fallback scan"));
+}
+
+#[test]
 fn bootstrap_parity_report_require_fails_closed_on_gaps() {
     let root = TempDir::new().unwrap();
 
@@ -353,31 +429,20 @@ fn bootstrap_parity_report_rejects_legacy_self_build_proof_without_unblocking_ax
 }
 
 #[test]
-fn bootstrap_parity_report_exposes_full_musl_binutils_contract_without_unblocking_axes() {
-    let repo = env!("CARGO_MANIFEST_DIR");
-
-    let output = crunch()
-        .arg("--json")
-        .arg("bootstrap")
-        .arg("parity-report")
-        .current_dir(repo)
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let report: Value = serde_json::from_slice(&output).unwrap();
-    let row = row_by_id(&report, "full-musl-binutils");
-    assert_eq!(row["status"], "partial");
-    assert_eq!(row["provider_kind"], "unknown");
-    assert!(row["notes"].as_str().unwrap().contains("checked receipt"));
-    assert!(!row["notes"].as_str().unwrap().contains("evidence check failed"));
+fn bootstrap_parity_report_accepts_independently_receipted_final_native_rows() {
+    let report = parity_report(Path::new(env!("CARGO_MANIFEST_DIR")));
+    for row_id in ["gcc.4.7", "gcc.10", "full-musl-binutils"] {
+        let row = row_by_id(&report, row_id);
+        assert_eq!(row["status"], "complete", "row {row_id} did not complete");
+        assert_eq!(row["provider_kind"], "source-root");
+        assert!(!row["notes"].as_str().unwrap().contains("evidence check failed"));
+    }
 
     let live = report["axes"].as_array().unwrap().iter().find(|axis| axis["axis"] == "live-bootstrap").unwrap();
     let guix = report["axes"].as_array().unwrap().iter().find(|axis| axis["axis"] == "guix").unwrap();
-    assert_eq!(live["complete"], false);
+    assert_eq!(live["complete"], true);
+    assert!(live["blocking_rows"].as_array().unwrap().is_empty());
     assert_eq!(guix["complete"], false);
-    assert!(live["blocking_rows"].as_array().unwrap().contains(&Value::String("full-musl-binutils".to_string())));
-    assert!(guix["blocking_rows"].as_array().unwrap().contains(&Value::String("full-musl-binutils".to_string())));
+    assert!(!live["blocking_rows"].as_array().unwrap().contains(&Value::String("full-musl-binutils".to_string())));
+    assert!(!guix["blocking_rows"].as_array().unwrap().contains(&Value::String("full-musl-binutils".to_string())));
 }

@@ -1,0 +1,61 @@
+{
+  "kind": "artifact",
+  "digest": "260d0c840a13ee609d7ff6eb3b04ac53dfefaba70c96b1e2c71fa382a3e566b8",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/1l8x0dsjq5lab9y01a1n8fmsfvkaxsk8-autoconf-2.64-gcc-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/3f5zqjcfb47xd242l5capfyy5q0kklvf-perl-5.6.2-configured-gcc-v16"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/1l8x0dsjq5lab9y01a1n8fmsfvkaxsk8-autoconf-2.64-gcc-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/sg7bci7sq750mvb6hdqkx6ak0ddamnab-m4-1.4.7-gcc-v5"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/1l8x0dsjq5lab9y01a1n8fmsfvkaxsk8-autoconf-2.64-gcc-v1",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/vqifafb2f3yl710c1nsckdjhmx6rqcqa-autoconf-2.64-gcc-v1"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:77d612fa9f299e28aa96bca480b7bb649f50b98d154c6c3b85ca403a186241b5",
+      "logical_path": "/mantle/store/1l8x0dsjq5lab9y01a1n8fmsfvkaxsk8-autoconf-2.64-gcc-v1",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/1l8x0dsjq5lab9y01a1n8fmsfvkaxsk8-autoconf-2.64-gcc-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/1l8x0dsjq5lab9y01a1n8fmsfvkaxsk8-autoconf-2.64-gcc-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/3f5zqjcfb47xd242l5capfyy5q0kklvf-perl-5.6.2-configured-gcc-v16"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/3f5zqjcfb47xd242l5capfyy5q0kklvf-perl-5.6.2-configured-gcc-v16"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/sg7bci7sq750mvb6hdqkx6ak0ddamnab-m4-1.4.7-gcc-v5"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/sg7bci7sq750mvb6hdqkx6ak0ddamnab-m4-1.4.7-gcc-v5"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/vqifafb2f3yl710c1nsckdjhmx6rqcqa-autoconf-2.64-gcc-v1"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/vqifafb2f3yl710c1nsckdjhmx6rqcqa-autoconf-2.64-gcc-v1"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/1l8x0dsjq5lab9y01a1n8fmsfvkaxsk8-autoconf-2.64-gcc-v1"
+  }
+}

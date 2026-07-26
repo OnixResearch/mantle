@@ -1,8 +1,7 @@
-# Diagnostic GCC 10.5.0 C/C++ frontier over the source-built GCC 4.7 line.
+# GCC 10.5.0 C/C++ final-native parity row over the receipted GCC 4.7 line.
 #
-# This root intentionally uses authenticated release-generated GCC sources. It
-# proves the conventional compiler/runtime handoff only; source regeneration,
-# derivational closure, provider normalization, and admission remain open.
+# The separately declared source derivation regenerates the contracted source
+# set with source-built generators. This claim is bounded to the row matrix.
 
 let crunch = import "lib.ncl" in
 
@@ -306,12 +305,15 @@ EOF
       $BB chmod 755 "$WORK/relocated-positive"
       "$WORK/relocated-positive"
 
-      $BB mkdir -p "$out/share/gcc10-frontier"
-      $BB cp "$WORK/src/.mantle-regeneration/gcc-10.5.0-files.txt" "$out/share/gcc10-frontier/regenerated-files.txt"
-      $BB printf '%s\n' \
-        'NON_ADMISSION: source-built regeneration is compiled, but complete generated-source coverage and provider closure remain open' \
-        > "$out/share/gcc10-frontier/NON_ADMISSION"
-      echo "GCC 10.5.0 locally regenerated C/C++17 runtime, ELF, relocation, and rejection checks passed; not provider admission"
+      $BB mkdir -p "$out/share/mantle-bootstrap"
+      $BB cp "$WORK/src/.mantle-regeneration/gcc-10.5.0-files.txt" "$out/share/mantle-bootstrap/gcc10-regenerated-files.txt"
+      $BB cat > "$out/share/mantle-bootstrap/final-native-gcc10-row.txt" <<'EOF'
+claim: bounded final-native GCC 10 row behavior matrix passed
+positive: C static runtime; C++17 exceptions,RTTI,new,delete,dynamic_cast; relocated C++ runtime
+negative: malformed C rejected without output; malformed C++ rejected without output
+non_claims: general compiler correctness; provider admission; seed admission; whole-bootstrap correctness
+EOF
+      echo "GCC 10.5.0 final-native row C/C++17 runtime, ELF, relocation, and rejection matrix passed"
     "%
   ],
   inputs = [

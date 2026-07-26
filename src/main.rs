@@ -32,6 +32,7 @@ mod errors;
 #[allow(dead_code)]
 mod external_batch_dispatch;
 mod filegen_cmd;
+mod final_native_row_receipt_shell;
 mod fix;
 mod foreign_derivation_import;
 // Foreign-import adapters mirror external receipt fields and preserve their typed error payloads at

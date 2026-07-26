@@ -1,8 +1,7 @@
-# Diagnostic binutils 2.41 frontier over final GCC 10 + musl 1.2.5.
+# Final-native binutils 2.41 row over final GCC 10 and musl 1.2.5.
 #
-# This root validates real assembler/linker/archive/object-tool behavior. It
-# remains non-admission until source regeneration, pure derivational closure,
-# normalized provider metadata, and fixed-point evidence are complete.
+# This root validates the bounded assembler/linker/archive/object-tool and
+# relocation matrix without claiming general binutils correctness.
 
 let crunch = import "lib.ncl" in
 let gcc10 = crunch.derivationFile "gcc-10-final.ncl" in
@@ -227,13 +226,42 @@ EOF
       "$out/bin/strip" "$WORK/positive-strip.o"
       test -s "$WORK/positive-strip.o"
 
+      TOOL_PROBE_TIMEOUT_SECONDS=10
+      TIMEOUT_EXIT_STATUS=124
+      expect_bounded_rejection() {
+        rejection_label="$1"
+        shift
+        set +e
+        "$BB" timeout "$TOOL_PROBE_TIMEOUT_SECONDS" "$@"
+        rejection_status=$?
+        set -e
+        if test "$rejection_status" -eq 0; then
+          echo "ERROR: binutils 2.41 accepted $rejection_label" >&2
+          exit 1
+        fi
+        if test "$rejection_status" -eq "$TIMEOUT_EXIT_STATUS"; then
+          echo "ERROR: binutils 2.41 timed out on $rejection_label" >&2
+          exit 1
+        fi
+      }
+
       $BB printf '%s\n' '.this-is-not-an-assembler-directive' > "$WORK/rejected.s"
       $BB rm -f "$WORK/rejected.o"
-      if "$out/bin/as" -o "$WORK/rejected.o" "$WORK/rejected.s"; then
-        echo "ERROR: binutils 2.41 assembler accepted malformed input" >&2
-        exit 1
-      fi
+      expect_bounded_rejection "malformed assembly" \
+        "$out/bin/as" -o "$WORK/rejected.o" "$WORK/rejected.s"
       test ! -e "$WORK/rejected.o"
+
+      $BB printf '%s\n' 'not-an-elf-object' > "$WORK/malformed.o"
+      expect_bounded_rejection "malformed object inspection" \
+        "$out/bin/readelf" -h "$WORK/malformed.o"
+      $BB rm -f "$WORK/malformed-copy.o"
+      expect_bounded_rejection "malformed object copy" \
+        "$out/bin/objcopy" "$WORK/malformed.o" "$WORK/malformed-copy.o"
+      test ! -e "$WORK/malformed-copy.o"
+
+      $BB printf '%s\n' 'not-an-archive' > "$WORK/malformed.a"
+      expect_bounded_rejection "malformed archive" \
+        "$out/bin/ar" t "$WORK/malformed.a"
 
       $BB cat > "$WORK/undefined.s" <<'EOF'
 .global _start
@@ -243,10 +271,8 @@ _start:
 EOF
       "$out/bin/as" -o "$WORK/undefined.o" "$WORK/undefined.s"
       $BB rm -f "$WORK/undefined-bin"
-      if "$out/bin/ld" -o "$WORK/undefined-bin" "$WORK/undefined.o"; then
-        echo "ERROR: binutils 2.41 linker accepted undefined symbol" >&2
-        exit 1
-      fi
+      expect_bounded_rejection "undefined-symbol link" \
+        "$out/bin/ld" -o "$WORK/undefined-bin" "$WORK/undefined.o"
       test ! -e "$WORK/undefined-bin"
 
       RELOCATED_BINUTILS="$WORK/relocated-binutils"
@@ -261,11 +287,14 @@ EOF
       set -e
       test "$relocated_status" -eq 42
 
-      $BB mkdir -p "$out/share/binutils241-frontier"
-      $BB printf '%s\n' \
-        'NON_ADMISSION: binutils 2.41 has component-level regenerated-source and runtime evidence; normalized-provider closure and external identity admission remain separate' \
-        > "$out/share/binutils241-frontier/NON_ADMISSION"
-      echo "binutils 2.41 assembler/linker/archive/object runtime, relocation, and rejection checks passed; not provider admission"
+      $BB mkdir -p "$out/share/mantle-bootstrap"
+      $BB cat > "$out/share/mantle-bootstrap/final-native-binutils-row.txt" <<'EOF'
+claim: bounded final-native binutils 2.41 matrix passed
+positive: assembler,linker,archive,ranlib,nm,objcopy,objdump,readelf,size,strings,strip,relocation,copied-tree runtime
+negative: malformed assembly,object,archive rejected without retained output or timeout; undefined-symbol link rejected without output or timeout
+non_claims: general binutils correctness; provider admission; seed admission; whole-bootstrap correctness
+EOF
+      echo "binutils 2.41 final-native assembler/linker/archive/object runtime, relocation, and rejection matrix passed"
     "%
   ],
   inputs = [

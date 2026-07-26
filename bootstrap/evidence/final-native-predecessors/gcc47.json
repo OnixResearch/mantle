@@ -1,0 +1,102 @@
+{
+  "kind": "artifact",
+  "digest": "8e4e022920f4d2ad673de72705e62ebc202513a2949cc79510aa3c21b2eafa86",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/fr5r3bhxiaysf48lkl4aj5jqjfgxph4z-gcc-4.7.4-musl-gcc40-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/fr5r3bhxiaysf48lkl4aj5jqjfgxph4z-gcc-4.7.4-musl-gcc40-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/fr5r3bhxiaysf48lkl4aj5jqjfgxph4z-gcc-4.7.4-musl-gcc40-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/fr5r3bhxiaysf48lkl4aj5jqjfgxph4z-gcc-4.7.4-musl-gcc40-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/fr5r3bhxiaysf48lkl4aj5jqjfgxph4z-gcc-4.7.4-musl-gcc40-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/fr5r3bhxiaysf48lkl4aj5jqjfgxph4z-gcc-4.7.4-musl-gcc40-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/fr5r3bhxiaysf48lkl4aj5jqjfgxph4z-gcc-4.7.4-musl-gcc40-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/fr5r3bhxiaysf48lkl4aj5jqjfgxph4z-gcc-4.7.4-musl-gcc40-v1",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/vv3h44ci9hnaqqnm1rnild1d74qxbm6n-gcc-4.7.4-musl-gcc40-v1"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:0156d94cfd7e1c39e3160491f623939a07dd628db8bc5f90f183c0d5432afb6a",
+      "logical_path": "/mantle/store/fr5r3bhxiaysf48lkl4aj5jqjfgxph4z-gcc-4.7.4-musl-gcc40-v1",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/fr5r3bhxiaysf48lkl4aj5jqjfgxph4z-gcc-4.7.4-musl-gcc40-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/fr5r3bhxiaysf48lkl4aj5jqjfgxph4z-gcc-4.7.4-musl-gcc40-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/vv3h44ci9hnaqqnm1rnild1d74qxbm6n-gcc-4.7.4-musl-gcc40-v1"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/vv3h44ci9hnaqqnm1rnild1d74qxbm6n-gcc-4.7.4-musl-gcc40-v1"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/fr5r3bhxiaysf48lkl4aj5jqjfgxph4z-gcc-4.7.4-musl-gcc40-v1"
+  }
+}

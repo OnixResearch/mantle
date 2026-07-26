@@ -1,0 +1,49 @@
+{
+  "kind": "artifact",
+  "digest": "4af9a4de161a9bc34575061bb4e6b3dbab50ad395c72f7137bc95311418a0f96",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/yjvscldji1c44m9bvvpyzxmn39yh0by5-bison-3.4.1-gcc-v2",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/sg7bci7sq750mvb6hdqkx6ak0ddamnab-m4-1.4.7-gcc-v5"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/yjvscldji1c44m9bvvpyzxmn39yh0by5-bison-3.4.1-gcc-v2",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/x3axbjhdkh1qhwcxcdvz7ps6gagxfara-bison-3.4.1-gcc-v2"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:37faef3e54ddf88b58e8c648eb90d9d3bf0975e4484170b5a62080267984aed3",
+      "logical_path": "/mantle/store/yjvscldji1c44m9bvvpyzxmn39yh0by5-bison-3.4.1-gcc-v2",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/sg7bci7sq750mvb6hdqkx6ak0ddamnab-m4-1.4.7-gcc-v5"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/sg7bci7sq750mvb6hdqkx6ak0ddamnab-m4-1.4.7-gcc-v5"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/yjvscldji1c44m9bvvpyzxmn39yh0by5-bison-3.4.1-gcc-v2"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/yjvscldji1c44m9bvvpyzxmn39yh0by5-bison-3.4.1-gcc-v2"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/x3axbjhdkh1qhwcxcdvz7ps6gagxfara-bison-3.4.1-gcc-v2"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/x3axbjhdkh1qhwcxcdvz7ps6gagxfara-bison-3.4.1-gcc-v2"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/yjvscldji1c44m9bvvpyzxmn39yh0by5-bison-3.4.1-gcc-v2"
+  }
+}

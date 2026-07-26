@@ -1,0 +1,49 @@
+{
+  "kind": "artifact",
+  "digest": "9ba8f518646196400ade82c5f7dab6209de9aff788ee559aa56b88c171263fd7",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/s3xnr7ydjrkpfi87midgal59n3zgh75f-gmp-6.2.1-gcc40-v1"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:155f8e557cb5341bc2b9e9a306304ae1f08a6c867726a4abebe0d5a01b50519a",
+      "logical_path": "/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/s3xnr7ydjrkpfi87midgal59n3zgh75f-gmp-6.2.1-gcc40-v1"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/s3xnr7ydjrkpfi87midgal59n3zgh75f-gmp-6.2.1-gcc40-v1"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+  }
+}

@@ -1,8 +1,7 @@
-# Diagnostic final GCC 10.5.0 rebuild over musl 1.2.5.
+# Final GCC 10.5.0 cycle rebuild over musl 1.2.5.
 #
-# This closes the modern compiler/libc runtime cycle and requires shared
-# libgcc/libstdc++ behavior. It remains non-admission until source regeneration,
-# pure derivational closure, provider normalization, and fixed-point proof.
+# This closes the bounded compiler/libc runtime cycle and requires static and
+# shared libgcc/libstdc++ behavior without claiming general correctness.
 
 let crunch = import "lib.ncl" in
 let gcc10_v1 = crunch.derivationFile "gcc-10.ncl" in
@@ -416,12 +415,15 @@ EOF
       $BB chmod 755 "$WORK/relocated-positive"
       "$WORK/relocated-positive"
 
-      $BB mkdir -p "$out/share/gcc10-final-frontier"
-      $BB cp "$WORK/src/.mantle-regeneration/gcc-10.5.0-files.txt" "$out/share/gcc10-final-frontier/regenerated-files.txt"
-      $BB printf '%s\n' \
-        'NON_ADMISSION: source-built regeneration and modern shared-runtime cycle pass, but complete generated-source coverage and provider closure remain open' \
-        > "$out/share/gcc10-final-frontier/NON_ADMISSION"
-      echo "final GCC 10.5.0 locally regenerated static/dynamic C++17, libgcc_s, relocation, and rejection checks passed; not provider admission"
+      $BB mkdir -p "$out/share/mantle-bootstrap"
+      $BB cp "$WORK/src/.mantle-regeneration/gcc-10.5.0-files.txt" "$out/share/mantle-bootstrap/gcc10-final-regenerated-files.txt"
+      $BB cat > "$out/share/mantle-bootstrap/final-native-gcc10-cycle.txt" <<'EOF'
+claim: bounded final GCC 10 cycle matrix passed
+positive: static and dynamic C++17 runtime; libgcc_s; libstdc++ shared runtime; relocated static runtime
+negative: malformed C++ rejected without output; absolute shared-runtime dependencies rejected
+non_claims: general compiler correctness; provider admission; seed admission; whole-bootstrap correctness
+EOF
+      echo "final GCC 10.5.0 cycle static/dynamic C++17, libgcc_s, relocation, and rejection matrix passed"
     "%
   ],
   inputs = [

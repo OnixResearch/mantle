@@ -1,0 +1,61 @@
+{
+  "kind": "artifact",
+  "digest": "aca82fb890e0589f2d336fe1c3fb659656465de38578679fdf96ba32f71ae828",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/9v1dnjsv4wba6slq7936v5yy7c6qhfdg-mpfr-4.1.0-gcc40-v1"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:8094ee592363614bac98a0c39a2876b9f85f10b2394b81995ba603a5105efb1d",
+      "logical_path": "/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/9v1dnjsv4wba6slq7936v5yy7c6qhfdg-mpfr-4.1.0-gcc40-v1"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/9v1dnjsv4wba6slq7936v5yy7c6qhfdg-mpfr-4.1.0-gcc40-v1"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1"
+  }
+}

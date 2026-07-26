@@ -1,0 +1,102 @@
+{
+  "kind": "artifact",
+  "digest": "ef3778e9d4099f65e52e3f76c21cda132559c9daa4700db0064a604877be5f3a",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/ysw79f732xmv92y8n63g6pjq3vid8445-gcc-10.5.0-musl-gcc47-v2",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/ysw79f732xmv92y8n63g6pjq3vid8445-gcc-10.5.0-musl-gcc47-v2",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/ysw79f732xmv92y8n63g6pjq3vid8445-gcc-10.5.0-musl-gcc47-v2",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/ysw79f732xmv92y8n63g6pjq3vid8445-gcc-10.5.0-musl-gcc47-v2",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/ysw79f732xmv92y8n63g6pjq3vid8445-gcc-10.5.0-musl-gcc47-v2",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/ysw79f732xmv92y8n63g6pjq3vid8445-gcc-10.5.0-musl-gcc47-v2",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/ysw79f732xmv92y8n63g6pjq3vid8445-gcc-10.5.0-musl-gcc47-v2"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/ysw79f732xmv92y8n63g6pjq3vid8445-gcc-10.5.0-musl-gcc47-v2",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/nw47j8f65gx1r496dsb52il4fydfhjif-gcc-10.5.0-musl-gcc47-v2"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:f8e334316c0e598ec7baabc9e601c68938a3dece37c83ec1791b4561e4fa5288",
+      "logical_path": "/mantle/store/ysw79f732xmv92y8n63g6pjq3vid8445-gcc-10.5.0-musl-gcc47-v2",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/ysw79f732xmv92y8n63g6pjq3vid8445-gcc-10.5.0-musl-gcc47-v2"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/ysw79f732xmv92y8n63g6pjq3vid8445-gcc-10.5.0-musl-gcc47-v2"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/nw47j8f65gx1r496dsb52il4fydfhjif-gcc-10.5.0-musl-gcc47-v2"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/nw47j8f65gx1r496dsb52il4fydfhjif-gcc-10.5.0-musl-gcc47-v2"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/ysw79f732xmv92y8n63g6pjq3vid8445-gcc-10.5.0-musl-gcc47-v2"
+  }
+}

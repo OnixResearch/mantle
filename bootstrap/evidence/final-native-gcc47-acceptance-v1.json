@@ -1,0 +1,39 @@
+{
+  "schema": "mantle-final-native-row-acceptance-v1",
+  "row_id": "gcc.4.7",
+  "logical_path": "/mantle/store/fr5r3bhxiaysf48lkl4aj5jqjfgxph4z-gcc-4.7.4-musl-gcc40-v1",
+  "success_marker": "GCC 4.7.4 final-native row C/C++11 runtime, relocation, and rejection matrix passed",
+  "evidence_origin": {
+    "recipe_logical_path": "/mantle/store/vv3h44ci9hnaqqnm1rnild1d74qxbm6n-gcc-4.7.4-musl-gcc40-v1",
+    "artifact_marker": "share/mantle-bootstrap/final-native-gcc47-row.txt",
+    "runtime_fingerprint_schema": "mantle-runtime-fingerprint-v1"
+  },
+  "positive": [
+    "c-static-runtime",
+    "cc1-and-cc1plus-present",
+    "cxx11-exception-rtti-allocation-runtime",
+    "libgcc-libstdcxx-libsupcxx-present",
+    "relocated-c-runtime"
+  ],
+  "rejection": [
+    "malformed-c-rejected",
+    "malformed-cxx-rejected",
+    "ambient-path-scan-clean",
+    "host-compiler-scan-clean",
+    "release-generated-substitution-scan-clean",
+    "wrong-predecessor-scan-clean"
+  ],
+  "trust": {
+    "trust_unsigned": false,
+    "signing_key_selected": true,
+    "substitutions_enabled": false
+  },
+  "fallback": {
+    "host_tool_execution": false,
+    "predecessor_delegation": false,
+    "release_generated_substitution": false,
+    "configure_bridge_compiler_use": false,
+    "fabricated_objects": [],
+    "omitted_artifacts": []
+  }
+}

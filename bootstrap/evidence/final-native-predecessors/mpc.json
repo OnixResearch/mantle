@@ -1,0 +1,73 @@
+{
+  "kind": "artifact",
+  "digest": "c510b50d520fae3201e33bb6c1e863924155be503b8fb128206b38e2fb105be6",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/1g2yb52d9jh5123sdx7cz5bgg56lwfdf-mpc-1.2.1-gcc40-v1"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:2db1fa16478815c8eaf5a30f106708cfe55d8cdb01c826592dbb98ea21bd6e83",
+      "logical_path": "/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/1g2yb52d9jh5123sdx7cz5bgg56lwfdf-mpc-1.2.1-gcc40-v1"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/1g2yb52d9jh5123sdx7cz5bgg56lwfdf-mpc-1.2.1-gcc40-v1"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1"
+  }
+}

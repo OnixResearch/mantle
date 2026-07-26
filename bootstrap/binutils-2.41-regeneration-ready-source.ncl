@@ -6,7 +6,7 @@ let crunch = import "lib.ncl" in
 
 let binutils_src = crunch.fetchTarball {
   # provenance: fosslinux/live-bootstrap steps/binutils-2.41/sources
-  url = "https://ftpmirror.gnu.org/binutils/binutils-2.41.tar.xz",
+  url = "https://mirrors.kernel.org/gnu/binutils/binutils-2.41.tar.xz",
   hash = "sha256-8dGjwSZTk28XKXwkODNezqFVLXDA6Ycf/dLF+RoYGWo=",
   name = "binutils-2.41-src",
 } in

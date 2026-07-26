@@ -83,18 +83,29 @@ pub(crate) struct FallbackRecord {
 
 #[derive(Debug, Clone)]
 pub(crate) struct RowExpectation {
+    pub(crate) schema: &'static str,
     pub(crate) row_id: &'static str,
     pub(crate) derivation: &'static str,
     pub(crate) artifact_evidence_path: &'static str,
+    pub(crate) artifact_evidence_schema: &'static str,
     pub(crate) acceptance_evidence_path: &'static str,
+    pub(crate) acceptance_evidence_schema: &'static str,
     pub(crate) success_marker: &'static str,
     pub(crate) source_paths: &'static [&'static str],
+    pub(crate) source_policies: &'static [SourcePolicyExpectation],
     pub(crate) predecessor_roles: &'static [&'static str],
     pub(crate) predecessor_evidence_paths: &'static [&'static str],
     pub(crate) generated_artifacts: &'static [&'static str],
     pub(crate) positive_matrix: &'static [&'static str],
     pub(crate) rejection_matrix: &'static [&'static str],
     pub(crate) required_non_claims: &'static [&'static str],
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SourcePolicyExpectation {
+    pub(crate) path: &'static str,
+    pub(crate) required: &'static [&'static str],
+    pub(crate) forbidden: &'static [&'static str],
 }
 
 #[derive(Debug, Clone)]
@@ -173,13 +184,13 @@ pub(crate) fn validate_receipt(
 }
 
 fn validate_identity(receipt: &EarlyNativeRowReceipt, expectation: &RowExpectation) -> Result<(), String> {
-    require_equal("schema", &receipt.schema, EARLY_NATIVE_ROW_RECEIPT_SCHEMA)?;
+    require_equal("schema", &receipt.schema, expectation.schema)?;
     require_equal("row_id", &receipt.row_id, expectation.row_id)?;
     require_equal("derivation", &receipt.derivation, expectation.derivation)?;
     if receipt.bounded_claim.trim().is_empty() {
         return Err("bounded_claim must not be empty".to_string());
     }
-    assert_eq!(receipt.schema, EARLY_NATIVE_ROW_RECEIPT_SCHEMA);
+    assert_eq!(receipt.schema, expectation.schema);
     assert!(!receipt.bounded_claim.trim().is_empty());
     Ok(())
 }
@@ -436,12 +447,16 @@ mod tests {
 
     fn expectation() -> RowExpectation {
         RowExpectation {
+            schema: EARLY_NATIVE_ROW_RECEIPT_SCHEMA,
             row_id: "row-a",
             derivation: "bootstrap/root.ncl",
             artifact_evidence_path: "bootstrap/evidence/row-a.json",
+            artifact_evidence_schema: "test-artifact-evidence-v1",
             acceptance_evidence_path: "bootstrap/evidence/row-a-acceptance.json",
+            acceptance_evidence_schema: "test-acceptance-evidence-v1",
             success_marker: "row-a matrix passed",
             source_paths: SOURCES,
+            source_policies: &[],
             predecessor_roles: PREDECESSORS,
             predecessor_evidence_paths: PREDECESSOR_EVIDENCE,
             generated_artifacts: GENERATED,

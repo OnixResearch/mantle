@@ -1,9 +1,8 @@
-# Diagnostic GCC 4.7.4 C/C++ build over regenerated GCC 4.0 plus the
-# source-built GMP/MPFR/MPC prerequisite chain.
+# GCC 4.7.4 C/C++ final-native parity row over the admitted regenerated GCC
+# 4.0 boundary and source-built GMP/MPFR/MPC prerequisites.
 #
-# This replaces the previous dependency cycle that attempted GCC 4.7 before
-# the math libraries its upstream compile recipe links. The build regenerates
-# its bounded Autoconf, header, Bison, and Flex inputs before compilation.
+# The build regenerates its declared Autoconf, header, Bison, and Flex inputs
+# before compilation. Its claim remains bounded to the receipted row matrix.
 
 let crunch = import "lib.ncl" in
 
@@ -78,7 +77,7 @@ let automake115_src = crunch.fetchTarball {
       for applet in awk basename cat chmod cmp cp cut date diff dirname echo egrep env expr find grep head ln ls mkdir mv od printf pwd rm rmdir sed sh sleep sort tail tar test touch tr true uname uniq wc; do
         $BB ln -sf "$BB" "$TOOLBIN/$applet"
       done
-      export PATH="$AUTOCONF/bin:$PERL/bin:$M4TOOL/bin:$BISON/bin:$FLEX/bin:$GAWK/bin:$GREP/bin:$TOOLBIN:$MAKE/bin:$BINUTILS/bin:$STAGE0/bin:$PATH"
+      export PATH="$AUTOCONF/bin:$PERL/bin:$M4TOOL/bin:$BISON/bin:$FLEX/bin:$GAWK/bin:$GREP/bin:$TOOLBIN:$MAKE/bin:$BINUTILS/bin:$STAGE0/bin"
       export CONFIG_SHELL=/bin/sh
       export SHELL=/bin/sh
       export MAKEINFO=true
@@ -329,6 +328,16 @@ EOF
       $BB chmod 755 "$WORK/positive-cxx"
       "$WORK/positive-cxx"
 
+      $BB printf '%s\n' 'int main( {' > "$WORK/rejected.c"
+      $BB rm -f "$WORK/rejected-c.o"
+      if "$out/bin/gcc" -B"$out/bin/" \
+        -B"$out/lib/gcc/$TARGET/$OUTPUT_GCC_VERSION/" \
+        -I"$MUSL/include" -c "$WORK/rejected.c" -o "$WORK/rejected-c.o"; then
+        echo "ERROR: GCC 4.7 accepted malformed C" >&2
+        exit 1
+      fi
+      test ! -e "$WORK/rejected-c.o"
+
       $BB printf '%s\n' 'template <typename T> int main(' > "$WORK/rejected.cpp"
       $BB rm -f "$WORK/rejected.o"
       if MANTLE_GCC_LINK_LIBGCC="$out/lib/gcc/$TARGET/$OUTPUT_GCC_VERSION/libgcc.a" \
@@ -357,12 +366,15 @@ EOF
       $BB chmod 755 "$WORK/relocated-positive"
       "$WORK/relocated-positive"
 
-      $BB mkdir -p "$out/share/gcc47-frontier"
-      $BB cp "$WORK/gcc47-regenerated-files.txt" "$out/share/gcc47-frontier/regenerated-files.txt"
-      $BB printf '%s\n' \
-        'NON_ADMISSION: component regeneration and runtime pass; normalized-provider admission remains separate' \
-        > "$out/share/gcc47-frontier/NON_ADMISSION"
-      echo "GCC 4.7.4 C/C++11 runtime, relocation, and rejection checks passed; not provider admission"
+      $BB mkdir -p "$out/share/mantle-bootstrap"
+      $BB cp "$WORK/gcc47-regenerated-files.txt" "$out/share/mantle-bootstrap/gcc47-regenerated-files.txt"
+      $BB cat > "$out/share/mantle-bootstrap/final-native-gcc47-row.txt" <<'EOF'
+claim: bounded final-native GCC 4.7 row behavior matrix passed
+positive: C runtime; C++11 exceptions,RTTI,new,delete,dynamic_cast; relocated C runtime
+negative: malformed C rejected without output; malformed C++ rejected without output
+non_claims: general compiler correctness; provider admission; seed admission; whole-bootstrap correctness
+EOF
+      echo "GCC 4.7.4 final-native row C/C++11 runtime, relocation, and rejection matrix passed"
     "%
   ],
   inputs = [

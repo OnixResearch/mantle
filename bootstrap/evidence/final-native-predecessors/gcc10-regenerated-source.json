@@ -1,0 +1,49 @@
+{
+  "kind": "artifact",
+  "digest": "3cd58563b39c2b7e3daa16b6f190c66f1425b06a6a227bb882e9a8680dbd515c",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/vp9n69cpag0l7sjw38sdhxvg2l8c6q86-gcc-10.5.0-regenerated-source-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/bsic5cswfi12py7jjnr962cd3rsv500y-autoconf-2.69-gcc-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/vp9n69cpag0l7sjw38sdhxvg2l8c6q86-gcc-10.5.0-regenerated-source-v1",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/ghi4aqc0xx0gb7jrfc9wsf57h0djrfqi-gcc-10.5.0-regenerated-source-v1"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:bfc04710a1686c1a9402d4da4b474592aee1939afead220ae7c5e59f1b879d63",
+      "logical_path": "/mantle/store/vp9n69cpag0l7sjw38sdhxvg2l8c6q86-gcc-10.5.0-regenerated-source-v1",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/bsic5cswfi12py7jjnr962cd3rsv500y-autoconf-2.69-gcc-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/bsic5cswfi12py7jjnr962cd3rsv500y-autoconf-2.69-gcc-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/vp9n69cpag0l7sjw38sdhxvg2l8c6q86-gcc-10.5.0-regenerated-source-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/vp9n69cpag0l7sjw38sdhxvg2l8c6q86-gcc-10.5.0-regenerated-source-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/ghi4aqc0xx0gb7jrfc9wsf57h0djrfqi-gcc-10.5.0-regenerated-source-v1"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/ghi4aqc0xx0gb7jrfc9wsf57h0djrfqi-gcc-10.5.0-regenerated-source-v1"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/vp9n69cpag0l7sjw38sdhxvg2l8c6q86-gcc-10.5.0-regenerated-source-v1"
+  }
+}

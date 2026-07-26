@@ -7,12 +7,14 @@ use crunch_attestation::ArtifactAttestation;
 use crunch_attestation::Canonicalize;
 use serde::Deserialize;
 
+use crate::early_native_row_receipt::EARLY_NATIVE_ROW_RECEIPT_SCHEMA;
 use crate::early_native_row_receipt::EarlyNativeRowReceipt;
 use crate::early_native_row_receipt::FallbackRecord;
 use crate::early_native_row_receipt::ObservedAcceptance;
 use crate::early_native_row_receipt::ObservedArtifact;
 use crate::early_native_row_receipt::ObservedPredecessor;
 use crate::early_native_row_receipt::RowExpectation;
+use crate::early_native_row_receipt::SourcePolicyExpectation;
 use crate::early_native_row_receipt::TrustRecord;
 use crate::early_native_row_receipt::parse_receipt;
 use crate::early_native_row_receipt::validate_receipt;
@@ -141,6 +143,31 @@ const GCC40_REJECTION: &[&str] = &[
     "release-generated-substitution-scan-clean",
     "wrapper-delegation-scan-clean",
 ];
+const BINUTILS_POLICY_REQUIRED: &[&str] = &[
+    "source-built TCC-era binutils matrix passed",
+    "CONFIGURE_PROBE_INVOCATION_COUNT_MAX=4096",
+    "CONFIGURE_PROBE_SOURCE_BYTES_MAX=65536",
+    "delegates to predecessor TinyCC",
+];
+const BINUTILS_POLICY_FORBIDDEN: &[&str] = &["command -v ", "/usr/bin/", "exec \"$TCC/bin/tcc\"", "NON_ADMISSION"];
+const BINUTILS_SOURCE_POLICIES: &[SourcePolicyExpectation] = &[SourcePolicyExpectation {
+    path: "bootstrap/binutils-tcc.ncl",
+    required: BINUTILS_POLICY_REQUIRED,
+    forbidden: BINUTILS_POLICY_FORBIDDEN,
+}];
+const GCC40_POLICY_REQUIRED: &[&str] = &[
+    "early-native-gcc40-row.txt",
+    "accepted malformed C",
+    "accepted malformed C++",
+    "for generator in genattrtab genoutput genemit genrecog genextract gengtype",
+];
+const GCC40_POLICY_FORBIDDEN: &[&str] = &["$STAGE0/bin:$PATH", "exec \"$TCC/bin/tcc\"", "NON_ADMISSION"];
+const GCC40_SOURCE_POLICIES: &[SourcePolicyExpectation] = &[SourcePolicyExpectation {
+    path: "bootstrap/gcc-4.0-musl-cxx.ncl",
+    required: GCC40_POLICY_REQUIRED,
+    forbidden: GCC40_POLICY_FORBIDDEN,
+}];
+
 const REQUIRED_NON_CLAIMS: &[&str] = &[
     "general compiler or binutils correctness",
     "provider or seed admission",
@@ -182,14 +209,19 @@ pub(crate) fn validate_gcc40_row(project_root: &Path) -> Result<(), String> {
     validate_row(project_root, GCC40_RECEIPT_PATH, &gcc40_expectation())
 }
 
-fn validate_row(project_root: &Path, receipt_path: &str, expectation: &RowExpectation) -> Result<(), String> {
+pub(crate) fn validate_row(
+    project_root: &Path,
+    receipt_path: &str,
+    expectation: &RowExpectation,
+) -> Result<(), String> {
     let receipt_text = read_relative(project_root, receipt_path, "early-native row receipt")?;
     let receipt = parse_receipt(&receipt_text)?;
     require_expected_artifact_path(&receipt, expectation)?;
     let observed_sources = observe_sources(project_root, &receipt, expectation)?;
     let observed_predecessors = observe_predecessors(project_root, expectation)?;
     let observed_acceptance = observe_acceptance(project_root, expectation)?;
-    let observed_artifact = observe_artifact(project_root, &receipt.output.artifact_evidence_path)?;
+    let observed_artifact =
+        observe_artifact(project_root, &receipt.output.artifact_evidence_path, expectation.artifact_evidence_schema)?;
     validate_receipt(
         &receipt,
         expectation,
@@ -289,10 +321,10 @@ fn observe_acceptance(project_root: &Path, expectation: &RowExpectation) -> Resu
     let text = read_relative(project_root, path, "early-native acceptance evidence")?;
     let envelope: AcceptanceEvidenceEnvelope =
         serde_json::from_str(&text).map_err(|error| format!("parse `{path}`: {error}"))?;
-    if envelope.schema != ACCEPTANCE_EVIDENCE_SCHEMA {
+    if envelope.schema != expectation.acceptance_evidence_schema {
         return Err(format!(
-            "acceptance evidence schema is `{}`, expected `{ACCEPTANCE_EVIDENCE_SCHEMA}`",
-            envelope.schema
+            "acceptance evidence schema is `{}`, expected `{}`",
+            envelope.schema, expectation.acceptance_evidence_schema
         ));
     }
     let positive = envelope.positive.into_iter().collect::<std::collections::BTreeSet<_>>();
@@ -318,54 +350,31 @@ fn observe_acceptance(project_root: &Path, expectation: &RowExpectation) -> Resu
 }
 
 fn validate_final_source_policy(project_root: &Path, expectation: &RowExpectation) -> Result<(), String> {
-    let (path, required, forbidden): (&str, &[&str], &[&str]) = match expectation.row_id {
-        "binutils.tcc" => (
-            "bootstrap/binutils-tcc.ncl",
-            &[
-                "source-built TCC-era binutils matrix passed",
-                "CONFIGURE_PROBE_INVOCATION_COUNT_MAX=4096",
-                "CONFIGURE_PROBE_SOURCE_BYTES_MAX=65536",
-                "delegates to predecessor TinyCC",
-            ],
-            &["command -v ", "/usr/bin/", "exec \"$TCC/bin/tcc\"", "NON_ADMISSION"],
-        ),
-        "gcc.4.0" => (
-            "bootstrap/gcc-4.0-musl-cxx.ncl",
-            &[
-                "early-native-gcc40-row.txt",
-                "accepted malformed C",
-                "accepted malformed C++",
-                "for generator in genattrtab genoutput genemit genrecog genextract gengtype",
-            ],
-            &["$STAGE0/bin:$PATH", "exec \"$TCC/bin/tcc\"", "NON_ADMISSION"],
-        ),
-        other => return Err(format!("no final-source policy exists for early-native row `{other}`")),
-    };
-    let source = read_relative(project_root, path, "early-native final source policy input")?;
-    for marker in required {
-        if !source.contains(marker) {
-            return Err(format!("final source `{path}` is missing required policy marker `{marker}`"));
+    for policy in expectation.source_policies {
+        let source = read_relative(project_root, policy.path, "native row final source policy input")?;
+        for marker in policy.required {
+            if !source.contains(marker) {
+                return Err(format!("final source `{}` is missing required policy marker `{marker}`", policy.path));
+            }
         }
-    }
-    for marker in forbidden {
-        if source.contains(marker) {
-            return Err(format!("final source `{path}` contains forbidden policy marker `{marker}`"));
+        for marker in policy.forbidden {
+            if source.contains(marker) {
+                return Err(format!("final source `{}` contains forbidden policy marker `{marker}`", policy.path));
+            }
         }
+        assert!(policy.required.iter().all(|marker| source.contains(marker)));
+        assert!(policy.forbidden.iter().all(|marker| !source.contains(marker)));
     }
-    assert!(required.iter().all(|marker| source.contains(marker)));
-    assert!(forbidden.iter().all(|marker| !source.contains(marker)));
+    assert!(expectation.source_policies.len() <= expectation.source_paths.len());
     Ok(())
 }
 
-fn observe_artifact(project_root: &Path, path: &str) -> Result<ObservedArtifact, String> {
+fn observe_artifact(project_root: &Path, path: &str, expected_schema: &str) -> Result<ObservedArtifact, String> {
     let text = read_relative(project_root, path, "early-native artifact evidence")?;
     let envelope: ArtifactEvidenceEnvelope =
         serde_json::from_str(&text).map_err(|error| format!("parse `{path}`: {error}"))?;
-    if envelope.schema != ARTIFACT_EVIDENCE_SCHEMA {
-        return Err(format!(
-            "artifact evidence schema is `{}`, expected `{ARTIFACT_EVIDENCE_SCHEMA}`",
-            envelope.schema
-        ));
+    if envelope.schema != expected_schema {
+        return Err(format!("artifact evidence schema is `{}`, expected `{expected_schema}`", envelope.schema));
     }
     let computed_digest = envelope
         .attestation
@@ -428,12 +437,16 @@ fn validate_relative_path(path: &str) -> Result<(), String> {
 
 fn binutils_expectation() -> RowExpectation {
     RowExpectation {
+        schema: EARLY_NATIVE_ROW_RECEIPT_SCHEMA,
         row_id: "binutils.tcc",
         derivation: "bootstrap/binutils-tcc.ncl",
         artifact_evidence_path: BINUTILS_ARTIFACT_EVIDENCE_PATH,
+        artifact_evidence_schema: ARTIFACT_EVIDENCE_SCHEMA,
         acceptance_evidence_path: BINUTILS_ACCEPTANCE_EVIDENCE_PATH,
+        acceptance_evidence_schema: ACCEPTANCE_EVIDENCE_SCHEMA,
         success_marker: BINUTILS_SUCCESS_MARKER,
         source_paths: BINUTILS_SOURCES,
+        source_policies: BINUTILS_SOURCE_POLICIES,
         predecessor_roles: BINUTILS_PREDECESSORS,
         predecessor_evidence_paths: BINUTILS_PREDECESSOR_EVIDENCE,
         generated_artifacts: BINUTILS_GENERATED,
@@ -445,12 +458,16 @@ fn binutils_expectation() -> RowExpectation {
 
 fn gcc40_expectation() -> RowExpectation {
     RowExpectation {
+        schema: EARLY_NATIVE_ROW_RECEIPT_SCHEMA,
         row_id: "gcc.4.0",
         derivation: "bootstrap/gcc-4.0.ncl",
         artifact_evidence_path: GCC40_ARTIFACT_EVIDENCE_PATH,
+        artifact_evidence_schema: ARTIFACT_EVIDENCE_SCHEMA,
         acceptance_evidence_path: GCC40_ACCEPTANCE_EVIDENCE_PATH,
+        acceptance_evidence_schema: ACCEPTANCE_EVIDENCE_SCHEMA,
         success_marker: GCC40_SUCCESS_MARKER,
         source_paths: GCC40_SOURCES,
+        source_policies: GCC40_SOURCE_POLICIES,
         predecessor_roles: GCC40_PREDECESSORS,
         predecessor_evidence_paths: GCC40_PREDECESSOR_EVIDENCE,
         generated_artifacts: GCC40_GENERATED,

@@ -182,11 +182,17 @@ enum EvidenceCheck {
     BinutilsTccToolTranscript,
     EarlyNativeBinutilsRow,
     EarlyNativeGcc40Row,
+    FinalNativeGcc47Row,
+    FinalNativeGcc10Row,
+    FinalNativeMuslBinutilsRow,
     RealSelfBuildProof,
     StagexLineageProviderReceipt,
     Gcc40PlaceholderInventory,
+    #[cfg_attr(not(test), allow(dead_code))]
     Gcc47CxxProviderContract,
+    #[cfg_attr(not(test), allow(dead_code))]
     Gcc10ProviderContract,
+    #[cfg_attr(not(test), allow(dead_code))]
     FullMuslBinutilsProviderContract,
 }
 
@@ -693,6 +699,14 @@ fn validate_stage_evidence(
         }
         EvidenceCheck::EarlyNativeGcc40Row => crate::early_native_row_receipt_shell::validate_gcc40_row(project_root)
             .map(|()| EvidenceValidation::empty()),
+        EvidenceCheck::FinalNativeGcc47Row => crate::final_native_row_receipt_shell::validate_gcc47_row(project_root)
+            .map(|()| EvidenceValidation::empty()),
+        EvidenceCheck::FinalNativeGcc10Row => crate::final_native_row_receipt_shell::validate_gcc10_row(project_root)
+            .map(|()| EvidenceValidation::empty()),
+        EvidenceCheck::FinalNativeMuslBinutilsRow => {
+            crate::final_native_row_receipt_shell::validate_final_musl_binutils_row(project_root)
+                .map(|()| EvidenceValidation::empty())
+        }
         EvidenceCheck::RealSelfBuildProof => validate_real_self_build_proof_parity_evidence(project_root),
         EvidenceCheck::StagexLineageProviderReceipt => {
             validate_stagex_lineage_provider_receipt(project_root).map(|()| EvidenceValidation::empty())
@@ -3207,12 +3221,12 @@ const BOOTSTRAP_GAP_STAGE_SPECS: &[StageSpec] = &[
         axes: LIVE_GUIX,
         lineage: "live-bootstrap",
         derivation: Some("gcc-4.7.ncl"),
-        expected_complete: false,
-        graph_evidence: "derivation present",
-        semantic_evidence: "checked C/C++/C++11 provider contract only; native correctness evidence required",
-        proof_evidence: "source transcript and checked C++ provider contract required",
-        notes: "checked receipt at bootstrap/evidence/gcc-4.7-cxx-provider-contract.json validates the C/C++ configure/build/install/smoke contract; row remains partial until native/full GCC 4.7 correctness is proven",
-        evidence_check: EvidenceCheck::Gcc47CxxProviderContract,
+        expected_complete: true,
+        graph_evidence: "regenerated GCC 4.7 derivation and independently bound output/predecessor attestations present",
+        semantic_evidence: "C/C++11, compiler-internal, static runtime, relocation, malformed-source, and fallback matrices passed",
+        proof_evidence: "stage-local BLAKE3 receipt over current sources, generated artifacts, immediate predecessors, output, trust, and rejection facts required",
+        notes: "completion is bounded to bootstrap/evidence/final-native-gcc47-row-v1.json and does not claim general compiler correctness",
+        evidence_check: EvidenceCheck::FinalNativeGcc47Row,
     },
     StageSpec {
         id: "gcc.10",
@@ -3220,12 +3234,12 @@ const BOOTSTRAP_GAP_STAGE_SPECS: &[StageSpec] = &[
         axes: LIVE_GUIX,
         lineage: "live-bootstrap",
         derivation: Some("gcc-10.ncl"),
-        expected_complete: false,
-        graph_evidence: "derivation present",
-        semantic_evidence: "checked C/C++/C++11 provider contract only; native correctness evidence required",
-        proof_evidence: "source transcript and checked GCC 10 provider contract required",
-        notes: "checked receipt at bootstrap/evidence/gcc-10-provider-contract.json validates the C/C++ configure/build/install/smoke contract; row remains partial until native/full GCC 10 correctness is proven",
-        evidence_check: EvidenceCheck::Gcc10ProviderContract,
+        expected_complete: true,
+        graph_evidence: "regenerated GCC 10 derivation and independently bound GCC 4.7/source/output attestations present",
+        semantic_evidence: "C/C++17, compiler-internal, static runtime, relocation, malformed-source, and fallback matrices passed",
+        proof_evidence: "stage-local BLAKE3 receipt over current sources, generated artifacts, GCC 4.7 lineage, output, trust, and rejection facts required",
+        notes: "completion is bounded to bootstrap/evidence/final-native-gcc10-row-v1.json and does not claim general compiler correctness",
+        evidence_check: EvidenceCheck::FinalNativeGcc10Row,
     },
     StageSpec {
         id: "full-musl-binutils",
@@ -3233,12 +3247,12 @@ const BOOTSTRAP_GAP_STAGE_SPECS: &[StageSpec] = &[
         axes: LIVE_GUIX,
         lineage: "guix",
         derivation: Some("binutils-full.ncl"),
-        expected_complete: false,
-        graph_evidence: "binutils-full plus musl-full derivations present",
-        semantic_evidence: "full toolchain smokes required",
-        proof_evidence: "source-root proof and checked full musl/binutils provider contract required",
-        notes: "checked receipt at bootstrap/evidence/full-musl-binutils-provider-contract.json validates the musl 1.2.5 and binutils 2.41 configure/build/install/smoke contract; row remains partial until full toolchain correctness and source-root proof are proven",
-        evidence_check: EvidenceCheck::FullMuslBinutilsProviderContract,
+        expected_complete: true,
+        graph_evidence: "final GCC 10, musl 1.2.5, and binutils 2.41 stage-local artifacts and attestations present",
+        semantic_evidence: "static/shared compiler and libc runtimes plus complete binutils, relocation, copied-tree, and rejection matrices passed",
+        proof_evidence: "composed BLAKE3 receipt over final GCC, libc/CRT/interpreter, binutils, trust, closure, relocation, and fallback facts required",
+        notes: "completion is bounded to bootstrap/evidence/final-native-musl-binutils-row-v1.json and does not claim provider admission or whole-toolchain correctness",
+        evidence_check: EvidenceCheck::FinalNativeMuslBinutilsRow,
     },
     StageSpec {
         id: "seed-full",

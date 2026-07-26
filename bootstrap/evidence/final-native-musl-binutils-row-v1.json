@@ -1,0 +1,64 @@
+{
+  "schema": "mantle-final-native-row-receipt-v1",
+  "row_id": "full-musl-binutils",
+  "derivation": "bootstrap/binutils-full.ncl",
+  "source_records": [
+    {"path":"bootstrap/gcc-10-final.ncl","blake3":"cb4b86700721abd0ec0e4912d776e0285dd329f8138e55c51c291a18b1fe2d19"},
+    {"path":"bootstrap/gcc-10.5.0-regenerated-source.ncl","blake3":"775a3bc0811fc9dfab0b5e5ea7126be2e9d9489989bee5b96c159d1fec268aa7"},
+    {"path":"bootstrap/musl-full.ncl","blake3":"a7af2d3324177576d7463ecc288b0e680eefaeae97910ec1609add17e90164e3"},
+    {"path":"bootstrap/binutils-full.ncl","blake3":"dad4892dd2c2c1c2e044f36be1f30001b1ffe4a83795743b686901cc3797d04d"},
+    {"path":"bootstrap/binutils-2.41-regeneration-ready-source.ncl","blake3":"64882948cf05b8f13fb78f8342f45ed3015affef373b6c87919cb42229a61ee1"}
+  ],
+  "predecessors": [
+    {"role":"gcc10","logical_path":"/mantle/store/ysw79f732xmv92y8n63g6pjq3vid8445-gcc-10.5.0-musl-gcc47-v2","artifact_evidence_path":"bootstrap/evidence/final-native-predecessors/gcc10.json","artifact_attestation_blake3":"ef3778e9d4099f65e52e3f76c21cda132559c9daa4700db0064a604877be5f3a"},
+    {"role":"gcc10-final-cycle","logical_path":"/mantle/store/nvia8gzpydjda31lvca1c2kmbn4s6z3c-gcc-10.5.0-musl-final-v1","artifact_evidence_path":"bootstrap/evidence/final-native-predecessors/gcc10-final.json","artifact_attestation_blake3":"260f7c2f4bf507e194f49562afcaf13e04fec0a0e1b2bc0583df86a0a44ee5d6"},
+    {"role":"musl-final","logical_path":"/mantle/store/m7k4i3gsq169qp9ca9ckbrz2kmqqk01d-musl-1.2.5-gcc10-v1","artifact_evidence_path":"bootstrap/evidence/final-native-predecessors/musl-final.json","artifact_attestation_blake3":"8e096e43126225d797dbb789338f380cc586d6e98af6497451fca5f5452139d9"}
+  ],
+  "generated_artifacts": [
+    {"id":"gcc10-final-regenerated-source-set","status":"regenerated"},
+    {"id":"binutils-configure-set-autoconf-2.69","status":"regenerated"},
+    {"id":"binutils-parser-scanner-set-bison-flex","status":"regenerated"}
+  ],
+  "acceptance_evidence_path": "bootstrap/evidence/final-native-musl-binutils-acceptance-v1.json",
+  "output": {
+    "logical_path": "/mantle/store/c15xv2d8hifachmldawfp66p93i725l9-binutils-2.41-gcc10-v1",
+    "artifact_evidence_path": "bootstrap/evidence/final-native-binutils-artifact.json",
+    "artifact_attestation_blake3": "c7a17c5307db3823a94f774d70668ccb08322044c17c18092cca618ebaf082b4",
+    "nar_sha256": "3c95ace4f3ddf20490fc75173eda57a0459c5115c835ecd853460ecabb68b338"
+  },
+  "behavior": {
+    "positive": [
+      {"id":"gcc10-static-cxx17-runtime","status":"passed"},
+      {"id":"gcc10-dynamic-cxx17-runtime","status":"passed"},
+      {"id":"gcc10-shared-runtime-members","status":"passed"},
+      {"id":"gcc10-relocated-runtime","status":"passed"},
+      {"id":"musl-header-crt-static-shared-interpreter-set","status":"passed"},
+      {"id":"musl-static-runtime","status":"passed"},
+      {"id":"musl-dynamic-runtime","status":"passed"},
+      {"id":"musl-copied-tree-runtime","status":"passed"},
+      {"id":"binutils-tool-set","status":"passed"},
+      {"id":"binutils-runtime-and-relocation","status":"passed"},
+      {"id":"binutils-copied-tree-runtime","status":"passed"}
+    ],
+    "rejection": [
+      {"id":"malformed-cxx-rejected","status":"passed"},
+      {"id":"absolute-shared-runtime-dependency-rejected","status":"passed"},
+      {"id":"malformed-c-rejected","status":"passed"},
+      {"id":"malformed-assembly-rejected","status":"passed"},
+      {"id":"malformed-object-rejected","status":"passed"},
+      {"id":"malformed-archive-rejected","status":"passed"},
+      {"id":"undefined-symbol-link-rejected","status":"passed"},
+      {"id":"ambient-path-scan-clean","status":"passed"},
+      {"id":"state-pinned-input-scan-clean","status":"passed"},
+      {"id":"missing-runtime-member-scan-clean","status":"passed"}
+    ]
+  },
+  "trust": {"trust_unsigned":false,"signing_key_selected":true,"substitutions_enabled":false},
+  "fallback": {"host_tool_execution":false,"predecessor_delegation":false,"release_generated_substitution":false,"configure_bridge_compiler_use":false,"fabricated_objects":[],"omitted_artifacts":[]},
+  "bounded_claim": "The independently receipted GCC 10 lineage produced the declared final GCC 10, musl 1.2.5, and binutils 2.41 behavior and rejection matrices under signed no-substitution acceptance.",
+  "non_claims": [
+    "general compiler, libc, or binutils correctness",
+    "provider or seed admission",
+    "whole-bootstrap correctness"
+  ]
+}

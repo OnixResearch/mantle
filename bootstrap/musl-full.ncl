@@ -1,8 +1,7 @@
-# Diagnostic musl 1.2.5 static/dynamic runtime frontier built by GCC 10.
+# Final-native musl 1.2.5 static/dynamic runtime built by receipted GCC 10.
 #
-# This root remains isolated from bootstrap/seed.ncl until its compiler and
-# utility predecessors become a pure derivational closure and the final
-# provider metadata/admission rails pass.
+# This output supplies the libc/header/CRT/interpreter portion of the bounded
+# final row and remains separate from provider or seed admission.
 
 let crunch = import "lib.ncl" in
 
@@ -214,6 +213,31 @@ EOF
       test "$dynamic_output" = gcc10-musl-1.2.5-smoke-ok
       "$BINUTILS/bin/readelf" -l "$WORK/runtime-dynamic" | "$GREP/bin/grep" -q "$out/lib/ld-musl-x86_64.so.1"
 
+      RELOCATED_MUSL="$WORK/relocated-musl"
+      $BB cp -R "$out" "$RELOCATED_MUSL"
+      MANTLE_GCC_ASSEMBLER="$BINUTILS/bin/as" \
+        "$GCC/bin/gcc" -B"$GCC/bin/" -B"$GCC/lib/gcc/$TARGET/$GCC_VERSION/" \
+          -I"$RELOCATED_MUSL/include" -c "$WORK/runtime-smoke.c" \
+          -o "$WORK/runtime-relocated.o"
+      test -s "$WORK/runtime-relocated.o"
+      MANTLE_GCC_ASSEMBLER="$BINUTILS/bin/as" \
+      MANTLE_GCC_LINKER="$BINUTILS/bin/ld" \
+      MANTLE_GCC_LINK_LIBC="$RELOCATED_MUSL/lib/libc.a" \
+      MANTLE_GCC_LINK_LIBM="$RELOCATED_MUSL/lib/libm.a" \
+      MANTLE_GCC_LINK_LIBGCC="$GCC/lib/gcc/$TARGET/$GCC_VERSION/libgcc.a" \
+      MANTLE_GCC_LINK_CRT="$RELOCATED_MUSL/lib" \
+        "$GCC/bin/gcc" -B"$GCC/bin/" -B"$GCC/lib/gcc/$TARGET/$GCC_VERSION/" \
+          -nostartfiles -static \
+          "$RELOCATED_MUSL/lib/crt1.o" "$RELOCATED_MUSL/lib/crti.o" \
+          "$GCC/lib/gcc/$TARGET/$GCC_VERSION/crtbeginT.o" \
+          "$WORK/runtime-relocated.o" \
+          "$GCC/lib/gcc/$TARGET/$GCC_VERSION/crtend.o" "$RELOCATED_MUSL/lib/crtn.o" \
+          -o "$WORK/runtime-relocated-static"
+      test -s "$WORK/runtime-relocated-static"
+      $BB chmod 755 "$WORK/runtime-relocated-static"
+      relocated_static_output=$("$WORK/runtime-relocated-static")
+      test "$relocated_static_output" = gcc10-musl-1.2.5-smoke-ok
+
       $BB printf '%s\n' 'int main(' > "$WORK/rejected.c"
       $BB rm -f "$WORK/rejected.o"
       if MANTLE_GCC_ASSEMBLER="$BINUTILS/bin/as" \
@@ -224,11 +248,14 @@ EOF
       fi
       test ! -e "$WORK/rejected.o"
 
-      $BB mkdir -p "$out/share/musl-gcc10-frontier"
-      $BB printf '%s\n' \
-        'NON_ADMISSION: musl 1.2.5 has component-level static/dynamic runtime evidence; normalized-provider closure and external identity admission remain separate' \
-        > "$out/share/musl-gcc10-frontier/NON_ADMISSION"
-      echo "musl 1.2.5 GCC 10 static/dynamic runtime and rejection checks passed; not provider admission"
+      $BB mkdir -p "$out/share/mantle-bootstrap"
+      $BB cat > "$out/share/mantle-bootstrap/final-native-musl-row.txt" <<'EOF'
+claim: bounded final-native musl 1.2.5 matrix passed
+positive: headers,CRT,static libc,shared libc,dynamic interpreter; static,dynamic,and copied-tree runtime
+negative: malformed C rejected without output
+non_claims: general libc correctness; provider admission; seed admission; whole-bootstrap correctness
+EOF
+      echo "musl 1.2.5 final-native static/dynamic runtime and rejection matrix passed"
     "%
   ],
   inputs = [

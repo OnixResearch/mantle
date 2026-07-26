@@ -1,0 +1,53 @@
+{
+  "schema": "mantle-final-native-row-acceptance-v1",
+  "row_id": "full-musl-binutils",
+  "logical_path": "/mantle/store/c15xv2d8hifachmldawfp66p93i725l9-binutils-2.41-gcc10-v1",
+  "success_marker": "binutils 2.41 final-native assembler/linker/archive/object runtime, relocation, and rejection matrix passed",
+  "evidence_origin": {
+    "recipe_logical_path": "/mantle/store/lmvizn7ch54abdycdbsbvwdxywbs5300-binutils-2.41-gcc10-v1",
+    "artifact_marker": "share/mantle-bootstrap/final-native-binutils-row.txt",
+    "runtime_fingerprint_schema": "mantle-runtime-fingerprint-v1",
+    "component_recipe_logical_paths": [
+      "/mantle/store/ncnw5i8jl4xr9qjk64liax67b92j0r0m-musl-1.2.5-gcc10-v1",
+      "/mantle/store/9hkk0hrr7svm2dbbn9vbywwncakkkpx6-gcc-10.5.0-musl-final-v1"
+    ]
+  },
+  "positive": [
+    "gcc10-static-cxx17-runtime",
+    "gcc10-dynamic-cxx17-runtime",
+    "gcc10-shared-runtime-members",
+    "gcc10-relocated-runtime",
+    "musl-header-crt-static-shared-interpreter-set",
+    "musl-static-runtime",
+    "musl-dynamic-runtime",
+    "musl-copied-tree-runtime",
+    "binutils-tool-set",
+    "binutils-runtime-and-relocation",
+    "binutils-copied-tree-runtime"
+  ],
+  "rejection": [
+    "malformed-cxx-rejected",
+    "absolute-shared-runtime-dependency-rejected",
+    "malformed-c-rejected",
+    "malformed-assembly-rejected",
+    "malformed-object-rejected",
+    "malformed-archive-rejected",
+    "undefined-symbol-link-rejected",
+    "ambient-path-scan-clean",
+    "state-pinned-input-scan-clean",
+    "missing-runtime-member-scan-clean"
+  ],
+  "trust": {
+    "trust_unsigned": false,
+    "signing_key_selected": true,
+    "substitutions_enabled": false
+  },
+  "fallback": {
+    "host_tool_execution": false,
+    "predecessor_delegation": false,
+    "release_generated_substitution": false,
+    "configure_bridge_compiler_use": false,
+    "fabricated_objects": [],
+    "omitted_artifacts": []
+  }
+}

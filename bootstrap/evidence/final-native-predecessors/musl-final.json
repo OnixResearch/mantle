@@ -1,0 +1,42 @@
+{
+  "kind": "artifact",
+  "digest": "8e096e43126225d797dbb789338f380cc586d6e98af6497451fca5f5452139d9",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/m7k4i3gsq169qp9ca9ckbrz2kmqqk01d-musl-1.2.5-gcc10-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/m7k4i3gsq169qp9ca9ckbrz2kmqqk01d-musl-1.2.5-gcc10-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/m7k4i3gsq169qp9ca9ckbrz2kmqqk01d-musl-1.2.5-gcc10-v1",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/ncnw5i8jl4xr9qjk64liax67b92j0r0m-musl-1.2.5-gcc10-v1"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:536e16442ba0acdea67dae2f06c3c93dd4e475ed2760bee0296e67fd4642a96c",
+      "logical_path": "/mantle/store/m7k4i3gsq169qp9ca9ckbrz2kmqqk01d-musl-1.2.5-gcc10-v1",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/m7k4i3gsq169qp9ca9ckbrz2kmqqk01d-musl-1.2.5-gcc10-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/m7k4i3gsq169qp9ca9ckbrz2kmqqk01d-musl-1.2.5-gcc10-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/ncnw5i8jl4xr9qjk64liax67b92j0r0m-musl-1.2.5-gcc10-v1"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/ncnw5i8jl4xr9qjk64liax67b92j0r0m-musl-1.2.5-gcc10-v1"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/m7k4i3gsq169qp9ca9ckbrz2kmqqk01d-musl-1.2.5-gcc10-v1"
+  }
+}
