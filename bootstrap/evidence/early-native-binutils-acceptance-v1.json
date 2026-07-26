@@ -1,0 +1,41 @@
+{
+  "schema": "mantle-early-native-row-acceptance-v1",
+  "row_id": "binutils.tcc",
+  "logical_path": "/mantle/store/rm39hk4lfnaqzhcpazva7n17f58l5syl-binutils-2.30-tcc-source-v1",
+  "success_marker": "source-built TCC-era binutils matrix passed",
+  "evidence_origin": {
+    "recipe_logical_path": "/mantle/store/66rwlnpidlrgnqwlpxs4jh3wj7jq1jdw-binutils-2.30-tcc-source-v1",
+    "artifact_marker": "share/mantle-bootstrap/binutils-tcc.json",
+    "runtime_fingerprint_schema": "mantle-runtime-fingerprint-v1"
+  },
+  "positive": [
+    "archive-roundtrip",
+    "assemble-object",
+    "link-execute",
+    "nm-symbols",
+    "objcopy-copy",
+    "object-format-readelf",
+    "ranlib-index",
+    "relocation-link"
+  ],
+  "rejection": [
+    "malformed-archive-rejected",
+    "malformed-assembly-rejected",
+    "malformed-link-input-rejected",
+    "malformed-object-rejected",
+    "missing-archive-member-rejected"
+  ],
+  "trust": {
+    "trust_unsigned": false,
+    "signing_key_selected": true,
+    "substitutions_enabled": false
+  },
+  "fallback": {
+    "host_tool_execution": false,
+    "predecessor_delegation": false,
+    "release_generated_substitution": false,
+    "configure_bridge_compiler_use": false,
+    "fabricated_objects": [],
+    "omitted_artifacts": []
+  }
+}

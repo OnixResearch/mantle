@@ -5,8 +5,7 @@
 let crunch = import "lib.ncl" in
 
 let stage0 = crunch.derivationFile "stage0-posix.ncl" in
-let tcc = crunch.derivationFile "tcc-musl-native.ncl" in
-let tcc_compile = crunch.derivationFile "tcc-musl-selfhost.ncl" in
+let tcc = crunch.derivationFile "tcc-musl-v2.ncl" in
 let musl = crunch.derivationFile "musl-1.1.24-native.ncl" in
 let make = crunch.derivationFile "make-tcc.ncl" in
 let sed = crunch.derivationFile "sed-4.0.9-musl.ncl" in
@@ -35,8 +34,7 @@ let diffutils_src = crunch.fetchTarball {
         echo "ERROR: input $1 not found" >&2; exit 1
       }
 
-      TCC=$(find_input tcc-0.9.27-musl-native-runtime)
-      TCC_COMPILE=$(find_input tcc-0.9.27-musl-selfhost)
+      TCC=$(find_input tcc-0.9.27-musl-v2)
       MUSL=$(find_input musl-1.1.24-native-candidate)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
@@ -57,22 +55,14 @@ let diffutils_src = crunch.fetchTarball {
       CFLAGS="-I. -I$MUSL/include -DNULL_DEVICE=\"/dev/null\" -DHAVE_STRERROR=1 -DREGEX_MALLOC=1 -DHAVE_DIRENT_H=1 -DHAVE_DUP2=1 -DHAVE_FORK=1 -DHAVE_UNISTD_H=1 -DHAVE_STRING_H=1 -DHAVE_STDLIB_H=1"
       CMP_SOURCES='cmp cmpbuf error getopt getopt1 xmalloc version'
       DIFF_SOURCES='diff alloca analyze cmpbuf dir io util context ed ifdef normal side fnmatch getopt getopt1 regex version'
-      COMPILER_TEARDOWN_SIGNAL_STATUS=139
-
       compile_object() {
         source_path="$1"
         object_path="$2"
-        if "$TCC_COMPILE/bin/tcc" -c $CFLAGS "$source_path" -o "$object_path"; then
-          :
-        else
-          compile_status=$?
-          if [ "$compile_status" -eq "$COMPILER_TEARDOWN_SIGNAL_STATUS" ] && [ -s "$object_path" ]; then
-            echo "diffutils-2.7: accepted complete object before known compiler teardown fault: $object_path" >&2
-          else
-            $BB rm -f "$object_path"
-            "$TCC/bin/tcc" -c $CFLAGS "$source_path" -o "$object_path"
-          fi
-        fi
+        "$TCC/bin/tcc" -c $CFLAGS "$source_path" -o "$object_path" || {
+          $BB rm -f "$object_path"
+          echo "ERROR: TCC-v2 failed compiling $source_path" >&2
+          exit 1
+        }
         test -s "$object_path"
         $BB chmod u+rw "$object_path"
       }
@@ -88,9 +78,8 @@ let diffutils_src = crunch.fetchTarball {
           object_files="$object_files $object_path"
         done
         echo "diffutils-2.7-link=$output_name" >&2
-        "$TCC_COMPILE/bin/tcc" -nostdlib -static -o "$WORK/$output_name" \
-          "$MUSL/lib/crt1.o" $object_files "$MUSL/lib/libc.a" \
-          "$TCC_COMPILE/lib/tcc/libtcc1.a"
+        "$TCC/bin/tcc" -nostdlib -static -o "$WORK/$output_name" \
+          "$MUSL/lib/crt1.o" $object_files "$MUSL/lib/libc.a"
         test -s "$WORK/$output_name"
         $BB chmod u+r "$WORK/$output_name"
       }
@@ -133,5 +122,5 @@ let diffutils_src = crunch.fetchTarball {
       echo "diffutils 2.7 source-built cmp/diff runtime and rejection checks passed" >&2
     "%,
   ],
-  inputs = [stage0, tcc, tcc_compile, musl, make, sed, diffutils_src],
+  inputs = [stage0, tcc, musl, make, sed, diffutils_src],
 } | crunch.Derivation

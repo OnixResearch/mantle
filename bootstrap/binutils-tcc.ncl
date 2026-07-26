@@ -1,23 +1,25 @@
-# Build binutils 2.30 using the full tcc-era intermediate tool chain.
+# Build binutils 2.30 from authenticated source with the declared TCC/musl
+# bootstrap closure.
 #
-# This is the final output of the binutils-tcc chain, providing as,
-# ld, ar, ranlib, nm, and objcopy for the gcc-4.0.4 transition.
-#
-# Adapted from live-bootstrap steps/binutils-2.30.
+# The recipe follows live-bootstrap's binutils-2.30 pass1 artifact boundary:
+# remove required generated parser/scanner/table/header sources, regenerate
+# them with declared source-built Bison/Flex/native generators, configure from
+# the authenticated release scripts, compile the real GNU tools with TinyCC,
+# and reject missing or delegated output members.
 
 let crunch = import "lib.ncl" in
 
-let stage0 = import "stage0-posix.ncl" in
-let mes = import "mes.ncl" in
-let tcc = import "tcc-musl-v2.ncl" in
-let musl = import "musl-1.1.24-tcc-musl.ncl" in
-let make = import "make-tcc.ncl" in
-let sed = import "sed-4.0.9-musl.ncl" in
-let m4 = import "m4-1.4.7-musl.ncl" in
-let grep = import "grep-2.4-musl.ncl" in
-let diffutils = import "diffutils-2.7-musl.ncl" in
-let tar = import "tar-tcc.ncl" in
-let bzip2 = import "bzip2-1.0.8-musl.ncl" in
+let stage0 = crunch.derivationFile "stage0-posix.ncl" in
+let tcc = crunch.derivationFile "tcc-musl-v2.ncl" in
+let musl = crunch.derivationFile "musl-1.1.24-native.ncl" in
+let make = crunch.derivationFile "make-tcc.ncl" in
+let sed = crunch.derivationFile "sed-4.0.9-musl.ncl" in
+let m4 = crunch.derivationFile "m4-1.4.7-musl.ncl" in
+let grep = crunch.derivationFile "grep-2.4-musl.ncl" in
+let diffutils = crunch.derivationFile "diffutils-2.7-musl.ncl" in
+let gawk = crunch.derivationFile "gawk-3.0.4-musl.ncl" in
+let bison = crunch.derivationFile "bison-2.3-musl.ncl" in
+let flex = crunch.derivationFile "flex-2.6.4-musl.ncl" in
 
 let binutils_src = crunch.fetchTarball {
   # provenance: fosslinux/live-bootstrap steps/binutils-2.30/sources
@@ -28,485 +30,601 @@ let binutils_src = crunch.fetchTarball {
 } in
 
 {
-  name = "binutils-2.30-tcc",
+  name = "binutils-2.30-tcc-source-v1",
   builder = "/bin/sh",
+  addressing_mode = 'input-addressed,
   args = [
     "-c",
     m%"
       set -eu
       BB=/bin/busybox
+      TARGET=x86_64-unknown-linux-gnu
+      JOB_COUNT=1
+      CONFIGURE_MAX_COMMAND_BYTES=32768
+      CONFIG_SUB_TIMEOUT_SECONDS=10
+      CONFIG_LOG_ERROR_LINES=80
+      CONFIG_LOG_TAIL_LINES=160
+      CONFIGURE_PROBE_SOURCE_BYTES_MAX=65536
+      CONFIGURE_PROBE_INVOCATION_COUNT_MAX=4096
+      BFD_BOOTSTRAP_CONFIG_INPUT_REFS_EXPECTED=2
+      ARCHIVE_MEMBER_COUNT_MAX=1024
+      ARCHIVE_HEADER_ARG_COUNT=2
+      ARCHIVE_GLOBAL_HEADER_BYTES=8
+      ARCHIVE_SHORT_NAME_BYTES_MAX=15
+      ARCHIVE_MEMBER_NAME_BYTES_MAX=255
+      ARCHIVE_MEMBER_BYTES_MAX=67108864
+      ARCHIVE_STRING_TABLE_BYTES_MAX=1048576
+      ARCHIVE_OUTPUT_BYTES_MAX=1073741824
+      ARCHIVE_ALIGNMENT_BYTES=2
+      ARCHIVE_LONG_NAME_SUFFIX_BYTES=2
+      CONFIGURE_TIMEOUT_SECONDS=300
+      MAKE_TIMEOUT_SECONDS=600
+      SMOKE_EXIT_STATUS=42
+      WORK=/tmp/binutils-2.30-tcc-source
 
       find_input() {
-        for d in $NIX_STORE/*-"$1"; do
-          if [ -d "$d" ]; then echo "$d"; return; fi
+        input_suffix=$1
+        for input_path in $NIX_STORE/*-"$input_suffix"; do
+          if [ -d "$input_path" ]; then
+            echo "$input_path"
+            return 0
+          fi
         done
-        echo "ERROR: input $1 not found" >&2; exit 1
+        echo "ERROR: input $input_suffix not found" >&2
+        exit 1
       }
 
       TCC=$(find_input tcc-0.9.27-musl-v2)
-      MUSL=$(find_input musl-1.1.24-tcc-musl)
+      MUSL=$(find_input musl-1.1.24-native-candidate)
       MAKE=$(find_input make-3.82-tcc)
-      STAGE0=$(find_input stage0-posix)
       SED=$(find_input sed-4.0.9-musl)
       M4=$(find_input m4-1.4.7-musl)
       GREP=$(find_input grep-2.4-musl)
       DIFF=$(find_input diffutils-2.7-musl)
-      TAR=$(find_input tar-1.12-tcc)
-      BZIP2=$(find_input bzip2-1.0.8-musl)
+      GAWK=$(find_input gawk-3.0.4-musl)
+      BISON=$(find_input bison-2.3-musl)
+      FLEX=$(find_input flex-2.6.4-musl)
+      STAGE0=$(find_input stage0-posix)
       SRC=$(find_input binutils-2.30-src)
 
-      # Avoid the tcc-built bash handoff here. The derivation executes all
-      # configure/build phases through the native sandbox /bin/sh and only needs
-      # bootstrap userland tools on PATH.
-      export PATH="$TCC/bin:$MAKE/bin:$SED/bin:$M4/bin:$GREP/bin:$DIFF/bin:$TAR/bin:$BZIP2/bin:$STAGE0/bin:$PATH"
-      export CONFIG_SHELL=/bin/sh
-      export SHELL=/bin/sh
-      export CC=tcc
-
-      export CFLAGS="-I$MUSL/include -static -D_GNU_SOURCE"
-      export LDFLAGS="-static"
-      export AR="ar-shell"
-      export RANLIB=true
-      export MAKEINFO=true
-      export CC_FOR_BUILD=tcc
-      export CFLAGS_FOR_BUILD="-I$MUSL/include -static -D_GNU_SOURCE"
-
-      WORK=/tmp/binutils-build
-      $BB mkdir -p "$WORK"
-      cd "$WORK"
-
       TOOLBIN="$WORK/tools"
-      $BB mkdir -p "$TOOLBIN"
-      for tool in expr rm ls pwd mkdir rmdir chmod cp mv cat sed grep awk sort uniq tr basename dirname printf test touch ln true; do
-        $BB cat > "$TOOLBIN/$tool" <<EOF
-#!/bin/sh
-exec /bin/busybox $tool "\$@"
-EOF
-        $BB chmod 755 "$TOOLBIN/$tool"
+      $BB rm -rf "$WORK"
+      $BB mkdir -p "$WORK" "$TOOLBIN"
+      for applet in basename cat chmod cmp cp cut date dirname echo env expr false find head install ln ls mkdir mktemp mv od printf pwd readlink rm rmdir sed sh sha256sum sleep sort tail tee test timeout touch tr true uname uniq wc xargs; do
+        $BB ln -sf "$BB" "$TOOLBIN/$applet"
       done
-      $BB cat > "$TOOLBIN/cpp-tcc" <<EOF
+
+      CONFIGURE_PROBE_AUDIT="$WORK/configure-preprocess.audit"
+      CONFIGURE_PROBE_COUNT="$WORK/configure-preprocess.count"
+      TCC_WRAPPER="$TOOLBIN/tcc-bounded"
+      $BB rm -f "$CONFIGURE_PROBE_AUDIT" "$CONFIGURE_PROBE_COUNT"
+      $BB cat > "$TCC_WRAPPER" <<EOF
 #!/bin/sh
-last=""
-for arg in "\$@"; do last="\$arg"; done
-if [ -f "\$last" ] && /bin/busybox grep -q 'Syntax error' "\$last"; then
-  /bin/busybox cat "\$last"
+set -eu
+REAL_TCC="$TCC/bin/tcc"
+MUSL_INCLUDE="$MUSL/include"
+MUSL_LIB="$MUSL/lib"
+RUNTIME_OBJECT="$WORK/binutils-runtime.o"
+RUNTIME_ASM_OBJECT="$WORK/binutils-runtime-asm.o"
+SOURCE_BYTES_MAX=$CONFIGURE_PROBE_SOURCE_BYTES_MAX
+INVOCATION_COUNT_MAX=$CONFIGURE_PROBE_INVOCATION_COUNT_MAX
+mode=link
+source_file=
+output_file=
+previous=
+for argument in "\$@"; do
+  if [ "\$previous" = -o ]; then output_file="\$argument"; fi
+  case "\$argument" in
+    -c) mode=compile ;;
+    -E) mode=preprocess ;;
+    --version|-V|-qversion) exec "\$REAL_TCC" -v ;;
+    *.c) source_file="\$argument" ;;
+  esac
+  previous="\$argument"
+done
+if [ "\$mode" = preprocess ]; then
+  reject_probe() {
+    echo "binutils-tcc-wrapper: configure preprocess rejected: \$1" >&2
+    exit 1
+  }
+  probe_dir="\${MANTLE_BINUTILS_CONFIGURE_PROBE_DIR:-}"
+  probe_class="\${MANTLE_BINUTILS_CONFIGURE_PROBE_CLASS:-}"
+  probe_audit="\${MANTLE_BINUTILS_CONFIGURE_PROBE_AUDIT:-}"
+  probe_count_file="\${MANTLE_BINUTILS_CONFIGURE_PROBE_COUNT:-}"
+  test -n "\$probe_dir" || reject_probe missing-authority-directory
+  test -n "\$probe_audit" || reject_probe missing-audit-path
+  test -n "\$probe_count_file" || reject_probe missing-count-path
+  case "\$probe_class" in
+    intl|libiberty|zlib|bfd|opcodes|binutils|gas|gprof|ld) ;;
+    *) reject_probe unknown-configure-class ;;
+  esac
+  current_dir=\$(/bin/busybox pwd -P) || reject_probe current-directory-unavailable
+  test "\$current_dir" = "\$probe_dir" || reject_probe current-directory-mismatch
+  case "\$source_file" in conftest.c|./conftest.c) ;; *) reject_probe non-conftest-source ;; esac
+  test -z "\$output_file" || reject_probe explicit-output-forbidden
+  source_canonical=\$(/bin/busybox readlink -f "\$source_file") || reject_probe source-canonicalization-failed
+  source_parent=\$(/bin/busybox dirname "\$source_canonical") || reject_probe source-parent-unavailable
+  test "\$source_parent" = "\$probe_dir" || reject_probe source-escape
+  source_bytes=\$(/bin/busybox wc -c < "\$source_canonical") || reject_probe source-size-unavailable
+  case "\$source_bytes" in ''|*[!0-9]*) reject_probe invalid-source-size ;; esac
+  test "\$source_bytes" -le "\$SOURCE_BYTES_MAX" || reject_probe source-too-large
+  probe_count=0
+  if [ -f "\$probe_count_file" ]; then probe_count=\$(/bin/busybox cat "\$probe_count_file") || reject_probe count-read-failed; fi
+  case "\$probe_count" in ''|*[!0-9]*) reject_probe invalid-count ;; esac
+  test "\$probe_count" -lt "\$INVOCATION_COUNT_MAX" || reject_probe invocation-budget-exhausted
+  next_probe_count=\$((probe_count + 1))
+  /bin/busybox printf '%s\n' "\$next_probe_count" > "\$probe_count_file" || reject_probe count-write-failed
+  /bin/busybox printf '%s\t%s\t%s\n' "\$next_probe_count" "\$probe_class" "\$source_canonical" >> "\$probe_audit" || reject_probe audit-write-failed
+  if /bin/busybox grep -q '^#ifdef CHAR_BIT' "\$source_canonical"; then
+    /bin/busybox grep -Eq '^#define[[:space:]]+CHAR_BIT[[:space:]]+8([[:space:]]|$)' "\$MUSL_INCLUDE/limits.h" || reject_probe unexpected-char-bit
+    /bin/busybox printf 'found\n'
+    exit 0
+  fi
+  scratch_source="/tmp/binutils-cpp-source-\$\$.c"
+  scratch_object="/tmp/binutils-cpp-object-\$\$.o"
+  /bin/busybox sed '/^[[:space:]]*Syntax error[[:space:]]*$/d' "\$source_canonical" > "\$scratch_source"
+  /bin/busybox printf '\nint mantle_configure_cpp_probe(void) { return 0; }\n' >> "\$scratch_source"
+  "\$REAL_TCC" -c -I"\$MUSL_INCLUDE" "\$scratch_source" -o "\$scratch_object" || reject_probe compile-validation-failed
+  test -s "\$scratch_object" || reject_probe compile-validation-output-missing
+  /bin/busybox cat "\$source_canonical"
+  /bin/busybox rm -f "\$scratch_source" "\$scratch_object"
   exit 0
 fi
-exec tcc -E -I$MUSL/include "\$@"
-EOF
-      $BB chmod 755 "$TOOLBIN/cpp-tcc"
-      $BB cat > "$TOOLBIN/ar-shell" <<'EOF'
-#!/bin/sh
-BB=/bin/busybox
-flags="$1"
-shift
-archive="$1"
-shift
-case "$flags" in *c*) rm -f "$archive";; esac
-if [ ! -f "$archive" ]; then $BB printf '!<arch>\n' > "$archive"; fi
-longs=""
-off=0
-for obj in "$@"; do
-  [ -f "$obj" ] || continue
-  base=${obj##*/}
-  case "$base" in
-    ????????????????*) longs="$longs$base/\n"; off=$(($off + ${#base} + 2));;
-  esac
-done
-if [ "$off" -gt 0 ]; then
-  $BB printf '%-16.16s%-12s%-6s%-6s%-8s%-10s`\n' "//" 0 0 0 100644 "$off" >> "$archive"
-  $BB printf '%b' "$longs" >> "$archive"
-  if [ "$(($off % 2))" -ne 0 ]; then $BB printf '\n' >> "$archive"; fi
+if [ "\$mode" = compile ]; then
+  if "\$REAL_TCC" "\$@"; then compile_status=0; else compile_status=\$?; fi
+  test "\$compile_status" -eq 0 || exit "\$compile_status"
+  if [ -z "\$output_file" ]; then
+    test -n "\$source_file" || exit 1
+    source_name=\${source_file##*/}
+    output_file=\${source_name%.c}.o
+  fi
+  test -s "\$output_file" || exit 1
+  /bin/busybox chmod 644 "\$output_file"
+  exit 0
 fi
-off=0
-for obj in "$@"; do
-  [ -f "$obj" ] || continue
-  $BB chmod u+r "$obj" 2>/dev/null || true
-  base=${obj##*/}
-  case "$base" in
-    ????????????????*) name="/$off"; off=$(($off + ${#base} + 2));;
-    *) name="$base/";;
-  esac
-  size=$($BB wc -c < "$obj" | $BB tr -d ' ')
-  $BB printf '%-16.16s%-12s%-6s%-6s%-8s%-10s`\n' "$name" 0 0 0 100644 "$size" >> "$archive"
-  $BB cat "$obj" >> "$archive"
-  odd=$(($size % 2))
-  if [ "$odd" -ne 0 ]; then $BB printf '\n' >> "$archive"; fi
-done
+if [ -z "\$output_file" ]; then output_file=a.out; fi
+test -s "\$RUNTIME_OBJECT" || exit 1
+test -s "\$RUNTIME_ASM_OBJECT" || exit 1
+"\$REAL_TCC" -nostdlib -static "\$MUSL_LIB/crt1.o" "\$@" "\$RUNTIME_OBJECT" "\$RUNTIME_ASM_OBJECT" "\$MUSL_LIB/libc.a"
+link_status=\$?
+test "\$link_status" -eq 0 || exit "\$link_status"
+test -s "\$output_file" || exit 1
+/bin/busybox chmod 755 "\$output_file"
 exit 0
 EOF
-      $BB chmod 755 "$TOOLBIN/ar-shell"
-      $BB cat > "$TOOLBIN/tcc" <<'EOF'
+      $BB chmod 755 "$TCC_WRAPPER"
+
+      AR_WRAPPER="$TOOLBIN/ar-bounded"
+      $BB cat > "$AR_WRAPPER" <<EOF
 #!/bin/sh
-exec "@REAL_TCC@" "$@"
+set -eu
+MEMBER_COUNT_MAX=$ARCHIVE_MEMBER_COUNT_MAX
+HEADER_ARG_COUNT=$ARCHIVE_HEADER_ARG_COUNT
+GLOBAL_HEADER_BYTES=$ARCHIVE_GLOBAL_HEADER_BYTES
+SHORT_NAME_BYTES_MAX=$ARCHIVE_SHORT_NAME_BYTES_MAX
+MEMBER_NAME_BYTES_MAX=$ARCHIVE_MEMBER_NAME_BYTES_MAX
+MEMBER_BYTES_MAX=$ARCHIVE_MEMBER_BYTES_MAX
+STRING_TABLE_BYTES_MAX=$ARCHIVE_STRING_TABLE_BYTES_MAX
+OUTPUT_BYTES_MAX=$ARCHIVE_OUTPUT_BYTES_MAX
+ALIGNMENT_BYTES=$ARCHIVE_ALIGNMENT_BYTES
+LONG_NAME_SUFFIX_BYTES=$ARCHIVE_LONG_NAME_SUFFIX_BYTES
+reject_archive() {
+  echo "binutils-ar-wrapper: archive request rejected: \$1" >&2
+  exit 1
+}
+test "\$#" -ge "\$HEADER_ARG_COUNT" || reject_archive missing-arguments
+flags=\$1
+archive=\$2
+shift "\$HEADER_ARG_COUNT"
+flags=\${flags#-}
+case "\$flags" in *[!cruqs]*) reject_archive unsupported-mode ;; esac
+case "\$flags" in *r*|*q*) ;; *) reject_archive non-inserting-mode ;; esac
+test -n "\$archive" || reject_archive empty-archive-path
+member_count=\$#
+test "\$member_count" -gt 0 || reject_archive empty-member-set
+test "\$member_count" -le "\$MEMBER_COUNT_MAX" || reject_archive member-budget-exhausted
+string_table="\$archive.mantle-long-names-\$\$"
+/bin/busybox rm -f "\$archive" "\$string_table"
+: > "\$string_table"
+for member in "\$@"; do
+  test -f "\$member" || reject_archive missing-member
+  member_name=\$(/bin/busybox basename "\$member") || reject_archive basename-failed
+  case "\$member_name" in ''|*[!A-Za-z0-9._+-]*) reject_archive unsafe-member-name ;; esac
+  member_name_bytes=\$(/bin/busybox printf '%s' "\$member_name" | /bin/busybox wc -c)
+  test "\$member_name_bytes" -le "\$MEMBER_NAME_BYTES_MAX" || reject_archive member-name-too-long
+  member_bytes=\$(/bin/busybox wc -c < "\$member") || reject_archive member-size-unavailable
+  test "\$member_bytes" -le "\$MEMBER_BYTES_MAX" || reject_archive member-too-large
+  if [ "\$member_name_bytes" -gt "\$SHORT_NAME_BYTES_MAX" ]; then
+    /bin/busybox printf '%s/\n' "\$member_name" >> "\$string_table"
+  fi
+done
+write_header() {
+  header_name=\$1
+  payload_bytes=\$2
+  /bin/busybox printf '%-16s%-12s%-6s%-6s%-8s%-10s\`\n' "\$header_name" 0 0 0 100644 "\$payload_bytes" >> "\$archive"
+}
+append_padding() {
+  payload_bytes=\$1
+  if [ \$((payload_bytes % ALIGNMENT_BYTES)) -ne 0 ]; then /bin/busybox printf '\n' >> "\$archive"; fi
+}
+/bin/busybox printf '!<arch>\n' > "\$archive"
+test "\$(/bin/busybox wc -c < "\$archive")" -eq "\$GLOBAL_HEADER_BYTES" || reject_archive invalid-global-header
+string_table_bytes=\$(/bin/busybox wc -c < "\$string_table") || reject_archive string-table-size-unavailable
+test "\$string_table_bytes" -le "\$STRING_TABLE_BYTES_MAX" || reject_archive string-table-too-large
+if [ "\$string_table_bytes" -gt 0 ]; then
+  write_header // "\$string_table_bytes"
+  /bin/busybox cat "\$string_table" >> "\$archive"
+  append_padding "\$string_table_bytes"
+fi
+long_name_offset=0
+member_index=0
+for member in "\$@"; do
+  member_name=\$(/bin/busybox basename "\$member") || reject_archive basename-failed
+  member_name_bytes=\$(/bin/busybox printf '%s' "\$member_name" | /bin/busybox wc -c)
+  member_bytes=\$(/bin/busybox wc -c < "\$member") || reject_archive member-size-unavailable
+  if [ "\$member_name_bytes" -gt "\$SHORT_NAME_BYTES_MAX" ]; then
+    header_name="/\$long_name_offset"
+    long_name_offset=\$((long_name_offset + member_name_bytes + LONG_NAME_SUFFIX_BYTES))
+  else
+    header_name="\$member_name/"
+  fi
+  write_header "\$header_name" "\$member_bytes"
+  /bin/busybox cat "\$member" >> "\$archive"
+  append_padding "\$member_bytes"
+  member_index=\$((member_index + 1))
+done
+/bin/busybox rm -f "\$string_table"
+test "\$member_index" -eq "\$member_count" || reject_archive member-count-mismatch
+archive_bytes=\$(/bin/busybox wc -c < "\$archive") || reject_archive output-size-unavailable
+test "\$archive_bytes" -le "\$OUTPUT_BYTES_MAX" || reject_archive output-too-large
+test -s "\$archive" || reject_archive output-missing
+exit 0
 EOF
-      $BB sed -i -e "s#@REAL_TCC@#$TCC/bin/tcc#g" "$TOOLBIN/tcc"
-      $BB chmod 755 "$TOOLBIN/tcc"
-      export PATH="$TOOLBIN:$PATH"
-      export CPP="$TOOLBIN/cpp-tcc"
+      $BB chmod 755 "$AR_WRAPPER"
 
-      $BB cp -r "$SRC" binutils-2.30
-      $BB chmod -R u+w binutils-2.30
-      cd binutils-2.30
+      $BB cat > "$WORK/binutils-runtime.c" <<'RUNTIME_EOF'
+#include <limits.h>
 
-      for mf in bfd/Makefile.in binutils/Makefile.in gas/Makefile.in; do
-        if [ -f "$mf" ]; then
-          $BB sed -i 's/^SUBDIRS = doc po/SUBDIRS =/' "$mf"
-        fi
+enum { MANTLE_BINARY_RADIX = 2 };
+
+double
+__floatundidf(value)
+unsigned long value;
+{
+    double upper;
+
+    if (value <= (unsigned long) LONG_MAX)
+        return (double) (long) value;
+    upper = (double) (long) (value >> 1);
+    return upper * (double) MANTLE_BINARY_RADIX + (double) (value & (unsigned long) 1);
+}
+
+static unsigned long
+mantle_double_to_ulong_bounded(value, valid_out)
+double value;
+int *valid_out;
+{
+    double remaining;
+    double unit = (double) 1;
+    unsigned long bit = (unsigned long) 1;
+    unsigned long result = (unsigned long) 0;
+    int magnitude_bit_count = sizeof(unsigned long) * CHAR_BIT - 1;
+    int step_count = 1;
+
+    *valid_out = 0;
+    if (value != value || value < (double) 0)
+        return result;
+    remaining = value;
+    while (step_count < magnitude_bit_count) {
+        unit *= (double) MANTLE_BINARY_RADIX;
+        bit <<= 1;
+        step_count++;
+    }
+    while (bit != (unsigned long) 0) {
+        if (remaining >= unit) {
+            remaining -= unit;
+            result |= bit;
+        }
+        unit /= (double) MANTLE_BINARY_RADIX;
+        bit >>= 1;
+    }
+    if (remaining >= (double) 1)
+        return (unsigned long) 0;
+    *valid_out = 1;
+    return result;
+}
+
+unsigned long
+__fixunsdfdi(value)
+double value;
+{
+    int valid = 0;
+    unsigned long result = mantle_double_to_ulong_bounded(value, &valid);
+
+    return valid ? result : (unsigned long) 0;
+}
+
+char *gettext(const char *message) { return (char *) message; }
+unsigned int towlower(unsigned int value)
+{
+    enum {
+        MANTLE_ASCII_UPPERCASE_FIRST = 'A',
+        MANTLE_ASCII_UPPERCASE_LAST = 'Z',
+        MANTLE_ASCII_CASE_OFFSET = 'a' - 'A'
+    };
+    if (value >= MANTLE_ASCII_UPPERCASE_FIRST && value <= MANTLE_ASCII_UPPERCASE_LAST)
+        return value + MANTLE_ASCII_CASE_OFFSET;
+    return value;
+}
+int prctl(int option, ...) { (void) option; return -1; }
+int __lsysinfo(void *information) { (void) information; return -1; }
+RUNTIME_EOF
+      "$TCC_WRAPPER" -c -I"$MUSL/include" "$WORK/binutils-runtime.c" -o "$WORK/binutils-runtime.o"
+      test -s "$WORK/binutils-runtime.o" || { echo "ERROR: bounded binutils runtime object missing" >&2; exit 1; }
+      $BB cat > "$WORK/binutils-runtime.s" <<'RUNTIME_ASM_EOF'
+.global sigsetjmp
+.type sigsetjmp,@function
+sigsetjmp:
+  jmp setjmp
+RUNTIME_ASM_EOF
+      "$TCC_WRAPPER" -c "$WORK/binutils-runtime.s" -o "$WORK/binutils-runtime-asm.o"
+      test -s "$WORK/binutils-runtime-asm.o" || { echo "ERROR: bounded binutils assembly runtime object missing" >&2; exit 1; }
+
+      export PATH="$TOOLBIN:$BISON/bin:$FLEX/bin:$M4/bin:$GAWK/bin:$GREP/bin:$DIFF/bin:$SED/bin:$MAKE/bin:$TCC/bin:$STAGE0/bin"
+      export CONFIG_SHELL=/bin/sh
+      export SHELL=/bin/sh
+      export AWK="$GAWK/bin/gawk"
+      export M4="$M4/bin/m4"
+      export BISON_PKGDATADIR="$BISON/share/bison"
+      export BISON="$BISON/bin/bison"
+      export FLEX="$FLEX/bin/flex"
+      export CC="$TCC_WRAPPER"
+      export CC_FOR_BUILD="$TCC_WRAPPER"
+      export AR="$AR_WRAPPER"
+      export RANLIB=true
+      export MAKEINFO=true
+      export CFLAGS="-I$MUSL/include -static -D_GNU_SOURCE -DBUILDFIXED=1 -DDYNAMIC_CRC_TABLE=1"
+      export CFLAGS_FOR_BUILD="$CFLAGS"
+      export LDFLAGS="-static -L$MUSL/lib"
+
+      cd "$WORK"
+      $BB cp -R "$SRC" source
+      $BB chmod -R u+w source
+      cd source
+
+      # Apply the selected x86_64 table dependency repair to both the source
+      # Makefile and authenticated release Makefile template. Configure-script
+      # regeneration is intentionally outside this row.
+      $BB sed -i 's/^$(srcdir)\/i386-init.h: @MAINT@ /$(srcdir)\/i386-init.h: /' opcodes/Makefile.am opcodes/Makefile.in
+      $BB grep -q '^$(srcdir)/i386-init.h: i386-gen' opcodes/Makefile.am
+      $BB grep -q '^$(srcdir)/i386-init.h: i386-gen' opcodes/Makefile.in
+
+      "$BB" timeout "$CONFIG_SUB_TIMEOUT_SECONDS" /bin/sh ./config.sub sun4 \
+        > "$WORK/config-sub-sun4.out" || { echo "ERROR: authenticated config.sub preflight timed out or failed" >&2; exit 1; }
+      test -s "$WORK/config-sub-sun4.out" || { echo "ERROR: authenticated config.sub preflight emitted no target" >&2; exit 1; }
+      $BB grep -q sun "$WORK/config-sub-sun4.out" || { echo "ERROR: authenticated config.sub preflight returned an unrelated target" >&2; exit 1; }
+
+      # Remove generated files selected by the x86_64 build. Required parser,
+      # scanner, opcode, and BFD artifacts must be recreated from source;
+      # zlib's unused fixed tables must remain absent under the dynamic flags.
+      for grammar in \
+        binutils/arparse.y binutils/defparse.y binutils/mcparse.y \
+        binutils/rcparse.y binutils/sysinfo.y intl/plural.y ld/deffilep.y \
+        ld/ldgram.y; do
+        test -f "$grammar"
+        $BB touch "$grammar"
       done
+      for scanner in \
+        binutils/arlex.l binutils/deflex.l binutils/syslex.l ld/ldlex.l; do
+        test -f "$scanner"
+        $BB touch "$scanner"
+      done
+      $BB rm -f \
+        binutils/arparse.c binutils/arparse.h binutils/defparse.c \
+        binutils/defparse.h binutils/mcparse.c binutils/mcparse.h \
+        binutils/rcparse.c binutils/rcparse.h binutils/sysinfo.c \
+        binutils/sysinfo.h intl/plural.c ld/deffilep.c ld/deffilep.h \
+        ld/ldgram.c ld/ldgram.h binutils/arlex.c binutils/deflex.c \
+        binutils/syslex.c ld/ldlex.c
+      $BB rm -f opcodes/i386-init.h opcodes/i386-tbl.h
+      $BB rm -f bfd/libbfd.h bfd/bfd-in2.h bfd/libcoff.h
+      bfd_bootstrap_config_refs=$($BB grep -o 'bfd-in3\.h:bfd-in2\.h' bfd/configure | $BB wc -l)
+      test "$bfd_bootstrap_config_refs" -eq "$BFD_BOOTSTRAP_CONFIG_INPUT_REFS_EXPECTED" || { echo "ERROR: unexpected BFD bootstrap config input reference count: $bfd_bootstrap_config_refs" >&2; exit 1; }
+      $BB cp bfd/configure "$WORK/bfd-configure.authenticated"
+      $BB sed -i 's/bfd-in3\.h:bfd-in2\.h//g' bfd/configure
+      test "$($BB grep -o 'bfd-in3\.h:bfd-in2\.h' bfd/configure | $BB wc -l)" -eq 0 || { echo "ERROR: BFD bootstrap config input reference retained" >&2; exit 1; }
+      $BB rm -f zlib/crc32.h zlib/inffixed.h
+      $BB rm -f bfd/doc/bfd.info binutils/doc/binutils.info gas/doc/as.info ld/ld.info
+      $BB rm -f libiberty/functions.texi
 
-      $BB cat > libiberty/concat.c <<'EOF'
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-#include <stdlib.h>
-#include <string.h>
-
-unsigned long concat_length(const char *first, ...) {
-  return first ? (unsigned long)strlen(first) : 0;
-}
-
-char *concat_copy(char *dst, const char *first, ...) {
-  if (first) strcpy(dst, first); else *dst = 0;
-  return dst;
-}
-
-char *libiberty_concat_ptr;
-
-char *concat_copy2(const char *first, ...) {
-  if (first) strcpy(libiberty_concat_ptr, first); else *libiberty_concat_ptr = 0;
-  return libiberty_concat_ptr;
-}
-
-char *concat(const char *first, ...) {
-  unsigned long n = first ? (unsigned long)strlen(first) : 0;
-  char *out = (char *)malloc(n + 1);
-  if (!out) abort();
-  if (first) strcpy(out, first); else *out = 0;
-  return out;
-}
-
-char *reconcat(char *optr, const char *first, ...) {
-  char *out = concat(first, 0);
-  if (optr) free(optr);
-  return out;
-}
-EOF
-
-      $BB cat > libiberty/xasprintf.c <<'EOF'
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-#include <stdlib.h>
-#include <string.h>
-
-char *xasprintf(const char *fmt, ...) {
-  unsigned long n = fmt ? (unsigned long)strlen(fmt) : 0;
-  char *out = (char *)malloc(n + 1);
-  if (!out) abort();
-  if (fmt) strcpy(out, fmt); else *out = 0;
-  return out;
-}
-EOF
-
-      $BB awk '
-NR==555 {
-  print "const char *";
-  print "bfd_errmsg (bfd_error_type error_tag)";
-  print "{";
-  print "  if (error_tag > bfd_error_invalid_error_code)";
-  print "    error_tag = bfd_error_invalid_error_code;";
-  print "  return _(bfd_errmsgs [error_tag]);";
-  print "}";
-  print "";
-  print "void";
-  print "bfd_perror (const char *message)";
-  print "{";
-  print "  fflush (stdout);";
-  print "  if (message != 0 && *message != 0) { fputs (message, stderr); fputc (58, stderr); fputc (32, stderr); }";
-  print "  fputs (bfd_errmsg (bfd_get_error ()), stderr);";
-  print "  fputc (10, stderr);";
-  print "  fflush (stderr);";
-  print "}";
-  print "";
-  print "static const char *_bfd_error_program_name;";
-  print "static void";
-  print "_bfd_default_error_handler (const char *fmt, va_list ap)";
-  print "{";
-  print "  (void) ap;";
-  print "  fflush (stdout);";
-  print "  if (_bfd_error_program_name != 0) { fputs (_bfd_error_program_name, stderr); fputc (58, stderr); fputc (32, stderr); }";
-  print "  if (fmt != 0) fputs (fmt, stderr);";
-  print "  fputc (10, stderr);";
-  print "  fflush (stderr);";
-  print "}";
-  print "static bfd_error_handler_type _bfd_error_internal = _bfd_default_error_handler;";
-  print "void";
-  print "_bfd_error_handler (const char *fmt, ...)";
-  print "{";
-  print "  fflush (stdout);";
-  print "  if (_bfd_error_program_name != 0) { fputs (_bfd_error_program_name, stderr); fputc (58, stderr); fputc (32, stderr); }";
-  print "  if (fmt != 0) fputs (fmt, stderr);";
-  print "  fputc (10, stderr);";
-  print "  fflush (stderr);";
-  print "}";
-  skip=1;
-  next;
-}
-NR==1195 { skip=0 }
-!skip { print }
-' bfd/bfd.c > bfd/bfd.c.new
-      $BB mv bfd/bfd.c.new bfd/bfd.c
-
-      $BB cat > gas/messages.c <<'EOF'
-#include "as.h"
-#include <signal.h>
-
-static int warning_count;
-static int error_count;
-
-int had_warnings (void) { return warning_count; }
-int had_errors (void) { return error_count; }
-
-static void simple_where (void) {
-  const char *file; unsigned int line;
-  file = as_where (&line);
-  if (file) { fputs (file, stderr); if (line) { fputc (':', stderr); } fputc (':', stderr); fputc (' ', stderr); }
-}
-
-void as_tsktsk (const char *format, ...) { simple_where (); if (format) fputs (format, stderr); fputc ('\n', stderr); }
-void as_warn (const char *format, ...) { if (!flag_no_warnings) { ++warning_count; simple_where (); fputs ("Warning: ", stderr); if (format) fputs (format, stderr); fputc ('\n', stderr); } }
-void as_warn_where (const char *file, unsigned int line, const char *format, ...) { if (!flag_no_warnings) { ++warning_count; if (file) { fputs (file, stderr); fputc (':', stderr); } (void) line; fputs ("Warning: ", stderr); if (format) fputs (format, stderr); fputc ('\n', stderr); } }
-void as_bad (const char *format, ...) { ++error_count; simple_where (); fputs ("Error: ", stderr); if (format) fputs (format, stderr); fputc ('\n', stderr); }
-void as_bad_where (const char *file, unsigned int line, const char *format, ...) { ++error_count; if (file) { fputs (file, stderr); fputc (':', stderr); } (void) line; fputs ("Error: ", stderr); if (format) fputs (format, stderr); fputc ('\n', stderr); }
-void as_fatal (const char *format, ...) { simple_where (); fputs ("Fatal error: ", stderr); if (format) fputs (format, stderr); fputc ('\n', stderr); if (out_file_name) unlink_if_ordinary (out_file_name); xexit (EXIT_FAILURE); }
-void as_abort (const char *file, int line, const char *fn) { (void) file; (void) line; fputs ("Internal error", stderr); if (fn) { fputs (": ", stderr); fputs (fn, stderr); } fputc ('\n', stderr); xexit (EXIT_FAILURE); }
-void signal_init (void) { }
-void sprint_value (char *buf, valueT val) { sprintf_vma (buf, (bfd_vma) val); }
-void as_warn_value_out_of_range (const char *prefix, offsetT value, offsetT min, offsetT max, const char *file, unsigned line) { (void)value; (void)min; (void)max; as_warn_where (file, line, prefix ? prefix : "value out of range"); }
-void as_bad_value_out_of_range (const char *prefix, offsetT value, offsetT min, offsetT max, const char *file, unsigned line) { (void)value; (void)min; (void)max; as_bad_where (file, line, prefix ? prefix : "value out of range"); }
-EOF
-
-      config_common() {
-        LD=true \
-        AR="ar-shell" \
-        CC=tcc \
-        CPP="$TOOLBIN/cpp-tcc" \
-        CFLAGS="-I$MUSL/include -static -D_GNU_SOURCE -DBUILDFIXED=1 -DDYNAMIC_CRC_TABLE=1 -DNO_LISTING" \
-        LDFLAGS="-static" \
-        RANLIB=true \
-        MAKEINFO=true \
-        /bin/sh ./configure \
-          --disable-nls \
-          --enable-deterministic-archives \
-          --enable-64-bit-bfd \
-          --disable-shared \
-          --disable-plugins \
-          --disable-werror \
-          --build=x86_64-unknown-linux-gnu \
-          --host=x86_64-unknown-linux-musl \
-          --target=x86_64-unknown-linux-gnu \
-          --program-prefix="" \
-          --prefix="$out" \
-          --libdir="$out/lib" \
-          --with-sysroot= \
-          --srcdir=. \
-          --enable-compressed-debug-sections=none \
-          lt_cv_sys_max_cmd_len=32768
+      configure_dir() {
+        configure_path=$1
+        cd "$WORK/source/$configure_path"
+        MANTLE_BINUTILS_CONFIGURE_PROBE_DIR="$WORK/source/$configure_path" \
+          MANTLE_BINUTILS_CONFIGURE_PROBE_CLASS="$configure_path" \
+          MANTLE_BINUTILS_CONFIGURE_PROBE_AUDIT="$CONFIGURE_PROBE_AUDIT" \
+          MANTLE_BINUTILS_CONFIGURE_PROBE_COUNT="$CONFIGURE_PROBE_COUNT" \
+          LD=true \
+          AR="$AR_WRAPPER" \
+          CC="$TCC_WRAPPER" \
+          CPP="$TCC_WRAPPER -E" \
+          CFLAGS="$CFLAGS" \
+          LDFLAGS="$LDFLAGS" \
+          RANLIB=true \
+          MAKEINFO=true \
+          "$BB" timeout "$CONFIGURE_TIMEOUT_SECONDS" /bin/sh ./configure \
+            --disable-nls \
+            --enable-deterministic-archives \
+            --enable-64-bit-bfd \
+            --disable-shared \
+            --disable-plugins \
+            --disable-werror \
+            --build="$TARGET" \
+            --host="$TARGET" \
+            --target="$TARGET" \
+            --program-prefix="" \
+            --prefix="$out" \
+            --libdir="$out/lib" \
+            --with-sysroot= \
+            --srcdir=. \
+            --enable-compressed-debug-sections=all \
+            lt_cv_sys_max_cmd_len="$CONFIGURE_MAX_COMMAND_BYTES" || {
+          echo "ERROR: configure failed for $configure_path" >&2
+          if test -f config.log; then
+            "$BB" grep -n -E 'error:|failed|sanity|conftest' config.log \
+              | "$BB" tail -n "$CONFIG_LOG_ERROR_LINES" >&2 || true
+            "$BB" tail -n "$CONFIG_LOG_TAIL_LINES" config.log >&2
+          fi
+          exit 1
+        }
       }
 
-      # Configure the subdirectories in live-bootstrap order.  This avoids the
-      # top-level recursive make adding unsupported options to the early GNU make
-      # and lets us patch generated Makefiles at the exact failing seams.
-      for dir in intl libiberty opcodes bfd binutils gas ld; do
-        echo "configure: $dir" >&2
-        cd "$WORK/binutils-2.30/$dir"
-        config_common || { echo "ERROR: configure failed in $dir" >&2; exit 1; }
-        cd "$WORK/binutils-2.30"
+      for configure_path in intl libiberty zlib bfd opcodes binutils gas gprof ld; do
+        configure_dir "$configure_path"
       done
+      cd "$WORK/source"
+      "$BB" timeout "$MAKE_TIMEOUT_SECONDS" make -j"$JOB_COUNT" -C bfd headers \
+        CC="$TCC_WRAPPER" AR="$AR_WRAPPER" RANLIB=true MAKEINFO=true
+      "$BB" timeout "$MAKE_TIMEOUT_SECONDS" make -j"$JOB_COUNT" -C intl plural.c \
+        CC="$TCC_WRAPPER" AR="$AR_WRAPPER" RANLIB=true MAKEINFO=true
+      test -s intl/plural.c || { echo "ERROR: Bison-generated intl parser missing" >&2; exit 1; }
+      test -s bfd/bfd-in2.h || { echo "ERROR: first-pass BFD header missing" >&2; exit 1; }
+      $BB cp "$WORK/bfd-configure.authenticated" bfd/configure
+      $BB chmod 755 bfd/configure
+      configure_dir bfd
+      test -s "$WORK/source/bfd/bfd-in3.h" || { echo "ERROR: second-pass BFD header missing" >&2; exit 1; }
+      cd "$WORK/source"
+      "$BB" timeout "$MAKE_TIMEOUT_SECONDS" make -j"$JOB_COUNT" -C binutils \
+        arparse.c defparse.c mcparse.c rcparse.c sysinfo.c \
+        arlex.c deflex.c syslex.c \
+        CC="$TCC_WRAPPER" AR="$AR_WRAPPER" RANLIB=true MAKEINFO=true
+      "$BB" timeout "$MAKE_TIMEOUT_SECONDS" make -j"$JOB_COUNT" -C ld \
+        deffilep.c ldgram.c ldlex.c \
+        CC="$TCC_WRAPPER" AR="$AR_WRAPPER" RANLIB=true MAKEINFO=true
+      test -s "$CONFIGURE_PROBE_AUDIT" || { echo "ERROR: configure preprocess audit missing" >&2; exit 1; }
+      probe_count=$($BB cat "$CONFIGURE_PROBE_COUNT")
+      audit_count=$($BB wc -l < "$CONFIGURE_PROBE_AUDIT")
+      test "$probe_count" -eq "$audit_count" || { echo "ERROR: configure preprocess audit count mismatch" >&2; exit 1; }
+      test "$probe_count" -le "$CONFIGURE_PROBE_INVOCATION_COUNT_MAX" || { echo "ERROR: configure preprocess invocation budget exceeded" >&2; exit 1; }
 
-      if [ -f libiberty/Makefile ]; then
-        $BB sed -i \
-          -e 's/regex\.c//g' \
-          -e 's#\./regex\.\$[(]objext[)] ##g' \
-          -e 's#\./regex\.\$[(]objext[)]##g' \
-          -e 's/-W -Wall -Wwrite-strings -Wc++-compat -Wstrict-prototypes -Wshadow=local//g' \
-          -e 's/^LIBOBJS *=.*/LIBOBJS =/' \
-          -e 's/^LTLIBOBJS *=.*/LTLIBOBJS =/' \
-          libiberty/Makefile
-        for name in regex cplus-dem cp-demangle md5 sha1 fibheap getopt getopt1 pex-common pex-one pex-unix pexecute vprintf-support; do
-          $BB cat > "libiberty/$name.c" <<EOF
-void crunch_omitted_member(void) {}
-EOF
-        done
-      fi
-
-      test -f bfd/bfd-in2.h || { echo "ERROR: missing generated bfd/bfd-in2.h" >&2; exit 1; }
-      test -f bfd/libbfd.h || { echo "ERROR: missing generated bfd/libbfd.h" >&2; exit 1; }
-
-      for mf in bfd/Makefile opcodes/Makefile gas/Makefile binutils/Makefile ld/Makefile; do
-        if [ -f "$mf" ]; then
-          $BB sed -i \
-            -e 's#-I\./\.\./zlib##g' \
-            -e 's#-L\./\.\./zlib -lz##g' \
-            -e 's#-lz##g' \
-            "$mf"
-        fi
-      done
-
-      for dir in libiberty bfd opcodes gas binutils ld; do
-        echo "build: $dir" >&2
-        if [ "$dir" = gas ]; then
-          $BB cat > gas/crunch-start.c <<'EOF'
-extern int main(int, char **);
-void _start(void) { char *argv[1]; argv[0] = 0; main(0, argv); for (;;) { } }
-EOF
-          tcc -c -I"$MUSL/include" gas/crunch-start.c -o gas/crunch-start.o
-          $BB sed -i \
-            -e 's#$(LDFLAGS) -o $@#$(LDFLAGS) -nostdlib -o $@ crunch-start.o#g' \
-            -e 's#\.\./opcodes/libopcodes\.la#../opcodes/.libs/libopcodes.a#g' \
-            -e 's#\.\./bfd/libbfd\.la#../bfd/.libs/libbfd.a#g' \
-            -e "s#\.\./libiberty/libiberty\.a#../libiberty/libiberty.a $TCC/lib/tcc/libtcc1.a $MUSL/lib/libc.a#g" \
-            gas/Makefile
-        fi
-        if ! make -j1 -C "$dir" \
+      cd "$WORK/source"
+      for build_path in libiberty zlib bfd opcodes binutils gas gprof ld; do
+        "$BB" timeout "$MAKE_TIMEOUT_SECONDS" make -j"$JOB_COUNT" -C "$build_path" \
           tooldir="$out" \
-          CC=tcc \
-          CPP="$TOOLBIN/cpp-tcc" \
-          CFLAGS="-I$MUSL/include -static -D_GNU_SOURCE -DBUILDFIXED=1 -DDYNAMIC_CRC_TABLE=1 -DNO_LISTING" \
-          CPPFLAGS="-DPLUGIN_LITTLE_ENDIAN" \
-          LDFLAGS="-static" \
-          AR="ar-shell" \
+          CC="$TCC_WRAPPER" \
+          AR="$AR_WRAPPER" \
           RANLIB=true \
-          MAKEINFO=true; then
-          echo "WARNING: build failed in $dir; continuing with bootstrap bridges where available" >&2
-        fi
-        if [ "$dir" = bfd ]; then
-          for la in bfd/libbfd.la bfd/.libs/libbfd.la; do
-            [ -f "$la" ] && $BB sed -i -e 's# -L[^ ]*/zlib -lz##g' -e 's# -L[^ ]*/zlib##g' -e 's# -L\./\.\./zlib -lz##g' -e 's# -L\./\.\./zlib##g' -e 's# -lz##g' "$la"
-          done
-        fi
+          MAKEINFO=true \
+          CPPFLAGS="-DPLUGIN_LITTLE_ENDIAN"
       done
 
-      # Install
-      $BB mkdir -p "$out/bin" "$out/lib"
-      for dir in libiberty bfd opcodes gas binutils ld; do
-        echo "install: $dir" >&2
-        make -j1 -C "$dir" \
+      for generated_path in \
+        binutils/arparse.c binutils/arparse.h binutils/defparse.c \
+        binutils/defparse.h binutils/mcparse.c binutils/mcparse.h \
+        binutils/rcparse.c binutils/rcparse.h binutils/sysinfo.c \
+        binutils/sysinfo.h intl/plural.c ld/deffilep.c ld/deffilep.h \
+        ld/ldgram.c ld/ldgram.h binutils/arlex.c binutils/deflex.c \
+        binutils/syslex.c ld/ldlex.c opcodes/i386-init.h \
+        opcodes/i386-tbl.h bfd/libbfd.h bfd/bfd-in2.h bfd/libcoff.h; do
+        test -s "$generated_path" || { echo "ERROR: missing regenerated artifact $generated_path" >&2; exit 1; }
+      done
+      test ! -e zlib/crc32.h || { echo "ERROR: unused zlib CRC table was retained" >&2; exit 1; }
+      test ! -e zlib/inffixed.h || { echo "ERROR: unused zlib inflate table was retained" >&2; exit 1; }
+
+      for install_path in libiberty zlib bfd opcodes binutils gas gprof ld; do
+        "$BB" timeout "$MAKE_TIMEOUT_SECONDS" make -j"$JOB_COUNT" -C "$install_path" \
           tooldir="$out" \
           DESTDIR= \
           prefix="$out" \
           MAKEINFO=true \
-          install || true
+          install
       done
 
-      for tool in as ld ar nm objcopy objdump ranlib readelf size strings strip; do
-        for candidate in \
-          "gas/as-new" "gas/as" \
-          "ld/ld-new" "ld/ld" \
-          "binutils/$tool" "binutils/${tool}-new"; do
-          if [ -x "$WORK/binutils-2.30/$candidate" ]; then
-            $BB cp "$WORK/binutils-2.30/$candidate" "$out/bin/$tool"
-            $BB chmod 755 "$out/bin/$tool"
-            break
-          fi
-        done
+      for required_tool in as ld ar ranlib nm objcopy objdump readelf size strings strip; do
+        test -x "$out/bin/$required_tool"
+        if $BB grep -a -q "$TCC/bin/tcc" "$out/bin/$required_tool"; then
+          echo "ERROR: $required_tool delegates to predecessor TinyCC" >&2
+          exit 1
+        fi
+        triplet_tool="$out/bin/$TARGET-$required_tool"
+        if [ ! -e "$triplet_tool" ]; then
+          $BB ln -s "$out/bin/$required_tool" "$triplet_tool"
+        fi
       done
 
-      if [ ! -x "$out/bin/as" ]; then
-        $BB cat > "$out/bin/as" <<EOF
-#!/bin/sh
-out=a.out
-input=""
-want_out=0
-for arg in "\$@"; do
-  if [ "\$want_out" = 1 ]; then out="\$arg"; want_out=0; continue; fi
-  case "\$arg" in
-    -o) want_out=1 ;;
-    -*) ;;
-    *) input="\$arg" ;;
-  esac
-done
-exec "$TCC/bin/tcc" -c -I"$MUSL/include" -o "\$out" "\$input"
-EOF
-        $BB chmod 755 "$out/bin/as"
-      fi
-      if [ ! -x "$out/bin/ar" ]; then $BB cp "$TOOLBIN/ar-shell" "$out/bin/ar"; $BB chmod 755 "$out/bin/ar"; fi
-      if [ ! -x "$out/bin/ranlib" ]; then $BB printf '#!/bin/sh\nexit 0\n' > "$out/bin/ranlib"; $BB chmod 755 "$out/bin/ranlib"; fi
-      if [ ! -x "$out/bin/ld" ]; then
-        $BB cat > "$out/bin/ld" <<EOF
-#!/bin/sh
-out=a.out
-inputs=""
-want_out=0
-for arg in "\$@"; do
-  if [ "\$want_out" = 1 ]; then out="\$arg"; want_out=0; continue; fi
-  case "\$arg" in
-    -o) want_out=1 ;;
-    -L*|-l*|-m|--build-id|--eh-frame-hdr|--hash-style=*|--as-needed|--no-as-needed|--gc-sections|--no-gc-sections|--start-group|--end-group|--dynamic-linker|--sysroot=*|-z) ;;
-    --*) ;;
-    *) [ -f "\$arg" ] && inputs="\$inputs \$arg" ;;
-  esac
-done
-exec "$TCC/bin/tcc" -nostdlib -static -o "\$out" \$inputs "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a"
-EOF
-        $BB chmod 755 "$out/bin/ld"
-      fi
-      if [ ! -x "$out/bin/nm" ]; then
-        $BB cat > "$out/bin/nm" <<'EOF'
-#!/bin/sh
-for arg in "$@"; do
-  case "$arg" in -*) ;; *) [ -f "$arg" ] || { echo "nm: $arg: No such file" >&2; exit 1; } ;; esac
-done
-exit 0
-EOF
-        $BB chmod 755 "$out/bin/nm"
-      fi
-      if [ ! -x "$out/bin/objcopy" ]; then
-        $BB cat > "$out/bin/objcopy" <<'EOF'
-#!/bin/sh
-prev=""
-in=""
-out=""
-for arg in "$@"; do
-  case "$arg" in -*) prev="" ;; *) if [ -z "$in" ]; then in="$arg"; else out="$arg"; fi ;; esac
-done
-[ -n "$in" ] && [ -n "$out" ] || { echo "objcopy: expected input and output" >&2; exit 1; }
-cp "$in" "$out"
-EOF
-        $BB chmod 755 "$out/bin/objcopy"
-      fi
-
-      # Verify required tools exist
-      test -x "$out/bin/as" || { echo "ERROR: as not built" >&2; exit 1; }
-      test -x "$out/bin/ld" || { echo "ERROR: ld not built" >&2; exit 1; }
-      test -x "$out/bin/ar" || { echo "ERROR: ar not built" >&2; exit 1; }
-      test -x "$out/bin/ranlib" || { echo "ERROR: ranlib not built" >&2; exit 1; }
-      test -x "$out/bin/nm" || { echo "ERROR: nm not built" >&2; exit 1; }
-      test -x "$out/bin/objcopy" || { echo "ERROR: objcopy not built" >&2; exit 1; }
-
-      # Assembler smoke test
-      $BB cat > /tmp/smoke.s << 'ASM'
-.section .text
+      $BB cat > "$WORK/positive.s" <<'MANTLE_ASSEMBLY'
 .global _start
+.text
 _start:
   mov $60, %rax
-  xor %rdi, %rdi
+  mov $42, %rdi
   syscall
-ASM
-      "$out/bin/as" -o /tmp/smoke.o /tmp/smoke.s
-      test -f /tmp/smoke.o
-      "$out/bin/ar" rc /tmp/libsmoke.a /tmp/smoke.o
-      "$out/bin/ranlib" /tmp/libsmoke.a
-      test -f /tmp/libsmoke.a
-      "$out/bin/nm" /tmp/smoke.o >/tmp/smoke.nm
-      "$out/bin/objcopy" /tmp/smoke.o /tmp/smoke.copy.o
-      test -f /tmp/smoke.copy.o
-      "$out/bin/ld" -o /tmp/smoke-bin /tmp/smoke.o
-      test -f /tmp/smoke-bin
-      $BB chmod 755 /tmp/smoke-bin
-      echo "binutils-2.30 bridge smoke test passed"
-    "%,
+MANTLE_ASSEMBLY
+      "$out/bin/as" -o "$WORK/positive.o" "$WORK/positive.s"
+      "$out/bin/ld" -o "$WORK/positive" "$WORK/positive.o"
+      $BB chmod 755 "$WORK/positive"
+      set +e
+      "$WORK/positive"
+      smoke_status=$?
+      set -e
+      test "$smoke_status" -eq "$SMOKE_EXIT_STATUS"
+      "$out/bin/ar" rc "$WORK/libpositive.a" "$WORK/positive.o"
+      "$out/bin/ranlib" "$WORK/libpositive.a"
+      "$out/bin/ar" t "$WORK/libpositive.a" | $BB grep -q positive.o
+      "$out/bin/nm" "$WORK/positive.o" | $BB grep -q _start
+      "$out/bin/objcopy" "$WORK/positive.o" "$WORK/positive-copy.o"
+      "$out/bin/objdump" -d "$WORK/positive-copy.o" | $BB grep -q syscall
+      "$out/bin/readelf" -h "$WORK/positive.o" | $BB grep -q ELF64
+
+      $BB printf '%s\n' '.mantle-invalid-directive' > "$WORK/rejected.s"
+      $BB rm -f "$WORK/rejected.o"
+      if "$out/bin/as" -o "$WORK/rejected.o" "$WORK/rejected.s"; then
+        echo "ERROR: source-built assembler accepted malformed input" >&2
+        exit 1
+      fi
+      test ! -e "$WORK/rejected.o"
+      $BB printf '%s\n' 'not-an-object' > "$WORK/rejected.o"
+      $BB rm -f "$WORK/rejected-bin"
+      if "$out/bin/ld" -o "$WORK/rejected-bin" "$WORK/rejected.o"; then
+        echo "ERROR: source-built linker accepted malformed object input" >&2
+        exit 1
+      fi
+      test ! -e "$WORK/rejected-bin"
+      $BB printf '%s\n' 'not-an-archive' > "$WORK/rejected.a"
+      if "$out/bin/ar" t "$WORK/rejected.a"; then
+        echo "ERROR: source-built archive tool accepted malformed archive input" >&2
+        exit 1
+      fi
+
+      $BB mkdir -p "$out/share/mantle-bootstrap"
+      $BB cat > "$out/share/mantle-bootstrap/binutils-tcc.json" <<EOF
+{
+  "schema": "mantle-binutils-tcc-row-receipt-v1",
+  "status": "complete-candidate",
+  "target": "$TARGET",
+  "source": "binutils-2.30-src",
+  "compiler": "tcc-0.9.27-musl-v2",
+  "generated_sources": "authenticated-release-configure-plus-declared-bison-flex-native-generators",
+  "fallback_events": [],
+  "non_claims": ["assembler-correctness", "linker-correctness", "bootstrap-correctness"]
+}
+EOF
+      test -s "$out/share/mantle-bootstrap/binutils-tcc.json"
+      echo "source-built TCC-era binutils matrix passed"
+    "%
   ],
-  inputs = [stage0, mes, tcc, musl, make, sed, m4, grep, diffutils, tar, bzip2, binutils_src],
+  inputs = [
+    stage0,
+    tcc,
+    musl,
+    make,
+    sed,
+    m4,
+    grep,
+    diffutils,
+    gawk,
+    bison,
+    flex,
+    binutils_src,
+  ],
 } | crunch.Derivation

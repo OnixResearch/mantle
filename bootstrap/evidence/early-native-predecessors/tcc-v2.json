@@ -1,0 +1,61 @@
+{
+  "kind": "artifact",
+  "digest": "79d1cfb4565d8e387f895265f33a7156794501c284c2c889055bb6c620cea67a",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/hh7ys4m19lyx4cdjbyadzkq937pbz3k3-tcc-0.9.27-musl-v2",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/1rkbfhmvrafnhrfbqf53k1fvxrrwy872-musl-1.1.24-tcc-musl"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/hh7ys4m19lyx4cdjbyadzkq937pbz3k3-tcc-0.9.27-musl-v2",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/n3n12q26vz8if06rv3l84idbjfii2plf-tinycc-0.9.26"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/hh7ys4m19lyx4cdjbyadzkq937pbz3k3-tcc-0.9.27-musl-v2",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/ly59qyd5wn6jaj2ng48f25619yx0mk0q-tcc-0.9.27-musl-v2"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:aa2b45aec6aeffddf641dd05d31c81a619bc83ba001d1c3dcef8f6efd55bc22a",
+      "logical_path": "/mantle/store/hh7ys4m19lyx4cdjbyadzkq937pbz3k3-tcc-0.9.27-musl-v2",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/1rkbfhmvrafnhrfbqf53k1fvxrrwy872-musl-1.1.24-tcc-musl"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/1rkbfhmvrafnhrfbqf53k1fvxrrwy872-musl-1.1.24-tcc-musl"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/hh7ys4m19lyx4cdjbyadzkq937pbz3k3-tcc-0.9.27-musl-v2"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/hh7ys4m19lyx4cdjbyadzkq937pbz3k3-tcc-0.9.27-musl-v2"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/n3n12q26vz8if06rv3l84idbjfii2plf-tinycc-0.9.26"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/n3n12q26vz8if06rv3l84idbjfii2plf-tinycc-0.9.26"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/ly59qyd5wn6jaj2ng48f25619yx0mk0q-tcc-0.9.27-musl-v2"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/ly59qyd5wn6jaj2ng48f25619yx0mk0q-tcc-0.9.27-musl-v2"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/hh7ys4m19lyx4cdjbyadzkq937pbz3k3-tcc-0.9.27-musl-v2"
+  }
+}

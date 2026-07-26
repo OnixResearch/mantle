@@ -252,7 +252,7 @@ const FIRST_STAGE_MINICARGO_RUSTC_THREADS_FLAG_LINE: &str = "        args.push_b
 const FIRST_STAGE_MINICARGO_RUSTC_THREADS_VALUE_LINE: &str = "        args.push_back(\"threads=1\");";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE: &str =
     "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF";
-const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE: &str = "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF LLVM_ENABLE_BACKTRACES=OFF CMAKE_DISABLE_FIND_PACKAGE_Backtrace=ON LLVM_TOOL_LTO_BUILD=OFF LLVM_BUILD_TOOLS=OFF";
+const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE: &str = "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_ZSTD=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF LLVM_ENABLE_BACKTRACES=OFF CMAKE_DISABLE_FIND_PACKAGE_Backtrace=ON CMAKE_DISABLE_FIND_PACKAGE_zstd=ON LLVM_TOOL_LTO_BUILD=OFF LLVM_BUILD_TOOLS=OFF";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_ORIGINAL_LINE: &str =
     "\t$Vcd $(RUSTCSRC)build && $(MAKE) -j $(PARLEVEL)";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_PATCHED_PREFIX: &str =
@@ -753,6 +753,22 @@ struct RustSourceProviderSmokePlan {
 }
 
 #[derive(Debug)]
+pub(crate) struct RustSourceProviderBlocked {
+    recipe_path: PathBuf,
+    recipe_digest_blake3: String,
+    route_plan_path: Option<PathBuf>,
+    route_plan_digest_blake3: Option<String>,
+    first_stage_id: Option<String>,
+    first_stage_script_path: Option<PathBuf>,
+    final_candidate_stage_id: Option<String>,
+    final_candidate_dir: Option<PathBuf>,
+    final_candidate_manifest_path: Option<PathBuf>,
+    final_candidate_metadata_digest_blake3: Option<String>,
+    final_candidate_smoke_summary_path: Option<PathBuf>,
+    reason: &'static str,
+}
+
+#[derive(Debug)]
 pub(crate) enum RustSourceProviderError {
     Read(String),
     Parse(String),
@@ -764,20 +780,7 @@ pub(crate) enum RustSourceProviderError {
     Build(String),
     Copy(String),
     Smoke(String),
-    Blocked {
-        recipe_path: PathBuf,
-        recipe_digest_blake3: String,
-        route_plan_path: Option<PathBuf>,
-        route_plan_digest_blake3: Option<String>,
-        first_stage_id: Option<String>,
-        first_stage_script_path: Option<PathBuf>,
-        final_candidate_stage_id: Option<String>,
-        final_candidate_dir: Option<PathBuf>,
-        final_candidate_manifest_path: Option<PathBuf>,
-        final_candidate_metadata_digest_blake3: Option<String>,
-        final_candidate_smoke_summary_path: Option<PathBuf>,
-        reason: &'static str,
-    },
+    Blocked(Box<RustSourceProviderBlocked>),
 }
 
 impl std::fmt::Display for RustSourceProviderError {
@@ -793,20 +796,21 @@ impl std::fmt::Display for RustSourceProviderError {
             Self::Build(message) => write!(formatter, "build: {message}"),
             Self::Copy(message) => write!(formatter, "copy: {message}"),
             Self::Smoke(message) => write!(formatter, "smoke: {message}"),
-            Self::Blocked {
-                recipe_path,
-                recipe_digest_blake3,
-                route_plan_path,
-                route_plan_digest_blake3,
-                first_stage_id,
-                first_stage_script_path,
-                final_candidate_stage_id,
-                final_candidate_dir,
-                final_candidate_manifest_path,
-                final_candidate_metadata_digest_blake3,
-                final_candidate_smoke_summary_path,
-                reason,
-            } => {
+            Self::Blocked(details) => {
+                let RustSourceProviderBlocked {
+                    recipe_path,
+                    recipe_digest_blake3,
+                    route_plan_path,
+                    route_plan_digest_blake3,
+                    first_stage_id,
+                    first_stage_script_path,
+                    final_candidate_stage_id,
+                    final_candidate_dir,
+                    final_candidate_manifest_path,
+                    final_candidate_metadata_digest_blake3,
+                    final_candidate_smoke_summary_path,
+                    reason,
+                } = details.as_ref();
                 write!(
                     formatter,
                     "{reason}; recipe={} recipe_digest_blake3={recipe_digest_blake3}",
@@ -854,13 +858,29 @@ impl std::fmt::Display for RustSourceProviderError {
 
 impl std::error::Error for RustSourceProviderError {}
 
+fn verify_optional_full_source_binding(
+    output_path: &Path,
+    publication: Option<&crate::full_source_rust_binding_shell::FullSourceRustBindingPublication>,
+) -> Result<(), RustSourceProviderError> {
+    let Some(publication) = publication else {
+        return Ok(());
+    };
+    if let Err(error) = verify_materialized_full_source_binding(output_path, publication) {
+        cleanup_failed_output(output_path);
+        return Err(error);
+    }
+    assert!(output_path.is_absolute());
+    assert!(!publication.content_digest_blake3.is_empty());
+    Ok(())
+}
+
 pub(crate) fn materialize_rust_source_provider(
     recipe_path: &Path,
     output_dir: &Path,
     scratch_dir: &Path,
     verbose: bool,
 ) -> Result<RustSourceProviderMaterialization, RustSourceProviderError> {
-    materialize_rust_source_provider_with_route_plan(recipe_path, None, output_dir, scratch_dir, verbose)
+    materialize_rust_source_provider_internal(recipe_path, None, None, output_dir, scratch_dir, verbose)
 }
 
 pub(crate) fn materialize_rust_source_provider_with_route_plan(
@@ -870,6 +890,38 @@ pub(crate) fn materialize_rust_source_provider_with_route_plan(
     scratch_dir: &Path,
     verbose: bool,
 ) -> Result<RustSourceProviderMaterialization, RustSourceProviderError> {
+    materialize_rust_source_provider_internal(recipe_path, route_plan_path, None, output_dir, scratch_dir, verbose)
+}
+
+pub(crate) fn materialize_full_source_bound_rust_provider_with_route_plan(
+    recipe_path: &Path,
+    route_plan_path: Option<&Path>,
+    admission_report_path: &Path,
+    output_dir: &Path,
+    scratch_dir: &Path,
+    verbose: bool,
+) -> Result<RustSourceProviderMaterialization, RustSourceProviderError> {
+    materialize_rust_source_provider_internal(
+        recipe_path,
+        route_plan_path,
+        Some(admission_report_path),
+        output_dir,
+        scratch_dir,
+        verbose,
+    )
+}
+
+fn materialize_rust_source_provider_internal(
+    recipe_path: &Path,
+    route_plan_path: Option<&Path>,
+    admission_report_path: Option<&Path>,
+    output_dir: &Path,
+    scratch_dir: &Path,
+    verbose: bool,
+) -> Result<RustSourceProviderMaterialization, RustSourceProviderError> {
+    if admission_report_path.is_some() {
+        crate::full_source_rust_binding_shell::ensure_full_source_binding_route_ready()?;
+    }
     let recipe_bytes = fs::read(recipe_path)
         .map_err(|err| RustSourceProviderError::Read(format!("recipe {}: {err}", recipe_path.display())))?;
     if recipe_bytes.is_empty() {
@@ -900,7 +952,16 @@ pub(crate) fn materialize_rust_source_provider_with_route_plan(
             .candidate,
     );
     let rustc_final_run = run_rustc_final_provider_candidate(&plan, &route, &rustc_final_bootstrap_candidate, verbose)?;
+    let binding_publication = admission_report_path
+        .map(|report_path| {
+            crate::full_source_rust_binding_shell::bind_full_source_rust_provider_candidate(
+                &rustc_final_run.candidate.candidate_dir,
+                report_path,
+            )
+        })
+        .transpose()?;
     let materialized = promote_rustc_final_provider_candidate(&plan, &rustc_final_run)?;
+    verify_optional_full_source_binding(&materialized.output_path, binding_publication.as_ref())?;
     if let Err(err) =
         write_rustc_final_provider_candidate_manifest(&rustc_final_run.boundary, &rustc_final_run.candidate, true)
     {
@@ -918,6 +979,32 @@ pub(crate) fn materialize_rust_source_provider_with_route_plan(
         });
     }
     Ok(materialized)
+}
+
+fn verify_materialized_full_source_binding(
+    output_dir: &Path,
+    publication: &crate::full_source_rust_binding_shell::FullSourceRustBindingPublication,
+) -> Result<(), RustSourceProviderError> {
+    let copied_path = output_dir.join(crate::full_source_rust_binding_shell::FULL_SOURCE_RUST_BINDING_RELATIVE_PATH);
+    let bytes = fs::read(&copied_path).map_err(|error| {
+        RustSourceProviderError::Read(format!("copied full-source binding {}: {error}", copied_path.display()))
+    })?;
+    if bytes.is_empty() {
+        return Err(RustSourceProviderError::Read(format!(
+            "copied full-source binding {} is empty",
+            copied_path.display()
+        )));
+    }
+    let copied_digest = blake3::hash(&bytes).to_hex().to_string();
+    if copied_digest != publication.content_digest_blake3 {
+        return Err(RustSourceProviderError::Digest(format!(
+            "copied full-source binding digest expected {}, got {}",
+            publication.content_digest_blake3, copied_digest
+        )));
+    }
+    debug_assert_ne!(publication.path, copied_path);
+    debug_assert!(publication.native_artifact_count > 1);
+    Ok(())
 }
 
 fn promote_rustc_final_provider_candidate(
@@ -7403,7 +7490,7 @@ fn observed_provider_artifacts(
     Ok(observed)
 }
 
-fn observed_provider_receipts(
+pub(crate) fn observed_provider_receipts(
     provider_dir: &Path,
     metadata: &RustSourceProviderMetadata,
 ) -> Result<Vec<RustProviderObservedBuildReceipt>, RustSourceProviderError> {
@@ -8661,14 +8748,17 @@ mod tests {
         assert!(script.contains("--sysroot \\\"\\$(abspath \\$(PREFIX_S))"));
         assert!(script.contains(&shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SYSROOT_SYMLINK_LINE)));
         assert!(script.contains(&shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SYSROOT_WRAPPER_LINE)));
-        let run_rustc_makefile = fs::read_to_string(
-            scratch
-                .join(FIRST_STAGE_SOURCE_DIR)
-                .join("mrustc-0.12.0")
-                .join(FIRST_STAGE_RUN_RUSTC_DIR)
-                .join(FIRST_STAGE_MAKEFILE),
-        )
-        .unwrap();
+        let mrustc_source = scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0");
+        let minicargo_makefile = fs::read_to_string(mrustc_source.join(FIRST_STAGE_MINICARGO_MAKEFILE)).unwrap();
+        assert!(minicargo_makefile.contains("LLVM_ENABLE_ZSTD=OFF"));
+        assert!(minicargo_makefile.contains("CMAKE_DISABLE_FIND_PACKAGE_zstd=ON"));
+        assert!(
+            !minicargo_makefile
+                .lines()
+                .any(|line| line == FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE)
+        );
+        let run_rustc_makefile =
+            fs::read_to_string(mrustc_source.join(FIRST_STAGE_RUN_RUSTC_DIR).join(FIRST_STAGE_MAKEFILE)).unwrap();
         assert!(run_rustc_makefile.contains(FIRST_STAGE_RUN_RUSTC_FINAL_PREFIX2_ENV_LINE));
         assert!(!run_rustc_makefile.contains(FIRST_STAGE_RUN_RUSTC_FINAL_ENV_LINE));
         assert!(run_rustc_makefile.lines().any(|line| line == FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_ALL_STATIC_LINE));

@@ -1,0 +1,37 @@
+{
+  "kind": "artifact",
+  "digest": "3ac1b76f70ce71d03148d0973c133757e5063513f9d5c0558cf0ba9282b35b8a",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/hr6j69m0kb5qzzi2kb162sm9zqrwf476-musl-1.1.24-gcc-pass5-v1"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:4aa707641fb092d191922d4d07849c1949cf2eef43940a86253b0ba6d9f8566b",
+      "logical_path": "/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/hr6j69m0kb5qzzi2kb162sm9zqrwf476-musl-1.1.24-gcc-pass5-v1"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/hr6j69m0kb5qzzi2kb162sm9zqrwf476-musl-1.1.24-gcc-pass5-v1"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+  }
+}

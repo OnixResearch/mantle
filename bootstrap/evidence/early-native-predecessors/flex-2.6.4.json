@@ -1,0 +1,49 @@
+{
+  "kind": "artifact",
+  "digest": "e785eea62f1fb55b881bf4ca966ee3d10ba03fcda4cd87bf53b93703328e4c37",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/cl7lwfbvv8sc46rv2a09xkfw28hnpxz1-flex-2.6.4-musl",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/sbhp9842v5hv1xsmkpyxkr497jvpl8sc-m4-1.4.7-musl"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/cl7lwfbvv8sc46rv2a09xkfw28hnpxz1-flex-2.6.4-musl",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/szyw6b4fndrwsq2hn27km8sg9052la4n-flex-2.6.4-musl"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:6c7dc2392f1717ae43540fac5bb60eb4418c5d427f072ace0ff0688d11b026f6",
+      "logical_path": "/mantle/store/cl7lwfbvv8sc46rv2a09xkfw28hnpxz1-flex-2.6.4-musl",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/cl7lwfbvv8sc46rv2a09xkfw28hnpxz1-flex-2.6.4-musl"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/cl7lwfbvv8sc46rv2a09xkfw28hnpxz1-flex-2.6.4-musl"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/sbhp9842v5hv1xsmkpyxkr497jvpl8sc-m4-1.4.7-musl"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/sbhp9842v5hv1xsmkpyxkr497jvpl8sc-m4-1.4.7-musl"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/szyw6b4fndrwsq2hn27km8sg9052la4n-flex-2.6.4-musl"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/szyw6b4fndrwsq2hn27km8sg9052la4n-flex-2.6.4-musl"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/cl7lwfbvv8sc46rv2a09xkfw28hnpxz1-flex-2.6.4-musl"
+  }
+}

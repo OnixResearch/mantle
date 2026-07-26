@@ -1,0 +1,61 @@
+{
+  "kind": "artifact",
+  "digest": "9b299baa6ca9bbce7a8175cf60e05a206d9e0bb814ac0cb00d7176e5ffb6a40d",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/bs7rnnl7i1775g4ianjgjvf415sy9f6f-gcc-4.0.4-musl-pass6-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/bs7rnnl7i1775g4ianjgjvf415sy9f6f-gcc-4.0.4-musl-pass6-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/bs7rnnl7i1775g4ianjgjvf415sy9f6f-gcc-4.0.4-musl-pass6-v1",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/skkycxyvnyl0sp3p5r21yy22xi0xw6ap-gcc-4.0.4-musl-pass6-v1"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:255d9b5046a67501d3375b5e404402157a94fece6a487126c75dd3395ab7714e",
+      "logical_path": "/mantle/store/bs7rnnl7i1775g4ianjgjvf415sy9f6f-gcc-4.0.4-musl-pass6-v1",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/bs7rnnl7i1775g4ianjgjvf415sy9f6f-gcc-4.0.4-musl-pass6-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/bs7rnnl7i1775g4ianjgjvf415sy9f6f-gcc-4.0.4-musl-pass6-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/skkycxyvnyl0sp3p5r21yy22xi0xw6ap-gcc-4.0.4-musl-pass6-v1"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/skkycxyvnyl0sp3p5r21yy22xi0xw6ap-gcc-4.0.4-musl-pass6-v1"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/bs7rnnl7i1775g4ianjgjvf415sy9f6f-gcc-4.0.4-musl-pass6-v1"
+  }
+}

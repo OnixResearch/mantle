@@ -10,7 +10,7 @@ let crunch = import "lib.ncl" in
 # Keep every diagnostic tool edge explicit.  The shipped GCC release already
 # contains generated configure/parser sources, so this root does not depend on
 # the currently incomplete Perl/autoconf/automake regeneration chain.
-let binutils = crunch.derivationFile "binutils-2.30-gas-source.ncl" in
+let binutils = crunch.derivationFile "binutils-tcc.ncl" in
 let tcc = crunch.derivationFile "tcc-musl-native.ncl" in
 let tcc_selfhost = crunch.derivationFile "tcc-musl-selfhost.ncl" in
 let tcc26 = crunch.derivationFile "tcc-musl-v2.ncl" in
@@ -21,7 +21,6 @@ let sed = crunch.derivationFile "sed-4.0.9-musl.ncl" in
 let m4 = crunch.derivationFile "m4-1.4.7-musl.ncl" in
 let grep = crunch.derivationFile "grep-2.4-musl.ncl" in
 let diffutils = crunch.derivationFile "diffutils-2.7-musl.ncl" in
-let sbase = crunch.derivationFile "sbase-tools.ncl" in
 let gawk = crunch.derivationFile "gawk-3.0.4-musl.ncl" in
 
 # Upstream uses a modern automake source only for config.sub. Keeping it as a
@@ -73,13 +72,12 @@ let gcc_src = crunch.fetchTarball {
       TCC26=$(find_input tcc-0.9.27-musl-v2)
       MUSL=$(find_input musl-1.1.24-native-candidate)
       MAKE=$(find_input make-3.82-tcc)
-      BINUTILS=$(find_input binutils-2.30-gas-source-v41)
+      BINUTILS=$(find_input binutils-2.30-tcc-source-v1)
       STAGE0=$(find_input stage0-posix)
       SED=$(find_input sed-4.0.9-musl)
       M4=$(find_input m4-1.4.7-musl)
       GREP=$(find_input grep-2.4-musl)
       DIFF=$(find_input diffutils-2.7-musl)
-      SBASE=$(find_input sbase-tools-c546c3a)
       GAWK=$(find_input gawk-3.0.4-musl)
       AUTOMAKE115_SRC=$(find_input automake-1.15.1-config-sub-src)
       SRC=$(find_input gcc-4.0.4-native-src)
@@ -88,7 +86,13 @@ let gcc_src = crunch.fetchTarball {
 
       # Every PATH utility is a declared source-built derivation output. The
       # sandbox shell remains the explicit builder boundary, not a PATH fallback.
-      export PATH="$TCC/bin:$BINUTILS/bin:$MAKE/bin:$SED/bin:$M4/bin:$GREP/bin:$DIFF/bin:$SBASE/bin:$GAWK/bin:$STAGE0/bin"
+      TOOLBIN=/tmp/gcc40-tools
+      $BB rm -rf "$TOOLBIN"
+      $BB mkdir -p "$TOOLBIN"
+      for applet in basename cat chmod cmp cp cut date dirname echo env expr false find head install ln ls mkdir mktemp mv od printf pwd readlink rm rmdir sh sha256sum sleep sort tail tee test timeout touch tr true uname uniq wc xargs; do
+        $BB ln -sf "$BB" "$TOOLBIN/$applet"
+      done
+      export PATH="$TOOLBIN:$TCC/bin:$BINUTILS/bin:$MAKE/bin:$SED/bin:$M4/bin:$GREP/bin:$DIFF/bin:$GAWK/bin:$STAGE0/bin"
       export AWK="$GAWK/bin/gawk"
       export CONFIG_SHELL=/bin/sh
       export SHELL=/bin/sh
@@ -926,6 +930,6 @@ EOF
   ],
   inputs = [
     binutils, tcc, tcc_selfhost, tcc26, musl, make, stage0, sed, m4, grep, diffutils,
-    sbase, gawk, automake115_src, gcc_src,
+    gawk, automake115_src, gcc_src,
   ],
 } | crunch.Derivation

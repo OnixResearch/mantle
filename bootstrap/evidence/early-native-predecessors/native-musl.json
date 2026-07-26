@@ -1,0 +1,37 @@
+{
+  "kind": "artifact",
+  "digest": "250eb710c9a5bb82d5e03bacfc33c49a0e677f3807f252e2aaedb96f092ddbae",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/w5jjcfjjj9vb99fbmppn1scawz2ml053-musl-1.1.24-native-candidate"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:02566ba96e79d087d68b60a75870a9df2c067808c2cef1cab0536892c7dcfc07",
+      "logical_path": "/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/w5jjcfjjj9vb99fbmppn1scawz2ml053-musl-1.1.24-native-candidate"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/w5jjcfjjj9vb99fbmppn1scawz2ml053-musl-1.1.24-native-candidate"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate"
+  }
+}

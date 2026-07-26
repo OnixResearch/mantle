@@ -218,7 +218,7 @@ pub(crate) enum ToolchainSourceKind {
     Generated,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum ToolchainBuildReceiptKind {
     MantleRustTopology,

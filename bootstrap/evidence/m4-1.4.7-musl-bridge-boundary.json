@@ -1,26 +1,52 @@
 {
-  "schema": "mantle-m4-147-musl-bridge-boundary-v1",
+  "schema": "mantle-m4-147-musl-provider-frontier-v2",
   "derivation": "bootstrap/m4-1.4.7-musl.ncl",
-  "status": "bridge-boundary-only",
-  "boundary": "tcc-musl-v2-m4-147-static-link",
-  "provider_kind": "source-root",
-  "expected_complete": false,
-  "checked_derivation_markers": [
-    "TinyCC/musl-v2 segfaults while compiling the two m4.c wrappers",
-    "TinyCC/musl-v2 handoff still segfaults during static link",
-    "deliberately small bootstrap m4 bridge",
-    "define(FOO,bar)FOO",
-    "dnl ignored"
-  ],
-  "build_smoke": {
-    "command": "crunch build bootstrap/m4-1.4.7-musl.ncl --store .crunch-drain/m4-boundary-store -j 4 --trust-unsigned",
+  "status": "diagnostic-source-build",
+  "provider_kind": "source-built-bootstrap-tool",
+  "source": {
+    "name": "GNU M4 1.4.7",
+    "url": "https://mirrors.kernel.org/gnu/m4/m4-1.4.7.tar.bz2",
+    "hash": "sha256-4SO98HrHjkV6a+NazK3EatKsynMNhfWXUpi1L5SeMMc="
+  },
+  "roles": {
+    "compiler": "tcc-0.9.27-musl-v2",
+    "startup_and_runtime": "musl-1.1.24-native-candidate",
+    "ambient_tool_discovery": false,
+    "awk_macro_bridge": false
+  },
+  "diagnostic_build": {
+    "pueue_task": 716,
+    "command": "CRUNCH_NO_FUSE=1 nix develop -c mantle --store .pi/cairn-drain/early-native-v3/store --state-dir .pi/cairn-drain/early-native-v3/state --verbose --log-level info build bootstrap/m4-1.4.7-musl.ncl --no-substitute --trust-unsigned -j 1",
+    "output": ".pi/cairn-drain/early-native-v3/store/sbhp9842v5hv1xsmkpyxkr497jvpl8sc-m4-1.4.7-musl",
     "status": "success",
+    "trust_mode": "unsigned-diagnostic-only",
     "output_contract": [
       "installed bin/m4 is executable",
-      "define(FOO,bar)FOO expands to bar",
-      "dnl-only input produces no output"
+      "GNU M4 1.4.7 version output matches",
+      "ordinary define expansion succeeds",
+      "m4 -P prefixed define expansion succeeds",
+      "m4 -P does not accept the unprefixed define builtin",
+      "malformed quoted input is rejected with a diagnostic"
     ]
   },
-  "replacement_condition": "Retire this boundary when bootstrap/m4-1.4.7-musl.ncl links a direct GNU m4 1.4.7 binary with tcc-musl-v2 and preserves the m4 output-contract smoke without installing the awk bridge.",
-  "parity_effect": "evidence-backed partial; does not prove GNU m4 1.4.7 musl source-build correctness"
+  "consumer_build": {
+    "pueue_task": 723,
+    "derivation": "bootstrap/flex-2.6.4-musl.ncl",
+    "output": ".pi/cairn-drain/early-native-v3/store/cl7lwfbvv8sc46rv2a09xkfw28hnpxz1-flex-2.6.4-musl",
+    "status": "success",
+    "observed_contract": [
+      "Flex invokes the exact declared GNU M4 with -P",
+      "positive scanner generation succeeds",
+      "malformed scanner input is rejected",
+      "no temporary trace instrumentation remains"
+    ]
+  },
+  "non_claims": [
+    "strict trusted-route acceptance",
+    "native-musl provider admission",
+    "full early-native parity",
+    "general macro-processor correctness",
+    "general compiler or bootstrap correctness"
+  ],
+  "next_acceptance_step": "Repeat the provider and consumer builds through the strict trusted route and bind accepted current artifacts into the early-native row receipt."
 }

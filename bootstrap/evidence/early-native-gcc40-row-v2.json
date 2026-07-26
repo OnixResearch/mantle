@@ -1,0 +1,81 @@
+{
+  "schema": "mantle-early-native-row-receipt-v2",
+  "row_id": "gcc.4.0",
+  "derivation": "bootstrap/gcc-4.0.ncl",
+  "source_records": [
+    {"path":"bootstrap/gcc-4.0.ncl","blake3":"534bf45c4efacb9f0184482d6ffe6ba6fb6c24868eba57db338a6dcaf7e930bb"},
+    {"path":"bootstrap/gcc-4.0-musl-cxx.ncl","blake3":"1a90a3cf344af92ffb21500bbfd952ef0c8df1f6137f753699369e03cd2c133d"},
+    {"path":"bootstrap/gcc-4.0-musl-pass3.ncl","blake3":"b301fb271cccfda7c3168ad4352f41c911c00518abe65bee7b605ff2d161fd84"},
+    {"path":"bootstrap/gcc-4.0-musl-pass4.ncl","blake3":"e1beeba2c729ddf1c0bc8a88624d5d1eca00f874006058f4fae1a37686cefabf"},
+    {"path":"bootstrap/gcc-4.0-musl-pass5.ncl","blake3":"180ebdbc2066923fff80d58ba0570e3f01da9a8783656b5781895b479bf886f8"},
+    {"path":"bootstrap/gcc-4.0-musl-pass6.ncl","blake3":"da48cce7f96b3fa62b1ec792f49beb777b859f1c733207187cee268b0d2bc8f8"},
+    {"path":"bootstrap/gcc-4.0-native.ncl","blake3":"05ecf550794532757b79686e457acdf04e34305997247b82347009089aa41d6b"},
+    {"path":"bootstrap/musl-1.1.24-gcc.ncl","blake3":"43ebfbddc2e5d4149b313bb1131f89e2738725c6fa4792e624b2c42c288a8bc3"},
+    {"path":"bootstrap/musl-1.1.24-gcc-pass4.ncl","blake3":"f2398ee1f9492858c7fe1dc7d6c84ceec46bf9ff2537c74ca09547e843936387"},
+    {"path":"bootstrap/musl-1.1.24-gcc-pass5.ncl","blake3":"30c4726bde2b87b4e90a09783d4a177269d2708a8026e7eeda670107011e44dd"},
+    {"path":"bootstrap/binutils-2.30-gcc.ncl","blake3":"9d49d6c85cfedb04fa473cfb569c083bc4d79528bd36d5696f0489b275c3feca"},
+    {"path":"bootstrap/binutils-tcc.ncl","blake3":"406d4aaecf2cc8c9b357463fb8f48f185acaa67e77c4136e5908cca851efd177"},
+    {"path":"bootstrap/bison-3.4.1-gcc.ncl","blake3":"6c053d3c24c39f659d04307e7c66433de970a227ec1d2c7e8171920781ca98d2"},
+    {"path":"bootstrap/flex-2.6.4-gcc.ncl","blake3":"5ad9d8a243fc28e0358709310a96085c16971e9ed3fa5a30cb92eb353ed99db2"},
+    {"path":"bootstrap/m4-1.4.7-gcc.ncl","blake3":"6205e82e657ce3352104f34c2d26143168ec585b9f86e5b253d2d861cec3c34e"},
+    {"path":"bootstrap/autoconf-2.13-gcc.ncl","blake3":"245cb0fe285183bf48c125805e8716854266461d595870a1bfef449ea0e40f59"},
+    {"path":"bootstrap/autoconf-2.59-gcc.ncl","blake3":"529f7386dd6678559a35dd2d73568f13a0cbdb15ab30fee0607b406a1dbbdab2"},
+    {"path":"bootstrap/perl-5.6.2-configured-gcc.ncl","blake3":"864885b7b26cf30b2bccf4c3cb8139ec615378e1b23f5295410fe09eba8b5979"}
+  ],
+  "predecessors": [
+    {"role":"early-binutils","logical_path":"/mantle/store/rm39hk4lfnaqzhcpazva7n17f58l5syl-binutils-2.30-tcc-source-v1","artifact_evidence_path":"bootstrap/evidence/early-native-predecessors/early-binutils.json","artifact_attestation_blake3":"e0a40c67426126069e36508046c41cc6230afb93e90cc1e07f2255f9d62cb5a1"},
+    {"role":"gcc-built-binutils","logical_path":"/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16","artifact_evidence_path":"bootstrap/evidence/early-native-predecessors/gcc-built-binutils.json","artifact_attestation_blake3":"bbded8477c2a01e767fed22388915e98a51e7ae6fa7d4edd0caa2ce245cc34b9"},
+    {"role":"gcc-pass6","logical_path":"/mantle/store/bs7rnnl7i1775g4ianjgjvf415sy9f6f-gcc-4.0.4-musl-pass6-v1","artifact_evidence_path":"bootstrap/evidence/early-native-predecessors/gcc-pass6.json","artifact_attestation_blake3":"9b299baa6ca9bbce7a8175cf60e05a206d9e0bb814ac0cb00d7176e5ffb6a40d"},
+    {"role":"musl-pass5","logical_path":"/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1","artifact_evidence_path":"bootstrap/evidence/early-native-predecessors/musl-pass5.json","artifact_attestation_blake3":"3ac1b76f70ce71d03148d0973c133757e5063513f9d5c0558cf0ba9282b35b8a"},
+    {"role":"native-musl","logical_path":"/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate","artifact_evidence_path":"bootstrap/evidence/early-native-predecessors/native-musl.json","artifact_attestation_blake3":"250eb710c9a5bb82d5e03bacfc33c49a0e677f3807f252e2aaedb96f092ddbae"},
+    {"role":"native-tcc","logical_path":"/mantle/store/1a7mcbsc3l1x8wn3qf41gjqm2cbz905c-tcc-0.9.27-musl-native-runtime","artifact_evidence_path":"bootstrap/evidence/early-native-predecessors/native-tcc.json","artifact_attestation_blake3":"b4e10807e297251649155606eda1e4aadf9963e573e3cc8f2532d798f68b6f29"}
+  ],
+  "generated_artifacts": [
+    {"id":"c-parser-bison-3.4.1","status":"regenerated"},
+    {"id":"gcc-configure-autoconf-2.59","status":"regenerated"},
+    {"id":"gengtype-parser-bison-3.4.1","status":"regenerated"},
+    {"id":"gengtype-scanner-flex-2.6.4","status":"regenerated"},
+    {"id":"top-level-configure-autoconf-2.13","status":"regenerated"}
+  ],
+  "acceptance_evidence_path": "bootstrap/evidence/early-native-gcc40-acceptance-v1.json",
+  "output": {
+    "logical_path": "/mantle/store/7rfhqyf3dmv0ziwh8j6jl8jr9labmn9z-gcc-4.0.4-musl-cxx-v7",
+    "artifact_evidence_path": "bootstrap/evidence/early-native-gcc40-artifact.json",
+    "artifact_attestation_blake3": "d48ce69b37a151cccaf5ee756362806b517c4427481581063a2ddc7bf8f7d0ac",
+    "nar_sha256": "a63f40ae6b88edb4b219b1423027d341685bf296384f4619885101631954b96b"
+  },
+  "behavior": {
+    "positive": [
+      {"id":"c-driver-static-runtime","status":"passed"},
+      {"id":"cc1-and-cc1plus-present","status":"passed"},
+      {"id":"cxx-exception-rtti-allocation-runtime","status":"passed"},
+      {"id":"demangler-runtime","status":"passed"},
+      {"id":"generator-artifact-set","status":"passed"},
+      {"id":"libgcc-exception-runtime-present","status":"passed"},
+      {"id":"relocated-c-driver-runtime","status":"passed"}
+    ],
+    "rejection": [
+      {"id":"configure-bridge-compiler-use-scan-clean","status":"passed"},
+      {"id":"fabricated-object-scan-clean","status":"passed"},
+      {"id":"malformed-c-rejected","status":"passed"},
+      {"id":"malformed-cxx-rejected","status":"passed"},
+      {"id":"release-generated-substitution-scan-clean","status":"passed"},
+      {"id":"wrapper-delegation-scan-clean","status":"passed"}
+    ]
+  },
+  "trust": {"trust_unsigned":false,"signing_key_selected":true,"substitutions_enabled":false},
+  "fallback": {
+    "host_tool_execution": false,
+    "predecessor_delegation": false,
+    "release_generated_substitution": false,
+    "configure_bridge_compiler_use": false,
+    "fabricated_objects": [],
+    "omitted_artifacts": []
+  },
+  "bounded_claim": "The authenticated same-version GCC 4.0.4 bootstrap cycle produced the declared C/C++ compiler, generator, demangler, libgcc, exception/runtime, relocation, and rejection matrix under signed no-substitution acceptance.",
+  "non_claims": [
+    "general compiler or binutils correctness",
+    "provider or seed admission",
+    "whole-bootstrap correctness"
+  ]
+}

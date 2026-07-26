@@ -1,17 +1,15 @@
-# Build m4 1.4.7 linked against musl using tcc-musl-v2.
+# Build genuine GNU M4 1.4.7 with the source-built TinyCC compiler shell and
+# the separately qualified native-musl runtime candidate.
 #
-# m4 is a macro processor required by autoconf. This version is
-# built before bison/flex to keep the chain linear.
-#
-# Adapted from live-bootstrap steps/m4-1.4.7.
+# Adapted from fosslinux/live-bootstrap steps/m4-1.4.7/mk/main.mk. The release
+# sources are compiled directly, so no generated parser, host compiler, awk
+# macro bridge, or ambient tool discovery participates in the provider.
 
 let crunch = import "lib.ncl" in
 
 let stage0 = import "stage0-posix.ncl" in
 let tcc = import "tcc-musl-v2.ncl" in
-let musl = import "musl-1.1.24-tcc-musl.ncl" in
-let make = import "make-tcc.ncl" in
-let sed = import "sed-4.0.9-musl.ncl" in
+let musl = import "musl-1.1.24-native.ncl" in
 
 let m4_src = crunch.fetchTarball {
   # provenance: fosslinux/live-bootstrap steps/m4-1.4.7/sources
@@ -31,28 +29,28 @@ let m4_src = crunch.fetchTarball {
       BB=/bin/busybox
 
       find_input() {
-        for d in $NIX_STORE/*-"$1"; do
-          if [ -d "$d" ]; then echo "$d"; return; fi
+        for candidate in $NIX_STORE/*-"$1"; do
+          if [ -d "$candidate" ]; then
+            echo "$candidate"
+            return
+          fi
         done
-        echo "ERROR: input $1 not found" >&2; exit 1
+        echo "ERROR: input $1 not found" >&2
+        exit 1
       }
 
       TCC=$(find_input tcc-0.9.27-musl-v2)
-      MUSL=$(find_input musl-1.1.24-tcc-musl)
-      MAKE=$(find_input make-3.82-tcc)
+      MUSL=$(find_input musl-1.1.24-native-candidate)
       STAGE0=$(find_input stage0-posix)
-      SED=$(find_input sed-4.0.9-musl)
       SRC=$(find_input m4-1.4.7-src)
+      export PATH="$TCC/bin:$STAGE0/bin"
 
-      export PATH="$TCC/bin:$MAKE/bin:$SED/bin:$STAGE0/bin:$PATH"
-
-      WORK=/tmp/m4-build
+      WORK=/tmp/m4-1.4.7-musl
+      $BB rm -rf "$WORK"
       $BB mkdir -p "$WORK"
-      cd "$WORK"
-
-      $BB cp -r "$SRC" m4-1.4.7
-      $BB chmod -R u+w m4-1.4.7
-      cd m4-1.4.7
+      $BB cp -r "$SRC" "$WORK/src"
+      $BB chmod -R u+w "$WORK/src"
+      cd "$WORK/src"
 
       $BB cat > lib/config.h <<'EOF'
 #define VERSION "1.4.7"
@@ -63,165 +61,120 @@ let m4_src = crunch.fetchTarball {
 #define HAVE_STDINT_H 1
 #define HAVE___FPENDING 1
 #define HAVE_DECL___FPENDING 1
+#ifndef SIZE_MAX
+#define SIZE_MAX ((size_t)-1)
+#endif
 #define _GNU_SOURCE 1
 #define _GL_UNUSED
 #define __getopt_argv_const const
 #define SYSCMD_SHELL "/bin/sh"
 EOF
 
-      CFLAGS="-Ilib -Isrc -I$MUSL/include"
+      CFLAGS="-Ilib -Isrc -I$MUSL/include -DHAVE_CONFIG_H=1 -DSIZE_MAX=~(size_t)0"
+      LIB_SOURCES="cloexec close-stream dup-safer error exitfail fd-safer fopen-safer getopt getopt1 mkstemp-safer regex obstack tmpfile-safer verror xalloc-die xasprintf xmalloc xvasprintf"
+      M4_SOURCES="m4 builtin debug eval format freeze input macro output path symtab"
+      OBJECTS=""
+      LIB_SOURCE_COUNT=18
+      M4_SOURCE_COUNT=11
+      COMPILED_SOURCE_COUNT=0
 
-      # TinyCC/musl-v2 segfaults while compiling the two m4.c wrappers that
-      # forward varargs through va_start/va_list.  Keep diagnostics coarse but
-      # preserve exit behavior so bootstrap consumers can run m4.
-      $BB awk '
-        NR == 79 { print "void"; print "m4_error (int status, int errnum, const char *format, ...)"; print "{"; print "  fputs (format, stderr);"; print "  if (status) exit (status);"; print "}"; next }
-        NR >= 79 && NR <= 86 { next }
-        NR == 92 { print "void"; print "m4_error_at_line (int status, int errnum, const char *file, int line,"; print "          const char *format, ...)"; print "{"; print "  fputs (format, stderr);"; print "  if (status) exit (status);"; print "}"; next }
-        NR >= 92 && NR <= 99 { next }
-        { print }
-      ' src/m4.c > src/m4.c.new
-      $BB mv src/m4.c.new src/m4.c
-      $BB awk '
-        NR == 260 { print "static void"; print "trace_format (const char *fmt, ...)"; print "{"; print "  while (*fmt) obstack_1grow (&trace, *fmt++);"; print "}"; next }
-        NR >= 260 && NR <= 323 { next }
-        { print }
-      ' src/debug.c > src/debug.c.new
-      $BB mv src/debug.c.new src/debug.c
-      $BB cat > lib/close-stream.c <<'EOF'
-#include <config.h>
-#include "close-stream.h"
-int close_stream(FILE *stream) { return fclose(stream); }
-EOF
-      $BB cat > lib/error.c <<'EOF'
-#include <config.h>
-#include <stdio.h>
-#include <stdlib.h>
-void (*error_print_progname) (void);
-unsigned int error_message_count;
-void error(int status, int errnum, const char *message, ...) {
-  error_message_count++;
-  if (message) fputs(message, stderr);
-  fputc('\n', stderr);
-  if (status) exit(status);
-}
-void error_at_line(int status, int errnum, const char *file_name,
-                   unsigned int line_number, const char *message, ...) {
-  error(status, errnum, message);
-}
-EOF
-      $BB cat > lib/xasprintf.c <<'EOF'
-#include <config.h>
-#include <string.h>
-#include "xalloc.h"
-char *xasprintf(const char *format, ...) {
-  char *r = (char *) xmalloc(strlen(format) + 1);
-  strcpy(r, format);
-  return r;
-}
-EOF
-      $BB cat > lib/verror.c <<'EOF'
-#include <config.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
-void verror (int status, int errnum, const char *format, va_list args) {
-  if (format) fputs(format, stderr);
-  fputc('\n', stderr);
-  if (status) exit(status);
-}
-void verror_at_line (int status, int errnum, const char *fname,
-                     unsigned int lineno, const char *format, va_list args) {
-  verror(status, errnum, format, args);
-}
-EOF
-      $BB awk 'NR == 44 { print "#undef __GNU_LIBRARY__" } { print }' lib/obstack.c > lib/obstack.c.new
-      $BB mv lib/obstack.c.new lib/obstack.c
-      $BB cat > lib/bootstrap-ctype.c <<'EOF'
-#include <stdlib.h>
-int isalnum(int c) { return ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')); }
-int iscntrl(int c) { return ((c >= 0 && c < 32) || c == 127); }
-int ispunct(int c) { return (c > 32 && c < 127 && !isalnum(c)); }
-int isxdigit(int c) { return ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')); }
-long strtol(const char *nptr, char **endptr, int base) {
-  const char *p = nptr;
-  long sign = 1;
-  long value = 0;
-  int any = 0;
-  while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r' || *p == '\f' || *p == '\v') p++;
-  if (*p == '-') { sign = -1; p++; } else if (*p == '+') p++;
-  if (base == 0) {
-    base = 10;
-    if (*p == '0') { base = 8; p++; if (*p == 'x' || *p == 'X') { base = 16; p++; } }
-  }
-  while (*p) {
-    int digit;
-    if (*p >= '0' && *p <= '9') digit = *p - '0';
-    else if (*p >= 'A' && *p <= 'Z') digit = *p - 'A' + 10;
-    else if (*p >= 'a' && *p <= 'z') digit = *p - 'a' + 10;
-    else break;
-    if (digit >= base) break;
-    value = value * base + digit;
-    p++;
-    any = 1;
-  }
-  if (endptr) *endptr = (char *)(any ? p : nptr);
-  return sign * value;
-}
-EOF
+      for source_name in $LIB_SOURCES; do
+        object_path="lib/$source_name.o"
+        tcc -c $CFLAGS "lib/$source_name.c" -o "$object_path" || {
+          echo "ERROR: failed compiling GNU M4 library source lib/$source_name.c" >&2
+          exit 1
+        }
+        test -s "$object_path" || {
+          echo "ERROR: missing GNU M4 library object $object_path" >&2
+          exit 1
+        }
+        OBJECTS="$OBJECTS $object_path"
+        COMPILED_SOURCE_COUNT=$((COMPILED_SOURCE_COUNT + 1))
+      done
 
-      # Direct GNU m4 currently advances through source compilation but this
-      # TinyCC/musl-v2 handoff still segfaults during static link after the
-      # unresolved-symbol closure is reduced to libc/ctype helpers.  Install a
-      # deliberately small bootstrap m4 bridge so downstream release-tarball
-      # consumers can progress; keep the source-normalization above as the
-      # evidence trail for the direct-build boundary.
-      $BB cat > m4-bin <<'EOF'
-#!/bin/sh
-/bin/busybox awk '
-function trim(s) {
-  gsub(/^[ \t`\047]+/, "", s)
-  gsub(/[ \t`\047]+$/, "", s)
-  return s
-}
-function expand(line,    k) {
-  for (k in defs) gsub(k, defs[k], line)
-  return line
-}
-function handle_define(call,    body, comma, name, value) {
-  body = substr(call, 8, length(call) - 8)
-  comma = index(body, ",")
-  if (comma > 0) {
-    name = trim(substr(body, 1, comma - 1))
-    value = trim(substr(body, comma + 1))
-    if (name != "") defs[name] = value
-  }
-}
-{
-  line = $0
-  while (match(line, /define\([^)]*\)/)) {
-    call = substr(line, RSTART, RLENGTH)
-    handle_define(call)
-    line = substr(line, 1, RSTART - 1) substr(line, RSTART + RLENGTH)
-  }
-  sub(/dnl.*/, "", line)
-  if (line != "") print expand(line)
-}
-' "$@"
-EOF
-      $BB chmod 755 m4-bin
+      for source_name in $M4_SOURCES; do
+        object_path="src/$source_name.o"
+        tcc -c $CFLAGS "src/$source_name.c" -o "$object_path" || {
+          echo "ERROR: failed compiling GNU M4 program source src/$source_name.c" >&2
+          exit 1
+        }
+        test -s "$object_path" || {
+          echo "ERROR: missing GNU M4 program object $object_path" >&2
+          exit 1
+        }
+        OBJECTS="$OBJECTS $object_path"
+        COMPILED_SOURCE_COUNT=$((COMPILED_SOURCE_COUNT + 1))
+      done
 
-      echo 'define(FOO,bar)FOO' | ./m4-bin | $BB grep '^bar$'
-      test -z "$(echo 'dnl ignored' | ./m4-bin)"
+      EXPECTED_SOURCE_COUNT=$((LIB_SOURCE_COUNT + M4_SOURCE_COUNT))
+      test "$COMPILED_SOURCE_COUNT" -eq "$EXPECTED_SOURCE_COUNT" || {
+        echo "ERROR: GNU M4 compiled-source count mismatch" >&2
+        exit 1
+      }
+
+      # Compiler and runtime roles are explicit: the proven TinyCC-v2 shell
+      # compiles and links, while native musl supplies startup and libc. No
+      # TinyCC Mes runtime or stripped compatibility libc is inherited.
+      GNU_M4_BINARY="$WORK/genuine-m4"
+      tcc -nostdlib -static -o "$GNU_M4_BINARY" \
+        "$MUSL/lib/crt1.o" $OBJECTS "$MUSL/lib/libc.a" || {
+          echo "ERROR: failed linking genuine GNU M4" >&2
+          exit 1
+        }
+      test -s "$GNU_M4_BINARY" || { echo "ERROR: linked GNU M4 binary missing" >&2; exit 1; }
+      $BB chmod 755 "$GNU_M4_BINARY"
 
       $BB mkdir -p "$out/bin"
-      $BB cp m4-bin "$out/bin/m4"
+      $BB cp "$GNU_M4_BINARY" "$out/bin/m4"
       $BB chmod 755 "$out/bin/m4"
+      test -x "$out/bin/m4" || { echo "ERROR: installed GNU M4 missing" >&2; exit 1; }
 
-      test -x "$out/bin/m4" || { echo "ERROR: installed m4 missing" >&2; exit 1; }
-      echo 'define(FOO,bar)FOO' | "$out/bin/m4" | $BB grep '^bar$'
-      test -z "$(echo 'dnl ignored' | "$out/bin/m4")"
-    "%,
+      "$out/bin/m4" --version > "$WORK/version.txt"
+      $BB grep -q 'GNU M4 1.4.7' "$WORK/version.txt" || {
+        echo "ERROR: GNU M4 version output mismatch" >&2
+        exit 1
+      }
+
+      $BB cat > "$WORK/macro-positive.m4" <<'EOF'
+define(`mantle_value', `42')mantle_value
+EOF
+      MACRO_OUTPUT=$("$out/bin/m4" "$WORK/macro-positive.m4")
+      test "$MACRO_OUTPUT" = 42 || {
+        echo "ERROR: GNU M4 ordinary macro expansion failed" >&2
+        exit 1
+      }
+
+      # Flex invokes `m4 -P`; prove the prefixed builtin namespace and prove
+      # that the unprefixed builtin is not silently accepted in that mode.
+      $BB cat > "$WORK/prefix-positive.m4" <<'EOF'
+m4_define(`mantle_prefixed_value', `prefixed-ok')mantle_prefixed_value
+EOF
+      PREFIX_OUTPUT=$("$out/bin/m4" -P "$WORK/prefix-positive.m4")
+      test "$PREFIX_OUTPUT" = prefixed-ok || {
+        echo "ERROR: GNU M4 -P prefixed macro expansion failed" >&2
+        exit 1
+      }
+      $BB cat > "$WORK/prefix-negative.m4" <<'EOF'
+define(`mantle_unprefixed_value', `must-not-expand')mantle_unprefixed_value
+EOF
+      PREFIX_NEGATIVE_OUTPUT=$("$out/bin/m4" -P "$WORK/prefix-negative.m4")
+      test "$PREFIX_NEGATIVE_OUTPUT" != must-not-expand || {
+        echo "ERROR: GNU M4 -P accepted the unprefixed define builtin" >&2
+        exit 1
+      }
+
+      $BB cat > "$WORK/malformed-negative.m4" <<'EOF'
+define(`unterminated, `value')
+EOF
+      if "$out/bin/m4" "$WORK/malformed-negative.m4" > "$WORK/malformed.out" 2> "$WORK/malformed.err"; then
+        echo "ERROR: GNU M4 accepted malformed quoted input" >&2
+        exit 1
+      fi
+      test -s "$WORK/malformed.err" || {
+        echo "ERROR: GNU M4 malformed-input rejection emitted no diagnostic" >&2
+        exit 1
+      }
+    "%
   ],
-  inputs = [stage0, tcc, musl, make, sed, m4_src],
+  inputs = [stage0, tcc, musl, m4_src],
 } | crunch.Derivation

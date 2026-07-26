@@ -1,10 +1,10 @@
-# Diagnostic GCC 4.0.4 C/C++ frontend rebuild over the closed C toolchain.
+# Regenerated GCC 4.0.4 C/C++ early-native parity output.
 #
-# GCC pass6, musl pass5, and clean binutils provide the predecessor closure.
-# This stage requires real cc1/cc1plus, libstdc++, and libsupc++ outputs and
-# executes C plus exceptions/RTTI/new/delete/dynamic_cast runtime smokes. It
-# remains isolated from seed selection pending dynamic-runtime, regeneration,
-# closure-purity, and normalized-provider admission.
+# GCC pass6, musl pass5, and clean binutils provide the same-version predecessor
+# closure. This stage requires real cc1/cc1plus, libgcc, libstdc++, and
+# libsupc++ outputs and executes C plus exceptions/RTTI/new/delete/dynamic_cast
+# runtime smokes. The row claim is bounded to the receipted behavior matrix; it
+# does not establish general compiler correctness or provider/seed admission.
 
 let crunch = import "lib.ncl" in
 
@@ -72,7 +72,10 @@ let automake115_src = crunch.fetchTarball {
       for applet in awk basename cat chmod cmp cp cut dirname echo egrep expr find grep head ln ls mkdir mv od printf pwd rm rmdir sed sh sort tail tar test touch tr true uname uniq wc; do
         $BB ln -sf "$BB" "$TOOLBIN/$applet"
       done
-      export PATH="$TOOLBIN:$BINUTILS/bin:$MAKE/bin:$BISON/bin:$FLEX/bin:$M4TOOL/bin:$AUTOCONF213/bin:$AUTOCONF259/bin:$PERL/bin:$STAGE0/bin:$PATH"
+      # The admitted row must not inherit ambient command discovery. Every
+      # executable reachable by name is supplied by a declared derivation or
+      # by the bounded BusyBox applet directory above.
+      export PATH="$TOOLBIN:$BINUTILS/bin:$MAKE/bin:$BISON/bin:$FLEX/bin:$M4TOOL/bin:$AUTOCONF213/bin:$AUTOCONF259/bin:$PERL/bin:$STAGE0/bin"
       export CONFIG_SHELL=/bin/sh
       export SHELL=/bin/sh
       export MAKEINFO=true
@@ -254,6 +257,28 @@ EOF
         RANLIB="$BINUTILS/bin/ranlib" \
         MAKEINFO=true
 
+      GENERATED_SOURCE_DIR="$out/share/mantle-bootstrap/generated-gcc40"
+      GENERATOR_DIR="$out/libexec/gcc/$TARGET/$GCC_VERSION/generators"
+      LIBIBERTY_BUILD="$WORK/build/build-$TARGET/libiberty/libiberty.a"
+      $BB mkdir -p "$GENERATED_SOURCE_DIR" "$GENERATOR_DIR" "$out/lib"
+      test -s "$WORK/build/gcc/c-parse.c"
+      test -s "$WORK/src/gcc/gengtype-yacc.c"
+      test -s "$WORK/src/gcc/gengtype-lex.c"
+      test -s "$WORK/src/configure"
+      test -s "$WORK/src/gcc/configure"
+      $BB cp "$WORK/build/gcc/c-parse.c" "$GENERATED_SOURCE_DIR/c-parse.c"
+      $BB cp "$WORK/src/gcc/gengtype-yacc.c" "$GENERATED_SOURCE_DIR/gengtype-yacc.c"
+      $BB cp "$WORK/src/gcc/gengtype-lex.c" "$GENERATED_SOURCE_DIR/gengtype-lex.c"
+      $BB cp "$WORK/src/configure" "$GENERATED_SOURCE_DIR/configure-autoconf-2.13"
+      $BB cp "$WORK/src/gcc/configure" "$GENERATED_SOURCE_DIR/gcc-configure-autoconf-2.59"
+      for generator in genattrtab genoutput genemit genrecog genextract gengtype; do
+        test -x "$WORK/build/gcc/build/$generator"
+        $BB cp "$WORK/build/gcc/build/$generator" "$GENERATOR_DIR/$generator"
+        $BB chmod 755 "$GENERATOR_DIR/$generator"
+      done
+      test -s "$LIBIBERTY_BUILD"
+      $BB cp "$LIBIBERTY_BUILD" "$out/lib/libiberty.a"
+
       if [ -x "$out/bin/$TARGET-g++" ] && [ ! -x "$out/bin/g++" ]; then
         $BB ln -s "$TARGET-g++" "$out/bin/g++"
       fi
@@ -355,6 +380,30 @@ EOF
       "$BINUTILS/bin/readelf" -h "$WORK/cxx-runtime" > "$WORK/cxx-runtime-header.txt"
       $BB grep -q 'ELF' "$WORK/cxx-runtime-header.txt"
 
+      $BB cat > "$WORK/demangle-runtime.c" <<'EOF'
+#include <demangle.h>
+#include <stdlib.h>
+#include <string.h>
+int main(void)
+{
+  const int options = DMGL_PARAMS | DMGL_ANSI | DMGL_TYPES;
+  char *accepted = cplus_demangle("_ZN3foo3barEs", options);
+  char *rejected = cplus_demangle("_ZN3foo3barE!", options);
+  int status = 1;
+  if (accepted != 0 && rejected == 0 && strcmp(accepted, "foo::bar(short)") == 0)
+    status = 0;
+  free(accepted);
+  free(rejected);
+  return status;
+}
+EOF
+      "$out/bin/gcc" -I"$MUSL/include" -I"$WORK/src/include" -static \
+        "$WORK/demangle-runtime.c" "$out/lib/libiberty.a" \
+        -o "$WORK/demangle-runtime"
+      test -s "$WORK/demangle-runtime"
+      $BB chmod 755 "$WORK/demangle-runtime"
+      "$WORK/demangle-runtime"
+
       # Prove the installed compiler can execute after its output tree moves
       # away from the sandbox's logical $out mount.  All absolute tool/runtime
       # references cross explicit override seams; GCC's own executables and
@@ -392,11 +441,15 @@ EOF
       fi
       test ! -e "$WORK/rejected-cxx.o"
 
-      $BB mkdir -p "$out/share/gcc-musl-cxx-frontier"
-      $BB printf '%s\n' \
-        'NON_ADMISSION: real regenerated GCC C++ frontend/libstdc++ still lacks dynamic-runtime, derivational-closure, and normalized-provider evidence' \
-        > "$out/share/gcc-musl-cxx-frontier/NON_ADMISSION"
-      echo "GCC 4.0.4 regenerated C/C++ frontend runtime checks passed; not provider admission"
+      $BB mkdir -p "$out/share/mantle-bootstrap"
+      $BB cat > "$out/share/mantle-bootstrap/early-native-gcc40-row.txt" <<'EOF'
+claim: bounded early-native GCC 4.0 row behavior matrix passed
+artifacts: gcc,g++,cc1,cc1plus,libgcc.a,libstdc++.a,libsupc++.a,generators,demangler
+positive: C static runtime; C++ exceptions,RTTI,new,delete,dynamic_cast; relocated C runtime
+negative: malformed C rejected without output; malformed C++ rejected without output
+non_claims: general compiler correctness; provider admission; seed admission
+EOF
+      echo "GCC 4.0.4 regenerated C/C++ early-native row behavior matrix passed"
     "%
   ],
   inputs = [

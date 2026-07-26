@@ -1,0 +1,41 @@
+{
+  "schema": "mantle-early-native-row-acceptance-v1",
+  "row_id": "gcc.4.0",
+  "logical_path": "/mantle/store/7rfhqyf3dmv0ziwh8j6jl8jr9labmn9z-gcc-4.0.4-musl-cxx-v7",
+  "success_marker": "GCC 4.0.4 regenerated C/C++ early-native row behavior matrix passed",
+  "evidence_origin": {
+    "recipe_logical_path": "/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+    "artifact_marker": "share/mantle-bootstrap/early-native-gcc40-row.txt",
+    "runtime_fingerprint_schema": "mantle-runtime-fingerprint-v1"
+  },
+  "positive": [
+    "c-driver-static-runtime",
+    "cc1-and-cc1plus-present",
+    "cxx-exception-rtti-allocation-runtime",
+    "demangler-runtime",
+    "generator-artifact-set",
+    "libgcc-exception-runtime-present",
+    "relocated-c-driver-runtime"
+  ],
+  "rejection": [
+    "configure-bridge-compiler-use-scan-clean",
+    "fabricated-object-scan-clean",
+    "malformed-c-rejected",
+    "malformed-cxx-rejected",
+    "release-generated-substitution-scan-clean",
+    "wrapper-delegation-scan-clean"
+  ],
+  "trust": {
+    "trust_unsigned": false,
+    "signing_key_selected": true,
+    "substitutions_enabled": false
+  },
+  "fallback": {
+    "host_tool_execution": false,
+    "predecessor_delegation": false,
+    "release_generated_substitution": false,
+    "configure_bridge_compiler_use": false,
+    "fabricated_objects": [],
+    "omitted_artifacts": []
+  }
+}

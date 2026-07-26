@@ -9,7 +9,7 @@ let crunch = import "lib.ncl" in
 let stage0 = crunch.derivationFile "stage0-posix.ncl" in
 let make = crunch.derivationFile "make-tcc.ncl" in
 let gcc = crunch.derivationFile "gcc-4.0-native.ncl" in
-let binutils = crunch.derivationFile "binutils-2.30-gas-source.ncl" in
+let binutils = crunch.derivationFile "binutils-tcc.ncl" in
 let predecessor_musl = crunch.derivationFile "musl-1.1.24-native.ncl" in
 let musl_src = crunch.derivationFile "musl-1.1.24-src.ncl" in
 
@@ -38,7 +38,7 @@ let musl_src = crunch.derivationFile "musl-1.1.24-src.ncl" in
       }
 
       GCC=$(find_input gcc-4.0.4-native-gas-v45)
-      BINUTILS=$(find_input binutils-2.30-gas-source-v41)
+      BINUTILS=$(find_input binutils-2.30-tcc-source-v1)
       PREDECESSOR_MUSL=$(find_input musl-1.1.24-native-candidate)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)

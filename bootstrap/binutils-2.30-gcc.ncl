@@ -11,7 +11,7 @@ let stage0 = crunch.derivationFile "stage0-posix.ncl" in
 let make = crunch.derivationFile "make-tcc.ncl" in
 let gcc = crunch.derivationFile "gcc-4.0-musl-pass4.ncl" in
 let musl = crunch.derivationFile "musl-1.1.24-gcc-pass4.ncl" in
-let predecessor_binutils = crunch.derivationFile "binutils-2.30-gas-source.ncl" in
+let predecessor_binutils = crunch.derivationFile "binutils-tcc.ncl" in
 let grep = crunch.derivationFile "grep-2.4-musl.ncl" in
 let diffutils = crunch.derivationFile "diffutils-2.7-musl.ncl" in
 let binutils_src = crunch.fetchTarball {
@@ -48,7 +48,7 @@ let automake115_src = crunch.fetchTarball {
 
       GCC=$(find_input gcc-4.0.4-musl-pass4-v5)
       MUSL=$(find_input musl-1.1.24-gcc-pass4-v2)
-      PREDECESSOR_BINUTILS=$(find_input binutils-2.30-gas-source-v41)
+      PREDECESSOR_BINUTILS=$(find_input binutils-2.30-tcc-source-v1)
       GREP=$(find_input grep-2.4-musl)
       DIFFUTILS=$(find_input diffutils-2.7-musl)
       MAKE=$(find_input make-3.82-tcc)

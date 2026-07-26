@@ -1,0 +1,37 @@
+{
+  "kind": "artifact",
+  "digest": "833d328797e4c5150a3bafe20d08a75bfd22ab128c6c3687c77f5aea1ef8e2e5",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/h895mi8sfc9i6r8wll20vh12yxphh4lp-gawk-3.0.4-musl",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/w54s6khrfk6mrd9wf71fmpbwk0l51yph-gawk-3.0.4-musl"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:3b810376a9a84cc15676488c90c25ab0fdadf172c80431712792c30e21dd0e73",
+      "logical_path": "/mantle/store/h895mi8sfc9i6r8wll20vh12yxphh4lp-gawk-3.0.4-musl",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/h895mi8sfc9i6r8wll20vh12yxphh4lp-gawk-3.0.4-musl"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/h895mi8sfc9i6r8wll20vh12yxphh4lp-gawk-3.0.4-musl"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/w54s6khrfk6mrd9wf71fmpbwk0l51yph-gawk-3.0.4-musl"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/w54s6khrfk6mrd9wf71fmpbwk0l51yph-gawk-3.0.4-musl"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/h895mi8sfc9i6r8wll20vh12yxphh4lp-gawk-3.0.4-musl"
+  }
+}

@@ -381,7 +381,7 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
       $BB chmod 755 tcc-musl
 
       echo "tcc-musl: install outputs"
-      $BB mkdir -p "$out/bin" "$out/lib/tcc"
+      $BB mkdir -p "$out/bin" "$out/lib/tcc/include"
       $BB cp tcc-musl "$out/bin/tcc"
       $BB cp tcc-musl "$out/bin/tcc-0.9.27-musl-v2"
       $BB chmod 755 "$out/bin/tcc" "$out/bin/tcc-0.9.27-musl-v2"
@@ -394,31 +394,133 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
         $BB cp "$source_file" "$out/share/tcc-source/$source_file"
       done
       $BB cp -r include "$out/share/tcc-source/include"
+      $BB cp -r include/. "$out/lib/tcc/include/"
       test -f "$out/share/tcc-source/tcc.c"
       test -f "$out/share/tcc-source/x86_64-gen.c"
       test -f "$out/share/tcc-source/include/stdarg.h"
 
-      # libtcc1.a is part of the compiler runtime contract.  The first musl
-      # stage can use the predecessor runtime archive until a later self-hosted
-      # musl tcc rebuild replaces it.
-      echo "tcc-musl: install libtcc1"
+      # libtcc1.a is part of the compiler runtime contract.  Extend the
+      # predecessor archive with the x86_64 TinyCC varargs runtime expected by
+      # the installed compiler's normalized stdarg.h.  Musl intentionally does
+      # not provide these compiler-private helpers.
+      echo "tcc-musl: install libtcc1 with TinyCC stdarg runtime"
+      $BB cat > /tmp/tcc-stdarg-runtime.c <<'EOF'
+#if defined __x86_64__
+enum tcc_va_arg_type { TCC_VA_GENERAL_REGISTER, TCC_VA_FLOAT_REGISTER, TCC_VA_STACK };
+enum {
+    TCC_VA_GENERAL_REGISTER_BYTES = 48,
+    TCC_VA_FLOAT_REGISTER_BYTES = 176,
+    TCC_VA_FRAME_METADATA_BYTES = 16,
+    TCC_VA_SLOT_BYTES = 8
+};
+typedef struct {
+    unsigned int gp_offset;
+    unsigned int fp_offset;
+    union { unsigned int overflow_offset; char *overflow_arg_area; };
+    char *reg_save_area;
+} tcc_va_list;
+static void tcc_va_abort(void)
+{
+    *(volatile int *)0 = 0;
+}
+void __va_start(tcc_va_list *arguments, void *frame_pointer)
+{
+    tcc_va_list *metadata;
+    if (arguments == 0) tcc_va_abort();
+    if (frame_pointer == 0) tcc_va_abort();
+    metadata = (tcc_va_list *)((char *)frame_pointer - TCC_VA_FRAME_METADATA_BYTES);
+    arguments->gp_offset = metadata->gp_offset;
+    arguments->fp_offset = metadata->fp_offset;
+    arguments->overflow_offset = metadata->overflow_offset;
+    arguments->overflow_arg_area = (char *)frame_pointer + arguments->overflow_offset;
+    arguments->reg_save_area =
+        (char *)frame_pointer - TCC_VA_FLOAT_REGISTER_BYTES - TCC_VA_FRAME_METADATA_BYTES;
+}
+void *__va_arg(tcc_va_list *arguments, enum tcc_va_arg_type argument_type, int size, int alignment)
+{
+    if (arguments == 0) tcc_va_abort();
+    if (size <= 0) tcc_va_abort();
+    if (alignment <= 0) tcc_va_abort();
+    size = (size + TCC_VA_SLOT_BYTES - 1) & -TCC_VA_SLOT_BYTES;
+    alignment = (alignment + TCC_VA_SLOT_BYTES - 1) & -TCC_VA_SLOT_BYTES;
+    switch (argument_type) {
+    case TCC_VA_GENERAL_REGISTER:
+        if (arguments->gp_offset + size <= TCC_VA_GENERAL_REGISTER_BYTES) {
+            arguments->gp_offset += size;
+            return arguments->reg_save_area + arguments->gp_offset - size;
+        }
+        goto use_overflow_area;
+    case TCC_VA_FLOAT_REGISTER:
+        if (arguments->fp_offset < TCC_VA_FLOAT_REGISTER_BYTES) {
+            arguments->fp_offset += TCC_VA_FRAME_METADATA_BYTES;
+            return arguments->reg_save_area + arguments->fp_offset - TCC_VA_FRAME_METADATA_BYTES;
+        }
+        size = TCC_VA_SLOT_BYTES;
+        goto use_overflow_area;
+    case TCC_VA_STACK:
+    use_overflow_area:
+        arguments->overflow_arg_area += size;
+        arguments->overflow_arg_area =
+            (char *)((long long)(arguments->overflow_arg_area + alignment - 1) & -alignment);
+        return arguments->overflow_arg_area - size;
+    default:
+        tcc_va_abort();
+        return 0;
+    }
+}
+#endif
+EOF
+      "$TCC26/bin/tcc" -c -o /tmp/tcc-stdarg-runtime.o /tmp/tcc-stdarg-runtime.c
+      test -s /tmp/tcc-stdarg-runtime.o || { echo "ERROR: TinyCC stdarg runtime object missing" >&2; exit 1; }
       $BB cp "$TCC_PREP/lib/${MES_ARCH}-mes/tcc/libtcc1.a" "$out/lib/tcc/libtcc1.a"
+      "$TCC26/bin/tcc" -ar rcs "$out/lib/tcc/libtcc1.a" /tmp/tcc-stdarg-runtime.o
+      test -s "$out/lib/tcc/libtcc1.a" || { echo "ERROR: extended TinyCC runtime archive missing" >&2; exit 1; }
 
       echo "tcc-musl: verify output contract"
       test -x "$out/bin/tcc"
       test -x "$out/bin/tcc-0.9.27-musl-v2"
       test -s "$out/lib/tcc/libtcc1.a"
-      echo "tcc-musl: smoke compile"
-      $BB cat > smoke.c <<'EOF'
-int main(void) { return 0; }
+      test -f "$out/lib/tcc/include/stdarg.h" || { echo "ERROR: TinyCC stdarg header missing from configured include root" >&2; exit 1; }
+
+      echo "tcc-musl: positive variadic compile and execution smoke"
+      $BB cp "$out/lib/tcc/include/stdarg.h" ./tcc-stdarg-prefix.h
+      test -f ./tcc-stdarg-prefix.h || { echo "ERROR: TinyCC stdarg smoke prefix missing" >&2; exit 1; }
+      $BB cat > variadic-positive.c <<'EOF'
+#include "tcc-stdarg-prefix.h"
+enum { EXPECTED_VARIADIC_VALUE = 7 };
+static int first_variadic(int ignored, ...)
+{
+  va_list arguments;
+  int value;
+  va_start(arguments, ignored);
+  value = va_arg(arguments, int);
+  va_end(arguments);
+  return value;
+}
+int main(void)
+{
+  return first_variadic(0, EXPECTED_VARIADIC_VALUE) == EXPECTED_VARIADIC_VALUE ? 0 : 1;
+}
 EOF
-      set +e
-      "$out/bin/tcc" -v -c -o smoke.o smoke.c
-      smoke_rc=$?
-      set -e
-      echo "tcc-musl: smoke rc=$smoke_rc"
-      test "$smoke_rc" -eq 0
-      test -s smoke.o
+      "$out/bin/tcc" -v -static -o variadic-positive variadic-positive.c
+      test -x variadic-positive || { echo "ERROR: TinyCC variadic positive smoke binary missing" >&2; exit 1; }
+      ./variadic-positive || { echo "ERROR: TinyCC variadic positive smoke failed" >&2; exit 1; }
+
+      echo "tcc-musl: negative malformed variadic rejection smoke"
+      $BB cat > variadic-negative.c <<'EOF'
+#include "tcc-stdarg-prefix.h"
+static int malformed_variadic(int ignored, ...)
+{
+  va_list arguments;
+  va_start(arguments, ignored);
+  return va_arg(arguments, );
+}
+EOF
+      if "$out/bin/tcc" -c -o variadic-negative.o variadic-negative.c; then
+        echo "ERROR: TinyCC accepted malformed variadic source" >&2
+        exit 1
+      fi
+      test ! -s variadic-negative.o || { echo "ERROR: TinyCC retained malformed variadic output" >&2; exit 1; }
     "%,
   ],
   inputs = [stage0, mes, tcc26, tcc_prep, musl, make, sed, tcc27_src],

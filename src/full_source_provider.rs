@@ -200,10 +200,10 @@ struct RuntimeSmokeStep {
 }
 
 // machine-artifact-public: bootstrap.full-source-provider-admission-report
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub(crate) struct FullSourceProviderAdmissionReport {
-    pub(crate) schema: &'static str,
-    pub(crate) status: &'static str,
+    pub(crate) schema: String,
+    pub(crate) status: String,
     pub(crate) provider_id: String,
     pub(crate) provider_path: PathBuf,
     pub(crate) metadata_path: PathBuf,
@@ -991,8 +991,8 @@ fn admission_report(
     assert_eq!(runtime_smoke_steps.len(), RUNTIME_SMOKE_STEP_COUNT);
     debug_assert_eq!(source_outputs.len(), SOURCE_OUTPUT_COUNT);
     FullSourceProviderAdmissionReport {
-        schema: "mantle-full-source-provider-admission-v2",
-        status: "admitted",
+        schema: "mantle-full-source-provider-admission-v2".to_string(),
+        status: "admitted".to_string(),
         provider_id: input.metadata.provider_id.clone(),
         provider_path: provider_dir.to_path_buf(),
         metadata_path,

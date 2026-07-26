@@ -1,0 +1,55 @@
+{
+  "schema": "mantle-early-native-artifact-evidence-v1",
+  "row_id": "binutils.tcc",
+  "digest": "e0a40c67426126069e36508046c41cc6230afb93e90cc1e07f2255f9d62cb5a1",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/rm39hk4lfnaqzhcpazva7n17f58l5syl-binutils-2.30-tcc-source-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/rm39hk4lfnaqzhcpazva7n17f58l5syl-binutils-2.30-tcc-source-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/rm39hk4lfnaqzhcpazva7n17f58l5syl-binutils-2.30-tcc-source-v1",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/rm39hk4lfnaqzhcpazva7n17f58l5syl-binutils-2.30-tcc-source-v1",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/66rwlnpidlrgnqwlpxs4jh3wj7jq1jdw-binutils-2.30-tcc-source-v1"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:4062d1da2398a0a5103cc214b3cf0a6c8bfaf3418717d516e6c2a0e1773084e4",
+      "logical_path": "/mantle/store/rm39hk4lfnaqzhcpazva7n17f58l5syl-binutils-2.30-tcc-source-v1",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/rm39hk4lfnaqzhcpazva7n17f58l5syl-binutils-2.30-tcc-source-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/rm39hk4lfnaqzhcpazva7n17f58l5syl-binutils-2.30-tcc-source-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/66rwlnpidlrgnqwlpxs4jh3wj7jq1jdw-binutils-2.30-tcc-source-v1"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/66rwlnpidlrgnqwlpxs4jh3wj7jq1jdw-binutils-2.30-tcc-source-v1"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/rm39hk4lfnaqzhcpazva7n17f58l5syl-binutils-2.30-tcc-source-v1"
+  }
+}

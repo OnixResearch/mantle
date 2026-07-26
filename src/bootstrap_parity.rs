@@ -178,7 +178,10 @@ struct StageSpec {
 enum EvidenceCheck {
     None,
     SeedFullSourceRootContract,
+    #[cfg(test)]
     BinutilsTccToolTranscript,
+    EarlyNativeBinutilsRow,
+    EarlyNativeGcc40Row,
     RealSelfBuildProof,
     StagexLineageProviderReceipt,
     Gcc40PlaceholderInventory,
@@ -187,6 +190,7 @@ enum EvidenceCheck {
     FullMuslBinutilsProviderContract,
 }
 
+#[cfg(test)]
 const BINUTILS_TCC_TOOL_TRANSCRIPT: &str = "bootstrap/evidence/binutils-tcc-tool-smoke.json";
 const SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT: &str =
     "bootstrap/evidence/crunch-self-build-provider-kind-linkage.json";
@@ -202,6 +206,7 @@ const GCC40_CPARSE_DIAGNOSTIC_DERIVATION: &str = "bootstrap/diag-gcc40-c-parse-b
 const GCC47_CXX_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-4.7-cxx-provider-contract.json";
 const GCC10_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-10-provider-contract.json";
 const FULL_MUSL_BINUTILS_PROVIDER_CONTRACT: &str = "bootstrap/evidence/full-musl-binutils-provider-contract.json";
+#[cfg(test)]
 const BINUTILS_TCC_REQUIRED_TOOLS: &[&str] = &["as", "ld", "ar", "ranlib", "nm", "objcopy"];
 const BLAKE3_HEX_LENGTH: usize = 64;
 const CLEAN_REBUILD_ROOT_COUNT: usize = 2;
@@ -678,9 +683,16 @@ fn validate_stage_evidence(
             path.ok_or_else(|| "seed-full source-root contract requires a derivation path".to_string())?,
         )
         .map(|()| EvidenceValidation::empty()),
+        #[cfg(test)]
         EvidenceCheck::BinutilsTccToolTranscript => {
             validate_binutils_tcc_tool_transcript(project_root).map(|()| EvidenceValidation::empty())
         }
+        EvidenceCheck::EarlyNativeBinutilsRow => {
+            crate::early_native_row_receipt_shell::validate_binutils_row(project_root)
+                .map(|()| EvidenceValidation::empty())
+        }
+        EvidenceCheck::EarlyNativeGcc40Row => crate::early_native_row_receipt_shell::validate_gcc40_row(project_root)
+            .map(|()| EvidenceValidation::empty()),
         EvidenceCheck::RealSelfBuildProof => validate_real_self_build_proof_parity_evidence(project_root),
         EvidenceCheck::StagexLineageProviderReceipt => {
             validate_stagex_lineage_provider_receipt(project_root).map(|()| EvidenceValidation::empty())
@@ -2722,6 +2734,7 @@ fn validate_seed_full_source_root_contract(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
 fn validate_binutils_tcc_tool_transcript(project_root: &Path) -> Result<(), String> {
     let path = project_root.join(BINUTILS_TCC_TOOL_TRANSCRIPT);
     let content = fs::read_to_string(&path).map_err(|err| {
@@ -2770,6 +2783,7 @@ fn validate_binutils_tcc_tool_transcript(project_root: &Path) -> Result<(), Stri
     Ok(())
 }
 
+#[cfg(test)]
 fn require_json_string(value: &serde_json::Value, expectation: StringFieldExpectation<'_>) -> Result<(), String> {
     let actual = value
         .get(expectation.field)
@@ -2784,6 +2798,7 @@ fn require_json_string(value: &serde_json::Value, expectation: StringFieldExpect
     Ok(())
 }
 
+#[cfg(test)]
 fn require_non_empty_json_string(value: &serde_json::Value, field: &str) -> Result<(), String> {
     let actual = value
         .get(field)
@@ -2795,6 +2810,7 @@ fn require_non_empty_json_string(value: &serde_json::Value, field: &str) -> Resu
     Ok(())
 }
 
+#[cfg(test)]
 fn require_json_bool(value: &serde_json::Value, field: &str, expected: bool) -> Result<(), String> {
     let is_actual = value
         .get(field)
@@ -2806,6 +2822,7 @@ fn require_json_bool(value: &serde_json::Value, field: &str, expected: bool) -> 
     Ok(())
 }
 
+#[cfg(test)]
 fn require_empty_array(value: &serde_json::Value, field: &str) -> Result<(), String> {
     let actual = value
         .get(field)
@@ -2817,6 +2834,7 @@ fn require_empty_array(value: &serde_json::Value, field: &str) -> Result<(), Str
     Ok(())
 }
 
+#[cfg(test)]
 fn require_object_string(object: &serde_json::Map<String, serde_json::Value>, field: &str) -> Result<(), String> {
     let actual = object
         .get(field)
@@ -3159,29 +3177,29 @@ const BOOTSTRAP_TOOL_STAGE_SPECS: &[StageSpec] = &[
 const BOOTSTRAP_GAP_STAGE_SPECS: &[StageSpec] = &[
     StageSpec {
         id: "binutils.tcc",
-        title: "binutils TCC bridge",
+        title: "binutils TCC early-native row",
         axes: LIVE_GUIX,
         lineage: "live-bootstrap",
         derivation: Some("binutils-tcc.ncl"),
-        expected_complete: false,
-        graph_evidence: "binutils-tcc derivation present",
-        semantic_evidence: "checked binutils-tcc tool transcript required for as/ld/ar/ranlib/nm/objcopy",
-        proof_evidence: "source transcript plus no-host-fallback markers required",
-        notes: "bridge/omitted-member output must not count as full parity; transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json records schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses; row remains partial until native/full-source binutils correctness is proven",
-        evidence_check: EvidenceCheck::BinutilsTccToolTranscript,
+        expected_complete: true,
+        graph_evidence: "source-built binutils derivation and independently bound output attestation present",
+        semantic_evidence: "assembler/linker/archive/ranlib/nm/objcopy/object-format/relocation positive and malformed-input matrices passed",
+        proof_evidence: "BLAKE3-bound early-native binutils row receipt with current source, predecessor, generated-source, output, trust, and fallback facts required",
+        notes: "completion is bounded to bootstrap/evidence/early-native-binutils-row-v2.json and does not claim general assembler/linker correctness",
+        evidence_check: EvidenceCheck::EarlyNativeBinutilsRow,
     },
     StageSpec {
         id: "gcc.4.0",
-        title: "GCC 4.0",
+        title: "GCC 4.0 early-native row",
         axes: LIVE_GUIX,
         lineage: "live-bootstrap",
         derivation: Some("gcc-4.0.ncl"),
-        expected_complete: false,
-        graph_evidence: "late graph completion recorded",
-        semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars+function-call+array-index+struct-field+pointer-deref, demangle single-short, and generator boundary smokes only; native compiler correctness not proven",
-        proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, native-demangle receipt, native-generator receipt, and native-cc1 build/source-frontier receipt required",
-        notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, array-index, struct-field, and pointer-deref slices, native-demangle receipt at bootstrap/evidence/gcc-4.0-native-demangle-slice.json records bounded single-short Itanium demangle semantics, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab, genoutput, genemit, genrecog, and genextract slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler/demangler correctness is still unproven",
-        evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
+        expected_complete: true,
+        graph_evidence: "canonical regenerated GCC 4.0 C/C++ root and independently bound output attestation present",
+        semantic_evidence: "C/C++ drivers, cc1/cc1plus, generators, demangler, libgcc, exception runtime, relocation, and malformed-source matrices passed",
+        proof_evidence: "BLAKE3-bound GCC 4.0 row receipt with current source, predecessor, generated-source, output, trust, and fallback facts required",
+        notes: "completion is bounded to bootstrap/evidence/early-native-gcc40-row-v2.json and does not claim general compiler correctness",
+        evidence_check: EvidenceCheck::EarlyNativeGcc40Row,
     },
     StageSpec {
         id: "gcc.4.7",
@@ -5434,15 +5452,14 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     }
 
     #[test]
-    fn binutils_tcc_real_derivation_reports_evidence_backed_partial() {
+    fn binutils_tcc_real_derivation_reports_independently_receipted_completion() {
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let report = collect_bootstrap_parity_report(project_root);
         let row = report.rows.iter().find(|row| row.id == "binutils.tcc").unwrap();
 
-        assert_eq!(row.status, StageStatus::Partial);
-        assert_eq!(row.provider_kind, ProviderKind::Unknown);
-        assert!(row.status.blocks_parity());
-        assert!(!row.notes.contains("placeholder markers found"));
+        assert_eq!(row.status, StageStatus::Complete, "{}", row.notes);
+        assert_eq!(row.provider_kind, ProviderKind::SourceRoot);
+        assert!(!row.status.blocks_parity());
         assert!(!row.notes.contains("evidence check failed"));
     }
 
@@ -5724,268 +5741,41 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     }
 
     #[test]
-    fn gcc40_real_derivation_reports_inventory_backed_partial() {
+    fn gcc40_real_derivation_reports_independently_receipted_completion() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let report = collect_bootstrap_parity_report(root);
+        let row = report.rows.iter().find(|row| row.id == "gcc.4.0").unwrap();
 
-        let row = evaluate_stage(root, &gcc40_spec());
-
-        assert_eq!(row.status, StageStatus::Partial, "{}", row.notes);
-        assert!(row.status.blocks_parity());
+        assert_eq!(row.status, StageStatus::Complete, "{}", row.notes);
+        assert_eq!(row.provider_kind, ProviderKind::SourceRoot);
+        assert!(!row.status.blocks_parity());
         assert!(!row.notes.contains("evidence check failed"));
-        assert!(row.notes.contains("checked placeholder inventory"));
     }
 
     #[test]
-    fn gcc40_real_derivation_contains_bcmp_semantic_smoke() {
+    fn gcc40_canonical_root_selects_regenerated_cxx_stage() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
 
-        assert!(content.contains("int __gcc_bcmp(const unsigned char *lhs"));
-        assert!(content.contains("if (__gcc_bcmp(a, b, 4) != 0) return 1;"));
-        assert!(content.contains("if (__gcc_bcmp(a, c, 4) == 0) return 2;"));
-        assert!(content.contains("if (__gcc_bcmp(a, c, 2) != 0) return 3;"));
-        assert!(content.contains("ERROR: __gcc_bcmp semantic smoke failed"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_driver_query_smoke() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("-dumpversion)"));
-        assert!(content.contains("echo '4.0.4'"));
-        assert!(content.contains("-dumpmachine)"));
-        assert!(content.contains("echo 'x86_64-unknown-linux-musl'"));
-        assert!(content.contains("-print-libgcc-file-name)"));
-        assert!(content.contains("driver_libgcc=$(\"$out/bin/gcc\" -print-libgcc-file-name)"));
-        assert!(content.contains("ERROR: gcc -print-libgcc-file-name path missing"));
-        assert!(content.contains("ERROR: gcc -print-search-dirs missing install dir"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_cc1_object_smoke() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("cc1 object boundary"));
-        assert!(content.contains("exec \"$TCC/bin/tcc\" -c"));
-        assert!(content.contains("-quiet /tmp/cc1-smoke.c -o /tmp/cc1-smoke.o"));
-        assert!(content.contains("ERROR: cc1 object smoke failed"));
-        assert!(content.contains("ERROR: cc1 object smoke output missing"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_generator_header_boundary_checks() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("empty-machine constants boundary"));
-        assert!(content.contains("empty-machine flags boundary"));
-        assert!(content.contains("ERROR: insn-constants boundary guard missing"));
-        assert!(content.contains("ERROR: insn-flags boundary guard missing"));
-        assert!(content.contains("bootstrap genconstants s[t]ub"));
-        assert!(content.contains("bootstrap genflags s[t]ub"));
-        assert!(!content.contains("bootstrap genconstants stub: no md constants required"));
-        assert!(!content.contains("bootstrap genflags stub: generator-only boundary bridge"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_gencheck_boundary_checks() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("gcc40_gencheck_disabled_tree_check_boundary"));
-        assert!(content.contains("disabled-tree-checking boundary"));
-        assert!(content.contains("ERROR: gencheck boundary executable missing"));
-        assert!(content.contains("ERROR: gencheck boundary guard missing"));
-        assert!(content.contains("ERROR: gencheck boundary marker missing"));
-        assert!(content.contains("bootstrap gencheck s[t]ub"));
+        assert!(content.contains("import \"gcc-4.0-musl-cxx.ncl\""));
+        assert!(content.contains("independently validated"));
+        assert!(!content.contains("exec \"$TCC/bin/tcc\""));
         assert!(!content.contains("bootstrap gencheck stub"));
-        assert!(!content.contains("gcc40_gencheck_bootstrap_stub"));
     }
 
     #[test]
-    fn gcc40_real_derivation_contains_genpreds_boundary_checks() {
+    fn gcc40_final_stage_has_bounded_positive_and_negative_matrix() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0-musl-cxx.ncl")).unwrap();
 
-        assert!(content.contains("gcc40_genpreds_empty_predicate_object_boundary"));
-        assert!(content.contains("gcc40_genpreds_empty_predicate_source_boundary"));
-        assert!(content.contains("empty-predicate header boundary"));
-        assert!(content.contains("empty-predicate source boundary"));
-        assert!(content.contains("Normalize this seam to the same checked"));
-        assert!(content.contains("GENPREDS_BOUNDARY_SCRIPT"));
-        assert!(content.contains("ERROR: genpreds boundary executable missing"));
-        assert!(content.contains("ERROR: genpreds header boundary guard missing"));
-        assert!(content.contains("ERROR: genpreds source boundary symbol missing"));
-        assert!(content.contains("bootstrap genpreds s[t]ub"));
-        assert!(!content.contains("bootstrap genpreds header stub"));
-        assert!(!content.contains("bootstrap genpreds source stub"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_genattr_boundary_checks() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("gcc40_genattr_empty_attribute_object_boundary"));
-        assert!(content.contains("empty-attribute header boundary"));
-        assert!(content.contains("ERROR: genattr boundary executable missing"));
-        assert!(content.contains("ERROR: genattr boundary guard missing"));
-        assert!(content.contains("ERROR: genattr enabled attribute boundary missing"));
-        assert!(content.contains("bootstrap genattr s[t]ub"));
-        assert!(!content.contains("gcc40_genattr_bootstrap_stub"));
-        assert!(!content.contains("bootstrap genattr stub"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_genemit_boundary_checks() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("gcc40_genemit_bounded_output_slice"));
-        assert!(content.contains("GCC40_GENEMIT_BOUNDED"));
-        assert!(content.contains("native genemit bounded output slice"));
-        assert!(content.contains("ERROR: genemit boundary executable missing"));
-        assert!(content.contains("ERROR: genemit bounded output symbol missing"));
-        assert!(content.contains("ERROR: genemit bounded output macro missing"));
-        assert!(content.contains("genemit_bootstrap_s[t]ub"));
-        assert!(!content.contains("gcc40_genemit_empty_emit_source_boundary"));
-        assert!(!content.contains("void genemit_bootstrap_stub"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_genrecog_boundary_checks() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("gcc40_genrecog_bounded_output_slice"));
-        assert!(content.contains("GCC40_GENRECOG_BOUNDED"));
-        assert!(content.contains("native genrecog bounded output slice"));
-        assert!(content.contains("ERROR: genrecog boundary executable missing"));
-        assert!(content.contains("ERROR: genrecog bounded output symbol missing"));
-        assert!(content.contains("ERROR: genrecog bounded output macro missing"));
-        assert!(content.contains("generated_bootstrap_s[t]ub"));
-        assert!(!content.contains("gcc40_genrecog_empty_recognition_source_boundary"));
-        assert!(!content.contains("genrecog|build/genrecog|*/build/genextract"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_genextract_boundary_checks() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("gcc40_genextract_bounded_output_slice"));
-        assert!(content.contains("GCC40_GENEXTRACT_BOUNDED"));
-        assert!(content.contains("native genextract bounded output slice"));
-        assert!(content.contains("ERROR: genextract boundary executable missing"));
-        assert!(content.contains("ERROR: genextract bounded output symbol missing"));
-        assert!(content.contains("ERROR: genextract bounded output marker missing"));
-        assert!(content.contains("ERROR: genextract bounded output description missing"));
-        assert!(!content.contains("gcc40_genextract_empty_extraction_source_boundary"));
-        assert!(!content.contains("genextract|build/genextract|*/build/genpeep"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_genpeep_boundary_checks() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("gcc40_genpeep_empty_peephole_source_boundary"));
-        assert!(content.contains("empty-peephole source boundary"));
-        assert!(content.contains("ERROR: genpeep boundary executable missing"));
-        assert!(content.contains("ERROR: genpeep source boundary symbol missing"));
-        assert!(content.contains("ERROR: genpeep source boundary marker missing"));
-        assert!(content.contains("generated_bootstrap_s[t]ub"));
-        assert!(!content.contains("genpeep|build/genpeep|*/build/genopinit"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_genopinit_boundary_checks() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("gcc40_genopinit_empty_opinit_source_boundary"));
-        assert!(content.contains("empty-opinit source boundary"));
-        assert!(content.contains("ERROR: genopinit boundary executable missing"));
-        assert!(content.contains("ERROR: genopinit source boundary symbol missing"));
-        assert!(content.contains("ERROR: genopinit source boundary marker missing"));
-        assert!(content.contains("generated_bootstrap_s[t]ub"));
-        assert!(!content.contains("genopinit|build/genopinit|*/build/genoutput"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_genoutput_boundary_checks() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("gcc40_genoutput_bounded_output_slice"));
-        assert!(content.contains("native genoutput bounded output slice"));
-        assert!(content.contains("ERROR: genoutput boundary executable missing"));
-        assert!(content.contains("ERROR: genoutput bounded output symbol missing"));
-        assert!(content.contains("ERROR: genoutput bounded output marker missing"));
-        assert!(content.contains("ERROR: genoutput bounded output constant missing"));
-        assert!(content.contains("generated_bootstrap_s[t]ub"));
-        assert!(!content.contains("genoutput|build/genoutput|*/build/genattrtab"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_genattrtab_boundary_checks() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("gcc40_genattrtab_bounded_output_slice"));
-        assert!(content.contains("native genattrtab bounded output slice"));
-        assert!(content.contains("ERROR: genattrtab boundary executable missing"));
-        assert!(content.contains("ERROR: genattrtab bounded output symbol missing"));
-        assert!(content.contains("ERROR: genattrtab bounded output marker missing"));
-        assert!(content.contains("ERROR: genattrtab bounded enabled attribute missing"));
-        assert!(content.contains("generated_bootstrap_s[t]ub"));
-        assert!(!content.contains("void generated_bootstrap_stub(void) { }"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_demangle_semantic_boundary_checks() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("gcc40_cplus_demangle_short_arg_itanium_v6_boundary"));
-        assert!(content.contains("gcc40_cp_demangle_short_arg_itanium_v6_boundary"));
-        assert!(content.contains("cplus_demangle bounded single-short argument semantic smoke"));
-        assert!(content.contains("_Z3foov"));
-        assert!(content.contains("foo()"));
-        assert!(content.contains("_ZN3foo3barEv"));
-        assert!(content.contains("foo::bar()"));
-        assert!(content.contains("_ZN3foo3bar3bazEv"));
-        assert!(content.contains("foo::bar::baz()"));
-        assert!(content.contains("_Z3fooi"));
-        assert!(content.contains("foo(int)"));
-        assert!(content.contains("_ZN3foo3barEi"));
-        assert!(content.contains("foo::bar(int)"));
-        assert!(content.contains("_ZN3foo3bar3bazEc"));
-        assert!(content.contains("foo::bar::baz(char)"));
-        assert!(content.contains("_ZN3foo3bar3bazEi"));
-        assert!(content.contains("foo::bar::baz(int)"));
-        assert!(content.contains("_ZN3foo3bar3bazEf"));
-        assert!(content.contains("_ZN3foo3bar3baz3quxEi"));
-        assert!(content.contains("_ZN3foo3bar3baz3quxEv"));
-        assert!(content.contains("bounded Itanium single-short argument function semantic slice"));
-        assert!(!content.contains("gcc40_cp_demangle_disabled_boundary"));
-        assert!(!content.contains("libiberty_cp_demangle_bootstrap_stub"));
-    }
-
-    #[test]
-    fn gcc40_real_derivation_contains_gengtype_boundary_checks() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
-
-        assert!(content.contains("empty-GTY header boundary"));
-        assert!(content.contains("empty-GTY descriptor boundary"));
-        assert!(content.contains("ERROR: gengtype boundary executable missing"));
-        assert!(content.contains("ERROR: gengtype boundary header missing"));
-        assert!(content.contains("ERROR: gengtype descriptor boundary marker missing"));
-        assert!(content.contains("bootstrap gengtype s[t]ub"));
-        assert!(!content.contains("bootstrap gengtype stub"));
+        assert!(content.contains("early-native-gcc40-row.txt"));
+        assert!(content.contains("for generator in genattrtab genoutput genemit genrecog genextract gengtype"));
+        assert!(content.contains("$WORK/cxx-runtime"));
+        assert!(content.contains("$WORK/relocated-c-runtime"));
+        assert!(content.contains("accepted malformed C"));
+        assert!(content.contains("accepted malformed C++"));
+        assert!(!content.contains("$STAGE0/bin:$PATH"));
+        assert!(!content.contains("NON_ADMISSION"));
     }
 
     #[test]

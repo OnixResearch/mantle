@@ -1,0 +1,49 @@
+{
+  "kind": "artifact",
+  "digest": "522e77181687c7e7ff81ca205ab6644d55769ef9f71dc9c98a4d7b024be9279b",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/4ag6mwv2pmsa0b8wii2zwc4jws5iajbk-bison-2.3-musl",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/sbhp9842v5hv1xsmkpyxkr497jvpl8sc-m4-1.4.7-musl"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/4ag6mwv2pmsa0b8wii2zwc4jws5iajbk-bison-2.3-musl",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/wp933vb4a7hqpgqp55qwc43d4db9dfa2-bison-2.3-musl"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:bf57cc2ef9c3df5a2a7be45f84164e9e096eb9c22ea829ae1cf88788fb31f7e9",
+      "logical_path": "/mantle/store/4ag6mwv2pmsa0b8wii2zwc4jws5iajbk-bison-2.3-musl",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/4ag6mwv2pmsa0b8wii2zwc4jws5iajbk-bison-2.3-musl"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/4ag6mwv2pmsa0b8wii2zwc4jws5iajbk-bison-2.3-musl"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/sbhp9842v5hv1xsmkpyxkr497jvpl8sc-m4-1.4.7-musl"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/sbhp9842v5hv1xsmkpyxkr497jvpl8sc-m4-1.4.7-musl"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/wp933vb4a7hqpgqp55qwc43d4db9dfa2-bison-2.3-musl"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/wp933vb4a7hqpgqp55qwc43d4db9dfa2-bison-2.3-musl"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/4ag6mwv2pmsa0b8wii2zwc4jws5iajbk-bison-2.3-musl"
+  }
+}

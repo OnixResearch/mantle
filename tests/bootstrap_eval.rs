@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -5,6 +6,7 @@ use crunch_glue::CrunchDerivation;
 use crunch_glue::Input;
 use serde::Deserialize;
 
+const RUST_SOURCE_ROUTE_COUNT: usize = 5;
 const BOOTSTRAP_ENTRYPOINTS: &[&str] = &[
     "make.ncl",
     "dash.ncl",
@@ -55,6 +57,31 @@ struct SeedModule {
 
 fn eval_seed_module() -> SeedModule {
     crunch_eval::evaluate_and_deserialize(&bootstrap_path("seed.ncl"), &bootstrap_import_paths()).unwrap()
+}
+
+#[derive(Debug, Deserialize)]
+struct RustSourceRouteRegistry {
+    schema: String,
+    selected_candidate: String,
+    routes: Vec<RustSourceRoute>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RustSourceRoute {
+    mechanism_id: String,
+    provider_origin: String,
+    compiler_host: String,
+    source_policy: String,
+    ambient_discovery: bool,
+    uses_prebuilt_rust: bool,
+    full_bootstrap_candidate: bool,
+    completion_probe: String,
+    disqualifying_non_claim: String,
+}
+
+fn eval_rust_source_route_registry() -> RustSourceRouteRegistry {
+    crunch_eval::evaluate_and_deserialize(&bootstrap_path("rust-source-route-registry.ncl"), &bootstrap_import_paths())
+        .unwrap()
 }
 
 fn input_derivation_names(drv: &CrunchDerivation) -> Vec<String> {
@@ -125,6 +152,39 @@ fn eval_seed_module_exposes_selected_full_source_provider_metadata() {
 }
 
 #[test]
+fn rust_source_route_registry_selects_only_the_full_source_musl_candidate() {
+    let registry = eval_rust_source_route_registry();
+    let route_ids = registry.routes.iter().map(|route| route.mechanism_id.as_str()).collect::<BTreeSet<_>>();
+    let candidates = registry.routes.iter().filter(|route| route.full_bootstrap_candidate).collect::<Vec<_>>();
+
+    assert_eq!(registry.schema, "mantle-rust-source-route-registry-v1");
+    assert_eq!(registry.routes.len(), RUST_SOURCE_ROUTE_COUNT);
+    assert_eq!(route_ids.len(), RUST_SOURCE_ROUTE_COUNT);
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0].mechanism_id, registry.selected_candidate);
+    assert_eq!(candidates[0].compiler_host, "admitted-full-source-native-provider");
+    assert_eq!(candidates[0].source_policy, "authenticated-offline-only");
+    assert!(!candidates[0].ambient_discovery);
+    assert!(!candidates[0].uses_prebuilt_rust);
+    assert!(candidates[0].completion_probe.contains("binding-v1"));
+}
+
+#[test]
+fn rust_source_route_registry_disqualifies_compatibility_and_import_routes() {
+    let registry = eval_rust_source_route_registry();
+    let rejected = registry.routes.iter().filter(|route| !route.full_bootstrap_candidate).collect::<Vec<_>>();
+
+    assert_eq!(rejected.len(), RUST_SOURCE_ROUTE_COUNT - 1);
+    assert!(rejected.iter().all(|route| !route.disqualifying_non_claim.is_empty()));
+    assert!(rejected.iter().all(|route| !route.provider_origin.is_empty()));
+    assert!(rejected.iter().all(|route| !route.completion_probe.is_empty()));
+    assert!(rejected.iter().any(|route| route.mechanism_id == "imported-provider"));
+    assert!(rejected.iter().any(|route| route.ambient_discovery));
+    assert!(rejected.iter().any(|route| route.uses_prebuilt_rust));
+    assert!(!rejected.iter().any(|route| route.mechanism_id == registry.selected_candidate));
+}
+
+#[test]
 fn bootstrap_entrypoints_do_not_inline_raw_seed_provider_details() {
     for entrypoint in BOOTSTRAP_ENTRYPOINTS {
         let text = std::fs::read_to_string(bootstrap_path(entrypoint)).unwrap();
@@ -192,6 +252,200 @@ fn source_built_linux_headers_replace_legacy_seed_header_assumption() {
     assert!(busybox.contains("$LINUX_HEADERS/include"));
     assert!(!bwrap.contains("SEED_INC"));
     assert!(!busybox.contains("SEED_INC"));
+}
+
+#[test]
+fn m4_musl_builds_genuine_prefix_capable_binary_with_fixture_polarities() {
+    let text = std::fs::read_to_string(bootstrap_path("m4-1.4.7-musl.ncl")).unwrap();
+
+    assert!(text.contains("https://mirrors.kernel.org/gnu/m4/m4-1.4.7.tar.bz2"));
+    assert!(text.contains("import \"tcc-musl-v2.ncl\""));
+    assert!(text.contains("import \"musl-1.1.24-native.ncl\""));
+    assert!(text.contains("export PATH=\"$TCC/bin:$STAGE0/bin\""));
+    assert!(text.contains("LIB_SOURCE_COUNT=18"));
+    assert!(text.contains("M4_SOURCE_COUNT=11"));
+    assert!(text.contains("tcc -c $CFLAGS \"lib/$source_name.c\""));
+    assert!(text.contains("tcc -c $CFLAGS \"src/$source_name.c\""));
+    assert!(text.contains("\"$MUSL/lib/crt1.o\" $OBJECTS \"$MUSL/lib/libc.a\""));
+    assert!(text.contains("GNU M4 -P prefixed macro expansion failed"));
+    assert!(text.contains("GNU M4 -P accepted the unprefixed define builtin"));
+    assert!(text.contains("GNU M4 accepted malformed quoted input"));
+    assert!(text.contains("GNU M4 malformed-input rejection emitted no diagnostic"));
+    assert!(!text.contains("m4-bin"));
+    assert!(!text.contains("/bin/busybox awk"));
+    assert!(!text.contains("deliberately small bootstrap m4 bridge"));
+}
+
+#[test]
+fn flex_musl_bounds_varargs_and_declares_m4_with_both_fixture_polarities() {
+    let text = std::fs::read_to_string(bootstrap_path("flex-2.6.4-musl.ncl")).unwrap();
+    assert!(text.contains("CFLAGS=\"-I. -Isrc -I$MUSL/include -DHAVE_CONFIG_H\""));
+    assert!(text.contains("ERROR: unexpected Flex external-filter call shape"));
+    assert!(text.contains("ERROR: multiple Flex external-filter calls require varargs"));
+    assert!(text.contains("FLEX_EXTERNAL_FILTER_ARGUMENT_COUNT"));
+    assert!(text.contains("FLEX_EXTERNAL_FILTER_VECTOR_LENGTH"));
+    assert!(text.contains("unexpected external-filter chain shape"));
+    assert!(text.contains("f->argv[1] = \"-P\""));
+    assert!(text.contains("void lerr (const char *msg, ...)"));
+    assert!(text.contains("void lerr_fatal (const char *msg, ...)"));
+    assert!(text.contains("ERROR: Flex varargs remained after bounded source normalization"));
+    assert!(text.contains("int filter_fix_linedirs (struct filter *chain)"));
+    assert!(text.contains("error flushing filtered output"));
+    assert!(text.contains("tables tables_shared tblcmp"));
+    assert!(text.contains("/tmp/flex-compat.c"));
+    assert!(text.contains("FLEX_BYTE_ZERO_MASK"));
+    assert!(text.contains("ERROR: bounded Flex compatibility object missing"));
+    assert!(!text.contains("flex_trace_marker"));
+    assert!(text.contains("import \"tcc-musl-v2.ncl\""));
+    assert!(text.contains("import \"musl-1.1.24-native.ncl\""));
+    assert!(text.contains("TCC=$(find_input tcc-0.9.27-musl-v2)"));
+    assert!(text.contains("MUSL=$(find_input musl-1.1.24-native-candidate)"));
+    assert!(text.contains("tcc -c $CFLAGS \"src/$src.c\""));
+    assert!(text.contains("\"$MUSL/lib/crt1.o\" $OBJS \"$MUSL/lib/libc.a\""));
+    assert!(!text.contains("tcc-stdarg-prefix.h"));
+    assert!(text.contains("import \"m4-1.4.7-musl.ncl\""));
+    assert!(text.contains("M4=$(find_input m4-1.4.7-musl)"));
+    assert!(text.contains("#define M4 \"$M4/bin/m4\""));
+    assert!(text.contains("M4=\"$M4/bin/m4\" \"$out/bin/flex\" -o /tmp/flex-smoke.c"));
+    assert!(text.contains("/tmp/flex-negative.l"));
+    assert!(text.contains("ERROR: flex accepted malformed scanner input"));
+    assert!(text.contains("ERROR: flex retained malformed scanner output"));
+    assert!(!text.contains("#define M4 \"/bin/m4\""));
+}
+
+#[test]
+fn gawk_musl_uses_proven_tcc_with_bounded_numeric_runtime_and_generator_checks() {
+    let text = std::fs::read_to_string(bootstrap_path("gawk-3.0.4-musl.ncl")).unwrap();
+
+    assert!(text.contains("import \"tcc-musl-v2.ncl\""));
+    assert!(text.contains("import \"musl-1.1.24-native.ncl\""));
+    assert!(text.contains("TCC=$(find_input tcc-0.9.27-musl-v2)"));
+    assert!(text.contains("MUSL=$(find_input musl-1.1.24-native-candidate)"));
+    assert!(text.contains("#define MANTLE_DECIMAL_INPUT_BYTES_MAX 4096"));
+    assert!(text.contains("mantle_double_to_ulong_bounded(value, valid_out)"));
+    assert!(text.contains("-Dstrtod=mantle_strtod -Datof=mantle_atof"));
+    assert!(text.contains("\"$MUSL/lib/crt1.o\" $OBJS \"$MUSL/lib/libc.a\""));
+    assert!(text.contains("gawk decimal arithmetic smoke failed"));
+    assert!(text.contains("gawk generator string-length smoke failed"));
+    assert!(text.contains("gawk generator hexadecimal-format smoke failed"));
+    assert!(text.contains("invalid gawk program unexpectedly succeeded"));
+    assert!(!text.contains("import \"tinycc-mes.ncl\""));
+    assert!(!text.contains("TCC_RUNTIME="));
+    assert!(!text.contains("$TCC_RUNTIME/lib/mes/tcc/libtcc1.a"));
+    assert!(!text.contains("$TCC_RUNTIME/lib/mes/libc.a"));
+    assert!(!text.contains("tcc-musl-native.ncl"));
+    assert!(!text.contains("tcc-0.9.27-musl-native-runtime"));
+}
+
+#[test]
+fn diffutils_musl_uses_proven_tcc_and_rejects_compiler_teardown_outputs() {
+    let text = std::fs::read_to_string(bootstrap_path("diffutils-2.7-musl.ncl")).unwrap();
+
+    assert!(text.contains("derivationFile \"tcc-musl-v2.ncl\""));
+    assert!(text.contains("derivationFile \"musl-1.1.24-native.ncl\""));
+    assert!(text.contains("TCC=$(find_input tcc-0.9.27-musl-v2)"));
+    assert!(text.contains("MUSL=$(find_input musl-1.1.24-native-candidate)"));
+    assert!(text.contains("ERROR: TCC-v2 failed compiling $source_path"));
+    assert!(text.contains("diffutils 2.7 source-built cmp/diff runtime and rejection checks passed"));
+    assert!(text.contains("ERROR: cmp did not detect different files"));
+    assert!(text.contains("ERROR: diff accepted malformed input"));
+    assert!(!text.contains("tcc-musl-native.ncl"));
+    assert!(!text.contains("tcc-musl-selfhost.ncl"));
+    assert!(!text.contains("accepted complete object before known compiler teardown fault"));
+    assert!(!text.contains("COMPILER_TEARDOWN_SIGNAL_STATUS"));
+    assert!(!text.contains("libtcc1.a"));
+}
+
+#[test]
+fn bison_23_musl_builds_complete_declared_sources_with_bounded_hash_semantics() {
+    let text = std::fs::read_to_string(bootstrap_path("bison-2.3-musl.ncl")).unwrap();
+
+    assert!(text.contains("import \"tcc-musl-v2.ncl\""));
+    assert!(text.contains("import \"musl-1.1.24-native.ncl\""));
+    assert!(text.contains("import \"m4-1.4.7-musl.ncl\""));
+    assert!(text.contains("EXPECTED_LIB_SOURCE_COUNT=27"));
+    assert!(text.contains("EXPECTED_PROGRAM_SOURCE_COUNT=29"));
+    assert!(text.contains("mantle_hash_ratio_ceil"));
+    assert!(text.contains("mantle_hash_growth_reached"));
+    assert!(text.contains("bison23-runtime-check=positive-grammar"));
+    assert!(text.contains("ERROR: Bison accepted malformed grammar"));
+    assert!(text.contains("ERROR: Bison retained malformed parser output"));
+    assert!(!text.contains("musl-1.1.24-tcc-musl.ncl"));
+    assert!(!text.contains("tcc-musl-native.ncl"));
+    assert!(!text.contains("2>/dev/null || true"));
+    assert!(!text.contains("tcc -ar"));
+}
+
+#[test]
+fn binutils_tcc_uses_declared_generators_and_checks_the_full_tool_matrix() {
+    let text = std::fs::read_to_string(bootstrap_path("binutils-tcc.ncl")).unwrap();
+
+    assert!(text.contains("derivationFile \"tcc-musl-v2.ncl\""));
+    assert!(text.contains("derivationFile \"musl-1.1.24-native.ncl\""));
+    assert!(text.contains("derivationFile \"bison-2.3-musl.ncl\""));
+    assert!(text.contains("derivationFile \"flex-2.6.4-musl.ncl\""));
+    assert!(text.contains("derivationFile \"gawk-3.0.4-musl.ncl\""));
+    assert!(text.contains("authenticated-release-configure-plus-declared-bison-flex-native-generators"));
+    assert!(text.contains("CONFIG_SUB_TIMEOUT_SECONDS=10"));
+    assert!(text.contains("timeout \"$CONFIG_SUB_TIMEOUT_SECONDS\" /bin/sh ./config.sub sun4"));
+    assert!(text.contains("timeout \"$CONFIGURE_TIMEOUT_SECONDS\" /bin/sh ./configure"));
+    assert!(text.contains("CONFIGURE_PROBE_SOURCE_BYTES_MAX=65536"));
+    assert!(text.contains("CONFIGURE_PROBE_INVOCATION_COUNT_MAX=4096"));
+    assert!(text.contains("intl|libiberty|zlib|bfd|opcodes|binutils|gas|gprof|ld"));
+    assert!(text.contains("reject_probe missing-authority-directory"));
+    assert!(text.contains("reject_probe source-too-large"));
+    assert!(text.contains("BFD_BOOTSTRAP_CONFIG_INPUT_REFS_EXPECTED=2"));
+    assert!(text.contains("bfd-configure.authenticated"));
+    assert!(text.contains("ERROR: second-pass BFD header missing"));
+    assert!(text.contains("ARCHIVE_MEMBER_COUNT_MAX=1024"));
+    assert!(text.contains("ARCHIVE_MEMBER_BYTES_MAX=67108864"));
+    assert!(text.contains("ARCHIVE_OUTPUT_BYTES_MAX=1073741824"));
+    assert!(text.contains("reject_archive unsafe-member-name"));
+    assert!(text.contains("reject_archive member-too-large"));
+    assert!(text.contains("reject_archive output-too-large"));
+    assert!(text.contains("MANTLE_BINARY_RADIX = 2"));
+    assert!(text.contains("RUNTIME_ASM_OBJECT=\"$WORK/binutils-runtime-asm.o\""));
+    assert!(text.contains("sigsetjmp:\n  jmp setjmp"));
+    assert!(text.contains("ERROR: missing regenerated artifact $generated_path"));
+    assert!(text.contains("ERROR: unused zlib CRC table was retained"));
+    assert!(text.contains("ERROR: unused zlib inflate table was retained"));
+    assert!(text.contains("for required_tool in as ld ar ranlib nm objcopy objdump readelf size strings strip"));
+    assert!(text.contains("ERROR: source-built assembler accepted malformed input"));
+    assert!(text.contains("ERROR: source-built linker accepted malformed object input"));
+    assert!(text.contains("ERROR: source-built archive tool accepted malformed archive input"));
+    assert!(!text.contains("musl-1.1.24-tcc-musl.ncl"));
+    assert!(!text.contains("perl-5.6.2-musl.ncl"));
+    assert!(!text.contains("autoconf-2.64.ncl"));
+    assert!(!text.contains("automake-1.11.2.ncl"));
+    assert!(!text.contains("coreutils-6.10-musl.ncl"));
+    assert!(!text.contains("bash-2.05b-tcc.ncl"));
+}
+
+#[test]
+fn tcc_musl_v2_installs_and_exercises_its_stdarg_contract() {
+    let text = std::fs::read_to_string(bootstrap_path("tcc-musl-v2.ncl")).unwrap();
+
+    assert!(text.contains("CONFIG_TCCDIR=\\\"$out/lib/tcc\\\""));
+    assert!(text.contains("CONFIG_TCC_SYSINCLUDEPATHS=\"'\"$MUSL/include\"'\""));
+    assert!(text.contains("$BB cp \"$out/lib/tcc/include/stdarg.h\" ./tcc-stdarg-prefix.h"));
+    assert!(text.contains("#include \"tcc-stdarg-prefix.h\""));
+    assert!(text.contains("-static -o variadic-positive variadic-positive.c"));
+    assert!(text.contains("-c -o variadic-negative.o variadic-negative.c"));
+    assert!(!text.contains("-nostdinc"));
+    assert!(!text.contains("$out/lib/tcc/include:$MUSL/include"));
+    assert!(text.contains("$BB cp -r include/. \"$out/lib/tcc/include/\""));
+    assert!(text.contains("ERROR: TinyCC stdarg header missing from configured include root"));
+    assert!(text.contains("/tmp/tcc-stdarg-runtime.c"));
+    assert!(text.contains("TCC_VA_GENERAL_REGISTER_BYTES"));
+    assert!(text.contains("TCC_VA_FLOAT_REGISTER_BYTES"));
+    assert!(text.contains("-ar rcs \"$out/lib/tcc/libtcc1.a\" /tmp/tcc-stdarg-runtime.o"));
+    assert!(text.contains("ERROR: extended TinyCC runtime archive missing"));
+    assert!(text.contains("variadic-positive.c"));
+    assert!(text.contains("value = va_arg(arguments, int)"));
+    assert!(text.contains("./variadic-positive"));
+    assert!(text.contains("variadic-negative.c"));
+    assert!(text.contains("return va_arg(arguments, )"));
+    assert!(text.contains("ERROR: TinyCC accepted malformed variadic source"));
 }
 
 #[test]
@@ -343,7 +597,9 @@ fn native_musl_candidate_preserves_runtime_sources() {
 fn gawk_string_macros_are_config_header_owned() {
     let text = std::fs::read_to_string(bootstrap_path("gawk-3.0.4-musl.ncl")).unwrap();
 
-    assert!(text.contains("import \"tcc-musl-native.ncl\""));
+    assert!(text.contains("import \"tcc-musl-v2.ncl\""));
+    assert!(text.contains("import \"musl-1.1.24-native.ncl\""));
+    assert!(!text.contains("import \"tcc-musl-native.ncl\""));
     assert!(text.contains("$TCC/bin/tcc\" -c $CFLAGS -Dalloca=malloc awktab.c"));
     assert!(text.contains("#define VERSION \"3.0.4\""));
     assert!(text.contains("#define PACKAGE \"gawk\""));
@@ -355,7 +611,11 @@ fn gawk_string_macros_are_config_header_owned() {
     assert!(text.contains("#define RETSIGTYPE void"));
     assert!(text.contains("#define HAVE_ALLOCA_H 1"));
     assert!(!text.contains("#define C_ALLOCA 1"));
-    assert!(text.contains("for src in array builtin dfa eval field io"));
+    assert!(
+        text.contains(
+            "for src in mantle_decimal array builtin dfa eval field io main msg node random re regex version"
+        )
+    );
     assert!(!text.contains("field getopt getopt1 io"));
     assert!(text.contains("$CFLAGS gawkmisc.c -o gawkmisc.o"));
     assert!(!text.contains("$CFLAGS posix/gawkmisc.c"));
@@ -366,7 +626,7 @@ fn gawk_string_macros_are_config_header_owned() {
     assert!(text.contains("invalid gawk program unexpectedly succeeded"));
     assert!(text.contains("invalid gawk program emitted no diagnostic"));
     assert!(!text.contains("mantle_compat.c"));
-    assert!(text.contains("CFLAGS=\"-I. -I$MUSL/include -DHAVE_CONFIG_H\""));
+    assert!(text.contains("CFLAGS=\"-I. -I$MUSL/include -DHAVE_CONFIG_H -Dstrtod=mantle_strtod -Datof=mantle_atof\""));
     assert!(!text.contains("-DVERSION=\\\\\\\""));
     assert!(!text.contains("-DPACKAGE=\\\\\\\""));
 }
@@ -390,7 +650,7 @@ fn source_built_coreutils_handoff_rejects_busybox_output_wrappers() {
 }
 
 #[test]
-fn source_built_sbase_handoff_replaces_busybox_path_fallbacks() {
+fn source_built_sbase_remains_separate_from_bounded_gcc_tool_path() {
     let sbase = std::fs::read_to_string(bootstrap_path("sbase-tools.ncl")).unwrap();
     let gcc = std::fs::read_to_string(bootstrap_path("gcc-4.0-native.ncl")).unwrap();
 
@@ -402,10 +662,12 @@ fn source_built_sbase_handoff_replaces_busybox_path_fallbacks() {
     assert!(sbase.contains("RANLIB=\"$BINUTILS/bin/ranlib\""));
     assert!(!sbase.contains("RANLIB=true"));
     assert!(!sbase.contains("ln -sf \"$BB\""));
-    assert!(gcc.contains("crunch.derivationFile \"sbase-tools.ncl\""));
-    assert!(gcc.contains("find_input sbase-tools-c546c3a"));
+    assert!(!gcc.contains("crunch.derivationFile \"sbase-tools.ncl\""));
+    assert!(!gcc.contains("find_input sbase-tools-c546c3a"));
     assert!(!gcc.contains("find_input coreutils-5.0-musl"));
-    assert!(!gcc.contains("TOOLBIN=/tmp/gcc40-native-tools"));
+    assert!(gcc.contains("TOOLBIN=/tmp/gcc40-tools"));
+    assert!(gcc.contains("export PATH=\"$TOOLBIN:$TCC/bin:$BINUTILS/bin"));
+    assert!(!gcc.contains("$STAGE0/bin:$PATH"));
 }
 
 #[test]

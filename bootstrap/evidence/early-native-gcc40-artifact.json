@@ -1,0 +1,205 @@
+{
+  "schema": "mantle-early-native-artifact-evidence-v1",
+  "row_id": "gcc.4.0",
+  "digest": "d48ce69b37a151cccaf5ee756362806b517c4427481581063a2ddc7bf8f7d0ac",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/7rfhqyf3dmv0ziwh8j6jl8jr9labmn9z-gcc-4.0.4-musl-cxx-v7",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/7rfhqyf3dmv0ziwh8j6jl8jr9labmn9z-gcc-4.0.4-musl-cxx-v7",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/7rfhqyf3dmv0ziwh8j6jl8jr9labmn9z-gcc-4.0.4-musl-cxx-v7",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7"
+      },
+      {
+        "from_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+        "kind": "build-input",
+        "to_node_id": "artifact:/mantle/store/02r39qxz56ycr9ajnvdd1ivlw7al5r8c-gcc-4.0.4-native-src"
+      },
+      {
+        "from_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+        "kind": "build-input",
+        "to_node_id": "artifact:/mantle/store/0flyvq4d2d11lpp0njni5ln6fa2cwn4r-automake-1.15.1-config-sub-src"
+      },
+      {
+        "from_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+        "kind": "build-input",
+        "to_node_id": "artifact:/mantle/store/1jwkfr329x2dgndmppqsn1sbznflm79v-autoconf-2.13-gcc-v1"
+      },
+      {
+        "from_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+        "kind": "build-input",
+        "to_node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "from_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+        "kind": "build-input",
+        "to_node_id": "artifact:/mantle/store/3f5zqjcfb47xd242l5capfyy5q0kklvf-perl-5.6.2-configured-gcc-v16"
+      },
+      {
+        "from_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+        "kind": "build-input",
+        "to_node_id": "artifact:/mantle/store/3mx2c5f71ca5ynhibncjaj3i125z7xbi-autoconf-2.59-gcc-v2"
+      },
+      {
+        "from_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+        "kind": "build-input",
+        "to_node_id": "artifact:/mantle/store/8h8xvgcdx7x629kqisc9arnb42iyb6m4-stage0-posix"
+      },
+      {
+        "from_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+        "kind": "build-input",
+        "to_node_id": "artifact:/mantle/store/9ps946hp60rnj3y3g7bbflyg2x9gx0jr-flex-2.6.4-gcc-v1"
+      },
+      {
+        "from_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+        "kind": "build-input",
+        "to_node_id": "artifact:/mantle/store/bs7rnnl7i1775g4ianjgjvf415sy9f6f-gcc-4.0.4-musl-pass6-v1"
+      },
+      {
+        "from_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+        "kind": "build-input",
+        "to_node_id": "artifact:/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16"
+      },
+      {
+        "from_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+        "kind": "build-input",
+        "to_node_id": "artifact:/mantle/store/sg7bci7sq750mvb6hdqkx6ak0ddamnab-m4-1.4.7-gcc-v5"
+      },
+      {
+        "from_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+        "kind": "build-input",
+        "to_node_id": "artifact:/mantle/store/vjn56primdj4w8p46jz5z3ym222b4hhw-make-3.82-tcc"
+      },
+      {
+        "from_node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7",
+        "kind": "build-input",
+        "to_node_id": "artifact:/mantle/store/yjvscldji1c44m9bvvpyzxmn39yh0by5-bison-3.4.1-gcc-v2"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:a63f40ae6b88edb4b219b1423027d341685bf296384f4619885101631954b96b",
+      "logical_path": "/mantle/store/7rfhqyf3dmv0ziwh8j6jl8jr9labmn9z-gcc-4.0.4-musl-cxx-v7",
+      "output_name": "out",
+      "store_layer": "overlay"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/02r39qxz56ycr9ajnvdd1ivlw7al5r8c-gcc-4.0.4-native-src"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/02r39qxz56ycr9ajnvdd1ivlw7al5r8c-gcc-4.0.4-native-src"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/0flyvq4d2d11lpp0njni5ln6fa2cwn4r-automake-1.15.1-config-sub-src"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/0flyvq4d2d11lpp0njni5ln6fa2cwn4r-automake-1.15.1-config-sub-src"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/1jwkfr329x2dgndmppqsn1sbznflm79v-autoconf-2.13-gcc-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/1jwkfr329x2dgndmppqsn1sbznflm79v-autoconf-2.13-gcc-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/3f5zqjcfb47xd242l5capfyy5q0kklvf-perl-5.6.2-configured-gcc-v16"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/3f5zqjcfb47xd242l5capfyy5q0kklvf-perl-5.6.2-configured-gcc-v16"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/3mx2c5f71ca5ynhibncjaj3i125z7xbi-autoconf-2.59-gcc-v2"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/3mx2c5f71ca5ynhibncjaj3i125z7xbi-autoconf-2.59-gcc-v2"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/7rfhqyf3dmv0ziwh8j6jl8jr9labmn9z-gcc-4.0.4-musl-cxx-v7"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/7rfhqyf3dmv0ziwh8j6jl8jr9labmn9z-gcc-4.0.4-musl-cxx-v7"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/8h8xvgcdx7x629kqisc9arnb42iyb6m4-stage0-posix"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/8h8xvgcdx7x629kqisc9arnb42iyb6m4-stage0-posix"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/9ps946hp60rnj3y3g7bbflyg2x9gx0jr-flex-2.6.4-gcc-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/9ps946hp60rnj3y3g7bbflyg2x9gx0jr-flex-2.6.4-gcc-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/bs7rnnl7i1775g4ianjgjvf415sy9f6f-gcc-4.0.4-musl-pass6-v1"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/bs7rnnl7i1775g4ianjgjvf415sy9f6f-gcc-4.0.4-musl-pass6-v1"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/sg7bci7sq750mvb6hdqkx6ak0ddamnab-m4-1.4.7-gcc-v5"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/sg7bci7sq750mvb6hdqkx6ak0ddamnab-m4-1.4.7-gcc-v5"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/vjn56primdj4w8p46jz5z3ym222b4hhw-make-3.82-tcc"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/vjn56primdj4w8p46jz5z3ym222b4hhw-make-3.82-tcc"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/yjvscldji1c44m9bvvpyzxmn39yh0by5-bison-3.4.1-gcc-v2"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/yjvscldji1c44m9bvvpyzxmn39yh0by5-bison-3.4.1-gcc-v2"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/sgssv3i19y3f4gkiziaq9amm3n62jwvb-gcc-4.0.4-musl-cxx-v7"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/7rfhqyf3dmv0ziwh8j6jl8jr9labmn9z-gcc-4.0.4-musl-cxx-v7"
+  }
+}

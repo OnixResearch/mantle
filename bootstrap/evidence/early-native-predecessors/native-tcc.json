@@ -1,0 +1,61 @@
+{
+  "kind": "artifact",
+  "digest": "b4e10807e297251649155606eda1e4aadf9963e573e3cc8f2532d798f68b6f29",
+  "attestation": {
+    "claims": {},
+    "edges": [
+      {
+        "from_node_id": "artifact:/mantle/store/1a7mcbsc3l1x8wn3qf41gjqm2cbz905c-tcc-0.9.27-musl-native-runtime",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/lxh8v7zw20hpnkys8yidda0gz6w91scs-tcc-0.9.27-src"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/1a7mcbsc3l1x8wn3qf41gjqm2cbz905c-tcc-0.9.27-musl-native-runtime",
+        "kind": "runtime-reference",
+        "to_node_id": "artifact:/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate"
+      },
+      {
+        "from_node_id": "artifact:/mantle/store/1a7mcbsc3l1x8wn3qf41gjqm2cbz905c-tcc-0.9.27-musl-native-runtime",
+        "kind": "produced-by",
+        "to_node_id": "recipe:/mantle/store/cji1pp37kdc8rcyl7lrqrm0rngs2i3z7-tcc-0.9.27-musl-native-runtime"
+      }
+    ],
+    "facts": {
+      "content_digest": "nar-sha256:cc42e18814107b02c868e192a977a311d287cece051379e0c2a29dc808de895b",
+      "logical_path": "/mantle/store/1a7mcbsc3l1x8wn3qf41gjqm2cbz905c-tcc-0.9.27-musl-native-runtime",
+      "output_name": "out"
+    },
+    "nodes": [
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/1a7mcbsc3l1x8wn3qf41gjqm2cbz905c-tcc-0.9.27-musl-native-runtime"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/1a7mcbsc3l1x8wn3qf41gjqm2cbz905c-tcc-0.9.27-musl-native-runtime"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/lxh8v7zw20hpnkys8yidda0gz6w91scs-tcc-0.9.27-src"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/lxh8v7zw20hpnkys8yidda0gz6w91scs-tcc-0.9.27-src"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate"
+        },
+        "kind": "artifact",
+        "node_id": "artifact:/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate"
+      },
+      {
+        "attributes": {
+          "logical_path": "/mantle/store/cji1pp37kdc8rcyl7lrqrm0rngs2i3z7-tcc-0.9.27-musl-native-runtime"
+        },
+        "kind": "recipe",
+        "node_id": "recipe:/mantle/store/cji1pp37kdc8rcyl7lrqrm0rngs2i3z7-tcc-0.9.27-musl-native-runtime"
+      }
+    ],
+    "schema_version": 1,
+    "subject_node_id": "artifact:/mantle/store/1a7mcbsc3l1x8wn3qf41gjqm2cbz905c-tcc-0.9.27-musl-native-runtime"
+  }
+}
