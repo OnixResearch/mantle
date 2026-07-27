@@ -24,7 +24,7 @@ These links are useful review indexes, but they do not mechanically establish re
 
 ## Dependencies
 
-This change consumes exact reviewed outputs from Cairn `export-content-bound-requirement-registry` and Valence `adopt-content-bound-requirement-references`.
+This change consumes Cairn revision `d953fe11ab620f3a42bdad1db51bc7672dd29824` and Valence revision `6ab37aa34c9f81da812d6b42f2f06b7ac2d7e214`.
 
 Mantle uses a small compatibility DTO in `crunch-release-core`. It does not add the std-oriented Valence crate to the no-std core.
 

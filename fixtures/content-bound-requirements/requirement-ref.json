@@ -1,0 +1,49 @@
+{
+  "schema": "valence.requirement-ref.v1",
+  "repository_id": "OnixResearch/valence",
+  "revision": {
+    "kind": "opaque",
+    "value": "valence-fixture-v1"
+  },
+  "requirement_id": "valence.provenance.content_bound_requirement_ref",
+  "specification_path": "cairn/specs/content-bound-requirements/spec.md",
+  "specification_identity": {
+    "domain": "specification",
+    "blake3": "585e525671d3f616ae30e447d3ae889462fdca99e47f21604dd0fce7b967ac38"
+  },
+  "requirement_body_identity": {
+    "domain": "requirement_body",
+    "blake3": "158aa2415d90afcff1487ab842225b3e5950d53b34290fa74081d24e4f245bd0"
+  },
+  "policy_identity": {
+    "domain": "policy",
+    "blake3": "b2034edeb9ab5ccbd7c9262e658987722e90e25db0cecd72aac2e2e64ab4107c"
+  },
+  "row_identity": {
+    "domain": "requirement_row",
+    "blake3": "f198521a55ab3d7a17a20802b74f54b72d10860388dcbce31939b4b37638d20a"
+  },
+  "registry_identity": {
+    "domain": "requirement_registry",
+    "blake3": "80dcf37ea9fbbb34bbee0110a04b5cb98f21ba2f19d2d56e9cb003e096a30ea1"
+  },
+  "registry_receipt_identity": {
+    "domain": "requirement_registry_receipt",
+    "blake3": "92d0fc38eccf284e640c8dbcf5254ddedc78df0267de40594864a4c7f4585b71"
+  },
+  "verification_role": "recorded_only",
+  "non_claims": [
+    "identity and linkage evidence only",
+    "supplied registry freshness was not independently established",
+    "declared revision authenticity was not established",
+    "not requirement satisfaction",
+    "not evidence truth",
+    "not runtime authority",
+    "not lifecycle readiness",
+    "not release eligibility"
+  ],
+  "reference_identity": {
+    "domain": "requirement_reference",
+    "blake3": "48372260c7fcc87d0c90128ea19e45614f07adc9124b596aed99d8d37053625a"
+  }
+}

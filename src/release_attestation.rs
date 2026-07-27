@@ -1415,6 +1415,7 @@ mod tests {
                 proof_manifest_digest_blake3: sample_digest(9),
             },
             provenance_coverage: None,
+            content_bound_requirement_evidence: None,
         }
     }
 

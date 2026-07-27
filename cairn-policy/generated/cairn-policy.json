@@ -2465,6 +2465,33 @@
             "extensions": [
               "rs"
             ],
+            "root": "tools/content_bound_release_requirement_tracey_refs.rs",
+            "source_kind": "rust_source"
+          }
+        ],
+        "id": "content-bound-release-requirements",
+        "marker_verbs": [
+          "impl",
+          "verify",
+          "depends",
+          "related"
+        ],
+        "requirement_sources": [
+          {
+            "extensions": [
+              "md"
+            ],
+            "root": "cairn/archive/2026-07-27-bind-release-requirement-evidence/specs/release-provenance/spec.md",
+            "source_kind": "requirements_doc"
+          }
+        ]
+      },
+      {
+        "evidence_sources": [
+          {
+            "extensions": [
+              "rs"
+            ],
             "root": "tools/remote_build_drain_tracey_refs.rs",
             "source_kind": "rust_source"
           }

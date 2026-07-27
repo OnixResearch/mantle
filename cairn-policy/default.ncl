@@ -123,6 +123,16 @@ let PolicyFieldSetDigest = "c5b71f15de4175d9ff01f7cb4b82eed898a71e55f6d1fa5e24a9
         marker_verbs = ["impl", "verify", "depends", "related"],
       },
       {
+        id = "content-bound-release-requirements",
+        requirement_sources = [
+          { root = "cairn/archive/2026-07-27-bind-release-requirement-evidence/specs/release-provenance/spec.md", source_kind = "requirements_doc", extensions = ["md"] },
+        ],
+        evidence_sources = [
+          { root = "tools/content_bound_release_requirement_tracey_refs.rs", source_kind = "rust_source", extensions = ["rs"] },
+        ],
+        marker_verbs = ["impl", "verify", "depends", "related"],
+      },
+      {
         id = "remote-build-drain",
         requirement_sources = [
           { root = "cairn/archive/2026-07-14-emit-remote-failure-debug-bundles/specs/operator-diagnostics/spec.md", source_kind = "requirements_doc", extensions = ["md"] },

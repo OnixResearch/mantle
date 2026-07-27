@@ -7,7 +7,11 @@ pub(crate) use crunch_release_core::BLAKE3_HEX_LENGTH_CHARS as BLAKE3_HEX_LEN;
 pub(crate) use crunch_release_core::BundledArtifact;
 pub(crate) use crunch_release_core::BundledArtifactKind;
 pub(crate) use crunch_release_core::CLAIM_SCOPE_PACKAGED_INTEGRITY;
+use crunch_release_core::CONTENT_BOUND_EVIDENCE_CLAIM_SCOPE;
+use crunch_release_core::CONTENT_BOUND_EVIDENCE_EXTERNAL_SCHEMA_V1;
 use crunch_release_core::CairnReleaseEvidenceHandoff;
+use crunch_release_core::ContentBoundReleaseBuildInputV1;
+use crunch_release_core::ContentBoundReleaseEvidenceV1;
 pub(crate) use crunch_release_core::DEFAULT_PROOF_WORKFLOW_COMMAND;
 pub(crate) use crunch_release_core::DEFAULT_PROOF_WORKFLOW_VERSION;
 use crunch_release_core::ExternalEvidence;
@@ -49,6 +53,7 @@ use crunch_release_core::STACK_PROVENANCE_SIDECAR_SCHEMA;
 pub(crate) use crunch_release_core::SourceAcquisition;
 use crunch_release_core::StackProvenanceReleaseEvidence;
 use crunch_release_core::VALENCE_STACK_PROVENANCE_RECEIPT_ROLE;
+use crunch_release_core::build_content_bound_release_evidence;
 use crunch_release_core::cairn_release_evidence_validation_receipt;
 use crunch_release_core::canonical_release_evidence_manifest;
 use crunch_release_core::extract_full_self_hosting_proof_identity_fields;
@@ -65,6 +70,7 @@ use crunch_release_core::validate_release_reproducibility_report_artifact_names;
 use crunch_release_core::validate_release_reproducibility_report_linkage;
 use crunch_release_core::validate_staged_publication_artifacts;
 
+use crate::content_bound_requirement_evidence::ContentBoundRequirementCreateRequest;
 use crate::errors::RunError;
 use crate::release_capability::ReleaseCapabilityRoot;
 use crate::release_capability::ValidatedReleasePath;
@@ -145,6 +151,7 @@ pub(crate) struct ReleaseBundleCreateRequest {
     pub external_evidence: Vec<ExternalEvidenceCreateRequest>,
     pub kani_toolchain_evidence: Vec<KaniToolchainEvidenceCreateRequest>,
     pub stack_provenance: Option<StackProvenanceCreateRequest>,
+    pub content_bound_requirement: Option<ContentBoundRequirementCreateRequest>,
     pub cairn_handoff_descriptor_path: Option<PathBuf>,
 }
 
@@ -172,6 +179,7 @@ impl ReleaseBundleCreateRequest {
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
             stack_provenance: None,
+            content_bound_requirement: None,
             cairn_handoff_descriptor_path: None,
         }
     }
@@ -315,6 +323,7 @@ fn expected_publication_artifacts(
         &mut artifacts,
     )?;
     append_expected_external_artifacts(request, &mut artifacts)?;
+    append_expected_content_bound_requirement_artifacts(request, &mut artifacts)?;
     append_expected_cairn_handoff_artifacts(request, &mut artifacts)?;
     debug_assert!(!artifacts.is_empty());
     debug_assert!(artifacts.capacity() >= artifacts.len());
@@ -379,6 +388,28 @@ fn append_expected_external_artifacts(
     }
     debug_assert!(artifacts.len() >= artifacts_before_count);
     debug_assert!(artifacts.capacity() >= artifacts.len());
+    Ok(())
+}
+
+fn append_expected_content_bound_requirement_artifacts(
+    request: &ReleaseBundleCreateRequest,
+    artifacts: &mut Vec<BundledArtifact>,
+) -> Result<(), RunError> {
+    let Some(content_bound) = &request.content_bound_requirement else {
+        return Ok(());
+    };
+    for file in &content_bound.files {
+        let artifact = BundledArtifact {
+            kind: BundledArtifactKind::File,
+            relative_path: file.row.bundle_relative_path.clone(),
+            size_bytes: file.row.size_bytes,
+            digest_blake3: file.row.content_identity.blake3.clone(),
+        };
+        artifacts.push(
+            validate_bundled_artifact_record(artifact, "content_bound_requirement_evidence".to_string())
+                .map_err(core_error_to_run_error)?,
+        );
+    }
     Ok(())
 }
 
@@ -466,6 +497,10 @@ fn publication_policy_facts(
         policy_fact("provider-fixed-point-present", boolean_text(request.provider_fixed_point_proof_dir.is_some())),
         policy_fact("reproducibility-report-present", boolean_text(request.reproducibility_report_path.is_some())),
         policy_fact("stack-provenance-present", boolean_text(request.stack_provenance.is_some())),
+        policy_fact(
+            "content-bound-requirement-evidence-present",
+            boolean_text(request.content_bound_requirement.is_some()),
+        ),
         policy_fact("cairn-handoff-present", boolean_text(request.cairn_handoff_descriptor_path.is_some())),
         policy_fact("artifact-count", &expected.len().to_string()),
     ];
@@ -717,6 +752,7 @@ struct ReleaseManifestEvidence {
     external_evidence: Vec<ExternalEvidence>,
     kani_toolchain_evidence: Vec<KaniToolchainEvidence>,
     stack_provenance: Option<StackProvenanceReleaseEvidence>,
+    content_bound_requirement: Option<ContentBoundReleaseEvidenceV1>,
     cairn_handoff: Option<CairnReleaseEvidenceHandoff>,
 }
 
@@ -745,6 +781,7 @@ fn collect_release_manifest_evidence(
     stage_root: &ReleaseCapabilityRoot,
     inputs: &mut ReleaseManifestInputs,
 ) -> Result<ReleaseManifestEvidence, RunError> {
+    let content_bound_requirement = build_content_bound_requirement_for_release(request, &inputs.binaries)?;
     let provider_fixed_point_proof =
         copy_optional_provider_fixed_point_proof(request, stage_root, inputs.prepared_provider_fixed_point.take())?;
     let reproducibility_artifact = copy_optional_reproducibility_report(
@@ -755,6 +792,7 @@ fn collect_release_manifest_evidence(
         &inputs.proof_bundle,
     )?;
     let mut external_evidence = copy_external_evidence(request, stage_root)?;
+    copy_content_bound_requirement_files(request, stage_root, &mut external_evidence)?;
     let stack_provenance =
         copy_optional_stack_provenance_evidence(request, stage_root, &mut external_evidence, &inputs.binaries)?;
     let kani_toolchain_evidence = build_kani_toolchain_evidence(request, &external_evidence)?;
@@ -767,8 +805,13 @@ fn collect_release_manifest_evidence(
         .transpose()?;
     let stack_provenance_artifact_count =
         stack_provenance.as_ref().map_or(0, |_| STACK_PROVENANCE_EXTERNAL_ARTIFACT_COUNT);
-    let expected_external_evidence_count =
-        request.external_evidence.len().saturating_add(stack_provenance_artifact_count);
+    let content_bound_artifact_count =
+        request.content_bound_requirement.as_ref().map_or(0, |content_bound| content_bound.files.len());
+    let expected_external_evidence_count = request
+        .external_evidence
+        .len()
+        .saturating_add(content_bound_artifact_count)
+        .saturating_add(stack_provenance_artifact_count);
     debug_assert_eq!(external_evidence.len(), expected_external_evidence_count);
     debug_assert_eq!(kani_toolchain_evidence.len(), request.kani_toolchain_evidence.len());
     Ok(ReleaseManifestEvidence {
@@ -777,6 +820,7 @@ fn collect_release_manifest_evidence(
         external_evidence,
         kani_toolchain_evidence,
         stack_provenance,
+        content_bound_requirement,
         cairn_handoff,
     })
 }
@@ -823,6 +867,7 @@ fn compose_release_manifest(
             proof_manifest_digest_blake3: inputs.proof_identity.proof_manifest_digest_blake3,
         },
         provenance_coverage: None,
+        content_bound_requirement_evidence: evidence.content_bound_requirement,
     }
 }
 
@@ -1378,6 +1423,56 @@ fn copy_optional_reproducibility_report(
     copy_file_into_bundle(report_path, bundle_root, &request.bundle_dir, &relative).map(Some)
 }
 
+fn build_content_bound_requirement_for_release(
+    request: &ReleaseBundleCreateRequest,
+    binaries: &[BundledArtifact],
+) -> Result<Option<ContentBoundReleaseEvidenceV1>, RunError> {
+    let Some(content_bound) = &request.content_bound_requirement else {
+        return Ok(None);
+    };
+    let build = ContentBoundReleaseBuildInputV1 {
+        input: content_bound.input.clone(),
+        evidence_rows: content_bound.files.iter().map(|file| file.row.clone()).collect(),
+        release_id: request.release_id.clone(),
+        binary_digests_blake3: binaries.iter().map(|binary| binary.digest_blake3.clone()).collect(),
+    };
+    build_content_bound_release_evidence(build).map(Some).map_err(|issues| {
+        let first = issues
+            .first()
+            .map(|issue| format!("{:?} at {}", issue.code, issue.field_path))
+            .unwrap_or_else(|| "unknown content-bound requirement issue".to_string());
+        RunError::Internal(format!("building content-bound release requirement evidence: {first}"))
+    })
+}
+
+fn copy_content_bound_requirement_files(
+    request: &ReleaseBundleCreateRequest,
+    bundle_root: &ReleaseCapabilityRoot,
+    external_evidence: &mut Vec<ExternalEvidence>,
+) -> Result<(), RunError> {
+    let Some(content_bound) = &request.content_bound_requirement else {
+        return Ok(());
+    };
+    for file in &content_bound.files {
+        let relative = ValidatedReleasePath::new(&file.row.bundle_relative_path)
+            .map_err(|error| RunError::Internal(format!("content-bound bundle path is invalid: {error:?}")))?;
+        bundle_root.write_new_file_nofollow(&relative, &file.bytes).map_err(|error| {
+            RunError::Internal(format!("writing content-bound evidence file into release stage: {error}"))
+        })?;
+        let measured_digest = blake3::hash(&file.bytes).to_hex().to_string();
+        assert_eq!(measured_digest, file.row.content_identity.blake3);
+        external_evidence.push(ExternalEvidence {
+            role: file.row.role.external_role().to_string(),
+            schema: CONTENT_BOUND_EVIDENCE_EXTERNAL_SCHEMA_V1.to_string(),
+            relative_path: file.row.bundle_relative_path.clone(),
+            digest_blake3: file.row.content_identity.blake3.clone(),
+            claim_scope: CONTENT_BOUND_EVIDENCE_CLAIM_SCOPE.to_string(),
+            non_claims: file.row.non_claims.clone(),
+        });
+    }
+    Ok(())
+}
+
 fn copy_external_evidence(
     request: &ReleaseBundleCreateRequest,
     bundle_root: &ReleaseCapabilityRoot,
@@ -1812,6 +1907,8 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::content_bound_requirement_evidence::CONTENT_BOUND_CREATE_FILE_SCHEMA_V1;
+    use crate::content_bound_requirement_evidence::load_content_bound_requirement_create_request;
 
     const PROVIDER_FIXED_POINT_SCHEMA: &str = "mantle-cargo-free-fixed-point-proof-v1";
     const RUST_SOURCE_PROVIDER_BINDING_SCHEMA: &str = "mantle-cargo-free-rust-source-provider-binding-v1";
@@ -1904,6 +2001,7 @@ mod tests {
                 proof_manifest_digest_blake3: sample_digest(9),
             },
             provenance_coverage: None,
+            content_bound_requirement_evidence: None,
         }
     }
 
@@ -2193,6 +2291,87 @@ mod tests {
         )
     }
 
+    fn content_bound_create_request(
+        temp: &Path,
+    ) -> crate::content_bound_requirement_evidence::ContentBoundRequirementCreateRequest {
+        let root = temp.join("content-bound-input");
+        std::fs::create_dir_all(&root).expect("create content-bound input root");
+        write_file(&root.join("source.rs"), b"content-bound source evidence");
+        write_file(&root.join("test.rs"), b"content-bound test evidence");
+        write_file(&root.join("receipt.json"), b"content-bound producer receipt");
+        let registry: serde_json::Value =
+            serde_json::from_str(include_str!("../fixtures/content-bound-requirements/mantle-registry.json"))
+                .expect("parse frozen Mantle registry");
+        let reference: serde_json::Value =
+            serde_json::from_str(include_str!("../fixtures/content-bound-requirements/mantle-requirement-ref.json"))
+                .expect("parse frozen Mantle requirement reference");
+        let reference_identity = reference["reference_identity"]["blake3"].as_str().expect("reference identity");
+        let release_non_claims = crunch_release_core::CONTENT_BOUND_RELEASE_NON_CLAIMS
+            .iter()
+            .map(|claim| (*claim).to_string())
+            .collect::<Vec<_>>();
+        let row_non_claims = crunch_release_core::CONTENT_BOUND_EVIDENCE_ROW_NON_CLAIMS
+            .iter()
+            .map(|claim| (*claim).to_string())
+            .collect::<Vec<_>>();
+        let input = json!({
+            "schema": CONTENT_BOUND_CREATE_FILE_SCHEMA_V1,
+            "release_input": {
+                "schema": crunch_release_core::CONTENT_BOUND_RELEASE_INPUT_SCHEMA_V1,
+                "registries": [registry],
+                "requirement_refs": [reference],
+                "coverage": [
+                    {
+                        "requirement_reference_blake3": reference_identity,
+                        "evidence_role": "source",
+                        "evidence_repository_paths": ["src/release_evidence.rs"]
+                    },
+                    {
+                        "requirement_reference_blake3": reference_identity,
+                        "evidence_role": "test",
+                        "evidence_repository_paths": ["tests/release_cli.rs"]
+                    }
+                ],
+                "non_claims": release_non_claims
+            },
+            "evidence_files": [
+                {
+                    "locator": "receipt.json",
+                    "repository_id": "OnixResearch/mantle",
+                    "repository_relative_path": "evidence/content-bound/producer-receipt.json",
+                    "bundle_relative_path": "requirement-evidence/003-producer-receipt.json",
+                    "role": "receipt",
+                    "non_claims": row_non_claims
+                },
+                {
+                    "locator": "source.rs",
+                    "repository_id": "OnixResearch/mantle",
+                    "repository_relative_path": "src/release_evidence.rs",
+                    "bundle_relative_path": "requirement-evidence/001-release-evidence.rs",
+                    "role": "source",
+                    "symbol": "create_release_evidence_bundle",
+                    "producer_receipt_repository_path": "evidence/content-bound/producer-receipt.json",
+                    "non_claims": row_non_claims
+                },
+                {
+                    "locator": "test.rs",
+                    "repository_id": "OnixResearch/mantle",
+                    "repository_relative_path": "tests/release_cli.rs",
+                    "bundle_relative_path": "requirement-evidence/002-release-cli.rs",
+                    "role": "test",
+                    "producer_receipt_repository_path": "evidence/content-bound/producer-receipt.json",
+                    "non_claims": row_non_claims
+                }
+            ]
+        });
+        std::fs::write(
+            root.join("input.json"),
+            serde_json::to_vec_pretty(&input).expect("serialize content-bound input"),
+        )
+        .expect("write content-bound input");
+        load_content_bound_requirement_create_request(&root, "input.json").expect("load content-bound create request")
+    }
+
     fn parent_entry_names(path: &Path) -> Vec<String> {
         let mut names = std::fs::read_dir(path)
             .unwrap()
@@ -2200,6 +2379,44 @@ mod tests {
             .collect::<Vec<_>>();
         names.sort();
         names
+    }
+
+    #[test]
+    fn content_bound_requirement_files_create_verify_and_fail_closed() {
+        // r[verify mantle.release_provenance.content_bound_evidence_manifest]
+        let temp = tempfile::tempdir().expect("temp root");
+        let mut request = publication_fixture(temp.path(), "mantle-content-bound-release", "content-bound-bundle");
+        request.content_bound_requirement = Some(content_bound_create_request(temp.path()));
+        let manifest = create_release_evidence_bundle(&request).expect("create content-bound release bundle");
+        let verification = crunch_release_core::evaluate_content_bound_requirement_release_evidence(
+            &manifest,
+            crunch_release_core::CONTENT_BOUND_REQUIREMENT_MODE_REQUIRED,
+        );
+        assert!(verification.valid, "issues: {:?}", verification.issues);
+        let verified =
+            verify_release_evidence_bundle(&request.bundle_dir).expect("verify content-bound release bundle");
+        assert!(verified.content_bound_requirement_evidence.is_some());
+
+        std::fs::write(
+            request.bundle_dir.join("requirement-evidence/001-release-evidence.rs"),
+            b"stale content-bound evidence bytes",
+        )
+        .expect("tamper bundled evidence");
+        let tampered =
+            verify_release_evidence_bundle(&request.bundle_dir).expect_err("stale content-bound bytes must fail");
+        let tampered_message = tampered.to_string();
+        assert!(tampered_message.contains("does not match"), "unexpected tamper diagnostic: {tampered_message}");
+
+        let mut invalid_request =
+            publication_fixture(temp.path(), "mantle-content-bound-invalid", "content-bound-invalid-bundle");
+        let mut invalid_content = content_bound_create_request(temp.path());
+        invalid_content.input.registries[0].registry_blake3 =
+            blake3::hash(b"stale registry identity").to_hex().to_string();
+        invalid_request.content_bound_requirement = Some(invalid_content);
+        let invalid =
+            create_release_evidence_bundle(&invalid_request).expect_err("stale registry must fail before publication");
+        assert!(invalid.to_string().contains("content-bound"));
+        assert!(!invalid_request.bundle_dir.exists(), "failed strict release must not publish a partial bundle");
     }
 
     #[test]

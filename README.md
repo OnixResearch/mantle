@@ -234,6 +234,8 @@ Mantle keeps build observations separate from stronger claims:
   builder, compiler, source, or dependency was correct.
 - Release verification checks the selected bundle and policy. Consumers must
   require a successful exit status and the report's final accepted disposition.
+- [Content-bound requirement evidence](docs/content-bound-requirement-evidence.md)
+  links selected Cairn and Valence identities to exact release evidence bytes.
 - Foreign import receipts bind the admitted graph and policy, not foreign
   frontend correctness, realization success, or output trust.
 - Bootstrap and fixed-point evidence applies only to the recorded seed,

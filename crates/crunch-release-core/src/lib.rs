@@ -13,6 +13,7 @@ fn default_false() -> bool {
 
 mod ast_grep;
 mod cairn_handoff;
+mod content_bound_requirements;
 mod determinism;
 mod error;
 mod function_address_binding;
@@ -59,6 +60,7 @@ pub use ast_grep::parse_ast_grep_structural_evidence_json;
 pub use ast_grep::validate_ast_grep_release_attachment;
 pub use ast_grep::validate_ast_grep_structural_evidence;
 pub use cairn_handoff::*;
+pub use content_bound_requirements::*;
 pub use determinism::BUILD_EFFECT_POLICY_VERSION;
 pub use determinism::BuildEffect;
 pub use determinism::DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
@@ -272,6 +274,7 @@ pub use manifest::StackProvenanceReleaseEvidence;
 pub use manifest::StackProvenanceReleaseVerification;
 pub use manifest::VALENCE_STACK_PROVENANCE_RECEIPT_ROLE;
 pub use manifest::canonical_release_evidence_manifest;
+pub use manifest::evaluate_content_bound_requirement_release_evidence;
 pub use manifest::evaluate_function_address_release_evidence;
 pub use manifest::evaluate_stack_provenance_release_evidence;
 pub use manifest::extract_full_self_hosting_proof_identity_fields;

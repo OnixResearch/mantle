@@ -1,0 +1,58 @@
+let NonEmptyString = std.contract.from_predicate (fun value =>
+  std.is_string value && std.string.length value > 0
+) in
+let Blake3 = std.contract.from_predicate (fun value =>
+  std.is_string value && std.string.is_match "^[0-9a-f]{64}$" value
+) in
+let Revision = std.contract.from_predicate (fun value =>
+  std.is_string value && std.string.is_match "^[0-9a-f]{40}$" value
+) in
+let Fixture = {
+  path | NonEmptyString,
+  blake3 | Blake3,
+} in
+let IntegrationReceipt = {
+  schema | NonEmptyString,
+  cairn_revision | Revision,
+  cairn_registry_schema | NonEmptyString,
+  valence_revision | Revision,
+  valence_requirement_ref_schema | NonEmptyString,
+  mantle_release_evidence_schema | NonEmptyString,
+  fixtures | Array Fixture,
+  non_claims | Array NonEmptyString,
+} in
+{
+  schema = "mantle.content-bound-requirement-integration-receipt.v1",
+  cairn_revision = "d953fe11ab620f3a42bdad1db51bc7672dd29824",
+  cairn_registry_schema = "cairn.content-bound-requirement-registry.v1",
+  valence_revision = "6ab37aa34c9f81da812d6b42f2f06b7ac2d7e214",
+  valence_requirement_ref_schema = "valence.requirement-ref.v1",
+  mantle_release_evidence_schema = "mantle.content-bound-release-requirement-evidence.v1",
+  fixtures = [
+    {
+      path = "fixtures/content-bound-requirements/cairn-registry.json",
+      blake3 = "53385e979fa7ea854075724bf82d07345c96265181dcab44ec67fb42c6cca7f7",
+    },
+    {
+      path = "fixtures/content-bound-requirements/requirement-ref.json",
+      blake3 = "39a8169a5a9e6e6b7796d89d6bc91cf4f5238f20a4ba8af798010a130d632f09",
+    },
+    {
+      path = "fixtures/content-bound-requirements/mantle-registry.json",
+      blake3 = "9b4feac963e7222b0c902e4afec985cba9ea1da6e8ba9d65255ec7fea1d41913",
+    },
+    {
+      path = "fixtures/content-bound-requirements/mantle-requirement-ref.json",
+      blake3 = "ea32362e03eed84c04f571e1e6e3842ff460650b7fbf27fd75527012bda1f31e",
+    },
+  ],
+  non_claims = [
+    "exact selected-revision contract and fixture identity only",
+    "not compatibility with arbitrary Cairn or Valence revisions",
+    "not registry freshness beyond supplied fixture bytes",
+    "not requirement satisfaction",
+    "not source correctness",
+    "not test truth",
+    "not release eligibility",
+  ],
+} | IntegrationReceipt

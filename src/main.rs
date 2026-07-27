@@ -78,6 +78,7 @@ mod pin_import;
 mod portable_receipt;
 // Preserves carrier types intentionally encode the full external evidence graph and optional
 // compatibility surfaces.
+mod content_bound_requirement_evidence;
 #[allow(dead_code, clippy::type_complexity)]
 mod preserves_release_carrier;
 mod project_build;
@@ -1331,6 +1332,14 @@ pub enum ReleaseAction {
         #[arg(long = "stack-provenance-binary", requires = "stack_provenance_sidecar")]
         stack_provenance_binary: Option<PathBuf>,
 
+        /// Capability root for content-bound requirement input and evidence files
+        #[arg(long = "requirement-evidence-root", requires = "requirement_evidence_input")]
+        requirement_evidence_root: Option<PathBuf>,
+
+        /// Capability-relative content-bound requirement creation input
+        #[arg(long = "requirement-evidence-input", requires = "requirement_evidence_root")]
+        requirement_evidence_input: Option<String>,
+
         /// Workflow version recorded in the manifest
         #[arg(long, default_value = "mantle-self-hosting-proof-v2")]
         workflow_version: String,
@@ -1381,6 +1390,10 @@ pub enum ReleaseAction {
         /// mode
         #[arg(long = "stack-provenance", value_parser = ["optional", "required"], default_value = "optional")]
         stack_provenance: String,
+
+        /// Content-bound requirement coverage policy for this verification
+        #[arg(long = "requirement-coverage", value_parser = ["optional", "required"], default_value = "optional")]
+        requirement_coverage: String,
     },
     /// Bind bundle-local function-address evidence into a Cairn-ready Mantle receipt
     FunctionAddressBind {
@@ -8542,6 +8555,52 @@ let Plan = {
                 ..
             }
         }));
+    }
+
+    #[test]
+    fn release_content_bound_requirement_flags_parse() {
+        let create = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "release",
+            "create",
+            "--release-id",
+            "mantle-content-bound",
+            "--binary",
+            "/tmp/mantle",
+            "--proof-bundle",
+            "/tmp/self-hosting-proof",
+            "--requirement-evidence-root",
+            "/tmp/requirement-evidence",
+            "--requirement-evidence-input",
+            "input.json",
+        ]))
+        .expect("content-bound release create arguments must parse");
+        assert!(matches!(create.command, Command::Release {
+            action: ReleaseAction::Create {
+                requirement_evidence_root: Some(_),
+                requirement_evidence_input: Some(_),
+                ..
+            }
+        }));
+
+        let verify = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "release",
+            "verify",
+            "/tmp/release-bundle",
+            "--requirement-coverage",
+            "required",
+        ]))
+        .expect("strict requirement coverage arguments must parse");
+        assert!(matches!(
+            verify.command,
+            Command::Release {
+                action: ReleaseAction::Verify {
+                    requirement_coverage,
+                    ..
+                }
+            } if requirement_coverage == "required"
+        ));
     }
 
     #[test]

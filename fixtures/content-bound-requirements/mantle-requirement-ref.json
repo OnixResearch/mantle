@@ -1,0 +1,49 @@
+{
+  "schema": "valence.requirement-ref.v1",
+  "repository_id": "OnixResearch/mantle",
+  "revision": {
+    "kind": "opaque",
+    "value": "mantle-fixture-v1"
+  },
+  "requirement_id": "mantle.release_provenance.content_bound_requirement_coverage",
+  "specification_path": "cairn/specs/release-provenance/spec.md",
+  "specification_identity": {
+    "domain": "specification",
+    "blake3": "e8a1236dfef4e9088ef966e9dfc2313645fdbd501b4f0783d349087678026572"
+  },
+  "requirement_body_identity": {
+    "domain": "requirement_body",
+    "blake3": "ba0c624d5ed5e8b741f5f61fe8cb239041e4bd0c100fa7620fd84ef8d21804d7"
+  },
+  "policy_identity": {
+    "domain": "policy",
+    "blake3": "b9f900c851a4eab9f6039b61674e4479bdf03a781f4c4593bc3b4ea9b3e6b890"
+  },
+  "row_identity": {
+    "domain": "requirement_row",
+    "blake3": "9879ac5a87b26fc58d3a8d308c3a636768d0d345344702dd2c04118eea7d5903"
+  },
+  "registry_identity": {
+    "domain": "requirement_registry",
+    "blake3": "3f65aa4b592fb6d26233d43661d8946bdfac14431c04fce89823e7c85161473e"
+  },
+  "registry_receipt_identity": {
+    "domain": "requirement_registry_receipt",
+    "blake3": "eb2b2d514b583487a3bb0a56d8f12590b0d658224298535ba9ed65190f58a98b"
+  },
+  "verification_role": "recorded_only",
+  "non_claims": [
+    "identity and linkage evidence only",
+    "supplied registry freshness was not independently established",
+    "declared revision authenticity was not established",
+    "not requirement satisfaction",
+    "not evidence truth",
+    "not runtime authority",
+    "not lifecycle readiness",
+    "not release eligibility"
+  ],
+  "reference_identity": {
+    "domain": "requirement_reference",
+    "blake3": "299bbfcc0dc06aec1c6d68745f80c50e272aff4379c8c70ce5866e8f26cb3664"
+  }
+}

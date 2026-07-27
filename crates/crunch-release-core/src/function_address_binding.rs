@@ -1041,6 +1041,7 @@ mod tests {
                 proof_manifest_digest_blake3: digest(PROOF_MANIFEST_DIGEST_SEED),
             },
             provenance_coverage: None,
+            content_bound_requirement_evidence: None,
         }
     }
 

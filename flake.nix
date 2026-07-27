@@ -785,6 +785,39 @@
               mkdir -p "$out"
               cp "$TMPDIR/actual.sorted.json" "$out/source-pin.json"
             '';
+
+        contentBoundRequirementEvidence =
+          pkgs.runCommand "mantle-content-bound-requirement-evidence"
+            {
+              nativeBuildInputs = [
+                pkgs.b3sum
+                pkgs.diffutils
+                pkgs.jq
+                pkgs.nickel
+              ];
+              src = self;
+            }
+            ''
+              set -eu
+              cd "$src"
+
+              receipt_ncl="fixtures/content-bound-requirements/integration-receipt.ncl"
+              receipt_json="fixtures/content-bound-requirements/integration-receipt.json"
+              nickel typecheck "$receipt_ncl"
+              nickel export --format json "$receipt_ncl" > "$TMPDIR/actual.json"
+              jq --sort-keys . "$TMPDIR/actual.json" > "$TMPDIR/actual.sorted.json"
+              jq --sort-keys . "$receipt_json" > "$TMPDIR/expected.sorted.json"
+              diff -u "$TMPDIR/expected.sorted.json" "$TMPDIR/actual.sorted.json"
+
+              jq --raw-output '.fixtures[] | [.path, .blake3] | @tsv' "$receipt_json" |
+                while IFS=$'\t' read -r path expected; do
+                  actual="$(b3sum --no-names "$path")"
+                  test "$actual" = "$expected"
+                done
+
+              mkdir -p "$out"
+              cp "$TMPDIR/actual.sorted.json" "$out/integration-receipt.json"
+            '';
       in
       {
         packages = {
@@ -827,6 +860,7 @@
           mantle-transcript-quality = mantleTranscriptQuality;
           bootstrap-blocker-inventory = bootstrapBlockerInventory;
           nickel-export-core-pin = nickelExportCorePin;
+          content-bound-requirement-evidence = contentBoundRequirementEvidence;
           release-determinism-quality = releaseDeterminismQuality;
           release-nix-witness-quality = releaseNixWitnessQuality;
 

@@ -28,6 +28,7 @@ const _: () = {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ReleaseRootKind {
     ReleaseEvidence,
+    ContentBoundRequirementEvidence,
     ReleaseTreeSource,
     ReleaseTreeDestination,
     WitnessRebuild,

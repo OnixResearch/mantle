@@ -2792,6 +2792,7 @@ mod tests {
                 proof_manifest_digest_blake3: digest,
             },
             provenance_coverage: None,
+            content_bound_requirement_evidence: None,
         }
     }
 

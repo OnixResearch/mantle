@@ -135,6 +135,10 @@ const TEST_PROOF_FIXED_UMASK: &str = "0022\n";
 const TEST_PROOF_NORMALIZATION_ENV: &str = "1|UTC|C.UTF-8|C.UTF-8|/tmp|/tmp|/tmp|/tmp|nobody|nobody\n";
 #[cfg(unix)]
 const TEST_SCRIPT_MODE: u32 = 0o755;
+const CONTENT_BOUND_SOURCE_BYTES: &[u8] = b"pub fn content_bound_source() {}\n";
+const CONTENT_BOUND_SECOND_SOURCE_BYTES: &[u8] = b"pub fn second_content_bound_source() {}\n";
+const CONTENT_BOUND_TEST_BYTES: &[u8] = b"content-bound test evidence\n";
+const CONTENT_BOUND_RECEIPT_BYTES: &[u8] = b"content-bound producer receipt\n";
 
 fn crunch() -> Command {
     Command::cargo_bin("crunch").unwrap()
@@ -472,6 +476,152 @@ fn sample_digest(seed: u8) -> String {
 
 fn sample_byte_digest(seed: u8) -> String {
     format!("{seed:02x}").repeat(BLAKE3_HEX_LEN / HEX_CHARS_PER_BYTE)
+}
+
+struct ContentBoundTestRowInput<'a> {
+    repository_id: &'a str,
+    repository_path: &'a str,
+    bundle_path: &'a str,
+    role: crunch_release_core::ContentBoundEvidenceRoleV1,
+    bytes: &'a [u8],
+    receipt: Option<crunch_release_core::ContentBoundDigestV1>,
+}
+
+fn sealed_content_bound_test_row(
+    input: ContentBoundTestRowInput<'_>,
+) -> crunch_release_core::ContentBoundMeasuredEvidenceRowV1 {
+    let row = crunch_release_core::ContentBoundMeasuredEvidenceRowV1 {
+        schema: crunch_release_core::CONTENT_BOUND_EVIDENCE_ROW_SCHEMA_V1.to_string(),
+        repository_id: input.repository_id.to_string(),
+        repository_relative_path: input.repository_path.to_string(),
+        bundle_relative_path: input.bundle_path.to_string(),
+        role: input.role,
+        size_bytes: u64::try_from(input.bytes.len()).expect("content-bound fixture size"),
+        content_identity: crunch_release_core::ContentBoundDigestV1 {
+            domain: crunch_release_core::ContentBoundDigestDomainV1::EvidenceFile,
+            blake3: blake3::hash(input.bytes).to_hex().to_string(),
+        },
+        span: None,
+        symbol: None,
+        producer_receipt_row_identity: input.receipt,
+        non_claims: crunch_release_core::CONTENT_BOUND_EVIDENCE_ROW_NON_CLAIMS
+            .iter()
+            .map(|claim| (*claim).to_string())
+            .collect(),
+        row_identity: crunch_release_core::ContentBoundDigestV1 {
+            domain: crunch_release_core::ContentBoundDigestDomainV1::EvidenceRow,
+            blake3: String::new(),
+        },
+    };
+    crunch_release_core::seal_content_bound_evidence_row(row).expect("seal content-bound test row")
+}
+
+fn content_bound_test_rows(repository_id: &str) -> Vec<crunch_release_core::ContentBoundMeasuredEvidenceRowV1> {
+    let receipt = sealed_content_bound_test_row(ContentBoundTestRowInput {
+        repository_id,
+        repository_path: "evidence/content-bound-receipt.json",
+        bundle_path: "requirement-evidence/003-receipt.json",
+        role: crunch_release_core::ContentBoundEvidenceRoleV1::Receipt,
+        bytes: CONTENT_BOUND_RECEIPT_BYTES,
+        receipt: None,
+    });
+    let receipt_identity = Some(receipt.row_identity.clone());
+    let source = sealed_content_bound_test_row(ContentBoundTestRowInput {
+        repository_id,
+        repository_path: "src/content_bound_fixture.rs",
+        bundle_path: "requirement-evidence/001-source.rs",
+        role: crunch_release_core::ContentBoundEvidenceRoleV1::Source,
+        bytes: CONTENT_BOUND_SOURCE_BYTES,
+        receipt: receipt_identity.clone(),
+    });
+    let second_source = sealed_content_bound_test_row(ContentBoundTestRowInput {
+        repository_id,
+        repository_path: "src/second_content_bound_fixture.rs",
+        bundle_path: "requirement-evidence/004-second-source.rs",
+        role: crunch_release_core::ContentBoundEvidenceRoleV1::Source,
+        bytes: CONTENT_BOUND_SECOND_SOURCE_BYTES,
+        receipt: receipt_identity.clone(),
+    });
+    let test = sealed_content_bound_test_row(ContentBoundTestRowInput {
+        repository_id,
+        repository_path: "tests/content_bound_fixture.txt",
+        bundle_path: "requirement-evidence/002-test.txt",
+        role: crunch_release_core::ContentBoundEvidenceRoleV1::Test,
+        bytes: CONTENT_BOUND_TEST_BYTES,
+        receipt: receipt_identity,
+    });
+    vec![source, second_source, test, receipt]
+}
+
+fn build_content_bound_test_evidence(
+    manifest: &ReleaseEvidenceManifest,
+) -> crunch_release_core::ContentBoundReleaseEvidenceV1 {
+    let registry: crunch_release_core::CairnContentBoundRequirementRegistryV1 =
+        serde_json::from_str(include_str!("../fixtures/content-bound-requirements/mantle-registry.json"))
+            .expect("parse Mantle registry fixture");
+    let reference: crunch_release_core::RequirementRefV1 =
+        serde_json::from_str(include_str!("../fixtures/content-bound-requirements/mantle-requirement-ref.json"))
+            .expect("parse Mantle requirement fixture");
+    let rows = content_bound_test_rows(&registry.repository_id);
+    let input = crunch_release_core::ContentBoundReleaseInputV1 {
+        schema: crunch_release_core::CONTENT_BOUND_RELEASE_INPUT_SCHEMA_V1.to_string(),
+        registries: vec![registry],
+        requirement_refs: vec![reference.clone()],
+        coverage: vec![
+            crunch_release_core::ContentBoundCoverageDraftV1 {
+                requirement_reference_blake3: reference.reference_identity.blake3.clone(),
+                evidence_role: crunch_release_core::ContentBoundEvidenceRoleV1::Source,
+                evidence_repository_paths: vec![
+                    "src/content_bound_fixture.rs".to_string(),
+                    "src/second_content_bound_fixture.rs".to_string(),
+                ],
+            },
+            crunch_release_core::ContentBoundCoverageDraftV1 {
+                requirement_reference_blake3: reference.reference_identity.blake3,
+                evidence_role: crunch_release_core::ContentBoundEvidenceRoleV1::Test,
+                evidence_repository_paths: vec!["tests/content_bound_fixture.txt".to_string()],
+            },
+        ],
+        non_claims: crunch_release_core::CONTENT_BOUND_RELEASE_NON_CLAIMS
+            .iter()
+            .map(|claim| (*claim).to_string())
+            .collect(),
+    };
+    crunch_release_core::build_content_bound_release_evidence(crunch_release_core::ContentBoundReleaseBuildInputV1 {
+        input,
+        evidence_rows: rows,
+        release_id: manifest.release_id.clone(),
+        binary_digests_blake3: manifest.binaries.iter().map(|binary| binary.digest_blake3.clone()).collect(),
+    })
+    .expect("build content-bound release evidence")
+}
+
+fn content_bound_test_bytes(row: &crunch_release_core::ContentBoundMeasuredEvidenceRowV1) -> &'static [u8] {
+    match row.repository_relative_path.as_str() {
+        "src/content_bound_fixture.rs" => CONTENT_BOUND_SOURCE_BYTES,
+        "src/second_content_bound_fixture.rs" => CONTENT_BOUND_SECOND_SOURCE_BYTES,
+        "tests/content_bound_fixture.txt" => CONTENT_BOUND_TEST_BYTES,
+        "evidence/content-bound-receipt.json" => CONTENT_BOUND_RECEIPT_BYTES,
+        _ => panic!("fixture row has no bytes"),
+    }
+}
+
+fn install_content_bound_requirement_fixture(bundle_dir: &Path, manifest: &mut ReleaseEvidenceManifest) {
+    let evidence = build_content_bound_test_evidence(manifest);
+    for row in &evidence.evidence_manifest.rows {
+        let bytes = content_bound_test_bytes(row);
+        write_file(&bundle_dir.join(&row.bundle_relative_path), bytes);
+        manifest.external_evidence.push(crunch_release_core::ExternalEvidence {
+            role: row.role.external_role().to_string(),
+            schema: crunch_release_core::CONTENT_BOUND_EVIDENCE_EXTERNAL_SCHEMA_V1.to_string(),
+            relative_path: row.bundle_relative_path.clone(),
+            digest_blake3: blake3::hash(bytes).to_hex().to_string(),
+            claim_scope: crunch_release_core::CONTENT_BOUND_EVIDENCE_CLAIM_SCOPE.to_string(),
+            non_claims: vec![crunch_release_core::CONTENT_BOUND_RELEASE_BOUNDARY.to_string()],
+        });
+    }
+    manifest.content_bound_requirement_evidence = Some(evidence);
+    write_canonical_manifest(bundle_dir, manifest);
 }
 
 fn make_valid_bundle() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
@@ -2836,6 +2986,45 @@ fn release_verify_succeeds_using_bundle_local_contents_only() {
     );
     assert!(stdout.rfind("verification check:").unwrap() < stdout.find(RELEASE_VERIFY_SUCCESS_MARKER).unwrap());
     assert!(stdout.trim_end().ends_with(&format!("{}: {}", RELEASE_VERIFY_SUCCESS_MARKER, bundle_dir.display())));
+}
+
+#[test]
+fn release_verify_strict_requirement_coverage_accepts_typed_bundle_evidence() {
+    let (_temp, bundle_dir, mut manifest) = make_valid_bundle();
+    install_content_bound_requirement_fixture(&bundle_dir, &mut manifest);
+
+    let output = crunch()
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--requirement-coverage")
+        .arg("required")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse strict verification JSON");
+    assert_eq!(json["valid"], true);
+    assert_eq!(json["content_bound_requirements"]["valid"], true);
+    assert_eq!(json["content_bound_requirements"]["disposition"], "present");
+}
+
+#[test]
+fn release_verify_strict_requirement_coverage_rejects_legacy_only_bundle() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+    let output = crunch()
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--requirement-coverage")
+        .arg("required")
+        .output()
+        .unwrap();
+
+    let json = assert_json_release_verify_rejection(output, "content-bound-requirements", "CoverageMissing");
+    assert_eq!(json["content_bound_requirements"]["required"], true);
+    assert_eq!(json["content_bound_requirements"]["valid"], false);
 }
 
 #[test]

@@ -452,6 +452,8 @@ pub struct ReleaseEvidenceManifest {
     pub proof_linkage: ReleaseProofLinkage,
     #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub provenance_coverage: Option<ProvenanceCoverage>,
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
+    pub content_bound_requirement_evidence: Option<crate::ContentBoundReleaseEvidenceV1>,
 }
 
 pub fn canonical_release_evidence_manifest(manifest: ReleaseEvidenceManifest) -> Result<Vec<u8>, ReleaseEvidenceError> {
@@ -501,6 +503,7 @@ fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Res
     validate_source_acquisition(manifest)?;
     validate_manifest_linkage(manifest)?;
     validate_provenance_coverage(manifest)?;
+    validate_content_bound_requirement_manifest_evidence(manifest)?;
     validate_external_evidence(manifest)?;
     validate_kani_toolchain_evidence(manifest)?;
     validate_stack_provenance_manifest_evidence(manifest)?;
@@ -508,6 +511,48 @@ fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Res
     validate_function_address_manifest_evidence(manifest)?;
     validate_cairn_handoff_manifest(manifest)?;
     Ok(())
+}
+
+pub fn evaluate_content_bound_requirement_release_evidence(
+    manifest: &ReleaseEvidenceManifest,
+    mode: &str,
+) -> crate::ContentBoundRequirementVerificationV1 {
+    debug_assert!(manifest.binaries.capacity() >= manifest.binaries.len());
+    debug_assert!(manifest.external_evidence.capacity() >= manifest.external_evidence.len());
+    let binary_digests = manifest.binaries.iter().map(|artifact| artifact.digest_blake3.clone()).collect::<Vec<_>>();
+    let external = manifest
+        .external_evidence
+        .iter()
+        .map(|evidence| crate::ContentBoundExternalEvidenceLinkV1 {
+            role: evidence.role.clone(),
+            schema: evidence.schema.clone(),
+            bundle_relative_path: evidence.relative_path.clone(),
+            digest_blake3: evidence.digest_blake3.clone(),
+        })
+        .collect::<Vec<_>>();
+    crate::evaluate_optional_content_bound_release_evidence(
+        manifest.content_bound_requirement_evidence.as_ref(),
+        &manifest.release_id,
+        &binary_digests,
+        &external,
+        mode,
+    )
+}
+
+fn validate_content_bound_requirement_manifest_evidence(
+    manifest: &ReleaseEvidenceManifest,
+) -> Result<(), ReleaseEvidenceError> {
+    let verification =
+        evaluate_content_bound_requirement_release_evidence(manifest, crate::CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL);
+    if verification.valid {
+        return Ok(());
+    }
+    let first = verification
+        .issues
+        .first()
+        .map(|issue| format!("{:?} at {}", issue.code, issue.field_path))
+        .unwrap_or_else(|| "unknown content-bound requirement issue".to_string());
+    Err(validation_error(format!("release content-bound requirement evidence is invalid: {first}")))
 }
 
 pub fn release_evidence_cairn_bundle_binding(
@@ -1447,16 +1492,25 @@ fn function_address_text_overclaims(value: &str) -> bool {
 
 fn validate_external_evidence(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
     let mut seen_roles = BTreeSet::new();
+    let mut seen_paths = BTreeSet::new();
     for (index_usize, evidence) in manifest.external_evidence.iter().enumerate() {
         let index_u32 = u32_count(index_usize, "external evidence index overflowed u32")?;
         let field_name = format!("external_evidence[{index_u32}]");
         validate_external_evidence_entry(evidence, &field_name)?;
-        if !seen_roles.insert(evidence.role.clone()) {
+        if !seen_paths.insert(evidence.relative_path.clone()) {
+            return Err(validation_error(format!(
+                "release evidence {field_name}.relative_path duplicates another external evidence path"
+            )));
+        }
+        let is_content_bound_row = evidence.schema == crate::CONTENT_BOUND_EVIDENCE_EXTERNAL_SCHEMA_V1;
+        if !is_content_bound_row && !seen_roles.insert(evidence.role.clone()) {
             return Err(validation_error(format!(
                 "release evidence {field_name}.role duplicates another external evidence role"
             )));
         }
     }
+    debug_assert!(seen_roles.len() <= manifest.external_evidence.len());
+    debug_assert_eq!(seen_paths.len(), manifest.external_evidence.len());
     Ok(())
 }
 
@@ -3082,6 +3136,7 @@ mod tests {
                 proof_manifest_digest_blake3: sample_digest(9),
             },
             provenance_coverage: None,
+            content_bound_requirement_evidence: None,
         }
     }
 
@@ -3153,6 +3208,17 @@ mod tests {
             }
         }))
         .unwrap()
+    }
+
+    #[test]
+    fn legacy_manifest_omits_additive_content_bound_requirement_field() {
+        // r[verify mantle.release_provenance.legacy_coverage_boundary]
+        let manifest = sample_manifest();
+        let value = serde_json::to_value(&manifest).expect("serialize legacy-compatible manifest");
+        assert!(value.get("content_bound_requirement_evidence").is_none());
+        let bytes = canonical_release_evidence_manifest(manifest).expect("canonical legacy manifest");
+        let reparsed: ReleaseEvidenceManifest = serde_json::from_slice(&bytes).expect("parse legacy manifest");
+        assert!(reparsed.content_bound_requirement_evidence.is_none());
     }
 
     #[test]

@@ -14,7 +14,7 @@ Make a Mantle release name the exact accepted requirements and evidence artifact
 - a canonical evidence manifest and strict-profile result;
 - deterministic issues and explicit non-claims.
 
-The DTO mirrors the reviewed Valence wire contract. Frozen positive and negative fixtures detect schema or identity drift.
+The DTO mirrors Cairn revision `d953fe11ab620f3a42bdad1db51bc7672dd29824` and Valence revision `6ab37aa34c9f81da812d6b42f2f06b7ac2d7e214`. Frozen positive and negative fixtures detect schema or identity drift.
 
 ## Release coverage
 
@@ -56,4 +56,4 @@ Release CLI tests cover strict and compatibility profiles. Cross-repository fixt
 
 ## Rollout
 
-The new fields are additive in a versioned release schema. Strict policy becomes selectable before any future default promotion.
+The optional `content_bound_requirement_evidence` manifest field is additive. Its absence preserves existing v1 serialization. Strict policy becomes selectable before any future default promotion.
