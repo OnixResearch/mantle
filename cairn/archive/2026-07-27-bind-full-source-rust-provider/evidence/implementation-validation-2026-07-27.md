@@ -68,6 +68,14 @@ Inspection confirmed that `r[bootstrap_inventory.full_source_rust_provider_bindi
 
 Post-sync pueue tasks `1258` through `1261` reported `valid: true`, 37 specs validated, and proposal/design/tasks verdicts `PASS`. The tasks packet still has seven completed tasks and zero remaining tasks. The gate receipt hashes stayed `b0fe5af9d7084e1a8920682a1dd57254ddf79fa4c84ad7f2c4fba8b7da4473ea`, `0aa8b931cda78f5286d6ca784aadd2ecc82c2fd220f439f72da4165a0a76d01a`, and `80e859e9196d6bf05905b85b0e235ef900ac6b3d002903ea620a5ea8be50166e`.
 
+## Archive and post-archive validation
+
+The archive dry-run had no reasons and receipt hash `ebe4aa78a869ad14e7df5bde45143c19cecccb534a5b5c99c56e019397d08376`. The executed archive had no reasons and receipt hash `9c88f9d705abb6edd3e7b404cde8bed66f9d0d01767ed56fb750a1f3577f3d27`.
+
+Cairn created `cairn/archive/1970-01-01-bind-full-source-rust-provider` because of the known archive-date bug. The directory was manually renamed to `cairn/archive/2026-07-27-bind-full-source-rust-provider` before validation.
+
+Pueue task `1277` ran post-archive validation. `cairn-post-archive-validate-2026-07-27.json` reports three active changes, 35 specs validated, `issues: []`, and `valid: true`. Its stderr file is empty.
+
 ## Next action
 
-Commit the synchronized accepted specs and archive this change before work starts on the StageX successor.
+Commit this archived packet. Then start the ordered StageX lineage-provider change.
