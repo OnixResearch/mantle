@@ -230,7 +230,7 @@ pub(crate) fn cmd_admit_full_source_provider(
     expected_source_closure_manifest_blake3: &str,
     report_path: &Path,
     json: bool,
-) -> Result<(), RunError> {
+) -> Result<FullSourceProviderAdmissionReport, RunError> {
     let report = admit_full_source_provider(
         provider_dir,
         expected_output_digest_blake3,
@@ -263,7 +263,62 @@ pub(crate) fn cmd_admit_full_source_provider(
     assert_eq!(report.output_digest_blake3, expected_output_digest_blake3);
     assert_eq!(report.source_closure_manifest_blake3, expected_source_closure_manifest_blake3);
     debug_assert!(!report_bytes.is_empty());
-    Ok(())
+    Ok(report)
+}
+
+pub(crate) fn adopt_admitted_full_source_provider(
+    report: &FullSourceProviderAdmissionReport,
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+) -> Result<String, RunError> {
+    assert!(!store_dir.is_empty(), "store_dir must not be empty");
+    assert!(Path::new(store_dir).is_absolute(), "store_dir must be absolute");
+    let provider_parent = report
+        .provider_path
+        .parent()
+        .ok_or_else(|| admission_error("admitted provider path has no parent".to_string()))?;
+    let canonical_parent = fs::canonicalize(provider_parent).map_err(|error| {
+        admission_error(format!("canonicalizing admitted provider parent {}: {error}", provider_parent.display()))
+    })?;
+    let canonical_output = fs::canonicalize(output_dir)
+        .map_err(|error| admission_error(format!("canonicalizing output store {}: {error}", output_dir.display())))?;
+    if canonical_parent != canonical_output {
+        return Err(admission_error(format!(
+            "admitted provider parent {} does not match current output store {}",
+            canonical_parent.display(),
+            canonical_output.display()
+        )));
+    }
+    let provider_basename = report
+        .provider_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| admission_error("admitted provider basename is not UTF-8".to_string()))?;
+    let logical_store_path = format!("{store_dir}/{provider_basename}");
+    let _mutation_guard = crunch_store::StoreMutationGuard::acquire_wait(state_dir)
+        .map_err(|error| admission_error(format!("acquiring provider adoption mutation lock: {error}")))?;
+    let keypair = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir, true)?;
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|error| admission_error(format!("creating provider adoption runtime: {error}")))?;
+    runtime.block_on(async {
+        let mut store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            state_dir: state_dir.to_path_buf(),
+            output_dir: output_dir.to_path_buf(),
+            remote_cache_urls: Vec::new(),
+            fallback_mode: crunch_store::StoreFallbackMode::Practical,
+            store_dir: store_dir.to_string(),
+            base_state_dirs: Vec::new(),
+        })
+        .await
+        .map_err(|error| admission_error(format!("opening provider adoption store: {error}")))?;
+        store
+            .adopt_verified_local_output(&logical_store_path, "out", &keypair.signing_key, None)
+            .await
+            .map_err(|error| admission_error(format!("adopting admitted provider: {error}")))?;
+        Ok::<(), RunError>(())
+    })?;
+    Ok(logical_store_path)
 }
 
 pub(crate) fn admit_full_source_provider(

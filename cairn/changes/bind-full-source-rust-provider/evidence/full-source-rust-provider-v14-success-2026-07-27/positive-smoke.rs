@@ -1,0 +1,3 @@
+fn main() {
+    println!("mantle-full-source-rust-v14-ok");
+}

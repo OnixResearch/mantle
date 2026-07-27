@@ -1,9 +1,8 @@
-# Typed bootstrap route for a future musl-host Rust-from-source provider.
+# Typed bootstrap route for the musl-host Rust-from-source provider.
 #
-# This is not a provider output and does not satisfy
-# `mantle-rust-source-provider-v1` by itself. It mirrors the source-built
-# route in `rust-source-plan.ncl`, but selects a musl host triple so a future
-# materialized provider can pair with the source-root musl native closure.
+# This plan is not a provider output and does not satisfy
+# `mantle-rust-source-provider-v1` by itself. The materializer binds this plan,
+# authenticated Rust sources, and the admitted source-built native closure.
 
 let Source = {
   id | String,

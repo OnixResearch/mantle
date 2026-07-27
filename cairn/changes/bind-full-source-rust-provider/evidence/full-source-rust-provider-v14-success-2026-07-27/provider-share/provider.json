@@ -1,0 +1,84 @@
+{
+  "schema": "mantle-rust-source-provider-v1",
+  "provider_id": "mantle-rust-source-provider",
+  "host_triple": "x86_64-unknown-linux-musl",
+  "target_triple": "x86_64-unknown-linux-musl",
+  "provenance": {
+    "source_built": true,
+    "uses_prebuilt_rust": false,
+    "build_recipe": "rust-final-source-route"
+  },
+  "sources": [
+    {
+      "id": "rust-1.94.0",
+      "kind": "tarball",
+      "name": "rust-compiler-source",
+      "digest_blake3": "796c7a9f7ffd4a1738685a96e8eac1d5866c543f5b25215530c2bb19cf0c7345"
+    },
+    {
+      "id": "rust-1.94.0-final-bootstrap-provider",
+      "kind": "generated",
+      "name": "bootstrap-provider-candidate",
+      "digest_blake3": "5b5186b994aded7ca99c68d26a6ebc69e8e634e4c4ce85388a24398879011b29"
+    }
+  ],
+  "build_receipts": [
+    {
+      "id": "rust-final-build",
+      "kind": "external-attested-build",
+      "name": "rust-final-build-receipt",
+      "path": "share/mantle-rust-provider/receipts/build.json",
+      "digest_blake3": "5e9efdf40ce362380ae0641254d470873907f53cda2aab44fbe1e3176b4cd757"
+    }
+  ],
+  "artifacts": [
+    {
+      "role": "rustc",
+      "name": "rustc",
+      "path": "bin/rustc",
+      "content_digest_blake3": "fc8954789b9c63e3fa820aefeb882158d4abec75acf339d8b62fe005f5104b61",
+      "source_id": "rust-1.94.0",
+      "build_receipt_id": "rust-final-build"
+    },
+    {
+      "role": "cargo",
+      "name": "cargo",
+      "path": "bin/cargo",
+      "content_digest_blake3": "d3c5a0fdda5d1aad2b49a0d10d449b97c86a500f4f7b7ed633664bbcbf1cd5c1",
+      "source_id": "rust-1.94.0",
+      "build_receipt_id": "rust-final-build"
+    },
+    {
+      "role": "rustdoc",
+      "name": "rustdoc",
+      "path": "bin/rustdoc",
+      "content_digest_blake3": "2e87d90e03552622e88da51f2b3f3e1c8e38ae9189210d47d0b2b527f16b1adc",
+      "source_id": "rust-1.94.0",
+      "build_receipt_id": "rust-final-build"
+    },
+    {
+      "role": "host-rustlib",
+      "name": "host-rustlib",
+      "path": "lib/rustlib/x86_64-unknown-linux-musl/lib",
+      "content_digest_blake3": "626842db4805a4c12f2764bc4de4450fd8c061963c278416aaea0f7eb049d3bb",
+      "source_id": "rust-1.94.0",
+      "build_receipt_id": "rust-final-build"
+    },
+    {
+      "role": "target-rustlib",
+      "name": "target-rustlib",
+      "path": "lib/rustlib/x86_64-unknown-linux-musl/lib",
+      "content_digest_blake3": "626842db4805a4c12f2764bc4de4450fd8c061963c278416aaea0f7eb049d3bb",
+      "source_id": "rust-1.94.0",
+      "build_receipt_id": "rust-final-build"
+    },
+    {
+      "role": "provider-receipt",
+      "name": "rust-final-build-receipt",
+      "path": "share/mantle-rust-provider/receipts/build.json",
+      "content_digest_blake3": "5e9efdf40ce362380ae0641254d470873907f53cda2aab44fbe1e3176b4cd757",
+      "source_id": "rust-1.94.0",
+      "build_receipt_id": "rust-final-build"
+    }
+  ]
+}

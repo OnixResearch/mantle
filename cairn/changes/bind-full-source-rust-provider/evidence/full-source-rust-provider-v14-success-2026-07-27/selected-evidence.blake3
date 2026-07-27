@@ -1,0 +1,17 @@
+bb031151252c51c0465a0cde3bc636c9bb97203ccb17ee5946f4ddcdc93649cc  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/positive-smoke
+11766cf2be6892caf5b08fadf576baee90e112673d53f91afc1ab42206218d93  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/provider-share/provider.json
+5e9efdf40ce362380ae0641254d470873907f53cda2aab44fbe1e3176b4cd757  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/provider-share/receipts/build.json
+2c9987050e52d3d8830f0b2055c097a004811eed561555fa5fa71dbc7c315bbb  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/provider-share/receipts/full-source-binding.json
+0e7441c6755c9b9bbbc8e26f3a5a6e54a7cd364e78bb1459345aeba95c8dae8f  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/source-manifests/mrustc-to-rust-1.90.0.json
+1bc8a54f17dd1cdaada7ae654ab9b0793c1e8872111c7ba6105160203eacd8f6  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/source-manifests/rust-1.91.1-stage1.json
+c8219b4b85d41ea7a8484040fbf47293783a4b964f589ab57ac657819ec385e8  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/source-manifests/rust-1.92.0-stage1.json
+12b0eb88e69b0d1beae664423ea83fbbab3d3c39a38fc1bcedcb52f35e8d0652  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/source-manifests/rust-1.93.1-stage1.json
+da0f452f3d02453615e6b74ec49a4f685f6e0ea372498e2750481b18df928b88  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/source-manifests/rust-1.94.0-final.json
+fe9fc39d77b5788975a465fbda301a046a205d44722eed8d4e87b9b331457e6b  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/driver.log.zst
+a453b5347fb883dc4b2291903b83188f84b0487f3766016478088ad192977aa9  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/stage-logs/mrustc-to-rust-1.90.0.log.zst
+b674d1467d73a5928bf78ab410fe177abfd3618cac626193085f6351a5800813  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/stage-logs/rust-1.91.1-stage1.log.zst
+5046b2728012533b5d8cdd877ffa4c653e51babd1537c5a82656b37ca512d4b7  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/stage-logs/rust-1.92.0-stage1.log.zst
+0ae39afe5ef87330a67b524955b2f12f63f547e8dd38d8ebdd14e8f1c18544a3  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/stage-logs/rust-1.93.1-stage1.log.zst
+300eed4a4a8eebc21e0343e912f89828fc31c7309781c42dcf03c71c08223026  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/stage-logs/rust-1.94.0-final.log.zst
+dca5268c86f796998c4f5523f1679b37b469bc157b895e505818cfd7119e5628  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/malformed-compile.stderr.txt.zst
+e58f4ef62848c16e92c83bfb0fb1b3bc0766f0f1e74ace04cd1ac7cf7895cec9  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-v14-success-2026-07-27/positive-static-pie-link-failure.stderr.txt.zst

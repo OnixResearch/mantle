@@ -1,0 +1,8 @@
+'re' not installed!? (Can't load module re, dynamic loading not available in this perl.
+  (You may need to build a new perl executable which either supports
+  dynamic loading or has the re module statically linked into it.)
+ at providers/common/der/oids_to_c.pm line 83
+) at /home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/93cbd63ilmcxzvfmqa9jfl7fjvwjy33f-perl-5.10.1-full-source-gcc10-v2/lib/5.10.1/re.pm line 98.
+BEGIN failed--compilation aborted at providers/common/der/oids_to_c.pm line 83.
+Compilation failed in require.
+BEGIN failed--compilation aborted.

@@ -1135,8 +1135,21 @@ enum BootstrapAction {
 
         /// Independently produced full-source native-provider admission report.
         /// When present, materialization must publish a validated binding receipt.
-        #[arg(long, conflicts_with = "import_dir")]
+        #[arg(
+            long,
+            conflicts_with = "import_dir",
+            requires_all = ["full_source_host_tools", "full_source_rust_sources"]
+        )]
         full_source_admission: Option<PathBuf>,
+
+        /// Receipt-bound Make, CMake, Python, Perl, and BusyBox manifest for the full-source route.
+        #[arg(long, conflicts_with = "import_dir", requires = "full_source_admission")]
+        full_source_host_tools: Option<PathBuf>,
+
+        /// Directory of verified `<source-id>.tar.gz` archives; full-source mode forbids network
+        /// fetches.
+        #[arg(long, conflicts_with = "import_dir", requires = "full_source_admission")]
+        full_source_rust_sources: Option<PathBuf>,
 
         /// Existing provider directory to validate and import instead of materializing
         #[arg(long)]
@@ -1152,6 +1165,42 @@ enum BootstrapAction {
         smoke_evidence_dir: Option<PathBuf>,
 
         /// Planned output directory for the Rust provider
+        #[arg(long)]
+        output_dir: PathBuf,
+
+        /// Create and retain the materialization work directory for source and stage evidence.
+        #[arg(long, conflicts_with = "import_dir")]
+        scratch_dir: Option<PathBuf>,
+    },
+
+    /// Materialize receipt-bound Make, CMake, Python, Perl, and BusyBox evidence.
+    FullSourceRustHostTools {
+        #[arg(long)]
+        admission_report: PathBuf,
+        #[arg(long)]
+        make_root: PathBuf,
+        #[arg(long)]
+        make_attestation: PathBuf,
+        #[arg(long)]
+        cmake_root: PathBuf,
+        #[arg(long)]
+        cmake_attestation: PathBuf,
+        #[arg(long)]
+        python_root: PathBuf,
+        #[arg(long)]
+        python_attestation: PathBuf,
+        #[arg(long)]
+        perl_root: PathBuf,
+        #[arg(long)]
+        perl_attestation: PathBuf,
+        #[arg(long)]
+        busybox_root: PathBuf,
+        #[arg(long)]
+        busybox_attestation: PathBuf,
+        #[arg(long)]
+        linux_headers_root: PathBuf,
+        #[arg(long)]
+        linux_headers_attestation: PathBuf,
         #[arg(long)]
         output_dir: PathBuf,
     },
@@ -1177,6 +1226,10 @@ enum BootstrapAction {
         /// New admission report path; existing files are never replaced
         #[arg(long)]
         report: PathBuf,
+
+        /// Adopt the independently admitted provider into the selected local store state.
+        #[arg(long)]
+        adopt_state: bool,
     },
 
     /// Materialize a zero-seed source-built native toolchain closure manifest
@@ -2785,6 +2838,7 @@ fn bootstrap_command_label(action: Option<&BootstrapAction>) -> &'static str {
         Some(BootstrapAction::Capabilities) => "bootstrap.capabilities",
         Some(BootstrapAction::ParityReport { .. }) => "bootstrap.parity-report",
         Some(BootstrapAction::RustSourceProvider { .. }) => "bootstrap.rust-source-provider",
+        Some(BootstrapAction::FullSourceRustHostTools { .. }) => "bootstrap.full-source-rust-host-tools",
         Some(BootstrapAction::FullSourceProviderAdmit { .. }) => "bootstrap.full-source-provider-admit",
         Some(BootstrapAction::NativeToolchainClosure { .. }) => "bootstrap.native-toolchain-closure",
         Some(BootstrapAction::Validate { .. }) => "bootstrap.validate",
@@ -5954,34 +6008,91 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
             recipe,
             route_plan,
             full_source_admission,
+            full_source_host_tools,
+            full_source_rust_sources,
             import_dir,
             smoke,
             smoke_evidence_dir,
             output_dir,
+            scratch_dir,
         } => cmd_bootstrap_rust_source_provider(RustSourceProviderCommandRequest {
             recipe,
             route_plan: route_plan.as_deref(),
             full_source_admission: full_source_admission.as_deref(),
+            full_source_host_tools: full_source_host_tools.as_deref(),
+            full_source_rust_sources: full_source_rust_sources.as_deref(),
             import_dir: import_dir.as_deref(),
             output_dir,
+            scratch_dir: scratch_dir.as_deref(),
             verbose: ctx.verbose,
             smoke: *smoke,
             smoke_evidence_dir: smoke_evidence_dir.as_deref(),
         }),
+        BootstrapAction::FullSourceRustHostTools {
+            admission_report,
+            make_root,
+            make_attestation,
+            cmake_root,
+            cmake_attestation,
+            python_root,
+            python_attestation,
+            perl_root,
+            perl_attestation,
+            busybox_root,
+            busybox_attestation,
+            linux_headers_root,
+            linux_headers_attestation,
+            output_dir,
+        } => {
+            let manifest = full_source_rust_binding_shell::materialize_full_source_rust_host_tools(
+                full_source_rust_binding_shell::FullSourceRustHostToolMaterializationRequest {
+                    admission_report_path: admission_report,
+                    make_root,
+                    make_attestation_path: make_attestation,
+                    cmake_root,
+                    cmake_attestation_path: cmake_attestation,
+                    python_root,
+                    python_attestation_path: python_attestation,
+                    perl_root,
+                    perl_attestation_path: perl_attestation,
+                    busybox_root,
+                    busybox_attestation_path: busybox_attestation,
+                    linux_headers_root,
+                    linux_headers_attestation_path: linux_headers_attestation,
+                    output_dir,
+                },
+            )
+            .map_err(|error| RunError::Build(format!("full-source Rust host-tool evidence: {error}")))?;
+            eprintln!("Materialized full-source Rust host-tool manifest {}", manifest.display());
+            Ok(())
+        }
         BootstrapAction::FullSourceProviderAdmit {
             provider_dir,
             expected_output_blake3,
             source_closure,
             expected_source_closure_blake3,
             report,
-        } => full_source_provider::cmd_admit_full_source_provider(
-            provider_dir,
-            expected_output_blake3,
-            source_closure,
-            expected_source_closure_blake3,
-            report,
-            ctx.json,
-        ),
+            adopt_state,
+        } => {
+            let admission = full_source_provider::cmd_admit_full_source_provider(
+                provider_dir,
+                expected_output_blake3,
+                source_closure,
+                expected_source_closure_blake3,
+                report,
+                ctx.json,
+            )?;
+            if *adopt_state {
+                let logical_path = full_source_provider::adopt_admitted_full_source_provider(
+                    &admission,
+                    &ctx.store,
+                    &ctx.resolved_state_dir,
+                    &ctx.store_prefix,
+                )?;
+                eprintln!("Adopted admitted provider into local state: {logical_path}");
+            }
+            Ok(())
+        }
         BootstrapAction::NativeToolchainClosure {
             rust_source_provider,
             host_root,
@@ -6021,11 +6132,53 @@ struct RustSourceProviderCommandRequest<'a> {
     recipe: &'a Path,
     route_plan: Option<&'a Path>,
     full_source_admission: Option<&'a Path>,
+    full_source_host_tools: Option<&'a Path>,
+    full_source_rust_sources: Option<&'a Path>,
     import_dir: Option<&'a Path>,
     output_dir: &'a Path,
+    scratch_dir: Option<&'a Path>,
     verbose: bool,
     smoke: bool,
     smoke_evidence_dir: Option<&'a Path>,
+}
+
+#[derive(Debug)]
+enum RustSourceProviderScratch {
+    Ephemeral(tempfile::TempDir),
+    Persistent(PathBuf),
+}
+
+impl RustSourceProviderScratch {
+    fn path(&self) -> &Path {
+        match self {
+            Self::Ephemeral(scratch) => scratch.path(),
+            Self::Persistent(path) => path,
+        }
+    }
+
+    fn preserve(self) -> PathBuf {
+        match self {
+            Self::Ephemeral(scratch) => preserve_rust_source_provider_scratch(scratch),
+            Self::Persistent(path) => path,
+        }
+    }
+}
+
+fn prepare_rust_source_provider_scratch(requested_path: Option<&Path>) -> Result<RustSourceProviderScratch, RunError> {
+    if let Some(path) = requested_path {
+        fs::create_dir(path).map_err(|error| {
+            RunError::Internal(format!("creating persistent Rust provider scratch {}: {error}", path.display()))
+        })?;
+        let canonical = fs::canonicalize(path).map_err(|error| {
+            RunError::Internal(format!("canonicalizing persistent Rust provider scratch {}: {error}", path.display()))
+        })?;
+        return Ok(RustSourceProviderScratch::Persistent(canonical));
+    }
+    let scratch = tempfile::Builder::new()
+        .prefix("mantle-rust-source-provider-")
+        .tempdir()
+        .map_err(|error| RunError::Internal(format!("creating Rust provider scratch: {error}")))?;
+    Ok(RustSourceProviderScratch::Ephemeral(scratch))
 }
 
 fn cmd_bootstrap_rust_source_provider(request: RustSourceProviderCommandRequest<'_>) -> Result<(), RunError> {
@@ -6039,23 +6192,23 @@ fn cmd_bootstrap_rust_source_provider(request: RustSourceProviderCommandRequest<
             request.smoke_evidence_dir,
         );
     }
-    let scratch = tempfile::Builder::new()
-        .prefix("mantle-rust-source-provider-")
-        .tempdir()
-        .map_err(|err| RunError::Internal(format!("creating Rust provider scratch: {err}")))?;
+    let scratch = prepare_rust_source_provider_scratch(request.scratch_dir)?;
     match materialize_requested_rust_source_provider(&request, scratch.path()) {
         Ok(materialized) => {
             eprintln!("Materialized Rust source provider {}", materialized.output_path.display());
             eprintln!("  recipe_digest_blake3: {}", materialized.recipe_digest_blake3);
             eprintln!("  metadata_path: {}", materialized.metadata_path.display());
             eprintln!("  metadata_digest_blake3: {}", materialized.metadata_digest_blake3);
+            if matches!(&scratch, RustSourceProviderScratch::Persistent(_)) {
+                eprintln!("  retained_scratch: {}", scratch.path().display());
+            }
             if request.smoke {
                 cmd_smoke_rust_source_provider(&materialized.output_path, request.smoke_evidence_dir)?;
             }
             Ok(())
         }
         Err(err) => {
-            let preserved_scratch = preserve_rust_source_provider_scratch(scratch);
+            let preserved_scratch = scratch.preserve();
             Err(RunError::Build(format!(
                 "Rust source provider materialization failed closed: {err} preserved_scratch={}",
                 preserved_scratch.display()
@@ -6068,11 +6221,33 @@ fn materialize_requested_rust_source_provider(
     request: &RustSourceProviderCommandRequest<'_>,
     scratch_dir: &Path,
 ) -> Result<rust_source_provider::RustSourceProviderMaterialization, rust_source_provider::RustSourceProviderError> {
+    if request.full_source_admission.is_none() && request.full_source_host_tools.is_some() {
+        return Err(rust_source_provider::RustSourceProviderError::Validate(
+            "--full-source-host-tools requires --full-source-admission".to_string(),
+        ));
+    }
+    if request.full_source_admission.is_none() && request.full_source_rust_sources.is_some() {
+        return Err(rust_source_provider::RustSourceProviderError::Validate(
+            "--full-source-rust-sources requires --full-source-admission".to_string(),
+        ));
+    }
     if let Some(admission_report_path) = request.full_source_admission {
+        let host_tool_manifest_path = request.full_source_host_tools.ok_or_else(|| {
+            rust_source_provider::RustSourceProviderError::Validate(
+                "full-source native admission requires --full-source-host-tools".to_string(),
+            )
+        })?;
+        let rust_source_archive_dir = request.full_source_rust_sources.ok_or_else(|| {
+            rust_source_provider::RustSourceProviderError::Validate(
+                "full-source native admission requires --full-source-rust-sources".to_string(),
+            )
+        })?;
         return rust_source_provider::materialize_full_source_bound_rust_provider_with_route_plan(
             request.recipe,
             request.route_plan,
             admission_report_path,
+            host_tool_manifest_path,
+            rust_source_archive_dir,
             request.output_dir,
             scratch_dir,
             request.verbose,
@@ -7995,10 +8170,13 @@ mod tests {
                     recipe,
                     route_plan,
                     full_source_admission,
+                    full_source_host_tools,
+                    full_source_rust_sources,
                     import_dir,
                     smoke,
                     smoke_evidence_dir,
                     output_dir,
+                    scratch_dir,
                 }),
             ..
         } = args.command
@@ -8008,10 +8186,13 @@ mod tests {
         assert_eq!(recipe, PathBuf::from("bootstrap/rust-source.ncl"));
         assert!(route_plan.is_none());
         assert!(full_source_admission.is_none());
+        assert!(full_source_host_tools.is_none());
+        assert!(full_source_rust_sources.is_none());
         assert!(import_dir.is_none());
         assert!(!smoke);
         assert!(smoke_evidence_dir.is_none());
         assert_eq!(output_dir, PathBuf::from("/tmp/mantle-rust-provider"));
+        assert!(scratch_dir.is_none());
     }
 
     #[test]
@@ -8043,6 +8224,42 @@ mod tests {
     }
 
     #[test]
+    fn bootstrap_rust_source_provider_action_parses_persistent_scratch() {
+        let args = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "bootstrap",
+            "rust-source-provider",
+            "--scratch-dir",
+            "/tmp/mantle-rust-provider-work",
+            "--output-dir",
+            "/tmp/mantle-rust-provider",
+        ])
+        .unwrap();
+
+        let Command::Bootstrap {
+            action: Some(BootstrapAction::RustSourceProvider { scratch_dir, .. }),
+            ..
+        } = args.command
+        else {
+            panic!("expected rust-source-provider bootstrap action");
+        };
+        assert_eq!(scratch_dir, Some(PathBuf::from("/tmp/mantle-rust-provider-work")));
+    }
+
+    #[test]
+    fn persistent_rust_source_provider_scratch_is_create_new() {
+        let dir = tempfile::tempdir().unwrap();
+        let scratch_path = dir.path().join("retained-work");
+
+        let scratch = prepare_rust_source_provider_scratch(Some(&scratch_path)).unwrap();
+        let duplicate_error = prepare_rust_source_provider_scratch(Some(&scratch_path)).unwrap_err();
+
+        assert!(matches!(&scratch, RustSourceProviderScratch::Persistent(_)));
+        assert_eq!(scratch.path(), fs::canonicalize(&scratch_path).unwrap());
+        assert!(duplicate_error.to_string().contains("creating persistent Rust provider scratch"));
+    }
+
+    #[test]
     fn bootstrap_rust_source_provider_action_parses_full_source_admission() {
         let args = parse_args_with_cli_test_stack(vec![
             "mantle",
@@ -8052,6 +8269,10 @@ mod tests {
             "bootstrap/rust-source-musl-host-plan.ncl",
             "--full-source-admission",
             "/evidence/full-source-admission.json",
+            "--full-source-host-tools",
+            "/evidence/full-source-host-tools.json",
+            "--full-source-rust-sources",
+            "/evidence/rust-sources",
             "--output-dir",
             "/tmp/mantle-rust-provider",
         ])
@@ -8061,6 +8282,8 @@ mod tests {
             action:
                 Some(BootstrapAction::RustSourceProvider {
                     full_source_admission,
+                    full_source_host_tools,
+                    full_source_rust_sources,
                     import_dir,
                     ..
                 }),
@@ -8070,7 +8293,63 @@ mod tests {
             panic!("expected rust-source-provider bootstrap action");
         };
         assert_eq!(full_source_admission, Some(PathBuf::from("/evidence/full-source-admission.json")));
+        assert_eq!(full_source_host_tools, Some(PathBuf::from("/evidence/full-source-host-tools.json")));
+        assert_eq!(full_source_rust_sources, Some(PathBuf::from("/evidence/rust-sources")));
         assert!(import_dir.is_none());
+    }
+
+    #[test]
+    fn bootstrap_rust_source_provider_rejects_admission_without_host_tools() {
+        let error = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "bootstrap",
+            "rust-source-provider",
+            "--full-source-admission",
+            "/evidence/full-source-admission.json",
+            "--output-dir",
+            "/tmp/mantle-rust-provider",
+        ])
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("--full-source-host-tools"));
+        assert!(error.contains("required"));
+    }
+
+    #[test]
+    fn bootstrap_rust_source_provider_rejects_host_tools_without_admission() {
+        let error = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "bootstrap",
+            "rust-source-provider",
+            "--full-source-host-tools",
+            "/evidence/full-source-host-tools.json",
+            "--output-dir",
+            "/tmp/mantle-rust-provider",
+        ])
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("--full-source-admission"));
+        assert!(error.contains("required"));
+    }
+
+    #[test]
+    fn bootstrap_rust_source_provider_rejects_sources_without_admission() {
+        let error = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "bootstrap",
+            "rust-source-provider",
+            "--full-source-rust-sources",
+            "/evidence/rust-sources",
+            "--output-dir",
+            "/tmp/mantle-rust-provider",
+        ])
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("--full-source-admission"));
+        assert!(error.contains("required"));
     }
 
     #[test]
@@ -8083,6 +8362,8 @@ mod tests {
             "/tmp/imported-provider",
             "--full-source-admission",
             "/evidence/full-source-admission.json",
+            "--full-source-host-tools",
+            "/evidence/full-source-host-tools.json",
             "--output-dir",
             "/tmp/mantle-rust-provider",
         ])
@@ -8260,7 +8541,7 @@ mod tests {
     }
 
     #[test]
-    fn bootstrap_full_source_rust_binding_fails_before_ambient_route_execution() {
+    fn bootstrap_full_source_rust_binding_requires_host_tool_manifest_before_route_execution() {
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("missing-recipe.ncl");
         let admission = dir.path().join("missing-admission.json");
@@ -8270,8 +8551,11 @@ mod tests {
             recipe: &recipe,
             route_plan: None,
             full_source_admission: Some(&admission),
+            full_source_host_tools: None,
+            full_source_rust_sources: None,
             import_dir: None,
             output_dir: &output_dir,
+            scratch_dir: None,
             verbose: false,
             smoke: false,
             smoke_evidence_dir: None,
@@ -8279,8 +8563,7 @@ mod tests {
         .unwrap_err()
         .to_string();
 
-        assert!(error.contains("FULL_SOURCE_RUST_SOURCE_BUILT_CMAKE_NOT_MATERIALIZED"));
-        assert!(error.contains("ambient CMake"));
+        assert!(error.contains("requires --full-source-host-tools"));
         assert!(!error.contains("recipe"));
         assert!(!output_dir.exists());
     }
@@ -8300,8 +8583,11 @@ mod tests {
             recipe: &recipe,
             route_plan: None,
             full_source_admission: None,
+            full_source_host_tools: None,
+            full_source_rust_sources: None,
             import_dir: None,
             output_dir: &output_dir,
+            scratch_dir: None,
             verbose: false,
             smoke: false,
             smoke_evidence_dir: None,

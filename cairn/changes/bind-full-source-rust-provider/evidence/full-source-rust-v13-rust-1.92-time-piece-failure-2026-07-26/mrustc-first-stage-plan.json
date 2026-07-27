@@ -1,0 +1,242 @@
+{
+  "blocked_reason": "source-built Rust provider completion remains pending until every planned stage passes and the validated final provider is published",
+  "full_source_execution": {
+    "ambient_tool_discovery": false,
+    "host_support_inputs": [
+      {
+        "attestation_digest_blake3": "ee761748d6d860cad63a2d4582e7992cc077f818d53172ede6477160e9760f35",
+        "attestation_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-tools-v5-linux-headers-2026-07-26/linux-headers-attestation.json",
+        "content_digest_blake3": "0fdac41832c7b489a3896fb70d7395110c7542a18bbf511432c78fe3757e3778",
+        "id": "linux-headers",
+        "path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/sr0f35l0sz5a8495zbag4pqlw4sl9dlb-linux-headers-6.6-full-source-gcc10-v3",
+        "source_id": "linux-6.6"
+      }
+    ],
+    "host_tool_manifest_digest_blake3": "537b89c834dfe7201024de64dab2969e3d433be0de56b4cd24be9159cf448f55",
+    "host_tools": [
+      {
+        "construction_receipt_digest_blake3": "1f05c830caae69f90c7b8b0e691f80c8cb4353ff7897d98368cdc42ae50aabbf",
+        "construction_receipt_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-tools-v5-linux-headers-2026-07-26/make-construction.json",
+        "content_digest_blake3": "11e99bd96b27689e78797520566b915d3b519f4550197ebb6678a67bed215866",
+        "path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/zgmmrsrq5kmcvmg70rjixz0g3lns6hig-make-4.4.1-full-source-gcc10-v1/bin/make",
+        "role": "make",
+        "source_id": "gnu-make-4.4.1"
+      },
+      {
+        "construction_receipt_digest_blake3": "52be5c69272bcd8f03791bd8d0348ed6079add75e09004b645b87aaba7f7a85e",
+        "construction_receipt_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-tools-v5-linux-headers-2026-07-26/cmake-construction.json",
+        "content_digest_blake3": "fdebf50f037de72ef22726f84359c8791a6abfbc5a28b888f50b71c23674657b",
+        "path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/rndqm2bqm2707xapjk0agq1l6rpjzv6d-cmake-3.31.8-full-source-gcc10-v1/bin/cmake",
+        "role": "cmake",
+        "source_id": "cmake-3.31.8"
+      },
+      {
+        "construction_receipt_digest_blake3": "e15304ab1fb7bc0fbd1a7a5ad39643a0a7a2332437cb9152ec1fc9fc229f4b94",
+        "construction_receipt_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-tools-v5-linux-headers-2026-07-26/python-construction.json",
+        "content_digest_blake3": "7a5f2d268fec22e59bf3bfa3875682c724d18884f4d6e7b34830e7d18e5fe4ce",
+        "path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/8b995r4qgngkvai2l6hkwvpa4zb32gqh-python-3.13.5-full-source-gcc10-v1/bin/python3.13",
+        "role": "python",
+        "source_id": "cpython-3.13.5"
+      },
+      {
+        "construction_receipt_digest_blake3": "b8b91741148bdae36f49407a38007ce7a55166117bedebd4352e3b058f480602",
+        "construction_receipt_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-tools-v5-linux-headers-2026-07-26/perl-construction.json",
+        "content_digest_blake3": "c5e895e9a2831508e4feb464f6d5c28e646c714863e2e91b1664e909418b8bef",
+        "path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/hk6iyjf76n3c5dsqwcfyjvbqdm5fxi7s-perl-5.10.1-full-source-gcc10-v4/bin/perl",
+        "role": "perl",
+        "source_id": "perl-5.10.1"
+      },
+      {
+        "construction_receipt_digest_blake3": "14d1324c019e5933161c8850a3aa6d7d12dd5ac7d9058d6a91d09717fc930d3b",
+        "construction_receipt_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-tools-v5-linux-headers-2026-07-26/busybox-construction.json",
+        "content_digest_blake3": "da5b5b1ca280f8a545eb750c27894766311c1b10b326da5ce10e6e1ee8c7f4c8",
+        "path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/md1lri56iljbbdiyk45njakzdbj7n4c3-busybox-1.37.0-full-source-gcc10-v1/bin/busybox",
+        "role": "busybox",
+        "source_id": "busybox-1.37.0"
+      }
+    ],
+    "native_provider_path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/q366f9q6n1silgmv8w0c2ypxxw4p4yw3-full-source-seed-toolchain",
+    "rust_source_archive_dir": "/home/brittonr/.cache/mantle-full-source-20260718/rust-source-archives-20260726",
+    "source_policy": "authenticated-offline-only"
+  },
+  "patch_plan": {
+    "input": {
+      "capabilities": {
+        "dynamic_tool_runtime": true,
+        "proc_macro_runtime": true,
+        "provider_contract_version": "mantle-rust-source-provider-v1",
+        "rustdoc_tool": false,
+        "source_built_provider": true,
+        "static_executable_linking": true
+      },
+      "host_triple": "x86_64-unknown-linux-musl",
+      "mrustc_version": "0.12.0",
+      "route_id": "rust-source-musl-host-plan",
+      "route_plan_digest_blake3": "58c6ea33a72121463d8e1e71310f60562f63528385b6cd2b86d98e8d37b2281c",
+      "route_policy_digest_blake3": "66a76c43410fabbbd3747a64f3715506acfe7034220e81e3b564dd5fd97e935a",
+      "rust_version": "1.90.0",
+      "source_identities": [
+        {
+          "digest": "c1ba35f5fc5c4ca2952d9f5526e900dcb6632ea7fd4d71fa58029b3bb563ae56",
+          "digest_kind": "sha256",
+          "id": "mrustc-0.12.0",
+          "name": "mrustc-source"
+        },
+        {
+          "digest": "799a9f9cba4ed5351e071048bcf6b5560755d9009648def33a407dd4961f9b7e",
+          "digest_kind": "sha256",
+          "id": "rust-1.90.0",
+          "name": "rust-compiler-source"
+        }
+      ],
+      "stage": "first-stage",
+      "stage_id": "mrustc-to-rust-1.90.0",
+      "target_triple": "x86_64-unknown-linux-musl"
+    },
+    "input_digest_blake3": "a7dc673650091a0c8f8b4b4c767c736da21941407ba19956b0f5feddb2345fa5",
+    "operation_count": 9,
+    "operations": [
+      {
+        "expected_anchor": "tools/minicargo/build.cpp OUT_DIR assignment",
+        "id": "first-stage-minicargo-out-dir",
+        "kind": "minicargo-build-out-dir",
+        "phase": "before-first-stage-main-make",
+        "source_id": "mrustc-0.12.0",
+        "summary": "share generated build-script outputs with target crate compiles"
+      },
+      {
+        "expected_anchor": "tools/minicargo/build.cpp rustc argument construction",
+        "id": "first-stage-minicargo-rustc-threads",
+        "kind": "minicargo-rustc-threads",
+        "phase": "before-first-stage-main-make",
+        "source_id": "mrustc-0.12.0",
+        "summary": "limit temporary static compiler worker threads"
+      },
+      {
+        "expected_anchor": "minicargo.mk LLVM CMake configuration",
+        "id": "first-stage-llvm-static-archives",
+        "kind": "minicargo-llvm-static-archive-targets",
+        "phase": "before-first-stage-main-make",
+        "source_id": "mrustc-0.12.0",
+        "summary": "disable LLVM shared probes and request generated headers plus static archives"
+      },
+      {
+        "expected_anchor": "source-root musl target toolchain",
+        "id": "first-stage-source-root-musl-runtime",
+        "kind": "source-root-musl-llvm-runtime",
+        "phase": "after-first-stage-minicargo",
+        "source_id": "mrustc-0.12.0",
+        "summary": "prepare source-root musl compiler runtime for LLVM and helper links"
+      },
+      {
+        "expected_anchor": "compiler/rustc_session/src/config.rs Sysroot::new",
+        "id": "first-stage-rust-explicit-sysroot",
+        "kind": "rust-explicit-sysroot",
+        "phase": "after-first-stage-rust-source-extract",
+        "source_id": "rust-1.90.0",
+        "summary": "keep explicit sysroot from probing dynamic compiler location"
+      },
+      {
+        "expected_anchor": "compiler/rustc_driver/Cargo.toml crate-type",
+        "id": "first-stage-rustc-driver-rlib",
+        "kind": "rustc-driver-rlib",
+        "phase": "after-first-stage-translated-cargo",
+        "source_id": "rust-1.90.0",
+        "summary": "build rustc_driver as rlib for temporary static compiler linking"
+      },
+      {
+        "expected_anchor": "run_rustc/Makefile host compiler rules",
+        "id": "first-stage-run-rustc-host-runtime",
+        "kind": "run-rustc-host-runtime",
+        "phase": "first-stage-run-rustc-host",
+        "source_id": "mrustc-0.12.0",
+        "summary": "build host compiler prefix with route runtime policy"
+      },
+      {
+        "expected_anchor": "run_rustc target rustlib rule",
+        "id": "first-stage-run-rustc-target",
+        "kind": "run-rustc-target-rustlib",
+        "phase": "first-stage-run-rustc-target",
+        "source_id": "mrustc-0.12.0",
+        "summary": "build provider target rustlib after host compiler prefix"
+      },
+      {
+        "expected_anchor": "provider metadata contract",
+        "id": "provider-contract-assertion",
+        "kind": "provider-contract-assertion",
+        "phase": "provider-evidence",
+        "summary": "assert provider contract mantle-rust-source-provider-v1 from explicit route facts"
+      }
+    ],
+    "output_digest_blake3": "82554907a23ae9214e1396dc421289ba2eb3905109c7a6e37c0551ba9a05cb8e",
+    "schema": "mantle-rust-bootstrap-patch-plan-v1"
+  },
+  "paths": {
+    "archive_dir": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/archives",
+    "build_dir": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/build",
+    "build_log": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/mrustc-first-stage-build.log",
+    "build_manifest": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/mrustc-first-stage-build.json",
+    "output_dir": "/home/brittonr/.cargo-target/mantle-full-source-rust-provider-detached-v13-20260726",
+    "provider_candidate_dir": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/mrustc-first-stage-provider-candidate",
+    "provider_candidate_manifest": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/mrustc-first-stage-provider-candidate.json",
+    "provider_candidate_smoke_dir": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/mrustc-first-stage-provider-candidate-smoke",
+    "provider_candidate_smoke_work_dir": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/mrustc-first-stage-provider-candidate-smoke/work",
+    "script": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/run-mrustc-first-stage.sh",
+    "source_dir": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/sources",
+    "source_manifest": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/mrustc-first-stage-sources.json"
+  },
+  "route_plan": {
+    "digest_blake3": "58c6ea33a72121463d8e1e71310f60562f63528385b6cd2b86d98e8d37b2281c",
+    "path": "bootstrap/rust-source-musl-host-plan.ncl",
+    "policy_digest_blake3": "66a76c43410fabbbd3747a64f3715506acfe7034220e81e3b564dd5fd97e935a"
+  },
+  "schema": "mantle-rust-source-provider-first-stage-plan-v1",
+  "sources": [
+    {
+      "id": "mrustc-0.12.0",
+      "kind": "tarball",
+      "name": "mrustc-source",
+      "sha256_hex": "c1ba35f5fc5c4ca2952d9f5526e900dcb6632ea7fd4d71fa58029b3bb563ae56",
+      "url": "https://github.com/thepowersgang/mrustc/archive/refs/tags/v0.12.0.tar.gz",
+      "version": "0.12.0"
+    },
+    {
+      "id": "rust-1.90.0",
+      "kind": "tarball",
+      "name": "rust-compiler-source",
+      "sha256_hex": "799a9f9cba4ed5351e071048bcf6b5560755d9009648def33a407dd4961f9b7e",
+      "url": "https://static.rust-lang.org/dist/rustc-1.90.0-src.tar.gz",
+      "version": "1.90.0"
+    }
+  ],
+  "stage": {
+    "expected_outputs": [
+      {
+        "path": "bin/rustc",
+        "role": "rustc"
+      },
+      {
+        "path": "bin/cargo",
+        "role": "cargo"
+      },
+      {
+        "path": "lib/rustlib/x86_64-unknown-linux-musl/lib",
+        "role": "host-rustlib"
+      },
+      {
+        "path": "lib/rustlib/x86_64-unknown-linux-musl/lib",
+        "role": "target-rustlib"
+      }
+    ],
+    "host_triple": "x86_64-unknown-linux-musl",
+    "id": "mrustc-to-rust-1.90.0",
+    "kind": "mrustc-seed",
+    "mrustc_target_version": "1.90",
+    "rust_version": "1.90.0",
+    "source_ids": [
+      "mrustc-0.12.0",
+      "rust-1.90.0"
+    ],
+    "target_triple": "x86_64-unknown-linux-musl"
+  }
+}

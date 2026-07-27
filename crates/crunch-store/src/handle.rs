@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use nix_compat::derivation::Derivation;
+use nix_compat::narinfo::SigningKey;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::narinfo::fingerprint;
 use nix_compat::store_path::StorePath;
@@ -27,6 +28,8 @@ use snix_castore::directoryservice::DirectoryService;
 use snix_castore::directoryservice::RedbDirectoryService;
 use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 use snix_castore::import::fs::ingest_path;
+use snix_store::nar::NarCalculationService;
+use snix_store::nar::SimpleRenderer;
 use snix_store::path_info::PathInfo;
 use snix_store::pathinfoservice::CachePathInfoService as PathInfoCache;
 use snix_store::pathinfoservice::NixHTTPPathInfoService;
@@ -71,6 +74,8 @@ use crate::metadata_cache::check_metadata_validity;
 use crate::metadata_cache::metadata_cache_key;
 use crate::metadata_cache::new_metadata_entry;
 use crate::roots;
+
+const NAR_SHA256_BYTES: usize = 32;
 
 /// Configuration for opening a store.
 pub struct StoreConfig {
@@ -2439,6 +2444,65 @@ impl StoreHandle {
 
     // -- Persistence + realization --
 
+    /// Adopt a locally materialized output only after its caller independently verifies it.
+    ///
+    /// The logical path must map to an existing entry in this handle's physical output
+    /// directory. Existing PathInfo entries are never replaced through this seam.
+    pub async fn adopt_verified_local_output(
+        &mut self,
+        logical_store_path: &str,
+        output_name: &str,
+        signing_key: &SigningKey<ed25519_dalek::SigningKey>,
+        provenance: Option<&ArtifactProvenance>,
+    ) -> Result<PathInfo, Error> {
+        assert!(!logical_store_path.is_empty(), "logical_store_path must not be empty");
+        assert!(!output_name.is_empty(), "output_name must not be empty");
+        let store_path = StorePath::from_absolute_path_with_prefix(logical_store_path.as_bytes(), &self.store_dir)
+            .map_err(|error| Error::Store(format!("adoption logical store path {logical_store_path}: {error}")))?;
+        if self
+            .pathinfo_service
+            .get(*store_path.digest())
+            .await
+            .map_err(|error| Error::PathInfoService(format!("adoption preflight: {error}")))?
+            .is_some()
+        {
+            return Err(Error::Store(format!("adoption refuses to replace existing PathInfo: {logical_store_path}")));
+        }
+        let physical_path = Path::new(&self.output_dir_str).join(store_path.to_string());
+        let metadata = std::fs::symlink_metadata(&physical_path)
+            .map_err(|error| Error::Store(format!("adoption source {}: {error}", physical_path.display())))?;
+        if metadata.file_type().is_symlink() {
+            return Err(Error::Store(format!(
+                "adoption source root must not be a symlink: {}",
+                physical_path.display()
+            )));
+        }
+        let node = ingest_path::<_, _, _, &[u8]>(
+            self.blob_service.clone(),
+            self.directory_service.clone(),
+            &physical_path,
+            None,
+        )
+        .await
+        .map_err(|error| Error::Store(format!("adoption ingest {}: {error}", physical_path.display())))?;
+        let renderer = SimpleRenderer::new(self.blob_service.clone(), self.directory_service.clone());
+        let (nar_size, nar_sha256) = renderer
+            .calculate_nar(&node)
+            .await
+            .map_err(|error| Error::Store(format!("adoption NAR calculation: {error}")))?;
+        let path_info = signed_adoption_path_info(store_path.clone(), node.clone(), nar_size, nar_sha256, signing_key);
+        self.persist_and_export_signed_output(PersistOutputRequest {
+            output_name,
+            output_path: &store_path,
+            path_info,
+            final_node: node,
+            provenance: provenance.cloned(),
+            is_root: true,
+            root_source: Some(GcRootSource::Build),
+        })
+        .await
+    }
+
     /// Persist a signed PathInfo and export it to disk when needed.
     ///
     /// StoreHandle refuses to persist unsigned PathInfos. That keeps the
@@ -2710,6 +2774,30 @@ fn compute_pathinfo_fingerprint(path_info: &PathInfo) -> String {
     let store_path_ref: StorePathRef = path_info.store_path.as_ref();
     let references = path_info.references.iter().map(|reference| reference.as_ref()).collect::<Vec<_>>();
     fingerprint(&store_path_ref, &path_info.nar_sha256, path_info.nar_size, references.iter())
+}
+
+fn signed_adoption_path_info(
+    store_path: StorePath<String>,
+    node: Node,
+    nar_size: u64,
+    nar_sha256: [u8; NAR_SHA256_BYTES],
+    signing_key: &SigningKey<ed25519_dalek::SigningKey>,
+) -> PathInfo {
+    let mut path_info = PathInfo {
+        store_path,
+        node,
+        references: Vec::new(),
+        nar_size,
+        nar_sha256,
+        signatures: Vec::new(),
+        deriver: None,
+        ca: None,
+    };
+    let path_info_fingerprint = compute_pathinfo_fingerprint(&path_info);
+    path_info.signatures.push(signing_key.sign(path_info_fingerprint.as_bytes()).to_owned());
+    assert_eq!(path_info.signatures.len(), 1);
+    debug_assert!(!path_info_fingerprint.is_empty());
+    path_info
 }
 
 async fn probe_remote_delta_capability(
@@ -3609,6 +3697,55 @@ mod tests {
         let cached = handle.check_cache(&drv_path, &derivation, false, None).await.unwrap();
         let outputs = cached.expect("CA mapping with matching custom prefix should cache-hit");
         assert_eq!(outputs.get("out").unwrap().store_path, output_path);
+    }
+
+    #[tokio::test]
+    async fn verified_local_output_adoption_ingests_signs_and_persists() {
+        const ADOPTION_DIGEST_BYTE: u8 = 31;
+        const ADOPTION_KEY_BYTE: u8 = 41;
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let store_path = test_output("adopted-provider", ADOPTION_DIGEST_BYTE);
+        let physical_path = state_dir.path().join(store_path.to_string());
+        std::fs::create_dir(&physical_path).unwrap();
+        std::fs::write(physical_path.join("provider.txt"), b"verified-provider").unwrap();
+        let logical_path = store_path.to_absolute_path();
+        let signing_key = SigningKey::new(
+            "adoption-test-1".to_string(),
+            ed25519_dalek::SigningKey::from_bytes(&[ADOPTION_KEY_BYTE; NAR_SHA256_BYTES]),
+        );
+
+        let adopted = handle.adopt_verified_local_output(&logical_path, "out", &signing_key, None).await.unwrap();
+        let stored = handle.pathinfo_service.get(*store_path.digest()).await.unwrap().unwrap();
+
+        assert_eq!(adopted, stored);
+        assert_eq!(adopted.store_path, store_path);
+        assert_eq!(adopted.signatures.len(), 1);
+        assert!(crate::artifact_attestation_file_path(state_dir.path(), "/nix/store", &store_path).is_file());
+    }
+
+    #[tokio::test]
+    async fn verified_local_output_adoption_rejects_a_missing_physical_path() {
+        const MISSING_DIGEST_BYTE: u8 = 32;
+        const ADOPTION_KEY_BYTE: u8 = 42;
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let store_path = test_output("missing-provider", MISSING_DIGEST_BYTE);
+        let logical_path = store_path.to_absolute_path();
+        let signing_key = SigningKey::new(
+            "adoption-test-2".to_string(),
+            ed25519_dalek::SigningKey::from_bytes(&[ADOPTION_KEY_BYTE; NAR_SHA256_BYTES]),
+        );
+
+        let error = handle
+            .adopt_verified_local_output(&logical_path, "out", &signing_key, None)
+            .await
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("adoption source"));
+        assert!(error.contains("missing-provider"));
+        assert!(handle.pathinfo_service.get(*store_path.digest()).await.unwrap().is_none());
     }
 
     #[tokio::test]

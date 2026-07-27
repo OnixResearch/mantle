@@ -1,0 +1,15 @@
+54523f402af2b2dc7b7d8dc38dee4002850d716d20ff926fe8b4bc65fd9701ab  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/driver.log.zst
+336d9108af01db0707dfb8dfe9f13947d7024bd3bbfcb1e08ff87de98dd52d3b  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/driver.sh
+93c5e8de72e3d893aa84a2d670060809d944cac9076e9a0cf0271d5411950e8c  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/mrustc-first-stage-build.json
+f3585f873527fc0f687d3b41cb7ddc9a652d555e05bbb9ca6fb49758f2bcb935  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/mrustc-first-stage-build.log.zst
+417a886acf1ec23d2d09269594b88c477e6413eccd7a9cf5410a44dd39f4125c  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/mrustc-first-stage-plan.json
+42bb2d5484892827e0cc58b53622417731afe655d68f104a2cd745f783198fd5  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/mrustc-first-stage-provider-receipt.json
+8346ba9bf26cae329309a313bab5f6faee563dad57d20d49c9ec27364e041bc7  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/rust-1.91.1-stage-build.json
+98f2ca603c714d2948a5b148620e001c9724363d18fb0b382b78e53e459bb407  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/rust-1.91.1-stage-build.log.zst
+67607523eaee906a05ba2ec99b3d6c7e081c7b5477b1204621261ca518900b0d  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/rust-1.91.1-stage-plan.json
+14732e7cc8d83efa3853660132dc0fbaf702e3943157590abcb71996a9f670f0  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/rust-1.91.1-stage-provider-receipt.json
+9b013d09ff6f865de1d5a9e7bd5788e3a990aa5194651c5f90b2a01a89c5fb3b  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/rust-1.91.1-stage-script.sh
+8d66fb7239f064cc5cabe5752eadfb47162034f8e7ae11c50897cf976c2fd1c1  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/rust-1.92.0-stage-build.log.zst
+f201c7a00b71a4eb58f9531339f907e5f5ffe438362c5619726cc8b3a6a385d4  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/rust-1.92.0-stage-plan.json
+a568dc17931db24b4de621e928c0b30a9dea255ac58853e77d4c06f6c4f9819d  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/rust-1.92.0-stage-script.sh
+50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v13-rust-1.92-time-piece-failure-2026-07-26/status.txt
