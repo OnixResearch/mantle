@@ -60,6 +60,14 @@ An initial committed-tree run passed before V3 was checked. After the task and e
 
 The final gate stderr files are empty.
 
+## Accepted-spec synchronization
+
+Pueue task `1248` ran the dry-run. Pueue task `1250` executed the sync with no reasons and receipt hash `b7d7e832fd5562ab063ed22cca168bbe861247ad6a1d42da83cd404ab50c4367`.
+
+Inspection confirmed that `r[bootstrap_inventory.full_source_rust_provider_binding]` and `r[rust_package_planning.full_source_rust_provider_binding]` now exist in the accepted specs with the reviewed scenarios. The sync receipts and empty stderr files are preserved in this evidence directory.
+
+Post-sync pueue tasks `1258` through `1261` reported `valid: true`, 37 specs validated, and proposal/design/tasks verdicts `PASS`. The tasks packet still has seven completed tasks and zero remaining tasks. The gate receipt hashes stayed `b0fe5af9d7084e1a8920682a1dd57254ddf79fa4c84ad7f2c4fba8b7da4473ea`, `0aa8b931cda78f5286d6ca784aadd2ecc82c2fd220f439f72da4165a0a76d01a`, and `80e859e9196d6bf05905b85b0e235ef900ac6b3d002903ea620a5ea8be50166e`.
+
 ## Next action
 
-Commit the completed validation packet. Then sync the accepted specification and archive this change before work starts on the StageX successor.
+Commit the synchronized accepted specs and archive this change before work starts on the StageX successor.

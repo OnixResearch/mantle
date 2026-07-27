@@ -1,0 +1,137 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./cairn/changes/bind-full-source-rust-provider/specs/bootstrap-inventory/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./cairn/changes/bind-full-source-rust-provider/specs/bootstrap-inventory/spec.md"
+    },
+    {
+      "description": "merge delta spec into main specs: ./cairn/changes/bind-full-source-rust-provider/specs/rust-package-planning/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./cairn/changes/bind-full-source-rust-provider/specs/rust-package-planning/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "bind-full-source-rust-provider",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "dc9212bec35f4a33a62089c5f89c37fbe9bce2936c644b225433344f267fb24f",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "31311ed59859b17aa3da30518cfd4053edafa0443ca657459c44956a08495ac4",
+    "receipt_hash": "aecfb24f277e5f8244fe54e3c553c236831818e41a883651fcf80d580107339c",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./cairn/changes/bind-full-source-rust-provider/specs/bootstrap-inventory/spec.md",
+    "./cairn/changes/bind-full-source-rust-provider/specs/rust-package-planning/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "a75be432b05a5fc15c09548be4afe8377544c373e80c1661630de14d22553f39",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "800509044352dd0ff06c17536f19513e3f7f36d5abbc6f7308f7898921daf578",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "5914b1fe8426c66c32254b6e51de4804e0647b2b18a83e8b70841332a19ec015",
+        "destination": "cairn/specs/bootstrap-inventory/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "2d8099317c0684c5247867e7ac5471c6363a7156812e725fa0be28b7f2793584",
+        "operations": [
+          {
+            "block_hash": "7550215a7e9cc8d8a497ad9c38b9e70703e7e1abe7b172a114c296bcd980e06c",
+            "heading": "### Requirement: Full-source native provider binds the Rust bootstrap",
+            "kind": "added",
+            "requirement_id": "bootstrap_inventory.full_source_rust_provider_binding"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "bootstrap_inventory.full_source_rust_provider_binding",
+            "state": "applied"
+          }
+        ],
+        "source": "cairn/changes/bind-full-source-rust-provider/specs/bootstrap-inventory/spec.md"
+      },
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "24ca003e61cd9a55dbd105c5cb8b9d265cd918ae3693f429fd4fa8c4de73d65c",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "d97fff21ee8cb936eb5d0e0ff04abfa1571202d4493eda5f6406144bcb442e3e",
+        "destination": "cairn/specs/rust-package-planning/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "72e3dc693a0cfe9846c8a2212dc5028915c902c69830dfc72fe6c6d3ae0d846a",
+        "operations": [
+          {
+            "block_hash": "b6ebec16f1fbd3b58ff25d0c6d3cfe5ed02872df4bd3958323a9a44a64b010fb",
+            "heading": "### Requirement: Full-source Rust provider closure binding",
+            "kind": "added",
+            "requirement_id": "rust_package_planning.full_source_rust_provider_binding"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "rust_package_planning.full_source_rust_provider_binding",
+            "state": "applied"
+          }
+        ],
+        "source": "cairn/changes/bind-full-source-rust-provider/specs/rust-package-planning/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "2d8099317c0684c5247867e7ac5471c6363a7156812e725fa0be28b7f2793584",
+          "exists": true,
+          "path": "./cairn/specs/bootstrap-inventory/spec.md"
+        },
+        {
+          "content_hash": "72e3dc693a0cfe9846c8a2212dc5028915c902c69830dfc72fe6c6d3ae0d846a",
+          "exists": true,
+          "path": "./cairn/specs/rust-package-planning/spec.md"
+        }
+      ],
+      "manifest_hash": "9fb4a33874ffe4e578936e99dd55c91097171a130b0e253aab36b369809451e8"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "800509044352dd0ff06c17536f19513e3f7f36d5abbc6f7308f7898921daf578",
+          "exists": true,
+          "path": "./cairn/specs/bootstrap-inventory/spec.md"
+        },
+        {
+          "content_hash": "24ca003e61cd9a55dbd105c5cb8b9d265cd918ae3693f429fd4fa8c4de73d65c",
+          "exists": true,
+          "path": "./cairn/specs/rust-package-planning/spec.md"
+        }
+      ],
+      "manifest_hash": "c33b7aceca35cd6bbc18679f497650d9278765b7911a2f2d784f7be6f1913b41"
+    },
+    "kind": "sync",
+    "manifest_hash": "d6fb97ffe1cd5a6806ad2aea48328355ab9fd12687427cf55804530724f15253"
+  },
+  "plan_hash": "180c165a1d1c9c078d4fff41be13dd3b0c3b2b05bef962a309166c5793e8c7cf",
+  "policy": "mantle-default",
+  "policy_hash": "31311ed59859b17aa3da30518cfd4053edafa0443ca657459c44956a08495ac4",
+  "reasons": [],
+  "receipt_hash": "b7d7e832fd5562ab063ed22cca168bbe861247ad6a1d42da83cd404ab50c4367"
+}
