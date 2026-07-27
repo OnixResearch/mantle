@@ -47,6 +47,19 @@ The focused implementation checks pass. The source-pin script also passes when i
 
 Mantle full-source bootstrap implementation.
 
+## Committed-tree Cairn receipts
+
+Implementation commit: `9e939c26`.
+
+An initial committed-tree run passed before V3 was checked. After the task and evidence update, final pueue tasks `1232` through `1235` ran the four commands again:
+
+- Cairn validation: `valid: true`, `issues: []`, four active changes and 37 specs validated. Full receipt: `cairn-validate-final-2026-07-27.json`.
+- Proposal gate: `PASS`, receipt hash `b0fe5af9d7084e1a8920682a1dd57254ddf79fa4c84ad7f2c4fba8b7da4473ea`.
+- Design gate: `PASS`, receipt hash `0aa8b931cda78f5286d6ca784aadd2ecc82c2fd220f439f72da4165a0a76d01a`.
+- Tasks gate: `PASS`, seven tasks done and zero tasks remaining, receipt hash `80e859e9196d6bf05905b85b0e235ef900ac6b3d002903ea620a5ea8be50166e`.
+
+The final gate stderr files are empty.
+
 ## Next action
 
-Complete the task boxes, commit the implementation, then run Cairn validation and all three Cairn gates from the committed state.
+Commit the completed validation packet. Then sync the accepted specification and archive this change before work starts on the StageX successor.
