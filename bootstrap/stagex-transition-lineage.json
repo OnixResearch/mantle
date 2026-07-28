@@ -569,6 +569,51 @@
       "id": "gnu-patch-smoke",
       "name": "GNU patch protected positive smoke output",
       "producing_tool_id": "gnu-patch-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "dd10648de513f76a1ecdbfa23cc88953f8c6e46848311a6372de7498aed43c6e"
+      },
+      "id": "gzip-makecrc",
+      "name": "source-built gzip CRC generator",
+      "producing_tool_id": "gzip-generator-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "19a3f07c4b071fe898927d1da2c3b64d37e02b0e8cf309d2a9fc4d70ac9d8fa1"
+      },
+      "id": "gzip-crc-table",
+      "name": "generated gzip CRC table",
+      "producing_tool_id": "gzip-generator-run-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d2939461715a694222c1a612c0908754e599eb2d268fe012c525845367eff04a"
+      },
+      "id": "gzip-1.2.4",
+      "name": "source-built gzip 1.2.4",
+      "producing_tool_id": "gzip-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d2939461715a694222c1a612c0908754e599eb2d268fe012c525845367eff04a"
+      },
+      "id": "gunzip-1.2.4",
+      "name": "source-built gunzip 1.2.4 alias",
+      "producing_tool_id": "gzip-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "78abaccbae9efa7039ff82d80215d2fbd3c4cd0221dadd85dd9df731f15d8751"
+      },
+      "id": "gzip-smoke",
+      "name": "gzip protected roundtrip smoke output",
+      "producing_tool_id": "gzip-smoke-exec"
     }
   ],
   "patches": [
@@ -646,7 +691,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "7ec4786f81326dc6633479ff78ed53cfd18eb5086ae7374113fdef4921f78751"
+        "hex_value": "6d6e2f0ae906c3a421b90e220fed77e6f90b556cd7982731352ce28f39f5a796"
       },
       "id": "stage0-source-bundle",
       "name": "authenticated offline full-source closure",
@@ -804,6 +849,24 @@
       "id": "gnu-patch-2.5.9-source",
       "name": "GNU patch 2.5.9 fixed-output source",
       "provenance": "source bundle record fixed-url-08fc9bbfa8cbf77e5bbfca6cffcfe7116d4927854bfc2b9352b912a00e017545"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "de8516b8bfc78a91f5d37837ff70d6926f4b03cf68924ae7ef6ed602f7f316fd"
+      },
+      "id": "gzip-1.2.4-source",
+      "name": "gzip 1.2.4 fixed-output source",
+      "provenance": "source bundle record fixed-url-28390b124a4e4a0426e370860163351efc23ff1d3d3b6be84a5609868b00f45d"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "48240f8bb743e9fd202f7bc2d98367607f853d2ed7483d484f50892bc69d9ef1"
+      },
+      "id": "gzip-makecrc-source",
+      "name": "bounded gzip CRC generator source",
+      "provenance": "bootstrap/seeds/gzip-makecrc.c"
     }
   ],
   "stage_graph": [
@@ -898,6 +961,14 @@
     {
       "from_node_id": "seed",
       "to_node_id": "gnu-patch-2.5.9-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "gzip-1.2.4-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "gzip-makecrc-source"
     }
   ],
   "transition_tools": [
@@ -1297,6 +1368,80 @@
       "name": "GNU patch 2.5.9 applying a positive patch and rejecting malformed input",
       "output_artifact_ids": [
         "gnu-patch-smoke"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39"
+      },
+      "id": "gzip-generator-build-exec",
+      "input_artifact_ids": [
+        "tinycc-0.9.27",
+        "tinycc27-libc",
+        "tinycc-crt1",
+        "tinycc-libtcc1",
+        "gnu-patch-smoke"
+      ],
+      "name": "TinyCC 0.9.27 materializing the bounded gzip CRC generator",
+      "output_artifact_ids": [
+        "gzip-makecrc"
+      ],
+      "source_artifact_ids": [
+        "gzip-makecrc-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "dd10648de513f76a1ecdbfa23cc88953f8c6e46848311a6372de7498aed43c6e"
+      },
+      "id": "gzip-generator-run-exec",
+      "input_artifact_ids": [
+        "gzip-makecrc"
+      ],
+      "name": "source-built gzip CRC generator materializing the checked table",
+      "output_artifact_ids": [
+        "gzip-crc-table"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39"
+      },
+      "id": "gzip-build-exec",
+      "input_artifact_ids": [
+        "tinycc-0.9.27",
+        "tinycc27-libc",
+        "tinycc-crt1",
+        "tinycc-libtcc1",
+        "gzip-crc-table"
+      ],
+      "name": "TinyCC 0.9.27 materializing gzip and gunzip 1.2.4",
+      "output_artifact_ids": [
+        "gzip-1.2.4",
+        "gunzip-1.2.4"
+      ],
+      "source_artifact_ids": [
+        "gzip-1.2.4-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d2939461715a694222c1a612c0908754e599eb2d268fe012c525845367eff04a"
+      },
+      "id": "gzip-smoke-exec",
+      "input_artifact_ids": [
+        "gzip-1.2.4",
+        "gunzip-1.2.4"
+      ],
+      "name": "gzip and gunzip executing a roundtrip and rejecting malformed input",
+      "output_artifact_ids": [
+        "gzip-smoke"
       ],
       "source_artifact_ids": []
     }

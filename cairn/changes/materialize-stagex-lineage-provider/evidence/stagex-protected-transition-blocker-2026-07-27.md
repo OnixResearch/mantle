@@ -1,12 +1,12 @@
 # StageX protected-transition blocker — 2026-07-27
 
-> Status update: superseded through GNU patch 2.5.9 by
-> `protected-transition-v25-gnu-patch-2026-07-28/`. Mantle now completes
-> protected full Stage0, source-built `mes-m2`, NYACC regeneration, Mes runtime
-> archives, TinyCC 0.9.26, TinyCC 0.9.27, GNU Make 3.82, and GNU patch 2.5.9.
-> The current run recorded 554 allowed events, zero denied events, and zero
-> fallback. The remaining blocker starts at authenticated gzip 1.2.4 and covers
-> the later native toolchain plus normalized-provider construction and admission.
+> Status update: superseded through gzip 1.2.4 by
+> `protected-transition-v26-gzip-2026-07-28/`. Mantle now completes protected
+> full Stage0, source-built `mes-m2`, NYACC regeneration, Mes runtime archives,
+> TinyCC 0.9.26, TinyCC 0.9.27, GNU Make 3.82, GNU patch 2.5.9, and gzip 1.2.4.
+> The current run recorded 575 allowed events, zero denied events, and zero
+> fallback. The remaining blocker starts at authenticated GNU tar 1.12 and
+> covers the later native toolchain plus normalized-provider construction and admission.
 
 ## Question
 
@@ -17,7 +17,7 @@ Can the current source-built native artifacts become a complete StageX lineage p
 ### Current receipt and manifest state
 
 - `bootstrap/evidence/stagex-lineage-provider-receipt.json` has `lineage_receipt_status = scaffold-only` and placeholder digests.
-- `bootstrap/stagex-transition-lineage.{ncl,json}` now binds the protected seed-to-GNU-patch-2.5.9 manifest and exact compatibility patches.
+- `bootstrap/stagex-transition-lineage.{ncl,json}` now binds the protected seed-to-gzip-1.2.4 manifest and exact compatibility patches.
 - `src/main.rs::cmd_bootstrap_stagex_lineage` validates a manifest, then returns `STAGEX_LINEAGE_PROVIDER_NOT_MATERIALIZED`.
 - The retained v6 evidence has a complete 132-event seed-to-full-Stage0 protected-exec audit.
 - No exported `hex0-seed` binary exists under `/home/brittonr/.cache/mantle-full-source-20260718`.
@@ -66,19 +66,19 @@ The current artifacts cannot meet the accepted requirement. Their construction s
 
 ## Exact completion blocker
 
-The protected transition now has checked seed bytes, authenticated direct source records, a typed 40-stage plan, exact executable identities, full Stage0 SHA-256 interoperability checks, and a 554-event observed audit through GNU patch 2.5.9.
+The protected transition now has checked seed bytes, authenticated direct source records, a typed 44-stage plan, exact executable identities, full Stage0 SHA-256 interoperability checks, and a 575-event observed audit through gzip 1.2.4.
 
-The current protected source authority has no gzip 1.2.4 source record. Therefore, the next canonical tool stage is not yet bound into this transition manifest.
+The current protected source authority has no GNU tar 1.12 source record. Therefore, the next canonical tool stage is not yet bound into this transition manifest.
 
 A complete provider run still needs all of these mechanisms and artifacts:
 
-1. Export and bind authenticated gzip 1.2.4 source, then execute its TinyCC source-build recipe under exact protected authority.
+1. Export and bind authenticated GNU tar 1.12 source, then execute its TinyCC source-build recipe under exact protected authority.
 2. Continue through the source-built shell, conventional GNU tools, musl, GCC, binutils, and completed native-provider stages without ambient execution.
 3. Retain per-stage reports for every later exact executable, source stage, input, output, and BLAKE3 value.
 4. Preserve a complete protected-exec audit through normalized-provider runtime validation.
 5. Independently validate and create-new publish the provider and complete receipt.
 
-No protected gzip 1.2.4 stage, output identity, or executable authorization exists in the current graph. Replacing only the scaffold JSON would create false evidence. Reusing the existing full-source provider would relabel host-assisted effects as StageX lineage.
+No protected GNU tar 1.12 stage, output identity, or executable authorization exists in the current graph. Replacing only the scaffold JSON would create false evidence. Reusing the existing full-source provider would relabel host-assisted effects as StageX lineage.
 
 ## Owner
 
@@ -86,7 +86,7 @@ Mantle StageX lineage-provider implementation.
 
 ## Next action
 
-Export and bind gzip 1.2.4 as authenticated offline source. Then continue the protected runner from GNU patch 2.5.9 with bounded Rust orchestration and no host shell or sandbox tools.
+Export and bind GNU tar 1.12 as authenticated offline source. Then continue the protected runner from gzip 1.2.4 with bounded Rust orchestration and no host shell or sandbox tools.
 
 I1 through V3 remain unchecked. The fixed-point and parity-promotion successor changes remain blocked by this change.
 

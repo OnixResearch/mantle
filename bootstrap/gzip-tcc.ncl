@@ -11,6 +11,8 @@ let crunch = import "lib.ncl" in
 
 let stage0 = import "stage0-posix.ncl" in
 let tcc = import "tinycc.ncl" in
+# Preserve the canonical StageX order even though gzip does not invoke patch.
+let patch = import "patch-tcc.ncl" in
 
 let gzip_src = crunch.fetchTarball {
   # provenance: fosslinux/live-bootstrap parts.rst labels this point `gzip 1.2.5`,
@@ -130,5 +132,5 @@ MKPATCH
       $BB cmp /tmp/gzip-smoke.txt /tmp/gzip-smoke.out >/dev/null || { echo "ERROR: gzip roundtrip mismatch" >&2; exit 1; }
     "%,
   ],
-  inputs = [stage0, tcc, gzip_src],
+  inputs = [stage0, tcc, patch, gzip_src],
 } | crunch.Derivation

@@ -142,6 +142,8 @@ mod source_toolchain_closure;
 #[allow(dead_code)]
 mod stagex_gnu_patch;
 #[allow(dead_code)]
+mod stagex_gzip;
+#[allow(dead_code)]
 mod stagex_make;
 #[allow(dead_code)]
 mod stagex_mes;
