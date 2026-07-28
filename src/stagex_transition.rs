@@ -64,6 +64,9 @@ pub(crate) const SED_SMOKE_STAGE_ID: &str = "sed-smoke";
 pub(crate) const BZIP2_REWRITE_STAGE_ID: &str = "bzip2-source-rewrite";
 pub(crate) const BZIP2_BUILD_STAGE_ID: &str = "bzip2-materialization";
 pub(crate) const BZIP2_SMOKE_STAGE_ID: &str = "bzip2-smoke";
+pub(crate) const COREUTILS_PATCH_STAGE_ID: &str = "coreutils-source-patch";
+pub(crate) const COREUTILS_BUILD_STAGE_ID: &str = "coreutils-materialization";
+pub(crate) const COREUTILS_SMOKE_STAGE_ID: &str = "coreutils-smoke";
 pub(crate) const HEX0_SEED_BLAKE3: &str = "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80";
 pub(crate) const HEX0_SOURCE_BLAKE3: &str = "0fb23576a10b41df29c165e39514f18c411da96ae71873a6a2e2f0b1d94de614";
 pub(crate) const KAEM_SOURCE_BLAKE3: &str = "5a56b4164dca4d1e03ba35bc8ce4b418a0de2baf1cb9e6a0912607e26532d30d";
@@ -89,7 +92,7 @@ const MES_OUTPUT_MAX_MIB: u64 = 64;
 const MES_OUTPUT_MAX_BYTES: u64 = MES_OUTPUT_MAX_MIB * MIB_BYTES;
 const STAGE_JOB_COUNT: u32 = 1;
 const TRANSITION_STAGE_COUNT_MAX: u32 = 3;
-const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 51;
+const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 54;
 const TINYCC_LINK_CHILD_EVENT_COUNT: usize = 5;
 const MAKE_RECIPE_CHILD_EVENT_COUNT: usize = 1;
 const GZIP_GZIP_SMOKE_EVENT_COUNT: usize = 2;
@@ -170,6 +173,10 @@ pub(crate) struct StagexTransitionReport {
     pub bzip2_sources: Option<crate::stagex_bzip2::Bzip2SourceMaterializationReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bzip2_runtime: Option<crate::stagex_bzip2::Bzip2InventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coreutils_sources: Option<crate::stagex_coreutils::CoreutilsSourceMaterializationReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coreutils_runtime: Option<crate::stagex_coreutils::CoreutilsInventoryReport>,
     pub fallback_events: Vec<String>,
     pub promotions: Vec<OutputPromotionRecord>,
     pub protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
@@ -400,6 +407,14 @@ pub(crate) fn materialize_protected_transition(
                 digest_hex: crate::stagex_bzip2::BZIP2_FINAL_BLAKE3.to_string(),
             },
         ]);
+        for (name, digest) in coreutils_smoke_executables() {
+            planned.push(PlannedExecutable {
+                authorization_id: format!("exec:coreutils-smoke:{name}"),
+                source_stage_id: COREUTILS_BUILD_STAGE_ID.to_string(),
+                path: request.scratch_dir.join(format!("coreutils-stage/runtime/output/bin/{name}")),
+                digest_hex: digest.to_string(),
+            });
+        }
         planned
     } else {
         Vec::new()
@@ -749,6 +764,40 @@ pub(crate) fn materialize_protected_transition(
         _ => unreachable!("bzip2 requires source bundle and GNU sed together"),
     };
 
+    let (coreutils_sources, coreutils_runtime) = match (request.source_bundle_path, bzip2_runtime.as_ref()) {
+        (Some(source_bundle_path), Some(_)) => {
+            let stage = request.scratch_dir.join("coreutils-stage");
+            fs::create_dir(&stage)
+                .map_err(|source| io_error("creating create-new protected coreutils stage root", source))?;
+            let sources = crate::stagex_coreutils::materialize_authenticated_coreutils_source(
+                source_bundle_path,
+                &manifest_authority.source_bundle_manifest_blake3,
+                &stage.join("sources"),
+            )
+            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+            let result = crate::stagex_coreutils::derive_coreutils_inventory(
+                crate::stagex_coreutils::CoreutilsInventoryRequest {
+                    source_root: &sources.output_path,
+                    tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
+                    patch_root: &request.scratch_dir.join("gnu-patch-stage/runtime/output"),
+                    scratch_dir: &stage.join("runtime"),
+                    protected_exec_enforced: true,
+                },
+            );
+            match result {
+                Ok(report) => (Some(sources), Some(report)),
+                Err(error) => {
+                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                    let events = supervisor.audit_events();
+                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
+                }
+            }
+        }
+        (None, None) => (None, None),
+        _ => unreachable!("coreutils requires source bundle and bzip2 together"),
+    };
+
     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
     let protected_exec_events = supervisor.audit_events();
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
@@ -766,6 +815,7 @@ pub(crate) fn materialize_protected_transition(
             tar_runtime: tar_runtime.as_ref(),
             sed_runtime: sed_runtime.as_ref(),
             bzip2_runtime: bzip2_runtime.as_ref(),
+            coreutils_runtime: coreutils_runtime.as_ref(),
         },
         &protected_exec_events,
     )?;
@@ -799,6 +849,8 @@ pub(crate) fn materialize_protected_transition(
         sed_runtime,
         bzip2_sources,
         bzip2_runtime,
+        coreutils_sources,
+        coreutils_runtime,
         fallback_events: Vec::new(),
         promotions: vec![hex0_promotion, kaem_promotion],
         protected_exec_events,
@@ -901,6 +953,9 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     for (artifact_id, digest_blake3) in crate::stagex_bzip2::source_artifact_digests() {
         require_manifest_digest(&sources, artifact_id, digest_blake3)?;
     }
+    for (artifact_id, digest_blake3) in crate::stagex_coreutils::source_artifact_digests() {
+        require_manifest_digest(&sources, artifact_id, digest_blake3)?;
+    }
     let generated: BTreeMap<&str, &str> = manifest
         .generated_artifacts
         .iter()
@@ -949,6 +1004,14 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
         crate::stagex_bzip2::BZIP2_CONFIGURED_SOURCE_BLAKE3,
     )?;
     for expected in crate::stagex_bzip2::BZIP2_EXPECTED_OUTPUTS {
+        require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
+    }
+    require_manifest_digest(
+        &generated,
+        "coreutils-configured-source",
+        crate::stagex_coreutils::COREUTILS_CONFIGURED_SOURCE_BLAKE3,
+    )?;
+    for expected in crate::stagex_coreutils::COREUTILS_EXPECTED_OUTPUTS {
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
     let patches: BTreeMap<&str, &str> =
@@ -1106,6 +1169,8 @@ fn build_transition_plan(
         stages.extend(sed_stage_plans(&tinycc27_root, &sed_root));
         let bzip2_root = staged.seed.parent().expect("staged seed has parent").join("bzip2-stage/runtime");
         stages.extend(bzip2_stage_plans(&tinycc27_root, &sed_root, &bzip2_root));
+        let coreutils_root = staged.seed.parent().expect("staged seed has parent").join("coreutils-stage/runtime");
+        stages.extend(coreutils_stage_plans(&tinycc27_root, &patch_root, &coreutils_root));
     }
     let stage_count_max = if include_stage0_mini {
         TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX
@@ -1585,6 +1650,105 @@ fn bzip2_stage_plans(tinycc27_root: &Path, sed_root: &Path, bzip2_root: &Path) -
                 crate::stagex_bzip2::BZIP2_FINAL_BLAKE3,
             )],
         ),
+    ]
+}
+
+fn coreutils_stage_plans(tinycc27_root: &Path, patch_root: &Path, coreutils_root: &Path) -> Vec<StagexStagePlan> {
+    let tinycc27 = tinycc27_root.join("output/bin/tcc");
+    let patch = patch_root.join("output/bin/patch");
+    let binary_root = coreutils_root.join("output/bin");
+    let build_outputs = crate::stagex_coreutils::COREUTILS_EXPECTED_OUTPUTS
+        .iter()
+        .filter(|output| output.artifact_id != "coreutils-smoke")
+        .map(|output| output.artifact_id.to_string())
+        .collect::<Vec<_>>();
+    let smoke_authorizations = coreutils_smoke_executables()
+        .into_iter()
+        .map(|(name, digest)| {
+            authorization(
+                &format!("exec:coreutils-smoke:{name}"),
+                &binary_root.join(name),
+                COREUTILS_BUILD_STAGE_ID,
+                digest,
+            )
+        })
+        .collect::<Vec<_>>();
+    vec![
+        mes_stage_plan(
+            COREUTILS_PATCH_STAGE_ID,
+            &[BZIP2_BUILD_STAGE_ID, BZIP2_SMOKE_STAGE_ID, GNU_PATCH_BUILD_STAGE_ID],
+            &[
+                "coreutils-5.0-source",
+                "coreutils-5.0-config-header-source",
+                "coreutils-modechange-patch-source",
+                "coreutils-mbstate-patch-source",
+                "coreutils-ls-strcmp-patch-source",
+                "coreutils-touch-getdate-patch-source",
+                "coreutils-tac-uint64-patch-source",
+                "coreutils-expr-strcmp-patch-source",
+                "coreutils-sort-locale-patch-source",
+                "coreutils-hash-tcc-patch-source",
+            ],
+            &["gnu-patch-2.5.9", "bzip2-smoke"],
+            &["coreutils-configured-source".to_string()],
+            vec![authorization(
+                "exec:coreutils-source-patch:patch",
+                &patch,
+                GNU_PATCH_BUILD_STAGE_ID,
+                crate::stagex_gnu_patch::GNU_PATCH_FINAL_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            COREUTILS_BUILD_STAGE_ID,
+            &[
+                COREUTILS_PATCH_STAGE_ID,
+                TINYCC27_BUILD_STAGE_ID,
+                TINYCC27_RUNTIME_STAGE_ID,
+                TINYCC_RUNTIME_STAGE_ID,
+            ],
+            &[],
+            &[
+                "coreutils-configured-source",
+                "tinycc-0.9.27",
+                "tinycc27-libc",
+                "tinycc-crt1",
+                "tinycc-libtcc1",
+            ],
+            &build_outputs,
+            vec![authorization(
+                "exec:coreutils-materialization:tinycc27",
+                &tinycc27,
+                TINYCC27_BUILD_STAGE_ID,
+                crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            COREUTILS_SMOKE_STAGE_ID,
+            &[COREUTILS_BUILD_STAGE_ID],
+            &[],
+            &[
+                "coreutils-mkdir",
+                "coreutils-echo",
+                "coreutils-cp",
+                "coreutils-cat",
+                "coreutils-test",
+            ],
+            &[
+                "coreutils-smoke".to_string(),
+                "coreutils-negative-observation".to_string(),
+            ],
+            smoke_authorizations,
+        ),
+    ]
+}
+
+fn coreutils_smoke_executables() -> [(&'static str, &'static str); 5] {
+    [
+        ("mkdir", "b94fc26390ef29d55b71e608b800fa0451ff477b33c15ff3d2be3c8a2a06621b"),
+        ("echo", "3ce3cfec07fda35f97485b30fddd8a14f4cb04bd8427d2aa3acc4e94fd650a3f"),
+        ("cp", "8c11ead9af84f2371178ce892afbac6daa416c445f2575a2300b2b5ffadf17f3"),
+        ("cat", "3d9de9e7f81612a74e75312f22d038b665e69c5d9590662c293843e9711cf020"),
+        ("test", "87baf4f61820a2861bbb1a08b3bd9b4c7a5b8baed66ddb0e152d7a981ae27669"),
     ]
 }
 
@@ -2446,6 +2610,7 @@ struct TransitionAuditReports<'a> {
     tar_runtime: Option<&'a crate::stagex_tar::TarInventoryReport>,
     sed_runtime: Option<&'a crate::stagex_sed::SedInventoryReport>,
     bzip2_runtime: Option<&'a crate::stagex_bzip2::Bzip2InventoryReport>,
+    coreutils_runtime: Option<&'a crate::stagex_coreutils::CoreutilsInventoryReport>,
 }
 
 fn validate_transition_audit(
@@ -2465,6 +2630,7 @@ fn validate_transition_audit(
         tar_runtime,
         sed_runtime,
         bzip2_runtime,
+        coreutils_runtime,
     } = reports;
     let expected = transition_expected_audit_events(staged);
     if events.len() < EXPECTED_AUDIT_EVENT_COUNT {
@@ -2487,6 +2653,7 @@ fn validate_transition_audit(
             && tar_runtime.is_none()
             && sed_runtime.is_none()
             && bzip2_runtime.is_none()
+            && coreutils_runtime.is_none()
             && events.len() == EXPECTED_AUDIT_EVENT_COUNT
         {
             return Ok(());
@@ -2511,7 +2678,8 @@ fn validate_transition_audit(
     }
     validate_stage0_audit(staged, &stage0.mini, &stage0_events[..mini_event_count])?;
     let after_mini = &stage0_events[mini_event_count..];
-    let (before_bzip2, bzip2_events) = split_bzip2_audit_suffix(bzip2_runtime, after_mini)?;
+    let (before_coreutils, coreutils_events) = split_coreutils_audit_suffix(coreutils_runtime, after_mini)?;
+    let (before_bzip2, bzip2_events) = split_bzip2_audit_suffix(bzip2_runtime, before_coreutils)?;
     let (before_sed, sed_events) = split_sed_audit_suffix(sed_runtime, before_bzip2)?;
     let (before_tar, tar_events) = split_tar_audit_suffix(tar_runtime, before_sed)?;
     let (before_gzip, gzip_events) = split_gzip_audit_suffix(gzip_runtime, before_tar)?;
@@ -2607,12 +2775,42 @@ fn validate_transition_audit(
         }
     }
     match (bzip2_runtime, tinycc27_runtime, sed_runtime) {
-        (Some(bzip2), Some(tinycc27), Some(sed)) => validate_bzip2_audit(tinycc27, sed, bzip2, bzip2_events),
-        (None, _, _) if bzip2_events.is_empty() => Ok(()),
+        (Some(bzip2), Some(tinycc27), Some(sed)) => validate_bzip2_audit(tinycc27, sed, bzip2, bzip2_events)?,
+        (None, _, _) if bzip2_events.is_empty() => {}
+        _ => {
+            return Err(StagexTransitionError::Audit(
+                "bzip2 report or events exist without TinyCC 0.9.27 and GNU sed authority".to_string(),
+            ));
+        }
+    }
+    match (coreutils_runtime, tinycc27_runtime, gnu_patch_runtime, bzip2_runtime) {
+        (Some(coreutils), Some(tinycc27), Some(patch), Some(_)) => {
+            validate_coreutils_audit(tinycc27, patch, coreutils, coreutils_events)
+        }
+        (None, _, _, _) if coreutils_events.is_empty() => Ok(()),
         _ => Err(StagexTransitionError::Audit(
-            "bzip2 report or events exist without TinyCC 0.9.27 and GNU sed authority".to_string(),
+            "coreutils report or events exist without TinyCC 0.9.27, GNU patch, and bzip2 authority".to_string(),
         )),
     }
+}
+
+fn split_coreutils_audit_suffix<'a>(
+    report: Option<&crate::stagex_coreutils::CoreutilsInventoryReport>,
+    events: &'a [ProtectedSeccompAuditEvent],
+) -> Result<(&'a [ProtectedSeccompAuditEvent], &'a [ProtectedSeccompAuditEvent]), StagexTransitionError> {
+    let Some(report) = report else {
+        return Ok((events, &events[events.len()..]));
+    };
+    let event_count = coreutils_expected_event_count(report)?;
+    let start = events.len().checked_sub(event_count).ok_or_else(|| {
+        StagexTransitionError::Audit(format!(
+            "expected {event_count} trailing coreutils events, observed {}",
+            events.len()
+        ))
+    })?;
+    assert_eq!(events.len().saturating_sub(start), event_count);
+    assert!(event_count > 0);
+    Ok((&events[..start], &events[start..]))
 }
 
 fn split_bzip2_audit_suffix<'a>(
@@ -3290,6 +3488,124 @@ fn tinycc27_expected_event_count(
         .ok_or_else(|| StagexTransitionError::Audit("TinyCC 0.9.27 command count overflow".to_string()))?;
     usize::try_from(command_count)
         .map_err(|_| StagexTransitionError::Audit("TinyCC 0.9.27 command count does not fit usize".to_string()))
+}
+
+fn validate_coreutils_audit(
+    tinycc27: &crate::stagex_tinycc27::Tinycc27InventoryReport,
+    patch: &crate::stagex_gnu_patch::GnuPatchInventoryReport,
+    coreutils: &crate::stagex_coreutils::CoreutilsInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    let expected_count = coreutils_expected_event_count(coreutils)?;
+    if events.len() != expected_count {
+        return Err(StagexTransitionError::Audit(format!(
+            "coreutils protected audit expected {expected_count} events, observed {}",
+            events.len()
+        )));
+    }
+    let patch_end = usize::try_from(coreutils.patch_command_count).unwrap_or(usize::MAX);
+    let build_end = patch_end
+        .checked_add(usize::try_from(coreutils.build_command_count).unwrap_or(usize::MAX))
+        .ok_or_else(|| StagexTransitionError::Audit("coreutils build boundary overflow".to_string()))?;
+    let patch_path = gnu_patch_output_path(patch, "gnu-patch-2.5.9")?;
+    let tinycc27_path = tinycc27_output_path(tinycc27, "tinycc27-alias")?;
+    let smoke = coreutils_smoke_audit_authority(coreutils)?;
+    for (index, event) in events.iter().enumerate() {
+        let (path, digest, inventory_id) = if index < patch_end {
+            (
+                &patch_path,
+                crate::stagex_gnu_patch::GNU_PATCH_FINAL_BLAKE3,
+                "planned:gnu-patch-materialization:exec:gnu-patch-smoke:patch".to_string(),
+            )
+        } else if index < build_end {
+            (
+                &tinycc27_path,
+                crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
+                "planned:tinycc27-materialization:exec:tinycc27-smoke:tinycc27".to_string(),
+            )
+        } else {
+            let smoke_index = index.saturating_sub(build_end);
+            let (name, path, digest) = smoke.get(smoke_index).ok_or_else(|| {
+                StagexTransitionError::Audit(format!("undeclared coreutils smoke event index {smoke_index}"))
+            })?;
+            (path, digest.as_str(), format!("planned:coreutils-materialization:exec:coreutils-smoke:{name}"))
+        };
+        validate_coreutils_event(event, path, digest, &inventory_id)?;
+    }
+    assert_eq!(events.len(), expected_count);
+    assert!(patch_end < build_end);
+    Ok(())
+}
+
+fn coreutils_expected_event_count(
+    report: &crate::stagex_coreutils::CoreutilsInventoryReport,
+) -> Result<usize, StagexTransitionError> {
+    const EXPECTED_PATCH_COUNT: u32 = 8;
+    const EXPECTED_LIBRARY_COMPILE_COUNT: u32 = 96;
+    const EXPECTED_ARCHIVE_COUNT: u32 = 1;
+    const EXPECTED_UTILITY_COMPILE_COUNT: u32 = 34;
+    const EXPECTED_UTILITY_LINK_COUNT: u32 = 25;
+    const EXPECTED_BUILD_COUNT: u32 = 156;
+    const EXPECTED_SMOKE_COUNT: u32 = 6;
+    let counts_match = report.patch_command_count == EXPECTED_PATCH_COUNT
+        && report.library_compile_count == EXPECTED_LIBRARY_COMPILE_COUNT
+        && report.archive_command_count == EXPECTED_ARCHIVE_COUNT
+        && report.utility_source_compile_count == EXPECTED_UTILITY_COMPILE_COUNT
+        && report.utility_link_count == EXPECTED_UTILITY_LINK_COUNT
+        && report.build_command_count == EXPECTED_BUILD_COUNT
+        && report.smoke_command_count == EXPECTED_SMOKE_COUNT;
+    if !counts_match {
+        return Err(StagexTransitionError::Audit(
+            "coreutils report has substituted patch, compile, archive, link, build, or smoke counts".to_string(),
+        ));
+    }
+    let total = report
+        .patch_command_count
+        .checked_add(report.build_command_count)
+        .and_then(|count| count.checked_add(report.smoke_command_count))
+        .ok_or_else(|| StagexTransitionError::Audit("coreutils event count overflow".to_string()))?;
+    usize::try_from(total)
+        .map_err(|_| StagexTransitionError::Audit("coreutils event count does not fit usize".to_string()))
+}
+
+fn coreutils_smoke_audit_authority(
+    report: &crate::stagex_coreutils::CoreutilsInventoryReport,
+) -> Result<Vec<(&'static str, PathBuf, String)>, StagexTransitionError> {
+    let sequence = ["mkdir", "echo", "cp", "cat", "test", "cp"];
+    let mut authority = Vec::with_capacity(sequence.len());
+    for name in sequence {
+        let artifact_id = format!("coreutils-{name}");
+        let output = report.outputs.iter().find(|output| output.artifact_id == artifact_id).ok_or_else(|| {
+            StagexTransitionError::Audit(format!("coreutils report lacks smoke executable {artifact_id}"))
+        })?;
+        authority.push((name, output.path.clone(), output.digest_blake3.clone()));
+    }
+    assert_eq!(authority.len(), sequence.len());
+    assert!(authority.iter().all(|(_, path, _)| path.is_absolute()));
+    Ok(authority)
+}
+
+fn validate_coreutils_event(
+    event: &ProtectedSeccompAuditEvent,
+    expected_path: &Path,
+    expected_digest: &str,
+    expected_inventory_id: &str,
+) -> Result<(), StagexTransitionError> {
+    let valid = event.policy_decision == "allowed"
+        && event.executable_path == expected_path
+        && event.tracee_path == expected_path
+        && event.resolved_host_path == expected_path
+        && event.digest_hex == expected_digest
+        && event.inventory_entry_id.as_deref() == Some(expected_inventory_id);
+    if !valid {
+        return Err(StagexTransitionError::Audit(format!(
+            "coreutils event for {} did not match exact planned authority",
+            event.executable_path.display()
+        )));
+    }
+    assert_eq!(event.executable_path, expected_path);
+    assert_eq!(event.digest_hex, expected_digest);
+    Ok(())
 }
 
 fn validate_bzip2_audit(
@@ -4165,7 +4481,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
-    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "495b2e97a6095eaed6180c3359acac3333cc08eb62a14c6e70990af92fbc843c";
+    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "791bfb656c82a61550dce3418010e0d8674c28058cd4f271ff8bcf7412bed183";
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {
@@ -4286,6 +4602,55 @@ mod tests {
         let error = tinycc27_expected_event_count(&overflow).unwrap_err();
         assert!(error.to_string().contains("command count overflow"));
         assert!(!error.to_string().is_empty());
+    }
+
+    #[test]
+    fn coreutils_event_count_is_closed_and_rejects_substitution() {
+        const EXPECTED_EVENT_COUNT: usize = 170;
+        let report = crate::stagex_coreutils::CoreutilsInventoryReport {
+            format: "test",
+            configured_source_digest_blake3: "a".repeat(blake3::OUT_LEN * 2),
+            patch_command_count: 8,
+            library_compile_count: 96,
+            archive_command_count: 1,
+            utility_source_compile_count: 34,
+            utility_link_count: 25,
+            build_command_count: 156,
+            smoke_command_count: 6,
+            outputs: Vec::new(),
+            protected_exec_enforced: true,
+            fallback_events: Vec::new(),
+            non_claim: "test",
+        };
+        assert_eq!(coreutils_expected_event_count(&report).unwrap(), EXPECTED_EVENT_COUNT);
+        let mut substituted = report;
+        substituted.utility_link_count = 24;
+        assert!(coreutils_expected_event_count(&substituted).unwrap_err().to_string().contains("substituted"));
+    }
+
+    #[test]
+    fn coreutils_audit_event_rejects_denied_or_substituted_authority() {
+        let expected_path = PathBuf::from("/stagex/coreutils/cp");
+        let inventory_id = "planned:coreutils-materialization:exec:coreutils-smoke:cp";
+        let mut event = ProtectedSeccompAuditEvent {
+            pid: 1,
+            syscall: "execve".to_string(),
+            executable_path: expected_path.clone(),
+            tracee_path: expected_path.clone(),
+            resolved_host_path: expected_path.clone(),
+            digest_hex: "a".repeat(blake3::OUT_LEN * 2),
+            reason: "test allow".to_string(),
+            phase: "protected".to_string(),
+            inventory_entry_id: Some(inventory_id.to_string()),
+            policy_decision: "allowed".to_string(),
+        };
+        let expected_digest = event.digest_hex.clone();
+        validate_coreutils_event(&event, &expected_path, &expected_digest, inventory_id).unwrap();
+        event.policy_decision = "denied".to_string();
+        assert!(validate_coreutils_event(&event, &expected_path, &expected_digest, inventory_id).is_err());
+        event.policy_decision = "allowed".to_string();
+        event.digest_hex = "b".repeat(blake3::OUT_LEN * 2);
+        assert!(validate_coreutils_event(&event, &expected_path, &expected_digest, inventory_id).is_err());
     }
 
     #[test]

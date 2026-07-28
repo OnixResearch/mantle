@@ -686,6 +686,258 @@
       "id": "bzip2-smoke",
       "name": "bzip2 protected compression roundtrip output",
       "producing_tool_id": "bzip2-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "232ccf0c23c2e8a028c5ca42cbb46f3afa1aad664a5d5187e11fecdcb04334d4"
+      },
+      "id": "coreutils-configured-source",
+      "name": "protected coreutils configured source identity",
+      "producing_tool_id": "coreutils-patch-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3d9de9e7f81612a74e75312f22d038b665e69c5d9590662c293843e9711cf020"
+      },
+      "id": "coreutils-cat",
+      "name": "source-built coreutils cat",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8fe8251243646c8e44ffe50e827cb27f2197eed344c498b31c365c7d27e07779"
+      },
+      "id": "coreutils-chmod",
+      "name": "source-built coreutils chmod",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8c11ead9af84f2371178ce892afbac6daa416c445f2575a2300b2b5ffadf17f3"
+      },
+      "id": "coreutils-cp",
+      "name": "source-built coreutils cp",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3ce3cfec07fda35f97485b30fddd8a14f4cb04bd8427d2aa3acc4e94fd650a3f"
+      },
+      "id": "coreutils-echo",
+      "name": "source-built coreutils echo",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "7f332bcf208b458595c202f4b1f2faf3fffadd80f7cd34ff67c711ee6183b210"
+      },
+      "id": "coreutils-install",
+      "name": "source-built coreutils install",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8146091298782331503b99b3f0bf02b0a92de93a5fe7b57fba08b5d870087c33"
+      },
+      "id": "coreutils-ln",
+      "name": "source-built coreutils ln",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "32e2fcd7893befd1096a15b0a44992dcfd522044aed0601df96f434b39a60683"
+      },
+      "id": "coreutils-ls",
+      "name": "source-built coreutils ls",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b94fc26390ef29d55b71e608b800fa0451ff477b33c15ff3d2be3c8a2a06621b"
+      },
+      "id": "coreutils-mkdir",
+      "name": "source-built coreutils mkdir",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d765750db422dcaf98b1203911d1bbd0569a1cbe5a2e7006c2e26a476e420886"
+      },
+      "id": "coreutils-mv",
+      "name": "source-built coreutils mv",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f1bf6e9330c0b9e1a88b85185f5834a38b2b89526b4ca95bbb095930e57714da"
+      },
+      "id": "coreutils-rm",
+      "name": "source-built coreutils rm",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "0a8235d566edcd18d68ed94df5ed2449e0fa9a4d37394367cb832536fa554dbc"
+      },
+      "id": "coreutils-rmdir",
+      "name": "source-built coreutils rmdir",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8b861f615fa0f7e868107b5c788562ba1d4dc2fff2ed9e9bca0f7d7df6c455bf"
+      },
+      "id": "coreutils-sort",
+      "name": "source-built coreutils sort",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "87baf4f61820a2861bbb1a08b3bd9b4c7a5b8baed66ddb0e152d7a981ae27669"
+      },
+      "id": "coreutils-test",
+      "name": "source-built coreutils test",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "deb8e7848bca7728c6594600c9d5a1b40d64beb6729fec2e71785236af2cc1e9"
+      },
+      "id": "coreutils-true",
+      "name": "source-built coreutils true",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b476958f8326512fe4fa9563cb97bf79a658900b646f64c8f9f84426ae099ac9"
+      },
+      "id": "coreutils-false",
+      "name": "source-built coreutils false",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "71a84fad92471f61509ba9b781414934bb3b0975fd1635cef51709f952bf682b"
+      },
+      "id": "coreutils-head",
+      "name": "source-built coreutils head",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d0840c1a769287b4c1acf913dd8c4cc396294158dd57e9cd5bcf3e7cdca06962"
+      },
+      "id": "coreutils-tail",
+      "name": "source-built coreutils tail",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "bc5ae003d38d9c4ca64568d97fe444d23e62258c93a936015e242806fb028f49"
+      },
+      "id": "coreutils-wc",
+      "name": "source-built coreutils wc",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "e6c5b456a4f2279400f46ff272734dfb68829281c9e702c9fcc1e1c852eb1074"
+      },
+      "id": "coreutils-basename",
+      "name": "source-built coreutils basename",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b21c5d4963d0d336150374699a4398c920fb2b323c265be463baf5264dae940e"
+      },
+      "id": "coreutils-dirname",
+      "name": "source-built coreutils dirname",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8c7c183c9af7a4fddcf526b8f0318ffb847faea0be75967de1bb72e0d51b4ea0"
+      },
+      "id": "coreutils-tr",
+      "name": "source-built coreutils tr",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "fadb7ca3f75ac06d73d01e8e304c86f06364a91f6001ba13717e69eb1dcbc328"
+      },
+      "id": "coreutils-uniq",
+      "name": "source-built coreutils uniq",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "75770b1702a18bec30618d11cc55eb07eafc5f1349ca0d1d0567e24534b437f2"
+      },
+      "id": "coreutils-expr",
+      "name": "source-built coreutils expr",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d5ec19db795aef5f981b4f99e310a4e977c0543dffbf192cc4539bcb0fff3975"
+      },
+      "id": "coreutils-tee",
+      "name": "source-built coreutils tee",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "a2b77b46e85c94390f459f158ebb33c529bbc5eb730c7719f24632f1fd6b6a4c"
+      },
+      "id": "coreutils-touch",
+      "name": "source-built coreutils touch",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "87baf4f61820a2861bbb1a08b3bd9b4c7a5b8baed66ddb0e152d7a981ae27669"
+      },
+      "id": "coreutils-bracket",
+      "name": "source-built coreutils bracket alias",
+      "producing_tool_id": "coreutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "fd65316f83e13de60a964675b6ab49ee8bd0e40db3aef391c8c1cbee240375d8"
+      },
+      "id": "coreutils-smoke",
+      "name": "coreutils protected filesystem smoke output",
+      "producing_tool_id": "coreutils-smoke-exec"
     }
   ],
   "patches": [
@@ -763,7 +1015,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "e9112bde5d990d68945cb91183911f0acd2d04cfd67ea59501177c196cc7fda5"
+        "hex_value": "11a116c4d1a406e46c3e2f15f11f8e643abcd387fc6668e1680abe1d230bfe42"
       },
       "id": "stage0-source-bundle",
       "name": "authenticated offline full-source closure",
@@ -984,6 +1236,96 @@
       "id": "bzip2-utime-header-source",
       "name": "bounded bzip2 compatibility header",
       "provenance": "bootstrap/seeds/bzip2-utime.h"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "82d3dd8a0cbb5b5032512d747b5bb79b5dfdfd94b2cd11d9ae50a1dd0b05d814"
+      },
+      "id": "coreutils-5.0-source",
+      "name": "coreutils 5.0 fixed-output source",
+      "provenance": "source bundle record fixed-url-758798ffe110eb26e73f9f7832f4addd66c8b8722387fba4513bb786c8528d76"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "03f96124348df7f962ee7c2e23ecfb97a7eeadcbd32a50e503850d5d0c6513b0"
+      },
+      "id": "coreutils-5.0-config-header-source",
+      "name": "bounded coreutils configuration header",
+      "provenance": "bootstrap/seeds/coreutils-5.0-config.h"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b3be0a3a118ad92371d0a1b5d664c216d33964a22e18060184e9d10d65d0ddf8"
+      },
+      "id": "coreutils-modechange-patch-source",
+      "name": "live-bootstrap modechange compatibility patch",
+      "provenance": "bootstrap/seeds/coreutils-5.0-modechange.patch"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d6a42d969bc7665e7b9193f15b0bb583c5d6fd1277ab2aa5a180c808aa70a877"
+      },
+      "id": "coreutils-mbstate-patch-source",
+      "name": "live-bootstrap mbstate compatibility patch",
+      "provenance": "bootstrap/seeds/coreutils-5.0-mbstate.patch"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "80c602c5e65288de9bf4153acc139b71477d89572ef6dc100bc39d40aa93cbd8"
+      },
+      "id": "coreutils-ls-strcmp-patch-source",
+      "name": "live-bootstrap ls compatibility patch",
+      "provenance": "bootstrap/seeds/coreutils-5.0-ls-strcmp.patch"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "ea379c4de61b38f39aebb7cac135e0c462814065f7849b9a5bb819154d0ee7f5"
+      },
+      "id": "coreutils-touch-getdate-patch-source",
+      "name": "live-bootstrap touch compatibility patch",
+      "provenance": "bootstrap/seeds/coreutils-5.0-touch-getdate.patch"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "e9441c3a23908b695aa7084b50a05065ed7daf852d573645ba82499bbdd6c995"
+      },
+      "id": "coreutils-tac-uint64-patch-source",
+      "name": "live-bootstrap TinyCC integer compatibility patch",
+      "provenance": "bootstrap/seeds/coreutils-5.0-tac-uint64.patch"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "0b808546ae32923f754a12dc0c7578aa68624400159a5c97a93cd49a6252f1a6"
+      },
+      "id": "coreutils-expr-strcmp-patch-source",
+      "name": "live-bootstrap expr compatibility patch",
+      "provenance": "bootstrap/seeds/coreutils-5.0-expr-strcmp.patch"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "69792c09234934fd70f1795affca68cdae6c622a7532898d55794572597ae7c7"
+      },
+      "id": "coreutils-sort-locale-patch-source",
+      "name": "live-bootstrap sort compatibility patch",
+      "provenance": "bootstrap/seeds/coreutils-5.0-sort-locale.patch"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "407c0d0457158c2ceb0a165babfeb5e2f574c3f3bea44b774eb336203a2d6daf"
+      },
+      "id": "coreutils-hash-tcc-patch-source",
+      "name": "bounded TinyCC hash-table compatibility patch",
+      "provenance": "bootstrap/seeds/coreutils-5.0-hash-tcc.patch"
     }
   ],
   "stage_graph": [
@@ -1106,6 +1448,46 @@
     {
       "from_node_id": "seed",
       "to_node_id": "bzip2-utime-header-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "coreutils-5.0-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "coreutils-5.0-config-header-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "coreutils-modechange-patch-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "coreutils-mbstate-patch-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "coreutils-ls-strcmp-patch-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "coreutils-touch-getdate-patch-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "coreutils-tac-uint64-patch-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "coreutils-expr-strcmp-patch-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "coreutils-sort-locale-patch-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "coreutils-hash-tcc-patch-source"
     }
   ],
   "transition_tools": [
@@ -1706,6 +2088,95 @@
       "name": "bzip2 1.0.8 executing a compression roundtrip and rejecting malformed input",
       "output_artifact_ids": [
         "bzip2-smoke"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "232ccf0c23c2e8a028c5ca42cbb46f3afa1aad664a5d5187e11fecdcb04334d4"
+      },
+      "id": "coreutils-patch-exec",
+      "input_artifact_ids": [
+        "gnu-patch-2.5.9"
+      ],
+      "name": "GNU patch 2.5.9 applying bounded coreutils compatibility patches",
+      "output_artifact_ids": [
+        "coreutils-configured-source"
+      ],
+      "source_artifact_ids": [
+        "coreutils-5.0-source",
+        "coreutils-5.0-config-header-source",
+        "coreutils-modechange-patch-source",
+        "coreutils-mbstate-patch-source",
+        "coreutils-ls-strcmp-patch-source",
+        "coreutils-touch-getdate-patch-source",
+        "coreutils-tac-uint64-patch-source",
+        "coreutils-expr-strcmp-patch-source",
+        "coreutils-sort-locale-patch-source",
+        "coreutils-hash-tcc-patch-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "232ccf0c23c2e8a028c5ca42cbb46f3afa1aad664a5d5187e11fecdcb04334d4"
+      },
+      "id": "coreutils-build-exec",
+      "input_artifact_ids": [
+        "coreutils-configured-source",
+        "tinycc-0.9.27",
+        "tinycc27-libc",
+        "tinycc-crt1",
+        "tinycc-libtcc1"
+      ],
+      "name": "TinyCC 0.9.27 materializing the bounded coreutils 5.0 utility set",
+      "output_artifact_ids": [
+        "coreutils-cat",
+        "coreutils-chmod",
+        "coreutils-cp",
+        "coreutils-echo",
+        "coreutils-install",
+        "coreutils-ln",
+        "coreutils-ls",
+        "coreutils-mkdir",
+        "coreutils-mv",
+        "coreutils-rm",
+        "coreutils-rmdir",
+        "coreutils-sort",
+        "coreutils-test",
+        "coreutils-true",
+        "coreutils-false",
+        "coreutils-head",
+        "coreutils-tail",
+        "coreutils-wc",
+        "coreutils-basename",
+        "coreutils-dirname",
+        "coreutils-tr",
+        "coreutils-uniq",
+        "coreutils-expr",
+        "coreutils-tee",
+        "coreutils-touch",
+        "coreutils-bracket"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "fd65316f83e13de60a964675b6ab49ee8bd0e40db3aef391c8c1cbee240375d8"
+      },
+      "id": "coreutils-smoke-exec",
+      "input_artifact_ids": [
+        "coreutils-mkdir",
+        "coreutils-echo",
+        "coreutils-cp",
+        "coreutils-cat",
+        "coreutils-test"
+      ],
+      "name": "coreutils 5.0 executing bounded filesystem smokes and rejecting a missing copy source",
+      "output_artifact_ids": [
+        "coreutils-smoke"
       ],
       "source_artifact_ids": []
     }

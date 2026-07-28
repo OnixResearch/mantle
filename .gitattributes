@@ -1,2 +1,3 @@
 # Embedded upstream diff context must preserve source tabs and blank lines.
 bootstrap/bison-2.3-musl.ncl whitespace=-blank-at-eol,-space-before-tab
+bootstrap/seeds/coreutils-5.0-*.patch whitespace=-blank-at-eol,-space-before-tab

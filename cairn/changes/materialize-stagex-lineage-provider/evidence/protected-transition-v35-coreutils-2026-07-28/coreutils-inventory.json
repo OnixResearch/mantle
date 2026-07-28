@@ -1,0 +1,178 @@
+{
+  "format": "mantle-stagex-coreutils-5.0-inventory-v1",
+  "configured_source_digest_blake3": "232ccf0c23c2e8a028c5ca42cbb46f3afa1aad664a5d5187e11fecdcb04334d4",
+  "patch_command_count": 8,
+  "library_compile_count": 96,
+  "archive_command_count": 1,
+  "utility_source_compile_count": 34,
+  "utility_link_count": 25,
+  "build_command_count": 156,
+  "smoke_command_count": 6,
+  "outputs": [
+    {
+      "artifact_id": "coreutils-cat",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/cat",
+      "bytes_len": 75592,
+      "digest_blake3": "3d9de9e7f81612a74e75312f22d038b665e69c5d9590662c293843e9711cf020"
+    },
+    {
+      "artifact_id": "coreutils-chmod",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/chmod",
+      "bytes_len": 80040,
+      "digest_blake3": "8fe8251243646c8e44ffe50e827cb27f2197eed344c498b31c365c7d27e07779"
+    },
+    {
+      "artifact_id": "coreutils-cp",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/cp",
+      "bytes_len": 118368,
+      "digest_blake3": "8c11ead9af84f2371178ce892afbac6daa416c445f2575a2300b2b5ffadf17f3"
+    },
+    {
+      "artifact_id": "coreutils-echo",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/echo",
+      "bytes_len": 71568,
+      "digest_blake3": "3ce3cfec07fda35f97485b30fddd8a14f4cb04bd8427d2aa3acc4e94fd650a3f"
+    },
+    {
+      "artifact_id": "coreutils-install",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/install",
+      "bytes_len": 122464,
+      "digest_blake3": "7f332bcf208b458595c202f4b1f2faf3fffadd80f7cd34ff67c711ee6183b210"
+    },
+    {
+      "artifact_id": "coreutils-ln",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/ln",
+      "bytes_len": 83656,
+      "digest_blake3": "8146091298782331503b99b3f0bf02b0a92de93a5fe7b57fba08b5d870087c33"
+    },
+    {
+      "artifact_id": "coreutils-ls",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/ls",
+      "bytes_len": 172784,
+      "digest_blake3": "32e2fcd7893befd1096a15b0a44992dcfd522044aed0601df96f434b39a60683"
+    },
+    {
+      "artifact_id": "coreutils-mkdir",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/mkdir",
+      "bytes_len": 81464,
+      "digest_blake3": "b94fc26390ef29d55b71e608b800fa0451ff477b33c15ff3d2be3c8a2a06621b"
+    },
+    {
+      "artifact_id": "coreutils-mv",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/mv",
+      "bytes_len": 130008,
+      "digest_blake3": "d765750db422dcaf98b1203911d1bbd0569a1cbe5a2e7006c2e26a476e420886"
+    },
+    {
+      "artifact_id": "coreutils-rm",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/rm",
+      "bytes_len": 100736,
+      "digest_blake3": "f1bf6e9330c0b9e1a88b85185f5834a38b2b89526b4ca95bbb095930e57714da"
+    },
+    {
+      "artifact_id": "coreutils-rmdir",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/rmdir",
+      "bytes_len": 71824,
+      "digest_blake3": "0a8235d566edcd18d68ed94df5ed2449e0fa9a4d37394367cb832536fa554dbc"
+    },
+    {
+      "artifact_id": "coreutils-sort",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/sort",
+      "bytes_len": 107288,
+      "digest_blake3": "8b861f615fa0f7e868107b5c788562ba1d4dc2fff2ed9e9bca0f7d7df6c455bf"
+    },
+    {
+      "artifact_id": "coreutils-test",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/test",
+      "bytes_len": 88072,
+      "digest_blake3": "87baf4f61820a2861bbb1a08b3bd9b4c7a5b8baed66ddb0e152d7a981ae27669"
+    },
+    {
+      "artifact_id": "coreutils-true",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/true",
+      "bytes_len": 61440,
+      "digest_blake3": "deb8e7848bca7728c6594600c9d5a1b40d64beb6729fec2e71785236af2cc1e9"
+    },
+    {
+      "artifact_id": "coreutils-false",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/false",
+      "bytes_len": 61440,
+      "digest_blake3": "b476958f8326512fe4fa9563cb97bf79a658900b646f64c8f9f84426ae099ac9"
+    },
+    {
+      "artifact_id": "coreutils-head",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/head",
+      "bytes_len": 76248,
+      "digest_blake3": "71a84fad92471f61509ba9b781414934bb3b0975fd1635cef51709f952bf682b"
+    },
+    {
+      "artifact_id": "coreutils-tail",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/tail",
+      "bytes_len": 98464,
+      "digest_blake3": "d0840c1a769287b4c1acf913dd8c4cc396294158dd57e9cd5bcf3e7cdca06962"
+    },
+    {
+      "artifact_id": "coreutils-wc",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/wc",
+      "bytes_len": 74568,
+      "digest_blake3": "bc5ae003d38d9c4ca64568d97fe444d23e62258c93a936015e242806fb028f49"
+    },
+    {
+      "artifact_id": "coreutils-basename",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/basename",
+      "bytes_len": 70712,
+      "digest_blake3": "e6c5b456a4f2279400f46ff272734dfb68829281c9e702c9fcc1e1c852eb1074"
+    },
+    {
+      "artifact_id": "coreutils-dirname",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/dirname",
+      "bytes_len": 70944,
+      "digest_blake3": "b21c5d4963d0d336150374699a4398c920fb2b323c265be463baf5264dae940e"
+    },
+    {
+      "artifact_id": "coreutils-tr",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/tr",
+      "bytes_len": 93952,
+      "digest_blake3": "8c7c183c9af7a4fddcf526b8f0318ffb847faea0be75967de1bb72e0d51b4ea0"
+    },
+    {
+      "artifact_id": "coreutils-uniq",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/uniq",
+      "bytes_len": 80736,
+      "digest_blake3": "fadb7ca3f75ac06d73d01e8e304c86f06364a91f6001ba13717e69eb1dcbc328"
+    },
+    {
+      "artifact_id": "coreutils-expr",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/expr",
+      "bytes_len": 139872,
+      "digest_blake3": "75770b1702a18bec30618d11cc55eb07eafc5f1349ca0d1d0567e24534b437f2"
+    },
+    {
+      "artifact_id": "coreutils-tee",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/tee",
+      "bytes_len": 71624,
+      "digest_blake3": "d5ec19db795aef5f981b4f99e310a4e977c0543dffbf192cc4539bcb0fff3975"
+    },
+    {
+      "artifact_id": "coreutils-touch",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/touch",
+      "bytes_len": 77856,
+      "digest_blake3": "a2b77b46e85c94390f459f158ebb33c529bbc5eb730c7719f24632f1fd6b6a4c"
+    },
+    {
+      "artifact_id": "coreutils-bracket",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/output/bin/[",
+      "bytes_len": 88072,
+      "digest_blake3": "87baf4f61820a2861bbb1a08b3bd9b4c7a5b8baed66ddb0e152d7a981ae27669"
+    },
+    {
+      "artifact_id": "coreutils-smoke",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v35-coreutils-20260728/coreutils-stage/runtime/coreutils-5.0/smoke/dir/output",
+      "bytes_len": 16,
+      "digest_blake3": "fd65316f83e13de60a964675b6ab49ee8bd0e40db3aef391c8c1cbee240375d8"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds a bounded coreutils 5.0 utility set and positive and negative filesystem observations only; it does not prove a general POSIX environment or provider admission"
+}

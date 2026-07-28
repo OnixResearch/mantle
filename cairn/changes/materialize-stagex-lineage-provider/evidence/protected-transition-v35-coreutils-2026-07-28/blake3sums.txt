@@ -1,0 +1,4 @@
+513bb8916e3a18e636d5646ff266d258f2499c18de2bb9280429320c9667809e  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v35-coreutils-2026-07-28/coreutils-inventory.json
+235e6cfbb01b1169936143d88daa4af7737ed66a3bbe6e94347e9966c1478a17  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v35-coreutils-2026-07-28/protected-exec-audit.json
+195dbbe01592b9c984e11132a1a6bb7e802a14e7c17159799ca0353493a7a0f4  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v35-coreutils-2026-07-28/transition-plan.json
+0c515cd0ba000d5436ab3b1667307cc12fee5a25fe0162146cba40c04ffd556b  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v35-coreutils-2026-07-28/transition-report.json

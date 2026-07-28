@@ -1,4 +1,4 @@
-# Typed source for the protected seed-to-bzip2-1.0.8 transition.
+# Typed source for the protected seed-to-coreutils-5.0 transition.
 # This file does not yet describe the later native toolchain or normalized StageX provider.
 
 let Digest = {
@@ -133,7 +133,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
       "generated as zero bytes by the bounded transition plan",
     source "stage0-source-bundle" "authenticated offline full-source closure"
-      "e9112bde5d990d68945cb91183911f0acd2d04cfd67ea59501177c196cc7fda5"
+      "11a116c4d1a406e46c3e2f15f11f8e643abcd387fc6668e1680abe1d230bfe42"
       "mantle-source-bundle-v1 manifest identity loaded and validated before Stage0 execution",
     source "stage0-posix-amd64-source" "stage0-posix AMD64 snapshot"
       "f983a7b79acdd53fd4d31c8959c62ca24eabbea491327aaa113c4bc11549e5f9"
@@ -207,6 +207,36 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "bzip2-utime-header-source" "bounded bzip2 compatibility header"
       "3bf37f6c622b15c4f6acada147c5ca5921da1cfefe9b0cb6dc53c5d10a10de13"
       "bootstrap/seeds/bzip2-utime.h",
+    source "coreutils-5.0-source" "coreutils 5.0 fixed-output source"
+      "82d3dd8a0cbb5b5032512d747b5bb79b5dfdfd94b2cd11d9ae50a1dd0b05d814"
+      "source bundle record fixed-url-758798ffe110eb26e73f9f7832f4addd66c8b8722387fba4513bb786c8528d76",
+    source "coreutils-5.0-config-header-source" "bounded coreutils configuration header"
+      "03f96124348df7f962ee7c2e23ecfb97a7eeadcbd32a50e503850d5d0c6513b0"
+      "bootstrap/seeds/coreutils-5.0-config.h",
+    source "coreutils-modechange-patch-source" "live-bootstrap modechange compatibility patch"
+      "b3be0a3a118ad92371d0a1b5d664c216d33964a22e18060184e9d10d65d0ddf8"
+      "bootstrap/seeds/coreutils-5.0-modechange.patch",
+    source "coreutils-mbstate-patch-source" "live-bootstrap mbstate compatibility patch"
+      "d6a42d969bc7665e7b9193f15b0bb583c5d6fd1277ab2aa5a180c808aa70a877"
+      "bootstrap/seeds/coreutils-5.0-mbstate.patch",
+    source "coreutils-ls-strcmp-patch-source" "live-bootstrap ls compatibility patch"
+      "80c602c5e65288de9bf4153acc139b71477d89572ef6dc100bc39d40aa93cbd8"
+      "bootstrap/seeds/coreutils-5.0-ls-strcmp.patch",
+    source "coreutils-touch-getdate-patch-source" "live-bootstrap touch compatibility patch"
+      "ea379c4de61b38f39aebb7cac135e0c462814065f7849b9a5bb819154d0ee7f5"
+      "bootstrap/seeds/coreutils-5.0-touch-getdate.patch",
+    source "coreutils-tac-uint64-patch-source" "live-bootstrap TinyCC integer compatibility patch"
+      "e9441c3a23908b695aa7084b50a05065ed7daf852d573645ba82499bbdd6c995"
+      "bootstrap/seeds/coreutils-5.0-tac-uint64.patch",
+    source "coreutils-expr-strcmp-patch-source" "live-bootstrap expr compatibility patch"
+      "0b808546ae32923f754a12dc0c7578aa68624400159a5c97a93cd49a6252f1a6"
+      "bootstrap/seeds/coreutils-5.0-expr-strcmp.patch",
+    source "coreutils-sort-locale-patch-source" "live-bootstrap sort compatibility patch"
+      "69792c09234934fd70f1795affca68cdae6c622a7532898d55794572597ae7c7"
+      "bootstrap/seeds/coreutils-5.0-sort-locale.patch",
+    source "coreutils-hash-tcc-patch-source" "bounded TinyCC hash-table compatibility patch"
+      "407c0d0457158c2ceb0a165babfeb5e2f574c3f3bea44b774eb336203a2d6daf"
+      "bootstrap/seeds/coreutils-5.0-hash-tcc.patch",
   ],
   generated_artifacts = [
     {
@@ -294,6 +324,34 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "bzip2-build-exec" "bzip2-1.0.8" "source-built bzip2 1.0.8" "b6911b1a367e8b159264078e7976d363e3cb9d268a1dd074ddca51a76916b8a7",
     tinycc_generated "bzip2-build-exec" "bzip2recover-1.0.8" "source-built bzip2recover 1.0.8" "f4bf3e19bd09bcd64503def65eb7bd7eaa5ea43af94536b8d6e638a48501e0a0",
     tinycc_generated "bzip2-smoke-exec" "bzip2-smoke" "bzip2 protected compression roundtrip output" "b37fa30b2c16ae67d4e023b19fbecf3b10dab989e5fdedec510c29780cc5793b",
+    tinycc_generated "coreutils-patch-exec" "coreutils-configured-source" "protected coreutils configured source identity" "232ccf0c23c2e8a028c5ca42cbb46f3afa1aad664a5d5187e11fecdcb04334d4",
+    tinycc_generated "coreutils-build-exec" "coreutils-cat" "source-built coreutils cat" "3d9de9e7f81612a74e75312f22d038b665e69c5d9590662c293843e9711cf020",
+    tinycc_generated "coreutils-build-exec" "coreutils-chmod" "source-built coreutils chmod" "8fe8251243646c8e44ffe50e827cb27f2197eed344c498b31c365c7d27e07779",
+    tinycc_generated "coreutils-build-exec" "coreutils-cp" "source-built coreutils cp" "8c11ead9af84f2371178ce892afbac6daa416c445f2575a2300b2b5ffadf17f3",
+    tinycc_generated "coreutils-build-exec" "coreutils-echo" "source-built coreutils echo" "3ce3cfec07fda35f97485b30fddd8a14f4cb04bd8427d2aa3acc4e94fd650a3f",
+    tinycc_generated "coreutils-build-exec" "coreutils-install" "source-built coreutils install" "7f332bcf208b458595c202f4b1f2faf3fffadd80f7cd34ff67c711ee6183b210",
+    tinycc_generated "coreutils-build-exec" "coreutils-ln" "source-built coreutils ln" "8146091298782331503b99b3f0bf02b0a92de93a5fe7b57fba08b5d870087c33",
+    tinycc_generated "coreutils-build-exec" "coreutils-ls" "source-built coreutils ls" "32e2fcd7893befd1096a15b0a44992dcfd522044aed0601df96f434b39a60683",
+    tinycc_generated "coreutils-build-exec" "coreutils-mkdir" "source-built coreutils mkdir" "b94fc26390ef29d55b71e608b800fa0451ff477b33c15ff3d2be3c8a2a06621b",
+    tinycc_generated "coreutils-build-exec" "coreutils-mv" "source-built coreutils mv" "d765750db422dcaf98b1203911d1bbd0569a1cbe5a2e7006c2e26a476e420886",
+    tinycc_generated "coreutils-build-exec" "coreutils-rm" "source-built coreutils rm" "f1bf6e9330c0b9e1a88b85185f5834a38b2b89526b4ca95bbb095930e57714da",
+    tinycc_generated "coreutils-build-exec" "coreutils-rmdir" "source-built coreutils rmdir" "0a8235d566edcd18d68ed94df5ed2449e0fa9a4d37394367cb832536fa554dbc",
+    tinycc_generated "coreutils-build-exec" "coreutils-sort" "source-built coreutils sort" "8b861f615fa0f7e868107b5c788562ba1d4dc2fff2ed9e9bca0f7d7df6c455bf",
+    tinycc_generated "coreutils-build-exec" "coreutils-test" "source-built coreutils test" "87baf4f61820a2861bbb1a08b3bd9b4c7a5b8baed66ddb0e152d7a981ae27669",
+    tinycc_generated "coreutils-build-exec" "coreutils-true" "source-built coreutils true" "deb8e7848bca7728c6594600c9d5a1b40d64beb6729fec2e71785236af2cc1e9",
+    tinycc_generated "coreutils-build-exec" "coreutils-false" "source-built coreutils false" "b476958f8326512fe4fa9563cb97bf79a658900b646f64c8f9f84426ae099ac9",
+    tinycc_generated "coreutils-build-exec" "coreutils-head" "source-built coreutils head" "71a84fad92471f61509ba9b781414934bb3b0975fd1635cef51709f952bf682b",
+    tinycc_generated "coreutils-build-exec" "coreutils-tail" "source-built coreutils tail" "d0840c1a769287b4c1acf913dd8c4cc396294158dd57e9cd5bcf3e7cdca06962",
+    tinycc_generated "coreutils-build-exec" "coreutils-wc" "source-built coreutils wc" "bc5ae003d38d9c4ca64568d97fe444d23e62258c93a936015e242806fb028f49",
+    tinycc_generated "coreutils-build-exec" "coreutils-basename" "source-built coreutils basename" "e6c5b456a4f2279400f46ff272734dfb68829281c9e702c9fcc1e1c852eb1074",
+    tinycc_generated "coreutils-build-exec" "coreutils-dirname" "source-built coreutils dirname" "b21c5d4963d0d336150374699a4398c920fb2b323c265be463baf5264dae940e",
+    tinycc_generated "coreutils-build-exec" "coreutils-tr" "source-built coreutils tr" "8c7c183c9af7a4fddcf526b8f0318ffb847faea0be75967de1bb72e0d51b4ea0",
+    tinycc_generated "coreutils-build-exec" "coreutils-uniq" "source-built coreutils uniq" "fadb7ca3f75ac06d73d01e8e304c86f06364a91f6001ba13717e69eb1dcbc328",
+    tinycc_generated "coreutils-build-exec" "coreutils-expr" "source-built coreutils expr" "75770b1702a18bec30618d11cc55eb07eafc5f1349ca0d1d0567e24534b437f2",
+    tinycc_generated "coreutils-build-exec" "coreutils-tee" "source-built coreutils tee" "d5ec19db795aef5f981b4f99e310a4e977c0543dffbf192cc4539bcb0fff3975",
+    tinycc_generated "coreutils-build-exec" "coreutils-touch" "source-built coreutils touch" "a2b77b46e85c94390f459f158ebb33c529bbc5eb730c7719f24632f1fd6b6a4c",
+    tinycc_generated "coreutils-build-exec" "coreutils-bracket" "source-built coreutils bracket alias" "87baf4f61820a2861bbb1a08b3bd9b4c7a5b8baed66ddb0e152d7a981ae27669",
+    tinycc_generated "coreutils-smoke-exec" "coreutils-smoke" "coreutils protected filesystem smoke output" "fd65316f83e13de60a964675b6ab49ee8bd0e40db3aef391c8c1cbee240375d8",
   ],
   transition_tools = [
     {
@@ -599,6 +657,42 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["bzip2-smoke"],
       digest = blake3 "b6911b1a367e8b159264078e7976d363e3cb9d268a1dd074ddca51a76916b8a7",
     },
+    {
+      id = "coreutils-patch-exec",
+      name = "GNU patch 2.5.9 applying bounded coreutils compatibility patches",
+      source_artifact_ids = [
+        "coreutils-5.0-source", "coreutils-5.0-config-header-source",
+        "coreutils-modechange-patch-source", "coreutils-mbstate-patch-source",
+        "coreutils-ls-strcmp-patch-source", "coreutils-touch-getdate-patch-source",
+        "coreutils-tac-uint64-patch-source", "coreutils-expr-strcmp-patch-source",
+        "coreutils-sort-locale-patch-source", "coreutils-hash-tcc-patch-source",
+      ],
+      input_artifact_ids = ["gnu-patch-2.5.9"],
+      output_artifact_ids = ["coreutils-configured-source"],
+      digest = blake3 "232ccf0c23c2e8a028c5ca42cbb46f3afa1aad664a5d5187e11fecdcb04334d4",
+    },
+    {
+      id = "coreutils-build-exec",
+      name = "TinyCC 0.9.27 materializing the bounded coreutils 5.0 utility set",
+      source_artifact_ids = [],
+      input_artifact_ids = ["coreutils-configured-source", "tinycc-0.9.27", "tinycc27-libc", "tinycc-crt1", "tinycc-libtcc1"],
+      output_artifact_ids = [
+        "coreutils-cat", "coreutils-chmod", "coreutils-cp", "coreutils-echo", "coreutils-install",
+        "coreutils-ln", "coreutils-ls", "coreutils-mkdir", "coreutils-mv", "coreutils-rm",
+        "coreutils-rmdir", "coreutils-sort", "coreutils-test", "coreutils-true", "coreutils-false",
+        "coreutils-head", "coreutils-tail", "coreutils-wc", "coreutils-basename", "coreutils-dirname",
+        "coreutils-tr", "coreutils-uniq", "coreutils-expr", "coreutils-tee", "coreutils-touch", "coreutils-bracket",
+      ],
+      digest = blake3 "232ccf0c23c2e8a028c5ca42cbb46f3afa1aad664a5d5187e11fecdcb04334d4",
+    },
+    {
+      id = "coreutils-smoke-exec",
+      name = "coreutils 5.0 executing bounded filesystem smokes and rejecting a missing copy source",
+      source_artifact_ids = [],
+      input_artifact_ids = ["coreutils-mkdir", "coreutils-echo", "coreutils-cp", "coreutils-cat", "coreutils-test"],
+      output_artifact_ids = ["coreutils-smoke"],
+      digest = blake3 "fd65316f83e13de60a964675b6ab49ee8bd0e40db3aef391c8c1cbee240375d8",
+    },
   ],
   patches = [
     {
@@ -665,5 +759,15 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "sed-4.0.9-source" },
     { from_node_id = "seed", to_node_id = "bzip2-1.0.8-source" },
     { from_node_id = "seed", to_node_id = "bzip2-utime-header-source" },
+    { from_node_id = "seed", to_node_id = "coreutils-5.0-source" },
+    { from_node_id = "seed", to_node_id = "coreutils-5.0-config-header-source" },
+    { from_node_id = "seed", to_node_id = "coreutils-modechange-patch-source" },
+    { from_node_id = "seed", to_node_id = "coreutils-mbstate-patch-source" },
+    { from_node_id = "seed", to_node_id = "coreutils-ls-strcmp-patch-source" },
+    { from_node_id = "seed", to_node_id = "coreutils-touch-getdate-patch-source" },
+    { from_node_id = "seed", to_node_id = "coreutils-tac-uint64-patch-source" },
+    { from_node_id = "seed", to_node_id = "coreutils-expr-strcmp-patch-source" },
+    { from_node_id = "seed", to_node_id = "coreutils-sort-locale-patch-source" },
+    { from_node_id = "seed", to_node_id = "coreutils-hash-tcc-patch-source" },
   ],
 } | Manifest
