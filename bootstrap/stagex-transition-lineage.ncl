@@ -1,4 +1,4 @@
-# Typed source for the protected seed-to-gzip-1.2.4 transition.
+# Typed source for the protected seed-to-GNU-tar-1.12 transition.
 # This file does not yet describe the later native toolchain or normalized StageX provider.
 
 let Digest = {
@@ -133,7 +133,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
       "generated as zero bytes by the bounded transition plan",
     source "stage0-source-bundle" "authenticated offline full-source closure"
-      "6d6e2f0ae906c3a421b90e220fed77e6f90b556cd7982731352ce28f39f5a796"
+      "fb693cea29637174c37ab949f1436831a1c0096eb3610231ef296549d291ae55"
       "mantle-source-bundle-v1 manifest identity loaded and validated before Stage0 execution",
     source "stage0-posix-amd64-source" "stage0-posix AMD64 snapshot"
       "f983a7b79acdd53fd4d31c8959c62ca24eabbea491327aaa113c4bc11549e5f9"
@@ -192,6 +192,12 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "gzip-makecrc-source" "bounded gzip CRC generator source"
       "48240f8bb743e9fd202f7bc2d98367607f853d2ed7483d484f50892bc69d9ef1"
       "bootstrap/seeds/gzip-makecrc.c",
+    source "tar-1.12-source" "GNU tar 1.12 fixed-output source"
+      "0cbc269e6eccf79f32b9f64204a0277a0e6df877dc1a6d0fd0d3e240365abdff"
+      "source bundle record fixed-url-56372665c26229fd9923e24885bba78d12de4459e7fb19f3ee6d5cb21dd1f1ac",
+    source "tar-getdate-stub-source" "bounded GNU tar date-parser stub source"
+      "a479349008d81a7766d3e56dd5bd1d83e8645c0690228d4bb2d89d6f04d4f0a9"
+      "bootstrap/seeds/tar-getdate-stub.c",
   ],
   generated_artifacts = [
     {
@@ -271,6 +277,8 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "gzip-build-exec" "gzip-1.2.4" "source-built gzip 1.2.4" "d2939461715a694222c1a612c0908754e599eb2d268fe012c525845367eff04a",
     tinycc_generated "gzip-build-exec" "gunzip-1.2.4" "source-built gunzip 1.2.4 alias" "d2939461715a694222c1a612c0908754e599eb2d268fe012c525845367eff04a",
     tinycc_generated "gzip-smoke-exec" "gzip-smoke" "gzip protected roundtrip smoke output" "78abaccbae9efa7039ff82d80215d2fbd3c4cd0221dadd85dd9df731f15d8751",
+    tinycc_generated "tar-build-exec" "tar-1.12" "source-built GNU tar 1.12" "57c861b961bfc2c1047ab7f175c0f16024ea91787ba5a5e43600c721b5eff6ca",
+    tinycc_generated "tar-smoke-exec" "tar-smoke" "GNU tar protected roundtrip smoke output" "59392bf4bef63f5688ff8604868a22adcecfe94f75c1234fe7c9df1107038be2",
   ],
   transition_tools = [
     {
@@ -520,6 +528,22 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["gzip-smoke"],
       digest = blake3 "d2939461715a694222c1a612c0908754e599eb2d268fe012c525845367eff04a",
     },
+    {
+      id = "tar-build-exec",
+      name = "TinyCC 0.9.27 materializing GNU tar 1.12 after gzip",
+      source_artifact_ids = ["tar-1.12-source", "tar-getdate-stub-source"],
+      input_artifact_ids = ["tinycc-0.9.27", "tinycc27-libc", "tinycc-crt1", "tinycc-libtcc1", "gzip-smoke"],
+      output_artifact_ids = ["tar-1.12"],
+      digest = blake3 "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39",
+    },
+    {
+      id = "tar-smoke-exec",
+      name = "GNU tar 1.12 executing an archive roundtrip and rejecting malformed input",
+      source_artifact_ids = [],
+      input_artifact_ids = ["tar-1.12"],
+      output_artifact_ids = ["tar-smoke"],
+      digest = blake3 "57c861b961bfc2c1047ab7f175c0f16024ea91787ba5a5e43600c721b5eff6ca",
+    },
   ],
   patches = [
     {
@@ -581,5 +605,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "gnu-patch-2.5.9-source" },
     { from_node_id = "seed", to_node_id = "gzip-1.2.4-source" },
     { from_node_id = "seed", to_node_id = "gzip-makecrc-source" },
+    { from_node_id = "seed", to_node_id = "tar-1.12-source" },
+    { from_node_id = "seed", to_node_id = "tar-getdate-stub-source" },
   ],
 } | Manifest

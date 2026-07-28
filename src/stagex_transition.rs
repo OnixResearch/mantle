@@ -57,6 +57,8 @@ pub(crate) const GZIP_GENERATOR_BUILD_STAGE_ID: &str = "gzip-generator-materiali
 pub(crate) const GZIP_GENERATOR_RUN_STAGE_ID: &str = "gzip-generator-execution";
 pub(crate) const GZIP_BUILD_STAGE_ID: &str = "gzip-materialization";
 pub(crate) const GZIP_SMOKE_STAGE_ID: &str = "gzip-smoke";
+pub(crate) const TAR_BUILD_STAGE_ID: &str = "tar-materialization";
+pub(crate) const TAR_SMOKE_STAGE_ID: &str = "tar-smoke";
 pub(crate) const HEX0_SEED_BLAKE3: &str = "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80";
 pub(crate) const HEX0_SOURCE_BLAKE3: &str = "0fb23576a10b41df29c165e39514f18c411da96ae71873a6a2e2f0b1d94de614";
 pub(crate) const KAEM_SOURCE_BLAKE3: &str = "5a56b4164dca4d1e03ba35bc8ce4b418a0de2baf1cb9e6a0912607e26532d30d";
@@ -82,7 +84,7 @@ const MES_OUTPUT_MAX_MIB: u64 = 64;
 const MES_OUTPUT_MAX_BYTES: u64 = MES_OUTPUT_MAX_MIB * MIB_BYTES;
 const STAGE_JOB_COUNT: u32 = 1;
 const TRANSITION_STAGE_COUNT_MAX: u32 = 3;
-const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 44;
+const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 46;
 const TINYCC_LINK_CHILD_EVENT_COUNT: usize = 5;
 const MAKE_RECIPE_CHILD_EVENT_COUNT: usize = 1;
 const GZIP_GZIP_SMOKE_EVENT_COUNT: usize = 2;
@@ -151,6 +153,10 @@ pub(crate) struct StagexTransitionReport {
     pub gzip_sources: Option<crate::stagex_gzip::GzipSourceMaterializationReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gzip_runtime: Option<crate::stagex_gzip::GzipInventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tar_sources: Option<crate::stagex_tar::TarSourceMaterializationReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tar_runtime: Option<crate::stagex_tar::TarInventoryReport>,
     pub fallback_events: Vec<String>,
     pub promotions: Vec<OutputPromotionRecord>,
     pub protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
@@ -361,6 +367,12 @@ pub(crate) fn materialize_protected_transition(
                 source_stage_id: GZIP_BUILD_STAGE_ID.to_string(),
                 path: request.scratch_dir.join("gzip-stage/runtime/output/bin/gunzip"),
                 digest_hex: crate::stagex_gzip::GZIP_FINAL_BLAKE3.to_string(),
+            },
+            PlannedExecutable {
+                authorization_id: "exec:tar-smoke:tar".to_string(),
+                source_stage_id: TAR_BUILD_STAGE_ID.to_string(),
+                path: request.scratch_dir.join("tar-stage/runtime/output/bin/tar"),
+                digest_hex: crate::stagex_tar::TAR_FINAL_BLAKE3.to_string(),
             },
         ]);
         planned
@@ -618,19 +630,53 @@ pub(crate) fn materialize_protected_transition(
         _ => unreachable!("gzip requires source bundle and GNU patch together"),
     };
 
+    let (tar_sources, tar_runtime) = match (request.source_bundle_path, gzip_runtime.as_ref()) {
+        (Some(source_bundle_path), Some(_)) => {
+            let tar_stage = request.scratch_dir.join("tar-stage");
+            fs::create_dir(&tar_stage)
+                .map_err(|source| io_error("creating create-new protected GNU tar stage root", source))?;
+            let sources = crate::stagex_tar::materialize_authenticated_tar_source(
+                source_bundle_path,
+                &manifest_authority.source_bundle_manifest_blake3,
+                &tar_stage.join("sources"),
+            )
+            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+            let result = crate::stagex_tar::derive_tar_inventory(crate::stagex_tar::TarInventoryRequest {
+                source_root: &sources.output_path,
+                tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
+                scratch_dir: &tar_stage.join("runtime"),
+                protected_exec_enforced: true,
+            });
+            match result {
+                Ok(report) => (Some(sources), Some(report)),
+                Err(error) => {
+                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                    let events = supervisor.audit_events();
+                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
+                }
+            }
+        }
+        (None, None) => (None, None),
+        _ => unreachable!("GNU tar requires source bundle and gzip together"),
+    };
+
     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
     let protected_exec_events = supervisor.audit_events();
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
     validate_transition_audit(
         &staged,
-        stage0_full.as_ref(),
-        mes_m2.as_ref(),
-        mes_runtime.as_ref(),
-        tinycc_runtime.as_ref(),
-        tinycc27_runtime.as_ref(),
-        make_runtime.as_ref(),
-        gnu_patch_runtime.as_ref(),
-        gzip_runtime.as_ref(),
+        TransitionAuditReports {
+            stage0_full: stage0_full.as_ref(),
+            mes_m2: mes_m2.as_ref(),
+            mes_runtime: mes_runtime.as_ref(),
+            tinycc_runtime: tinycc_runtime.as_ref(),
+            tinycc27_runtime: tinycc27_runtime.as_ref(),
+            make_runtime: make_runtime.as_ref(),
+            gnu_patch_runtime: gnu_patch_runtime.as_ref(),
+            gzip_runtime: gzip_runtime.as_ref(),
+            tar_runtime: tar_runtime.as_ref(),
+        },
         &protected_exec_events,
     )?;
     let kaem_smoke_digest_blake3 = blake3_file_hex(&staged.kaem_smoke).map_err(protected_digest_error)?;
@@ -657,6 +703,8 @@ pub(crate) fn materialize_protected_transition(
         gnu_patch_runtime,
         gzip_sources,
         gzip_runtime,
+        tar_sources,
+        tar_runtime,
         fallback_events: Vec::new(),
         promotions: vec![hex0_promotion, kaem_promotion],
         protected_exec_events,
@@ -750,6 +798,9 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     for (artifact_id, digest_blake3) in crate::stagex_gzip::source_artifact_digests() {
         require_manifest_digest(&sources, artifact_id, digest_blake3)?;
     }
+    for (artifact_id, digest_blake3) in crate::stagex_tar::source_artifact_digests() {
+        require_manifest_digest(&sources, artifact_id, digest_blake3)?;
+    }
     let generated: BTreeMap<&str, &str> = manifest
         .generated_artifacts
         .iter()
@@ -784,6 +835,9 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
     for expected in crate::stagex_gzip::GZIP_EXPECTED_OUTPUTS {
+        require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
+    }
+    for expected in crate::stagex_tar::TAR_EXPECTED_OUTPUTS {
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
     let patches: BTreeMap<&str, &str> =
@@ -935,6 +989,8 @@ fn build_transition_plan(
         stages.extend(gnu_patch_stage_plans(&tinycc27_root, &patch_root));
         let gzip_root = staged.seed.parent().expect("staged seed has parent").join("gzip-stage/runtime");
         stages.extend(gzip_stage_plans(&tinycc27_root, &gzip_root));
+        let tar_root = staged.seed.parent().expect("staged seed has parent").join("tar-stage/runtime");
+        stages.extend(tar_stage_plans(&tinycc27_root, &tar_root));
     }
     let stage_count_max = if include_stage0_mini {
         TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX
@@ -1348,6 +1404,57 @@ fn gzip_stage_plans(tinycc27_root: &Path, gzip_root: &Path) -> Vec<StagexStagePl
                     crate::stagex_gzip::GZIP_FINAL_BLAKE3,
                 ),
             ],
+        ),
+    ]
+}
+
+fn tar_stage_plans(tinycc27_root: &Path, tar_root: &Path) -> Vec<StagexStagePlan> {
+    let tinycc27 = tinycc27_root.join("output/bin/tcc");
+    let tar = tar_root.join("output/bin/tar");
+    vec![
+        mes_stage_plan(
+            TAR_BUILD_STAGE_ID,
+            &[
+                GZIP_SMOKE_STAGE_ID,
+                TINYCC27_BUILD_STAGE_ID,
+                TINYCC27_RUNTIME_STAGE_ID,
+                TINYCC_RUNTIME_STAGE_ID,
+            ],
+            &[
+                crate::stagex_tar::TAR_SOURCE_ARTIFACT_ID,
+                crate::stagex_tar::TAR_GETDATE_SOURCE_ARTIFACT_ID,
+            ],
+            &[
+                "tinycc-0.9.27",
+                "tinycc27-libc",
+                "tinycc-crt1",
+                "tinycc-libtcc1",
+                "gzip-smoke",
+            ],
+            &["tar-1.12".to_string()],
+            vec![authorization(
+                "exec:tar-materialization:tinycc27",
+                &tinycc27,
+                TINYCC27_BUILD_STAGE_ID,
+                crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            TAR_SMOKE_STAGE_ID,
+            &[TAR_BUILD_STAGE_ID],
+            &[],
+            &["tar-1.12"],
+            &[
+                "tar-smoke".to_string(),
+                "tar-version-observation".to_string(),
+                "tar-negative-observation".to_string(),
+            ],
+            vec![authorization(
+                "exec:tar-smoke:tar",
+                &tar,
+                TAR_BUILD_STAGE_ID,
+                crate::stagex_tar::TAR_FINAL_BLAKE3,
+            )],
         ),
     ]
 }
@@ -2098,18 +2205,35 @@ fn promote_executable(
         .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))
 }
 
+#[derive(Debug, Clone, Copy)]
+struct TransitionAuditReports<'a> {
+    stage0_full: Option<&'a crate::stagex_stage0_full::Stage0FullInventoryReport>,
+    mes_m2: Option<&'a crate::stagex_mes::MesM2InventoryReport>,
+    mes_runtime: Option<&'a crate::stagex_mes_lib::MesRuntimeInventoryReport>,
+    tinycc_runtime: Option<&'a crate::stagex_tinycc::TccMesInventoryReport>,
+    tinycc27_runtime: Option<&'a crate::stagex_tinycc27::Tinycc27InventoryReport>,
+    make_runtime: Option<&'a crate::stagex_make::MakeInventoryReport>,
+    gnu_patch_runtime: Option<&'a crate::stagex_gnu_patch::GnuPatchInventoryReport>,
+    gzip_runtime: Option<&'a crate::stagex_gzip::GzipInventoryReport>,
+    tar_runtime: Option<&'a crate::stagex_tar::TarInventoryReport>,
+}
+
 fn validate_transition_audit(
     staged: &StagedTransitionPaths,
-    stage0_full: Option<&crate::stagex_stage0_full::Stage0FullInventoryReport>,
-    mes_m2: Option<&crate::stagex_mes::MesM2InventoryReport>,
-    mes_runtime: Option<&crate::stagex_mes_lib::MesRuntimeInventoryReport>,
-    tinycc_runtime: Option<&crate::stagex_tinycc::TccMesInventoryReport>,
-    tinycc27_runtime: Option<&crate::stagex_tinycc27::Tinycc27InventoryReport>,
-    make_runtime: Option<&crate::stagex_make::MakeInventoryReport>,
-    gnu_patch_runtime: Option<&crate::stagex_gnu_patch::GnuPatchInventoryReport>,
-    gzip_runtime: Option<&crate::stagex_gzip::GzipInventoryReport>,
+    reports: TransitionAuditReports<'_>,
     events: &[ProtectedSeccompAuditEvent],
 ) -> Result<(), StagexTransitionError> {
+    let TransitionAuditReports {
+        stage0_full,
+        mes_m2,
+        mes_runtime,
+        tinycc_runtime,
+        tinycc27_runtime,
+        make_runtime,
+        gnu_patch_runtime,
+        gzip_runtime,
+        tar_runtime,
+    } = reports;
     let expected = transition_expected_audit_events(staged);
     if events.len() < EXPECTED_AUDIT_EVENT_COUNT {
         return Err(StagexTransitionError::Audit(format!(
@@ -2128,6 +2252,7 @@ fn validate_transition_audit(
             && make_runtime.is_none()
             && gnu_patch_runtime.is_none()
             && gzip_runtime.is_none()
+            && tar_runtime.is_none()
             && events.len() == EXPECTED_AUDIT_EVENT_COUNT
         {
             return Ok(());
@@ -2152,7 +2277,8 @@ fn validate_transition_audit(
     }
     validate_stage0_audit(staged, &stage0.mini, &stage0_events[..mini_event_count])?;
     let after_mini = &stage0_events[mini_event_count..];
-    let (before_gzip, gzip_events) = split_gzip_audit_suffix(gzip_runtime, after_mini)?;
+    let (before_tar, tar_events) = split_tar_audit_suffix(tar_runtime, after_mini)?;
+    let (before_gzip, gzip_events) = split_gzip_audit_suffix(gzip_runtime, before_tar)?;
     let (before_gnu_patch, gnu_patch_events) = split_gnu_patch_audit_suffix(gnu_patch_runtime, before_gzip)?;
     let (before_make, make_events) = split_make_audit_suffix(make_runtime, before_gnu_patch)?;
     let predecessor_result = match (mes_m2, mes_runtime, tinycc_runtime, tinycc27_runtime) {
@@ -2218,12 +2344,40 @@ fn validate_transition_audit(
         }
     }
     match (gzip_runtime, tinycc27_runtime, gnu_patch_runtime) {
-        (Some(gzip), Some(tinycc27), Some(_)) => validate_gzip_audit(tinycc27, gzip, gzip_events),
-        (None, _, _) if gzip_events.is_empty() => Ok(()),
+        (Some(gzip), Some(tinycc27), Some(_)) => validate_gzip_audit(tinycc27, gzip, gzip_events)?,
+        (None, _, _) if gzip_events.is_empty() => {}
+        _ => {
+            return Err(StagexTransitionError::Audit(
+                "gzip report or events exist without TinyCC 0.9.27 and GNU patch authority".to_string(),
+            ));
+        }
+    }
+    match (tar_runtime, tinycc27_runtime, gzip_runtime) {
+        (Some(tar), Some(tinycc27), Some(_)) => validate_tar_audit(tinycc27, tar, tar_events),
+        (None, _, _) if tar_events.is_empty() => Ok(()),
         _ => Err(StagexTransitionError::Audit(
-            "gzip report or events exist without TinyCC 0.9.27 and GNU patch authority".to_string(),
+            "GNU tar report or events exist without TinyCC 0.9.27 and gzip authority".to_string(),
         )),
     }
+}
+
+fn split_tar_audit_suffix<'a>(
+    report: Option<&crate::stagex_tar::TarInventoryReport>,
+    events: &'a [ProtectedSeccompAuditEvent],
+) -> Result<(&'a [ProtectedSeccompAuditEvent], &'a [ProtectedSeccompAuditEvent]), StagexTransitionError> {
+    let Some(report) = report else {
+        return Ok((events, &events[events.len()..]));
+    };
+    let event_count = tar_expected_event_count(report)?;
+    let start = events.len().checked_sub(event_count).ok_or_else(|| {
+        StagexTransitionError::Audit(format!(
+            "expected {event_count} trailing GNU tar events, observed {}",
+            events.len()
+        ))
+    })?;
+    assert_eq!(events.len().saturating_sub(start), event_count);
+    assert!(event_count > 0);
+    Ok((&events[..start], &events[start..]))
 }
 
 fn split_gzip_audit_suffix<'a>(
@@ -2849,6 +3003,97 @@ fn tinycc27_expected_event_count(
         .map_err(|_| StagexTransitionError::Audit("TinyCC 0.9.27 command count does not fit usize".to_string()))
 }
 
+fn validate_tar_audit(
+    tinycc27: &crate::stagex_tinycc27::Tinycc27InventoryReport,
+    tar: &crate::stagex_tar::TarInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    let expected_count = tar_expected_event_count(tar)?;
+    validate_tar_observed_event_count(expected_count, events.len())?;
+    let build_count = usize::try_from(tar.build_command_count)
+        .map_err(|_| StagexTransitionError::Audit("GNU tar build count does not fit usize".to_string()))?;
+    let tinycc27_path = tinycc27_output_path(tinycc27, "tinycc27-alias")?;
+    let tar_path = tar_output_path(tar, "tar-1.12")?;
+    for (index, event) in events.iter().enumerate() {
+        if index < build_count {
+            validate_tar_event(
+                event,
+                &tinycc27_path,
+                crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
+                "planned:tinycc27-materialization:exec:tinycc27-smoke:tinycc27",
+            )?;
+        } else {
+            validate_tar_event(
+                event,
+                &tar_path,
+                crate::stagex_tar::TAR_FINAL_BLAKE3,
+                "planned:tar-materialization:exec:tar-smoke:tar",
+            )?;
+        }
+    }
+    assert_eq!(events.len(), expected_count);
+    assert!(build_count < expected_count);
+    Ok(())
+}
+
+fn tar_expected_event_count(report: &crate::stagex_tar::TarInventoryReport) -> Result<usize, StagexTransitionError> {
+    const EXPECTED_SOURCE_COMPILE_COUNT: u32 = 29;
+    const EXPECTED_SMOKE_COMMAND_COUNT: u32 = 4;
+    let expected_build_count = report
+        .source_compile_count
+        .checked_add(1)
+        .ok_or_else(|| StagexTransitionError::Audit("GNU tar build count overflow".to_string()))?;
+    if report.source_compile_count != EXPECTED_SOURCE_COMPILE_COUNT
+        || report.build_command_count != expected_build_count
+        || report.smoke_command_count != EXPECTED_SMOKE_COMMAND_COUNT
+    {
+        return Err(StagexTransitionError::Audit(
+            "GNU tar report has substituted compile, build, or smoke counts".to_string(),
+        ));
+    }
+    let total = report
+        .build_command_count
+        .checked_add(report.smoke_command_count)
+        .ok_or_else(|| StagexTransitionError::Audit("GNU tar event count overflow".to_string()))?;
+    usize::try_from(total)
+        .map_err(|_| StagexTransitionError::Audit("GNU tar event count does not fit usize".to_string()))
+}
+
+fn validate_tar_observed_event_count(
+    expected_count: usize,
+    observed_count: usize,
+) -> Result<(), StagexTransitionError> {
+    if expected_count == observed_count {
+        return Ok(());
+    }
+    Err(StagexTransitionError::Audit(format!(
+        "GNU tar protected audit expected {expected_count} events, observed {observed_count}"
+    )))
+}
+
+fn validate_tar_event(
+    event: &ProtectedSeccompAuditEvent,
+    expected_path: &Path,
+    expected_digest: &str,
+    expected_inventory_id: &str,
+) -> Result<(), StagexTransitionError> {
+    let valid = event.policy_decision == "allowed"
+        && event.executable_path == expected_path
+        && event.tracee_path == expected_path
+        && event.resolved_host_path == expected_path
+        && event.digest_hex == expected_digest
+        && event.inventory_entry_id.as_deref() == Some(expected_inventory_id);
+    if !valid {
+        return Err(StagexTransitionError::Audit(format!(
+            "GNU tar event for {} did not match exact planned authority",
+            event.executable_path.display()
+        )));
+    }
+    assert_eq!(event.executable_path, expected_path);
+    assert_eq!(event.digest_hex, expected_digest);
+    Ok(())
+}
+
 fn validate_gzip_audit(
     tinycc27: &crate::stagex_tinycc27::Tinycc27InventoryReport,
     gzip: &crate::stagex_gzip::GzipInventoryReport,
@@ -3244,6 +3489,18 @@ fn tinycc27_output_path(
         .ok_or_else(|| StagexTransitionError::Audit(format!("TinyCC 0.9.27 report lacks output {artifact_id}")))
 }
 
+fn tar_output_path(
+    report: &crate::stagex_tar::TarInventoryReport,
+    artifact_id: &str,
+) -> Result<PathBuf, StagexTransitionError> {
+    report
+        .outputs
+        .iter()
+        .find(|output| output.artifact_id == artifact_id)
+        .map(|output| output.path.clone())
+        .ok_or_else(|| StagexTransitionError::Audit(format!("GNU tar report lacks output {artifact_id}")))
+}
+
 fn gzip_output_path(
     report: &crate::stagex_gzip::GzipInventoryReport,
     artifact_id: &str,
@@ -3406,7 +3663,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
-    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "9a69d780220d6d4bec40b63ddccc80441098779ac9f1586d8544c8101f422359";
+    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "5ace1556501a43692de8b10df10ecdb600e1039048583dfe15d8fb01a624b2c5";
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {
@@ -3526,6 +3783,34 @@ mod tests {
         overflow.runtime_command_count = u32::MAX;
         let error = tinycc27_expected_event_count(&overflow).unwrap_err();
         assert!(error.to_string().contains("command count overflow"));
+        assert!(!error.to_string().is_empty());
+    }
+
+    #[test]
+    fn tar_event_count_is_closed_and_rejects_missing_or_extra_events() {
+        const EXPECTED_EVENT_COUNT: usize = 34;
+        let report = crate::stagex_tar::TarInventoryReport {
+            format: "test",
+            configured_source_digest_blake3: "a".repeat(blake3::OUT_LEN * 2),
+            source_compile_count: 29,
+            build_command_count: 30,
+            smoke_command_count: 4,
+            outputs: Vec::new(),
+            protected_exec_enforced: true,
+            fallback_events: Vec::new(),
+            non_claim: "test",
+        };
+        assert_eq!(tar_expected_event_count(&report).unwrap(), EXPECTED_EVENT_COUNT);
+        validate_tar_observed_event_count(EXPECTED_EVENT_COUNT, EXPECTED_EVENT_COUNT).unwrap();
+        let missing = EXPECTED_EVENT_COUNT.checked_sub(1).unwrap();
+        let extra = EXPECTED_EVENT_COUNT.checked_add(1).unwrap();
+        assert!(validate_tar_observed_event_count(EXPECTED_EVENT_COUNT, missing).is_err());
+        assert!(validate_tar_observed_event_count(EXPECTED_EVENT_COUNT, extra).is_err());
+
+        let mut substituted = report;
+        substituted.build_command_count = 29;
+        let error = tar_expected_event_count(&substituted).unwrap_err();
+        assert!(error.to_string().contains("substituted"));
         assert!(!error.to_string().is_empty());
     }
 

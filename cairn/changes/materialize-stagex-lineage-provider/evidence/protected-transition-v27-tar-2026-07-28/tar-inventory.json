@@ -1,0 +1,24 @@
+{
+  "format": "mantle-stagex-tar-1.12-inventory-v1",
+  "configured_source_digest_blake3": "e3bbe80418be6a87402866f8215926c9e3a7054d745a0f46be852306dff790c7",
+  "source_compile_count": 29,
+  "build_command_count": 30,
+  "smoke_command_count": 4,
+  "outputs": [
+    {
+      "artifact_id": "tar-1.12",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v27-tar-20260728/tar-stage/runtime/output/bin/tar",
+      "bytes_len": 200936,
+      "digest_blake3": "57c861b961bfc2c1047ab7f175c0f16024ea91787ba5a5e43600c721b5eff6ca"
+    },
+    {
+      "artifact_id": "tar-smoke",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v27-tar-20260728/tar-stage/runtime/tar-1.12/smoke/out/file.txt",
+      "bytes_len": 10,
+      "digest_blake3": "59392bf4bef63f5688ff8604868a22adcecfe94f75c1234fe7c9df1107038be2"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds GNU tar 1.12 and positive and negative archive smoke observations only; it does not prove later bootstrap utilities or provider admission"
+}

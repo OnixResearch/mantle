@@ -614,6 +614,24 @@
       "id": "gzip-smoke",
       "name": "gzip protected roundtrip smoke output",
       "producing_tool_id": "gzip-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "57c861b961bfc2c1047ab7f175c0f16024ea91787ba5a5e43600c721b5eff6ca"
+      },
+      "id": "tar-1.12",
+      "name": "source-built GNU tar 1.12",
+      "producing_tool_id": "tar-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "59392bf4bef63f5688ff8604868a22adcecfe94f75c1234fe7c9df1107038be2"
+      },
+      "id": "tar-smoke",
+      "name": "GNU tar protected roundtrip smoke output",
+      "producing_tool_id": "tar-smoke-exec"
     }
   ],
   "patches": [
@@ -691,7 +709,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "6d6e2f0ae906c3a421b90e220fed77e6f90b556cd7982731352ce28f39f5a796"
+        "hex_value": "fb693cea29637174c37ab949f1436831a1c0096eb3610231ef296549d291ae55"
       },
       "id": "stage0-source-bundle",
       "name": "authenticated offline full-source closure",
@@ -867,6 +885,24 @@
       "id": "gzip-makecrc-source",
       "name": "bounded gzip CRC generator source",
       "provenance": "bootstrap/seeds/gzip-makecrc.c"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "0cbc269e6eccf79f32b9f64204a0277a0e6df877dc1a6d0fd0d3e240365abdff"
+      },
+      "id": "tar-1.12-source",
+      "name": "GNU tar 1.12 fixed-output source",
+      "provenance": "source bundle record fixed-url-56372665c26229fd9923e24885bba78d12de4459e7fb19f3ee6d5cb21dd1f1ac"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "a479349008d81a7766d3e56dd5bd1d83e8645c0690228d4bb2d89d6f04d4f0a9"
+      },
+      "id": "tar-getdate-stub-source",
+      "name": "bounded GNU tar date-parser stub source",
+      "provenance": "bootstrap/seeds/tar-getdate-stub.c"
     }
   ],
   "stage_graph": [
@@ -969,6 +1005,14 @@
     {
       "from_node_id": "seed",
       "to_node_id": "gzip-makecrc-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "tar-1.12-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "tar-getdate-stub-source"
     }
   ],
   "transition_tools": [
@@ -1442,6 +1486,43 @@
       "name": "gzip and gunzip executing a roundtrip and rejecting malformed input",
       "output_artifact_ids": [
         "gzip-smoke"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39"
+      },
+      "id": "tar-build-exec",
+      "input_artifact_ids": [
+        "tinycc-0.9.27",
+        "tinycc27-libc",
+        "tinycc-crt1",
+        "tinycc-libtcc1",
+        "gzip-smoke"
+      ],
+      "name": "TinyCC 0.9.27 materializing GNU tar 1.12 after gzip",
+      "output_artifact_ids": [
+        "tar-1.12"
+      ],
+      "source_artifact_ids": [
+        "tar-1.12-source",
+        "tar-getdate-stub-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "57c861b961bfc2c1047ab7f175c0f16024ea91787ba5a5e43600c721b5eff6ca"
+      },
+      "id": "tar-smoke-exec",
+      "input_artifact_ids": [
+        "tar-1.12"
+      ],
+      "name": "GNU tar 1.12 executing an archive roundtrip and rejecting malformed input",
+      "output_artifact_ids": [
+        "tar-smoke"
       ],
       "source_artifact_ids": []
     }
