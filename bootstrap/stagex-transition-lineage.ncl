@@ -1,4 +1,4 @@
-# Typed source for the protected seed-to-TinyCC-musl-prep transition.
+# Typed source for the protected seed-to-musl-1.1.24 transition.
 # This file does not yet describe the later native toolchain or normalized StageX provider.
 
 let Digest = {
@@ -133,7 +133,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
       "generated as zero bytes by the bounded transition plan",
     source "stage0-source-bundle" "authenticated offline full-source closure"
-      "a5793a83c98d36f673f77ef0083d402db32f4fd96e765bd657b89c088d1bf4a6"
+      "d3ed9b10c763444d416182b58b2e4b766ed80f0a8ab71d07c0bcf576e599052d"
       "mantle-source-bundle-v1 manifest identity loaded and validated before Stage0 execution",
     source "stage0-posix-amd64-source" "stage0-posix AMD64 snapshot"
       "f983a7b79acdd53fd4d31c8959c62ca24eabbea491327aaa113c4bc11549e5f9"
@@ -294,6 +294,36 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "tcc-musl-prep-recipe-source" "checked TinyCC-to-musl bridge recipe"
       "88f0a242b6e53d3618383af6d9fce83bbacaa4cf4f2403bba56baf9651901b4e"
       "bootstrap/tcc-musl-prep.ncl",
+    source "musl-1.1.24-source" "musl 1.1.24 fixed-output source"
+      "2abcaf25adf8f529b9f45e5549bfaa5cc5827305624c081e9388ac2ad828ba17"
+      "source bundle record fixed-url-e5130672fe4e4cdd9b19e8602ae7cbe70696d8de4b08732ff6bc01fa3c9b7d85",
+    source "musl-1.1.24-recipe-source" "checked reduced first-musl recipe"
+      "cbcdc20f7e285b11921a9a0e0799363132296e9d1725d2a4e3baae9a7e24a9d9"
+      "bootstrap/musl-1.1.24-tcc.ncl",
+    source "musl-minmath-source" "reduced musl math compatibility source" "69fc61b70094ca956699dc2fa39f752cab7c65d568bd8fe05d4a936322c3960b" "musl recipe heredoc src/math/minmath.c",
+    source "musl-minunistd-source" "reduced musl unistd compatibility source" "05695e5b671545adf3d7b175c06e5abc9d7f3568f1cfdeee904da8b5daca199e" "musl recipe heredoc src/unistd/minunistd.c",
+    source "musl-minstdlib-source" "reduced musl stdlib compatibility source" "c00f0c394966d3976dc551183d23ae074b38071b7e10f36fca82865a0f27c46c" "musl recipe heredoc src/stdlib/minstdlib.c",
+    source "musl-minstdio-source" "reduced musl stdio compatibility source" "c77a6ae68839a92336105833735770df1455bf76466d9e8ef9bbc606f9dbce90" "musl recipe heredoc src/stdio/minstdio.c",
+    source "musl-malloc-source" "reduced musl allocator source" "57a8675cd8c7bba2de72af0bbc8a5e31e29c71c3136dc8a5f057d6754765ca84" "musl recipe heredoc src/malloc/malloc.c",
+    source "musl-sysconf-source" "reduced musl sysconf source" "4e0b9e10f5d0cb0b2cfdb9a7952b835805901275757978bd0df7491d777e5f2e" "musl recipe heredoc src/conf/sysconf.c",
+    source "musl-mb-cur-max-source" "reduced musl multibyte bound source" "5a4e448755715c58f92a4e59913a2013eda231bbb5a7718e954408e629371f30" "musl recipe heredoc src/ctype/__ctype_get_mb_cur_max.c",
+    source "musl-init-tls-source" "reduced musl TLS initialization source" "a92a92721c1f5045b81dcb38d3c2d2d47bafa822132021c59f5c0ee2e80861cf" "musl recipe heredoc src/env/__init_tls.c",
+    source "musl-reset-tls-source" "reduced musl TLS reset source" "0d47c776d69f29aaf091831b88487376786bef2cda19b03de55dfbf1ce7c0abe" "musl recipe heredoc src/env/__reset_tls.c",
+    source "musl-stack-fail-source" "reduced musl stack failure source" "dad22f13907c8a5c01177ea03c9b7439d88f82cad27c249bfea98a7cfd0c47cc" "musl recipe heredoc src/env/__stack_chk_fail.c",
+    source "musl-start-main-source" "reduced musl process start source" "69c3f1dde3ebc3b778a8e586c9fb83656700a8606d37679b18a89ff8288135ac" "musl recipe heredoc src/env/__libc_start_main.c",
+    source "musl-errno-location-source" "reduced musl errno source" "5362208b59d4de384c2c80c1a9141f163836d9538b8b8218794d25f7a32d7b5a" "musl recipe heredoc src/errno/__errno_location.c",
+    source "musl-strerror-source" "reduced musl strerror source" "357e6527f4faddb05e93bb0ee6f6cdb70c8c60c9d08ddd5bbcab3ffbe974b9f8" "musl recipe heredoc src/errno/strerror.c",
+    source "musl-abort-source" "reduced musl abort source" "497171f9dc9dcf6b118c3b559d2ae224982710179603e91f1f6ae5390066d018" "musl recipe heredoc src/exit/abort.c",
+    source "musl-open-source" "reduced musl open source" "7f3afdf5148358c90c7f8915de354742da02d7a60d85bbfe22b41c99e2f98bf5" "musl recipe heredoc src/fcntl/open.c",
+    source "musl-openat-source" "reduced musl openat source" "8876c1c3b87682ba175d0ca3da3c19aafd773d6780baa63638049ec99c735343" "musl recipe heredoc src/fcntl/openat.c",
+    source "musl-fadvise-source" "reduced musl fadvise source" "b4ba89e259263927792ffb789b4efc42c72d5e6834a5a0dc1c2f7175469164ee" "musl recipe heredoc src/fcntl/posix_fadvise.c",
+    source "musl-fcntl-source" "reduced musl fcntl source" "fd96b7cf48005c85e7756e1aeb548127a07c1162861e4a68d717644521469282" "musl recipe heredoc src/fcntl/fcntl.c",
+    source "musl-crt1-source" "reduced musl startup source" "49f71cb10539bd5244198385c8d26d8e70955c5c7d1289a6580c5a6e5e7aa65f" "musl recipe heredoc crt/crt1.c",
+    source "musl-confstr-source" "reduced musl confstr source" "b54e82c47c18b998c196fe0e7451edbeb56649e36ebb78719093a6ee8f26f419" "musl recipe heredoc src/conf/confstr.c",
+    source "musl-crypt-source" "reduced musl crypt source" "4f36091d58b669daef9b9001f82acac22f13ecd171831058d10c90a31502e672" "musl recipe heredoc src/crypt/crypt_sha256.c",
+    source "musl-semctl-source" "reduced musl semctl source" "22289baa86062d7aa482f84bd3b3b1492519b225419e9df6ba46397e86d27e2d" "musl recipe heredoc src/ipc/semctl.c",
+    source "musl-dlerror-source" "reduced musl dlerror source" "9e63330518eb48f3e5b3caf961cc7e05ffef11e3f13768c6e8b22d066d6804c7" "musl recipe heredoc src/ldso/dlerror.c",
+    source "musl-fenv-source" "reduced musl fenv assembly source" "2e7056cbed4ae4e55a676ebfdad8ccfe39bbb06090e9ca86dd2a445fa3cfb33c" "musl recipe heredoc src/fenv/x86_64/fenv.s",
   ],
   generated_artifacts = [
     {
@@ -424,6 +454,21 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "tcc-musl-prep-build-exec" "tcc-musl-prep-libtcc1" "carried TinyCC runtime archive for musl handoff" "0e8b75458ad70ab03142b27a3014af68f57c03004f4d22a65702e60d531140e9",
     tinycc_generated "tcc-musl-prep-build-exec" "tcc-musl-prep-headers" "carried Mes headers for musl handoff" "2577c43f136d52c8d7b61ba8f7cab614b31898586d3fab634bebe6e1fd14cb7d",
     tinycc_generated "tcc-musl-prep-smoke-exec" "tcc-musl-prep-positive-object" "TinyCC musl-prep positive object" "41c08a115f275f00099aa397872090612e853be0fb5f13ba55ddb89737e42377",
+    tinycc_generated "musl-build-exec" "musl-configured-source" "reduced musl configured source identity" "d1d3f1b8c7b99ba3902a4b999f55ee4ba3410cfd7ebac9462176f2d1d7565dcf",
+    tinycc_generated "musl-build-exec" "musl-libc" "reduced first-musl static libc" "b3a7f8bd311e8d3eaa6b1767e87276d3d02dce04a95808ed187082b05bb6211d",
+    tinycc_generated "musl-build-exec" "musl-crt1" "reduced first-musl startup object" "701c5afce9f5e09d0bcca0702764c64148fcacfe7e1477e2321b249b03af66be",
+    tinycc_generated "musl-build-exec" "musl-crti" "reduced first-musl initialization object" "ecf4006e5ea51c3ad49a243165909cd4f9eddfbe181b576ac43513ede8578be4",
+    tinycc_generated "musl-build-exec" "musl-crtn" "reduced first-musl finalization object" "b3b3153225cc100b8c429f5916ae36b96ef4903169b86f841f86498c0fd7251d",
+    tinycc_generated "musl-build-exec" "musl-libm" "empty compatibility archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-build-exec" "musl-librt" "empty compatibility archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-build-exec" "musl-libpthread" "empty compatibility archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-build-exec" "musl-libcrypt" "empty compatibility archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-build-exec" "musl-libutil" "empty compatibility archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-build-exec" "musl-libxnet" "empty compatibility archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-build-exec" "musl-libresolv" "empty compatibility archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-build-exec" "musl-libdl" "empty compatibility archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-build-exec" "musl-headers" "reduced first-musl installed headers" "4d5a63f48ef27c8377a5319d3d68cd1a2b724a974ee5d8281a67f8fb0b5dc1c7",
+    tinycc_generated "musl-smoke-exec" "musl-smoke-binary" "reduced first-musl linked smoke binary" "92ebe6be234ab289a07f5560ce0f25b1a696917d4515d2ec92c330fa0cd3a8a4",
   ],
   transition_tools = [
     {
@@ -832,6 +877,34 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["tcc-musl-prep-positive-object"],
       digest = blake3 "4add5639d2016d79b1ac258aa502098fc941354ded0acd91bf8cafea42240a77",
     },
+    {
+      id = "musl-build-exec",
+      name = "TinyCC musl-prep materializing the reduced first musl",
+      source_artifact_ids = [
+        "musl-1.1.24-source", "musl-1.1.24-recipe-source", "musl-minmath-source",
+        "musl-minunistd-source", "musl-minstdlib-source", "musl-minstdio-source", "musl-malloc-source",
+        "musl-sysconf-source", "musl-mb-cur-max-source", "musl-init-tls-source", "musl-reset-tls-source",
+        "musl-stack-fail-source", "musl-start-main-source", "musl-errno-location-source", "musl-strerror-source",
+        "musl-abort-source", "musl-open-source", "musl-openat-source", "musl-fadvise-source", "musl-fcntl-source",
+        "musl-crt1-source", "musl-confstr-source", "musl-crypt-source", "musl-semctl-source",
+        "musl-dlerror-source", "musl-fenv-source",
+      ],
+      input_artifact_ids = ["tcc-musl-prep", "tcc-musl-prep-libc", "tcc-musl-prep-crt1", "tcc-musl-prep-libtcc1", "tcc-musl-prep-headers"],
+      output_artifact_ids = [
+        "musl-configured-source", "musl-libc", "musl-crt1", "musl-crti", "musl-crtn",
+        "musl-libm", "musl-librt", "musl-libpthread", "musl-libcrypt", "musl-libutil",
+        "musl-libxnet", "musl-libresolv", "musl-libdl", "musl-headers",
+      ],
+      digest = blake3 "d1d3f1b8c7b99ba3902a4b999f55ee4ba3410cfd7ebac9462176f2d1d7565dcf",
+    },
+    {
+      id = "musl-smoke-exec",
+      name = "TinyCC musl-prep compiling and linking against reduced musl",
+      source_artifact_ids = [],
+      input_artifact_ids = ["musl-libc", "musl-crt1", "musl-headers", "tcc-musl-prep-libtcc1"],
+      output_artifact_ids = ["musl-smoke-binary"],
+      digest = blake3 "4add5639d2016d79b1ac258aa502098fc941354ded0acd91bf8cafea42240a77",
+    },
   ],
   patches = [
     {
@@ -927,5 +1000,31 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "bash-builtin-stubs-source" },
     { from_node_id = "seed", to_node_id = "bash-readline-stub-source" },
     { from_node_id = "seed", to_node_id = "tcc-musl-prep-recipe-source" },
+    { from_node_id = "seed", to_node_id = "musl-1.1.24-source" },
+    { from_node_id = "seed", to_node_id = "musl-1.1.24-recipe-source" },
+    { from_node_id = "seed", to_node_id = "musl-minmath-source" },
+    { from_node_id = "seed", to_node_id = "musl-minunistd-source" },
+    { from_node_id = "seed", to_node_id = "musl-minstdlib-source" },
+    { from_node_id = "seed", to_node_id = "musl-minstdio-source" },
+    { from_node_id = "seed", to_node_id = "musl-malloc-source" },
+    { from_node_id = "seed", to_node_id = "musl-sysconf-source" },
+    { from_node_id = "seed", to_node_id = "musl-mb-cur-max-source" },
+    { from_node_id = "seed", to_node_id = "musl-init-tls-source" },
+    { from_node_id = "seed", to_node_id = "musl-reset-tls-source" },
+    { from_node_id = "seed", to_node_id = "musl-stack-fail-source" },
+    { from_node_id = "seed", to_node_id = "musl-start-main-source" },
+    { from_node_id = "seed", to_node_id = "musl-errno-location-source" },
+    { from_node_id = "seed", to_node_id = "musl-strerror-source" },
+    { from_node_id = "seed", to_node_id = "musl-abort-source" },
+    { from_node_id = "seed", to_node_id = "musl-open-source" },
+    { from_node_id = "seed", to_node_id = "musl-openat-source" },
+    { from_node_id = "seed", to_node_id = "musl-fadvise-source" },
+    { from_node_id = "seed", to_node_id = "musl-fcntl-source" },
+    { from_node_id = "seed", to_node_id = "musl-crt1-source" },
+    { from_node_id = "seed", to_node_id = "musl-confstr-source" },
+    { from_node_id = "seed", to_node_id = "musl-crypt-source" },
+    { from_node_id = "seed", to_node_id = "musl-semctl-source" },
+    { from_node_id = "seed", to_node_id = "musl-dlerror-source" },
+    { from_node_id = "seed", to_node_id = "musl-fenv-source" },
   ],
 } | Manifest

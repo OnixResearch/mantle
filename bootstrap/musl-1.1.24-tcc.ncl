@@ -12,6 +12,7 @@ let mes = import "mes.ncl" in
 let tcc_prep = import "tcc-musl-prep.ncl" in
 let make = import "make-tcc.ncl" in
 let sed = import "sed-tcc.ncl" in
+let bash = import "bash-2.05b-tcc.ncl" in
 
 let musl_src = crunch.fetchTarball {
   # first-consumer: bootstrap/musl-1.1.24-tcc.ncl
@@ -306,5 +307,5 @@ EOF
       fi
     "%,
   ],
-  inputs = [stage0, mes, tcc_prep, make, sed, musl_src],
+  inputs = [stage0, mes, tcc_prep, make, sed, bash, musl_src],
 } | crunch.Derivation
