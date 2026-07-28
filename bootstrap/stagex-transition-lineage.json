@@ -965,6 +965,42 @@
       "id": "oyacc-smoke-output",
       "name": "oyacc protected generated-parser smoke output",
       "producing_tool_id": "oyacc-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "acd33bededf76dc149f7c7fa14a2e1a1246c5dafe2ef65eee18cf0d82e3d6bcd"
+      },
+      "id": "bash-configured-source",
+      "name": "bounded bash configured source identity",
+      "producing_tool_id": "bash-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f7326a0fcc0878e7cd3616640cee376f71bab5583460b5459cac91168809c03f"
+      },
+      "id": "bash-2.05b",
+      "name": "source-built bash 2.05b",
+      "producing_tool_id": "bash-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f7326a0fcc0878e7cd3616640cee376f71bab5583460b5459cac91168809c03f"
+      },
+      "id": "sh-2.05b",
+      "name": "source-built bash sh alias",
+      "producing_tool_id": "bash-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f9bb7985b1ac20ccbfdd1195397be795edb7996ab02e6f173d166517c19eb579"
+      },
+      "id": "bash-smoke-output",
+      "name": "bash protected command smoke output",
+      "producing_tool_id": "bash-smoke-exec"
     }
   ],
   "patches": [
@@ -1042,7 +1078,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "8a58a015b0a1f45023ed38f92dc46f5a733be983794524117abe68654786ac5f"
+        "hex_value": "a5793a83c98d36f673f77ef0083d402db32f4fd96e765bd657b89c088d1bf4a6"
       },
       "id": "stage0-source-bundle",
       "name": "authenticated offline full-source closure",
@@ -1407,6 +1443,114 @@
       "id": "oyacc-tcc-patch-source",
       "name": "live-bootstrap oyacc TinyCC compatibility patch",
       "provenance": "bootstrap/seeds/oyacc-6.6-tcc.patch"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "130da251856869c8d04a52d35299181bc6c3be8e38624e731a9323382c3d755e"
+      },
+      "id": "bash-2.05b-source",
+      "name": "bash 2.05b fixed-output source",
+      "provenance": "source bundle record fixed-url-62e1b90422b8fcc2101590edd36dc56e7a72e8bc233854bb1e8b63dc0f76a6c0"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "83fa7ce8da2012b7efab048046f52b6a1416e71058704b086478419bffe0994d"
+      },
+      "id": "bash-2.05b-recipe-source",
+      "name": "checked bounded bash recipe container",
+      "provenance": "bootstrap/bash-2.05b-tcc.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "c4c01b7f8f7129e8f6228d84d9792f05d79b345effcc715436cb5f3dd5f900ff"
+      },
+      "id": "bash-config-header-source",
+      "name": "bounded bash configuration header",
+      "provenance": "CONFIG heredoc in bootstrap/bash-2.05b-tcc.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "37f38802c7756f7fa6f316697b8c45ab40408fc37445b0acaf95a020f7506e64"
+      },
+      "id": "bash-pathnames-header-source",
+      "name": "bounded bash pathnames header",
+      "provenance": "PATHS heredoc in bootstrap/bash-2.05b-tcc.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "9f778f7eb9163e51926466add39958654cc6f8ddf64bbc24b65d1ec9a331e0e4"
+      },
+      "id": "bash-signames-header-source",
+      "name": "bounded bash signal-name header",
+      "provenance": "SIGS heredoc in bootstrap/bash-2.05b-tcc.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "2e23bab4e73551bf46dd410fc474e088c2586b0bd72483e751a8315c8790ddef"
+      },
+      "id": "bash-version-header-source",
+      "name": "bounded bash version header",
+      "provenance": "VER heredoc in bootstrap/bash-2.05b-tcc.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3a39f97f535b38b4765ca9ab98866e44ef89e62bcde36de3502dbf572b27e0a3"
+      },
+      "id": "bash-builtext-header-source",
+      "name": "bounded bash builtin extension header",
+      "provenance": "BUILTEXT heredoc in bootstrap/bash-2.05b-tcc.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "916c161448de17a494684e30eb1dfb4a474cb7c901f79dcc056067effdef2827"
+      },
+      "id": "bash-termios-header-source",
+      "name": "bounded bash termios compatibility header",
+      "provenance": "TERM heredoc in bootstrap/bash-2.05b-tcc.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "17dcfcc315eec400baa889b9e109c93831e86018d275877ba9d19701ac2a4706"
+      },
+      "id": "bash-syntax-source",
+      "name": "bounded bash syntax table source",
+      "provenance": "SYN heredoc in bootstrap/bash-2.05b-tcc.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "85d458eb329da9adb9c86e1333791a99e0253403aab2d2192f2586d512426ba9"
+      },
+      "id": "bash-siglist-source",
+      "name": "bounded bash signal-list source",
+      "provenance": "SIGL heredoc in bootstrap/bash-2.05b-tcc.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "7b78354611deacef7f61db89f8890ba817e351045dbccb8f502b377ba34546b3"
+      },
+      "id": "bash-builtin-stubs-source",
+      "name": "bounded bash builtin stubs source",
+      "provenance": "BSTUB heredoc in bootstrap/bash-2.05b-tcc.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8178ce89f526ed0d738b7d0d4b7ae946e75949c4278713342e68ed969b6644ca"
+      },
+      "id": "bash-readline-stub-source",
+      "name": "bounded bash readline stub source",
+      "provenance": "RLSTUB heredoc in bootstrap/bash-2.05b-tcc.ncl"
     }
   ],
   "stage_graph": [
@@ -1593,6 +1737,54 @@
     {
       "from_node_id": "seed",
       "to_node_id": "oyacc-tcc-patch-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bash-2.05b-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bash-2.05b-recipe-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bash-config-header-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bash-pathnames-header-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bash-signames-header-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bash-version-header-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bash-builtext-header-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bash-termios-header-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bash-syntax-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bash-siglist-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bash-builtin-stubs-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bash-readline-stub-source"
     }
   ],
   "transition_tools": [
@@ -2339,6 +2531,56 @@
       "name": "oyacc 6.6 generating a parser and rejecting malformed grammar",
       "output_artifact_ids": [
         "oyacc-smoke-output"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "acd33bededf76dc149f7c7fa14a2e1a1246c5dafe2ef65eee18cf0d82e3d6bcd"
+      },
+      "id": "bash-build-exec",
+      "input_artifact_ids": [
+        "oyacc-smoke-output",
+        "coreutils-smoke",
+        "tinycc-0.9.27",
+        "tinycc27-libc",
+        "tinycc-crt1",
+        "tinycc-libtcc1"
+      ],
+      "name": "bounded helper materialization and TinyCC 0.9.27 bash build",
+      "output_artifact_ids": [
+        "bash-configured-source",
+        "bash-2.05b",
+        "sh-2.05b"
+      ],
+      "source_artifact_ids": [
+        "bash-2.05b-source",
+        "bash-2.05b-recipe-source",
+        "bash-config-header-source",
+        "bash-pathnames-header-source",
+        "bash-signames-header-source",
+        "bash-version-header-source",
+        "bash-builtext-header-source",
+        "bash-termios-header-source",
+        "bash-syntax-source",
+        "bash-siglist-source",
+        "bash-builtin-stubs-source",
+        "bash-readline-stub-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f7326a0fcc0878e7cd3616640cee376f71bab5583460b5459cac91168809c03f"
+      },
+      "id": "bash-smoke-exec",
+      "input_artifact_ids": [
+        "bash-2.05b"
+      ],
+      "name": "bash 2.05b executing bounded commands and rejecting malformed syntax",
+      "output_artifact_ids": [
+        "bash-smoke-output"
       ],
       "source_artifact_ids": []
     }

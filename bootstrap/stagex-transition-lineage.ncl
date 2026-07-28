@@ -1,4 +1,4 @@
-# Typed source for the protected seed-to-oyacc-6.6 transition.
+# Typed source for the protected seed-to-bash-2.05b transition.
 # This file does not yet describe the later native toolchain or normalized StageX provider.
 
 let Digest = {
@@ -133,7 +133,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
       "generated as zero bytes by the bounded transition plan",
     source "stage0-source-bundle" "authenticated offline full-source closure"
-      "8a58a015b0a1f45023ed38f92dc46f5a733be983794524117abe68654786ac5f"
+      "a5793a83c98d36f673f77ef0083d402db32f4fd96e765bd657b89c088d1bf4a6"
       "mantle-source-bundle-v1 manifest identity loaded and validated before Stage0 execution",
     source "stage0-posix-amd64-source" "stage0-posix AMD64 snapshot"
       "f983a7b79acdd53fd4d31c8959c62ca24eabbea491327aaa113c4bc11549e5f9"
@@ -255,6 +255,42 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "oyacc-tcc-patch-source" "live-bootstrap oyacc TinyCC compatibility patch"
       "56c7df4bfa6adbf223a14fedfdc56b82d3c0fc702d6d88d5f54de158dcea0706"
       "bootstrap/seeds/oyacc-6.6-tcc.patch",
+    source "bash-2.05b-source" "bash 2.05b fixed-output source"
+      "130da251856869c8d04a52d35299181bc6c3be8e38624e731a9323382c3d755e"
+      "source bundle record fixed-url-62e1b90422b8fcc2101590edd36dc56e7a72e8bc233854bb1e8b63dc0f76a6c0",
+    source "bash-2.05b-recipe-source" "checked bounded bash recipe container"
+      "83fa7ce8da2012b7efab048046f52b6a1416e71058704b086478419bffe0994d"
+      "bootstrap/bash-2.05b-tcc.ncl",
+    source "bash-config-header-source" "bounded bash configuration header"
+      "c4c01b7f8f7129e8f6228d84d9792f05d79b345effcc715436cb5f3dd5f900ff"
+      "CONFIG heredoc in bootstrap/bash-2.05b-tcc.ncl",
+    source "bash-pathnames-header-source" "bounded bash pathnames header"
+      "37f38802c7756f7fa6f316697b8c45ab40408fc37445b0acaf95a020f7506e64"
+      "PATHS heredoc in bootstrap/bash-2.05b-tcc.ncl",
+    source "bash-signames-header-source" "bounded bash signal-name header"
+      "9f778f7eb9163e51926466add39958654cc6f8ddf64bbc24b65d1ec9a331e0e4"
+      "SIGS heredoc in bootstrap/bash-2.05b-tcc.ncl",
+    source "bash-version-header-source" "bounded bash version header"
+      "2e23bab4e73551bf46dd410fc474e088c2586b0bd72483e751a8315c8790ddef"
+      "VER heredoc in bootstrap/bash-2.05b-tcc.ncl",
+    source "bash-builtext-header-source" "bounded bash builtin extension header"
+      "3a39f97f535b38b4765ca9ab98866e44ef89e62bcde36de3502dbf572b27e0a3"
+      "BUILTEXT heredoc in bootstrap/bash-2.05b-tcc.ncl",
+    source "bash-termios-header-source" "bounded bash termios compatibility header"
+      "916c161448de17a494684e30eb1dfb4a474cb7c901f79dcc056067effdef2827"
+      "TERM heredoc in bootstrap/bash-2.05b-tcc.ncl",
+    source "bash-syntax-source" "bounded bash syntax table source"
+      "17dcfcc315eec400baa889b9e109c93831e86018d275877ba9d19701ac2a4706"
+      "SYN heredoc in bootstrap/bash-2.05b-tcc.ncl",
+    source "bash-siglist-source" "bounded bash signal-list source"
+      "85d458eb329da9adb9c86e1333791a99e0253403aab2d2192f2586d512426ba9"
+      "SIGL heredoc in bootstrap/bash-2.05b-tcc.ncl",
+    source "bash-builtin-stubs-source" "bounded bash builtin stubs source"
+      "7b78354611deacef7f61db89f8890ba817e351045dbccb8f502b377ba34546b3"
+      "BSTUB heredoc in bootstrap/bash-2.05b-tcc.ncl",
+    source "bash-readline-stub-source" "bounded bash readline stub source"
+      "8178ce89f526ed0d738b7d0d4b7ae946e75949c4278713342e68ed969b6644ca"
+      "RLSTUB heredoc in bootstrap/bash-2.05b-tcc.ncl",
   ],
   generated_artifacts = [
     {
@@ -373,6 +409,10 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "oyacc-patch-exec" "oyacc-configured-source" "protected oyacc configured source identity" "f4cde58315dcbfc49c47928f9258debd030140c54e249cb2a11beef1eba30296",
     tinycc_generated "oyacc-build-exec" "oyacc-6.6" "source-built oyacc 6.6" "0b073649ea023167a293495f25302cc3debc4dd6727d9214ce6be9361503aa50",
     tinycc_generated "oyacc-smoke-exec" "oyacc-smoke-output" "oyacc protected generated-parser smoke output" "6e719a5fc57aa5e8a06b7f7f37c6fdf672cd2ef2f91c27a7ca1daff128ac65a2",
+    tinycc_generated "bash-build-exec" "bash-configured-source" "bounded bash configured source identity" "acd33bededf76dc149f7c7fa14a2e1a1246c5dafe2ef65eee18cf0d82e3d6bcd",
+    tinycc_generated "bash-build-exec" "bash-2.05b" "source-built bash 2.05b" "f7326a0fcc0878e7cd3616640cee376f71bab5583460b5459cac91168809c03f",
+    tinycc_generated "bash-build-exec" "sh-2.05b" "source-built bash sh alias" "f7326a0fcc0878e7cd3616640cee376f71bab5583460b5459cac91168809c03f",
+    tinycc_generated "bash-smoke-exec" "bash-smoke-output" "bash protected command smoke output" "f9bb7985b1ac20ccbfdd1195397be795edb7996ab02e6f173d166517c19eb579",
   ],
   transition_tools = [
     {
@@ -741,6 +781,27 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["oyacc-smoke-output"],
       digest = blake3 "0b073649ea023167a293495f25302cc3debc4dd6727d9214ce6be9361503aa50",
     },
+    {
+      id = "bash-build-exec",
+      name = "bounded helper materialization and TinyCC 0.9.27 bash build",
+      source_artifact_ids = [
+        "bash-2.05b-source", "bash-2.05b-recipe-source", "bash-config-header-source",
+        "bash-pathnames-header-source", "bash-signames-header-source", "bash-version-header-source",
+        "bash-builtext-header-source", "bash-termios-header-source", "bash-syntax-source",
+        "bash-siglist-source", "bash-builtin-stubs-source", "bash-readline-stub-source",
+      ],
+      input_artifact_ids = ["oyacc-smoke-output", "coreutils-smoke", "tinycc-0.9.27", "tinycc27-libc", "tinycc-crt1", "tinycc-libtcc1"],
+      output_artifact_ids = ["bash-configured-source", "bash-2.05b", "sh-2.05b"],
+      digest = blake3 "acd33bededf76dc149f7c7fa14a2e1a1246c5dafe2ef65eee18cf0d82e3d6bcd",
+    },
+    {
+      id = "bash-smoke-exec",
+      name = "bash 2.05b executing bounded commands and rejecting malformed syntax",
+      source_artifact_ids = [],
+      input_artifact_ids = ["bash-2.05b"],
+      output_artifact_ids = ["bash-smoke-output"],
+      digest = blake3 "f7326a0fcc0878e7cd3616640cee376f71bab5583460b5459cac91168809c03f",
+    },
   ],
   patches = [
     {
@@ -823,5 +884,17 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "oyacc-empty-config-source" },
     { from_node_id = "seed", to_node_id = "oyacc-meslibc-patch-source" },
     { from_node_id = "seed", to_node_id = "oyacc-tcc-patch-source" },
+    { from_node_id = "seed", to_node_id = "bash-2.05b-source" },
+    { from_node_id = "seed", to_node_id = "bash-2.05b-recipe-source" },
+    { from_node_id = "seed", to_node_id = "bash-config-header-source" },
+    { from_node_id = "seed", to_node_id = "bash-pathnames-header-source" },
+    { from_node_id = "seed", to_node_id = "bash-signames-header-source" },
+    { from_node_id = "seed", to_node_id = "bash-version-header-source" },
+    { from_node_id = "seed", to_node_id = "bash-builtext-header-source" },
+    { from_node_id = "seed", to_node_id = "bash-termios-header-source" },
+    { from_node_id = "seed", to_node_id = "bash-syntax-source" },
+    { from_node_id = "seed", to_node_id = "bash-siglist-source" },
+    { from_node_id = "seed", to_node_id = "bash-builtin-stubs-source" },
+    { from_node_id = "seed", to_node_id = "bash-readline-stub-source" },
   ],
 } | Manifest

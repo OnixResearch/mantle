@@ -10,6 +10,8 @@ let crunch = import "lib.ncl" in
 
 let stage0 = import "stage0-posix.ncl" in
 let tcc = import "tinycc.ncl" in
+let coreutils = import "coreutils-5.0-tcc.ncl" in
+let oyacc = import "oyacc-tcc.ncl" in
 
 let bash_src = crunch.fetchTarball {
   # provenance: fosslinux/live-bootstrap steps/bash-2.05b/sources
@@ -428,5 +430,5 @@ RLSTUB
       test -L "$out/bin/sh" || test -x "$out/bin/sh"
     "%,
   ],
-  inputs = [stage0, tcc, bash_src],
+  inputs = [stage0, tcc, coreutils, oyacc, bash_src],
 } | crunch.Derivation
