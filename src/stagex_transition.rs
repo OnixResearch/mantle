@@ -45,6 +45,9 @@ pub(crate) const TINYCC_BOOT0_STAGE_ID: &str = "tinycc-boot0-materialization";
 pub(crate) const TINYCC_BOOT0_SMOKE_STAGE_ID: &str = "tinycc-boot0-smoke";
 pub(crate) const TINYCC_FINAL_STAGE_ID: &str = "tinycc-final-materialization";
 pub(crate) const TINYCC_FINAL_SMOKE_STAGE_ID: &str = "tinycc-final-smoke";
+pub(crate) const TINYCC27_RUNTIME_STAGE_ID: &str = "tinycc27-runtime-refresh";
+pub(crate) const TINYCC27_BUILD_STAGE_ID: &str = "tinycc27-materialization";
+pub(crate) const TINYCC27_SMOKE_STAGE_ID: &str = "tinycc27-smoke";
 pub(crate) const HEX0_SEED_BLAKE3: &str = "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80";
 pub(crate) const HEX0_SOURCE_BLAKE3: &str = "0fb23576a10b41df29c165e39514f18c411da96ae71873a6a2e2f0b1d94de614";
 pub(crate) const KAEM_SOURCE_BLAKE3: &str = "5a56b4164dca4d1e03ba35bc8ce4b418a0de2baf1cb9e6a0912607e26532d30d";
@@ -70,7 +73,7 @@ const MES_OUTPUT_MAX_MIB: u64 = 64;
 const MES_OUTPUT_MAX_BYTES: u64 = MES_OUTPUT_MAX_MIB * MIB_BYTES;
 const STAGE_JOB_COUNT: u32 = 1;
 const TRANSITION_STAGE_COUNT_MAX: u32 = 3;
-const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 32;
+const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 35;
 const TINYCC_LINK_CHILD_EVENT_COUNT: usize = 5;
 const PROCESS_POLL_MS: u64 = 10;
 const AUDIT_FLUSH_WAIT_MS: u64 = 50;
@@ -121,6 +124,10 @@ pub(crate) struct StagexTransitionReport {
     pub tinycc_sources: Option<crate::stagex_tinycc::TinyccSourceMaterializationReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tinycc_runtime: Option<crate::stagex_tinycc::TccMesInventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tinycc27_sources: Option<crate::stagex_tinycc27::Tinycc27SourceMaterializationReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tinycc27_runtime: Option<crate::stagex_tinycc27::Tinycc27InventoryReport>,
     pub fallback_events: Vec<String>,
     pub promotions: Vec<OutputPromotionRecord>,
     pub protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
@@ -290,6 +297,12 @@ pub(crate) fn materialize_protected_transition(
                 path: tinycc_root.join("output/bin/tcc"),
                 digest_hex: crate::stagex_tinycc::TINYCC_FINAL_BLAKE3.to_string(),
             },
+            PlannedExecutable {
+                authorization_id: "exec:tinycc27-smoke:tinycc27".to_string(),
+                source_stage_id: TINYCC27_BUILD_STAGE_ID.to_string(),
+                path: request.scratch_dir.join("tinycc27-stage/runtime/output/bin/tcc"),
+                digest_hex: crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3.to_string(),
+            },
         ]);
         planned
     } else {
@@ -416,6 +429,41 @@ pub(crate) fn materialize_protected_transition(
         _ => unreachable!("TinyCC runtime requires source bundle and Mes runtime together"),
     };
 
+    let (tinycc27_sources, tinycc27_runtime) =
+        match (request.source_bundle_path, tinycc_sources.as_ref(), tinycc_runtime.as_ref()) {
+            (Some(source_bundle_path), Some(tinycc_sources), Some(_)) => {
+                let tinycc27_stage = request.scratch_dir.join("tinycc27-stage");
+                fs::create_dir(&tinycc27_stage)
+                    .map_err(|source| io_error("creating create-new protected TinyCC 0.9.27 stage root", source))?;
+                let sources = crate::stagex_tinycc27::materialize_authenticated_tinycc27_source(
+                    source_bundle_path,
+                    &manifest_authority.source_bundle_manifest_blake3,
+                    &tinycc27_stage.join("sources"),
+                )
+                .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+                let result = crate::stagex_tinycc27::derive_tinycc27_inventory(
+                    crate::stagex_tinycc27::Tinycc27InventoryRequest {
+                        source_root: &sources.output_path,
+                        mes_source_root: &tinycc_sources.mes_output_path,
+                        tinycc26_root: &request.scratch_dir.join("tinycc-stage/runtime/output"),
+                        scratch_dir: &tinycc27_stage.join("runtime"),
+                        protected_exec_enforced: true,
+                    },
+                );
+                match result {
+                    Ok(report) => (Some(sources), Some(report)),
+                    Err(error) => {
+                        thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                        let events = supervisor.audit_events();
+                        write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                        return Err(StagexTransitionError::ProtectedExec(error.to_string()));
+                    }
+                }
+            }
+            (None, None, None) => (None, None),
+            _ => unreachable!("TinyCC 0.9.27 requires source bundle and TinyCC 0.9.26 together"),
+        };
+
     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
     let protected_exec_events = supervisor.audit_events();
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
@@ -425,6 +473,7 @@ pub(crate) fn materialize_protected_transition(
         mes_m2.as_ref(),
         mes_runtime.as_ref(),
         tinycc_runtime.as_ref(),
+        tinycc27_runtime.as_ref(),
         &protected_exec_events,
     )?;
     let kaem_smoke_digest_blake3 = blake3_file_hex(&staged.kaem_smoke).map_err(protected_digest_error)?;
@@ -443,6 +492,8 @@ pub(crate) fn materialize_protected_transition(
         mes_runtime,
         tinycc_sources,
         tinycc_runtime,
+        tinycc27_sources,
+        tinycc27_runtime,
         fallback_events: Vec::new(),
         promotions: vec![hex0_promotion, kaem_promotion],
         protected_exec_events,
@@ -526,6 +577,8 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     for (artifact_id, digest_blake3) in crate::stagex_tinycc::tinycc_source_artifact_digests() {
         require_manifest_digest(&sources, artifact_id, digest_blake3)?;
     }
+    let (tinycc27_source_id, tinycc27_source_blake3) = crate::stagex_tinycc27::source_artifact_digest();
+    require_manifest_digest(&sources, tinycc27_source_id, tinycc27_source_blake3)?;
     let generated: BTreeMap<&str, &str> = manifest
         .generated_artifacts
         .iter()
@@ -550,6 +603,12 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     for expected in crate::stagex_tinycc::TINYCC_EXPECTED_OUTPUTS {
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
+    for expected in crate::stagex_tinycc27::TINYCC27_EXPECTED_OUTPUTS {
+        require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
+    }
+    let patches: BTreeMap<&str, &str> =
+        manifest.patches.iter().map(|patch| (patch.id.as_str(), patch.digest.hex_value.as_str())).collect();
+    require_manifest_digest(&patches, "tinycc-0.9.27-stagex-patch", crate::stagex_tinycc27::TINYCC27_PATCH_BLAKE3)?;
     let assumption_ids: BTreeSet<&str> = manifest.environment_assumptions.iter().map(|item| item.id.as_str()).collect();
     if !assumption_ids.contains("linux-kernel") || !assumption_ids.contains("mantle-orchestrator") {
         return Err(StagexTransitionError::InvalidInput(
@@ -687,6 +746,8 @@ fn build_transition_plan(
         stages.extend(mes_runtime_stage_plans(&stage0_root, &mes_root));
         let tinycc_root = staged.seed.parent().expect("staged seed has parent").join("tinycc-stage/runtime");
         stages.extend(tinycc_stage_plans(&stage0_root, &mes_root, &tinycc_root));
+        let tinycc27_root = staged.seed.parent().expect("staged seed has parent").join("tinycc27-stage/runtime");
+        stages.extend(tinycc27_stage_plans(&tinycc_root, &tinycc27_root));
     }
     let stage_count_max = if include_stage0_mini {
         TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX
@@ -822,6 +883,73 @@ fn tinycc_stage_plans(stage0_root: &Path, mes_root: &Path, tinycc_root: &Path) -
                 &final_tcc,
                 TINYCC_FINAL_STAGE_ID,
                 crate::stagex_tinycc::TINYCC_FINAL_BLAKE3,
+            )],
+        ),
+    ]
+}
+
+fn tinycc27_stage_plans(tinycc_root: &Path, tinycc27_root: &Path) -> Vec<StagexStagePlan> {
+    let tinycc26 = tinycc_root.join("output/bin/tcc");
+    let tinycc27 = tinycc27_root.join("output/bin/tcc");
+    vec![
+        mes_stage_plan(
+            TINYCC27_RUNTIME_STAGE_ID,
+            &[
+                TINYCC_FINAL_SMOKE_STAGE_ID,
+                TINYCC_FINAL_STAGE_ID,
+                TINYCC_RUNTIME_STAGE_ID,
+            ],
+            &[
+                crate::stagex_tinycc27::TINYCC27_SOURCE_ARTIFACT_ID,
+                "tinycc-mes-0.27.1-source",
+            ],
+            &[
+                "tinycc-0.9.26",
+                "tinycc-crt1",
+                "tinycc-libc",
+                "tinycc-libtcc1",
+                "tinycc-libgetopt",
+            ],
+            &["tinycc27-va-list".to_string(), "tinycc27-libc".to_string()],
+            vec![authorization(
+                "exec:tinycc27-runtime-refresh:tinycc26",
+                &tinycc26,
+                TINYCC_FINAL_STAGE_ID,
+                crate::stagex_tinycc::TINYCC_FINAL_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            TINYCC27_BUILD_STAGE_ID,
+            &[
+                TINYCC27_RUNTIME_STAGE_ID,
+                TINYCC_FINAL_STAGE_ID,
+                TINYCC_RUNTIME_STAGE_ID,
+            ],
+            &[crate::stagex_tinycc27::TINYCC27_SOURCE_ARTIFACT_ID],
+            &["tinycc-0.9.26", "tinycc27-va-list", "tinycc27-libc", "tinycc-libtcc1"],
+            &["tinycc-0.9.27".to_string(), "tinycc27-alias".to_string()],
+            vec![authorization(
+                "exec:tinycc27-materialization:tinycc26",
+                &tinycc26,
+                TINYCC_FINAL_STAGE_ID,
+                crate::stagex_tinycc::TINYCC_FINAL_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            TINYCC27_SMOKE_STAGE_ID,
+            &[TINYCC27_BUILD_STAGE_ID],
+            &[],
+            &["tinycc-0.9.27"],
+            &[
+                "tinycc27-positive-object".to_string(),
+                "tinycc27-version-observation".to_string(),
+                "tinycc27-negative-observation".to_string(),
+            ],
+            vec![authorization(
+                "exec:tinycc27-smoke:tinycc27",
+                &tinycc27,
+                TINYCC27_BUILD_STAGE_ID,
+                crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
             )],
         ),
     ]
@@ -1579,6 +1707,7 @@ fn validate_transition_audit(
     mes_m2: Option<&crate::stagex_mes::MesM2InventoryReport>,
     mes_runtime: Option<&crate::stagex_mes_lib::MesRuntimeInventoryReport>,
     tinycc_runtime: Option<&crate::stagex_tinycc::TccMesInventoryReport>,
+    tinycc27_runtime: Option<&crate::stagex_tinycc27::Tinycc27InventoryReport>,
     events: &[ProtectedSeccompAuditEvent],
 ) -> Result<(), StagexTransitionError> {
     let expected = transition_expected_audit_events(staged);
@@ -1595,6 +1724,7 @@ fn validate_transition_audit(
         if mes_m2.is_none()
             && mes_runtime.is_none()
             && tinycc_runtime.is_none()
+            && tinycc27_runtime.is_none()
             && events.len() == EXPECTED_AUDIT_EVENT_COUNT
         {
             return Ok(());
@@ -1619,11 +1749,18 @@ fn validate_transition_audit(
     }
     validate_stage0_audit(staged, &stage0.mini, &stage0_events[..mini_event_count])?;
     let after_mini = &stage0_events[mini_event_count..];
-    match (mes_m2, mes_runtime, tinycc_runtime) {
-        (Some(mes_report), Some(runtime_report), Some(tinycc_report)) => {
-            validate_mes_and_tinycc_suffix(stage0, mes_report, runtime_report, tinycc_report, after_mini)
+    match (mes_m2, mes_runtime, tinycc_runtime, tinycc27_runtime) {
+        (Some(mes_report), Some(runtime_report), Some(tinycc_report), tinycc27_report) => {
+            validate_mes_and_tinycc_suffix(
+                stage0,
+                mes_report,
+                runtime_report,
+                tinycc_report,
+                tinycc27_report,
+                after_mini,
+            )
         }
-        (Some(mes_report), Some(runtime_report), None) => {
+        (Some(mes_report), Some(runtime_report), None, None) => {
             let runtime_event_count = mes_runtime_event_count(runtime_report)?;
             let runtime_start = after_mini.len().checked_sub(runtime_event_count).ok_or_else(|| {
                 StagexTransitionError::Audit(format!(
@@ -1641,7 +1778,7 @@ fn validate_transition_audit(
             validate_mes_m2_audit(stage0, mes_report, &before_runtime[mes_start..])?;
             validate_mes_runtime_audit(stage0, mes_report, runtime_report, &after_mini[runtime_start..])
         }
-        (Some(mes_report), None, None) => {
+        (Some(mes_report), None, None, None) => {
             let mes_event_count = mes_m2_event_count(mes_report)?;
             let mes_start = after_mini
                 .len()
@@ -1650,9 +1787,9 @@ fn validate_transition_audit(
             validate_stage0_full_audit(stage0, &after_mini[..mes_start])?;
             validate_mes_m2_audit(stage0, mes_report, &after_mini[mes_start..])
         }
-        (None, None, None) => validate_stage0_full_audit(stage0, after_mini),
+        (None, None, None, None) => validate_stage0_full_audit(stage0, after_mini),
         _ => Err(StagexTransitionError::Audit(
-            "Mes or TinyCC report exists without its predecessor report".to_string(),
+            "Mes, TinyCC, or TinyCC 0.9.27 report exists without its predecessor report".to_string(),
         )),
     }
 }
@@ -1669,6 +1806,7 @@ fn validate_mes_and_tinycc_suffix(
     mes_m2: &crate::stagex_mes::MesM2InventoryReport,
     mes_runtime: &crate::stagex_mes_lib::MesRuntimeInventoryReport,
     tinycc: &crate::stagex_tinycc::TccMesInventoryReport,
+    tinycc27: Option<&crate::stagex_tinycc27::Tinycc27InventoryReport>,
     events: &[ProtectedSeccompAuditEvent],
 ) -> Result<(), StagexTransitionError> {
     let mes_path = mes_m2
@@ -1702,7 +1840,19 @@ fn validate_mes_and_tinycc_suffix(
     validate_stage0_full_audit(stage0, &events[..mes_start])?;
     validate_mes_m2_audit(stage0, mes_m2, &events[mes_start..mes_end])?;
     validate_mes_runtime_audit(stage0, mes_m2, mes_runtime, &events[mes_end..runtime_end])?;
-    validate_tinycc_audit(stage0, mes_m2, tinycc, &events[runtime_end..])
+    let compiler_events = &events[runtime_end..];
+    if let Some(tinycc27) = tinycc27 {
+        let tinycc27_event_count = tinycc27_expected_event_count(tinycc27)?;
+        let tinycc27_start = compiler_events.len().checked_sub(tinycc27_event_count).ok_or_else(|| {
+            StagexTransitionError::Audit(format!(
+                "expected {tinycc27_event_count} trailing TinyCC 0.9.27 events, observed {}",
+                compiler_events.len()
+            ))
+        })?;
+        validate_tinycc_audit(stage0, mes_m2, tinycc, &compiler_events[..tinycc27_start])?;
+        return validate_tinycc27_audit(tinycc, tinycc27, &compiler_events[tinycc27_start..]);
+    }
+    validate_tinycc_audit(stage0, mes_m2, tinycc, compiler_events)
 }
 
 fn transition_expected_audit_events(
@@ -2127,6 +2277,92 @@ fn validate_tinycc_audit(
     Ok(())
 }
 
+fn validate_tinycc27_audit(
+    tinycc: &crate::stagex_tinycc::TccMesInventoryReport,
+    tinycc27: &crate::stagex_tinycc27::Tinycc27InventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    let expected_count = tinycc27_expected_event_count(tinycc27)?;
+    if events.len() != expected_count {
+        return Err(StagexTransitionError::Audit(format!(
+            "TinyCC 0.9.27 protected audit expected {expected_count} events, observed {}",
+            events.len()
+        )));
+    }
+    let tinycc26_binary = tinycc_output_path(tinycc, "tinycc-0.9.26")?;
+    let tinycc26_alias = tinycc26_binary
+        .parent()
+        .ok_or_else(|| StagexTransitionError::Audit("TinyCC 0.9.26 path has no parent".to_string()))?
+        .join("tcc");
+    let tinycc27_alias = tinycc27_output_path(tinycc27, "tinycc27-alias")?;
+    let predecessor_count = tinycc27_predecessor_event_count(tinycc27)?;
+    for (index, event) in events.iter().enumerate() {
+        let (path, digest, inventory_id) = if index < predecessor_count {
+            (
+                &tinycc26_alias,
+                crate::stagex_tinycc::TINYCC_FINAL_BLAKE3,
+                "planned:tinycc-final-materialization:exec:tinycc-final-smoke:tinycc",
+            )
+        } else {
+            (
+                &tinycc27_alias,
+                crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
+                "planned:tinycc27-materialization:exec:tinycc27-smoke:tinycc27",
+            )
+        };
+        validate_tinycc27_event(event, path, digest, inventory_id)?;
+    }
+    assert_eq!(events.len(), expected_count);
+    assert!(predecessor_count < expected_count);
+    Ok(())
+}
+
+fn validate_tinycc27_event(
+    event: &ProtectedSeccompAuditEvent,
+    expected_path: &Path,
+    expected_digest: &str,
+    expected_inventory_id: &str,
+) -> Result<(), StagexTransitionError> {
+    let valid = event.policy_decision == "allowed"
+        && event.executable_path == expected_path
+        && event.tracee_path == expected_path
+        && event.resolved_host_path == expected_path
+        && event.digest_hex == expected_digest
+        && event.inventory_entry_id.as_deref() == Some(expected_inventory_id);
+    if !valid {
+        return Err(StagexTransitionError::Audit(format!(
+            "TinyCC 0.9.27 event for {} did not match exact planned authority",
+            event.executable_path.display()
+        )));
+    }
+    assert_eq!(event.executable_path, expected_path);
+    assert_eq!(event.digest_hex, expected_digest);
+    Ok(())
+}
+
+fn tinycc27_predecessor_event_count(
+    report: &crate::stagex_tinycc27::Tinycc27InventoryReport,
+) -> Result<usize, StagexTransitionError> {
+    let count = report
+        .runtime_command_count
+        .checked_add(report.build_command_count)
+        .ok_or_else(|| StagexTransitionError::Audit("TinyCC 0.9.27 predecessor count overflow".to_string()))?;
+    usize::try_from(count)
+        .map_err(|_| StagexTransitionError::Audit("TinyCC 0.9.27 predecessor count does not fit usize".to_string()))
+}
+
+fn tinycc27_expected_event_count(
+    report: &crate::stagex_tinycc27::Tinycc27InventoryReport,
+) -> Result<usize, StagexTransitionError> {
+    let command_count = report
+        .runtime_command_count
+        .checked_add(report.build_command_count)
+        .and_then(|count| count.checked_add(report.smoke_command_count))
+        .ok_or_else(|| StagexTransitionError::Audit("TinyCC 0.9.27 command count overflow".to_string()))?;
+    usize::try_from(command_count)
+        .map_err(|_| StagexTransitionError::Audit("TinyCC 0.9.27 command count does not fit usize".to_string()))
+}
+
 fn tinycc_expected_event_count(
     compile_command_count: u32,
     runtime_refresh_command_count: u32,
@@ -2179,6 +2415,18 @@ fn tinycc_output_path(
         .find(|output| output.artifact_id == artifact_id)
         .map(|output| output.path.clone())
         .ok_or_else(|| StagexTransitionError::Audit(format!("TinyCC report lacks output {artifact_id}")))
+}
+
+fn tinycc27_output_path(
+    report: &crate::stagex_tinycc27::Tinycc27InventoryReport,
+    artifact_id: &str,
+) -> Result<PathBuf, StagexTransitionError> {
+    report
+        .outputs
+        .iter()
+        .find(|output| output.artifact_id == artifact_id)
+        .map(|output| output.path.clone())
+        .ok_or_else(|| StagexTransitionError::Audit(format!("TinyCC 0.9.27 report lacks output {artifact_id}")))
 }
 
 fn stage0_artifact_path(root: &Path, artifact_id: &str) -> Result<PathBuf, StagexTransitionError> {
@@ -2307,7 +2555,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
-    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "9c3abb9ce93ea57c50eedd3d989b7464c08c4f6ae0510eb374103e3a09055f60";
+    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "c531f00a7501ab0fab452ddb029e6a84d5257bb06f5a2692aa9b72f5cfb8a6ed";
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {
@@ -2404,6 +2652,33 @@ mod tests {
     }
 
     #[test]
+    fn tinycc27_event_count_is_closed_over_runtime_build_and_smokes() {
+        const EXPECTED_EVENT_COUNT: usize = 7;
+        const EXPECTED_PREDECESSOR_COUNT: usize = 4;
+        let report = crate::stagex_tinycc27::Tinycc27InventoryReport {
+            format: "test",
+            source_patch_digest_blake3: "a".repeat(blake3::OUT_LEN * 2),
+            patched_files: vec!["tcc.c".to_string()],
+            unified_libc_source_count: 1,
+            runtime_command_count: 3,
+            build_command_count: 1,
+            smoke_command_count: 3,
+            outputs: Vec::new(),
+            protected_exec_enforced: true,
+            fallback_events: Vec::new(),
+            non_claim: "test",
+        };
+        assert_eq!(tinycc27_expected_event_count(&report).unwrap(), EXPECTED_EVENT_COUNT);
+        assert_eq!(tinycc27_predecessor_event_count(&report).unwrap(), EXPECTED_PREDECESSOR_COUNT);
+
+        let mut overflow = report;
+        overflow.runtime_command_count = u32::MAX;
+        let error = tinycc27_expected_event_count(&overflow).unwrap_err();
+        assert!(error.to_string().contains("command count overflow"));
+        assert!(!error.to_string().is_empty());
+    }
+
+    #[test]
     fn bounded_retry_classification_is_exact() {
         let exact = io::Error::from_raw_os_error(libc::ETXTBSY);
         let other = io::Error::from_raw_os_error(libc::EACCES);
@@ -2470,6 +2745,8 @@ mod tests {
         assert_eq!(report.mes_runtime.is_some(), source_bundle.is_some());
         assert_eq!(report.tinycc_sources.is_some(), source_bundle.is_some());
         assert_eq!(report.tinycc_runtime.is_some(), source_bundle.is_some());
+        assert_eq!(report.tinycc27_sources.is_some(), source_bundle.is_some());
+        assert_eq!(report.tinycc27_runtime.is_some(), source_bundle.is_some());
         assert!(
             report
                 .stage0_full
@@ -2479,6 +2756,7 @@ mod tests {
         assert!(report.mes_m2.as_ref().is_none_or(|mes| mes.protected_exec_enforced));
         assert!(report.mes_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
         assert!(report.tinycc_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
+        assert!(report.tinycc27_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
         assert_eq!(report.promotions.len(), EXPECTED_PROMOTION_COUNT);
         assert!(report.fallback_events.is_empty());
         assert!(scratch.join(REPORT_FILE_NAME).is_file());

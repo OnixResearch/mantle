@@ -355,7 +355,7 @@ fn prepare_tcc_mes_runtime(
     Ok(())
 }
 
-fn create_unified_libc(mes_root: &Path) -> Result<u32, TinyccError> {
+pub(crate) fn create_unified_libc(mes_root: &Path) -> Result<u32, TinyccError> {
     let configure = fs::read_to_string(mes_root.join("build-aux/configure-lib.sh"))
         .map_err(|error| TinyccError::Materialization(format!("reading Mes configure-lib.sh: {error}")))?;
     let sources = crate::stagex_mes_lib::derive_mes_unified_libc_sources(&configure)?;
@@ -947,7 +947,7 @@ fn patch_tinycc_varargs_paths(root: &Path) -> Result<(), TinyccError> {
     Ok(())
 }
 
-fn replace_required_text(path: &Path, old: &str, new: &str) -> Result<(), TinyccError> {
+pub(crate) fn replace_required_text(path: &Path, old: &str, new: &str) -> Result<(), TinyccError> {
     let text = fs::read_to_string(path).map_err(|error| {
         TinyccError::Materialization(format!("reading TinyCC patch target {}: {error}", path.display()))
     })?;
@@ -998,7 +998,7 @@ fn patched_source_digest(root: &Path) -> Result<String, TinyccError> {
     Ok(digest)
 }
 
-fn make_tree_owner_writable(root: &Path) -> Result<(), TinyccError> {
+pub(crate) fn make_tree_owner_writable(root: &Path) -> Result<(), TinyccError> {
     use std::os::unix::fs::PermissionsExt;
     const ENTRY_COUNT_MAX: u32 = 30_000;
     const OWNER_WRITE_MODE: u32 = 0o200;
@@ -1038,7 +1038,7 @@ fn make_tree_owner_writable(root: &Path) -> Result<(), TinyccError> {
     Ok(())
 }
 
-fn set_owner_executable(path: &Path) -> Result<(), TinyccError> {
+pub(crate) fn set_owner_executable(path: &Path) -> Result<(), TinyccError> {
     use std::os::unix::fs::PermissionsExt;
     const EXECUTABLE_MODE: u32 = 0o755;
     let mut permissions = fs::metadata(path)

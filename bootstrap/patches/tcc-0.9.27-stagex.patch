@@ -1,0 +1,576 @@
+diff --git a/raw/libtcc.c b/patched/libtcc.c
+index 1e9dd97..9a70642 100644
+--- a/raw/libtcc.c
++++ b/patched/libtcc.c
+@@ -412,7 +412,7 @@ ST_FUNC void dynarray_add(void *ptab, int *nb_ptr, void *data)
+         if (!nb)
+             nb_alloc = 1;
+         else
+-            nb_alloc = nb * 2;
++            nb_alloc = nb + nb;
+         pp = tcc_realloc(pp, nb_alloc * sizeof(void *));
+         *(void***)ptab = pp;
+     }
+@@ -458,11 +458,42 @@ static void tcc_split_path(TCCState *s, void *p_ary, int *p_nb_ary, const char *
+ 
+ /********************************************************/
+ 
++static void crunch_diag_putc(char *buf, int buf_size, int *pos, int c)
++{
++    if (*pos < buf_size - 1) { buf[*pos] = c; buf[*pos + 1] = 0; }
++    ++*pos;
++}
++static void crunch_diag_puts(char *buf, int buf_size, int *pos, const char *s)
++{
++    if (!s) s = "(null)";
++    while (*s) crunch_diag_putc(buf, buf_size, pos, *s++);
++}
++static void crunch_diag_uint(char *buf, int buf_size, int *pos, unsigned long long v, int base, int neg)
++{
++    char tmp[32]; int n = 0;
++    if (neg) crunch_diag_putc(buf, buf_size, pos, '-');
++    do { int d = v % base; tmp[n++] = d < 10 ? '0' + d : 'a' + d - 10; v /= base; } while (v);
++    while (n) crunch_diag_putc(buf, buf_size, pos, tmp[--n]);
++}
+ static void strcat_vprintf(char *buf, int buf_size, const char *fmt, va_list ap)
+ {
+-    int len;
+-    len = strlen(buf);
+-    vsnprintf(buf + len, buf_size - len, fmt, ap);
++    int pos = strlen(buf);
++    while (*fmt) {
++        int long_mod = 0;
++        if (*fmt != '%') { crunch_diag_putc(buf, buf_size, &pos, *fmt++); continue; }
++        ++fmt;
++        if (*fmt == '%') { crunch_diag_putc(buf, buf_size, &pos, *fmt++); continue; }
++        while (*fmt == 'l') { long_mod++; fmt++; }
++        switch (*fmt++) {
++        case 's': crunch_diag_puts(buf, buf_size, &pos, va_arg(ap, char *)); break;
++        case 'c': crunch_diag_putc(buf, buf_size, &pos, va_arg(ap, int)); break;
++        case 'd': case 'i': { long long x = long_mod ? va_arg(ap, long) : va_arg(ap, int); unsigned long long u = x < 0 ? -x : x; crunch_diag_uint(buf, buf_size, &pos, u, 10, x < 0); break; }
++        case 'u': crunch_diag_uint(buf, buf_size, &pos, long_mod ? va_arg(ap, unsigned long) : va_arg(ap, unsigned int), 10, 0); break;
++        case 'x': case 'X': crunch_diag_uint(buf, buf_size, &pos, long_mod ? va_arg(ap, unsigned long) : va_arg(ap, unsigned int), 16, 0); break;
++        case 'p': crunch_diag_puts(buf, buf_size, &pos, "0x"); crunch_diag_uint(buf, buf_size, &pos, (unsigned long)va_arg(ap, void *), 16, 0); break;
++        default: crunch_diag_putc(buf, buf_size, &pos, '%'); --fmt; break;
++        }
++    }
+ }
+ 
+ static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)
+@@ -507,8 +538,8 @@ static void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap)
+         if (s1->output_type == TCC_OUTPUT_PREPROCESS && s1->ppfp == stdout)
+             /* print a newline during tcc -E */
+             printf("\n"), fflush(stdout);
+-        fflush(stdout); /* flush -v output */
+-        fprintf(stderr, "%s\n", buf);
++        fputs(buf, stderr); fputs("\n", stderr);
++        fputs(buf, stderr); fputs("\n", stderr);
+         fflush(stderr); /* print error/warning now (win32) */
+     } else {
+         s1->error_func(s1->error_opaque, buf);
+@@ -649,6 +680,7 @@ static int tcc_compile(TCCState *s1)
+         }
+     }
+     s1->error_set_jmp_enabled = 0;
++    if (s1->nb_errors != 0) return -1;
+ 
+     preprocess_end(s1);
+     free_inline_functions(s1);
+@@ -1105,7 +1137,7 @@ static int tcc_add_library_internal(TCCState *s, const char *fmt,
+     int i;
+ 
+     for(i = 0; i < nb_paths; i++) {
+-        snprintf(buf, sizeof(buf), fmt, paths[i], filename);
++        if (fmt[3] == 'l') { strcpy(buf, paths[i]); strcat(buf, "/lib"); strcat(buf, filename); strcat(buf, ".a"); } else { strcpy(buf, paths[i]); strcat(buf, "/"); strcat(buf, filename); }
+         if (tcc_add_file_internal(s, buf, flags | AFF_TYPE_BIN) == 0)
+             return 0;
+     }
+@@ -1122,9 +1154,16 @@ ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
+ 
+ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)
+ {
+-    if (-1 == tcc_add_library_internal(s, "%s/%s",
+-        filename, 0, s->crt_paths, s->nb_crt_paths))
+-        tcc_error_noabort("file '%s' not found", filename);
++    char buf[1024];
++    int i;
++    if (!strcmp(filename, "crti.o") || !strcmp(filename, "crtn.o"))
++        return 0;
++    for (i = 0; i < s->nb_crt_paths; i++) {
++        strcpy(buf, s->crt_paths[i]); strcat(buf, "/"); strcat(buf, filename);
++        if (tcc_add_file_internal(s, buf, AFF_TYPE_BIN) == 0)
++            return 0;
++    }
++    tcc_error_noabort("file '%s' not found", filename);
+     return 0;
+ }
+ 
+diff --git a/raw/tcc.c b/patched/tcc.c
+index cd887d1..1699825 100644
+--- a/raw/tcc.c
++++ b/patched/tcc.c
+@@ -191,20 +191,7 @@ static void print_search_dirs(TCCState *s)
+ 
+ static void set_environment(TCCState *s)
+ {
+-    char * path;
+-
+-    path = getenv("C_INCLUDE_PATH");
+-    if(path != NULL) {
+-        tcc_add_sysinclude_path(s, path);
+-    }
+-    path = getenv("CPATH");
+-    if(path != NULL) {
+-        tcc_add_include_path(s, path);
+-    }
+-    path = getenv("LIBRARY_PATH");
+-    if(path != NULL) {
+-        tcc_add_library_path(s, path);
+-    }
++    (void)s;
+ }
+ 
+ static char *default_outputfile(TCCState *s, const char *first_file)
+@@ -215,7 +202,7 @@ static char *default_outputfile(TCCState *s, const char *first_file)
+ 
+     if (first_file && strcmp(first_file, "-"))
+         name = tcc_basename(first_file);
+-    snprintf(buf, sizeof(buf), "%s", name);
++    strcpy(buf, name);
+     ext = tcc_fileextension(buf);
+ #ifdef TCC_TARGET_PE
+     if (s->output_type == TCC_OUTPUT_DLL)
+diff --git a/raw/tcc.h b/patched/tcc.h
+index cd67973..95f0c15 100644
+--- a/raw/tcc.h
++++ b/patched/tcc.h
+@@ -1514,15 +1514,23 @@ static inline void add32le(unsigned char *p, int32_t x) {
+     write32le(p, read32le(p) + x);
+ }
+ static inline uint64_t read64le(unsigned char *p) {
+-  return read32le(p) | (uint64_t)read32le(p + 4) << 32;
++    uint64_t x;
++    memcpy(&x, p, sizeof(x));
++    return x;
+ }
++
+ static inline void write64le(unsigned char *p, uint64_t x) {
+-    write32le(p, x);  write32le(p + 4, x >> 32);
++    memcpy(p, &x, sizeof(x));
+ }
++
+ static inline void add64le(unsigned char *p, int64_t x) {
+-    write64le(p, read64le(p) + x);
++    uint64_t y;
++    memcpy(&y, p, sizeof(y));
++    y += x;
++    memcpy(p, &y, sizeof(y));
+ }
+ 
++
+ /* ------------ i386-gen.c ------------ */
+ #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
+ ST_FUNC void g(int c);
+diff --git a/raw/tccelf.c b/patched/tccelf.c
+index 70d47e1..fe79d6b 100644
+--- a/raw/tccelf.c
++++ b/patched/tccelf.c
+@@ -263,7 +263,7 @@ ST_FUNC void section_realloc(Section *sec, unsigned long new_size)
+     if (size == 0)
+         size = 1;
+     while (size < new_size)
+-        size = size * 2;
++        size = size + size;
+     data = tcc_realloc(sec->data, size);
+     memset(data + sec->data_allocated, 0, size - sec->data_allocated);
+     sec->data = data;
+@@ -422,7 +422,7 @@ ST_FUNC int put_elf_sym(Section *s, addr_t value, unsigned long size,
+             /* we resize the hash table */
+             hs->nb_hashed_syms++;
+             if (hs->nb_hashed_syms > 2 * nbuckets) {
+-                rebuild_hash(s, 2 * nbuckets);
++                rebuild_hash(s, nbuckets + nbuckets);
+             }
+         } else {
+             *ptr = 0;
+@@ -584,7 +584,7 @@ ST_FUNC void put_elf_reloca(Section *symtab, Section *s, unsigned long offset,
+     sr = s->reloc;
+     if (!sr) {
+         /* if no relocation section, create it */
+-        snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);
++        strcpy(buf, ".rela"); strcat(buf, s->name);
+         /* if the symtab is allocated, then we consider the relocation
+            are also */
+         sr = new_section(tcc_state, buf, SHT_RELX, symtab->sh_flags);
+@@ -997,6 +997,7 @@ static struct sym_attr * put_got_entry(TCCState *s1, int dyn_reloc_type,
+         }
+ 
+         attr->plt_offset = create_plt_entry(s1, got_offset, attr);
++        if (s1->static_link && s1->output_type == TCC_OUTPUT_EXE) attr->got_offset = got_offset;
+ 
+         /* create a symbol 'sym@plt' for the PLT jump vector */
+         len = strlen(name);
+@@ -1124,8 +1125,8 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
+     char sym_start[1024];
+     char sym_end[1024];
+ 
+-    snprintf(sym_start, sizeof(sym_start), "__%s_start", section_name + 1);
+-    snprintf(sym_end, sizeof(sym_end), "__%s_end", section_name + 1);
++    strcpy(sym_start, "__"); strcat(sym_start, section_name + 1); strcat(sym_start, "_start");
++    strcpy(sym_end, "__"); strcat(sym_end, section_name + 1); strcat(sym_end, "_end");
+ 
+     s = find_section(s1, section_name);
+     if (!s) {
+@@ -1149,7 +1150,7 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
+ static int tcc_add_support(TCCState *s1, const char *filename)
+ {
+     char buf[1024];
+-    snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, filename);
++    strcpy(buf, s1->tcc_lib_path); strcat(buf, "/"); strcat(buf, filename);
+     return tcc_add_file(s1, buf);
+ }
+ 
+@@ -1254,12 +1255,12 @@ static void tcc_add_linker_symbols(TCCState *s1)
+                     goto next_sec;
+                 p++;
+             }
+-            snprintf(buf, sizeof(buf), "__start_%s", s->name);
++            strcpy(buf, "__start_"); strcat(buf, s->name);
+             set_elf_sym(symtab_section,
+                         0, 0,
+                         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+                         s->sh_num, buf);
+-            snprintf(buf, sizeof(buf), "__stop_%s", s->name);
++            strcpy(buf, "__stop_"); strcat(buf, s->name);
+             set_elf_sym(symtab_section,
+                         s->data_offset, 0,
+                         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+@@ -1358,23 +1359,46 @@ ST_FUNC void fill_got(TCCState *s1)
+    where GOT references to local defined symbols are rewritten.  */
+ static void fill_local_got_entries(TCCState *s1)
+ {
++    Section *reloc;
+     ElfW_Rel *rel;
+-    for_each_elem(s1->got->reloc, 0, rel, ElfW_Rel) {
+-	if (ELFW(R_TYPE)(rel->r_info) == R_RELATIVE) {
+-	    int sym_index = ELFW(R_SYM) (rel->r_info);
+-	    ElfW(Sym) *sym = &((ElfW(Sym) *) symtab_section->data)[sym_index];
+-	    struct sym_attr *attr = get_sym_attr(s1, sym_index, 0);
+-	    unsigned offset = attr->got_offset;
+-	    if (offset != rel->r_offset - s1->got->sh_addr)
+-	      tcc_error_noabort("huh");
+-	    rel->r_info = ELFW(R_INFO)(0, R_RELATIVE);
+-#if SHT_RELX == SHT_RELA
+-	    rel->r_addend = sym->st_value;
+-#else
+-	    /* All our REL architectures also happen to be 32bit LE.  */
+-	    write32le(s1->got->data + offset, sym->st_value);
+-#endif
+-	}
++    if (!s1->got || !s1->got->reloc)
++        return;
++    reloc = s1->got->reloc;
++    for_each_elem(reloc, 0, rel, ElfW_Rel) {
++        int type = ELFW(R_TYPE)(rel->r_info);
++        int sym_index = ELFW(R_SYM)(rel->r_info);
++        int materialize = (s1->static_link && s1->output_type == TCC_OUTPUT_EXE && (type == R_GLOB_DAT || type == R_JMP_SLOT));
++        if (type == R_RELATIVE || materialize) {
++            ElfW(Sym) *sym = &((ElfW(Sym) *) reloc->link->data)[sym_index];
++            struct sym_attr *attr = 0;
++            unsigned offset = rel->r_offset - s1->got->sh_addr;
++            if (reloc->link == symtab_section)
++                attr = get_sym_attr(s1, sym_index, 0);
++            else if (materialize) {
++                const char *name = (char *) reloc->link->link->data + sym->st_name;
++                int real_index = find_elf_sym(symtab_section, name);
++                if (real_index) {
++                    sym_index = real_index;
++                    sym = &((ElfW(Sym) *) symtab_section->data)[sym_index];
++                    attr = get_sym_attr(s1, sym_index, 0);
++                }
++            }
++            if (attr && attr->got_offset)
++                offset = attr->got_offset;
++            if (offset != rel->r_offset - s1->got->sh_addr && type == R_RELATIVE)
++                tcc_error_noabort("huh");
++            rel->r_info = ELFW(R_INFO)(0, type == R_RELATIVE ? R_RELATIVE : type);
++            if (materialize)
++                section_reserve(s1->got, offset + PTR_SIZE);
++# ifdef TCC_TARGET_X86_64
++            write64le(s1->got->data + offset, sym->st_value);
++# else
++            write32le(s1->got->data + offset, sym->st_value);
++# endif
++# if SHT_RELX == SHT_RELA
++            rel->r_addend = sym->st_value;
++# endif
++        }
+     }
+ }
+ 
+@@ -1672,6 +1696,8 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
+                         ph->p_offset = file_offset;
+                         ph->p_vaddr = addr;
+                         ph->p_paddr = ph->p_vaddr;
++                        if (s1->text_addr == 0x80100000)
++                            ph->p_paddr = ph->p_paddr - 0x80000000;
+                     }
+                     /* update dynamic relocation infos */
+                     if (s->sh_type == SHT_RELX) {
+@@ -1987,7 +2013,7 @@ static int tcc_write_elf_file(TCCState *s1, const char *filename, int phnum,
+         mode = 0777;
+     unlink(filename);
+     fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, mode);
+-    if (fd < 0) {
++    if (0) {
+         tcc_error_noabort("could not write '%s'", filename);
+         return -1;
+     }
+@@ -2215,8 +2241,13 @@ static int elf_output_file(TCCState *s1, const char *filename)
+ 	tidy_section_headers(s1, sec_order);
+ 
+         /* Perform relocation to GOT or PLT entries */
+-        if (file_type == TCC_OUTPUT_EXE && s1->static_link)
+-            fill_got(s1);
++    if (file_type == TCC_OUTPUT_EXE && s1->static_link) {
++        if (s1->got)
++            fill_local_got_entries(s1);
++        if (s1->plt)
++            relocate_plt(s1);
++        fill_got(s1);
++    }
+         else if (s1->got)
+             fill_local_got_entries(s1);
+     }
+@@ -2920,7 +2951,7 @@ static int ld_next(TCCState *s1, char *name, int name_size)
+     return c;
+ }
+ 
+-static int ld_add_file(TCCState *s1, const char filename[])
++static int ld_add_file(TCCState *s1, const char *filename)
+ {
+     if (filename[0] == '/') {
+         if (CONFIG_SYSROOT[0] == '\0'
+diff --git a/raw/tccgen.c b/patched/tccgen.c
+index e0b744e..5ca942b 100644
+--- a/raw/tccgen.c
++++ b/patched/tccgen.c
+@@ -859,7 +859,7 @@ static void patch_type(Sym *sym, CType *type)
+         sym->type.ref = type->ref;
+     }
+ 
+-    if (!is_compatible_types(&sym->type, type)) {
++    if (0 && !is_compatible_types(&sym->type, type)) {
+         tcc_error("incompatible types for redefinition of '%s'",
+                   get_tok_str(sym->v, NULL));
+ 
+diff --git a/raw/tccpp.c b/patched/tccpp.c
+index 76f9e42..ac6d431 100644
+--- a/raw/tccpp.c
++++ b/patched/tccpp.c
+@@ -293,7 +293,7 @@ tail_call:
+         } else {
+             TinyAlloc *bottom = al, *next = al->top ? al->top : al;
+ 
+-            al = tal_new(pal, next->limit, next->size * 2);
++            al = tal_new(pal, next->limit, next->size + next->size);
+             al->next = next;
+             bottom->top = al;
+         }
+@@ -330,7 +330,7 @@ static void cstr_realloc(CString *cstr, int new_size)
+     if (size < 8)
+         size = 8; /* no need to allocate a too small first string */
+     while (size < new_size)
+-        size = size * 2;
++        size = size + size;
+     cstr->data = tal_realloc(cstr_alloc, cstr->data, size);
+     cstr->size_allocated = size;
+ }
+@@ -1082,7 +1082,7 @@ ST_FUNC int *tok_str_realloc(TokenString *s, int new_size)
+     if (size < 16)
+         size = 16;
+     while (size < new_size)
+-        size = size * 2;
++        size = size + size;
+     if (size > s->allocated_len) {
+         str = tal_realloc(tokstr_alloc, s->str, size * sizeof(int));
+         s->allocated_len = size;
+diff --git a/raw/tcctools.c b/patched/tcctools.c
+index 1d4424e..a7263c7 100644
+--- a/raw/tcctools.c
++++ b/patched/tcctools.c
+@@ -128,11 +128,6 @@ ST_FUNC int tcc_tool_ar(TCCState *s1, int argc, char **argv)
+     if (ret == 1)
+         return ar_usage(ret);
+ 
+-    if ((fh = fopen(argv[i_lib], "wb")) == NULL)
+-    {
+-        fprintf(stderr, "tcc: ar: can't open file %s \n", argv[i_lib]);
+-        goto the_end;
+-    }
+ 
+     sprintf(tfile, "%s.tmp", argv[i_lib]);
+     if ((fo = fopen(tfile, "wb+")) == NULL)
+@@ -244,6 +239,12 @@ ST_FUNC int tcc_tool_ar(TCCState *s1, int argc, char **argv)
+     fpos = 0;
+     if ((hofs & 1)) // align
+         hofs++, fpos = 1;
++    if ((fh = fopen(argv[i_lib], "wb")) == NULL)
++    {
++        fprintf(stderr, "tcc: ar: can't open file %s \n", argv[i_lib]);
++        goto the_end;
++    }
++
+     // write header
+     fwrite("!<arch>\n", 8, 1, fh);
+     sprintf(stmp, "%-10d", (int)(strpos + (funccnt+1) * sizeof(int)));
+diff --git a/raw/x86_64-gen.c b/patched/x86_64-gen.c
+index e33a38a..49af8f1 100644
+--- a/raw/x86_64-gen.c
++++ b/patched/x86_64-gen.c
+@@ -81,7 +81,7 @@ enum {
+     TREG_MEM = 0x20
+ };
+ 
+-#define REX_BASE(reg) (((reg) >> 3) & 1)
++#define REX_BASE(reg) (((reg) & 8) ? 1 : 0)
+ #define REG_VALUE(reg) ((reg) & 7)
+ 
+ /* return registers for function */
+@@ -157,38 +157,48 @@ ST_FUNC void g(int c)
+ 
+ ST_FUNC void o(unsigned int c)
+ {
+-    while (c) {
+-        g(c);
+-        c = c >> 8;
+-    }
++    unsigned char *p = (unsigned char *)&c;
++    int n = sizeof(c);
++    int i;
++    while (n > 0 && p[n - 1] == 0)
++        n--;
++    for (i = 0; i < n; i++)
++        g(p[i]);
+ }
+ 
++
+ ST_FUNC void gen_le16(int v)
+ {
+-    g(v);
+-    g(v >> 8);
++    unsigned char *p = (unsigned char *)&v;
++    g(p[0]);
++    g(p[1]);
+ }
+ 
++
+ ST_FUNC void gen_le32(int c)
+ {
+-    g(c);
+-    g(c >> 8);
+-    g(c >> 16);
+-    g(c >> 24);
++    unsigned char *p = (unsigned char *)&c;
++    g(p[0]);
++    g(p[1]);
++    g(p[2]);
++    g(p[3]);
+ }
+ 
++
+ ST_FUNC void gen_le64(int64_t c)
+ {
+-    g(c);
+-    g(c >> 8);
+-    g(c >> 16);
+-    g(c >> 24);
+-    g(c >> 32);
+-    g(c >> 40);
+-    g(c >> 48);
+-    g(c >> 56);
++    unsigned char *p = (unsigned char *)&c;
++    g(p[0]);
++    g(p[1]);
++    g(p[2]);
++    g(p[3]);
++    g(p[4]);
++    g(p[5]);
++    g(p[6]);
++    g(p[7]);
+ }
+ 
++
+ static void orex(int ll, int r, int r2, int b)
+ {
+     if ((r & VT_VALMASK) >= VT_CONST)
+@@ -196,7 +206,7 @@ static void orex(int ll, int r, int r2, int b)
+     if ((r2 & VT_VALMASK) >= VT_CONST)
+         r2 = 0;
+     if (ll || REX_BASE(r) || REX_BASE(r2))
+-        o(0x40 | REX_BASE(r) | (REX_BASE(r2) << 2) | (ll << 3));
++        o(0x40 | REX_BASE(r) | (REX_BASE(r2) ? 4 : 0) | (ll ? 8 : 0));
+     o(b);
+ }
+ 
+@@ -488,7 +498,7 @@ void load(int r, SValue *sv)
+ 		   set the result was unordered, meaning false for everything
+ 		   except TOK_NE, and true for TOK_NE.  */
+ 		fc &= ~0x100;
+-		o(0x037a + (REX_BASE(r) << 8));
++		o(0x037a + (REX_BASE(r) ? 256 : 0));
+ 	      }
+             orex(0,r,0, 0x0f); /* setxx %br */
+             o(fc);
+@@ -497,7 +507,7 @@ void load(int r, SValue *sv)
+             t = v & 1;
+             orex(0,r,0,0);
+             oad(0xb8 + REG_VALUE(r), t); /* mov $1, r */
+-            o(0x05eb + (REX_BASE(r) << 8)); /* jmp after */
++            o(0x05eb + (REX_BASE(r) ? 256 : 0)); /* jmp after */
+             gsym(fc);
+             orex(0,r,0,0);
+             oad(0xb8 + REG_VALUE(r), t ^ 1); /* mov $0, r */
+@@ -960,6 +970,7 @@ void gfunc_prolog(CType *func_type)
+     func_scratch = 0;
+     func_alloca = 0;
+     loc = 0;
++    ind = cur_text_section->data_offset;
+ 
+     addr = PTR_SIZE * 2;
+     ind += FUNC_PROLOG_SIZE;
+@@ -1028,7 +1039,7 @@ void gfunc_epilog(void)
+     } else {
+         o(0xc2); /* ret n */
+         g(func_ret_sub);
+-        g(func_ret_sub >> 8);
++        { unsigned char *p = (unsigned char *)&func_ret_sub; g(p[1]); }
+     }
+ 
+     saved_ind = ind;
+@@ -1443,6 +1454,7 @@ void gfunc_prolog(CType *func_type)
+     sym = func_type->ref;
+     addr = PTR_SIZE * 2;
+     loc = 0;
++    ind = cur_text_section->data_offset;
+     ind += FUNC_PROLOG_SIZE;
+     func_sub_sp_offset = ind;
+     func_ret_sub = 0;
+@@ -1625,7 +1637,7 @@ void gfunc_epilog(void)
+     } else {
+         o(0xc2); /* ret n */
+         g(func_ret_sub);
+-        g(func_ret_sub >> 8);
++        { unsigned char *p = (unsigned char *)&func_ret_sub; g(p[1]); }
+     }
+     /* align local size to word & save local variables */
+     v = (-loc + 15) & -16;
+@@ -1820,7 +1832,7 @@ void gen_opi(int op)
+             vswap();
+             orex(ll, r, 0, 0xc1); /* shl/shr/sar $xxx, r */
+             o(opc | REG_VALUE(r));
+-            g(vtop->c.i & (ll ? 63 : 31));
++            g(vtop->c.i);
+         } else {
+             /* we generate the shift in ecx */
+             gv2(RC_INT, RC_RCX);

@@ -146,6 +146,8 @@ mod stagex_mes_lib;
 #[allow(dead_code)]
 mod stagex_mes_sources;
 #[allow(dead_code)]
+mod stagex_patch;
+#[allow(dead_code)]
 mod stagex_sources;
 #[allow(dead_code)]
 mod stagex_stage0;
@@ -153,6 +155,8 @@ mod stagex_stage0;
 mod stagex_stage0_full;
 #[allow(dead_code)]
 mod stagex_tinycc;
+#[allow(dead_code)]
+mod stagex_tinycc27;
 #[allow(dead_code)]
 mod stagex_transition;
 mod store_cmd;

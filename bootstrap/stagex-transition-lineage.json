@@ -479,9 +479,65 @@
       "id": "tinycc-libgetopt",
       "name": "TinyCC-refreshed getopt archive",
       "producing_tool_id": "tinycc-runtime-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "0374e6d6c06eb731b2189d02283736cb93a0caa66ef4022737f2617ae037c7e8"
+      },
+      "id": "tinycc27-va-list",
+      "name": "TinyCC 0.9.27 x86_64 va_list object",
+      "producing_tool_id": "tinycc27-runtime-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "bd46a4a350e17ec4a7870be6c6dea82f7327c513ee4e2720bebb7b6e26f20d85"
+      },
+      "id": "tinycc27-libc",
+      "name": "TinyCC 0.9.27 Mes libc archive",
+      "producing_tool_id": "tinycc27-runtime-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39"
+      },
+      "id": "tinycc-0.9.27",
+      "name": "source-built TinyCC 0.9.27 compiler",
+      "producing_tool_id": "tinycc27-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39"
+      },
+      "id": "tinycc27-alias",
+      "name": "TinyCC 0.9.27 compiler alias",
+      "producing_tool_id": "tinycc27-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "19efdabfedafc9bf94f3ddc49967773a2a5e5b5f28128c6f95ac4f36184fdb92"
+      },
+      "id": "tinycc27-positive-object",
+      "name": "TinyCC 0.9.27 positive smoke object",
+      "producing_tool_id": "tinycc27-smoke-exec"
     }
   ],
-  "patches": [],
+  "patches": [
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b05705f548352080041ae56e2cacdf2e0898aa7dd5c857888004cf808884fc7f"
+      },
+      "id": "tinycc-0.9.27-stagex-patch",
+      "name": "bounded TinyCC 0.9.27 StageX compatibility patch",
+      "provenance": "bootstrap/patches/tcc-0.9.27-stagex.patch derived from the checked TinyCC 0.9.27 recipe",
+      "target_artifact_id": "tinycc-0.9.27-source"
+    }
+  ],
   "provider_outputs": [
     {
       "producing_artifact_id": "stage0-kaem",
@@ -657,6 +713,15 @@
       "id": "tinycc-mes-0.27.1-source",
       "name": "fresh GNU Mes 0.27.1 source for TinyCC handoff",
       "provenance": "source bundle record fixed-url-6b4961e6c9fff76f8cf2bab720817eff96172d622164c4b23580203514d4b7b2"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "a3417d7e6218de60bfb3b30cab2db9fbe3e65891d9b3e765f09a4ac87539d03d"
+      },
+      "id": "tinycc-0.9.27-source",
+      "name": "TinyCC 0.9.27 fixed-output source",
+      "provenance": "source bundle record fixed-url-767003cf551d3f2e8409b6666cc3e000e1377f298a55fbf20daea3867bd3aed4"
     }
   ],
   "stage_graph": [
@@ -727,6 +792,14 @@
     {
       "from_node_id": "seed",
       "to_node_id": "tinycc-mes-0.27.1-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "tinycc-0.9.27-source"
+    },
+    {
+      "from_node_id": "tinycc-0.9.27-source",
+      "to_node_id": "tinycc-0.9.27-stagex-patch"
     }
   ],
   "transition_tools": [
@@ -979,6 +1052,63 @@
         "tinycc-0.9.26-source",
         "tinycc-mes-0.27.1-source"
       ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "ef10b32c5de0b9322dfdcc5653bab9f0b9e8d5ee57b248ec8cb570c2ae10e9b3"
+      },
+      "id": "tinycc27-runtime-exec",
+      "input_artifact_ids": [
+        "tinycc-0.9.26",
+        "tinycc-crt1",
+        "tinycc-libtcc1"
+      ],
+      "name": "TinyCC 0.9.26 refreshing the Mes runtime for the TinyCC 0.9.27 ABI",
+      "output_artifact_ids": [
+        "tinycc27-va-list",
+        "tinycc27-libc"
+      ],
+      "source_artifact_ids": [
+        "tinycc-0.9.27-source",
+        "tinycc-mes-0.27.1-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "ef10b32c5de0b9322dfdcc5653bab9f0b9e8d5ee57b248ec8cb570c2ae10e9b3"
+      },
+      "id": "tinycc27-build-exec",
+      "input_artifact_ids": [
+        "tinycc-0.9.26",
+        "tinycc27-va-list",
+        "tinycc27-libc",
+        "tinycc-libtcc1"
+      ],
+      "name": "TinyCC 0.9.26 materializing TinyCC 0.9.27",
+      "output_artifact_ids": [
+        "tinycc-0.9.27",
+        "tinycc27-alias"
+      ],
+      "source_artifact_ids": [
+        "tinycc-0.9.27-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39"
+      },
+      "id": "tinycc27-smoke-exec",
+      "input_artifact_ids": [
+        "tinycc-0.9.27"
+      ],
+      "name": "TinyCC 0.9.27 executing bounded positive and negative smoke checks",
+      "output_artifact_ids": [
+        "tinycc27-positive-object"
+      ],
+      "source_artifact_ids": []
     }
   ]
 }

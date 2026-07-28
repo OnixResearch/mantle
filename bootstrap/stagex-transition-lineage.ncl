@@ -1,5 +1,5 @@
-# Typed source for the protected seed-to-source-built-mes-m2 transition.
-# This file does not yet describe Mes libc, TinyCC, or the normalized StageX provider.
+# Typed source for the protected seed-to-TinyCC-0.9.27 transition.
+# This file does not yet describe the later native toolchain or normalized StageX provider.
 
 let Digest = {
   algorithm | String,
@@ -38,6 +38,13 @@ let TransitionTool = {
   output_artifact_ids | Array String,
   digest | Digest,
 } in
+let Patch = {
+  id | String,
+  name | String,
+  target_artifact_id | String,
+  digest | Digest,
+  provenance | String,
+} in
 let ProviderOutput = {
   role | String,
   producing_artifact_id | String,
@@ -56,7 +63,7 @@ let Manifest = {
   source_artifacts | Array SourceArtifact,
   generated_artifacts | Array GeneratedArtifact,
   transition_tools | Array TransitionTool,
-  patches | Array Dyn,
+  patches | Array Patch,
   provider_outputs | Array ProviderOutput,
   environment_assumptions | Array EnvironmentAssumption,
   stage_graph | Array StageTransition,
@@ -167,6 +174,9 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "tinycc-mes-0.27.1-source" "fresh GNU Mes 0.27.1 source for TinyCC handoff"
       "438536d1095c3cd1f19b2645572dbe4ec265353513076db6ba5c395e23e6841a"
       "source bundle record fixed-url-6b4961e6c9fff76f8cf2bab720817eff96172d622164c4b23580203514d4b7b2",
+    source "tinycc-0.9.27-source" "TinyCC 0.9.27 fixed-output source"
+      "a3417d7e6218de60bfb3b30cab2db9fbe3e65891d9b3e765f09a4ac87539d03d"
+      "source bundle record fixed-url-767003cf551d3f2e8409b6666cc3e000e1377f298a55fbf20daea3867bd3aed4",
   ],
   generated_artifacts = [
     {
@@ -231,6 +241,11 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "tinycc-runtime-exec" "tinycc-libc" "TinyCC-refreshed Mes libc" "cbc10117c34515b9b3ad14f3e4dc73a37708c6206f36cd51dc6f1e8a98093f8c",
     tinycc_generated "tinycc-runtime-exec" "tinycc-libtcc1" "TinyCC runtime support archive" "0e8b75458ad70ab03142b27a3014af68f57c03004f4d22a65702e60d531140e9",
     tinycc_generated "tinycc-runtime-exec" "tinycc-libgetopt" "TinyCC-refreshed getopt archive" "1fb5e11a952e173ec451601f2f11c09b2703d48e20b6533d327dc83b6b520449",
+    tinycc_generated "tinycc27-runtime-exec" "tinycc27-va-list" "TinyCC 0.9.27 x86_64 va_list object" "0374e6d6c06eb731b2189d02283736cb93a0caa66ef4022737f2617ae037c7e8",
+    tinycc_generated "tinycc27-runtime-exec" "tinycc27-libc" "TinyCC 0.9.27 Mes libc archive" "bd46a4a350e17ec4a7870be6c6dea82f7327c513ee4e2720bebb7b6e26f20d85",
+    tinycc_generated "tinycc27-build-exec" "tinycc-0.9.27" "source-built TinyCC 0.9.27 compiler" "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39",
+    tinycc_generated "tinycc27-build-exec" "tinycc27-alias" "TinyCC 0.9.27 compiler alias" "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39",
+    tinycc_generated "tinycc27-smoke-exec" "tinycc27-positive-object" "TinyCC 0.9.27 positive smoke object" "19efdabfedafc9bf94f3ddc49967773a2a5e5b5f28128c6f95ac4f36184fdb92",
   ],
   transition_tools = [
     {
@@ -384,8 +399,40 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["tinycc-0.9.26"],
       digest = blake3 "de4f20cdc2ad232ca79c5aee20c1ef491a71ce95fcfdb28020fc0c9a4c51ea3d",
     },
+    {
+      id = "tinycc27-runtime-exec",
+      name = "TinyCC 0.9.26 refreshing the Mes runtime for the TinyCC 0.9.27 ABI",
+      source_artifact_ids = ["tinycc-0.9.27-source", "tinycc-mes-0.27.1-source"],
+      input_artifact_ids = ["tinycc-0.9.26", "tinycc-crt1", "tinycc-libtcc1"],
+      output_artifact_ids = ["tinycc27-va-list", "tinycc27-libc"],
+      digest = blake3 "ef10b32c5de0b9322dfdcc5653bab9f0b9e8d5ee57b248ec8cb570c2ae10e9b3",
+    },
+    {
+      id = "tinycc27-build-exec",
+      name = "TinyCC 0.9.26 materializing TinyCC 0.9.27",
+      source_artifact_ids = ["tinycc-0.9.27-source"],
+      input_artifact_ids = ["tinycc-0.9.26", "tinycc27-va-list", "tinycc27-libc", "tinycc-libtcc1"],
+      output_artifact_ids = ["tinycc-0.9.27", "tinycc27-alias"],
+      digest = blake3 "ef10b32c5de0b9322dfdcc5653bab9f0b9e8d5ee57b248ec8cb570c2ae10e9b3",
+    },
+    {
+      id = "tinycc27-smoke-exec",
+      name = "TinyCC 0.9.27 executing bounded positive and negative smoke checks",
+      source_artifact_ids = [],
+      input_artifact_ids = ["tinycc-0.9.27"],
+      output_artifact_ids = ["tinycc27-positive-object"],
+      digest = blake3 "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39",
+    },
   ],
-  patches = [],
+  patches = [
+    {
+      id = "tinycc-0.9.27-stagex-patch",
+      name = "bounded TinyCC 0.9.27 StageX compatibility patch",
+      target_artifact_id = "tinycc-0.9.27-source",
+      digest = blake3 "b05705f548352080041ae56e2cacdf2e0898aa7dd5c857888004cf808884fc7f",
+      provenance = "bootstrap/patches/tcc-0.9.27-stagex.patch derived from the checked TinyCC 0.9.27 recipe",
+    },
+  ],
   provider_outputs = [
     {
       role = "retained_tool_metadata",
@@ -422,5 +469,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "nyacc-1.00.2-source" },
     { from_node_id = "seed", to_node_id = "tinycc-0.9.26-source" },
     { from_node_id = "seed", to_node_id = "tinycc-mes-0.27.1-source" },
+    { from_node_id = "seed", to_node_id = "tinycc-0.9.27-source" },
+    { from_node_id = "tinycc-0.9.27-source", to_node_id = "tinycc-0.9.27-stagex-patch" },
   ],
 } | Manifest
