@@ -43,7 +43,9 @@ mantle --json --state-dir "$work/consumer-state" receipt bundle import \
   --output "$logical_output" --policy-hash gallery-policy-v1
 ```
 
-Inspect `claim_strength`, `evidence_complete`, `missing_evidence`, `output_matches`, `imported`, and `idempotent`. This example intentionally requests diagnostic evidence; it does not fabricate the source/action/sandbox chain required for a strong claim.
+Inspect `claim_strength`, `evidence_complete`, `missing_evidence`, `output_matches`, `imported`, and `idempotent`.
+
+This example requests diagnostic evidence. It does not fabricate the source, action, and sandbox chain that a strong claim requires.
 
 ## Semantic graph queries
 

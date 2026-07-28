@@ -19,4 +19,8 @@ mantle upgrade
 
 `mantle refresh` updates `mantle.lock`, `.mantle/inputs.ncl`, patch identity, and the current-retention record together. `list-stale` is read-only. The repository test copies the project before mutating it, proves stale detection does not alter lock state, refreshes only the selected input, rejects a missing patch, rejects the empty Git revision in `fixtures/unresolved-revision.ncl`, and exercises the 0.9.0 → 1.0.0 upgrade path.
 
-The example mirror uses `.invalid` deliberately and is never contacted by the offline workflow. The generated lock uses SHA-256 because project fetch inputs share the fetcher/interoperability hash schema; Mantle-owned identities otherwise default to BLAKE3. A content hash records bytes; it is not an upstream-authenticity claim.
+The example mirror uses `.invalid` and the offline workflow does not contact it.
+
+The generated lock uses SHA-256 because project fetch inputs use the interoperable fetcher schema. Other Mantle-owned identities use BLAKE3.
+
+A content hash records bytes. It does not prove upstream authenticity.

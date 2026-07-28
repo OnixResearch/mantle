@@ -21,7 +21,7 @@ These directories combine source/configuration, package selectors, checks, and p
 | `foreign-import-handoff/` | `mantle --json foreign-import validate` | Nix-like/Guix-like plans plus stale, untrusted, and unsupported-input rejection | local + fast |
 | `portable-receipt-handoff/` | `mantle receipt bundle export` after `mantle build .#payload` | archive verification, idempotent import, graph explanation, and incomplete/conflict rejection | local + bwrap |
 | `kernel-bundle-oci-local/` | `mantle artifact oci-export` after importing both fixture objects | atomic local layout, admitted fresh-state import, and descriptor-tamper rejection | local + fast |
-| `kernel-bundle-oci-registry/` | `mantle artifact oci-push` followed by three-digest policy-verified `oci-pull` | signed image/metadata pair authentication before exact recovery/admitted import, plus drift/tamper/unknown/revoked/interruption rejection | networked registry; fast loopback validation |
+| `kernel-bundle-oci-registry/` | `mantle artifact oci-push` followed by three-digest policy-verified `oci-pull` | signed image/metadata pair authentication before exact recovery/admitted import, plus drift/tamper/unknown/revoked/interruption rejection | networked registry with fast loopback validation |
 | `artifact-provenance-walkthrough/` | `mantle --json build .#application` | show, closure, verify, diff, tamper, and missing-selector evidence | local + fast |
 | `hermetic-plan-rebuild/` | `mantle --json build --plan --strict-hermetic .#payload` | fresh-state identity comparison and policy/source/prefix drift rejection | local + fast |
 | `shared-action-result-roundtrip/` | `mantle --json build .#payload --publish-action-results` | static HTTP reuse, changed-action miss, unknown-signer rejection, and missing/corrupt-NAR fallback | heavy + loopback HTTP |
@@ -29,8 +29,8 @@ These directories combine source/configuration, package selectors, checks, and p
 | `store-gc-lifecycle/` | `mantle build .#retained` | persistent root, dry-run, GC, and mutation-lock runbook | heavy + local state |
 | `delta-substitution/` | `mantle build .#source` | `cargo run -p mantle --example delta_substitution` | Rust adaptor |
 | `release-witness-handoff/` | `mantle build .#source` | `cargo run -p mantle --example release_witness_handoff` | Rust adaptor |
-| `remote-build-loopback/` | `mantle build .#payload --builder gallery-builder --ticket <id:secret>` | production stdio streaming plus checked multi-chunk interruption/resume, repeated-content identity, tamper rejection, signed admission, and redacted status | heavy + local bwrap; interruption rail uses a debug build |
-| `wasm-component-hello/` | `mantle eval workflow.ncl` | pinned production component materialization and identity/interface/runtime drift rails | typed export fast; production heavy |
+| `remote-build-loopback/` | `mantle build .#payload --builder gallery-builder --ticket <id:secret>` | production stdio streaming plus checked multi-chunk interruption/resume, repeated-content identity, tamper rejection, signed admission, and redacted status | heavy + local bwrap with a debug interruption rail |
+| `wasm-component-hello/` | `mantle eval workflow.ncl` | pinned production component materialization and identity/interface/runtime drift rails | fast typed export and heavy production rail |
 
 The C, Rust, and SDK projects expose source or generated-source selectors that can be built without realizing every downstream package. Their compiled packages use Mantle-owned bootstrap/toolchain inputs rather than ambient host compilers or Cargo caches.
 
@@ -38,4 +38,8 @@ The fetched project pins both its unpacked upstream source and local patch. The 
 
 The workflow tier adds signed cache exchange, lock refresh, offline source handoff, reviewed file generation, named development shells, Cargo import, foreign derivation admission, portable receipt/graph handoff, local OCI projection/import, artifact/closure evidence inspection, strict plan/rebuild comparison, authenticated shared action-result reuse, host/target role separation, persistent garbage collection, production local stdio streaming with fenced resume and fail-closed receiver tamper handling, typed component materialization, delta transfer policy, and signed witness quorum. The Rust adaptor projects package their exact source through a BLAKE3-fixed `.#source` selector while executing against the shipped Mantle libraries.
 
-Source-bundle readiness proves only declared source availability, filegen plans prove only bounded generated-content identity, and shell activation is non-mutating convenience evidence. Artifact sidecars prove bounded identity/linkage facts, strict matching builds do not prove compiler correctness, and signed action records do not replace independent PathInfo/NAR trust. Project checks cover successful behavior and explicit invalid-input rejection. Build success proves only the selected local build and check; it does not prove general cross-language equivalence, upstream trust, release signatures, or cross-platform reproducibility.
+Source-bundle readiness proves only declared source availability. Filegen plans prove only bounded generated-content identity. Shell activation is non-mutating convenience evidence.
+
+Artifact sidecars prove bounded identity and linkage facts. Strict matching builds do not prove compiler correctness. Signed action records do not replace independent PathInfo and NAR trust.
+
+Project checks cover successful behavior and invalid-input rejection. Build success proves only the selected local build and check. It does not prove cross-language equivalence, upstream trust, release signatures, or cross-platform reproducibility.

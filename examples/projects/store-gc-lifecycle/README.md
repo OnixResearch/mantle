@@ -17,4 +17,16 @@ mantle --store "$work/store" --state-dir "$work/state" store gc --dry-run
 mantle --store "$work/store" --state-dir "$work/state" store gc
 ```
 
-Each command reopens persistent store state, so the sequence also covers restart behavior. To inspect lock contention, start `mantle --store "$work/store" --state-dir "$work/state" build .#lock-holder --no-substitute` and run `store gc` from a second terminal before the holder finishes; GC fails fast rather than racing the build. The repository workflow validation proves dry-run non-mutation, retained-root survival, unreachable-output collection, and fail-fast mutation locking. GC evidence is scoped to the selected local state directory; it is not a distributed retention claim.
+Each command reopens persistent store state. Thus, the sequence also covers restart behavior.
+
+To inspect lock contention, start this command:
+
+```sh
+mantle --store "$work/store" --state-dir "$work/state" build .#lock-holder --no-substitute
+```
+
+Run `store gc` from a second terminal before the holder finishes. GC fails fast instead of racing the build.
+
+The workflow validation checks dry-run behavior, retained roots, unreachable-output collection, and mutation locking.
+
+GC evidence applies only to the selected local state directory. It does not prove distributed retention.

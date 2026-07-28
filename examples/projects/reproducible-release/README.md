@@ -11,4 +11,8 @@ mantle build .#checks.reproducible
 mantle build .#checks.tamper-detection
 ```
 
-Each release output contains `release-demo.tar` and `release-demo.tar.blake3`. The expected BLAKE3 sidecar is checked by the repository integration test against the archive bytes. This proves reproducibility only for the selected payload, BusyBox tar implementation, and declared normalization procedure; it is not a release-signature or cross-platform reproducibility proof.
+Each release output contains `release-demo.tar` and `release-demo.tar.blake3`.
+
+The integration test checks the expected BLAKE3 sidecar against the archive bytes.
+
+This proves reproducibility only for the selected payload, BusyBox tar implementation, and declared normalization procedure. It does not prove a release signature or cross-platform reproducibility.

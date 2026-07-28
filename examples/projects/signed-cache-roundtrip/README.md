@@ -26,4 +26,13 @@ mantle --store "$work/consumer-store" --state-dir "$work/consumer-state" \
   --trusted-public-keys cache.example.com-1:yKUSiqP9yaMSduDmGtw8U9iVVd/Coyv9csB1rjHtiRM=
 ```
 
-The repository workflow test also proves that a missing cache entry is reported without import, an unknown signer is skipped, matching-name but wrong key material fails signature verification, and a corrupted NAR is rejected by its declared hash. NAR and narinfo fields use SHA-256 because the interoperable Nix cache protocol requires it; Mantle-owned action and content identities remain BLAKE3. A cache hit proves integrity and signer acceptance for this artifact; it does not prove the producer was correct or trustworthy.
+The workflow test checks these negative conditions:
+
+- a missing cache entry does not cause an import
+- Mantle skips an unknown signer
+- wrong key material fails signature verification
+- a corrupt NAR fails its declared hash check
+
+NAR and narinfo fields use SHA-256 because the Nix cache protocol requires it. Mantle-owned action and content identities use BLAKE3.
+
+A cache hit proves integrity and signer acceptance for this artifact. It does not prove that the producer is correct or trustworthy.

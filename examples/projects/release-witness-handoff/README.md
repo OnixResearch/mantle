@@ -10,4 +10,6 @@ cargo run -p mantle --example release_witness_handoff
 
 The negative paths reject an unknown signature key, a witness bound to the wrong release, an insufficient witness set, and a revoked witness. The `mantle-project.ncl` package admits the exact BLAKE3-fixed source for inspection.
 
-The release key is a public test fixture and the witness key is ephemeral. This example proves bounded signature and policy behavior over synthetic attestations; it is not a release-evidence bundle, independent rebuild, or production trust ceremony.
+The release key is a public test fixture. The witness key is ephemeral.
+
+This example proves bounded signature and policy behavior over synthetic attestations. It does not prove release evidence, an independent rebuild, or a production trust ceremony.

@@ -31,8 +31,14 @@ mantle --json --state-dir "$consumer_state" source bundle preflight \
   --build-root "$root"
 ```
 
-Before import, `verify --imported` reports one missing record without mutating the consumer. After the pinned import, verification and preflight report `ready`. Inspect `record_count`, `ready_class`, `source_state_blake3`, and the bundle's per-file BLAKE3 identities. The source fetcher keeps its declared SHA-256 fixed-output hash for fetcher interoperability; Mantle-owned bundle and state identities use BLAKE3.
+Before import, `verify --imported` reports one missing record without mutating the consumer. After the pinned import, verification and preflight report `ready`.
+
+Inspect `record_count`, `ready_class`, `source_state_blake3`, and each file's BLAKE3 identity.
+
+The source fetcher keeps its declared SHA-256 hash for interoperability. Mantle-owned bundle and state identities use BLAKE3.
 
 For the negative path, copy the bundle, alter one `records[].files[].content_hex` value without updating its digest, and import it into a new state directory. Mantle rejects the digest mismatch and writes no source-state record.
 
-Source-bundle evidence proves declared source/input availability and identity only. It does not prove build success, source trust, compiler correctness, or output correctness; source-bundle route execution is future work.
+Source-bundle evidence proves declared source availability and identity only. It does not prove build success, source trust, compiler correctness, or output correctness.
+
+Source-bundle route execution is future work.

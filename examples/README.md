@@ -57,7 +57,21 @@ Start here. These examples are local, fast, and do not need generated seed mater
 
 ## Fetcher cookbook
 
-Real-network examples stay useful for operators, but deterministic validation uses generated offline fixtures in `tests/examples_build.rs` for each fetcher helper family. For disconnected rehearsal, pair a fetcher example with the offline build runbook: `mantle source bundle export --build-root examples/fetch-crate-crc64.ncl --import-path lib --to source-bundle.json`, `mantle source bundle import --from source-bundle.json --pin`, `mantle source bundle verify --from source-bundle.json --imported`, `mantle source bundle preflight --build-root examples/fetch-crate-crc64.ncl --import-path lib`, then `mantle build --offline-source-preflight --no-substitute examples/fetch-crate-crc64.ncl`. Inspect `ready_class`, `source_state_blake3`, `next_actions[]`, `network_policy_reports[]`, `cargo_build_evidence[]`, and `cargo_build_evidence_diagnostics[]`; the source bundle evidence proves declared source/input availability and identity only, and source-bundle route execution is future work.
+Real-network examples remain useful for operators. Deterministic validation uses generated offline fixtures in `tests/examples_build.rs` for each fetcher helper family.
+
+For a disconnected rehearsal, run these commands in order:
+
+```sh
+mantle source bundle export --build-root examples/fetch-crate-crc64.ncl --import-path lib --to source-bundle.json
+mantle source bundle import --from source-bundle.json --pin
+mantle source bundle verify --from source-bundle.json --imported
+mantle source bundle preflight --build-root examples/fetch-crate-crc64.ncl --import-path lib
+mantle build --offline-source-preflight --no-substitute examples/fetch-crate-crc64.ncl
+```
+
+Inspect `ready_class`, `source_state_blake3`, `next_actions[]`, `network_policy_reports[]`, `cargo_build_evidence[]`, and `cargo_build_evidence_diagnostics[]`.
+
+Source-bundle evidence proves declared source availability and identity only. Source-bundle route execution is future work.
 
 | File | Command | Expected output shape | Capability | Offline validation rail |
 |---|---|---|---|---|
@@ -105,9 +119,9 @@ Project examples show selector syntax after package composition. See `examples/p
 | `examples/projects/foreign-import-handoff/workflow.ncl` | `cd examples/projects/foreign-import-handoff && mantle --json foreign-import plan ...` | accepted receipt-bound adapter plan without Guix or Nix commands | local + fast |
 | `examples/projects/portable-receipt-handoff/mantle-project.ncl` | follow the project-local archive/receipt/graph runbook | diagnostic receipt verify/import reports and bounded graph explanations | local build + fast CLI |
 | `examples/projects/kernel-bundle-oci-local/workflow.ncl` | follow the project-local import/export/import runbook | sealed projection, OCI descriptor identities, admitted fresh-state object refs, and tamper rejection | local + fast |
-| `examples/projects/kernel-bundle-oci-registry/workflow.ncl` | follow the project-local push/pull runbook with an explicit registry and token file | image/metadata manifest SHA-256 values, layout/projection BLAKE3, reuse accounting, and admitted import linkage | networked registry; deterministic loopback rail is fast |
-| `examples/projects/remote-build-loopback/mantle-project.ncl` | follow the project-local ticket and resumable-transfer runbook | production stdio streaming, durable resume/reuse, repeated-content identity, tamper rejection, signed admission, and redacted status | heavy + local bwrap; interruption rail uses a debug build |
-| `examples/projects/wasm-component-hello/workflow.ncl` | `cd examples/projects/wasm-component-hello && mantle eval workflow.ncl` | typed generated-input export; production rail publishes rehashable component evidence | typed export fast; production heavy |
+| `examples/projects/kernel-bundle-oci-registry/workflow.ncl` | follow the project-local push/pull runbook with an explicit registry and token file | image/metadata manifest SHA-256 values, layout/projection BLAKE3, reuse accounting, and admitted import linkage | networked registry with a fast deterministic loopback rail |
+| `examples/projects/remote-build-loopback/mantle-project.ncl` | follow the project-local ticket and resumable-transfer runbook | production stdio streaming, durable resume/reuse, repeated-content identity, tamper rejection, signed admission, and redacted status | heavy + local bwrap with a debug interruption rail |
+| `examples/projects/wasm-component-hello/workflow.ncl` | `cd examples/projects/wasm-component-hello && mantle eval workflow.ncl` | typed generated-input export and rehashable production component evidence | fast typed export and heavy production rail |
 | `examples/projects/cross-compiled-host-tool/mantle-project.ncl` | `cd examples/projects/cross-compiled-host-tool && mantle build .#target` | host-generated header consumed by an `x86_64-linux-musl` executable | heavy + first-build network |
 | `examples/projects/store-gc-lifecycle/mantle-project.ncl` | follow the project-local runbook | persistent roots, dry-run candidates, collected unreachable output, and mutation-lock rejection | heavy + local state |
 | `examples/projects/delta-substitution/mantle-project.ncl` | `cargo run -p mantle --example delta_substitution` | partial chunk transfer, full fallback, and fail-closed missing-chunk rejection | Rust adaptor |
@@ -116,21 +130,27 @@ Project examples show selector syntax after package composition. See `examples/p
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#hello` | named package store path with `bin/hello` | generated seed |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#goodbye` | named package store path with `bin/goodbye` | generated seed |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#checks.test-hello` | check output with `result` text `ok` | generated seed |
-| `examples/rust_compatibility_rail.rs` + `examples/rust_compatibility_surface_matrix.ncl` | `cargo test -p mantle --test rust_compatibility_rail` | generated representative Rust compatibility rail surface matrix; sandboxed offline Cargo smoke plus rust-plan bounded success/blocker receipt | fast + bwrap |
-| `examples/hardware_simulation_plan.rs` | `cargo run -p mantle --example hardware_simulation_plan -- request.json plan.json` | bounded generic `mantle-plan-v1` JSON with independent compile, link, and smoke units | fast planning; real Verilator rail is heavy + bwrap |
+| `examples/rust_compatibility_rail.rs` + `examples/rust_compatibility_surface_matrix.ncl` | `cargo test -p mantle --test rust_compatibility_rail` | generated representative Rust compatibility matrix with a sandboxed offline Cargo smoke and bounded rust-plan receipt | fast + bwrap |
+| `examples/hardware_simulation_plan.rs` | `cargo run -p mantle --example hardware_simulation_plan -- request.json plan.json` | bounded generic `mantle-plan-v1` JSON with independent compile, link, and smoke units | fast planning with a heavy real Verilator rail |
 
-The hardware plan generator consumes a JSON `HardwarePlanRequest`; it does not interpret HDL in Mantle core. The exact request construction, tool cohort, real execution command, evidence shape, seed boundary, and non-claims are documented in [`docs/hardware-simulation.md`](../docs/hardware-simulation.md).
+The hardware plan generator consumes a JSON `HardwarePlanRequest`. It does not interpret HDL in Mantle core.
 
-The Cargo import workflow stops at generated, reviewable Mantle files with explicit failing source/toolchain placeholders; the existing Rust workspace project owns the separately supported offline build lane. The Wasm workflow's checked-in Nickel file proves typed authoring/export only, while `tests/wasm_component_cli.rs` owns production execution against the pinned cohort.
+[`docs/hardware-simulation.md`](../docs/hardware-simulation.md) defines the request, tool cohort, command, evidence, seed boundary, and non-claims.
+
+The Cargo import workflow stops at generated, reviewable Mantle files with explicit failing source and toolchain placeholders. The existing Rust workspace project owns the supported offline build lane.
+
+The checked-in Wasm Nickel file proves typed authoring and export only. `tests/wasm_component_cli.rs` owns production execution against the pinned cohort.
 
 The representative Rust compatibility rail is lane-scoped evidence, not proof of
 full Cargo compatibility, compiler correctness, release reproducibility, or
 bootstrap correctness. `examples/rust_compatibility_surface_matrix.ncl` is the
-source-controlled surface matrix: it names supported offline Cargo surfaces,
-native `cargo-free-bounded-topology` path-workspace support, blocked surfaces
-such as vendored git and native-link metadata, stable blocker classes, and
-non-claims. The offline rail reports `cargo-inside-mantle-sandbox`; the native
-rail reports either `cargo-free-bounded-topology` or a deterministic
+source-controlled surface matrix. It names supported offline Cargo surfaces,
+native `cargo-free-bounded-topology` path-workspace support, blocked surfaces,
+stable blocker classes, and non-claims. Blocked surfaces include vendored Git
+and native-link metadata.
+
+The offline rail reports `cargo-inside-mantle-sandbox`. The native rail reports
+either `cargo-free-bounded-topology` or a deterministic
 `blocked-unsupported-surface` receipt.
 
 ## Trust/provenance
@@ -194,7 +214,7 @@ mantle build examples/fetch-crate-crc64.ncl \
   --store /tmp/mantle-examples-store \
   --state-dir /tmp/mantle-examples-state
 
-# Build a real Rust crate from crates.io; heavyweight, run explicitly
+# Build a real Rust crate from crates.io. This command is heavyweight.
 mantle build examples/build-crate-crc64.ncl \
   --store /tmp/mantle-examples-store \
   --state-dir /tmp/mantle-examples-state \

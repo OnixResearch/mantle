@@ -16,4 +16,6 @@ mantle build .#target
 mantle build .#role-mismatch  # expected failure
 ```
 
-The target binary prints `host-generated header -> x86_64-linux-musl (target)` and rejects extra arguments. This is a real host-ABI to musl-target boundary on the same CPU architecture; it does not claim a different CPU architecture or universal cross-toolchain support.
+The target binary prints `host-generated header -> x86_64-linux-musl (target)` and rejects extra arguments.
+
+This is a real host-ABI to musl-target boundary on the same CPU architecture. It does not prove support for another architecture or all cross-toolchains.

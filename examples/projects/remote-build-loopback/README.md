@@ -30,7 +30,11 @@ mantle --json --state-dir "$work/state" remote status \
 mantle --json --state-dir "$work/state" remote ticket inspect "$ticket_id"
 ```
 
-Inspect `.outcomes[0].outputs[0].substitution`: the ordinary production route reports `mode = "streaming"`. Also inspect route, upload summary, transfer/admission phase, signer/trust basis, artifact-attestation reference, and bounded observability fields. Ticket list, inspect, and status output remain secret-redacted; only `ticket reveal` prints the bearer value.
+Inspect `.outcomes[0].outputs[0].substitution`. The ordinary production route reports `mode = "streaming"`.
+
+Also inspect the route, upload summary, transfer phase, admission phase, trust basis, artifact reference, and bounded observability fields.
+
+Ticket list, inspect, and status output do not contain the secret. Only `ticket reveal` prints the bearer value.
 
 The ticket has one use, so a second dispatch must fail before output admission:
 
@@ -54,17 +58,21 @@ nix develop -c cargo test -p mantle --test remote_transfer_production \
 
 The positive fixture:
 
-1. uses a fixed bounded ticket and fresh client/worker state;
-2. interrupts after one durable output acknowledgement;
-3. verifies no client output was admitted;
-4. starts fresh client/server processes for the same fenced request;
-5. verifies the same 64-character BLAKE3 manifest identity, positive reused bytes, and additional missing-chunk progress;
-6. admits exactly one output through ordinary signed PathInfo/content/store-prefix/attestation checks; and
-7. checks `payload.txt` plus the complete deterministic `payload.bin` bytes.
+1. Uses a fixed bounded ticket and fresh client and worker state.
+2. Interrupts after one durable output acknowledgement.
+3. Verifies that the client admitted no output.
+4. Starts fresh client and server processes for the same fenced request.
+5. Verifies the same BLAKE3 manifest identity, reused bytes, and missing-chunk progress.
+6. Admits one output through the standard signed PathInfo, content, store-prefix, and attestation checks.
+7. Checks `payload.txt` and all deterministic `payload.bin` bytes.
 
 The paired negative fixture changes the acknowledged receiver chunk before retry. Resume must fail with `acknowledged-chunk-missing`, leave the client store empty, and emit no output-admission evidence.
 
-The interruption is driven by `MANTLE_TEST_REMOTE_INTERRUPT_AFTER_OUTPUT_CHUNKS`, which is compiled and read only in debug builds. It is a deterministic validation seam, not a supported release operator control; release binaries ignore it. For the broader existing production regression set, run:
+`MANTLE_TEST_REMOTE_INTERRUPT_AFTER_OUTPUT_CHUNKS` controls the interruption in debug builds only.
+
+This variable is a deterministic validation seam. It is not a supported release operator control. Release binaries ignore it.
+
+Run the broader production regression set:
 
 ```sh
 nix develop -c cargo test -p mantle --test remote_transfer_production \

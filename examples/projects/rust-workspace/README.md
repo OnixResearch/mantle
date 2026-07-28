@@ -17,4 +17,6 @@ mantle build .#workspace-app
 mantle build .#checks.smoke
 ```
 
-The first Mantle build may need to realize the source-built Rust, seed-toolchain, and musl inputs, so it is intentionally classified as heavyweight. The resulting evidence is scoped to Cargo running offline inside Mantle's sandbox; it is not a Cargo-free execution or compiler-correctness claim.
+The first Mantle build can realize the source-built Rust, seed-toolchain, and musl inputs. Therefore, this example is heavyweight.
+
+The evidence applies to Cargo running offline inside Mantle's sandbox. It does not prove Cargo-free execution or compiler correctness.

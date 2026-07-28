@@ -28,7 +28,11 @@ mantle eval mantle-project.ncl
 
 Inspect `selected_package`, `selected_binary`, `file_operations[].digest_blake3`, `source_inputs`, `blockers`, and `non_claims`. Apply writes only `mantle-project.ncl` and `.mantle/inputs.ncl` after the plan is blocker-free.
 
-The generated inputs file deliberately contains failing placeholders for the package source, Rust toolchain, seed toolchain, and musl. Replace them with admitted derivations before `mantle build`; see `examples/projects/rust-workspace/mantle-project.ncl` for the separately validated offline build lane. Import success alone is not a successful package build.
+The generated inputs file contains failing placeholders for the package source, Rust toolchain, seed toolchain, and musl.
+
+Replace them with admitted derivations before `mantle build`. See `examples/projects/rust-workspace/mantle-project.ncl` for the validated offline build lane.
+
+Import success does not prove a successful package build.
 
 ## Negative paths
 

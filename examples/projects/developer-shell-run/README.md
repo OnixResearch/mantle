@@ -1,6 +1,8 @@
 # Developer shell and run loop
 
-This local project packages a small executable and declares `dev` and `minimal` shell profiles. The default profile is `dev`; activation is explicit and does not refresh locks, rewrite project files, or change package identity.
+This local project packages a small executable and declares `dev` and `minimal` shell profiles.
+
+The default profile is `dev`. Activation is explicit. It does not refresh locks, rewrite project files, or change package identity.
 
 Run from this directory with writable store state:
 

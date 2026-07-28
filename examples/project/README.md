@@ -1,8 +1,8 @@
 # Mantle project workflow example
 
 `crunch.ncl` is the compatibility file name for project outputs. It keeps the
-same frontend-neutral boundary as other Mantle examples: the file already
-contains concrete derivations and checks; it is not a module-layer inventory.
+same frontend-neutral boundary as other Mantle examples. The file contains
+concrete derivations and checks. It is not a module-layer inventory.
 
 ## Prerequisite
 

@@ -7,7 +7,7 @@ This project builds one C SDK derivation with four outputs:
 - `doc`: guide and manual page
 - `debug`: unstripped executable
 
-Downstream checks consume only the selected output they need. The development consumer compiles against `dev`; the runtime consumer executes `out`.
+Downstream checks consume only the required output. The development consumer compiles against `dev`. The runtime consumer executes `out`.
 
 ```sh
 cd examples/projects/multi-output-sdk
@@ -17,4 +17,4 @@ mantle build .#checks.runtime
 mantle build .#checks.development
 ```
 
-The first build may fetch Mantle's pinned bootstrap C toolchain. Output selection proves the declared dependency projection, not ABI stability or compiler correctness.
+The first build can fetch Mantle's pinned bootstrap C toolchain. Output selection proves the declared dependency projection. It does not prove ABI stability or compiler correctness.

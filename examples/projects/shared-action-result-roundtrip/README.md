@@ -1,6 +1,10 @@
 # Shared action-result round trip
 
-This project keeps execution-result metadata distinct from ordinary NAR/narinfo artifact publication. The producer signs both PathInfo and its immutable `mantle-action-result-v1` record. The bounded `shared_action_result_publish` Rust helper uses Mantle's canonical action-result implementation to project the example's single local record into the static HTTP layout; it is intentionally not a general publisher.
+This project keeps execution-result metadata separate from ordinary NAR and narinfo publication.
+
+The producer signs PathInfo and its immutable `mantle-action-result-v1` record.
+
+The bounded `shared_action_result_publish` helper projects one local record into the static HTTP layout. It uses Mantle's canonical action-result implementation. It is not a general publisher.
 
 The checked-in `fixtures/action.key` is a **public test fixture private key**. Never use it outside this example. Its verifier token is:
 

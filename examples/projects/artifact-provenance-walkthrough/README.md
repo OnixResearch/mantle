@@ -22,6 +22,13 @@ mantle --store "$work/store" --state-dir "$work/state" attest verify closure "$a
 mantle --store "$work/store" --state-dir "$work/state" attest diff "$source" "$artifact"
 ```
 
-Inspect the build report's `artifact_attestation`, the artifact envelope's `facts`, the closure member and edge sets, and the diff between source and assembled artifacts. The walkthrough test appends bytes to persisted sidecars, removes the selected root from cached closure membership, and proves canonical verification fails; a missing selector is rejected rather than synthesized.
+Inspect these items:
+
+- the build report's `artifact_attestation`
+- the artifact envelope's `facts`
+- the closure members and edges
+- the diff between the source and assembled artifacts
+
+The walkthrough test changes persisted sidecars and removes the selected root from cached closure membership. Canonical verification then fails. Mantle also rejects a missing selector.
 
 These attestations bind canonical recorded claims, observed build facts, store identities, and dependency linkage. They do **not** prove that the builder, source text, dependency, compiler, or resulting behavior is correct, and they are not release or witness proofs.

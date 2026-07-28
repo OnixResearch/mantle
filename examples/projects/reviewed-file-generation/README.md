@@ -1,6 +1,8 @@
 # Reviewed file generation
 
-This project declares two generated files in Nickel. Planning is non-mutating; applying requires the exact still-current reviewed plan and records managed identities in `.mantle/filegen-state.json`.
+This project declares two generated files in Nickel. Planning does not mutate files.
+
+Apply only the exact current reviewed plan. Mantle records managed identities in `.mantle/filegen-state.json`.
 
 Use a scratch copy so the checked-in example remains unchanged:
 

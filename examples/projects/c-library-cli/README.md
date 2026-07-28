@@ -11,6 +11,6 @@ mantle build .#greet
 mantle build .#checks.test-greet
 ```
 
-The first build may fetch and reduce the pinned bootstrap toolchain, so this project is classified as heavyweight.
+The first build can fetch and reduce the pinned bootstrap toolchain. Therefore, this project is heavyweight.
 
 The package contains `bin/greet`, `lib/libgreet.a`, and `include/greet.h`. Both the C unit test and project check exercise positive and negative behavior.

@@ -28,6 +28,5 @@ audit the 229 bytes by hand against the annotated source in
 
 The hex0 source (`hex0_AMD64.hex0`) is a line-by-line annotated hex dump.
 Assembling it with any hex0 implementation produces the seed binary.
-Auditors should verify the source comments match the ELF header layout
-and instruction semantics, then confirm the binary matches the source
-bytes.
+Verify that the source comments match the ELF header layout and instruction
+semantics. Then confirm that the binary matches the source bytes.

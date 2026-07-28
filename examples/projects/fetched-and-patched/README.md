@@ -14,4 +14,6 @@ mantle build .#invalid-hash
 mantle build .#invalid-patch
 ```
 
-The first build requires network access. Repeating the build with the same store and state directory reuses the verified fixed-output source. The source hash proves the fetched unpacked tree identity; it does not vouch for the upstream project or make the local patch semantically correct.
+The first build requires network access. A repeated build with the same store and state reuses the verified fixed-output source.
+
+The source hash proves the identity of the unpacked tree. It does not vouch for the upstream project or prove the patch is correct.

@@ -15,7 +15,11 @@ trust_policy=$PWD/examples/projects/kernel-bundle-oci-registry/trust-policy.ncl
 mantle attest key-show --signing-key "$signing_key"
 ```
 
-The checked-in policy contains only a demonstration public key; its matching private key is intentionally absent. Replace its trust domain, repository allowlist, trusted public keys, required signers, threshold, and revocations for production. `mantle attest key-show` prints the public verifier token for an existing key without generating or mutating trust roots.
+The checked-in policy contains only a demonstration public key. Its matching private key is absent.
+
+For production, replace the trust domain, repository allowlist, trusted keys, required signers, threshold, and revocations.
+
+`mantle attest key-show` prints the public verifier token for an existing key. It does not generate or mutate trust roots.
 
 For a controlled local HTTP registry, use an origin such as `http://127.0.0.1:5000` and add `--allow-http` to both commands. Mantle rejects HTTP by default, does not read Docker configuration, does not consult ambient proxy variables, and does not follow redirects.
 
@@ -38,7 +42,13 @@ metadata_manifest_digest=$(jq -r .metadata_manifest_digest "$work/registry-push.
 signature_manifest_digest=$(jq -r .signature_manifest_digest "$work/registry-push.json")
 ```
 
-Mantle uploads only absent blobs. It publishes `<reference>.mantle-metadata`, then `<reference>.mantle-signature`, and the user-facing image tag last. The signature document domain-separates and signs the exact image/metadata SHA-256 pair; all three manifests are re-read by immutable digest before the push receipt is written. A failed attempt may leave unreferenced blobs or companion tags; rerunning the exact command reuses verified content-addressed blobs. This is not a transaction, exactly-once publication, or resumable upload claim.
+Mantle uploads only absent blobs. It publishes `<reference>.mantle-metadata`, then `<reference>.mantle-signature`, and the user-facing image tag last.
+
+The signature document domain-separates and signs the exact image and metadata SHA-256 pair. Mantle reads all three manifests by immutable digest before it writes the push receipt.
+
+A failed attempt can leave unreferenced blobs or companion tags. The exact repeated command reuses verified content-addressed blobs.
+
+This process does not prove a transaction, exactly-once publication, or resumable upload.
 
 ## Pull and admit into fresh state
 
@@ -74,7 +84,17 @@ nix develop -c cargo test -p mantle --lib oci_registry::tests -- --test-threads=
 nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
 ```
 
-The in-process loopback registry requires bearer authentication and implements the exact endpoint subset used by production `oci-push`/`oci-pull`. The tests prove a trusted byte-identical round trip into fresh state; image/signature tag drift, metadata blob tampering, unknown/revoked keys, wrong repository policy, and invalid signature rejection before admission; denied anonymous access; interrupted image publication without a receipt; and a rerun that reuses blobs without duplicate writes.
+The in-process loopback registry requires bearer authentication. It implements the endpoint subset that production `oci-push` and `oci-pull` use.
+
+The tests check these cases:
+
+- a trusted byte-identical round trip into fresh state
+- tag drift and metadata-blob tampering
+- unknown and revoked keys
+- wrong repository policy and invalid signatures
+- denied anonymous access
+- interrupted publication without a receipt
+- a repeated operation that reuses blobs without duplicate writes
 
 ## Non-claims
 
