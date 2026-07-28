@@ -1,11 +1,12 @@
 # StageX protected-transition blocker — 2026-07-27
 
-> Status update: partially superseded by the protected full Stage0 proof in
-> `protected-transition-v6-full-stage0-2026-07-27/`. Mantle now starts from the
-> checked-in audited seed, reproduces `hex0`, builds `kaem-0`, authenticates the
-> offline source closure, and completes full Stage0 under protected execution.
-> The run recorded 132 allowed events and zero fallback. The remaining blocker
-> starts after full Stage0 and covers Mes, TinyCC, and normalized-provider lineage.
+> Status update: superseded through TinyCC 0.9.26 by
+> `protected-transition-v20-tinycc-2026-07-27/`. Mantle now completes protected
+> full Stage0, source-built `mes-m2`, NYACC regeneration, Mes runtime archives,
+> the TinyCC runtime refresh, boot0, and final TinyCC 0.9.26. The current run
+> recorded 491 allowed events, zero denied events, and zero fallback. The
+> remaining blocker starts at authenticated TinyCC 0.9.27 and covers the later
+> native toolchain plus normalized-provider construction and admission.
 
 ## Question
 
@@ -16,7 +17,7 @@ Can the current source-built native artifacts become a complete StageX lineage p
 ### Current receipt and manifest state
 
 - `bootstrap/evidence/stagex-lineage-provider-receipt.json` has `lineage_receipt_status = scaffold-only` and placeholder digests.
-- `bootstrap/stagex-transition-lineage.{ncl,json}` now binds the protected seed-to-full-Stage0 manifest.
+- `bootstrap/stagex-transition-lineage.{ncl,json}` now binds the protected seed-to-TinyCC-0.9.26 manifest.
 - `src/main.rs::cmd_bootstrap_stagex_lineage` validates a manifest, then returns `STAGEX_LINEAGE_PROVIDER_NOT_MATERIALIZED`.
 - The retained v6 evidence has a complete 132-event seed-to-full-Stage0 protected-exec audit.
 - No exported `hex0-seed` binary exists under `/home/brittonr/.cache/mantle-full-source-20260718`.
@@ -65,17 +66,19 @@ The current artifacts cannot meet the accepted requirement. Their construction s
 
 ## Exact completion blocker
 
-The protected transition now has checked seed bytes, authenticated direct source records, a typed 22-stage plan, exact executable identities, full Stage0 SHA-256 interoperability checks, and a 132-event observed audit.
+The protected transition now has checked seed bytes, authenticated direct source records, a typed 32-stage plan, exact executable identities, full Stage0 SHA-256 interoperability checks, and a 491-event observed audit through final TinyCC 0.9.26.
+
+The next authenticated source record is TinyCC 0.9.27, identity `fixed-url-767003cf551d3f2e8409b6666cc3e000e1377f298a55fbf20daea3867bd3aed4`, content BLAKE3 `a3417d7e6218de60bfb3b30cab2db9fbe3e65891d9b3e765f09a4ac87539d03d`.
 
 A complete provider run still needs all of these mechanisms and artifacts:
 
-1. Continue from protected full Stage0 through Mes, TinyCC, and later native-provider stages.
-2. Replace the later host-shell and sandbox orchestration with source-produced runners.
+1. Materialize TinyCC 0.9.27 and execute its source-build recipe under exact protected authority.
+2. Continue through make, the conventional GNU tools, musl, GCC, binutils, and the completed native-provider stages without ambient execution.
 3. Retain per-stage reports for every later exact executable, source stage, input, output, and BLAKE3 value.
 4. Preserve a complete protected-exec audit through normalized-provider runtime validation.
 5. Independently validate and create-new publish the provider and complete receipt.
 
-Replacing only the scaffold JSON would create false evidence. Reusing the existing full-source provider would relabel host-assisted effects as StageX lineage.
+No TinyCC 0.9.27 stage, output identity, or executable authorization exists in the current protected graph. Replacing only the scaffold JSON would create false evidence. Reusing the existing full-source provider would relabel host-assisted effects as StageX lineage.
 
 ## Owner
 
@@ -83,7 +86,7 @@ Mantle StageX lineage-provider implementation.
 
 ## Next action
 
-Continue the protected runner from full Stage0. Adapt the authenticated Mes and TinyCC command graph without invoking host shell or sandbox tools.
+Continue the protected runner from final TinyCC 0.9.26. Materialize authenticated TinyCC 0.9.27 and port its recipe to bounded Rust orchestration without host shell or sandbox tools.
 
 I1 through V3 remain unchecked. The fixed-point and parity-promotion successor changes remain blocked by this change.
 

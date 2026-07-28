@@ -1,5 +1,5 @@
-# Typed source for the protected seed-to-mini-Stage0 transition.
-# This file does not describe Mes, TinyCC, or the normalized StageX provider.
+# Typed source for the protected seed-to-source-built-mes-m2 transition.
+# This file does not yet describe Mes libc, TinyCC, or the normalized StageX provider.
 
 let Digest = {
   algorithm | String,
@@ -83,6 +83,24 @@ let full_generated = fun artifact_id artifact_name artifact_digest => {
   producing_tool_id = "stage0-full-kaem-exec",
   digest = blake3 artifact_digest,
 } in
+let mes_generated = fun artifact_id artifact_name artifact_digest => {
+  id = artifact_id,
+  name = artifact_name,
+  producing_tool_id = "mes-m2-kaem-exec",
+  digest = blake3 artifact_digest,
+} in
+let mes_runtime_generated = fun artifact_id artifact_name artifact_digest => {
+  id = artifact_id,
+  name = artifact_name,
+  producing_tool_id = "mes-runtime-exec",
+  digest = blake3 artifact_digest,
+} in
+let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest => {
+  id = artifact_id,
+  name = artifact_name,
+  producing_tool_id = producer_id,
+  digest = blake3 artifact_digest,
+} in
 {
   seed = {
     seed_class = "hex0_seed",
@@ -137,6 +155,18 @@ let full_generated = fun artifact_id artifact_name artifact_digest => {
     source "stage0-after-script" "empty Stage0 after hook"
       "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
       "generated as zero bytes by the bounded transition plan",
+    source "mes-0.27.1-source" "GNU Mes 0.27.1 fixed-output source"
+      "dd0e49258701c541d8fc097a899e4d00ae987d49951346ee22bd5743d5e81582"
+      "source bundle record fixed-url-5fda7b5bed4dbf8d8da85b3dd19ee873cae96c563d0b33d7d796c645aaf2e14d",
+    source "nyacc-1.00.2-source" "NYACC 1.00.2 fixed-output source"
+      "3cdb842d8699276ce030e5fbbab455193d12ab41cfb36aabfc3f3bbdfa4c47db"
+      "source bundle record fixed-url-cc3d97f8a1c6486f4393ae3002300713a08781fc4b8ec843a9bd2fe73ba082bc",
+    source "tinycc-0.9.26-source" "TinyCC 0.9.26 fixed-output source"
+      "db8c11387fd0db5783b4d2349b578ba1edfc739bf13d0865ab8b6b5f83a0711b"
+      "source bundle record fixed-url-71495e1ddb39612a9f8197f340bf7254942f843ef7ff361eca64dae0b0a7bd2f",
+    source "tinycc-mes-0.27.1-source" "fresh GNU Mes 0.27.1 source for TinyCC handoff"
+      "438536d1095c3cd1f19b2645572dbe4ec265353513076db6ba5c395e23e6841a"
+      "source bundle record fixed-url-6b4961e6c9fff76f8cf2bab720817eff96172d622164c4b23580203514d4b7b2",
   ],
   generated_artifacts = [
     {
@@ -180,6 +210,27 @@ let full_generated = fun artifact_id artifact_name artifact_digest => {
     full_generated "stage0-full-untar" "full Stage0 untar" "794461d61868aa601955182f5abc1fbc6f840a1402ece32855c41b59efb2bdf0",
     full_generated "stage0-full-unxz" "full Stage0 unxz" "8a1543cab9d6290e9c9306e16efc83ac0d230307c9c394b048e2d0b41b719771",
     full_generated "stage0-full-wrap" "full Stage0 wrap" "1d08486cfb920032a821c7603f56410af6c0372c0a4b78546d6c8d8bb1c0f9e0",
+    mes_generated "mes-m2" "source-built mes-m2 Scheme runtime" "de4f20cdc2ad232ca79c5aee20c1ef491a71ce95fcfdb28020fc0c9a4c51ea3d",
+    mes_generated "mes" "source-built Mes runtime compatibility executable" "de4f20cdc2ad232ca79c5aee20c1ef491a71ce95fcfdb28020fc0c9a4c51ea3d",
+    mes_runtime_generated "mescc-entrypoint" "relocatable mescc Scheme entrypoint" "34ecfa676a692c79fe14fe85882dbd3b325c6f6f732e475ab94b9240f18cf445",
+    mes_runtime_generated "mes-crt1" "Mes x86_64 crt1 object" "e49c87f324b58369183ab753fb1f346aeb28fc2974956d2872e046f8ef27416d",
+    mes_runtime_generated "mes-x86_64-m1" "Mes x86_64 M1 definitions" "a1107fe39ca1c6486dc57bccf82ad40569fa13e34695e8f2c119fbb892b02892",
+    mes_runtime_generated "mes-libc-mini" "Mes minimal libc archive" "12f9ee98f249da9a85158df6f242f5382c1e2d9a590dc84d521c70249d01dda1",
+    mes_runtime_generated "mes-libmes" "Mes runtime archive" "2f7c7eb4d002097cf68ad3b84ffecbb107195563fd21f27672b9918c3cfad2bd",
+    mes_runtime_generated "mes-libmescc" "Mes compiler support archive" "6a8d1e0a5f9dea02ae863552744e36f721833e57d054c993466d74c83eed7cdc",
+    mes_runtime_generated "mes-libc" "Mes libc archive" "d70f11fe75e9eaa59b0aa4d0d92d8c663afe33a0e8f60e3864d364b45d0105c4",
+    mes_runtime_generated "mes-libc-tcc" "Mes TinyCC support libc archive" "348f304db99daa3dc1eec807133cb232d28768b0d20a563bf8f6d68b493440d7",
+    mes_runtime_generated "mes-libtcc1" "Mes TinyCC runtime archive" "c11be20d8d70e8ed3a88f1cea0a54ade5c64f8035c50974859dccb77f1bea055",
+    mes_runtime_generated "mes-libgetopt" "Mes getopt archive" "04806a625d31f6a1ae4c92343e23ac4d355bcaa880f8aaa55b372f4a3785f135",
+    mes_runtime_generated "mes-elf-header" "Mes x86_64 ELF header recipe" "892b042fe8e7d17b9774e89c83979c35f79f067fa2bdfd2bcc7279ac2858d8d4",
+    mes_runtime_generated "mes-elf-footer" "Mes x86_64 ELF footer recipe" "b23189272376d99464531e041d1367b5a93086665513280645c1f41ce7ecda79",
+    tinycc_generated "tinycc-mes-exec" "tcc-mes" "Mes-linked TinyCC compiler" "ef10b32c5de0b9322dfdcc5653bab9f0b9e8d5ee57b248ec8cb570c2ae10e9b3",
+    tinycc_generated "tinycc-boot0-exec" "tcc-boot0" "first TinyCC self-compiled boundary" "8b3f20ef69f2356e64d513b82d26afb5c67bce9e51c045bbfbbf14784d13c66f",
+    tinycc_generated "tinycc-final-exec" "tinycc-0.9.26" "final source-built TinyCC 0.9.26 compiler" "ef10b32c5de0b9322dfdcc5653bab9f0b9e8d5ee57b248ec8cb570c2ae10e9b3",
+    tinycc_generated "tinycc-runtime-exec" "tinycc-crt1" "TinyCC-refreshed crt1" "d3fec15bd12fd72fdbdf4248d6df6b21a44cfb6a3e2c9d787a0d081ff7143df1",
+    tinycc_generated "tinycc-runtime-exec" "tinycc-libc" "TinyCC-refreshed Mes libc" "cbc10117c34515b9b3ad14f3e4dc73a37708c6206f36cd51dc6f1e8a98093f8c",
+    tinycc_generated "tinycc-runtime-exec" "tinycc-libtcc1" "TinyCC runtime support archive" "0e8b75458ad70ab03142b27a3014af68f57c03004f4d22a65702e60d531140e9",
+    tinycc_generated "tinycc-runtime-exec" "tinycc-libgetopt" "TinyCC-refreshed getopt archive" "1fb5e11a952e173ec451601f2f11c09b2703d48e20b6533d327dc83b6b520449",
   ],
   transition_tools = [
     {
@@ -260,6 +311,79 @@ let full_generated = fun artifact_id artifact_name artifact_digest => {
       ],
       digest = blake3 "c6c2f9136a41ec16b049e2af0a017d87804d69f4cad882b20eefbbc6725ea854",
     },
+    {
+      id = "mes-m2-kaem-exec",
+      name = "source-built full Stage0 tools executing the bounded mes-m2 recipe",
+      source_artifact_ids = [
+        "stage0-source-bundle",
+        "mes-0.27.1-source",
+        "nyacc-1.00.2-source",
+      ],
+      input_artifact_ids = [
+        "stage0-kaem",
+        "stage0-m1",
+        "stage0-hex2",
+        "stage0-full-m2-planet",
+        "stage0-full-blood-elf",
+        "stage0-full-mkdir",
+        "stage0-full-cp",
+      ],
+      output_artifact_ids = ["mes-m2", "mes"],
+      digest = blake3 "de4f20cdc2ad232ca79c5aee20c1ef491a71ce95fcfdb28020fc0c9a4c51ea3d",
+    },
+    {
+      id = "mes-runtime-exec",
+      name = "source-built mes-m2 and full Stage0 M1 materializing Mes modules and runtime archives",
+      source_artifact_ids = ["mes-0.27.1-source", "nyacc-1.00.2-source"],
+      input_artifact_ids = ["mes-m2", "stage0-m1", "stage0-full-blood-elf"],
+      output_artifact_ids = [
+        "mescc-entrypoint",
+        "mes-crt1",
+        "mes-x86_64-m1",
+        "mes-libc-mini",
+        "mes-libmes",
+        "mes-libmescc",
+        "mes-libc",
+        "mes-libc-tcc",
+        "mes-libtcc1",
+        "mes-libgetopt",
+        "mes-elf-header",
+        "mes-elf-footer",
+      ],
+      digest = blake3 "27e64a1954a37d4ac5ec39c219fa9906237a0f6861ea10fbc3d528b3a514f549",
+    },
+    {
+      id = "tinycc-mes-exec",
+      name = "Mes and full Stage0 tools materializing the first TinyCC compiler",
+      source_artifact_ids = ["tinycc-0.9.26-source", "tinycc-mes-0.27.1-source"],
+      input_artifact_ids = ["mes-m2", "mescc-entrypoint", "mes-libc-tcc", "stage0-m1", "stage0-hex2"],
+      output_artifact_ids = ["tcc-mes"],
+      digest = blake3 "de4f20cdc2ad232ca79c5aee20c1ef491a71ce95fcfdb28020fc0c9a4c51ea3d",
+    },
+    {
+      id = "tinycc-runtime-exec",
+      name = "Mes-linked TinyCC refreshing its crt and runtime archives",
+      source_artifact_ids = ["tinycc-0.9.26-source", "tinycc-mes-0.27.1-source"],
+      input_artifact_ids = ["tcc-mes", "mes-crt1", "mes-libc-tcc"],
+      output_artifact_ids = ["tinycc-crt1", "tinycc-libc", "tinycc-libtcc1", "tinycc-libgetopt"],
+      digest = blake3 "ef10b32c5de0b9322dfdcc5653bab9f0b9e8d5ee57b248ec8cb570c2ae10e9b3",
+    },
+    {
+      id = "tinycc-boot0-exec",
+      name = "Mes-linked TinyCC compiling the first TinyCC self-boundary",
+      source_artifact_ids = ["tinycc-0.9.26-source"],
+      input_artifact_ids = ["tcc-mes", "tinycc-crt1", "tinycc-libc", "tinycc-libtcc1"],
+      output_artifact_ids = ["tcc-boot0"],
+      digest = blake3 "ef10b32c5de0b9322dfdcc5653bab9f0b9e8d5ee57b248ec8cb570c2ae10e9b3",
+    },
+    {
+      id = "tinycc-final-exec",
+      name = "source-built Mes tools materializing final TinyCC 0.9.26",
+      source_artifact_ids = ["tinycc-0.9.26-source", "tinycc-mes-0.27.1-source"],
+      input_artifact_ids = ["tcc-boot0", "tcc-mes", "mes-m2", "stage0-m1", "stage0-hex2"],
+      output_artifact_ids = ["tinycc-0.9.26"],
+      digest = blake3 "de4f20cdc2ad232ca79c5aee20c1ef491a71ce95fcfdb28020fc0c9a4c51ea3d",
+    },
   ],
   patches = [],
   provider_outputs = [
@@ -294,5 +418,9 @@ let full_generated = fun artifact_id artifact_name artifact_digest => {
     { from_node_id = "seed", to_node_id = "m2-mesoplanet-source" },
     { from_node_id = "seed", to_node_id = "stage0-amd64-answers" },
     { from_node_id = "seed", to_node_id = "stage0-after-script" },
+    { from_node_id = "seed", to_node_id = "mes-0.27.1-source" },
+    { from_node_id = "seed", to_node_id = "nyacc-1.00.2-source" },
+    { from_node_id = "seed", to_node_id = "tinycc-0.9.26-source" },
+    { from_node_id = "seed", to_node_id = "tinycc-mes-0.27.1-source" },
   ],
 } | Manifest

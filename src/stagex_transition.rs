@@ -35,6 +35,16 @@ pub(crate) const STAGEX_TRANSITION_REPORT_SCHEMA_V1: &str = "mantle-stagex-prote
 pub(crate) const HEX0_REPRODUCTION_STAGE_ID: &str = "hex0-reproduction";
 pub(crate) const KAEM_MATERIALIZATION_STAGE_ID: &str = "kaem-materialization";
 pub(crate) const KAEM_SMOKE_STAGE_ID: &str = "kaem-smoke";
+pub(crate) const MES_M2_STAGE_ID: &str = "mes-m2-materialization";
+pub(crate) const MES_M2_SMOKE_STAGE_ID: &str = "mes-m2-smoke";
+pub(crate) const MES_NYACC_STAGE_ID: &str = "mes-nyacc-regeneration";
+pub(crate) const MES_RUNTIME_STAGE_ID: &str = "mes-runtime-materialization";
+pub(crate) const TINYCC_MES_STAGE_ID: &str = "tinycc-mes-materialization";
+pub(crate) const TINYCC_RUNTIME_STAGE_ID: &str = "tinycc-runtime-refresh";
+pub(crate) const TINYCC_BOOT0_STAGE_ID: &str = "tinycc-boot0-materialization";
+pub(crate) const TINYCC_BOOT0_SMOKE_STAGE_ID: &str = "tinycc-boot0-smoke";
+pub(crate) const TINYCC_FINAL_STAGE_ID: &str = "tinycc-final-materialization";
+pub(crate) const TINYCC_FINAL_SMOKE_STAGE_ID: &str = "tinycc-final-smoke";
 pub(crate) const HEX0_SEED_BLAKE3: &str = "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80";
 pub(crate) const HEX0_SOURCE_BLAKE3: &str = "0fb23576a10b41df29c165e39514f18c411da96ae71873a6a2e2f0b1d94de614";
 pub(crate) const KAEM_SOURCE_BLAKE3: &str = "5a56b4164dca4d1e03ba35bc8ce4b418a0de2baf1cb9e6a0912607e26532d30d";
@@ -55,9 +65,13 @@ const LINEAGE_MANIFEST_MAX_MIB: u64 = 1;
 const LINEAGE_MANIFEST_MAX_BYTES: u64 = LINEAGE_MANIFEST_MAX_MIB * MIB_BYTES;
 const STAGE_TIMEOUT_MS: u64 = 30_000;
 const STAGE0_STAGE_TIMEOUT_MS: u64 = 120_000;
+const MES_STAGE_TIMEOUT_MS: u64 = 300_000;
+const MES_OUTPUT_MAX_MIB: u64 = 64;
+const MES_OUTPUT_MAX_BYTES: u64 = MES_OUTPUT_MAX_MIB * MIB_BYTES;
 const STAGE_JOB_COUNT: u32 = 1;
 const TRANSITION_STAGE_COUNT_MAX: u32 = 3;
-const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 22;
+const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 32;
+const TINYCC_LINK_CHILD_EVENT_COUNT: usize = 5;
 const PROCESS_POLL_MS: u64 = 10;
 const AUDIT_FLUSH_WAIT_MS: u64 = 50;
 const GENERATED_LAUNCH_MAX_ATTEMPTS: u32 = 16;
@@ -74,6 +88,7 @@ const SOURCE_STATE_DOMAIN: &[u8] = b"mantle-stagex-transition-source-state-v1\0"
 const REPORT_FILE_NAME: &str = "transition-report.json";
 const PLAN_FILE_NAME: &str = "transition-plan.json";
 const AUDIT_FILE_NAME: &str = "protected-exec-audit.json";
+const FAILURE_AUDIT_FILE_NAME: &str = "protected-exec-audit-failure.json";
 
 #[derive(Debug, Clone)]
 pub(crate) struct StagexTransitionRequest<'a> {
@@ -98,6 +113,14 @@ pub(crate) struct StagexTransitionReport {
     pub kaem_smoke_digest_blake3: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stage0_full: Option<crate::stagex_stage0_full::Stage0FullInventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mes_m2: Option<crate::stagex_mes::MesM2InventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mes_runtime: Option<crate::stagex_mes_lib::MesRuntimeInventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tinycc_sources: Option<crate::stagex_tinycc::TinyccSourceMaterializationReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tinycc_runtime: Option<crate::stagex_tinycc::TccMesInventoryReport>,
     pub fallback_events: Vec<String>,
     pub promotions: Vec<OutputPromotionRecord>,
     pub protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
@@ -240,6 +263,34 @@ pub(crate) fn materialize_protected_transition(
                 digest_hex: entry.digest_blake3,
             },
         ));
+        planned.extend(additional_mes_stage0_planned_executables(&stage0_root));
+        planned.push(PlannedExecutable {
+            authorization_id: "exec:mes-m2-smoke:mes-m2".to_string(),
+            source_stage_id: MES_M2_STAGE_ID.to_string(),
+            path: request.scratch_dir.join("mes-stage/mes-0.27.1/bin/mes-m2"),
+            digest_hex: crate::stagex_mes::MES_M2_BLAKE3.to_string(),
+        });
+        let tinycc_root = request.scratch_dir.join("tinycc-stage/runtime");
+        planned.extend([
+            PlannedExecutable {
+                authorization_id: "exec:tinycc-runtime-refresh:tcc-mes".to_string(),
+                source_stage_id: TINYCC_MES_STAGE_ID.to_string(),
+                path: tinycc_root.join("tinycc-0.9.26/tcc-mes"),
+                digest_hex: crate::stagex_tinycc::TCC_MES_BLAKE3.to_string(),
+            },
+            PlannedExecutable {
+                authorization_id: "exec:tinycc-boot0-smoke:tcc-boot0".to_string(),
+                source_stage_id: TINYCC_BOOT0_STAGE_ID.to_string(),
+                path: tinycc_root.join("tinycc-0.9.26/tcc-boot0"),
+                digest_hex: crate::stagex_tinycc::TCC_BOOT0_BLAKE3.to_string(),
+            },
+            PlannedExecutable {
+                authorization_id: "exec:tinycc-final-smoke:tinycc".to_string(),
+                source_stage_id: TINYCC_FINAL_STAGE_ID.to_string(),
+                path: tinycc_root.join("output/bin/tcc"),
+                digest_hex: crate::stagex_tinycc::TINYCC_FINAL_BLAKE3.to_string(),
+            },
+        ]);
         planned
     } else {
         Vec::new()
@@ -282,11 +333,100 @@ pub(crate) fn materialize_protected_transition(
         (None, None) => None,
         _ => unreachable!("Stage0 optional inputs validated before execution"),
     };
+    let mes_m2 = match (request.source_bundle_path, stage0_full.as_ref()) {
+        (Some(source_bundle_path), Some(_)) => {
+            let result = crate::stagex_mes::derive_mes_m2_inventory(crate::stagex_mes::MesM2InventoryRequest {
+                source_bundle_path,
+                expected_source_bundle_blake3: &manifest_authority.source_bundle_manifest_blake3,
+                full_stage0_root: &stage0_root,
+                scratch_dir: &request.scratch_dir.join("mes-stage"),
+                protected_exec_enforced: true,
+            });
+            match result {
+                Ok(report) => Some(report),
+                Err(error) => {
+                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                    let events = supervisor.audit_events();
+                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
+                }
+            }
+        }
+        (None, None) => None,
+        _ => unreachable!("full Stage0 and Mes execution must advance together"),
+    };
+
+    let mes_runtime = match (stage0_full.as_ref(), mes_m2.as_ref()) {
+        (Some(_), Some(_)) => {
+            let mes_stage_root = request.scratch_dir.join("mes-stage");
+            let result = crate::stagex_mes_lib::derive_mes_runtime_inventory(
+                crate::stagex_mes_lib::MesRuntimeInventoryRequest {
+                    mes_source_root: &mes_stage_root.join("mes-0.27.1"),
+                    nyacc_source_root: &mes_stage_root.join("nyacc"),
+                    stage0_root: &stage0_root,
+                    output_root: &mes_stage_root.join("mes-runtime"),
+                    protected_exec_enforced: true,
+                },
+            );
+            match result {
+                Ok(report) => Some(report),
+                Err(error) => {
+                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                    let events = supervisor.audit_events();
+                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
+                }
+            }
+        }
+        (None, None) => None,
+        _ => unreachable!("Mes runtime requires full Stage0 and mes-m2 reports together"),
+    };
+
+    let (tinycc_sources, tinycc_runtime) = match (request.source_bundle_path, mes_runtime.as_ref()) {
+        (Some(source_bundle_path), Some(_)) => {
+            let tinycc_stage = request.scratch_dir.join("tinycc-stage");
+            fs::create_dir(&tinycc_stage)
+                .map_err(|source| io_error("creating create-new protected TinyCC stage root", source))?;
+            let sources = crate::stagex_tinycc::materialize_authenticated_tinycc_source(
+                source_bundle_path,
+                &manifest_authority.source_bundle_manifest_blake3,
+                &tinycc_stage.join("sources"),
+            )
+            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+            let result = crate::stagex_tinycc::derive_tcc_mes_inventory(crate::stagex_tinycc::TccMesInventoryRequest {
+                tinycc_source_root: &sources.output_path,
+                mes_source_root: &sources.mes_output_path,
+                mes_runtime_root: &request.scratch_dir.join("mes-stage/mes-runtime"),
+                mes_m2_path: &request.scratch_dir.join("mes-stage/mes-0.27.1/bin/mes-m2"),
+                stage0_root: &stage0_root,
+                scratch_dir: &tinycc_stage.join("runtime"),
+                protected_exec_enforced: true,
+            });
+            match result {
+                Ok(report) => (Some(sources), Some(report)),
+                Err(error) => {
+                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                    let events = supervisor.audit_events();
+                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
+                }
+            }
+        }
+        (None, None) => (None, None),
+        _ => unreachable!("TinyCC runtime requires source bundle and Mes runtime together"),
+    };
 
     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
     let protected_exec_events = supervisor.audit_events();
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
-    validate_transition_audit(&staged, stage0_full.as_ref(), &protected_exec_events)?;
+    validate_transition_audit(
+        &staged,
+        stage0_full.as_ref(),
+        mes_m2.as_ref(),
+        mes_runtime.as_ref(),
+        tinycc_runtime.as_ref(),
+        &protected_exec_events,
+    )?;
     let kaem_smoke_digest_blake3 = blake3_file_hex(&staged.kaem_smoke).map_err(protected_digest_error)?;
     let report = StagexTransitionReport {
         schema_version: STAGEX_TRANSITION_REPORT_SCHEMA_V1.to_string(),
@@ -299,6 +439,10 @@ pub(crate) fn materialize_protected_transition(
         kaem_digest_blake3: KAEM_OUTPUT_BLAKE3.to_string(),
         kaem_smoke_digest_blake3,
         stage0_full,
+        mes_m2,
+        mes_runtime,
+        tinycc_sources,
+        tinycc_runtime,
         fallback_events: Vec::new(),
         promotions: vec![hex0_promotion, kaem_promotion],
         protected_exec_events,
@@ -376,6 +520,12 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     }
     require_manifest_digest(&sources, "stage0-amd64-answers", crate::stagex_stage0_full::STAGE0_ANSWERS_BLAKE3)?;
     require_manifest_digest(&sources, "stage0-after-script", EMPTY_KAEM_SMOKE_SOURCE_BLAKE3)?;
+    for (artifact_id, digest_blake3) in crate::stagex_mes_sources::expected_mes_source_artifact_digests() {
+        require_manifest_digest(&sources, artifact_id, digest_blake3)?;
+    }
+    for (artifact_id, digest_blake3) in crate::stagex_tinycc::tinycc_source_artifact_digests() {
+        require_manifest_digest(&sources, artifact_id, digest_blake3)?;
+    }
     let generated: BTreeMap<&str, &str> = manifest
         .generated_artifacts
         .iter()
@@ -390,6 +540,14 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
     for expected in crate::stagex_stage0_full::STAGE0_FULL_EXPECTED_EXECUTABLES {
+        require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
+    }
+    require_manifest_digest(&generated, "mes-m2", crate::stagex_mes::MES_M2_BLAKE3)?;
+    require_manifest_digest(&generated, "mes", crate::stagex_mes::MES_M2_BLAKE3)?;
+    for expected in crate::stagex_mes_lib::MES_RUNTIME_EXPECTED_OUTPUTS {
+        require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
+    }
+    for expected in crate::stagex_tinycc::TINYCC_EXPECTED_OUTPUTS {
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
     let assumption_ids: BTreeSet<&str> = manifest.environment_assumptions.iter().map(|item| item.id.as_str()).collect();
@@ -524,6 +682,11 @@ fn build_transition_plan(
         let stage0_root = staged.seed.parent().expect("staged seed has parent").join("stage0-mini");
         stages.extend(stage0_mini_stage_plans(&stage0_root));
         stages.extend(stage0_full_stage_plans(&stage0_root));
+        let mes_root = staged.seed.parent().expect("staged seed has parent").join("mes-stage/mes-0.27.1");
+        stages.extend(mes_m2_stage_plans(&stage0_root, &mes_root));
+        stages.extend(mes_runtime_stage_plans(&stage0_root, &mes_root));
+        let tinycc_root = staged.seed.parent().expect("staged seed has parent").join("tinycc-stage/runtime");
+        stages.extend(tinycc_stage_plans(&stage0_root, &mes_root, &tinycc_root));
     }
     let stage_count_max = if include_stage0_mini {
         TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX
@@ -544,6 +707,257 @@ fn build_transition_plan(
         return Ok(plan);
     }
     Err(StagexTransitionError::Plan(validation.errors.into_iter().map(|error| error.to_string()).collect()))
+}
+
+fn tinycc_stage_plans(stage0_root: &Path, mes_root: &Path, tinycc_root: &Path) -> Vec<StagexStagePlan> {
+    let tcc_mes = tinycc_root.join("tinycc-0.9.26/tcc-mes");
+    let boot0 = tinycc_root.join("tinycc-0.9.26/tcc-boot0");
+    let final_tcc = tinycc_root.join("output/bin/tcc");
+    vec![
+        mes_stage_plan(
+            TINYCC_MES_STAGE_ID,
+            &[
+                MES_RUNTIME_STAGE_ID,
+                MES_M2_STAGE_ID,
+                "stage0-m1",
+                "stage0-hex2",
+                "stage0-full-blood-elf",
+            ],
+            &["tinycc-0.9.26-source", "tinycc-mes-0.27.1-source"],
+            &[
+                "mes-m2",
+                "mescc-entrypoint",
+                "mes-libc-tcc",
+                "stage0-m1",
+                "stage0-hex2",
+                "stage0-full-blood-elf",
+            ],
+            &["tcc-mes-assembly".to_string(), "tcc-mes".to_string()],
+            vec![
+                mes_m2_authorization(TINYCC_MES_STAGE_ID, mes_root),
+                stage0_authorization(TINYCC_MES_STAGE_ID, stage0_root, "stage0-m1"),
+                stage0_authorization(TINYCC_MES_STAGE_ID, stage0_root, "stage0-hex2"),
+                stage0_full_authorization(TINYCC_MES_STAGE_ID, stage0_root, "stage0-full-blood-elf"),
+            ],
+        ),
+        mes_stage_plan(
+            TINYCC_RUNTIME_STAGE_ID,
+            &[TINYCC_MES_STAGE_ID, MES_RUNTIME_STAGE_ID],
+            &[],
+            &["tcc-mes", "mes-crt1", "mes-libc-tcc"],
+            &[
+                "tinycc-crt1".to_string(),
+                "tinycc-libc".to_string(),
+                "tinycc-libtcc1".to_string(),
+                "tinycc-libgetopt".to_string(),
+            ],
+            vec![authorization(
+                "exec:tinycc-runtime-refresh:tcc-mes",
+                &tcc_mes,
+                TINYCC_MES_STAGE_ID,
+                crate::stagex_tinycc::TCC_MES_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            TINYCC_BOOT0_STAGE_ID,
+            &[TINYCC_RUNTIME_STAGE_ID, TINYCC_MES_STAGE_ID],
+            &[],
+            &["tcc-mes", "tinycc-crt1", "tinycc-libc", "tinycc-libtcc1"],
+            &["tcc-boot0".to_string()],
+            vec![authorization(
+                "exec:tinycc-boot0-materialization:tcc-mes",
+                &tcc_mes,
+                TINYCC_MES_STAGE_ID,
+                crate::stagex_tinycc::TCC_MES_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            TINYCC_BOOT0_SMOKE_STAGE_ID,
+            &[TINYCC_BOOT0_STAGE_ID],
+            &[],
+            &["tcc-boot0"],
+            &["tcc-boot0-smoke-observation".to_string()],
+            vec![authorization(
+                "exec:tinycc-boot0-smoke:tcc-boot0",
+                &boot0,
+                TINYCC_BOOT0_STAGE_ID,
+                crate::stagex_tinycc::TCC_BOOT0_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            TINYCC_FINAL_STAGE_ID,
+            &[
+                TINYCC_BOOT0_SMOKE_STAGE_ID,
+                TINYCC_MES_STAGE_ID,
+                MES_M2_STAGE_ID,
+                "stage0-m1",
+                "stage0-hex2",
+                "stage0-full-blood-elf",
+            ],
+            &[],
+            &[
+                "tcc-boot0-smoke-observation",
+                "mes-m2",
+                "tcc-mes",
+                "stage0-m1",
+                "stage0-hex2",
+                "stage0-full-blood-elf",
+            ],
+            &["tcc-final-assembly".to_string(), "tinycc-0.9.26".to_string()],
+            vec![
+                mes_m2_authorization(TINYCC_FINAL_STAGE_ID, mes_root),
+                stage0_authorization(TINYCC_FINAL_STAGE_ID, stage0_root, "stage0-m1"),
+                stage0_authorization(TINYCC_FINAL_STAGE_ID, stage0_root, "stage0-hex2"),
+                stage0_full_authorization(TINYCC_FINAL_STAGE_ID, stage0_root, "stage0-full-blood-elf"),
+            ],
+        ),
+        mes_stage_plan(
+            TINYCC_FINAL_SMOKE_STAGE_ID,
+            &[TINYCC_FINAL_STAGE_ID],
+            &[],
+            &["tinycc-0.9.26"],
+            &["tinycc-final-smoke-observation".to_string()],
+            vec![authorization(
+                "exec:tinycc-final-smoke:tinycc",
+                &final_tcc,
+                TINYCC_FINAL_STAGE_ID,
+                crate::stagex_tinycc::TINYCC_FINAL_BLAKE3,
+            )],
+        ),
+    ]
+}
+
+fn mes_runtime_stage_plans(stage0_root: &Path, mes_root: &Path) -> Vec<StagexStagePlan> {
+    let runtime_outputs = crate::stagex_mes_lib::MES_RUNTIME_EXPECTED_OUTPUTS
+        .iter()
+        .filter(|expected| expected.artifact_id != "mes-m2")
+        .map(|expected| expected.artifact_id.to_string())
+        .collect::<Vec<_>>();
+    vec![
+        mes_stage_plan(
+            MES_NYACC_STAGE_ID,
+            &[MES_M2_STAGE_ID],
+            &["nyacc-1.00.2-source"],
+            &["mes-m2"],
+            &["nyacc-generated-tables".to_string()],
+            vec![mes_m2_authorization(MES_NYACC_STAGE_ID, mes_root)],
+        ),
+        mes_stage_plan(
+            MES_RUNTIME_STAGE_ID,
+            &[
+                MES_NYACC_STAGE_ID,
+                MES_M2_STAGE_ID,
+                "stage0-m1",
+                "stage0-full-blood-elf",
+            ],
+            &["mes-0.27.1-source", "nyacc-1.00.2-source"],
+            &["nyacc-generated-tables", "mes-m2", "stage0-m1", "stage0-full-blood-elf"],
+            &runtime_outputs,
+            vec![
+                mes_m2_authorization(MES_RUNTIME_STAGE_ID, mes_root),
+                stage0_authorization(MES_RUNTIME_STAGE_ID, stage0_root, "stage0-m1"),
+                stage0_full_authorization(MES_RUNTIME_STAGE_ID, stage0_root, "stage0-full-blood-elf"),
+            ],
+        ),
+    ]
+}
+
+fn mes_stage_plan(
+    stage_id: &str,
+    predecessors: &[&str],
+    sources: &[&str],
+    inputs: &[&str],
+    outputs: &[String],
+    executable_authorizations: Vec<StagexExecutableAuthorization>,
+) -> StagexStagePlan {
+    StagexStagePlan {
+        id: stage_id.to_string(),
+        immediate_predecessor_stage_ids: predecessors.iter().map(|value| (*value).to_string()).collect(),
+        source_artifact_ids: sources.iter().map(|value| (*value).to_string()).collect(),
+        input_artifact_ids: inputs.iter().map(|value| (*value).to_string()).collect(),
+        output_artifact_ids: outputs.to_vec(),
+        executable_authorizations,
+        timeout_ms_max: MES_STAGE_TIMEOUT_MS,
+        output_bytes_max: MES_OUTPUT_MAX_BYTES,
+        parallel_job_count_max: STAGE_JOB_COUNT,
+    }
+}
+
+fn mes_m2_authorization(stage_id: &str, mes_root: &Path) -> StagexExecutableAuthorization {
+    authorization(
+        &format!("exec:{stage_id}:mes-m2"),
+        &mes_root.join("bin/mes-m2"),
+        MES_M2_STAGE_ID,
+        crate::stagex_mes::MES_M2_BLAKE3,
+    )
+}
+
+fn additional_mes_stage0_planned_executables(stage0_root: &Path) -> Vec<PlannedExecutable> {
+    ["stage0-full-mkdir", "stage0-full-cp"]
+        .into_iter()
+        .map(|artifact_id| {
+            let expected = crate::stagex_stage0_full::STAGE0_FULL_EXPECTED_EXECUTABLES
+                .iter()
+                .find(|expected| expected.artifact_id == artifact_id)
+                .expect("Mes Stage0 tool has expected identity");
+            PlannedExecutable {
+                authorization_id: format!("exec:{artifact_id}"),
+                source_stage_id: "stage0-full-extras".to_string(),
+                path: stage0_root.join(expected.relative_path),
+                digest_hex: expected.digest_blake3.to_string(),
+            }
+        })
+        .collect()
+}
+
+fn mes_m2_stage_plans(stage0_root: &Path, mes_root: &Path) -> Vec<StagexStagePlan> {
+    vec![
+        stage0_stage_plan(
+            MES_M2_STAGE_ID,
+            &[
+                "stage0-full-after-smoke",
+                "stage0-kaem",
+                "stage0-m1",
+                "stage0-hex2",
+                "stage0-full-m2-planet",
+                "stage0-full-blood-elf",
+                "stage0-full-extras",
+            ],
+            &["stage0-source-bundle", "mes-0.27.1-source", "nyacc-1.00.2-source"],
+            &[
+                "stage0-kaem",
+                "stage0-m1",
+                "stage0-hex2",
+                "stage0-full-m2-planet",
+                "stage0-full-blood-elf",
+                "stage0-full-mkdir",
+                "stage0-full-cp",
+            ],
+            &["mes-m2", "mes"],
+            vec![
+                stage0_authorization(MES_M2_STAGE_ID, stage0_root, "stage0-kaem"),
+                stage0_authorization(MES_M2_STAGE_ID, stage0_root, "stage0-m1"),
+                stage0_authorization(MES_M2_STAGE_ID, stage0_root, "stage0-hex2"),
+                stage0_full_authorization(MES_M2_STAGE_ID, stage0_root, "stage0-full-m2-planet"),
+                stage0_full_authorization(MES_M2_STAGE_ID, stage0_root, "stage0-full-blood-elf"),
+                stage0_full_authorization(MES_M2_STAGE_ID, stage0_root, "stage0-full-mkdir"),
+                stage0_full_authorization(MES_M2_STAGE_ID, stage0_root, "stage0-full-cp"),
+            ],
+        ),
+        stage0_stage_plan(
+            MES_M2_SMOKE_STAGE_ID,
+            &[MES_M2_STAGE_ID],
+            &[],
+            &["mes-m2"],
+            &["mes-m2-smoke-observation"],
+            vec![authorization(
+                "exec:mes-m2-smoke:mes-m2",
+                &mes_root.join("bin/mes-m2"),
+                MES_M2_STAGE_ID,
+                crate::stagex_mes::MES_M2_BLAKE3,
+            )],
+        ),
+    ]
 }
 
 fn stage0_full_stage_plans(root: &Path) -> Vec<StagexStagePlan> {
@@ -729,8 +1143,7 @@ fn stage0_full_authorization(stage_id: &str, root: &Path, artifact_id: &str) -> 
         "stage0-full-m2-mesoplanet" => "stage0-full-m2-mesoplanet",
         "stage0-full-m2-planet" => "stage0-full-m2-planet",
         "stage0-full-blood-elf" => "stage0-full-blood-elf",
-        "stage0-full-sha256sum" => "stage0-full-extras",
-        _ => panic!("full Stage0 authorization has no producer stage: {artifact_id}"),
+        _ => "stage0-full-extras",
     };
     authorization(
         &format!("exec:{stage_id}:{artifact_id}"),
@@ -1163,6 +1576,9 @@ fn promote_executable(
 fn validate_transition_audit(
     staged: &StagedTransitionPaths,
     stage0_full: Option<&crate::stagex_stage0_full::Stage0FullInventoryReport>,
+    mes_m2: Option<&crate::stagex_mes::MesM2InventoryReport>,
+    mes_runtime: Option<&crate::stagex_mes_lib::MesRuntimeInventoryReport>,
+    tinycc_runtime: Option<&crate::stagex_tinycc::TccMesInventoryReport>,
     events: &[ProtectedSeccompAuditEvent],
 ) -> Result<(), StagexTransitionError> {
     let expected = transition_expected_audit_events(staged);
@@ -1175,30 +1591,118 @@ fn validate_transition_audit(
     for (event, expected_event) in events.iter().take(EXPECTED_AUDIT_EVENT_COUNT).zip(expected.iter()) {
         validate_audit_event(event, expected_event)?;
     }
-    match stage0_full {
-        Some(report) => {
-            const STAGE0_PARENT_EVENT_COUNT: usize = 1;
-            let mini_command_count = usize::try_from(report.mini.command_count)
-                .map_err(|_| StagexTransitionError::Audit("Stage0 command count does not fit usize".to_string()))?;
-            let mini_event_count = mini_command_count
-                .checked_add(STAGE0_PARENT_EVENT_COUNT)
-                .ok_or_else(|| StagexTransitionError::Audit("Stage0 mini event count overflow".to_string()))?;
-            let stage0_events = &events[EXPECTED_AUDIT_EVENT_COUNT..];
-            if stage0_events.len() < mini_event_count {
-                return Err(StagexTransitionError::Audit(format!(
-                    "expected at least {mini_event_count} mini Stage0 events, observed {}",
-                    stage0_events.len()
-                )));
-            }
-            validate_stage0_audit(staged, &report.mini, &stage0_events[..mini_event_count])?;
-            validate_stage0_full_audit(report, &stage0_events[mini_event_count..])
+    let Some(stage0) = stage0_full else {
+        if mes_m2.is_none()
+            && mes_runtime.is_none()
+            && tinycc_runtime.is_none()
+            && events.len() == EXPECTED_AUDIT_EVENT_COUNT
+        {
+            return Ok(());
         }
-        None if events.len() == EXPECTED_AUDIT_EVENT_COUNT => Ok(()),
-        None => Err(StagexTransitionError::Audit(format!(
-            "expected {EXPECTED_AUDIT_EVENT_COUNT} transition events, observed {}",
+        return Err(StagexTransitionError::Audit(format!(
+            "expected {EXPECTED_AUDIT_EVENT_COUNT} transition events without Stage0, Mes, or TinyCC; observed {}",
             events.len()
-        ))),
+        )));
+    };
+    const STAGE0_PARENT_EVENT_COUNT: usize = 1;
+    let mini_command_count = usize::try_from(stage0.mini.command_count)
+        .map_err(|_| StagexTransitionError::Audit("Stage0 command count does not fit usize".to_string()))?;
+    let mini_event_count = mini_command_count
+        .checked_add(STAGE0_PARENT_EVENT_COUNT)
+        .ok_or_else(|| StagexTransitionError::Audit("Stage0 mini event count overflow".to_string()))?;
+    let stage0_events = &events[EXPECTED_AUDIT_EVENT_COUNT..];
+    if stage0_events.len() < mini_event_count {
+        return Err(StagexTransitionError::Audit(format!(
+            "expected at least {mini_event_count} mini Stage0 events, observed {}",
+            stage0_events.len()
+        )));
     }
+    validate_stage0_audit(staged, &stage0.mini, &stage0_events[..mini_event_count])?;
+    let after_mini = &stage0_events[mini_event_count..];
+    match (mes_m2, mes_runtime, tinycc_runtime) {
+        (Some(mes_report), Some(runtime_report), Some(tinycc_report)) => {
+            validate_mes_and_tinycc_suffix(stage0, mes_report, runtime_report, tinycc_report, after_mini)
+        }
+        (Some(mes_report), Some(runtime_report), None) => {
+            let runtime_event_count = mes_runtime_event_count(runtime_report)?;
+            let runtime_start = after_mini.len().checked_sub(runtime_event_count).ok_or_else(|| {
+                StagexTransitionError::Audit(format!(
+                    "expected {runtime_event_count} trailing Mes runtime events, observed {}",
+                    after_mini.len()
+                ))
+            })?;
+            let before_runtime = &after_mini[..runtime_start];
+            let mes_event_count = mes_m2_event_count(mes_report)?;
+            let mes_start = before_runtime
+                .len()
+                .checked_sub(mes_event_count)
+                .ok_or_else(|| StagexTransitionError::Audit("Mes event suffix exceeds audit".to_string()))?;
+            validate_stage0_full_audit(stage0, &before_runtime[..mes_start])?;
+            validate_mes_m2_audit(stage0, mes_report, &before_runtime[mes_start..])?;
+            validate_mes_runtime_audit(stage0, mes_report, runtime_report, &after_mini[runtime_start..])
+        }
+        (Some(mes_report), None, None) => {
+            let mes_event_count = mes_m2_event_count(mes_report)?;
+            let mes_start = after_mini
+                .len()
+                .checked_sub(mes_event_count)
+                .ok_or_else(|| StagexTransitionError::Audit("Mes event suffix exceeds audit".to_string()))?;
+            validate_stage0_full_audit(stage0, &after_mini[..mes_start])?;
+            validate_mes_m2_audit(stage0, mes_report, &after_mini[mes_start..])
+        }
+        (None, None, None) => validate_stage0_full_audit(stage0, after_mini),
+        _ => Err(StagexTransitionError::Audit(
+            "Mes or TinyCC report exists without its predecessor report".to_string(),
+        )),
+    }
+}
+
+fn mes_m2_event_count(report: &crate::stagex_mes::MesM2InventoryReport) -> Result<usize, StagexTransitionError> {
+    usize::try_from(report.command_count)
+        .map_err(|_| StagexTransitionError::Audit("Mes command count does not fit usize".to_string()))?
+        .checked_add(1)
+        .ok_or_else(|| StagexTransitionError::Audit("Mes event count overflow".to_string()))
+}
+
+fn validate_mes_and_tinycc_suffix(
+    stage0: &crate::stagex_stage0_full::Stage0FullInventoryReport,
+    mes_m2: &crate::stagex_mes::MesM2InventoryReport,
+    mes_runtime: &crate::stagex_mes_lib::MesRuntimeInventoryReport,
+    tinycc: &crate::stagex_tinycc::TccMesInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    let mes_path = mes_m2
+        .outputs
+        .iter()
+        .find(|output| output.artifact_id == "mes-m2")
+        .ok_or_else(|| StagexTransitionError::Audit("mes-m2 report lacks output path".to_string()))?
+        .path
+        .as_path();
+    let first_mes_index = events
+        .iter()
+        .position(|event| event.executable_path == mes_path)
+        .ok_or_else(|| StagexTransitionError::Audit("protected audit never executed mes-m2".to_string()))?;
+    let mes_event_count = mes_m2_event_count(mes_m2)?;
+    let mes_end = first_mes_index
+        .checked_add(1)
+        .ok_or_else(|| StagexTransitionError::Audit("Mes audit end overflow".to_string()))?;
+    let mes_start = mes_end
+        .checked_sub(mes_event_count)
+        .ok_or_else(|| StagexTransitionError::Audit("Mes audit prefix is too short".to_string()))?;
+    let runtime_event_count = mes_runtime_event_count(mes_runtime)?;
+    let runtime_end = mes_end
+        .checked_add(runtime_event_count)
+        .ok_or_else(|| StagexTransitionError::Audit("Mes runtime audit end overflow".to_string()))?;
+    if runtime_end > events.len() {
+        return Err(StagexTransitionError::Audit(format!(
+            "Mes runtime audit ends at {runtime_end}, but only {} events are available",
+            events.len()
+        )));
+    }
+    validate_stage0_full_audit(stage0, &events[..mes_start])?;
+    validate_mes_m2_audit(stage0, mes_m2, &events[mes_start..mes_end])?;
+    validate_mes_runtime_audit(stage0, mes_m2, mes_runtime, &events[mes_end..runtime_end])?;
+    validate_tinycc_audit(stage0, mes_m2, tinycc, &events[runtime_end..])
 }
 
 fn transition_expected_audit_events(
@@ -1294,21 +1798,8 @@ fn validate_stage0_full_audit(
     report: &crate::stagex_stage0_full::Stage0FullInventoryReport,
     events: &[ProtectedSeccompAuditEvent],
 ) -> Result<(), StagexTransitionError> {
-    const STAGE0_FULL_PARENT_EVENT_COUNT: usize = 1;
-    let command_count = report
-        .root_command_count
-        .checked_add(report.nested_command_count)
-        .and_then(|count| count.checked_add(report.extra_command_count))
-        .ok_or_else(|| StagexTransitionError::Audit("full Stage0 command count overflow".to_string()))?;
-    let expected_event_count = usize::try_from(command_count)
-        .map_err(|_| StagexTransitionError::Audit("full Stage0 command count does not fit usize".to_string()))?
-        .checked_add(STAGE0_FULL_PARENT_EVENT_COUNT)
-        .ok_or_else(|| StagexTransitionError::Audit("full Stage0 event count overflow".to_string()))?;
-    if events.len() < expected_event_count {
-        return Err(StagexTransitionError::Audit(format!(
-            "expected at least {expected_event_count} full Stage0 events, observed {}",
-            events.len()
-        )));
+    if events.is_empty() {
+        return Err(StagexTransitionError::Audit("full Stage0 audit has no events".to_string()));
     }
     let stage0_root = report.mini.sources_root();
     let mut authorities = BTreeMap::new();
@@ -1353,6 +1844,357 @@ fn validate_stage0_full_audit(
     assert!(!events.is_empty());
     assert!(observed_paths.len() <= authorities.len());
     Ok(())
+}
+
+fn validate_mes_m2_audit(
+    stage0: &crate::stagex_stage0_full::Stage0FullInventoryReport,
+    report: &crate::stagex_mes::MesM2InventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    const MES_PARENT_EVENT_COUNT: usize = 1;
+    let command_count = usize::try_from(report.command_count)
+        .map_err(|_| StagexTransitionError::Audit("Mes command count does not fit usize".to_string()))?;
+    let expected_event_count = command_count
+        .checked_add(MES_PARENT_EVENT_COUNT)
+        .ok_or_else(|| StagexTransitionError::Audit("Mes event count overflow".to_string()))?;
+    if events.len() != expected_event_count {
+        return Err(StagexTransitionError::Audit(format!(
+            "expected exactly {expected_event_count} mes-m2 events, observed {}",
+            events.len()
+        )));
+    }
+    let stage0_root = stage0.mini.sources_root();
+    let mut authorities = BTreeMap::new();
+    for planned in crate::stagex_stage0::planned_stage0_executables(stage0_root) {
+        let inventory_id = format!("planned:{}:{}", planned.source_stage_id, planned.authorization_id);
+        authorities.insert(planned.path, (planned.digest_blake3, inventory_id));
+    }
+    for planned in crate::stagex_stage0_full::planned_stage0_full_executables(stage0_root) {
+        let inventory_id = format!("planned:{}:{}", planned.source_stage_id, planned.authorization_id);
+        authorities.insert(planned.path, (planned.digest_blake3, inventory_id));
+    }
+    for planned in additional_mes_stage0_planned_executables(stage0_root) {
+        let inventory_id = format!("planned:{}:{}", planned.source_stage_id, planned.authorization_id);
+        authorities.insert(planned.path, (planned.digest_hex, inventory_id));
+    }
+    let mes_m2_path = report
+        .outputs
+        .iter()
+        .find(|output| output.artifact_id == "mes-m2")
+        .ok_or_else(|| StagexTransitionError::Audit("Mes report lacks mes-m2 output".to_string()))?
+        .path
+        .clone();
+    let mes_inventory_id = format!("planned:{MES_M2_STAGE_ID}:exec:mes-m2-smoke:mes-m2");
+    authorities.insert(mes_m2_path.clone(), (crate::stagex_mes::MES_M2_BLAKE3.to_string(), mes_inventory_id));
+    let mut observed_paths = BTreeSet::new();
+    for event in events {
+        let (expected_digest, expected_id) = authorities.get(&event.executable_path).ok_or_else(|| {
+            StagexTransitionError::Audit(format!(
+                "mes-m2 event used undeclared path {}",
+                event.executable_path.display()
+            ))
+        })?;
+        let valid = event.policy_decision == "allowed"
+            && event.resolved_host_path == event.executable_path
+            && event.tracee_path == event.executable_path
+            && event.digest_hex == *expected_digest
+            && event.inventory_entry_id.as_deref() == Some(expected_id.as_str());
+        if !valid {
+            return Err(StagexTransitionError::Audit(format!(
+                "mes-m2 event for {} did not match exact planned authority",
+                event.executable_path.display()
+            )));
+        }
+        observed_paths.insert(event.executable_path.clone());
+    }
+    let required_artifacts = [
+        "stage0-kaem",
+        "stage0-m1",
+        "stage0-hex2",
+        "stage0-full-m2-planet",
+        "stage0-full-blood-elf",
+        "stage0-full-mkdir",
+        "stage0-full-cp",
+    ];
+    for artifact_id in required_artifacts {
+        let path = stage0_artifact_path(stage0_root, artifact_id)?;
+        if !observed_paths.contains(&path) {
+            return Err(StagexTransitionError::Audit(format!(
+                "mes-m2 stage did not observe required executable {artifact_id} at {}",
+                path.display()
+            )));
+        }
+    }
+    if !observed_paths.contains(&mes_m2_path) {
+        return Err(StagexTransitionError::Audit("mes-m2 smoke executable was not observed".to_string()));
+    }
+    assert_eq!(events.len(), expected_event_count);
+    assert!(observed_paths.len() <= authorities.len());
+    Ok(())
+}
+
+fn mes_runtime_event_count(
+    report: &crate::stagex_mes_lib::MesRuntimeInventoryReport,
+) -> Result<usize, StagexTransitionError> {
+    const EXEC_EVENTS_PER_COMPILE: u32 = 2;
+    let compile_events = report
+        .source_compile_count
+        .checked_mul(EXEC_EVENTS_PER_COMPILE)
+        .ok_or_else(|| StagexTransitionError::Audit("Mes runtime compile event count overflow".to_string()))?;
+    let total = report
+        .nyacc_command_count
+        .checked_add(compile_events)
+        .ok_or_else(|| StagexTransitionError::Audit("Mes runtime event count overflow".to_string()))?;
+    let count = usize::try_from(total)
+        .map_err(|_| StagexTransitionError::Audit("Mes runtime event count does not fit usize".to_string()))?;
+    assert!(count >= usize::try_from(report.nyacc_command_count).unwrap_or(usize::MAX));
+    assert!(count > 0);
+    Ok(count)
+}
+
+fn validate_mes_runtime_audit(
+    stage0: &crate::stagex_stage0_full::Stage0FullInventoryReport,
+    mes_m2: &crate::stagex_mes::MesM2InventoryReport,
+    runtime: &crate::stagex_mes_lib::MesRuntimeInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    let expected_event_count = mes_runtime_event_count(runtime)?;
+    if events.len() != expected_event_count {
+        return Err(StagexTransitionError::Audit(format!(
+            "expected exactly {expected_event_count} Mes runtime events, observed {}",
+            events.len()
+        )));
+    }
+    let mes_path = mes_m2
+        .outputs
+        .iter()
+        .find(|output| output.artifact_id == "mes-m2")
+        .ok_or_else(|| StagexTransitionError::Audit("mes-m2 report lacks executable output".to_string()))?
+        .path
+        .clone();
+    let stage0_root = stage0.mini.sources_root();
+    let m1_path = stage0_artifact_path(stage0_root, "stage0-m1")?;
+    const EXEC_EVENTS_PER_COMPILE: usize = 2;
+    let mes_expected = ExpectedAuditEvent {
+        executable_path: &mes_path,
+        digest_blake3: crate::stagex_mes::MES_M2_BLAKE3,
+        inventory_entry_id: "planned:mes-m2-materialization:exec:mes-m2-smoke:mes-m2".to_string(),
+    };
+    let m1_expected = ExpectedAuditEvent {
+        executable_path: &m1_path,
+        digest_blake3: crate::stagex_stage0::STAGE0_EXPECTED_EXECUTABLES
+            .iter()
+            .find(|expected| expected.artifact_id == "stage0-m1")
+            .expect("Stage0 M1 identity exists")
+            .digest_blake3,
+        inventory_entry_id: "planned:stage0-m1:exec:stage0-m1".to_string(),
+    };
+    let nyacc_count = usize::try_from(runtime.nyacc_command_count)
+        .map_err(|_| StagexTransitionError::Audit("NYACC command count does not fit usize".to_string()))?;
+    for event in &events[..nyacc_count] {
+        validate_audit_event(event, &mes_expected)?;
+    }
+    let compile_events = &events[nyacc_count..];
+    let mut chunks = compile_events.chunks_exact(EXEC_EVENTS_PER_COMPILE);
+    for pair in &mut chunks {
+        validate_audit_event(&pair[0], &mes_expected)?;
+        validate_audit_event(&pair[1], &m1_expected)?;
+    }
+    if !chunks.remainder().is_empty() {
+        return Err(StagexTransitionError::Audit("Mes runtime compile events do not form mes-m2/M1 pairs".to_string()));
+    }
+    let observed_compile_count = compile_events.len() / EXEC_EVENTS_PER_COMPILE;
+    if observed_compile_count != usize::try_from(runtime.source_compile_count).unwrap_or(usize::MAX) {
+        return Err(StagexTransitionError::Audit(format!(
+            "Mes runtime compile event pairs {observed_compile_count} do not match report count {}",
+            runtime.source_compile_count
+        )));
+    }
+    assert_eq!(events.len(), expected_event_count);
+    assert_eq!(observed_compile_count, usize::try_from(runtime.source_compile_count).unwrap());
+    Ok(())
+}
+
+fn validate_tinycc_audit(
+    stage0: &crate::stagex_stage0_full::Stage0FullInventoryReport,
+    mes_m2: &crate::stagex_mes::MesM2InventoryReport,
+    tinycc: &crate::stagex_tinycc::TccMesInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    let expected_event_count = tinycc_expected_event_count(
+        tinycc.compile_command_count,
+        tinycc.runtime_refresh_command_count,
+        tinycc.boot0_command_count,
+        tinycc.final_command_count,
+    )?;
+    validate_tinycc_observed_event_count(expected_event_count, events.len())?;
+    let stage0_root = stage0.mini.sources_root();
+    let mes_path = report_output_path(&mes_m2.outputs, "mes-m2")?;
+    let tcc_mes_path = tinycc_output_path(tinycc, "tcc-mes")?;
+    let boot0_path = tinycc_output_path(tinycc, "tcc-boot0")?;
+    let final_binary_path = tinycc_output_path(tinycc, "tinycc-0.9.26")?;
+    let final_alias_path = final_binary_path
+        .parent()
+        .ok_or_else(|| StagexTransitionError::Audit("final TinyCC path has no parent".to_string()))?
+        .join("tcc");
+    let mut authorities = BTreeMap::<PathBuf, (String, String)>::new();
+    authorities.insert(
+        mes_path.clone(),
+        (
+            crate::stagex_mes::MES_M2_BLAKE3.to_string(),
+            "planned:mes-m2-materialization:exec:mes-m2-smoke:mes-m2".to_string(),
+        ),
+    );
+    for artifact_id in ["stage0-m1", "stage0-hex2"] {
+        let path = stage0_artifact_path(stage0_root, artifact_id)?;
+        let expected = crate::stagex_stage0::STAGE0_EXPECTED_EXECUTABLES
+            .iter()
+            .find(|expected| expected.artifact_id == artifact_id)
+            .expect("TinyCC Stage0 executable identity exists");
+        authorities.insert(
+            path,
+            (
+                expected.digest_blake3.to_string(),
+                format!("planned:{}:exec:{}", expected.source_stage_id, expected.artifact_id),
+            ),
+        );
+    }
+    let blood_path = stage0_artifact_path(stage0_root, "stage0-full-blood-elf")?;
+    authorities.insert(
+        blood_path,
+        (
+            crate::stagex_stage0_full::STAGE0_FULL_EXPECTED_EXECUTABLES
+                .iter()
+                .find(|expected| expected.artifact_id == "stage0-full-blood-elf")
+                .expect("full Stage0 blood-elf identity exists")
+                .digest_blake3
+                .to_string(),
+            "planned:stage0-full-blood-elf:exec:stage0-full-blood-elf".to_string(),
+        ),
+    );
+    authorities.insert(
+        tcc_mes_path.clone(),
+        (
+            crate::stagex_tinycc::TCC_MES_BLAKE3.to_string(),
+            "planned:tinycc-mes-materialization:exec:tinycc-runtime-refresh:tcc-mes".to_string(),
+        ),
+    );
+    authorities.insert(
+        boot0_path.clone(),
+        (
+            crate::stagex_tinycc::TCC_BOOT0_BLAKE3.to_string(),
+            "planned:tinycc-boot0-materialization:exec:tinycc-boot0-smoke:tcc-boot0".to_string(),
+        ),
+    );
+    authorities.insert(
+        final_alias_path.clone(),
+        (
+            crate::stagex_tinycc::TINYCC_FINAL_BLAKE3.to_string(),
+            "planned:tinycc-final-materialization:exec:tinycc-final-smoke:tinycc".to_string(),
+        ),
+    );
+    let mut observed = BTreeSet::new();
+    for event in events {
+        let (expected_digest, expected_id) = authorities.get(&event.executable_path).ok_or_else(|| {
+            StagexTransitionError::Audit(format!(
+                "TinyCC event used undeclared path {}",
+                event.executable_path.display()
+            ))
+        })?;
+        let valid = event.policy_decision == "allowed"
+            && event.resolved_host_path == event.executable_path
+            && event.tracee_path == event.executable_path
+            && event.digest_hex == *expected_digest
+            && event.inventory_entry_id.as_deref() == Some(expected_id.as_str());
+        if !valid {
+            return Err(StagexTransitionError::Audit(format!(
+                "TinyCC event for {} did not match exact planned authority",
+                event.executable_path.display()
+            )));
+        }
+        observed.insert(event.executable_path.clone());
+    }
+    for required in [&mes_path, &tcc_mes_path, &boot0_path, &final_alias_path] {
+        if !observed.contains(required) {
+            return Err(StagexTransitionError::Audit(format!(
+                "TinyCC audit did not observe required executable {}",
+                required.display()
+            )));
+        }
+    }
+    assert!(!events.is_empty());
+    assert!(observed.len() <= authorities.len());
+    Ok(())
+}
+
+fn tinycc_expected_event_count(
+    compile_command_count: u32,
+    runtime_refresh_command_count: u32,
+    boot0_command_count: u32,
+    final_command_count: u32,
+) -> Result<usize, StagexTransitionError> {
+    let command_count = compile_command_count
+        .checked_add(runtime_refresh_command_count)
+        .and_then(|count| count.checked_add(boot0_command_count))
+        .and_then(|count| count.checked_add(final_command_count))
+        .ok_or_else(|| StagexTransitionError::Audit("TinyCC reported command count overflow".to_string()))?;
+    usize::try_from(command_count)
+        .map_err(|_| StagexTransitionError::Audit("TinyCC command count does not fit usize".to_string()))?
+        .checked_add(TINYCC_LINK_CHILD_EVENT_COUNT)
+        .ok_or_else(|| StagexTransitionError::Audit("TinyCC expected event count overflow".to_string()))
+}
+
+fn validate_tinycc_observed_event_count(
+    expected_event_count: usize,
+    observed_event_count: usize,
+) -> Result<(), StagexTransitionError> {
+    if observed_event_count != expected_event_count {
+        return Err(StagexTransitionError::Audit(format!(
+            "TinyCC protected audit expected {expected_event_count} events, observed {observed_event_count}"
+        )));
+    }
+    assert!(expected_event_count > 0);
+    assert_eq!(observed_event_count, expected_event_count);
+    Ok(())
+}
+
+fn report_output_path(
+    outputs: &[crate::stagex_mes::MesM2Output],
+    artifact_id: &str,
+) -> Result<PathBuf, StagexTransitionError> {
+    outputs
+        .iter()
+        .find(|output| output.artifact_id == artifact_id)
+        .map(|output| output.path.clone())
+        .ok_or_else(|| StagexTransitionError::Audit(format!("Mes report lacks output {artifact_id}")))
+}
+
+fn tinycc_output_path(
+    report: &crate::stagex_tinycc::TccMesInventoryReport,
+    artifact_id: &str,
+) -> Result<PathBuf, StagexTransitionError> {
+    report
+        .outputs
+        .iter()
+        .find(|output| output.artifact_id == artifact_id)
+        .map(|output| output.path.clone())
+        .ok_or_else(|| StagexTransitionError::Audit(format!("TinyCC report lacks output {artifact_id}")))
+}
+
+fn stage0_artifact_path(root: &Path, artifact_id: &str) -> Result<PathBuf, StagexTransitionError> {
+    if let Some(expected) = crate::stagex_stage0::STAGE0_EXPECTED_EXECUTABLES
+        .iter()
+        .find(|expected| expected.artifact_id == artifact_id)
+    {
+        return Ok(root.join(expected.relative_path));
+    }
+    if let Some(expected) = crate::stagex_stage0_full::STAGE0_FULL_EXPECTED_EXECUTABLES
+        .iter()
+        .find(|expected| expected.artifact_id == artifact_id)
+    {
+        return Ok(root.join(expected.relative_path));
+    }
+    Err(StagexTransitionError::Audit(format!("unknown Stage0 artifact {artifact_id}")))
 }
 
 fn validate_audit_event(
@@ -1465,7 +2307,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
-    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "9e9138e807dba3b348303ad333a74cbdb8094533bf7e3357ba0971781ac43d8a";
+    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "9c3abb9ce93ea57c50eedd3d989b7464c08c4f6ae0510eb374103e3a09055f60";
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {
@@ -1539,6 +2381,29 @@ mod tests {
     }
 
     #[test]
+    fn tinycc_event_count_accepts_complete_and_rejects_missing_event() {
+        const COMPILE_COMMAND_COUNT: u32 = 2;
+        const RUNTIME_COMMAND_COUNT: u32 = 7;
+        const BOOT_COMMAND_COUNT: u32 = 2;
+        const FINAL_COMMAND_COUNT: u32 = 3;
+        const EXPECTED_EVENT_COUNT: usize = 19;
+        let expected = tinycc_expected_event_count(
+            COMPILE_COMMAND_COUNT,
+            RUNTIME_COMMAND_COUNT,
+            BOOT_COMMAND_COUNT,
+            FINAL_COMMAND_COUNT,
+        )
+        .unwrap();
+        assert_eq!(expected, EXPECTED_EVENT_COUNT);
+        validate_tinycc_observed_event_count(expected, expected).unwrap();
+
+        let missing_event_count = expected.checked_sub(1).unwrap();
+        let error = validate_tinycc_observed_event_count(expected, missing_event_count).unwrap_err();
+        assert!(error.to_string().contains("TinyCC protected audit expected"));
+        assert!(!error.to_string().is_empty());
+    }
+
+    #[test]
     fn bounded_retry_classification_is_exact() {
         let exact = io::Error::from_raw_os_error(libc::ETXTBSY);
         let other = io::Error::from_raw_os_error(libc::EACCES);
@@ -1581,32 +2446,39 @@ mod tests {
         })
         .unwrap();
         assert_eq!(report.status, "complete");
-        let expected_event_count = report.stage0_full.as_ref().map_or(EXPECTED_AUDIT_EVENT_COUNT, |stage0| {
+        let minimum_event_count = report.stage0_full.as_ref().map_or(EXPECTED_AUDIT_EVENT_COUNT, |stage0| {
             let mini_count = usize::try_from(stage0.mini.command_count).unwrap().checked_add(1).unwrap();
-            let full_count = stage0
-                .root_command_count
-                .checked_add(stage0.nested_command_count)
-                .and_then(|count| count.checked_add(stage0.extra_command_count))
-                .and_then(|count| count.checked_add(1))
-                .and_then(|count| usize::try_from(count).ok())
+            let mes_count = report
+                .mes_m2
+                .as_ref()
+                .map(|mes| usize::try_from(mes.command_count).unwrap().checked_add(1).unwrap())
                 .unwrap();
+            let runtime_count = report.mes_runtime.as_ref().map(mes_runtime_event_count).unwrap().unwrap();
             EXPECTED_AUDIT_EVENT_COUNT
                 .checked_add(mini_count)
-                .and_then(|count| count.checked_add(full_count))
+                .and_then(|count| count.checked_add(mes_count))
+                .and_then(|count| count.checked_add(runtime_count))
                 .unwrap()
         });
         if report.stage0_full.is_some() {
-            assert!(report.protected_exec_events.len() >= expected_event_count);
+            assert!(report.protected_exec_events.len() > minimum_event_count);
         } else {
-            assert_eq!(report.protected_exec_events.len(), expected_event_count);
+            assert_eq!(report.protected_exec_events.len(), minimum_event_count);
         }
         assert_eq!(report.stage0_full.is_some(), source_bundle.is_some());
+        assert_eq!(report.mes_m2.is_some(), source_bundle.is_some());
+        assert_eq!(report.mes_runtime.is_some(), source_bundle.is_some());
+        assert_eq!(report.tinycc_sources.is_some(), source_bundle.is_some());
+        assert_eq!(report.tinycc_runtime.is_some(), source_bundle.is_some());
         assert!(
             report
                 .stage0_full
                 .as_ref()
                 .is_none_or(|stage0| { stage0.protected_exec_enforced && stage0.mini.protected_exec_enforced })
         );
+        assert!(report.mes_m2.as_ref().is_none_or(|mes| mes.protected_exec_enforced));
+        assert!(report.mes_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
+        assert!(report.tinycc_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
         assert_eq!(report.promotions.len(), EXPECTED_PROMOTION_COUNT);
         assert!(report.fallback_events.is_empty());
         assert!(scratch.join(REPORT_FILE_NAME).is_file());

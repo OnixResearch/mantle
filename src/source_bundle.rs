@@ -3040,6 +3040,16 @@ fn source_fetch_override_kind(record: &SourceRecord) -> Result<crunch_build::Fet
     }
 }
 
+pub(crate) fn materialize_source_record_for_offline_use(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
+    let kind = source_fetch_override_kind(record)?;
+    materialize_source_record_for_fetch_override(record, kind, target)?;
+    let expected_hash = expected_source_record_hash(record)?;
+    verify_captured_source_record(record, target, &expected_hash)?;
+    assert!(target.exists());
+    assert!(!record.files.is_empty());
+    Ok(())
+}
+
 fn materialize_source_record_for_fetch_override(
     record: &SourceRecord,
     kind: crunch_build::FetchSourceOverrideKind,
