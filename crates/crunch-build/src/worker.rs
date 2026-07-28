@@ -42,6 +42,10 @@ use crate::dynamic_plan::FixedOutputHashAlgo;
 use crate::dynamic_plan::FixedOutputMode;
 use crate::dynamic_plan::FixedOutputSpec;
 use crate::dynamic_plan::MAX_DYNAMIC_PLAN_BYTES;
+use crate::dynamic_plan::OutputName;
+use crate::dynamic_plan::SourceId;
+use crate::dynamic_plan::StorePathString;
+use crate::dynamic_plan::UnitId;
 use crate::dynamic_plan::decode_validated_plan_v1;
 use crate::dynamic_plan::parse_dynamic_placeholders;
 use crate::dynamic_plan::resolve_dynamic_placeholders;
@@ -82,8 +86,8 @@ type PendingRegistryEntry = (
 type CreatedGoal = (String, Vec<StorePath<String>>);
 
 struct DynamicPlaceholderBindings {
-    sources: BTreeMap<String, String>,
-    unit_outputs: BTreeMap<(String, String), String>,
+    sources: BTreeMap<SourceId, StorePathString>,
+    unit_outputs: BTreeMap<(UnitId, OutputName), StorePathString>,
 }
 
 struct NativePlanIdentity<'a> {
@@ -230,7 +234,7 @@ enum NativeDynamicPlanOutputScan {
 
 struct RegisteredNativeDynamicPlan {
     root_drv_paths: Vec<StorePath<String>>,
-    unit_drv_paths: BTreeMap<String, StorePath<String>>,
+    unit_drv_paths: BTreeMap<UnitId, StorePath<String>>,
 }
 
 impl NativeDynamicPlanScan {
@@ -251,13 +255,13 @@ fn blake3_hex(bytes: &[u8]) -> String {
 }
 
 fn accepted_native_plan(input: AcceptedNativePlanInput<'_>) -> NativeDynamicPlanAccepted {
-    let accepted_unit_ids = input.plan.plan.units.iter().map(|unit| unit.id.clone()).collect();
+    let accepted_unit_ids = input.plan.plan.units.iter().map(|unit| unit.id.as_str().to_owned()).collect();
     NativeDynamicPlanAccepted {
         producer_key: input.identity.producer_key.to_string(),
         output_name: input.identity.output_name.to_string(),
         plan_artifact_path: input.plan_artifact_path,
         raw_artifact_digest: input.raw_artifact_digest,
-        canonical_plan_digest: input.plan.digest.clone(),
+        canonical_plan_digest: input.plan.digest.as_str().to_owned(),
         accepted_unit_ids,
         plan: input.plan,
     }
@@ -351,15 +355,20 @@ fn parse_dynamic_store_path(input: DynamicStorePathInput<'_>) -> Result<StorePat
     })
 }
 
+fn admit_dynamic_binding_path(value: String, store_dir: &str) -> Result<StorePathString, Error> {
+    StorePathString::new(value, store_dir)
+        .map_err(|error| Error::Store(format!("admitting native dynamic path binding: {error}")))
+}
+
 fn dynamic_sources_by_id(
     sources: &[DeclaredSourceInput],
     store_dir: &str,
-) -> Result<BTreeMap<String, StorePath<String>>, Error> {
+) -> Result<BTreeMap<SourceId, StorePath<String>>, Error> {
     let source_count_max = sources.len();
     let mut by_id = BTreeMap::new();
     for source in sources {
         let path = parse_dynamic_store_path(DynamicStorePathInput {
-            path: &source.path,
+            path: source.path.as_str(),
             store_dir,
         })?;
         if by_id.len() >= source_count_max {
@@ -401,11 +410,11 @@ fn parse_dynamic_fixed_output(spec: &FixedOutputSpec) -> Result<CAHash, Error> {
 }
 
 fn dynamic_plan_outputs_are_declared(unit: &DynamicUnit) -> bool {
-    let outputs: BTreeSet<&str> = unit.derivation.outputs.iter().map(String::as_str).collect();
-    unit.derivation.dynamic_plan_outputs.iter().all(|output| outputs.contains(output.as_str()))
+    let outputs = unit.derivation.outputs.iter().collect::<BTreeSet<_>>();
+    unit.derivation.dynamic_plan_outputs.iter().all(|output| outputs.contains(output))
 }
 
-fn unit_output_dependencies_registered(unit: &DynamicUnit, registered: &BTreeMap<String, StorePath<String>>) -> bool {
+fn unit_output_dependencies_registered(unit: &DynamicUnit, registered: &BTreeMap<UnitId, StorePath<String>>) -> bool {
     unit.derivation.inputs.iter().all(|input| match input {
         DynamicInput::UnitOutput { unit, .. } => registered.contains_key(unit),
         DynamicInput::StorePath { .. } | DynamicInput::Source { .. } => true,
@@ -418,9 +427,14 @@ fn register_native_dynamic_plan_units(
 ) -> Result<RegisteredNativeDynamicPlan, Error> {
     let store_dir = known_paths.store_dir().to_string();
     let sources = dynamic_sources_by_id(&accepted.plan.plan.sources, &store_dir)?;
-    let units_by_id: BTreeMap<String, &DynamicUnit> =
-        accepted.plan.plan.units.iter().map(|unit| (unit.id.clone(), unit)).collect();
-    let mut pending: BTreeSet<String> = units_by_id.keys().cloned().collect();
+    let units_by_id = accepted
+        .plan
+        .plan
+        .units
+        .iter()
+        .map(|unit| (unit.id.clone(), unit))
+        .collect::<BTreeMap<UnitId, &DynamicUnit>>();
+    let mut pending = units_by_id.keys().cloned().collect::<BTreeSet<UnitId>>();
     let registered_unit_count_max = units_by_id.len();
     let unit_iteration_count_max = accepted.plan.plan.units.len();
     let mut registered = BTreeMap::new();
@@ -430,16 +444,20 @@ fn register_native_dynamic_plan_units(
         if pending.is_empty() {
             break;
         }
-        let ready_units: Vec<String> = pending
+        let ready_units = pending
             .iter()
-            .filter(|unit_id| unit_output_dependencies_registered(units_by_id[unit_id.as_str()], &registered))
+            .filter(|unit_id| {
+                units_by_id.get(*unit_id).is_some_and(|unit| unit_output_dependencies_registered(unit, &registered))
+            })
             .cloned()
-            .collect();
+            .collect::<Vec<UnitId>>();
         if ready_units.is_empty() {
             break;
         }
         for unit_id in ready_units {
-            let unit = units_by_id[unit_id.as_str()];
+            let Some(unit) = units_by_id.get(&unit_id) else {
+                return Err(Error::Store(format!("native dynamic unit disappeared during registration: {unit_id}")));
+            };
             let drv_path = register_native_dynamic_unit(unit, &sources, &registered, known_paths, &store_dir)?;
             if registered.len() >= registered_unit_count_max {
                 return Err(Error::Store("native dynamic unit map exceeded validated plan bound".to_string()));
@@ -453,7 +471,7 @@ fn register_native_dynamic_plan_units(
         return Err(Error::Store(format!(
             "native dynamic plan '{}' has unresolved unit dependencies: {}",
             accepted.canonical_plan_digest,
-            pending.into_iter().collect::<Vec<_>>().join(", ")
+            pending.into_iter().map(|unit| unit.to_string()).collect::<Vec<_>>().join(", ")
         )));
     }
 
@@ -475,8 +493,8 @@ fn register_native_dynamic_plan_units(
 
 fn register_native_dynamic_unit(
     unit: &DynamicUnit,
-    sources: &BTreeMap<String, StorePath<String>>,
-    registered_units: &BTreeMap<String, StorePath<String>>,
+    sources: &BTreeMap<SourceId, StorePath<String>>,
+    registered_units: &BTreeMap<UnitId, StorePath<String>>,
     known_paths: &mut DerivationRegistry,
     store_dir: &str,
 ) -> Result<StorePath<String>, Error> {
@@ -526,7 +544,7 @@ fn register_native_dynamic_unit(
         hdm,
         derivation,
         is_ca,
-        unit.derivation.dynamic_plan_outputs.clone(),
+        unit.derivation.dynamic_plan_outputs.iter().map(|output| output.as_str().to_owned()).collect(),
         None,
     );
     Ok(drv_path)
@@ -534,8 +552,8 @@ fn register_native_dynamic_unit(
 
 fn build_native_dynamic_derivation(
     unit: &DynamicUnit,
-    sources: &BTreeMap<String, StorePath<String>>,
-    registered_units: &BTreeMap<String, StorePath<String>>,
+    sources: &BTreeMap<SourceId, StorePath<String>>,
+    registered_units: &BTreeMap<UnitId, StorePath<String>>,
     known_paths: &DerivationRegistry,
     store_dir: &str,
 ) -> Result<Derivation, Error> {
@@ -545,9 +563,13 @@ fn build_native_dynamic_derivation(
         .outputs
         .iter()
         .map(|output_name| {
-            (output_name.clone(), Output {
+            (output_name.as_str().to_owned(), Output {
                 path: None,
-                ca_hash: if output_name == "out" { ca_hash.clone() } else { None },
+                ca_hash: if output_name.as_str() == "out" {
+                    ca_hash.clone()
+                } else {
+                    None
+                },
             })
         })
         .collect();
@@ -567,17 +589,23 @@ fn build_native_dynamic_derivation(
         })
         .collect::<Result<BTreeMap<_, _>, _>>()?;
     environment.insert("system".to_string(), unit.derivation.system.as_bytes().into());
-    environment.insert("builder".to_string(), unit.derivation.builder.as_bytes().into());
+    environment.insert("builder".to_string(), unit.derivation.builder.as_str().as_bytes().into());
     environment.insert("name".to_string(), unit.derivation.name.as_bytes().into());
-    environment.extend(unit.derivation.outputs.iter().map(|output_name| (output_name.clone(), BString::from(""))));
-    environment.insert("outputs".to_string(), unit.derivation.outputs.join(" ").as_bytes().into());
+    environment.extend(
+        unit.derivation
+            .outputs
+            .iter()
+            .map(|output_name| (output_name.as_str().to_owned(), BString::from(""))),
+    );
+    let output_names = unit.derivation.outputs.iter().map(OutputName::as_str).collect::<Vec<_>>().join(" ");
+    environment.insert("outputs".to_string(), output_names.as_bytes().into());
 
     let (input_derivations, input_sources) = resolve_native_dynamic_inputs(unit, sources, registered_units, store_dir)?;
     assert_eq!(arguments.len(), unit.derivation.args.len());
     assert!(bindings.sources.len() <= unit.derivation.inputs.len());
     Ok(Derivation {
         arguments,
-        builder: unit.derivation.builder.clone(),
+        builder: unit.derivation.builder.as_str().to_owned(),
         environment,
         input_derivations,
         input_sources,
@@ -588,8 +616,8 @@ fn build_native_dynamic_derivation(
 
 fn dynamic_placeholder_bindings(
     unit: &DynamicUnit,
-    sources: &BTreeMap<String, StorePath<String>>,
-    registered_units: &BTreeMap<String, StorePath<String>>,
+    sources: &BTreeMap<SourceId, StorePath<String>>,
+    registered_units: &BTreeMap<UnitId, StorePath<String>>,
     known_paths: &DerivationRegistry,
     store_dir: &str,
 ) -> Result<DynamicPlaceholderBindings, Error> {
@@ -620,7 +648,8 @@ fn dynamic_placeholder_bindings(
                 if source_bindings.len() >= binding_count_max {
                     return Err(Error::Store("native dynamic source bindings exceeded input bound".to_string()));
                 }
-                source_bindings.insert(source.clone(), path.to_absolute_path_with_prefix(store_dir));
+                let binding_path = admit_dynamic_binding_path(path.to_absolute_path_with_prefix(store_dir), store_dir)?;
+                source_bindings.insert(source.clone(), binding_path);
             }
             DynamicInput::UnitOutput {
                 unit: dependency,
@@ -634,11 +663,13 @@ fn dynamic_placeholder_bindings(
                 })?;
                 let drv_abs = drv_path.to_absolute_path_with_prefix(store_dir);
                 let binding_key = (dependency.clone(), output.clone());
-                if let Some(path) = known_paths.get_output_path(&drv_abs, output) {
+                if let Some(path) = known_paths.get_output_path(&drv_abs, output.as_str()) {
                     if output_bindings.len() >= binding_count_max {
                         return Err(Error::Store("native dynamic output bindings exceeded input bound".to_string()));
                     }
-                    output_bindings.insert(binding_key, path.to_absolute_path_with_prefix(store_dir));
+                    let binding_path =
+                        admit_dynamic_binding_path(path.to_absolute_path_with_prefix(store_dir), store_dir)?;
+                    output_bindings.insert(binding_key, binding_path);
                 } else if required_outputs.contains(&binding_key) {
                     return Err(Error::Store(format!(
                         "native dynamic unit '{}' requires a statically known path for {dependency}:{output}",
@@ -672,8 +703,8 @@ type NativeDynamicInputs = (NativeDynamicInputDerivations, NativeDynamicInputSou
 
 fn resolve_native_dynamic_inputs(
     unit: &DynamicUnit,
-    sources: &BTreeMap<String, StorePath<String>>,
-    registered_units: &BTreeMap<String, StorePath<String>>,
+    sources: &BTreeMap<SourceId, StorePath<String>>,
+    registered_units: &BTreeMap<UnitId, StorePath<String>>,
     store_dir: &str,
 ) -> Result<NativeDynamicInputs, Error> {
     let mut input_derivations: BTreeMap<StorePath<String>, BTreeSet<String>> = BTreeMap::new();
@@ -681,7 +712,10 @@ fn resolve_native_dynamic_inputs(
     for input in &unit.derivation.inputs {
         match input {
             DynamicInput::StorePath { path } => {
-                input_sources.insert(parse_dynamic_store_path(DynamicStorePathInput { path, store_dir })?);
+                input_sources.insert(parse_dynamic_store_path(DynamicStorePathInput {
+                    path: path.as_str(),
+                    store_dir,
+                })?);
             }
             DynamicInput::Source { source } => {
                 let path = sources.get(source).ok_or_else(|| {
@@ -699,7 +733,7 @@ fn resolve_native_dynamic_inputs(
                         unit.id
                     ))
                 })?;
-                input_derivations.entry(drv_path.clone()).or_default().insert(output.clone());
+                input_derivations.entry(drv_path.clone()).or_default().insert(output.as_str().to_owned());
             }
         }
     }
@@ -2599,8 +2633,8 @@ mod tests {
     fn native_dynamic_registration_resolves_declared_placeholders_and_rejects_unknown_ca_paths() {
         let canonical = decode_validated_plan_v1(&native_plan_with_placeholders_bytes(), "/nix/store").unwrap();
         let sources = dynamic_sources_by_id(&canonical.plan.sources, "/nix/store").unwrap();
-        let dep = canonical.plan.units.iter().find(|unit| unit.id == "unit.dep").unwrap();
-        let root = canonical.plan.units.iter().find(|unit| unit.id == "unit.root").unwrap();
+        let dep = canonical.plan.units.iter().find(|unit| unit.id.as_str() == "unit.dep").unwrap();
+        let root = canonical.plan.units.iter().find(|unit| unit.id.as_str() == "unit.root").unwrap();
         let mut registry = DerivationRegistry::default();
         let mut registered = BTreeMap::new();
 
@@ -3654,20 +3688,18 @@ mod tests {
         let mut dynamic_builder = make_test_builder(bs);
         let result = dynamic_worker.run(&mut dynamic_builder, &mut kp).await.unwrap();
 
-        assert!(registered.unit_drv_paths.contains_key("unit.dep"));
-        assert!(registered.unit_drv_paths.contains_key("unit.root"));
-        assert!(registered.unit_drv_paths.contains_key("unit.unused"));
+        let dep_id = UnitId::new("unit.dep").unwrap();
+        let root_id = UnitId::new("unit.root").unwrap();
+        let unused_id = UnitId::new("unit.unused").unwrap();
+        assert!(registered.unit_drv_paths.contains_key(&dep_id));
+        assert!(registered.unit_drv_paths.contains_key(&root_id));
+        assert!(registered.unit_drv_paths.contains_key(&unused_id));
         assert_eq!(registered.root_drv_paths.len(), 1);
         assert!(result.failed.is_empty());
         assert_eq!(result.outcomes.len(), 1);
-        assert!(dynamic_worker.registry().get(&registered.unit_drv_paths["unit.dep"].to_absolute_path()).is_some());
-        assert!(dynamic_worker.registry().get(&registered.unit_drv_paths["unit.root"].to_absolute_path()).is_some());
-        assert!(
-            dynamic_worker
-                .registry()
-                .get(&registered.unit_drv_paths["unit.unused"].to_absolute_path())
-                .is_none()
-        );
+        assert!(dynamic_worker.registry().get(&registered.unit_drv_paths[&dep_id].to_absolute_path()).is_some());
+        assert!(dynamic_worker.registry().get(&registered.unit_drv_paths[&root_id].to_absolute_path()).is_some());
+        assert!(dynamic_worker.registry().get(&registered.unit_drv_paths[&unused_id].to_absolute_path()).is_none());
     }
 
     #[tokio::test]

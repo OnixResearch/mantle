@@ -219,6 +219,10 @@ project-facing prose uses Mantle. Pure decision logic is split into functional
 core crates where adopted. Filesystem, process, network, and CLI effects remain
 in thin Rust adapters.
 
+The `mantle-plan-v1` boundary decodes structural wire records before it admits
+checked IDs, output names, logical store paths, and role-specific BLAKE3 values.
+See [Nominal dynamic-plan types](docs/nominal-dynamic-plan-types.md).
+
 The scheduler creates goals lazily, deduplicates them by store identity, and
 dispatches eligible work under explicit concurrency and policy bounds. A build
 report describes what was observed. It does not turn scheduling, sandbox, or

@@ -7,6 +7,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::marker::PhantomData;
 
 use nix_compat::store_path::StorePath;
 use serde::Deserialize;
@@ -41,15 +42,204 @@ const DYNAMIC_SOURCE_PLACEHOLDER_PREFIX: &str = "source:";
 const DYNAMIC_UNIT_OUTPUT_PLACEHOLDER_PREFIX: &str = "unit-output:";
 const MAX_DYNAMIC_PLACEHOLDERS_PER_STRING: u32 = 1024;
 
-pub type UnitId = String;
-pub type SourceId = String;
-pub type StorePathString = String;
-pub type Blake3Hex = String;
+/// A checked dynamic-plan unit identifier.
+///
+/// ```
+/// # use crunch_build::dynamic_plan::UnitId;
+/// let unit = UnitId::new("unit.main")?;
+/// assert_eq!(unit.as_str(), "unit.main");
+/// # Ok::<(), crunch_build::dynamic_plan::DynamicPlanError>(())
+/// ```
+///
+/// ```compile_fail
+/// # use crunch_build::dynamic_plan::{SourceId, UnitId};
+/// fn requires_unit(_: UnitId) {}
+/// let source = SourceId::new("src.main").unwrap();
+/// requires_unit(source);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct UnitId(String);
+
+impl UnitId {
+    pub fn new(value: impl Into<String>) -> Result<Self, DynamicPlanError> {
+        let value = value.into();
+        validate_unit_id(&value)?;
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for UnitId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+/// A checked dynamic-plan source identifier.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SourceId(String);
+
+impl SourceId {
+    pub fn new(value: impl Into<String>) -> Result<Self, DynamicPlanError> {
+        let value = value.into();
+        validate_source_id(&value)?;
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for SourceId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+/// A checked logical store path under one admitted store prefix.
+///
+/// This type does not prove that the path exists or that its contents are trusted.
+///
+/// ```compile_fail
+/// # use crunch_build::dynamic_plan::{SourceId, StorePathString};
+/// fn requires_path(_: StorePathString) {}
+/// let source = SourceId::new("src.main").unwrap();
+/// requires_path(source);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StorePathString(String);
+
+impl StorePathString {
+    pub fn new(value: impl Into<String>, store_prefix: &str) -> Result<Self, DynamicPlanError> {
+        let value = value.into();
+        validate_store_path_string(&value, store_prefix)?;
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for StorePathString {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+/// A checked derivation output name.
+///
+/// ```compile_fail
+/// # use crunch_build::dynamic_plan::{OutputName, UnitId};
+/// fn requires_output(_: OutputName) {}
+/// let unit = UnitId::new("unit.main").unwrap();
+/// requires_output(unit);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct OutputName(String);
+
+impl OutputName {
+    pub fn new(value: impl Into<String>) -> Result<Self, DynamicPlanError> {
+        let value = value.into();
+        validate_output_name(&value)?;
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for OutputName {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+mod nominal_sealed {
+    pub trait Sealed {}
+}
+
+/// Marker implemented by each closed dynamic-plan BLAKE3 role.
+pub trait Blake3Role: nominal_sealed::Sealed + Clone + Copy + std::fmt::Debug + Eq + Ord + 'static {}
+
+/// Marker for canonical `mantle-plan-v1` identities.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PlanDigestRole;
+impl nominal_sealed::Sealed for PlanDigestRole {}
+impl Blake3Role for PlanDigestRole {}
+
+/// Marker for declared source NAR identities.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct NarDigestRole;
+impl nominal_sealed::Sealed for NarDigestRole {}
+impl Blake3Role for NarDigestRole {}
+
+/// Checked lowercase BLAKE3 text for one compile-time role.
+///
+/// ```compile_fail
+/// # use crunch_build::dynamic_plan::{NarDigest, PlanDigest};
+/// fn requires_plan(_: PlanDigest) {}
+/// let nar = NarDigest::new("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef").unwrap();
+/// requires_plan(nar);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Blake3Hex<Role: Blake3Role> {
+    hex: String,
+    role: PhantomData<fn() -> Role>,
+}
+
+impl<Role: Blake3Role> Blake3Hex<Role> {
+    pub fn new(value: impl Into<String>) -> Result<Self, DynamicPlanError> {
+        let value = value.into();
+        validate_blake3_hex(&value)?;
+        Ok(Self {
+            hex: value,
+            role: PhantomData,
+        })
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.hex
+    }
+}
+
+impl Blake3Hex<PlanDigestRole> {
+    #[must_use]
+    pub fn from_canonical_bytes(bytes: &[u8]) -> Self {
+        let hex = blake3::hash(bytes).to_hex().to_string();
+        assert_eq!(hex.len(), BLAKE3_HEX_BYTES);
+        assert!(validate_blake3_hex(&hex).is_ok());
+        Self { hex, role: PhantomData }
+    }
+}
+
+impl<Role: Blake3Role> std::fmt::Display for Blake3Hex<Role> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+pub type PlanDigest = Blake3Hex<PlanDigestRole>;
+pub type NarDigest = Blake3Hex<NarDigestRole>;
+
+#[path = "dynamic_plan/wire.rs"]
+mod wire;
+pub use wire::admit_plan_v1;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DynamicPlaceholder {
     Source { source: SourceId },
-    UnitOutput { unit: UnitId, output: String },
+    UnitOutput { unit: UnitId, output: OutputName },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -95,11 +285,11 @@ pub enum DynamicPlanError {
 pub struct CanonicalDynamicPlanV1 {
     pub plan: DynamicPlanV1,
     pub bytes: Vec<u8>,
-    pub digest: Blake3Hex,
+    pub digest: PlanDigest,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+/// Admitted dynamic plan. Semantic scalar fields use checked nominal types.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DynamicPlanV1 {
     pub schema: String,
     pub producer: PlanProducer,
@@ -109,25 +299,88 @@ pub struct DynamicPlanV1 {
     pub provenance: BTreeMap<String, String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanProducer {
+    pub logical_name: String,
+    pub goal_hint: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DynamicUnit {
+    pub id: UnitId,
+    pub derivation: DynamicDerivation,
+    pub requested_outputs: Vec<OutputName>,
+    pub policy: DynamicUnitPolicy,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DynamicUnitPolicy {
+    pub sandbox: String,
+    pub substitutions: String,
+    pub store_prefix: String,
+    pub host_paths: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DynamicDerivation {
+    pub name: String,
+    pub builder: StorePathString,
+    pub system: String,
+    pub args: Vec<String>,
+    pub outputs: Vec<OutputName>,
+    pub env: BTreeMap<String, String>,
+    pub inputs: Vec<DynamicInput>,
+    pub fixed_output: Option<FixedOutputSpec>,
+    pub addressing_mode: AddressingMode,
+    pub sandbox: SandboxMode,
+    pub dynamic_plan_outputs: Vec<OutputName>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeclaredSourceInput {
+    pub id: SourceId,
+    pub path: StorePathString,
+    pub nar_blake3: Option<NarDigest>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FixedOutputSpec {
+    pub mode: FixedOutputMode,
+    pub algo: FixedOutputHashAlgo,
+    pub hash: String,
+}
+
+/// Current-shape `mantle-plan-v1` wire record.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct PlanProducer {
+pub struct WireDynamicPlanV1 {
+    pub schema: String,
+    pub producer: WirePlanProducer,
+    pub sources: Vec<WireDeclaredSourceInput>,
+    pub units: Vec<WireDynamicUnit>,
+    pub roots: Vec<String>,
+    pub provenance: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WirePlanProducer {
     pub logical_name: String,
     pub goal_hint: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DynamicUnit {
-    pub id: UnitId,
-    pub derivation: DynamicDerivation,
+pub struct WireDynamicUnit {
+    pub id: String,
+    pub derivation: WireDynamicDerivation,
     pub requested_outputs: Vec<String>,
-    pub policy: DynamicUnitPolicy,
+    pub policy: WireDynamicUnitPolicy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DynamicUnitPolicy {
+pub struct WireDynamicUnitPolicy {
     pub sandbox: String,
     pub substitutions: String,
     pub store_prefix: String,
@@ -136,15 +389,15 @@ pub struct DynamicUnitPolicy {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DynamicDerivation {
+pub struct WireDynamicDerivation {
     pub name: String,
-    pub builder: StorePathString,
+    pub builder: String,
     pub system: String,
     pub args: Vec<String>,
     pub outputs: Vec<String>,
     pub env: BTreeMap<String, String>,
-    pub inputs: Vec<DynamicInput>,
-    pub fixed_output: Option<FixedOutputSpec>,
+    pub inputs: Vec<WireDynamicInput>,
+    pub fixed_output: Option<WireFixedOutputSpec>,
     pub addressing_mode: AddressingMode,
     pub sandbox: SandboxMode,
     pub dynamic_plan_outputs: Vec<String>,
@@ -152,15 +405,15 @@ pub struct DynamicDerivation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DeclaredSourceInput {
-    pub id: SourceId,
-    pub path: StorePathString,
-    pub nar_blake3: Option<Blake3Hex>,
+pub struct WireDeclaredSourceInput {
+    pub id: String,
+    pub path: String,
+    pub nar_blake3: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct FixedOutputSpec {
+pub struct WireFixedOutputSpec {
     pub mode: FixedOutputMode,
     pub algo: FixedOutputHashAlgo,
     pub hash: String,
@@ -196,15 +449,28 @@ pub enum FixedOutputHashAlgo {
     Blake3,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DynamicInput {
     StorePath { path: StorePathString },
     Source { source: SourceId },
-    UnitOutput { unit: UnitId, output: String },
+    UnitOutput { unit: UnitId, output: OutputName },
 }
 
-pub fn decode_plan_v1(bytes: &[u8]) -> Result<DynamicPlanV1, DynamicPlanError> {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WireDynamicInput {
+    StorePath { path: String },
+    Source { source: String },
+    UnitOutput { unit: String, output: String },
+}
+
+/// Decode the bounded `mantle-plan-v1` wire shape without admitting semantic values.
+pub fn decode_plan_v1(bytes: &[u8]) -> Result<WireDynamicPlanV1, DynamicPlanError> {
+    decode_wire_plan_v1(bytes)
+}
+
+/// Decode the bounded current-shape wire DTO.
+pub fn decode_wire_plan_v1(bytes: &[u8]) -> Result<WireDynamicPlanV1, DynamicPlanError> {
     let actual_bytes = len_as_u64("plan bytes", bytes.len())?;
     if actual_bytes > MAX_DYNAMIC_PLAN_BYTES {
         return Err(DynamicPlanError::PlanTooLarge {
@@ -222,14 +488,14 @@ pub fn decode_plan_v1(bytes: &[u8]) -> Result<DynamicPlanV1, DynamicPlanError> {
 }
 
 pub fn decode_validated_plan_v1(bytes: &[u8], store_prefix: &str) -> Result<CanonicalDynamicPlanV1, DynamicPlanError> {
-    let plan = decode_plan_v1(bytes)?;
-    validate_plan_v1(&plan, store_prefix)?;
+    let wire = decode_wire_plan_v1(bytes)?;
+    let plan = admit_plan_v1(wire, store_prefix)?;
     let canonical = canonicalize_plan_v1(&plan);
     let canonical_bytes = canonical_plan_v1_bytes(&canonical)?;
-    let digest = blake3_hex_digest(&canonical_bytes);
+    let digest = PlanDigest::from_canonical_bytes(&canonical_bytes);
 
     assert!(!canonical_bytes.is_empty());
-    assert_eq!(digest.len(), BLAKE3_HEX_BYTES);
+    assert_eq!(digest.as_str().len(), BLAKE3_HEX_BYTES);
 
     Ok(CanonicalDynamicPlanV1 {
         plan: canonical,
@@ -252,25 +518,14 @@ pub fn validate_plan_v1(plan: &DynamicPlanV1, store_prefix: &str) -> Result<(), 
     Ok(())
 }
 
-pub fn decode_canonical_plan_v1(bytes: &[u8]) -> Result<CanonicalDynamicPlanV1, DynamicPlanError> {
-    let plan = decode_plan_v1(bytes)?;
-    let canonical = canonicalize_plan_v1(&plan);
-    let canonical_bytes = canonical_plan_v1_bytes(&canonical)?;
-    let digest = blake3_hex_digest(&canonical_bytes);
-
-    assert!(!canonical_bytes.is_empty());
-    assert_eq!(digest.len(), BLAKE3_HEX_BYTES);
-
-    Ok(CanonicalDynamicPlanV1 {
-        plan: canonical,
-        bytes: canonical_bytes,
-        digest,
-    })
+pub fn decode_canonical_plan_v1(bytes: &[u8], store_prefix: &str) -> Result<CanonicalDynamicPlanV1, DynamicPlanError> {
+    decode_validated_plan_v1(bytes, store_prefix)
 }
 
 pub fn canonical_plan_v1_bytes(plan: &DynamicPlanV1) -> Result<Vec<u8>, DynamicPlanError> {
     let canonical = canonicalize_plan_v1(plan);
-    let bytes = serde_json::to_vec(&canonical).map_err(|err| DynamicPlanError::CanonicalJson {
+    let wire = WireDynamicPlanV1::from(&canonical);
+    let bytes = serde_json::to_vec(&wire).map_err(|err| DynamicPlanError::CanonicalJson {
         message: err.to_string(),
     })?;
 
@@ -287,12 +542,12 @@ pub fn canonical_plan_v1_bytes(plan: &DynamicPlanV1) -> Result<Vec<u8>, DynamicP
     Ok(bytes)
 }
 
-pub fn canonical_plan_v1_digest(plan: &DynamicPlanV1) -> Result<Blake3Hex, DynamicPlanError> {
+pub fn canonical_plan_v1_digest(plan: &DynamicPlanV1) -> Result<PlanDigest, DynamicPlanError> {
     let bytes = canonical_plan_v1_bytes(plan)?;
-    let digest = blake3_hex_digest(&bytes);
+    let digest = PlanDigest::from_canonical_bytes(&bytes);
 
-    assert_eq!(digest.len(), BLAKE3_HEX_BYTES);
-    assert!(validate_blake3_hex(&digest).is_ok());
+    assert_eq!(digest.as_str().len(), BLAKE3_HEX_BYTES);
+    assert!(validate_blake3_hex(digest.as_str()).is_ok());
 
     Ok(digest)
 }
@@ -384,10 +639,10 @@ fn validate_producer(producer: &PlanProducer, store_prefix: &str) -> Result<(), 
 
 fn validate_sources(sources: &[DeclaredSourceInput], store_prefix: &str) -> Result<(), DynamicPlanError> {
     for source in sources {
-        validate_source_id(&source.id)?;
-        validate_store_path_string(&source.path, store_prefix)?;
+        validate_source_id(source.id.as_str())?;
+        validate_store_path_string(source.path.as_str(), store_prefix)?;
         if let Some(digest) = &source.nar_blake3 {
-            validate_blake3_hex(digest)?;
+            validate_blake3_hex(digest.as_str())?;
         }
     }
     Ok(())
@@ -395,7 +650,7 @@ fn validate_sources(sources: &[DeclaredSourceInput], store_prefix: &str) -> Resu
 
 fn validate_units(units: &[DynamicUnit], store_prefix: &str) -> Result<(), DynamicPlanError> {
     for unit in units {
-        validate_unit_id(&unit.id)?;
+        validate_unit_id(unit.id.as_str())?;
         validate_dynamic_derivation(&unit.derivation, store_prefix)?;
         validate_output_names("requested outputs", &unit.requested_outputs)?;
         validate_unit_policy(&unit.policy)?;
@@ -405,7 +660,7 @@ fn validate_units(units: &[DynamicUnit], store_prefix: &str) -> Result<(), Dynam
 
 fn validate_dynamic_derivation(derivation: &DynamicDerivation, store_prefix: &str) -> Result<(), DynamicPlanError> {
     validate_required_string("derivation name", &derivation.name, store_prefix)?;
-    validate_store_path_string(&derivation.builder, store_prefix)?;
+    validate_store_path_string(derivation.builder.as_str(), store_prefix)?;
     validate_required_string("system", &derivation.system, store_prefix)?;
     validate_argument_strings(&derivation.args, store_prefix)?;
     validate_output_names("unit outputs", &derivation.outputs)?;
@@ -438,11 +693,11 @@ fn validate_environment(env: &BTreeMap<String, String>, store_prefix: &str) -> R
 fn validate_inputs(inputs: &[DynamicInput], store_prefix: &str) -> Result<(), DynamicPlanError> {
     for input in inputs {
         match input {
-            DynamicInput::StorePath { path } => validate_store_path_string(path, store_prefix)?,
-            DynamicInput::Source { source } => validate_source_id(source)?,
+            DynamicInput::StorePath { path } => validate_store_path_string(path.as_str(), store_prefix)?,
+            DynamicInput::Source { source } => validate_source_id(source.as_str())?,
             DynamicInput::UnitOutput { unit, output } => {
-                validate_unit_id(unit)?;
-                validate_output_name(output)?;
+                validate_unit_id(unit.as_str())?;
+                validate_output_name(output.as_str())?;
             }
         }
     }
@@ -454,7 +709,7 @@ fn validate_dynamic_placeholders(derivation: &DynamicDerivation) -> Result<(), D
         .inputs
         .iter()
         .filter_map(|input| match input {
-            DynamicInput::Source { source } => Some(source.as_str()),
+            DynamicInput::Source { source } => Some(source.clone()),
             DynamicInput::StorePath { .. } | DynamicInput::UnitOutput { .. } => None,
         })
         .collect::<BTreeSet<_>>();
@@ -462,7 +717,7 @@ fn validate_dynamic_placeholders(derivation: &DynamicDerivation) -> Result<(), D
         .inputs
         .iter()
         .filter_map(|input| match input {
-            DynamicInput::UnitOutput { unit, output } => Some((unit.as_str(), output.as_str())),
+            DynamicInput::UnitOutput { unit, output } => Some((unit.clone(), output.clone())),
             DynamicInput::StorePath { .. } | DynamicInput::Source { .. } => None,
         })
         .collect::<BTreeSet<_>>();
@@ -470,9 +725,9 @@ fn validate_dynamic_placeholders(derivation: &DynamicDerivation) -> Result<(), D
     for value in derivation.args.iter().chain(derivation.env.values()) {
         for placeholder in parse_dynamic_placeholders(value)? {
             match placeholder {
-                DynamicPlaceholder::Source { source } if declared_sources.contains(source.as_str()) => {}
+                DynamicPlaceholder::Source { source } if declared_sources.contains(&source) => {}
                 DynamicPlaceholder::UnitOutput { unit, output }
-                    if declared_outputs.contains(&(unit.as_str(), output.as_str())) => {}
+                    if declared_outputs.contains(&(unit.clone(), output.clone())) => {}
                 DynamicPlaceholder::Source { .. } | DynamicPlaceholder::UnitOutput { .. } => {
                     return invalid_scalar(
                         "dynamic placeholder",
@@ -523,7 +778,7 @@ pub fn parse_dynamic_placeholders(value: &str) -> Result<Vec<DynamicPlaceholder>
 pub fn resolve_dynamic_placeholders(
     value: &str,
     source_paths: &BTreeMap<SourceId, StorePathString>,
-    unit_output_paths: &BTreeMap<(UnitId, String), StorePathString>,
+    unit_output_paths: &BTreeMap<(UnitId, OutputName), StorePathString>,
 ) -> Result<String, DynamicPlanError> {
     let placeholders = parse_dynamic_placeholders(value)?;
     let mut resolved = value.to_string();
@@ -548,7 +803,7 @@ pub fn resolve_dynamic_placeholders(
                 (format!("{{{{mantle-unit-output:{unit}:{output}}}}}"), path)
             }
         };
-        resolved = resolved.replace(&token, path);
+        resolved = resolved.replace(&token, path.as_str());
     }
     validate_bounded_string("resolved dynamic value", &resolved)?;
     if resolved.contains(DYNAMIC_PLACEHOLDER_START) {
@@ -573,20 +828,17 @@ fn parse_dynamic_placeholder_body(
     );
     let original = original.into();
     if let Some(source) = body.strip_prefix(DYNAMIC_SOURCE_PLACEHOLDER_PREFIX) {
-        validate_source_id(source)?;
         return Ok(DynamicPlaceholder::Source {
-            source: source.to_string(),
+            source: SourceId::new(source)?,
         });
     }
     if let Some(unit_output) = body.strip_prefix(DYNAMIC_UNIT_OUTPUT_PLACEHOLDER_PREFIX) {
         let Some((unit, output)) = unit_output.rsplit_once(':') else {
             return invalid_scalar("dynamic placeholder", original, "unit output token is missing its output name");
         };
-        validate_unit_id(unit)?;
-        validate_output_name(output)?;
         return Ok(DynamicPlaceholder::UnitOutput {
-            unit: unit.to_string(),
-            output: output.to_string(),
+            unit: UnitId::new(unit)?,
+            output: OutputName::new(output)?,
         });
     }
     invalid_scalar("dynamic placeholder", original, "uses an unsupported token kind")
@@ -609,12 +861,12 @@ fn validate_sandbox_mode(sandbox: &SandboxMode) -> Result<(), DynamicPlanError> 
     }
 }
 
-fn validate_output_names(field: &'static str, outputs: &[String]) -> Result<(), DynamicPlanError> {
+fn validate_output_names(field: &'static str, outputs: &[OutputName]) -> Result<(), DynamicPlanError> {
     let mut seen = BTreeSet::new();
     for output in outputs {
-        validate_output_name(output)?;
-        if !seen.insert(output.as_str()) {
-            return invalid_scalar(field, output, "contains duplicate output name");
+        validate_output_name(output.as_str())?;
+        if !seen.insert(output) {
+            return invalid_scalar(field, output.as_str(), "contains duplicate output name");
         }
     }
     Ok(())
@@ -630,7 +882,7 @@ fn validate_unit_policy(policy: &DynamicUnitPolicy) -> Result<(), DynamicPlanErr
 
 fn validate_roots(roots: &[UnitId]) -> Result<(), DynamicPlanError> {
     for root in roots {
-        validate_unit_id(root)?;
+        validate_unit_id(root.as_str())?;
     }
     Ok(())
 }
@@ -660,23 +912,23 @@ fn validate_plan_graph(plan: &DynamicPlanV1) -> Result<(), DynamicPlanError> {
     Ok(())
 }
 
-fn collect_source_ids(sources: &[DeclaredSourceInput]) -> Result<BTreeSet<&str>, DynamicPlanError> {
+fn collect_source_ids(sources: &[DeclaredSourceInput]) -> Result<BTreeSet<&SourceId>, DynamicPlanError> {
     let mut source_ids = BTreeSet::new();
     for source in sources {
-        if !source_ids.insert(source.id.as_str()) {
-            return invalid_scalar("source id", &source.id, "contains duplicate source id");
+        if !source_ids.insert(&source.id) {
+            return invalid_scalar("source id", source.id.as_str(), "contains duplicate source id");
         }
     }
     assert_eq!(source_ids.len(), sources.len());
     Ok(source_ids)
 }
 
-fn collect_unit_outputs(units: &[DynamicUnit]) -> Result<BTreeMap<&str, BTreeSet<&str>>, DynamicPlanError> {
+fn collect_unit_outputs(units: &[DynamicUnit]) -> Result<BTreeMap<&UnitId, BTreeSet<&OutputName>>, DynamicPlanError> {
     let mut unit_outputs = BTreeMap::new();
     for unit in units {
-        let output_names = unit.derivation.outputs.iter().map(String::as_str).collect::<BTreeSet<_>>();
-        if unit_outputs.insert(unit.id.as_str(), output_names).is_some() {
-            return invalid_scalar("unit id", &unit.id, "contains duplicate unit id");
+        let output_names = unit.derivation.outputs.iter().collect::<BTreeSet<_>>();
+        if unit_outputs.insert(&unit.id, output_names).is_some() {
+            return invalid_scalar("unit id", unit.id.as_str(), "contains duplicate unit id");
         }
     }
     assert_eq!(unit_outputs.len(), units.len());
@@ -685,7 +937,7 @@ fn collect_unit_outputs(units: &[DynamicUnit]) -> Result<BTreeMap<&str, BTreeSet
 
 fn validate_root_graph(
     roots: &[UnitId],
-    unit_outputs: &BTreeMap<&str, BTreeSet<&str>>,
+    unit_outputs: &BTreeMap<&UnitId, BTreeSet<&OutputName>>,
 ) -> Result<(), DynamicPlanError> {
     if roots.is_empty() {
         return invalid_scalar("roots", "", "must not be empty");
@@ -693,11 +945,11 @@ fn validate_root_graph(
 
     let mut seen_roots = BTreeSet::new();
     for root in roots {
-        if !seen_roots.insert(root.as_str()) {
-            return invalid_scalar("roots", root, "contains duplicate root");
+        if !seen_roots.insert(root) {
+            return invalid_scalar("roots", root.as_str(), "contains duplicate root");
         }
-        if !unit_outputs.contains_key(root.as_str()) {
-            return invalid_scalar("roots", root, "references unknown unit");
+        if !unit_outputs.contains_key(root) {
+            return invalid_scalar("roots", root.as_str(), "references unknown unit");
         }
     }
     assert_eq!(seen_roots.len(), roots.len());
@@ -706,26 +958,30 @@ fn validate_root_graph(
 
 fn validate_input_graph(
     units: &[DynamicUnit],
-    source_ids: &BTreeSet<&str>,
-    unit_outputs: &BTreeMap<&str, BTreeSet<&str>>,
+    source_ids: &BTreeSet<&SourceId>,
+    unit_outputs: &BTreeMap<&UnitId, BTreeSet<&OutputName>>,
 ) -> Result<(), DynamicPlanError> {
     assert_eq!(unit_outputs.len(), units.len(), "every unit must have an output-set entry");
-    assert!(units.iter().all(|unit| !unit.id.is_empty()), "validated unit IDs must not be empty");
+    assert!(units.iter().all(|unit| !unit.id.as_str().is_empty()), "validated unit IDs must not be empty");
     for unit in units {
         for input in &unit.derivation.inputs {
             match input {
                 DynamicInput::StorePath { .. } => {}
                 DynamicInput::Source { source } => {
-                    if !source_ids.contains(source.as_str()) {
-                        return invalid_scalar("source dependency", source, "references undeclared source input");
+                    if !source_ids.contains(source) {
+                        return invalid_scalar(
+                            "source dependency",
+                            source.as_str(),
+                            "references undeclared source input",
+                        );
                     }
                 }
                 DynamicInput::UnitOutput { unit, output } => {
-                    let Some(outputs) = unit_outputs.get(unit.as_str()) else {
-                        return invalid_scalar("unit output dependency", unit, "references unknown unit");
+                    let Some(outputs) = unit_outputs.get(unit) else {
+                        return invalid_scalar("unit output dependency", unit.as_str(), "references unknown unit");
                     };
-                    if !outputs.contains(output.as_str()) {
-                        return invalid_scalar("unit output dependency", output, "references unknown output");
+                    if !outputs.contains(output) {
+                        return invalid_scalar("unit output dependency", output.as_str(), "references unknown output");
                     }
                 }
             }
@@ -764,7 +1020,7 @@ fn validate_unit_dependency_cycles(units: &[DynamicUnit]) -> Result<(), DynamicP
     if processed_count != units.len() {
         let cycle_member = remaining_dependencies
             .iter()
-            .find_map(|(unit, dependencies)| (!dependencies.is_empty()).then_some(*unit))
+            .find_map(|(unit, dependencies)| (!dependencies.is_empty()).then_some(unit.as_str()))
             .unwrap_or("<unknown>");
         return invalid_scalar("unit dependency graph", cycle_member, "contains dependency cycle");
     }
@@ -772,7 +1028,7 @@ fn validate_unit_dependency_cycles(units: &[DynamicUnit]) -> Result<(), DynamicP
     Ok(())
 }
 
-fn build_unit_dependency_sets(units: &[DynamicUnit]) -> BTreeMap<&str, BTreeSet<&str>> {
+fn build_unit_dependency_sets(units: &[DynamicUnit]) -> BTreeMap<&UnitId, BTreeSet<&UnitId>> {
     let dependencies_by_unit = units
         .iter()
         .map(|unit| {
@@ -781,11 +1037,11 @@ fn build_unit_dependency_sets(units: &[DynamicUnit]) -> BTreeMap<&str, BTreeSet<
                 .inputs
                 .iter()
                 .filter_map(|input| match input {
-                    DynamicInput::UnitOutput { unit: dependency, .. } => Some(dependency.as_str()),
+                    DynamicInput::UnitOutput { unit: dependency, .. } => Some(dependency),
                     DynamicInput::StorePath { .. } | DynamicInput::Source { .. } => None,
                 })
                 .collect::<BTreeSet<_>>();
-            (unit.id.as_str(), dependencies)
+            (&unit.id, dependencies)
         })
         .collect::<BTreeMap<_, _>>();
     assert_eq!(dependencies_by_unit.len(), units.len());
@@ -793,8 +1049,8 @@ fn build_unit_dependency_sets(units: &[DynamicUnit]) -> BTreeMap<&str, BTreeSet<
 }
 
 fn build_dependents_by_dependency<'a>(
-    dependencies_by_unit: &BTreeMap<&'a str, BTreeSet<&'a str>>,
-) -> BTreeMap<&'a str, BTreeSet<&'a str>> {
+    dependencies_by_unit: &BTreeMap<&'a UnitId, BTreeSet<&'a UnitId>>,
+) -> BTreeMap<&'a UnitId, BTreeSet<&'a UnitId>> {
     let mut dependents = BTreeMap::new();
     for (unit, dependencies) in dependencies_by_unit {
         for dependency in dependencies {
@@ -903,12 +1159,6 @@ fn dynamic_input_sort_key(input: &DynamicInput) -> (&'static str, &str, &str) {
         DynamicInput::Source { source } => (SOURCE_KIND, source.as_str(), ""),
         DynamicInput::UnitOutput { unit, output } => (UNIT_OUTPUT_KIND, unit.as_str(), output.as_str()),
     }
-}
-
-fn blake3_hex_digest(bytes: &[u8]) -> Blake3Hex {
-    let digest = blake3::hash(bytes).to_hex().to_string();
-    assert_eq!(digest.len(), BLAKE3_HEX_BYTES);
-    digest
 }
 
 fn require_nullable_fields_present(value: &Value) -> Result<(), DynamicPlanError> {
@@ -1118,6 +1368,8 @@ mod tests {
     const TEST_STORE_COMPONENT: &str = "00000000000000000000000000000000-dynplan";
     const TEST_STORE_PATH: &str = "/mantle/store/00000000000000000000000000000000-dynplan";
     const TEST_BLAKE3_HEX: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    const TEST_CANONICAL_PLAN_BLAKE3: &str = "dc6814c1f500dc7e8575c3fd84a64ae78a70d38313ccbbfff4fbfcf7610f6750";
+    const TEST_CANONICAL_PLAN_JSON: &[u8] = include_bytes!("../testdata/dynamic-plan-v1-canonical.json");
     const OVER_LIMIT_EXTRA: usize = 1;
 
     fn valid_plan_json() -> String {
@@ -1196,18 +1448,38 @@ mod tests {
         )
     }
 
-    fn valid_plan() -> DynamicPlanV1 {
+    fn unit_id(value: &str) -> UnitId {
+        UnitId::new(value).unwrap()
+    }
+
+    fn source_id(value: &str) -> SourceId {
+        SourceId::new(value).unwrap()
+    }
+
+    fn output_name(value: &str) -> OutputName {
+        OutputName::new(value).unwrap()
+    }
+
+    fn store_path(value: &str) -> StorePathString {
+        StorePathString::new(value, TEST_STORE_PREFIX).unwrap()
+    }
+
+    fn valid_wire_plan() -> WireDynamicPlanV1 {
         decode_plan_v1(valid_plan_json().as_bytes()).unwrap()
+    }
+
+    fn valid_plan() -> DynamicPlanV1 {
+        admit_plan_v1(valid_wire_plan(), TEST_STORE_PREFIX).unwrap()
     }
 
     fn plan_with_extra_collections() -> DynamicPlanV1 {
         let mut plan = valid_plan();
         plan.sources.push(DeclaredSourceInput {
-            id: "src.extra".to_string(),
-            path: TEST_STORE_PATH.to_string(),
+            id: source_id("src.extra"),
+            path: store_path(TEST_STORE_PATH),
             nar_blake3: None,
         });
-        plan.roots.push("unit.extra".to_string());
+        plan.roots.push(unit_id("unit.extra"));
         plan.provenance.insert("zeta".to_string(), "last".to_string());
         plan.provenance.insert("alpha".to_string(), "first".to_string());
         plan.units.push(extra_unit());
@@ -1216,35 +1488,35 @@ mod tests {
 
     fn extra_unit() -> DynamicUnit {
         DynamicUnit {
-            id: "unit.extra".to_string(),
+            id: unit_id("unit.extra"),
             derivation: DynamicDerivation {
                 name: "unit-extra".to_string(),
-                builder: TEST_STORE_PATH.to_string(),
+                builder: store_path(TEST_STORE_PATH),
                 system: "x86_64-linux".to_string(),
                 args: vec!["--extra".to_string()],
-                outputs: vec!["out".to_string(), "dev".to_string()],
+                outputs: vec![output_name("out"), output_name("dev")],
                 env: std::collections::BTreeMap::from([
                     ("ZED".to_string(), "last".to_string()),
                     ("ALPHA".to_string(), "first".to_string()),
                 ]),
                 inputs: vec![
                     DynamicInput::UnitOutput {
-                        unit: "unit.main".to_string(),
-                        output: "out".to_string(),
+                        unit: unit_id("unit.main"),
+                        output: output_name("out"),
                     },
                     DynamicInput::StorePath {
-                        path: TEST_STORE_PATH.to_string(),
+                        path: store_path(TEST_STORE_PATH),
                     },
                     DynamicInput::Source {
-                        source: "src.extra".to_string(),
+                        source: source_id("src.extra"),
                     },
                 ],
                 fixed_output: None,
                 addressing_mode: AddressingMode::ContentAddressed,
                 sandbox: SandboxMode::Native,
-                dynamic_plan_outputs: vec!["plan_b".to_string(), "plan_a".to_string()],
+                dynamic_plan_outputs: vec![output_name("plan_b"), output_name("plan_a")],
             },
-            requested_outputs: vec!["out".to_string(), "dev".to_string()],
+            requested_outputs: vec![output_name("out"), output_name("dev")],
             policy: DynamicUnitPolicy {
                 sandbox: INHERIT_POLICY_VALUE.to_string(),
                 substitutions: INHERIT_POLICY_VALUE.to_string(),
@@ -1282,13 +1554,13 @@ mod tests {
 
     fn store_path_input() -> DynamicInput {
         DynamicInput::StorePath {
-            path: TEST_STORE_PATH.to_string(),
+            path: store_path(TEST_STORE_PATH),
         }
     }
 
     #[test]
     fn decode_accepts_valid_plan_shape() {
-        let plan = valid_plan();
+        let plan = valid_wire_plan();
 
         assert_eq!(plan.schema, MANTLE_PLAN_V1_SCHEMA);
         assert_eq!(plan.producer.logical_name, "resolver");
@@ -1312,9 +1584,24 @@ mod tests {
     }
 
     #[test]
+    fn wire_projection_preserves_frozen_canonical_bytes_and_plan_digest() {
+        let plan = valid_plan();
+        let canonical_bytes = canonical_plan_v1_bytes(&plan).unwrap();
+        let digest = canonical_plan_v1_digest(&plan).unwrap();
+        let projected = WireDynamicPlanV1::from(&plan);
+        let projected_bytes = serde_json::to_vec(&projected).unwrap();
+
+        assert_eq!(canonical_bytes, TEST_CANONICAL_PLAN_JSON);
+        assert_eq!(projected_bytes, TEST_CANONICAL_PLAN_JSON);
+        assert_eq!(digest.as_str(), TEST_CANONICAL_PLAN_BLAKE3);
+    }
+
+    #[test]
     fn canonical_digest_ignores_formatting_and_object_key_order() {
         let left = valid_plan();
-        let right = decode_plan_v1(valid_plan_key_order_variant_json().as_bytes()).unwrap();
+        let right =
+            admit_plan_v1(decode_plan_v1(valid_plan_key_order_variant_json().as_bytes()).unwrap(), TEST_STORE_PREFIX)
+                .unwrap();
 
         let left_bytes = canonical_plan_v1_bytes(&left).unwrap();
         let right_bytes = canonical_plan_v1_bytes(&right).unwrap();
@@ -1324,9 +1611,9 @@ mod tests {
 
         assert_eq!(left_bytes, right_bytes);
         assert_eq!(left_digest, right_digest);
-        assert_eq!(left_digest, direct_digest);
-        assert_eq!(left_digest.len(), BLAKE3_HEX_BYTES);
-        assert!(validate_blake3_hex(&left_digest).is_ok());
+        assert_eq!(left_digest.as_str(), direct_digest);
+        assert_eq!(left_digest.as_str().len(), BLAKE3_HEX_BYTES);
+        assert!(validate_blake3_hex(left_digest.as_str()).is_ok());
     }
 
     #[test]
@@ -1343,8 +1630,8 @@ mod tests {
             unit.derivation.inputs.reverse();
         }
 
-        let raw_left = serde_json::to_vec(&left).unwrap();
-        let raw_right = serde_json::to_vec(&right).unwrap();
+        let raw_left = serde_json::to_vec(&WireDynamicPlanV1::from(&left)).unwrap();
+        let raw_right = serde_json::to_vec(&WireDynamicPlanV1::from(&right)).unwrap();
         let canonical_left = canonical_plan_v1_bytes(&left).unwrap();
         let canonical_right = canonical_plan_v1_bytes(&right).unwrap();
         let canonical = canonicalize_plan_v1(&right);
@@ -1352,27 +1639,40 @@ mod tests {
         assert_ne!(raw_left, raw_right);
         assert_eq!(canonical_left, canonical_right);
         assert_eq!(canonical_plan_v1_digest(&left).unwrap(), canonical_plan_v1_digest(&right).unwrap());
-        assert_eq!(canonical.sources[0].id, "src.extra");
-        assert_eq!(canonical.units[0].id, "unit.extra");
-        assert_eq!(canonical.roots, vec!["unit.extra", "unit.main"]);
-        assert_eq!(canonical.units[0].requested_outputs, vec!["dev", "out"]);
-        assert_eq!(canonical.units[0].derivation.outputs, vec!["dev", "out"]);
-        assert_eq!(canonical.units[0].derivation.dynamic_plan_outputs, vec!["plan_a", "plan_b"]);
+        assert_eq!(canonical.sources[0].id.as_str(), "src.extra");
+        assert_eq!(canonical.units[0].id.as_str(), "unit.extra");
+        assert_eq!(canonical.roots.iter().map(UnitId::as_str).collect::<Vec<_>>(), vec!["unit.extra", "unit.main"]);
+        assert_eq!(canonical.units[0].requested_outputs.iter().map(OutputName::as_str).collect::<Vec<_>>(), vec![
+            "dev", "out"
+        ]);
+        assert_eq!(canonical.units[0].derivation.outputs.iter().map(OutputName::as_str).collect::<Vec<_>>(), vec![
+            "dev", "out"
+        ]);
+        assert_eq!(
+            canonical.units[0]
+                .derivation
+                .dynamic_plan_outputs
+                .iter()
+                .map(OutputName::as_str)
+                .collect::<Vec<_>>(),
+            vec!["plan_a", "plan_b"]
+        );
         assert_eq!(canonical.units[0].derivation.inputs[0], DynamicInput::Source {
-            source: "src.extra".to_string()
+            source: source_id("src.extra")
         });
     }
 
     #[test]
     fn decode_canonical_plan_returns_canonical_plan_bytes_and_digest() {
-        let decoded = decode_canonical_plan_v1(valid_plan_key_order_variant_json().as_bytes()).unwrap();
+        let decoded =
+            decode_canonical_plan_v1(valid_plan_key_order_variant_json().as_bytes(), TEST_STORE_PREFIX).unwrap();
         let canonical_bytes = canonical_plan_v1_bytes(&decoded.plan).unwrap();
         let canonical_digest = canonical_plan_v1_digest(&decoded.plan).unwrap();
 
         assert_eq!(decoded.bytes, canonical_bytes);
         assert_eq!(decoded.digest, canonical_digest);
         assert_eq!(decoded.plan.units[0].derivation.inputs[0], DynamicInput::Source {
-            source: "src.main".to_string()
+            source: source_id("src.main")
         });
     }
 
@@ -1409,7 +1709,7 @@ mod tests {
 
         let mut too_many_outputs = valid_plan();
         too_many_outputs.units[0].derivation.outputs =
-            vec!["out".to_string(); over_limit(MAX_DYNAMIC_PLAN_OUTPUTS_PER_UNIT)];
+            vec![output_name("out"); over_limit(MAX_DYNAMIC_PLAN_OUTPUTS_PER_UNIT)];
         expect_limit(validate_err(&too_many_outputs), "unit outputs");
 
         let mut too_many_env = valid_plan();
@@ -1442,21 +1742,27 @@ mod tests {
     }
 
     #[test]
-    fn validate_rejects_invalid_output_name_and_store_prefix_reference() {
-        let mut invalid_output = valid_plan();
-        invalid_output.units[0].derivation.outputs[0] = "Out".to_string();
-        expect_invalid_scalar(validate_err(&invalid_output), "output name");
+    fn admission_rejects_invalid_output_name_and_store_prefix_reference() {
+        let mut invalid_output: Value = serde_json::from_str(&valid_plan_json()).unwrap();
+        invalid_output["units"][0]["derivation"]["outputs"][0] = serde_json::json!("Out");
+        let output_error =
+            decode_validated_plan_v1(invalid_output.to_string().as_bytes(), TEST_STORE_PREFIX).unwrap_err();
+        expect_invalid_scalar(output_error, "output name");
 
-        let mut invalid_builder = valid_plan();
-        invalid_builder.units[0].derivation.builder = "/tmp/builder".to_string();
-        expect_invalid_scalar(validate_err(&invalid_builder), "store path");
+        let mut invalid_builder: Value = serde_json::from_str(&valid_plan_json()).unwrap();
+        invalid_builder["units"][0]["derivation"]["builder"] = serde_json::json!("/tmp/builder");
+        let builder_error =
+            decode_validated_plan_v1(invalid_builder.to_string().as_bytes(), TEST_STORE_PREFIX).unwrap_err();
+        expect_invalid_scalar(builder_error, "store path");
     }
 
     #[test]
-    fn validate_rejects_malformed_source_digest_and_absolute_host_path() {
-        let mut invalid_digest = valid_plan();
-        invalid_digest.sources[0].nar_blake3 = Some(TEST_BLAKE3_HEX.to_ascii_uppercase());
-        expect_invalid_scalar(validate_err(&invalid_digest), "blake3 hex");
+    fn admission_rejects_malformed_source_digest_and_absolute_host_path() {
+        let mut invalid_digest: Value = serde_json::from_str(&valid_plan_json()).unwrap();
+        invalid_digest["sources"][0]["nar_blake3"] = serde_json::json!(TEST_BLAKE3_HEX.to_ascii_uppercase());
+        let digest_error =
+            decode_validated_plan_v1(invalid_digest.to_string().as_bytes(), TEST_STORE_PREFIX).unwrap_err();
+        expect_invalid_scalar(digest_error, "blake3 hex");
 
         let mut host_path_arg = valid_plan();
         host_path_arg.units[0].derivation.args.push("/tmp/host-tool".to_string());
@@ -1488,15 +1794,15 @@ mod tests {
     #[test]
     fn validate_rejects_duplicate_output_names() {
         let mut duplicate_unit_output = valid_plan();
-        duplicate_unit_output.units[0].derivation.outputs.push("out".to_string());
+        duplicate_unit_output.units[0].derivation.outputs.push(output_name("out"));
         expect_invalid_scalar(validate_err(&duplicate_unit_output), "unit outputs");
 
         let mut duplicate_requested_output = valid_plan();
-        duplicate_requested_output.units[0].requested_outputs.push("out".to_string());
+        duplicate_requested_output.units[0].requested_outputs.push(output_name("out"));
         expect_invalid_scalar(validate_err(&duplicate_requested_output), "requested outputs");
 
         let mut duplicate_plan_output = valid_plan();
-        duplicate_plan_output.units[0].derivation.dynamic_plan_outputs.push("plan".to_string());
+        duplicate_plan_output.units[0].derivation.dynamic_plan_outputs.push(output_name("plan"));
         expect_invalid_scalar(validate_err(&duplicate_plan_output), "dynamic plan outputs");
     }
 
@@ -1507,11 +1813,11 @@ mod tests {
         expect_invalid_scalar(validate_err(&empty_roots), "roots");
 
         let mut duplicate_roots = valid_plan();
-        duplicate_roots.roots.push("unit.main".to_string());
+        duplicate_roots.roots.push(unit_id("unit.main"));
         expect_invalid_scalar(validate_err(&duplicate_roots), "roots");
 
         let mut unknown_root = valid_plan();
-        unknown_root.roots[0] = "unit.missing".to_string();
+        unknown_root.roots[0] = unit_id("unit.missing");
         expect_invalid_scalar(validate_err(&unknown_root), "roots");
     }
 
@@ -1530,21 +1836,21 @@ mod tests {
     fn validate_rejects_undeclared_source_and_unit_output_refs() {
         let mut undeclared_source = valid_plan();
         undeclared_source.units[0].derivation.inputs[0] = DynamicInput::Source {
-            source: "src.missing".to_string(),
+            source: source_id("src.missing"),
         };
         expect_invalid_scalar(validate_err(&undeclared_source), "source dependency");
 
         let mut unknown_unit = valid_plan();
         unknown_unit.units[0].derivation.inputs.push(DynamicInput::UnitOutput {
-            unit: "unit.missing".to_string(),
-            output: "out".to_string(),
+            unit: unit_id("unit.missing"),
+            output: output_name("out"),
         });
         expect_invalid_scalar(validate_err(&unknown_unit), "unit output dependency");
 
         let mut unknown_output = plan_with_extra_collections();
         unknown_output.units[1].derivation.inputs[0] = DynamicInput::UnitOutput {
-            unit: "unit.main".to_string(),
-            output: "missing".to_string(),
+            unit: unit_id("unit.main"),
+            output: output_name("missing"),
         };
         expect_invalid_scalar(validate_err(&unknown_output), "unit output dependency");
     }
@@ -1553,8 +1859,8 @@ mod tests {
     fn validate_rejects_unit_output_dependency_cycles() {
         let mut plan = plan_with_extra_collections();
         plan.units[0].derivation.inputs.push(DynamicInput::UnitOutput {
-            unit: "unit.extra".to_string(),
-            output: "out".to_string(),
+            unit: unit_id("unit.extra"),
+            output: output_name("out"),
         });
 
         let err = validate_err(&plan);
@@ -1658,6 +1964,44 @@ mod tests {
     }
 
     #[test]
+    fn nominal_constructors_admit_valid_distinct_values() {
+        let unit = UnitId::new("unit.main").unwrap();
+        let source = SourceId::new("src.main").unwrap();
+        let output = OutputName::new("out").unwrap();
+        let path = StorePathString::new(TEST_STORE_PATH, TEST_STORE_PREFIX).unwrap();
+        let nar = NarDigest::new(TEST_BLAKE3_HEX).unwrap();
+        let plan = PlanDigest::new(TEST_BLAKE3_HEX).unwrap();
+
+        assert_eq!(unit.as_str(), "unit.main");
+        assert_eq!(source.as_str(), "src.main");
+        assert_eq!(output.as_str(), "out");
+        assert_eq!(path.as_str(), TEST_STORE_PATH);
+        assert_eq!(nar.as_str(), TEST_BLAKE3_HEX);
+        assert_eq!(plan.as_str(), TEST_BLAKE3_HEX);
+    }
+
+    #[test]
+    fn nominal_constructors_reject_empty_oversized_control_and_malformed_values() {
+        let oversized_id = "a".repeat(over_limit(MAX_DYNAMIC_PLAN_ID_BYTES));
+        let oversized_output = "a".repeat(over_limit(MAX_DYNAMIC_PLAN_OUTPUT_NAME_BYTES));
+
+        let empty_error = UnitId::new("").unwrap_err();
+        let path_error = StorePathString::new(TEST_STORE_PATH, "/other/store").unwrap_err();
+        let digest_error = NarDigest::new("0").unwrap_err();
+
+        assert_eq!(empty_error.to_string(), "invalid unit id ``: must not be empty");
+        assert_eq!(
+            path_error.to_string(),
+            format!("invalid store path `{TEST_STORE_PATH}`: does not start with active store prefix")
+        );
+        assert_eq!(digest_error.to_string(), "invalid blake3 hex `0`: must be exactly 64 lowercase hex bytes");
+        assert!(UnitId::new(oversized_id).is_err());
+        assert!(SourceId::new("src\nmain").is_err());
+        assert!(OutputName::new(oversized_output).is_err());
+        assert!(PlanDigest::new(TEST_BLAKE3_HEX.to_ascii_uppercase()).is_err());
+    }
+
+    #[test]
     fn unit_id_accepts_expected_grammar() {
         assert!(validate_unit_id("unit.main-1_ok").is_ok());
         assert!(validate_unit_id("a").is_ok());
@@ -1741,9 +2085,9 @@ mod tests {
     fn dynamic_placeholders_resolve_declared_source_and_unit_output_paths() {
         let source_token = "{{mantle-source:src.main}}";
         let output_token = "{{mantle-unit-output:unit.main:out}}";
-        let source_paths = BTreeMap::from([("src.main".to_string(), TEST_STORE_PATH.to_string())]);
+        let source_paths = BTreeMap::from([(source_id("src.main"), store_path(TEST_STORE_PATH))]);
         let output_path = format!("{TEST_STORE_PREFIX}/11111111111111111111111111111111-output");
-        let output_paths = BTreeMap::from([(("unit.main".to_string(), "out".to_string()), output_path.clone())]);
+        let output_paths = BTreeMap::from([((unit_id("unit.main"), output_name("out")), store_path(&output_path))]);
 
         let resolved = resolve_dynamic_placeholders(
             &format!("source={source_token};output={output_token}"),
@@ -1754,6 +2098,17 @@ mod tests {
 
         assert_eq!(resolved, format!("source={TEST_STORE_PATH};output={output_path}"));
         assert!(parse_dynamic_placeholders(&resolved).unwrap().is_empty());
+    }
+
+    #[test]
+    fn dynamic_placeholder_validation_rejects_wrong_role_tokens() {
+        let mut source_as_unit = valid_plan();
+        source_as_unit.units[0].derivation.args.push("{{mantle-unit-output:src.main:out}}".to_string());
+        expect_invalid_scalar(validate_err(&source_as_unit), "dynamic placeholder");
+
+        let mut unit_as_source = valid_plan();
+        unit_as_source.units[0].derivation.args.push("{{mantle-source:unit.main}}".to_string());
+        expect_invalid_scalar(validate_err(&unit_as_source), "dynamic placeholder");
     }
 
     #[test]

@@ -3,7 +3,11 @@
 # Keep this file consumer-owned. Tigerstyle defaults stay in the lint crate;
 # crunch chooses which findings block the build here.
 #
-# Current policy: every tigerstyle lint is enabled and treated as an error.
+# Current legacy policy: every Tiger Style lint is enabled and treated as an error.
+# Current Octet policy denies only the reviewed nominal-domain family.
+
+[octet]
+nominal_domain_mode = "deny"
 
 [tigerstyle]
 
