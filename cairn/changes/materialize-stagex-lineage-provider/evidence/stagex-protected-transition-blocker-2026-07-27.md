@@ -1,12 +1,12 @@
 # StageX protected-transition blocker — 2026-07-27
 
-> Status update: superseded through GNU sed 4.0.9 by
-> `protected-transition-v30-sed-2026-07-28/`. Mantle now completes protected
+> Status update: superseded through bzip2 1.0.8 by
+> `protected-transition-v32-bzip2-2026-07-28/`. Mantle now completes protected
 > full Stage0, source-built `mes-m2`, NYACC regeneration, Mes runtime archives,
 > TinyCC 0.9.26, TinyCC 0.9.27, GNU Make 3.82, GNU patch 2.5.9, gzip 1.2.4,
-> GNU tar 1.12, and GNU sed 4.0.9. The current run recorded 626 allowed events,
-> zero denied events, and zero fallback. The remaining blocker starts at
-> authenticated bzip2 1.0.8 and covers later tools plus provider admission.
+> GNU tar 1.12, GNU sed 4.0.9, and bzip2 1.0.8. The current run recorded
+> 644 allowed events, zero denied events, and zero fallback. The remaining
+> blocker starts at coreutils 5.0 and covers later tools plus provider admission.
 
 ## Question
 
@@ -17,7 +17,7 @@ Can the current source-built native artifacts become a complete StageX lineage p
 ### Current receipt and manifest state
 
 - `bootstrap/evidence/stagex-lineage-provider-receipt.json` has `lineage_receipt_status = scaffold-only` and placeholder digests.
-- `bootstrap/stagex-transition-lineage.{ncl,json}` now binds the protected seed-to-GNU-sed-4.0.9 manifest and exact compatibility patches.
+- `bootstrap/stagex-transition-lineage.{ncl,json}` now binds the protected seed-to-bzip2-1.0.8 manifest and exact compatibility patches.
 - `src/main.rs::cmd_bootstrap_stagex_lineage` validates a manifest, then returns `STAGEX_LINEAGE_PROVIDER_NOT_MATERIALIZED`.
 - The retained v6 evidence has a complete 132-event seed-to-full-Stage0 protected-exec audit.
 - No exported `hex0-seed` binary exists under `/home/brittonr/.cache/mantle-full-source-20260718`.
@@ -66,19 +66,19 @@ The current artifacts cannot meet the accepted requirement. Their construction s
 
 ## Exact completion blocker
 
-The protected transition now has checked seed bytes, authenticated direct source records, a typed 48-stage plan, exact executable identities, full Stage0 SHA-256 interoperability checks, and a 626-event observed audit through GNU sed 4.0.9.
+The protected transition now has checked seed bytes, authenticated direct source records, a typed 51-stage plan, exact executable identities, full Stage0 SHA-256 interoperability checks, and a 644-event observed audit through bzip2 1.0.8.
 
-The current protected source authority has no bzip2 1.0.8 source record. Therefore, the next conventional tool stage is not yet bound into this transition manifest.
+The current protected source authority has no coreutils 5.0 source record. Therefore, the next conventional tool stage is not yet bound into this transition manifest.
 
 A complete provider run still needs all of these mechanisms and artifacts:
 
-1. Export and bind authenticated bzip2 1.0.8 source, then execute its source rewrites and TinyCC build under exact protected authority.
+1. Export and bind authenticated coreutils 5.0 source, then build its bounded utility set under exact protected authority.
 2. Continue through the source-built shell, conventional GNU tools, musl, GCC, binutils, and completed native-provider stages without ambient execution.
 3. Retain per-stage reports for every later exact executable, source stage, input, output, and BLAKE3 value.
 4. Preserve a complete protected-exec audit through normalized-provider runtime validation.
 5. Independently validate and create-new publish the provider and complete receipt.
 
-No protected bzip2 1.0.8 stage, output identity, or executable authorization exists in the current graph. Replacing only the scaffold JSON would create false evidence. Reusing the existing full-source provider would relabel host-assisted effects as StageX lineage.
+No protected coreutils 5.0 stage, output identity, or executable authorization exists in the current graph. Replacing only the scaffold JSON would create false evidence. Reusing the existing full-source provider would relabel host-assisted effects as StageX lineage.
 
 ## Owner
 
@@ -86,7 +86,7 @@ Mantle StageX lineage-provider implementation.
 
 ## Next action
 
-Export and bind bzip2 1.0.8 as authenticated offline source. Then continue the protected runner from GNU sed 4.0.9 with source-produced rewrites, bounded Rust orchestration, and no host shell or sandbox tools.
+Export and bind coreutils 5.0 as authenticated offline source. Then continue the protected runner from bzip2 1.0.8 with bounded Rust orchestration and no host shell or sandbox tools.
 
 I1 through V3 remain unchecked. The fixed-point and parity-promotion successor changes remain blocked by this change.
 

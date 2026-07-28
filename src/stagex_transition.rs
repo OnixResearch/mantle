@@ -61,6 +61,9 @@ pub(crate) const TAR_BUILD_STAGE_ID: &str = "tar-materialization";
 pub(crate) const TAR_SMOKE_STAGE_ID: &str = "tar-smoke";
 pub(crate) const SED_BUILD_STAGE_ID: &str = "sed-materialization";
 pub(crate) const SED_SMOKE_STAGE_ID: &str = "sed-smoke";
+pub(crate) const BZIP2_REWRITE_STAGE_ID: &str = "bzip2-source-rewrite";
+pub(crate) const BZIP2_BUILD_STAGE_ID: &str = "bzip2-materialization";
+pub(crate) const BZIP2_SMOKE_STAGE_ID: &str = "bzip2-smoke";
 pub(crate) const HEX0_SEED_BLAKE3: &str = "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80";
 pub(crate) const HEX0_SOURCE_BLAKE3: &str = "0fb23576a10b41df29c165e39514f18c411da96ae71873a6a2e2f0b1d94de614";
 pub(crate) const KAEM_SOURCE_BLAKE3: &str = "5a56b4164dca4d1e03ba35bc8ce4b418a0de2baf1cb9e6a0912607e26532d30d";
@@ -86,7 +89,7 @@ const MES_OUTPUT_MAX_MIB: u64 = 64;
 const MES_OUTPUT_MAX_BYTES: u64 = MES_OUTPUT_MAX_MIB * MIB_BYTES;
 const STAGE_JOB_COUNT: u32 = 1;
 const TRANSITION_STAGE_COUNT_MAX: u32 = 3;
-const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 48;
+const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 51;
 const TINYCC_LINK_CHILD_EVENT_COUNT: usize = 5;
 const MAKE_RECIPE_CHILD_EVENT_COUNT: usize = 1;
 const GZIP_GZIP_SMOKE_EVENT_COUNT: usize = 2;
@@ -163,6 +166,10 @@ pub(crate) struct StagexTransitionReport {
     pub sed_sources: Option<crate::stagex_sed::SedSourceMaterializationReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sed_runtime: Option<crate::stagex_sed::SedInventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bzip2_sources: Option<crate::stagex_bzip2::Bzip2SourceMaterializationReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bzip2_runtime: Option<crate::stagex_bzip2::Bzip2InventoryReport>,
     pub fallback_events: Vec<String>,
     pub promotions: Vec<OutputPromotionRecord>,
     pub protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
@@ -385,6 +392,12 @@ pub(crate) fn materialize_protected_transition(
                 source_stage_id: SED_BUILD_STAGE_ID.to_string(),
                 path: request.scratch_dir.join("sed-stage/runtime/output/bin/sed"),
                 digest_hex: crate::stagex_sed::SED_FINAL_BLAKE3.to_string(),
+            },
+            PlannedExecutable {
+                authorization_id: "exec:bzip2-smoke:bzip2".to_string(),
+                source_stage_id: BZIP2_BUILD_STAGE_ID.to_string(),
+                path: request.scratch_dir.join("bzip2-stage/runtime/output/bin/bzip2"),
+                digest_hex: crate::stagex_bzip2::BZIP2_FINAL_BLAKE3.to_string(),
             },
         ]);
         planned
@@ -704,6 +717,38 @@ pub(crate) fn materialize_protected_transition(
         _ => unreachable!("GNU sed requires source bundle and GNU tar together"),
     };
 
+    let (bzip2_sources, bzip2_runtime) = match (request.source_bundle_path, sed_runtime.as_ref()) {
+        (Some(source_bundle_path), Some(_)) => {
+            let stage = request.scratch_dir.join("bzip2-stage");
+            fs::create_dir(&stage)
+                .map_err(|source| io_error("creating create-new protected bzip2 stage root", source))?;
+            let sources = crate::stagex_bzip2::materialize_authenticated_bzip2_source(
+                source_bundle_path,
+                &manifest_authority.source_bundle_manifest_blake3,
+                &stage.join("sources"),
+            )
+            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+            let result = crate::stagex_bzip2::derive_bzip2_inventory(crate::stagex_bzip2::Bzip2InventoryRequest {
+                source_root: &sources.output_path,
+                tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
+                sed_root: &request.scratch_dir.join("sed-stage/runtime/output"),
+                scratch_dir: &stage.join("runtime"),
+                protected_exec_enforced: true,
+            });
+            match result {
+                Ok(report) => (Some(sources), Some(report)),
+                Err(error) => {
+                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                    let events = supervisor.audit_events();
+                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
+                }
+            }
+        }
+        (None, None) => (None, None),
+        _ => unreachable!("bzip2 requires source bundle and GNU sed together"),
+    };
+
     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
     let protected_exec_events = supervisor.audit_events();
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
@@ -720,6 +765,7 @@ pub(crate) fn materialize_protected_transition(
             gzip_runtime: gzip_runtime.as_ref(),
             tar_runtime: tar_runtime.as_ref(),
             sed_runtime: sed_runtime.as_ref(),
+            bzip2_runtime: bzip2_runtime.as_ref(),
         },
         &protected_exec_events,
     )?;
@@ -751,6 +797,8 @@ pub(crate) fn materialize_protected_transition(
         tar_runtime,
         sed_sources,
         sed_runtime,
+        bzip2_sources,
+        bzip2_runtime,
         fallback_events: Vec::new(),
         promotions: vec![hex0_promotion, kaem_promotion],
         protected_exec_events,
@@ -850,6 +898,9 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     for (artifact_id, digest_blake3) in crate::stagex_sed::source_artifact_digests() {
         require_manifest_digest(&sources, artifact_id, digest_blake3)?;
     }
+    for (artifact_id, digest_blake3) in crate::stagex_bzip2::source_artifact_digests() {
+        require_manifest_digest(&sources, artifact_id, digest_blake3)?;
+    }
     let generated: BTreeMap<&str, &str> = manifest
         .generated_artifacts
         .iter()
@@ -890,6 +941,14 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
     for expected in crate::stagex_sed::SED_EXPECTED_OUTPUTS {
+        require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
+    }
+    require_manifest_digest(
+        &generated,
+        "bzip2-configured-source",
+        crate::stagex_bzip2::BZIP2_CONFIGURED_SOURCE_BLAKE3,
+    )?;
+    for expected in crate::stagex_bzip2::BZIP2_EXPECTED_OUTPUTS {
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
     let patches: BTreeMap<&str, &str> =
@@ -1045,6 +1104,8 @@ fn build_transition_plan(
         stages.extend(tar_stage_plans(&tinycc27_root, &tar_root));
         let sed_root = staged.seed.parent().expect("staged seed has parent").join("sed-stage/runtime");
         stages.extend(sed_stage_plans(&tinycc27_root, &sed_root));
+        let bzip2_root = staged.seed.parent().expect("staged seed has parent").join("bzip2-stage/runtime");
+        stages.extend(bzip2_stage_plans(&tinycc27_root, &sed_root, &bzip2_root));
     }
     let stage_count_max = if include_stage0_mini {
         TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX
@@ -1458,6 +1519,71 @@ fn gzip_stage_plans(tinycc27_root: &Path, gzip_root: &Path) -> Vec<StagexStagePl
                     crate::stagex_gzip::GZIP_FINAL_BLAKE3,
                 ),
             ],
+        ),
+    ]
+}
+
+fn bzip2_stage_plans(tinycc27_root: &Path, sed_root: &Path, bzip2_root: &Path) -> Vec<StagexStagePlan> {
+    let tinycc27 = tinycc27_root.join("output/bin/tcc");
+    let sed = sed_root.join("output/bin/sed");
+    let bzip2 = bzip2_root.join("output/bin/bzip2");
+    vec![
+        mes_stage_plan(
+            BZIP2_REWRITE_STAGE_ID,
+            &[SED_BUILD_STAGE_ID, SED_SMOKE_STAGE_ID],
+            &[
+                crate::stagex_bzip2::BZIP2_SOURCE_ARTIFACT_ID,
+                crate::stagex_bzip2::BZIP2_UTIME_SOURCE_ARTIFACT_ID,
+            ],
+            &["sed-4.0.9", "sed-smoke"],
+            &["bzip2-configured-source".to_string()],
+            vec![authorization(
+                "exec:bzip2-source-rewrite:sed",
+                &sed,
+                SED_BUILD_STAGE_ID,
+                crate::stagex_sed::SED_FINAL_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            BZIP2_BUILD_STAGE_ID,
+            &[
+                BZIP2_REWRITE_STAGE_ID,
+                TINYCC27_BUILD_STAGE_ID,
+                TINYCC27_RUNTIME_STAGE_ID,
+                TINYCC_RUNTIME_STAGE_ID,
+            ],
+            &[],
+            &[
+                "bzip2-configured-source",
+                "tinycc-0.9.27",
+                "tinycc27-libc",
+                "tinycc-crt1",
+                "tinycc-libtcc1",
+            ],
+            &["bzip2-1.0.8".to_string(), "bzip2recover-1.0.8".to_string()],
+            vec![authorization(
+                "exec:bzip2-materialization:tinycc27",
+                &tinycc27,
+                TINYCC27_BUILD_STAGE_ID,
+                crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            BZIP2_SMOKE_STAGE_ID,
+            &[BZIP2_BUILD_STAGE_ID],
+            &[],
+            &["bzip2-1.0.8"],
+            &[
+                "bzip2-smoke".to_string(),
+                "bzip2-help-observation".to_string(),
+                "bzip2-negative-observation".to_string(),
+            ],
+            vec![authorization(
+                "exec:bzip2-smoke:bzip2",
+                &bzip2,
+                BZIP2_BUILD_STAGE_ID,
+                crate::stagex_bzip2::BZIP2_FINAL_BLAKE3,
+            )],
         ),
     ]
 }
@@ -2319,6 +2445,7 @@ struct TransitionAuditReports<'a> {
     gzip_runtime: Option<&'a crate::stagex_gzip::GzipInventoryReport>,
     tar_runtime: Option<&'a crate::stagex_tar::TarInventoryReport>,
     sed_runtime: Option<&'a crate::stagex_sed::SedInventoryReport>,
+    bzip2_runtime: Option<&'a crate::stagex_bzip2::Bzip2InventoryReport>,
 }
 
 fn validate_transition_audit(
@@ -2337,6 +2464,7 @@ fn validate_transition_audit(
         gzip_runtime,
         tar_runtime,
         sed_runtime,
+        bzip2_runtime,
     } = reports;
     let expected = transition_expected_audit_events(staged);
     if events.len() < EXPECTED_AUDIT_EVENT_COUNT {
@@ -2358,6 +2486,7 @@ fn validate_transition_audit(
             && gzip_runtime.is_none()
             && tar_runtime.is_none()
             && sed_runtime.is_none()
+            && bzip2_runtime.is_none()
             && events.len() == EXPECTED_AUDIT_EVENT_COUNT
         {
             return Ok(());
@@ -2382,7 +2511,8 @@ fn validate_transition_audit(
     }
     validate_stage0_audit(staged, &stage0.mini, &stage0_events[..mini_event_count])?;
     let after_mini = &stage0_events[mini_event_count..];
-    let (before_sed, sed_events) = split_sed_audit_suffix(sed_runtime, after_mini)?;
+    let (before_bzip2, bzip2_events) = split_bzip2_audit_suffix(bzip2_runtime, after_mini)?;
+    let (before_sed, sed_events) = split_sed_audit_suffix(sed_runtime, before_bzip2)?;
     let (before_tar, tar_events) = split_tar_audit_suffix(tar_runtime, before_sed)?;
     let (before_gzip, gzip_events) = split_gzip_audit_suffix(gzip_runtime, before_tar)?;
     let (before_gnu_patch, gnu_patch_events) = split_gnu_patch_audit_suffix(gnu_patch_runtime, before_gzip)?;
@@ -2468,12 +2598,37 @@ fn validate_transition_audit(
         }
     }
     match (sed_runtime, tinycc27_runtime, tar_runtime) {
-        (Some(sed), Some(tinycc27), Some(_)) => validate_sed_audit(tinycc27, sed, sed_events),
-        (None, _, _) if sed_events.is_empty() => Ok(()),
+        (Some(sed), Some(tinycc27), Some(_)) => validate_sed_audit(tinycc27, sed, sed_events)?,
+        (None, _, _) if sed_events.is_empty() => {}
+        _ => {
+            return Err(StagexTransitionError::Audit(
+                "GNU sed report or events exist without TinyCC 0.9.27 and GNU tar authority".to_string(),
+            ));
+        }
+    }
+    match (bzip2_runtime, tinycc27_runtime, sed_runtime) {
+        (Some(bzip2), Some(tinycc27), Some(sed)) => validate_bzip2_audit(tinycc27, sed, bzip2, bzip2_events),
+        (None, _, _) if bzip2_events.is_empty() => Ok(()),
         _ => Err(StagexTransitionError::Audit(
-            "GNU sed report or events exist without TinyCC 0.9.27 and GNU tar authority".to_string(),
+            "bzip2 report or events exist without TinyCC 0.9.27 and GNU sed authority".to_string(),
         )),
     }
+}
+
+fn split_bzip2_audit_suffix<'a>(
+    report: Option<&crate::stagex_bzip2::Bzip2InventoryReport>,
+    events: &'a [ProtectedSeccompAuditEvent],
+) -> Result<(&'a [ProtectedSeccompAuditEvent], &'a [ProtectedSeccompAuditEvent]), StagexTransitionError> {
+    let Some(report) = report else {
+        return Ok((events, &events[events.len()..]));
+    };
+    let event_count = bzip2_expected_event_count(report)?;
+    let start = events.len().checked_sub(event_count).ok_or_else(|| {
+        StagexTransitionError::Audit(format!("expected {event_count} trailing bzip2 events, observed {}", events.len()))
+    })?;
+    assert_eq!(events.len().saturating_sub(start), event_count);
+    assert!(event_count > 0);
+    Ok((&events[..start], &events[start..]))
 }
 
 fn split_sed_audit_suffix<'a>(
@@ -3137,6 +3292,104 @@ fn tinycc27_expected_event_count(
         .map_err(|_| StagexTransitionError::Audit("TinyCC 0.9.27 command count does not fit usize".to_string()))
 }
 
+fn validate_bzip2_audit(
+    tinycc27: &crate::stagex_tinycc27::Tinycc27InventoryReport,
+    sed: &crate::stagex_sed::SedInventoryReport,
+    bzip2: &crate::stagex_bzip2::Bzip2InventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    let expected_count = bzip2_expected_event_count(bzip2)?;
+    validate_bzip2_observed_event_count(expected_count, events.len())?;
+    let rewrite_end = usize::try_from(bzip2.rewrite_command_count)
+        .map_err(|_| StagexTransitionError::Audit("bzip2 rewrite count does not fit usize".to_string()))?;
+    let build_end = rewrite_end
+        .checked_add(usize::try_from(bzip2.build_command_count).unwrap_or(usize::MAX))
+        .ok_or_else(|| StagexTransitionError::Audit("bzip2 build boundary overflow".to_string()))?;
+    let tinycc27_path = tinycc27_output_path(tinycc27, "tinycc27-alias")?;
+    let sed_path = sed_output_path(sed, "sed-4.0.9")?;
+    let bzip2_path = bzip2_output_path(bzip2, "bzip2-1.0.8")?;
+    for (index, event) in events.iter().enumerate() {
+        let (path, digest, inventory_id) = if index < rewrite_end {
+            (&sed_path, crate::stagex_sed::SED_FINAL_BLAKE3, "planned:sed-materialization:exec:sed-smoke:sed")
+        } else if index < build_end {
+            (
+                &tinycc27_path,
+                crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
+                "planned:tinycc27-materialization:exec:tinycc27-smoke:tinycc27",
+            )
+        } else {
+            (
+                &bzip2_path,
+                crate::stagex_bzip2::BZIP2_FINAL_BLAKE3,
+                "planned:bzip2-materialization:exec:bzip2-smoke:bzip2",
+            )
+        };
+        validate_bzip2_event(event, path, digest, inventory_id)?;
+    }
+    assert_eq!(events.len(), expected_count);
+    assert!(build_end < expected_count);
+    Ok(())
+}
+
+fn bzip2_expected_event_count(
+    report: &crate::stagex_bzip2::Bzip2InventoryReport,
+) -> Result<usize, StagexTransitionError> {
+    const EXPECTED_REWRITE_COUNT: u32 = 3;
+    const EXPECTED_SOURCE_COMPILE_COUNT: u32 = 9;
+    const EXPECTED_BUILD_COUNT: u32 = 11;
+    const EXPECTED_SMOKE_COUNT: u32 = 4;
+    if report.rewrite_command_count != EXPECTED_REWRITE_COUNT
+        || report.source_compile_count != EXPECTED_SOURCE_COMPILE_COUNT
+        || report.build_command_count != EXPECTED_BUILD_COUNT
+        || report.smoke_command_count != EXPECTED_SMOKE_COUNT
+    {
+        return Err(StagexTransitionError::Audit(
+            "bzip2 report has substituted rewrite, compile, build, or smoke counts".to_string(),
+        ));
+    }
+    let total = report
+        .rewrite_command_count
+        .checked_add(report.build_command_count)
+        .and_then(|count| count.checked_add(report.smoke_command_count))
+        .ok_or_else(|| StagexTransitionError::Audit("bzip2 event count overflow".to_string()))?;
+    usize::try_from(total).map_err(|_| StagexTransitionError::Audit("bzip2 event count does not fit usize".to_string()))
+}
+
+fn validate_bzip2_observed_event_count(
+    expected_count: usize,
+    observed_count: usize,
+) -> Result<(), StagexTransitionError> {
+    if expected_count == observed_count {
+        return Ok(());
+    }
+    Err(StagexTransitionError::Audit(format!(
+        "bzip2 protected audit expected {expected_count} events, observed {observed_count}"
+    )))
+}
+
+fn validate_bzip2_event(
+    event: &ProtectedSeccompAuditEvent,
+    expected_path: &Path,
+    expected_digest: &str,
+    expected_inventory_id: &str,
+) -> Result<(), StagexTransitionError> {
+    let valid = event.policy_decision == "allowed"
+        && event.executable_path == expected_path
+        && event.tracee_path == expected_path
+        && event.resolved_host_path == expected_path
+        && event.digest_hex == expected_digest
+        && event.inventory_entry_id.as_deref() == Some(expected_inventory_id);
+    if !valid {
+        return Err(StagexTransitionError::Audit(format!(
+            "bzip2 event for {} did not match exact planned authority",
+            event.executable_path.display()
+        )));
+    }
+    assert_eq!(event.executable_path, expected_path);
+    assert_eq!(event.digest_hex, expected_digest);
+    Ok(())
+}
+
 fn validate_sed_audit(
     tinycc27: &crate::stagex_tinycc27::Tinycc27InventoryReport,
     sed: &crate::stagex_sed::SedInventoryReport,
@@ -3714,6 +3967,18 @@ fn tinycc27_output_path(
         .ok_or_else(|| StagexTransitionError::Audit(format!("TinyCC 0.9.27 report lacks output {artifact_id}")))
 }
 
+fn bzip2_output_path(
+    report: &crate::stagex_bzip2::Bzip2InventoryReport,
+    artifact_id: &str,
+) -> Result<PathBuf, StagexTransitionError> {
+    report
+        .outputs
+        .iter()
+        .find(|output| output.artifact_id == artifact_id)
+        .map(|output| output.path.clone())
+        .ok_or_else(|| StagexTransitionError::Audit(format!("bzip2 report lacks output {artifact_id}")))
+}
+
 fn sed_output_path(
     report: &crate::stagex_sed::SedInventoryReport,
     artifact_id: &str,
@@ -3900,7 +4165,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
-    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "be89b70de54fa4f7c4b67761992e8eb590a16fcfd4d04f066d1c149b61a5707d";
+    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "495b2e97a6095eaed6180c3359acac3333cc08eb62a14c6e70990af92fbc843c";
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {
@@ -4021,6 +4286,60 @@ mod tests {
         let error = tinycc27_expected_event_count(&overflow).unwrap_err();
         assert!(error.to_string().contains("command count overflow"));
         assert!(!error.to_string().is_empty());
+    }
+
+    #[test]
+    fn bzip2_event_count_is_closed_and_rejects_substitution() {
+        const EXPECTED_EVENT_COUNT: usize = 18;
+        let report = crate::stagex_bzip2::Bzip2InventoryReport {
+            format: "test",
+            configured_source_digest_blake3: "a".repeat(blake3::OUT_LEN * 2),
+            rewrite_command_count: 3,
+            source_compile_count: 9,
+            build_command_count: 11,
+            smoke_command_count: 4,
+            outputs: Vec::new(),
+            protected_exec_enforced: true,
+            fallback_events: Vec::new(),
+            non_claim: "test",
+        };
+        assert_eq!(bzip2_expected_event_count(&report).unwrap(), EXPECTED_EVENT_COUNT);
+        validate_bzip2_observed_event_count(EXPECTED_EVENT_COUNT, EXPECTED_EVENT_COUNT).unwrap();
+        assert!(validate_bzip2_observed_event_count(EXPECTED_EVENT_COUNT, EXPECTED_EVENT_COUNT - 1).is_err());
+        assert!(validate_bzip2_observed_event_count(EXPECTED_EVENT_COUNT, EXPECTED_EVENT_COUNT + 1).is_err());
+        let mut substituted = report;
+        substituted.rewrite_command_count = 2;
+        assert!(bzip2_expected_event_count(&substituted).unwrap_err().to_string().contains("substituted"));
+    }
+
+    #[test]
+    fn bzip2_audit_event_rejects_denied_or_substituted_authority() {
+        let expected_path = PathBuf::from("/stagex/bzip2");
+        let inventory_id = "planned:bzip2-materialization:exec:bzip2-smoke:bzip2";
+        let mut event = ProtectedSeccompAuditEvent {
+            pid: 1,
+            syscall: "execve".to_string(),
+            executable_path: expected_path.clone(),
+            tracee_path: expected_path.clone(),
+            resolved_host_path: expected_path.clone(),
+            digest_hex: crate::stagex_bzip2::BZIP2_FINAL_BLAKE3.to_string(),
+            reason: "test allow".to_string(),
+            phase: "protected".to_string(),
+            inventory_entry_id: Some(inventory_id.to_string()),
+            policy_decision: "allowed".to_string(),
+        };
+        validate_bzip2_event(&event, &expected_path, crate::stagex_bzip2::BZIP2_FINAL_BLAKE3, inventory_id).unwrap();
+        event.policy_decision = "denied".to_string();
+        assert!(
+            validate_bzip2_event(&event, &expected_path, crate::stagex_bzip2::BZIP2_FINAL_BLAKE3, inventory_id)
+                .is_err()
+        );
+        event.policy_decision = "allowed".to_string();
+        event.digest_hex = "a".repeat(blake3::OUT_LEN * 2);
+        assert!(
+            validate_bzip2_event(&event, &expected_path, crate::stagex_bzip2::BZIP2_FINAL_BLAKE3, inventory_id)
+                .is_err()
+        );
     }
 
     #[test]

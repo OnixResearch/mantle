@@ -1,4 +1,4 @@
-# Typed source for the protected seed-to-GNU-sed-4.0.9 transition.
+# Typed source for the protected seed-to-bzip2-1.0.8 transition.
 # This file does not yet describe the later native toolchain or normalized StageX provider.
 
 let Digest = {
@@ -133,7 +133,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
       "generated as zero bytes by the bounded transition plan",
     source "stage0-source-bundle" "authenticated offline full-source closure"
-      "58180e33d97d4dd12f15a0b8998f19ee66cff60056d1535e2d2a62d8256005b6"
+      "e9112bde5d990d68945cb91183911f0acd2d04cfd67ea59501177c196cc7fda5"
       "mantle-source-bundle-v1 manifest identity loaded and validated before Stage0 execution",
     source "stage0-posix-amd64-source" "stage0-posix AMD64 snapshot"
       "f983a7b79acdd53fd4d31c8959c62ca24eabbea491327aaa113c4bc11549e5f9"
@@ -201,6 +201,12 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "sed-4.0.9-source" "GNU sed 4.0.9 fixed-output source"
       "65aa1a57a2966a247b4992de6525e319adb99f8ad2fe4cc2eb543a28740994ad"
       "source bundle record fixed-url-2861bfe2bbe8003326313432362cdd09a73a549a874abb706bce6ba4e5378011",
+    source "bzip2-1.0.8-source" "bzip2 1.0.8 fixed-output source"
+      "969e26e40644aaed6137a7403c29397ada624f6dc20d38dfae5fec9d2079292d"
+      "source bundle record fixed-url-29051c18498ee931a89eb96a6c890e06b4098c8ec2e0f4242f0d8337192a8070",
+    source "bzip2-utime-header-source" "bounded bzip2 compatibility header"
+      "3bf37f6c622b15c4f6acada147c5ca5921da1cfefe9b0cb6dc53c5d10a10de13"
+      "bootstrap/seeds/bzip2-utime.h",
   ],
   generated_artifacts = [
     {
@@ -284,6 +290,10 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "tar-smoke-exec" "tar-smoke" "GNU tar protected roundtrip smoke output" "59392bf4bef63f5688ff8604868a22adcecfe94f75c1234fe7c9df1107038be2",
     tinycc_generated "sed-build-exec" "sed-4.0.9" "source-built GNU sed 4.0.9" "cc4bc898fbad65d9c0a07eab85c61c99abdb9d7d7d747948067bea7d9954618a",
     tinycc_generated "sed-smoke-exec" "sed-smoke" "GNU sed protected substitution smoke output" "91f02abc6d98e0f00da4f3b1249ae0acd29544f7b19304f190d29f523885c077",
+    tinycc_generated "bzip2-rewrite-exec" "bzip2-configured-source" "protected bzip2 source rewrite identity" "a3e8d977c0652889d2714f7eb9d1cfbe48581c05c7b7e3b79405334504fedd73",
+    tinycc_generated "bzip2-build-exec" "bzip2-1.0.8" "source-built bzip2 1.0.8" "b6911b1a367e8b159264078e7976d363e3cb9d268a1dd074ddca51a76916b8a7",
+    tinycc_generated "bzip2-build-exec" "bzip2recover-1.0.8" "source-built bzip2recover 1.0.8" "f4bf3e19bd09bcd64503def65eb7bd7eaa5ea43af94536b8d6e638a48501e0a0",
+    tinycc_generated "bzip2-smoke-exec" "bzip2-smoke" "bzip2 protected compression roundtrip output" "b37fa30b2c16ae67d4e023b19fbecf3b10dab989e5fdedec510c29780cc5793b",
   ],
   transition_tools = [
     {
@@ -565,6 +575,30 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["sed-smoke"],
       digest = blake3 "cc4bc898fbad65d9c0a07eab85c61c99abdb9d7d7d747948067bea7d9954618a",
     },
+    {
+      id = "bzip2-rewrite-exec",
+      name = "GNU sed 4.0.9 applying bounded bzip2 compatibility rewrites",
+      source_artifact_ids = ["bzip2-1.0.8-source", "bzip2-utime-header-source"],
+      input_artifact_ids = ["sed-4.0.9", "sed-smoke"],
+      output_artifact_ids = ["bzip2-configured-source"],
+      digest = blake3 "a3e8d977c0652889d2714f7eb9d1cfbe48581c05c7b7e3b79405334504fedd73",
+    },
+    {
+      id = "bzip2-build-exec",
+      name = "TinyCC 0.9.27 materializing bzip2 1.0.8",
+      source_artifact_ids = [],
+      input_artifact_ids = ["bzip2-configured-source", "tinycc-0.9.27", "tinycc27-libc", "tinycc-crt1", "tinycc-libtcc1"],
+      output_artifact_ids = ["bzip2-1.0.8", "bzip2recover-1.0.8"],
+      digest = blake3 "a3e8d977c0652889d2714f7eb9d1cfbe48581c05c7b7e3b79405334504fedd73",
+    },
+    {
+      id = "bzip2-smoke-exec",
+      name = "bzip2 1.0.8 executing a compression roundtrip and rejecting malformed input",
+      source_artifact_ids = [],
+      input_artifact_ids = ["bzip2-1.0.8"],
+      output_artifact_ids = ["bzip2-smoke"],
+      digest = blake3 "b6911b1a367e8b159264078e7976d363e3cb9d268a1dd074ddca51a76916b8a7",
+    },
   ],
   patches = [
     {
@@ -629,5 +663,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "tar-1.12-source" },
     { from_node_id = "seed", to_node_id = "tar-getdate-stub-source" },
     { from_node_id = "seed", to_node_id = "sed-4.0.9-source" },
+    { from_node_id = "seed", to_node_id = "bzip2-1.0.8-source" },
+    { from_node_id = "seed", to_node_id = "bzip2-utime-header-source" },
   ],
 } | Manifest

@@ -140,6 +140,8 @@ mod source_root_capability;
 mod source_root_provider;
 mod source_toolchain_closure;
 #[allow(dead_code)]
+mod stagex_bzip2;
+#[allow(dead_code)]
 mod stagex_gnu_patch;
 #[allow(dead_code)]
 mod stagex_gzip;

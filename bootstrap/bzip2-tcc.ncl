@@ -13,6 +13,7 @@ let mes = import "mes.ncl" in
 let tcc = import "tinycc.ncl" in
 let make = import "make-tcc.ncl" in
 let patch = import "patch-tcc.ncl" in
+let sed = import "sed-tcc.ncl" in
 
 let bzip2_src = crunch.fetchTarball {
   # provenance: fosslinux/live-bootstrap steps/bzip2-1.0.8/sources
@@ -120,5 +121,5 @@ EOF
       "$out/bin/bzip2recover" 2>&1 | $BB head -1
     "%,
   ],
-  inputs = [stage0, mes, tcc, make, patch, bzip2_src],
+  inputs = [stage0, mes, tcc, make, patch, sed, bzip2_src],
 } | crunch.Derivation

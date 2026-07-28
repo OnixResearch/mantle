@@ -650,6 +650,42 @@
       "id": "sed-smoke",
       "name": "GNU sed protected substitution smoke output",
       "producing_tool_id": "sed-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "a3e8d977c0652889d2714f7eb9d1cfbe48581c05c7b7e3b79405334504fedd73"
+      },
+      "id": "bzip2-configured-source",
+      "name": "protected bzip2 source rewrite identity",
+      "producing_tool_id": "bzip2-rewrite-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b6911b1a367e8b159264078e7976d363e3cb9d268a1dd074ddca51a76916b8a7"
+      },
+      "id": "bzip2-1.0.8",
+      "name": "source-built bzip2 1.0.8",
+      "producing_tool_id": "bzip2-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f4bf3e19bd09bcd64503def65eb7bd7eaa5ea43af94536b8d6e638a48501e0a0"
+      },
+      "id": "bzip2recover-1.0.8",
+      "name": "source-built bzip2recover 1.0.8",
+      "producing_tool_id": "bzip2-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b37fa30b2c16ae67d4e023b19fbecf3b10dab989e5fdedec510c29780cc5793b"
+      },
+      "id": "bzip2-smoke",
+      "name": "bzip2 protected compression roundtrip output",
+      "producing_tool_id": "bzip2-smoke-exec"
     }
   ],
   "patches": [
@@ -727,7 +763,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "58180e33d97d4dd12f15a0b8998f19ee66cff60056d1535e2d2a62d8256005b6"
+        "hex_value": "e9112bde5d990d68945cb91183911f0acd2d04cfd67ea59501177c196cc7fda5"
       },
       "id": "stage0-source-bundle",
       "name": "authenticated offline full-source closure",
@@ -930,6 +966,24 @@
       "id": "sed-4.0.9-source",
       "name": "GNU sed 4.0.9 fixed-output source",
       "provenance": "source bundle record fixed-url-2861bfe2bbe8003326313432362cdd09a73a549a874abb706bce6ba4e5378011"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "969e26e40644aaed6137a7403c29397ada624f6dc20d38dfae5fec9d2079292d"
+      },
+      "id": "bzip2-1.0.8-source",
+      "name": "bzip2 1.0.8 fixed-output source",
+      "provenance": "source bundle record fixed-url-29051c18498ee931a89eb96a6c890e06b4098c8ec2e0f4242f0d8337192a8070"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3bf37f6c622b15c4f6acada147c5ca5921da1cfefe9b0cb6dc53c5d10a10de13"
+      },
+      "id": "bzip2-utime-header-source",
+      "name": "bounded bzip2 compatibility header",
+      "provenance": "bootstrap/seeds/bzip2-utime.h"
     }
   ],
   "stage_graph": [
@@ -1044,6 +1098,14 @@
     {
       "from_node_id": "seed",
       "to_node_id": "sed-4.0.9-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bzip2-1.0.8-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bzip2-utime-header-source"
     }
   ],
   "transition_tools": [
@@ -1590,6 +1652,60 @@
       "name": "GNU sed 4.0.9 executing a substitution and rejecting malformed input",
       "output_artifact_ids": [
         "sed-smoke"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "a3e8d977c0652889d2714f7eb9d1cfbe48581c05c7b7e3b79405334504fedd73"
+      },
+      "id": "bzip2-rewrite-exec",
+      "input_artifact_ids": [
+        "sed-4.0.9",
+        "sed-smoke"
+      ],
+      "name": "GNU sed 4.0.9 applying bounded bzip2 compatibility rewrites",
+      "output_artifact_ids": [
+        "bzip2-configured-source"
+      ],
+      "source_artifact_ids": [
+        "bzip2-1.0.8-source",
+        "bzip2-utime-header-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "a3e8d977c0652889d2714f7eb9d1cfbe48581c05c7b7e3b79405334504fedd73"
+      },
+      "id": "bzip2-build-exec",
+      "input_artifact_ids": [
+        "bzip2-configured-source",
+        "tinycc-0.9.27",
+        "tinycc27-libc",
+        "tinycc-crt1",
+        "tinycc-libtcc1"
+      ],
+      "name": "TinyCC 0.9.27 materializing bzip2 1.0.8",
+      "output_artifact_ids": [
+        "bzip2-1.0.8",
+        "bzip2recover-1.0.8"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b6911b1a367e8b159264078e7976d363e3cb9d268a1dd074ddca51a76916b8a7"
+      },
+      "id": "bzip2-smoke-exec",
+      "input_artifact_ids": [
+        "bzip2-1.0.8"
+      ],
+      "name": "bzip2 1.0.8 executing a compression roundtrip and rejecting malformed input",
+      "output_artifact_ids": [
+        "bzip2-smoke"
       ],
       "source_artifact_ids": []
     }
