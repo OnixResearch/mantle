@@ -28,6 +28,20 @@ const MUSL_NON_CLAIM: &str = "this inventory binds the reduced first-musl static
 const MUSL_FILE_BYTES_MAX: u64 = 64 * 1_024 * 1_024;
 const MUSL_TREE_ENTRY_COUNT_MAX: usize = 16_384;
 const MUSL_HELPER_COUNT: usize = 24;
+const MUSL_PASS2_HELPER_COUNT: usize = 28;
+const MUSL_PASS2_RECIPE_SOURCE_ARTIFACT_ID: &str = "musl-pass2-recipe-source";
+const MUSL_PASS2_RECIPE_SOURCE_BLAKE3: &str = "5f85fc84eb8eb235ca15d3179db8a3504668804f140d46f15fe7af2e53a0dec5";
+const MUSL_PASS2_RECIPE_SOURCE: &[u8] = include_bytes!("../bootstrap/musl-1.1.24-tcc-musl.ncl");
+const MUSL_PASS2_REPORT_FORMAT: &str = "mantle-stagex-musl-1.1.24-pass2-inventory-v1";
+const MUSL_PASS2_NON_CLAIM: &str = "this inventory binds the second reduced musl static archive built by musl-linked TinyCC and bounded compile/link observations only; it does not prove a complete libc, dynamic runtime, or provider admission";
+pub(crate) const MUSL_PASS2_CONFIGURED_SOURCE_BLAKE3: &str =
+    "575e19d9e8f5d23be1ae0e87b9e40bebbaa3be7845632980586f38ef2d906e5d";
+pub(crate) const MUSL_PASS2_LIBC_BLAKE3: &str = "86f238f807b2580bcb814ef914a64a288e34bb89101c8b5f094cd2a124febaed";
+const MUSL_PASS2_CRT1_BLAKE3: &str = "c34258edb3d4de07a67e1d20c7dc5946543ce4ba078ace182b0b99cd4bbb7257";
+const MUSL_PASS2_CRTI_BLAKE3: &str = "ecf4006e5ea51c3ad49a243165909cd4f9eddfbe181b576ac43513ede8578be4";
+const MUSL_PASS2_CRTN_BLAKE3: &str = "b3b3153225cc100b8c429f5916ae36b96ef4903169b86f841f86498c0fd7251d";
+const MUSL_PASS2_HEADERS_BLAKE3: &str = "4d5a63f48ef27c8377a5319d3d68cd1a2b724a974ee5d8281a67f8fb0b5dc1c7";
+const MUSL_PASS2_SMOKE_BINARY_BLAKE3: &str = "30c18329ab3981639dba0dbdef48cd01beae52abab89c8b732f8f6eb1248fc57";
 const MUSL_EMPTY_ARCHIVE_COUNT: u32 = 8;
 const MUSL_SMOKE_COMMAND_COUNT: u32 = 3;
 const MUSL_OUTPUT_COUNT: usize = 1 + 3 + MUSL_EMPTY_ARCHIVE_COUNT as usize + 1 + 1;
@@ -220,6 +234,149 @@ const MUSL_HELPERS: [MuslHelperSpec; MUSL_HELPER_COUNT] = [
     },
 ];
 
+const MUSL_PASS2_HELPERS: [MuslHelperSpec; MUSL_PASS2_HELPER_COUNT] = [
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-minmath-source",
+        target: "src/math/minmath.c",
+        digest_blake3: "69fc61b70094ca956699dc2fa39f752cab7c65d568bd8fe05d4a936322c3960b",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-minunistd-source",
+        target: "src/unistd/minunistd.c",
+        digest_blake3: "7a201a50dbb656dccea6b064ae51b5f5fcffcd1bd5d0de2f95b16af50d5b3045",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-minstdlib-source",
+        target: "src/stdlib/minstdlib.c",
+        digest_blake3: "a4b5ad9096f8826607865f54b26136f8c19da0058dbe86dcb78ad1d06ec4f7d1",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-minstdio-source",
+        target: "src/stdio/minstdio.c",
+        digest_blake3: "52c1a3ee69221559e4c38b1efe6c82e3a8f84c87fa9ce8d3835cbac6e732c697",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-malloc-source",
+        target: "src/malloc/malloc.c",
+        digest_blake3: "57a8675cd8c7bba2de72af0bbc8a5e31e29c71c3136dc8a5f057d6754765ca84",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-sysconf-source",
+        target: "src/conf/sysconf.c",
+        digest_blake3: "4e0b9e10f5d0cb0b2cfdb9a7952b835805901275757978bd0df7491d777e5f2e",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-mb-cur-max-source",
+        target: "src/ctype/__ctype_get_mb_cur_max.c",
+        digest_blake3: "5a4e448755715c58f92a4e59913a2013eda231bbb5a7718e954408e629371f30",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-init-tls-source",
+        target: "src/env/__init_tls.c",
+        digest_blake3: "a92a92721c1f5045b81dcb38d3c2d2d47bafa822132021c59f5c0ee2e80861cf",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-reset-tls-source",
+        target: "src/env/__reset_tls.c",
+        digest_blake3: "0d47c776d69f29aaf091831b88487376786bef2cda19b03de55dfbf1ce7c0abe",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-stack-fail-source",
+        target: "src/env/__stack_chk_fail.c",
+        digest_blake3: "dad22f13907c8a5c01177ea03c9b7439d88f82cad27c249bfea98a7cfd0c47cc",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-start-main-source",
+        target: "src/env/__libc_start_main.c",
+        digest_blake3: "69c3f1dde3ebc3b778a8e586c9fb83656700a8606d37679b18a89ff8288135ac",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-errno-location-source",
+        target: "src/errno/__errno_location.c",
+        digest_blake3: "5362208b59d4de384c2c80c1a9141f163836d9538b8b8218794d25f7a32d7b5a",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-strerror-source",
+        target: "src/errno/strerror.c",
+        digest_blake3: "357e6527f4faddb05e93bb0ee6f6cdb70c8c60c9d08ddd5bbcab3ffbe974b9f8",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-abort-source",
+        target: "src/exit/abort.c",
+        digest_blake3: "497171f9dc9dcf6b118c3b559d2ae224982710179603e91f1f6ae5390066d018",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-open-source",
+        target: "src/fcntl/open.c",
+        digest_blake3: "7f3afdf5148358c90c7f8915de354742da02d7a60d85bbfe22b41c99e2f98bf5",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-openat-source",
+        target: "src/fcntl/openat.c",
+        digest_blake3: "8876c1c3b87682ba175d0ca3da3c19aafd773d6780baa63638049ec99c735343",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-fadvise-source",
+        target: "src/fcntl/posix_fadvise.c",
+        digest_blake3: "b4ba89e259263927792ffb789b4efc42c72d5e6834a5a0dc1c2f7175469164ee",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-fcntl-source",
+        target: "src/fcntl/fcntl.c",
+        digest_blake3: "fd96b7cf48005c85e7756e1aeb548127a07c1162861e4a68d717644521469282",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-minstat-source",
+        target: "src/stat/minstat.c",
+        digest_blake3: "e4d5e5096162c3979357fab4392cdff388a5df93bbf048dbd72b86d1cca8318b",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-remove-source",
+        target: "src/stdio/remove.c",
+        digest_blake3: "dc2a168ba09d83414283a3aa337dddd71a13d7f88b5cc06186f762c85460c495",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-utime-source",
+        target: "src/time/utime.c",
+        digest_blake3: "670df56105afbae06807aea52df008850ac343be79850c6c6a6a8fc1b5ac0f82",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-signal-source",
+        target: "src/signal/signal.c",
+        digest_blake3: "d157fbf502c72be6a283483115ddb04e18ce295ce731bc98112147759f4608d0",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-crt1-source",
+        target: "crt/crt1.c",
+        digest_blake3: "df822d5849c76562ea29882c4b5ed6cf4dceca203eb65d52442f0c0871ca29fc",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-confstr-source",
+        target: "src/conf/confstr.c",
+        digest_blake3: "b54e82c47c18b998c196fe0e7451edbeb56649e36ebb78719093a6ee8f26f419",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-crypt-source",
+        target: "src/crypt/crypt_sha256.c",
+        digest_blake3: "4f36091d58b669daef9b9001f82acac22f13ecd171831058d10c90a31502e672",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-semctl-source",
+        target: "src/ipc/semctl.c",
+        digest_blake3: "22289baa86062d7aa482f84bd3b3b1492519b225419e9df6ba46397e86d27e2d",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-dlerror-source",
+        target: "src/ldso/dlerror.c",
+        digest_blake3: "9e63330518eb48f3e5b3caf961cc7e05ffef11e3f13768c6e8b22d066d6804c7",
+    },
+    MuslHelperSpec {
+        artifact_id: "musl-pass2-fenv-source",
+        target: "src/fenv/x86_64/fenv.s",
+        digest_blake3: "2e7056cbed4ae4e55a676ebfdad8ccfe39bbb06090e9ca86dd2a445fa3cfb33c",
+    },
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct MuslExpectedOutput {
     pub artifact_id: &'static str,
@@ -285,6 +442,71 @@ pub(crate) const MUSL_EXPECTED_OUTPUTS: [MuslExpectedOutput; MUSL_OUTPUT_COUNT] 
     },
 ];
 
+pub(crate) const MUSL_PASS2_EXPECTED_OUTPUTS: [MuslExpectedOutput; MUSL_OUTPUT_COUNT] = [
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-libc",
+        digest_blake3: MUSL_PASS2_LIBC_BLAKE3,
+    },
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-crt1",
+        digest_blake3: MUSL_PASS2_CRT1_BLAKE3,
+    },
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-crti",
+        digest_blake3: MUSL_PASS2_CRTI_BLAKE3,
+    },
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-crtn",
+        digest_blake3: MUSL_PASS2_CRTN_BLAKE3,
+    },
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-libm",
+        digest_blake3: EMPTY_ARCHIVE_BLAKE3,
+    },
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-librt",
+        digest_blake3: EMPTY_ARCHIVE_BLAKE3,
+    },
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-libpthread",
+        digest_blake3: EMPTY_ARCHIVE_BLAKE3,
+    },
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-libcrypt",
+        digest_blake3: EMPTY_ARCHIVE_BLAKE3,
+    },
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-libutil",
+        digest_blake3: EMPTY_ARCHIVE_BLAKE3,
+    },
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-libxnet",
+        digest_blake3: EMPTY_ARCHIVE_BLAKE3,
+    },
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-libresolv",
+        digest_blake3: EMPTY_ARCHIVE_BLAKE3,
+    },
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-libdl",
+        digest_blake3: EMPTY_ARCHIVE_BLAKE3,
+    },
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-headers",
+        digest_blake3: MUSL_PASS2_HEADERS_BLAKE3,
+    },
+    MuslExpectedOutput {
+        artifact_id: "musl-pass2-smoke-binary",
+        digest_blake3: MUSL_PASS2_SMOKE_BINARY_BLAKE3,
+    },
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MuslProfile {
+    First,
+    Second,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct MuslSourceMaterializationReport {
     pub format: &'static str,
@@ -323,9 +545,89 @@ pub(crate) struct MuslInventoryReport {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct MuslInventoryRequest<'a> {
     pub source_root: &'a Path,
-    pub tcc_musl_prep_root: &'a Path,
+    pub compiler_root: &'a Path,
+    pub profile: MuslProfile,
     pub scratch_dir: &'a Path,
     pub protected_exec_enforced: bool,
+}
+
+impl MuslProfile {
+    fn recipe(self) -> &'static [u8] {
+        match self {
+            Self::First => MUSL_RECIPE_SOURCE,
+            Self::Second => MUSL_PASS2_RECIPE_SOURCE,
+        }
+    }
+
+    fn recipe_artifact(self) -> (&'static str, &'static str) {
+        match self {
+            Self::First => (MUSL_RECIPE_SOURCE_ARTIFACT_ID, MUSL_RECIPE_SOURCE_BLAKE3),
+            Self::Second => (MUSL_PASS2_RECIPE_SOURCE_ARTIFACT_ID, MUSL_PASS2_RECIPE_SOURCE_BLAKE3),
+        }
+    }
+
+    fn helpers(self) -> &'static [MuslHelperSpec] {
+        match self {
+            Self::First => &MUSL_HELPERS,
+            Self::Second => &MUSL_PASS2_HELPERS,
+        }
+    }
+
+    fn compiler_relative(self) -> &'static str {
+        match self {
+            Self::First => "bin/tcc-musl-prep",
+            Self::Second => "bin/tcc-0.9.27-musl",
+        }
+    }
+
+    fn compiler_digest(self) -> &'static str {
+        match self {
+            Self::First => crate::stagex_tcc_musl_prep::TCC_MUSL_PREP_FINAL_BLAKE3,
+            Self::Second => crate::stagex_tcc_musl::TCC_MUSL_FINAL_BLAKE3,
+        }
+    }
+
+    fn runtime_archive_relative(self) -> &'static str {
+        match self {
+            Self::First => "lib/mes/tcc/libtcc1.a",
+            Self::Second => "lib/tcc/libtcc1.a",
+        }
+    }
+
+    fn configured_source_digest(self) -> &'static str {
+        match self {
+            Self::First => MUSL_CONFIGURED_SOURCE_BLAKE3,
+            Self::Second => MUSL_PASS2_CONFIGURED_SOURCE_BLAKE3,
+        }
+    }
+
+    fn output_prefix(self) -> &'static str {
+        match self {
+            Self::First => "musl",
+            Self::Second => "musl-pass2",
+        }
+    }
+
+    fn expected_outputs(self) -> &'static [MuslExpectedOutput] {
+        match self {
+            Self::First => &MUSL_EXPECTED_OUTPUTS,
+            Self::Second => &MUSL_PASS2_EXPECTED_OUTPUTS,
+        }
+    }
+
+    fn report_format(self) -> &'static str {
+        match self {
+            Self::First => MUSL_REPORT_FORMAT,
+            Self::Second => MUSL_PASS2_REPORT_FORMAT,
+        }
+    }
+
+    fn non_claim(self) -> &'static str {
+        match self {
+            Self::First => MUSL_NON_CLAIM,
+            Self::Second => MUSL_PASS2_NON_CLAIM,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -360,11 +662,25 @@ impl From<crate::stagex_tinycc::TinyccError> for StagexMuslError {
 }
 
 pub(crate) fn source_artifact_digests() -> Vec<(&'static str, &'static str)> {
-    let mut artifacts = Vec::with_capacity(2 + MUSL_HELPER_COUNT);
-    artifacts.push((MUSL_SOURCE_ARTIFACT_ID, MUSL_SOURCE_CONTENT_BLAKE3));
-    artifacts.push((MUSL_RECIPE_SOURCE_ARTIFACT_ID, MUSL_RECIPE_SOURCE_BLAKE3));
-    artifacts.extend(MUSL_HELPERS.iter().map(|helper| (helper.artifact_id, helper.digest_blake3)));
-    assert_eq!(artifacts.len(), 2 + MUSL_HELPER_COUNT);
+    profile_source_artifact_digests(MuslProfile::First, true)
+}
+
+pub(crate) fn pass2_source_artifact_digests() -> Vec<(&'static str, &'static str)> {
+    profile_source_artifact_digests(MuslProfile::Second, false)
+}
+
+fn profile_source_artifact_digests(
+    profile: MuslProfile,
+    include_shared_source: bool,
+) -> Vec<(&'static str, &'static str)> {
+    let helpers = profile.helpers();
+    let mut artifacts = Vec::with_capacity(usize::from(include_shared_source) + 1 + helpers.len());
+    if include_shared_source {
+        artifacts.push((MUSL_SOURCE_ARTIFACT_ID, MUSL_SOURCE_CONTENT_BLAKE3));
+    }
+    artifacts.push(profile.recipe_artifact());
+    artifacts.extend(helpers.iter().map(|helper| (helper.artifact_id, helper.digest_blake3)));
+    assert_eq!(artifacts.len(), usize::from(include_shared_source) + 1 + helpers.len());
     assert!(artifacts.iter().all(|(_, digest)| !digest.is_empty()));
     artifacts
 }
@@ -422,28 +738,29 @@ pub(crate) fn derive_musl_inventory(request: MuslInventoryRequest<'_>) -> Result
     let source_root = request.scratch_dir.join(MUSL_SOURCE_OUTPUT_NAME);
     crate::stagex_mes_lib::copy_tree_bounded(request.source_root, &source_root)?;
     crate::stagex_tinycc::make_tree_owner_writable(&source_root)?;
-    configure_source_tree(&source_root)?;
+    configure_source_tree(&source_root, request.profile)?;
     generate_headers(&source_root)?;
     let libc_sources = selected_sources(&source_root.join("src"))?;
     let crt_sources = selected_sources(&source_root.join("crt"))?;
-    let configured_source_digest_blake3 = configured_source_digest(&source_root, &libc_sources, &crt_sources)?;
+    let configured_source_digest_blake3 =
+        configured_source_digest(&source_root, &libc_sources, &crt_sources, request.profile)?;
     let output_root = request.scratch_dir.join("output");
     fs::create_dir_all(output_root.join("lib"))
         .map_err(|error| StagexMuslError::Materialization(format!("creating musl output: {error}")))?;
     install_headers(&source_root, &output_root.join("include"))?;
-    let compiler = request.tcc_musl_prep_root.join("bin/tcc-musl-prep");
+    let compiler = request.compiler_root.join(request.profile.compiler_relative());
     let objects = compile_sources(&request, &compiler, &source_root, &libc_sources, "libc")?;
     let crt_objects = compile_sources(&request, &compiler, &source_root, &crt_sources, "crt")?;
     let libc = archive_libc(&request, &compiler, &source_root, &output_root, &objects)?;
     install_crt_objects(&output_root, &crt_sources, &crt_objects)?;
     materialize_empty_archives(&output_root)?;
     let smoke_binary = run_smokes(&request, &compiler, &source_root, &output_root)?;
-    let outputs = collect_outputs(&output_root, &libc, &smoke_binary)?;
-    validate_expected_outputs(&outputs)?;
+    let outputs = collect_outputs(&output_root, &libc, &smoke_binary, request.profile)?;
+    validate_expected_outputs(&outputs, request.profile)?;
     let report = MuslInventoryReport {
-        format: MUSL_REPORT_FORMAT,
+        format: request.profile.report_format(),
         configured_source_digest_blake3,
-        helper_count: u32::try_from(MUSL_HELPER_COUNT).unwrap(),
+        helper_count: u32::try_from(request.profile.helpers().len()).unwrap(),
         source_compile_count: u32::try_from(libc_sources.len())
             .map_err(|_| StagexMuslError::Materialization("musl source count overflow".to_string()))?,
         crt_compile_count: u32::try_from(crt_sources.len())
@@ -453,7 +770,7 @@ pub(crate) fn derive_musl_inventory(request: MuslInventoryRequest<'_>) -> Result
         outputs,
         protected_exec_enforced: request.protected_exec_enforced,
         fallback_events: Vec::new(),
-        non_claim: MUSL_NON_CLAIM,
+        non_claim: request.profile.non_claim(),
     };
     crate::stagex_mes_lib::write_create_new(
         &request.scratch_dir.join("musl-inventory.json"),
@@ -474,7 +791,7 @@ fn validate_inventory_inputs(request: &MuslInventoryRequest<'_>) -> Result<(), S
     }
     for (label, root) in [
         ("musl source", request.source_root),
-        ("TinyCC musl-prep", request.tcc_musl_prep_root),
+        ("musl compiler", request.compiler_root),
     ] {
         if !root.is_absolute() || !root.is_dir() {
             return Err(StagexMuslError::Materialization(format!(
@@ -484,18 +801,18 @@ fn validate_inventory_inputs(request: &MuslInventoryRequest<'_>) -> Result<(), S
         }
     }
     validate_file_digest(
-        &request.tcc_musl_prep_root.join("bin/tcc-musl-prep"),
-        crate::stagex_tcc_musl_prep::TCC_MUSL_PREP_FINAL_BLAKE3,
-        "TinyCC musl-prep compiler",
+        &request.compiler_root.join(request.profile.compiler_relative()),
+        request.profile.compiler_digest(),
+        "musl compiler",
     )?;
-    validate_bound_recipe()?;
-    validate_helper_digests()?;
+    validate_bound_recipe_for_profile(request.profile)?;
+    validate_helper_digests(request.profile)?;
     assert!(request.source_root.join("Makefile").is_file());
-    assert!(request.tcc_musl_prep_root.join("lib/mes/tcc/libtcc1.a").is_file());
+    assert!(request.compiler_root.join(request.profile.runtime_archive_relative()).is_file());
     Ok(())
 }
 
-fn configure_source_tree(root: &Path) -> Result<(), StagexMuslError> {
+fn configure_source_tree(root: &Path, profile: MuslProfile) -> Result<(), StagexMuslError> {
     for relative in REMOVED_SOURCE_DIRECTORIES {
         let path = root.join(relative);
         if path.exists() {
@@ -538,15 +855,15 @@ fn configure_source_tree(root: &Path) -> Result<(), StagexMuslError> {
         fs::write(&syscall, kept)
             .map_err(|error| StagexMuslError::Materialization(format!("writing bounded musl syscall.h: {error}")))?;
     }
-    materialize_helpers(root)?;
+    materialize_helpers(root, profile)?;
     assert!(!root.join("src/network").exists());
     assert!(root.join("src/math/minmath.c").is_file());
     Ok(())
 }
 
-fn materialize_helpers(root: &Path) -> Result<(), StagexMuslError> {
-    for helper in MUSL_HELPERS {
-        let bytes = extract_helper(MUSL_RECIPE_SOURCE, helper.target)?;
+fn materialize_helpers(root: &Path, profile: MuslProfile) -> Result<(), StagexMuslError> {
+    for helper in profile.helpers() {
+        let bytes = extract_helper(profile.recipe(), helper.target)?;
         let target = root.join(helper.target);
         if target.exists() {
             if target.is_dir() {
@@ -601,10 +918,11 @@ fn extract_helper(source: &[u8], target: &str) -> Result<Vec<u8>, StagexMuslErro
     Ok(bytes)
 }
 
-fn validate_helper_digests() -> Result<(), StagexMuslError> {
+fn validate_helper_digests(profile: MuslProfile) -> Result<(), StagexMuslError> {
+    let helpers = profile.helpers();
     let mut mismatches = Vec::new();
-    for helper in MUSL_HELPERS {
-        let observed = blake3::hash(&extract_helper(MUSL_RECIPE_SOURCE, helper.target)?).to_hex().to_string();
+    for helper in helpers {
+        let observed = blake3::hash(&extract_helper(profile.recipe(), helper.target)?).to_hex().to_string();
         if observed != helper.digest_blake3 {
             mismatches.push(format!("{}={observed}", helper.artifact_id));
         }
@@ -615,8 +933,8 @@ fn validate_helper_digests() -> Result<(), StagexMuslError> {
             mismatches.join(",")
         )));
     }
-    assert_eq!(MUSL_HELPERS.len(), MUSL_HELPER_COUNT);
-    assert!(MUSL_HELPERS.iter().all(|helper| helper.digest_blake3.len() == blake3::OUT_LEN * 2));
+    assert!(!helpers.is_empty());
+    assert!(helpers.iter().all(|helper| helper.digest_blake3.len() == blake3::OUT_LEN * 2));
     Ok(())
 }
 
@@ -926,7 +1244,10 @@ fn run_smokes(
             &absolute_utf8(&output_root.join("lib/crt1.o"), "musl smoke crt1")?,
             &absolute_utf8(&object, "musl smoke object")?,
             &absolute_utf8(&output_root.join("lib/libc.a"), "musl smoke libc")?,
-            &absolute_utf8(&request.tcc_musl_prep_root.join("lib/mes/tcc/libtcc1.a"), "musl smoke libtcc1")?,
+            &absolute_utf8(
+                &request.compiler_root.join(request.profile.runtime_archive_relative()),
+                "musl smoke libtcc1",
+            )?,
         ],
         source_root,
         &BTreeMap::<String, String>::new(),
@@ -975,29 +1296,31 @@ fn collect_outputs(
     output_root: &Path,
     libc: &Path,
     smoke_binary: &Path,
+    profile: MuslProfile,
 ) -> Result<Vec<MuslOutputReport>, StagexMuslError> {
+    let prefix = profile.output_prefix();
     let specs = [
-        ("musl-libc", libc.to_path_buf(), false),
-        ("musl-crt1", output_root.join("lib/crt1.o"), false),
-        ("musl-crti", output_root.join("lib/crti.o"), false),
-        ("musl-crtn", output_root.join("lib/crtn.o"), false),
-        ("musl-libm", output_root.join("lib/libm.a"), false),
-        ("musl-librt", output_root.join("lib/librt.a"), false),
-        ("musl-libpthread", output_root.join("lib/libpthread.a"), false),
-        ("musl-libcrypt", output_root.join("lib/libcrypt.a"), false),
-        ("musl-libutil", output_root.join("lib/libutil.a"), false),
-        ("musl-libxnet", output_root.join("lib/libxnet.a"), false),
-        ("musl-libresolv", output_root.join("lib/libresolv.a"), false),
-        ("musl-libdl", output_root.join("lib/libdl.a"), false),
-        ("musl-headers", output_root.join("include"), true),
-        ("musl-smoke-binary", smoke_binary.to_path_buf(), false),
+        (format!("{prefix}-libc"), libc.to_path_buf(), false),
+        (format!("{prefix}-crt1"), output_root.join("lib/crt1.o"), false),
+        (format!("{prefix}-crti"), output_root.join("lib/crti.o"), false),
+        (format!("{prefix}-crtn"), output_root.join("lib/crtn.o"), false),
+        (format!("{prefix}-libm"), output_root.join("lib/libm.a"), false),
+        (format!("{prefix}-librt"), output_root.join("lib/librt.a"), false),
+        (format!("{prefix}-libpthread"), output_root.join("lib/libpthread.a"), false),
+        (format!("{prefix}-libcrypt"), output_root.join("lib/libcrypt.a"), false),
+        (format!("{prefix}-libutil"), output_root.join("lib/libutil.a"), false),
+        (format!("{prefix}-libxnet"), output_root.join("lib/libxnet.a"), false),
+        (format!("{prefix}-libresolv"), output_root.join("lib/libresolv.a"), false),
+        (format!("{prefix}-libdl"), output_root.join("lib/libdl.a"), false),
+        (format!("{prefix}-headers"), output_root.join("include"), true),
+        (format!("{prefix}-smoke-binary"), smoke_binary.to_path_buf(), false),
     ];
     let mut outputs = Vec::with_capacity(MUSL_OUTPUT_COUNT);
     for (artifact_id, path, is_tree) in specs {
         let (bytes_len, digest_blake3) = if is_tree {
             (tree_bytes_len(&path)?, tree_digest_blake3(&path)?)
         } else {
-            let bytes = crate::stagex_mes_lib::read_bounded_file(&path, MUSL_FILE_BYTES_MAX, artifact_id)?;
+            let bytes = crate::stagex_mes_lib::read_bounded_file(&path, MUSL_FILE_BYTES_MAX, &artifact_id)?;
             (
                 u64::try_from(bytes.len())
                     .map_err(|_| StagexMuslError::Materialization("musl output size overflow".to_string()))?,
@@ -1005,7 +1328,7 @@ fn collect_outputs(
             )
         };
         outputs.push(MuslOutputReport {
-            artifact_id: artifact_id.to_string(),
+            artifact_id,
             path,
             bytes_len,
             digest_blake3,
@@ -1016,9 +1339,10 @@ fn collect_outputs(
     Ok(outputs)
 }
 
-fn validate_expected_outputs(outputs: &[MuslOutputReport]) -> Result<(), StagexMuslError> {
+fn validate_expected_outputs(outputs: &[MuslOutputReport], profile: MuslProfile) -> Result<(), StagexMuslError> {
+    let expected_outputs = profile.expected_outputs();
     let mut mismatches = Vec::new();
-    for expected in MUSL_EXPECTED_OUTPUTS {
+    for expected in expected_outputs {
         let output = outputs
             .iter()
             .find(|output| output.artifact_id == expected.artifact_id)
@@ -1033,7 +1357,7 @@ fn validate_expected_outputs(outputs: &[MuslOutputReport]) -> Result<(), StagexM
             mismatches.join(",")
         )));
     }
-    assert_eq!(outputs.len(), MUSL_EXPECTED_OUTPUTS.len());
+    assert_eq!(outputs.len(), expected_outputs.len());
     assert!(outputs.iter().all(|output| output.digest_blake3.len() == blake3::OUT_LEN * 2));
     Ok(())
 }
@@ -1042,14 +1366,15 @@ fn configured_source_digest(
     root: &Path,
     libc_sources: &[String],
     crt_sources: &[String],
+    profile: MuslProfile,
 ) -> Result<String, StagexMuslError> {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"mantle-stagex-musl-configured-source-v1\0");
     hasher.update(MUSL_SOURCE_CONTENT_BLAKE3.as_bytes());
     hasher.update(b"\0");
-    hasher.update(MUSL_RECIPE_SOURCE_BLAKE3.as_bytes());
-    for helper in MUSL_HELPERS {
-        hasher.update(&extract_helper(MUSL_RECIPE_SOURCE, helper.target)?);
+    hasher.update(profile.recipe_artifact().1.as_bytes());
+    for helper in profile.helpers() {
+        hasher.update(&extract_helper(profile.recipe(), helper.target)?);
         hasher.update(b"\0");
     }
     for value in REMOVED_SOURCE_DIRECTORIES.iter().chain(COMMON_COMPILE_FLAGS.iter()) {
@@ -1073,9 +1398,10 @@ fn configured_source_digest(
         hasher.update(b"\0");
     }
     let digest = hasher.finalize().to_hex().to_string();
-    if digest != MUSL_CONFIGURED_SOURCE_BLAKE3 {
+    if digest != profile.configured_source_digest() {
         return Err(StagexMuslError::Materialization(format!(
-            "musl configured source BLAKE3 mismatch: expected {MUSL_CONFIGURED_SOURCE_BLAKE3}, observed {digest}"
+            "musl configured source BLAKE3 mismatch: expected {}, observed {digest}",
+            profile.configured_source_digest()
         )));
     }
     assert!(!libc_sources.is_empty());
@@ -1124,13 +1450,19 @@ fn validate_source_record(record: &SourceRecord) -> Result<(), StagexMuslError> 
 }
 
 fn validate_bound_recipe() -> Result<(), StagexMuslError> {
-    let observed = blake3::hash(MUSL_RECIPE_SOURCE).to_hex().to_string();
-    if observed != MUSL_RECIPE_SOURCE_BLAKE3 {
+    validate_bound_recipe_for_profile(MuslProfile::First)
+}
+
+fn validate_bound_recipe_for_profile(profile: MuslProfile) -> Result<(), StagexMuslError> {
+    let recipe = profile.recipe();
+    let expected = profile.recipe_artifact().1;
+    let observed = blake3::hash(recipe).to_hex().to_string();
+    if observed != expected {
         return Err(StagexMuslError::Materialization(format!(
-            "musl recipe BLAKE3 mismatch: expected {MUSL_RECIPE_SOURCE_BLAKE3}, observed {observed}"
+            "musl recipe BLAKE3 mismatch: expected {expected}, observed {observed}"
         )));
     }
-    assert!(!MUSL_RECIPE_SOURCE.is_empty());
+    assert!(!recipe.is_empty());
     assert_eq!(observed.len(), blake3::OUT_LEN * 2);
     Ok(())
 }
@@ -1271,12 +1603,14 @@ mod tests {
     const RETAINED_SOURCE_ROOT_ENV: &str = "MANTLE_STAGE_X_MUSL_SOURCE_ROOT";
     const RETAINED_TCC_MUSL_PREP_ROOT_ENV: &str = "MANTLE_STAGE_X_TCC_MUSL_PREP_ROOT";
     const RETAINED_BUILD_SCRATCH_ENV: &str = "MANTLE_STAGE_X_MUSL_BUILD_SCRATCH";
+    const RETAINED_PASS2_BUILD_SCRATCH_ENV: &str = "MANTLE_STAGE_X_MUSL_PASS2_BUILD_SCRATCH";
 
     #[test]
     fn helper_digests_are_bound() {
-        validate_helper_digests().unwrap();
+        validate_helper_digests(MuslProfile::First).unwrap();
+        validate_helper_digests(MuslProfile::Second).unwrap();
         assert_eq!(MUSL_HELPERS.len(), MUSL_HELPER_COUNT);
-        assert!(MUSL_HELPERS.iter().all(|helper| !helper.target.is_empty()));
+        assert_eq!(MUSL_PASS2_HELPERS.len(), MUSL_PASS2_HELPER_COUNT);
     }
 
     #[test]
@@ -1321,12 +1655,31 @@ mod tests {
         let scratch_dir = PathBuf::from(std::env::var(RETAINED_BUILD_SCRATCH_ENV).unwrap());
         let report = derive_musl_inventory(MuslInventoryRequest {
             source_root: &source_root,
-            tcc_musl_prep_root: &prep_root,
+            compiler_root: &prep_root,
+            profile: MuslProfile::First,
             scratch_dir: &scratch_dir,
             protected_exec_enforced: false,
         })
         .unwrap();
         assert_eq!(report.helper_count, u32::try_from(MUSL_HELPER_COUNT).unwrap());
+        assert!(report.fallback_events.is_empty());
+    }
+
+    #[test]
+    #[ignore = "requires retained musl source and musl-linked TinyCC"]
+    fn derives_retained_musl_pass2_inventory() {
+        let source_root = PathBuf::from(std::env::var(RETAINED_SOURCE_ROOT_ENV).unwrap());
+        let compiler_root = PathBuf::from(std::env::var(RETAINED_TCC_MUSL_PREP_ROOT_ENV).unwrap());
+        let scratch_dir = PathBuf::from(std::env::var(RETAINED_PASS2_BUILD_SCRATCH_ENV).unwrap());
+        let report = derive_musl_inventory(MuslInventoryRequest {
+            source_root: &source_root,
+            compiler_root: &compiler_root,
+            profile: MuslProfile::Second,
+            scratch_dir: &scratch_dir,
+            protected_exec_enforced: false,
+        })
+        .unwrap();
+        assert_eq!(report.helper_count, u32::try_from(MUSL_PASS2_HELPER_COUNT).unwrap());
         assert!(report.fallback_events.is_empty());
     }
 }

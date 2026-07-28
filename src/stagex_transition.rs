@@ -78,6 +78,8 @@ pub(crate) const MUSL_BUILD_STAGE_ID: &str = "musl-materialization";
 pub(crate) const MUSL_SMOKE_STAGE_ID: &str = "musl-smoke";
 pub(crate) const TCC_MUSL_BUILD_STAGE_ID: &str = "tcc-musl-materialization";
 pub(crate) const TCC_MUSL_SMOKE_STAGE_ID: &str = "tcc-musl-smoke";
+pub(crate) const MUSL_PASS2_BUILD_STAGE_ID: &str = "musl-pass2-materialization";
+pub(crate) const MUSL_PASS2_SMOKE_STAGE_ID: &str = "musl-pass2-smoke";
 pub(crate) const HEX0_SEED_BLAKE3: &str = "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80";
 pub(crate) const HEX0_SOURCE_BLAKE3: &str = "0fb23576a10b41df29c165e39514f18c411da96ae71873a6a2e2f0b1d94de614";
 pub(crate) const KAEM_SOURCE_BLAKE3: &str = "5a56b4164dca4d1e03ba35bc8ce4b418a0de2baf1cb9e6a0912607e26532d30d";
@@ -106,7 +108,7 @@ const MES_OUTPUT_MAX_MIB: u64 = 64;
 const MES_OUTPUT_MAX_BYTES: u64 = MES_OUTPUT_MAX_MIB * MIB_BYTES;
 const STAGE_JOB_COUNT: u32 = 1;
 const TRANSITION_STAGE_COUNT_MAX: u32 = 3;
-const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 65;
+const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 67;
 const TINYCC_LINK_CHILD_EVENT_COUNT: usize = 5;
 const MAKE_RECIPE_CHILD_EVENT_COUNT: usize = 1;
 const GZIP_GZIP_SMOKE_EVENT_COUNT: usize = 2;
@@ -207,6 +209,8 @@ pub(crate) struct StagexTransitionReport {
     pub musl_runtime: Option<crate::stagex_musl::MuslInventoryReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tcc_musl_runtime: Option<crate::stagex_tcc_musl::TccMuslInventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub musl_pass2_runtime: Option<crate::stagex_musl::MuslInventoryReport>,
     pub fallback_events: Vec<String>,
     pub promotions: Vec<OutputPromotionRecord>,
     pub protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
@@ -955,7 +959,8 @@ pub(crate) fn materialize_protected_transition(
             .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
             let result = crate::stagex_musl::derive_musl_inventory(crate::stagex_musl::MuslInventoryRequest {
                 source_root: &sources.output_path,
-                tcc_musl_prep_root: &request.scratch_dir.join("tcc-musl-prep-stage/runtime/output"),
+                compiler_root: &request.scratch_dir.join("tcc-musl-prep-stage/runtime/output"),
+                profile: crate::stagex_musl::MuslProfile::First,
                 scratch_dir: &stage.join("runtime"),
                 protected_exec_enforced: true,
             });
@@ -1000,6 +1005,32 @@ pub(crate) fn materialize_protected_transition(
         _ => unreachable!("musl-linked TinyCC requires TinyCC sources and musl together"),
     };
 
+    let musl_pass2_runtime = match (musl_sources.as_ref(), tcc_musl_runtime.as_ref()) {
+        (Some(sources), Some(_)) => {
+            let stage = request.scratch_dir.join("musl-pass2-stage");
+            fs::create_dir(&stage)
+                .map_err(|source| io_error("creating create-new protected second-musl stage root", source))?;
+            let result = crate::stagex_musl::derive_musl_inventory(crate::stagex_musl::MuslInventoryRequest {
+                source_root: &sources.output_path,
+                compiler_root: &request.scratch_dir.join("tcc-musl-stage/runtime/output"),
+                profile: crate::stagex_musl::MuslProfile::Second,
+                scratch_dir: &stage.join("runtime"),
+                protected_exec_enforced: true,
+            });
+            match result {
+                Ok(report) => Some(report),
+                Err(error) => {
+                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                    let events = supervisor.audit_events();
+                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
+                }
+            }
+        }
+        (None, None) => None,
+        _ => unreachable!("second-musl requires authenticated musl source and musl-linked TinyCC"),
+    };
+
     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
     let protected_exec_events = supervisor.audit_events();
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
@@ -1023,6 +1054,7 @@ pub(crate) fn materialize_protected_transition(
             tcc_musl_prep_runtime: tcc_musl_prep_runtime.as_ref(),
             musl_runtime: musl_runtime.as_ref(),
             tcc_musl_runtime: tcc_musl_runtime.as_ref(),
+            musl_pass2_runtime: musl_pass2_runtime.as_ref(),
         },
         &protected_exec_events,
     )?;
@@ -1066,6 +1098,7 @@ pub(crate) fn materialize_protected_transition(
         musl_sources,
         musl_runtime,
         tcc_musl_runtime,
+        musl_pass2_runtime,
         fallback_events: Vec::new(),
         promotions: vec![hex0_promotion, kaem_promotion],
         protected_exec_events,
@@ -1186,6 +1219,9 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     for (artifact_id, digest_blake3) in crate::stagex_tcc_musl::source_artifact_digests() {
         require_manifest_digest(&sources, artifact_id, digest_blake3)?;
     }
+    for (artifact_id, digest_blake3) in crate::stagex_musl::pass2_source_artifact_digests() {
+        require_manifest_digest(&sources, artifact_id, digest_blake3)?;
+    }
     let generated: BTreeMap<&str, &str> = manifest
         .generated_artifacts
         .iter()
@@ -1274,6 +1310,14 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
         crate::stagex_tcc_musl::TCC_MUSL_CONFIGURED_SOURCE_BLAKE3,
     )?;
     for expected in crate::stagex_tcc_musl::TCC_MUSL_EXPECTED_OUTPUTS {
+        require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
+    }
+    require_manifest_digest(
+        &generated,
+        "musl-pass2-configured-source",
+        crate::stagex_musl::MUSL_PASS2_CONFIGURED_SOURCE_BLAKE3,
+    )?;
+    for expected in crate::stagex_musl::MUSL_PASS2_EXPECTED_OUTPUTS {
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
     let patches: BTreeMap<&str, &str> =
@@ -1443,6 +1487,7 @@ fn build_transition_plan(
         stages.extend(musl_stage_plans(&tcc_musl_prep_root));
         let tcc_musl_root = staged.seed.parent().expect("staged seed has parent").join("tcc-musl-stage/runtime");
         stages.extend(tcc_musl_stage_plans(&tcc_musl_prep_root, &tcc_musl_root));
+        stages.extend(musl_pass2_stage_plans(&tcc_musl_root));
     }
     let stage_count_max = if include_stage0_mini {
         TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX
@@ -1992,6 +2037,66 @@ fn oyacc_stage_plans(tinycc27_root: &Path, patch_root: &Path, oyacc_root: &Path)
                 &yacc,
                 OYACC_BUILD_STAGE_ID,
                 crate::stagex_oyacc::OYACC_FINAL_BLAKE3,
+            )],
+        ),
+    ]
+}
+
+fn musl_pass2_stage_plans(tcc_musl_root: &Path) -> Vec<StagexStagePlan> {
+    let compiler = tcc_musl_root.join("output/bin/tcc-0.9.27-musl");
+    let source_artifact_ids = crate::stagex_musl::pass2_source_artifact_digests()
+        .into_iter()
+        .map(|(artifact_id, _)| artifact_id)
+        .chain(std::iter::once("musl-1.1.24-source"))
+        .collect::<Vec<_>>();
+    vec![
+        mes_stage_plan(
+            MUSL_PASS2_BUILD_STAGE_ID,
+            &[TCC_MUSL_BUILD_STAGE_ID, TCC_MUSL_SMOKE_STAGE_ID, MUSL_BUILD_STAGE_ID],
+            &source_artifact_ids,
+            &["tcc-musl", "tcc-musl-libtcc1", "musl-libc", "musl-crt1", "musl-headers"],
+            &[
+                "musl-pass2-configured-source".to_string(),
+                "musl-pass2-libc".to_string(),
+                "musl-pass2-crt1".to_string(),
+                "musl-pass2-crti".to_string(),
+                "musl-pass2-crtn".to_string(),
+                "musl-pass2-libm".to_string(),
+                "musl-pass2-librt".to_string(),
+                "musl-pass2-libpthread".to_string(),
+                "musl-pass2-libcrypt".to_string(),
+                "musl-pass2-libutil".to_string(),
+                "musl-pass2-libxnet".to_string(),
+                "musl-pass2-libresolv".to_string(),
+                "musl-pass2-libdl".to_string(),
+                "musl-pass2-headers".to_string(),
+            ],
+            vec![authorization(
+                "exec:musl-pass2-materialization:tcc-musl",
+                &compiler,
+                TCC_MUSL_BUILD_STAGE_ID,
+                crate::stagex_tcc_musl::TCC_MUSL_FINAL_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            MUSL_PASS2_SMOKE_STAGE_ID,
+            &[MUSL_PASS2_BUILD_STAGE_ID, TCC_MUSL_BUILD_STAGE_ID],
+            &[],
+            &[
+                "musl-pass2-libc",
+                "musl-pass2-crt1",
+                "musl-pass2-headers",
+                "tcc-musl-libtcc1",
+            ],
+            &[
+                "musl-pass2-smoke-binary".to_string(),
+                "musl-pass2-negative-observation".to_string(),
+            ],
+            vec![authorization(
+                "exec:musl-pass2-smoke:tcc-musl",
+                &compiler,
+                TCC_MUSL_BUILD_STAGE_ID,
+                crate::stagex_tcc_musl::TCC_MUSL_FINAL_BLAKE3,
             )],
         ),
     ]
@@ -3180,6 +3285,7 @@ struct TransitionAuditReports<'a> {
     tcc_musl_prep_runtime: Option<&'a crate::stagex_tcc_musl_prep::TccMuslPrepInventoryReport>,
     musl_runtime: Option<&'a crate::stagex_musl::MuslInventoryReport>,
     tcc_musl_runtime: Option<&'a crate::stagex_tcc_musl::TccMuslInventoryReport>,
+    musl_pass2_runtime: Option<&'a crate::stagex_musl::MuslInventoryReport>,
 }
 
 fn validate_transition_audit(
@@ -3205,6 +3311,7 @@ fn validate_transition_audit(
         tcc_musl_prep_runtime,
         musl_runtime,
         tcc_musl_runtime,
+        musl_pass2_runtime,
     } = reports;
     let expected = transition_expected_audit_events(staged);
     if events.len() < EXPECTED_AUDIT_EVENT_COUNT {
@@ -3233,6 +3340,7 @@ fn validate_transition_audit(
             && tcc_musl_prep_runtime.is_none()
             && musl_runtime.is_none()
             && tcc_musl_runtime.is_none()
+            && musl_pass2_runtime.is_none()
             && events.len() == EXPECTED_AUDIT_EVENT_COUNT
         {
             return Ok(());
@@ -3257,7 +3365,8 @@ fn validate_transition_audit(
     }
     validate_stage0_audit(staged, &stage0.mini, &stage0_events[..mini_event_count])?;
     let after_mini = &stage0_events[mini_event_count..];
-    let (before_tcc_musl, tcc_musl_events) = split_tcc_musl_audit_suffix(tcc_musl_runtime, after_mini)?;
+    let (before_musl_pass2, musl_pass2_events) = split_musl_audit_suffix(musl_pass2_runtime, after_mini)?;
+    let (before_tcc_musl, tcc_musl_events) = split_tcc_musl_audit_suffix(tcc_musl_runtime, before_musl_pass2)?;
     let (before_musl, musl_events) = split_musl_audit_suffix(musl_runtime, before_tcc_musl)?;
     let (before_tcc_musl_prep, tcc_musl_prep_events) =
         split_tcc_musl_prep_audit_suffix(tcc_musl_prep_runtime, before_musl)?;
@@ -3420,10 +3529,19 @@ fn validate_transition_audit(
         }
     }
     match (tcc_musl_runtime, tcc_musl_prep_runtime, musl_runtime) {
-        (Some(tcc_musl), Some(prep), Some(_)) => validate_tcc_musl_audit(prep, tcc_musl, tcc_musl_events),
-        (None, _, _) if tcc_musl_events.is_empty() => Ok(()),
+        (Some(tcc_musl), Some(prep), Some(_)) => validate_tcc_musl_audit(prep, tcc_musl, tcc_musl_events)?,
+        (None, _, _) if tcc_musl_events.is_empty() => {}
+        _ => {
+            return Err(StagexTransitionError::Audit(
+                "musl-linked TinyCC report or events exist without musl-prep and musl authority".to_string(),
+            ));
+        }
+    }
+    match (musl_pass2_runtime, tcc_musl_runtime) {
+        (Some(musl_pass2), Some(tcc_musl)) => validate_musl_pass2_audit(tcc_musl, musl_pass2, musl_pass2_events),
+        (None, _) if musl_pass2_events.is_empty() => Ok(()),
         _ => Err(StagexTransitionError::Audit(
-            "musl-linked TinyCC report or events exist without musl-prep and musl authority".to_string(),
+            "second-musl report or events exist without musl-linked TinyCC authority".to_string(),
         )),
     }
 }
@@ -4210,6 +4328,32 @@ fn tinycc27_expected_event_count(
         .map_err(|_| StagexTransitionError::Audit("TinyCC 0.9.27 command count does not fit usize".to_string()))
 }
 
+fn validate_musl_pass2_audit(
+    tcc_musl: &crate::stagex_tcc_musl::TccMuslInventoryReport,
+    musl_pass2: &crate::stagex_musl::MuslInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    let expected_count = musl_expected_event_count(musl_pass2)?;
+    if events.len() != expected_count {
+        return Err(StagexTransitionError::Audit(format!(
+            "second-musl audit expected {expected_count} events, observed {}",
+            events.len()
+        )));
+    }
+    let compiler_path = tcc_musl_output_path(tcc_musl, "tcc-musl")?;
+    for event in events {
+        validate_coreutils_event(
+            event,
+            &compiler_path,
+            crate::stagex_tcc_musl::TCC_MUSL_FINAL_BLAKE3,
+            "planned:tcc-musl-materialization:exec:tcc-musl-smoke:tcc",
+        )?;
+    }
+    assert_eq!(events.len(), expected_count);
+    assert!(expected_count > 1);
+    Ok(())
+}
+
 fn validate_tcc_musl_audit(
     prep: &crate::stagex_tcc_musl_prep::TccMuslPrepInventoryReport,
     tcc_musl: &crate::stagex_tcc_musl::TccMuslInventoryReport,
@@ -4291,13 +4435,24 @@ fn validate_musl_audit(
 }
 
 fn musl_expected_event_count(report: &crate::stagex_musl::MuslInventoryReport) -> Result<usize, StagexTransitionError> {
-    const EXPECTED_HELPER_COUNT: u32 = 24;
-    const EXPECTED_SOURCE_COMPILE_COUNT: u32 = 215;
+    const FIRST_FORMAT: &str = "mantle-stagex-musl-1.1.24-inventory-v1";
+    const SECOND_FORMAT: &str = "mantle-stagex-musl-1.1.24-pass2-inventory-v1";
+    const FIRST_HELPER_COUNT: u32 = 24;
+    const FIRST_SOURCE_COMPILE_COUNT: u32 = 215;
+    const SECOND_HELPER_COUNT: u32 = 28;
+    const SECOND_SOURCE_COMPILE_COUNT: u32 = 219;
     const EXPECTED_CRT_COMPILE_COUNT: u32 = 3;
     const EXPECTED_ARCHIVE_COUNT: u32 = 1;
     const EXPECTED_SMOKE_COUNT: u32 = 3;
-    if report.helper_count != EXPECTED_HELPER_COUNT
-        || report.source_compile_count != EXPECTED_SOURCE_COMPILE_COUNT
+    let (expected_helper_count, expected_source_compile_count) = match report.format {
+        FIRST_FORMAT => (FIRST_HELPER_COUNT, FIRST_SOURCE_COMPILE_COUNT),
+        SECOND_FORMAT => (SECOND_HELPER_COUNT, SECOND_SOURCE_COMPILE_COUNT),
+        other => {
+            return Err(StagexTransitionError::Audit(format!("musl report has unsupported format {other}")));
+        }
+    };
+    if report.helper_count != expected_helper_count
+        || report.source_compile_count != expected_source_compile_count
         || report.crt_compile_count != EXPECTED_CRT_COMPILE_COUNT
         || report.archive_command_count != EXPECTED_ARCHIVE_COUNT
         || report.smoke_command_count != EXPECTED_SMOKE_COUNT
@@ -5536,7 +5691,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
-    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "8f8882b4469304f9b185a1001bbd68d4fef33ceddf680e9829bd32eb2a8fff37";
+    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "1d3427d724a1e6839862a98f4e45feff70cee602edbf13a80a6698c1138d0740";
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {
@@ -5660,6 +5815,28 @@ mod tests {
     }
 
     #[test]
+    fn musl_pass2_event_count_is_closed_and_rejects_substitution() {
+        const EXPECTED_EVENT_COUNT: usize = 226;
+        let report = crate::stagex_musl::MuslInventoryReport {
+            format: "mantle-stagex-musl-1.1.24-pass2-inventory-v1",
+            configured_source_digest_blake3: "a".repeat(blake3::OUT_LEN * 2),
+            helper_count: 28,
+            source_compile_count: 219,
+            crt_compile_count: 3,
+            archive_command_count: 1,
+            smoke_command_count: 3,
+            outputs: Vec::new(),
+            protected_exec_enforced: true,
+            fallback_events: Vec::new(),
+            non_claim: "test",
+        };
+        assert_eq!(musl_expected_event_count(&report).unwrap(), EXPECTED_EVENT_COUNT);
+        let mut substituted = report;
+        substituted.smoke_command_count = 2;
+        assert!(musl_expected_event_count(&substituted).unwrap_err().to_string().contains("substituted"));
+    }
+
+    #[test]
     fn tcc_musl_event_count_is_closed_and_rejects_substitution() {
         const EXPECTED_EVENT_COUNT: usize = 6;
         let report = crate::stagex_tcc_musl::TccMuslInventoryReport {
@@ -5682,7 +5859,7 @@ mod tests {
     fn musl_event_count_is_closed_and_rejects_substitution() {
         const EXPECTED_EVENT_COUNT: usize = 222;
         let report = crate::stagex_musl::MuslInventoryReport {
-            format: "test",
+            format: "mantle-stagex-musl-1.1.24-inventory-v1",
             configured_source_digest_blake3: "a".repeat(blake3::OUT_LEN * 2),
             helper_count: 24,
             source_compile_count: 215,
