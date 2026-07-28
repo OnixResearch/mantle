@@ -1208,6 +1208,60 @@
       "id": "musl-smoke-binary",
       "name": "reduced first-musl linked smoke binary",
       "producing_tool_id": "musl-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "679e40759989e2bf0886a430ac3cb00ef22b045dd18fa50fdeddba44230c7674"
+      },
+      "id": "tcc-musl-configured-source",
+      "name": "musl-linked TinyCC configured source identity",
+      "producing_tool_id": "tcc-musl-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "053f36a66503797b3aaee40d2b0962dc643554e4ecf35d00ee2b7f947601f2af"
+      },
+      "id": "tcc-musl",
+      "name": "first musl-linked TinyCC compiler",
+      "producing_tool_id": "tcc-musl-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "053f36a66503797b3aaee40d2b0962dc643554e4ecf35d00ee2b7f947601f2af"
+      },
+      "id": "tcc-musl-alias",
+      "name": "musl-linked TinyCC compiler alias",
+      "producing_tool_id": "tcc-musl-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "0e8b75458ad70ab03142b27a3014af68f57c03004f4d22a65702e60d531140e9"
+      },
+      "id": "tcc-musl-libtcc1",
+      "name": "musl-linked TinyCC runtime archive",
+      "producing_tool_id": "tcc-musl-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f7d6cd4379debd6239bbbcfffdd602d87ad9e8cfabe322902a85fa5ace902fc6"
+      },
+      "id": "tcc-musl-positive-object",
+      "name": "musl-linked TinyCC positive object",
+      "producing_tool_id": "tcc-musl-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "92ebe6be234ab289a07f5560ce0f25b1a696917d4515d2ec92c330fa0cd3a8a4"
+      },
+      "id": "tcc-musl-positive-binary",
+      "name": "musl-linked TinyCC positive binary",
+      "producing_tool_id": "tcc-musl-smoke-exec"
     }
   ],
   "patches": [
@@ -2001,6 +2055,15 @@
       "id": "musl-fenv-source",
       "name": "reduced musl fenv assembly source",
       "provenance": "musl recipe heredoc src/fenv/x86_64/fenv.s"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8692c674f19ec7dcf7643365a984dbac570418dbb81989874f078792dd2668c4"
+      },
+      "id": "tcc-musl-recipe-source",
+      "name": "checked musl-linked TinyCC recipe",
+      "provenance": "bootstrap/tcc-musl.ncl"
     }
   ],
   "stage_graph": [
@@ -2343,6 +2406,10 @@
     {
       "from_node_id": "seed",
       "to_node_id": "musl-fenv-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "tcc-musl-recipe-source"
     }
   ],
   "transition_tools": [
@@ -3261,6 +3328,53 @@
       "name": "TinyCC musl-prep compiling and linking against reduced musl",
       "output_artifact_ids": [
         "musl-smoke-binary"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "679e40759989e2bf0886a430ac3cb00ef22b045dd18fa50fdeddba44230c7674"
+      },
+      "id": "tcc-musl-build-exec",
+      "input_artifact_ids": [
+        "tcc-musl-prep",
+        "tcc-musl-prep-libc",
+        "tcc-musl-prep-crt1",
+        "tcc-musl-prep-libtcc1",
+        "musl-libc",
+        "musl-crt1",
+        "musl-headers"
+      ],
+      "name": "TinyCC musl-prep materializing the first musl-linked TinyCC",
+      "output_artifact_ids": [
+        "tcc-musl-configured-source",
+        "tcc-musl",
+        "tcc-musl-alias",
+        "tcc-musl-libtcc1"
+      ],
+      "source_artifact_ids": [
+        "tinycc-0.9.27-source",
+        "tinycc-0.9.27-patch-source",
+        "tcc-musl-recipe-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "053f36a66503797b3aaee40d2b0962dc643554e4ecf35d00ee2b7f947601f2af"
+      },
+      "id": "tcc-musl-smoke-exec",
+      "input_artifact_ids": [
+        "tcc-musl",
+        "tcc-musl-libtcc1",
+        "musl-libc",
+        "musl-crt1"
+      ],
+      "name": "musl-linked TinyCC compiling, linking, and rejecting malformed C",
+      "output_artifact_ids": [
+        "tcc-musl-positive-object",
+        "tcc-musl-positive-binary"
       ],
       "source_artifact_ids": []
     }

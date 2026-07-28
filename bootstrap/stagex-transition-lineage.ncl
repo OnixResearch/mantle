@@ -1,4 +1,4 @@
-# Typed source for the protected seed-to-musl-1.1.24 transition.
+# Typed source for the protected seed-to-musl-linked-TinyCC transition.
 # This file does not yet describe the later native toolchain or normalized StageX provider.
 
 let Digest = {
@@ -324,6 +324,9 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "musl-semctl-source" "reduced musl semctl source" "22289baa86062d7aa482f84bd3b3b1492519b225419e9df6ba46397e86d27e2d" "musl recipe heredoc src/ipc/semctl.c",
     source "musl-dlerror-source" "reduced musl dlerror source" "9e63330518eb48f3e5b3caf961cc7e05ffef11e3f13768c6e8b22d066d6804c7" "musl recipe heredoc src/ldso/dlerror.c",
     source "musl-fenv-source" "reduced musl fenv assembly source" "2e7056cbed4ae4e55a676ebfdad8ccfe39bbb06090e9ca86dd2a445fa3cfb33c" "musl recipe heredoc src/fenv/x86_64/fenv.s",
+    source "tcc-musl-recipe-source" "checked musl-linked TinyCC recipe"
+      "8692c674f19ec7dcf7643365a984dbac570418dbb81989874f078792dd2668c4"
+      "bootstrap/tcc-musl.ncl",
   ],
   generated_artifacts = [
     {
@@ -469,6 +472,12 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "musl-build-exec" "musl-libdl" "empty compatibility archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
     tinycc_generated "musl-build-exec" "musl-headers" "reduced first-musl installed headers" "4d5a63f48ef27c8377a5319d3d68cd1a2b724a974ee5d8281a67f8fb0b5dc1c7",
     tinycc_generated "musl-smoke-exec" "musl-smoke-binary" "reduced first-musl linked smoke binary" "92ebe6be234ab289a07f5560ce0f25b1a696917d4515d2ec92c330fa0cd3a8a4",
+    tinycc_generated "tcc-musl-build-exec" "tcc-musl-configured-source" "musl-linked TinyCC configured source identity" "679e40759989e2bf0886a430ac3cb00ef22b045dd18fa50fdeddba44230c7674",
+    tinycc_generated "tcc-musl-build-exec" "tcc-musl" "first musl-linked TinyCC compiler" "053f36a66503797b3aaee40d2b0962dc643554e4ecf35d00ee2b7f947601f2af",
+    tinycc_generated "tcc-musl-build-exec" "tcc-musl-alias" "musl-linked TinyCC compiler alias" "053f36a66503797b3aaee40d2b0962dc643554e4ecf35d00ee2b7f947601f2af",
+    tinycc_generated "tcc-musl-build-exec" "tcc-musl-libtcc1" "musl-linked TinyCC runtime archive" "0e8b75458ad70ab03142b27a3014af68f57c03004f4d22a65702e60d531140e9",
+    tinycc_generated "tcc-musl-smoke-exec" "tcc-musl-positive-object" "musl-linked TinyCC positive object" "f7d6cd4379debd6239bbbcfffdd602d87ad9e8cfabe322902a85fa5ace902fc6",
+    tinycc_generated "tcc-musl-smoke-exec" "tcc-musl-positive-binary" "musl-linked TinyCC positive binary" "92ebe6be234ab289a07f5560ce0f25b1a696917d4515d2ec92c330fa0cd3a8a4",
   ],
   transition_tools = [
     {
@@ -905,6 +914,22 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["musl-smoke-binary"],
       digest = blake3 "4add5639d2016d79b1ac258aa502098fc941354ded0acd91bf8cafea42240a77",
     },
+    {
+      id = "tcc-musl-build-exec",
+      name = "TinyCC musl-prep materializing the first musl-linked TinyCC",
+      source_artifact_ids = ["tinycc-0.9.27-source", "tinycc-0.9.27-patch-source", "tcc-musl-recipe-source"],
+      input_artifact_ids = ["tcc-musl-prep", "tcc-musl-prep-libc", "tcc-musl-prep-crt1", "tcc-musl-prep-libtcc1", "musl-libc", "musl-crt1", "musl-headers"],
+      output_artifact_ids = ["tcc-musl-configured-source", "tcc-musl", "tcc-musl-alias", "tcc-musl-libtcc1"],
+      digest = blake3 "679e40759989e2bf0886a430ac3cb00ef22b045dd18fa50fdeddba44230c7674",
+    },
+    {
+      id = "tcc-musl-smoke-exec",
+      name = "musl-linked TinyCC compiling, linking, and rejecting malformed C",
+      source_artifact_ids = [],
+      input_artifact_ids = ["tcc-musl", "tcc-musl-libtcc1", "musl-libc", "musl-crt1"],
+      output_artifact_ids = ["tcc-musl-positive-object", "tcc-musl-positive-binary"],
+      digest = blake3 "053f36a66503797b3aaee40d2b0962dc643554e4ecf35d00ee2b7f947601f2af",
+    },
   ],
   patches = [
     {
@@ -1026,5 +1051,6 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "musl-semctl-source" },
     { from_node_id = "seed", to_node_id = "musl-dlerror-source" },
     { from_node_id = "seed", to_node_id = "musl-fenv-source" },
+    { from_node_id = "seed", to_node_id = "tcc-musl-recipe-source" },
   ],
 } | Manifest

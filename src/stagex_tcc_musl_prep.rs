@@ -177,7 +177,7 @@ pub(crate) fn derive_tcc_musl_prep_inventory(
     Ok(report)
 }
 
-fn apply_musl_prep_adjustments(source_root: &Path) -> Result<(), TccMuslPrepError> {
+pub(crate) fn apply_musl_prep_adjustments(source_root: &Path) -> Result<(), TccMuslPrepError> {
     crate::stagex_tinycc::replace_required_text(
         &source_root.join("elf.h"),
         "#include <inttypes.h>\n",
