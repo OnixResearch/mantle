@@ -1,4 +1,4 @@
-# Typed source for the protected seed-to-GNU-Make-3.82 transition.
+# Typed source for the protected seed-to-GNU-patch-2.5.9 transition.
 # This file does not yet describe the later native toolchain or normalized StageX provider.
 
 let Digest = {
@@ -133,7 +133,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
       "generated as zero bytes by the bounded transition plan",
     source "stage0-source-bundle" "authenticated offline full-source closure"
-      "7e93ccc7a29bacc1da6f75c10ae90655ee83afd0d95ca282c8d270c225372f45"
+      "7ec4786f81326dc6633479ff78ed53cfd18eb5086ae7374113fdef4921f78751"
       "mantle-source-bundle-v1 manifest identity loaded and validated before Stage0 execution",
     source "stage0-posix-amd64-source" "stage0-posix AMD64 snapshot"
       "f983a7b79acdd53fd4d31c8959c62ca24eabbea491327aaa113c4bc11549e5f9"
@@ -183,6 +183,9 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "make-recipe-runner-source" "bounded GNU Make recipe runner source"
       "2d6a9757ecb8ba18de695edadd2473f14cc8c51427c8a922310c13f97221f6e8"
       "bootstrap/seeds/make-recipe-runner.c",
+    source "gnu-patch-2.5.9-source" "GNU patch 2.5.9 fixed-output source"
+      "d7dd692b74dea83bc6b6aed6efbd9f874aa991a1ba5722e8f4b06bf0c20a21e0"
+      "source bundle record fixed-url-08fc9bbfa8cbf77e5bbfca6cffcfe7116d4927854bfc2b9352b912a00e017545",
   ],
   generated_artifacts = [
     {
@@ -255,6 +258,8 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "make-build-exec" "make-3.82" "source-built GNU Make 3.82" "8a5aa115eab6069a8f69cf1b2c63c69c478d64b271bc13fda7ea4e3531b841d1",
     tinycc_generated "make-recipe-runner-build-exec" "make-recipe-runner" "source-built bounded Make recipe runner" "028ececbb67a3394595027c9273a44ed2ba5b465c209767589b5a989032b93d1",
     tinycc_generated "make-smoke-exec" "make-recipe-smoke" "GNU Make protected recipe smoke output" "8dd632d8df367d6751cc2e2497e8d9c38e0c5a1e58b100d59e1c0fdac235e3a2",
+    tinycc_generated "gnu-patch-build-exec" "gnu-patch-2.5.9" "source-built GNU patch 2.5.9" "2193ea653bfbc16acc2609a5c7ef6c0b03a7a65dc50e6525d23868598e25fbcb",
+    tinycc_generated "gnu-patch-smoke-exec" "gnu-patch-smoke" "GNU patch protected positive smoke output" "79d1d8da0b625035cdbfc9d51841030861b9f4cf7c5abbe442a8d13efc352170",
   ],
   transition_tools = [
     {
@@ -456,6 +461,22 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["make-recipe-smoke"],
       digest = blake3 "8a5aa115eab6069a8f69cf1b2c63c69c478d64b271bc13fda7ea4e3531b841d1",
     },
+    {
+      id = "gnu-patch-build-exec",
+      name = "TinyCC 0.9.27 materializing GNU patch 2.5.9 after the Make handoff",
+      source_artifact_ids = ["gnu-patch-2.5.9-source"],
+      input_artifact_ids = ["tinycc-0.9.27", "tinycc27-libc", "tinycc-crt1", "tinycc-libtcc1", "make-recipe-smoke"],
+      output_artifact_ids = ["gnu-patch-2.5.9"],
+      digest = blake3 "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39",
+    },
+    {
+      id = "gnu-patch-smoke-exec",
+      name = "GNU patch 2.5.9 applying a positive patch and rejecting malformed input",
+      source_artifact_ids = [],
+      input_artifact_ids = ["gnu-patch-2.5.9"],
+      output_artifact_ids = ["gnu-patch-smoke"],
+      digest = blake3 "2193ea653bfbc16acc2609a5c7ef6c0b03a7a65dc50e6525d23868598e25fbcb",
+    },
   ],
   patches = [
     {
@@ -514,5 +535,6 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "make-3.82-source" },
     { from_node_id = "seed", to_node_id = "make-recipe-runner-source" },
     { from_node_id = "make-3.82-source", to_node_id = "make-3.82-stagex-patch" },
+    { from_node_id = "seed", to_node_id = "gnu-patch-2.5.9-source" },
   ],
 } | Manifest

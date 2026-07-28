@@ -1,0 +1,24 @@
+{
+  "format": "mantle-stagex-gnu-patch-2.5.9-inventory-v1",
+  "configured_source_digest_blake3": "ae44c6060b51d532b264a5fb2bcf0fa6541493482cbf1a5b402f1605ea1596f3",
+  "source_compile_count": 19,
+  "build_command_count": 20,
+  "smoke_command_count": 3,
+  "outputs": [
+    {
+      "artifact_id": "gnu-patch-2.5.9",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v25-gnu-patch-20260728/gnu-patch-stage/runtime/output/bin/patch",
+      "bytes_len": 173520,
+      "digest_blake3": "2193ea653bfbc16acc2609a5c7ef6c0b03a7a65dc50e6525d23868598e25fbcb"
+    },
+    {
+      "artifact_id": "gnu-patch-smoke",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v25-gnu-patch-20260728/gnu-patch-stage/runtime/patch-2.5.9/smoke/smoke.txt",
+      "bytes_len": 4,
+      "digest_blake3": "79d1d8da0b625035cdbfc9d51841030861b9f4cf7c5abbe442a8d13efc352170"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds GNU patch 2.5.9 and positive and negative smoke observations only; it does not prove a general shell, later toolchain stages, or provider admission"
+}

@@ -551,6 +551,24 @@
       "id": "make-recipe-smoke",
       "name": "GNU Make protected recipe smoke output",
       "producing_tool_id": "make-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "2193ea653bfbc16acc2609a5c7ef6c0b03a7a65dc50e6525d23868598e25fbcb"
+      },
+      "id": "gnu-patch-2.5.9",
+      "name": "source-built GNU patch 2.5.9",
+      "producing_tool_id": "gnu-patch-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "79d1d8da0b625035cdbfc9d51841030861b9f4cf7c5abbe442a8d13efc352170"
+      },
+      "id": "gnu-patch-smoke",
+      "name": "GNU patch protected positive smoke output",
+      "producing_tool_id": "gnu-patch-smoke-exec"
     }
   ],
   "patches": [
@@ -628,7 +646,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "7e93ccc7a29bacc1da6f75c10ae90655ee83afd0d95ca282c8d270c225372f45"
+        "hex_value": "7ec4786f81326dc6633479ff78ed53cfd18eb5086ae7374113fdef4921f78751"
       },
       "id": "stage0-source-bundle",
       "name": "authenticated offline full-source closure",
@@ -777,6 +795,15 @@
       "id": "make-recipe-runner-source",
       "name": "bounded GNU Make recipe runner source",
       "provenance": "bootstrap/seeds/make-recipe-runner.c"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d7dd692b74dea83bc6b6aed6efbd9f874aa991a1ba5722e8f4b06bf0c20a21e0"
+      },
+      "id": "gnu-patch-2.5.9-source",
+      "name": "GNU patch 2.5.9 fixed-output source",
+      "provenance": "source bundle record fixed-url-08fc9bbfa8cbf77e5bbfca6cffcfe7116d4927854bfc2b9352b912a00e017545"
     }
   ],
   "stage_graph": [
@@ -867,6 +894,10 @@
     {
       "from_node_id": "make-3.82-source",
       "to_node_id": "make-3.82-stagex-patch"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "gnu-patch-2.5.9-source"
     }
   ],
   "transition_tools": [
@@ -1230,6 +1261,42 @@
       "name": "GNU Make 3.82 dispatching a protected bounded recipe and rejecting malformed input",
       "output_artifact_ids": [
         "make-recipe-smoke"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39"
+      },
+      "id": "gnu-patch-build-exec",
+      "input_artifact_ids": [
+        "tinycc-0.9.27",
+        "tinycc27-libc",
+        "tinycc-crt1",
+        "tinycc-libtcc1",
+        "make-recipe-smoke"
+      ],
+      "name": "TinyCC 0.9.27 materializing GNU patch 2.5.9 after the Make handoff",
+      "output_artifact_ids": [
+        "gnu-patch-2.5.9"
+      ],
+      "source_artifact_ids": [
+        "gnu-patch-2.5.9-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "2193ea653bfbc16acc2609a5c7ef6c0b03a7a65dc50e6525d23868598e25fbcb"
+      },
+      "id": "gnu-patch-smoke-exec",
+      "input_artifact_ids": [
+        "gnu-patch-2.5.9"
+      ],
+      "name": "GNU patch 2.5.9 applying a positive patch and rejecting malformed input",
+      "output_artifact_ids": [
+        "gnu-patch-smoke"
       ],
       "source_artifact_ids": []
     }
