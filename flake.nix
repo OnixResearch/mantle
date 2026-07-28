@@ -29,6 +29,10 @@
       url = "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa";
       flake = false;
     };
+    durablePublicationSource = {
+      url = "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f";
+      flake = false;
+    };
     octet.url = "github:OnixResearch/octet/86ee46b3b9257b145d2dbeb6ce9d9897607db99c";
   };
 
@@ -44,6 +48,7 @@
       wasi-virt,
       nickelExportCore,
       artifactAuthSource,
+      durablePublicationSource,
       octet,
       ...
     }:
@@ -116,6 +121,33 @@
             && artifactAuthWorkspace.workspace.package.license == "MIT OR Apache-2.0"
           ) "Mantle artifact-auth Cargo/Nix source identity, package set, or license drifted";
           true;
+        durablePublicationRevision = "951c27f59003cea9bfdb40ed4d89653d50fada1f";
+        durablePublicationRid = "rad:z3tAR4For7qw8ZirkJzoDw1VNDDLM";
+        durablePublicationRepositoryIdentity = "rad://z3tAR4For7qw8ZirkJzoDw1VNDDLM";
+        durablePublicationRepository = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git";
+        durablePublicationDependency = cargoManifest.dependencies.durable-file-publication;
+        durablePublicationLockPackages = builtins.filter (
+          package: package.name == "durable-file-publication"
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        durablePublicationExpectedLockSource = "git+${durablePublicationRepository}?rev=${durablePublicationRevision}#${durablePublicationRevision}";
+        durablePublicationManifest = builtins.fromTOML (
+          builtins.readFile (durablePublicationSource + "/Cargo.toml")
+        );
+        durablePublicationSourceAdmitted =
+          assert pkgs.lib.assertMsg (
+            durablePublicationDependency.git == durablePublicationRepository
+            && durablePublicationDependency.rev == durablePublicationRevision
+            && durablePublicationSource.rev == durablePublicationRevision
+            && map (package: package.name) durablePublicationLockPackages == [ "durable-file-publication" ]
+            && builtins.all (
+              package: package.source == durablePublicationExpectedLockSource
+            ) durablePublicationLockPackages
+            && durablePublicationManifest.package.name == "durable-file-publication"
+            && durablePublicationManifest.package.repository == durablePublicationRepositoryIdentity
+            && durablePublicationManifest.package.license == "MIT OR Apache-2.0"
+            && durablePublicationManifest.package.publish == false
+          ) "Mantle durable-file-publication Cargo/Nix source identity, package, RID, or license drifted";
+          true;
         nickelExportCoreRevision = "257fafc1c746f1faf156207043a4c826bfb16d49";
         nickelExportCoreSource =
           assert pkgs.lib.assertMsg (
@@ -186,7 +218,7 @@
             );
         };
 
-        artifactAuthCargoVendorDir = craneLib.vendorCargoDeps {
+        cargoVendorDir = craneLib.vendorCargoDeps {
           inherit src;
           cargoLock = ./Cargo.lock;
           overrideVendorGitCheckout =
@@ -197,6 +229,13 @@
             then
               checkout.overrideAttrs (_old: {
                 src = artifactAuthSource;
+              })
+            else if
+              durablePublicationSourceAdmitted
+              && builtins.any (package: package.name == "durable-file-publication") packages
+            then
+              checkout.overrideAttrs (_old: {
+                src = durablePublicationSource;
               })
             else
               checkout;
@@ -629,7 +668,7 @@
         # Build just the cargo dependencies for caching
         cargoArtifacts = craneLib.buildDepsOnly {
           inherit src nativeBuildInputs buildInputs;
-          cargoVendorDir = artifactAuthCargoVendorDir;
+          inherit cargoVendorDir;
         };
 
         # Build the actual package
@@ -637,10 +676,10 @@
           inherit
             src
             cargoArtifacts
+            cargoVendorDir
             nativeBuildInputs
             buildInputs
             ;
-          cargoVendorDir = artifactAuthCargoVendorDir;
           SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
           GIT = "${pkgs.git}/bin/git";
           SSL_CERT_FILE = caCertificateBundlePath;
@@ -935,6 +974,91 @@
                   echo 'executable artifact-auth GitHub fallback remains' >&2
                   exit 1
                 fi
+
+                touch "$out"
+              '';
+
+          # r[verify mantle.durable_file_publication.source]
+          # r[verify mantle.durable_file_publication.mapping]
+          # r[verify mantle.durable_file_publication.authority]
+          # r[verify mantle.durable_file_publication.evidence]
+          durable-file-publication-adoption =
+            assert durablePublicationSourceAdmitted;
+            pkgs.runCommand "mantle-durable-file-publication-adoption"
+              {
+                nativeBuildInputs = [
+                  pkgs.b3sum
+                  pkgs.jq
+                  pkgs.nickel
+                  pkgs.ripgrep
+                ];
+                src = self;
+              }
+              ''
+                set -eu
+                cd "$src"
+
+                nickel typecheck evidence/radicle/durable-file-publication-adoption-v1.ncl
+                nickel typecheck lib/durable-file-publication-adoption-receipt.ncl
+                nickel export --format json tests/durable-file-publication-adoption.ncl > "$TMPDIR/tests.json"
+                grep -Fq '"tests": true' "$TMPDIR/tests.json"
+
+                nickel export --format json evidence/radicle/durable-file-publication-adoption-v1.ncl > "$TMPDIR/adoption.json"
+                jq -S . "$TMPDIR/adoption.json" > "$TMPDIR/adoption.normalized.json"
+                jq -S . evidence/radicle/durable-file-publication-adoption-v1.json > "$TMPDIR/evidence.normalized.json"
+                cmp "$TMPDIR/adoption.normalized.json" "$TMPDIR/evidence.normalized.json"
+
+                receipt_hash="$(b3sum evidence/radicle/durable-file-publication-adoption-v1.json | cut -d ' ' -f 1)"
+                expected_receipt_hash="$(tr -d '\n' < evidence/radicle/durable-file-publication-adoption-v1.blake3)"
+                test "$receipt_hash" = "$expected_receipt_hash"
+
+                for binding in \
+                  'cargo.manifest_blake3:Cargo.toml' \
+                  'cargo.lock_blake3:Cargo.lock' \
+                  'nix.flake_blake3:flake.nix' \
+                  'nix.lock_blake3:flake.lock'; do
+                  field="''${binding%%:*}"
+                  path="''${binding#*:}"
+                  expected="$(jq -r ".$field" evidence/radicle/durable-file-publication-adoption-v1.json)"
+                  actual="$(b3sum "$path" | cut -d ' ' -f 1)"
+                  test "$actual" = "$expected"
+                done
+
+                source_url='${durablePublicationRepository}'
+                source_rid='${durablePublicationRid}'
+                source_rev='${durablePublicationRevision}'
+                source_nar_hash='sha256-fKxZ+3rzWzVuawILnmpiYCCe8PT/z6usopFMbr2KFbI='
+                jq -e \
+                  --arg url "$source_url" \
+                  --arg rid "$source_rid" \
+                  --arg rev "$source_rev" \
+                  --arg nar_hash "$source_nar_hash" \
+                  '.nodes.durablePublicationSource as $source
+                   | $source.locked.url == $url
+                   and $source.original.url == $url
+                   and $source.locked.rev == $rev
+                   and $source.original.rev == $rev
+                   and $source.locked.narHash == $nar_hash' \
+                  flake.lock >/dev/null
+                test "$(jq -r '.source.rid' evidence/radicle/durable-file-publication-adoption-v1.json)" = "$source_rid"
+
+                github_host='github.com'
+                forbidden_source="$github_host/OnixResearch/durable-file-publication"
+                if rg -F "$forbidden_source" Cargo.toml Cargo.lock flake.nix flake.lock; then
+                  echo 'executable durable-file-publication GitHub fallback remains' >&2
+                  exit 1
+                fi
+                dependency_name='durable-file-publication'
+                sibling_path_pattern="$dependency_name = { path ="
+                if rg -F "$sibling_path_pattern" Cargo.toml Cargo.lock flake.nix; then
+                  echo 'executable durable-file-publication sibling path remains' >&2
+                  exit 1
+                fi
+
+                rg -Fq 'ImmutablePublicationBackend::Shared' src/remote_attempt_log_store.rs
+                rg -Fq 'ImmutablePublicationBackend::Legacy' src/remote_attempt_log_store.rs
+                rg -Fq 'CommittedDurabilityUnknown' src/remote_attempt_log_store.rs
+                rg -Fq 'commit_manifest_with_hook' src/remote_attempt_log_store.rs
 
                 touch "$out"
               '';

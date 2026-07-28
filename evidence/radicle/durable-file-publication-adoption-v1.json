@@ -1,0 +1,117 @@
+{
+  "authority_boundary": {
+    "deletion_retained": true,
+    "manifest_retained": true,
+    "product_policy_retained": true,
+    "retention_retained": true,
+    "shared_deletion_authority": false,
+    "shared_release_authority": false
+  },
+  "cargo": {
+    "lock_blake3": "d2ad3e9488064274e8c12fb1992309055aeed844e3f2f3970320fa020431d078",
+    "lock_source": "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f59003cea9bfdb40ed4d89653d50fada1f",
+    "manifest_blake3": "314ee9fcb8a96686f2754b92fe3eed109cb86d570769fb88c2f4b2ba0a6767e2",
+    "package": "durable-file-publication"
+  },
+  "evidence": [
+    "cairn/archive/1970-01-01-adopt-durable-file-publication/evidence/validation.md",
+    "evidence/radicle/durable-file-publication-adoption-v1.json",
+    "durable-file-publication:cairn/archive/2026-07-27-establish-durable-file-publication/evidence/validation.md",
+    "onix-core:cairn/archive/1970-01-01-admit-durable-file-publication-radicle-source/evidence/declarative-deployment-2026-07-27.md"
+  ],
+  "mapping": {
+    "cleanup": [
+      "not-needed",
+      "removed",
+      "failed"
+    ],
+    "collision_attempt_limit": 8,
+    "consumer_surfaces": [
+      "manifest",
+      "content-equivalence",
+      "retention",
+      "deletion",
+      "receipts",
+      "diagnostics"
+    ],
+    "durability": "required",
+    "existing_content": "bounded-no-follow-exact-comparison",
+    "final_mode": 384,
+    "outcomes": [
+      "not-committed",
+      "destination-exists",
+      "committed-visibility-only-rejected",
+      "committed-and-parent-synchronized",
+      "committed-durability-unknown"
+    ],
+    "production_backend": "shared",
+    "replacement": "no-replace",
+    "shared_surfaces": [
+      "remote-attempt-segment",
+      "remote-attempt-anchor"
+    ]
+  },
+  "nix": {
+    "flake_blake3": "a8bcb5df03cfdfbfdd2343cf82fdbdf22b31d1c0f1777627646ac1bec4d78691",
+    "lock_blake3": "7e2664d81c9366f2dc1ba4e02bbe54a0545e86b5d5c31f297d52173f31cc897c",
+    "locked_rev": "951c27f59003cea9bfdb40ed4d89653d50fada1f",
+    "locked_url": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git",
+    "nar_hash": "sha256-fKxZ+3rzWzVuawILnmpiYCCe8PT/z6usopFMbr2KFbI=",
+    "original_rev": "951c27f59003cea9bfdb40ed4d89653d50fada1f",
+    "original_url": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git"
+  },
+  "non_claims": [
+    "durable-file-publication-source-correctness",
+    "whole-mantle-behavior-correctness",
+    "remote-attempt-log-semantic-correctness",
+    "manifest-publication-adoption",
+    "release-bundle-publication-adoption",
+    "android-execution",
+    "automatic-fallback",
+    "release-readiness",
+    "retention-or-deletion-authority"
+  ],
+  "observed_date": "2026-07-27",
+  "platforms": {
+    "executed": [
+      "x86_64-linux"
+    ],
+    "not_executed": [
+      "android",
+      "other-operating-systems"
+    ]
+  },
+  "receipt_type": "mantle.durable-file-publication-adoption.v1",
+  "rollback": {
+    "automatic_fallback": false,
+    "explicit_code_change_required": true,
+    "legacy_backend_available": true,
+    "production_backend": "shared"
+  },
+  "schema_version": 1,
+  "source": {
+    "https_git": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git",
+    "license": "MIT OR Apache-2.0",
+    "package": "durable-file-publication",
+    "package_version": "0.1.0",
+    "producer_archive_receipt": "3a11ed34c922a32678f4e5e72bd9ea48b3e3d0eba35edf0c821c27f5a7920fe4",
+    "publishable": false,
+    "repository_identity": "rad://z3tAR4For7qw8ZirkJzoDw1VNDDLM",
+    "reviewed_revision": "951c27f59003cea9bfdb40ed4d89653d50fada1f",
+    "rid": "rad:z3tAR4For7qw8ZirkJzoDw1VNDDLM",
+    "source_archive_blake3": "2c1d8b5adc8d7384f48a6f8336165e38c3eb196337ebbd66707e157a64b63210"
+  },
+  "status": "accepted",
+  "validation": {
+    "baseline_remote_attempt_tests": "passed",
+    "baseline_revision": "7875ec1c8b80662f183b76194ae4ef8e3cd52a28",
+    "focused_clippy": "passed",
+    "formatting": "passed",
+    "linux_integration": "passed",
+    "shared_corpus": "passed",
+    "shared_corpus_cases": 17,
+    "source_agreement_negative": "passed",
+    "source_agreement_positive": "passed",
+    "tigerstyle": "passed"
+  }
+}

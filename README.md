@@ -327,6 +327,7 @@ Useful documentation:
 - [Machine artifact contracts](docs/machine-artifact-contracts.md)
 - [Build correctness primitives](docs/build-correctness-primitives.md)
 - [Mantle naming rules](docs/mantle-naming.md)
+- [Durable file publication adoption](docs/durable-file-publication-adoption.md)
 
 ## Requirements
 
@@ -348,3 +349,4 @@ notices.
 - [OnixResearch/valence](https://github.com/OnixResearch/valence) owns canonical evidence identities, links, roles, and non-claims.
 - [AeneasVerif/aeneas](https://github.com/AeneasVerif/aeneas) and [AeneasVerif/charon](https://github.com/AeneasVerif/charon) provide the current Rust-to-proof-model toolchain reference.
 - [AeneasVerif/eurydice](https://github.com/AeneasVerif/eurydice) and [AeneasVerif/scylla](https://github.com/AeneasVerif/scylla) provide deferred code-generation and migration references.
+- `durable-file-publication` at `rad:z3tAR4For7qw8ZirkJzoDw1VNDDLM` provides the reviewed capability-relative one-file publication mechanism.
