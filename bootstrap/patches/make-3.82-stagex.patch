@@ -1,0 +1,36 @@
+diff --git a/raw/main.c b/patched/main.c
+index c6989e3..e54e613 100644
+--- a/raw/main.c
++++ b/patched/main.c
+@@ -379,7 +379,7 @@ static const struct command_switch switches[] =
+     { 'B', flag, &always_make_set, 1, 1, 0, 0, 0, "always-make" },
+     { 'C', filename, &directories, 0, 0, 0, 0, 0, "directory" },
+     { 'd', flag, &debug_flag, 1, 1, 0, 0, 0, 0 },
+-    { CHAR_MAX+1, string, &db_flags, 1, 1, 0, "basic", 0, "debug" },
++    { CHAR_MAX+1, string, &db_flags, 1, 1, 0, 0, 0, "debug" },
+ #ifdef WINDOWS32
+     { 'D', flag, &suspend_flag, 1, 1, 0, 0, 0, "suspend-for-debug" },
+ #endif
+@@ -389,17 +389,17 @@ static const struct command_switch switches[] =
+     { 'i', flag, &ignore_errors_flag, 1, 1, 0, 0, 0, "ignore-errors" },
+     { 'I', filename, &include_directories, 1, 1, 0, 0, 0,
+       "include-dir" },
+-    { 'j', positive_int, &job_slots, 1, 1, 0, &inf_jobs, &default_job_slots,
++    { 'j', positive_int, &job_slots, 1, 1, 0, 0, 0,
+       "jobs" },
+     { CHAR_MAX+2, string, &jobserver_fds, 1, 1, 0, 0, 0, "jobserver-fds" },
+     { 'k', flag, &keep_going_flag, 1, 1, 0, 0, &default_keep_going_flag,
+       "keep-going" },
+ #ifndef NO_FLOAT
+-    { 'l', floating, &max_load_average, 1, 1, 0, &default_load_average,
+-      &default_load_average, "load-average" },
++    { 'l', floating, &max_load_average, 1, 1, 0, 0,
++      0, "load-average" },
+ #else
+-    { 'l', positive_int, &max_load_average, 1, 1, 0, &default_load_average,
+-      &default_load_average, "load-average" },
++    { 'l', positive_int, &max_load_average, 1, 1, 0, 0,
++      0, "load-average" },
+ #endif
+     { 'L', flag, &check_symlink_flag, 1, 1, 0, 0, 0, "check-symlink-times" },
+     { 'm', ignore, 0, 0, 0, 0, 0, 0, 0 },

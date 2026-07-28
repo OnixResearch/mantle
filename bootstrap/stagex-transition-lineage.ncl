@@ -1,4 +1,4 @@
-# Typed source for the protected seed-to-TinyCC-0.9.27 transition.
+# Typed source for the protected seed-to-GNU-Make-3.82 transition.
 # This file does not yet describe the later native toolchain or normalized StageX provider.
 
 let Digest = {
@@ -177,6 +177,12 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "tinycc-0.9.27-source" "TinyCC 0.9.27 fixed-output source"
       "a3417d7e6218de60bfb3b30cab2db9fbe3e65891d9b3e765f09a4ac87539d03d"
       "source bundle record fixed-url-767003cf551d3f2e8409b6666cc3e000e1377f298a55fbf20daea3867bd3aed4",
+    source "make-3.82-source" "GNU Make 3.82 fixed-output source"
+      "b768ff74b8f16f6c41fb869833582c7cf614e98a8728a1c74616a6b6157ece77"
+      "source bundle record fixed-url-ae11d5ec6f5d6b01fdeeb081181a8a51ad8208ab2d8b651cd2d8383f8fcda3f0",
+    source "make-recipe-runner-source" "bounded GNU Make recipe runner source"
+      "2d6a9757ecb8ba18de695edadd2473f14cc8c51427c8a922310c13f97221f6e8"
+      "bootstrap/seeds/make-recipe-runner.c",
   ],
   generated_artifacts = [
     {
@@ -246,6 +252,9 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "tinycc27-build-exec" "tinycc-0.9.27" "source-built TinyCC 0.9.27 compiler" "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39",
     tinycc_generated "tinycc27-build-exec" "tinycc27-alias" "TinyCC 0.9.27 compiler alias" "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39",
     tinycc_generated "tinycc27-smoke-exec" "tinycc27-positive-object" "TinyCC 0.9.27 positive smoke object" "19efdabfedafc9bf94f3ddc49967773a2a5e5b5f28128c6f95ac4f36184fdb92",
+    tinycc_generated "make-build-exec" "make-3.82" "source-built GNU Make 3.82" "8a5aa115eab6069a8f69cf1b2c63c69c478d64b271bc13fda7ea4e3531b841d1",
+    tinycc_generated "make-recipe-runner-build-exec" "make-recipe-runner" "source-built bounded Make recipe runner" "028ececbb67a3394595027c9273a44ed2ba5b465c209767589b5a989032b93d1",
+    tinycc_generated "make-smoke-exec" "make-recipe-smoke" "GNU Make protected recipe smoke output" "8dd632d8df367d6751cc2e2497e8d9c38e0c5a1e58b100d59e1c0fdac235e3a2",
   ],
   transition_tools = [
     {
@@ -423,6 +432,30 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["tinycc27-positive-object"],
       digest = blake3 "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39",
     },
+    {
+      id = "make-recipe-runner-build-exec",
+      name = "TinyCC 0.9.27 materializing the bounded Make recipe runner",
+      source_artifact_ids = ["make-recipe-runner-source"],
+      input_artifact_ids = ["tinycc-0.9.27", "tinycc27-libc", "tinycc-crt1", "tinycc-libtcc1"],
+      output_artifact_ids = ["make-recipe-runner"],
+      digest = blake3 "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39",
+    },
+    {
+      id = "make-build-exec",
+      name = "TinyCC 0.9.27 materializing GNU Make 3.82",
+      source_artifact_ids = ["make-3.82-source"],
+      input_artifact_ids = ["tinycc-0.9.27", "tinycc27-libc", "tinycc-crt1", "tinycc-libtcc1"],
+      output_artifact_ids = ["make-3.82"],
+      digest = blake3 "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39",
+    },
+    {
+      id = "make-smoke-exec",
+      name = "GNU Make 3.82 dispatching a protected bounded recipe and rejecting malformed input",
+      source_artifact_ids = [],
+      input_artifact_ids = ["make-3.82", "make-recipe-runner"],
+      output_artifact_ids = ["make-recipe-smoke"],
+      digest = blake3 "8a5aa115eab6069a8f69cf1b2c63c69c478d64b271bc13fda7ea4e3531b841d1",
+    },
   ],
   patches = [
     {
@@ -431,6 +464,13 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       target_artifact_id = "tinycc-0.9.27-source",
       digest = blake3 "b05705f548352080041ae56e2cacdf2e0898aa7dd5c857888004cf808884fc7f",
       provenance = "bootstrap/patches/tcc-0.9.27-stagex.patch derived from the checked TinyCC 0.9.27 recipe",
+    },
+    {
+      id = "make-3.82-stagex-patch",
+      name = "bounded GNU Make 3.82 TinyCC compatibility patch",
+      target_artifact_id = "make-3.82-source",
+      digest = blake3 "51c890dd1f9a2ddf816c68ebfbd4506241e45e3993ca4f14151c0d8665f87e59",
+      provenance = "bootstrap/patches/make-3.82-stagex.patch derived from the checked Make 3.82 recipe",
     },
   ],
   provider_outputs = [
@@ -471,5 +511,8 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "tinycc-mes-0.27.1-source" },
     { from_node_id = "seed", to_node_id = "tinycc-0.9.27-source" },
     { from_node_id = "tinycc-0.9.27-source", to_node_id = "tinycc-0.9.27-stagex-patch" },
+    { from_node_id = "seed", to_node_id = "make-3.82-source" },
+    { from_node_id = "seed", to_node_id = "make-recipe-runner-source" },
+    { from_node_id = "make-3.82-source", to_node_id = "make-3.82-stagex-patch" },
   ],
 } | Manifest

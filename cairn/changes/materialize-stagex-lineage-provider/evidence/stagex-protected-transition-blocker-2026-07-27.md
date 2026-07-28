@@ -1,12 +1,12 @@
 # StageX protected-transition blocker — 2026-07-27
 
-> Status update: superseded through TinyCC 0.9.27 by
-> `protected-transition-v22-tinycc27-2026-07-28/`. Mantle now completes protected
+> Status update: superseded through GNU Make 3.82 by
+> `protected-transition-v24-make-2026-07-28/`. Mantle now completes protected
 > full Stage0, source-built `mes-m2`, NYACC regeneration, Mes runtime archives,
-> TinyCC 0.9.26, the TinyCC 0.9.27 Mes ABI refresh, compiler build, and bounded
-> positive and negative smokes. The current run recorded 498 allowed events,
-> zero denied events, and zero fallback. The remaining blocker starts at
-> authenticated GNU Make 3.82 and covers the later native toolchain plus
+> TinyCC 0.9.26, TinyCC 0.9.27, and GNU Make 3.82 with a bounded source-built
+> recipe runner. The current run recorded 531 allowed events, zero denied
+> events, and zero fallback. The remaining blocker starts at an authenticated
+> GNU patch 2.5.9 source record and covers the later native toolchain plus
 > normalized-provider construction and admission.
 
 ## Question
@@ -18,7 +18,7 @@ Can the current source-built native artifacts become a complete StageX lineage p
 ### Current receipt and manifest state
 
 - `bootstrap/evidence/stagex-lineage-provider-receipt.json` has `lineage_receipt_status = scaffold-only` and placeholder digests.
-- `bootstrap/stagex-transition-lineage.{ncl,json}` now binds the protected seed-to-TinyCC-0.9.27 manifest and exact compatibility patch.
+- `bootstrap/stagex-transition-lineage.{ncl,json}` now binds the protected seed-to-GNU-Make-3.82 manifest and exact compatibility patches.
 - `src/main.rs::cmd_bootstrap_stagex_lineage` validates a manifest, then returns `STAGEX_LINEAGE_PROVIDER_NOT_MATERIALIZED`.
 - The retained v6 evidence has a complete 132-event seed-to-full-Stage0 protected-exec audit.
 - No exported `hex0-seed` binary exists under `/home/brittonr/.cache/mantle-full-source-20260718`.
@@ -67,19 +67,19 @@ The current artifacts cannot meet the accepted requirement. Their construction s
 
 ## Exact completion blocker
 
-The protected transition now has checked seed bytes, authenticated direct source records, a typed 35-stage plan, exact executable identities, full Stage0 SHA-256 interoperability checks, and a 498-event observed audit through TinyCC 0.9.27.
+The protected transition now has checked seed bytes, authenticated direct source records, a typed 38-stage plan, exact executable identities, full Stage0 SHA-256 interoperability checks, and a 531-event observed audit through GNU Make 3.82.
 
-The next authenticated source record is GNU Make 3.82, identity `fixed-url-ae11d5ec6f5d6b01fdeeb081181a8a51ad8208ab2d8b651cd2d8383f8fcda3f0`, content BLAKE3 `b768ff74b8f16f6c41fb869833582c7cf614e98a8728a1c74616a6b6157ece77`.
+The current source bundle has no GNU patch 2.5.9 source record. Therefore, no authenticated identity or content BLAKE3 is available to the protected transition for the next canonical tool stage.
 
 A complete provider run still needs all of these mechanisms and artifacts:
 
-1. Materialize GNU Make 3.82 and execute its TinyCC source-build recipe under exact protected authority.
+1. Export and bind authenticated GNU patch 2.5.9 source, then execute its TinyCC source-build recipe under exact protected authority.
 2. Continue through the source-built shell, conventional GNU tools, musl, GCC, binutils, and completed native-provider stages without ambient execution.
 3. Retain per-stage reports for every later exact executable, source stage, input, output, and BLAKE3 value.
 4. Preserve a complete protected-exec audit through normalized-provider runtime validation.
 5. Independently validate and create-new publish the provider and complete receipt.
 
-No GNU Make 3.82 stage, output identity, or executable authorization exists in the current protected graph. Replacing only the scaffold JSON would create false evidence. Reusing the existing full-source provider would relabel host-assisted effects as StageX lineage.
+No GNU patch 2.5.9 source authority, stage, output identity, or executable authorization exists in the current protected graph. Replacing only the scaffold JSON would create false evidence. Reusing the existing full-source provider would relabel host-assisted effects as StageX lineage.
 
 ## Owner
 
@@ -87,7 +87,7 @@ Mantle StageX lineage-provider implementation.
 
 ## Next action
 
-Continue the protected runner from TinyCC 0.9.27. Materialize authenticated GNU Make 3.82 and port its TinyCC recipe to bounded Rust orchestration without host shell or sandbox tools.
+Export and bind GNU patch 2.5.9 as authenticated offline source. Then continue the protected runner from GNU Make 3.82 with bounded Rust orchestration and no host shell or sandbox tools.
 
 I1 through V3 remain unchecked. The fixed-point and parity-promotion successor changes remain blocked by this change.
 

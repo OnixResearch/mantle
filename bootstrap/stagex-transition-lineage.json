@@ -524,6 +524,33 @@
       "id": "tinycc27-positive-object",
       "name": "TinyCC 0.9.27 positive smoke object",
       "producing_tool_id": "tinycc27-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8a5aa115eab6069a8f69cf1b2c63c69c478d64b271bc13fda7ea4e3531b841d1"
+      },
+      "id": "make-3.82",
+      "name": "source-built GNU Make 3.82",
+      "producing_tool_id": "make-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "028ececbb67a3394595027c9273a44ed2ba5b465c209767589b5a989032b93d1"
+      },
+      "id": "make-recipe-runner",
+      "name": "source-built bounded Make recipe runner",
+      "producing_tool_id": "make-recipe-runner-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8dd632d8df367d6751cc2e2497e8d9c38e0c5a1e58b100d59e1c0fdac235e3a2"
+      },
+      "id": "make-recipe-smoke",
+      "name": "GNU Make protected recipe smoke output",
+      "producing_tool_id": "make-smoke-exec"
     }
   ],
   "patches": [
@@ -536,6 +563,16 @@
       "name": "bounded TinyCC 0.9.27 StageX compatibility patch",
       "provenance": "bootstrap/patches/tcc-0.9.27-stagex.patch derived from the checked TinyCC 0.9.27 recipe",
       "target_artifact_id": "tinycc-0.9.27-source"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "51c890dd1f9a2ddf816c68ebfbd4506241e45e3993ca4f14151c0d8665f87e59"
+      },
+      "id": "make-3.82-stagex-patch",
+      "name": "bounded GNU Make 3.82 TinyCC compatibility patch",
+      "provenance": "bootstrap/patches/make-3.82-stagex.patch derived from the checked Make 3.82 recipe",
+      "target_artifact_id": "make-3.82-source"
     }
   ],
   "provider_outputs": [
@@ -722,6 +759,24 @@
       "id": "tinycc-0.9.27-source",
       "name": "TinyCC 0.9.27 fixed-output source",
       "provenance": "source bundle record fixed-url-767003cf551d3f2e8409b6666cc3e000e1377f298a55fbf20daea3867bd3aed4"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b768ff74b8f16f6c41fb869833582c7cf614e98a8728a1c74616a6b6157ece77"
+      },
+      "id": "make-3.82-source",
+      "name": "GNU Make 3.82 fixed-output source",
+      "provenance": "source bundle record fixed-url-ae11d5ec6f5d6b01fdeeb081181a8a51ad8208ab2d8b651cd2d8383f8fcda3f0"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "2d6a9757ecb8ba18de695edadd2473f14cc8c51427c8a922310c13f97221f6e8"
+      },
+      "id": "make-recipe-runner-source",
+      "name": "bounded GNU Make recipe runner source",
+      "provenance": "bootstrap/seeds/make-recipe-runner.c"
     }
   ],
   "stage_graph": [
@@ -800,6 +855,18 @@
     {
       "from_node_id": "tinycc-0.9.27-source",
       "to_node_id": "tinycc-0.9.27-stagex-patch"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "make-3.82-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "make-recipe-runner-source"
+    },
+    {
+      "from_node_id": "make-3.82-source",
+      "to_node_id": "make-3.82-stagex-patch"
     }
   ],
   "transition_tools": [
@@ -1107,6 +1174,62 @@
       "name": "TinyCC 0.9.27 executing bounded positive and negative smoke checks",
       "output_artifact_ids": [
         "tinycc27-positive-object"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39"
+      },
+      "id": "make-recipe-runner-build-exec",
+      "input_artifact_ids": [
+        "tinycc-0.9.27",
+        "tinycc27-libc",
+        "tinycc-crt1",
+        "tinycc-libtcc1"
+      ],
+      "name": "TinyCC 0.9.27 materializing the bounded Make recipe runner",
+      "output_artifact_ids": [
+        "make-recipe-runner"
+      ],
+      "source_artifact_ids": [
+        "make-recipe-runner-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39"
+      },
+      "id": "make-build-exec",
+      "input_artifact_ids": [
+        "tinycc-0.9.27",
+        "tinycc27-libc",
+        "tinycc-crt1",
+        "tinycc-libtcc1"
+      ],
+      "name": "TinyCC 0.9.27 materializing GNU Make 3.82",
+      "output_artifact_ids": [
+        "make-3.82"
+      ],
+      "source_artifact_ids": [
+        "make-3.82-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8a5aa115eab6069a8f69cf1b2c63c69c478d64b271bc13fda7ea4e3531b841d1"
+      },
+      "id": "make-smoke-exec",
+      "input_artifact_ids": [
+        "make-3.82",
+        "make-recipe-runner"
+      ],
+      "name": "GNU Make 3.82 dispatching a protected bounded recipe and rejecting malformed input",
+      "output_artifact_ids": [
+        "make-recipe-smoke"
       ],
       "source_artifact_ids": []
     }

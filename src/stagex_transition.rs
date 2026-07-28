@@ -48,6 +48,9 @@ pub(crate) const TINYCC_FINAL_SMOKE_STAGE_ID: &str = "tinycc-final-smoke";
 pub(crate) const TINYCC27_RUNTIME_STAGE_ID: &str = "tinycc27-runtime-refresh";
 pub(crate) const TINYCC27_BUILD_STAGE_ID: &str = "tinycc27-materialization";
 pub(crate) const TINYCC27_SMOKE_STAGE_ID: &str = "tinycc27-smoke";
+pub(crate) const MAKE_RECIPE_RUNNER_STAGE_ID: &str = "make-recipe-runner-materialization";
+pub(crate) const MAKE_BUILD_STAGE_ID: &str = "make-materialization";
+pub(crate) const MAKE_SMOKE_STAGE_ID: &str = "make-smoke";
 pub(crate) const HEX0_SEED_BLAKE3: &str = "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80";
 pub(crate) const HEX0_SOURCE_BLAKE3: &str = "0fb23576a10b41df29c165e39514f18c411da96ae71873a6a2e2f0b1d94de614";
 pub(crate) const KAEM_SOURCE_BLAKE3: &str = "5a56b4164dca4d1e03ba35bc8ce4b418a0de2baf1cb9e6a0912607e26532d30d";
@@ -73,8 +76,9 @@ const MES_OUTPUT_MAX_MIB: u64 = 64;
 const MES_OUTPUT_MAX_BYTES: u64 = MES_OUTPUT_MAX_MIB * MIB_BYTES;
 const STAGE_JOB_COUNT: u32 = 1;
 const TRANSITION_STAGE_COUNT_MAX: u32 = 3;
-const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 35;
+const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 38;
 const TINYCC_LINK_CHILD_EVENT_COUNT: usize = 5;
+const MAKE_RECIPE_CHILD_EVENT_COUNT: usize = 1;
 const PROCESS_POLL_MS: u64 = 10;
 const AUDIT_FLUSH_WAIT_MS: u64 = 50;
 const GENERATED_LAUNCH_MAX_ATTEMPTS: u32 = 16;
@@ -128,6 +132,10 @@ pub(crate) struct StagexTransitionReport {
     pub tinycc27_sources: Option<crate::stagex_tinycc27::Tinycc27SourceMaterializationReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tinycc27_runtime: Option<crate::stagex_tinycc27::Tinycc27InventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub make_sources: Option<crate::stagex_make::MakeSourceMaterializationReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub make_runtime: Option<crate::stagex_make::MakeInventoryReport>,
     pub fallback_events: Vec<String>,
     pub promotions: Vec<OutputPromotionRecord>,
     pub protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
@@ -303,6 +311,18 @@ pub(crate) fn materialize_protected_transition(
                 path: request.scratch_dir.join("tinycc27-stage/runtime/output/bin/tcc"),
                 digest_hex: crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3.to_string(),
             },
+            PlannedExecutable {
+                authorization_id: "exec:make-smoke:recipe-runner".to_string(),
+                source_stage_id: MAKE_RECIPE_RUNNER_STAGE_ID.to_string(),
+                path: request.scratch_dir.join("make-stage/runtime/output/bin/make-recipe-runner"),
+                digest_hex: crate::stagex_make::MAKE_RECIPE_RUNNER_BLAKE3.to_string(),
+            },
+            PlannedExecutable {
+                authorization_id: "exec:make-smoke:make".to_string(),
+                source_stage_id: MAKE_BUILD_STAGE_ID.to_string(),
+                path: request.scratch_dir.join("make-stage/runtime/output/bin/make"),
+                digest_hex: crate::stagex_make::MAKE_FINAL_BLAKE3.to_string(),
+            },
         ]);
         planned
     } else {
@@ -464,6 +484,37 @@ pub(crate) fn materialize_protected_transition(
             _ => unreachable!("TinyCC 0.9.27 requires source bundle and TinyCC 0.9.26 together"),
         };
 
+    let (make_sources, make_runtime) = match (request.source_bundle_path, tinycc27_runtime.as_ref()) {
+        (Some(source_bundle_path), Some(_)) => {
+            let make_stage = request.scratch_dir.join("make-stage");
+            fs::create_dir(&make_stage)
+                .map_err(|source| io_error("creating create-new protected GNU Make stage root", source))?;
+            let sources = crate::stagex_make::materialize_authenticated_make_source(
+                source_bundle_path,
+                &manifest_authority.source_bundle_manifest_blake3,
+                &make_stage.join("sources"),
+            )
+            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+            let result = crate::stagex_make::derive_make_inventory(crate::stagex_make::MakeInventoryRequest {
+                source_root: &sources.output_path,
+                tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
+                scratch_dir: &make_stage.join("runtime"),
+                protected_exec_enforced: true,
+            });
+            match result {
+                Ok(report) => (Some(sources), Some(report)),
+                Err(error) => {
+                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                    let events = supervisor.audit_events();
+                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
+                }
+            }
+        }
+        (None, None) => (None, None),
+        _ => unreachable!("GNU Make requires source bundle and TinyCC 0.9.27 together"),
+    };
+
     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
     let protected_exec_events = supervisor.audit_events();
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
@@ -474,6 +525,7 @@ pub(crate) fn materialize_protected_transition(
         mes_runtime.as_ref(),
         tinycc_runtime.as_ref(),
         tinycc27_runtime.as_ref(),
+        make_runtime.as_ref(),
         &protected_exec_events,
     )?;
     let kaem_smoke_digest_blake3 = blake3_file_hex(&staged.kaem_smoke).map_err(protected_digest_error)?;
@@ -494,6 +546,8 @@ pub(crate) fn materialize_protected_transition(
         tinycc_runtime,
         tinycc27_sources,
         tinycc27_runtime,
+        make_sources,
+        make_runtime,
         fallback_events: Vec::new(),
         promotions: vec![hex0_promotion, kaem_promotion],
         protected_exec_events,
@@ -579,6 +633,9 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     }
     let (tinycc27_source_id, tinycc27_source_blake3) = crate::stagex_tinycc27::source_artifact_digest();
     require_manifest_digest(&sources, tinycc27_source_id, tinycc27_source_blake3)?;
+    for (artifact_id, digest_blake3) in crate::stagex_make::source_artifact_digests() {
+        require_manifest_digest(&sources, artifact_id, digest_blake3)?;
+    }
     let generated: BTreeMap<&str, &str> = manifest
         .generated_artifacts
         .iter()
@@ -606,9 +663,13 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     for expected in crate::stagex_tinycc27::TINYCC27_EXPECTED_OUTPUTS {
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
+    for expected in crate::stagex_make::MAKE_EXPECTED_OUTPUTS {
+        require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
+    }
     let patches: BTreeMap<&str, &str> =
         manifest.patches.iter().map(|patch| (patch.id.as_str(), patch.digest.hex_value.as_str())).collect();
     require_manifest_digest(&patches, "tinycc-0.9.27-stagex-patch", crate::stagex_tinycc27::TINYCC27_PATCH_BLAKE3)?;
+    require_manifest_digest(&patches, "make-3.82-stagex-patch", crate::stagex_make::MAKE_PATCH_BLAKE3)?;
     let assumption_ids: BTreeSet<&str> = manifest.environment_assumptions.iter().map(|item| item.id.as_str()).collect();
     if !assumption_ids.contains("linux-kernel") || !assumption_ids.contains("mantle-orchestrator") {
         return Err(StagexTransitionError::InvalidInput(
@@ -748,6 +809,8 @@ fn build_transition_plan(
         stages.extend(tinycc_stage_plans(&stage0_root, &mes_root, &tinycc_root));
         let tinycc27_root = staged.seed.parent().expect("staged seed has parent").join("tinycc27-stage/runtime");
         stages.extend(tinycc27_stage_plans(&tinycc_root, &tinycc27_root));
+        let make_root = staged.seed.parent().expect("staged seed has parent").join("make-stage/runtime");
+        stages.extend(make_stage_plans(&tinycc27_root, &make_root));
     }
     let stage_count_max = if include_stage0_mini {
         TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX
@@ -951,6 +1014,73 @@ fn tinycc27_stage_plans(tinycc_root: &Path, tinycc27_root: &Path) -> Vec<StagexS
                 TINYCC27_BUILD_STAGE_ID,
                 crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
             )],
+        ),
+    ]
+}
+
+fn make_stage_plans(tinycc27_root: &Path, make_root: &Path) -> Vec<StagexStagePlan> {
+    let tinycc27 = tinycc27_root.join("output/bin/tcc");
+    let recipe_runner = make_root.join("output/bin/make-recipe-runner");
+    let make = make_root.join("output/bin/make");
+    vec![
+        mes_stage_plan(
+            MAKE_RECIPE_RUNNER_STAGE_ID,
+            &[
+                TINYCC27_BUILD_STAGE_ID,
+                TINYCC27_RUNTIME_STAGE_ID,
+                TINYCC_RUNTIME_STAGE_ID,
+            ],
+            &[crate::stagex_make::MAKE_RECIPE_RUNNER_SOURCE_ARTIFACT_ID],
+            &["tinycc-0.9.27", "tinycc27-libc", "tinycc-crt1", "tinycc-libtcc1"],
+            &["make-recipe-runner".to_string()],
+            vec![authorization(
+                "exec:make-recipe-runner-materialization:tinycc27",
+                &tinycc27,
+                TINYCC27_BUILD_STAGE_ID,
+                crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            MAKE_BUILD_STAGE_ID,
+            &[
+                TINYCC27_BUILD_STAGE_ID,
+                TINYCC27_RUNTIME_STAGE_ID,
+                TINYCC_RUNTIME_STAGE_ID,
+            ],
+            &[crate::stagex_make::MAKE_SOURCE_ARTIFACT_ID],
+            &["tinycc-0.9.27", "tinycc27-libc", "tinycc-crt1", "tinycc-libtcc1"],
+            &["make-3.82".to_string()],
+            vec![authorization(
+                "exec:make-materialization:tinycc27",
+                &tinycc27,
+                TINYCC27_BUILD_STAGE_ID,
+                crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            MAKE_SMOKE_STAGE_ID,
+            &[MAKE_BUILD_STAGE_ID, MAKE_RECIPE_RUNNER_STAGE_ID],
+            &[],
+            &["make-3.82", "make-recipe-runner"],
+            &[
+                "make-recipe-smoke".to_string(),
+                "make-version-observation".to_string(),
+                "make-malformed-observation".to_string(),
+            ],
+            vec![
+                authorization(
+                    "exec:make-smoke:make",
+                    &make,
+                    MAKE_BUILD_STAGE_ID,
+                    crate::stagex_make::MAKE_FINAL_BLAKE3,
+                ),
+                authorization(
+                    "exec:make-smoke:recipe-runner",
+                    &recipe_runner,
+                    MAKE_RECIPE_RUNNER_STAGE_ID,
+                    crate::stagex_make::MAKE_RECIPE_RUNNER_BLAKE3,
+                ),
+            ],
         ),
     ]
 }
@@ -1708,6 +1838,7 @@ fn validate_transition_audit(
     mes_runtime: Option<&crate::stagex_mes_lib::MesRuntimeInventoryReport>,
     tinycc_runtime: Option<&crate::stagex_tinycc::TccMesInventoryReport>,
     tinycc27_runtime: Option<&crate::stagex_tinycc27::Tinycc27InventoryReport>,
+    make_runtime: Option<&crate::stagex_make::MakeInventoryReport>,
     events: &[ProtectedSeccompAuditEvent],
 ) -> Result<(), StagexTransitionError> {
     let expected = transition_expected_audit_events(staged);
@@ -1725,6 +1856,7 @@ fn validate_transition_audit(
             && mes_runtime.is_none()
             && tinycc_runtime.is_none()
             && tinycc27_runtime.is_none()
+            && make_runtime.is_none()
             && events.len() == EXPECTED_AUDIT_EVENT_COUNT
         {
             return Ok(());
@@ -1749,7 +1881,8 @@ fn validate_transition_audit(
     }
     validate_stage0_audit(staged, &stage0.mini, &stage0_events[..mini_event_count])?;
     let after_mini = &stage0_events[mini_event_count..];
-    match (mes_m2, mes_runtime, tinycc_runtime, tinycc27_runtime) {
+    let (before_make, make_events) = split_make_audit_suffix(make_runtime, after_mini)?;
+    let predecessor_result = match (mes_m2, mes_runtime, tinycc_runtime, tinycc27_runtime) {
         (Some(mes_report), Some(runtime_report), Some(tinycc_report), tinycc27_report) => {
             validate_mes_and_tinycc_suffix(
                 stage0,
@@ -1757,18 +1890,18 @@ fn validate_transition_audit(
                 runtime_report,
                 tinycc_report,
                 tinycc27_report,
-                after_mini,
+                before_make,
             )
         }
         (Some(mes_report), Some(runtime_report), None, None) => {
             let runtime_event_count = mes_runtime_event_count(runtime_report)?;
-            let runtime_start = after_mini.len().checked_sub(runtime_event_count).ok_or_else(|| {
+            let runtime_start = before_make.len().checked_sub(runtime_event_count).ok_or_else(|| {
                 StagexTransitionError::Audit(format!(
                     "expected {runtime_event_count} trailing Mes runtime events, observed {}",
-                    after_mini.len()
+                    before_make.len()
                 ))
             })?;
-            let before_runtime = &after_mini[..runtime_start];
+            let before_runtime = &before_make[..runtime_start];
             let mes_event_count = mes_m2_event_count(mes_report)?;
             let mes_start = before_runtime
                 .len()
@@ -1776,22 +1909,49 @@ fn validate_transition_audit(
                 .ok_or_else(|| StagexTransitionError::Audit("Mes event suffix exceeds audit".to_string()))?;
             validate_stage0_full_audit(stage0, &before_runtime[..mes_start])?;
             validate_mes_m2_audit(stage0, mes_report, &before_runtime[mes_start..])?;
-            validate_mes_runtime_audit(stage0, mes_report, runtime_report, &after_mini[runtime_start..])
+            validate_mes_runtime_audit(stage0, mes_report, runtime_report, &before_make[runtime_start..])
         }
         (Some(mes_report), None, None, None) => {
             let mes_event_count = mes_m2_event_count(mes_report)?;
-            let mes_start = after_mini
+            let mes_start = before_make
                 .len()
                 .checked_sub(mes_event_count)
                 .ok_or_else(|| StagexTransitionError::Audit("Mes event suffix exceeds audit".to_string()))?;
-            validate_stage0_full_audit(stage0, &after_mini[..mes_start])?;
-            validate_mes_m2_audit(stage0, mes_report, &after_mini[mes_start..])
+            validate_stage0_full_audit(stage0, &before_make[..mes_start])?;
+            validate_mes_m2_audit(stage0, mes_report, &before_make[mes_start..])
         }
-        (None, None, None, None) => validate_stage0_full_audit(stage0, after_mini),
+        (None, None, None, None) => validate_stage0_full_audit(stage0, before_make),
         _ => Err(StagexTransitionError::Audit(
             "Mes, TinyCC, or TinyCC 0.9.27 report exists without its predecessor report".to_string(),
         )),
+    };
+    predecessor_result?;
+    match (make_runtime, tinycc27_runtime) {
+        (Some(make), Some(tinycc27)) => validate_make_audit(tinycc27, make, make_events),
+        (None, _) if make_events.is_empty() => Ok(()),
+        _ => Err(StagexTransitionError::Audit(
+            "GNU Make report or events exist without TinyCC 0.9.27 authority".to_string(),
+        )),
     }
+}
+
+fn split_make_audit_suffix<'a>(
+    report: Option<&crate::stagex_make::MakeInventoryReport>,
+    events: &'a [ProtectedSeccompAuditEvent],
+) -> Result<(&'a [ProtectedSeccompAuditEvent], &'a [ProtectedSeccompAuditEvent]), StagexTransitionError> {
+    let Some(report) = report else {
+        return Ok((events, &events[events.len()..]));
+    };
+    let make_event_count = make_expected_event_count(report)?;
+    let make_start = events.len().checked_sub(make_event_count).ok_or_else(|| {
+        StagexTransitionError::Audit(format!(
+            "expected {make_event_count} trailing GNU Make events, observed {}",
+            events.len()
+        ))
+    })?;
+    assert_eq!(events.len().saturating_sub(make_start), make_event_count);
+    assert!(make_event_count > 0);
+    Ok((&events[..make_start], &events[make_start..]))
 }
 
 fn mes_m2_event_count(report: &crate::stagex_mes::MesM2InventoryReport) -> Result<usize, StagexTransitionError> {
@@ -2363,6 +2523,125 @@ fn tinycc27_expected_event_count(
         .map_err(|_| StagexTransitionError::Audit("TinyCC 0.9.27 command count does not fit usize".to_string()))
 }
 
+fn validate_make_audit(
+    tinycc27: &crate::stagex_tinycc27::Tinycc27InventoryReport,
+    make: &crate::stagex_make::MakeInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    const MAKE_VERSION_OFFSET: usize = 0;
+    const MAKE_RECIPE_OFFSET: usize = 1;
+    const RECIPE_RUNNER_OFFSET: usize = 2;
+    const MAKE_MALFORMED_OFFSET: usize = 3;
+    let expected_count = make_expected_event_count(make)?;
+    validate_make_observed_event_count(expected_count, events.len())?;
+    let predecessor_count = make_predecessor_event_count(make)?;
+    let tinycc27_path = tinycc27_output_path(tinycc27, "tinycc27-alias")?;
+    let make_path = make_output_path(make, "make-3.82")?;
+    let runner_path = make_output_path(make, "make-recipe-runner")?;
+    for (index, event) in events.iter().enumerate() {
+        if index < predecessor_count {
+            validate_make_event(
+                event,
+                &tinycc27_path,
+                crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
+                "planned:tinycc27-materialization:exec:tinycc27-smoke:tinycc27",
+            )?;
+            continue;
+        }
+        let smoke_offset = index.saturating_sub(predecessor_count);
+        match smoke_offset {
+            MAKE_VERSION_OFFSET | MAKE_RECIPE_OFFSET | MAKE_MALFORMED_OFFSET => validate_make_event(
+                event,
+                &make_path,
+                crate::stagex_make::MAKE_FINAL_BLAKE3,
+                "planned:make-materialization:exec:make-smoke:make",
+            )?,
+            RECIPE_RUNNER_OFFSET => validate_make_event(
+                event,
+                &runner_path,
+                crate::stagex_make::MAKE_RECIPE_RUNNER_BLAKE3,
+                "planned:make-recipe-runner-materialization:exec:make-smoke:recipe-runner",
+            )?,
+            _ => {
+                return Err(StagexTransitionError::Audit(format!(
+                    "GNU Make audit has undeclared smoke offset {smoke_offset}"
+                )));
+            }
+        }
+    }
+    assert_eq!(events.len(), expected_count);
+    assert!(predecessor_count < expected_count);
+    Ok(())
+}
+
+fn validate_make_observed_event_count(
+    expected_count: usize,
+    observed_count: usize,
+) -> Result<(), StagexTransitionError> {
+    if observed_count == expected_count {
+        return Ok(());
+    }
+    Err(StagexTransitionError::Audit(format!(
+        "GNU Make protected audit expected {expected_count} events, observed {observed_count}"
+    )))
+}
+
+fn validate_make_event(
+    event: &ProtectedSeccompAuditEvent,
+    expected_path: &Path,
+    expected_digest: &str,
+    expected_inventory_id: &str,
+) -> Result<(), StagexTransitionError> {
+    let valid = event.policy_decision == "allowed"
+        && event.executable_path == expected_path
+        && event.tracee_path == expected_path
+        && event.resolved_host_path == expected_path
+        && event.digest_hex == expected_digest
+        && event.inventory_entry_id.as_deref() == Some(expected_inventory_id);
+    if !valid {
+        return Err(StagexTransitionError::Audit(format!(
+            "GNU Make event for {} did not match exact planned authority",
+            event.executable_path.display()
+        )));
+    }
+    assert_eq!(event.executable_path, expected_path);
+    assert_eq!(event.digest_hex, expected_digest);
+    Ok(())
+}
+
+fn make_predecessor_event_count(
+    report: &crate::stagex_make::MakeInventoryReport,
+) -> Result<usize, StagexTransitionError> {
+    const EXPECTED_RECIPE_RUNNER_COMMAND_COUNT: u32 = 1;
+    if report.recipe_runner_command_count != EXPECTED_RECIPE_RUNNER_COMMAND_COUNT {
+        return Err(StagexTransitionError::Audit(format!(
+            "GNU Make recipe-runner command count is {}, expected {EXPECTED_RECIPE_RUNNER_COMMAND_COUNT}",
+            report.recipe_runner_command_count
+        )));
+    }
+    let count = report
+        .recipe_runner_command_count
+        .checked_add(report.build_command_count)
+        .ok_or_else(|| StagexTransitionError::Audit("GNU Make predecessor count overflow".to_string()))?;
+    usize::try_from(count)
+        .map_err(|_| StagexTransitionError::Audit("GNU Make predecessor count does not fit usize".to_string()))
+}
+
+fn make_expected_event_count(report: &crate::stagex_make::MakeInventoryReport) -> Result<usize, StagexTransitionError> {
+    const EXPECTED_SMOKE_COMMAND_COUNT: u32 = 3;
+    if report.smoke_command_count != EXPECTED_SMOKE_COMMAND_COUNT {
+        return Err(StagexTransitionError::Audit(format!(
+            "GNU Make smoke command count is {}, expected {EXPECTED_SMOKE_COMMAND_COUNT}",
+            report.smoke_command_count
+        )));
+    }
+    let predecessor_count = make_predecessor_event_count(report)?;
+    predecessor_count
+        .checked_add(usize::try_from(report.smoke_command_count).unwrap_or(usize::MAX))
+        .and_then(|count| count.checked_add(MAKE_RECIPE_CHILD_EVENT_COUNT))
+        .ok_or_else(|| StagexTransitionError::Audit("GNU Make expected event count overflow".to_string()))
+}
+
 fn tinycc_expected_event_count(
     compile_command_count: u32,
     runtime_refresh_command_count: u32,
@@ -2427,6 +2706,18 @@ fn tinycc27_output_path(
         .find(|output| output.artifact_id == artifact_id)
         .map(|output| output.path.clone())
         .ok_or_else(|| StagexTransitionError::Audit(format!("TinyCC 0.9.27 report lacks output {artifact_id}")))
+}
+
+fn make_output_path(
+    report: &crate::stagex_make::MakeInventoryReport,
+    artifact_id: &str,
+) -> Result<PathBuf, StagexTransitionError> {
+    report
+        .outputs
+        .iter()
+        .find(|output| output.artifact_id == artifact_id)
+        .map(|output| output.path.clone())
+        .ok_or_else(|| StagexTransitionError::Audit(format!("GNU Make report lacks output {artifact_id}")))
 }
 
 fn stage0_artifact_path(root: &Path, artifact_id: &str) -> Result<PathBuf, StagexTransitionError> {
@@ -2555,7 +2846,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
-    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "c531f00a7501ab0fab452ddb029e6a84d5257bb06f5a2692aa9b72f5cfb8a6ed";
+    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "b240a5e1e348e22dc2cbdfebc72e0832348901d478ed5872234d33568d527f99";
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {
@@ -2676,6 +2967,84 @@ mod tests {
         let error = tinycc27_expected_event_count(&overflow).unwrap_err();
         assert!(error.to_string().contains("command count overflow"));
         assert!(!error.to_string().is_empty());
+    }
+
+    #[test]
+    fn make_event_count_is_closed_over_build_recipe_dispatch_and_smokes() {
+        const EXPECTED_EVENT_COUNT: usize = 33;
+        const EXPECTED_PREDECESSOR_COUNT: usize = 29;
+        let report = crate::stagex_make::MakeInventoryReport {
+            format: "test",
+            source_patch_digest_blake3: "a".repeat(blake3::OUT_LEN * 2),
+            patched_files: vec!["main.c".to_string()],
+            source_compile_count: 27,
+            recipe_runner_command_count: 1,
+            build_command_count: 28,
+            smoke_command_count: 3,
+            outputs: Vec::new(),
+            protected_exec_enforced: true,
+            fallback_events: Vec::new(),
+            non_claim: "test",
+        };
+        assert_eq!(make_predecessor_event_count(&report).unwrap(), EXPECTED_PREDECESSOR_COUNT);
+        assert_eq!(make_expected_event_count(&report).unwrap(), EXPECTED_EVENT_COUNT);
+        validate_make_observed_event_count(EXPECTED_EVENT_COUNT, EXPECTED_EVENT_COUNT).unwrap();
+        let missing = EXPECTED_EVENT_COUNT.checked_sub(1).unwrap();
+        let extra = EXPECTED_EVENT_COUNT.checked_add(1).unwrap();
+        assert!(validate_make_observed_event_count(EXPECTED_EVENT_COUNT, missing).is_err());
+        assert!(validate_make_observed_event_count(EXPECTED_EVENT_COUNT, extra).is_err());
+
+        let mut substituted = report;
+        substituted.smoke_command_count = 2;
+        let error = make_expected_event_count(&substituted).unwrap_err();
+        assert!(error.to_string().contains("smoke command count"));
+        assert!(!error.to_string().is_empty());
+    }
+
+    #[test]
+    fn make_audit_event_rejects_denied_or_substituted_authority() {
+        let expected_path = PathBuf::from("/stagex/make");
+        let mut event = ProtectedSeccompAuditEvent {
+            pid: 1,
+            syscall: "execve".to_string(),
+            executable_path: expected_path.clone(),
+            tracee_path: expected_path.clone(),
+            resolved_host_path: expected_path.clone(),
+            digest_hex: crate::stagex_make::MAKE_FINAL_BLAKE3.to_string(),
+            reason: "test allow".to_string(),
+            phase: "protected".to_string(),
+            inventory_entry_id: Some("planned:make-materialization:exec:make-smoke:make".to_string()),
+            policy_decision: "allowed".to_string(),
+        };
+        validate_make_event(
+            &event,
+            &expected_path,
+            crate::stagex_make::MAKE_FINAL_BLAKE3,
+            "planned:make-materialization:exec:make-smoke:make",
+        )
+        .unwrap();
+
+        event.policy_decision = "denied".to_string();
+        assert!(
+            validate_make_event(
+                &event,
+                &expected_path,
+                crate::stagex_make::MAKE_FINAL_BLAKE3,
+                "planned:make-materialization:exec:make-smoke:make",
+            )
+            .is_err()
+        );
+        event.policy_decision = "allowed".to_string();
+        event.executable_path = PathBuf::from("/stagex/substituted-make");
+        assert!(
+            validate_make_event(
+                &event,
+                &expected_path,
+                crate::stagex_make::MAKE_FINAL_BLAKE3,
+                "planned:make-materialization:exec:make-smoke:make",
+            )
+            .is_err()
+        );
     }
 
     #[test]
