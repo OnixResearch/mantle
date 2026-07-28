@@ -1,0 +1,4 @@
+eb2da88907c514ffff2d6ffb40a5efd806b954f533c16d0ea8c6527edd4c77cc  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v36-oyacc-2026-07-28/oyacc-inventory.json
+95a1960919a29fd33240a519f5604b70f203d20cad32c3216bbf867232461ab0  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v36-oyacc-2026-07-28/protected-exec-audit.json
+6368c13dd5a2c540e678b4087d88e3c01e3c3342a6d9aa67dbd925a4af780d41  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v36-oyacc-2026-07-28/transition-plan.json
+bd532e31c9c980342315c0f8db2ca7ccb9c675b2fb1b1790ebd60ac8ce4488a7  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v36-oyacc-2026-07-28/transition-report.json

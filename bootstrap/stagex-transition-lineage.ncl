@@ -1,4 +1,4 @@
-# Typed source for the protected seed-to-coreutils-5.0 transition.
+# Typed source for the protected seed-to-oyacc-6.6 transition.
 # This file does not yet describe the later native toolchain or normalized StageX provider.
 
 let Digest = {
@@ -133,7 +133,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
       "generated as zero bytes by the bounded transition plan",
     source "stage0-source-bundle" "authenticated offline full-source closure"
-      "11a116c4d1a406e46c3e2f15f11f8e643abcd387fc6668e1680abe1d230bfe42"
+      "8a58a015b0a1f45023ed38f92dc46f5a733be983794524117abe68654786ac5f"
       "mantle-source-bundle-v1 manifest identity loaded and validated before Stage0 execution",
     source "stage0-posix-amd64-source" "stage0-posix AMD64 snapshot"
       "f983a7b79acdd53fd4d31c8959c62ca24eabbea491327aaa113c4bc11549e5f9"
@@ -237,6 +237,24 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "coreutils-hash-tcc-patch-source" "bounded TinyCC hash-table compatibility patch"
       "407c0d0457158c2ceb0a165babfeb5e2f574c3f3bea44b774eb336203a2d6daf"
       "bootstrap/seeds/coreutils-5.0-hash-tcc.patch",
+    source "oyacc-6.6-source" "oyacc 6.6 fixed-output source"
+      "b1ea74a498a000f5f27160860fd44042d738295c78c1db56a4e0fdd10ea5ee76"
+      "source bundle record fixed-url-a674f552ef5345d19cb7e37f3c6f80f38dcf1a2f54b188894680bda6c6930c1a",
+    source "oyacc-smoke-grammar-source" "positive oyacc smoke grammar"
+      "5c61da581cf9442bc3da26780e417e3918a8a12c9c9be4d846607e7f5f994934"
+      "bootstrap/seeds/oyacc-smoke.y",
+    source "oyacc-malformed-grammar-source" "negative oyacc smoke grammar"
+      "dbab9cbaaae8309d582edff2ed8c25748316c0364c7049333eb616056033228a"
+      "bootstrap/seeds/oyacc-malformed.y",
+    source "oyacc-empty-config-source" "authenticated empty oyacc configuration"
+      "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      "zero-byte config.h required by the live-bootstrap recipe",
+    source "oyacc-meslibc-patch-source" "live-bootstrap oyacc Mes libc compatibility patch"
+      "776fde281b132b5f38011466151a96f40fa1d25c0132c00f4e7c64ce44101c31"
+      "bootstrap/seeds/oyacc-6.6-meslibc.patch",
+    source "oyacc-tcc-patch-source" "live-bootstrap oyacc TinyCC compatibility patch"
+      "56c7df4bfa6adbf223a14fedfdc56b82d3c0fc702d6d88d5f54de158dcea0706"
+      "bootstrap/seeds/oyacc-6.6-tcc.patch",
   ],
   generated_artifacts = [
     {
@@ -352,6 +370,9 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "coreutils-build-exec" "coreutils-touch" "source-built coreutils touch" "a2b77b46e85c94390f459f158ebb33c529bbc5eb730c7719f24632f1fd6b6a4c",
     tinycc_generated "coreutils-build-exec" "coreutils-bracket" "source-built coreutils bracket alias" "87baf4f61820a2861bbb1a08b3bd9b4c7a5b8baed66ddb0e152d7a981ae27669",
     tinycc_generated "coreutils-smoke-exec" "coreutils-smoke" "coreutils protected filesystem smoke output" "fd65316f83e13de60a964675b6ab49ee8bd0e40db3aef391c8c1cbee240375d8",
+    tinycc_generated "oyacc-patch-exec" "oyacc-configured-source" "protected oyacc configured source identity" "f4cde58315dcbfc49c47928f9258debd030140c54e249cb2a11beef1eba30296",
+    tinycc_generated "oyacc-build-exec" "oyacc-6.6" "source-built oyacc 6.6" "0b073649ea023167a293495f25302cc3debc4dd6727d9214ce6be9361503aa50",
+    tinycc_generated "oyacc-smoke-exec" "oyacc-smoke-output" "oyacc protected generated-parser smoke output" "6e719a5fc57aa5e8a06b7f7f37c6fdf672cd2ef2f91c27a7ca1daff128ac65a2",
   ],
   transition_tools = [
     {
@@ -693,6 +714,33 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["coreutils-smoke"],
       digest = blake3 "fd65316f83e13de60a964675b6ab49ee8bd0e40db3aef391c8c1cbee240375d8",
     },
+    {
+      id = "oyacc-patch-exec",
+      name = "GNU patch 2.5.9 applying bounded oyacc compatibility patches",
+      source_artifact_ids = [
+        "oyacc-6.6-source", "oyacc-smoke-grammar-source", "oyacc-malformed-grammar-source",
+        "oyacc-empty-config-source", "oyacc-meslibc-patch-source", "oyacc-tcc-patch-source",
+      ],
+      input_artifact_ids = ["gnu-patch-2.5.9", "coreutils-smoke"],
+      output_artifact_ids = ["oyacc-configured-source"],
+      digest = blake3 "f4cde58315dcbfc49c47928f9258debd030140c54e249cb2a11beef1eba30296",
+    },
+    {
+      id = "oyacc-build-exec",
+      name = "TinyCC 0.9.27 materializing oyacc 6.6",
+      source_artifact_ids = [],
+      input_artifact_ids = ["oyacc-configured-source", "tinycc-0.9.27", "tinycc27-libc", "tinycc-crt1", "tinycc-libtcc1"],
+      output_artifact_ids = ["oyacc-6.6"],
+      digest = blake3 "f4cde58315dcbfc49c47928f9258debd030140c54e249cb2a11beef1eba30296",
+    },
+    {
+      id = "oyacc-smoke-exec",
+      name = "oyacc 6.6 generating a parser and rejecting malformed grammar",
+      source_artifact_ids = [],
+      input_artifact_ids = ["oyacc-6.6"],
+      output_artifact_ids = ["oyacc-smoke-output"],
+      digest = blake3 "0b073649ea023167a293495f25302cc3debc4dd6727d9214ce6be9361503aa50",
+    },
   ],
   patches = [
     {
@@ -769,5 +817,11 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "coreutils-expr-strcmp-patch-source" },
     { from_node_id = "seed", to_node_id = "coreutils-sort-locale-patch-source" },
     { from_node_id = "seed", to_node_id = "coreutils-hash-tcc-patch-source" },
+    { from_node_id = "seed", to_node_id = "oyacc-6.6-source" },
+    { from_node_id = "seed", to_node_id = "oyacc-smoke-grammar-source" },
+    { from_node_id = "seed", to_node_id = "oyacc-malformed-grammar-source" },
+    { from_node_id = "seed", to_node_id = "oyacc-empty-config-source" },
+    { from_node_id = "seed", to_node_id = "oyacc-meslibc-patch-source" },
+    { from_node_id = "seed", to_node_id = "oyacc-tcc-patch-source" },
   ],
 } | Manifest

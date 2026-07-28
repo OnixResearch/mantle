@@ -11,6 +11,7 @@ let stage0 = import "stage0-posix.ncl" in
 let mes = import "mes.ncl" in
 let tcc = import "tinycc.ncl" in
 let make = import "make-tcc.ncl" in
+let coreutils = import "coreutils-5.0-tcc.ncl" in
 
 let oyacc_src = crunch.fetchTarball {
   # provenance: fosslinux/live-bootstrap steps/oyacc-6.6/sources
@@ -84,5 +85,5 @@ EOF
       test -s y.tab.c || { echo "ERROR: installed yacc smoke did not produce y.tab.c" >&2; exit 1; }
     "%,
   ],
-  inputs = [stage0, mes, tcc, make, oyacc_src],
+  inputs = [stage0, mes, tcc, make, coreutils, oyacc_src],
 } | crunch.Derivation

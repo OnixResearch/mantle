@@ -938,6 +938,33 @@
       "id": "coreutils-smoke",
       "name": "coreutils protected filesystem smoke output",
       "producing_tool_id": "coreutils-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f4cde58315dcbfc49c47928f9258debd030140c54e249cb2a11beef1eba30296"
+      },
+      "id": "oyacc-configured-source",
+      "name": "protected oyacc configured source identity",
+      "producing_tool_id": "oyacc-patch-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "0b073649ea023167a293495f25302cc3debc4dd6727d9214ce6be9361503aa50"
+      },
+      "id": "oyacc-6.6",
+      "name": "source-built oyacc 6.6",
+      "producing_tool_id": "oyacc-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "6e719a5fc57aa5e8a06b7f7f37c6fdf672cd2ef2f91c27a7ca1daff128ac65a2"
+      },
+      "id": "oyacc-smoke-output",
+      "name": "oyacc protected generated-parser smoke output",
+      "producing_tool_id": "oyacc-smoke-exec"
     }
   ],
   "patches": [
@@ -1015,7 +1042,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "11a116c4d1a406e46c3e2f15f11f8e643abcd387fc6668e1680abe1d230bfe42"
+        "hex_value": "8a58a015b0a1f45023ed38f92dc46f5a733be983794524117abe68654786ac5f"
       },
       "id": "stage0-source-bundle",
       "name": "authenticated offline full-source closure",
@@ -1326,6 +1353,60 @@
       "id": "coreutils-hash-tcc-patch-source",
       "name": "bounded TinyCC hash-table compatibility patch",
       "provenance": "bootstrap/seeds/coreutils-5.0-hash-tcc.patch"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b1ea74a498a000f5f27160860fd44042d738295c78c1db56a4e0fdd10ea5ee76"
+      },
+      "id": "oyacc-6.6-source",
+      "name": "oyacc 6.6 fixed-output source",
+      "provenance": "source bundle record fixed-url-a674f552ef5345d19cb7e37f3c6f80f38dcf1a2f54b188894680bda6c6930c1a"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "5c61da581cf9442bc3da26780e417e3918a8a12c9c9be4d846607e7f5f994934"
+      },
+      "id": "oyacc-smoke-grammar-source",
+      "name": "positive oyacc smoke grammar",
+      "provenance": "bootstrap/seeds/oyacc-smoke.y"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "dbab9cbaaae8309d582edff2ed8c25748316c0364c7049333eb616056033228a"
+      },
+      "id": "oyacc-malformed-grammar-source",
+      "name": "negative oyacc smoke grammar",
+      "provenance": "bootstrap/seeds/oyacc-malformed.y"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "id": "oyacc-empty-config-source",
+      "name": "authenticated empty oyacc configuration",
+      "provenance": "zero-byte config.h required by the live-bootstrap recipe"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "776fde281b132b5f38011466151a96f40fa1d25c0132c00f4e7c64ce44101c31"
+      },
+      "id": "oyacc-meslibc-patch-source",
+      "name": "live-bootstrap oyacc Mes libc compatibility patch",
+      "provenance": "bootstrap/seeds/oyacc-6.6-meslibc.patch"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "56c7df4bfa6adbf223a14fedfdc56b82d3c0fc702d6d88d5f54de158dcea0706"
+      },
+      "id": "oyacc-tcc-patch-source",
+      "name": "live-bootstrap oyacc TinyCC compatibility patch",
+      "provenance": "bootstrap/seeds/oyacc-6.6-tcc.patch"
     }
   ],
   "stage_graph": [
@@ -1488,6 +1569,30 @@
     {
       "from_node_id": "seed",
       "to_node_id": "coreutils-hash-tcc-patch-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "oyacc-6.6-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "oyacc-smoke-grammar-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "oyacc-malformed-grammar-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "oyacc-empty-config-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "oyacc-meslibc-patch-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "oyacc-tcc-patch-source"
     }
   ],
   "transition_tools": [
@@ -2177,6 +2282,63 @@
       "name": "coreutils 5.0 executing bounded filesystem smokes and rejecting a missing copy source",
       "output_artifact_ids": [
         "coreutils-smoke"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f4cde58315dcbfc49c47928f9258debd030140c54e249cb2a11beef1eba30296"
+      },
+      "id": "oyacc-patch-exec",
+      "input_artifact_ids": [
+        "gnu-patch-2.5.9",
+        "coreutils-smoke"
+      ],
+      "name": "GNU patch 2.5.9 applying bounded oyacc compatibility patches",
+      "output_artifact_ids": [
+        "oyacc-configured-source"
+      ],
+      "source_artifact_ids": [
+        "oyacc-6.6-source",
+        "oyacc-smoke-grammar-source",
+        "oyacc-malformed-grammar-source",
+        "oyacc-empty-config-source",
+        "oyacc-meslibc-patch-source",
+        "oyacc-tcc-patch-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f4cde58315dcbfc49c47928f9258debd030140c54e249cb2a11beef1eba30296"
+      },
+      "id": "oyacc-build-exec",
+      "input_artifact_ids": [
+        "oyacc-configured-source",
+        "tinycc-0.9.27",
+        "tinycc27-libc",
+        "tinycc-crt1",
+        "tinycc-libtcc1"
+      ],
+      "name": "TinyCC 0.9.27 materializing oyacc 6.6",
+      "output_artifact_ids": [
+        "oyacc-6.6"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "0b073649ea023167a293495f25302cc3debc4dd6727d9214ce6be9361503aa50"
+      },
+      "id": "oyacc-smoke-exec",
+      "input_artifact_ids": [
+        "oyacc-6.6"
+      ],
+      "name": "oyacc 6.6 generating a parser and rejecting malformed grammar",
+      "output_artifact_ids": [
+        "oyacc-smoke-output"
       ],
       "source_artifact_ids": []
     }

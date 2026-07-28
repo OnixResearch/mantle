@@ -1,0 +1,25 @@
+{
+  "format": "mantle-stagex-oyacc-6.6-inventory-v1",
+  "configured_source_digest_blake3": "f4cde58315dcbfc49c47928f9258debd030140c54e249cb2a11beef1eba30296",
+  "patch_command_count": 2,
+  "source_compile_count": 13,
+  "build_command_count": 14,
+  "smoke_command_count": 2,
+  "outputs": [
+    {
+      "artifact_id": "oyacc-6.6",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v36-oyacc-20260728/oyacc-stage/runtime/output/bin/yacc",
+      "bytes_len": 153616,
+      "digest_blake3": "0b073649ea023167a293495f25302cc3debc4dd6727d9214ce6be9361503aa50"
+    },
+    {
+      "artifact_id": "oyacc-smoke-output",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v36-oyacc-20260728/oyacc-stage/runtime/oyacc-6.6/smoke/y.tab.c",
+      "bytes_len": 240,
+      "digest_blake3": "6e719a5fc57aa5e8a06b7f7f37c6fdf672cd2ef2f91c27a7ca1daff128ac65a2"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds oyacc 6.6 and positive and negative parser-generation observations only; it does not prove the later shell or provider admission"
+}
