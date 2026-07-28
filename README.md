@@ -11,9 +11,9 @@ build inputs into Mantle. See [ADR 0010](adr/0010-keep-mantle-build-tool-boundar
 
 > **Status:** active research software. Mantle has working build, store, cache,
 > project, evidence, bootstrap, and self-build paths. Each proof or receipt is
-> bounded to its declared inputs and policy; it is not automatically a claim of
-> compiler correctness, full-source bootstrap, global reproducibility, or
-> deployment safety.
+> bounded to its declared inputs and policy. It does not prove compiler
+> correctness, full-source bootstrap, global reproducibility, or deployment
+> safety.
 
 ## Why Mantle
 
@@ -24,7 +24,7 @@ build inputs into Mantle. See [ADR 0010](adr/0010-keep-mantle-build-tool-boundar
 - **Explicit builds:** inputs, outputs, network policy, store prefix, and
   hermeticity mode are visible rather than inferred from ambient context.
 - **Independent store logic:** closure resolution uses Mantle PathInfo and
-  castore services; ordinary builds do not invoke `nix-store`.
+  castore services. Ordinary builds do not invoke `nix-store`.
 - **Evidence-first operations:** machine-readable reports distinguish observed
   facts, policy decisions, and explicit non-claims.
 
@@ -113,7 +113,7 @@ Mantle separates logical identity from physical placement:
 Use `--store /tmp/mantle-store` for an unprivileged physical output directory.
 Use `--nix-compat` when the logical prefix must be `/nix/store` for
 interoperability. The legacy `CRUNCH_STATE_DIR` spelling remains a compatibility
-surface; new operator prose and project-facing names use Mantle.
+surface. New operator prose and project-facing names use Mantle.
 
 Content-addressed outputs are the default. Input-addressed derivations and Nix
 hash algorithms remain available where compatibility requires them. Mantle signs
@@ -216,12 +216,12 @@ crunch-store      persist PathInfo, castore data, roots, and attestations
 
 The `crunch-*` crate names are retained compatibility identifiers. New
 project-facing prose uses Mantle. Pure decision logic is split into functional
-core crates where adopted; filesystem, process, network, and CLI effects remain
+core crates where adopted. Filesystem, process, network, and CLI effects remain
 in thin Rust adapters.
 
 The scheduler creates goals lazily, deduplicates them by store identity, and
 dispatches eligible work under explicit concurrency and policy bounds. A build
-report describes what was observed; it does not turn scheduling, sandbox, or
+report describes what was observed. It does not turn scheduling, sandbox, or
 cache evidence into a whole-system correctness proof.
 
 ## Evidence and trust boundaries
@@ -230,7 +230,7 @@ Mantle keeps build observations separate from stronger claims:
 
 - Build reports describe selected actions, outputs, failures, policy events,
   cache decisions, and evidence sidecars.
-- Attestations bind canonical facts and identities; they do not prove that a
+- Attestations bind canonical facts and identities. They do not prove that a
   builder, compiler, source, or dependency was correct.
 - Release verification checks the selected bundle and policy. Consumers must
   require a successful exit status and the report's final accepted disposition.
@@ -333,7 +333,7 @@ Useful documentation:
 Compiling Mantle uses the checked-in Rust nightly and requires the linker and
 OpenSSL development environment supplied by `nix develop`. Running derivation
 builds requires Linux and `bwrap`. Nix is not required for ordinary closure
-resolution or builds; the non-fetch `mantle bootstrap` path is the main
+resolution or builds. The non-fetch `mantle bootstrap` path is the main
 Nix-backed compatibility workflow.
 
 ## License
