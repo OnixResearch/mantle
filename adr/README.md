@@ -41,3 +41,4 @@ compatibility surface, crate name, or historical decision.
 | [0032](0032-deny-live-source-acquisition-in-hydrated-fixed-point-proofs.md) | Deny live source acquisition in hydrated fixed-point proofs | Accepted |
 | [0033](0033-preserve-history-when-publishing-mantle.md) | Preserve history when publishing Mantle | Accepted |
 | [0034](0034-keep-aeneasverif-proof-and-translation-authority-in-octet.md) | Keep AeneasVerif proof and translation authority in Octet | Accepted |
+| [0035](0035-cache-rust-units-through-castore-action-results.md) | Cache Rust units through castore action results | Proposed |
