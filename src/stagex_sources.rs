@@ -15,7 +15,7 @@ const SOURCE_RECORD_NAME_KEY: &str = "name";
 const SOURCE_RECORD_REVISION_KEY: &str = "rev";
 const STAGEX_SOURCE_RECORD_COUNT: usize = 7;
 pub(crate) const STAGEX_SOURCE_BUNDLE_MANIFEST_BLAKE3: &str =
-    "fb693cea29637174c37ab949f1436831a1c0096eb3610231ef296549d291ae55";
+    "58180e33d97d4dd12f15a0b8998f19ee66cff60056d1535e2d2a62d8256005b6";
 const STAGEX_SOURCE_REPORT_FORMAT: &str = "mantle-stagex-source-materialization-v1";
 const STAGEX_SOURCE_NON_CLAIM: &str = "source materialization proves authenticated payload identity and placement only; it does not prove executable lineage or provider admission";
 

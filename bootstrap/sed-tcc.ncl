@@ -9,6 +9,7 @@ let stage0 = import "stage0-posix.ncl" in
 let mes = import "mes.ncl" in
 let tcc = import "tinycc.ncl" in
 let make = import "make-tcc.ncl" in
+let tar = import "tar-tcc.ncl" in
 
 let sed_src = crunch.fetchTarball {
   # first-consumer: bootstrap/sed-tcc.ncl
@@ -102,5 +103,5 @@ let sed_src = crunch.fetchTarball {
       test -x "$out/bin/sed"
     "%,
   ],
-  inputs = [stage0, mes, tcc, make, sed_src],
+  inputs = [stage0, mes, tcc, make, tar, sed_src],
 } | crunch.Derivation

@@ -632,6 +632,24 @@
       "id": "tar-smoke",
       "name": "GNU tar protected roundtrip smoke output",
       "producing_tool_id": "tar-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "cc4bc898fbad65d9c0a07eab85c61c99abdb9d7d7d747948067bea7d9954618a"
+      },
+      "id": "sed-4.0.9",
+      "name": "source-built GNU sed 4.0.9",
+      "producing_tool_id": "sed-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "91f02abc6d98e0f00da4f3b1249ae0acd29544f7b19304f190d29f523885c077"
+      },
+      "id": "sed-smoke",
+      "name": "GNU sed protected substitution smoke output",
+      "producing_tool_id": "sed-smoke-exec"
     }
   ],
   "patches": [
@@ -709,7 +727,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "fb693cea29637174c37ab949f1436831a1c0096eb3610231ef296549d291ae55"
+        "hex_value": "58180e33d97d4dd12f15a0b8998f19ee66cff60056d1535e2d2a62d8256005b6"
       },
       "id": "stage0-source-bundle",
       "name": "authenticated offline full-source closure",
@@ -903,6 +921,15 @@
       "id": "tar-getdate-stub-source",
       "name": "bounded GNU tar date-parser stub source",
       "provenance": "bootstrap/seeds/tar-getdate-stub.c"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "65aa1a57a2966a247b4992de6525e319adb99f8ad2fe4cc2eb543a28740994ad"
+      },
+      "id": "sed-4.0.9-source",
+      "name": "GNU sed 4.0.9 fixed-output source",
+      "provenance": "source bundle record fixed-url-2861bfe2bbe8003326313432362cdd09a73a549a874abb706bce6ba4e5378011"
     }
   ],
   "stage_graph": [
@@ -1013,6 +1040,10 @@
     {
       "from_node_id": "seed",
       "to_node_id": "tar-getdate-stub-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "sed-4.0.9-source"
     }
   ],
   "transition_tools": [
@@ -1523,6 +1554,42 @@
       "name": "GNU tar 1.12 executing an archive roundtrip and rejecting malformed input",
       "output_artifact_ids": [
         "tar-smoke"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3e96d4952cf6c52707082fc120d9a372def665c73bef7ec13609abbfc201b99c"
+      },
+      "id": "sed-build-exec",
+      "input_artifact_ids": [
+        "tinycc-0.9.27",
+        "tinycc27-libc",
+        "tinycc-crt1",
+        "tinycc-libtcc1",
+        "tar-smoke"
+      ],
+      "name": "TinyCC 0.9.27 materializing GNU sed 4.0.9 after GNU tar",
+      "output_artifact_ids": [
+        "sed-4.0.9"
+      ],
+      "source_artifact_ids": [
+        "sed-4.0.9-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "cc4bc898fbad65d9c0a07eab85c61c99abdb9d7d7d747948067bea7d9954618a"
+      },
+      "id": "sed-smoke-exec",
+      "input_artifact_ids": [
+        "sed-4.0.9"
+      ],
+      "name": "GNU sed 4.0.9 executing a substitution and rejecting malformed input",
+      "output_artifact_ids": [
+        "sed-smoke"
       ],
       "source_artifact_ids": []
     }

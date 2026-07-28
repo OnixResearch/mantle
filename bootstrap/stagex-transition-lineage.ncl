@@ -1,4 +1,4 @@
-# Typed source for the protected seed-to-GNU-tar-1.12 transition.
+# Typed source for the protected seed-to-GNU-sed-4.0.9 transition.
 # This file does not yet describe the later native toolchain or normalized StageX provider.
 
 let Digest = {
@@ -133,7 +133,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
       "generated as zero bytes by the bounded transition plan",
     source "stage0-source-bundle" "authenticated offline full-source closure"
-      "fb693cea29637174c37ab949f1436831a1c0096eb3610231ef296549d291ae55"
+      "58180e33d97d4dd12f15a0b8998f19ee66cff60056d1535e2d2a62d8256005b6"
       "mantle-source-bundle-v1 manifest identity loaded and validated before Stage0 execution",
     source "stage0-posix-amd64-source" "stage0-posix AMD64 snapshot"
       "f983a7b79acdd53fd4d31c8959c62ca24eabbea491327aaa113c4bc11549e5f9"
@@ -198,6 +198,9 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "tar-getdate-stub-source" "bounded GNU tar date-parser stub source"
       "a479349008d81a7766d3e56dd5bd1d83e8645c0690228d4bb2d89d6f04d4f0a9"
       "bootstrap/seeds/tar-getdate-stub.c",
+    source "sed-4.0.9-source" "GNU sed 4.0.9 fixed-output source"
+      "65aa1a57a2966a247b4992de6525e319adb99f8ad2fe4cc2eb543a28740994ad"
+      "source bundle record fixed-url-2861bfe2bbe8003326313432362cdd09a73a549a874abb706bce6ba4e5378011",
   ],
   generated_artifacts = [
     {
@@ -279,6 +282,8 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "gzip-smoke-exec" "gzip-smoke" "gzip protected roundtrip smoke output" "78abaccbae9efa7039ff82d80215d2fbd3c4cd0221dadd85dd9df731f15d8751",
     tinycc_generated "tar-build-exec" "tar-1.12" "source-built GNU tar 1.12" "57c861b961bfc2c1047ab7f175c0f16024ea91787ba5a5e43600c721b5eff6ca",
     tinycc_generated "tar-smoke-exec" "tar-smoke" "GNU tar protected roundtrip smoke output" "59392bf4bef63f5688ff8604868a22adcecfe94f75c1234fe7c9df1107038be2",
+    tinycc_generated "sed-build-exec" "sed-4.0.9" "source-built GNU sed 4.0.9" "cc4bc898fbad65d9c0a07eab85c61c99abdb9d7d7d747948067bea7d9954618a",
+    tinycc_generated "sed-smoke-exec" "sed-smoke" "GNU sed protected substitution smoke output" "91f02abc6d98e0f00da4f3b1249ae0acd29544f7b19304f190d29f523885c077",
   ],
   transition_tools = [
     {
@@ -544,6 +549,22 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["tar-smoke"],
       digest = blake3 "57c861b961bfc2c1047ab7f175c0f16024ea91787ba5a5e43600c721b5eff6ca",
     },
+    {
+      id = "sed-build-exec",
+      name = "TinyCC 0.9.27 materializing GNU sed 4.0.9 after GNU tar",
+      source_artifact_ids = ["sed-4.0.9-source"],
+      input_artifact_ids = ["tinycc-0.9.27", "tinycc27-libc", "tinycc-crt1", "tinycc-libtcc1", "tar-smoke"],
+      output_artifact_ids = ["sed-4.0.9"],
+      digest = blake3 "3e96d4952cf6c52707082fc120d9a372def665c73bef7ec13609abbfc201b99c",
+    },
+    {
+      id = "sed-smoke-exec",
+      name = "GNU sed 4.0.9 executing a substitution and rejecting malformed input",
+      source_artifact_ids = [],
+      input_artifact_ids = ["sed-4.0.9"],
+      output_artifact_ids = ["sed-smoke"],
+      digest = blake3 "cc4bc898fbad65d9c0a07eab85c61c99abdb9d7d7d747948067bea7d9954618a",
+    },
   ],
   patches = [
     {
@@ -607,5 +628,6 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "gzip-makecrc-source" },
     { from_node_id = "seed", to_node_id = "tar-1.12-source" },
     { from_node_id = "seed", to_node_id = "tar-getdate-stub-source" },
+    { from_node_id = "seed", to_node_id = "sed-4.0.9-source" },
   ],
 } | Manifest

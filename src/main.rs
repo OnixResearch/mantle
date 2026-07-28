@@ -154,6 +154,8 @@ mod stagex_mes_sources;
 #[allow(dead_code)]
 mod stagex_patch;
 #[allow(dead_code)]
+mod stagex_sed;
+#[allow(dead_code)]
 mod stagex_sources;
 #[allow(dead_code)]
 mod stagex_stage0;
