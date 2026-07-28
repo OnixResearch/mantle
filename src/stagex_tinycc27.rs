@@ -31,7 +31,8 @@ const TINYCC27_BUILD_COMMAND_COUNT: u32 = 1;
 const TINYCC27_SMOKE_COMMAND_COUNT: u32 = 3;
 const TINYCC27_OUTPUT_COUNT: usize = 5;
 pub(crate) const TINYCC27_FINAL_BLAKE3: &str = "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39";
-const TINYCC27_PATCHED_SOURCE_BLAKE3: &str = "684632508d70bc1cfd9941cb8f3ceea609507347f677eb29f148d86000d29711";
+pub(crate) const TINYCC27_PATCHED_SOURCE_BLAKE3: &str =
+    "684632508d70bc1cfd9941cb8f3ceea609507347f677eb29f148d86000d29711";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Tinycc27ExpectedOutput {
@@ -700,7 +701,7 @@ fn validate_expected_tinycc27_outputs(outputs: &[Tinycc27Output]) -> Result<(), 
     Ok(())
 }
 
-fn patched_tinycc27_source_digest(root: &Path, files: &[String]) -> Result<String, Tinycc27Error> {
+pub(crate) fn patched_tinycc27_source_digest(root: &Path, files: &[String]) -> Result<String, Tinycc27Error> {
     let mut sorted = files.to_vec();
     sorted.sort();
     let mut hasher = blake3::Hasher::new();

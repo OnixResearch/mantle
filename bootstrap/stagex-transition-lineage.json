@@ -1001,6 +1001,78 @@
       "id": "bash-smoke-output",
       "name": "bash protected command smoke output",
       "producing_tool_id": "bash-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "29489150a78ce433dac24acfaf58ec66a4cd37d3eb93e223c5b9150f5c71a0aa"
+      },
+      "id": "tcc-musl-prep-configured-source",
+      "name": "TinyCC-to-musl configured source identity",
+      "producing_tool_id": "tcc-musl-prep-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "4add5639d2016d79b1ac258aa502098fc941354ded0acd91bf8cafea42240a77"
+      },
+      "id": "tcc-musl-prep",
+      "name": "TinyCC compiler prepared for musl",
+      "producing_tool_id": "tcc-musl-prep-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "4add5639d2016d79b1ac258aa502098fc941354ded0acd91bf8cafea42240a77"
+      },
+      "id": "tcc-musl-prep-alias",
+      "name": "TinyCC musl-prep compiler alias",
+      "producing_tool_id": "tcc-musl-prep-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "bd46a4a350e17ec4a7870be6c6dea82f7327c513ee4e2720bebb7b6e26f20d85"
+      },
+      "id": "tcc-musl-prep-libc",
+      "name": "carried Mes libc for musl handoff",
+      "producing_tool_id": "tcc-musl-prep-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d3fec15bd12fd72fdbdf4248d6df6b21a44cfb6a3e2c9d787a0d081ff7143df1"
+      },
+      "id": "tcc-musl-prep-crt1",
+      "name": "carried Mes startup object for musl handoff",
+      "producing_tool_id": "tcc-musl-prep-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "0e8b75458ad70ab03142b27a3014af68f57c03004f4d22a65702e60d531140e9"
+      },
+      "id": "tcc-musl-prep-libtcc1",
+      "name": "carried TinyCC runtime archive for musl handoff",
+      "producing_tool_id": "tcc-musl-prep-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "2577c43f136d52c8d7b61ba8f7cab614b31898586d3fab634bebe6e1fd14cb7d"
+      },
+      "id": "tcc-musl-prep-headers",
+      "name": "carried Mes headers for musl handoff",
+      "producing_tool_id": "tcc-musl-prep-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "41c08a115f275f00099aa397872090612e853be0fb5f13ba55ddb89737e42377"
+      },
+      "id": "tcc-musl-prep-positive-object",
+      "name": "TinyCC musl-prep positive object",
+      "producing_tool_id": "tcc-musl-prep-smoke-exec"
     }
   ],
   "patches": [
@@ -1551,6 +1623,15 @@
       "id": "bash-readline-stub-source",
       "name": "bounded bash readline stub source",
       "provenance": "RLSTUB heredoc in bootstrap/bash-2.05b-tcc.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "88f0a242b6e53d3618383af6d9fce83bbacaa4cf4f2403bba56baf9651901b4e"
+      },
+      "id": "tcc-musl-prep-recipe-source",
+      "name": "checked TinyCC-to-musl bridge recipe",
+      "provenance": "bootstrap/tcc-musl-prep.ncl"
     }
   ],
   "stage_graph": [
@@ -1785,6 +1866,10 @@
     {
       "from_node_id": "seed",
       "to_node_id": "bash-readline-stub-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "tcc-musl-prep-recipe-source"
     }
   ],
   "transition_tools": [
@@ -2581,6 +2666,51 @@
       "name": "bash 2.05b executing bounded commands and rejecting malformed syntax",
       "output_artifact_ids": [
         "bash-smoke-output"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "29489150a78ce433dac24acfaf58ec66a4cd37d3eb93e223c5b9150f5c71a0aa"
+      },
+      "id": "tcc-musl-prep-build-exec",
+      "input_artifact_ids": [
+        "bash-smoke-output",
+        "tinycc-0.9.27",
+        "tinycc27-libc",
+        "tinycc-crt1",
+        "tinycc-libtcc1"
+      ],
+      "name": "TinyCC 0.9.27 materializing the compiler prepared for musl",
+      "output_artifact_ids": [
+        "tcc-musl-prep-configured-source",
+        "tcc-musl-prep",
+        "tcc-musl-prep-alias",
+        "tcc-musl-prep-libc",
+        "tcc-musl-prep-crt1",
+        "tcc-musl-prep-libtcc1",
+        "tcc-musl-prep-headers"
+      ],
+      "source_artifact_ids": [
+        "tinycc-0.9.27-source",
+        "tinycc-0.9.27-patch-source",
+        "tcc-musl-prep-recipe-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "4add5639d2016d79b1ac258aa502098fc941354ded0acd91bf8cafea42240a77"
+      },
+      "id": "tcc-musl-prep-smoke-exec",
+      "input_artifact_ids": [
+        "tcc-musl-prep",
+        "tcc-musl-prep-headers"
+      ],
+      "name": "TinyCC musl-prep compiling an object and rejecting malformed C",
+      "output_artifact_ids": [
+        "tcc-musl-prep-positive-object"
       ],
       "source_artifact_ids": []
     }

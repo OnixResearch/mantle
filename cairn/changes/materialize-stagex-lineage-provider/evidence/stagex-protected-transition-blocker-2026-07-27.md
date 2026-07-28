@@ -1,13 +1,13 @@
 # StageX protected-transition blocker — 2026-07-27
 
-> Status update: superseded through bash 2.05b by
-> `protected-transition-v38-bash-2026-07-28/`. Mantle now completes protected
+> Status update: superseded through TinyCC musl-prep by
+> `protected-transition-v41-tcc-musl-prep-2026-07-28/`. Mantle now completes protected
 > full Stage0, source-built `mes-m2`, NYACC regeneration, Mes runtime archives,
 > TinyCC 0.9.26, TinyCC 0.9.27, GNU Make 3.82, GNU patch 2.5.9, gzip 1.2.4,
 > GNU tar 1.12, GNU sed 4.0.9, bzip2 1.0.8, bounded coreutils 5.0, oyacc 6.6,
-> and bash 2.05b. The current run recorded 928 allowed events, zero denied events,
-> and zero fallback. The remaining blocker starts at the TinyCC-to-musl handoff
-> and covers later tools plus provider admission.
+> bash 2.05b, and the TinyCC-to-musl preparation compiler. The current run
+> recorded 933 allowed events, zero denied events, and zero fallback. The
+> remaining blocker starts at musl 1.1.24 and covers later tools plus provider admission.
 
 ## Question
 
@@ -18,7 +18,7 @@ Can the current source-built native artifacts become a complete StageX lineage p
 ### Current receipt and manifest state
 
 - `bootstrap/evidence/stagex-lineage-provider-receipt.json` has `lineage_receipt_status = scaffold-only` and placeholder digests.
-- `bootstrap/stagex-transition-lineage.{ncl,json}` now binds the protected seed-to-bash-2.05b manifest and exact compatibility sources.
+- `bootstrap/stagex-transition-lineage.{ncl,json}` now binds the protected seed-to-TinyCC-musl-prep manifest and exact compatibility sources.
 - `src/main.rs::cmd_bootstrap_stagex_lineage` validates a manifest, then returns `STAGEX_LINEAGE_PROVIDER_NOT_MATERIALIZED`.
 - The retained v6 evidence has a complete 132-event seed-to-full-Stage0 protected-exec audit.
 - No exported `hex0-seed` binary exists under `/home/brittonr/.cache/mantle-full-source-20260718`.
@@ -67,19 +67,19 @@ The current artifacts cannot meet the accepted requirement. Their construction s
 
 ## Exact completion blocker
 
-The protected transition now has checked seed bytes, authenticated direct source records, a typed 59-stage plan, exact executable identities, full Stage0 SHA-256 interoperability checks, and a 928-event observed audit through bash 2.05b.
+The protected transition now has checked seed bytes, authenticated direct source records, a typed 61-stage plan, exact executable identities, full Stage0 SHA-256 interoperability checks, and a 933-event observed audit through TinyCC musl-prep.
 
-The current protected authority has no admitted TinyCC-to-musl bridge or musl 1.1.24 runtime. Therefore, the libc handoff is not yet bound into this transition manifest.
+The current protected authority has no musl 1.1.24 runtime. Therefore, the first real libc output is not yet bound into this transition manifest.
 
 A complete provider run still needs all of these mechanisms and artifacts:
 
-1. Bind the TinyCC-to-musl preparation compiler and authenticated musl 1.1.24 source, then build and smoke them under exact protected authority.
+1. Bind authenticated musl 1.1.24 source and its generated compatibility sources, then build and smoke the first real libc under exact protected authority.
 2. Continue through the remaining conventional GNU tools, musl, GCC, binutils, and completed native-provider stages without ambient execution.
 3. Retain per-stage reports for every later exact executable, source stage, input, output, and BLAKE3 value.
 4. Preserve a complete protected-exec audit through normalized-provider runtime validation.
 5. Independently validate and create-new publish the provider and complete receipt.
 
-No protected `tcc-musl-prep` stage, musl 1.1.24 output identity, or musl-linked executable authorization exists in the current graph. Replacing only the scaffold JSON would create false evidence. Reusing the existing full-source provider would relabel host-assisted effects as StageX lineage.
+No protected musl 1.1.24 output identity or musl-linked executable authorization exists in the current graph. Replacing only the scaffold JSON would create false evidence. Reusing the existing full-source provider would relabel host-assisted effects as StageX lineage.
 
 ## Owner
 
@@ -87,7 +87,7 @@ Mantle StageX lineage-provider implementation.
 
 ## Next action
 
-Bind the TinyCC-to-musl preparation compiler and authenticated musl 1.1.24 source. Then continue the protected runner from bash 2.05b with bounded Rust orchestration and no host shell or sandbox tools.
+Bind authenticated musl 1.1.24 source and generated compatibility sources. Then continue the protected runner from TinyCC musl-prep with bounded Rust orchestration and no host shell or sandbox tools.
 
 I1 through V3 remain unchecked. The fixed-point and parity-promotion successor changes remain blocked by this change.
 

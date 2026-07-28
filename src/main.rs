@@ -172,6 +172,8 @@ mod stagex_stage0_full;
 #[allow(dead_code)]
 mod stagex_tar;
 #[allow(dead_code)]
+mod stagex_tcc_musl_prep;
+#[allow(dead_code)]
 mod stagex_tinycc;
 #[allow(dead_code)]
 mod stagex_tinycc27;

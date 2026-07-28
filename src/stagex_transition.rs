@@ -72,6 +72,8 @@ pub(crate) const OYACC_BUILD_STAGE_ID: &str = "oyacc-materialization";
 pub(crate) const OYACC_SMOKE_STAGE_ID: &str = "oyacc-smoke";
 pub(crate) const BASH_BUILD_STAGE_ID: &str = "bash-materialization";
 pub(crate) const BASH_SMOKE_STAGE_ID: &str = "bash-smoke";
+pub(crate) const TCC_MUSL_PREP_BUILD_STAGE_ID: &str = "tcc-musl-prep-materialization";
+pub(crate) const TCC_MUSL_PREP_SMOKE_STAGE_ID: &str = "tcc-musl-prep-smoke";
 pub(crate) const HEX0_SEED_BLAKE3: &str = "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80";
 pub(crate) const HEX0_SOURCE_BLAKE3: &str = "0fb23576a10b41df29c165e39514f18c411da96ae71873a6a2e2f0b1d94de614";
 pub(crate) const KAEM_SOURCE_BLAKE3: &str = "5a56b4164dca4d1e03ba35bc8ce4b418a0de2baf1cb9e6a0912607e26532d30d";
@@ -92,12 +94,15 @@ const LINEAGE_MANIFEST_MAX_MIB: u64 = 1;
 const LINEAGE_MANIFEST_MAX_BYTES: u64 = LINEAGE_MANIFEST_MAX_MIB * MIB_BYTES;
 const STAGE_TIMEOUT_MS: u64 = 30_000;
 const STAGE0_STAGE_TIMEOUT_MS: u64 = 120_000;
-const MES_STAGE_TIMEOUT_MS: u64 = 300_000;
+const MILLISECONDS_PER_SECOND: u64 = 1_000;
+const SECONDS_PER_MINUTE: u64 = 60;
+const MES_STAGE_TIMEOUT_MINUTES: u64 = 10;
+const MES_STAGE_TIMEOUT_MS: u64 = MES_STAGE_TIMEOUT_MINUTES * SECONDS_PER_MINUTE * MILLISECONDS_PER_SECOND;
 const MES_OUTPUT_MAX_MIB: u64 = 64;
 const MES_OUTPUT_MAX_BYTES: u64 = MES_OUTPUT_MAX_MIB * MIB_BYTES;
 const STAGE_JOB_COUNT: u32 = 1;
 const TRANSITION_STAGE_COUNT_MAX: u32 = 3;
-const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 59;
+const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 61;
 const TINYCC_LINK_CHILD_EVENT_COUNT: usize = 5;
 const MAKE_RECIPE_CHILD_EVENT_COUNT: usize = 1;
 const GZIP_GZIP_SMOKE_EVENT_COUNT: usize = 2;
@@ -190,6 +195,8 @@ pub(crate) struct StagexTransitionReport {
     pub bash_sources: Option<crate::stagex_bash::BashSourceMaterializationReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bash_runtime: Option<crate::stagex_bash::BashInventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tcc_musl_prep_runtime: Option<crate::stagex_tcc_musl_prep::TccMuslPrepInventoryReport>,
     pub fallback_events: Vec<String>,
     pub promotions: Vec<OutputPromotionRecord>,
     pub protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
@@ -439,6 +446,12 @@ pub(crate) fn materialize_protected_transition(
             source_stage_id: BASH_BUILD_STAGE_ID.to_string(),
             path: request.scratch_dir.join("bash-stage/runtime/output/bin/bash"),
             digest_hex: crate::stagex_bash::BASH_FINAL_BLAKE3.to_string(),
+        });
+        planned.push(PlannedExecutable {
+            authorization_id: "exec:tcc-musl-prep-smoke:tcc".to_string(),
+            source_stage_id: TCC_MUSL_PREP_BUILD_STAGE_ID.to_string(),
+            path: request.scratch_dir.join("tcc-musl-prep-stage/runtime/output/bin/tcc-musl-prep"),
+            digest_hex: crate::stagex_tcc_musl_prep::TCC_MUSL_PREP_FINAL_BLAKE3.to_string(),
         });
         planned
     } else {
@@ -886,6 +899,33 @@ pub(crate) fn materialize_protected_transition(
         _ => unreachable!("bash requires source bundle and oyacc together"),
     };
 
+    let tcc_musl_prep_runtime = match (tinycc27_sources.as_ref(), bash_runtime.as_ref()) {
+        (Some(tinycc27_sources), Some(_)) => {
+            let stage = request.scratch_dir.join("tcc-musl-prep-stage");
+            fs::create_dir(&stage)
+                .map_err(|source| io_error("creating create-new protected TinyCC musl-prep stage root", source))?;
+            let result = crate::stagex_tcc_musl_prep::derive_tcc_musl_prep_inventory(
+                crate::stagex_tcc_musl_prep::TccMuslPrepInventoryRequest {
+                    tinycc27_source_root: &tinycc27_sources.output_path,
+                    tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
+                    scratch_dir: &stage.join("runtime"),
+                    protected_exec_enforced: true,
+                },
+            );
+            match result {
+                Ok(report) => Some(report),
+                Err(error) => {
+                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                    let events = supervisor.audit_events();
+                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
+                }
+            }
+        }
+        (None, None) => None,
+        _ => unreachable!("TinyCC musl-prep requires TinyCC 0.9.27 sources and bash together"),
+    };
+
     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
     let protected_exec_events = supervisor.audit_events();
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
@@ -906,6 +946,7 @@ pub(crate) fn materialize_protected_transition(
             coreutils_runtime: coreutils_runtime.as_ref(),
             oyacc_runtime: oyacc_runtime.as_ref(),
             bash_runtime: bash_runtime.as_ref(),
+            tcc_musl_prep_runtime: tcc_musl_prep_runtime.as_ref(),
         },
         &protected_exec_events,
     )?;
@@ -945,6 +986,7 @@ pub(crate) fn materialize_protected_transition(
         oyacc_runtime,
         bash_sources,
         bash_runtime,
+        tcc_musl_prep_runtime,
         fallback_events: Vec::new(),
         promotions: vec![hex0_promotion, kaem_promotion],
         protected_exec_events,
@@ -1056,6 +1098,9 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     for (artifact_id, digest_blake3) in crate::stagex_bash::source_artifact_digests() {
         require_manifest_digest(&sources, artifact_id, digest_blake3)?;
     }
+    for (artifact_id, digest_blake3) in crate::stagex_tcc_musl_prep::source_artifact_digests() {
+        require_manifest_digest(&sources, artifact_id, digest_blake3)?;
+    }
     let generated: BTreeMap<&str, &str> = manifest
         .generated_artifacts
         .iter()
@@ -1124,6 +1169,14 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     }
     require_manifest_digest(&generated, "bash-configured-source", crate::stagex_bash::BASH_CONFIGURED_SOURCE_BLAKE3)?;
     for expected in crate::stagex_bash::BASH_EXPECTED_OUTPUTS {
+        require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
+    }
+    require_manifest_digest(
+        &generated,
+        "tcc-musl-prep-configured-source",
+        crate::stagex_tcc_musl_prep::TCC_MUSL_PREP_CONFIGURED_SOURCE_BLAKE3,
+    )?;
+    for expected in crate::stagex_tcc_musl_prep::TCC_MUSL_PREP_EXPECTED_OUTPUTS {
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
     let patches: BTreeMap<&str, &str> =
@@ -1287,6 +1340,9 @@ fn build_transition_plan(
         stages.extend(oyacc_stage_plans(&tinycc27_root, &patch_root, &oyacc_root));
         let bash_root = staged.seed.parent().expect("staged seed has parent").join("bash-stage/runtime");
         stages.extend(bash_stage_plans(&tinycc27_root, &bash_root));
+        let tcc_musl_prep_root =
+            staged.seed.parent().expect("staged seed has parent").join("tcc-musl-prep-stage/runtime");
+        stages.extend(tcc_musl_prep_stage_plans(&tinycc27_root, &tcc_musl_prep_root));
     }
     let stage_count_max = if include_stage0_mini {
         TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX
@@ -1836,6 +1892,66 @@ fn oyacc_stage_plans(tinycc27_root: &Path, patch_root: &Path, oyacc_root: &Path)
                 &yacc,
                 OYACC_BUILD_STAGE_ID,
                 crate::stagex_oyacc::OYACC_FINAL_BLAKE3,
+            )],
+        ),
+    ]
+}
+
+fn tcc_musl_prep_stage_plans(tinycc27_root: &Path, prep_root: &Path) -> Vec<StagexStagePlan> {
+    let tinycc27 = tinycc27_root.join("output/bin/tcc");
+    let prep = prep_root.join("output/bin/tcc-musl-prep");
+    vec![
+        mes_stage_plan(
+            TCC_MUSL_PREP_BUILD_STAGE_ID,
+            &[
+                BASH_BUILD_STAGE_ID,
+                BASH_SMOKE_STAGE_ID,
+                TINYCC27_BUILD_STAGE_ID,
+                TINYCC27_RUNTIME_STAGE_ID,
+                TINYCC_RUNTIME_STAGE_ID,
+            ],
+            &[
+                "tinycc-0.9.27-source",
+                "tinycc-0.9.27-patch-source",
+                "tcc-musl-prep-recipe-source",
+            ],
+            &[
+                "bash-smoke-output",
+                "tinycc-0.9.27",
+                "tinycc27-libc",
+                "tinycc-crt1",
+                "tinycc-libtcc1",
+            ],
+            &[
+                "tcc-musl-prep-configured-source".to_string(),
+                "tcc-musl-prep".to_string(),
+                "tcc-musl-prep-alias".to_string(),
+                "tcc-musl-prep-libc".to_string(),
+                "tcc-musl-prep-crt1".to_string(),
+                "tcc-musl-prep-libtcc1".to_string(),
+                "tcc-musl-prep-headers".to_string(),
+            ],
+            vec![authorization(
+                "exec:tcc-musl-prep-materialization:tinycc27",
+                &tinycc27,
+                TINYCC27_BUILD_STAGE_ID,
+                crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(
+            TCC_MUSL_PREP_SMOKE_STAGE_ID,
+            &[TCC_MUSL_PREP_BUILD_STAGE_ID],
+            &[],
+            &["tcc-musl-prep", "tcc-musl-prep-headers"],
+            &[
+                "tcc-musl-prep-positive-object".to_string(),
+                "tcc-musl-prep-negative-observation".to_string(),
+            ],
+            vec![authorization(
+                "exec:tcc-musl-prep-smoke:tcc",
+                &prep,
+                TCC_MUSL_PREP_BUILD_STAGE_ID,
+                crate::stagex_tcc_musl_prep::TCC_MUSL_PREP_FINAL_BLAKE3,
             )],
         ),
     ]
@@ -2856,6 +2972,7 @@ struct TransitionAuditReports<'a> {
     coreutils_runtime: Option<&'a crate::stagex_coreutils::CoreutilsInventoryReport>,
     oyacc_runtime: Option<&'a crate::stagex_oyacc::OyaccInventoryReport>,
     bash_runtime: Option<&'a crate::stagex_bash::BashInventoryReport>,
+    tcc_musl_prep_runtime: Option<&'a crate::stagex_tcc_musl_prep::TccMuslPrepInventoryReport>,
 }
 
 fn validate_transition_audit(
@@ -2878,6 +2995,7 @@ fn validate_transition_audit(
         coreutils_runtime,
         oyacc_runtime,
         bash_runtime,
+        tcc_musl_prep_runtime,
     } = reports;
     let expected = transition_expected_audit_events(staged);
     if events.len() < EXPECTED_AUDIT_EVENT_COUNT {
@@ -2903,6 +3021,7 @@ fn validate_transition_audit(
             && coreutils_runtime.is_none()
             && oyacc_runtime.is_none()
             && bash_runtime.is_none()
+            && tcc_musl_prep_runtime.is_none()
             && events.len() == EXPECTED_AUDIT_EVENT_COUNT
         {
             return Ok(());
@@ -2927,7 +3046,9 @@ fn validate_transition_audit(
     }
     validate_stage0_audit(staged, &stage0.mini, &stage0_events[..mini_event_count])?;
     let after_mini = &stage0_events[mini_event_count..];
-    let (before_bash, bash_events) = split_bash_audit_suffix(bash_runtime, after_mini)?;
+    let (before_tcc_musl_prep, tcc_musl_prep_events) =
+        split_tcc_musl_prep_audit_suffix(tcc_musl_prep_runtime, after_mini)?;
+    let (before_bash, bash_events) = split_bash_audit_suffix(bash_runtime, before_tcc_musl_prep)?;
     let (before_oyacc, oyacc_events) = split_oyacc_audit_suffix(oyacc_runtime, before_bash)?;
     let (before_coreutils, coreutils_events) = split_coreutils_audit_suffix(coreutils_runtime, before_oyacc)?;
     let (before_bzip2, bzip2_events) = split_bzip2_audit_suffix(bzip2_runtime, before_coreutils)?;
@@ -3057,12 +3178,40 @@ fn validate_transition_audit(
         }
     }
     match (bash_runtime, tinycc27_runtime, oyacc_runtime) {
-        (Some(bash), Some(tinycc27), Some(_)) => validate_bash_audit(tinycc27, bash, bash_events),
-        (None, _, _) if bash_events.is_empty() => Ok(()),
+        (Some(bash), Some(tinycc27), Some(_)) => validate_bash_audit(tinycc27, bash, bash_events)?,
+        (None, _, _) if bash_events.is_empty() => {}
+        _ => {
+            return Err(StagexTransitionError::Audit(
+                "bash report or events exist without TinyCC 0.9.27 and oyacc authority".to_string(),
+            ));
+        }
+    }
+    match (tcc_musl_prep_runtime, tinycc27_runtime, bash_runtime) {
+        (Some(prep), Some(tinycc27), Some(_)) => validate_tcc_musl_prep_audit(tinycc27, prep, tcc_musl_prep_events),
+        (None, _, _) if tcc_musl_prep_events.is_empty() => Ok(()),
         _ => Err(StagexTransitionError::Audit(
-            "bash report or events exist without TinyCC 0.9.27 and oyacc authority".to_string(),
+            "TinyCC musl-prep report or events exist without TinyCC 0.9.27 and bash authority".to_string(),
         )),
     }
+}
+
+fn split_tcc_musl_prep_audit_suffix<'a>(
+    report: Option<&crate::stagex_tcc_musl_prep::TccMuslPrepInventoryReport>,
+    events: &'a [ProtectedSeccompAuditEvent],
+) -> Result<(&'a [ProtectedSeccompAuditEvent], &'a [ProtectedSeccompAuditEvent]), StagexTransitionError> {
+    let Some(report) = report else {
+        return Ok((events, &events[events.len()..]));
+    };
+    let event_count = tcc_musl_prep_expected_event_count(report)?;
+    let start = events.len().checked_sub(event_count).ok_or_else(|| {
+        StagexTransitionError::Audit(format!(
+            "expected {event_count} trailing TinyCC musl-prep events, observed {}",
+            events.len()
+        ))
+    })?;
+    assert_eq!(events.len().saturating_sub(start), event_count);
+    assert!(event_count > 0);
+    Ok((&events[..start], &events[start..]))
 }
 
 fn split_bash_audit_suffix<'a>(
@@ -3791,6 +3940,60 @@ fn tinycc27_expected_event_count(
         .ok_or_else(|| StagexTransitionError::Audit("TinyCC 0.9.27 command count overflow".to_string()))?;
     usize::try_from(command_count)
         .map_err(|_| StagexTransitionError::Audit("TinyCC 0.9.27 command count does not fit usize".to_string()))
+}
+
+fn validate_tcc_musl_prep_audit(
+    tinycc27: &crate::stagex_tinycc27::Tinycc27InventoryReport,
+    prep: &crate::stagex_tcc_musl_prep::TccMuslPrepInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    let expected_count = tcc_musl_prep_expected_event_count(prep)?;
+    if events.len() != expected_count {
+        return Err(StagexTransitionError::Audit(format!(
+            "TinyCC musl-prep audit expected {expected_count} events, observed {}",
+            events.len()
+        )));
+    }
+    let build_end = usize::try_from(prep.build_command_count).unwrap_or(usize::MAX);
+    let tinycc27_path = tinycc27_output_path(tinycc27, "tinycc27-alias")?;
+    let prep_path = tcc_musl_prep_output_path(prep, "tcc-musl-prep")?;
+    for (index, event) in events.iter().enumerate() {
+        let (path, digest, inventory_id) = if index < build_end {
+            (
+                &tinycc27_path,
+                crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
+                "planned:tinycc27-materialization:exec:tinycc27-smoke:tinycc27",
+            )
+        } else {
+            (
+                &prep_path,
+                crate::stagex_tcc_musl_prep::TCC_MUSL_PREP_FINAL_BLAKE3,
+                "planned:tcc-musl-prep-materialization:exec:tcc-musl-prep-smoke:tcc",
+            )
+        };
+        validate_coreutils_event(event, path, digest, inventory_id)?;
+    }
+    assert_eq!(events.len(), expected_count);
+    assert_eq!(build_end, 2);
+    Ok(())
+}
+
+fn tcc_musl_prep_expected_event_count(
+    report: &crate::stagex_tcc_musl_prep::TccMuslPrepInventoryReport,
+) -> Result<usize, StagexTransitionError> {
+    const EXPECTED_BUILD_COUNT: u32 = 2;
+    const EXPECTED_SMOKE_COUNT: u32 = 3;
+    if report.build_command_count != EXPECTED_BUILD_COUNT || report.smoke_command_count != EXPECTED_SMOKE_COUNT {
+        return Err(StagexTransitionError::Audit(
+            "TinyCC musl-prep report has substituted build or smoke counts".to_string(),
+        ));
+    }
+    let total = report
+        .build_command_count
+        .checked_add(report.smoke_command_count)
+        .ok_or_else(|| StagexTransitionError::Audit("TinyCC musl-prep event count overflow".to_string()))?;
+    usize::try_from(total)
+        .map_err(|_| StagexTransitionError::Audit("TinyCC musl-prep event count does not fit usize".to_string()))
 }
 
 fn validate_bash_audit(
@@ -4714,6 +4917,18 @@ fn tinycc27_output_path(
         .ok_or_else(|| StagexTransitionError::Audit(format!("TinyCC 0.9.27 report lacks output {artifact_id}")))
 }
 
+fn tcc_musl_prep_output_path(
+    report: &crate::stagex_tcc_musl_prep::TccMuslPrepInventoryReport,
+    artifact_id: &str,
+) -> Result<PathBuf, StagexTransitionError> {
+    report
+        .outputs
+        .iter()
+        .find(|output| output.artifact_id == artifact_id)
+        .map(|output| output.path.clone())
+        .ok_or_else(|| StagexTransitionError::Audit(format!("TinyCC musl-prep report lacks output {artifact_id}")))
+}
+
 fn bash_output_path(
     report: &crate::stagex_bash::BashInventoryReport,
     artifact_id: &str,
@@ -4936,7 +5151,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
-    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "f5a0b8f0bc14ec40a54f6a6329114d8d0f0438a126f8c7c8771dde215fc1b7e3";
+    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "1ea9b7334d547fb34fc21e88b6c5e898e0cb153868ee655c2d36366ffcaaafd0";
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {
@@ -5057,6 +5272,25 @@ mod tests {
         let error = tinycc27_expected_event_count(&overflow).unwrap_err();
         assert!(error.to_string().contains("command count overflow"));
         assert!(!error.to_string().is_empty());
+    }
+
+    #[test]
+    fn tcc_musl_prep_event_count_is_closed_and_rejects_substitution() {
+        const EXPECTED_EVENT_COUNT: usize = 5;
+        let report = crate::stagex_tcc_musl_prep::TccMuslPrepInventoryReport {
+            format: "test",
+            configured_source_digest_blake3: "a".repeat(blake3::OUT_LEN * 2),
+            build_command_count: 2,
+            smoke_command_count: 3,
+            outputs: Vec::new(),
+            protected_exec_enforced: true,
+            fallback_events: Vec::new(),
+            non_claim: "test",
+        };
+        assert_eq!(tcc_musl_prep_expected_event_count(&report).unwrap(), EXPECTED_EVENT_COUNT);
+        let mut substituted = report;
+        substituted.smoke_command_count = 2;
+        assert!(tcc_musl_prep_expected_event_count(&substituted).unwrap_err().to_string().contains("substituted"));
     }
 
     #[test]

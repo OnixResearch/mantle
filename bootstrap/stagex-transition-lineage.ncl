@@ -1,4 +1,4 @@
-# Typed source for the protected seed-to-bash-2.05b transition.
+# Typed source for the protected seed-to-TinyCC-musl-prep transition.
 # This file does not yet describe the later native toolchain or normalized StageX provider.
 
 let Digest = {
@@ -291,6 +291,9 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "bash-readline-stub-source" "bounded bash readline stub source"
       "8178ce89f526ed0d738b7d0d4b7ae946e75949c4278713342e68ed969b6644ca"
       "RLSTUB heredoc in bootstrap/bash-2.05b-tcc.ncl",
+    source "tcc-musl-prep-recipe-source" "checked TinyCC-to-musl bridge recipe"
+      "88f0a242b6e53d3618383af6d9fce83bbacaa4cf4f2403bba56baf9651901b4e"
+      "bootstrap/tcc-musl-prep.ncl",
   ],
   generated_artifacts = [
     {
@@ -413,6 +416,14 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "bash-build-exec" "bash-2.05b" "source-built bash 2.05b" "f7326a0fcc0878e7cd3616640cee376f71bab5583460b5459cac91168809c03f",
     tinycc_generated "bash-build-exec" "sh-2.05b" "source-built bash sh alias" "f7326a0fcc0878e7cd3616640cee376f71bab5583460b5459cac91168809c03f",
     tinycc_generated "bash-smoke-exec" "bash-smoke-output" "bash protected command smoke output" "f9bb7985b1ac20ccbfdd1195397be795edb7996ab02e6f173d166517c19eb579",
+    tinycc_generated "tcc-musl-prep-build-exec" "tcc-musl-prep-configured-source" "TinyCC-to-musl configured source identity" "29489150a78ce433dac24acfaf58ec66a4cd37d3eb93e223c5b9150f5c71a0aa",
+    tinycc_generated "tcc-musl-prep-build-exec" "tcc-musl-prep" "TinyCC compiler prepared for musl" "4add5639d2016d79b1ac258aa502098fc941354ded0acd91bf8cafea42240a77",
+    tinycc_generated "tcc-musl-prep-build-exec" "tcc-musl-prep-alias" "TinyCC musl-prep compiler alias" "4add5639d2016d79b1ac258aa502098fc941354ded0acd91bf8cafea42240a77",
+    tinycc_generated "tcc-musl-prep-build-exec" "tcc-musl-prep-libc" "carried Mes libc for musl handoff" "bd46a4a350e17ec4a7870be6c6dea82f7327c513ee4e2720bebb7b6e26f20d85",
+    tinycc_generated "tcc-musl-prep-build-exec" "tcc-musl-prep-crt1" "carried Mes startup object for musl handoff" "d3fec15bd12fd72fdbdf4248d6df6b21a44cfb6a3e2c9d787a0d081ff7143df1",
+    tinycc_generated "tcc-musl-prep-build-exec" "tcc-musl-prep-libtcc1" "carried TinyCC runtime archive for musl handoff" "0e8b75458ad70ab03142b27a3014af68f57c03004f4d22a65702e60d531140e9",
+    tinycc_generated "tcc-musl-prep-build-exec" "tcc-musl-prep-headers" "carried Mes headers for musl handoff" "2577c43f136d52c8d7b61ba8f7cab614b31898586d3fab634bebe6e1fd14cb7d",
+    tinycc_generated "tcc-musl-prep-smoke-exec" "tcc-musl-prep-positive-object" "TinyCC musl-prep positive object" "41c08a115f275f00099aa397872090612e853be0fb5f13ba55ddb89737e42377",
   ],
   transition_tools = [
     {
@@ -802,6 +813,25 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["bash-smoke-output"],
       digest = blake3 "f7326a0fcc0878e7cd3616640cee376f71bab5583460b5459cac91168809c03f",
     },
+    {
+      id = "tcc-musl-prep-build-exec",
+      name = "TinyCC 0.9.27 materializing the compiler prepared for musl",
+      source_artifact_ids = ["tinycc-0.9.27-source", "tinycc-0.9.27-patch-source", "tcc-musl-prep-recipe-source"],
+      input_artifact_ids = ["bash-smoke-output", "tinycc-0.9.27", "tinycc27-libc", "tinycc-crt1", "tinycc-libtcc1"],
+      output_artifact_ids = [
+        "tcc-musl-prep-configured-source", "tcc-musl-prep", "tcc-musl-prep-alias",
+        "tcc-musl-prep-libc", "tcc-musl-prep-crt1", "tcc-musl-prep-libtcc1", "tcc-musl-prep-headers",
+      ],
+      digest = blake3 "29489150a78ce433dac24acfaf58ec66a4cd37d3eb93e223c5b9150f5c71a0aa",
+    },
+    {
+      id = "tcc-musl-prep-smoke-exec",
+      name = "TinyCC musl-prep compiling an object and rejecting malformed C",
+      source_artifact_ids = [],
+      input_artifact_ids = ["tcc-musl-prep", "tcc-musl-prep-headers"],
+      output_artifact_ids = ["tcc-musl-prep-positive-object"],
+      digest = blake3 "4add5639d2016d79b1ac258aa502098fc941354ded0acd91bf8cafea42240a77",
+    },
   ],
   patches = [
     {
@@ -896,5 +926,6 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "bash-siglist-source" },
     { from_node_id = "seed", to_node_id = "bash-builtin-stubs-source" },
     { from_node_id = "seed", to_node_id = "bash-readline-stub-source" },
+    { from_node_id = "seed", to_node_id = "tcc-musl-prep-recipe-source" },
   ],
 } | Manifest
