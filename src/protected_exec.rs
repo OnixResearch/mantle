@@ -20,6 +20,7 @@ const ROLE_SANDBOX_ENTRY: &str = "sandbox-entry";
 const ROLE_SANDBOX_SHELL: &str = "sandbox-shell";
 const ROLE_BOOTSTRAP_TOOLCHAIN_TOOL: &str = "bootstrap-toolchain-tool";
 const ROLE_BOOTSTRAP_BUILD_TOOL: &str = "bootstrap-build-tool";
+const ROLE_AUDITED_BOOTSTRAP_SEED: &str = "audited-bootstrap-seed";
 const PROVENANCE_OPERATOR_SOURCE_BUILD: &str = "operator-supplied-source-build";
 const PROVENANCE_OPERATOR_BOOTSTRAP_SEED: &str = "operator-supplied-bootstrap-seed";
 const PROVENANCE_TEST_FIXTURE: &str = "test-fixture";
@@ -165,7 +166,16 @@ impl fmt::Display for SeedClosureRisk {
 pub struct ProtectedExecPolicy {
     executables_by_path: BTreeMap<PathBuf, ExecutableSeedEntry>,
     sources_by_url: BTreeMap<String, SourceSeedEntry>,
+    allowed_promotion_source_ids: Option<BTreeSet<String>>,
     inventory_digest_blake3: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PlannedExecutable {
+    pub authorization_id: String,
+    pub source_stage_id: String,
+    pub path: PathBuf,
+    pub digest_hex: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -250,6 +260,12 @@ pub enum ProtectedExecError {
     PromotionEmptySet {
         source_entry_id: String,
     },
+    UndeclaredPromotionSource {
+        source_entry_id: String,
+    },
+    DuplicatePromotionSource {
+        source_entry_id: String,
+    },
     InventoryCollectionLimitExceeded {
         collection: &'static str,
         limit: u32,
@@ -311,6 +327,12 @@ impl fmt::Display for ProtectedExecError {
             Self::PromotionEmptySet { source_entry_id } => {
                 write!(f, "promotion from source {source_entry_id} produced no executables")
             }
+            Self::UndeclaredPromotionSource { source_entry_id } => {
+                write!(f, "promotion source is not declared by the protected plan: {source_entry_id}")
+            }
+            Self::DuplicatePromotionSource { source_entry_id } => {
+                write!(f, "duplicate protected promotion source: {source_entry_id}")
+            }
             Self::InventoryCollectionLimitExceeded { collection, limit } => {
                 write!(f, "protected exec {collection} exceeds limit {limit}")
             }
@@ -324,6 +346,63 @@ impl std::error::Error for ProtectedExecError {}
 
 impl ProtectedExecPolicy {
     pub fn from_inventory(inventory: Stage0Inventory) -> Result<Self, ProtectedExecError> {
+        Self::from_inventory_with_required_roles(inventory, &[ROLE_SANDBOX_ENTRY, ROLE_SANDBOX_SHELL], None)
+    }
+
+    pub fn from_stagex_seed(
+        seed_path: PathBuf,
+        seed_digest_blake3: String,
+        promotion_stage_ids: &[String],
+    ) -> Result<Self, ProtectedExecError> {
+        Self::from_stagex_plan(seed_path, seed_digest_blake3, promotion_stage_ids, &[])
+    }
+
+    pub fn from_stagex_plan(
+        seed_path: PathBuf,
+        seed_digest_blake3: String,
+        promotion_stage_ids: &[String],
+        planned_executables: &[PlannedExecutable],
+    ) -> Result<Self, ProtectedExecError> {
+        let seed_entry = ExecutableSeedEntry {
+            schema_version: SCHEMA_VERSION_V1.to_string(),
+            id: "stagex:seed:hex0".to_string(),
+            role: ROLE_AUDITED_BOOTSTRAP_SEED.to_string(),
+            phase: PHASE_PROTECTED.to_string(),
+            executable_path: seed_path.clone(),
+            digest: DigestSpec {
+                algorithm: DIGEST_ALGORITHM_BLAKE3.to_string(),
+                hex: seed_digest_blake3.clone(),
+                interoperability_reason: None,
+            },
+            version_evidence: Some(promoted_version_evidence(&seed_path, &seed_digest_blake3)),
+            provenance_category: PROVENANCE_OPERATOR_BOOTSTRAP_SEED.to_string(),
+            provenance: "checked audited StageX seed bytes".to_string(),
+            allowed_reason: "execute the audited StageX hex0 seed after the protected transition".to_string(),
+            owner: "mantle-stagex-lineage".to_string(),
+            required: true,
+        };
+        let allowed_promotion_source_ids = validate_promotion_source_ids(promotion_stage_ids)?;
+        let mut executable_entries = Vec::with_capacity(planned_executables.len().saturating_add(1));
+        executable_entries.push(seed_entry);
+        for planned in planned_executables {
+            executable_entries.push(planned_executable_entry(planned, &allowed_promotion_source_ids)?);
+        }
+        let inventory = Stage0Inventory {
+            executable_entries,
+            source_entries: Vec::new(),
+        };
+        Self::from_inventory_with_required_roles(
+            inventory,
+            &[ROLE_AUDITED_BOOTSTRAP_SEED],
+            Some(allowed_promotion_source_ids),
+        )
+    }
+
+    fn from_inventory_with_required_roles(
+        inventory: Stage0Inventory,
+        required_roles: &[&'static str],
+        allowed_promotion_source_ids: Option<BTreeSet<String>>,
+    ) -> Result<Self, ProtectedExecError> {
         let max_executables = usize::try_from(MAX_SEED_EXECUTABLES).map_err(|_| {
             ProtectedExecError::InventoryCollectionLimitExceeded {
                 collection: "executable entries",
@@ -347,7 +426,7 @@ impl ProtectedExecPolicy {
                 limit: MAX_SOURCE_ENTRIES,
             });
         }
-        validate_required_roles(&inventory.executable_entries)?;
+        validate_required_roles(&inventory.executable_entries, required_roles)?;
         let source_url_count = inventory_source_url_count(&inventory.source_entries)?;
         if source_url_count > MAX_SOURCE_URLS {
             return Err(ProtectedExecError::InventoryCollectionLimitExceeded {
@@ -400,6 +479,7 @@ impl ProtectedExecPolicy {
         Ok(Self {
             executables_by_path,
             sources_by_url,
+            allowed_promotion_source_ids,
             inventory_digest_blake3,
         })
     }
@@ -469,6 +549,11 @@ impl ProtectedExecPolicy {
         extraction_rules: &[String],
         executables: &[PromotedExecutable],
     ) -> Result<OutputPromotionRecord, ProtectedExecError> {
+        if self.allowed_promotion_source_ids.as_ref().is_some_and(|allowed| !allowed.contains(source_entry_id)) {
+            return Err(ProtectedExecError::UndeclaredPromotionSource {
+                source_entry_id: source_entry_id.to_string(),
+            });
+        }
         if executables.is_empty() {
             return Err(ProtectedExecError::PromotionEmptySet {
                 source_entry_id: source_entry_id.to_string(),
@@ -562,11 +647,50 @@ impl ProtectedExecPolicy {
     }
 }
 
-fn validate_required_roles(entries: &[ExecutableSeedEntry]) -> Result<(), ProtectedExecError> {
+fn validate_promotion_source_ids(source_ids: &[String]) -> Result<BTreeSet<String>, ProtectedExecError> {
+    if source_ids.is_empty() {
+        return Err(ProtectedExecError::EmptyField {
+            entry_id: "stagex-plan".to_string(),
+            field: "promotion_stage_ids",
+        });
+    }
+    let max_sources =
+        usize::try_from(MAX_SOURCE_ENTRIES).map_err(|_| ProtectedExecError::InventoryCollectionLimitExceeded {
+            collection: "promotion source IDs",
+            limit: MAX_SOURCE_ENTRIES,
+        })?;
+    if source_ids.len() > max_sources {
+        return Err(ProtectedExecError::InventoryCollectionLimitExceeded {
+            collection: "promotion source IDs",
+            limit: MAX_SOURCE_ENTRIES,
+        });
+    }
+    let mut unique = BTreeSet::new();
+    for source_id in source_ids {
+        if source_id.trim().is_empty() {
+            return Err(ProtectedExecError::EmptyField {
+                entry_id: "stagex-plan".to_string(),
+                field: "promotion_stage_ids[]",
+            });
+        }
+        if !unique.insert(source_id.clone()) {
+            return Err(ProtectedExecError::DuplicatePromotionSource {
+                source_entry_id: source_id.clone(),
+            });
+        }
+    }
+    Ok(unique)
+}
+
+fn validate_required_roles(
+    entries: &[ExecutableSeedEntry],
+    required_roles: &[&'static str],
+) -> Result<(), ProtectedExecError> {
     assert!(!entries.is_empty(), "inventory must include executable entries");
+    assert!(!required_roles.is_empty(), "required executable roles must not be empty");
     let roles: BTreeSet<&str> =
         entries.iter().filter(|entry| entry.required).map(|entry| entry.role.as_str()).collect();
-    for role in [ROLE_SANDBOX_ENTRY, ROLE_SANDBOX_SHELL] {
+    for role in required_roles {
         if !roles.contains(role) {
             return Err(ProtectedExecError::MissingRequiredSeedRole { role });
         }
@@ -961,6 +1085,7 @@ fn is_allowed_executable_role(role: &str) -> bool {
             | ROLE_SANDBOX_SHELL
             | ROLE_BOOTSTRAP_TOOLCHAIN_TOOL
             | ROLE_BOOTSTRAP_BUILD_TOOL
+            | ROLE_AUDITED_BOOTSTRAP_SEED
     )
 }
 
@@ -1515,9 +1640,51 @@ fn seed_version_evidence(path: &Path, digest_hex: &str) -> BoundedVersionEvidenc
     bounded_version_evidence(vec![path.display().to_string(), "--version".to_string()], sample, 0)
 }
 
+fn planned_executable_entry(
+    planned: &PlannedExecutable,
+    allowed_source_ids: &BTreeSet<String>,
+) -> Result<ExecutableSeedEntry, ProtectedExecError> {
+    if !allowed_source_ids.contains(&planned.source_stage_id) {
+        return Err(ProtectedExecError::UndeclaredPromotionSource {
+            source_entry_id: planned.source_stage_id.clone(),
+        });
+    }
+    let entry = ExecutableSeedEntry {
+        schema_version: SCHEMA_VERSION_V1.to_string(),
+        id: format!("planned:{}:{}", planned.source_stage_id, planned.authorization_id),
+        role: ROLE_BOOTSTRAP_BUILD_TOOL.to_string(),
+        phase: PHASE_PROTECTED.to_string(),
+        executable_path: planned.path.clone(),
+        digest: DigestSpec {
+            algorithm: DIGEST_ALGORITHM_BLAKE3.to_string(),
+            hex: planned.digest_hex.clone(),
+            interoperability_reason: None,
+        },
+        version_evidence: Some(planned_version_evidence(&planned.path, &planned.digest_hex)),
+        provenance_category: PROVENANCE_OPERATOR_SOURCE_BUILD.to_string(),
+        provenance: format!("planned output of StageX stage {}", planned.source_stage_id),
+        allowed_reason: format!(
+            "execute only after the StageX plan produces the exact digest for stage {}",
+            planned.source_stage_id
+        ),
+        owner: "mantle-stagex-lineage".to_string(),
+        required: false,
+    };
+    validate_executable_entry(&entry)?;
+    assert!(entry.executable_path.is_absolute());
+    assert_eq!(entry.digest.hex, planned.digest_hex);
+    Ok(entry)
+}
+
 fn promoted_version_evidence(path: &Path, digest_hex: &str) -> BoundedVersionEvidence {
     assert!(!digest_hex.is_empty(), "promoted version evidence must bind digest");
     let sample = format!("promoted executable bytes are bound by blake3 {digest_hex}\n");
+    bounded_version_evidence(vec![path.display().to_string(), "--version".to_string()], sample, 0)
+}
+
+fn planned_version_evidence(path: &Path, digest_hex: &str) -> BoundedVersionEvidence {
+    assert!(!digest_hex.is_empty(), "planned version evidence must bind digest");
+    let sample = format!("planned executable bytes must match blake3 {digest_hex} at exec notification\n");
     bounded_version_evidence(vec![path.display().to_string(), "--version".to_string()], sample, 0)
 }
 
@@ -2407,6 +2574,114 @@ mod tests {
         assert_eq!(err, ProtectedExecError::UndeclaredSourceUrl {
             url: "https://example.invalid/other.tar.xz".to_string()
         });
+    }
+
+    #[test]
+    fn stagex_seed_policy_authorizes_only_the_bound_seed() {
+        let seed_path = PathBuf::from("/stagex/seed/hex0-seed");
+        let promotion_stage_ids = vec!["hex0-reproduction".to_string()];
+        let policy =
+            ProtectedExecPolicy::from_stagex_seed(seed_path.clone(), DIGEST_A.to_string(), &promotion_stage_ids)
+                .unwrap();
+        let decision = policy
+            .decide_exec(&ExecRequest {
+                path: seed_path,
+                digest_hex: DIGEST_A.to_string(),
+            })
+            .unwrap();
+        let undeclared = policy.decide_exec(&ExecRequest {
+            path: PathBuf::from("/bin/sh"),
+            digest_hex: DIGEST_A.to_string(),
+        });
+        assert!(decision.allowed);
+        assert_eq!(decision.entry_id.as_deref(), Some("stagex:seed:hex0"));
+        assert!(matches!(undeclared, Err(ProtectedExecError::UndeclaredExecutable { .. })));
+    }
+
+    #[test]
+    fn stagex_plan_preauthorizes_exact_future_output_digest() {
+        let output_path = PathBuf::from("/stagex/out/hex1");
+        let source_stage_ids = vec!["stage0-hex1".to_string()];
+        let planned = vec![PlannedExecutable {
+            authorization_id: "exec:stage0-hex1".to_string(),
+            source_stage_id: "stage0-hex1".to_string(),
+            path: output_path.clone(),
+            digest_hex: DIGEST_B.to_string(),
+        }];
+        let policy = ProtectedExecPolicy::from_stagex_plan(
+            PathBuf::from("/stagex/seed/hex0-seed"),
+            DIGEST_A.to_string(),
+            &source_stage_ids,
+            &planned,
+        )
+        .unwrap();
+
+        let allowed = policy.decide_exec(&ExecRequest {
+            path: output_path.clone(),
+            digest_hex: DIGEST_B.to_string(),
+        });
+        let substituted = policy.decide_exec(&ExecRequest {
+            path: output_path,
+            digest_hex: DIGEST_A.to_string(),
+        });
+
+        assert!(allowed.unwrap().allowed);
+        assert!(matches!(substituted, Err(ProtectedExecError::DigestMismatch { .. })));
+    }
+
+    #[test]
+    fn stagex_plan_rejects_future_output_from_undeclared_stage() {
+        let source_stage_ids = vec!["stage0-hex1".to_string()];
+        let planned = vec![PlannedExecutable {
+            authorization_id: "exec:ambient".to_string(),
+            source_stage_id: "host-tools".to_string(),
+            path: PathBuf::from("/stagex/out/ambient"),
+            digest_hex: DIGEST_B.to_string(),
+        }];
+
+        let error = ProtectedExecPolicy::from_stagex_plan(
+            PathBuf::from("/stagex/seed/hex0-seed"),
+            DIGEST_A.to_string(),
+            &source_stage_ids,
+            &planned,
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, ProtectedExecError::UndeclaredPromotionSource { .. }));
+        assert!(!error.to_string().contains("digest mismatch"));
+    }
+
+    #[test]
+    fn stagex_seed_policy_rejects_undeclared_output_promotion() {
+        let promotion_stage_ids = vec!["hex0-reproduction".to_string()];
+        let mut policy = ProtectedExecPolicy::from_stagex_seed(
+            PathBuf::from("/stagex/seed/hex0-seed"),
+            DIGEST_A.to_string(),
+            &promotion_stage_ids,
+        )
+        .unwrap();
+        let result = policy.promote_verified_output("host-tools", &["format=raw".to_string()], &[PromotedExecutable {
+            path: PathBuf::from("/stagex/out/host-tool"),
+            digest_hex: DIGEST_B.to_string(),
+        }]);
+        assert!(matches!(result, Err(ProtectedExecError::UndeclaredPromotionSource { .. })));
+    }
+
+    #[test]
+    fn stagex_seed_policy_rejects_relative_path_and_bad_digest() {
+        let promotion_stage_ids = vec!["hex0-reproduction".to_string()];
+        let relative = ProtectedExecPolicy::from_stagex_seed(
+            PathBuf::from("hex0-seed"),
+            DIGEST_A.to_string(),
+            &promotion_stage_ids,
+        );
+        let malformed = ProtectedExecPolicy::from_stagex_seed(
+            PathBuf::from("/stagex/seed/hex0-seed"),
+            "bad".to_string(),
+            &promotion_stage_ids,
+        );
+        assert!(matches!(relative, Err(ProtectedExecError::RelativeExecutablePath { .. })));
+        assert!(matches!(malformed, Err(ProtectedExecError::InvalidBlake3Digest { .. })));
     }
 
     #[test]

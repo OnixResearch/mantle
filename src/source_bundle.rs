@@ -3543,7 +3543,7 @@ fn imported_record_matches_store_path(record: &SourceRecord, lookup: &StorePathL
     record.metadata.get(RECORD_METADATA_STORE_PATH_KEY).map(String::as_str) == Some(lookup.logical_store_path)
 }
 
-fn materialize_source_record_payload(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
+pub(crate) fn materialize_source_record_payload(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
     validate_source_record(record)?;
     if record.files.is_empty() {
         return Err(RunError::Internal(format!("source record {} has no materialized payload", record.identity)));

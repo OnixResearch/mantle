@@ -139,6 +139,14 @@ mod source_bundle;
 mod source_root_capability;
 mod source_root_provider;
 mod source_toolchain_closure;
+#[allow(dead_code)]
+mod stagex_sources;
+#[allow(dead_code)]
+mod stagex_stage0;
+#[allow(dead_code)]
+mod stagex_stage0_full;
+#[allow(dead_code)]
+mod stagex_transition;
 mod store_cmd;
 mod structured_refactor;
 mod transcript_cmd;

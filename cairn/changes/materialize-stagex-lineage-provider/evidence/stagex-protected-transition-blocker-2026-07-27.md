@@ -1,5 +1,12 @@
 # StageX protected-transition blocker — 2026-07-27
 
+> Status update: partially superseded by the protected full Stage0 proof in
+> `protected-transition-v6-full-stage0-2026-07-27/`. Mantle now starts from the
+> checked-in audited seed, reproduces `hex0`, builds `kaem-0`, authenticates the
+> offline source closure, and completes full Stage0 under protected execution.
+> The run recorded 132 allowed events and zero fallback. The remaining blocker
+> starts after full Stage0 and covers Mes, TinyCC, and normalized-provider lineage.
+
 ## Question
 
 Can the current source-built native artifacts become a complete StageX lineage provider without relabeling host-assisted effects?
@@ -9,12 +16,14 @@ Can the current source-built native artifacts become a complete StageX lineage p
 ### Current receipt and manifest state
 
 - `bootstrap/evidence/stagex-lineage-provider-receipt.json` has `lineage_receipt_status = scaffold-only` and placeholder digests.
-- No real StageX lineage manifest exists outside synthetic Rust test fixtures.
+- `bootstrap/stagex-transition-lineage.{ncl,json}` now binds the protected seed-to-full-Stage0 manifest.
 - `src/main.rs::cmd_bootstrap_stagex_lineage` validates a manifest, then returns `STAGEX_LINEAGE_PROVIDER_NOT_MATERIALIZED`.
-- No protected-exec audit exists under `bootstrap/evidence/`.
+- The retained v6 evidence has a complete 132-event seed-to-full-Stage0 protected-exec audit.
 - No exported `hex0-seed` binary exists under `/home/brittonr/.cache/mantle-full-source-20260718`.
+- The repository has the audited seed at `bootstrap/seeds/AMD64/hex0-seed`.
+- The protected transition now stages and verifies that checked-in seed directly.
 - A built `stage0-posix` output exists at `/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/wisq2xjp7b646gvscc09qad8svi0a3qc-stage0-posix`.
-- That output contains produced transition tools. It does not preserve the audited seed as a separately verified input artifact.
+- That older output remains host-assisted evidence and is not used by the new transition proof.
 
 ### Host-assisted lineage construction
 
@@ -56,14 +65,15 @@ The current artifacts cannot meet the accepted requirement. Their construction s
 
 ## Exact completion blocker
 
-A complete run needs all of these missing mechanisms and artifacts:
+The protected transition now has checked seed bytes, authenticated direct source records, a typed 22-stage plan, exact executable identities, full Stage0 SHA-256 interoperability checks, and a 132-event observed audit.
 
-1. An exported audited `hex0-seed` input with checked seed bytes, BLAKE3, audit bound, and source-to-byte transcript.
-2. A real bounded StageX manifest with immediate predecessor edges, source identities, output roles, limits, and a declared transition point.
-3. Post-transition orchestration that does not execute host `/bin/sh`, BusyBox, bwrap, compiler, linker, or path-discovery fallbacks.
-4. Per-stage observed reports that bind exact executable paths, roles, source stages, BLAKE3 values, inputs, and outputs.
-5. A protected-exec audit for every post-transition executable decision.
-6. Independent provider and receipt validation before create-new publication.
+A complete provider run still needs all of these mechanisms and artifacts:
+
+1. Continue from protected full Stage0 through Mes, TinyCC, and later native-provider stages.
+2. Replace the later host-shell and sandbox orchestration with source-produced runners.
+3. Retain per-stage reports for every later exact executable, source stage, input, output, and BLAKE3 value.
+4. Preserve a complete protected-exec audit through normalized-provider runtime validation.
+5. Independently validate and create-new publish the provider and complete receipt.
 
 Replacing only the scaffold JSON would create false evidence. Reusing the existing full-source provider would relabel host-assisted effects as StageX lineage.
 
@@ -73,7 +83,7 @@ Mantle StageX lineage-provider implementation.
 
 ## Next action
 
-First replace the post-transition shell and sandbox orchestration with a source-produced runner. Then rebuild from the exported audited seed and retain every protected stage report.
+Continue the protected runner from full Stage0. Adapt the authenticated Mes and TinyCC command graph without invoking host shell or sandbox tools.
 
 I1 through V3 remain unchecked. The fixed-point and parity-promotion successor changes remain blocked by this change.
 
