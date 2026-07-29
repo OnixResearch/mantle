@@ -1410,7 +1410,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "e7c34884d2dd51b38db8a19034ce36cc79a66af9222e30fed1f37d7516351765"
+        "hex_value": "a17643b015db05bd452918841ba7811b8e063edfe29328672388f6b693a1b8ec"
       },
       "id": "tcc-musl-v2",
       "name": "TinyCC musl-v2 compiler",
@@ -1419,7 +1419,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "e7c34884d2dd51b38db8a19034ce36cc79a66af9222e30fed1f37d7516351765"
+        "hex_value": "a17643b015db05bd452918841ba7811b8e063edfe29328672388f6b693a1b8ec"
       },
       "id": "tcc-musl-v2-alias",
       "name": "TinyCC musl-v2 compiler alias",
@@ -1437,7 +1437,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "f6d2aec4068377861ab1548e672389dd79aaa31412057e5b4d3187e59ec11e26"
+        "hex_value": "5461df0d2a3503f2a7d124859d2ddedab87694f16bd81b644b9cdb8fffdfa367"
       },
       "id": "tcc-musl-v2-source-tree",
       "name": "TinyCC musl-v2 normalized source tree",
@@ -4111,7 +4111,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "e7c34884d2dd51b38db8a19034ce36cc79a66af9222e30fed1f37d7516351765"
+        "hex_value": "a17643b015db05bd452918841ba7811b8e063edfe29328672388f6b693a1b8ec"
       },
       "id": "tcc-musl-v2-smoke-exec",
       "input_artifact_ids": [

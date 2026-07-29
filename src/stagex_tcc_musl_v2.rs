@@ -20,9 +20,9 @@ const BUILD_COMMAND_COUNT: u32 = 4;
 const SMOKE_COMMAND_COUNT: u32 = 5;
 const OUTPUT_COUNT: usize = 8;
 pub(crate) const CONFIGURED_SOURCE_BLAKE3: &str = "b68ec9f7c46ca1cbec5508a98476f771e4bcc4d90b4e088a237065aac1c6061b";
-pub(crate) const COMPILER_BLAKE3: &str = "e7c34884d2dd51b38db8a19034ce36cc79a66af9222e30fed1f37d7516351765";
+pub(crate) const COMPILER_BLAKE3: &str = "a17643b015db05bd452918841ba7811b8e063edfe29328672388f6b693a1b8ec";
 pub(crate) const RUNTIME_BLAKE3: &str = "c201ffd35a5466b4171345fc924b64a75c650fabbe7d0c20d365cfe08faf0860";
-const SOURCE_TREE_BLAKE3: &str = "f6d2aec4068377861ab1548e672389dd79aaa31412057e5b4d3187e59ec11e26";
+const SOURCE_TREE_BLAKE3: &str = "5461df0d2a3503f2a7d124859d2ddedab87694f16bd81b644b9cdb8fffdfa367";
 const HEADER_TREE_BLAKE3: &str = "2fa068749df350a62721e60696d625b6d5b0e3061019929a4c67970155833424";
 const POSITIVE_OBJECT_BLAKE3: &str = "a507376f7e9af418c78cc9f9121e7b182c8b1ef3b741de98741d6320f6f301b2";
 pub(crate) const POSITIVE_BINARY_BLAKE3: &str = "2a6733b887417ec6f848ece381d125e10d5d5544f0839dcfa896eacc88529fa6";
@@ -263,6 +263,22 @@ fn apply_v2_codegen_adjustments(source_root: &Path) -> Result<(), Error> {
         "    int pos = strlen(buf);\n    while (*fmt) {",
         "    int pos = strlen(buf);\n    (void)va_arg(ap, char *);\n    while (*fmt) {",
     )?;
+    let tools = source_root.join("tcctools.c");
+    crate::stagex_tinycc::replace_required_text(
+        &tools,
+        "static int ar_usage(int ret) {",
+        "static void crunch_ar_size(char dst[10], unsigned long v)\n{\n    char tmp[20]; int i = 0, j = 0;\n    do { tmp[i++] = 48 + (v % 10); v /= 10; } while (v && i < 20);\n    while (i && j < 10) dst[j++] = tmp[--i];\n    while (j < 10) dst[j++] = 32;\n}\n\nstatic int ar_usage(int ret) {",
+    )?;
+    crate::stagex_tinycc::replace_required_text(
+        &tools,
+        "        sprintf(stmp, \"%-10d\", fsize);\n        memcpy(&arhdro.ar_size, stmp, 10);",
+        "        crunch_ar_size(arhdro.ar_size, (unsigned long)fsize);",
+    )?;
+    crate::stagex_tinycc::replace_required_text(
+        &tools,
+        "    sprintf(stmp, \"%-10d\", (int)(strpos + (funccnt+1) * sizeof(int)));\n    memcpy(&arhdr.ar_size, stmp, 10);",
+        "    crunch_ar_size(arhdr.ar_size, (unsigned long)(strpos + (funccnt+1) * sizeof(int)));",
+    )?;
     let generator = source_root.join("tccgen.c");
     let generator_text = fs::read_to_string(&generator)
         .map_err(|error| Error::Materialization(format!("reading TinyCC generator: {error}")))?;
@@ -273,6 +289,7 @@ fn apply_v2_codegen_adjustments(source_root: &Path) -> Result<(), Error> {
     }
     assert!(codegen.is_file());
     assert!(library.is_file());
+    assert!(tools.is_file());
     assert!(generator.is_file());
     Ok(())
 }
