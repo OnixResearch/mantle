@@ -12,7 +12,7 @@ const RECIPE: &[u8] = include_bytes!("../bootstrap/musl-1.1.24-native.ncl");
 const REPORT_FORMAT: &str = "mantle-stagex-musl-1.1.24-native-inventory-v1";
 const NON_CLAIM: &str = "this inventory binds a static upstream-shaped musl candidate built by the protected self-hosted TinyCC with declared TinyCC musl-v2 assembly, math, and malformed-source diagnostic assistance; it does not prove complete musl behavior, dynamic runtime, compiler correctness, or provider admission";
 const CONFIGURED_SOURCE_DOMAIN: &[u8] = b"mantle-stagex-musl-native-configured-source-v1\0";
-pub(crate) const CONFIGURED_SOURCE_BLAKE3: &str = "b65d4f08a8a49ebc0c402c00f68a9348fb416cb8d66b066b4d08022e744018b2";
+pub(crate) const CONFIGURED_SOURCE_BLAKE3: &str = "25136ba596733447cbb6259862f4e0b37dd557fc4dd8cc4392912e2f34880f18";
 const FILE_BYTES_MAX: u64 = 64 * 1_024 * 1_024;
 const TREE_ENTRY_COUNT_MAX: usize = 32_768;
 const EMPTY_ARCHIVE_BYTES: &[u8] = b"!<arch>\n";
@@ -34,7 +34,7 @@ const AR_ALIGNMENT_BYTES: usize = 2;
 const SMOKE_COMMAND_COUNT: u32 = 2;
 const EXECUTION_COMMAND_COUNT: u32 = 2;
 const ARCHIVE_COMMAND_COUNT: u32 = 1;
-pub(crate) const SELFHOST_COMPILE_COUNT: u32 = 708;
+pub(crate) const SELFHOST_COMPILE_COUNT: u32 = 746;
 pub(crate) const PREDECESSOR_COMPILE_COUNT: u32 = 19;
 const OUTPUT_COUNT: usize = 15;
 const VALIDATION_RECEIPT_BYTES: &[u8] = b"native-musl-validation-ok\n";
@@ -129,7 +129,7 @@ const REMOVED_FILES: [&str; 23] = [
     "src/string/x86_64/memcpy.s",
 ];
 
-const REMOVED_GLOB_PREFIXES: [&str; 13] = [
+const REMOVED_GLOB_PREFIXES: [&str; 12] = [
     "src/thread/mtx_",
     "src/thread/cnd_",
     "src/thread/thrd_",
@@ -142,19 +142,6 @@ const REMOVED_GLOB_PREFIXES: [&str; 13] = [
     "src/thread/pthread_key_",
     "src/thread/sem_",
     "src/time/timer_",
-    "src/thread/pthread_",
-];
-
-const REMOVED_GLOB_EXCEPTIONS: [&str; 9] = [
-    "src/thread/pthread_atfork.c",
-    "src/thread/pthread_once.c",
-    "src/thread/pthread_self.c",
-    "src/thread/pthread_sigmask.c",
-    "src/thread/pthread_kill.c",
-    "src/thread/pthread_getattr_np.c",
-    "src/thread/pthread_setname_np.c",
-    "src/thread/pthread_getname_np.c",
-    "src/thread/pthread_equal.c",
 ];
 
 const PRESERVED_MATH_FILES: [&str; 5] = ["__fpclassifyl.c", "__signbitl.c", "frexp.c", "frexpl.c", "ldexp.c"];
@@ -183,7 +170,7 @@ pub(crate) struct ExpectedOutput {
 pub(crate) const EXPECTED_OUTPUTS: [ExpectedOutput; OUTPUT_COUNT] = [
     ExpectedOutput {
         artifact_id: "musl-native-libc",
-        digest_blake3: "da903202e9b5f574fd32ba550e654b918f5ce4dad0c87b5d70171eaba1f0cf07",
+        digest_blake3: "a9aa627c3a70fce68d928e0a7ccd423370472a87ae9fde795a85db4d0899366c",
     },
     ExpectedOutput {
         artifact_id: "musl-native-crt1",
@@ -713,19 +700,7 @@ fn remove_glob_sources(root: &Path) -> Result<(), Error> {
             .map_err(|error| Error::Materialization(format!("finding native musl relative path: {error}")))?
             .to_str()
             .ok_or_else(|| Error::Materialization("native musl path is not UTF-8".to_string()))?;
-        let matched =
-            REMOVED_GLOB_PREFIXES.iter().any(|prefix| relative.starts_with(prefix) && relative.ends_with(".c"));
-        let excepted = REMOVED_GLOB_EXCEPTIONS.contains(&relative);
-        let direct_thread = matches!(
-            relative,
-            "src/thread/pthread_create.c"
-                | "src/thread/pthread_join.c"
-                | "src/thread/pthread_detach.c"
-                | "src/thread/pthread_cancel.c"
-                | "src/thread/pthread_getspecific.c"
-                | "src/thread/pthread_setspecific.c"
-        );
-        if (matched && !excepted) || direct_thread {
+        if should_remove_glob_source(relative) {
             fs::remove_file(&path).map_err(|error| {
                 Error::Materialization(format!("removing native musl glob source {}: {error}", path.display()))
             })?;
@@ -733,7 +708,25 @@ fn remove_glob_sources(root: &Path) -> Result<(), Error> {
     }
     assert!(!root.join("src/thread/pthread_create.c").exists());
     assert!(root.join("src/thread/pthread_once.c").is_file());
+    assert!(root.join("src/thread/pthread_testcancel.c").is_file());
+    assert!(root.join("src/thread/pthread_setcancelstate.c").is_file());
     Ok(())
+}
+
+fn should_remove_glob_source(relative: &str) -> bool {
+    let matched = REMOVED_GLOB_PREFIXES.iter().any(|prefix| relative.starts_with(prefix) && relative.ends_with(".c"));
+    let direct_thread = matches!(
+        relative,
+        "src/thread/pthread_create.c"
+            | "src/thread/pthread_join.c"
+            | "src/thread/pthread_detach.c"
+            | "src/thread/pthread_cancel.c"
+            | "src/thread/pthread_getspecific.c"
+            | "src/thread/pthread_setspecific.c"
+    );
+    assert!(!relative.is_empty());
+    assert!(!direct_thread || relative.ends_with(".c"));
+    matched || direct_thread
 }
 
 fn rewrite_native_alltypes(path: &Path) -> Result<(), Error> {
@@ -1399,6 +1392,14 @@ mod tests {
         let duplicate = b"$BB cat > x.c <<'EOF'\na\nEOF\n$BB cat > x.c <<'EOF'\nb\nEOF\n";
         let error = extract_heredoc(duplicate, "x.c").unwrap_err();
         assert!(error.to_string().contains("occurs 2 times"));
+    }
+
+    #[test]
+    fn pthread_source_selection_matches_the_checked_recipe() {
+        assert!(!should_remove_glob_source("src/thread/pthread_testcancel.c"));
+        assert!(!should_remove_glob_source("src/thread/pthread_setcancelstate.c"));
+        assert!(should_remove_glob_source("src/thread/pthread_create.c"));
+        assert!(should_remove_glob_source("src/thread/pthread_cond_wait.c"));
     }
 
     #[test]

@@ -150,6 +150,8 @@ mod stagex_gnu_patch;
 #[allow(dead_code)]
 mod stagex_gzip;
 #[allow(dead_code)]
+mod stagex_m4;
+#[allow(dead_code)]
 mod stagex_make;
 #[allow(dead_code)]
 mod stagex_mes;

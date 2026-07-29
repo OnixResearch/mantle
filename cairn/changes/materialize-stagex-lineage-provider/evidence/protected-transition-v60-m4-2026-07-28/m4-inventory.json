@@ -1,0 +1,42 @@
+{
+  "format": "mantle-stagex-m4-1.4.7-inventory-v1",
+  "configured_source_digest_blake3": "dbd75c146b108dfe62f23aeb29675b68d0d41bc8ca5b5dfd137d346a284376ac",
+  "source_compile_count": 29,
+  "build_command_count": 30,
+  "smoke_command_count": 5,
+  "outputs": [
+    {
+      "artifact_id": "m4-1.4.7",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v60-m4-20260728/m4-stage/runtime/output/bin/m4",
+      "bytes_len": 298676,
+      "digest_blake3": "3dfd2a1223ff6e0c2c540bc2507a097948ab24e2465f232e2363944e5b704741"
+    },
+    {
+      "artifact_id": "m4-version-observation",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v60-m4-20260728/m4-stage/runtime/m4-1.4.7/smoke/version.txt",
+      "bytes_len": 241,
+      "digest_blake3": "c9b69698f54279bd5ce4b9cba7442ba625e7ba92717ee139d3152093331c0e75"
+    },
+    {
+      "artifact_id": "m4-macro-observation",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v60-m4-20260728/m4-stage/runtime/m4-1.4.7/smoke/macro.out",
+      "bytes_len": 20,
+      "digest_blake3": "f737ffa0d1bffb14295a97110f43d0f9cf059d5cbffc7ff6187b2182250d34ca"
+    },
+    {
+      "artifact_id": "m4-prefix-observation",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v60-m4-20260728/m4-stage/runtime/m4-1.4.7/smoke/prefix.out",
+      "bytes_len": 12,
+      "digest_blake3": "6277dd4b0cbd4b080f3a4c4e561d05f128ffee445dadefa2116cc8e3b079e26c"
+    },
+    {
+      "artifact_id": "m4-malformed-rejection",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v60-m4-20260728/m4-stage/runtime/m4-1.4.7/smoke/malformed-rejection.json",
+      "bytes_len": 75,
+      "digest_blake3": "675bd6ec5c382c78909a394f1f5a59e8b51e7e617f9ad9537e466fd799553420"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds GNU M4 1.4.7 and bounded macro observations only; it does not prove the later parser generators, binutils, native TinyCC, or provider admission"
+}

@@ -1,5 +1,5 @@
-# Typed source for the protected seed-to-musl-linked-TinyCC transition.
-# This file does not yet describe the later native toolchain or normalized StageX provider.
+# Typed source for the protected seed-to-GNU-M4 transition.
+# This file does not yet describe the later parser generators, binutils, native TinyCC, or normalized StageX provider.
 
 let Digest = {
   algorithm | String,
@@ -133,7 +133,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
       "generated as zero bytes by the bounded transition plan",
     source "stage0-source-bundle" "authenticated offline full-source closure"
-      "d3ed9b10c763444d416182b58b2e4b766ed80f0a8ab71d07c0bcf576e599052d"
+      "bc58825cd1432e48cfd11e61dc2d0e72945ea9f5f9f6f68b9d8dc79ed2e0ad06"
       "mantle-source-bundle-v1 manifest identity loaded and validated before Stage0 execution",
     source "stage0-posix-amd64-source" "stage0-posix AMD64 snapshot"
       "f983a7b79acdd53fd4d31c8959c62ca24eabbea491327aaa113c4bc11549e5f9"
@@ -360,6 +360,8 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "tcc-musl-v2-stdarg-runtime-source" "checked TinyCC variadic runtime helper" "39655914dd22719e8f64182e281622ccaa4104ab7d901f728db84338659cc942" "TinyCC musl-v2 recipe heredoc /tmp/tcc-stdarg-runtime.c",
     source "tcc-musl-selfhost-recipe-source" "checked TinyCC self-host recipe" "e24d7a19746cbae7387c7c7d739c7a3ee5ae6c8e343351f3deacebad1be805d2" "bootstrap/tcc-musl-selfhost.ncl",
     source "musl-native-recipe-source" "checked upstream-shaped native musl recipe" "0f86c28c5a4f7290002200871edede784e79566b4f02c9ebb1f22b654c1e6c1c" "bootstrap/musl-1.1.24-native.ncl",
+    source "m4-1.4.7-source" "authenticated GNU M4 1.4.7 source" "1acf045348ef14f9fb38dc1e23fec5146d32b4fb6b7bb5c4dfb9742da12ce0d1" "fixed-output source record m4-1.4.7-src",
+    source "m4-1.4.7-recipe-source" "checked GNU M4 1.4.7 recipe" "39671a43fce58c3cae66c38810b1912b27a29f7a5c134c84acf03b678af22e74" "bootstrap/m4-1.4.7-musl.ncl",
   ],
   generated_artifacts = [
     {
@@ -542,8 +544,8 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "tcc-musl-selfhost-build-exec" "tcc-musl-selfhost-patched-source" "self-hosted TinyCC patched source tree" "5e918d19d4d7151f17a5a81bd07d25fd8a55e57037b4735f038344365326b3d4",
     tinycc_generated "tcc-musl-selfhost-build-exec" "tcc-musl-selfhost-object-tree" "self-hosted TinyCC compiler object tree" "2f3fcb41daa227dac3e1d206c4c7aeabd6ff6341fe975399e950629e8a281880",
     tinycc_generated "tcc-musl-selfhost-smoke-exec" "tcc-musl-selfhost-smoke-object" "self-hosted TinyCC syntax smoke object" "cc40480286f053fc69e7d17431b4cf5de82b477b0f84e646717cd6c3c71cecb1",
-    tinycc_generated "musl-native-build-exec" "musl-native-configured-source" "upstream-shaped native musl configured source identity" "b65d4f08a8a49ebc0c402c00f68a9348fb416cb8d66b066b4d08022e744018b2",
-    tinycc_generated "musl-native-build-exec" "musl-native-libc" "upstream-shaped native musl static libc" "da903202e9b5f574fd32ba550e654b918f5ce4dad0c87b5d70171eaba1f0cf07",
+    tinycc_generated "musl-native-build-exec" "musl-native-configured-source" "upstream-shaped native musl configured source identity" "25136ba596733447cbb6259862f4e0b37dd557fc4dd8cc4392912e2f34880f18",
+    tinycc_generated "musl-native-build-exec" "musl-native-libc" "upstream-shaped native musl static libc" "a9aa627c3a70fce68d928e0a7ccd423370472a87ae9fde795a85db4d0899366c",
     tinycc_generated "musl-native-build-exec" "musl-native-crt1" "native musl startup object" "bcfefaf8179325fd26e8ecaa83b22a87fe75d3bbadb411e32113b4cb69f21f66",
     tinycc_generated "musl-native-build-exec" "musl-native-crti" "native musl initialization object" "ecf4006e5ea51c3ad49a243165909cd4f9eddfbe181b576ac43513ede8578be4",
     tinycc_generated "musl-native-build-exec" "musl-native-crtn" "native musl finalization object" "b3b3153225cc100b8c429f5916ae36b96ef4903169b86f841f86498c0fd7251d",
@@ -558,6 +560,12 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "musl-native-build-exec" "musl-native-headers" "native musl installed header tree" "315e38bd3f318804adf63fadc9689a9b692ee69986e26c6fddd4670190498700",
     tinycc_generated "musl-native-smoke-exec" "musl-native-smoke-binary" "native musl runtime smoke binary" "37b452f13fc423d7a1a5cc061264e4a897b305d144b0e214648738d106cb3e49",
     tinycc_generated "musl-native-execution-exec" "musl-native-validation-receipt" "native musl execution and malformed-source validation receipt" "f578c82fb2c9eb48d87b171daedaef41f63c7f82b64d26b14e6f686f9c3f230e",
+    tinycc_generated "m4-build-exec" "m4-configured-source" "GNU M4 configured source identity" "dbd75c146b108dfe62f23aeb29675b68d0d41bc8ca5b5dfd137d346a284376ac",
+    tinycc_generated "m4-build-exec" "m4-1.4.7" "source-built GNU M4 1.4.7 with ambient shell builtins disabled" "3dfd2a1223ff6e0c2c540bc2507a097948ab24e2465f232e2363944e5b704741",
+    tinycc_generated "m4-smoke-exec" "m4-version-observation" "GNU M4 version observation" "c9b69698f54279bd5ce4b9cba7442ba625e7ba92717ee139d3152093331c0e75",
+    tinycc_generated "m4-smoke-exec" "m4-macro-observation" "GNU M4 macro and ambient-shell-disable observation" "f737ffa0d1bffb14295a97110f43d0f9cf059d5cbffc7ff6187b2182250d34ca",
+    tinycc_generated "m4-smoke-exec" "m4-prefix-observation" "GNU M4 prefixed macro observation" "6277dd4b0cbd4b080f3a4c4e561d05f128ffee445dadefa2116cc8e3b079e26c",
+    tinycc_generated "m4-smoke-exec" "m4-malformed-rejection" "GNU M4 malformed-input rejection receipt" "675bd6ec5c382c78909a394f1f5a59e8b51e7e617f9ad9537e466fd799553420",
   ],
   transition_tools = [
     {
@@ -1106,6 +1114,22 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["musl-native-validation-receipt"],
       digest = blake3 "f578c82fb2c9eb48d87b171daedaef41f63c7f82b64d26b14e6f686f9c3f230e",
     },
+    {
+      id = "m4-build-exec",
+      name = "TinyCC musl-v2 materializing GNU M4 against native musl",
+      source_artifact_ids = ["m4-1.4.7-source", "m4-1.4.7-recipe-source"],
+      input_artifact_ids = ["tcc-musl-v2", "musl-native-libc", "musl-native-crt1", "musl-native-headers"],
+      output_artifact_ids = ["m4-configured-source", "m4-1.4.7"],
+      digest = blake3 "dbd75c146b108dfe62f23aeb29675b68d0d41bc8ca5b5dfd137d346a284376ac",
+    },
+    {
+      id = "m4-smoke-exec",
+      name = "GNU M4 executing version, macro, prefix, and malformed-input checks",
+      source_artifact_ids = [],
+      input_artifact_ids = ["m4-1.4.7"],
+      output_artifact_ids = ["m4-version-observation", "m4-macro-observation", "m4-prefix-observation", "m4-malformed-rejection"],
+      digest = blake3 "3dfd2a1223ff6e0c2c540bc2507a097948ab24e2465f232e2363944e5b704741",
+    },
   ],
   patches = [
     {
@@ -1261,5 +1285,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "tcc-musl-v2-stdarg-runtime-source" },
     { from_node_id = "seed", to_node_id = "tcc-musl-selfhost-recipe-source" },
     { from_node_id = "seed", to_node_id = "musl-native-recipe-source" },
+    { from_node_id = "seed", to_node_id = "m4-1.4.7-source" },
+    { from_node_id = "seed", to_node_id = "m4-1.4.7-recipe-source" },
   ],
 } | Manifest

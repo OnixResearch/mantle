@@ -949,20 +949,61 @@ pub(crate) fn run_bounded_process<S: AsRef<std::ffi::OsStr>>(
     environment: &BTreeMap<String, String>,
     stderr_path: &Path,
 ) -> Result<(), MesLibraryPlanError> {
-    let stderr_file = File::create(stderr_path).map_err(|source| io_error("creating Mes process stderr", source))?;
+    run_bounded_process_with_stdio(executable, args, current_dir, environment, Stdio::null(), None, stderr_path)
+}
+
+pub(crate) fn run_bounded_process_capturing_stdout<S: AsRef<std::ffi::OsStr>>(
+    executable: &Path,
+    args: &[S],
+    current_dir: &Path,
+    environment: &BTreeMap<String, String>,
+    stdout_path: &Path,
+    stdout_bytes_max: u64,
+    stderr_path: &Path,
+) -> Result<(), MesLibraryPlanError> {
+    let stdout_file = File::create(stdout_path).map_err(|source| io_error("creating process stdout", source))?;
+    let result = run_bounded_process_with_stdio(
+        executable,
+        args,
+        current_dir,
+        environment,
+        Stdio::from(stdout_file),
+        Some((stdout_path, stdout_bytes_max)),
+        stderr_path,
+    );
+    assert!(stdout_path.is_file());
+    assert!(stderr_path.is_file());
+    result
+}
+
+fn run_bounded_process_with_stdio<S: AsRef<std::ffi::OsStr>>(
+    executable: &Path,
+    args: &[S],
+    current_dir: &Path,
+    environment: &BTreeMap<String, String>,
+    stdout: Stdio,
+    stdout_limit: Option<(&Path, u64)>,
+    stderr_path: &Path,
+) -> Result<(), MesLibraryPlanError> {
+    let stderr_file = File::create(stderr_path).map_err(|source| io_error("creating process stderr", source))?;
     let mut child = Command::new(executable)
         .args(args)
         .current_dir(current_dir)
         .env_clear()
         .envs(environment)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
+        .stdout(stdout)
         .stderr(Stdio::from(stderr_file))
         .spawn()
         .map_err(|source| io_error(format!("spawning {}", executable.display()), source))?;
     let started = Instant::now();
     loop {
-        if let Some(status) = child.try_wait().map_err(|source| io_error("waiting for Mes process", source))? {
+        if let Err(error) = enforce_optional_observation_file_limit(stdout_limit) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error);
+        }
+        if let Some(status) = child.try_wait().map_err(|source| io_error("waiting for process", source))? {
             return classify_process_status(executable, status, stderr_path);
         }
         if started.elapsed() >= Duration::from_millis(MES_PROCESS_TIMEOUT_MS) {
@@ -975,6 +1016,26 @@ pub(crate) fn run_bounded_process<S: AsRef<std::ffi::OsStr>>(
         }
         thread::sleep(Duration::from_millis(MES_PROCESS_POLL_MS));
     }
+}
+
+fn enforce_optional_observation_file_limit(stdout_limit: Option<(&Path, u64)>) -> Result<(), MesLibraryPlanError> {
+    let Some((stdout_path, stdout_bytes_max)) = stdout_limit else {
+        return Ok(());
+    };
+    enforce_observation_file_limit(stdout_path, stdout_bytes_max)
+}
+
+fn enforce_observation_file_limit(path: &Path, bytes_max: u64) -> Result<(), MesLibraryPlanError> {
+    let bytes_len = fs::metadata(path).map_err(|source| io_error("reading process stdout metadata", source))?.len();
+    if bytes_len > bytes_max {
+        return Err(MesLibraryPlanError::Limit(format!(
+            "process stdout exceeds {bytes_max} bytes: {} has {bytes_len} bytes",
+            path.display()
+        )));
+    }
+    assert!(bytes_len <= bytes_max);
+    assert!(path.is_file());
+    Ok(())
 }
 
 fn classify_process_status(
@@ -1354,6 +1415,20 @@ libtcc1_SOURCES=\"lib/libtcc1.c\"\n";
         }
         assert_eq!(libraries.len(), MES_LIBRARY_COUNT);
         assert!(libraries.iter().all(|library| library.source_paths.iter().all(|path| root.join(path).is_file())));
+    }
+
+    #[test]
+    fn stdout_capture_limit_accepts_bound_and_rejects_overflow() {
+        const STDOUT_BYTES_MAX: u64 = 1;
+        const OVER_LIMIT_STDOUT: &[u8] = b"xx";
+        let temp = tempfile::tempdir().unwrap();
+        let stdout = temp.path().join("stdout.txt");
+        fs::write(&stdout, b"x").unwrap();
+        enforce_observation_file_limit(&stdout, STDOUT_BYTES_MAX).unwrap();
+        fs::write(&stdout, OVER_LIMIT_STDOUT).unwrap();
+        let error = enforce_observation_file_limit(&stdout, STDOUT_BYTES_MAX).unwrap_err();
+        assert!(error.to_string().contains("process stdout exceeds"));
+        assert!(error.to_string().contains(stdout.to_str().unwrap()));
     }
 
     #[test]

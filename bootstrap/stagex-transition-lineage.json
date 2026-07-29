@@ -1545,7 +1545,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "b65d4f08a8a49ebc0c402c00f68a9348fb416cb8d66b066b4d08022e744018b2"
+        "hex_value": "25136ba596733447cbb6259862f4e0b37dd557fc4dd8cc4392912e2f34880f18"
       },
       "id": "musl-native-configured-source",
       "name": "upstream-shaped native musl configured source identity",
@@ -1554,7 +1554,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "da903202e9b5f574fd32ba550e654b918f5ce4dad0c87b5d70171eaba1f0cf07"
+        "hex_value": "a9aa627c3a70fce68d928e0a7ccd423370472a87ae9fde795a85db4d0899366c"
       },
       "id": "musl-native-libc",
       "name": "upstream-shaped native musl static libc",
@@ -1685,6 +1685,60 @@
       "id": "musl-native-validation-receipt",
       "name": "native musl execution and malformed-source validation receipt",
       "producing_tool_id": "musl-native-execution-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "dbd75c146b108dfe62f23aeb29675b68d0d41bc8ca5b5dfd137d346a284376ac"
+      },
+      "id": "m4-configured-source",
+      "name": "GNU M4 configured source identity",
+      "producing_tool_id": "m4-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3dfd2a1223ff6e0c2c540bc2507a097948ab24e2465f232e2363944e5b704741"
+      },
+      "id": "m4-1.4.7",
+      "name": "source-built GNU M4 1.4.7 with ambient shell builtins disabled",
+      "producing_tool_id": "m4-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "c9b69698f54279bd5ce4b9cba7442ba625e7ba92717ee139d3152093331c0e75"
+      },
+      "id": "m4-version-observation",
+      "name": "GNU M4 version observation",
+      "producing_tool_id": "m4-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f737ffa0d1bffb14295a97110f43d0f9cf059d5cbffc7ff6187b2182250d34ca"
+      },
+      "id": "m4-macro-observation",
+      "name": "GNU M4 macro and ambient-shell-disable observation",
+      "producing_tool_id": "m4-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "6277dd4b0cbd4b080f3a4c4e561d05f128ffee445dadefa2116cc8e3b079e26c"
+      },
+      "id": "m4-prefix-observation",
+      "name": "GNU M4 prefixed macro observation",
+      "producing_tool_id": "m4-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "675bd6ec5c382c78909a394f1f5a59e8b51e7e617f9ad9537e466fd799553420"
+      },
+      "id": "m4-malformed-rejection",
+      "name": "GNU M4 malformed-input rejection receipt",
+      "producing_tool_id": "m4-smoke-exec"
     }
   ],
   "patches": [
@@ -1762,7 +1816,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "d3ed9b10c763444d416182b58b2e4b766ed80f0a8ab71d07c0bcf576e599052d"
+        "hex_value": "bc58825cd1432e48cfd11e61dc2d0e72945ea9f5f9f6f68b9d8dc79ed2e0ad06"
       },
       "id": "stage0-source-bundle",
       "name": "authenticated offline full-source closure",
@@ -2784,6 +2838,24 @@
       "id": "musl-native-recipe-source",
       "name": "checked upstream-shaped native musl recipe",
       "provenance": "bootstrap/musl-1.1.24-native.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "1acf045348ef14f9fb38dc1e23fec5146d32b4fb6b7bb5c4dfb9742da12ce0d1"
+      },
+      "id": "m4-1.4.7-source",
+      "name": "authenticated GNU M4 1.4.7 source",
+      "provenance": "fixed-output source record m4-1.4.7-src"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "39671a43fce58c3cae66c38810b1912b27a29f7a5c134c84acf03b678af22e74"
+      },
+      "id": "m4-1.4.7-recipe-source",
+      "name": "checked GNU M4 1.4.7 recipe",
+      "provenance": "bootstrap/m4-1.4.7-musl.ncl"
     }
   ],
   "stage_graph": [
@@ -3262,6 +3334,14 @@
     {
       "from_node_id": "seed",
       "to_node_id": "musl-native-recipe-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "m4-1.4.7-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "m4-1.4.7-recipe-source"
     }
   ],
   "transition_tools": [
@@ -4481,6 +4561,46 @@
       "name": "native musl execution and malformed-source rejection",
       "output_artifact_ids": [
         "musl-native-validation-receipt"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "dbd75c146b108dfe62f23aeb29675b68d0d41bc8ca5b5dfd137d346a284376ac"
+      },
+      "id": "m4-build-exec",
+      "input_artifact_ids": [
+        "tcc-musl-v2",
+        "musl-native-libc",
+        "musl-native-crt1",
+        "musl-native-headers"
+      ],
+      "name": "TinyCC musl-v2 materializing GNU M4 against native musl",
+      "output_artifact_ids": [
+        "m4-configured-source",
+        "m4-1.4.7"
+      ],
+      "source_artifact_ids": [
+        "m4-1.4.7-source",
+        "m4-1.4.7-recipe-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3dfd2a1223ff6e0c2c540bc2507a097948ab24e2465f232e2363944e5b704741"
+      },
+      "id": "m4-smoke-exec",
+      "input_artifact_ids": [
+        "m4-1.4.7"
+      ],
+      "name": "GNU M4 executing version, macro, prefix, and malformed-input checks",
+      "output_artifact_ids": [
+        "m4-version-observation",
+        "m4-macro-observation",
+        "m4-prefix-observation",
+        "m4-malformed-rejection"
       ],
       "source_artifact_ids": []
     }
