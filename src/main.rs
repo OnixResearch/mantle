@@ -148,6 +148,8 @@ mod stagex_coreutils;
 #[allow(dead_code)]
 mod stagex_diffutils;
 #[allow(dead_code)]
+mod stagex_gawk;
+#[allow(dead_code)]
 mod stagex_gnu_patch;
 #[allow(dead_code)]
 mod stagex_grep;

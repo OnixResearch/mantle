@@ -94,8 +94,11 @@ pub(crate) const DIFFUTILS_BUILD_STAGE_ID: &str = "diffutils-materialization";
 pub(crate) const DIFFUTILS_SMOKE_STAGE_ID: &str = "diffutils-smoke";
 pub(crate) const GREP_BUILD_STAGE_ID: &str = "grep-materialization";
 pub(crate) const GREP_SMOKE_STAGE_ID: &str = "grep-smoke";
+pub(crate) const GAWK_BUILD_STAGE_ID: &str = "gawk-materialization";
+pub(crate) const GAWK_SMOKE_STAGE_ID: &str = "gawk-smoke";
 const TCC_MUSL_V2_CANONICAL_AUTHORIZATION_ID: &str = "planned:tcc-musl-v2-materialization:exec:tcc-musl-v2-smoke:tcc";
 const GREP_RUNNER_CANONICAL_AUTHORIZATION_ID: &str = "planned:grep-materialization:exec:grep-smoke:grep";
+const GAWK_CANONICAL_AUTHORIZATION_ID: &str = "planned:gawk-materialization:exec:gawk-smoke:gawk";
 pub(crate) const HEX0_SEED_BLAKE3: &str = "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80";
 pub(crate) const HEX0_SOURCE_BLAKE3: &str = "0fb23576a10b41df29c165e39514f18c411da96ae71873a6a2e2f0b1d94de614";
 pub(crate) const KAEM_SOURCE_BLAKE3: &str = "5a56b4164dca4d1e03ba35bc8ce4b418a0de2baf1cb9e6a0912607e26532d30d";
@@ -124,7 +127,7 @@ const MES_OUTPUT_MAX_MIB: u64 = 64;
 const MES_OUTPUT_MAX_BYTES: u64 = MES_OUTPUT_MAX_MIB * MIB_BYTES;
 const STAGE_JOB_COUNT: u32 = 1;
 const TRANSITION_STAGE_COUNT_MAX: u32 = 3;
-const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 81;
+const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 83;
 const TINYCC_LINK_CHILD_EVENT_COUNT: usize = 5;
 const MAKE_RECIPE_CHILD_EVENT_COUNT: usize = 1;
 const GZIP_GZIP_SMOKE_EVENT_COUNT: usize = 2;
@@ -245,6 +248,10 @@ pub(crate) struct StagexTransitionReport {
     pub grep_sources: Option<crate::stagex_grep::GrepSourceMaterializationReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grep_runtime: Option<crate::stagex_grep::GrepInventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gawk_sources: Option<crate::stagex_gawk::GawkSourceMaterializationReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gawk_runtime: Option<crate::stagex_gawk::GawkInventoryReport>,
     pub fallback_events: Vec<String>,
     pub promotions: Vec<OutputPromotionRecord>,
     pub protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
@@ -565,6 +572,12 @@ pub(crate) fn materialize_protected_transition(
             source_stage_id: GREP_BUILD_STAGE_ID.to_string(),
             path: request.scratch_dir.join("grep-stage/runtime/output/bin/grep"),
             digest_hex: crate::stagex_grep::GREP_RUNNER_BLAKE3.to_string(),
+        });
+        planned.push(PlannedExecutable {
+            authorization_id: "exec:gawk-smoke:gawk".to_string(),
+            source_stage_id: GAWK_BUILD_STAGE_ID.to_string(),
+            path: request.scratch_dir.join("gawk-stage/runtime/output/bin/gawk"),
+            digest_hex: crate::stagex_gawk::GAWK_BINARY_BLAKE3.to_string(),
         });
         planned
     } else {
@@ -1300,6 +1313,38 @@ pub(crate) fn materialize_protected_transition(
         _ => unreachable!("GNU grep requires authenticated source and protected GNU diffutils completion"),
     };
 
+    let (gawk_sources, gawk_runtime) = match (request.source_bundle_path, grep_runtime.as_ref()) {
+        (Some(source_bundle_path), Some(_)) => {
+            let stage = request.scratch_dir.join("gawk-stage");
+            fs::create_dir(&stage)
+                .map_err(|source| io_error("creating create-new protected GNU Gawk stage root", source))?;
+            let sources = crate::stagex_gawk::materialize_authenticated_gawk_source(
+                source_bundle_path,
+                &manifest_authority.source_bundle_manifest_blake3,
+                &stage.join("sources"),
+            )
+            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+            let result = crate::stagex_gawk::derive_gawk_inventory(crate::stagex_gawk::GawkInventoryRequest {
+                source_root: &sources.output_path,
+                tcc_musl_v2_root: &request.scratch_dir.join("tcc-musl-v2-stage/runtime/output"),
+                musl_native_root: &request.scratch_dir.join("musl-native-stage/runtime/output"),
+                scratch_dir: &stage.join("runtime"),
+                protected_exec_enforced: true,
+            });
+            match result {
+                Ok(report) => (Some(sources), Some(report)),
+                Err(error) => {
+                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                    let events = supervisor.audit_events();
+                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
+                }
+            }
+        }
+        (None, None) => (None, None),
+        _ => unreachable!("GNU Gawk requires authenticated source and protected GNU grep completion"),
+    };
+
     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
     let protected_exec_events = supervisor.audit_events();
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
@@ -1330,6 +1375,7 @@ pub(crate) fn materialize_protected_transition(
             m4_runtime: m4_runtime.as_ref(),
             diffutils_runtime: diffutils_runtime.as_ref(),
             grep_runtime: grep_runtime.as_ref(),
+            gawk_runtime: gawk_runtime.as_ref(),
         },
         &protected_exec_events,
     )?;
@@ -1383,6 +1429,8 @@ pub(crate) fn materialize_protected_transition(
         diffutils_runtime,
         grep_sources,
         grep_runtime,
+        gawk_sources,
+        gawk_runtime,
         fallback_events: Vec::new(),
         promotions: vec![hex0_promotion, kaem_promotion],
         protected_exec_events,
@@ -1524,6 +1572,9 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     for (artifact_id, digest_blake3) in crate::stagex_grep::source_artifact_digests() {
         require_manifest_digest(&sources, artifact_id, digest_blake3)?;
     }
+    for (artifact_id, digest_blake3) in crate::stagex_gawk::source_artifact_digests() {
+        require_manifest_digest(&sources, artifact_id, digest_blake3)?;
+    }
     let generated: BTreeMap<&str, &str> = manifest
         .generated_artifacts
         .iter()
@@ -1655,6 +1706,10 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     }
     require_manifest_digest(&generated, "grep-configured-source", crate::stagex_grep::GREP_CONFIGURED_SOURCE_BLAKE3)?;
     for expected in crate::stagex_grep::GREP_EXPECTED_OUTPUTS {
+        require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
+    }
+    require_manifest_digest(&generated, "gawk-configured-source", crate::stagex_gawk::GAWK_CONFIGURED_SOURCE_BLAKE3)?;
+    for expected in crate::stagex_gawk::GAWK_EXPECTED_OUTPUTS {
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
     let patches: BTreeMap<&str, &str> =
@@ -1839,6 +1894,8 @@ fn build_transition_plan(
         stages.extend(diffutils_stage_plans(&tcc_musl_v2_root, &musl_native_root, &diffutils_root));
         let grep_root = staged.seed.parent().expect("staged seed has parent").join("grep-stage/runtime");
         stages.extend(grep_stage_plans(&tcc_musl_v2_root, &musl_native_root, &grep_root));
+        let gawk_root = staged.seed.parent().expect("staged seed has parent").join("gawk-stage/runtime");
+        stages.extend(gawk_stage_plans(&tcc_musl_v2_root, &musl_native_root, &gawk_root));
     }
     let stage_count_max = if include_stage0_mini {
         TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX
@@ -2796,6 +2853,57 @@ fn grep_stage_plans(tcc_musl_v2_root: &Path, musl_native_root: &Path, grep_root:
         ),
         mes_stage_plan(GREP_SMOKE_STAGE_ID, &[GREP_BUILD_STAGE_ID], &[], &["grep-2.4-runner"], &smoke_outputs, vec![
             authorization("exec:grep-smoke:grep", &grep, GREP_BUILD_STAGE_ID, crate::stagex_grep::GREP_RUNNER_BLAKE3),
+        ]),
+    ]
+}
+
+fn gawk_stage_plans(tcc_musl_v2_root: &Path, musl_native_root: &Path, gawk_root: &Path) -> Vec<StagexStagePlan> {
+    const GAWK_BUILD_OUTPUT_COUNT: usize = 2;
+    const GAWK_SMOKE_OUTPUT_COUNT: usize = crate::stagex_gawk::GAWK_EXPECTED_OUTPUTS.len() - GAWK_BUILD_OUTPUT_COUNT;
+    let compiler = tcc_musl_v2_root.join("output/bin/tcc-0.9.27-musl-v2");
+    let gawk = gawk_root.join("output/bin/gawk");
+    let smoke_outputs = crate::stagex_gawk::GAWK_EXPECTED_OUTPUTS
+        .iter()
+        .filter(|output| output.artifact_id.ends_with("-observation"))
+        .map(|output| output.artifact_id.to_string())
+        .collect::<Vec<_>>();
+    assert!(musl_native_root.join("output/lib/libc.a").is_absolute());
+    assert_eq!(smoke_outputs.len(), GAWK_SMOKE_OUTPUT_COUNT);
+    vec![
+        mes_stage_plan(
+            GAWK_BUILD_STAGE_ID,
+            &[
+                GREP_SMOKE_STAGE_ID,
+                MUSL_NATIVE_BUILD_STAGE_ID,
+                MUSL_NATIVE_SMOKE_STAGE_ID,
+                MUSL_NATIVE_EXECUTION_STAGE_ID,
+                TCC_MUSL_V2_BUILD_STAGE_ID,
+                TCC_MUSL_V2_SMOKE_STAGE_ID,
+            ],
+            &[
+                crate::stagex_gawk::GAWK_SOURCE_ARTIFACT_ID,
+                crate::stagex_gawk::GAWK_RECIPE_ARTIFACT_ID,
+            ],
+            &[
+                "tcc-musl-v2",
+                "musl-native-libc",
+                "musl-native-crt1",
+                "musl-native-headers",
+            ],
+            &[
+                "gawk-configured-source".to_string(),
+                "gawk-3.0.4".to_string(),
+                "awk-3.0.4-alias".to_string(),
+            ],
+            vec![authorization(
+                "exec:gawk-materialization:tcc-musl-v2",
+                &compiler,
+                TCC_MUSL_V2_BUILD_STAGE_ID,
+                crate::stagex_tcc_musl_v2::COMPILER_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(GAWK_SMOKE_STAGE_ID, &[GAWK_BUILD_STAGE_ID], &[], &["gawk-3.0.4"], &smoke_outputs, vec![
+            authorization("exec:gawk-smoke:gawk", &gawk, GAWK_BUILD_STAGE_ID, crate::stagex_gawk::GAWK_BINARY_BLAKE3),
         ]),
     ]
 }
@@ -4050,6 +4158,7 @@ struct TransitionAuditReports<'a> {
     m4_runtime: Option<&'a crate::stagex_m4::M4InventoryReport>,
     diffutils_runtime: Option<&'a crate::stagex_diffutils::DiffutilsInventoryReport>,
     grep_runtime: Option<&'a crate::stagex_grep::GrepInventoryReport>,
+    gawk_runtime: Option<&'a crate::stagex_gawk::GawkInventoryReport>,
 }
 
 fn validate_transition_audit(
@@ -4082,6 +4191,7 @@ fn validate_transition_audit(
         m4_runtime,
         diffutils_runtime,
         grep_runtime,
+        gawk_runtime,
     } = reports;
     let expected = transition_expected_audit_events(staged);
     if events.len() < EXPECTED_AUDIT_EVENT_COUNT {
@@ -4117,6 +4227,7 @@ fn validate_transition_audit(
             && m4_runtime.is_none()
             && diffutils_runtime.is_none()
             && grep_runtime.is_none()
+            && gawk_runtime.is_none()
             && events.len() == EXPECTED_AUDIT_EVENT_COUNT
         {
             return Ok(());
@@ -4141,7 +4252,8 @@ fn validate_transition_audit(
     }
     validate_stage0_audit(staged, &stage0.mini, &stage0_events[..mini_event_count])?;
     let after_mini = &stage0_events[mini_event_count..];
-    let (before_grep, grep_events) = split_grep_audit_suffix(grep_runtime, after_mini)?;
+    let (before_gawk, gawk_events) = split_gawk_audit_suffix(gawk_runtime, after_mini)?;
+    let (before_grep, grep_events) = split_grep_audit_suffix(grep_runtime, before_gawk)?;
     let (before_diffutils, diffutils_events) = split_diffutils_audit_suffix(diffutils_runtime, before_grep)?;
     let (before_m4, m4_events) = split_m4_audit_suffix(m4_runtime, before_diffutils)?;
     let (before_musl_native, musl_native_events) = split_musl_native_audit_suffix(musl_native_runtime, before_m4)?;
@@ -4382,10 +4494,20 @@ fn validate_transition_audit(
         }
     }
     match (grep_runtime, tcc_musl_v2_runtime, musl_native_runtime, diffutils_runtime) {
-        (Some(grep), Some(v2), Some(_), Some(_)) => validate_grep_audit(v2, grep, grep_events),
-        (None, _, _, _) if grep_events.is_empty() => Ok(()),
+        (Some(grep), Some(v2), Some(_), Some(_)) => validate_grep_audit(v2, grep, grep_events)?,
+        (None, _, _, _) if grep_events.is_empty() => {}
+        _ => {
+            return Err(StagexTransitionError::Audit(
+                "GNU grep report or events exist without TinyCC musl-v2, native musl, and protected GNU diffutils completion"
+                    .to_string(),
+            ));
+        }
+    }
+    match (gawk_runtime, tcc_musl_v2_runtime, musl_native_runtime, grep_runtime) {
+        (Some(gawk), Some(v2), Some(_), Some(_)) => validate_gawk_audit(v2, gawk, gawk_events),
+        (None, _, _, _) if gawk_events.is_empty() => Ok(()),
         _ => Err(StagexTransitionError::Audit(
-            "GNU grep report or events exist without TinyCC musl-v2, native musl, and protected GNU diffutils completion"
+            "GNU Gawk report or events exist without TinyCC musl-v2, native musl, and protected GNU grep completion"
                 .to_string(),
         )),
     }
@@ -4585,6 +4707,92 @@ fn validate_grep_audit(
     if !report.protected_exec_enforced || !report.fallback_events.is_empty() {
         return Err(StagexTransitionError::Audit(
             "GNU grep report lacks protected execution or contains fallback events".to_string(),
+        ));
+    }
+    assert_eq!(events[BUILD_EXECUTION_COUNT..].len(), SMOKE_EXECUTION_COUNT);
+    assert!(events.iter().all(|event| event.policy_decision == "allowed"));
+    Ok(())
+}
+
+fn gawk_expected_event_count(report: &crate::stagex_gawk::GawkInventoryReport) -> Result<usize, StagexTransitionError> {
+    const EXPECTED_BUILD_COMMAND_COUNT: u32 = 17;
+    const EXPECTED_SMOKE_COMMAND_COUNT: u32 = 7;
+    const EXPECTED_EVENT_COUNT: usize = 24;
+    if report.build_command_count != EXPECTED_BUILD_COMMAND_COUNT
+        || report.smoke_command_count != EXPECTED_SMOKE_COMMAND_COUNT
+        || report.negative_exit_code == 0
+    {
+        return Err(StagexTransitionError::Audit(
+            "GNU Gawk command counts or negative result were substituted".to_string(),
+        ));
+    }
+    let count = report
+        .build_command_count
+        .checked_add(report.smoke_command_count)
+        .ok_or_else(|| StagexTransitionError::Audit("GNU Gawk event count overflow".to_string()))?;
+    let count = usize::try_from(count)
+        .map_err(|_| StagexTransitionError::Audit("GNU Gawk event count does not fit usize".to_string()))?;
+    if count != EXPECTED_EVENT_COUNT {
+        return Err(StagexTransitionError::Audit(format!(
+            "GNU Gawk event count is not closed: expected {EXPECTED_EVENT_COUNT}, observed {count}"
+        )));
+    }
+    assert_eq!(count, EXPECTED_EVENT_COUNT);
+    assert_ne!(report.negative_exit_code, 0);
+    Ok(count)
+}
+
+fn split_gawk_audit_suffix<'a>(
+    report: Option<&crate::stagex_gawk::GawkInventoryReport>,
+    events: &'a [ProtectedSeccompAuditEvent],
+) -> Result<(&'a [ProtectedSeccompAuditEvent], &'a [ProtectedSeccompAuditEvent]), StagexTransitionError> {
+    let Some(report) = report else {
+        return Ok((events, &[]));
+    };
+    let count = gawk_expected_event_count(report)?;
+    let start = events.len().checked_sub(count).ok_or_else(|| {
+        StagexTransitionError::Audit(format!("expected {count} trailing GNU Gawk events, observed {}", events.len()))
+    })?;
+    assert_eq!(events[start..].len(), count);
+    assert!(start <= events.len());
+    Ok((&events[..start], &events[start..]))
+}
+
+fn validate_gawk_audit(
+    v2: &crate::stagex_tcc_musl_v2::InventoryReport,
+    report: &crate::stagex_gawk::GawkInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    const BUILD_EXECUTION_COUNT: usize = 17;
+    const SMOKE_EXECUTION_COUNT: usize = 7;
+    let expected = gawk_expected_event_count(report)?;
+    if events.len() != expected {
+        return Err(StagexTransitionError::Audit(format!(
+            "GNU Gawk event count is not closed: expected {expected}, observed {}",
+            events.len()
+        )));
+    }
+    let compiler = tcc_musl_v2_output_path(v2, "tcc-musl-v2")?;
+    let gawk = report
+        .outputs
+        .iter()
+        .find(|output| output.artifact_id == "gawk-3.0.4")
+        .map(|output| output.path.as_path())
+        .ok_or_else(|| StagexTransitionError::Audit("GNU Gawk report lacks its executable".to_string()))?;
+    for event in &events[..BUILD_EXECUTION_COUNT] {
+        validate_coreutils_event(
+            event,
+            &compiler,
+            crate::stagex_tcc_musl_v2::COMPILER_BLAKE3,
+            TCC_MUSL_V2_CANONICAL_AUTHORIZATION_ID,
+        )?;
+    }
+    for event in &events[BUILD_EXECUTION_COUNT..] {
+        validate_coreutils_event(event, gawk, crate::stagex_gawk::GAWK_BINARY_BLAKE3, GAWK_CANONICAL_AUTHORIZATION_ID)?;
+    }
+    if !report.protected_exec_enforced || !report.fallback_events.is_empty() {
+        return Err(StagexTransitionError::Audit(
+            "GNU Gawk report lacks protected execution or contains fallback events".to_string(),
         ));
     }
     assert_eq!(events[BUILD_EXECUTION_COUNT..].len(), SMOKE_EXECUTION_COUNT);
@@ -7190,7 +7398,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
-    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "acd107888638cce6dbbc14832227395a0ab93dfe87d088c382fbd68069c908d7";
+    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "60237483ba78dbc51a1fa4ab83296f2901f8c425ab7a6778ee0c7a4ba05f78b0";
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {
@@ -7418,6 +7626,28 @@ mod tests {
         let mut substituted = report;
         substituted.build_command_count = substituted.build_command_count.checked_add(1).unwrap();
         assert!(grep_expected_event_count(&substituted).unwrap_err().to_string().contains("substituted"));
+    }
+
+    #[test]
+    fn gawk_event_count_is_closed_and_rejects_substitution() {
+        const EXPECTED_BUILD_COMMAND_COUNT: u32 = 17;
+        const EXPECTED_SMOKE_COMMAND_COUNT: u32 = 7;
+        const EXPECTED_EVENT_COUNT: usize = 24;
+        let report = crate::stagex_gawk::GawkInventoryReport {
+            format: "test",
+            configured_source_digest_blake3: "a".repeat(blake3::OUT_LEN * 2),
+            build_command_count: EXPECTED_BUILD_COMMAND_COUNT,
+            smoke_command_count: EXPECTED_SMOKE_COMMAND_COUNT,
+            negative_exit_code: 1,
+            outputs: Vec::new(),
+            protected_exec_enforced: true,
+            fallback_events: Vec::new(),
+            non_claim: "test",
+        };
+        assert_eq!(gawk_expected_event_count(&report).unwrap(), EXPECTED_EVENT_COUNT);
+        let mut substituted = report;
+        substituted.negative_exit_code = 0;
+        assert!(gawk_expected_event_count(&substituted).unwrap_err().to_string().contains("substituted"));
     }
 
     #[test]
@@ -7993,6 +8223,8 @@ mod tests {
         assert_eq!(report.diffutils_runtime.is_some(), source_bundle.is_some());
         assert_eq!(report.grep_sources.is_some(), source_bundle.is_some());
         assert_eq!(report.grep_runtime.is_some(), source_bundle.is_some());
+        assert_eq!(report.gawk_sources.is_some(), source_bundle.is_some());
+        assert_eq!(report.gawk_runtime.is_some(), source_bundle.is_some());
         assert!(
             report
                 .stage0_full
@@ -8007,6 +8239,7 @@ mod tests {
         assert!(report.m4_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
         assert!(report.diffutils_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
         assert!(report.grep_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
+        assert!(report.gawk_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
         assert_eq!(report.promotions.len(), EXPECTED_PROMOTION_COUNT);
         assert!(report.fallback_events.is_empty());
         assert!(scratch.join(REPORT_FILE_NAME).is_file());

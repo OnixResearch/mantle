@@ -997,9 +997,61 @@ pub(crate) fn run_bounded_process_with_stdin_capturing_stdout<S: AsRef<std::ffi:
     stdout_bytes_max: u64,
     stderr_path: &Path,
 ) -> Result<(), MesLibraryPlanError> {
+    let status = run_bounded_process_with_stdin_capturing_status(
+        executable,
+        args,
+        current_dir,
+        environment,
+        stdin_path,
+        stdin_bytes_max,
+        stdout_path,
+        stdout_bytes_max,
+        stderr_path,
+    )?;
+    classify_process_status(executable, status, stderr_path)
+}
+
+pub(crate) fn run_bounded_process_with_stdin_capturing_stdout_status<S: AsRef<std::ffi::OsStr>>(
+    executable: &Path,
+    args: &[S],
+    current_dir: &Path,
+    environment: &BTreeMap<String, String>,
+    stdin_path: &Path,
+    stdin_bytes_max: u64,
+    stdout_path: &Path,
+    stdout_bytes_max: u64,
+    stderr_path: &Path,
+) -> Result<i32, MesLibraryPlanError> {
+    let status = run_bounded_process_with_stdin_capturing_status(
+        executable,
+        args,
+        current_dir,
+        environment,
+        stdin_path,
+        stdin_bytes_max,
+        stdout_path,
+        stdout_bytes_max,
+        stderr_path,
+    )?;
+    status.code().ok_or_else(|| {
+        MesLibraryPlanError::Limit(format!("process terminated without an exit status: {}", executable.display()))
+    })
+}
+
+fn run_bounded_process_with_stdin_capturing_status<S: AsRef<std::ffi::OsStr>>(
+    executable: &Path,
+    args: &[S],
+    current_dir: &Path,
+    environment: &BTreeMap<String, String>,
+    stdin_path: &Path,
+    stdin_bytes_max: u64,
+    stdout_path: &Path,
+    stdout_bytes_max: u64,
+    stderr_path: &Path,
+) -> Result<ExitStatus, MesLibraryPlanError> {
     let stdin_file = open_bounded_process_stdin(stdin_path, stdin_bytes_max)?;
     let stdout_file = File::create(stdout_path).map_err(|source| io_error("creating process stdout", source))?;
-    let result = run_bounded_process_with_stdio(
+    let status = run_bounded_process_with_stdio_status(
         executable,
         args,
         current_dir,
@@ -1008,10 +1060,10 @@ pub(crate) fn run_bounded_process_with_stdin_capturing_stdout<S: AsRef<std::ffi:
         Stdio::from(stdout_file),
         Some((stdout_path, stdout_bytes_max)),
         stderr_path,
-    );
+    )?;
     assert!(stdin_path.is_file());
     assert!(stdout_path.is_file());
-    result
+    Ok(status)
 }
 
 fn run_bounded_process_with_stdio<S: AsRef<std::ffi::OsStr>>(
@@ -1024,6 +1076,29 @@ fn run_bounded_process_with_stdio<S: AsRef<std::ffi::OsStr>>(
     stdout_limit: Option<(&Path, u64)>,
     stderr_path: &Path,
 ) -> Result<(), MesLibraryPlanError> {
+    let status = run_bounded_process_with_stdio_status(
+        executable,
+        args,
+        current_dir,
+        environment,
+        stdin,
+        stdout,
+        stdout_limit,
+        stderr_path,
+    )?;
+    classify_process_status(executable, status, stderr_path)
+}
+
+fn run_bounded_process_with_stdio_status<S: AsRef<std::ffi::OsStr>>(
+    executable: &Path,
+    args: &[S],
+    current_dir: &Path,
+    environment: &BTreeMap<String, String>,
+    stdin: Stdio,
+    stdout: Stdio,
+    stdout_limit: Option<(&Path, u64)>,
+    stderr_path: &Path,
+) -> Result<ExitStatus, MesLibraryPlanError> {
     let stderr_file = File::create(stderr_path).map_err(|source| io_error("creating process stderr", source))?;
     let mut child = Command::new(executable)
         .args(args)
@@ -1043,7 +1118,7 @@ fn run_bounded_process_with_stdio<S: AsRef<std::ffi::OsStr>>(
             return Err(error);
         }
         if let Some(status) = child.try_wait().map_err(|source| io_error("waiting for process", source))? {
-            return classify_process_status(executable, status, stderr_path);
+            return Ok(status);
         }
         if started.elapsed() >= Duration::from_millis(MES_PROCESS_TIMEOUT_MS) {
             let _ = child.kill();

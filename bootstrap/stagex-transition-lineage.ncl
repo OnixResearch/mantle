@@ -367,6 +367,8 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "grep-2.4-source" "authenticated GNU grep 2.4 source" "b40c519f58ef370f44bbafc37a76ae843a3cf621a44ef83158294fb29ada14d0" "fixed-output source record grep-2.4-src",
     source "grep-2.4-recipe-source" "checked GNU grep 2.4 bridge recipe" "15afa14595fb8c84cd5e1ce8d0807ed853a2177146a4e585bcedd90b3d589ad6" "bootstrap/grep-2.4-musl.ncl",
     source "grep-2.4-bridge-runner-source" "bounded native runner for the checked GNU grep bridge subset" "926cba44f7f96479db1e73a85e428346eccc380ca463704fa7f2e68905e9363f" "bootstrap/stagex-grep-bridge-runner.c",
+    source "gawk-3.0.4-source" "authenticated GNU Gawk 3.0.4 source" "db0f59d2c7905c1e16d8c45df3548e304a593bdd193444da7e550ff109deb9aa" "fixed-output source record gawk-3.0.4-src",
+    source "gawk-3.0.4-recipe-source" "checked GNU Gawk 3.0.4 recipe" "1d35ef5716aea8d04a916ec05d3b4345256d4c4313205fd360b119aebb54b637" "bootstrap/gawk-3.0.4-musl.ncl",
   ],
   generated_artifacts = [
     {
@@ -586,6 +588,16 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "grep-smoke-exec" "grep-literal-observation" "GNU grep bridge literal-match observation" "8e4c7c1b99dbfd50e7a95185fead5ee1448fa904a2fdd778eaf5f2dbfd629a99",
     tinycc_generated "grep-smoke-exec" "grep-quiet-observation" "GNU grep bridge quiet-match observation" "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
     tinycc_generated "grep-smoke-exec" "grep-anchored-observation" "GNU grep bridge anchored-match observation" "aa95faeede7041e63c6056bdcf10e6fbf709a355e539259da51a067e5dd27802",
+    tinycc_generated "gawk-build-exec" "gawk-configured-source" "GNU Gawk configured source identity" "ccf0a5c408f8d60f4c8d72413c4c0ec0f8a49e29884c54c229ede61284dc7988",
+    tinycc_generated "gawk-build-exec" "gawk-3.0.4" "source-built GNU Gawk 3.0.4" "1608d2ac4b0f9faaecd91494502942fccfcec3fd6298aa610f2dfd4308aaf5d1",
+    tinycc_generated "gawk-build-exec" "awk-3.0.4-alias" "AWK alias for source-built GNU Gawk 3.0.4" "1608d2ac4b0f9faaecd91494502942fccfcec3fd6298aa610f2dfd4308aaf5d1",
+    tinycc_generated "gawk-smoke-exec" "gawk-behavior-observation" "GNU Gawk record and expression behavior observation" "e8d40a8383b8b65278313f2589e148f294e19cba489e3517f3153c38d8603f7f",
+    tinycc_generated "gawk-smoke-exec" "gawk-numeric-observation" "GNU Gawk numeric-array observation" "c95e800034a073abe91702b1faca0c3bf102d53fdebcd4d0cf46b39c524a98ba",
+    tinycc_generated "gawk-smoke-exec" "gawk-decimal-observation" "GNU Gawk decimal-arithmetic observation" "49124bf4f7f37328738ac34216a60dcd5f58bb198c5c3f6719b6becafb7e7882",
+    tinycc_generated "gawk-smoke-exec" "gawk-length-observation" "GNU Gawk generator string-length observation" "b9a1a3183dd350f0e896d0f4b59c87e7bda8b1ed3a1af76afc86c1cb8f7cbbde",
+    tinycc_generated "gawk-smoke-exec" "gawk-hex-observation" "GNU Gawk hexadecimal-format observation" "320b59884ca4a418f85cef0916f3761d8a7225abda1b1069cb2182a9a15bdde9",
+    tinycc_generated "gawk-smoke-exec" "gawk-negative-observation" "GNU Gawk malformed-program diagnostic" "9633428410d0cea43777d103fa8f7aa73048977e6b3421ee6d8ea663f7722e65",
+    tinycc_generated "gawk-smoke-exec" "gawk-installed-observation" "installed GNU Gawk behavior observation" "b59a7a3ea06ce3059bdb45f57197d14ea5d2ecae9fb8b840cf7f486fc9685f33",
   ],
   transition_tools = [
     {
@@ -1182,6 +1194,22 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["grep-literal-observation", "grep-quiet-observation", "grep-anchored-observation"],
       digest = blake3 "b4adac2bf1f29e3e3b8ec736207a0cdfc3eb5b51c658a2f9f8eff85aee4ef71d",
     },
+    {
+      id = "gawk-build-exec",
+      name = "TinyCC musl-v2 materializing GNU Gawk against native musl",
+      source_artifact_ids = ["gawk-3.0.4-source", "gawk-3.0.4-recipe-source"],
+      input_artifact_ids = ["tcc-musl-v2", "musl-native-libc", "musl-native-crt1", "musl-native-headers"],
+      output_artifact_ids = ["gawk-configured-source", "gawk-3.0.4", "awk-3.0.4-alias"],
+      digest = blake3 "ccf0a5c408f8d60f4c8d72413c4c0ec0f8a49e29884c54c229ede61284dc7988",
+    },
+    {
+      id = "gawk-smoke-exec",
+      name = "GNU Gawk executing bounded generator and malformed-program checks",
+      source_artifact_ids = [],
+      input_artifact_ids = ["gawk-3.0.4"],
+      output_artifact_ids = ["gawk-behavior-observation", "gawk-numeric-observation", "gawk-decimal-observation", "gawk-length-observation", "gawk-hex-observation", "gawk-negative-observation", "gawk-installed-observation"],
+      digest = blake3 "1608d2ac4b0f9faaecd91494502942fccfcec3fd6298aa610f2dfd4308aaf5d1",
+    },
   ],
   patches = [
     {
@@ -1344,5 +1372,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "grep-2.4-source" },
     { from_node_id = "seed", to_node_id = "grep-2.4-recipe-source" },
     { from_node_id = "seed", to_node_id = "grep-2.4-bridge-runner-source" },
+    { from_node_id = "seed", to_node_id = "gawk-3.0.4-source" },
+    { from_node_id = "seed", to_node_id = "gawk-3.0.4-recipe-source" },
   ],
 } | Manifest
