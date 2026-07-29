@@ -369,6 +369,8 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "grep-2.4-bridge-runner-source" "bounded native runner for the checked GNU grep bridge subset" "926cba44f7f96479db1e73a85e428346eccc380ca463704fa7f2e68905e9363f" "bootstrap/stagex-grep-bridge-runner.c",
     source "gawk-3.0.4-source" "authenticated GNU Gawk 3.0.4 source" "db0f59d2c7905c1e16d8c45df3548e304a593bdd193444da7e550ff109deb9aa" "fixed-output source record gawk-3.0.4-src",
     source "gawk-3.0.4-recipe-source" "checked GNU Gawk 3.0.4 recipe" "1d35ef5716aea8d04a916ec05d3b4345256d4c4313205fd360b119aebb54b637" "bootstrap/gawk-3.0.4-musl.ncl",
+    source "bison-2.3-source" "authenticated GNU Bison 2.3 source" "45e40c482750cf4aa35637a7f62ee4f865a8a6d5dcf06aa557be8797c7bc4c62" "fixed-output source record bison-2.3-src",
+    source "bison-2.3-recipe-source" "checked GNU Bison 2.3 recipe" "a086f71d144ee17961fe8462fee3b1d9184af885e45ee0200aa133c9fd54bd63" "bootstrap/bison-2.3-musl.ncl",
   ],
   generated_artifacts = [
     {
@@ -598,6 +600,13 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "gawk-smoke-exec" "gawk-hex-observation" "GNU Gawk hexadecimal-format observation" "320b59884ca4a418f85cef0916f3761d8a7225abda1b1069cb2182a9a15bdde9",
     tinycc_generated "gawk-smoke-exec" "gawk-negative-observation" "GNU Gawk malformed-program diagnostic" "9633428410d0cea43777d103fa8f7aa73048977e6b3421ee6d8ea663f7722e65",
     tinycc_generated "gawk-smoke-exec" "gawk-installed-observation" "installed GNU Gawk behavior observation" "b59a7a3ea06ce3059bdb45f57197d14ea5d2ecae9fb8b840cf7f486fc9685f33",
+    tinycc_generated "bison-build-exec" "bison-configured-source" "GNU Bison configured source identity" "7b9699a83f7028fb22c8aa5bffaa5e314e2a9e1ad8625c0304c2a7bbbf37f121",
+    tinycc_generated "bison-build-exec" "bison-2.3" "source-built GNU Bison 2.3" "3db09397aa2752eea9c438a4cb1c5ebd27605f58b56ec43781baf411c3f2b983",
+    tinycc_generated "bison-build-exec" "bison-2.3-runtime-data" "GNU Bison 2.3 runtime data tree" "f3d4a63ba0b8049557c690ad7db8d48d954c3dd6e45cfdd9488fe6d75d01bc7c",
+    tinycc_generated "bison-smoke-exec" "bison-version-observation" "GNU Bison version observation" "a83fcaecff55230ffd6fb2ff09b2018392e8c403a3e2a8087d2cb68115f383c3",
+    tinycc_generated "bison-smoke-exec" "bison-positive-parser-source" "GNU Bison positive generated parser source" "bf73d7f6db6f0dd4a96706a1efb9e23dd287cbf847badd17f64d4c7ed235c923",
+    tinycc_generated "bison-smoke-exec" "bison-positive-parser-header" "GNU Bison positive generated parser header" "afa05cc327a73b17e33baf53fb44030b1a111aa993db60f01565a2a80dc8f913",
+    tinycc_generated "bison-smoke-exec" "bison-negative-observation" "GNU Bison malformed-grammar diagnostic" "d0c674aaeab59c3efab1090e74cb598ae4df44bbcd42bc451a0a3f1a1257dcb4",
   ],
   transition_tools = [
     {
@@ -1210,6 +1219,22 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["gawk-behavior-observation", "gawk-numeric-observation", "gawk-decimal-observation", "gawk-length-observation", "gawk-hex-observation", "gawk-negative-observation", "gawk-installed-observation"],
       digest = blake3 "1608d2ac4b0f9faaecd91494502942fccfcec3fd6298aa610f2dfd4308aaf5d1",
     },
+    {
+      id = "bison-build-exec",
+      name = "TinyCC musl-v2 materializing GNU Bison against native musl",
+      source_artifact_ids = ["bison-2.3-source", "bison-2.3-recipe-source"],
+      input_artifact_ids = ["tcc-musl-v2", "musl-native-libc", "musl-native-crt1", "musl-native-headers", "m4-1.4.7"],
+      output_artifact_ids = ["bison-configured-source", "bison-2.3", "bison-2.3-runtime-data"],
+      digest = blake3 "7b9699a83f7028fb22c8aa5bffaa5e314e2a9e1ad8625c0304c2a7bbbf37f121",
+    },
+    {
+      id = "bison-smoke-exec",
+      name = "GNU Bison executing version, valid grammar, and malformed grammar checks",
+      source_artifact_ids = [],
+      input_artifact_ids = ["bison-2.3", "bison-2.3-runtime-data", "m4-1.4.7"],
+      output_artifact_ids = ["bison-version-observation", "bison-positive-parser-source", "bison-positive-parser-header", "bison-negative-observation"],
+      digest = blake3 "3db09397aa2752eea9c438a4cb1c5ebd27605f58b56ec43781baf411c3f2b983",
+    },
   ],
   patches = [
     {
@@ -1374,5 +1399,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "grep-2.4-bridge-runner-source" },
     { from_node_id = "seed", to_node_id = "gawk-3.0.4-source" },
     { from_node_id = "seed", to_node_id = "gawk-3.0.4-recipe-source" },
+    { from_node_id = "seed", to_node_id = "bison-2.3-source" },
+    { from_node_id = "seed", to_node_id = "bison-2.3-recipe-source" },
   ],
 } | Manifest

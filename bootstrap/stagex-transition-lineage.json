@@ -1964,6 +1964,69 @@
       "id": "gawk-installed-observation",
       "name": "installed GNU Gawk behavior observation",
       "producing_tool_id": "gawk-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "7b9699a83f7028fb22c8aa5bffaa5e314e2a9e1ad8625c0304c2a7bbbf37f121"
+      },
+      "id": "bison-configured-source",
+      "name": "GNU Bison configured source identity",
+      "producing_tool_id": "bison-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3db09397aa2752eea9c438a4cb1c5ebd27605f58b56ec43781baf411c3f2b983"
+      },
+      "id": "bison-2.3",
+      "name": "source-built GNU Bison 2.3",
+      "producing_tool_id": "bison-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f3d4a63ba0b8049557c690ad7db8d48d954c3dd6e45cfdd9488fe6d75d01bc7c"
+      },
+      "id": "bison-2.3-runtime-data",
+      "name": "GNU Bison 2.3 runtime data tree",
+      "producing_tool_id": "bison-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "a83fcaecff55230ffd6fb2ff09b2018392e8c403a3e2a8087d2cb68115f383c3"
+      },
+      "id": "bison-version-observation",
+      "name": "GNU Bison version observation",
+      "producing_tool_id": "bison-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "bf73d7f6db6f0dd4a96706a1efb9e23dd287cbf847badd17f64d4c7ed235c923"
+      },
+      "id": "bison-positive-parser-source",
+      "name": "GNU Bison positive generated parser source",
+      "producing_tool_id": "bison-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "afa05cc327a73b17e33baf53fb44030b1a111aa993db60f01565a2a80dc8f913"
+      },
+      "id": "bison-positive-parser-header",
+      "name": "GNU Bison positive generated parser header",
+      "producing_tool_id": "bison-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d0c674aaeab59c3efab1090e74cb598ae4df44bbcd42bc451a0a3f1a1257dcb4"
+      },
+      "id": "bison-negative-observation",
+      "name": "GNU Bison malformed-grammar diagnostic",
+      "producing_tool_id": "bison-smoke-exec"
     }
   ],
   "patches": [
@@ -3144,6 +3207,24 @@
       "id": "gawk-3.0.4-recipe-source",
       "name": "checked GNU Gawk 3.0.4 recipe",
       "provenance": "bootstrap/gawk-3.0.4-musl.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "45e40c482750cf4aa35637a7f62ee4f865a8a6d5dcf06aa557be8797c7bc4c62"
+      },
+      "id": "bison-2.3-source",
+      "name": "authenticated GNU Bison 2.3 source",
+      "provenance": "fixed-output source record bison-2.3-src"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "a086f71d144ee17961fe8462fee3b1d9184af885e45ee0200aa133c9fd54bd63"
+      },
+      "id": "bison-2.3-recipe-source",
+      "name": "checked GNU Bison 2.3 recipe",
+      "provenance": "bootstrap/bison-2.3-musl.ncl"
     }
   ],
   "stage_graph": [
@@ -3658,6 +3739,14 @@
     {
       "from_node_id": "seed",
       "to_node_id": "gawk-3.0.4-recipe-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bison-2.3-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "bison-2.3-recipe-source"
     }
   ],
   "transition_tools": [
@@ -5046,6 +5135,50 @@
         "gawk-hex-observation",
         "gawk-negative-observation",
         "gawk-installed-observation"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "7b9699a83f7028fb22c8aa5bffaa5e314e2a9e1ad8625c0304c2a7bbbf37f121"
+      },
+      "id": "bison-build-exec",
+      "input_artifact_ids": [
+        "tcc-musl-v2",
+        "musl-native-libc",
+        "musl-native-crt1",
+        "musl-native-headers",
+        "m4-1.4.7"
+      ],
+      "name": "TinyCC musl-v2 materializing GNU Bison against native musl",
+      "output_artifact_ids": [
+        "bison-configured-source",
+        "bison-2.3",
+        "bison-2.3-runtime-data"
+      ],
+      "source_artifact_ids": [
+        "bison-2.3-source",
+        "bison-2.3-recipe-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3db09397aa2752eea9c438a4cb1c5ebd27605f58b56ec43781baf411c3f2b983"
+      },
+      "id": "bison-smoke-exec",
+      "input_artifact_ids": [
+        "bison-2.3",
+        "bison-2.3-runtime-data",
+        "m4-1.4.7"
+      ],
+      "name": "GNU Bison executing version, valid grammar, and malformed grammar checks",
+      "output_artifact_ids": [
+        "bison-version-observation",
+        "bison-positive-parser-source",
+        "bison-positive-parser-header",
+        "bison-negative-observation"
       ],
       "source_artifact_ids": []
     }
