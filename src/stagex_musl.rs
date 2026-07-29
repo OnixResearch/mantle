@@ -938,7 +938,7 @@ fn validate_helper_digests(profile: MuslProfile) -> Result<(), StagexMuslError> 
     Ok(())
 }
 
-fn generate_headers(root: &Path) -> Result<(), StagexMuslError> {
+pub(crate) fn generate_headers(root: &Path) -> Result<(), StagexMuslError> {
     let object_bits = root.join("obj/include/bits");
     let object_internal = root.join("obj/src/internal");
     fs::create_dir_all(&object_bits)
@@ -1013,7 +1013,7 @@ fn transform_alltypes(input: &str) -> Result<String, StagexMuslError> {
     Ok(output)
 }
 
-fn selected_sources(root: &Path) -> Result<Vec<String>, StagexMuslError> {
+pub(crate) fn selected_sources(root: &Path) -> Result<Vec<String>, StagexMuslError> {
     let source_prefix = root
         .file_name()
         .and_then(|value| value.to_str())
@@ -1163,7 +1163,7 @@ fn materialize_empty_archives(output_root: &Path) -> Result<(), StagexMuslError>
     Ok(())
 }
 
-fn install_headers(source_root: &Path, output_include: &Path) -> Result<(), StagexMuslError> {
+pub(crate) fn install_headers(source_root: &Path, output_include: &Path) -> Result<(), StagexMuslError> {
     crate::stagex_mes_lib::copy_tree_bounded(&source_root.join("include"), output_include)?;
     for source in [
         source_root.join("arch/generic/bits"),

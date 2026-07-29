@@ -160,6 +160,8 @@ mod stagex_mes_sources;
 #[allow(dead_code)]
 mod stagex_musl;
 #[allow(dead_code)]
+mod stagex_musl_native;
+#[allow(dead_code)]
 mod stagex_oyacc;
 #[allow(dead_code)]
 mod stagex_patch;

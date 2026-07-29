@@ -359,6 +359,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "tcc-musl-v2-recipe-source" "checked TinyCC musl-v2 recipe" "c82e4b5c375d3f9ba767c916ad4dba18e995d239755ea492ae94a007d2f49190" "bootstrap/tcc-musl-v2.ncl",
     source "tcc-musl-v2-stdarg-runtime-source" "checked TinyCC variadic runtime helper" "39655914dd22719e8f64182e281622ccaa4104ab7d901f728db84338659cc942" "TinyCC musl-v2 recipe heredoc /tmp/tcc-stdarg-runtime.c",
     source "tcc-musl-selfhost-recipe-source" "checked TinyCC self-host recipe" "e24d7a19746cbae7387c7c7d739c7a3ee5ae6c8e343351f3deacebad1be805d2" "bootstrap/tcc-musl-selfhost.ncl",
+    source "musl-native-recipe-source" "checked upstream-shaped native musl recipe" "0f86c28c5a4f7290002200871edede784e79566b4f02c9ebb1f22b654c1e6c1c" "bootstrap/musl-1.1.24-native.ncl",
   ],
   generated_artifacts = [
     {
@@ -541,6 +542,22 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "tcc-musl-selfhost-build-exec" "tcc-musl-selfhost-patched-source" "self-hosted TinyCC patched source tree" "5e918d19d4d7151f17a5a81bd07d25fd8a55e57037b4735f038344365326b3d4",
     tinycc_generated "tcc-musl-selfhost-build-exec" "tcc-musl-selfhost-object-tree" "self-hosted TinyCC compiler object tree" "2f3fcb41daa227dac3e1d206c4c7aeabd6ff6341fe975399e950629e8a281880",
     tinycc_generated "tcc-musl-selfhost-smoke-exec" "tcc-musl-selfhost-smoke-object" "self-hosted TinyCC syntax smoke object" "cc40480286f053fc69e7d17431b4cf5de82b477b0f84e646717cd6c3c71cecb1",
+    tinycc_generated "musl-native-build-exec" "musl-native-configured-source" "upstream-shaped native musl configured source identity" "b65d4f08a8a49ebc0c402c00f68a9348fb416cb8d66b066b4d08022e744018b2",
+    tinycc_generated "musl-native-build-exec" "musl-native-libc" "upstream-shaped native musl static libc" "da903202e9b5f574fd32ba550e654b918f5ce4dad0c87b5d70171eaba1f0cf07",
+    tinycc_generated "musl-native-build-exec" "musl-native-crt1" "native musl startup object" "bcfefaf8179325fd26e8ecaa83b22a87fe75d3bbadb411e32113b4cb69f21f66",
+    tinycc_generated "musl-native-build-exec" "musl-native-crti" "native musl initialization object" "ecf4006e5ea51c3ad49a243165909cd4f9eddfbe181b576ac43513ede8578be4",
+    tinycc_generated "musl-native-build-exec" "musl-native-crtn" "native musl finalization object" "b3b3153225cc100b8c429f5916ae36b96ef4903169b86f841f86498c0fd7251d",
+    tinycc_generated "musl-native-build-exec" "musl-native-libm" "native musl empty libm archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-native-build-exec" "musl-native-librt" "native musl empty librt archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-native-build-exec" "musl-native-libpthread" "native musl empty libpthread archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-native-build-exec" "musl-native-libcrypt" "native musl empty libcrypt archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-native-build-exec" "musl-native-libutil" "native musl empty libutil archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-native-build-exec" "musl-native-libxnet" "native musl empty libxnet archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-native-build-exec" "musl-native-libresolv" "native musl empty libresolv archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-native-build-exec" "musl-native-libdl" "native musl empty libdl archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
+    tinycc_generated "musl-native-build-exec" "musl-native-headers" "native musl installed header tree" "315e38bd3f318804adf63fadc9689a9b692ee69986e26c6fddd4670190498700",
+    tinycc_generated "musl-native-smoke-exec" "musl-native-smoke-binary" "native musl runtime smoke binary" "37b452f13fc423d7a1a5cc061264e4a897b305d144b0e214648738d106cb3e49",
+    tinycc_generated "musl-native-execution-exec" "musl-native-validation-receipt" "native musl execution and malformed-source validation receipt" "f578c82fb2c9eb48d87b171daedaef41f63c7f82b64d26b14e6f686f9c3f230e",
   ],
   transition_tools = [
     {
@@ -1065,6 +1082,30 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["tcc-musl-selfhost-smoke-object"],
       digest = blake3 "cc40480286f053fc69e7d17431b4cf5de82b477b0f84e646717cd6c3c71cecb1",
     },
+    {
+      id = "musl-native-build-exec",
+      name = "self-hosted TinyCC materializing upstream-shaped native musl with declared predecessor assistance",
+      source_artifact_ids = ["musl-1.1.24-source", "musl-native-recipe-source"],
+      input_artifact_ids = ["tcc-musl-selfhost", "tcc-musl-v2"],
+      output_artifact_ids = ["musl-native-configured-source", "musl-native-libc", "musl-native-crt1", "musl-native-crti", "musl-native-crtn", "musl-native-libm", "musl-native-librt", "musl-native-libpthread", "musl-native-libcrypt", "musl-native-libutil", "musl-native-libxnet", "musl-native-libresolv", "musl-native-libdl", "musl-native-headers"],
+      digest = blake3 "b65d4f08a8a49ebc0c402c00f68a9348fb416cb8d66b066b4d08022e744018b2",
+    },
+    {
+      id = "musl-native-smoke-exec",
+      name = "native musl compile and static link smoke",
+      source_artifact_ids = [],
+      input_artifact_ids = ["musl-native-libc", "musl-native-crt1", "musl-native-headers", "tcc-musl-selfhost"],
+      output_artifact_ids = ["musl-native-smoke-binary"],
+      digest = blake3 "37b452f13fc423d7a1a5cc061264e4a897b305d144b0e214648738d106cb3e49",
+    },
+    {
+      id = "musl-native-execution-exec",
+      name = "native musl execution and malformed-source rejection",
+      source_artifact_ids = [],
+      input_artifact_ids = ["musl-native-smoke-binary", "tcc-musl-v2"],
+      output_artifact_ids = ["musl-native-validation-receipt"],
+      digest = blake3 "f578c82fb2c9eb48d87b171daedaef41f63c7f82b64d26b14e6f686f9c3f230e",
+    },
   ],
   patches = [
     {
@@ -1219,5 +1260,6 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "tcc-musl-v2-recipe-source" },
     { from_node_id = "seed", to_node_id = "tcc-musl-v2-stdarg-runtime-source" },
     { from_node_id = "seed", to_node_id = "tcc-musl-selfhost-recipe-source" },
+    { from_node_id = "seed", to_node_id = "musl-native-recipe-source" },
   ],
 } | Manifest

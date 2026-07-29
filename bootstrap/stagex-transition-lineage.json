@@ -1541,6 +1541,150 @@
       "id": "tcc-musl-selfhost-smoke-object",
       "name": "self-hosted TinyCC syntax smoke object",
       "producing_tool_id": "tcc-musl-selfhost-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b65d4f08a8a49ebc0c402c00f68a9348fb416cb8d66b066b4d08022e744018b2"
+      },
+      "id": "musl-native-configured-source",
+      "name": "upstream-shaped native musl configured source identity",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "da903202e9b5f574fd32ba550e654b918f5ce4dad0c87b5d70171eaba1f0cf07"
+      },
+      "id": "musl-native-libc",
+      "name": "upstream-shaped native musl static libc",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "bcfefaf8179325fd26e8ecaa83b22a87fe75d3bbadb411e32113b4cb69f21f66"
+      },
+      "id": "musl-native-crt1",
+      "name": "native musl startup object",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "ecf4006e5ea51c3ad49a243165909cd4f9eddfbe181b576ac43513ede8578be4"
+      },
+      "id": "musl-native-crti",
+      "name": "native musl initialization object",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b3b3153225cc100b8c429f5916ae36b96ef4903169b86f841f86498c0fd7251d"
+      },
+      "id": "musl-native-crtn",
+      "name": "native musl finalization object",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+      },
+      "id": "musl-native-libm",
+      "name": "native musl empty libm archive",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+      },
+      "id": "musl-native-librt",
+      "name": "native musl empty librt archive",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+      },
+      "id": "musl-native-libpthread",
+      "name": "native musl empty libpthread archive",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+      },
+      "id": "musl-native-libcrypt",
+      "name": "native musl empty libcrypt archive",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+      },
+      "id": "musl-native-libutil",
+      "name": "native musl empty libutil archive",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+      },
+      "id": "musl-native-libxnet",
+      "name": "native musl empty libxnet archive",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+      },
+      "id": "musl-native-libresolv",
+      "name": "native musl empty libresolv archive",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+      },
+      "id": "musl-native-libdl",
+      "name": "native musl empty libdl archive",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "315e38bd3f318804adf63fadc9689a9b692ee69986e26c6fddd4670190498700"
+      },
+      "id": "musl-native-headers",
+      "name": "native musl installed header tree",
+      "producing_tool_id": "musl-native-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "37b452f13fc423d7a1a5cc061264e4a897b305d144b0e214648738d106cb3e49"
+      },
+      "id": "musl-native-smoke-binary",
+      "name": "native musl runtime smoke binary",
+      "producing_tool_id": "musl-native-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f578c82fb2c9eb48d87b171daedaef41f63c7f82b64d26b14e6f686f9c3f230e"
+      },
+      "id": "musl-native-validation-receipt",
+      "name": "native musl execution and malformed-source validation receipt",
+      "producing_tool_id": "musl-native-execution-exec"
     }
   ],
   "patches": [
@@ -2631,6 +2775,15 @@
       "id": "tcc-musl-selfhost-recipe-source",
       "name": "checked TinyCC self-host recipe",
       "provenance": "bootstrap/tcc-musl-selfhost.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "0f86c28c5a4f7290002200871edede784e79566b4f02c9ebb1f22b654c1e6c1c"
+      },
+      "id": "musl-native-recipe-source",
+      "name": "checked upstream-shaped native musl recipe",
+      "provenance": "bootstrap/musl-1.1.24-native.ncl"
     }
   ],
   "stage_graph": [
@@ -3105,6 +3258,10 @@
     {
       "from_node_id": "seed",
       "to_node_id": "tcc-musl-selfhost-recipe-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "musl-native-recipe-source"
     }
   ],
   "transition_tools": [
@@ -4258,6 +4415,72 @@
       "name": "self-hosted TinyCC syntax and variadic object smoke",
       "output_artifact_ids": [
         "tcc-musl-selfhost-smoke-object"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b65d4f08a8a49ebc0c402c00f68a9348fb416cb8d66b066b4d08022e744018b2"
+      },
+      "id": "musl-native-build-exec",
+      "input_artifact_ids": [
+        "tcc-musl-selfhost",
+        "tcc-musl-v2"
+      ],
+      "name": "self-hosted TinyCC materializing upstream-shaped native musl with declared predecessor assistance",
+      "output_artifact_ids": [
+        "musl-native-configured-source",
+        "musl-native-libc",
+        "musl-native-crt1",
+        "musl-native-crti",
+        "musl-native-crtn",
+        "musl-native-libm",
+        "musl-native-librt",
+        "musl-native-libpthread",
+        "musl-native-libcrypt",
+        "musl-native-libutil",
+        "musl-native-libxnet",
+        "musl-native-libresolv",
+        "musl-native-libdl",
+        "musl-native-headers"
+      ],
+      "source_artifact_ids": [
+        "musl-1.1.24-source",
+        "musl-native-recipe-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "37b452f13fc423d7a1a5cc061264e4a897b305d144b0e214648738d106cb3e49"
+      },
+      "id": "musl-native-smoke-exec",
+      "input_artifact_ids": [
+        "musl-native-libc",
+        "musl-native-crt1",
+        "musl-native-headers",
+        "tcc-musl-selfhost"
+      ],
+      "name": "native musl compile and static link smoke",
+      "output_artifact_ids": [
+        "musl-native-smoke-binary"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f578c82fb2c9eb48d87b171daedaef41f63c7f82b64d26b14e6f686f9c3f230e"
+      },
+      "id": "musl-native-execution-exec",
+      "input_artifact_ids": [
+        "musl-native-smoke-binary",
+        "tcc-musl-v2"
+      ],
+      "name": "native musl execution and malformed-source rejection",
+      "output_artifact_ids": [
+        "musl-native-validation-receipt"
       ],
       "source_artifact_ids": []
     }
