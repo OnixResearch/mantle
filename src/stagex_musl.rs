@@ -1503,7 +1503,7 @@ fn bounded_tree_paths(root: &Path) -> Result<Vec<PathBuf>, StagexMuslError> {
     Ok(paths)
 }
 
-fn tree_digest_blake3(root: &Path) -> Result<String, StagexMuslError> {
+pub(crate) fn tree_digest_blake3(root: &Path) -> Result<String, StagexMuslError> {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"mantle-stagex-musl-tree-v1\0");
     for path in bounded_tree_paths(root)? {
@@ -1546,7 +1546,7 @@ fn tree_digest_blake3(root: &Path) -> Result<String, StagexMuslError> {
     Ok(digest)
 }
 
-fn tree_bytes_len(root: &Path) -> Result<u64, StagexMuslError> {
+pub(crate) fn tree_bytes_len(root: &Path) -> Result<u64, StagexMuslError> {
     let mut total = 0_u64;
     for path in bounded_tree_paths(root)? {
         let metadata = fs::symlink_metadata(&path).map_err(|error| {

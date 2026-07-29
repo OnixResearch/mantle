@@ -356,6 +356,8 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "musl-pass2-semctl-source" "second-musl semctl helper" "22289baa86062d7aa482f84bd3b3b1492519b225419e9df6ba46397e86d27e2d" "musl pass2 recipe heredoc src/ipc/semctl.c",
     source "musl-pass2-dlerror-source" "second-musl dlerror helper" "9e63330518eb48f3e5b3caf961cc7e05ffef11e3f13768c6e8b22d066d6804c7" "musl pass2 recipe heredoc src/ldso/dlerror.c",
     source "musl-pass2-fenv-source" "second-musl fenv assembly helper" "2e7056cbed4ae4e55a676ebfdad8ccfe39bbb06090e9ca86dd2a445fa3cfb33c" "musl pass2 recipe heredoc src/fenv/x86_64/fenv.s",
+    source "tcc-musl-v2-recipe-source" "checked TinyCC musl-v2 recipe" "c82e4b5c375d3f9ba767c916ad4dba18e995d239755ea492ae94a007d2f49190" "bootstrap/tcc-musl-v2.ncl",
+    source "tcc-musl-v2-stdarg-runtime-source" "checked TinyCC variadic runtime helper" "39655914dd22719e8f64182e281622ccaa4104ab7d901f728db84338659cc942" "TinyCC musl-v2 recipe heredoc /tmp/tcc-stdarg-runtime.c",
   ],
   generated_artifacts = [
     {
@@ -522,6 +524,15 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "musl-pass2-build-exec" "musl-pass2-libdl" "second-musl empty libdl archive" "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb",
     tinycc_generated "musl-pass2-build-exec" "musl-pass2-headers" "second-musl installed header tree" "4d5a63f48ef27c8377a5319d3d68cd1a2b724a974ee5d8281a67f8fb0b5dc1c7",
     tinycc_generated "musl-pass2-smoke-exec" "musl-pass2-smoke-binary" "second-musl linked smoke binary" "30c18329ab3981639dba0dbdef48cd01beae52abab89c8b732f8f6eb1248fc57",
+    tinycc_generated "tcc-musl-v2-build-exec" "tcc-musl-v2-configured-source" "TinyCC musl-v2 configured source identity" "b68ec9f7c46ca1cbec5508a98476f771e4bcc4d90b4e088a237065aac1c6061b",
+    tinycc_generated "tcc-musl-v2-build-exec" "tcc-musl-v2" "TinyCC musl-v2 compiler" "e7c34884d2dd51b38db8a19034ce36cc79a66af9222e30fed1f37d7516351765",
+    tinycc_generated "tcc-musl-v2-build-exec" "tcc-musl-v2-alias" "TinyCC musl-v2 compiler alias" "e7c34884d2dd51b38db8a19034ce36cc79a66af9222e30fed1f37d7516351765",
+    tinycc_generated "tcc-musl-v2-build-exec" "tcc-musl-v2-libtcc1" "TinyCC musl-v2 variadic runtime archive" "c201ffd35a5466b4171345fc924b64a75c650fabbe7d0c20d365cfe08faf0860",
+    tinycc_generated "tcc-musl-v2-build-exec" "tcc-musl-v2-source-tree" "TinyCC musl-v2 normalized source tree" "f6d2aec4068377861ab1548e672389dd79aaa31412057e5b4d3187e59ec11e26",
+    tinycc_generated "tcc-musl-v2-build-exec" "tcc-musl-v2-header-tree" "TinyCC musl-v2 header tree" "2fa068749df350a62721e60696d625b6d5b0e3061019929a4c67970155833424",
+    tinycc_generated "tcc-musl-v2-smoke-exec" "tcc-musl-v2-positive-object" "TinyCC musl-v2 positive variadic object" "a507376f7e9af418c78cc9f9121e7b182c8b1ef3b741de98741d6320f6f301b2",
+    tinycc_generated "tcc-musl-v2-smoke-exec" "tcc-musl-v2-positive-binary" "TinyCC musl-v2 positive variadic binary" "2a6733b887417ec6f848ece381d125e10d5d5544f0839dcfa896eacc88529fa6",
+    tinycc_generated "tcc-musl-v2-execution-exec" "tcc-musl-v2-positive-execution" "TinyCC musl-v2 zero-output successful execution" "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
   ],
   transition_tools = [
     {
@@ -1006,6 +1017,30 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["musl-pass2-smoke-binary"],
       digest = blake3 "053f36a66503797b3aaee40d2b0962dc643554e4ecf35d00ee2b7f947601f2af",
     },
+    {
+      id = "tcc-musl-v2-build-exec",
+      name = "TinyCC 0.9.26 materializing TinyCC musl-v2 and its variadic runtime",
+      source_artifact_ids = ["tinycc-0.9.27-source", "tinycc-0.9.27-patch-source", "tcc-musl-v2-recipe-source", "tcc-musl-v2-stdarg-runtime-source"],
+      input_artifact_ids = ["tinycc-0.9.26", "tinycc-libtcc1", "tcc-musl-prep-libtcc1", "musl-pass2-libc", "musl-pass2-crt1", "musl-pass2-headers"],
+      output_artifact_ids = ["tcc-musl-v2-configured-source", "tcc-musl-v2", "tcc-musl-v2-alias", "tcc-musl-v2-libtcc1", "tcc-musl-v2-source-tree", "tcc-musl-v2-header-tree"],
+      digest = blake3 "b68ec9f7c46ca1cbec5508a98476f771e4bcc4d90b4e088a237065aac1c6061b",
+    },
+    {
+      id = "tcc-musl-v2-smoke-exec",
+      name = "TinyCC musl-v2 variadic compile, link, execute, and malformed-source rejection",
+      source_artifact_ids = [],
+      input_artifact_ids = ["tcc-musl-v2", "tcc-musl-v2-libtcc1", "musl-pass2-libc", "musl-pass2-crt1", "musl-pass2-headers"],
+      output_artifact_ids = ["tcc-musl-v2-positive-object", "tcc-musl-v2-positive-binary"],
+      digest = blake3 "e7c34884d2dd51b38db8a19034ce36cc79a66af9222e30fed1f37d7516351765",
+    },
+    {
+      id = "tcc-musl-v2-execution-exec",
+      name = "TinyCC musl-v2 positive variadic execution",
+      source_artifact_ids = [],
+      input_artifact_ids = ["tcc-musl-v2-positive-binary"],
+      output_artifact_ids = ["tcc-musl-v2-positive-execution"],
+      digest = blake3 "2a6733b887417ec6f848ece381d125e10d5d5544f0839dcfa896eacc88529fa6",
+    },
   ],
   patches = [
     {
@@ -1157,5 +1192,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "musl-pass2-semctl-source" },
     { from_node_id = "seed", to_node_id = "musl-pass2-dlerror-source" },
     { from_node_id = "seed", to_node_id = "musl-pass2-fenv-source" },
+    { from_node_id = "seed", to_node_id = "tcc-musl-v2-recipe-source" },
+    { from_node_id = "seed", to_node_id = "tcc-musl-v2-stdarg-runtime-source" },
   ],
 } | Manifest

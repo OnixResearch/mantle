@@ -1397,6 +1397,87 @@
       "id": "musl-pass2-smoke-binary",
       "name": "second-musl linked smoke binary",
       "producing_tool_id": "musl-pass2-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b68ec9f7c46ca1cbec5508a98476f771e4bcc4d90b4e088a237065aac1c6061b"
+      },
+      "id": "tcc-musl-v2-configured-source",
+      "name": "TinyCC musl-v2 configured source identity",
+      "producing_tool_id": "tcc-musl-v2-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "e7c34884d2dd51b38db8a19034ce36cc79a66af9222e30fed1f37d7516351765"
+      },
+      "id": "tcc-musl-v2",
+      "name": "TinyCC musl-v2 compiler",
+      "producing_tool_id": "tcc-musl-v2-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "e7c34884d2dd51b38db8a19034ce36cc79a66af9222e30fed1f37d7516351765"
+      },
+      "id": "tcc-musl-v2-alias",
+      "name": "TinyCC musl-v2 compiler alias",
+      "producing_tool_id": "tcc-musl-v2-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "c201ffd35a5466b4171345fc924b64a75c650fabbe7d0c20d365cfe08faf0860"
+      },
+      "id": "tcc-musl-v2-libtcc1",
+      "name": "TinyCC musl-v2 variadic runtime archive",
+      "producing_tool_id": "tcc-musl-v2-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f6d2aec4068377861ab1548e672389dd79aaa31412057e5b4d3187e59ec11e26"
+      },
+      "id": "tcc-musl-v2-source-tree",
+      "name": "TinyCC musl-v2 normalized source tree",
+      "producing_tool_id": "tcc-musl-v2-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "2fa068749df350a62721e60696d625b6d5b0e3061019929a4c67970155833424"
+      },
+      "id": "tcc-musl-v2-header-tree",
+      "name": "TinyCC musl-v2 header tree",
+      "producing_tool_id": "tcc-musl-v2-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "a507376f7e9af418c78cc9f9121e7b182c8b1ef3b741de98741d6320f6f301b2"
+      },
+      "id": "tcc-musl-v2-positive-object",
+      "name": "TinyCC musl-v2 positive variadic object",
+      "producing_tool_id": "tcc-musl-v2-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "2a6733b887417ec6f848ece381d125e10d5d5544f0839dcfa896eacc88529fa6"
+      },
+      "id": "tcc-musl-v2-positive-binary",
+      "name": "TinyCC musl-v2 positive variadic binary",
+      "producing_tool_id": "tcc-musl-v2-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "id": "tcc-musl-v2-positive-execution",
+      "name": "TinyCC musl-v2 zero-output successful execution",
+      "producing_tool_id": "tcc-musl-v2-execution-exec"
     }
   ],
   "patches": [
@@ -2460,6 +2541,24 @@
       "id": "musl-pass2-fenv-source",
       "name": "second-musl fenv assembly helper",
       "provenance": "musl pass2 recipe heredoc src/fenv/x86_64/fenv.s"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "c82e4b5c375d3f9ba767c916ad4dba18e995d239755ea492ae94a007d2f49190"
+      },
+      "id": "tcc-musl-v2-recipe-source",
+      "name": "checked TinyCC musl-v2 recipe",
+      "provenance": "bootstrap/tcc-musl-v2.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "39655914dd22719e8f64182e281622ccaa4104ab7d901f728db84338659cc942"
+      },
+      "id": "tcc-musl-v2-stdarg-runtime-source",
+      "name": "checked TinyCC variadic runtime helper",
+      "provenance": "TinyCC musl-v2 recipe heredoc /tmp/tcc-stdarg-runtime.c"
     }
   ],
   "stage_graph": [
@@ -2922,6 +3021,14 @@
     {
       "from_node_id": "seed",
       "to_node_id": "musl-pass2-fenv-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "tcc-musl-v2-recipe-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "tcc-musl-v2-stdarg-runtime-source"
     }
   ],
   "transition_tools": [
@@ -3968,6 +4075,71 @@
       "name": "musl-linked TinyCC compiling and linking against second-musl",
       "output_artifact_ids": [
         "musl-pass2-smoke-binary"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b68ec9f7c46ca1cbec5508a98476f771e4bcc4d90b4e088a237065aac1c6061b"
+      },
+      "id": "tcc-musl-v2-build-exec",
+      "input_artifact_ids": [
+        "tinycc-0.9.26",
+        "tinycc-libtcc1",
+        "tcc-musl-prep-libtcc1",
+        "musl-pass2-libc",
+        "musl-pass2-crt1",
+        "musl-pass2-headers"
+      ],
+      "name": "TinyCC 0.9.26 materializing TinyCC musl-v2 and its variadic runtime",
+      "output_artifact_ids": [
+        "tcc-musl-v2-configured-source",
+        "tcc-musl-v2",
+        "tcc-musl-v2-alias",
+        "tcc-musl-v2-libtcc1",
+        "tcc-musl-v2-source-tree",
+        "tcc-musl-v2-header-tree"
+      ],
+      "source_artifact_ids": [
+        "tinycc-0.9.27-source",
+        "tinycc-0.9.27-patch-source",
+        "tcc-musl-v2-recipe-source",
+        "tcc-musl-v2-stdarg-runtime-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "e7c34884d2dd51b38db8a19034ce36cc79a66af9222e30fed1f37d7516351765"
+      },
+      "id": "tcc-musl-v2-smoke-exec",
+      "input_artifact_ids": [
+        "tcc-musl-v2",
+        "tcc-musl-v2-libtcc1",
+        "musl-pass2-libc",
+        "musl-pass2-crt1",
+        "musl-pass2-headers"
+      ],
+      "name": "TinyCC musl-v2 variadic compile, link, execute, and malformed-source rejection",
+      "output_artifact_ids": [
+        "tcc-musl-v2-positive-object",
+        "tcc-musl-v2-positive-binary"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "2a6733b887417ec6f848ece381d125e10d5d5544f0839dcfa896eacc88529fa6"
+      },
+      "id": "tcc-musl-v2-execution-exec",
+      "input_artifact_ids": [
+        "tcc-musl-v2-positive-binary"
+      ],
+      "name": "TinyCC musl-v2 positive variadic execution",
+      "output_artifact_ids": [
+        "tcc-musl-v2-positive-execution"
       ],
       "source_artifact_ids": []
     }

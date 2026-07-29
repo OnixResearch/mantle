@@ -178,6 +178,8 @@ mod stagex_tcc_musl;
 #[allow(dead_code)]
 mod stagex_tcc_musl_prep;
 #[allow(dead_code)]
+mod stagex_tcc_musl_v2;
+#[allow(dead_code)]
 mod stagex_tinycc;
 #[allow(dead_code)]
 mod stagex_tinycc27;
