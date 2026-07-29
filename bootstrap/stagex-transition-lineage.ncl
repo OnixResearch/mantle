@@ -1,5 +1,5 @@
-# Typed source for the protected seed-to-GNU-diffutils transition.
-# This file does not yet describe the later grep/parser generators, binutils, native TinyCC, or normalized StageX provider.
+# Typed source for the protected seed-to-GNU-grep transition.
+# This file does not yet describe the later parser generators, binutils, native TinyCC, or normalized StageX provider.
 
 let Digest = {
   algorithm | String,
@@ -364,6 +364,9 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "m4-1.4.7-recipe-source" "checked GNU M4 1.4.7 recipe" "39671a43fce58c3cae66c38810b1912b27a29f7a5c134c84acf03b678af22e74" "bootstrap/m4-1.4.7-musl.ncl",
     source "diffutils-2.7-source" "authenticated GNU diffutils 2.7 source" "36714b7ee4e36f7f39ca3fb32010c5babe8a09532ee991f565771f9ca26daf90" "fixed-output source record diffutils-2.7-src",
     source "diffutils-2.7-recipe-source" "checked GNU diffutils 2.7 recipe" "51279c523c0443488a89650985fce68305233907ee2b915540978cb3271f1254" "bootstrap/diffutils-2.7-musl.ncl",
+    source "grep-2.4-source" "authenticated GNU grep 2.4 source" "b40c519f58ef370f44bbafc37a76ae843a3cf621a44ef83158294fb29ada14d0" "fixed-output source record grep-2.4-src",
+    source "grep-2.4-recipe-source" "checked GNU grep 2.4 bridge recipe" "15afa14595fb8c84cd5e1ce8d0807ed853a2177146a4e585bcedd90b3d589ad6" "bootstrap/grep-2.4-musl.ncl",
+    source "grep-2.4-bridge-runner-source" "bounded native runner for the checked GNU grep bridge subset" "926cba44f7f96479db1e73a85e428346eccc380ca463704fa7f2e68905e9363f" "bootstrap/stagex-grep-bridge-runner.c",
   ],
   generated_artifacts = [
     {
@@ -575,6 +578,14 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "diffutils-smoke-exec" "diffutils-diff-observation" "GNU diff difference observation" "db3c58f16a007600d256c0be6306d55101919037d37ed4ece231bab4c3bbe2ca",
     tinycc_generated "diffutils-smoke-exec" "diffutils-cmp-observation" "GNU cmp difference observation" "5d5856604bb2fa260c00b5ed8bcaa9a6b0bb89a644c7b23a2b678bf0e9127f6e",
     tinycc_generated "diffutils-smoke-exec" "diffutils-malformed-rejection" "GNU diffutils malformed-input rejection receipt" "202fa55131223d7bc743f2ff8d6896e001df815d001f698d58be1bc451ea5725",
+    tinycc_generated "grep-build-exec" "grep-configured-source" "GNU grep bridge configured source identity" "d86dde390ef4ab7b4456f0371cbd29afa8b0e31ca297e7acc85b5f9544775c40",
+    tinycc_generated "grep-build-exec" "grep-2.4-runner" "native runner for the checked GNU grep 2.4 bridge subset" "b4adac2bf1f29e3e3b8ec736207a0cdfc3eb5b51c658a2f9f8eff85aee4ef71d",
+    tinycc_generated "grep-build-exec" "egrep-2.4-runner" "egrep alias for the native GNU grep bridge runner" "b4adac2bf1f29e3e3b8ec736207a0cdfc3eb5b51c658a2f9f8eff85aee4ef71d",
+    tinycc_generated "grep-build-exec" "fgrep-2.4-runner" "fgrep alias for the native GNU grep bridge runner" "b4adac2bf1f29e3e3b8ec736207a0cdfc3eb5b51c658a2f9f8eff85aee4ef71d",
+    tinycc_generated "grep-build-exec" "grep-2.4-bridge-script" "exact checked GNU grep 2.4 shell bridge retained as non-executable data" "3da22b084c98e1ebef50ddcbe404c681d6a7d81b29389d26151729b1c74127de",
+    tinycc_generated "grep-smoke-exec" "grep-literal-observation" "GNU grep bridge literal-match observation" "8e4c7c1b99dbfd50e7a95185fead5ee1448fa904a2fdd778eaf5f2dbfd629a99",
+    tinycc_generated "grep-smoke-exec" "grep-quiet-observation" "GNU grep bridge quiet-match observation" "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+    tinycc_generated "grep-smoke-exec" "grep-anchored-observation" "GNU grep bridge anchored-match observation" "aa95faeede7041e63c6056bdcf10e6fbf709a355e539259da51a067e5dd27802",
   ],
   transition_tools = [
     {
@@ -1155,6 +1166,22 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["diffutils-version-observation", "diffutils-diff-observation", "diffutils-cmp-observation", "diffutils-malformed-rejection"],
       digest = blake3 "054ba2636aef71a1cbda93de3358ff8b8a7c92127ce951dcb7cc5814ac0e2d66",
     },
+    {
+      id = "grep-build-exec",
+      name = "TinyCC musl-v2 materializing the checked GNU grep bridge and native subset runner",
+      source_artifact_ids = ["grep-2.4-source", "grep-2.4-recipe-source", "grep-2.4-bridge-runner-source"],
+      input_artifact_ids = ["tcc-musl-v2", "musl-native-libc", "musl-native-crt1", "musl-native-headers"],
+      output_artifact_ids = ["grep-configured-source", "grep-2.4-runner", "egrep-2.4-runner", "fgrep-2.4-runner", "grep-2.4-bridge-script"],
+      digest = blake3 "d86dde390ef4ab7b4456f0371cbd29afa8b0e31ca297e7acc85b5f9544775c40",
+    },
+    {
+      id = "grep-smoke-exec",
+      name = "native GNU grep bridge runner executing literal, quiet, and anchored checks",
+      source_artifact_ids = [],
+      input_artifact_ids = ["grep-2.4-runner"],
+      output_artifact_ids = ["grep-literal-observation", "grep-quiet-observation", "grep-anchored-observation"],
+      digest = blake3 "b4adac2bf1f29e3e3b8ec736207a0cdfc3eb5b51c658a2f9f8eff85aee4ef71d",
+    },
   ],
   patches = [
     {
@@ -1314,5 +1341,8 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "m4-1.4.7-recipe-source" },
     { from_node_id = "seed", to_node_id = "diffutils-2.7-source" },
     { from_node_id = "seed", to_node_id = "diffutils-2.7-recipe-source" },
+    { from_node_id = "seed", to_node_id = "grep-2.4-source" },
+    { from_node_id = "seed", to_node_id = "grep-2.4-recipe-source" },
+    { from_node_id = "seed", to_node_id = "grep-2.4-bridge-runner-source" },
   ],
 } | Manifest

@@ -92,7 +92,10 @@ pub(crate) const M4_BUILD_STAGE_ID: &str = "m4-materialization";
 pub(crate) const M4_SMOKE_STAGE_ID: &str = "m4-smoke";
 pub(crate) const DIFFUTILS_BUILD_STAGE_ID: &str = "diffutils-materialization";
 pub(crate) const DIFFUTILS_SMOKE_STAGE_ID: &str = "diffutils-smoke";
+pub(crate) const GREP_BUILD_STAGE_ID: &str = "grep-materialization";
+pub(crate) const GREP_SMOKE_STAGE_ID: &str = "grep-smoke";
 const TCC_MUSL_V2_CANONICAL_AUTHORIZATION_ID: &str = "planned:tcc-musl-v2-materialization:exec:tcc-musl-v2-smoke:tcc";
+const GREP_RUNNER_CANONICAL_AUTHORIZATION_ID: &str = "planned:grep-materialization:exec:grep-smoke:grep";
 pub(crate) const HEX0_SEED_BLAKE3: &str = "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80";
 pub(crate) const HEX0_SOURCE_BLAKE3: &str = "0fb23576a10b41df29c165e39514f18c411da96ae71873a6a2e2f0b1d94de614";
 pub(crate) const KAEM_SOURCE_BLAKE3: &str = "5a56b4164dca4d1e03ba35bc8ce4b418a0de2baf1cb9e6a0912607e26532d30d";
@@ -121,7 +124,7 @@ const MES_OUTPUT_MAX_MIB: u64 = 64;
 const MES_OUTPUT_MAX_BYTES: u64 = MES_OUTPUT_MAX_MIB * MIB_BYTES;
 const STAGE_JOB_COUNT: u32 = 1;
 const TRANSITION_STAGE_COUNT_MAX: u32 = 3;
-const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 79;
+const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 81;
 const TINYCC_LINK_CHILD_EVENT_COUNT: usize = 5;
 const MAKE_RECIPE_CHILD_EVENT_COUNT: usize = 1;
 const GZIP_GZIP_SMOKE_EVENT_COUNT: usize = 2;
@@ -238,6 +241,10 @@ pub(crate) struct StagexTransitionReport {
     pub diffutils_sources: Option<crate::stagex_diffutils::DiffutilsSourceMaterializationReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diffutils_runtime: Option<crate::stagex_diffutils::DiffutilsInventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grep_sources: Option<crate::stagex_grep::GrepSourceMaterializationReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grep_runtime: Option<crate::stagex_grep::GrepInventoryReport>,
     pub fallback_events: Vec<String>,
     pub promotions: Vec<OutputPromotionRecord>,
     pub protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
@@ -552,6 +559,12 @@ pub(crate) fn materialize_protected_transition(
             source_stage_id: DIFFUTILS_BUILD_STAGE_ID.to_string(),
             path: request.scratch_dir.join("diffutils-stage/runtime/output/bin/cmp"),
             digest_hex: crate::stagex_diffutils::DIFFUTILS_CMP_BLAKE3.to_string(),
+        });
+        planned.push(PlannedExecutable {
+            authorization_id: "exec:grep-smoke:grep".to_string(),
+            source_stage_id: GREP_BUILD_STAGE_ID.to_string(),
+            path: request.scratch_dir.join("grep-stage/runtime/output/bin/grep"),
+            digest_hex: crate::stagex_grep::GREP_RUNNER_BLAKE3.to_string(),
         });
         planned
     } else {
@@ -1255,6 +1268,38 @@ pub(crate) fn materialize_protected_transition(
         _ => unreachable!("GNU diffutils requires authenticated source and protected GNU M4 completion"),
     };
 
+    let (grep_sources, grep_runtime) = match (request.source_bundle_path, diffutils_runtime.as_ref()) {
+        (Some(source_bundle_path), Some(_)) => {
+            let stage = request.scratch_dir.join("grep-stage");
+            fs::create_dir(&stage)
+                .map_err(|source| io_error("creating create-new protected GNU grep stage root", source))?;
+            let sources = crate::stagex_grep::materialize_authenticated_grep_source(
+                source_bundle_path,
+                &manifest_authority.source_bundle_manifest_blake3,
+                &stage.join("sources"),
+            )
+            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+            let result = crate::stagex_grep::derive_grep_inventory(crate::stagex_grep::GrepInventoryRequest {
+                source_root: &sources.output_path,
+                tcc_musl_v2_root: &request.scratch_dir.join("tcc-musl-v2-stage/runtime/output"),
+                musl_native_root: &request.scratch_dir.join("musl-native-stage/runtime/output"),
+                scratch_dir: &stage.join("runtime"),
+                protected_exec_enforced: true,
+            });
+            match result {
+                Ok(report) => (Some(sources), Some(report)),
+                Err(error) => {
+                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                    let events = supervisor.audit_events();
+                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
+                }
+            }
+        }
+        (None, None) => (None, None),
+        _ => unreachable!("GNU grep requires authenticated source and protected GNU diffutils completion"),
+    };
+
     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
     let protected_exec_events = supervisor.audit_events();
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
@@ -1284,6 +1329,7 @@ pub(crate) fn materialize_protected_transition(
             musl_native_runtime: musl_native_runtime.as_ref(),
             m4_runtime: m4_runtime.as_ref(),
             diffutils_runtime: diffutils_runtime.as_ref(),
+            grep_runtime: grep_runtime.as_ref(),
         },
         &protected_exec_events,
     )?;
@@ -1335,6 +1381,8 @@ pub(crate) fn materialize_protected_transition(
         m4_runtime,
         diffutils_sources,
         diffutils_runtime,
+        grep_sources,
+        grep_runtime,
         fallback_events: Vec::new(),
         promotions: vec![hex0_promotion, kaem_promotion],
         protected_exec_events,
@@ -1473,6 +1521,9 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     for (artifact_id, digest_blake3) in crate::stagex_diffutils::source_artifact_digests() {
         require_manifest_digest(&sources, artifact_id, digest_blake3)?;
     }
+    for (artifact_id, digest_blake3) in crate::stagex_grep::source_artifact_digests() {
+        require_manifest_digest(&sources, artifact_id, digest_blake3)?;
+    }
     let generated: BTreeMap<&str, &str> = manifest
         .generated_artifacts
         .iter()
@@ -1600,6 +1651,10 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
         crate::stagex_diffutils::DIFFUTILS_CONFIGURED_SOURCE_BLAKE3,
     )?;
     for expected in crate::stagex_diffutils::DIFFUTILS_EXPECTED_OUTPUTS {
+        require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
+    }
+    require_manifest_digest(&generated, "grep-configured-source", crate::stagex_grep::GREP_CONFIGURED_SOURCE_BLAKE3)?;
+    for expected in crate::stagex_grep::GREP_EXPECTED_OUTPUTS {
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
     let patches: BTreeMap<&str, &str> =
@@ -1782,6 +1837,8 @@ fn build_transition_plan(
         stages.extend(m4_stage_plans(&tcc_musl_v2_root, &musl_native_root, &m4_root));
         let diffutils_root = staged.seed.parent().expect("staged seed has parent").join("diffutils-stage/runtime");
         stages.extend(diffutils_stage_plans(&tcc_musl_v2_root, &musl_native_root, &diffutils_root));
+        let grep_root = staged.seed.parent().expect("staged seed has parent").join("grep-stage/runtime");
+        stages.extend(grep_stage_plans(&tcc_musl_v2_root, &musl_native_root, &grep_root));
     }
     let stage_count_max = if include_stage0_mini {
         TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX
@@ -2686,6 +2743,60 @@ fn diffutils_stage_plans(
                 ),
             ],
         ),
+    ]
+}
+
+fn grep_stage_plans(tcc_musl_v2_root: &Path, musl_native_root: &Path, grep_root: &Path) -> Vec<StagexStagePlan> {
+    const GREP_BUILD_OUTPUT_COUNT: usize = 4;
+    const GREP_SMOKE_OUTPUT_COUNT: usize = crate::stagex_grep::GREP_EXPECTED_OUTPUTS.len() - GREP_BUILD_OUTPUT_COUNT;
+    let compiler = tcc_musl_v2_root.join("output/bin/tcc-0.9.27-musl-v2");
+    let grep = grep_root.join("output/bin/grep");
+    let smoke_outputs = crate::stagex_grep::GREP_EXPECTED_OUTPUTS
+        .iter()
+        .filter(|output| output.artifact_id.ends_with("-observation"))
+        .map(|output| output.artifact_id.to_string())
+        .collect::<Vec<_>>();
+    assert!(musl_native_root.join("output/lib/libc.a").is_absolute());
+    assert_eq!(smoke_outputs.len(), GREP_SMOKE_OUTPUT_COUNT);
+    vec![
+        mes_stage_plan(
+            GREP_BUILD_STAGE_ID,
+            &[
+                DIFFUTILS_SMOKE_STAGE_ID,
+                MUSL_NATIVE_BUILD_STAGE_ID,
+                MUSL_NATIVE_SMOKE_STAGE_ID,
+                MUSL_NATIVE_EXECUTION_STAGE_ID,
+                TCC_MUSL_V2_BUILD_STAGE_ID,
+                TCC_MUSL_V2_SMOKE_STAGE_ID,
+            ],
+            &[
+                crate::stagex_grep::GREP_SOURCE_ARTIFACT_ID,
+                crate::stagex_grep::GREP_RECIPE_ARTIFACT_ID,
+                crate::stagex_grep::GREP_RUNNER_SOURCE_ARTIFACT_ID,
+            ],
+            &[
+                "tcc-musl-v2",
+                "musl-native-libc",
+                "musl-native-crt1",
+                "musl-native-headers",
+            ],
+            &[
+                "grep-configured-source".to_string(),
+                "grep-2.4-runner".to_string(),
+                "egrep-2.4-runner".to_string(),
+                "fgrep-2.4-runner".to_string(),
+                "grep-2.4-bridge-script".to_string(),
+            ],
+            vec![authorization(
+                "exec:grep-materialization:tcc-musl-v2",
+                &compiler,
+                TCC_MUSL_V2_BUILD_STAGE_ID,
+                crate::stagex_tcc_musl_v2::COMPILER_BLAKE3,
+            )],
+        ),
+        mes_stage_plan(GREP_SMOKE_STAGE_ID, &[GREP_BUILD_STAGE_ID], &[], &["grep-2.4-runner"], &smoke_outputs, vec![
+            authorization("exec:grep-smoke:grep", &grep, GREP_BUILD_STAGE_ID, crate::stagex_grep::GREP_RUNNER_BLAKE3),
+        ]),
     ]
 }
 
@@ -3938,6 +4049,7 @@ struct TransitionAuditReports<'a> {
     musl_native_runtime: Option<&'a crate::stagex_musl_native::InventoryReport>,
     m4_runtime: Option<&'a crate::stagex_m4::M4InventoryReport>,
     diffutils_runtime: Option<&'a crate::stagex_diffutils::DiffutilsInventoryReport>,
+    grep_runtime: Option<&'a crate::stagex_grep::GrepInventoryReport>,
 }
 
 fn validate_transition_audit(
@@ -3969,6 +4081,7 @@ fn validate_transition_audit(
         musl_native_runtime,
         m4_runtime,
         diffutils_runtime,
+        grep_runtime,
     } = reports;
     let expected = transition_expected_audit_events(staged);
     if events.len() < EXPECTED_AUDIT_EVENT_COUNT {
@@ -4003,6 +4116,7 @@ fn validate_transition_audit(
             && musl_native_runtime.is_none()
             && m4_runtime.is_none()
             && diffutils_runtime.is_none()
+            && grep_runtime.is_none()
             && events.len() == EXPECTED_AUDIT_EVENT_COUNT
         {
             return Ok(());
@@ -4027,7 +4141,8 @@ fn validate_transition_audit(
     }
     validate_stage0_audit(staged, &stage0.mini, &stage0_events[..mini_event_count])?;
     let after_mini = &stage0_events[mini_event_count..];
-    let (before_diffutils, diffutils_events) = split_diffutils_audit_suffix(diffutils_runtime, after_mini)?;
+    let (before_grep, grep_events) = split_grep_audit_suffix(grep_runtime, after_mini)?;
+    let (before_diffutils, diffutils_events) = split_diffutils_audit_suffix(diffutils_runtime, before_grep)?;
     let (before_m4, m4_events) = split_m4_audit_suffix(m4_runtime, before_diffutils)?;
     let (before_musl_native, musl_native_events) = split_musl_native_audit_suffix(musl_native_runtime, before_m4)?;
     let (before_tcc_selfhost, tcc_selfhost_events) =
@@ -4257,10 +4372,21 @@ fn validate_transition_audit(
         }
     }
     match (diffutils_runtime, tcc_musl_v2_runtime, m4_runtime) {
-        (Some(diffutils), Some(v2), Some(_)) => validate_diffutils_audit(v2, diffutils, diffutils_events),
-        (None, _, _) if diffutils_events.is_empty() => Ok(()),
+        (Some(diffutils), Some(v2), Some(_)) => validate_diffutils_audit(v2, diffutils, diffutils_events)?,
+        (None, _, _) if diffutils_events.is_empty() => {}
+        _ => {
+            return Err(StagexTransitionError::Audit(
+                "GNU diffutils report or events exist without TinyCC musl-v2 and protected GNU M4 completion"
+                    .to_string(),
+            ));
+        }
+    }
+    match (grep_runtime, tcc_musl_v2_runtime, musl_native_runtime, diffutils_runtime) {
+        (Some(grep), Some(v2), Some(_), Some(_)) => validate_grep_audit(v2, grep, grep_events),
+        (None, _, _, _) if grep_events.is_empty() => Ok(()),
         _ => Err(StagexTransitionError::Audit(
-            "GNU diffutils report or events exist without TinyCC musl-v2 and protected GNU M4 completion".to_string(),
+            "GNU grep report or events exist without TinyCC musl-v2, native musl, and protected GNU diffutils completion"
+                .to_string(),
         )),
     }
 }
@@ -4371,6 +4497,94 @@ fn validate_diffutils_audit(
     if !report.protected_exec_enforced || !report.fallback_events.is_empty() {
         return Err(StagexTransitionError::Audit(
             "GNU diffutils report lacks protected execution or contains fallback events".to_string(),
+        ));
+    }
+    assert_eq!(events[BUILD_EXECUTION_COUNT..].len(), SMOKE_EXECUTION_COUNT);
+    assert!(events.iter().all(|event| event.policy_decision == "allowed"));
+    Ok(())
+}
+
+fn grep_expected_event_count(report: &crate::stagex_grep::GrepInventoryReport) -> Result<usize, StagexTransitionError> {
+    const EXPECTED_BUILD_COMMAND_COUNT: u32 = 2;
+    const EXPECTED_SMOKE_COMMAND_COUNT: u32 = 3;
+    const EXPECTED_EVENT_COUNT: usize = 5;
+    if report.build_command_count != EXPECTED_BUILD_COMMAND_COUNT
+        || report.smoke_command_count != EXPECTED_SMOKE_COMMAND_COUNT
+    {
+        return Err(StagexTransitionError::Audit("GNU grep command counts were substituted".to_string()));
+    }
+    let count = report
+        .build_command_count
+        .checked_add(report.smoke_command_count)
+        .ok_or_else(|| StagexTransitionError::Audit("GNU grep event count overflow".to_string()))?;
+    let count = usize::try_from(count)
+        .map_err(|_| StagexTransitionError::Audit("GNU grep event count does not fit usize".to_string()))?;
+    if count != EXPECTED_EVENT_COUNT {
+        return Err(StagexTransitionError::Audit(format!(
+            "GNU grep event count is not closed: expected {EXPECTED_EVENT_COUNT}, observed {count}"
+        )));
+    }
+    assert_eq!(count, EXPECTED_EVENT_COUNT);
+    assert!(report.protected_exec_enforced || report.fallback_events.is_empty());
+    Ok(count)
+}
+
+fn split_grep_audit_suffix<'a>(
+    report: Option<&crate::stagex_grep::GrepInventoryReport>,
+    events: &'a [ProtectedSeccompAuditEvent],
+) -> Result<(&'a [ProtectedSeccompAuditEvent], &'a [ProtectedSeccompAuditEvent]), StagexTransitionError> {
+    let Some(report) = report else {
+        return Ok((events, &[]));
+    };
+    let count = grep_expected_event_count(report)?;
+    let start = events.len().checked_sub(count).ok_or_else(|| {
+        StagexTransitionError::Audit(format!("expected {count} trailing GNU grep events, observed {}", events.len()))
+    })?;
+    assert_eq!(events[start..].len(), count);
+    assert!(start <= events.len());
+    Ok((&events[..start], &events[start..]))
+}
+
+fn validate_grep_audit(
+    v2: &crate::stagex_tcc_musl_v2::InventoryReport,
+    report: &crate::stagex_grep::GrepInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    const BUILD_EXECUTION_COUNT: usize = 2;
+    const SMOKE_EXECUTION_COUNT: usize = 3;
+    let expected = grep_expected_event_count(report)?;
+    if events.len() != expected {
+        return Err(StagexTransitionError::Audit(format!(
+            "GNU grep event count is not closed: expected {expected}, observed {}",
+            events.len()
+        )));
+    }
+    let compiler = tcc_musl_v2_output_path(v2, "tcc-musl-v2")?;
+    let grep = report
+        .outputs
+        .iter()
+        .find(|output| output.artifact_id == "grep-2.4-runner")
+        .map(|output| output.path.as_path())
+        .ok_or_else(|| StagexTransitionError::Audit("GNU grep report lacks its native runner".to_string()))?;
+    for event in &events[..BUILD_EXECUTION_COUNT] {
+        validate_coreutils_event(
+            event,
+            &compiler,
+            crate::stagex_tcc_musl_v2::COMPILER_BLAKE3,
+            TCC_MUSL_V2_CANONICAL_AUTHORIZATION_ID,
+        )?;
+    }
+    for event in &events[BUILD_EXECUTION_COUNT..] {
+        validate_coreutils_event(
+            event,
+            grep,
+            crate::stagex_grep::GREP_RUNNER_BLAKE3,
+            GREP_RUNNER_CANONICAL_AUTHORIZATION_ID,
+        )?;
+    }
+    if !report.protected_exec_enforced || !report.fallback_events.is_empty() {
+        return Err(StagexTransitionError::Audit(
+            "GNU grep report lacks protected execution or contains fallback events".to_string(),
         ));
     }
     assert_eq!(events[BUILD_EXECUTION_COUNT..].len(), SMOKE_EXECUTION_COUNT);
@@ -6976,7 +7190,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
-    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "ed230a16c39e09bc025263ebcf6047d03ea669a35170ae254208c4e1758574a8";
+    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "acd107888638cce6dbbc14832227395a0ab93dfe87d088c382fbd68069c908d7";
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {
@@ -7183,6 +7397,27 @@ mod tests {
         let mut substituted = report;
         substituted.smoke_command_count = substituted.smoke_command_count.checked_sub(1).unwrap();
         assert!(diffutils_expected_event_count(&substituted).unwrap_err().to_string().contains("substituted"));
+    }
+
+    #[test]
+    fn grep_event_count_is_closed_and_rejects_substitution() {
+        const EXPECTED_BUILD_COMMAND_COUNT: u32 = 2;
+        const EXPECTED_SMOKE_COMMAND_COUNT: u32 = 3;
+        const EXPECTED_EVENT_COUNT: usize = 5;
+        let report = crate::stagex_grep::GrepInventoryReport {
+            format: "test",
+            configured_source_digest_blake3: "a".repeat(blake3::OUT_LEN * 2),
+            build_command_count: EXPECTED_BUILD_COMMAND_COUNT,
+            smoke_command_count: EXPECTED_SMOKE_COMMAND_COUNT,
+            outputs: Vec::new(),
+            protected_exec_enforced: true,
+            fallback_events: Vec::new(),
+            non_claim: "test",
+        };
+        assert_eq!(grep_expected_event_count(&report).unwrap(), EXPECTED_EVENT_COUNT);
+        let mut substituted = report;
+        substituted.build_command_count = substituted.build_command_count.checked_add(1).unwrap();
+        assert!(grep_expected_event_count(&substituted).unwrap_err().to_string().contains("substituted"));
     }
 
     #[test]
@@ -7756,6 +7991,8 @@ mod tests {
         assert_eq!(report.m4_runtime.is_some(), source_bundle.is_some());
         assert_eq!(report.diffutils_sources.is_some(), source_bundle.is_some());
         assert_eq!(report.diffutils_runtime.is_some(), source_bundle.is_some());
+        assert_eq!(report.grep_sources.is_some(), source_bundle.is_some());
+        assert_eq!(report.grep_runtime.is_some(), source_bundle.is_some());
         assert!(
             report
                 .stage0_full
@@ -7769,6 +8006,7 @@ mod tests {
         assert!(report.musl_native_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
         assert!(report.m4_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
         assert!(report.diffutils_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
+        assert!(report.grep_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
         assert_eq!(report.promotions.len(), EXPECTED_PROMOTION_COUNT);
         assert!(report.fallback_events.is_empty());
         assert!(scratch.join(REPORT_FILE_NAME).is_file());

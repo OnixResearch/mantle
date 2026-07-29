@@ -150,6 +150,8 @@ mod stagex_diffutils;
 #[allow(dead_code)]
 mod stagex_gnu_patch;
 #[allow(dead_code)]
+mod stagex_grep;
+#[allow(dead_code)]
 mod stagex_gzip;
 #[allow(dead_code)]
 mod stagex_m4;

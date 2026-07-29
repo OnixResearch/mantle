@@ -949,7 +949,16 @@ pub(crate) fn run_bounded_process<S: AsRef<std::ffi::OsStr>>(
     environment: &BTreeMap<String, String>,
     stderr_path: &Path,
 ) -> Result<(), MesLibraryPlanError> {
-    run_bounded_process_with_stdio(executable, args, current_dir, environment, Stdio::null(), None, stderr_path)
+    run_bounded_process_with_stdio(
+        executable,
+        args,
+        current_dir,
+        environment,
+        Stdio::null(),
+        Stdio::null(),
+        None,
+        stderr_path,
+    )
 }
 
 pub(crate) fn run_bounded_process_capturing_stdout<S: AsRef<std::ffi::OsStr>>(
@@ -967,6 +976,7 @@ pub(crate) fn run_bounded_process_capturing_stdout<S: AsRef<std::ffi::OsStr>>(
         args,
         current_dir,
         environment,
+        Stdio::null(),
         Stdio::from(stdout_file),
         Some((stdout_path, stdout_bytes_max)),
         stderr_path,
@@ -976,11 +986,40 @@ pub(crate) fn run_bounded_process_capturing_stdout<S: AsRef<std::ffi::OsStr>>(
     result
 }
 
+pub(crate) fn run_bounded_process_with_stdin_capturing_stdout<S: AsRef<std::ffi::OsStr>>(
+    executable: &Path,
+    args: &[S],
+    current_dir: &Path,
+    environment: &BTreeMap<String, String>,
+    stdin_path: &Path,
+    stdin_bytes_max: u64,
+    stdout_path: &Path,
+    stdout_bytes_max: u64,
+    stderr_path: &Path,
+) -> Result<(), MesLibraryPlanError> {
+    let stdin_file = open_bounded_process_stdin(stdin_path, stdin_bytes_max)?;
+    let stdout_file = File::create(stdout_path).map_err(|source| io_error("creating process stdout", source))?;
+    let result = run_bounded_process_with_stdio(
+        executable,
+        args,
+        current_dir,
+        environment,
+        Stdio::from(stdin_file),
+        Stdio::from(stdout_file),
+        Some((stdout_path, stdout_bytes_max)),
+        stderr_path,
+    );
+    assert!(stdin_path.is_file());
+    assert!(stdout_path.is_file());
+    result
+}
+
 fn run_bounded_process_with_stdio<S: AsRef<std::ffi::OsStr>>(
     executable: &Path,
     args: &[S],
     current_dir: &Path,
     environment: &BTreeMap<String, String>,
+    stdin: Stdio,
     stdout: Stdio,
     stdout_limit: Option<(&Path, u64)>,
     stderr_path: &Path,
@@ -991,7 +1030,7 @@ fn run_bounded_process_with_stdio<S: AsRef<std::ffi::OsStr>>(
         .current_dir(current_dir)
         .env_clear()
         .envs(environment)
-        .stdin(Stdio::null())
+        .stdin(stdin)
         .stdout(stdout)
         .stderr(Stdio::from(stderr_file))
         .spawn()
@@ -1016,6 +1055,24 @@ fn run_bounded_process_with_stdio<S: AsRef<std::ffi::OsStr>>(
         }
         thread::sleep(Duration::from_millis(MES_PROCESS_POLL_MS));
     }
+}
+
+fn open_bounded_process_stdin(path: &Path, bytes_max: u64) -> Result<File, MesLibraryPlanError> {
+    let metadata = fs::metadata(path).map_err(|source| io_error("reading process stdin metadata", source))?;
+    if !metadata.is_file() {
+        return Err(MesLibraryPlanError::Limit(format!("process stdin is not a regular file: {}", path.display())));
+    }
+    if metadata.len() > bytes_max {
+        return Err(MesLibraryPlanError::Limit(format!(
+            "process stdin exceeds {bytes_max} bytes: {} has {} bytes",
+            path.display(),
+            metadata.len()
+        )));
+    }
+    let file = File::open(path).map_err(|source| io_error("opening process stdin", source))?;
+    assert!(metadata.len() <= bytes_max);
+    assert!(path.is_file());
+    Ok(file)
 }
 
 fn enforce_optional_observation_file_limit(stdout_limit: Option<(&Path, u64)>) -> Result<(), MesLibraryPlanError> {
@@ -1429,6 +1486,20 @@ libtcc1_SOURCES=\"lib/libtcc1.c\"\n";
         let error = enforce_observation_file_limit(&stdout, STDOUT_BYTES_MAX).unwrap_err();
         assert!(error.to_string().contains("process stdout exceeds"));
         assert!(error.to_string().contains(stdout.to_str().unwrap()));
+    }
+
+    #[test]
+    fn process_stdin_limit_accepts_bound_and_rejects_overflow() {
+        const STDIN_BYTES_MAX: u64 = 1;
+        const OVER_LIMIT_STDIN: &[u8] = b"xx";
+        let temp = tempfile::tempdir().unwrap();
+        let stdin = temp.path().join("stdin.txt");
+        fs::write(&stdin, b"x").unwrap();
+        drop(open_bounded_process_stdin(&stdin, STDIN_BYTES_MAX).unwrap());
+        fs::write(&stdin, OVER_LIMIT_STDIN).unwrap();
+        let error = open_bounded_process_stdin(&stdin, STDIN_BYTES_MAX).unwrap_err();
+        assert!(error.to_string().contains("process stdin exceeds"));
+        assert!(error.to_string().contains(stdin.to_str().unwrap()));
     }
 
     #[test]

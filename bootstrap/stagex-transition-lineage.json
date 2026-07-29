@@ -1802,6 +1802,78 @@
       "id": "diffutils-malformed-rejection",
       "name": "GNU diffutils malformed-input rejection receipt",
       "producing_tool_id": "diffutils-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d86dde390ef4ab7b4456f0371cbd29afa8b0e31ca297e7acc85b5f9544775c40"
+      },
+      "id": "grep-configured-source",
+      "name": "GNU grep bridge configured source identity",
+      "producing_tool_id": "grep-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b4adac2bf1f29e3e3b8ec736207a0cdfc3eb5b51c658a2f9f8eff85aee4ef71d"
+      },
+      "id": "grep-2.4-runner",
+      "name": "native runner for the checked GNU grep 2.4 bridge subset",
+      "producing_tool_id": "grep-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b4adac2bf1f29e3e3b8ec736207a0cdfc3eb5b51c658a2f9f8eff85aee4ef71d"
+      },
+      "id": "egrep-2.4-runner",
+      "name": "egrep alias for the native GNU grep bridge runner",
+      "producing_tool_id": "grep-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b4adac2bf1f29e3e3b8ec736207a0cdfc3eb5b51c658a2f9f8eff85aee4ef71d"
+      },
+      "id": "fgrep-2.4-runner",
+      "name": "fgrep alias for the native GNU grep bridge runner",
+      "producing_tool_id": "grep-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3da22b084c98e1ebef50ddcbe404c681d6a7d81b29389d26151729b1c74127de"
+      },
+      "id": "grep-2.4-bridge-script",
+      "name": "exact checked GNU grep 2.4 shell bridge retained as non-executable data",
+      "producing_tool_id": "grep-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8e4c7c1b99dbfd50e7a95185fead5ee1448fa904a2fdd778eaf5f2dbfd629a99"
+      },
+      "id": "grep-literal-observation",
+      "name": "GNU grep bridge literal-match observation",
+      "producing_tool_id": "grep-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "id": "grep-quiet-observation",
+      "name": "GNU grep bridge quiet-match observation",
+      "producing_tool_id": "grep-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "aa95faeede7041e63c6056bdcf10e6fbf709a355e539259da51a067e5dd27802"
+      },
+      "id": "grep-anchored-observation",
+      "name": "GNU grep bridge anchored-match observation",
+      "producing_tool_id": "grep-smoke-exec"
     }
   ],
   "patches": [
@@ -2937,6 +3009,33 @@
       "id": "diffutils-2.7-recipe-source",
       "name": "checked GNU diffutils 2.7 recipe",
       "provenance": "bootstrap/diffutils-2.7-musl.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b40c519f58ef370f44bbafc37a76ae843a3cf621a44ef83158294fb29ada14d0"
+      },
+      "id": "grep-2.4-source",
+      "name": "authenticated GNU grep 2.4 source",
+      "provenance": "fixed-output source record grep-2.4-src"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "15afa14595fb8c84cd5e1ce8d0807ed853a2177146a4e585bcedd90b3d589ad6"
+      },
+      "id": "grep-2.4-recipe-source",
+      "name": "checked GNU grep 2.4 bridge recipe",
+      "provenance": "bootstrap/grep-2.4-musl.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "926cba44f7f96479db1e73a85e428346eccc380ca463704fa7f2e68905e9363f"
+      },
+      "id": "grep-2.4-bridge-runner-source",
+      "name": "bounded native runner for the checked GNU grep bridge subset",
+      "provenance": "bootstrap/stagex-grep-bridge-runner.c"
     }
   ],
   "stage_graph": [
@@ -3431,6 +3530,18 @@
     {
       "from_node_id": "seed",
       "to_node_id": "diffutils-2.7-recipe-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "grep-2.4-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "grep-2.4-recipe-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "grep-2.4-bridge-runner-source"
     }
   ],
   "transition_tools": [
@@ -4732,6 +4843,49 @@
         "diffutils-diff-observation",
         "diffutils-cmp-observation",
         "diffutils-malformed-rejection"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d86dde390ef4ab7b4456f0371cbd29afa8b0e31ca297e7acc85b5f9544775c40"
+      },
+      "id": "grep-build-exec",
+      "input_artifact_ids": [
+        "tcc-musl-v2",
+        "musl-native-libc",
+        "musl-native-crt1",
+        "musl-native-headers"
+      ],
+      "name": "TinyCC musl-v2 materializing the checked GNU grep bridge and native subset runner",
+      "output_artifact_ids": [
+        "grep-configured-source",
+        "grep-2.4-runner",
+        "egrep-2.4-runner",
+        "fgrep-2.4-runner",
+        "grep-2.4-bridge-script"
+      ],
+      "source_artifact_ids": [
+        "grep-2.4-source",
+        "grep-2.4-recipe-source",
+        "grep-2.4-bridge-runner-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b4adac2bf1f29e3e3b8ec736207a0cdfc3eb5b51c658a2f9f8eff85aee4ef71d"
+      },
+      "id": "grep-smoke-exec",
+      "input_artifact_ids": [
+        "grep-2.4-runner"
+      ],
+      "name": "native GNU grep bridge runner executing literal, quiet, and anchored checks",
+      "output_artifact_ids": [
+        "grep-literal-observation",
+        "grep-quiet-observation",
+        "grep-anchored-observation"
       ],
       "source_artifact_ids": []
     }
