@@ -146,6 +146,8 @@ mod stagex_bzip2;
 #[allow(dead_code)]
 mod stagex_coreutils;
 #[allow(dead_code)]
+mod stagex_diffutils;
+#[allow(dead_code)]
 mod stagex_gnu_patch;
 #[allow(dead_code)]
 mod stagex_gzip;

@@ -1,0 +1,11 @@
+7df45ecd0386310b2353d06eb1dcb07c567984c9984503bae3e1ad3124248acd  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v62-diffutils-2026-07-28/transition-plan.json
+e0917a40c29713d13c7bb9714d0b9851a878ae16ecca2bce500e0d5c9b216e92  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v62-diffutils-2026-07-28/transition-report.json
+c4938bfffdd2011e095b5a88e9ba73358abb2d5fe11007dc6369a9797b83df89  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v62-diffutils-2026-07-28/protected-exec-audit.json
+dceb370f473a9a6586bf1b36061b44cf02db304e68d976b11bebd25a55c83fd3  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v62-diffutils-2026-07-28/diffutils-inventory.json
+33510988f98a66cf0bc0e53661c6af77e8ed062faa45eac70734aef40a65ce6c  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v62-diffutils-2026-07-28/diffutils-version.txt
+db3c58f16a007600d256c0be6306d55101919037d37ed4ece231bab4c3bbe2ca  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v62-diffutils-2026-07-28/diffutils-diff-changed.out
+5d5856604bb2fa260c00b5ed8bcaa9a6b0bb89a644c7b23a2b678bf0e9127f6e  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v62-diffutils-2026-07-28/diffutils-cmp-changed.out
+202fa55131223d7bc743f2ff8d6896e001df815d001f698d58be1bc451ea5725  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v62-diffutils-2026-07-28/diffutils-malformed-rejection.json
+fa4c5148bc85b512d074abe8f6e180ec7b523109201e8d7a27ac915f3110e0f7  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v62-diffutils-2026-07-28/diffutils-object-modes.txt
+1d7e61d5254952fca2b1ee454a06593d260466f434b4a59c8e28a8f55798ac01  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v62-diffutils-2026-07-28/full-transition-test.log
+a9e878e64e10e67f5cee8bc3efb6cdb3f138535b01c2b3da13f628c13ae8e777  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v62-diffutils-2026-07-28/summary.md

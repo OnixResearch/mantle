@@ -1739,6 +1739,69 @@
       "id": "m4-malformed-rejection",
       "name": "GNU M4 malformed-input rejection receipt",
       "producing_tool_id": "m4-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "00d79a6f09d23d7a3430ccfd407a8cac0351aa5ecc6efc122f8cf093989cbbe5"
+      },
+      "id": "diffutils-configured-source",
+      "name": "GNU diffutils configured source identity",
+      "producing_tool_id": "diffutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "054ba2636aef71a1cbda93de3358ff8b8a7c92127ce951dcb7cc5814ac0e2d66"
+      },
+      "id": "diffutils-diff-2.7",
+      "name": "source-built GNU diff 2.7",
+      "producing_tool_id": "diffutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "145c05e3557ba74a8ce85912c08feee01b7616fcc273e92279a96dbe18a8793b"
+      },
+      "id": "diffutils-cmp-2.7",
+      "name": "source-built GNU cmp 2.7",
+      "producing_tool_id": "diffutils-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "33510988f98a66cf0bc0e53661c6af77e8ed062faa45eac70734aef40a65ce6c"
+      },
+      "id": "diffutils-version-observation",
+      "name": "GNU diffutils version observation",
+      "producing_tool_id": "diffutils-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "db3c58f16a007600d256c0be6306d55101919037d37ed4ece231bab4c3bbe2ca"
+      },
+      "id": "diffutils-diff-observation",
+      "name": "GNU diff difference observation",
+      "producing_tool_id": "diffutils-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "5d5856604bb2fa260c00b5ed8bcaa9a6b0bb89a644c7b23a2b678bf0e9127f6e"
+      },
+      "id": "diffutils-cmp-observation",
+      "name": "GNU cmp difference observation",
+      "producing_tool_id": "diffutils-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "202fa55131223d7bc743f2ff8d6896e001df815d001f698d58be1bc451ea5725"
+      },
+      "id": "diffutils-malformed-rejection",
+      "name": "GNU diffutils malformed-input rejection receipt",
+      "producing_tool_id": "diffutils-smoke-exec"
     }
   ],
   "patches": [
@@ -1816,7 +1879,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "bc58825cd1432e48cfd11e61dc2d0e72945ea9f5f9f6f68b9d8dc79ed2e0ad06"
+        "hex_value": "541eae99be64df5f13ed8ff52403e83d034c8ce4747984a2d8d11cffc10b01ab"
       },
       "id": "stage0-source-bundle",
       "name": "authenticated offline full-source closure",
@@ -2856,6 +2919,24 @@
       "id": "m4-1.4.7-recipe-source",
       "name": "checked GNU M4 1.4.7 recipe",
       "provenance": "bootstrap/m4-1.4.7-musl.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "36714b7ee4e36f7f39ca3fb32010c5babe8a09532ee991f565771f9ca26daf90"
+      },
+      "id": "diffutils-2.7-source",
+      "name": "authenticated GNU diffutils 2.7 source",
+      "provenance": "fixed-output source record diffutils-2.7-src"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "51279c523c0443488a89650985fce68305233907ee2b915540978cb3271f1254"
+      },
+      "id": "diffutils-2.7-recipe-source",
+      "name": "checked GNU diffutils 2.7 recipe",
+      "provenance": "bootstrap/diffutils-2.7-musl.ncl"
     }
   ],
   "stage_graph": [
@@ -3342,6 +3423,14 @@
     {
       "from_node_id": "seed",
       "to_node_id": "m4-1.4.7-recipe-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "diffutils-2.7-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "diffutils-2.7-recipe-source"
     }
   ],
   "transition_tools": [
@@ -4601,6 +4690,48 @@
         "m4-macro-observation",
         "m4-prefix-observation",
         "m4-malformed-rejection"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "00d79a6f09d23d7a3430ccfd407a8cac0351aa5ecc6efc122f8cf093989cbbe5"
+      },
+      "id": "diffutils-build-exec",
+      "input_artifact_ids": [
+        "tcc-musl-v2",
+        "musl-native-libc",
+        "musl-native-crt1",
+        "musl-native-headers"
+      ],
+      "name": "TinyCC musl-v2 materializing GNU diffutils against native musl",
+      "output_artifact_ids": [
+        "diffutils-configured-source",
+        "diffutils-diff-2.7",
+        "diffutils-cmp-2.7"
+      ],
+      "source_artifact_ids": [
+        "diffutils-2.7-source",
+        "diffutils-2.7-recipe-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "054ba2636aef71a1cbda93de3358ff8b8a7c92127ce951dcb7cc5814ac0e2d66"
+      },
+      "id": "diffutils-smoke-exec",
+      "input_artifact_ids": [
+        "diffutils-diff-2.7",
+        "diffutils-cmp-2.7"
+      ],
+      "name": "GNU diffutils executing equality, difference, version, and malformed-input checks",
+      "output_artifact_ids": [
+        "diffutils-version-observation",
+        "diffutils-diff-observation",
+        "diffutils-cmp-observation",
+        "diffutils-malformed-rejection"
       ],
       "source_artifact_ids": []
     }

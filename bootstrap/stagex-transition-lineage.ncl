@@ -1,5 +1,5 @@
-# Typed source for the protected seed-to-GNU-M4 transition.
-# This file does not yet describe the later parser generators, binutils, native TinyCC, or normalized StageX provider.
+# Typed source for the protected seed-to-GNU-diffutils transition.
+# This file does not yet describe the later grep/parser generators, binutils, native TinyCC, or normalized StageX provider.
 
 let Digest = {
   algorithm | String,
@@ -133,7 +133,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
       "generated as zero bytes by the bounded transition plan",
     source "stage0-source-bundle" "authenticated offline full-source closure"
-      "bc58825cd1432e48cfd11e61dc2d0e72945ea9f5f9f6f68b9d8dc79ed2e0ad06"
+      "541eae99be64df5f13ed8ff52403e83d034c8ce4747984a2d8d11cffc10b01ab"
       "mantle-source-bundle-v1 manifest identity loaded and validated before Stage0 execution",
     source "stage0-posix-amd64-source" "stage0-posix AMD64 snapshot"
       "f983a7b79acdd53fd4d31c8959c62ca24eabbea491327aaa113c4bc11549e5f9"
@@ -362,6 +362,8 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "musl-native-recipe-source" "checked upstream-shaped native musl recipe" "0f86c28c5a4f7290002200871edede784e79566b4f02c9ebb1f22b654c1e6c1c" "bootstrap/musl-1.1.24-native.ncl",
     source "m4-1.4.7-source" "authenticated GNU M4 1.4.7 source" "1acf045348ef14f9fb38dc1e23fec5146d32b4fb6b7bb5c4dfb9742da12ce0d1" "fixed-output source record m4-1.4.7-src",
     source "m4-1.4.7-recipe-source" "checked GNU M4 1.4.7 recipe" "39671a43fce58c3cae66c38810b1912b27a29f7a5c134c84acf03b678af22e74" "bootstrap/m4-1.4.7-musl.ncl",
+    source "diffutils-2.7-source" "authenticated GNU diffutils 2.7 source" "36714b7ee4e36f7f39ca3fb32010c5babe8a09532ee991f565771f9ca26daf90" "fixed-output source record diffutils-2.7-src",
+    source "diffutils-2.7-recipe-source" "checked GNU diffutils 2.7 recipe" "51279c523c0443488a89650985fce68305233907ee2b915540978cb3271f1254" "bootstrap/diffutils-2.7-musl.ncl",
   ],
   generated_artifacts = [
     {
@@ -566,6 +568,13 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "m4-smoke-exec" "m4-macro-observation" "GNU M4 macro and ambient-shell-disable observation" "f737ffa0d1bffb14295a97110f43d0f9cf059d5cbffc7ff6187b2182250d34ca",
     tinycc_generated "m4-smoke-exec" "m4-prefix-observation" "GNU M4 prefixed macro observation" "6277dd4b0cbd4b080f3a4c4e561d05f128ffee445dadefa2116cc8e3b079e26c",
     tinycc_generated "m4-smoke-exec" "m4-malformed-rejection" "GNU M4 malformed-input rejection receipt" "675bd6ec5c382c78909a394f1f5a59e8b51e7e617f9ad9537e466fd799553420",
+    tinycc_generated "diffutils-build-exec" "diffutils-configured-source" "GNU diffutils configured source identity" "00d79a6f09d23d7a3430ccfd407a8cac0351aa5ecc6efc122f8cf093989cbbe5",
+    tinycc_generated "diffutils-build-exec" "diffutils-diff-2.7" "source-built GNU diff 2.7" "054ba2636aef71a1cbda93de3358ff8b8a7c92127ce951dcb7cc5814ac0e2d66",
+    tinycc_generated "diffutils-build-exec" "diffutils-cmp-2.7" "source-built GNU cmp 2.7" "145c05e3557ba74a8ce85912c08feee01b7616fcc273e92279a96dbe18a8793b",
+    tinycc_generated "diffutils-smoke-exec" "diffutils-version-observation" "GNU diffutils version observation" "33510988f98a66cf0bc0e53661c6af77e8ed062faa45eac70734aef40a65ce6c",
+    tinycc_generated "diffutils-smoke-exec" "diffutils-diff-observation" "GNU diff difference observation" "db3c58f16a007600d256c0be6306d55101919037d37ed4ece231bab4c3bbe2ca",
+    tinycc_generated "diffutils-smoke-exec" "diffutils-cmp-observation" "GNU cmp difference observation" "5d5856604bb2fa260c00b5ed8bcaa9a6b0bb89a644c7b23a2b678bf0e9127f6e",
+    tinycc_generated "diffutils-smoke-exec" "diffutils-malformed-rejection" "GNU diffutils malformed-input rejection receipt" "202fa55131223d7bc743f2ff8d6896e001df815d001f698d58be1bc451ea5725",
   ],
   transition_tools = [
     {
@@ -1130,6 +1139,22 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["m4-version-observation", "m4-macro-observation", "m4-prefix-observation", "m4-malformed-rejection"],
       digest = blake3 "3dfd2a1223ff6e0c2c540bc2507a097948ab24e2465f232e2363944e5b704741",
     },
+    {
+      id = "diffutils-build-exec",
+      name = "TinyCC musl-v2 materializing GNU diffutils against native musl",
+      source_artifact_ids = ["diffutils-2.7-source", "diffutils-2.7-recipe-source"],
+      input_artifact_ids = ["tcc-musl-v2", "musl-native-libc", "musl-native-crt1", "musl-native-headers"],
+      output_artifact_ids = ["diffutils-configured-source", "diffutils-diff-2.7", "diffutils-cmp-2.7"],
+      digest = blake3 "00d79a6f09d23d7a3430ccfd407a8cac0351aa5ecc6efc122f8cf093989cbbe5",
+    },
+    {
+      id = "diffutils-smoke-exec",
+      name = "GNU diffutils executing equality, difference, version, and malformed-input checks",
+      source_artifact_ids = [],
+      input_artifact_ids = ["diffutils-diff-2.7", "diffutils-cmp-2.7"],
+      output_artifact_ids = ["diffutils-version-observation", "diffutils-diff-observation", "diffutils-cmp-observation", "diffutils-malformed-rejection"],
+      digest = blake3 "054ba2636aef71a1cbda93de3358ff8b8a7c92127ce951dcb7cc5814ac0e2d66",
+    },
   ],
   patches = [
     {
@@ -1287,5 +1312,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "musl-native-recipe-source" },
     { from_node_id = "seed", to_node_id = "m4-1.4.7-source" },
     { from_node_id = "seed", to_node_id = "m4-1.4.7-recipe-source" },
+    { from_node_id = "seed", to_node_id = "diffutils-2.7-source" },
+    { from_node_id = "seed", to_node_id = "diffutils-2.7-recipe-source" },
   ],
 } | Manifest
