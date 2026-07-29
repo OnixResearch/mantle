@@ -1,0 +1,3 @@
+negative.l:2: bad character class
+negative.l:2: unrecognized rule
+negative.l:2: fatal parse error

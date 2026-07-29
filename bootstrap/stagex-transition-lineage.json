@@ -2027,6 +2027,78 @@
       "id": "bison-negative-observation",
       "name": "GNU Bison malformed-grammar diagnostic",
       "producing_tool_id": "bison-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d2d7e2a0ed46329fc2e37d58d25dab8f17c01b5c9b7b97de09930ef3e25fe3b7"
+      },
+      "id": "flex-configured-source",
+      "name": "GNU Flex configured source identity",
+      "producing_tool_id": "flex-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "1adcaf70694b47268ddbaa32c834c78ee11f5a01a5fe45f07857607915b0507b"
+      },
+      "id": "flex-2.6.4",
+      "name": "source-built GNU Flex 2.6.4",
+      "producing_tool_id": "flex-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "45c3a2d2e338eae19d24fa17df35127f5c61c16dca0ce98dce45efb13b920bfa"
+      },
+      "id": "flex-libfl",
+      "name": "GNU Flex yywrap archive",
+      "producing_tool_id": "flex-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "713ca824326279098cc1eb9b18ddd200e7506335c502cf2d79b4af7aaa330cdf"
+      },
+      "id": "flex-cxx-header",
+      "name": "GNU Flex C++ scanner header",
+      "producing_tool_id": "flex-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "9d13005da4640c131d85edff0a255a83471b136d31ce41d2b04534c8a7b533b4"
+      },
+      "id": "flex-libfl-consumer",
+      "name": "GNU Flex yywrap archive proof consumer",
+      "producing_tool_id": "flex-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3697eccbbb98cf059d94cc199ff12f77bee88f5097ad8f0826c86bcf1fcbd5a7"
+      },
+      "id": "flex-version-observation",
+      "name": "GNU Flex version observation",
+      "producing_tool_id": "flex-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "fb2c93883438dca7366f41ba363944da66b78787f76be32767cb697943b26732"
+      },
+      "id": "flex-positive-scanner-source",
+      "name": "GNU Flex positive generated scanner source",
+      "producing_tool_id": "flex-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f1180cfefce605bb56ee38ccfec3bbd99f448e2d5f391bec146f4a02cdff336f"
+      },
+      "id": "flex-negative-observation",
+      "name": "GNU Flex malformed-scanner diagnostic",
+      "producing_tool_id": "flex-smoke-exec"
     }
   ],
   "patches": [
@@ -3225,6 +3297,24 @@
       "id": "bison-2.3-recipe-source",
       "name": "checked GNU Bison 2.3 recipe",
       "provenance": "bootstrap/bison-2.3-musl.ncl"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "6a84744fa55e734f9640c58c694c509dba34ddff104ab83e0131b9bc2468f8c0"
+      },
+      "id": "flex-2.6.4-source",
+      "name": "authenticated GNU Flex 2.6.4 source",
+      "provenance": "fixed-output source record flex-2.6.4-src"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "b9e11c2ef244ef9fab988d13bda45d0f0bdeabea8913964bb58cb00c9ac9688b"
+      },
+      "id": "flex-2.6.4-recipe-source",
+      "name": "checked GNU Flex 2.6.4 recipe",
+      "provenance": "bootstrap/flex-2.6.4-musl.ncl"
     }
   ],
   "stage_graph": [
@@ -3747,6 +3837,14 @@
     {
       "from_node_id": "seed",
       "to_node_id": "bison-2.3-recipe-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "flex-2.6.4-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "flex-2.6.4-recipe-source"
     }
   ],
   "transition_tools": [
@@ -5179,6 +5277,52 @@
         "bison-positive-parser-source",
         "bison-positive-parser-header",
         "bison-negative-observation"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "d2d7e2a0ed46329fc2e37d58d25dab8f17c01b5c9b7b97de09930ef3e25fe3b7"
+      },
+      "id": "flex-build-exec",
+      "input_artifact_ids": [
+        "tcc-musl-v2",
+        "musl-native-libc",
+        "musl-native-crt1",
+        "musl-native-headers",
+        "m4-1.4.7"
+      ],
+      "name": "TinyCC musl-v2 materializing GNU Flex against native musl",
+      "output_artifact_ids": [
+        "flex-configured-source",
+        "flex-2.6.4",
+        "flex-libfl",
+        "flex-cxx-header",
+        "flex-libfl-consumer"
+      ],
+      "source_artifact_ids": [
+        "flex-2.6.4-source",
+        "flex-2.6.4-recipe-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "1adcaf70694b47268ddbaa32c834c78ee11f5a01a5fe45f07857607915b0507b"
+      },
+      "id": "flex-smoke-exec",
+      "input_artifact_ids": [
+        "flex-2.6.4",
+        "flex-libfl",
+        "flex-libfl-consumer",
+        "m4-1.4.7"
+      ],
+      "name": "GNU Flex executing archive, version, valid scanner, and malformed scanner checks",
+      "output_artifact_ids": [
+        "flex-version-observation",
+        "flex-positive-scanner-source",
+        "flex-negative-observation"
       ],
       "source_artifact_ids": []
     }

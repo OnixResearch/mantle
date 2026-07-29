@@ -371,6 +371,8 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "gawk-3.0.4-recipe-source" "checked GNU Gawk 3.0.4 recipe" "1d35ef5716aea8d04a916ec05d3b4345256d4c4313205fd360b119aebb54b637" "bootstrap/gawk-3.0.4-musl.ncl",
     source "bison-2.3-source" "authenticated GNU Bison 2.3 source" "45e40c482750cf4aa35637a7f62ee4f865a8a6d5dcf06aa557be8797c7bc4c62" "fixed-output source record bison-2.3-src",
     source "bison-2.3-recipe-source" "checked GNU Bison 2.3 recipe" "a086f71d144ee17961fe8462fee3b1d9184af885e45ee0200aa133c9fd54bd63" "bootstrap/bison-2.3-musl.ncl",
+    source "flex-2.6.4-source" "authenticated GNU Flex 2.6.4 source" "6a84744fa55e734f9640c58c694c509dba34ddff104ab83e0131b9bc2468f8c0" "fixed-output source record flex-2.6.4-src",
+    source "flex-2.6.4-recipe-source" "checked GNU Flex 2.6.4 recipe" "b9e11c2ef244ef9fab988d13bda45d0f0bdeabea8913964bb58cb00c9ac9688b" "bootstrap/flex-2.6.4-musl.ncl",
   ],
   generated_artifacts = [
     {
@@ -607,6 +609,14 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "bison-smoke-exec" "bison-positive-parser-source" "GNU Bison positive generated parser source" "bf73d7f6db6f0dd4a96706a1efb9e23dd287cbf847badd17f64d4c7ed235c923",
     tinycc_generated "bison-smoke-exec" "bison-positive-parser-header" "GNU Bison positive generated parser header" "afa05cc327a73b17e33baf53fb44030b1a111aa993db60f01565a2a80dc8f913",
     tinycc_generated "bison-smoke-exec" "bison-negative-observation" "GNU Bison malformed-grammar diagnostic" "d0c674aaeab59c3efab1090e74cb598ae4df44bbcd42bc451a0a3f1a1257dcb4",
+    tinycc_generated "flex-build-exec" "flex-configured-source" "GNU Flex configured source identity" "d2d7e2a0ed46329fc2e37d58d25dab8f17c01b5c9b7b97de09930ef3e25fe3b7",
+    tinycc_generated "flex-build-exec" "flex-2.6.4" "source-built GNU Flex 2.6.4" "1adcaf70694b47268ddbaa32c834c78ee11f5a01a5fe45f07857607915b0507b",
+    tinycc_generated "flex-build-exec" "flex-libfl" "GNU Flex yywrap archive" "45c3a2d2e338eae19d24fa17df35127f5c61c16dca0ce98dce45efb13b920bfa",
+    tinycc_generated "flex-build-exec" "flex-cxx-header" "GNU Flex C++ scanner header" "713ca824326279098cc1eb9b18ddd200e7506335c502cf2d79b4af7aaa330cdf",
+    tinycc_generated "flex-build-exec" "flex-libfl-consumer" "GNU Flex yywrap archive proof consumer" "9d13005da4640c131d85edff0a255a83471b136d31ce41d2b04534c8a7b533b4",
+    tinycc_generated "flex-smoke-exec" "flex-version-observation" "GNU Flex version observation" "3697eccbbb98cf059d94cc199ff12f77bee88f5097ad8f0826c86bcf1fcbd5a7",
+    tinycc_generated "flex-smoke-exec" "flex-positive-scanner-source" "GNU Flex positive generated scanner source" "fb2c93883438dca7366f41ba363944da66b78787f76be32767cb697943b26732",
+    tinycc_generated "flex-smoke-exec" "flex-negative-observation" "GNU Flex malformed-scanner diagnostic" "f1180cfefce605bb56ee38ccfec3bbd99f448e2d5f391bec146f4a02cdff336f",
   ],
   transition_tools = [
     {
@@ -1235,6 +1245,22 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["bison-version-observation", "bison-positive-parser-source", "bison-positive-parser-header", "bison-negative-observation"],
       digest = blake3 "3db09397aa2752eea9c438a4cb1c5ebd27605f58b56ec43781baf411c3f2b983",
     },
+    {
+      id = "flex-build-exec",
+      name = "TinyCC musl-v2 materializing GNU Flex against native musl",
+      source_artifact_ids = ["flex-2.6.4-source", "flex-2.6.4-recipe-source"],
+      input_artifact_ids = ["tcc-musl-v2", "musl-native-libc", "musl-native-crt1", "musl-native-headers", "m4-1.4.7"],
+      output_artifact_ids = ["flex-configured-source", "flex-2.6.4", "flex-libfl", "flex-cxx-header", "flex-libfl-consumer"],
+      digest = blake3 "d2d7e2a0ed46329fc2e37d58d25dab8f17c01b5c9b7b97de09930ef3e25fe3b7",
+    },
+    {
+      id = "flex-smoke-exec",
+      name = "GNU Flex executing archive, version, valid scanner, and malformed scanner checks",
+      source_artifact_ids = [],
+      input_artifact_ids = ["flex-2.6.4", "flex-libfl", "flex-libfl-consumer", "m4-1.4.7"],
+      output_artifact_ids = ["flex-version-observation", "flex-positive-scanner-source", "flex-negative-observation"],
+      digest = blake3 "1adcaf70694b47268ddbaa32c834c78ee11f5a01a5fe45f07857607915b0507b",
+    },
   ],
   patches = [
     {
@@ -1401,5 +1427,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "gawk-3.0.4-recipe-source" },
     { from_node_id = "seed", to_node_id = "bison-2.3-source" },
     { from_node_id = "seed", to_node_id = "bison-2.3-recipe-source" },
+    { from_node_id = "seed", to_node_id = "flex-2.6.4-source" },
+    { from_node_id = "seed", to_node_id = "flex-2.6.4-recipe-source" },
   ],
 } | Manifest
