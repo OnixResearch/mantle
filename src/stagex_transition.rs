@@ -83,6 +83,8 @@ pub(crate) const MUSL_PASS2_SMOKE_STAGE_ID: &str = "musl-pass2-smoke";
 pub(crate) const TCC_MUSL_V2_BUILD_STAGE_ID: &str = "tcc-musl-v2-materialization";
 pub(crate) const TCC_MUSL_V2_SMOKE_STAGE_ID: &str = "tcc-musl-v2-smoke";
 pub(crate) const TCC_MUSL_V2_EXECUTION_STAGE_ID: &str = "tcc-musl-v2-execution";
+pub(crate) const TCC_SELFHOST_BUILD_STAGE_ID: &str = "tcc-musl-selfhost-build";
+pub(crate) const TCC_SELFHOST_SMOKE_STAGE_ID: &str = "tcc-musl-selfhost-smoke";
 pub(crate) const HEX0_SEED_BLAKE3: &str = "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80";
 pub(crate) const HEX0_SOURCE_BLAKE3: &str = "0fb23576a10b41df29c165e39514f18c411da96ae71873a6a2e2f0b1d94de614";
 pub(crate) const KAEM_SOURCE_BLAKE3: &str = "5a56b4164dca4d1e03ba35bc8ce4b418a0de2baf1cb9e6a0912607e26532d30d";
@@ -111,7 +113,7 @@ const MES_OUTPUT_MAX_MIB: u64 = 64;
 const MES_OUTPUT_MAX_BYTES: u64 = MES_OUTPUT_MAX_MIB * MIB_BYTES;
 const STAGE_JOB_COUNT: u32 = 1;
 const TRANSITION_STAGE_COUNT_MAX: u32 = 3;
-const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 70;
+const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 72;
 const TINYCC_LINK_CHILD_EVENT_COUNT: usize = 5;
 const MAKE_RECIPE_CHILD_EVENT_COUNT: usize = 1;
 const GZIP_GZIP_SMOKE_EVENT_COUNT: usize = 2;
@@ -216,6 +218,8 @@ pub(crate) struct StagexTransitionReport {
     pub musl_pass2_runtime: Option<crate::stagex_musl::MuslInventoryReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tcc_musl_v2_runtime: Option<crate::stagex_tcc_musl_v2::InventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tcc_selfhost_runtime: Option<crate::stagex_tcc_selfhost::InventoryReport>,
     pub fallback_events: Vec<String>,
     pub promotions: Vec<OutputPromotionRecord>,
     pub protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
@@ -495,6 +499,12 @@ pub(crate) fn materialize_protected_transition(
             source_stage_id: TCC_MUSL_V2_SMOKE_STAGE_ID.to_string(),
             path: request.scratch_dir.join("tcc-musl-v2-stage/runtime/smoke/variadic-positive"),
             digest_hex: crate::stagex_tcc_musl_v2::POSITIVE_BINARY_BLAKE3.to_string(),
+        });
+        planned.push(PlannedExecutable {
+            authorization_id: "exec:tcc-musl-selfhost-smoke:tcc".to_string(),
+            source_stage_id: TCC_SELFHOST_BUILD_STAGE_ID.to_string(),
+            path: request.scratch_dir.join("tcc-musl-selfhost-stage/runtime/output/bin/tcc-0.9.27-musl-selfhost"),
+            digest_hex: crate::stagex_tcc_selfhost::COMPILER_BLAKE3.to_string(),
         });
         planned
     } else {
@@ -1081,6 +1091,31 @@ pub(crate) fn materialize_protected_transition(
         _ => unreachable!("TinyCC musl-v2 requires source, TinyCC 0.9.26, and second-musl"),
     };
 
+    let tcc_selfhost_runtime = match tcc_musl_v2_runtime.as_ref() {
+        Some(_) => {
+            let stage = request.scratch_dir.join("tcc-musl-selfhost-stage");
+            fs::create_dir(&stage)
+                .map_err(|source| io_error("creating create-new protected TinyCC self-host stage root", source))?;
+            let result = crate::stagex_tcc_selfhost::derive_inventory(crate::stagex_tcc_selfhost::InventoryRequest {
+                tcc_musl_v2_root: &request.scratch_dir.join("tcc-musl-v2-stage/runtime/output"),
+                tinycc26_root: &request.scratch_dir.join("tinycc-stage/runtime/output"),
+                musl_pass2_root: &request.scratch_dir.join("musl-pass2-stage/runtime/output"),
+                scratch_dir: &stage.join("runtime"),
+                protected_exec_enforced: true,
+            });
+            match result {
+                Ok(report) => Some(report),
+                Err(error) => {
+                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                    let events = supervisor.audit_events();
+                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
+                }
+            }
+        }
+        None => None,
+    };
+
     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
     let protected_exec_events = supervisor.audit_events();
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
@@ -1106,6 +1141,7 @@ pub(crate) fn materialize_protected_transition(
             tcc_musl_runtime: tcc_musl_runtime.as_ref(),
             musl_pass2_runtime: musl_pass2_runtime.as_ref(),
             tcc_musl_v2_runtime: tcc_musl_v2_runtime.as_ref(),
+            tcc_selfhost_runtime: tcc_selfhost_runtime.as_ref(),
         },
         &protected_exec_events,
     )?;
@@ -1151,6 +1187,7 @@ pub(crate) fn materialize_protected_transition(
         tcc_musl_runtime,
         musl_pass2_runtime,
         tcc_musl_v2_runtime,
+        tcc_selfhost_runtime,
         fallback_events: Vec::new(),
         promotions: vec![hex0_promotion, kaem_promotion],
         protected_exec_events,
@@ -1277,6 +1314,9 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
     for (artifact_id, digest_blake3) in crate::stagex_tcc_musl_v2::source_artifact_digests() {
         require_manifest_digest(&sources, artifact_id, digest_blake3)?;
     }
+    for (artifact_id, digest_blake3) in crate::stagex_tcc_selfhost::source_artifact_digests() {
+        require_manifest_digest(&sources, artifact_id, digest_blake3)?;
+    }
     let generated: BTreeMap<&str, &str> = manifest
         .generated_artifacts
         .iter()
@@ -1381,6 +1421,9 @@ fn validate_transition_manifest_fields(manifest: &LineageManifest) -> Result<Str
         crate::stagex_tcc_musl_v2::CONFIGURED_SOURCE_BLAKE3,
     )?;
     for expected in crate::stagex_tcc_musl_v2::EXPECTED_OUTPUTS {
+        require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
+    }
+    for expected in crate::stagex_tcc_selfhost::EXPECTED_OUTPUTS {
         require_manifest_digest(&generated, expected.artifact_id, expected.digest_blake3)?;
     }
     let patches: BTreeMap<&str, &str> =
@@ -1554,6 +1597,9 @@ fn build_transition_plan(
         let tinycc_root = staged.seed.parent().expect("staged seed has parent").join("tinycc-stage/runtime");
         let tcc_musl_v2_root = staged.seed.parent().expect("staged seed has parent").join("tcc-musl-v2-stage/runtime");
         stages.extend(tcc_musl_v2_stage_plans(&tinycc_root, &tcc_musl_v2_root));
+        let tcc_selfhost_root =
+            staged.seed.parent().expect("staged seed has parent").join("tcc-musl-selfhost-stage/runtime");
+        stages.extend(tcc_selfhost_stage_plans(&tinycc_root, &tcc_musl_v2_root, &tcc_selfhost_root));
     }
     let stage_count_max = if include_stage0_mini {
         TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX
@@ -2184,6 +2230,70 @@ fn tcc_musl_v2_stage_plans(tinycc_root: &Path, v2_root: &Path) -> Vec<StagexStag
                 &positive,
                 TCC_MUSL_V2_SMOKE_STAGE_ID,
                 crate::stagex_tcc_musl_v2::POSITIVE_BINARY_BLAKE3,
+            )],
+        ),
+    ]
+}
+
+fn tcc_selfhost_stage_plans(tinycc_root: &Path, v2_root: &Path, selfhost_root: &Path) -> Vec<StagexStagePlan> {
+    let tinycc = tinycc_root.join("output/bin/tcc-0.9.26");
+    let v2 = v2_root.join("output/bin/tcc-0.9.27-musl-v2");
+    let selfhost = selfhost_root.join("output/bin/tcc-0.9.27-musl-selfhost");
+    vec![
+        mes_stage_plan(
+            TCC_SELFHOST_BUILD_STAGE_ID,
+            &[
+                TCC_MUSL_V2_BUILD_STAGE_ID,
+                TCC_MUSL_V2_SMOKE_STAGE_ID,
+                TCC_MUSL_V2_EXECUTION_STAGE_ID,
+                TINYCC_FINAL_STAGE_ID,
+                TINYCC_RUNTIME_STAGE_ID,
+                MUSL_PASS2_BUILD_STAGE_ID,
+                MUSL_PASS2_SMOKE_STAGE_ID,
+            ],
+            &["tcc-musl-selfhost-recipe-source"],
+            &[
+                "tcc-musl-v2",
+                "tcc-musl-v2-source-tree",
+                "tinycc-0.9.26",
+                "tinycc-libc",
+                "tinycc-libtcc1",
+                "musl-pass2-libc",
+            ],
+            &[
+                "tcc-musl-selfhost".to_string(),
+                "tcc-musl-selfhost-alias".to_string(),
+                "tcc-musl-selfhost-libtcc".to_string(),
+                "tcc-musl-selfhost-main-object".to_string(),
+                "tcc-musl-selfhost-patched-source".to_string(),
+                "tcc-musl-selfhost-object-tree".to_string(),
+            ],
+            vec![
+                authorization(
+                    "exec:tcc-musl-selfhost-build:tcc-v2",
+                    &v2,
+                    TCC_MUSL_V2_BUILD_STAGE_ID,
+                    crate::stagex_tcc_musl_v2::COMPILER_BLAKE3,
+                ),
+                authorization(
+                    "exec:tcc-musl-selfhost-build:tinycc26",
+                    &tinycc,
+                    TINYCC_FINAL_STAGE_ID,
+                    crate::stagex_tinycc::TINYCC_FINAL_BLAKE3,
+                ),
+            ],
+        ),
+        mes_stage_plan(
+            TCC_SELFHOST_SMOKE_STAGE_ID,
+            &[TCC_SELFHOST_BUILD_STAGE_ID],
+            &[],
+            &["tcc-musl-selfhost"],
+            &["tcc-musl-selfhost-smoke-object".to_string()],
+            vec![authorization(
+                "exec:tcc-musl-selfhost-smoke:tcc",
+                &selfhost,
+                TCC_SELFHOST_BUILD_STAGE_ID,
+                crate::stagex_tcc_selfhost::COMPILER_BLAKE3,
             )],
         ),
     ]
@@ -3434,6 +3544,7 @@ struct TransitionAuditReports<'a> {
     tcc_musl_runtime: Option<&'a crate::stagex_tcc_musl::TccMuslInventoryReport>,
     musl_pass2_runtime: Option<&'a crate::stagex_musl::MuslInventoryReport>,
     tcc_musl_v2_runtime: Option<&'a crate::stagex_tcc_musl_v2::InventoryReport>,
+    tcc_selfhost_runtime: Option<&'a crate::stagex_tcc_selfhost::InventoryReport>,
 }
 
 fn validate_transition_audit(
@@ -3461,6 +3572,7 @@ fn validate_transition_audit(
         tcc_musl_runtime,
         musl_pass2_runtime,
         tcc_musl_v2_runtime,
+        tcc_selfhost_runtime,
     } = reports;
     let expected = transition_expected_audit_events(staged);
     if events.len() < EXPECTED_AUDIT_EVENT_COUNT {
@@ -3515,7 +3627,9 @@ fn validate_transition_audit(
     }
     validate_stage0_audit(staged, &stage0.mini, &stage0_events[..mini_event_count])?;
     let after_mini = &stage0_events[mini_event_count..];
-    let (before_tcc_musl_v2, tcc_musl_v2_events) = split_tcc_musl_v2_audit_suffix(tcc_musl_v2_runtime, after_mini)?;
+    let (before_tcc_selfhost, tcc_selfhost_events) = split_tcc_selfhost_audit_suffix(tcc_selfhost_runtime, after_mini)?;
+    let (before_tcc_musl_v2, tcc_musl_v2_events) =
+        split_tcc_musl_v2_audit_suffix(tcc_musl_v2_runtime, before_tcc_selfhost)?;
     let (before_musl_pass2, musl_pass2_events) = split_musl_audit_suffix(musl_pass2_runtime, before_tcc_musl_v2)?;
     let (before_tcc_musl, tcc_musl_events) = split_tcc_musl_audit_suffix(tcc_musl_runtime, before_musl_pass2)?;
     let (before_musl, musl_events) = split_musl_audit_suffix(musl_runtime, before_tcc_musl)?;
@@ -3698,12 +3812,110 @@ fn validate_transition_audit(
         }
     }
     match (tcc_musl_v2_runtime, tinycc_runtime) {
-        (Some(v2), Some(tinycc)) => validate_tcc_musl_v2_audit(tinycc, v2, tcc_musl_v2_events),
-        (None, _) if tcc_musl_v2_events.is_empty() => Ok(()),
+        (Some(v2), Some(tinycc)) => validate_tcc_musl_v2_audit(tinycc, v2, tcc_musl_v2_events)?,
+        (None, _) if tcc_musl_v2_events.is_empty() => {}
+        _ => {
+            return Err(StagexTransitionError::Audit(
+                "TinyCC musl-v2 report or events exist without TinyCC 0.9.26 authority".to_string(),
+            ));
+        }
+    }
+    match (tcc_selfhost_runtime, tcc_musl_v2_runtime, tinycc_runtime) {
+        (Some(selfhost), Some(v2), Some(tinycc)) => {
+            validate_tcc_selfhost_audit(v2, tinycc, selfhost, tcc_selfhost_events)
+        }
+        (None, _, _) if tcc_selfhost_events.is_empty() => Ok(()),
         _ => Err(StagexTransitionError::Audit(
-            "TinyCC musl-v2 report or events exist without TinyCC 0.9.26 authority".to_string(),
+            "TinyCC self-host report or events exist without TinyCC musl-v2 authority".to_string(),
         )),
     }
+}
+
+fn tcc_selfhost_expected_event_count(
+    report: &crate::stagex_tcc_selfhost::InventoryReport,
+) -> Result<usize, StagexTransitionError> {
+    const EXPECTED_BUILD_COMMAND_COUNT: u32 = 12;
+    const EXPECTED_SMOKE_COMMAND_COUNT: u32 = 1;
+    if report.build_command_count != EXPECTED_BUILD_COMMAND_COUNT
+        || report.smoke_command_count != EXPECTED_SMOKE_COMMAND_COUNT
+    {
+        return Err(StagexTransitionError::Audit("TinyCC self-host command count was substituted".to_string()));
+    }
+    let count = report
+        .build_command_count
+        .checked_add(report.smoke_command_count)
+        .ok_or_else(|| StagexTransitionError::Audit("TinyCC self-host event count overflow".to_string()))?;
+    let count = usize::try_from(count)
+        .map_err(|_| StagexTransitionError::Audit("TinyCC self-host event count does not fit usize".to_string()))?;
+    assert_eq!(count, 13);
+    assert!(count > 0);
+    Ok(count)
+}
+
+fn split_tcc_selfhost_audit_suffix<'a>(
+    report: Option<&crate::stagex_tcc_selfhost::InventoryReport>,
+    events: &'a [ProtectedSeccompAuditEvent],
+) -> Result<(&'a [ProtectedSeccompAuditEvent], &'a [ProtectedSeccompAuditEvent]), StagexTransitionError> {
+    let Some(report) = report else {
+        return Ok((events, &[]));
+    };
+    let count = tcc_selfhost_expected_event_count(report)?;
+    if events.len() < count {
+        return Err(StagexTransitionError::Audit(format!(
+            "TinyCC self-host expected {count} events but only {} remain",
+            events.len()
+        )));
+    }
+    Ok(events.split_at(events.len() - count))
+}
+
+fn validate_tcc_selfhost_audit(
+    v2: &crate::stagex_tcc_musl_v2::InventoryReport,
+    tinycc: &crate::stagex_tinycc::TccMesInventoryReport,
+    report: &crate::stagex_tcc_selfhost::InventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    const V2_BUILD_EXECUTIONS: usize = 11;
+    const TINYCC26_LINK_EXECUTIONS: usize = 1;
+    let expected = tcc_selfhost_expected_event_count(report)?;
+    if events.len() != expected {
+        return Err(StagexTransitionError::Audit(format!(
+            "TinyCC self-host event count is not closed: expected {expected}, observed {}",
+            events.len()
+        )));
+    }
+    let v2_compiler = tcc_musl_v2_output_path(v2, "tcc-musl-v2")?;
+    let tinycc26 = tinycc_output_path(tinycc, "tinycc-0.9.26")?;
+    let selfhost = tcc_selfhost_output_path(report, "tcc-musl-selfhost")?;
+    for event in &events[..V2_BUILD_EXECUTIONS] {
+        validate_coreutils_event(
+            event,
+            &v2_compiler,
+            crate::stagex_tcc_musl_v2::COMPILER_BLAKE3,
+            "planned:tcc-musl-v2-materialization:exec:tcc-musl-v2-smoke:tcc",
+        )?;
+    }
+    validate_coreutils_event(
+        &events[V2_BUILD_EXECUTIONS],
+        &tinycc26,
+        crate::stagex_tinycc::TINYCC_FINAL_BLAKE3,
+        "planned:tinycc-final-materialization:exec:tcc-musl-v2-materialization:tinycc26",
+    )?;
+    let smoke_index = V2_BUILD_EXECUTIONS + TINYCC26_LINK_EXECUTIONS;
+    validate_coreutils_event(
+        &events[smoke_index],
+        &selfhost,
+        crate::stagex_tcc_selfhost::COMPILER_BLAKE3,
+        "planned:tcc-musl-selfhost-build:exec:tcc-musl-selfhost-smoke:tcc",
+    )?;
+    if !report.protected_exec_enforced || !report.fallback_events.is_empty() {
+        return Err(StagexTransitionError::Audit(
+            "TinyCC self-host report lacks protected execution or contains fallback events".to_string(),
+        ));
+    }
+    assert_eq!(events.len(), expected);
+    assert!(events.iter().all(|event| event.policy_decision == "allowed"));
+    Ok(())
 }
 
 fn split_tcc_musl_v2_audit_suffix<'a>(
@@ -5700,6 +5912,18 @@ fn tcc_musl_v2_output_path(
         .ok_or_else(|| StagexTransitionError::Audit(format!("TinyCC musl-v2 report lacks output {artifact_id}")))
 }
 
+fn tcc_selfhost_output_path(
+    report: &crate::stagex_tcc_selfhost::InventoryReport,
+    artifact_id: &str,
+) -> Result<PathBuf, StagexTransitionError> {
+    report
+        .outputs
+        .iter()
+        .find(|output| output.artifact_id == artifact_id)
+        .map(|output| output.path.clone())
+        .ok_or_else(|| StagexTransitionError::Audit(format!("TinyCC self-host report lacks output {artifact_id}")))
+}
+
 fn tcc_musl_output_path(
     report: &crate::stagex_tcc_musl::TccMuslInventoryReport,
     artifact_id: &str,
@@ -5946,7 +6170,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
-    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "adf866532f659e747542ffb554a8cd80d9b27ab3f478ea613e0d10f3803d45b2";
+    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "fcdb953381c05504a44d2848a35ef96e6cae7e52f2d4a0ecad8b65df640fee01";
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {
@@ -6067,6 +6291,24 @@ mod tests {
         let error = tinycc27_expected_event_count(&overflow).unwrap_err();
         assert!(error.to_string().contains("command count overflow"));
         assert!(!error.to_string().is_empty());
+    }
+
+    #[test]
+    fn tcc_selfhost_event_count_is_closed_and_rejects_substitution() {
+        const EXPECTED_EVENT_COUNT: usize = 13;
+        let report = crate::stagex_tcc_selfhost::InventoryReport {
+            format: "test",
+            build_command_count: 12,
+            smoke_command_count: 1,
+            outputs: Vec::new(),
+            protected_exec_enforced: true,
+            fallback_events: Vec::new(),
+            non_claim: "test",
+        };
+        assert_eq!(tcc_selfhost_expected_event_count(&report).unwrap(), EXPECTED_EVENT_COUNT);
+        let mut substituted = report;
+        substituted.smoke_command_count = 0;
+        assert!(tcc_selfhost_expected_event_count(&substituted).unwrap_err().to_string().contains("substituted"));
     }
 
     #[test]

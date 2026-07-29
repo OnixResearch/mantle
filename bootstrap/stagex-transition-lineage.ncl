@@ -358,6 +358,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     source "musl-pass2-fenv-source" "second-musl fenv assembly helper" "2e7056cbed4ae4e55a676ebfdad8ccfe39bbb06090e9ca86dd2a445fa3cfb33c" "musl pass2 recipe heredoc src/fenv/x86_64/fenv.s",
     source "tcc-musl-v2-recipe-source" "checked TinyCC musl-v2 recipe" "c82e4b5c375d3f9ba767c916ad4dba18e995d239755ea492ae94a007d2f49190" "bootstrap/tcc-musl-v2.ncl",
     source "tcc-musl-v2-stdarg-runtime-source" "checked TinyCC variadic runtime helper" "39655914dd22719e8f64182e281622ccaa4104ab7d901f728db84338659cc942" "TinyCC musl-v2 recipe heredoc /tmp/tcc-stdarg-runtime.c",
+    source "tcc-musl-selfhost-recipe-source" "checked TinyCC self-host recipe" "e24d7a19746cbae7387c7c7d739c7a3ee5ae6c8e343351f3deacebad1be805d2" "bootstrap/tcc-musl-selfhost.ncl",
   ],
   generated_artifacts = [
     {
@@ -533,6 +534,13 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "tcc-musl-v2-smoke-exec" "tcc-musl-v2-positive-object" "TinyCC musl-v2 positive variadic object" "a507376f7e9af418c78cc9f9121e7b182c8b1ef3b741de98741d6320f6f301b2",
     tinycc_generated "tcc-musl-v2-smoke-exec" "tcc-musl-v2-positive-binary" "TinyCC musl-v2 positive variadic binary" "2a6733b887417ec6f848ece381d125e10d5d5544f0839dcfa896eacc88529fa6",
     tinycc_generated "tcc-musl-v2-execution-exec" "tcc-musl-v2-positive-execution" "TinyCC musl-v2 zero-output successful execution" "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+    tinycc_generated "tcc-musl-selfhost-build-exec" "tcc-musl-selfhost" "self-hosted TinyCC compiler" "8e6580da40c5892b941423ae108d6218b3636ebd3643bc3ba1e78e33d6c4898a",
+    tinycc_generated "tcc-musl-selfhost-build-exec" "tcc-musl-selfhost-alias" "self-hosted TinyCC compiler alias" "8e6580da40c5892b941423ae108d6218b3636ebd3643bc3ba1e78e33d6c4898a",
+    tinycc_generated "tcc-musl-selfhost-build-exec" "tcc-musl-selfhost-libtcc" "self-hosted TinyCC library archive" "fb9f87834e0d81214fd9654820ea482a5adedecafc6359a1d32729874b2a1267",
+    tinycc_generated "tcc-musl-selfhost-build-exec" "tcc-musl-selfhost-main-object" "self-hosted TinyCC main object" "22f5f8579f023fee1afb35595d4e99c76132bf2fec75dc2451c25ed2f10cc16b",
+    tinycc_generated "tcc-musl-selfhost-build-exec" "tcc-musl-selfhost-patched-source" "self-hosted TinyCC patched source tree" "5e918d19d4d7151f17a5a81bd07d25fd8a55e57037b4735f038344365326b3d4",
+    tinycc_generated "tcc-musl-selfhost-build-exec" "tcc-musl-selfhost-object-tree" "self-hosted TinyCC compiler object tree" "2f3fcb41daa227dac3e1d206c4c7aeabd6ff6341fe975399e950629e8a281880",
+    tinycc_generated "tcc-musl-selfhost-smoke-exec" "tcc-musl-selfhost-smoke-object" "self-hosted TinyCC syntax smoke object" "cc40480286f053fc69e7d17431b4cf5de82b477b0f84e646717cd6c3c71cecb1",
   ],
   transition_tools = [
     {
@@ -1041,6 +1049,22 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       output_artifact_ids = ["tcc-musl-v2-positive-execution"],
       digest = blake3 "2a6733b887417ec6f848ece381d125e10d5d5544f0839dcfa896eacc88529fa6",
     },
+    {
+      id = "tcc-musl-selfhost-build-exec",
+      name = "TinyCC musl-v2 compiling self-hosted TinyCC objects with declared predecessor linking",
+      source_artifact_ids = ["tcc-musl-selfhost-recipe-source"],
+      input_artifact_ids = ["tcc-musl-v2", "tcc-musl-v2-source-tree", "tinycc-0.9.26", "tinycc-libc", "tinycc-libtcc1", "musl-pass2-libc"],
+      output_artifact_ids = ["tcc-musl-selfhost", "tcc-musl-selfhost-alias", "tcc-musl-selfhost-libtcc", "tcc-musl-selfhost-main-object", "tcc-musl-selfhost-patched-source", "tcc-musl-selfhost-object-tree"],
+      digest = blake3 "8e6580da40c5892b941423ae108d6218b3636ebd3643bc3ba1e78e33d6c4898a",
+    },
+    {
+      id = "tcc-musl-selfhost-smoke-exec",
+      name = "self-hosted TinyCC syntax and variadic object smoke",
+      source_artifact_ids = [],
+      input_artifact_ids = ["tcc-musl-selfhost"],
+      output_artifact_ids = ["tcc-musl-selfhost-smoke-object"],
+      digest = blake3 "cc40480286f053fc69e7d17431b4cf5de82b477b0f84e646717cd6c3c71cecb1",
+    },
   ],
   patches = [
     {
@@ -1194,5 +1218,6 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     { from_node_id = "seed", to_node_id = "musl-pass2-fenv-source" },
     { from_node_id = "seed", to_node_id = "tcc-musl-v2-recipe-source" },
     { from_node_id = "seed", to_node_id = "tcc-musl-v2-stdarg-runtime-source" },
+    { from_node_id = "seed", to_node_id = "tcc-musl-selfhost-recipe-source" },
   ],
 } | Manifest

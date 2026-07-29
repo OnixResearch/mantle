@@ -1478,6 +1478,69 @@
       "id": "tcc-musl-v2-positive-execution",
       "name": "TinyCC musl-v2 zero-output successful execution",
       "producing_tool_id": "tcc-musl-v2-execution-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8e6580da40c5892b941423ae108d6218b3636ebd3643bc3ba1e78e33d6c4898a"
+      },
+      "id": "tcc-musl-selfhost",
+      "name": "self-hosted TinyCC compiler",
+      "producing_tool_id": "tcc-musl-selfhost-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8e6580da40c5892b941423ae108d6218b3636ebd3643bc3ba1e78e33d6c4898a"
+      },
+      "id": "tcc-musl-selfhost-alias",
+      "name": "self-hosted TinyCC compiler alias",
+      "producing_tool_id": "tcc-musl-selfhost-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "fb9f87834e0d81214fd9654820ea482a5adedecafc6359a1d32729874b2a1267"
+      },
+      "id": "tcc-musl-selfhost-libtcc",
+      "name": "self-hosted TinyCC library archive",
+      "producing_tool_id": "tcc-musl-selfhost-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "22f5f8579f023fee1afb35595d4e99c76132bf2fec75dc2451c25ed2f10cc16b"
+      },
+      "id": "tcc-musl-selfhost-main-object",
+      "name": "self-hosted TinyCC main object",
+      "producing_tool_id": "tcc-musl-selfhost-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "5e918d19d4d7151f17a5a81bd07d25fd8a55e57037b4735f038344365326b3d4"
+      },
+      "id": "tcc-musl-selfhost-patched-source",
+      "name": "self-hosted TinyCC patched source tree",
+      "producing_tool_id": "tcc-musl-selfhost-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "2f3fcb41daa227dac3e1d206c4c7aeabd6ff6341fe975399e950629e8a281880"
+      },
+      "id": "tcc-musl-selfhost-object-tree",
+      "name": "self-hosted TinyCC compiler object tree",
+      "producing_tool_id": "tcc-musl-selfhost-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "cc40480286f053fc69e7d17431b4cf5de82b477b0f84e646717cd6c3c71cecb1"
+      },
+      "id": "tcc-musl-selfhost-smoke-object",
+      "name": "self-hosted TinyCC syntax smoke object",
+      "producing_tool_id": "tcc-musl-selfhost-smoke-exec"
     }
   ],
   "patches": [
@@ -2559,6 +2622,15 @@
       "id": "tcc-musl-v2-stdarg-runtime-source",
       "name": "checked TinyCC variadic runtime helper",
       "provenance": "TinyCC musl-v2 recipe heredoc /tmp/tcc-stdarg-runtime.c"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "e24d7a19746cbae7387c7c7d739c7a3ee5ae6c8e343351f3deacebad1be805d2"
+      },
+      "id": "tcc-musl-selfhost-recipe-source",
+      "name": "checked TinyCC self-host recipe",
+      "provenance": "bootstrap/tcc-musl-selfhost.ncl"
     }
   ],
   "stage_graph": [
@@ -3029,6 +3101,10 @@
     {
       "from_node_id": "seed",
       "to_node_id": "tcc-musl-v2-stdarg-runtime-source"
+    },
+    {
+      "from_node_id": "seed",
+      "to_node_id": "tcc-musl-selfhost-recipe-source"
     }
   ],
   "transition_tools": [
@@ -4140,6 +4216,48 @@
       "name": "TinyCC musl-v2 positive variadic execution",
       "output_artifact_ids": [
         "tcc-musl-v2-positive-execution"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "8e6580da40c5892b941423ae108d6218b3636ebd3643bc3ba1e78e33d6c4898a"
+      },
+      "id": "tcc-musl-selfhost-build-exec",
+      "input_artifact_ids": [
+        "tcc-musl-v2",
+        "tcc-musl-v2-source-tree",
+        "tinycc-0.9.26",
+        "tinycc-libc",
+        "tinycc-libtcc1",
+        "musl-pass2-libc"
+      ],
+      "name": "TinyCC musl-v2 compiling self-hosted TinyCC objects with declared predecessor linking",
+      "output_artifact_ids": [
+        "tcc-musl-selfhost",
+        "tcc-musl-selfhost-alias",
+        "tcc-musl-selfhost-libtcc",
+        "tcc-musl-selfhost-main-object",
+        "tcc-musl-selfhost-patched-source",
+        "tcc-musl-selfhost-object-tree"
+      ],
+      "source_artifact_ids": [
+        "tcc-musl-selfhost-recipe-source"
+      ]
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "cc40480286f053fc69e7d17431b4cf5de82b477b0f84e646717cd6c3c71cecb1"
+      },
+      "id": "tcc-musl-selfhost-smoke-exec",
+      "input_artifact_ids": [
+        "tcc-musl-selfhost"
+      ],
+      "name": "self-hosted TinyCC syntax and variadic object smoke",
+      "output_artifact_ids": [
+        "tcc-musl-selfhost-smoke-object"
       ],
       "source_artifact_ids": []
     }
