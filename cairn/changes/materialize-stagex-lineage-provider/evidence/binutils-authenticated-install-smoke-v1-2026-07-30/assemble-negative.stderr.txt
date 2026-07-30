@@ -1,0 +1,2 @@
+rejected.s: Assembler messages:
+rejected.s:1: Error: unknown pseudo-op: `.mantle'

@@ -49,3 +49,4 @@ compatibility surface, crate name, or historical decision.
 | [0040](0040-validate-stagex-generated-sources-before-second-configure.md) | Validate StageX generated sources before second configure | Accepted |
 | [0041](0041-run-ylwrap-rewrites-with-a-bounded-native-runner.md) | Run `ylwrap` rewrites with a bounded native runner | Accepted |
 | [0042](0042-build-stagex-binutils-archives-with-a-bounded-producer.md) | Build StageX binutils archives with a bounded producer | Accepted |
+| [0043](0043-stage-stagex-binutils-install-under-its-logical-prefix.md) | Stage the StageX binutils install under its logical prefix | Accepted |

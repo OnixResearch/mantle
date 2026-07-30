@@ -481,6 +481,20 @@ const FLEX_GENERATED_FILES: [&str; FLEX_GENERATED_FILE_COUNT] = [
     "binutils/syslex.c",
     "ld/ldlex.c",
 ];
+const BINUTILS_REQUIRED_TOOL_COUNT: usize = 11;
+const BINUTILS_REQUIRED_TOOLS: [(&str, &str); BINUTILS_REQUIRED_TOOL_COUNT] = [
+    ("as", "36bb17408403b4fd8283bf80f78410ae76eedb4e1565f0fc6db0f7a8c0a1eac4"),
+    ("ld", "e2939e05b0e115efa3530f66d60b63ef06627a1ba0c0c1a70ce71fabcf4ca158"),
+    ("ar", "c5836470e484f7b9137abc3bbdffbec7155a7700fdf094662b4253a576e76600"),
+    ("ranlib", "8c6d65ff0cc4b6936e6f93a016782890dd39e556ef2f99d1699d0071c6691533"),
+    ("nm", "bd92671b478f6f88d3aea88d910335cb024079bebcf4432c8abba77a51d1b00b"),
+    ("objcopy", "919f6ad3c798a023395ca4d1d4574f395c8316b5595b25fbdf3bdafc891552e3"),
+    ("objdump", "f48859e9dbfb3594a92cc52ba2281879c7f02855a5679a03ed5349489a019ca1"),
+    ("readelf", "9c13500d32b180628d9768d0c56c3eabdd242f35dee79119c60e7b52f4ad3e0d"),
+    ("size", "812bd48e35d078b759192073cb2de2accaf9620c075c2ae24df9329c5623a7dd"),
+    ("strings", "8ff50f5ca1c25ab91d259225eb8fc7ed85584e9071d732192a80d82f9c24866f"),
+    ("strip", "d5505e1aa9e5b016a0b976b067aa0c7d096c84d0e875a41ff456be612d8ccc07"),
+];
 const BINUTILS_COMPONENT_COUNT: usize = 8;
 const BINUTILS_COMPONENTS: [(&str, &str, bool, &str); BINUTILS_COMPONENT_COUNT] = [
     (
@@ -527,6 +541,16 @@ const BINUTILS_AR_AUDIT_ARCHIVE_INDEX: usize = 3;
 const BINUTILS_AR_AUDIT_STATUS_INDEX: usize = 4;
 const SED_BRIDGE_INVOCATION_COUNT_MAX: u32 = 8_192;
 const BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS: [u32; 2] = [4_771, 4_772];
+const BINUTILS_INSTALL_SED_INVOCATION_COUNTS: [u32; 2] = [4_891, 4_892];
+const BINUTILS_SMOKE_OUTPUT_KIBIBYTES_MAX: u64 = 64;
+const BINUTILS_SMOKE_OUTPUT_BYTES_MAX: u64 = BINUTILS_SMOKE_OUTPUT_KIBIBYTES_MAX * KIBIBYTE_BYTES;
+const BINUTILS_SMOKE_EXIT_STATUS: i32 = 42;
+const BINUTILS_INSPECTION_SMOKE_COUNT: usize = 7;
+const BINUTILS_POSITIVE_ASSEMBLY: &[u8] =
+    b".global _start\n.text\n_start:\n  mov $60, %rax\n  mov $42, %rdi\n  syscall\n";
+const BINUTILS_INVALID_ASSEMBLY: &[u8] = b".mantle-invalid-directive\n";
+const BINUTILS_INVALID_OBJECT: &[u8] = b"not-an-object\n";
+const BINUTILS_INVALID_ARCHIVE: &[u8] = b"not-an-archive\n";
 const SED_BRIDGE_AUDIT_FIELD_COUNT: usize = 5;
 const SED_BRIDGE_CANONICAL_FIELD_COUNT: usize = 4;
 const SED_BRIDGE_CANONICAL_INPUT_INDEX: usize = 0;
@@ -546,6 +570,7 @@ const EXECUTABLE_FILE_MODE: u32 = 0o755;
 const EXECUTABLE_MODE_BITS: u32 = 0o111;
 const NATIVE_HELPER_COMPILE_ARGUMENT_COUNT: usize = 6;
 const BINUTILS_INSTALL_PREFIX: &str = "/mantle/stagex/binutils-probe-output";
+const BINUTILS_INSTALL_PREFIX_RELATIVE: &str = "mantle/stagex/binutils-probe-output";
 const BINUTILS_INSTALL_PREFIX_ARGUMENT: &str = "--prefix=/mantle/stagex/binutils-probe-output";
 const BINUTILS_INSTALL_LIBDIR_ARGUMENT: &str = "--libdir=/mantle/stagex/binutils-probe-output/lib";
 const CONFIGURE_CLASS_COUNT: usize = 9;
@@ -627,12 +652,16 @@ fn probe_authenticated_component_builds(
 ) -> Result<Vec<PathBuf>, StagexBinutilsError> {
     let (context, second_bfd) = prepare_generated_source_context(&request)?;
     let outputs = run_component_builds(&request, &context)?;
+    validate_sed_bridge_total_count(&context.sed_bridge, &BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS)?;
+    let install_root = run_component_installs(&request, &context)?;
+    run_installed_tool_smokes(&request, &install_root)?;
+    validate_sed_bridge_total_count(&context.sed_bridge, &BINUTILS_INSTALL_SED_INVOCATION_COUNTS)?;
     finalize_archive_runner_audit(&context.archive_runner)?;
     finalize_sed_bridge_audit(&context.sed_bridge)?;
     validate_ylwrap_sed_audit(&context.sed_bridge)?;
-    validate_sed_bridge_total_count(&context.sed_bridge, &BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS)?;
     assert_eq!(second_bfd.exit_code, 0);
     assert_eq!(outputs.len(), BINUTILS_COMPONENT_COUNT);
+    assert!(install_root.join("bin/ld").is_file());
     Ok(outputs)
 }
 
@@ -1000,11 +1029,21 @@ fn validate_component_output(
 ) -> Result<(), StagexBinutilsError> {
     let bytes = crate::stagex_mes_lib::read_bounded_file(path, CONFIGURE_OUTPUT_BYTES_MAX, label)
         .map_err(StagexBinutilsError::from_runtime)?;
+    let mode = fs::metadata(path)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading {label} output mode: {error}")))?
+        .permissions()
+        .mode();
+    validate_component_output_facts(&bytes, label, executable, mode, expected_digest)
+}
+
+fn validate_component_output_facts(
+    bytes: &[u8],
+    label: &str,
+    executable: bool,
+    mode: u32,
+    expected_digest: &str,
+) -> Result<(), StagexBinutilsError> {
     if executable {
-        let mode = fs::metadata(path)
-            .map_err(|error| StagexBinutilsError::Materialization(format!("reading {label} output mode: {error}")))?
-            .permissions()
-            .mode();
         if bytes.len() < ELF_MAGIC.len() || &bytes[..ELF_MAGIC.len()] != ELF_MAGIC || mode & EXECUTABLE_MODE_BITS == 0 {
             return Err(StagexBinutilsError::Materialization(format!(
                 "binutils component {label} lacks an executable ELF output"
@@ -1015,7 +1054,7 @@ fn validate_component_output(
             "binutils component {label} lacks an archive output"
         )));
     }
-    let observed_digest = blake3::hash(&bytes).to_hex().to_string();
+    let observed_digest = blake3::hash(bytes).to_hex().to_string();
     if observed_digest != expected_digest {
         return Err(StagexBinutilsError::Materialization(format!(
             "binutils component {label} digest mismatch: expected {expected_digest}, observed {observed_digest}"
@@ -1023,6 +1062,342 @@ fn validate_component_output(
     }
     assert!(!bytes.is_empty());
     assert_eq!(observed_digest.len(), BLAKE3_HEX_CHAR_COUNT);
+    Ok(())
+}
+
+fn run_component_installs(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    context: &ConfigureProbeContext,
+) -> Result<PathBuf, StagexBinutilsError> {
+    let destination = request.scratch_dir.join("install-destdir");
+    fs::create_dir(&destination)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("creating install destination: {error}")))?;
+    let environment = generated_source_environment(request, context)?;
+    for (subdirectory, _, _, _) in BINUTILS_COMPONENTS {
+        run_component_install(request, context, &environment, &destination, subdirectory)?;
+    }
+    let install_root = destination.join(BINUTILS_INSTALL_PREFIX_RELATIVE);
+    validate_installed_tools(request, &install_root)?;
+    materialize_triplet_tool_links(&install_root)?;
+    assert!(destination.is_dir());
+    assert!(install_root.join("bin").is_dir());
+    Ok(install_root)
+}
+
+fn run_component_install(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    context: &ConfigureProbeContext,
+    environment: &std::collections::BTreeMap<String, String>,
+    destination: &Path,
+    subdirectory: &str,
+) -> Result<(), StagexBinutilsError> {
+    let arguments = [
+        format!("-j{MAKE_JOB_COUNT}"),
+        "-C".to_string(),
+        shell_path(&context.source.join(subdirectory), "install source directory")?,
+        format!("tooldir={BINUTILS_INSTALL_PREFIX}"),
+        format!("DESTDIR={}", shell_path(destination, "install destination")?),
+        format!("prefix={BINUTILS_INSTALL_PREFIX}"),
+        "MAKEINFO=true".to_string(),
+        "install".to_string(),
+    ];
+    let argument_refs = arguments.iter().map(String::as_str).collect::<Vec<_>>();
+    let stdout = request.scratch_dir.join(format!("make-{subdirectory}-install.stdout.txt"));
+    let stderr = request.scratch_dir.join(format!("make-{subdirectory}-install.stderr.txt"));
+    let status = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
+        request.make,
+        &argument_refs,
+        &context.source,
+        environment,
+        &context.stdin_path,
+        CONFIGURE_OUTPUT_BYTES_MAX,
+        &stdout,
+        CONFIGURE_OUTPUT_BYTES_MAX,
+        &stderr,
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    if status != 0 {
+        let diagnostic = fs::read_to_string(&stderr).unwrap_or_else(|error| format!("unreadable diagnostic: {error}"));
+        return Err(StagexBinutilsError::Materialization(format!(
+            "binutils component {subdirectory} install failed with status {status}: {diagnostic}"
+        )));
+    }
+    assert!(stdout.is_file());
+    assert!(stderr.is_file());
+    Ok(())
+}
+
+fn validate_installed_tools(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    install_root: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let predecessor = request.tcc.as_os_str().as_encoded_bytes();
+    if predecessor.is_empty() {
+        return Err(StagexBinutilsError::Materialization("predecessor TinyCC path is empty".to_string()));
+    }
+    for (tool, expected_digest) in BINUTILS_REQUIRED_TOOLS {
+        let path = install_root.join("bin").join(tool);
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|error| StagexBinutilsError::Materialization(format!("reading installed {tool}: {error}")))?;
+        let bytes = crate::stagex_mes_lib::read_bounded_file(&path, CONFIGURE_OUTPUT_BYTES_MAX, tool)
+            .map_err(StagexBinutilsError::from_runtime)?;
+        validate_installed_tool_facts(
+            tool,
+            &bytes,
+            metadata.file_type().is_file(),
+            metadata.permissions().mode(),
+            predecessor,
+            expected_digest,
+        )?;
+    }
+    assert!(!predecessor.is_empty());
+    assert_eq!(BINUTILS_REQUIRED_TOOLS.len(), BINUTILS_REQUIRED_TOOL_COUNT);
+    Ok(())
+}
+
+fn materialize_triplet_tool_links(install_root: &Path) -> Result<(), StagexBinutilsError> {
+    let bin = install_root.join("bin");
+    for (tool, link, target) in triplet_tool_link_plan(install_root) {
+        symlink(&target, &link).map_err(|error| {
+            StagexBinutilsError::Materialization(format!("creating installed triplet link for {tool}: {error}"))
+        })?;
+        let observed = fs::read_link(&link).map_err(|error| {
+            StagexBinutilsError::Materialization(format!("reading installed triplet link for {tool}: {error}"))
+        })?;
+        if observed != target {
+            return Err(StagexBinutilsError::Materialization(format!(
+                "installed triplet link for {tool} targets {}, expected {}",
+                observed.display(),
+                target.display()
+            )));
+        }
+    }
+    assert!(bin.is_dir());
+    assert!(bin.join(format!("{TARGET}-ld")).is_symlink());
+    Ok(())
+}
+
+fn triplet_tool_link_plan(install_root: &Path) -> Vec<(&'static str, PathBuf, PathBuf)> {
+    let bin = install_root.join("bin");
+    let plan = BINUTILS_REQUIRED_TOOLS
+        .iter()
+        .map(|(tool, _)| {
+            (
+                *tool,
+                bin.join(format!("{TARGET}-{tool}")),
+                PathBuf::from(BINUTILS_INSTALL_PREFIX).join("bin").join(tool),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(plan.len(), BINUTILS_REQUIRED_TOOL_COUNT);
+    assert!(plan.iter().all(|(_, link, target)| link.is_absolute() && target.is_absolute()));
+    plan
+}
+
+fn validate_installed_tool_facts(
+    tool: &str,
+    bytes: &[u8],
+    regular: bool,
+    mode: u32,
+    predecessor: &[u8],
+    expected_digest: &str,
+) -> Result<(), StagexBinutilsError> {
+    if predecessor.is_empty() {
+        return Err(StagexBinutilsError::Materialization("installed tool predecessor identity is empty".to_string()));
+    }
+    let is_elf = bytes.len() >= ELF_MAGIC.len() && &bytes[..ELF_MAGIC.len()] == ELF_MAGIC;
+    if !regular || !is_elf {
+        return Err(StagexBinutilsError::Materialization(format!("installed {tool} is not a regular ELF file")));
+    }
+    let delegates = bytes.windows(predecessor.len()).any(|window| window == predecessor);
+    if mode & EXECUTABLE_MODE_BITS == 0 || delegates {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "installed {tool} is not executable or delegates to predecessor TinyCC"
+        )));
+    }
+    let observed_digest = blake3::hash(bytes).to_hex().to_string();
+    if observed_digest != expected_digest {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "installed {tool} digest mismatch: expected {expected_digest}, observed {observed_digest}"
+        )));
+    }
+    assert!(regular);
+    assert_eq!(observed_digest.len(), BLAKE3_HEX_CHAR_COUNT);
+    Ok(())
+}
+
+fn run_installed_tool_smokes(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    install_root: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let smoke_root = request.scratch_dir.join("binutils-runtime-smoke");
+    fs::create_dir(&smoke_root)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("creating binutils smoke root: {error}")))?;
+    crate::stagex_mes_lib::write_create_new(&smoke_root.join("empty.stdin"), b"")
+        .map_err(StagexBinutilsError::from_runtime)?;
+    crate::stagex_mes_lib::write_create_new(&smoke_root.join("positive.s"), BINUTILS_POSITIVE_ASSEMBLY)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    run_link_and_execution_smoke(request, install_root, &smoke_root)?;
+    run_archive_and_inspection_smokes(request, install_root, &smoke_root)?;
+    run_negative_tool_smokes(request, install_root, &smoke_root)?;
+    assert!(smoke_root.join("positive").is_file());
+    assert!(smoke_root.join("libpositive.a").is_file());
+    Ok(())
+}
+
+fn run_link_and_execution_smoke(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    install_root: &Path,
+    smoke_root: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let assembler = install_root.join("bin/as");
+    let linker = install_root.join("bin/ld");
+    let assemble_status = run_binutils_smoke_process(
+        request,
+        smoke_root,
+        &assembler,
+        &["-o", "positive.o", "positive.s"],
+        "assemble-positive",
+    )?;
+    require_binutils_smoke_status("positive assembly", assemble_status, 0)?;
+    let link_status =
+        run_binutils_smoke_process(request, smoke_root, &linker, &["-o", "positive", "positive.o"], "link-positive")?;
+    require_binutils_smoke_status("positive link", link_status, 0)?;
+    fs::set_permissions(smoke_root.join("positive"), fs::Permissions::from_mode(EXECUTABLE_FILE_MODE))
+        .map_err(|error| StagexBinutilsError::Materialization(format!("setting smoke executable mode: {error}")))?;
+    let execute_status =
+        run_binutils_smoke_process(request, smoke_root, &smoke_root.join("positive"), &[], "execute-positive")?;
+    require_binutils_smoke_status("positive execution", execute_status, BINUTILS_SMOKE_EXIT_STATUS)?;
+    assert!(smoke_root.join("positive.o").is_file());
+    assert!(smoke_root.join("positive").is_file());
+    Ok(())
+}
+
+fn run_archive_and_inspection_smokes(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    install_root: &Path,
+    smoke_root: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let cases: [(&str, &[&str], &str, Option<&str>); BINUTILS_INSPECTION_SMOKE_COUNT] = [
+        ("ar", &["rc", "libpositive.a", "positive.o"], "archive-positive", None),
+        ("ranlib", &["libpositive.a"], "ranlib-positive", None),
+        ("ar", &["t", "libpositive.a"], "archive-list", Some("positive.o")),
+        ("nm", &["positive.o"], "nm-positive", Some("_start")),
+        ("objcopy", &["positive.o", "positive-copy.o"], "objcopy-positive", None),
+        ("objdump", &["-d", "positive-copy.o"], "objdump-positive", Some("syscall")),
+        ("readelf", &["-h", "positive.o"], "readelf-positive", Some("ELF64")),
+    ];
+    for (tool, arguments, label, marker) in cases {
+        let status =
+            run_binutils_smoke_process(request, smoke_root, &install_root.join("bin").join(tool), arguments, label)?;
+        require_binutils_smoke_status(label, status, 0)?;
+        if let Some(marker) = marker {
+            let stdout = fs::read_to_string(request.scratch_dir.join(format!("{label}.stdout.txt")))
+                .map_err(|error| StagexBinutilsError::Materialization(format!("reading {label} stdout: {error}")))?;
+            if !stdout.contains(marker) {
+                return Err(StagexBinutilsError::Materialization(format!("{label} lacks marker {marker:?}")));
+            }
+        }
+    }
+    assert!(smoke_root.join("libpositive.a").is_file());
+    assert!(smoke_root.join("positive-copy.o").is_file());
+    Ok(())
+}
+
+fn run_negative_tool_smokes(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    install_root: &Path,
+    smoke_root: &Path,
+) -> Result<(), StagexBinutilsError> {
+    crate::stagex_mes_lib::write_create_new(&smoke_root.join("rejected.s"), BINUTILS_INVALID_ASSEMBLY)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    let assembler = install_root.join("bin/as");
+    let assemble_status = run_binutils_smoke_process(
+        request,
+        smoke_root,
+        &assembler,
+        &["-o", "rejected.o", "rejected.s"],
+        "assemble-negative",
+    )?;
+    require_binutils_smoke_rejection("malformed assembly", assemble_status, &smoke_root.join("rejected.o"))?;
+    crate::stagex_mes_lib::write_create_new(&smoke_root.join("rejected.o"), BINUTILS_INVALID_OBJECT)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    let link_status = run_binutils_smoke_process(
+        request,
+        smoke_root,
+        &install_root.join("bin/ld"),
+        &["-o", "rejected-bin", "rejected.o"],
+        "link-negative",
+    )?;
+    require_binutils_smoke_rejection("malformed object", link_status, &smoke_root.join("rejected-bin"))?;
+    crate::stagex_mes_lib::write_create_new(&smoke_root.join("rejected.a"), BINUTILS_INVALID_ARCHIVE)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    let archive_status = run_binutils_smoke_process(
+        request,
+        smoke_root,
+        &install_root.join("bin/ar"),
+        &["t", "rejected.a"],
+        "archive-negative",
+    )?;
+    if archive_status == 0 {
+        return Err(StagexBinutilsError::Materialization("archive tool accepted malformed input".to_string()));
+    }
+    assert_ne!(assemble_status, 0);
+    assert_ne!(archive_status, 0);
+    Ok(())
+}
+
+fn run_binutils_smoke_process(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    smoke_root: &Path,
+    executable: &Path,
+    arguments: &[&str],
+    label: &str,
+) -> Result<i32, StagexBinutilsError> {
+    let stdout = request.scratch_dir.join(format!("{label}.stdout.txt"));
+    let stderr = request.scratch_dir.join(format!("{label}.stderr.txt"));
+    let environment = std::collections::BTreeMap::new();
+    let status = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
+        executable,
+        arguments,
+        smoke_root,
+        &environment,
+        &smoke_root.join("empty.stdin"),
+        BINUTILS_SMOKE_OUTPUT_BYTES_MAX,
+        &stdout,
+        BINUTILS_SMOKE_OUTPUT_BYTES_MAX,
+        &stderr,
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    assert!(stdout.is_file());
+    assert!(stderr.is_file());
+    Ok(status)
+}
+
+fn require_binutils_smoke_status(label: &str, observed: i32, expected: i32) -> Result<(), StagexBinutilsError> {
+    if observed != expected {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "{label} status mismatch: expected {expected}, observed {observed}"
+        )));
+    }
+    assert_eq!(observed, expected);
+    assert!(!label.is_empty());
+    Ok(())
+}
+
+fn require_binutils_smoke_rejection(
+    label: &str,
+    status: i32,
+    forbidden_output: &Path,
+) -> Result<(), StagexBinutilsError> {
+    if status == 0 || forbidden_output.exists() {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "{label} did not fail closed: status {status}, output {}",
+            forbidden_output.display()
+        )));
+    }
+    assert_ne!(status, 0);
+    assert!(!forbidden_output.exists());
     Ok(())
 }
 
@@ -3110,6 +3485,53 @@ mod tests {
     }
 
     #[test]
+    fn plans_exact_triplet_tool_links_without_io() {
+        let root = Path::new("/retained/install");
+        let plan = triplet_tool_link_plan(root);
+        assert_eq!(plan.len(), BINUTILS_REQUIRED_TOOL_COUNT);
+        assert_eq!(plan[0].1, root.join("bin/x86_64-unknown-linux-gnu-as"));
+        assert_eq!(plan[0].2, Path::new(BINUTILS_INSTALL_PREFIX).join("bin/as"));
+        assert!(plan.iter().all(|(_, link, target)| link != target));
+    }
+
+    #[test]
+    fn validates_installed_tool_facts_without_io() {
+        const PREDECESSOR: &[u8] = b"/protected/tcc";
+        const ELF_FIXTURE: &[u8] = b"\x7fELFfixture";
+        const SUBSTITUTED_EXPECTED_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+        let digest = blake3::hash(ELF_FIXTURE).to_hex().to_string();
+        validate_installed_tool_facts("fixture", ELF_FIXTURE, true, EXECUTABLE_FILE_MODE, PREDECESSOR, &digest)
+            .unwrap();
+        let digest_error = validate_installed_tool_facts(
+            "fixture",
+            ELF_FIXTURE,
+            true,
+            EXECUTABLE_FILE_MODE,
+            PREDECESSOR,
+            SUBSTITUTED_EXPECTED_DIGEST,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(digest_error.contains("digest mismatch"));
+        let delegating = [ELF_MAGIC, PREDECESSOR].concat();
+        let delegating_digest = blake3::hash(&delegating).to_hex().to_string();
+        let delegate_error = validate_installed_tool_facts(
+            "fixture",
+            &delegating,
+            true,
+            EXECUTABLE_FILE_MODE,
+            PREDECESSOR,
+            &delegating_digest,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(delegate_error.contains("delegates to predecessor TinyCC"));
+        assert!(
+            validate_installed_tool_facts("fixture", ELF_FIXTURE, true, EXECUTABLE_FILE_MODE, b"", &digest).is_err()
+        );
+    }
+
+    #[test]
     fn rejects_substituted_component_output() {
         const SUBSTITUTED_EXPECTED_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
         let temp = tempfile::tempdir().unwrap();
@@ -3316,6 +3738,24 @@ mod tests {
             assert!(!stderr.contains(AMBIENT_FILE_PATH));
             assert!(!stderr.contains("Broken pipe"));
         }
+    }
+
+    #[test]
+    #[ignore = "requires a retained authenticated binutils install root"]
+    fn smokes_authenticated_installed_tools() {
+        let paths = ProbeEnvironment::from_environment();
+        let install_root = PathBuf::from(
+            std::env::var("MANTLE_STAGE_X_BINUTILS_INSTALL_ROOT")
+                .expect("MANTLE_STAGE_X_BINUTILS_INSTALL_ROOT must name the retained install root"),
+        );
+        fs::create_dir(&paths.scratch_dir).unwrap();
+        validate_installed_tools(&paths.request(), &install_root).unwrap();
+        for (_, link, target) in triplet_tool_link_plan(&install_root) {
+            assert_eq!(fs::read_link(link).unwrap(), target);
+        }
+        run_installed_tool_smokes(&paths.request(), &install_root).unwrap();
+        assert!(paths.scratch_dir.join("binutils-runtime-smoke/positive").is_file());
+        assert!(!paths.scratch_dir.join("binutils-runtime-smoke/rejected-bin").exists());
     }
 
     #[test]

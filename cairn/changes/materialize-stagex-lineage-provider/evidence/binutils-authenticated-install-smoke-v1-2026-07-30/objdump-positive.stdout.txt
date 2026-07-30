@@ -1,0 +1,10 @@
+
+positive-copy.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <_start>:
+   0:	48 c7 c0 3c 00 00 00 	mov    $0x3c,%rax
+   7:	48 c7 c7 2a 00 00 00 	mov    $0x2a,%rdi
+   e:	0f 05                	syscall 
