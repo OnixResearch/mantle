@@ -1,0 +1,1 @@
+binutils-tcc-wrapper: configure preprocess rejected: current-directory-mismatch
