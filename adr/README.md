@@ -47,3 +47,4 @@ compatibility surface, crate name, or historical decision.
 | [0038](0038-stabilize-protected-sed-stdin-with-regular-files.md) | Stabilize protected sed stdin with regular files | Accepted |
 | [0039](0039-relocate-stagex-configure-helpers-to-a-bounded-utility.md) | Relocate StageX configure helpers to a bounded utility | Accepted |
 | [0040](0040-validate-stagex-generated-sources-before-second-configure.md) | Validate StageX generated sources before second configure | Accepted |
+| [0041](0041-run-ylwrap-rewrites-with-a-bounded-native-runner.md) | Run `ylwrap` rewrites with a bounded native runner | Accepted |

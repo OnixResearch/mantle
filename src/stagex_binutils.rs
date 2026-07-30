@@ -26,6 +26,7 @@ const SED_BRIDGE_LAUNCHER_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-se
 const SED_BRIDGE_SCRIPT_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-sed-regular-file-bridge.sh");
 const SINGLE_THREAD_SEMAPHORE_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-single-thread-semaphore-compat.c");
 const CONFIGURE_UTILITY_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-configure-utility.c");
+const YLWRAP_SED_RUNNER_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-ylwrap-sed-runner.c");
 const SED_BRIDGE_LAUNCHER_SOURCE_ARTIFACT_ID: &str = "stagex-sed-bridge-launcher-source";
 const SED_BRIDGE_LAUNCHER_SOURCE_NAME: &str = "stagex-sed-bridge-launcher.c";
 const SED_BRIDGE_LAUNCHER_OUTPUT_NAME: &str = "stagex-sed-bridge-launcher";
@@ -33,9 +34,14 @@ const SINGLE_THREAD_SEMAPHORE_SOURCE_NAME: &str = "stagex-single-thread-semaphor
 const SED_BRIDGE_SCRIPT_SOURCE_ARTIFACT_ID: &str = "stagex-sed-regular-file-bridge-source";
 const SINGLE_THREAD_SEMAPHORE_SOURCE_ARTIFACT_ID: &str = "stagex-single-thread-semaphore-compat-source";
 const CONFIGURE_UTILITY_SOURCE_ARTIFACT_ID: &str = "stagex-configure-utility-source";
+const YLWRAP_SED_RUNNER_SOURCE_ARTIFACT_ID: &str = "stagex-ylwrap-sed-runner-source";
+const YLWRAP_SED_RUNNER_SOURCE_NAME: &str = "stagex-ylwrap-sed-runner.c";
+const YLWRAP_SED_RUNNER_OUTPUT_NAME: &str = "stagex-ylwrap-sed-runner";
 const SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3: &str = "606c52085de42d0221ba5490e81d8c539a50a65aaa89f7b4b478371bdc643dab";
 const SED_BRIDGE_LAUNCHER_BLAKE3: &str = "9b4d6a5eca05f55c407a70f7e426f756f482c9ae8f76d0a22d1b1b46e7dba1a1";
-const SED_BRIDGE_SCRIPT_SOURCE_BLAKE3: &str = "5e7f2c7575a6e9de292737c0dc3c25174d6284e967b2a43ba26472a050f8b0d0";
+const SED_BRIDGE_SCRIPT_SOURCE_BLAKE3: &str = "f8a7228b0341fc4569583055936d9386de26c14a92e0da6e850f4c080abccbbc";
+const YLWRAP_SED_RUNNER_SOURCE_BLAKE3: &str = "372a51aef1c1d06bef3ec1963bc61e89598b2912c8e709dce747637ffe49587d";
+const YLWRAP_SED_RUNNER_BLAKE3: &str = "d675a75869cba2e3c7cdb932ee75106a4a6094161e4d95fc196c08aa7b9723f8";
 const SINGLE_THREAD_SEMAPHORE_SOURCE_BLAKE3: &str = "52c3ec19c484b0b4c3c5de84fc7ae77f40601fc81993d16ef6e15eb7401ee084";
 const CONFIGURE_UTILITY_SOURCE_BLAKE3: &str = "b150327f4ef9256764e8024466dd706ee87012f70554f1c7a01a0d8bc08975b1";
 const CONFIGURE_UTILITY_BLAKE3: &str = "a0d4f306ed84086cb0cebff1dffb0f5fea0a93e9ee4085e6e5e0acc3e4df201f";
@@ -46,7 +52,7 @@ const BINUTILS_RECORD_HASH: &str = "sha256-L8aaWezlL47cNdPIbSEAtryYUDXLe9htMSECT
 const BINUTILS_RECORD_URL: &str = "https://ftpmirror.gnu.org/binutils/binutils-2.30.tar.xz";
 const BINUTILS_RECORD_PAYLOAD_ENCODING: &str = "tarball-archive-v1";
 const BINUTILS_RECORD_UNPACK: &str = "1";
-const BINUTILS_SOURCE_ARTIFACT_COUNT: usize = 6;
+const BINUTILS_SOURCE_ARTIFACT_COUNT: usize = 7;
 const REQUIRED_SOURCE_FILES: &[&str] = &[
     "configure",
     "config.sub",
@@ -142,6 +148,7 @@ pub(crate) fn source_artifact_digests() -> [(&'static str, &'static str); BINUTI
         (SED_BRIDGE_SCRIPT_SOURCE_ARTIFACT_ID, SED_BRIDGE_SCRIPT_SOURCE_BLAKE3),
         (SINGLE_THREAD_SEMAPHORE_SOURCE_ARTIFACT_ID, SINGLE_THREAD_SEMAPHORE_SOURCE_BLAKE3),
         (CONFIGURE_UTILITY_SOURCE_ARTIFACT_ID, CONFIGURE_UTILITY_SOURCE_BLAKE3),
+        (YLWRAP_SED_RUNNER_SOURCE_ARTIFACT_ID, YLWRAP_SED_RUNNER_SOURCE_BLAKE3),
     ]
 }
 
@@ -344,6 +351,7 @@ pub(crate) struct BinutilsConfigureProbeRequest<'a> {
 struct SedBridgePaths {
     launcher: PathBuf,
     script: PathBuf,
+    ylwrap_runner: PathBuf,
     spool_root: PathBuf,
     audit: PathBuf,
 }
@@ -409,11 +417,63 @@ const BFD_HEADER_MARKER: &str = "void bfd_init (void);";
 const BFD_LIBRARY_HEADER_MARKER: &str = "/* Extracted from libbfd.c.  */";
 const BFD_COFF_HEADER_MARKER: &str = "generated from \"libcoff-in.h\" and \"coffcode.h\"";
 const BISON_OUTPUT_MARKER: &str = "#define YYBISON_VERSION \"2.3\"";
+const BISON_FILE_MARKER: &str = "A Bison parser, made by GNU Bison 2.3.";
+const FLEX_OUTPUT_MARKER: &str = "#define YY_FLEX_MAJOR_VERSION 2";
+const BINUTILS_GENERATED_TARGET_COUNT: usize = 8;
+const BINUTILS_GENERATED_TARGETS: [&str; BINUTILS_GENERATED_TARGET_COUNT] = [
+    "arparse.c",
+    "defparse.c",
+    "mcparse.c",
+    "rcparse.c",
+    "sysinfo.c",
+    "arlex.c",
+    "deflex.c",
+    "syslex.c",
+];
+const LD_GENERATED_TARGET_COUNT: usize = 3;
+const LD_GENERATED_TARGETS: [&str; LD_GENERATED_TARGET_COUNT] = ["deffilep.c", "ldgram.c", "ldlex.c"];
+const BISON_GENERATED_FILE_COUNT: usize = 14;
+const BISON_GENERATED_FILES: [&str; BISON_GENERATED_FILE_COUNT] = [
+    "binutils/arparse.c",
+    "binutils/arparse.h",
+    "binutils/defparse.c",
+    "binutils/defparse.h",
+    "binutils/mcparse.c",
+    "binutils/mcparse.h",
+    "binutils/rcparse.c",
+    "binutils/rcparse.h",
+    "binutils/sysinfo.c",
+    "binutils/sysinfo.h",
+    "ld/deffilep.c",
+    "ld/deffilep.h",
+    "ld/ldgram.c",
+    "ld/ldgram.h",
+];
+const FLEX_GENERATED_FILE_COUNT: usize = 4;
+const FLEX_GENERATED_FILES: [&str; FLEX_GENERATED_FILE_COUNT] = [
+    "binutils/arlex.c",
+    "binutils/deflex.c",
+    "binutils/syslex.c",
+    "ld/ldlex.c",
+];
 const BFD_SECOND_CONFIG_UNRESOLVED_MARKER: &str = "@BFD_HOST_64_BIT@";
 const SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX: u64 = KIBIBYTE_BYTES;
+const YLWRAP_SED_FILE_MEBIBYTES_MAX: u64 = 8;
+const YLWRAP_SED_FILE_BYTES_MAX: u64 = YLWRAP_SED_FILE_MEBIBYTES_MAX * MEBIBYTE_BYTES;
+const YLWRAP_SED_DYNAMIC_PROGRAM_COUNT: usize = 3;
+const YLWRAP_SED_ARGUMENT_COUNT: usize = 9;
+const YLWRAP_SED_EXPECTED_INVOCATION_COUNT: usize = 18;
+const YLWRAP_SED_PATH_PROGRAM_INDEX: usize = 0;
+const YLWRAP_SED_NAME_PROGRAM_INDEX: usize = 1;
+const YLWRAP_SED_GUARD_PROGRAM_INDEX: usize = 2;
 const SED_BRIDGE_AUTHORITY_FAILURE: i32 = 125;
 const SED_BRIDGE_INVOCATION_COUNT_MAX: u32 = 4_096;
 const SED_BRIDGE_AUDIT_FIELD_COUNT: usize = 5;
+const SED_BRIDGE_CANONICAL_FIELD_COUNT: usize = 4;
+const SED_BRIDGE_CANONICAL_INPUT_INDEX: usize = 0;
+const SED_BRIDGE_CANONICAL_OUTPUT_INDEX: usize = 1;
+const SED_BRIDGE_CANONICAL_FILE_COUNT_INDEX: usize = 2;
+const SED_BRIDGE_CANONICAL_STATUS_INDEX: usize = 3;
 const SED_BRIDGE_SMOKE_EXPECTED: &[u8] = b"S[\"LTLIBOBJS\"]=\"\"\n";
 const SED_BRIDGE_SMOKE_INPUT: &[u8] = b"LTLIBOBJS!%!_!# \n";
 const SED_BRIDGE_FIRST_PROGRAM: &[u8] = b"h\ns/^/S[\"/; s/!.*/\"]=/\np\ng\ns/^[^!]*!//\n:repl\nt repl\ns/%!_!# $//\nt delim\n:nl\nh\ns/\\(.\\{148\\}\\).*/\\1/\nt more1\ns/[\"\\\\]/\\\\&/g; s/^/\"/; s/$/\\\\n\"\\\\/\np\nn\nb repl\n:more1\ns/[\"\\\\]/\\\\&/g; s/^/\"/; s/$/\"\\\\/\np\ng\ns/.\\{148\\}//\nt nl\n:delim\nh\ns/\\(.\\{148\\}\\).*/\\1/\nt more2\ns/[\"\\\\]/\\\\&/g; s/^/\"/; s/$/\"/\np\nb\n:more2\ns/[\"\\\\]/\\\\&/g; s/^/\"/; s/$/\"\\\\/\np\ng\ns/.\\{148\\}//\nt delim\n";
@@ -482,7 +542,9 @@ fn probe_authenticated_generated_sources(
         )));
     }
     validate_second_bfd_header(&context.source.join("bfd/bfd-in3.h"))?;
+    run_remaining_generated_source_targets(&request, &context)?;
     finalize_sed_bridge_audit(&context.sed_bridge)?;
+    validate_ylwrap_sed_audit(&context.sed_bridge)?;
     assert_eq!(outcomes.len(), CONFIGURE_CLASS_COUNT);
     assert_eq!(second_bfd.configure_class, "bfd");
     Ok(second_bfd)
@@ -612,7 +674,7 @@ fn run_initial_generated_source_targets(
     context: &ConfigureProbeContext,
 ) -> Result<(), StagexBinutilsError> {
     let environment = generated_source_environment(request, context)?;
-    run_make_generation_target(request, context, &environment, "bfd", "headers", "make-bfd-headers")?;
+    run_make_generation_targets(request, context, &environment, "bfd", &["headers"], "make-bfd-headers")?;
     validate_generated_file(&context.source.join("bfd/bfd-in2.h"), BFD_HEADER_MARKER, "first BFD header")?;
     validate_generated_file(&context.source.join("bfd/libbfd.h"), BFD_LIBRARY_HEADER_MARKER, "BFD library header")?;
     validate_generated_file(&context.source.join("bfd/libcoff.h"), BFD_COFF_HEADER_MARKER, "BFD COFF header")?;
@@ -624,10 +686,35 @@ fn run_initial_generated_source_targets(
     if chew_mode & EXECUTABLE_MODE_BITS == 0 {
         return Err(StagexBinutilsError::Materialization("BFD chew generator is not executable".to_string()));
     }
-    run_make_generation_target(request, context, &environment, "intl", "plural.c", "make-intl-plural")?;
+    run_make_generation_targets(request, context, &environment, "intl", &["plural.c"], "make-intl-plural")?;
     validate_generated_file(&context.source.join("intl/plural.c"), BISON_OUTPUT_MARKER, "intl plural parser")?;
     assert!(chew.is_file());
     assert!(context.source.join("intl/plural.c").is_file());
+    Ok(())
+}
+
+fn run_remaining_generated_source_targets(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    context: &ConfigureProbeContext,
+) -> Result<(), StagexBinutilsError> {
+    let environment = generated_source_environment(request, context)?;
+    run_make_generation_targets(
+        request,
+        context,
+        &environment,
+        "binutils",
+        &BINUTILS_GENERATED_TARGETS,
+        "make-binutils-generated",
+    )?;
+    run_make_generation_targets(request, context, &environment, "ld", &LD_GENERATED_TARGETS, "make-ld-generated")?;
+    for relative in BISON_GENERATED_FILES {
+        validate_generated_file(&context.source.join(relative), BISON_FILE_MARKER, relative)?;
+    }
+    for relative in FLEX_GENERATED_FILES {
+        validate_generated_file(&context.source.join(relative), FLEX_OUTPUT_MARKER, relative)?;
+    }
+    assert_eq!(BINUTILS_GENERATED_TARGETS.len(), BINUTILS_GENERATED_TARGET_COUNT);
+    assert_eq!(LD_GENERATED_TARGETS.len(), LD_GENERATED_TARGET_COUNT);
     Ok(())
 }
 
@@ -672,12 +759,12 @@ fn generated_source_environment(
     Ok(environment)
 }
 
-fn run_make_generation_target(
+fn run_make_generation_targets(
     request: &BinutilsConfigureProbeRequest<'_>,
     context: &ConfigureProbeContext,
     environment: &std::collections::BTreeMap<String, String>,
     subdirectory: &str,
-    target: &str,
+    targets: &[&str],
     label: &str,
 ) -> Result<(), StagexBinutilsError> {
     let compiler = environment.get("CC").ok_or_else(|| {
@@ -686,18 +773,23 @@ fn run_make_generation_target(
     let cflags_for_build = environment
         .get("CFLAGS_FOR_BUILD")
         .ok_or_else(|| StagexBinutilsError::Materialization("generated-source build flags are missing".to_string()))?;
-    let arguments = vec![
+    if targets.is_empty() {
+        return Err(StagexBinutilsError::Materialization(format!("{label} has no declared Make targets")));
+    }
+    let mut arguments = vec![
         format!("-j{MAKE_JOB_COUNT}"),
         "-C".to_string(),
         shell_path(&context.source.join(subdirectory), "generated-source directory")?,
-        target.to_string(),
+    ];
+    arguments.extend(targets.iter().map(|target| (*target).to_string()));
+    arguments.extend([
         format!("CC={compiler}"),
         format!("CC_FOR_BUILD={compiler}"),
         format!("CFLAGS_FOR_BUILD={cflags_for_build}"),
         "AR=true".to_string(),
         "RANLIB=true".to_string(),
         "MAKEINFO=true".to_string(),
-    ];
+    ]);
     let stdout = request.scratch_dir.join(format!("{label}.stdout.txt"));
     let stderr = request.scratch_dir.join(format!("{label}.stderr.txt"));
     let status = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
@@ -719,6 +811,7 @@ fn run_make_generation_target(
             "{label} failed: status {status}, diagnostic {diagnostic:?}"
         )));
     }
+    assert!(!targets.is_empty());
     assert!(stdout.is_file());
     assert!(stderr.is_file());
     Ok(())
@@ -1259,6 +1352,8 @@ fn prepare_sed_bridge(
     let semaphore_source = request.scratch_dir.join(SINGLE_THREAD_SEMAPHORE_SOURCE_NAME);
     let launcher = request.scratch_dir.join(SED_BRIDGE_LAUNCHER_OUTPUT_NAME);
     let script = request.scratch_dir.join("stagex-sed-regular-file-bridge.sh");
+    let ylwrap_source = request.scratch_dir.join(YLWRAP_SED_RUNNER_SOURCE_NAME);
+    let ylwrap_runner = request.scratch_dir.join(YLWRAP_SED_RUNNER_OUTPUT_NAME);
     let spool_root = request.scratch_dir.join("sed-spool");
     crate::stagex_mes_lib::write_create_new(&launcher_source, SED_BRIDGE_LAUNCHER_SOURCE)
         .map_err(StagexBinutilsError::from_runtime)?;
@@ -1266,11 +1361,14 @@ fn prepare_sed_bridge(
         .map_err(StagexBinutilsError::from_runtime)?;
     crate::stagex_mes_lib::write_create_new(&semaphore_source, SINGLE_THREAD_SEMAPHORE_SOURCE)
         .map_err(StagexBinutilsError::from_runtime)?;
+    crate::stagex_mes_lib::write_create_new(&ylwrap_source, YLWRAP_SED_RUNNER_SOURCE)
+        .map_err(StagexBinutilsError::from_runtime)?;
     fs::set_permissions(&script, fs::Permissions::from_mode(REGULAR_FILE_MODE))
         .map_err(|error| StagexBinutilsError::Materialization(format!("setting sed bridge script mode: {error}")))?;
     fs::create_dir(&spool_root)
         .map_err(|error| StagexBinutilsError::Materialization(format!("creating sed spool root: {error}")))?;
     compile_sed_bridge_launcher(request, compiler_wrapper, &launcher_source, &semaphore_source, &launcher)?;
+    compile_ylwrap_sed_runner(request, compiler_wrapper, &ylwrap_runner)?;
     run_sed_bridge_launcher_self_test(request, &launcher)?;
     run_sed_bridge_launcher_missing_authority_test(request, &launcher)?;
     assert!(launcher.is_file());
@@ -1278,6 +1376,7 @@ fn prepare_sed_bridge(
     Ok(SedBridgePaths {
         launcher,
         script,
+        ylwrap_runner,
         audit: spool_root.join("audit.tsv"),
         spool_root,
     })
@@ -1350,6 +1449,7 @@ fn validate_sed_bridge_sources() -> Result<(), StagexBinutilsError> {
         SINGLE_THREAD_SEMAPHORE_SOURCE_BLAKE3,
     )?;
     require_sed_bridge_source_digest("configure utility", CONFIGURE_UTILITY_SOURCE, CONFIGURE_UTILITY_SOURCE_BLAKE3)?;
+    require_sed_bridge_source_digest("ylwrap sed runner", YLWRAP_SED_RUNNER_SOURCE, YLWRAP_SED_RUNNER_SOURCE_BLAKE3)?;
     assert_ne!(SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3, SED_BRIDGE_SCRIPT_SOURCE_BLAKE3);
     assert!(!SED_BRIDGE_SCRIPT_SOURCE.is_empty());
     Ok(())
@@ -1419,6 +1519,214 @@ fn compile_sed_bridge_launcher(
     assert!(source.is_file());
     assert!(semaphore_source.is_file());
     assert!(output.is_file());
+    Ok(())
+}
+
+fn compile_ylwrap_sed_runner(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    compiler_wrapper: &Path,
+    output: &Path,
+) -> Result<(), StagexBinutilsError> {
+    if output != request.scratch_dir.join(YLWRAP_SED_RUNNER_OUTPUT_NAME) {
+        return Err(StagexBinutilsError::Materialization(
+            "ylwrap sed runner output differs from the fixed relative name".to_string(),
+        ));
+    }
+    let arguments = vec![
+        shell_path(compiler_wrapper, "TinyCC wrapper")?,
+        format!("-I{}", shell_path(&request.musl_root.join("include"), "native musl include")?),
+        YLWRAP_SED_RUNNER_SOURCE_NAME.to_string(),
+        SINGLE_THREAD_SEMAPHORE_SOURCE_NAME.to_string(),
+        "-o".to_string(),
+        YLWRAP_SED_RUNNER_OUTPUT_NAME.to_string(),
+    ];
+    crate::stagex_mes_lib::run_bounded_process(
+        request.bash,
+        &arguments,
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        &request.scratch_dir.join("ylwrap-sed-runner-compile.stderr.txt"),
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    fs::set_permissions(output, fs::Permissions::from_mode(EXECUTABLE_FILE_MODE))
+        .map_err(|error| StagexBinutilsError::Materialization(format!("setting ylwrap sed runner mode: {error}")))?;
+    validate_file_digest(output, YLWRAP_SED_RUNNER_BLAKE3, "ylwrap sed runner")?;
+    crate::stagex_mes_lib::run_bounded_process(
+        output,
+        &["--mantle-self-test"],
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        &request.scratch_dir.join("ylwrap-sed-runner-self-test.stderr.txt"),
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    run_ylwrap_sed_runner_smokes(request, output)?;
+    assert_eq!(arguments.len(), NATIVE_HELPER_COMPILE_ARGUMENT_COUNT);
+    assert!(output.is_file());
+    Ok(())
+}
+
+fn quote_ylwrap_sed_pattern(text: &str) -> String {
+    let mut quoted = String::with_capacity(text.len());
+    for character in text.chars() {
+        if matches!(character, '[' | ']' | '\\' | '.' | '*') {
+            quoted.push('\\');
+        }
+        quoted.push(character);
+    }
+    assert!(quoted.len() >= text.len());
+    assert!(!quoted.contains('\n'));
+    quoted
+}
+
+fn ylwrap_sed_programs(parent: &Path) -> Result<[String; YLWRAP_SED_DYNAMIC_PROGRAM_COUNT], StagexBinutilsError> {
+    let parent = shell_path(parent, "ylwrap sed smoke parent")?;
+    let path_program = format!("s|{}/||", quote_ylwrap_sed_pattern(&parent));
+    let names = "s|y\\.tab\\.c|arparse.c|g;s|y\\.tab\\.h|arparse.h|g;s|y\\.output|arparse.output|g;";
+    let guards = "s|Y_TAB_C|ARPARSE_C|g;s|Y_TAB_H|ARPARSE_H|g;s|Y_OUTPUT|ARPARSE_OUTPUT|g;";
+    assert!(path_program.starts_with("s|/"));
+    assert!(names.contains("arparse.c"));
+    Ok([path_program, names.to_string(), guards.to_string()])
+}
+
+fn run_ylwrap_sed_runner_case(
+    runner: &Path,
+    current_dir: &Path,
+    programs: &[String; YLWRAP_SED_DYNAMIC_PROGRAM_COUNT],
+    input_name: &str,
+    label: &str,
+    stdin_path: &Path,
+    scratch_dir: &Path,
+) -> Result<(i32, Vec<u8>), StagexBinutilsError> {
+    let arguments = [
+        "-e".to_string(),
+        "/^#/!b".to_string(),
+        "-e".to_string(),
+        programs[YLWRAP_SED_PATH_PROGRAM_INDEX].clone(),
+        "-e".to_string(),
+        programs[YLWRAP_SED_NAME_PROGRAM_INDEX].clone(),
+        "-e".to_string(),
+        programs[YLWRAP_SED_GUARD_PROGRAM_INDEX].clone(),
+        input_name.to_string(),
+    ];
+    let argument_refs = arguments.iter().map(String::as_str).collect::<Vec<_>>();
+    let stdout = scratch_dir.join(format!("ylwrap-sed-{label}.stdout.txt"));
+    let stderr = scratch_dir.join(format!("ylwrap-sed-{label}.stderr.txt"));
+    let status = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
+        runner,
+        &argument_refs,
+        current_dir,
+        &std::collections::BTreeMap::new(),
+        stdin_path,
+        YLWRAP_SED_FILE_BYTES_MAX,
+        &stdout,
+        SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX,
+        &stderr,
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    let output = fs::read(&stdout)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading ylwrap sed {label} output: {error}")))?;
+    assert_eq!(arguments.len(), YLWRAP_SED_ARGUMENT_COUNT);
+    assert!(stderr.is_file());
+    Ok((status, output))
+}
+
+fn run_ylwrap_sed_runner_smokes(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    runner: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let parent = request.scratch_dir.join("ylwrap-sed-smokes");
+    let current_dir = parent.join("ylwrap1");
+    fs::create_dir(&parent)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("creating ylwrap sed smoke parent: {error}")))?;
+    fs::create_dir(&current_dir).map_err(|error| {
+        StagexBinutilsError::Materialization(format!("creating ylwrap sed smoke directory: {error}"))
+    })?;
+    let stdin_path = parent.join("empty.stdin");
+    crate::stagex_mes_lib::write_create_new(&stdin_path, b"").map_err(StagexBinutilsError::from_runtime)?;
+    let programs = ylwrap_sed_programs(&parent)?;
+    let input = format!(
+        "#line 1 \"{}/arparse.y\"\n#include \"y.tab.h\"\n#ifndef Y_TAB_C\nbody y.tab.c\n",
+        shell_path(&parent, "ylwrap sed fixture parent")?
+    );
+    crate::stagex_mes_lib::write_create_new(&current_dir.join("y.tab.c"), input.as_bytes())
+        .map_err(StagexBinutilsError::from_runtime)?;
+    let (status, output) = run_ylwrap_sed_runner_case(
+        runner,
+        &current_dir,
+        &programs,
+        "y.tab.c",
+        "positive",
+        &stdin_path,
+        request.scratch_dir,
+    )?;
+    let expected = b"#line 1 \"arparse.y\"\n#include \"arparse.h\"\n#ifndef ARPARSE_C\nbody y.tab.c\n";
+    if status != 0 || output != expected {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "ylwrap sed positive smoke mismatch: status {status}, output {:?}",
+            String::from_utf8_lossy(&output)
+        )));
+    }
+    run_ylwrap_sed_runner_negative_smokes(request, runner, &parent, &current_dir, &programs, &stdin_path)?;
+    assert_eq!(output, expected);
+    assert!(runner.is_file());
+    Ok(())
+}
+
+fn require_ylwrap_sed_rejection(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    runner: &Path,
+    current_dir: &Path,
+    programs: &[String; YLWRAP_SED_DYNAMIC_PROGRAM_COUNT],
+    input_name: &str,
+    label: &str,
+    stdin_path: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let (status, output) =
+        run_ylwrap_sed_runner_case(runner, current_dir, programs, input_name, label, stdin_path, request.scratch_dir)?;
+    if status != SED_BRIDGE_AUTHORITY_FAILURE || !output.is_empty() {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "ylwrap sed {label} negative smoke mismatch: status {status}, output bytes {}",
+            output.len()
+        )));
+    }
+    assert_eq!(status, SED_BRIDGE_AUTHORITY_FAILURE);
+    assert!(output.is_empty());
+    Ok(())
+}
+
+fn run_ylwrap_sed_runner_negative_smokes(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    runner: &Path,
+    parent: &Path,
+    current_dir: &Path,
+    programs: &[String; YLWRAP_SED_DYNAMIC_PROGRAM_COUNT],
+    stdin_path: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let mut wrong_path = programs.clone();
+    wrong_path[YLWRAP_SED_PATH_PROGRAM_INDEX] = "s|/substituted/source/||".to_string();
+    require_ylwrap_sed_rejection(request, runner, current_dir, &wrong_path, "y.tab.c", "wrong-path", stdin_path)?;
+    require_ylwrap_sed_rejection(request, runner, parent, programs, "y.tab.c", "wrong-directory", stdin_path)?;
+    let scanner_programs = [
+        programs[YLWRAP_SED_PATH_PROGRAM_INDEX].clone(),
+        "s|lex\\.yy\\.c|arlex.c|g;".to_string(),
+        "s|LEX_YY_C|ARLEX_C|g;".to_string(),
+    ];
+    symlink("y.tab.c", current_dir.join("lex.yy.c"))
+        .map_err(|error| StagexBinutilsError::Materialization(format!("creating ylwrap sed symlink smoke: {error}")))?;
+    require_ylwrap_sed_rejection(request, runner, current_dir, &scanner_programs, "lex.yy.c", "symlink", stdin_path)?;
+    let oversized_dir = parent.join("ylwrap2");
+    fs::create_dir(&oversized_dir).map_err(|error| {
+        StagexBinutilsError::Materialization(format!("creating ylwrap sed oversized directory: {error}"))
+    })?;
+    let oversized_len = usize::try_from(YLWRAP_SED_FILE_BYTES_MAX)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("converting ylwrap sed limit: {error}")))?
+        .checked_add(1)
+        .ok_or_else(|| StagexBinutilsError::Materialization("ylwrap sed oversized fixture overflow".to_string()))?;
+    crate::stagex_mes_lib::write_create_new(&oversized_dir.join("y.tab.c"), &vec![b'x'; oversized_len])
+        .map_err(StagexBinutilsError::from_runtime)?;
+    require_ylwrap_sed_rejection(request, runner, &oversized_dir, programs, "y.tab.c", "oversized", stdin_path)?;
+    assert!(current_dir.join("lex.yy.c").is_symlink());
+    assert!(oversized_len > usize::try_from(YLWRAP_SED_FILE_BYTES_MAX).unwrap());
     Ok(())
 }
 
@@ -1889,6 +2197,51 @@ fn finalize_sed_bridge_audit(bridge: &SedBridgePaths) -> Result<(), StagexBinuti
     Ok(())
 }
 
+fn validate_ylwrap_sed_audit(bridge: &SedBridgePaths) -> Result<(), StagexBinutilsError> {
+    let canonical_path = bridge.spool_root.join("audit.canonical.tsv");
+    let canonical = fs::read_to_string(&canonical_path)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading ylwrap sed audit: {error}")))?;
+    let observed_count = validate_ylwrap_sed_canonical(&canonical)?;
+    assert_eq!(observed_count, YLWRAP_SED_EXPECTED_INVOCATION_COUNT);
+    assert!(canonical_path.is_file());
+    Ok(())
+}
+
+fn validate_ylwrap_sed_canonical(canonical: &str) -> Result<usize, StagexBinutilsError> {
+    let mut observed_count = 0usize;
+    for line in canonical.lines() {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        if fields.len() != SED_BRIDGE_CANONICAL_FIELD_COUNT {
+            return Err(StagexBinutilsError::Materialization(format!("malformed canonical sed bridge line: {line:?}")));
+        }
+        if fields[SED_BRIDGE_CANONICAL_STATUS_INDEX] != "ok:ylwrap-sed" {
+            continue;
+        }
+        let output_bytes = fields[SED_BRIDGE_CANONICAL_OUTPUT_INDEX].parse::<u64>().map_err(|error| {
+            StagexBinutilsError::Materialization(format!("invalid ylwrap sed output size: {error}"))
+        })?;
+        if fields[SED_BRIDGE_CANONICAL_INPUT_INDEX] != "0"
+            || fields[SED_BRIDGE_CANONICAL_FILE_COUNT_INDEX] != "1"
+            || output_bytes == 0
+        {
+            return Err(StagexBinutilsError::Materialization(format!(
+                "ylwrap sed audit has an invalid authority shape: {line:?}"
+            )));
+        }
+        observed_count = observed_count
+            .checked_add(1)
+            .ok_or_else(|| StagexBinutilsError::Materialization("ylwrap sed audit count overflow".to_string()))?;
+    }
+    if observed_count != YLWRAP_SED_EXPECTED_INVOCATION_COUNT {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "ylwrap sed invocation count mismatch: expected {YLWRAP_SED_EXPECTED_INVOCATION_COUNT}, observed {observed_count}"
+        )));
+    }
+    assert_eq!(observed_count, YLWRAP_SED_EXPECTED_INVOCATION_COUNT);
+    assert!(!canonical.is_empty());
+    Ok(observed_count)
+}
+
 fn canonical_sed_bridge_audit(text: &str, expected_count: u32) -> Result<String, StagexBinutilsError> {
     if expected_count == 0 || expected_count > SED_BRIDGE_INVOCATION_COUNT_MAX {
         return Err(StagexBinutilsError::Materialization(format!(
@@ -1940,7 +2293,8 @@ fn parse_sed_bridge_audit_line(line: &str) -> Result<SedBridgeAuditEntry, Stagex
         })
     };
     let status = fields[4];
-    if status != "ok" && !status.starts_with("rejected:") {
+    let accepted = status == "ok:protected-sed" || status == "ok:ylwrap-sed";
+    if !accepted && !status.starts_with("rejected:") {
         return Err(StagexBinutilsError::Materialization(format!("invalid sed bridge status: {status:?}")));
     }
     Ok(SedBridgeAuditEntry {
@@ -2055,6 +2409,10 @@ fn append_sed_bridge_environment(
         shell_path(&context.sed_bridge.script, "sed bridge script")?,
     );
     environment.insert("MANTLE_STAGE_X_SED_BRIDGE_TARGET".to_string(), shell_path(request.sed, "protected sed")?);
+    environment.insert(
+        "MANTLE_STAGE_X_YLWRAP_SED".to_string(),
+        shell_path(&context.sed_bridge.ylwrap_runner, "ylwrap sed runner")?,
+    );
     for (name, tool) in [
         ("CAT", "cat"),
         ("HEAD", "head"),
@@ -2081,6 +2439,7 @@ fn append_sed_bridge_environment(
         shell_path(&context.sed_bridge.audit, "sed bridge audit")?,
     );
     assert!(environment.contains_key("MANTLE_STAGE_X_SED_BRIDGE_TARGET"));
+    assert!(environment.contains_key("MANTLE_STAGE_X_YLWRAP_SED"));
     assert!(environment.contains_key("MANTLE_STAGE_X_SED_BRIDGE_EMIT"));
     assert!(environment.contains_key("MANTLE_STAGE_X_SED_BRIDGE_AUDIT"));
     Ok(())
@@ -2195,16 +2554,37 @@ mod tests {
 
     #[test]
     fn canonicalizes_complete_sed_bridge_audit() {
-        let unordered = "2\t17\t19\t0\tok\n1\t4\t0\t1\trejected:mixed-input-authority\n";
+        let unordered = "2\t17\t19\t0\tok:protected-sed\n1\t4\t0\t1\trejected:mixed-input-authority\n";
         let canonical = canonical_sed_bridge_audit(unordered, 2).unwrap();
-        assert!(canonical.starts_with("17\t19\t0\tok\n"));
+        assert!(canonical.starts_with("17\t19\t0\tok:protected-sed\n"));
         assert!(canonical.ends_with("4\t0\t1\trejected:mixed-input-authority\n"));
     }
 
     #[test]
     fn rejects_incomplete_sed_bridge_audit() {
-        let error = canonical_sed_bridge_audit("2\t17\t19\t0\tok\n", 2).unwrap_err().to_string();
+        let error = canonical_sed_bridge_audit("2\t17\t19\t0\tok:protected-sed\n", 2).unwrap_err().to_string();
         assert!(error.contains("audit count mismatch"));
+        assert!(!error.contains("panicked"));
+    }
+
+    #[test]
+    fn accepts_exact_ylwrap_sed_audit_suffix() {
+        let canonical = (0..YLWRAP_SED_EXPECTED_INVOCATION_COUNT)
+            .map(|index| format!("0\t{}\t1\tok:ylwrap-sed\n", index + 1))
+            .collect::<String>();
+        let count = validate_ylwrap_sed_canonical(&canonical).unwrap();
+        assert_eq!(count, YLWRAP_SED_EXPECTED_INVOCATION_COUNT);
+        assert!(canonical.ends_with("ok:ylwrap-sed\n"));
+    }
+
+    #[test]
+    fn rejects_incomplete_ylwrap_sed_audit_suffix() {
+        let incomplete_count = YLWRAP_SED_EXPECTED_INVOCATION_COUNT - 1;
+        let canonical = (0..incomplete_count)
+            .map(|index| format!("0\t{}\t1\tok:ylwrap-sed\n", index + 1))
+            .collect::<String>();
+        let error = validate_ylwrap_sed_canonical(&canonical).unwrap_err().to_string();
+        assert!(error.contains("invocation count mismatch"));
         assert!(!error.contains("panicked"));
     }
 
@@ -2336,7 +2716,15 @@ mod tests {
         assert!(source.join("bfd/doc/chew").is_file());
         assert!(source.join("bfd/bfd-in3.h").is_file());
         assert!(source.join("intl/plural.c").is_file());
+        assert!(source.join("binutils/arparse.c").is_file());
+        assert!(source.join("binutils/arlex.c").is_file());
+        assert!(source.join("ld/ldgram.c").is_file());
+        assert!(source.join("ld/ldlex.c").is_file());
         assert!(paths.scratch_dir.join("make-bfd-headers.stdout.txt").is_file());
         assert!(paths.scratch_dir.join("make-intl-plural.stdout.txt").is_file());
+        assert!(paths.scratch_dir.join("make-binutils-generated.stdout.txt").is_file());
+        assert!(paths.scratch_dir.join("make-ld-generated.stdout.txt").is_file());
+        let audit = fs::read_to_string(paths.scratch_dir.join("sed-spool/audit.canonical.tsv")).unwrap();
+        assert!(audit.contains("ok:ylwrap-sed"));
     }
 }
