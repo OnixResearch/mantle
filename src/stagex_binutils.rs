@@ -28,6 +28,7 @@ const SINGLE_THREAD_SEMAPHORE_SOURCE: &[u8] = include_bytes!("../bootstrap/stage
 const CONFIGURE_UTILITY_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-configure-utility.c");
 const YLWRAP_SED_RUNNER_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-ylwrap-sed-runner.c");
 const BINUTILS_AR_RUNNER_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-binutils-ar-runner.sh");
+const ELF_SYMBOL_CANONICALIZER_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-elf-local-symbol-canonicalizer.c");
 const SED_BRIDGE_LAUNCHER_SOURCE_ARTIFACT_ID: &str = "stagex-sed-bridge-launcher-source";
 const SED_BRIDGE_LAUNCHER_SOURCE_NAME: &str = "stagex-sed-bridge-launcher.c";
 const SED_BRIDGE_LAUNCHER_OUTPUT_NAME: &str = "stagex-sed-bridge-launcher";
@@ -37,6 +38,9 @@ const SINGLE_THREAD_SEMAPHORE_SOURCE_ARTIFACT_ID: &str = "stagex-single-thread-s
 const CONFIGURE_UTILITY_SOURCE_ARTIFACT_ID: &str = "stagex-configure-utility-source";
 const YLWRAP_SED_RUNNER_SOURCE_ARTIFACT_ID: &str = "stagex-ylwrap-sed-runner-source";
 const BINUTILS_AR_RUNNER_SOURCE_ARTIFACT_ID: &str = "stagex-binutils-ar-runner-source";
+const ELF_SYMBOL_CANONICALIZER_SOURCE_ARTIFACT_ID: &str = "stagex-elf-local-symbol-canonicalizer-source";
+const ELF_SYMBOL_CANONICALIZER_SOURCE_NAME: &str = "stagex-elf-local-symbol-canonicalizer.c";
+const ELF_SYMBOL_CANONICALIZER_OUTPUT_NAME: &str = "stagex-elf-local-symbol-canonicalizer";
 const YLWRAP_SED_RUNNER_SOURCE_NAME: &str = "stagex-ylwrap-sed-runner.c";
 const YLWRAP_SED_RUNNER_OUTPUT_NAME: &str = "stagex-ylwrap-sed-runner";
 const BINUTILS_AR_RUNNER_SOURCE_NAME: &str = "stagex-binutils-ar-runner.sh";
@@ -46,6 +50,8 @@ const SED_BRIDGE_SCRIPT_SOURCE_BLAKE3: &str = "fcdaf54c41ea283af6d7d75b2e2dce24a
 const YLWRAP_SED_RUNNER_SOURCE_BLAKE3: &str = "372a51aef1c1d06bef3ec1963bc61e89598b2912c8e709dce747637ffe49587d";
 const YLWRAP_SED_RUNNER_BLAKE3: &str = "d675a75869cba2e3c7cdb932ee75106a4a6094161e4d95fc196c08aa7b9723f8";
 const BINUTILS_AR_RUNNER_SOURCE_BLAKE3: &str = "27daef7796f882d478b0d7f26508b4b7c0a3d67faa3fd9dafe6e6fb67733c9f1";
+const ELF_SYMBOL_CANONICALIZER_SOURCE_BLAKE3: &str = "eed4dcf5e348d6b77317243a394ad2effb76ac112186eaf71e7115a1c5dc4a20";
+const ELF_SYMBOL_CANONICALIZER_BLAKE3: &str = "1a7a10d6ce97f3cea18ffc4f956fe28bdb10d94568146d89670016a80d1de06a";
 const BINUTILS_AR_SMOKE_ARCHIVE_BLAKE3: &str = "b54d2b2a954c606f06e62177013cec573bb4ac598c50b2e4f9867879ea5b65a9";
 const SINGLE_THREAD_SEMAPHORE_SOURCE_BLAKE3: &str = "52c3ec19c484b0b4c3c5de84fc7ae77f40601fc81993d16ef6e15eb7401ee084";
 const CONFIGURE_UTILITY_SOURCE_BLAKE3: &str = "b150327f4ef9256764e8024466dd706ee87012f70554f1c7a01a0d8bc08975b1";
@@ -57,7 +63,7 @@ const BINUTILS_RECORD_HASH: &str = "sha256-L8aaWezlL47cNdPIbSEAtryYUDXLe9htMSECT
 const BINUTILS_RECORD_URL: &str = "https://ftpmirror.gnu.org/binutils/binutils-2.30.tar.xz";
 const BINUTILS_RECORD_PAYLOAD_ENCODING: &str = "tarball-archive-v1";
 const BINUTILS_RECORD_UNPACK: &str = "1";
-const BINUTILS_SOURCE_ARTIFACT_COUNT: usize = 8;
+const BINUTILS_SOURCE_ARTIFACT_COUNT: usize = 9;
 const REQUIRED_SOURCE_FILES: &[&str] = &[
     "configure",
     "config.sub",
@@ -155,6 +161,7 @@ pub(crate) fn source_artifact_digests() -> [(&'static str, &'static str); BINUTI
         (CONFIGURE_UTILITY_SOURCE_ARTIFACT_ID, CONFIGURE_UTILITY_SOURCE_BLAKE3),
         (YLWRAP_SED_RUNNER_SOURCE_ARTIFACT_ID, YLWRAP_SED_RUNNER_SOURCE_BLAKE3),
         (BINUTILS_AR_RUNNER_SOURCE_ARTIFACT_ID, BINUTILS_AR_RUNNER_SOURCE_BLAKE3),
+        (ELF_SYMBOL_CANONICALIZER_SOURCE_ARTIFACT_ID, ELF_SYMBOL_CANONICALIZER_SOURCE_BLAKE3),
     ]
 }
 
@@ -408,6 +415,12 @@ struct ArchiveAuditEntry {
     status: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IdentityValidationMode {
+    Enforce,
+    Observe,
+}
+
 #[derive(Debug, Clone)]
 struct ConfigureProbeContext {
     source: PathBuf,
@@ -418,6 +431,7 @@ struct ConfigureProbeContext {
     sed_bridge: SedBridgePaths,
     archive_runner: ArchiveRunnerPaths,
     stdin_path: PathBuf,
+    identity_validation_mode: IdentityValidationMode,
 }
 
 const COREUTILS_TOOL_NAMES: &[&str] = &[
@@ -425,6 +439,15 @@ const COREUTILS_TOOL_NAMES: &[&str] = &[
     "rm", "rmdir", "sort", "tail", "tee", "test", "touch", "tr", "true", "uniq", "wc",
 ];
 const COREUTILS_TOOL_COUNT: usize = 25;
+const PROBE_TOOL_ALIAS_NAMES: &[&str] = &[
+    "sh", "bash", "cc", "sed", "sleep", "file", "emit", "grep", "egrep", "fgrep", "diff", "cmp", "awk", "gawk", "m4",
+    "bison", "flex", "make",
+];
+const PROBE_TOOL_ALIAS_COUNT: usize = 18;
+const BINUTILS_DIAGNOSTIC_EXEC_PATH_COUNT_MAX: usize = 128;
+const BINUTILS_DIAGNOSTIC_UNIQUE_EXECUTABLE_COUNT_MAX: usize = 512;
+const BINUTILS_DIAGNOSTIC_EXEC_EVENT_COUNT_MAX: usize = 65_536;
+const BINUTILS_EXEC_OBSERVATION_SCHEMA: &str = "mantle-stagex-binutils-exec-observation-v1";
 const CONFIGURE_OUTPUT_MEBIBYTES_MAX: u64 = 16;
 const KIBIBYTE_BYTES: u64 = 1_024;
 const MEBIBYTE_BYTES: u64 = KIBIBYTE_BYTES * KIBIBYTE_BYTES;
@@ -501,15 +524,15 @@ const BINUTILS_COMPONENTS: [(&str, &str, bool, &str); BINUTILS_COMPONENT_COUNT] 
         "libiberty",
         "libiberty.a",
         false,
-        "0d14d3a7309819b451e48610945ad84ae39c33fbe044e886e2250c78798a9694",
+        "d19e0d15373a237fe94b0d915f3edba43182343739da15f837c1a9a1ea426236",
     ),
-    ("zlib", "libz.a", false, "659eb0576df9eddf5578a0221c24ac56634ba42d964aee0fbd72db4cd7422b81"),
-    ("bfd", ".libs/libbfd.a", false, "85a785159511ed1f69d2c299612cf4753cedfc404b836e0d503f45e6a992d2e4"),
+    ("zlib", "libz.a", false, "b922a8528a2491568debfc87c017514986a44516f43c3865c10a72884bb4eb53"),
+    ("bfd", ".libs/libbfd.a", false, "f45500a900c2294cd23bcd0c7fd013e31a7b4028bce48f765108d7f309169e53"),
     (
         "opcodes",
         ".libs/libopcodes.a",
         false,
-        "2362655bace614327777f68f539849f40edb98f75ea7c89916655b0ca6c67b1a",
+        "1f9d0deabd406f82dcabaaddf6faff6b5fdb7475b3e59d000b27b70251200fac",
     ),
     ("binutils", "size", true, "812bd48e35d078b759192073cb2de2accaf9620c075c2ae24df9329c5623a7dd"),
     ("gas", "as-new", true, "36bb17408403b4fd8283bf80f78410ae76eedb4e1565f0fc6db0f7a8c0a1eac4"),
@@ -569,6 +592,9 @@ const REGULAR_FILE_MODE: u32 = 0o644;
 const EXECUTABLE_FILE_MODE: u32 = 0o755;
 const EXECUTABLE_MODE_BITS: u32 = 0o111;
 const NATIVE_HELPER_COMPILE_ARGUMENT_COUNT: usize = 6;
+const ELF_CANONICALIZER_COMPILE_ARGUMENT_COUNT: usize = 5;
+const ELF_CANONICALIZER_LINK_ARGUMENT_COUNT: usize = 10;
+const ELF_CANONICALIZER_SMOKE_COMPILE_ARGUMENT_COUNT: usize = 4;
 const BINUTILS_INSTALL_PREFIX: &str = "/mantle/stagex/binutils-probe-output";
 const BINUTILS_INSTALL_PREFIX_RELATIVE: &str = "mantle/stagex/binutils-probe-output";
 const BINUTILS_INSTALL_PREFIX_ARGUMENT: &str = "--prefix=/mantle/stagex/binutils-probe-output";
@@ -585,6 +611,18 @@ const CONFIGURE_CLASSES: [&str; CONFIGURE_CLASS_COUNT] = [
     "gprof",
     "ld",
 ];
+const LEGACY_ABSOLUTE_HOST_PROBE_BLOCK: &str = "/usr/bin/uname -p = `(/usr/bin/uname -p) 2>/dev/null || echo unknown`\n/bin/uname -X     = `(/bin/uname -X) 2>/dev/null     || echo unknown`\n\n/bin/arch              = `(/bin/arch) 2>/dev/null              || echo unknown`\n/usr/bin/arch -k       = `(/usr/bin/arch -k) 2>/dev/null       || echo unknown`\n/usr/convex/getsysinfo = `(/usr/convex/getsysinfo) 2>/dev/null || echo unknown`\n/usr/bin/hostinfo      = `(/usr/bin/hostinfo) 2>/dev/null      || echo unknown`\n/bin/machine           = `(/bin/machine) 2>/dev/null           || echo unknown`\n/usr/bin/oslevel       = `(/usr/bin/oslevel) 2>/dev/null       || echo unknown`\n/bin/universe          = `(/bin/universe) 2>/dev/null          || echo unknown`";
+const DISABLED_ABSOLUTE_HOST_PROBE_BLOCK: &str = "/usr/bin/uname -p = unknown\n/bin/uname -X     = unknown\n\n/bin/arch              = unknown\n/usr/bin/arch -k       = unknown\n/usr/convex/getsysinfo = unknown\n/usr/bin/hostinfo      = unknown\n/bin/machine           = unknown\n/usr/bin/oslevel       = unknown\n/bin/universe          = unknown";
+const CONFIGURE_DYNAMIC_EXEC_OLD: &str = "ac_try='./$ac_file'";
+const CONFIGURE_DYNAMIC_EXEC_NEW: &str = "ac_try=\"$PWD/$ac_file\"";
+const CONFIGURE_CONFTEST_EXEC_OLD: &str = "ac_try='./conftest$ac_exeext'";
+const CONFIGURE_CONFTEST_EXEC_NEW: &str = "ac_try=\"$PWD/conftest$ac_exeext\"";
+const CONFIGURE_LIBTOOL_EXEC_OLD: &str = "(./conftest; exit; )";
+const CONFIGURE_LIBTOOL_EXEC_NEW: &str = "(\"$PWD/conftest\"; exit; )";
+const CONFIGURE_LIBTOOL_EXEC_COUNT_PER_CLASS: usize = 2;
+const BFD_CHEW_RELATIVE_EXEC: &str = "\t./$(MKDOC)";
+const BFD_CHEW_ABSOLUTE_EXEC: &str = "\t$(CURDIR)/$(MKDOC)";
+const BFD_CHEW_EXEC_OCCURRENCE_COUNT: usize = 25;
 const CONFIGURE_UTILITY_SOURCE_NAME: &str = "stagex-configure-utility.c";
 const CONFIGURE_UTILITY_OUTPUT_NAME: &str = "stagex-configure-utility";
 const FILE_RELOCATION_CLASS_COUNT: usize = 7;
@@ -594,6 +632,174 @@ const FILE_RELOCATION_OCCURRENCES_PER_CLASS: usize = 10;
 const FILE_RELOCATION_OCCURRENCE_COUNT: usize = FILE_RELOCATION_CLASS_COUNT * FILE_RELOCATION_OCCURRENCES_PER_CLASS;
 const AMBIENT_FILE_PATH: &str = "/usr/bin/file";
 const DECLARED_FILE_PATH: &str = "$MANTLE_STAGE_X_FILE";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct BinutilsObservedExecutable {
+    resolved_path: PathBuf,
+    digest_blake3: String,
+    tracee_paths: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct BinutilsExecObservationReport {
+    schema_version: String,
+    status: String,
+    claim_boundary: String,
+    execution_error: Option<String>,
+    event_count: u32,
+    observed_event_count: u32,
+    denied_event_count: u32,
+    unique_executables: Vec<BinutilsObservedExecutable>,
+    denied_events: Vec<crate::protected_exec::ProtectedSeccompAuditEvent>,
+}
+
+fn diagnostic_exec_observation_paths(
+    request: &BinutilsConfigureProbeRequest<'_>,
+) -> std::collections::BTreeSet<PathBuf> {
+    let mut paths = std::collections::BTreeSet::new();
+    insert_diagnostic_tool_paths(request, &mut paths);
+    insert_diagnostic_generated_paths(request, &mut paths);
+    assert!(!paths.is_empty());
+    assert!(paths.len() <= BINUTILS_DIAGNOSTIC_EXEC_PATH_COUNT_MAX);
+    assert!(paths.iter().all(|path| path.is_absolute()));
+    paths
+}
+
+fn insert_diagnostic_tool_paths(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    paths: &mut std::collections::BTreeSet<PathBuf>,
+) {
+    for name in COREUTILS_TOOL_NAMES {
+        paths.insert(request.coreutils_bin.join(name));
+        paths.insert(request.scratch_dir.join("tools").join(name));
+    }
+    for name in PROBE_TOOL_ALIAS_NAMES {
+        paths.insert(request.scratch_dir.join("tools").join(name));
+    }
+    for path in [
+        request.bash,
+        request.tcc,
+        request.sed,
+        request.grep,
+        request.diff,
+        request.cmp,
+        request.gawk,
+        request.m4,
+        request.bison,
+        request.flex,
+        request.make,
+    ] {
+        paths.insert(path.to_path_buf());
+    }
+    assert_eq!(COREUTILS_TOOL_NAMES.len(), COREUTILS_TOOL_COUNT);
+    assert_eq!(PROBE_TOOL_ALIAS_NAMES.len(), PROBE_TOOL_ALIAS_COUNT);
+}
+
+fn insert_diagnostic_generated_paths(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    paths: &mut std::collections::BTreeSet<PathBuf>,
+) {
+    let source = request.scratch_dir.join("source");
+    for configure_class in CONFIGURE_CLASSES {
+        paths.insert(source.join(configure_class).join("a.out"));
+        paths.insert(source.join(configure_class).join("conftest"));
+    }
+    for name in [
+        SED_BRIDGE_LAUNCHER_OUTPUT_NAME,
+        YLWRAP_SED_RUNNER_OUTPUT_NAME,
+        CONFIGURE_UTILITY_OUTPUT_NAME,
+        ELF_SYMBOL_CANONICALIZER_OUTPUT_NAME,
+    ] {
+        paths.insert(request.scratch_dir.join(name));
+    }
+    paths.insert(source.join("bfd/doc/chew"));
+    let install_bin = request.scratch_dir.join("install-destdir").join(BINUTILS_INSTALL_PREFIX_RELATIVE).join("bin");
+    for (name, _) in BINUTILS_REQUIRED_TOOLS {
+        paths.insert(install_bin.join(name));
+    }
+    paths.insert(request.scratch_dir.join("binutils-runtime-smoke/positive"));
+    assert_eq!(CONFIGURE_CLASSES.len(), CONFIGURE_CLASS_COUNT);
+    assert_eq!(BINUTILS_REQUIRED_TOOLS.len(), BINUTILS_REQUIRED_TOOL_COUNT);
+}
+
+fn binutils_exec_observation_report(
+    events: &[crate::protected_exec::ProtectedSeccompAuditEvent],
+    execution_error: Option<String>,
+) -> Result<BinutilsExecObservationReport, StagexBinutilsError> {
+    if events.len() > BINUTILS_DIAGNOSTIC_EXEC_EVENT_COUNT_MAX {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "binutils diagnostic exec event count exceeds {BINUTILS_DIAGNOSTIC_EXEC_EVENT_COUNT_MAX}"
+        )));
+    }
+    let mut grouped = std::collections::BTreeMap::new();
+    let mut denied_events = Vec::new();
+    let mut observed_event_count = 0_u32;
+    for event in events {
+        if event.policy_decision != "diagnostic-observed" {
+            denied_events.push(event.clone());
+            continue;
+        }
+        validate_observed_exec_event(event)?;
+        grouped
+            .entry((event.resolved_host_path.clone(), event.digest_hex.clone()))
+            .or_insert_with(std::collections::BTreeSet::new)
+            .insert(event.tracee_path.clone());
+        observed_event_count = observed_event_count.checked_add(1).ok_or_else(|| {
+            StagexBinutilsError::Materialization("binutils observed exec event count overflow".to_string())
+        })?;
+    }
+    let unique_executables = grouped
+        .into_iter()
+        .map(|((resolved_path, digest_blake3), tracee_paths)| BinutilsObservedExecutable {
+            resolved_path,
+            digest_blake3,
+            tracee_paths: tracee_paths.into_iter().collect(),
+        })
+        .collect::<Vec<_>>();
+    let event_count = u32::try_from(events.len())
+        .map_err(|_| StagexBinutilsError::Materialization("binutils diagnostic event count exceeds u32".to_string()))?;
+    let denied_event_count = u32::try_from(denied_events.len())
+        .map_err(|_| StagexBinutilsError::Materialization("binutils denied event count exceeds u32".to_string()))?;
+    let status = if execution_error.is_none() && denied_events.is_empty() {
+        "complete-diagnostic-observation"
+    } else {
+        "blocked-diagnostic-observation"
+    };
+    assert_eq!(event_count, observed_event_count.saturating_add(denied_event_count));
+    assert!(unique_executables.len() <= BINUTILS_DIAGNOSTIC_UNIQUE_EXECUTABLE_COUNT_MAX);
+    Ok(BinutilsExecObservationReport {
+        schema_version: BINUTILS_EXEC_OBSERVATION_SCHEMA.to_string(),
+        status: status.to_string(),
+        claim_boundary:
+            "Diagnostic path-and-digest observation only; this report grants no protected execution authority."
+                .to_string(),
+        execution_error,
+        event_count,
+        observed_event_count,
+        denied_event_count,
+        unique_executables,
+        denied_events,
+    })
+}
+
+fn validate_observed_exec_event(
+    event: &crate::protected_exec::ProtectedSeccompAuditEvent,
+) -> Result<(), StagexBinutilsError> {
+    let digest_valid = event.digest_hex.len() == BLAKE3_HEX_CHAR_COUNT
+        && event.digest_hex.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
+    if event.phase != "diagnostic" || event.inventory_entry_id.is_some() || !digest_valid {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "invalid diagnostic exec event for {}",
+            event.resolved_host_path.display()
+        )));
+    }
+    if !event.tracee_path.is_absolute() || !event.resolved_host_path.is_absolute() {
+        return Err(StagexBinutilsError::Materialization("diagnostic exec event contains a relative path".to_string()));
+    }
+    assert!(!event.digest_hex.is_empty());
+    assert_eq!(event.policy_decision, "diagnostic-observed");
+    Ok(())
+}
 
 pub(crate) fn probe_authenticated_intl_configure(
     request: BinutilsConfigureProbeRequest<'_>,
@@ -627,7 +833,14 @@ fn probe_authenticated_generated_sources(
 fn prepare_generated_source_context(
     request: &BinutilsConfigureProbeRequest<'_>,
 ) -> Result<(ConfigureProbeContext, ConfigureProbeOutcome), StagexBinutilsError> {
-    let context = prepare_configure_probe(request)?;
+    prepare_generated_source_context_with_mode(request, IdentityValidationMode::Enforce)
+}
+
+fn prepare_generated_source_context_with_mode(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    identity_validation_mode: IdentityValidationMode,
+) -> Result<(ConfigureProbeContext, ConfigureProbeOutcome), StagexBinutilsError> {
+    let context = prepare_configure_probe(request, identity_validation_mode)?;
     let smoke_environment = configure_environment(request, &context, CONFIGURE_CLASSES[0])?;
     run_sed_bridge_smokes(request, &context.sed_bridge, &smoke_environment)?;
     let outcomes = run_configure_classes(request, &context, &CONFIGURE_CLASSES, true)?;
@@ -650,7 +863,20 @@ fn prepare_generated_source_context(
 fn probe_authenticated_component_builds(
     request: BinutilsConfigureProbeRequest<'_>,
 ) -> Result<Vec<PathBuf>, StagexBinutilsError> {
-    let (context, second_bfd) = prepare_generated_source_context(&request)?;
+    probe_authenticated_component_builds_with_mode(request, IdentityValidationMode::Enforce)
+}
+
+fn probe_authenticated_component_builds_observing_identities(
+    request: BinutilsConfigureProbeRequest<'_>,
+) -> Result<Vec<PathBuf>, StagexBinutilsError> {
+    probe_authenticated_component_builds_with_mode(request, IdentityValidationMode::Observe)
+}
+
+fn probe_authenticated_component_builds_with_mode(
+    request: BinutilsConfigureProbeRequest<'_>,
+    identity_validation_mode: IdentityValidationMode,
+) -> Result<Vec<PathBuf>, StagexBinutilsError> {
+    let (context, second_bfd) = prepare_generated_source_context_with_mode(&request, identity_validation_mode)?;
     let outputs = run_component_builds(&request, &context)?;
     validate_sed_bridge_total_count(&context.sed_bridge, &BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS)?;
     let install_root = run_component_installs(&request, &context)?;
@@ -671,7 +897,7 @@ fn probe_authenticated_configures(
     require_success: bool,
 ) -> Result<Vec<ConfigureProbeOutcome>, StagexBinutilsError> {
     validate_configure_classes(configure_classes)?;
-    let context = prepare_configure_probe(&request)?;
+    let context = prepare_configure_probe(&request, IdentityValidationMode::Enforce)?;
     let smoke_environment = configure_environment(&request, &context, configure_classes[0])?;
     run_sed_bridge_smokes(&request, &context.sed_bridge, &smoke_environment)?;
     let outcomes = run_configure_classes(&request, &context, configure_classes, require_success)?;
@@ -705,6 +931,7 @@ fn run_configure_classes(
 
 fn prepare_configure_probe(
     request: &BinutilsConfigureProbeRequest<'_>,
+    identity_validation_mode: IdentityValidationMode,
 ) -> Result<ConfigureProbeContext, StagexBinutilsError> {
     validate_configure_probe_request(request)?;
     fs::create_dir(request.scratch_dir)
@@ -735,6 +962,7 @@ fn prepare_configure_probe(
         sed_bridge,
         archive_runner,
         stdin_path,
+        identity_validation_mode,
     };
     run_config_sub_preflight(request, &context)?;
     assert!(context.source.is_dir());
@@ -1015,7 +1243,13 @@ fn run_component_build(
         )));
     }
     let output = context.source.join(subdirectory).join(expected_output);
-    validate_component_output(&output, subdirectory, executable, expected_digest)?;
+    validate_component_output_with_mode(
+        &output,
+        subdirectory,
+        executable,
+        expected_digest,
+        context.identity_validation_mode,
+    )?;
     assert!(stdout.is_file());
     assert!(stderr.is_file());
     Ok(output)
@@ -1027,13 +1261,30 @@ fn validate_component_output(
     executable: bool,
     expected_digest: &str,
 ) -> Result<(), StagexBinutilsError> {
+    validate_component_output_with_mode(path, label, executable, expected_digest, IdentityValidationMode::Enforce)
+}
+
+fn validate_component_output_with_mode(
+    path: &Path,
+    label: &str,
+    executable: bool,
+    expected_digest: &str,
+    identity_validation_mode: IdentityValidationMode,
+) -> Result<(), StagexBinutilsError> {
     let bytes = crate::stagex_mes_lib::read_bounded_file(path, CONFIGURE_OUTPUT_BYTES_MAX, label)
         .map_err(StagexBinutilsError::from_runtime)?;
     let mode = fs::metadata(path)
         .map_err(|error| StagexBinutilsError::Materialization(format!("reading {label} output mode: {error}")))?
         .permissions()
         .mode();
-    validate_component_output_facts(&bytes, label, executable, mode, expected_digest)
+    validate_component_output_facts_with_mode(
+        &bytes,
+        label,
+        executable,
+        mode,
+        expected_digest,
+        identity_validation_mode,
+    )
 }
 
 fn validate_component_output_facts(
@@ -1042,6 +1293,24 @@ fn validate_component_output_facts(
     executable: bool,
     mode: u32,
     expected_digest: &str,
+) -> Result<(), StagexBinutilsError> {
+    validate_component_output_facts_with_mode(
+        bytes,
+        label,
+        executable,
+        mode,
+        expected_digest,
+        IdentityValidationMode::Enforce,
+    )
+}
+
+fn validate_component_output_facts_with_mode(
+    bytes: &[u8],
+    label: &str,
+    executable: bool,
+    mode: u32,
+    expected_digest: &str,
+    identity_validation_mode: IdentityValidationMode,
 ) -> Result<(), StagexBinutilsError> {
     if executable {
         if bytes.len() < ELF_MAGIC.len() || &bytes[..ELF_MAGIC.len()] != ELF_MAGIC || mode & EXECUTABLE_MODE_BITS == 0 {
@@ -1055,7 +1324,7 @@ fn validate_component_output_facts(
         )));
     }
     let observed_digest = blake3::hash(bytes).to_hex().to_string();
-    if observed_digest != expected_digest {
+    if identity_validation_mode == IdentityValidationMode::Enforce && observed_digest != expected_digest {
         return Err(StagexBinutilsError::Materialization(format!(
             "binutils component {label} digest mismatch: expected {expected_digest}, observed {observed_digest}"
         )));
@@ -1077,7 +1346,7 @@ fn run_component_installs(
         run_component_install(request, context, &environment, &destination, subdirectory)?;
     }
     let install_root = destination.join(BINUTILS_INSTALL_PREFIX_RELATIVE);
-    validate_installed_tools(request, &install_root)?;
+    validate_installed_tools_with_mode(request, &install_root, context.identity_validation_mode)?;
     materialize_triplet_tool_links(&install_root)?;
     assert!(destination.is_dir());
     assert!(install_root.join("bin").is_dir());
@@ -1131,6 +1400,14 @@ fn validate_installed_tools(
     request: &BinutilsConfigureProbeRequest<'_>,
     install_root: &Path,
 ) -> Result<(), StagexBinutilsError> {
+    validate_installed_tools_with_mode(request, install_root, IdentityValidationMode::Enforce)
+}
+
+fn validate_installed_tools_with_mode(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    install_root: &Path,
+    identity_validation_mode: IdentityValidationMode,
+) -> Result<(), StagexBinutilsError> {
     let predecessor = request.tcc.as_os_str().as_encoded_bytes();
     if predecessor.is_empty() {
         return Err(StagexBinutilsError::Materialization("predecessor TinyCC path is empty".to_string()));
@@ -1141,13 +1418,14 @@ fn validate_installed_tools(
             .map_err(|error| StagexBinutilsError::Materialization(format!("reading installed {tool}: {error}")))?;
         let bytes = crate::stagex_mes_lib::read_bounded_file(&path, CONFIGURE_OUTPUT_BYTES_MAX, tool)
             .map_err(StagexBinutilsError::from_runtime)?;
-        validate_installed_tool_facts(
+        validate_installed_tool_facts_with_mode(
             tool,
             &bytes,
             metadata.file_type().is_file(),
             metadata.permissions().mode(),
             predecessor,
             expected_digest,
+            identity_validation_mode,
         )?;
     }
     assert!(!predecessor.is_empty());
@@ -1202,6 +1480,26 @@ fn validate_installed_tool_facts(
     predecessor: &[u8],
     expected_digest: &str,
 ) -> Result<(), StagexBinutilsError> {
+    validate_installed_tool_facts_with_mode(
+        tool,
+        bytes,
+        regular,
+        mode,
+        predecessor,
+        expected_digest,
+        IdentityValidationMode::Enforce,
+    )
+}
+
+fn validate_installed_tool_facts_with_mode(
+    tool: &str,
+    bytes: &[u8],
+    regular: bool,
+    mode: u32,
+    predecessor: &[u8],
+    expected_digest: &str,
+    identity_validation_mode: IdentityValidationMode,
+) -> Result<(), StagexBinutilsError> {
     if predecessor.is_empty() {
         return Err(StagexBinutilsError::Materialization("installed tool predecessor identity is empty".to_string()));
     }
@@ -1216,7 +1514,7 @@ fn validate_installed_tool_facts(
         )));
     }
     let observed_digest = blake3::hash(bytes).to_hex().to_string();
-    if observed_digest != expected_digest {
+    if identity_validation_mode == IdentityValidationMode::Enforce && observed_digest != expected_digest {
         return Err(StagexBinutilsError::Materialization(format!(
             "installed {tool} digest mismatch: expected {expected_digest}, observed {observed_digest}"
         )));
@@ -1490,6 +1788,8 @@ fn run_configure_class_named(
 
 fn prepare_recipe_source(scratch_dir: &Path, source: &Path) -> Result<PathBuf, StagexBinutilsError> {
     repair_opcodes_dependencies(source)?;
+    disable_legacy_absolute_host_probes(source)?;
+    make_generated_exec_paths_absolute(source)?;
     let authenticated_bfd_configure = scratch_dir.join("bfd-configure.authenticated");
     let bfd_configure = source.join("bfd/configure");
     let bfd_bytes = fs::read(&bfd_configure).map_err(|error| {
@@ -1498,10 +1798,107 @@ fn prepare_recipe_source(scratch_dir: &Path, source: &Path) -> Result<PathBuf, S
     crate::stagex_mes_lib::write_create_new(&authenticated_bfd_configure, &bfd_bytes)
         .map_err(StagexBinutilsError::from_runtime)?;
     repair_bfd_bootstrap_config(&bfd_configure, &bfd_bytes)?;
+    make_bfd_chew_exec_paths_absolute(source)?;
     remove_release_generated_sources(source)?;
     assert!(authenticated_bfd_configure.is_file());
     assert!(GENERATED_SOURCE_REMOVALS.iter().all(|path| !source.join(path).exists()));
     Ok(authenticated_bfd_configure)
+}
+
+fn disable_legacy_absolute_host_probes(source: &Path) -> Result<(), StagexBinutilsError> {
+    for configure_class in CONFIGURE_CLASSES {
+        let configure = source.join(configure_class).join("configure");
+        let original = fs::read_to_string(&configure).map_err(|error| {
+            StagexBinutilsError::Materialization(format!(
+                "reading {configure_class} configure for legacy host probe removal: {error}"
+            ))
+        })?;
+        let rewritten = disable_legacy_absolute_host_probe_text(configure_class, &original)?;
+        fs::write(&configure, rewritten.as_bytes()).map_err(|error| {
+            StagexBinutilsError::Materialization(format!(
+                "writing {configure_class} configure without legacy host probes: {error}"
+            ))
+        })?;
+        assert!(!rewritten.contains(LEGACY_ABSOLUTE_HOST_PROBE_BLOCK));
+        assert!(rewritten.contains(DISABLED_ABSOLUTE_HOST_PROBE_BLOCK));
+    }
+    assert_eq!(CONFIGURE_CLASSES.len(), CONFIGURE_CLASS_COUNT);
+    assert!(CONFIGURE_CLASSES.iter().all(|class| source.join(class).join("configure").is_file()));
+    Ok(())
+}
+
+fn disable_legacy_absolute_host_probe_text(
+    configure_class: &str,
+    original: &str,
+) -> Result<String, StagexBinutilsError> {
+    let label = format!("{configure_class} legacy absolute host probes");
+    let rewritten =
+        replace_exact_text(&label, original, LEGACY_ABSOLUTE_HOST_PROBE_BLOCK, DISABLED_ABSOLUTE_HOST_PROBE_BLOCK, 1)?;
+    assert!(!rewritten.contains(LEGACY_ABSOLUTE_HOST_PROBE_BLOCK));
+    assert_eq!(rewritten.matches(DISABLED_ABSOLUTE_HOST_PROBE_BLOCK).count(), 1);
+    Ok(rewritten)
+}
+
+fn make_generated_exec_paths_absolute(source: &Path) -> Result<(), StagexBinutilsError> {
+    for configure_class in CONFIGURE_CLASSES {
+        let configure = source.join(configure_class).join("configure");
+        let original = fs::read_to_string(&configure).map_err(|error| {
+            StagexBinutilsError::Materialization(format!(
+                "reading {configure_class} configure for generated exec path repair: {error}"
+            ))
+        })?;
+        let rewritten = make_configure_exec_paths_absolute(configure_class, &original)?;
+        fs::write(&configure, rewritten.as_bytes()).map_err(|error| {
+            StagexBinutilsError::Materialization(format!(
+                "writing {configure_class} configure with absolute generated exec paths: {error}"
+            ))
+        })?;
+        assert!(!rewritten.contains(CONFIGURE_DYNAMIC_EXEC_OLD));
+        assert!(!rewritten.contains(CONFIGURE_CONFTEST_EXEC_OLD));
+    }
+    assert_eq!(CONFIGURE_CLASSES.len(), CONFIGURE_CLASS_COUNT);
+    assert!(CONFIGURE_CLASSES.iter().all(|class| source.join(class).join("configure").is_file()));
+    Ok(())
+}
+
+fn make_configure_exec_paths_absolute(configure_class: &str, original: &str) -> Result<String, StagexBinutilsError> {
+    let dynamic_label = format!("{configure_class} dynamic generated executable");
+    let dynamic =
+        replace_exact_text(&dynamic_label, original, CONFIGURE_DYNAMIC_EXEC_OLD, CONFIGURE_DYNAMIC_EXEC_NEW, 1)?;
+    let conftest_label = format!("{configure_class} fixed conftest executable");
+    let conftest =
+        replace_exact_text(&conftest_label, &dynamic, CONFIGURE_CONFTEST_EXEC_OLD, CONFIGURE_CONFTEST_EXEC_NEW, 1)?;
+    if !FILE_RELOCATION_CLASSES.contains(&configure_class) {
+        assert!(!conftest.contains(CONFIGURE_DYNAMIC_EXEC_OLD));
+        assert!(!conftest.contains(CONFIGURE_CONFTEST_EXEC_OLD));
+        return Ok(conftest);
+    }
+    let libtool_label = format!("{configure_class} libtool conftest executable");
+    replace_exact_text(
+        &libtool_label,
+        &conftest,
+        CONFIGURE_LIBTOOL_EXEC_OLD,
+        CONFIGURE_LIBTOOL_EXEC_NEW,
+        CONFIGURE_LIBTOOL_EXEC_COUNT_PER_CLASS,
+    )
+}
+
+fn make_bfd_chew_exec_paths_absolute(source: &Path) -> Result<(), StagexBinutilsError> {
+    let makefile = source.join("bfd/doc/Makefile.in");
+    let original = fs::read_to_string(&makefile)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading BFD doc Makefile: {error}")))?;
+    let rewritten = replace_exact_text(
+        "BFD chew executable paths",
+        &original,
+        BFD_CHEW_RELATIVE_EXEC,
+        BFD_CHEW_ABSOLUTE_EXEC,
+        BFD_CHEW_EXEC_OCCURRENCE_COUNT,
+    )?;
+    fs::write(&makefile, rewritten.as_bytes())
+        .map_err(|error| StagexBinutilsError::Materialization(format!("writing BFD doc Makefile: {error}")))?;
+    assert!(!rewritten.contains(BFD_CHEW_RELATIVE_EXEC));
+    assert_eq!(rewritten.matches(BFD_CHEW_ABSOLUTE_EXEC).count(), BFD_CHEW_EXEC_OCCURRENCE_COUNT);
+    Ok(())
 }
 
 fn repair_opcodes_dependencies(source: &Path) -> Result<(), StagexBinutilsError> {
@@ -1775,14 +2172,207 @@ fn prepare_tcc_wrapper(request: &BinutilsConfigureProbeRequest<'_>) -> Result<Pa
     .map_err(StagexBinutilsError::from_runtime)?;
     compile_runtime_object(request, &runtime_source, &runtime_object, "runtime")?;
     compile_runtime_object(request, &runtime_assembly, &runtime_assembly_object, "runtime-assembly")?;
+    let canonicalizer = prepare_elf_symbol_canonicalizer(request, &runtime_object, &runtime_assembly_object)?;
     let wrapper = request.scratch_dir.join("tcc-bounded.sh");
-    let script = tcc_wrapper_script(request, &runtime_object, &runtime_assembly_object)?;
+    let script = tcc_wrapper_script(request, &runtime_object, &runtime_assembly_object, &canonicalizer)?;
     crate::stagex_mes_lib::write_create_new(&wrapper, script.as_bytes()).map_err(StagexBinutilsError::from_runtime)?;
     fs::set_permissions(&wrapper, fs::Permissions::from_mode(REGULAR_FILE_MODE))
         .map_err(|error| StagexBinutilsError::Materialization(format!("setting compiler wrapper mode: {error}")))?;
     assert!(runtime_object.is_file());
+    assert!(canonicalizer.is_file());
     assert!(wrapper.is_file());
     Ok(wrapper)
+}
+
+fn prepare_elf_symbol_canonicalizer(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    runtime_object: &Path,
+    runtime_assembly_object: &Path,
+) -> Result<PathBuf, StagexBinutilsError> {
+    require_sed_bridge_source_digest(
+        "ELF symbol canonicalizer",
+        ELF_SYMBOL_CANONICALIZER_SOURCE,
+        ELF_SYMBOL_CANONICALIZER_SOURCE_BLAKE3,
+    )?;
+    let source = request.scratch_dir.join(ELF_SYMBOL_CANONICALIZER_SOURCE_NAME);
+    let object = request.scratch_dir.join("stagex-elf-local-symbol-canonicalizer.o");
+    let output = request.scratch_dir.join(ELF_SYMBOL_CANONICALIZER_OUTPUT_NAME);
+    crate::stagex_mes_lib::write_create_new(&source, ELF_SYMBOL_CANONICALIZER_SOURCE)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    compile_elf_symbol_canonicalizer(request, &object, &output, runtime_object, runtime_assembly_object)?;
+    validate_file_digest(&output, ELF_SYMBOL_CANONICALIZER_BLAKE3, "ELF symbol canonicalizer")?;
+    run_elf_symbol_canonicalizer_smokes(request, &output)?;
+    assert!(source.is_file());
+    assert!(output.is_file());
+    Ok(output)
+}
+
+fn compile_elf_symbol_canonicalizer(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    object: &Path,
+    output: &Path,
+    runtime_object: &Path,
+    runtime_assembly_object: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let include = format!("-I{}", shell_path(&request.musl_root.join("include"), "native musl include")?);
+    let compile_arguments = [
+        "-c".to_string(),
+        include,
+        ELF_SYMBOL_CANONICALIZER_SOURCE_NAME.to_string(),
+        "-o".to_string(),
+        shell_path(object, "ELF symbol canonicalizer object")?,
+    ];
+    crate::stagex_mes_lib::run_bounded_process(
+        request.tcc,
+        &compile_arguments,
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        &request.scratch_dir.join("elf-symbol-canonicalizer-compile.stderr.txt"),
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    fs::set_permissions(object, fs::Permissions::from_mode(REGULAR_FILE_MODE))
+        .map_err(|error| StagexBinutilsError::Materialization(format!("setting canonicalizer object mode: {error}")))?;
+    link_elf_symbol_canonicalizer(request, object, output, runtime_object, runtime_assembly_object)?;
+    assert_eq!(compile_arguments.len(), ELF_CANONICALIZER_COMPILE_ARGUMENT_COUNT);
+    assert!(object.is_file());
+    Ok(())
+}
+
+fn link_elf_symbol_canonicalizer(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    object: &Path,
+    output: &Path,
+    runtime_object: &Path,
+    runtime_assembly_object: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let musl_lib = request.musl_root.join("lib");
+    let link_arguments = [
+        "-nostdlib".to_string(),
+        "-static".to_string(),
+        "-s".to_string(),
+        shell_path(&musl_lib.join("crt1.o"), "native musl crt1")?,
+        shell_path(object, "ELF symbol canonicalizer object")?,
+        shell_path(runtime_object, "runtime object")?,
+        shell_path(runtime_assembly_object, "runtime assembly object")?,
+        shell_path(&musl_lib.join("libc.a"), "native musl libc")?,
+        "-o".to_string(),
+        shell_path(output, "ELF symbol canonicalizer output")?,
+    ];
+    crate::stagex_mes_lib::run_bounded_process(
+        request.tcc,
+        &link_arguments,
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        &request.scratch_dir.join("elf-symbol-canonicalizer-link.stderr.txt"),
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    fs::set_permissions(output, fs::Permissions::from_mode(EXECUTABLE_FILE_MODE))
+        .map_err(|error| StagexBinutilsError::Materialization(format!("setting canonicalizer mode: {error}")))?;
+    assert_eq!(link_arguments.len(), ELF_CANONICALIZER_LINK_ARGUMENT_COUNT);
+    assert!(output.is_file());
+    Ok(())
+}
+
+fn run_elf_symbol_canonicalizer_smokes(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    canonicalizer: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let source = request.scratch_dir.join("elf-canonicalizer-smoke.c");
+    let first = request.scratch_dir.join("elf-canonicalizer-smoke-a.o");
+    let second = request.scratch_dir.join("elf-canonicalizer-smoke-b.o");
+    let malformed = request.scratch_dir.join("elf-canonicalizer-malformed.o");
+    crate::stagex_mes_lib::write_create_new(
+        &source,
+        b"static const char value[] = \"anonymous-symbol\"; int value_at(unsigned i) { return value[i]; }\n",
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    compile_canonicalizer_smoke_object(request, &source, &first, "first")?;
+    compile_canonicalizer_smoke_object(request, &source, &second, "second")?;
+    run_canonicalizer_on_path(request, canonicalizer, &first, "first")?;
+    run_canonicalizer_on_path(request, canonicalizer, &second, "second")?;
+    let first_bytes = fs::read(&first)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading first canonical ELF: {error}")))?;
+    let second_bytes = fs::read(&second)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading second canonical ELF: {error}")))?;
+    if first_bytes != second_bytes {
+        return Err(StagexBinutilsError::Materialization(
+            "ELF symbol canonicalizer did not stabilize repeated compiler output".to_string(),
+        ));
+    }
+    crate::stagex_mes_lib::write_create_new(&malformed, b"not-an-elf\n").map_err(StagexBinutilsError::from_runtime)?;
+    require_canonicalizer_rejection(request, canonicalizer, &malformed, "malformed")?;
+    assert!(!first_bytes.is_empty());
+    assert_eq!(first_bytes, second_bytes);
+    Ok(())
+}
+
+fn compile_canonicalizer_smoke_object(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    source: &Path,
+    output: &Path,
+    label: &str,
+) -> Result<(), StagexBinutilsError> {
+    let arguments = [
+        "-c".to_string(),
+        shell_path(source, "canonicalizer smoke source")?,
+        "-o".to_string(),
+        shell_path(output, "canonicalizer smoke object")?,
+    ];
+    crate::stagex_mes_lib::run_bounded_process(
+        request.tcc,
+        &arguments,
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        &request.scratch_dir.join(format!("elf-canonicalizer-{label}-compile.stderr.txt")),
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    fs::set_permissions(output, fs::Permissions::from_mode(REGULAR_FILE_MODE)).map_err(|error| {
+        StagexBinutilsError::Materialization(format!("setting {label} canonicalizer smoke mode: {error}"))
+    })?;
+    assert_eq!(arguments.len(), ELF_CANONICALIZER_SMOKE_COMPILE_ARGUMENT_COUNT);
+    assert!(source.is_file());
+    assert!(output.is_file());
+    Ok(())
+}
+
+fn run_canonicalizer_on_path(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    canonicalizer: &Path,
+    output: &Path,
+    label: &str,
+) -> Result<(), StagexBinutilsError> {
+    crate::stagex_mes_lib::run_bounded_process(
+        canonicalizer,
+        &[shell_path(output, "canonicalizer smoke object")?],
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        &request.scratch_dir.join(format!("elf-canonicalizer-{label}.stderr.txt")),
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    assert!(canonicalizer.is_file());
+    assert!(output.is_file());
+    Ok(())
+}
+
+fn require_canonicalizer_rejection(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    canonicalizer: &Path,
+    input: &Path,
+    label: &str,
+) -> Result<(), StagexBinutilsError> {
+    let result = crate::stagex_mes_lib::run_bounded_process(
+        canonicalizer,
+        &[shell_path(input, "rejected canonicalizer input")?],
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        &request.scratch_dir.join(format!("elf-canonicalizer-{label}-negative.stderr.txt")),
+    );
+    if result.is_ok() {
+        return Err(StagexBinutilsError::Materialization(format!("ELF symbol canonicalizer accepted {label} input")));
+    }
+    assert!(canonicalizer.is_file());
+    assert!(input.is_file());
+    Ok(())
 }
 
 fn configure_preprocess_negative_cases() -> [ConfigurePreprocessNegativeCase; CONFIGURE_PREPROCESS_NEGATIVE_CASE_COUNT]
@@ -2326,6 +2916,11 @@ fn validate_sed_bridge_sources() -> Result<(), StagexBinutilsError> {
         BINUTILS_AR_RUNNER_SOURCE,
         BINUTILS_AR_RUNNER_SOURCE_BLAKE3,
     )?;
+    require_sed_bridge_source_digest(
+        "ELF symbol canonicalizer",
+        ELF_SYMBOL_CANONICALIZER_SOURCE,
+        ELF_SYMBOL_CANONICALIZER_SOURCE_BLAKE3,
+    )?;
     assert_ne!(SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3, SED_BRIDGE_SCRIPT_SOURCE_BLAKE3);
     assert!(!SED_BRIDGE_SCRIPT_SOURCE.is_empty());
     Ok(())
@@ -2812,6 +3407,7 @@ MUSL_INCLUDE='@MUSL_INCLUDE@'
 MUSL_LIB='@MUSL_LIB@'
 RUNTIME_OBJECT='@RUNTIME@'
 RUNTIME_ASM_OBJECT='@RUNTIME_ASM@'
+CANONICALIZER='@CANONICALIZER@'
 CHMOD='@CHMOD@'
 CAT='@CAT@'
 RM='@RM@'
@@ -2894,6 +3490,8 @@ if test "$mode" = compile; then
   fi
   test -s "$output_file" || exit 1
   "$CHMOD" 644 "$output_file"
+  case "$output_file" in /*) canonical_output=$output_file ;; *) canonical_output=$PWD/$output_file ;; esac
+  "$CANONICALIZER" "$canonical_output"
   exit 0
 fi
 if test -z "$output_file"; then output_file=a.out; fi
@@ -2904,12 +3502,15 @@ link_status=$?
 test "$link_status" -eq 0 || exit "$link_status"
 test -s "$output_file"
 "$CHMOD" 755 "$output_file"
+case "$output_file" in /*) canonical_output=$output_file ;; *) canonical_output=$PWD/$output_file ;; esac
+"$CANONICALIZER" "$canonical_output"
 "#;
 
 fn tcc_wrapper_script(
     request: &BinutilsConfigureProbeRequest<'_>,
     runtime_object: &Path,
     runtime_assembly_object: &Path,
+    canonicalizer: &Path,
 ) -> Result<String, StagexBinutilsError> {
     let bindings = [
         ("@TCC@", shell_path(request.tcc, "TinyCC")?),
@@ -2917,6 +3518,7 @@ fn tcc_wrapper_script(
         ("@MUSL_LIB@", shell_path(&request.musl_root.join("lib"), "native musl lib")?),
         ("@RUNTIME@", shell_path(runtime_object, "runtime object")?),
         ("@RUNTIME_ASM@", shell_path(runtime_assembly_object, "runtime assembly object")?),
+        ("@CANONICALIZER@", shell_path(canonicalizer, "ELF symbol canonicalizer")?),
         ("@CHMOD@", shell_path(&request.coreutils_bin.join("chmod"), "chmod")?),
         ("@CAT@", shell_path(&request.coreutils_bin.join("cat"), "cat")?),
         ("@RM@", shell_path(&request.coreutils_bin.join("rm"), "rm")?),
@@ -3368,6 +3970,7 @@ mod tests {
 
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const SOURCE_MANIFEST_BLAKE3: &str = "541eae99be64df5f13ed8ff52403e83d034c8ce4747984a2d8d11cffc10b01ab";
+    const OBSERVATION_FIXTURE_EVENT_COUNT: usize = 2;
 
     struct ProbeEnvironment {
         source_root: PathBuf,
@@ -3430,6 +4033,51 @@ mod tests {
         }
     }
 
+    fn observed_event(tracee_path: &str, resolved_path: &str) -> crate::protected_exec::ProtectedSeccompAuditEvent {
+        crate::protected_exec::ProtectedSeccompAuditEvent {
+            pid: 1,
+            syscall: "execve".to_string(),
+            executable_path: PathBuf::from(resolved_path),
+            tracee_path: PathBuf::from(tracee_path),
+            resolved_host_path: PathBuf::from(resolved_path),
+            digest_hex: "a".repeat(BLAKE3_HEX_CHAR_COUNT),
+            reason: "diagnostic observation".to_string(),
+            phase: "diagnostic".to_string(),
+            inventory_entry_id: None,
+            policy_decision: "diagnostic-observed".to_string(),
+        }
+    }
+
+    #[test]
+    fn canonicalizes_diagnostic_exec_observations_without_authority() {
+        let events = vec![
+            observed_event("/tools/cc", "/protected/tcc"),
+            observed_event("/tools/tcc", "/protected/tcc"),
+        ];
+        let report = binutils_exec_observation_report(&events, None).unwrap();
+        let expected_event_count = u32::try_from(OBSERVATION_FIXTURE_EVENT_COUNT).unwrap();
+        assert_eq!(report.event_count, expected_event_count);
+        assert_eq!(report.observed_event_count, expected_event_count);
+        assert_eq!(report.unique_executables.len(), 1);
+        assert_eq!(report.unique_executables[0].tracee_paths.len(), OBSERVATION_FIXTURE_EVENT_COUNT);
+        assert!(report.denied_events.is_empty());
+        assert!(report.claim_boundary.contains("grants no protected execution authority"));
+    }
+
+    #[test]
+    fn rejects_invalid_diagnostic_exec_observation_identity() {
+        let mut wrong_phase = observed_event("/tools/cc", "/protected/tcc");
+        wrong_phase.phase = "protected".to_string();
+        let mut bad_digest = observed_event("/tools/cc", "/protected/tcc");
+        bad_digest.digest_hex = "Z".repeat(BLAKE3_HEX_CHAR_COUNT);
+        let phase_error = binutils_exec_observation_report(&[wrong_phase], None).unwrap_err();
+        let digest_error = binutils_exec_observation_report(&[bad_digest], None).unwrap_err();
+        assert!(phase_error.to_string().contains("invalid diagnostic exec event"));
+        assert!(digest_error.to_string().contains("invalid diagnostic exec event"));
+        assert!(!phase_error.to_string().contains("panicked"));
+        assert!(!digest_error.to_string().contains("panicked"));
+    }
+
     #[test]
     fn validates_exact_binutils_source_record_and_recipe() {
         let bundle = match std::env::var(SOURCE_BUNDLE_ENV) {
@@ -3457,6 +4105,37 @@ mod tests {
         let error = validate_source_record(&record).unwrap_err().to_string();
         assert!(error.contains("source record identity"));
         assert!(!error.contains("panicked"));
+    }
+
+    #[test]
+    fn validates_bounded_elf_symbol_canonicalizer_source() {
+        let source = std::str::from_utf8(ELF_SYMBOL_CANONICALIZER_SOURCE).unwrap();
+        require_sed_bridge_source_digest(
+            "ELF symbol canonicalizer",
+            ELF_SYMBOL_CANONICALIZER_SOURCE,
+            ELF_SYMBOL_CANONICALIZER_SOURCE_BLAKE3,
+        )
+        .unwrap();
+        assert!(source.contains("SHT_SYMTAB"));
+        assert!(source.contains("STB_LOCAL"));
+        assert!(source.contains("O_EXCL"));
+        assert!(source.contains("rename(staged_path, path)"));
+        assert!(!source.contains("system("));
+        assert!(!source.contains("popen("));
+    }
+
+    #[test]
+    fn rejects_substituted_elf_symbol_canonicalizer_source() {
+        let wrong_digest = "0".repeat(BLAKE3_HEX_CHAR_COUNT);
+        let error = require_sed_bridge_source_digest(
+            "ELF symbol canonicalizer",
+            ELF_SYMBOL_CANONICALIZER_SOURCE,
+            &wrong_digest,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("source BLAKE3 mismatch"));
+        assert!(!error.contains("accepted"));
     }
 
     #[test]
@@ -3630,6 +4309,57 @@ mod tests {
     }
 
     #[test]
+    fn disables_exact_legacy_absolute_host_probe_block() {
+        let original = format!("before\n{LEGACY_ABSOLUTE_HOST_PROBE_BLOCK}\nafter\n");
+        let rewritten = disable_legacy_absolute_host_probe_text("bfd", &original).unwrap();
+        assert!(!rewritten.contains("`(/usr/bin/uname -p)"));
+        assert!(!rewritten.contains("`(/bin/universe)"));
+        assert!(rewritten.contains(DISABLED_ABSOLUTE_HOST_PROBE_BLOCK));
+        assert!(rewritten.starts_with("before\n"));
+        assert!(rewritten.ends_with("after\n"));
+    }
+
+    #[test]
+    fn rejects_missing_or_duplicate_legacy_absolute_host_probe_blocks() {
+        let missing = disable_legacy_absolute_host_probe_text("bfd", "no legacy probe block").unwrap_err();
+        let duplicate_text = format!("{LEGACY_ABSOLUTE_HOST_PROBE_BLOCK}\n{LEGACY_ABSOLUTE_HOST_PROBE_BLOCK}");
+        let duplicate = disable_legacy_absolute_host_probe_text("bfd", &duplicate_text).unwrap_err();
+        assert!(missing.to_string().contains("expected 1, observed 0"));
+        assert!(duplicate.to_string().contains("expected 1, observed 2"));
+        assert!(!missing.to_string().contains("panicked"));
+        assert!(!duplicate.to_string().contains("panicked"));
+    }
+
+    #[test]
+    fn makes_generated_configure_exec_paths_absolute() {
+        let bfd_original = format!(
+            "{CONFIGURE_DYNAMIC_EXEC_OLD}\n{CONFIGURE_CONFTEST_EXEC_OLD}\n{}",
+            CONFIGURE_LIBTOOL_EXEC_OLD.repeat(CONFIGURE_LIBTOOL_EXEC_COUNT_PER_CLASS)
+        );
+        let bfd = make_configure_exec_paths_absolute("bfd", &bfd_original).unwrap();
+        let intl_original = format!("{CONFIGURE_DYNAMIC_EXEC_OLD}\n{CONFIGURE_CONFTEST_EXEC_OLD}\n");
+        let intl = make_configure_exec_paths_absolute("intl", &intl_original).unwrap();
+        assert!(bfd.contains(CONFIGURE_DYNAMIC_EXEC_NEW));
+        assert!(bfd.contains(CONFIGURE_CONFTEST_EXEC_NEW));
+        assert_eq!(bfd.matches(CONFIGURE_LIBTOOL_EXEC_NEW).count(), CONFIGURE_LIBTOOL_EXEC_COUNT_PER_CLASS);
+        assert!(!bfd.contains("(./conftest"));
+        assert!(!intl.contains("ac_try='./"));
+    }
+
+    #[test]
+    fn rejects_generated_configure_exec_path_drift() {
+        let missing_dynamic = format!("{CONFIGURE_CONFTEST_EXEC_OLD}\n");
+        let wrong_libtool_count =
+            format!("{CONFIGURE_DYNAMIC_EXEC_OLD}\n{CONFIGURE_CONFTEST_EXEC_OLD}\n{CONFIGURE_LIBTOOL_EXEC_OLD}");
+        let dynamic_error = make_configure_exec_paths_absolute("intl", &missing_dynamic).unwrap_err();
+        let libtool_error = make_configure_exec_paths_absolute("bfd", &wrong_libtool_count).unwrap_err();
+        assert!(dynamic_error.to_string().contains("expected 1, observed 0"));
+        assert!(libtool_error.to_string().contains("expected 2, observed 1"));
+        assert!(!dynamic_error.to_string().contains("panicked"));
+        assert!(!libtool_error.to_string().contains("panicked"));
+    }
+
+    #[test]
     fn repairs_exact_recipe_source_text() {
         let original = format!("before{BFD_BOOTSTRAP_CONFIG_REFERENCE}middle{BFD_BOOTSTRAP_CONFIG_REFERENCE}after");
         let repaired = replace_exact_text(
@@ -3758,6 +4488,37 @@ mod tests {
         assert!(!paths.scratch_dir.join("binutils-runtime-smoke/rejected-bin").exists());
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "requires retained binutils source and protected tool roots"]
+    fn observes_authenticated_binutils_exec_inventory() {
+        let paths = ProbeEnvironment::from_environment();
+        let request = paths.request();
+        let allowed_paths = diagnostic_exec_observation_paths(&request);
+        let observer =
+            crate::protected_exec_seccomp::install_current_thread_diagnostic_exec_observer(allowed_paths).unwrap();
+        let outcome = probe_authenticated_component_builds_observing_identities(request);
+        let events = observer.audit_events();
+        let execution_error = outcome.as_ref().err().map(ToString::to_string);
+        let report = binutils_exec_observation_report(&events, execution_error).unwrap();
+        let report_path = PathBuf::from(
+            std::env::var("MANTLE_STAGE_X_BINUTILS_EXEC_OBSERVATION_REPORT")
+                .expect("MANTLE_STAGE_X_BINUTILS_EXEC_OBSERVATION_REPORT must name an absent report path"),
+        );
+        let bytes = serde_json::to_vec_pretty(&report).unwrap();
+        crate::stagex_mes_lib::write_create_new(&report_path, &bytes).unwrap();
+        eprintln!(
+            "binutils diagnostic exec observation: events={} unique={} denied={} report={}",
+            report.event_count,
+            report.unique_executables.len(),
+            report.denied_event_count,
+            report_path.display()
+        );
+        assert!(outcome.is_ok(), "binutils execution failed; inspect {}", report_path.display());
+        assert_eq!(report.denied_event_count, 0);
+        assert!(!report.unique_executables.is_empty());
+    }
+
     #[test]
     #[ignore = "requires retained binutils source and protected tool roots"]
     fn builds_authenticated_binutils_components() {
@@ -3767,6 +4528,17 @@ mod tests {
         assert!(outputs.iter().all(|output| output.is_file()));
         assert!(paths.scratch_dir.join("source/bfd/.libs/libbfd.a").is_file());
         assert!(paths.scratch_dir.join("source/ld/ld-new").is_file());
+    }
+
+    #[test]
+    #[ignore = "derives canonical identities from retained binutils source and protected tool roots"]
+    fn builds_authenticated_binutils_components_observing_identities() {
+        let paths = ProbeEnvironment::from_environment();
+        let outputs = probe_authenticated_component_builds_observing_identities(paths.request()).unwrap();
+        assert_eq!(outputs.len(), BINUTILS_COMPONENT_COUNT);
+        assert!(outputs.iter().all(|output| output.is_file()));
+        assert!(paths.scratch_dir.join("source/bfd/.libs/libbfd.a").is_file());
+        assert!(paths.scratch_dir.join("install-destdir").is_dir());
     }
 
     #[test]

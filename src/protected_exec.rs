@@ -32,6 +32,7 @@ const HASH_BUFFER_KIB: usize = 64;
 const KIB_BYTES_USIZE: usize = 1024;
 const HASH_BUFFER_BYTES: usize = HASH_BUFFER_KIB.saturating_mul(KIB_BYTES_USIZE);
 const MAX_SEED_EXECUTABLES: u32 = 4096;
+const MAX_EXECUTABLE_DIGEST_VARIANTS_PER_PATH: u32 = 64;
 const MAX_SEED_WALK_DEPTH: u32 = 16;
 const MAX_SEED_WALK_ENTRIES: u32 = MAX_SEED_EXECUTABLES.saturating_mul(MAX_SEED_WALK_DEPTH);
 const MAX_SOURCE_ENTRIES: u32 = MAX_SEED_EXECUTABLES;
@@ -162,9 +163,11 @@ impl fmt::Display for SeedClosureRisk {
     }
 }
 
+type ExecutableVariantsByPath = BTreeMap<PathBuf, BTreeMap<String, ExecutableSeedEntry>>;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectedExecPolicy {
-    executables_by_path: BTreeMap<PathBuf, ExecutableSeedEntry>,
+    executables_by_path: ExecutableVariantsByPath,
     sources_by_url: BTreeMap<String, SourceSeedEntry>,
     allowed_promotion_source_ids: Option<BTreeSet<String>>,
     inventory_digest_blake3: String,
@@ -346,7 +349,7 @@ impl std::error::Error for ProtectedExecError {}
 
 impl ProtectedExecPolicy {
     pub fn from_inventory(inventory: Stage0Inventory) -> Result<Self, ProtectedExecError> {
-        Self::from_inventory_with_required_roles(inventory, &[ROLE_SANDBOX_ENTRY, ROLE_SANDBOX_SHELL], None)
+        Self::from_inventory_with_required_roles(inventory, &[ROLE_SANDBOX_ENTRY, ROLE_SANDBOX_SHELL], None, false)
     }
 
     pub fn from_stagex_seed(
@@ -395,6 +398,7 @@ impl ProtectedExecPolicy {
             inventory,
             &[ROLE_AUDITED_BOOTSTRAP_SEED],
             Some(allowed_promotion_source_ids),
+            true,
         )
     }
 
@@ -402,6 +406,7 @@ impl ProtectedExecPolicy {
         inventory: Stage0Inventory,
         required_roles: &[&'static str],
         allowed_promotion_source_ids: Option<BTreeSet<String>>,
+        allow_digest_variants: bool,
     ) -> Result<Self, ProtectedExecError> {
         let max_executables = usize::try_from(MAX_SEED_EXECUTABLES).map_err(|_| {
             ProtectedExecError::InventoryCollectionLimitExceeded {
@@ -443,20 +448,8 @@ impl ProtectedExecPolicy {
         if inventory_digest_blake3 == INVALID_INVENTORY_DIGEST {
             return Err(ProtectedExecError::InventorySerializationFailed);
         }
-        let mut executables_by_path = BTreeMap::new();
-        for entry in inventory.executable_entries {
-            if executables_by_path.len() >= max_executables {
-                return Err(ProtectedExecError::InventoryCollectionLimitExceeded {
-                    collection: "executable entries",
-                    limit: MAX_SEED_EXECUTABLES,
-                });
-            }
-            validate_executable_entry(&entry)?;
-            let path = entry.executable_path.clone();
-            if executables_by_path.insert(path.clone(), entry).is_some() {
-                return Err(ProtectedExecError::DuplicateExecutablePath { path });
-            }
-        }
+        let executables_by_path =
+            group_executable_entries(inventory.executable_entries, max_executables, allow_digest_variants)?;
 
         let mut sources_by_url = BTreeMap::new();
         for entry in inventory.source_entries {
@@ -488,22 +481,27 @@ impl ProtectedExecPolicy {
         &self.inventory_digest_blake3
     }
 
+    fn executable_entry_count(&self) -> usize {
+        let count = self.executables_by_path.values().map(BTreeMap::len).sum::<usize>();
+        assert!(count <= usize::try_from(MAX_SEED_EXECUTABLES).unwrap_or(usize::MAX));
+        assert!(count >= self.executables_by_path.len());
+        count
+    }
+
     pub fn decide_exec(&self, request: &ExecRequest) -> Result<ExecDecision, ProtectedExecError> {
         assert!(request.path.is_absolute(), "exec request path must be absolute");
         assert!(!request.digest_hex.is_empty(), "exec request digest must be present");
-        let entry =
+        let variants =
             self.executables_by_path
                 .get(&request.path)
                 .ok_or_else(|| ProtectedExecError::UndeclaredExecutable {
                     path: request.path.clone(),
                 })?;
-        if entry.digest.hex != request.digest_hex {
-            return Err(ProtectedExecError::DigestMismatch {
-                path: request.path.clone(),
-                expected: entry.digest.hex.clone(),
-                actual: request.digest_hex.clone(),
-            });
-        }
+        let entry = variants.get(&request.digest_hex).ok_or_else(|| ProtectedExecError::DigestMismatch {
+            path: request.path.clone(),
+            expected: variants.keys().cloned().collect::<Vec<_>>().join(","),
+            actual: request.digest_hex.clone(),
+        })?;
         Ok(ExecDecision {
             allowed: true,
             entry_id: Some(entry.id.clone()),
@@ -566,8 +564,7 @@ impl ProtectedExecPolicy {
             }
         })?;
         let resulting_entry_count = self
-            .executables_by_path
-            .len()
+            .executable_entry_count()
             .checked_add(executables.len())
             .filter(|entry_count| *entry_count <= max_executables)
             .ok_or(ProtectedExecError::InventoryCollectionLimitExceeded {
@@ -608,7 +605,9 @@ impl ProtectedExecPolicy {
                 owner: "crunch-protected-exec".to_string(),
                 required: false,
             };
-            self.executables_by_path.insert(exe.path.clone(), entry);
+            let digest = entry.digest.hex.clone();
+            let previous = self.executables_by_path.insert(exe.path.clone(), BTreeMap::from([(digest, entry)]));
+            assert!(previous.is_none(), "promotion paths were checked before insertion");
         }
         Ok(OutputPromotionRecord {
             source_entry_id: source_entry_id.to_string(),
@@ -627,8 +626,12 @@ impl ProtectedExecPolicy {
     }
 
     fn required_executable_for_role(&self, role: &'static str) -> Result<&ExecutableSeedEntry, ProtectedExecError> {
-        let matches: Vec<&ExecutableSeedEntry> =
-            self.executables_by_path.values().filter(|entry| entry.required && entry.role == role).collect();
+        let matches: Vec<&ExecutableSeedEntry> = self
+            .executables_by_path
+            .values()
+            .flat_map(BTreeMap::values)
+            .filter(|entry| entry.required && entry.role == role)
+            .collect();
         if matches.is_empty() {
             return Err(ProtectedExecError::MissingRequiredSeedRole { role });
         }
@@ -645,6 +648,53 @@ impl ProtectedExecPolicy {
         }
         Ok(matches[0])
     }
+}
+
+fn group_executable_entries(
+    entries: Vec<ExecutableSeedEntry>,
+    max_executables: usize,
+    allow_digest_variants: bool,
+) -> Result<ExecutableVariantsByPath, ProtectedExecError> {
+    let max_digest_variants = usize::try_from(MAX_EXECUTABLE_DIGEST_VARIANTS_PER_PATH).map_err(|_| {
+        ProtectedExecError::InventoryCollectionLimitExceeded {
+            collection: "executable digest variants per path",
+            limit: MAX_EXECUTABLE_DIGEST_VARIANTS_PER_PATH,
+        }
+    })?;
+    let mut grouped = ExecutableVariantsByPath::new();
+    let mut executable_entry_count = 0_usize;
+    for entry in entries {
+        if executable_entry_count >= max_executables {
+            return Err(ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "executable entries",
+                limit: MAX_SEED_EXECUTABLES,
+            });
+        }
+        validate_executable_entry(&entry)?;
+        let path = entry.executable_path.clone();
+        let digest = entry.digest.hex.clone();
+        let variants = grouped.entry(path.clone()).or_default();
+        if !variants.is_empty() && !allow_digest_variants {
+            return Err(ProtectedExecError::DuplicateExecutablePath { path });
+        }
+        if variants.len() >= max_digest_variants {
+            return Err(ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "executable digest variants per path",
+                limit: MAX_EXECUTABLE_DIGEST_VARIANTS_PER_PATH,
+            });
+        }
+        if variants.insert(digest, entry).is_some() {
+            return Err(ProtectedExecError::DuplicateExecutablePath { path });
+        }
+        executable_entry_count =
+            executable_entry_count.checked_add(1).ok_or(ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "executable entries",
+                limit: MAX_SEED_EXECUTABLES,
+            })?;
+    }
+    assert_eq!(executable_entry_count, grouped.values().map(BTreeMap::len).sum::<usize>());
+    assert!(grouped.values().all(|variants| !variants.is_empty()));
+    Ok(grouped)
 }
 
 fn validate_promotion_source_ids(source_ids: &[String]) -> Result<BTreeSet<String>, ProtectedExecError> {
@@ -2064,6 +2114,7 @@ mod tests {
 
     const DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const DIGEST_C: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 
     fn digest(hex: &str) -> DigestSpec {
         DigestSpec {
@@ -2627,6 +2678,105 @@ mod tests {
 
         assert!(allowed.unwrap().allowed);
         assert!(matches!(substituted, Err(ProtectedExecError::DigestMismatch { .. })));
+    }
+
+    #[test]
+    fn stagex_plan_allows_bounded_digest_variants_at_one_path() {
+        let output_path = PathBuf::from("/stagex/out/conftest");
+        let source_stage_ids = vec!["configure-probes".to_string()];
+        let planned = vec![
+            PlannedExecutable {
+                authorization_id: "exec:configure-probe:a".to_string(),
+                source_stage_id: "configure-probes".to_string(),
+                path: output_path.clone(),
+                digest_hex: DIGEST_B.to_string(),
+            },
+            PlannedExecutable {
+                authorization_id: "exec:configure-probe:b".to_string(),
+                source_stage_id: "configure-probes".to_string(),
+                path: output_path.clone(),
+                digest_hex: DIGEST_C.to_string(),
+            },
+        ];
+        let policy = ProtectedExecPolicy::from_stagex_plan(
+            PathBuf::from("/stagex/seed/hex0-seed"),
+            DIGEST_A.to_string(),
+            &source_stage_ids,
+            &planned,
+        )
+        .unwrap();
+        let first = policy
+            .decide_exec(&ExecRequest {
+                path: output_path.clone(),
+                digest_hex: DIGEST_B.to_string(),
+            })
+            .unwrap();
+        let second = policy
+            .decide_exec(&ExecRequest {
+                path: output_path,
+                digest_hex: DIGEST_C.to_string(),
+            })
+            .unwrap();
+        assert_eq!(first.entry_id.as_deref(), Some("planned:configure-probes:exec:configure-probe:a"));
+        assert_eq!(second.entry_id.as_deref(), Some("planned:configure-probes:exec:configure-probe:b"));
+    }
+
+    #[test]
+    fn inventory_rejects_digest_variants_at_one_path() {
+        let mut inv = inventory();
+        let mut variant = inv.executable_entries[0].clone();
+        variant.id = "duplicate-path-variant".to_string();
+        variant.digest.hex = DIGEST_C.to_string();
+        inv.executable_entries.push(variant);
+        let error = ProtectedExecPolicy::from_inventory(inv).unwrap_err();
+        assert!(matches!(error, ProtectedExecError::DuplicateExecutablePath { .. }));
+        assert!(!error.to_string().contains("allowed"));
+    }
+
+    #[test]
+    fn stagex_plan_rejects_duplicate_and_excessive_path_variants() {
+        let output_path = PathBuf::from("/stagex/out/conftest");
+        let source_stage_ids = vec!["configure-probes".to_string()];
+        let duplicate = vec![
+            PlannedExecutable {
+                authorization_id: "exec:configure-probe:a".to_string(),
+                source_stage_id: "configure-probes".to_string(),
+                path: output_path.clone(),
+                digest_hex: DIGEST_B.to_string(),
+            },
+            PlannedExecutable {
+                authorization_id: "exec:configure-probe:duplicate".to_string(),
+                source_stage_id: "configure-probes".to_string(),
+                path: output_path.clone(),
+                digest_hex: DIGEST_B.to_string(),
+            },
+        ];
+        let duplicate_error = ProtectedExecPolicy::from_stagex_plan(
+            PathBuf::from("/stagex/seed/hex0-seed"),
+            DIGEST_A.to_string(),
+            &source_stage_ids,
+            &duplicate,
+        )
+        .unwrap_err();
+        let excessive_count = usize::try_from(MAX_EXECUTABLE_DIGEST_VARIANTS_PER_PATH).unwrap().saturating_add(1);
+        let digest_width = usize::try_from(BLAKE3_HEX_LEN).unwrap();
+        let excessive = (0..excessive_count)
+            .map(|index| PlannedExecutable {
+                authorization_id: format!("exec:configure-probe:{index}"),
+                source_stage_id: "configure-probes".to_string(),
+                path: output_path.clone(),
+                digest_hex: format!("{index:0width$x}", width = digest_width),
+            })
+            .collect::<Vec<_>>();
+        let excessive_error = ProtectedExecPolicy::from_stagex_plan(
+            PathBuf::from("/stagex/seed/hex0-seed"),
+            DIGEST_A.to_string(),
+            &source_stage_ids,
+            &excessive,
+        )
+        .unwrap_err();
+        assert!(matches!(duplicate_error, ProtectedExecError::DuplicateExecutablePath { .. }));
+        assert!(matches!(excessive_error, ProtectedExecError::InventoryCollectionLimitExceeded { .. }));
     }
 
     #[test]

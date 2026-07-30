@@ -50,3 +50,4 @@ compatibility surface, crate name, or historical decision.
 | [0041](0041-run-ylwrap-rewrites-with-a-bounded-native-runner.md) | Run `ylwrap` rewrites with a bounded native runner | Accepted |
 | [0042](0042-build-stagex-binutils-archives-with-a-bounded-producer.md) | Build StageX binutils archives with a bounded producer | Accepted |
 | [0043](0043-stage-stagex-binutils-install-under-its-logical-prefix.md) | Stage the StageX binutils install under its logical prefix | Accepted |
+| [0044](0044-canonicalize-tinycc-local-symbol-names-at-the-stagex-boundary.md) | Canonicalize TinyCC local symbol names at the StageX boundary | Accepted |

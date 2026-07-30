@@ -1,5 +1,6 @@
 #[cfg(target_os = "linux")]
 mod linux {
+    use std::collections::BTreeSet;
     use std::ffi::OsString;
     use std::fs::File;
     use std::io;
@@ -36,6 +37,9 @@ mod linux {
     const EXECVEAT_DIRFD_ARG_INDEX: usize = 0;
     const EXECVEAT_PATH_ARG_INDEX: usize = 1;
     const PROC_FD_PATH_PREFIX: &str = "/proc/self/fd";
+    const DIAGNOSTIC_EXEC_PATH_COUNT_MAX: usize = 256;
+    const DIAGNOSTIC_EXEC_EVENT_COUNT_MAX: usize = 65_536;
+    const PHASE_DIAGNOSTIC: &str = "diagnostic";
 
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub enum ProtectedSeccompError {
@@ -55,6 +59,25 @@ mod linux {
     }
 
     impl std::error::Error for ProtectedSeccompError {}
+
+    #[derive(Debug)]
+    pub struct DiagnosticExecObserver {
+        audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
+        listener_fd: RawFd,
+    }
+
+    impl DiagnosticExecObserver {
+        pub fn audit_events(&self) -> Vec<ProtectedSeccompAuditEvent> {
+            match self.audit_events.lock() {
+                Ok(events) => events.clone(),
+                Err(poisoned) => poisoned.into_inner().clone(),
+            }
+        }
+
+        pub fn listener_fd(&self) -> RawFd {
+            self.listener_fd
+        }
+    }
 
     #[derive(Debug)]
     pub struct ProtectedSeccompSupervisor {
@@ -85,6 +108,38 @@ mod linux {
             let mut policy = self.shared_policy.write().map_err(|_| ProtectedExecError::PolicyLockPoisoned)?;
             policy.promote_verified_output(source_entry_id, extraction_rules, executables)
         }
+    }
+
+    pub fn install_current_thread_diagnostic_exec_observer(
+        allowed_paths: BTreeSet<PathBuf>,
+    ) -> Result<DiagnosticExecObserver, ProtectedSeccompError> {
+        validate_diagnostic_paths(&allowed_paths)?;
+        verify_notification_sizes()?;
+        set_no_new_privileges()?;
+        let listener_fd = install_exec_filter()?;
+        let audit_events = Arc::new(Mutex::new(Vec::new()));
+        spawn_diagnostic_observer_thread(listener_fd, allowed_paths, audit_events.clone())?;
+        Ok(DiagnosticExecObserver {
+            audit_events,
+            listener_fd,
+        })
+    }
+
+    fn validate_diagnostic_paths(allowed_paths: &BTreeSet<PathBuf>) -> Result<(), ProtectedSeccompError> {
+        if allowed_paths.is_empty() || allowed_paths.len() > DIAGNOSTIC_EXEC_PATH_COUNT_MAX {
+            return Err(ProtectedSeccompError::Install(format!(
+                "diagnostic exec path count must be in 1..={DIAGNOSTIC_EXEC_PATH_COUNT_MAX}"
+            )));
+        }
+        if let Some(path) = allowed_paths.iter().find(|path| !path.is_absolute()) {
+            return Err(ProtectedSeccompError::Install(format!(
+                "diagnostic exec path is not absolute: {}",
+                path.display()
+            )));
+        }
+        assert!(!allowed_paths.is_empty());
+        assert!(allowed_paths.iter().all(|path| path.is_absolute()));
+        Ok(())
     }
 
     pub fn install_current_thread_exec_supervisor(
@@ -249,6 +304,58 @@ mod linux {
         None
     }
 
+    fn spawn_diagnostic_observer_thread(
+        listener_fd: RawFd,
+        allowed_paths: BTreeSet<PathBuf>,
+        audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
+    ) -> Result<(), ProtectedSeccompError> {
+        thread::Builder::new()
+            .name("mantle-diagnostic-exec-observer".to_string())
+            .spawn(move || diagnostic_observer_loop(listener_fd, allowed_paths, audit_events))
+            .map(|_| ())
+            .map_err(|err| ProtectedSeccompError::Supervisor(format!("spawning diagnostic observer thread: {err}")))
+    }
+
+    fn diagnostic_observer_loop(
+        listener_fd: RawFd,
+        allowed_paths: BTreeSet<PathBuf>,
+        audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
+    ) {
+        while listener_is_open(listener_fd) {
+            let mut notif: libc::seccomp_notif = unsafe { std::mem::zeroed() };
+            #[allow(clippy::unnecessary_cast)]
+            let recv_rc = unsafe { libc::ioctl(listener_fd, SECCOMP_IOCTL_NOTIF_RECV as libc::Ioctl, &mut notif) };
+            if recv_rc != 0 {
+                let err = io::Error::last_os_error();
+                if matches!(err.raw_os_error(), Some(libc::EINTR) | Some(libc::ENOENT)) {
+                    continue;
+                }
+                return;
+            }
+            if diagnostic_event_limit_reached(&audit_events) {
+                let _ = send_response(listener_fd, notif.id, false);
+                continue;
+            }
+            let decision = classify_diagnostic_notification(listener_fd, &allowed_paths, &notif);
+            match audit_events.lock() {
+                Ok(mut events) => events.push(decision.audit_event),
+                Err(poisoned) => poisoned.into_inner().push(decision.audit_event),
+            }
+            if send_response(listener_fd, notif.id, decision.allowed).is_err() {
+                continue;
+            }
+        }
+    }
+
+    fn diagnostic_event_limit_reached(audit_events: &Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>) -> bool {
+        let count = match audit_events.lock() {
+            Ok(events) => events.len(),
+            Err(poisoned) => poisoned.into_inner().len(),
+        };
+        assert!(count <= DIAGNOSTIC_EXEC_EVENT_COUNT_MAX);
+        count >= DIAGNOSTIC_EXEC_EVENT_COUNT_MAX
+    }
+
     fn spawn_supervisor_thread(
         listener_fd: RawFd,
         shared_policy: Arc<RwLock<ProtectedExecPolicy>>,
@@ -318,6 +425,82 @@ mod linux {
     struct ExecTarget {
         tracee_path: PathBuf,
         resolved_host_path: PathBuf,
+    }
+
+    fn classify_diagnostic_notification(
+        listener_fd: RawFd,
+        allowed_paths: &BTreeSet<PathBuf>,
+        notif: &libc::seccomp_notif,
+    ) -> SupervisorDecision {
+        let syscall_name = syscall_name(notif.data.nr);
+        match exec_target(listener_fd, notif) {
+            Ok(target) => classify_diagnostic_path(allowed_paths, notif.pid, syscall_name, target),
+            Err((path, reason)) => denied_event(DeniedEventInput {
+                pid: notif.pid,
+                syscall_name,
+                tracee_path: path,
+                resolved_host_path: PathBuf::new(),
+                digest_hex: String::new(),
+                reason,
+                inventory_entry_id: None,
+            }),
+        }
+    }
+
+    fn classify_diagnostic_path(
+        allowed_paths: &BTreeSet<PathBuf>,
+        pid: u32,
+        syscall_name: &'static str,
+        target: ExecTarget,
+    ) -> SupervisorDecision {
+        if !diagnostic_path_allowed(allowed_paths, &target) {
+            return denied_event(DeniedEventInput {
+                pid,
+                syscall_name,
+                tracee_path: target.tracee_path,
+                resolved_host_path: target.resolved_host_path,
+                digest_hex: String::new(),
+                reason: "path is outside the exact diagnostic exec inventory".to_string(),
+                inventory_entry_id: None,
+            });
+        }
+        let digest_hex = match blake3_file_hex(&target.resolved_host_path) {
+            Ok(digest) => digest,
+            Err(err) => {
+                return denied_event(DeniedEventInput {
+                    pid,
+                    syscall_name,
+                    tracee_path: target.tracee_path,
+                    resolved_host_path: target.resolved_host_path,
+                    digest_hex: String::new(),
+                    reason: err.to_string(),
+                    inventory_entry_id: None,
+                });
+            }
+        };
+        SupervisorDecision {
+            allowed: true,
+            audit_event: ProtectedSeccompAuditEvent {
+                pid,
+                syscall: syscall_name.to_string(),
+                executable_path: target.resolved_host_path.clone(),
+                tracee_path: target.tracee_path,
+                resolved_host_path: target.resolved_host_path,
+                digest_hex,
+                reason: "diagnostic path observation only; this event grants no protected authority".to_string(),
+                phase: PHASE_DIAGNOSTIC.to_string(),
+                inventory_entry_id: None,
+                policy_decision: "diagnostic-observed".to_string(),
+            },
+        }
+    }
+
+    fn diagnostic_path_allowed(allowed_paths: &BTreeSet<PathBuf>, target: &ExecTarget) -> bool {
+        let tracee_allowed = allowed_paths.contains(&target.tracee_path);
+        let resolved_allowed = allowed_paths.contains(&target.resolved_host_path);
+        assert!(target.tracee_path.is_absolute());
+        assert!(target.resolved_host_path.is_absolute());
+        tracee_allowed || resolved_allowed
     }
 
     fn classify_notification(
@@ -554,11 +737,8 @@ mod linux {
 
     fn read_remote_cstring(request: RemoteCstringRequest) -> Result<Vec<u8>, String> {
         validate_notification_id(request.listener_fd, request.notification_id)?;
-        let mem =
-            File::open(format!("/proc/{}/mem", request.pid)).map_err(|err| format!("open target memory: {err}"))?;
-        validate_notification_id(request.listener_fd, request.notification_id)?;
         let mut buf = vec![0_u8; MAX_REMOTE_PATH_BYTES];
-        let nread = mem.read_at(&mut buf, request.address).map_err(|err| format!("read target exec path: {err}"))?;
+        let nread = read_tracee_memory(request.pid, request.address, &mut buf)?;
         validate_notification_id(request.listener_fd, request.notification_id)?;
         if nread == 0 {
             return Err("target exec path read returned EOF".to_string());
@@ -569,6 +749,28 @@ mod linux {
         };
         buf.truncate(nul_pos);
         Ok(buf)
+    }
+
+    fn read_tracee_memory(pid: u32, address: u64, buffer: &mut [u8]) -> Result<usize, String> {
+        let process_id = libc::pid_t::try_from(pid).map_err(|_| format!("target pid exceeds pid_t: {pid}"))?;
+        let mut local = libc::iovec {
+            iov_base: buffer.as_mut_ptr().cast::<libc::c_void>(),
+            iov_len: buffer.len(),
+        };
+        let remote = libc::iovec {
+            iov_base: usize::try_from(address).map_err(|_| format!("target address exceeds usize: {address}"))?
+                as *mut libc::c_void,
+            iov_len: buffer.len(),
+        };
+        let result = unsafe { libc::process_vm_readv(process_id, &mut local, 1, &remote, 1, 0) };
+        if result >= 0 {
+            return usize::try_from(result).map_err(|_| format!("target read size exceeds usize: {result}"));
+        }
+        let process_vm_error = io::Error::last_os_error();
+        let mem = File::open(format!("/proc/{pid}/mem"))
+            .map_err(|error| format!("read target memory: process_vm_readv={process_vm_error}; proc-mem={error}"))?;
+        mem.read_at(buffer, address)
+            .map_err(|error| format!("read target exec path: process_vm_readv={process_vm_error}; proc-mem={error}"))
     }
 
     fn validate_notification_id(listener_fd: RawFd, id: u64) -> Result<(), String> {
@@ -625,6 +827,7 @@ mod linux {
 
         const CHILD_MODE_VAR: &str = "CRUNCH_TEST_SECCOMP_CHILD_MODE";
         const AUDIT_FLUSH_WAIT_MS: u64 = 50;
+        const DIAGNOSTIC_TEST_EVENT_COUNT: usize = 2;
 
         fn current_exe_policy(digest_hex: String) -> ProtectedExecPolicy {
             let current_exe = std::env::current_exe().unwrap();
@@ -696,6 +899,42 @@ mod linux {
 
             assert!(relative.contains("relative exec path"), "reason: {relative}");
             assert!(parent.contains("parent component"), "reason: {parent}");
+        }
+
+        #[test]
+        fn diagnostic_exec_path_validation_is_bounded_and_absolute() {
+            let empty = BTreeSet::new();
+            let relative = BTreeSet::from([PathBuf::from("relative-tool")]);
+            let excessive = (0..=DIAGNOSTIC_EXEC_PATH_COUNT_MAX)
+                .map(|index| PathBuf::from(format!("/diagnostic/tool-{index}")))
+                .collect::<BTreeSet<_>>();
+            assert!(validate_diagnostic_paths(&empty).is_err());
+            assert!(validate_diagnostic_paths(&relative).is_err());
+            assert!(validate_diagnostic_paths(&excessive).is_err());
+            assert_eq!(excessive.len(), DIAGNOSTIC_EXEC_PATH_COUNT_MAX.saturating_add(1));
+        }
+
+        #[test]
+        fn diagnostic_observer_records_exact_paths_without_granting_authority() {
+            if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some("diagnostic-observer") {
+                run_diagnostic_observer_child();
+                return;
+            }
+            let output = Command::new(std::env::current_exe().unwrap())
+                .arg("--exact")
+                .arg(
+                    "protected_exec_seccomp::linux::tests::diagnostic_observer_records_exact_paths_without_granting_authority",
+                )
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, "diagnostic-observer")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "stdout={}\nstderr={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
 
         #[test]
@@ -864,6 +1103,29 @@ mod linux {
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
+        }
+
+        fn run_diagnostic_observer_child() {
+            let current_exe = std::env::current_exe().unwrap();
+            let temp = tempfile::tempdir().unwrap();
+            let declared = temp.path().join("declared-exec");
+            std::os::unix::fs::symlink(&current_exe, &declared).unwrap();
+            let undeclared = temp.path().join("undeclared-exec");
+            std::fs::copy(&current_exe, &undeclared).unwrap();
+            make_executable(&undeclared);
+            let observer = install_current_thread_diagnostic_exec_observer(BTreeSet::from([declared.clone()])).unwrap();
+            let status = Command::new(&declared).arg("--help").status().unwrap();
+            let denied = Command::new(&undeclared).arg("--help").status().unwrap_err();
+            std::thread::sleep(std::time::Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+            let events = observer.audit_events();
+            assert!(status.success());
+            assert_eq!(denied.kind(), std::io::ErrorKind::PermissionDenied);
+            assert_eq!(events.len(), DIAGNOSTIC_TEST_EVENT_COUNT);
+            assert_eq!(events[0].policy_decision, "diagnostic-observed");
+            assert_eq!(events[0].phase, PHASE_DIAGNOSTIC);
+            assert!(events[0].inventory_entry_id.is_none());
+            assert_eq!(events[1].policy_decision, "denied");
+            assert!(events[1].reason.contains("exact diagnostic exec inventory"));
         }
 
         fn run_allow_child() {
