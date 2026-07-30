@@ -3488,3 +3488,787 @@ error: tracey coverage failed
 exit_status=1
 new_shared_identifiers_absent_from_findings=true
 ```
+
+## Cairn archive preview
+
+```text
+$ CAIRN_ARCHIVE_DATE=2026-07-30 nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- archive share-rust-unit-action-results --root . --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+{
+  "actions": [
+    {
+      "description": "move active change to archive: share-rust-unit-action-results",
+      "kind": "archive_change",
+      "path": "./cairn/changes/share-rust-unit-action-results"
+    }
+  ],
+  "blocked": false,
+  "change": "share-rust-unit-action-results",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "c5a478cbfc662fd997e7ad050cd19487200302796427e697e2d50faf43095c13",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "860fcf019180b030d855e90c3475a102dc6cdeb4aeb5214badeb84e0dd95145f",
+    "receipt_hash": "b06b13b9f7df737bb10a7204ea1b0f2bd67b15db56686a8e08767561662ed3de",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": true,
+  "input_hash": "317b35b0c68d35f75408a1bce44b4890abf89a7a8c22302d8bb873dc94e99edf",
+  "layout": "cairn",
+  "mutated": false,
+  "mutation_manifest": null,
+  "plan_hash": "e52d9770e563acc7cd6d335e71135c271aef2e86a056f1f0e0ebed824d5d9d9f",
+  "policy": "cairn-default",
+  "policy_hash": "860fcf019180b030d855e90c3475a102dc6cdeb4aeb5214badeb84e0dd95145f",
+  "reasons": [],
+  "receipt_hash": "b18c23e25dc2dc81ffb683dcf2d9a9f54d97ff9f9c78b479954a6777cf0ca00d"
+}
+exit_status=0
+```
+
+## Cairn archive execution
+
+```text
+$ CAIRN_ARCHIVE_DATE=2026-07-30 nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- archive share-rust-unit-action-results --root . --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json --execute
+{
+  "actions": [
+    {
+      "description": "move active change to archive: share-rust-unit-action-results",
+      "kind": "archive_change",
+      "path": "./cairn/archive/2026-07-30-share-rust-unit-action-results"
+    }
+  ],
+  "blocked": false,
+  "change": "share-rust-unit-action-results",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "c5a478cbfc662fd997e7ad050cd19487200302796427e697e2d50faf43095c13",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "860fcf019180b030d855e90c3475a102dc6cdeb4aeb5214badeb84e0dd95145f",
+    "receipt_hash": "b06b13b9f7df737bb10a7204ea1b0f2bd67b15db56686a8e08767561662ed3de",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "317b35b0c68d35f75408a1bce44b4890abf89a7a8c22302d8bb873dc94e99edf",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "bc2740ee333fa49795e722de019bd9e8bdb5851aaff9c29f1ccd03f1c24f57a4",
+          "exists": true,
+          "path": "./cairn/archive/2026-07-30-share-rust-unit-action-results/design.md"
+        },
+        {
+          "content_hash": "de67cf3ef846ea3d1bfc3b6b6f68f552ebfeb11d878e3d45037d4dc9b7da7a5b",
+          "exists": true,
+          "path": "./cairn/archive/2026-07-30-share-rust-unit-action-results/evidence/scaffold-validation-2026-07-27.md"
+        },
+        {
+          "content_hash": "8156f50b4c26c13a2d085fd3914952e655622b66892f1fb2ddbde43dffe500db",
+          "exists": true,
+          "path": "./cairn/archive/2026-07-30-share-rust-unit-action-results/evidence/verification.md"
+        },
+        {
+          "content_hash": "39cdc83694c1ff8194b7ac007a8a96f47b31c76491331192bcc397f6cdc268fc",
+          "exists": true,
+          "path": "./cairn/archive/2026-07-30-share-rust-unit-action-results/proposal.md"
+        },
+        {
+          "content_hash": "fd32cb8f1346950f6e8fe8c85a3ebe3e1ddb595c06a9cedcb9580eada335222f",
+          "exists": true,
+          "path": "./cairn/archive/2026-07-30-share-rust-unit-action-results/specs/cache-substitution/spec.md"
+        },
+        {
+          "content_hash": "d9675d19086bb8bbed23a8890f3ee7ed07d85f79edc9c2bb54bbca998b7a0837",
+          "exists": true,
+          "path": "./cairn/archive/2026-07-30-share-rust-unit-action-results/specs/rust-package-planning/spec.md"
+        },
+        {
+          "content_hash": "efa5057ff0751cbc944818b409e45ea35a934de2cd60cedfe114152e5a06ed0d",
+          "exists": true,
+          "path": "./cairn/archive/2026-07-30-share-rust-unit-action-results/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./cairn/changes/share-rust-unit-action-results"
+        }
+      ],
+      "manifest_hash": "78bf6ffc42545a56f9f1bec6ad8d4e2469000bbbbb55ba54b758041c9eee18c4"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "bc2740ee333fa49795e722de019bd9e8bdb5851aaff9c29f1ccd03f1c24f57a4",
+          "exists": true,
+          "path": "./cairn/changes/share-rust-unit-action-results/design.md"
+        },
+        {
+          "content_hash": "de67cf3ef846ea3d1bfc3b6b6f68f552ebfeb11d878e3d45037d4dc9b7da7a5b",
+          "exists": true,
+          "path": "./cairn/changes/share-rust-unit-action-results/evidence/scaffold-validation-2026-07-27.md"
+        },
+        {
+          "content_hash": "8156f50b4c26c13a2d085fd3914952e655622b66892f1fb2ddbde43dffe500db",
+          "exists": true,
+          "path": "./cairn/changes/share-rust-unit-action-results/evidence/verification.md"
+        },
+        {
+          "content_hash": "39cdc83694c1ff8194b7ac007a8a96f47b31c76491331192bcc397f6cdc268fc",
+          "exists": true,
+          "path": "./cairn/changes/share-rust-unit-action-results/proposal.md"
+        },
+        {
+          "content_hash": "fd32cb8f1346950f6e8fe8c85a3ebe3e1ddb595c06a9cedcb9580eada335222f",
+          "exists": true,
+          "path": "./cairn/changes/share-rust-unit-action-results/specs/cache-substitution/spec.md"
+        },
+        {
+          "content_hash": "d9675d19086bb8bbed23a8890f3ee7ed07d85f79edc9c2bb54bbca998b7a0837",
+          "exists": true,
+          "path": "./cairn/changes/share-rust-unit-action-results/specs/rust-package-planning/spec.md"
+        },
+        {
+          "content_hash": "efa5057ff0751cbc944818b409e45ea35a934de2cd60cedfe114152e5a06ed0d",
+          "exists": true,
+          "path": "./cairn/changes/share-rust-unit-action-results/tasks.md"
+        }
+      ],
+      "manifest_hash": "2ac61e8ea4f4bcac9acffc04bd6baa5d8ec4990ede2872f45c08cd58e5e804c8"
+    },
+    "kind": "archive",
+    "manifest_hash": "c7e7c7122e8d6401f63204ce3ea87cb1c4471707d933f8a27b9b65b4dc815b10"
+  },
+  "plan_hash": "19af50c6a6948ad2e6296b69e69cd23326e2420d06059756b0cedfdddab349c1",
+  "policy": "cairn-default",
+  "policy_hash": "860fcf019180b030d855e90c3475a102dc6cdeb4aeb5214badeb84e0dd95145f",
+  "reasons": [],
+  "receipt_hash": "e979b0bb5da4a558a97dd3542bd813898a400cb68e575a2f5777f5ed5a4e5928"
+}
+exit_status=0
+```
+
+## Post-archive repository validation
+
+```text
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+{
+  "change_issues": [],
+  "changes": 6,
+  "cross_repo_dependencies": [],
+  "cross_repo_evidence_issues": [],
+  "findings": [],
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "resolution": {
+    "diagnostics": [],
+    "locator_consulted": false,
+    "registry_lookup": "local_locator_only",
+    "selected": {
+      "project_identity": null,
+      "root": ".",
+      "source": "explicit_root",
+      "store_id": null,
+      "store_identity": null
+    },
+    "valid": true
+  },
+  "spec_findings": [],
+  "spec_issues": [],
+  "spec_substance": [
+    {
+      "path": "./cairn/changes/add-daemon-backed-rustc-wrapper/specs/rustc-cache-adapter/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./cairn/changes/add-evidence-driven-resource-policy/specs/remote-builds/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/changes/add-nix-remote-service-gateway/specs/remote-builds/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./cairn/changes/materialize-stagex-lineage-provider/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./cairn/changes/promote-full-bootstrap-parity/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./cairn/changes/prove-source-built-mantle-fixed-point/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./cairn/specs/artifact-auth-adoption/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 13,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./cairn/specs/artifact-auth-operational-receipt/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./cairn/specs/artifact-auth-shell-verification/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./cairn/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 48,
+      "substantive_requirement_blocks": 11
+    },
+    {
+      "path": "./cairn/specs/build-correctness/spec.md",
+      "requirement_blocks": 33,
+      "scenario_blocks": 77,
+      "substantive_requirement_blocks": 33
+    },
+    {
+      "path": "./cairn/specs/build-scheduling/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/specs/build-tool-boundary/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 23,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/cache-substitution/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 23,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./cairn/specs/examples/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 24,
+      "substantive_requirement_blocks": 11
+    },
+    {
+      "path": "./cairn/specs/external-batch-dispatchers/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 18,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/flake-source-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 1,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./cairn/specs/foreign-derivation-import/spec.md",
+      "requirement_blocks": 22,
+      "scenario_blocks": 52,
+      "substantive_requirement_blocks": 22
+    },
+    {
+      "path": "./cairn/specs/gcc40-bridge/spec.md",
+      "requirement_blocks": 2,
+      "scenario_blocks": 6,
+      "substantive_requirement_blocks": 2
+    },
+    {
+      "path": "./cairn/specs/hardware-simulation-builds/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 17,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/i386-tinycc27/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 4,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./cairn/specs/kani-toolchain-evidence/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/specs/kernel-bundle-oci/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 30,
+      "substantive_requirement_blocks": 14
+    },
+    {
+      "path": "./cairn/specs/kernelscript-experiment/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./cairn/specs/machine-artifact-contracts/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 9,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/nickel-export-infrastructure/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 12,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./cairn/specs/operator-diagnostics/spec.md",
+      "requirement_blocks": 13,
+      "scenario_blocks": 32,
+      "substantive_requirement_blocks": 13
+    },
+    {
+      "path": "./cairn/specs/portable-build-receipts/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/specs/project-workflows/spec.md",
+      "requirement_blocks": 24,
+      "scenario_blocks": 80,
+      "substantive_requirement_blocks": 24
+    },
+    {
+      "path": "./cairn/specs/realization-routing/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 21,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/release-provenance/spec.md",
+      "requirement_blocks": 69,
+      "scenario_blocks": 102,
+      "substantive_requirement_blocks": 69
+    },
+    {
+      "path": "./cairn/specs/remote-builds/spec.md",
+      "requirement_blocks": 45,
+      "scenario_blocks": 131,
+      "substantive_requirement_blocks": 45
+    },
+    {
+      "path": "./cairn/specs/rust-package-planning/spec.md",
+      "requirement_blocks": 135,
+      "scenario_blocks": 465,
+      "substantive_requirement_blocks": 135
+    },
+    {
+      "path": "./cairn/specs/source-transports/spec.md",
+      "requirement_blocks": 12,
+      "scenario_blocks": 25,
+      "substantive_requirement_blocks": 12
+    },
+    {
+      "path": "./cairn/specs/spacewasm-reference-materialization/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/store-transports/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 26,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/verification-evidence/spec.md",
+      "requirement_blocks": 58,
+      "scenario_blocks": 164,
+      "substantive_requirement_blocks": 58
+    },
+    {
+      "path": "./cairn/specs/wasm-component-builds/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 25,
+      "substantive_requirement_blocks": 14
+    }
+  ],
+  "specs_validated": 38,
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-daemon-backed-rustc-wrapper/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 58,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-daemon-backed-rustc-wrapper/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 20,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-daemon-backed-rustc-wrapper/specs/rustc-cache-adapter/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 16,
+      "substantive_lines": 72,
+      "substantive_requirement_blocks": 6,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 22,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-daemon-backed-rustc-wrapper/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 22,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 22,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 22
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-evidence-driven-resource-policy/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 40,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-evidence-driven-resource-policy/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 22,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-evidence-driven-resource-policy/specs/remote-builds/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 15,
+      "substantive_lines": 66,
+      "substantive_requirement_blocks": 7,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 33,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-evidence-driven-resource-policy/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 33,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 33,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 33
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-nix-remote-service-gateway/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 36,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-nix-remote-service-gateway/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 22,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-nix-remote-service-gateway/specs/remote-builds/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 15,
+      "substantive_lines": 66,
+      "substantive_requirement_blocks": 8,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 31,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-nix-remote-service-gateway/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 31,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 31,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 31
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/materialize-stagex-lineage-provider/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 12,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/materialize-stagex-lineage-provider/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 10,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/materialize-stagex-lineage-provider/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 5,
+      "substantive_lines": 21,
+      "substantive_requirement_blocks": 1,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 8,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/materialize-stagex-lineage-provider/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 8,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 8,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 8
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/promote-full-bootstrap-parity/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 14,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/promote-full-bootstrap-parity/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 12,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/promote-full-bootstrap-parity/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 5,
+      "substantive_lines": 21,
+      "substantive_requirement_blocks": 1,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 9,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/promote-full-bootstrap-parity/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 9,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 9,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 9
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/prove-source-built-mantle-fixed-point/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 14,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/prove-source-built-mantle-fixed-point/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 10,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/prove-source-built-mantle-fixed-point/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 5,
+      "substantive_lines": 21,
+      "substantive_requirement_blocks": 1,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 8,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/prove-source-built-mantle-fixed-point/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 8,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 8,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 8
+    }
+  ],
+  "substance_findings": [],
+  "substance_issues": [],
+  "valid": true
+}
+exit_status=0
+```
