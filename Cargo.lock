@@ -1585,6 +1585,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-rust-cache-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "crunch-shell"
 version = "0.1.0"
 dependencies = [
