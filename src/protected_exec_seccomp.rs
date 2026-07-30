@@ -115,6 +115,7 @@ mod linux {
     ) -> Result<DiagnosticExecObserver, ProtectedSeccompError> {
         validate_diagnostic_paths(&allowed_paths)?;
         verify_notification_sizes()?;
+        set_child_subreaper()?;
         set_no_new_privileges()?;
         let listener_fd = install_exec_filter()?;
         let audit_events = Arc::new(Mutex::new(Vec::new()));
@@ -146,6 +147,7 @@ mod linux {
         policy: ProtectedExecPolicy,
     ) -> Result<ProtectedSeccompSupervisor, ProtectedSeccompError> {
         verify_notification_sizes()?;
+        set_child_subreaper()?;
         set_no_new_privileges()?;
         let listener_fd = install_exec_filter()?;
         let audit_events = Arc::new(Mutex::new(Vec::new()));
@@ -167,6 +169,14 @@ mod linux {
             return Ok(());
         }
         Err(ProtectedSeccompError::Unsupported(last_os_error("SECCOMP_GET_NOTIF_SIZES")))
+    }
+
+    fn set_child_subreaper() -> Result<(), ProtectedSeccompError> {
+        let rc = unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) };
+        if rc == 0 {
+            return Ok(());
+        }
+        Err(ProtectedSeccompError::Install(last_os_error("PR_SET_CHILD_SUBREAPER")))
     }
 
     fn set_no_new_privileges() -> Result<(), ProtectedSeccompError> {
@@ -835,6 +845,7 @@ mod linux {
         const CHILD_MODE_VAR: &str = "CRUNCH_TEST_SECCOMP_CHILD_MODE";
         const AUDIT_FLUSH_WAIT_MS: u64 = 50;
         const DIAGNOSTIC_TEST_EVENT_COUNT: usize = 2;
+        const ORPHAN_EXEC_DELAY_US: libc::useconds_t = 100_000;
 
         fn current_exe_policy(digest_hex: String) -> ProtectedExecPolicy {
             let current_exe = std::env::current_exe().unwrap();
@@ -1018,6 +1029,64 @@ mod linux {
                 .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_allows_declared_execveat_descendant")
                 .arg("--nocapture")
                 .env(CHILD_MODE_VAR, "execveat")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "stdout={}\nstderr={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        #[test]
+        fn seccomp_supervisor_denies_orphan_exec_without_subreaper_adoption() {
+            match std::env::var(CHILD_MODE_VAR).ok().as_deref() {
+                Some("orphan-without-subreaper-parent") => {
+                    run_orphan_without_subreaper_parent();
+                    return;
+                }
+                Some("orphan-without-subreaper-middle") => {
+                    run_deep_middle_child();
+                    return;
+                }
+                _ => {}
+            }
+            let output = Command::new(std::env::current_exe().unwrap())
+                .arg("--exact")
+                .arg(
+                    "protected_exec_seccomp::linux::tests::seccomp_supervisor_denies_orphan_exec_without_subreaper_adoption",
+                )
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, "orphan-without-subreaper-parent")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "stdout={}\nstderr={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        #[test]
+        fn seccomp_supervisor_reads_deep_descendant_exec_path() {
+            match std::env::var(CHILD_MODE_VAR).ok().as_deref() {
+                Some("deep-parent") => {
+                    run_deep_parent_child();
+                    return;
+                }
+                Some("deep-middle") => {
+                    run_deep_middle_child();
+                    return;
+                }
+                _ => {}
+            }
+            let output = Command::new(std::env::current_exe().unwrap())
+                .arg("--exact")
+                .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path")
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, "deep-parent")
                 .output()
                 .unwrap();
             assert!(
@@ -1213,6 +1282,69 @@ mod linux {
             assert_eq!(events[0].inventory_entry_id.as_deref(), Some("sandbox-entry"));
         }
 
+        fn run_orphan_without_subreaper_parent() {
+            let current_exe = std::env::current_exe().unwrap();
+            let digest_hex = blake3_file_hex(&current_exe).unwrap();
+            let policy = current_exe_policy(digest_hex);
+            verify_notification_sizes().unwrap();
+            set_no_new_privileges().unwrap();
+            let listener_fd = install_exec_filter().unwrap();
+            let audit_events = Arc::new(Mutex::new(Vec::new()));
+            let shared_policy = Arc::new(RwLock::new(policy));
+            spawn_supervisor_thread(listener_fd, shared_policy, audit_events.clone()).unwrap();
+            let status = Command::new(&current_exe)
+                .arg("--exact")
+                .arg(
+                    "protected_exec_seccomp::linux::tests::seccomp_supervisor_denies_orphan_exec_without_subreaper_adoption",
+                )
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, "orphan-without-subreaper-middle")
+                .status()
+                .unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(AUDIT_FLUSH_WAIT_MS.saturating_mul(4)));
+            let events = audit_events.lock().unwrap().clone();
+            assert!(status.success());
+            assert_eq!(events.len(), 2);
+            assert_eq!(events[0].policy_decision, "allowed");
+            assert_eq!(events[1].policy_decision, "denied");
+            assert!(events[1].reason.contains("read target memory"), "reason: {}", events[1].reason);
+        }
+
+        fn run_deep_parent_child() {
+            let current_exe = std::env::current_exe().unwrap();
+            let digest_hex = blake3_file_hex(&current_exe).unwrap();
+            let supervisor = install_current_thread_exec_supervisor(current_exe_policy(digest_hex)).unwrap();
+            let status = Command::new(&current_exe)
+                .arg("--exact")
+                .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path")
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, "deep-middle")
+                .status()
+                .unwrap();
+            let mut orphan_status: libc::c_int = 0;
+            let orphan_pid = unsafe { libc::waitpid(-1, &mut orphan_status, 0) };
+            assert!(orphan_pid > 0, "waiting for adopted descendant failed: {}", std::io::Error::last_os_error());
+            std::thread::sleep(std::time::Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+            let events = supervisor.audit_events();
+            assert!(status.success());
+            assert!(libc::WIFEXITED(orphan_status));
+            assert_eq!(libc::WEXITSTATUS(orphan_status), 0);
+            assert_eq!(events.len(), 2);
+            assert!(events.iter().all(|event| event.policy_decision == "allowed"));
+        }
+
+        fn run_deep_middle_child() {
+            let current_exe = std::env::current_exe().unwrap();
+            let pid = unsafe { libc::fork() };
+            assert!(pid >= 0, "fork failed: {}", std::io::Error::last_os_error());
+            if pid == 0 {
+                unsafe {
+                    libc::usleep(ORPHAN_EXEC_DELAY_US);
+                }
+                execve_current_exe_help(&current_exe);
+            }
+        }
+
         fn run_symlink_resolution_child() {
             let temp = tempfile::tempdir().unwrap();
             let bin_dir = temp.path().join("bin");
@@ -1333,6 +1465,18 @@ mod linux {
             unsafe {
                 libc::syscall(libc::SYS_execveat, dir.as_raw_fd(), path.as_ptr(), argv.as_ptr(), envp.as_ptr(), 0);
                 libc::_exit(std::io::Error::last_os_error().raw_os_error().unwrap_or(libc::EINVAL));
+            }
+        }
+
+        fn execve_current_exe_help(current_exe: &Path) -> ! {
+            let path = CString::new(current_exe.as_os_str().as_encoded_bytes()).unwrap();
+            let argv0 = CString::new("crunch-seccomp-test").unwrap();
+            let arg_help = CString::new("--help").unwrap();
+            let argv = [argv0.as_ptr(), arg_help.as_ptr(), std::ptr::null()];
+            let envp = [std::ptr::null::<libc::c_char>()];
+            unsafe {
+                libc::execve(path.as_ptr(), argv.as_ptr(), envp.as_ptr());
+                libc::_exit(127);
             }
         }
 
