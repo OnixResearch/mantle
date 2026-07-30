@@ -270,6 +270,62 @@ nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs --self
 Use [`docs/operator-proof-guide.md`](docs/operator-proof-guide.md) before making
 or reviewing self-build, Cargo-free, Nix-free, or release claims.
 
+### Bootstrap proof methodology
+
+Mantle uses a layered, fail-closed evidence argument. A successful build does
+not prove a bootstrap claim.
+
+```text
+accepted claim =
+  authenticated inputs
+  + authorized construction
+  + bound outputs
+  + bounded behavior
+  + negative evidence
+  + independent validation
+  + reproducible fixed point
+```
+
+Each proof starts with a claim contract. The contract names the required
+sources, predecessors, outputs, behaviors, rejection cases, forbidden
+fallbacks, and non-claims. The parity system derives status from current
+receipts instead of a manually selected completion value.
+
+Proof construction uses strict state when the claim requires it. Strict state
+disables substitutions, rejects unsigned artifacts, removes ambient tools, and
+disables live source acquisition. Each stage must use its declared immediate
+predecessor.
+
+StageX adds execution authority. Its seccomp supervisor intercepts `execve` and
+`execveat` before a child starts. The policy binds an absolute path, a BLAKE3
+executable identity, an allowed stage, and an allowed child relationship.
+Undeclared execution and identity mismatches fail closed.
+
+Receipts are evidence, not authority. The validators recompute canonical
+identities from current source and artifact files. They reject missing, stale,
+substituted, or malformed evidence. Positive tests demonstrate bounded
+behavior. Negative and mutation tests demonstrate fail-closed behavior.
+
+The final reproducibility argument requires exact BLAKE3 identity for stage1
+and stage2 Mantle binaries. Its receipt must also record zero live fetches,
+substitutions, fallback events, prebuilt Rust inputs, Cargo oracle use, and
+ambient compiler discovery.
+
+| Question | Required evidence |
+|---|---|
+| Which source bytes entered the build? | Authenticated source records and an offline source bundle |
+| Which tools ran? | A protected execution audit |
+| Which predecessor built the output? | Row-local receipts |
+| Which output bytes resulted? | Canonical artifact identities |
+| Does the output perform its bounded role? | Positive runtime tests |
+| Does modified evidence fail closed? | Negative and mutation tests |
+| Can Mantle reproduce itself? | An exact stage1-to-stage2 fixed point |
+| Can the claim be published? | Bootstrap parity and Cairn gates |
+
+This methodology proves bounded bootstrap facts for the recorded seed, source,
+tools, platform, and policy. It does not prove compiler correctness, semantic
+correctness, kernel correctness, or universal reproducibility.
+
 Self-hosting preflight and proof modes:
 
 ```bash
