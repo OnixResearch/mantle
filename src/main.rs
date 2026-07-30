@@ -341,6 +341,13 @@ enum RustLocalCacheMode {
     ReadWrite,
 }
 
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+enum RustSharedCacheMode {
+    Off,
+    Read,
+    ReadWrite,
+}
+
 // CLI variants retain their complete clap payloads to preserve flag and help compatibility.
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Debug)]
@@ -964,6 +971,34 @@ enum Command {
         /// Explicit local Rust unit cache policy
         #[arg(long, value_enum, default_value_t = RustLocalCacheMode::Off)]
         local_rust_cache: RustLocalCacheMode,
+
+        /// Explicit shared Rust unit cache policy
+        #[arg(long, value_enum, default_value_t = RustSharedCacheMode::Off)]
+        shared_rust_cache: RustSharedCacheMode,
+
+        /// Ordered shared Rust result source: an HTTP(S) base URL or directory
+        #[arg(long = "shared-rust-cache-source")]
+        shared_rust_cache_sources: Vec<String>,
+
+        /// Shared Rust publication target: an HTTP(S) base URL or directory
+        #[arg(long)]
+        shared_rust_cache_publish_target: Option<String>,
+
+        /// Trusted shared Rust verifier in name:base64 format; repeatable
+        #[arg(long = "shared-rust-cache-trusted-key")]
+        shared_rust_cache_trusted_keys: Vec<String>,
+
+        /// Accepted shared Rust producer-policy identity; repeatable
+        #[arg(long = "shared-rust-cache-producer-policy")]
+        shared_rust_cache_producer_policies: Vec<String>,
+
+        /// Nix-format Ed25519 key file for shared Rust result publication
+        #[arg(long)]
+        shared_rust_cache_signing_key: Option<PathBuf>,
+
+        /// Keep remote shared Rust result and object sources unopened
+        #[arg(long)]
+        shared_rust_cache_offline: bool,
     },
 
     /// Enter a development shell from the compatibility-named crunch.ncl devShells
@@ -6822,6 +6857,13 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         execute_patch_source_topology,
         execution_output_root,
         local_rust_cache,
+        shared_rust_cache,
+        shared_rust_cache_sources,
+        shared_rust_cache_publish_target,
+        shared_rust_cache_trusted_keys,
+        shared_rust_cache_producer_policies,
+        shared_rust_cache_signing_key,
+        shared_rust_cache_offline,
     } = command
     else {
         return Err(RunError::Internal("run_rust_plan_command called with non-RustPlan command".to_string()));
@@ -6856,7 +6898,16 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         execution_output_root: execution_output_root.as_deref(),
     })?;
     rust_plan::set_receipt_bound_c_compiler_route_override(captured.c_compiler_route)?;
-    let local_cache = prepare_rust_plan_local_cache(ctx, rustc, *local_rust_cache, execution_mode)?;
+    let local_cache =
+        prepare_rust_plan_local_cache(ctx, rustc, *local_rust_cache, execution_mode, RustSharedCacheCliInput {
+            mode: *shared_rust_cache,
+            sources: shared_rust_cache_sources,
+            publish_target: shared_rust_cache_publish_target.as_deref(),
+            trusted_keys: shared_rust_cache_trusted_keys,
+            producer_policies: shared_rust_cache_producer_policies,
+            signing_key: shared_rust_cache_signing_key.as_deref(),
+            offline: *shared_rust_cache_offline,
+        })?;
     execute_rust_plan_receipt(RustPlanExecutionRequest {
         receipt: captured.receipt,
         rustc,
@@ -6919,13 +6970,32 @@ fn validate_rust_local_cache_mode(
     Ok(())
 }
 
+const SHARED_RUST_HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+const SHARED_RUST_SIGNING_KEY_MAX_BYTES: u64 = 4_096;
+const ED25519_SECRET_KEY_BYTES: usize = 32;
+const ED25519_PUBLIC_KEY_BYTES: usize = 32;
+const ED25519_KEYPAIR_BYTES: usize = ED25519_SECRET_KEY_BYTES + ED25519_PUBLIC_KEY_BYTES;
+const SHARED_RUST_PRODUCER_ID: &str = "mantle-rust-plan";
+
+struct RustSharedCacheCliInput<'a> {
+    mode: RustSharedCacheMode,
+    sources: &'a [String],
+    publish_target: Option<&'a str>,
+    trusted_keys: &'a [String],
+    producer_policies: &'a [String],
+    signing_key: Option<&'a Path>,
+    offline: bool,
+}
+
 fn prepare_rust_plan_local_cache(
     ctx: &RunContext,
     rustc: &Path,
     mode: RustLocalCacheMode,
     execution_mode: RustPlanExecutionMode,
+    shared_input: RustSharedCacheCliInput<'_>,
 ) -> Result<Option<rust_plan::RustUnitLocalCacheSelection>, RunError> {
     validate_rust_local_cache_mode(mode, execution_mode)?;
+    validate_rust_shared_cache_cli_input(&shared_input, mode, execution_mode)?;
     let (reads_enabled, writes_enabled, policy_id) = match mode {
         RustLocalCacheMode::Off => return Ok(None),
         RustLocalCacheMode::Read => (true, false, "mantle-rust-local-cache-read-v1"),
@@ -6946,10 +7016,220 @@ fn prepare_rust_plan_local_cache(
         base_state_dirs: Vec::new(),
     })
     .map_err(|error| RunError::Internal(format!("opening local Rust unit cache: {error}")))?;
-    let selection = rust_plan::rust_unit_local_cache_selection(Arc::new(cache), policy, rustc)?;
+    let mut selection = rust_plan::rust_unit_local_cache_selection(Arc::new(cache), policy, rustc)?;
+    selection.shared = prepare_rust_plan_shared_cache(shared_input, mode, execution_mode)?;
     assert_eq!(selection.policy.reads_enabled, reads_enabled);
     assert_eq!(selection.policy.writes_enabled, writes_enabled);
     Ok(Some(selection))
+}
+
+fn validate_rust_shared_cache_cli_input(
+    input: &RustSharedCacheCliInput<'_>,
+    local_mode: RustLocalCacheMode,
+    execution_mode: RustPlanExecutionMode,
+) -> Result<(), RunError> {
+    let enabled = !matches!(input.mode, RustSharedCacheMode::Off);
+    let execution_enabled = !matches!(execution_mode, RustPlanExecutionMode::PrintOnly);
+    if enabled && !execution_enabled {
+        return Err(RunError::Internal("--shared-rust-cache requires a Rust unit execution mode".to_string()));
+    }
+    if enabled && matches!(local_mode, RustLocalCacheMode::Off) {
+        return Err(RunError::Internal(
+            "--shared-rust-cache requires --local-rust-cache read or read-write".to_string(),
+        ));
+    }
+    if !enabled {
+        let has_shared_arguments = !input.sources.is_empty()
+            || input.publish_target.is_some()
+            || !input.trusted_keys.is_empty()
+            || !input.producer_policies.is_empty()
+            || input.signing_key.is_some()
+            || input.offline;
+        if has_shared_arguments {
+            return Err(RunError::Internal(
+                "shared Rust cache arguments require --shared-rust-cache read or read-write".to_string(),
+            ));
+        }
+        return Ok(());
+    }
+    if input.sources.is_empty() || input.trusted_keys.is_empty() || input.producer_policies.is_empty() {
+        return Err(RunError::Internal(
+            "shared Rust cache reads require a source, trusted key, and producer policy".to_string(),
+        ));
+    }
+    if matches!(input.mode, RustSharedCacheMode::ReadWrite)
+        && (input.publish_target.is_none() || input.signing_key.is_none())
+    {
+        return Err(RunError::Internal("shared Rust cache publication requires a target and signing key".to_string()));
+    }
+    if matches!(input.mode, RustSharedCacheMode::Read)
+        && (input.publish_target.is_some() || input.signing_key.is_some())
+    {
+        return Err(RunError::Internal(
+            "shared Rust publication arguments require --shared-rust-cache read-write".to_string(),
+        ));
+    }
+    assert!(execution_enabled);
+    assert!(!matches!(local_mode, RustLocalCacheMode::Off));
+    Ok(())
+}
+
+fn prepare_rust_plan_shared_cache(
+    input: RustSharedCacheCliInput<'_>,
+    local_mode: RustLocalCacheMode,
+    execution_mode: RustPlanExecutionMode,
+) -> Result<Option<rust_plan::RustUnitSharedCacheSelection>, RunError> {
+    validate_rust_shared_cache_cli_input(&input, local_mode, execution_mode)?;
+    if matches!(input.mode, RustSharedCacheMode::Off) {
+        return Ok(None);
+    }
+    let sources = input.sources.iter().map(|source| open_rust_result_source(source)).collect::<Result<Vec<_>, _>>()?;
+    let publication_source = input.publish_target.map(open_rust_result_source).transpose()?;
+    let trusted_keys = parse_shared_rust_trusted_keys(input.trusted_keys)?;
+    let mut producer_policies = input.producer_policies.to_vec();
+    producer_policies.sort();
+    producer_policies.dedup();
+    let trust_policy_id = shared_rust_trust_policy_id(&producer_policies, &trusted_keys)?;
+    let trust_policy = crunch_rust_cache_core::shared::RustResultTrustPolicy {
+        schema: crunch_rust_cache_core::shared::SHARED_RUST_TRUST_POLICY_SCHEMA.to_string(),
+        policy_id: trust_policy_id,
+        accepted_producer_policy_ids: producer_policies.clone(),
+        trusted_keys,
+    };
+    crunch_rust_cache_core::shared::validate_trust_policy(&trust_policy).map_err(RunError::Internal)?;
+    let signing = input.signing_key.map(load_shared_rust_signing_key).transpose()?;
+    let (signer_name, signing_key) = match signing {
+        Some((name, key)) => (name, Some(Arc::new(key))),
+        None => ("shared-rust-read-only".to_string(), None),
+    };
+    let policy = crunch_rust_cache::shared::SharedRustCachePolicy {
+        policy_id: match input.mode {
+            RustSharedCacheMode::Read => "mantle-shared-rust-read-v1".to_string(),
+            RustSharedCacheMode::ReadWrite => "mantle-shared-rust-read-write-v1".to_string(),
+            RustSharedCacheMode::Off => unreachable!("off mode returned before policy construction"),
+        },
+        reads_enabled: true,
+        publishes_enabled: matches!(input.mode, RustSharedCacheMode::ReadWrite),
+        offline: input.offline,
+        ..crunch_rust_cache::shared::SharedRustCachePolicy::default()
+    };
+    crunch_rust_cache::shared::validate_shared_cache_policy(&policy)
+        .map_err(|error| RunError::Internal(error.to_string()))?;
+    let selection = rust_plan::RustUnitSharedCacheSelection {
+        policy,
+        trust_policy,
+        sources,
+        publication_source,
+        producer: crunch_rust_cache_core::shared::RustResultProducerIdentity {
+            producer_id: SHARED_RUST_PRODUCER_ID.to_string(),
+            producer_policy_id: producer_policies[0].clone(),
+        },
+        signer_name,
+        signing_key,
+    };
+    assert!(!selection.sources.is_empty());
+    assert!(!selection.trust_policy.trusted_keys.is_empty());
+    Ok(Some(selection))
+}
+
+fn open_rust_result_source(source: &str) -> Result<Arc<dyn crunch_rust_cache::shared::RustResultSource>, RunError> {
+    if source.starts_with("http://") || source.starts_with("https://") {
+        let http = crunch_rust_cache::shared::HttpRustResultSource::new(source, SHARED_RUST_HTTP_TIMEOUT)
+            .map_err(|error| RunError::Internal(format!("opening shared Rust HTTP source: {error}")))?;
+        return Ok(Arc::new(http));
+    }
+    let directory = crunch_rust_cache::shared::DirectoryRustResultSource::open(PathBuf::from(source), false)
+        .map_err(|error| RunError::Internal(format!("opening shared Rust directory source: {error}")))?;
+    Ok(Arc::new(directory))
+}
+
+fn parse_shared_rust_trusted_keys(
+    values: &[String],
+) -> Result<Vec<crunch_rust_cache_core::shared::TrustedRustResultKey>, RunError> {
+    let mut keys = Vec::with_capacity(values.len());
+    for value in values {
+        let (name, encoded) = value
+            .split_once(':')
+            .ok_or_else(|| RunError::Internal("shared Rust trusted key is malformed".to_string()))?;
+        let bytes = data_encoding::BASE64
+            .decode(encoded.as_bytes())
+            .map_err(|_| RunError::Internal("shared Rust trusted key is malformed".to_string()))?;
+        if bytes.len() != ED25519_PUBLIC_KEY_BYTES {
+            return Err(RunError::Internal("shared Rust trusted key has the wrong size".to_string()));
+        }
+        keys.push(crunch_rust_cache_core::shared::TrustedRustResultKey {
+            signer_name: name.to_string(),
+            verifier_key_hex: data_encoding::HEXLOWER.encode(&bytes),
+        });
+    }
+    keys.sort();
+    keys.dedup();
+    assert!(keys.len() <= values.len());
+    assert!(keys.iter().all(|key| !key.signer_name.is_empty()));
+    Ok(keys)
+}
+
+fn load_shared_rust_signing_key(path: &Path) -> Result<(String, ed25519_dalek::SigningKey), RunError> {
+    let metadata = std::fs::symlink_metadata(path)
+        .map_err(|error| RunError::Internal(format!("reading shared Rust signing key metadata: {error}")))?;
+    if !metadata.file_type().is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.len() > SHARED_RUST_SIGNING_KEY_MAX_BYTES
+    {
+        return Err(RunError::Internal("shared Rust signing key must be a bounded regular file".to_string()));
+    }
+    let mut file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(path)
+            .map_err(|error| RunError::Internal(format!("opening shared Rust signing key: {error}")))?
+    };
+    let capacity = usize::try_from(metadata.len())
+        .map_err(|_| RunError::Internal("shared Rust signing key is too large".to_string()))?;
+    let mut bytes = zeroize::Zeroizing::new(Vec::with_capacity(capacity));
+    std::io::Read::read_to_end(&mut file, &mut bytes)
+        .map_err(|error| RunError::Internal(format!("reading shared Rust signing key: {error}")))?;
+    if bytes.len() != capacity {
+        return Err(RunError::Internal("shared Rust signing key size changed while reading".to_string()));
+    }
+    let text = std::str::from_utf8(&bytes)
+        .map_err(|_| RunError::Internal("shared Rust signing key is not UTF-8".to_string()))?
+        .trim();
+    let (name, encoded) = text
+        .split_once(':')
+        .ok_or_else(|| RunError::Internal("shared Rust signing key is malformed".to_string()))?;
+    let decoded = zeroize::Zeroizing::new(
+        data_encoding::BASE64
+            .decode(encoded.as_bytes())
+            .map_err(|_| RunError::Internal("shared Rust signing key is malformed".to_string()))?,
+    );
+    if decoded.len() != ED25519_KEYPAIR_BYTES {
+        return Err(RunError::Internal("shared Rust signing key has the wrong size".to_string()));
+    }
+    let mut secret = zeroize::Zeroizing::new([0_u8; ED25519_SECRET_KEY_BYTES]);
+    secret.copy_from_slice(&decoded[..ED25519_SECRET_KEY_BYTES]);
+    let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret);
+    if signing_key.verifying_key().as_bytes() != &decoded[ED25519_SECRET_KEY_BYTES..] {
+        return Err(RunError::Internal("shared Rust signing key public material does not match".to_string()));
+    }
+    assert!(!name.is_empty());
+    assert_eq!(decoded.len(), ED25519_KEYPAIR_BYTES);
+    Ok((name.to_string(), signing_key))
+}
+
+fn shared_rust_trust_policy_id(
+    producer_policies: &[String],
+    keys: &[crunch_rust_cache_core::shared::TrustedRustResultKey],
+) -> Result<String, RunError> {
+    let canonical = serde_json::to_vec(&(producer_policies, keys))
+        .map_err(|error| RunError::Internal(format!("encoding shared Rust trust policy: {error}")))?;
+    let digest = blake3::hash(&canonical).to_hex();
+    let policy_id = format!("mantle-shared-rust-trust-{digest}");
+    assert!(!canonical.is_empty());
+    assert_eq!(digest.len(), crunch_rust_cache_core::BLAKE3_HEX_CHARS);
+    Ok(policy_id)
 }
 
 struct RustPlanExecutionRequest<'a> {
@@ -8375,13 +8655,59 @@ mod tests {
     }
 
     #[test]
+    fn shared_rust_cache_requires_local_execution_and_explicit_trust() {
+        let empty = Vec::<String>::new();
+        let enabled_without_local = RustSharedCacheCliInput {
+            mode: RustSharedCacheMode::Read,
+            sources: &["/tmp/shared".to_string()],
+            publish_target: None,
+            trusted_keys: &["builder:key".to_string()],
+            producer_policies: &["policy-v1".to_string()],
+            signing_key: None,
+            offline: false,
+        };
+        let error = validate_rust_shared_cache_cli_input(
+            &enabled_without_local,
+            RustLocalCacheMode::Off,
+            RustPlanExecutionMode::FirstSupported,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("requires --local-rust-cache"));
+
+        let missing_trust = RustSharedCacheCliInput {
+            mode: RustSharedCacheMode::Read,
+            sources: &["/tmp/shared".to_string()],
+            publish_target: None,
+            trusted_keys: &empty,
+            producer_policies: &empty,
+            signing_key: None,
+            offline: false,
+        };
+        let error = validate_rust_shared_cache_cli_input(
+            &missing_trust,
+            RustLocalCacheMode::Read,
+            RustPlanExecutionMode::FirstSupported,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("trusted key"));
+    }
+
+    #[test]
     fn rust_plan_cli_cache_is_explicit_and_defaults_off() {
         let default = parse_args_with_cli_test_stack(Vec::from(["mantle", "rust-plan"]))
             .expect("default rust-plan CLI should parse");
-        let Command::RustPlan { local_rust_cache, .. } = default.command else {
+        let Command::RustPlan {
+            local_rust_cache,
+            shared_rust_cache,
+            ..
+        } = default.command
+        else {
             panic!("rust-plan command should parse");
         };
         assert_eq!(local_rust_cache, RustLocalCacheMode::Off);
+        assert_eq!(shared_rust_cache, RustSharedCacheMode::Off);
 
         let enabled = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
@@ -8395,6 +8721,36 @@ mod tests {
             panic!("rust-plan command should parse");
         };
         assert_eq!(local_rust_cache, RustLocalCacheMode::ReadWrite);
+
+        let shared = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "rust-plan",
+            "--execute-first-supported-unit",
+            "--local-rust-cache",
+            "read",
+            "--shared-rust-cache",
+            "read",
+            "--shared-rust-cache-source",
+            "/tmp/shared-rust",
+            "--shared-rust-cache-trusted-key",
+            "builder-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=",
+            "--shared-rust-cache-producer-policy",
+            "builder-policy-v1",
+            "--shared-rust-cache-offline",
+        ]))
+        .expect("shared rust-plan cache CLI should parse");
+        let Command::RustPlan {
+            shared_rust_cache,
+            shared_rust_cache_sources,
+            shared_rust_cache_offline,
+            ..
+        } = shared.command
+        else {
+            panic!("rust-plan command should parse");
+        };
+        assert_eq!(shared_rust_cache, RustSharedCacheMode::Read);
+        assert_eq!(shared_rust_cache_sources, ["/tmp/shared-rust"]);
+        assert!(shared_rust_cache_offline);
     }
 
     #[test]

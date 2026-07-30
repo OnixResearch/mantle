@@ -14,12 +14,19 @@ use std::sync::OnceLock;
 
 use crunch_rust_cache::RustCache;
 use crunch_rust_cache::RustCacheReport;
+use crunch_rust_cache::shared::RustResultSource;
+use crunch_rust_cache::shared::SharedPublicationObservation;
+use crunch_rust_cache::shared::SharedPublishRequest;
+use crunch_rust_cache::shared::SharedRustCachePolicy;
+use crunch_rust_cache::shared::SharedRustCacheReport;
 use crunch_rust_cache_core::LocalCachePolicy;
 use crunch_rust_cache_core::RustArtifactIdentity;
 use crunch_rust_cache_core::RustBuildFact;
 use crunch_rust_cache_core::RustSemanticArgument;
 use crunch_rust_cache_core::RustUnitAction;
 use crunch_rust_cache_core::RustUnitActionInput;
+use crunch_rust_cache_core::shared::RustResultProducerIdentity;
+use crunch_rust_cache_core::shared::RustResultTrustPolicy;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -30,6 +37,7 @@ const RECEIPT_SCHEMA_VERSION: u32 = 1;
 const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json";
 const RUST_CACHE_OUTPUT_REUSE: &str = "existing-output-directory-reuse";
 const RUST_CACHE_RESTORE_REBUILD_REASON: &str = "restored-local-castore-result";
+const RUST_SHARED_CACHE_RESTORE_REBUILD_REASON: &str = "restored-shared-castore-result";
 const RUST_CACHE_COMPILE_REBUILD_REASON: &str = "rebuilt-explicit-unit";
 const RUST_CACHE_RECEIPT_REF_PREFIX: &str = "mantle-rust-receipt://blake3/";
 const RUST_CACHE_EFFECTIVE_ENV_DIGEST_KEY: &str = "MANTLE_EFFECTIVE_CHILD_ENV_BLAKE3";
@@ -833,10 +841,37 @@ impl RustCompilerPolicyMode {
 pub(crate) struct RustUnitLocalCacheSelection {
     pub(crate) cache: Arc<RustCache>,
     pub(crate) policy: LocalCachePolicy,
+    pub(crate) shared: Option<RustUnitSharedCacheSelection>,
     compiler_digest_blake3: String,
     toolchain_closure_digest_blake3: String,
     execution_platform_digest_blake3: String,
     sysroot: PathBuf,
+}
+
+#[derive(Clone)]
+pub(crate) struct RustUnitSharedCacheSelection {
+    pub(crate) policy: SharedRustCachePolicy,
+    pub(crate) trust_policy: RustResultTrustPolicy,
+    pub(crate) sources: Vec<Arc<dyn RustResultSource>>,
+    pub(crate) publication_source: Option<Arc<dyn RustResultSource>>,
+    pub(crate) producer: RustResultProducerIdentity,
+    pub(crate) signer_name: String,
+    pub(crate) signing_key: Option<Arc<ed25519_dalek::SigningKey>>,
+}
+
+impl std::fmt::Debug for RustUnitSharedCacheSelection {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RustUnitSharedCacheSelection")
+            .field("policy", &self.policy)
+            .field("trust_policy", &self.trust_policy.policy_id)
+            .field("source_count", &self.sources.len())
+            .field("publication_enabled", &self.publication_source.is_some())
+            .field("producer", &self.producer)
+            .field("signer_name", &self.signer_name)
+            .field("signing_key", &self.signing_key.as_ref().map(|_| "redacted"))
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -977,6 +1012,8 @@ pub(crate) struct RustUnitExecutionReceipt {
     pub(crate) output_artifact_digests: Vec<RustExecutionArtifactDigest>,
     #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) local_cache: Option<RustCacheReport>,
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
+    pub(crate) shared_cache: Option<SharedRustCacheReport>,
     #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
     pub(crate) blocker: Option<RustUnitExecutionBlocker>,
@@ -15790,6 +15827,7 @@ struct RustUnitExecutionInputs {
     compiler_policy_receipt: Option<RustCompilerPolicyExecutionReceipt>,
     local_cache_action: Option<RustUnitAction>,
     local_cache_report: Option<RustCacheReport>,
+    shared_cache_report: Option<SharedRustCacheReport>,
 }
 
 type RequiredExecutionArtifactDigests =
@@ -15885,6 +15923,7 @@ fn prepare_rust_unit_execution_inputs(
         compiler_policy_receipt: None,
         local_cache_action: None,
         local_cache_report: None,
+        shared_cache_report: None,
     }))
 }
 
@@ -16351,6 +16390,17 @@ fn attach_local_cache_report(
     Ok(receipt)
 }
 
+fn attach_shared_cache_report(
+    mut receipt: RustUnitExecutionReceipt,
+    report: SharedRustCacheReport,
+) -> Result<RustUnitExecutionReceipt, RunError> {
+    receipt.shared_cache = Some(report);
+    receipt.receipt_hash = rust_unit_execution_receipt_hash(&receipt)?;
+    assert!(receipt.shared_cache.is_some());
+    assert_eq!(receipt.receipt_hash.len(), BLAKE3_HEX_CHARS);
+    Ok(receipt)
+}
+
 fn finalize_successful_rust_unit_execution(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
@@ -16399,10 +16449,20 @@ fn finalize_successful_rust_unit_execution(
     if let Some(report) = inputs.local_cache_report {
         receipt = attach_local_cache_report(receipt, report)?;
     }
-    write_rust_unit_execution_receipt(&output_dir, &receipt)?;
-    if publish_cache_result {
-        publish_local_cache_result(options, cache_action.as_ref(), &output_dir, &receipt)?;
+    if let Some(report) = inputs.shared_cache_report {
+        receipt = attach_shared_cache_report(receipt, report)?;
     }
+    if publish_cache_result {
+        let published = publish_local_cache_result(options, cache_action.as_ref(), &output_dir, &receipt)?;
+        if let Some(publication) = publish_shared_cache_result(options, published.as_ref()) {
+            let shared_report = receipt
+                .shared_cache
+                .get_or_insert_with(|| SharedRustCacheReport::rejected("shared-cache-lookup-not-recorded"));
+            shared_report.publications.push(publication);
+            receipt.receipt_hash = rust_unit_execution_receipt_hash(&receipt)?;
+        }
+    }
+    write_rust_unit_execution_receipt(&output_dir, &receipt)?;
     Ok(receipt)
 }
 
@@ -16411,12 +16471,12 @@ fn publish_local_cache_result(
     action: Option<&RustUnitAction>,
     output_dir: &Path,
     receipt: &RustUnitExecutionReceipt,
-) -> Result<(), RunError> {
+) -> Result<Option<crunch_rust_cache_core::RustUnitResult>, RunError> {
     let Some(action) = action else {
-        return Ok(());
+        return Ok(None);
     };
     let Some(selection) = options.local_cache.as_ref() else {
-        return Ok(());
+        return Ok(None);
     };
     let producer_receipt_ref = format!("{RUST_CACHE_RECEIPT_REF_PREFIX}{}", receipt.receipt_hash);
     let request = crunch_rust_cache::PublishRequest {
@@ -16425,12 +16485,48 @@ fn publish_local_cache_result(
         producer_receipt_ref: &producer_receipt_ref,
         policy: &selection.policy,
     };
-    if selection.cache.publish_blocking(request).is_err() {
-        return Ok(());
-    }
+    let result = match selection.cache.publish_blocking(request) {
+        Ok(result) => result,
+        Err(_) => return Ok(None),
+    };
     assert_eq!(producer_receipt_ref.len(), RUST_CACHE_RECEIPT_REF_PREFIX.len() + BLAKE3_HEX_CHARS);
     assert!(!receipt.receipt_hash.is_empty());
-    Ok(())
+    Ok(Some(result))
+}
+
+fn publish_shared_cache_result(
+    options: &RustUnitExecutionOptions,
+    result: Option<&crunch_rust_cache_core::RustUnitResult>,
+) -> Option<SharedPublicationObservation> {
+    let local = options.local_cache.as_ref()?;
+    let shared = local.shared.as_ref()?;
+    let source = shared.publication_source.as_ref()?;
+    let Some(result) = result else {
+        return Some(SharedPublicationObservation::rejected(
+            source.source_id().to_string(),
+            "shared-local-result-unavailable",
+        ));
+    };
+    let Some(signing_key) = shared.signing_key.as_ref() else {
+        return Some(SharedPublicationObservation::rejected(
+            source.source_id().to_string(),
+            "shared-signing-key-unavailable",
+        ));
+    };
+    let request = SharedPublishRequest {
+        result,
+        producer: shared.producer.clone(),
+        signer_name: shared.signer_name.clone(),
+        signing_key,
+        policy: &shared.policy,
+    };
+    let publication = local.cache.publish_shared_blocking(source.as_ref(), request);
+    assert!(shared.policy.publishes_enabled);
+    assert!(!shared.signer_name.is_empty());
+    Some(match publication {
+        Ok(report) => SharedPublicationObservation::accepted(report),
+        Err(_) => SharedPublicationObservation::rejected(source.source_id().to_string(), "shared-publication-failed"),
+    })
 }
 
 fn try_restore_local_cache_result(
@@ -16465,15 +16561,91 @@ fn try_restore_local_cache_result(
     };
     let is_hit = report.disposition == crunch_rust_cache::CACHE_DISPOSITION_HIT;
     inputs.local_cache_report = Some(report);
-    if !is_hit {
-        return Ok(None);
+    if is_hit {
+        return finish_cache_restored_receipt(unit, options, inputs, RUST_CACHE_RESTORE_REBUILD_REASON).map(Some);
     }
+    try_restore_shared_cache_result(unit, options, selection, &action, inputs)
+}
+
+fn try_restore_shared_cache_result(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    local_selection: &RustUnitLocalCacheSelection,
+    action: &RustUnitAction,
+    inputs: &mut RustUnitExecutionInputs,
+) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
+    let Some(shared) = local_selection.shared.as_ref() else {
+        return Ok(None);
+    };
+    let report = local_selection
+        .cache
+        .restore_shared_blocking(
+            action,
+            &inputs.output_dir,
+            &local_selection.policy,
+            &shared.policy,
+            &shared.trust_policy,
+            &shared.sources,
+        )
+        .unwrap_or_else(|_| SharedRustCacheReport::rejected("shared-cache-restore-error"));
+    let is_hit = report.disposition == crunch_rust_cache::shared::SHARED_CACHE_HIT;
+    let is_conflict = report.disposition == crunch_rust_cache::shared::SHARED_CACHE_CONFLICT;
+    let must_block =
+        (is_conflict && shared.policy.block_on_conflict) || (!is_hit && !shared.policy.execute_after_rejection);
+    inputs.shared_cache_report = Some(report);
+    if is_hit {
+        return finish_cache_restored_receipt(unit, options, inputs, RUST_SHARED_CACHE_RESTORE_REBUILD_REASON)
+            .map(Some);
+    }
+    if must_block {
+        return shared_cache_blocked_receipt(unit, options, inputs).map(Some);
+    }
+    Ok(None)
+}
+
+fn finish_cache_restored_receipt(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    inputs: &mut RustUnitExecutionInputs,
+    rebuild_reason: &str,
+) -> Result<RustUnitExecutionReceipt, RunError> {
     let owned_inputs = std::mem::replace(inputs, empty_rust_unit_execution_inputs(options));
-    let receipt =
-        finalize_successful_rust_unit_execution(unit, options, owned_inputs, RUST_CACHE_RESTORE_REBUILD_REASON, false)?;
+    let receipt = finalize_successful_rust_unit_execution(unit, options, owned_inputs, rebuild_reason, false)?;
     assert_eq!(receipt.execution_status, "success");
-    assert_eq!(receipt.rebuild_reason, RUST_CACHE_RESTORE_REBUILD_REASON);
-    Ok(Some(receipt))
+    assert_eq!(receipt.rebuild_reason, rebuild_reason);
+    Ok(receipt)
+}
+
+fn shared_cache_blocked_receipt(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    inputs: &mut RustUnitExecutionInputs,
+) -> Result<RustUnitExecutionReceipt, RunError> {
+    let owned = std::mem::replace(inputs, empty_rust_unit_execution_inputs(options));
+    let mut receipt = finalized_execution_receipt(FinalizedExecutionReceiptInputs {
+        unit,
+        execution_status: "blocked",
+        rebuild_reason: "not-run-shared-cache-blocker",
+        toolchain: owned.toolchain,
+        environment_digest_blake3: owned.environment_digest_blake3,
+        dependency_artifact_digests: owned.dependency_artifact_digests,
+        host_artifact_digests: owned.host_artifact_digests,
+        output_artifact_digests: Vec::new(),
+        compiler_policy: owned.compiler_policy_receipt,
+        blocker: Some(RustUnitExecutionBlocker {
+            class: "shared-cache-strong-reuse-blocked".to_string(),
+            message: "shared Rust result policy rejected compiler fallback".to_string(),
+        }),
+    })?;
+    if let Some(report) = owned.local_cache_report {
+        receipt = attach_local_cache_report(receipt, report)?;
+    }
+    if let Some(report) = owned.shared_cache_report {
+        receipt = attach_shared_cache_report(receipt, report)?;
+    }
+    assert_eq!(receipt.execution_status, "blocked");
+    assert!(receipt.blocker.is_some());
+    Ok(receipt)
 }
 
 fn empty_rust_unit_execution_inputs(options: &RustUnitExecutionOptions) -> RustUnitExecutionInputs {
@@ -16487,6 +16659,7 @@ fn empty_rust_unit_execution_inputs(options: &RustUnitExecutionOptions) -> RustU
         compiler_policy_receipt: None,
         local_cache_action: None,
         local_cache_report: None,
+        shared_cache_report: None,
     };
     assert!(empty.dependency_artifact_digests.is_empty());
     assert!(empty.local_cache_action.is_none());
@@ -16536,6 +16709,9 @@ fn execute_rust_unit(
     }
     if let Some(report) = inputs.local_cache_report.take() {
         inputs.local_cache_report = Some(report.compiler_executed());
+    }
+    if let Some(report) = inputs.shared_cache_report.take() {
+        inputs.shared_cache_report = Some(report.compiler_executed());
     }
     finalize_successful_rust_unit_execution(unit, options, inputs, RUST_CACHE_COMPILE_REBUILD_REASON, true)
 }
@@ -17431,6 +17607,7 @@ fn finalized_execution_receipt(
         host_artifact_digests,
         output_artifact_digests,
         local_cache: None,
+        shared_cache: None,
         compiler_policy,
         blocker,
         diagnostic_context: None,
@@ -17632,6 +17809,7 @@ pub(crate) fn rust_unit_local_cache_selection(
     let selection = RustUnitLocalCacheSelection {
         cache,
         policy,
+        shared: None,
         compiler_digest_blake3,
         toolchain_closure_digest_blake3,
         execution_platform_digest_blake3,
@@ -18491,6 +18669,7 @@ mod tests {
         let selection = RustUnitLocalCacheSelection {
             cache: Arc::new(cache),
             policy,
+            shared: None,
             compiler_digest_blake3,
             toolchain_closure_digest_blake3: TEST_DIGEST_A.to_string(),
             execution_platform_digest_blake3: TEST_DIGEST_A.to_string(),
@@ -18498,6 +18677,41 @@ mod tests {
         };
         assert!(selection.policy.reads_enabled);
         assert!(selection.policy.writes_enabled);
+        selection
+    }
+
+    fn test_shared_cache_selection(source: Arc<dyn RustResultSource>, publish: bool) -> RustUnitSharedCacheSelection {
+        const TEST_SHARED_KEY_BYTE: u8 = 61;
+        let signing_key = Arc::new(ed25519_dalek::SigningKey::from_bytes(
+            &[TEST_SHARED_KEY_BYTE; crunch_rust_cache_core::shared::ED25519_PUBLIC_KEY_BYTES],
+        ));
+        let trusted_key = crunch_rust_cache_core::shared::TrustedRustResultKey {
+            signer_name: "shared-test-key".to_string(),
+            verifier_key_hex: data_encoding::HEXLOWER.encode(signing_key.verifying_key().as_bytes()),
+        };
+        let selection = RustUnitSharedCacheSelection {
+            policy: SharedRustCachePolicy {
+                reads_enabled: true,
+                publishes_enabled: publish,
+                ..SharedRustCachePolicy::default()
+            },
+            trust_policy: RustResultTrustPolicy {
+                schema: crunch_rust_cache_core::shared::SHARED_RUST_TRUST_POLICY_SCHEMA.to_string(),
+                policy_id: "shared-test-trust-policy-v1".to_string(),
+                accepted_producer_policy_ids: vec!["shared-test-producer-policy-v1".to_string()],
+                trusted_keys: vec![trusted_key],
+            },
+            sources: vec![source.clone()],
+            publication_source: publish.then_some(source),
+            producer: RustResultProducerIdentity {
+                producer_id: "shared-test-producer".to_string(),
+                producer_policy_id: "shared-test-producer-policy-v1".to_string(),
+            },
+            signer_name: "shared-test-key".to_string(),
+            signing_key: publish.then_some(signing_key),
+        };
+        assert_eq!(selection.publication_source.is_some(), publish);
+        assert_eq!(selection.signing_key.is_some(), publish);
         selection
     }
 
@@ -25442,6 +25656,96 @@ checksum = "0123456789abcdef"
         assert!(second_elapsed < first_elapsed);
         assert!(existing_elapsed < first_elapsed);
         assert!(unit_output.join(RUST_UNIT_EXECUTION_RECEIPT_FILE).is_file());
+    }
+
+    #[test]
+    fn clean_client_shared_cache_hit_skips_second_compiler_invocation() {
+        let dir = TempDir::new().unwrap();
+        let counter = dir.path().join("shared-compiler-count");
+        let rustc = write_counting_fake_rustc(dir.path(), &counter);
+        let graph = policy_test_graph(dir.path());
+        let source: Arc<dyn RustResultSource> = Arc::new(
+            crunch_rust_cache::shared::DirectoryRustResultSource::open(dir.path().join("shared-results"), true)
+                .unwrap(),
+        );
+        let mut producer_cache = test_local_cache_selection(&dir.path().join("producer"), &rustc);
+        producer_cache.shared = Some(test_shared_cache_selection(source.clone(), true));
+        let producer_options = RustUnitExecutionOptions {
+            rustc: rustc.clone(),
+            output_root: dir.path().join("producer-output"),
+            compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: Some(producer_cache),
+        };
+
+        let produced = execute_first_supported_rust_unit(&graph, &producer_options).unwrap();
+        assert_eq!(produced.execution_status, "success");
+        assert_eq!(produced.shared_cache.as_ref().unwrap().publications.len(), 1);
+        assert_eq!(produced.shared_cache.as_ref().unwrap().publications[0].disposition, "published");
+        assert_eq!(std::fs::read_to_string(&counter).unwrap(), TEST_COMPILER_INVOCATION_COUNT);
+
+        let mut client_cache = test_local_cache_selection(&dir.path().join("client"), &rustc);
+        client_cache.shared = Some(test_shared_cache_selection(source, false));
+        let client_options = RustUnitExecutionOptions {
+            rustc,
+            output_root: dir.path().join("client-output"),
+            compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: Some(client_cache),
+        };
+
+        let restored = execute_first_supported_rust_unit(&graph, &client_options).unwrap();
+
+        assert_eq!(restored.execution_status, "success");
+        assert_eq!(restored.rebuild_reason, RUST_SHARED_CACHE_RESTORE_REBUILD_REASON);
+        assert_eq!(std::fs::read_to_string(&counter).unwrap(), TEST_COMPILER_INVOCATION_COUNT);
+        assert_eq!(restored.shared_cache.as_ref().unwrap().disposition, crunch_rust_cache::shared::SHARED_CACHE_HIT);
+        assert!(!restored.shared_cache.as_ref().unwrap().compiler_executed);
+    }
+
+    #[test]
+    fn untrusted_shared_candidate_records_rejection_before_compiler_fallback() {
+        const WRONG_SHARED_KEY_BYTE: u8 = 67;
+        let dir = TempDir::new().unwrap();
+        let counter = dir.path().join("shared-fallback-compiler-count");
+        let rustc = write_counting_fake_rustc(dir.path(), &counter);
+        let graph = policy_test_graph(dir.path());
+        let source: Arc<dyn RustResultSource> = Arc::new(
+            crunch_rust_cache::shared::DirectoryRustResultSource::open(dir.path().join("shared-results"), true)
+                .unwrap(),
+        );
+        let mut producer_cache = test_local_cache_selection(&dir.path().join("producer"), &rustc);
+        producer_cache.shared = Some(test_shared_cache_selection(source.clone(), true));
+        let producer_options = RustUnitExecutionOptions {
+            rustc: rustc.clone(),
+            output_root: dir.path().join("producer-output"),
+            compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: Some(producer_cache),
+        };
+        execute_first_supported_rust_unit(&graph, &producer_options).unwrap();
+
+        let mut client_cache = test_local_cache_selection(&dir.path().join("client"), &rustc);
+        let mut shared = test_shared_cache_selection(source, false);
+        let wrong_key = ed25519_dalek::SigningKey::from_bytes(
+            &[WRONG_SHARED_KEY_BYTE; crunch_rust_cache_core::shared::ED25519_PUBLIC_KEY_BYTES],
+        );
+        shared.trust_policy.trusted_keys[0].verifier_key_hex =
+            data_encoding::HEXLOWER.encode(wrong_key.verifying_key().as_bytes());
+        client_cache.shared = Some(shared);
+        let client_options = RustUnitExecutionOptions {
+            rustc,
+            output_root: dir.path().join("client-output"),
+            compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: Some(client_cache),
+        };
+
+        let receipt = execute_first_supported_rust_unit(&graph, &client_options).unwrap();
+
+        assert_eq!(receipt.execution_status, "success");
+        assert_eq!(receipt.rebuild_reason, RUST_CACHE_COMPILE_REBUILD_REASON);
+        assert_eq!(std::fs::read_to_string(&counter).unwrap(), TEST_TOPOLOGY_COMPILER_INVOCATION_COUNT);
+        assert!(receipt.shared_cache.as_ref().unwrap().compiler_executed);
+        assert!(receipt.shared_cache.as_ref().unwrap().observations.iter().any(|observation| {
+            observation.reason_codes.contains(&"shared-rust-verifier-key-untrusted".to_string())
+        }));
     }
 
     #[test]

@@ -49,6 +49,8 @@ use snix_castore::import::fs::ingest_path;
 use tempfile::Builder;
 use thiserror::Error;
 
+pub mod shared;
+
 pub const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json";
 pub const RUST_CACHE_RETENTION_SCHEMA: &str = "mantle-rust-unit-retention-v1";
 pub const CACHE_DISPOSITION_DISABLED: &str = "local-cache-disabled";

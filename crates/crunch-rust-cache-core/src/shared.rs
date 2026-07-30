@@ -22,6 +22,7 @@ pub const SHARED_RUST_ENVELOPE_SCHEMA: &str = "mantle-shared-rust-unit-result-en
 pub const SHARED_RUST_TRUST_POLICY_SCHEMA: &str = "mantle-shared-rust-unit-trust-policy-v1";
 pub const SHARED_RUST_CLAIM_CLASS: &str = "admitted-rust-unit-result-v1";
 pub const SHARED_RUST_ENVELOPE_REF_PREFIX: &str = "mantle-shared-rust-envelope://blake3/";
+pub const SHARED_RUST_OBJECT_REF_PREFIX: &str = "mantle-shared-rust-object://blake3/";
 pub const MAX_TRUSTED_RUST_RESULT_KEYS: usize = 64;
 pub const MAX_ACCEPTED_PRODUCER_POLICIES: usize = 64;
 pub const ED25519_PUBLIC_KEY_BYTES: usize = 32;
@@ -44,11 +45,19 @@ pub struct RustResultProducerIdentity {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+pub struct RustResultObjectIdentity {
+    pub object_ref: String,
+    pub size_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct RustResultEnvelope {
     pub schema: String,
     pub envelope_ref: String,
     pub claim_class: String,
     pub result: RustUnitResult,
+    pub object: RustResultObjectIdentity,
     pub producer: RustResultProducerIdentity,
     pub signer_name: String,
     pub verifier_key_blake3: String,
@@ -93,6 +102,7 @@ struct EnvelopeHashable<'a> {
     schema: &'a str,
     claim_class: &'a str,
     result: &'a RustUnitResult,
+    object: &'a RustResultObjectIdentity,
     producer: &'a RustResultProducerIdentity,
     signer_name: &'a str,
     verifier_key_blake3: &'a str,
@@ -100,22 +110,25 @@ struct EnvelopeHashable<'a> {
 
 pub fn sign_rust_result_envelope(
     result: RustUnitResult,
+    object: RustResultObjectIdentity,
     producer: RustResultProducerIdentity,
     signer_name: String,
     signing_key: &ed25519_dalek::SigningKey,
 ) -> Result<SignedRustResultEnvelope, String> {
     validate_rust_result(&result)?;
+    validate_object_identity(&object)?;
     validate_identifier(&producer.producer_id, "shared-rust-producer-id-invalid")?;
     validate_identifier(&producer.producer_policy_id, "shared-rust-producer-policy-id-invalid")?;
     validate_identifier(&signer_name, "shared-rust-signer-name-invalid")?;
     let verifier_key_hex = HEXLOWER.encode(signing_key.verifying_key().as_bytes());
     let verifier_key_blake3 = verifier_key_digest(&verifier_key_hex)?;
-    let envelope_ref = envelope_reference(&result, &producer, &signer_name, &verifier_key_blake3)?;
+    let envelope_ref = envelope_reference(&result, &object, &producer, &signer_name, &verifier_key_blake3)?;
     let envelope = RustResultEnvelope {
         schema: SHARED_RUST_ENVELOPE_SCHEMA.to_string(),
         envelope_ref,
         claim_class: SHARED_RUST_CLAIM_CLASS.to_string(),
         result,
+        object,
         producer,
         signer_name,
         verifier_key_blake3,
@@ -142,12 +155,18 @@ pub fn validate_rust_result_envelope(envelope: &RustResultEnvelope) -> Result<()
         return Err("shared-rust-claim-class-unsupported".to_string());
     }
     validate_rust_result(&envelope.result)?;
+    validate_object_identity(&envelope.object)?;
     validate_identifier(&envelope.producer.producer_id, "shared-rust-producer-id-invalid")?;
     validate_identifier(&envelope.producer.producer_policy_id, "shared-rust-producer-policy-id-invalid")?;
     validate_identifier(&envelope.signer_name, "shared-rust-signer-name-invalid")?;
     validate_blake3(&envelope.verifier_key_blake3, "shared-rust-verifier-key-digest-invalid")?;
-    let expected_ref =
-        envelope_reference(&envelope.result, &envelope.producer, &envelope.signer_name, &envelope.verifier_key_blake3)?;
+    let expected_ref = envelope_reference(
+        &envelope.result,
+        &envelope.object,
+        &envelope.producer,
+        &envelope.signer_name,
+        &envelope.verifier_key_blake3,
+    )?;
     if envelope.envelope_ref != expected_ref {
         return Err("shared-rust-envelope-ref-mismatch".to_string());
     }
@@ -273,6 +292,7 @@ pub fn verifier_key_digest(verifier_key_hex: &str) -> Result<String, String> {
 
 fn envelope_reference(
     result: &RustUnitResult,
+    object: &RustResultObjectIdentity,
     producer: &RustResultProducerIdentity,
     signer_name: &str,
     verifier_key_blake3: &str,
@@ -281,6 +301,7 @@ fn envelope_reference(
         schema: SHARED_RUST_ENVELOPE_SCHEMA,
         claim_class: SHARED_RUST_CLAIM_CLASS,
         result,
+        object,
         producer,
         signer_name,
         verifier_key_blake3,
@@ -293,6 +314,26 @@ fn envelope_reference(
     assert_eq!(digest.len(), BLAKE3_HEX_CHARS);
     assert!(bytes.len() <= MAX_SHARED_ENVELOPE_BYTES);
     Ok(format!("{SHARED_RUST_ENVELOPE_REF_PREFIX}{digest}"))
+}
+
+fn validate_object_identity(object: &RustResultObjectIdentity) -> Result<(), String> {
+    validate_typed_ref(&object.object_ref, SHARED_RUST_OBJECT_REF_PREFIX, "shared-rust-object-ref-invalid")?;
+    if object.size_bytes == 0 || object.size_bytes > crate::MAX_TREE_BYTES {
+        return Err("shared-rust-object-size-invalid".to_string());
+    }
+    assert!(object.object_ref.starts_with(SHARED_RUST_OBJECT_REF_PREFIX));
+    assert!(object.size_bytes <= crate::MAX_TREE_BYTES);
+    Ok(())
+}
+
+fn validate_typed_ref(value: &str, prefix: &str, code: &str) -> Result<(), String> {
+    let Some(digest) = value.strip_prefix(prefix) else {
+        return Err(code.to_string());
+    };
+    validate_blake3(digest, code)?;
+    assert_eq!(value.len(), prefix.len() + BLAKE3_HEX_CHARS);
+    assert!(value.starts_with(prefix));
+    Ok(())
 }
 
 fn verify_signature(signed: &SignedRustResultEnvelope) -> Result<(), String> {
@@ -551,6 +592,10 @@ mod tests {
         let signing_key = signing_key(TEST_KEY_BYTE);
         let signed = sign_rust_result_envelope(
             result,
+            RustResultObjectIdentity {
+                object_ref: typed_ref(SHARED_RUST_OBJECT_REF_PREFIX, DIGEST_HEX),
+                size_bytes: 128,
+            },
             RustResultProducerIdentity {
                 producer_id: "fixture-builder".to_string(),
                 producer_policy_id: "fixture-producer-policy-v1".to_string(),
