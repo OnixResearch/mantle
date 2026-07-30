@@ -11,6 +11,8 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use serde::Serialize;
 
+pub mod shared;
+
 pub const RUST_ACTION_SCHEMA: &str = "mantle-rust-unit-action-v1";
 pub const RUST_RESULT_SCHEMA: &str = "mantle-rust-unit-result-v1";
 pub const RUST_RESULT_INDEX_SCHEMA: &str = "mantle-rust-unit-result-index-v1";

@@ -2,8 +2,8 @@
 
 ## Phase 1: Shared record authority
 
-- [ ] [depends:persist-rust-unit-castore-results] I1 Extend the Rust cache core with bounded signed result envelopes, producer-policy identity, full-key trust matching, and deterministic authority decisions. r[cache_substitution.rust_unit_action_result_discovery]
-- [ ] [serial] I2 Add positive and negative signature tests for accepted keys, unknown keys, duplicate signer names with different key material, modified records, wrong action references, and wrong result references. r[cache_substitution.rust_unit_action_result_discovery.candidate_admission]
+- [x] [depends:persist-rust-unit-castore-results] I1 Extend the Rust cache core with bounded signed result envelopes, producer-policy identity, full-key trust matching, and deterministic authority decisions. r[cache_substitution.rust_unit_action_result_discovery]
+- [x] [serial] I2 Add positive and negative signature tests for accepted keys, unknown keys, duplicate signer names with different key material, modified records, wrong action references, and wrong result references. r[cache_substitution.rust_unit_action_result_discovery.candidate_admission]
 
 ## Phase 2: Discovery and content transfer
 

@@ -1607,6 +1607,8 @@ name = "crunch-rust-cache-core"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "data-encoding",
+ "ed25519-dalek",
  "pretty_assertions",
  "serde",
  "serde_json",
