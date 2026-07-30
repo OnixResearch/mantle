@@ -52,3 +52,5 @@ compatibility surface, crate name, or historical decision.
 | [0043](0043-stage-stagex-binutils-install-under-its-logical-prefix.md) | Stage the StageX binutils install under its logical prefix | Accepted |
 | [0044](0044-canonicalize-tinycc-local-symbol-names-at-the-stagex-boundary.md) | Canonicalize TinyCC local symbol names at the StageX boundary | Accepted |
 | [0045](0045-adopt-orphaned-stagex-exec-descendants-before-inspection.md) | Adopt orphaned StageX exec descendants before inspection | Accepted |
+| [0046](0046-realize-foreign-graphs-through-a-receipt-bound-adapter.md) | Realize foreign graphs through a receipt-bound adapter | Proposed |
+| [0047](0047-bound-stagex-exec-audits-above-the-closed-binutils-trace.md) | Bound StageX exec audits above the closed binutils trace | Accepted |
