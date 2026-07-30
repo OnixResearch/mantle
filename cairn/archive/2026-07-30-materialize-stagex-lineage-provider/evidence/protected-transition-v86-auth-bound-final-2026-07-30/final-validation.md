@@ -15,6 +15,9 @@
 - Cairn proposal gate: `PASS`, receipt `eab28671b3e59d0f0ad6c167e064fca0237806d540a6a647f0b27d4af8e5b30f`.
 - Cairn design gate: `PASS`, receipt `0ea2a775b4e8049715628a50ec2870a966e8818da8dab95997ed198d9d73cbcf`.
 - Cairn tasks gate: `PASS`, receipt `1ab6ce5a913cd7f60686b1af88289ff78bc00db31ae5223785b560532da3481c`.
+- Cairn sync: executed, receipt `10bdd1ebc4b4bed65dd5499e9f94fa6728351b8bcb1053a6987113245ee23ea3`.
+- Cairn archive: executed, receipt `c1407f8d065dcd552f147645c23d1ed830d601df622e3a84109e32b407c00114`.
+- Post-archive Cairn validation: `valid: true`; exact output is in `post-archive-validation.txt`.
 
 The compatible Cairn command source was:
 

@@ -68,6 +68,10 @@ Pueue task `4281` reused the first destination. It recorded CLI exit status `3` 
 error: invalid StageX provider input: provider output must be an absent absolute path
 ```
 
+## Lifecycle closure
+
+Cairn sync promoted `r[bootstrap_inventory.stagex_lineage_provider_materialization]` into the accepted bootstrap inventory specification. The executed sync receipt is `10bdd1ebc4b4bed65dd5499e9f94fa6728351b8bcb1053a6987113245ee23ea3`. Cairn then archived this change under `cairn/archive/2026-07-30-materialize-stagex-lineage-provider/` with receipt `c1407f8d065dcd552f147645c23d1ed830d601df622e3a84109e32b407c00114`. The preserved post-archive validation reports `valid: true`.
+
 ## Evidence limitation
 
 `full-transition-test.log` contains the exact command and the retained `pueue_log` result lines. The queue CLI could not export a longer transcript through its separate daemon context. The complete plan, report, 76,576-event audit, inventories, authorization review, publication logs, provider metadata, validation report, receipt, and BLAKE3 manifest remain present for independent inspection.
@@ -87,6 +91,7 @@ The v85 evidence remains a diagnostic record of the authorization-binding gap. I
 - `cairn-validate.txt`
 - `cairn-gate-{proposal,design,tasks}.txt`
 - `cairn-current-validate.{stdout,stderr}.txt`
+- `post-archive-validation.txt`
 - `musl-native-inventory.json`
 - `tcc-musl-selfhost-inventory.json`
 - `provider.json`
