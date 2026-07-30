@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "crates/crunch-action-result-core",
   "crates/crunch-rust-cache-core",
+  "crates/crunch-rust-cache",
   "crates/crunch-eval",
   "crates/crunch-glue",
   "crates/crunch-store",
@@ -65,6 +66,7 @@ default_scope = [
   "-p", "crunch-project-core",
   "-p", "crunch-release-core",
   "-p", "crunch-rust-cache-core",
+  "-p", "crunch-rust-cache",
   "-p", "crunch-shell",
   "-p", "crunch-shell-core",
   "-p", "crunch-store",

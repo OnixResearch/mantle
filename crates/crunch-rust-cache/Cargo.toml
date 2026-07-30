@@ -1,0 +1,24 @@
+[package]
+name = "crunch-rust-cache"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
+
+[dependencies]
+blake3 = "=1.8.2"
+crunch-rust-cache-core = { path = "../crunch-rust-cache-core" }
+crunch-store = { path = "../crunch-store" }
+fs2 = "0.4"
+libc = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+snix-castore = { path = "../../vendor/snix-castore" }
+tempfile = "3"
+thiserror = "2.0"
+tokio = { version = "1", features = ["rt", "time"] }
+
+[dev-dependencies]
+pretty_assertions = "1.0"
