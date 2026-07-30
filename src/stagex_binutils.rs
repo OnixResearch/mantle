@@ -22,6 +22,19 @@ pub(crate) const BINUTILS_SOURCE_CONTENT_BLAKE3: &str =
 pub(crate) const BINUTILS_RECIPE_ARTIFACT_ID: &str = "binutils-2.30-recipe-source";
 pub(crate) const BINUTILS_RECIPE_BLAKE3: &str = "406d4aaecf2cc8c9b357463fb8f48f185acaa67e77c4136e5908cca851efd177";
 const BINUTILS_RECIPE: &[u8] = include_bytes!("../bootstrap/binutils-tcc.ncl");
+const SED_BRIDGE_LAUNCHER_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-sed-bridge-launcher.c");
+const SED_BRIDGE_SCRIPT_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-sed-regular-file-bridge.sh");
+const SINGLE_THREAD_SEMAPHORE_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-single-thread-semaphore-compat.c");
+const SED_BRIDGE_LAUNCHER_SOURCE_ARTIFACT_ID: &str = "stagex-sed-bridge-launcher-source";
+const SED_BRIDGE_LAUNCHER_SOURCE_NAME: &str = "stagex-sed-bridge-launcher.c";
+const SED_BRIDGE_LAUNCHER_OUTPUT_NAME: &str = "stagex-sed-bridge-launcher";
+const SINGLE_THREAD_SEMAPHORE_SOURCE_NAME: &str = "stagex-single-thread-semaphore-compat.c";
+const SED_BRIDGE_SCRIPT_SOURCE_ARTIFACT_ID: &str = "stagex-sed-regular-file-bridge-source";
+const SINGLE_THREAD_SEMAPHORE_SOURCE_ARTIFACT_ID: &str = "stagex-single-thread-semaphore-compat-source";
+const SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3: &str = "606c52085de42d0221ba5490e81d8c539a50a65aaa89f7b4b478371bdc643dab";
+const SED_BRIDGE_LAUNCHER_BLAKE3: &str = "9b4d6a5eca05f55c407a70f7e426f756f482c9ae8f76d0a22d1b1b46e7dba1a1";
+const SED_BRIDGE_SCRIPT_SOURCE_BLAKE3: &str = "d2c195da10d206de2538c03ad7f10579d3c50acbbca649ce0952bd102da467d0";
+const SINGLE_THREAD_SEMAPHORE_SOURCE_BLAKE3: &str = "52c3ec19c484b0b4c3c5de84fc7ae77f40601fc81993d16ef6e15eb7401ee084";
 const BINUTILS_SOURCE_REPORT_FORMAT: &str = "mantle-stagex-binutils-2.30-source-materialization-v1";
 const BINUTILS_SOURCE_NON_CLAIM: &str =
     "binutils source materialization proves authenticated offline archive identity and checked-recipe identity only";
@@ -29,7 +42,7 @@ const BINUTILS_RECORD_HASH: &str = "sha256-L8aaWezlL47cNdPIbSEAtryYUDXLe9htMSECT
 const BINUTILS_RECORD_URL: &str = "https://ftpmirror.gnu.org/binutils/binutils-2.30.tar.xz";
 const BINUTILS_RECORD_PAYLOAD_ENCODING: &str = "tarball-archive-v1";
 const BINUTILS_RECORD_UNPACK: &str = "1";
-const BINUTILS_SOURCE_ARTIFACT_COUNT: usize = 2;
+const BINUTILS_SOURCE_ARTIFACT_COUNT: usize = 5;
 const REQUIRED_SOURCE_FILES: &[&str] = &[
     "configure",
     "config.sub",
@@ -83,6 +96,9 @@ pub(crate) fn source_artifact_digests() -> [(&'static str, &'static str); BINUTI
     [
         (BINUTILS_SOURCE_ARTIFACT_ID, BINUTILS_SOURCE_CONTENT_BLAKE3),
         (BINUTILS_RECIPE_ARTIFACT_ID, BINUTILS_RECIPE_BLAKE3),
+        (SED_BRIDGE_LAUNCHER_SOURCE_ARTIFACT_ID, SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3),
+        (SED_BRIDGE_SCRIPT_SOURCE_ARTIFACT_ID, SED_BRIDGE_SCRIPT_SOURCE_BLAKE3),
+        (SINGLE_THREAD_SEMAPHORE_SOURCE_ARTIFACT_ID, SINGLE_THREAD_SEMAPHORE_SOURCE_BLAKE3),
     ]
 }
 
@@ -281,6 +297,23 @@ pub(crate) struct BinutilsConfigureProbeRequest<'a> {
     pub make: &'a Path,
 }
 
+#[derive(Debug, Clone)]
+struct SedBridgePaths {
+    launcher: PathBuf,
+    script: PathBuf,
+    spool_root: PathBuf,
+    audit: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SedBridgeAuditEntry {
+    invocation: u32,
+    input_bytes: u64,
+    output_bytes: u64,
+    input_file_count: u32,
+    status: String,
+}
+
 const COREUTILS_TOOL_NAMES: &[&str] = &[
     "basename", "cat", "chmod", "cp", "dirname", "echo", "expr", "false", "head", "install", "ln", "ls", "mkdir", "mv",
     "rm", "rmdir", "sort", "tail", "tee", "test", "touch", "tr", "true", "uniq", "wc",
@@ -290,10 +323,20 @@ const CONFIGURE_OUTPUT_MEBIBYTES_MAX: u64 = 16;
 const KIBIBYTE_BYTES: u64 = 1_024;
 const MEBIBYTE_BYTES: u64 = KIBIBYTE_BYTES * KIBIBYTE_BYTES;
 const CONFIGURE_OUTPUT_BYTES_MAX: u64 = CONFIGURE_OUTPUT_MEBIBYTES_MAX * MEBIBYTE_BYTES;
+const SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX: u64 = KIBIBYTE_BYTES;
+const SED_BRIDGE_AUTHORITY_FAILURE: i32 = 125;
+const SED_BRIDGE_INVOCATION_COUNT_MAX: u32 = 4_096;
+const SED_BRIDGE_AUDIT_FIELD_COUNT: usize = 5;
+const SED_BRIDGE_SMOKE_EXPECTED: &[u8] = b"S[\"LTLIBOBJS\"]=\"\"\n";
+const SED_BRIDGE_SMOKE_INPUT: &[u8] = b"LTLIBOBJS!%!_!# \n";
+const SED_BRIDGE_FIRST_PROGRAM: &[u8] = b"h\ns/^/S[\"/; s/!.*/\"]=/\np\ng\ns/^[^!]*!//\n:repl\nt repl\ns/%!_!# $//\nt delim\n:nl\nh\ns/\\(.\\{148\\}\\).*/\\1/\nt more1\ns/[\"\\\\]/\\\\&/g; s/^/\"/; s/$/\\\\n\"\\\\/\np\nn\nb repl\n:more1\ns/[\"\\\\]/\\\\&/g; s/^/\"/; s/$/\"\\\\/\np\ng\ns/.\\{148\\}//\nt nl\n:delim\nh\ns/\\(.\\{148\\}\\).*/\\1/\nt more2\ns/[\"\\\\]/\\\\&/g; s/^/\"/; s/$/\"/\np\nb\n:more2\ns/[\"\\\\]/\\\\&/g; s/^/\"/; s/$/\"\\\\/\np\ng\ns/.\\{148\\}//\nt delim\n";
+const SED_BRIDGE_SECOND_PROGRAM: &[u8] = b"/^[^\"\"]/ {\n  N\n  s/\\n//\n}\n";
 const TARGET: &str = "x86_64-unknown-linux-gnu";
 const BINUTILS_RUNTIME_START: &str = "      $BB cat > \"$WORK/binutils-runtime.c\" <<'RUNTIME_EOF'\n";
 const BINUTILS_RUNTIME_END: &str = "\nRUNTIME_EOF";
 const REGULAR_FILE_MODE: u32 = 0o644;
+const EXECUTABLE_FILE_MODE: u32 = 0o755;
+const SED_BRIDGE_COMPILE_ARGUMENT_COUNT: usize = 6;
 
 pub(crate) fn probe_authenticated_intl_configure(
     request: BinutilsConfigureProbeRequest<'_>,
@@ -307,14 +350,16 @@ pub(crate) fn probe_authenticated_intl_configure(
     let tools = request.scratch_dir.join("tools");
     fs::create_dir(&tools)
         .map_err(|error| StagexBinutilsError::Materialization(format!("creating configure tool namespace: {error}")))?;
-    populate_probe_tool_namespace(&request, &tools)?;
     let compiler_wrapper = prepare_tcc_wrapper(&request)?;
+    let sed_bridge = prepare_sed_bridge(&request, &compiler_wrapper)?;
+    populate_probe_tool_namespace(&request, &tools, &sed_bridge.launcher)?;
     let stdin_path = request.scratch_dir.join("configure.stdin");
     crate::stagex_mes_lib::write_create_new(&stdin_path, b"").map_err(StagexBinutilsError::from_runtime)?;
     let stdout_path = request.scratch_dir.join("configure.stdout.txt");
     let stderr_path = request.scratch_dir.join("configure.stderr.txt");
     let arguments = configure_arguments();
-    let environment = configure_environment(&request, &tools, &compiler_wrapper)?;
+    let environment = configure_environment(&request, &tools, &compiler_wrapper, &sed_bridge)?;
+    run_sed_bridge_smokes(&request, &sed_bridge, &environment)?;
     let configure_dir = source.join("intl");
     let exit_code = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
         request.bash,
@@ -328,6 +373,7 @@ pub(crate) fn probe_authenticated_intl_configure(
         &stderr_path,
     )
     .map_err(StagexBinutilsError::from_runtime)?;
+    finalize_sed_bridge_audit(&sed_bridge)?;
     assert!(stdout_path.is_file());
     assert!(stderr_path.is_file());
     Ok(exit_code)
@@ -379,6 +425,7 @@ fn probe_required_executables<'a>(request: &'a BinutilsConfigureProbeRequest<'a>
 fn populate_probe_tool_namespace(
     request: &BinutilsConfigureProbeRequest<'_>,
     tools: &Path,
+    sed_bridge_launcher: &Path,
 ) -> Result<(), StagexBinutilsError> {
     for name in COREUTILS_TOOL_NAMES {
         add_tool_binding(tools, name, &request.coreutils_bin.join(name))?;
@@ -387,7 +434,7 @@ fn populate_probe_tool_namespace(
         ("sh", request.bash),
         ("bash", request.bash),
         ("cc", request.tcc),
-        ("sed", request.sed),
+        ("sed", sed_bridge_launcher),
         ("grep", request.grep),
         ("egrep", request.grep),
         ("fgrep", request.grep),
@@ -474,6 +521,169 @@ fn prepare_tcc_wrapper(request: &BinutilsConfigureProbeRequest<'_>) -> Result<Pa
     assert!(runtime_object.is_file());
     assert!(wrapper.is_file());
     Ok(wrapper)
+}
+
+fn prepare_sed_bridge(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    compiler_wrapper: &Path,
+) -> Result<SedBridgePaths, StagexBinutilsError> {
+    validate_sed_bridge_sources()?;
+    let launcher_source = request.scratch_dir.join(SED_BRIDGE_LAUNCHER_SOURCE_NAME);
+    let semaphore_source = request.scratch_dir.join(SINGLE_THREAD_SEMAPHORE_SOURCE_NAME);
+    let launcher = request.scratch_dir.join(SED_BRIDGE_LAUNCHER_OUTPUT_NAME);
+    let script = request.scratch_dir.join("stagex-sed-regular-file-bridge.sh");
+    let spool_root = request.scratch_dir.join("sed-spool");
+    crate::stagex_mes_lib::write_create_new(&launcher_source, SED_BRIDGE_LAUNCHER_SOURCE)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    crate::stagex_mes_lib::write_create_new(&script, SED_BRIDGE_SCRIPT_SOURCE)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    crate::stagex_mes_lib::write_create_new(&semaphore_source, SINGLE_THREAD_SEMAPHORE_SOURCE)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    fs::set_permissions(&script, fs::Permissions::from_mode(REGULAR_FILE_MODE))
+        .map_err(|error| StagexBinutilsError::Materialization(format!("setting sed bridge script mode: {error}")))?;
+    fs::create_dir(&spool_root)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("creating sed spool root: {error}")))?;
+    compile_sed_bridge_launcher(request, compiler_wrapper, &launcher_source, &semaphore_source, &launcher)?;
+    run_sed_bridge_launcher_self_test(request, &launcher)?;
+    run_sed_bridge_launcher_missing_authority_test(request, &launcher)?;
+    assert!(launcher.is_file());
+    assert!(spool_root.is_dir());
+    Ok(SedBridgePaths {
+        launcher,
+        script,
+        audit: spool_root.join("audit.tsv"),
+        spool_root,
+    })
+}
+
+fn validate_sed_bridge_sources() -> Result<(), StagexBinutilsError> {
+    require_sed_bridge_source_digest("launcher", SED_BRIDGE_LAUNCHER_SOURCE, SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3)?;
+    require_sed_bridge_source_digest("script", SED_BRIDGE_SCRIPT_SOURCE, SED_BRIDGE_SCRIPT_SOURCE_BLAKE3)?;
+    require_sed_bridge_source_digest(
+        "single-thread semaphore compatibility",
+        SINGLE_THREAD_SEMAPHORE_SOURCE,
+        SINGLE_THREAD_SEMAPHORE_SOURCE_BLAKE3,
+    )?;
+    assert_ne!(SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3, SED_BRIDGE_SCRIPT_SOURCE_BLAKE3);
+    assert!(!SED_BRIDGE_SCRIPT_SOURCE.is_empty());
+    Ok(())
+}
+
+fn require_sed_bridge_source_digest(label: &str, bytes: &[u8], expected: &str) -> Result<(), StagexBinutilsError> {
+    let observed = blake3::hash(bytes).to_hex().to_string();
+    if observed != expected {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "sed bridge {label} source BLAKE3 mismatch: expected {expected}, observed {observed}"
+        )));
+    }
+    assert_eq!(observed.len(), BLAKE3_HEX_CHAR_COUNT);
+    assert!(!bytes.is_empty());
+    Ok(())
+}
+
+fn validate_file_digest(path: &Path, expected: &str, label: &str) -> Result<(), StagexBinutilsError> {
+    let bytes = crate::stagex_mes_lib::read_bounded_file(path, CONFIGURE_OUTPUT_BYTES_MAX, label)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    let observed = blake3::hash(&bytes).to_hex().to_string();
+    if observed != expected {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "{label} BLAKE3 mismatch: expected {expected}, observed {observed}"
+        )));
+    }
+    assert_eq!(observed.len(), BLAKE3_HEX_CHAR_COUNT);
+    assert!(!bytes.is_empty());
+    Ok(())
+}
+
+fn compile_sed_bridge_launcher(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    compiler_wrapper: &Path,
+    source: &Path,
+    semaphore_source: &Path,
+    output: &Path,
+) -> Result<(), StagexBinutilsError> {
+    if source != request.scratch_dir.join(SED_BRIDGE_LAUNCHER_SOURCE_NAME)
+        || semaphore_source != request.scratch_dir.join(SINGLE_THREAD_SEMAPHORE_SOURCE_NAME)
+        || output != request.scratch_dir.join(SED_BRIDGE_LAUNCHER_OUTPUT_NAME)
+    {
+        return Err(StagexBinutilsError::Materialization(
+            "sed bridge compile paths differ from the fixed relative names".to_string(),
+        ));
+    }
+    let arguments = vec![
+        shell_path(compiler_wrapper, "TinyCC wrapper")?,
+        format!("-I{}", shell_path(&request.musl_root.join("include"), "native musl include")?),
+        SED_BRIDGE_LAUNCHER_SOURCE_NAME.to_string(),
+        SINGLE_THREAD_SEMAPHORE_SOURCE_NAME.to_string(),
+        "-o".to_string(),
+        SED_BRIDGE_LAUNCHER_OUTPUT_NAME.to_string(),
+    ];
+    crate::stagex_mes_lib::run_bounded_process(
+        request.bash,
+        &arguments,
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        &request.scratch_dir.join("sed-bridge-launcher-compile.stderr.txt"),
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    fs::set_permissions(output, fs::Permissions::from_mode(EXECUTABLE_FILE_MODE))
+        .map_err(|error| StagexBinutilsError::Materialization(format!("setting sed bridge launcher mode: {error}")))?;
+    validate_file_digest(output, SED_BRIDGE_LAUNCHER_BLAKE3, "sed bridge launcher")?;
+    assert_eq!(arguments.len(), SED_BRIDGE_COMPILE_ARGUMENT_COUNT);
+    assert!(source.is_file());
+    assert!(semaphore_source.is_file());
+    assert!(output.is_file());
+    Ok(())
+}
+
+fn run_sed_bridge_launcher_self_test(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    launcher: &Path,
+) -> Result<(), StagexBinutilsError> {
+    crate::stagex_mes_lib::run_bounded_process(
+        launcher,
+        &["--mantle-self-test"],
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        &request.scratch_dir.join("sed-bridge-launcher-self-test.stderr.txt"),
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    assert!(launcher.is_file());
+    assert!(request.scratch_dir.is_dir());
+    Ok(())
+}
+
+fn run_sed_bridge_launcher_missing_authority_test(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    launcher: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let stdin_path = request.scratch_dir.join("sed-bridge-missing-authority.stdin");
+    let stdout_path = request.scratch_dir.join("sed-bridge-missing-authority.stdout.txt");
+    let stderr_path = request.scratch_dir.join("sed-bridge-missing-authority.stderr.txt");
+    crate::stagex_mes_lib::write_create_new(&stdin_path, b"").map_err(StagexBinutilsError::from_runtime)?;
+    let status = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
+        launcher,
+        &["s/x/y/"],
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        &stdin_path,
+        SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX,
+        &stdout_path,
+        SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX,
+        &stderr_path,
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    let stderr = fs::read_to_string(&stderr_path).map_err(|error| {
+        StagexBinutilsError::Materialization(format!("reading sed bridge missing-authority stderr: {error}"))
+    })?;
+    if status != SED_BRIDGE_AUTHORITY_FAILURE || !stderr.contains("missing absolute launcher authority") {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "sed bridge missing-authority test mismatch: status {status}, stderr {stderr:?}"
+        )));
+    }
+    assert_eq!(status, SED_BRIDGE_AUTHORITY_FAILURE);
+    assert!(!stderr.is_empty());
+    Ok(())
 }
 
 fn extract_recipe_block(start: &str, end: &str, label: &str) -> Result<String, StagexBinutilsError> {
@@ -650,6 +860,229 @@ fn tcc_wrapper_script(
     Ok(script)
 }
 
+fn run_sed_bridge_smokes(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    bridge: &SedBridgePaths,
+    environment: &std::collections::BTreeMap<String, String>,
+) -> Result<(), StagexBinutilsError> {
+    let smoke_root = request.scratch_dir.join("sed-bridge-smoke");
+    fs::create_dir(&smoke_root)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("creating sed bridge smoke root: {error}")))?;
+    let input = smoke_root.join("input.txt");
+    let first = smoke_root.join("first.sed");
+    let second = smoke_root.join("second.sed");
+    let driver = smoke_root.join("positive.sh");
+    let empty_stdin = smoke_root.join("empty.stdin");
+    crate::stagex_mes_lib::write_create_new(&input, SED_BRIDGE_SMOKE_INPUT)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    crate::stagex_mes_lib::write_create_new(&first, SED_BRIDGE_FIRST_PROGRAM)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    crate::stagex_mes_lib::write_create_new(&second, SED_BRIDGE_SECOND_PROGRAM)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    crate::stagex_mes_lib::write_create_new(&empty_stdin, b"").map_err(StagexBinutilsError::from_runtime)?;
+    let driver_bytes = sed_bridge_smoke_driver(bridge, &input, &first, &second)?;
+    crate::stagex_mes_lib::write_create_new(&driver, driver_bytes.as_bytes())
+        .map_err(StagexBinutilsError::from_runtime)?;
+    run_positive_sed_bridge_smoke(request, environment, &driver, &empty_stdin, &smoke_root)?;
+    run_negative_sed_bridge_smoke(bridge, environment, &input, &smoke_root)?;
+    assert!(bridge.audit.is_file());
+    assert!(smoke_root.is_dir());
+    Ok(())
+}
+
+fn sed_bridge_smoke_driver(
+    bridge: &SedBridgePaths,
+    input: &Path,
+    first: &Path,
+    second: &Path,
+) -> Result<String, StagexBinutilsError> {
+    let driver = format!(
+        "set -eu\nSED='{}'\n\"$SED\" -n -f '{}' < '{}' | \"$SED\" -f '{}'\n",
+        shell_path(&bridge.launcher, "sed bridge launcher")?,
+        shell_path(first, "first sed smoke program")?,
+        shell_path(input, "sed smoke input")?,
+        shell_path(second, "second sed smoke program")?,
+    );
+    assert!(driver.contains("\"$SED\""));
+    assert!(!driver.contains("/bin/sh"));
+    Ok(driver)
+}
+
+fn run_positive_sed_bridge_smoke(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    environment: &std::collections::BTreeMap<String, String>,
+    driver: &Path,
+    stdin_path: &Path,
+    smoke_root: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let stdout_path = smoke_root.join("positive.stdout.txt");
+    let stderr_path = smoke_root.join("positive.stderr.txt");
+    let status = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
+        request.bash,
+        &[shell_path(driver, "sed bridge smoke driver")?],
+        smoke_root,
+        environment,
+        stdin_path,
+        SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX,
+        &stdout_path,
+        SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX,
+        &stderr_path,
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    let observed = fs::read(&stdout_path)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading sed bridge smoke output: {error}")))?;
+    if status != 0 || observed != SED_BRIDGE_SMOKE_EXPECTED {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "sed bridge positive smoke mismatch: status {status}, observed {:?}",
+            String::from_utf8_lossy(&observed)
+        )));
+    }
+    assert_eq!(observed, SED_BRIDGE_SMOKE_EXPECTED);
+    assert_eq!(status, 0);
+    Ok(())
+}
+
+fn run_negative_sed_bridge_smoke(
+    bridge: &SedBridgePaths,
+    environment: &std::collections::BTreeMap<String, String>,
+    input: &Path,
+    smoke_root: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let stdout_path = smoke_root.join("negative.stdout.txt");
+    let stderr_path = smoke_root.join("negative.stderr.txt");
+    let status = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
+        &bridge.launcher,
+        &[
+            "s/LTLIBOBJS/rejected/",
+            shell_path(input, "negative sed smoke input")?.as_str(),
+        ],
+        smoke_root,
+        environment,
+        input,
+        SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX,
+        &stdout_path,
+        SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX,
+        &stderr_path,
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    let stderr = fs::read_to_string(&stderr_path).map_err(|error| {
+        StagexBinutilsError::Materialization(format!("reading sed bridge negative stderr: {error}"))
+    })?;
+    if status != SED_BRIDGE_AUTHORITY_FAILURE || !stderr.contains("mixed-input-authority") {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "sed bridge negative smoke mismatch: status {status}, stderr {stderr:?}"
+        )));
+    }
+    assert_eq!(status, SED_BRIDGE_AUTHORITY_FAILURE);
+    assert!(!stderr.is_empty());
+    Ok(())
+}
+
+fn finalize_sed_bridge_audit(bridge: &SedBridgePaths) -> Result<(), StagexBinutilsError> {
+    let count_text = fs::read_to_string(bridge.spool_root.join("invocation.count"))
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading sed bridge count: {error}")))?;
+    let expected_count = count_text
+        .trim()
+        .parse::<u32>()
+        .map_err(|error| StagexBinutilsError::Materialization(format!("parsing sed bridge count: {error}")))?;
+    let audit_text = fs::read_to_string(&bridge.audit)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading sed bridge audit: {error}")))?;
+    let canonical = canonical_sed_bridge_audit(&audit_text, expected_count)?;
+    crate::stagex_mes_lib::write_create_new(&bridge.spool_root.join("audit.canonical.tsv"), canonical.as_bytes())
+        .map_err(StagexBinutilsError::from_runtime)?;
+    assert!(expected_count > 0);
+    assert!(!canonical.is_empty());
+    Ok(())
+}
+
+fn canonical_sed_bridge_audit(text: &str, expected_count: u32) -> Result<String, StagexBinutilsError> {
+    if expected_count == 0 || expected_count > SED_BRIDGE_INVOCATION_COUNT_MAX {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "sed bridge invocation count is outside bounds: {expected_count}"
+        )));
+    }
+    let mut entries = text.lines().map(parse_sed_bridge_audit_line).collect::<Result<Vec<_>, _>>()?;
+    if entries.len() != usize::try_from(expected_count).unwrap() {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "sed bridge audit count mismatch: expected {expected_count}, observed {}",
+            entries.len()
+        )));
+    }
+    entries.sort_by_key(|entry| entry.invocation);
+    validate_sed_bridge_audit_entries(&entries)?;
+    entries.sort_by(|left, right| {
+        (&left.status, left.input_bytes, left.output_bytes, left.input_file_count).cmp(&(
+            &right.status,
+            right.input_bytes,
+            right.output_bytes,
+            right.input_file_count,
+        ))
+    });
+    let mut canonical = String::new();
+    for entry in &entries {
+        canonical.push_str(&format!(
+            "{}\t{}\t{}\t{}\n",
+            entry.input_bytes, entry.output_bytes, entry.input_file_count, entry.status
+        ));
+    }
+    assert_eq!(entries.len(), usize::try_from(expected_count).unwrap());
+    assert!(canonical.ends_with('\n'));
+    Ok(canonical)
+}
+
+fn parse_sed_bridge_audit_line(line: &str) -> Result<SedBridgeAuditEntry, StagexBinutilsError> {
+    let fields = line.split('\t').collect::<Vec<_>>();
+    if fields.len() != SED_BRIDGE_AUDIT_FIELD_COUNT {
+        return Err(StagexBinutilsError::Materialization(format!("malformed sed bridge audit line: {line:?}")));
+    }
+    let parse_u32 = |value: &str, label: &str| {
+        value.parse::<u32>().map_err(|error| {
+            StagexBinutilsError::Materialization(format!("invalid sed bridge {label} {value:?}: {error}"))
+        })
+    };
+    let parse_u64 = |value: &str, label: &str| {
+        value.parse::<u64>().map_err(|error| {
+            StagexBinutilsError::Materialization(format!("invalid sed bridge {label} {value:?}: {error}"))
+        })
+    };
+    let status = fields[4];
+    if status != "ok" && !status.starts_with("rejected:") {
+        return Err(StagexBinutilsError::Materialization(format!("invalid sed bridge status: {status:?}")));
+    }
+    Ok(SedBridgeAuditEntry {
+        invocation: parse_u32(fields[0], "invocation")?,
+        input_bytes: parse_u64(fields[1], "input size")?,
+        output_bytes: parse_u64(fields[2], "output size")?,
+        input_file_count: parse_u32(fields[3], "input file count")?,
+        status: status.to_string(),
+    })
+}
+
+fn validate_sed_bridge_audit_entries(entries: &[SedBridgeAuditEntry]) -> Result<(), StagexBinutilsError> {
+    let mut mixed_input_rejection_seen = false;
+    for (index, entry) in entries.iter().enumerate() {
+        let expected_invocation = u32::try_from(index)
+            .map_err(|error| StagexBinutilsError::Materialization(format!("sed audit index overflow: {error}")))?
+            .checked_add(1)
+            .ok_or_else(|| StagexBinutilsError::Materialization("sed audit invocation overflow".to_string()))?;
+        if entry.invocation != expected_invocation {
+            return Err(StagexBinutilsError::Materialization(format!(
+                "sed bridge audit sequence mismatch: expected {expected_invocation}, observed {}",
+                entry.invocation
+            )));
+        }
+        mixed_input_rejection_seen |= entry.status == "rejected:mixed-input-authority";
+    }
+    if !mixed_input_rejection_seen {
+        return Err(StagexBinutilsError::Materialization(
+            "sed bridge audit lacks the mixed-input rejection smoke".to_string(),
+        ));
+    }
+    assert!(!entries.is_empty());
+    assert!(mixed_input_rejection_seen);
+    Ok(())
+}
+
 fn shell_path(path: &Path, label: &str) -> Result<String, StagexBinutilsError> {
     if !path.is_absolute() || path.as_os_str().as_encoded_bytes().contains(&b'\'') {
         return Err(StagexBinutilsError::Materialization(format!(
@@ -669,6 +1102,7 @@ fn configure_environment(
     request: &BinutilsConfigureProbeRequest<'_>,
     tools: &Path,
     compiler_wrapper: &Path,
+    sed_bridge: &SedBridgePaths,
 ) -> Result<std::collections::BTreeMap<String, String>, StagexBinutilsError> {
     let utf8 = |path: &Path, label: &str| {
         path.to_str()
@@ -700,6 +1134,25 @@ fn configure_environment(
     environment.insert("MANTLE_BINUTILS_CONFIGURE_PROBE_CLASS".to_string(), "intl".to_string());
     environment.insert("MANTLE_BINUTILS_CONFIGURE_PROBE_AUDIT".to_string(), format!("{probe_root}/preprocess.audit"));
     environment.insert("MANTLE_BINUTILS_CONFIGURE_PROBE_COUNT".to_string(), format!("{probe_root}/preprocess.count"));
+    environment.insert("MANTLE_STAGE_X_SED_BRIDGE_BASH".to_string(), utf8(request.bash, "sed bridge Bash")?);
+    environment.insert("MANTLE_STAGE_X_SED_BRIDGE_SCRIPT".to_string(), utf8(&sed_bridge.script, "sed bridge script")?);
+    environment.insert("MANTLE_STAGE_X_SED_BRIDGE_TARGET".to_string(), utf8(request.sed, "protected sed")?);
+    for (name, tool) in [
+        ("CAT", "cat"),
+        ("HEAD", "head"),
+        ("MKDIR", "mkdir"),
+        ("RM", "rm"),
+        ("RMDIR", "rmdir"),
+        ("WC", "wc"),
+    ] {
+        environment.insert(
+            format!("MANTLE_STAGE_X_SED_BRIDGE_{name}"),
+            utf8(&request.coreutils_bin.join(tool), "sed bridge coreutils tool")?,
+        );
+    }
+    environment
+        .insert("MANTLE_STAGE_X_SED_SPOOL_ROOT".to_string(), utf8(&sed_bridge.spool_root, "sed bridge spool root")?);
+    environment.insert("MANTLE_STAGE_X_SED_BRIDGE_AUDIT".to_string(), utf8(&sed_bridge.audit, "sed bridge audit")?);
     assert!(environment.contains_key("CONFIG_SHELL"));
     assert_eq!(environment.get("LD").map(String::as_str), Some("true"));
     Ok(environment)
@@ -722,6 +1175,7 @@ mod tests {
         let record = find_source_record(&manifest.records).unwrap();
         validate_source_record(record).unwrap();
         validate_recipe_digest().unwrap();
+        validate_sed_bridge_sources().unwrap();
         assert_eq!(record.content_blake3, BINUTILS_SOURCE_CONTENT_BLAKE3);
         assert_eq!(source_artifact_digests().len(), BINUTILS_SOURCE_ARTIFACT_COUNT);
     }
@@ -737,6 +1191,31 @@ mod tests {
         record.identity = "fixed-url-substituted".to_string();
         let error = validate_source_record(&record).unwrap_err().to_string();
         assert!(error.contains("source record identity"));
+        assert!(!error.contains("panicked"));
+    }
+
+    #[test]
+    fn rejects_substituted_sed_bridge_source() {
+        let wrong_digest = "0".repeat(BLAKE3_HEX_CHAR_COUNT);
+        let error = require_sed_bridge_source_digest("launcher", SED_BRIDGE_LAUNCHER_SOURCE, &wrong_digest)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("source BLAKE3 mismatch"));
+        assert!(!error.contains("panicked"));
+    }
+
+    #[test]
+    fn canonicalizes_complete_sed_bridge_audit() {
+        let unordered = "2\t17\t19\t0\tok\n1\t4\t0\t1\trejected:mixed-input-authority\n";
+        let canonical = canonical_sed_bridge_audit(unordered, 2).unwrap();
+        assert!(canonical.starts_with("17\t19\t0\tok\n"));
+        assert!(canonical.ends_with("4\t0\t1\trejected:mixed-input-authority\n"));
+    }
+
+    #[test]
+    fn rejects_incomplete_sed_bridge_audit() {
+        let error = canonical_sed_bridge_audit("2\t17\t19\t0\tok\n", 2).unwrap_err().to_string();
+        assert!(error.contains("audit count mismatch"));
         assert!(!error.contains("panicked"));
     }
 
@@ -765,7 +1244,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires retained binutils source and protected tool roots"]
-    fn detects_protected_sed_config_status_blocker() {
+    fn configures_intl_with_regular_file_sed_bridge() {
         let path = |name: &str| PathBuf::from(std::env::var(name).unwrap());
         let source_root = path("MANTLE_STAGE_X_BINUTILS_RETAINED_SOURCE");
         let scratch_dir = path("MANTLE_STAGE_X_BINUTILS_CONFIGURE_SCRATCH");
@@ -801,8 +1280,11 @@ mod tests {
         })
         .unwrap();
         let stderr = fs::read_to_string(scratch_dir.join("configure.stderr.txt")).unwrap();
-        assert_eq!(exit_code, 1);
-        assert!(stderr.contains("config.status: error: could not create Makefile"));
+        let invocation_count = fs::read_to_string(scratch_dir.join("sed-spool/invocation.count")).unwrap();
+        assert_eq!(exit_code, 0);
+        assert!(!stderr.contains("config.status: error"));
+        assert!(invocation_count.trim().parse::<u32>().unwrap() > 1);
         assert!(scratch_dir.join("source/intl/config.status").is_file());
+        assert!(scratch_dir.join("source/intl/Makefile").is_file());
     }
 }
