@@ -1,4 +1,7 @@
 use std::fs;
+use std::io::Read as _;
+use std::io::Seek as _;
+use std::os::fd::AsRawFd as _;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -14,8 +17,9 @@ const OCI_ROOT: &str = "examples/projects/kernel-bundle-oci-local";
 const OCI_REGISTRY_ROOT: &str = "examples/projects/kernel-bundle-oci-registry";
 const TRANSCRIPT_PATH: &str = "examples/transcripts/hello-eval.md";
 const POLICY_HASH: &str = "gallery-policy-v1";
-const TEST_NOW_UNIX_S: u64 = 1_000;
 const TEST_TICKET_TTL_SECS: u64 = 100;
+const TICKET_KEY: &str = "ticket-key-1:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE";
+const RESULT_SIGNING_KEY: &str = "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 const BLAKE3_A: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const BLAKE3_B: &str = "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
@@ -29,6 +33,14 @@ fn example_path(relative: &str) -> PathBuf {
 
 fn mantle_cmd() -> Command {
     Command::cargo_bin("mantle").expect("mantle binary should be built")
+}
+
+fn write_service_credentials(root: &Path) -> PathBuf {
+    let credentials_dir = root.join("credentials");
+    fs::create_dir_all(&credentials_dir).expect("credentials dir");
+    fs::write(credentials_dir.join("TICKET_VERIFIER_KEY"), TICKET_KEY).expect("ticket key credential");
+    fs::write(credentials_dir.join("RESULT_SIGNING_KEY"), RESULT_SIGNING_KEY).expect("signing key credential");
+    credentials_dir
 }
 
 fn parse_json(output: &std::process::Output) -> Value {
@@ -294,12 +306,18 @@ fn semantic_graph_example_reports_incomplete_evidence_without_invention() {
 }
 
 #[test]
-fn remote_ticket_example_redacts_reveals_and_revokes_explicitly() {
+fn remote_ticket_example_delivers_once_redacts_and_revokes() {
     let temp = tempfile::tempdir().expect("tempdir should be created");
     let state = temp.path().to_str().expect("state path should be UTF-8");
-    let now_unix_s = TEST_NOW_UNIX_S.to_string();
+    let credentials_dir = write_service_credentials(temp.path());
     let ticket_ttl_secs = TEST_TICKET_TTL_SECS.to_string();
-    let create = mantle_cmd()
+    let mut bearer_file = tempfile::tempfile().expect("bearer delivery file");
+    let bearer_fd = bearer_file.as_raw_fd();
+    let clear_cloexec = unsafe { libc::fcntl(bearer_fd, libc::F_SETFD, 0) };
+    assert_eq!(clear_cloexec, 0, "ticket fd must be inherited by the child");
+    let bearer_fd_text = bearer_fd.to_string();
+    let mut create_command = mantle_cmd();
+    create_command
         .args([
             "--json",
             "--state-dir",
@@ -309,35 +327,44 @@ fn remote_ticket_example_redacts_reveals_and_revokes_explicitly() {
             "create",
             "--display-name",
             "gallery-loopback",
-            "--now-unix-s",
-            &now_unix_s,
             "--ttl-secs",
             &ticket_ttl_secs,
             "--uses",
             "1",
+            "--ticket-fd",
+            &bearer_fd_text,
+            "--secret-manifest",
+            example_path("secretspec.toml").to_str().expect("manifest path is UTF-8"),
         ])
-        .output()
-        .expect("remote ticket create should run");
+        .env("CREDENTIALS_DIRECTORY", &credentials_dir);
+    let create = create_command.output().expect("remote ticket create should run");
     let created = parse_json(&create);
-    let id = created["id"].as_str().expect("ticket id should be present");
-    assert!(create.status.success());
-    assert_eq!(created["secret"], "<redacted>");
+    let id = created["ticket"]["id"].as_str().expect("ticket id should be present");
+    assert!(create.status.success(), "stderr={}", String::from_utf8_lossy(&create.stderr));
+    assert_eq!(created["delivery"]["target"], "caller-owned-fd");
+    assert_eq!(created["delivery"]["delivered"], true);
+    assert!(created["ticket"].get("secret").is_none());
+
+    bearer_file.rewind().expect("rewind bearer file");
+    let mut credential = String::new();
+    bearer_file.read_to_string(&mut credential).expect("read delivered bearer");
+    let credential = credential.trim_end();
+    assert!(credential.starts_with(&format!("{id}:")));
 
     let reveal = mantle_cmd()
         .args(["--json", "--state-dir", state, "remote", "ticket", "reveal", id])
         .output()
-        .expect("remote ticket reveal should run");
-    let revealed = parse_json(&reveal);
-    let secret = revealed["secret"].as_str().expect("revealed secret should be present");
-    assert!(reveal.status.success());
-    assert_ne!(secret, "<redacted>");
+        .expect("removed remote ticket reveal should be rejected");
+    assert!(!reveal.status.success());
+    assert!(!String::from_utf8_lossy(&reveal.stderr).contains(credential));
 
     let list = mantle_cmd()
         .args(["--json", "--state-dir", state, "remote", "ticket", "list"])
         .output()
         .expect("remote ticket list should run");
     assert!(list.status.success());
-    assert!(!String::from_utf8_lossy(&list.stdout).contains(secret));
+    assert!(!String::from_utf8_lossy(&list.stdout).contains(credential));
+    assert!(!fs::read_to_string(temp.path().join("remote-builders/tickets.json")).unwrap().contains(credential));
 
     let revoke = mantle_cmd()
         .args(["--json", "--state-dir", state, "remote", "ticket", "revoke", id])

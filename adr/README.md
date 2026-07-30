@@ -60,3 +60,4 @@ compatibility surface, crate name, or historical decision.
 | [0051](0051-cut-legacy-bootstrap-edges-at-the-stagex-provider.md) | Cut legacy bootstrap edges at the StageX provider | Accepted |
 | [0052](0052-separate-stagex-execution-evidence-from-runtime-handoff.md) | Separate StageX execution evidence from the runtime handoff | Accepted |
 | [0053](0053-isolate-irreversible-seccomp-listeners-by-proof-stage.md) | Isolate irreversible seccomp listeners by proof stage | Accepted |
+| [0054](0054-keep-remote-bearers-out-of-durable-state.md) | Keep remote bearers out of durable state | Accepted |

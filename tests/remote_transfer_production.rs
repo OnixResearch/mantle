@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::os::fd::AsRawFd as _;
+use std::os::unix::fs::PermissionsExt as _;
+use std::os::unix::process::CommandExt as _;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -19,7 +22,10 @@ const MIN_PRODUCTION_SCALE_OUTPUT_CHUNKS: usize = 100;
 const PATTERN_MODULUS: usize = 251;
 const INTERRUPT_AFTER_CHUNKS: &str = "1";
 const TICKET_ID: &str = "production-ticket";
-const TICKET_SECRET: &str = "production-secret";
+const TICKET_SECRET: &str = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI";
+const TICKET_KEY: &str = "ticket-key-1:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE";
+const TICKET_VERIFIER_DOMAIN: &[u8] = b"mantle-remote-ticket-verifier-v2\0";
+const RESULT_SIGNING_KEY: &str = "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 const BUILDER_ID: &str = "production-builder";
 const MAX_BUILD_TIME_SECS: u64 = 600;
 const MAX_UPLOAD_BYTES: u64 = 1_073_741_824;
@@ -58,6 +64,10 @@ const GALLERY_PAYLOAD_BYTES: usize = 262_144;
 const REMOTE_TRANSFER_RECEIVER_DIR: &str = "remote-transfer-receiver";
 const REMOTE_TRANSFER_CHUNK_DIR: &str = "chunks";
 const ACKNOWLEDGED_CHUNK_MISSING_REASON: &str = "acknowledged-chunk-missing";
+const PRIVATE_DIRECTORY_MODE: u32 = 0o700;
+const PRIVATE_FILE_MODE: u32 = 0o600;
+const REMOTE_TICKET_INPUT_FD: i32 = 9;
+const REMOTE_TICKET_INPUT_FILENAME: &str = "remote-ticket.secret";
 
 #[test]
 fn production_stdio_resumes_missing_chunks_and_imports_output() {
@@ -965,11 +975,15 @@ fn remote_failure_replay_command(state_dir: &Path, store_dir: &Path, bundle_dige
         bundle_digest,
         "--builder",
         BUILDER_ID,
-        "--ticket",
-        &format!("{TICKET_ID}:{TICKET_SECRET}"),
+        "--ticket-fd",
+        &REMOTE_TICKET_INPUT_FD.to_string(),
         "--remote-build-time-secs",
         &MAX_BUILD_TIME_SECS.to_string(),
+        "--remote-secret-manifest",
+        secret_manifest().to_str().expect("UTF-8 secret manifest"),
     ]);
+    command.env("CREDENTIALS_DIRECTORY", state_dir.join("credentials"));
+    configure_ticket_input_fd(&mut command, state_dir);
     command
 }
 
@@ -989,11 +1003,15 @@ fn remote_build_command(state_dir: &Path, store_dir: &Path, build_file: &Path) -
         "--no-substitute",
         "--builder",
         BUILDER_ID,
-        "--ticket",
-        &format!("{TICKET_ID}:{TICKET_SECRET}"),
+        "--ticket-fd",
+        &REMOTE_TICKET_INPUT_FD.to_string(),
         "--remote-build-time-secs",
         &MAX_BUILD_TIME_SECS.to_string(),
+        "--remote-secret-manifest",
+        secret_manifest().to_str().expect("UTF-8 secret manifest"),
     ]);
+    command.env("CREDENTIALS_DIRECTORY", state_dir.join("credentials"));
+    configure_ticket_input_fd(&mut command, state_dir);
     command
 }
 
@@ -1022,12 +1040,16 @@ fn write_ticket_state(state_dir: &Path) {
 fn write_ticket_state_with_upload_limit(state_dir: &Path, max_upload_bytes: u64) {
     let ticket_dir = state_dir.join("remote-builders");
     fs::create_dir_all(&ticket_dir).expect("ticket state dir");
+    fs::set_permissions(&ticket_dir, fs::Permissions::from_mode(PRIVATE_DIRECTORY_MODE)).expect("private ticket dir");
     let state = serde_json::json!({
+        "schema_version": 2,
+        "next_ticket_sequence": 1,
         "tickets": {
             TICKET_ID: {
                 "id": TICKET_ID,
                 "display_name": "production transfer test",
-                "secret": TICKET_SECRET,
+                "verifier_key_id": "ticket-key-1",
+                "verifier": ticket_verifier(),
                 "created_unix_s": TEST_CREATED_UNIX_S,
                 "expires_unix_s": TEST_EXPIRES_UNIX_S,
                 "uses_remaining": TICKET_USES,
@@ -1036,10 +1058,47 @@ fn write_ticket_state_with_upload_limit(state_dir: &Path, max_upload_bytes: u64)
                 "bound_client_endpoint": null,
                 "revoked": false
             }
-        }
+        },
+        "invalidated_legacy_ticket_ids": []
     });
-    fs::write(ticket_dir.join("tickets.json"), serde_json::to_vec_pretty(&state).expect("ticket state JSON"))
-        .expect("ticket state");
+    let state_path = ticket_dir.join("tickets.json");
+    fs::write(&state_path, serde_json::to_vec_pretty(&state).expect("ticket state JSON")).expect("ticket state");
+    fs::set_permissions(state_path, fs::Permissions::from_mode(PRIVATE_FILE_MODE)).expect("private ticket file");
+    let credential_path = state_dir.join(REMOTE_TICKET_INPUT_FILENAME);
+    fs::write(&credential_path, format!("{TICKET_ID}:{TICKET_SECRET}\n")).expect("ticket input file");
+    fs::set_permissions(credential_path, fs::Permissions::from_mode(PRIVATE_FILE_MODE))
+        .expect("private ticket input file");
+    write_service_credentials(state_dir);
+}
+
+fn configure_ticket_input_fd(command: &mut Command, state_dir: &Path) {
+    let ticket_file = fs::File::open(state_dir.join(REMOTE_TICKET_INPUT_FILENAME)).expect("ticket input file");
+    unsafe {
+        command.pre_exec(move || {
+            if libc::dup2(ticket_file.as_raw_fd(), REMOTE_TICKET_INPUT_FD) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+}
+
+fn ticket_verifier() -> String {
+    let mut input = Vec::from(TICKET_VERIFIER_DOMAIN);
+    input.extend_from_slice(&[0x42_u8; 32]);
+    let key = [0x41_u8; 32];
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(blake3::keyed_hash(&key, &input).as_bytes())
+}
+
+fn write_service_credentials(state_dir: &Path) {
+    let credentials_dir = state_dir.join("credentials");
+    fs::create_dir_all(&credentials_dir).expect("credentials dir");
+    fs::write(credentials_dir.join("TICKET_VERIFIER_KEY"), TICKET_KEY).expect("ticket key credential");
+    fs::write(credentials_dir.join("RESULT_SIGNING_KEY"), RESULT_SIGNING_KEY).expect("signing key credential");
+}
+
+fn secret_manifest() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("secretspec.toml")
 }
 
 fn write_replayable_derivation(path: &Path) {

@@ -41,6 +41,33 @@
 // synced requirements implemented there need a small bridge until the coverage
 // rail scans the package root directly.
 
+// Remote credential boundary bridge.
+//
+// r[impl remote_builds.ticket_randomness]
+// r[impl remote_builds.ticket_verifier_state]
+// r[impl remote_builds.ticket_constant_time_verification]
+// r[impl remote_builds.ticket_one_time_delivery]
+// r[impl remote_builds.secretspec_service_keys]
+// r[impl remote_builds.private_atomic_state]
+// r[impl remote_builds.legacy_ticket_invalidation]
+// r[impl remote_builds.no_secret_evidence]
+// The pure ticket and verifier core lives in `src/remote_credentials.rs`.
+// State, SecretSpec, process, descriptor, and CLI shells live in
+// `src/{remote_credential_state,remote_service_secrets,remote_build,main}.rs`.
+//
+// r[verify remote_builds.ticket_randomness]
+// r[verify remote_builds.ticket_verifier_state]
+// r[verify remote_builds.ticket_constant_time_verification]
+// r[verify remote_builds.ticket_one_time_delivery]
+// r[verify remote_builds.secretspec_service_keys]
+// r[verify remote_builds.private_atomic_state]
+// r[verify remote_builds.legacy_ticket_invalidation]
+// r[verify remote_builds.no_secret_evidence]
+// Positive and negative core, state, provider, CLI, migration, rotation, and
+// redaction tests live in the root package and `tests/remote_credentials_cli.rs`.
+// These checks do not prove provider security, key freshness, or operator
+// identity.
+
 // Atomic release publication bridge.
 //
 // r[impl mantle.release_provenance.bundle_publication.atomic_commit]

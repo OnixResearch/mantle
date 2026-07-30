@@ -2,28 +2,35 @@
 
 This project exercises Mantle's production local stdio client/server path. It creates bounded bearer tickets, evaluates concrete project payloads locally, launches `remote serve --binding stdio-once --executor local-build`, streams receiver-demanded inputs and outputs, admits signed results, and exposes redacted status.
 
-Run from this directory on Linux with bubblewrap available.
+Run from this directory on Linux with bubblewrap available. Configure the `production` profile in [`secretspec.toml`](../../../secretspec.toml). Supply `TICKET_VERIFIER_KEY` and `RESULT_SIGNING_KEY` as systemd credentials.
 
 ## One-use ticket and small payload
 
 ```sh
 work=$(mktemp -d /tmp/mantle-remote-loopback.XXXXXX)
 mkdir -p "$work/client-store" "$work/state"
-now_unix_s=$(date +%s)
 ticket_ttl_secs=3600
+secret_manifest=$(realpath ../../../secretspec.toml)
 
-created=$(mantle --json --state-dir "$work/state" remote ticket create \
+# The command writes the bearer only to descriptor 9.
+exec 9>"$work/ticket"
+mantle --json --state-dir "$work/state" remote ticket create \
   --display-name gallery-loopback \
-  --now-unix-s "$now_unix_s" \
   --ttl-secs "$ticket_ttl_secs" \
-  --uses 1)
-ticket_id=$(printf '%s' "$created" | jq -r .id)
-revealed=$(mantle --json --state-dir "$work/state" remote ticket reveal "$ticket_id")
-ticket=$(printf '%s' "$revealed" | jq -r '"\(.id):\(.secret)"')
+  --uses 1 \
+  --ticket-fd 9 \
+  --secret-manifest "$secret_manifest" > "$work/ticket-report.json"
+exec 9>&-
+chmod 600 "$work/ticket"
+ticket=$(cat "$work/ticket")
+ticket_id=${ticket%%:*}
+exec 9<"$work/ticket"
 
 mantle --json --store "$work/client-store" --state-dir "$work/state" \
   build .#payload --no-substitute \
-  --builder gallery-builder --ticket "$ticket" > "$work/build.json"
+  --builder gallery-builder --ticket-fd 9 \
+  --remote-secret-manifest "$secret_manifest" > "$work/build.json"
+exec 9>&-
 
 mantle --json --state-dir "$work/state" remote status \
   --endpoint-id gallery-builder > "$work/status.json"
@@ -34,14 +41,16 @@ Inspect `.outcomes[0].outputs[0].substitution`. The ordinary production route re
 
 Also inspect the route, upload summary, transfer phase, admission phase, trust basis, artifact reference, and bounded observability fields.
 
-Ticket list, inspect, and status output do not contain the secret. Only `ticket reveal` prints the bearer value.
+Ticket create, list, inspect, status, logs, and evidence do not contain the bearer. Mantle does not persist the bearer and cannot reveal it later. The caller owns `$work/ticket` and its deletion policy.
 
 The ticket has one use, so a second dispatch must fail before output admission:
 
 ```sh
+exec 9<"$work/ticket"
 mantle --json --store "$work/client-store" --state-dir "$work/state" \
   build .#payload --no-substitute \
-  --builder gallery-builder --ticket "$ticket"
+  --builder gallery-builder --ticket-fd 9
+exec 9>&-
 ```
 
 A separately created ticket can be revoked before use with `mantle --state-dir "$work/state" remote ticket revoke <id>`.
@@ -58,7 +67,7 @@ nix develop -c cargo test -p mantle --test remote_transfer_production \
 
 The positive fixture:
 
-1. Uses a fixed bounded ticket and fresh client and worker state.
+1. Uses a fixed verifier-only ticket and fresh client and worker state.
 2. Interrupts after one durable output acknowledgement.
 3. Verifies that the client admitted no output.
 4. Starts fresh client and server processes for the same fenced request.
