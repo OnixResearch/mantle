@@ -1,0 +1,15 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-9acdbd2e5de447e1)
+
+running 8 tests
+test stagex_binutils::tests::rejects_duplicate_configure_class ... ok
+test stagex_binutils::tests::rejects_substituted_sed_bridge_source ... ok
+test stagex_binutils::tests::rejects_unbounded_ambient_file_relocation ... ok
+test stagex_binutils::tests::rejects_incomplete_sed_bridge_audit ... ok
+test stagex_binutils::tests::rejects_existing_source_scratch_before_bundle_access ... ok
+test stagex_binutils::tests::canonicalizes_complete_sed_bridge_audit ... ok
+test stagex_binutils::tests::validates_exact_binutils_source_record_and_recipe ... ok
+test stagex_binutils::tests::rejects_substituted_binutils_source_authority ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 1868 filtered out; finished in 5.22s
+

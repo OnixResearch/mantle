@@ -77,6 +77,7 @@ classify_arguments() {
 require_absolute_file sed "$MANTLE_STAGE_X_SED_BRIDGE_TARGET"
 require_absolute_file cat "$MANTLE_STAGE_X_SED_BRIDGE_CAT"
 require_absolute_file head "$MANTLE_STAGE_X_SED_BRIDGE_HEAD"
+require_absolute_file emit "$MANTLE_STAGE_X_SED_BRIDGE_EMIT"
 require_absolute_file mkdir "$MANTLE_STAGE_X_SED_BRIDGE_MKDIR"
 require_absolute_file rm "$MANTLE_STAGE_X_SED_BRIDGE_RM"
 require_absolute_file rmdir "$MANTLE_STAGE_X_SED_BRIDGE_RMDIR"
@@ -120,4 +121,7 @@ output_bytes=${output_bytes//[[:space:]]/}
 case "$output_bytes" in ''|*[!0-9]*) reject_bridge invalid-output-size ;; esac
 test "$output_bytes" -le "$SPOOL_BYTES_MAX" || reject_bridge output-size-exceeded
 printf '%s\t%s\t%s\t%s\tok\n' "$invocation_count" "$input_bytes" "$output_bytes" "$input_file_count" >> "$MANTLE_STAGE_X_SED_BRIDGE_AUDIT"
-"$MANTLE_STAGE_X_SED_BRIDGE_CAT" "$output_path"
+(
+  cd "$MANTLE_STAGE_X_SED_SPOOL_ROOT"
+  "$MANTLE_STAGE_X_SED_BRIDGE_EMIT" "output-$invocation_count"
+)

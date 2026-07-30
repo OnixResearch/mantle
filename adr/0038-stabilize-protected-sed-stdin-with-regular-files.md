@@ -33,7 +33,7 @@ The bridge rejects mixed standard-input and explicit-file authority. It also rej
 
 The bridge permits at most 4,096 invocations and 8 MiB per input or output. It records every accepted or rejected invocation. Mantle validates contiguous raw invocation numbers and writes a deterministic canonical multiset audit.
 
-The source identities and the compiled launcher identity are exact BLAKE3 values. The tool namespace binds `sed` to the launcher. The launcher then uses only the declared full Bash, bridge script, coreutils helpers, and protected sed.
+The source identities and compiled identities are exact BLAKE3 values. The tool namespace binds `sed` to the launcher. The launcher uses only the declared full Bash, bridge script, coreutils helpers, native emitter, and protected sed.
 
 ## Alternatives Considered
 

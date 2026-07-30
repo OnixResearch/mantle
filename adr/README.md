@@ -45,3 +45,4 @@ compatibility surface, crate name, or historical decision.
 | [0036](0036-run-stagex-grep-bridge-with-a-native-subset-runner.md) | Run the StageX grep bridge with a native subset runner | Accepted |
 | [0037](0037-add-a-later-full-shell-for-protected-stagex-configure.md) | Add a later full shell for protected StageX configure | Accepted |
 | [0038](0038-stabilize-protected-sed-stdin-with-regular-files.md) | Stabilize protected sed stdin with regular files | Accepted |
+| [0039](0039-relocate-stagex-configure-helpers-to-a-bounded-utility.md) | Relocate StageX configure helpers to a bounded utility | Accepted |

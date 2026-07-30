@@ -25,16 +25,20 @@ const BINUTILS_RECIPE: &[u8] = include_bytes!("../bootstrap/binutils-tcc.ncl");
 const SED_BRIDGE_LAUNCHER_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-sed-bridge-launcher.c");
 const SED_BRIDGE_SCRIPT_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-sed-regular-file-bridge.sh");
 const SINGLE_THREAD_SEMAPHORE_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-single-thread-semaphore-compat.c");
+const CONFIGURE_UTILITY_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-configure-utility.c");
 const SED_BRIDGE_LAUNCHER_SOURCE_ARTIFACT_ID: &str = "stagex-sed-bridge-launcher-source";
 const SED_BRIDGE_LAUNCHER_SOURCE_NAME: &str = "stagex-sed-bridge-launcher.c";
 const SED_BRIDGE_LAUNCHER_OUTPUT_NAME: &str = "stagex-sed-bridge-launcher";
 const SINGLE_THREAD_SEMAPHORE_SOURCE_NAME: &str = "stagex-single-thread-semaphore-compat.c";
 const SED_BRIDGE_SCRIPT_SOURCE_ARTIFACT_ID: &str = "stagex-sed-regular-file-bridge-source";
 const SINGLE_THREAD_SEMAPHORE_SOURCE_ARTIFACT_ID: &str = "stagex-single-thread-semaphore-compat-source";
+const CONFIGURE_UTILITY_SOURCE_ARTIFACT_ID: &str = "stagex-configure-utility-source";
 const SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3: &str = "606c52085de42d0221ba5490e81d8c539a50a65aaa89f7b4b478371bdc643dab";
 const SED_BRIDGE_LAUNCHER_BLAKE3: &str = "9b4d6a5eca05f55c407a70f7e426f756f482c9ae8f76d0a22d1b1b46e7dba1a1";
-const SED_BRIDGE_SCRIPT_SOURCE_BLAKE3: &str = "d2c195da10d206de2538c03ad7f10579d3c50acbbca649ce0952bd102da467d0";
+const SED_BRIDGE_SCRIPT_SOURCE_BLAKE3: &str = "5e7f2c7575a6e9de292737c0dc3c25174d6284e967b2a43ba26472a050f8b0d0";
 const SINGLE_THREAD_SEMAPHORE_SOURCE_BLAKE3: &str = "52c3ec19c484b0b4c3c5de84fc7ae77f40601fc81993d16ef6e15eb7401ee084";
+const CONFIGURE_UTILITY_SOURCE_BLAKE3: &str = "b150327f4ef9256764e8024466dd706ee87012f70554f1c7a01a0d8bc08975b1";
+const CONFIGURE_UTILITY_BLAKE3: &str = "a0d4f306ed84086cb0cebff1dffb0f5fea0a93e9ee4085e6e5e0acc3e4df201f";
 const BINUTILS_SOURCE_REPORT_FORMAT: &str = "mantle-stagex-binutils-2.30-source-materialization-v1";
 const BINUTILS_SOURCE_NON_CLAIM: &str =
     "binutils source materialization proves authenticated offline archive identity and checked-recipe identity only";
@@ -42,7 +46,7 @@ const BINUTILS_RECORD_HASH: &str = "sha256-L8aaWezlL47cNdPIbSEAtryYUDXLe9htMSECT
 const BINUTILS_RECORD_URL: &str = "https://ftpmirror.gnu.org/binutils/binutils-2.30.tar.xz";
 const BINUTILS_RECORD_PAYLOAD_ENCODING: &str = "tarball-archive-v1";
 const BINUTILS_RECORD_UNPACK: &str = "1";
-const BINUTILS_SOURCE_ARTIFACT_COUNT: usize = 5;
+const BINUTILS_SOURCE_ARTIFACT_COUNT: usize = 6;
 const REQUIRED_SOURCE_FILES: &[&str] = &[
     "configure",
     "config.sub",
@@ -99,6 +103,7 @@ pub(crate) fn source_artifact_digests() -> [(&'static str, &'static str); BINUTI
         (SED_BRIDGE_LAUNCHER_SOURCE_ARTIFACT_ID, SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3),
         (SED_BRIDGE_SCRIPT_SOURCE_ARTIFACT_ID, SED_BRIDGE_SCRIPT_SOURCE_BLAKE3),
         (SINGLE_THREAD_SEMAPHORE_SOURCE_ARTIFACT_ID, SINGLE_THREAD_SEMAPHORE_SOURCE_BLAKE3),
+        (CONFIGURE_UTILITY_SOURCE_ARTIFACT_ID, CONFIGURE_UTILITY_SOURCE_BLAKE3),
     ]
 }
 
@@ -314,6 +319,24 @@ struct SedBridgeAuditEntry {
     status: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ConfigureProbeOutcome {
+    pub configure_class: String,
+    pub exit_code: i32,
+    pub stdout_path: PathBuf,
+    pub stderr_path: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+struct ConfigureProbeContext {
+    source: PathBuf,
+    tools: PathBuf,
+    compiler_wrapper: PathBuf,
+    configure_utility: PathBuf,
+    sed_bridge: SedBridgePaths,
+    stdin_path: PathBuf,
+}
+
 const COREUTILS_TOOL_NAMES: &[&str] = &[
     "basename", "cat", "chmod", "cp", "dirname", "echo", "expr", "false", "head", "install", "ln", "ls", "mkdir", "mv",
     "rm", "rmdir", "sort", "tail", "tee", "test", "touch", "tr", "true", "uniq", "wc",
@@ -336,47 +359,200 @@ const BINUTILS_RUNTIME_START: &str = "      $BB cat > \"$WORK/binutils-runtime.c
 const BINUTILS_RUNTIME_END: &str = "\nRUNTIME_EOF";
 const REGULAR_FILE_MODE: u32 = 0o644;
 const EXECUTABLE_FILE_MODE: u32 = 0o755;
-const SED_BRIDGE_COMPILE_ARGUMENT_COUNT: usize = 6;
+const NATIVE_HELPER_COMPILE_ARGUMENT_COUNT: usize = 6;
+const CONFIGURE_CLASS_COUNT: usize = 9;
+const CONFIGURE_CLASSES: [&str; CONFIGURE_CLASS_COUNT] = [
+    "intl",
+    "libiberty",
+    "zlib",
+    "bfd",
+    "opcodes",
+    "binutils",
+    "gas",
+    "gprof",
+    "ld",
+];
+const CONFIGURE_UTILITY_SOURCE_NAME: &str = "stagex-configure-utility.c";
+const CONFIGURE_UTILITY_OUTPUT_NAME: &str = "stagex-configure-utility";
+const FILE_RELOCATION_CLASS_COUNT: usize = 7;
+const FILE_RELOCATION_CLASSES: [&str; FILE_RELOCATION_CLASS_COUNT] =
+    ["zlib", "bfd", "opcodes", "binutils", "gas", "gprof", "ld"];
+const FILE_RELOCATION_OCCURRENCES_PER_CLASS: usize = 10;
+const FILE_RELOCATION_OCCURRENCE_COUNT: usize = FILE_RELOCATION_CLASS_COUNT * FILE_RELOCATION_OCCURRENCES_PER_CLASS;
+const AMBIENT_FILE_PATH: &str = "/usr/bin/file";
+const DECLARED_FILE_PATH: &str = "$MANTLE_STAGE_X_FILE";
 
 pub(crate) fn probe_authenticated_intl_configure(
     request: BinutilsConfigureProbeRequest<'_>,
 ) -> Result<i32, StagexBinutilsError> {
-    validate_configure_probe_request(&request)?;
+    let outcomes = probe_authenticated_configures(request, &["intl"], false)?;
+    assert_eq!(outcomes.len(), 1);
+    assert_eq!(outcomes[0].configure_class, "intl");
+    Ok(outcomes[0].exit_code)
+}
+
+pub(crate) fn probe_authenticated_configure_matrix(
+    request: BinutilsConfigureProbeRequest<'_>,
+) -> Result<Vec<ConfigureProbeOutcome>, StagexBinutilsError> {
+    let outcomes = probe_authenticated_configures(request, &CONFIGURE_CLASSES, true)?;
+    assert_eq!(outcomes.len(), CONFIGURE_CLASS_COUNT);
+    assert!(outcomes.iter().all(|outcome| outcome.exit_code == 0));
+    Ok(outcomes)
+}
+
+fn probe_authenticated_configures(
+    request: BinutilsConfigureProbeRequest<'_>,
+    configure_classes: &[&str],
+    require_success: bool,
+) -> Result<Vec<ConfigureProbeOutcome>, StagexBinutilsError> {
+    validate_configure_classes(configure_classes)?;
+    let context = prepare_configure_probe(&request)?;
+    let smoke_environment = configure_environment(&request, &context, configure_classes[0])?;
+    run_sed_bridge_smokes(&request, &context.sed_bridge, &smoke_environment)?;
+    let mut outcomes = Vec::with_capacity(configure_classes.len());
+    for configure_class in configure_classes {
+        let outcome = run_configure_class(&request, &context, configure_class)?;
+        if require_success && outcome.exit_code != 0 {
+            return Err(StagexBinutilsError::Materialization(format!(
+                "authenticated configure failed for {configure_class} with status {}",
+                outcome.exit_code
+            )));
+        }
+        outcomes.push(outcome);
+    }
+    finalize_sed_bridge_audit(&context.sed_bridge)?;
+    assert_eq!(outcomes.len(), configure_classes.len());
+    assert!(!outcomes.is_empty());
+    Ok(outcomes)
+}
+
+fn prepare_configure_probe(
+    request: &BinutilsConfigureProbeRequest<'_>,
+) -> Result<ConfigureProbeContext, StagexBinutilsError> {
+    validate_configure_probe_request(request)?;
     fs::create_dir(request.scratch_dir)
         .map_err(|error| StagexBinutilsError::Materialization(format!("creating configure probe root: {error}")))?;
     let source = request.scratch_dir.join("source");
     crate::stagex_mes_lib::copy_tree_bounded(request.source_root, &source)
         .map_err(StagexBinutilsError::from_runtime)?;
+    relocate_configure_file_utility(&source)?;
     let tools = request.scratch_dir.join("tools");
     fs::create_dir(&tools)
         .map_err(|error| StagexBinutilsError::Materialization(format!("creating configure tool namespace: {error}")))?;
-    let compiler_wrapper = prepare_tcc_wrapper(&request)?;
-    let sed_bridge = prepare_sed_bridge(&request, &compiler_wrapper)?;
-    populate_probe_tool_namespace(&request, &tools, &sed_bridge.launcher)?;
+    let compiler_wrapper = prepare_tcc_wrapper(request)?;
+    let sed_bridge = prepare_sed_bridge(request, &compiler_wrapper)?;
+    let configure_utility = prepare_configure_utility(request, &compiler_wrapper)?;
+    populate_probe_tool_namespace(request, &tools, &sed_bridge.launcher, &configure_utility)?;
+    run_configure_utility_smokes(request, &tools, &configure_utility)?;
     let stdin_path = request.scratch_dir.join("configure.stdin");
     crate::stagex_mes_lib::write_create_new(&stdin_path, b"").map_err(StagexBinutilsError::from_runtime)?;
-    let stdout_path = request.scratch_dir.join("configure.stdout.txt");
-    let stderr_path = request.scratch_dir.join("configure.stderr.txt");
-    let arguments = configure_arguments();
-    let environment = configure_environment(&request, &tools, &compiler_wrapper, &sed_bridge)?;
-    run_sed_bridge_smokes(&request, &sed_bridge, &environment)?;
-    let configure_dir = source.join("intl");
+    assert!(source.is_dir());
+    assert!(tools.is_dir());
+    Ok(ConfigureProbeContext {
+        source,
+        tools,
+        compiler_wrapper,
+        configure_utility,
+        sed_bridge,
+        stdin_path,
+    })
+}
+
+fn run_configure_class(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    context: &ConfigureProbeContext,
+    configure_class: &str,
+) -> Result<ConfigureProbeOutcome, StagexBinutilsError> {
+    let output_stem = if configure_class == "intl" {
+        "configure"
+    } else {
+        configure_class
+    };
+    let stdout_path = request.scratch_dir.join(format!("{output_stem}.stdout.txt"));
+    let stderr_path = request.scratch_dir.join(format!("{output_stem}.stderr.txt"));
+    let environment = configure_environment(request, context, configure_class)?;
+    let configure_dir = context.source.join(configure_class);
     let exit_code = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
         request.bash,
-        &arguments,
+        &configure_arguments(),
         &configure_dir,
         &environment,
-        &stdin_path,
+        &context.stdin_path,
         CONFIGURE_OUTPUT_BYTES_MAX,
         &stdout_path,
         CONFIGURE_OUTPUT_BYTES_MAX,
         &stderr_path,
     )
     .map_err(StagexBinutilsError::from_runtime)?;
-    finalize_sed_bridge_audit(&sed_bridge)?;
     assert!(stdout_path.is_file());
     assert!(stderr_path.is_file());
-    Ok(exit_code)
+    Ok(ConfigureProbeOutcome {
+        configure_class: configure_class.to_string(),
+        exit_code,
+        stdout_path,
+        stderr_path,
+    })
+}
+
+fn relocate_configure_file_utility(source: &Path) -> Result<(), StagexBinutilsError> {
+    let mut replacement_count = 0usize;
+    for configure_class in FILE_RELOCATION_CLASSES {
+        let configure = source.join(configure_class).join("configure");
+        let original = fs::read_to_string(&configure).map_err(|error| {
+            StagexBinutilsError::Materialization(format!(
+                "reading {configure_class} configure for file relocation: {error}"
+            ))
+        })?;
+        let class_count = original.matches(AMBIENT_FILE_PATH).count();
+        let relocated = relocate_configure_file_text(configure_class, &original)?;
+        fs::write(&configure, relocated.as_bytes()).map_err(|error| {
+            StagexBinutilsError::Materialization(format!(
+                "writing {configure_class} configure file relocation: {error}"
+            ))
+        })?;
+        replacement_count = replacement_count.checked_add(class_count).ok_or_else(|| {
+            StagexBinutilsError::Materialization("configure file relocation count overflow".to_string())
+        })?;
+        assert!(!relocated.contains(AMBIENT_FILE_PATH));
+    }
+    if replacement_count != FILE_RELOCATION_OCCURRENCE_COUNT {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "ambient file relocation count mismatch: expected {FILE_RELOCATION_OCCURRENCE_COUNT}, observed {replacement_count}"
+        )));
+    }
+    assert_eq!(replacement_count, FILE_RELOCATION_OCCURRENCE_COUNT);
+    assert!(FILE_RELOCATION_CLASSES.iter().all(|class| source.join(class).join("configure").is_file()));
+    Ok(())
+}
+
+fn relocate_configure_file_text(configure_class: &str, original: &str) -> Result<String, StagexBinutilsError> {
+    let class_count = original.matches(AMBIENT_FILE_PATH).count();
+    if class_count != FILE_RELOCATION_OCCURRENCES_PER_CLASS {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "{configure_class} ambient file occurrence mismatch: expected {FILE_RELOCATION_OCCURRENCES_PER_CLASS}, observed {class_count}"
+        )));
+    }
+    let relocated = original.replace(AMBIENT_FILE_PATH, DECLARED_FILE_PATH);
+    assert_eq!(relocated.matches(DECLARED_FILE_PATH).count(), FILE_RELOCATION_OCCURRENCES_PER_CLASS);
+    assert!(!relocated.contains(AMBIENT_FILE_PATH));
+    Ok(relocated)
+}
+
+fn validate_configure_classes(configure_classes: &[&str]) -> Result<(), StagexBinutilsError> {
+    if configure_classes.is_empty() || configure_classes.len() > CONFIGURE_CLASS_COUNT {
+        return Err(StagexBinutilsError::Materialization("configure class count is outside bounds".to_string()));
+    }
+    let mut unique = std::collections::BTreeSet::new();
+    for configure_class in configure_classes {
+        if !CONFIGURE_CLASSES.contains(configure_class) || !unique.insert(*configure_class) {
+            return Err(StagexBinutilsError::Materialization(format!(
+                "unknown or duplicate configure class: {configure_class}"
+            )));
+        }
+    }
+    assert_eq!(unique.len(), configure_classes.len());
+    assert!(!configure_classes.is_empty());
+    Ok(())
 }
 
 impl StagexBinutilsError {
@@ -426,6 +602,7 @@ fn populate_probe_tool_namespace(
     request: &BinutilsConfigureProbeRequest<'_>,
     tools: &Path,
     sed_bridge_launcher: &Path,
+    configure_utility: &Path,
 ) -> Result<(), StagexBinutilsError> {
     for name in COREUTILS_TOOL_NAMES {
         add_tool_binding(tools, name, &request.coreutils_bin.join(name))?;
@@ -435,6 +612,9 @@ fn populate_probe_tool_namespace(
         ("bash", request.bash),
         ("cc", request.tcc),
         ("sed", sed_bridge_launcher),
+        ("sleep", configure_utility),
+        ("file", configure_utility),
+        ("emit", configure_utility),
         ("grep", request.grep),
         ("egrep", request.grep),
         ("fgrep", request.grep),
@@ -452,6 +632,7 @@ fn populate_probe_tool_namespace(
     }
     assert_eq!(COREUTILS_TOOL_NAMES.len(), COREUTILS_TOOL_COUNT);
     assert!(tools.join("sh").is_symlink());
+    assert!(tools.join("file").is_symlink());
     Ok(())
 }
 
@@ -556,6 +737,64 @@ fn prepare_sed_bridge(
     })
 }
 
+fn prepare_configure_utility(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    compiler_wrapper: &Path,
+) -> Result<PathBuf, StagexBinutilsError> {
+    require_sed_bridge_source_digest("configure utility", CONFIGURE_UTILITY_SOURCE, CONFIGURE_UTILITY_SOURCE_BLAKE3)?;
+    let source = request.scratch_dir.join(CONFIGURE_UTILITY_SOURCE_NAME);
+    let semaphore_source = request.scratch_dir.join(SINGLE_THREAD_SEMAPHORE_SOURCE_NAME);
+    let output = request.scratch_dir.join(CONFIGURE_UTILITY_OUTPUT_NAME);
+    crate::stagex_mes_lib::write_create_new(&source, CONFIGURE_UTILITY_SOURCE)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    if !semaphore_source.is_file() {
+        return Err(StagexBinutilsError::Materialization(
+            "configure utility lacks the declared semaphore source".to_string(),
+        ));
+    }
+    compile_configure_utility(request, compiler_wrapper, &output)?;
+    crate::stagex_mes_lib::run_bounded_process(
+        &output,
+        &["--mantle-self-test"],
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        &request.scratch_dir.join("configure-utility-self-test.stderr.txt"),
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    assert!(source.is_file());
+    assert!(output.is_file());
+    Ok(output)
+}
+
+fn compile_configure_utility(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    compiler_wrapper: &Path,
+    output: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let arguments = vec![
+        shell_path(compiler_wrapper, "TinyCC wrapper")?,
+        format!("-I{}", shell_path(&request.musl_root.join("include"), "native musl include")?),
+        CONFIGURE_UTILITY_SOURCE_NAME.to_string(),
+        SINGLE_THREAD_SEMAPHORE_SOURCE_NAME.to_string(),
+        "-o".to_string(),
+        CONFIGURE_UTILITY_OUTPUT_NAME.to_string(),
+    ];
+    crate::stagex_mes_lib::run_bounded_process(
+        request.bash,
+        &arguments,
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        &request.scratch_dir.join("configure-utility-compile.stderr.txt"),
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    fs::set_permissions(output, fs::Permissions::from_mode(EXECUTABLE_FILE_MODE))
+        .map_err(|error| StagexBinutilsError::Materialization(format!("setting configure utility mode: {error}")))?;
+    validate_file_digest(output, CONFIGURE_UTILITY_BLAKE3, "configure utility")?;
+    assert_eq!(arguments.len(), NATIVE_HELPER_COMPILE_ARGUMENT_COUNT);
+    assert!(output.is_file());
+    Ok(())
+}
+
 fn validate_sed_bridge_sources() -> Result<(), StagexBinutilsError> {
     require_sed_bridge_source_digest("launcher", SED_BRIDGE_LAUNCHER_SOURCE, SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3)?;
     require_sed_bridge_source_digest("script", SED_BRIDGE_SCRIPT_SOURCE, SED_BRIDGE_SCRIPT_SOURCE_BLAKE3)?;
@@ -564,6 +803,7 @@ fn validate_sed_bridge_sources() -> Result<(), StagexBinutilsError> {
         SINGLE_THREAD_SEMAPHORE_SOURCE,
         SINGLE_THREAD_SEMAPHORE_SOURCE_BLAKE3,
     )?;
+    require_sed_bridge_source_digest("configure utility", CONFIGURE_UTILITY_SOURCE, CONFIGURE_UTILITY_SOURCE_BLAKE3)?;
     assert_ne!(SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3, SED_BRIDGE_SCRIPT_SOURCE_BLAKE3);
     assert!(!SED_BRIDGE_SCRIPT_SOURCE.is_empty());
     Ok(())
@@ -629,7 +869,7 @@ fn compile_sed_bridge_launcher(
     fs::set_permissions(output, fs::Permissions::from_mode(EXECUTABLE_FILE_MODE))
         .map_err(|error| StagexBinutilsError::Materialization(format!("setting sed bridge launcher mode: {error}")))?;
     validate_file_digest(output, SED_BRIDGE_LAUNCHER_BLAKE3, "sed bridge launcher")?;
-    assert_eq!(arguments.len(), SED_BRIDGE_COMPILE_ARGUMENT_COUNT);
+    assert_eq!(arguments.len(), NATIVE_HELPER_COMPILE_ARGUMENT_COUNT);
     assert!(source.is_file());
     assert!(semaphore_source.is_file());
     assert!(output.is_file());
@@ -650,6 +890,112 @@ fn run_sed_bridge_launcher_self_test(
     .map_err(StagexBinutilsError::from_runtime)?;
     assert!(launcher.is_file());
     assert!(request.scratch_dir.is_dir());
+    Ok(())
+}
+
+fn run_configure_utility_smokes(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    tools: &Path,
+    configure_utility: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let empty_stdin = request.scratch_dir.join("configure-utility-empty.stdin");
+    crate::stagex_mes_lib::write_create_new(&empty_stdin, b"").map_err(StagexBinutilsError::from_runtime)?;
+    crate::stagex_mes_lib::run_bounded_process(
+        &tools.join("sleep"),
+        &["0"],
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        &request.scratch_dir.join("configure-sleep-positive.stderr.txt"),
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    run_configure_utility_negative_smoke(request, &tools.join("sleep"), &["11"], &empty_stdin, "sleep")?;
+    run_configure_utility_file_smokes(request, tools, configure_utility, &empty_stdin)?;
+    assert!(tools.join("sleep").is_symlink());
+    assert!(tools.join("file").is_symlink());
+    Ok(())
+}
+
+fn run_configure_utility_file_smokes(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    tools: &Path,
+    configure_utility: &Path,
+    empty_stdin: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let stdout_path = request.scratch_dir.join("configure-file-positive.stdout.txt");
+    let stderr_path = request.scratch_dir.join("configure-file-positive.stderr.txt");
+    let status = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
+        &tools.join("file"),
+        &[CONFIGURE_UTILITY_OUTPUT_NAME],
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        empty_stdin,
+        SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX,
+        &stdout_path,
+        SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX,
+        &stderr_path,
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    let stdout = fs::read_to_string(&stdout_path)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading configure file smoke: {error}")))?;
+    if status != 0 || !stdout.contains("ELF 64-bit LSB") {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "configure file positive smoke mismatch: status {status}, stdout {stdout:?}"
+        )));
+    }
+    run_configure_utility_negative_smoke(
+        request,
+        &tools.join("file"),
+        &["/usr/bin/file"],
+        empty_stdin,
+        "file-absolute",
+    )?;
+    run_configure_utility_negative_smoke(
+        request,
+        &tools.join("file"),
+        &["nested/conftest"],
+        empty_stdin,
+        "file-nested",
+    )?;
+    let symlink_name = "configure-file-symlink";
+    let symlink_path = request.scratch_dir.join(symlink_name);
+    std::os::unix::fs::symlink(configure_utility, &symlink_path).map_err(|error| {
+        StagexBinutilsError::Materialization(format!("creating configure file smoke symlink: {error}"))
+    })?;
+    run_configure_utility_negative_smoke(request, &tools.join("file"), &[symlink_name], empty_stdin, "file-symlink")?;
+    assert!(configure_utility.is_file());
+    assert!(symlink_path.is_symlink());
+    assert!(!stdout.is_empty());
+    Ok(())
+}
+
+fn run_configure_utility_negative_smoke(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    executable: &Path,
+    arguments: &[&str],
+    stdin_path: &Path,
+    label: &str,
+) -> Result<(), StagexBinutilsError> {
+    let stdout_path = request.scratch_dir.join(format!("configure-{label}-negative.stdout.txt"));
+    let stderr_path = request.scratch_dir.join(format!("configure-{label}-negative.stderr.txt"));
+    let status = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
+        executable,
+        arguments,
+        request.scratch_dir,
+        &std::collections::BTreeMap::new(),
+        stdin_path,
+        SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX,
+        &stdout_path,
+        SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX,
+        &stderr_path,
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    if status != SED_BRIDGE_AUTHORITY_FAILURE {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "configure {label} negative smoke mismatch: expected {SED_BRIDGE_AUTHORITY_FAILURE}, observed {status}"
+        )));
+    }
+    assert_eq!(status, SED_BRIDGE_AUTHORITY_FAILURE);
+    assert!(stderr_path.is_file());
     Ok(())
 }
 
@@ -1100,22 +1446,16 @@ fn shell_path(path: &Path, label: &str) -> Result<String, StagexBinutilsError> {
 
 fn configure_environment(
     request: &BinutilsConfigureProbeRequest<'_>,
-    tools: &Path,
-    compiler_wrapper: &Path,
-    sed_bridge: &SedBridgePaths,
+    context: &ConfigureProbeContext,
+    configure_class: &str,
 ) -> Result<std::collections::BTreeMap<String, String>, StagexBinutilsError> {
-    let utf8 = |path: &Path, label: &str| {
-        path.to_str()
-            .map(str::to_string)
-            .ok_or_else(|| StagexBinutilsError::Materialization(format!("{label} is not UTF-8")))
-    };
-    let bash = utf8(request.bash, "full Bash")?;
-    let wrapper = utf8(compiler_wrapper, "TinyCC wrapper")?;
+    let bash = shell_path(request.bash, "full Bash")?;
+    let wrapper = shell_path(&context.compiler_wrapper, "TinyCC wrapper")?;
     let compiler = format!("{bash} {wrapper}");
-    let musl_include = utf8(&request.musl_root.join("include"), "native musl include")?;
-    let musl_lib = utf8(&request.musl_root.join("lib"), "native musl lib")?;
+    let musl_include = shell_path(&request.musl_root.join("include"), "native musl include")?;
+    let musl_lib = shell_path(&request.musl_root.join("lib"), "native musl lib")?;
     let mut environment = std::collections::BTreeMap::new();
-    environment.insert("PATH".to_string(), utf8(tools, "tool namespace")?);
+    environment.insert("PATH".to_string(), shell_path(&context.tools, "tool namespace")?);
     environment.insert("CONFIG_SHELL".to_string(), bash.clone());
     environment.insert("SHELL".to_string(), bash);
     environment.insert("CC".to_string(), compiler.clone());
@@ -1125,18 +1465,46 @@ fn configure_environment(
     environment.insert("RANLIB".to_string(), "true".to_string());
     environment.insert("LD".to_string(), "true".to_string());
     environment.insert("MAKEINFO".to_string(), "true".to_string());
-    environment.insert("AWK".to_string(), utf8(request.gawk, "Gawk")?);
-    environment.insert("M4".to_string(), utf8(request.m4, "M4")?);
+    environment.insert("AWK".to_string(), shell_path(request.gawk, "Gawk")?);
+    environment.insert("M4".to_string(), shell_path(request.m4, "M4")?);
     environment.insert("CFLAGS".to_string(), format!("-I{musl_include} -static -D_GNU_SOURCE"));
     environment.insert("LDFLAGS".to_string(), format!("-static -L{musl_lib}"));
-    let probe_root = utf8(request.scratch_dir, "configure probe root")?;
-    environment.insert("MANTLE_BINUTILS_CONFIGURE_PROBE_DIR".to_string(), format!("{probe_root}/source/intl"));
-    environment.insert("MANTLE_BINUTILS_CONFIGURE_PROBE_CLASS".to_string(), "intl".to_string());
+    append_configure_probe_environment(&mut environment, request, configure_class)?;
+    environment.insert("MANTLE_STAGE_X_FILE".to_string(), shell_path(&context.tools.join("file"), "configure file")?);
+    append_sed_bridge_environment(&mut environment, request, context)?;
+    assert!(environment.contains_key("CONFIG_SHELL"));
+    assert!(context.configure_utility.is_file());
+    assert_eq!(environment.get("MANTLE_BINUTILS_CONFIGURE_PROBE_CLASS").map(String::as_str), Some(configure_class));
+    Ok(environment)
+}
+
+fn append_configure_probe_environment(
+    environment: &mut std::collections::BTreeMap<String, String>,
+    request: &BinutilsConfigureProbeRequest<'_>,
+    configure_class: &str,
+) -> Result<(), StagexBinutilsError> {
+    let probe_root = shell_path(request.scratch_dir, "configure probe root")?;
+    environment
+        .insert("MANTLE_BINUTILS_CONFIGURE_PROBE_DIR".to_string(), format!("{probe_root}/source/{configure_class}"));
+    environment.insert("MANTLE_BINUTILS_CONFIGURE_PROBE_CLASS".to_string(), configure_class.to_string());
     environment.insert("MANTLE_BINUTILS_CONFIGURE_PROBE_AUDIT".to_string(), format!("{probe_root}/preprocess.audit"));
     environment.insert("MANTLE_BINUTILS_CONFIGURE_PROBE_COUNT".to_string(), format!("{probe_root}/preprocess.count"));
-    environment.insert("MANTLE_STAGE_X_SED_BRIDGE_BASH".to_string(), utf8(request.bash, "sed bridge Bash")?);
-    environment.insert("MANTLE_STAGE_X_SED_BRIDGE_SCRIPT".to_string(), utf8(&sed_bridge.script, "sed bridge script")?);
-    environment.insert("MANTLE_STAGE_X_SED_BRIDGE_TARGET".to_string(), utf8(request.sed, "protected sed")?);
+    assert!(CONFIGURE_CLASSES.contains(&configure_class));
+    assert!(environment.contains_key("MANTLE_BINUTILS_CONFIGURE_PROBE_DIR"));
+    Ok(())
+}
+
+fn append_sed_bridge_environment(
+    environment: &mut std::collections::BTreeMap<String, String>,
+    request: &BinutilsConfigureProbeRequest<'_>,
+    context: &ConfigureProbeContext,
+) -> Result<(), StagexBinutilsError> {
+    environment.insert("MANTLE_STAGE_X_SED_BRIDGE_BASH".to_string(), shell_path(request.bash, "sed bridge Bash")?);
+    environment.insert(
+        "MANTLE_STAGE_X_SED_BRIDGE_SCRIPT".to_string(),
+        shell_path(&context.sed_bridge.script, "sed bridge script")?,
+    );
+    environment.insert("MANTLE_STAGE_X_SED_BRIDGE_TARGET".to_string(), shell_path(request.sed, "protected sed")?);
     for (name, tool) in [
         ("CAT", "cat"),
         ("HEAD", "head"),
@@ -1147,15 +1515,25 @@ fn configure_environment(
     ] {
         environment.insert(
             format!("MANTLE_STAGE_X_SED_BRIDGE_{name}"),
-            utf8(&request.coreutils_bin.join(tool), "sed bridge coreutils tool")?,
+            shell_path(&request.coreutils_bin.join(tool), "sed bridge coreutils tool")?,
         );
     }
-    environment
-        .insert("MANTLE_STAGE_X_SED_SPOOL_ROOT".to_string(), utf8(&sed_bridge.spool_root, "sed bridge spool root")?);
-    environment.insert("MANTLE_STAGE_X_SED_BRIDGE_AUDIT".to_string(), utf8(&sed_bridge.audit, "sed bridge audit")?);
-    assert!(environment.contains_key("CONFIG_SHELL"));
-    assert_eq!(environment.get("LD").map(String::as_str), Some("true"));
-    Ok(environment)
+    environment.insert(
+        "MANTLE_STAGE_X_SED_BRIDGE_EMIT".to_string(),
+        shell_path(&context.tools.join("emit"), "sed bridge emitter")?,
+    );
+    environment.insert(
+        "MANTLE_STAGE_X_SED_SPOOL_ROOT".to_string(),
+        shell_path(&context.sed_bridge.spool_root, "sed bridge spool root")?,
+    );
+    environment.insert(
+        "MANTLE_STAGE_X_SED_BRIDGE_AUDIT".to_string(),
+        shell_path(&context.sed_bridge.audit, "sed bridge audit")?,
+    );
+    assert!(environment.contains_key("MANTLE_STAGE_X_SED_BRIDGE_TARGET"));
+    assert!(environment.contains_key("MANTLE_STAGE_X_SED_BRIDGE_EMIT"));
+    assert!(environment.contains_key("MANTLE_STAGE_X_SED_BRIDGE_AUDIT"));
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1216,6 +1594,20 @@ mod tests {
     fn rejects_incomplete_sed_bridge_audit() {
         let error = canonical_sed_bridge_audit("2\t17\t19\t0\tok\n", 2).unwrap_err().to_string();
         assert!(error.contains("audit count mismatch"));
+        assert!(!error.contains("panicked"));
+    }
+
+    #[test]
+    fn rejects_unbounded_ambient_file_relocation() {
+        let error = relocate_configure_file_text("bfd", "case `/usr/bin/file conftest.o`").unwrap_err().to_string();
+        assert!(error.contains("occurrence mismatch"));
+        assert!(!error.contains("panicked"));
+    }
+
+    #[test]
+    fn rejects_duplicate_configure_class() {
+        let error = validate_configure_classes(&["intl", "intl"]).unwrap_err().to_string();
+        assert!(error.contains("duplicate configure class"));
         assert!(!error.contains("panicked"));
     }
 
@@ -1286,5 +1678,70 @@ mod tests {
         assert!(invocation_count.trim().parse::<u32>().unwrap() > 1);
         assert!(scratch_dir.join("source/intl/config.status").is_file());
         assert!(scratch_dir.join("source/intl/Makefile").is_file());
+    }
+
+    #[test]
+    #[ignore = "requires retained binutils source and protected tool roots"]
+    fn configures_declared_matrix_with_regular_file_sed_bridge() {
+        let path = |name: &str| PathBuf::from(std::env::var(name).unwrap());
+        let source_root = path("MANTLE_STAGE_X_BINUTILS_RETAINED_SOURCE");
+        let scratch_dir = path("MANTLE_STAGE_X_BINUTILS_CONFIGURE_SCRATCH");
+        let bash = path("MANTLE_STAGE_X_BASH_FULL");
+        let tcc = path("MANTLE_STAGE_X_TCC_MUSL_V2");
+        let musl_root = path("MANTLE_STAGE_X_MUSL_NATIVE_ROOT");
+        let coreutils_bin = path("MANTLE_STAGE_X_COREUTILS_BIN");
+        let sed = path("MANTLE_STAGE_X_SED");
+        let grep = path("MANTLE_STAGE_X_GREP");
+        let diff = path("MANTLE_STAGE_X_DIFF");
+        let cmp = path("MANTLE_STAGE_X_CMP");
+        let gawk = path("MANTLE_STAGE_X_GAWK");
+        let m4 = path("MANTLE_STAGE_X_M4");
+        let bison = path("MANTLE_STAGE_X_BISON");
+        let flex = path("MANTLE_STAGE_X_FLEX");
+        let make = path("MANTLE_STAGE_X_MAKE");
+        let request = BinutilsConfigureProbeRequest {
+            source_root: &source_root,
+            scratch_dir: &scratch_dir,
+            bash: &bash,
+            tcc: &tcc,
+            musl_root: &musl_root,
+            coreutils_bin: &coreutils_bin,
+            sed: &sed,
+            grep: &grep,
+            diff: &diff,
+            cmp: &cmp,
+            gawk: &gawk,
+            m4: &m4,
+            bison: &bison,
+            flex: &flex,
+            make: &make,
+        };
+        let outcomes = probe_authenticated_configure_matrix(request).unwrap();
+        assert_eq!(outcomes.len(), CONFIGURE_CLASS_COUNT);
+        assert!(outcomes.iter().all(|outcome| outcome.exit_code == 0));
+        assert!(
+            CONFIGURE_CLASSES.iter().all(|class| scratch_dir
+                .join("source")
+                .join(class)
+                .join("config.status")
+                .is_file())
+        );
+        assert!(
+            CONFIGURE_CLASSES
+                .iter()
+                .all(|class| scratch_dir.join("source").join(class).join("Makefile").is_file())
+        );
+        assert!(FILE_RELOCATION_CLASSES.iter().all(|class| {
+            !fs::read_to_string(scratch_dir.join("source").join(class).join("configure"))
+                .unwrap()
+                .contains(AMBIENT_FILE_PATH)
+        }));
+        for outcome in &outcomes {
+            let stderr = fs::read_to_string(&outcome.stderr_path).unwrap();
+            assert!(!stderr.contains("command not found"));
+            assert!(!stderr.contains("No such file"));
+            assert!(!stderr.contains(AMBIENT_FILE_PATH));
+            assert!(!stderr.contains("Broken pipe"));
+        }
     }
 }
