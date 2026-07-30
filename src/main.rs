@@ -241,6 +241,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -331,6 +332,13 @@ struct Args {
 
     #[command(subcommand)]
     command: Command,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+enum RustLocalCacheMode {
+    Off,
+    Read,
+    ReadWrite,
 }
 
 // CLI variants retain their complete clap payloads to preserve flag and help compatibility.
@@ -952,6 +960,10 @@ enum Command {
         /// Output directory for execution artifacts
         #[arg(long)]
         execution_output_root: Option<PathBuf>,
+
+        /// Explicit local Rust unit cache policy
+        #[arg(long, value_enum, default_value_t = RustLocalCacheMode::Off)]
+        local_rust_cache: RustLocalCacheMode,
     },
 
     /// Enter a development shell from the compatibility-named crunch.ncl devShells
@@ -6809,10 +6821,22 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         execute_workspace_dependency_topology,
         execute_patch_source_topology,
         execution_output_root,
+        local_rust_cache,
     } = command
     else {
         return Err(RunError::Internal("run_rust_plan_command called with non-RustPlan command".to_string()));
     };
+    let execution_mode = select_rust_plan_execution_mode(RustPlanExecutionSelection {
+        first_supported: *execute_first_supported_unit,
+        first_dependency_chain: *execute_first_dependency_chain,
+        target_topology: *execute_target_topology,
+        host_artifact_topology: *execute_host_artifact_topology,
+        topology: *execute_topology,
+        dev_dependency_test_topology: *execute_dev_dependency_test_topology,
+        workspace_dependency_topology: *execute_workspace_dependency_topology,
+        patch_source_topology: *execute_patch_source_topology,
+    });
+    validate_rust_local_cache_mode(*local_rust_cache, execution_mode)?;
     let root = root.clone().unwrap_or(current_dir_or_error()?);
     let captured = capture_rust_plan_command(RustPlanCaptureRequest {
         root,
@@ -6832,22 +6856,14 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         execution_output_root: execution_output_root.as_deref(),
     })?;
     rust_plan::set_receipt_bound_c_compiler_route_override(captured.c_compiler_route)?;
-    let execution_mode = select_rust_plan_execution_mode(RustPlanExecutionSelection {
-        first_supported: *execute_first_supported_unit,
-        first_dependency_chain: *execute_first_dependency_chain,
-        target_topology: *execute_target_topology,
-        host_artifact_topology: *execute_host_artifact_topology,
-        topology: *execute_topology,
-        dev_dependency_test_topology: *execute_dev_dependency_test_topology,
-        workspace_dependency_topology: *execute_workspace_dependency_topology,
-        patch_source_topology: *execute_patch_source_topology,
-    });
+    let local_cache = prepare_rust_plan_local_cache(ctx, rustc, *local_rust_cache, execution_mode)?;
     execute_rust_plan_receipt(RustPlanExecutionRequest {
         receipt: captured.receipt,
         rustc,
         compiler_policy: captured.compiler_policy,
         output_root: execution_output_root.as_deref(),
         mode: execution_mode,
+        local_cache,
         json: ctx.json,
     })
 }
@@ -6891,12 +6907,58 @@ fn select_rust_plan_execution_mode(selection: RustPlanExecutionSelection) -> Rus
     }
 }
 
+fn validate_rust_local_cache_mode(
+    mode: RustLocalCacheMode,
+    execution_mode: RustPlanExecutionMode,
+) -> Result<(), RunError> {
+    let cache_enabled = !matches!(mode, RustLocalCacheMode::Off);
+    let execution_enabled = !matches!(execution_mode, RustPlanExecutionMode::PrintOnly);
+    if cache_enabled && !execution_enabled {
+        return Err(RunError::Internal("--local-rust-cache requires a Rust unit execution mode".to_string()));
+    }
+    Ok(())
+}
+
+fn prepare_rust_plan_local_cache(
+    ctx: &RunContext,
+    rustc: &Path,
+    mode: RustLocalCacheMode,
+    execution_mode: RustPlanExecutionMode,
+) -> Result<Option<rust_plan::RustUnitLocalCacheSelection>, RunError> {
+    validate_rust_local_cache_mode(mode, execution_mode)?;
+    let (reads_enabled, writes_enabled, policy_id) = match mode {
+        RustLocalCacheMode::Off => return Ok(None),
+        RustLocalCacheMode::Read => (true, false, "mantle-rust-local-cache-read-v1"),
+        RustLocalCacheMode::ReadWrite => (true, true, "mantle-rust-local-cache-read-write-v1"),
+    };
+    let policy = crunch_rust_cache_core::LocalCachePolicy {
+        policy_id: policy_id.to_string(),
+        reads_enabled,
+        writes_enabled,
+        ..crunch_rust_cache_core::LocalCachePolicy::default()
+    };
+    let cache = crunch_rust_cache::RustCache::open(crunch_store::StoreConfig {
+        state_dir: ctx.resolved_state_dir.clone(),
+        output_dir: ctx.store.clone(),
+        remote_cache_urls: Vec::new(),
+        fallback_mode: crunch_store::StoreFallbackMode::Strict,
+        store_dir: ctx.store_prefix.clone(),
+        base_state_dirs: Vec::new(),
+    })
+    .map_err(|error| RunError::Internal(format!("opening local Rust unit cache: {error}")))?;
+    let selection = rust_plan::rust_unit_local_cache_selection(Arc::new(cache), policy, rustc)?;
+    assert_eq!(selection.policy.reads_enabled, reads_enabled);
+    assert_eq!(selection.policy.writes_enabled, writes_enabled);
+    Ok(Some(selection))
+}
+
 struct RustPlanExecutionRequest<'a> {
     receipt: rust_plan::RustPlanReceipt,
     rustc: &'a Path,
     compiler_policy: rust_plan::RustCompilerPolicySelection,
     output_root: Option<&'a Path>,
     mode: RustPlanExecutionMode,
+    local_cache: Option<rust_plan::RustUnitLocalCacheSelection>,
     json: bool,
 }
 
@@ -6925,6 +6987,7 @@ fn rust_plan_execution_options(
         rustc: request.rustc.to_path_buf(),
         output_root: output_root.to_path_buf(),
         compiler_policy: request.compiler_policy.clone(),
+        local_cache: request.local_cache.clone(),
     })
 }
 
@@ -8297,6 +8360,41 @@ mod tests {
             parse_args_with_cli_test_stack(Vec::from(["mantle", "build", "demo.ncl", "--strict-hermetic", "--impure"]))
                 .unwrap_err();
         assert!(err.to_string().contains("cannot be used with"));
+    }
+
+    #[test]
+    fn rust_plan_cache_requires_execution_but_off_allows_printing() {
+        assert!(validate_rust_local_cache_mode(RustLocalCacheMode::Off, RustPlanExecutionMode::PrintOnly).is_ok());
+        assert!(
+            validate_rust_local_cache_mode(RustLocalCacheMode::Read, RustPlanExecutionMode::FirstSupported).is_ok()
+        );
+        let error = validate_rust_local_cache_mode(RustLocalCacheMode::ReadWrite, RustPlanExecutionMode::PrintOnly)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("requires a Rust unit execution mode"));
+    }
+
+    #[test]
+    fn rust_plan_cli_cache_is_explicit_and_defaults_off() {
+        let default = parse_args_with_cli_test_stack(Vec::from(["mantle", "rust-plan"]))
+            .expect("default rust-plan CLI should parse");
+        let Command::RustPlan { local_rust_cache, .. } = default.command else {
+            panic!("rust-plan command should parse");
+        };
+        assert_eq!(local_rust_cache, RustLocalCacheMode::Off);
+
+        let enabled = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "rust-plan",
+            "--execute-first-supported-unit",
+            "--local-rust-cache",
+            "read-write",
+        ]))
+        .expect("explicit rust-plan cache CLI should parse");
+        let Command::RustPlan { local_rust_cache, .. } = enabled.command else {
+            panic!("rust-plan command should parse");
+        };
+        assert_eq!(local_rust_cache, RustLocalCacheMode::ReadWrite);
     }
 
     #[test]

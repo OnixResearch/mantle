@@ -136,6 +136,8 @@ crunch-eval = { path = "crates/crunch-eval" }
 nickel-export-core = { git = "https://github.com/OnixResearch/nickel-export", rev = "257fafc1c746f1faf156207043a4c826bfb16d49" }
 crunch-glue = { path = "crates/crunch-glue" }
 crunch-action-result-core = { path = "crates/crunch-action-result-core" }
+crunch-rust-cache-core = { path = "crates/crunch-rust-cache-core" }
+crunch-rust-cache = { path = "crates/crunch-rust-cache" }
 crunch-build = { path = "crates/crunch-build" }
 crunch-store = { path = "crates/crunch-store" }
 crunch-wasm-component = { path = "crates/crunch-wasm-component" }

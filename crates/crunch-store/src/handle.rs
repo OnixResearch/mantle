@@ -1073,6 +1073,14 @@ impl StoreHandle {
     }
 
     pub async fn garbage_collect(&mut self, is_dry_run: bool) -> Result<GcReport, Error> {
+        self.garbage_collect_with_castore_roots(is_dry_run, &[]).await
+    }
+
+    pub async fn garbage_collect_with_castore_roots(
+        &mut self,
+        is_dry_run: bool,
+        retained_castore_roots: &[Node],
+    ) -> Result<GcReport, Error> {
         let ctx = gc::GcContext {
             state_dir: &self.state_dir,
             output_dir_str: &self.output_dir_str,
@@ -1080,6 +1088,7 @@ impl StoreHandle {
             pathinfo: self.pathinfo_service.as_ref(),
             directory_service: self.directory_service.as_ref(),
             blob_service: self.blob_service.as_ref(),
+            retained_castore_roots,
         };
         gc::run_gc(&ctx, &mut self.ca_mappings, is_dry_run).await
     }

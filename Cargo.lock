@@ -4693,6 +4693,8 @@ dependencies = [
  "crunch-pipeline",
  "crunch-project",
  "crunch-release-core",
+ "crunch-rust-cache",
+ "crunch-rust-cache-core",
  "crunch-shell",
  "crunch-store",
  "crunch-wasm-component",

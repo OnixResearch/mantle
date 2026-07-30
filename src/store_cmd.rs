@@ -159,8 +159,22 @@ async fn cmd_store_mutation_or_transfer(
 async fn cmd_store_gc_action(context: StoreCommandContext<'_>, is_dry_run: bool) -> Result<(), RunError> {
     let _guard = crunch_store::StoreMutationGuard::try_acquire(context.state_dir)
         .map_err(|e| RunError::Build(format!("{e}")))?;
+    let rust_cache = crunch_rust_cache::RustCache::open_async(crunch_store::StoreConfig {
+        state_dir: context.state_dir.to_path_buf(),
+        output_dir: context.output_dir.to_path_buf(),
+        remote_cache_urls: Vec::new(),
+        fallback_mode: crunch_store::StoreFallbackMode::Practical,
+        store_dir: context.store_dir.to_string(),
+        base_state_dirs: Vec::new(),
+    })
+    .await
+    .map_err(|error| RunError::Build(format!("planning Rust cache retention: {error}")))?;
+    let rust_retention = rust_cache
+        .plan_retention_gc()
+        .map_err(|error| RunError::Build(format!("planning Rust cache retention: {error}")))?;
+    drop(rust_cache);
     let mut store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
-    cmd_store_gc(&mut store, is_dry_run).await
+    cmd_store_gc(&mut store, &rust_retention, is_dry_run).await
 }
 
 fn store_mutation_guard(state_dir: &Path) -> Result<crunch_store::StoreMutationGuard, RunError> {
@@ -465,12 +479,27 @@ fn cmd_store_unpin(store: &crunch_store::StoreHandle, path: &str) -> Result<(), 
     Ok(())
 }
 
-async fn cmd_store_gc(store: &mut crunch_store::StoreHandle, is_dry_run: bool) -> Result<(), RunError> {
+async fn cmd_store_gc(
+    store: &mut crunch_store::StoreHandle,
+    rust_retention: &crunch_rust_cache::RustCacheRetentionPlan,
+    is_dry_run: bool,
+) -> Result<(), RunError> {
     debug_assert!(!store.store_dir().is_empty());
     debug_assert!(Path::new(store.store_dir()).is_absolute());
-    let gc_evidence = store.garbage_collect(is_dry_run).await.map_err(|e| RunError::Build(format!("{e}")))?;
-    if !gc_report_has_candidates(&gc_evidence) {
-        println!("retained_roots={}  candidate_paths=0  reclaimable_bytes=0", gc_evidence.retained_root_count);
+    let gc_evidence = store
+        .garbage_collect_with_castore_roots(is_dry_run, rust_retention.live_nodes())
+        .await
+        .map_err(|e| RunError::Build(format!("{e}")))?;
+    rust_retention
+        .apply(is_dry_run)
+        .map_err(|error| RunError::Build(format!("applying Rust cache retention: {error}")))?;
+    if !gc_report_has_candidates(&gc_evidence) && rust_retention.stale_result_count() == 0 {
+        println!(
+            "retained_roots={}  retained_rust_results={}  stale_rust_results={}  candidate_paths=0  reclaimable_bytes=0",
+            gc_evidence.retained_root_count,
+            gc_evidence.retained_castore_root_count,
+            rust_retention.stale_result_count(),
+        );
         if is_dry_run {
             eprintln!("dry-run: no changes made");
         } else {
@@ -480,8 +509,12 @@ async fn cmd_store_gc(store: &mut crunch_store::StoreHandle, is_dry_run: bool) -
     }
 
     println!(
-        "retained_roots={}  candidate_paths={}  reclaimable_bytes={}",
-        gc_evidence.retained_root_count, gc_evidence.candidate_path_count, gc_evidence.reclaimable_bytes_total
+        "retained_roots={}  retained_rust_results={}  stale_rust_results={}  candidate_paths={}  reclaimable_bytes={}",
+        gc_evidence.retained_root_count,
+        gc_evidence.retained_castore_root_count,
+        rust_retention.stale_result_count(),
+        gc_evidence.candidate_path_count,
+        gc_evidence.reclaimable_bytes_total
     );
     println!(
         "candidate_exported_outputs={}  candidate_artifact_attestations={}  candidate_closure_attestations={}  candidate_blob_indexes={}  candidate_blob_chunks={}  candidate_action_result_records={}  candidate_action_result_indexes={}",
@@ -499,7 +532,11 @@ async fn cmd_store_gc(store: &mut crunch_store::StoreHandle, is_dry_run: bool) -
     if is_dry_run {
         eprintln!("dry-run: no changes made");
     } else {
-        eprintln!("gc: removed {} candidate path(s)", gc_evidence.candidate_path_count);
+        eprintln!(
+            "gc: removed {} candidate path(s) and {} stale Rust result record(s)",
+            gc_evidence.candidate_path_count,
+            rust_retention.stale_result_count(),
+        );
     }
     Ok(())
 }

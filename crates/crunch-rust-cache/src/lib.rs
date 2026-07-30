@@ -6,11 +6,13 @@
 //! `crunch-rust-cache-core` crate owns canonical identity and admission logic.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Read;
 use std::io::Write;
+use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -47,7 +49,7 @@ use snix_castore::import::fs::ingest_path;
 use tempfile::Builder;
 use thiserror::Error;
 
-pub const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = "rust-unit-execution-receipt.json";
+pub const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json";
 pub const RUST_CACHE_RETENTION_SCHEMA: &str = "mantle-rust-unit-retention-v1";
 pub const CACHE_DISPOSITION_DISABLED: &str = "local-cache-disabled";
 pub const CACHE_DISPOSITION_MISS: &str = "local-cache-miss";
@@ -138,6 +140,54 @@ pub struct RustCacheReport {
     pub compiler_executed: bool,
 }
 
+#[derive(Debug)]
+pub struct RustCacheRetentionPlan {
+    live_nodes: Vec<Node>,
+    stale_result_paths: Vec<PathBuf>,
+    index_updates: Vec<(PathBuf, Option<RustResultIndex>)>,
+    mutation_lock_path: PathBuf,
+}
+
+impl RustCacheRetentionPlan {
+    pub fn live_nodes(&self) -> &[Node] {
+        assert!(self.live_nodes.len() <= crunch_rust_cache_core::MAX_RESULT_CANDIDATES);
+        assert!(!self.mutation_lock_path.as_os_str().is_empty());
+        &self.live_nodes
+    }
+
+    pub fn stale_result_count(&self) -> u32 {
+        assert!(self.stale_result_paths.len() <= crunch_rust_cache_core::MAX_RESULT_CANDIDATES);
+        assert!(u32::try_from(self.stale_result_paths.len()).is_ok());
+        self.stale_result_paths.len() as u32
+    }
+
+    pub fn apply(&self, is_dry_run: bool) -> Result<(), Error> {
+        if is_dry_run {
+            return Ok(());
+        }
+        let _lock = CacheMutationLock::acquire(&self.mutation_lock_path)?;
+        for (path, replacement) in &self.index_updates {
+            if let Some(index) = replacement {
+                write_atomic_json(path, index)?;
+            } else {
+                fs::remove_file(path).map_err(|source| Error::Io {
+                    context: "remove-stale-index".to_string(),
+                    source,
+                })?;
+            }
+        }
+        for path in &self.stale_result_paths {
+            fs::remove_file(path).map_err(|source| Error::Io {
+                context: "remove-stale-result".to_string(),
+                source,
+            })?;
+        }
+        assert!(self.stale_result_paths.iter().all(|path| !path.exists()));
+        assert!(!self.mutation_lock_path.as_os_str().is_empty());
+        Ok(())
+    }
+}
+
 impl RustCacheReport {
     pub fn disabled() -> Self {
         Self {
@@ -166,7 +216,36 @@ pub struct PublishRequest<'a> {
     pub policy: &'a LocalCachePolicy,
 }
 
+impl std::fmt::Debug for RustCache {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RustCache")
+            .field("state_dir", &self.state_dir)
+            .field("cache_dir", &self.cache_dir)
+            .finish_non_exhaustive()
+    }
+}
+
 impl RustCache {
+    pub fn open(config: crunch_store::StoreConfig) -> Result<Self, Error> {
+        let runtime =
+            tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|source| Error::Io {
+                context: "create-cache-runtime".to_string(),
+                source,
+            })?;
+        runtime.block_on(Self::open_async(config))
+    }
+
+    pub async fn open_async(config: crunch_store::StoreConfig) -> Result<Self, Error> {
+        let handle = crunch_store::StoreHandle::open(config)
+            .await
+            .map_err(|error| Error::Castore(format!("open-store:{error}")))?;
+        let cache = Self::new(handle.state_dir().to_path_buf(), handle.blob_service(), handle.directory_service())?;
+        assert_eq!(cache.state_dir(), handle.state_dir());
+        assert!(cache.cache_dir.starts_with(handle.state_dir()));
+        Ok(cache)
+    }
+
     pub fn new(
         state_dir: PathBuf,
         blob_service: Arc<dyn BlobService>,
@@ -201,12 +280,26 @@ impl RustCache {
         &self.state_dir
     }
 
+    pub fn publish_blocking(&self, request: PublishRequest<'_>) -> Result<RustUnitResult, Error> {
+        let runtime =
+            tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|source| Error::Io {
+                context: "create-publish-runtime".to_string(),
+                source,
+            })?;
+        let result = runtime.block_on(self.publish(request))?;
+        assert!(!result.result_ref.is_empty());
+        assert!(!result.input.artifacts.is_empty());
+        Ok(result)
+    }
+
     pub async fn publish(&self, request: PublishRequest<'_>) -> Result<RustUnitResult, Error> {
         validate_rust_action(request.action).map_err(Error::Core)?;
         crunch_rust_cache_core::validate_local_cache_policy(request.policy).map_err(Error::Core)?;
         if !request.policy.writes_enabled {
             return Err(Error::State("local-cache-write-disabled".to_string()));
         }
+        let _store_guard = crunch_store::StoreMutationGuard::acquire_wait(&self.state_dir)
+            .map_err(|error| Error::State(format!("store-mutation-lock:{error}")))?;
         let manifest = scan_output_artifacts(request.output_dir, request.policy)?;
         let snapshot = self.snapshot_declared_artifacts(request.output_dir, &manifest)?;
         let node = ingest_path(
@@ -238,6 +331,23 @@ impl RustCache {
         Ok(result)
     }
 
+    pub fn restore_blocking(
+        &self,
+        action: &RustUnitAction,
+        output_dir: &Path,
+        policy: &LocalCachePolicy,
+    ) -> Result<RustCacheReport, Error> {
+        let runtime =
+            tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|source| Error::Io {
+                context: "create-restore-runtime".to_string(),
+                source,
+            })?;
+        let report = runtime.block_on(self.restore(action, output_dir, policy))?;
+        assert!(!report.disposition.is_empty());
+        assert!(report.candidate_count <= policy.max_candidates);
+        Ok(report)
+    }
+
     pub async fn restore(
         &self,
         action: &RustUnitAction,
@@ -249,6 +359,8 @@ impl RustCache {
         if !policy.reads_enabled {
             return Ok(RustCacheReport::disabled());
         }
+        let _store_guard = crunch_store::StoreMutationGuard::acquire_wait(&self.state_dir)
+            .map_err(|error| Error::State(format!("store-mutation-lock:{error}")))?;
         if output_dir.exists() {
             return Ok(rejected_report("rust-local-cache-output-exists"));
         }
@@ -299,6 +411,46 @@ impl RustCache {
         assert_eq!(retention.schema, RUST_CACHE_RETENTION_SCHEMA);
         assert!(retention.retained_results.len() <= crunch_rust_cache_core::MAX_RESULT_CANDIDATES);
         Ok(retention)
+    }
+
+    pub fn plan_retention_gc(&self) -> Result<RustCacheRetentionPlan, Error> {
+        let _lock = CacheMutationLock::acquire(&self.cache_dir.join(MUTATION_LOCK_FILE))?;
+        let retention = self.retention()?;
+        let mut indexes = BTreeMap::new();
+        let mut live_nodes = Vec::with_capacity(retention.retained_results.len());
+        let mut live_result_paths = BTreeSet::new();
+        let mut retained_result_actions = BTreeMap::new();
+        for (result_ref, retained_node) in &retention.retained_results {
+            let result = self.read_result(result_ref)?;
+            if &result.input.root_node != retained_node {
+                return Err(Error::State("retention-result-node-mismatch".to_string()));
+            }
+            if !indexes.contains_key(&result.input.action_ref) {
+                let index = self
+                    .read_index(&result.input.action_ref)?
+                    .ok_or_else(|| Error::State("retention-index-missing".to_string()))?;
+                indexes.insert(result.input.action_ref.clone(), index);
+            }
+            let index = indexes
+                .get(&result.input.action_ref)
+                .ok_or_else(|| Error::State("retention-index-not-loaded".to_string()))?;
+            if !index.result_refs.contains(result_ref) {
+                return Err(Error::State("retention-result-not-indexed".to_string()));
+            }
+            live_nodes.push(node_from_identity(retained_node)?);
+            live_result_paths.insert(self.result_path(result_ref)?);
+            retained_result_actions.insert(result_ref.clone(), result.input.action_ref);
+        }
+        let stale_result_paths = collect_stale_result_paths(&self.results_dir, &live_result_paths)?;
+        let index_updates = collect_stale_index_updates(&self.indexes_dir, &retained_result_actions)?;
+        assert_eq!(live_nodes.len(), retention.retained_results.len());
+        assert!(stale_result_paths.iter().all(|path| !live_result_paths.contains(path)));
+        Ok(RustCacheRetentionPlan {
+            live_nodes,
+            stale_result_paths,
+            index_updates,
+            mutation_lock_path: self.cache_dir.join(MUTATION_LOCK_FILE),
+        })
     }
 
     fn snapshot_declared_artifacts(
@@ -409,6 +561,7 @@ impl RustCache {
             context: "create-restore-staging".to_string(),
             source,
         })?;
+        let temp = RestoreStaging::new(temp);
         let node = node_from_identity(&result.input.root_node)?;
         let staging_text = temp.path().to_str().ok_or_else(|| Error::State("restore-path-non-utf8".to_string()))?;
         crunch_store::export_castore_to_disk(&node, staging_text, &self.blob_service, &self.directory_service)
@@ -422,6 +575,13 @@ impl RustCache {
             return Err(Error::State("restore-output-raced".to_string()));
         }
         let staging = temp.keep();
+        ensure_same_commit_device(&staging, parent)?;
+        fs::set_permissions(&staging, fs::Permissions::from_mode(PRIVATE_DIRECTORY_MODE)).map_err(|source| {
+            Error::Io {
+                context: "make-restore-root-writable".to_string(),
+                source,
+            }
+        })?;
         if let Err(source) = fs::rename(&staging, output_dir) {
             make_owner_writable(&staging);
             let _cleanup = fs::remove_dir_all(&staging);
@@ -443,6 +603,34 @@ impl RustCache {
     fn result_path(&self, result_ref: &str) -> Result<PathBuf, Error> {
         typed_ref_path(&self.results_dir, result_ref, crunch_rust_cache_core::RUST_RESULT_REF_PREFIX)
     }
+}
+
+fn ensure_same_commit_device(staging: &Path, destination_parent: &Path) -> Result<(), Error> {
+    let staging_device = fs::metadata(staging)
+        .map_err(|source| Error::Io {
+            context: "stat-restore-staging-device".to_string(),
+            source,
+        })?
+        .dev();
+    let destination_device = fs::metadata(destination_parent)
+        .map_err(|source| Error::Io {
+            context: "stat-restore-parent-device".to_string(),
+            source,
+        })?
+        .dev();
+    validate_commit_devices(staging_device, destination_device)?;
+    assert_eq!(staging_device, destination_device);
+    assert!(staging.starts_with(destination_parent));
+    Ok(())
+}
+
+fn validate_commit_devices(staging_device: u64, destination_device: u64) -> Result<(), Error> {
+    if staging_device != destination_device {
+        return Err(Error::State("cross-filesystem-restore-commit-rejected".to_string()));
+    }
+    assert_eq!(staging_device, destination_device);
+    assert!(staging_device == destination_device);
+    Ok(())
 }
 
 fn scan_output_artifacts(output_dir: &Path, policy: &LocalCachePolicy) -> Result<Vec<RustResultArtifact>, Error> {
@@ -675,6 +863,107 @@ fn typed_ref_path(directory: &Path, reference: &str, prefix: &str) -> Result<Pat
     Ok(path)
 }
 
+fn collect_stale_result_paths(
+    results_dir: &Path,
+    live_result_paths: &BTreeSet<PathBuf>,
+) -> Result<Vec<PathBuf>, Error> {
+    let entries = fs::read_dir(results_dir).map_err(|source| Error::Io {
+        context: "read-result-directory".to_string(),
+        source,
+    })?;
+    let mut stale_paths = Vec::new();
+    let mut entry_count = 0_usize;
+    for entry in entries {
+        entry_count = entry_count
+            .checked_add(1)
+            .ok_or_else(|| Error::Bound("result-directory-count-overflow".to_string()))?;
+        if entry_count > crunch_rust_cache_core::MAX_RESULT_CANDIDATES {
+            return Err(Error::Bound("result-directory-limit-exceeded".to_string()));
+        }
+        let entry = entry.map_err(|source| Error::Io {
+            context: "read-result-entry".to_string(),
+            source,
+        })?;
+        let file_type = entry.file_type().map_err(|source| Error::Io {
+            context: "inspect-result-entry".to_string(),
+            source,
+        })?;
+        if !file_type.is_file() || file_type.is_symlink() {
+            return Err(Error::State("result-directory-entry-not-regular".to_string()));
+        }
+        let path = entry.path();
+        if !live_result_paths.contains(&path) {
+            stale_paths.push(path);
+        }
+    }
+    stale_paths.sort();
+    assert!(entry_count <= crunch_rust_cache_core::MAX_RESULT_CANDIDATES);
+    assert!(stale_paths.iter().all(|path| path.starts_with(results_dir)));
+    Ok(stale_paths)
+}
+
+fn collect_stale_index_updates(
+    indexes_dir: &Path,
+    retained_result_actions: &BTreeMap<String, String>,
+) -> Result<Vec<(PathBuf, Option<RustResultIndex>)>, Error> {
+    let entries = fs::read_dir(indexes_dir).map_err(|source| Error::Io {
+        context: "read-index-directory".to_string(),
+        source,
+    })?;
+    let mut updates = Vec::new();
+    let mut entry_count = 0_usize;
+    for entry in entries {
+        entry_count = entry_count
+            .checked_add(1)
+            .ok_or_else(|| Error::Bound("index-directory-count-overflow".to_string()))?;
+        if entry_count > crunch_rust_cache_core::MAX_RESULT_CANDIDATES {
+            return Err(Error::Bound("index-directory-limit-exceeded".to_string()));
+        }
+        let entry = entry.map_err(|source| Error::Io {
+            context: "read-index-entry".to_string(),
+            source,
+        })?;
+        let file_type = entry.file_type().map_err(|source| Error::Io {
+            context: "inspect-index-entry".to_string(),
+            source,
+        })?;
+        if !file_type.is_file() || file_type.is_symlink() {
+            return Err(Error::State("index-directory-entry-not-regular".to_string()));
+        }
+        let path = entry.path();
+        let bytes = read_bounded_required(&path)?;
+        let index = serde_json::from_slice::<RustResultIndex>(&bytes)
+            .map_err(|error| Error::Json(format!("index-decode:{error}")))?;
+        validate_result_index(&index).map_err(Error::Core)?;
+        let expected_path =
+            typed_ref_path(indexes_dir, &index.action_ref, crunch_rust_cache_core::RUST_ACTION_REF_PREFIX)?;
+        if path != expected_path {
+            return Err(Error::State("index-reference-path-mismatch".to_string()));
+        }
+        let retained_refs = index
+            .result_refs
+            .iter()
+            .filter(|result_ref| {
+                retained_result_actions.get(*result_ref).is_some_and(|action_ref| action_ref == &index.action_ref)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if retained_refs == index.result_refs {
+            continue;
+        }
+        let replacement = if retained_refs.is_empty() {
+            None
+        } else {
+            Some(canonical_result_index(index.action_ref, retained_refs).map_err(Error::Core)?)
+        };
+        updates.push((path, replacement));
+    }
+    updates.sort_by(|left, right| left.0.cmp(&right.0));
+    assert!(entry_count <= crunch_rust_cache_core::MAX_RESULT_CANDIDATES);
+    assert!(updates.iter().all(|(path, _)| path.starts_with(indexes_dir)));
+    Ok(updates)
+}
+
 fn validate_retention(retention: &RustCacheRetention) -> Result<(), Error> {
     if retention.schema != RUST_CACHE_RETENTION_SCHEMA {
         return Err(Error::State("retention-schema-unsupported".to_string()));
@@ -838,6 +1127,32 @@ fn make_owner_writable(path: &Path) {
     debug_assert!(!existed || path.exists());
 }
 
+fn cleanup_restore_staging(root: &Path) {
+    let mut pending = vec![root.to_path_buf()];
+    let mut visited = 0_u32;
+    while let Some(directory) = pending.pop() {
+        visited = visited.saturating_add(1);
+        if visited > MAX_SCAN_ENTRIES {
+            break;
+        }
+        make_owner_writable(&directory);
+        let Ok(entries) = fs::read_dir(&directory) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if file_type.is_dir() && !file_type.is_symlink() {
+                pending.push(entry.path());
+            }
+        }
+    }
+    let _cleanup = fs::remove_dir_all(root);
+    debug_assert!(visited <= MAX_SCAN_ENTRIES.saturating_add(1));
+    debug_assert!(!root.as_os_str().is_empty());
+}
+
 fn path_mode(path: &Path) -> u32 {
     let mode = fs::symlink_metadata(path).map(|metadata| metadata.permissions().mode()).unwrap_or(0);
     assert!(!path.as_os_str().is_empty());
@@ -932,6 +1247,43 @@ fn rejected_plan_report(
     report
 }
 
+struct RestoreStaging {
+    temp: Option<tempfile::TempDir>,
+}
+
+impl RestoreStaging {
+    fn new(temp: tempfile::TempDir) -> Self {
+        assert!(temp.path().is_dir());
+        assert!(!temp.path().as_os_str().is_empty());
+        Self { temp: Some(temp) }
+    }
+
+    fn path(&self) -> &Path {
+        let path = self.temp.as_ref().expect("restore staging must be owned").path();
+        assert!(path.is_dir());
+        assert!(!path.as_os_str().is_empty());
+        path
+    }
+
+    fn keep(mut self) -> PathBuf {
+        let path = self.temp.take().expect("restore staging must be owned before commit").keep();
+        assert!(path.is_dir());
+        assert!(!path.as_os_str().is_empty());
+        path
+    }
+}
+
+impl Drop for RestoreStaging {
+    fn drop(&mut self) {
+        let Some(temp) = self.temp.take() else {
+            return;
+        };
+        let path = temp.keep();
+        cleanup_restore_staging(&path);
+        debug_assert!(!path.exists(), "restore staging must be removed after failure");
+    }
+}
+
 struct CacheMutationLock {
     file: File,
 }
@@ -998,8 +1350,11 @@ mod tests {
     use super::*;
 
     const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const OTHER_DIGEST: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const TEST_OUTPUT: &[u8] = b"local rust cache artifact";
     const TEST_CONFLICT_CANDIDATES: u32 = 2;
+    const TEST_DEVICE_A: u64 = 10;
+    const TEST_DEVICE_B: u64 = 11;
 
     async fn test_cache(state_dir: &Path) -> RustCache {
         let directories = RedbDirectoryService::new("rust-cache-test".to_string(), RedbDirectoryServiceConfig {
@@ -1089,6 +1444,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retention_plan_keeps_accepted_roots_and_prunes_only_stale_records() {
+        let state = tempfile::tempdir().unwrap();
+        let cache = test_cache(state.path()).await;
+        let source = state.path().join("source");
+        fs::create_dir(&source).unwrap();
+        fs::write(source.join("libcrate.rlib"), TEST_OUTPUT).unwrap();
+        let action = test_action();
+        let result = cache
+            .publish(PublishRequest {
+                action: &action,
+                output_dir: &source,
+                producer_receipt_ref: &format!("mantle-rust-receipt://blake3/{DIGEST}"),
+                policy: &read_write_policy(),
+            })
+            .await
+            .unwrap();
+        let mut stale_input = result.input.clone();
+        stale_input.producer_receipt_ref = format!("mantle-rust-receipt://blake3/{OTHER_DIGEST}");
+        let stale_result = canonical_rust_result(stale_input).unwrap();
+        let stale_path = cache.result_path(&stale_result.result_ref).unwrap();
+        write_immutable_json(&stale_path, &stale_result).unwrap();
+        let index = canonical_result_index(action.action_ref.clone(), vec![
+            result.result_ref.clone(),
+            stale_result.result_ref.clone(),
+        ])
+        .unwrap();
+        write_atomic_json(&cache.index_path(&action.action_ref).unwrap(), &index).unwrap();
+
+        let plan = cache.plan_retention_gc().unwrap();
+
+        assert_eq!(plan.live_nodes().len(), 1);
+        assert_eq!(plan.stale_result_count(), 1);
+        plan.apply(true).unwrap();
+        assert!(stale_path.is_file());
+        plan.apply(false).unwrap();
+        assert!(!stale_path.exists());
+        assert!(cache.result_path(&result.result_ref).unwrap().is_file());
+        assert_eq!(cache.read_index(&action.action_ref).unwrap().unwrap().result_refs, vec![result.result_ref]);
+    }
+
+    #[tokio::test]
     async fn incomplete_castore_candidate_is_rejected() {
         let root = tempfile::tempdir().unwrap();
         let cache = test_cache(root.path()).await;
@@ -1174,6 +1570,79 @@ mod tests {
 
         assert_eq!(error.to_string(), "rust-cache-state:symlink-artifact-unsupported");
         assert!(cache.retention().unwrap().retained_results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn artifact_entry_bound_rejects_publication_without_result_state() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = test_cache(root.path()).await;
+        let output = root.path().join("execution/unit");
+        fs::create_dir_all(&output).unwrap();
+        fs::write(output.join("one.rlib"), b"one").unwrap();
+        fs::write(output.join("two.rlib"), b"two").unwrap();
+        let mut policy = read_write_policy();
+        policy.max_tree_entries = 1;
+
+        let error = cache
+            .publish(PublishRequest {
+                action: &test_action(),
+                output_dir: &output,
+                producer_receipt_ref: &format!("mantle-rust-receipt://blake3/{DIGEST}"),
+                policy: &policy,
+            })
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.to_string(), "rust-cache-bound:artifact-tree-entry-count-exceeded");
+        assert!(cache.retention().unwrap().retained_results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn artifact_mismatch_cleans_interrupted_restore_staging() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = test_cache(root.path()).await;
+        let output = root.path().join("execution/unit");
+        write_output(&output, TEST_OUTPUT);
+        let action = test_action();
+        let policy = read_write_policy();
+        let original = cache
+            .publish(PublishRequest {
+                action: &action,
+                output_dir: &output,
+                producer_receipt_ref: &format!("mantle-rust-receipt://blake3/{DIGEST}"),
+                policy: &policy,
+            })
+            .await
+            .unwrap();
+        fs::remove_dir_all(&output).unwrap();
+        fs::remove_file(cache.result_path(&original.result_ref).unwrap()).unwrap();
+        fs::remove_file(cache.index_path(&action.action_ref).unwrap()).unwrap();
+        write_atomic_json(&cache.cache_dir.join(RETENTION_FILE), &RustCacheRetention::default()).unwrap();
+        let mut tampered_input = original.input.clone();
+        tampered_input.artifacts[0].digest_blake3 = "b".repeat(BLAKE3_HEX_CHARS);
+        let tampered = canonical_rust_result(tampered_input).unwrap();
+        cache.publish_record_and_index(&tampered).unwrap();
+
+        let error = cache.restore(&action, &output, &policy).await.unwrap_err();
+
+        assert_eq!(error.to_string(), "rust-cache-state:restored-artifact-manifest-mismatch");
+        assert!(!output.exists());
+        let parent = output.parent().unwrap();
+        assert!(
+            fs::read_dir(parent).unwrap().all(|entry| !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with("restore-"))
+        );
+    }
+
+    #[test]
+    fn cross_filesystem_commit_facts_fail_closed() {
+        assert!(validate_commit_devices(TEST_DEVICE_A, TEST_DEVICE_A).is_ok());
+        let error = validate_commit_devices(TEST_DEVICE_A, TEST_DEVICE_B).unwrap_err();
+        assert_eq!(error.to_string(), "rust-cache-state:cross-filesystem-restore-commit-rejected");
+        assert_ne!(TEST_DEVICE_A, TEST_DEVICE_B);
     }
 
     #[tokio::test]

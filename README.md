@@ -263,6 +263,13 @@ alongside blocked surfaces and `blocked-unsupported-surface` receipts. This is
 not proof of full Cargo compatibility, compiler correctness, release
 reproducibility, or bootstrap correctness.
 
+Native Rust unit caching is disabled by default. Use
+`--local-rust-cache read` or `--local-rust-cache read-write` with an explicit
+`rust-plan` execution mode. Mantle admits only results with matching action
+identity, policy, complete castore content, and verified artifacts. See
+[`docs/native-rust-plan-validation.md`](docs/native-rust-plan-validation.md)
+for the cache report, retention, GC, and validation rules.
+
 Foreign derivation admission is documented in
 [`docs/foreign-derivation-import-trust-model.md`](docs/foreign-derivation-import-trust-model.md).
 The [foreign realization operator guide](docs/foreign-realization-operator-guide.md)

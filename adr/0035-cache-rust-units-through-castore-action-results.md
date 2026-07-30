@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-07-27)
+Accepted (2026-07-30)
 
 ## Context
 
@@ -104,7 +104,7 @@ Rejected as the default semantic model. Rust unit output trees do not automatica
 - `rust-plan` gains the shortest and strongest path to micro-level reuse.
 - Remote sharing reuses Mantle's action-result architecture without changing derivation result semantics.
 - A later Cargo adapter shares the same Rust cache core instead of defining another identity model.
-- Garbage collection must retain Rust unit result roots or remove stale result references first.
+- Garbage collection validates committed local result records, retains their castore roots, and removes unretained result records.
 - Cache hits require explicit materialization cost unless a later read-only exposure change proves a better route.
 - Strong wrapper eligibility remains narrower than arbitrary Cargo compatibility.
 - Cache evidence does not prove compiler correctness, determinism, hermeticity, or release eligibility.

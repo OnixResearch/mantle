@@ -9,8 +9,17 @@ use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Arc;
 use std::sync::OnceLock;
 
+use crunch_rust_cache::RustCache;
+use crunch_rust_cache::RustCacheReport;
+use crunch_rust_cache_core::LocalCachePolicy;
+use crunch_rust_cache_core::RustArtifactIdentity;
+use crunch_rust_cache_core::RustBuildFact;
+use crunch_rust_cache_core::RustSemanticArgument;
+use crunch_rust_cache_core::RustUnitAction;
+use crunch_rust_cache_core::RustUnitActionInput;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -19,6 +28,12 @@ use crate::errors::RunError;
 
 const RECEIPT_SCHEMA_VERSION: u32 = 1;
 const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json";
+const RUST_CACHE_OUTPUT_REUSE: &str = "existing-output-directory-reuse";
+const RUST_CACHE_RESTORE_REBUILD_REASON: &str = "restored-local-castore-result";
+const RUST_CACHE_COMPILE_REBUILD_REASON: &str = "rebuilt-explicit-unit";
+const RUST_CACHE_RECEIPT_REF_PREFIX: &str = "mantle-rust-receipt://blake3/";
+const RUST_CACHE_EFFECTIVE_ENV_DIGEST_KEY: &str = "MANTLE_EFFECTIVE_CHILD_ENV_BLAKE3";
+const RUST_CACHE_EFFECTIVE_ENV_DOMAIN: &[u8] = b"mantle-rust-effective-child-env-v1\0";
 const DEFAULT_CARGO_PROFILE: &str = "dev";
 const DEFAULT_RUST_EDITION: &str = "2015";
 const PATH_SOURCE_DIGEST_ALGORITHM: &str = "blake3-tree-v1";
@@ -815,10 +830,21 @@ impl RustCompilerPolicyMode {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct RustUnitLocalCacheSelection {
+    pub(crate) cache: Arc<RustCache>,
+    pub(crate) policy: LocalCachePolicy,
+    compiler_digest_blake3: String,
+    toolchain_closure_digest_blake3: String,
+    execution_platform_digest_blake3: String,
+    sysroot: PathBuf,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct RustUnitExecutionOptions {
     pub(crate) rustc: PathBuf,
     pub(crate) output_root: PathBuf,
     pub(crate) compiler_policy: RustCompilerPolicySelection,
+    pub(crate) local_cache: Option<RustUnitLocalCacheSelection>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -949,6 +975,8 @@ pub(crate) struct RustUnitExecutionReceipt {
     pub(crate) dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     pub(crate) host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     pub(crate) output_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
+    pub(crate) local_cache: Option<RustCacheReport>,
     #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
     pub(crate) blocker: Option<RustUnitExecutionBlocker>,
@@ -15760,6 +15788,8 @@ struct RustUnitExecutionInputs {
     host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     compiler_policy_invocation: Option<RustCompilerPolicyInvocation>,
     compiler_policy_receipt: Option<RustCompilerPolicyExecutionReceipt>,
+    local_cache_action: Option<RustUnitAction>,
+    local_cache_report: Option<RustCacheReport>,
 }
 
 type RequiredExecutionArtifactDigests =
@@ -15853,6 +15883,8 @@ fn prepare_rust_unit_execution_inputs(
         host_artifact_digests,
         compiler_policy_invocation: None,
         compiler_policy_receipt: None,
+        local_cache_action: None,
+        local_cache_report: None,
     }))
 }
 
@@ -15992,12 +16024,344 @@ fn validate_successful_compiler_policy_report(
     }
 }
 
+fn prepare_local_cache_action(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    inputs: &RustUnitExecutionInputs,
+) -> Result<Option<RustUnitAction>, RunError> {
+    let Some(selection) = options.local_cache.as_ref() else {
+        return Ok(None);
+    };
+    let compiler = resolve_tool_path(&options.rustc)
+        .ok_or_else(|| RunError::Internal("local Rust cache compiler is no longer available".to_string()))?;
+    let current_compiler_digest = digest_artifact_path(&compiler)?.blake3;
+    if current_compiler_digest != selection.compiler_digest_blake3 {
+        return Err(RunError::Internal("local Rust cache compiler content changed after selection".to_string()));
+    }
+    let replacements = rust_cache_path_replacements(unit, options, inputs, selection);
+    let semantic_arguments = unit
+        .derivation
+        .args
+        .iter()
+        .map(|argument| normalize_rust_cache_argument(argument, &replacements))
+        .collect::<Vec<_>>();
+    let admitted_environment = rust_cache_admitted_environment(&unit.derivation.env, &replacements)?;
+    let dependency_artifacts = rust_cache_dependency_identities(unit, &inputs.dependency_artifact_digests)?;
+    let host_artifacts = rust_cache_host_identities(unit, &inputs.host_artifact_digests)?;
+    let compiler_policy_digest_blake3 =
+        rust_unit_toolchain_policy_digest(unit, inputs.compiler_policy_receipt.as_ref())?;
+    let action = crunch_rust_cache_core::canonical_rust_action(RustUnitActionInput {
+        unit_id: unit.unit_id.clone(),
+        package_id: unit.package_id.clone(),
+        crate_name: unit.target_name.clone(),
+        target_kind: unit.target_kind.clone(),
+        execution_kind: unit.execution_kind.clone(),
+        host_triple: host_target_triple(),
+        target_triple: unit.selected_triple.clone(),
+        profile: unit.profile.clone(),
+        mode: unit.mode.clone(),
+        features: rust_cache_features(&unit.derivation.args),
+        source_digest_blake3: rust_cache_source_identity_digest(&unit.source_digest)?,
+        compiler_digest_blake3: selection.compiler_digest_blake3.clone(),
+        compiler_version_digest_blake3: inputs.toolchain.version_digest_blake3.clone(),
+        toolchain_closure_digest_blake3: selection.toolchain_closure_digest_blake3.clone(),
+        execution_platform_digest_blake3: selection.execution_platform_digest_blake3.clone(),
+        semantic_arguments,
+        admitted_environment,
+        dependency_artifacts,
+        host_artifacts,
+        build_script_facts: rust_cache_build_script_facts(unit)?,
+        native_link_facts: rust_cache_native_link_facts(unit, &replacements),
+        compiler_policy_digest_blake3,
+    })
+    .map_err(|error| RunError::Internal(format!("local Rust cache action ineligible: {error}")))?;
+    assert_eq!(action.input.unit_id, unit.unit_id);
+    assert_eq!(action.input.source_digest_blake3.len(), BLAKE3_HEX_CHARS);
+    Ok(Some(action))
+}
+
+fn rust_cache_source_identity_digest(source: &SourceDigest) -> Result<String, RunError> {
+    let canonical = serde_json::to_vec(source)
+        .map_err(|error| RunError::Internal(format!("canonicalizing local cache source identity: {error}")))?;
+    let digest = blake3::hash(&canonical).to_hex().to_string();
+    assert_eq!(digest.len(), BLAKE3_HEX_CHARS);
+    assert!(!source.algorithm.is_empty());
+    Ok(digest)
+}
+
+fn rust_cache_path_replacements(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    inputs: &RustUnitExecutionInputs,
+    selection: &RustUnitLocalCacheSelection,
+) -> Vec<(String, String)> {
+    let mut replacements = Vec::new();
+    if let Some(source) = rustc_materialized_source_path(&unit.derivation.args) {
+        replacements.push((normalize_path_string(&source), "@source".to_string()));
+        if let Some(parent) = source.parent() {
+            replacements.push((normalize_path_string(parent), "@source-root".to_string()));
+        }
+    }
+    replacements.push((normalize_path_string(&options.output_root), "@execution-output".to_string()));
+    replacements.push((normalize_path_string(&inputs.output_dir), "@unit-output".to_string()));
+    replacements.push((normalize_path_string(&selection.sysroot), "@toolchain-root".to_string()));
+    for artifact in unit.dependency_artifacts.iter().map(|artifact| (&artifact.artifact, &artifact.name)) {
+        replacements.push((artifact.0.clone(), format!("@dependency:{}", artifact.1)));
+    }
+    for artifact in unit.consumed_host_artifacts.iter().map(|artifact| (&artifact.artifact, &artifact.target_name)) {
+        replacements.push((artifact.0.clone(), format!("@host-artifact:{}", artifact.1)));
+    }
+    replacements.retain(|(source, _)| source.len() > 1);
+    replacements.sort_by(|left, right| right.0.len().cmp(&left.0.len()).then(left.0.cmp(&right.0)));
+    replacements.dedup_by(|left, right| left.0 == right.0);
+    assert!(replacements.iter().all(|(source, target)| !source.is_empty() && !target.is_empty()));
+    assert!(replacements.windows(2).all(|pair| pair[0].0.len() >= pair[1].0.len()));
+    replacements
+}
+
+fn normalize_rust_cache_argument(argument: &str, replacements: &[(String, String)]) -> RustSemanticArgument {
+    let normalized = normalize_rust_cache_text(argument, replacements);
+    let contains_absolute_path = contains_absolute_path_text(&normalized);
+    let semantic = RustSemanticArgument {
+        value: normalized,
+        contains_absolute_path,
+        absolute_paths_classified: false,
+    };
+    assert!(!semantic.value.is_empty());
+    assert!(!semantic.absolute_paths_classified);
+    semantic
+}
+
+fn rust_cache_admitted_environment(
+    environment: &BTreeMap<String, String>,
+    replacements: &[(String, String)],
+) -> Result<BTreeMap<String, String>, RunError> {
+    let mut normalized = BTreeMap::new();
+    for (name, value) in environment {
+        let value = normalize_rust_cache_text(value, replacements);
+        if contains_absolute_path_text(&value) {
+            return Err(RunError::Internal(format!(
+                "local Rust cache environment contains unclassified absolute path in {name}"
+            )));
+        }
+        normalized.insert(name.clone(), value);
+    }
+    let effective = rust_topology_child_env(
+        environment,
+        std::env::var_os(RUST_TOPOLOGY_TOOL_PATH_ENV),
+        &inherited_rust_topology_compile_env(),
+    );
+    normalized.insert(
+        RUST_CACHE_EFFECTIVE_ENV_DIGEST_KEY.to_string(),
+        rust_cache_effective_environment_digest(&effective)?,
+    );
+    assert_eq!(normalized.len(), environment.len().saturating_add(1));
+    assert!(normalized.keys().all(|name| !name.is_empty()));
+    Ok(normalized)
+}
+
+fn rust_cache_effective_environment_digest(environment: &BTreeMap<String, OsString>) -> Result<String, RunError> {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(RUST_CACHE_EFFECTIVE_ENV_DOMAIN);
+    for (name, value) in environment {
+        let name = name.as_bytes();
+        let value = value.as_encoded_bytes();
+        let name_len = u64::try_from(name.len())
+            .map_err(|_| RunError::Internal("effective environment name length is unrepresentable".to_string()))?;
+        let value_len = u64::try_from(value.len())
+            .map_err(|_| RunError::Internal("effective environment value length is unrepresentable".to_string()))?;
+        hasher.update(&name_len.to_le_bytes());
+        hasher.update(name);
+        hasher.update(&value_len.to_le_bytes());
+        hasher.update(value);
+    }
+    let digest = hasher.finalize().to_hex().to_string();
+    assert_eq!(digest.len(), BLAKE3_HEX_CHARS);
+    assert!(!RUST_CACHE_EFFECTIVE_ENV_DOMAIN.is_empty());
+    Ok(digest)
+}
+
+fn normalize_rust_cache_text(value: &str, replacements: &[(String, String)]) -> String {
+    let mut normalized = value.to_string();
+    for (source, target) in replacements {
+        normalized = normalized.replace(source, target);
+    }
+    assert!(!value.is_empty());
+    assert!(normalized.len() <= value.len().saturating_add(replacements.len().saturating_mul(BLAKE3_HEX_CHARS)));
+    normalized
+}
+
+fn contains_absolute_path_text(value: &str) -> bool {
+    let has_root_token = value
+        .split(|character: char| character.is_ascii_whitespace() || matches!(character, '=' | ',' | ';'))
+        .any(|token| token.starts_with('/'));
+    let has_assignment_root = value.contains("=/");
+    debug_assert!(!value.is_empty());
+    debug_assert!(!has_assignment_root || value.contains('/'));
+    has_root_token || has_assignment_root
+}
+
+fn rust_cache_dependency_identities(
+    unit: &RustUnitDerivationSummary,
+    digests: &[RustExecutionArtifactDigest],
+) -> Result<Vec<RustArtifactIdentity>, RunError> {
+    let mut identities = Vec::with_capacity(unit.dependency_artifacts.len());
+    for artifact in &unit.dependency_artifacts {
+        let digest = required_cache_artifact_digest(&artifact.artifact, digests)?;
+        identities.push(RustArtifactIdentity {
+            role: dependency_artifact_role(unit, artifact),
+            name: artifact.name.clone(),
+            digest_blake3: digest,
+        });
+    }
+    identities.sort();
+    assert_eq!(identities.len(), unit.dependency_artifacts.len());
+    assert!(identities.iter().all(|identity| !identity.digest_blake3.is_empty()));
+    Ok(identities)
+}
+
+fn rust_cache_host_identities(
+    unit: &RustUnitDerivationSummary,
+    digests: &[RustExecutionArtifactDigest],
+) -> Result<Vec<RustArtifactIdentity>, RunError> {
+    let mut identities = Vec::with_capacity(unit.consumed_host_artifacts.len());
+    for artifact in &unit.consumed_host_artifacts {
+        let digest = required_cache_artifact_digest(&artifact.artifact, digests)?;
+        identities.push(RustArtifactIdentity {
+            role: HOST_EXECUTION_KIND.to_string(),
+            name: artifact.target_name.clone(),
+            digest_blake3: digest,
+        });
+    }
+    identities.sort();
+    assert_eq!(identities.len(), unit.consumed_host_artifacts.len());
+    assert!(identities.iter().all(|identity| identity.role == HOST_EXECUTION_KIND));
+    Ok(identities)
+}
+
+fn required_cache_artifact_digest(
+    artifact_path: &str,
+    digests: &[RustExecutionArtifactDigest],
+) -> Result<String, RunError> {
+    let normalized = normalize_path_string(Path::new(artifact_path));
+    let digest = digests
+        .iter()
+        .find(|digest| digest.path == normalized)
+        .map(|digest| digest.blake3.clone())
+        .ok_or_else(|| RunError::Internal(format!("local Rust cache artifact digest missing for {artifact_path}")))?;
+    assert_eq!(digest.len(), BLAKE3_HEX_CHARS);
+    assert!(!normalized.is_empty());
+    Ok(digest)
+}
+
+fn rust_cache_features(arguments: &[String]) -> Vec<String> {
+    let mut features = arguments
+        .windows(RUSTC_EXTERN_ARG_PAIR_WIDTH)
+        .filter(|pair| pair[0] == RUSTC_CFG_FLAG)
+        .filter_map(|pair| pair[1].strip_prefix("feature=\"").and_then(|value| value.strip_suffix('"')))
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    features.sort();
+    features.dedup();
+    assert!(features.len() <= arguments.len());
+    assert!(features.windows(2).all(|pair| pair[0] < pair[1]));
+    features
+}
+
+fn rust_cache_build_script_facts(unit: &RustUnitDerivationSummary) -> Result<Vec<RustBuildFact>, RunError> {
+    let mut facts = Vec::new();
+    if let Some(metadata) = &unit.generated_metadata {
+        facts.push(RustBuildFact {
+            name: "generated-metadata".to_string(),
+            value_digest_blake3: metadata.digest_blake3.clone(),
+        });
+    }
+    for dependency in &unit.metadata_dependencies {
+        let canonical = serde_json::to_vec(dependency)
+            .map_err(|error| RunError::Internal(format!("canonicalizing build-script dependency: {error}")))?;
+        facts.push(RustBuildFact {
+            name: format!("metadata-dependency:{}:{}", dependency.package_id, dependency.links),
+            value_digest_blake3: blake3::hash(&canonical).to_hex().to_string(),
+        });
+    }
+    facts.sort();
+    facts.dedup();
+    assert!(facts.len() <= unit.metadata_dependencies.len().saturating_add(1));
+    assert!(facts.iter().all(|fact| fact.value_digest_blake3.len() == BLAKE3_HEX_CHARS));
+    Ok(facts)
+}
+
+fn rust_cache_native_link_facts(
+    unit: &RustUnitDerivationSummary,
+    replacements: &[(String, String)],
+) -> Vec<RustBuildFact> {
+    let mut facts = unit
+        .derivation
+        .args
+        .iter()
+        .filter(|argument| argument.starts_with("-l") || argument.starts_with("-L") || argument.contains("linker="))
+        .map(|argument| normalize_rust_cache_text(argument, replacements))
+        .enumerate()
+        .map(|(index, value)| RustBuildFact {
+            name: format!("native-link-argument-{index}"),
+            value_digest_blake3: blake3::hash(value.as_bytes()).to_hex().to_string(),
+        })
+        .collect::<Vec<_>>();
+    facts.sort();
+    facts.dedup();
+    assert!(facts.len() <= unit.derivation.args.len());
+    assert!(facts.iter().all(|fact| fact.value_digest_blake3.len() == BLAKE3_HEX_CHARS));
+    facts
+}
+
+fn local_cache_rejection(error: &RunError) -> RustCacheReport {
+    RustCacheReport {
+        disposition: crunch_rust_cache::CACHE_DISPOSITION_REJECTED.to_string(),
+        reason_codes: vec![format!("local-cache-action-ineligible:{error}")],
+        selected_result_ref: None,
+        candidate_count: 0,
+        artifact_count: 0,
+        restored_bytes: 0,
+        reused_bytes: 0,
+        compiler_executed: false,
+    }
+}
+
+fn local_cache_output_reuse_report() -> RustCacheReport {
+    RustCacheReport {
+        disposition: RUST_CACHE_OUTPUT_REUSE.to_string(),
+        reason_codes: vec![RUST_CACHE_OUTPUT_REUSE.to_string()],
+        selected_result_ref: None,
+        candidate_count: 0,
+        artifact_count: 0,
+        restored_bytes: 0,
+        reused_bytes: 0,
+        compiler_executed: false,
+    }
+}
+
+fn attach_local_cache_report(
+    mut receipt: RustUnitExecutionReceipt,
+    report: RustCacheReport,
+) -> Result<RustUnitExecutionReceipt, RunError> {
+    receipt.local_cache = Some(report);
+    receipt.receipt_hash = rust_unit_execution_receipt_hash(&receipt)?;
+    assert!(receipt.local_cache.is_some());
+    assert_eq!(receipt.receipt_hash.len(), BLAKE3_HEX_CHARS);
+    Ok(receipt)
+}
+
 fn finalize_successful_rust_unit_execution(
     unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
     inputs: RustUnitExecutionInputs,
+    rebuild_reason: &str,
+    publish_cache_result: bool,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!inputs.output_dir.as_os_str().is_empty());
+    let cache_action = inputs.local_cache_action.clone();
+    let output_dir = inputs.output_dir.clone();
     let output_artifact_digests = digest_output_artifacts(&inputs.output_dir)?;
     if output_artifact_digests.is_empty() {
         if let Some(compiler_policy) = inputs.compiler_policy_receipt {
@@ -16020,10 +16384,10 @@ fn finalize_successful_rust_unit_execution(
             message: "rustc completed but produced no declared output artifacts",
         });
     }
-    let receipt = finalized_execution_receipt(FinalizedExecutionReceiptInputs {
+    let mut receipt = finalized_execution_receipt(FinalizedExecutionReceiptInputs {
         unit,
         execution_status: "success",
-        rebuild_reason: "rebuilt-explicit-unit",
+        rebuild_reason,
         toolchain: inputs.toolchain,
         environment_digest_blake3: inputs.environment_digest_blake3,
         dependency_artifact_digests: inputs.dependency_artifact_digests,
@@ -16032,8 +16396,101 @@ fn finalize_successful_rust_unit_execution(
         compiler_policy: inputs.compiler_policy_receipt,
         blocker: None,
     })?;
-    write_rust_unit_execution_receipt(&inputs.output_dir, &receipt)?;
+    if let Some(report) = inputs.local_cache_report {
+        receipt = attach_local_cache_report(receipt, report)?;
+    }
+    write_rust_unit_execution_receipt(&output_dir, &receipt)?;
+    if publish_cache_result {
+        publish_local_cache_result(options, cache_action.as_ref(), &output_dir, &receipt)?;
+    }
     Ok(receipt)
+}
+
+fn publish_local_cache_result(
+    options: &RustUnitExecutionOptions,
+    action: Option<&RustUnitAction>,
+    output_dir: &Path,
+    receipt: &RustUnitExecutionReceipt,
+) -> Result<(), RunError> {
+    let Some(action) = action else {
+        return Ok(());
+    };
+    let Some(selection) = options.local_cache.as_ref() else {
+        return Ok(());
+    };
+    let producer_receipt_ref = format!("{RUST_CACHE_RECEIPT_REF_PREFIX}{}", receipt.receipt_hash);
+    let request = crunch_rust_cache::PublishRequest {
+        action,
+        output_dir,
+        producer_receipt_ref: &producer_receipt_ref,
+        policy: &selection.policy,
+    };
+    if selection.cache.publish_blocking(request).is_err() {
+        return Ok(());
+    }
+    assert_eq!(producer_receipt_ref.len(), RUST_CACHE_RECEIPT_REF_PREFIX.len() + BLAKE3_HEX_CHARS);
+    assert!(!receipt.receipt_hash.is_empty());
+    Ok(())
+}
+
+fn try_restore_local_cache_result(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    inputs: &mut RustUnitExecutionInputs,
+) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
+    let Some(selection) = options.local_cache.as_ref() else {
+        return Ok(None);
+    };
+    let action = match prepare_local_cache_action(unit, options, inputs) {
+        Ok(Some(action)) => action,
+        Ok(None) => return Ok(None),
+        Err(error) => {
+            inputs.local_cache_report = Some(local_cache_rejection(&error));
+            return Ok(None);
+        }
+    };
+    inputs.local_cache_action = Some(action.clone());
+    let report = match selection.cache.restore_blocking(&action, &inputs.output_dir, &selection.policy) {
+        Ok(report) => report,
+        Err(error) => RustCacheReport {
+            disposition: crunch_rust_cache::CACHE_DISPOSITION_REJECTED.to_string(),
+            reason_codes: vec![format!("local-cache-restore-error:{error}")],
+            selected_result_ref: None,
+            candidate_count: 0,
+            artifact_count: 0,
+            restored_bytes: 0,
+            reused_bytes: 0,
+            compiler_executed: false,
+        },
+    };
+    let is_hit = report.disposition == crunch_rust_cache::CACHE_DISPOSITION_HIT;
+    inputs.local_cache_report = Some(report);
+    if !is_hit {
+        return Ok(None);
+    }
+    let owned_inputs = std::mem::replace(inputs, empty_rust_unit_execution_inputs(options));
+    let receipt =
+        finalize_successful_rust_unit_execution(unit, options, owned_inputs, RUST_CACHE_RESTORE_REBUILD_REASON, false)?;
+    assert_eq!(receipt.execution_status, "success");
+    assert_eq!(receipt.rebuild_reason, RUST_CACHE_RESTORE_REBUILD_REASON);
+    Ok(Some(receipt))
+}
+
+fn empty_rust_unit_execution_inputs(options: &RustUnitExecutionOptions) -> RustUnitExecutionInputs {
+    let empty = RustUnitExecutionInputs {
+        output_dir: options.output_root.join("unused-local-cache-input"),
+        toolchain: missing_toolchain_identity(),
+        environment_digest_blake3: String::new(),
+        dependency_artifact_digests: Vec::new(),
+        host_artifact_digests: Vec::new(),
+        compiler_policy_invocation: None,
+        compiler_policy_receipt: None,
+        local_cache_action: None,
+        local_cache_report: None,
+    };
+    assert!(empty.dependency_artifact_digests.is_empty());
+    assert!(empty.local_cache_action.is_none());
+    empty
 }
 
 fn execute_rust_unit(
@@ -16049,7 +16506,7 @@ fn execute_rust_unit(
     if let Some(receipt) = apply_rust_unit_compiler_policy(unit, options, &mut inputs)? {
         return Ok(receipt);
     }
-    if let Some(receipt) = try_reuse_rust_unit_outputs(ReuseRustUnitOutputsInputs {
+    if let Some(mut receipt) = try_reuse_rust_unit_outputs(ReuseRustUnitOutputsInputs {
         unit,
         output_dir: &inputs.output_dir,
         toolchain: inputs.toolchain.clone(),
@@ -16058,6 +16515,13 @@ fn execute_rust_unit(
         host_artifact_digests: inputs.host_artifact_digests.clone(),
         compiler_policy: inputs.compiler_policy_receipt.clone(),
     })? {
+        if options.local_cache.is_some() && receipt.execution_status == "success" {
+            receipt = attach_local_cache_report(receipt, local_cache_output_reuse_report())?;
+            write_rust_unit_execution_receipt(&inputs.output_dir, &receipt)?;
+        }
+        return Ok(receipt);
+    }
+    if let Some(receipt) = try_restore_local_cache_result(unit, options, &mut inputs)? {
         return Ok(receipt);
     }
     prepare_unit_output_dir(&inputs.output_dir)?;
@@ -16070,7 +16534,10 @@ fn execute_rust_unit(
     } else if let Some(receipt) = validate_successful_compiler_policy_report(unit, options, &mut inputs)? {
         return Ok(receipt);
     }
-    finalize_successful_rust_unit_execution(unit, inputs)
+    if let Some(report) = inputs.local_cache_report.take() {
+        inputs.local_cache_report = Some(report.compiler_executed());
+    }
+    finalize_successful_rust_unit_execution(unit, options, inputs, RUST_CACHE_COMPILE_REBUILD_REASON, true)
 }
 
 struct ReuseRustUnitOutputsInputs<'a> {
@@ -16963,6 +17430,7 @@ fn finalized_execution_receipt(
         dependency_artifact_digests,
         host_artifact_digests,
         output_artifact_digests,
+        local_cache: None,
         compiler_policy,
         blocker,
         diagnostic_context: None,
@@ -17135,6 +17603,62 @@ fn rust_unit_execution_receipt_hash(receipt: &RustUnitExecutionReceipt) -> Resul
     let canonical = serde_json::to_vec(&hashable)
         .map_err(|err| RunError::Internal(format!("canonicalizing Rust unit execution receipt: {err}")))?;
     Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+pub(crate) fn rust_unit_local_cache_selection(
+    cache: Arc<RustCache>,
+    policy: LocalCachePolicy,
+    rustc: &Path,
+) -> Result<RustUnitLocalCacheSelection, RunError> {
+    crunch_rust_cache_core::validate_local_cache_policy(&policy).map_err(RunError::Internal)?;
+    let compiler = resolve_tool_path(rustc)
+        .ok_or_else(|| RunError::Internal(format!("resolving Rust compiler for local cache: {}", rustc.display())))?;
+    let compiler_digest_blake3 = digest_artifact_path(&compiler)?.blake3;
+    let output = Command::new(&compiler)
+        .args(["--print", "sysroot"])
+        .output()
+        .map_err(|error| RunError::Internal(format!("querying Rust sysroot for local cache: {error}")))?;
+    if !output.status.success() {
+        return Err(RunError::Internal("rustc --print sysroot failed for local cache identity".to_string()));
+    }
+    let sysroot_text = String::from_utf8(output.stdout)
+        .map_err(|error| RunError::Internal(format!("Rust sysroot path is not UTF-8: {error}")))?;
+    let sysroot = PathBuf::from(sysroot_text.trim());
+    if !sysroot.is_dir() {
+        return Err(RunError::Internal(format!("Rust sysroot is not a directory: {}", sysroot.display())));
+    }
+    let toolchain_closure_digest_blake3 = hash_path_source_tree(&sysroot).map_err(RunError::Internal)?;
+    let execution_platform_digest_blake3 = rust_cache_execution_platform_digest()?;
+    let selection = RustUnitLocalCacheSelection {
+        cache,
+        policy,
+        compiler_digest_blake3,
+        toolchain_closure_digest_blake3,
+        execution_platform_digest_blake3,
+        sysroot,
+    };
+    assert_eq!(selection.compiler_digest_blake3.len(), BLAKE3_HEX_CHARS);
+    assert_eq!(selection.toolchain_closure_digest_blake3.len(), BLAKE3_HEX_CHARS);
+    Ok(selection)
+}
+
+fn rust_cache_execution_platform_digest() -> Result<String, RunError> {
+    #[derive(Serialize)]
+    struct ExecutionPlatform<'a> {
+        os: &'a str,
+        architecture: &'a str,
+        pointer_width_bits: u32,
+    }
+    let canonical = serde_json::to_vec(&ExecutionPlatform {
+        os: std::env::consts::OS,
+        architecture: std::env::consts::ARCH,
+        pointer_width_bits: usize::BITS,
+    })
+    .map_err(|error| RunError::Internal(format!("canonicalizing local cache execution platform: {error}")))?;
+    let digest = blake3::hash(&canonical).to_hex().to_string();
+    assert_eq!(digest.len(), BLAKE3_HEX_CHARS);
+    assert!(!canonical.is_empty());
+    Ok(digest)
 }
 
 fn rustc_toolchain_identity(tool: &Path) -> Result<Result<RustToolchainIdentity, RustUnitExecutionBlocker>, RunError> {
@@ -17411,6 +17935,7 @@ mod tests {
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
     use std::process::Command;
+    use std::time::Instant;
 
     use tempfile::TempDir;
 
@@ -17900,9 +18425,14 @@ mod tests {
     const TEST_POLICY_WAIVER_DIGEST: &str = "b3:1111111111111111111111111111111111111111111111111111111111111111";
     const TEST_POLICY_BAD_DIGEST: &str = "b3:0000000000000000000000000000000000000000000000000000000000000000";
     const TEST_FAKE_RUSTC_ARTIFACT: &str = "libpolicy_fixture.rlib";
+    const TEST_FAKE_CACHE_A_ARTIFACT: &str = "libcache_a.rlib";
+    const TEST_FAKE_CACHE_B_ARTIFACT: &str = "libcache_b.rlib";
     const TEST_FAKE_POLICY_FAIL_STATUS: i32 = 17;
     const TEST_FAKE_RUSTC_MISSING_OUT_STATUS: i32 = 2;
     const TEST_FAKE_POLICY_ENV_STATUS: i32 = 9;
+    const TEST_COMPILER_INVOCATION_COUNT: &str = "1";
+    const TEST_TOPOLOGY_COMPILER_INVOCATION_COUNT: &str = "2";
+    const TEST_COMPILER_DELAY_SECONDS_TEXT: &str = "0.2";
     #[cfg(unix)]
     const TEST_EXECUTABLE_MODE: u32 = 0o755;
 
@@ -17925,6 +18455,50 @@ mod tests {
             ),
         );
         rustc
+    }
+
+    fn write_counting_fake_rustc(dir: &Path, counter: &Path) -> PathBuf {
+        let rustc = dir.join("counting-rustc");
+        let counter = counter.display().to_string();
+        assert!(!counter.contains('\''));
+        write_executable(
+            &rustc,
+            &format!(
+                "#!/bin/sh\nif [ \"$1\" = \"-vV\" ]; then\n  printf '%s\\n' \"{TEST_RUSTC_VERSION_VERBOSE}\"\n  exit 0\nfi\ncount=0\nif [ -f '{counter}' ]; then read count < '{counter}'; fi\ncount=$((count + 1))\nprintf '%s' \"$count\" > '{counter}'\nsleep {TEST_COMPILER_DELAY_SECONDS_TEXT}\nout=''\nprev=''\nfor arg in \"$@\"; do\n  if [ \"$prev\" = \"--out-dir\" ]; then out=\"$arg\"; fi\n  prev=\"$arg\"\ndone\nif [ -z \"$out\" ]; then exit {TEST_FAKE_RUSTC_MISSING_OUT_STATUS}; fi\nmkdir -p \"$out\"\nprintf fake-rlib > \"$out/{TEST_FAKE_RUSTC_ARTIFACT}\"\nprintf fake-rlib > \"$out/{TEST_FAKE_CACHE_A_ARTIFACT}\"\nprintf fake-rlib > \"$out/{TEST_FAKE_CACHE_B_ARTIFACT}\"\n"
+            ),
+        );
+        assert!(rustc.is_file());
+        assert!(!counter.is_empty());
+        rustc
+    }
+
+    fn test_local_cache_selection(root: &Path, rustc: &Path) -> RustUnitLocalCacheSelection {
+        let cache = RustCache::open(crunch_store::StoreConfig {
+            state_dir: root.join("state"),
+            output_dir: root.join("store"),
+            remote_cache_urls: Vec::new(),
+            fallback_mode: crunch_store::StoreFallbackMode::Practical,
+            store_dir: "/mantle/store".to_string(),
+            base_state_dirs: Vec::new(),
+        })
+        .unwrap();
+        let compiler_digest_blake3 = digest_artifact_path(rustc).unwrap().blake3;
+        let policy = LocalCachePolicy {
+            reads_enabled: true,
+            writes_enabled: true,
+            ..LocalCachePolicy::default()
+        };
+        let selection = RustUnitLocalCacheSelection {
+            cache: Arc::new(cache),
+            policy,
+            compiler_digest_blake3,
+            toolchain_closure_digest_blake3: TEST_DIGEST_A.to_string(),
+            execution_platform_digest_blake3: TEST_DIGEST_A.to_string(),
+            sysroot: root.join("test-sysroot"),
+        };
+        assert!(selection.policy.reads_enabled);
+        assert!(selection.policy.writes_enabled);
+        selection
     }
 
     fn write_fake_policy_adapter(dir: &Path, passes: bool, report_json: Option<&str>) -> PathBuf {
@@ -18493,6 +19067,7 @@ mod tests {
             rustc: dir.path().join("rustc"),
             output_root: execution_root.clone(),
             compiler_policy: rust_compiler_policy_selection("plain", None, None).unwrap(),
+            local_cache: None,
         };
 
         let env = build_script_child_env(&unit, &options, &out_dir, Some(&package_root), Some(&route));
@@ -19726,6 +20301,7 @@ rust-version = "1.80"
                 rustc: dir.path().join("rustc"),
                 output_root: dir.path().join("unit-out"),
                 compiler_policy: RustCompilerPolicySelection::default(),
+                local_cache: None,
             },
             &dir.path().join("out"),
             None,
@@ -19861,6 +20437,7 @@ rust-version = "1.80"
             rustc: dir.path().join("rustc"),
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         };
 
         let env = build_script_child_env(&unit, &options, &out_dir, None, None);
@@ -19898,6 +20475,7 @@ rust-version = "1.80"
             rustc: rustc_path.clone(),
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         };
 
         let root = build_script_package_root(&unit).expect("source path has package root");
@@ -19932,6 +20510,7 @@ rust-version = "1.80"
             rustc: dir.path().join("rustc"),
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         };
 
         let env = build_script_child_env(&unit, &options, &out_dir, build_script_package_root(&unit).as_deref(), None);
@@ -19958,6 +20537,7 @@ rust-version = "1.80"
             rustc: dir.path().join("rustc"),
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         };
 
         let env = build_script_child_env(&unit, &options, &out_dir, None, None);
@@ -24731,6 +25311,7 @@ checksum = "0123456789abcdef"
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         })
         .unwrap();
 
@@ -24757,6 +25338,7 @@ checksum = "0123456789abcdef"
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         })
         .unwrap();
         assert_eq!(repeated.execution_status, "success");
@@ -24776,6 +25358,7 @@ checksum = "0123456789abcdef"
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         })
         .unwrap();
         assert_eq!(stale.execution_status, "blocked");
@@ -24783,6 +25366,124 @@ checksum = "0123456789abcdef"
         assert_eq!(stale.blocker.as_ref().unwrap().class, "stale-cached-output");
         assert_ne!(stale.environment_digest_blake3, receipt.environment_digest_blake3);
         assert!(receipt.compiler_policy.is_none());
+    }
+
+    #[test]
+    fn effective_child_environment_and_unclassified_paths_change_cache_eligibility() {
+        let environment_a = BTreeMap::from([("PATH".to_string(), OsString::from("/tools/a"))]);
+        let environment_b = BTreeMap::from([("PATH".to_string(), OsString::from("/tools/b"))]);
+        let digest_a = rust_cache_effective_environment_digest(&environment_a).unwrap();
+        let digest_b = rust_cache_effective_environment_digest(&environment_b).unwrap();
+        assert_ne!(digest_a, digest_b);
+        assert_eq!(digest_a.len(), BLAKE3_HEX_CHARS);
+
+        let unclassified = BTreeMap::from([("CUSTOM_TOOL".to_string(), "/ambient/tool".to_string())]);
+        let error = rust_cache_admitted_environment(&unclassified, &[]).unwrap_err().to_string();
+        assert!(error.contains("unclassified absolute path"));
+        assert!(error.contains("CUSTOM_TOOL"));
+    }
+
+    #[test]
+    fn local_castore_restoration_skips_second_compiler_invocation() {
+        let dir = TempDir::new().unwrap();
+        let counter = dir.path().join("compiler-count");
+        let rustc = write_counting_fake_rustc(dir.path(), &counter);
+        let graph = policy_test_graph(dir.path());
+        let output_root = dir.path().join("cache-execution");
+        let selection = test_local_cache_selection(dir.path(), &rustc);
+        let options = RustUnitExecutionOptions {
+            rustc,
+            output_root: output_root.clone(),
+            compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: Some(selection),
+        };
+
+        let first_started = Instant::now();
+        let first = execute_first_supported_rust_unit(&graph, &options).unwrap();
+        let first_elapsed = first_started.elapsed();
+        let unit_output = output_root.join(safe_path_component(&graph.derivations[0].unit_id));
+        assert_eq!(std::fs::read_to_string(&counter).unwrap(), TEST_COMPILER_INVOCATION_COUNT);
+        assert_eq!(first.local_cache.as_ref().unwrap().disposition, crunch_rust_cache::CACHE_DISPOSITION_MISS);
+        assert!(first.local_cache.as_ref().unwrap().compiler_executed);
+        std::fs::remove_dir_all(&unit_output).unwrap();
+
+        let second_started = Instant::now();
+        let second = execute_first_supported_rust_unit(&graph, &options).unwrap();
+        let second_elapsed = second_started.elapsed();
+        let existing_started = Instant::now();
+        let existing = execute_first_supported_rust_unit(&graph, &options).unwrap();
+        let existing_elapsed = existing_started.elapsed();
+        let uncached_options = RustUnitExecutionOptions {
+            rustc: options.rustc.clone(),
+            output_root: dir.path().join("uncached-execution"),
+            compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
+        };
+        let uncached_started = Instant::now();
+        let uncached = execute_first_supported_rust_unit(&graph, &uncached_options).unwrap();
+        let uncached_elapsed = uncached_started.elapsed();
+        let restored_report = second.local_cache.as_ref().unwrap();
+        eprintln!(
+            "rust-local-cache-benchmark: sample=policy-fixture cold_cache_miss_us={} uncached_compile_us={} existing_output_us={} castore_restore_us={} restored_bytes={} reused_bytes={} compiler_invocations=2",
+            first_elapsed.as_micros(),
+            uncached_elapsed.as_micros(),
+            existing_elapsed.as_micros(),
+            second_elapsed.as_micros(),
+            restored_report.restored_bytes,
+            restored_report.reused_bytes,
+        );
+
+        assert_eq!(std::fs::read_to_string(&counter).unwrap(), TEST_TOPOLOGY_COMPILER_INVOCATION_COUNT);
+        assert_eq!(second.rebuild_reason, RUST_CACHE_RESTORE_REBUILD_REASON);
+        assert_eq!(restored_report.disposition, crunch_rust_cache::CACHE_DISPOSITION_HIT);
+        assert!(!restored_report.compiler_executed);
+        assert_eq!(existing.local_cache.as_ref().unwrap().disposition, RUST_CACHE_OUTPUT_REUSE);
+        assert_eq!(uncached.execution_status, "success");
+        assert!(second_elapsed < first_elapsed);
+        assert!(existing_elapsed < first_elapsed);
+        assert!(unit_output.join(RUST_UNIT_EXECUTION_RECEIPT_FILE).is_file());
+    }
+
+    #[test]
+    fn local_castore_restores_every_target_unit_without_compiler_invocation() {
+        let dir = TempDir::new().unwrap();
+        let counter = dir.path().join("topology-compiler-count");
+        let rustc = write_counting_fake_rustc(dir.path(), &counter);
+        let source_a = dir.path().join("cache-a.rs");
+        let source_b = dir.path().join("cache-b.rs");
+        std::fs::write(&source_a, "pub fn a() {}\n").unwrap();
+        std::fs::write(&source_b, "pub fn b() {}\n").unwrap();
+        let mut unit_a = test_rust_derivation(0, "cache-a 0.1.0", "lib", TARGET_EXECUTION_KIND, Vec::new());
+        unit_a.target_name = "cache-a".to_string();
+        unit_a.derivation.args.push(normalize_path_string(&source_a));
+        let mut unit_b = test_rust_derivation(1, "cache-b 0.1.0", "lib", TARGET_EXECUTION_KIND, Vec::new());
+        unit_b.target_name = "cache-b".to_string();
+        unit_b.derivation.args.push(normalize_path_string(&source_b));
+        let graph = test_unit_derivation_graph(vec![unit_a, unit_b]);
+        let output_root = dir.path().join("topology-cache-execution");
+        let selection = test_local_cache_selection(dir.path(), &rustc);
+        let options = RustUnitExecutionOptions {
+            rustc,
+            output_root: output_root.clone(),
+            compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: Some(selection),
+        };
+
+        let first = execute_rust_target_unit_topology(&graph, &options).unwrap();
+        assert_eq!(first.execution_status, "success", "blocker={:?}", first.blocker);
+        assert_eq!(std::fs::read_to_string(&counter).unwrap(), TEST_TOPOLOGY_COMPILER_INVOCATION_COUNT);
+        std::fs::remove_dir_all(&output_root).unwrap();
+
+        let second = execute_rust_target_unit_topology(&graph, &options).unwrap();
+
+        assert_eq!(second.execution_status, "success");
+        assert_eq!(second.unit_executions.len(), graph.derivations.len());
+        assert_eq!(std::fs::read_to_string(&counter).unwrap(), TEST_TOPOLOGY_COMPILER_INVOCATION_COUNT);
+        assert!(second.unit_executions.iter().all(|receipt| {
+            receipt.local_cache.as_ref().is_some_and(|report| {
+                report.disposition == crunch_rust_cache::CACHE_DISPOSITION_HIT && !report.compiler_executed
+            })
+        }));
     }
 
     #[test]
@@ -24804,6 +25505,7 @@ checksum = "0123456789abcdef"
             rustc,
             output_root: dir.path().join("audit-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Audit, &manifest),
+            local_cache: None,
         })
         .unwrap();
 
@@ -24851,6 +25553,7 @@ checksum = "0123456789abcdef"
             rustc,
             output_root: dir.path().join("json-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Audit, &manifest),
+            local_cache: None,
         })
         .unwrap();
         let json = serde_json::to_value(&receipt).unwrap();
@@ -24879,6 +25582,7 @@ checksum = "0123456789abcdef"
             rustc,
             output_root: dir.path().join("deny-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Deny, &manifest),
+            local_cache: None,
         })
         .unwrap();
 
@@ -24902,6 +25606,7 @@ checksum = "0123456789abcdef"
             rustc,
             output_root: dir.path().join("required-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+            local_cache: None,
         })
         .unwrap();
 
@@ -24944,6 +25649,7 @@ checksum = "0123456789abcdef"
             rustc,
             output_root: dir.path().join("missing-driver-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+            local_cache: None,
         })
         .unwrap();
 
@@ -24967,6 +25673,7 @@ checksum = "0123456789abcdef"
             rustc,
             output_root: dir.path().join("missing-lint-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+            local_cache: None,
         })
         .unwrap();
 
@@ -24988,6 +25695,7 @@ checksum = "0123456789abcdef"
             rustc,
             output_root: dir.path().join("toolchain-mismatch-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+            local_cache: None,
         })
         .unwrap();
 
@@ -25009,6 +25717,7 @@ checksum = "0123456789abcdef"
             rustc,
             output_root: dir.path().join("digest-mismatch-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+            local_cache: None,
         })
         .unwrap();
 
@@ -25030,6 +25739,7 @@ checksum = "0123456789abcdef"
             rustc,
             output_root: dir.path().join("missing-standards-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+            local_cache: None,
         })
         .unwrap();
 
@@ -25051,12 +25761,14 @@ checksum = "0123456789abcdef"
             rustc: rustc.clone(),
             output_root: output_root.clone(),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         })
         .unwrap();
         let required = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
             rustc,
             output_root,
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+            local_cache: None,
         })
         .unwrap();
 
@@ -25082,6 +25794,7 @@ checksum = "0123456789abcdef"
             rustc,
             output_root: dir.path().join("manifest-digest-out"),
             compiler_policy: selection,
+            local_cache: None,
         })
         .unwrap();
 
@@ -25158,6 +25871,7 @@ checksum = "0123456789abcdef"
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("chain-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         })
         .unwrap();
 
@@ -25207,6 +25921,7 @@ checksum = "0123456789abcdef"
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("chain-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         })
         .unwrap();
 
@@ -25253,6 +25968,7 @@ checksum = "0123456789abcdef"
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         })
         .unwrap();
 
@@ -25306,6 +26022,7 @@ checksum = "0123456789abcdef"
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         })
         .unwrap();
 
@@ -25357,6 +26074,7 @@ checksum = "0123456789abcdef"
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         })
         .unwrap();
 
@@ -25411,6 +26129,7 @@ checksum = "0123456789abcdef"
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         })
         .unwrap();
 
@@ -25455,6 +26174,7 @@ checksum = "0123456789abcdef"
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
         })
         .unwrap();
 

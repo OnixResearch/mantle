@@ -28,6 +28,7 @@ pub struct GcContext<'a> {
     pub pathinfo: &'a dyn PathInfoService,
     pub directory_service: &'a dyn DirectoryService,
     pub blob_service: &'a dyn BlobService,
+    pub retained_castore_roots: &'a [Node],
 }
 use crate::artifact_attestation_file_path;
 use crate::closure::resolve_closure;
@@ -36,6 +37,7 @@ use crate::roots::GcRootRecord;
 
 const MAX_GC_BYTES_WALK_ENTRIES: u32 = 100_000;
 const MAX_GC_FILE_SCAN_ENTRIES: u32 = 200_000;
+const MAX_GC_RETAINED_CASTORE_ROOTS: usize = 1_000_000;
 #[cfg(unix)]
 const OWNER_WRITE_PERMISSION_MODE: u32 = 0o200;
 
@@ -56,6 +58,7 @@ pub enum GcOperationKind {
 pub struct GcReport {
     pub is_dry_run: bool,
     pub retained_root_count: u32,
+    pub retained_castore_root_count: u32,
     pub candidate_path_count: u32,
     pub reclaimable_bytes_total: u64,
     pub candidate_paths: Vec<String>,
@@ -93,6 +96,9 @@ struct GcPlan {
 pub async fn run_gc(ctx: &GcContext<'_>, ca_mappings: &mut CaMappings, is_dry_run: bool) -> Result<GcReport, Error> {
     assert!(!ctx.store_dir.is_empty(), "store_dir must not be empty");
     assert!(ctx.store_dir.starts_with('/'), "store_dir must be absolute");
+    if ctx.retained_castore_roots.len() > MAX_GC_RETAINED_CASTORE_ROOTS {
+        return Err(Error::Gc(format!("retained castore root count exceeds {MAX_GC_RETAINED_CASTORE_ROOTS}")));
+    }
 
     let plan = build_plan(ctx).await?;
     let live_paths: BTreeSet<String> = plan
@@ -105,6 +111,7 @@ pub async fn run_gc(ctx: &GcContext<'_>, ca_mappings: &mut CaMappings, is_dry_ru
     let mut gc_result = GcReport {
         is_dry_run,
         retained_root_count: saturating_u32(plan.retained_roots.len()),
+        retained_castore_root_count: saturating_u32(ctx.retained_castore_roots.len()),
         candidate_path_count: saturating_u32(plan.dead_pathinfos.len()),
         reclaimable_bytes_total: plan.reclaimable_bytes_total,
         candidate_paths: plan.candidate_paths.clone(),
@@ -163,7 +170,13 @@ async fn build_plan(ctx: &GcContext<'_>) -> Result<GcPlan, Error> {
     let live_paths = mark_live_paths(&retained_roots, ctx.pathinfo, ctx.store_dir).await?;
     let snapshot = snapshot_pathinfos(ctx.pathinfo).await?;
     let (live_pathinfos, dead_pathinfos) = split_pathinfos(snapshot, &live_paths);
-    let live_castore = collect_live_castore_state(&live_pathinfos, ctx.directory_service, ctx.blob_service).await?;
+    let live_castore = collect_live_castore_state(
+        &live_pathinfos,
+        ctx.retained_castore_roots,
+        ctx.directory_service,
+        ctx.blob_service,
+    )
+    .await?;
     let orphaned_on_disk = collect_existing_exported_outputs(&dead_pathinfos, ctx.output_dir_str)?;
     let artifact_attestation_paths =
         collect_existing_artifact_attestation_paths(ctx.state_dir, ctx.store_dir, &dead_pathinfos)?;
@@ -248,6 +261,7 @@ fn split_pathinfos(
 
 async fn collect_live_castore_state(
     live_pathinfos: &[PathInfo],
+    retained_castore_roots: &[Node],
     directory_service: &dyn DirectoryService,
     blob_service: &dyn BlobService,
 ) -> Result<LiveCastoreState, Error> {
@@ -258,6 +272,9 @@ async fn collect_live_castore_state(
     };
     for path_info in live_pathinfos {
         collect_node_state(&path_info.node, directory_service, blob_service, &mut state).await?;
+    }
+    for node in retained_castore_roots {
+        collect_node_state(node, directory_service, blob_service, &mut state).await?;
     }
     Ok(state)
 }
@@ -745,7 +762,6 @@ mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
-    use futures::StreamExt as _;
     use futures::stream::BoxStream;
     use pretty_assertions::assert_eq;
     use snix_castore::SymlinkTarget;
@@ -985,6 +1001,34 @@ mod tests {
         store.garbage_collect(false).await.unwrap();
 
         assert!(chunk_path.exists());
+    }
+
+    #[tokio::test]
+    async fn explicit_castore_root_survives_while_unreachable_blob_is_reclaimed() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let mut store = open_store(state_dir.path(), output_dir.path()).await;
+        let retained_node = write_blob(&store, b"retained-rust-result").await;
+        let stale_node = write_blob(&store, b"stale-rust-result").await;
+        let retained_digest = match &retained_node {
+            Node::File { digest, .. } => *digest,
+            _ => panic!("expected retained file node"),
+        };
+        let stale_digest = match &stale_node {
+            Node::File { digest, .. } => *digest,
+            _ => panic!("expected stale file node"),
+        };
+        let retained_path = blob_chunk_path(state_dir.path(), &retained_digest);
+        let stale_path = blob_chunk_path(state_dir.path(), &stale_digest);
+        assert!(retained_path.is_file());
+        assert!(stale_path.is_file());
+
+        let report =
+            store.garbage_collect_with_castore_roots(false, std::slice::from_ref(&retained_node)).await.unwrap();
+
+        assert_eq!(report.retained_castore_root_count, 1);
+        assert!(retained_path.is_file());
+        assert!(!stale_path.exists());
     }
 
     #[tokio::test]

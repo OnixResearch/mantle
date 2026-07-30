@@ -59,6 +59,59 @@ cargo test -p mantle --bin mantle \
   -- --exact --nocapture
 ```
 
+## Local castore cache
+
+The local Rust unit cache is optional and disabled by default. Select one mode
+with an explicit execution command:
+
+```bash
+mantle rust-plan --execute-topology --local-rust-cache read
+mantle rust-plan --execute-topology --local-rust-cache read-write
+```
+
+`read` permits verified restore operations. `read-write` also permits
+publication after successful compiler execution. Mantle keeps prior execution
+output reuse first. It checks local castore results second and runs the compiler
+only after a miss or rejection.
+
+The action identity includes the declared source, compiler content, toolchain
+closure, platform, target, profile, mode, features, semantic arguments,
+admitted environment, dependency artifacts, host artifacts, build-script
+facts, native-link facts, and compiler policy. An unclassified absolute path
+makes that action ineligible for cache reuse. Compilation can still continue.
+
+Each execution receipt can include a `local_cache` report. The report gives the
+disposition, reason codes, selected result reference, candidate count, artifact
+count, restored and reused byte counts, and whether the compiler ran. A restored
+unit gets a new execution receipt. The stored result tree excludes that receipt.
+
+Mantle stores local records under the resolved state directory at
+`rust-unit-cache/`. Result records and indexes are private, bounded, and
+no-follow. `mantle store gc` validates committed retained results and passes
+their castore nodes as explicit roots. GC keeps live Rust result content and
+removes unrooted content. It also removes unretained result records. The
+operator who runs `mantle store gc` has deletion authority.
+
+This cache does not prove compiler correctness, output reproducibility,
+hermeticity, remote trust, or release eligibility. Object presence alone never
+authorizes reuse.
+
+Focused cache and performance rail:
+
+```bash
+cargo test -p crunch-rust-cache-core
+cargo test -p crunch-rust-cache
+cargo test -p crunch-store \
+  gc::tests::explicit_castore_root_survives_while_unreachable_blob_is_reclaimed \
+  -- --exact --nocapture
+cargo test -p mantle --bin mantle \
+  rust_plan::tests::local_castore_restoration_skips_second_compiler_invocation \
+  -- --exact --nocapture
+```
+
+The final test prints cold and restored wall-clock microseconds. It also checks
+that the restored run does not invoke the compiler.
+
 ## Fixture inventory
 
 | Fixture family | Shared resource risk | Current isolation rule | Serial-only status |
