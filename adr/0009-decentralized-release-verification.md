@@ -30,7 +30,7 @@ organization-specific governance debate.
 
 ## Decision
 
-Crunch will model decentralized release verification as two cooperating systems:
+Mantle models decentralized release verification as two cooperating systems:
 
 ### Technical verification layer
 
@@ -59,6 +59,26 @@ promote a release beyond self-proof-only status:
 This layer MUST consume technical artifacts by stable digest or canonical
 attestation identity. It MAY evolve without changing technical artifact hashes.
 
+### Witness collection before quorum
+
+The technical layer MUST allow valid build-witness artifacts to be verified and
+retained when the selected policy requires zero witnesses. A witness-quorum gate
+MUST apply only when an operator selects an explicit positive threshold and
+independence rule. The presence of multiple witness files MUST NOT enable quorum
+automatically.
+
+Bootstrap parity, StageX no-quorum verification, generic release verification,
+and witness-quorum admission remain separate decisions. Failure or absence of an
+optional witness cannot change bootstrap evidence.
+
+### Source-review role separation
+
+Source-review approvals, release signatures, and build-witness attestations use
+different domain-separated statements and policy roles. A signature MUST NOT
+count across those roles unless a future explicit policy evaluates each role
+separately. Mantle consumes exact source-review evidence but does not own review
+workflow or reviewer judgment.
+
 ## Consequences
 
 - Crunch gets a path from "internally consistent release bundle" toward
@@ -69,8 +89,11 @@ attestation identity. It MAY evolve without changing technical artifact hashes.
   sufficiency.
 - Operator output becomes more complex because a release may be technically
   valid but socially insufficient.
-- Additional release machinery is required: witness collection, signer policy,
-  and publication workflow.
+- Additional release machinery is required: witness collection, optional quorum
+  policy, signer policy, source-review evidence binding, and publication workflow.
+- Operators can collect and compare witnesses before they adopt a quorum gate.
+- Reports must distinguish `not-required`, `satisfied`, and `insufficient`
+  policy status from individual witness validity.
 
 ## Alternatives Considered
 

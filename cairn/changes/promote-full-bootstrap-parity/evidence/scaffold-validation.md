@@ -4,7 +4,7 @@ Status: scaffold-only. No implementation, provider, lineage, fixed-point, parity
 
 ## Goal and completion contract
 
-The scaffolds decompose the remaining work into independently reviewable changes whose observable terminal evidence is: current source-built native row receipts, a Rust provider built by the admitted native provider, a real StageX lineage receipt, a clean source-to-provider-to-Mantle v2 fixed point, and independent parity/release verification. Checked task boxes, historical output directories, scaffold receipts, provider smoke alone, one-shot Mantle builds, imported provider outputs, or model agreement are false completions.
+The scaffolds decompose the remaining work into independently reviewable changes whose observable terminal evidence is: current source-built native row receipts, a Rust provider built by the admitted native provider, a real StageX lineage receipt, a clean source-to-provider-to-Mantle v2 fixed point, and independent parity/release verification. Build-witness quorum is not a bootstrap completion criterion. Checked task boxes, historical output directories, scaffold receipts, provider smoke alone, one-shot Mantle builds, imported provider outputs, witness counts, or model agreement are false completions.
 
 ## Dependency order
 
@@ -44,4 +44,4 @@ After writing and adversarially tightening all six changes:
 
 ## Non-claims
 
-These packages are executable plans, not implementation evidence. They do not prove compiler correctness, seed correctness, StageX materialization, source-built Rust integration, Mantle fixed-point equality, parity completion, release reproducibility, independent rebuild agreement, deployment, or full Cargo compatibility.
+These packages are executable plans, not implementation evidence. They do not prove compiler correctness, seed correctness, StageX materialization, source-built Rust integration, Mantle fixed-point equality, parity completion, release reproducibility, optional-witness validity, witness quorum, independent rebuild agreement, deployment, or full Cargo compatibility.

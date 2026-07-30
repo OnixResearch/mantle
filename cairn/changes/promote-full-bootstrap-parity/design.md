@@ -28,6 +28,12 @@ The current parity report correctly keeps every axis incomplete. It also exposes
 
 **Rationale:** A strong bounded claim is more useful than an ambiguous universal one.
 
+### Decision: keep build-witness policy separate from bootstrap promotion
+
+**Choice:** A complete full-bootstrap bundle can pass parity promotion with no build-witness sidecars and no witness-quorum policy. Promoted release evidence may feed later `optional-witness` or explicit `witness-quorum` evaluation, but that separate result cannot change bootstrap-axis status.
+
+**Rationale:** Full bootstrap and external rebuild agreement prove different facts. Quorum remains an operator-selected social-policy option, not a hidden bootstrap requirement.
+
 ### Decision: require current committed evidence
 
 **Choice:** Promotion uses evidence produced from the implementation commit or a committed ancestor explicitly named by the proof source descriptor. Scaffold, synthetic, stale-schema, target-only, or uncommitted-source evidence fails closed.

@@ -25,6 +25,13 @@ WHEN the standalone verifier reads it outside the producer output tree
 THEN the verifier MUST recompute BLAKE3 relationships, validate every required schema and cross-receipt edge, reject target-authority and absolute-path dependence, and reproduce the promoted bounded status
 AND producer status fields alone MUST NOT authorize acceptance.
 
+#### Scenario: bootstrap promotion does not require witness quorum
+
+GIVEN every bootstrap axis and the independent bundle verifier pass with no build-witness sidecars
+WHEN Mantle emits promoted bootstrap and release evidence
+THEN bootstrap promotion MUST succeed without selecting or satisfying a witness-quorum policy
+AND any later optional-witness or explicit quorum result MUST remain separate and MUST NOT change bootstrap-axis status.
+
 #### Scenario: parity require mode fails closed
 
 GIVEN an operator requires live-bootstrap, Guix, StageX, or all defined axes

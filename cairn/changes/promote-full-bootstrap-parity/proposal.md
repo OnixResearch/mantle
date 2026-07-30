@@ -9,6 +9,7 @@ This final change is promotion-only. It consumes completed native parity rows, a
 - Make bootstrap parity consume the completed row-specific, StageX, and v2 self-build receipts and report complete axes only when every axis-specific requirement is independently satisfied.
 - Add an independent verifier for the promoted evidence bundle and mutation-style negative fixtures for every authority and digest edge.
 - Export release evidence and operator summaries with exact bounded claims and non-claims.
+- Keep full-bootstrap promotion independent from build-witness quorum while making promoted evidence available to later optional-witness or explicit quorum evaluation.
 - Preserve compatibility row/schema identifiers unless a separately versioned migration is required.
 
 ## Dependencies
