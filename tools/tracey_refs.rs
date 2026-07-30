@@ -49,6 +49,30 @@
 // fixtures live in the `artifact-auth-radicle-cutover` check in `flake.nix`.
 // The accepted Nickel, JSON, and BLAKE3 receipt files remain unchanged.
 
+// Local Rust unit castore cache bridge.
+//
+// r[impl rust_package_planning.unit_execution.topology.castore_result_cache]
+// r[impl rust_package_planning.unit_execution.topology.castore_result_cache.identity]
+// r[impl rust_package_planning.unit_execution.topology.castore_result_cache.local_reuse]
+// r[impl rust_package_planning.unit_execution.topology.castore_result_cache.atomic_materialization]
+// r[impl rust_package_planning.unit_execution.topology.castore_result_cache.retention]
+// r[impl rust_package_planning.unit_execution.topology.castore_result_cache.evidence]
+// r[impl rust_package_planning.unit_execution.topology.castore_result_cache.performance]
+// Root-package integration lives in `src/{main,rust_plan,store_cmd}.rs`.
+// Canonical identity lives in `crates/crunch-rust-cache-core`; bounded storage,
+// verified staging, and retention live in `crates/crunch-rust-cache`.
+//
+// r[verify rust_package_planning.unit_execution.topology.castore_result_cache]
+// r[verify rust_package_planning.unit_execution.topology.castore_result_cache.identity]
+// r[verify rust_package_planning.unit_execution.topology.castore_result_cache.local_reuse]
+// r[verify rust_package_planning.unit_execution.topology.castore_result_cache.atomic_materialization]
+// r[verify rust_package_planning.unit_execution.topology.castore_result_cache.retention]
+// r[verify rust_package_planning.unit_execution.topology.castore_result_cache.evidence]
+// r[verify rust_package_planning.unit_execution.topology.castore_result_cache.performance]
+// Focused positive and negative tests cover identity invalidation, local hits,
+// rejected candidates, atomic restore, GC roots, and measured compiler skipping.
+// The evidence does not prove compiler correctness or universal speedup.
+
 // Remote credential boundary bridge.
 //
 // r[impl remote_builds.ticket_randomness]

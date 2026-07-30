@@ -217,6 +217,40 @@ error: tracey coverage failed
 
 The repository-wide Tracey rail reports existing missing and dangling requirement references. The active delta is not yet part of the accepted canonical spec, and none of its `castore_result_cache` identifiers appears in either finding list. Run Tracey again after spec sync.
 
+## Accepted-spec sync
+
+Dry-run sync returned no blockers:
+
+```text
+mutated=false
+plan_hash=a6594c4ef20c9a4c7bec5a0195dcd31bbe4c3600023447287def8b0d3d9d4923
+reasons=[]
+receipt_hash=1f9581b4c02fddd5c431986425bde79dccac6a37ef8f5c5da5becf74565f29ef
+```
+
+Executed sync updated `cairn/specs/rust-package-planning/spec.md`:
+
+```text
+manifest_hash=10ceb1337b06de9c4390df01d152883cb480eb778a9ffaaf7e3f9bc445c58267
+plan_hash=ce4dbacdcdb1f7b23dabd8d5b87bf8bcb5fab83358aedc9dfcb22c1784efdc7a
+reasons=[]
+receipt_hash=0d1067a172b7abaaa264346a6836075b1e2bf57425f6559b713825771ac16736
+```
+
+Post-sync validation returned `valid=true`, `changes=8`, and `specs_validated=41`.
+
+Post-sync Tracey reran after adding direct implementation and verification references. It remains invalid only because of repository-wide existing findings:
+
+```text
+receipt_hash=21e08988d30367d38e291345af665dd114ec51056c3e2d895675f0db8ffae6fb
+referenced=270
+requirements=696
+valid=false
+verdict=fail
+```
+
+The accepted cache contract added seven requirements and seven matching references. None of the `castore_result_cache` identifiers appears in the missing or dangling lists.
+
 ## Review checkpoint
 
 - **Question:** Can Mantle sync and archive the local Rust unit castore result contract without treating object presence as reuse authority?
