@@ -8084,17 +8084,94 @@ pub fn encode_remote_frame(frame: &RemoteFrame) -> Result<zeroize::Zeroizing<Vec
     encode_remote_frame_zeroizing(frame)
 }
 
-fn encode_remote_frame_zeroizing(frame: &RemoteFrame) -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
-    let mut payload = zeroize::Zeroizing::new(Vec::new());
-    serde_json::to_writer(&mut *payload, frame).map_err(|err| format!("serializing remote frame: {err}"))?;
-    if payload.len() > MAX_REMOTE_FRAME_BYTES {
-        return Err(format!("remote-frame-payload-exceeds-{MAX_REMOTE_FRAME_BYTES}"));
+struct BoundedFrameCountingWriter {
+    bytes_written: usize,
+    bytes_max: usize,
+    is_exceeded: bool,
+}
+
+impl Write for BoundedFrameCountingWriter {
+    fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        let next_len = self
+            .bytes_written
+            .checked_add(buffer.len())
+            .ok_or_else(|| std::io::Error::other("remote frame count overflow"))?;
+        if next_len > self.bytes_max {
+            self.is_exceeded = true;
+            return Err(std::io::Error::other("remote frame count exceeds limit"));
+        }
+        self.bytes_written = next_len;
+        Ok(buffer.len())
     }
-    let payload_len = u32::try_from(payload.len()).map_err(|_| "remote-frame-length-overflow".to_string())?;
-    let mut encoded =
-        zeroize::Zeroizing::new(Vec::with_capacity(REMOTE_FRAME_HEADER_BYTES.saturating_add(payload.len())));
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+struct FixedCapacityFrameWriter<'a> {
+    output: &'a mut Vec<u8>,
+    bytes_max: usize,
+}
+
+impl Write for FixedCapacityFrameWriter<'_> {
+    fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        let next_len = self
+            .output
+            .len()
+            .checked_add(buffer.len())
+            .ok_or_else(|| std::io::Error::other("remote frame write overflow"))?;
+        if next_len > self.bytes_max {
+            return Err(std::io::Error::other("remote frame write exceeds counted length"));
+        }
+        self.output.extend_from_slice(buffer);
+        Ok(buffer.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+fn count_remote_frame_payload(frame: &RemoteFrame) -> Result<usize, String> {
+    let mut counter = BoundedFrameCountingWriter {
+        bytes_written: 0,
+        bytes_max: MAX_REMOTE_FRAME_BYTES,
+        is_exceeded: false,
+    };
+    if let Err(error) = serde_json::to_writer(&mut counter, frame) {
+        if counter.is_exceeded {
+            return Err(format!("remote-frame-payload-exceeds-{MAX_REMOTE_FRAME_BYTES}"));
+        }
+        return Err(format!("serializing remote frame: {error}"));
+    }
+    assert!(counter.bytes_written <= MAX_REMOTE_FRAME_BYTES);
+    Ok(counter.bytes_written)
+}
+
+fn encode_remote_frame_zeroizing(frame: &RemoteFrame) -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
+    let counted_len = count_remote_frame_payload(frame)?;
+    let mut payload = zeroize::Zeroizing::new(Vec::with_capacity(counted_len));
+    let payload_capacity = payload.capacity();
+    assert!(payload_capacity >= counted_len);
+    serde_json::to_writer(
+        &mut FixedCapacityFrameWriter {
+            output: &mut payload,
+            bytes_max: counted_len,
+        },
+        frame,
+    )
+    .map_err(|error| format!("serializing remote frame: {error}"))?;
+    assert_eq!(payload.len(), counted_len);
+    assert_eq!(payload.capacity(), payload_capacity);
+    let payload_len = u32::try_from(counted_len).map_err(|_| "remote-frame-length-overflow".to_string())?;
+    let encoded_capacity = REMOTE_FRAME_HEADER_BYTES
+        .checked_add(counted_len)
+        .ok_or_else(|| "remote-frame-length-overflow".to_string())?;
+    let mut encoded = zeroize::Zeroizing::new(Vec::with_capacity(encoded_capacity));
     encoded.extend_from_slice(&payload_len.to_be_bytes());
     encoded.extend_from_slice(&payload);
+    assert_eq!(encoded.len(), encoded_capacity);
     Ok(encoded)
 }
 
@@ -9232,7 +9309,11 @@ fn read_remote_ticket_credential_from_owned_fd_with_timeout(
     let deadline = std::time::Instant::now()
         .checked_add(timeout)
         .ok_or_else(|| "remote-ticket-input-deadline-overflow".to_string())?;
-    let mut bytes = zeroize::Zeroizing::new(Vec::new());
+    let credential_capacity = usize::try_from(REMOTE_TICKET_CREDENTIAL_BYTES_MAX)
+        .map_err(|_| "remote-ticket-input-size-invalid".to_string())?;
+    let mut bytes = zeroize::Zeroizing::new(Vec::with_capacity(credential_capacity));
+    let allocation_capacity = bytes.capacity();
+    assert!(allocation_capacity >= credential_capacity);
     let mut chunk = zeroize::Zeroizing::new([0_u8; REMOTE_TICKET_CREDENTIAL_READ_CHUNK_BYTES]);
     loop {
         let now = std::time::Instant::now();
@@ -9271,12 +9352,13 @@ fn read_remote_ticket_credential_from_owned_fd_with_timeout(
             return Err("remote-ticket-input-read-failed".to_string());
         }
         let read_count = usize::try_from(read_count).map_err(|_| "remote-ticket-input-size-invalid".to_string())?;
-        bytes.extend_from_slice(&chunk[..read_count]);
-        if u64::try_from(bytes.len()).map_err(|_| "remote-ticket-input-size-invalid".to_string())?
-            > REMOTE_TICKET_CREDENTIAL_BYTES_MAX
-        {
+        let next_len =
+            bytes.len().checked_add(read_count).ok_or_else(|| "remote-ticket-input-size-invalid".to_string())?;
+        if next_len > credential_capacity {
             return Err("remote-ticket-input-size-limit-exceeded".to_string());
         }
+        bytes.extend_from_slice(&chunk[..read_count]);
+        assert_eq!(bytes.capacity(), allocation_capacity);
     }
     drop(file);
     let value = std::str::from_utf8(&bytes).map_err(|_| "remote-ticket-input-utf8-invalid".to_string())?;
