@@ -441,9 +441,16 @@ mod linux {
                 tracee_path: path,
                 resolved_host_path: PathBuf::new(),
                 digest_hex: String::new(),
-                reason,
+                reason: format!("{reason}; {}", diagnostic_tracee_context(notif.pid)),
                 inventory_entry_id: None,
             }),
+        }
+    }
+
+    fn diagnostic_tracee_context(pid: u32) -> String {
+        match std::fs::read_link(format!("/proc/{pid}/exe")) {
+            Ok(path) => format!("tracee-image={}", path.display()),
+            Err(error) => format!("tracee-image-unavailable={error}"),
         }
     }
 

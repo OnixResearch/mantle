@@ -104,6 +104,12 @@ pub(crate) const BASH_FULL_GENERATOR_BUILD_STAGE_ID: &str = "bash-full-generator
 pub(crate) const BASH_FULL_GENERATOR_RUN_STAGE_ID: &str = "bash-full-generator-execution";
 pub(crate) const BASH_FULL_BUILD_STAGE_ID: &str = "bash-full-materialization";
 pub(crate) const BASH_FULL_SMOKE_STAGE_ID: &str = "bash-full-smoke";
+pub(crate) const BINUTILS_CANONICALIZER_BUILD_STAGE_ID: &str = "binutils-canonicalizer-materialization";
+pub(crate) const BINUTILS_HELPER_BUILD_STAGE_ID: &str = "binutils-helper-materialization";
+pub(crate) const BINUTILS_GENERATOR_BUILD_STAGE_ID: &str = "binutils-generator-materialization";
+pub(crate) const BINUTILS_COMPONENT_BUILD_STAGE_ID: &str = "binutils-component-materialization";
+pub(crate) const BINUTILS_INSTALL_STAGE_ID: &str = "binutils-install-materialization";
+pub(crate) const BINUTILS_INSTALL_SMOKE_STAGE_ID: &str = "binutils-install-smoke";
 const TCC_MUSL_V2_CANONICAL_AUTHORIZATION_ID: &str = "planned:tcc-musl-v2-materialization:exec:tcc-musl-v2-smoke:tcc";
 const M4_CANONICAL_AUTHORIZATION_ID: &str = "planned:m4-materialization:exec:m4-smoke:m4";
 const GREP_RUNNER_CANONICAL_AUTHORIZATION_ID: &str = "planned:grep-materialization:exec:grep-smoke:grep";
@@ -144,7 +150,7 @@ const MES_OUTPUT_MAX_MIB: u64 = 64;
 const MES_OUTPUT_MAX_BYTES: u64 = MES_OUTPUT_MAX_MIB * MIB_BYTES;
 const STAGE_JOB_COUNT: u32 = 1;
 const TRANSITION_STAGE_COUNT_MAX: u32 = 3;
-const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 91;
+const TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX: u32 = 97;
 const TINYCC_LINK_CHILD_EVENT_COUNT: usize = 5;
 const MAKE_RECIPE_CHILD_EVENT_COUNT: usize = 1;
 const GZIP_GZIP_SMOKE_EVENT_COUNT: usize = 2;
@@ -279,6 +285,10 @@ pub(crate) struct StagexTransitionReport {
     pub flex_runtime: Option<crate::stagex_flex::FlexInventoryReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bash_full_runtime: Option<crate::stagex_bash_full::BashFullInventoryReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binutils_sources: Option<crate::stagex_binutils::BinutilsSourceMaterializationReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binutils_runtime: Option<crate::stagex_binutils::BinutilsInventoryReport>,
     pub fallback_events: Vec<String>,
     pub promotions: Vec<OutputPromotionRecord>,
     pub protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
@@ -366,6 +376,68 @@ struct StagedTransitionPaths {
     kaem: PathBuf,
     kaem_smoke_script: PathBuf,
     kaem_smoke: PathBuf,
+}
+
+struct BinutilsStagePaths {
+    runtime: PathBuf,
+    bash: PathBuf,
+    tcc: PathBuf,
+    musl_root: PathBuf,
+    coreutils_bin: PathBuf,
+    sed: PathBuf,
+    grep: PathBuf,
+    diff: PathBuf,
+    cmp: PathBuf,
+    gawk: PathBuf,
+    m4: PathBuf,
+    bison: PathBuf,
+    flex: PathBuf,
+    make: PathBuf,
+}
+
+impl BinutilsStagePaths {
+    fn from_transition_root(root: &Path) -> Self {
+        let path = |relative: &str| root.join(relative);
+        let paths = Self {
+            runtime: path("binutils-stage/runtime"),
+            bash: path("bash-full-stage/runtime/output/bin/bash-full"),
+            tcc: path("tcc-musl-v2-stage/runtime/output/bin/tcc-0.9.27-musl-v2"),
+            musl_root: path("musl-native-stage/runtime/output"),
+            coreutils_bin: path("coreutils-stage/runtime/output/bin"),
+            sed: path("sed-stage/runtime/output/bin/sed"),
+            grep: path("grep-stage/runtime/output/bin/grep"),
+            diff: path("diffutils-stage/runtime/output/bin/diff"),
+            cmp: path("diffutils-stage/runtime/output/bin/cmp"),
+            gawk: path("gawk-stage/runtime/output/bin/gawk"),
+            m4: path("m4-stage/runtime/output/bin/m4"),
+            bison: path("bison-stage/runtime/output/bin/bison"),
+            flex: path("flex-stage/runtime/output/bin/flex"),
+            make: path("make-stage/runtime/output/bin/make"),
+        };
+        assert!(paths.runtime.is_absolute());
+        assert!(paths.make.is_absolute());
+        paths
+    }
+
+    fn probe_request<'a>(&'a self, source_root: &'a Path) -> crate::stagex_binutils::BinutilsConfigureProbeRequest<'a> {
+        crate::stagex_binutils::BinutilsConfigureProbeRequest {
+            source_root,
+            scratch_dir: &self.runtime,
+            bash: &self.bash,
+            tcc: &self.tcc,
+            musl_root: &self.musl_root,
+            coreutils_bin: &self.coreutils_bin,
+            sed: &self.sed,
+            grep: &self.grep,
+            diff: &self.diff,
+            cmp: &self.cmp,
+            gawk: &self.gawk,
+            m4: &self.m4,
+            bison: &self.bison,
+            flex: &self.flex,
+            make: &self.make,
+        }
+    }
 }
 
 struct BoundedCommandRequest<'a> {
@@ -636,6 +708,7 @@ pub(crate) fn materialize_protected_transition(
             path: request.scratch_dir.join("bash-full-stage/runtime/output/bin/bash-full"),
             digest_hex: crate::stagex_bash_full::BASH_FULL_BINARY_BLAKE3.to_string(),
         });
+        planned.extend(planned_binutils_executables(&request.scratch_dir.join("binutils-stage/runtime")));
         planned
     } else {
         Vec::new()
@@ -1497,6 +1570,9 @@ pub(crate) fn materialize_protected_transition(
         _ => unreachable!("full Bash requires authenticated source closure and protected GNU Flex completion"),
     };
 
+    let (binutils_sources, binutils_runtime) =
+        materialize_binutils_stage(&request, &manifest_authority, &supervisor, bash_full_runtime.is_some())?;
+
     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
     let protected_exec_events = supervisor.audit_events();
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
@@ -1591,12 +1667,57 @@ pub(crate) fn materialize_protected_transition(
         flex_sources,
         flex_runtime,
         bash_full_runtime,
+        binutils_sources,
+        binutils_runtime,
         fallback_events: Vec::new(),
         promotions: vec![hex0_promotion, kaem_promotion],
         protected_exec_events,
     };
     write_json_create_new(&request.scratch_dir.join(REPORT_FILE_NAME), &report)?;
     Ok(report)
+}
+
+fn materialize_binutils_stage(
+    request: &StagexTransitionRequest<'_>,
+    manifest_authority: &TransitionManifestAuthority,
+    supervisor: &ProtectedSeccompSupervisor,
+    bash_full_complete: bool,
+) -> Result<
+    (
+        Option<crate::stagex_binutils::BinutilsSourceMaterializationReport>,
+        Option<crate::stagex_binutils::BinutilsInventoryReport>,
+    ),
+    StagexTransitionError,
+> {
+    match (request.source_bundle_path, bash_full_complete) {
+        (Some(source_bundle_path), true) => {
+            let stage = request.scratch_dir.join("binutils-stage");
+            fs::create_dir(&stage)
+                .map_err(|source| io_error("creating create-new protected binutils stage root", source))?;
+            let sources = crate::stagex_binutils::materialize_authenticated_binutils_source(
+                source_bundle_path,
+                &manifest_authority.source_bundle_manifest_blake3,
+                &stage.join("sources"),
+            )
+            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+            let paths = BinutilsStagePaths::from_transition_root(request.scratch_dir);
+            let result =
+                crate::stagex_binutils::derive_binutils_inventory(paths.probe_request(&sources.output_path), true);
+            match result {
+                Ok(report) => Ok((Some(sources), Some(report))),
+                Err(error) => {
+                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+                    let events = supervisor.audit_events();
+                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    Err(StagexTransitionError::ProtectedExec(error.to_string()))
+                }
+            }
+        }
+        (None, false) => Ok((None, None)),
+        _ => Err(StagexTransitionError::InvalidInput(
+            "binutils requires authenticated source closure and protected full Bash completion".to_string(),
+        )),
+    }
 }
 
 fn validate_stage0_optional_inputs(
@@ -2102,6 +2223,8 @@ fn build_transition_plan(
             &bash_root,
             &bash_full_root,
         ));
+        let transition_root = staged.seed.parent().expect("staged seed has parent");
+        stages.extend(binutils_stage_plans(transition_root));
     }
     let stage_count_max = if include_stage0_mini {
         TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX
@@ -3813,6 +3936,61 @@ fn mes_m2_authorization(stage_id: &str, mes_root: &Path) -> StagexExecutableAuth
     )
 }
 
+fn planned_binutils_executables(binutils_root: &Path) -> Vec<PlannedExecutable> {
+    const FIXED_PLANNED_EXECUTABLE_COUNT: usize = 6;
+    let mut planned = vec![
+        PlannedExecutable {
+            authorization_id: "exec:binutils-helper:sed-launcher".to_string(),
+            source_stage_id: BINUTILS_HELPER_BUILD_STAGE_ID.to_string(),
+            path: binutils_root.join("stagex-sed-bridge-launcher"),
+            digest_hex: crate::stagex_binutils::SED_BRIDGE_LAUNCHER_BLAKE3.to_string(),
+        },
+        PlannedExecutable {
+            authorization_id: "exec:binutils-helper:configure-utility".to_string(),
+            source_stage_id: BINUTILS_HELPER_BUILD_STAGE_ID.to_string(),
+            path: binutils_root.join("stagex-configure-utility"),
+            digest_hex: crate::stagex_binutils::CONFIGURE_UTILITY_BLAKE3.to_string(),
+        },
+        PlannedExecutable {
+            authorization_id: "exec:binutils-helper:ylwrap-runner".to_string(),
+            source_stage_id: BINUTILS_HELPER_BUILD_STAGE_ID.to_string(),
+            path: binutils_root.join("stagex-ylwrap-sed-runner"),
+            digest_hex: crate::stagex_binutils::YLWRAP_SED_RUNNER_BLAKE3.to_string(),
+        },
+        PlannedExecutable {
+            authorization_id: "exec:binutils-helper:elf-canonicalizer".to_string(),
+            source_stage_id: BINUTILS_CANONICALIZER_BUILD_STAGE_ID.to_string(),
+            path: binutils_root.join("stagex-elf-local-symbol-canonicalizer"),
+            digest_hex: crate::stagex_binutils::ELF_SYMBOL_CANONICALIZER_BLAKE3.to_string(),
+        },
+        PlannedExecutable {
+            authorization_id: "exec:binutils-component:bfd-chew".to_string(),
+            source_stage_id: BINUTILS_GENERATOR_BUILD_STAGE_ID.to_string(),
+            path: binutils_root.join("source/bfd/doc/chew"),
+            digest_hex: crate::stagex_binutils::BINUTILS_BFD_CHEW_BLAKE3.to_string(),
+        },
+        PlannedExecutable {
+            authorization_id: "exec:binutils-smoke:positive".to_string(),
+            source_stage_id: BINUTILS_INSTALL_STAGE_ID.to_string(),
+            path: binutils_root.join("binutils-runtime-smoke/positive"),
+            digest_hex: crate::stagex_binutils::BINUTILS_POSITIVE_SMOKE_BLAKE3.to_string(),
+        },
+    ];
+    let install_bin = binutils_root.join("install-destdir/mantle/stagex/binutils-probe-output/bin");
+    planned.extend(crate::stagex_binutils::BINUTILS_REQUIRED_TOOLS.iter().map(|(tool, digest)| PlannedExecutable {
+        authorization_id: format!("exec:binutils-smoke:{tool}"),
+        source_stage_id: BINUTILS_INSTALL_STAGE_ID.to_string(),
+        path: install_bin.join(tool),
+        digest_hex: (*digest).to_string(),
+    }));
+    assert_eq!(
+        planned.len(),
+        crate::stagex_binutils::BINUTILS_REQUIRED_TOOLS.len() + FIXED_PLANNED_EXECUTABLE_COUNT
+    );
+    assert!(planned.iter().all(|entry| entry.path.is_absolute()));
+    planned
+}
+
 fn additional_mes_stage0_planned_executables(stage0_root: &Path) -> Vec<PlannedExecutable> {
     ["stage0-full-mkdir", "stage0-full-cp"]
         .into_iter()
@@ -4308,6 +4486,468 @@ fn promotion_stage_ids(plan: &StagexMaterializationPlan) -> Vec<String> {
         }
     }
     source_stage_ids.into_iter().collect()
+}
+
+fn binutils_stage_plans(transition_root: &Path) -> Vec<StagexStagePlan> {
+    let paths = BinutilsStagePaths::from_transition_root(transition_root);
+    let source_artifacts = crate::stagex_binutils::source_artifact_digests()
+        .into_iter()
+        .map(|(artifact_id, _)| artifact_id)
+        .collect::<Vec<_>>();
+    let canonicalizer_outputs = vec!["binutils-elf-symbol-canonicalizer".to_string()];
+    let helper_outputs = vec![
+        "binutils-sed-bridge-launcher".to_string(),
+        "binutils-configure-utility".to_string(),
+        "binutils-ylwrap-runner".to_string(),
+    ];
+    let generator_outputs = vec![
+        "binutils-bfd-chew".to_string(),
+        "binutils-configure-probe-executables".to_string(),
+    ];
+    let mut component_outputs = crate::stagex_binutils::BINUTILS_COMPONENT_ARTIFACT_IDS
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    component_outputs.push("binutils-generated-sources".to_string());
+    let mut install_outputs = crate::stagex_binutils::BINUTILS_REQUIRED_TOOLS
+        .iter()
+        .map(|(tool, _)| format!("binutils-installed-{tool}"))
+        .collect::<Vec<_>>();
+    install_outputs.push("binutils-positive-smoke-executable".to_string());
+    let smoke_outputs = vec!["binutils-runtime-smoke".to_string()];
+    assert!(transition_root.is_absolute());
+    assert_eq!(install_outputs.len(), crate::stagex_binutils::BINUTILS_REQUIRED_TOOLS.len() + 1);
+    vec![
+        binutils_canonicalizer_stage(&paths, &source_artifacts, &canonicalizer_outputs),
+        binutils_helper_stage(&paths, &source_artifacts, &canonicalizer_outputs, &helper_outputs),
+        binutils_generator_stage(&paths, &source_artifacts, &helper_outputs, &generator_outputs),
+        binutils_component_stage(&paths, &source_artifacts, &generator_outputs, &component_outputs),
+        binutils_install_stage(&paths, &component_outputs, &install_outputs),
+        binutils_install_smoke_stage(&paths, &install_outputs, &smoke_outputs),
+    ]
+}
+
+fn binutils_canonicalizer_stage(
+    paths: &BinutilsStagePaths,
+    source_artifacts: &[&str],
+    canonicalizer_outputs: &[String],
+) -> StagexStagePlan {
+    let stage = mes_stage_plan(
+        BINUTILS_CANONICALIZER_BUILD_STAGE_ID,
+        &[
+            TCC_MUSL_V2_BUILD_STAGE_ID,
+            TCC_MUSL_V2_SMOKE_STAGE_ID,
+            MUSL_NATIVE_BUILD_STAGE_ID,
+        ],
+        source_artifacts,
+        &[
+            "tcc-musl-v2",
+            "musl-native-libc",
+            "musl-native-crt1",
+            "musl-native-headers",
+        ],
+        canonicalizer_outputs,
+        vec![authorization(
+            "exec:binutils-canonicalizer:tcc-musl-v2",
+            &paths.tcc,
+            TCC_MUSL_V2_BUILD_STAGE_ID,
+            crate::stagex_tcc_musl_v2::COMPILER_BLAKE3,
+        )],
+    );
+    assert_eq!(stage.id, BINUTILS_CANONICALIZER_BUILD_STAGE_ID);
+    assert_eq!(stage.executable_authorizations.len(), 1);
+    stage
+}
+
+fn binutils_helper_stage(
+    paths: &BinutilsStagePaths,
+    source_artifacts: &[&str],
+    canonicalizer_outputs: &[String],
+    helper_outputs: &[String],
+) -> StagexStagePlan {
+    let mut authorizations = vec![
+        authorization(
+            "exec:binutils-helper:tcc-musl-v2",
+            &paths.tcc,
+            TCC_MUSL_V2_BUILD_STAGE_ID,
+            crate::stagex_tcc_musl_v2::COMPILER_BLAKE3,
+        ),
+        authorization(
+            "exec:binutils-helper:bash-full",
+            &paths.bash,
+            BASH_FULL_BUILD_STAGE_ID,
+            crate::stagex_bash_full::BASH_FULL_BINARY_BLAKE3,
+        ),
+    ];
+    for tool in ["cat", "chmod", "mkdir", "rm", "wc"] {
+        authorizations.push(binutils_coreutils_authorization(paths, BINUTILS_HELPER_BUILD_STAGE_ID, tool));
+    }
+    authorizations.push(binutils_generated_authorization(
+        paths,
+        BINUTILS_HELPER_BUILD_STAGE_ID,
+        BINUTILS_CANONICALIZER_BUILD_STAGE_ID,
+        "elf-canonicalizer",
+        "stagex-elf-local-symbol-canonicalizer",
+        crate::stagex_binutils::ELF_SYMBOL_CANONICALIZER_BLAKE3,
+    ));
+    let stage = mes_stage_plan(
+        BINUTILS_HELPER_BUILD_STAGE_ID,
+        &[
+            BINUTILS_CANONICALIZER_BUILD_STAGE_ID,
+            BASH_FULL_BUILD_STAGE_ID,
+            BASH_FULL_SMOKE_STAGE_ID,
+            TCC_MUSL_V2_BUILD_STAGE_ID,
+            TCC_MUSL_V2_SMOKE_STAGE_ID,
+            COREUTILS_BUILD_STAGE_ID,
+            COREUTILS_SMOKE_STAGE_ID,
+        ],
+        source_artifacts,
+        &binutils_helper_inputs(canonicalizer_outputs),
+        helper_outputs,
+        authorizations,
+    );
+    assert_eq!(stage.id, BINUTILS_HELPER_BUILD_STAGE_ID);
+    assert!(!stage.executable_authorizations.is_empty());
+    stage
+}
+
+fn binutils_helper_inputs(canonicalizer_outputs: &[String]) -> Vec<&str> {
+    let mut inputs = canonicalizer_outputs.iter().map(String::as_str).collect::<Vec<_>>();
+    inputs.extend([
+        "bash-2.05b-full",
+        "tcc-musl-v2",
+        "coreutils-cat",
+        "coreutils-chmod",
+        "coreutils-mkdir",
+        "coreutils-rm",
+        "coreutils-wc",
+    ]);
+    assert!(!inputs.is_empty());
+    assert!(inputs.iter().all(|input| !input.is_empty()));
+    inputs
+}
+
+fn binutils_helper_executable_authorizations(
+    paths: &BinutilsStagePaths,
+    consumer_stage_id: &str,
+) -> Vec<StagexExecutableAuthorization> {
+    let authorizations = vec![
+        binutils_generated_authorization(
+            paths,
+            consumer_stage_id,
+            BINUTILS_HELPER_BUILD_STAGE_ID,
+            "sed-launcher",
+            "stagex-sed-bridge-launcher",
+            crate::stagex_binutils::SED_BRIDGE_LAUNCHER_BLAKE3,
+        ),
+        binutils_generated_authorization(
+            paths,
+            consumer_stage_id,
+            BINUTILS_HELPER_BUILD_STAGE_ID,
+            "configure-utility",
+            "stagex-configure-utility",
+            crate::stagex_binutils::CONFIGURE_UTILITY_BLAKE3,
+        ),
+        binutils_generated_authorization(
+            paths,
+            consumer_stage_id,
+            BINUTILS_HELPER_BUILD_STAGE_ID,
+            "ylwrap-runner",
+            "stagex-ylwrap-sed-runner",
+            crate::stagex_binutils::YLWRAP_SED_RUNNER_BLAKE3,
+        ),
+        binutils_generated_authorization(
+            paths,
+            consumer_stage_id,
+            BINUTILS_CANONICALIZER_BUILD_STAGE_ID,
+            "elf-canonicalizer",
+            "stagex-elf-local-symbol-canonicalizer",
+            crate::stagex_binutils::ELF_SYMBOL_CANONICALIZER_BLAKE3,
+        ),
+    ];
+    assert!(!authorizations.is_empty());
+    assert!(authorizations.iter().all(|authorization| authorization.id.contains(consumer_stage_id)));
+    authorizations
+}
+
+fn binutils_component_inputs(helper_outputs: &[String]) -> Vec<&str> {
+    let mut inputs = helper_outputs.iter().map(String::as_str).collect::<Vec<_>>();
+    inputs.extend([
+        "binutils-elf-symbol-canonicalizer",
+        "bash-2.05b-full",
+        "tcc-musl-v2",
+        "sed-4.0.9",
+        "grep-2.4-runner",
+        "diffutils-diff-2.7",
+        "diffutils-cmp-2.7",
+        "gawk-3.0.4",
+        "m4-1.4.7",
+        "bison-2.3",
+        "flex-2.6.4",
+        "make-3.82",
+    ]);
+    inputs.extend(crate::stagex_coreutils::COREUTILS_EXPECTED_OUTPUTS.iter().map(|expected| expected.artifact_id));
+    assert!(!inputs.is_empty());
+    assert!(inputs.iter().all(|input| !input.is_empty()));
+    inputs
+}
+
+fn binutils_generator_stage(
+    paths: &BinutilsStagePaths,
+    source_artifacts: &[&str],
+    helper_outputs: &[String],
+    generator_outputs: &[String],
+) -> StagexStagePlan {
+    let mut authorizations = binutils_component_authorizations(paths, BINUTILS_GENERATOR_BUILD_STAGE_ID);
+    authorizations.extend(binutils_helper_executable_authorizations(paths, BINUTILS_GENERATOR_BUILD_STAGE_ID));
+    let stage = mes_stage_plan(
+        BINUTILS_GENERATOR_BUILD_STAGE_ID,
+        &[
+            BINUTILS_CANONICALIZER_BUILD_STAGE_ID,
+            BINUTILS_HELPER_BUILD_STAGE_ID,
+            BASH_FULL_BUILD_STAGE_ID,
+            TCC_MUSL_V2_BUILD_STAGE_ID,
+            SED_BUILD_STAGE_ID,
+            GREP_BUILD_STAGE_ID,
+            DIFFUTILS_BUILD_STAGE_ID,
+            GAWK_BUILD_STAGE_ID,
+            M4_BUILD_STAGE_ID,
+            BISON_BUILD_STAGE_ID,
+            FLEX_BUILD_STAGE_ID,
+            MAKE_BUILD_STAGE_ID,
+            COREUTILS_BUILD_STAGE_ID,
+            COREUTILS_SMOKE_STAGE_ID,
+        ],
+        source_artifacts,
+        &binutils_component_inputs(helper_outputs),
+        generator_outputs,
+        authorizations,
+    );
+    assert_eq!(stage.id, BINUTILS_GENERATOR_BUILD_STAGE_ID);
+    assert!(!stage.executable_authorizations.is_empty());
+    stage
+}
+
+fn binutils_component_stage(
+    paths: &BinutilsStagePaths,
+    source_artifacts: &[&str],
+    generator_outputs: &[String],
+    component_outputs: &[String],
+) -> StagexStagePlan {
+    let mut authorizations = binutils_component_authorizations(paths, BINUTILS_COMPONENT_BUILD_STAGE_ID);
+    authorizations.push(binutils_generated_authorization(
+        paths,
+        BINUTILS_COMPONENT_BUILD_STAGE_ID,
+        BINUTILS_GENERATOR_BUILD_STAGE_ID,
+        "bfd-chew",
+        "source/bfd/doc/chew",
+        crate::stagex_binutils::BINUTILS_BFD_CHEW_BLAKE3,
+    ));
+    authorizations.extend(binutils_helper_executable_authorizations(paths, BINUTILS_COMPONENT_BUILD_STAGE_ID));
+    let generator_inputs = generator_outputs.iter().map(String::as_str).collect::<Vec<_>>();
+    let stage = mes_stage_plan(
+        BINUTILS_COMPONENT_BUILD_STAGE_ID,
+        &[BINUTILS_GENERATOR_BUILD_STAGE_ID],
+        source_artifacts,
+        &generator_inputs,
+        component_outputs,
+        authorizations,
+    );
+    assert_eq!(stage.id, BINUTILS_COMPONENT_BUILD_STAGE_ID);
+    assert!(!stage.executable_authorizations.is_empty());
+    stage
+}
+
+fn binutils_install_stage(
+    paths: &BinutilsStagePaths,
+    component_outputs: &[String],
+    install_outputs: &[String],
+) -> StagexStagePlan {
+    let mut authorizations = binutils_component_authorizations(paths, BINUTILS_INSTALL_STAGE_ID);
+    authorizations.extend(binutils_helper_executable_authorizations(paths, BINUTILS_INSTALL_STAGE_ID));
+    let component_inputs = component_outputs.iter().map(String::as_str).collect::<Vec<_>>();
+    let stage = mes_stage_plan(
+        BINUTILS_INSTALL_STAGE_ID,
+        &[BINUTILS_COMPONENT_BUILD_STAGE_ID],
+        &[],
+        &component_inputs,
+        install_outputs,
+        authorizations,
+    );
+    assert_eq!(stage.id, BINUTILS_INSTALL_STAGE_ID);
+    assert!(!stage.executable_authorizations.is_empty());
+    stage
+}
+
+fn binutils_install_smoke_stage(
+    paths: &BinutilsStagePaths,
+    install_outputs: &[String],
+    smoke_outputs: &[String],
+) -> StagexStagePlan {
+    let install_bin = paths.runtime.join("install-destdir/mantle/stagex/binutils-probe-output/bin");
+    let mut authorizations = crate::stagex_binutils::BINUTILS_REQUIRED_TOOLS
+        .iter()
+        .map(|(tool, digest)| {
+            authorization(
+                &format!("exec:{BINUTILS_INSTALL_SMOKE_STAGE_ID}:{tool}"),
+                &install_bin.join(tool),
+                BINUTILS_INSTALL_STAGE_ID,
+                digest,
+            )
+        })
+        .collect::<Vec<_>>();
+    authorizations.push(binutils_generated_authorization(
+        paths,
+        BINUTILS_INSTALL_SMOKE_STAGE_ID,
+        BINUTILS_INSTALL_STAGE_ID,
+        "positive",
+        "binutils-runtime-smoke/positive",
+        crate::stagex_binutils::BINUTILS_POSITIVE_SMOKE_BLAKE3,
+    ));
+    let install_inputs = install_outputs.iter().map(String::as_str).collect::<Vec<_>>();
+    let stage = mes_stage_plan(
+        BINUTILS_INSTALL_SMOKE_STAGE_ID,
+        &[BINUTILS_INSTALL_STAGE_ID],
+        &[],
+        &install_inputs,
+        smoke_outputs,
+        authorizations,
+    );
+    assert_eq!(stage.id, BINUTILS_INSTALL_SMOKE_STAGE_ID);
+    assert!(!stage.executable_authorizations.is_empty());
+    stage
+}
+
+fn binutils_component_authorizations(
+    paths: &BinutilsStagePaths,
+    consumer_stage_id: &str,
+) -> Vec<StagexExecutableAuthorization> {
+    let mut authorizations = vec![
+        authorization(
+            &format!("exec:{consumer_stage_id}:tcc-musl-v2"),
+            &paths.tcc,
+            TCC_MUSL_V2_BUILD_STAGE_ID,
+            crate::stagex_tcc_musl_v2::COMPILER_BLAKE3,
+        ),
+        authorization(
+            &format!("exec:{consumer_stage_id}:bash-full"),
+            &paths.bash,
+            BASH_FULL_BUILD_STAGE_ID,
+            crate::stagex_bash_full::BASH_FULL_BINARY_BLAKE3,
+        ),
+        authorization(
+            &format!("exec:{consumer_stage_id}:sed"),
+            &paths.sed,
+            SED_BUILD_STAGE_ID,
+            crate::stagex_sed::SED_FINAL_BLAKE3,
+        ),
+        authorization(
+            &format!("exec:{consumer_stage_id}:grep"),
+            &paths.grep,
+            GREP_BUILD_STAGE_ID,
+            crate::stagex_grep::GREP_RUNNER_BLAKE3,
+        ),
+        authorization(
+            &format!("exec:{consumer_stage_id}:diff"),
+            &paths.diff,
+            DIFFUTILS_BUILD_STAGE_ID,
+            crate::stagex_diffutils::DIFFUTILS_DIFF_BLAKE3,
+        ),
+        authorization(
+            &format!("exec:{consumer_stage_id}:cmp"),
+            &paths.cmp,
+            DIFFUTILS_BUILD_STAGE_ID,
+            crate::stagex_diffutils::DIFFUTILS_CMP_BLAKE3,
+        ),
+        authorization(
+            &format!("exec:{consumer_stage_id}:gawk"),
+            &paths.gawk,
+            GAWK_BUILD_STAGE_ID,
+            crate::stagex_gawk::GAWK_BINARY_BLAKE3,
+        ),
+        authorization(
+            &format!("exec:{consumer_stage_id}:m4"),
+            &paths.m4,
+            M4_BUILD_STAGE_ID,
+            crate::stagex_m4::M4_FINAL_BLAKE3,
+        ),
+        authorization(
+            &format!("exec:{consumer_stage_id}:bison"),
+            &paths.bison,
+            BISON_BUILD_STAGE_ID,
+            crate::stagex_bison::BISON_BINARY_BLAKE3,
+        ),
+        authorization(
+            &format!("exec:{consumer_stage_id}:flex"),
+            &paths.flex,
+            FLEX_BUILD_STAGE_ID,
+            crate::stagex_flex::FLEX_BINARY_BLAKE3,
+        ),
+        authorization(
+            &format!("exec:{consumer_stage_id}:make"),
+            &paths.make,
+            MAKE_BUILD_STAGE_ID,
+            crate::stagex_make::MAKE_FINAL_BLAKE3,
+        ),
+    ];
+    authorizations.extend(
+        binutils_coreutils_tool_digests()
+            .into_iter()
+            .map(|(tool, _)| binutils_coreutils_authorization(paths, consumer_stage_id, tool)),
+    );
+    assert!(!authorizations.is_empty());
+    assert!(authorizations.iter().all(|entry| Path::new(&entry.absolute_path).is_absolute()));
+    authorizations
+}
+
+fn binutils_coreutils_tool_digests() -> Vec<(&'static str, &'static str)> {
+    let tools = crate::stagex_coreutils::COREUTILS_EXPECTED_OUTPUTS
+        .iter()
+        .map(|expected| {
+            let tool = expected
+                .artifact_id
+                .strip_prefix("coreutils-")
+                .expect("coreutils artifact id has the checked prefix");
+            (tool, expected.digest_blake3)
+        })
+        .collect::<Vec<_>>();
+    assert!(!tools.is_empty());
+    assert!(tools.iter().all(|(tool, digest)| !tool.is_empty() && !digest.is_empty()));
+    tools
+}
+
+fn binutils_coreutils_authorization(
+    paths: &BinutilsStagePaths,
+    consumer_stage_id: &str,
+    tool: &str,
+) -> StagexExecutableAuthorization {
+    let digest = binutils_coreutils_tool_digests()
+        .into_iter()
+        .find(|(name, _)| *name == tool)
+        .map(|(_, digest)| digest)
+        .expect("binutils coreutils tool has a protected identity");
+    authorization(
+        &format!("exec:{consumer_stage_id}:coreutils-{tool}"),
+        &paths.coreutils_bin.join(tool),
+        COREUTILS_BUILD_STAGE_ID,
+        digest,
+    )
+}
+
+fn binutils_generated_authorization(
+    paths: &BinutilsStagePaths,
+    consumer_stage_id: &str,
+    source_stage_id: &str,
+    label: &str,
+    relative_path: &str,
+    digest: &str,
+) -> StagexExecutableAuthorization {
+    authorization(
+        &format!("exec:{consumer_stage_id}:{label}"),
+        &paths.runtime.join(relative_path),
+        source_stage_id,
+        digest,
+    )
 }
 
 fn bash_full_stage_plans(
@@ -8624,7 +9264,7 @@ mod tests {
     }
 
     #[test]
-    fn full_bash_plan_closes_four_new_stages() {
+    fn transition_plan_closes_binutils_producer_and_consumer_stages() {
         let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let authority =
             load_transition_manifest_authority(&repo.join("bootstrap/stagex-transition-lineage.json")).unwrap();
@@ -8646,6 +9286,54 @@ mod tests {
         assert_eq!(plan.stages.len(), usize::try_from(TRANSITION_WITH_STAGE0_STAGE_COUNT_MAX).unwrap());
         assert!(stage_ids.contains(BASH_FULL_GENERATOR_BUILD_STAGE_ID));
         assert!(stage_ids.contains(BASH_FULL_SMOKE_STAGE_ID));
+        assert!(stage_ids.contains(BINUTILS_CANONICALIZER_BUILD_STAGE_ID));
+        assert!(stage_ids.contains(BINUTILS_HELPER_BUILD_STAGE_ID));
+        assert!(stage_ids.contains(BINUTILS_GENERATOR_BUILD_STAGE_ID));
+        assert!(stage_ids.contains(BINUTILS_COMPONENT_BUILD_STAGE_ID));
+        assert!(stage_ids.contains(BINUTILS_INSTALL_STAGE_ID));
+        assert!(stage_ids.contains(BINUTILS_INSTALL_SMOKE_STAGE_ID));
+        let authorization_ids = plan
+            .stages
+            .iter()
+            .flat_map(|stage| stage.executable_authorizations.iter().map(|authorization| authorization.id.as_str()))
+            .collect::<Vec<_>>();
+        let unique_authorization_ids = authorization_ids.iter().copied().collect::<BTreeSet<_>>();
+        assert_eq!(authorization_ids.len(), unique_authorization_ids.len());
+    }
+
+    #[test]
+    fn binutils_plan_rejects_same_stage_generated_executable_authority() {
+        let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let authority =
+            load_transition_manifest_authority(&repo.join("bootstrap/stagex-transition-lineage.json")).unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("transition");
+        let staged = StagedTransitionPaths {
+            seed: root.join("inputs/hex0-seed"),
+            hex0_source: root.join("inputs/hex0-source"),
+            kaem_source: root.join("inputs/kaem-source"),
+            reproduced_hex0: root.join("outputs/hex0"),
+            kaem: root.join("outputs/kaem"),
+            kaem_smoke_script: root.join("inputs/kaem-smoke"),
+            kaem_smoke: root.join("outputs/kaem-smoke"),
+        };
+        let source_state = "a".repeat(blake3::OUT_LEN * 2);
+        let mut plan = build_transition_plan(&authority, &staged, &source_state, true).unwrap();
+        let component = plan.stages.iter_mut().find(|stage| stage.id == BINUTILS_COMPONENT_BUILD_STAGE_ID).unwrap();
+        let chew = component
+            .executable_authorizations
+            .iter_mut()
+            .find(|authorization| authorization.id.ends_with(":bfd-chew"))
+            .unwrap();
+        chew.source_stage_id = BINUTILS_COMPONENT_BUILD_STAGE_ID.to_string();
+        let validation = validate_stagex_plan(&plan);
+        assert!(!validation.is_valid());
+        assert!(
+            validation
+                .errors
+                .iter()
+                .any(|error| error.to_string().contains("invalid source stage binutils-component-materialization"))
+        );
     }
 
     #[test]

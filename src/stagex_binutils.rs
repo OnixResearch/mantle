@@ -45,20 +45,23 @@ const YLWRAP_SED_RUNNER_SOURCE_NAME: &str = "stagex-ylwrap-sed-runner.c";
 const YLWRAP_SED_RUNNER_OUTPUT_NAME: &str = "stagex-ylwrap-sed-runner";
 const BINUTILS_AR_RUNNER_SOURCE_NAME: &str = "stagex-binutils-ar-runner.sh";
 const SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3: &str = "606c52085de42d0221ba5490e81d8c539a50a65aaa89f7b4b478371bdc643dab";
-const SED_BRIDGE_LAUNCHER_BLAKE3: &str = "9b4d6a5eca05f55c407a70f7e426f756f482c9ae8f76d0a22d1b1b46e7dba1a1";
+pub(crate) const SED_BRIDGE_LAUNCHER_BLAKE3: &str = "9b4d6a5eca05f55c407a70f7e426f756f482c9ae8f76d0a22d1b1b46e7dba1a1";
 const SED_BRIDGE_SCRIPT_SOURCE_BLAKE3: &str = "fcdaf54c41ea283af6d7d75b2e2dce24afcbdf9286981e11603b2361775f5d6a";
 const YLWRAP_SED_RUNNER_SOURCE_BLAKE3: &str = "372a51aef1c1d06bef3ec1963bc61e89598b2912c8e709dce747637ffe49587d";
-const YLWRAP_SED_RUNNER_BLAKE3: &str = "d675a75869cba2e3c7cdb932ee75106a4a6094161e4d95fc196c08aa7b9723f8";
+pub(crate) const YLWRAP_SED_RUNNER_BLAKE3: &str = "d675a75869cba2e3c7cdb932ee75106a4a6094161e4d95fc196c08aa7b9723f8";
 const BINUTILS_AR_RUNNER_SOURCE_BLAKE3: &str = "27daef7796f882d478b0d7f26508b4b7c0a3d67faa3fd9dafe6e6fb67733c9f1";
 const ELF_SYMBOL_CANONICALIZER_SOURCE_BLAKE3: &str = "eed4dcf5e348d6b77317243a394ad2effb76ac112186eaf71e7115a1c5dc4a20";
-const ELF_SYMBOL_CANONICALIZER_BLAKE3: &str = "1a7a10d6ce97f3cea18ffc4f956fe28bdb10d94568146d89670016a80d1de06a";
+pub(crate) const ELF_SYMBOL_CANONICALIZER_BLAKE3: &str =
+    "1a7a10d6ce97f3cea18ffc4f956fe28bdb10d94568146d89670016a80d1de06a";
 const BINUTILS_AR_SMOKE_ARCHIVE_BLAKE3: &str = "b54d2b2a954c606f06e62177013cec573bb4ac598c50b2e4f9867879ea5b65a9";
 const SINGLE_THREAD_SEMAPHORE_SOURCE_BLAKE3: &str = "52c3ec19c484b0b4c3c5de84fc7ae77f40601fc81993d16ef6e15eb7401ee084";
 const CONFIGURE_UTILITY_SOURCE_BLAKE3: &str = "b150327f4ef9256764e8024466dd706ee87012f70554f1c7a01a0d8bc08975b1";
-const CONFIGURE_UTILITY_BLAKE3: &str = "a0d4f306ed84086cb0cebff1dffb0f5fea0a93e9ee4085e6e5e0acc3e4df201f";
+pub(crate) const CONFIGURE_UTILITY_BLAKE3: &str = "a0d4f306ed84086cb0cebff1dffb0f5fea0a93e9ee4085e6e5e0acc3e4df201f";
 const BINUTILS_SOURCE_REPORT_FORMAT: &str = "mantle-stagex-binutils-2.30-source-materialization-v1";
+const BINUTILS_INVENTORY_FORMAT: &str = "mantle-stagex-binutils-2.30-inventory-v1";
 const BINUTILS_SOURCE_NON_CLAIM: &str =
     "binutils source materialization proves authenticated offline archive identity and checked-recipe identity only";
+const BINUTILS_INVENTORY_NON_CLAIM: &str = "this inventory binds the checked binutils configure, generated-source, component, install, link, and smoke observations only; it does not prove compiler correctness, complete protected child authorization, provider publication, or provider admission";
 const BINUTILS_RECORD_HASH: &str = "sha256-L8aaWezlL47cNdPIbSEAtryYUDXLe9htMSECT4xqpoc=";
 const BINUTILS_RECORD_URL: &str = "https://ftpmirror.gnu.org/binutils/binutils-2.30.tar.xz";
 const BINUTILS_RECORD_PAYLOAD_ENCODING: &str = "tarball-archive-v1";
@@ -386,6 +389,37 @@ pub(crate) struct ConfigureProbeOutcome {
     pub stderr_path: PathBuf,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct BinutilsOutputReport {
+    pub artifact_id: String,
+    pub path: PathBuf,
+    pub bytes_len: u64,
+    pub digest_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct BinutilsInventoryReport {
+    pub format: &'static str,
+    pub configure_class_count: u32,
+    pub component_count: u32,
+    pub installed_tool_count: u32,
+    pub archive_count: u32,
+    pub sed_invocation_count: u32,
+    pub component_outputs: Vec<BinutilsOutputReport>,
+    pub installed_tools: Vec<BinutilsOutputReport>,
+    pub install_root: PathBuf,
+    pub protected_exec_enforced: bool,
+    pub fallback_events: Vec<String>,
+    pub non_claim: &'static str,
+}
+
+#[derive(Debug, Clone)]
+struct AuthenticatedBinutilsBuild {
+    component_outputs: Vec<PathBuf>,
+    install_root: PathBuf,
+    sed_invocation_count: u32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ConfigurePreprocessNegativeCase {
     label: &'static str,
@@ -505,7 +539,7 @@ const FLEX_GENERATED_FILES: [&str; FLEX_GENERATED_FILE_COUNT] = [
     "ld/ldlex.c",
 ];
 const BINUTILS_REQUIRED_TOOL_COUNT: usize = 11;
-const BINUTILS_REQUIRED_TOOLS: [(&str, &str); BINUTILS_REQUIRED_TOOL_COUNT] = [
+pub(crate) const BINUTILS_REQUIRED_TOOLS: [(&str, &str); BINUTILS_REQUIRED_TOOL_COUNT] = [
     ("as", "36bb17408403b4fd8283bf80f78410ae76eedb4e1565f0fc6db0f7a8c0a1eac4"),
     ("ld", "e2939e05b0e115efa3530f66d60b63ef06627a1ba0c0c1a70ce71fabcf4ca158"),
     ("ar", "c5836470e484f7b9137abc3bbdffbec7155a7700fdf094662b4253a576e76600"),
@@ -519,6 +553,16 @@ const BINUTILS_REQUIRED_TOOLS: [(&str, &str); BINUTILS_REQUIRED_TOOL_COUNT] = [
     ("strip", "d5505e1aa9e5b016a0b976b067aa0c7d096c84d0e875a41ff456be612d8ccc07"),
 ];
 const BINUTILS_COMPONENT_COUNT: usize = 8;
+pub(crate) const BINUTILS_COMPONENT_ARTIFACT_IDS: [&str; BINUTILS_COMPONENT_COUNT] = [
+    "binutils-libiberty-archive",
+    "binutils-zlib-archive",
+    "binutils-bfd-archive",
+    "binutils-opcodes-archive",
+    "binutils-size-build-output",
+    "binutils-as-build-output",
+    "binutils-gprof-build-output",
+    "binutils-ld-build-output",
+];
 const BINUTILS_COMPONENTS: [(&str, &str, bool, &str); BINUTILS_COMPONENT_COUNT] = [
     (
         "libiberty",
@@ -568,6 +612,9 @@ const BINUTILS_INSTALL_SED_INVOCATION_COUNTS: [u32; 2] = [4_891, 4_892];
 const BINUTILS_SMOKE_OUTPUT_KIBIBYTES_MAX: u64 = 64;
 const BINUTILS_SMOKE_OUTPUT_BYTES_MAX: u64 = BINUTILS_SMOKE_OUTPUT_KIBIBYTES_MAX * KIBIBYTE_BYTES;
 const BINUTILS_SMOKE_EXIT_STATUS: i32 = 42;
+pub(crate) const BINUTILS_BFD_CHEW_BLAKE3: &str = "8df489a85fdb18b2bcff0e78f6fd5462ac2bf24b0c0b425ce742049c8f16cecd";
+pub(crate) const BINUTILS_POSITIVE_SMOKE_BLAKE3: &str =
+    "4deb353a3e09f526f5c041a1614727deb0d8746fd72a23c521afbc16b6a5d974";
 const BINUTILS_INSPECTION_SMOKE_COUNT: usize = 7;
 const BINUTILS_POSITIVE_ASSEMBLY: &[u8] =
     b".global _start\n.text\n_start:\n  mov $60, %rax\n  mov $42, %rdi\n  syscall\n";
@@ -860,35 +907,73 @@ fn prepare_generated_source_context_with_mode(
     Ok((context, second_bfd))
 }
 
+pub(crate) fn derive_binutils_inventory(
+    request: BinutilsConfigureProbeRequest<'_>,
+    protected_exec_enforced: bool,
+) -> Result<BinutilsInventoryReport, StagexBinutilsError> {
+    let build = probe_authenticated_component_builds_with_mode(request, IdentityValidationMode::Enforce)?;
+    let component_outputs = component_output_reports(&build.component_outputs)?;
+    let installed_tools = installed_tool_output_reports(&build.install_root)?;
+    let report = BinutilsInventoryReport {
+        format: BINUTILS_INVENTORY_FORMAT,
+        configure_class_count: u32::try_from(CONFIGURE_CLASS_COUNT)
+            .map_err(|_| StagexBinutilsError::Materialization("configure class count exceeds u32".to_string()))?,
+        component_count: u32::try_from(component_outputs.len())
+            .map_err(|_| StagexBinutilsError::Materialization("component count exceeds u32".to_string()))?,
+        installed_tool_count: u32::try_from(installed_tools.len())
+            .map_err(|_| StagexBinutilsError::Materialization("installed tool count exceeds u32".to_string()))?,
+        archive_count: u32::try_from(BINUTILS_AR_EXPECTED_INVOCATION_COUNT)
+            .map_err(|_| StagexBinutilsError::Materialization("archive count exceeds u32".to_string()))?,
+        sed_invocation_count: build.sed_invocation_count,
+        component_outputs,
+        installed_tools,
+        install_root: build.install_root,
+        protected_exec_enforced,
+        fallback_events: Vec::new(),
+        non_claim: BINUTILS_INVENTORY_NON_CLAIM,
+    };
+    write_binutils_inventory_report(request.scratch_dir, &report)?;
+    assert_eq!(report.component_outputs.len(), BINUTILS_COMPONENT_COUNT);
+    assert_eq!(report.installed_tools.len(), BINUTILS_REQUIRED_TOOL_COUNT);
+    Ok(report)
+}
+
 fn probe_authenticated_component_builds(
     request: BinutilsConfigureProbeRequest<'_>,
 ) -> Result<Vec<PathBuf>, StagexBinutilsError> {
-    probe_authenticated_component_builds_with_mode(request, IdentityValidationMode::Enforce)
+    let build = probe_authenticated_component_builds_with_mode(request, IdentityValidationMode::Enforce)?;
+    Ok(build.component_outputs)
 }
 
 fn probe_authenticated_component_builds_observing_identities(
     request: BinutilsConfigureProbeRequest<'_>,
 ) -> Result<Vec<PathBuf>, StagexBinutilsError> {
-    probe_authenticated_component_builds_with_mode(request, IdentityValidationMode::Observe)
+    let build = probe_authenticated_component_builds_with_mode(request, IdentityValidationMode::Observe)?;
+    Ok(build.component_outputs)
 }
 
 fn probe_authenticated_component_builds_with_mode(
     request: BinutilsConfigureProbeRequest<'_>,
     identity_validation_mode: IdentityValidationMode,
-) -> Result<Vec<PathBuf>, StagexBinutilsError> {
+) -> Result<AuthenticatedBinutilsBuild, StagexBinutilsError> {
     let (context, second_bfd) = prepare_generated_source_context_with_mode(&request, identity_validation_mode)?;
-    let outputs = run_component_builds(&request, &context)?;
+    let component_outputs = run_component_builds(&request, &context)?;
     validate_sed_bridge_total_count(&context.sed_bridge, &BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS)?;
     let install_root = run_component_installs(&request, &context)?;
     run_installed_tool_smokes(&request, &install_root)?;
     validate_sed_bridge_total_count(&context.sed_bridge, &BINUTILS_INSTALL_SED_INVOCATION_COUNTS)?;
+    let sed_invocation_count = read_sed_bridge_total_count(&context.sed_bridge)?;
     finalize_archive_runner_audit(&context.archive_runner)?;
     finalize_sed_bridge_audit(&context.sed_bridge)?;
     validate_ylwrap_sed_audit(&context.sed_bridge)?;
     assert_eq!(second_bfd.exit_code, 0);
-    assert_eq!(outputs.len(), BINUTILS_COMPONENT_COUNT);
+    assert_eq!(component_outputs.len(), BINUTILS_COMPONENT_COUNT);
     assert!(install_root.join("bin/ld").is_file());
-    Ok(outputs)
+    Ok(AuthenticatedBinutilsBuild {
+        component_outputs,
+        install_root,
+        sed_invocation_count,
+    })
 }
 
 fn probe_authenticated_configures(
@@ -1031,6 +1116,7 @@ fn run_initial_generated_source_targets(
     if chew_mode & EXECUTABLE_MODE_BITS == 0 {
         return Err(StagexBinutilsError::Materialization("BFD chew generator is not executable".to_string()));
     }
+    validate_file_digest(&chew, BINUTILS_BFD_CHEW_BLAKE3, "BFD chew generator")?;
     run_make_generation_targets(request, context, &environment, "intl", &["plural.c"], "make-intl-plural")?;
     validate_generated_file(&context.source.join("intl/plural.c"), BISON_OUTPUT_MARKER, "intl plural parser")?;
     assert!(chew.is_file());
@@ -1334,6 +1420,74 @@ fn validate_component_output_facts_with_mode(
     Ok(())
 }
 
+fn component_output_reports(outputs: &[PathBuf]) -> Result<Vec<BinutilsOutputReport>, StagexBinutilsError> {
+    if outputs.len() != BINUTILS_COMPONENT_COUNT {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "binutils component report count mismatch: expected {BINUTILS_COMPONENT_COUNT}, observed {}",
+            outputs.len()
+        )));
+    }
+    let reports = outputs
+        .iter()
+        .zip(BINUTILS_COMPONENT_ARTIFACT_IDS)
+        .zip(BINUTILS_COMPONENTS)
+        .map(|((path, artifact_id), (_, _, _, expected_digest))| output_report(artifact_id, path, expected_digest))
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(reports.len(), BINUTILS_COMPONENT_COUNT);
+    assert!(reports.iter().all(|report| report.bytes_len > 0));
+    Ok(reports)
+}
+
+fn installed_tool_output_reports(install_root: &Path) -> Result<Vec<BinutilsOutputReport>, StagexBinutilsError> {
+    let reports = BINUTILS_REQUIRED_TOOLS
+        .iter()
+        .map(|(tool, expected_digest)| {
+            output_report(&format!("binutils-installed-{tool}"), &install_root.join("bin").join(tool), expected_digest)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(reports.len(), BINUTILS_REQUIRED_TOOL_COUNT);
+    assert!(reports.iter().all(|report| report.path.starts_with(install_root)));
+    Ok(reports)
+}
+
+fn output_report(
+    artifact_id: &str,
+    path: &Path,
+    expected_digest: &str,
+) -> Result<BinutilsOutputReport, StagexBinutilsError> {
+    let bytes = crate::stagex_mes_lib::read_bounded_file(path, CONFIGURE_OUTPUT_BYTES_MAX, artifact_id)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    let digest_blake3 = blake3::hash(&bytes).to_hex().to_string();
+    if digest_blake3 != expected_digest {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "binutils report {artifact_id} digest mismatch: expected {expected_digest}, observed {digest_blake3}"
+        )));
+    }
+    let bytes_len = u64::try_from(bytes.len())
+        .map_err(|_| StagexBinutilsError::Materialization(format!("binutils report {artifact_id} size exceeds u64")))?;
+    assert!(bytes_len > 0);
+    assert_eq!(digest_blake3.len(), BLAKE3_HEX_CHAR_COUNT);
+    Ok(BinutilsOutputReport {
+        artifact_id: artifact_id.to_string(),
+        path: path.to_path_buf(),
+        bytes_len,
+        digest_blake3,
+    })
+}
+
+fn write_binutils_inventory_report(
+    scratch_dir: &Path,
+    report: &BinutilsInventoryReport,
+) -> Result<(), StagexBinutilsError> {
+    let bytes = serde_json::to_vec_pretty(report)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("serializing binutils inventory: {error}")))?;
+    crate::stagex_mes_lib::write_create_new(&scratch_dir.join("binutils-inventory.json"), &bytes)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    assert!(!bytes.is_empty());
+    assert_eq!(report.format, BINUTILS_INVENTORY_FORMAT);
+    Ok(())
+}
+
 fn run_component_installs(
     request: &BinutilsConfigureProbeRequest<'_>,
     context: &ConfigureProbeContext,
@@ -1563,6 +1717,11 @@ fn run_link_and_execution_smoke(
     require_binutils_smoke_status("positive link", link_status, 0)?;
     fs::set_permissions(smoke_root.join("positive"), fs::Permissions::from_mode(EXECUTABLE_FILE_MODE))
         .map_err(|error| StagexBinutilsError::Materialization(format!("setting smoke executable mode: {error}")))?;
+    validate_file_digest(
+        &smoke_root.join("positive"),
+        BINUTILS_POSITIVE_SMOKE_BLAKE3,
+        "binutils positive smoke executable",
+    )?;
     let execute_status =
         run_binutils_smoke_process(request, smoke_root, &smoke_root.join("positive"), &[], "execute-positive")?;
     require_binutils_smoke_status("positive execution", execute_status, BINUTILS_SMOKE_EXIT_STATUS)?;
@@ -3659,13 +3818,20 @@ fn run_negative_sed_bridge_smoke(
 }
 
 fn validate_sed_bridge_total_count(bridge: &SedBridgePaths, expected: &[u32]) -> Result<(), StagexBinutilsError> {
+    let observed = read_sed_bridge_total_count(bridge)?;
+    validate_sed_bridge_count_value(observed, expected)
+}
+
+fn read_sed_bridge_total_count(bridge: &SedBridgePaths) -> Result<u32, StagexBinutilsError> {
     let count_text = fs::read_to_string(bridge.spool_root.join("invocation.count"))
         .map_err(|error| StagexBinutilsError::Materialization(format!("reading final sed bridge count: {error}")))?;
     let observed = count_text
         .trim()
         .parse::<u32>()
         .map_err(|error| StagexBinutilsError::Materialization(format!("parsing final sed bridge count: {error}")))?;
-    validate_sed_bridge_count_value(observed, expected)
+    assert!(observed > 0);
+    assert!(observed <= SED_BRIDGE_INVOCATION_COUNT_MAX);
+    Ok(observed)
 }
 
 fn validate_sed_bridge_count_value(observed: u32, expected: &[u32]) -> Result<(), StagexBinutilsError> {
