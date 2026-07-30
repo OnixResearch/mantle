@@ -299,7 +299,9 @@ predecessor.
 StageX adds execution authority. Its seccomp supervisor intercepts `execve` and
 `execveat` before a child starts. The policy binds an absolute path, a BLAKE3
 executable identity, an allowed stage, and an allowed child relationship.
-Undeclared execution and identity mismatches fail closed.
+Undeclared execution and identity mismatches fail closed. A complete stage report
+requires each declared path and digest in the intercepted audit. This proves an
+execution decision, not successful process behavior.
 
 A complete protected transition can publish one bounded intermediate provider:
 

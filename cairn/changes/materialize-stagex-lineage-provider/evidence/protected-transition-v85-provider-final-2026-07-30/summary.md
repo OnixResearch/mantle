@@ -68,7 +68,7 @@ error: invalid StageX provider input: provider output must be an absent absolute
 
 An adversarial receipt review after publication rejected the weaker declared-set/raw-audit split. The strict check found 24 declared binutils authorization IDs whose exact path-plus-digest identities never appeared in the raw audit. They were seven unused coreutils tools repeated across three binutils stages and three installed binutils tools that the smoke checked by identity but did not execute. `authorization-binding-gap.json` preserves the exact set.
 
-The plan now omits those unused executable authorizations, and complete stage reports require every remaining declared path-plus-digest identity to appear in the protected audit. The v85 transition and publication remain diagnostic implementation evidence. They cannot serve as the final provider authority after this hardening; a post-checkpoint transition must replace the checked receipt.
+The plan now omits those unused executable authorizations, and complete stage reports require every remaining declared path-plus-digest identity to appear in the protected audit. The v85 transition and publication remain diagnostic implementation evidence. The committed-source v86 transition replaced this checked receipt as the final provider authority.
 
 ## Evidence limitation
 

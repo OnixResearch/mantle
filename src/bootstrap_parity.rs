@@ -6060,17 +6060,17 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     }
 
     #[test]
-    fn stagex_lineage_real_scaffold_receipt_remains_blocked() {
+    fn stagex_lineage_real_receipt_reports_evidence_backed_completion() {
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let report = collect_bootstrap_parity_report(project_root);
         let row = report.rows.iter().find(|row| row.id == "seed-full.stagex-lineage").unwrap();
 
-        assert_eq!(row.status, StageStatus::Blocked, "{}", row.notes);
-        assert_eq!(row.provider_kind, ProviderKind::Unknown);
-        assert!(row.status.blocks_parity());
-        assert!(row.notes.contains("evidence check failed"));
+        assert_eq!(row.status, StageStatus::Complete, "{}", row.notes);
+        assert_eq!(row.provider_kind, ProviderKind::StagexLineage);
+        assert!(!row.status.blocks_parity());
+        assert!(!row.notes.contains("evidence check failed"));
         let stagex = report.axes.iter().find(|axis| axis.axis == ParityAxis::Stagex).unwrap();
-        assert!(stagex.blocking_rows.contains(&"seed-full.stagex-lineage".to_string()));
+        assert!(!stagex.blocking_rows.contains(&"seed-full.stagex-lineage".to_string()));
         assert!(!stagex.blocking_rows.is_empty());
     }
 
