@@ -387,6 +387,7 @@ mantle source bundle bootstrap-profile \
   --mode source-built-fixed-point \
   --provider-archive bootstrap/seeds/AMD64/hex0-seed \
   --provider-manifest bootstrap/stagex-transition-lineage.json \
+  --bootstrap-source /media/handoff/stagex-native-source-closure.json \
   --mantle-source . \
   --vendor-deps ./vendor-deps \
   --proof-input /media/handoff/rust-source-archives \
@@ -397,7 +398,8 @@ mantle source bundle bootstrap-profile \
 For this mode, `--provider-archive` carries the audited hex0 seed. The
 `--provider-manifest` flag carries the validated StageX lineage manifest. The
 names remain CLI compatibility surfaces; neither input is a provider output.
-The included bundle must contain materialized native fetch records. Each
+The `--bootstrap-source` record binds the original native source manifest.
+The included bundle supplies its materialized native fetch records. Each
 `--proof-input` carries authenticated Rust source archives.
 
 Hydration publishes only `vendor-deps/`. It imports and pins the seed, lineage,

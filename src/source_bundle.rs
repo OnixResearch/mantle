@@ -333,7 +333,7 @@ impl BootstrapSourceBundleMode {
     }
 
     fn requires_bootstrap_sources(self) -> bool {
-        !matches!(self, Self::FreshCloneInputs | Self::FreshCloneFixedPoint | Self::SourceBuiltFixedPoint)
+        !matches!(self, Self::FreshCloneInputs | Self::FreshCloneFixedPoint)
     }
 
     fn requires_supplemental_fetch_closure(self) -> bool {
@@ -4748,12 +4748,16 @@ mod tests {
         let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
         let planned =
             plan_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap();
+        let supplemental = materialized_record_from_payload(&planned.records[0], &payload, false);
+        let native_source_manifest = assemble_source_bundle(vec![supplemental.clone()], "/mantle/store").unwrap();
+        let native_source_manifest_path = temp.join("native-source-closure.json");
+        write_source_bundle(&native_source_manifest_path, &native_source_manifest).unwrap();
         input.mode = BootstrapSourceBundleMode::SourceBuiltFixedPoint;
         input.provider_archive = repo.join("bootstrap/seeds/AMD64/hex0-seed");
         input.provider_manifest = repo.join("bootstrap/stagex-transition-lineage.json");
-        input.bootstrap_sources.clear();
+        input.bootstrap_sources = vec![native_source_manifest_path];
         input.toolchain_source_root = None;
-        input.supplemental_records = vec![materialized_record_from_payload(&planned.records[0], &payload, false)];
+        input.supplemental_records = vec![supplemental];
         assert!(input.mantle_source.is_some());
         assert!(!input.proof_inputs.is_empty());
         input
