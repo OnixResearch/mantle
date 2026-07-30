@@ -2099,6 +2099,87 @@
       "id": "flex-negative-observation",
       "name": "GNU Flex malformed-scanner diagnostic",
       "producing_tool_id": "flex-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "725e682bc5f91728a92f72a81332dda87537ff0ec27b20134b9644b5f2cd43a7"
+      },
+      "id": "bash-full-mkbuiltins",
+      "name": "protected Bash 2.05b builtin generator",
+      "producing_tool_id": "bash-full-generator-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "1797cb39c0507d6fbb40afbbd58299ffd9a0eb7d0e983bbe64742499a3fdc9c9"
+      },
+      "id": "bash-full-generated-builtins",
+      "name": "generated Bash 2.05b builtin source tree",
+      "producing_tool_id": "bash-full-generator-run-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "dc3fd01b5f34af5e2f3031c10cda243f43b3c9ce45a0fd2181693727fb629a2e"
+      },
+      "id": "bash-full-configured-source",
+      "name": "normalized full Bash 2.05b configured source",
+      "producing_tool_id": "bash-full-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3f166d5bb28aee29982ec38ba07f8b1dca3c488390737a0e78d35950876e4d4e"
+      },
+      "id": "bash-2.05b-full",
+      "name": "source-built full Bash 2.05b",
+      "producing_tool_id": "bash-full-build-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "1cb581932f76e9f3870af0a75060141d692acd438ef5663ebb182798642fa20e"
+      },
+      "id": "bash-full-version-observation",
+      "name": "full Bash version observation",
+      "producing_tool_id": "bash-full-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "6687d0952325979e333ab55180b9aea8835ff490e46b7652ea5ec204c94b9c2a"
+      },
+      "id": "bash-full-functional-observation",
+      "name": "full Bash control-flow and builtin observation",
+      "producing_tool_id": "bash-full-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "f1184a47cefae3e975232299de76d9a96ea5a9354c87f19f77413895583d8da3"
+      },
+      "id": "bash-full-negative-observation",
+      "name": "full Bash malformed-input diagnostic",
+      "producing_tool_id": "bash-full-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "deb003aad7485e87e9a7ec33306fe4e89ca6774d39eeea26371b78d21cd8c292"
+      },
+      "id": "bash-full-external-child-observation",
+      "name": "full Bash external GNU Make child observation",
+      "producing_tool_id": "bash-full-smoke-exec"
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "97ce45a8f015be46bbbd66c2abd778940a5aed257069c4e9dfd432b751c968d8"
+      },
+      "id": "bash-full-make-shell-observation",
+      "name": "GNU Make recipe through full Bash observation",
+      "producing_tool_id": "bash-full-smoke-exec"
     }
   ],
   "patches": [
@@ -5323,6 +5404,81 @@
         "flex-version-observation",
         "flex-positive-scanner-source",
         "flex-negative-observation"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "725e682bc5f91728a92f72a81332dda87537ff0ec27b20134b9644b5f2cd43a7"
+      },
+      "id": "bash-full-generator-build-exec",
+      "input_artifact_ids": [
+        "bash-configured-source",
+        "tcc-musl-v2",
+        "musl-native-libc",
+        "musl-native-headers"
+      ],
+      "name": "TinyCC musl-v2 materializing the Bash builtin generator",
+      "output_artifact_ids": [
+        "bash-full-mkbuiltins"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "1797cb39c0507d6fbb40afbbd58299ffd9a0eb7d0e983bbe64742499a3fdc9c9"
+      },
+      "id": "bash-full-generator-run-exec",
+      "input_artifact_ids": [
+        "bash-configured-source",
+        "bash-full-mkbuiltins"
+      ],
+      "name": "authenticated Bash builtin generation",
+      "output_artifact_ids": [
+        "bash-full-generated-builtins"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "dc3fd01b5f34af5e2f3031c10cda243f43b3c9ce45a0fd2181693727fb629a2e"
+      },
+      "id": "bash-full-build-exec",
+      "input_artifact_ids": [
+        "bash-configured-source",
+        "bash-full-generated-builtins",
+        "tcc-musl-v2",
+        "musl-native-libc",
+        "musl-native-crt1",
+        "musl-native-headers"
+      ],
+      "name": "TinyCC musl-v2 materializing full Bash against native musl",
+      "output_artifact_ids": [
+        "bash-full-configured-source",
+        "bash-2.05b-full"
+      ],
+      "source_artifact_ids": []
+    },
+    {
+      "digest": {
+        "algorithm": "blake3",
+        "hex_value": "3f166d5bb28aee29982ec38ba07f8b1dca3c488390737a0e78d35950876e4d4e"
+      },
+      "id": "bash-full-smoke-exec",
+      "input_artifact_ids": [
+        "bash-2.05b-full",
+        "make-3.82"
+      ],
+      "name": "full Bash control-flow, builtin, external-child, and GNU Make shell checks",
+      "output_artifact_ids": [
+        "bash-full-version-observation",
+        "bash-full-functional-observation",
+        "bash-full-negative-observation",
+        "bash-full-external-child-observation",
+        "bash-full-make-shell-observation"
       ],
       "source_artifact_ids": []
     }

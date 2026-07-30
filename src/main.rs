@@ -142,6 +142,8 @@ mod source_toolchain_closure;
 #[allow(dead_code)]
 mod stagex_bash;
 #[allow(dead_code)]
+mod stagex_bash_full;
+#[allow(dead_code)]
 mod stagex_bison;
 #[allow(dead_code)]
 mod stagex_bzip2;

@@ -120,7 +120,7 @@ const BASH_HELPERS: [BashHelperSpec; BASH_HELPER_COUNT] = [
     },
 ];
 
-const CORE_SOURCES: [&str; BASH_CORE_COMPILE_COUNT as usize] = [
+pub(crate) const CORE_SOURCES: [&str; BASH_CORE_COMPILE_COUNT as usize] = [
     "shell",
     "eval",
     "y.tab",
@@ -164,9 +164,9 @@ const CORE_SOURCES: [&str; BASH_CORE_COMPILE_COUNT as usize] = [
     "xmalloc",
     "siglist",
 ];
-const GLOB_SOURCES: [&str; BASH_GLOB_COMPILE_COUNT as usize] =
+pub(crate) const GLOB_SOURCES: [&str; BASH_GLOB_COMPILE_COUNT as usize] =
     ["lib/glob/glob", "lib/glob/strmatch", "lib/glob/smatch"];
-const SH_LIBRARY_SOURCES: [&str; BASH_SH_LIBRARY_COMPILE_COUNT as usize] = [
+pub(crate) const SH_LIBRARY_SOURCES: [&str; BASH_SH_LIBRARY_COMPILE_COUNT as usize] = [
     "lib/sh/clktck",
     "lib/sh/getcwd",
     "lib/sh/getenv",

@@ -43,3 +43,4 @@ compatibility surface, crate name, or historical decision.
 | [0034](0034-keep-aeneasverif-proof-and-translation-authority-in-octet.md) | Keep AeneasVerif proof and translation authority in Octet | Accepted |
 | [0035](0035-cache-rust-units-through-castore-action-results.md) | Cache Rust units through castore action results | Proposed |
 | [0036](0036-run-stagex-grep-bridge-with-a-native-subset-runner.md) | Run the StageX grep bridge with a native subset runner | Accepted |
+| [0037](0037-add-a-later-full-shell-for-protected-stagex-configure.md) | Add a later full shell for protected StageX configure | Accepted |
