@@ -709,6 +709,8 @@ pub(crate) fn materialize_protected_transition(
             digest_hex: crate::stagex_bash_full::BASH_FULL_BINARY_BLAKE3.to_string(),
         });
         planned.extend(planned_binutils_executables(&request.scratch_dir.join("binutils-stage/runtime")));
+        let binutils_predecessors = additional_planned_binutils_predecessor_executables(&request.scratch_dir, &planned);
+        planned.extend(binutils_predecessors);
         planned
     } else {
         Vec::new()
@@ -1570,11 +1572,27 @@ pub(crate) fn materialize_protected_transition(
         _ => unreachable!("full Bash requires authenticated source closure and protected GNU Flex completion"),
     };
 
+    crate::protected_exec_seccomp::reap_adopted_exec_descendants()
+        .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+    let binutils_event_start = supervisor
+        .wait_for_audit_quiescence()
+        .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
     let (binutils_sources, binutils_runtime) =
         materialize_binutils_stage(&request, &manifest_authority, &supervisor, bash_full_runtime.is_some())?;
-
-    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+    crate::protected_exec_seccomp::reap_adopted_exec_descendants()
+        .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+    let quiescent_event_count = supervisor
+        .wait_for_audit_quiescence()
+        .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
     let protected_exec_events = supervisor.audit_events();
+    let binutils_event_count = binutils_runtime.as_ref().map(|_| {
+        quiescent_event_count
+            .checked_sub(binutils_event_start)
+            .expect("binutils audit end follows its start")
+    });
+    if protected_exec_events.len() != quiescent_event_count {
+        return Err(StagexTransitionError::Audit("protected exec audit changed after quiescence".to_string()));
+    }
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
     validate_transition_audit(
         &staged,
@@ -1607,6 +1625,8 @@ pub(crate) fn materialize_protected_transition(
             bison_runtime: bison_runtime.as_ref(),
             flex_runtime: flex_runtime.as_ref(),
             bash_full_runtime: bash_full_runtime.as_ref(),
+            binutils_runtime: binutils_runtime.as_ref(),
+            binutils_event_count,
         },
         &protected_exec_events,
     )?;
@@ -3976,6 +3996,14 @@ fn planned_binutils_executables(binutils_root: &Path) -> Vec<PlannedExecutable> 
             digest_hex: crate::stagex_binutils::BINUTILS_POSITIVE_SMOKE_BLAKE3.to_string(),
         },
     ];
+    planned.extend(crate::stagex_binutils::BINUTILS_GENERATED_EXECUTABLES.iter().map(|(label, relative, digest)| {
+        PlannedExecutable {
+            authorization_id: format!("exec:binutils-generated:{label}"),
+            source_stage_id: BINUTILS_GENERATOR_BUILD_STAGE_ID.to_string(),
+            path: binutils_root.join(relative),
+            digest_hex: (*digest).to_string(),
+        }
+    }));
     let install_bin = binutils_root.join("install-destdir/mantle/stagex/binutils-probe-output/bin");
     planned.extend(crate::stagex_binutils::BINUTILS_REQUIRED_TOOLS.iter().map(|(tool, digest)| PlannedExecutable {
         authorization_id: format!("exec:binutils-smoke:{tool}"),
@@ -3985,10 +4013,37 @@ fn planned_binutils_executables(binutils_root: &Path) -> Vec<PlannedExecutable> 
     }));
     assert_eq!(
         planned.len(),
-        crate::stagex_binutils::BINUTILS_REQUIRED_TOOLS.len() + FIXED_PLANNED_EXECUTABLE_COUNT
+        crate::stagex_binutils::BINUTILS_REQUIRED_TOOLS.len()
+            + crate::stagex_binutils::BINUTILS_GENERATED_EXECUTABLE_COUNT
+            + FIXED_PLANNED_EXECUTABLE_COUNT
     );
     assert!(planned.iter().all(|entry| entry.path.is_absolute()));
     planned
+}
+
+fn additional_planned_binutils_predecessor_executables(
+    transition_root: &Path,
+    existing: &[PlannedExecutable],
+) -> Vec<PlannedExecutable> {
+    let paths = BinutilsStagePaths::from_transition_root(transition_root);
+    let additional = binutils_component_authorizations(&paths, "binutils-policy")
+        .into_iter()
+        .filter(|authorization| {
+            !existing.iter().any(|planned| {
+                planned.path == Path::new(&authorization.absolute_path)
+                    && planned.digest_hex == authorization.digest_blake3
+            })
+        })
+        .map(|authorization| PlannedExecutable {
+            authorization_id: authorization.id,
+            source_stage_id: authorization.source_stage_id,
+            path: PathBuf::from(authorization.absolute_path),
+            digest_hex: authorization.digest_blake3,
+        })
+        .collect::<Vec<_>>();
+    assert!(!additional.is_empty());
+    assert!(additional.iter().all(|entry| entry.path.is_absolute()));
+    additional
 }
 
 fn additional_mes_stage0_planned_executables(stage0_root: &Path) -> Vec<PlannedExecutable> {
@@ -4744,6 +4799,7 @@ fn binutils_component_stage(
         crate::stagex_binutils::BINUTILS_BFD_CHEW_BLAKE3,
     ));
     authorizations.extend(binutils_helper_executable_authorizations(paths, BINUTILS_COMPONENT_BUILD_STAGE_ID));
+    authorizations.extend(binutils_generated_executable_authorizations(paths, BINUTILS_COMPONENT_BUILD_STAGE_ID));
     let generator_inputs = generator_outputs.iter().map(String::as_str).collect::<Vec<_>>();
     let stage = mes_stage_plan(
         BINUTILS_COMPONENT_BUILD_STAGE_ID,
@@ -4816,6 +4872,32 @@ fn binutils_install_smoke_stage(
     assert_eq!(stage.id, BINUTILS_INSTALL_SMOKE_STAGE_ID);
     assert!(!stage.executable_authorizations.is_empty());
     stage
+}
+
+fn binutils_generated_executable_authorizations(
+    paths: &BinutilsStagePaths,
+    consumer_stage_id: &str,
+) -> Vec<StagexExecutableAuthorization> {
+    let authorizations = crate::stagex_binutils::BINUTILS_GENERATED_EXECUTABLES
+        .iter()
+        .map(|(label, relative, digest)| {
+            binutils_generated_authorization(
+                paths,
+                consumer_stage_id,
+                BINUTILS_GENERATOR_BUILD_STAGE_ID,
+                label,
+                relative,
+                digest,
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(authorizations.len(), crate::stagex_binutils::BINUTILS_GENERATED_EXECUTABLE_COUNT);
+    assert!(
+        authorizations
+            .iter()
+            .all(|authorization| authorization.source_stage_id == BINUTILS_GENERATOR_BUILD_STAGE_ID)
+    );
+    authorizations
 }
 
 fn binutils_component_authorizations(
@@ -5308,6 +5390,8 @@ struct TransitionAuditReports<'a> {
     bison_runtime: Option<&'a crate::stagex_bison::BisonInventoryReport>,
     flex_runtime: Option<&'a crate::stagex_flex::FlexInventoryReport>,
     bash_full_runtime: Option<&'a crate::stagex_bash_full::BashFullInventoryReport>,
+    binutils_runtime: Option<&'a crate::stagex_binutils::BinutilsInventoryReport>,
+    binutils_event_count: Option<usize>,
 }
 
 fn validate_transition_audit(
@@ -5344,6 +5428,8 @@ fn validate_transition_audit(
         bison_runtime,
         flex_runtime,
         bash_full_runtime,
+        binutils_runtime,
+        binutils_event_count,
     } = reports;
     let expected = transition_expected_audit_events(staged);
     if events.len() < EXPECTED_AUDIT_EVENT_COUNT {
@@ -5383,6 +5469,8 @@ fn validate_transition_audit(
             && bison_runtime.is_none()
             && flex_runtime.is_none()
             && bash_full_runtime.is_none()
+            && binutils_runtime.is_none()
+            && binutils_event_count.is_none()
             && events.len() == EXPECTED_AUDIT_EVENT_COUNT
         {
             return Ok(());
@@ -5407,7 +5495,9 @@ fn validate_transition_audit(
     }
     validate_stage0_audit(staged, &stage0.mini, &stage0_events[..mini_event_count])?;
     let after_mini = &stage0_events[mini_event_count..];
-    let (before_bash_full, bash_full_events) = split_bash_full_audit_suffix(bash_full_runtime, after_mini)?;
+    let (before_binutils, binutils_events) =
+        split_binutils_audit_suffix(binutils_runtime, binutils_event_count, after_mini)?;
+    let (before_bash_full, bash_full_events) = split_bash_full_audit_suffix(bash_full_runtime, before_binutils)?;
     let (before_flex, flex_events) = split_flex_audit_suffix(flex_runtime, before_bash_full)?;
     let (before_bison, bison_events) = split_bison_audit_suffix(bison_runtime, before_flex)?;
     let (before_gawk, gawk_events) = split_gawk_audit_suffix(gawk_runtime, before_bison)?;
@@ -5695,14 +5785,447 @@ fn validate_transition_audit(
     }
     match (bash_full_runtime, tcc_musl_v2_runtime, musl_native_runtime, make_runtime, flex_runtime) {
         (Some(bash_full), Some(v2), Some(_), Some(make), Some(_)) => {
-            validate_bash_full_audit(v2, make, bash_full, bash_full_events)
+            validate_bash_full_audit(v2, make, bash_full, bash_full_events)?;
         }
-        (None, _, _, _, _) if bash_full_events.is_empty() => Ok(()),
+        (None, _, _, _, _) if bash_full_events.is_empty() => {}
+        _ => {
+            return Err(StagexTransitionError::Audit(
+                "full Bash report or events exist without TinyCC musl-v2, native musl, protected GNU Make, and GNU Flex completion"
+                    .to_string(),
+            ));
+        }
+    }
+    match (binutils_runtime, bash_full_runtime) {
+        (Some(binutils), Some(_)) => validate_binutils_audit(binutils, binutils_events),
+        (None, _) if binutils_events.is_empty() => Ok(()),
         _ => Err(StagexTransitionError::Audit(
-            "full Bash report or events exist without TinyCC musl-v2, native musl, protected GNU Make, and GNU Flex completion"
-                .to_string(),
+            "GNU binutils report or events exist without protected full Bash completion".to_string(),
         )),
     }
+}
+
+fn split_binutils_audit_suffix<'a>(
+    report: Option<&crate::stagex_binutils::BinutilsInventoryReport>,
+    observed_event_count: Option<usize>,
+    events: &'a [ProtectedSeccompAuditEvent],
+) -> Result<(&'a [ProtectedSeccompAuditEvent], &'a [ProtectedSeccompAuditEvent]), StagexTransitionError> {
+    let Some(report) = report else {
+        if observed_event_count.is_some() {
+            return Err(StagexTransitionError::Audit(
+                "GNU binutils event count exists without a runtime report".to_string(),
+            ));
+        }
+        return Ok((events, &[]));
+    };
+    let event_count = observed_event_count
+        .ok_or_else(|| StagexTransitionError::Audit("GNU binutils runtime report lacks an event count".to_string()))?;
+    if !binutils_event_count_within_bounds(report.protected_exec_event_count_bounds, event_count) {
+        return Err(StagexTransitionError::Audit(format!(
+            "GNU binutils event count is outside the accepted closure: observed {event_count}"
+        )));
+    }
+    let start = events.len().checked_sub(event_count).ok_or_else(|| {
+        StagexTransitionError::Audit(format!(
+            "expected {event_count} trailing GNU binutils events, observed {}",
+            events.len()
+        ))
+    })?;
+    assert_eq!(events.len().saturating_sub(start), event_count);
+    assert!(event_count > 0);
+    Ok((&events[..start], &events[start..]))
+}
+
+fn binutils_event_count_within_bounds(count_bounds: [u32; 2], observed_count: usize) -> bool {
+    let bounds = count_bounds.map(|count| usize::try_from(count).expect("bounded binutils event count fits usize"));
+    let result = observed_count >= bounds[0] && observed_count <= bounds[1];
+    assert_eq!(bounds.len(), count_bounds.len());
+    assert!(bounds[0] > 0 && bounds[0] <= bounds[1]);
+    result
+}
+
+fn validate_binutils_audit(
+    report: &crate::stagex_binutils::BinutilsInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    const EXPECTED_CONFIGURE_CLASS_COUNT: u32 = 9;
+    const EXPECTED_COMPONENT_COUNT: u32 = 8;
+    const EXPECTED_INSTALLED_TOOL_COUNT: u32 = 11;
+    const EXPECTED_ARCHIVE_COUNT: u32 = 4;
+    const EXPECTED_SED_INVOCATION_COUNTS: [u32; 2] = [4_891, 4_892];
+    let reported_event_count_bounds = report
+        .protected_exec_event_count_bounds
+        .map(|count| usize::try_from(count).expect("bounded binutils event count fits usize"));
+    let sed_derived_event_count_bounds = binutils_event_count_bounds_from_sed_invocations(report.sed_invocation_count)?;
+    if reported_event_count_bounds != crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS
+        || !binutils_event_count_within_bounds(report.protected_exec_event_count_bounds, events.len())
+        || events.len() < sed_derived_event_count_bounds[0]
+        || events.len() > sed_derived_event_count_bounds[1]
+    {
+        return Err(StagexTransitionError::Audit(format!(
+            "GNU binutils event count is not closed: bounds {:?}, sed bounds {:?}, observed {}",
+            crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS,
+            sed_derived_event_count_bounds,
+            events.len()
+        )));
+    }
+    if report.configure_class_count != EXPECTED_CONFIGURE_CLASS_COUNT
+        || report.component_count != EXPECTED_COMPONENT_COUNT
+        || report.installed_tool_count != EXPECTED_INSTALLED_TOOL_COUNT
+        || report.archive_count != EXPECTED_ARCHIVE_COUNT
+        || !EXPECTED_SED_INVOCATION_COUNTS.contains(&report.sed_invocation_count)
+    {
+        return Err(StagexTransitionError::Audit("GNU binutils report counts were substituted".to_string()));
+    }
+    if !report.protected_exec_enforced || !report.fallback_events.is_empty() {
+        return Err(StagexTransitionError::Audit(
+            "GNU binutils report lacks protected execution or contains fallback events".to_string(),
+        ));
+    }
+    validate_binutils_event_authorities(report, events)?;
+    validate_binutils_critical_event_counts(report, events)?;
+    validate_binutils_event_order(report, events)?;
+    assert!(binutils_event_count_within_bounds(report.protected_exec_event_count_bounds, events.len()));
+    assert!(events.iter().all(|event| event.policy_decision == "allowed"));
+    Ok(())
+}
+
+fn validate_binutils_event_authorities(
+    report: &crate::stagex_binutils::BinutilsInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    let expected = binutils_expected_exec_identities(report)?;
+    for event in events {
+        let identity = (event.resolved_host_path.clone(), event.digest_hex.clone());
+        let valid_metadata = event.policy_decision == "allowed"
+            && event.phase == "protected"
+            && event.inventory_entry_id.as_deref().is_some_and(|id| id.starts_with("planned:"));
+        if !valid_metadata || !expected.contains(&identity) {
+            return Err(StagexTransitionError::Audit(format!(
+                "unexpected GNU binutils protected exec identity: {} {}",
+                event.resolved_host_path.display(),
+                event.digest_hex
+            )));
+        }
+    }
+    assert!(!expected.is_empty());
+    assert!(events.iter().all(|event| event.resolved_host_path.is_absolute()));
+    Ok(())
+}
+
+fn binutils_expected_exec_identities(
+    report: &crate::stagex_binutils::BinutilsInventoryReport,
+) -> Result<BTreeSet<(PathBuf, String)>, StagexTransitionError> {
+    let binutils_stage = report
+        .runtime_root
+        .parent()
+        .ok_or_else(|| StagexTransitionError::Audit("GNU binutils runtime root has no stage parent".to_string()))?;
+    let transition_root = binutils_stage
+        .parent()
+        .ok_or_else(|| StagexTransitionError::Audit("GNU binutils stage has no transition parent".to_string()))?;
+    if binutils_stage.file_name().and_then(|name| name.to_str()) != Some("binutils-stage") {
+        return Err(StagexTransitionError::Audit("GNU binutils runtime root is outside binutils-stage".to_string()));
+    }
+    let paths = BinutilsStagePaths::from_transition_root(transition_root);
+    let mut expected = planned_binutils_executables(&report.runtime_root)
+        .into_iter()
+        .map(|planned| (planned.path, planned.digest_hex))
+        .collect::<BTreeSet<_>>();
+    expected.extend(
+        binutils_component_authorizations(&paths, "binutils-audit")
+            .into_iter()
+            .map(|authorization| (PathBuf::from(authorization.absolute_path), authorization.digest_blake3)),
+    );
+    assert!(report.runtime_root.is_absolute());
+    assert!(expected.len() >= crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_UNIQUE_IDENTITY_COUNT);
+    Ok(expected)
+}
+
+fn binutils_event_count_bounds_from_sed_invocations(
+    sed_invocation_count: u32,
+) -> Result<[usize; 2], StagexTransitionError> {
+    const LOWER_SED_INVOCATION_COUNT: u32 = 4_891;
+    const UPPER_SED_INVOCATION_COUNT: u32 = 4_892;
+    const LOWER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [73_996, 74_045];
+    const UPPER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_008, 74_057];
+    match sed_invocation_count {
+        LOWER_SED_INVOCATION_COUNT => Ok(LOWER_SED_EVENT_COUNT_BOUNDS),
+        UPPER_SED_INVOCATION_COUNT => Ok(UPPER_SED_EVENT_COUNT_BOUNDS),
+        other => Err(StagexTransitionError::Audit(format!(
+            "GNU binutils sed invocation count is outside the closed set: {other}"
+        ))),
+    }
+}
+
+fn validate_binutils_critical_event_counts(
+    report: &crate::stagex_binutils::BinutilsInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    let mut counts = BTreeMap::new();
+    for event in events {
+        let identity = (event.resolved_host_path.clone(), event.digest_hex.clone());
+        let count = counts.entry(identity).or_insert(0_u32);
+        *count = count
+            .checked_add(1)
+            .ok_or_else(|| StagexTransitionError::Audit("GNU binutils identity count overflow".to_string()))?;
+    }
+    for ((label, relative, digest), (count_label, expected_count)) in
+        crate::stagex_binutils::BINUTILS_GENERATED_EXECUTABLES
+            .iter()
+            .zip(crate::stagex_binutils::BINUTILS_GENERATED_EXECUTABLE_EVENT_COUNTS.iter())
+    {
+        if label != count_label {
+            return Err(StagexTransitionError::Audit("GNU binutils generated count labels drifted".to_string()));
+        }
+        require_binutils_identity_count(&counts, &report.runtime_root.join(relative), digest, *expected_count)?;
+    }
+    for (relative, digest, expected_count) in crate::stagex_binutils::BINUTILS_FIXED_EXECUTABLE_EVENT_COUNTS {
+        require_binutils_identity_count(&counts, &report.runtime_root.join(relative), digest, expected_count)?;
+    }
+    validate_binutils_sed_derived_identity_counts(report, &counts)?;
+    require_binutils_predecessor_identities(report, &counts)?;
+    if counts.len() != crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_UNIQUE_IDENTITY_COUNT {
+        return Err(StagexTransitionError::Audit(format!(
+            "GNU binutils unique identity count is not closed: expected {}, observed {}",
+            crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_UNIQUE_IDENTITY_COUNT,
+            counts.len()
+        )));
+    }
+    assert!(counts.values().all(|count| *count > 0));
+    assert_eq!(
+        events.len(),
+        counts.values().map(|count| usize::try_from(*count).unwrap_or_default()).sum::<usize>()
+    );
+    Ok(())
+}
+
+fn validate_binutils_sed_derived_identity_counts(
+    report: &crate::stagex_binutils::BinutilsInventoryReport,
+    counts: &BTreeMap<(PathBuf, String), u32>,
+) -> Result<(), StagexTransitionError> {
+    const CONFIGURE_UTILITY_EVENT_OFFSET: u32 = 21;
+    const SED_LAUNCHER_EVENT_OFFSET: u32 = 10;
+    let configure_utility_count = report
+        .sed_invocation_count
+        .checked_add(CONFIGURE_UTILITY_EVENT_OFFSET)
+        .ok_or_else(|| StagexTransitionError::Audit("configure utility event count overflow".to_string()))?;
+    let sed_launcher_count = report
+        .sed_invocation_count
+        .checked_add(SED_LAUNCHER_EVENT_OFFSET)
+        .ok_or_else(|| StagexTransitionError::Audit("sed launcher event count overflow".to_string()))?;
+    require_binutils_identity_count(
+        counts,
+        &report.runtime_root.join("stagex-configure-utility"),
+        crate::stagex_binutils::CONFIGURE_UTILITY_BLAKE3,
+        configure_utility_count,
+    )?;
+    require_binutils_identity_count(
+        counts,
+        &report.runtime_root.join("stagex-sed-bridge-launcher"),
+        crate::stagex_binutils::SED_BRIDGE_LAUNCHER_BLAKE3,
+        sed_launcher_count,
+    )?;
+    assert!(configure_utility_count > sed_launcher_count);
+    assert!(sed_launcher_count > report.sed_invocation_count);
+    Ok(())
+}
+
+fn require_binutils_identity_count(
+    counts: &BTreeMap<(PathBuf, String), u32>,
+    path: &Path,
+    digest: &str,
+    expected_count: u32,
+) -> Result<(), StagexTransitionError> {
+    let observed = counts.get(&(path.to_path_buf(), digest.to_string())).copied().unwrap_or_default();
+    if observed != expected_count {
+        return Err(StagexTransitionError::Audit(format!(
+            "GNU binutils exec count drifted for {}: expected {expected_count}, observed {observed}",
+            path.display()
+        )));
+    }
+    assert!(path.is_absolute());
+    assert!(expected_count > 0);
+    Ok(())
+}
+
+fn require_binutils_predecessor_identities(
+    report: &crate::stagex_binutils::BinutilsInventoryReport,
+    counts: &BTreeMap<(PathBuf, String), u32>,
+) -> Result<(), StagexTransitionError> {
+    let transition_root =
+        report.runtime_root.parent().and_then(Path::parent).ok_or_else(|| {
+            StagexTransitionError::Audit("GNU binutils runtime root has no transition root".to_string())
+        })?;
+    let paths = BinutilsStagePaths::from_transition_root(transition_root);
+    require_binutils_non_coreutils_counts(report, counts, &paths)?;
+    require_binutils_coreutils_counts(report, counts, &paths)?;
+    assert!(paths.coreutils_bin.is_absolute());
+    assert!(report.sed_invocation_count > 0);
+    Ok(())
+}
+
+fn require_binutils_non_coreutils_counts(
+    report: &crate::stagex_binutils::BinutilsInventoryReport,
+    counts: &BTreeMap<(PathBuf, String), u32>,
+    paths: &BinutilsStagePaths,
+) -> Result<(), StagexTransitionError> {
+    const TCC_COUNT: u32 = 1_423;
+    const BASH_COUNT_BOUNDS: [u32; 2] = [7_619, 7_627];
+    const SED_COUNT_OFFSET: u32 = 125;
+    let sed_count = report
+        .sed_invocation_count
+        .checked_add(SED_COUNT_OFFSET)
+        .ok_or_else(|| StagexTransitionError::Audit("GNU sed child event count overflow".to_string()))?;
+    for (path, expected_count) in [
+        (&paths.tcc, TCC_COUNT),
+        (&paths.sed, sed_count),
+        (&paths.grep, 560),
+        (&paths.diff, 107),
+        (&paths.cmp, 36),
+        (&paths.gawk, 52),
+        (&paths.m4, 15),
+        (&paths.bison, 9),
+        (&paths.flex, 7),
+        (&paths.make, 104),
+    ] {
+        require_binutils_path_count(counts, path, expected_count)?;
+    }
+    require_binutils_path_count_bounds(counts, &paths.bash, BASH_COUNT_BOUNDS)?;
+    assert_eq!(sed_count, report.sed_invocation_count + SED_COUNT_OFFSET);
+    assert!(BASH_COUNT_BOUNDS[0] <= BASH_COUNT_BOUNDS[1]);
+    Ok(())
+}
+
+fn require_binutils_coreutils_counts(
+    report: &crate::stagex_binutils::BinutilsInventoryReport,
+    counts: &BTreeMap<(PathBuf, String), u32>,
+    paths: &BinutilsStagePaths,
+) -> Result<(), StagexTransitionError> {
+    const CHMOD_COUNT_BOUNDS: [u32; 2] = [993, 994];
+    const CP_COUNT_BOUNDS: [u32; 2] = [104, 105];
+    const MKDIR_COUNT_BOUNDS: [u32; 2] = [5_385, 5_424];
+    let sed = report.sed_invocation_count;
+    let cat = sed
+        .checked_add(4_738)
+        .ok_or_else(|| StagexTransitionError::Audit("cat count overflow".to_string()))?;
+    let mv = sed
+        .checked_sub(4_463)
+        .ok_or_else(|| StagexTransitionError::Audit("mv count underflow".to_string()))?;
+    let rm = sed
+        .checked_mul(2)
+        .and_then(|count| count.checked_sub(1_504))
+        .ok_or_else(|| StagexTransitionError::Audit("rm count overflow".to_string()))?;
+    let rmdir = sed
+        .checked_add(54)
+        .ok_or_else(|| StagexTransitionError::Audit("rmdir count overflow".to_string()))?;
+    let touch = sed
+        .checked_sub(4_214)
+        .ok_or_else(|| StagexTransitionError::Audit("touch count underflow".to_string()))?;
+    let wc = sed
+        .checked_mul(2)
+        .and_then(|count| count.checked_add(748))
+        .ok_or_else(|| StagexTransitionError::Audit("wc count overflow".to_string()))?;
+    for (tool, expected_count) in [
+        ("basename", 359),
+        ("cat", cat),
+        ("dirname", 1_267),
+        ("echo", 17),
+        ("expr", 364),
+        ("head", sed),
+        ("install", 175),
+        ("ln", 45),
+        ("ls", 28),
+        ("mv", mv),
+        ("rm", rm),
+        ("rmdir", rmdir),
+        ("sort", 36),
+        ("touch", touch),
+        ("tr", 23),
+        ("wc", wc),
+    ] {
+        require_binutils_path_count(counts, &paths.coreutils_bin.join(tool), expected_count)?;
+    }
+    require_binutils_path_count_bounds(counts, &paths.coreutils_bin.join("chmod"), CHMOD_COUNT_BOUNDS)?;
+    require_binutils_path_count_bounds(counts, &paths.coreutils_bin.join("cp"), CP_COUNT_BOUNDS)?;
+    require_binutils_path_count_bounds(counts, &paths.coreutils_bin.join("mkdir"), MKDIR_COUNT_BOUNDS)?;
+    assert!(cat > sed);
+    assert!(wc > cat);
+    Ok(())
+}
+
+fn require_binutils_path_count(
+    counts: &BTreeMap<(PathBuf, String), u32>,
+    path: &Path,
+    expected_count: u32,
+) -> Result<(), StagexTransitionError> {
+    require_binutils_path_count_bounds(counts, path, [expected_count, expected_count])
+}
+
+fn require_binutils_path_count_bounds(
+    counts: &BTreeMap<(PathBuf, String), u32>,
+    path: &Path,
+    count_bounds: [u32; 2],
+) -> Result<(), StagexTransitionError> {
+    let matching = counts
+        .iter()
+        .filter(|((observed_path, _), _)| observed_path == path)
+        .map(|(_, count)| *count)
+        .collect::<Vec<_>>();
+    if matching.len() != 1 || matching[0] < count_bounds[0] || matching[0] > count_bounds[1] {
+        return Err(StagexTransitionError::Audit(format!(
+            "GNU binutils exec count drifted for {}: bounds {:?}, observed {:?}",
+            path.display(),
+            count_bounds,
+            matching
+        )));
+    }
+    assert!(path.is_absolute());
+    assert!(count_bounds[0] > 0 && count_bounds[0] <= count_bounds[1]);
+    Ok(())
+}
+
+fn validate_binutils_event_order(
+    report: &crate::stagex_binutils::BinutilsInventoryReport,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    let runtime = &report.runtime_root;
+    let canonicalizer = runtime.join("stagex-elf-local-symbol-canonicalizer");
+    let chew = runtime.join("source/bfd/doc/chew");
+    let i386_gen = runtime.join("source/opcodes/i386-gen");
+    let sysinfo = runtime.join("source/binutils/sysinfo");
+    let install_bin = runtime.join("install-destdir/mantle/stagex/binutils-probe-output/bin");
+    let positive = runtime.join("binutils-runtime-smoke/positive");
+    let first_canonicalizer = first_binutils_event_index(events, &canonicalizer)?;
+    let first_chew = first_binutils_event_index(events, &chew)?;
+    let first_i386_gen = first_binutils_event_index(events, &i386_gen)?;
+    let first_sysinfo = first_binutils_event_index(events, &sysinfo)?;
+    let first_installed_as = first_binutils_event_index(events, &install_bin.join("as"))?;
+    let first_installed_ld = first_binutils_event_index(events, &install_bin.join("ld"))?;
+    let first_positive = first_binutils_event_index(events, &positive)?;
+    if first_chew <= first_canonicalizer
+        || first_i386_gen <= first_canonicalizer
+        || first_sysinfo <= first_canonicalizer
+        || first_positive <= first_installed_as
+        || first_positive <= first_installed_ld
+    {
+        return Err(StagexTransitionError::Audit(
+            "GNU binutils generated-child producer order was substituted".to_string(),
+        ));
+    }
+    assert!(first_chew > first_canonicalizer);
+    assert!(first_positive > first_installed_as);
+    Ok(())
+}
+
+fn first_binutils_event_index(
+    events: &[ProtectedSeccompAuditEvent],
+    path: &Path,
+) -> Result<usize, StagexTransitionError> {
+    let index = events.iter().position(|event| event.resolved_host_path == path).ok_or_else(|| {
+        StagexTransitionError::Audit(format!("missing GNU binutils exec event for {}", path.display()))
+    })?;
+    assert!(index < events.len());
+    assert!(events[index].resolved_host_path.is_absolute());
+    Ok(index)
 }
 
 fn diffutils_expected_event_count(
@@ -9302,6 +9825,59 @@ mod tests {
     }
 
     #[test]
+    fn binutils_runtime_policy_adds_missing_predecessors_without_duplicates() {
+        let transition_root = PathBuf::from("/stagex/transition");
+        let paths = BinutilsStagePaths::from_transition_root(&transition_root);
+        let existing = vec![PlannedExecutable {
+            authorization_id: "existing-tcc".to_string(),
+            source_stage_id: TCC_MUSL_V2_BUILD_STAGE_ID.to_string(),
+            path: paths.tcc.clone(),
+            digest_hex: crate::stagex_tcc_musl_v2::COMPILER_BLAKE3.to_string(),
+        }];
+        let additional = additional_planned_binutils_predecessor_executables(&transition_root, &existing);
+        let wc = paths.coreutils_bin.join("wc");
+        assert!(!additional.iter().any(|entry| entry.path == paths.tcc));
+        assert!(additional.iter().any(|entry| entry.path == wc));
+        assert!(
+            additional
+                .iter()
+                .all(|entry| !existing.iter().any(|old| old.path == entry.path && old.digest_hex == entry.digest_hex))
+        );
+    }
+
+    #[test]
+    fn binutils_event_count_accepts_only_the_closed_bounds() {
+        const LOWER_SED_INVOCATION_COUNT: u32 = 4_891;
+        const UPPER_SED_INVOCATION_COUNT: u32 = 4_892;
+        const OUTSIDE_SED_INVOCATION_COUNT: u32 = 4_890;
+        const LOWER_SED_EVENT_BOUNDS: [usize; 2] = [73_996, 74_045];
+        const UPPER_SED_EVENT_BOUNDS: [usize; 2] = [74_008, 74_057];
+        let bounds = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS
+            .map(|count| u32::try_from(count).unwrap());
+        let below = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS[0].checked_sub(1).unwrap();
+        let above = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS[1].checked_add(1).unwrap();
+        assert!(binutils_event_count_within_bounds(
+            bounds,
+            crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS[0]
+        ));
+        assert!(binutils_event_count_within_bounds(
+            bounds,
+            crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS[1]
+        ));
+        assert!(!binutils_event_count_within_bounds(bounds, below));
+        assert!(!binutils_event_count_within_bounds(bounds, above));
+        assert_eq!(
+            binutils_event_count_bounds_from_sed_invocations(LOWER_SED_INVOCATION_COUNT).unwrap(),
+            LOWER_SED_EVENT_BOUNDS
+        );
+        assert_eq!(
+            binutils_event_count_bounds_from_sed_invocations(UPPER_SED_INVOCATION_COUNT).unwrap(),
+            UPPER_SED_EVENT_BOUNDS
+        );
+        assert!(binutils_event_count_bounds_from_sed_invocations(OUTSIDE_SED_INVOCATION_COUNT).is_err());
+    }
+
+    #[test]
     fn binutils_plan_rejects_same_stage_generated_executable_authority() {
         let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let authority =
@@ -9945,6 +10521,8 @@ mod tests {
         assert_eq!(report.flex_sources.is_some(), source_bundle.is_some());
         assert_eq!(report.flex_runtime.is_some(), source_bundle.is_some());
         assert_eq!(report.bash_full_runtime.is_some(), source_bundle.is_some());
+        assert_eq!(report.binutils_sources.is_some(), source_bundle.is_some());
+        assert_eq!(report.binutils_runtime.is_some(), source_bundle.is_some());
         assert!(
             report
                 .stage0_full
@@ -9963,6 +10541,7 @@ mod tests {
         assert!(report.bison_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
         assert!(report.flex_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
         assert!(report.bash_full_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
+        assert!(report.binutils_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
         assert_eq!(report.promotions.len(), EXPECTED_PROMOTION_COUNT);
         assert!(report.fallback_events.is_empty());
         assert!(scratch.join(REPORT_FILE_NAME).is_file());

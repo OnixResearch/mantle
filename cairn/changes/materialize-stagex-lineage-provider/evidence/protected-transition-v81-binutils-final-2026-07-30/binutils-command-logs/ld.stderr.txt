@@ -1,0 +1,2 @@
+configure: WARNING: unrecognized options: --enable-deterministic-archives
+configure: WARNING: unrecognized options: --enable-deterministic-archives

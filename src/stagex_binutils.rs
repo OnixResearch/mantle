@@ -405,8 +405,10 @@ pub(crate) struct BinutilsInventoryReport {
     pub installed_tool_count: u32,
     pub archive_count: u32,
     pub sed_invocation_count: u32,
+    pub protected_exec_event_count_bounds: [u32; 2],
     pub component_outputs: Vec<BinutilsOutputReport>,
     pub installed_tools: Vec<BinutilsOutputReport>,
+    pub runtime_root: PathBuf,
     pub install_root: PathBuf,
     pub protected_exec_enforced: bool,
     pub fallback_events: Vec<String>,
@@ -480,7 +482,7 @@ const PROBE_TOOL_ALIAS_NAMES: &[&str] = &[
 const PROBE_TOOL_ALIAS_COUNT: usize = 18;
 const BINUTILS_DIAGNOSTIC_EXEC_PATH_COUNT_MAX: usize = 128;
 const BINUTILS_DIAGNOSTIC_UNIQUE_EXECUTABLE_COUNT_MAX: usize = 512;
-const BINUTILS_DIAGNOSTIC_EXEC_EVENT_COUNT_MAX: usize = 65_536;
+const BINUTILS_DIAGNOSTIC_EXEC_EVENT_COUNT_MAX: usize = 131_072;
 const BINUTILS_EXEC_OBSERVATION_SCHEMA: &str = "mantle-stagex-binutils-exec-observation-v1";
 const CONFIGURE_OUTPUT_MEBIBYTES_MAX: u64 = 16;
 const KIBIBYTE_BYTES: u64 = 1_024;
@@ -615,6 +617,192 @@ const BINUTILS_SMOKE_EXIT_STATUS: i32 = 42;
 pub(crate) const BINUTILS_BFD_CHEW_BLAKE3: &str = "8df489a85fdb18b2bcff0e78f6fd5462ac2bf24b0c0b425ce742049c8f16cecd";
 pub(crate) const BINUTILS_POSITIVE_SMOKE_BLAKE3: &str =
     "4deb353a3e09f526f5c041a1614727deb0d8746fd72a23c521afbc16b6a5d974";
+pub(crate) const BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS: [usize; 2] = [73_996, 74_057];
+pub(crate) const BINUTILS_PROTECTED_EXEC_UNIQUE_IDENTITY_COUNT: usize = 68;
+pub(crate) const BINUTILS_GENERATED_EXECUTABLE_COUNT: usize = 24;
+pub(crate) const BINUTILS_FIXED_EXECUTABLE_EVENT_COUNT: usize = 12;
+pub(crate) const BINUTILS_GENERATED_EXECUTABLES: [(&str, &str, &str); BINUTILS_GENERATED_EXECUTABLE_COUNT] = [
+    ("bfd-a-out", "source/bfd/a.out", "8f928f6223ea972f54e8f14c7b14aba87af247f4f0d020058f82c04d57ae4fdc"),
+    (
+        "bfd-conftest-daae",
+        "source/bfd/conftest",
+        "daae114d834a0f84cf389d094b713e73a35beb173bbe49fd5505721747d37317",
+    ),
+    (
+        "bfd-conftest-e5e6",
+        "source/bfd/conftest",
+        "e5e602e06fba34c690ce4b1ddbeace13d33c269bc642b9c5b86a557669afa4e7",
+    ),
+    (
+        "binutils-a-out",
+        "source/binutils/a.out",
+        "8f928f6223ea972f54e8f14c7b14aba87af247f4f0d020058f82c04d57ae4fdc",
+    ),
+    (
+        "binutils-conftest",
+        "source/binutils/conftest",
+        "e5e602e06fba34c690ce4b1ddbeace13d33c269bc642b9c5b86a557669afa4e7",
+    ),
+    (
+        "binutils-sysinfo",
+        "source/binutils/sysinfo",
+        "33a57b54cf9ca0e7d3f52bf7ffa1c2ef274339514fbcedc0e825f1268357bac1",
+    ),
+    ("gas-a-out", "source/gas/a.out", "8f928f6223ea972f54e8f14c7b14aba87af247f4f0d020058f82c04d57ae4fdc"),
+    (
+        "gprof-a-out",
+        "source/gprof/a.out",
+        "8f928f6223ea972f54e8f14c7b14aba87af247f4f0d020058f82c04d57ae4fdc",
+    ),
+    (
+        "intl-a-out",
+        "source/intl/a.out",
+        "8f928f6223ea972f54e8f14c7b14aba87af247f4f0d020058f82c04d57ae4fdc",
+    ),
+    (
+        "intl-conftest-5572",
+        "source/intl/conftest",
+        "5572ffef24deef821bcddc3af7c17c37d068b75c1f7df6274208afc0e6858622",
+    ),
+    (
+        "intl-conftest-daae",
+        "source/intl/conftest",
+        "daae114d834a0f84cf389d094b713e73a35beb173bbe49fd5505721747d37317",
+    ),
+    ("ld-a-out", "source/ld/a.out", "8f928f6223ea972f54e8f14c7b14aba87af247f4f0d020058f82c04d57ae4fdc"),
+    (
+        "ld-conftest",
+        "source/ld/conftest",
+        "daae114d834a0f84cf389d094b713e73a35beb173bbe49fd5505721747d37317",
+    ),
+    (
+        "libiberty-a-out",
+        "source/libiberty/a.out",
+        "8f928f6223ea972f54e8f14c7b14aba87af247f4f0d020058f82c04d57ae4fdc",
+    ),
+    (
+        "libiberty-conftest-6800",
+        "source/libiberty/conftest",
+        "6800f0a5dd0357f810b9a89e1f80c58e156e089f00a14a8b370cdcd24934e6dc",
+    ),
+    (
+        "libiberty-conftest-6dfb",
+        "source/libiberty/conftest",
+        "6dfbb9e993f93fc4229343aba8442f3db3cdc49fdc1f320d7c8c29c1f1c91dd9",
+    ),
+    (
+        "libiberty-conftest-7dae",
+        "source/libiberty/conftest",
+        "7dae69a3a70594e98e4e972cf472603e4f5a397772deb02b0d5bebd60f2b61da",
+    ),
+    (
+        "libiberty-conftest-b9cf",
+        "source/libiberty/conftest",
+        "b9cf04138573456b66e435463e4dcb848a67a07963ff9ce098ba587761b76d3b",
+    ),
+    (
+        "libiberty-conftest-daae",
+        "source/libiberty/conftest",
+        "daae114d834a0f84cf389d094b713e73a35beb173bbe49fd5505721747d37317",
+    ),
+    (
+        "libiberty-conftest-e5e6",
+        "source/libiberty/conftest",
+        "e5e602e06fba34c690ce4b1ddbeace13d33c269bc642b9c5b86a557669afa4e7",
+    ),
+    (
+        "opcodes-a-out",
+        "source/opcodes/a.out",
+        "8f928f6223ea972f54e8f14c7b14aba87af247f4f0d020058f82c04d57ae4fdc",
+    ),
+    (
+        "opcodes-i386-gen",
+        "source/opcodes/i386-gen",
+        "350fb1765f3402bf34b3af71239b3942e67116e71f9d6621ba99aa8fa42497e7",
+    ),
+    (
+        "zlib-a-out",
+        "source/zlib/a.out",
+        "8f928f6223ea972f54e8f14c7b14aba87af247f4f0d020058f82c04d57ae4fdc",
+    ),
+    (
+        "zlib-conftest",
+        "source/zlib/conftest",
+        "daae114d834a0f84cf389d094b713e73a35beb173bbe49fd5505721747d37317",
+    ),
+];
+pub(crate) const BINUTILS_FIXED_EXECUTABLE_EVENT_COUNTS: [(&str, &str, u32); BINUTILS_FIXED_EXECUTABLE_EVENT_COUNT] = [
+    ("stagex-elf-local-symbol-canonicalizer", ELF_SYMBOL_CANONICALIZER_BLAKE3, 941),
+    ("stagex-ylwrap-sed-runner", YLWRAP_SED_RUNNER_BLAKE3, 24),
+    ("source/bfd/doc/chew", BINUTILS_BFD_CHEW_BLAKE3, 47),
+    ("binutils-runtime-smoke/positive", BINUTILS_POSITIVE_SMOKE_BLAKE3, 1),
+    (
+        "install-destdir/mantle/stagex/binutils-probe-output/bin/ar",
+        "c5836470e484f7b9137abc3bbdffbec7155a7700fdf094662b4253a576e76600",
+        3,
+    ),
+    (
+        "install-destdir/mantle/stagex/binutils-probe-output/bin/as",
+        "36bb17408403b4fd8283bf80f78410ae76eedb4e1565f0fc6db0f7a8c0a1eac4",
+        2,
+    ),
+    (
+        "install-destdir/mantle/stagex/binutils-probe-output/bin/ld",
+        "e2939e05b0e115efa3530f66d60b63ef06627a1ba0c0c1a70ce71fabcf4ca158",
+        2,
+    ),
+    (
+        "install-destdir/mantle/stagex/binutils-probe-output/bin/nm",
+        "bd92671b478f6f88d3aea88d910335cb024079bebcf4432c8abba77a51d1b00b",
+        1,
+    ),
+    (
+        "install-destdir/mantle/stagex/binutils-probe-output/bin/objcopy",
+        "919f6ad3c798a023395ca4d1d4574f395c8316b5595b25fbdf3bdafc891552e3",
+        1,
+    ),
+    (
+        "install-destdir/mantle/stagex/binutils-probe-output/bin/objdump",
+        "f48859e9dbfb3594a92cc52ba2281879c7f02855a5679a03ed5349489a019ca1",
+        1,
+    ),
+    (
+        "install-destdir/mantle/stagex/binutils-probe-output/bin/ranlib",
+        "8c6d65ff0cc4b6936e6f93a016782890dd39e556ef2f99d1699d0071c6691533",
+        1,
+    ),
+    (
+        "install-destdir/mantle/stagex/binutils-probe-output/bin/readelf",
+        "9c13500d32b180628d9768d0c56c3eabdd242f35dee79119c60e7b52f4ad3e0d",
+        1,
+    ),
+];
+pub(crate) const BINUTILS_GENERATED_EXECUTABLE_EVENT_COUNTS: [(&str, u32); BINUTILS_GENERATED_EXECUTABLE_COUNT] = [
+    ("bfd-a-out", 2),
+    ("bfd-conftest-daae", 2),
+    ("bfd-conftest-e5e6", 8),
+    ("binutils-a-out", 1),
+    ("binutils-conftest", 2),
+    ("binutils-sysinfo", 1),
+    ("gas-a-out", 1),
+    ("gprof-a-out", 1),
+    ("intl-a-out", 1),
+    ("intl-conftest-5572", 1),
+    ("intl-conftest-daae", 1),
+    ("ld-a-out", 1),
+    ("ld-conftest", 1),
+    ("libiberty-a-out", 1),
+    ("libiberty-conftest-6800", 1),
+    ("libiberty-conftest-6dfb", 1),
+    ("libiberty-conftest-7dae", 1),
+    ("libiberty-conftest-b9cf", 1),
+    ("libiberty-conftest-daae", 1),
+    ("libiberty-conftest-e5e6", 3),
+    ("opcodes-a-out", 1),
+    ("opcodes-i386-gen", 1),
+    ("zlib-a-out", 1),
+    ("zlib-conftest", 1),
+];
 const BINUTILS_INSPECTION_SMOKE_COUNT: usize = 7;
 const BINUTILS_POSITIVE_ASSEMBLY: &[u8] =
     b".global _start\n.text\n_start:\n  mov $60, %rax\n  mov $42, %rdi\n  syscall\n";
@@ -670,6 +858,16 @@ const CONFIGURE_LIBTOOL_EXEC_COUNT_PER_CLASS: usize = 2;
 const BFD_CHEW_RELATIVE_EXEC: &str = "\t./$(MKDOC)";
 const BFD_CHEW_ABSOLUTE_EXEC: &str = "\t$(CURDIR)/$(MKDOC)";
 const BFD_CHEW_EXEC_OCCURRENCE_COUNT: usize = 25;
+const OPCODES_I386_GEN_RELATIVE_EXEC: &str = "\t./i386-gen$(EXEEXT_FOR_BUILD) --srcdir $(srcdir)";
+const OPCODES_I386_GEN_ABSOLUTE_EXEC: &str = "\t$(CURDIR)/i386-gen$(EXEEXT_FOR_BUILD) --srcdir $(srcdir)";
+const OPCODES_I386_GEN_EXEC_OCCURRENCE_COUNT: usize = 1;
+const BINUTILS_SYSINFO_RELATIVE_EXEC: &str = "\t./sysinfo$(EXEEXT_FOR_BUILD)";
+const BINUTILS_SYSINFO_ABSOLUTE_EXEC: &str = "\t$(CURDIR)/sysinfo$(EXEEXT_FOR_BUILD)";
+const BINUTILS_SYSINFO_EXEC_OCCURRENCE_COUNT: usize = 4;
+const BFD_GEN_AOUT_RELATIVE_EXEC: &str = "\t./gen-aout host > aout-params.h";
+const BFD_GEN_AOUT_ABSOLUTE_EXEC: &str = "\t$(CURDIR)/gen-aout host > aout-params.h";
+const BFD_GEN_AOUT_EXEC_OCCURRENCE_COUNT: usize = 1;
+const COMPONENT_GENERATOR_REWRITE_COUNT: usize = 4;
 const CONFIGURE_UTILITY_SOURCE_NAME: &str = "stagex-configure-utility.c";
 const CONFIGURE_UTILITY_OUTPUT_NAME: &str = "stagex-configure-utility";
 const FILE_RELOCATION_CLASS_COUNT: usize = 7;
@@ -684,6 +882,7 @@ const DECLARED_FILE_PATH: &str = "$MANTLE_STAGE_X_FILE";
 struct BinutilsObservedExecutable {
     resolved_path: PathBuf,
     digest_blake3: String,
+    event_count: u32,
     tracee_paths: Vec<PathBuf>,
 }
 
@@ -760,6 +959,9 @@ fn insert_diagnostic_generated_paths(
         paths.insert(request.scratch_dir.join(name));
     }
     paths.insert(source.join("bfd/doc/chew"));
+    paths.insert(source.join("opcodes/i386-gen"));
+    paths.insert(source.join("binutils/sysinfo"));
+    paths.insert(source.join("bfd/gen-aout"));
     let install_bin = request.scratch_dir.join("install-destdir").join(BINUTILS_INSTALL_PREFIX_RELATIVE).join("bin");
     for (name, _) in BINUTILS_REQUIRED_TOOLS {
         paths.insert(install_bin.join(name));
@@ -787,19 +989,23 @@ fn binutils_exec_observation_report(
             continue;
         }
         validate_observed_exec_event(event)?;
-        grouped
+        let grouped_entry = grouped
             .entry((event.resolved_host_path.clone(), event.digest_hex.clone()))
-            .or_insert_with(std::collections::BTreeSet::new)
-            .insert(event.tracee_path.clone());
+            .or_insert_with(|| (0_u32, std::collections::BTreeSet::new()));
+        grouped_entry.0 = grouped_entry.0.checked_add(1).ok_or_else(|| {
+            StagexBinutilsError::Materialization("binutils grouped exec event count overflow".to_string())
+        })?;
+        grouped_entry.1.insert(event.tracee_path.clone());
         observed_event_count = observed_event_count.checked_add(1).ok_or_else(|| {
             StagexBinutilsError::Materialization("binutils observed exec event count overflow".to_string())
         })?;
     }
     let unique_executables = grouped
         .into_iter()
-        .map(|((resolved_path, digest_blake3), tracee_paths)| BinutilsObservedExecutable {
+        .map(|((resolved_path, digest_blake3), (event_count, tracee_paths))| BinutilsObservedExecutable {
             resolved_path,
             digest_blake3,
+            event_count,
             tracee_paths: tracee_paths.into_iter().collect(),
         })
         .collect::<Vec<_>>();
@@ -925,8 +1131,11 @@ pub(crate) fn derive_binutils_inventory(
         archive_count: u32::try_from(BINUTILS_AR_EXPECTED_INVOCATION_COUNT)
             .map_err(|_| StagexBinutilsError::Materialization("archive count exceeds u32".to_string()))?,
         sed_invocation_count: build.sed_invocation_count,
+        protected_exec_event_count_bounds: BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS
+            .map(|count| u32::try_from(count).expect("bounded binutils protected exec event count fits u32")),
         component_outputs,
         installed_tools,
+        runtime_root: request.scratch_dir.to_path_buf(),
         install_root: build.install_root,
         protected_exec_enforced,
         fallback_events: Vec::new(),
@@ -935,6 +1144,17 @@ pub(crate) fn derive_binutils_inventory(
     write_binutils_inventory_report(request.scratch_dir, &report)?;
     assert_eq!(report.component_outputs.len(), BINUTILS_COMPONENT_COUNT);
     assert_eq!(report.installed_tools.len(), BINUTILS_REQUIRED_TOOL_COUNT);
+    assert!(report.runtime_root.is_absolute());
+    assert!(
+        BINUTILS_GENERATED_EXECUTABLES
+            .iter()
+            .zip(BINUTILS_GENERATED_EXECUTABLE_EVENT_COUNTS.iter())
+            .all(|((label, _, _), (count_label, count))| label == count_label && *count > 0)
+    );
+    assert_eq!(
+        report.protected_exec_event_count_bounds,
+        BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS.map(|count| u32::try_from(count).unwrap())
+    );
     Ok(report)
 }
 
@@ -1211,6 +1431,7 @@ fn run_make_generation_targets(
     let archive_runner = environment.get("AR").ok_or_else(|| {
         StagexBinutilsError::Materialization("generated-source archive authority is missing".to_string())
     })?;
+    let shell_assignment = make_shell_assignment(environment)?;
     if targets.is_empty() {
         return Err(StagexBinutilsError::Materialization(format!("{label} has no declared Make targets")));
     }
@@ -1225,6 +1446,7 @@ fn run_make_generation_targets(
         format!("CC_FOR_BUILD={compiler}"),
         format!("CFLAGS_FOR_BUILD={cflags_for_build}"),
         format!("AR={archive_runner}"),
+        shell_assignment,
         "RANLIB=true".to_string(),
         "MAKEINFO=true".to_string(),
     ]);
@@ -1295,6 +1517,7 @@ fn run_component_build(
     let cflags = environment
         .get("CFLAGS")
         .ok_or_else(|| StagexBinutilsError::Materialization("component C flags are missing".to_string()))?;
+    let shell_assignment = make_shell_assignment(environment)?;
     let arguments = [
         format!("-j{MAKE_JOB_COUNT}"),
         "-C".to_string(),
@@ -1302,6 +1525,7 @@ fn run_component_build(
         format!("tooldir={BINUTILS_INSTALL_PREFIX}"),
         format!("CC={compiler}"),
         format!("AR={archive_runner}"),
+        shell_assignment,
         "RANLIB=true".to_string(),
         "MAKEINFO=true".to_string(),
         "CPPFLAGS=-DPLUGIN_LITTLE_ENDIAN".to_string(),
@@ -1339,6 +1563,24 @@ fn run_component_build(
     assert!(stdout.is_file());
     assert!(stderr.is_file());
     Ok(output)
+}
+
+fn make_shell_assignment(
+    environment: &std::collections::BTreeMap<String, String>,
+) -> Result<String, StagexBinutilsError> {
+    let shell = environment
+        .get("SHELL")
+        .ok_or_else(|| StagexBinutilsError::Materialization("Make shell authority is missing".to_string()))?;
+    let shell_path = Path::new(shell);
+    if !shell_path.is_absolute() || shell.contains(['\n', '\r']) {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "Make shell authority must be one absolute line: {shell:?}"
+        )));
+    }
+    let assignment = format!("SHELL={shell}");
+    assert!(assignment.starts_with("SHELL=/"));
+    assert!(!assignment.contains('\n'));
+    Ok(assignment)
 }
 
 fn validate_component_output(
@@ -1514,6 +1756,7 @@ fn run_component_install(
     destination: &Path,
     subdirectory: &str,
 ) -> Result<(), StagexBinutilsError> {
+    let shell_assignment = make_shell_assignment(environment)?;
     let arguments = [
         format!("-j{MAKE_JOB_COUNT}"),
         "-C".to_string(),
@@ -1521,6 +1764,7 @@ fn run_component_install(
         format!("tooldir={BINUTILS_INSTALL_PREFIX}"),
         format!("DESTDIR={}", shell_path(destination, "install destination")?),
         format!("prefix={BINUTILS_INSTALL_PREFIX}"),
+        shell_assignment,
         "MAKEINFO=true".to_string(),
         "install".to_string(),
     ];
@@ -1947,6 +2191,8 @@ fn run_configure_class_named(
 
 fn prepare_recipe_source(scratch_dir: &Path, source: &Path) -> Result<PathBuf, StagexBinutilsError> {
     repair_opcodes_dependencies(source)?;
+    make_opcodes_generator_exec_paths_absolute(source)?;
+    make_component_generator_exec_paths_absolute(source)?;
     disable_legacy_absolute_host_probes(source)?;
     make_generated_exec_paths_absolute(source)?;
     let authenticated_bfd_configure = scratch_dir.join("bfd-configure.authenticated");
@@ -2057,6 +2303,81 @@ fn make_bfd_chew_exec_paths_absolute(source: &Path) -> Result<(), StagexBinutils
         .map_err(|error| StagexBinutilsError::Materialization(format!("writing BFD doc Makefile: {error}")))?;
     assert!(!rewritten.contains(BFD_CHEW_RELATIVE_EXEC));
     assert_eq!(rewritten.matches(BFD_CHEW_ABSOLUTE_EXEC).count(), BFD_CHEW_EXEC_OCCURRENCE_COUNT);
+    Ok(())
+}
+
+fn make_opcodes_generator_exec_paths_absolute(source: &Path) -> Result<(), StagexBinutilsError> {
+    for relative in ["opcodes/Makefile.am", "opcodes/Makefile.in"] {
+        let path = source.join(relative);
+        let original = fs::read_to_string(&path)
+            .map_err(|error| StagexBinutilsError::Materialization(format!("reading {relative}: {error}")))?;
+        let rewritten = make_opcodes_generator_exec_path_absolute(relative, &original)?;
+        fs::write(&path, rewritten.as_bytes())
+            .map_err(|error| StagexBinutilsError::Materialization(format!("writing {relative}: {error}")))?;
+        assert!(!rewritten.contains(OPCODES_I386_GEN_RELATIVE_EXEC));
+        assert_eq!(rewritten.matches(OPCODES_I386_GEN_ABSOLUTE_EXEC).count(), OPCODES_I386_GEN_EXEC_OCCURRENCE_COUNT);
+    }
+    assert!(source.join("opcodes/Makefile.in").is_file());
+    assert!(source.join("opcodes/Makefile.am").is_file());
+    Ok(())
+}
+
+fn make_opcodes_generator_exec_path_absolute(label: &str, original: &str) -> Result<String, StagexBinutilsError> {
+    let rewritten = replace_exact_text(
+        label,
+        original,
+        OPCODES_I386_GEN_RELATIVE_EXEC,
+        OPCODES_I386_GEN_ABSOLUTE_EXEC,
+        OPCODES_I386_GEN_EXEC_OCCURRENCE_COUNT,
+    )?;
+    assert!(!rewritten.contains(OPCODES_I386_GEN_RELATIVE_EXEC));
+    assert_eq!(rewritten.matches(OPCODES_I386_GEN_ABSOLUTE_EXEC).count(), OPCODES_I386_GEN_EXEC_OCCURRENCE_COUNT);
+    Ok(rewritten)
+}
+
+fn make_component_generator_exec_paths_absolute(source: &Path) -> Result<(), StagexBinutilsError> {
+    let rewrites = [
+        (
+            "binutils/Makefile.am",
+            BINUTILS_SYSINFO_RELATIVE_EXEC,
+            BINUTILS_SYSINFO_ABSOLUTE_EXEC,
+            BINUTILS_SYSINFO_EXEC_OCCURRENCE_COUNT,
+        ),
+        (
+            "binutils/Makefile.in",
+            BINUTILS_SYSINFO_RELATIVE_EXEC,
+            BINUTILS_SYSINFO_ABSOLUTE_EXEC,
+            BINUTILS_SYSINFO_EXEC_OCCURRENCE_COUNT,
+        ),
+        (
+            "bfd/Makefile.am",
+            BFD_GEN_AOUT_RELATIVE_EXEC,
+            BFD_GEN_AOUT_ABSOLUTE_EXEC,
+            BFD_GEN_AOUT_EXEC_OCCURRENCE_COUNT,
+        ),
+        (
+            "bfd/Makefile.in",
+            BFD_GEN_AOUT_RELATIVE_EXEC,
+            BFD_GEN_AOUT_ABSOLUTE_EXEC,
+            BFD_GEN_AOUT_EXEC_OCCURRENCE_COUNT,
+        ),
+    ];
+    let mut prepared = Vec::with_capacity(COMPONENT_GENERATOR_REWRITE_COUNT);
+    for (relative, old, new, count) in rewrites {
+        let path = source.join(relative);
+        let original = fs::read_to_string(&path)
+            .map_err(|error| StagexBinutilsError::Materialization(format!("reading {relative}: {error}")))?;
+        let rewritten = replace_exact_text(relative, &original, old, new, count)?;
+        prepared.push((path, relative, old, new, count, rewritten));
+    }
+    assert_eq!(prepared.len(), COMPONENT_GENERATOR_REWRITE_COUNT);
+    assert!(prepared.iter().all(|(_, _, old, _, _, rewritten)| !rewritten.contains(old)));
+    for (path, relative, old, new, count, rewritten) in prepared {
+        fs::write(&path, rewritten.as_bytes())
+            .map_err(|error| StagexBinutilsError::Materialization(format!("writing {relative}: {error}")))?;
+        assert!(!rewritten.contains(old));
+        assert_eq!(rewritten.matches(new).count(), count);
+    }
     Ok(())
 }
 
@@ -4215,6 +4536,24 @@ mod tests {
     }
 
     #[test]
+    fn make_shell_assignment_binds_one_absolute_shell() {
+        let environment = std::collections::BTreeMap::from([("SHELL".to_string(), "/stagex/bash-full".to_string())]);
+        let assignment = make_shell_assignment(&environment).unwrap();
+        assert_eq!(assignment, "SHELL=/stagex/bash-full");
+        assert!(!assignment.contains('\n'));
+    }
+
+    #[test]
+    fn make_shell_assignment_rejects_missing_relative_and_multiline_authority() {
+        let missing = std::collections::BTreeMap::new();
+        let relative = std::collections::BTreeMap::from([("SHELL".to_string(), "bash".to_string())]);
+        let multiline = std::collections::BTreeMap::from([("SHELL".to_string(), "/stagex/bash\nambient".to_string())]);
+        assert!(make_shell_assignment(&missing).unwrap_err().to_string().contains("missing"));
+        assert!(make_shell_assignment(&relative).unwrap_err().to_string().contains("absolute"));
+        assert!(make_shell_assignment(&multiline).unwrap_err().to_string().contains("absolute"));
+    }
+
+    #[test]
     fn canonicalizes_diagnostic_exec_observations_without_authority() {
         let events = vec![
             observed_event("/tools/cc", "/protected/tcc"),
@@ -4226,6 +4565,7 @@ mod tests {
         assert_eq!(report.observed_event_count, expected_event_count);
         assert_eq!(report.unique_executables.len(), 1);
         assert_eq!(report.unique_executables[0].tracee_paths.len(), OBSERVATION_FIXTURE_EVENT_COUNT);
+        assert_eq!(report.unique_executables[0].event_count, u32::try_from(OBSERVATION_FIXTURE_EVENT_COUNT).unwrap());
         assert!(report.denied_events.is_empty());
         assert!(report.claim_boundary.contains("grants no protected execution authority"));
     }
@@ -4513,6 +4853,66 @@ mod tests {
     }
 
     #[test]
+    fn makes_opcodes_generator_exec_path_absolute() {
+        let original = format!("target:\n{OPCODES_I386_GEN_RELATIVE_EXEC}\n");
+        let rewritten = make_opcodes_generator_exec_path_absolute("opcodes fixture", &original).unwrap();
+        assert!(rewritten.contains(OPCODES_I386_GEN_ABSOLUTE_EXEC));
+        assert!(!rewritten.contains(OPCODES_I386_GEN_RELATIVE_EXEC));
+    }
+
+    #[test]
+    fn makes_component_generator_exec_paths_absolute() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path();
+        fs::create_dir(source.join("binutils")).unwrap();
+        fs::create_dir(source.join("bfd")).unwrap();
+        let sysinfo = format!("{BINUTILS_SYSINFO_RELATIVE_EXEC}\n").repeat(BINUTILS_SYSINFO_EXEC_OCCURRENCE_COUNT);
+        for relative in ["binutils/Makefile.am", "binutils/Makefile.in"] {
+            fs::write(source.join(relative), &sysinfo).unwrap();
+        }
+        for relative in ["bfd/Makefile.am", "bfd/Makefile.in"] {
+            fs::write(source.join(relative), format!("{BFD_GEN_AOUT_RELATIVE_EXEC}\n")).unwrap();
+        }
+        make_component_generator_exec_paths_absolute(source).unwrap();
+        assert_eq!(
+            fs::read_to_string(source.join("binutils/Makefile.in"))
+                .unwrap()
+                .matches(BINUTILS_SYSINFO_ABSOLUTE_EXEC)
+                .count(),
+            BINUTILS_SYSINFO_EXEC_OCCURRENCE_COUNT
+        );
+        assert!(fs::read_to_string(source.join("bfd/Makefile.in")).unwrap().contains(BFD_GEN_AOUT_ABSOLUTE_EXEC));
+    }
+
+    #[test]
+    fn rejects_component_generator_exec_path_drift_before_writing() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path();
+        fs::create_dir(source.join("binutils")).unwrap();
+        fs::create_dir(source.join("bfd")).unwrap();
+        let wrong_sysinfo = format!("{BINUTILS_SYSINFO_RELATIVE_EXEC}\n");
+        for relative in ["binutils/Makefile.am", "binutils/Makefile.in"] {
+            fs::write(source.join(relative), &wrong_sysinfo).unwrap();
+        }
+        for relative in ["bfd/Makefile.am", "bfd/Makefile.in"] {
+            fs::write(source.join(relative), format!("{BFD_GEN_AOUT_RELATIVE_EXEC}\n")).unwrap();
+        }
+        let error = make_component_generator_exec_paths_absolute(source).unwrap_err();
+        assert!(error.to_string().contains("expected 4, observed 1"));
+        assert_eq!(fs::read_to_string(source.join("binutils/Makefile.am")).unwrap(), wrong_sysinfo);
+    }
+
+    #[test]
+    fn rejects_opcodes_generator_exec_path_drift() {
+        let missing = "target:\n\t./different-generator --srcdir $(srcdir)\n";
+        let duplicate = format!("{OPCODES_I386_GEN_RELATIVE_EXEC}\n{OPCODES_I386_GEN_RELATIVE_EXEC}\n");
+        let missing_error = make_opcodes_generator_exec_path_absolute("opcodes missing", missing).unwrap_err();
+        let duplicate_error = make_opcodes_generator_exec_path_absolute("opcodes duplicate", &duplicate).unwrap_err();
+        assert!(missing_error.to_string().contains("expected 1, observed 0"));
+        assert!(duplicate_error.to_string().contains("expected 1, observed 2"));
+    }
+
+    #[test]
     fn rejects_generated_configure_exec_path_drift() {
         let missing_dynamic = format!("{CONFIGURE_CONFTEST_EXEC_OLD}\n");
         let wrong_libtool_count =
@@ -4664,7 +5064,10 @@ mod tests {
         let observer =
             crate::protected_exec_seccomp::install_current_thread_diagnostic_exec_observer(allowed_paths).unwrap();
         let outcome = probe_authenticated_component_builds_observing_identities(request);
+        let reaped_count = crate::protected_exec_seccomp::reap_adopted_exec_descendants().unwrap();
+        let quiescent_event_count = observer.wait_for_audit_quiescence().unwrap();
         let events = observer.audit_events();
+        assert_eq!(quiescent_event_count, events.len());
         let execution_error = outcome.as_ref().err().map(ToString::to_string);
         let report = binutils_exec_observation_report(&events, execution_error).unwrap();
         let report_path = PathBuf::from(
@@ -4674,15 +5077,19 @@ mod tests {
         let bytes = serde_json::to_vec_pretty(&report).unwrap();
         crate::stagex_mes_lib::write_create_new(&report_path, &bytes).unwrap();
         eprintln!(
-            "binutils diagnostic exec observation: events={} unique={} denied={} report={}",
+            "binutils diagnostic exec observation: events={} unique={} denied={} reaped={} report={}",
             report.event_count,
             report.unique_executables.len(),
             report.denied_event_count,
+            reaped_count,
             report_path.display()
         );
         assert!(outcome.is_ok(), "binutils execution failed; inspect {}", report_path.display());
         assert_eq!(report.denied_event_count, 0);
-        assert!(!report.unique_executables.is_empty());
+        let event_count_bounds = BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS.map(|count| u32::try_from(count).unwrap());
+        assert!(report.event_count >= event_count_bounds[0]);
+        assert!(report.event_count <= event_count_bounds[1]);
+        assert_eq!(report.unique_executables.len(), BINUTILS_PROTECTED_EXEC_UNIQUE_IDENTITY_COUNT);
     }
 
     #[test]

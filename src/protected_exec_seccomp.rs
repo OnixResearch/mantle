@@ -38,7 +38,13 @@ mod linux {
     const EXECVEAT_PATH_ARG_INDEX: usize = 1;
     const PROC_FD_PATH_PREFIX: &str = "/proc/self/fd";
     const DIAGNOSTIC_EXEC_PATH_COUNT_MAX: usize = 256;
-    const DIAGNOSTIC_EXEC_EVENT_COUNT_MAX: usize = 65_536;
+    const DIAGNOSTIC_EXEC_EVENT_COUNT_MAX: usize = 131_072;
+    const PROTECTED_EXEC_EVENT_COUNT_MAX: usize = 131_072;
+    const ADOPTED_DESCENDANT_REAP_POLL_COUNT_MAX: u32 = 3_000;
+    const ADOPTED_DESCENDANT_REAP_POLL_INTERVAL_MS: u64 = 10;
+    const AUDIT_QUIESCENCE_POLL_COUNT_MAX: u32 = 3_000;
+    const AUDIT_QUIESCENCE_STABLE_POLL_COUNT: u32 = 100;
+    const AUDIT_QUIESCENCE_POLL_INTERVAL_MS: u64 = 10;
     const PHASE_DIAGNOSTIC: &str = "diagnostic";
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -77,6 +83,10 @@ mod linux {
         pub fn listener_fd(&self) -> RawFd {
             self.listener_fd
         }
+
+        pub fn wait_for_audit_quiescence(&self) -> Result<usize, ProtectedSeccompError> {
+            wait_for_audit_quiescence(&self.audit_events)
+        }
     }
 
     #[derive(Debug)]
@@ -99,6 +109,10 @@ mod linux {
             self.listener_fd
         }
 
+        pub fn wait_for_audit_quiescence(&self) -> Result<usize, ProtectedSeccompError> {
+            wait_for_audit_quiescence(&self.audit_events)
+        }
+
         pub fn promote_verified_output(
             &self,
             source_entry_id: &str,
@@ -108,6 +122,72 @@ mod linux {
             let mut policy = self.shared_policy.write().map_err(|_| ProtectedExecError::PolicyLockPoisoned)?;
             policy.promote_verified_output(source_entry_id, extraction_rules, executables)
         }
+    }
+
+    pub fn reap_adopted_exec_descendants() -> Result<u32, ProtectedSeccompError> {
+        let mut reaped_count = 0_u32;
+        for _ in 0..ADOPTED_DESCENDANT_REAP_POLL_COUNT_MAX {
+            let mut status: libc::c_int = 0;
+            let wait_result = unsafe { libc::waitpid(-1, &mut status, libc::WNOHANG) };
+            if wait_result > 0 {
+                if !libc::WIFEXITED(status) || libc::WEXITSTATUS(status) != 0 {
+                    return Err(ProtectedSeccompError::Supervisor(format!(
+                        "adopted StageX descendant {wait_result} failed with wait status {status}"
+                    )));
+                }
+                reaped_count = reaped_count.checked_add(1).ok_or_else(|| {
+                    ProtectedSeccompError::Supervisor("adopted descendant reap count overflow".to_string())
+                })?;
+                continue;
+            }
+            if wait_result == 0 {
+                thread::sleep(std::time::Duration::from_millis(ADOPTED_DESCENDANT_REAP_POLL_INTERVAL_MS));
+                continue;
+            }
+            let error = io::Error::last_os_error();
+            if error.raw_os_error() == Some(libc::EINTR) {
+                continue;
+            }
+            if error.raw_os_error() == Some(libc::ECHILD) {
+                assert!(reaped_count < u32::MAX);
+                assert!(ADOPTED_DESCENDANT_REAP_POLL_COUNT_MAX > 0);
+                return Ok(reaped_count);
+            }
+            return Err(ProtectedSeccompError::Supervisor(format!("reaping adopted StageX descendant: {error}")));
+        }
+        Err(ProtectedSeccompError::Supervisor(format!(
+            "adopted StageX descendants did not exit within {} ms",
+            u64::from(ADOPTED_DESCENDANT_REAP_POLL_COUNT_MAX).saturating_mul(ADOPTED_DESCENDANT_REAP_POLL_INTERVAL_MS)
+        )))
+    }
+
+    fn wait_for_audit_quiescence(
+        audit_events: &Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
+    ) -> Result<usize, ProtectedSeccompError> {
+        let mut previous_count = usize::MAX;
+        let mut stable_poll_count = 0_u32;
+        for _ in 0..AUDIT_QUIESCENCE_POLL_COUNT_MAX {
+            let count = match audit_events.lock() {
+                Ok(events) => events.len(),
+                Err(poisoned) => poisoned.into_inner().len(),
+            };
+            if count == previous_count {
+                stable_poll_count = stable_poll_count.saturating_add(1);
+            } else {
+                previous_count = count;
+                stable_poll_count = 0;
+            }
+            if stable_poll_count >= AUDIT_QUIESCENCE_STABLE_POLL_COUNT {
+                assert!(count <= PROTECTED_EXEC_EVENT_COUNT_MAX);
+                assert!(AUDIT_QUIESCENCE_STABLE_POLL_COUNT > 0);
+                return Ok(count);
+            }
+            thread::sleep(std::time::Duration::from_millis(AUDIT_QUIESCENCE_POLL_INTERVAL_MS));
+        }
+        Err(ProtectedSeccompError::Supervisor(format!(
+            "StageX exec audit did not become quiescent within {} ms",
+            u64::from(AUDIT_QUIESCENCE_POLL_COUNT_MAX).saturating_mul(AUDIT_QUIESCENCE_POLL_INTERVAL_MS)
+        )))
     }
 
     pub fn install_current_thread_diagnostic_exec_observer(
@@ -342,7 +422,7 @@ mod linux {
                 }
                 return;
             }
-            if diagnostic_event_limit_reached(&audit_events) {
+            if event_limit_reached(&audit_events, DIAGNOSTIC_EXEC_EVENT_COUNT_MAX) {
                 let _ = send_response(listener_fd, notif.id, false);
                 continue;
             }
@@ -357,13 +437,14 @@ mod linux {
         }
     }
 
-    fn diagnostic_event_limit_reached(audit_events: &Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>) -> bool {
+    fn event_limit_reached(audit_events: &Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>, count_max: usize) -> bool {
         let count = match audit_events.lock() {
             Ok(events) => events.len(),
             Err(poisoned) => poisoned.into_inner().len(),
         };
-        assert!(count <= DIAGNOSTIC_EXEC_EVENT_COUNT_MAX);
-        count >= DIAGNOSTIC_EXEC_EVENT_COUNT_MAX
+        assert!(count <= count_max);
+        assert!(count_max > 0);
+        count >= count_max
     }
 
     fn spawn_supervisor_thread(
@@ -396,6 +477,10 @@ mod linux {
                     continue;
                 }
                 return;
+            }
+            if event_limit_reached(&audit_events, PROTECTED_EXEC_EVENT_COUNT_MAX) {
+                let _ = send_response(listener_fd, notif.id, false);
+                continue;
             }
             let decision = match shared_policy.read() {
                 Ok(policy) => classify_notification(listener_fd, &policy, &notif),
@@ -1040,6 +1125,32 @@ mod linux {
         }
 
         #[test]
+        fn adopted_descendant_reaper_rejects_failed_exit() {
+            const REAPER_FAILURE_MODE: &str = "reaper-failed-descendant";
+            const FAILED_EXIT_STATUS: libc::c_int = 7;
+            if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some(REAPER_FAILURE_MODE) {
+                let pid = unsafe { libc::fork() };
+                assert!(pid >= 0, "fork failed: {}", std::io::Error::last_os_error());
+                if pid == 0 {
+                    unsafe { libc::_exit(FAILED_EXIT_STATUS) };
+                }
+                let error = reap_adopted_exec_descendants().unwrap_err();
+                assert!(error.to_string().contains("failed with wait status"));
+                assert!(!error.to_string().contains("timed out"));
+                return;
+            }
+            let output = Command::new(std::env::current_exe().unwrap())
+                .arg("--exact")
+                .arg("protected_exec_seccomp::linux::tests::adopted_descendant_reaper_rejects_failed_exit")
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, REAPER_FAILURE_MODE)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+            assert!(output.stdout.is_empty() || String::from_utf8_lossy(&output.stdout).contains("test result: ok"));
+        }
+
+        #[test]
         fn seccomp_supervisor_denies_orphan_exec_without_subreaper_adoption() {
             match std::env::var(CHILD_MODE_VAR).ok().as_deref() {
                 Some("orphan-without-subreaper-parent") => {
@@ -1321,14 +1432,11 @@ mod linux {
                 .env(CHILD_MODE_VAR, "deep-middle")
                 .status()
                 .unwrap();
-            let mut orphan_status: libc::c_int = 0;
-            let orphan_pid = unsafe { libc::waitpid(-1, &mut orphan_status, 0) };
-            assert!(orphan_pid > 0, "waiting for adopted descendant failed: {}", std::io::Error::last_os_error());
+            let reaped_count = reap_adopted_exec_descendants().unwrap();
             std::thread::sleep(std::time::Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
             let events = supervisor.audit_events();
             assert!(status.success());
-            assert!(libc::WIFEXITED(orphan_status));
-            assert_eq!(libc::WEXITSTATUS(orphan_status), 0);
+            assert_eq!(reaped_count, 1);
             assert_eq!(events.len(), 2);
             assert!(events.iter().all(|event| event.policy_decision == "allowed"));
         }

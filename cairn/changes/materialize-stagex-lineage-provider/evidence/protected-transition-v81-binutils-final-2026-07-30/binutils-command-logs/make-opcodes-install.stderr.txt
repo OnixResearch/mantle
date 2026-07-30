@@ -1,0 +1,4 @@
+make: the `-l' option requires a positive integral argument
+make: the `-l' option requires a positive integral argument
+libtool: install: warning: remember to run `libtool --finish /mantle/stagex/binutils-probe-output/lib'
+make: the `-l' option requires a positive integral argument
