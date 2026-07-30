@@ -118,7 +118,9 @@ The current stdio and SSH-stdio bindings do not authenticate a peer identity. Th
 
 Wall-clock freshness is host-owned. Mantle rejects authorization when the service clock is before ticket issuance, but operators must monitor clock synchronization and rollback.
 
-Protocol input and completed authentication owners wipe their buffers. A failed partial `serde_json` decode can allocate a secret string before constructing its zeroizing owner. Mantle does not claim complete allocator-memory erasure for that failure path.
+The service reads bounded admission frames before it takes the state lock. Under the lock, it reloads state and obtains the service time. It then checks the peer and request, decrements the ticket, and atomically saves and syncs the state. It releases the lock before `AuthOk`, uploads, execution, or output. It does not save the admission copy again.
+
+Protocol input and completed authentication owners wipe their buffers. Frame encoding and verifier-state encoding use zeroizing output owners before serialization starts. A failed partial `serde_json` decode can allocate a secret string before constructing its zeroizing owner. Mantle does not claim complete allocator-memory erasure for that failure path.
 
 ## Non-claims
 

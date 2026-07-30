@@ -21,7 +21,7 @@ const PRODUCTION_SCALE_OUTPUT_BYTES: usize = 8_388_608;
 const MIN_PRODUCTION_SCALE_OUTPUT_CHUNKS: usize = 100;
 const PATTERN_MODULUS: usize = 251;
 const INTERRUPT_AFTER_CHUNKS: &str = "1";
-const TICKET_ID: &str = "production-ticket";
+const TICKET_ID: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const TICKET_SECRET: &str = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI";
 const TICKET_KEY: &str = "ticket-key-1:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE";
 const TICKET_VERIFIER_DOMAIN: &[u8] = b"mantle-remote-ticket-verifier-v2\0";
@@ -32,8 +32,7 @@ const MAX_BUILD_TIME_SECS: u64 = 600;
 const MAX_UPLOAD_BYTES: u64 = 1_073_741_824;
 const REJECTING_UPLOAD_BYTES: u64 = 1;
 const TICKET_USES: u32 = 3;
-const TEST_CREATED_UNIX_S: u64 = 1;
-const TEST_EXPIRES_UNIX_S: u64 = u64::MAX;
+const TEST_TICKET_TTL_SECS: u64 = 3_600;
 const INPUT_INTERRUPT_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_INPUT_CHUNKS";
 const INTERRUPT_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_OUTPUT_CHUNKS";
 const MAX_TEST_REMOTE_WORKERS: usize = 16;
@@ -305,7 +304,9 @@ fn gallery_resumable_remote_transfer_resumes_verified_chunks_and_admits_once() {
     assert!(!interrupted.status.success(), "first gallery run must interrupt after a durable chunk");
     assert!(
         String::from_utf8_lossy(&interrupted.stderr)
-            .contains("remote-production-transfer-interrupted-after-checkpoint")
+            .contains("remote-production-transfer-interrupted-after-checkpoint"),
+        "gallery interruption stderr={}",
+        String::from_utf8_lossy(&interrupted.stderr),
     );
     assert_eq!(fs::read_dir(&store_dir).unwrap().count(), 0);
     assert!(!state_diagnostics_contain(&state_dir, "output-admitted"));
@@ -1040,6 +1041,8 @@ fn write_ticket_state(state_dir: &Path) {
 
 fn write_ticket_state_with_upload_limit(state_dir: &Path, max_upload_bytes: u64) {
     let ticket_dir = state_dir.join("remote-builders");
+    let created_unix_s = test_unix_time_now_s();
+    let expires_unix_s = created_unix_s.checked_add(TEST_TICKET_TTL_SECS).unwrap();
     fs::create_dir_all(&ticket_dir).expect("ticket state dir");
     fs::set_permissions(&ticket_dir, fs::Permissions::from_mode(PRIVATE_DIRECTORY_MODE)).expect("private ticket dir");
     let state = serde_json::json!({
@@ -1051,8 +1054,8 @@ fn write_ticket_state_with_upload_limit(state_dir: &Path, max_upload_bytes: u64)
                 "display_name": "production transfer test",
                 "verifier_key_id": "ticket-key-1",
                 "verifier": ticket_verifier(),
-                "created_unix_s": TEST_CREATED_UNIX_S,
-                "expires_unix_s": TEST_EXPIRES_UNIX_S,
+                "created_unix_s": created_unix_s,
+                "expires_unix_s": expires_unix_s,
                 "uses_remaining": TICKET_USES,
                 "max_build_time_secs": MAX_BUILD_TIME_SECS,
                 "max_upload_bytes": max_upload_bytes,
@@ -1070,6 +1073,10 @@ fn write_ticket_state_with_upload_limit(state_dir: &Path, max_upload_bytes: u64)
     fs::set_permissions(credential_path, fs::Permissions::from_mode(PRIVATE_FILE_MODE))
         .expect("private ticket input file");
     write_service_credentials(state_dir);
+}
+
+fn test_unix_time_now_s() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
 }
 
 fn configure_ticket_input_fd(command: &mut Command, state_dir: &Path) {

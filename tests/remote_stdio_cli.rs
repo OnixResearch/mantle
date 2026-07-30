@@ -11,6 +11,7 @@ const PROTOCOL_ALPN: &str = "mantle-remote-build/1";
 const PROTOCOL_VERSION: u32 = 1;
 const TEST_NOW_UNIX_S: u64 = 1;
 const TEST_TICKET_TTL_SECS: u64 = 3_600;
+const TEST_CLOCK_ROLLBACK_SECS: u64 = 60;
 const TEST_TICKET_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const TEST_BUILD_TIME_LIMIT_SECS: u64 = 60;
 const TEST_TICKET_MAX_BUILD_TIME_SECS: u64 = 600;
@@ -110,6 +111,37 @@ fn concurrent_one_use_redemption_commits_exactly_once() {
 }
 
 #[test]
+fn stdio_rejects_clock_rollback_before_any_success_frame() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let now_unix_s = test_unix_time_now_s();
+    let created_unix_s = now_unix_s.checked_add(TEST_CLOCK_ROLLBACK_SECS).unwrap();
+    let expires_unix_s = created_unix_s.checked_add(TEST_TICKET_TTL_SECS).unwrap();
+    write_ticket_state_with_policy(temp.path(), created_unix_s, expires_unix_s, None);
+    let credentials_dir = write_service_credentials(temp.path());
+    let output = run_stdio_contender(temp.path(), &credentials_dir, encode_frames(&client_request_frames()));
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("ticket-clock-before-issuance"));
+    assert_eq!(read_ticket_uses(temp.path()), 1);
+}
+
+#[test]
+fn stdio_rejects_endpoint_bound_ticket_without_authenticated_peer() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let created_unix_s = test_unix_time_now_s();
+    let expires_unix_s = created_unix_s.checked_add(TEST_TICKET_TTL_SECS).unwrap();
+    write_ticket_state_with_policy(temp.path(), created_unix_s, expires_unix_s, Some("client-a"));
+    let credentials_dir = write_service_credentials(temp.path());
+    let output = run_stdio_contender(temp.path(), &credentials_dir, encode_frames(&client_request_frames()));
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("ticket-client-endpoint-mismatch"));
+    assert_eq!(read_ticket_uses(temp.path()), 1);
+}
+
+#[test]
 fn remote_serve_stdio_once_rejects_unknown_ticket_without_stdout_frames() {
     let temp = tempfile::tempdir().expect("tempdir");
     let credentials_dir = write_service_credentials(temp.path());
@@ -164,9 +196,18 @@ fn run_stdio_contender(state_dir: &Path, credentials_dir: &Path, input: Vec<u8>)
 }
 
 fn write_ticket_state(state_dir: &std::path::Path) {
-    let ticket_dir = state_dir.join("remote-builders");
     let created_unix_s = test_unix_time_now_s();
     let expires_unix_s = created_unix_s.checked_add(TEST_TICKET_TTL_SECS).unwrap();
+    write_ticket_state_with_policy(state_dir, created_unix_s, expires_unix_s, None);
+}
+
+fn write_ticket_state_with_policy(
+    state_dir: &std::path::Path,
+    created_unix_s: u64,
+    expires_unix_s: u64,
+    bound_client_endpoint: Option<&str>,
+) {
+    let ticket_dir = state_dir.join("remote-builders");
     fs::create_dir_all(&ticket_dir).expect("ticket dir");
     fs::set_permissions(&ticket_dir, fs::Permissions::from_mode(PRIVATE_DIRECTORY_MODE)).expect("private ticket dir");
     let ticket_state = serde_json::json!({
@@ -183,7 +224,7 @@ fn write_ticket_state(state_dir: &std::path::Path) {
                 "uses_remaining": 1,
                 "max_build_time_secs": TEST_TICKET_MAX_BUILD_TIME_SECS,
                 "max_upload_bytes": TEST_MAX_UPLOAD_BYTES,
-                "bound_client_endpoint": null,
+                "bound_client_endpoint": bound_client_endpoint,
                 "revoked": false
             }
         },
@@ -193,6 +234,13 @@ fn write_ticket_state(state_dir: &std::path::Path) {
     fs::write(&path, serde_json::to_vec_pretty(&ticket_state).expect("ticket state serializes"))
         .expect("write ticket state");
     fs::set_permissions(path, fs::Permissions::from_mode(PRIVATE_FILE_MODE)).expect("private ticket file");
+}
+
+fn read_ticket_uses(state_dir: &Path) -> u64 {
+    let state: Value =
+        serde_json::from_slice(&fs::read(state_dir.join("remote-builders/tickets.json")).expect("ticket state"))
+            .expect("ticket state JSON");
+    state["tickets"][TEST_TICKET_ID]["uses_remaining"].as_u64().expect("ticket uses")
 }
 
 fn test_unix_time_now_s() -> u64 {

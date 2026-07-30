@@ -130,6 +130,7 @@ pub use crate::remote_credentials::RemoteTicketView;
 use crate::remote_credentials::TicketAuthorization;
 use crate::remote_credentials::TicketIssueInput;
 use crate::remote_credentials::TicketPolicyFacts;
+use crate::remote_credentials::TicketVerifierKey;
 use crate::remote_credentials::redacted_ticket_view;
 use crate::remote_telemetry_export::RemoteTelemetryAdapterHealth;
 use crate::remote_telemetry_export::RemoteTelemetryAdapterStatus;
@@ -8084,8 +8085,8 @@ pub fn encode_remote_frame(frame: &RemoteFrame) -> Result<zeroize::Zeroizing<Vec
 }
 
 fn encode_remote_frame_zeroizing(frame: &RemoteFrame) -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
-    let payload =
-        zeroize::Zeroizing::new(serde_json::to_vec(frame).map_err(|err| format!("serializing remote frame: {err}"))?);
+    let mut payload = zeroize::Zeroizing::new(Vec::new());
+    serde_json::to_writer(&mut *payload, frame).map_err(|err| format!("serializing remote frame: {err}"))?;
     if payload.len() > MAX_REMOTE_FRAME_BYTES {
         return Err(format!("remote-frame-payload-exceeds-{MAX_REMOTE_FRAME_BYTES}"));
     }
@@ -8714,6 +8715,12 @@ fn open_remote_production_client(
     write_remote_control_frame(&mut io.stdin, &RemoteFrame::AuthTicket {
         auth: context.auth.clone(),
     })?;
+    write_remote_control_frame(&mut io.stdin, &RemoteFrame::BuildRequest {
+        request: context.request.clone(),
+    })?;
+    write_remote_control_frame(&mut io.stdin, &RemoteFrame::InputManifest {
+        manifest: input_manifest,
+    })?;
     let auth_ok = read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::AuthOk)?;
     let mut progress = RemoteProductionClientProgress {
         frames: Vec::with_capacity(MAX_REMOTE_STDIO_FRAME_COUNT),
@@ -8730,12 +8737,6 @@ fn open_remote_production_client(
         progress.frames.push(acknowledgement_frame);
         progress.trace_context_health = Some(health);
     }
-    write_remote_control_frame(&mut io.stdin, &RemoteFrame::BuildRequest {
-        request: context.request.clone(),
-    })?;
-    write_remote_control_frame(&mut io.stdin, &RemoteFrame::InputManifest {
-        manifest: input_manifest,
-    })?;
     progress.frames.push(read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::MissingInputs)?);
     send_remote_production_inputs(io, context, &mut progress)?;
     debug_assert!(progress.frames.len() <= MAX_REMOTE_STDIO_FRAME_COUNT);
@@ -9579,14 +9580,23 @@ pub fn plan_remote_builder_frames_with_executor(
     )
 }
 
-fn plan_remote_builder_frames_with_executor_and_auth_facts(
+struct RemoteBuilderAdmission<'a> {
+    request: &'a ConcreteBuildRequest,
+    input_upload: RemoteInputUpload,
+    client_transfer: RemoteTransferCapabilities,
+    phase: RemoteProtocolPhase,
+    response_frames: Vec<RemoteFrame>,
+    missing: Vec<String>,
+    ticket_uses_remaining: u32,
+}
+
+fn admit_remote_builder_frames_with_auth_facts<'a>(
     builder: &RemoteLoopbackBuilder,
     ticket: &mut RemoteTicket,
-    client_frames: &[RemoteFrame],
+    client_frames: &'a [RemoteFrame],
     client_transfer: RemoteTransferCapabilities,
-    executor: &dyn RemoteBuildExecutor,
     service_facts: RemoteTicketAuthFacts<'_>,
-) -> Result<RemoteBuilderFrameResponse, String> {
+) -> Result<RemoteBuilderAdmission<'a>, String> {
     let mut phase = RemoteProtocolPhase::Open;
     let mut frames = client_frames.iter();
     let hello = take_hello(&mut frames, &mut phase)?;
@@ -9610,20 +9620,49 @@ fn plan_remote_builder_frames_with_executor_and_auth_facts(
     let input_upload = take_input_upload(&mut frames, &mut phase, request, &missing, ticket)?;
     reject_extra_client_frames(frames.next())?;
     redeem_after_queue(ticket, true)?;
-    let response = build_response_frames(BuildResponseFramesInput {
-        builder,
+    Ok(RemoteBuilderAdmission {
         request,
-        input_upload: &input_upload,
+        input_upload,
         client_transfer,
         phase,
         response_frames: vec![auth_ok, missing_frame],
         missing,
         ticket_uses_remaining: ticket.uses_remaining,
+    })
+}
+
+fn execute_remote_builder_admission(
+    builder: &RemoteLoopbackBuilder,
+    admission: RemoteBuilderAdmission<'_>,
+    executor: &dyn RemoteBuildExecutor,
+) -> Result<RemoteBuilderFrameResponse, String> {
+    let response = build_response_frames(BuildResponseFramesInput {
+        builder,
+        request: admission.request,
+        input_upload: &admission.input_upload,
+        client_transfer: admission.client_transfer,
+        phase: admission.phase,
+        response_frames: admission.response_frames,
+        missing: admission.missing,
+        ticket_uses_remaining: admission.ticket_uses_remaining,
         executor,
     })?;
     debug_assert_eq!(response.output_digest_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
     debug_assert!(!response.response_frames.is_empty());
     Ok(response)
+}
+
+fn plan_remote_builder_frames_with_executor_and_auth_facts(
+    builder: &RemoteLoopbackBuilder,
+    ticket: &mut RemoteTicket,
+    client_frames: &[RemoteFrame],
+    client_transfer: RemoteTransferCapabilities,
+    executor: &dyn RemoteBuildExecutor,
+    service_facts: RemoteTicketAuthFacts<'_>,
+) -> Result<RemoteBuilderFrameResponse, String> {
+    let admission =
+        admit_remote_builder_frames_with_auth_facts(builder, ticket, client_frames, client_transfer, service_facts)?;
+    execute_remote_builder_admission(builder, admission, executor)
 }
 
 pub fn serve_stdio_remote_once(
@@ -9649,28 +9688,6 @@ pub fn plan_stdio_remote_once_from_state(
     let input = read_bounded_stdio_input(reader)?;
     let client_frames = decode_remote_frame_stream(&input)?;
     plan_remote_builder_frames_from_state(builder, state, &client_frames, client_transfer)
-}
-
-fn plan_stdio_remote_once_from_state_with_auth_facts(
-    reader: impl Read,
-    builder: &RemoteLoopbackBuilder,
-    state: &mut RemoteTicketState,
-    client_transfer: RemoteTransferCapabilities,
-    service_facts: RemoteTicketAuthFacts<'_>,
-) -> Result<RemoteBuilderFrameResponse, String> {
-    let input = read_bounded_stdio_input(reader)?;
-    let client_frames = decode_remote_frame_stream(&input)?;
-    let ticket_id = request_ticket_id_from_frames(&client_frames)?;
-    let ticket = state.tickets.get_mut(ticket_id).ok_or_else(|| format!("unknown-remote-ticket-{ticket_id}"))?;
-    let executor = RemoteFixtureExecutor;
-    plan_remote_builder_frames_with_executor_and_auth_facts(
-        builder,
-        ticket,
-        &client_frames,
-        client_transfer,
-        &executor,
-        service_facts,
-    )
 }
 
 pub fn plan_stdio_remote_once_from_state_with_executor(
@@ -12283,52 +12300,73 @@ fn validate_input_transfer_manifest_binding(
 
 struct RemoteProductionServerContext<'a> {
     builder: &'a RemoteLoopbackBuilder,
-    ticket_state: &'a mut RemoteTicketState,
+    verifier_key: &'a std::sync::Arc<TicketVerifierKey>,
     executor: &'a RemoteLocalBuildExecutor,
-    state_dir: &'a Path,
-    server_now_unix_s: u64,
+    credential_state_dir: &'a Path,
+    execution_state_dir: &'a Path,
     authenticated_client_endpoint: Option<String>,
 }
 
 struct RemoteProductionServerOpening {
     hello: RemoteHello,
-    auth: TicketAuthRequest,
     server_now_unix_s: u64,
+    max_upload_bytes: u64,
     request: ConcreteBuildRequest,
     policy: RemoteTransferPolicy,
     missing: Vec<String>,
+    accepted_capabilities: Vec<String>,
+    is_trace_negotiated: bool,
+    trace_context_health: RemoteTraceContextHealth,
+}
+
+struct CommittedRemoteTicketAdmission {
+    server_now_unix_s: u64,
+    max_upload_bytes: u64,
 }
 
 fn serve_stdio_remote_production_once(
     reader: &mut impl Read,
     writer: &mut impl Write,
-    mut context: RemoteProductionServerContext<'_>,
-    commit_ticket_state: &mut impl FnMut(&RemoteTicketState) -> Result<(), String>,
+    context: RemoteProductionServerContext<'_>,
 ) -> Result<(), String> {
-    let opening = accept_remote_production_opening(reader, writer, &mut context, commit_ticket_state)?;
+    let mut commit = |auth: &TicketAuthRequest, request: &ConcreteBuildRequest| {
+        commit_remote_ticket_admission(&context, auth, request)
+    };
+    serve_stdio_remote_production_once_with_commit(reader, writer, &context, &mut commit)
+}
+
+fn serve_stdio_remote_production_once_with_commit(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    context: &RemoteProductionServerContext<'_>,
+    commit: &mut impl FnMut(&TicketAuthRequest, &ConcreteBuildRequest) -> Result<CommittedRemoteTicketAdmission, String>,
+) -> Result<(), String> {
+    let mut opening = read_remote_production_opening(reader, context.builder)?;
+    let committed = commit(&opening.0, &opening.1.request)?;
+    opening.1.server_now_unix_s = committed.server_now_unix_s;
+    opening.1.max_upload_bytes = committed.max_upload_bytes;
+    write_remote_production_admission(writer, context.builder, &opening.1)?;
     let runtime = tokio::runtime::Runtime::new().map_err(|err| format!("remote production runtime: {err}"))?;
-    let uploaded_bytes = receive_remote_production_inputs(reader, writer, &mut context, &opening, &runtime)?;
-    send_remote_production_result(reader, writer, &context, RemoteProductionResultInput {
-        opening: &opening,
+    let uploaded_bytes = receive_remote_production_inputs(reader, writer, context, &opening.1, &runtime)?;
+    send_remote_production_result(reader, writer, context, RemoteProductionResultInput {
+        opening: &opening.1,
         runtime: &runtime,
         uploaded_bytes,
     })?;
-    debug_assert!(!opening.request.request_id.is_empty());
+    debug_assert!(!opening.1.request.request_id.is_empty());
     debug_assert!(uploaded_bytes <= MAX_REMOTE_UPLOAD_BYTES);
     Ok(())
 }
 
-fn accept_remote_production_opening(
+fn read_remote_production_opening(
     reader: &mut impl Read,
-    writer: &mut impl Write,
-    context: &mut RemoteProductionServerContext<'_>,
-    commit_ticket_state: &mut impl FnMut(&RemoteTicketState) -> Result<(), String>,
-) -> Result<RemoteProductionServerOpening, String> {
+    builder: &RemoteLoopbackBuilder,
+) -> Result<(TicketAuthRequest, RemoteProductionServerOpening), String> {
     let hello = match read_expected_remote_frame(reader, RemoteFrameKind::Hello)? {
         RemoteFrame::Hello { hello } => hello,
         _ => return Err("remote-hello-frame-invalid".to_string()),
     };
-    let accepted = expect_accepted_hello(&hello, context.builder)?;
+    let accepted = expect_accepted_hello(&hello, builder)?;
     let is_trace_negotiated = accepted
         .accepted_capabilities
         .iter()
@@ -12338,41 +12376,10 @@ fn accept_remote_production_opening(
         RemoteFrame::AuthTicket { auth } => auth,
         _ => return Err("remote-auth-ticket-frame-invalid".to_string()),
     };
-    {
-        let ticket = context
-            .ticket_state
-            .tickets
-            .get(&auth.ticket_id)
-            .ok_or_else(|| format!("unknown-remote-ticket-{}", auth.ticket_id))?;
-        expect_authorized_ticket(ticket, &auth, RemoteTicketAuthFacts {
-            server_now_unix_s: context.server_now_unix_s,
-            authenticated_client_endpoint: context.authenticated_client_endpoint.as_deref(),
-        })?;
-    }
-    redeem_and_commit_ticket_state(context.ticket_state, &auth.ticket_id, commit_ticket_state)?;
-    write_remote_control_frame(writer, &RemoteFrame::AuthOk {
-        auth: RemoteAuthOk {
-            builder_signing_keys: vec![context.builder.signing_key_id.clone()],
-            accepted_capabilities: accepted.accepted_capabilities,
-        },
-    })?;
-    if is_trace_negotiated {
-        write_remote_control_frame(writer, &RemoteFrame::TraceContextAck {
-            acknowledgement: RemoteTraceContextAck {
-                health: trace_context_health.clone(),
-            },
-        })?;
-    }
     let request = match read_expected_remote_frame(reader, RemoteFrameKind::BuildRequest)? {
         RemoteFrame::BuildRequest { request } => request,
         _ => return Err("remote-build-request-frame-invalid".to_string()),
     };
-    let ticket = context
-        .ticket_state
-        .tickets
-        .get(&auth.ticket_id)
-        .ok_or_else(|| "remote-production-ticket-disappeared".to_string())?;
-    validate_concrete_request(&request, ticket)?;
     let policy = request.transfer_policy.ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
     policy.validate().map_err(|reason| reason.as_str().to_string())?;
     let input_manifest = match read_expected_remote_frame(reader, RemoteFrameKind::InputManifest)? {
@@ -12380,20 +12387,89 @@ fn accept_remote_production_opening(
         _ => return Err("remote-input-manifest-frame-invalid".to_string()),
     };
     validate_input_manifest(&input_manifest, &request)?;
-    let missing = derive_missing_inputs(&input_manifest.input_refs, &context.builder.present_input_refs)?;
-    write_remote_control_frame(writer, &RemoteFrame::MissingInputs {
-        request_id: request.request_id.clone(),
-        refs: missing.clone(),
-    })?;
-    debug_assert!(!trace_context_health.reason_code.is_empty());
-    debug_assert!(missing.len() <= MAX_REMOTE_INPUT_REFS);
-    Ok(RemoteProductionServerOpening {
+    let missing = derive_missing_inputs(&input_manifest.input_refs, &builder.present_input_refs)?;
+    Ok((auth, RemoteProductionServerOpening {
         hello,
-        auth,
-        server_now_unix_s: context.server_now_unix_s,
+        server_now_unix_s: 0,
+        max_upload_bytes: 0,
         request,
         policy,
         missing,
+        accepted_capabilities: accepted.accepted_capabilities,
+        is_trace_negotiated,
+        trace_context_health,
+    }))
+}
+
+fn write_remote_production_admission(
+    writer: &mut impl Write,
+    builder: &RemoteLoopbackBuilder,
+    opening: &RemoteProductionServerOpening,
+) -> Result<(), String> {
+    write_remote_control_frame(writer, &RemoteFrame::AuthOk {
+        auth: RemoteAuthOk {
+            builder_signing_keys: vec![builder.signing_key_id.clone()],
+            accepted_capabilities: opening.accepted_capabilities.clone(),
+        },
+    })?;
+    if opening.is_trace_negotiated {
+        write_remote_control_frame(writer, &RemoteFrame::TraceContextAck {
+            acknowledgement: RemoteTraceContextAck {
+                health: opening.trace_context_health.clone(),
+            },
+        })?;
+    }
+    write_remote_control_frame(writer, &RemoteFrame::MissingInputs {
+        request_id: opening.request.request_id.clone(),
+        refs: opening.missing.clone(),
+    })?;
+    debug_assert!(!opening.trace_context_health.reason_code.is_empty());
+    debug_assert!(opening.missing.len() <= MAX_REMOTE_INPUT_REFS);
+    Ok(())
+}
+
+fn commit_remote_ticket_admission(
+    context: &RemoteProductionServerContext<'_>,
+    auth: &TicketAuthRequest,
+    request: &ConcreteBuildRequest,
+) -> Result<CommittedRemoteTicketAdmission, String> {
+    commit_remote_ticket_admission_for_state(
+        context.credential_state_dir,
+        context.verifier_key,
+        context.authenticated_client_endpoint.as_deref(),
+        auth,
+        request,
+    )
+}
+
+fn commit_remote_ticket_admission_for_state(
+    credential_state_dir: &Path,
+    verifier_key: &std::sync::Arc<TicketVerifierKey>,
+    authenticated_client_endpoint: Option<&str>,
+    auth: &TicketAuthRequest,
+    request: &ConcreteBuildRequest,
+) -> Result<CommittedRemoteTicketAdmission, String> {
+    let _guard = crate::remote_credential_state::acquire_ticket_state_mutation_guard(credential_state_dir)
+        .map_err(|error| error.to_string())?;
+    let mut state = load_ticket_state(credential_state_dir).map_err(|error| error.to_string())?;
+    state.bind_active_verifier_key(verifier_key);
+    let server_now_unix_s = crate::unix_time_now_s().map_err(|error| error.to_string())?;
+    let ticket = state
+        .tickets
+        .get(&auth.ticket_id)
+        .ok_or_else(|| format!("unknown-remote-ticket-{}", auth.ticket_id))?;
+    expect_authorized_ticket(ticket, auth, RemoteTicketAuthFacts {
+        server_now_unix_s,
+        authenticated_client_endpoint,
+    })?;
+    validate_concrete_request(request, ticket)?;
+    let max_upload_bytes = ticket.max_upload_bytes;
+    redeem_and_commit_ticket_state(&mut state, &auth.ticket_id, &mut |candidate| {
+        save_ticket_state(credential_state_dir, candidate).map_err(|_| "remote-ticket-state-commit-failed".to_string())
+    })?;
+    Ok(CommittedRemoteTicketAdmission {
+        server_now_unix_s,
+        max_upload_bytes,
     })
 }
 
@@ -12420,16 +12496,11 @@ fn read_remote_server_trace_context(
 fn receive_remote_production_inputs(
     reader: &mut impl Read,
     writer: &mut impl Write,
-    context: &mut RemoteProductionServerContext<'_>,
+    context: &RemoteProductionServerContext<'_>,
     opening: &RemoteProductionServerOpening,
     runtime: &tokio::runtime::Runtime,
 ) -> Result<u64, String> {
-    let max_upload_bytes = context
-        .ticket_state
-        .tickets
-        .get(&opening.auth.ticket_id)
-        .ok_or_else(|| "remote-production-ticket-disappeared".to_string())?
-        .max_upload_bytes;
+    let max_upload_bytes = opening.max_upload_bytes;
     let uploaded_bytes = if opening.request.input_refs.is_empty() {
         0
     } else {
@@ -12486,8 +12557,10 @@ fn receive_remote_production_input_transfer(
     if canonical.total_bytes > input.max_upload_bytes {
         return Err("upload-byte-limit-exceeded".to_string());
     }
-    let receiver_root =
-        crate::remote_transfer::remote_transfer_receiver_root(context.state_dir, &canonical.manifest.session_id);
+    let receiver_root = crate::remote_transfer::remote_transfer_receiver_root(
+        context.execution_state_dir,
+        &canonical.manifest.session_id,
+    );
     let lease_expires_unix_s = opening
         .server_now_unix_s
         .checked_add(REMOTE_TRANSFER_LEASE_DURATION_SECS)
@@ -12496,7 +12569,7 @@ fn receive_remote_production_input_transfer(
         transfer.manifest,
         &transfer.manifest_digest_blake3,
         opening.policy,
-        context.state_dir,
+        context.execution_state_dir,
         &receiver_root,
         crate::remote_transfer::RemoteTransferRunOptions {
             direction: crate::remote_transfer::RemoteTransferDirection::Upload,
@@ -12651,10 +12724,6 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
         crate::RemoteServeBinding::StdioOnce => {
             let service_keys =
                 crate::remote_service_secrets::resolve_remote_service_keys_bounded(&input.secret_request)?;
-            let mut ticket_state_guard =
-                Some(crate::remote_credential_state::acquire_ticket_state_mutation_guard(input.state_dir)?);
-            let mut state = load_ticket_state(input.state_dir)?;
-            state.bind_active_verifier_key(&service_keys.verifier_key);
             let (builder_signing_key_id, local_executor) = remote_serve_executor(
                 RemoteServeExecutorInput {
                     executor: input.executor,
@@ -12680,53 +12749,61 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
                 signing_key_id: builder_signing_key_id,
                 transfer_capabilities: RemoteTransferCapabilities::delta_and_full().with_streaming(),
             };
-            let server_now_unix_s = crate::unix_time_now_s()?;
             match local_executor {
-                Some(local_executor) => {
-                    let mut stdin = std::io::stdin().lock();
-                    let mut stdout = std::io::stdout().lock();
-                    let mut commit_ticket_state = |ticket_state: &RemoteTicketState| {
-                        let commit_result = save_ticket_state(input.state_dir, ticket_state)
-                            .map_err(|_| "remote-ticket-state-commit-failed".to_string());
-                        drop(ticket_state_guard.take());
-                        commit_result
-                    };
-                    serve_stdio_remote_production_once(
-                        &mut stdin,
-                        &mut stdout,
-                        RemoteProductionServerContext {
-                            builder: &builder,
-                            ticket_state: &mut state,
-                            executor: &local_executor,
-                            state_dir: input.execution_state_dir,
-                            server_now_unix_s,
-                            authenticated_client_endpoint: None,
-                        },
-                        &mut commit_ticket_state,
-                    )
-                    .map_err(|err| RunError::Internal(format!("remote production stdio serve once: {err}")))
-                }
-                None => {
-                    let response = plan_stdio_remote_once_from_state_with_auth_facts(
-                        std::io::stdin().lock(),
-                        &builder,
-                        &mut state,
-                        RemoteTransferCapabilities::delta_and_full(),
-                        RemoteTicketAuthFacts {
-                            server_now_unix_s,
-                            authenticated_client_endpoint: None,
-                        },
-                    )
-                    .map_err(|err| RunError::Internal(format!("remote fixture stdio serve once: {err}")));
-                    let save_result = save_ticket_state(input.state_dir, &state);
-                    let response = response?;
-                    save_result?;
-                    write_remote_response_frames(std::io::stdout().lock(), &response)
-                        .map_err(|err| RunError::Internal(format!("remote fixture stdio serve once response: {err}")))
-                }
+                Some(local_executor) => serve_stdio_remote_production_once(
+                    &mut std::io::stdin().lock(),
+                    &mut std::io::stdout().lock(),
+                    RemoteProductionServerContext {
+                        builder: &builder,
+                        verifier_key: &service_keys.verifier_key,
+                        executor: &local_executor,
+                        credential_state_dir: input.state_dir,
+                        execution_state_dir: input.execution_state_dir,
+                        authenticated_client_endpoint: None,
+                    },
+                )
+                .map_err(|err| RunError::Internal(format!("remote production stdio serve once: {err}"))),
+                None => serve_stdio_remote_fixture_once(input.state_dir, &service_keys.verifier_key, &builder),
             }
         }
     }
+}
+
+fn serve_stdio_remote_fixture_once(
+    state_dir: &Path,
+    verifier_key: &std::sync::Arc<TicketVerifierKey>,
+    builder: &RemoteLoopbackBuilder,
+) -> Result<(), RunError> {
+    let input = read_bounded_stdio_input(std::io::stdin().lock()).map_err(RunError::Internal)?;
+    let client_frames = decode_remote_frame_stream(&input).map_err(RunError::Internal)?;
+    let admission = {
+        let _guard = crate::remote_credential_state::acquire_ticket_state_mutation_guard(state_dir)?;
+        let mut state = load_ticket_state(state_dir)?;
+        state.bind_active_verifier_key(verifier_key);
+        let server_now_unix_s = crate::unix_time_now_s()?;
+        let ticket_id = request_ticket_id_from_frames(&client_frames).map_err(RunError::Internal)?;
+        let ticket = state
+            .tickets
+            .get_mut(ticket_id)
+            .ok_or_else(|| RunError::Internal(format!("unknown-remote-ticket-{ticket_id}")))?;
+        let admission = admit_remote_builder_frames_with_auth_facts(
+            builder,
+            ticket,
+            &client_frames,
+            RemoteTransferCapabilities::delta_and_full(),
+            RemoteTicketAuthFacts {
+                server_now_unix_s,
+                authenticated_client_endpoint: None,
+            },
+        )
+        .map_err(|error| RunError::Internal(format!("remote fixture stdio serve once: {error}")))?;
+        save_ticket_state(state_dir, &state)?;
+        admission
+    };
+    let response = execute_remote_builder_admission(builder, admission, &RemoteFixtureExecutor)
+        .map_err(|error| RunError::Internal(format!("remote fixture stdio serve once: {error}")))?;
+    write_remote_response_frames(std::io::stdout().lock(), &response)
+        .map_err(|error| RunError::Internal(format!("remote fixture stdio serve once response: {error}")))
 }
 
 fn remote_serve_metadata_json(input: (&str, &str)) -> serde_json::Value {
@@ -13084,6 +13161,11 @@ mod tests {
     const TEST_EXTERNAL_BATCH_OUTPUT_LIMIT_BYTES: u64 = 512;
     const TEST_LOCALITY_ARTIFACT_BYTES: u64 = 8;
     const TEST_LOCALITY_CHUNK_BYTES: u32 = 8;
+    const TRANSACTION_TICKET_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const TRANSACTION_TICKET_TTL_SECS: u64 = 3_600;
+    const STALE_TRANSACTION_TICKET_USES: u32 = 2;
+    const CONCURRENT_CONTENDER_COUNT: usize = 2;
+    const EXTERNAL_LEGACY_TICKET_ID: &str = "legacy-observation";
 
     fn fixture_log_control_summary(
         retained_start_cursor: u64,
@@ -13965,6 +14047,98 @@ mod tests {
         .unwrap();
         assert_eq!(committed_uses, Some(0));
         assert_eq!(state.tickets[&ticket_id].uses_remaining, 0);
+    }
+
+    #[test]
+    fn production_persistence_failure_emits_no_success_frame() {
+        let temp = tempfile::tempdir().unwrap();
+        let builder = fixture_loopback_builder();
+        let verifier_key = fixture_ticket_verifier_key();
+        let executor = fixture_local_build_executor();
+        let mut client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        client.request.transfer_policy = Some(RemoteTransferPolicy::default());
+        let frames = vec![
+            RemoteFrame::Hello { hello: client.hello },
+            RemoteFrame::AuthTicket { auth: client.auth },
+            RemoteFrame::BuildRequest {
+                request: client.request,
+            },
+            RemoteFrame::InputManifest {
+                manifest: client.input_manifest,
+            },
+        ];
+        let encoded = encode_frame_stream(&frames);
+        let mut reader = &encoded[..];
+        let mut writer = Vec::new();
+        let context = RemoteProductionServerContext {
+            builder: &builder,
+            verifier_key: &verifier_key,
+            executor: &executor,
+            credential_state_dir: temp.path(),
+            execution_state_dir: temp.path(),
+            authenticated_client_endpoint: None,
+        };
+        let mut is_request_admitted = false;
+        let error = serve_stdio_remote_production_once_with_commit(
+            &mut reader,
+            &mut writer,
+            &context,
+            &mut |_auth, request| {
+                is_request_admitted = !request.request_id.is_empty();
+                Err("remote-ticket-state-commit-failed".to_string())
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "remote-ticket-state-commit-failed");
+        assert!(is_request_admitted);
+        assert!(writer.is_empty());
+    }
+
+    #[test]
+    fn production_concurrent_one_use_contenders_commit_exactly_once() {
+        let temp = tempfile::tempdir().unwrap();
+        let (verifier_key, auth, request) = persist_transaction_ticket(temp.path(), 1);
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(CONCURRENT_CONTENDER_COUNT));
+        let contenders = (0..CONCURRENT_CONTENDER_COUNT)
+            .map(|_| {
+                let state_dir = temp.path().to_path_buf();
+                let verifier_key = verifier_key.clone();
+                let auth = auth.clone();
+                let request = request.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    commit_remote_ticket_admission_for_state(&state_dir, &verifier_key, None, &auth, &request)
+                })
+            })
+            .collect::<Vec<_>>();
+        let results = contenders.into_iter().map(|contender| contender.join().unwrap()).collect::<Vec<_>>();
+        let committed_count = results.iter().filter(|result| result.is_ok()).count();
+        let rejected_count = results.len().saturating_sub(committed_count);
+        let state = load_ticket_state(temp.path()).unwrap();
+
+        assert_eq!(committed_count, 1);
+        assert_eq!(rejected_count, 1);
+        assert_eq!(state.tickets[TRANSACTION_TICKET_ID].uses_remaining, 0);
+    }
+
+    #[test]
+    fn production_admission_reloads_state_and_preserves_intervening_mutation() {
+        let temp = tempfile::tempdir().unwrap();
+        let (verifier_key, auth, request) = persist_transaction_ticket(temp.path(), STALE_TRANSACTION_TICKET_USES);
+        commit_remote_ticket_admission_for_state(temp.path(), &verifier_key, None, &auth, &request).unwrap();
+        {
+            let _guard = crate::remote_credential_state::acquire_ticket_state_mutation_guard(temp.path()).unwrap();
+            let mut state = load_ticket_state(temp.path()).unwrap();
+            state.invalidated_legacy_ticket_ids.insert(EXTERNAL_LEGACY_TICKET_ID.to_string());
+            save_ticket_state(temp.path(), &state).unwrap();
+        }
+        commit_remote_ticket_admission_for_state(temp.path(), &verifier_key, None, &auth, &request).unwrap();
+        let state = load_ticket_state(temp.path()).unwrap();
+
+        assert_eq!(state.tickets[TRANSACTION_TICKET_ID].uses_remaining, 0);
+        assert!(state.invalidated_legacy_ticket_ids.contains(EXTERNAL_LEGACY_TICKET_ID));
     }
 
     #[test]
@@ -17307,6 +17481,40 @@ mod tests {
             "/mantle/store",
         )
         .expect("mismatched fixture output path parses")
+    }
+
+    fn persist_transaction_ticket(
+        state_dir: &Path,
+        uses_remaining: u32,
+    ) -> (
+        std::sync::Arc<crate::remote_credentials::TicketVerifierKey>,
+        TicketAuthRequest,
+        ConcreteBuildRequest,
+    ) {
+        let verifier_key = fixture_ticket_verifier_key();
+        let created_unix_s = crate::unix_time_now_s().unwrap();
+        let expires_unix_s = created_unix_s.checked_add(TRANSACTION_TICKET_TTL_SECS).unwrap();
+        let ticket = RemoteTicket::fixture(
+            TRANSACTION_TICKET_ID,
+            "transaction-test",
+            fixture_ticket_token(),
+            &verifier_key,
+            created_unix_s,
+            expires_unix_s,
+            uses_remaining,
+            MAX_REMOTE_BUILD_TIME_SECS,
+            MAX_REMOTE_UPLOAD_BYTES,
+            None,
+        );
+        let mut state = RemoteTicketState::default();
+        state.bind_active_verifier_key(&verifier_key);
+        state.tickets.insert(TRANSACTION_TICKET_ID.to_string(), ticket);
+        save_ticket_state(state_dir, &state).unwrap();
+        let mut client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        client.auth.ticket_id = TRANSACTION_TICKET_ID.to_string();
+        client.auth.secret = fixture_ticket_token().to_string();
+        client.auth.client_endpoint = None;
+        (verifier_key, client.auth, client.request)
     }
 
     fn fixture_ticket() -> RemoteTicket {

@@ -128,11 +128,11 @@ pub fn save_ticket_state(state_dir: &Path, state: &RemoteTicketState) -> Result<
     let parent = path.parent().ok_or_else(|| state_error("parent-missing"))?;
     ensure_private_state_directory(parent)?;
     validate_existing_state_target(&path)?;
-    let rendered = serde_json::to_vec_pretty(state).map_err(|_| state_error("serialization-failed"))?;
+    let mut rendered = Zeroizing::new(Vec::new());
+    serde_json::to_writer_pretty(&mut *rendered, state).map_err(|_| state_error("serialization-failed"))?;
+    rendered.push(b'\n');
     let rendered_bytes = u64::try_from(rendered.len()).map_err(|_| state_error("size-conversion-failed"))?;
-    let newline_bytes = 1_u64;
-    let total_bytes = rendered_bytes.checked_add(newline_bytes).ok_or_else(|| state_error("size-overflow"))?;
-    if total_bytes > REMOTE_TICKET_STATE_BYTES_MAX {
+    if rendered_bytes > REMOTE_TICKET_STATE_BYTES_MAX {
         return Err(state_error("size-limit-exceeded"));
     }
     let (tmp_path, mut file) = create_private_state_temp(parent)?;
@@ -586,7 +586,6 @@ fn write_and_commit_state(
     rendered: &[u8],
 ) -> Result<(), RunError> {
     file.write_all(rendered).map_err(|_| state_error("temp-write-failed"))?;
-    file.write_all(b"\n").map_err(|_| state_error("temp-write-failed"))?;
     file.sync_all().map_err(|_| state_error("temp-sync-failed"))?;
     validate_private_state_file_metadata(&file.metadata().map_err(|_| state_error("temp-metadata-failed"))?)?;
     fs::rename(tmp_path, path).map_err(|_| state_error("atomic-replace-failed"))?;
