@@ -376,6 +376,36 @@ boundary. It does not prove compiler correctness, bootstrap-seed correctness,
 bit-for-bit release reproducibility, independent rebuild agreement, deployment
 success, or full Cargo compatibility. See [ADR 0032](../adr/0032-deny-live-source-acquisition-in-hydrated-fixed-point-proofs.md).
 
+### Source-built fixed-point source authority
+
+Use the `source-built-fixed-point` profile when the proof must construct its
+providers. This profile carries source authority only. It rejects a provider
+manifest in place of the StageX lineage manifest.
+
+```bash
+mantle source bundle bootstrap-profile \
+  --mode source-built-fixed-point \
+  --provider-archive bootstrap/seeds/AMD64/hex0-seed \
+  --provider-manifest bootstrap/stagex-transition-lineage.json \
+  --mantle-source . \
+  --vendor-deps ./vendor-deps \
+  --proof-input /media/handoff/rust-source-archives \
+  --include-bundle /media/handoff/stagex-native-source-closure.json \
+  --to source-built-fixed-point-sources.json
+```
+
+For this mode, `--provider-archive` carries the audited hex0 seed. The
+`--provider-manifest` flag carries the validated StageX lineage manifest. The
+names remain CLI compatibility surfaces; neither input is a provider output.
+The included bundle must contain materialized native fetch records. Each
+`--proof-input` carries authenticated Rust source archives.
+
+Hydration publishes only `vendor-deps/`. It imports and pins the seed, lineage,
+native source records, Rust archives, and Mantle source record. It does not
+create transition, provider, Rust-provider, or Mantle output directories.
+Those directories must remain absent until the source-built proof shell starts.
+See [ADR 0050](../adr/0050-build-the-source-fixed-point-through-one-rust-proof-authority.md).
+
 For a prepared checkout that already has its explicit vendor directory, import,
 pin, and preflight the bundle directly:
 

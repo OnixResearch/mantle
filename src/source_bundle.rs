@@ -115,8 +115,11 @@ const TARBALL_ARCHIVE_PAYLOAD_ENCODING: &str = "tarball-archive-v1";
 
 const BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED: &str = "musl.cc-native-reduced-v1";
 const BOOTSTRAP_PROVIDER_KIND_SOURCE_ROOT: &str = "source-root-v1";
+const BOOTSTRAP_PROVIDER_KIND_STAGEX_LINEAGE: &str = "stagex-lineage";
 const BOOTSTRAP_PROFILE_CLASS_PROVIDER_ARCHIVE: &str = "provider-archive";
 const BOOTSTRAP_PROFILE_CLASS_PROVIDER_MANIFEST: &str = "provider-manifest";
+const BOOTSTRAP_PROFILE_CLASS_STAGEX_SEED: &str = "stagex-seed";
+const BOOTSTRAP_PROFILE_CLASS_STAGEX_LINEAGE: &str = "stagex-lineage";
 const BOOTSTRAP_PROFILE_CLASS_BOOTSTRAP_SOURCE: &str = "bootstrap-source";
 const BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE: &str = "mantle-source";
 const BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS: &str = "vendored-cargo-inputs";
@@ -281,6 +284,7 @@ pub enum BootstrapSourceBundleMode {
     SelfBuildProof,
     FreshCloneInputs,
     FreshCloneFixedPoint,
+    SourceBuiltFixedPoint,
 }
 
 impl BootstrapSourceBundleMode {
@@ -291,6 +295,7 @@ impl BootstrapSourceBundleMode {
             "self-build-proof" => Ok(Self::SelfBuildProof),
             "fresh-clone-inputs" => Ok(Self::FreshCloneInputs),
             "fresh-clone-fixed-point" => Ok(Self::FreshCloneFixedPoint),
+            "source-built-fixed-point" => Ok(Self::SourceBuiltFixedPoint),
             other => Err(RunError::Internal(format!("unsupported bootstrap source profile mode '{other}'"))),
         }
     }
@@ -302,6 +307,7 @@ impl BootstrapSourceBundleMode {
             Self::SelfBuildProof => "self-build-proof",
             Self::FreshCloneInputs => "fresh-clone-inputs",
             Self::FreshCloneFixedPoint => "fresh-clone-fixed-point",
+            Self::SourceBuiltFixedPoint => "source-built-fixed-point",
         }
     }
 
@@ -311,23 +317,34 @@ impl BootstrapSourceBundleMode {
                 BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED
             }
             Self::SourceRoot => BOOTSTRAP_PROVIDER_KIND_SOURCE_ROOT,
+            Self::SourceBuiltFixedPoint => BOOTSTRAP_PROVIDER_KIND_STAGEX_LINEAGE,
         }
     }
 
     fn requires_full_self_build_inputs(self) -> bool {
-        matches!(self, Self::SelfBuildProof)
+        matches!(self, Self::SelfBuildProof | Self::SourceBuiltFixedPoint)
     }
 
     fn requires_vendor_inputs(self) -> bool {
-        matches!(self, Self::SelfBuildProof | Self::FreshCloneInputs | Self::FreshCloneFixedPoint)
+        matches!(
+            self,
+            Self::SelfBuildProof | Self::FreshCloneInputs | Self::FreshCloneFixedPoint | Self::SourceBuiltFixedPoint
+        )
     }
 
     fn requires_bootstrap_sources(self) -> bool {
-        !matches!(self, Self::FreshCloneInputs | Self::FreshCloneFixedPoint)
+        !matches!(self, Self::FreshCloneInputs | Self::FreshCloneFixedPoint | Self::SourceBuiltFixedPoint)
     }
 
     fn requires_supplemental_fetch_closure(self) -> bool {
-        matches!(self, Self::FreshCloneFixedPoint)
+        matches!(self, Self::FreshCloneFixedPoint | Self::SourceBuiltFixedPoint)
+    }
+
+    fn hydration_authority_classes(self) -> (&'static str, &'static str) {
+        if self == Self::SourceBuiltFixedPoint {
+            return (BOOTSTRAP_PROFILE_CLASS_STAGEX_SEED, BOOTSTRAP_PROFILE_CLASS_STAGEX_LINEAGE);
+        }
+        (BOOTSTRAP_PROFILE_CLASS_PROVIDER_ARCHIVE, BOOTSTRAP_PROFILE_CLASS_PROVIDER_MANIFEST)
     }
 }
 
@@ -582,7 +599,7 @@ pub fn plan_bootstrap_source_bundle_profile(
     validate_bootstrap_profile_input(input, store_prefix)?;
     assert!(store_prefix.starts_with('/'));
     assert!(!input.mode.requires_bootstrap_sources() || !input.bootstrap_sources.is_empty());
-    let provider_metadata = read_bootstrap_provider_profile_metadata(&input.provider_manifest)?;
+    let provider_metadata = read_bootstrap_provider_profile_metadata(input.mode, &input.provider_manifest)?;
     validate_bootstrap_provider_kind(input.mode, &provider_metadata.provider_kind)?;
     assert_eq!(provider_metadata.provider_kind, input.mode.expected_provider_kind());
     let profile_entries = bootstrap_profile_records_capacity(input)?;
@@ -659,21 +676,32 @@ fn append_bootstrap_provider_records(
     provider_metadata: &BootstrapProviderProfileMetadata,
 ) -> Result<(), RunError> {
     assert!(records.is_empty());
+    let (archive_class, manifest_class) = input.mode.hydration_authority_classes();
+    let archive_identity = if input.mode == BootstrapSourceBundleMode::SourceBuiltFixedPoint {
+        "stagex-seed"
+    } else {
+        "bootstrap-provider-archive"
+    };
+    let manifest_identity = if input.mode == BootstrapSourceBundleMode::SourceBuiltFixedPoint {
+        "stagex-lineage"
+    } else {
+        "bootstrap-provider-manifest"
+    };
     records.push(bootstrap_profile_record(BootstrapProfileRecordRequest {
         kind: SourceRecordKind::BootstrapArchive,
-        identity: "bootstrap-provider-archive".to_string(),
+        identity: archive_identity.to_string(),
         path: &input.provider_archive,
         mode: input.mode,
-        class: BOOTSTRAP_PROFILE_CLASS_PROVIDER_ARCHIVE,
+        class: archive_class,
         provider_metadata: None,
         store_prefix,
     })?);
     records.push(bootstrap_profile_record(BootstrapProfileRecordRequest {
         kind: SourceRecordKind::ProviderManifest,
-        identity: "bootstrap-provider-manifest".to_string(),
+        identity: manifest_identity.to_string(),
         path: &input.provider_manifest,
         mode: input.mode,
-        class: BOOTSTRAP_PROFILE_CLASS_PROVIDER_MANIFEST,
+        class: manifest_class,
         provider_metadata: Some(provider_metadata),
         store_prefix,
     })?);
@@ -758,12 +786,12 @@ pub fn bootstrap_source_bundle_profile_report(
     validate_manifest(manifest)?;
     assert_eq!(manifest.format, SOURCE_BUNDLE_FORMAT);
     assert_eq!(manifest.non_claim, SOURCE_BUNDLE_NON_CLAIM);
+    let (_, manifest_class) = mode.hydration_authority_classes();
     let provider = manifest
         .records
         .iter()
         .find(|record| {
-            record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
-                == Some(BOOTSTRAP_PROFILE_CLASS_PROVIDER_MANIFEST)
+            record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str) == Some(manifest_class)
         })
         .ok_or_else(|| RunError::Internal("bootstrap profile missing provider manifest record".to_string()))?;
     let provider_kind = provider
@@ -909,16 +937,12 @@ fn plan_self_build_hydration(
     }
     let vendor_record_index =
         unique_hydration_record_index(manifest, BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS, SourceRecordKind::PackageMirror)?;
-    let provider_archive_record_index = unique_hydration_record_index(
-        manifest,
-        BOOTSTRAP_PROFILE_CLASS_PROVIDER_ARCHIVE,
-        SourceRecordKind::BootstrapArchive,
-    )?;
-    let provider_manifest_record_index = unique_hydration_record_index(
-        manifest,
-        BOOTSTRAP_PROFILE_CLASS_PROVIDER_MANIFEST,
-        SourceRecordKind::ProviderManifest,
-    )?;
+    let mode = hydration_mode_from_vendor_record(manifest, vendor_record_index)?;
+    let (archive_class, manifest_class) = mode.hydration_authority_classes();
+    let provider_archive_record_index =
+        unique_hydration_record_index(manifest, archive_class, SourceRecordKind::BootstrapArchive)?;
+    let provider_manifest_record_index =
+        unique_hydration_record_index(manifest, manifest_class, SourceRecordKind::ProviderManifest)?;
     let plan = SelfBuildHydrationPlan {
         vendor_record_index,
         provider_archive_record_index,
@@ -966,6 +990,20 @@ fn unique_hydration_record_index(
     Ok(index)
 }
 
+fn hydration_mode_from_vendor_record(
+    manifest: &SourceBundleManifest,
+    vendor_record_index: usize,
+) -> Result<BootstrapSourceBundleMode, RunError> {
+    let mode_text = manifest.records[vendor_record_index]
+        .metadata
+        .get(RECORD_METADATA_PROFILE_MODE_KEY)
+        .ok_or_else(|| RunError::Internal("self-build hydration vendor record is missing profile mode".to_string()))?;
+    let mode = BootstrapSourceBundleMode::parse(mode_text)?;
+    assert!(vendor_record_index < manifest.records.len());
+    assert_eq!(mode.as_str(), mode_text);
+    Ok(mode)
+}
+
 fn validate_hydration_profile_linkage(
     manifest: &SourceBundleManifest,
     plan: &SelfBuildHydrationPlan,
@@ -975,22 +1013,16 @@ fn validate_hydration_profile_linkage(
         &manifest.records[plan.provider_archive_record_index],
         &manifest.records[plan.provider_manifest_record_index],
     ];
-    let mode_text = records[0]
-        .metadata
-        .get(RECORD_METADATA_PROFILE_MODE_KEY)
-        .ok_or_else(|| RunError::Internal("self-build hydration vendor record is missing profile mode".to_string()))?;
-    let mode = BootstrapSourceBundleMode::parse(mode_text)?;
+    let mode = hydration_mode_from_vendor_record(manifest, plan.vendor_record_index)?;
     if !matches!(
         mode,
         BootstrapSourceBundleMode::LegacySeed
             | BootstrapSourceBundleMode::SelfBuildProof
             | BootstrapSourceBundleMode::FreshCloneInputs
             | BootstrapSourceBundleMode::FreshCloneFixedPoint
+            | BootstrapSourceBundleMode::SourceBuiltFixedPoint
     ) {
-        return Err(RunError::Internal(format!(
-            "self-build hydration requires a legacy-seed, self-build-proof, fresh-clone-inputs, or fresh-clone-fixed-point profile, got {}",
-            mode.as_str()
-        )));
+        return Err(RunError::Internal(format!("self-build hydration does not accept profile mode {}", mode.as_str())));
     }
     for record in records {
         if record.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).map(String::as_str) != Some(mode.as_str()) {
@@ -1543,9 +1575,10 @@ fn validate_bootstrap_profile_input(
 
 fn validate_supplemental_profile_records(input: &BootstrapSourceBundleProfileInput) -> Result<(), RunError> {
     if input.mode.requires_supplemental_fetch_closure() && input.supplemental_records.is_empty() {
-        return Err(RunError::Internal(
-            "fresh-clone-fixed-point profile requires materialized --include-bundle fetch records".to_string(),
-        ));
+        return Err(RunError::Internal(format!(
+            "{} profile requires materialized --include-bundle fetch records",
+            input.mode.as_str()
+        )));
     }
     if !input.mode.requires_supplemental_fetch_closure() && !input.supplemental_records.is_empty() {
         return Err(RunError::Internal(format!(
@@ -1594,9 +1627,15 @@ fn bootstrap_indexed_identity(class: &str, index: usize) -> Result<String, RunEr
     Ok(identity)
 }
 
-fn read_bootstrap_provider_profile_metadata(path: &Path) -> Result<BootstrapProviderProfileMetadata, RunError> {
+fn read_bootstrap_provider_profile_metadata(
+    mode: BootstrapSourceBundleMode,
+    path: &Path,
+) -> Result<BootstrapProviderProfileMetadata, RunError> {
     let bytes = fs::read(path)
         .map_err(|err| RunError::Internal(format!("reading bootstrap provider manifest {}: {err}", path.display())))?;
+    if mode == BootstrapSourceBundleMode::SourceBuiltFixedPoint {
+        return read_stagex_lineage_profile_metadata(path, &bytes);
+    }
     let value = serde_json::from_slice::<serde_json::Value>(&bytes)
         .map_err(|err| RunError::Internal(format!("parsing bootstrap provider manifest {}: {err}", path.display())))?;
     let provider_kind = provider_kind_from_json(&value).ok_or_else(|| {
@@ -1608,6 +1647,29 @@ fn read_bootstrap_provider_profile_metadata(path: &Path) -> Result<BootstrapProv
         provider_kind,
         schema_version,
     })
+}
+
+fn read_stagex_lineage_profile_metadata(
+    path: &Path,
+    bytes: &[u8],
+) -> Result<BootstrapProviderProfileMetadata, RunError> {
+    let lineage = serde_json::from_slice::<crunch_bootstrap_core::LineageManifest>(bytes)
+        .map_err(|err| RunError::Internal(format!("parsing StageX lineage manifest {}: {err}", path.display())))?;
+    let validation = crunch_bootstrap_core::validate_lineage(&lineage);
+    if !validation.is_valid() {
+        return Err(RunError::Internal(format!(
+            "StageX lineage manifest {} is invalid: {:?}",
+            path.display(),
+            validation.errors
+        )));
+    }
+    let metadata = BootstrapProviderProfileMetadata {
+        provider_kind: BOOTSTRAP_PROVIDER_KIND_STAGEX_LINEAGE.to_string(),
+        schema_version: "1".to_string(),
+    };
+    assert!(!lineage.stage_graph.is_empty());
+    assert_eq!(metadata.provider_kind, BOOTSTRAP_PROVIDER_KIND_STAGEX_LINEAGE);
+    Ok(metadata)
 }
 
 fn provider_kind_from_json(value: &serde_json::Value) -> Option<String> {
@@ -4677,6 +4739,26 @@ mod tests {
         }
     }
 
+    fn source_built_fixed_point_profile_fixture(temp: &Path) -> BootstrapSourceBundleProfileInput {
+        let mut input = bootstrap_profile_fixture(temp);
+        let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let payload = temp.join("native-fixed-payload.txt");
+        fs::write(&payload, b"authenticated native source payload").unwrap();
+        let fetcher = fixed_fetcher("native-fixed-src", &file_url(&payload));
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let planned =
+            plan_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap();
+        input.mode = BootstrapSourceBundleMode::SourceBuiltFixedPoint;
+        input.provider_archive = repo.join("bootstrap/seeds/AMD64/hex0-seed");
+        input.provider_manifest = repo.join("bootstrap/stagex-transition-lineage.json");
+        input.bootstrap_sources.clear();
+        input.toolchain_source_root = None;
+        input.supplemental_records = vec![materialized_record_from_payload(&planned.records[0], &payload, false)];
+        assert!(input.mantle_source.is_some());
+        assert!(!input.proof_inputs.is_empty());
+        input
+    }
+
     fn cargo_sha256_hex(bytes: &[u8]) -> String {
         use sha2::Digest as _;
         data_encoding::HEXLOWER.encode(&sha2::Sha256::digest(bytes))
@@ -4730,6 +4812,19 @@ mod tests {
         let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
         let checkout = temp.join("fresh-clone");
         write_hydration_checkout(&checkout);
+        (manifest, checkout)
+    }
+
+    fn source_built_hydration_fixture(temp: &Path) -> (SourceBundleManifest, PathBuf) {
+        let input = source_built_fixed_point_profile_fixture(&temp.join("profile"));
+        let vendor = input.vendor_deps.as_ref().unwrap();
+        fs::remove_dir_all(vendor).unwrap();
+        write_hydration_vendor(vendor, false);
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let checkout = temp.join("source-built-fresh-clone");
+        write_hydration_checkout(&checkout);
+        assert!(manifest.records.len() > REQUIRED_HYDRATION_RECORD_CLASS_COUNT);
+        assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
         (manifest, checkout)
     }
 
@@ -5170,6 +5265,27 @@ mod tests {
         assert!(!state_dir.exists());
     }
 
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_fixed_point_hydration_pins_all_sources_and_publishes_only_vendor() {
+        let temp = tempfile::tempdir().unwrap();
+        let (manifest, checkout) = source_built_hydration_fixture(temp.path());
+        let state_dir = temp.path().join("source-built-state");
+
+        let report =
+            hydrate_self_build_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state_dir).unwrap();
+        let verification = verify_source_bundle_state(&manifest, &state_dir).unwrap();
+        let observed_record_count = report.imported_record_count.saturating_add(report.existing_record_count);
+
+        assert_eq!(verification.ready_class, SourceReadiness::Ready);
+        assert_eq!(observed_record_count, u32::try_from(manifest.records.len()).unwrap());
+        assert!(checkout.join(VENDOR_DEPS_DIR_NAME).is_dir());
+        assert!(!checkout.join("native-provider").exists());
+        assert!(!checkout.join("rust-provider").exists());
+        assert!(!checkout.join("mantle-output").exists());
+        assert!(report.pinned);
+    }
+
     // r[verify bootstrap_inventory.fresh_clone_source_hydration]
     #[test]
     fn self_build_hydration_preserves_existing_vendor_without_importing_state() {
@@ -5339,6 +5455,64 @@ mod tests {
         assert_eq!(fixed_point_manifest.records.len(), REQUIRED_HYDRATION_RECORD_CLASS_COUNT + 1);
         assert!(fixed_point_manifest.records.contains(&supplemental));
         assert_eq!(base_manifest.records.len(), REQUIRED_HYDRATION_RECORD_CLASS_COUNT);
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_fixed_point_profile_carries_sources_without_provider_outputs() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = source_built_fixed_point_profile_fixture(temp.path());
+
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let report = bootstrap_source_bundle_profile_report(&manifest, input.mode).unwrap();
+        let hydration = plan_self_build_hydration(&manifest, &manifest.manifest_blake3).unwrap();
+
+        assert_eq!(report.mode, BootstrapSourceBundleMode::SourceBuiltFixedPoint);
+        assert_eq!(report.provider_kind, BOOTSTRAP_PROVIDER_KIND_STAGEX_LINEAGE);
+        assert!(manifest.records.iter().any(|record| {
+            record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+                == Some(BOOTSTRAP_PROFILE_CLASS_STAGEX_SEED)
+        }));
+        assert!(manifest.records.iter().any(|record| {
+            record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+                == Some(BOOTSTRAP_PROFILE_CLASS_STAGEX_LINEAGE)
+        }));
+        assert!(manifest.records.iter().any(|record| record.kind == SourceRecordKind::ProofInput));
+        assert!(manifest.records.iter().any(|record| record.kind == SourceRecordKind::LocalPath));
+        assert!(manifest.records.iter().any(|record| record.kind == SourceRecordKind::PackageMirror));
+        assert_eq!(manifest.records[hydration.provider_archive_record_index].identity, "stagex-seed");
+        assert_eq!(manifest.records[hydration.provider_manifest_record_index].identity, "stagex-lineage");
+        assert!(!manifest.records.iter().any(|record| record.identity.contains("imported-provider")));
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_fixed_point_profile_rejects_missing_native_source_closure() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut input = source_built_fixed_point_profile_fixture(temp.path());
+        input.supplemental_records.clear();
+
+        let error = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap_err();
+
+        assert!(error.to_string().contains("source-built-fixed-point"));
+        assert!(error.to_string().contains("requires materialized --include-bundle"));
+        assert!(!error.to_string().contains("provider output"));
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_fixed_point_profile_rejects_provider_manifest_substitution() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut input = source_built_fixed_point_profile_fixture(temp.path());
+        let provider_manifest = temp.path().join("substituted-provider.json");
+        write_provider_manifest(&provider_manifest, BOOTSTRAP_PROVIDER_KIND_STAGEX_LINEAGE);
+        input.provider_manifest = provider_manifest;
+
+        let error = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap_err();
+
+        assert!(error.to_string().contains("StageX lineage manifest"));
+        assert!(error.to_string().contains("parsing"));
+        assert!(!error.to_string().contains("accepted"));
     }
 
     #[test]

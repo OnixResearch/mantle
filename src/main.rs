@@ -135,9 +135,9 @@ mod self_build;
 #[allow(dead_code)]
 mod semantic_graph;
 mod shell_cmd;
-mod source_bundle;
 #[allow(dead_code)]
 mod source_built_fixed_point;
+mod source_bundle;
 mod source_root_capability;
 mod source_root_provider;
 mod source_toolchain_closure;
@@ -2599,8 +2599,8 @@ pub enum SourceBundleAction {
     },
     /// Build a named bootstrap source-bundle profile from local inputs
     BootstrapProfile {
-        /// Profile mode: legacy-seed, source-root, self-build-proof, fresh-clone-inputs, or
-        /// fresh-clone-fixed-point
+        /// Profile mode: legacy-seed, source-root, self-build-proof, fresh-clone-inputs,
+        /// fresh-clone-fixed-point, or source-built-fixed-point
         #[arg(long, default_value = "legacy-seed")]
         mode: String,
 
