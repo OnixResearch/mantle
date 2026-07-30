@@ -55,14 +55,51 @@ const FLEX_SMOKE_COMMAND_COUNT: u32 = 4;
 const FLEX_OUTPUT_COUNT: usize = 7;
 const FLEX_EXECUTABLE_MODE: u32 = 0o755;
 const FLEX_REGULAR_MODE: u32 = 0o644;
+const FLEX_PERMISSION_MODE_MASK: u32 = 0o777;
+const FLEX_NO_PERMISSION_MODE: u32 = 0o000;
 const FLEX_EXECUTE_MODE_MASK: u32 = 0o111;
+const ELF_MAGIC_BYTES: usize = 4;
+const ELF_MAGIC: &[u8; ELF_MAGIC_BYTES] = b"\x7fELF";
+const ELF64_HEADER_BYTES: usize = 64;
+const ELF64_SECTION_HEADER_BYTES: usize = 64;
+const ELF_IDENT_CLASS_OFFSET: usize = 4;
+const ELF_IDENT_DATA_OFFSET: usize = 5;
+const ELF_TYPE_OFFSET: usize = 16;
+const ELF_MACHINE_OFFSET: usize = 18;
+const ELF_SECTION_TABLE_OFFSET: usize = 40;
+const ELF_SECTION_HEADER_SIZE_OFFSET: usize = 58;
+const ELF_SECTION_COUNT_OFFSET: usize = 60;
+const ELF_SECTION_NAMES_INDEX_OFFSET: usize = 62;
+const ELF_SECTION_NAME_OFFSET: usize = 0;
+const ELF_SECTION_TYPE_OFFSET: usize = 4;
+const ELF_SECTION_FLAGS_OFFSET: usize = 8;
+const ELF_SECTION_DATA_OFFSET: usize = 24;
+const ELF_SECTION_DATA_SIZE_OFFSET: usize = 32;
+const ELF_SECTION_ALIGNMENT_OFFSET: usize = 48;
+const ELF_CLASS_64: u8 = 2;
+const ELF_DATA_LITTLE_ENDIAN: u8 = 1;
+const ELF_TYPE_EXECUTABLE: u16 = 2;
+const ELF_MACHINE_X86_64: u16 = 62;
+const ELF_SECTION_TYPE_PROGBITS: u32 = 1;
+const ELF_SECTION_TYPE_STRING_TABLE: u32 = 3;
+const ELF_SECTION_FLAG_ALLOC: u64 = 2;
+const FLEX_RUNTIME_SECTION_ALIGNMENT: u64 = 8;
+const FLEX_RUNTIME_SECTION_BYTES_LEN: usize = 49;
+const FLEX_RUNTIME_SECTION_NAME_BYTES_LEN: usize = 3;
+const FLEX_RUNTIME_SECTION_NAME: &[u8; FLEX_RUNTIME_SECTION_NAME_BYTES_LEN] = b"stx";
+const FLEX_RUNTIME_SECTION_BYTES: [u8; FLEX_RUNTIME_SECTION_BYTES_LEN] = [
+    0x48, 0xc7, 0xc0, 0x39, 0x00, 0x00, 0x00, 0x0f, 0x05, 0xc3, 0x48, 0x89, 0xfe, 0x48, 0xc7, 0xc7, 0xff, 0xff, 0xff,
+    0xff, 0x48, 0x31, 0xd2, 0x4d, 0x31, 0xd2, 0x48, 0xc7, 0xc0, 0x3d, 0x00, 0x00, 0x00, 0x0f, 0x05, 0xc3, 0x48, 0x31,
+    0xd2, 0x48, 0xc7, 0xc0, 0x3b, 0x00, 0x00, 0x00, 0x0f, 0x05, 0xc3,
+];
+const FLEX_RUNTIME_SECTION_MATCH_COUNT: usize = 1;
 const FLEX_COMPAT_START: &str = "      $BB cat > /tmp/flex-compat.c <<'COMPAT'\n";
 const FLEX_COMPAT_END: &str = "\nCOMPAT\n";
 const FLEX_REPORT_FORMAT: &str = "mantle-stagex-flex-2.6.4-inventory-v1";
 const FLEX_NON_CLAIM: &str = "this inventory binds GNU Flex 2.6.4, its exact bounded source normalization and compatibility runtime, its declared GNU M4 child, and positive and negative scanner observations only; it does not prove arbitrary scanner semantics, binutils, native TinyCC, compiler correctness, or provider admission";
 pub(crate) const FLEX_CONFIGURED_SOURCE_BLAKE3: &str =
     "d2d7e2a0ed46329fc2e37d58d25dab8f17c01b5c9b7b97de09930ef3e25fe3b7";
-pub(crate) const FLEX_BINARY_BLAKE3: &str = "1adcaf70694b47268ddbaa32c834c78ee11f5a01a5fe45f07857607915b0507b";
+pub(crate) const FLEX_BINARY_BLAKE3: &str = "502324a00e1b35d6fc18a6cf6c3a257d3578b7d5fd8bffc27ce41b9da3c1ebbf";
 const FLEX_LIBFL_BLAKE3: &str = "45c3a2d2e338eae19d24fa17df35127f5c61c16dca0ce98dce45efb13b920bfa";
 const FLEX_HEADER_BLAKE3: &str = "713ca824326279098cc1eb9b18ddd200e7506335c502cf2d79b4af7aaa330cdf";
 pub(crate) const FLEX_LIBFL_CONSUMER_BLAKE3: &str = "9d13005da4640c131d85edff0a255a83471b136d31ce41d2b04534c8a7b533b4";
@@ -933,6 +970,227 @@ struct FlexProducts {
     consumer: PathBuf,
 }
 
+fn read_elf_u16(bytes: &[u8], offset: usize) -> Option<u16> {
+    let end = offset.checked_add(std::mem::size_of::<u16>())?;
+    let field = bytes.get(offset..end)?;
+    Some(u16::from_le_bytes([field[0], field[1]]))
+}
+
+fn read_elf_u32(bytes: &[u8], offset: usize) -> Option<u32> {
+    let end = offset.checked_add(std::mem::size_of::<u32>())?;
+    let field = bytes.get(offset..end)?;
+    Some(u32::from_le_bytes([field[0], field[1], field[2], field[3]]))
+}
+
+fn read_elf_u64(bytes: &[u8], offset: usize) -> Option<u64> {
+    let end = offset.checked_add(std::mem::size_of::<u64>())?;
+    let field = bytes.get(offset..end)?;
+    Some(u64::from_le_bytes([
+        field[0], field[1], field[2], field[3], field[4], field[5], field[6], field[7],
+    ]))
+}
+
+fn elf_usize(value: u64, label: &str) -> Result<usize, String> {
+    usize::try_from(value).map_err(|_| format!("Flex ELF {label} exceeds this platform"))
+}
+
+fn elf_section_header_offset(table_offset: usize, entry_size: usize, index: usize) -> Result<usize, String> {
+    let relative =
+        index.checked_mul(entry_size).ok_or_else(|| "Flex ELF section-header offset overflow".to_string())?;
+    table_offset
+        .checked_add(relative)
+        .ok_or_else(|| "Flex ELF section-table offset overflow".to_string())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FlexElfSections {
+    table_offset: usize,
+    header_size: usize,
+    count: usize,
+    names_offset: usize,
+    names_end: usize,
+}
+
+fn validate_flex_elf_header(bytes: &[u8]) -> Result<(), String> {
+    if bytes.len() < ELF64_HEADER_BYTES || bytes.get(..ELF_MAGIC_BYTES) != Some(ELF_MAGIC) {
+        return Err("Flex runtime section canonicalizer requires an ELF file".to_string());
+    }
+    if bytes[ELF_IDENT_CLASS_OFFSET] != ELF_CLASS_64 || bytes[ELF_IDENT_DATA_OFFSET] != ELF_DATA_LITTLE_ENDIAN {
+        return Err("Flex runtime section canonicalizer requires little-endian ELF64".to_string());
+    }
+    if read_elf_u16(bytes, ELF_TYPE_OFFSET) != Some(ELF_TYPE_EXECUTABLE) {
+        return Err("Flex runtime section canonicalizer requires an executable".to_string());
+    }
+    if read_elf_u16(bytes, ELF_MACHINE_OFFSET) != Some(ELF_MACHINE_X86_64) {
+        return Err("Flex runtime section canonicalizer requires x86_64".to_string());
+    }
+    assert!(bytes.len() >= ELF64_HEADER_BYTES);
+    assert_eq!(bytes[ELF_IDENT_CLASS_OFFSET], ELF_CLASS_64);
+    Ok(())
+}
+
+fn parse_flex_elf_sections(bytes: &[u8]) -> Result<FlexElfSections, String> {
+    let table_offset = elf_usize(
+        read_elf_u64(bytes, ELF_SECTION_TABLE_OFFSET)
+            .ok_or_else(|| "Flex ELF lacks a section-table offset".to_string())?,
+        "section-table offset",
+    )?;
+    let header_size = usize::from(
+        read_elf_u16(bytes, ELF_SECTION_HEADER_SIZE_OFFSET)
+            .ok_or_else(|| "Flex ELF lacks a section-header size".to_string())?,
+    );
+    let count = usize::from(
+        read_elf_u16(bytes, ELF_SECTION_COUNT_OFFSET).ok_or_else(|| "Flex ELF lacks a section count".to_string())?,
+    );
+    let names_index = usize::from(
+        read_elf_u16(bytes, ELF_SECTION_NAMES_INDEX_OFFSET)
+            .ok_or_else(|| "Flex ELF lacks a section-name table index".to_string())?,
+    );
+    if header_size != ELF64_SECTION_HEADER_BYTES || count == 0 || names_index >= count {
+        return Err("Flex ELF has an invalid bounded section table".to_string());
+    }
+    let table_bytes =
+        count.checked_mul(header_size).ok_or_else(|| "Flex ELF section-table size overflow".to_string())?;
+    let table_end = table_offset
+        .checked_add(table_bytes)
+        .ok_or_else(|| "Flex ELF section-table range overflow".to_string())?;
+    if table_end > bytes.len() {
+        return Err("Flex ELF section table exceeds the file".to_string());
+    }
+    let names_header = elf_section_header_offset(table_offset, header_size, names_index)?;
+    if read_elf_u32(bytes, names_header + ELF_SECTION_TYPE_OFFSET) != Some(ELF_SECTION_TYPE_STRING_TABLE) {
+        return Err("Flex ELF section-name table has the wrong type".to_string());
+    }
+    let names_offset = elf_usize(
+        read_elf_u64(bytes, names_header + ELF_SECTION_DATA_OFFSET)
+            .ok_or_else(|| "Flex ELF lacks a section-name offset".to_string())?,
+        "section-name offset",
+    )?;
+    let names_size = elf_usize(
+        read_elf_u64(bytes, names_header + ELF_SECTION_DATA_SIZE_OFFSET)
+            .ok_or_else(|| "Flex ELF lacks a section-name size".to_string())?,
+        "section-name size",
+    )?;
+    let names_end = names_offset
+        .checked_add(names_size)
+        .ok_or_else(|| "Flex ELF section-name range overflow".to_string())?;
+    if names_end > bytes.len() {
+        return Err("Flex ELF section-name table exceeds the file".to_string());
+    }
+    assert!(table_end <= bytes.len());
+    assert!(names_offset < names_end);
+    Ok(FlexElfSections {
+        table_offset,
+        header_size,
+        count,
+        names_offset,
+        names_end,
+    })
+}
+
+fn flex_runtime_section_name_start(
+    bytes: &[u8],
+    sections: FlexElfSections,
+    header: usize,
+) -> Result<Option<usize>, String> {
+    if read_elf_u32(bytes, header + ELF_SECTION_TYPE_OFFSET) != Some(ELF_SECTION_TYPE_PROGBITS) {
+        return Ok(None);
+    }
+    if read_elf_u64(bytes, header + ELF_SECTION_FLAGS_OFFSET) != Some(ELF_SECTION_FLAG_ALLOC) {
+        return Ok(None);
+    }
+    if read_elf_u64(bytes, header + ELF_SECTION_ALIGNMENT_OFFSET) != Some(FLEX_RUNTIME_SECTION_ALIGNMENT) {
+        return Ok(None);
+    }
+    let data_offset = elf_usize(
+        read_elf_u64(bytes, header + ELF_SECTION_DATA_OFFSET)
+            .ok_or_else(|| "Flex ELF section lacks a data offset".to_string())?,
+        "section data offset",
+    )?;
+    let data_size = elf_usize(
+        read_elf_u64(bytes, header + ELF_SECTION_DATA_SIZE_OFFSET)
+            .ok_or_else(|| "Flex ELF section lacks a data size".to_string())?,
+        "section data size",
+    )?;
+    let data_end = data_offset
+        .checked_add(data_size)
+        .ok_or_else(|| "Flex ELF section data range overflow".to_string())?;
+    if data_size != FLEX_RUNTIME_SECTION_BYTES_LEN || data_end > bytes.len() {
+        return Ok(None);
+    }
+    if bytes[data_offset..data_end] != FLEX_RUNTIME_SECTION_BYTES {
+        return Ok(None);
+    }
+    let name_offset = usize::try_from(
+        read_elf_u32(bytes, header + ELF_SECTION_NAME_OFFSET)
+            .ok_or_else(|| "Flex ELF section lacks a name offset".to_string())?,
+    )
+    .map_err(|_| "Flex ELF section-name offset exceeds this platform".to_string())?;
+    let name_start = sections
+        .names_offset
+        .checked_add(name_offset)
+        .ok_or_else(|| "Flex ELF runtime section-name offset overflow".to_string())?;
+    if name_start >= sections.names_end {
+        return Err("Flex ELF runtime section name exceeds the string table".to_string());
+    }
+    let name_len = bytes[name_start..sections.names_end]
+        .iter()
+        .position(|byte| *byte == 0)
+        .ok_or_else(|| "Flex ELF runtime section name is not terminated".to_string())?;
+    if name_len != FLEX_RUNTIME_SECTION_NAME_BYTES_LEN {
+        return Err(format!(
+            "Flex ELF runtime section name has {name_len} bytes; expected {FLEX_RUNTIME_SECTION_NAME_BYTES_LEN}"
+        ));
+    }
+    assert_eq!(data_size, FLEX_RUNTIME_SECTION_BYTES_LEN);
+    assert!(name_start < sections.names_end);
+    Ok(Some(name_start))
+}
+
+fn canonicalize_flex_runtime_section_bytes(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    validate_flex_elf_header(bytes)?;
+    let sections = parse_flex_elf_sections(bytes)?;
+    let mut canonical = bytes.to_vec();
+    let mut match_count = 0usize;
+    for section_index in 0..sections.count {
+        let header = elf_section_header_offset(sections.table_offset, sections.header_size, section_index)?;
+        let Some(name_start) = flex_runtime_section_name_start(bytes, sections, header)? else {
+            continue;
+        };
+        let name_end = name_start + FLEX_RUNTIME_SECTION_NAME_BYTES_LEN;
+        canonical[name_start..name_end].copy_from_slice(FLEX_RUNTIME_SECTION_NAME);
+        match_count = match_count
+            .checked_add(1)
+            .ok_or_else(|| "Flex ELF runtime section match count overflow".to_string())?;
+    }
+    if match_count != FLEX_RUNTIME_SECTION_MATCH_COUNT {
+        return Err(format!(
+            "Flex ELF has {match_count} matching runtime sections; expected {FLEX_RUNTIME_SECTION_MATCH_COUNT}"
+        ));
+    }
+    assert_eq!(canonical.len(), bytes.len());
+    assert_eq!(match_count, FLEX_RUNTIME_SECTION_MATCH_COUNT);
+    Ok(canonical)
+}
+
+fn canonicalize_flex_runtime_section_file(path: &Path) -> Result<(), StagexFlexError> {
+    fs::set_permissions(path, fs::Permissions::from_mode(FLEX_REGULAR_MODE))
+        .map_err(|error| StagexFlexError::Materialization(format!("setting Flex canonicalization mode: {error}")))?;
+    let bytes = crate::stagex_mes_lib::read_bounded_file(path, FLEX_ARTIFACT_BYTES_MAX, "Flex executable")?;
+    let canonical = canonicalize_flex_runtime_section_bytes(&bytes)
+        .map_err(|error| StagexFlexError::Materialization(format!("canonicalizing Flex runtime section: {error}")))?;
+    fs::write(path, &canonical)
+        .map_err(|error| StagexFlexError::Materialization(format!("writing canonical Flex executable: {error}")))?;
+    if fs::read(path).unwrap_or_default() != canonical {
+        return Err(StagexFlexError::Materialization(
+            "canonical Flex executable did not persist byte-for-byte".to_string(),
+        ));
+    }
+    assert_eq!(canonical.len(), bytes.len());
+    assert!(path.is_file());
+    Ok(())
+}
+
 fn build_flex(
     request: &FlexInventoryRequest<'_>,
     source_root: &Path,
@@ -1044,6 +1302,7 @@ fn link_flex(
         &BTreeMap::<String, String>::new(),
         &request.scratch_dir.join("flex-link.stderr.txt"),
     )?;
+    canonicalize_flex_runtime_section_file(&flex)?;
     fs::set_permissions(&flex, fs::Permissions::from_mode(FLEX_EXECUTABLE_MODE))
         .map_err(|error| StagexFlexError::Materialization(format!("setting Flex executable mode: {error}")))?;
     validate_nonempty_artifact(&flex, "Flex executable")?;
@@ -1482,6 +1741,131 @@ mod tests {
 
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const SOURCE_MANIFEST_BLAKE3: &str = "541eae99be64df5f13ed8ff52403e83d034c8ce4747984a2d8d11cffc10b01ab";
+    const SYNTHETIC_SECTION_COUNT: usize = 3;
+    const SYNTHETIC_TARGET_SECTION_INDEX: usize = 1;
+    const SYNTHETIC_NAMES_SECTION_INDEX: usize = 2;
+    const SYNTHETIC_NAME_OFFSET: u32 = 1;
+    const SYNTHETIC_RANDOM_NAME: &[u8; FLEX_RUNTIME_SECTION_NAME_BYTES_LEN] = b"rnd";
+    const SYNTHETIC_SECTION_NAMES: &[u8] = b"\0rnd\0.shstrtab\0";
+
+    fn write_fixture_u16(bytes: &mut [u8], offset: usize, value: u16) {
+        let encoded = value.to_le_bytes();
+        bytes[offset..offset + encoded.len()].copy_from_slice(&encoded);
+    }
+
+    fn write_fixture_u32(bytes: &mut [u8], offset: usize, value: u32) {
+        let encoded = value.to_le_bytes();
+        bytes[offset..offset + encoded.len()].copy_from_slice(&encoded);
+    }
+
+    fn write_fixture_u64(bytes: &mut [u8], offset: usize, value: u64) {
+        let encoded = value.to_le_bytes();
+        bytes[offset..offset + encoded.len()].copy_from_slice(&encoded);
+    }
+
+    fn synthetic_flex_elf() -> Vec<u8> {
+        let content_offset = ELF64_HEADER_BYTES;
+        let names_offset = content_offset + FLEX_RUNTIME_SECTION_BYTES_LEN;
+        let table_offset = names_offset + SYNTHETIC_SECTION_NAMES.len();
+        let table_bytes = SYNTHETIC_SECTION_COUNT * ELF64_SECTION_HEADER_BYTES;
+        let mut bytes = vec![0u8; table_offset + table_bytes];
+        bytes[..ELF_MAGIC_BYTES].copy_from_slice(ELF_MAGIC);
+        bytes[ELF_IDENT_CLASS_OFFSET] = ELF_CLASS_64;
+        bytes[ELF_IDENT_DATA_OFFSET] = ELF_DATA_LITTLE_ENDIAN;
+        write_fixture_u16(&mut bytes, ELF_TYPE_OFFSET, ELF_TYPE_EXECUTABLE);
+        write_fixture_u16(&mut bytes, ELF_MACHINE_OFFSET, ELF_MACHINE_X86_64);
+        write_fixture_u64(&mut bytes, ELF_SECTION_TABLE_OFFSET, u64::try_from(table_offset).unwrap());
+        write_fixture_u16(
+            &mut bytes,
+            ELF_SECTION_HEADER_SIZE_OFFSET,
+            u16::try_from(ELF64_SECTION_HEADER_BYTES).unwrap(),
+        );
+        write_fixture_u16(&mut bytes, ELF_SECTION_COUNT_OFFSET, u16::try_from(SYNTHETIC_SECTION_COUNT).unwrap());
+        write_fixture_u16(
+            &mut bytes,
+            ELF_SECTION_NAMES_INDEX_OFFSET,
+            u16::try_from(SYNTHETIC_NAMES_SECTION_INDEX).unwrap(),
+        );
+        bytes[content_offset..names_offset].copy_from_slice(&FLEX_RUNTIME_SECTION_BYTES);
+        bytes[names_offset..table_offset].copy_from_slice(SYNTHETIC_SECTION_NAMES);
+        let target = table_offset + SYNTHETIC_TARGET_SECTION_INDEX * ELF64_SECTION_HEADER_BYTES;
+        write_fixture_u32(&mut bytes, target + ELF_SECTION_NAME_OFFSET, SYNTHETIC_NAME_OFFSET);
+        write_fixture_u32(&mut bytes, target + ELF_SECTION_TYPE_OFFSET, ELF_SECTION_TYPE_PROGBITS);
+        write_fixture_u64(&mut bytes, target + ELF_SECTION_FLAGS_OFFSET, ELF_SECTION_FLAG_ALLOC);
+        write_fixture_u64(&mut bytes, target + ELF_SECTION_DATA_OFFSET, u64::try_from(content_offset).unwrap());
+        write_fixture_u64(
+            &mut bytes,
+            target + ELF_SECTION_DATA_SIZE_OFFSET,
+            u64::try_from(FLEX_RUNTIME_SECTION_BYTES_LEN).unwrap(),
+        );
+        write_fixture_u64(&mut bytes, target + ELF_SECTION_ALIGNMENT_OFFSET, FLEX_RUNTIME_SECTION_ALIGNMENT);
+        let names = table_offset + SYNTHETIC_NAMES_SECTION_INDEX * ELF64_SECTION_HEADER_BYTES;
+        write_fixture_u32(&mut bytes, names + ELF_SECTION_TYPE_OFFSET, ELF_SECTION_TYPE_STRING_TABLE);
+        write_fixture_u64(&mut bytes, names + ELF_SECTION_DATA_OFFSET, u64::try_from(names_offset).unwrap());
+        write_fixture_u64(
+            &mut bytes,
+            names + ELF_SECTION_DATA_SIZE_OFFSET,
+            u64::try_from(SYNTHETIC_SECTION_NAMES.len()).unwrap(),
+        );
+        assert_eq!(
+            &bytes[names_offset + usize::try_from(SYNTHETIC_NAME_OFFSET).unwrap()..][..SYNTHETIC_RANDOM_NAME.len()],
+            SYNTHETIC_RANDOM_NAME
+        );
+        assert_eq!(bytes.len(), table_offset + table_bytes);
+        bytes
+    }
+
+    #[test]
+    fn canonicalizes_exact_flex_runtime_section_name() {
+        let input = synthetic_flex_elf();
+        let canonical = canonicalize_flex_runtime_section_bytes(&input).unwrap();
+        let names_offset = ELF64_HEADER_BYTES + FLEX_RUNTIME_SECTION_BYTES_LEN;
+        let name_start = names_offset + usize::try_from(SYNTHETIC_NAME_OFFSET).unwrap();
+        let repeated = canonicalize_flex_runtime_section_bytes(&canonical).unwrap();
+
+        assert_eq!(&canonical[name_start..name_start + FLEX_RUNTIME_SECTION_NAME_BYTES_LEN], FLEX_RUNTIME_SECTION_NAME);
+        assert_eq!(repeated, canonical);
+    }
+
+    #[test]
+    fn rejects_substituted_flex_runtime_section_bytes() {
+        let mut input = synthetic_flex_elf();
+        input[ELF64_HEADER_BYTES] ^= 1;
+
+        let error = canonicalize_flex_runtime_section_bytes(&input).unwrap_err();
+
+        assert!(error.contains("0 matching runtime sections"));
+        assert!(error.contains("expected 1"));
+    }
+
+    #[test]
+    fn canonicalization_shell_restores_read_permission() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("flex");
+        fs::write(&path, synthetic_flex_elf()).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(FLEX_NO_PERMISSION_MODE)).unwrap();
+
+        canonicalize_flex_runtime_section_file(&path).unwrap();
+
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & FLEX_PERMISSION_MODE_MASK;
+        let after = fs::read(&path).unwrap();
+        assert_eq!(mode, FLEX_REGULAR_MODE);
+        assert_eq!(canonicalize_flex_runtime_section_bytes(&after).unwrap(), after);
+    }
+
+    #[test]
+    fn canonicalizes_retained_flex_runtime_identity() {
+        let path = match std::env::var("MANTLE_STAGE_X_FLEX_RETAINED_BINARY") {
+            Ok(value) => PathBuf::from(value),
+            Err(_) => return,
+        };
+        let input = fs::read(path).unwrap();
+        let canonical = canonicalize_flex_runtime_section_bytes(&input).unwrap();
+        let digest = blake3::hash(&canonical).to_hex().to_string();
+
+        assert_eq!(digest, FLEX_BINARY_BLAKE3);
+        assert_ne!(canonical, input);
+    }
 
     #[test]
     fn validates_exact_flex_source_record_and_recipe() {

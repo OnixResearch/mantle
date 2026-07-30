@@ -1,5 +1,6 @@
-# Typed source for the protected seed-to-GNU-grep transition.
-# This file does not yet describe the later parser generators, binutils, native TinyCC, or normalized StageX provider.
+# Typed source for the protected StageX transition through self-hosted TinyCC,
+# native musl, the later protected GNU tools, and the intermediate provider boundary.
+# Binutils execution is bound by the transition plan and retained receipt evidence.
 
 let Digest = {
   algorithm | String,
@@ -610,7 +611,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "bison-smoke-exec" "bison-positive-parser-header" "GNU Bison positive generated parser header" "afa05cc327a73b17e33baf53fb44030b1a111aa993db60f01565a2a80dc8f913",
     tinycc_generated "bison-smoke-exec" "bison-negative-observation" "GNU Bison malformed-grammar diagnostic" "d0c674aaeab59c3efab1090e74cb598ae4df44bbcd42bc451a0a3f1a1257dcb4",
     tinycc_generated "flex-build-exec" "flex-configured-source" "GNU Flex configured source identity" "d2d7e2a0ed46329fc2e37d58d25dab8f17c01b5c9b7b97de09930ef3e25fe3b7",
-    tinycc_generated "flex-build-exec" "flex-2.6.4" "source-built GNU Flex 2.6.4" "1adcaf70694b47268ddbaa32c834c78ee11f5a01a5fe45f07857607915b0507b",
+    tinycc_generated "flex-build-exec" "flex-2.6.4" "source-built GNU Flex 2.6.4 with a canonical bounded runtime-section name" "502324a00e1b35d6fc18a6cf6c3a257d3578b7d5fd8bffc27ce41b9da3c1ebbf",
     tinycc_generated "flex-build-exec" "flex-libfl" "GNU Flex yywrap archive" "45c3a2d2e338eae19d24fa17df35127f5c61c16dca0ce98dce45efb13b920bfa",
     tinycc_generated "flex-build-exec" "flex-cxx-header" "GNU Flex C++ scanner header" "713ca824326279098cc1eb9b18ddd200e7506335c502cf2d79b4af7aaa330cdf",
     tinycc_generated "flex-build-exec" "flex-libfl-consumer" "GNU Flex yywrap archive proof consumer" "9d13005da4640c131d85edff0a255a83471b136d31ce41d2b04534c8a7b533b4",
@@ -1268,7 +1269,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
       source_artifact_ids = [],
       input_artifact_ids = ["flex-2.6.4", "flex-libfl", "flex-libfl-consumer", "m4-1.4.7"],
       output_artifact_ids = ["flex-version-observation", "flex-positive-scanner-source", "flex-negative-observation"],
-      digest = blake3 "1adcaf70694b47268ddbaa32c834c78ee11f5a01a5fe45f07857607915b0507b",
+      digest = blake3 "502324a00e1b35d6fc18a6cf6c3a257d3578b7d5fd8bffc27ce41b9da3c1ebbf",
     },
     {
       id = "bash-full-generator-build-exec",
@@ -1321,8 +1322,20 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
   ],
   provider_outputs = [
     {
-      role = "retained_tool_metadata",
-      producing_artifact_id = "stage0-kaem",
+      role = "target_prefixed_tools",
+      producing_artifact_id = "tcc-musl-selfhost",
+    },
+    {
+      role = "headers",
+      producing_artifact_id = "musl-native-headers",
+    },
+    {
+      role = "libraries",
+      producing_artifact_id = "musl-native-libc",
+    },
+    {
+      role = "provider_metadata",
+      producing_artifact_id = "tcc-musl-selfhost",
     },
   ],
   environment_assumptions = [

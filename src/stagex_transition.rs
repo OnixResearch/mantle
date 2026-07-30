@@ -110,6 +110,14 @@ pub(crate) const BINUTILS_GENERATOR_BUILD_STAGE_ID: &str = "binutils-generator-m
 pub(crate) const BINUTILS_COMPONENT_BUILD_STAGE_ID: &str = "binutils-component-materialization";
 pub(crate) const BINUTILS_INSTALL_STAGE_ID: &str = "binutils-install-materialization";
 pub(crate) const BINUTILS_INSTALL_SMOKE_STAGE_ID: &str = "binutils-install-smoke";
+const BINUTILS_EXECUTED_COREUTILS_TOOL_COUNT: usize = 20;
+const BINUTILS_EXECUTED_COREUTILS_TOOL_NAMES: [&str; BINUTILS_EXECUTED_COREUTILS_TOOL_COUNT] = [
+    "cat", "chmod", "cp", "echo", "install", "ln", "ls", "mkdir", "mv", "rm", "rmdir", "sort", "test", "head", "wc",
+    "basename", "dirname", "tr", "expr", "touch",
+];
+const BINUTILS_INSTALL_SMOKE_EXECUTED_TOOL_COUNT: usize = 8;
+const BINUTILS_INSTALL_SMOKE_EXECUTED_TOOL_NAMES: [&str; BINUTILS_INSTALL_SMOKE_EXECUTED_TOOL_COUNT] =
+    ["as", "ld", "ar", "ranlib", "nm", "objcopy", "objdump", "readelf"];
 const TCC_MUSL_V2_CANONICAL_AUTHORIZATION_ID: &str = "planned:tcc-musl-v2-materialization:exec:tcc-musl-v2-smoke:tcc";
 const M4_CANONICAL_AUTHORIZATION_ID: &str = "planned:m4-materialization:exec:m4-smoke:m4";
 const GREP_RUNNER_CANONICAL_AUTHORIZATION_ID: &str = "planned:grep-materialization:exec:grep-smoke:grep";
@@ -709,7 +717,7 @@ pub(crate) fn materialize_protected_transition(
             digest_hex: crate::stagex_bash_full::BASH_FULL_BINARY_BLAKE3.to_string(),
         });
         planned.extend(planned_binutils_executables(&request.scratch_dir.join("binutils-stage/runtime")));
-        let binutils_predecessors = additional_planned_binutils_predecessor_executables(&request.scratch_dir, &planned);
+        let binutils_predecessors = additional_planned_binutils_predecessor_executables(request.scratch_dir, &planned);
         planned.extend(binutils_predecessors);
         planned
     } else {
@@ -4841,9 +4849,14 @@ fn binutils_install_smoke_stage(
     smoke_outputs: &[String],
 ) -> StagexStagePlan {
     let install_bin = paths.runtime.join("install-destdir/mantle/stagex/binutils-probe-output/bin");
-    let mut authorizations = crate::stagex_binutils::BINUTILS_REQUIRED_TOOLS
+    let mut authorizations = BINUTILS_INSTALL_SMOKE_EXECUTED_TOOL_NAMES
         .iter()
-        .map(|(tool, digest)| {
+        .map(|tool| {
+            let digest = crate::stagex_binutils::BINUTILS_REQUIRED_TOOLS
+                .iter()
+                .find(|(required, _)| required == tool)
+                .map(|(_, digest)| *digest)
+                .expect("executed binutils smoke tool has a required identity");
             authorization(
                 &format!("exec:{BINUTILS_INSTALL_SMOKE_STAGE_ID}:{tool}"),
                 &install_bin.join(tool),
@@ -4983,17 +4996,17 @@ fn binutils_component_authorizations(
 }
 
 fn binutils_coreutils_tool_digests() -> Vec<(&'static str, &'static str)> {
-    let tools = crate::stagex_coreutils::COREUTILS_EXPECTED_OUTPUTS
+    let tools = BINUTILS_EXECUTED_COREUTILS_TOOL_NAMES
         .iter()
-        .map(|expected| {
-            let tool = expected
-                .artifact_id
-                .strip_prefix("coreutils-")
-                .expect("coreutils artifact id has the checked prefix");
-            (tool, expected.digest_blake3)
+        .map(|tool| {
+            let expected = crate::stagex_coreutils::COREUTILS_EXPECTED_OUTPUTS
+                .iter()
+                .find(|expected| expected.artifact_id.strip_prefix("coreutils-") == Some(*tool))
+                .expect("executed coreutils tool has a protected identity");
+            (*tool, expected.digest_blake3)
         })
         .collect::<Vec<_>>();
-    assert!(!tools.is_empty());
+    assert_eq!(tools.len(), BINUTILS_EXECUTED_COREUTILS_TOOL_NAMES.len());
     assert!(tools.iter().all(|(tool, digest)| !tool.is_empty() && !digest.is_empty()));
     tools
 }
@@ -5945,7 +5958,7 @@ fn binutils_event_count_bounds_from_sed_invocations(
 ) -> Result<[usize; 2], StagexTransitionError> {
     const LOWER_SED_INVOCATION_COUNT: u32 = 4_891;
     const UPPER_SED_INVOCATION_COUNT: u32 = 4_892;
-    const LOWER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [73_996, 74_045];
+    const LOWER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [73_991, 74_045];
     const UPPER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_008, 74_057];
     match sed_invocation_count {
         LOWER_SED_INVOCATION_COUNT => Ok(LOWER_SED_EVENT_COUNT_BOUNDS),
@@ -9486,7 +9499,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
-    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "ff13121154ebda99ec4b3887aff52f38584e1a91395a662f8ca3e704ae1bd80a";
+    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "4ad1f3b14dfa219fc64faf752dd0050e678f293af7828a65262f510cc4228e2a";
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {
@@ -9822,6 +9835,36 @@ mod tests {
             .collect::<Vec<_>>();
         let unique_authorization_ids = authorization_ids.iter().copied().collect::<BTreeSet<_>>();
         assert_eq!(authorization_ids.len(), unique_authorization_ids.len());
+        let expected_coreutils = BINUTILS_EXECUTED_COREUTILS_TOOL_NAMES.iter().copied().collect::<BTreeSet<_>>();
+        for stage_id in [
+            BINUTILS_GENERATOR_BUILD_STAGE_ID,
+            BINUTILS_COMPONENT_BUILD_STAGE_ID,
+            BINUTILS_INSTALL_STAGE_ID,
+        ] {
+            let stage = plan.stages.iter().find(|stage| stage.id == stage_id).unwrap();
+            let observed = stage
+                .executable_authorizations
+                .iter()
+                .filter_map(|authorization| authorization.id.rsplit_once(":coreutils-").map(|(_, tool)| tool))
+                .collect::<BTreeSet<_>>();
+            assert_eq!(observed, expected_coreutils);
+        }
+        let smoke = plan.stages.iter().find(|stage| stage.id == BINUTILS_INSTALL_SMOKE_STAGE_ID).unwrap();
+        let smoke_ids = smoke
+            .executable_authorizations
+            .iter()
+            .map(|authorization| authorization.id.as_str())
+            .collect::<BTreeSet<_>>();
+        assert!(
+            BINUTILS_INSTALL_SMOKE_EXECUTED_TOOL_NAMES
+                .iter()
+                .all(|tool| { smoke_ids.contains(format!("exec:{BINUTILS_INSTALL_SMOKE_STAGE_ID}:{tool}").as_str()) })
+        );
+        assert!(
+            !["size", "strings", "strip"]
+                .iter()
+                .any(|tool| { smoke_ids.contains(format!("exec:{BINUTILS_INSTALL_SMOKE_STAGE_ID}:{tool}").as_str()) })
+        );
     }
 
     #[test]
@@ -9850,7 +9893,7 @@ mod tests {
         const LOWER_SED_INVOCATION_COUNT: u32 = 4_891;
         const UPPER_SED_INVOCATION_COUNT: u32 = 4_892;
         const OUTSIDE_SED_INVOCATION_COUNT: u32 = 4_890;
-        const LOWER_SED_EVENT_BOUNDS: [usize; 2] = [73_996, 74_045];
+        const LOWER_SED_EVENT_BOUNDS: [usize; 2] = [73_991, 74_045];
         const UPPER_SED_EVENT_BOUNDS: [usize; 2] = [74_008, 74_057];
         let bounds = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS
             .map(|count| u32::try_from(count).unwrap());

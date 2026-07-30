@@ -182,6 +182,8 @@ mod stagex_oyacc;
 #[allow(dead_code)]
 mod stagex_patch;
 #[allow(dead_code)]
+mod stagex_provider;
+#[allow(dead_code)]
 mod stagex_sed;
 #[allow(dead_code)]
 mod stagex_sources;
@@ -538,7 +540,7 @@ enum Command {
         #[command(subcommand)]
         action: Option<BootstrapAction>,
 
-        /// Output file path
+        /// Output file path, or an absent absolute provider directory in StageX mode.
         #[arg(short, long, default_value = "seed.ncl")]
         output: PathBuf,
 
@@ -552,9 +554,13 @@ enum Command {
         #[arg(long)]
         source_root: Option<PathBuf>,
 
-        /// Validate a StageX-class lineage manifest and select the lineage provider path.
+        /// Materialize from one explicit absolute StageX lineage manifest.
         #[arg(long)]
         stagex_lineage: Option<PathBuf>,
+
+        /// Import one explicit absolute, complete protected StageX transition root.
+        #[arg(long, requires = "stagex_lineage")]
+        stagex_transition_root: Option<PathBuf>,
 
         /// Require imported/pinned bootstrap source state before fetch-mode source acquisition.
         #[arg(long)]
@@ -6044,6 +6050,7 @@ fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(),
             fetch,
             source_root,
             stagex_lineage,
+            stagex_transition_root,
             offline_source_preflight,
             packages,
         } => {
@@ -6056,6 +6063,7 @@ fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(),
                 fetch: *fetch,
                 source_root: source_root.as_deref(),
                 stagex_lineage: stagex_lineage.as_deref(),
+                stagex_transition_root: stagex_transition_root.as_deref(),
                 offline_source_preflight: *offline_source_preflight,
                 packages,
             })
@@ -6395,6 +6403,7 @@ struct BootstrapCommandRequest<'a> {
     fetch: bool,
     source_root: Option<&'a Path>,
     stagex_lineage: Option<&'a Path>,
+    stagex_transition_root: Option<&'a Path>,
     offline_source_preflight: bool,
     packages: &'a [String],
 }
@@ -6422,7 +6431,10 @@ fn run_bootstrap_command(request: BootstrapCommandRequest<'_>) -> Result<(), Run
             let manifest_path = request
                 .stagex_lineage
                 .ok_or_else(|| RunError::Internal("stagex-lineage mode requires a manifest path".to_string()))?;
-            cmd_bootstrap_stagex_lineage(request.output, manifest_path)
+            let transition_root = request.stagex_transition_root.ok_or_else(|| {
+                RunError::Internal("stagex-lineage provider publication requires --stagex-transition-root".to_string())
+            })?;
+            cmd_bootstrap_stagex_lineage(request.output, manifest_path, transition_root)
         }
         bootstrap_source_root::BootstrapProviderMode::FullSource => Err(RunError::Internal(
             "full-source mode is selected by bootstrap/seed.ncl, not the compatibility bootstrap command".to_string(),
@@ -6431,24 +6443,22 @@ fn run_bootstrap_command(request: BootstrapCommandRequest<'_>) -> Result<(), Run
     }
 }
 
-fn cmd_bootstrap_stagex_lineage(output: &Path, manifest_path: &Path) -> Result<(), RunError> {
-    let manifest_bytes = std::fs::read(manifest_path)
-        .map_err(|e| RunError::Internal(format!("reading {}: {e}", manifest_path.display())))?;
-    let manifest = bootstrap_source_root::validate_stagex_lineage_manifest(&manifest_bytes)
-        .map_err(|diags| RunError::Internal(bootstrap_source_root::format_diagnostics(&diags)))?;
-
-    let evidence = bootstrap_source_root::classify_stagex_provider_evidence(&manifest);
-    eprintln!("StageX lineage manifest validated:");
-    eprintln!("  seed_class: {}", evidence.seed_class);
-    eprintln!("  audit_seed_max_bytes: {}", evidence.audit_seed_max_bytes);
-    eprintln!("  provider_outputs: {}", evidence.provider_output_count);
-    eprintln!("  environment_assumptions: {}", evidence.environment_assumptions.len());
-
-    Err(RunError::Internal(format!(
-        "{}: output={}",
-        bootstrap_source_root::STAGEX_LINEAGE_PROVIDER_NOT_MATERIALIZED,
-        output.display()
-    )))
+fn cmd_bootstrap_stagex_lineage(output: &Path, manifest_path: &Path, transition_root: &Path) -> Result<(), RunError> {
+    let report = stagex_provider::materialize_stagex_provider(stagex_provider::StagexProviderRequest {
+        lineage_manifest_path: manifest_path,
+        transition_root,
+        output_path: output,
+    })
+    .map_err(|error| RunError::Internal(error.to_string()))?;
+    eprintln!("StageX intermediate provider published:");
+    eprintln!("  output: {}", report.output_path.display());
+    eprintln!("  receipt: {}", report.receipt_path.display());
+    eprintln!("  normalized_provider_digest_blake3: {}", report.normalized_provider_digest_blake3);
+    eprintln!("  output_digest_blake3: {}", report.output_digest_blake3);
+    eprintln!("  final_bundle_digest_blake3: {}", report.final_bundle_digest_blake3);
+    eprintln!("  provider_validation_audit_digest_blake3: {}", report.provider_validation_audit_digest_blake3);
+    eprintln!("  provider_validation_report_digest_blake3: {}", report.provider_validation_report_digest_blake3);
+    Ok(())
 }
 
 fn run_project_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {

@@ -540,6 +540,30 @@ const FLEX_GENERATED_FILES: [&str; FLEX_GENERATED_FILE_COUNT] = [
     "binutils/syslex.c",
     "ld/ldlex.c",
 ];
+pub(crate) const BINUTILS_GENERATED_SOURCE_OUTPUTS: &[&str] = &[
+    "bfd/bfd-in2.h",
+    "bfd/libbfd.h",
+    "bfd/libcoff.h",
+    "intl/plural.c",
+    "binutils/arparse.c",
+    "binutils/arparse.h",
+    "binutils/defparse.c",
+    "binutils/defparse.h",
+    "binutils/mcparse.c",
+    "binutils/mcparse.h",
+    "binutils/rcparse.c",
+    "binutils/rcparse.h",
+    "binutils/sysinfo.c",
+    "binutils/sysinfo.h",
+    "ld/deffilep.c",
+    "ld/deffilep.h",
+    "ld/ldgram.c",
+    "ld/ldgram.h",
+    "binutils/arlex.c",
+    "binutils/deflex.c",
+    "binutils/syslex.c",
+    "ld/ldlex.c",
+];
 const BINUTILS_REQUIRED_TOOL_COUNT: usize = 11;
 pub(crate) const BINUTILS_REQUIRED_TOOLS: [(&str, &str); BINUTILS_REQUIRED_TOOL_COUNT] = [
     ("as", "36bb17408403b4fd8283bf80f78410ae76eedb4e1565f0fc6db0f7a8c0a1eac4"),
@@ -617,7 +641,7 @@ const BINUTILS_SMOKE_EXIT_STATUS: i32 = 42;
 pub(crate) const BINUTILS_BFD_CHEW_BLAKE3: &str = "8df489a85fdb18b2bcff0e78f6fd5462ac2bf24b0c0b425ce742049c8f16cecd";
 pub(crate) const BINUTILS_POSITIVE_SMOKE_BLAKE3: &str =
     "4deb353a3e09f526f5c041a1614727deb0d8746fd72a23c521afbc16b6a5d974";
-pub(crate) const BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS: [usize; 2] = [73_996, 74_057];
+pub(crate) const BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS: [usize; 2] = [73_991, 74_057];
 pub(crate) const BINUTILS_PROTECTED_EXEC_UNIQUE_IDENTITY_COUNT: usize = 68;
 pub(crate) const BINUTILS_GENERATED_EXECUTABLE_COUNT: usize = 24;
 pub(crate) const BINUTILS_FIXED_EXECUTABLE_EVENT_COUNT: usize = 12;

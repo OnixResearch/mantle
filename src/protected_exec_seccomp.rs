@@ -45,6 +45,8 @@ mod linux {
     const AUDIT_QUIESCENCE_POLL_COUNT_MAX: u32 = 3_000;
     const AUDIT_QUIESCENCE_STABLE_POLL_COUNT: u32 = 100;
     const AUDIT_QUIESCENCE_POLL_INTERVAL_MS: u64 = 10;
+    const _: () = assert!(ADOPTED_DESCENDANT_REAP_POLL_COUNT_MAX > 0);
+    const _: () = assert!(AUDIT_QUIESCENCE_STABLE_POLL_COUNT > 0);
     const PHASE_DIAGNOSTIC: &str = "diagnostic";
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -150,7 +152,6 @@ mod linux {
             }
             if error.raw_os_error() == Some(libc::ECHILD) {
                 assert!(reaped_count < u32::MAX);
-                assert!(ADOPTED_DESCENDANT_REAP_POLL_COUNT_MAX > 0);
                 return Ok(reaped_count);
             }
             return Err(ProtectedSeccompError::Supervisor(format!("reaping adopted StageX descendant: {error}")));
@@ -179,7 +180,6 @@ mod linux {
             }
             if stable_poll_count >= AUDIT_QUIESCENCE_STABLE_POLL_COUNT {
                 assert!(count <= PROTECTED_EXEC_EVENT_COUNT_MAX);
-                assert!(AUDIT_QUIESCENCE_STABLE_POLL_COUNT > 0);
                 return Ok(count);
             }
             thread::sleep(std::time::Duration::from_millis(AUDIT_QUIESCENCE_POLL_INTERVAL_MS));
@@ -855,7 +855,7 @@ mod linux {
 
     fn read_tracee_memory(pid: u32, address: u64, buffer: &mut [u8]) -> Result<usize, String> {
         let process_id = libc::pid_t::try_from(pid).map_err(|_| format!("target pid exceeds pid_t: {pid}"))?;
-        let mut local = libc::iovec {
+        let local = libc::iovec {
             iov_base: buffer.as_mut_ptr().cast::<libc::c_void>(),
             iov_len: buffer.len(),
         };
@@ -864,7 +864,7 @@ mod linux {
                 as *mut libc::c_void,
             iov_len: buffer.len(),
         };
-        let result = unsafe { libc::process_vm_readv(process_id, &mut local, 1, &remote, 1, 0) };
+        let result = unsafe { libc::process_vm_readv(process_id, &local, 1, &remote, 1, 0) };
         if result >= 0 {
             return usize::try_from(result).map_err(|_| format!("target read size exceeds usize: {result}"));
         }

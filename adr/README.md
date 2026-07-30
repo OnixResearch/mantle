@@ -54,3 +54,5 @@ compatibility surface, crate name, or historical decision.
 | [0045](0045-adopt-orphaned-stagex-exec-descendants-before-inspection.md) | Adopt orphaned StageX exec descendants before inspection | Accepted |
 | [0046](0046-realize-foreign-graphs-through-a-receipt-bound-adapter.md) | Realize foreign graphs through a receipt-bound adapter | Proposed |
 | [0047](0047-bound-stagex-exec-audits-above-the-closed-binutils-trace.md) | Bound StageX exec audits above the closed binutils trace | Accepted |
+| [0048](0048-publish-the-protected-stagex-intermediate-provider.md) | Publish the protected StageX intermediate provider | Accepted |
+| [0049](0049-canonicalize-the-stagex-flex-runtime-section-name.md) | Canonicalize the StageX Flex runtime section name | Accepted |

@@ -215,6 +215,8 @@ const FULL_MUSL_BINUTILS_PROVIDER_CONTRACT: &str = "bootstrap/evidence/full-musl
 #[cfg(test)]
 const BINUTILS_TCC_REQUIRED_TOOLS: &[&str] = &["as", "ld", "ar", "ranlib", "nm", "objcopy"];
 const BLAKE3_HEX_LENGTH: usize = 64;
+const STAGEX_PROVIDER_ROLE_COUNT: usize = 4;
+const STAGEX_NON_CLAIM_COUNT_MIN: usize = 3;
 const CLEAN_REBUILD_ROOT_COUNT: usize = 2;
 
 #[derive(Debug, Copy, Clone)]
@@ -574,6 +576,9 @@ fn evaluate_stage(project_root: &Path, spec: &StageSpec) -> ParityRow {
         StageStatus::Blocked
     } else {
         match (spec.expected_complete, file_state) {
+            (true, None) if spec.evidence_check != EvidenceCheck::None && evidence_failure.is_none() => {
+                StageStatus::Complete
+            }
             (false, None) if spec.evidence_check != EvidenceCheck::None && evidence_failure.is_none() => {
                 StageStatus::Partial
             }
@@ -2097,7 +2102,7 @@ fn validate_stagex_lineage_provider_receipt(project_root: &Path) -> Result<(), S
     let path = project_root.join(STAGEX_LINEAGE_PROVIDER_RECEIPT);
     let content = fs::read_to_string(&path).map_err(|err| {
         format!(
-            "StageX lineage provider receipt missing `{}` ({err}); expected schema, provider_kind=stagex-lineage, lineage_receipt_status=scaffold-only, digest fields, and fallback_events=[]",
+            "StageX lineage provider receipt missing `{}` ({err}); expected a complete provider receipt with four roles, stage reports, digest fields, and fallback_events=[]",
             STAGEX_LINEAGE_PROVIDER_RECEIPT
         )
     })?;
@@ -2108,25 +2113,45 @@ fn validate_stagex_lineage_provider_receipt(project_root: &Path) -> Result<(), S
         expected: "mantle-stagex-lineage-provider-receipt-v1",
     })?;
     require_stagex_json_string(&value, StringFieldExpectation {
+        field: "schema_version",
+        expected: "mantle-stagex-lineage-provider-receipt-v1",
+    })?;
+    require_stagex_json_string(&value, StringFieldExpectation {
         field: "provider_kind",
         expected: "stagex-lineage",
     })?;
     require_stagex_json_string(&value, StringFieldExpectation {
         field: "lineage_receipt_status",
-        expected: "scaffold-only",
+        expected: "complete",
     })?;
     for field in [
         "audited_seed_digest",
         "lineage_manifest_digest",
         "stage_graph_digest",
         "normalized_provider_digest",
+        "transition_report_digest_blake3",
+        "provider_validation_audit_digest_blake3",
+        "provider_validation_report_digest_blake3",
+        "receipt_payload_digest_blake3",
+        "plan_digest_blake3",
+        "lineage_manifest_digest_blake3",
+        "stage_graph_digest_blake3",
+        "source_state_digest_blake3",
+        "normalized_provider_digest_blake3",
+        "output_digest_blake3",
+        "protected_exec_audit_digest_blake3",
+        "final_bundle_digest_blake3",
     ] {
         let digest = require_stagex_non_empty_string(&value, field)?;
         validate_lower_hex_digest(DigestFieldCheck { digest, field })?;
     }
     require_stagex_empty_array(&value, "fallback_events")?;
+    validate_stagex_receipt_claim_boundary(&value)?;
+    validate_stagex_provider_outputs(&value)?;
+    validate_stagex_stage_reports(&value)?;
+    crate::stagex_provider::validate_lineage_receipt_payload_digest(content.as_bytes())?;
     assert_eq!(value.get("provider_kind").and_then(serde_json::Value::as_str), Some("stagex-lineage"));
-    assert_eq!(value.get("lineage_receipt_status").and_then(serde_json::Value::as_str), Some("scaffold-only"));
+    assert_eq!(value.get("lineage_receipt_status").and_then(serde_json::Value::as_str), Some("complete"));
     Ok(())
 }
 
@@ -2173,8 +2198,152 @@ fn require_stagex_empty_array(value: &serde_json::Value, field: &str) -> Result<
         .and_then(|v| v.as_array())
         .ok_or_else(|| format!("StageX lineage provider receipt missing array field `{field}`"))?;
     if !actual.is_empty() {
-        return Err(format!("StageX lineage provider receipt `{field}` must be empty for scaffold-only evidence"));
+        return Err(format!("StageX lineage provider receipt `{field}` must be empty"));
     }
+    Ok(())
+}
+
+fn validate_stagex_receipt_claim_boundary(value: &serde_json::Value) -> Result<(), String> {
+    for field in [
+        "bounded_claim",
+        "stage_report_output_binding",
+        "executable_authorization_binding",
+    ] {
+        require_stagex_non_empty_string(value, field)?;
+    }
+    let non_claims = value
+        .get("non_claims")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "StageX lineage provider receipt missing array field `non_claims`".to_string())?;
+    if non_claims.len() < STAGEX_NON_CLAIM_COUNT_MIN {
+        return Err(format!(
+            "StageX lineage provider receipt has {} non-claims; expected at least {STAGEX_NON_CLAIM_COUNT_MIN}",
+            non_claims.len()
+        ));
+    }
+    if non_claims.iter().any(|item| item.as_str().is_none_or(str::is_empty)) {
+        return Err("StageX lineage provider receipt has an empty non-claim".to_string());
+    }
+    assert!(non_claims.len() >= STAGEX_NON_CLAIM_COUNT_MIN);
+    assert!(non_claims.iter().all(serde_json::Value::is_string));
+    Ok(())
+}
+
+fn validate_stagex_provider_outputs(value: &serde_json::Value) -> Result<(), String> {
+    const REQUIRED_ROLES: [&str; STAGEX_PROVIDER_ROLE_COUNT] =
+        ["target_prefixed_tools", "headers", "libraries", "provider_metadata"];
+    let outputs = value
+        .get("provider_outputs")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "StageX lineage provider receipt missing array field `provider_outputs`".to_string())?;
+    let roles = outputs
+        .iter()
+        .filter_map(|output| output.get("role").and_then(serde_json::Value::as_str))
+        .collect::<std::collections::BTreeSet<_>>();
+    for required_role in REQUIRED_ROLES {
+        if !roles.contains(required_role) {
+            return Err(format!("StageX lineage provider receipt missing provider role `{required_role}`"));
+        }
+    }
+    for output in outputs {
+        let role = output
+            .get("role")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "StageX provider output is missing string field `role`".to_string())?;
+        let artifact_ids = output
+            .get("artifact_ids")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| format!("StageX provider output `{role}` is missing `artifact_ids`"))?;
+        if artifact_ids.is_empty() || artifact_ids.iter().any(|id| id.as_str().is_none_or(str::is_empty)) {
+            return Err(format!("StageX provider output `{role}` must bind non-empty artifact IDs"));
+        }
+        let digest = output
+            .get("digest_blake3")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| format!("StageX provider output `{role}` is missing `digest_blake3`"))?;
+        validate_lower_hex_digest(DigestFieldCheck {
+            digest,
+            field: "provider_outputs.digest_blake3",
+        })?;
+    }
+    if outputs.len() != REQUIRED_ROLES.len() {
+        return Err(format!(
+            "StageX lineage provider receipt has {} provider roles, expected {}",
+            outputs.len(),
+            REQUIRED_ROLES.len()
+        ));
+    }
+    assert_eq!(roles.len(), REQUIRED_ROLES.len());
+    assert_eq!(outputs.len(), REQUIRED_ROLES.len());
+    Ok(())
+}
+
+fn validate_stagex_stage_reports(value: &serde_json::Value) -> Result<(), String> {
+    let reports = value
+        .get("stage_reports")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "StageX lineage provider receipt missing array field `stage_reports`".to_string())?;
+    if reports.is_empty() {
+        return Err("StageX lineage provider receipt `stage_reports` must not be empty".to_string());
+    }
+    for report in reports {
+        let stage_id = report
+            .get("stage_id")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "StageX stage report is missing string field `stage_id`".to_string())?;
+        if report.get("status").and_then(serde_json::Value::as_str) != Some("complete") {
+            return Err(format!("StageX stage report `{stage_id}` is not complete"));
+        }
+        let stage_plan_digest = report
+            .get("stage_plan_digest_blake3")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| format!("StageX stage report `{stage_id}` is missing its plan digest"))?;
+        validate_lower_hex_digest(DigestFieldCheck {
+            digest: stage_plan_digest,
+            field: "stage_reports.stage_plan_digest_blake3",
+        })?;
+        report
+            .get("predecessor_reports")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| format!("StageX stage report `{stage_id}` is missing predecessor reports"))?;
+        let events = report
+            .get("executable_event_ids")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| format!("StageX stage report `{stage_id}` is missing executable event IDs"))?;
+        let outputs = report
+            .get("output_observations")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| format!("StageX stage report `{stage_id}` is missing output observations"))?;
+        if events.is_empty() || events.iter().any(|event| event.as_str().is_none_or(str::is_empty)) {
+            return Err(format!("StageX stage report `{stage_id}` must bind non-empty executable event IDs"));
+        }
+        if outputs.is_empty() {
+            return Err(format!("StageX stage report `{stage_id}` must bind output observations"));
+        }
+        for output in outputs {
+            let artifact_id = output
+                .get("artifact_id")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| format!("StageX stage report `{stage_id}` has an output without an artifact ID"))?;
+            let digest = output
+                .get("digest_blake3")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| format!("StageX stage report `{stage_id}` output `{artifact_id}` lacks a digest"))?;
+            if artifact_id.is_empty() {
+                return Err(format!("StageX stage report `{stage_id}` has an empty artifact ID"));
+            }
+            validate_lower_hex_digest(DigestFieldCheck {
+                digest,
+                field: "stage_reports.output_observations.digest_blake3",
+            })?;
+        }
+    }
+    assert!(!reports.is_empty());
+    assert!(
+        reports
+            .iter()
+            .all(|report| report.get("status").and_then(serde_json::Value::as_str) == Some("complete"))
+    );
     Ok(())
 }
 
@@ -3273,11 +3442,11 @@ const BOOTSTRAP_GAP_STAGE_SPECS: &[StageSpec] = &[
         axes: STAGEX_ONLY,
         lineage: "stagex",
         derivation: None,
-        expected_complete: false,
-        graph_evidence: "StageX lineage provider derivation/proof not yet bound",
-        semantic_evidence: "audited lineage provider contract validation required",
-        proof_evidence: "lineage provider digest and transcript required",
-        notes: "Guix source-root seed-full evidence must not satisfy this StageX row; checked scaffold receipt at bootstrap/evidence/stagex-lineage-provider-receipt.json records provider_kind=stagex-lineage but does not prove audited lineage",
+        expected_complete: true,
+        graph_evidence: "protected StageX transition and normalized provider publication are bound",
+        semantic_evidence: "complete four-role provider contract and relocated runtime validation required",
+        proof_evidence: "lineage, plan, audit, provider, stage-report, and final-bundle BLAKE3 identities required",
+        notes: "Guix source-root evidence does not satisfy this StageX row; completion is bounded to the checked intermediate TinyCC/native-musl/binutils receipt and does not claim final GCC admission",
         evidence_check: EvidenceCheck::StagexLineageProviderReceipt,
     },
 ];
@@ -3463,11 +3632,11 @@ mod tests {
             axes: STAGEX_ONLY,
             lineage: "stagex",
             derivation: None,
-            expected_complete: false,
-            graph_evidence: "StageX lineage provider derivation/proof not yet bound",
-            semantic_evidence: "audited lineage provider contract validation required",
-            proof_evidence: "lineage provider digest and transcript required",
-            notes: "Guix source-root seed-full evidence must not satisfy this StageX row; checked scaffold receipt at bootstrap/evidence/stagex-lineage-provider-receipt.json records provider_kind=stagex-lineage but does not prove audited lineage",
+            expected_complete: true,
+            graph_evidence: "protected StageX transition and normalized provider publication are bound",
+            semantic_evidence: "complete four-role provider contract and relocated runtime validation required",
+            proof_evidence: "lineage, plan, audit, provider, stage-report, and final-bundle BLAKE3 identities required",
+            notes: "Guix source-root evidence does not satisfy this StageX row; completion is bounded to the checked intermediate TinyCC/native-musl/binutils receipt and does not claim final GCC admission",
             evidence_check: EvidenceCheck::StagexLineageProviderReceipt,
         }
     }
@@ -3482,21 +3651,58 @@ mod tests {
         let path = root.join(STAGEX_LINEAGE_PROVIDER_RECEIPT);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(
-            path,
+            &path,
             format!(
                 r#"{{
   "schema": "mantle-stagex-lineage-provider-receipt-v1",
+  "schema_version": "mantle-stagex-lineage-provider-receipt-v1",
   "provider_kind": "{provider_kind}",
   "lineage_receipt_status": "{status}",
   "audited_seed_digest": "{audited_seed_digest}",
   "lineage_manifest_digest": "2222222222222222222222222222222222222222222222222222222222222222",
   "stage_graph_digest": "3333333333333333333333333333333333333333333333333333333333333333",
   "normalized_provider_digest": "4444444444444444444444444444444444444444444444444444444444444444",
+  "transition_report_digest_blake3": "5555555555555555555555555555555555555555555555555555555555555555",
+  "provider_validation_audit_digest_blake3": "5555555555555555555555555555555555555555555555555555555555555555",
+  "provider_validation_report_digest_blake3": "5555555555555555555555555555555555555555555555555555555555555555",
+  "receipt_payload_digest_blake3": "",
+  "plan_digest_blake3": "6666666666666666666666666666666666666666666666666666666666666666",
+  "lineage_manifest_digest_blake3": "2222222222222222222222222222222222222222222222222222222222222222",
+  "stage_graph_digest_blake3": "3333333333333333333333333333333333333333333333333333333333333333",
+  "source_state_digest_blake3": "7777777777777777777777777777777777777777777777777777777777777777",
+  "normalized_provider_digest_blake3": "4444444444444444444444444444444444444444444444444444444444444444",
+  "output_digest_blake3": "8888888888888888888888888888888888888888888888888888888888888888",
+  "protected_exec_audit_digest_blake3": "9999999999999999999999999999999999999999999999999999999999999999",
+  "final_bundle_digest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "bounded_claim": "bounded intermediate provider",
+  "stage_report_output_binding": "observed outputs and report-bound projections",
+  "executable_authorization_binding": "declared authorizations plus protected audit",
+  "non_claims": ["no final GCC", "no compiler correctness", "no self-build"],
+  "provider_outputs": [
+    {{"role":"target_prefixed_tools","artifact_ids":["tcc"],"digest_blake3":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},
+    {{"role":"headers","artifact_ids":["headers"],"digest_blake3":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
+    {{"role":"libraries","artifact_ids":["libraries"],"digest_blake3":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}},
+    {{"role":"provider_metadata","artifact_ids":["provider.json"],"digest_blake3":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}}
+  ],
+  "stage_reports": [{{
+    "stage_id":"stage",
+    "stage_plan_digest_blake3":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "predecessor_reports":[],
+    "status":"complete",
+    "executable_event_ids":["exec:stage"],
+    "output_observations":[{{"artifact_id":"output","digest_blake3":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}}]
+  }}],
   "fallback_events": {fallback_events}
 }}"#
             ),
         )
         .unwrap();
+        let mut value = serde_json::from_slice::<serde_json::Value>(&fs::read(&path).unwrap()).unwrap();
+        let digest =
+            crate::stagex_provider::compute_lineage_receipt_payload_digest(&serde_json::to_vec(&value).unwrap())
+                .unwrap();
+        value["receipt_payload_digest_blake3"] = serde_json::Value::String(digest);
+        fs::write(&path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
     }
 
     fn write_self_build_provider_kind_linkage(
@@ -5691,7 +5897,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     }
 
     #[test]
-    fn stagex_lineage_scaffold_receipt_is_partial_not_complete() {
+    fn stagex_lineage_scaffold_receipt_is_rejected() {
         let dir = tempdir().unwrap();
         write_stagex_lineage_receipt(
             dir.path(),
@@ -5703,9 +5909,28 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
 
         let row = evaluate_stage(dir.path(), &stagex_lineage_spec());
 
-        assert_eq!(row.status, StageStatus::Partial);
+        assert_eq!(row.status, StageStatus::Blocked);
         assert_eq!(row.provider_kind, ProviderKind::Unknown);
         assert!(row.status.blocks_parity());
+        assert!(row.notes.contains("lineage_receipt_status"));
+    }
+
+    #[test]
+    fn stagex_lineage_complete_receipt_is_complete() {
+        let dir = tempdir().unwrap();
+        write_stagex_lineage_receipt(
+            dir.path(),
+            "stagex-lineage",
+            "complete",
+            "1111111111111111111111111111111111111111111111111111111111111111",
+            "[]",
+        );
+
+        let row = evaluate_stage(dir.path(), &stagex_lineage_spec());
+
+        assert_eq!(row.status, StageStatus::Complete);
+        assert_eq!(row.provider_kind, ProviderKind::StagexLineage);
+        assert!(!row.status.blocks_parity());
         assert!(!row.notes.contains("evidence check failed"));
     }
 
@@ -5715,7 +5940,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_stagex_lineage_receipt(
             dir.path(),
             "source-root",
-            "scaffold-only",
+            "complete",
             "1111111111111111111111111111111111111111111111111111111111111111",
             "[]",
         );
@@ -5729,7 +5954,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     #[test]
     fn stagex_lineage_receipt_rejects_malformed_digest() {
         let dir = tempdir().unwrap();
-        write_stagex_lineage_receipt(dir.path(), "stagex-lineage", "scaffold-only", "ABC", "[]");
+        write_stagex_lineage_receipt(dir.path(), "stagex-lineage", "complete", "ABC", "[]");
 
         let err = validate_stagex_lineage_provider_receipt(dir.path()).unwrap_err();
 
@@ -5743,7 +5968,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_stagex_lineage_receipt(
             dir.path(),
             "stagex-lineage",
-            "scaffold-only",
+            "complete",
             "1111111111111111111111111111111111111111111111111111111111111111",
             r#"["host-bwrap"]"#,
         );
@@ -5752,6 +5977,48 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
 
         assert!(err.contains("fallback_events"));
         assert!(err.contains("must be empty"));
+    }
+
+    #[test]
+    fn stagex_lineage_receipt_rejects_missing_non_claims() {
+        let dir = tempdir().unwrap();
+        write_stagex_lineage_receipt(
+            dir.path(),
+            "stagex-lineage",
+            "complete",
+            "1111111111111111111111111111111111111111111111111111111111111111",
+            "[]",
+        );
+        let path = dir.path().join(STAGEX_LINEAGE_PROVIDER_RECEIPT);
+        let mut value = serde_json::from_slice::<serde_json::Value>(&fs::read(&path).unwrap()).unwrap();
+        value["non_claims"] = serde_json::json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+
+        let err = validate_stagex_lineage_provider_receipt(dir.path()).unwrap_err();
+
+        assert!(err.contains("non-claims"));
+        assert!(err.contains("expected at least"));
+    }
+
+    #[test]
+    fn stagex_lineage_receipt_rejects_stale_payload_digest() {
+        let dir = tempdir().unwrap();
+        write_stagex_lineage_receipt(
+            dir.path(),
+            "stagex-lineage",
+            "complete",
+            "1111111111111111111111111111111111111111111111111111111111111111",
+            "[]",
+        );
+        let path = dir.path().join(STAGEX_LINEAGE_PROVIDER_RECEIPT);
+        let mut value = serde_json::from_slice::<serde_json::Value>(&fs::read(&path).unwrap()).unwrap();
+        value["bounded_claim"] = serde_json::Value::String("substituted claim".to_string());
+        fs::write(&path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+
+        let err = validate_stagex_lineage_provider_receipt(dir.path()).unwrap_err();
+
+        assert!(err.contains("payload digest mismatch"));
+        assert!(err.contains("expected"));
     }
 
     #[test]
@@ -5793,17 +6060,18 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     }
 
     #[test]
-    fn stagex_lineage_real_receipt_reports_evidence_backed_partial() {
+    fn stagex_lineage_real_scaffold_receipt_remains_blocked() {
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let report = collect_bootstrap_parity_report(project_root);
         let row = report.rows.iter().find(|row| row.id == "seed-full.stagex-lineage").unwrap();
 
-        assert_eq!(row.status, StageStatus::Partial);
+        assert_eq!(row.status, StageStatus::Blocked, "{}", row.notes);
         assert_eq!(row.provider_kind, ProviderKind::Unknown);
         assert!(row.status.blocks_parity());
-        assert!(!row.notes.contains("evidence check failed"));
+        assert!(row.notes.contains("evidence check failed"));
         let stagex = report.axes.iter().find(|axis| axis.axis == ParityAxis::Stagex).unwrap();
         assert!(stagex.blocking_rows.contains(&"seed-full.stagex-lineage".to_string()));
+        assert!(!stagex.blocking_rows.is_empty());
     }
 
     #[test]

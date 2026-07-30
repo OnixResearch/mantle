@@ -2040,10 +2040,10 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "1adcaf70694b47268ddbaa32c834c78ee11f5a01a5fe45f07857607915b0507b"
+        "hex_value": "502324a00e1b35d6fc18a6cf6c3a257d3578b7d5fd8bffc27ce41b9da3c1ebbf"
       },
       "id": "flex-2.6.4",
-      "name": "source-built GNU Flex 2.6.4",
+      "name": "source-built GNU Flex 2.6.4 with a canonical bounded runtime-section name",
       "producing_tool_id": "flex-build-exec"
     },
     {
@@ -2206,8 +2206,20 @@
   ],
   "provider_outputs": [
     {
-      "producing_artifact_id": "stage0-kaem",
-      "role": "retained_tool_metadata"
+      "producing_artifact_id": "tcc-musl-selfhost",
+      "role": "target_prefixed_tools"
+    },
+    {
+      "producing_artifact_id": "musl-native-headers",
+      "role": "headers"
+    },
+    {
+      "producing_artifact_id": "musl-native-libc",
+      "role": "libraries"
+    },
+    {
+      "producing_artifact_id": "tcc-musl-selfhost",
+      "role": "provider_metadata"
     }
   ],
   "seed": {
@@ -5390,7 +5402,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "1adcaf70694b47268ddbaa32c834c78ee11f5a01a5fe45f07857607915b0507b"
+        "hex_value": "502324a00e1b35d6fc18a6cf6c3a257d3578b7d5fd8bffc27ce41b9da3c1ebbf"
       },
       "id": "flex-smoke-exec",
       "input_artifact_ids": [

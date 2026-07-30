@@ -1,6 +1,6 @@
 ## Context
 
-The StageX CLI path validates lineage input and classifies evidence, but it does not construct a provider. The source graph already contains hex0, M0/M1/hex2/kaem, Mes, TinyCC, musl, GNU tools, GCC, and final provider stages. The missing boundary is trustworthy orchestration and evidence: current Nickel builders can name `/bin/sh` and `/bin/busybox`, while the protected self-build contract rejects host-bwrap and executable fallback for StageX completion.
+The StageX CLI path validates lineage input, but it does not construct a provider. The protected transition now reaches self-hosted TinyCC, native musl, GNU tools, and authenticated binutils. This is enough for an intermediate provider. Final GCC stages and provider admission remain separate claims.
 
 ## Decisions
 
@@ -18,18 +18,32 @@ The StageX CLI path validates lineage input and classifies evidence, but it does
 
 ### Decision: derive receipts from observed stage execution
 
-**Choice:** The final receipt is produced from stage reports and observed protected-exec events, not from a checked-in template. It records real audited-seed, manifest, stage-graph, source-state, provider, output, and audit BLAKE3 values and `lineage_receipt_status = complete`.
+**Choice:** The final receipt is produced from stage reports and observed protected-exec events, not from a checked-in template. It records real audited-seed, manifest, stage-graph, source-state, provider, output, transition-report, audit, provider-validation-report, final-bundle, and domain-separated receipt-payload BLAKE3 values and `lineage_receipt_status = complete`.
 
 **Rationale:** Digest-shaped scaffold values are useful for parser tests but are not evidence.
 
+### Decision: use explicit publication inputs
+
+**Choice:** Require an absolute lineage-manifest path, an absolute complete transition root, and an absent absolute output path. Do not infer transition artifacts from the checkout, environment, output path, or store.
+
+**Rationale:** Explicit authority prevents stale-root discovery and keeps publication reviewable.
+
 ### Decision: publish only after independent revalidation
 
-**Choice:** Materialize under a private staging directory, validate the provider contract and lineage receipt independently, then publish create-new. Any source, stage, output, fallback, or audit mismatch leaves the existing scaffold and selected provider unchanged.
+**Choice:** Materialize under a private create-new staging directory, validate the provider contract and lineage receipt independently, then publish with Linux no-replace rename. Revalidate the emitted provider after rename.
 
-**Rationale:** Partial output must never become bootstrap authority.
+**Rationale:** Partial output must never become bootstrap authority, and an existing destination must never be removed or overwritten.
+
+### Decision: publish the smallest honest intermediate provider
+
+**Choice:** Publish the self-hosted TinyCC compiler and runtime, native-musl headers and static libraries, 11 target-prefixed binutils tools, binutils headers and linker scripts, provider metadata, validation evidence, and the complete receipt.
+
+**Rationale:** These four provider roles close the bounded StageX boundary without promoting the result to final GCC admission or compiler correctness.
 
 ## Risks / Trade-offs
 
 - Early stages may genuinely require host shell/sandbox help; the claim must either construct and transition away from it or retain an explicit blocker.
 - Seccomp user-notification support is platform-specific; unsupported kernels fail closed for StageX proof.
-- The full lineage is long-running and needs resumable authenticated stage outputs without accepting stale evidence.
+- The full protected transition is long-running. Publication imports one complete transition root and rejects stale or partial evidence.
+- Some report-only stage observations have no standalone artifact bytes. The receipt uses an exact allowlist and a domain-separated projection over the artifact ID, plan digest, and complete report digest. Live provider components always use observed file or tree BLAKE3 identities.
+- Stage reports bind each stage's complete declared authorization set only after every declared path-plus-digest identity appears in a kernel-intercepted `execve` or `execveat` decision in the separately bound raw audit. One raw event can satisfy equivalent authorization IDs, but an unused identity fails publication. This does not prove successful process completion.

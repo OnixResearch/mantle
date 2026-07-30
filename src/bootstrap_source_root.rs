@@ -521,9 +521,6 @@ fn validate_emitted_roles(
     }
 }
 
-pub(crate) const STAGEX_LINEAGE_PROVIDER_NOT_MATERIALIZED: &str = "StageX-class lineage provider materialization not yet implemented: \
-     the hex0-seed to normalized-provider stage0 chain requires a separate integration change";
-
 pub(crate) fn validate_stagex_lineage_manifest(
     manifest_bytes: &[u8],
 ) -> Result<crunch_bootstrap_core::LineageManifest, Vec<ManifestDiagnostic>> {
@@ -546,36 +543,6 @@ pub(crate) fn validate_stagex_lineage_manifest(
     }
 
     Ok(manifest)
-}
-
-pub(crate) fn classify_stagex_provider_evidence(
-    manifest: &crunch_bootstrap_core::LineageManifest,
-) -> StagexProviderEvidence {
-    let seed_class = manifest.seed.seed_class.as_str().to_string();
-    let seed_digest = manifest.seed.seed_digest.hex_value.clone();
-    let environment_assumptions: Vec<String> = manifest
-        .environment_assumptions
-        .iter()
-        .map(|a| format!("{}: {}", a.category, a.description))
-        .collect();
-    StagexProviderEvidence {
-        seed_class,
-        seed_digest,
-        audit_seed_max_bytes: manifest.seed.audit_seed_max_bytes,
-        provider_output_count: manifest.provider_outputs.len() as u32,
-        environment_assumptions,
-        materialized: false,
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct StagexProviderEvidence {
-    pub seed_class: String,
-    pub seed_digest: String,
-    pub audit_seed_max_bytes: u32,
-    pub provider_output_count: u32,
-    pub environment_assumptions: Vec<String>,
-    pub materialized: bool,
 }
 
 #[cfg(test)]
@@ -800,7 +767,7 @@ mod tests {
     }
 
     #[test]
-    fn stagex_provider_evidence_classification() {
+    fn stagex_manifest_exposes_provider_boundary_fields() {
         let manifest_json = serde_json::json!({
             "seed": {
                 "seed_class": "hex0_seed",
@@ -830,12 +797,11 @@ mod tests {
         });
         let bytes = serde_json::to_vec(&manifest_json).unwrap();
         let manifest = validate_stagex_lineage_manifest(&bytes).unwrap();
-        let evidence = classify_stagex_provider_evidence(&manifest);
-        assert_eq!(evidence.seed_class, "hex0-seed");
-        assert_eq!(evidence.audit_seed_max_bytes, 4096);
-        assert_eq!(evidence.provider_output_count, 1);
-        assert!(!evidence.materialized);
-        assert!(evidence.environment_assumptions.iter().any(|a| a.contains("kernel")));
+        assert_eq!(manifest.seed.seed_class.as_str(), "hex0-seed");
+        assert_eq!(manifest.seed.audit_seed_max_bytes, 4096);
+        assert_eq!(manifest.provider_outputs.len(), 1);
+        assert_eq!(manifest.environment_assumptions.len(), 1);
+        assert_eq!(manifest.environment_assumptions[0].category, "kernel");
     }
 
     #[test]

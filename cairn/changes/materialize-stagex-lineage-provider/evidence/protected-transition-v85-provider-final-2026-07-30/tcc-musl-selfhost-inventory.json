@@ -1,0 +1,52 @@
+{
+  "format": "mantle-stagex-tcc-musl-selfhost-inventory-v1",
+  "build_command_count": 12,
+  "smoke_command_count": 1,
+  "outputs": [
+    {
+      "artifact_id": "tcc-musl-selfhost",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v85-provider-roles-final-20260730/tcc-musl-selfhost-stage/runtime/output/bin/tcc-0.9.27-musl-selfhost",
+      "bytes_len": 352368,
+      "digest_blake3": "8e6580da40c5892b941423ae108d6218b3636ebd3643bc3ba1e78e33d6c4898a"
+    },
+    {
+      "artifact_id": "tcc-musl-selfhost-alias",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v85-provider-roles-final-20260730/tcc-musl-selfhost-stage/runtime/output/bin/tcc",
+      "bytes_len": 352368,
+      "digest_blake3": "8e6580da40c5892b941423ae108d6218b3636ebd3643bc3ba1e78e33d6c4898a"
+    },
+    {
+      "artifact_id": "tcc-musl-selfhost-libtcc",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v85-provider-roles-final-20260730/tcc-musl-selfhost-stage/runtime/output/share/selfhost-link/libtcc-selfhost.a",
+      "bytes_len": 505962,
+      "digest_blake3": "fb9f87834e0d81214fd9654820ea482a5adedecafc6359a1d32729874b2a1267"
+    },
+    {
+      "artifact_id": "tcc-musl-selfhost-main-object",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v85-provider-roles-final-20260730/tcc-musl-selfhost-stage/runtime/output/share/selfhost-link/objects/tcc.o",
+      "bytes_len": 22300,
+      "digest_blake3": "22f5f8579f023fee1afb35595d4e99c76132bf2fec75dc2451c25ed2f10cc16b"
+    },
+    {
+      "artifact_id": "tcc-musl-selfhost-patched-source",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v85-provider-roles-final-20260730/tcc-musl-selfhost-stage/runtime/output/share/tcc-source-patched",
+      "bytes_len": 1372604,
+      "digest_blake3": "5e918d19d4d7151f17a5a81bd07d25fd8a55e57037b4735f038344365326b3d4"
+    },
+    {
+      "artifact_id": "tcc-musl-selfhost-object-tree",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v85-provider-roles-final-20260730/tcc-musl-selfhost-stage/runtime/output/share/selfhost-link/objects",
+      "bytes_len": 522816,
+      "digest_blake3": "2f3fcb41daa227dac3e1d206c4c7aeabd6ff6341fe975399e950629e8a281880"
+    },
+    {
+      "artifact_id": "tcc-musl-selfhost-smoke-object",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v85-provider-roles-final-20260730/tcc-musl-selfhost-stage/runtime/smoke/syntax-smoke.o",
+      "bytes_len": 1408,
+      "digest_blake3": "cc40480286f053fc69e7d17431b4cf5de82b477b0f84e646717cd6c3c71cecb1"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds TinyCC 0.9.27 rebuilt from separate compiler objects by the protected TinyCC musl-v2 predecessor and linked by the declared TinyCC 0.9.26 path only; it does not prove native-runtime replacement, the later GNU/GCC/binutils chain, or provider admission"
+}

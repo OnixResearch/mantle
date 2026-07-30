@@ -301,6 +301,21 @@ StageX adds execution authority. Its seccomp supervisor intercepts `execve` and
 executable identity, an allowed stage, and an allowed child relationship.
 Undeclared execution and identity mismatches fail closed.
 
+A complete protected transition can publish one bounded intermediate provider:
+
+```bash
+mantle bootstrap \
+  --stagex-lineage /absolute/path/stagex-transition-lineage.json \
+  --stagex-transition-root /absolute/path/complete-transition \
+  --output /absolute/path/absent-provider-directory
+```
+
+Mantle requires all three paths to be explicit and absolute. The output must
+not exist. The provider contains self-hosted TinyCC, native-musl headers and
+static libraries, target-prefixed binutils, metadata, validation evidence, and
+a complete receipt. This provider does not admit final GCC or prove compiler
+correctness.
+
 Receipts are evidence, not authority. The validators recompute canonical
 identities from current source and artifact files. They reject missing, stale,
 substituted, or malformed evidence. Positive tests demonstrate bounded

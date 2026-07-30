@@ -1,0 +1,20 @@
+{
+  "schema": "mantle-stagex-binutils-count-comparison-v1",
+  "status": "diagnostic-only",
+  "old_transition_root": "stagex-protected-transition-v81-binutils-final-20260730",
+  "new_transition_root": "stagex-protected-transition-v82-provider-roles-20260730",
+  "old_total_event_count": 76569,
+  "new_total_event_count": 76538,
+  "old_binutils_event_count": 74022,
+  "new_binutils_event_count": 73991,
+  "differing_authorization_counts": [
+    {
+      "authorization_id": "planned:coreutils-materialization:exec:coreutils-smoke:mkdir",
+      "old_count": 5411,
+      "new_count": 5380
+    }
+  ],
+  "other_authorization_count_differences": 0,
+  "fallback_events": [],
+  "decision": "widen-lower-bound-to-73991"
+}
