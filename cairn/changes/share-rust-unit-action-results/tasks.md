@@ -30,4 +30,5 @@
 
 - [x] [serial] V1 Run focused Rust cache core, result-source, object-transfer, store, and `rust-plan` integration tests. Record exact command output in `cairn/changes/share-rust-unit-action-results/evidence/verification.md`. r[rust_package_planning.unit_execution.topology.shared_cache_receipts]
 - [x] [serial] V2 Run clean-client, offline, invalid-signature, incomplete-tree, conflict, and atomic-publication rails with both positive and negative cases. r[cache_substitution.rust_unit_action_result_discovery]
-- [ ] [serial] V3 Run `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .`, all three gates for this change, and `tracey coverage`. Record exact output before sync and archive. r[rust_package_planning.unit_execution.topology.shared_cache_receipts]
+- [x] [serial] V3 Run `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .`, all three gates for this change, and `tracey coverage`. Record exact output before sync and archive. r[rust_package_planning.unit_execution.topology.shared_cache_receipts]
+  - Evidence: repository validation and all three change gates passed. Pre-sync Tracey retained existing repository-wide findings and reported the new identifiers as expected dangling references until spec sync.
