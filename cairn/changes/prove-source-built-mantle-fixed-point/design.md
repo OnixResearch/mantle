@@ -6,9 +6,15 @@ The hydrated full-source-provider proof reaches matching Mantle binaries but ins
 
 ### Decision: construct providers inside the proof authority
 
-**Choice:** The promoted evidence run starts with empty native-provider, Rust-provider, and Mantle output authorities. Its inputs contain authenticated source records and seed/lineage authority, never prebuilt provider directories. Development runs may use receipt-validated caches, but cached provider outputs cannot satisfy this proof.
+**Choice:** The promoted evidence run starts with empty transition, native-provider, Rust-provider, and Mantle output authorities. Its inputs contain authenticated source records and seed/lineage authority, never prebuilt provider directories. Development runs may use receipt-validated caches, but cached provider outputs cannot satisfy this proof.
 
 **Rationale:** Importing or revalidating a previously built provider would prove consumption, not the claimed source-to-Mantle lineage.
+
+### Decision: compose existing mechanisms under a new pure plan and Rust shell
+
+**Choice:** A pure core defines the exact StageX transition, StageX publication, full-source native-provider, full-source Rust-provider, Mantle stage1, and Mantle stage2 sequence. A new Rust shell observes inputs and runs those mechanisms. The existing v1 Cargo-free fixed-point command remains a narrower diagnostic.
+
+**Rationale:** Extending the v1 result could let existing provider-path inputs satisfy a source-construction claim. An external driver cannot own one typed authority plan or durable fail-closed evidence. ADR 0050 records this boundary.
 
 ### Decision: use one immutable closure policy for both Mantle stages
 

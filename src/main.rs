@@ -136,6 +136,8 @@ mod self_build;
 mod semantic_graph;
 mod shell_cmd;
 mod source_bundle;
+#[allow(dead_code)]
+mod source_built_fixed_point;
 mod source_root_capability;
 mod source_root_provider;
 mod source_toolchain_closure;
