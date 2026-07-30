@@ -27,6 +27,7 @@ const SED_BRIDGE_SCRIPT_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-sed-
 const SINGLE_THREAD_SEMAPHORE_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-single-thread-semaphore-compat.c");
 const CONFIGURE_UTILITY_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-configure-utility.c");
 const YLWRAP_SED_RUNNER_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-ylwrap-sed-runner.c");
+const BINUTILS_AR_RUNNER_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-binutils-ar-runner.sh");
 const SED_BRIDGE_LAUNCHER_SOURCE_ARTIFACT_ID: &str = "stagex-sed-bridge-launcher-source";
 const SED_BRIDGE_LAUNCHER_SOURCE_NAME: &str = "stagex-sed-bridge-launcher.c";
 const SED_BRIDGE_LAUNCHER_OUTPUT_NAME: &str = "stagex-sed-bridge-launcher";
@@ -35,13 +36,17 @@ const SED_BRIDGE_SCRIPT_SOURCE_ARTIFACT_ID: &str = "stagex-sed-regular-file-brid
 const SINGLE_THREAD_SEMAPHORE_SOURCE_ARTIFACT_ID: &str = "stagex-single-thread-semaphore-compat-source";
 const CONFIGURE_UTILITY_SOURCE_ARTIFACT_ID: &str = "stagex-configure-utility-source";
 const YLWRAP_SED_RUNNER_SOURCE_ARTIFACT_ID: &str = "stagex-ylwrap-sed-runner-source";
+const BINUTILS_AR_RUNNER_SOURCE_ARTIFACT_ID: &str = "stagex-binutils-ar-runner-source";
 const YLWRAP_SED_RUNNER_SOURCE_NAME: &str = "stagex-ylwrap-sed-runner.c";
 const YLWRAP_SED_RUNNER_OUTPUT_NAME: &str = "stagex-ylwrap-sed-runner";
+const BINUTILS_AR_RUNNER_SOURCE_NAME: &str = "stagex-binutils-ar-runner.sh";
 const SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3: &str = "606c52085de42d0221ba5490e81d8c539a50a65aaa89f7b4b478371bdc643dab";
 const SED_BRIDGE_LAUNCHER_BLAKE3: &str = "9b4d6a5eca05f55c407a70f7e426f756f482c9ae8f76d0a22d1b1b46e7dba1a1";
-const SED_BRIDGE_SCRIPT_SOURCE_BLAKE3: &str = "f8a7228b0341fc4569583055936d9386de26c14a92e0da6e850f4c080abccbbc";
+const SED_BRIDGE_SCRIPT_SOURCE_BLAKE3: &str = "fcdaf54c41ea283af6d7d75b2e2dce24afcbdf9286981e11603b2361775f5d6a";
 const YLWRAP_SED_RUNNER_SOURCE_BLAKE3: &str = "372a51aef1c1d06bef3ec1963bc61e89598b2912c8e709dce747637ffe49587d";
 const YLWRAP_SED_RUNNER_BLAKE3: &str = "d675a75869cba2e3c7cdb932ee75106a4a6094161e4d95fc196c08aa7b9723f8";
+const BINUTILS_AR_RUNNER_SOURCE_BLAKE3: &str = "27daef7796f882d478b0d7f26508b4b7c0a3d67faa3fd9dafe6e6fb67733c9f1";
+const BINUTILS_AR_SMOKE_ARCHIVE_BLAKE3: &str = "b54d2b2a954c606f06e62177013cec573bb4ac598c50b2e4f9867879ea5b65a9";
 const SINGLE_THREAD_SEMAPHORE_SOURCE_BLAKE3: &str = "52c3ec19c484b0b4c3c5de84fc7ae77f40601fc81993d16ef6e15eb7401ee084";
 const CONFIGURE_UTILITY_SOURCE_BLAKE3: &str = "b150327f4ef9256764e8024466dd706ee87012f70554f1c7a01a0d8bc08975b1";
 const CONFIGURE_UTILITY_BLAKE3: &str = "a0d4f306ed84086cb0cebff1dffb0f5fea0a93e9ee4085e6e5e0acc3e4df201f";
@@ -52,7 +57,7 @@ const BINUTILS_RECORD_HASH: &str = "sha256-L8aaWezlL47cNdPIbSEAtryYUDXLe9htMSECT
 const BINUTILS_RECORD_URL: &str = "https://ftpmirror.gnu.org/binutils/binutils-2.30.tar.xz";
 const BINUTILS_RECORD_PAYLOAD_ENCODING: &str = "tarball-archive-v1";
 const BINUTILS_RECORD_UNPACK: &str = "1";
-const BINUTILS_SOURCE_ARTIFACT_COUNT: usize = 7;
+const BINUTILS_SOURCE_ARTIFACT_COUNT: usize = 8;
 const REQUIRED_SOURCE_FILES: &[&str] = &[
     "configure",
     "config.sub",
@@ -149,6 +154,7 @@ pub(crate) fn source_artifact_digests() -> [(&'static str, &'static str); BINUTI
         (SINGLE_THREAD_SEMAPHORE_SOURCE_ARTIFACT_ID, SINGLE_THREAD_SEMAPHORE_SOURCE_BLAKE3),
         (CONFIGURE_UTILITY_SOURCE_ARTIFACT_ID, CONFIGURE_UTILITY_SOURCE_BLAKE3),
         (YLWRAP_SED_RUNNER_SOURCE_ARTIFACT_ID, YLWRAP_SED_RUNNER_SOURCE_BLAKE3),
+        (BINUTILS_AR_RUNNER_SOURCE_ARTIFACT_ID, BINUTILS_AR_RUNNER_SOURCE_BLAKE3),
     ]
 }
 
@@ -386,6 +392,23 @@ struct ConfigurePreprocessNegativeCase {
 }
 
 #[derive(Debug, Clone)]
+struct ArchiveRunnerPaths {
+    script: PathBuf,
+    scratch: PathBuf,
+    audit: PathBuf,
+    count: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ArchiveAuditEntry {
+    invocation: u32,
+    member_count: u32,
+    output_bytes: u64,
+    archive: String,
+    status: String,
+}
+
+#[derive(Debug, Clone)]
 struct ConfigureProbeContext {
     source: PathBuf,
     bfd_configure_authenticated: PathBuf,
@@ -393,6 +416,7 @@ struct ConfigureProbeContext {
     compiler_wrapper: PathBuf,
     configure_utility: PathBuf,
     sed_bridge: SedBridgePaths,
+    archive_runner: ArchiveRunnerPaths,
     stdin_path: PathBuf,
 }
 
@@ -413,6 +437,7 @@ const CONFIGURE_PREPROCESS_REJECTION_STATUS: i32 = 1;
 const CONFIG_SUB_LEGACY_INPUT: &str = "sun4";
 const CONFIG_SUB_EXPECTED_OUTPUT: &str = "sparc-sun-sunos4.1.1\n";
 const MAKE_JOB_COUNT: u32 = 1;
+const BINUTILS_CFLAGS_FEATURES: &str = "-static -D_GNU_SOURCE -DBUILDFIXED=1 -DDYNAMIC_CRC_TABLE=1";
 const BFD_HEADER_MARKER: &str = "void bfd_init (void);";
 const BFD_LIBRARY_HEADER_MARKER: &str = "/* Extracted from libbfd.c.  */";
 const BFD_COFF_HEADER_MARKER: &str = "generated from \"libcoff-in.h\" and \"coffcode.h\"";
@@ -456,6 +481,27 @@ const FLEX_GENERATED_FILES: [&str; FLEX_GENERATED_FILE_COUNT] = [
     "binutils/syslex.c",
     "ld/ldlex.c",
 ];
+const BINUTILS_COMPONENT_COUNT: usize = 8;
+const BINUTILS_COMPONENTS: [(&str, &str, bool, &str); BINUTILS_COMPONENT_COUNT] = [
+    (
+        "libiberty",
+        "libiberty.a",
+        false,
+        "0d14d3a7309819b451e48610945ad84ae39c33fbe044e886e2250c78798a9694",
+    ),
+    ("zlib", "libz.a", false, "659eb0576df9eddf5578a0221c24ac56634ba42d964aee0fbd72db4cd7422b81"),
+    ("bfd", ".libs/libbfd.a", false, "85a785159511ed1f69d2c299612cf4753cedfc404b836e0d503f45e6a992d2e4"),
+    (
+        "opcodes",
+        ".libs/libopcodes.a",
+        false,
+        "2362655bace614327777f68f539849f40edb98f75ea7c89916655b0ca6c67b1a",
+    ),
+    ("binutils", "size", true, "812bd48e35d078b759192073cb2de2accaf9620c075c2ae24df9329c5623a7dd"),
+    ("gas", "as-new", true, "36bb17408403b4fd8283bf80f78410ae76eedb4e1565f0fc6db0f7a8c0a1eac4"),
+    ("gprof", "gprof", true, "37321441797634fb44356c1cbfba5d4b59bb4fec97fd39f49df7124f258cbb9e"),
+    ("ld", "ld-new", true, "e2939e05b0e115efa3530f66d60b63ef06627a1ba0c0c1a70ce71fabcf4ca158"),
+];
 const BFD_SECOND_CONFIG_UNRESOLVED_MARKER: &str = "@BFD_HOST_64_BIT@";
 const SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX: u64 = KIBIBYTE_BYTES;
 const YLWRAP_SED_FILE_MEBIBYTES_MAX: u64 = 8;
@@ -467,7 +513,20 @@ const YLWRAP_SED_PATH_PROGRAM_INDEX: usize = 0;
 const YLWRAP_SED_NAME_PROGRAM_INDEX: usize = 1;
 const YLWRAP_SED_GUARD_PROGRAM_INDEX: usize = 2;
 const SED_BRIDGE_AUTHORITY_FAILURE: i32 = 125;
-const SED_BRIDGE_INVOCATION_COUNT_MAX: u32 = 4_096;
+const BINUTILS_AR_AUTHORITY_FAILURE: i32 = 125;
+const BINUTILS_AR_SMOKE_SHORT_BYTES: &[u8] = b"abc";
+const BINUTILS_AR_SMOKE_LONG_BYTES: &[u8] = b"long-payload";
+const BINUTILS_AR_EXPECTED_INVOCATION_COUNT: usize = 4;
+const BINUTILS_AR_EXPECTED_ARCHIVES: [&str; BINUTILS_AR_EXPECTED_INVOCATION_COUNT] =
+    ["./libiberty.a", "libz.a", ".libs/libbfd.a", ".libs/libopcodes.a"];
+const BINUTILS_AR_AUDIT_FIELD_COUNT: usize = 5;
+const BINUTILS_AR_AUDIT_INVOCATION_INDEX: usize = 0;
+const BINUTILS_AR_AUDIT_MEMBER_COUNT_INDEX: usize = 1;
+const BINUTILS_AR_AUDIT_OUTPUT_BYTES_INDEX: usize = 2;
+const BINUTILS_AR_AUDIT_ARCHIVE_INDEX: usize = 3;
+const BINUTILS_AR_AUDIT_STATUS_INDEX: usize = 4;
+const SED_BRIDGE_INVOCATION_COUNT_MAX: u32 = 8_192;
+const BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS: [u32; 2] = [4_771, 4_772];
 const SED_BRIDGE_AUDIT_FIELD_COUNT: usize = 5;
 const SED_BRIDGE_CANONICAL_FIELD_COUNT: usize = 4;
 const SED_BRIDGE_CANONICAL_INPUT_INDEX: usize = 0;
@@ -481,10 +540,14 @@ const SED_BRIDGE_SECOND_PROGRAM: &[u8] = b"/^[^\"\"]/ {\n  N\n  s/\\n//\n}\n";
 const TARGET: &str = "x86_64-unknown-linux-gnu";
 const BINUTILS_RUNTIME_START: &str = "      $BB cat > \"$WORK/binutils-runtime.c\" <<'RUNTIME_EOF'\n";
 const BINUTILS_RUNTIME_END: &str = "\nRUNTIME_EOF";
+const ELF_MAGIC: &[u8] = b"\x7fELF";
 const REGULAR_FILE_MODE: u32 = 0o644;
 const EXECUTABLE_FILE_MODE: u32 = 0o755;
 const EXECUTABLE_MODE_BITS: u32 = 0o111;
 const NATIVE_HELPER_COMPILE_ARGUMENT_COUNT: usize = 6;
+const BINUTILS_INSTALL_PREFIX: &str = "/mantle/stagex/binutils-probe-output";
+const BINUTILS_INSTALL_PREFIX_ARGUMENT: &str = "--prefix=/mantle/stagex/binutils-probe-output";
+const BINUTILS_INSTALL_LIBDIR_ARGUMENT: &str = "--libdir=/mantle/stagex/binutils-probe-output/lib";
 const CONFIGURE_CLASS_COUNT: usize = 9;
 const CONFIGURE_CLASSES: [&str; CONFIGURE_CLASS_COUNT] = [
     "intl",
@@ -528,13 +591,24 @@ pub(crate) fn probe_authenticated_configure_matrix(
 fn probe_authenticated_generated_sources(
     request: BinutilsConfigureProbeRequest<'_>,
 ) -> Result<ConfigureProbeOutcome, StagexBinutilsError> {
-    let context = prepare_configure_probe(&request)?;
-    let smoke_environment = configure_environment(&request, &context, CONFIGURE_CLASSES[0])?;
-    run_sed_bridge_smokes(&request, &context.sed_bridge, &smoke_environment)?;
-    let outcomes = run_configure_classes(&request, &context, &CONFIGURE_CLASSES, true)?;
-    run_initial_generated_source_targets(&request, &context)?;
+    let (context, second_bfd) = prepare_generated_source_context(&request)?;
+    finalize_sed_bridge_audit(&context.sed_bridge)?;
+    validate_ylwrap_sed_audit(&context.sed_bridge)?;
+    assert_eq!(second_bfd.configure_class, "bfd");
+    assert!(context.source.join("ld/ldlex.c").is_file());
+    Ok(second_bfd)
+}
+
+fn prepare_generated_source_context(
+    request: &BinutilsConfigureProbeRequest<'_>,
+) -> Result<(ConfigureProbeContext, ConfigureProbeOutcome), StagexBinutilsError> {
+    let context = prepare_configure_probe(request)?;
+    let smoke_environment = configure_environment(request, &context, CONFIGURE_CLASSES[0])?;
+    run_sed_bridge_smokes(request, &context.sed_bridge, &smoke_environment)?;
+    let outcomes = run_configure_classes(request, &context, &CONFIGURE_CLASSES, true)?;
+    run_initial_generated_source_targets(request, &context)?;
     restore_authenticated_bfd_configure(&context)?;
-    let second_bfd = run_configure_class_named(&request, &context, "bfd", "bfd-second")?;
+    let second_bfd = run_configure_class_named(request, &context, "bfd", "bfd-second")?;
     if second_bfd.exit_code != 0 {
         return Err(StagexBinutilsError::Materialization(format!(
             "second authenticated BFD configure failed with status {}",
@@ -542,12 +616,24 @@ fn probe_authenticated_generated_sources(
         )));
     }
     validate_second_bfd_header(&context.source.join("bfd/bfd-in3.h"))?;
-    run_remaining_generated_source_targets(&request, &context)?;
-    finalize_sed_bridge_audit(&context.sed_bridge)?;
-    validate_ylwrap_sed_audit(&context.sed_bridge)?;
+    run_remaining_generated_source_targets(request, &context)?;
     assert_eq!(outcomes.len(), CONFIGURE_CLASS_COUNT);
     assert_eq!(second_bfd.configure_class, "bfd");
-    Ok(second_bfd)
+    Ok((context, second_bfd))
+}
+
+fn probe_authenticated_component_builds(
+    request: BinutilsConfigureProbeRequest<'_>,
+) -> Result<Vec<PathBuf>, StagexBinutilsError> {
+    let (context, second_bfd) = prepare_generated_source_context(&request)?;
+    let outputs = run_component_builds(&request, &context)?;
+    finalize_archive_runner_audit(&context.archive_runner)?;
+    finalize_sed_bridge_audit(&context.sed_bridge)?;
+    validate_ylwrap_sed_audit(&context.sed_bridge)?;
+    validate_sed_bridge_total_count(&context.sed_bridge, &BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS)?;
+    assert_eq!(second_bfd.exit_code, 0);
+    assert_eq!(outputs.len(), BINUTILS_COMPONENT_COUNT);
+    Ok(outputs)
 }
 
 fn probe_authenticated_configures(
@@ -604,6 +690,7 @@ fn prepare_configure_probe(
         .map_err(|error| StagexBinutilsError::Materialization(format!("creating configure tool namespace: {error}")))?;
     let compiler_wrapper = prepare_tcc_wrapper(request)?;
     run_tcc_wrapper_negative_smokes(request, &compiler_wrapper)?;
+    let archive_runner = prepare_archive_runner(request)?;
     let sed_bridge = prepare_sed_bridge(request, &compiler_wrapper)?;
     let configure_utility = prepare_configure_utility(request, &compiler_wrapper)?;
     populate_probe_tool_namespace(request, &tools, &sed_bridge.launcher, &configure_utility)?;
@@ -617,6 +704,7 @@ fn prepare_configure_probe(
         compiler_wrapper,
         configure_utility,
         sed_bridge,
+        archive_runner,
         stdin_path,
     };
     run_config_sub_preflight(request, &context)?;
@@ -735,11 +823,14 @@ fn generated_source_environment(
     let mut environment = std::collections::BTreeMap::new();
     environment.insert("PATH".to_string(), shell_path(&context.tools, "generated-source tool namespace")?);
     environment.insert("CONFIG_SHELL".to_string(), bash.clone());
-    environment.insert("SHELL".to_string(), bash);
+    environment.insert("SHELL".to_string(), bash.clone());
     environment.insert("CC".to_string(), compiler.clone());
     environment.insert("CC_FOR_BUILD".to_string(), compiler.clone());
     environment.insert("CPP".to_string(), format!("{compiler} -E"));
-    environment.insert("AR".to_string(), "true".to_string());
+    environment.insert(
+        "AR".to_string(),
+        format!("{bash} {}", shell_path(&context.archive_runner.script, "binutils ar runner")?),
+    );
     environment.insert("RANLIB".to_string(), "true".to_string());
     environment.insert("MAKEINFO".to_string(), "true".to_string());
     environment.insert("AWK".to_string(), shell_path(request.gawk, "generated-source Gawk")?);
@@ -748,12 +839,13 @@ fn generated_source_environment(
     environment.insert("FLEX".to_string(), shell_path(request.flex, "generated-source Flex")?);
     environment
         .insert("BISON_PKGDATADIR".to_string(), shell_path(&bison_root.join("share/bison"), "Bison runtime data")?);
-    let cflags = format!("-I{musl_include} -static -D_GNU_SOURCE");
+    let cflags = format!("-I{musl_include} {BINUTILS_CFLAGS_FEATURES}");
     environment.insert("CFLAGS".to_string(), cflags.clone());
     environment.insert("CFLAGS_FOR_BUILD".to_string(), cflags);
     environment.insert("LDFLAGS".to_string(), format!("-static -L{musl_lib}"));
     environment.insert("MANTLE_STAGE_X_FILE".to_string(), shell_path(&context.tools.join("file"), "configure file")?);
     append_sed_bridge_environment(&mut environment, request, context)?;
+    append_archive_runner_environment(&mut environment, request, context)?;
     assert!(environment.contains_key("CFLAGS_FOR_BUILD"));
     assert!(environment.contains_key("BISON_PKGDATADIR"));
     Ok(environment)
@@ -773,6 +865,9 @@ fn run_make_generation_targets(
     let cflags_for_build = environment
         .get("CFLAGS_FOR_BUILD")
         .ok_or_else(|| StagexBinutilsError::Materialization("generated-source build flags are missing".to_string()))?;
+    let archive_runner = environment.get("AR").ok_or_else(|| {
+        StagexBinutilsError::Materialization("generated-source archive authority is missing".to_string())
+    })?;
     if targets.is_empty() {
         return Err(StagexBinutilsError::Materialization(format!("{label} has no declared Make targets")));
     }
@@ -786,7 +881,7 @@ fn run_make_generation_targets(
         format!("CC={compiler}"),
         format!("CC_FOR_BUILD={compiler}"),
         format!("CFLAGS_FOR_BUILD={cflags_for_build}"),
-        "AR=true".to_string(),
+        format!("AR={archive_runner}"),
         "RANLIB=true".to_string(),
         "MAKEINFO=true".to_string(),
     ]);
@@ -814,6 +909,120 @@ fn run_make_generation_targets(
     assert!(!targets.is_empty());
     assert!(stdout.is_file());
     assert!(stderr.is_file());
+    Ok(())
+}
+
+fn run_component_builds(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    context: &ConfigureProbeContext,
+) -> Result<Vec<PathBuf>, StagexBinutilsError> {
+    let environment = generated_source_environment(request, context)?;
+    let mut outputs = Vec::with_capacity(BINUTILS_COMPONENT_COUNT);
+    for (subdirectory, output, executable, expected_digest) in BINUTILS_COMPONENTS {
+        outputs.push(run_component_build(
+            request,
+            context,
+            &environment,
+            subdirectory,
+            output,
+            executable,
+            expected_digest,
+        )?);
+    }
+    assert_eq!(outputs.len(), BINUTILS_COMPONENT_COUNT);
+    assert!(outputs.iter().all(|output| output.is_file()));
+    Ok(outputs)
+}
+
+fn run_component_build(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    context: &ConfigureProbeContext,
+    environment: &std::collections::BTreeMap<String, String>,
+    subdirectory: &str,
+    expected_output: &str,
+    executable: bool,
+    expected_digest: &str,
+) -> Result<PathBuf, StagexBinutilsError> {
+    let compiler = environment
+        .get("CC")
+        .ok_or_else(|| StagexBinutilsError::Materialization("component compiler authority is missing".to_string()))?;
+    let archive_runner = environment
+        .get("AR")
+        .ok_or_else(|| StagexBinutilsError::Materialization("component archive authority is missing".to_string()))?;
+    let cflags = environment
+        .get("CFLAGS")
+        .ok_or_else(|| StagexBinutilsError::Materialization("component C flags are missing".to_string()))?;
+    let arguments = [
+        format!("-j{MAKE_JOB_COUNT}"),
+        "-C".to_string(),
+        shell_path(&context.source.join(subdirectory), "component source directory")?,
+        format!("tooldir={BINUTILS_INSTALL_PREFIX}"),
+        format!("CC={compiler}"),
+        format!("AR={archive_runner}"),
+        "RANLIB=true".to_string(),
+        "MAKEINFO=true".to_string(),
+        "CPPFLAGS=-DPLUGIN_LITTLE_ENDIAN".to_string(),
+        format!("CFLAGS={cflags}"),
+    ];
+    let argument_refs = arguments.iter().map(String::as_str).collect::<Vec<_>>();
+    let stdout = request.scratch_dir.join(format!("make-{subdirectory}-build.stdout.txt"));
+    let stderr = request.scratch_dir.join(format!("make-{subdirectory}-build.stderr.txt"));
+    let status = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
+        request.make,
+        &argument_refs,
+        &context.source,
+        environment,
+        &context.stdin_path,
+        CONFIGURE_OUTPUT_BYTES_MAX,
+        &stdout,
+        CONFIGURE_OUTPUT_BYTES_MAX,
+        &stderr,
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    if status != 0 {
+        let diagnostic = fs::read_to_string(&stderr).unwrap_or_else(|error| format!("unreadable diagnostic: {error}"));
+        return Err(StagexBinutilsError::Materialization(format!(
+            "binutils component {subdirectory} failed with status {status}: {diagnostic}"
+        )));
+    }
+    let output = context.source.join(subdirectory).join(expected_output);
+    validate_component_output(&output, subdirectory, executable, expected_digest)?;
+    assert!(stdout.is_file());
+    assert!(stderr.is_file());
+    Ok(output)
+}
+
+fn validate_component_output(
+    path: &Path,
+    label: &str,
+    executable: bool,
+    expected_digest: &str,
+) -> Result<(), StagexBinutilsError> {
+    let bytes = crate::stagex_mes_lib::read_bounded_file(path, CONFIGURE_OUTPUT_BYTES_MAX, label)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    if executable {
+        let mode = fs::metadata(path)
+            .map_err(|error| StagexBinutilsError::Materialization(format!("reading {label} output mode: {error}")))?
+            .permissions()
+            .mode();
+        if bytes.len() < ELF_MAGIC.len() || &bytes[..ELF_MAGIC.len()] != ELF_MAGIC || mode & EXECUTABLE_MODE_BITS == 0 {
+            return Err(StagexBinutilsError::Materialization(format!(
+                "binutils component {label} lacks an executable ELF output"
+            )));
+        }
+    } else if !bytes.starts_with(b"!<arch>\n") {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "binutils component {label} lacks an archive output"
+        )));
+    }
+    let observed_digest = blake3::hash(&bytes).to_hex().to_string();
+    if observed_digest != expected_digest {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "binutils component {label} digest mismatch: expected {expected_digest}, observed {observed_digest}"
+        )));
+    }
+    assert!(!bytes.is_empty());
+    assert_eq!(observed_digest.len(), BLAKE3_HEX_CHAR_COUNT);
     Ok(())
 }
 
@@ -1161,8 +1370,8 @@ fn configure_arguments() -> Vec<String> {
         "--host=x86_64-unknown-linux-gnu",
         "--target=x86_64-unknown-linux-gnu",
         "--program-prefix=",
-        "--prefix=/mantle/stagex/binutils-probe-output",
-        "--libdir=/mantle/stagex/binutils-probe-output/lib",
+        BINUTILS_INSTALL_PREFIX_ARGUMENT,
+        BINUTILS_INSTALL_LIBDIR_ARGUMENT,
         "--with-sysroot=",
         "--srcdir=.",
         "--enable-compressed-debug-sections=all",
@@ -1343,6 +1552,293 @@ fn preprocess_negative_environment(
     Ok(environment)
 }
 
+fn prepare_archive_runner(
+    request: &BinutilsConfigureProbeRequest<'_>,
+) -> Result<ArchiveRunnerPaths, StagexBinutilsError> {
+    require_sed_bridge_source_digest(
+        "binutils ar runner",
+        BINUTILS_AR_RUNNER_SOURCE,
+        BINUTILS_AR_RUNNER_SOURCE_BLAKE3,
+    )?;
+    let script = request.scratch_dir.join(BINUTILS_AR_RUNNER_SOURCE_NAME);
+    let scratch = request.scratch_dir.join("ar-scratch");
+    fs::create_dir(&scratch)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("creating binutils ar scratch: {error}")))?;
+    crate::stagex_mes_lib::write_create_new(&script, BINUTILS_AR_RUNNER_SOURCE)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    fs::set_permissions(&script, fs::Permissions::from_mode(REGULAR_FILE_MODE))
+        .map_err(|error| StagexBinutilsError::Materialization(format!("setting binutils ar runner mode: {error}")))?;
+    let paths = ArchiveRunnerPaths {
+        script,
+        scratch,
+        audit: request.scratch_dir.join("ar-audit.tsv"),
+        count: request.scratch_dir.join("ar-count.txt"),
+    };
+    run_archive_runner_smokes(request, &paths)?;
+    assert!(paths.script.is_file());
+    assert!(paths.scratch.is_dir());
+    Ok(paths)
+}
+
+fn archive_runner_environment(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    paths: &ArchiveRunnerPaths,
+) -> Result<std::collections::BTreeMap<String, String>, StagexBinutilsError> {
+    let mut environment = std::collections::BTreeMap::new();
+    for (name, tool) in [
+        ("BASENAME", "basename"),
+        ("CAT", "cat"),
+        ("MV", "mv"),
+        ("RM", "rm"),
+        ("WC", "wc"),
+    ] {
+        environment.insert(
+            format!("MANTLE_STAGE_X_AR_{name}"),
+            shell_path(&request.coreutils_bin.join(tool), "binutils ar utility")?,
+        );
+    }
+    environment.insert("MANTLE_STAGE_X_AR_AUDIT".to_string(), shell_path(&paths.audit, "binutils ar audit")?);
+    environment.insert("MANTLE_STAGE_X_AR_COUNT".to_string(), shell_path(&paths.count, "binutils ar count")?);
+    environment.insert("MANTLE_STAGE_X_AR_SCRATCH".to_string(), shell_path(&paths.scratch, "binutils ar scratch")?);
+    assert_eq!(environment.len(), 8);
+    assert!(environment.contains_key("MANTLE_STAGE_X_AR_AUDIT"));
+    Ok(environment)
+}
+
+fn finalize_archive_runner_audit(paths: &ArchiveRunnerPaths) -> Result<(), StagexBinutilsError> {
+    let count_text = fs::read_to_string(&paths.count)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading binutils ar count: {error}")))?;
+    let count = count_text
+        .trim()
+        .parse::<usize>()
+        .map_err(|error| StagexBinutilsError::Materialization(format!("parsing binutils ar count: {error}")))?;
+    let audit_text = fs::read_to_string(&paths.audit)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading binutils ar audit: {error}")))?;
+    let entries = parse_archive_runner_audit(&audit_text)?;
+    if count != entries.len() || count != BINUTILS_AR_EXPECTED_INVOCATION_COUNT {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "binutils ar audit count mismatch: expected {BINUTILS_AR_EXPECTED_INVOCATION_COUNT}, count {count}, entries {}",
+            entries.len()
+        )));
+    }
+    let mut canonical = String::new();
+    for entry in &entries {
+        canonical.push_str(&format!(
+            "{}\t{}\t{}\t{}\n",
+            entry.member_count, entry.output_bytes, entry.archive, entry.status
+        ));
+    }
+    crate::stagex_mes_lib::write_create_new(&paths.scratch.join("audit.canonical.tsv"), canonical.as_bytes())
+        .map_err(StagexBinutilsError::from_runtime)?;
+    assert_eq!(entries.len(), BINUTILS_AR_EXPECTED_INVOCATION_COUNT);
+    assert!(canonical.ends_with('\n'));
+    Ok(())
+}
+
+fn parse_archive_runner_audit(text: &str) -> Result<Vec<ArchiveAuditEntry>, StagexBinutilsError> {
+    let mut entries = Vec::new();
+    for (index, line) in text.lines().enumerate() {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        if fields.len() != BINUTILS_AR_AUDIT_FIELD_COUNT {
+            return Err(StagexBinutilsError::Materialization(format!("malformed binutils ar audit: {line:?}")));
+        }
+        let invocation = fields[BINUTILS_AR_AUDIT_INVOCATION_INDEX].parse::<u32>().map_err(|error| {
+            StagexBinutilsError::Materialization(format!("invalid binutils ar invocation: {error}"))
+        })?;
+        let expected_invocation = u32::try_from(index)
+            .map_err(|error| StagexBinutilsError::Materialization(format!("binutils ar index overflow: {error}")))?
+            .checked_add(1)
+            .ok_or_else(|| StagexBinutilsError::Materialization("binutils ar invocation overflow".to_string()))?;
+        let member_count = fields[BINUTILS_AR_AUDIT_MEMBER_COUNT_INDEX].parse::<u32>().map_err(|error| {
+            StagexBinutilsError::Materialization(format!("invalid binutils ar member count: {error}"))
+        })?;
+        let output_bytes = fields[BINUTILS_AR_AUDIT_OUTPUT_BYTES_INDEX].parse::<u64>().map_err(|error| {
+            StagexBinutilsError::Materialization(format!("invalid binutils ar output size: {error}"))
+        })?;
+        let expected_archive = BINUTILS_AR_EXPECTED_ARCHIVES.get(index).copied().unwrap_or("");
+        let archive = fields[BINUTILS_AR_AUDIT_ARCHIVE_INDEX];
+        let status = fields[BINUTILS_AR_AUDIT_STATUS_INDEX];
+        if invocation != expected_invocation || member_count == 0 || output_bytes == 0 {
+            return Err(StagexBinutilsError::Materialization(format!("invalid binutils ar audit facts: {line:?}")));
+        }
+        if archive != expected_archive || status != "ok" {
+            return Err(StagexBinutilsError::Materialization(format!("substituted binutils ar audit facts: {line:?}")));
+        }
+        entries.push(ArchiveAuditEntry {
+            invocation,
+            member_count,
+            output_bytes,
+            archive: archive.to_string(),
+            status: status.to_string(),
+        });
+    }
+    if entries.len() != BINUTILS_AR_EXPECTED_INVOCATION_COUNT {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "binutils ar audit entry mismatch: expected {BINUTILS_AR_EXPECTED_INVOCATION_COUNT}, observed {}",
+            entries.len()
+        )));
+    }
+    assert!(entries.iter().all(|entry| entry.status == "ok"));
+    assert_eq!(entries.len(), BINUTILS_AR_EXPECTED_INVOCATION_COUNT);
+    Ok(entries)
+}
+
+fn run_archive_runner_case(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    paths: &ArchiveRunnerPaths,
+    current_dir: &Path,
+    arguments: &[&str],
+    environment: &std::collections::BTreeMap<String, String>,
+    label: &str,
+    stdin_path: &Path,
+) -> Result<i32, StagexBinutilsError> {
+    let mut command_arguments = vec![shell_path(&paths.script, "binutils ar runner")?];
+    command_arguments.extend(arguments.iter().map(|argument| (*argument).to_string()));
+    let argument_refs = command_arguments.iter().map(String::as_str).collect::<Vec<_>>();
+    let stdout = request.scratch_dir.join(format!("ar-{label}.stdout.txt"));
+    let stderr = request.scratch_dir.join(format!("ar-{label}.stderr.txt"));
+    let status = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
+        request.bash,
+        &argument_refs,
+        current_dir,
+        environment,
+        stdin_path,
+        SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX,
+        &stdout,
+        SED_BRIDGE_SMOKE_OUTPUT_BYTES_MAX,
+        &stderr,
+    )
+    .map_err(StagexBinutilsError::from_runtime)?;
+    assert!(stdout.is_file());
+    assert!(stderr.is_file());
+    Ok(status)
+}
+
+fn require_archive_runner_rejection(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    paths: &ArchiveRunnerPaths,
+    current_dir: &Path,
+    arguments: &[&str],
+    environment: &std::collections::BTreeMap<String, String>,
+    label: &str,
+    stdin_path: &Path,
+) -> Result<(), StagexBinutilsError> {
+    let status = run_archive_runner_case(request, paths, current_dir, arguments, environment, label, stdin_path)?;
+    if status != BINUTILS_AR_AUTHORITY_FAILURE {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "binutils ar {label} negative smoke mismatch: expected {BINUTILS_AR_AUTHORITY_FAILURE}, observed {status}"
+        )));
+    }
+    assert_eq!(status, BINUTILS_AR_AUTHORITY_FAILURE);
+    assert!(!arguments.is_empty());
+    Ok(())
+}
+
+fn run_archive_runner_smokes(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    paths: &ArchiveRunnerPaths,
+) -> Result<(), StagexBinutilsError> {
+    let root = request.scratch_dir.join("ar-runner-smokes");
+    let scratch = root.join("scratch");
+    fs::create_dir(&root)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("creating binutils ar smoke root: {error}")))?;
+    fs::create_dir(&scratch).map_err(|error| {
+        StagexBinutilsError::Materialization(format!("creating binutils ar smoke scratch: {error}"))
+    })?;
+    let smoke_paths = ArchiveRunnerPaths {
+        script: paths.script.clone(),
+        scratch,
+        audit: root.join("audit.tsv"),
+        count: root.join("count.txt"),
+    };
+    let stdin_path = root.join("empty.stdin");
+    crate::stagex_mes_lib::write_create_new(&stdin_path, b"").map_err(StagexBinutilsError::from_runtime)?;
+    crate::stagex_mes_lib::write_create_new(&root.join("a.o"), BINUTILS_AR_SMOKE_SHORT_BYTES)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    crate::stagex_mes_lib::write_create_new(&root.join("a-very-long-member-name.o"), BINUTILS_AR_SMOKE_LONG_BYTES)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    let environment = archive_runner_environment(request, &smoke_paths)?;
+    let status = run_archive_runner_case(
+        request,
+        &smoke_paths,
+        &root,
+        &["rc", "libtest.a", "a.o", "a-very-long-member-name.o"],
+        &environment,
+        "positive",
+        &stdin_path,
+    )?;
+    if status != 0 {
+        return Err(StagexBinutilsError::Materialization(format!("binutils ar positive smoke failed: {status}")));
+    }
+    validate_file_digest(&root.join("libtest.a"), BINUTILS_AR_SMOKE_ARCHIVE_BLAKE3, "binutils ar smoke archive")?;
+    run_archive_runner_negative_smokes(request, &smoke_paths, &root, &environment, &stdin_path)?;
+    assert!(root.join("libtest.a").is_file());
+    assert!(smoke_paths.audit.is_file());
+    Ok(())
+}
+
+fn run_archive_runner_negative_smokes(
+    request: &BinutilsConfigureProbeRequest<'_>,
+    paths: &ArchiveRunnerPaths,
+    root: &Path,
+    environment: &std::collections::BTreeMap<String, String>,
+    stdin_path: &Path,
+) -> Result<(), StagexBinutilsError> {
+    require_archive_runner_rejection(
+        request,
+        paths,
+        root,
+        &["rc", "empty.a"],
+        environment,
+        "empty-members",
+        stdin_path,
+    )?;
+    crate::stagex_mes_lib::write_create_new(&root.join("existing.a"), b"occupied")
+        .map_err(StagexBinutilsError::from_runtime)?;
+    require_archive_runner_rejection(
+        request,
+        paths,
+        root,
+        &["rc", "existing.a", "a.o"],
+        environment,
+        "existing-output",
+        stdin_path,
+    )?;
+    require_archive_runner_rejection(
+        request,
+        paths,
+        root,
+        &["t", "rejected.a", "a.o"],
+        environment,
+        "unsupported-mode",
+        stdin_path,
+    )?;
+    require_archive_runner_rejection(
+        request,
+        paths,
+        root,
+        &["rc", "../escape.a", "a.o"],
+        environment,
+        "path-escape",
+        stdin_path,
+    )?;
+    symlink("a.o", root.join("link.o")).map_err(|error| {
+        StagexBinutilsError::Materialization(format!("creating binutils ar symlink smoke: {error}"))
+    })?;
+    require_archive_runner_rejection(
+        request,
+        paths,
+        root,
+        &["rc", "symlink.a", "link.o"],
+        environment,
+        "symlink",
+        stdin_path,
+    )?;
+    assert!(root.join("link.o").is_symlink());
+    assert!(stdin_path.is_file());
+    Ok(())
+}
+
 fn prepare_sed_bridge(
     request: &BinutilsConfigureProbeRequest<'_>,
     compiler_wrapper: &Path,
@@ -1450,6 +1946,11 @@ fn validate_sed_bridge_sources() -> Result<(), StagexBinutilsError> {
     )?;
     require_sed_bridge_source_digest("configure utility", CONFIGURE_UTILITY_SOURCE, CONFIGURE_UTILITY_SOURCE_BLAKE3)?;
     require_sed_bridge_source_digest("ylwrap sed runner", YLWRAP_SED_RUNNER_SOURCE, YLWRAP_SED_RUNNER_SOURCE_BLAKE3)?;
+    require_sed_bridge_source_digest(
+        "binutils ar runner",
+        BINUTILS_AR_RUNNER_SOURCE,
+        BINUTILS_AR_RUNNER_SOURCE_BLAKE3,
+    )?;
     assert_ne!(SED_BRIDGE_LAUNCHER_SOURCE_BLAKE3, SED_BRIDGE_SCRIPT_SOURCE_BLAKE3);
     assert!(!SED_BRIDGE_SCRIPT_SOURCE.is_empty());
     Ok(())
@@ -2180,6 +2681,27 @@ fn run_negative_sed_bridge_smoke(
     Ok(())
 }
 
+fn validate_sed_bridge_total_count(bridge: &SedBridgePaths, expected: &[u32]) -> Result<(), StagexBinutilsError> {
+    let count_text = fs::read_to_string(bridge.spool_root.join("invocation.count"))
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading final sed bridge count: {error}")))?;
+    let observed = count_text
+        .trim()
+        .parse::<u32>()
+        .map_err(|error| StagexBinutilsError::Materialization(format!("parsing final sed bridge count: {error}")))?;
+    validate_sed_bridge_count_value(observed, expected)
+}
+
+fn validate_sed_bridge_count_value(observed: u32, expected: &[u32]) -> Result<(), StagexBinutilsError> {
+    if expected.is_empty() || !expected.contains(&observed) {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "final sed bridge count mismatch: expected one of {expected:?}, observed {observed}"
+        )));
+    }
+    assert!(observed > 0);
+    assert!(expected.contains(&observed));
+    Ok(())
+}
+
 fn finalize_sed_bridge_audit(bridge: &SedBridgePaths) -> Result<(), StagexBinutilsError> {
     let count_text = fs::read_to_string(bridge.spool_root.join("invocation.count"))
         .map_err(|error| StagexBinutilsError::Materialization(format!("reading sed bridge count: {error}")))?;
@@ -2359,23 +2881,27 @@ fn configure_environment(
     let mut environment = std::collections::BTreeMap::new();
     environment.insert("PATH".to_string(), shell_path(&context.tools, "tool namespace")?);
     environment.insert("CONFIG_SHELL".to_string(), bash.clone());
-    environment.insert("SHELL".to_string(), bash);
+    environment.insert("SHELL".to_string(), bash.clone());
     environment.insert("CC".to_string(), compiler.clone());
     environment.insert("CC_FOR_BUILD".to_string(), compiler.clone());
     environment.insert("CPP".to_string(), format!("{compiler} -E"));
-    environment.insert("AR".to_string(), "true".to_string());
+    environment.insert(
+        "AR".to_string(),
+        format!("{bash} {}", shell_path(&context.archive_runner.script, "binutils ar runner")?),
+    );
     environment.insert("RANLIB".to_string(), "true".to_string());
     environment.insert("LD".to_string(), "true".to_string());
     environment.insert("MAKEINFO".to_string(), "true".to_string());
     environment.insert("AWK".to_string(), shell_path(request.gawk, "Gawk")?);
     environment.insert("M4".to_string(), shell_path(request.m4, "M4")?);
-    let cflags = format!("-I{musl_include} -static -D_GNU_SOURCE");
+    let cflags = format!("-I{musl_include} {BINUTILS_CFLAGS_FEATURES}");
     environment.insert("CFLAGS".to_string(), cflags.clone());
     environment.insert("CFLAGS_FOR_BUILD".to_string(), cflags);
     environment.insert("LDFLAGS".to_string(), format!("-static -L{musl_lib}"));
     append_configure_probe_environment(&mut environment, request, configure_class)?;
     environment.insert("MANTLE_STAGE_X_FILE".to_string(), shell_path(&context.tools.join("file"), "configure file")?);
     append_sed_bridge_environment(&mut environment, request, context)?;
+    append_archive_runner_environment(&mut environment, request, context)?;
     assert!(environment.contains_key("CONFIG_SHELL"));
     assert!(context.configure_utility.is_file());
     assert_eq!(environment.get("MANTLE_BINUTILS_CONFIGURE_PROBE_CLASS").map(String::as_str), Some(configure_class));
@@ -2395,6 +2921,22 @@ fn append_configure_probe_environment(
     environment.insert("MANTLE_BINUTILS_CONFIGURE_PROBE_COUNT".to_string(), format!("{probe_root}/preprocess.count"));
     assert!(CONFIGURE_CLASSES.contains(&configure_class));
     assert!(environment.contains_key("MANTLE_BINUTILS_CONFIGURE_PROBE_DIR"));
+    Ok(())
+}
+
+fn append_archive_runner_environment(
+    environment: &mut std::collections::BTreeMap<String, String>,
+    request: &BinutilsConfigureProbeRequest<'_>,
+    context: &ConfigureProbeContext,
+) -> Result<(), StagexBinutilsError> {
+    let additions = archive_runner_environment(request, &context.archive_runner)?;
+    for (name, value) in additions {
+        if environment.insert(name.clone(), value).is_some() {
+            return Err(StagexBinutilsError::Materialization(format!("binutils ar environment duplicates {name}")));
+        }
+    }
+    assert!(environment.contains_key("MANTLE_STAGE_X_AR_AUDIT"));
+    assert!(environment.contains_key("MANTLE_STAGE_X_AR_COUNT"));
     Ok(())
 }
 
@@ -2568,6 +3110,76 @@ mod tests {
     }
 
     #[test]
+    fn rejects_substituted_component_output() {
+        const SUBSTITUTED_EXPECTED_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+        let temp = tempfile::tempdir().unwrap();
+        let output = temp.path().join("component");
+        crate::stagex_mes_lib::write_create_new(&output, b"not-an-archive").unwrap();
+        let type_error = validate_component_output(&output, "fixture", false, SUBSTITUTED_EXPECTED_DIGEST)
+            .unwrap_err()
+            .to_string();
+        assert!(type_error.contains("lacks an archive output"));
+        crate::stagex_mes_lib::write_create_new(&temp.path().join("archive"), b"!<arch>\n").unwrap();
+        let digest_error =
+            validate_component_output(&temp.path().join("archive"), "fixture", false, SUBSTITUTED_EXPECTED_DIGEST)
+                .unwrap_err()
+                .to_string();
+        assert!(digest_error.contains("digest mismatch"));
+    }
+
+    #[test]
+    fn accepts_bounded_full_build_sed_counts() {
+        validate_sed_bridge_count_value(
+            BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS[0],
+            &BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS,
+        )
+        .unwrap();
+        validate_sed_bridge_count_value(
+            BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS[1],
+            &BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS,
+        )
+        .unwrap();
+        assert!(BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS.iter().all(|count| *count > 0));
+        assert!(BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS[0] < BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS[1]);
+    }
+
+    #[test]
+    fn rejects_unobserved_full_build_sed_count() {
+        const UNOBSERVED_SED_COUNT: u32 = 4_770;
+        let error = validate_sed_bridge_count_value(UNOBSERVED_SED_COUNT, &BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("expected one of [4771, 4772]"));
+        assert!(validate_sed_bridge_count_value(1, &[]).is_err());
+    }
+
+    #[test]
+    fn accepts_exact_archive_runner_audit() {
+        let audit = concat!(
+            "1\t66\t704408\t./libiberty.a\tok\n",
+            "2\t15\t164042\tlibz.a\tok\n",
+            "3\t59\t2383682\t.libs/libbfd.a\tok\n",
+            "4\t5\t2160260\t.libs/libopcodes.a\tok\n",
+        );
+        let entries = parse_archive_runner_audit(audit).unwrap();
+        assert_eq!(entries.len(), BINUTILS_AR_EXPECTED_INVOCATION_COUNT);
+        assert!(entries.iter().all(|entry| entry.output_bytes > 0));
+    }
+
+    #[test]
+    fn rejects_substituted_archive_runner_audit() {
+        let audit = concat!(
+            "1\t66\t704408\t./libiberty.a\tok\n",
+            "2\t15\t164042\tlibz.a\tok\n",
+            "3\t59\t2383682\t.libs/libbfd.a\tok\n",
+            "4\t5\t2160260\t../escaped.a\tok\n",
+        );
+        let error = parse_archive_runner_audit(audit).unwrap_err().to_string();
+        assert!(error.contains("substituted binutils ar audit facts"));
+        assert!(!error.contains("panicked"));
+    }
+
+    #[test]
     fn accepts_exact_ylwrap_sed_audit_suffix() {
         let canonical = (0..YLWRAP_SED_EXPECTED_INVOCATION_COUNT)
             .map(|index| format!("0\t{}\t1\tok:ylwrap-sed\n", index + 1))
@@ -2704,6 +3316,17 @@ mod tests {
             assert!(!stderr.contains(AMBIENT_FILE_PATH));
             assert!(!stderr.contains("Broken pipe"));
         }
+    }
+
+    #[test]
+    #[ignore = "requires retained binutils source and protected tool roots"]
+    fn builds_authenticated_binutils_components() {
+        let paths = ProbeEnvironment::from_environment();
+        let outputs = probe_authenticated_component_builds(paths.request()).unwrap();
+        assert_eq!(outputs.len(), BINUTILS_COMPONENT_COUNT);
+        assert!(outputs.iter().all(|output| output.is_file()));
+        assert!(paths.scratch_dir.join("source/bfd/.libs/libbfd.a").is_file());
+        assert!(paths.scratch_dir.join("source/ld/ld-new").is_file());
     }
 
     #[test]
