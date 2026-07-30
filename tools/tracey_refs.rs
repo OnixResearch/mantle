@@ -73,6 +73,31 @@
 // rejected candidates, atomic restore, GC roots, and measured compiler skipping.
 // The evidence does not prove compiler correctness or universal speedup.
 
+// Shared Rust unit result bridge.
+//
+// r[impl cache_substitution.rust_unit_action_result_discovery]
+// r[impl cache_substitution.rust_unit_action_result_discovery.clean_client]
+// r[impl cache_substitution.rust_unit_action_result_discovery.candidate_admission]
+// r[impl cache_substitution.rust_unit_action_result_discovery.offline]
+// r[impl cache_substitution.rust_unit_action_result_discovery.publication]
+// r[impl cache_substitution.rust_unit_action_result_discovery.conflicts]
+// r[impl rust_package_planning.unit_execution.topology.shared_cache_receipts]
+// Canonical authority lives in `crates/crunch-rust-cache-core/src/shared.rs`.
+// Ordered sources, transfer, admission, and publication live in
+// `crates/crunch-rust-cache/src/shared.rs`. Root-package policy and receipt
+// integration live in `src/{main,rust_plan}.rs`.
+//
+// r[verify cache_substitution.rust_unit_action_result_discovery]
+// r[verify cache_substitution.rust_unit_action_result_discovery.clean_client]
+// r[verify cache_substitution.rust_unit_action_result_discovery.candidate_admission]
+// r[verify cache_substitution.rust_unit_action_result_discovery.offline]
+// r[verify cache_substitution.rust_unit_action_result_discovery.publication]
+// r[verify cache_substitution.rust_unit_action_result_discovery.conflicts]
+// r[verify rust_package_planning.unit_execution.topology.shared_cache_receipts]
+// Focused tests cover full-key authority, clean-client hits, offline no-open,
+// bounded failures, corrupt and incomplete objects, conflicts, receipt fallback,
+// and object-envelope-candidate publication order.
+
 // Remote credential boundary bridge.
 //
 // r[impl remote_builds.ticket_randomness]
