@@ -13,7 +13,8 @@ use serde_json::Value;
 
 const TICKET_KEY_ONE: &str = "ticket-key-1:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE";
 const TICKET_KEY_TWO: &str = "ticket-key-2:UlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlI";
-const RESULT_SIGNING_KEY: &str = "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
+const RESULT_SIGNING_KEY: &str =
+    "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 const SYSTEMD_PROVIDER: &str = "systemd-credential://";
 const PRIVATE_DIRECTORY_MODE: u32 = 0o700;
 const PRIVATE_FILE_MODE: u32 = 0o600;
@@ -38,7 +39,8 @@ fn ticket_creation_delivers_only_to_fd_and_persists_verifier_only_state() {
     let root = tempfile::tempdir().unwrap();
     let credentials_dir = write_systemd_credentials(root.path(), TICKET_KEY_ONE);
     let issuance_started_unix_s = test_unix_time_now_s();
-    let (output, mut delivery_file) = create_ticket_command(root.path(), &credentials_dir, SYSTEMD_PROVIDER, "production");
+    let (output, mut delivery_file) =
+        create_ticket_command(root.path(), &credentials_dir, SYSTEMD_PROVIDER, "production");
     let issuance_finished_unix_s = test_unix_time_now_s();
 
     assert!(output.status.success(), "stderr={}", String::from_utf8_lossy(&output.stderr));
@@ -160,12 +162,7 @@ fn explicit_legacy_migration_invalidates_plaintext_tickets() {
     let executed = mantle_command()
         .args(["--json", "--state-dir"])
         .arg(root.path())
-        .args([
-            "remote",
-            "ticket",
-            "migrate-legacy",
-            "--invalidate-legacy-tickets",
-        ])
+        .args(["remote", "ticket", "migrate-legacy", "--invalidate-legacy-tickets"])
         .output()
         .unwrap();
     let report: Value = serde_json::from_slice(&executed.stdout).unwrap();
@@ -187,7 +184,8 @@ fn explicit_legacy_migration_invalidates_plaintext_tickets() {
 fn key_rotation_invalidates_tickets_from_retired_verifier_key() {
     let root = tempfile::tempdir().unwrap();
     let credentials_dir = write_systemd_credentials(root.path(), TICKET_KEY_ONE);
-    let (created, mut delivery_file) = create_ticket_command(root.path(), &credentials_dir, SYSTEMD_PROVIDER, "production");
+    let (created, mut delivery_file) =
+        create_ticket_command(root.path(), &credentials_dir, SYSTEMD_PROVIDER, "production");
     assert!(created.status.success(), "stderr={}", String::from_utf8_lossy(&created.stderr));
     let credential = read_delivery(&mut delivery_file);
     let ticket_id = credential.split_once(':').unwrap().0;
@@ -196,19 +194,15 @@ fn key_rotation_invalidates_tickets_from_retired_verifier_key() {
     let rotated = mantle_command()
         .args(["--json", "--state-dir"])
         .arg(root.path())
-        .args([
-            "remote",
-            "ticket",
-            "rotate-keys",
-            "--secret-manifest",
-        ])
+        .args(["remote", "ticket", "rotate-keys", "--secret-manifest"])
         .arg(secret_manifest())
         .args(["--secret-profile", "rotation", "--secret-provider", SYSTEMD_PROVIDER])
         .env("CREDENTIALS_DIRECTORY", &credentials_dir)
         .output()
         .unwrap();
     let report: Value = serde_json::from_slice(&rotated.stdout).unwrap();
-    let state: Value = serde_json::from_slice(&fs::read(root.path().join("remote-builders/tickets.json")).unwrap()).unwrap();
+    let state: Value =
+        serde_json::from_slice(&fs::read(root.path().join("remote-builders/tickets.json")).unwrap()).unwrap();
 
     assert!(rotated.status.success(), "stderr={}", String::from_utf8_lossy(&rotated.stderr));
     assert_eq!(report["active_ticket_verifier_key_id"], "ticket-key-2");
@@ -378,10 +372,7 @@ fn write_legacy_state(root: &Path) {
 }
 
 fn test_unix_time_now_s() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
 }
 
 fn mantle_command() -> Command {
@@ -424,9 +415,7 @@ fn write_fake_sops(path: &Path, mode: FakeSopsMode) {
             })
         ),
         FakeSopsMode::Sleep => format!("#!/bin/sh\nsleep {FAKE_SOPS_SLEEP_SECS}\n"),
-        FakeSopsMode::OversizedOutput => format!(
-            "#!/bin/sh\nhead -c {FAKE_SOPS_OUTPUT_BYTES} /dev/zero\n"
-        ),
+        FakeSopsMode::OversizedOutput => format!("#!/bin/sh\nhead -c {FAKE_SOPS_OUTPUT_BYTES} /dev/zero\n"),
     };
     fs::write(path, source).unwrap();
     fs::set_permissions(path, fs::Permissions::from_mode(EXECUTABLE_FILE_MODE)).unwrap();

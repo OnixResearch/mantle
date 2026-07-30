@@ -10,7 +10,8 @@ const FRAME_HEADER_BYTES: usize = 4;
 const PROTOCOL_ALPN: &str = "mantle-remote-build/1";
 const PROTOCOL_VERSION: u32 = 1;
 const TEST_NOW_UNIX_S: u64 = 1;
-const TEST_EXPIRY_UNIX_S: u64 = u64::MAX;
+const TEST_TICKET_TTL_SECS: u64 = 3_600;
+const TEST_TICKET_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const TEST_BUILD_TIME_LIMIT_SECS: u64 = 60;
 const TEST_TICKET_MAX_BUILD_TIME_SECS: u64 = 600;
 const TEST_UPLOAD_BYTES: u64 = 10;
@@ -18,7 +19,8 @@ const TEST_MAX_UPLOAD_BYTES: u64 = 1_000;
 const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
 const TICKET_TOKEN: &str = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI";
 const TICKET_KEY: &str = "ticket-key-1:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE";
-const RESULT_SIGNING_KEY: &str = "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
+const RESULT_SIGNING_KEY: &str =
+    "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 const RESULT_SIGNING_KEY_ID: &str = "cache.example.com-1";
 const TICKET_VERIFIER_DOMAIN: &[u8] = b"mantle-remote-ticket-verifier-v2\0";
 const PRIVATE_DIRECTORY_MODE: u32 = 0o700;
@@ -76,7 +78,7 @@ fn remote_serve_stdio_once_exchanges_frames_and_redeems_ticket() {
             .len(),
         BLAKE3_HEX_LENGTH_CHARS
     );
-    assert_eq!(ticket_state["tickets"]["ticket-1"]["uses_remaining"], 0);
+    assert_eq!(ticket_state["tickets"][TEST_TICKET_ID]["uses_remaining"], 0);
 }
 
 #[test]
@@ -103,7 +105,7 @@ fn concurrent_one_use_redemption_commits_exactly_once() {
 
     assert_eq!(success_count, 1);
     assert_eq!(failure_count, 1);
-    assert_eq!(ticket_state["tickets"]["ticket-1"]["uses_remaining"], 0);
+    assert_eq!(ticket_state["tickets"][TEST_TICKET_ID]["uses_remaining"], 0);
     assert!(outputs.iter().all(|output| !String::from_utf8_lossy(&output.stderr).contains(TICKET_TOKEN)));
 }
 
@@ -135,7 +137,7 @@ fn remote_serve_stdio_once_rejects_unknown_ticket_without_stdout_frames() {
 
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("unknown-remote-ticket-ticket-1"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains(&format!("unknown-remote-ticket-{TEST_TICKET_ID}")));
 }
 
 fn run_stdio_contender(state_dir: &Path, credentials_dir: &Path, input: Vec<u8>) -> std::process::Output {
@@ -163,19 +165,21 @@ fn run_stdio_contender(state_dir: &Path, credentials_dir: &Path, input: Vec<u8>)
 
 fn write_ticket_state(state_dir: &std::path::Path) {
     let ticket_dir = state_dir.join("remote-builders");
+    let created_unix_s = test_unix_time_now_s();
+    let expires_unix_s = created_unix_s.checked_add(TEST_TICKET_TTL_SECS).unwrap();
     fs::create_dir_all(&ticket_dir).expect("ticket dir");
     fs::set_permissions(&ticket_dir, fs::Permissions::from_mode(PRIVATE_DIRECTORY_MODE)).expect("private ticket dir");
     let ticket_state = serde_json::json!({
         "schema_version": 2,
         "next_ticket_sequence": 1,
         "tickets": {
-            "ticket-1": {
-                "id": "ticket-1",
+            TEST_TICKET_ID: {
+                "id": TEST_TICKET_ID,
                 "display_name": "ticket",
                 "verifier_key_id": "ticket-key-1",
                 "verifier": ticket_verifier(),
-                "created_unix_s": TEST_NOW_UNIX_S,
-                "expires_unix_s": TEST_EXPIRY_UNIX_S,
+                "created_unix_s": created_unix_s,
+                "expires_unix_s": expires_unix_s,
                 "uses_remaining": 1,
                 "max_build_time_secs": TEST_TICKET_MAX_BUILD_TIME_SECS,
                 "max_upload_bytes": TEST_MAX_UPLOAD_BYTES,
@@ -189,6 +193,10 @@ fn write_ticket_state(state_dir: &std::path::Path) {
     fs::write(&path, serde_json::to_vec_pretty(&ticket_state).expect("ticket state serializes"))
         .expect("write ticket state");
     fs::set_permissions(path, fs::Permissions::from_mode(PRIVATE_FILE_MODE)).expect("private ticket file");
+}
+
+fn test_unix_time_now_s() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
 }
 
 fn ticket_verifier() -> String {
@@ -224,7 +232,7 @@ fn client_request_frames() -> Vec<Value> {
         serde_json::json!({
             "kind": "auth-ticket",
             "auth": {
-                "ticket_id": "ticket-1",
+                "ticket_id": TEST_TICKET_ID,
                 "secret": TICKET_TOKEN,
                 "client_endpoint": null,
                 "now_unix_s": TEST_NOW_UNIX_S

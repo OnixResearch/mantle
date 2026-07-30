@@ -7,7 +7,8 @@ use std::io::Write as _;
 use std::path::Path;
 use std::path::PathBuf;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
 use fs2::FileExt as _;
 use rand::RngCore as _;
@@ -62,9 +63,7 @@ impl Drop for TicketStateMutationGuard {
     }
 }
 
-pub fn acquire_ticket_state_mutation_guard(
-    state_dir: &Path,
-) -> Result<TicketStateMutationGuard, RunError> {
+pub fn acquire_ticket_state_mutation_guard(state_dir: &Path) -> Result<TicketStateMutationGuard, RunError> {
     acquire_ticket_state_mutation_guard_with_wait(
         state_dir,
         Duration::from_millis(REMOTE_TICKET_STATE_LOCK_WAIT_TIMEOUT_MS),
@@ -99,9 +98,7 @@ fn acquire_ticket_state_mutation_guard_with_wait(
 }
 
 pub fn ticket_state_path(state_dir: &Path) -> PathBuf {
-    state_dir
-        .join(REMOTE_TICKET_STATE_DIRECTORY)
-        .join(REMOTE_TICKET_STATE_FILENAME)
+    state_dir.join(REMOTE_TICKET_STATE_DIRECTORY).join(REMOTE_TICKET_STATE_FILENAME)
 }
 
 pub fn load_ticket_state(state_dir: &Path) -> Result<RemoteTicketState, RunError> {
@@ -120,8 +117,7 @@ pub fn load_ticket_state(state_dir: &Path) -> Result<RemoteTicketState, RunError
     if json_contains_field(value.as_value(), "secret") {
         return Err(state_error("plaintext-field-forbidden"));
     }
-    let state: RemoteTicketState =
-        serde_json::from_value(value.take()).map_err(|_| state_error("malformed"))?;
+    let state: RemoteTicketState = serde_json::from_value(value.take()).map_err(|_| state_error("malformed"))?;
     state.validate().map_err(|_| state_error("validation-failed"))?;
     Ok(state)
 }
@@ -135,9 +131,7 @@ pub fn save_ticket_state(state_dir: &Path, state: &RemoteTicketState) -> Result<
     let rendered = serde_json::to_vec_pretty(state).map_err(|_| state_error("serialization-failed"))?;
     let rendered_bytes = u64::try_from(rendered.len()).map_err(|_| state_error("size-conversion-failed"))?;
     let newline_bytes = 1_u64;
-    let total_bytes = rendered_bytes
-        .checked_add(newline_bytes)
-        .ok_or_else(|| state_error("size-overflow"))?;
+    let total_bytes = rendered_bytes.checked_add(newline_bytes).ok_or_else(|| state_error("size-overflow"))?;
     if total_bytes > REMOTE_TICKET_STATE_BYTES_MAX {
         return Err(state_error("size-limit-exceeded"));
     }
@@ -203,9 +197,8 @@ fn read_explicit_migration_file(path: &Path) -> Result<Zeroizing<Vec<u8>>, RunEr
     let mut file = open_state_read_no_follow(path).map_err(|_| state_error("open-failed"))?;
     let metadata = file.metadata().map_err(|_| state_error("metadata-failed"))?;
     validate_migration_source_file(&metadata)?;
-    let limit_with_probe = REMOTE_TICKET_STATE_BYTES_MAX
-        .checked_add(1)
-        .ok_or_else(|| state_error("size-limit-overflow"))?;
+    let limit_with_probe =
+        REMOTE_TICKET_STATE_BYTES_MAX.checked_add(1).ok_or_else(|| state_error("size-limit-overflow"))?;
     let mut bytes = Zeroizing::new(Vec::new());
     std::io::Read::by_ref(&mut file)
         .take(limit_with_probe)
@@ -352,9 +345,7 @@ fn state_schema_version(value: &serde_json::Value) -> Result<u32, RunError> {
         }
         return Err(state_error("schema-version-missing"));
     };
-    let version = version
-        .as_u64()
-        .ok_or_else(|| state_error("schema-version-malformed"))?;
+    let version = version.as_u64().ok_or_else(|| state_error("schema-version-malformed"))?;
     u32::try_from(version).map_err(|_| state_error("schema-version-unsupported"))
 }
 
@@ -368,9 +359,7 @@ fn legacy_ticket_ids(value: &serde_json::Value) -> Result<Vec<String>, RunError>
     }
     let mut ids = BTreeSet::new();
     for (map_id, record) in tickets {
-        let record = record
-            .as_object()
-            .ok_or_else(|| state_error("legacy-ticket-malformed"))?;
+        let record = record.as_object().ok_or_else(|| state_error("legacy-ticket-malformed"))?;
         let record_id = record
             .get("id")
             .and_then(serde_json::Value::as_str)
@@ -378,10 +367,7 @@ fn legacy_ticket_ids(value: &serde_json::Value) -> Result<Vec<String>, RunError>
         if record_id != map_id {
             return Err(state_error("legacy-ticket-id-mismatch"));
         }
-        if !record
-            .get("secret")
-            .is_some_and(serde_json::Value::is_string)
-        {
+        if !record.get("secret").is_some_and(serde_json::Value::is_string) {
             return Err(state_error("legacy-ticket-secret-missing"));
         }
         ids.insert(record_id.to_string());
@@ -404,9 +390,8 @@ fn read_private_state_file(path: &Path) -> Result<Option<Zeroizing<Vec<u8>>>, Ru
         Err(_) => return Err(state_error("open-failed")),
     };
     validate_private_state_file_metadata(&file.metadata().map_err(|_| state_error("metadata-failed"))?)?;
-    let limit_with_probe = REMOTE_TICKET_STATE_BYTES_MAX
-        .checked_add(1)
-        .ok_or_else(|| state_error("size-limit-overflow"))?;
+    let limit_with_probe =
+        REMOTE_TICKET_STATE_BYTES_MAX.checked_add(1).ok_or_else(|| state_error("size-limit-overflow"))?;
     let mut bytes = Zeroizing::new(Vec::new());
     std::io::Read::by_ref(&mut file)
         .take(limit_with_probe)
@@ -494,7 +479,9 @@ fn validate_private_state_file_metadata(metadata: &fs::Metadata) -> Result<(), R
         return Err(state_error("target-not-regular"));
     }
     let mode = metadata.mode();
-    if mode & NON_OWNER_PERMISSION_BITS != 0 || mode & PRIVATE_FILE_REQUIRED_OWNER_BITS != PRIVATE_FILE_REQUIRED_OWNER_BITS {
+    if mode & NON_OWNER_PERMISSION_BITS != 0
+        || mode & PRIVATE_FILE_REQUIRED_OWNER_BITS != PRIVATE_FILE_REQUIRED_OWNER_BITS
+    {
         return Err(state_error("target-permissions-unsafe"));
     }
     if metadata.uid() != unsafe { libc::geteuid() } {
@@ -515,19 +502,13 @@ fn validate_private_state_file_metadata(metadata: &fs::Metadata) -> Result<(), R
 fn open_state_read_no_follow(path: &Path) -> std::io::Result<File> {
     use std::os::unix::fs::OpenOptionsExt as _;
 
-    OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
-        .open(path)
+    OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC).open(path)
 }
 
 #[cfg(not(unix))]
 fn open_state_read_no_follow(path: &Path) -> std::io::Result<File> {
     if fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "state symlink rejected",
-        ));
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "state symlink rejected"));
     }
     OpenOptions::new().read(true).open(path)
 }
@@ -548,16 +529,9 @@ fn open_private_state_lock(path: &Path) -> std::io::Result<File> {
 #[cfg(not(unix))]
 fn open_private_state_lock(path: &Path) -> std::io::Result<File> {
     if fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "state lock symlink rejected",
-        ));
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "state lock symlink rejected"));
     }
-    OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .open(path)
+    OpenOptions::new().create(true).read(true).write(true).open(path)
 }
 
 fn create_private_state_temp(parent: &Path) -> Result<(PathBuf, File), RunError> {
@@ -592,9 +566,7 @@ fn open_state_temp_no_follow(path: &Path) -> std::io::Result<File> {
 
 fn random_temp_suffix() -> Result<String, RunError> {
     let mut random = [0_u8; STATE_TEMP_RANDOM_BYTES];
-    OsRng
-        .try_fill_bytes(&mut random)
-        .map_err(|_| state_error("temp-random-failed"))?;
+    OsRng.try_fill_bytes(&mut random).map_err(|_| state_error("temp-random-failed"))?;
     let capacity = STATE_TEMP_RANDOM_BYTES
         .checked_mul(HEX_CHARS_PER_BYTE)
         .ok_or_else(|| state_error("temp-name-capacity-overflow"))?;
@@ -640,11 +612,12 @@ fn state_error(category: &str) -> RunError {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use base64::Engine as _;
-    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use std::sync::Arc;
 
+    use base64::Engine as _;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
+    use super::*;
     use crate::remote_credentials::TICKET_ENTROPY_BYTES;
     use crate::remote_credentials::TICKET_VERIFIER_KEY_BYTES;
     use crate::remote_credentials::TicketIssueInput;

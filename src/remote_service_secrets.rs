@@ -52,10 +52,7 @@ impl std::fmt::Debug for RemoteServiceKeys {
         formatter
             .debug_struct("RemoteServiceKeys")
             .field("verifier_key_id", &self.verifier_key.id())
-            .field(
-                "result_signing_key_id",
-                &self.result_signing_key.verifying_key.name(),
-            )
+            .field("result_signing_key_id", &self.result_signing_key.verifying_key.name())
             .field("key_material", &"<redacted>")
             .finish()
     }
@@ -73,6 +70,88 @@ pub struct RemoteServiceSecretRequest {
 struct RemoteServiceKeyWire {
     ticket_verifier_key: String,
     result_signing_key: String,
+}
+
+struct ResolvedSecretsOwner {
+    secrets: std::collections::BTreeMap<String, secretspec::ResolvedSecret>,
+}
+
+impl ResolvedSecretsOwner {
+    fn take_from(secrets: &mut std::collections::BTreeMap<String, secretspec::ResolvedSecret>) -> Self {
+        Self {
+            secrets: std::mem::take(secrets),
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.secrets.len()
+    }
+
+    fn remove(&mut self, name: &str) -> Option<secretspec::ResolvedSecret> {
+        self.secrets.remove(name)
+    }
+
+    fn zeroize_all(&mut self) {
+        for (mut name, mut secret) in std::mem::take(&mut self.secrets) {
+            name.zeroize();
+            zeroize_resolved_secret(&mut secret);
+        }
+    }
+}
+
+impl Drop for ResolvedSecretsOwner {
+    fn drop(&mut self) {
+        self.zeroize_all();
+    }
+}
+
+struct ResolvedSecretOwner(secretspec::ResolvedSecret);
+
+struct ExtractedSecret {
+    value: String,
+}
+
+impl ExtractedSecret {
+    fn take(&mut self) -> String {
+        std::mem::take(&mut self.value)
+    }
+}
+
+impl Drop for ExtractedSecret {
+    fn drop(&mut self) {
+        self.value.zeroize();
+        #[cfg(test)]
+        EXTRACTED_SECRET_WIPE_COUNT.with(|count| count.set(count.get().saturating_add(1)));
+    }
+}
+
+impl Drop for ResolvedSecretOwner {
+    fn drop(&mut self) {
+        zeroize_resolved_secret(&mut self.0);
+    }
+}
+
+fn zeroize_resolved_secret(secret: &mut secretspec::ResolvedSecret) {
+    if let Some(value) = secret.value.as_mut() {
+        value.zeroize();
+    }
+    if let Some(path) = secret.path.as_mut() {
+        path.zeroize();
+    }
+    if let Some(provider) = secret.source_provider.as_mut() {
+        provider.zeroize();
+    }
+    secret.value = None;
+    secret.path = None;
+    secret.source_provider = None;
+    #[cfg(test)]
+    RESOLVED_SECRET_WIPE_COUNT.with(|count| count.set(count.get().saturating_add(1)));
+}
+
+#[cfg(test)]
+thread_local! {
+    static RESOLVED_SECRET_WIPE_COUNT: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+    static EXTRACTED_SECRET_WIPE_COUNT: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
 }
 
 impl Drop for RemoteServiceKeyWire {
@@ -101,9 +180,7 @@ pub fn resolve_remote_service_keys_bounded(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     configure_secret_worker_limits(&mut command);
-    let child = command
-        .spawn()
-        .map_err(|_| secret_error("worker-spawn-failed"))?;
+    let child = command.spawn().map_err(|_| secret_error("worker-spawn-failed"))?;
     let output = collect_secret_worker_output(child)?;
     if output.stdout_exceeded || output.stderr_exceeded {
         return Err(secret_error("worker-output-limit-exceeded"));
@@ -116,11 +193,7 @@ pub fn resolve_remote_service_keys_bounded(
     parse_remote_service_keys(&wire).map_err(secret_error)
 }
 
-pub fn run_remote_secret_worker(
-    manifest_path: &Path,
-    profile: &str,
-    provider: &str,
-) -> Result<(), RunError> {
+pub fn run_remote_secret_worker(manifest_path: &Path, profile: &str, provider: &str) -> Result<(), RunError> {
     if std::env::var(REMOTE_SECRET_WORKER_ENV).as_deref() != Ok(REMOTE_SECRET_WORKER_ENV_VALUE) {
         return Err(secret_error("worker-invocation-rejected"));
     }
@@ -134,63 +207,74 @@ pub fn run_remote_secret_worker(
     let stdout = std::io::stdout();
     let mut locked = stdout.lock();
     serde_json::to_writer(&mut locked, &wire).map_err(|_| secret_error("worker-response-serialization-failed"))?;
-    locked
-        .flush()
-        .map_err(|_| secret_error("worker-response-write-failed"))?;
+    locked.flush().map_err(|_| secret_error("worker-response-write-failed"))?;
     Ok(())
 }
 
-fn resolve_remote_service_key_wire(
-    request: &RemoteServiceSecretRequest,
-) -> Result<RemoteServiceKeyWire, &'static str> {
+fn resolve_remote_service_key_wire(request: &RemoteServiceSecretRequest) -> Result<RemoteServiceKeyWire, &'static str> {
     validate_remote_secret_manifest(&request.manifest_path, &request.profile)?;
-    let mut secrets = secretspec::Secrets::load_from(&request.manifest_path)
-        .map_err(|_| "manifest-load-failed")?;
+    let mut secrets = secretspec::Secrets::load_from(&request.manifest_path).map_err(|_| "manifest-load-failed")?;
     secrets.set_provider(request.provider.clone());
     secrets.set_profile(request.profile.clone());
     secrets.set_scope(REMOTE_SECRET_SCOPE);
     secrets.set_ignore_ambient_scope(true);
     let secrets = secrets.with_reason("Mantle remote service key resolution");
     let mut resolved = secrets.resolve().map_err(|_| "provider-resolution-failed")?;
-    if !resolved.is_ok() {
-        return Err("required-secret-missing");
-    }
-    if resolved.profile != request.profile || resolved.scope.as_deref() != Some(REMOTE_SECRET_SCOPE) {
-        return Err("resolution-boundary-mismatch");
-    }
-    if resolved.secrets.len() != REQUIRED_SECRET_COUNT {
-        return Err("resolution-secret-count-mismatch");
-    }
-    let ticket_verifier_key = take_inline_secret(&mut resolved.secrets, TICKET_VERIFIER_KEY_SECRET)?;
-    let result_signing_key = take_inline_secret(&mut resolved.secrets, RESULT_SIGNING_KEY_SECRET)?;
+    let mut resolved_secrets = ResolvedSecretsOwner::take_from(&mut resolved.secrets);
+    validate_resolved_boundary(
+        resolved.is_ok(),
+        &resolved.profile,
+        resolved.scope.as_deref(),
+        resolved_secrets.len(),
+        request,
+    )?;
+    let mut ticket_verifier_key = take_inline_secret(&mut resolved_secrets, TICKET_VERIFIER_KEY_SECRET)?;
+    let mut result_signing_key = take_inline_secret(&mut resolved_secrets, RESULT_SIGNING_KEY_SECRET)?;
     let wire = RemoteServiceKeyWire {
-        ticket_verifier_key,
-        result_signing_key,
+        ticket_verifier_key: ticket_verifier_key.take(),
+        result_signing_key: result_signing_key.take(),
     };
     parse_remote_service_keys(&wire)?;
     Ok(wire)
 }
 
-fn take_inline_secret(
-    secrets: &mut std::collections::BTreeMap<String, secretspec::ResolvedSecret>,
-    name: &str,
-) -> Result<String, &'static str> {
-    let secret = secrets.remove(name).ok_or("required-secret-missing")?;
-    if secret.as_path || secret.path.is_some() {
+fn validate_resolved_boundary(
+    is_ok: bool,
+    profile: &str,
+    scope: Option<&str>,
+    secret_count: usize,
+    request: &RemoteServiceSecretRequest,
+) -> Result<(), &'static str> {
+    if !is_ok {
+        return Err("required-secret-missing");
+    }
+    if profile != request.profile || scope != Some(REMOTE_SECRET_SCOPE) {
+        return Err("resolution-boundary-mismatch");
+    }
+    if secret_count != REQUIRED_SECRET_COUNT {
+        return Err("resolution-secret-count-mismatch");
+    }
+    Ok(())
+}
+
+fn take_inline_secret(secrets: &mut ResolvedSecretsOwner, name: &str) -> Result<ExtractedSecret, &'static str> {
+    let mut secret = ResolvedSecretOwner(secrets.remove(name).ok_or("required-secret-missing")?);
+    if secret.0.as_path || secret.0.path.is_some() {
         return Err("secret-path-materialization-forbidden");
     }
-    let value = secret.value.ok_or("required-secret-value-missing")?;
-    if value.is_empty() || value.len() > REMOTE_SECRET_VALUE_BYTES_MAX {
+    let value = secret.0.value.take().ok_or("required-secret-value-missing")?;
+    let value = ExtractedSecret { value };
+    if value.value.is_empty() || value.value.len() > REMOTE_SECRET_VALUE_BYTES_MAX {
         return Err("secret-value-size-invalid");
     }
     Ok(value)
 }
 
 fn parse_remote_service_keys(wire: &RemoteServiceKeyWire) -> Result<RemoteServiceKeys, &'static str> {
-    let verifier_key = TicketVerifierKey::parse(&wire.ticket_verifier_key)
-        .map_err(|_| "ticket-verifier-key-invalid")?;
-    let result_signing_key = crunch_build::load_keypair(&wire.result_signing_key)
-        .map_err(|_| "result-signing-key-invalid")?;
+    let verifier_key =
+        TicketVerifierKey::parse(&wire.ticket_verifier_key).map_err(|_| "ticket-verifier-key-invalid")?;
+    let result_signing_key =
+        crunch_build::load_keypair(&wire.result_signing_key).map_err(|_| "result-signing-key-invalid")?;
     Ok(RemoteServiceKeys {
         verifier_key: Arc::new(verifier_key),
         result_signing_key,
@@ -230,24 +314,15 @@ fn validate_remote_secret_manifest(path: &Path, profile: &str) -> Result<(), &'s
     let source = fs::read_to_string(path).map_err(|_| "manifest-read-failed")?;
     let value: toml::Value = toml::from_str(&source).map_err(|_| "manifest-parse-failed")?;
     let root = value.as_table().ok_or("manifest-root-invalid")?;
-    let project = root
-        .get("project")
-        .and_then(toml::Value::as_table)
-        .ok_or("manifest-project-missing")?;
+    let project = root.get("project").and_then(toml::Value::as_table).ok_or("manifest-project-missing")?;
     if project.get("name").and_then(toml::Value::as_str) != Some("mantle") {
         return Err("manifest-project-invalid");
     }
-    let profiles = root
-        .get("profiles")
-        .and_then(toml::Value::as_table)
-        .ok_or("manifest-profiles-missing")?;
+    let profiles = root.get("profiles").and_then(toml::Value::as_table).ok_or("manifest-profiles-missing")?;
     if profiles.len() != PROFILE_COUNT {
         return Err("manifest-profile-count-invalid");
     }
-    let selected = profiles
-        .get(profile)
-        .and_then(toml::Value::as_table)
-        .ok_or("manifest-profile-missing")?;
+    let selected = profiles.get(profile).and_then(toml::Value::as_table).ok_or("manifest-profile-missing")?;
     validate_selected_secret_declarations(selected)?;
     let scope = root
         .get("scopes")
@@ -255,10 +330,7 @@ fn validate_remote_secret_manifest(path: &Path, profile: &str) -> Result<(), &'s
         .and_then(|scopes| scopes.get(REMOTE_SECRET_SCOPE))
         .and_then(toml::Value::as_table)
         .ok_or("manifest-scope-missing")?;
-    let members = scope
-        .get("secrets")
-        .and_then(toml::Value::as_array)
-        .ok_or("manifest-scope-members-invalid")?;
+    let members = scope.get("secrets").and_then(toml::Value::as_array).ok_or("manifest-scope-members-invalid")?;
     let names = members
         .iter()
         .map(toml::Value::as_str)
@@ -273,25 +345,17 @@ fn validate_remote_secret_manifest(path: &Path, profile: &str) -> Result<(), &'s
     Ok(())
 }
 
-fn validate_selected_secret_declarations(
-    selected: &toml::map::Map<String, toml::Value>,
-) -> Result<(), &'static str> {
+fn validate_selected_secret_declarations(selected: &toml::map::Map<String, toml::Value>) -> Result<(), &'static str> {
     if selected.len() != REQUIRED_SECRET_COUNT {
         return Err("manifest-secret-count-invalid");
     }
     for name in [TICKET_VERIFIER_KEY_SECRET, RESULT_SIGNING_KEY_SECRET] {
-        let declaration = selected
-            .get(name)
-            .and_then(toml::Value::as_table)
-            .ok_or("manifest-secret-declaration-missing")?;
+        let declaration =
+            selected.get(name).and_then(toml::Value::as_table).ok_or("manifest-secret-declaration-missing")?;
         if declaration.get("required").and_then(toml::Value::as_bool) != Some(true) {
             return Err("manifest-secret-not-required");
         }
-        if declaration
-            .get("description")
-            .and_then(toml::Value::as_str)
-            .is_none_or(str::is_empty)
-        {
+        if declaration.get("description").and_then(toml::Value::as_str).is_none_or(str::is_empty) {
             return Err("manifest-secret-description-missing");
         }
     }
@@ -301,16 +365,13 @@ fn validate_selected_secret_declarations(
 fn contains_forbidden_secret_storage_field(value: &toml::Value, parent_key: Option<&str>) -> bool {
     match value {
         toml::Value::Table(table) => table.iter().any(|(key, nested)| {
-            let forbidden = matches!(
-                key.as_str(),
-                "default" | "generate" | "as_path" | "cache" | "credentials"
-            );
+            let forbidden = matches!(key.as_str(), "default" | "generate" | "as_path" | "cache" | "credentials");
             let provider_cache = parent_key == Some("providers") && key == "cache";
             forbidden || provider_cache || contains_forbidden_secret_storage_field(nested, Some(key))
         }),
-        toml::Value::Array(values) => values
-            .iter()
-            .any(|nested| contains_forbidden_secret_storage_field(nested, parent_key)),
+        toml::Value::Array(values) => {
+            values.iter().any(|nested| contains_forbidden_secret_storage_field(nested, parent_key))
+        }
         _ => false,
     }
 }
@@ -335,24 +396,15 @@ impl Drop for SecretWorkerOutput {
 }
 
 fn collect_secret_worker_output(mut child: std::process::Child) -> Result<SecretWorkerOutput, RunError> {
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| secret_error("worker-stdout-missing"))?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| secret_error("worker-stderr-missing"))?;
+    let stdout = child.stdout.take().ok_or_else(|| secret_error("worker-stdout-missing"))?;
+    let stderr = child.stderr.take().ok_or_else(|| secret_error("worker-stderr-missing"))?;
     let stdout_reader = thread::spawn(move || drain_bounded_pipe(stdout, REMOTE_SECRET_WORKER_STDOUT_BYTES_MAX));
     let stderr_reader = thread::spawn(move || drain_bounded_pipe(stderr, REMOTE_SECRET_WORKER_STDERR_BYTES_MAX));
     let deadline = Instant::now()
         .checked_add(Duration::from_secs(REMOTE_SECRET_WORKER_TIMEOUT_SECS))
         .ok_or_else(|| secret_error("worker-deadline-overflow"))?;
     let status = loop {
-        if let Some(status) = child
-            .try_wait()
-            .map_err(|_| secret_error("worker-wait-failed"))?
-        {
+        if let Some(status) = child.try_wait().map_err(|_| secret_error("worker-wait-failed"))? {
             break status;
         }
         if Instant::now() >= deadline {
@@ -362,9 +414,7 @@ fn collect_secret_worker_output(mut child: std::process::Child) -> Result<Secret
         thread::sleep(Duration::from_millis(REMOTE_SECRET_WORKER_POLL_MS));
     };
     terminate_secret_worker_descendants(child.id())?;
-    let _reaped_status = child
-        .wait()
-        .map_err(|_| secret_error("worker-reap-failed"))?;
+    let _reaped_status = child.wait().map_err(|_| secret_error("worker-reap-failed"))?;
     let (stdout, stdout_exceeded) = stdout_reader
         .join()
         .map_err(|_| secret_error("worker-stdout-reader-failed"))?
@@ -437,20 +487,14 @@ fn configure_secret_worker_limits(_command: &mut Command) {}
 fn terminate_secret_worker_tree(child: &mut std::process::Child) -> Result<(), RunError> {
     terminate_secret_worker_descendants(child.id())?;
     thread::sleep(Duration::from_millis(WORKER_TERMINATION_WAIT_MS));
-    child
-        .wait()
-        .map_err(|_| secret_error("worker-reap-failed"))?;
+    child.wait().map_err(|_| secret_error("worker-reap-failed"))?;
     Ok(())
 }
 
 #[cfg(not(unix))]
 fn terminate_secret_worker_tree(child: &mut std::process::Child) -> Result<(), RunError> {
-    child
-        .kill()
-        .map_err(|_| secret_error("worker-termination-failed"))?;
-    child
-        .wait()
-        .map_err(|_| secret_error("worker-reap-failed"))?;
+    child.kill().map_err(|_| secret_error("worker-termination-failed"))?;
+    child.wait().map_err(|_| secret_error("worker-reap-failed"))?;
     Ok(())
 }
 
@@ -479,8 +523,9 @@ fn secret_error(category: &str) -> RunError {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use base64::Engine as _;
+
+    use super::*;
 
     const TEST_SIGNING_KEY: &str =
         "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
@@ -566,6 +611,103 @@ secrets = ["{TICKET_VERIFIER_KEY_SECRET}", "{RESULT_SIGNING_KEY_SECRET}"]
             })
             .is_err()
         );
+    }
+
+    fn test_resolved_secret(value: Option<String>, path: Option<String>, as_path: bool) -> secretspec::ResolvedSecret {
+        secretspec::ResolvedSecret {
+            value,
+            path,
+            as_path,
+            source: secretspec::ResolvedSource::Provider,
+            source_provider: Some("provider-secret-marker".to_string()),
+        }
+    }
+
+    fn reset_secret_wipe_counts() {
+        RESOLVED_SECRET_WIPE_COUNT.with(|count| count.set(0));
+        EXTRACTED_SECRET_WIPE_COUNT.with(|count| count.set(0));
+    }
+
+    fn secret_wipe_counts() -> (u32, u32) {
+        let resolved = RESOLVED_SECRET_WIPE_COUNT.with(std::cell::Cell::get);
+        let extracted = EXTRACTED_SECRET_WIPE_COUNT.with(std::cell::Cell::get);
+        (resolved, extracted)
+    }
+
+    fn expect_inline_secret_error(result: Result<ExtractedSecret, &'static str>) -> &'static str {
+        match result {
+            Ok(_) => panic!("expected inline secret extraction failure"),
+            Err(error) => error,
+        }
+    }
+
+    #[test]
+    fn resolved_secret_owner_wipes_boundary_error_maps() {
+        let request = RemoteServiceSecretRequest {
+            manifest_path: PathBuf::from("secretspec.toml"),
+            profile: "production".to_string(),
+            provider: "systemd".to_string(),
+        };
+        for (is_ok, profile, scope, count, expected) in [
+            (false, "production", Some(REMOTE_SECRET_SCOPE), REQUIRED_SECRET_COUNT, "required-secret-missing"),
+            (true, "wrong", Some(REMOTE_SECRET_SCOPE), REQUIRED_SECRET_COUNT, "resolution-boundary-mismatch"),
+            (true, "production", Some("wrong"), REQUIRED_SECRET_COUNT, "resolution-boundary-mismatch"),
+            (true, "production", Some(REMOTE_SECRET_SCOPE), 1, "resolution-secret-count-mismatch"),
+        ] {
+            reset_secret_wipe_counts();
+            let mut map = std::collections::BTreeMap::new();
+            map.insert("a".to_string(), test_resolved_secret(Some("secret-a".to_string()), None, false));
+            map.insert("b".to_string(), test_resolved_secret(Some("secret-b".to_string()), None, false));
+            let owner = ResolvedSecretsOwner { secrets: map };
+            let error = validate_resolved_boundary(is_ok, profile, scope, count, &request).unwrap_err();
+            drop(owner);
+            assert_eq!(error, expected);
+            assert_eq!(secret_wipe_counts(), (2, 0));
+        }
+    }
+
+    #[test]
+    fn inline_secret_owner_wipes_path_size_and_second_take_errors() {
+        reset_secret_wipe_counts();
+        let mut path_map = std::collections::BTreeMap::new();
+        path_map.insert(
+            TICKET_VERIFIER_KEY_SECRET.to_string(),
+            test_resolved_secret(Some("secret-a".to_string()), Some("/secret/path".to_string()), true),
+        );
+        let mut path_owner = ResolvedSecretsOwner { secrets: path_map };
+        assert_eq!(
+            expect_inline_secret_error(take_inline_secret(&mut path_owner, TICKET_VERIFIER_KEY_SECRET)),
+            "secret-path-materialization-forbidden"
+        );
+        assert_eq!(secret_wipe_counts(), (1, 0));
+
+        reset_secret_wipe_counts();
+        let mut size_map = std::collections::BTreeMap::new();
+        size_map.insert(
+            TICKET_VERIFIER_KEY_SECRET.to_string(),
+            test_resolved_secret(Some("x".repeat(REMOTE_SECRET_VALUE_BYTES_MAX.saturating_add(1))), None, false),
+        );
+        let mut size_owner = ResolvedSecretsOwner { secrets: size_map };
+        assert_eq!(
+            expect_inline_secret_error(take_inline_secret(&mut size_owner, TICKET_VERIFIER_KEY_SECRET)),
+            "secret-value-size-invalid"
+        );
+        assert_eq!(secret_wipe_counts(), (1, 1));
+
+        reset_secret_wipe_counts();
+        let mut partial_map = std::collections::BTreeMap::new();
+        partial_map.insert(
+            TICKET_VERIFIER_KEY_SECRET.to_string(),
+            test_resolved_secret(Some("ticket-secret".to_string()), None, false),
+        );
+        let mut partial_owner = ResolvedSecretsOwner { secrets: partial_map };
+        let ticket_secret = take_inline_secret(&mut partial_owner, TICKET_VERIFIER_KEY_SECRET).unwrap();
+        assert_eq!(
+            expect_inline_secret_error(take_inline_secret(&mut partial_owner, RESULT_SIGNING_KEY_SECRET)),
+            "required-secret-missing"
+        );
+        drop(ticket_secret);
+        assert_eq!(secret_wipe_counts(), (1, 1));
     }
 
     #[test]

@@ -118,6 +118,8 @@ The current stdio and SSH-stdio bindings do not authenticate a peer identity. Th
 
 Wall-clock freshness is host-owned. Mantle rejects authorization when the service clock is before ticket issuance, but operators must monitor clock synchronization and rollback.
 
+Protocol input and completed authentication owners wipe their buffers. A failed partial `serde_json` decode can allocate a secret string before constructing its zeroizing owner. Mantle does not claim complete allocator-memory erasure for that failure path.
+
 ## Non-claims
 
 Verifier state does not prove ticket-user identity. Client time and client endpoint claims are not authority facts. SecretSpec resolution does not prove provider security, key freshness, or correct operator policy.

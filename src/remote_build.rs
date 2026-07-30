@@ -121,6 +121,9 @@ use zeroize::Zeroize as _;
 use crate::errors::RunError;
 #[cfg(test)]
 use crate::external_batch_dispatch::ConfiguredExternalBatchDispatcher;
+use crate::external_batch_dispatch::ExternalBatchDispatcher;
+use crate::remote_credential_state::load_ticket_state;
+use crate::remote_credential_state::save_ticket_state;
 pub use crate::remote_credentials::RemoteTicket;
 pub use crate::remote_credentials::RemoteTicketState;
 pub use crate::remote_credentials::RemoteTicketView;
@@ -128,9 +131,6 @@ use crate::remote_credentials::TicketAuthorization;
 use crate::remote_credentials::TicketIssueInput;
 use crate::remote_credentials::TicketPolicyFacts;
 use crate::remote_credentials::redacted_ticket_view;
-use crate::remote_credential_state::load_ticket_state;
-use crate::remote_credential_state::save_ticket_state;
-use crate::external_batch_dispatch::ExternalBatchDispatcher;
 use crate::remote_telemetry_export::RemoteTelemetryAdapterHealth;
 use crate::remote_telemetry_export::RemoteTelemetryAdapterStatus;
 use crate::remote_telemetry_export::RemoteTelemetryExportReport;
@@ -180,6 +180,8 @@ const SECRET_REDACTION: &str = "<redacted>";
 const TEMP_FILE_EXTENSION: &str = "tmp";
 const REMOTE_FRAME_HEADER_BYTES: usize = std::mem::size_of::<u32>();
 const REMOTE_TICKET_CREDENTIAL_BYTES_MAX: u64 = 256;
+const REMOTE_TICKET_CREDENTIAL_READ_TIMEOUT_MS: u64 = 5_000;
+const REMOTE_TICKET_CREDENTIAL_READ_CHUNK_BYTES: usize = 256;
 const REMOTE_LOOPBACK_OUTPUT_BYTES: u64 = 64;
 const DELTA_REUSE_PERCENT: u64 = 75;
 const PERCENT_DENOMINATOR: u64 = 100;
@@ -8074,26 +8076,22 @@ impl RemoteFailurePhase {
     }
 }
 
-/// Encode one frame for a caller-owned compatibility buffer.
+/// Encode one frame in a zeroizing caller-owned buffer.
 ///
-/// The returned bytes can contain bearer material. The caller must zeroize them
-/// after transport or decoding. Internal write paths use a zeroizing owner.
-pub fn encode_remote_frame(frame: &RemoteFrame) -> Result<Vec<u8>, String> {
-    let encoded = encode_remote_frame_zeroizing(frame)?;
-    Ok(encoded.to_vec())
+/// The returned bytes can contain bearer material and wipe on drop.
+pub fn encode_remote_frame(frame: &RemoteFrame) -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
+    encode_remote_frame_zeroizing(frame)
 }
 
 fn encode_remote_frame_zeroizing(frame: &RemoteFrame) -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
-    let payload = zeroize::Zeroizing::new(
-        serde_json::to_vec(frame).map_err(|err| format!("serializing remote frame: {err}"))?,
-    );
+    let payload =
+        zeroize::Zeroizing::new(serde_json::to_vec(frame).map_err(|err| format!("serializing remote frame: {err}"))?);
     if payload.len() > MAX_REMOTE_FRAME_BYTES {
         return Err(format!("remote-frame-payload-exceeds-{MAX_REMOTE_FRAME_BYTES}"));
     }
     let payload_len = u32::try_from(payload.len()).map_err(|_| "remote-frame-length-overflow".to_string())?;
-    let mut encoded = zeroize::Zeroizing::new(Vec::with_capacity(
-        REMOTE_FRAME_HEADER_BYTES.saturating_add(payload.len()),
-    ));
+    let mut encoded =
+        zeroize::Zeroizing::new(Vec::with_capacity(REMOTE_FRAME_HEADER_BYTES.saturating_add(payload.len())));
     encoded.extend_from_slice(&payload_len.to_be_bytes());
     encoded.extend_from_slice(&payload);
     Ok(encoded)
@@ -9204,29 +9202,82 @@ pub fn remote_client_request_frames(client: &RemoteLoopbackClient) -> Vec<Remote
 
 #[cfg(unix)]
 pub fn read_remote_ticket_credential_from_owned_fd(fd: i32) -> Result<RemoteTicketCredential, String> {
+    read_remote_ticket_credential_from_owned_fd_with_timeout(
+        fd,
+        std::time::Duration::from_millis(REMOTE_TICKET_CREDENTIAL_READ_TIMEOUT_MS),
+    )
+}
+
+#[cfg(unix)]
+fn read_remote_ticket_credential_from_owned_fd_with_timeout(
+    fd: i32,
+    timeout: std::time::Duration,
+) -> Result<RemoteTicketCredential, String> {
     use std::io::IsTerminal as _;
     use std::os::fd::FromRawFd as _;
 
     if fd <= libc::STDERR_FILENO {
         return Err("remote-ticket-input-fd-reserved".to_string());
     }
-    // SAFETY: The caller explicitly transfers this child-process descriptor to the command.
-    let mut file = unsafe { File::from_raw_fd(fd) };
+    // SAFETY: The caller explicitly transfers this descriptor to the command.
+    let file = unsafe { File::from_raw_fd(fd) };
     if file.is_terminal() {
         return Err("remote-ticket-input-terminal-forbidden".to_string());
     }
-    let read_limit_with_probe = REMOTE_TICKET_CREDENTIAL_BYTES_MAX
-        .checked_add(1)
-        .ok_or_else(|| "remote-ticket-input-limit-overflow".to_string())?;
-    let mut bytes = zeroize::Zeroizing::new(Vec::new());
-    std::io::Read::by_ref(&mut file)
-        .take(read_limit_with_probe)
-        .read_to_end(&mut bytes)
-        .map_err(|_| "remote-ticket-input-read-failed".to_string())?;
-    let observed_bytes = u64::try_from(bytes.len()).map_err(|_| "remote-ticket-input-size-invalid".to_string())?;
-    if observed_bytes > REMOTE_TICKET_CREDENTIAL_BYTES_MAX {
-        return Err("remote-ticket-input-size-limit-exceeded".to_string());
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+    if flags < 0 || unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 {
+        return Err("remote-ticket-input-nonblocking-setup-failed".to_string());
     }
+    let deadline = std::time::Instant::now()
+        .checked_add(timeout)
+        .ok_or_else(|| "remote-ticket-input-deadline-overflow".to_string())?;
+    let mut bytes = zeroize::Zeroizing::new(Vec::new());
+    let mut chunk = zeroize::Zeroizing::new([0_u8; REMOTE_TICKET_CREDENTIAL_READ_CHUNK_BYTES]);
+    loop {
+        let now = std::time::Instant::now();
+        if now >= deadline {
+            return Err("remote-ticket-input-read-timeout".to_string());
+        }
+        let remaining_ms = deadline.saturating_duration_since(now).as_millis().max(1);
+        let poll_timeout_ms = i32::try_from(remaining_ms.min(i32::MAX as u128)).unwrap_or(i32::MAX);
+        let mut poll_fd = libc::pollfd {
+            fd,
+            events: libc::POLLIN | libc::POLLHUP,
+            revents: 0,
+        };
+        let poll_result = unsafe { libc::poll(&mut poll_fd, 1, poll_timeout_ms) };
+        if poll_result == 0 {
+            return Err("remote-ticket-input-read-timeout".to_string());
+        }
+        if poll_result < 0 {
+            if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err("remote-ticket-input-poll-failed".to_string());
+        }
+        if poll_fd.revents & (libc::POLLERR | libc::POLLNVAL) != 0 {
+            return Err("remote-ticket-input-poll-failed".to_string());
+        }
+        let read_count = unsafe { libc::read(fd, chunk.as_mut_ptr().cast(), chunk.len()) };
+        if read_count == 0 {
+            break;
+        }
+        if read_count < 0 {
+            let kind = std::io::Error::last_os_error().kind();
+            if matches!(kind, std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock) {
+                continue;
+            }
+            return Err("remote-ticket-input-read-failed".to_string());
+        }
+        let read_count = usize::try_from(read_count).map_err(|_| "remote-ticket-input-size-invalid".to_string())?;
+        bytes.extend_from_slice(&chunk[..read_count]);
+        if u64::try_from(bytes.len()).map_err(|_| "remote-ticket-input-size-invalid".to_string())?
+            > REMOTE_TICKET_CREDENTIAL_BYTES_MAX
+        {
+            return Err("remote-ticket-input-size-limit-exceeded".to_string());
+        }
+    }
+    drop(file);
     let value = std::str::from_utf8(&bytes).map_err(|_| "remote-ticket-input-utf8-invalid".to_string())?;
     let value = value.strip_suffix('\n').unwrap_or(value);
     let value = value.strip_suffix('\r').unwrap_or(value);
@@ -9610,10 +9661,7 @@ fn plan_stdio_remote_once_from_state_with_auth_facts(
     let input = read_bounded_stdio_input(reader)?;
     let client_frames = decode_remote_frame_stream(&input)?;
     let ticket_id = request_ticket_id_from_frames(&client_frames)?;
-    let ticket = state
-        .tickets
-        .get_mut(ticket_id)
-        .ok_or_else(|| format!("unknown-remote-ticket-{ticket_id}"))?;
+    let ticket = state.tickets.get_mut(ticket_id).ok_or_else(|| format!("unknown-remote-ticket-{ticket_id}"))?;
     let executor = RemoteFixtureExecutor;
     plan_remote_builder_frames_with_executor_and_auth_facts(
         builder,
@@ -12075,9 +12123,7 @@ fn remote_serve_executor(
     let signing_key_id = keypair.verifying_key.name().to_string();
     let is_default_fixture_key = input.fixture_signing_key_id == "builder-key";
     if !is_default_fixture_key && input.fixture_signing_key_id != signing_key_id {
-        return Err(RunError::Internal(
-            "remote-builder-signing-key-override-forbidden".to_string(),
-        ));
+        return Err(RunError::Internal("remote-builder-signing-key-override-forbidden".to_string()));
     }
     match input.executor {
         crate::RemoteServeExecutor::Fixture => Ok((signing_key_id, None)),
@@ -12257,8 +12303,9 @@ fn serve_stdio_remote_production_once(
     reader: &mut impl Read,
     writer: &mut impl Write,
     mut context: RemoteProductionServerContext<'_>,
+    commit_ticket_state: &mut impl FnMut(&RemoteTicketState) -> Result<(), String>,
 ) -> Result<(), String> {
-    let opening = accept_remote_production_opening(reader, writer, &mut context)?;
+    let opening = accept_remote_production_opening(reader, writer, &mut context, commit_ticket_state)?;
     let runtime = tokio::runtime::Runtime::new().map_err(|err| format!("remote production runtime: {err}"))?;
     let uploaded_bytes = receive_remote_production_inputs(reader, writer, &mut context, &opening, &runtime)?;
     send_remote_production_result(reader, writer, &context, RemoteProductionResultInput {
@@ -12275,6 +12322,7 @@ fn accept_remote_production_opening(
     reader: &mut impl Read,
     writer: &mut impl Write,
     context: &mut RemoteProductionServerContext<'_>,
+    commit_ticket_state: &mut impl FnMut(&RemoteTicketState) -> Result<(), String>,
 ) -> Result<RemoteProductionServerOpening, String> {
     let hello = match read_expected_remote_frame(reader, RemoteFrameKind::Hello)? {
         RemoteFrame::Hello { hello } => hello,
@@ -12290,19 +12338,18 @@ fn accept_remote_production_opening(
         RemoteFrame::AuthTicket { auth } => auth,
         _ => return Err("remote-auth-ticket-frame-invalid".to_string()),
     };
-    let ticket = context
-        .ticket_state
-        .tickets
-        .get(&auth.ticket_id)
-        .ok_or_else(|| format!("unknown-remote-ticket-{}", auth.ticket_id))?;
-    expect_authorized_ticket(
-        ticket,
-        &auth,
-        RemoteTicketAuthFacts {
+    {
+        let ticket = context
+            .ticket_state
+            .tickets
+            .get(&auth.ticket_id)
+            .ok_or_else(|| format!("unknown-remote-ticket-{}", auth.ticket_id))?;
+        expect_authorized_ticket(ticket, &auth, RemoteTicketAuthFacts {
             server_now_unix_s: context.server_now_unix_s,
             authenticated_client_endpoint: context.authenticated_client_endpoint.as_deref(),
-        },
-    )?;
+        })?;
+    }
+    redeem_and_commit_ticket_state(context.ticket_state, &auth.ticket_id, commit_ticket_state)?;
     write_remote_control_frame(writer, &RemoteFrame::AuthOk {
         auth: RemoteAuthOk {
             builder_signing_keys: vec![context.builder.signing_key_id.clone()],
@@ -12320,6 +12367,11 @@ fn accept_remote_production_opening(
         RemoteFrame::BuildRequest { request } => request,
         _ => return Err("remote-build-request-frame-invalid".to_string()),
     };
+    let ticket = context
+        .ticket_state
+        .tickets
+        .get(&auth.ticket_id)
+        .ok_or_else(|| "remote-production-ticket-disappeared".to_string())?;
     validate_concrete_request(&request, ticket)?;
     let policy = request.transfer_policy.ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
     policy.validate().map_err(|reason| reason.as_str().to_string())?;
@@ -12388,16 +12440,29 @@ fn receive_remote_production_inputs(
         })?
     };
     validate_missing_uploads(&opening.missing, &opening.missing, uploaded_bytes, max_upload_bytes)?;
-    let ticket = context
-        .ticket_state
-        .tickets
-        .get_mut(&opening.auth.ticket_id)
-        .ok_or_else(|| "remote-production-ticket-disappeared".to_string())?;
+    debug_assert!(uploaded_bytes <= max_upload_bytes);
+    Ok(uploaded_bytes)
+}
+
+fn redeem_and_commit_ticket_state(
+    state: &mut RemoteTicketState,
+    ticket_id: &str,
+    commit_ticket_state: &mut impl FnMut(&RemoteTicketState) -> Result<(), String>,
+) -> Result<(), String> {
+    let ticket = state.tickets.get_mut(ticket_id).ok_or_else(|| "remote-production-ticket-disappeared".to_string())?;
     let uses_before = ticket.uses_remaining;
     redeem_after_queue(ticket, true)?;
-    debug_assert!(uploaded_bytes <= max_upload_bytes);
-    debug_assert_eq!(ticket.uses_remaining.checked_add(1), Some(uses_before));
-    Ok(uploaded_bytes)
+    if commit_ticket_state(state).is_err() {
+        let ticket =
+            state.tickets.get_mut(ticket_id).ok_or_else(|| "remote-production-ticket-disappeared".to_string())?;
+        ticket.uses_remaining = uses_before;
+        return Err("remote-ticket-state-commit-failed".to_string());
+    }
+    debug_assert_eq!(
+        state.tickets.get(ticket_id).and_then(|ticket| ticket.uses_remaining.checked_add(1)),
+        Some(uses_before)
+    );
+    Ok(())
 }
 
 struct RemoteProductionInputTransferInput<'a> {
@@ -12584,9 +12649,10 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
             print_json_or_human(&remote_serve_metadata_json((&input.endpoint_id, "metadata-only")), input.json_output)
         }
         crate::RemoteServeBinding::StdioOnce => {
-            let service_keys = crate::remote_service_secrets::resolve_remote_service_keys_bounded(&input.secret_request)?;
-            let _ticket_state_guard =
-                crate::remote_credential_state::acquire_ticket_state_mutation_guard(input.state_dir)?;
+            let service_keys =
+                crate::remote_service_secrets::resolve_remote_service_keys_bounded(&input.secret_request)?;
+            let mut ticket_state_guard =
+                Some(crate::remote_credential_state::acquire_ticket_state_mutation_guard(input.state_dir)?);
             let mut state = load_ticket_state(input.state_dir)?;
             state.bind_active_verifier_key(&service_keys.verifier_key);
             let (builder_signing_key_id, local_executor) = remote_serve_executor(
@@ -12619,7 +12685,13 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
                 Some(local_executor) => {
                     let mut stdin = std::io::stdin().lock();
                     let mut stdout = std::io::stdout().lock();
-                    let serve_result = serve_stdio_remote_production_once(
+                    let mut commit_ticket_state = |ticket_state: &RemoteTicketState| {
+                        let commit_result = save_ticket_state(input.state_dir, ticket_state)
+                            .map_err(|_| "remote-ticket-state-commit-failed".to_string());
+                        drop(ticket_state_guard.take());
+                        commit_result
+                    };
+                    serve_stdio_remote_production_once(
                         &mut stdin,
                         &mut stdout,
                         RemoteProductionServerContext {
@@ -12630,11 +12702,9 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
                             server_now_unix_s,
                             authenticated_client_endpoint: None,
                         },
+                        &mut commit_ticket_state,
                     )
-                    .map_err(|err| RunError::Internal(format!("remote production stdio serve once: {err}")));
-                    let save_result = save_ticket_state(input.state_dir, &state);
-                    serve_result?;
-                    save_result
+                    .map_err(|err| RunError::Internal(format!("remote production stdio serve once: {err}")))
                 }
                 None => {
                     let response = plan_stdio_remote_once_from_state_with_auth_facts(
@@ -12767,15 +12837,12 @@ fn cmd_remote_ticket(action: crate::RemoteTicketAction, state_dir: &Path, json_o
         }
         crate::RemoteTicketAction::Inspect { id } => {
             let state = load_ticket_state(state_dir)?;
-            let ticket = state
-                .tickets
-                .get(&id)
-                .ok_or_else(|| RunError::Internal(format!("unknown remote ticket {id}")))?;
+            let ticket =
+                state.tickets.get(&id).ok_or_else(|| RunError::Internal(format!("unknown remote ticket {id}")))?;
             print_json_or_human(&redacted_ticket_view(ticket), json_output)
         }
         crate::RemoteTicketAction::Revoke { id } => {
-            let _ticket_state_guard =
-                crate::remote_credential_state::acquire_ticket_state_mutation_guard(state_dir)?;
+            let _ticket_state_guard = crate::remote_credential_state::acquire_ticket_state_mutation_guard(state_dir)?;
             let mut state = load_ticket_state(state_dir)?;
             let view = revoke_ticket(&mut state, &id)?;
             save_ticket_state(state_dir, &state)?;
@@ -12824,9 +12891,7 @@ fn create_and_deliver_remote_ticket(
     let mut entropy = [0_u8; crate::remote_credentials::TICKET_ENTROPY_BYTES];
     if OsRng.try_fill_bytes(&mut entropy).is_err() {
         entropy.zeroize();
-        return Err(RunError::Internal(
-            "remote-ticket-os-randomness-failed".to_string(),
-        ));
+        return Err(RunError::Internal("remote-ticket-os-randomness-failed".to_string()));
     }
     let planned = crate::remote_credentials::plan_ticket_issue(&state, input, &entropy, &service_keys.verifier_key);
     entropy.zeroize();
@@ -12834,9 +12899,8 @@ fn create_and_deliver_remote_ticket(
     let view = crate::remote_credentials::apply_ticket_issue(&mut state, &plan).map_err(RunError::Internal)?;
     save_ticket_state(state_dir, &state)?;
     if deliver_ticket(delivery_target, plan.bearer_credential().as_str()).is_err() {
-        save_ticket_state(state_dir, &previous_state).map_err(|_| {
-            RunError::Internal("remote-ticket-delivery-failed-and-state-rollback-failed".to_string())
-        })?;
+        save_ticket_state(state_dir, &previous_state)
+            .map_err(|_| RunError::Internal("remote-ticket-delivery-failed-and-state-rollback-failed".to_string()))?;
         return Err(RunError::Internal("remote-ticket-delivery-failed".to_string()));
     }
     let report = TicketCreationReport {
@@ -12868,11 +12932,7 @@ fn rotate_remote_service_keys(
     let _ticket_state_guard = crate::remote_credential_state::acquire_ticket_state_mutation_guard(state_dir)?;
     let mut state = load_ticket_state(state_dir)?;
     let active_key_id = service_keys.verifier_key.id().to_string();
-    let retiring_key_ids = state
-        .tickets
-        .values()
-        .map(|ticket| ticket.verifier_key_id.clone())
-        .collect::<BTreeSet<_>>();
+    let retiring_key_ids = state.tickets.values().map(|ticket| ticket.verifier_key_id.clone()).collect::<BTreeSet<_>>();
     let mut invalidated_ticket_ids = Vec::new();
     for retiring_key_id in retiring_key_ids {
         invalidated_ticket_ids.extend(
@@ -12898,9 +12958,7 @@ fn ticket_delivery_target(
     match (ticket_fd, interactive_operator_terminal_reveal) {
         (Some(fd), false) => Ok(TicketDeliveryTarget::CallerOwnedFileDescriptor(fd)),
         (None, true) => Ok(TicketDeliveryTarget::InteractiveOperatorTerminal),
-        _ => Err(RunError::Internal(
-            "remote-ticket-delivery-target-invalid".to_string(),
-        )),
+        _ => Err(RunError::Internal("remote-ticket-delivery-target-invalid".to_string())),
     }
 }
 
@@ -12933,9 +12991,7 @@ fn deliver_ticket_to_owned_fd(fd: i32, credential: &str) -> Result<(), RunError>
 
 #[cfg(not(unix))]
 fn deliver_ticket_to_owned_fd(_fd: i32, _credential: &str) -> Result<(), RunError> {
-    Err(RunError::Internal(
-        "remote-ticket-delivery-fd-unsupported".to_string(),
-    ))
+    Err(RunError::Internal("remote-ticket-delivery-fd-unsupported".to_string()))
 }
 
 #[cfg(unix)]
@@ -12949,9 +13005,7 @@ fn deliver_ticket_to_operator_terminal(credential: &str) -> Result<(), RunError>
         .open("/dev/tty")
         .map_err(|_| RunError::Internal("remote-ticket-operator-terminal-unavailable".to_string()))?;
     if !terminal.is_terminal() {
-        return Err(RunError::Internal(
-            "remote-ticket-operator-terminal-invalid".to_string(),
-        ));
+        return Err(RunError::Internal("remote-ticket-operator-terminal-invalid".to_string()));
     }
     terminal
         .write_all(credential.as_bytes())
@@ -12962,9 +13016,7 @@ fn deliver_ticket_to_operator_terminal(credential: &str) -> Result<(), RunError>
 
 #[cfg(not(unix))]
 fn deliver_ticket_to_operator_terminal(_credential: &str) -> Result<(), RunError> {
-    Err(RunError::Internal(
-        "remote-ticket-operator-terminal-unsupported".to_string(),
-    ))
+    Err(RunError::Internal("remote-ticket-operator-terminal-unsupported".to_string()))
 }
 
 fn print_json_or_human(value: &impl Serialize, json_output: bool) -> Result<(), RunError> {
@@ -12997,6 +13049,7 @@ mod tests {
     const FORGED_CLIENT_NOW_UNIX_S: u64 = 2;
     const EXPIRED_TICKET_UNIX_S: u64 = 5;
     const AUTHORITY_NOW_AFTER_EXPIRY_UNIX_S: u64 = 6;
+    const TEST_TICKET_FD_TIMEOUT_MS: u64 = 30;
     const REMOTE_CLIENT_DISPATCH_FRAME_COUNT: usize = 5;
     const ED25519_SIGNATURE_BYTES: usize = 64;
     const SHA256_DIGEST_BYTES: usize = 32;
@@ -13889,6 +13942,32 @@ mod tests {
     }
 
     #[test]
+    fn production_redemption_requires_durable_commit_before_continuation() {
+        let mut state = RemoteTicketState::default();
+        let ticket_id = fixture_ticket().id.clone();
+        state.tickets.insert(ticket_id.clone(), fixture_ticket());
+        let mut failed_commit_observed_redeemed_state = false;
+        let error = redeem_and_commit_ticket_state(&mut state, &ticket_id, &mut |candidate| {
+            failed_commit_observed_redeemed_state = candidate.tickets[&ticket_id].uses_remaining == 0;
+            Err("simulated-fsync-failure".to_string())
+        })
+        .unwrap_err();
+
+        assert_eq!(error, "remote-ticket-state-commit-failed");
+        assert!(failed_commit_observed_redeemed_state);
+        assert_eq!(state.tickets[&ticket_id].uses_remaining, 1);
+
+        let mut committed_uses = None;
+        redeem_and_commit_ticket_state(&mut state, &ticket_id, &mut |candidate| {
+            committed_uses = Some(candidate.tickets[&ticket_id].uses_remaining);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(committed_uses, Some(0));
+        assert_eq!(state.tickets[&ticket_id].uses_remaining, 0);
+    }
+
+    #[test]
     fn forged_client_time_and_endpoint_cannot_expand_ticket_authority() {
         let mut expired = fixture_ticket();
         expired.expires_unix_s = EXPIRED_TICKET_UNIX_S;
@@ -13900,37 +13979,25 @@ mod tests {
         };
 
         assert_eq!(
-            authorize_ticket(
-                &expired,
-                &forged,
-                RemoteTicketAuthFacts {
-                    server_now_unix_s: AUTHORITY_NOW_AFTER_EXPIRY_UNIX_S,
-                    authenticated_client_endpoint: Some("client-a"),
-                },
-            ),
+            authorize_ticket(&expired, &forged, RemoteTicketAuthFacts {
+                server_now_unix_s: AUTHORITY_NOW_AFTER_EXPIRY_UNIX_S,
+                authenticated_client_endpoint: Some("client-a"),
+            },),
             TicketDecision::Reject("ticket-expired".to_string())
         );
         let bound = fixture_ticket();
         assert_eq!(
-            authorize_ticket(
-                &bound,
-                &forged,
-                RemoteTicketAuthFacts {
-                    server_now_unix_s: 2,
-                    authenticated_client_endpoint: None,
-                },
-            ),
+            authorize_ticket(&bound, &forged, RemoteTicketAuthFacts {
+                server_now_unix_s: 2,
+                authenticated_client_endpoint: None,
+            },),
             TicketDecision::Reject("ticket-client-endpoint-mismatch".to_string())
         );
         assert_eq!(
-            authorize_ticket(
-                &bound,
-                &forged,
-                RemoteTicketAuthFacts {
-                    server_now_unix_s: 2,
-                    authenticated_client_endpoint: Some("attacker-controlled-peer"),
-                },
-            ),
+            authorize_ticket(&bound, &forged, RemoteTicketAuthFacts {
+                server_now_unix_s: 2,
+                authenticated_client_endpoint: Some("attacker-controlled-peer"),
+            },),
             TicketDecision::Reject("ticket-client-endpoint-mismatch".to_string())
         );
     }
@@ -14205,12 +14272,22 @@ mod tests {
             read_remote_ticket_credential_from_owned_fd(terminal_fd).unwrap_err(),
             "remote-ticket-input-terminal-forbidden"
         );
+
+        let mut pipe_fds = [-1_i32; 2];
+        assert_eq!(unsafe { libc::pipe(pipe_fds.as_mut_ptr()) }, 0);
+        let timeout_error = read_remote_ticket_credential_from_owned_fd_with_timeout(
+            pipe_fds[0],
+            std::time::Duration::from_millis(TEST_TICKET_FD_TIMEOUT_MS),
+        )
+        .unwrap_err();
+        assert_eq!(unsafe { libc::close(pipe_fds[1]) }, 0);
+        assert_eq!(timeout_error, "remote-ticket-input-read-timeout");
     }
 
     #[test]
     fn remote_ticket_credential_parses_bearer_token() {
-        let credential = parse_remote_ticket_credential(&format!("ticket-1:{}", fixture_ticket_token()))
-            .expect("ticket parses");
+        let credential =
+            parse_remote_ticket_credential(&format!("ticket-1:{}", fixture_ticket_token())).expect("ticket parses");
 
         assert_eq!(credential.ticket_id, "ticket-1");
         assert_eq!(credential.secret, fixture_ticket_token());
@@ -14340,10 +14417,7 @@ mod tests {
             ticket_delivery_target(Some(TEST_TICKET_DELIVERY_FD), false).unwrap(),
             TicketDeliveryTarget::CallerOwnedFileDescriptor(TEST_TICKET_DELIVERY_FD)
         );
-        assert_eq!(
-            ticket_delivery_target(None, true).unwrap(),
-            TicketDeliveryTarget::InteractiveOperatorTerminal
-        );
+        assert_eq!(ticket_delivery_target(None, true).unwrap(), TicketDeliveryTarget::InteractiveOperatorTerminal);
         assert!(ticket_delivery_target(None, false).is_err());
         assert!(ticket_delivery_target(Some(TEST_TICKET_DELIVERY_FD), true).is_err());
     }
@@ -14443,9 +14517,10 @@ mod tests {
             request_id: "r1".to_string(),
         };
         let mut stdout = encode_remote_frame(&hello).expect("hello encodes");
-        stdout.extend(encode_remote_frame(&done).expect("done encodes"));
+        let done_encoded = encode_remote_frame(&done).expect("done encodes");
+        stdout.extend_from_slice(&done_encoded);
         let output = RemoteStdioChildOutput {
-            stdout,
+            stdout: stdout.to_vec(),
             stderr: b"diagnostic on stderr\n".to_vec(),
             status_success: true,
         };
@@ -14587,7 +14662,7 @@ mod tests {
         let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
         let response = fixture_builder_response(&client);
         let output = RemoteStdioChildOutput {
-            stdout: encode_frame_stream(&response.response_frames),
+            stdout: encode_frame_stream(&response.response_frames).to_vec(),
             stderr: b"diagnostic\n".to_vec(),
             status_success: true,
         };
@@ -14605,7 +14680,7 @@ mod tests {
         let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
         let response = fixture_builder_response(&client);
         let output = RemoteStdioChildOutput {
-            stdout: encode_frame_stream(&response.response_frames),
+            stdout: encode_frame_stream(&response.response_frames).to_vec(),
             stderr: Vec::new(),
             status_success: true,
         };
@@ -16845,7 +16920,7 @@ mod tests {
         let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["other-key".to_string()]);
         let response = fixture_builder_response(&client);
         let child_output = RemoteStdioChildOutput {
-            stdout: encode_frame_stream(&response.response_frames),
+            stdout: encode_frame_stream(&response.response_frames).to_vec(),
             stderr: Vec::new(),
             status_success: true,
         };
@@ -17057,10 +17132,11 @@ mod tests {
         }
     }
 
-    fn encode_frame_stream(frames: &[RemoteFrame]) -> Vec<u8> {
-        let mut encoded = Vec::new();
+    fn encode_frame_stream(frames: &[RemoteFrame]) -> zeroize::Zeroizing<Vec<u8>> {
+        let mut encoded = zeroize::Zeroizing::new(Vec::new());
         for frame in frames {
-            encoded.extend(encode_remote_frame(frame).expect("test frame encodes"));
+            let frame_bytes = encode_remote_frame(frame).expect("test frame encodes");
+            encoded.extend_from_slice(&frame_bytes);
         }
         encoded
     }

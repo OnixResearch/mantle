@@ -2415,11 +2415,7 @@ pub enum RemoteTicketAction {
         ticket_fd: Option<i32>,
 
         /// Reveal the new bearer once through the controlling terminal
-        #[arg(
-            long,
-            conflicts_with = "ticket_fd",
-            required_unless_present = "ticket_fd"
-        )]
+        #[arg(long, conflicts_with = "ticket_fd", required_unless_present = "ticket_fd")]
         interactive_operator_terminal_reveal: bool,
 
         /// SecretSpec metadata manifest
@@ -3230,9 +3226,8 @@ fn apply_primary_build_fingerprint_fields(modes: &mut RuntimeFingerprintModeFiel
                 trust_unsigned: *trust_unsigned,
             });
             if builder.is_some() || ticket_fd.is_some() {
-                modes.bearer_ticket_count = Some(operator_diagnostics::bounded_runtime_count(
-                    usize::from(ticket_fd.is_some()),
-                ));
+                modes.bearer_ticket_count =
+                    Some(operator_diagnostics::bounded_runtime_count(usize::from(ticket_fd.is_some())));
             }
             true
         }
@@ -4194,11 +4189,8 @@ fn prepare_build_command<'a>(
     } else {
         cache_substitution::split_substituter_urls(input.substituters)
     };
-    let remote_plan_facts = remote_plan_facts_for_cli(
-        input.remote_builder,
-        input.remote_ticket_fd.is_some(),
-        input.trusted_builder_keys,
-    )?;
+    let remote_plan_facts =
+        remote_plan_facts_for_cli(input.remote_builder, input.remote_ticket_fd.is_some(), input.trusted_builder_keys)?;
     let remote_selection = if input.plan {
         None
     } else {
@@ -4461,20 +4453,11 @@ fn remote_build_selection(
     let ticket_fd = input
         .ticket_fd
         .ok_or_else(|| RunError::Internal("remote build dispatch requires --ticket-fd".to_string()))?;
-    let ticket = remote_build::read_remote_ticket_credential_from_owned_fd(ticket_fd)
-        .map_err(RunError::Internal)?;
-    let (program, args) = remote_stdio_builder_command(
-        builder,
-        input.builder_program,
-        input.builder_args,
-        input.secret_request,
-        ctx,
-    )?;
-    let trusted_output_keys = remote_trusted_builder_keys(
-        input.trusted_builder_keys,
-        input.builder_program,
-        input.secret_request,
-    )?;
+    let ticket = remote_build::read_remote_ticket_credential_from_owned_fd(ticket_fd).map_err(RunError::Internal)?;
+    let (program, args) =
+        remote_stdio_builder_command(builder, input.builder_program, input.builder_args, input.secret_request, ctx)?;
+    let trusted_output_keys =
+        remote_trusted_builder_keys(input.trusted_builder_keys, input.builder_program, input.secret_request)?;
     let transfer_capabilities = if input.remote_delta {
         remote_build::RemoteTransferCapabilities::delta_and_full().with_streaming()
     } else {
@@ -4616,9 +4599,7 @@ fn remote_trusted_builder_keys(
         ));
     }
     let service_keys = remote_service_secrets::resolve_remote_service_keys_bounded(secret_request)?;
-    Ok(vec![
-        service_keys.result_signing_key.verifying_key.name().to_string(),
-    ])
+    Ok(vec![service_keys.result_signing_key.verifying_key.name().to_string()])
 }
 
 #[allow(
@@ -4758,8 +4739,8 @@ fn cmd_remote_failure_debug_replay(
         source_bundle_blake3: bundle.bundle_blake3.clone(),
         execution_blake3: new_remote_failure_replay_execution_identity(&bundle.bundle_blake3)?,
     });
-    let parsed_ticket = remote_build::read_remote_ticket_credential_from_owned_fd(input.ticket_fd)
-        .map_err(RunError::Internal)?;
+    let parsed_ticket =
+        remote_build::read_remote_ticket_credential_from_owned_fd(input.ticket_fd).map_err(RunError::Internal)?;
     let (program, args) = remote_stdio_builder_command(
         input.builder,
         input.builder_program,
@@ -4767,11 +4748,8 @@ fn cmd_remote_failure_debug_replay(
         &input.secret_request,
         ctx,
     )?;
-    let trusted_output_keys = remote_trusted_builder_keys(
-        input.trusted_builder_keys,
-        input.builder_program,
-        &input.secret_request,
-    )?;
+    let trusted_output_keys =
+        remote_trusted_builder_keys(input.trusted_builder_keys, input.builder_program, &input.secret_request)?;
     let options = remote_build::RemoteClientBuildOptions {
         store_prefix: ctx.store_prefix.clone(),
         ticket: parsed_ticket,

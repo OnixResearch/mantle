@@ -42,11 +42,10 @@ pub struct TicketVerifierKey {
 
 impl TicketVerifierKey {
     pub fn parse(value: &str) -> Result<Self, String> {
-        let (id, encoded) = value
-            .split_once(':')
-            .ok_or_else(|| "remote-ticket-verifier-key-format-invalid".to_string())?;
+        let (id, encoded) =
+            value.split_once(':').ok_or_else(|| "remote-ticket-verifier-key-format-invalid".to_string())?;
         validate_key_id(id)?;
-        let bytes = decode_canonical_base64url::<TICKET_VERIFIER_KEY_BYTES>(
+        let mut bytes = decode_canonical_base64url::<TICKET_VERIFIER_KEY_BYTES>(
             encoded,
             "remote-ticket-verifier-key-encoding-invalid",
         )?;
@@ -55,7 +54,7 @@ impl TicketVerifierKey {
         }
         Ok(Self {
             id: id.to_string(),
-            bytes,
+            bytes: std::mem::take(&mut *bytes),
         })
     }
 
@@ -98,6 +97,12 @@ impl TicketVerifier {
     }
 }
 
+impl Drop for TicketVerifier {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
+
 impl fmt::Debug for TicketVerifier {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("TicketVerifier(<redacted>)")
@@ -106,25 +111,20 @@ impl fmt::Debug for TicketVerifier {
 
 impl Serialize for TicketVerifier {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&URL_SAFE_NO_PAD.encode(self.0))
+    where S: Serializer {
+        let encoded = Zeroizing::new(URL_SAFE_NO_PAD.encode(self.0));
+        serializer.serialize_str(&encoded)
     }
 }
 
 impl<'de> Deserialize<'de> for TicketVerifier {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let encoded = String::deserialize(deserializer)?;
-        decode_canonical_base64url::<TICKET_VERIFIER_BYTES>(
-            &encoded,
-            "remote-ticket-verifier-encoding-invalid",
-        )
-        .map(Self)
-        .map_err(serde::de::Error::custom)
+    where D: Deserializer<'de> {
+        let encoded = Zeroizing::new(String::deserialize(deserializer)?);
+        let mut decoded =
+            decode_canonical_base64url::<TICKET_VERIFIER_BYTES>(&encoded, "remote-ticket-verifier-encoding-invalid")
+                .map_err(serde::de::Error::custom)?;
+        Ok(Self(std::mem::take(&mut *decoded)))
     }
 }
 
@@ -289,10 +289,7 @@ impl TicketBearerCredential {
 
     #[cfg(test)]
     fn token(&self) -> &str {
-        self.value
-            .split_once(':')
-            .expect("issued credential always has an id separator")
-            .1
+        self.value.split_once(':').expect("issued credential always has an id separator").1
     }
 }
 
@@ -378,13 +375,9 @@ pub fn plan_ticket_issue(
         .checked_add(1)
         .ok_or_else(|| "remote-ticket-sequence-overflow".to_string())?;
     let token = Zeroizing::new(URL_SAFE_NO_PAD.encode(entropy));
-    let token_bytes = Zeroizing::new(decode_ticket_token(token.as_str())?);
+    let token_bytes = decode_ticket_token(token.as_str())?;
     let verifier = keyed_ticket_verifier(verifier_key, &token_bytes);
-    if state
-        .tickets
-        .values()
-        .any(|ticket| ticket.verifier.constant_time_eq(&verifier))
-    {
+    if state.tickets.values().any(|ticket| ticket.verifier.constant_time_eq(&verifier)) {
         return Err("remote-ticket-entropy-reused".to_string());
     }
     let id = ticket_identity(&input, state.next_ticket_sequence);
@@ -424,15 +417,13 @@ pub fn apply_ticket_issue(state: &mut RemoteTicketState, plan: &TicketIssuePlan)
         return Err("remote-ticket-identity-collision".to_string());
     }
     state.next_ticket_sequence = plan.next_ticket_sequence;
-    state
-        .tickets
-        .insert(plan.ticket.id.clone(), plan.ticket.clone());
+    state.tickets.insert(plan.ticket.id.clone(), plan.ticket.clone());
     state.validate()?;
     Ok(redacted_ticket_view(&plan.ticket))
 }
 
 pub fn validate_presented_ticket_token(token: &str) -> Result<(), String> {
-    decode_ticket_token(token).map(|_bytes| ())
+    decode_ticket_token(token).map(drop)
 }
 
 pub fn authorize_ticket(
@@ -449,7 +440,6 @@ pub fn authorize_ticket(
     let Ok(token_bytes) = decode_ticket_token(presented_token) else {
         return TicketAuthorization::Rejected("ticket-authentication-failed");
     };
-    let token_bytes = Zeroizing::new(token_bytes);
     let presented_verifier = keyed_ticket_verifier(key, &token_bytes);
     if !ticket.verifier.constant_time_eq(&presented_verifier) {
         return TicketAuthorization::Rejected("ticket-authentication-failed");
@@ -545,7 +535,7 @@ fn validate_ticket_entropy(entropy: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-fn decode_ticket_token(token: &str) -> Result<[u8; TICKET_ENTROPY_BYTES], String> {
+fn decode_ticket_token(token: &str) -> Result<Zeroizing<[u8; TICKET_ENTROPY_BYTES]>, String> {
     if token.len() != TICKET_TOKEN_BASE64URL_BYTES {
         return Err("remote-ticket-token-encoding-invalid".to_string());
     }
@@ -555,7 +545,7 @@ fn decode_ticket_token(token: &str) -> Result<[u8; TICKET_ENTROPY_BYTES], String
 fn decode_canonical_base64url<const OUTPUT_BYTES: usize>(
     encoded: &str,
     error: &'static str,
-) -> Result<[u8; OUTPUT_BYTES], String> {
+) -> Result<Zeroizing<[u8; OUTPUT_BYTES]>, String> {
     let decoded = Zeroizing::new(URL_SAFE_NO_PAD.decode(encoded).map_err(|_| error.to_string())?);
     if decoded.len() != OUTPUT_BYTES {
         return Err(error.to_string());
@@ -567,13 +557,10 @@ fn decode_canonical_base64url<const OUTPUT_BYTES: usize>(
         bytes.zeroize();
         return Err(error.to_string());
     }
-    Ok(bytes)
+    Ok(Zeroizing::new(bytes))
 }
 
-fn keyed_ticket_verifier(
-    key: &TicketVerifierKey,
-    token_bytes: &[u8; TICKET_ENTROPY_BYTES],
-) -> TicketVerifier {
+fn keyed_ticket_verifier(key: &TicketVerifierKey, token_bytes: &[u8; TICKET_ENTROPY_BYTES]) -> TicketVerifier {
     let mut hasher = blake3::Hasher::new_keyed(key.bytes());
     hasher.update(TICKET_VERIFIER_DOMAIN);
     hasher.update(token_bytes);
@@ -630,7 +617,8 @@ fn validate_ticket_record(map_id: &str, ticket: &RemoteTicket) -> Result<(), Str
 }
 
 fn validate_generated_ticket_id(id: &str) -> Result<(), String> {
-    if id.len() != TICKET_ID_HEX_CHARS || !id.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
+    if id.len() != TICKET_ID_HEX_CHARS || !id.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
         return Err("remote-ticket-generated-id-invalid".to_string());
     }
     Ok(())
@@ -712,15 +700,11 @@ mod tests {
         let token = plan.bearer_credential().token().to_string();
         let ticket_id = plan.ticket().id.clone();
         let view = apply_ticket_issue(&mut state, &plan).unwrap();
-        let decision = authorize_ticket(
-            state.tickets.get(&ticket_id).unwrap(),
-            &token,
-            &TicketPolicyFacts {
-                ticket_id: &ticket_id,
-                client_endpoint: Some("client-a"),
-                now_unix_s: TEST_NOW_UNIX_S,
-            },
-        );
+        let decision = authorize_ticket(state.tickets.get(&ticket_id).unwrap(), &token, &TicketPolicyFacts {
+            ticket_id: &ticket_id,
+            client_endpoint: Some("client-a"),
+            now_unix_s: TEST_NOW_UNIX_S,
+        });
 
         assert_eq!(decision, TicketAuthorization::Authorized);
         assert_eq!(view.verifier_key_id, TEST_KEY_ID);
@@ -736,10 +720,8 @@ mod tests {
         let id = baseline.tickets.keys().next().unwrap().clone();
 
         let mut excessive_ttl = baseline.clone();
-        excessive_ttl.tickets.get_mut(&id).unwrap().expires_unix_s = TEST_NOW_UNIX_S
-            .checked_add(TICKET_TTL_SECS_MAX)
-            .and_then(|value| value.checked_add(1))
-            .unwrap();
+        excessive_ttl.tickets.get_mut(&id).unwrap().expires_unix_s =
+            TEST_NOW_UNIX_S.checked_add(TICKET_TTL_SECS_MAX).and_then(|value| value.checked_add(1)).unwrap();
         assert_eq!(excessive_ttl.validate().unwrap_err(), "remote-ticket-state-ttl-limit-exceeded");
 
         let mut excessive_uses = baseline.clone();
@@ -752,10 +734,14 @@ mod tests {
         assert_eq!(excessive_build.validate().unwrap_err(), "remote-ticket-state-build-time-limit-invalid");
 
         let mut excessive_upload = baseline.clone();
-        excessive_upload.tickets.get_mut(&id).unwrap().max_upload_bytes = TICKET_UPLOAD_BYTES_MAX.checked_add(1).unwrap();
+        excessive_upload.tickets.get_mut(&id).unwrap().max_upload_bytes =
+            TICKET_UPLOAD_BYTES_MAX.checked_add(1).unwrap();
         assert_eq!(excessive_upload.validate().unwrap_err(), "remote-ticket-state-upload-limit-exceeded");
 
-        for endpoint in [String::new(), "x".repeat(TICKET_BOUND_ENDPOINT_BYTES_MAX.checked_add(1).unwrap())] {
+        for endpoint in [
+            String::new(),
+            "x".repeat(TICKET_BOUND_ENDPOINT_BYTES_MAX.checked_add(1).unwrap()),
+        ] {
             let mut invalid_endpoint = baseline.clone();
             invalid_endpoint.tickets.get_mut(&id).unwrap().bound_client_endpoint = Some(endpoint);
             assert_eq!(invalid_endpoint.validate().unwrap_err(), "remote-ticket-bound-endpoint-invalid");
@@ -769,10 +755,7 @@ mod tests {
 
         let mut overlapping = baseline;
         overlapping.invalidated_legacy_ticket_ids.insert(id);
-        assert_eq!(
-            overlapping.validate().unwrap_err(),
-            "remote-ticket-state-active-invalidated-id-overlap"
-        );
+        assert_eq!(overlapping.validate().unwrap_err(), "remote-ticket-state-active-invalidated-id-overlap");
     }
 
     #[test]
@@ -782,38 +765,18 @@ mod tests {
         let mut boundary = input();
         boundary.ttl_secs = TICKET_TTL_SECS_MAX;
         boundary.uses = TICKET_USES_MAX;
-        assert!(
-            plan_ticket_issue(
-                &state,
-                boundary,
-                &[TEST_ENTROPY_BYTE; TICKET_ENTROPY_BYTES],
-                &key,
-            )
-            .is_ok()
-        );
+        assert!(plan_ticket_issue(&state, boundary, &[TEST_ENTROPY_BYTE; TICKET_ENTROPY_BYTES], &key,).is_ok());
 
         let mut excessive_ttl = input();
         excessive_ttl.ttl_secs = TICKET_TTL_SECS_MAX.checked_add(1).unwrap();
         assert_eq!(
-            plan_ticket_issue(
-                &state,
-                excessive_ttl,
-                &[TEST_ENTROPY_BYTE; TICKET_ENTROPY_BYTES],
-                &key,
-            )
-            .unwrap_err(),
+            plan_ticket_issue(&state, excessive_ttl, &[TEST_ENTROPY_BYTE; TICKET_ENTROPY_BYTES], &key,).unwrap_err(),
             "remote-ticket-ttl-limit-exceeded"
         );
         let mut excessive_uses = input();
         excessive_uses.uses = TICKET_USES_MAX.checked_add(1).unwrap();
         assert_eq!(
-            plan_ticket_issue(
-                &state,
-                excessive_uses,
-                &[TEST_ENTROPY_BYTE; TICKET_ENTROPY_BYTES],
-                &key,
-            )
-            .unwrap_err(),
+            plan_ticket_issue(&state, excessive_uses, &[TEST_ENTROPY_BYTE; TICKET_ENTROPY_BYTES], &key,).unwrap_err(),
             "remote-ticket-use-limit-exceeded"
         );
     }
@@ -883,68 +846,48 @@ mod tests {
         ticket.bind_active_verifier_key(&key);
 
         assert_eq!(
-            authorize_ticket(
-                ticket,
-                &token,
-                &TicketPolicyFacts {
-                    ticket_id: &id,
-                    client_endpoint: Some("client-a"),
-                    now_unix_s: CLOCK_ROLLBACK_NOW_UNIX_S,
-                },
-            ),
+            authorize_ticket(ticket, &token, &TicketPolicyFacts {
+                ticket_id: &id,
+                client_endpoint: Some("client-a"),
+                now_unix_s: CLOCK_ROLLBACK_NOW_UNIX_S,
+            },),
             TicketAuthorization::Rejected("ticket-clock-before-issuance")
         );
 
         ticket.revoked = true;
         assert_eq!(
-            authorize_ticket(
-                ticket,
-                &token,
-                &TicketPolicyFacts {
-                    ticket_id: &id,
-                    client_endpoint: Some("client-a"),
-                    now_unix_s: TEST_NOW_UNIX_S,
-                },
-            ),
+            authorize_ticket(ticket, &token, &TicketPolicyFacts {
+                ticket_id: &id,
+                client_endpoint: Some("client-a"),
+                now_unix_s: TEST_NOW_UNIX_S,
+            },),
             TicketAuthorization::Rejected("ticket-revoked")
         );
         ticket.revoked = false;
         assert_eq!(
-            authorize_ticket(
-                ticket,
-                &token,
-                &TicketPolicyFacts {
-                    ticket_id: &id,
-                    client_endpoint: Some("client-a"),
-                    now_unix_s: TEST_NOW_UNIX_S + TEST_TTL_SECS,
-                },
-            ),
+            authorize_ticket(ticket, &token, &TicketPolicyFacts {
+                ticket_id: &id,
+                client_endpoint: Some("client-a"),
+                now_unix_s: TEST_NOW_UNIX_S + TEST_TTL_SECS,
+            },),
             TicketAuthorization::Rejected("ticket-expired")
         );
         ticket.uses_remaining = 0;
         assert_eq!(
-            authorize_ticket(
-                ticket,
-                &token,
-                &TicketPolicyFacts {
-                    ticket_id: &id,
-                    client_endpoint: Some("client-a"),
-                    now_unix_s: TEST_NOW_UNIX_S,
-                },
-            ),
+            authorize_ticket(ticket, &token, &TicketPolicyFacts {
+                ticket_id: &id,
+                client_endpoint: Some("client-a"),
+                now_unix_s: TEST_NOW_UNIX_S,
+            },),
             TicketAuthorization::Rejected("ticket-exhausted")
         );
         ticket.uses_remaining = TEST_USES;
         assert_eq!(
-            authorize_ticket(
-                ticket,
-                &token,
-                &TicketPolicyFacts {
-                    ticket_id: &id,
-                    client_endpoint: Some("client-b"),
-                    now_unix_s: TEST_NOW_UNIX_S,
-                },
-            ),
+            authorize_ticket(ticket, &token, &TicketPolicyFacts {
+                ticket_id: &id,
+                client_endpoint: Some("client-b"),
+                now_unix_s: TEST_NOW_UNIX_S,
+            },),
             TicketAuthorization::Rejected("ticket-client-endpoint-mismatch")
         );
     }
@@ -966,14 +909,7 @@ mod tests {
 
     #[test]
     fn legacy_public_seed_prediction_does_not_match_new_token() {
-        let legacy_seed = format!(
-            "{}:{}:{}:{}:{}",
-            input().display_name,
-            TEST_NOW_UNIX_S,
-            TEST_TTL_SECS,
-            TEST_USES,
-            0
-        );
+        let legacy_seed = format!("{}:{}:{}:{}:{}", input().display_name, TEST_NOW_UNIX_S, TEST_TTL_SECS, TEST_USES, 0);
         let predicted_legacy_secret = blake3::hash(legacy_seed.as_bytes()).to_hex().to_string();
         let (_state, plan, _key) = issued();
 
@@ -988,10 +924,7 @@ mod tests {
             TicketVerifierKey::parse("missing-separator").unwrap_err(),
             "remote-ticket-verifier-key-format-invalid"
         );
-        assert_eq!(
-            TicketVerifierKey::parse("bad key:AAAA").unwrap_err(),
-            "remote-ticket-verifier-key-id-invalid"
-        );
+        assert_eq!(TicketVerifierKey::parse("bad key:AAAA").unwrap_err(), "remote-ticket-verifier-key-id-invalid");
         let zero = URL_SAFE_NO_PAD.encode([0_u8; TICKET_VERIFIER_KEY_BYTES]);
         assert_eq!(
             TicketVerifierKey::parse(&format!("ticket-key-1:{zero}")).unwrap_err(),
