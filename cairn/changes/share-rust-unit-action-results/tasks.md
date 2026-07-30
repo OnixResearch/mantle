@@ -24,7 +24,7 @@
 - [x] [serial] I11 Extend unit and topology receipts with sanitized source identity, result identity, authority disposition, local or remote route, rejection reason, transferred bytes, reused bytes, and compiler execution. r[rust_package_planning.unit_execution.topology.shared_cache_receipts]
 - [x] [parallel] I12 Add a clean-client integration test that restores a signed remote Rust topology and observes zero compiler invocations. r[cache_substitution.rust_unit_action_result_discovery.clean_client]
 - [x] [parallel] I13 Add fallback tests for untrusted, incomplete, unavailable, and policy-rejected candidates plus a conflict test that does not choose by source order. r[cache_substitution.rust_unit_action_result_discovery.conflicts]
-- [ ] [parallel] I14 Update operator, policy, machine-artifact, trust, and non-claim documentation. r[rust_package_planning.unit_execution.topology.shared_cache_receipts]
+- [x] [parallel] I14 Update operator, policy, machine-artifact, trust, and non-claim documentation. r[rust_package_planning.unit_execution.topology.shared_cache_receipts]
 
 ## Phase 5: Verification and lifecycle evidence
 

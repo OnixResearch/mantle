@@ -265,10 +265,12 @@ reproducibility, or bootstrap correctness.
 
 Native Rust unit caching is disabled by default. Use
 `--local-rust-cache read` or `--local-rust-cache read-write` with an explicit
-`rust-plan` execution mode. Mantle admits only results with matching action
-identity, policy, complete castore content, and verified artifacts. See
-[`docs/native-rust-plan-validation.md`](docs/native-rust-plan-validation.md)
-for the cache report, retention, GC, and validation rules.
+`rust-plan` execution mode. Add `--shared-rust-cache read` or `read-write` for
+signed directory or HTTP exchange. Mantle keeps existing output and local
+castore reuse ahead of shared transfer. It admits a shared result only after
+full-key authority, policy, object, complete-tree, artifact, and materialization
+checks. See [`docs/native-rust-plan-validation.md`](docs/native-rust-plan-validation.md)
+and [`docs/shared-rust-unit-cache.md`](docs/shared-rust-unit-cache.md).
 
 Foreign derivation admission is documented in
 [`docs/foreign-derivation-import-trust-model.md`](docs/foreign-derivation-import-trust-model.md).

@@ -112,6 +112,30 @@ cargo test -p mantle --bin mantle \
 The final test prints cold and restored wall-clock microseconds. It also checks
 that the restored run does not invoke the compiler.
 
+## Shared Rust result cache
+
+Shared cache use requires an enabled local cache. This rule keeps local output
+and local castore reuse ahead of remote transfer.
+
+Focused positive and negative rails:
+
+```bash
+cargo test -p crunch-rust-cache shared::tests:: -- --nocapture
+cargo test -p mantle --bin mantle \
+  rust_plan::tests::clean_client_shared_cache_hit_skips_second_compiler_invocation \
+  -- --exact --nocapture
+cargo test -p mantle --bin mantle \
+  rust_plan::tests::untrusted_shared_candidate_records_rejection_before_compiler_fallback \
+  -- --exact --nocapture
+```
+
+These tests cover signed publication, clean-client restore, zero additional
+compiler calls, fallback evidence, conflicts, offline behavior, redirects,
+timeouts, truncation, corruption, bounds, and atomic visibility.
+
+See [`shared-rust-unit-cache.md`](shared-rust-unit-cache.md) for operator
+commands, trust policy, protocol paths, receipt fields, and non-claims.
+
 ## Fixture inventory
 
 | Fixture family | Shared resource risk | Current isolation rule | Serial-only status |

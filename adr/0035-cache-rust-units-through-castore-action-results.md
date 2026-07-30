@@ -53,6 +53,19 @@ Mantle will verify record authority, action identity, policy, complete content, 
 
 Remote publication will make immutable objects visible first, signed records second, and no-clobber index candidates last.
 
+The implemented envelope binds the Rust result, castore root, artifact manifest,
+BLAKE3 NAR object identity, producer policy, claim class, and full verifier-key
+identity. Trust matches full Ed25519 key material. Signer names and transport
+sources remain descriptive.
+
+Directory and HTTP adapters implement the same Rust-specific result-source
+interface. HTTP access rejects redirects, ambient proxies, URL credentials, and
+unbounded responses. Offline mode keeps HTTP sources unopened.
+
+Configured source order applies only to equivalent admitted candidates. A
+conflict between admissible artifact sets blocks strong reuse and remains
+visible as nondeterminism evidence.
+
 ### 3. Add an optional daemon-backed Cargo wrapper
 
 The wrapper will remain a thin local client. One daemon will own stores, remote clients, policy, compiler execution, and receipts.
