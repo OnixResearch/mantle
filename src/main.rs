@@ -7058,6 +7058,11 @@ fn validate_rust_shared_cache_cli_input(
             "shared Rust cache reads require a source, trusted key, and producer policy".to_string(),
         ));
     }
+    if matches!(input.mode, RustSharedCacheMode::ReadWrite) && !matches!(local_mode, RustLocalCacheMode::ReadWrite) {
+        return Err(RunError::Internal(
+            "shared Rust cache publication requires --local-rust-cache read-write".to_string(),
+        ));
+    }
     if matches!(input.mode, RustSharedCacheMode::ReadWrite)
         && (input.publish_target.is_none() || input.signing_key.is_none())
     {
@@ -7194,7 +7199,19 @@ fn load_shared_rust_signing_key(path: &Path) -> Result<(String, ed25519_dalek::S
             .open(path)
             .map_err(|error| RunError::Internal(format!("opening shared Rust signing key: {error}")))?
     };
-    let capacity = usize::try_from(metadata.len())
+    let opened_metadata = file
+        .metadata()
+        .map_err(|error| RunError::Internal(format!("checking shared Rust signing key: {error}")))?;
+    let same_file = {
+        use std::os::unix::fs::MetadataExt;
+        metadata.dev() == opened_metadata.dev()
+            && metadata.ino() == opened_metadata.ino()
+            && metadata.len() == opened_metadata.len()
+    };
+    if !same_file {
+        return Err(RunError::Internal("shared Rust signing key changed before reading".to_string()));
+    }
+    let capacity = usize::try_from(opened_metadata.len())
         .map_err(|_| RunError::Internal("shared Rust signing key is too large".to_string()))?;
     let mut bytes = zeroize::Zeroizing::new(Vec::with_capacity(capacity));
     std::io::Read::read_to_end(&mut file, &mut bytes)

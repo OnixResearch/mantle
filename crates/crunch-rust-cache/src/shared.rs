@@ -233,10 +233,18 @@ impl SharedPublicationObservation {
     }
 
     pub fn rejected(source_id: String, reason: &str) -> Self {
+        Self::rejected_with_result(source_id, None, reason)
+    }
+
+    pub fn rejected_for_result(source_id: String, result_ref: String, reason: &str) -> Self {
+        Self::rejected_with_result(source_id, Some(result_ref), reason)
+    }
+
+    fn rejected_with_result(source_id: String, result_ref: Option<String>, reason: &str) -> Self {
         let observation = Self {
             source_id,
             disposition: "publication-rejected".to_string(),
-            result_ref: None,
+            result_ref,
             envelope_ref: None,
             object_ref: None,
             object_bytes: 0,
@@ -244,7 +252,7 @@ impl SharedPublicationObservation {
             reason_codes: vec![reason.to_string()],
         };
         assert!(!observation.reason_codes.is_empty());
-        assert!(observation.result_ref.is_none());
+        assert!(observation.envelope_ref.is_none());
         observation
     }
 }
@@ -514,14 +522,24 @@ impl HttpRustResultSource {
         if bytes.is_empty() || bytes.len() as u64 > MAX_SHARED_METADATA_BYTES {
             return Err(SourceError::new("shared-http-publish-metadata-size-invalid"));
         }
+        let put_endpoint = endpoint.clone();
         let response = self
             .client
-            .put(endpoint)
+            .put(put_endpoint)
             .header(reqwest::header::IF_NONE_MATCH, "*")
             .body(bytes.to_vec())
             .send()
             .await
             .map_err(classify_http_error)?;
+        if response.status() == reqwest::StatusCode::PRECONDITION_FAILED {
+            let existing = self.get(endpoint).await?;
+            require_http_success(existing.status(), "shared-http-existing-metadata")?;
+            let existing = bounded_http_bytes(existing, MAX_SHARED_METADATA_BYTES).await?;
+            if existing != bytes {
+                return Err(SourceError::new("shared-http-immutable-conflict"));
+            }
+            return Ok(());
+        }
         require_http_success(response.status(), "shared-http-publish")?;
         assert!(!bytes.is_empty());
         assert!(bytes.len() as u64 <= MAX_SHARED_METADATA_BYTES);
@@ -595,15 +613,28 @@ impl RustResultSource for HttpRustResultSource {
             .map_err(|_| SourceError::new("shared-http-object-open-failed"))?;
         let stream = ReaderStream::new(file.take(size_bytes));
         let body = reqwest::Body::wrap_stream(stream);
+        let endpoint = self.object_endpoint(object_ref)?;
         let response = self
             .client
-            .put(self.object_endpoint(object_ref)?)
+            .put(endpoint.clone())
             .header(reqwest::header::IF_NONE_MATCH, "*")
             .header(reqwest::header::CONTENT_LENGTH, size_bytes)
             .body(body)
             .send()
             .await
             .map_err(classify_http_error)?;
+        if response.status() == reqwest::StatusCode::PRECONDITION_FAILED {
+            let existing = self.get(endpoint).await?;
+            require_http_success(existing.status(), "shared-http-existing-object")?;
+            let staged = tempfile::NamedTempFile::new()
+                .map_err(|_| SourceError::new("shared-http-existing-object-staging-failed"))?;
+            let existing_size = stream_http_object(existing, staged.path(), size_bytes).await?;
+            if existing_size != size_bytes {
+                return Err(SourceError::new("shared-http-immutable-conflict"));
+            }
+            compare_existing_file(staged.path(), source, size_bytes)?;
+            return Ok(());
+        }
         require_http_success(response.status(), "shared-http-publish-object")?;
         assert!(size_bytes > 0);
         assert!(size_bytes <= MAX_SHARED_TRANSFER_BYTES);

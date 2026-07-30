@@ -16508,8 +16508,9 @@ fn publish_shared_cache_result(
         ));
     };
     let Some(signing_key) = shared.signing_key.as_ref() else {
-        return Some(SharedPublicationObservation::rejected(
+        return Some(SharedPublicationObservation::rejected_for_result(
             source.source_id().to_string(),
+            result.result_ref.clone(),
             "shared-signing-key-unavailable",
         ));
     };
@@ -16525,7 +16526,11 @@ fn publish_shared_cache_result(
     assert!(!shared.signer_name.is_empty());
     Some(match publication {
         Ok(report) => SharedPublicationObservation::accepted(report),
-        Err(_) => SharedPublicationObservation::rejected(source.source_id().to_string(), "shared-publication-failed"),
+        Err(_) => SharedPublicationObservation::rejected_for_result(
+            source.source_id().to_string(),
+            result.result_ref.clone(),
+            "shared-publication-failed",
+        ),
     })
 }
 
