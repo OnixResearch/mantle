@@ -111,6 +111,7 @@ pub(crate) const BINUTILS_COMPONENT_BUILD_STAGE_ID: &str = "binutils-component-m
 pub(crate) const BINUTILS_INSTALL_STAGE_ID: &str = "binutils-install-materialization";
 pub(crate) const BINUTILS_INSTALL_SMOKE_STAGE_ID: &str = "binutils-install-smoke";
 const BINUTILS_EXECUTED_COREUTILS_TOOL_COUNT: usize = 20;
+const BINUTILS_MKDIR_EXEC_COUNT_BOUNDS: [u32; 2] = [5_377, 5_425];
 const BINUTILS_EXECUTED_COREUTILS_TOOL_NAMES: [&str; BINUTILS_EXECUTED_COREUTILS_TOOL_COUNT] = [
     "cat", "chmod", "cp", "echo", "install", "ln", "ls", "mkdir", "mv", "rm", "rmdir", "sort", "test", "head", "wc",
     "basename", "dirname", "tr", "expr", "touch",
@@ -6115,7 +6116,6 @@ fn require_binutils_coreutils_counts(
 ) -> Result<(), StagexTransitionError> {
     const CHMOD_COUNT_BOUNDS: [u32; 2] = [993, 994];
     const CP_COUNT_BOUNDS: [u32; 2] = [104, 105];
-    const MKDIR_COUNT_BOUNDS: [u32; 2] = [5_385, 5_425];
     let sed = report.sed_invocation_count;
     let cat = sed
         .checked_add(4_738)
@@ -6159,7 +6159,7 @@ fn require_binutils_coreutils_counts(
     }
     require_binutils_path_count_bounds(counts, &paths.coreutils_bin.join("chmod"), CHMOD_COUNT_BOUNDS)?;
     require_binutils_path_count_bounds(counts, &paths.coreutils_bin.join("cp"), CP_COUNT_BOUNDS)?;
-    require_binutils_path_count_bounds(counts, &paths.coreutils_bin.join("mkdir"), MKDIR_COUNT_BOUNDS)?;
+    require_binutils_path_count_bounds(counts, &paths.coreutils_bin.join("mkdir"), BINUTILS_MKDIR_EXEC_COUNT_BOUNDS)?;
     assert!(cat > sed);
     assert!(wc > cat);
     Ok(())
@@ -9895,6 +9895,36 @@ mod tests {
                 .iter()
                 .all(|entry| !existing.iter().any(|old| old.path == entry.path && old.digest_hex == entry.digest_hex))
         );
+    }
+
+    #[test]
+    fn binutils_mkdir_count_accepts_closed_observed_bounds() {
+        let path = PathBuf::from("/stagex/coreutils/bin/mkdir");
+        let digest = "a".repeat(blake3::OUT_LEN * 2);
+        for count in BINUTILS_MKDIR_EXEC_COUNT_BOUNDS {
+            let counts = BTreeMap::from([((path.clone(), digest.clone()), count)]);
+            assert!(require_binutils_path_count_bounds(&counts, &path, BINUTILS_MKDIR_EXEC_COUNT_BOUNDS).is_ok());
+        }
+        assert!(path.is_absolute());
+        assert!(BINUTILS_MKDIR_EXEC_COUNT_BOUNDS[0] < BINUTILS_MKDIR_EXEC_COUNT_BOUNDS[1]);
+    }
+
+    #[test]
+    fn binutils_mkdir_count_rejects_outside_or_ambiguous_identity() {
+        let path = PathBuf::from("/stagex/coreutils/bin/mkdir");
+        let digest = "a".repeat(blake3::OUT_LEN * 2);
+        let below = BINUTILS_MKDIR_EXEC_COUNT_BOUNDS[0].checked_sub(1).unwrap();
+        let above = BINUTILS_MKDIR_EXEC_COUNT_BOUNDS[1].checked_add(1).unwrap();
+        for count in [below, above] {
+            let counts = BTreeMap::from([((path.clone(), digest.clone()), count)]);
+            assert!(require_binutils_path_count_bounds(&counts, &path, BINUTILS_MKDIR_EXEC_COUNT_BOUNDS).is_err());
+        }
+        let ambiguous = BTreeMap::from([
+            ((path.clone(), digest), BINUTILS_MKDIR_EXEC_COUNT_BOUNDS[0]),
+            ((path.clone(), "b".repeat(blake3::OUT_LEN * 2)), BINUTILS_MKDIR_EXEC_COUNT_BOUNDS[0]),
+        ]);
+        assert!(require_binutils_path_count_bounds(&ambiguous, &path, BINUTILS_MKDIR_EXEC_COUNT_BOUNDS).is_err());
+        assert_eq!(ambiguous.len(), 2);
     }
 
     #[test]
