@@ -124,6 +124,15 @@ pub(crate) struct SourceBuiltFixedPointOptions<'a> {
     pub(crate) json: bool,
 }
 
+struct MaterializedSourceDigests {
+    stagex_seed: String,
+    stagex_source_bundle: String,
+    native_source_manifest: String,
+    rust_source_archive_set: String,
+    mantle_source: String,
+    vendor_inputs: String,
+}
+
 #[derive(Debug)]
 struct PreparedAttempt {
     final_dir: PathBuf,
@@ -278,11 +287,14 @@ fn prepare_attempt(options: &SourceBuiltFixedPointOptions<'_>) -> Result<Prepare
         .map_err(|error| proof_error(format!("creating proof inputs {}: {error}", inputs_dir.display())))?;
     let source_root = inputs_dir.join(SOURCE_ROOT_DIR);
     materialize_source_record_payload(records.mantle_source, &source_root)?;
+    let mantle_source_digest = hash_materialized_source(&source_root)?;
     let vendor_root = source_root.join(VENDOR_RELATIVE_PATH);
     materialize_source_record_payload(records.vendor_inputs, &vendor_root)?;
+    let vendor_inputs_digest = hash_materialized_source(&vendor_root)?;
     let stagex_seed_root = inputs_dir.join(STAGEX_SEED_DIR);
     materialize_source_record_payload(records.stagex_seed, &stagex_seed_root)?;
     let stagex_seed = sole_materialized_file(records.stagex_seed, &stagex_seed_root)?;
+    let stagex_seed_digest = hash_materialized_source(&stagex_seed)?;
     let stagex_lineage_root = inputs_dir.join(STAGEX_LINEAGE_DIR);
     materialize_source_record_payload(records.stagex_lineage, &stagex_lineage_root)?;
     let stagex_lineage = sole_materialized_file(records.stagex_lineage, &stagex_lineage_root)?;
@@ -297,10 +309,12 @@ fn prepare_attempt(options: &SourceBuiltFixedPointOptions<'_>) -> Result<Prepare
     let stagex_source_bundle_root = inputs_dir.join(STAGEX_SOURCE_BUNDLE_DIR);
     materialize_source_record_payload(records.stagex_source_bundle, &stagex_source_bundle_root)?;
     let stagex_source_bundle = sole_materialized_file(records.stagex_source_bundle, &stagex_source_bundle_root)?;
+    let stagex_source_bundle_digest = hash_materialized_source(&stagex_source_bundle)?;
     let bound_stagex_manifest = crate::source_bundle::read_source_bundle(&stagex_source_bundle)
         .map_err(|error| proof_error(format!("validating StageX source bundle: {error}")))?;
     let rust_source_archive_dir = inputs_dir.join(RUST_SOURCE_DIR);
     materialize_source_record_payload(records.rust_source_archive_set, &rust_source_archive_dir)?;
+    let rust_source_archive_set_digest = hash_materialized_source(&rust_source_archive_dir)?;
     let native_source_authority_root = inputs_dir.join(NATIVE_SOURCE_AUTHORITY_DIR);
     materialize_source_record_payload(records.native_source_manifest, &native_source_authority_root)?;
     let native_source_authority_manifest =
@@ -311,21 +325,22 @@ fn prepare_attempt(options: &SourceBuiltFixedPointOptions<'_>) -> Result<Prepare
         &bound_stagex_manifest,
         &records.native_source_records,
     )?;
-    let native_source_manifest_digest = crate::protected_exec::blake3_file_hex(&native_source_authority_manifest)
-        .map_err(|error| proof_error(format!("hashing native source manifest: {error}")))?;
-    if native_source_manifest_digest != records.native_source_manifest.content_blake3 {
-        return Err(proof_error(format!(
-            "native source manifest digest changed after materialization: expected {}, observed {native_source_manifest_digest}",
-            records.native_source_manifest.content_blake3
-        )));
-    }
+    let native_source_manifest_digest = hash_materialized_source(&native_source_authority_manifest)?;
     let native_source_manifest = staging_dir.join(NATIVE_SOURCE_MANIFEST_FILE);
     let combined_native_manifest = assemble_source_bundle(
         records.native_source_records.iter().map(|record| (*record).clone()).collect(),
         LOGICAL_STORE_PREFIX,
     )?;
     crate::source_bundle::write_source_bundle(&native_source_manifest, &combined_native_manifest)?;
-    let plan = prepare_plan(options, &records, &native_source_manifest_digest, &native_source_authority_manifest)?;
+    let source_digests = MaterializedSourceDigests {
+        stagex_seed: stagex_seed_digest,
+        stagex_source_bundle: stagex_source_bundle_digest,
+        native_source_manifest: native_source_manifest_digest,
+        rust_source_archive_set: rust_source_archive_set_digest,
+        mantle_source: mantle_source_digest,
+        vendor_inputs: vendor_inputs_digest,
+    };
+    let plan = prepare_plan(options, &records, &source_digests, &native_source_authority_manifest)?;
     let plan_path = staging_dir.join(PLAN_FILE);
     write_json_create_new(&plan_path, &plan)?;
     let native_store_dir = staging_dir.join(NATIVE_STORE_DIR);
@@ -434,12 +449,17 @@ fn validate_materialized_source_records(
 fn prepare_plan(
     options: &SourceBuiltFixedPointOptions<'_>,
     records: &SourceBuiltFixedPointProfileRecords<'_>,
-    native_source_manifest_digest: &str,
+    source_digests: &MaterializedSourceDigests,
     native_source_manifest_path: &Path,
 ) -> Result<SourceBuiltFixedPointPlan, RunError> {
     let native_manifest_size = file_size(native_source_manifest_path)?;
     let source_inputs = vec![
-        source_input_from_record("stagex-seed", SourceAuthorityRole::StagexSeed, records.stagex_seed),
+        source_input_from_record(
+            "stagex-seed",
+            SourceAuthorityRole::StagexSeed,
+            records.stagex_seed,
+            &source_digests.stagex_seed,
+        ),
         SourceAuthorityInput {
             id: "stagex-lineage".to_string(),
             role: SourceAuthorityRole::StagexLineage,
@@ -451,21 +471,33 @@ fn prepare_plan(
             "stagex-source-bundle",
             SourceAuthorityRole::StagexSourceBundle,
             records.stagex_source_bundle,
+            &source_digests.stagex_source_bundle,
         ),
         SourceAuthorityInput {
             id: "native-source-bundle".to_string(),
             role: SourceAuthorityRole::NativeSourceBundle,
             kind: SourceContentKind::RegularFile,
-            digest_blake3: native_source_manifest_digest.to_string(),
+            digest_blake3: source_digests.native_source_manifest.clone(),
             size_bytes: native_manifest_size,
         },
         source_input_from_record(
             "rust-source-archive-set",
             SourceAuthorityRole::RustSourceArchiveSet,
             records.rust_source_archive_set,
+            &source_digests.rust_source_archive_set,
         ),
-        source_input_from_record("mantle-source", SourceAuthorityRole::MantleSource, records.mantle_source),
-        source_input_from_record("vendor-inputs", SourceAuthorityRole::VendorInputs, records.vendor_inputs),
+        source_input_from_record(
+            "mantle-source",
+            SourceAuthorityRole::MantleSource,
+            records.mantle_source,
+            &source_digests.mantle_source,
+        ),
+        source_input_from_record(
+            "vendor-inputs",
+            SourceAuthorityRole::VendorInputs,
+            records.vendor_inputs,
+            &source_digests.vendor_inputs,
+        ),
     ];
     let plan_input = SourceBuiltFixedPointPlanInput {
         proof_id: format!(
@@ -975,9 +1007,15 @@ fn print_completion(options: &SourceBuiltFixedPointOptions<'_>, prepared: &Prepa
     Ok(())
 }
 
-fn source_input_from_record(id: &str, role: SourceAuthorityRole, record: &SourceRecord) -> SourceAuthorityInput {
+fn source_input_from_record(
+    id: &str,
+    role: SourceAuthorityRole,
+    record: &SourceRecord,
+    materialized_digest_blake3: &str,
+) -> SourceAuthorityInput {
     assert!(!record.files.is_empty());
     assert!(record.payload_bytes > 0);
+    assert_eq!(materialized_digest_blake3.len(), BLAKE3_HEX_LENGTH);
     SourceAuthorityInput {
         id: id.to_string(),
         role,
@@ -988,9 +1026,24 @@ fn source_input_from_record(id: &str, role: SourceAuthorityRole, record: &Source
             | SourceAuthorityRole::NativeSourceBundle => SourceContentKind::RegularFile,
             _ => SourceContentKind::Directory,
         },
-        digest_blake3: record.content_blake3.clone(),
+        digest_blake3: materialized_digest_blake3.to_string(),
         size_bytes: record.payload_bytes,
     }
+}
+
+fn hash_materialized_source(path: &Path) -> Result<String, RunError> {
+    if path.is_file() {
+        return crate::protected_exec::blake3_file_hex(path)
+            .map_err(|error| proof_error(format!("hashing source file {}: {error}", path.display())));
+    }
+    if !path.is_dir() {
+        return Err(proof_error(format!("materialized source path is not a file or directory: {}", path.display())));
+    }
+    let (_, digest) = crate::release_tree_copy::hash_directory_tree(path)
+        .map_err(|error| proof_error(format!("hashing source tree {}: {error}", path.display())))?;
+    assert_eq!(digest.len(), BLAKE3_HEX_LENGTH);
+    debug_assert!(path.is_dir());
+    Ok(digest)
 }
 
 fn sole_materialized_file(record: &SourceRecord, root: &Path) -> Result<PathBuf, RunError> {
@@ -1348,6 +1401,13 @@ mod tests {
         let exact = vec![&native.records[0], &stagex.records[0]];
 
         validate_materialized_source_records(&native, &stagex, &exact).unwrap();
+        let native_raw_digest = hash_materialized_source(&temp.path().join("native")).unwrap();
+        let native_input = source_input_from_record(
+            "native",
+            SourceAuthorityRole::NativeSourceBundle,
+            &native.records[0],
+            &native_raw_digest,
+        );
         let missing_error = validate_materialized_source_records(&native, &stagex, &[&native.records[0]]).unwrap_err();
         let extra_error = validate_materialized_source_records(&native, &stagex, &[
             &native.records[0],
@@ -1356,6 +1416,8 @@ mod tests {
         ])
         .unwrap_err();
 
+        assert_eq!(native_input.digest_blake3, native_raw_digest);
+        assert_ne!(native_input.digest_blake3, native.records[0].content_blake3);
         assert!(missing_error.to_string().contains("exact native and StageX union"));
         assert!(extra_error.to_string().contains("exact native and StageX union"));
     }
