@@ -7139,7 +7139,7 @@ fn validate_musl_native_audit(
 fn tcc_selfhost_expected_event_count(
     report: &crate::stagex_tcc_selfhost::InventoryReport,
 ) -> Result<usize, StagexTransitionError> {
-    const EXPECTED_BUILD_COMMAND_COUNT: u32 = 12;
+    const EXPECTED_BUILD_COMMAND_COUNT: u32 = 13;
     const EXPECTED_SMOKE_COMMAND_COUNT: u32 = 1;
     if report.build_command_count != EXPECTED_BUILD_COMMAND_COUNT
         || report.smoke_command_count != EXPECTED_SMOKE_COMMAND_COUNT
@@ -7152,7 +7152,7 @@ fn tcc_selfhost_expected_event_count(
         .ok_or_else(|| StagexTransitionError::Audit("TinyCC self-host event count overflow".to_string()))?;
     let count = usize::try_from(count)
         .map_err(|_| StagexTransitionError::Audit("TinyCC self-host event count does not fit usize".to_string()))?;
-    assert_eq!(count, 13);
+    assert_eq!(count, 14);
     assert!(count > 0);
     Ok(count)
 }
@@ -7180,8 +7180,9 @@ fn validate_tcc_selfhost_audit(
     report: &crate::stagex_tcc_selfhost::InventoryReport,
     events: &[ProtectedSeccompAuditEvent],
 ) -> Result<(), StagexTransitionError> {
-    const V2_BUILD_EXECUTIONS: usize = 11;
+    const V2_INITIAL_BUILD_EXECUTIONS: usize = 11;
     const TINYCC26_LINK_EXECUTIONS: usize = 1;
+    const V2_CANONICAL_ARCHIVE_EXECUTIONS: usize = 1;
     let expected = tcc_selfhost_expected_event_count(report)?;
     if events.len() != expected {
         return Err(StagexTransitionError::Audit(format!(
@@ -7192,7 +7193,7 @@ fn validate_tcc_selfhost_audit(
     let v2_compiler = tcc_musl_v2_output_path(v2, "tcc-musl-v2")?;
     let tinycc26 = tinycc_output_path(tinycc, "tinycc-0.9.26")?;
     let selfhost = tcc_selfhost_output_path(report, "tcc-musl-selfhost")?;
-    for event in &events[..V2_BUILD_EXECUTIONS] {
+    for event in &events[..V2_INITIAL_BUILD_EXECUTIONS] {
         validate_coreutils_event(
             event,
             &v2_compiler,
@@ -7200,13 +7201,21 @@ fn validate_tcc_selfhost_audit(
             "planned:tcc-musl-v2-materialization:exec:tcc-musl-v2-smoke:tcc",
         )?;
     }
+    let tinycc26_index = V2_INITIAL_BUILD_EXECUTIONS;
     validate_coreutils_event(
-        &events[V2_BUILD_EXECUTIONS],
+        &events[tinycc26_index],
         &tinycc26,
         crate::stagex_tinycc::TINYCC_FINAL_BLAKE3,
         "planned:tinycc-final-materialization:exec:tcc-musl-v2-materialization:tinycc26",
     )?;
-    let smoke_index = V2_BUILD_EXECUTIONS + TINYCC26_LINK_EXECUTIONS;
+    let canonical_archive_index = tinycc26_index + TINYCC26_LINK_EXECUTIONS;
+    validate_coreutils_event(
+        &events[canonical_archive_index],
+        &v2_compiler,
+        crate::stagex_tcc_musl_v2::COMPILER_BLAKE3,
+        "planned:tcc-musl-v2-materialization:exec:tcc-musl-v2-smoke:tcc",
+    )?;
+    let smoke_index = canonical_archive_index + V2_CANONICAL_ARCHIVE_EXECUTIONS;
     validate_coreutils_event(
         &events[smoke_index],
         &selfhost,
@@ -9624,10 +9633,10 @@ mod tests {
 
     #[test]
     fn tcc_selfhost_event_count_is_closed_and_rejects_substitution() {
-        const EXPECTED_EVENT_COUNT: usize = 13;
+        const EXPECTED_EVENT_COUNT: usize = 14;
         let report = crate::stagex_tcc_selfhost::InventoryReport {
             format: "test",
-            build_command_count: 12,
+            build_command_count: 13,
             smoke_command_count: 1,
             outputs: Vec::new(),
             protected_exec_enforced: true,

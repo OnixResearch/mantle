@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Write as _;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -10,16 +11,17 @@ const RECIPE_BLAKE3: &str = "e24d7a19746cbae7387c7c7d739c7a3ee5ae6c8e343351f3dea
 const RECIPE: &[u8] = include_bytes!("../bootstrap/tcc-musl-selfhost.ncl");
 const REPORT_FORMAT: &str = "mantle-stagex-tcc-musl-selfhost-inventory-v1";
 const NON_CLAIM: &str = "this inventory binds TinyCC 0.9.27 rebuilt from separate compiler objects by the protected TinyCC musl-v2 predecessor and linked by the declared TinyCC 0.9.26 path only; it does not prove native-runtime replacement, the later GNU/GCC/binutils chain, or provider admission";
-const BUILD_COMMAND_COUNT: u32 = 12;
+const BUILD_COMMAND_COUNT: u32 = 13;
 const SMOKE_COMMAND_COUNT: u32 = 1;
 const COMPILER_SOURCE_COUNT: u32 = 10;
 const OUTPUT_COUNT: usize = 7;
 const FILE_BYTES_MAX: u64 = 64 * 1_024 * 1_024;
+const CANONICAL_TEMP_EXTENSION: &str = "mantle-canonical.tmp";
 pub(crate) const COMPILER_BLAKE3: &str = "8e6580da40c5892b941423ae108d6218b3636ebd3643bc3ba1e78e33d6c4898a";
-const LIBTCC_ARCHIVE_BLAKE3: &str = "fb9f87834e0d81214fd9654820ea482a5adedecafc6359a1d32729874b2a1267";
-const MAIN_OBJECT_BLAKE3: &str = "22f5f8579f023fee1afb35595d4e99c76132bf2fec75dc2451c25ed2f10cc16b";
+const LIBTCC_ARCHIVE_BLAKE3: &str = "be8187b0d6a5e7e62ea75baf0de0dabf02fc558b11760302ddacd59b4402b7d7";
+const MAIN_OBJECT_BLAKE3: &str = "a348e60d7092d9cd974171d67aaafebe784399d8443513d4a80cd0baecc1f199";
 const PATCHED_SOURCE_BLAKE3: &str = "5e918d19d4d7151f17a5a81bd07d25fd8a55e57037b4735f038344365326b3d4";
-const OBJECT_TREE_BLAKE3: &str = "2f3fcb41daa227dac3e1d206c4c7aeabd6ff6341fe975399e950629e8a281880";
+const OBJECT_TREE_BLAKE3: &str = "813e91a25bdec4d859ebb0415c3ce8b88c56e0b40a5c74653b2645b0453304c0";
 const SMOKE_OBJECT_BLAKE3: &str = "cc40480286f053fc69e7d17431b4cf5de82b477b0f84e646717cd6c3c71cecb1";
 const SMOKE_SOURCE: &[u8] = b"#include <stdarg.h>\nstruct item { int first; int second; };\nstatic const struct item item = { .second = 2, .first = 1 };\nstatic int first_variadic(int ignored, ...) { va_list arguments; int value; va_start(arguments, ignored); value = va_arg(arguments, int); va_end(arguments); return value; }\nint smoke(void) { return item.first == 1 && item.second == 2 && first_variadic(0, 1) == 1 ? 0 : 1; }\n";
 const COMPILER_SOURCES: [&str; COMPILER_SOURCE_COUNT as usize] = [
@@ -377,6 +379,15 @@ fn build_selfhost(
         &request.scratch_dir.join("link.stderr.txt"),
     )?;
     crate::stagex_tinycc::set_owner_executable(&compiler)?;
+    canonicalize_retained_objects(&object_root)?;
+    fs::remove_file(&archive)
+        .map_err(|error| Error::Materialization(format!("removing pre-canonical TinyCC archive: {error}")))?;
+    run(
+        &host,
+        &archive_args(&object_root, &archive)?,
+        source_root,
+        &request.scratch_dir.join("archive-canonical.stderr.txt"),
+    )?;
     crate::stagex_mes_lib::copy_file_exact(&compiler, &output_root.join("bin/tcc"))?;
     crate::stagex_tinycc::set_owner_executable(&output_root.join("bin/tcc"))?;
     crate::stagex_mes_lib::copy_file_exact(
@@ -387,6 +398,60 @@ fn build_selfhost(
     assert!(compiler.is_file());
     assert!(archive.is_file());
     Ok((compiler, archive, main_object))
+}
+
+fn canonicalize_retained_objects(object_root: &Path) -> Result<(), Error> {
+    let mut rewrite_count = 0u32;
+    for source in COMPILER_SOURCES {
+        let object = object_root.join(source.replace(".c", ".o"));
+        rewrite_count = rewrite_count
+            .checked_add(canonicalize_elf_file(&object)?)
+            .ok_or_else(|| Error::Materialization("TinyCC canonical rewrite count overflow".to_string()))?;
+    }
+    if rewrite_count == 0 {
+        return Err(Error::Materialization(
+            "TinyCC retained objects contain no decimal local symbols to canonicalize".to_string(),
+        ));
+    }
+    assert!(rewrite_count > 0);
+    debug_assert!(object_root.is_dir());
+    Ok(())
+}
+
+fn canonicalize_elf_file(path: &Path) -> Result<u32, Error> {
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| Error::Materialization(format!("reading TinyCC object metadata: {error}")))?;
+    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > FILE_BYTES_MAX {
+        return Err(Error::Materialization(format!("TinyCC canonicalization input is invalid: {}", path.display())));
+    }
+    let mut bytes = fs::read(path)
+        .map_err(|error| Error::Materialization(format!("reading TinyCC object {}: {error}", path.display())))?;
+    let rewrite_count = crate::elf_local_symbol_core::canonicalize_local_elf_symbol_names(&mut bytes)
+        .map_err(|error| Error::Materialization(format!("canonicalizing TinyCC object {}: {error}", path.display())))?;
+    let staged = path.with_extension(CANONICAL_TEMP_EXTENSION);
+    let write_result = (|| -> Result<(), Error> {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&staged)
+            .map_err(|error| Error::Materialization(format!("creating canonical TinyCC object: {error}")))?;
+        file.write_all(&bytes)
+            .map_err(|error| Error::Materialization(format!("writing canonical TinyCC object: {error}")))?;
+        file.set_permissions(metadata.permissions())
+            .map_err(|error| Error::Materialization(format!("setting canonical TinyCC object mode: {error}")))?;
+        file.sync_all()
+            .map_err(|error| Error::Materialization(format!("syncing canonical TinyCC object: {error}")))?;
+        fs::rename(&staged, path)
+            .map_err(|error| Error::Materialization(format!("publishing canonical TinyCC object: {error}")))?;
+        Ok(())
+    })();
+    if write_result.is_err() && staged.exists() {
+        let _ = fs::remove_file(&staged);
+    }
+    write_result?;
+    assert_eq!(u64::try_from(bytes.len()).ok(), Some(metadata.len()));
+    debug_assert!(path.is_file());
+    Ok(rewrite_count)
 }
 
 fn compile_args(

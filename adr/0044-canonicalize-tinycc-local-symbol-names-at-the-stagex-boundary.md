@@ -12,6 +12,8 @@ This variation changed archive and executable BLAKE3 identities. Exact protected
 
 The affected symbols are local entries in an ELF symbol table. Their names do not define linker-visible authority.
 
+A later fresh fixed-point run found the same variation in the retained TinyCC self-host objects. The already-linked compiler stayed stable, but the retained main object, `libtcc.a`, and object-tree evidence did not.
+
 ## Decision Drivers
 
 - Keep exact protected executable digests.
@@ -32,6 +34,8 @@ For each `SHT_SYMTAB`, the canonicalizer changes only local symbol names that ex
 The canonicalizer writes a create-new sibling file, flushes it, and renames it over the compiler output. The bounded TinyCC wrapper runs it after each object compilation and executable link.
 
 Mantle checks the canonicalizer source and binary by exact BLAKE3 identity. A positive smoke compiles the same anonymous-symbol fixture twice and requires equal canonical outputs. A negative smoke requires malformed input rejection.
+
+The TinyCC self-host evidence path applies the same transformation through a pure Rust core. Its shell reads each declared retained object, calls the bounded core, publishes the result through a create-new sibling, and rebuilds `libtcc.a` with the declared predecessor. This path does not modify the already-linked compiler. It fails if no matching local symbol exists, if an input is not a bounded regular ELF64 file, or if the archive rebuild fails.
 
 ## Alternatives Considered
 
@@ -59,6 +63,7 @@ Rejected because executable probes and intermediate links also require stable id
 
 - Repeated TinyCC object outputs can have stable BLAKE3 identities.
 - Protected execution can keep exact path-and-digest authorization.
+- Retained TinyCC self-host objects and `libtcc.a` have repeatable evidence identities without changing the compiler binary.
 - Binutils archive and tool identities change once to their canonical values.
 - Local anonymous symbol names no longer preserve TinyCC's process-derived numeric suffixes.
 - This decision does not prove compiler correctness, source semantics, provider admission, or debug-symbol equivalence.
