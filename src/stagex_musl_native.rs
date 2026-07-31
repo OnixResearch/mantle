@@ -170,7 +170,7 @@ pub(crate) struct ExpectedOutput {
 pub(crate) const EXPECTED_OUTPUTS: [ExpectedOutput; OUTPUT_COUNT] = [
     ExpectedOutput {
         artifact_id: "musl-native-libc",
-        digest_blake3: "a9aa627c3a70fce68d928e0a7ccd423370472a87ae9fde795a85db4d0899366c",
+        digest_blake3: "87bea2db6aa8d4d34ec72427bbb9effad86ed6e0458bf4ce600b57d4966f92a7",
     },
     ExpectedOutput {
         artifact_id: "musl-native-crt1",
@@ -862,6 +862,7 @@ fn compile_source_closure(
     let mut crt_objects = BTreeMap::new();
     let mut selfhost_count = 0_u32;
     let mut predecessor_count = 0_u32;
+    let mut canonical_rewrite_count = 0_u32;
     for (index, relative) in sources.iter().enumerate() {
         let route = compiler_route(relative);
         let object = root.join(format!("obj/native/{index:04}.o"));
@@ -870,7 +871,11 @@ fn compile_source_closure(
                 Error::Materialization(format!("creating native musl object parent {}: {error}", parent.display()))
             })?;
         }
-        compile_one(request, root, relative, &object, route, &selfhost, &predecessor, index)?;
+        let object_rewrite_count =
+            compile_one(request, root, relative, &object, route, &selfhost, &predecessor, index)?;
+        canonical_rewrite_count = canonical_rewrite_count
+            .checked_add(object_rewrite_count)
+            .ok_or_else(|| Error::Materialization("native musl canonical rewrite count overflow".to_string()))?;
         if relative.starts_with("crt/") {
             let name = Path::new(relative)
                 .file_stem()
@@ -889,6 +894,11 @@ fn compile_source_closure(
     }
     if objects.is_empty() || crt_objects.is_empty() {
         return Err(Error::Materialization("native musl source closure is incomplete".to_string()));
+    }
+    if canonical_rewrite_count == 0 {
+        return Err(Error::Materialization(
+            "native musl objects contain no decimal local symbols to canonicalize".to_string(),
+        ));
     }
     if selfhost_count != SELFHOST_COMPILE_COUNT || predecessor_count != PREDECESSOR_COMPILE_COUNT {
         return Err(Error::Materialization(format!(
@@ -932,7 +942,7 @@ fn compile_one(
     selfhost: &Path,
     predecessor: &Path,
     index: usize,
-) -> Result<(), Error> {
+) -> Result<u32, Error> {
     let (compiler, source_argument) = match route {
         CompilerRoute::SelfHosted => (selfhost, relative.to_string()),
         CompilerRoute::Predecessor if relative.ends_with(".s") => {
@@ -964,10 +974,12 @@ fn compile_one(
         Error::Materialization(format!("compiling native musl source {relative} at index {index}: {error}"))
     })?;
     set_owner_read_write(object)?;
+    let rewrite_count =
+        crate::elf_local_symbol_shell::canonicalize_elf_file(object, FILE_BYTES_MAX).map_err(Error::Materialization)?;
     validate_nonempty_file(object, "native musl object")?;
     assert!(compiler.is_file());
     assert!(object.is_file());
-    Ok(())
+    Ok(rewrite_count)
 }
 
 fn inline_assembly_source(input: &str) -> String {
@@ -1375,6 +1387,9 @@ fn set_owner_read_write(path: &Path) -> Result<(), Error> {
 mod tests {
     use super::*;
 
+    const OBJECT_VARIANT_A_ENV: &str = "MANTLE_MUSL_NATIVE_OBJECT_VARIANT_A";
+    const OBJECT_VARIANT_B_ENV: &str = "MANTLE_MUSL_NATIVE_OBJECT_VARIANT_B";
+
     #[test]
     fn recipe_and_helpers_are_bound() {
         validate_recipe().unwrap();
@@ -1493,6 +1508,61 @@ mod tests {
         let error = derive_inventory(request).unwrap_err();
         assert!(error.to_string().contains("scratch exists"));
         assert!(scratch.path().exists());
+    }
+
+    #[test]
+    #[ignore = "requires two retained native-musl object trees with different local-symbol widths"]
+    fn retained_native_object_width_variants_converge() {
+        let root_a = PathBuf::from(std::env::var_os(OBJECT_VARIANT_A_ENV).unwrap());
+        let root_b = PathBuf::from(std::env::var_os(OBJECT_VARIANT_B_ENV).unwrap());
+        let paths_a = retained_object_paths(&root_a);
+        let paths_b = retained_object_paths(&root_b);
+        let expected_count = usize::try_from(
+            SELFHOST_COMPILE_COUNT
+                .checked_add(PREDECESSOR_COMPILE_COUNT)
+                .expect("bounded native compiler count"),
+        )
+        .unwrap();
+        let mut distinct_input_count = 0u32;
+        let mut rewrite_count = 0u32;
+
+        assert_eq!(paths_a.len(), expected_count);
+        assert_eq!(paths_b.len(), expected_count);
+        for (path_a, path_b) in paths_a.iter().zip(&paths_b) {
+            assert_eq!(path_a.file_name(), path_b.file_name());
+            let input_a = fs::read(path_a).unwrap();
+            let input_b = fs::read(path_b).unwrap();
+            distinct_input_count = distinct_input_count
+                .checked_add(u32::from(input_a != input_b))
+                .expect("bounded native object count");
+            let canonical_a = crate::elf_local_symbol_core::canonicalize_local_elf_symbol_names(&input_a).unwrap();
+            let canonical_b = crate::elf_local_symbol_core::canonicalize_local_elf_symbol_names(&input_b).unwrap();
+            rewrite_count = rewrite_count.checked_add(canonical_a.rewrite_count).expect("bounded native rewrite count");
+            if canonical_a.bytes != canonical_b.bytes {
+                let first_difference =
+                    canonical_a.bytes.iter().zip(&canonical_b.bytes).position(|(left, right)| left != right);
+                panic!(
+                    "native object {:?} canonical forms differ: first={first_difference:?} left_bytes={} right_bytes={}",
+                    path_a.file_name(),
+                    canonical_a.bytes.len(),
+                    canonical_b.bytes.len()
+                );
+            }
+        }
+        assert!(distinct_input_count > 0);
+        assert!(rewrite_count > 0);
+    }
+
+    fn retained_object_paths(root: &Path) -> Vec<PathBuf> {
+        let mut paths = fs::read_dir(root)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.is_file() && path.extension().is_some_and(|extension| extension == "o"))
+            .collect::<Vec<_>>();
+        paths.sort();
+        assert!(!paths.is_empty());
+        assert!(paths.iter().all(|path| path.starts_with(root)));
+        paths
     }
 
     #[test]

@@ -9508,7 +9508,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
-    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "55ef7e2dbef79a34ab85ae3cc597a9a8e86f2563db992b7d1574d61402aeb059";
+    const TEST_LINEAGE_MANIFEST_DIGEST: &str = "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d";
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {

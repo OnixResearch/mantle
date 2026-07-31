@@ -1554,7 +1554,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "a9aa627c3a70fce68d928e0a7ccd423370472a87ae9fde795a85db4d0899366c"
+        "hex_value": "87bea2db6aa8d4d34ec72427bbb9effad86ed6e0458bf4ce600b57d4966f92a7"
       },
       "id": "musl-native-libc",
       "name": "upstream-shaped native musl static libc",

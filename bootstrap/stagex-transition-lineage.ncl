@@ -557,7 +557,7 @@ let tinycc_generated = fun producer_id artifact_id artifact_name artifact_digest
     tinycc_generated "tcc-musl-selfhost-build-exec" "tcc-musl-selfhost-object-tree" "self-hosted TinyCC compiler object tree" "e5c7d2d26adf9230fa6c713ae526d666089c31d9bca4a32c3bdc4a876a01ae39",
     tinycc_generated "tcc-musl-selfhost-smoke-exec" "tcc-musl-selfhost-smoke-object" "self-hosted TinyCC syntax smoke object" "cc40480286f053fc69e7d17431b4cf5de82b477b0f84e646717cd6c3c71cecb1",
     tinycc_generated "musl-native-build-exec" "musl-native-configured-source" "upstream-shaped native musl configured source identity" "25136ba596733447cbb6259862f4e0b37dd557fc4dd8cc4392912e2f34880f18",
-    tinycc_generated "musl-native-build-exec" "musl-native-libc" "upstream-shaped native musl static libc" "a9aa627c3a70fce68d928e0a7ccd423370472a87ae9fde795a85db4d0899366c",
+    tinycc_generated "musl-native-build-exec" "musl-native-libc" "upstream-shaped native musl static libc" "87bea2db6aa8d4d34ec72427bbb9effad86ed6e0458bf4ce600b57d4966f92a7",
     tinycc_generated "musl-native-build-exec" "musl-native-crt1" "native musl startup object" "bcfefaf8179325fd26e8ecaa83b22a87fe75d3bbadb411e32113b4cb69f21f66",
     tinycc_generated "musl-native-build-exec" "musl-native-crti" "native musl initialization object" "ecf4006e5ea51c3ad49a243165909cd4f9eddfbe181b576ac43513ede8578be4",
     tinycc_generated "musl-native-build-exec" "musl-native-crtn" "native musl finalization object" "b3b3153225cc100b8c429f5916ae36b96ef4903169b86f841f86498c0fd7251d",

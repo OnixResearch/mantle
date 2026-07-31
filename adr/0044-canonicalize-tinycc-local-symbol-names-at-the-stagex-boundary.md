@@ -14,6 +14,8 @@ The affected symbols are local entries in an ELF symbol table. Their names do no
 
 A later fresh fixed-point run found the same variation in the retained TinyCC self-host objects. The already-linked compiler stayed stable, but the retained main object, `libtcc.a`, and object-tree evidence did not. Two proof contexts also produced different decimal suffix widths because the process-derived values had different magnitudes. Padding within the existing name width did not remove that variation.
 
+After the self-host evidence was stable, the hydrated proof exposed the same variation in the native-musl objects and `libc.a`. Archive metadata normalization cannot repair nondeterministic member bytes.
+
 ## Decision Drivers
 
 - Keep exact protected executable digests.
@@ -38,6 +40,8 @@ Mantle checks the canonicalizer source and binary by exact BLAKE3 identity. A po
 The TinyCC self-host evidence path uses a pure Rust core with one stricter canonical form. It accepts a bounded relocatable ELF64 file with no program headers and exactly one `SHT_SYMTAB`. It rebuilds the linked string table so each matched local name uses a 10-digit symbol index. It updates every symbol-name offset, later section offsets, the string-table size, and the section-table offset. It also replaces the old alignment gap before the next file-backed section with the unique zero-filled canonical gap. It rejects overlaps, shared conflicting names, non-canonical input padding, unsupported layouts, and malformed bounds.
 
 The shell reads each declared retained object, calls the core, publishes the result through a create-new sibling, and rebuilds `libtcc.a` with the declared predecessor. This path does not modify the already-linked compiler. It fails if no matching local symbol exists, if an input is not a bounded regular ELF64 file, or if the archive rebuild fails.
+
+The native-musl stage applies the same shell to every compiled object before CRT installation and `libc.a` assembly. It requires at least one matched name across the bounded source closure. The protected compiler execution plan does not change because canonicalization is an in-process pure transformation followed by the existing archive command.
 
 ## Alternatives Considered
 
@@ -66,6 +70,7 @@ Rejected because executable probes and intermediate links also require stable id
 - Repeated TinyCC object outputs can have stable BLAKE3 identities.
 - Protected execution can keep exact path-and-digest authorization.
 - Retained TinyCC self-host objects and `libtcc.a` have repeatable evidence identities without changing the compiler binary.
+- Native-musl CRT and archive inputs use the same canonical ELF boundary.
 - Binutils archive and tool identities change once to their canonical values.
 - Local anonymous symbol names no longer preserve TinyCC's process-derived numeric suffixes or their variable decimal widths.
 - This decision does not prove compiler correctness, source semantics, provider admission, or debug-symbol equivalence.

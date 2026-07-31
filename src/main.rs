@@ -29,6 +29,7 @@ mod cargo_import;
 mod early_native_row_receipt;
 mod early_native_row_receipt_shell;
 mod elf_local_symbol_core;
+mod elf_local_symbol_shell;
 mod errors;
 #[allow(dead_code)]
 mod external_batch_dispatch;
