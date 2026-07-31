@@ -1,0 +1,8 @@
+StageX intermediate provider published:
+  output: /home/brittonr/.cargo-target/stagex-intermediate-provider-v91-canonical-native-musl-c-20260731
+  receipt: /home/brittonr/.cargo-target/stagex-intermediate-provider-v91-canonical-native-musl-c-20260731/share/crunch-bootstrap/stagex-lineage-receipt.json
+  normalized_provider_digest_blake3: 9e992a41dac86e4e069e3d5dcfdcb9512f2fb572639a3512aa0400895bffb269
+  output_digest_blake3: b4eb6e6517a87e29fedbf840238f4becb67573a2649549bb3df6fa5a889e1c1e
+  final_bundle_digest_blake3: fcb1138d5b52657057424c23c41d6a367988cc5f476d5c14a6e50c11fb1866dc
+  provider_validation_audit_digest_blake3: b895024ed20acd76d7438ca9e2b7a99566e3c2140e040ca16fc77103d683123c
+  provider_validation_report_digest_blake3: a42ae56c41f4d3edd64c24bcd40d136852665d3974f2b41188f0aabd7d444cb6

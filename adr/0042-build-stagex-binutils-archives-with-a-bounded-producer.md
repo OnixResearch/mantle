@@ -43,7 +43,7 @@ Mantle passes the archive producer to configure and Make. This is necessary beca
 
 Mantle uses the fixed logical `tooldir` `/mantle/stagex/binutils-probe-output`. This prevents scratch paths from changing `ld-new` bytes.
 
-The full build accepts only the two observed sed counts, 4,771 and 4,772. Authenticated configure can run one optional empty sed probe. Both forms produce the same required component identities.
+The full build accepts only the three observed sed counts: 4,771, 4,772, and 4,773. Authenticated configure can run up to two optional empty sed probes. All three forms produce the same required component identities.
 
 ## Alternatives Considered
 

@@ -37,7 +37,7 @@ Each file must match its checked BLAKE3 identity. No file can contain the protec
 
 Mantle creates one target-prefixed link for each required tool. Each link points to the corresponding absolute path under the logical prefix.
 
-The bounded install accepts 4,891 or 4,892 total sed calls. Configure can make one optional empty sed call. The build-only boundary remains 4,771 or 4,772 calls.
+The bounded install accepts 4,891, 4,892, or 4,893 total sed calls. Configure can make up to two optional empty sed calls. The build-only boundary remains 4,771, 4,772, or 4,773 calls.
 
 Mantle then runs these authenticated smokes:
 

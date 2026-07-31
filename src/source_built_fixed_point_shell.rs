@@ -50,7 +50,7 @@ pub(crate) const STAGEX_PROVIDER_STORE_BASENAME: &str =
 const STAGEX_PROVIDER_LOGICAL_PATH: &str =
     "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider";
 const STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST: &str =
-    "37d33a89003cfd30d78052f20a1d3957ec8908038924ea27afe0ac79f698e615";
+    "9e992a41dac86e4e069e3d5dcfdcb9512f2fb572639a3512aa0400895bffb269";
 const NATIVE_PROVIDER_ID: &str = "full-source-native-provider";
 const NATIVE_ADMISSION_REPORT_FILE: &str = "full-source-provider-admission.json";
 const NATIVE_SOURCE_MANIFEST_FILE: &str = "native-source-closure.json";
