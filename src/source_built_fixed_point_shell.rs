@@ -49,7 +49,8 @@ pub(crate) const STAGEX_PROVIDER_STORE_BASENAME: &str =
     "snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider";
 const STAGEX_PROVIDER_LOGICAL_PATH: &str =
     "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider";
-const STAGEX_PROVIDER_EXPECTED_OUTPUT_DIGEST: &str = "a092e2e8d8eb421bcbed105882ef2c8c10afd6c5558ac6083150af57f4e5a20d";
+const STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST: &str =
+    "37d33a89003cfd30d78052f20a1d3957ec8908038924ea27afe0ac79f698e615";
 const NATIVE_PROVIDER_ID: &str = "full-source-native-provider";
 const NATIVE_ADMISSION_REPORT_FILE: &str = "full-source-provider-admission.json";
 const NATIVE_SOURCE_MANIFEST_FILE: &str = "native-source-closure.json";
@@ -670,12 +671,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         output_path: &stagex_provider_root,
     })
     .map_err(|error| proof_error(format!("StageX provider publication failed: {error}")))?;
-    if stagex_provider_report.output_digest_blake3 != STAGEX_PROVIDER_EXPECTED_OUTPUT_DIGEST {
-        return Err(proof_error(format!(
-            "StageX provider output digest mismatch: expected {STAGEX_PROVIDER_EXPECTED_OUTPUT_DIGEST}, observed {}",
-            stagex_provider_report.output_digest_blake3
-        )));
-    }
+    validate_stagex_provider_normalized_identity(&stagex_provider_report.normalized_provider_digest_blake3)?;
     validate_runtime_bounds(options, prepared)?;
     let stagex_logical_path = crate::full_source_provider::adopt_verified_local_provider_path_strict(
         &stagex_provider_root,
@@ -727,6 +723,17 @@ fn validate_runtime_bounds(
             options.disk_bytes_max
         )));
     }
+    Ok(())
+}
+
+fn validate_stagex_provider_normalized_identity(observed_digest_blake3: &str) -> Result<(), RunError> {
+    if observed_digest_blake3 != STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST {
+        return Err(proof_error(format!(
+            "StageX normalized provider digest mismatch: expected {STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST}, observed {observed_digest_blake3}"
+        )));
+    }
+    assert_eq!(observed_digest_blake3.len(), BLAKE3_HEX_LENGTH);
+    debug_assert!(observed_digest_blake3.bytes().all(|byte| byte.is_ascii_hexdigit()));
     Ok(())
 }
 
@@ -1453,6 +1460,15 @@ mod tests {
         assert!(args.iter().any(|argument| argument == "--no-substitute"));
         assert!(args.iter().any(|argument| argument == "--strict-hermetic"));
         assert!(!args.iter().any(|argument| argument == "--impure"));
+    }
+
+    #[test]
+    fn stagex_provider_handoff_accepts_only_expected_normalized_identity() {
+        validate_stagex_provider_normalized_identity(STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST).unwrap();
+        let substituted = validate_stagex_provider_normalized_identity(DIGEST).unwrap_err();
+
+        assert!(substituted.to_string().contains("normalized provider digest mismatch"));
+        assert_ne!(STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST, DIGEST);
     }
 
     #[test]

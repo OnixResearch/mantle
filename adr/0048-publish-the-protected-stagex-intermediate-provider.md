@@ -16,7 +16,8 @@ The former CLI only validated the lineage manifest. It returned a materializatio
 - Keep final GCC admission and compiler correctness outside this claim.
 - Prevent stale-root discovery and destination replacement.
 - Validate relocated tools without ambient executable authority.
-- Keep receipt identities deterministic across output locations.
+- Keep the normalized payload identity deterministic across output locations.
+- Keep exact receipt and output identities bound to each transition run.
 
 ## Decision
 
@@ -34,6 +35,8 @@ Mantle creates a private staging directory. It rejects symlinks and unsupported 
 The validation audit projects staging paths to provider-relative paths. Each complete stage report binds its declared authorization set only after the protected audit contains each exact executable path and digest identity from an intercepted `execve` or `execveat` decision. One event can satisfy equivalent authorization IDs, but an unused identity fails publication. This proves an execution decision, not successful process completion. The receipt binds the full transition plan, full transition report, protected audit, provider payload, four provider roles, full validation report, validation audit, stage reports, bounded claims, and non-claims. A domain-separated receipt-payload digest rejects stale or edited receipt fields. Exact allowlisted report-only observations use a separate domain-separated BLAKE3 projection over the artifact ID, plan digest, and complete report digest. Live provider components always use observed file or tree identities.
 
 Mantle validates staging, publishes with Linux no-replace rename, and validates the emitted provider again. It never removes or overwrites an existing destination.
+
+The normalized provider digest identifies the functional four-role payload. Exact output and receipt digests also bind the transition path, plan, report, and protected-exec observations. Those exact digests can differ between fresh transition runs. A downstream handoff compares the normalized provider digest and retains the exact output digest as run evidence; it must not treat a path-specific receipt digest as the normalized provider identity.
 
 ## Alternatives Considered
 
@@ -59,4 +62,5 @@ Rejected because replacement can hide stale or competing authority and can expos
 - Mantle self-build remains a separate blocker.
 - Final native GCC admission remains separate evidence.
 - Publication requires Linux seccomp user notification and no-replace rename support.
+- Two providers can have one normalized payload identity and different exact output identities when their receipts bind different transition runs.
 - The provider does not prove compiler correctness, complete musl or binutils behavior, kernel isolation, reproducibility, or release eligibility.
