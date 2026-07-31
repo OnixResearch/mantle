@@ -58,8 +58,9 @@ fn publish_canonical_bytes(path: &Path, metadata: &fs::Metadata, bytes: &[u8]) -
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::os::unix::fs::PermissionsExt as _;
+
+    use super::*;
 
     const MODE_PERMISSION_BITS: u32 = 0o777;
     const TEST_FILE_MODE: u32 = 0o640;
