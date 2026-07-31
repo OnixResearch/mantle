@@ -24,9 +24,11 @@ Mantle treats the fresh StageX transition tree and intermediate provider as the 
 
 The source-built proof binds the original native manifest and the exact StageX source bundle as separate authorities. It reserves logical store paths for both fresh outputs. It executes the protected transition, checks the accepted report identity, adopts that tree into the fresh store, publishes the StageX provider at its accepted logical path, and then builds the later native graph.
 
-Historical compatibility derivations for Stage0 POSIX tools, GNU Make, Bash, TinyCC, musl, and binutils become thin adapters. Each adapter copies a bounded layout from the fresh StageX transition or provider. The adapters keep historical output names so later recipes do not infer a new authority or require a broad rename.
+Historical compatibility derivations for Stage0 POSIX tools and GNU Make become thin adapters. Each adapter copies a bounded layout from the fresh StageX transition. The adapters keep historical output names so later recipes do not infer a new authority or require a broad rename.
 
-`gcc-4.0-native.ncl` consumes the fresh StageX roots directly. This makes the first conventional GCC boundary explicit and prevents it from selecting the legacy TinyCC, musl, binutils, Make, or utility derivations.
+The Bash, TinyCC self-host, TinyCC musl-v2, native musl, and early binutils files remain the exact authenticated recipe sources used inside the protected StageX transition. They are not downstream compatibility inputs. The later native graph cannot evaluate them as provider edges.
+
+`gcc-4.0-native.ncl` consumes the fresh StageX roots directly. This makes the first conventional GCC boundary explicit and prevents it from selecting the legacy TinyCC, musl, binutils, Make, Bash, or utility derivations.
 
 ## Alternatives Considered
 
@@ -45,6 +47,7 @@ Rejected because the fixed-point requirement requires fresh construction in the 
 ## Consequences
 
 - Later native builds fail if the fresh StageX roots are absent or have the wrong logical identities.
-- Historical derivation names remain compatibility surfaces, not independent provider claims.
-- Adapter outputs add ordinary derivation nodes, but their only bootstrap inputs are the fresh StageX roots.
+- Historical downstream derivation names remain compatibility surfaces, not independent provider claims.
+- The StageX Bash, TinyCC, musl, and binutils recipes remain authenticated transition sources and are unreachable from the later native graph.
+- Adapter outputs add ordinary derivation nodes, but their only bootstrap input is the fresh StageX transition.
 - This decision does not prove compiler correctness, StageX completeness outside its checked roles, native-provider admission, the Rust provider, the Mantle fixed point, or release eligibility.

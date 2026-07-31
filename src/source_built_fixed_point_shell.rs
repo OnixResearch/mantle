@@ -1487,14 +1487,17 @@ mod tests {
         assert!(!GCC40.contains("derivationFile \"tcc-musl-v2.ncl\""));
         assert!(!GCC40.contains("derivationFile \"musl-1.1.24-native.ncl\""));
         assert!(!GCC40.contains("derivationFile \"binutils-tcc.ncl\""));
-        for adapter in [STAGE0, MAKE, BASH] {
+        for adapter in [STAGE0, MAKE] {
             assert!(adapter.contains("stagex-transition-proof-input.ncl"));
             assert!(!adapter.contains("seed-legacy.ncl"));
         }
-        for adapter in [TCC_SELFHOST, TCC_V2, MUSL, BINUTILS] {
-            assert!(adapter.contains("stagex-provider-proof-input.ncl"));
-            assert!(!adapter.contains("seed-full-admitted.ncl"));
-            assert!(!adapter.contains("tinycc-mes.ncl"));
+        assert!(BASH.contains("Build bash 2.05b using tinycc 0.9.27"));
+        assert!(TCC_SELFHOST.contains("tcc-0.9.27-musl-selfhost"));
+        assert!(TCC_V2.contains("Final tcc 0.9.27 rebuilt"));
+        assert!(MUSL.contains("musl-1.1.24-native-candidate"));
+        assert!(BINUTILS.contains("source-built TCC-era binutils matrix passed"));
+        for transition_recipe in [BASH, TCC_SELFHOST, TCC_V2, MUSL, BINUTILS] {
+            assert!(!transition_recipe.contains("stagex-provider-proof-input.ncl"));
         }
     }
 
