@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -41,6 +42,8 @@ const M4_BUILD_COMMAND_COUNT: u32 = M4_SOURCE_COMPILE_COUNT + 1;
 const M4_SMOKE_COMMAND_COUNT: u32 = 5;
 const M4_OUTPUT_COUNT: usize = 5;
 const M4_SOURCE_ARTIFACT_COUNT: usize = 2;
+const M4_OBJECT_MODE: u32 = 0o644;
+const M4_PERMISSION_MODE_MASK: u32 = 0o7777;
 const M4_CONFIG_H: &[u8] = br#"#define VERSION "1.4.7"
 #define PACKAGE_BUGREPORT "bug-m4@gnu.org"
 #define PACKAGE_STRING "GNU M4 1.4.7"
@@ -494,12 +497,43 @@ fn compile_m4_objects(
             &BTreeMap::<String, String>::new(),
             &request.scratch_dir.join(format!("m4-compile-{index:02}.stderr.txt")),
         )?;
-        validate_nonempty_file(&source_root.join(&object), source)?;
+        let object_path = source_root.join(&object);
+        normalize_m4_object_mode(&object_path, source)?;
+        validate_nonempty_file(&object_path, source)?;
         object_paths.push(object);
     }
     assert_eq!(object_paths.len(), source_paths.len());
     assert!(object_paths.iter().all(|path| path.ends_with(".o")));
     Ok(object_paths)
+}
+
+fn normalize_m4_object_mode(path: &Path, source: &str) -> Result<(), StagexM4Error> {
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| StagexM4Error::Materialization(format!("reading GNU M4 object {source} metadata: {error}")))?;
+    if !metadata.file_type().is_file() {
+        return Err(StagexM4Error::Materialization(format!(
+            "GNU M4 object {source} is not a regular file: {}",
+            path.display()
+        )));
+    }
+    fs::set_permissions(path, fs::Permissions::from_mode(M4_OBJECT_MODE)).map_err(|error| {
+        StagexM4Error::Materialization(format!("setting GNU M4 object {source} permissions: {error}"))
+    })?;
+    let observed_mode = fs::symlink_metadata(path)
+        .map_err(|error| {
+            StagexM4Error::Materialization(format!("re-reading GNU M4 object {source} metadata: {error}"))
+        })?
+        .permissions()
+        .mode()
+        & M4_PERMISSION_MODE_MASK;
+    if observed_mode != M4_OBJECT_MODE {
+        return Err(StagexM4Error::Materialization(format!(
+            "GNU M4 object {source} mode mismatch: expected {M4_OBJECT_MODE:o}, observed {observed_mode:o}"
+        )));
+    }
+    assert!(path.is_file());
+    assert_eq!(observed_mode, M4_OBJECT_MODE);
+    Ok(())
 }
 
 fn compile_args(musl_root: &Path, source: &str, object: &str) -> Result<Vec<String>, StagexM4Error> {
@@ -919,6 +953,28 @@ mod tests {
         let error = validate_compile_source_set(source_root.path()).unwrap_err();
         assert!(error.to_string().contains("compile source is missing"));
         assert!(error.to_string().contains(&missing_relative));
+    }
+
+    #[test]
+    fn normalizes_m4_object_permissions_before_linking() {
+        let temp = tempfile::tempdir().unwrap();
+        let object = temp.path().join("cloexec.o");
+        fs::write(&object, b"object").unwrap();
+        fs::set_permissions(&object, fs::Permissions::from_mode(0o1150)).unwrap();
+
+        normalize_m4_object_mode(&object, "lib/cloexec.c").unwrap();
+
+        let observed_mode = fs::metadata(&object).unwrap().permissions().mode() & M4_PERMISSION_MODE_MASK;
+        assert_eq!(observed_mode, M4_OBJECT_MODE);
+        assert_eq!(fs::read(&object).unwrap(), b"object");
+    }
+
+    #[test]
+    fn rejects_non_regular_m4_object_before_mode_change() {
+        let temp = tempfile::tempdir().unwrap();
+        let error = normalize_m4_object_mode(temp.path(), "lib/cloexec.c").unwrap_err();
+        assert!(error.to_string().contains("not a regular file"));
+        assert!(temp.path().is_dir());
     }
 
     #[test]
