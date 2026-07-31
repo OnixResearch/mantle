@@ -5865,7 +5865,7 @@ fn validate_binutils_audit(
     const EXPECTED_COMPONENT_COUNT: u32 = 8;
     const EXPECTED_INSTALLED_TOOL_COUNT: u32 = 11;
     const EXPECTED_ARCHIVE_COUNT: u32 = 4;
-    const EXPECTED_SED_INVOCATION_COUNTS: [u32; 2] = [4_891, 4_892];
+    const EXPECTED_SED_INVOCATION_COUNTS: [u32; 3] = [4_891, 4_892, 4_893];
     let reported_event_count_bounds = report
         .protected_exec_event_count_bounds
         .map(|count| usize::try_from(count).expect("bounded binutils event count fits usize"));
@@ -5958,11 +5958,14 @@ fn binutils_event_count_bounds_from_sed_invocations(
     sed_invocation_count: u32,
 ) -> Result<[usize; 2], StagexTransitionError> {
     const LOWER_SED_INVOCATION_COUNT: u32 = 4_891;
-    const UPPER_SED_INVOCATION_COUNT: u32 = 4_892;
+    const MIDDLE_SED_INVOCATION_COUNT: u32 = 4_892;
+    const UPPER_SED_INVOCATION_COUNT: u32 = 4_893;
     const LOWER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [73_991, 74_045];
-    const UPPER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_008, 74_057];
+    const MIDDLE_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_008, 74_057];
+    const UPPER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_010, 74_057];
     match sed_invocation_count {
         LOWER_SED_INVOCATION_COUNT => Ok(LOWER_SED_EVENT_COUNT_BOUNDS),
+        MIDDLE_SED_INVOCATION_COUNT => Ok(MIDDLE_SED_EVENT_COUNT_BOUNDS),
         UPPER_SED_INVOCATION_COUNT => Ok(UPPER_SED_EVENT_COUNT_BOUNDS),
         other => Err(StagexTransitionError::Audit(format!(
             "GNU binutils sed invocation count is outside the closed set: {other}"
@@ -9930,10 +9933,12 @@ mod tests {
     #[test]
     fn binutils_event_count_accepts_only_the_closed_bounds() {
         const LOWER_SED_INVOCATION_COUNT: u32 = 4_891;
-        const UPPER_SED_INVOCATION_COUNT: u32 = 4_892;
-        const OUTSIDE_SED_INVOCATION_COUNT: u32 = 4_890;
+        const MIDDLE_SED_INVOCATION_COUNT: u32 = 4_892;
+        const UPPER_SED_INVOCATION_COUNT: u32 = 4_893;
+        const OUTSIDE_SED_INVOCATION_COUNTS: [u32; 2] = [4_890, 4_894];
         const LOWER_SED_EVENT_BOUNDS: [usize; 2] = [73_991, 74_045];
-        const UPPER_SED_EVENT_BOUNDS: [usize; 2] = [74_008, 74_057];
+        const MIDDLE_SED_EVENT_BOUNDS: [usize; 2] = [74_008, 74_057];
+        const UPPER_SED_EVENT_BOUNDS: [usize; 2] = [74_010, 74_057];
         let bounds = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS
             .map(|count| u32::try_from(count).unwrap());
         let below = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS[0].checked_sub(1).unwrap();
@@ -9953,10 +9958,16 @@ mod tests {
             LOWER_SED_EVENT_BOUNDS
         );
         assert_eq!(
+            binutils_event_count_bounds_from_sed_invocations(MIDDLE_SED_INVOCATION_COUNT).unwrap(),
+            MIDDLE_SED_EVENT_BOUNDS
+        );
+        assert_eq!(
             binutils_event_count_bounds_from_sed_invocations(UPPER_SED_INVOCATION_COUNT).unwrap(),
             UPPER_SED_EVENT_BOUNDS
         );
-        assert!(binutils_event_count_bounds_from_sed_invocations(OUTSIDE_SED_INVOCATION_COUNT).is_err());
+        for count in OUTSIDE_SED_INVOCATION_COUNTS {
+            assert!(binutils_event_count_bounds_from_sed_invocations(count).is_err());
+        }
     }
 
     #[test]

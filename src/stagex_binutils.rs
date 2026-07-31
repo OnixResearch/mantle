@@ -633,8 +633,8 @@ const BINUTILS_AR_AUDIT_OUTPUT_BYTES_INDEX: usize = 2;
 const BINUTILS_AR_AUDIT_ARCHIVE_INDEX: usize = 3;
 const BINUTILS_AR_AUDIT_STATUS_INDEX: usize = 4;
 const SED_BRIDGE_INVOCATION_COUNT_MAX: u32 = 8_192;
-const BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS: [u32; 2] = [4_771, 4_772];
-const BINUTILS_INSTALL_SED_INVOCATION_COUNTS: [u32; 2] = [4_891, 4_892];
+const BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS: [u32; 3] = [4_771, 4_772, 4_773];
+const BINUTILS_INSTALL_SED_INVOCATION_COUNTS: [u32; 3] = [4_891, 4_892, 4_893];
 const BINUTILS_SMOKE_OUTPUT_KIBIBYTES_MAX: u64 = 64;
 const BINUTILS_SMOKE_OUTPUT_BYTES_MAX: u64 = BINUTILS_SMOKE_OUTPUT_KIBIBYTES_MAX * KIBIBYTE_BYTES;
 const BINUTILS_SMOKE_EXIT_STATUS: i32 = 42;
@@ -4759,28 +4759,30 @@ mod tests {
     }
 
     #[test]
-    fn accepts_bounded_full_build_sed_counts() {
-        validate_sed_bridge_count_value(
-            BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS[0],
-            &BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS,
-        )
-        .unwrap();
-        validate_sed_bridge_count_value(
-            BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS[1],
-            &BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS,
-        )
-        .unwrap();
+    fn accepts_bounded_full_build_and_install_sed_counts() {
+        for count in BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS {
+            validate_sed_bridge_count_value(count, &BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS).unwrap();
+        }
+        for count in BINUTILS_INSTALL_SED_INVOCATION_COUNTS {
+            validate_sed_bridge_count_value(count, &BINUTILS_INSTALL_SED_INVOCATION_COUNTS).unwrap();
+        }
         assert!(BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS.iter().all(|count| *count > 0));
-        assert!(BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS[0] < BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS[1]);
+        assert!(BINUTILS_INSTALL_SED_INVOCATION_COUNTS.iter().all(|count| *count > 0));
     }
 
     #[test]
-    fn rejects_unobserved_full_build_sed_count() {
-        const UNOBSERVED_SED_COUNT: u32 = 4_770;
-        let error = validate_sed_bridge_count_value(UNOBSERVED_SED_COUNT, &BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS)
-            .unwrap_err()
-            .to_string();
-        assert!(error.contains("expected one of [4771, 4772]"));
+    fn rejects_unobserved_full_build_and_install_sed_counts() {
+        const UNOBSERVED_FULL_SED_COUNTS: [u32; 2] = [4_770, 4_774];
+        const UNOBSERVED_INSTALL_SED_COUNTS: [u32; 2] = [4_890, 4_894];
+        for count in UNOBSERVED_FULL_SED_COUNTS {
+            let error = validate_sed_bridge_count_value(count, &BINUTILS_FULL_BUILD_SED_INVOCATION_COUNTS)
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("expected one of [4771, 4772, 4773]"));
+        }
+        for count in UNOBSERVED_INSTALL_SED_COUNTS {
+            assert!(validate_sed_bridge_count_value(count, &BINUTILS_INSTALL_SED_INVOCATION_COUNTS).is_err());
+        }
         assert!(validate_sed_bridge_count_value(1, &[]).is_err());
     }
 
