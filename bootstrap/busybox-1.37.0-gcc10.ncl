@@ -4,7 +4,7 @@
 # provider with independently source-built GNU Make and Linux UAPI headers.
 
 let crunch = import "lib.ncl" in
-let native_provider = import "seed-full-admitted.ncl" in
+let native_provider = crunch.derivationFile "seed-full-toolchain.ncl" in
 let gnumake = crunch.derivationFile "make-4.4.1-gcc10.ncl" in
 let linux_headers = crunch.derivationFile "linux-headers-6.6-gcc10.ncl" in
 # Upstream archive SHA-256: 3311dff32e746499f4df0d5df04d7eb396382d7e108bb9250e7b519b837043a4.

@@ -1517,7 +1517,7 @@ fn read_seed_risk_prefix(path: &Path) -> io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn classify_seed_closure_risk_bytes(bytes: &[u8]) -> SeedClosureRisk {
+pub(crate) fn classify_seed_closure_risk_bytes(bytes: &[u8]) -> SeedClosureRisk {
     if bytes.starts_with(SHEBANG_MAGIC) {
         return SeedClosureRisk::ScriptInterpreter;
     }

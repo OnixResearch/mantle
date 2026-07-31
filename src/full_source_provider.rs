@@ -272,10 +272,40 @@ pub(crate) fn adopt_admitted_full_source_provider(
     state_dir: &Path,
     store_dir: &str,
 ) -> Result<String, RunError> {
+    adopt_verified_local_provider_path_with_mode(
+        &report.provider_path,
+        output_dir,
+        state_dir,
+        store_dir,
+        crunch_store::StoreFallbackMode::Practical,
+    )
+}
+
+pub(crate) fn adopt_verified_local_provider_path_strict(
+    provider_path: &Path,
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+) -> Result<String, RunError> {
+    adopt_verified_local_provider_path_with_mode(
+        provider_path,
+        output_dir,
+        state_dir,
+        store_dir,
+        crunch_store::StoreFallbackMode::Strict,
+    )
+}
+
+fn adopt_verified_local_provider_path_with_mode(
+    provider_path: &Path,
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+    fallback_mode: crunch_store::StoreFallbackMode,
+) -> Result<String, RunError> {
     assert!(!store_dir.is_empty(), "store_dir must not be empty");
     assert!(Path::new(store_dir).is_absolute(), "store_dir must be absolute");
-    let provider_parent = report
-        .provider_path
+    let provider_parent = provider_path
         .parent()
         .ok_or_else(|| admission_error("admitted provider path has no parent".to_string()))?;
     let canonical_parent = fs::canonicalize(provider_parent).map_err(|error| {
@@ -290,8 +320,7 @@ pub(crate) fn adopt_admitted_full_source_provider(
             canonical_output.display()
         )));
     }
-    let provider_basename = report
-        .provider_path
+    let provider_basename = provider_path
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| admission_error("admitted provider basename is not UTF-8".to_string()))?;
@@ -306,7 +335,7 @@ pub(crate) fn adopt_admitted_full_source_provider(
             state_dir: state_dir.to_path_buf(),
             output_dir: output_dir.to_path_buf(),
             remote_cache_urls: Vec::new(),
-            fallback_mode: crunch_store::StoreFallbackMode::Practical,
+            fallback_mode,
             store_dir: store_dir.to_string(),
             base_state_dirs: Vec::new(),
         })

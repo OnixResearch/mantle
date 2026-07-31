@@ -57,3 +57,4 @@ compatibility surface, crate name, or historical decision.
 | [0048](0048-publish-the-protected-stagex-intermediate-provider.md) | Publish the protected StageX intermediate provider | Accepted |
 | [0049](0049-canonicalize-the-stagex-flex-runtime-section-name.md) | Canonicalize the StageX Flex runtime section name | Accepted |
 | [0050](0050-build-the-source-fixed-point-through-one-rust-proof-authority.md) | Build the source fixed point through one Rust proof authority | Accepted |
+| [0051](0051-cut-legacy-bootstrap-edges-at-the-stagex-provider.md) | Cut legacy bootstrap edges at the StageX provider | Accepted |

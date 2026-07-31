@@ -8,17 +8,7 @@
 
 let crunch = import "lib.ncl" in
 
-let stage0 = crunch.derivationFile "stage0-posix.ncl" in
-let tcc26 = crunch.derivationFile "tinycc-mes.ncl" in
-let host_tcc = crunch.derivationFile "tcc-musl-v2.ncl" in
-let selfhost = crunch.derivationFile "tcc-musl-selfhost.ncl" in
-let musl = crunch.derivationFile "musl-1.1.24-native.ncl" in
-let binutils = crunch.derivationFile "binutils-tcc.ncl" in
-let tcc27_src = crunch.fetchTarball {
-  url = "https://download-mirror.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2",
-  hash = "sha256-J1qVIv8ti91hOO6Gp2Wqho3t8C7jQHcXpTI85IPwZn0=",
-  name = "tcc-0.9.27-src",
-} in
+let stagex_provider = import "stagex-provider-proof-input.ncl" in
 
 {
   name = "tcc-0.9.27-musl-native-runtime",
@@ -40,13 +30,15 @@ let tcc27_src = crunch.fetchTarball {
         exit 1
       }
 
-      TCC26=$(find_input tinycc-0.9.26)
-      HOST_TCC=$(find_input tcc-0.9.27-musl-v2)
-      SELFHOST=$(find_input tcc-0.9.27-musl-selfhost)
-      MUSL=$(find_input musl-1.1.24-native-candidate)
-      BINUTILS=$(find_input binutils-2.30-tcc-source-v1)
-      TCC27_SRC=$(find_input tcc-0.9.27-src)
-      PATCHED_SOURCE="$SELFHOST/share/tcc-source-patched"
+      STAGEX=$(find_input mantle-stagex-intermediate-provider)
+      HOST_TCC="$STAGEX/bin/x86_64-linux-musl-tcc"
+      MUSL="$STAGEX/x86_64-linux-musl"
+      PATCHED_SOURCE="$STAGEX/share/mantle-stagex/tcc-source-patched"
+      TCC27_SRC="$PATCHED_SOURCE"
+      test -x "$HOST_TCC" || { echo "ERROR: protected StageX TinyCC missing" >&2; exit 1; }
+      test -x "$STAGEX/bin/x86_64-linux-musl-ar" || { echo "ERROR: protected StageX ar missing" >&2; exit 1; }
+      test -x "$STAGEX/bin/x86_64-linux-musl-ranlib" || { echo "ERROR: protected StageX ranlib missing" >&2; exit 1; }
+      test -x "$STAGEX/bin/x86_64-linux-musl-ld" || { echo "ERROR: protected StageX ld missing" >&2; exit 1; }
       test -f "$PATCHED_SOURCE/tcc.c" || { echo "ERROR: patched TinyCC source missing" >&2; exit 1; }
 
       WORK=/tmp/tcc-native-runtime
@@ -140,8 +132,8 @@ extern long double bootstrap_strtold(const char *, char **);' tccpp.c
       for compiler_source in tcc.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c x86_64-gen.c x86_64-link.c i386-asm.c; do
         object="${compiler_source%.c}.o"
         echo "tcc-native-runtime: compile $compiler_source" >&2
-        "$HOST_TCC/bin/tcc" \
-          -c -I . -I "$WORK/native-abi" -I "$TCC26/include/mes" \
+        "$HOST_TCC" \
+          -c -I . -I "$WORK/native-abi" \
           -D BOOTSTRAP=1 \
           -D HAVE_BITFIELD=1 \
           -D HAVE_FLOAT=1 \
@@ -267,7 +259,7 @@ double ldexp(double value, int exponent)
 }
 EOF
       echo "tcc-native-runtime: compile source-literal adapter" >&2
-      "$HOST_TCC/bin/tcc" -c -I "$WORK/native-abi" -I "$TCC26/include/mes" \
+      "$HOST_TCC" -c -I "$WORK/native-abi" \
         native-runtime-compat.c -o native-runtime-compat.o
       $BB chmod u+rw native-runtime-compat.o
 
@@ -275,7 +267,7 @@ EOF
       RUNTIME_OBJECTS=""
       for runtime_source in libtcc1.c va_list.c; do
         runtime_object="native-${runtime_source%.c}.o"
-        "$HOST_TCC/bin/tcc" -c -I "$TCC27_SRC" -I "$TCC27_SRC/include" \
+        "$HOST_TCC" -c -I "$TCC27_SRC" -I "$TCC27_SRC/include" \
           "$TCC27_SRC/lib/$runtime_source" -o "$runtime_object"
         test -s "$runtime_object" || { echo "ERROR: native TinyCC runtime object $runtime_object missing" >&2; exit 1; }
         $BB chmod 644 "$runtime_object"
@@ -283,26 +275,26 @@ EOF
       done
       for runtime_source in alloca86_64.S alloca86_64-bt.S; do
         runtime_object="native-${runtime_source%.S}.o"
-        "$HOST_TCC/bin/tcc" -c -I "$TCC27_SRC" -I "$TCC27_SRC/include" \
+        "$HOST_TCC" -c -I "$TCC27_SRC" -I "$TCC27_SRC/include" \
           "$TCC27_SRC/lib/$runtime_source" -o "$runtime_object"
         test -s "$runtime_object" || { echo "ERROR: native TinyCC assembly runtime object $runtime_object missing" >&2; exit 1; }
         $BB chmod 644 "$runtime_object"
         RUNTIME_OBJECTS="$RUNTIME_OBJECTS $runtime_object"
       done
       $BB rm -f native-libtcc1.a
-      "$BINUTILS/bin/ar" rc native-libtcc1.a $RUNTIME_OBJECTS
-      "$BINUTILS/bin/ranlib" native-libtcc1.a
+      "$STAGEX/bin/x86_64-linux-musl-ar" rc native-libtcc1.a $RUNTIME_OBJECTS
+      "$STAGEX/bin/x86_64-linux-musl-ranlib" native-libtcc1.a
       test -s native-libtcc1.a || { echo "ERROR: source-built native TinyCC runtime archive missing" >&2; exit 1; }
 
       echo "tcc-native-runtime: link compiler with source-built binutils" >&2
-      "$BINUTILS/bin/ld" -static -o tcc-native \
+      "$STAGEX/bin/x86_64-linux-musl-ld" -static -o tcc-native \
         "$MUSL/lib/crt1.o" "$MAIN_OBJECT" $LINK_OBJECTS \
         native-runtime-compat.o native-libtcc1.a "$MUSL/lib/libc.a"
       $BB chmod 755 tcc-native
       $BB cp tcc-native "$out/bin/tcc"
       $BB cp tcc-native "$out/bin/tcc-0.9.27-musl-native-runtime"
       $BB cp native-libtcc1.a "$out/lib/tcc/libtcc1.a"
-      $BB cp -r "$SELFHOST/lib/tcc/include/." "$out/lib/tcc/include/"
+      $BB cp -r "$STAGEX/lib/tcc/include/." "$out/lib/tcc/include/"
 
       $BB cat > integer-compile-smoke.c <<'EOF'
 int value(void) { return 7; }
@@ -367,5 +359,5 @@ EOF
       test -f "$out/lib/tcc/include/stdarg.h"
     "%,
   ],
-  inputs = [stage0, tcc26, host_tcc, selfhost, musl, binutils, tcc27_src],
+  inputs = [stagex_provider],
 } | crunch.Derivation

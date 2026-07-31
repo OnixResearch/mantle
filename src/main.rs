@@ -137,6 +137,8 @@ mod semantic_graph;
 mod shell_cmd;
 #[allow(dead_code)]
 mod source_built_fixed_point;
+mod source_built_fixed_point_receipt;
+mod source_built_fixed_point_shell;
 mod source_bundle;
 mod source_root_capability;
 mod source_root_provider;
@@ -246,6 +248,11 @@ const REMOTE_FAILURE_REPLAY_RANDOM_BYTES: usize = 16;
 const REMOTE_FAILURE_DEBUG_BUNDLE_REF_PREFIX: &str = "remote-failure-debug:";
 const REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS: usize = 64;
 const REMOTE_FAILURE_DEBUG_STATUS_CODE_BYTES_MAX: usize = 128;
+const SOURCE_BUILT_FIXED_POINT_ELAPSED_SECONDS_MAX_DEFAULT: u64 = 86_400;
+const SOURCE_BUILT_FIXED_POINT_DISK_BYTES_MAX_DEFAULT: u64 = 1_099_511_627_776;
+const SOURCE_BUILT_FIXED_POINT_PROTECTED_EXEC_EVENTS_MAX_DEFAULT: u32 = 262_144;
+const SOURCE_BUILT_FIXED_POINT_SOURCE_RECORDS_MAX_DEFAULT: u32 = 65_536;
+const SOURCE_BUILT_FIXED_POINT_JOBS_DEFAULT: u32 = 4;
 #[cfg(unix)]
 const UNIX_EXECUTE_BITS: u32 = 0o111;
 
@@ -732,6 +739,50 @@ enum Command {
         #[arg(long, requires = "offline_source_manifest_blake3")]
         offline_source_state_dir: Option<PathBuf>,
 
+        /// Construct the full source lineage and prove the Cargo-free Mantle fixed point.
+        #[arg(long, conflicts_with = "cargo_free")]
+        source_built_fixed_point: bool,
+
+        /// Authenticated source-built-fixed-point source profile.
+        #[arg(long, requires = "source_built_fixed_point")]
+        source_profile: Option<PathBuf>,
+
+        /// Independently authenticated BLAKE3 of --source-profile.
+        #[arg(long, requires = "source_built_fixed_point")]
+        expected_source_profile_blake3: Option<String>,
+
+        /// Independently authenticated StageX lineage-manifest BLAKE3.
+        #[arg(long, requires = "source_built_fixed_point")]
+        expected_stagex_lineage_blake3: Option<String>,
+
+        /// Independently authenticated normalized native-provider tree BLAKE3.
+        #[arg(long, requires = "source_built_fixed_point")]
+        expected_native_provider_blake3: Option<String>,
+
+        /// Explicit bubblewrap executable used by the native construction shell.
+        #[arg(long, requires = "source_built_fixed_point")]
+        proof_bwrap: Option<PathBuf>,
+
+        /// Explicit static sandbox shell used by native derivations.
+        #[arg(long, requires = "source_built_fixed_point")]
+        proof_sandbox_shell: Option<PathBuf>,
+
+        /// Maximum proof elapsed time recorded in the immutable plan.
+        #[arg(long, default_value_t = SOURCE_BUILT_FIXED_POINT_ELAPSED_SECONDS_MAX_DEFAULT, requires = "source_built_fixed_point")]
+        proof_elapsed_seconds_max: u64,
+
+        /// Maximum proof disk bytes recorded in the immutable plan.
+        #[arg(long, default_value_t = SOURCE_BUILT_FIXED_POINT_DISK_BYTES_MAX_DEFAULT, requires = "source_built_fixed_point")]
+        proof_disk_bytes_max: u64,
+
+        /// Maximum protected exec decisions recorded in the immutable plan.
+        #[arg(long, default_value_t = SOURCE_BUILT_FIXED_POINT_PROTECTED_EXEC_EVENTS_MAX_DEFAULT, requires = "source_built_fixed_point")]
+        proof_exec_events_max: u32,
+
+        /// Maximum native source records recorded in the immutable plan.
+        #[arg(long, default_value_t = SOURCE_BUILT_FIXED_POINT_SOURCE_RECORDS_MAX_DEFAULT, requires = "source_built_fixed_point")]
+        proof_source_records_max: u32,
+
         /// Build Mantle through native Rust topology execution without invoking Cargo.
         #[arg(long)]
         cargo_free: bool,
@@ -740,8 +791,8 @@ enum Command {
         #[arg(long, requires = "cargo_free")]
         fixed_point: bool,
 
-        /// Output directory for --cargo-free binary and receipt evidence.
-        #[arg(long, requires = "cargo_free")]
+        /// Output directory for Cargo-free or source-built fixed-point evidence.
+        #[arg(long)]
         out: Option<PathBuf>,
 
         /// rustc executable for --cargo-free topology execution.
@@ -2615,6 +2666,10 @@ pub enum SourceBundleAction {
         /// Bootstrap source archive/root payload; repeat for multiple inputs
         #[arg(long = "bootstrap-source")]
         bootstrap_sources: Vec<std::path::PathBuf>,
+
+        /// Exact authenticated StageX source-bundle manifest for source-built fixed-point mode
+        #[arg(long = "stagex-source-bundle")]
+        stagex_source_bundle: Option<std::path::PathBuf>,
 
         /// Mantle source tree for self-build proof mode
         #[arg(long = "mantle-source")]
@@ -6990,6 +7045,17 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             bootstrap_busybox_path,
             offline_source_manifest_blake3,
             offline_source_state_dir,
+            source_built_fixed_point,
+            source_profile,
+            expected_source_profile_blake3,
+            expected_stagex_lineage_blake3,
+            expected_native_provider_blake3,
+            proof_bwrap,
+            proof_sandbox_shell,
+            proof_elapsed_seconds_max,
+            proof_disk_bytes_max,
+            proof_exec_events_max,
+            proof_source_records_max,
             cargo_free,
             fixed_point,
             out,
@@ -7016,6 +7082,17 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             bootstrap_busybox_path: bootstrap_busybox_path.as_deref(),
             offline_source_manifest_blake3: offline_source_manifest_blake3.as_deref(),
             offline_source_state_dir: offline_source_state_dir.as_deref(),
+            source_built_fixed_point: *source_built_fixed_point,
+            source_profile: source_profile.as_deref(),
+            expected_source_profile_blake3: expected_source_profile_blake3.as_deref(),
+            expected_stagex_lineage_blake3: expected_stagex_lineage_blake3.as_deref(),
+            expected_native_provider_blake3: expected_native_provider_blake3.as_deref(),
+            proof_bwrap: proof_bwrap.as_deref(),
+            proof_sandbox_shell: proof_sandbox_shell.as_deref(),
+            proof_elapsed_seconds_max: *proof_elapsed_seconds_max,
+            proof_disk_bytes_max: *proof_disk_bytes_max,
+            proof_exec_events_max: *proof_exec_events_max,
+            proof_source_records_max: *proof_source_records_max,
             cargo_free: *cargo_free,
             fixed_point: *fixed_point,
             out: out.as_deref(),
@@ -7044,6 +7121,17 @@ struct SelfBuildCommandRequest<'a> {
     bootstrap_busybox_path: Option<&'a Path>,
     offline_source_manifest_blake3: Option<&'a str>,
     offline_source_state_dir: Option<&'a Path>,
+    source_built_fixed_point: bool,
+    source_profile: Option<&'a Path>,
+    expected_source_profile_blake3: Option<&'a str>,
+    expected_stagex_lineage_blake3: Option<&'a str>,
+    expected_native_provider_blake3: Option<&'a str>,
+    proof_bwrap: Option<&'a Path>,
+    proof_sandbox_shell: Option<&'a Path>,
+    proof_elapsed_seconds_max: u64,
+    proof_disk_bytes_max: u64,
+    proof_exec_events_max: u32,
+    proof_source_records_max: u32,
     cargo_free: bool,
     fixed_point: bool,
     out: Option<&'a Path>,
@@ -7056,10 +7144,64 @@ struct SelfBuildCommandRequest<'a> {
 fn run_self_build_command(request: SelfBuildCommandRequest<'_>) -> Result<(), RunError> {
     debug_assert!(request.ctx.store_prefix.starts_with('/'));
     debug_assert!(!request.rustc.as_os_str().is_empty());
+    if request.source_built_fixed_point {
+        return run_source_built_fixed_point(&request);
+    }
     if request.cargo_free {
         return run_cargo_free_self_build(&request);
     }
     run_legacy_self_build(&request)
+}
+
+fn run_source_built_fixed_point(request: &SelfBuildCommandRequest<'_>) -> Result<(), RunError> {
+    let source_profile = request
+        .source_profile
+        .ok_or_else(|| RunError::Build("--source-built-fixed-point requires --source-profile".to_string()))?;
+    let expected_source_profile_blake3 = request.expected_source_profile_blake3.ok_or_else(|| {
+        RunError::Build("--source-built-fixed-point requires --expected-source-profile-blake3".to_string())
+    })?;
+    let expected_stagex_lineage_blake3 = request.expected_stagex_lineage_blake3.ok_or_else(|| {
+        RunError::Build("--source-built-fixed-point requires --expected-stagex-lineage-blake3".to_string())
+    })?;
+    let expected_native_provider_blake3 = request.expected_native_provider_blake3.ok_or_else(|| {
+        RunError::Build("--source-built-fixed-point requires --expected-native-provider-blake3".to_string())
+    })?;
+    let output_dir = request
+        .out
+        .ok_or_else(|| RunError::Build("--source-built-fixed-point requires --out".to_string()))?;
+    let proof_bwrap = request
+        .proof_bwrap
+        .ok_or_else(|| RunError::Build("--source-built-fixed-point requires --proof-bwrap".to_string()))?;
+    let proof_sandbox_shell = request
+        .proof_sandbox_shell
+        .ok_or_else(|| RunError::Build("--source-built-fixed-point requires --proof-sandbox-shell".to_string()))?;
+    if request.hermeticity.impure {
+        return Err(RunError::Build("--source-built-fixed-point rejects --impure".to_string()));
+    }
+    if request.no_host_tools || request.no_verify || request.fixed_point {
+        return Err(RunError::Build(
+            "--source-built-fixed-point rejects legacy --no-host-tools, --no-verify, and --fixed-point flags"
+                .to_string(),
+        ));
+    }
+    source_built_fixed_point_shell::cmd_source_built_fixed_point(
+        source_built_fixed_point_shell::SourceBuiltFixedPointOptions {
+            source_profile,
+            expected_source_profile_blake3,
+            expected_stagex_lineage_blake3,
+            expected_native_provider_blake3,
+            output_dir,
+            bwrap: proof_bwrap,
+            sandbox_shell: proof_sandbox_shell,
+            jobs: request.jobs.unwrap_or(SOURCE_BUILT_FIXED_POINT_JOBS_DEFAULT),
+            elapsed_seconds_max: request.proof_elapsed_seconds_max,
+            disk_bytes_max: request.proof_disk_bytes_max,
+            protected_exec_events_max: request.proof_exec_events_max,
+            source_records_max: request.proof_source_records_max,
+            verbose: request.ctx.verbose,
+            json: request.ctx.json,
+        },
+    )
 }
 
 fn run_cargo_free_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<(), RunError> {
@@ -9422,6 +9564,51 @@ let Plan = {
                 ..
             }
         }));
+    }
+
+    #[test]
+    fn self_build_cli_accepts_source_built_fixed_point_authority() {
+        const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let args = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "self-build",
+            "--source-built-fixed-point",
+            "--source-profile",
+            "/tmp/source-profile.json",
+            "--expected-source-profile-blake3",
+            DIGEST,
+            "--expected-stagex-lineage-blake3",
+            DIGEST,
+            "--expected-native-provider-blake3",
+            DIGEST,
+            "--proof-bwrap",
+            "/tmp/bwrap",
+            "--proof-sandbox-shell",
+            "/tmp/busybox",
+            "--out",
+            "/tmp/source-built-proof",
+        ]))
+        .expect("CLI parser test");
+
+        assert!(matches!(args.command, Command::SelfBuild {
+            source_built_fixed_point: true,
+            cargo_free: false,
+            source_profile: Some(_),
+            out: Some(_),
+            ..
+        }));
+    }
+
+    #[test]
+    fn self_build_cli_rejects_source_built_and_legacy_cargo_free_modes_together() {
+        let result = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "self-build",
+            "--source-built-fixed-point",
+            "--cargo-free",
+        ]));
+
+        assert!(result.is_err());
     }
 
     #[test]

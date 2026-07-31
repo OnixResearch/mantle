@@ -5,7 +5,7 @@
 # assumption outside the installed host-tool claim.
 
 let crunch = import "lib.ncl" in
-let native_provider = import "seed-full-admitted.ncl" in
+let native_provider = crunch.derivationFile "seed-full-toolchain.ncl" in
 # Upstream archive SHA-256: dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3.
 let make_src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/make/make-4.4.1.tar.gz",

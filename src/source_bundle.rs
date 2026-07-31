@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::fs;
+use std::io::BufReader;
+use std::io::BufWriter;
 use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Write;
@@ -121,6 +123,7 @@ const BOOTSTRAP_PROFILE_CLASS_PROVIDER_MANIFEST: &str = "provider-manifest";
 const BOOTSTRAP_PROFILE_CLASS_STAGEX_SEED: &str = "stagex-seed";
 const BOOTSTRAP_PROFILE_CLASS_STAGEX_LINEAGE: &str = "stagex-lineage";
 const BOOTSTRAP_PROFILE_CLASS_BOOTSTRAP_SOURCE: &str = "bootstrap-source";
+const BOOTSTRAP_PROFILE_CLASS_STAGEX_SOURCE_BUNDLE: &str = "stagex-source-bundle";
 const BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE: &str = "mantle-source";
 const BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS: &str = "vendored-cargo-inputs";
 const BOOTSTRAP_PROFILE_CLASS_TOOLCHAIN_SOURCE_ROOT: &str = "toolchain-source-root";
@@ -354,6 +357,7 @@ pub struct BootstrapSourceBundleProfileInput {
     pub provider_archive: PathBuf,
     pub provider_manifest: PathBuf,
     pub bootstrap_sources: Vec<PathBuf>,
+    pub stagex_source_bundle: Option<PathBuf>,
     pub mantle_source: Option<PathBuf>,
     pub vendor_deps: Option<PathBuf>,
     pub toolchain_source_root: Option<PathBuf>,
@@ -458,6 +462,8 @@ struct SourceRecordPathRequest<'a> {
     metadata: BTreeMap<String, String>,
     adapter: Option<SourceAdapterMetadata>,
     is_skipping_git_dir: bool,
+    allow_large_file_chunks: bool,
+    root_entry_allowlist: Option<&'a [&'a str]>,
 }
 
 struct BootstrapProfileRecordRequest<'a> {
@@ -637,6 +643,7 @@ fn bootstrap_profile_records_capacity(input: &BootstrapSourceBundleProfileInput)
         .checked_add(input.supplemental_records.len())
         .ok_or_else(|| RunError::Internal("bootstrap profile record capacity overflow".to_string()))?;
     for is_present in [
+        input.stagex_source_bundle.is_some(),
         input.mantle_source.is_some(),
         input.vendor_deps.is_some(),
         input.toolchain_source_root.is_some(),
@@ -741,6 +748,12 @@ fn append_optional_bootstrap_profile_records(
     let initial_records_len = records.len();
     let optional_records = [
         (
+            SourceRecordKind::ProofInput,
+            "stagex-source-bundle",
+            input.stagex_source_bundle.as_deref(),
+            BOOTSTRAP_PROFILE_CLASS_STAGEX_SOURCE_BUNDLE,
+        ),
+        (
             SourceRecordKind::LocalPath,
             "mantle-source-tree",
             input.mantle_source.as_deref(),
@@ -807,6 +820,74 @@ pub fn bootstrap_source_bundle_profile_report(
         provider_kind,
         non_claim: BOOTSTRAP_SOURCE_PROFILE_NON_CLAIM,
     })
+}
+
+pub(crate) struct SourceBuiltFixedPointProfileRecords<'a> {
+    pub(crate) stagex_seed: &'a SourceRecord,
+    pub(crate) stagex_lineage: &'a SourceRecord,
+    pub(crate) native_source_manifest: &'a SourceRecord,
+    pub(crate) stagex_source_bundle: &'a SourceRecord,
+    pub(crate) mantle_source: &'a SourceRecord,
+    pub(crate) vendor_inputs: &'a SourceRecord,
+    pub(crate) rust_source_archive_set: &'a SourceRecord,
+    pub(crate) native_source_records: Vec<&'a SourceRecord>,
+}
+
+pub(crate) fn source_built_fixed_point_profile_records(
+    manifest: &SourceBundleManifest,
+) -> Result<SourceBuiltFixedPointProfileRecords<'_>, RunError> {
+    bootstrap_source_bundle_profile_report(manifest, BootstrapSourceBundleMode::SourceBuiltFixedPoint)?;
+    let stagex_seed = require_single_profile_record(manifest, BOOTSTRAP_PROFILE_CLASS_STAGEX_SEED)?;
+    let stagex_lineage = require_single_profile_record(manifest, BOOTSTRAP_PROFILE_CLASS_STAGEX_LINEAGE)?;
+    let native_source_manifest = require_single_profile_record(manifest, BOOTSTRAP_PROFILE_CLASS_BOOTSTRAP_SOURCE)?;
+    let stagex_source_bundle = require_single_profile_record(manifest, BOOTSTRAP_PROFILE_CLASS_STAGEX_SOURCE_BUNDLE)?;
+    let mantle_source = require_single_profile_record(manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)?;
+    let vendor_inputs = require_single_profile_record(manifest, BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS)?;
+    let rust_source_archive_set = require_single_profile_record(manifest, BOOTSTRAP_PROFILE_CLASS_PROOF_INPUT)?;
+    let native_source_records: Vec<&SourceRecord> = manifest
+        .records
+        .iter()
+        .filter(|record| !record.metadata.contains_key(RECORD_METADATA_PROFILE_CLASS_KEY))
+        .collect();
+    if native_source_records.is_empty() {
+        return Err(RunError::Internal(
+            "source-built-fixed-point profile has no materialized native source records".to_string(),
+        ));
+    }
+    assert!(native_source_records.iter().all(|record| !record.files.is_empty()));
+    debug_assert_eq!(
+        stagex_seed.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str),
+        Some(BOOTSTRAP_PROFILE_CLASS_STAGEX_SEED)
+    );
+    Ok(SourceBuiltFixedPointProfileRecords {
+        stagex_seed,
+        stagex_lineage,
+        native_source_manifest,
+        stagex_source_bundle,
+        mantle_source,
+        vendor_inputs,
+        rust_source_archive_set,
+        native_source_records,
+    })
+}
+
+fn require_single_profile_record<'a>(
+    manifest: &'a SourceBundleManifest,
+    class: &str,
+) -> Result<&'a SourceRecord, RunError> {
+    let mut matches = manifest
+        .records
+        .iter()
+        .filter(|record| record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str) == Some(class));
+    let Some(record) = matches.next() else {
+        return Err(RunError::Internal(format!("source-built-fixed-point profile is missing record class {class}")));
+    };
+    if matches.next().is_some() {
+        return Err(RunError::Internal(format!("source-built-fixed-point profile has duplicate record class {class}")));
+    }
+    assert!(!record.files.is_empty());
+    debug_assert_eq!(record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str), Some(class));
+    Ok(record)
 }
 
 #[cfg(test)]
@@ -893,7 +974,10 @@ fn canonicalize_source_specs(specs: &[SourceSpec], store_prefix: &str) -> Result
     Ok(records)
 }
 
-fn assemble_source_bundle(records: Vec<SourceRecord>, store_prefix: &str) -> Result<SourceBundleManifest, RunError> {
+pub(crate) fn assemble_source_bundle(
+    records: Vec<SourceRecord>,
+    store_prefix: &str,
+) -> Result<SourceBundleManifest, RunError> {
     if records.is_empty() {
         return Err(RunError::Internal("source bundle requires at least one --source or --build-root".to_string()));
     }
@@ -1058,17 +1142,28 @@ pub fn plan_report(manifest: &SourceBundleManifest) -> Result<SourceBundlePlanRe
 
 pub fn write_source_bundle(path: &Path, manifest: &SourceBundleManifest) -> Result<(), RunError> {
     validate_manifest(manifest)?;
-    let rendered = serde_json::to_string_pretty(manifest)
-        .map_err(|err| RunError::Internal(format!("serializing source bundle: {err}")))?;
-    fs::write(path, format!("{rendered}\n"))
-        .map_err(|err| RunError::Internal(format!("writing source bundle {}: {err}", path.display())))
+    let file = fs::File::create(path)
+        .map_err(|error| RunError::Internal(format!("creating source bundle {}: {error}", path.display())))?;
+    let mut writer = BufWriter::new(file);
+    serde_json::to_writer_pretty(&mut writer, manifest)
+        .map_err(|error| RunError::Internal(format!("serializing source bundle: {error}")))?;
+    writer
+        .write_all(b"\n")
+        .map_err(|error| RunError::Internal(format!("writing source bundle {}: {error}", path.display())))?;
+    writer
+        .flush()
+        .map_err(|error| RunError::Internal(format!("flushing source bundle {}: {error}", path.display())))?;
+    assert!(path.is_file());
+    debug_assert!(fs::metadata(path).is_ok_and(|metadata| metadata.len() > 0));
+    Ok(())
 }
 
 pub fn read_source_bundle(path: &Path) -> Result<SourceBundleManifest, RunError> {
-    let bytes =
-        fs::read(path).map_err(|err| RunError::Internal(format!("reading source bundle {}: {err}", path.display())))?;
-    let manifest = serde_json::from_slice::<SourceBundleManifest>(&bytes)
-        .map_err(|err| RunError::Internal(format!("parsing source bundle {}: {err}", path.display())))?;
+    let file = fs::File::open(path)
+        .map_err(|error| RunError::Internal(format!("reading source bundle {}: {error}", path.display())))?;
+    let reader = BufReader::new(file);
+    let manifest = serde_json::from_reader::<_, SourceBundleManifest>(reader)
+        .map_err(|error| RunError::Internal(format!("parsing source bundle {}: {error}", path.display())))?;
     validate_manifest(&manifest)?;
     Ok(manifest)
 }
@@ -1516,13 +1611,20 @@ fn canonicalize_source_spec(spec: &SourceSpec, store_prefix: &str) -> Result<Sou
         metadata: BTreeMap::new(),
         adapter: spec.adapter.clone(),
         is_skipping_git_dir: false,
+        allow_large_file_chunks: false,
+        root_entry_allowlist: None,
     })
 }
 
 fn source_record_from_path(request: SourceRecordPathRequest<'_>) -> Result<SourceRecord, RunError> {
     validate_identity(&request.identity)?;
     validate_adapter_metadata(request.adapter.as_ref())?;
-    let (files, payload_bytes) = canonicalize_payload_entries(request.path, request.is_skipping_git_dir)?;
+    let (files, payload_bytes) = canonicalize_payload_entries_with_policy(
+        request.path,
+        request.is_skipping_git_dir,
+        request.allow_large_file_chunks,
+        request.root_entry_allowlist,
+    )?;
     let content_blake3 = digest_source_record_content(&request.kind, &request.metadata, &files)?;
     Ok(SourceRecord {
         store_prefix: record_store_prefix(&request.kind, request.store_prefix),
@@ -1546,6 +1648,24 @@ fn validate_bootstrap_profile_input(
     if input.mode.requires_bootstrap_sources() && input.bootstrap_sources.is_empty() {
         return Err(RunError::Internal("bootstrap profile requires at least one bootstrap source archive".to_string()));
     }
+    if input.mode == BootstrapSourceBundleMode::SourceBuiltFixedPoint {
+        if input.bootstrap_sources.len() != 1 {
+            return Err(RunError::Internal(
+                "source-built-fixed-point profile requires exactly one original native --bootstrap-source manifest"
+                    .to_string(),
+            ));
+        }
+        if input.stagex_source_bundle.is_none() {
+            return Err(RunError::Internal(
+                "source-built-fixed-point profile requires --stagex-source-bundle".to_string(),
+            ));
+        }
+        if input.proof_inputs.len() != 1 {
+            return Err(RunError::Internal(
+                "source-built-fixed-point profile requires exactly one Rust archive-set --proof-input".to_string(),
+            ));
+        }
+    }
     if input.mode.requires_full_self_build_inputs() {
         if input.mantle_source.is_none() {
             return Err(RunError::Internal("self-build bootstrap profile requires --mantle-source".to_string()));
@@ -1568,6 +1688,7 @@ fn validate_bootstrap_profile_input(
     validate_supplemental_profile_records(input)?;
     assert!(store_prefix.starts_with('/'));
     assert!(!input.mode.requires_bootstrap_sources() || !input.bootstrap_sources.is_empty());
+    assert!(input.mode != BootstrapSourceBundleMode::SourceBuiltFixedPoint || input.stagex_source_bundle.is_some());
     assert!(!input.mode.requires_vendor_inputs() || input.vendor_deps.is_some());
     assert!(!input.mode.requires_supplemental_fetch_closure() || !input.supplemental_records.is_empty());
     Ok(())
@@ -1606,7 +1727,13 @@ fn bootstrap_profile_record(request: BootstrapProfileRecordRequest<'_>) -> Resul
         metadata.insert(RECORD_METADATA_PROVIDER_KIND_KEY.to_string(), provider_metadata.provider_kind.clone());
         metadata.insert(RECORD_METADATA_PROVIDER_SCHEMA_KEY.to_string(), provider_metadata.schema_version.clone());
     }
-    let is_skipping_git_dir = request.class == BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE;
+    let is_mantle_source = request.class == BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE;
+    let mantle_source_entries = crate::self_build::STAGED_SOURCE_TOP_LEVEL_ENTRIES
+        .iter()
+        .copied()
+        .filter(|entry| *entry != VENDOR_DEPS_DIR_NAME)
+        .collect::<Vec<_>>();
+    let root_entry_allowlist = is_mantle_source.then_some(mantle_source_entries.as_slice());
     source_record_from_path(SourceRecordPathRequest {
         kind: request.kind,
         identity: request.identity,
@@ -1614,7 +1741,9 @@ fn bootstrap_profile_record(request: BootstrapProfileRecordRequest<'_>) -> Resul
         store_prefix: request.store_prefix,
         metadata,
         adapter: None,
-        is_skipping_git_dir,
+        is_skipping_git_dir: is_mantle_source,
+        allow_large_file_chunks: request.mode == BootstrapSourceBundleMode::SourceBuiltFixedPoint,
+        root_entry_allowlist,
     })
 }
 
@@ -1716,20 +1845,21 @@ fn canonicalize_payload_entries(
     path: &Path,
     is_skipping_git_dir: bool,
 ) -> Result<(Vec<SourceFileEntry>, u64), RunError> {
-    canonicalize_payload_entries_with_policy(path, is_skipping_git_dir, false)
+    canonicalize_payload_entries_with_policy(path, is_skipping_git_dir, false, None)
 }
 
 fn canonicalize_fetch_payload_entries(
     path: &Path,
     is_skipping_git_dir: bool,
 ) -> Result<(Vec<SourceFileEntry>, u64), RunError> {
-    canonicalize_payload_entries_with_policy(path, is_skipping_git_dir, true)
+    canonicalize_payload_entries_with_policy(path, is_skipping_git_dir, true, None)
 }
 
 fn canonicalize_payload_entries_with_policy(
     path: &Path,
     is_skipping_git_dir: bool,
     allow_large_file_chunks: bool,
+    root_entry_allowlist: Option<&[&str]>,
 ) -> Result<(Vec<SourceFileEntry>, u64), RunError> {
     let root = fs::canonicalize(path)
         .map_err(|err| RunError::Internal(format!("canonicalizing source path {}: {err}", path.display())))?;
@@ -1749,7 +1879,14 @@ fn canonicalize_payload_entries_with_policy(
         payload_bytes: 0,
         visited_nodes_len: 0,
     };
-    collect_source_entries(&relative_root, &root, is_skipping_git_dir, allow_large_file_chunks, &mut collection)?;
+    collect_source_entries(
+        &relative_root,
+        &root,
+        is_skipping_git_dir,
+        allow_large_file_chunks,
+        root_entry_allowlist,
+        &mut collection,
+    )?;
     collection
         .files
         .sort_by(|left, right| left.path.cmp(&right.path).then(left.chunk_index.cmp(&right.chunk_index)));
@@ -1763,6 +1900,7 @@ fn collect_source_entries(
     current: &Path,
     is_skipping_git_dir: bool,
     allow_large_file_chunks: bool,
+    root_entry_allowlist: Option<&[&str]>,
     collection: &mut SourceEntryCollection,
 ) -> Result<(), RunError> {
     assert!(current.starts_with(root));
@@ -1782,7 +1920,8 @@ fn collect_source_entries(
         let metadata = fs::symlink_metadata(&next_path)
             .map_err(|err| RunError::Internal(format!("reading source metadata {}: {err}", next_path.display())))?;
         if metadata.is_dir() {
-            let children = read_sorted_source_children(&next_path, is_skipping_git_dir)?;
+            let allowlist = (next_path == root).then_some(root_entry_allowlist).flatten();
+            let children = read_sorted_source_children(&next_path, is_skipping_git_dir, allowlist)?;
             reserve_pending_source_paths(&mut pending_paths, children.len())?;
             pending_paths.extend(children.into_iter().rev());
             continue;
@@ -1795,7 +1934,11 @@ fn collect_source_entries(
     Err(RunError::Internal(format!("source entry walk exceeds {MAX_SOURCE_FILES_PER_RECORD} nodes")))
 }
 
-fn read_sorted_source_children(current: &Path, is_skipping_git_dir: bool) -> Result<Vec<PathBuf>, RunError> {
+fn read_sorted_source_children(
+    current: &Path,
+    is_skipping_git_dir: bool,
+    entry_allowlist: Option<&[&str]>,
+) -> Result<Vec<PathBuf>, RunError> {
     assert!(current.is_absolute());
     let entries = fs::read_dir(current)
         .map_err(|err| RunError::Internal(format!("reading source dir {}: {err}", current.display())))?;
@@ -1803,8 +1946,15 @@ fn read_sorted_source_children(current: &Path, is_skipping_git_dir: bool) -> Res
     for entry in entries {
         let entry = entry
             .map_err(|err| RunError::Internal(format!("reading source dir entry {}: {err}", current.display())))?;
-        if is_skipping_git_dir && entry.file_name().to_str() == Some(DOT_GIT_DIR_NAME) {
+        let entry_name = entry.file_name();
+        if is_skipping_git_dir && entry_name.to_str() == Some(DOT_GIT_DIR_NAME) {
             continue;
+        }
+        if let Some(allowlist) = entry_allowlist {
+            let is_allowed = entry_name.to_str().is_some_and(|name| allowlist.contains(&name));
+            if !is_allowed {
+                continue;
+            }
         }
         if children.len() >= MAX_SOURCE_FILES_PER_RECORD {
             return Err(RunError::Internal(format!("source entry count exceeds {MAX_SOURCE_FILES_PER_RECORD}")));
@@ -2111,11 +2261,30 @@ fn hash_source_entries(hasher: &mut blake3::Hasher, files: &[SourceFileEntry]) -
 }
 
 fn digest_manifest_without_digest(manifest: &SourceBundleManifest) -> Result<String, RunError> {
-    let mut clone = manifest.clone();
-    clone.manifest_blake3.clear();
-    let encoded = serde_json::to_vec(&clone)
-        .map_err(|err| RunError::Internal(format!("serializing source manifest for digest: {err}")))?;
-    Ok(blake3::hash(&encoded).to_hex().to_string())
+    #[derive(Serialize)]
+    struct DigestView<'a> {
+        format: &'a str,
+        version: u32,
+        store_prefix: &'a str,
+        roots: &'a [String],
+        records: &'a [SourceRecord],
+        manifest_blake3: &'static str,
+        non_claim: &'a str,
+    }
+
+    let view = DigestView {
+        format: &manifest.format,
+        version: manifest.version,
+        store_prefix: &manifest.store_prefix,
+        roots: &manifest.roots,
+        records: &manifest.records,
+        manifest_blake3: "",
+        non_claim: &manifest.non_claim,
+    };
+    let mut hasher = blake3::Hasher::new();
+    serde_json::to_writer(Blake3Writer(&mut hasher), &view)
+        .map_err(|error| RunError::Internal(format!("serializing source manifest for digest: {error}")))?;
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
 fn digest_virtual_source_record(
@@ -2784,19 +2953,31 @@ fn digest_offline_preflight_state(
     manifest_blake3: Option<&str>,
     matching_records: &[SourceRecord],
 ) -> Result<String, RunError> {
-    let mut records = matching_records.to_vec();
-    records.sort_by_key(record_sort_key);
+    let mut records = matching_records.iter().collect::<Vec<_>>();
+    records.sort_by_key(|record| record_sort_key(record));
     let mut hasher = blake3::Hasher::new();
     hasher.update(SOURCE_OFFLINE_PREFLIGHT_STATE_MARKER);
     hasher.update(manifest_blake3.unwrap_or("none").as_bytes());
     hasher.update(b"\n");
-    for record in &records {
-        let encoded = serde_json::to_vec(record)
-            .map_err(|err| RunError::Internal(format!("serializing source preflight state: {err}")))?;
-        hasher.update(&encoded);
+    for record in records {
+        serde_json::to_writer(Blake3Writer(&mut hasher), record)
+            .map_err(|error| RunError::Internal(format!("serializing source preflight state: {error}")))?;
         hasher.update(b"\n");
     }
     Ok(hasher.finalize().to_hex().to_string())
+}
+
+struct Blake3Writer<'a>(&'a mut blake3::Hasher);
+
+impl Write for Blake3Writer<'_> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.update(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 fn source_records_dir(state_dir: &Path) -> PathBuf {
@@ -2808,13 +2989,7 @@ fn source_pins_dir(state_dir: &Path) -> PathBuf {
 }
 
 fn write_record_atomically(target: &Path, record: &SourceRecord) -> Result<(), RunError> {
-    let rendered = serde_json::to_string_pretty(record)
-        .map_err(|err| RunError::Internal(format!("serializing source record: {err}")))?;
-    let tmp = target.with_extension(TEMP_FILE_EXTENSION);
-    fs::write(&tmp, format!("{rendered}\n"))
-        .map_err(|err| RunError::Internal(format!("writing source record temp {}: {err}", tmp.display())))?;
-    fs::rename(&tmp, target)
-        .map_err(|err| RunError::Internal(format!("committing source record {}: {err}", target.display())))
+    write_json_atomically(target, record, "source record")
 }
 
 fn write_pin_atomically(state_dir: &Path, manifest: &SourceBundleManifest) -> Result<(), RunError> {
@@ -2822,20 +2997,31 @@ fn write_pin_atomically(state_dir: &Path, manifest: &SourceBundleManifest) -> Re
     fs::create_dir_all(&pins_dir)
         .map_err(|err| RunError::Internal(format!("creating source pins dir {}: {err}", pins_dir.display())))?;
     let target = pins_dir.join(format!("{}.json", manifest.manifest_blake3));
+    write_json_atomically(&target, manifest, "source pin")
+}
+
+fn write_json_atomically<T: Serialize>(target: &Path, value: &T, label: &str) -> Result<(), RunError> {
     let tmp = target.with_extension(TEMP_FILE_EXTENSION);
-    let rendered = serde_json::to_string_pretty(manifest)
-        .map_err(|err| RunError::Internal(format!("serializing source pin: {err}")))?;
-    fs::write(&tmp, format!("{rendered}\n"))
-        .map_err(|err| RunError::Internal(format!("writing source pin temp {}: {err}", tmp.display())))?;
-    fs::rename(&tmp, &target)
-        .map_err(|err| RunError::Internal(format!("committing source pin {}: {err}", target.display())))
+    let file = fs::File::create(&tmp)
+        .map_err(|error| RunError::Internal(format!("creating {label} temp {}: {error}", tmp.display())))?;
+    let mut writer = BufWriter::new(file);
+    serde_json::to_writer_pretty(&mut writer, value)
+        .map_err(|error| RunError::Internal(format!("serializing {label}: {error}")))?;
+    writer
+        .write_all(b"\n")
+        .map_err(|error| RunError::Internal(format!("writing {label} temp {}: {error}", tmp.display())))?;
+    writer
+        .flush()
+        .map_err(|error| RunError::Internal(format!("flushing {label} temp {}: {error}", tmp.display())))?;
+    fs::rename(&tmp, target)
+        .map_err(|error| RunError::Internal(format!("committing {label} {}: {error}", target.display())))
 }
 
 fn read_record(path: &Path) -> Result<SourceRecord, RunError> {
-    let bytes =
-        fs::read(path).map_err(|err| RunError::Internal(format!("reading source record {}: {err}", path.display())))?;
-    let record = serde_json::from_slice(&bytes)
-        .map_err(|err| RunError::Internal(format!("parsing source record {}: {err}", path.display())))?;
+    let file = fs::File::open(path)
+        .map_err(|error| RunError::Internal(format!("reading source record {}: {error}", path.display())))?;
+    let record = serde_json::from_reader(BufReader::new(file))
+        .map_err(|error| RunError::Internal(format!("parsing source record {}: {error}", path.display())))?;
     validate_source_record(&record)?;
     Ok(record)
 }
@@ -2851,10 +3037,10 @@ fn read_pinned_source_records(state_dir: &Path) -> Result<Vec<SourceRecord>, Run
     assert!(pins_dir.starts_with(state_dir));
     let mut records = Vec::new();
     for path in &paths {
-        let bytes = fs::read(path)
-            .map_err(|err| RunError::Internal(format!("reading source pin {}: {err}", path.display())))?;
-        let manifest = serde_json::from_slice::<SourceBundleManifest>(&bytes)
-            .map_err(|err| RunError::Internal(format!("parsing source pin {}: {err}", path.display())))?;
+        let file = fs::File::open(path)
+            .map_err(|error| RunError::Internal(format!("reading source pin {}: {error}", path.display())))?;
+        let manifest = serde_json::from_reader::<_, SourceBundleManifest>(BufReader::new(file))
+            .map_err(|error| RunError::Internal(format!("parsing source pin {}: {error}", path.display())))?;
         validate_manifest(&manifest)?;
         let additional_len = manifest.records.len();
         let next_len = records
@@ -3880,6 +4066,24 @@ fn fixed_fetcher_source_record(derivation: &crunch_glue::CrunchDerivation) -> Re
     Ok(Some(virtual_source_record(kind, id_prefix, None, metadata)?))
 }
 
+pub(crate) fn import_constructed_store_path_source(
+    logical_store_path: &str,
+    physical_path: &Path,
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<SourceBundleImportReport, RunError> {
+    let planned = store_path_source_record(StorePathSourceRequest {
+        source_path: logical_store_path,
+        store_prefix,
+    })?;
+    let materialized = materialize_source_record_from_path(&planned, physical_path, false)?;
+    let manifest = assemble_source_bundle(vec![materialized], store_prefix)?;
+    let report = import_source_bundle(&manifest, state_dir, true)?;
+    assert_eq!(report.imported_count, 1);
+    debug_assert!(report.pinned);
+    Ok(report)
+}
+
 fn store_path_source_record(request: StorePathSourceRequest<'_>) -> Result<SourceRecord, RunError> {
     if !request.source_path.starts_with('/') {
         return Err(RunError::Internal(format!(
@@ -3959,6 +4163,7 @@ struct BootstrapProfileCliInput {
     provider_archive: PathBuf,
     provider_manifest: PathBuf,
     bootstrap_sources: Vec<PathBuf>,
+    stagex_source_bundle: Option<PathBuf>,
     mantle_source: Option<PathBuf>,
     vendor_deps: Option<PathBuf>,
     toolchain_source_root: Option<PathBuf>,
@@ -3979,6 +4184,7 @@ fn cmd_bootstrap_profile(
         provider_archive: input.provider_archive,
         provider_manifest: input.provider_manifest,
         bootstrap_sources: input.bootstrap_sources,
+        stagex_source_bundle: input.stagex_source_bundle,
         mantle_source: input.mantle_source,
         vendor_deps: input.vendor_deps,
         toolchain_source_root: input.toolchain_source_root,
@@ -4007,17 +4213,35 @@ fn read_supplemental_bundle_records(paths: &[PathBuf]) -> Result<Vec<SourceRecor
     let mut records = Vec::new();
     for path in paths {
         let manifest = read_source_bundle(path)?;
-        let next_len = records
-            .len()
-            .checked_add(manifest.records.len())
-            .ok_or_else(|| RunError::Internal("supplemental source record count overflow".to_string()))?;
-        if next_len > MAX_SOURCE_RECORDS {
-            return Err(RunError::Internal(format!("supplemental source record count exceeds {MAX_SOURCE_RECORDS}")));
-        }
+        records
+            .try_reserve(manifest.records.len())
+            .map_err(|error| RunError::Internal(format!("reserving supplemental source records: {error}")))?;
         records.extend(manifest.records);
     }
-    assert!(records.len() <= MAX_SOURCE_RECORDS);
-    Ok(records)
+    merge_identical_source_records(records)
+}
+
+fn merge_identical_source_records(records: Vec<SourceRecord>) -> Result<Vec<SourceRecord>, RunError> {
+    let mut records_by_identity = BTreeMap::new();
+    for record in records {
+        if let Some(existing) = records_by_identity.get(&record.identity) {
+            if existing != &record {
+                return Err(RunError::Internal(format!(
+                    "supplemental source identity '{}' has conflicting records",
+                    record.identity
+                )));
+            }
+            continue;
+        }
+        if records_by_identity.len() >= MAX_SOURCE_RECORDS {
+            return Err(RunError::Internal(format!("supplemental source record count exceeds {MAX_SOURCE_RECORDS}")));
+        }
+        records_by_identity.insert(record.identity.clone(), record);
+    }
+    let merged = records_by_identity.into_values().collect::<Vec<_>>();
+    assert!(merged.len() <= MAX_SOURCE_RECORDS);
+    debug_assert!(merged.windows(2).all(|pair| pair[0].identity < pair[1].identity));
+    Ok(merged)
 }
 
 fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
@@ -4039,6 +4263,7 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             provider_archive,
             provider_manifest,
             bootstrap_sources,
+            stagex_source_bundle,
             mantle_source,
             vendor_deps,
             toolchain_source_root,
@@ -4052,6 +4277,7 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
                 provider_archive,
                 provider_manifest,
                 bootstrap_sources,
+                stagex_source_bundle,
                 mantle_source,
                 vendor_deps,
                 toolchain_source_root,
@@ -4723,6 +4949,8 @@ mod tests {
         write_provider_manifest(&provider_manifest, BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED);
         write_fixture(&bootstrap_source);
         write_fixture(&mantle_source);
+        write_fixture(&mantle_source.join(VENDOR_DEPS_DIR_NAME));
+        fs::write(mantle_source.join("not-build-input.txt"), b"excluded").unwrap();
         write_fixture(&vendor_deps);
         write_fixture(&toolchain);
         write_fixture(&proof);
@@ -4731,6 +4959,7 @@ mod tests {
             provider_archive,
             provider_manifest,
             bootstrap_sources: vec![bootstrap_source],
+            stagex_source_bundle: None,
             mantle_source: Some(mantle_source),
             vendor_deps: Some(vendor_deps),
             toolchain_source_root: Some(toolchain),
@@ -4755,7 +4984,8 @@ mod tests {
         input.mode = BootstrapSourceBundleMode::SourceBuiltFixedPoint;
         input.provider_archive = repo.join("bootstrap/seeds/AMD64/hex0-seed");
         input.provider_manifest = repo.join("bootstrap/stagex-transition-lineage.json");
-        input.bootstrap_sources = vec![native_source_manifest_path];
+        input.bootstrap_sources = vec![native_source_manifest_path.clone()];
+        input.stagex_source_bundle = Some(native_source_manifest_path);
         input.toolchain_source_root = None;
         input.supplemental_records = vec![supplemental];
         assert!(input.mantle_source.is_some());
@@ -4932,6 +5162,29 @@ mod tests {
         assert_eq!(source_fetch_override_kind(&record).unwrap(), crunch_build::FetchSourceOverrideKind::Tarball);
         assert!(!source_record_is_legacy_provider_fetch(&wrong_hash_record));
         assert!(source_fetch_override_kind(&wrong_hash_record).is_err());
+    }
+
+    #[test]
+    fn streaming_manifest_digest_matches_canonical_compact_json() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload");
+        fs::write(&payload, b"digest fixture").unwrap();
+        let manifest = plan_source_bundle(
+            &[SourceSpec {
+                kind: SourceRecordKind::LocalPath,
+                identity: "digest-fixture".to_string(),
+                path: payload,
+                adapter: None,
+            }],
+            "/mantle/store",
+        )
+        .unwrap();
+        let mut legacy_view = manifest.clone();
+        legacy_view.manifest_blake3.clear();
+        let expected = blake3::hash(&serde_json::to_vec(&legacy_view).unwrap()).to_hex().to_string();
+
+        assert_eq!(digest_manifest_without_digest(&manifest).unwrap(), expected);
+        assert_eq!(manifest.manifest_blake3, expected);
     }
 
     #[test]
@@ -5482,11 +5735,41 @@ mod tests {
                 == Some(BOOTSTRAP_PROFILE_CLASS_STAGEX_LINEAGE)
         }));
         assert!(manifest.records.iter().any(|record| record.kind == SourceRecordKind::ProofInput));
+        assert!(manifest.records.iter().any(|record| {
+            record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+                == Some(BOOTSTRAP_PROFILE_CLASS_BOOTSTRAP_SOURCE)
+        }));
+        let fixed_point_records = source_built_fixed_point_profile_records(&manifest).unwrap();
+        assert_eq!(fixed_point_records.native_source_manifest.identity, "bootstrap-source-0001");
+        let mantle_source_record = manifest
+            .records
+            .iter()
+            .find(|record| {
+                record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+                    == Some(BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)
+            })
+            .expect("Mantle source record");
+        assert!(mantle_source_record.files.iter().all(|file| file.path.starts_with("src/")));
+        assert!(!mantle_source_record.files.iter().any(|file| file.path.starts_with("vendor-deps/")));
+        assert!(!mantle_source_record.files.iter().any(|file| file.path == "not-build-input.txt"));
         assert!(manifest.records.iter().any(|record| record.kind == SourceRecordKind::LocalPath));
         assert!(manifest.records.iter().any(|record| record.kind == SourceRecordKind::PackageMirror));
         assert_eq!(manifest.records[hydration.provider_archive_record_index].identity, "stagex-seed");
         assert_eq!(manifest.records[hydration.provider_manifest_record_index].identity, "stagex-lineage");
         assert!(!manifest.records.iter().any(|record| record.identity.contains("imported-provider")));
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_fixed_point_profile_rejects_missing_native_manifest_authority() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut input = source_built_fixed_point_profile_fixture(temp.path());
+        input.bootstrap_sources.clear();
+
+        let error = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap_err();
+
+        assert!(error.to_string().contains("requires at least one bootstrap source archive"));
+        assert!(!error.to_string().contains("supplemental"));
     }
 
     // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
@@ -5501,6 +5784,33 @@ mod tests {
         assert!(error.to_string().contains("source-built-fixed-point"));
         assert!(error.to_string().contains("requires materialized --include-bundle"));
         assert!(!error.to_string().contains("provider output"));
+    }
+
+    #[test]
+    fn supplemental_bundle_merge_deduplicates_exact_records_and_rejects_conflicts() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload");
+        fs::write(&payload, b"source payload").unwrap();
+        let mut records = canonicalize_source_specs(
+            &[SourceSpec {
+                kind: SourceRecordKind::LocalPath,
+                identity: "shared-source".to_string(),
+                path: payload,
+                adapter: None,
+            }],
+            "/mantle/store",
+        )
+        .unwrap();
+        let record = records.pop().unwrap();
+
+        let merged = merge_identical_source_records(vec![record.clone(), record.clone()]).unwrap();
+        assert_eq!(merged, vec![record.clone()]);
+
+        let mut conflict = record;
+        conflict.content_blake3 = "f".repeat(conflict.content_blake3.len());
+        let error = merge_identical_source_records(vec![merged[0].clone(), conflict]).unwrap_err();
+        assert!(error.to_string().contains("conflicting records"));
+        assert!(error.to_string().contains("shared-source"));
     }
 
     // r[verify bootstrap_inventory.source_built_mantle_fixed_point]

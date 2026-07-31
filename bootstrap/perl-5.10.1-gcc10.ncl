@@ -5,8 +5,10 @@
 # binutils provider and declared source-built bootstrap tools.
 
 let crunch = import "lib.ncl" in
-let native_provider = import "seed-full-admitted.ncl" in
-let admitted_host_tools = import "full-source-rust-host-tools-admitted.ncl" in
+let native_provider = crunch.derivationFile "seed-full-toolchain.ncl" in
+let gnumake = crunch.derivationFile "make-4.4.1-gcc10.ncl" in
+let linux_headers = crunch.derivationFile "linux-headers-6.6-gcc10.ncl" in
+let busybox = crunch.derivationFile "busybox-1.37.0-gcc10.ncl" in
 # Upstream archive SHA-256: cb7f26ea4b2b28d6644354d87a269d01cac1b635287dae64e88eeafa24b44f35.
 let perl_src = crunch.fetchTarball {
   url = "https://www.cpan.org/src/5.0/perl-5.10.1.tar.gz",
@@ -252,9 +254,9 @@ EOF
   ],
   inputs = [
     native_provider,
-    admitted_host_tools.make,
-    admitted_host_tools.linux_headers,
-    admitted_host_tools.busybox,
+    gnumake,
+    linux_headers,
+    busybox,
     perl_src,
   ],
 } | crunch.Derivation

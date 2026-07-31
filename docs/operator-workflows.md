@@ -387,26 +387,51 @@ mantle source bundle bootstrap-profile \
   --mode source-built-fixed-point \
   --provider-archive bootstrap/seeds/AMD64/hex0-seed \
   --provider-manifest bootstrap/stagex-transition-lineage.json \
-  --bootstrap-source /media/handoff/stagex-native-source-closure.json \
+  --bootstrap-source /media/handoff/native-source-closure.json \
+  --stagex-source-bundle /media/handoff/stagex-source-closure.json \
   --mantle-source . \
   --vendor-deps ./vendor-deps \
   --proof-input /media/handoff/rust-source-archives \
-  --include-bundle /media/handoff/stagex-native-source-closure.json \
+  --include-bundle /media/handoff/native-source-closure.json \
+  --include-bundle /media/handoff/stagex-source-closure.json \
   --to source-built-fixed-point-sources.json
 ```
 
 For this mode, `--provider-archive` carries the audited hex0 seed. The
 `--provider-manifest` flag carries the validated StageX lineage manifest. The
 names remain CLI compatibility surfaces; neither input is a provider output.
-The `--bootstrap-source` record binds the original native source manifest.
-The included bundle supplies its materialized native fetch records. Each
-`--proof-input` carries authenticated Rust source archives.
+The `--bootstrap-source` record binds exactly one original native source
+manifest. The `--stagex-source-bundle` record binds the exact source bundle
+accepted by the StageX transition. The two included bundles supply their
+materialized source records. Exact duplicate records are merged. Conflicting
+records fail. The single `--proof-input` directory carries all authenticated
+Rust source archives. Files larger than 64 MiB use canonical, contiguous
+source-record chunks.
 
 Hydration publishes only `vendor-deps/`. It imports and pins the seed, lineage,
-native source records, Rust archives, and Mantle source record. It does not
-create transition, provider, Rust-provider, or Mantle output directories.
-Those directories must remain absent until the source-built proof shell starts.
-See [ADR 0050](../adr/0050-build-the-source-fixed-point-through-one-rust-proof-authority.md).
+source records, Rust archives, and Mantle source record. It does not create
+transition, provider, Rust-provider, or Mantle output directories. Those
+directories must remain absent until the source-built proof shell starts.
+See [ADR 0050](../adr/0050-build-the-source-fixed-point-through-one-rust-proof-authority.md)
+and [ADR 0051](../adr/0051-cut-legacy-bootstrap-edges-at-the-stagex-provider.md).
+
+Run the proof with independent digests and explicit executable paths:
+
+```bash
+CRUNCH_NO_FUSE=1 mantle self-build \
+  --source-built-fixed-point \
+  --source-profile /media/handoff/source-built-fixed-point-sources.json \
+  --expected-source-profile-blake3 "$SOURCE_PROFILE_BLAKE3" \
+  --expected-stagex-lineage-blake3 "$STAGEX_LINEAGE_BLAKE3" \
+  --expected-native-provider-blake3 "$NATIVE_PROVIDER_BLAKE3" \
+  --proof-bwrap /absolute/path/to/bwrap \
+  --proof-sandbox-shell /absolute/path/to/static-busybox \
+  --out /absolute/fresh/path/source-built-proof
+```
+
+The output path and its two success aliases must be absent. A failed run keeps
+its private staging directory and `attempt-status.json`. A successful run
+publishes with a no-replace rename and updates both aliases atomically.
 
 For a prepared checkout that already has its explicit vendor directory, import,
 pin, and preflight the bundle directly:

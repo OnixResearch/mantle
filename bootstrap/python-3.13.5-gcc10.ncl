@@ -6,7 +6,7 @@
 # BusyBox utilities.
 
 let crunch = import "lib.ncl" in
-let native_provider = import "seed-full-admitted.ncl" in
+let native_provider = crunch.derivationFile "seed-full-toolchain.ncl" in
 let gnumake = crunch.derivationFile "make-4.4.1-gcc10.ncl" in
 let linux_headers = crunch.derivationFile "linux-headers-6.6-gcc10.ncl" in
 let busybox = crunch.derivationFile "busybox-1.37.0-gcc10.ncl" in

@@ -16,7 +16,7 @@ pub(crate) const SOURCE_BUILT_FIXED_POINT_PROVIDER_KIND: &str = "full-source";
 const SOURCE_AUTHORITY_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-source-authority-v1";
 const PLAN_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-plan-v1";
 const BUILD_EFFECT_POLICY_VERSION: &str = "mantle-build-effects-v1";
-const REQUIRED_SOURCE_ROLE_COUNT: u32 = 6;
+const REQUIRED_SOURCE_ROLE_COUNT: u32 = 7;
 const EXPECTED_STAGE_COUNT: u32 = 6;
 const EXPECTED_RUN_COUNT: u32 = 2;
 const BLAKE3_HEX_LENGTH: usize = 64;
@@ -30,6 +30,7 @@ const MANTLE_STAGE2_INDEX: usize = 5;
 const REQUIRED_SOURCE_ROLES: [SourceAuthorityRole; REQUIRED_SOURCE_ROLE_COUNT as usize] = [
     SourceAuthorityRole::StagexSeed,
     SourceAuthorityRole::StagexLineage,
+    SourceAuthorityRole::StagexSourceBundle,
     SourceAuthorityRole::NativeSourceBundle,
     SourceAuthorityRole::RustSourceArchiveSet,
     SourceAuthorityRole::MantleSource,
@@ -41,6 +42,7 @@ const REQUIRED_SOURCE_ROLES: [SourceAuthorityRole; REQUIRED_SOURCE_ROLE_COUNT as
 pub(crate) enum SourceAuthorityRole {
     StagexSeed,
     StagexLineage,
+    StagexSourceBundle,
     NativeSourceBundle,
     RustSourceArchiveSet,
     MantleSource,
@@ -98,6 +100,7 @@ pub(crate) enum ProofHermeticityMode {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct SourceBuiltFixedPointPolicies {
+    pub(crate) expected_native_provider_digest_blake3: String,
     pub(crate) closure_policy_digest_blake3: String,
     pub(crate) hermeticity_policy_digest_blake3: String,
     pub(crate) protected_execution_policy_digest_blake3: String,
@@ -398,6 +401,7 @@ fn expected_content_kind(role: SourceAuthorityRole) -> SourceContentKind {
     match role {
         SourceAuthorityRole::StagexSeed
         | SourceAuthorityRole::StagexLineage
+        | SourceAuthorityRole::StagexSourceBundle
         | SourceAuthorityRole::NativeSourceBundle => SourceContentKind::RegularFile,
         SourceAuthorityRole::RustSourceArchiveSet
         | SourceAuthorityRole::MantleSource
@@ -425,6 +429,7 @@ fn validate_initial_output_authority(
 
 fn validate_policies(policies: &SourceBuiltFixedPointPolicies) -> Result<(), SourceBuiltFixedPointPlanError> {
     for (name, digest) in [
+        ("expected native provider", &policies.expected_native_provider_digest_blake3),
         ("closure policy", &policies.closure_policy_digest_blake3),
         ("hermeticity policy", &policies.hermeticity_policy_digest_blake3),
         ("protected execution policy", &policies.protected_execution_policy_digest_blake3),
@@ -565,6 +570,7 @@ fn stagex_transition_stage() -> SourceBuiltFixedPointStagePlan {
         vec![
             source_authority(SourceAuthorityRole::StagexSeed),
             source_authority(SourceAuthorityRole::StagexLineage),
+            source_authority(SourceAuthorityRole::StagexSourceBundle),
             source_authority(SourceAuthorityRole::NativeSourceBundle),
             policy_authority(ProofPolicyRole::ProtectedExecution),
         ],
@@ -893,6 +899,17 @@ mod tests {
     }
 
     #[test]
+    fn rejects_invalid_expected_native_provider_digest() {
+        let mut input = valid_input();
+        input.policies.expected_native_provider_digest_blake3 = "not-a-digest".to_string();
+
+        let error = plan_source_built_fixed_point(input).unwrap_err();
+
+        assert!(error.to_string().contains("expected native provider"));
+        assert!(error.to_string().contains("lowercase hexadecimal BLAKE3"));
+    }
+
+    #[test]
     fn rejects_practical_or_fallback_policy() {
         let mut practical = valid_input();
         practical.policies.hermeticity_mode = ProofHermeticityMode::Practical;
@@ -949,19 +966,25 @@ mod tests {
                 source_input("stagex-seed", SourceAuthorityRole::StagexSeed, SourceContentKind::RegularFile, 'a'),
                 source_input("stagex-lineage", SourceAuthorityRole::StagexLineage, SourceContentKind::RegularFile, 'b'),
                 source_input(
+                    "stagex-source-bundle",
+                    SourceAuthorityRole::StagexSourceBundle,
+                    SourceContentKind::RegularFile,
+                    'c',
+                ),
+                source_input(
                     "native-source-bundle",
                     SourceAuthorityRole::NativeSourceBundle,
                     SourceContentKind::RegularFile,
-                    'c',
+                    'd',
                 ),
                 source_input(
                     "rust-source-archives",
                     SourceAuthorityRole::RustSourceArchiveSet,
                     SourceContentKind::Directory,
-                    'd',
+                    'e',
                 ),
-                source_input("mantle-source", SourceAuthorityRole::MantleSource, SourceContentKind::Directory, 'e'),
-                source_input("vendor-inputs", SourceAuthorityRole::VendorInputs, SourceContentKind::Directory, 'f'),
+                source_input("mantle-source", SourceAuthorityRole::MantleSource, SourceContentKind::Directory, 'f'),
+                source_input("vendor-inputs", SourceAuthorityRole::VendorInputs, SourceContentKind::Directory, '7'),
             ],
             initial_output_authority: InitialOutputAuthorityState {
                 stagex_transition_entries: 0,
@@ -970,6 +993,7 @@ mod tests {
                 mantle_output_entries: 0,
             },
             policies: SourceBuiltFixedPointPolicies {
+                expected_native_provider_digest_blake3: digest('0'),
                 closure_policy_digest_blake3: digest('1'),
                 hermeticity_policy_digest_blake3: digest('2'),
                 protected_execution_policy_digest_blake3: digest('3'),

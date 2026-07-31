@@ -378,6 +378,50 @@ mod tests {
     }
 
     #[test]
+    fn full_source_graph_resolves_gcc40_from_stagex_sources() {
+        const PENDING_DERIVATION_COUNT_MIN: usize = 50;
+        const STORE_PREFIX: &str = "/mantle/store";
+        const STAGEX_PROVIDER: &str =
+            "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider";
+        const STAGEX_TRANSITION: &str = "/mantle/store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition";
+        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+        let root = workspace.join("bootstrap/seed-full-toolchain.ncl");
+        let import_paths = vec![
+            workspace.join("lib").into_os_string(),
+            workspace.join("bootstrap").into_os_string(),
+        ];
+        let mut roots =
+            crunch_eval::evaluate_and_extract_named_roots::<CrunchDerivation>(&root, &import_paths).unwrap();
+        assert_eq!(roots.len(), SINGLE_FILE_ROOT_COUNT);
+        let (_, mut derivation) = roots.pop().unwrap();
+        let mut cache = ConversionCache::new(STORE_PREFIX);
+        let mut resolver = DerivationFileResolver::new(&root, &import_paths).unwrap();
+        resolver.resolve_root_inputs(&root, &mut derivation, &mut cache).unwrap();
+        crunch_glue::convert(&derivation, &mut cache).unwrap();
+        let pending = cache.drain_pending();
+        let gcc40 = pending
+            .iter()
+            .find(|entry| entry.0.to_string().contains("gcc-4.0.4-native-gas-v45"))
+            .expect("resolved GCC 4.0 native derivation");
+        let input_sources = gcc40
+            .2
+            .input_sources
+            .iter()
+            .map(|source| source.to_absolute_path_with_prefix(STORE_PREFIX))
+            .collect::<Vec<_>>();
+
+        assert!(pending.len() >= PENDING_DERIVATION_COUNT_MIN);
+        assert!(
+            input_sources.iter().any(|source| source == STAGEX_PROVIDER),
+            "GCC 4.0 input sources: {input_sources:?}"
+        );
+        assert!(
+            input_sources.iter().any(|source| source == STAGEX_TRANSITION),
+            "GCC 4.0 input sources: {input_sources:?}"
+        );
+    }
+
+    #[test]
     fn resolver_falls_back_to_explicit_import_root() {
         let root_dir = tempfile::tempdir().unwrap();
         let import_dir = tempfile::tempdir().unwrap();

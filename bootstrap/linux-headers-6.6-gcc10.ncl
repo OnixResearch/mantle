@@ -4,7 +4,7 @@
 # and admitted native provider rather than the compatibility bootstrap chain.
 
 let crunch = import "lib.ncl" in
-let native_provider = import "seed-full-admitted.ncl" in
+let native_provider = crunch.derivationFile "seed-full-toolchain.ncl" in
 let gnumake = crunch.derivationFile "make-4.4.1-gcc10.ncl" in
 let linux_src = crunch.derivationFile "linux-6.6-source.ncl" in
 
