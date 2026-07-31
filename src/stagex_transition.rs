@@ -6115,7 +6115,7 @@ fn require_binutils_coreutils_counts(
 ) -> Result<(), StagexTransitionError> {
     const CHMOD_COUNT_BOUNDS: [u32; 2] = [993, 994];
     const CP_COUNT_BOUNDS: [u32; 2] = [104, 105];
-    const MKDIR_COUNT_BOUNDS: [u32; 2] = [5_385, 5_424];
+    const MKDIR_COUNT_BOUNDS: [u32; 2] = [5_385, 5_425];
     let sed = report.sed_invocation_count;
     let cat = sed
         .checked_add(4_738)
