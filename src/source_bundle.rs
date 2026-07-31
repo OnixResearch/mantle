@@ -3809,7 +3809,7 @@ pub(crate) fn materialize_source_record_payload(record: &SourceRecord, target: &
     fs::create_dir_all(target)
         .map_err(|err| RunError::Internal(format!("creating materialized source root {}: {err}", target.display())))?;
     materialize_source_record_files(record, target)?;
-    let observed = materialize_source_record_from_path(record, target, false)?;
+    let observed = materialize_source_record_from_path(record, target, source_record_uses_canonical_chunks(record))?;
     if observed.files != record.files || observed.content_blake3 != record.content_blake3 {
         return Err(RunError::Internal(format!(
             "materialized source record {} does not preserve declared files and identity",
@@ -3819,6 +3819,10 @@ pub(crate) fn materialize_source_record_payload(record: &SourceRecord, target: &
     assert_eq!(observed.payload_bytes, record.payload_bytes);
     assert_eq!(observed.files.len(), record.files.len());
     Ok(())
+}
+
+fn source_record_uses_canonical_chunks(record: &SourceRecord) -> bool {
+    record.files.iter().any(|file| file.chunk_index.is_some())
 }
 
 fn materialize_source_record_files(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
@@ -5241,6 +5245,24 @@ mod tests {
         assert_eq!(exact_tail, vec![TEST_CHUNK_SIZE_BYTES_MAX, TEST_CHUNK_SIZE_BYTES_MAX]);
         assert!(partial_tail.iter().all(|size| *size <= TEST_CHUNK_SIZE_BYTES_MAX));
         assert!(exact_tail.iter().all(|size| *size > 0));
+    }
+
+    #[test]
+    fn materialization_recanonicalizes_only_declared_chunked_records_with_chunk_support() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload");
+        fs::write(&payload, b"payload").unwrap();
+        let spec = SourceSpec {
+            kind: SourceRecordKind::ProofInput,
+            identity: "chunk-policy-fixture".to_string(),
+            path: payload,
+            adapter: None,
+        };
+        let mut manifest = plan_source_bundle(&[spec], "/mantle/store").unwrap();
+
+        assert!(!source_record_uses_canonical_chunks(&manifest.records[0]));
+        manifest.records[0].files[0].chunk_index = Some(0);
+        assert!(source_record_uses_canonical_chunks(&manifest.records[0]));
     }
 
     #[test]
