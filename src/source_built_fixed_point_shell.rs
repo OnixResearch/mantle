@@ -8,6 +8,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Output;
+use std::time::Duration;
+use std::time::Instant;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -146,6 +148,8 @@ struct PreparedAttempt {
     native_store_dir: PathBuf,
     native_state_dir: PathBuf,
     transcripts_dir: PathBuf,
+    disk_available_bytes_before: u64,
+    started_at: Instant,
     plan: SourceBuiltFixedPointPlan,
 }
 
@@ -153,7 +157,8 @@ struct PreparedAttempt {
 struct AttemptStatus {
     schema: &'static str,
     status: &'static str,
-    plan_digest_blake3: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    plan_digest_blake3: Option<String>,
     blocker: Option<String>,
 }
 
@@ -214,18 +219,39 @@ pub(crate) struct ConstructedProviders {
 
 pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions<'_>) -> Result<(), RunError> {
     validate_options(&options)?;
-    let prepared = prepare_attempt(&options)?;
-    write_attempt_status(&prepared.staging_dir, &prepared.plan, PROOF_STATUS_RUNNING, None)?;
+    let started_at = Instant::now();
+    let expected_staging_dir = staging_path(options.output_dir)?;
+    let prepared = match prepare_attempt(&options, started_at) {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            let blocker = error.to_string();
+            let preservation = if expected_staging_dir.is_dir() {
+                write_attempt_status(&expected_staging_dir, None, PROOF_STATUS_FAILED, Some(&blocker))?;
+                format!("preserved_attempt={}", expected_staging_dir.display())
+            } else {
+                "attempt_not_started=true".to_string()
+            };
+            return Err(RunError::Build(format!(
+                "source-built fixed-point preparation failed closed: {blocker}; {preservation}"
+            )));
+        }
+    };
+    write_attempt_status(&prepared.staging_dir, Some(&prepared.plan.plan_digest_blake3), PROOF_STATUS_RUNNING, None)?;
     let result = run_attempt(&options, &prepared);
     if let Err(error) = result {
         let blocker = error.to_string();
-        write_attempt_status(&prepared.staging_dir, &prepared.plan, PROOF_STATUS_FAILED, Some(&blocker))?;
+        write_attempt_status(
+            &prepared.staging_dir,
+            Some(&prepared.plan.plan_digest_blake3),
+            PROOF_STATUS_FAILED,
+            Some(&blocker),
+        )?;
         return Err(RunError::Build(format!(
             "source-built fixed-point proof failed closed: {blocker}; preserved_attempt={}",
             prepared.staging_dir.display()
         )));
     }
-    write_attempt_status(&prepared.staging_dir, &prepared.plan, PROOF_STATUS_COMPLETE, None)?;
+    write_attempt_status(&prepared.staging_dir, Some(&prepared.plan.plan_digest_blake3), PROOF_STATUS_COMPLETE, None)?;
     publish_attempt(&prepared)?;
     print_completion(&options, &prepared)
 }
@@ -264,10 +290,35 @@ fn validate_options(options: &SourceBuiltFixedPointOptions<'_>) -> Result<(), Ru
     }
     assert!(options.elapsed_seconds_max > 0);
     assert!(options.disk_bytes_max > 0);
+    validate_disk_preflight(options.output_dir, options.disk_bytes_max)
+}
+
+fn validate_disk_preflight(output_dir: &Path, disk_bytes_max: u64) -> Result<(), RunError> {
+    let parent = output_dir
+        .parent()
+        .ok_or_else(|| proof_error(format!("proof output has no parent directory: {}", output_dir.display())))?;
+    if !parent.is_dir() {
+        return Err(proof_error(format!("proof output parent must exist before execution: {}", parent.display())));
+    }
+    let available_bytes = fs2::available_space(parent)
+        .map_err(|error| proof_error(format!("probing proof output capacity {}: {error}", parent.display())))?;
+    validate_disk_capacity(available_bytes, disk_bytes_max)
+}
+
+fn validate_disk_capacity(available_bytes: u64, required_bytes: u64) -> Result<(), RunError> {
+    assert!(required_bytes > 0);
+    if available_bytes < required_bytes {
+        return Err(proof_error(format!(
+            "proof disk preflight requires {required_bytes} bytes, only {available_bytes} bytes are available"
+        )));
+    }
     Ok(())
 }
 
-fn prepare_attempt(options: &SourceBuiltFixedPointOptions<'_>) -> Result<PreparedAttempt, RunError> {
+fn prepare_attempt(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    started_at: Instant,
+) -> Result<PreparedAttempt, RunError> {
     let profile = crate::source_bundle::read_source_bundle(options.source_profile)?;
     if profile.format != PROFILE_SCHEMA {
         return Err(proof_error(format!("source profile schema must be {PROFILE_SCHEMA}")));
@@ -281,6 +332,9 @@ fn prepare_attempt(options: &SourceBuiltFixedPointOptions<'_>) -> Result<Prepare
     let records = source_built_fixed_point_profile_records(&profile)?;
     validate_profile_records(&records, options)?;
     let staging_dir = staging_path(options.output_dir)?;
+    let disk_available_bytes_before =
+        fs2::available_space(options.output_dir.parent().expect("validated absolute output has an existing parent"))
+            .map_err(|error| proof_error(format!("recording proof disk baseline: {error}")))?;
     create_private_attempt_dir(&staging_dir)?;
     let inputs_dir = staging_dir.join(INPUTS_DIR);
     fs::create_dir(&inputs_dir)
@@ -365,6 +419,8 @@ fn prepare_attempt(options: &SourceBuiltFixedPointOptions<'_>) -> Result<Prepare
         native_store_dir,
         native_state_dir,
         transcripts_dir,
+        disk_available_bytes_before,
+        started_at,
         plan,
     })
 }
@@ -541,6 +597,7 @@ fn prepare_plan(
 }
 
 fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAttempt) -> Result<(), RunError> {
+    validate_runtime_bounds(options, prepared)?;
     let stagex_transition_root = prepared.native_store_dir.join(STAGEX_TRANSITION_STORE_BASENAME);
     let transition_report = crate::stagex_transition::materialize_protected_transition(StagexTransitionRequest {
         seed_path: &prepared.stagex_seed,
@@ -558,6 +615,15 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             transition_report.status
         )));
     }
+    let transition_event_count = u32::try_from(transition_report.protected_exec_events.len())
+        .map_err(|_| proof_error("StageX protected-exec event count exceeds u32".to_string()))?;
+    if transition_event_count > options.protected_exec_events_max {
+        return Err(proof_error(format!(
+            "StageX protected-exec event count {transition_event_count} exceeds configured bound {}",
+            options.protected_exec_events_max
+        )));
+    }
+    validate_runtime_bounds(options, prepared)?;
     let transition_report_path = stagex_transition_root.join("transition-report.json");
     crate::protected_exec::blake3_file_hex(&transition_report_path)
         .map_err(|error| proof_error(format!("hashing fresh StageX transition report: {error}")))?;
@@ -591,6 +657,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             stagex_provider_report.output_digest_blake3
         )));
     }
+    validate_runtime_bounds(options, prepared)?;
     let stagex_logical_path = crate::full_source_provider::adopt_verified_local_provider_path_strict(
         &stagex_provider_root,
         &prepared.native_store_dir,
@@ -609,12 +676,38 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         LOGICAL_STORE_PREFIX,
     )?;
     let providers = construct_full_source_providers(options, prepared, stagex_provider_report)?;
+    validate_runtime_bounds(options, prepared)?;
     run_cargo_free_fixed_point(options, prepared, &providers)?;
+    validate_runtime_bounds(options, prepared)?;
     crate::source_built_fixed_point_receipt::write_source_built_fixed_point_receipt(
         &prepared.staging_dir,
         &prepared.plan,
         &providers,
     )?;
+    validate_runtime_bounds(options, prepared)
+}
+
+fn validate_runtime_bounds(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+) -> Result<(), RunError> {
+    let elapsed_max = Duration::from_secs(options.elapsed_seconds_max);
+    let elapsed = prepared.started_at.elapsed();
+    if elapsed > elapsed_max {
+        return Err(proof_error(format!(
+            "proof elapsed time {:?} exceeds configured bound {:?}",
+            elapsed, elapsed_max
+        )));
+    }
+    let available_bytes = fs2::available_space(&prepared.staging_dir)
+        .map_err(|error| proof_error(format!("probing proof disk use {}: {error}", prepared.staging_dir.display())))?;
+    let consumed_bytes = prepared.disk_available_bytes_before.saturating_sub(available_bytes);
+    if consumed_bytes > options.disk_bytes_max {
+        return Err(proof_error(format!(
+            "proof observed disk use {consumed_bytes} bytes exceeds configured bound {}",
+            options.disk_bytes_max
+        )));
+    }
     Ok(())
 }
 
@@ -725,6 +818,7 @@ fn run_native_build(
     let ncl_path = prepared.source_root.join(relative_ncl);
     let mut command = native_build_command(options, prepared, &ncl_path);
     let output = command.output().map_err(|error| proof_error(format!("launching native build {label}: {error}")))?;
+    validate_runtime_bounds(options, prepared)?;
     let stdout_path = prepared.transcripts_dir.join(format!("{label}.json"));
     let stderr_path = prepared.transcripts_dir.join(format!("{label}.stderr.txt"));
     write_bytes_create_new(&stdout_path, &output.stdout)?;
@@ -1094,7 +1188,7 @@ fn create_private_attempt_dir(path: &Path) -> Result<(), RunError> {
 
 fn write_attempt_status(
     staging_dir: &Path,
-    plan: &SourceBuiltFixedPointPlan,
+    plan_digest_blake3: Option<&str>,
     status: &'static str,
     blocker: Option<&str>,
 ) -> Result<(), RunError> {
@@ -1102,7 +1196,7 @@ fn write_attempt_status(
     let value = AttemptStatus {
         schema: PROOF_STATUS_SCHEMA,
         status,
-        plan_digest_blake3: plan.plan_digest_blake3.clone(),
+        plan_digest_blake3: plan_digest_blake3.map(ToString::to_string),
         blocker: blocker.map(ToString::to_string),
     };
     let bytes = serde_json::to_vec_pretty(&value)
@@ -1281,6 +1375,8 @@ mod tests {
             native_store_dir: output.join("store"),
             native_state_dir: output.join("state"),
             transcripts_dir: output.join("transcripts"),
+            disk_available_bytes_before: options.disk_bytes_max,
+            started_at: Instant::now(),
             plan: test_plan(),
         };
         let command = native_build_command(&options, &prepared, Path::new("/source/bootstrap/seed-full-toolchain.ncl"));
@@ -1333,6 +1429,29 @@ mod tests {
             assert!(!adapter.contains("seed-full-admitted.ncl"));
             assert!(!adapter.contains("tinycc-mes.ncl"));
         }
+    }
+
+    #[test]
+    fn disk_capacity_accepts_sufficient_space_and_rejects_shortfall() {
+        const AVAILABLE_BYTES: u64 = 2;
+        const REQUIRED_BYTES: u64 = 1;
+        validate_disk_capacity(AVAILABLE_BYTES, REQUIRED_BYTES).unwrap();
+        let error = validate_disk_capacity(REQUIRED_BYTES, AVAILABLE_BYTES).unwrap_err();
+
+        assert!(error.to_string().contains("disk preflight"));
+        assert!(error.to_string().contains("only 1 bytes are available"));
+    }
+
+    #[test]
+    fn preparation_failure_status_preserves_blocker_without_inventing_plan_identity() {
+        let temp = tempfile::tempdir().unwrap();
+        write_attempt_status(temp.path(), None, PROOF_STATUS_FAILED, Some("materialization failed")).unwrap();
+        let value: serde_json::Value =
+            serde_json::from_slice(&fs::read(temp.path().join(ATTEMPT_STATUS_FILE)).unwrap()).unwrap();
+
+        assert_eq!(value["status"], PROOF_STATUS_FAILED);
+        assert_eq!(value["blocker"], "materialization failed");
+        assert!(value.get("plan_digest_blake3").is_none());
     }
 
     #[test]
