@@ -170,7 +170,11 @@ fn source_label(path: &Path) -> String {
 }
 
 pub(crate) fn hash_directory_tree(path: &Path) -> Result<(u64, String), RunError> {
-    let prepared = prepare_tree_copy(path)
+    hash_directory_tree_with_limits(path, TreeCopyLimits::RELEASE_BUNDLE)
+}
+
+pub(crate) fn hash_directory_tree_with_limits(path: &Path, limits: TreeCopyLimits) -> Result<(u64, String), RunError> {
+    let prepared = prepare_tree_copy_with_limits(path, limits)
         .map_err(|error| RunError::Internal(format!("expected directory artifact {}: {error}", path.display())))?;
     hash_prepared_tree(&prepared)
 }
@@ -960,6 +964,7 @@ mod tests {
     const SENTINEL_BYTES: &[u8] = b"sentinel";
     const FILE_BYTES: &[u8] = b"tree-copy-file";
     const SMALL_ENTRY_LIMIT: u32 = 1;
+    const MULTI_ENTRY_LIMIT: u32 = 4;
     const SMALL_DEPTH_LIMIT: u32 = 1;
     const EXPECTED_POSITIVE_ENTRIES_COUNT: usize = 5;
     const DIRECTORY_OPERATION_INDEX: usize = 0;
@@ -999,6 +1004,29 @@ mod tests {
         symlink("nested/other.txt", source.join("latest")).unwrap();
         let retargeted_hash = hash_directory_tree(&source).unwrap();
         assert_ne!(retargeted_hash, source_hash, "symlink target text must affect the tree digest");
+    }
+
+    #[test]
+    fn configured_hash_limit_accepts_bounded_tree_and_rejects_excess_entries() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        write_file(&source.join("one"), FILE_BYTES);
+        write_file(&source.join("two"), FILE_BYTES);
+        let sufficient_limits = TreeCopyLimits {
+            entries_count_max: MULTI_ENTRY_LIMIT,
+            ..TreeCopyLimits::RELEASE_BUNDLE
+        };
+        let insufficient_limits = TreeCopyLimits {
+            entries_count_max: SMALL_ENTRY_LIMIT,
+            ..TreeCopyLimits::RELEASE_BUNDLE
+        };
+
+        let digest = hash_directory_tree_with_limits(&source, sufficient_limits).unwrap();
+        let error = hash_directory_tree_with_limits(&source, insufficient_limits).unwrap_err();
+
+        assert_eq!(digest.1.len(), blake3::OUT_LEN.saturating_mul(2));
+        assert!(error.to_string().contains("exceeds"));
+        assert!(error.to_string().contains("1"));
     }
 
     // r[verify mantle.release_provenance.bundle_tree_copy.fixtures.negative.target]

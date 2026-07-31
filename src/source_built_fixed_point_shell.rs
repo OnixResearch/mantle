@@ -98,6 +98,7 @@ const EXPECTED_STAGE_COUNT: usize = 6;
 const BLAKE3_HEX_LENGTH: usize = 64;
 const MAX_JOBS_MIN: u32 = 1;
 const MAX_JOBS_MAX: u32 = 16;
+const MATERIALIZED_SOURCE_TREE_ENTRY_COUNT_MAX: u32 = 1_000_000;
 const FILE_MODE_EXECUTABLE_MASK: u32 = 0o111;
 const ATTEMPT_DIRECTORY_MODE: u32 = 0o700;
 const SUCCESS_ALIAS_COUNT: usize = 2;
@@ -1194,7 +1195,11 @@ fn hash_materialized_source(path: &Path) -> Result<String, RunError> {
     if !path.is_dir() {
         return Err(proof_error(format!("materialized source path is not a file or directory: {}", path.display())));
     }
-    let (_, digest) = crate::release_tree_copy::hash_directory_tree(path)
+    let source_limits = crunch_release_core::TreeCopyLimits {
+        entries_count_max: MATERIALIZED_SOURCE_TREE_ENTRY_COUNT_MAX,
+        ..crunch_release_core::TreeCopyLimits::RELEASE_BUNDLE
+    };
+    let (_, digest) = crate::release_tree_copy::hash_directory_tree_with_limits(path, source_limits)
         .map_err(|error| proof_error(format!("hashing source tree {}: {error}", path.display())))?;
     assert_eq!(digest.len(), BLAKE3_HEX_LENGTH);
     debug_assert!(path.is_dir());
