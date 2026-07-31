@@ -18,10 +18,10 @@ const OUTPUT_COUNT: usize = 7;
 const FILE_BYTES_MAX: u64 = 64 * 1_024 * 1_024;
 const CANONICAL_TEMP_EXTENSION: &str = "mantle-canonical.tmp";
 pub(crate) const COMPILER_BLAKE3: &str = "8e6580da40c5892b941423ae108d6218b3636ebd3643bc3ba1e78e33d6c4898a";
-const LIBTCC_ARCHIVE_BLAKE3: &str = "be8187b0d6a5e7e62ea75baf0de0dabf02fc558b11760302ddacd59b4402b7d7";
-const MAIN_OBJECT_BLAKE3: &str = "a348e60d7092d9cd974171d67aaafebe784399d8443513d4a80cd0baecc1f199";
+const LIBTCC_ARCHIVE_BLAKE3: &str = "dbf67a48eed6afe4a0e74ce5d3b27bbe97dd6531b0eb5a5a648a3e290d9723ca";
+const MAIN_OBJECT_BLAKE3: &str = "6df478ee2068dca31c540583925db4116d24b6db9cf21c788d5a0106f02123ef";
 const PATCHED_SOURCE_BLAKE3: &str = "5e918d19d4d7151f17a5a81bd07d25fd8a55e57037b4735f038344365326b3d4";
-const OBJECT_TREE_BLAKE3: &str = "813e91a25bdec4d859ebb0415c3ce8b88c56e0b40a5c74653b2645b0453304c0";
+const OBJECT_TREE_BLAKE3: &str = "e5c7d2d26adf9230fa6c713ae526d666089c31d9bca4a32c3bdc4a876a01ae39";
 const SMOKE_OBJECT_BLAKE3: &str = "cc40480286f053fc69e7d17431b4cf5de82b477b0f84e646717cd6c3c71cecb1";
 const SMOKE_SOURCE: &[u8] = b"#include <stdarg.h>\nstruct item { int first; int second; };\nstatic const struct item item = { .second = 2, .first = 1 };\nstatic int first_variadic(int ignored, ...) { va_list arguments; int value; va_start(arguments, ignored); value = va_arg(arguments, int); va_end(arguments); return value; }\nint smoke(void) { return item.first == 1 && item.second == 2 && first_variadic(0, 1) == 1 ? 0 : 1; }\n";
 const COMPILER_SOURCES: [&str; COMPILER_SOURCE_COUNT as usize] = [
@@ -424,10 +424,12 @@ fn canonicalize_elf_file(path: &Path) -> Result<u32, Error> {
     if !metadata.is_file() || metadata.len() == 0 || metadata.len() > FILE_BYTES_MAX {
         return Err(Error::Materialization(format!("TinyCC canonicalization input is invalid: {}", path.display())));
     }
-    let mut bytes = fs::read(path)
+    let input_bytes = fs::read(path)
         .map_err(|error| Error::Materialization(format!("reading TinyCC object {}: {error}", path.display())))?;
-    let rewrite_count = crate::elf_local_symbol_core::canonicalize_local_elf_symbol_names(&mut bytes)
+    let canonical = crate::elf_local_symbol_core::canonicalize_local_elf_symbol_names(&input_bytes)
         .map_err(|error| Error::Materialization(format!("canonicalizing TinyCC object {}: {error}", path.display())))?;
+    let rewrite_count = canonical.rewrite_count;
+    let bytes = canonical.bytes;
     let staged = path.with_extension(CANONICAL_TEMP_EXTENSION);
     let write_result = (|| -> Result<(), Error> {
         let mut file = fs::OpenOptions::new()
@@ -449,7 +451,7 @@ fn canonicalize_elf_file(path: &Path) -> Result<u32, Error> {
         let _ = fs::remove_file(&staged);
     }
     write_result?;
-    assert_eq!(u64::try_from(bytes.len()).ok(), Some(metadata.len()));
+    assert!(u64::try_from(bytes.len()).is_ok_and(|bytes_len| bytes_len >= metadata.len()));
     debug_assert!(path.is_file());
     Ok(rewrite_count)
 }
@@ -677,6 +679,9 @@ fn set_owner_read_write(path: &Path) -> Result<(), Error> {
 mod tests {
     use super::*;
 
+    const OBJECT_VARIANT_A_ENV: &str = "MANTLE_TCC_SELFHOST_OBJECT_VARIANT_A";
+    const OBJECT_VARIANT_B_ENV: &str = "MANTLE_TCC_SELFHOST_OBJECT_VARIANT_B";
+
     #[test]
     fn brace_match_accepts_nested_and_rejects_missing_close() {
         assert_eq!(matching_brace_end("x{a{b}c}z", 1).unwrap(), 8);
@@ -702,6 +707,41 @@ mod tests {
         };
         assert!(derive_inventory(request).is_err());
         assert!(scratch.path().exists());
+    }
+
+    #[test]
+    #[ignore = "requires two retained TinyCC self-host object trees with different local-symbol widths"]
+    fn retained_object_tree_width_variants_converge() {
+        let root_a = PathBuf::from(std::env::var_os(OBJECT_VARIANT_A_ENV).unwrap());
+        let root_b = PathBuf::from(std::env::var_os(OBJECT_VARIANT_B_ENV).unwrap());
+        let mut distinct_input_count = 0u32;
+
+        for source in COMPILER_SOURCES {
+            let relative = source.replace(".c", ".o");
+            let input_a = fs::read(root_a.join(&relative)).unwrap();
+            let input_b = fs::read(root_b.join(&relative)).unwrap();
+            distinct_input_count = distinct_input_count
+                .checked_add(u32::from(input_a != input_b))
+                .expect("bounded compiler source count");
+            let canonical_a = crate::elf_local_symbol_core::canonicalize_local_elf_symbol_names(&input_a).unwrap();
+            let canonical_b = crate::elf_local_symbol_core::canonicalize_local_elf_symbol_names(&input_b).unwrap();
+
+            if canonical_a.bytes != canonical_b.bytes {
+                let first_difference =
+                    canonical_a.bytes.iter().zip(&canonical_b.bytes).position(|(left, right)| left != right);
+                panic!(
+                    "object {relative} canonical forms differ: first={first_difference:?} left_bytes={} right_bytes={} left_rewrites={} right_rewrites={}",
+                    canonical_a.bytes.len(),
+                    canonical_b.bytes.len(),
+                    canonical_a.rewrite_count,
+                    canonical_b.rewrite_count
+                );
+            }
+            assert!(canonical_a.rewrite_count > 0, "object {relative}");
+            assert!(canonical_b.rewrite_count > 0, "object {relative}");
+        }
+        assert!(distinct_input_count > 0);
+        assert!(distinct_input_count <= COMPILER_SOURCE_COUNT);
     }
 
     #[test]

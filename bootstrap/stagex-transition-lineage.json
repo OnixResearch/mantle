@@ -1500,7 +1500,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "be8187b0d6a5e7e62ea75baf0de0dabf02fc558b11760302ddacd59b4402b7d7"
+        "hex_value": "dbf67a48eed6afe4a0e74ce5d3b27bbe97dd6531b0eb5a5a648a3e290d9723ca"
       },
       "id": "tcc-musl-selfhost-libtcc",
       "name": "self-hosted TinyCC library archive",
@@ -1509,7 +1509,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "a348e60d7092d9cd974171d67aaafebe784399d8443513d4a80cd0baecc1f199"
+        "hex_value": "6df478ee2068dca31c540583925db4116d24b6db9cf21c788d5a0106f02123ef"
       },
       "id": "tcc-musl-selfhost-main-object",
       "name": "self-hosted TinyCC main object",
@@ -1527,7 +1527,7 @@
     {
       "digest": {
         "algorithm": "blake3",
-        "hex_value": "813e91a25bdec4d859ebb0415c3ce8b88c56e0b40a5c74653b2645b0453304c0"
+        "hex_value": "e5c7d2d26adf9230fa6c713ae526d666089c31d9bca4a32c3bdc4a876a01ae39"
       },
       "id": "tcc-musl-selfhost-object-tree",
       "name": "self-hosted TinyCC compiler object tree",
