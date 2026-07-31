@@ -1841,13 +1841,6 @@ fn validate_bootstrap_provider_kind(mode: BootstrapSourceBundleMode, provider_ki
     )))
 }
 
-fn canonicalize_payload_entries(
-    path: &Path,
-    is_skipping_git_dir: bool,
-) -> Result<(Vec<SourceFileEntry>, u64), RunError> {
-    canonicalize_payload_entries_with_policy(path, is_skipping_git_dir, false, None)
-}
-
 fn canonicalize_fetch_payload_entries(
     path: &Path,
     is_skipping_git_dir: bool,
@@ -3760,7 +3753,12 @@ pub(crate) fn materialize_source_record_from_path(
     let (files, payload_bytes) = if source_record_is_fetcher_input(record) {
         canonicalize_fetch_payload_entries(payload_path, is_skipping_git_dir)?
     } else {
-        canonicalize_payload_entries(payload_path, is_skipping_git_dir)?
+        canonicalize_payload_entries_with_policy(
+            payload_path,
+            is_skipping_git_dir,
+            source_record_uses_canonical_chunks(record),
+            None,
+        )?
     };
     let content_blake3 = digest_source_record_content(&record.kind, &record.metadata, &files)?;
     Ok(SourceRecord {
@@ -3809,7 +3807,7 @@ pub(crate) fn materialize_source_record_payload(record: &SourceRecord, target: &
     fs::create_dir_all(target)
         .map_err(|err| RunError::Internal(format!("creating materialized source root {}: {err}", target.display())))?;
     materialize_source_record_files(record, target)?;
-    let observed = materialize_source_record_from_path(record, target, source_record_uses_canonical_chunks(record))?;
+    let observed = materialize_source_record_from_path(record, target, false)?;
     if observed.files != record.files || observed.content_blake3 != record.content_blake3 {
         return Err(RunError::Internal(format!(
             "materialized source record {} does not preserve declared files and identity",
@@ -4883,7 +4881,7 @@ mod tests {
         let (files, payload_bytes) = if source_record_is_fetcher_input(record) {
             canonicalize_fetch_payload_entries(payload_path, skip_git_dir).unwrap()
         } else {
-            canonicalize_payload_entries(payload_path, skip_git_dir).unwrap()
+            canonicalize_payload_entries_with_policy(payload_path, skip_git_dir, false, None).unwrap()
         };
         let content_blake3 = digest_source_record_content(&record.kind, &record.metadata, &files).unwrap();
         SourceRecord {
