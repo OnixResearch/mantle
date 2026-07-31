@@ -252,7 +252,24 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
         )));
     }
     write_attempt_status(&prepared.staging_dir, Some(&prepared.plan.plan_digest_blake3), PROOF_STATUS_COMPLETE, None)?;
-    publish_attempt(&prepared)?;
+    if let Err(error) = publish_attempt(&prepared) {
+        let blocker = error.to_string();
+        let status_root = if prepared.staging_dir.is_dir() {
+            &prepared.staging_dir
+        } else {
+            &prepared.final_dir
+        };
+        write_attempt_status(
+            status_root,
+            Some(&prepared.plan.plan_digest_blake3),
+            PROOF_STATUS_FAILED,
+            Some(&blocker),
+        )?;
+        return Err(RunError::Build(format!(
+            "source-built fixed-point publication failed closed: {blocker}; preserved_attempt={}",
+            status_root.display()
+        )));
+    }
     print_completion(&options, &prepared)
 }
 
@@ -440,8 +457,9 @@ fn validate_profile_records(
             options.source_records_max
         )));
     }
-    assert!(!records.stagex_seed.files.is_empty());
-    assert!(!records.rust_source_archive_set.files.is_empty());
+    if records.stagex_seed.files.is_empty() || records.rust_source_archive_set.files.is_empty() {
+        return Err(proof_error("source profile has an empty required source authority".to_string()));
+    }
     Ok(())
 }
 
@@ -816,7 +834,7 @@ fn run_native_build(
     relative_ncl: &str,
 ) -> Result<BuildObservation, RunError> {
     let ncl_path = prepared.source_root.join(relative_ncl);
-    let mut command = native_build_command(options, prepared, &ncl_path);
+    let mut command = native_build_command(options, prepared, &ncl_path)?;
     let output = command.output().map_err(|error| proof_error(format!("launching native build {label}: {error}")))?;
     validate_runtime_bounds(options, prepared)?;
     let stdout_path = prepared.transcripts_dir.join(format!("{label}.json"));
@@ -838,13 +856,20 @@ fn native_build_command(
     options: &SourceBuiltFixedPointOptions<'_>,
     prepared: &PreparedAttempt,
     ncl_path: &Path,
-) -> Command {
-    let mut command = Command::new(std::env::current_exe().expect("current Mantle executable"));
-    let bwrap_parent = options.bwrap.parent().expect("validated bwrap has parent");
+) -> Result<Command, RunError> {
+    let current_executable = std::env::current_exe()
+        .map_err(|error| proof_error(format!("resolving current Mantle executable: {error}")))?;
+    let mut command = Command::new(current_executable);
+    let bwrap_parent = options
+        .bwrap
+        .parent()
+        .ok_or_else(|| proof_error(format!("proof bwrap path has no parent: {}", options.bwrap.display())))?;
     let home = prepared.staging_dir.join(HOME_DIR);
     let temp = prepared.staging_dir.join(TMP_DIR);
-    fs::create_dir_all(&home).expect("validated staging permits home creation");
-    fs::create_dir_all(&temp).expect("validated staging permits tmp creation");
+    fs::create_dir_all(&home)
+        .map_err(|error| proof_error(format!("creating proof home {}: {error}", home.display())))?;
+    fs::create_dir_all(&temp)
+        .map_err(|error| proof_error(format!("creating proof temporary directory {}: {error}", temp.display())))?;
     command
         .env_clear()
         .env("PATH", bwrap_parent)
@@ -875,7 +900,7 @@ fn native_build_command(
         .arg("--strict-hermetic")
         .arg("--jobs")
         .arg(options.jobs.to_string());
-    command
+    Ok(command)
 }
 
 fn parse_build_report(label: &str, output: &Output) -> Result<BuildJsonReport, RunError> {
@@ -902,7 +927,9 @@ fn parse_build_report(label: &str, output: &Output) -> Result<BuildJsonReport, R
             build_failures_summary(&report.failed)
         )));
     }
-    assert!(report.outcomes.iter().all(|outcome| !outcome.cached));
+    if report.outcomes.iter().any(|outcome| outcome.cached) {
+        return Err(proof_error(format!("native build {label} report contains a cache-hit outcome")));
+    }
     debug_assert!(report.failed.is_empty());
     Ok(report)
 }
@@ -930,8 +957,9 @@ fn require_single_build_output(label: &str, report: BuildJsonReport) -> Result<B
     if !output.path.exists() || !output.artifact_attestation.path.is_file() {
         return Err(proof_error(format!("native build {label} output or attestation is missing")));
     }
-    assert!(!outcome.label.is_empty());
-    debug_assert!(output.artifact_attestation.logical_path.starts_with(LOGICAL_STORE_PREFIX));
+    if outcome.label.is_empty() || !output.artifact_attestation.logical_path.starts_with(LOGICAL_STORE_PREFIX) {
+        return Err(proof_error(format!("native build {label} returned invalid report identity")));
+    }
     Ok(output)
 }
 
@@ -968,7 +996,9 @@ fn run_cargo_free_fixed_point(
     if stage1_digest.is_none() || stage1_digest != stage2_digest {
         return Err(proof_error("stage1 and stage2 Mantle BLAKE3 identities do not match".to_string()));
     }
-    assert_eq!(stage1_digest.expect("validated digest").len(), BLAKE3_HEX_LENGTH);
+    if stage1_digest.is_none_or(|digest| digest.len() != BLAKE3_HEX_LENGTH) {
+        return Err(proof_error("fixed-point binary digest has invalid length".to_string()));
+    }
     debug_assert_eq!(providers.native_admission.output_digest_blake3, options.expected_native_provider_blake3);
     Ok(())
 }
@@ -987,7 +1017,17 @@ fn publish_attempt(prepared: &PreparedAttempt) -> Result<(), RunError> {
         .file_name()
         .ok_or_else(|| proof_error("proof output has no basename".to_string()))?;
     let aliases = [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS];
-    update_success_aliases(parent, &aliases, target_name)?;
+    if let Err(alias_error) = update_success_aliases(parent, &aliases, target_name) {
+        let rollback_result = crate::linux_rename::rename_path_no_replace(&prepared.final_dir, &prepared.staging_dir);
+        return match rollback_result {
+            Ok(()) => Err(alias_error),
+            Err(rollback_error) => Err(proof_error(format!(
+                "{alias_error}; proof publication rollback {} -> {} also failed: {rollback_error}",
+                prepared.final_dir.display(),
+                prepared.staging_dir.display()
+            ))),
+        };
+    }
     assert_eq!(aliases.len(), SUCCESS_ALIAS_COUNT);
     debug_assert!(prepared.final_dir.is_dir());
     Ok(())
@@ -1038,15 +1078,36 @@ fn update_success_aliases(parent: &Path, alias_names: &[&str], target_name: &std
         }
         committed = index.saturating_add(1);
     }
-    for (alias, _, backup) in &transaction {
-        if backup.is_symlink() {
-            fs::remove_file(backup)
-                .map_err(|error| proof_error(format!("removing old success alias {}: {error}", backup.display())))?;
-        }
-        assert!(alias.is_symlink());
-        debug_assert_eq!(fs::read_link(alias).ok().as_deref(), Some(Path::new(target_name)));
+    if committed != alias_names.len() {
+        rollback_success_aliases(&transaction, committed);
+        return Err(proof_error(format!(
+            "success alias transaction committed {committed} of {} aliases",
+            alias_names.len()
+        )));
     }
-    assert_eq!(committed, alias_names.len());
+    for (alias, _, _) in &transaction {
+        let observed_target = match fs::read_link(alias) {
+            Ok(target) => target,
+            Err(error) => {
+                rollback_success_aliases(&transaction, committed);
+                return Err(proof_error(format!("reading published success alias {}: {error}", alias.display())));
+            }
+        };
+        if observed_target != Path::new(target_name) {
+            rollback_success_aliases(&transaction, committed);
+            return Err(proof_error(format!(
+                "published success alias {} has target {}, expected {}",
+                alias.display(),
+                observed_target.display(),
+                Path::new(target_name).display()
+            )));
+        }
+    }
+    for (_, _, backup) in &transaction {
+        if backup.is_symlink() {
+            let _ = fs::remove_file(backup);
+        }
+    }
     Ok(())
 }
 
@@ -1379,7 +1440,8 @@ mod tests {
             started_at: Instant::now(),
             plan: test_plan(),
         };
-        let command = native_build_command(&options, &prepared, Path::new("/source/bootstrap/seed-full-toolchain.ncl"));
+        let command =
+            native_build_command(&options, &prepared, Path::new("/source/bootstrap/seed-full-toolchain.ncl")).unwrap();
         let args = command.get_args().map(OsString::from).collect::<Vec<_>>();
 
         assert!(args.iter().any(|argument| argument == "--offline-source-preflight"));
@@ -1452,6 +1514,39 @@ mod tests {
         assert_eq!(value["status"], PROOF_STATUS_FAILED);
         assert_eq!(value["blocker"], "materialization failed");
         assert!(value.get("plan_digest_blake3").is_none());
+    }
+
+    #[test]
+    fn publication_rolls_bundle_back_when_alias_transaction_fails() {
+        const TEST_DISK_AVAILABLE_BYTES: u64 = 1;
+        let temp = tempfile::tempdir().unwrap();
+        let staging = temp.path().join("proof.staging");
+        let final_dir = temp.path().join("proof");
+        fs::create_dir(&staging).unwrap();
+        fs::create_dir(temp.path().join(LATEST_SOURCE_BUILT_ALIAS)).unwrap();
+        let prepared = PreparedAttempt {
+            final_dir: final_dir.clone(),
+            staging_dir: staging.clone(),
+            source_root: staging.join("source"),
+            stagex_seed: staging.join("seed"),
+            stagex_lineage: staging.join("lineage"),
+            stagex_source_bundle: staging.join("stagex-source.json"),
+            native_source_manifest: staging.join("native.json"),
+            rust_source_archive_dir: staging.join("rust"),
+            native_store_dir: staging.join("store"),
+            native_state_dir: staging.join("state"),
+            transcripts_dir: staging.join("transcripts"),
+            disk_available_bytes_before: TEST_DISK_AVAILABLE_BYTES,
+            started_at: Instant::now(),
+            plan: test_plan(),
+        };
+
+        let error = publish_attempt(&prepared).unwrap_err();
+
+        assert!(error.to_string().contains("not a symlink"));
+        assert!(staging.is_dir());
+        assert!(!final_dir.exists());
+        assert!(!temp.path().join(LATEST_ALIAS).exists());
     }
 
     #[test]
