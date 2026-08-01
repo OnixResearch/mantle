@@ -11,7 +11,7 @@ let stage0 = crunch.derivationFile "stage0-posix.ncl" in
 let make = crunch.derivationFile "make-tcc.ncl" in
 let seed_gcc = crunch.derivationFile "gcc-4.0-musl-pass3.ncl" in
 let musl = crunch.derivationFile "musl-1.1.24-gcc-pass4.ncl" in
-let binutils = crunch.derivationFile "binutils-tcc.ncl" in
+let stagex_provider = import "stagex-provider-proof-input.ncl" in
 let gcc_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/gcc/gcc-4.0.4/gcc-4.0.4.tar.bz2",
   hash = "sha256-QNHCUqWDcOtqVLokzAd3MfsWWR/jN3HdAld/Pm+GSM0=",
@@ -46,7 +46,7 @@ let automake115_src = crunch.fetchTarball {
 
       SEED_GCC=$(find_input gcc-4.0.4-musl-pass3-v22)
       MUSL=$(find_input musl-1.1.24-gcc-pass4-v2)
-      BINUTILS=$(find_input binutils-2.30-tcc-source-v1)
+      STAGEX=$(find_input mantle-stagex-intermediate-provider)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
       SRC=$(find_input gcc-4.0.4-native-src)
@@ -58,15 +58,19 @@ let automake115_src = crunch.fetchTarball {
       test -s "$SEED_GCC/lib/gcc/$TARGET/$GCC_VERSION/libgcc.a"
       test -s "$MUSL/lib/libc.a"
       test -s "$MUSL/lib/crt1.o"
-      test -x "$BINUTILS/bin/as"
-      test -x "$BINUTILS/bin/ar"
-      test -x "$BINUTILS/bin/ld"
-      test -x "$BINUTILS/bin/readelf"
+      test -x "$STAGEX/bin/x86_64-linux-musl-as"
+      test -x "$STAGEX/bin/x86_64-linux-musl-ar"
+      test -x "$STAGEX/bin/x86_64-linux-musl-ld"
+      test -x "$STAGEX/bin/x86_64-linux-musl-readelf"
 
       WORK=/tmp/gcc-4.0.4-musl-pass4
       TOOLBIN="$WORK/tools"
+      BINUTILS="$WORK/binutils"
       $BB rm -rf "$WORK"
-      $BB mkdir -p "$TOOLBIN"
+      $BB mkdir -p "$TOOLBIN" "$BINUTILS/bin"
+      for tool in ar as ld nm objcopy objdump ranlib readelf size strings strip; do
+        $BB ln -s "$STAGEX/bin/x86_64-linux-musl-$tool" "$BINUTILS/bin/$tool"
+      done
       for applet in awk basename cat chmod cmp cp cut dirname echo egrep expr find grep head ln ls mkdir mv od printf pwd rm rmdir sed sh sort tail tar test touch tr true uname uniq wc; do
         $BB ln -sf "$BB" "$TOOLBIN/$applet"
       done
@@ -301,5 +305,5 @@ EOF
       echo "GCC 4.0.4 musl pass4 compiler/libgcc runtime checks passed; not provider admission"
     "%
   ],
-  inputs = [stage0, make, seed_gcc, musl, binutils, gcc_src, automake115_src],
+  inputs = [stage0, make, seed_gcc, musl, stagex_provider, gcc_src, automake115_src],
 } | crunch.Derivation

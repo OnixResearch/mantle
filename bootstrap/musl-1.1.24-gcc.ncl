@@ -1,16 +1,16 @@
 # Diagnostic GCC-built musl successor for the full-source seed provider.
 #
-# This stage deliberately consumes the isolated GCC pass2 artifact and source
-# binutils. It remains outside bootstrap/seed.ncl until the compiler is rebuilt
-# against this libc and the complete provider admission surface passes.
+# This stage deliberately consumes the isolated GCC pass2 artifact and the
+# fresh StageX provider. It remains outside bootstrap/seed.ncl until the
+# compiler is rebuilt against this libc and the complete provider admission
+# surface passes.
 
 let crunch = import "lib.ncl" in
 
 let stage0 = crunch.derivationFile "stage0-posix.ncl" in
 let make = crunch.derivationFile "make-tcc.ncl" in
 let gcc = crunch.derivationFile "gcc-4.0-native.ncl" in
-let binutils = crunch.derivationFile "binutils-tcc.ncl" in
-let predecessor_musl = crunch.derivationFile "musl-1.1.24-native.ncl" in
+let stagex_provider = import "stagex-provider-proof-input.ncl" in
 let musl_src = crunch.derivationFile "musl-1.1.24-src.ncl" in
 
 {
@@ -38,16 +38,20 @@ let musl_src = crunch.derivationFile "musl-1.1.24-src.ncl" in
       }
 
       GCC=$(find_input gcc-4.0.4-native-gas-v45)
-      BINUTILS=$(find_input binutils-2.30-tcc-source-v1)
-      PREDECESSOR_MUSL=$(find_input musl-1.1.24-native-candidate)
+      STAGEX=$(find_input mantle-stagex-intermediate-provider)
+      PREDECESSOR_MUSL="$STAGEX/x86_64-linux-musl"
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
       SRC=$(find_input musl-1.1.24-src)
 
       WORK=/tmp/musl-gcc-pass3
       TOOLBIN="$WORK/tools"
+      BINUTILS="$WORK/binutils"
       $BB rm -rf "$WORK"
-      $BB mkdir -p "$TOOLBIN"
+      $BB mkdir -p "$TOOLBIN" "$BINUTILS/bin"
+      for tool in ar as ld nm objcopy objdump ranlib readelf size strings strip; do
+        $BB ln -s "$STAGEX/bin/x86_64-linux-musl-$tool" "$BINUTILS/bin/$tool"
+      done
       for applet in awk basename cat chmod cp dirname echo expr find grep head ln mkdir mv od printf pwd rm rmdir sed sh sort test touch tr true uname wc; do
         $BB ln -sf "$BB" "$TOOLBIN/$applet"
       done
@@ -234,5 +238,5 @@ EOF
       echo "musl-1.1.24 GCC pass3 runtime checks passed; not provider admission"
     "%
   ],
-  inputs = [stage0, make, gcc, binutils, predecessor_musl, musl_src],
+  inputs = [stage0, make, gcc, stagex_provider, musl_src],
 } | crunch.Derivation

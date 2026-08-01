@@ -9,7 +9,7 @@ let crunch = import "lib.ncl" in
 let stage0 = crunch.derivationFile "stage0-posix.ncl" in
 let make = crunch.derivationFile "make-tcc.ncl" in
 let gcc = crunch.derivationFile "gcc-4.0-musl-pass3.ncl" in
-let binutils = crunch.derivationFile "binutils-tcc.ncl" in
+let stagex_provider = import "stagex-provider-proof-input.ncl" in
 let musl_src = crunch.derivationFile "musl-1.1.24-src.ncl" in
 
 {
@@ -37,7 +37,7 @@ let musl_src = crunch.derivationFile "musl-1.1.24-src.ncl" in
       }
 
       GCC=$(find_input gcc-4.0.4-musl-pass3-v22)
-      BINUTILS=$(find_input binutils-2.30-tcc-source-v1)
+      STAGEX=$(find_input mantle-stagex-intermediate-provider)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
       SRC=$(find_input musl-1.1.24-src)
@@ -46,15 +46,19 @@ let musl_src = crunch.derivationFile "musl-1.1.24-src.ncl" in
       test -x "$GCC/bin/ld"
       test -x "$GCC/libexec/gcc/$TARGET/$GCC_VERSION/cc1"
       test -s "$GCC/lib/gcc/$TARGET/$GCC_VERSION/libgcc.a"
-      test -x "$BINUTILS/bin/as"
-      test -x "$BINUTILS/bin/ar"
-      test -x "$BINUTILS/bin/ld"
-      test -x "$BINUTILS/bin/readelf"
+      test -x "$STAGEX/bin/x86_64-linux-musl-as"
+      test -x "$STAGEX/bin/x86_64-linux-musl-ar"
+      test -x "$STAGEX/bin/x86_64-linux-musl-ld"
+      test -x "$STAGEX/bin/x86_64-linux-musl-readelf"
 
       WORK=/tmp/musl-gcc-pass4
       TOOLBIN="$WORK/tools"
+      BINUTILS="$WORK/binutils"
       $BB rm -rf "$WORK"
-      $BB mkdir -p "$TOOLBIN"
+      $BB mkdir -p "$TOOLBIN" "$BINUTILS/bin"
+      for tool in ar as ld nm objcopy objdump ranlib readelf size strings strip; do
+        $BB ln -s "$STAGEX/bin/x86_64-linux-musl-$tool" "$BINUTILS/bin/$tool"
+      done
       for applet in awk basename cat chmod cp dirname echo expr find grep head ln mkdir mv od printf pwd rm rmdir sed sh sort test touch tr true uname wc; do
         $BB ln -sf "$BB" "$TOOLBIN/$applet"
       done
@@ -172,5 +176,5 @@ EOF
       echo "musl-1.1.24 GCC pass4 runtime checks passed; not provider admission"
     "%
   ],
-  inputs = [stage0, make, gcc, binutils, musl_src],
+  inputs = [stage0, make, gcc, stagex_provider, musl_src],
 } | crunch.Derivation

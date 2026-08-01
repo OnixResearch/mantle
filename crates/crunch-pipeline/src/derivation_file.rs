@@ -345,6 +345,47 @@ mod tests {
         assert!(!text.is_empty());
     }
 
+    fn assert_stagex_cutover(pending_paths: &[String]) {
+        let forbidden_legacy_names = [
+            "mes",
+            "tinycc-0.9.26",
+            "tinycc-0.9.27",
+            "patch-2.5.9-tcc",
+            "gzip-1.2.4-tcc",
+            "tar-1.12-tcc",
+            "sed-4.0.9-tcc",
+            "tcc-0.9.27-musl-prep",
+            "bzip2-1.0.8-tcc",
+            "coreutils-5.0-tcc",
+            "oyacc-6.6-tcc",
+            "bash-2.05b-tcc",
+            "musl-1.1.24-tcc",
+            "tcc-0.9.27-musl",
+            "musl-1.1.24-tcc-musl",
+            "tcc-0.9.27-musl-v2",
+            "tcc-0.9.27-musl-selfhost",
+            "tcc-0.9.27-musl-native-runtime",
+            "musl-1.1.24-native-candidate",
+            "sed-4.0.9-musl",
+            "m4-1.4.7-musl",
+            "grep-2.4-musl",
+            "diffutils-2.7-musl",
+            "gawk-3.0.4-musl",
+            "bison-2.3-musl",
+            "flex-2.6.4-musl",
+            "binutils-2.30-tcc-source-v1",
+        ];
+        assert!(pending_paths.iter().any(|path| path.ends_with("-stage0-posix.drv")));
+        assert!(pending_paths.iter().any(|path| path.ends_with("-make-3.82-tcc.drv")));
+        for forbidden_name in forbidden_legacy_names {
+            let forbidden_suffix = format!("-{forbidden_name}.drv");
+            assert!(
+                !pending_paths.iter().any(|path| path.ends_with(&forbidden_suffix)),
+                "post-StageX graph retained forbidden legacy derivation {forbidden_name}: {pending_paths:?}"
+            );
+        }
+    }
+
     #[test]
     fn reference_text_accepts_normalized_relative_nickel_path() {
         assert!(validate_reference_text("dep.ncl").is_ok());
@@ -378,7 +419,7 @@ mod tests {
     }
 
     #[test]
-    fn full_source_graph_resolves_gcc40_from_stagex_sources() {
+    fn full_source_graph_cuts_legacy_edges_at_stagex_sources() {
         const PENDING_DERIVATION_COUNT_MIN: usize = 50;
         const STORE_PREFIX: &str = "/mantle/store";
         const STAGEX_PROVIDER: &str =
@@ -399,6 +440,7 @@ mod tests {
         resolver.resolve_root_inputs(&root, &mut derivation, &mut cache).unwrap();
         crunch_glue::convert(&derivation, &mut cache).unwrap();
         let pending = cache.drain_pending();
+        let pending_paths = pending.iter().map(|entry| entry.0.to_string()).collect::<Vec<_>>();
         let gcc40 = pending
             .iter()
             .find(|entry| entry.0.to_string().contains("gcc-4.0.4-native-gas-v45"))
@@ -411,6 +453,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert!(pending.len() >= PENDING_DERIVATION_COUNT_MIN);
+        assert_stagex_cutover(&pending_paths);
         assert!(
             input_sources.iter().any(|source| source == STAGEX_PROVIDER),
             "GCC 4.0 input sources: {input_sources:?}"

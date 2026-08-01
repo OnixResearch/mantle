@@ -2,8 +2,9 @@
 #
 # Mantle build sandboxes expose direct inputs, not arbitrary transitive inputs.
 # This derivation copies the closed GCC 4.0/pass4, musl, binutils, Make,
-# stage0, sed, diffutils, and config.sub surfaces once so later generator stages
-# can retain a linear derivation DAG without recursively flattening `.inputs`.
+# stage0, StageX sed/diffutils, and config.sub surfaces once so later generator
+# stages can retain a linear derivation DAG without recursively flattening
+# `.inputs`.
 
 let crunch = import "lib.ncl" in
 let stage0 = crunch.derivationFile "stage0-posix.ncl" in
@@ -11,8 +12,7 @@ let make = crunch.derivationFile "make-tcc.ncl" in
 let gcc = crunch.derivationFile "gcc-4.0-musl-pass4.ncl" in
 let musl = crunch.derivationFile "musl-1.1.24-gcc-pass4.ncl" in
 let binutils = crunch.derivationFile "binutils-2.30-gcc.ncl" in
-let sed = crunch.derivationFile "sed-4.0.9-musl.ncl" in
-let diffutils = crunch.derivationFile "diffutils-2.7-musl.ncl" in
+let stagex_transition = import "stagex-transition-proof-input.ncl" in
 let automake115_src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/automake/automake-1.15.1.tar.xz",
   hash = "sha256-/KHwBUWoEgUxjLuLFOpqM4c0UXUDWiyiBV4HBTwOcZU=",
@@ -50,8 +50,9 @@ let automake115_src = crunch.fetchTarball {
       BINUTILS=$(find_input binutils-2.30-gcc-pass4-v16)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
-      SED=$(find_input sed-4.0.9-musl)
-      DIFFUTILS=$(find_input diffutils-2.7-musl)
+      TRANSITION=$(find_input mantle-stagex-transition)
+      SED="$TRANSITION/sed-stage/runtime/output"
+      DIFFUTILS="$TRANSITION/diffutils-stage/runtime/output"
       AUTOMAKE115_SRC=$(find_input automake-1.15.1-config-sub-src)
 
       test -x "$GCC/bin/gcc"
@@ -162,5 +163,5 @@ EOF
       echo "GCC generator base direct-input bundle passed"
     "%
   ],
-  inputs = [stage0, make, gcc, musl, binutils, sed, diffutils, automake115_src],
+  inputs = [stage0, make, gcc, musl, binutils, stagex_transition, automake115_src],
 } | crunch.Derivation

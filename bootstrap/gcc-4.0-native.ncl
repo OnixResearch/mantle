@@ -12,7 +12,6 @@ let crunch = import "lib.ncl" in
 # the currently incomplete Perl/autoconf/automake regeneration chain.
 let stagex_provider = import "stagex-provider-proof-input.ncl" in
 let stagex_transition = import "stagex-transition-proof-input.ncl" in
-let tcc = crunch.derivationFile "tcc-musl-native.ncl" in
 
 # Upstream uses a modern automake source only for config.sub. Keeping it as a
 # source input avoids constructing an unrelated late autotools output.
@@ -44,6 +43,7 @@ let gcc_src = crunch.fetchTarball {
       WORK=/tmp/gcc-4.0.4-native
       PASS1=/tmp/gcc-4.0.4-pass1
       COMPILER_TEARDOWN_STATUS=139
+      LINK_OUTPUT_MODE=755
       GCC_ASSEMBLER_COMPAT_FLAGS="-fno-asynchronous-unwind-tables -fno-unwind-tables -fno-common -D__STDC__=1"
 
       find_input() {
@@ -60,7 +60,6 @@ let gcc_src = crunch.fetchTarball {
 
       STAGEX=$(find_input mantle-stagex-intermediate-provider)
       TRANSITION=$(find_input mantle-stagex-transition)
-      TCC=$(find_input tcc-0.9.27-musl-native-runtime)
       MUSL="$STAGEX/x86_64-linux-musl"
       MAKE="$TRANSITION/make-stage/runtime/output"
       SED="$TRANSITION/sed-stage/runtime/output"
@@ -69,13 +68,14 @@ let gcc_src = crunch.fetchTarball {
       DIFF="$TRANSITION/diffutils-stage/runtime/output"
       GAWK="$TRANSITION/gawk-stage/runtime/output"
       STAGEX_COMPAT=/tmp/gcc40-stagex-compat
-      TCC_SELFHOST="$STAGEX_COMPAT/tcc-selfhost"
-      TCC26="$STAGEX_COMPAT/tcc-old"
+      TCC="$STAGEX_COMPAT/tcc"
+      TCC_SELFHOST="$TCC"
+      TCC26="$TCC"
       BINUTILS="$STAGEX_COMPAT/binutils"
       $BB rm -rf "$STAGEX_COMPAT"
-      $BB mkdir -p "$TCC_SELFHOST/bin" "$TCC26/bin" "$BINUTILS/bin"
-      $BB ln -s "$STAGEX/bin/x86_64-linux-musl-tcc" "$TCC_SELFHOST/bin/tcc"
-      $BB ln -s "$STAGEX/bin/x86_64-linux-musl-tcc" "$TCC26/bin/tcc"
+      $BB mkdir -p "$TCC/bin" "$TCC/lib" "$BINUTILS/bin"
+      $BB ln -s "$STAGEX/bin/x86_64-linux-musl-tcc" "$TCC/bin/tcc"
+      $BB ln -s "$STAGEX/lib/tcc" "$TCC/lib/tcc"
       for tool in ar as ld nm objcopy objdump ranlib readelf size strings strip; do
         $BB ln -s "$STAGEX/bin/x86_64-linux-musl-$tool" "$BINUTILS/bin/$tool"
       done
@@ -109,6 +109,7 @@ let gcc_src = crunch.fetchTarball {
 REAL_TCC="$TCC/bin/tcc"
 REAL_CPP_COMPILER="$TCC_SELFHOST/bin/tcc"
 REAL_OLD_COMPILER="$TCC26/bin/tcc"
+REAL_LD="$BINUTILS/bin/ld"
 MUSL_INCLUDE="$MUSL/include"
 MUSL_LIB="$MUSL/lib"
 TCC_RUNTIME="$TCC/lib/tcc/libtcc1.a"
@@ -252,7 +253,10 @@ if [ "\$mode" = link ]; then
     Tcollect2|xgcc|cpp) progname_compat_input="\$PROGNAME_COMPAT_OBJECT" ;;
   esac
   echo "gcc40-tcc-wrapper: link output=\$output_file inputs=\$link_inputs" >&2
-  "\$REAL_TCC" -nostdlib -static -o "\$output_file" "\$MUSL_LIB/crt1.o" \
+  # The protected TinyCC compiler is a bounded C producer. Its internal linker
+  # can fault on larger Autoconf probes. Link those objects with the protected
+  # StageX binutils authority instead of reviving a legacy TinyCC derivation.
+  "\$REAL_LD" -static -o "\$output_file" "\$MUSL_LIB/crt1.o" \
     \$link_inputs \$progname_compat_input "\$LINK_COMPAT_OBJECT" "\$MUSL_LIB/libc.a" "\$TCC_RUNTIME"
   compiler_status=\$?
   echo "gcc40-tcc-wrapper: link status=\$compiler_status" >&2
@@ -265,7 +269,7 @@ if [ "\$mode" = link ]; then
       echo "gcc40-tcc-wrapper: older link-source compile status=\$compiler_status" >&2
       if { [ "\$compiler_status" -eq 0 ] || [ "\$compiler_status" -eq "\$TEARDOWN_STATUS" ]; } && [ -s "\$scratch_link_object" ]; then
         /bin/busybox chmod u+rw "\$scratch_link_object"
-        "\$REAL_OLD_COMPILER" -nostdlib -static -o "\$output_file" "\$MUSL_LIB/crt1.o" \
+        "\$REAL_LD" -static -o "\$output_file" "\$MUSL_LIB/crt1.o" \
           \$link_inputs \$progname_compat_input "\$LINK_COMPAT_OBJECT" "\$MUSL_LIB/libc.a" "\$TCC_RUNTIME"
         compiler_status=\$?
         echo "gcc40-tcc-wrapper: older-object link status=\$compiler_status" >&2
@@ -279,13 +283,14 @@ if [ "\$mode" = link ]; then
   if [ "\$link_output_accepted" = no ]; then
     /bin/busybox rm -f "\$output_file"
     echo "gcc40-tcc-wrapper: retry older compiler for rejected link output=\$output_file" >&2
-    "\$REAL_OLD_COMPILER" -nostdlib -static -o "\$output_file" "\$MUSL_LIB/crt1.o" \
+    "\$REAL_LD" -static -o "\$output_file" "\$MUSL_LIB/crt1.o" \
       \$link_inputs \$progname_compat_input "\$LINK_COMPAT_OBJECT" "\$MUSL_LIB/libc.a" "\$TCC_RUNTIME"
     compiler_status=\$?
     echo "gcc40-tcc-wrapper: older link status=\$compiler_status" >&2
   fi
   if [ -n "\${scratch_link_object:-}" ]; then /bin/busybox rm -f "\$scratch_link_object"; fi
   if { [ "\$compiler_status" -eq 0 ] || [ "\$compiler_status" -eq "\$TEARDOWN_STATUS" ]; } && [ -s "\$output_file" ]; then
+    /bin/busybox chmod $LINK_OUTPUT_MODE "\$output_file"
     exit 0
   fi
   exit "\$compiler_status"
@@ -929,6 +934,6 @@ EOF
     "%
   ],
   inputs = [
-    stagex_provider, stagex_transition, tcc, automake115_src, gcc_src,
+    stagex_provider, stagex_transition, automake115_src, gcc_src,
   ],
 } | crunch.Derivation

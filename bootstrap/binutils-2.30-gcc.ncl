@@ -11,9 +11,8 @@ let stage0 = crunch.derivationFile "stage0-posix.ncl" in
 let make = crunch.derivationFile "make-tcc.ncl" in
 let gcc = crunch.derivationFile "gcc-4.0-musl-pass4.ncl" in
 let musl = crunch.derivationFile "musl-1.1.24-gcc-pass4.ncl" in
-let predecessor_binutils = crunch.derivationFile "binutils-tcc.ncl" in
-let grep = crunch.derivationFile "grep-2.4-musl.ncl" in
-let diffutils = crunch.derivationFile "diffutils-2.7-musl.ncl" in
+let stagex_provider = import "stagex-provider-proof-input.ncl" in
+let stagex_transition = import "stagex-transition-proof-input.ncl" in
 let binutils_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/binutils/binutils-2.30.tar.xz",
   hash = "sha256-L8aaWezlL47cNdPIbSEAtryYUDXLe9htMSECT4xqpoc=",
@@ -48,13 +47,23 @@ let automake115_src = crunch.fetchTarball {
 
       GCC=$(find_input gcc-4.0.4-musl-pass4-v5)
       MUSL=$(find_input musl-1.1.24-gcc-pass4-v2)
-      PREDECESSOR_BINUTILS=$(find_input binutils-2.30-tcc-source-v1)
-      GREP=$(find_input grep-2.4-musl)
-      DIFFUTILS=$(find_input diffutils-2.7-musl)
+      STAGEX=$(find_input mantle-stagex-intermediate-provider)
+      TRANSITION=$(find_input mantle-stagex-transition)
+      GREP="$TRANSITION/grep-stage/runtime/output"
+      DIFFUTILS="$TRANSITION/diffutils-stage/runtime/output"
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
       SRC=$(find_input binutils-2.30-src)
       AUTOMAKE115_SRC=$(find_input automake-1.15.1-config-sub-src)
+
+      WORK=/tmp/binutils-2.30-gcc-pass4
+      TOOLBIN="$WORK/tools"
+      PREDECESSOR_BINUTILS="$WORK/predecessor-binutils"
+      $BB rm -rf "$WORK"
+      $BB mkdir -p "$TOOLBIN" "$PREDECESSOR_BINUTILS/bin"
+      for tool in ar as ld nm objcopy objdump ranlib readelf size strings strip; do
+        $BB ln -s "$STAGEX/bin/x86_64-linux-musl-$tool" "$PREDECESSOR_BINUTILS/bin/$tool"
+      done
 
       test -x "$GCC/bin/gcc"
       test -x "$GCC/bin/ld"
@@ -62,11 +71,8 @@ let automake115_src = crunch.fetchTarball {
       test -s "$GCC/lib/gcc/$TARGET/$GCC_VERSION/libgcc.a"
       test -s "$MUSL/lib/libc.a"
       test -x "$PREDECESSOR_BINUTILS/bin/ar"
-
-      WORK=/tmp/binutils-2.30-gcc-pass4
-      TOOLBIN="$WORK/tools"
-      $BB rm -rf "$WORK"
-      $BB mkdir -p "$TOOLBIN"
+      test -x "$GREP/bin/grep"
+      test -x "$DIFFUTILS/bin/diff"
       for applet in awk basename cat chmod cmp cp cut dirname echo expr find head ln ls mkdir mv od printf pwd readlink rm rmdir sed sh sleep sort tail tar test touch tr true uname uniq wc; do
         $BB ln -sf "$BB" "$TOOLBIN/$applet"
       done
@@ -384,5 +390,14 @@ ASM
       echo "binutils-2.30 clean GCC pass4 runtime checks passed; not provider admission"
     "%
   ],
-  inputs = [stage0, make, gcc, musl, predecessor_binutils, grep, diffutils, binutils_src, automake115_src],
+  inputs = [
+    stage0,
+    make,
+    gcc,
+    musl,
+    stagex_provider,
+    stagex_transition,
+    binutils_src,
+    automake115_src,
+  ],
 } | crunch.Derivation
