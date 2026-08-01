@@ -928,6 +928,8 @@ mod linux {
         use crate::protected_exec::Stage0Inventory;
 
         const CHILD_MODE_VAR: &str = "CRUNCH_TEST_SECCOMP_CHILD_MODE";
+        const LISTENER_ISOLATION_CHILD_MODE: &str = "listener-isolation";
+        const FRESH_LISTENER_WORKER_COUNT: usize = 2;
         const AUDIT_FLUSH_WAIT_MS: u64 = 50;
         const DIAGNOSTIC_TEST_EVENT_COUNT: usize = 2;
         const ORPHAN_EXEC_DELAY_US: libc::useconds_t = 100_000;
@@ -1059,6 +1061,29 @@ mod linux {
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
+        }
+
+        #[test]
+        fn seccomp_listeners_require_distinct_fresh_worker_threads() {
+            if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some(LISTENER_ISOLATION_CHILD_MODE) {
+                run_listener_isolation_child();
+                return;
+            }
+            let output = Command::new(std::env::current_exe().unwrap())
+                .arg("--exact")
+                .arg("protected_exec_seccomp::linux::tests::seccomp_listeners_require_distinct_fresh_worker_threads")
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, LISTENER_ISOLATION_CHILD_MODE)
+                .output()
+                .unwrap();
+
+            assert!(
+                output.status.success(),
+                "stdout={}\nstderr={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(output.stderr.is_empty(), "stderr={}", String::from_utf8_lossy(&output.stderr));
         }
 
         #[test]
@@ -1313,6 +1338,37 @@ mod linux {
             assert!(events[0].inventory_entry_id.is_none());
             assert_eq!(events[1].policy_decision, "denied");
             assert!(events[1].reason.contains("exact diagnostic exec inventory"));
+        }
+
+        fn run_listener_isolation_child() {
+            let current_exe = std::env::current_exe().unwrap();
+            let digest_hex = blake3_file_hex(&current_exe).unwrap();
+            for _ in 0..FRESH_LISTENER_WORKER_COUNT {
+                let worker_digest = digest_hex.clone();
+                std::thread::spawn(move || {
+                    let supervisor = install_current_thread_exec_supervisor(current_exe_policy(worker_digest)).unwrap();
+                    assert!(supervisor.listener_fd() >= 0);
+                    assert!(supervisor.audit_events().is_empty());
+                })
+                .join()
+                .unwrap();
+            }
+            let same_thread_digest = digest_hex.clone();
+            std::thread::spawn(move || {
+                let first =
+                    install_current_thread_exec_supervisor(current_exe_policy(same_thread_digest.clone())).unwrap();
+                let second =
+                    install_current_thread_exec_supervisor(current_exe_policy(same_thread_digest)).unwrap_err();
+                assert!(first.listener_fd() >= 0);
+                assert!(matches!(second, ProtectedSeccompError::Install(_)));
+                assert!(second.to_string().contains("Device or resource busy"));
+            })
+            .join()
+            .unwrap();
+            let status = Command::new("/usr/bin/env").env_clear().status().unwrap();
+
+            assert!(status.success());
+            assert!(FRESH_LISTENER_WORKER_COUNT > 1);
         }
 
         fn run_allow_child() {

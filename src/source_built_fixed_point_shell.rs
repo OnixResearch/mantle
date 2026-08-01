@@ -655,16 +655,19 @@ fn prepare_plan(
 fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAttempt) -> Result<(), RunError> {
     validate_runtime_bounds(options, prepared)?;
     let stagex_transition_execution_dir = prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR);
-    let transition_report = crate::stagex_transition::materialize_protected_transition(StagexTransitionRequest {
-        seed_path: &prepared.stagex_seed,
-        hex0_source_path: &prepared.source_root.join("bootstrap/seeds/AMD64/hex0_AMD64.hex0"),
-        kaem_source_path: &prepared.source_root.join("bootstrap/seeds/AMD64/kaem-minimal.hex0"),
-        lineage_manifest_path: &prepared.stagex_lineage,
-        source_bundle_path: Some(&prepared.stagex_source_bundle),
-        stage0_answers_path: Some(&prepared.source_root.join("bootstrap/stage0-amd64.answers")),
-        scratch_dir: &stagex_transition_execution_dir,
-    })
-    .map_err(|error| proof_error(format!("StageX transition failed: {error}")))?;
+    let transition_result = run_in_isolated_exec_thread("StageX transition", || {
+        crate::stagex_transition::materialize_protected_transition(StagexTransitionRequest {
+            seed_path: &prepared.stagex_seed,
+            hex0_source_path: &prepared.source_root.join("bootstrap/seeds/AMD64/hex0_AMD64.hex0"),
+            kaem_source_path: &prepared.source_root.join("bootstrap/seeds/AMD64/kaem-minimal.hex0"),
+            lineage_manifest_path: &prepared.stagex_lineage,
+            source_bundle_path: Some(&prepared.stagex_source_bundle),
+            stage0_answers_path: Some(&prepared.source_root.join("bootstrap/stage0-amd64.answers")),
+            scratch_dir: &stagex_transition_execution_dir,
+        })
+    })?;
+    let transition_report =
+        transition_result.map_err(|error| proof_error(format!("StageX transition failed: {error}")))?;
     if transition_report.status != PROOF_STATUS_COMPLETE {
         return Err(proof_error(format!(
             "StageX transition status must be complete, got {}",
@@ -706,12 +709,15 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     )?;
 
     let stagex_provider_root = prepared.native_store_dir.join(STAGEX_PROVIDER_STORE_BASENAME);
-    let stagex_provider_report = crate::stagex_provider::materialize_stagex_provider(StagexProviderRequest {
-        lineage_manifest_path: &prepared.stagex_lineage,
-        transition_root: &stagex_transition_execution_dir,
-        output_path: &stagex_provider_root,
-    })
-    .map_err(|error| proof_error(format!("StageX provider publication failed: {error}")))?;
+    let stagex_provider_result = run_in_isolated_exec_thread("StageX provider publication", || {
+        crate::stagex_provider::materialize_stagex_provider(StagexProviderRequest {
+            lineage_manifest_path: &prepared.stagex_lineage,
+            transition_root: &stagex_transition_execution_dir,
+            output_path: &stagex_provider_root,
+        })
+    })?;
+    let stagex_provider_report =
+        stagex_provider_result.map_err(|error| proof_error(format!("StageX provider publication failed: {error}")))?;
     validate_stagex_provider_normalized_identity(&stagex_provider_report.normalized_provider_digest_blake3)?;
     validate_runtime_bounds(options, prepared)?;
     let stagex_logical_path = crate::full_source_provider::adopt_verified_local_provider_path_strict(
@@ -742,6 +748,20 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         &providers,
     )?;
     validate_runtime_bounds(options, prepared)
+}
+
+fn run_in_isolated_exec_thread<T, F>(operation_name: &str, operation: F) -> Result<T, RunError>
+where
+    T: Send,
+    F: FnOnce() -> T + Send,
+{
+    if operation_name.is_empty() {
+        return Err(proof_error("isolated protected operation name is empty".to_string()));
+    }
+    let result = std::thread::scope(|scope| scope.spawn(operation).join());
+    let value = result.map_err(|_| proof_error(format!("{operation_name} worker panicked")))?;
+    assert!(!operation_name.is_empty());
+    Ok(value)
 }
 
 fn materialize_stagex_transition_handoff(execution_root: &Path, handoff_root: &Path) -> Result<(), RunError> {
@@ -1617,6 +1637,22 @@ mod tests {
         assert!(args.iter().any(|argument| argument == "--no-substitute"));
         assert!(args.iter().any(|argument| argument == "--strict-hermetic"));
         assert!(!args.iter().any(|argument| argument == "--impure"));
+    }
+
+    #[test]
+    fn isolated_exec_worker_returns_values_and_reports_invalid_completion() {
+        let orchestrator_thread = std::thread::current().id();
+        let (worker_thread, value) = run_in_isolated_exec_thread("positive worker", || {
+            (std::thread::current().id(), STAGEX_TRANSITION_HANDOFF_DIRECTORY_COUNT)
+        })
+        .unwrap();
+        let empty_name = run_in_isolated_exec_thread("", || ()).unwrap_err();
+        let panic = run_in_isolated_exec_thread("panicking worker", || panic!("controlled worker panic")).unwrap_err();
+
+        assert_ne!(worker_thread, orchestrator_thread);
+        assert_eq!(value, STAGEX_TRANSITION_HANDOFF_DIRECTORY_COUNT);
+        assert!(empty_name.to_string().contains("operation name is empty"));
+        assert!(panic.to_string().contains("worker panicked"));
     }
 
     #[test]
