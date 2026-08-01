@@ -1,0 +1,2 @@
+format=mantle-bootstrap-source-profile-v1 mode=source-built-fixed-point records=68 manifest_blake3=6725fab7d286b7338c6a0d74f92230e95ee89c032a8a0a8fb252c9911209563b provider_kind=stagex-lineage
+non_claim=bootstrap source profile proves source/input availability and identity only
