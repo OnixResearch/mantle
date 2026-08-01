@@ -12,3 +12,7 @@ SNIX_BUILD_SANDBOX_SHELL=/bin/sh nix develop -c cargo clippy -p mantle --bin man
 ```
 
 Task `7152` completed successfully. Cargo reported only the existing vendored `snix-castore` dead-code warning for `directoryservice::combinators::Error::Unimplemented`. First-party Clippy accepted the changed library, binary, and integration test targets with `-D warnings`.
+
+## Post-rebase regression
+
+Main advanced with the independent StageX commit `93f8f4cb`. After rebasing, pueue task `7177` reran the full 53-test pull filter, the 10-test store-pull CLI filter, and both first-party Clippy commands. Task `7177` completed successfully with only the same vendored warning.
