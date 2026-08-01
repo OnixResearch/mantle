@@ -2020,6 +2020,7 @@ pub fn authorize_ticket(
 }
 
 pub fn validate_concrete_request(request: &ConcreteBuildRequest, ticket: &RemoteTicket) -> Result<(), String> {
+    let admitted_ticket = crate::remote_credentials::admit_ticket_policy(ticket)?;
     plan_remote_executable_request(request)?;
     // Reject raw frontend eval requests — CI systems must submit
     // concrete build requests, not eval scheduling fields.
@@ -2031,10 +2032,12 @@ pub fn validate_concrete_request(request: &ConcreteBuildRequest, ticket: &Remote
         return Err(format!("input-ref-count-exceeds-{MAX_REMOTE_INPUT_REFS}"));
     }
     validate_source_input_refs(request)?;
-    if request.upload_bytes > ticket.max_upload_bytes || request.upload_bytes > MAX_REMOTE_UPLOAD_BYTES {
+    if request.upload_bytes > admitted_ticket.upload_byte_limit().bytes()
+        || request.upload_bytes > MAX_REMOTE_UPLOAD_BYTES
+    {
         return Err("upload-byte-limit-exceeded".to_string());
     }
-    if request.build_time_limit_secs > ticket.max_build_time_secs
+    if request.build_time_limit_secs > admitted_ticket.build_time_limit().seconds()
         || request.build_time_limit_secs > MAX_REMOTE_BUILD_TIME_SECS
     {
         return Err("build-time-limit-exceeded".to_string());
@@ -13057,7 +13060,7 @@ fn create_and_deliver_remote_ticket(
     let plan = planned.map_err(RunError::Internal)?;
     let view = crate::remote_credentials::apply_ticket_issue(&mut state, &plan).map_err(RunError::Internal)?;
     save_ticket_state(state_dir, &state)?;
-    if deliver_ticket(delivery_target, plan.bearer_credential().as_str()).is_err() {
+    if plan.with_bearer_credential(|credential| deliver_ticket(delivery_target, credential)).is_err() {
         save_ticket_state(state_dir, &previous_state)
             .map_err(|_| RunError::Internal("remote-ticket-delivery-failed-and-state-rollback-failed".to_string()))?;
         return Err(RunError::Internal("remote-ticket-delivery-failed".to_string()));

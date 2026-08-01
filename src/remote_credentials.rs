@@ -34,9 +34,298 @@ const TICKET_ID_HEX_CHARS: usize = 32;
 const HASH_LENGTH_PREFIX_BYTES: usize = std::mem::size_of::<u64>();
 const ALL_ZERO_ENTROPY_BYTE: u8 = 0;
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TicketId(String);
+
+impl TicketId {
+    pub fn parse_compatible(value: &str) -> Result<Self, String> {
+        validate_legacy_ticket_id(value)?;
+        debug_assert!(!value.is_empty());
+        debug_assert!(value.len() <= TICKET_ID_HEX_CHARS);
+        Ok(Self(value.to_string()))
+    }
+
+    fn parse_generated(value: &str) -> Result<Self, String> {
+        validate_generated_ticket_id(value)?;
+        debug_assert_eq!(value.len(), TICKET_ID_HEX_CHARS);
+        debug_assert!(value.bytes().all(|byte| !byte.is_ascii_uppercase()));
+        Ok(Self(value.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TicketVerifierKeyId(String);
+
+impl TicketVerifierKeyId {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        validate_key_id(value)?;
+        debug_assert!(!value.is_empty());
+        debug_assert!(value.len() <= MAX_TICKET_KEY_ID_BYTES);
+        Ok(Self(value.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TicketTtl(u64);
+
+impl TicketTtl {
+    pub fn new(ttl_secs: u64) -> Result<Self, String> {
+        if ttl_secs == 0 {
+            return Err("remote-ticket-ttl-or-uses-zero".to_string());
+        }
+        if ttl_secs > TICKET_TTL_SECS_MAX {
+            return Err("remote-ticket-ttl-limit-exceeded".to_string());
+        }
+        debug_assert!(ttl_secs > 0);
+        debug_assert!(ttl_secs <= TICKET_TTL_SECS_MAX);
+        Ok(Self(ttl_secs))
+    }
+
+    pub fn seconds(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TicketValidityWindow {
+    created_unix_s: u64,
+    expires_unix_s: u64,
+}
+
+impl TicketValidityWindow {
+    pub fn from_ttl(created_unix_s: u64, ttl: TicketTtl) -> Result<Self, String> {
+        let expires_unix_s = created_unix_s
+            .checked_add(ttl.seconds())
+            .ok_or_else(|| "remote-ticket-expiry-overflow".to_string())?;
+        Self::from_bounds(created_unix_s, expires_unix_s)
+    }
+
+    pub fn from_bounds(created_unix_s: u64, expires_unix_s: u64) -> Result<Self, String> {
+        let span_secs = expires_unix_s
+            .checked_sub(created_unix_s)
+            .ok_or_else(|| "remote-ticket-validity-window-invalid".to_string())?;
+        TicketTtl::new(span_secs).map_err(|_| "remote-ticket-validity-window-invalid".to_string())?;
+        debug_assert!(expires_unix_s > created_unix_s);
+        debug_assert!(span_secs <= TICKET_TTL_SECS_MAX);
+        Ok(Self {
+            created_unix_s,
+            expires_unix_s,
+        })
+    }
+
+    pub fn created_unix_s(self) -> u64 {
+        self.created_unix_s
+    }
+
+    pub fn expires_unix_s(self) -> u64 {
+        self.expires_unix_s
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TicketUseLimit(u32);
+
+impl TicketUseLimit {
+    pub fn new(uses: u32) -> Result<Self, String> {
+        if uses == 0 {
+            return Err("remote-ticket-ttl-or-uses-zero".to_string());
+        }
+        if uses > TICKET_USES_MAX {
+            return Err("remote-ticket-use-limit-exceeded".to_string());
+        }
+        debug_assert!(uses > 0);
+        debug_assert!(uses <= TICKET_USES_MAX);
+        Ok(Self(uses))
+    }
+
+    pub fn count(self) -> u32 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TicketUsesRemaining(u32);
+
+impl TicketUsesRemaining {
+    pub fn new(uses: u32) -> Result<Self, String> {
+        if uses > TICKET_USES_MAX {
+            return Err("remote-ticket-use-limit-exceeded".to_string());
+        }
+        debug_assert!(uses <= TICKET_USES_MAX);
+        debug_assert_eq!(uses.min(TICKET_USES_MAX), uses);
+        Ok(Self(uses))
+    }
+
+    pub fn count(self) -> u32 {
+        self.0
+    }
+}
+
+/// A checked build-time role cannot be replaced with an upload-byte role.
+///
+/// ```compile_fail
+/// use mantle::remote_credentials::{BuildTimeLimit, UploadByteLimit};
+/// fn accepts_build_time(_: BuildTimeLimit) {}
+/// let upload = UploadByteLimit::new(1).unwrap();
+/// accepts_build_time(upload);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BuildTimeLimit(u64);
+
+impl BuildTimeLimit {
+    pub fn new(seconds: u64) -> Result<Self, String> {
+        if seconds == 0 {
+            return Err("remote-ticket-build-time-zero".to_string());
+        }
+        if seconds > TICKET_BUILD_TIME_SECS_MAX {
+            return Err("remote-ticket-build-time-limit-exceeded".to_string());
+        }
+        debug_assert!(seconds > 0);
+        debug_assert!(seconds <= TICKET_BUILD_TIME_SECS_MAX);
+        Ok(Self(seconds))
+    }
+
+    pub fn seconds(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UploadByteLimit(u64);
+
+impl UploadByteLimit {
+    pub fn new(bytes: u64) -> Result<Self, String> {
+        if bytes > TICKET_UPLOAD_BYTES_MAX {
+            return Err("remote-ticket-upload-limit-exceeded".to_string());
+        }
+        debug_assert!(bytes <= TICKET_UPLOAD_BYTES_MAX);
+        debug_assert_eq!(bytes.min(TICKET_UPLOAD_BYTES_MAX), bytes);
+        Ok(Self(bytes))
+    }
+
+    pub fn bytes(self) -> u64 {
+        self.0
+    }
+}
+
+/// Issued bearer material has no ordinary display or Serde path.
+///
+/// ```compile_fail
+/// use mantle::remote_credentials::IssuedBearerToken;
+/// let _: IssuedBearerToken = serde_json::from_str("\"secret\"").unwrap();
+/// ```
+///
+/// ```compile_fail
+/// use mantle::remote_credentials::IssuedBearerToken;
+/// fn render(token: IssuedBearerToken) { println!("{token}"); }
+/// ```
+pub struct IssuedBearerToken(String);
+
+impl IssuedBearerToken {
+    fn from_encoded(value: String) -> Self {
+        debug_assert_eq!(value.len(), TICKET_TOKEN_BASE64URL_BYTES);
+        debug_assert!(!value.is_empty());
+        Self(value)
+    }
+
+    fn expose_to_sink(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for IssuedBearerToken {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("IssuedBearerToken(<redacted>)")
+    }
+}
+
+impl Drop for IssuedBearerToken {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+/// Presented bearer material has no direct deserialization path.
+///
+/// ```compile_fail
+/// use mantle::remote_credentials::PresentedBearerToken;
+/// let _: PresentedBearerToken = serde_json::from_str("\"secret\"").unwrap();
+/// ```
+#[derive(Clone, PartialEq, Eq)]
+pub struct PresentedBearerToken([u8; TICKET_ENTROPY_BYTES]);
+
+impl PresentedBearerToken {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        let mut decoded = decode_ticket_token(value)?;
+        let bytes = std::mem::take(&mut *decoded);
+        debug_assert_eq!(bytes.len(), TICKET_ENTROPY_BYTES);
+        debug_assert!(value.len() == TICKET_TOKEN_BASE64URL_BYTES);
+        Ok(Self(bytes))
+    }
+
+    fn bytes(&self) -> &[u8; TICKET_ENTROPY_BYTES] {
+        &self.0
+    }
+}
+
+impl fmt::Debug for PresentedBearerToken {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("PresentedBearerToken(<redacted>)")
+    }
+}
+
+impl Drop for PresentedBearerToken {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+#[derive(Debug)]
+pub struct AdmittedTicketPolicy<'a> {
+    ticket_id: TicketId,
+    verifier_key_id: TicketVerifierKeyId,
+    verifier: &'a TicketVerifier,
+    validity: TicketValidityWindow,
+    uses_remaining: TicketUsesRemaining,
+    build_time_limit: BuildTimeLimit,
+    upload_byte_limit: UploadByteLimit,
+    bound_client_endpoint: Option<String>,
+    revoked: bool,
+}
+
+impl AdmittedTicketPolicy<'_> {
+    pub fn build_time_limit(&self) -> BuildTimeLimit {
+        self.build_time_limit
+    }
+
+    pub fn upload_byte_limit(&self) -> UploadByteLimit {
+        self.upload_byte_limit
+    }
+}
+
+struct AdmittedTicketPresentation {
+    ticket_id: TicketId,
+    bearer: PresentedBearerToken,
+    client_endpoint: Option<String>,
+    now_unix_s: u64,
+}
+
+struct AdmittedTicketCredential<'a> {
+    policy: AdmittedTicketPolicy<'a>,
+    presentation: AdmittedTicketPresentation,
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct TicketVerifierKey {
-    id: String,
+    id: TicketVerifierKeyId,
     bytes: [u8; TICKET_VERIFIER_KEY_BYTES],
 }
 
@@ -44,7 +333,7 @@ impl TicketVerifierKey {
     pub fn parse(value: &str) -> Result<Self, String> {
         let (id, encoded) =
             value.split_once(':').ok_or_else(|| "remote-ticket-verifier-key-format-invalid".to_string())?;
-        validate_key_id(id)?;
+        let id = TicketVerifierKeyId::parse(id)?;
         let mut bytes = decode_canonical_base64url::<TICKET_VERIFIER_KEY_BYTES>(
             encoded,
             "remote-ticket-verifier-key-encoding-invalid",
@@ -52,13 +341,19 @@ impl TicketVerifierKey {
         if bytes.iter().all(|byte| *byte == ALL_ZERO_ENTROPY_BYTE) {
             return Err("remote-ticket-verifier-key-all-zero".to_string());
         }
+        debug_assert!(bytes.iter().any(|byte| *byte != ALL_ZERO_ENTROPY_BYTE));
+        debug_assert_eq!(bytes.len(), TICKET_VERIFIER_KEY_BYTES);
         Ok(Self {
-            id: id.to_string(),
+            id,
             bytes: std::mem::take(&mut *bytes),
         })
     }
 
     pub fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn key_id(&self) -> &TicketVerifierKeyId {
         &self.id
     }
 
@@ -71,7 +366,7 @@ impl fmt::Debug for TicketVerifierKey {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("TicketVerifierKey")
-            .field("id", &self.id)
+            .field("id", &self.id.as_str())
             .field("bytes", &"<redacted>")
             .finish()
     }
@@ -260,7 +555,7 @@ impl RemoteTicketState {
             return Err("remote-ticket-state-invalidated-id-count-exceeded".to_string());
         }
         for (map_id, ticket) in &self.tickets {
-            validate_ticket_record(map_id, ticket)?;
+            admit_ticket_record(map_id, ticket, TicketIdAdmission::GeneratedState).map(drop)?;
             if self.invalidated_legacy_ticket_ids.contains(map_id) {
                 return Err("remote-ticket-state-active-invalidated-id-overlap".to_string());
             }
@@ -278,33 +573,6 @@ impl RemoteTicketState {
     }
 }
 
-pub struct TicketBearerCredential {
-    value: String,
-}
-
-impl TicketBearerCredential {
-    pub fn as_str(&self) -> &str {
-        &self.value
-    }
-
-    #[cfg(test)]
-    fn token(&self) -> &str {
-        self.value.split_once(':').expect("issued credential always has an id separator").1
-    }
-}
-
-impl fmt::Debug for TicketBearerCredential {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("TicketBearerCredential(<redacted>)")
-    }
-}
-
-impl Drop for TicketBearerCredential {
-    fn drop(&mut self) {
-        self.value.zeroize();
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TicketIssueInput {
     pub display_name: String,
@@ -316,9 +584,20 @@ pub struct TicketIssueInput {
     pub bound_client_endpoint: Option<String>,
 }
 
+#[derive(Debug)]
+struct AdmittedTicketIssueInput {
+    display_name: String,
+    ttl: TicketTtl,
+    validity: TicketValidityWindow,
+    use_limit: TicketUseLimit,
+    build_time_limit: BuildTimeLimit,
+    upload_byte_limit: UploadByteLimit,
+    bound_client_endpoint: Option<String>,
+}
+
 pub struct TicketIssuePlan {
     ticket: RemoteTicket,
-    bearer_credential: TicketBearerCredential,
+    issued_bearer: IssuedBearerToken,
     next_ticket_sequence: u64,
 }
 
@@ -328,8 +607,16 @@ impl TicketIssuePlan {
         &self.ticket
     }
 
-    pub fn bearer_credential(&self) -> &TicketBearerCredential {
-        &self.bearer_credential
+    pub fn with_bearer_credential<R>(&self, sink: impl FnOnce(&str) -> R) -> R {
+        let credential = Zeroizing::new(format!("{}:{}", self.ticket.id, self.issued_bearer.expose_to_sink()));
+        debug_assert!(credential.starts_with(&self.ticket.id));
+        debug_assert!(credential.len() > self.ticket.id.len());
+        sink(&credential)
+    }
+
+    #[cfg(test)]
+    fn issued_bearer_for_test(&self) -> &str {
+        self.issued_bearer.expose_to_sink()
     }
 }
 
@@ -338,7 +625,7 @@ impl fmt::Debug for TicketIssuePlan {
         formatter
             .debug_struct("TicketIssuePlan")
             .field("ticket", &self.ticket)
-            .field("bearer_credential", &self.bearer_credential)
+            .field("issued_bearer", &self.issued_bearer)
             .field("next_ticket_sequence", &self.next_ticket_sequence)
             .finish()
     }
@@ -364,46 +651,44 @@ pub fn plan_ticket_issue(
     verifier_key: &Arc<TicketVerifierKey>,
 ) -> Result<TicketIssuePlan, String> {
     state.validate()?;
-    validate_ticket_issue_input(&input)?;
+    let admitted = admit_ticket_issue_input(input)?;
     validate_ticket_entropy(entropy)?;
-    let expires_unix_s = input
-        .now_unix_s
-        .checked_add(input.ttl_secs)
-        .ok_or_else(|| "remote-ticket-expiry-overflow".to_string())?;
     let next_ticket_sequence = state
         .next_ticket_sequence
         .checked_add(1)
         .ok_or_else(|| "remote-ticket-sequence-overflow".to_string())?;
-    let token = Zeroizing::new(URL_SAFE_NO_PAD.encode(entropy));
-    let token_bytes = decode_ticket_token(token.as_str())?;
-    let verifier = keyed_ticket_verifier(verifier_key, &token_bytes);
+    let issued_bearer = IssuedBearerToken::from_encoded(URL_SAFE_NO_PAD.encode(entropy));
+    let presented_bearer = PresentedBearerToken::parse(issued_bearer.expose_to_sink())?;
+    let verifier = keyed_ticket_verifier(verifier_key, presented_bearer.bytes());
     if state.tickets.values().any(|ticket| ticket.verifier.constant_time_eq(&verifier)) {
         return Err("remote-ticket-entropy-reused".to_string());
     }
-    let id = ticket_identity(&input, state.next_ticket_sequence);
-    if state.tickets.contains_key(&id) || state.invalidated_legacy_ticket_ids.contains(&id) {
+    let id = ticket_identity(&admitted, state.next_ticket_sequence);
+    let ticket_id = TicketId::parse_generated(&id)?;
+    if state.tickets.contains_key(ticket_id.as_str())
+        || state.invalidated_legacy_ticket_ids.contains(ticket_id.as_str())
+    {
         return Err("remote-ticket-identity-collision".to_string());
     }
-    let bearer_credential = TicketBearerCredential {
-        value: format!("{id}:{}", token.as_str()),
-    };
+    debug_assert_eq!(ticket_id.as_str(), id);
+    debug_assert_eq!(Some(next_ticket_sequence), state.next_ticket_sequence.checked_add(1));
     let ticket = RemoteTicket {
         id,
-        display_name: input.display_name,
+        display_name: admitted.display_name,
         verifier_key_id: verifier_key.id().to_string(),
         verifier,
-        created_unix_s: input.now_unix_s,
-        expires_unix_s,
-        uses_remaining: input.uses,
-        max_build_time_secs: input.max_build_time_secs,
-        max_upload_bytes: input.max_upload_bytes,
-        bound_client_endpoint: input.bound_client_endpoint,
+        created_unix_s: admitted.validity.created_unix_s(),
+        expires_unix_s: admitted.validity.expires_unix_s(),
+        uses_remaining: admitted.use_limit.count(),
+        max_build_time_secs: admitted.build_time_limit.seconds(),
+        max_upload_bytes: admitted.upload_byte_limit.bytes(),
+        bound_client_endpoint: admitted.bound_client_endpoint,
         revoked: false,
         runtime_verifier_key: Some(Arc::clone(verifier_key)),
     };
     Ok(TicketIssuePlan {
         ticket,
-        bearer_credential,
+        issued_bearer,
         next_ticket_sequence,
     })
 }
@@ -423,7 +708,31 @@ pub fn apply_ticket_issue(state: &mut RemoteTicketState, plan: &TicketIssuePlan)
 }
 
 pub fn validate_presented_ticket_token(token: &str) -> Result<(), String> {
-    decode_ticket_token(token).map(drop)
+    PresentedBearerToken::parse(token).map(drop)
+}
+
+pub fn admit_ticket_policy(ticket: &RemoteTicket) -> Result<AdmittedTicketPolicy<'_>, String> {
+    admit_ticket_record(&ticket.id, ticket, TicketIdAdmission::CompatibleProtocol)
+}
+
+fn admit_ticket_credential<'a>(
+    ticket: &'a RemoteTicket,
+    presented_token: &str,
+    facts: &TicketPolicyFacts<'_>,
+) -> Result<AdmittedTicketCredential<'a>, String> {
+    let policy = admit_ticket_policy(ticket)?;
+    let ticket_id = TicketId::parse_compatible(facts.ticket_id)?;
+    let bearer = PresentedBearerToken::parse(presented_token)?;
+    validate_bound_client_endpoint(facts.client_endpoint)?;
+    let presentation = AdmittedTicketPresentation {
+        ticket_id,
+        bearer,
+        client_endpoint: facts.client_endpoint.map(str::to_string),
+        now_unix_s: facts.now_unix_s,
+    };
+    debug_assert!(!presentation.ticket_id.as_str().is_empty());
+    debug_assert_eq!(presentation.bearer.bytes().len(), TICKET_ENTROPY_BYTES);
+    Ok(AdmittedTicketCredential { policy, presentation })
 }
 
 pub fn authorize_ticket(
@@ -431,20 +740,20 @@ pub fn authorize_ticket(
     presented_token: &str,
     facts: &TicketPolicyFacts<'_>,
 ) -> TicketAuthorization {
+    let Ok(admitted) = admit_ticket_credential(ticket, presented_token, facts) else {
+        return TicketAuthorization::Rejected("ticket-authentication-failed");
+    };
     let Some(key) = ticket.active_verifier_key() else {
         return TicketAuthorization::Rejected("ticket-authentication-failed");
     };
-    if key.id() != ticket.verifier_key_id {
+    if key.key_id() != &admitted.policy.verifier_key_id {
         return TicketAuthorization::Rejected("ticket-authentication-failed");
     }
-    let Ok(token_bytes) = decode_ticket_token(presented_token) else {
-        return TicketAuthorization::Rejected("ticket-authentication-failed");
-    };
-    let presented_verifier = keyed_ticket_verifier(key, &token_bytes);
-    if !ticket.verifier.constant_time_eq(&presented_verifier) {
+    let presented_verifier = keyed_ticket_verifier(key, admitted.presentation.bearer.bytes());
+    if !admitted.policy.verifier.constant_time_eq(&presented_verifier) {
         return TicketAuthorization::Rejected("ticket-authentication-failed");
     }
-    apply_ticket_policy(ticket, facts)
+    apply_ticket_policy(&admitted)
 }
 
 pub fn redacted_ticket_view(ticket: &RemoteTicket) -> RemoteTicketView {
@@ -475,54 +784,53 @@ pub fn invalidate_tickets_for_key(state: &mut RemoteTicketState, retiring_key_id
     Ok(invalidated_ids)
 }
 
-fn apply_ticket_policy(ticket: &RemoteTicket, facts: &TicketPolicyFacts<'_>) -> TicketAuthorization {
-    if facts.ticket_id != ticket.id {
+fn apply_ticket_policy(admitted: &AdmittedTicketCredential<'_>) -> TicketAuthorization {
+    let policy = &admitted.policy;
+    let presentation = &admitted.presentation;
+    if presentation.ticket_id != policy.ticket_id {
         return TicketAuthorization::Rejected("ticket-id-mismatch");
     }
-    if facts.now_unix_s < ticket.created_unix_s {
+    if presentation.now_unix_s < policy.validity.created_unix_s() {
         return TicketAuthorization::Rejected("ticket-clock-before-issuance");
     }
-    if ticket.revoked {
+    if policy.revoked {
         return TicketAuthorization::Rejected("ticket-revoked");
     }
-    if facts.now_unix_s >= ticket.expires_unix_s {
+    if presentation.now_unix_s >= policy.validity.expires_unix_s() {
         return TicketAuthorization::Rejected("ticket-expired");
     }
-    if ticket.uses_remaining == 0 {
+    if policy.uses_remaining.count() == 0 {
         return TicketAuthorization::Rejected("ticket-exhausted");
     }
-    if let Some(bound) = ticket.bound_client_endpoint.as_deref()
-        && facts.client_endpoint != Some(bound)
+    if let Some(bound) = policy.bound_client_endpoint.as_deref()
+        && presentation.client_endpoint.as_deref() != Some(bound)
     {
         return TicketAuthorization::Rejected("ticket-client-endpoint-mismatch");
     }
     TicketAuthorization::Authorized
 }
 
-fn validate_ticket_issue_input(input: &TicketIssueInput) -> Result<(), String> {
+fn admit_ticket_issue_input(input: TicketIssueInput) -> Result<AdmittedTicketIssueInput, String> {
     if input.display_name.is_empty() || input.display_name.len() > MAX_TICKET_DISPLAY_NAME_BYTES {
         return Err("remote-ticket-display-name-invalid".to_string());
     }
-    if input.ttl_secs == 0 || input.uses == 0 {
-        return Err("remote-ticket-ttl-or-uses-zero".to_string());
-    }
-    if input.ttl_secs > TICKET_TTL_SECS_MAX {
-        return Err("remote-ticket-ttl-limit-exceeded".to_string());
-    }
-    if input.uses > TICKET_USES_MAX {
-        return Err("remote-ticket-use-limit-exceeded".to_string());
-    }
-    if input.max_build_time_secs == 0 {
-        return Err("remote-ticket-build-time-zero".to_string());
-    }
-    if input.max_build_time_secs > TICKET_BUILD_TIME_SECS_MAX {
-        return Err("remote-ticket-build-time-limit-exceeded".to_string());
-    }
-    if input.max_upload_bytes > TICKET_UPLOAD_BYTES_MAX {
-        return Err("remote-ticket-upload-limit-exceeded".to_string());
-    }
+    let ttl = TicketTtl::new(input.ttl_secs)?;
+    let validity = TicketValidityWindow::from_ttl(input.now_unix_s, ttl)?;
+    let use_limit = TicketUseLimit::new(input.uses)?;
+    let build_time_limit = BuildTimeLimit::new(input.max_build_time_secs)?;
+    let upload_byte_limit = UploadByteLimit::new(input.max_upload_bytes)?;
     validate_bound_client_endpoint(input.bound_client_endpoint.as_deref())?;
-    Ok(())
+    debug_assert!(validity.expires_unix_s() > validity.created_unix_s());
+    debug_assert!(use_limit.count() > 0);
+    Ok(AdmittedTicketIssueInput {
+        display_name: input.display_name,
+        ttl,
+        validity,
+        use_limit,
+        build_time_limit,
+        upload_byte_limit,
+        bound_client_endpoint: input.bound_client_endpoint,
+    })
 }
 
 fn validate_ticket_entropy(entropy: &[u8]) -> Result<(), String> {
@@ -567,15 +875,18 @@ fn keyed_ticket_verifier(key: &TicketVerifierKey, token_bytes: &[u8; TICKET_ENTR
     TicketVerifier(*hasher.finalize().as_bytes())
 }
 
-fn ticket_identity(input: &TicketIssueInput, sequence: u64) -> String {
+fn ticket_identity(input: &AdmittedTicketIssueInput, sequence: u64) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(TICKET_IDENTITY_DOMAIN);
     hash_labeled_bytes(&mut hasher, b"display-name", input.display_name.as_bytes());
-    hash_labeled_bytes(&mut hasher, b"created-unix-s", &input.now_unix_s.to_be_bytes());
-    hash_labeled_bytes(&mut hasher, b"ttl-secs", &input.ttl_secs.to_be_bytes());
-    hash_labeled_bytes(&mut hasher, b"uses", &input.uses.to_be_bytes());
+    hash_labeled_bytes(&mut hasher, b"created-unix-s", &input.validity.created_unix_s().to_be_bytes());
+    hash_labeled_bytes(&mut hasher, b"ttl-secs", &input.ttl.seconds().to_be_bytes());
+    hash_labeled_bytes(&mut hasher, b"uses", &input.use_limit.count().to_be_bytes());
     hash_labeled_bytes(&mut hasher, b"sequence", &sequence.to_be_bytes());
-    hasher.finalize().to_hex()[..TICKET_ID_HEX_CHARS].to_string()
+    let id = hasher.finalize().to_hex()[..TICKET_ID_HEX_CHARS].to_string();
+    debug_assert_eq!(id.len(), TICKET_ID_HEX_CHARS);
+    debug_assert!(id.bytes().all(|byte| !byte.is_ascii_uppercase()));
+    id
 }
 
 fn hash_labeled_bytes(hasher: &mut blake3::Hasher, label: &[u8], value: &[u8]) {
@@ -587,15 +898,28 @@ fn hash_labeled_bytes(hasher: &mut blake3::Hasher, label: &[u8], value: &[u8]) {
     hasher.update(value);
 }
 
-fn validate_ticket_record(map_id: &str, ticket: &RemoteTicket) -> Result<(), String> {
-    validate_generated_ticket_id(map_id)?;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TicketIdAdmission {
+    GeneratedState,
+    CompatibleProtocol,
+}
+
+fn admit_ticket_record<'a>(
+    map_id: &str,
+    ticket: &'a RemoteTicket,
+    id_admission: TicketIdAdmission,
+) -> Result<AdmittedTicketPolicy<'a>, String> {
+    let ticket_id = match id_admission {
+        TicketIdAdmission::GeneratedState => TicketId::parse_generated(map_id)?,
+        TicketIdAdmission::CompatibleProtocol => TicketId::parse_compatible(map_id)?,
+    };
     if map_id != ticket.id {
         return Err("remote-ticket-state-map-id-mismatch".to_string());
     }
     if ticket.display_name.is_empty() || ticket.display_name.len() > MAX_TICKET_DISPLAY_NAME_BYTES {
         return Err("remote-ticket-state-display-name-invalid".to_string());
     }
-    validate_key_id(&ticket.verifier_key_id)?;
+    let verifier_key_id = TicketVerifierKeyId::parse(&ticket.verifier_key_id)?;
     let ttl_span = ticket
         .expires_unix_s
         .checked_sub(ticket.created_unix_s)
@@ -603,17 +927,30 @@ fn validate_ticket_record(map_id: &str, ticket: &RemoteTicket) -> Result<(), Str
     if ttl_span == 0 || ttl_span > TICKET_TTL_SECS_MAX {
         return Err("remote-ticket-state-ttl-limit-exceeded".to_string());
     }
-    if ticket.uses_remaining > TICKET_USES_MAX {
-        return Err("remote-ticket-state-use-limit-exceeded".to_string());
-    }
-    if ticket.max_build_time_secs == 0 || ticket.max_build_time_secs > TICKET_BUILD_TIME_SECS_MAX {
-        return Err("remote-ticket-state-build-time-limit-invalid".to_string());
-    }
-    if ticket.max_upload_bytes > TICKET_UPLOAD_BYTES_MAX {
-        return Err("remote-ticket-state-upload-limit-exceeded".to_string());
-    }
+    let validity = TicketValidityWindow {
+        created_unix_s: ticket.created_unix_s,
+        expires_unix_s: ticket.expires_unix_s,
+    };
+    let uses_remaining = TicketUsesRemaining::new(ticket.uses_remaining)
+        .map_err(|_| "remote-ticket-state-use-limit-exceeded".to_string())?;
+    let build_time_limit = BuildTimeLimit::new(ticket.max_build_time_secs)
+        .map_err(|_| "remote-ticket-state-build-time-limit-invalid".to_string())?;
+    let upload_byte_limit = UploadByteLimit::new(ticket.max_upload_bytes)
+        .map_err(|_| "remote-ticket-state-upload-limit-exceeded".to_string())?;
     validate_bound_client_endpoint(ticket.bound_client_endpoint.as_deref())?;
-    Ok(())
+    debug_assert_eq!(ticket_id.as_str(), ticket.id);
+    debug_assert!(validity.expires_unix_s() > validity.created_unix_s());
+    Ok(AdmittedTicketPolicy {
+        ticket_id,
+        verifier_key_id,
+        verifier: &ticket.verifier,
+        validity,
+        uses_remaining,
+        build_time_limit,
+        upload_byte_limit,
+        bound_client_endpoint: ticket.bound_client_endpoint.clone(),
+        revoked: ticket.revoked,
+    })
 }
 
 fn validate_generated_ticket_id(id: &str) -> Result<(), String> {
@@ -697,7 +1034,7 @@ mod tests {
     #[test]
     fn valid_entropy_issues_and_verifies_ticket() {
         let (mut state, plan, _key) = issued();
-        let token = plan.bearer_credential().token().to_string();
+        let token = plan.issued_bearer_for_test().to_string();
         let ticket_id = plan.ticket().id.clone();
         let view = apply_ticket_issue(&mut state, &plan).unwrap();
         let decision = authorize_ticket(state.tickets.get(&ticket_id).unwrap(), &token, &TicketPolicyFacts {
@@ -807,7 +1144,7 @@ mod tests {
     #[test]
     fn malformed_tokens_and_wrong_keys_fail_authentication() {
         let (mut state, plan, _key) = issued();
-        let token = plan.bearer_credential().token().to_string();
+        let token = plan.issued_bearer_for_test().to_string();
         let id = plan.ticket().id.clone();
         apply_ticket_issue(&mut state, &plan).unwrap();
         let facts = TicketPolicyFacts {
@@ -839,7 +1176,7 @@ mod tests {
     #[test]
     fn policy_checks_follow_successful_verifier_comparison() {
         let (mut state, plan, key) = issued();
-        let token = plan.bearer_credential().token().to_string();
+        let token = plan.issued_bearer_for_test().to_string();
         let id = plan.ticket().id.clone();
         apply_ticket_issue(&mut state, &plan).unwrap();
         let ticket = state.tickets.get_mut(&id).unwrap();
@@ -895,8 +1232,8 @@ mod tests {
     #[test]
     fn state_serialization_contains_verifier_but_not_bearer_material() {
         let (mut state, plan, _key) = issued();
-        let credential = plan.bearer_credential().as_str().to_string();
-        let token = plan.bearer_credential().token().to_string();
+        let credential = plan.with_bearer_credential(str::to_string);
+        let token = plan.issued_bearer_for_test().to_string();
         apply_ticket_issue(&mut state, &plan).unwrap();
         let rendered = serde_json::to_string(&state).unwrap();
 
@@ -914,8 +1251,8 @@ mod tests {
         let (_state, plan, _key) = issued();
 
         assert_eq!(predicted_legacy_secret.len(), 64);
-        assert_ne!(plan.bearer_credential().token(), predicted_legacy_secret);
-        assert_eq!(plan.bearer_credential().token().len(), TICKET_TOKEN_BASE64URL_BYTES);
+        assert_ne!(plan.issued_bearer_for_test(), predicted_legacy_secret);
+        assert_eq!(plan.issued_bearer_for_test().len(), TICKET_TOKEN_BASE64URL_BYTES);
     }
 
     #[test]
@@ -941,5 +1278,82 @@ mod tests {
         assert_eq!(decoded, plan.ticket().verifier);
         assert_eq!(format!("{:?}", plan.ticket().verifier), "TicketVerifier(<redacted>)");
         assert!(serde_json::from_str::<TicketVerifier>("\"AAAA\"").is_err());
+    }
+
+    #[test]
+    fn nominal_roles_accept_valid_boundaries() {
+        let ticket_id = TicketId::parse_compatible("ticket-1").unwrap();
+        let key_id = TicketVerifierKeyId::parse(TEST_KEY_ID).unwrap();
+        let ttl = TicketTtl::new(TICKET_TTL_SECS_MAX).unwrap();
+        let validity = TicketValidityWindow::from_ttl(TEST_NOW_UNIX_S, ttl).unwrap();
+        let use_limit = TicketUseLimit::new(TICKET_USES_MAX).unwrap();
+        let uses_remaining = TicketUsesRemaining::new(0).unwrap();
+        let build_time = BuildTimeLimit::new(TICKET_BUILD_TIME_SECS_MAX).unwrap();
+        let upload_bytes = UploadByteLimit::new(TICKET_UPLOAD_BYTES_MAX).unwrap();
+
+        assert_eq!(ticket_id.as_str(), "ticket-1");
+        assert_eq!(key_id.as_str(), TEST_KEY_ID);
+        assert_eq!(validity.expires_unix_s(), TEST_NOW_UNIX_S.checked_add(TICKET_TTL_SECS_MAX).unwrap());
+        assert_eq!(use_limit.count(), TICKET_USES_MAX);
+        assert_eq!(uses_remaining.count(), 0);
+        assert_eq!(build_time.seconds(), TICKET_BUILD_TIME_SECS_MAX);
+        assert_eq!(upload_bytes.bytes(), TICKET_UPLOAD_BYTES_MAX);
+    }
+
+    #[test]
+    fn nominal_roles_reject_invalid_boundaries_and_overflow() {
+        let oversized_id = "x".repeat(TICKET_ID_HEX_CHARS.checked_add(1).unwrap());
+        assert!(TicketId::parse_compatible("").is_err());
+        assert!(TicketId::parse_compatible("bad id").is_err());
+        assert!(TicketId::parse_compatible(&oversized_id).is_err());
+        assert!(TicketVerifierKeyId::parse("").is_err());
+        assert!(TicketTtl::new(0).is_err());
+        assert!(TicketTtl::new(TICKET_TTL_SECS_MAX.checked_add(1).unwrap()).is_err());
+        assert!(TicketValidityWindow::from_ttl(u64::MAX, TicketTtl::new(1).unwrap()).is_err());
+        assert!(TicketValidityWindow::from_bounds(TEST_NOW_UNIX_S, TEST_NOW_UNIX_S).is_err());
+        assert!(TicketValidityWindow::from_bounds(TEST_NOW_UNIX_S, CLOCK_ROLLBACK_NOW_UNIX_S).is_err());
+        assert!(TicketUseLimit::new(0).is_err());
+        assert!(TicketUseLimit::new(TICKET_USES_MAX.checked_add(1).unwrap()).is_err());
+        assert!(TicketUsesRemaining::new(TICKET_USES_MAX.checked_add(1).unwrap()).is_err());
+        assert!(BuildTimeLimit::new(0).is_err());
+        assert!(BuildTimeLimit::new(TICKET_BUILD_TIME_SECS_MAX.checked_add(1).unwrap()).is_err());
+        assert!(UploadByteLimit::new(TICKET_UPLOAD_BYTES_MAX.checked_add(1).unwrap()).is_err());
+        assert!(PresentedBearerToken::parse("not-a-token").is_err());
+    }
+
+    #[test]
+    fn secret_nominal_types_format_only_as_redacted() {
+        let encoded = URL_SAFE_NO_PAD.encode([TEST_ENTROPY_BYTE; TICKET_ENTROPY_BYTES]);
+        let issued = IssuedBearerToken::from_encoded(encoded.clone());
+        let presented = PresentedBearerToken::parse(&encoded).unwrap();
+        let issued_debug = format!("{issued:?}");
+        let presented_debug = format!("{presented:?}");
+
+        assert_eq!(issued_debug, "IssuedBearerToken(<redacted>)");
+        assert_eq!(presented_debug, "PresentedBearerToken(<redacted>)");
+        assert!(!issued_debug.contains(&encoded));
+        assert!(!presented_debug.contains(&encoded));
+    }
+
+    #[test]
+    fn malformed_structural_state_cannot_reach_authentication_policy() {
+        let (mut state, plan, key) = issued();
+        let token = plan.issued_bearer_for_test().to_string();
+        let id = plan.ticket().id.clone();
+        apply_ticket_issue(&mut state, &plan).unwrap();
+        let ticket = state.tickets.get_mut(&id).unwrap();
+        ticket.bind_active_verifier_key(&key);
+        ticket.expires_unix_s = ticket.created_unix_s;
+        let facts = TicketPolicyFacts {
+            ticket_id: &id,
+            client_endpoint: Some("client-a"),
+            now_unix_s: TEST_NOW_UNIX_S,
+        };
+
+        assert_eq!(admit_ticket_policy(ticket).unwrap_err(), "remote-ticket-state-ttl-limit-exceeded");
+        assert_eq!(
+            authorize_ticket(ticket, &token, &facts),
+            TicketAuthorization::Rejected("ticket-authentication-failed")
+        );
     }
 }

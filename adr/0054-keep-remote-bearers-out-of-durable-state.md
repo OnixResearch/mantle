@@ -27,6 +27,8 @@ Mantle stores a keyed BLAKE3 verifier and its key identifier. It does not store 
 
 Mantle compares recomputed verifier bytes with a constant-time operation. It checks expiry, use count, revocation, and endpoint policy after authentication.
 
+A pure admission boundary converts structural records into distinct credential, validity, use-state, build-time, and upload-limit roles. Malformed records cannot enter verifier or policy logic.
+
 The service supplies current time. A transport supplies authenticated peer identity when it has that capability. Client claims do not provide either authority fact.
 
 Mantle resolves the ticket-verifier key and result-signing key through SecretSpec `0.17.0`. Every request selects an explicit profile and the `mantle-remote` scope.

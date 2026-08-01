@@ -33,6 +33,16 @@ The provider runs in a worker process. Mantle applies a deadline, process-group 
 
 Provider failure stops the operation. Mantle does not try another provider, generate a key, or write ticket state.
 
+## Credential admission
+
+Wire and legacy-state records remain structural until the pure credential core admits them.
+
+The core uses distinct types for ticket identity, issued and presented bearers, verifier identity, validity, use state, and resource limits.
+
+Secret types have no ordinary display or Serde path. Build-time and upload limits cannot be exchanged without an explicit checked conversion.
+
+Malformed records fail before verifier comparison or policy evaluation. Compatibility parsing still accepts bounded public identifiers such as `ticket-1`.
+
 ## Create a ticket
 
 Open a caller-owned descriptor before the command. Do not use standard output or standard error for the bearer.
