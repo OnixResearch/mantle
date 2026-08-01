@@ -41,6 +41,14 @@
 // synced requirements implemented there need a small bridge until the coverage
 // rail scans the package root directly.
 
+// Artifact-auth live cutover validation bridge.
+//
+// r[impl mantle.artifact_auth_adoption.live_validation_scope]
+// r[verify mantle.artifact_auth_adoption.live_validation_scope]
+// The scoped source matcher and its current, unrelated-change, and wrong-revision
+// fixtures live in the `artifact-auth-radicle-cutover` check in `flake.nix`.
+// The accepted Nickel, JSON, and BLAKE3 receipt files remain unchanged.
+
 // Atomic release publication bridge.
 //
 // r[impl mantle.release_provenance.bundle_publication.atomic_commit]

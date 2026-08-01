@@ -876,6 +876,7 @@
                   pkgs.b3sum
                   pkgs.jq
                   pkgs.nickel
+                  pkgs.nix
                   pkgs.ripgrep
                 ];
                 src = self;
@@ -898,11 +899,48 @@
                 expected_receipt_hash="$(tr -d '\n' < evidence/radicle/artifact-auth-cutover-v1.blake3)"
                 test "$receipt_hash" = "$expected_receipt_hash"
 
+                source_url='https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git'
+                source_rev='799459346d5416fbd7b9f55840a7371441b55afa'
+                source_nar_hash='sha256-nEgz2FtVuDesX95yyxidp0vhjxL4INB6Ve8rkpLyJk0='
+                wrong_source_rev='1111111111111111111111111111111111111111'
+                expected_flake_source="git+$source_url?rev=$source_rev"
+                wrong_flake_source="git+$source_url?rev=$wrong_source_rev"
+                expected_flake_input="url = \"$expected_flake_source\";"
+                wrong_flake_input="url = \"$wrong_flake_source\";"
+                export NIX_STATE_DIR="$TMPDIR/nix-state"
+                export NIX_LOG_DIR="$TMPDIR/nix-log"
+                mkdir -p "$NIX_STATE_DIR" "$NIX_LOG_DIR"
+
+                # r[impl mantle.artifact_auth_adoption.live_validation_scope]
+                scoped_flake_source() {
+                  source_file="$1"
+                  nix-instantiate --eval --strict --json \
+                    --attr inputs.artifactAuthSource.url "$source_file" | jq -r .
+                }
+
+                # r[verify mantle.artifact_auth_adoption.live_validation_scope]
+                test "$(scoped_flake_source flake.nix)" = "$expected_flake_source"
+
+                cp flake.nix "$TMPDIR/unrelated-flake.nix"
+                chmod u+w "$TMPDIR/unrelated-flake.nix"
+                printf '\n# unrelated flake maintenance fixture\n' >> "$TMPDIR/unrelated-flake.nix"
+                test "$(scoped_flake_source "$TMPDIR/unrelated-flake.nix")" = "$expected_flake_source"
+
+                cp flake.nix "$TMPDIR/wrong-source-flake.nix"
+                chmod u+w "$TMPDIR/wrong-source-flake.nix"
+                substituteInPlace "$TMPDIR/wrong-source-flake.nix" \
+                  --replace-fail "$expected_flake_input" "$wrong_flake_input"
+                actual_wrong_source="$(scoped_flake_source "$TMPDIR/wrong-source-flake.nix")"
+                test "$actual_wrong_source" = "$wrong_flake_source"
+                if test "$actual_wrong_source" = "$expected_flake_source"; then
+                  echo 'wrong artifact-auth flake revision passed scoped validation' >&2
+                  exit 1
+                fi
+
                 for binding in \
                   'cargo.core_manifest_blake3:crates/crunch-action-result-core/Cargo.toml' \
                   'cargo.shell_manifest_blake3:crates/crunch-build/Cargo.toml' \
                   'cargo.lock_blake3:Cargo.lock' \
-                  'nix.flake_blake3:flake.nix' \
                   'nix.lock_blake3:flake.lock'; do
                   field="''${binding%%:*}"
                   path="''${binding#*:}"
@@ -911,9 +949,6 @@
                   test "$actual" = "$expected"
                 done
 
-                source_url='https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git'
-                source_rev='799459346d5416fbd7b9f55840a7371441b55afa'
-                source_nar_hash='sha256-nEgz2FtVuDesX95yyxidp0vhjxL4INB6Ve8rkpLyJk0='
                 jq -e \
                   --arg url "$source_url" \
                   --arg rev "$source_rev" \
