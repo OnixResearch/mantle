@@ -1,4 +1,4 @@
-# ADR 0044: Keep remote bearers out of durable state
+# ADR 0054: Keep remote bearers out of durable state
 
 ## Status
 
