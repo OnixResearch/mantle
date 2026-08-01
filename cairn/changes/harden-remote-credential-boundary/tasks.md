@@ -46,10 +46,10 @@
 
 ## 6. Validate and gate rollout
 
-- [ ] [serial] 6.1 Run `cargo fmt --all -- --check`. r[remote_builds.ticket_randomness]
+- [x] [serial] 6.1 Run `cargo fmt --all -- --check`. r[remote_builds.ticket_randomness]
 - [x] [serial] 6.2 Run focused positive and negative remote credential, nominal-admission, compile-fail, and secret-redaction tests. r[remote_builds.ticket_constant_time_verification] r[remote_builds.ticket_nominal_secret_boundary]
-- [ ] [serial] 6.3 Run `cargo test --workspace`. r[remote_builds.ticket_verifier_state]
-- [ ] [serial] 6.4 Run `cargo clippy --workspace --all-targets -- -D warnings`. r[remote_builds.ticket_constant_time_verification]
-- [ ] [serial] 6.5 Run the relevant Nix and Nickel checks. r[remote_builds.secretspec_service_keys]
-- [ ] [serial] 6.6 Run Cairn validation, requirement coverage, design gate, and tasks gate. r[remote_builds.no_secret_evidence]
-- [ ] [serial] 6.7 Archive migration evidence before enabling the public remote-service gateway. r[remote_builds.legacy_ticket_invalidation]
+- [x] [serial] 6.3 Run `cargo test --workspace`. r[remote_builds.ticket_verifier_state]
+- [x] [serial] 6.4 Run `cargo clippy --workspace --all-targets -- -D warnings`. r[remote_builds.ticket_constant_time_verification]
+- [x] [serial] 6.5 Run the relevant Nix and Nickel checks. r[remote_builds.secretspec_service_keys]
+- [x] [serial] 6.6 Run Cairn validation, requirement coverage, design gate, and tasks gate. r[remote_builds.no_secret_evidence]
+- [x] [serial] 6.7 Archive migration evidence before enabling the public remote-service gateway. r[remote_builds.legacy_ticket_invalidation]
