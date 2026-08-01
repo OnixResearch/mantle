@@ -49,7 +49,7 @@
   - Evidence: `evidence/package-checks.md`; task `7152` completed successfully.
 - [x] [serial] H1 Import a recorded `cache.nixos.org` root closure into fresh store and state directories, verify complete local PathInfo/castore state, and record exact bounded evidence. If network access blocks the run, record the exact blocker and do not claim live closure proof. r[cache_substitution.complete_http_closure_pull]
   - Evidence: `evidence/live-cache-nixos-hello/summary.md`; five members imported, five reused on repeat, isolated `Hello, world!` execution passed.
-- [ ] [serial] V4 Run Cairn validate, proposal, design, tasks, and Tracey coverage gates. Record exact results in `evidence/lifecycle-gates.md`. r[cache_substitution.complete_http_closure_pull]
-  - Blocked: the pre-existing generated policy lacks `nominal_identity_policy`; see `evidence/lifecycle-gates.md`.
+- [x] [serial] V4 Run Cairn validate, proposal, design, tasks, and Tracey coverage gates. Record exact results in `evidence/lifecycle-gates.md`. r[cache_substitution.complete_http_closure_pull]
+  - Evidence: `evidence/lifecycle-gates.md` records passing validation and change gates under the current explicit Cairn policy. Broad Tracey remains non-green from unrelated debt, but the synced requirement is referenced and is neither missing nor dangling.
 - [x] [serial] R1 Review the final diff and evidence against the requirement. Preserve package correctness, rebuild compatibility, evaluator parity, private-cache authentication, and release eligibility as non-claims. r[cache_substitution.complete_http_closure_pull]
   - Evidence: `evidence/oracle-review.md`; final review retained all named non-claims and resolved the advisory aggregate-size question.

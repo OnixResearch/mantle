@@ -2,22 +2,70 @@
 
 Date: 2026-08-01
 
-## Final validation attempt
+## Policy selection
+
+Mantle's checked-in generated policy predates Cairn's required `nominal_identity_policy` field. The active `extend-nominal-types-to-trust-boundaries` change owns that refresh.
+
+This change used the current sibling Cairn policy explicitly:
 
 ```text
-$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .
-error: failed to parse policy cairn-policy/generated/cairn-policy.json: policy missing field nominal_identity_policy; diagnostic=policy-refresh-required; missing_field=nominal_identity_policy; refresh_command=nix run path:$CAIRN_SOURCE#cairn -- policy export --output cairn-policy/generated/cairn-policy.json
+/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+policy_hash: 860fcf019180b030d855e90c3475a102dc6cdeb4aeb5214badeb84e0dd95145f
 ```
 
-The current sibling Cairn binary stops before it reads the change package. Proposal, design, tasks, and Tracey gates therefore did not run.
+This is the same bounded workaround recorded by the nominal-types change. This change does not modify Cairn policy files.
 
-The earlier non-mutating policy refresh probe also failed:
+## Read-only lifecycle gates
+
+Pueue tasks `7153` through `7157` ran these commands with the explicit policy:
 
 ```text
-$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- policy export --root . --output /tmp/mantle-cairn-policy-20260801.json
-error: Nickel import must be repository-root-relative
+cairn validate --root .
+cairn gate proposal import-complete-http-cache-closures --root .
+cairn gate design import-complete-http-cache-closures --root .
+cairn gate tasks import-complete-http-cache-closures --root .
+cairn tracey coverage --root .
 ```
 
-The active `extend-nominal-types-to-trust-boundaries` change owns the missing nominal identity policy surface. This closure change does not modify that unrelated active policy work.
+Results:
 
-V4 remains incomplete. This change must not sync or archive until the policy owner repairs the generated policy and all lifecycle gates pass.
+```text
+validate: valid=true
+proposal: valid=true, verdict=PASS
+design: valid=true, verdict=PASS
+tasks: valid=true, verdict=PASS, done=18, todo=1
+tracey before sync: valid=false; the active requirement ID was dangling
+```
+
+## Accepted-spec sync
+
+Pueue task `7173` executed the reviewed sync plan. It added the requirement to `cairn/specs/cache-substitution/spec.md`.
+
+```text
+plan_hash: c671c63325085282ce5adeab6f41fe594f5e15d1378b60e3bd8388a786e47e64
+receipt_hash: 7ac94838ad5c53f35eb018ed4b91e7f311f6898b08d1ebb1088cbcbd36cf1210
+```
+
+## Tracey after sync
+
+Pueue task `7177` reran broad Tracey coverage after sync.
+
+```text
+requirements: 681
+referenced: 254
+valid: false
+receipt_hash: 0a7d8877b2fa5220c19924d32e6ff245c3e3f49362c43a363901fe427df9bc58
+```
+
+The broad profile retains unrelated historical missing and dangling IDs. `cache_substitution.complete_http_closure_pull` is absent from both lists and increased the referenced count by one. This evidence does not claim global Tracey coverage is green.
+
+## Final completed-task gates
+
+Pueue tasks `7192` through `7195` reran validation and all three change gates after sync and task completion.
+
+```text
+validate: valid=true
+proposal: valid=true, verdict=PASS
+design: valid=true, verdict=PASS
+tasks: valid=true, verdict=PASS, done=19, todo=0
+```
