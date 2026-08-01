@@ -1,8 +1,8 @@
 ## ADDED Requirements
 
-### Requirement: Live cutover validation is scoped to artifact-auth source facts r[mantle.artifact_auth_adoption.live_validation_scope]
+### Requirement: Live cutover validation is scoped to artifact-auth source facts
 
-Mantle MUST preserve the accepted historical cutover receipt while live validation checks the current artifact-auth source declaration, Cargo manifests and lock, Nix lock identity, package set, and forbidden fallback state. Live validation MUST NOT require the current whole `flake.nix` file to retain the historical cutover digest.
+r[mantle.artifact_auth_adoption.live_validation_scope] Mantle MUST preserve the accepted historical cutover receipt while live validation checks the current artifact-auth source declaration, Cargo manifests and lock, Nix lock identity, package set, and forbidden fallback state. Live validation MUST NOT require the current whole `flake.nix` file to retain the historical cutover digest.
 
 #### Scenario: Unrelated flake maintenance preserves admission
 

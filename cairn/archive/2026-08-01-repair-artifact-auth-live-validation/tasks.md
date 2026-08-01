@@ -12,5 +12,7 @@
 
 ## Phase 3: Validate and complete
 
-- [ ] [serial] V2 Run the targeted Nix check, Cairn validation, all three change gates, and Tracey coverage. Record exact output. r[mantle.artifact_auth_adoption.live_validation_scope]
-- [ ] [serial] V3 Sync, inspect, archive, and record post-archive validation. r[mantle.artifact_auth_adoption.live_validation_scope]
+- [x] [serial] V2 Run the targeted Nix check, Cairn validation, all three change gates, and Tracey coverage. Record exact output. r[mantle.artifact_auth_adoption.live_validation_scope]
+  - Evidence: `evidence/validation.md` records focused success, four passing lifecycle commands, scoped Tracey coverage, and the unrelated broad-gate blockers.
+- [x] [serial] V3 Sync, inspect, archive, and record post-archive validation. r[mantle.artifact_auth_adoption.live_validation_scope]
+  - Evidence: sync plan `2085c9fc4f680b97962fca55e7c1ffa912c90d1a79279f1c5d8429c84b38b656` reported `already_applied`; the canonical requirement preserves all prior artifact-auth requirements. Archive and post-archive output are recorded with this change.

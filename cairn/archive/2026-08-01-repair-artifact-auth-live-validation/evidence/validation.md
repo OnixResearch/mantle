@@ -62,7 +62,9 @@ Pueue task `7402` ran current-policy Tracey coverage before sync. It reported:
 error: tracey coverage failed
 ```
 
-This repository-wide debt predates this change. The change adds a `tools/tracey_refs.rs` bridge for its new requirement. A post-sync run must show that this requirement is not missing.
+This repository-wide debt predates this change. The change adds a `tools/tracey_refs.rs` bridge for its new requirement.
+
+After sync, pueue task `7475` reported `681` requirements and `254` referenced requirements. The new requirement increased both counts by one. Its ID was absent from both `missing` and `dangling`. The broad pre-existing coverage debt kept the final verdict at `fail`.
 
 Pueue task `7435` ran `nix flake check -L`. The repaired artifact-auth check passed. The broad gate stopped at an unrelated baseline blocker:
 
