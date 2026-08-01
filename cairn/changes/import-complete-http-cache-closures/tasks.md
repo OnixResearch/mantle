@@ -10,8 +10,10 @@
 
 ## Phase 2: Pure closure plan
 
-- [ ] [serial] I2 Add a pure observation-driven closure planner with typed member, depth, metadata, aggregate NAR-size, duplicate, conflict, and finalization errors. r[cache_substitution.complete_http_closure_pull]
-- [ ] [serial] I3 Compute a canonical BLAKE3 plan identity over authority, trust policy, store prefix, root, limits, and member facts. r[cache_substitution.complete_http_closure_pull]
+- [x] [serial] I2 Add a pure observation-driven closure planner with typed member, depth, metadata, aggregate NAR-size, duplicate, conflict, and finalization errors. r[cache_substitution.complete_http_closure_pull]
+  - Evidence: `crates/crunch-store/src/http_closure.rs`.
+- [x] [serial] I3 Compute a canonical BLAKE3 plan identity over authority, trust policy, store prefix, root, limits, and member facts. r[cache_substitution.complete_http_closure_pull]
+  - Evidence: `HttpClosurePlanBuilder::finalize` and `compute_plan_blake3`.
 - [ ] [parallel] I4 Add positive tests for one member, linear, diamond, cycle, shortest-depth, stable order, and stable identity. r[cache_substitution.complete_http_closure_pull]
 - [ ] [parallel] I5 Add negative tests for every limit, duplicate references, conflicting path identity, unexpected observations, and incomplete finalization. r[cache_substitution.complete_http_closure_pull]
 
