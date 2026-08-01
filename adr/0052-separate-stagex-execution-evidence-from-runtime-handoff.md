@@ -41,6 +41,8 @@ A deterministic handoff report records this fixed allowlist and its non-claim. M
 
 The complete execution tree remains unchanged. The runtime handoff does not contain binutils scratch, tool-namespace links, or transition evidence copies with run-specific paths.
 
+The bound native source manifest can name the reserved transition and provider paths as empty virtual store-path records. Those records bind the current graph shape, but they are not acquisition payloads. The profile materializes the exact deduplicated union of fixed-fetch records from the native and StageX manifests. The proof constructs and imports the two StageX store paths before native offline preflight.
+
 ## Alternatives Considered
 
 ### Permit internal absolute symlinks during source admission

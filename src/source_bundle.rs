@@ -3147,7 +3147,7 @@ fn source_fetch_override_key(source_override: &crunch_build::FetchSourceOverride
     (kind, source_override.url.clone(), source_override.rev.clone())
 }
 
-fn source_record_is_fetcher_input(record: &SourceRecord) -> bool {
+pub(crate) fn source_record_is_fetcher_input(record: &SourceRecord) -> bool {
     matches!(record.kind, SourceRecordKind::FixedUrl | SourceRecordKind::VcsSnapshot)
         || source_record_is_legacy_provider_fetch(record)
 }
@@ -4218,7 +4218,7 @@ fn read_supplemental_bundle_records(paths: &[PathBuf]) -> Result<Vec<SourceRecor
         records
             .try_reserve(manifest.records.len())
             .map_err(|error| RunError::Internal(format!("reserving supplemental source records: {error}")))?;
-        records.extend(manifest.records);
+        records.extend(manifest.records.into_iter().filter(source_record_is_fetcher_input));
     }
     merge_identical_source_records(records)
 }
@@ -5804,6 +5804,33 @@ mod tests {
         assert!(error.to_string().contains("source-built-fixed-point"));
         assert!(error.to_string().contains("requires materialized --include-bundle"));
         assert!(!error.to_string().contains("provider output"));
+    }
+
+    #[test]
+    fn supplemental_bundle_reader_keeps_fetches_and_excludes_constructed_store_authorities() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload");
+        fs::write(&payload, b"source payload").unwrap();
+        let fetcher = fixed_fetcher("native-fixed-src", &file_url(&payload));
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let planned =
+            plan_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap();
+        let supplemental = materialized_record_from_payload(&planned.records[0], &payload, false);
+        let constructed = store_path_source_record(StorePathSourceRequest {
+            source_path: "/mantle/store/fresh-stagex-provider",
+            store_prefix: "/mantle/store",
+        })
+        .unwrap();
+        let manifest =
+            assemble_source_bundle(vec![supplemental.clone(), constructed.clone()], "/mantle/store").unwrap();
+        let bundle = temp.path().join("current-native-source.json");
+        write_source_bundle(&bundle, &manifest).unwrap();
+
+        let observed = read_supplemental_bundle_records(&[bundle]).unwrap();
+
+        assert_eq!(observed, vec![supplemental]);
+        assert!(!source_record_is_fetcher_input(&constructed));
+        assert!(constructed.files.is_empty());
     }
 
     #[test]

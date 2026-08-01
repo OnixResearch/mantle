@@ -518,7 +518,12 @@ fn validate_materialized_source_records(
         }
     }
     let mut expected_by_identity = BTreeMap::new();
-    for record in native_manifest.records.iter().chain(&stagex_manifest.records) {
+    for record in native_manifest
+        .records
+        .iter()
+        .chain(&stagex_manifest.records)
+        .filter(|record| crate::source_bundle::source_record_is_fetcher_input(record))
+    {
         if let Some(existing) = expected_by_identity.get(record.identity.as_str()) {
             if *existing != record {
                 return Err(proof_error(format!(
@@ -1939,7 +1944,7 @@ mod tests {
         fs::write(&extra_payload, b"extra source").unwrap();
         let native = crate::source_bundle::plan_source_bundle(
             &[crate::source_bundle::SourceSpec {
-                kind: crate::source_bundle::SourceRecordKind::LocalPath,
+                kind: crate::source_bundle::SourceRecordKind::FixedUrl,
                 identity: "native".to_string(),
                 path: native_payload,
                 adapter: None,
@@ -1949,7 +1954,7 @@ mod tests {
         .unwrap();
         let stagex = crate::source_bundle::plan_source_bundle(
             &[crate::source_bundle::SourceSpec {
-                kind: crate::source_bundle::SourceRecordKind::LocalPath,
+                kind: crate::source_bundle::SourceRecordKind::FixedUrl,
                 identity: "stagex".to_string(),
                 path: stagex_payload,
                 adapter: None,
@@ -1959,7 +1964,7 @@ mod tests {
         .unwrap();
         let extra = crate::source_bundle::plan_source_bundle(
             &[crate::source_bundle::SourceSpec {
-                kind: crate::source_bundle::SourceRecordKind::LocalPath,
+                kind: crate::source_bundle::SourceRecordKind::FixedUrl,
                 identity: "extra".to_string(),
                 path: extra_payload,
                 adapter: None,
@@ -1968,8 +1973,16 @@ mod tests {
         )
         .unwrap();
         let exact = vec![&native.records[0], &stagex.records[0]];
+        let mut native_with_constructed_authority = native.clone();
+        let mut constructed_authority = native.records[0].clone();
+        constructed_authority.kind = crate::source_bundle::SourceRecordKind::ToolchainSourceRoot;
+        constructed_authority.identity = "fresh-stagex-provider".to_string();
+        constructed_authority.files.clear();
+        constructed_authority.payload_bytes = 0;
+        native_with_constructed_authority.records.push(constructed_authority);
 
         validate_materialized_source_records(&native, &stagex, &exact).unwrap();
+        validate_materialized_source_records(&native_with_constructed_authority, &stagex, &exact).unwrap();
         let native_raw_digest = hash_materialized_source(&temp.path().join("native")).unwrap();
         let native_input = source_input_from_record(
             "native",
