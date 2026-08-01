@@ -10,12 +10,13 @@ This is a production blocker for any public remote-build service. Mantle needs r
 
 - Generate ticket material from operating-system cryptographic randomness in the imperative shell. Keep ticket policy and verifier construction in pure functions.
 - Deliver a ticket secret once through an explicit caller-owned secret sink. Keep normal output free of bearer material and persist only a keyed BLAKE3 verifier plus public metadata.
+- Represent ticket IDs, bearer tokens, verifier values, key IDs, validity windows, use limits, build-time limits, and upload limits with checked nominal types.
 - Verify presented ticket material in constant time and preserve explicit expiry, revocation, scope, use-count, and verifier-key rotation policy.
 - Add an explicit migration that invalidates legacy deterministic and plaintext tickets, removes their secret fields, and requires replacement issuance.
 - Pin the SecretSpec Rust SDK at `v0.17.0` for Mantle service secrets, including the ticket-verifier key and result-signing key.
 - Resolve SecretSpec values only in a bounded imperative worker and prefer systemd credentials for deployed services.
 - Harden state-file creation, replacement, permissions, symlink handling, diagnostics, and evidence.
-- Add positive and negative tests for entropy injection, verifier behavior, migration, corruption, replay, expiry, scope, redaction, and provider failure.
+- Add positive and negative tests for entropy injection, typed admission, verifier behavior, migration, corruption, replay, expiry, scope, redaction, and provider failure.
 
 ## Non-Goals
 
@@ -34,6 +35,6 @@ This is a production blocker for any public remote-build service. Mantle needs r
 ## Impact
 
 - **Affected specs:** `remote-builds`
-- **Affected code:** remote ticket creation and verification, remote state schema, state I/O shell, service-key loading, migration command, and diagnostics
+- **Affected code:** remote ticket nominal types, creation and verification, remote state schema, state I/O shell, service-key loading, migration command, and diagnostics
 - **Operator impact:** all legacy tickets become invalid and must be reissued
 - **Security impact:** this change must archive before the public remote-service gateway is enabled

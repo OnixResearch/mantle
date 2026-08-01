@@ -30,6 +30,28 @@ Presented tokens are decoded strictly, recomputed with the active verifier key, 
 
 Ticket-verifier key rotation is invalidating by default. State binds each verifier to a public key identifier. Retiring a key invalidates every remaining ticket under that identifier and requires replacement issuance. Mantle does not keep an undeclared old key or silently extend an overlap window.
 
+## Credential nominal boundary
+
+The structural protocol and legacy-state DTOs retain raw text long enough to produce bounded migration and malformed-input diagnostics. One pure admission function converts accepted values into these core roles:
+
+- `TicketId` for bounded public ticket identity;
+- `IssuedBearerToken` for one-time secret delivery;
+- `PresentedBearerToken` for strict authentication input;
+- `TicketVerifier` for keyed BLAKE3 verifier bytes;
+- `TicketVerifierKeyId` for public key selection;
+- `TicketTtl` for bounded issuance lifetime;
+- `TicketValidityWindow` for ordered creation and expiry times;
+- `TicketUseLimit` for nonzero issuance policy;
+- `TicketUsesRemaining` for state that can reach zero;
+- `BuildTimeLimit` for bounded execution duration;
+- `UploadByteLimit` for bounded input transfer.
+
+Secret-bearing types do not implement ordinary `Display`, derived `Debug`, or unrestricted serialization. They expose bytes only to verifier construction, constant-time matching, or the explicit caller-owned secret sink. Their redacted debug output contains no length, prefix, suffix, digest, or value-derived data.
+
+The public compatibility parser can continue to accept existing non-empty ticket IDs such as `ticket-1`. Production issuance may derive a stronger public ID, but the nominal type does not add an undocumented digest-only wire rule.
+
+A `UnixSeconds` scalar does not prove time ordering. `TicketValidityWindow::from_ttl` uses checked addition and confirms that expiry follows creation. The shell supplies the observed current time explicitly to pure policy evaluation.
+
 ## Functional core and imperative shell
 
 ### Functional core

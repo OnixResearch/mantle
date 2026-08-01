@@ -91,6 +91,40 @@ Mantle SHALL decode presented ticket material strictly, recompute the keyed veri
 - **THEN** constant-time comparison SHALL reject it
 - **AND** diagnostics SHALL NOT distinguish which verifier bytes differed
 
+### Requirement: remote_builds.ticket_nominal_secret_boundary
+
+r[remote_builds.ticket_nominal_secret_boundary]
+
+Mantle SHALL convert structural ticket input into distinct checked ticket, bearer-token, verifier, key-identity, TTL, validity-window, use-limit, remaining-use, build-time-limit, and upload-limit types before authentication or policy evaluation.
+
+#### Scenario: Valid structural credential is admitted
+
+- **GIVEN** a bounded ticket request contains a valid public ID, bearer token, explicit time, and policy limits
+- **WHEN** credential admission runs
+- **THEN** Mantle SHALL construct distinct checked values before verifier comparison or policy evaluation
+- **AND** the pure credential core SHALL retain those roles until a redacted diagnostic or explicit secret sink requires projection
+
+#### Scenario: Malformed credential cannot bypass admission
+
+- **GIVEN** a credential has an empty or oversized ID, malformed bearer token, overflowing TTL, invalid validity window, zero use limit, or excessive resource limit
+- **WHEN** direct protocol admission or deserialization runs
+- **THEN** Mantle SHALL reject the credential before authentication
+- **AND** derived deserialization SHALL NOT bypass checked construction
+- **AND** no ticket state SHALL be written or redeemed
+
+#### Scenario: Secret-bearing type reaches a diagnostic
+
+- **GIVEN** an issued or presented bearer token enters an error, debug, report, or serialization path
+- **WHEN** Mantle renders that path
+- **THEN** it SHALL omit the token, its length, prefix, suffix, digest, and other value-derived data
+- **AND** only the explicit one-time secret sink MAY receive the issued bearer value
+
+#### Scenario: Resource limits cannot be exchanged
+
+- **GIVEN** build-time and upload limits use numeric primitive representations
+- **WHEN** source passes an upload limit to an API that requires a build-time limit
+- **THEN** the source SHALL fail compilation or require an explicit checked conversion
+
 ### Requirement: remote_builds.secretspec_service_keys
 
 r[remote_builds.secretspec_service_keys]

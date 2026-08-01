@@ -14,6 +14,9 @@
 - [ ] [serial] 2.3 Add strict token encoding and decoding plus constant-time verifier comparison. r[remote_builds.ticket_constant_time_verification]
 - [ ] [serial] 2.4 Add positive tests for issue and verify flows. r[remote_builds.ticket_constant_time_verification]
 - [ ] [serial] 2.5 Add negative tests for short entropy, repeated fixtures, malformed tokens, wrong keys, expiry, revocation, scope mismatch, and replay limits. r[remote_builds.ticket_randomness] r[remote_builds.ticket_constant_time_verification]
+- [ ] [serial] 2.6 Add checked `TicketId`, `IssuedBearerToken`, `PresentedBearerToken`, `TicketVerifier`, `TicketVerifierKeyId`, `TicketTtl`, `TicketValidityWindow`, `TicketUseLimit`, `TicketUsesRemaining`, `BuildTimeLimit`, and `UploadByteLimit` types. r[remote_builds.ticket_nominal_secret_boundary]
+- [ ] [serial] 2.7 Convert structural protocol and legacy-state values through one pure credential-admission boundary before verification or policy evaluation. r[remote_builds.ticket_nominal_secret_boundary]
+- [ ] [parallel] 2.8 Add compile-fail role tests and negative direct-Serde, TTL-overflow, invalid-window, swapped-limit, and secret-formatting tests. r[remote_builds.ticket_nominal_secret_boundary] r[remote_builds.no_secret_evidence]
 
 ## 3. Integrate SecretSpec service keys
 
@@ -39,11 +42,12 @@
 - [ ] [serial] 5.2 Add structured redaction for SecretSpec and state I/O failures. r[remote_builds.no_secret_evidence]
 - [ ] [serial] 5.3 Add tests that scan stdout, stderr, logs, diagnostics, snapshots, receipts, and migration reports for secret material and value-derived hashes. r[remote_builds.ticket_one_time_delivery] r[remote_builds.no_secret_evidence]
 - [ ] [serial] 5.4 Document rotation, backup exposure, incident response, migration, and rollback. r[remote_builds.legacy_ticket_invalidation]
+- [ ] [serial] 5.5 Remove ordinary secret `Debug`, `Display`, and serialization paths. Keep explicit one-time sink exposure and redacted diagnostics only. r[remote_builds.ticket_nominal_secret_boundary] r[remote_builds.no_secret_evidence]
 
 ## 6. Validate and gate rollout
 
 - [ ] [serial] 6.1 Run `cargo fmt --all -- --check`. r[remote_builds.ticket_randomness]
-- [ ] [serial] 6.2 Run focused positive and negative remote credential tests. r[remote_builds.ticket_constant_time_verification]
+- [ ] [serial] 6.2 Run focused positive and negative remote credential, nominal-admission, compile-fail, and secret-redaction tests. r[remote_builds.ticket_constant_time_verification] r[remote_builds.ticket_nominal_secret_boundary]
 - [ ] [serial] 6.3 Run `cargo test --workspace`. r[remote_builds.ticket_verifier_state]
 - [ ] [serial] 6.4 Run `cargo clippy --workspace --all-targets -- -D warnings`. r[remote_builds.ticket_constant_time_verification]
 - [ ] [serial] 6.5 Run the relevant Nix and Nickel checks. r[remote_builds.secretspec_service_keys]
