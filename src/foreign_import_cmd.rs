@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -8,10 +9,15 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::errors::RunError;
+use crate::foreign_derivation_import::AtermDerivationInput;
+use crate::foreign_derivation_import::AtermProducerConfig;
 use crate::foreign_derivation_import::CacheHint;
 use crate::foreign_derivation_import::ForeignDerivationGraph;
 use crate::foreign_derivation_import::ImportDiagnostic;
 use crate::foreign_derivation_import::ImportReceipt;
+use crate::foreign_derivation_import::MAX_ATERM_BUNDLE_BYTES;
+use crate::foreign_derivation_import::MAX_ATERM_BUNDLE_DERIVATIONS;
+use crate::foreign_derivation_import::MAX_ATERM_DERIVATION_BYTES;
 use crate::foreign_derivation_import::MantleForeignPlan;
 use crate::foreign_derivation_import::NixDerivationJsonExport;
 use crate::foreign_derivation_import::NixProducerConfig;
@@ -20,8 +26,10 @@ use crate::foreign_derivation_import::TranslationPolicy;
 use crate::foreign_derivation_import::admit_translated_graph;
 use crate::foreign_derivation_import::foreign_import_non_claims;
 use crate::foreign_derivation_import::lower_nix_derivation_json_closure;
+use crate::foreign_derivation_import::lower_prefix_aware_aterm_closure;
 use crate::foreign_derivation_import::normalize_nix_aterm_derivation_closure;
 use crate::foreign_derivation_import::normalize_nix_derivation_json_export;
+use crate::foreign_derivation_import::parse_prefix_aware_aterm_bundle;
 use crate::foreign_derivation_import::plan_mantle_foreign_import;
 use crate::foreign_derivation_import::select_nix_derivation_json_closure;
 use crate::foreign_derivation_import::translate_foreign_graph;
@@ -30,6 +38,7 @@ const CLI_REPORT_SCHEMA: &str = "mantle-foreign-import-cli-v1";
 const VALIDATE_COMMAND: &str = "validate";
 const PLAN_COMMAND: &str = "plan";
 const PRODUCE_NIX_COMMAND: &str = "produce-nix";
+const PRODUCE_ATERM_COMMAND: &str = "produce-aterm";
 const ACCEPTED_VERDICT: &str = "accepted";
 const REJECTED_VERDICT: &str = "rejected";
 const FAILURE_EXIT_CODE: u8 = 1;
@@ -41,6 +50,8 @@ const DEFAULT_PRODUCER_REVISION: &str = "unknown";
 const DEFAULT_CACHE_TRUST_SCOPE: &str = "trusted-binary-cache";
 const NIXPKGS_GRAPH_FILE: &str = "nixpkgs.graph.json";
 const NIXPKGS_INDEX_FILE: &str = "nixpkgs.index.json";
+const ATERM_GRAPH_FILE: &str = "foreign-aterm.graph.json";
+const ATERM_INDEX_FILE: &str = "foreign-aterm.index.json";
 const DRV_SPEC_SEPARATOR: char = '=';
 const DRV_FILE_EXTENSION: &str = "drv";
 const NIX_LOGICAL_STORE_PREFIX: &str = "/nix/store";
@@ -88,6 +99,62 @@ pub(crate) enum ForeignImportAction {
         /// System to select from the package index
         #[arg(long, default_value = DEFAULT_SYSTEM)]
         system: String,
+    },
+
+    /// Lower explicit prefix-aware ATerm derivations into foreign import artifacts
+    ProduceAterm {
+        /// Declared source store prefix: `/nix/store` or `/gnu/store`
+        #[arg(long = "source-prefix")]
+        source_prefix: String,
+
+        /// Explicit logical `.drv` path to ATerm file mapping:
+        /// `/gnu/store/...drv=/path/to/file.drv`
+        #[arg(long = "drv")]
+        drv_files: Vec<String>,
+
+        /// Directory containing direct child `*.drv` ATerm files named by store basename
+        #[arg(long = "drv-dir")]
+        drv_dir: Option<PathBuf>,
+
+        /// Concrete root `.drv` path inside the provided derivation closure
+        #[arg(long = "root-derivation")]
+        root_derivation: String,
+
+        /// Producer kind recorded in `foreign-derivation-graph-v1`
+        #[arg(long = "producer-kind")]
+        producer_kind: String,
+
+        /// Package name to write into `foreign-package-index-v1`
+        #[arg(long, default_value = DEFAULT_PACKAGE_NAME)]
+        package: String,
+
+        /// Package system to write into `foreign-package-index-v1`
+        #[arg(long, default_value = DEFAULT_SYSTEM)]
+        system: String,
+
+        /// Producer identity or selected package provenance
+        #[arg(long = "producer-identity")]
+        producer_identity: String,
+
+        /// Producer revision or provenance revision when known
+        #[arg(long = "producer-revision", default_value = DEFAULT_PRODUCER_REVISION)]
+        producer_revision: String,
+
+        /// Binary cache hint URL to record as policy data on the selected root
+        #[arg(long = "cache-url")]
+        cache_urls: Vec<String>,
+
+        /// Trust scope label associated with every `--cache-url` hint
+        #[arg(long = "cache-trust-scope", default_value = DEFAULT_CACHE_TRUST_SCOPE)]
+        cache_trust_scope: String,
+
+        /// Unsupported frontend metadata class to carry in the package index
+        #[arg(long = "unsupported-metadata-class")]
+        unsupported_metadata_classes: Vec<String>,
+
+        /// Directory where graph and package-index JSON artifacts are written
+        #[arg(long = "out-dir")]
+        out_dir: PathBuf,
     },
 
     /// Lower concrete Nix derivation facts into foreign import artifacts
@@ -172,6 +239,23 @@ struct ForeignPlanRequest<'a> {
     json: bool,
 }
 
+struct AtermProducerRequest<'a> {
+    source_prefix: &'a str,
+    drv_file_specs: &'a [String],
+    drv_dir: Option<&'a Path>,
+    root_derivation: &'a str,
+    producer_kind: &'a str,
+    package: &'a str,
+    system: &'a str,
+    producer_identity: &'a str,
+    producer_revision: &'a str,
+    cache_urls: &'a [String],
+    cache_trust_scope: &'a str,
+    unsupported_metadata_classes: &'a [String],
+    out_dir: &'a Path,
+    json: bool,
+}
+
 struct NixProducerRequest<'a> {
     derivation_json_path: Option<&'a Path>,
     drv_file_specs: &'a [String],
@@ -214,6 +298,36 @@ pub(crate) fn cmd_foreign_import(action: ForeignImportAction, json: bool) -> Res
             policy_path: &policy,
             package: &package,
             system: &system,
+            json,
+        }),
+        ForeignImportAction::ProduceAterm {
+            source_prefix,
+            drv_files,
+            drv_dir,
+            root_derivation,
+            producer_kind,
+            package,
+            system,
+            producer_identity,
+            producer_revision,
+            cache_urls,
+            cache_trust_scope,
+            unsupported_metadata_classes,
+            out_dir,
+        } => run_produce_aterm(AtermProducerRequest {
+            source_prefix: &source_prefix,
+            drv_file_specs: &drv_files,
+            drv_dir: drv_dir.as_deref(),
+            root_derivation: &root_derivation,
+            producer_kind: &producer_kind,
+            package: &package,
+            system: &system,
+            producer_identity: &producer_identity,
+            producer_revision: &producer_revision,
+            cache_urls: &cache_urls,
+            cache_trust_scope: &cache_trust_scope,
+            unsupported_metadata_classes: &unsupported_metadata_classes,
+            out_dir: &out_dir,
             json,
         }),
         ForeignImportAction::ProduceNix {
@@ -354,7 +468,251 @@ fn run_produce_nix(request: NixProducerRequest<'_>) -> Result<(), RunError> {
     let index_path = request.out_dir.join(NIXPKGS_INDEX_FILE);
     write_json_file(&graph_path, &artifacts.graph)?;
     write_json_file(&index_path, &artifacts.package_index)?;
-    emit_report(producer_report(&graph_path, &index_path), request.json)
+    emit_report(producer_report(PRODUCE_NIX_COMMAND, &graph_path, &index_path), request.json)
+}
+
+fn run_produce_aterm(request: AtermProducerRequest<'_>) -> Result<(), RunError> {
+    assert!(!PRODUCE_ATERM_COMMAND.is_empty(), "ATerm producer command identity must not be empty");
+    assert_ne!(ATERM_GRAPH_FILE, ATERM_INDEX_FILE, "ATerm producer artifact names must differ");
+    let inputs = match read_aterm_producer_inputs(request.source_prefix, request.drv_file_specs, request.drv_dir)? {
+        Ok(inputs) => inputs,
+        Err(report) => return emit_report(report, request.json),
+    };
+    let closure = match parse_prefix_aware_aterm_bundle(request.source_prefix, &inputs) {
+        Ok(closure) => closure,
+        Err(diagnostic) => return emit_report(rejected_report(PRODUCE_ATERM_COMMAND, diagnostic), request.json),
+    };
+    let config = AtermProducerConfig {
+        source_prefix: request.source_prefix.to_string(),
+        producer_kind: request.producer_kind.to_string(),
+        package_name: request.package.to_string(),
+        system: request.system.to_string(),
+        root_derivation: request.root_derivation.to_string(),
+        producer_identity: request.producer_identity.to_string(),
+        producer_revision: request.producer_revision.to_string(),
+        cache_hints: producer_cache_hints(request.cache_urls, request.cache_trust_scope),
+        unsupported_metadata_classes: request.unsupported_metadata_classes.to_vec(),
+    };
+    let artifacts = match lower_prefix_aware_aterm_closure(&closure, &config) {
+        Ok(artifacts) => artifacts,
+        Err(diagnostic) => return emit_report(rejected_report(PRODUCE_ATERM_COMMAND, diagnostic), request.json),
+    };
+    fs::create_dir_all(request.out_dir).map_err(|error| {
+        RunError::Internal(format!("creating foreign import artifact directory {}: {error}", request.out_dir.display()))
+    })?;
+    let graph_path = request.out_dir.join(ATERM_GRAPH_FILE);
+    let index_path = request.out_dir.join(ATERM_INDEX_FILE);
+    write_json_file(&graph_path, &artifacts.graph)?;
+    write_json_file(&index_path, &artifacts.package_index)?;
+    emit_report(producer_report(PRODUCE_ATERM_COMMAND, &graph_path, &index_path), request.json)
+}
+
+fn producer_cache_hints(cache_urls: &[String], trust_scope: &str) -> Vec<CacheHint> {
+    let hints = cache_urls
+        .iter()
+        .map(|cache_url| CacheHint {
+            cache_url: cache_url.clone(),
+            trust_scope: trust_scope.to_string(),
+        })
+        .collect::<Vec<_>>();
+    debug_assert_eq!(hints.len(), cache_urls.len());
+    debug_assert!(hints.iter().all(|hint| hint.trust_scope == trust_scope));
+    hints
+}
+
+fn read_aterm_producer_inputs(
+    source_prefix: &str,
+    drv_file_specs: &[String],
+    drv_dir: Option<&Path>,
+) -> Result<Result<Vec<AtermDerivationInput>, ForeignImportCliReport>, RunError> {
+    let mode_count = [!drv_file_specs.is_empty(), drv_dir.is_some()].into_iter().filter(|selected| *selected).count();
+    if mode_count == 0 {
+        return Ok(Err(rejected_report(
+            PRODUCE_ATERM_COMMAND,
+            diagnostic("missing-aterm-producer-input", None, "provide --drv logical=file inputs or --drv-dir"),
+        )));
+    }
+    if mode_count != 1 {
+        return Ok(Err(rejected_report(
+            PRODUCE_ATERM_COMMAND,
+            diagnostic("aterm-producer-input-mode-conflict", None, "provide exactly one of --drv inputs or --drv-dir"),
+        )));
+    }
+    let result = if let Some(dir) = drv_dir {
+        read_aterm_drv_dir(source_prefix, dir)
+    } else {
+        read_aterm_drv_specs(drv_file_specs)
+    }?;
+    debug_assert_eq!(mode_count, 1);
+    debug_assert!(mode_count > 0);
+    Ok(result)
+}
+
+fn read_aterm_drv_specs(
+    drv_file_specs: &[String],
+) -> Result<Result<Vec<AtermDerivationInput>, ForeignImportCliReport>, RunError> {
+    if drv_file_specs.len() > MAX_ATERM_BUNDLE_DERIVATIONS {
+        return Ok(Err(rejected_report(
+            PRODUCE_ATERM_COMMAND,
+            diagnostic(
+                "foreign-aterm-derivation-count-out-of-range",
+                None,
+                "foreign ATerm explicit bundle exceeds the derivation limit",
+            ),
+        )));
+    }
+    let mut inputs = Vec::with_capacity(drv_file_specs.len());
+    let mut total_bytes = 0usize;
+    for spec in drv_file_specs {
+        let (logical_path, file_path) = match parse_aterm_file_spec(spec) {
+            Ok(pair) => pair,
+            Err(diagnostic) => return Ok(Err(rejected_report(PRODUCE_ATERM_COMMAND, diagnostic))),
+        };
+        let bytes = match read_aterm_file(&logical_path, &file_path) {
+            Ok(bytes) => bytes,
+            Err(report) => return Ok(Err(report)),
+        };
+        if let Err(report) =
+            push_bounded_aterm_input(&mut inputs, &mut total_bytes, AtermDerivationInput { logical_path, bytes })
+        {
+            return Ok(Err(report));
+        }
+    }
+    debug_assert_eq!(inputs.len(), drv_file_specs.len());
+    debug_assert!(total_bytes <= MAX_ATERM_BUNDLE_BYTES);
+    debug_assert!(!inputs.is_empty());
+    Ok(Ok(inputs))
+}
+
+fn read_aterm_drv_dir(
+    source_prefix: &str,
+    drv_dir: &Path,
+) -> Result<Result<Vec<AtermDerivationInput>, ForeignImportCliReport>, RunError> {
+    let entries = fs::read_dir(drv_dir).map_err(|error| {
+        RunError::Internal(format!("reading foreign import drv dir {}: {error}", drv_dir.display()))
+    })?;
+    let mut file_paths = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|error| {
+            RunError::Internal(format!("reading foreign import drv dir {}: {error}", drv_dir.display()))
+        })?;
+        let file_path = entry.path();
+        if file_path.extension().and_then(|extension| extension.to_str()) != Some(DRV_FILE_EXTENSION) {
+            continue;
+        }
+        if file_paths.len() >= MAX_ATERM_BUNDLE_DERIVATIONS {
+            return Ok(Err(rejected_report(
+                PRODUCE_ATERM_COMMAND,
+                diagnostic(
+                    "foreign-aterm-derivation-count-out-of-range",
+                    None,
+                    "foreign ATerm directory bundle exceeds the derivation limit",
+                ),
+            )));
+        }
+        file_paths.push(file_path);
+    }
+    file_paths.sort();
+    let file_count = file_paths.len();
+    let mut inputs = Vec::with_capacity(file_count);
+    let mut total_bytes = 0usize;
+    for file_path in file_paths {
+        let Some(file_name) = file_path.file_name().and_then(|name| name.to_str()) else {
+            return Ok(Err(rejected_report(
+                PRODUCE_ATERM_COMMAND,
+                diagnostic("non-utf8-foreign-derivation-filename", None, "drv directory contains non-UTF-8 filename"),
+            )));
+        };
+        let logical_path = format!("{source_prefix}/{file_name}");
+        let bytes = match read_aterm_file(&logical_path, &file_path) {
+            Ok(bytes) => bytes,
+            Err(report) => return Ok(Err(report)),
+        };
+        if let Err(report) =
+            push_bounded_aterm_input(&mut inputs, &mut total_bytes, AtermDerivationInput { logical_path, bytes })
+        {
+            return Ok(Err(report));
+        }
+    }
+    debug_assert_eq!(inputs.len(), file_count);
+    debug_assert!(inputs.len() <= MAX_ATERM_BUNDLE_DERIVATIONS);
+    debug_assert!(total_bytes <= MAX_ATERM_BUNDLE_BYTES);
+    Ok(Ok(inputs))
+}
+
+fn push_bounded_aterm_input(
+    inputs: &mut Vec<AtermDerivationInput>,
+    total_bytes: &mut usize,
+    input: AtermDerivationInput,
+) -> Result<(), ForeignImportCliReport> {
+    let next_total = total_bytes.checked_add(input.bytes.len()).ok_or_else(|| {
+        rejected_report(
+            PRODUCE_ATERM_COMMAND,
+            diagnostic(
+                "foreign-aterm-bundle-bytes-out-of-range",
+                None,
+                "foreign ATerm bundle byte count overflowed while reading",
+            ),
+        )
+    })?;
+    if next_total > MAX_ATERM_BUNDLE_BYTES {
+        return Err(rejected_report(
+            PRODUCE_ATERM_COMMAND,
+            diagnostic(
+                "foreign-aterm-bundle-bytes-out-of-range",
+                None,
+                "foreign ATerm bundle exceeds the total byte limit while reading",
+            ),
+        ));
+    }
+    *total_bytes = next_total;
+    inputs.push(input);
+    debug_assert!(*total_bytes <= MAX_ATERM_BUNDLE_BYTES);
+    debug_assert!(inputs.len() <= MAX_ATERM_BUNDLE_DERIVATIONS);
+    Ok(())
+}
+
+fn read_aterm_file(logical_path: &str, file_path: &Path) -> Result<Vec<u8>, ForeignImportCliReport> {
+    let read_limit = MAX_ATERM_DERIVATION_BYTES.checked_add(1).expect("ATerm read limit must fit usize");
+    let read_limit_u64 = u64::try_from(read_limit).expect("ATerm read limit must fit u64");
+    let file = fs::File::open(file_path).map_err(|error| unreadable_aterm_report(logical_path, file_path, error))?;
+    let mut reader = file.take(read_limit_u64);
+    let mut bytes = Vec::new();
+    reader
+        .read_to_end(&mut bytes)
+        .map_err(|error| unreadable_aterm_report(logical_path, file_path, error))?;
+    debug_assert!(bytes.len() <= read_limit);
+    debug_assert!(read_limit > MAX_ATERM_DERIVATION_BYTES);
+    Ok(bytes)
+}
+
+fn unreadable_aterm_report(logical_path: &str, file_path: &Path, error: std::io::Error) -> ForeignImportCliReport {
+    rejected_report(
+        PRODUCE_ATERM_COMMAND,
+        diagnostic(
+            "unreadable-foreign-derivation-file",
+            None,
+            &format!("reading {logical_path} from {}: {error}", file_path.display()),
+        ),
+    )
+}
+
+fn parse_aterm_file_spec(spec: &str) -> Result<(String, PathBuf), ImportDiagnostic> {
+    let Some((logical_path, file_path)) = spec.split_once(DRV_SPEC_SEPARATOR) else {
+        return Err(diagnostic(
+            "malformed-foreign-derivation-input",
+            None,
+            "--drv must be formatted as /store/prefix/name.drv=/path/to/file.drv",
+        ));
+    };
+    if logical_path.is_empty() || file_path.is_empty() {
+        return Err(diagnostic(
+            "malformed-foreign-derivation-input",
+            None,
+            "--drv logical path and file path must both be non-empty",
+        ));
+    }
+    Ok((logical_path.to_string(), PathBuf::from(file_path)))
 }
 
 fn read_nix_producer_closure(
@@ -642,10 +1000,10 @@ fn accepted_report(
     }
 }
 
-fn producer_report(graph_path: &Path, index_path: &Path) -> ForeignImportCliReport {
+fn producer_report(command: &str, graph_path: &Path, index_path: &Path) -> ForeignImportCliReport {
     ForeignImportCliReport {
         schema: CLI_REPORT_SCHEMA.to_string(),
-        command: PRODUCE_NIX_COMMAND.to_string(),
+        command: command.to_string(),
         verdict: ACCEPTED_VERDICT.to_string(),
         accepted: true,
         diagnostics: Vec::new(),

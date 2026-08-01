@@ -24,15 +24,21 @@ const GUIX_SOURCE_PREFIX: &str = "/gnu/store";
 const NIX_SOURCE_PREFIX: &str = "/nix/store";
 const NIX_STORE_PREFIX_WITH_SLASH: &str = "/nix/store/";
 const NIX_DERIVATION_SUFFIX: &str = ".drv";
+const KIBIBYTE_BYTES: usize = 1_024;
+const MEBIBYTE_BYTES: usize = KIBIBYTE_BYTES * KIBIBYTE_BYTES;
+const MAX_ATERM_DERIVATION_MEBIBYTES: usize = 16;
+const MAX_ATERM_BUNDLE_MEBIBYTES: usize = 256;
+pub(crate) const MAX_ATERM_DERIVATION_BYTES: usize = MAX_ATERM_DERIVATION_MEBIBYTES * MEBIBYTE_BYTES;
+pub(crate) const MAX_ATERM_BUNDLE_BYTES: usize = MAX_ATERM_BUNDLE_MEBIBYTES * MEBIBYTE_BYTES;
+pub(crate) const MAX_ATERM_BUNDLE_DERIVATIONS: usize = MAX_GRAPH_NODES;
+const MAX_ATERM_COLLECTION_ITEMS: usize = 256;
+const MAX_ATERM_STORE_REFERENCES_PER_FIELD: usize = 256;
 const UNKNOWN_FOREIGN_PREFIX: &str = "/foreign/store";
 const GUIX_HELLO_NODE_ID: &str = "guix:hello";
 const NIX_HELLO_NODE_ID: &str = "nix:hello";
 const NIXPKGS_PRODUCER_KIND: &str = "nixpkgs";
 const NIX_DERIVATION_BUILTIN: &str = "nix.derivation";
 const FIXED_OUTPUT_FETCH_BUILTIN: &str = "fixed-output-fetch";
-const NIX_INPUT_SOURCE_KIND: &str = "nix-input-source";
-const NIX_NODE_ID_PREFIX: &str = "nix:";
-const NIX_SOURCE_PAYLOAD_ID_PREFIX: &str = "nix-source:";
 const CHMOD_SETUID_CAPABILITY: &str = "chmod-setuid";
 const TRUSTED_CACHE_SCOPE: &str = "trusted-binary-cache";
 const CACHE_NIXOS_ORG_URL: &str = "https://cache.nixos.org";
@@ -331,6 +337,12 @@ pub(crate) struct NixDerivationJsonInput {
 
 pub(crate) type NixDerivationJsonClosure = BTreeMap<String, NixDerivationJsonNode>;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AtermDerivationInput {
+    pub(crate) logical_path: String,
+    pub(crate) bytes: Vec<u8>,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub(crate) enum NixDerivationJsonExport {
@@ -368,6 +380,19 @@ pub(crate) struct NixDerivationJsonVersionedInputs {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct NixProducerConfig {
+    pub(crate) package_name: String,
+    pub(crate) system: String,
+    pub(crate) root_derivation: String,
+    pub(crate) producer_identity: String,
+    pub(crate) producer_revision: String,
+    pub(crate) cache_hints: Vec<CacheHint>,
+    pub(crate) unsupported_metadata_classes: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AtermProducerConfig {
+    pub(crate) source_prefix: String,
+    pub(crate) producer_kind: String,
     pub(crate) package_name: String,
     pub(crate) system: String,
     pub(crate) root_derivation: String,
@@ -538,6 +563,390 @@ pub(crate) fn normalize_nix_derivation_json_export(
     }
 }
 
+pub(crate) fn parse_prefix_aware_aterm_bundle(
+    source_prefix: &str,
+    inputs: &[AtermDerivationInput],
+) -> Result<NixDerivationJsonClosure, ImportDiagnostic> {
+    validate_foreign_store_prefix(source_prefix)?;
+    if inputs.is_empty() || inputs.len() > MAX_ATERM_BUNDLE_DERIVATIONS {
+        return Err(diagnostic(
+            "foreign-aterm-derivation-count-out-of-range",
+            None,
+            "foreign ATerm derivation bundle size is outside supported limits",
+        ));
+    }
+
+    let total_bytes = inputs.iter().try_fold(0usize, |total, input| {
+        total.checked_add(input.bytes.len()).ok_or_else(|| {
+            diagnostic("foreign-aterm-bundle-bytes-out-of-range", None, "foreign ATerm bundle byte count overflowed")
+        })
+    })?;
+    if total_bytes > MAX_ATERM_BUNDLE_BYTES {
+        return Err(diagnostic(
+            "foreign-aterm-bundle-bytes-out-of-range",
+            None,
+            "foreign ATerm bundle exceeds the total byte limit",
+        ));
+    }
+    let input_count = inputs.len();
+    let mut closure = BTreeMap::new();
+    for input in inputs {
+        validate_foreign_derivation_path(&input.logical_path, source_prefix)?;
+        if closure.contains_key(&input.logical_path) {
+            return Err(diagnostic(
+                "duplicate-foreign-derivation-path",
+                None,
+                &format!("foreign ATerm bundle repeats logical path: {}", input.logical_path),
+            ));
+        }
+        let node = parse_prefix_aware_aterm_derivation(input, source_prefix)?;
+        let replaced = closure.insert(input.logical_path.clone(), node);
+        debug_assert!(replaced.is_none(), "duplicate logical paths are rejected before insertion");
+        debug_assert!(closure.len() <= input_count, "parsed closure cannot exceed declared inputs");
+    }
+    validate_foreign_aterm_closure_inputs(&closure)?;
+    debug_assert_eq!(closure.len(), input_count);
+    debug_assert!(total_bytes <= MAX_ATERM_BUNDLE_BYTES);
+    debug_assert!(!closure.is_empty());
+    Ok(closure)
+}
+
+fn parse_prefix_aware_aterm_derivation(
+    input: &AtermDerivationInput,
+    source_prefix: &str,
+) -> Result<NixDerivationJsonNode, ImportDiagnostic> {
+    if input.bytes.is_empty() || input.bytes.len() > MAX_ATERM_DERIVATION_BYTES {
+        return Err(diagnostic(
+            "foreign-aterm-bytes-out-of-range",
+            None,
+            &format!("foreign ATerm bytes are outside supported limits: {}", input.logical_path),
+        ));
+    }
+    let text = std::str::from_utf8(&input.bytes).map_err(|_| {
+        diagnostic("non-utf8-foreign-aterm", None, &format!("foreign ATerm input is not UTF-8: {}", input.logical_path))
+    })?;
+    reject_mixed_foreign_store_prefix(text, source_prefix, &input.logical_path)?;
+    let parser_text = restore_store_prefix(text, source_prefix, NIX_SOURCE_PREFIX);
+    let derivation = nix_compat::derivation::Derivation::from_aterm_bytes(parser_text.as_bytes()).map_err(|_| {
+        diagnostic(
+            "malformed-foreign-aterm",
+            None,
+            &format!("foreign ATerm input is malformed: {}", input.logical_path),
+        )
+    })?;
+    validate_foreign_aterm_limits(&derivation, &input.logical_path)?;
+    let node = normalize_prefix_aware_aterm_node(&input.logical_path, derivation, source_prefix)?;
+    debug_assert!(input.logical_path.starts_with(source_prefix));
+    debug_assert!(node.input_drvs.len() <= MAX_ATERM_COLLECTION_ITEMS);
+    Ok(node)
+}
+
+fn validate_foreign_aterm_limits(
+    derivation: &nix_compat::derivation::Derivation,
+    logical_path: &str,
+) -> Result<(), ImportDiagnostic> {
+    let collections = [
+        derivation.outputs.len(),
+        derivation.input_derivations.len(),
+        derivation.input_sources.len(),
+        derivation.arguments.len(),
+        derivation.environment.len(),
+    ];
+    if collections.iter().any(|count| *count > MAX_ATERM_COLLECTION_ITEMS) {
+        return Err(diagnostic(
+            "foreign-aterm-collection-limit-exceeded",
+            None,
+            &format!("foreign ATerm collection exceeds limit: {logical_path}"),
+        ));
+    }
+    let input_edge_count = derivation.input_derivations.values().try_fold(0usize, |count, outputs| {
+        count.checked_add(outputs.len()).ok_or_else(|| {
+            diagnostic(
+                "foreign-aterm-collection-limit-exceeded",
+                None,
+                &format!("foreign ATerm input edge count overflowed: {logical_path}"),
+            )
+        })
+    })?;
+    if input_edge_count > MAX_GRAPH_EDGES {
+        return Err(diagnostic(
+            "foreign-aterm-collection-limit-exceeded",
+            None,
+            &format!("foreign ATerm input edge count exceeds limit: {logical_path}"),
+        ));
+    }
+    for outputs in derivation.input_derivations.values() {
+        for output_name in outputs {
+            require_field_limit(output_name, None, "foreign-aterm-input-output-name")?;
+        }
+    }
+    require_field_limit(&derivation.builder, None, "foreign-aterm-builder")?;
+    require_field_limit(&derivation.system, None, "foreign-aterm-system")?;
+    for argument in &derivation.arguments {
+        require_field_limit(argument, None, "foreign-aterm-argument")?;
+    }
+    for (key, value) in &derivation.environment {
+        require_field_limit(key, None, "foreign-aterm-environment-key")?;
+        if value.len() > MAX_FIELD_BYTES {
+            return Err(diagnostic(
+                "field-limit-exceeded",
+                None,
+                &format!("field foreign-aterm-environment-value exceeds byte limit: {logical_path}"),
+            ));
+        }
+    }
+    debug_assert!(collections.iter().all(|count| *count <= MAX_ATERM_COLLECTION_ITEMS));
+    debug_assert!(input_edge_count <= MAX_GRAPH_EDGES);
+    debug_assert!(derivation.builder.len() <= MAX_FIELD_BYTES);
+    Ok(())
+}
+
+fn normalize_prefix_aware_aterm_node(
+    drv_path: &str,
+    derivation: nix_compat::derivation::Derivation,
+    source_prefix: &str,
+) -> Result<NixDerivationJsonNode, ImportDiagnostic> {
+    let raw_env = foreign_aterm_environment_to_strings(&derivation)?;
+    let env = raw_env
+        .into_iter()
+        .map(|(key, value)| {
+            restore_and_validate_foreign_text(&value, source_prefix, "environment").map(|value| (key, value))
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    let name = env.get("name").cloned().unwrap_or_else(|| nix_derivation_name_from_path(drv_path));
+    let outputs = normalize_foreign_aterm_outputs(derivation.outputs, &env, source_prefix)?;
+    let input_drvs = derivation
+        .input_derivations
+        .into_iter()
+        .map(|(path, outputs)| {
+            (path.to_absolute_path_with_prefix(source_prefix), NixDerivationJsonInput {
+                outputs: outputs.into_iter().collect(),
+            })
+        })
+        .collect();
+    let input_srcs = derivation
+        .input_sources
+        .into_iter()
+        .map(|path| path.to_absolute_path_with_prefix(source_prefix))
+        .collect();
+    let system = restore_and_validate_foreign_text(&derivation.system, source_prefix, "system")?;
+    let builder = restore_and_validate_foreign_text(&derivation.builder, source_prefix, "builder")?;
+    let args = derivation
+        .arguments
+        .into_iter()
+        .map(|argument| restore_and_validate_foreign_text(&argument, source_prefix, "argument"))
+        .collect::<Result<Vec<_>, _>>()?;
+    let node = NixDerivationJsonNode {
+        name,
+        system,
+        builder,
+        args,
+        env,
+        outputs,
+        input_drvs,
+        input_srcs,
+    };
+    debug_assert!(!node.outputs.is_empty());
+    debug_assert!(node.input_drvs.len() <= MAX_ATERM_COLLECTION_ITEMS);
+    Ok(node)
+}
+
+fn normalize_foreign_aterm_outputs(
+    outputs: BTreeMap<String, nix_compat::derivation::Output>,
+    env: &BTreeMap<String, String>,
+    source_prefix: &str,
+) -> Result<BTreeMap<String, NixDerivationJsonOutput>, ImportDiagnostic> {
+    let output_count = outputs.len();
+    let mut normalized = BTreeMap::new();
+    for (name, output) in outputs {
+        require_field_limit(&name, None, "foreign-aterm-output-name")?;
+        let (hash, hash_algo) = nix_aterm_output_hash_fields(output.ca_hash.as_ref());
+        let path = output
+            .path
+            .map(|path| path.to_absolute_path_with_prefix(source_prefix))
+            .or_else(|| env.get(&name).cloned())
+            .ok_or_else(|| diagnostic("missing-foreign-output-path", None, "foreign ATerm output is missing a path"))?;
+        validate_foreign_store_path(&path, source_prefix)?;
+        let replaced = normalized.insert(name, NixDerivationJsonOutput {
+            path: Some(path),
+            hash,
+            hash_algo,
+        });
+        debug_assert!(replaced.is_none(), "ATerm parser rejects duplicate output names");
+        debug_assert!(normalized.len() <= output_count);
+    }
+    if normalized.is_empty() {
+        return Err(diagnostic("missing-output-declaration", None, "foreign ATerm derivation has no outputs"));
+    }
+    debug_assert_eq!(normalized.len(), output_count);
+    debug_assert!(normalized.len() <= MAX_ATERM_COLLECTION_ITEMS);
+    Ok(normalized)
+}
+
+fn foreign_aterm_environment_to_strings(
+    derivation: &nix_compat::derivation::Derivation,
+) -> Result<BTreeMap<String, String>, ImportDiagnostic> {
+    let mut env = BTreeMap::new();
+    for (key, value) in &derivation.environment {
+        let value = std::str::from_utf8(value.as_ref()).map_err(|_| {
+            diagnostic("non-utf8-foreign-aterm-field", None, "foreign ATerm environment contains non-UTF-8 bytes")
+        })?;
+        let replaced = env.insert(key.clone(), value.to_string());
+        debug_assert!(replaced.is_none(), "ATerm parser rejects duplicate environment keys");
+        debug_assert!(env.len() <= derivation.environment.len());
+    }
+    Ok(env)
+}
+
+fn restore_and_validate_foreign_text(
+    value: &str,
+    source_prefix: &str,
+    field: &str,
+) -> Result<String, ImportDiagnostic> {
+    let restored = restore_store_prefix(value, NIX_SOURCE_PREFIX, source_prefix);
+    validate_embedded_foreign_store_paths(&restored, source_prefix, field)?;
+    debug_assert!(source_prefix == NIX_SOURCE_PREFIX || !restored.contains(NIX_STORE_PREFIX_WITH_SLASH));
+    debug_assert!(source_prefix == GUIX_SOURCE_PREFIX || !restored.contains("/gnu/store/"));
+    Ok(restored)
+}
+
+fn validate_embedded_foreign_store_paths(
+    value: &str,
+    source_prefix: &str,
+    field: &str,
+) -> Result<(), ImportDiagnostic> {
+    let needle = format!("{source_prefix}/");
+    let mut search_offset = 0usize;
+    let mut reference_count = 0usize;
+    while let Some(relative_start) = value[search_offset..].find(&needle) {
+        reference_count = reference_count.checked_add(1).ok_or_else(|| {
+            diagnostic(
+                "foreign-aterm-store-reference-limit-exceeded",
+                None,
+                &format!("foreign ATerm store reference count overflowed in {field}"),
+            )
+        })?;
+        if reference_count > MAX_ATERM_STORE_REFERENCES_PER_FIELD {
+            return Err(diagnostic(
+                "foreign-aterm-store-reference-limit-exceeded",
+                None,
+                &format!("foreign ATerm store reference count exceeds limit in {field}"),
+            ));
+        }
+        let path_start = search_offset.saturating_add(relative_start);
+        let component_start = path_start.saturating_add(needle.len());
+        let component_tail = &value[component_start..];
+        let component_bytes = component_tail.as_bytes();
+        let component_end = component_bytes
+            .iter()
+            .position(|byte| is_foreign_store_path_delimiter(*byte))
+            .unwrap_or(component_bytes.len());
+        let path_end = component_start.saturating_add(component_end);
+        validate_foreign_store_path(&value[path_start..path_end], source_prefix)?;
+        debug_assert!(path_end > path_start, "store prefix must make each scan advance");
+        search_offset = path_end;
+    }
+    debug_assert!(reference_count <= MAX_ATERM_STORE_REFERENCES_PER_FIELD);
+    debug_assert!(search_offset <= value.len());
+    Ok(())
+}
+
+fn is_foreign_store_path_delimiter(byte: u8) -> bool {
+    byte == b'/'
+        || byte == b':'
+        || byte == b'"'
+        || byte == b'\''
+        || byte == b')'
+        || byte == b']'
+        || byte == b'}'
+        || byte == b','
+        || byte == b';'
+        || byte.is_ascii_whitespace()
+}
+
+fn validate_foreign_aterm_closure_inputs(closure: &NixDerivationJsonClosure) -> Result<(), ImportDiagnostic> {
+    for (drv_path, node) in closure {
+        for input_drv in node.input_drvs.keys() {
+            if !closure.contains_key(input_drv) {
+                return Err(diagnostic(
+                    "missing-foreign-input-derivation",
+                    None,
+                    &format!("foreign ATerm input is absent from bundle: {input_drv}; referenced by {drv_path}"),
+                ));
+            }
+        }
+    }
+    debug_assert!(closure.values().all(|node| node.input_drvs.keys().all(|path| closure.contains_key(path))));
+    debug_assert!(!closure.is_empty());
+    Ok(())
+}
+
+fn validate_foreign_store_prefix(source_prefix: &str) -> Result<(), ImportDiagnostic> {
+    if source_prefix != NIX_SOURCE_PREFIX && source_prefix != GUIX_SOURCE_PREFIX {
+        return Err(diagnostic(
+            "unsupported-foreign-store-prefix",
+            None,
+            "foreign ATerm store prefix must be /nix/store or /gnu/store",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_foreign_derivation_path(path: &str, source_prefix: &str) -> Result<(), ImportDiagnostic> {
+    validate_foreign_store_path(path, source_prefix)?;
+    if !path.ends_with(NIX_DERIVATION_SUFFIX) {
+        return Err(diagnostic(
+            "invalid-foreign-derivation-path",
+            None,
+            &format!("foreign derivation path must end in .drv: {path}"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_foreign_store_path(path: &str, source_prefix: &str) -> Result<(), ImportDiagnostic> {
+    require_field_limit(path, None, "foreign-store-path")?;
+    nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(path.as_bytes(), source_prefix)
+        .map_err(|_| {
+            diagnostic(
+                "invalid-foreign-store-path",
+                None,
+                &format!("foreign store path is malformed or outside {source_prefix}: {path}"),
+            )
+        })?;
+    Ok(())
+}
+
+fn reject_mixed_foreign_store_prefix(
+    text: &str,
+    source_prefix: &str,
+    logical_path: &str,
+) -> Result<(), ImportDiagnostic> {
+    let other_prefix = if source_prefix == NIX_SOURCE_PREFIX {
+        GUIX_SOURCE_PREFIX
+    } else {
+        NIX_SOURCE_PREFIX
+    };
+    let other_prefix_with_slash = format!("{other_prefix}/");
+    if text.contains(&other_prefix_with_slash) {
+        return Err(diagnostic(
+            "mixed-foreign-store-prefix",
+            None,
+            &format!("foreign ATerm input contains {other_prefix} outside declared {source_prefix}: {logical_path}"),
+        ));
+    }
+    Ok(())
+}
+
+fn restore_store_prefix(value: &str, from_prefix: &str, to_prefix: &str) -> String {
+    if from_prefix == to_prefix {
+        return value.to_string();
+    }
+    let from_prefix_with_slash = format!("{from_prefix}/");
+    let to_prefix_with_slash = format!("{to_prefix}/");
+    value.replace(&from_prefix_with_slash, &to_prefix_with_slash)
+}
+
 pub(crate) fn normalize_nix_aterm_derivation_closure(
     derivations: BTreeMap<String, nix_compat::derivation::Derivation>,
 ) -> Result<NixDerivationJsonClosure, ImportDiagnostic> {
@@ -593,49 +1002,94 @@ pub(crate) fn lower_nix_derivation_json_closure(
     closure: &NixDerivationJsonClosure,
     config: &NixProducerConfig,
 ) -> Result<NixProducerArtifacts, ImportDiagnostic> {
-    validate_nix_producer_inputs(closure, config)?;
-    let path_to_node_id = nix_node_id_map(closure)?;
+    lower_prefix_aware_aterm_closure(closure, &AtermProducerConfig {
+        source_prefix: NIX_SOURCE_PREFIX.to_string(),
+        producer_kind: NIXPKGS_PRODUCER_KIND.to_string(),
+        package_name: config.package_name.clone(),
+        system: config.system.clone(),
+        root_derivation: config.root_derivation.clone(),
+        producer_identity: config.producer_identity.clone(),
+        producer_revision: config.producer_revision.clone(),
+        cache_hints: config.cache_hints.clone(),
+        unsupported_metadata_classes: config.unsupported_metadata_classes.clone(),
+    })
+}
+
+pub(crate) fn lower_prefix_aware_aterm_closure(
+    closure: &NixDerivationJsonClosure,
+    config: &AtermProducerConfig,
+) -> Result<NixProducerArtifacts, ImportDiagnostic> {
+    validate_aterm_producer_inputs(closure, config)?;
+    let path_to_node_id = foreign_node_id_map(closure, &config.source_prefix)?;
     let root_node_id = path_to_node_id.get(&config.root_derivation).cloned().ok_or_else(|| {
         diagnostic(
-            "missing-nix-root-derivation",
+            "missing-foreign-root-derivation",
             None,
-            "selected root derivation is absent from the concrete Nix closure",
+            "selected root derivation is absent from the concrete foreign closure",
         )
     })?;
+    let (nodes, source_payloads) = lower_aterm_nodes(closure, config, &path_to_node_id)?;
+    let artifacts = build_aterm_producer_artifacts(closure, config, root_node_id, nodes, source_payloads);
+    debug_assert_eq!(artifacts.graph.nodes.len(), closure.len());
+    debug_assert_eq!(artifacts.package_index.entries.len(), REQUIRED_HELLO_ROOT_COUNT);
+    Ok(artifacts)
+}
+
+fn lower_aterm_nodes(
+    closure: &NixDerivationJsonClosure,
+    config: &AtermProducerConfig,
+    path_to_node_id: &BTreeMap<String, String>,
+) -> Result<(Vec<ForeignDerivationNode>, BTreeMap<String, SourcePayload>), ImportDiagnostic> {
     let mut source_payloads = BTreeMap::new();
     let mut nodes = Vec::with_capacity(closure.len());
-    let lowering_context = NixLoweringContext {
-        path_to_node_id: &path_to_node_id,
+    let lowering_context = AtermLoweringContext {
+        path_to_node_id,
         closure,
-        root_cache_hints: &config.cache_hints,
+        config,
     };
     for (drv_path, derivation) in closure {
-        let node = lower_nix_derivation_node(
-            NixNodeLoweringRequest {
+        nodes.push(lower_aterm_derivation_node(
+            AtermNodeLoweringRequest {
                 drv_path,
                 derivation,
                 is_root: drv_path == &config.root_derivation,
             },
             &lowering_context,
             &mut source_payloads,
-        )?;
-        nodes.push(node);
+        )?);
     }
+    debug_assert_eq!(nodes.len(), closure.len());
+    debug_assert!(source_payloads.len() <= MAX_SOURCE_PAYLOADS);
+    Ok((nodes, source_payloads))
+}
+
+fn build_aterm_producer_artifacts(
+    closure: &NixDerivationJsonClosure,
+    config: &AtermProducerConfig,
+    root_node_id: String,
+    nodes: Vec<ForeignDerivationNode>,
+    source_payloads: BTreeMap<String, SourcePayload>,
+) -> NixProducerArtifacts {
+    let hash_domains = if config.source_prefix == NIX_SOURCE_PREFIX {
+        nix_hash_domain_records(closure)
+    } else {
+        Vec::new()
+    };
     let graph = ForeignDerivationGraph {
         schema: GRAPH_SCHEMA.to_string(),
         producer: ProducerSummary {
-            kind: NIXPKGS_PRODUCER_KIND.to_string(),
+            kind: config.producer_kind.clone(),
             identity: config.producer_identity.clone(),
             revision: config.producer_revision.clone(),
         },
-        source_store_prefixes: vec![NIX_SOURCE_PREFIX.to_string()],
+        source_store_prefixes: vec![config.source_prefix.clone()],
         target_store_prefix: None,
         root_derivation_ids: vec![root_node_id.clone()],
         nodes,
         source_payloads: source_payloads.into_values().collect(),
         unsupported_features: Vec::new(),
         frontend_metadata: Vec::new(),
-        hash_domains: nix_hash_domain_records(closure),
+        hash_domains,
     };
     let package_index = PackageIndex {
         schema: PACKAGE_INDEX_SCHEMA.to_string(),
@@ -645,13 +1099,13 @@ pub(crate) fn lower_nix_derivation_json_closure(
             root_derivation_id: root_node_id,
             aliases: Vec::new(),
             provenance_ref: config.producer_identity.clone(),
-            metadata_digest: nix_package_metadata_digest(config),
+            metadata_digest: aterm_package_metadata_digest(config),
             unsupported_metadata_classes: sorted_strings(config.unsupported_metadata_classes.clone()),
         }],
     };
     debug_assert_eq!(graph.nodes.len(), closure.len());
     debug_assert_eq!(package_index.entries.len(), REQUIRED_HELLO_ROOT_COUNT);
-    Ok(NixProducerArtifacts { graph, package_index })
+    NixProducerArtifacts { graph, package_index }
 }
 
 pub(crate) fn guix_like_hello_fixture() -> (ForeignDerivationGraph, PackageIndex) {
@@ -1037,41 +1491,37 @@ fn looks_like_store_basename(value: &str) -> bool {
     value.len() > OUTPUT_HASH_HEX_CHARS && !value.contains('/') && value.contains('-')
 }
 
-fn validate_nix_producer_inputs(
+fn validate_aterm_producer_inputs(
     closure: &NixDerivationJsonClosure,
-    config: &NixProducerConfig,
+    config: &AtermProducerConfig,
 ) -> Result<(), ImportDiagnostic> {
+    validate_foreign_store_prefix(&config.source_prefix)?;
     if closure.is_empty() || closure.len() > MAX_GRAPH_NODES {
         return Err(diagnostic(
-            "nix-derivation-count-out-of-range",
+            "foreign-derivation-count-out-of-range",
             None,
-            "Nix derivation closure size is outside supported limits",
+            "foreign derivation closure size is outside supported limits",
         ));
     }
-    require_field_limit(&config.package_name, None, "nix-package-name")?;
-    require_field_limit(&config.system, None, "nix-system")?;
-    require_field_limit(&config.root_derivation, None, "nix-root-derivation")?;
-    require_field_limit(&config.producer_identity, None, "nix-producer-identity")?;
-    require_field_limit(&config.producer_revision, None, "nix-producer-revision")?;
-    validate_nix_derivation_path(&config.root_derivation)?;
-    if config.cache_hints.len() > MAX_CACHE_HINTS {
-        return Err(diagnostic("cache-hint-limit-exceeded", None, "Nix producer config declares too many cache hints"));
+    require_field_limit(&config.package_name, None, "foreign-package-name")?;
+    require_field_limit(&config.system, None, "foreign-system")?;
+    require_field_limit(&config.root_derivation, None, "foreign-root-derivation")?;
+    require_field_limit(&config.producer_kind, None, "foreign-producer-kind")?;
+    require_field_limit(&config.producer_identity, None, "foreign-producer-identity")?;
+    require_field_limit(&config.producer_revision, None, "foreign-producer-revision")?;
+    if config.producer_kind.is_empty() {
+        return Err(diagnostic("missing-foreign-producer-kind", None, "foreign producer kind must not be empty"));
     }
-    for hint in &config.cache_hints {
-        require_field_limit(&hint.cache_url, None, "nix-cache-url")?;
-        require_field_limit(&hint.trust_scope, None, "nix-cache-trust-scope")?;
-        if hint.trust_scope.is_empty() {
-            return Err(diagnostic("missing-cache-trust-scope", None, "cache hint is missing a trust scope"));
-        }
-    }
+    validate_foreign_derivation_path(&config.root_derivation, &config.source_prefix)?;
+    validate_aterm_cache_hints(config)?;
     for drv_path in closure.keys() {
-        validate_nix_derivation_path(drv_path)?;
+        validate_foreign_derivation_path(drv_path, &config.source_prefix)?;
     }
     if !closure.contains_key(&config.root_derivation) {
         return Err(diagnostic(
-            "missing-nix-root-derivation",
+            "missing-foreign-root-derivation",
             None,
-            "selected root derivation is absent from the concrete Nix closure",
+            "selected root derivation is absent from the concrete foreign closure",
         ));
     }
     debug_assert!(!closure.is_empty());
@@ -1079,52 +1529,79 @@ fn validate_nix_producer_inputs(
     Ok(())
 }
 
-fn nix_node_id_map(closure: &NixDerivationJsonClosure) -> Result<BTreeMap<String, String>, ImportDiagnostic> {
+fn validate_aterm_cache_hints(config: &AtermProducerConfig) -> Result<(), ImportDiagnostic> {
+    if config.cache_hints.len() > MAX_CACHE_HINTS {
+        return Err(diagnostic(
+            "cache-hint-limit-exceeded",
+            None,
+            "foreign producer config declares too many cache hints",
+        ));
+    }
+    for hint in &config.cache_hints {
+        require_field_limit(&hint.cache_url, None, "foreign-cache-url")?;
+        require_field_limit(&hint.trust_scope, None, "foreign-cache-trust-scope")?;
+        if hint.trust_scope.is_empty() {
+            return Err(diagnostic("missing-cache-trust-scope", None, "cache hint is missing a trust scope"));
+        }
+    }
+    debug_assert!(config.cache_hints.len() <= MAX_CACHE_HINTS);
+    debug_assert!(config.cache_hints.iter().all(|hint| !hint.trust_scope.is_empty()));
+    Ok(())
+}
+
+fn foreign_node_id_map(
+    closure: &NixDerivationJsonClosure,
+    source_prefix: &str,
+) -> Result<BTreeMap<String, String>, ImportDiagnostic> {
     let mut path_to_node_id = BTreeMap::new();
     let mut node_ids = BTreeSet::new();
     for drv_path in closure.keys() {
-        let node_id = nix_node_id(drv_path)?;
+        let node_id = foreign_node_id(drv_path, source_prefix)?;
         if !node_ids.insert(node_id.clone()) {
-            return Err(diagnostic("duplicate-nix-node-id", None, "Nix derivation paths produce duplicate node IDs"));
+            return Err(diagnostic(
+                "duplicate-foreign-node-id",
+                None,
+                "foreign derivation paths produce duplicate node IDs",
+            ));
         }
         if path_to_node_id.len() >= closure.len() {
-            return Err(diagnostic("nix-derivation-count-out-of-range", None, "Nix node IDs exceeded closure"));
+            return Err(diagnostic("foreign-derivation-count-out-of-range", None, "foreign node IDs exceeded closure"));
         }
         path_to_node_id.insert(drv_path.clone(), node_id);
     }
+    debug_assert_eq!(path_to_node_id.len(), closure.len());
+    debug_assert_eq!(node_ids.len(), closure.len());
     Ok(path_to_node_id)
 }
 
-struct NixLoweringContext<'a> {
+struct AtermLoweringContext<'a> {
     path_to_node_id: &'a BTreeMap<String, String>,
     closure: &'a NixDerivationJsonClosure,
-    root_cache_hints: &'a [CacheHint],
+    config: &'a AtermProducerConfig,
 }
 
-struct NixNodeLoweringRequest<'a> {
+struct AtermNodeLoweringRequest<'a> {
     drv_path: &'a str,
     derivation: &'a NixDerivationJsonNode,
     is_root: bool,
 }
 
-fn lower_nix_derivation_node(
-    request: NixNodeLoweringRequest<'_>,
-    context: &NixLoweringContext<'_>,
+fn lower_aterm_derivation_node(
+    request: AtermNodeLoweringRequest<'_>,
+    context: &AtermLoweringContext<'_>,
     source_payloads: &mut BTreeMap<String, SourcePayload>,
 ) -> Result<ForeignDerivationNode, ImportDiagnostic> {
-    let node_id = context
-        .path_to_node_id
-        .get(request.drv_path)
-        .cloned()
-        .ok_or_else(|| diagnostic("missing-nix-node-id", None, "Nix derivation path was not assigned a node ID"))?;
+    let node_id = context.path_to_node_id.get(request.drv_path).cloned().ok_or_else(|| {
+        diagnostic("missing-foreign-node-id", None, "foreign derivation path was not assigned a node ID")
+    })?;
     let derivation = request.derivation;
-    let outputs = lower_nix_outputs(&derivation.outputs)?;
+    let outputs = lower_aterm_outputs(&derivation.outputs, &context.config.source_prefix)?;
     let fixed_output = nix_fixed_output_metadata(&derivation.outputs)?;
     let input_derivations = lower_nix_input_derivations(&derivation.input_drvs, context.path_to_node_id)?;
-    let source_refs = lower_nix_source_refs(&derivation.input_srcs, source_payloads)?;
+    let source_refs = lower_aterm_source_refs(&derivation.input_srcs, source_payloads, context.config)?;
     let declared_references = nix_declared_references(&derivation.input_drvs, &derivation.input_srcs, context.closure)?;
     let cache_hints = if request.is_root {
-        context.root_cache_hints.to_vec()
+        context.config.cache_hints.to_vec()
     } else {
         Vec::new()
     };
@@ -1140,11 +1617,7 @@ fn lower_nix_derivation_node(
         input_derivations,
         source_refs,
         fixed_output: fixed_output.clone(),
-        builtin: if fixed_output.is_some() {
-            FIXED_OUTPUT_FETCH_BUILTIN.to_string()
-        } else {
-            NIX_DERIVATION_BUILTIN.to_string()
-        },
+        builtin: foreign_aterm_builtin(&context.config.source_prefix, fixed_output.is_some()),
         declared_references,
         sandbox_capabilities: Vec::new(),
         unsupported_features: Vec::new(),
@@ -1155,25 +1628,32 @@ fn lower_nix_derivation_node(
     Ok(lowered)
 }
 
-fn lower_nix_outputs(
+fn lower_aterm_outputs(
     outputs: &BTreeMap<String, NixDerivationJsonOutput>,
+    source_prefix: &str,
 ) -> Result<BTreeMap<String, OutputDeclaration>, ImportDiagnostic> {
     if outputs.is_empty() {
-        return Err(diagnostic("missing-output-declaration", None, "Nix derivation has no outputs"));
+        return Err(diagnostic("missing-output-declaration", None, "foreign derivation has no outputs"));
     }
     let output_count = outputs.len();
     let mut lowered = BTreeMap::new();
     for (name, output) in outputs {
         let path = nix_output_path(output)?;
-        validate_nix_store_path(path)?;
+        validate_foreign_store_path(path, source_prefix)?;
         if lowered.len() >= output_count {
-            return Err(diagnostic("nix-output-count-out-of-range", None, "lowered Nix outputs exceeded input"));
+            return Err(diagnostic(
+                "foreign-output-count-out-of-range",
+                None,
+                "lowered foreign outputs exceeded input",
+            ));
         }
         lowered.insert(name.clone(), OutputDeclaration {
             path: path.to_string(),
             hash: output.hash.clone(),
         });
     }
+    debug_assert_eq!(lowered.len(), output_count);
+    debug_assert!(!lowered.is_empty());
     Ok(lowered)
 }
 
@@ -1212,17 +1692,18 @@ fn lower_nix_input_derivations(
     Ok(edges)
 }
 
-fn lower_nix_source_refs(
+fn lower_aterm_source_refs(
     input_srcs: &[String],
     source_payloads: &mut BTreeMap<String, SourcePayload>,
+    config: &AtermProducerConfig,
 ) -> Result<Vec<SourceRef>, ImportDiagnostic> {
     let mut refs = Vec::with_capacity(input_srcs.len());
     for input_src in sorted_strings(input_srcs.to_vec()) {
-        validate_nix_store_path(&input_src)?;
-        let payload_id = nix_source_payload_id(&input_src);
+        validate_foreign_store_path(&input_src, &config.source_prefix)?;
+        let payload_id = foreign_source_payload_id(&input_src, &config.source_prefix);
         source_payloads.entry(payload_id.clone()).or_insert_with(|| SourcePayload {
             payload_id: payload_id.clone(),
-            kind: NIX_INPUT_SOURCE_KIND.to_string(),
+            kind: format!("{}-input-source", foreign_store_namespace(&config.source_prefix)),
             content_ref: input_src.clone(),
             embedded_text: None,
             mirrors: Vec::new(),
@@ -1298,19 +1779,35 @@ fn nix_declared_references(
     Ok(sorted_strings(references))
 }
 
-fn nix_node_id(drv_path: &str) -> Result<String, ImportDiagnostic> {
-    let component = drv_path
-        .rsplit('/')
-        .next()
-        .filter(|component| !component.is_empty())
-        .ok_or_else(|| diagnostic("invalid-nix-derivation-path", None, "Nix derivation path has no basename"))?;
-    Ok(format!("{NIX_NODE_ID_PREFIX}{component}"))
+fn foreign_node_id(drv_path: &str, source_prefix: &str) -> Result<String, ImportDiagnostic> {
+    let component = drv_path.rsplit('/').next().filter(|component| !component.is_empty()).ok_or_else(|| {
+        diagnostic("invalid-foreign-derivation-path", None, "foreign derivation path has no basename")
+    })?;
+    let node_id = format!("{}:{component}", foreign_store_namespace(source_prefix));
+    debug_assert!(node_id.contains(':'));
+    debug_assert!(node_id.ends_with(component));
+    Ok(node_id)
 }
 
-fn nix_source_payload_id(input_src: &str) -> String {
+fn foreign_source_payload_id(input_src: &str, source_prefix: &str) -> String {
     let digest = blake3_hex(input_src);
     let short_digest = &digest[..SOURCE_PAYLOAD_HASH_HEX_CHARS];
-    format!("{NIX_SOURCE_PAYLOAD_ID_PREFIX}{short_digest}")
+    format!("{}-source:{short_digest}", foreign_store_namespace(source_prefix))
+}
+
+fn foreign_aterm_builtin(source_prefix: &str, fixed_output: bool) -> String {
+    if fixed_output {
+        return FIXED_OUTPUT_FETCH_BUILTIN.to_string();
+    }
+    format!("{}.derivation", foreign_store_namespace(source_prefix))
+}
+
+fn foreign_store_namespace(source_prefix: &str) -> &'static str {
+    if source_prefix == NIX_SOURCE_PREFIX {
+        "nix"
+    } else {
+        "guix"
+    }
 }
 
 fn validate_nix_derivation_path(path: &str) -> Result<(), ImportDiagnostic> {
@@ -1344,9 +1841,10 @@ fn nix_hash_domain_records(closure: &NixDerivationJsonClosure) -> Vec<HashDomain
     records
 }
 
-fn nix_package_metadata_digest(config: &NixProducerConfig) -> String {
+fn aterm_package_metadata_digest(config: &AtermProducerConfig) -> String {
     blake3_hex(&format!(
-        "nixpkgs:{}:{}:{}:{}:{:?}",
+        "{}:{}:{}:{}:{}:{:?}",
+        config.producer_kind,
         config.package_name,
         config.system,
         config.root_derivation,
@@ -2014,6 +2512,128 @@ mod tests {
     }
 
     #[test]
+    fn prefix_aware_aterm_bundle_parses_nix_and_guix_paths() {
+        let nix_inputs = nixpkgs_hello_aterm_inputs(NIX_SOURCE_PREFIX);
+        let guix_inputs = nixpkgs_hello_aterm_inputs(GUIX_SOURCE_PREFIX);
+
+        let nix = parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &nix_inputs).unwrap();
+        let guix = parse_prefix_aware_aterm_bundle(GUIX_SOURCE_PREFIX, &guix_inputs).unwrap();
+
+        assert_eq!(nix.len(), NIXPKGS_DERIVATION_COUNT);
+        assert_eq!(guix.len(), NIXPKGS_DERIVATION_COUNT);
+        assert!(nix.keys().all(|path| path.starts_with(NIX_SOURCE_PREFIX)));
+        assert!(guix.keys().all(|path| path.starts_with(GUIX_SOURCE_PREFIX)));
+        assert!(guix.values().all(|node| {
+            node.outputs
+                .values()
+                .all(|output| output.path.as_deref().is_some_and(|path| path.starts_with(GUIX_SOURCE_PREFIX)))
+        }));
+        assert!(guix.values().all(|node| node.input_drvs.keys().all(|path| path.starts_with(GUIX_SOURCE_PREFIX))));
+    }
+
+    #[test]
+    fn prefix_aware_aterm_lowering_emits_guix_graph_facts() {
+        let inputs = nixpkgs_hello_aterm_inputs(GUIX_SOURCE_PREFIX);
+        let closure = parse_prefix_aware_aterm_bundle(GUIX_SOURCE_PREFIX, &inputs).unwrap();
+        let root_derivation = restore_store_prefix(NIXPKGS_HELLO_DRV, NIX_SOURCE_PREFIX, GUIX_SOURCE_PREFIX);
+        let artifacts = lower_prefix_aware_aterm_closure(&closure, &AtermProducerConfig {
+            source_prefix: GUIX_SOURCE_PREFIX.to_string(),
+            producer_kind: "guix".to_string(),
+            package_name: HELLO_PACKAGE_NAME.to_string(),
+            system: HELLO_SYSTEM.to_string(),
+            root_derivation,
+            producer_identity: "guix:hello-fixture".to_string(),
+            producer_revision: "fixture-revision".to_string(),
+            cache_hints: Vec::new(),
+            unsupported_metadata_classes: Vec::new(),
+        })
+        .unwrap();
+
+        assert_eq!(artifacts.graph.producer.kind, "guix");
+        assert_eq!(artifacts.graph.source_store_prefixes, vec![GUIX_SOURCE_PREFIX.to_string()]);
+        assert_eq!(artifacts.graph.nodes.len(), NIXPKGS_DERIVATION_COUNT);
+        assert!(artifacts.graph.nodes.iter().all(|node| node.node_id.starts_with("guix:")));
+        assert!(artifacts.graph.nodes.iter().all(|node| node.original_derivation.starts_with(GUIX_SOURCE_PREFIX)));
+        assert!(artifacts.graph.nodes.iter().any(|node| node.builtin == "guix.derivation"));
+        assert!(artifacts.graph.nodes.iter().any(|node| {
+            node.fixed_output
+                .as_ref()
+                .is_some_and(|fixed| fixed.algorithm == SHA256_ALGORITHM && fixed.recursive)
+        }));
+    }
+
+    #[test]
+    fn prefix_aware_aterm_bundle_rejects_malformed_and_mixed_inputs() {
+        let malformed = vec![AtermDerivationInput {
+            logical_path: NIXPKGS_SOURCE_DRV.to_string(),
+            bytes: b"not-an-aterm-derivation".to_vec(),
+        }];
+        assert_error_class(parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &malformed), "malformed-foreign-aterm");
+
+        let mut mixed = nixpkgs_hello_aterm_inputs(GUIX_SOURCE_PREFIX);
+        mixed[0].bytes = include_bytes!("../tests/fixtures/foreign-import/nixpkgs-hello-source.drv").to_vec();
+        assert_error_class(parse_prefix_aware_aterm_bundle(GUIX_SOURCE_PREFIX, &mixed), "mixed-foreign-store-prefix");
+
+        let invalid_path = vec![AtermDerivationInput {
+            logical_path: format!("{NIX_SOURCE_PREFIX}/not-a-store-object.drv"),
+            bytes: include_bytes!("../tests/fixtures/foreign-import/nixpkgs-hello-source.drv").to_vec(),
+        }];
+        assert_error_class(
+            parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &invalid_path),
+            "invalid-foreign-store-path",
+        );
+        assert_error_class(
+            parse_prefix_aware_aterm_bundle("/unsupported/store", &invalid_path),
+            "unsupported-foreign-store-prefix",
+        );
+
+        let malformed_embedded_text =
+            std::str::from_utf8(include_bytes!("../tests/fixtures/foreign-import/nixpkgs-hello-source.drv"))
+                .expect("source fixture must be UTF-8")
+                .replace("55555555555555555555555555555555-builtin-fetchurl", "not-a-store-object");
+        let malformed_embedded = vec![AtermDerivationInput {
+            logical_path: NIXPKGS_SOURCE_DRV.to_string(),
+            bytes: malformed_embedded_text.into_bytes(),
+        }];
+        assert_error_class(
+            parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &malformed_embedded),
+            "invalid-foreign-store-path",
+        );
+    }
+
+    #[test]
+    fn prefix_aware_aterm_bundle_rejects_missing_duplicate_non_utf8_and_limits() {
+        let mut missing = nixpkgs_hello_aterm_inputs(NIX_SOURCE_PREFIX);
+        missing.remove(0);
+        assert_error_class(
+            parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &missing),
+            "missing-foreign-input-derivation",
+        );
+
+        let source = nixpkgs_hello_aterm_inputs(NIX_SOURCE_PREFIX).remove(0);
+        let duplicate = vec![source.clone(), source];
+        assert_error_class(
+            parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &duplicate),
+            "duplicate-foreign-derivation-path",
+        );
+
+        let non_utf8 = vec![AtermDerivationInput {
+            logical_path: NIXPKGS_SOURCE_DRV.to_string(),
+            bytes: vec![u8::MAX],
+        }];
+        assert_error_class(parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &non_utf8), "non-utf8-foreign-aterm");
+
+        let oversized = vec![AtermDerivationInput {
+            logical_path: NIXPKGS_SOURCE_DRV.to_string(),
+            bytes: vec![b'x'; MAX_ATERM_DERIVATION_BYTES + 1],
+        }];
+        assert_error_class(
+            parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &oversized),
+            "foreign-aterm-bytes-out-of-range",
+        );
+    }
+
+    #[test]
     fn nix_closure_selection_filters_unreachable_and_requires_inputs() {
         let mut closure = nixpkgs_hello_closure();
         let unrelated_drv = "/nix/store/66666666666666666666666666666666-unrelated.drv";
@@ -2206,6 +2826,33 @@ mod tests {
         closure.insert(NIXPKGS_SOURCE_DRV.to_string(), source);
         closure.insert(NIXPKGS_HELLO_DRV.to_string(), hello);
         closure
+    }
+
+    fn nixpkgs_hello_aterm_inputs(source_prefix: &str) -> Vec<AtermDerivationInput> {
+        let source_bytes = include_bytes!("../tests/fixtures/foreign-import/nixpkgs-hello-source.drv");
+        let hello_bytes = include_bytes!("../tests/fixtures/foreign-import/nixpkgs-hello-root.drv");
+        let source_path = restore_store_prefix(NIXPKGS_SOURCE_DRV, NIX_SOURCE_PREFIX, source_prefix);
+        let hello_path = restore_store_prefix(NIXPKGS_HELLO_DRV, NIX_SOURCE_PREFIX, source_prefix);
+        vec![
+            AtermDerivationInput {
+                logical_path: source_path,
+                bytes: restore_store_prefix(
+                    std::str::from_utf8(source_bytes).expect("source fixture must be UTF-8"),
+                    NIX_SOURCE_PREFIX,
+                    source_prefix,
+                )
+                .into_bytes(),
+            },
+            AtermDerivationInput {
+                logical_path: hello_path,
+                bytes: restore_store_prefix(
+                    std::str::from_utf8(hello_bytes).expect("root fixture must be UTF-8"),
+                    NIX_SOURCE_PREFIX,
+                    source_prefix,
+                )
+                .into_bytes(),
+            },
+        ]
     }
 
     fn versioned_nix_export_with_fod_env_path(include_env_out: bool) -> NixDerivationJsonVersionedExport {

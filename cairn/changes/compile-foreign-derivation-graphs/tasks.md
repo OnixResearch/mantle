@@ -2,9 +2,9 @@
 
 ## Phase 1: Prefix-aware producer boundary
 
-- [ ] [serial] I1 Add pure prefix-aware ATerm parsing for declared foreign store prefixes, bounded fields, fixed-output metadata, and exact input edges. r[foreign_derivation_import.prefix_aware_aterm]
-- [ ] [serial] I2 Add a thin `foreign-import produce-aterm` shell for explicit path-to-file mappings and directory bundles. Keep `produce-nix` as a compatibility surface. r[foreign_derivation_import.prefix_aware_aterm]
-- [ ] [parallel] I3 Add positive `/nix/store` and `/gnu/store` fixtures plus negative malformed, mixed-prefix, missing-input, duplicate-key, non-UTF-8, and oversized fixtures. r[foreign_derivation_import.prefix_aware_aterm]
+- [x] [serial] I1 Add pure prefix-aware ATerm parsing for declared foreign store prefixes, bounded fields, fixed-output metadata, and exact input edges. r[foreign_derivation_import.prefix_aware_aterm]
+- [x] [serial] I2 Add a thin `foreign-import produce-aterm` shell for explicit path-to-file mappings and directory bundles. Keep `produce-nix` as a compatibility surface. r[foreign_derivation_import.prefix_aware_aterm]
+- [x] [parallel] I3 Add positive `/nix/store` and `/gnu/store` fixtures plus negative malformed, mixed-prefix, missing-input, duplicate-key, non-UTF-8, and oversized fixtures. r[foreign_derivation_import.prefix_aware_aterm]
 
 ## Phase 2: Exact graph compiler
 
