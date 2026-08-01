@@ -4,8 +4,8 @@ use nix_compat::store_path::StorePath;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("source input not found in store: {}", path.to_absolute_path())]
-    SourceNotFound { path: StorePath<String> },
+    #[error("source input not found in store: {}", path.to_absolute_path_with_prefix(store_dir))]
+    SourceNotFound { path: StorePath<String>, store_dir: String },
 
     #[error("build failed for {name} (exit code {exit_code})\n{log}")]
     BuildFailed {
@@ -95,13 +95,29 @@ mod tests {
     // ── Display formatting ──────────────────────────────────────
 
     #[test]
-    fn source_not_found_display() {
+    fn source_not_found_display_uses_configured_store_prefix() {
+        const CUSTOM_STORE_DIR: &str = "/mantle/store";
         let err = Error::SourceNotFound {
             path: dummy_store_path("missing-src"),
+            store_dir: CUSTOM_STORE_DIR.to_string(),
         };
         let msg = err.to_string();
+
         assert!(msg.contains("missing-src"), "should name the path: {msg}");
+        assert!(msg.contains(CUSTOM_STORE_DIR), "should use the configured store prefix: {msg}");
+        assert!(!msg.contains("/nix/store"), "must not substitute the default store prefix: {msg}");
+    }
+
+    #[test]
+    fn source_not_found_display_keeps_nix_compatibility() {
+        let err = Error::SourceNotFound {
+            path: dummy_store_path("missing-src"),
+            store_dir: nix_compat::store_path::STORE_DIR.to_string(),
+        };
+        let msg = err.to_string();
+
         assert!(msg.contains("source input not found"), "should describe the error: {msg}");
+        assert!(msg.contains("/nix/store"), "should preserve the configured Nix-compatible prefix: {msg}");
     }
 
     #[test]

@@ -940,12 +940,13 @@ where BServ: BuildService + 'static
         assert!(!source_path.name().is_empty(), "source path name must not be empty");
         assert!(source_path.to_string().contains('-'), "source path text must include a digest/name separator");
 
-        let abs = PathBuf::from(source_path.to_absolute_path());
-        if abs.exists() {
+        let host_path = self.preferred_source_host_path(source_path);
+        if host_path.exists() {
             return Ok(());
         }
         Err(Error::SourceNotFound {
             path: source_path.clone(),
+            store_dir: self.store.store_dir().to_string(),
         })
     }
 
@@ -981,11 +982,11 @@ where BServ: BuildService + 'static
     }
 
     fn preferred_source_host_path(&self, source_path: &StorePath<String>) -> PathBuf {
-        let crunch_abs = PathBuf::from(source_path.to_absolute_path_with_prefix(self.store.output_dir_str()));
-        if crunch_abs.exists() {
-            return crunch_abs;
+        let physical_path = PathBuf::from(source_path.to_absolute_path_with_prefix(self.store.output_dir_str()));
+        if physical_path.exists() {
+            return physical_path;
         }
-        PathBuf::from(source_path.to_absolute_path())
+        PathBuf::from(source_path.to_absolute_path_with_prefix(self.store.store_dir()))
     }
 
     async fn cached_or_ingested_node_for_path(
@@ -1083,10 +1084,12 @@ where BServ: BuildService + 'static
 
         let mut pairs: Vec<(StorePath<String>, Node)> = Vec::with_capacity(input_paths.len());
         for input_path in &input_paths {
-            let abs = self.resolve_host_path(input_path, derivation);
-            let Some(node) = self.cached_or_ingested_node_for_path(input_path, &abs).await? else {
+            let is_source = source_paths.contains(input_path);
+            let host_path = self.resolve_host_path(input_path, is_source);
+            let Some(node) = self.cached_or_ingested_node_for_path(input_path, &host_path).await? else {
                 return Err(Error::SourceNotFound {
                     path: input_path.clone(),
+                    store_dir: self.store.store_dir().to_string(),
                 });
             };
             pairs.push((input_path.clone(), node));
@@ -1660,12 +1663,11 @@ where BServ: BuildService + 'static
     }
 
     /// Resolve a store path to its host filesystem location.
-    /// Source inputs (from input_sources) live at /nix/store/.
-    /// Built outputs live at the physical output dir.
-    fn resolve_host_path(&self, path: &StorePath<String>, derivation: &Derivation) -> PathBuf {
-        let is_source = derivation.input_sources.contains(path);
+    /// Source inputs prefer the physical output authority, then the configured logical store.
+    /// Built outputs use the physical output authority.
+    fn resolve_host_path(&self, path: &StorePath<String>, is_source: bool) -> PathBuf {
         if is_source {
-            PathBuf::from(path.to_absolute_path())
+            self.preferred_source_host_path(path)
         } else {
             PathBuf::from(path.to_absolute_path_with_prefix(self.store.output_dir_str()))
         }
@@ -3272,6 +3274,97 @@ mod tests {
     }
 
     // ── Custom output_dir tests ───────────────────────────────────
+
+    #[test]
+    fn custom_logical_store_prefix_controls_source_lookup_and_diagnostics() {
+        const CUSTOM_SOURCE_DIGEST_BYTE: u8 = 43;
+        const MISSING_SOURCE_DIGEST_BYTE: u8 = 44;
+
+        let logical_store = tempfile::tempdir().unwrap();
+        let physical_store = tempfile::tempdir().unwrap();
+        let logical_store_dir = logical_store.path().to_str().unwrap();
+        let bs = MemoryBlobService::default();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+        let builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            test_pis(),
+            physical_store.path().to_path_buf(),
+            logical_store_dir,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let source_path = make_source_path("custom-prefix-source", CUSTOM_SOURCE_DIGEST_BYTE);
+        let logical_source = PathBuf::from(source_path.to_absolute_path_with_prefix(logical_store_dir));
+        std::fs::write(&logical_source, b"logical source").unwrap();
+
+        assert_eq!(builder.preferred_source_host_path(&source_path), logical_source);
+        assert_eq!(builder.resolve_host_path(&source_path, true), logical_source);
+        assert!(builder.ensure_declared_source_exists(&source_path).is_ok());
+
+        let physical_source =
+            PathBuf::from(source_path.to_absolute_path_with_prefix(physical_store.path().to_str().unwrap()));
+        std::fs::write(&physical_source, b"physical source").unwrap();
+        assert_eq!(builder.preferred_source_host_path(&source_path), physical_source);
+        assert_eq!(builder.resolve_host_path(&source_path, true), physical_source);
+
+        let missing_path = make_source_path("missing-custom-prefix-source", MISSING_SOURCE_DIGEST_BYTE);
+        let error = builder.ensure_declared_source_exists(&missing_path).unwrap_err().to_string();
+        assert!(
+            error.contains(logical_store_dir),
+            "missing-source diagnostic must preserve the configured prefix: {error}"
+        );
+        assert!(
+            !error.contains("/nix/store"),
+            "missing-source diagnostic must not inject the default prefix: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn custom_logical_store_prefix_controls_transitive_source_inputs() {
+        const CLOSURE_SOURCE_DIGEST_BYTE: u8 = 45;
+        const MISSING_CLOSURE_SOURCE_DIGEST_BYTE: u8 = 46;
+
+        let logical_store = tempfile::tempdir().unwrap();
+        let physical_store = tempfile::tempdir().unwrap();
+        let logical_store_dir = logical_store.path().to_str().unwrap();
+        let bs = MemoryBlobService::default();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            test_pis(),
+            physical_store.path().to_path_buf(),
+            logical_store_dir,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut registry = DerivationRegistry::default();
+        let (_drv_path, derivation) = build_and_register("transitive-source-consumer", &[], &mut registry);
+        let closure_source = make_source_path("transitive-custom-prefix-source", CLOSURE_SOURCE_DIGEST_BYTE);
+        let logical_source = PathBuf::from(closure_source.to_absolute_path_with_prefix(logical_store_dir));
+        std::fs::write(&logical_source, b"transitive logical source").unwrap();
+
+        let inputs = builder.collect_sandbox_inputs(&derivation, &registry, &[closure_source.clone()]).await.unwrap();
+        assert!(inputs.contains_key(&closure_source), "transitive source must become a sandbox input");
+        assert!(builder.store.output_nodes.contains_key(&closure_source), "transitive source must be ingested");
+
+        let missing_source =
+            make_source_path("missing-transitive-custom-prefix-source", MISSING_CLOSURE_SOURCE_DIGEST_BYTE);
+        let error = builder
+            .collect_sandbox_inputs(&derivation, &registry, &[missing_source])
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(logical_store_dir), "transitive-source error must preserve the prefix: {error}");
+        assert!(!error.contains("/nix/store"), "transitive-source error must not inject the default prefix: {error}");
+    }
 
     #[tokio::test]
     async fn custom_output_dir_writes_output_there() {
