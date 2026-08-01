@@ -68,7 +68,20 @@ Pueue task `7245` ran repository validation, proposal gate, design gate, tasks g
 
 The checked migration guide records schema versions, backup exposure, invalidating migration, rotation, incident response, and rollback limits. This evidence is ready to move with the archived change before any public gateway enablement.
 
-Cairn sync, post-sync coverage, archive execution, and post-archive validation remain pending.
+## Sync and post-sync validation
+
+Pueue task `7249` executed the unblocked sync plan. Execution plan hash: `04030fb81a00e9d526f5771f8f93cd3794e8e23f3300b9f1ebc7c543e1cd0992`.
+
+The accepted `remote-builds` spec now contains each of the nine credential requirement identifiers exactly once.
+
+Pueue task `7253` ran post-sync repository validation and Tracey coverage.
+
+- Repository validation returned `valid: true` with no issues.
+- Tracey receipt: `3c915ff632f758466b3fdf88915f5145d10dde711f305a5957149dfbaa47b2be`.
+- No credential requirement appeared in the missing or dangling lists after sync.
+- Repository-wide coverage remained failed for unrelated requirements.
+
+Archive execution and post-archive validation remain pending.
 
 ## Non-claims
 
