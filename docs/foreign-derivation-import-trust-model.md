@@ -225,6 +225,37 @@ That bundle records host-Nix `nixpkgs#hello` derivation export, Mantle
 `produce-nix`, and no-Nix validate/plan consumption. Treat it as admitted/planned
 only until separate substitution or rebuild evidence exists.
 
+## Complete HTTP cache closure pull
+
+Use explicit closure mode to import one root and its complete signed runtime
+closure from a public Nix-compatible HTTP cache:
+
+```text
+mantle --nix-compat store pull \
+  --from https://cache.nixos.org \
+  --closure \
+  --trusted-public-keys 'cache.nixos.org-1:...' \
+  /nix/store/<hash>-<name>
+```
+
+Mantle fetches and validates every bounded narinfo record before it requests NAR
+content. The closure plan binds the normalized cache authority, trusted public
+keys, store prefix, root, limits, and member metadata with BLAKE3. Nix store
+paths, NAR hashes, and narinfo signatures keep their required Nix identity
+rules.
+
+Mantle reuses a local member only when its PathInfo matches the plan, its
+signature satisfies the selected trust policy, and its complete castore content
+is present. It downloads dependencies before the selected root. A missing or
+invalid dependency prevents root admission.
+
+The generic `store pull --closure` command is not yet bound to a foreign-import
+receipt. The operator must compare the selected root with the accepted import
+plan. A successful closure pull proves cache admission under the configured
+trust policy. It does not prove package correctness, local rebuild compatibility,
+evaluator parity, reproducibility, private-cache authentication, or release
+eligibility.
+
 ## Claim-safe reporting checklist
 
 Before reporting a foreign import result, name the strongest current evidence

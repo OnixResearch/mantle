@@ -1151,6 +1151,69 @@ fn store_pull_http_requires_explicit_paths() {
 }
 
 #[test]
+fn store_pull_http_closure_requires_exactly_one_root() {
+    let store_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    crunch_cmd()
+        .arg("--store")
+        .arg(store_dir.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
+        .arg("store")
+        .arg("pull")
+        .arg("--from")
+        .arg("https://cache.example.com")
+        .arg("--closure")
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("--closure requires exactly one explicit logical store path"));
+}
+
+#[test]
+fn store_pull_http_closure_rejects_multiple_roots() {
+    let store_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    const FIRST_ROOT: &str = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-first";
+    const SECOND_ROOT: &str = "/mantle/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-second";
+    crunch_cmd()
+        .arg("--store")
+        .arg(store_dir.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
+        .arg("store")
+        .arg("pull")
+        .arg("--from")
+        .arg("https://cache.example.com")
+        .arg("--closure")
+        .arg(FIRST_ROOT)
+        .arg(SECOND_ROOT)
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("--closure requires exactly one explicit logical store path"));
+}
+
+#[test]
+fn store_pull_directory_rejects_closure_mode() {
+    let cache_dir = tempfile::tempdir().unwrap();
+    let store_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    crunch_cmd()
+        .arg("--store")
+        .arg(store_dir.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
+        .arg("store")
+        .arg("pull")
+        .arg("--from")
+        .arg(cache_dir.path())
+        .arg("--closure")
+        .arg("root")
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("--closure is supported only for HTTP caches"));
+}
+
+#[test]
 fn store_pull_http_rejects_all() {
     let store_dir = tempfile::tempdir().unwrap();
     let state_dir = tempfile::tempdir().unwrap();
@@ -1167,6 +1230,26 @@ fn store_pull_http_rejects_all() {
         .assert()
         .code(3)
         .stderr(predicate::str::contains("--all is not supported for HTTP caches; specify paths explicitly"));
+}
+
+#[test]
+fn store_pull_closure_conflicts_with_all() {
+    let store_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    crunch_cmd()
+        .arg("--store")
+        .arg(store_dir.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
+        .arg("store")
+        .arg("pull")
+        .arg("--from")
+        .arg("https://cache.example.com")
+        .arg("--closure")
+        .arg("--all")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be used with '--all'"));
 }
 
 #[test]
@@ -1249,6 +1332,53 @@ fn store_pull_http_round_trip_imports_path() {
 
     let pulled_name = logical_store_path.rsplit('/').next().unwrap();
     assert!(store_dir.join(pulled_name).exists(), "expected pulled output on disk");
+}
+
+#[test]
+fn store_pull_http_closure_round_trip_imports_root() {
+    if !require_loopback_network("store_pull_http_closure_round_trip_imports_root") {
+        return;
+    }
+    let work = tempfile::tempdir().unwrap();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let (cache_dir, logical_store_path, trusted_public_key) =
+        runtime.block_on(make_http_pull_cache_fixture(work.path()));
+    let server = HttpFixtureServer::serve_cache_dir(&cache_dir);
+    let store_dir = work.path().join("closure-pull-store");
+    let state_dir = work.path().join("closure-pull-state");
+    std::fs::create_dir_all(&store_dir).unwrap();
+    std::fs::create_dir_all(&state_dir).unwrap();
+
+    let output = crunch_cmd()
+        .arg("--store")
+        .arg(&store_dir)
+        .arg("--state-dir")
+        .arg(&state_dir)
+        .arg("store")
+        .arg("pull")
+        .arg("--from")
+        .arg(&server.base_url)
+        .arg("--closure")
+        .arg("--trusted-public-keys")
+        .arg(&trusted_public_key)
+        .arg(&logical_store_path)
+        .output()
+        .expect("HTTP closure pull should execute");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "HTTP closure pull failed (exit {}):\nstdout: {stdout}\nstderr: {stderr}",
+        output.status.code().unwrap_or(-1),
+    );
+    assert!(stdout.contains("CLOSURE plan_blake3="), "stdout: {stdout}");
+    assert!(stdout.contains("members=1"), "stdout: {stdout}");
+    assert!(stdout.contains("admitted=true"), "stdout: {stdout}");
+    assert!(stderr.contains("imported=1"), "stderr: {stderr}");
+
+    let pulled_name = logical_store_path.rsplit('/').next().unwrap();
+    assert!(store_dir.join(pulled_name).exists(), "expected pulled closure root on disk");
 }
 
 #[test]

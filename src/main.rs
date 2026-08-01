@@ -2582,6 +2582,10 @@ pub enum StoreAction {
         #[arg(long)]
         all: bool,
 
+        /// Recursively import one complete signed HTTP runtime closure
+        #[arg(long, conflicts_with = "all")]
+        closure: bool,
+
         /// Accept unsigned/unverified narinfos
         #[arg(long)]
         trust_unsigned: bool,

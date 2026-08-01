@@ -126,6 +126,7 @@ async fn cmd_store_mutation_or_transfer(
         crate::StoreAction::Pull {
             from,
             all,
+            closure,
             trust_unsigned,
             trusted_public_keys,
             paths,
@@ -133,6 +134,7 @@ async fn cmd_store_mutation_or_transfer(
             cmd_store_pull_action(context, StorePullAction {
                 source_url: from,
                 is_all: all,
+                is_closure: closure,
                 is_trust_unsigned: trust_unsigned,
                 trusted_public_keys,
                 paths,
@@ -175,6 +177,7 @@ struct StorePushAction {
 struct StorePullAction {
     source_url: String,
     is_all: bool,
+    is_closure: bool,
     is_trust_unsigned: bool,
     trusted_public_keys: Vec<String>,
     paths: Vec<String>,
@@ -210,6 +213,7 @@ async fn cmd_store_pull_action(context: StoreCommandContext<'_>, action: StorePu
     cmd_store_pull(&store, StorePullRequest {
         source_url: &action.source_url,
         is_all: action.is_all,
+        is_closure: action.is_closure,
         is_trust_unsigned: action.is_trust_unsigned,
         explicit_trusted_public_keys: &action.trusted_public_keys,
         paths: &action.paths,
@@ -753,6 +757,7 @@ fn parse_http_pull_paths(
 struct StorePullRequest<'a> {
     source_url: &'a str,
     is_all: bool,
+    is_closure: bool,
     is_trust_unsigned: bool,
     explicit_trusted_public_keys: &'a [String],
     paths: &'a [String],
@@ -763,7 +768,7 @@ async fn cmd_store_pull(store: &crunch_store::StoreHandle, request: StorePullReq
     let pull_source = validate_pull_request(&request)?;
     let options = resolve_pull_options(&request)?;
     let pull_evidence = execute_pull(store, pull_source, &request, &options).await?;
-    print_pull_report(&pull_evidence);
+    print_pull_evidence(&pull_evidence);
     Ok(())
 }
 
@@ -771,6 +776,12 @@ fn validate_pull_request(request: &StorePullRequest<'_>) -> Result<crunch_store:
     let pull_source = parse_pull_source(request.source_url)?;
     if matches!(&pull_source, crunch_store::PullSource::Http(_)) && request.is_all {
         return Err(RunError::Internal("--all is not supported for HTTP caches; specify paths explicitly".to_string()));
+    }
+    if request.is_closure && !matches!(&pull_source, crunch_store::PullSource::Http(_)) {
+        return Err(RunError::Internal("--closure is supported only for HTTP caches".to_string()));
+    }
+    if request.is_closure && request.paths.len() != 1 {
+        return Err(RunError::Internal("--closure requires exactly one explicit logical store path".to_string()));
     }
     if request.paths.is_empty() && !request.is_all {
         let detail = if matches!(&pull_source, crunch_store::PullSource::Http(_)) {
@@ -801,24 +812,74 @@ fn resolve_pull_options(request: &StorePullRequest<'_>) -> Result<crunch_store::
     })
 }
 
+enum StorePullEvidence {
+    Explicit(crunch_store::PullReport),
+    Closure(Box<crunch_store::HttpClosurePullReport>),
+}
+
 async fn execute_pull(
     store: &crunch_store::StoreHandle,
     pull_source: crunch_store::PullSource,
     request: &StorePullRequest<'_>,
     options: &crunch_store::PullOptions,
-) -> Result<crunch_store::PullReport, RunError> {
+) -> Result<StorePullEvidence, RunError> {
     match pull_source {
         crunch_store::PullSource::Directory(source_dir) => {
             let paths_filter = (!request.is_all).then(|| request.paths.to_vec());
             crunch_store::import_paths_from_cache_dir(store, &source_dir, paths_filter.as_deref(), options)
                 .await
-                .map_err(|e| RunError::Internal(format!("pull: {e}")))
+                .map(StorePullEvidence::Explicit)
+                .map_err(|error| RunError::Internal(format!("pull: {error}")))
         }
         crunch_store::PullSource::Http(cache_url) => {
             let requested_paths = parse_http_pull_paths(request.paths, store.store_dir())?;
-            crunch_store::import_paths_from_http_cache(store, &cache_url, &requested_paths, options)
-                .await
-                .map_err(|e| RunError::Internal(format!("pull: {e}")))
+            execute_http_pull(store, &cache_url, &requested_paths, request.is_closure, options).await
+        }
+    }
+}
+
+async fn execute_http_pull(
+    store: &crunch_store::StoreHandle,
+    cache_url: &url::Url,
+    requested_paths: &[nix_compat::store_path::StorePath<String>],
+    is_closure: bool,
+    options: &crunch_store::PullOptions,
+) -> Result<StorePullEvidence, RunError> {
+    if is_closure {
+        let root = requested_paths
+            .first()
+            .ok_or_else(|| RunError::Internal("closure root disappeared after validation".to_string()))?;
+        return crunch_store::import_http_cache_closure(
+            store,
+            cache_url,
+            root,
+            options,
+            crunch_store::HttpClosureLimits::default(),
+        )
+        .await
+        .map(Box::new)
+        .map(StorePullEvidence::Closure)
+        .map_err(|error| RunError::Internal(format!("pull closure: {error}")));
+    }
+    crunch_store::import_paths_from_http_cache(store, cache_url, requested_paths, options)
+        .await
+        .map(StorePullEvidence::Explicit)
+        .map_err(|error| RunError::Internal(format!("pull: {error}")))
+}
+
+fn print_pull_evidence(evidence: &StorePullEvidence) {
+    match evidence {
+        StorePullEvidence::Explicit(report) => print_pull_report(report),
+        StorePullEvidence::Closure(report) => {
+            println!(
+                "CLOSURE plan_blake3={} members={} reused={} root={} admitted={}",
+                report.plan.plan_blake3,
+                report.plan.members.len(),
+                report.reused_complete_count,
+                report.plan.root,
+                report.root_admitted,
+            );
+            print_pull_report(&report.pull);
         }
     }
 }

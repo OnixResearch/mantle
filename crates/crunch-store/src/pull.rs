@@ -1,5 +1,6 @@
 //! Binary cache pull: import narinfo + NAR files into the local store.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -11,17 +12,26 @@ use nix_compat::nixbase32;
 use nix_compat::store_path::StorePath;
 use reqwest::StatusCode;
 use reqwest::redirect::Policy;
+use serde::Serialize;
 use snix_castore::Node;
 use snix_store::nar::ingest_nar_and_hash;
 use snix_store::path_info::PathInfo;
 use snix_store::pathinfoservice::PathInfoService;
 use tokio::io::AsyncRead;
+use tokio::io::AsyncReadExt;
 use tokio_util::io::StreamReader;
 use url::Url;
 
 use crate::Error;
 use crate::export::export_castore_to_disk;
 use crate::handle::StoreHandle;
+use crate::http_closure::HttpClosureLimits;
+use crate::http_closure::HttpClosureObservation;
+use crate::http_closure::HttpClosurePlan;
+use crate::http_closure::HttpClosurePlanBuilder;
+use crate::http_closure::HttpClosurePlanMember;
+use crate::http_closure::MAX_HTTP_CLOSURE_NARINFO_BYTES;
+use crate::http_closure::verify_http_closure_plan_identity;
 
 /// Maximum number of requested/importable paths in one pull.
 const MAX_PULL_PATHS: usize = 1_000_000;
@@ -74,6 +84,15 @@ pub struct PullReport {
     pub skipped_store_dir_mismatch_count: u32,
     pub total_nar_bytes: u64,
     pub paths: Vec<PulledPath>,
+}
+
+/// Strict single-root HTTP closure import result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HttpClosurePullReport {
+    pub plan: HttpClosurePlan,
+    pub pull: PullReport,
+    pub reused_complete_count: u32,
+    pub root_admitted: bool,
 }
 
 /// Import PathInfo entries from a flat Nix binary cache directory.
@@ -262,9 +281,24 @@ async fn fetch_http_narinfo_text(
     cache_url: &Url,
     digest: [u8; 20],
 ) -> Result<Option<String>, String> {
-    let narinfo_url = narinfo_url_for_digest(cache_url, digest).map_err(|e| e.to_string())?;
-    let response =
-        client.get(narinfo_url.clone()).send().await.map_err(|e| format!("requesting {narinfo_url}: {e}"))?;
+    fetch_http_narinfo_text_bounded(client, cache_url, digest, MAX_HTTP_CLOSURE_NARINFO_BYTES).await
+}
+
+async fn fetch_http_narinfo_text_bounded(
+    client: &reqwest::Client,
+    cache_url: &Url,
+    digest: [u8; 20],
+    max_bytes: u64,
+) -> Result<Option<String>, String> {
+    if max_bytes == 0 {
+        return Err("narinfo byte limit must be positive".to_string());
+    }
+    let narinfo_url = narinfo_url_for_digest(cache_url, digest).map_err(|error| error.to_string())?;
+    let response = client
+        .get(narinfo_url.clone())
+        .send()
+        .await
+        .map_err(|error| format!("requesting {narinfo_url}: {error}"))?;
 
     if matches!(response.status(), StatusCode::NOT_FOUND | StatusCode::FORBIDDEN) {
         return Ok(None);
@@ -272,8 +306,26 @@ async fn fetch_http_narinfo_text(
     if !response.status().is_success() {
         return Err(format!("requesting {narinfo_url}: HTTP {}", response.status()));
     }
+    if response.content_length().is_some_and(|content_length| content_length > max_bytes) {
+        return Err(format!("narinfo response exceeds {max_bytes} bytes"));
+    }
 
-    response.text().await.map(Some).map_err(|e| format!("reading {narinfo_url}: {e}"))
+    let mut bytes = Vec::new();
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.try_next().await.map_err(|error| format!("reading {narinfo_url}: {error}"))? {
+        let next_length = u64::try_from(bytes.len())
+            .ok()
+            .and_then(|length| length.checked_add(u64::try_from(chunk.len()).ok()?))
+            .ok_or_else(|| "narinfo response size overflow".to_string())?;
+        if next_length > max_bytes {
+            return Err(format!("narinfo response exceeds {max_bytes} bytes"));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    let text = String::from_utf8(bytes).map_err(|error| format!("narinfo response is not UTF-8: {error}"))?;
+    debug_assert!(u64::try_from(text.len()).is_ok_and(|length| length <= max_bytes));
+    debug_assert!(!narinfo_url.as_str().is_empty());
+    Ok(Some(text))
 }
 
 fn resolve_relative_nar_url(cache_url: &Url, narinfo_url_field: &str) -> Result<Url, String> {
@@ -301,17 +353,7 @@ pub async fn import_paths_from_http_cache(
     let normalized_cache_url = normalize_http_cache_base_url(cache_url);
     validate_remote_store_dir(&client, &normalized_cache_url, handle.store_dir()).await?;
 
-    let mut pull_result = PullReport {
-        imported_count: 0,
-        skipped_already_present_count: 0,
-        skipped_untrusted_count: 0,
-        skipped_hash_mismatch_count: 0,
-        skipped_missing_nar_count: 0,
-        skipped_parse_error_count: 0,
-        skipped_store_dir_mismatch_count: 0,
-        total_nar_bytes: 0,
-        paths: Vec::with_capacity(paths.len().min(256)),
-    };
+    let mut pull_result = empty_pull_report(paths.len());
     let context = HttpPullContext {
         handle,
         client: &client,
@@ -324,6 +366,373 @@ pub async fn import_paths_from_http_cache(
     }
 
     Ok(pull_result)
+}
+
+/// Discover and import one complete signed HTTP cache closure.
+/// r[impl cache_substitution.complete_http_closure_pull]
+pub async fn import_http_cache_closure(
+    handle: &StoreHandle,
+    cache_url: &Url,
+    root: &StorePath<String>,
+    options: &PullOptions,
+    limits: HttpClosureLimits,
+) -> Result<HttpClosurePullReport, Error> {
+    validate_http_cache_url(cache_url)?;
+    let client = build_http_pull_client()?;
+    let normalized_cache_url = normalize_http_cache_base_url(cache_url);
+    validate_remote_store_dir(&client, &normalized_cache_url, handle.store_dir()).await?;
+
+    let discovered =
+        discover_http_cache_closure(&client, &normalized_cache_url, root, handle.store_dir(), options, limits).await?;
+    if !verify_http_closure_plan_identity(&discovered.plan).map_err(http_closure_plan_error)? {
+        return Err(Error::Store("http-closure-plan-identity-mismatch".to_string()));
+    }
+    import_discovered_http_closure(handle, &client, &normalized_cache_url, options, discovered).await
+}
+
+#[derive(Debug)]
+struct DiscoveredHttpNarinfo {
+    path: StorePath<String>,
+    text: String,
+}
+
+#[derive(Debug)]
+struct DiscoveredHttpClosure {
+    plan: HttpClosurePlan,
+    narinfos: BTreeMap<String, DiscoveredHttpNarinfo>,
+}
+
+async fn discover_http_cache_closure(
+    client: &reqwest::Client,
+    cache_url: &Url,
+    root: &StorePath<String>,
+    store_dir: &str,
+    options: &PullOptions,
+    limits: HttpClosureLimits,
+) -> Result<DiscoveredHttpClosure, Error> {
+    let trust_policy_blake3 = http_pull_trust_policy_blake3(options)?;
+    let mut builder = HttpClosurePlanBuilder::new(
+        root.clone(),
+        cache_url.to_string(),
+        trust_policy_blake3,
+        store_dir.to_string(),
+        limits,
+    )
+    .map_err(http_closure_plan_error)?;
+    let mut narinfos = BTreeMap::new();
+
+    while let Some(request) = builder.take_next_request().map_err(http_closure_plan_error)? {
+        let text = fetch_required_closure_narinfo(client, cache_url, &request.path, limits.max_narinfo_bytes).await?;
+        let observation = strict_http_closure_observation(&text, &request.path, store_dir, options)?;
+        let map_key = request.path.to_string();
+        builder.observe(observation).map_err(http_closure_plan_error)?;
+        narinfos.insert(map_key, DiscoveredHttpNarinfo {
+            path: request.path,
+            text,
+        });
+    }
+    let plan = builder.finalize().map_err(http_closure_plan_error)?;
+    if plan.members.len() != narinfos.len() {
+        return Err(Error::Store("http-closure-plan-member-count-mismatch".to_string()));
+    }
+    debug_assert_eq!(plan.root, root.to_string());
+    debug_assert_eq!(plan.members.len(), narinfos.len());
+    Ok(DiscoveredHttpClosure { plan, narinfos })
+}
+
+async fn fetch_required_closure_narinfo(
+    client: &reqwest::Client,
+    cache_url: &Url,
+    path: &StorePath<String>,
+    max_bytes: u64,
+) -> Result<String, Error> {
+    match fetch_http_narinfo_text_bounded(client, cache_url, *path.digest(), max_bytes).await {
+        Ok(Some(text)) => Ok(text),
+        Ok(None) => Err(Error::Store(format!("http-closure-missing-narinfo: {path}"))),
+        Err(detail) => Err(Error::Store(format!("http-closure-narinfo-fetch-failed: {path}: {detail}"))),
+    }
+}
+
+fn strict_http_closure_observation(
+    text: &str,
+    requested_path: &StorePath<String>,
+    store_dir: &str,
+    options: &PullOptions,
+) -> Result<HttpClosureObservation, Error> {
+    let narinfo = NarInfo::parse_with_store_dir(text, store_dir)
+        .map_err(|error| Error::Store(format!("http-closure-narinfo-parse-failed: {requested_path}: {error}")))?;
+    let returned_path = narinfo.store_path.to_owned();
+    if returned_path != *requested_path {
+        return Err(Error::Store(format!(
+            "http-closure-returned-path-mismatch: requested {requested_path}, returned {returned_path}"
+        )));
+    }
+    if !verify_narinfo_signatures(&narinfo, store_dir, options) {
+        return Err(Error::Store(format!("http-closure-untrusted-narinfo: {requested_path}")));
+    }
+    let observation = HttpClosureObservation {
+        requested_path: requested_path.clone(),
+        returned_path,
+        references: narinfo.references.iter().map(StorePath::to_owned).collect(),
+        nar_sha256: narinfo.nar_hash,
+        nar_size: narinfo.nar_size,
+        narinfo_blake3: *blake3::hash(text.as_bytes()).as_bytes(),
+    };
+    debug_assert_eq!(observation.requested_path, observation.returned_path);
+    debug_assert!(!text.is_empty());
+    Ok(observation)
+}
+
+async fn import_discovered_http_closure(
+    handle: &StoreHandle,
+    client: &reqwest::Client,
+    cache_url: &Url,
+    options: &PullOptions,
+    discovered: DiscoveredHttpClosure,
+) -> Result<HttpClosurePullReport, Error> {
+    let mut pull = empty_pull_report(discovered.plan.members.len());
+    let mut reused_complete_count = 0_u32;
+    let context = HttpPullContext {
+        handle,
+        client,
+        cache_url,
+        options,
+    };
+
+    for member in &discovered.plan.members {
+        let discovered_narinfo = discovered
+            .narinfos
+            .get(&member.store_path)
+            .ok_or_else(|| Error::Store(format!("http-closure-missing-planned-metadata: {}", member.store_path)))?;
+        if local_member_is_complete(handle, discovered_narinfo, member, options).await? {
+            ensure_local_member_exported(handle, &discovered_narinfo.path).await?;
+            reused_complete_count = reused_complete_count.saturating_add(1);
+            pull.skipped_already_present_count = pull.skipped_already_present_count.saturating_add(1);
+            continue;
+        }
+        import_planned_http_member(&context, discovered_narinfo, member, &mut pull).await?;
+    }
+
+    let root_member = discovered
+        .narinfos
+        .get(&discovered.plan.root)
+        .ok_or_else(|| Error::Store("http-closure-root-metadata-missing-after-import".to_string()))?;
+    let root_admitted = local_member_is_complete(
+        handle,
+        root_member,
+        discovered.plan.members.last().expect("closure plan must contain the root"),
+        options,
+    )
+    .await?;
+    if !root_admitted {
+        return Err(Error::Store("http-closure-root-not-admitted".to_string()));
+    }
+    debug_assert_eq!(
+        discovered.plan.members.last().map(|member| member.store_path.as_str()),
+        Some(discovered.plan.root.as_str())
+    );
+    debug_assert_eq!(pull.imported_count.saturating_add(reused_complete_count) as usize, discovered.plan.members.len());
+    Ok(HttpClosurePullReport {
+        plan: discovered.plan,
+        pull,
+        reused_complete_count,
+        root_admitted,
+    })
+}
+
+async fn local_member_is_complete(
+    handle: &StoreHandle,
+    discovered: &DiscoveredHttpNarinfo,
+    member: &HttpClosurePlanMember,
+    options: &PullOptions,
+) -> Result<bool, Error> {
+    let Some(path_info) = handle
+        .pathinfo_service()
+        .get(*discovered.path.digest())
+        .await
+        .map_err(|error| Error::PathInfoService(format!("checking closure member PathInfo: {error}")))?
+    else {
+        return Ok(false);
+    };
+    ensure_pathinfo_matches_plan(&path_info, discovered, member)?;
+    if !verify_pathinfo_signatures(&path_info, handle.store_dir(), options) {
+        return Ok(false);
+    }
+    let is_complete = handle.castore_has_complete_content(&path_info.node).await?;
+    debug_assert_eq!(path_info.store_path, discovered.path);
+    debug_assert_eq!(path_info.nar_size, member.nar_size);
+    Ok(is_complete)
+}
+
+fn ensure_pathinfo_matches_plan(
+    path_info: &PathInfo,
+    discovered: &DiscoveredHttpNarinfo,
+    member: &HttpClosurePlanMember,
+) -> Result<(), Error> {
+    let mut references = path_info.references.iter().map(ToString::to_string).collect::<Vec<_>>();
+    references.sort();
+    let nar_sha256_hex = data_encoding::HEXLOWER.encode(&path_info.nar_sha256);
+    if path_info.store_path != discovered.path
+        || path_info.store_path.to_string() != member.store_path
+        || path_info.nar_size != member.nar_size
+        || nar_sha256_hex != member.nar_sha256_hex
+        || references != member.references
+    {
+        return Err(Error::Store(format!("http-closure-local-metadata-conflict: {}", member.store_path)));
+    }
+    debug_assert_eq!(references, member.references);
+    debug_assert_eq!(nar_sha256_hex, member.nar_sha256_hex);
+    Ok(())
+}
+
+fn verify_pathinfo_signatures(path_info: &PathInfo, store_dir: &str, options: &PullOptions) -> bool {
+    if options.trust_unsigned {
+        return true;
+    }
+    let store_path_ref = path_info.store_path.as_ref();
+    let references = path_info.references.iter().map(StorePath::as_ref).collect::<Vec<_>>();
+    let fingerprint = nix_compat::narinfo::fingerprint_with_store_dir(
+        &store_path_ref,
+        &path_info.nar_sha256,
+        path_info.nar_size,
+        references.iter(),
+        store_dir,
+    );
+    let is_trusted = path_info
+        .signatures
+        .iter()
+        .any(|signature| options.trusted_public_keys.iter().any(|key| key.verify(&fingerprint, &signature.as_ref())));
+    debug_assert!(!store_dir.is_empty());
+    debug_assert!(options.trust_unsigned || !is_trusted || !path_info.signatures.is_empty());
+    is_trusted
+}
+
+async fn ensure_local_member_exported(handle: &StoreHandle, path: &StorePath<String>) -> Result<(), Error> {
+    let Some(path_info) = handle
+        .pathinfo_service()
+        .get(*path.digest())
+        .await
+        .map_err(|error| Error::PathInfoService(format!("loading reusable closure member: {error}")))?
+    else {
+        return Err(Error::Store(format!("http-closure-reusable-member-disappeared: {path}")));
+    };
+    let abs_path = path.to_absolute_path_with_prefix(handle.output_dir_str());
+    if !std::path::Path::new(&abs_path).exists() {
+        export_castore_to_disk(&path_info.node, &abs_path, &handle.blob_service(), &handle.directory_service())
+            .await
+            .map_err(|error| Error::Export(format!("exporting reusable closure member {abs_path}: {error}")))?;
+    }
+    debug_assert_eq!(path_info.store_path, *path);
+    debug_assert!(!abs_path.is_empty());
+    Ok(())
+}
+
+async fn import_planned_http_member(
+    context: &HttpPullContext<'_>,
+    discovered: &DiscoveredHttpNarinfo,
+    member: &HttpClosurePlanMember,
+    result: &mut PullReport,
+) -> Result<(), Error> {
+    let narinfo = NarInfo::parse_with_store_dir(&discovered.text, context.handle.store_dir()).map_err(|error| {
+        Error::Store(format!("http-closure-planned-narinfo-parse-failed: {}: {error}", member.store_path))
+    })?;
+    ensure_narinfo_matches_plan(&narinfo, &discovered.text, member, context.options, context.handle.store_dir())?;
+    let ingested = ingest_http_nar(context, &narinfo, &member.store_path, result)
+        .await?
+        .ok_or_else(|| Error::Store(format!("http-closure-content-admission-failed: {}", member.store_path)))?;
+    if ingested.nar_sha256 != narinfo.nar_hash || ingested.nar_size_bytes != narinfo.nar_size {
+        return Err(Error::Store(format!("http-closure-nar-facts-mismatch: {}", member.store_path)));
+    }
+    let path_info = PathInfo {
+        store_path: discovered.path.clone(),
+        node: ingested.node,
+        references: narinfo.references.iter().map(StorePath::to_owned).collect(),
+        nar_sha256: ingested.nar_sha256,
+        nar_size: ingested.nar_size_bytes,
+        signatures: narinfo.signatures.iter().map(|signature| signature.to_owned()).collect(),
+        deriver: narinfo.deriver.as_ref().map(StorePath::to_owned),
+        ca: narinfo.ca.clone(),
+    };
+    persist_pulled_admission(
+        context.handle,
+        PulledPathAdmission {
+            path_info,
+            transport: PullTransport::Http,
+        },
+        result,
+    )
+    .await
+}
+
+fn ensure_narinfo_matches_plan(
+    narinfo: &NarInfo<'_>,
+    text: &str,
+    member: &HttpClosurePlanMember,
+    options: &PullOptions,
+    store_dir: &str,
+) -> Result<(), Error> {
+    let mut references = narinfo.references.iter().map(ToString::to_string).collect::<Vec<_>>();
+    references.sort();
+    let nar_hash_hex = data_encoding::HEXLOWER.encode(&narinfo.nar_hash);
+    let narinfo_blake3 = blake3::hash(text.as_bytes()).to_hex().to_string();
+    if narinfo.store_path.to_string() != member.store_path
+        || narinfo.nar_size != member.nar_size
+        || nar_hash_hex != member.nar_sha256_hex
+        || references != member.references
+        || narinfo_blake3 != member.narinfo_blake3
+    {
+        return Err(Error::Store(format!("http-closure-planned-metadata-mismatch: {}", member.store_path)));
+    }
+    if !verify_narinfo_signatures(narinfo, store_dir, options) {
+        return Err(Error::Store(format!("http-closure-planned-signature-mismatch: {}", member.store_path)));
+    }
+    debug_assert_eq!(references, member.references);
+    debug_assert_eq!(nar_hash_hex, member.nar_sha256_hex);
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct HttpPullTrustIdentity {
+    trust_unsigned: bool,
+    trusted_public_keys: Vec<String>,
+}
+
+fn http_pull_trust_policy_blake3(options: &PullOptions) -> Result<String, Error> {
+    const TRUST_POLICY_DOMAIN: &[u8] = b"mantle-http-pull-trust-policy-v1\0";
+    let mut trusted_public_keys = options.trusted_public_keys.iter().map(ToString::to_string).collect::<Vec<_>>();
+    trusted_public_keys.sort();
+    trusted_public_keys.dedup();
+    let identity = HttpPullTrustIdentity {
+        trust_unsigned: options.trust_unsigned,
+        trusted_public_keys,
+    };
+    let bytes = serde_json::to_vec(&identity)
+        .map_err(|error| Error::Store(format!("serializing HTTP pull trust identity: {error}")))?;
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(TRUST_POLICY_DOMAIN);
+    hasher.update(&bytes);
+    let digest = hasher.finalize().to_hex().to_string();
+    debug_assert!(!bytes.is_empty());
+    debug_assert_eq!(digest.len(), 64);
+    Ok(digest)
+}
+
+fn http_closure_plan_error(error: crate::http_closure::HttpClosurePlanError) -> Error {
+    Error::Store(error.to_string())
+}
+
+fn empty_pull_report(expected_paths: usize) -> PullReport {
+    PullReport {
+        imported_count: 0,
+        skipped_already_present_count: 0,
+        skipped_untrusted_count: 0,
+        skipped_hash_mismatch_count: 0,
+        skipped_missing_nar_count: 0,
+        skipped_parse_error_count: 0,
+        skipped_store_dir_mismatch_count: 0,
+        total_nar_bytes: 0,
+        paths: Vec::with_capacity(expected_paths.min(256)),
+    }
 }
 
 struct HttpPullContext<'a> {
@@ -494,7 +903,7 @@ async fn ingest_http_nar(
     };
     let response_stream = nar_response.bytes_stream().map_err(|error| std::io::Error::other(error.to_string()));
     let response_reader = tokio::io::BufReader::new(StreamReader::new(response_stream));
-    let mut nar_reader: Box<dyn AsyncRead + Send + Unpin> = match narinfo.compression {
+    let nar_reader: Box<dyn AsyncRead + Send + Unpin> = match narinfo.compression {
         None => Box::new(response_reader),
         Some("bzip2") => Box::new(async_compression::tokio::bufread::BzDecoder::new(response_reader)),
         Some("gzip") => Box::new(async_compression::tokio::bufread::GzipDecoder::new(response_reader)),
@@ -506,10 +915,12 @@ async fn ingest_http_nar(
             return Ok(None);
         }
     };
+    let nar_read_limit = narinfo.nar_size.saturating_add(1);
+    let mut bounded_nar_reader = nar_reader.take(nar_read_limit);
     let ingestion = ingest_nar_and_hash(
         context.handle.blob_service(),
         context.handle.directory_service(),
-        &mut nar_reader,
+        &mut bounded_nar_reader,
         &narinfo.ca,
     )
     .await;
@@ -1186,6 +1597,12 @@ mod tests {
         std::fs::read_to_string(cache_dir.join(narinfo_file_name(store_path))).unwrap()
     }
 
+    fn nar_route(cache_dir: &Path, store_path: &StorePath<String>) -> String {
+        let narinfo_text = read_narinfo_text(cache_dir, store_path);
+        let relative_url = narinfo_text.lines().find_map(|line| line.strip_prefix("URL: ")).expect("narinfo URL");
+        format!("/{relative_url}")
+    }
+
     fn replace_narinfo_field(narinfo_text: &str, field: &str, new_value: &str) -> String {
         narinfo_text
             .lines()
@@ -1516,6 +1933,399 @@ mod tests {
         assert_eq!(imported_pi.store_path, pi.store_path);
         assert_eq!(server.stats().narinfo_requests, 1);
         assert_eq!(server.stats().nar_requests, 1);
+    }
+
+    // r[verify cache_substitution.complete_http_closure_pull]
+    #[tokio::test]
+    async fn http_closure_pull_discovers_all_metadata_and_imports_root_last() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-closure")).await;
+        let child = make_signed_pathinfo(&push_store, "closure-child", b"child").await;
+        let root =
+            make_signed_pathinfo_with_references(&push_store, "closure-root", b"root", vec![child.store_path.clone()])
+                .await;
+        let cache_dir = tmp.path().join("cache-closure");
+        export_paths_to_cache_dir(&push_store, &[child.clone(), root.clone()], &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+
+        let server = HttpTestServer::spawn(cache_routes(&cache_dir));
+        let pull_store = open_test_store(&tmp.path().join("pull-closure")).await;
+        let report = import_http_cache_closure(
+            &pull_store,
+            &server.base_url,
+            &root.store_path,
+            &default_pull_options(),
+            HttpClosureLimits::default(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(report.plan.members.len(), 2);
+        assert_eq!(report.plan.members.last().unwrap().store_path, root.store_path.to_string());
+        assert_eq!(report.pull.imported_count, 2);
+        assert_eq!(report.reused_complete_count, 0);
+        assert!(report.root_admitted);
+        let stats = server.stats();
+        assert_eq!(stats.narinfo_requests, 2);
+        assert_eq!(stats.nar_requests, 2);
+        let first_nar_index = stats.request_paths.iter().position(|path| path.contains("/nar/")).unwrap();
+        let narinfo_count_before_content =
+            stats.request_paths[..first_nar_index].iter().filter(|path| path.ends_with(".narinfo")).count();
+        assert_eq!(narinfo_count_before_content, 2);
+        assert_eq!(stats.request_paths.last(), Some(&nar_route(&cache_dir, &root.store_path)));
+    }
+
+    #[tokio::test]
+    async fn http_closure_pull_reuses_complete_dependency() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-reuse")).await;
+        let child = make_signed_pathinfo(&push_store, "reuse-child", b"child").await;
+        let root =
+            make_signed_pathinfo_with_references(&push_store, "reuse-root", b"root", vec![child.store_path.clone()])
+                .await;
+        let cache_dir = tmp.path().join("cache-reuse");
+        export_paths_to_cache_dir(&push_store, &[child.clone(), root.clone()], &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let server = HttpTestServer::spawn(cache_routes(&cache_dir));
+        let pull_store = open_test_store(&tmp.path().join("pull-reuse")).await;
+        let seed_report = import_paths_from_http_cache(
+            &pull_store,
+            &server.base_url,
+            std::slice::from_ref(&child.store_path),
+            &default_pull_options(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(seed_report.imported_count, 1);
+
+        let report = import_http_cache_closure(
+            &pull_store,
+            &server.base_url,
+            &root.store_path,
+            &default_pull_options(),
+            HttpClosureLimits::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(report.pull.imported_count, 1);
+        assert_eq!(report.reused_complete_count, 1);
+        assert_eq!(report.pull.skipped_already_present_count, 1);
+        assert!(report.root_admitted);
+    }
+
+    // r[verify cache_substitution.complete_http_closure_pull]
+    #[tokio::test]
+    async fn http_closure_missing_dependency_fails_before_nar_download() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-missing-ref")).await;
+        let missing = StorePath::from_name_and_digest_fixed("missing-child", [77u8; 20]).unwrap();
+        let root = make_signed_pathinfo_with_references(&push_store, "missing-root", b"root", vec![missing]).await;
+        let cache_dir = tmp.path().join("cache-missing-ref");
+        export_paths_to_cache_dir(&push_store, std::slice::from_ref(&root), &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let server = HttpTestServer::spawn(cache_routes(&cache_dir));
+        let pull_store = open_test_store(&tmp.path().join("pull-missing-ref")).await;
+
+        let error = import_http_cache_closure(
+            &pull_store,
+            &server.base_url,
+            &root.store_path,
+            &default_pull_options(),
+            HttpClosureLimits::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("http-closure-missing-narinfo"));
+        assert_eq!(server.stats().nar_requests, 0);
+        assert!(pull_store.pathinfo_service().get(*root.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn http_closure_narinfo_limit_fails_before_nar_download() {
+        const SMALL_NARINFO_LIMIT_BYTES: u64 = 32;
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-narinfo-limit")).await;
+        let root = make_signed_pathinfo(&push_store, "narinfo-limit-root", b"root").await;
+        let cache_dir = tmp.path().join("cache-narinfo-limit");
+        export_paths_to_cache_dir(&push_store, std::slice::from_ref(&root), &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let server = HttpTestServer::spawn(cache_routes(&cache_dir));
+        let pull_store = open_test_store(&tmp.path().join("pull-narinfo-limit")).await;
+        let limits = HttpClosureLimits {
+            max_narinfo_bytes: SMALL_NARINFO_LIMIT_BYTES,
+            ..HttpClosureLimits::default()
+        };
+
+        let error =
+            import_http_cache_closure(&pull_store, &server.base_url, &root.store_path, &default_pull_options(), limits)
+                .await
+                .unwrap_err();
+        assert!(error.to_string().contains("narinfo response exceeds"));
+        assert_eq!(server.stats().nar_requests, 0);
+        assert!(pull_store.pathinfo_service().get(*root.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn http_closure_diamond_fetches_shared_member_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-diamond")).await;
+        let leaf = make_signed_pathinfo(&push_store, "diamond-leaf", b"leaf").await;
+        let left =
+            make_signed_pathinfo_with_references(&push_store, "diamond-left", b"left", vec![leaf.store_path.clone()])
+                .await;
+        let right =
+            make_signed_pathinfo_with_references(&push_store, "diamond-right", b"right", vec![leaf.store_path.clone()])
+                .await;
+        let root = make_signed_pathinfo_with_references(&push_store, "diamond-root", b"root", vec![
+            left.store_path.clone(),
+            right.store_path.clone(),
+        ])
+        .await;
+        let cache_dir = tmp.path().join("cache-diamond");
+        export_paths_to_cache_dir(&push_store, &[leaf.clone(), left, right, root.clone()], &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let server = HttpTestServer::spawn(cache_routes(&cache_dir));
+        let pull_store = open_test_store(&tmp.path().join("pull-diamond")).await;
+
+        let report = import_http_cache_closure(
+            &pull_store,
+            &server.base_url,
+            &root.store_path,
+            &default_pull_options(),
+            HttpClosureLimits::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(report.plan.members.len(), 4);
+        assert_eq!(report.pull.imported_count, 4);
+        assert_eq!(server.stats().narinfo_requests, 4);
+        assert_eq!(server.stats().nar_requests, 4);
+        assert_eq!(
+            report.plan.members.iter().filter(|member| member.store_path == leaf.store_path.to_string()).count(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn http_closure_path_mismatch_fails_before_nar_download() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-path-mismatch")).await;
+        let root = make_signed_pathinfo(&push_store, "path-mismatch-root", b"root").await;
+        let cache_dir = tmp.path().join("cache-path-mismatch");
+        export_paths_to_cache_dir(&push_store, std::slice::from_ref(&root), &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let mut routes = cache_routes(&cache_dir);
+        let mismatched: StorePath<String> =
+            StorePath::from_name_and_digest_fixed("different-name", *root.store_path.digest()).unwrap();
+        let narinfo_route = format!("/{}", narinfo_file_name(&root.store_path));
+        let mismatched_text = replace_narinfo_field(
+            &read_narinfo_text(&cache_dir, &root.store_path),
+            "StorePath",
+            &mismatched.to_absolute_path(),
+        );
+        routes.insert(narinfo_route, HttpResponse::ok_text(mismatched_text));
+        let server = HttpTestServer::spawn(routes);
+        let pull_store = open_test_store(&tmp.path().join("pull-path-mismatch")).await;
+
+        let error = import_http_cache_closure(
+            &pull_store,
+            &server.base_url,
+            &root.store_path,
+            &default_pull_options(),
+            HttpClosureLimits::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("http-closure-returned-path-mismatch"));
+        assert_eq!(server.stats().nar_requests, 0);
+        assert!(pull_store.pathinfo_service().get(*root.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn http_closure_untrusted_root_fails_before_nar_download() {
+        const OTHER_KEY_SEED: u8 = 99;
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-untrusted-closure")).await;
+        let root = make_signed_pathinfo(&push_store, "untrusted-closure-root", b"root").await;
+        let cache_dir = tmp.path().join("cache-untrusted-closure");
+        export_paths_to_cache_dir(&push_store, std::slice::from_ref(&root), &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let server = HttpTestServer::spawn(cache_routes(&cache_dir));
+        let pull_store = open_test_store(&tmp.path().join("pull-untrusted-closure")).await;
+        let other_secret = ed25519_dalek::SigningKey::from_bytes(&[OTHER_KEY_SEED; 32]);
+        let options = PullOptions {
+            trust_unsigned: false,
+            trusted_public_keys: vec![VerifyingKey::new(
+                "other-key-1".to_string(),
+                other_secret.verifying_key(),
+            )],
+        };
+
+        let error = import_http_cache_closure(
+            &pull_store,
+            &server.base_url,
+            &root.store_path,
+            &options,
+            HttpClosureLimits::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("http-closure-untrusted-narinfo"));
+        assert_eq!(server.stats().nar_requests, 0);
+        assert!(pull_store.pathinfo_service().get(*root.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn http_closure_total_nar_limit_fails_before_nar_download() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-total-limit")).await;
+        let root = make_signed_pathinfo(&push_store, "total-limit-root", b"root").await;
+        let cache_dir = tmp.path().join("cache-total-limit");
+        export_paths_to_cache_dir(&push_store, std::slice::from_ref(&root), &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let server = HttpTestServer::spawn(cache_routes(&cache_dir));
+        let pull_store = open_test_store(&tmp.path().join("pull-total-limit")).await;
+        let limits = HttpClosureLimits {
+            max_total_nar_bytes: root.nar_size.saturating_sub(1),
+            ..HttpClosureLimits::default()
+        };
+
+        let error =
+            import_http_cache_closure(&pull_store, &server.base_url, &root.store_path, &default_pull_options(), limits)
+                .await
+                .unwrap_err();
+        assert!(error.to_string().contains("http-closure-total-nar-size-limit"));
+        assert_eq!(server.stats().nar_requests, 0);
+        assert!(pull_store.pathinfo_service().get(*root.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn http_closure_refetches_incomplete_local_dependency() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-incomplete-local")).await;
+        let child = make_signed_pathinfo(&push_store, "incomplete-local-child", b"child").await;
+        let root = make_signed_pathinfo_with_references(&push_store, "incomplete-local-root", b"root", vec![
+            child.store_path.clone(),
+        ])
+        .await;
+        let cache_dir = tmp.path().join("cache-incomplete-local");
+        export_paths_to_cache_dir(&push_store, &[child.clone(), root.clone()], &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let server = HttpTestServer::spawn(cache_routes(&cache_dir));
+        let pull_store = open_test_store(&tmp.path().join("pull-incomplete-local")).await;
+        pull_store.pathinfo_service().put(child.clone()).await.unwrap();
+        assert!(!pull_store.castore_has_complete_content(&child.node).await.unwrap());
+
+        let report = import_http_cache_closure(
+            &pull_store,
+            &server.base_url,
+            &root.store_path,
+            &default_pull_options(),
+            HttpClosureLimits::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(report.pull.imported_count, 2);
+        assert_eq!(report.reused_complete_count, 0);
+        assert!(report.root_admitted);
+        assert!(pull_store.castore_has_complete_content(&child.node).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn http_closure_duplicate_reference_fails_before_nar_download() {
+        const CHILD_DIGEST_SEED: u8 = 78;
+        const STORE_PATH_DIGEST_BYTES: usize = 20;
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-duplicate-ref")).await;
+        let child =
+            StorePath::from_name_and_digest_fixed("duplicate-child", [CHILD_DIGEST_SEED; STORE_PATH_DIGEST_BYTES])
+                .unwrap();
+        let root =
+            make_signed_pathinfo_with_references(&push_store, "duplicate-root", b"root", vec![child.clone(), child])
+                .await;
+        let cache_dir = tmp.path().join("cache-duplicate-ref");
+        export_paths_to_cache_dir(&push_store, std::slice::from_ref(&root), &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let server = HttpTestServer::spawn(cache_routes(&cache_dir));
+        let pull_store = open_test_store(&tmp.path().join("pull-duplicate-ref")).await;
+
+        let error = import_http_cache_closure(
+            &pull_store,
+            &server.base_url,
+            &root.store_path,
+            &default_pull_options(),
+            HttpClosureLimits::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("http-closure-duplicate-reference"));
+        assert_eq!(server.stats().nar_requests, 0);
+        assert!(pull_store.pathinfo_service().get(*root.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn http_closure_dependency_content_failure_keeps_root_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-content-failure")).await;
+        let child = make_signed_pathinfo(&push_store, "content-failure-child", b"child").await;
+        let root = make_signed_pathinfo_with_references(&push_store, "content-failure-root", b"root", vec![
+            child.store_path.clone(),
+        ])
+        .await;
+        let cache_dir = tmp.path().join("cache-content-failure");
+        export_paths_to_cache_dir(&push_store, &[child.clone(), root.clone()], &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let mut routes = cache_routes(&cache_dir);
+        routes.remove(&nar_route(&cache_dir, &child.store_path));
+        let server = HttpTestServer::spawn(routes);
+        let pull_store = open_test_store(&tmp.path().join("pull-content-failure")).await;
+
+        let error = import_http_cache_closure(
+            &pull_store,
+            &server.base_url,
+            &root.store_path,
+            &default_pull_options(),
+            HttpClosureLimits::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("http-closure-content-admission-failed"));
+        assert_eq!(server.stats().narinfo_requests, 2);
+        assert_eq!(server.stats().nar_requests, 1);
+        assert!(pull_store.pathinfo_service().get(*root.store_path.digest()).await.unwrap().is_none());
     }
 
     #[tokio::test]

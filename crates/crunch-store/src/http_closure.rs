@@ -88,6 +88,7 @@ struct ObservedMember {
     narinfo_blake3: [u8; BLAKE3_BYTES],
 }
 
+// r[impl cache_substitution.complete_http_closure_pull]
 #[derive(Debug)]
 pub struct HttpClosurePlanBuilder {
     cache_identity: String,
@@ -418,8 +419,30 @@ fn plan_member(member: &ObservedMember) -> HttpClosurePlanMember {
     plan_member
 }
 
+#[derive(Serialize)]
+struct HttpClosurePlanIdentity<'a> {
+    schema: &'a str,
+    cache_identity: &'a str,
+    trust_policy_blake3: &'a str,
+    store_dir: &'a str,
+    root: &'a str,
+    limits: HttpClosureLimits,
+    total_nar_bytes: u64,
+    members: &'a [HttpClosurePlanMember],
+}
+
 fn compute_plan_blake3(plan: &HttpClosurePlan) -> Result<String, HttpClosurePlanError> {
-    let canonical_bytes = serde_json::to_vec(plan).map_err(|error| HttpClosurePlanError::PlanSerialization {
+    let identity = HttpClosurePlanIdentity {
+        schema: &plan.schema,
+        cache_identity: &plan.cache_identity,
+        trust_policy_blake3: &plan.trust_policy_blake3,
+        store_dir: &plan.store_dir,
+        root: &plan.root,
+        limits: plan.limits,
+        total_nar_bytes: plan.total_nar_bytes,
+        members: &plan.members,
+    };
+    let canonical_bytes = serde_json::to_vec(&identity).map_err(|error| HttpClosurePlanError::PlanSerialization {
         detail: error.to_string(),
     })?;
     let mut hasher = blake3::Hasher::new();
@@ -429,6 +452,14 @@ fn compute_plan_blake3(plan: &HttpClosurePlan) -> Result<String, HttpClosurePlan
     debug_assert!(!canonical_bytes.is_empty());
     debug_assert_eq!(digest.len(), BLAKE3_BYTES.saturating_mul(2));
     Ok(digest)
+}
+
+pub fn verify_http_closure_plan_identity(plan: &HttpClosurePlan) -> Result<bool, HttpClosurePlanError> {
+    let expected = compute_plan_blake3(plan)?;
+    let is_valid = expected == plan.plan_blake3;
+    debug_assert_eq!(expected.len(), BLAKE3_BYTES.saturating_mul(2));
+    debug_assert!(!plan.schema.is_empty());
+    Ok(is_valid)
 }
 
 #[cfg(test)]
@@ -443,6 +474,7 @@ mod tests {
     const SMALL_MEMBER_LIMIT: u32 = 2;
     const ZERO_DEPTH: u32 = 0;
     const ONE_DEPTH: u32 = 1;
+    const TWO_DEPTH: u32 = 2;
     const SMALL_TOTAL_NAR_BYTES: u64 = 100;
 
     fn make_path(name: &str, seed: u8) -> StorePath<String> {
@@ -489,6 +521,7 @@ mod tests {
             .unwrap();
     }
 
+    // r[verify cache_substitution.complete_http_closure_pull]
     #[test]
     fn one_member_plan_is_stable_and_root_last() {
         let root = make_path("root", ROOT_SEED);
@@ -502,6 +535,10 @@ mod tests {
         assert_eq!(plan.members[0].store_path, root.to_string());
         assert_eq!(plan.total_nar_bytes, NAR_SIZE);
         assert_eq!(plan.plan_blake3.len(), BLAKE3_BYTES * 2);
+        assert!(verify_http_closure_plan_identity(&plan).unwrap());
+        let mut tampered = plan.clone();
+        tampered.total_nar_bytes = tampered.total_nar_bytes.saturating_add(1);
+        assert!(!verify_http_closure_plan_identity(&tampered).unwrap());
     }
 
     #[test]
@@ -512,10 +549,13 @@ mod tests {
         let mut builder = builder(&root);
 
         let root_request = builder.take_next_request().unwrap().unwrap();
+        assert_eq!(root_request.depth, ZERO_DEPTH);
         observe(&mut builder, root_request, vec![child.clone()], NAR_SIZE);
         let child_request = builder.take_next_request().unwrap().unwrap();
+        assert_eq!(child_request.depth, ONE_DEPTH);
         observe(&mut builder, child_request, vec![leaf.clone()], NAR_SIZE);
         let leaf_request = builder.take_next_request().unwrap().unwrap();
+        assert_eq!(leaf_request.depth, TWO_DEPTH);
         observe(&mut builder, leaf_request, vec![], NAR_SIZE);
 
         let plan = builder.finalize().unwrap();
@@ -572,6 +612,7 @@ mod tests {
         assert_eq!(first.members, second.members);
     }
 
+    // r[verify cache_substitution.complete_http_closure_pull]
     #[test]
     fn member_limit_fails_closed() {
         let root = make_path("root", ROOT_SEED);
@@ -753,6 +794,24 @@ mod tests {
         let incomplete_error = builder.finalize().unwrap_err();
         assert_eq!(incomplete_error.reason_code(), "http-closure-incomplete-plan");
         assert_eq!(incomplete_error, HttpClosurePlanError::IncompletePlan { pending_count: 1 });
+    }
+
+    #[test]
+    fn observation_without_active_request_is_rejected() {
+        let root = make_path("root", ROOT_SEED);
+        let mut builder = builder(&root);
+        let error = builder
+            .observe(HttpClosureObservation {
+                requested_path: root.clone(),
+                returned_path: root,
+                references: vec![],
+                nar_sha256: [FIRST_SEED; BLAKE3_BYTES],
+                nar_size: NAR_SIZE,
+                narinfo_blake3: [SECOND_SEED; BLAKE3_BYTES],
+            })
+            .unwrap_err();
+        assert_eq!(error.reason_code(), "http-closure-unexpected-observation");
+        assert!(error.to_string().contains("no-active-request"));
     }
 
     #[test]
