@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "d988bdac2dc60b86c9171cb23327081cdff60e53607d7ad3baec225cc6d87cf4",
+  "blocker": "error: build failed\nsource-built fixed-point blocked: parsing native build full-source-native-provider report: missing field `schema` at line 354 column 1"
+}

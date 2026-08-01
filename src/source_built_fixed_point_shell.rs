@@ -39,6 +39,9 @@ use crate::stagex_transition::StagexTransitionRequest;
 const LOGICAL_STORE_PREFIX: &str = "/mantle/store";
 const PROFILE_SCHEMA: &str = "mantle-source-bundle-v1";
 const BUILD_REPORT_SCHEMA: &str = "crunch-build-report-v1";
+const OFFLINE_PREFLIGHT_REPORT_FORMAT: &str = "mantle-source-offline-preflight-v1";
+const NATIVE_FAILURE_IDENTITY_COUNT_MAX: usize = 8;
+const _: () = assert!(NATIVE_FAILURE_IDENTITY_COUNT_MAX > 0);
 const PROOF_STATUS_SCHEMA: &str = "mantle-source-built-fixed-point-attempt-v1";
 const PROOF_STATUS_RUNNING: &str = "running";
 const PROOF_STATUS_FAILED: &str = "failed";
@@ -1073,15 +1076,15 @@ fn native_build_command(
 fn parse_build_report(label: &str, output: &Output) -> Result<BuildJsonReport, RunError> {
     let stdout = std::str::from_utf8(&output.stdout)
         .map_err(|error| proof_error(format!("native build {label} stdout is not UTF-8: {error}")))?;
-    let report: BuildJsonReport = serde_json::from_str(stdout)
-        .map_err(|error| proof_error(format!("parsing native build {label} report: {error}")))?;
     if !output.status.success() {
         return Err(proof_error(format!(
             "native build {label} failed with status {:?}: {}",
             output.status.code(),
-            build_failures_summary(&report.failed)
+            native_build_failure_summary(stdout)
         )));
     }
+    let report: BuildJsonReport = serde_json::from_str(stdout)
+        .map_err(|error| proof_error(format!("parsing native build {label} report: {error}")))?;
     if report.schema != BUILD_REPORT_SCHEMA {
         return Err(proof_error(format!("native build {label} report schema is {}", report.schema)));
     }
@@ -1517,6 +1520,38 @@ fn policy_digest(text: &str) -> String {
     digest
 }
 
+fn native_build_failure_summary(stdout: &str) -> String {
+    if let Ok(report) = serde_json::from_str::<BuildJsonReport>(stdout) {
+        return build_failures_summary(&report.failed);
+    }
+    let Ok(report) = serde_json::from_str::<serde_json::Value>(stdout) else {
+        return "stdout is not a supported JSON report".to_string();
+    };
+    let format = report.get("format").and_then(serde_json::Value::as_str).unwrap_or("unknown");
+    let readiness = report
+        .get("ready_class")
+        .or_else(|| report.get("readiness"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("unknown");
+    let blocker_identities = [
+        "missing_records",
+        "network_required_records",
+        "stale_records",
+        "untrusted_records",
+    ]
+    .iter()
+    .filter_map(|field| report.get(field).and_then(serde_json::Value::as_array))
+    .flatten()
+    .filter_map(serde_json::Value::as_str)
+    .take(NATIVE_FAILURE_IDENTITY_COUNT_MAX)
+    .collect::<Vec<_>>()
+    .join(",");
+    if format == OFFLINE_PREFLIGHT_REPORT_FORMAT {
+        return format!("format={format} readiness={readiness} blockers={blocker_identities}");
+    }
+    format!("format={format} readiness={readiness}")
+}
+
 fn build_failures_summary(failures: &[BuildJsonFailure]) -> String {
     failures
         .iter()
@@ -1653,6 +1688,39 @@ mod tests {
         assert_eq!(value, STAGEX_TRANSITION_HANDOFF_DIRECTORY_COUNT);
         assert!(empty_name.to_string().contains("operation name is empty"));
         assert!(panic.to_string().contains("worker panicked"));
+    }
+
+    #[test]
+    fn native_build_failure_summary_preserves_offline_blockers_and_rejects_malformed_output() {
+        use std::os::unix::process::ExitStatusExt as _;
+
+        const NATIVE_BUILD_FAILURE_EXIT_CODE: i32 = 1;
+        let preflight = serde_json::json!({
+            "format": OFFLINE_PREFLIGHT_REPORT_FORMAT,
+            "ready_class": "network-required",
+            "missing_records": [],
+            "network_required_records": ["fixed-url-missing"],
+            "stale_records": [],
+            "untrusted_records": []
+        })
+        .to_string();
+        let summary = native_build_failure_summary(&preflight);
+        let malformed = native_build_failure_summary("not-json");
+        let failed_output = Output {
+            status: std::process::ExitStatus::from_raw(NATIVE_BUILD_FAILURE_EXIT_CODE << 8),
+            stdout: preflight.into_bytes(),
+            stderr: Vec::new(),
+        };
+        let parsed_failure = parse_build_report("native-provider", &failed_output).unwrap_err();
+
+        assert_eq!(
+            summary,
+            "format=mantle-source-offline-preflight-v1 readiness=network-required blockers=fixed-url-missing"
+        );
+        assert_eq!(malformed, "stdout is not a supported JSON report");
+        assert!(parsed_failure.to_string().contains("readiness=network-required"));
+        assert!(parsed_failure.to_string().contains("fixed-url-missing"));
+        assert_ne!(summary, malformed);
     }
 
     #[test]

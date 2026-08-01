@@ -408,6 +408,11 @@ records fail. The single `--proof-input` directory carries all authenticated
 Rust source archives. Files larger than 64 MiB use canonical, contiguous
 source-record chunks.
 
+Profile verification checks the bundle that you declared. It does not prove that
+an older native bundle still matches the current `bootstrap/seed-full-toolchain.ncl`
+graph. Before a long proof, export and verify that current build root again. The
+proof's offline preflight remains the fail-closed parity check.
+
 Hydration publishes only `vendor-deps/`. It imports and pins the seed, lineage,
 source records, Rust archives, and Mantle source record. It does not create
 transition, provider, Rust-provider, or Mantle output directories. Those
