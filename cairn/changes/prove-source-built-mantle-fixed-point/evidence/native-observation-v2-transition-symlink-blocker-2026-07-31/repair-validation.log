@@ -1,0 +1,27 @@
+pueue task 7739
+
+test result: ok. 13 passed; 0 failed; 1 ignored; 0 measured; 1984 filtered out; finished in 0.00s
+
+pueue task 7763
+
+test source_built_fixed_point_shell::tests::projects_and_imports_retained_stagex_transition_handoff ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1997 filtered out; finished in 1.76s
+
+retained execution tree:
+75 symlinks total
+55 absolute symlinks
+
+projected handoff tree:
+4 safe relative runtime aliases
+0 absolute or parent-relative symlinks
+strict source import: passed
+
+pueue task 7793
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 1995 filtered out; finished in 0.00s
+
+pueue task 7519
+
+first-party binary clippy with -D warnings and CARGO_INCREMENTAL=0: passed
+focused git diff --check: passed

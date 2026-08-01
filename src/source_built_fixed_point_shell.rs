@@ -43,6 +43,35 @@ const PROOF_STATUS_SCHEMA: &str = "mantle-source-built-fixed-point-attempt-v1";
 const PROOF_STATUS_RUNNING: &str = "running";
 const PROOF_STATUS_FAILED: &str = "failed";
 const PROOF_STATUS_COMPLETE: &str = "complete";
+const STAGEX_TRANSITION_EXECUTION_DIR: &str = "stagex-transition-execution";
+pub(crate) const STAGEX_TRANSITION_REPORT_FILE: &str = "transition-report.json";
+pub(crate) const STAGEX_TRANSITION_AUDIT_FILE: &str = "protected-exec-audit.json";
+const STAGEX_TRANSITION_HANDOFF_REPORT_FILE: &str = "stagex-transition-handoff.json";
+const STAGEX_TRANSITION_HANDOFF_REPORT_FORMAT: &str = "mantle-stagex-transition-handoff-v1";
+const STAGEX_TRANSITION_HANDOFF_NON_CLAIM: &str = "this projection exposes only declared StageX runtime outputs; the preserved execution tree owns transition evidence";
+const STAGEX_TRANSITION_HANDOFF_DIRECTORY_COUNT: usize = 8;
+const STAGEX_TRANSITION_HANDOFF_DIRECTORIES: [&str; STAGEX_TRANSITION_HANDOFF_DIRECTORY_COUNT] = [
+    "bash-full-stage/runtime/output",
+    "coreutils-stage/runtime/output",
+    "diffutils-stage/runtime/output",
+    "gawk-stage/runtime/output",
+    "grep-stage/runtime/output",
+    "m4-stage/runtime/output",
+    "make-stage/runtime/output",
+    "sed-stage/runtime/output",
+];
+const STAGEX_TRANSITION_HANDOFF_REQUIRED_FILE_COUNT: usize = 9;
+const STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES: [&str; STAGEX_TRANSITION_HANDOFF_REQUIRED_FILE_COUNT] = [
+    "bash-full-stage/runtime/output/bin/bash-full",
+    "coreutils-stage/runtime/output/bin/cp",
+    "diffutils-stage/runtime/output/bin/cmp",
+    "diffutils-stage/runtime/output/bin/diff",
+    "gawk-stage/runtime/output/bin/gawk",
+    "grep-stage/runtime/output/bin/grep",
+    "m4-stage/runtime/output/bin/m4",
+    "make-stage/runtime/output/bin/make",
+    "sed-stage/runtime/output/bin/sed",
+];
 pub(crate) const STAGEX_TRANSITION_STORE_BASENAME: &str = "ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition";
 const STAGEX_TRANSITION_LOGICAL_PATH: &str = "/mantle/store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition";
 pub(crate) const STAGEX_PROVIDER_STORE_BASENAME: &str =
@@ -208,9 +237,16 @@ pub(crate) struct BuildObservation {
     pub(crate) transcript_digest_blake3: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct StagexTransitionHandoffReport {
+    format: &'static str,
+    copied_directories: Vec<&'static str>,
+    non_claim: &'static str,
+}
+
 #[derive(Debug)]
 pub(crate) struct ConstructedProviders {
-    pub(crate) native_store_dir: PathBuf,
+    pub(crate) stagex_transition_execution_dir: PathBuf,
     pub(crate) stagex_provider_report: crate::stagex_provider::StagexProviderPublicationReport,
     pub(crate) native_provider: BuildObservation,
     pub(crate) native_admission: crate::full_source_provider::FullSourceProviderAdmissionReport,
@@ -618,7 +654,7 @@ fn prepare_plan(
 
 fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAttempt) -> Result<(), RunError> {
     validate_runtime_bounds(options, prepared)?;
-    let stagex_transition_root = prepared.native_store_dir.join(STAGEX_TRANSITION_STORE_BASENAME);
+    let stagex_transition_execution_dir = prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR);
     let transition_report = crate::stagex_transition::materialize_protected_transition(StagexTransitionRequest {
         seed_path: &prepared.stagex_seed,
         hex0_source_path: &prepared.source_root.join("bootstrap/seeds/AMD64/hex0_AMD64.hex0"),
@@ -626,7 +662,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         lineage_manifest_path: &prepared.stagex_lineage,
         source_bundle_path: Some(&prepared.stagex_source_bundle),
         stage0_answers_path: Some(&prepared.source_root.join("bootstrap/stage0-amd64.answers")),
-        scratch_dir: &stagex_transition_root,
+        scratch_dir: &stagex_transition_execution_dir,
     })
     .map_err(|error| proof_error(format!("StageX transition failed: {error}")))?;
     if transition_report.status != PROOF_STATUS_COMPLETE {
@@ -643,10 +679,14 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             options.protected_exec_events_max
         )));
     }
+    drop(transition_report);
     validate_runtime_bounds(options, prepared)?;
-    let transition_report_path = stagex_transition_root.join("transition-report.json");
+    let transition_report_path = stagex_transition_execution_dir.join(STAGEX_TRANSITION_REPORT_FILE);
     crate::protected_exec::blake3_file_hex(&transition_report_path)
         .map_err(|error| proof_error(format!("hashing fresh StageX transition report: {error}")))?;
+
+    let stagex_transition_root = prepared.native_store_dir.join(STAGEX_TRANSITION_STORE_BASENAME);
+    materialize_stagex_transition_handoff(&stagex_transition_execution_dir, &stagex_transition_root)?;
     let transition_logical_path = crate::full_source_provider::adopt_verified_local_provider_path_strict(
         &stagex_transition_root,
         &prepared.native_store_dir,
@@ -664,10 +704,11 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         &prepared.native_state_dir,
         LOGICAL_STORE_PREFIX,
     )?;
+
     let stagex_provider_root = prepared.native_store_dir.join(STAGEX_PROVIDER_STORE_BASENAME);
     let stagex_provider_report = crate::stagex_provider::materialize_stagex_provider(StagexProviderRequest {
         lineage_manifest_path: &prepared.stagex_lineage,
-        transition_root: &stagex_transition_root,
+        transition_root: &stagex_transition_execution_dir,
         output_path: &stagex_provider_root,
     })
     .map_err(|error| proof_error(format!("StageX provider publication failed: {error}")))?;
@@ -690,7 +731,8 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         &prepared.native_state_dir,
         LOGICAL_STORE_PREFIX,
     )?;
-    let providers = construct_full_source_providers(options, prepared, stagex_provider_report)?;
+    let providers =
+        construct_full_source_providers(options, prepared, stagex_transition_execution_dir, stagex_provider_report)?;
     validate_runtime_bounds(options, prepared)?;
     run_cargo_free_fixed_point(options, prepared, &providers)?;
     validate_runtime_bounds(options, prepared)?;
@@ -700,6 +742,102 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         &providers,
     )?;
     validate_runtime_bounds(options, prepared)
+}
+
+fn materialize_stagex_transition_handoff(execution_root: &Path, handoff_root: &Path) -> Result<(), RunError> {
+    validate_stagex_transition_handoff_layout()?;
+    validate_stagex_transition_handoff_sources(execution_root)?;
+    if handoff_root.exists() {
+        return Err(proof_error(format!(
+            "StageX transition handoff destination already exists: {}",
+            handoff_root.display()
+        )));
+    }
+    fs::create_dir(handoff_root).map_err(|error| {
+        proof_error(format!("creating StageX transition handoff {}: {error}", handoff_root.display()))
+    })?;
+    for relative in STAGEX_TRANSITION_HANDOFF_DIRECTORIES {
+        crate::stagex_mes_lib::copy_tree_bounded(&execution_root.join(relative), &handoff_root.join(relative))
+            .map_err(|error| proof_error(format!("copying StageX transition handoff {relative}: {error}")))?;
+    }
+    let report = StagexTransitionHandoffReport {
+        format: STAGEX_TRANSITION_HANDOFF_REPORT_FORMAT,
+        copied_directories: STAGEX_TRANSITION_HANDOFF_DIRECTORIES.to_vec(),
+        non_claim: STAGEX_TRANSITION_HANDOFF_NON_CLAIM,
+    };
+    let report_bytes = serde_json::to_vec_pretty(&report)
+        .map_err(|error| proof_error(format!("serializing StageX transition handoff report: {error}")))?;
+    crate::stagex_mes_lib::write_create_new(&handoff_root.join(STAGEX_TRANSITION_HANDOFF_REPORT_FILE), &report_bytes)
+        .map_err(|error| proof_error(format!("writing StageX transition handoff report: {error}")))?;
+    validate_stagex_transition_handoff_outputs(handoff_root)?;
+    assert!(execution_root.join(STAGEX_TRANSITION_REPORT_FILE).is_file());
+    assert!(handoff_root.join(STAGEX_TRANSITION_HANDOFF_REPORT_FILE).is_file());
+    Ok(())
+}
+
+fn validate_stagex_transition_handoff_layout() -> Result<(), RunError> {
+    let directories = STAGEX_TRANSITION_HANDOFF_DIRECTORIES.iter().copied().map(Path::new).collect::<Vec<_>>();
+    let unique_directories = directories.iter().copied().collect::<std::collections::BTreeSet<_>>();
+    let files_are_covered = STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES
+        .iter()
+        .all(|file| directories.iter().any(|directory| Path::new(file).starts_with(directory)));
+    let paths_are_relative = directories
+        .iter()
+        .copied()
+        .chain(STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES.iter().copied().map(Path::new))
+        .all(|path| {
+            path.is_relative()
+                && !path.components().any(|component| matches!(component, std::path::Component::ParentDir))
+        });
+    if unique_directories.len() != directories.len() || !files_are_covered || !paths_are_relative {
+        return Err(proof_error("StageX transition handoff layout is invalid".to_string()));
+    }
+    assert_eq!(unique_directories.len(), STAGEX_TRANSITION_HANDOFF_DIRECTORY_COUNT);
+    assert!(files_are_covered);
+    Ok(())
+}
+
+fn validate_stagex_transition_handoff_sources(execution_root: &Path) -> Result<(), RunError> {
+    if !execution_root.is_absolute() || !execution_root.is_dir() {
+        return Err(proof_error(format!(
+            "StageX transition execution root is not an absolute directory: {}",
+            execution_root.display()
+        )));
+    }
+    for relative in STAGEX_TRANSITION_HANDOFF_DIRECTORIES {
+        if !execution_root.join(relative).is_dir() {
+            return Err(proof_error(format!("StageX transition handoff directory is missing: {relative}")));
+        }
+    }
+    for relative in STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES {
+        if !execution_root.join(relative).is_file() {
+            return Err(proof_error(format!("StageX transition handoff file is missing: {relative}")));
+        }
+    }
+    for relative in [STAGEX_TRANSITION_REPORT_FILE, STAGEX_TRANSITION_AUDIT_FILE] {
+        if !execution_root.join(relative).is_file() {
+            return Err(proof_error(format!("StageX transition evidence file is missing: {relative}")));
+        }
+    }
+    assert!(execution_root.is_absolute());
+    assert!(execution_root.join(STAGEX_TRANSITION_REPORT_FILE).is_file());
+    Ok(())
+}
+
+fn validate_stagex_transition_handoff_outputs(handoff_root: &Path) -> Result<(), RunError> {
+    for relative in STAGEX_TRANSITION_HANDOFF_DIRECTORIES {
+        if !handoff_root.join(relative).is_dir() {
+            return Err(proof_error(format!("copied StageX transition handoff directory is missing: {relative}")));
+        }
+    }
+    for relative in STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES {
+        if !handoff_root.join(relative).is_file() {
+            return Err(proof_error(format!("copied StageX transition handoff file is missing: {relative}")));
+        }
+    }
+    assert!(handoff_root.is_absolute());
+    assert!(handoff_root.join(STAGEX_TRANSITION_HANDOFF_REPORT_FILE).is_file());
+    Ok(())
 }
 
 fn validate_runtime_bounds(
@@ -740,6 +878,7 @@ fn validate_stagex_provider_normalized_identity(observed_digest_blake3: &str) ->
 fn construct_full_source_providers(
     options: &SourceBuiltFixedPointOptions<'_>,
     prepared: &PreparedAttempt,
+    stagex_transition_execution_dir: PathBuf,
     stagex_provider_report: crate::stagex_provider::StagexProviderPublicationReport,
 ) -> Result<ConstructedProviders, RunError> {
     let native_provider = run_native_build(options, prepared, NATIVE_PROVIDER_ID, NATIVE_PROVIDER_NCL)?;
@@ -802,7 +941,7 @@ fn construct_full_source_providers(
         output: &toolchain_closure_path,
     })?;
     Ok(ConstructedProviders {
-        native_store_dir: prepared.native_store_dir.clone(),
+        stagex_transition_execution_dir,
         stagex_provider_report,
         native_provider,
         native_admission,
@@ -1375,6 +1514,24 @@ mod tests {
     use super::*;
 
     const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const RETAINED_TRANSITION_EXECUTION_ROOT_ENV: &str = "MANTLE_STAGE_X_TRANSITION_EXECUTION_ROOT";
+    const RETAINED_TRANSITION_HANDOFF_ROOT_ENV: &str = "MANTLE_STAGE_X_TRANSITION_HANDOFF_ROOT";
+    const RETAINED_TRANSITION_SOURCE_STATE_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SOURCE_STATE";
+
+    fn write_stagex_transition_handoff_fixture(execution_root: &Path) {
+        for relative in STAGEX_TRANSITION_HANDOFF_DIRECTORIES {
+            fs::create_dir_all(execution_root.join(relative)).unwrap();
+        }
+        for relative in STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES {
+            let path = execution_root.join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, b"runtime-output").unwrap();
+        }
+        fs::write(execution_root.join(STAGEX_TRANSITION_REPORT_FILE), b"{}").unwrap();
+        fs::write(execution_root.join(STAGEX_TRANSITION_AUDIT_FILE), b"[]").unwrap();
+        assert!(execution_root.join(STAGEX_TRANSITION_REPORT_FILE).is_file());
+        assert!(STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES.iter().all(|path| execution_root.join(path).is_file()));
+    }
 
     #[test]
     fn options_reject_existing_output_and_malformed_digests() {
@@ -1460,6 +1617,76 @@ mod tests {
         assert!(args.iter().any(|argument| argument == "--no-substitute"));
         assert!(args.iter().any(|argument| argument == "--strict-hermetic"));
         assert!(!args.iter().any(|argument| argument == "--impure"));
+    }
+
+    #[test]
+    fn stagex_transition_handoff_projects_only_declared_runtime_outputs() {
+        let temp = tempfile::tempdir().unwrap();
+        let execution_root = temp.path().join("execution");
+        let handoff_root = temp.path().join(STAGEX_TRANSITION_STORE_BASENAME);
+        fs::create_dir(&execution_root).unwrap();
+        write_stagex_transition_handoff_fixture(&execution_root);
+        let excluded_dir = execution_root.join("binutils-stage/runtime/tools");
+        fs::create_dir_all(&excluded_dir).unwrap();
+        let excluded_link = excluded_dir.join("file");
+        std::os::unix::fs::symlink("/proof-owned/stagex-configure-utility", &excluded_link).unwrap();
+        let original_target = fs::read_link(&excluded_link).unwrap();
+
+        materialize_stagex_transition_handoff(&execution_root, &handoff_root).unwrap();
+
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(handoff_root.join(STAGEX_TRANSITION_HANDOFF_REPORT_FILE)).unwrap())
+                .unwrap();
+        let observed_roots = fs::read_dir(&handoff_root)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect::<std::collections::BTreeSet<_>>();
+        let expected_roots = STAGEX_TRANSITION_HANDOFF_DIRECTORIES
+            .iter()
+            .map(|relative| relative.split('/').next().unwrap().to_string())
+            .chain([STAGEX_TRANSITION_HANDOFF_REPORT_FILE.to_string()])
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(report["copied_directories"], serde_json::json!(STAGEX_TRANSITION_HANDOFF_DIRECTORIES));
+        assert_eq!(observed_roots, expected_roots);
+        assert_eq!(fs::read_link(&excluded_link).unwrap(), original_target);
+        assert!(!handoff_root.join("binutils-stage").exists());
+    }
+
+    #[test]
+    #[ignore = "requires retained completed StageX transition"]
+    fn projects_and_imports_retained_stagex_transition_handoff() {
+        let execution_root = PathBuf::from(std::env::var(RETAINED_TRANSITION_EXECUTION_ROOT_ENV).unwrap());
+        let handoff_root = PathBuf::from(std::env::var(RETAINED_TRANSITION_HANDOFF_ROOT_ENV).unwrap());
+        let state_dir = PathBuf::from(std::env::var(RETAINED_TRANSITION_SOURCE_STATE_ENV).unwrap());
+
+        materialize_stagex_transition_handoff(&execution_root, &handoff_root).unwrap();
+        let import = crate::source_bundle::import_constructed_store_path_source(
+            STAGEX_TRANSITION_LOGICAL_PATH,
+            &handoff_root,
+            &state_dir,
+            LOGICAL_STORE_PREFIX,
+        )
+        .unwrap();
+
+        assert_eq!(import.imported_count, 1);
+        assert!(import.pinned);
+        assert!(!handoff_root.join("binutils-stage").exists());
+        assert!(execution_root.join("binutils-stage").is_dir());
+    }
+
+    #[test]
+    fn missing_stagex_transition_handoff_input_leaves_destination_absent() {
+        let temp = tempfile::tempdir().unwrap();
+        let execution_root = temp.path().join("execution");
+        let handoff_root = temp.path().join(STAGEX_TRANSITION_STORE_BASENAME);
+        fs::create_dir(&execution_root).unwrap();
+        write_stagex_transition_handoff_fixture(&execution_root);
+        fs::remove_dir_all(execution_root.join("m4-stage")).unwrap();
+
+        let error = materialize_stagex_transition_handoff(&execution_root, &handoff_root).unwrap_err();
+
+        assert!(error.to_string().contains("handoff directory is missing: m4-stage/runtime/output"));
+        assert!(!handoff_root.exists());
     }
 
     #[test]

@@ -30,7 +30,8 @@ use crate::errors::RunError;
 use crate::source_built_fixed_point::ProofOutputRole;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPlan;
 use crate::source_built_fixed_point_shell::ConstructedProviders;
-use crate::source_built_fixed_point_shell::STAGEX_TRANSITION_STORE_BASENAME;
+use crate::source_built_fixed_point_shell::STAGEX_TRANSITION_AUDIT_FILE;
+use crate::source_built_fixed_point_shell::STAGEX_TRANSITION_REPORT_FILE;
 
 const EXTENSION_FIELD: &str = "source_built_fixed_point";
 const EXTENSION_SCHEMA: &str = "mantle-source-built-fixed-point-receipt-extension-v1";
@@ -446,9 +447,9 @@ fn stage_evidence(
     let current_executable =
         std::env::current_exe().map_err(|error| receipt_error(format!("resolving proof executable: {error}")))?;
     let current_executable_digest = hash_file(&current_executable)?;
-    let transition_root = providers.native_store_dir.join(STAGEX_TRANSITION_STORE_BASENAME);
-    let transition_report = transition_root.join("transition-report.json");
-    let transition_audit = transition_root.join("protected-transition-exec-audit.jsonl");
+    let transition_root = &providers.stagex_transition_execution_dir;
+    let transition_report = transition_root.join(STAGEX_TRANSITION_REPORT_FILE);
+    let transition_audit = transition_root.join(STAGEX_TRANSITION_AUDIT_FILE);
     let stagex_receipt = providers.stagex_provider_report.receipt_path.clone();
     let stagex_validation = providers
         .stagex_provider_report
@@ -473,8 +474,8 @@ fn stage_evidence(
             transcript_digest_blake3: hash_file(&transition_report)?,
             audit_paths: vec![relative_path(proof_root, &transition_audit)?],
             audit_digests_blake3: vec![hash_file(&transition_audit)?],
-            output_path: relative_path(proof_root, &transition_root)?,
-            output_digest_blake3: hash_tree(&transition_root)?.1,
+            output_path: relative_path(proof_root, transition_root)?,
+            output_digest_blake3: hash_tree(transition_root)?.1,
             authority_violations: Vec::new(),
             fallback_events: Vec::new(),
         },
