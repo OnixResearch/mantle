@@ -4641,10 +4641,9 @@ pub fn redeem_after_queue(ticket: &mut RemoteTicket, request_validated: bool) ->
     if !request_validated {
         return Ok(());
     }
-    if ticket.uses_remaining == 0 {
-        return Err("ticket-exhausted".to_string());
-    }
-    ticket.uses_remaining = ticket.uses_remaining.saturating_sub(1);
+    ticket.uses_remaining = crate::remote_credentials::redeem_ticket_use(ticket.uses_remaining)?;
+    debug_assert!(ticket.uses_remaining < crate::remote_credentials::TICKET_USES_MAX);
+    debug_assert!(ticket.uses_remaining <= crate::remote_credentials::TICKET_USES_MAX);
     Ok(())
 }
 

@@ -167,6 +167,23 @@ impl TicketUsesRemaining {
     pub fn count(self) -> u32 {
         self.0
     }
+
+    pub fn redeem(self) -> Result<Self, String> {
+        let next = self.0.checked_sub(1).ok_or_else(|| "ticket-exhausted".to_string())?;
+        let remaining = Self::new(next)?;
+        debug_assert!(remaining.count() < self.count());
+        debug_assert_eq!(remaining.count().checked_add(1), Some(self.count()));
+        Ok(remaining)
+    }
+}
+
+pub fn redeem_ticket_use(uses_remaining: u32) -> Result<u32, String> {
+    let current =
+        TicketUsesRemaining::new(uses_remaining).map_err(|_| "remote-ticket-state-use-limit-exceeded".to_string())?;
+    let next = current.redeem()?;
+    debug_assert!(next.count() < uses_remaining);
+    debug_assert_eq!(next.count().checked_add(1), Some(uses_remaining));
+    Ok(next.count())
 }
 
 /// A checked build-time role cannot be replaced with an upload-byte role.
@@ -1288,6 +1305,7 @@ mod tests {
         let validity = TicketValidityWindow::from_ttl(TEST_NOW_UNIX_S, ttl).unwrap();
         let use_limit = TicketUseLimit::new(TICKET_USES_MAX).unwrap();
         let uses_remaining = TicketUsesRemaining::new(0).unwrap();
+        let redeemed = TicketUsesRemaining::new(1).unwrap().redeem().unwrap();
         let build_time = BuildTimeLimit::new(TICKET_BUILD_TIME_SECS_MAX).unwrap();
         let upload_bytes = UploadByteLimit::new(TICKET_UPLOAD_BYTES_MAX).unwrap();
 
@@ -1296,6 +1314,7 @@ mod tests {
         assert_eq!(validity.expires_unix_s(), TEST_NOW_UNIX_S.checked_add(TICKET_TTL_SECS_MAX).unwrap());
         assert_eq!(use_limit.count(), TICKET_USES_MAX);
         assert_eq!(uses_remaining.count(), 0);
+        assert_eq!(redeemed.count(), 0);
         assert_eq!(build_time.seconds(), TICKET_BUILD_TIME_SECS_MAX);
         assert_eq!(upload_bytes.bytes(), TICKET_UPLOAD_BYTES_MAX);
     }
@@ -1315,6 +1334,7 @@ mod tests {
         assert!(TicketUseLimit::new(0).is_err());
         assert!(TicketUseLimit::new(TICKET_USES_MAX.checked_add(1).unwrap()).is_err());
         assert!(TicketUsesRemaining::new(TICKET_USES_MAX.checked_add(1).unwrap()).is_err());
+        assert!(TicketUsesRemaining::new(0).unwrap().redeem().is_err());
         assert!(BuildTimeLimit::new(0).is_err());
         assert!(BuildTimeLimit::new(TICKET_BUILD_TIME_SECS_MAX.checked_add(1).unwrap()).is_err());
         assert!(UploadByteLimit::new(TICKET_UPLOAD_BYTES_MAX.checked_add(1).unwrap()).is_err());
