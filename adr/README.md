@@ -69,3 +69,4 @@ compatibility surface, crate name, or historical decision.
 | [0060](0060-verify-remote-admission-with-a-trellis-model.md) | Verify remote admission with a Trellis model | Proposed |
 | [0061](0061-keep-remote-bearers-out-of-durable-state.md) | Keep remote bearers out of durable state | Accepted |
 | [0062](0062-adapt-ekala-package-maintenance-patterns-without-transferring-authority.md) | Adapt Ekala package-maintenance patterns without transferring authority | Proposed |
+| [0063](0063-select-the-stagex-provider-compiler-by-bounded-workload.md) | Select the StageX provider compiler by bounded workload | Accepted |
