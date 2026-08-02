@@ -2,7 +2,7 @@
   "/nix/store/22222222222222222222222222222222-hello.drv": {
     "name": "hello",
     "system": "x86_64-linux",
-    "builder": "/nix/store/33333333333333333333333333333333-bash/bin/bash",
+    "builder": "/bin/sh",
     "args": [
       "-c",
       "cp $src $out"
@@ -29,7 +29,9 @@
     "system": "x86_64-linux",
     "builder": "/nix/store/55555555555555555555555555555555-builtin-fetchurl",
     "args": [],
-    "env": {},
+    "env": {
+      "url": "https://source.example.invalid/hello.txt"
+    },
     "outputs": {
       "out": {
         "path": "/nix/store/00000000000000000000000000000000-hello-source",

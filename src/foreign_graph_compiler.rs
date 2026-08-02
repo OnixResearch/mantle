@@ -502,7 +502,13 @@ fn lower_foreign_builtin(
 ) -> Result<BuiltinLowering, ImportDiagnostic> {
     match node.builtin.as_str() {
         NIX_DERIVATION_BUILTIN => Ok(native_builtin_lowering(node, CompiledForeignBuiltin::NativeDerivation)),
-        FIXED_OUTPUT_FETCH_BUILTIN => Ok(native_builtin_lowering(node, CompiledForeignBuiltin::FixedOutput)),
+        FIXED_OUTPUT_FETCH_BUILTIN => Ok(BuiltinLowering {
+            builder: MANTLE_FETCH_BUILDER.to_string(),
+            system: MANTLE_BUILTIN_SYSTEM.to_string(),
+            arguments: Vec::new(),
+            environment: BTreeMap::new(),
+            fact: CompiledForeignBuiltin::FixedOutput,
+        }),
         FOREIGN_DOWNLOAD_BUILTIN => lower_download_builtin(node, payloads),
         FOREIGN_GIT_DOWNLOAD_BUILTIN => lower_git_download_builtin(node, payloads),
         _ => Err(compiler_diagnostic(
@@ -760,7 +766,7 @@ fn compiled_digest_facts(
     Ok(facts)
 }
 
-fn validate_digest_facts(facts: &[CompiledDigestFact]) -> Result<(), ImportDiagnostic> {
+pub(crate) fn validate_digest_facts(facts: &[CompiledDigestFact]) -> Result<(), ImportDiagnostic> {
     for fact in facts {
         let valid = match fact.role.as_str() {
             FIXED_OUTPUT_CONTENT_ROLE => fact.domain == FOREIGN_DIGEST_DOMAIN && fact.algorithm != BLAKE3_ALGORITHM,
@@ -957,6 +963,9 @@ fn compile_environment(
     for (key, value) in &node.env {
         if node.outputs.contains_key(key) {
             environment.insert(key.clone(), BString::from(""));
+            continue;
+        }
+        if matches!(key.as_str(), "builder" | "name" | "outputs" | "system") {
             continue;
         }
         let rewritten = rewrite_store_objects(value, exact_map, &graph.source_store_prefixes, Some(&node.node_id))?;

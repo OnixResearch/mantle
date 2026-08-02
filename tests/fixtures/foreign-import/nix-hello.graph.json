@@ -24,13 +24,16 @@
         "cp /nix/store/00000000000000000000000000000000-hello-source $out"
       ],
       "env": {
+        "executable": "0",
+        "mode": "recursive",
         "out": "/nix/store/11111111111111111111111111111111-hello",
-        "src": "/nix/store/00000000000000000000000000000000-hello-source"
+        "src": "/nix/store/00000000000000000000000000000000-hello-source",
+        "url": "https://source.example.invalid/hello.tar.gz"
       },
       "outputs": {
         "out": {
           "path": "/nix/store/11111111111111111111111111111111-hello",
-          "hash": null
+          "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         }
       },
       "input_derivations": [],
@@ -41,11 +44,11 @@
         }
       ],
       "fixed_output": {
-        "algorithm": "blake3",
-        "digest": "e0e1e2e3e4e5e6e7e8e9eaebecedeeef000102030405060708090a0b0c0d0e0f10111213",
+        "algorithm": "sha256",
+        "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "recursive": true
       },
-      "builtin": "fixed-output-fetch",
+      "builtin": "builtin:download",
       "declared_references": [
         "/nix/store/00000000000000000000000000000000-hello-source"
       ],

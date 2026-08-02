@@ -22,7 +22,7 @@ mantle --json foreign-import validate \
   --policy tests/fixtures/foreign-import/policy.json
 ```
 
-Emit a receipt-bound adapter plan:
+Emit a receipt-bound executable plan:
 
 ```bash
 mantle --json foreign-import plan \
@@ -33,10 +33,23 @@ mantle --json foreign-import plan \
   --system x86_64-linux
 ```
 
-`validate` and `plan` read JSON artifacts in the CLI shell, pass owned in-memory
-data into the import core, and print deterministic reports. `validate --receipt
-<path>` additionally checks that an existing receipt still matches the current
-graph and policy digests.
+`validate` and `plan` read JSON artifacts in the CLI shell. The shell passes
+owned data to the pure import core. `validate --receipt <path>` checks that a
+receipt still matches the current graph and policy digests.
+
+## Executable foreign plan
+
+A successful `plan` report contains `mantle-foreign-executable-plan-v1`. The
+plan binds the accepted import receipt, selected roots, and exact path maps. It
+also binds native units, source requirements, and execution profile references.
+
+Each native unit records canonical ATerm data and its exact target identities.
+Foreign SHA-256 facts stay in the foreign digest domain. Mantle target and plan
+identities use labeled BLAKE3 roles.
+
+The plan proves compilation only. It does not prove source availability. It
+does not prove scheduler execution. It does not prove store admission. It does
+not prove realization or output trust. These facts require realization receipts.
 
 ## What an import receipt binds
 
@@ -67,8 +80,9 @@ trust. It does not claim reproducibility. It does not claim foreign-frontend
 availability.
 
 Additional realization and verification evidence is required before claiming
-trusted outputs. Receipt existence is not proof of correctness, and receipt
-existence is not proof that Mantle can build or substitute the imported closure.
+trusted outputs. Receipt existence is not proof of correctness. A receipt does
+not prove source availability, scheduler execution, or store admission. It also
+does not prove that Mantle can build or substitute the imported closure.
 Treat a receipt as the input-admission record for later planning, build,
 substitution, attestation, or release-proof workflows.
 
@@ -107,16 +121,16 @@ and binary-cache lookup facts stay in the Nix-compatible hash domain required by
 those formats. Raw graph digests, policy digests, translated artifact digests,
 and import receipts stay in Mantle's BLAKE3 receipt domain.
 
-A Nix-compatible identity must not be replaced with a Mantle BLAKE3 derivation or
-receipt digest. A Mantle receipt identity must not be replaced with a Nix
-SHA-256-compatible digest. If either domain is supplied in the wrong place,
-validation must fail closed before planning or substitution.
+A Nix-compatible identity must not replace a Mantle BLAKE3 identity. A Mantle
+BLAKE3 identity must not replace a Nix SHA-256 identity. The executable plan
+records algorithms, domains, and roles for these values. Validation fails before
+planning or substitution when a value uses the wrong role.
 
 ### Source verification
 
-Fixed-output source descriptors and mirror lists are source policy, not source
-contents by themselves. A descriptor can say which hash or content reference a
-later fetch must verify; it does not prove the bytes have been fetched,
+Fixed-output source descriptors and ordered mirror lists are source policy.
+They are not source contents. An executable plan maps each descriptor to a
+source requirement. It does not prove that the bytes are available, fetched,
 materialized, unpacked, patched, or built.
 
 Trusted source-output claims require later evidence from Mantle fetchers, source

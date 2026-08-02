@@ -24,13 +24,16 @@
         "cp /gnu/store/00000000000000000000000000000000-hello-source $out"
       ],
       "env": {
+        "executable": "0",
+        "mode": "recursive",
         "out": "/gnu/store/11111111111111111111111111111111-hello",
-        "src": "/gnu/store/00000000000000000000000000000000-hello-source"
+        "src": "/gnu/store/00000000000000000000000000000000-hello-source",
+        "url": "https://source.example.invalid/hello.tar.gz"
       },
       "outputs": {
         "out": {
           "path": "/gnu/store/11111111111111111111111111111111-hello",
-          "hash": null
+          "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         }
       },
       "input_derivations": [],
@@ -41,11 +44,11 @@
         }
       ],
       "fixed_output": {
-        "algorithm": "blake3",
-        "digest": "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f10111213",
+        "algorithm": "sha256",
+        "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "recursive": true
       },
-      "builtin": "fixed-output-fetch",
+      "builtin": "builtin:download",
       "declared_references": [
         "/gnu/store/00000000000000000000000000000000-hello-source"
       ],

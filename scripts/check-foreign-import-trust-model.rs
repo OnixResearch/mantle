@@ -19,6 +19,7 @@ const PROOF_GUIDE_PATH: &str = "docs/operator-proof-guide.md";
 
 const REQUIRED_GUIDE_SECTIONS: &[&str] = &[
     "# Foreign derivation import trust model",
+    "## Executable foreign plan",
     "## What an import receipt binds",
     "## What an import receipt does not claim",
     "## Trust boundaries",
@@ -47,6 +48,10 @@ const REQUIRED_BOUNDARY_TERMS: &[&str] = &[
     "PathInfo signature",
     "NAR hash",
     "artifact attestation",
+    "mantle-foreign-executable-plan-v1",
+    "exact path maps",
+    "source requirements",
+    "execution profile references",
 ];
 
 const REQUIRED_NON_CLAIMS: &[&str] = &[
@@ -61,6 +66,10 @@ const REQUIRED_NON_CLAIMS: &[&str] = &[
     "cache hints remain subject to store/substitution trust policy",
     "does not bypass output admission or signature verification",
     "local rebuild compatibility is a separate level",
+    "does not prove source availability",
+    "does not prove scheduler execution",
+    "does not prove store admission",
+    "does not prove realization",
 ];
 
 const REQUIRED_EXAMPLES: &[&str] = &[
@@ -129,9 +138,7 @@ struct Args {
 
 impl Args {
     fn parse<I>(args: I) -> Result<Self, String>
-    where
-        I: Iterator<Item = String>,
-    {
+    where I: Iterator<Item = String> {
         let mut parsed = Args {
             help: false,
             self_test: false,
@@ -148,9 +155,7 @@ impl Args {
 }
 
 fn print_usage() {
-    println!(
-        "Usage: cargo -Zscript scripts/check-foreign-import-trust-model.rs [--self-test]"
-    );
+    println!("Usage: cargo -Zscript scripts/check-foreign-import-trust-model.rs [--self-test]");
 }
 
 struct GuideInputs<'a> {
@@ -198,10 +203,7 @@ fn reject_forbidden(haystack: &str, forbidden: &[&str], errors: &mut Vec<String>
 }
 
 fn normalize_for_match(text: &str) -> String {
-    text.split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_ascii_lowercase()
+    text.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase()
 }
 
 fn read_to_string(path: impl AsRef<Path>) -> Result<String, String> {
@@ -220,6 +222,12 @@ fn run_self_test() -> Result<(), String> {
     assert_rejected(
         "missing non-claim",
         guide.replace("does not claim output trust", "claims output trust"),
+        &linked_doc,
+        &linked_doc,
+    )?;
+    assert_rejected(
+        "missing executable plan boundary",
+        guide.replace("## Executable foreign plan", "## Foreign plan"),
         &linked_doc,
         &linked_doc,
     )?;
@@ -247,12 +255,7 @@ fn run_self_test() -> Result<(), String> {
     Ok(())
 }
 
-fn assert_rejected(
-    label: &str,
-    guide: String,
-    readme: &str,
-    proof_guide: &str,
-) -> Result<(), String> {
+fn assert_rejected(label: &str, guide: String, readme: &str, proof_guide: &str) -> Result<(), String> {
     match validate_inputs(GuideInputs {
         guide: &guide,
         readme,

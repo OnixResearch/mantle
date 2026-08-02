@@ -16,13 +16,13 @@
 ## Phase 3: Builtins and identity domains
 
 - [x] [serial] I8 Lower declared Guix-like `builtin:download` and Git download nodes to bounded Mantle fetch facts. Reject every other builtin. r[foreign_derivation_import.foreign_builtin_lowering]
-- [ ] [serial] I9 Preserve foreign fixed-output and SHA-256 facts while labeling Mantle BLAKE3 plan and target identities. Reject cross-domain digest substitution. r[foreign_derivation_import.foreign_builtin_lowering]
-- [ ] [parallel] I10 Add ordered-mirror, fixed-output, executable-download, Git revision, malformed-hash, empty-candidate, unsupported-builtin, and digest-domain tests. r[foreign_derivation_import.foreign_builtin_lowering]
+- [x] [serial] I9 Preserve foreign fixed-output and SHA-256 facts while labeling Mantle BLAKE3 plan and target identities. Reject cross-domain digest substitution. r[foreign_derivation_import.foreign_builtin_lowering]
+- [x] [parallel] I10 Add ordered-mirror, fixed-output, executable-download, Git revision, malformed-hash, empty-candidate, unsupported-builtin, and digest-domain tests. r[foreign_derivation_import.foreign_builtin_lowering]
 
 ## Phase 4: Executable plan and lifecycle evidence
 
-- [ ] [serial] I11 Emit deterministic `mantle-foreign-executable-plan-v1` artifacts with accepted import identity, selected roots, resolved units, exact path maps, source requirements, profile references, diagnostics, and non-claims. r[foreign_derivation_import.executable_plan]
-- [ ] [parallel] I12 Update the trust-model guide and machine-artifact documentation. State that executable plans do not prove source availability, realization, store admission, or output trust. r[foreign_derivation_import.executable_plan]
+- [x] [serial] I11 Emit deterministic `mantle-foreign-executable-plan-v1` artifacts with accepted import identity, selected roots, resolved units, exact path maps, source requirements, profile references, diagnostics, and non-claims. r[foreign_derivation_import.executable_plan]
+- [x] [parallel] I12 Update the trust-model guide and machine-artifact documentation. State that executable plans do not prove source availability, realization, store admission, or output trust. r[foreign_derivation_import.executable_plan]
 - [ ] [serial] V1 Run `nix develop -c cargo test -p mantle --bin mantle foreign_derivation_import`, `nix develop -c cargo test -p crunch-glue`, and `nix develop -c cargo test -p mantle --test foreign_import_cli`. Record exact output in `cairn/changes/compile-foreign-derivation-graphs/evidence/verification.md`. r[foreign_derivation_import.exact_graph_compilation]
 - [ ] [serial] V2 Run `nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs`, `nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs --self-test`, and `git diff --check`. Record an inline summary and the exact transcript. r[foreign_derivation_import.executable_plan]
 - [ ] [serial] V3 Run `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .`, all three Cairn gates for this change, and `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- tracey coverage --root .`. Archive only after the transcript is current. r[foreign_derivation_import.executable_plan]

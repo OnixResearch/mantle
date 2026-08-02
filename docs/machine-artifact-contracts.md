@@ -19,10 +19,20 @@ producer annotation disappears or moves outside its declared owner sources. It
 also scans root-package Rust sources that serialize JSON through the standard
 string/vector helpers (compact or pretty) and requires each such module to
 belong to at least one classified producer family.
-Registry entries may be added before their producer workflow is complete, so
-classification alone never proves implementation. Current resumable-transfer
-production evidence is owned by the Rust client/server path and the validation
-rails in [`remote-transfer.md`](remote-transfer.md), not by registry presence.
+Registry entries can exist before a producer workflow is complete. Thus,
+classification does not prove implementation. The Rust client and server own
+current resumable-transfer evidence. The validation rails are in
+[`remote-transfer.md`](remote-transfer.md).
+
+Foreign import command reports use the `import.command-reports` compatibility
+family. A successful planning report now contains the versioned
+`mantle-foreign-executable-plan-v1` artifact. Its Rust owner is
+`src/foreign_executable_plan.rs`.
+
+The plan binds accepted import identity, roots, native units, exact path maps,
+source requirements, profiles, diagnostics, and non-claims. Its BLAKE3 identity
+covers those fields. This classification does not prove source availability,
+scheduler execution, store admission, realization, or output trust.
 
 OCI registry push/pull receipts are contracted separately from local OCI
 export/import reports. The push receipt binds the image and subject-metadata

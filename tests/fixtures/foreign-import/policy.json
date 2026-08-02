@@ -11,6 +11,7 @@
   "rewrite_declared_references": true,
   "allow_embedded_source_payload_rewrite": false,
   "builtin_mappings": {
+    "builtin:download": "mantle.fetch",
     "fixed-output-fetch": "mantle.fetch"
   },
   "output_path_recompute_mode": "recompute-blake3-v1",

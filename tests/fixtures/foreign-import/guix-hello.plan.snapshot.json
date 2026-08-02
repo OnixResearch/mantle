@@ -7,9 +7,9 @@
   "receipt": {
     "schema": "foreign-derivation-import-receipt-v1",
     "producer_identity": "guix-time-machine:hello",
-    "raw_graph_digest": "fccf7bfda42c24a27d41519b793f4b6253a4c4fe5783b1f43bc376f00a6838b0",
-    "translation_policy_digest": "9f72d829c8d1e8acc773e7ceb535b73d3582b65c5d351661219fe718d4c70eb8",
-    "translated_graph_digest": "8ddbd5581159b67f4a94e66ba5757cf79d1040733720c79c0cb2cc5dead373ff",
+    "raw_graph_digest": "1c5f6621337d023dcc475a32a375778598e52d85dc48432b78c8cc8153488c6e",
+    "translation_policy_digest": "ab40f47029145290ba26f85ba94d81a74a9793e2728d52b0bde9120c537f4787",
+    "translated_graph_digest": "848388b0eacab30a1421d1a69340d3cf24d59271e2652c0525cf4e2d5755f997",
     "package_index_digest": "5437402da1fcda9d58dfd9c0914b0f5b4d493ad2f4424669acfff2f2c2a85fc5",
     "fetch_cache_policy_digest": "292b2c9f121b3f3e207fc74aca1b9c2e72bd188ec7ccd9c9434a4e0476577ff4",
     "sandbox_policy_digest": "b80fdec27a0955fcb9748d1ac75b7da507959fdab796a2f223c6bc8d76424afc",
@@ -24,36 +24,150 @@
     ]
   },
   "plan": {
-    "schema": "mantle-foreign-derivation-adapter-plan-v1",
+    "schema": "mantle-foreign-executable-plan-v1",
+    "plan_identity": {
+      "domain": "mantle-plan",
+      "algorithm": "blake3",
+      "role": "foreign-executable-plan",
+      "value": "8c7b3122ad2ad250711c5b50ef2103ab6f6b1ac639ff14e7462bb0e1bd05fb53"
+    },
+    "accepted_import": {
+      "receipt_schema": "foreign-derivation-import-receipt-v1",
+      "receipt_digest_blake3": "9c4c7be8420e51b64d3989723df64f6143f91a54a1ad12695a7d51f88a6640df",
+      "producer_identity": "guix-time-machine:hello",
+      "raw_graph_digest_blake3": "1c5f6621337d023dcc475a32a375778598e52d85dc48432b78c8cc8153488c6e",
+      "translation_policy_digest_blake3": "ab40f47029145290ba26f85ba94d81a74a9793e2728d52b0bde9120c537f4787",
+      "translated_graph_digest_blake3": "848388b0eacab30a1421d1a69340d3cf24d59271e2652c0525cf4e2d5755f997",
+      "package_index_digest_blake3": "5437402da1fcda9d58dfd9c0914b0f5b4d493ad2f4424669acfff2f2c2a85fc5"
+    },
     "roots": [
       {
         "package_name": "hello",
+        "system": "x86_64-linux",
         "node_id": "guix:hello",
-        "output_paths": {
-          "out": "/mantle/store/e5433e8b6eed8ee41f6bf704b3ec285b-hello"
+        "foreign_derivation": "/gnu/store/22222222222222222222222222222222-hello.drv",
+        "target_derivation": "/mantle/store/vmncxpx21gv3xqx1h0qq7i557r3psxf5-hello.drv",
+        "target_outputs": {
+          "out": "/mantle/store/2q3rlp6aiyg09i3nwm99c1nymbz135lb-hello"
         }
       }
     ],
-    "source_payloads": [
+    "target_store_prefix": "/mantle/store",
+    "native_units": [
       {
-        "payload_id": "guix-hello-source",
-        "kind": "fixed-output-source",
-        "content_ref": "/mantle/store/00000000000000000000000000000000-hello-source",
-        "embedded_text": null,
-        "mirrors": [
-          "https://mirror.example.invalid/hello.tar.gz"
+        "sequence": 0,
+        "node_id": "guix:hello",
+        "foreign_derivation": "/gnu/store/22222222222222222222222222222222-hello.drv",
+        "target_derivation": "/mantle/store/vmncxpx21gv3xqx1h0qq7i557r3psxf5-hello.drv",
+        "hdm_blake3": "ab070363de819a6baeb3aac075f6feec536700f2d68ca2ea563f0e9d643b7d5a",
+        "derivation_aterm": "Derive([(\"out\",\"/mantle/store/2q3rlp6aiyg09i3nwm99c1nymbz135lb-hello\",\"r:sha256\",\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\")],[],[\"/mantle/store/rgd66zbivgyfnkjwb1n58438frd4z41j-hello-source\"],\"builtin\",\"builtin:fetchurl\",[],[(\"__mantle_foreign_candidates\",\"[\\\"https://source.example.invalid/hello.tar.gz\\\",\\\"https://mirror.example.invalid/hello.tar.gz\\\"]\"),(\"builder\",\"builtin:fetchurl\"),(\"executable\",\"0\"),(\"mode\",\"recursive\"),(\"name\",\"hello\"),(\"out\",\"/mantle/store/2q3rlp6aiyg09i3nwm99c1nymbz135lb-hello\"),(\"outputs\",\"out\"),(\"src\",\"/mantle/store/rgd66zbivgyfnkjwb1n58438frd4z41j-hello-source\"),(\"system\",\"builtin\"),(\"unpack\",\"1\"),(\"url\",\"https://source.example.invalid/hello.tar.gz\")])",
+        "builder": "builtin:fetchurl",
+        "system": "builtin",
+        "arguments": [],
+        "environment": {
+          "__mantle_foreign_candidates": "[\"https://source.example.invalid/hello.tar.gz\",\"https://mirror.example.invalid/hello.tar.gz\"]",
+          "builder": "builtin:fetchurl",
+          "executable": "0",
+          "mode": "recursive",
+          "name": "hello",
+          "out": "/mantle/store/2q3rlp6aiyg09i3nwm99c1nymbz135lb-hello",
+          "outputs": "out",
+          "src": "/mantle/store/rgd66zbivgyfnkjwb1n58438frd4z41j-hello-source",
+          "system": "builtin",
+          "unpack": "1",
+          "url": "https://source.example.invalid/hello.tar.gz"
+        },
+        "foreign_outputs": {
+          "out": "/gnu/store/11111111111111111111111111111111-hello"
+        },
+        "outputs": {
+          "out": "/mantle/store/2q3rlp6aiyg09i3nwm99c1nymbz135lb-hello"
+        },
+        "input_derivations": {},
+        "input_sources": [
+          "/mantle/store/rgd66zbivgyfnkjwb1n58438frd4z41j-hello-source"
+        ],
+        "builtin": {
+          "kind": "download",
+          "candidates": [
+            "https://source.example.invalid/hello.tar.gz",
+            "https://mirror.example.invalid/hello.tar.gz"
+          ],
+          "mode": "recursive",
+          "executable": false,
+          "content_digest": {
+            "domain": "foreign-compatible",
+            "algorithm": "sha256",
+            "role": "fixed-output-content",
+            "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "digest_facts": [
+          {
+            "domain": "foreign-compatible",
+            "algorithm": "sha256",
+            "role": "fixed-output-content",
+            "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "domain": "mantle-target",
+            "algorithm": "blake3",
+            "role": "target-hash-derivation-modulo",
+            "value": "ab070363de819a6baeb3aac075f6feec536700f2d68ca2ea563f0e9d643b7d5a"
+          },
+          {
+            "domain": "mantle-target",
+            "algorithm": "blake3",
+            "role": "target-derivation-aterm",
+            "value": "af5725828227e55155924381549768e382bd6f1bb47b9b920bffb3c4239e2562"
+          }
+        ],
+        "declared_references": [
+          "/mantle/store/rgd66zbivgyfnkjwb1n58438frd4z41j-hello-source"
         ]
       }
     ],
+    "exact_path_maps": {
+      "derivations": {
+        "/gnu/store/22222222222222222222222222222222-hello.drv": "/mantle/store/vmncxpx21gv3xqx1h0qq7i557r3psxf5-hello.drv"
+      },
+      "outputs": {
+        "/gnu/store/11111111111111111111111111111111-hello": "/mantle/store/2q3rlp6aiyg09i3nwm99c1nymbz135lb-hello"
+      },
+      "sources": {
+        "/gnu/store/00000000000000000000000000000000-hello-source": "/mantle/store/rgd66zbivgyfnkjwb1n58438frd4z41j-hello-source"
+      }
+    },
+    "source_requirements": [
+      {
+        "payload_id": "guix-hello-source",
+        "foreign_path": "/gnu/store/00000000000000000000000000000000-hello-source",
+        "target_path": "/mantle/store/rgd66zbivgyfnkjwb1n58438frd4z41j-hello-source",
+        "descriptor_digest": "b78af8ee3d18a402de6b8caa28cdeb49157081f587156da32388ca26dfa742b5"
+      }
+    ],
+    "execution_profiles": {
+      "scheduler": "mantle-native-scheduler-v1",
+      "fetch": "mantle-bounded-fetch-v1",
+      "store_admission": "mantle-store-admission-v1",
+      "fetch_cache_policy_digest_blake3": "292b2c9f121b3f3e207fc74aca1b9c2e72bd188ec7ccd9c9434a4e0476577ff4",
+      "sandbox_policy_digest_blake3": "b80fdec27a0955fcb9748d1ac75b7da507959fdab796a2f223c6bc8d76424afc"
+    },
+    "diagnostics": [],
     "sandbox_audit": [],
+    "substitution_audit": [],
     "forbidden_process_invocations": [],
     "non_claims": [
-      "not-build-success",
-      "not-package-correctness",
       "not-bootstrap-parity",
+      "not-build-success",
+      "not-foreign-frontend-availability",
       "not-output-trust",
+      "not-package-correctness",
+      "not-realization",
       "not-reproducibility",
-      "not-foreign-frontend-availability"
+      "not-scheduler-execution",
+      "not-source-availability",
+      "not-store-admission"
     ]
   },
   "non_claims": [

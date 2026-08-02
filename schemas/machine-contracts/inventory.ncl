@@ -1442,7 +1442,9 @@ let Registry = {
           "src/cargo_import.rs",
           "src/pin_import.rs",
           "src/foreign_import_cmd.rs",
-          "src/foreign_derivation_import.rs"
+          "src/foreign_derivation_import.rs",
+          "src/foreign_executable_plan.rs",
+          "src/foreign_graph_compiler.rs"
         ]
       },
       "consumers"= [

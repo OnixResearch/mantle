@@ -44,6 +44,8 @@ const NIXPKGS_UNRELATED_DRV: &str = "/nix/store/66666666666666666666666666666666
 const NIXPKGS_REACHABLE_DRV_COUNT: usize = 2;
 const CACHE_NIXOS_ORG: &str = "https://cache.nixos.org";
 const TRUSTED_CACHE_SCOPE: &str = "trusted-binary-cache";
+const EXECUTABLE_PLAN_SCHEMA: &str = "mantle-foreign-executable-plan-v1";
+const BLAKE3_ALGORITHM: &str = "blake3";
 const KIBIBYTE_BYTES: usize = 1_024;
 const MEBIBYTE_BYTES: usize = KIBIBYTE_BYTES * KIBIBYTE_BYTES;
 const MAX_ATERM_DERIVATION_MEBIBYTES: usize = 16;
@@ -101,13 +103,24 @@ fn foreign_import_cli_validates_and_plans_checked_fixtures() {
         let expected_plan = fixture_json(case.plan_snapshot);
         assert_eq!(plan, expected_plan);
         assert_eq!(plan["accepted"], true);
+        assert_eq!(plan["plan"]["schema"], EXECUTABLE_PLAN_SCHEMA);
+        assert_eq!(plan["plan"]["plan_identity"]["algorithm"], BLAKE3_ALGORITHM);
         assert_eq!(plan["plan"]["roots"][0]["node_id"], case.root_node);
+        assert!(!plan["plan"]["native_units"].as_array().unwrap().is_empty());
+        assert!(!plan["plan"]["exact_path_maps"]["derivations"].as_object().unwrap().is_empty());
+        assert!(!plan["plan"]["source_requirements"].as_array().unwrap().is_empty());
         assert!(plan["plan"]["forbidden_process_invocations"].as_array().unwrap().is_empty());
         assert!(
             plan["plan"]["non_claims"]
                 .as_array()
                 .unwrap()
                 .contains(&Value::String("not-output-trust".to_string()))
+        );
+        assert!(
+            plan["plan"]["non_claims"]
+                .as_array()
+                .unwrap()
+                .contains(&Value::String("not-realization".to_string()))
         );
     }
 }

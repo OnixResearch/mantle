@@ -37,6 +37,7 @@ mod filegen_cmd;
 mod final_native_row_receipt_shell;
 mod fix;
 mod foreign_derivation_import;
+mod foreign_executable_plan;
 #[allow(dead_code)]
 mod foreign_graph_compiler;
 // Foreign-import adapters mirror external receipt fields and preserve their typed error payloads at

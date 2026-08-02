@@ -18,7 +18,6 @@ use crate::foreign_derivation_import::ImportReceipt;
 use crate::foreign_derivation_import::MAX_ATERM_BUNDLE_BYTES;
 use crate::foreign_derivation_import::MAX_ATERM_BUNDLE_DERIVATIONS;
 use crate::foreign_derivation_import::MAX_ATERM_DERIVATION_BYTES;
-use crate::foreign_derivation_import::MantleForeignPlan;
 use crate::foreign_derivation_import::NixDerivationJsonExport;
 use crate::foreign_derivation_import::NixProducerConfig;
 use crate::foreign_derivation_import::PackageIndex;
@@ -30,9 +29,10 @@ use crate::foreign_derivation_import::lower_prefix_aware_aterm_closure;
 use crate::foreign_derivation_import::normalize_nix_aterm_derivation_closure;
 use crate::foreign_derivation_import::normalize_nix_derivation_json_export;
 use crate::foreign_derivation_import::parse_prefix_aware_aterm_bundle;
-use crate::foreign_derivation_import::plan_mantle_foreign_import;
 use crate::foreign_derivation_import::select_nix_derivation_json_closure;
 use crate::foreign_derivation_import::translate_foreign_graph;
+use crate::foreign_executable_plan::ForeignExecutablePlan;
+use crate::foreign_executable_plan::compile_foreign_executable_plan;
 
 const CLI_REPORT_SCHEMA: &str = "mantle-foreign-import-cli-v1";
 const VALIDATE_COMMAND: &str = "validate";
@@ -78,7 +78,7 @@ pub(crate) enum ForeignImportAction {
         receipt: Option<PathBuf>,
     },
 
-    /// Emit a receipt-bound Mantle adapter plan from lowered foreign import artifacts
+    /// Emit a receipt-bound Mantle executable plan from lowered foreign import artifacts
     Plan {
         /// Path to `foreign-derivation-graph-v1` JSON
         #[arg(long)]
@@ -218,7 +218,7 @@ struct ForeignImportCliReport {
     accepted: bool,
     diagnostics: Vec<ImportDiagnostic>,
     receipt: Option<ImportReceipt>,
-    plan: Option<MantleForeignPlan>,
+    plan: Option<ForeignExecutablePlan>,
     #[serde(skip_serializing_if = "Option::is_none")]
     producer_artifacts: Option<ProducerArtifactReport>,
     non_claims: Vec<String>,
@@ -928,12 +928,8 @@ fn plan_inputs(
     policy: TranslationPolicy,
     system: &str,
 ) -> ForeignImportCliReport {
-    let (translated, receipt) = match translate_foreign_graph(&graph, Some(&index), &policy) {
-        Ok(pair) => pair,
-        Err(diagnostic) => return rejected_report(PLAN_COMMAND, diagnostic),
-    };
-    let plan = match plan_mantle_foreign_import(&translated, &index, package, system) {
-        Ok(plan) => plan,
+    let (plan, receipt) = match compile_foreign_executable_plan(&graph, &index, &policy, package, system) {
+        Ok(result) => result,
         Err(diagnostic) => return rejected_report(PLAN_COMMAND, diagnostic),
     };
     accepted_report(PLAN_COMMAND, Some(receipt), Some(plan))
@@ -985,7 +981,7 @@ fn read_json<T: DeserializeOwned>(request: JsonReadRequest<'_>) -> Result<Result
 fn accepted_report(
     command: &str,
     receipt: Option<ImportReceipt>,
-    plan: Option<MantleForeignPlan>,
+    plan: Option<ForeignExecutablePlan>,
 ) -> ForeignImportCliReport {
     ForeignImportCliReport {
         schema: CLI_REPORT_SCHEMA.to_string(),

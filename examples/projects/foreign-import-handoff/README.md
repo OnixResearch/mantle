@@ -24,7 +24,13 @@ mantle --json foreign-import plan \
   --system x86_64-linux > nix-plan.json
 ```
 
-Inspect `accepted`, `receipt.raw_graph_digest`, `plan.roots`, `plan.forbidden_process_invocations`, and `plan.non_claims`. To demonstrate frontend independence, resolve the Mantle binary first and then run with an empty `PATH`:
+Inspect `accepted`, `receipt.raw_graph_digest`, and `plan.plan_identity`. Also
+inspect `plan.roots`, `plan.native_units`, `plan.exact_path_maps`, and
+`plan.source_requirements`. The `plan.non_claims` field keeps realization claims
+out of this step.
+
+To demonstrate frontend independence, resolve the Mantle binary. Then run with
+an empty `PATH`:
 
 ```sh
 mantle_bin=$(command -v mantle)
@@ -54,4 +60,7 @@ From the repository root, the focused rail also covers malformed input, stale re
 nix develop -c cargo test -p mantle --test foreign_import_cli
 ```
 
-Accepted validation proves only that the supplied lowered graph and package index satisfy the declared adapter policy. A plan is not output trust, a local rebuild, foreign-frontend correctness, producer availability, or release evidence.
+Accepted validation proves only that the supplied artifacts satisfy the import
+policy. An executable plan proves bounded compilation only. It does not prove
+source availability, scheduler execution, store admission, realization, output
+trust, package correctness, reproducibility, or release readiness.
