@@ -219,8 +219,8 @@ creates no receipt and makes no store change.
 
 The `audit` command reads signed PathInfo and castore content. It does not scan
 exported host paths. It checks bounded files, ELF headers, scripts, links, tar
-archives, and newc initrds. It also resolves observed store references against
-plan-bound closure identities.
+archives, newc initrds, and gzip or zstd streams. It normalizes safe lexical
+store suffixes before it resolves references against plan-bound closure identities.
 
 A passing `mantle-foreign-provenance-audit-v1` can report
 `provenance-audited`. This state proves only the recorded bounded classification
@@ -253,6 +253,32 @@ Claim-safe summary:
 > package correctness, bootstrap parity, reproducibility, or future Guix
 > availability. Trusted output claims require later Mantle realization and
 > verification evidence.
+
+## GuixPkgs producer export
+
+GuixPkgs checks translated Guix derivations into a Nix flake. A bounded producer
+can export one package without running Guix:
+
+1. Pin the GuixPkgs flake revision.
+2. Record its `guix-metadata.json` Guix revision and locked `guix-transfer` revision.
+3. Use producer-side Nix to export the recursive raw derivation graph.
+4. Realize the selected translated root and sign its runtime closure under a
+   dedicated exporter key.
+5. Publish that closure as a Nix-compatible cache.
+6. Stop the producer boundary before Mantle planning and consumption.
+
+Mantle then uses `preserve-cache-paths-v1` and `cache-only-preserve-v1`. It
+verifies the exporter signature, NAR facts, references, limits, and exact
+`/nix/store` paths. It does not run Nix, Guix, GuixPkgs, or `guix-transfer`.
+
+The exporter signature authenticates the exported translated bytes. It does not
+prove Guix translation correctness or original `/gnu/store` identity. A failed
+castore audit keeps `realized` as the strongest state and retains every finding.
+
+The live `hello.unwrapped` proof reached `realized`, exact reuse, and fresh-store
+hydration. Its audit retained one `unclassified-executable` finding. Guix glibc's
+`bin/mtrace` has executable mode, no shebang, and an ambient `perl` invocation.
+Therefore, this proof does not claim `provenance-audited`.
 
 ## Nix-like hello import
 
@@ -304,6 +330,8 @@ The earlier export-to-plan evidence remains in
 `cairn/archive/2026-07-03-live-nixpkgs-foreign-import-proof/evidence/live-nixpkgs-hello/summary.md`.
 The current archived change adds realization, reuse, audit, fresh-store hydration, and negative evidence.
 Future Nixpkgs revisions and cache availability remain outside this proof.
+The GuixPkgs proof is separate and retains its exact audit finding rather than
+promoting the Nixpkgs audit result.
 
 ## Complete HTTP cache closure pull
 

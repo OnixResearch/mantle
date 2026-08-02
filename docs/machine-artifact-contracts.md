@@ -42,7 +42,9 @@ Contract conformance does not prove package correctness, evaluator parity, prove
 The family also includes `mantle-foreign-provenance-audit-v1`. This audit binds
 one realization receipt to selected roots, signed PathInfo, castore identities,
 path maps, profiles, scanner policy, limits, observations, findings, and
-non-claims. A passing disposition can report `provenance-audited` for this
+non-claims. Payload observations can classify bounded gzip and zstd streams.
+Reference observations record normalized store suffixes that stay inside one
+store root. A passing disposition can report `provenance-audited` for this
 bounded scope. It does not prove dynamic behavior or package correctness.
 
 OCI registry push/pull receipts are contracted separately from local OCI

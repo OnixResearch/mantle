@@ -90,6 +90,35 @@ The ordinary scheduler observes the selected output as already present.
 The cache-only observer has no inputs, arguments, or executable builder fallback.
 Units outside the runtime closure report `not-required-cache-only`.
 
+## Export a translated GuixPkgs package
+
+GuixPkgs is a producer boundary. Pin its flake before export. Record the flake
+revision, `guix-metadata.json`, and locked `guix-transfer` revision.
+
+Use producer-side Nix to export and realize the raw translated package:
+
+```text
+nix derivation show --recursive <guixpkgs-hello-unwrapped.drv> > derivation-json.json
+nix build --no-link <pinned-guixpkgs-hello-unwrapped>
+```
+
+Generate a dedicated Nix cache signing key. Sign the complete runtime closure,
+then copy it to a Nix-compatible cache:
+
+```text
+nix key generate-secret --key-name <exporter-name> > export-secret-key
+nix key convert-secret-to-public < export-secret-key > export-public-key
+nix store sign --key-file export-secret-key --recursive <hello-output>
+nix copy --to 'file:///path/to/cache?compression=xz' <hello-output>
+```
+
+Do not retain the secret key in evidence or consumer state. Put the public key
+in the graph's receipt-bound cache URL. Percent-encode `+` as `%2B` in query
+values. Stop the producer boundary before Mantle planning starts.
+
+Serve the exported cache over bounded HTTP. Then use the preserved-path flow
+above with a `PATH` that contains no Nix or Guix command.
+
 ## Realize locally
 
 Run the ordinary Mantle registry, scheduler, worker, and store path:
@@ -155,8 +184,9 @@ The command loads the existing signing key. It verifies every selected PathInfo
 before content scanning. It then reads directories and blobs from castore only.
 It does not use exported host files as replacement content.
 
-The scanner classifies data, ELF files, scripts, links, tar archives, newc initrds, gzip streams, and libtool archives.
-It scans bounded gzip payloads after decompression.
+The scanner classifies data, ELF files, scripts, links, tar archives, newc initrds, gzip streams, zstd streams, and libtool archives.
+It scans bounded gzip and zstd payloads after decompression.
+It normalizes lexical `.` and `..` suffixes only when they stay inside one store root.
 Unknown executable bytes fail closed.
 Invalid store digests, missing targets, link escapes, malformed containers, and exhausted limits also fail closed.
 

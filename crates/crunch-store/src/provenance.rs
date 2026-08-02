@@ -5,6 +5,7 @@
 // r[impl foreign_derivation_import.castore_provenance_audit]
 // r[impl foreign_derivation_import.executable_payload_classification]
 // r[impl foreign_derivation_import.provenance_audit_receipt]
+// r[impl foreign_derivation_import.live_guixpkgs_export_realization]
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -20,6 +21,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use snix_castore::Node;
 use tokio::io::AsyncReadExt;
+use zstd::stream::read::Decoder as ZstdDecoder;
 
 use crate::Error;
 use crate::StoreHandle;
@@ -105,6 +107,7 @@ pub enum ProvenancePayloadClass {
     CpioInitrd,
     GzipCpioInitrd,
     GzipStream,
+    ZstdStream,
     LibtoolArchive,
     Malformed,
     UnsupportedContainer,
@@ -690,11 +693,10 @@ pub fn classify_payload(executable: bool, path: &str, bytes: &[u8]) -> Provenanc
     if bytes.starts_with(GZIP_MAGIC) {
         return ProvenancePayloadClass::GzipStream;
     }
-    if bytes.starts_with(ZIP_MAGIC)
-        || bytes.starts_with(XZ_MAGIC)
-        || bytes.starts_with(BZIP2_MAGIC)
-        || bytes.starts_with(ZSTD_MAGIC)
-    {
+    if bytes.starts_with(ZSTD_MAGIC) {
+        return ProvenancePayloadClass::ZstdStream;
+    }
+    if bytes.starts_with(ZIP_MAGIC) || bytes.starts_with(XZ_MAGIC) || bytes.starts_with(BZIP2_MAGIC) {
         return ProvenancePayloadClass::UnsupportedContainer;
     }
     if bytes.starts_with(CPIO_NEWC_MAGIC) || bytes.starts_with(CPIO_CRC_MAGIC) {
@@ -754,6 +756,7 @@ fn inspect_payload(
         ProvenancePayloadClass::GzipCpioInitrd | ProvenancePayloadClass::GzipStream => {
             inspect_gzip_stream(&input, container_depth, policy, context, state)
         }
+        ProvenancePayloadClass::ZstdStream => inspect_zstd_stream(&input, container_depth, policy, context, state),
         ProvenancePayloadClass::Malformed => {
             state.finding(policy, "malformed-elf", input.path, "ELF header is incomplete or invalid")
         }
@@ -846,11 +849,16 @@ fn inspect_shebang(
         });
         return;
     }
+    let prefix = std::iter::once(context.target_store_prefix)
+        .chain(context.foreign_store_prefixes.iter().map(String::as_str))
+        .find(|prefix| interpreter.starts_with(&format!("{prefix}/")));
+    let (reference, suffix) =
+        prefix.map_or((interpreter, EMPTY_PATH), |prefix| split_store_reference(interpreter, prefix));
     resolve_observed_reference(
         input.owner_store_path,
         input.path,
-        interpreter,
-        EMPTY_PATH,
+        reference,
+        suffix,
         ProvenanceReferenceKind::ShebangInterpreter,
         policy,
         context,
@@ -910,33 +918,36 @@ fn resolve_observed_reference(
     context: &ResolutionContext<'_>,
     state: &mut ScanAccumulator,
 ) {
-    if contains_parent_component(suffix) {
-        state.finding(policy, "reference-path-escape", view, format!("{reference}{suffix}"));
-        return;
-    }
+    let normalized_suffix = match normalize_store_suffix(suffix) {
+        Ok(normalized) => normalized,
+        Err(()) => {
+            state.finding(policy, "reference-path-escape", view, format!("{reference}{suffix}"));
+            return;
+        }
+    };
     if is_untranslated_foreign_reference(reference, context.foreign_to_target_paths, &context.foreign_store_prefixes) {
-        state.finding(policy, "untranslated-foreign-path", view, format!("{reference}{suffix}"));
+        state.finding(policy, "untranslated-foreign-path", view, format!("{reference}{normalized_suffix}"));
         return;
     }
     if !reference.starts_with(&format!("{}/", context.target_store_prefix)) {
-        state.finding(policy, "missing-executable-target", view, format!("{reference}{suffix}"));
+        state.finding(policy, "missing-executable-target", view, format!("{reference}{normalized_suffix}"));
         return;
     }
     if !context.admitted_closure_paths.contains(reference) {
-        state.finding(policy, "missing-target", view, format!("{reference}{suffix}"));
+        state.finding(policy, "missing-target", view, format!("{reference}{normalized_suffix}"));
         return;
     }
     let declared = context.declared_references_by_output.get(owner_store_path);
     let is_self = reference == owner_store_path;
     if !is_self && !declared.is_some_and(|values| values.contains(reference)) {
-        state.finding(policy, "undeclared-target-reference", view, format!("{reference}{suffix}"));
+        state.finding(policy, "undeclared-target-reference", view, format!("{reference}{normalized_suffix}"));
         return;
     }
     state.references.push(ProvenanceReferenceObservation {
         owner_store_path: owner_store_path.to_string(),
         view: view.to_string(),
         reference: reference.to_string(),
-        suffix: suffix.to_string(),
+        suffix: normalized_suffix,
         kind,
     });
 }
@@ -1145,10 +1156,42 @@ fn inspect_gzip_stream(
     state: &mut ScanAccumulator,
 ) {
     let decoder = GzDecoder::new(Cursor::new(input.bytes));
+    inspect_compressed_stream(input, decoder, ".gz", "gzip", container_depth, policy, context, state);
+}
+
+fn inspect_zstd_stream(
+    input: &PurePayloadInput<'_>,
+    container_depth: u32,
+    policy: &ForeignProvenancePolicy,
+    context: &ResolutionContext<'_>,
+    state: &mut ScanAccumulator,
+) {
+    let decoder = match ZstdDecoder::new(Cursor::new(input.bytes)) {
+        Ok(decoder) => decoder,
+        Err(error) => {
+            state.finding(policy, "malformed-container", input.path, format!("zstd stream: {error}"));
+            return;
+        }
+    };
+    inspect_compressed_stream(input, decoder, ".zst", "zstd", container_depth, policy, context, state);
+}
+
+fn inspect_compressed_stream<R: Read>(
+    input: &PurePayloadInput<'_>,
+    decoder: R,
+    extension: &str,
+    format_name: &str,
+    container_depth: u32,
+    policy: &ForeignProvenancePolicy,
+    context: &ResolutionContext<'_>,
+    state: &mut ScanAccumulator,
+) {
+    assert!(!extension.is_empty());
+    assert!(!format_name.is_empty());
     let mut expanded = Vec::new();
     let mut bounded = decoder.take(policy.max_container_expanded_bytes.saturating_add(1));
     if let Err(error) = bounded.read_to_end(&mut expanded) {
-        state.finding(policy, "malformed-container", input.path, format!("gzip stream: {error}"));
+        state.finding(policy, "malformed-container", input.path, format!("{format_name} stream: {error}"));
         return;
     }
     if u64::try_from(expanded.len()).unwrap_or(u64::MAX) > policy.max_container_expanded_bytes {
@@ -1159,7 +1202,7 @@ fn inspect_gzip_stream(
         inspect_cpio(input, &expanded, container_depth, policy, context, state);
         return;
     }
-    let inner_path = input.path.strip_suffix(".gz").unwrap_or(input.path).to_string();
+    let inner_path = input.path.strip_suffix(extension).unwrap_or(input.path).to_string();
     inspect_container_entries(
         input,
         vec![ContainerEntry {
@@ -1510,6 +1553,30 @@ fn contains_parent_component(path: &str) -> bool {
     path.split(PATH_COMPONENT_SEPARATOR).any(|component| component == PARENT_PATH_COMPONENT)
 }
 
+fn normalize_store_suffix(suffix: &str) -> Result<String, ()> {
+    if suffix.is_empty() {
+        return Ok(String::new());
+    }
+    if !suffix.starts_with(PATH_COMPONENT_SEPARATOR) {
+        return Err(());
+    }
+    let mut components = Vec::new();
+    for component in suffix.split(PATH_COMPONENT_SEPARATOR) {
+        match component {
+            EMPTY_PATH | CURRENT_PATH_COMPONENT => {}
+            PARENT_PATH_COMPONENT => {
+                components.pop().ok_or(())?;
+            }
+            _ => components.push(component),
+        }
+    }
+    if components.is_empty() {
+        Ok(String::new())
+    } else {
+        Ok(format!("/{path}", path = components.join("/")))
+    }
+}
+
 fn container_path_escapes(path: &str) -> bool {
     path.starts_with(PATH_COMPONENT_SEPARATOR) || contains_parent_component(path)
 }
@@ -1858,7 +1925,13 @@ mod tests {
             classify_payload(true, "unknown", b"not executable syntax"),
             ProvenancePayloadClass::UnsupportedExecutable
         );
+        let ambient_perl_polyglot = b"# -*- perl -*-\neval \"q () {\n  :\n}\";\nq { exec perl -e 'exit 0' }\n";
+        assert_eq!(
+            classify_payload(true, "mtrace", ambient_perl_polyglot),
+            ProvenancePayloadClass::UnsupportedExecutable
+        );
         assert_eq!(classify_payload(true, "bad-elf", ELF_MAGIC), ProvenancePayloadClass::Malformed);
+        assert_eq!(classify_payload(false, "payload.zst", ZSTD_MAGIC), ProvenancePayloadClass::ZstdStream);
         assert_eq!(classify_payload(false, "payload.zip", ZIP_MAGIC), ProvenancePayloadClass::UnsupportedContainer);
     }
 
@@ -1868,6 +1941,11 @@ mod tests {
         assert!(accepted.findings.is_empty());
         assert_eq!(accepted.references.len(), 1);
         assert_eq!(accepted.references[0].kind, ProvenanceReferenceKind::ShebangInterpreter);
+
+        let store_shebang = inspect(format!("#!{TEST_DEP}/bin/tool\n").as_bytes(), true, "store-script");
+        assert!(store_shebang.findings.is_empty());
+        assert_eq!(store_shebang.references[0].reference, TEST_DEP);
+        assert_eq!(store_shebang.references[0].suffix, "/bin/tool");
 
         let relative = inspect(b"#!bin/sh\n", true, "relative");
         assert_eq!(relative.findings[0].code, "relative-shebang");
@@ -1883,6 +1961,10 @@ mod tests {
         assert!(accepted.findings.is_empty());
         assert_eq!(accepted.references[0].reference, TEST_DEP);
         assert_eq!(accepted.references[0].suffix, "/bin/tool");
+
+        let normalized = inspect(format!("run {TEST_DEP}/lib/../lib/tool").as_bytes(), false, "normalized");
+        assert!(normalized.findings.is_empty());
+        assert_eq!(normalized.references[0].suffix, "/lib/tool");
 
         let foreign = inspect(format!("run {TEST_FOREIGN}/bin/tool").as_bytes(), false, "foreign");
         assert_eq!(foreign.findings[0].code, "untranslated-foreign-path");
@@ -1966,7 +2048,7 @@ mod tests {
     }
 
     #[test]
-    fn generic_gzip_streams_are_bounded_and_scanned_as_single_payloads() {
+    fn generic_compressed_streams_are_bounded_and_scanned_as_single_payloads() {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(b"plain data").unwrap();
         let compressed = encoder.finish().unwrap();
@@ -1978,6 +2060,16 @@ mod tests {
                 .iter()
                 .any(|payload| { payload.path == "manual.txt" && payload.class == ProvenancePayloadClass::Data })
         );
+
+        let compressed = zstd::stream::encode_all(Cursor::new(b"plain data"), 0).unwrap();
+        let zstd = inspect(&compressed, false, "manual.txt.zst");
+        assert!(zstd.findings.is_empty());
+        assert!(zstd.payloads.iter().any(|payload| payload.class == ProvenancePayloadClass::ZstdStream));
+        assert!(
+            zstd.payloads
+                .iter()
+                .any(|payload| { payload.path == "manual.txt" && payload.class == ProvenancePayloadClass::Data })
+        );
     }
 
     #[test]
@@ -1986,6 +2078,8 @@ mod tests {
         assert_eq!(malformed.findings[0].code, "malformed-container");
         let truncated_cpio = inspect(CPIO_NEWC_MAGIC, false, "initrd.cpio");
         assert_eq!(truncated_cpio.findings[0].code, "malformed-container");
+        let truncated_zstd = inspect(ZSTD_MAGIC, false, "manual.txt.zst");
+        assert_eq!(truncated_zstd.findings[0].code, "malformed-container");
         let mut bounded_policy = policy();
         bounded_policy.max_container_entries = 1;
         let mut state = ScanAccumulator::new();

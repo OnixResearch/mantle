@@ -1480,7 +1480,9 @@ let Registry = {
       "fixture_coverage"= [
         "classification",
         "positive-provenance-audit",
-        "negative-provenance-audit"
+        "negative-provenance-audit",
+        "zstd-stream-classification",
+        "normalized-store-suffixes"
       ],
       "freshness_strategy"= "classification only pending per-import schemas",
       "freshness"= {

@@ -246,7 +246,9 @@ Mantle keeps build observations separate from stronger claims:
   Cache-only plans can preserve exact Nix paths after trusted closure hydration.
   They do not prove local rebuild compatibility, package correctness, evaluator parity, or reproducibility.
 - Foreign provenance audits scan signed castore facts under explicit limits.
-  They do not prove dynamic behavior, package correctness, or release eligibility.
+  The scanner handles bounded gzip and zstd streams and normalizes safe store
+  suffixes. Unknown executable bytes still fail closed.
+  These audits do not prove dynamic behavior, package correctness, or release eligibility.
 - Bootstrap and fixed-point evidence applies only to the recorded seed,
   source, tools, platform, and proof mode.
 - AeneasVerif proof and translation policy remains owned by Octet. Mantle can
@@ -434,3 +436,5 @@ notices.
 - [AeneasVerif/aeneas](https://github.com/AeneasVerif/aeneas) and [AeneasVerif/charon](https://github.com/AeneasVerif/charon) provide the current Rust-to-proof-model toolchain reference.
 - [AeneasVerif/eurydice](https://github.com/AeneasVerif/eurydice) and [AeneasVerif/scylla](https://github.com/AeneasVerif/scylla) provide deferred code-generation and migration references.
 - [fzakaria/guix-transfer](https://github.com/fzakaria/guix-transfer) provides MIT-licensed ATerm parsing, graph translation, and path-mapping design references. Mantle retains execution and evidence authority.
+- [fzakaria/guixpkgs](https://github.com/fzakaria/guixpkgs) provides the checked-in translated Guix package graph used by the live GuixPkgs export proof. Mantle trusts the proof exporter's separate cache key.
+- [adeci/guix-by-nix](https://github.com/adeci/guix-by-nix) provides a system-level reference for consuming translated Guix packages without Guix in the target environment.
