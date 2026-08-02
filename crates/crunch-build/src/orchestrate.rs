@@ -103,6 +103,20 @@ fn push_unique_store_paths(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SourceClosureDisposition {
+    Resolve,
+    ReuseCurrentSessionOutput,
+}
+
+fn source_closure_disposition(is_current_session_output: bool) -> SourceClosureDisposition {
+    if is_current_session_output {
+        SourceClosureDisposition::ReuseCurrentSessionOutput
+    } else {
+        SourceClosureDisposition::Resolve
+    }
+}
+
 fn derivation_uses_mutable_workspace(derivation: &Derivation) -> Result<bool, Error> {
     let Some(raw) = derivation.environment.get(crate::build_request::WORKSPACE_POLICY_ENV) else {
         return Ok(false);
@@ -1054,8 +1068,10 @@ where BServ: BuildService + 'static
         );
 
         for source_path in &derivation.input_sources {
-            if self.is_crunch_built(source_path) {
-                debug!(path = %source_path, "skipping closure resolution (crunch-built)");
+            let physical_source_path = source_path.to_absolute_path_with_prefix(self.store.output_dir_str());
+            let disposition = source_closure_disposition(self.store.built_outputs.contains_key(&physical_source_path));
+            if disposition == SourceClosureDisposition::ReuseCurrentSessionOutput {
+                debug!(path = %source_path, "skipping closure resolution for current-session output");
                 continue;
             }
             self.ensure_declared_source_exists(source_path).await?;
@@ -1071,26 +1087,6 @@ where BServ: BuildService + 'static
         }
 
         Ok(all_source_paths)
-    }
-
-    /// Check if a source path is crunch-built (not from the host Nix store).
-    ///
-    /// A path is crunch-built if:
-    /// - It already has a node in output_nodes (built in this session), or
-    /// - It exists in the crunch output dir (when --store != /nix/store)
-    fn is_crunch_built(&self, path: &StorePath<String>) -> bool {
-        // Already built in this session.
-        if self.store.output_nodes.contains_key(path) {
-            return true;
-        }
-        // If --store is a custom dir, check if the path exists there.
-        // When output_dir == /nix/store, we can't distinguish, so
-        // fall through to Nix closure resolution (safe default).
-        if self.store.output_dir_str() != self.store.store_dir() {
-            let custom_abs = path.to_absolute_path_with_prefix(self.store.output_dir_str());
-            return PathBuf::from(&custom_abs).exists();
-        }
-        false
     }
 
     /// Gather all castore nodes needed as sandbox inputs: built
@@ -2239,6 +2235,136 @@ mod tests {
         assert_eq!(pis.get_count(&root), 1, "root closure should be queried once");
         assert_eq!(pis.get_count(&dep), 1, "transitive reference should be queried once");
         assert_eq!(builder.source_closure_cache.len(), 1, "session should cache one source root");
+    }
+
+    #[test]
+    fn source_closure_disposition_only_reuses_current_session_outputs() {
+        assert_eq!(source_closure_disposition(true), SourceClosureDisposition::ReuseCurrentSessionOutput);
+        assert_eq!(source_closure_disposition(false), SourceClosureDisposition::Resolve);
+    }
+
+    #[tokio::test]
+    async fn physical_store_source_with_pathinfo_resolves_transitive_closure() {
+        const IMPORTED_SOURCE_DIGEST_BYTE: u8 = 47;
+        const IMPORTED_REFERENCE_DIGEST_BYTE: u8 = 48;
+
+        let bs = MemoryBlobService::default();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+        let physical_store = tempfile::tempdir().unwrap();
+        let pis = CountingPathInfoService::default();
+        let source = make_source_path("cache-imported-source", IMPORTED_SOURCE_DIGEST_BYTE);
+        let reference = make_source_path("cache-imported-reference", IMPORTED_REFERENCE_DIGEST_BYTE);
+        pis.insert(make_source_path_info(&reference, vec![]));
+        pis.insert(make_source_path_info(&source, vec![reference.clone()]));
+
+        let physical_source =
+            PathBuf::from(source.to_absolute_path_with_prefix(physical_store.path().to_str().unwrap()));
+        std::fs::write(&physical_source, b"cache-imported source").unwrap();
+
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            pis.clone(),
+            physical_store.path().to_path_buf(),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut registry = DerivationRegistry::default();
+        let (_drv_path, mut derivation) = build_and_register("cache-imported-source-consumer", &[], &mut registry);
+        derivation.input_sources.insert(source.clone());
+
+        let first_sources = builder.resolve_and_ingest_sources(&derivation).await.unwrap();
+        let source_queries_after_first = pis.get_count(&source);
+        let reference_queries_after_first = pis.get_count(&reference);
+        let repeated_sources = builder.resolve_and_ingest_sources(&derivation).await.unwrap();
+
+        assert_eq!(first_sources, vec![source.clone(), reference.clone()]);
+        assert_eq!(repeated_sources, first_sources, "ingested imports must keep their complete closure");
+        assert!(source_queries_after_first > 0, "imported source PathInfo must be queried");
+        assert!(reference_queries_after_first > 0, "imported runtime reference PathInfo must be queried");
+        assert_eq!(pis.get_count(&source), source_queries_after_first, "repeat use must reuse source facts");
+        assert_eq!(
+            pis.get_count(&reference),
+            reference_queries_after_first,
+            "repeat use must reuse runtime reference facts"
+        );
+    }
+
+    #[tokio::test]
+    async fn strict_physical_store_source_without_pathinfo_fails_closed() {
+        const MISSING_PATHINFO_DIGEST_BYTE: u8 = 49;
+
+        let bs = MemoryBlobService::default();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+        let physical_store = tempfile::tempdir().unwrap();
+        let pis = CountingPathInfoService::default();
+        let source = make_source_path("physical-source-without-pathinfo", MISSING_PATHINFO_DIGEST_BYTE);
+        let physical_source =
+            PathBuf::from(source.to_absolute_path_with_prefix(physical_store.path().to_str().unwrap()));
+        std::fs::write(&physical_source, b"unbound physical source").unwrap();
+
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            pis.clone(),
+            physical_store.path().to_path_buf(),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        builder.set_hermeticity_mode(HermeticityMode::Strict);
+        let mut registry = DerivationRegistry::default();
+        let (_drv_path, mut derivation) = build_and_register("strict-source-consumer", &[], &mut registry);
+        derivation.input_sources.insert(source.clone());
+
+        let error = builder.resolve_and_ingest_sources(&derivation).await.unwrap_err().to_string();
+
+        assert!(error.contains("missing closure facts"), "strict source must require PathInfo: {error}");
+        assert_eq!(pis.get_count(&source), 1, "strict source PathInfo must be queried once");
+    }
+
+    #[tokio::test]
+    async fn current_session_source_skips_closure_resolution() {
+        const CURRENT_SESSION_SOURCE_DIGEST_BYTE: u8 = 50;
+
+        let bs = MemoryBlobService::default();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+        let physical_store = tempfile::tempdir().unwrap();
+        let pis = CountingPathInfoService::default();
+        let source = make_source_path("current-session-source", CURRENT_SESSION_SOURCE_DIGEST_BYTE);
+
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            pis.clone(),
+            physical_store.path().to_path_buf(),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        builder.set_hermeticity_mode(HermeticityMode::Strict);
+        let source_path_info = make_source_path_info(&source, vec![]);
+        builder.store.output_nodes.insert(source.clone(), source_path_info.node.clone());
+        let physical_source_path = source.to_absolute_path_with_prefix(builder.store.output_dir_str());
+        builder.store.built_outputs.insert(physical_source_path, source_path_info);
+        let mut registry = DerivationRegistry::default();
+        let (_drv_path, mut derivation) = build_and_register("current-session-source-consumer", &[], &mut registry);
+        derivation.input_sources.insert(source.clone());
+
+        let sources = builder.resolve_and_ingest_sources(&derivation).await.unwrap();
+
+        assert_eq!(sources, vec![source.clone()]);
+        assert_eq!(pis.get_count(&source), 0, "current-session source must not query PathInfo");
     }
 
     #[tokio::test]

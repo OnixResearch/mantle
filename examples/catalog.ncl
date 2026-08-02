@@ -642,6 +642,18 @@ let Example = {
       skip_reason = "",
     },
     {
+      id = "project-nixpkgs-tool-use",
+      path = "examples/projects/nixpkgs-tool-use/workflow.ncl",
+      title = "Cache-imported Nixpkgs build tool",
+      summary = "Imports one signed Nixpkgs mksh closure and uses that exact cache-imported executable to build a separate Mantle output.",
+      lane = "trust-provenance",
+      kind = "nickel-workflow",
+      support_tier = "heavy-real-network",
+      requirements = { network = true, generated_seed = false, linux_bwrap = true, heavyweight = true, benchmark = false },
+      validation_rails = ["eval", "foreign-import-cli", "ignored-heavy-build", "inspect-output", "negative-build", "non-claim-doc"],
+      skip_reason = "live workflow requires the pinned Nix producer export, cache.nixos.org, signed closure import, and Linux bwrap",
+    },
+    {
       id = "project-portable-receipt-handoff",
       path = "examples/projects/portable-receipt-handoff/mantle-project.ncl",
       title = "Portable receipt and semantic graph handoff",
