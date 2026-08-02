@@ -8,10 +8,10 @@
 
 ## Phase 2: Exact graph compiler
 
-- [ ] [serial] I4 Add deterministic bounded dependency ordering with cycle, missing-node, duplicate-edge, root, and full-node-coverage checks. r[foreign_derivation_import.exact_graph_compilation]
-- [ ] [serial] I5 Add typed derivation, output, and source path maps. Rewrite exact store objects with suffix preservation and reject all unknown or leftover foreign references. r[foreign_derivation_import.exact_graph_compilation]
-- [ ] [serial] I6 Refactor `crunch-glue` with a pure resolved-registration helper that computes target HDM, output paths, derivation path, and pending registration without weak preliminary identity. r[foreign_derivation_import.exact_graph_compilation]
-- [ ] [parallel] I7 Add two-node and multi-output tests that prove each parent receives the exact recomputed child path. Add negative collision, cycle, unknown-reference, output-name, and partial-plan tests. r[foreign_derivation_import.exact_graph_compilation]
+- [x] [serial] I4 Add deterministic bounded dependency ordering with cycle, missing-node, duplicate-edge, root, and full-node-coverage checks. r[foreign_derivation_import.exact_graph_compilation]
+- [x] [serial] I5 Add typed derivation, output, and source path maps. Rewrite exact store objects with suffix preservation and reject all unknown or leftover foreign references. r[foreign_derivation_import.exact_graph_compilation]
+- [x] [serial] I6 Refactor `crunch-glue` with a pure resolved-registration helper that computes target HDM, output paths, derivation path, and pending registration without weak preliminary identity. r[foreign_derivation_import.exact_graph_compilation]
+- [x] [parallel] I7 Add two-node and multi-output tests that prove each parent receives the exact recomputed child path. Add negative collision, cycle, unknown-reference, output-name, and partial-plan tests. r[foreign_derivation_import.exact_graph_compilation]
 
 ## Phase 3: Builtins and identity domains
 

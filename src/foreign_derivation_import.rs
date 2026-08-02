@@ -2014,7 +2014,7 @@ fn recompute_outputs(
     Ok(outputs)
 }
 
-fn validate_graph(graph: &ForeignDerivationGraph) -> Result<(), ImportDiagnostic> {
+pub(crate) fn validate_graph(graph: &ForeignDerivationGraph) -> Result<(), ImportDiagnostic> {
     if graph.schema != GRAPH_SCHEMA {
         return Err(diagnostic("unsupported-graph-schema", None, "foreign graph schema is unsupported"));
     }

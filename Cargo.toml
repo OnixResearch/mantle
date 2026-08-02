@@ -155,6 +155,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 clap = { version = "4", features = ["derive", "env"] }
 data-encoding = "2.6"
 tempfile = "3"
+bstr = "=1.12.1"
 blake3 = "=1.8.2"
 rand = "0.8"
 digest = "=0.10.7"

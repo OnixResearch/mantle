@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use bstr::BString;
+use crunch_attestation::Claims;
 use nix_compat::derivation::Derivation;
 use nix_compat::derivation::Output;
 use nix_compat::nixhash::CAHash;
@@ -12,6 +13,7 @@ use nix_compat::nixhash::NixHash;
 use nix_compat::store_path::StorePath;
 
 use crate::conversion_cache::ConversionCache;
+use crate::conversion_cache::InsertCaEntry;
 use crate::error::Error;
 use crate::types::CrunchDerivation;
 use crate::types::FixedOutput;
@@ -21,6 +23,18 @@ use crate::types::validate_dynamic_plan_outputs;
 /// Maximum derivation dependency depth before we bail out.
 /// Prevents stack overflow from pathological or accidental deep graphs.
 const MAX_RECURSION_DEPTH: u32 = 512;
+const CONTENT_ADDRESSED_MODE: &str = "content-addressed";
+const INPUT_ADDRESSED_MODE: &str = "input-addressed";
+
+pub struct ResolvedDerivationRequest<'a> {
+    pub name: &'a str,
+    pub derivation: Derivation,
+    pub input_hdms: &'a BTreeMap<String, [u8; 32]>,
+    pub store_dir: &'a str,
+    pub addressing_mode: &'a str,
+    pub dynamic_plan_outputs: Vec<String>,
+    pub provenance_claims: Option<Claims>,
+}
 
 type InputDerivationMap = BTreeMap<StorePath<String>, BTreeSet<String>>;
 type InputSourceSet = BTreeSet<StorePath<String>>;
@@ -29,6 +43,97 @@ type ResolvedInputs = (InputDerivationMap, InputSourceSet);
 struct StorePathText<'a> {
     path_text: &'a str,
     store_dir: &'a str,
+}
+
+/// Compute one exact derivation registration from complete resolved inputs.
+pub fn resolve_derivation_registration(request: ResolvedDerivationRequest<'_>) -> Result<InsertCaEntry, Error> {
+    assert!(!request.name.is_empty(), "resolved derivation name must not be empty");
+    assert!(request.store_dir.starts_with('/'), "resolved derivation store prefix must be absolute");
+    if request.derivation.outputs.is_empty() {
+        return Err(Error::MissingField {
+            field: "outputs".to_string(),
+        });
+    }
+    validate_addressing_mode(request.addressing_mode)?;
+    let output_names = request.derivation.outputs.keys().cloned().collect::<Vec<_>>();
+    validate_dynamic_plan_outputs(&output_names, &request.dynamic_plan_outputs)
+        .map_err(Error::InvalidDynamicPlanOutputs)?;
+    validate_unpopulated_outputs(&request.derivation)?;
+    validate_resolved_input_hdms(&request.derivation, request.input_hdms, request.store_dir)?;
+
+    let mut derivation = request.derivation;
+    let hdm = derivation.hash_derivation_modulo_with_store_dir(
+        |parent_drv_path| {
+            let absolute = parent_drv_path.to_absolute_path_with_prefix(request.store_dir);
+            let parent_hdm = request.input_hdms.get(&absolute).copied();
+            assert!(parent_hdm.is_some(), "pre-validated resolved parent HDM must exist");
+            parent_hdm.unwrap_or([0u8; 32])
+        },
+        request.store_dir,
+    );
+    derivation.calculate_output_paths_with_store_dir(request.name, &hdm, request.store_dir)?;
+    let content_addressed =
+        request.addressing_mode == CONTENT_ADDRESSED_MODE && derivation.outputs.values().all(|o| o.ca_hash.is_none());
+    if content_addressed {
+        for output in derivation.outputs.values_mut() {
+            output.path = None;
+        }
+    }
+    let drv_path = derivation.calculate_derivation_path_with_store_dir(request.name, request.store_dir)?;
+    let aterm_hash = *blake3::hash(&derivation.to_aterm_bytes_with_store_dir(request.store_dir)).as_bytes();
+    let entry = InsertCaEntry {
+        aterm_hash,
+        drv_path,
+        hdm,
+        derivation,
+        content_addressed,
+        dynamic_plan_outputs: request.dynamic_plan_outputs,
+        provenance_claims: request.provenance_claims,
+    };
+    debug_assert!(entry.aterm_hash != [0u8; 32]);
+    debug_assert!(!entry.derivation.outputs.is_empty());
+    Ok(entry)
+}
+
+fn validate_addressing_mode(addressing_mode: &str) -> Result<(), Error> {
+    if addressing_mode != CONTENT_ADDRESSED_MODE && addressing_mode != INPUT_ADDRESSED_MODE {
+        return Err(Error::InvalidAddressingMode(addressing_mode.to_string()));
+    }
+    Ok(())
+}
+
+fn validate_unpopulated_outputs(derivation: &Derivation) -> Result<(), Error> {
+    for (output_name, output) in &derivation.outputs {
+        if output.path.is_some() {
+            return Err(Error::ResolvedOutputAlreadyPopulated {
+                output: output_name.clone(),
+            });
+        }
+    }
+    debug_assert!(!derivation.outputs.is_empty());
+    debug_assert!(derivation.outputs.values().all(|output| output.path.is_none()));
+    Ok(())
+}
+
+fn validate_resolved_input_hdms(
+    derivation: &Derivation,
+    input_hdms: &BTreeMap<String, [u8; 32]>,
+    store_dir: &str,
+) -> Result<(), Error> {
+    for parent_drv_path in derivation.input_derivations.keys() {
+        let absolute = parent_drv_path.to_absolute_path_with_prefix(store_dir);
+        if !input_hdms.contains_key(&absolute) {
+            return Err(Error::InvalidStorePath(format!("resolved parent derivation {absolute} has no known HDM")));
+        }
+    }
+    debug_assert!(
+        derivation
+            .input_derivations
+            .keys()
+            .all(|path| { input_hdms.contains_key(&path.to_absolute_path_with_prefix(store_dir)) })
+    );
+    debug_assert!(store_dir.starts_with('/'));
+    Ok(())
 }
 
 /// Convert a `CrunchDerivation` into a `nix_compat::Derivation` with
@@ -224,41 +329,24 @@ fn finalize_and_register(
     known_paths: &mut ConversionCache,
     store_dir: &str,
 ) -> Result<(StorePath<String>, Derivation), Error> {
-    // Pre-validate: every input derivation must already be registered.
-    // The nix-compat HDM callback is infallible, so we check up front.
-    for parent_drv_path in nix_drv.input_derivations.keys() {
-        let abs = parent_drv_path.to_absolute_path_with_prefix(store_dir);
-        if known_paths.get_hdm_by_drv_path(&abs).is_none() {
-            return Err(Error::InvalidStorePath(format!(
-                "parent derivation {} not in KnownPaths during HDM computation for '{}'",
-                parent_drv_path, drv.name,
-            )));
-        }
-    }
-
-    let hdm = nix_drv.hash_derivation_modulo(|parent_drv_path| {
-        let parent_hdm = known_paths.get_hdm_by_drv_path(&parent_drv_path.to_absolute_path_with_prefix(store_dir));
-        assert!(parent_hdm.is_some(), "pre-validated parent missing");
-        parent_hdm.unwrap_or([0u8; 32])
-    });
-
-    let is_ca = drv.addressing_mode == "content-addressed" && drv.fixed_output.is_none();
-
-    // Compute provisional output paths (used as $out in the sandbox).
-    nix_drv.calculate_output_paths_with_store_dir(&drv.name, &hdm, store_dir)?;
-
-    if is_ca {
-        // CA: clear stored paths but keep provisional paths in env for $out.
-        for (_name, output) in nix_drv.outputs.iter_mut() {
-            output.path = None;
-        }
-    }
-
-    let drv_path = nix_drv.calculate_derivation_path_with_store_dir(&drv.name, store_dir)?;
-
-    let aterm_bytes = nix_drv.to_aterm_bytes();
-    let aterm_hash = *blake3::hash(&aterm_bytes).as_bytes();
-    if let Some(existing) = known_paths.get_by_aterm_hash(&aterm_hash)
+    let input_hdms = nix_drv
+        .input_derivations
+        .keys()
+        .filter_map(|parent_drv_path| {
+            let absolute = parent_drv_path.to_absolute_path_with_prefix(store_dir);
+            known_paths.get_hdm_by_drv_path(&absolute).map(|hdm| (absolute, hdm))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let registration = resolve_derivation_registration(ResolvedDerivationRequest {
+        name: &drv.name,
+        derivation: nix_drv.clone(),
+        input_hdms: &input_hdms,
+        store_dir,
+        addressing_mode: &drv.addressing_mode,
+        dynamic_plan_outputs: drv.dynamic_plan_outputs.clone(),
+        provenance_claims: drv.provenance.clone(),
+    })?;
+    if let Some(existing) = known_paths.get_by_aterm_hash(&registration.aterm_hash)
         && existing.dynamic_plan_outputs != drv.dynamic_plan_outputs
     {
         return Err(Error::InvalidDynamicPlanOutputs(format!(
@@ -267,26 +355,19 @@ fn finalize_and_register(
         )));
     }
 
-    known_paths.insert_ca(crate::conversion_cache::InsertCaEntry {
-        aterm_hash,
-        drv_path: drv_path.clone(),
-        hdm,
-        derivation: nix_drv.clone(),
-        content_addressed: is_ca,
-        dynamic_plan_outputs: drv.dynamic_plan_outputs.clone(),
-        provenance_claims: drv.provenance.clone(),
-    });
+    let drv_path = registration.drv_path.clone();
+    *nix_drv = registration.derivation.clone();
+    let content_addressed = registration.content_addressed;
+    known_paths.insert_ca(registration);
 
-    // Tiger Style: assert postconditions.
     debug_assert!(
         known_paths.get_by_drv_path(&drv_path.to_absolute_path_with_prefix(store_dir)).is_some(),
         "derivation must be registered in KnownPaths after insert"
     );
     debug_assert!(
-        !is_ca || nix_drv.outputs.values().all(|o| o.path.is_none()),
-        "CA derivation outputs must have None paths (resolved after build)"
+        !content_addressed || nix_drv.outputs.values().all(|output| output.path.is_none()),
+        "CA derivation outputs must have None paths after registration"
     );
-
     Ok((drv_path, nix_drv.clone()))
 }
 
@@ -351,6 +432,120 @@ mod tests {
             addressing_mode: "input-addressed".to_string(),
             provenance: None,
         }
+    }
+
+    #[test]
+    fn resolved_registration_compiles_dependencies_before_parents_and_respects_prefixes() {
+        const TARGET_PREFIX: &str = "/mantle/store";
+        const OTHER_TARGET_PREFIX: &str = "/alternate/store";
+        let child_model = minimal_drv("resolved-child", "/bin/sh");
+        let child_derivation = build_nix_derivation(&child_model, BTreeMap::new(), BTreeSet::new(), None);
+        let child = resolve_derivation_registration(ResolvedDerivationRequest {
+            name: &child_model.name,
+            derivation: child_derivation.clone(),
+            input_hdms: &BTreeMap::new(),
+            store_dir: TARGET_PREFIX,
+            addressing_mode: INPUT_ADDRESSED_MODE,
+            dynamic_plan_outputs: Vec::new(),
+            provenance_claims: None,
+        })
+        .expect("resolved child registration must succeed");
+        let other_prefix_child = resolve_derivation_registration(ResolvedDerivationRequest {
+            name: &child_model.name,
+            derivation: child_derivation,
+            input_hdms: &BTreeMap::new(),
+            store_dir: OTHER_TARGET_PREFIX,
+            addressing_mode: INPUT_ADDRESSED_MODE,
+            dynamic_plan_outputs: Vec::new(),
+            provenance_claims: None,
+        })
+        .expect("alternate prefix child registration must succeed");
+        assert_ne!(child.drv_path, other_prefix_child.drv_path);
+        assert_eq!(child.hdm, other_prefix_child.hdm);
+        assert_ne!(child.aterm_hash, other_prefix_child.aterm_hash);
+
+        let parent_model = minimal_drv("resolved-parent", "/bin/sh");
+        let mut parent_derivation = build_nix_derivation(&parent_model, BTreeMap::new(), BTreeSet::new(), None);
+        parent_derivation
+            .input_derivations
+            .insert(child.drv_path.clone(), BTreeSet::from(["out".to_string()]));
+        let child_absolute = child.drv_path.to_absolute_path_with_prefix(TARGET_PREFIX);
+        let known_hdms = BTreeMap::from([(child_absolute.clone(), child.hdm)]);
+        let parent = resolve_derivation_registration(ResolvedDerivationRequest {
+            name: &parent_model.name,
+            derivation: parent_derivation,
+            input_hdms: &known_hdms,
+            store_dir: TARGET_PREFIX,
+            addressing_mode: INPUT_ADDRESSED_MODE,
+            dynamic_plan_outputs: Vec::new(),
+            provenance_claims: None,
+        })
+        .expect("resolved parent registration must succeed");
+
+        assert!(parent.drv_path.to_absolute_path_with_prefix(TARGET_PREFIX).starts_with(TARGET_PREFIX));
+        assert!(parent.derivation.input_derivations.contains_key(&child.drv_path));
+        assert_eq!(known_hdms[&child_absolute], child.hdm);
+        assert!(parent.derivation.outputs["out"].path.is_some());
+    }
+
+    #[test]
+    fn resolved_registration_rejects_missing_hdms_populated_outputs_and_unknown_modes() {
+        const TARGET_PREFIX: &str = "/mantle/store";
+        let child_model = minimal_drv("negative-child", "/bin/sh");
+        let child = resolve_derivation_registration(ResolvedDerivationRequest {
+            name: &child_model.name,
+            derivation: build_nix_derivation(&child_model, BTreeMap::new(), BTreeSet::new(), None),
+            input_hdms: &BTreeMap::new(),
+            store_dir: TARGET_PREFIX,
+            addressing_mode: INPUT_ADDRESSED_MODE,
+            dynamic_plan_outputs: Vec::new(),
+            provenance_claims: None,
+        })
+        .expect("negative child fixture must register");
+
+        let parent_model = minimal_drv("negative-parent", "/bin/sh");
+        let mut missing_hdm_parent = build_nix_derivation(&parent_model, BTreeMap::new(), BTreeSet::new(), None);
+        missing_hdm_parent
+            .input_derivations
+            .insert(child.drv_path.clone(), BTreeSet::from(["out".to_string()]));
+        let missing_hdm = resolve_derivation_registration(ResolvedDerivationRequest {
+            name: &parent_model.name,
+            derivation: missing_hdm_parent,
+            input_hdms: &BTreeMap::new(),
+            store_dir: TARGET_PREFIX,
+            addressing_mode: INPUT_ADDRESSED_MODE,
+            dynamic_plan_outputs: Vec::new(),
+            provenance_claims: None,
+        })
+        .err()
+        .expect("missing parent HDM must fail");
+        assert!(matches!(missing_hdm, Error::InvalidStorePath(_)));
+
+        let populated = resolve_derivation_registration(ResolvedDerivationRequest {
+            name: &child_model.name,
+            derivation: child.derivation.clone(),
+            input_hdms: &BTreeMap::new(),
+            store_dir: TARGET_PREFIX,
+            addressing_mode: INPUT_ADDRESSED_MODE,
+            dynamic_plan_outputs: Vec::new(),
+            provenance_claims: None,
+        })
+        .err()
+        .expect("prepopulated output path must fail");
+        assert!(matches!(populated, Error::ResolvedOutputAlreadyPopulated { .. }));
+
+        let unknown_mode = resolve_derivation_registration(ResolvedDerivationRequest {
+            name: &child_model.name,
+            derivation: build_nix_derivation(&child_model, BTreeMap::new(), BTreeSet::new(), None),
+            input_hdms: &BTreeMap::new(),
+            store_dir: TARGET_PREFIX,
+            addressing_mode: "unknown-addressing-mode",
+            dynamic_plan_outputs: Vec::new(),
+            provenance_claims: None,
+        })
+        .err()
+        .expect("unknown addressing mode must fail");
+        assert!(matches!(unknown_mode, Error::InvalidAddressingMode(_)));
     }
 
     // ── Phase 2: basic derivations ────────────────────────────────────

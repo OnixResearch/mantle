@@ -29,6 +29,12 @@ pub enum Error {
     #[error("invalid dynamic plan outputs: {0}")]
     InvalidDynamicPlanOutputs(String),
 
+    #[error("invalid addressing mode: {0}")]
+    InvalidAddressingMode(String),
+
+    #[error("resolved derivation output path is already populated: {output}")]
+    ResolvedOutputAlreadyPopulated { output: String },
+
     #[error("unresolved derivation-file input reached conversion: {path}")]
     UnresolvedDerivationFile { path: String },
 

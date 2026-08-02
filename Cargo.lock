@@ -4480,6 +4480,7 @@ dependencies = [
  "assert_cmd",
  "base64",
  "blake3",
+ "bstr",
  "cap-fs-ext",
  "cap-std",
  "clap",
