@@ -1,9 +1,12 @@
 //! Pure admission for receipt-bound foreign realization.
+// r[impl foreign_derivation_import.realization_adapter]
+// r[impl foreign_derivation_import.source_materialization]
 //!
 //! This module performs no file, store, process, clock, or network I/O. The
 //! imperative shell may mutate the store only after this admission succeeds.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt;
 
 use crunch_build::ExecutionProfile;
@@ -20,9 +23,22 @@ use crate::foreign_executable_plan::ForeignExecutablePlan;
 use crate::foreign_executable_plan::import_receipt_digest;
 use crate::foreign_executable_plan::validate_foreign_executable_plan;
 use crate::foreign_executable_plan::validate_unit_aterm_projection;
+use crate::foreign_graph_compiler::CompiledSourceRequirement;
+use crate::source_bundle::FOREIGN_SOURCE_DESCRIPTOR_DIGEST_METADATA as SOURCE_DESCRIPTOR_DIGEST_METADATA;
+use crate::source_bundle::FOREIGN_SOURCE_FOREIGN_PATH_METADATA as SOURCE_FOREIGN_PATH_METADATA;
+use crate::source_bundle::FOREIGN_SOURCE_PAYLOAD_ID_METADATA as SOURCE_PAYLOAD_ID_METADATA;
+use crate::source_bundle::FOREIGN_SOURCE_TARGET_PATH_METADATA as SOURCE_TARGET_PATH_METADATA;
+use crate::source_bundle::SourceBundleManifest;
+use crate::source_bundle::validate_manifest;
 
 const MAX_REALIZATION_PROFILES: usize = 1_024;
 const HDM_BYTES: usize = 32;
+const FOREIGN_SOURCE_METADATA_KEYS: [&str; 4] = [
+    SOURCE_PAYLOAD_ID_METADATA,
+    SOURCE_DESCRIPTOR_DIGEST_METADATA,
+    SOURCE_FOREIGN_PATH_METADATA,
+    SOURCE_TARGET_PATH_METADATA,
+];
 
 #[derive(Debug)]
 pub(crate) struct ForeignRealizationAdmission<'a> {
@@ -49,6 +65,24 @@ pub(crate) struct AdmittedForeignRealization {
     pub(crate) units: Vec<AdmittedForeignUnit>,
 }
 
+#[derive(Debug)]
+pub(crate) struct ForeignSourceAdmission<'a> {
+    pub(crate) source_requirements: &'a [CompiledSourceRequirement],
+    pub(crate) source_bundle: &'a SourceBundleManifest,
+    pub(crate) expected_manifest_blake3: &'a str,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct AdmittedForeignSource {
+    pub(crate) payload_id: String,
+    pub(crate) foreign_path: String,
+    pub(crate) target_path: String,
+    pub(crate) descriptor_blake3: String,
+    pub(crate) record_index: usize,
+    pub(crate) record_identity: String,
+    pub(crate) content_blake3: String,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ForeignRealizationAdmissionError {
     InvalidPlan(String),
@@ -65,6 +99,13 @@ pub(crate) enum ForeignRealizationAdmissionError {
     InvalidNativeUnit { node_id: String, reason: String },
     InvalidHdm(String),
     InvalidTargetPath(String),
+    InvalidSourceBundle(String),
+    SourceBundleDigestMismatch,
+    InvalidForeignSourceMetadata(String),
+    DuplicateForeignSource(String),
+    UnexpectedForeignSource(String),
+    MissingForeignSource(String),
+    ForeignSourceBindingMismatch(String),
     RemoteExecutionUnsupported,
 }
 
@@ -107,6 +148,25 @@ impl fmt::Display for ForeignRealizationAdmissionError {
             Self::InvalidTargetPath(path) => {
                 write!(formatter, "foreign realization native unit target path is invalid: {path}")
             }
+            Self::InvalidSourceBundle(reason) => write!(formatter, "foreign source bundle is invalid: {reason}"),
+            Self::SourceBundleDigestMismatch => {
+                write!(formatter, "foreign source bundle digest does not match the admitted digest")
+            }
+            Self::InvalidForeignSourceMetadata(identity) => {
+                write!(formatter, "foreign source record metadata is incomplete: {identity}")
+            }
+            Self::DuplicateForeignSource(payload_id) => {
+                write!(formatter, "foreign source payload occurs more than once: {payload_id}")
+            }
+            Self::UnexpectedForeignSource(payload_id) => {
+                write!(formatter, "foreign source payload is absent from the executable plan: {payload_id}")
+            }
+            Self::MissingForeignSource(payload_id) => {
+                write!(formatter, "foreign source payload is absent from the admitted source bundle: {payload_id}")
+            }
+            Self::ForeignSourceBindingMismatch(payload_id) => {
+                write!(formatter, "foreign source payload binding does not match the executable plan: {payload_id}")
+            }
             Self::RemoteExecutionUnsupported => write!(formatter, "remote foreign realization is unsupported"),
         }
     }
@@ -137,6 +197,92 @@ pub(crate) fn validate_foreign_realization_admission(
         selected_root_paths,
         units,
     })
+}
+
+pub(crate) fn validate_foreign_source_admission(
+    admission: ForeignSourceAdmission<'_>,
+) -> Result<Vec<AdmittedForeignSource>, ForeignRealizationAdmissionError> {
+    validate_manifest(admission.source_bundle)
+        .map_err(|error| ForeignRealizationAdmissionError::InvalidSourceBundle(error.to_string()))?;
+    if admission.source_bundle.manifest_blake3 != admission.expected_manifest_blake3 {
+        return Err(ForeignRealizationAdmissionError::SourceBundleDigestMismatch);
+    }
+    let requirements = admission
+        .source_requirements
+        .iter()
+        .map(|requirement| (requirement.payload_id.as_str(), requirement))
+        .collect::<BTreeMap<_, _>>();
+    let expected_payload_ids = requirements.keys().copied().collect::<BTreeSet<_>>();
+    if expected_payload_ids.len() != admission.source_requirements.len() {
+        return Err(ForeignRealizationAdmissionError::InvalidPlan(
+            "foreign executable plan repeats a source payload ID".to_string(),
+        ));
+    }
+    let foreign_paths = admission
+        .source_requirements
+        .iter()
+        .map(|requirement| requirement.foreign_path.as_str())
+        .collect::<BTreeSet<_>>();
+    if foreign_paths.len() != admission.source_requirements.len() {
+        return Err(ForeignRealizationAdmissionError::InvalidPlan(
+            "foreign executable plan repeats a foreign source path".to_string(),
+        ));
+    }
+    let target_paths = admission
+        .source_requirements
+        .iter()
+        .map(|requirement| requirement.target_path.as_str())
+        .collect::<BTreeSet<_>>();
+    if target_paths.len() != admission.source_requirements.len() {
+        return Err(ForeignRealizationAdmissionError::InvalidPlan(
+            "foreign executable plan repeats a target source path".to_string(),
+        ));
+    }
+
+    let mut admitted_by_payload = BTreeMap::<String, AdmittedForeignSource>::new();
+    for (record_index, record) in admission.source_bundle.records.iter().enumerate() {
+        let present_metadata_count =
+            FOREIGN_SOURCE_METADATA_KEYS.iter().filter(|key| record.metadata.contains_key(**key)).count();
+        if present_metadata_count == 0 {
+            continue;
+        }
+        if present_metadata_count != FOREIGN_SOURCE_METADATA_KEYS.len() {
+            return Err(ForeignRealizationAdmissionError::InvalidForeignSourceMetadata(record.identity.clone()));
+        }
+        let payload_id = &record.metadata[SOURCE_PAYLOAD_ID_METADATA];
+        let requirement = requirements
+            .get(payload_id.as_str())
+            .copied()
+            .ok_or_else(|| ForeignRealizationAdmissionError::UnexpectedForeignSource(payload_id.clone()))?;
+        let binding_matches = record.metadata[SOURCE_DESCRIPTOR_DIGEST_METADATA] == requirement.descriptor_digest
+            && record.metadata[SOURCE_FOREIGN_PATH_METADATA] == requirement.foreign_path
+            && record.metadata[SOURCE_TARGET_PATH_METADATA] == requirement.target_path;
+        if !binding_matches {
+            return Err(ForeignRealizationAdmissionError::ForeignSourceBindingMismatch(payload_id.clone()));
+        }
+        let admitted = AdmittedForeignSource {
+            payload_id: payload_id.clone(),
+            foreign_path: requirement.foreign_path.clone(),
+            target_path: requirement.target_path.clone(),
+            descriptor_blake3: requirement.descriptor_digest.clone(),
+            record_index,
+            record_identity: record.identity.clone(),
+            content_blake3: record.content_blake3.clone(),
+        };
+        if admitted_by_payload.insert(payload_id.clone(), admitted).is_some() {
+            return Err(ForeignRealizationAdmissionError::DuplicateForeignSource(payload_id.clone()));
+        }
+    }
+
+    admission
+        .source_requirements
+        .iter()
+        .map(|requirement| {
+            admitted_by_payload
+                .remove(&requirement.payload_id)
+                .ok_or_else(|| ForeignRealizationAdmissionError::MissingForeignSource(requirement.payload_id.clone()))
+        })
+        .collect()
 }
 
 fn validate_import_receipt_link(
@@ -261,6 +407,11 @@ mod tests {
     use crate::foreign_derivation_import::PackageIndex;
     use crate::foreign_derivation_import::TranslationPolicy;
     use crate::foreign_executable_plan::compile_foreign_executable_plan;
+    use crate::source_bundle::SourceRecordKind;
+    use crate::source_bundle::SourceSpec;
+    use crate::source_bundle::digest_manifest_without_digest;
+    use crate::source_bundle::digest_source_record_content;
+    use crate::source_bundle::plan_source_bundle;
 
     const NIX_GRAPH: &str = include_str!("../tests/fixtures/foreign-import/nix-hello.graph.json");
     const NIX_INDEX: &str = include_str!("../tests/fixtures/foreign-import/nix-hello.index.json");
@@ -331,6 +482,80 @@ mod tests {
     }
 
     #[test]
+    fn source_admission_binds_payloads_to_manifest_records() {
+        let (plan, _) = fixture();
+        let (_temporary, manifest) = source_bundle_fixture(&plan);
+
+        let admitted = validate_foreign_source_admission(ForeignSourceAdmission {
+            source_requirements: &plan.source_requirements,
+            source_bundle: &manifest,
+            expected_manifest_blake3: &manifest.manifest_blake3,
+        })
+        .unwrap();
+
+        assert_eq!(admitted.len(), plan.source_requirements.len());
+        assert_eq!(admitted[0].payload_id, plan.source_requirements[0].payload_id);
+        assert_eq!(admitted[0].content_blake3, manifest.records[admitted[0].record_index].content_blake3);
+    }
+
+    #[test]
+    fn source_admission_rejects_missing_incomplete_and_stale_bindings() {
+        let (plan, _) = fixture();
+        let (_temporary, manifest) = source_bundle_fixture(&plan);
+
+        let mut missing = manifest.clone();
+        missing.records[0].metadata.clear();
+        refresh_source_bundle_digests(&mut missing);
+        assert!(matches!(
+            validate_foreign_source_admission(ForeignSourceAdmission {
+                source_requirements: &plan.source_requirements,
+                source_bundle: &missing,
+                expected_manifest_blake3: &missing.manifest_blake3,
+            }),
+            Err(ForeignRealizationAdmissionError::MissingForeignSource(_))
+        ));
+
+        let mut incomplete = manifest.clone();
+        incomplete.records[0].metadata.remove(SOURCE_TARGET_PATH_METADATA);
+        refresh_source_bundle_digests(&mut incomplete);
+        assert!(matches!(
+            validate_foreign_source_admission(ForeignSourceAdmission {
+                source_requirements: &plan.source_requirements,
+                source_bundle: &incomplete,
+                expected_manifest_blake3: &incomplete.manifest_blake3,
+            }),
+            Err(ForeignRealizationAdmissionError::InvalidForeignSourceMetadata(_))
+        ));
+
+        let mut stale = manifest.clone();
+        stale.records[0].metadata.insert(SOURCE_DESCRIPTOR_DIGEST_METADATA.to_string(), "0".repeat(64));
+        refresh_source_bundle_digests(&mut stale);
+        assert!(matches!(
+            validate_foreign_source_admission(ForeignSourceAdmission {
+                source_requirements: &plan.source_requirements,
+                source_bundle: &stale,
+                expected_manifest_blake3: &stale.manifest_blake3,
+            }),
+            Err(ForeignRealizationAdmissionError::ForeignSourceBindingMismatch(_))
+        ));
+
+        let mut repeated_target_requirements = plan.source_requirements.clone();
+        let mut repeated = repeated_target_requirements[0].clone();
+        repeated.payload_id.push_str("-duplicate");
+        repeated.foreign_path.push_str("-duplicate");
+        repeated_target_requirements.push(repeated);
+        assert!(matches!(
+            validate_foreign_source_admission(ForeignSourceAdmission {
+                source_requirements: &repeated_target_requirements,
+                source_bundle: &manifest,
+                expected_manifest_blake3: &manifest.manifest_blake3,
+            }),
+            Err(ForeignRealizationAdmissionError::InvalidPlan(message))
+                if message.contains("repeats a target source path")
+        ));
+    }
+
+    #[test]
     fn admission_rejects_remote_execution_before_unit_admission() {
         let (plan, receipt) = fixture();
         let roots = vec![plan.selected_roots[0].node_id.clone()];
@@ -359,5 +584,49 @@ mod tests {
         let profile = crunch_build::foreign_profile_for_producer("nix");
         assert_eq!(execution_profile_digest(&profile).unwrap(), plan.native_units[0].execution_profile_digest_blake3);
         BTreeMap::from([(profile.profile_id.clone(), profile)])
+    }
+
+    fn source_bundle_fixture(plan: &ForeignExecutablePlan) -> (tempfile::TempDir, SourceBundleManifest) {
+        assert!(!plan.source_requirements.is_empty());
+        let temporary = tempfile::tempdir().unwrap();
+        let specs = plan
+            .source_requirements
+            .iter()
+            .enumerate()
+            .map(|(index, requirement)| {
+                let path = temporary.path().join(format!("payload-{index}"));
+                std::fs::write(&path, requirement.payload_id.as_bytes()).unwrap();
+                SourceSpec {
+                    kind: SourceRecordKind::LocalPath,
+                    identity: requirement.payload_id.clone(),
+                    path,
+                    adapter: None,
+                }
+            })
+            .collect::<Vec<_>>();
+        let mut manifest = plan_source_bundle(&specs, "/mantle/store").unwrap();
+        for record in &mut manifest.records {
+            let requirement = plan
+                .source_requirements
+                .iter()
+                .find(|requirement| requirement.payload_id == record.identity)
+                .unwrap();
+            record.metadata.insert(SOURCE_PAYLOAD_ID_METADATA.to_string(), requirement.payload_id.clone());
+            record
+                .metadata
+                .insert(SOURCE_DESCRIPTOR_DIGEST_METADATA.to_string(), requirement.descriptor_digest.clone());
+            record.metadata.insert(SOURCE_FOREIGN_PATH_METADATA.to_string(), requirement.foreign_path.clone());
+            record.metadata.insert(SOURCE_TARGET_PATH_METADATA.to_string(), requirement.target_path.clone());
+        }
+        refresh_source_bundle_digests(&mut manifest);
+        (temporary, manifest)
+    }
+
+    fn refresh_source_bundle_digests(manifest: &mut SourceBundleManifest) {
+        for record in &mut manifest.records {
+            record.content_blake3 =
+                digest_source_record_content(&record.kind, &record.metadata, &record.files).unwrap();
+        }
+        manifest.manifest_blake3 = digest_manifest_without_digest(manifest).unwrap();
     }
 }

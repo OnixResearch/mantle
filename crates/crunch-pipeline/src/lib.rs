@@ -104,6 +104,39 @@ pub struct PipelineResult {
     pub priority_decisions: Vec<PriorityDecisionEvidence>,
 }
 
+#[derive(Debug, Clone)]
+pub struct RegisteredOutputExpectation {
+    pub unit_id: String,
+    pub output_name: String,
+    pub store_path: StorePath<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RegisteredOutputResult {
+    pub unit_id: String,
+    pub output_name: String,
+    pub path_info: crunch_store::PathInfo,
+}
+
+pub struct RegisteredBuildRequest<'a> {
+    pub roots: &'a [StorePath<String>],
+    pub expected_outputs: &'a [RegisteredOutputExpectation],
+    pub retained_outputs: &'a [StorePath<String>],
+    pub source_policy: FetchSourcePolicy,
+}
+
+#[derive(Debug)]
+pub struct RegisteredBuildResult {
+    pub outcomes: Vec<BuildOutcome>,
+    pub failed_roots: Vec<FailedGoal>,
+    pub outputs: Vec<RegisteredOutputResult>,
+    pub hermeticity_audit_events: Vec<HermeticityAuditEvent>,
+    pub build_environment_reports: Vec<BuildEnvironmentReport>,
+    pub network_policy_reports: Vec<BuildNetworkPolicyReport>,
+    pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
+    pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FodMismatch {
     pub name: String,
@@ -273,10 +306,100 @@ async fn build_linux(
     ))
 }
 
+pub async fn build_registered_derivations(
+    config: &BuildConfig,
+    store: crunch_store::StoreHandle,
+    known_paths: &mut DerivationRegistry,
+    request: RegisteredBuildRequest<'_>,
+) -> Result<RegisteredBuildResult, Error> {
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (config, store, known_paths, request);
+        return Err(Error::Build("building is only supported on Linux (requires bwrap)".to_string()));
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if request.roots.is_empty() {
+            return Err(Error::Build("registered derivation build requires at least one root".to_string()));
+        }
+        let (mut builder, workspace_evidence_sink) =
+            create_pipeline_builder_with_source_policy(config, store, request.source_policy)?;
+        let mut worker_result = builder
+            .build_all_report(request.roots, known_paths, config.max_jobs)
+            .await
+            .map_err(|error| Error::Build(error.to_string()))?;
+        normalize_failed_goal_keys(&mut worker_result.failed, &config.store_dir);
+        let pathinfo_service = builder.store_handle().pathinfo_service();
+        let mut outputs = Vec::with_capacity(request.expected_outputs.len());
+        for expected in request.expected_outputs {
+            let path_info = pathinfo_service
+                .get(*expected.store_path.digest())
+                .await
+                .map_err(|error| Error::Build(format!("registered output lookup failed: {error}")))?;
+            if let Some(path_info) = path_info {
+                if path_info.store_path != expected.store_path {
+                    return Err(Error::Build(format!(
+                        "registered output lookup returned a conflicting path: {}",
+                        expected.store_path
+                    )));
+                }
+                outputs.push(RegisteredOutputResult {
+                    unit_id: expected.unit_id.clone(),
+                    output_name: expected.output_name.clone(),
+                    path_info,
+                });
+            }
+        }
+        for retained_output in request.retained_outputs {
+            let is_present = pathinfo_service
+                .get(*retained_output.digest())
+                .await
+                .map_err(|error| Error::Build(format!("selected root lookup failed: {error}")))?
+                .is_some();
+            if is_present {
+                builder
+                    .store_handle()
+                    .register_retained_root(retained_output, GcRootSource::Build)
+                    .await
+                    .map_err(|error| Error::Build(format!("registering selected foreign root: {error}")))?;
+            }
+        }
+        assert_eq!(worker_result.outcomes.len().saturating_add(worker_result.failed.len()), request.roots.len());
+        if worker_result.failed.is_empty() {
+            assert_eq!(outputs.len(), request.expected_outputs.len());
+        }
+        Ok(RegisteredBuildResult {
+            outcomes: worker_result.all_outcomes,
+            failed_roots: worker_result.failed,
+            outputs,
+            hermeticity_audit_events: builder.take_hermeticity_audit_events(),
+            build_environment_reports: builder.take_build_environment_reports(),
+            network_policy_reports: builder.take_network_policy_reports(),
+            workspace_reports: workspace_evidence_sink.take(),
+            action_result_reports: builder.take_action_result_reports(),
+        })
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn create_pipeline_builder(
     config: &BuildConfig,
     store: crunch_store::StoreHandle,
+) -> Result<(Builder<impl snix_build::buildservice::BuildService + use<>>, crunch_build::WorkspaceReportCollector), Error>
+{
+    let source_policy = if config.source_fetch_overrides.is_empty() {
+        FetchSourcePolicy::AllowNetwork
+    } else {
+        FetchSourcePolicy::RequireOverride
+    };
+    create_pipeline_builder_with_source_policy(config, store, source_policy)
+}
+
+#[cfg(target_os = "linux")]
+fn create_pipeline_builder_with_source_policy(
+    config: &BuildConfig,
+    store: crunch_store::StoreHandle,
+    source_policy: FetchSourcePolicy,
 ) -> Result<(Builder<impl snix_build::buildservice::BuildService + use<>>, crunch_build::WorkspaceReportCollector), Error>
 {
     use snix_build::buildservice::BubblewrapBuildService;
@@ -287,11 +410,6 @@ fn create_pipeline_builder(
     let directory_service = store.directory_service();
     let workdir = std::env::temp_dir().join("crunch-builds");
     std::fs::create_dir_all(&workdir).map_err(|error| Error::Internal(format!("create workdir: {error}")))?;
-    let source_policy = if config.source_fetch_overrides.is_empty() {
-        FetchSourcePolicy::AllowNetwork
-    } else {
-        FetchSourcePolicy::RequireOverride
-    };
     let fetch_service = FetchBuildService::new(blob_service.clone(), directory_service.clone())
         .with_source_overrides(config.source_fetch_overrides.clone())
         .with_source_policy(source_policy);
@@ -365,7 +483,9 @@ fn finish_pipeline_result(
     if let Some(eval_failure) = &eval_stream.eval_failure {
         worker_result.failed.push(FailedGoal {
             drv_key: eval_failure_key(&eval_failure.label),
+            origin_drv_key: eval_failure_key(&eval_failure.label),
             error: eval_failure.error.clone(),
+            build_log: None,
         });
     }
     normalize_failed_goal_keys(&mut worker_result.failed, store_dir);
@@ -590,7 +710,9 @@ fn build_preflight_failure(
         .iter()
         .map(|(_, drv_path)| FailedGoal {
             drv_key: drv_path.to_absolute_path_with_prefix(&config.store_dir),
+            origin_drv_key: drv_path.to_absolute_path_with_prefix(&config.store_dir),
             error: error.clone(),
+            build_log: None,
         })
         .collect();
     Ok(PipelineResult {
@@ -625,14 +747,19 @@ fn convert_root_drv_paths(
 
 fn normalize_failed_goal_keys(failed: &mut [FailedGoal], store_dir: &str) {
     for failed_goal in failed {
-        if parse_drv_key(store_dir, &failed_goal.drv_key).is_some() {
-            continue;
-        }
-        let Ok(drv_path) = StorePath::from_absolute_path(failed_goal.drv_key.as_bytes()) else {
-            continue;
-        };
-        failed_goal.drv_key = drv_key_for(store_dir, &drv_path);
+        failed_goal.drv_key = normalized_failed_drv_key(&failed_goal.drv_key, store_dir);
+        failed_goal.origin_drv_key = normalized_failed_drv_key(&failed_goal.origin_drv_key, store_dir);
     }
+}
+
+fn normalized_failed_drv_key(drv_key: &str, store_dir: &str) -> String {
+    if parse_drv_key(store_dir, drv_key).is_some() {
+        return drv_key.to_string();
+    }
+    let Ok(drv_path) = StorePath::from_absolute_path(drv_key.as_bytes()) else {
+        return drv_key.to_string();
+    };
+    drv_key_for(store_dir, &drv_path)
 }
 
 fn collect_fod_mismatches(failed: &[FailedGoal]) -> Vec<FodMismatch> {
@@ -754,12 +881,15 @@ mod tests {
         let drv_path: StorePath<String> = StorePath::from_name_and_digest_fixed("hello.drv", [9u8; 20]).unwrap();
         let mut failed = vec![FailedGoal {
             drv_key: drv_path.to_absolute_path(),
+            origin_drv_key: drv_path.to_absolute_path(),
             error: "boom".to_string(),
+            build_log: None,
         }];
 
         normalize_failed_goal_keys(&mut failed, "/crunch/store");
 
         assert_eq!(failed[0].drv_key, drv_path.to_absolute_path_with_prefix("/crunch/store"));
+        assert_eq!(failed[0].origin_drv_key, failed[0].drv_key);
     }
 
     #[test]

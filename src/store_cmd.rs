@@ -1,4 +1,7 @@
 // machine-artifact-public: store.command-reports
+use std::collections::BTreeSet;
+use std::fs;
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -7,6 +10,9 @@ use serde::Serialize;
 const PATHINFO_SCAN_COUNT_MAX: u32 = 1_000_000;
 const PATHINFO_SCAN_COUNT_MAX_USIZE: usize = 1_000_000;
 const PATHINFO_INITIAL_CAPACITY: usize = 256;
+const MAX_FOREIGN_RECEIPT_ROOT_PATHS: usize = 64;
+const MAX_FOREIGN_REALIZATION_RECEIPT_BYTES: u64 = 16_777_216;
+const FOREIGN_REALIZATION_RECEIPT_READ_LIMIT: u64 = MAX_FOREIGN_REALIZATION_RECEIPT_BYTES + 1;
 
 use crate::build_cmd::load_configured_trusted_public_keys;
 use crate::build_cmd::load_or_generate_signing_keypair;
@@ -129,6 +135,7 @@ async fn cmd_store_mutation_or_transfer(
             closure,
             trust_unsigned,
             trusted_public_keys,
+            foreign_realization_receipt,
             paths,
         } => {
             cmd_store_pull_action(context, StorePullAction {
@@ -137,6 +144,7 @@ async fn cmd_store_mutation_or_transfer(
                 is_closure: closure,
                 is_trust_unsigned: trust_unsigned,
                 trusted_public_keys,
+                foreign_realization_receipt,
                 paths,
             })
             .await
@@ -180,6 +188,7 @@ struct StorePullAction {
     is_closure: bool,
     is_trust_unsigned: bool,
     trusted_public_keys: Vec<String>,
+    foreign_realization_receipt: Option<PathBuf>,
     paths: Vec<String>,
 }
 
@@ -208,6 +217,11 @@ async fn cmd_store_push_action(context: StoreCommandContext<'_>, action: StorePu
 }
 
 async fn cmd_store_pull_action(context: StoreCommandContext<'_>, action: StorePullAction) -> Result<(), RunError> {
+    let paths = resolve_foreign_receipt_pull_paths(
+        &action.paths,
+        action.foreign_realization_receipt.as_deref(),
+        context.store_dir,
+    )?;
     let _guard = store_mutation_guard(context.state_dir)?;
     let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
     cmd_store_pull(&store, StorePullRequest {
@@ -216,10 +230,113 @@ async fn cmd_store_pull_action(context: StoreCommandContext<'_>, action: StorePu
         is_closure: action.is_closure,
         is_trust_unsigned: action.is_trust_unsigned,
         explicit_trusted_public_keys: &action.trusted_public_keys,
-        paths: &action.paths,
+        paths: &paths,
         state_dir: context.state_dir,
     })
     .await
+}
+
+fn resolve_foreign_receipt_pull_paths(
+    explicit_paths: &[String],
+    receipt_path: Option<&Path>,
+    store_dir: &str,
+) -> Result<Vec<String>, RunError> {
+    let Some(receipt_path) = receipt_path else {
+        return Ok(explicit_paths.to_vec());
+    };
+    if !explicit_paths.is_empty() {
+        return Err(RunError::Internal(
+            "foreign realization receipt cannot be combined with explicit store paths".to_string(),
+        ));
+    }
+    let receipt_bytes = read_bounded_foreign_realization_receipt(receipt_path)?;
+    let receipt: crate::foreign_realization_receipt::ForeignRealizationReceipt = serde_json::from_slice(&receipt_bytes)
+        .map_err(|error| {
+            RunError::Internal(format!("parsing foreign realization receipt {}: {error}", receipt_path.display()))
+        })?;
+    let paths = validate_foreign_receipt_pull_paths(&receipt)?;
+    for path in &paths {
+        nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(path.as_bytes(), store_dir)
+            .map_err(|error| {
+                RunError::Internal(format!(
+                    "foreign realization receipt selected root is outside {store_dir}: {path}: {error}"
+                ))
+            })?;
+    }
+    Ok(paths)
+}
+
+fn read_bounded_foreign_realization_receipt(receipt_path: &Path) -> Result<Vec<u8>, RunError> {
+    let file = fs::File::open(receipt_path).map_err(|error| {
+        RunError::Internal(format!("opening foreign realization receipt {}: {error}", receipt_path.display()))
+    })?;
+    let mut receipt_bytes = Vec::new();
+    file.take(FOREIGN_REALIZATION_RECEIPT_READ_LIMIT).read_to_end(&mut receipt_bytes).map_err(|error| {
+        RunError::Internal(format!("reading foreign realization receipt {}: {error}", receipt_path.display()))
+    })?;
+    if u64::try_from(receipt_bytes.len()).unwrap_or(u64::MAX) > MAX_FOREIGN_REALIZATION_RECEIPT_BYTES {
+        return Err(RunError::Internal(format!(
+            "foreign realization receipt exceeds {MAX_FOREIGN_REALIZATION_RECEIPT_BYTES} bytes"
+        )));
+    }
+    Ok(receipt_bytes)
+}
+
+fn validate_foreign_receipt_pull_paths(
+    receipt: &crate::foreign_realization_receipt::ForeignRealizationReceipt,
+) -> Result<Vec<String>, RunError> {
+    use crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS;
+    use crate::foreign_realization_receipt::FOREIGN_REALIZATION_REALIZED_STATE;
+    use crate::foreign_realization_receipt::FOREIGN_REALIZATION_RECEIPT_SCHEMA;
+    use crate::foreign_realization_receipt::foreign_realization_receipt_digest;
+
+    if receipt.schema != FOREIGN_REALIZATION_RECEIPT_SCHEMA {
+        return Err(RunError::Internal(format!("unsupported foreign realization receipt schema: {}", receipt.schema)));
+    }
+    if receipt.status != FOREIGN_REALIZATION_COMPLETE_STATUS
+        || receipt.strongest_state != FOREIGN_REALIZATION_REALIZED_STATE
+        || receipt.failure.is_some()
+    {
+        return Err(RunError::Internal("foreign realization receipt is not complete".to_string()));
+    }
+    let expected_digest = foreign_realization_receipt_digest(receipt)
+        .map_err(|error| RunError::Internal(format!("hashing foreign realization receipt: {error}")))?;
+    if receipt.receipt_blake3 != expected_digest {
+        return Err(RunError::Internal("foreign realization receipt digest mismatch".to_string()));
+    }
+    if !foreign_receipt_selected_paths_are_bound(receipt) {
+        return Err(RunError::Internal(
+            "foreign realization receipt selected roots are not bound to unit outputs".to_string(),
+        ));
+    }
+    if receipt.selected_root_paths.is_empty() || receipt.selected_root_paths.len() > MAX_FOREIGN_RECEIPT_ROOT_PATHS {
+        return Err(RunError::Internal(format!(
+            "foreign realization receipt root count must be between 1 and {MAX_FOREIGN_RECEIPT_ROOT_PATHS}"
+        )));
+    }
+    if receipt.selected_root_paths.len() != 1 {
+        return Err(RunError::Internal(
+            "store pull --closure requires exactly one selected foreign realization root".to_string(),
+        ));
+    }
+    Ok(receipt.selected_root_paths.clone())
+}
+
+fn foreign_receipt_selected_paths_are_bound(
+    receipt: &crate::foreign_realization_receipt::ForeignRealizationReceipt,
+) -> bool {
+    let selected_root_ids = receipt.selected_root_node_ids.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    if selected_root_ids.is_empty() || selected_root_ids.len() != receipt.selected_root_node_ids.len() {
+        return false;
+    }
+    let bound_paths = receipt
+        .units
+        .iter()
+        .filter(|unit| selected_root_ids.contains(unit.node_id.as_str()) && unit.failure.is_none())
+        .flat_map(|unit| unit.outputs.iter().map(|output| output.target_path.as_str()))
+        .collect::<BTreeSet<_>>();
+    !bound_paths.is_empty()
+        && receipt.selected_root_paths.iter().all(|selected_path| bound_paths.contains(selected_path.as_str()))
 }
 
 async fn open_pathinfo_service(

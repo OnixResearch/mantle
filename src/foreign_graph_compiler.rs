@@ -7,6 +7,8 @@ use std::collections::BTreeSet;
 use bstr::BString;
 use crunch_build::EXECUTION_PROFILE_BINDING_ENV;
 use crunch_build::ExecutionProfile;
+use crunch_build::FETCH_BUILDER;
+use crunch_build::FOREIGN_FETCH_CANDIDATES_ENV;
 use crunch_build::bind_execution_profile;
 use crunch_build::execution_profile_digest;
 use crunch_build::foreign_profile_for_producer;
@@ -35,7 +37,6 @@ const FOREIGN_INPUT_ADDRESSING_MODE: &str = "input-addressed";
 const FIXED_OUTPUT_FETCH_BUILTIN: &str = "fixed-output-fetch";
 const FOREIGN_DOWNLOAD_BUILTIN: &str = "builtin:download";
 const FOREIGN_GIT_DOWNLOAD_BUILTIN: &str = "builtin:git-download";
-const MANTLE_FETCH_BUILDER: &str = "builtin:fetchurl";
 const MANTLE_BUILTIN_SYSTEM: &str = "builtin";
 const NIX_DERIVATION_BUILTIN: &str = "nix.derivation";
 const OUTPUT_ENV_SEPARATOR: &str = " ";
@@ -565,7 +566,7 @@ fn lower_foreign_builtin(
     match node.builtin.as_str() {
         NIX_DERIVATION_BUILTIN => Ok(native_builtin_lowering(node, CompiledForeignBuiltin::NativeDerivation)),
         FIXED_OUTPUT_FETCH_BUILTIN => Ok(BuiltinLowering {
-            builder: MANTLE_FETCH_BUILDER.to_string(),
+            builder: FETCH_BUILDER.to_string(),
             system: MANTLE_BUILTIN_SYSTEM.to_string(),
             arguments: Vec::new(),
             environment: BTreeMap::new(),
@@ -610,7 +611,7 @@ fn lower_download_builtin(
     let mut environment = BTreeMap::from([
         ("url".to_string(), candidates[0].clone()),
         ("mode".to_string(), mode.clone()),
-        ("__mantle_foreign_candidates".to_string(), serialize_candidates(&candidates, &node.node_id)?),
+        (FOREIGN_FETCH_CANDIDATES_ENV.to_string(), serialize_candidates(&candidates, &node.node_id)?),
     ]);
     if fixed_output.recursive {
         environment.insert("unpack".to_string(), "1".to_string());
@@ -619,7 +620,7 @@ fn lower_download_builtin(
         environment.insert("executable".to_string(), "1".to_string());
     }
     Ok(BuiltinLowering {
-        builder: MANTLE_FETCH_BUILDER.to_string(),
+        builder: FETCH_BUILDER.to_string(),
         system: MANTLE_BUILTIN_SYSTEM.to_string(),
         arguments: Vec::new(),
         environment,
@@ -661,10 +662,10 @@ fn lower_git_download_builtin(
         ("url".to_string(), candidates[0].clone()),
         ("rev".to_string(), revision.clone()),
         ("exportPolicy".to_string(), export_policy.clone()),
-        ("__mantle_foreign_candidates".to_string(), serialize_candidates(&candidates, &node.node_id)?),
+        (FOREIGN_FETCH_CANDIDATES_ENV.to_string(), serialize_candidates(&candidates, &node.node_id)?),
     ]);
     Ok(BuiltinLowering {
-        builder: MANTLE_FETCH_BUILDER.to_string(),
+        builder: FETCH_BUILDER.to_string(),
         system: MANTLE_BUILTIN_SYSTEM.to_string(),
         arguments: Vec::new(),
         environment,
@@ -1446,7 +1447,7 @@ mod tests {
             }
             other => panic!("unexpected lowered builtin: {other:?}"),
         }
-        assert_eq!(leaf_unit.derivation.builder, MANTLE_FETCH_BUILDER);
+        assert_eq!(leaf_unit.derivation.builder, FETCH_BUILDER);
         assert_eq!(leaf_unit.derivation.system, MANTLE_BUILTIN_SYSTEM);
         assert!(matches!(
             crunch_build::fetcher::parse_fetch(&leaf_unit.derivation).expect("native fetch facts must parse"),

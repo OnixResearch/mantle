@@ -141,14 +141,19 @@ pub struct EvalMessage {
 const MAX_IN_FLIGHT: u32 = 64;
 const BLAKE3_HEX_CHARS_PER_BYTE: usize = 2;
 const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN.saturating_mul(BLAKE3_HEX_CHARS_PER_BYTE);
+const MAX_FAILED_BUILD_LOG_BYTES: usize = 1_048_576;
 
 /// A root goal that failed, with error context.
 #[derive(Debug, Clone)]
 pub struct FailedGoal {
     /// Absolute drv-path key.
     pub drv_key: String,
+    /// Derivation that caused this root failure.
+    pub origin_drv_key: String,
     /// Human-readable error message.
     pub error: String,
+    /// Bounded build-service log retained when output admission fails after execution.
+    pub build_log: Option<String>,
 }
 
 /// Result of running the Worker: outcomes for root goals.
@@ -156,6 +161,8 @@ pub struct FailedGoal {
 pub struct WorkerResult {
     /// Build outcomes for root derivations that succeeded.
     pub outcomes: Vec<BuildOutcome>,
+    /// Build outcomes for every completed goal, including dependencies.
+    pub all_outcomes: Vec<BuildOutcome>,
     /// Root goals that failed (build error or dep failure).
     pub failed: Vec<FailedGoal>,
     /// Native dynamic-plan accepted/rejected rows discovered during the run.
@@ -303,8 +310,13 @@ fn native_plan_reports_from_scan(scan: &NativeDynamicPlanScan) -> Vec<NativeDyna
     native_plan_rows
 }
 
+fn bounded_failed_build_log(log: Option<&str>) -> Option<String> {
+    log.filter(|value| value.len() <= MAX_FAILED_BUILD_LOG_BYTES).map(str::to_string)
+}
+
 fn finish_worker_result(
     outcomes: Vec<BuildOutcome>,
+    all_outcomes: Vec<BuildOutcome>,
     failed: Vec<FailedGoal>,
     mut native_dynamic_plans: Vec<NativeDynamicPlanReport>,
     priority_decisions: Vec<PriorityDecisionEvidence>,
@@ -318,6 +330,7 @@ fn finish_worker_result(
     );
     WorkerResult {
         outcomes,
+        all_outcomes,
         failed,
         native_dynamic_plans,
         priority_decisions,
@@ -752,6 +765,7 @@ struct WorkerLoopState<'a> {
     join_set: JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
     pending_meta: HashMap<String, PreparedBuild>,
     outcomes: &'a mut Vec<BuildOutcome>,
+    all_outcomes: &'a mut Vec<BuildOutcome>,
     failed: &'a mut Vec<FailedGoal>,
     native_dynamic_plans: &'a mut Vec<NativeDynamicPlanReport>,
     completed_count: u32,
@@ -1120,6 +1134,7 @@ impl Worker {
         debug_assert!(total_goals <= MAX_GOALS, "goal count exceeds limit");
 
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
+        let mut all_outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<FailedGoal> = Vec::new();
         let mut native_dynamic_plans: Vec<NativeDynamicPlanReport> = Vec::new();
         let mut state = WorkerLoopState {
@@ -1129,6 +1144,7 @@ impl Worker {
             join_set: JoinSet::new(),
             pending_meta: HashMap::new(),
             outcomes: &mut outcomes,
+            all_outcomes: &mut all_outcomes,
             failed: &mut failed,
             native_dynamic_plans: &mut native_dynamic_plans,
             completed_count: 0,
@@ -1146,7 +1162,13 @@ impl Worker {
                     "worker finished"
                 );
                 let priority_decisions = std::mem::take(&mut self.priority_decisions);
-                return Ok(finish_worker_result(outcomes, failed, native_dynamic_plans, priority_decisions));
+                return Ok(finish_worker_result(
+                    outcomes,
+                    all_outcomes,
+                    failed,
+                    native_dynamic_plans,
+                    priority_decisions,
+                ));
             }
 
             if state.join_set.is_empty() {
@@ -1185,6 +1207,7 @@ impl Worker {
         BServ: BuildService + 'static,
     {
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
+        let mut all_outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<FailedGoal> = Vec::new();
         let mut native_dynamic_plans: Vec<NativeDynamicPlanReport> = Vec::new();
         let mut state = WorkerLoopState {
@@ -1194,6 +1217,7 @@ impl Worker {
             join_set: JoinSet::new(),
             pending_meta: HashMap::new(),
             outcomes: &mut outcomes,
+            all_outcomes: &mut all_outcomes,
             failed: &mut failed,
             native_dynamic_plans: &mut native_dynamic_plans,
             completed_count: 0,
@@ -1219,7 +1243,13 @@ impl Worker {
                     "worker streaming finished"
                 );
                 let priority_decisions = std::mem::take(&mut self.priority_decisions);
-                return Ok(finish_worker_result(outcomes, failed, native_dynamic_plans, priority_decisions));
+                return Ok(finish_worker_result(
+                    outcomes,
+                    all_outcomes,
+                    failed,
+                    native_dynamic_plans,
+                    priority_decisions,
+                ));
             }
 
             self.wait_for_event(&mut is_eval_done, rx, builder, known_paths, &mut state).await?;
@@ -1342,7 +1372,7 @@ impl Worker {
                 let err_msg = format!("{build_err}");
                 tracing::warn!(drv = %drv_key, err = %err_msg, "sandbox build failed");
                 state.pending_meta.remove(&drv_key);
-                self.fail_goal(&drv_key, &err_msg, state.failed)?;
+                self.fail_goal(&drv_key, &err_msg, None, state.failed)?;
                 Ok(())
             }
             Err(join_err) => {
@@ -1371,12 +1401,13 @@ impl Worker {
             .remove(drv_key)
             .ok_or_else(|| Error::Store(format!("BUG: completed build has no pending metadata: {drv_key}")))?;
 
+        let build_log = bounded_failed_build_log(build_result.log.as_deref());
         let outcome = match builder.finish_build(&prepared, build_result, known_paths).await {
             Ok(outcome) => outcome,
             Err(e) => {
                 let err_msg = format!("{e}");
                 tracing::warn!(drv = drv_key, err = %err_msg, "build failed, marking goal as failed");
-                self.fail_goal(drv_key, &err_msg, state.failed)?;
+                self.fail_goal(drv_key, &err_msg, build_log.as_deref(), state.failed)?;
                 return Ok(());
             }
         };
@@ -1406,7 +1437,7 @@ impl Worker {
         self.detect_dynamic_derivations(drv_key, &outcome, builder, known_paths, &declared_native_outputs)
             .await?;
 
-        self.complete_goal(drv_key, outcome, state.outcomes, state.failed)
+        self.complete_goal(drv_key, outcome, state.outcomes, state.all_outcomes, state.failed)
     }
 
     fn declared_native_dynamic_outputs(
@@ -1763,7 +1794,7 @@ impl Worker {
             Err(err) => {
                 let err_msg = format!("{err}");
                 tracing::warn!(drv = %drv_key, err = %err_msg, "prepare_build failed");
-                self.fail_goal(drv_key, &err_msg, state.failed)?;
+                self.fail_goal(drv_key, &err_msg, None, state.failed)?;
                 Ok(false)
             }
             Ok(PrepareResult::NeedsBuild {
@@ -1817,6 +1848,7 @@ impl Worker {
         drv_key: &str,
         outcome: BuildOutcome,
         outcomes: &mut Vec<BuildOutcome>,
+        all_outcomes: &mut Vec<BuildOutcome>,
         _failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error> {
         let goal = self
@@ -1843,6 +1875,7 @@ impl Worker {
         let is_root = goal.is_root;
         let waiters = std::mem::take(&mut goal.waiters);
 
+        all_outcomes.push(outcome.clone());
         if is_root {
             outcomes.push(outcome);
         }
@@ -1868,9 +1901,15 @@ impl Worker {
 
     /// Mark a goal as failed and propagate failure to all waiters.
     ///
-    /// The error message is stored in the  for root goals
+    /// The error message is stored in `FailedGoal` for root goals.
     /// so callers can report per-package errors.
-    fn fail_goal(&mut self, drv_key: &str, error_msg: &str, failed: &mut Vec<FailedGoal>) -> Result<(), Error> {
+    fn fail_goal(
+        &mut self,
+        drv_key: &str,
+        error_msg: &str,
+        build_log: Option<&str>,
+        failed: &mut Vec<FailedGoal>,
+    ) -> Result<(), Error> {
         let goal = self
             .registry
             .get_mut(drv_key)
@@ -1885,7 +1924,9 @@ impl Worker {
         if is_root {
             failed.push(FailedGoal {
                 drv_key: drv_key.to_string(),
+                origin_drv_key: drv_key.to_string(),
                 error: error_msg.to_string(),
+                build_log: build_log.map(str::to_string),
             });
         }
 
@@ -1898,7 +1939,7 @@ impl Worker {
 
         // Propagate failure to waiters.
         for waiter_key in &waiters {
-            self.propagate_failure(waiter_key, &drv_name, failed)?;
+            self.propagate_failure(waiter_key, drv_key, &drv_name, build_log, failed)?;
         }
 
         Ok(())
@@ -1908,7 +1949,9 @@ impl Worker {
     fn propagate_failure(
         &mut self,
         drv_key: &str,
+        origin_drv_key: &str,
         failed_dep_name: &str,
+        build_log: Option<&str>,
         failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error> {
         let goal = self
@@ -1930,12 +1973,14 @@ impl Worker {
         if is_root {
             failed.push(FailedGoal {
                 drv_key: drv_key.to_string(),
+                origin_drv_key: origin_drv_key.to_string(),
                 error: format!("dependency {failed_dep_name} failed"),
+                build_log: build_log.map(str::to_string),
             });
         }
 
         for waiter_key in &waiters {
-            self.propagate_failure(waiter_key, &drv_name, failed)?;
+            self.propagate_failure(waiter_key, origin_drv_key, &drv_name, build_log, failed)?;
         }
 
         Ok(())
@@ -1957,6 +2002,16 @@ mod tests {
 
     use super::*;
     use crate::goal::GoalState;
+
+    #[test]
+    fn failed_build_log_retention_is_bounded() {
+        let retained = bounded_failed_build_log(Some("bounded"));
+        let oversized = "x".repeat(MAX_FAILED_BUILD_LOG_BYTES.saturating_add(1));
+
+        assert_eq!(retained.as_deref(), Some("bounded"));
+        assert!(bounded_failed_build_log(Some(&oversized)).is_none());
+        assert!(bounded_failed_build_log(None).is_none());
+    }
 
     fn make_drv() -> Derivation {
         let mut outputs = BTreeMap::new();
@@ -2220,8 +2275,9 @@ mod tests {
             log: None,
         };
         let mut outcomes = Vec::new();
+        let mut all_outcomes = Vec::new();
         let mut failed = Vec::new();
-        w.complete_goal(&leaf_key, outcome, &mut outcomes, &mut failed).unwrap();
+        w.complete_goal(&leaf_key, outcome, &mut outcomes, &mut all_outcomes, &mut failed).unwrap();
 
         // Leaf should be Done.
         assert_eq!(w.registry.get(&leaf_key).unwrap().state, GoalState::Done);
@@ -2230,8 +2286,9 @@ mod tests {
         assert_eq!(w.registry.get(&top_key).unwrap().state, GoalState::Ready);
         // Top should be in the ready set.
         assert!(w.ready_goals.contains_key(&top_key));
-        // Leaf is not a root, so outcomes should be empty.
+        // Leaf is not a root, so root outcomes stay empty.
         assert!(outcomes.is_empty());
+        assert_eq!(all_outcomes.len(), 1);
     }
 
     #[test]
@@ -2252,10 +2309,13 @@ mod tests {
             log: None,
         };
         let mut outcomes = Vec::new();
+        let mut all_outcomes = Vec::new();
         let mut failed = Vec::new();
-        w.complete_goal(&key, outcome, &mut outcomes, &mut failed).unwrap();
+        w.complete_goal(&key, outcome, &mut outcomes, &mut all_outcomes, &mut failed).unwrap();
 
         assert_eq!(outcomes.len(), 1);
+        assert_eq!(all_outcomes.len(), 1);
+        assert_eq!(all_outcomes[0].drv_path, outcomes[0].drv_path);
         assert!(outcomes[0].cached);
     }
 
@@ -2306,9 +2366,11 @@ mod tests {
             log: None,
         };
         let mut outcomes = Vec::new();
+        let mut all_outcomes = Vec::new();
         let mut failed = Vec::new();
-        w.complete_goal(&shared_key, outcome, &mut outcomes, &mut failed).unwrap();
+        w.complete_goal(&shared_key, outcome, &mut outcomes, &mut all_outcomes, &mut failed).unwrap();
 
+        assert_eq!(all_outcomes.len(), 1);
         // Both left and right should now be Ready.
         let left_key = left_sp.to_absolute_path();
         let right_key = right_sp.to_absolute_path();
@@ -2323,6 +2385,7 @@ mod tests {
 
     #[test]
     fn fail_goal_propagates_to_waiters() {
+        const BUILD_LOG: &str = "bounded-build-log";
         let mut kp = DerivationRegistry::default();
 
         let leaf_drv = make_drv();
@@ -2344,7 +2407,7 @@ mod tests {
 
         // Fail the leaf.
         let mut failed = Vec::new();
-        w.fail_goal(&leaf_key, "leaf build error", &mut failed).unwrap();
+        w.fail_goal(&leaf_key, "leaf build error", Some(BUILD_LOG), &mut failed).unwrap();
 
         // Leaf should be Failed.
         assert_eq!(w.registry.get(&leaf_key).unwrap().state, GoalState::Failed);
@@ -2357,7 +2420,9 @@ mod tests {
         let top_key = top_sp.to_absolute_path();
         assert_eq!(w.registry.get(&top_key).unwrap().state, GoalState::Failed);
         // Top is a root, so it should be in the failed list.
-        assert!(failed.iter().any(|f| f.drv_key == top_key));
+        let root_failure = failed.iter().find(|failure| failure.drv_key == top_key).unwrap();
+        assert_eq!(root_failure.origin_drv_key, leaf_key);
+        assert_eq!(root_failure.build_log.as_deref(), Some(BUILD_LOG));
     }
 
     #[test]
@@ -2384,7 +2449,7 @@ mod tests {
 
         // Fail bad. It has no waiters, so good (waiting on shared) should be unaffected.
         let mut failed = Vec::new();
-        w.fail_goal(&bad_key, "bad build error", &mut failed).unwrap();
+        w.fail_goal(&bad_key, "bad build error", None, &mut failed).unwrap();
 
         assert_eq!(w.registry.get(&bad_key).unwrap().state, GoalState::Failed);
         // good is still Waiting on shared, not failed.
@@ -2675,6 +2740,7 @@ mod tests {
             worker.want(root, &known_paths, true).unwrap();
         }
         let mut outcomes = Vec::new();
+        let mut all_outcomes = Vec::new();
         let mut failed = Vec::new();
         let mut native_dynamic_plans = Vec::new();
         let mut state = WorkerLoopState {
@@ -2682,6 +2748,7 @@ mod tests {
             join_set: JoinSet::new(),
             pending_meta: HashMap::new(),
             outcomes: &mut outcomes,
+            all_outcomes: &mut all_outcomes,
             failed: &mut failed,
             native_dynamic_plans: &mut native_dynamic_plans,
             completed_count: 0,
@@ -2709,6 +2776,7 @@ mod tests {
         worker.want(&root, &known_paths, true).unwrap();
         let ready_before = worker.ready_goals.clone();
         let mut outcomes = Vec::new();
+        let mut all_outcomes = Vec::new();
         let mut failed = Vec::new();
         let mut native_dynamic_plans = Vec::new();
         let mut state = WorkerLoopState {
@@ -2716,6 +2784,7 @@ mod tests {
             join_set: JoinSet::new(),
             pending_meta: HashMap::new(),
             outcomes: &mut outcomes,
+            all_outcomes: &mut all_outcomes,
             failed: &mut failed,
             native_dynamic_plans: &mut native_dynamic_plans,
             completed_count: 0,
@@ -3560,6 +3629,7 @@ mod tests {
     #[test]
     fn native_dynamic_plan_reports_are_deterministically_sorted() {
         let result = finish_worker_result(
+            Vec::new(),
             Vec::new(),
             Vec::new(),
             vec![

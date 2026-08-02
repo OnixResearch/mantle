@@ -34,6 +34,12 @@ source requirements, profiles, diagnostics, and non-claims. Its BLAKE3 identity
 covers those fields. This classification does not prove source availability,
 scheduler execution, store admission, realization, or output trust.
 
+The same family includes `mantle-foreign-realization-receipt-v1`. This receipt
+binds the plan, import receipt, source bundle, profiles, build report, PathInfo
+facts, dispositions, failures, strongest state, fetch attempts, and non-claims.
+Contract conformance does not prove package correctness, evaluator parity,
+provenance, reproducibility, or release eligibility.
+
 OCI registry push/pull receipts are contracted separately from local OCI
 export/import reports. The push receipt binds the image and subject-metadata
 manifest SHA-256 values needed for immutable pull. The pull receipt binds both

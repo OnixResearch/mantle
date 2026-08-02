@@ -509,27 +509,37 @@ where BServ: BuildService + 'static
         known_paths: &mut DerivationRegistry,
         max_jobs: u32,
     ) -> Result<Vec<BuildOutcome>, Error> {
-        use crate::worker::Worker;
-
-        if roots.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        debug_assert!(max_jobs >= 1, "max_jobs must be at least 1");
-
-        let mut worker = Worker::with_scheduling_policy(max_jobs, crate::scheduling::SchedulingPolicy::default())?;
-
-        for root in roots {
-            worker.want(root, known_paths, true)?;
-        }
-
-        let result = worker.run(self, known_paths).await?;
-
+        let result = self.build_all_report(roots, known_paths, max_jobs).await?;
         if !result.failed.is_empty() {
             return Err(Error::Store(format!("{} root build(s) failed", result.failed.len(),)));
         }
-
         Ok(result.outcomes)
+    }
+
+    /// Build roots through the ordinary worker while preserving partial root results.
+    pub async fn build_all_report(
+        &mut self,
+        roots: &[StorePath<String>],
+        known_paths: &mut DerivationRegistry,
+        max_jobs: u32,
+    ) -> Result<crate::WorkerResult, Error> {
+        use crate::worker::Worker;
+
+        if roots.is_empty() {
+            return Ok(crate::WorkerResult {
+                outcomes: Vec::new(),
+                all_outcomes: Vec::new(),
+                failed: Vec::new(),
+                native_dynamic_plans: Vec::new(),
+                priority_decisions: Vec::new(),
+            });
+        }
+        debug_assert!(max_jobs >= 1, "max_jobs must be at least 1");
+        let mut worker = Worker::with_scheduling_policy(max_jobs, crate::scheduling::SchedulingPolicy::default())?;
+        for root in roots {
+            worker.want(root, known_paths, true)?;
+        }
+        worker.run(self, known_paths).await
     }
 
     /// Prepare a single derivation for building. Handles cache hits and
@@ -942,12 +952,20 @@ where BServ: BuildService + 'static
         }
     }
 
-    fn ensure_declared_source_exists(&self, source_path: &StorePath<String>) -> Result<(), Error> {
+    async fn ensure_declared_source_exists(&mut self, source_path: &StorePath<String>) -> Result<(), Error> {
         assert!(!source_path.name().is_empty(), "source path name must not be empty");
         assert!(source_path.to_string().contains('-'), "source path text must include a digest/name separator");
 
         let host_path = self.preferred_source_host_path(source_path);
         if host_path.exists() {
+            return Ok(());
+        }
+        let stored = self
+            .store
+            .cached_node_for_path(source_path)
+            .await
+            .map_err(|error| Error::Store(format!("checking declared source PathInfo: {error}")))?;
+        if stored.is_some() {
             return Ok(());
         }
         Err(Error::SourceNotFound {
@@ -1040,7 +1058,7 @@ where BServ: BuildService + 'static
                 debug!(path = %source_path, "skipping closure resolution (crunch-built)");
                 continue;
             }
-            self.ensure_declared_source_exists(source_path)?;
+            self.ensure_declared_source_exists(source_path).await?;
             let closure_paths = self.resolve_source_closure_paths(source_path).await?;
             push_unique_store_paths(&mut all_source_paths, &mut seen_source_paths, closure_paths);
         }
@@ -3281,8 +3299,8 @@ mod tests {
 
     // ── Custom output_dir tests ───────────────────────────────────
 
-    #[test]
-    fn custom_logical_store_prefix_controls_source_lookup_and_diagnostics() {
+    #[tokio::test]
+    async fn custom_logical_store_prefix_controls_source_lookup_and_diagnostics() {
         const CUSTOM_SOURCE_DIGEST_BYTE: u8 = 43;
         const MISSING_SOURCE_DIGEST_BYTE: u8 = 44;
 
@@ -3291,7 +3309,7 @@ mod tests {
         let logical_store_dir = logical_store.path().to_str().unwrap();
         let bs = MemoryBlobService::default();
         let (mock, _calls) = MockBuildService::new(bs.clone());
-        let builder = Builder::new(
+        let mut builder = Builder::new(
             bs,
             tmp_ds(),
             mock,
@@ -3309,7 +3327,7 @@ mod tests {
 
         assert_eq!(builder.preferred_source_host_path(&source_path), logical_source);
         assert_eq!(builder.resolve_host_path(&source_path, true), logical_source);
-        assert!(builder.ensure_declared_source_exists(&source_path).is_ok());
+        assert!(builder.ensure_declared_source_exists(&source_path).await.is_ok());
 
         let physical_source =
             PathBuf::from(source_path.to_absolute_path_with_prefix(physical_store.path().to_str().unwrap()));
@@ -3318,7 +3336,7 @@ mod tests {
         assert_eq!(builder.resolve_host_path(&source_path, true), physical_source);
 
         let missing_path = make_source_path("missing-custom-prefix-source", MISSING_SOURCE_DIGEST_BYTE);
-        let error = builder.ensure_declared_source_exists(&missing_path).unwrap_err().to_string();
+        let error = builder.ensure_declared_source_exists(&missing_path).await.unwrap_err().to_string();
         assert!(
             error.contains(logical_store_dir),
             "missing-source diagnostic must preserve the configured prefix: {error}"
@@ -3357,7 +3375,10 @@ mod tests {
         let logical_source = PathBuf::from(closure_source.to_absolute_path_with_prefix(logical_store_dir));
         std::fs::write(&logical_source, b"transitive logical source").unwrap();
 
-        let inputs = builder.collect_sandbox_inputs(&derivation, &registry, &[closure_source.clone()]).await.unwrap();
+        let inputs = builder
+            .collect_sandbox_inputs(&derivation, &registry, std::slice::from_ref(&closure_source))
+            .await
+            .unwrap();
         assert!(inputs.contains_key(&closure_source), "transitive source must become a sandbox input");
         assert!(builder.store.output_nodes.contains_key(&closure_source), "transitive source must be ingested");
 

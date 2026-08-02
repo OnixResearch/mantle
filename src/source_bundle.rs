@@ -110,6 +110,12 @@ const RECORD_METADATA_SOURCE_KIND_KEY: &str = "source_kind";
 const RECORD_METADATA_STORE_PATH_KEY: &str = "store_path";
 const RECORD_METADATA_URL_KEY: &str = "url";
 const RECORD_METADATA_PROFILE_MODE_KEY: &str = "bootstrap_profile_mode";
+const FOREIGN_PAYLOAD_SHAPE_METADATA_KEY: &str = "mantle.foreign.payload-shape";
+const FOREIGN_PAYLOAD_SHAPE_FLAT_FILE: &str = "flat-file";
+pub(crate) const FOREIGN_SOURCE_PAYLOAD_ID_METADATA: &str = "mantle.foreign.source-payload-id";
+pub(crate) const FOREIGN_SOURCE_DESCRIPTOR_DIGEST_METADATA: &str = "mantle.foreign.descriptor-blake3";
+pub(crate) const FOREIGN_SOURCE_FOREIGN_PATH_METADATA: &str = "mantle.foreign.path";
+pub(crate) const FOREIGN_SOURCE_TARGET_PATH_METADATA: &str = "mantle.foreign.target-path";
 const RECORD_METADATA_PROFILE_CLASS_KEY: &str = "bootstrap_profile_class";
 const RECORD_METADATA_PROVIDER_KIND_KEY: &str = "provider_kind";
 const RECORD_METADATA_PROVIDER_SCHEMA_KEY: &str = "provider_schema_version";
@@ -454,6 +460,12 @@ pub struct SourceSpec {
     pub adapter: Option<SourceAdapterMetadata>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ForeignSourcePathBinding {
+    pub(crate) payload_id: String,
+    pub(crate) path: PathBuf,
+}
+
 struct SourceRecordPathRequest<'a> {
     kind: SourceRecordKind,
     identity: String,
@@ -584,6 +596,83 @@ pub fn parse_source_spec(raw: &str) -> Result<SourceSpec, RunError> {
 pub fn plan_source_bundle(specs: &[SourceSpec], store_prefix: &str) -> Result<SourceBundleManifest, RunError> {
     let records = canonicalize_source_specs(specs, store_prefix)?;
     assemble_source_bundle(records, store_prefix)
+}
+
+pub(crate) fn plan_bound_foreign_source_bundle(
+    requirements: &[crate::foreign_graph_compiler::CompiledSourceRequirement],
+    bindings: &[ForeignSourcePathBinding],
+    store_prefix: &str,
+) -> Result<SourceBundleManifest, RunError> {
+    let requirements_by_payload = requirements
+        .iter()
+        .map(|requirement| (requirement.payload_id.as_str(), requirement))
+        .collect::<BTreeMap<_, _>>();
+    let mut seen = BTreeSet::new();
+    let mut specs = Vec::with_capacity(bindings.len());
+    for binding in bindings {
+        if !requirements_by_payload.contains_key(binding.payload_id.as_str()) {
+            return Err(RunError::Internal(format!(
+                "foreign source binding has no plan requirement: {}",
+                binding.payload_id
+            )));
+        }
+        if !seen.insert(binding.payload_id.clone()) {
+            return Err(RunError::Internal(format!(
+                "foreign source binding repeats payload ID: {}",
+                binding.payload_id
+            )));
+        }
+        specs.push(SourceSpec {
+            kind: SourceRecordKind::LocalPath,
+            identity: binding.payload_id.clone(),
+            path: binding.path.clone(),
+            adapter: None,
+        });
+    }
+    if seen.len() != requirements.len() {
+        return Err(RunError::Internal("foreign source bindings do not cover every plan requirement".to_string()));
+    }
+    let binding_by_payload =
+        bindings.iter().map(|binding| (binding.payload_id.as_str(), binding)).collect::<BTreeMap<_, _>>();
+    let mut manifest = plan_source_bundle(&specs, store_prefix)?;
+    for record in &mut manifest.records {
+        let requirement = requirements_by_payload.get(record.identity.as_str()).copied().ok_or_else(|| {
+            RunError::Internal(format!("planned foreign source record has no requirement: {}", record.identity))
+        })?;
+        let binding = binding_by_payload.get(record.identity.as_str()).copied().ok_or_else(|| {
+            RunError::Internal(format!("foreign source record has no path binding: {}", record.identity))
+        })?;
+        let metadata = fs::symlink_metadata(&binding.path).map_err(|error| {
+            RunError::Internal(format!("reading foreign source binding {}: {error}", binding.path.display()))
+        })?;
+        if metadata.file_type().is_symlink() {
+            return Err(RunError::Internal(format!(
+                "foreign source binding root must not be a symlink: {}",
+                binding.path.display()
+            )));
+        }
+        if metadata.is_file() {
+            record
+                .metadata
+                .insert(FOREIGN_PAYLOAD_SHAPE_METADATA_KEY.to_string(), FOREIGN_PAYLOAD_SHAPE_FLAT_FILE.to_string());
+        }
+        record
+            .metadata
+            .insert(FOREIGN_SOURCE_PAYLOAD_ID_METADATA.to_string(), requirement.payload_id.clone());
+        record
+            .metadata
+            .insert(FOREIGN_SOURCE_DESCRIPTOR_DIGEST_METADATA.to_string(), requirement.descriptor_digest.clone());
+        record
+            .metadata
+            .insert(FOREIGN_SOURCE_FOREIGN_PATH_METADATA.to_string(), requirement.foreign_path.clone());
+        record
+            .metadata
+            .insert(FOREIGN_SOURCE_TARGET_PATH_METADATA.to_string(), requirement.target_path.clone());
+        record.content_blake3 = digest_source_record_content(&record.kind, &record.metadata, &record.files)?;
+    }
+    manifest.manifest_blake3 = digest_manifest_without_digest(&manifest)?;
+    validate_manifest(&manifest)?;
+    Ok(manifest)
 }
 
 #[cfg(test)]
@@ -2253,7 +2342,7 @@ fn hash_source_entries(hasher: &mut blake3::Hasher, files: &[SourceFileEntry]) -
     Ok(())
 }
 
-fn digest_manifest_without_digest(manifest: &SourceBundleManifest) -> Result<String, RunError> {
+pub(crate) fn digest_manifest_without_digest(manifest: &SourceBundleManifest) -> Result<String, RunError> {
     #[derive(Serialize)]
     struct DigestView<'a> {
         format: &'a str,
@@ -2289,7 +2378,7 @@ fn digest_virtual_source_record(
     Ok(blake3::hash(&encoded).to_hex().to_string())
 }
 
-fn digest_source_record_content(
+pub(crate) fn digest_source_record_content(
     kind: &SourceRecordKind,
     metadata: &BTreeMap<String, String>,
     files: &[SourceFileEntry],
@@ -2318,7 +2407,7 @@ fn digest_source_record_content(
     Ok(hasher.finalize().to_hex().to_string())
 }
 
-fn validate_manifest(manifest: &SourceBundleManifest) -> Result<(), RunError> {
+pub(crate) fn validate_manifest(manifest: &SourceBundleManifest) -> Result<(), RunError> {
     if manifest.format != SOURCE_BUNDLE_FORMAT {
         return Err(RunError::Internal(format!("unsupported source bundle format {}", manifest.format)));
     }
@@ -2993,7 +3082,7 @@ fn write_pin_atomically(state_dir: &Path, manifest: &SourceBundleManifest) -> Re
     write_json_atomically(&target, manifest, "source pin")
 }
 
-fn write_json_atomically<T: Serialize>(target: &Path, value: &T, label: &str) -> Result<(), RunError> {
+pub(crate) fn write_json_atomically<T: Serialize>(target: &Path, value: &T, label: &str) -> Result<(), RunError> {
     let tmp = target.with_extension(TEMP_FILE_EXTENSION);
     let file = fs::File::create(&tmp)
         .map_err(|error| RunError::Internal(format!("creating {label} temp {}: {error}", tmp.display())))?;
@@ -3797,6 +3886,42 @@ fn imported_record_matches_store_path(record: &SourceRecord, lookup: &StorePathL
         return false;
     }
     record.metadata.get(RECORD_METADATA_STORE_PATH_KEY).map(String::as_str) == Some(lookup.logical_store_path)
+}
+
+pub(crate) fn materialize_source_record_exact_payload(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
+    validate_source_record(record)?;
+    if record.files.is_empty() {
+        return Err(RunError::Internal(format!("source record {} has no materialized payload", record.identity)));
+    }
+    let is_flat_payload = record.metadata.get(FOREIGN_PAYLOAD_SHAPE_METADATA_KEY).map(String::as_str)
+        == Some(FOREIGN_PAYLOAD_SHAPE_FLAT_FILE);
+    if !is_flat_payload {
+        return materialize_source_record_payload(record, target);
+    }
+    if record.files.iter().any(|file| file.file_type == SourceFileType::Symlink) {
+        return Err(RunError::Internal(format!("source record {} has an unsupported root symlink", record.identity)));
+    }
+    if source_record_uses_canonical_chunks(record) {
+        materialize_chunked_regular_file_entries_at_path(&record.files, target)?;
+    } else {
+        assert_eq!(record.files.len(), 1);
+        materialize_regular_file_entry(&record.files[0], target)?;
+    }
+    let mut observed = materialize_source_record_from_path(record, target, false)?;
+    if observed.files.len() == record.files.len() {
+        for (observed_file, expected_file) in observed.files.iter_mut().zip(&record.files) {
+            observed_file.path.clone_from(&expected_file.path);
+        }
+        observed.content_blake3 = digest_source_record_content(&observed.kind, &observed.metadata, &observed.files)?;
+    }
+    if observed.files != record.files || observed.content_blake3 != record.content_blake3 {
+        return Err(RunError::Internal(format!(
+            "materialized source record {} does not preserve declared files and identity",
+            record.identity
+        )));
+    }
+    assert_eq!(observed.payload_bytes, record.payload_bytes);
+    Ok(())
 }
 
 pub(crate) fn materialize_source_record_payload(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
@@ -5062,6 +5187,52 @@ mod tests {
         assert!(manifest.records.len() > REQUIRED_HYDRATION_RECORD_CLASS_COUNT);
         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
         (manifest, checkout)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn foreign_source_bundle_preserves_directory_links_and_modes_and_rejects_mode_tamper() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::os::unix::fs::symlink;
+
+        const PAYLOAD_ID: &str = "foreign-tree";
+        const STORE_PREFIX: &str = "/mantle/store";
+        const FOREIGN_PATH: &str = "/nix/store/00000000000000000000000000000000-foreign-tree";
+        const TARGET_PATH: &str = "/mantle/store/00000000000000000000000000000000-foreign-tree";
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        fs::create_dir_all(source.join("bin")).unwrap();
+        fs::write(source.join("bin/tool"), b"tool").unwrap();
+        fs::set_permissions(source.join("bin/tool"), fs::Permissions::from_mode(UNIX_EXECUTABLE_FILE_MODE)).unwrap();
+        symlink("bin/tool", source.join("tool-link")).unwrap();
+        let requirements = [crate::foreign_graph_compiler::CompiledSourceRequirement {
+            payload_id: PAYLOAD_ID.to_string(),
+            foreign_path: FOREIGN_PATH.to_string(),
+            target_path: TARGET_PATH.to_string(),
+            descriptor_digest: blake3::hash(b"foreign-tree-descriptor").to_hex().to_string(),
+        }];
+        let bindings = [ForeignSourcePathBinding {
+            payload_id: PAYLOAD_ID.to_string(),
+            path: source,
+        }];
+
+        let manifest = plan_bound_foreign_source_bundle(&requirements, &bindings, STORE_PREFIX).unwrap();
+        let record = manifest.records.first().unwrap();
+        assert!(record.files.iter().any(|file| file.path == "bin/tool" && file.executable));
+        assert!(record.files.iter().any(|file| {
+            file.path == "tool-link"
+                && file.file_type == SourceFileType::Symlink
+                && file.symlink_target.as_deref() == Some("bin/tool")
+        }));
+        let materialized = temp.path().join("materialized");
+        materialize_source_record_exact_payload(record, &materialized).unwrap();
+        assert_eq!(fs::read(materialized.join("bin/tool")).unwrap(), b"tool");
+        assert_eq!(fs::read_link(materialized.join("tool-link")).unwrap(), PathBuf::from("bin/tool"));
+
+        let mut tampered = record.clone();
+        tampered.files.iter_mut().find(|file| file.path == "bin/tool").unwrap().executable = false;
+        let error = materialize_source_record_exact_payload(&tampered, &temp.path().join("rejected")).unwrap_err();
+        assert!(error.to_string().contains("content digest mismatch"));
     }
 
     #[test]

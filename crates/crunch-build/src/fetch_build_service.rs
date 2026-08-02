@@ -14,6 +14,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use async_trait::async_trait;
+use serde::Deserialize;
+use serde::Serialize;
 use snix_build::buildservice::BuildOutput;
 use snix_build::buildservice::BuildRequest;
 use snix_build::buildservice::BuildResult;
@@ -29,7 +31,10 @@ use crate::fetcher::{self};
 
 /// The builder string that identifies builtin fetcher derivations.
 pub const FETCH_BUILDER: &str = "builtin:fetchurl";
+pub const FOREIGN_FETCH_CANDIDATES_ENV: &str = "__mantle_foreign_candidates";
+pub const FOREIGN_FETCH_ATTEMPT_LOG_SCHEMA: &str = "mantle-foreign-fetch-attempts-v1";
 
+const MAX_FOREIGN_FETCH_CANDIDATES: usize = 16;
 const MAX_SOURCE_OVERRIDES: usize = 65_536;
 const MAX_OVERRIDE_COPY_ENTRIES: usize = 262_144;
 #[cfg(unix)]
@@ -67,6 +72,41 @@ impl FetchKind {
             Self::Git { url, rev } => format!("kind=git url={url} rev={rev}"),
         }
     }
+
+    fn candidate(&self) -> &str {
+        match self {
+            Self::File { url } | Self::Tarball { url } | Self::Executable { url } => url.as_str(),
+            Self::Git { url, .. } => url,
+        }
+    }
+
+    fn with_candidate(&self, candidate: &str) -> Result<Self, FetchError> {
+        let parsed = Url::parse(candidate).map_err(|error| FetchError::InvalidUrl(format!("{candidate}: {error}")))?;
+        Ok(match self {
+            Self::File { .. } => Self::File { url: parsed },
+            Self::Tarball { .. } => Self::Tarball { url: parsed },
+            Self::Executable { .. } => Self::Executable { url: parsed },
+            Self::Git { rev, .. } => Self::Git {
+                url: candidate.to_string(),
+                rev: rev.clone(),
+            },
+        })
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ForeignFetchAttempt {
+    pub index: usize,
+    pub candidate: String,
+    pub classification: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ForeignFetchAttemptLog {
+    pub schema: String,
+    pub attempts: Vec<ForeignFetchAttempt>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -167,6 +207,63 @@ fn parse_fetch_kind(request: &BuildRequest) -> Result<FetchKind, FetchError> {
     } else {
         Ok(FetchKind::File { url })
     }
+}
+
+fn ordered_fetch_kinds(request: &BuildRequest, primary: &FetchKind) -> Result<Vec<FetchKind>, FetchError> {
+    let Some(serialized) =
+        request.environment_vars.iter().find(|environment| environment.key == FOREIGN_FETCH_CANDIDATES_ENV)
+    else {
+        return Ok(vec![primary.clone()]);
+    };
+    let candidates = serde_json::from_slice::<Vec<String>>(serialized.value.as_ref())
+        .map_err(|error| FetchError::InvalidCandidateList(format!("invalid JSON: {error}")))?;
+    if candidates.is_empty() || candidates.len() > MAX_FOREIGN_FETCH_CANDIDATES {
+        return Err(FetchError::InvalidCandidateList(format!(
+            "candidate count must be between 1 and {MAX_FOREIGN_FETCH_CANDIDATES}"
+        )));
+    }
+    let mut seen = BTreeSet::new();
+    let mut kinds = Vec::with_capacity(candidates.len());
+    for candidate in candidates {
+        if !seen.insert(candidate.clone()) {
+            return Err(FetchError::InvalidCandidateList(format!("duplicate candidate: {candidate}")));
+        }
+        kinds.push(primary.with_candidate(&candidate)?);
+    }
+    if kinds[0] != *primary {
+        return Err(FetchError::InvalidCandidateList("first candidate differs from the derivation URL".to_string()));
+    }
+    debug_assert!(!kinds.is_empty());
+    debug_assert!(kinds.len() <= MAX_FOREIGN_FETCH_CANDIDATES);
+    Ok(kinds)
+}
+
+fn fetch_error_is_candidate_unavailable(error: &FetchError) -> bool {
+    matches!(error, FetchError::HttpError { .. } | FetchError::GitError(_) | FetchError::Io(_))
+}
+
+fn foreign_fetch_attempt_log(attempts: Vec<ForeignFetchAttempt>) -> Result<Option<String>, FetchError> {
+    if attempts.is_empty() {
+        return Ok(None);
+    }
+    serde_json::to_string(&ForeignFetchAttemptLog {
+        schema: FOREIGN_FETCH_ATTEMPT_LOG_SCHEMA.to_string(),
+        attempts,
+    })
+    .map(Some)
+    .map_err(|error| FetchError::InvalidCandidateList(format!("serializing attempt log: {error}")))
+}
+
+fn remove_fetch_output(path: &Path) -> Result<(), FetchError> {
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return Ok(());
+    };
+    if metadata.is_dir() {
+        fs::remove_dir_all(path)?;
+    } else {
+        fs::remove_file(path)?;
+    }
+    Ok(())
 }
 
 // ── Execute fetch (blocking) ──────────────────────────────────────────
@@ -368,33 +465,81 @@ where
         // Tiger Style: assert the request has at least one output.
         debug_assert!(!request.outputs.is_empty(), "fetch request must have at least one output");
 
-        let kind = parse_fetch_kind(&request).map_err(io::Error::other)?;
+        let primary_kind = parse_fetch_kind(&request).map_err(io::Error::other)?;
+        let ordered_kinds = ordered_fetch_kinds(&request, &primary_kind).map_err(io::Error::other)?;
+        let is_foreign_candidate_set =
+            request.environment_vars.iter().any(|environment| environment.key == FOREIGN_FETCH_CANDIDATES_ENV);
 
         // Download to a temp directory (cleaned up on drop).
         let tmp = tempfile::tempdir().map_err(|e| io::Error::other(format!("creating fetch temp dir: {e}")))?;
         let out_path = tmp.path().join("output");
-        let out_str = out_path.to_str().ok_or_else(|| io::Error::other("temp path not valid UTF-8"))?.to_string();
+        let mut attempts = Vec::with_capacity(ordered_kinds.len());
+        let mut selected_kind = None;
+        let mut last_unavailable_error = None;
+        for (index, kind) in ordered_kinds.iter().enumerate() {
+            remove_fetch_output(&out_path).map_err(io::Error::other)?;
+            let candidate = kind.candidate().to_string();
+            if let Some(source_override) = source_override_for_kind(kind, &self.source_overrides) {
+                info!(
+                    url = %source_override.url,
+                    source_state_blake3 = %source_override.source_state_blake3,
+                    "materializing fetcher input from source state"
+                );
+                materialize_source_override(source_override, &out_path).map_err(io::Error::other)?;
+                attempts.push(ForeignFetchAttempt {
+                    index,
+                    candidate,
+                    classification: "selected-source-state".to_string(),
+                });
+                selected_kind = Some(kind.clone());
+                break;
+            }
+            if self.source_policy == FetchSourcePolicy::RequireOverride {
+                attempts.push(ForeignFetchAttempt {
+                    index,
+                    candidate,
+                    classification: "unavailable-source-state".to_string(),
+                });
+                continue;
+            }
 
-        if let Some(source_override) = source_override_for_kind(&kind, &self.source_overrides) {
-            info!(
-                url = %source_override.url,
-                source_state_blake3 = %source_override.source_state_blake3,
-                "materializing fetcher input from source state"
-            );
-            materialize_source_override(source_override, &out_path).map_err(io::Error::other)?;
-        } else if self.source_policy == FetchSourcePolicy::RequireOverride {
-            return Err(io::Error::other(format!(
-                "offline source policy rejected unmatched builtin fetch before network acquisition: {}",
-                kind.source_identity()
-            )));
-        } else {
-            // Blocking download on a dedicated thread.
             let kind_clone = kind.clone();
-            tokio::task::spawn_blocking(move || execute_fetch(&kind_clone, &out_str))
+            let out_str = out_path.to_str().ok_or_else(|| io::Error::other("temp path not valid UTF-8"))?.to_string();
+            let result = tokio::task::spawn_blocking(move || execute_fetch(&kind_clone, &out_str))
                 .await
-                .map_err(|e| io::Error::other(format!("fetch spawn_blocking: {e}")))?
-                .map_err(io::Error::other)?;
+                .map_err(|error| io::Error::other(format!("fetch spawn_blocking: {error}")))?;
+            match result {
+                Ok(()) => {
+                    attempts.push(ForeignFetchAttempt {
+                        index,
+                        candidate,
+                        classification: "selected-network".to_string(),
+                    });
+                    selected_kind = Some(kind.clone());
+                    break;
+                }
+                Err(error) if fetch_error_is_candidate_unavailable(&error) => {
+                    attempts.push(ForeignFetchAttempt {
+                        index,
+                        candidate,
+                        classification: "unavailable-network".to_string(),
+                    });
+                    last_unavailable_error = Some(error);
+                }
+                Err(error) => return Err(io::Error::other(error)),
+            }
         }
+        let kind = selected_kind.ok_or_else(|| match last_unavailable_error {
+            Some(error) => io::Error::other(error),
+            None if is_foreign_candidate_set => io::Error::other(format!(
+                "offline source policy rejected all ordered builtin fetch candidates before network acquisition: {}",
+                primary_kind.source_identity()
+            )),
+            None => io::Error::other(format!(
+                "offline source policy rejected unmatched builtin fetch before network acquisition: {}",
+                primary_kind.source_identity()
+            )),
+        })?;
 
         // Verify output was produced.
         if !out_path.exists() {
@@ -425,7 +570,12 @@ where
             "must produce exactly one BuildOutput per requested output"
         );
 
-        Ok(BuildResult { outputs, log: None })
+        let log = if is_foreign_candidate_set {
+            foreign_fetch_attempt_log(attempts).map_err(io::Error::other)?
+        } else {
+            None
+        };
+        Ok(BuildResult { outputs, log })
     }
 }
 
@@ -573,6 +723,58 @@ mod tests {
         assert!(matches!(kind, FetchKind::Tarball { .. }));
     }
 
+    #[test]
+    fn ordered_foreign_candidates_preserve_declared_order_and_kind() {
+        let candidates = serde_json::to_string(&vec![
+            "https://example.com/source".to_string(),
+            "https://mirror.example.com/source".to_string(),
+        ])
+        .unwrap();
+        let request = fetch_request(vec![
+            env("url", "https://example.com/source"),
+            env("executable", "1"),
+            env(FOREIGN_FETCH_CANDIDATES_ENV, &candidates),
+        ]);
+        let primary = parse_fetch_kind(&request).unwrap();
+
+        let kinds = ordered_fetch_kinds(&request, &primary).unwrap();
+
+        assert_eq!(kinds.len(), 2);
+        assert!(kinds.iter().all(|kind| matches!(kind, FetchKind::Executable { .. })));
+        assert_eq!(kinds[0].candidate(), "https://example.com/source");
+        assert_eq!(kinds[1].candidate(), "https://mirror.example.com/source");
+    }
+
+    #[test]
+    fn ordered_foreign_candidates_reject_malformed_duplicate_and_stale_primary() {
+        let malformed = fetch_request(vec![
+            env("url", "https://example.com/source"),
+            env(FOREIGN_FETCH_CANDIDATES_ENV, "not-json"),
+        ]);
+        let primary = parse_fetch_kind(&malformed).unwrap();
+        assert!(matches!(ordered_fetch_kinds(&malformed, &primary), Err(FetchError::InvalidCandidateList(_))));
+
+        let duplicate_json = serde_json::to_string(&vec![
+            "https://example.com/source".to_string(),
+            "https://example.com/source".to_string(),
+        ])
+        .unwrap();
+        let duplicate = fetch_request(vec![
+            env("url", "https://example.com/source"),
+            env(FOREIGN_FETCH_CANDIDATES_ENV, &duplicate_json),
+        ]);
+        let primary = parse_fetch_kind(&duplicate).unwrap();
+        assert!(matches!(ordered_fetch_kinds(&duplicate, &primary), Err(FetchError::InvalidCandidateList(_))));
+
+        let stale_json = serde_json::to_string(&vec!["https://mirror.example.com/source".to_string()]).unwrap();
+        let stale = fetch_request(vec![
+            env("url", "https://example.com/source"),
+            env(FOREIGN_FETCH_CANDIDATES_ENV, &stale_json),
+        ]);
+        let primary = parse_fetch_kind(&stale).unwrap();
+        assert!(matches!(ordered_fetch_kinds(&stale, &primary), Err(FetchError::InvalidCandidateList(_))));
+    }
+
     // ── FetchBuildService::do_build ────────────────────────────────
 
     #[tokio::test]
@@ -623,6 +825,36 @@ mod tests {
         if let Node::File { size, .. } = &result.outputs[0].node {
             assert_eq!(*size, u64::try_from(OFFLINE_PAYLOAD.len()).unwrap());
         }
+    }
+
+    #[tokio::test]
+    async fn ordered_foreign_candidates_select_first_available_source_state() {
+        const OFFLINE_PAYLOAD: &[u8] = b"mirror payload";
+        let primary = "https://primary.example.invalid/source.txt";
+        let mirror = "https://mirror.example.invalid/source.txt";
+        let candidates = serde_json::to_string(&vec![primary.to_string(), mirror.to_string()]).unwrap();
+        let payload = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(payload.path(), OFFLINE_PAYLOAD).unwrap();
+        let source_override = FetchSourceOverride {
+            url: mirror.to_string(),
+            kind: FetchSourceOverrideKind::File,
+            rev: None,
+            payload_path: payload.path().to_path_buf(),
+            source_state_blake3: blake3::hash(b"mirror-source-state").to_hex().to_string(),
+        };
+        let service = FetchBuildService::new(MemoryBlobService::default(), tmp_ds())
+            .with_source_overrides(vec![source_override])
+            .with_source_policy(FetchSourcePolicy::RequireOverride);
+        let request = fetch_request(vec![env("url", primary), env(FOREIGN_FETCH_CANDIDATES_ENV, &candidates)]);
+
+        let result = service.do_build(request).await.unwrap();
+        let log: ForeignFetchAttemptLog = serde_json::from_str(result.log.as_deref().unwrap()).unwrap();
+
+        assert_eq!(log.schema, FOREIGN_FETCH_ATTEMPT_LOG_SCHEMA);
+        assert_eq!(log.attempts.len(), 2);
+        assert_eq!(log.attempts[0].classification, "unavailable-source-state");
+        assert_eq!(log.attempts[1].classification, "selected-source-state");
+        assert_eq!(log.attempts[1].candidate, mirror);
     }
 
     #[tokio::test]

@@ -4503,6 +4503,7 @@ dependencies = [
  "crunch-wasm-component-core",
  "data-encoding",
  "digest 0.10.7",
+ "ed25519-dalek",
  "flate2",
  "fs2",
  "futures",

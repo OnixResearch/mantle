@@ -242,6 +242,8 @@ Mantle keeps build observations separate from stronger claims:
   links selected Cairn and Valence identities to exact release evidence bytes.
 - Foreign import receipts bind the admitted graph and policy, not foreign
   frontend correctness, realization success, or output trust.
+- Foreign realization receipts bind observed local execution and store facts.
+  They do not prove package correctness, evaluator parity, or reproducibility.
 - Bootstrap and fixed-point evidence applies only to the recorded seed,
   source, tools, platform, and proof mode.
 - AeneasVerif proof and translation policy remains owned by Octet. Mantle can
@@ -258,7 +260,9 @@ reproducibility, or bootstrap correctness.
 
 Foreign derivation admission is documented in
 [`docs/foreign-derivation-import-trust-model.md`](docs/foreign-derivation-import-trust-model.md).
-Run its positive and negative drift guards with:
+The [foreign realization operator guide](docs/foreign-realization-operator-guide.md)
+explains source preparation, local realization, receipts, and cache hydration.
+Run the positive and negative trust-model guards with:
 
 ```bash
 nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs

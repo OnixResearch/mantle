@@ -42,6 +42,8 @@ mod foreign_executable_plan;
 mod foreign_graph_compiler;
 #[allow(dead_code)]
 mod foreign_realization;
+mod foreign_realization_receipt;
+mod foreign_realization_shell;
 // Foreign-import adapters mirror external receipt fields and preserve their typed error payloads at
 // the CLI boundary.
 #[allow(clippy::result_large_err, clippy::too_many_arguments)]
@@ -2599,6 +2601,10 @@ pub enum StoreAction {
         #[arg(long, value_delimiter = ',')]
         trusted_public_keys: Vec<String>,
 
+        /// Use selected root paths from a complete foreign realization receipt
+        #[arg(long = "foreign-realization-receipt", requires = "closure", conflicts_with_all = ["all", "paths"])]
+        foreign_realization_receipt: Option<PathBuf>,
+
         /// Store paths to import (full or fragment)
         paths: Vec<String>,
     },
@@ -3326,7 +3332,15 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Transcript { action } => run_transcript_command(action.clone()),
         Command::Stage0Inventory { output } => run_stage0_inventory_command(ctx, output),
         Command::NixFreeDemo { action } => nix_free_demo_cmd::cmd_nix_free_demo(action.clone(), ctx.json),
-        Command::ForeignImport { action } => foreign_import_cmd::cmd_foreign_import(action.clone(), ctx.json),
+        Command::ForeignImport { action } => {
+            foreign_import_cmd::cmd_foreign_import(action.clone(), foreign_import_cmd::ForeignImportContext {
+                output_dir: &ctx.store,
+                state_dir: &ctx.resolved_state_dir,
+                base_state_dirs: &ctx.base_state_dirs,
+                verbose: ctx.verbose,
+                json: ctx.json,
+            })
+        }
         Command::Eval { file, import_paths } => run_eval(file, import_paths),
         Command::Export { .. } => run_nickel_export_from_command(ctx, &args.command),
         Command::Build { .. } => run_build_from_command(ctx, &args.command),

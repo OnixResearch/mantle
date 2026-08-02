@@ -1,3 +1,6 @@
+// r[verify foreign_derivation_import.realization_adapter]
+// r[verify foreign_derivation_import.realization_receipt]
+// r[verify foreign_derivation_import.source_materialization]
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -22,6 +25,13 @@ const GUIX_VALIDATE_SNAPSHOT: &str = "guix-hello.validate.snapshot.json";
 const GUIX_PLAN_SNAPSHOT: &str = "guix-hello.plan.snapshot.json";
 const NIX_VALIDATE_SNAPSHOT: &str = "nix-hello.validate.snapshot.json";
 const NIX_PLAN_SNAPSHOT: &str = "nix-hello.plan.snapshot.json";
+const REALIZE_GRAPH: &str = "realize-two-node.graph.json";
+const REALIZE_INDEX: &str = "realize-two-node.index.json";
+const REALIZE_POLICY: &str = "realize-policy.json";
+const REALIZE_BUILDER: &str = "realize-two-node-builder.sh";
+const NIX_EXECUTION_PROFILE: &str = "config/foreign-execution-profiles/generated/nix.json";
+const GUIX_EXECUTION_PROFILE: &str = "config/foreign-execution-profiles/generated/guix.json";
+const REALIZATION_RECEIPT_SCHEMA: &str = "mantle-foreign-realization-receipt-v1";
 const HELLO_PACKAGE: &str = "hello";
 const HELLO_SYSTEM: &str = "x86_64-linux";
 const MALFORMED_JSON: &str = "malformed-json";
@@ -123,6 +133,460 @@ fn foreign_import_cli_validates_and_plans_checked_fixtures() {
                 .contains(&Value::String("not-realization".to_string()))
         );
     }
+}
+
+#[test]
+fn foreign_import_cli_realizes_two_node_graph_and_reuses_exact_outputs() {
+    let temp = TempDir::new().expect("tempdir should be created");
+    let plan_path = temp.path().join("plan.json");
+    let import_receipt_path = temp.path().join("import-receipt.json");
+    let source_bundle_path = temp.path().join("source-bundle.json");
+    let realization_receipt_path = temp.path().join("realization-receipt.json");
+    let state_dir = temp.path().join("state");
+    let output_dir = temp.path().join("output");
+    fs::create_dir(&output_dir).expect("output directory should be created");
+    let profile = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(NIX_EXECUTION_PROFILE);
+
+    mantle_cmd()
+        .args([
+            "--json",
+            "foreign-import",
+            "plan",
+            "--graph",
+            path_str(&fixture_path(REALIZE_GRAPH)),
+            "--package-index",
+            path_str(&fixture_path(REALIZE_INDEX)),
+            "--policy",
+            path_str(&fixture_path(REALIZE_POLICY)),
+            "--package",
+            "two-node",
+            "--system",
+            HELLO_SYSTEM,
+            "--execution-profile",
+            path_str(&profile),
+            "--plan-out",
+            path_str(&plan_path),
+            "--receipt-out",
+            path_str(&import_receipt_path),
+        ])
+        .assert()
+        .success();
+
+    mantle_cmd()
+        .args([
+            "--json",
+            "foreign-import",
+            "prepare-sources",
+            "--plan",
+            path_str(&plan_path),
+            "--source",
+            &format!("foreign-builder={}", fixture_path(REALIZE_BUILDER).display()),
+            "--out",
+            path_str(&source_bundle_path),
+        ])
+        .assert()
+        .success();
+    let source_bundle = json_file(&source_bundle_path);
+    let source_bundle_blake3 = source_bundle["manifest_blake3"]
+        .as_str()
+        .expect("source bundle digest should be present")
+        .to_string();
+
+    let rejected_state_dir = temp.path().join("rejected-state");
+    let rejected_receipt = temp.path().join("rejected-receipt.json");
+    mantle_cmd()
+        .args([
+            "--json",
+            "--state-dir",
+            path_str(&rejected_state_dir),
+            "--store",
+            path_str(&output_dir),
+            "foreign-import",
+            "realize",
+            "--plan",
+            path_str(&plan_path),
+            "--import-receipt",
+            path_str(&import_receipt_path),
+            "--source-bundle",
+            path_str(&source_bundle_path),
+            "--source-bundle-blake3",
+            &source_bundle_blake3,
+            "--execution-profile",
+            path_str(&profile),
+            "--receipt-out",
+            path_str(&rejected_receipt),
+            "--remote",
+        ])
+        .assert()
+        .failure();
+    assert!(!rejected_state_dir.exists());
+    assert!(!rejected_receipt.exists());
+
+    let run_realization = || {
+        mantle_cmd()
+            .args([
+                "--json",
+                "--state-dir",
+                path_str(&state_dir),
+                "--store",
+                path_str(&output_dir),
+                "foreign-import",
+                "realize",
+                "--plan",
+                path_str(&plan_path),
+                "--import-receipt",
+                path_str(&import_receipt_path),
+                "--source-bundle",
+                path_str(&source_bundle_path),
+                "--source-bundle-blake3",
+                &source_bundle_blake3,
+                "--execution-profile",
+                path_str(&profile),
+                "--receipt-out",
+                path_str(&realization_receipt_path),
+                "--offline",
+                "--no-substitute",
+                "--jobs",
+                "2",
+            ])
+            .assert()
+            .success();
+    };
+    run_realization();
+
+    let first = json_file(&realization_receipt_path);
+    assert_eq!(first["schema"], REALIZATION_RECEIPT_SCHEMA);
+    assert_eq!(first["status"], "complete");
+    assert_eq!(first["strongest_state"], "realized");
+    assert_eq!(first["failure"], Value::Null);
+    eprintln!("two-node build_report_blake3={}", first["build_report_blake3"]);
+    assert_eq!(first["units"].as_array().unwrap().len(), 2);
+    assert!(first["units"].as_array().unwrap().iter().all(|unit| unit["execution_class"] == "built"));
+    let root_path = first["selected_root_paths"][0].as_str().expect("selected root path should be present");
+    let root_basename = root_path.rsplit('/').next().expect("selected root should have a basename");
+    assert_eq!(fs::read_to_string(output_dir.join(root_basename)).unwrap(), "child\n");
+    let original_receipt_bytes = fs::read(&realization_receipt_path).unwrap();
+    mantle_cmd()
+        .args([
+            "--json",
+            "--state-dir",
+            path_str(&state_dir),
+            "--store",
+            path_str(&output_dir),
+            "foreign-import",
+            "realize",
+            "--plan",
+            path_str(&plan_path),
+            "--import-receipt",
+            path_str(&import_receipt_path),
+            "--source-bundle",
+            path_str(&source_bundle_path),
+            "--source-bundle-blake3",
+            &source_bundle_blake3,
+            "--execution-profile",
+            path_str(&profile),
+            "--receipt-out",
+            path_str(&realization_receipt_path),
+            "--offline",
+            "--no-substitute",
+        ])
+        .assert()
+        .failure();
+    assert_eq!(fs::read(&realization_receipt_path).unwrap(), original_receipt_bytes);
+
+    let tampered_receipt_path = temp.path().join("tampered-realization-receipt.json");
+    let mut tampered_receipt = first.clone();
+    tampered_receipt["status"] = Value::String("partial-failure".to_string());
+    fs::write(&tampered_receipt_path, serde_json::to_vec(&tampered_receipt).unwrap()).unwrap();
+    let pull_state = temp.path().join("rejected-pull-state");
+    mantle_cmd()
+        .args([
+            "--state-dir",
+            path_str(&pull_state),
+            "store",
+            "pull",
+            "--from",
+            "https://cache.invalid",
+            "--closure",
+            "--foreign-realization-receipt",
+            path_str(&tampered_receipt_path),
+        ])
+        .assert()
+        .failure();
+    assert!(!pull_state.exists());
+
+    let unknown_field_receipt_path = temp.path().join("unknown-field-realization-receipt.json");
+    let mut unknown_field_receipt = first.clone();
+    unknown_field_receipt
+        .as_object_mut()
+        .unwrap()
+        .insert("unknown_field".to_string(), Value::Bool(true));
+    fs::write(&unknown_field_receipt_path, serde_json::to_vec(&unknown_field_receipt).unwrap()).unwrap();
+    let unknown_field_state = temp.path().join("unknown-field-pull-state");
+    mantle_cmd()
+        .args([
+            "--state-dir",
+            path_str(&unknown_field_state),
+            "store",
+            "pull",
+            "--from",
+            "https://cache.invalid",
+            "--closure",
+            "--foreign-realization-receipt",
+            path_str(&unknown_field_receipt_path),
+        ])
+        .assert()
+        .failure();
+    assert!(!unknown_field_state.exists());
+
+    fs::remove_file(&realization_receipt_path).unwrap();
+    run_realization();
+    let second = json_file(&realization_receipt_path);
+    assert_eq!(second["status"], "complete");
+    assert!(second["units"].as_array().unwrap().iter().all(|unit| unit["execution_class"] == "already-present"));
+
+    const EXECUTABLE_FILE_MODE: u32 = 0o755;
+    let failing_builder = temp.path().join("failing-builder.sh");
+    fs::write(&failing_builder, "#!/bin/sh\nexit 7\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&failing_builder, fs::Permissions::from_mode(EXECUTABLE_FILE_MODE)).unwrap();
+    }
+    let failing_bundle = temp.path().join("failing-source-bundle.json");
+    mantle_cmd()
+        .args([
+            "--json",
+            "foreign-import",
+            "prepare-sources",
+            "--plan",
+            path_str(&plan_path),
+            "--source",
+            &format!("foreign-builder={}", failing_builder.display()),
+            "--out",
+            path_str(&failing_bundle),
+        ])
+        .assert()
+        .success();
+    let failing_bundle_json = json_file(&failing_bundle);
+    let failing_digest = failing_bundle_json["manifest_blake3"].as_str().unwrap();
+    let failing_state = temp.path().join("failing-state");
+    let failing_output = temp.path().join("failing-output");
+    let failing_receipt = temp.path().join("failing-receipt.json");
+    fs::create_dir(&failing_output).unwrap();
+    mantle_cmd()
+        .args([
+            "--json",
+            "--state-dir",
+            path_str(&failing_state),
+            "--store",
+            path_str(&failing_output),
+            "foreign-import",
+            "realize",
+            "--plan",
+            path_str(&plan_path),
+            "--import-receipt",
+            path_str(&import_receipt_path),
+            "--source-bundle",
+            path_str(&failing_bundle),
+            "--source-bundle-blake3",
+            failing_digest,
+            "--execution-profile",
+            path_str(&profile),
+            "--receipt-out",
+            path_str(&failing_receipt),
+            "--offline",
+            "--no-substitute",
+        ])
+        .assert()
+        .failure();
+    let partial = json_file(&failing_receipt);
+    assert_eq!(partial["status"], "partial-failure");
+    assert_eq!(partial["strongest_state"], "partial-realization");
+    assert_ne!(partial["failure"], Value::Null);
+    assert!(partial["units"].as_array().unwrap().iter().any(|unit| unit["failure"] != Value::Null));
+
+    let guix_profile = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(GUIX_EXECUTION_PROFILE);
+    let guix_plan = temp.path().join("guix-plan.json");
+    let guix_import_receipt = temp.path().join("guix-import-receipt.json");
+    let guix_bundle = temp.path().join("guix-source-bundle.json");
+    let guix_state = temp.path().join("guix-state");
+    let guix_output = temp.path().join("guix-output");
+    let guix_receipt = temp.path().join("guix-receipt.json");
+    fs::create_dir(&guix_output).unwrap();
+    mantle_cmd()
+        .args([
+            "--json",
+            "foreign-import",
+            "plan",
+            "--graph",
+            path_str(&fixture_path(REALIZE_GRAPH)),
+            "--package-index",
+            path_str(&fixture_path(REALIZE_INDEX)),
+            "--policy",
+            path_str(&fixture_path(REALIZE_POLICY)),
+            "--package",
+            "two-node",
+            "--system",
+            HELLO_SYSTEM,
+            "--execution-profile",
+            path_str(&guix_profile),
+            "--plan-out",
+            path_str(&guix_plan),
+            "--receipt-out",
+            path_str(&guix_import_receipt),
+        ])
+        .assert()
+        .success();
+    mantle_cmd()
+        .args([
+            "--json",
+            "foreign-import",
+            "prepare-sources",
+            "--plan",
+            path_str(&guix_plan),
+            "--source",
+            &format!("foreign-builder={}", fixture_path(REALIZE_BUILDER).display()),
+            "--out",
+            path_str(&guix_bundle),
+        ])
+        .assert()
+        .success();
+    let guix_bundle_json = json_file(&guix_bundle);
+    let guix_bundle_digest = guix_bundle_json["manifest_blake3"].as_str().unwrap();
+    mantle_cmd()
+        .args([
+            "--json",
+            "--state-dir",
+            path_str(&guix_state),
+            "--store",
+            path_str(&guix_output),
+            "foreign-import",
+            "realize",
+            "--plan",
+            path_str(&guix_plan),
+            "--import-receipt",
+            path_str(&guix_import_receipt),
+            "--source-bundle",
+            path_str(&guix_bundle),
+            "--source-bundle-blake3",
+            guix_bundle_digest,
+            "--execution-profile",
+            path_str(&guix_profile),
+            "--receipt-out",
+            path_str(&guix_receipt),
+            "--offline",
+            "--no-substitute",
+        ])
+        .assert()
+        .failure();
+    let guix_result = json_file(&guix_receipt);
+    assert_eq!(guix_result["strongest_state"], "partial-realization");
+    assert_eq!(guix_result["execution_profiles"][0]["profile_id"], "mantle-foreign-guix-v1");
+    eprintln!("guix-no-bin-sh build_report_blake3={}", guix_result["build_report_blake3"]);
+    assert_ne!(guix_result["failure"], Value::Null);
+}
+
+#[test]
+fn foreign_import_cli_reports_fixed_output_mismatch_from_admitted_source_state() {
+    const ARCHIVE_ENTRY: &str = "payload";
+    const ARCHIVE_MODE: u32 = 0o644;
+    const ARCHIVE_CONTENT: &[u8] = b"not-the-declared-fixed-output";
+    let temp = TempDir::new().unwrap();
+    let plan_path = temp.path().join("plan.json");
+    let import_receipt_path = temp.path().join("import-receipt.json");
+    let source_bundle_path = temp.path().join("source-bundle.json");
+    let realization_receipt_path = temp.path().join("realization-receipt.json");
+    let source_archive_path = temp.path().join("source.tar");
+    let state_dir = temp.path().join("state");
+    let output_dir = temp.path().join("output");
+    let profile = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(NIX_EXECUTION_PROFILE);
+    fs::create_dir(&output_dir).unwrap();
+    let archive = fs::File::create(&source_archive_path).unwrap();
+    let mut archive_builder = tar::Builder::new(archive);
+    let mut header = tar::Header::new_gnu();
+    header.set_size(u64::try_from(ARCHIVE_CONTENT.len()).unwrap());
+    header.set_mode(ARCHIVE_MODE);
+    header.set_cksum();
+    archive_builder.append_data(&mut header, ARCHIVE_ENTRY, ARCHIVE_CONTENT).unwrap();
+    archive_builder.finish().unwrap();
+
+    mantle_cmd()
+        .args([
+            "--json",
+            "foreign-import",
+            "plan",
+            "--graph",
+            path_str(&fixture_path(NIX_GRAPH)),
+            "--package-index",
+            path_str(&fixture_path(NIX_INDEX)),
+            "--policy",
+            path_str(&fixture_path(POLICY)),
+            "--package",
+            "hello",
+            "--system",
+            HELLO_SYSTEM,
+            "--execution-profile",
+            path_str(&profile),
+            "--plan-out",
+            path_str(&plan_path),
+            "--receipt-out",
+            path_str(&import_receipt_path),
+        ])
+        .assert()
+        .success();
+    mantle_cmd()
+        .args([
+            "--json",
+            "foreign-import",
+            "prepare-sources",
+            "--plan",
+            path_str(&plan_path),
+            "--source",
+            &format!("nix-hello-source={}", source_archive_path.display()),
+            "--out",
+            path_str(&source_bundle_path),
+        ])
+        .assert()
+        .success();
+    let source_bundle = json_file(&source_bundle_path);
+    let source_digest = source_bundle["manifest_blake3"].as_str().unwrap();
+    mantle_cmd()
+        .args([
+            "--json",
+            "--state-dir",
+            path_str(&state_dir),
+            "--store",
+            path_str(&output_dir),
+            "foreign-import",
+            "realize",
+            "--plan",
+            path_str(&plan_path),
+            "--import-receipt",
+            path_str(&import_receipt_path),
+            "--source-bundle",
+            path_str(&source_bundle_path),
+            "--source-bundle-blake3",
+            source_digest,
+            "--execution-profile",
+            path_str(&profile),
+            "--receipt-out",
+            path_str(&realization_receipt_path),
+            "--offline",
+            "--no-substitute",
+        ])
+        .assert()
+        .failure();
+
+    let receipt = json_file(&realization_receipt_path);
+    eprintln!("fixed-output-mismatch build_report_blake3={}", receipt["build_report_blake3"]);
+    assert_eq!(receipt["strongest_state"], "partial-realization");
+    assert_eq!(
+        receipt["units"][0]["fetch_attempts"][0]["classification"], "selected-source-state",
+        "failure: {} unit: {}",
+        receipt["failure"], receipt["units"][0]
+    );
+    assert_ne!(receipt["units"][0]["failure"], Value::Null);
 }
 
 #[test]

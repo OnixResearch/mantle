@@ -3,6 +3,7 @@
 //! The pure profile core validates bounded policy, derives canonical BLAKE3
 //! identity, and verifies the reserved derivation binding. Build and CLI shells
 //! only transport validated profiles.
+// r[impl foreign_derivation_import.execution_profile]
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;

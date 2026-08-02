@@ -35,10 +35,22 @@ use crate::foreign_derivation_import::translate_foreign_graph;
 use crate::foreign_executable_plan::ForeignExecutablePlan;
 use crate::foreign_executable_plan::compile_foreign_executable_plan;
 use crate::foreign_executable_plan::compile_foreign_executable_plan_with_profile;
+use crate::foreign_realization::ForeignRealizationAdmission;
+use crate::foreign_realization::ForeignSourceAdmission;
+use crate::foreign_realization::validate_foreign_realization_admission;
+use crate::foreign_realization::validate_foreign_source_admission;
+use crate::foreign_realization_shell::ForeignRealizationRequest;
+use crate::foreign_realization_shell::realize_foreign_plan;
+use crate::source_bundle::ForeignSourcePathBinding;
+use crate::source_bundle::SourceBundleManifest;
+use crate::source_bundle::plan_bound_foreign_source_bundle;
+use crate::source_bundle::write_json_atomically;
 
 const CLI_REPORT_SCHEMA: &str = "mantle-foreign-import-cli-v1";
 const VALIDATE_COMMAND: &str = "validate";
 const PLAN_COMMAND: &str = "plan";
+const REALIZE_COMMAND: &str = "realize";
+const PREPARE_SOURCES_COMMAND: &str = "prepare-sources";
 const PRODUCE_NIX_COMMAND: &str = "produce-nix";
 const PRODUCE_ATERM_COMMAND: &str = "produce-aterm";
 const ACCEPTED_VERDICT: &str = "accepted";
@@ -55,8 +67,11 @@ const NIXPKGS_INDEX_FILE: &str = "nixpkgs.index.json";
 const ATERM_GRAPH_FILE: &str = "foreign-aterm.graph.json";
 const ATERM_INDEX_FILE: &str = "foreign-aterm.index.json";
 const DRV_SPEC_SEPARATOR: char = '=';
+const SOURCE_BINDING_SEPARATOR: char = '=';
 const DRV_FILE_EXTENSION: &str = "drv";
 const NIX_LOGICAL_STORE_PREFIX: &str = "/nix/store";
+const MAX_FOREIGN_JSON_ARTIFACT_BYTES: u64 = 268_435_456;
+const FOREIGN_JSON_ARTIFACT_READ_LIMIT: u64 = MAX_FOREIGN_JSON_ARTIFACT_BYTES + 1;
 
 #[derive(Subcommand, Debug, Clone)]
 pub(crate) enum ForeignImportAction {
@@ -105,6 +120,84 @@ pub(crate) enum ForeignImportAction {
         /// Optional exported `mantle-foreign-execution-profile-v1` JSON
         #[arg(long = "execution-profile")]
         execution_profile: Option<PathBuf>,
+
+        /// Write the accepted executable plan atomically to this path
+        #[arg(long = "plan-out")]
+        plan_out: Option<PathBuf>,
+
+        /// Write the accepted import receipt atomically to this path
+        #[arg(long = "receipt-out")]
+        receipt_out: Option<PathBuf>,
+    },
+
+    /// Bind local source payloads into an admitted foreign source bundle
+    PrepareSources {
+        /// Path to `mantle-foreign-executable-plan-v1` JSON
+        #[arg(long)]
+        plan: PathBuf,
+
+        /// Source payload mapping: `payload-id=/path/to/payload`
+        #[arg(long = "source", required = true)]
+        sources: Vec<String>,
+
+        /// Write the source-bundle manifest atomically to this path
+        #[arg(long)]
+        out: PathBuf,
+    },
+
+    /// Realize an admitted executable plan through Mantle's scheduler and store
+    Realize {
+        /// Path to `mantle-foreign-executable-plan-v1` JSON
+        #[arg(long)]
+        plan: PathBuf,
+
+        /// Path to the exact admitted `foreign-derivation-import-receipt-v1` JSON
+        #[arg(long = "import-receipt")]
+        import_receipt: PathBuf,
+
+        /// Path to an admitted source-bundle manifest with foreign source bindings
+        #[arg(long = "source-bundle")]
+        source_bundle: PathBuf,
+
+        /// Expected source-bundle manifest BLAKE3
+        #[arg(long = "source-bundle-blake3")]
+        source_bundle_blake3: String,
+
+        /// Exported execution-profile JSON. Repeat for each profile ID in the plan
+        #[arg(long = "execution-profile", required = true)]
+        execution_profiles: Vec<PathBuf>,
+
+        /// Selected root node ID. Repeat to select multiple roots. Defaults to all plan roots
+        #[arg(long = "root")]
+        roots: Vec<String>,
+
+        /// Write the complete realization receipt atomically to this path
+        #[arg(long = "receipt-out")]
+        receipt_out: PathBuf,
+
+        /// Maximum concurrent jobs
+        #[arg(short = 'j', long = "jobs")]
+        jobs: Option<u32>,
+
+        /// Permit only cache URLs already bound into the executable plan
+        #[arg(long = "substitute", conflicts_with = "no_substitute")]
+        substitute: bool,
+
+        /// Explicitly disable cache substitution
+        #[arg(long = "no-substitute")]
+        no_substitute: bool,
+
+        /// Reject network fetch and cache substitution
+        #[arg(long)]
+        offline: bool,
+
+        /// Request remote execution. This version rejects the request before store mutation
+        #[arg(long)]
+        remote: bool,
+
+        /// Optional Nix-format signing key path
+        #[arg(long = "signing-key")]
+        signing_key: Option<PathBuf>,
     },
 
     /// Lower explicit prefix-aware ATerm derivations into foreign import artifacts
@@ -243,6 +336,8 @@ struct ForeignPlanRequest<'a> {
     package: &'a str,
     system: &'a str,
     execution_profile_path: Option<&'a Path>,
+    plan_out: Option<&'a Path>,
+    receipt_out: Option<&'a Path>,
     json: bool,
 }
 
@@ -285,7 +380,35 @@ struct JsonReadRequest<'a> {
     command: &'a str,
 }
 
-pub(crate) fn cmd_foreign_import(action: ForeignImportAction, json: bool) -> Result<(), RunError> {
+pub(crate) struct ForeignImportContext<'a> {
+    pub(crate) output_dir: &'a Path,
+    pub(crate) state_dir: &'a Path,
+    pub(crate) base_state_dirs: &'a [PathBuf],
+    pub(crate) verbose: bool,
+    pub(crate) json: bool,
+}
+
+struct ForeignRealizeCommandRequest<'a> {
+    plan_path: &'a Path,
+    import_receipt_path: &'a Path,
+    source_bundle_path: &'a Path,
+    source_bundle_blake3: &'a str,
+    execution_profile_paths: &'a [PathBuf],
+    selected_roots: &'a [String],
+    receipt_out: &'a Path,
+    jobs: Option<u32>,
+    substitute: bool,
+    no_substitute: bool,
+    offline: bool,
+    remote: bool,
+    signing_key_path: Option<&'a Path>,
+}
+
+pub(crate) fn cmd_foreign_import(
+    action: ForeignImportAction,
+    context: ForeignImportContext<'_>,
+) -> Result<(), RunError> {
+    let json = context.json;
     match action {
         ForeignImportAction::Validate {
             graph,
@@ -300,6 +423,8 @@ pub(crate) fn cmd_foreign_import(action: ForeignImportAction, json: bool) -> Res
             package,
             system,
             execution_profile,
+            plan_out,
+            receipt_out,
         } => run_plan(ForeignPlanRequest {
             graph_path: &graph,
             index_path: &package_index,
@@ -307,8 +432,43 @@ pub(crate) fn cmd_foreign_import(action: ForeignImportAction, json: bool) -> Res
             package: &package,
             system: &system,
             execution_profile_path: execution_profile.as_deref(),
+            plan_out: plan_out.as_deref(),
+            receipt_out: receipt_out.as_deref(),
             json,
         }),
+        ForeignImportAction::PrepareSources { plan, sources, out } => run_prepare_sources(&plan, &sources, &out, json),
+        ForeignImportAction::Realize {
+            plan,
+            import_receipt,
+            source_bundle,
+            source_bundle_blake3,
+            execution_profiles,
+            roots,
+            receipt_out,
+            jobs,
+            substitute,
+            no_substitute,
+            offline,
+            remote,
+            signing_key,
+        } => run_realize(
+            ForeignRealizeCommandRequest {
+                plan_path: &plan,
+                import_receipt_path: &import_receipt,
+                source_bundle_path: &source_bundle,
+                source_bundle_blake3: &source_bundle_blake3,
+                execution_profile_paths: &execution_profiles,
+                selected_roots: &roots,
+                receipt_out: &receipt_out,
+                jobs,
+                substitute,
+                no_substitute,
+                offline,
+                remote,
+                signing_key_path: signing_key.as_deref(),
+            },
+            &context,
+        ),
         ForeignImportAction::ProduceAterm {
             source_prefix,
             drv_files,
@@ -447,7 +607,197 @@ fn run_plan(request: ForeignPlanRequest<'_>) -> Result<(), RunError> {
     } else {
         plan_inputs(graph, index, request.package, policy, request.system)
     };
+    if request.plan_out.is_some() && request.plan_out == request.receipt_out {
+        return Err(RunError::Internal("foreign plan and import receipt output paths must differ".to_string()));
+    }
+    if outcome.accepted {
+        if let Some(path) = request.plan_out {
+            let plan = outcome
+                .plan
+                .as_ref()
+                .ok_or_else(|| RunError::Internal("accepted foreign plan report has no plan".to_string()))?;
+            write_json_atomically(path, plan, "foreign executable plan")?;
+        }
+        if let Some(path) = request.receipt_out {
+            let receipt = outcome
+                .receipt
+                .as_ref()
+                .ok_or_else(|| RunError::Internal("accepted foreign plan report has no receipt".to_string()))?;
+            write_json_atomically(path, receipt, "foreign import receipt")?;
+        }
+    }
     emit_report(outcome, request.json)
+}
+
+fn run_prepare_sources(
+    plan_path: &Path,
+    source_specs: &[String],
+    output_path: &Path,
+    json: bool,
+) -> Result<(), RunError> {
+    let plan = match read_json::<ForeignExecutablePlan>(JsonReadRequest {
+        path: plan_path,
+        artifact: "plan",
+        command: PREPARE_SOURCES_COMMAND,
+    })? {
+        Ok(plan) => plan,
+        Err(report) => return emit_report(report, json),
+    };
+    crate::foreign_executable_plan::validate_foreign_executable_plan(&plan)
+        .map_err(|diagnostic| RunError::Internal(format!("foreign source plan is invalid: {}", diagnostic.class)))?;
+    let mut bindings = Vec::with_capacity(source_specs.len());
+    for source_spec in source_specs {
+        let (payload_id, path) = source_spec.split_once(SOURCE_BINDING_SEPARATOR).ok_or_else(|| {
+            RunError::Internal(format!("foreign source binding must use payload-id=/path syntax: {source_spec}"))
+        })?;
+        if payload_id.is_empty() || path.is_empty() {
+            return Err(RunError::Internal(format!(
+                "foreign source binding has an empty payload ID or path: {source_spec}"
+            )));
+        }
+        bindings.push(ForeignSourcePathBinding {
+            payload_id: payload_id.to_string(),
+            path: PathBuf::from(path),
+        });
+    }
+    let manifest = plan_bound_foreign_source_bundle(&plan.source_requirements, &bindings, &plan.target_store_prefix)?;
+    write_json_atomically(output_path, &manifest, "foreign source bundle")?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string(&manifest)
+                .map_err(|error| RunError::Internal(format!("serializing foreign source bundle: {error}")))?
+        );
+    } else {
+        println!(
+            "manifest_blake3={} records={} path={}",
+            manifest.manifest_blake3,
+            manifest.records.len(),
+            output_path.display()
+        );
+    }
+    Ok(())
+}
+
+fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImportContext<'_>) -> Result<(), RunError> {
+    assert!(!REALIZE_COMMAND.is_empty(), "foreign realize command identity must not be empty");
+    if request.receipt_out.exists() {
+        return Err(RunError::Internal(format!(
+            "foreign realization receipt output already exists: {}",
+            request.receipt_out.display()
+        )));
+    }
+    let plan = read_required_realization_json::<ForeignExecutablePlan>(request.plan_path, "plan", context.json)?;
+    let import_receipt =
+        read_required_realization_json::<ImportReceipt>(request.import_receipt_path, "import-receipt", context.json)?;
+    let source_bundle = read_required_realization_json::<SourceBundleManifest>(
+        request.source_bundle_path,
+        "source-bundle",
+        context.json,
+    )?;
+    let mut execution_profiles = BTreeMap::new();
+    for profile_path in request.execution_profile_paths {
+        let profile =
+            read_required_realization_json::<ExecutionProfile>(profile_path, "execution-profile", context.json)?;
+        if execution_profiles.insert(profile.profile_id.clone(), profile).is_some() {
+            return Err(RunError::Internal("foreign realization repeats an execution profile ID".to_string()));
+        }
+    }
+    let mut selected_roots = if request.selected_roots.is_empty() {
+        plan.selected_roots.iter().map(|root| root.node_id.clone()).collect::<Vec<_>>()
+    } else {
+        request.selected_roots.to_vec()
+    };
+    let selected_root_count = selected_roots.len();
+    selected_roots.sort();
+    selected_roots.dedup();
+    if selected_roots.len() != selected_root_count {
+        return Err(RunError::Internal("foreign realization selected-root set contains a duplicate".to_string()));
+    }
+    if request.substitute && request.no_substitute {
+        return Err(RunError::Internal(
+            "foreign realization cannot enable and disable substitution together".to_string(),
+        ));
+    }
+    if request.offline && request.substitute {
+        return Err(RunError::Internal("offline foreign realization cannot enable cache substitution".to_string()));
+    }
+    validate_foreign_realization_admission(ForeignRealizationAdmission {
+        plan: &plan,
+        import_receipt: &import_receipt,
+        selected_root_node_ids: &selected_roots,
+        execution_profiles: &execution_profiles,
+        remote_execution_requested: request.remote,
+    })
+    .map_err(|error| RunError::Internal(error.to_string()))?;
+    validate_foreign_source_admission(ForeignSourceAdmission {
+        source_requirements: &plan.source_requirements,
+        source_bundle: &source_bundle,
+        expected_manifest_blake3: request.source_bundle_blake3,
+    })
+    .map_err(|error| RunError::Internal(error.to_string()))?;
+    let keypair =
+        crate::build_cmd::load_or_generate_signing_keypair(request.signing_key_path, context.state_dir, !context.json)?;
+    let trusted_keys = crunch_build::build_trusted_keys(&keypair, None);
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|error| RunError::Internal(format!("creating foreign realization runtime: {error}")))?;
+    let receipt = runtime.block_on(realize_foreign_plan(ForeignRealizationRequest {
+        plan: &plan,
+        import_receipt: &import_receipt,
+        source_bundle: &source_bundle,
+        expected_source_bundle_blake3: request.source_bundle_blake3,
+        selected_root_node_ids: &selected_roots,
+        execution_profiles: &execution_profiles,
+        output_dir: context.output_dir,
+        state_dir: context.state_dir,
+        base_state_dirs: context.base_state_dirs,
+        keypair: &keypair,
+        trusted_keys: &trusted_keys,
+        max_jobs: crunch_pipeline::resolve_max_jobs(request.jobs),
+        substitution_enabled: request.substitute,
+        offline: request.offline,
+        remote_execution_requested: request.remote,
+        verbose: context.verbose,
+    }))?;
+    write_json_atomically(request.receipt_out, &receipt, "foreign realization receipt")?;
+    if context.json {
+        println!(
+            "{}",
+            serde_json::to_string(&receipt)
+                .map_err(|error| RunError::Internal(format!("serializing foreign realization receipt: {error}")))?
+        );
+    } else {
+        println!(
+            "status={} receipt_blake3={} roots={} units={} sources={} path={}",
+            receipt.status,
+            receipt.receipt_blake3,
+            receipt.selected_root_node_ids.len(),
+            receipt.units.len(),
+            receipt.sources.len(),
+            request.receipt_out.display()
+        );
+    }
+    if receipt.failure.is_some() {
+        Err(RunError::Reported(FAILURE_EXIT_CODE))
+    } else {
+        Ok(())
+    }
+}
+
+fn read_required_realization_json<T: DeserializeOwned>(path: &Path, artifact: &str, json: bool) -> Result<T, RunError> {
+    match read_json::<T>(JsonReadRequest {
+        path,
+        artifact,
+        command: REALIZE_COMMAND,
+    })? {
+        Ok(value) => Ok(value),
+        Err(report) => match emit_report(report, json) {
+            Err(error) => Err(error),
+            Ok(()) => {
+                Err(RunError::Internal("rejected foreign realization input unexpectedly returned success".to_string()))
+            }
+        },
+    }
 }
 
 fn run_produce_nix(request: NixProducerRequest<'_>) -> Result<(), RunError> {
@@ -1004,10 +1354,24 @@ fn read_optional_receipt(
 }
 
 fn read_json<T: DeserializeOwned>(request: JsonReadRequest<'_>) -> Result<Result<T, ForeignImportCliReport>, RunError> {
-    let contents = fs::read_to_string(request.path).map_err(|error| {
+    let file = fs::File::open(request.path).map_err(|error| {
+        RunError::Internal(format!("opening foreign import {} {}: {error}", request.artifact, request.path.display()))
+    })?;
+    let mut contents = Vec::new();
+    file.take(FOREIGN_JSON_ARTIFACT_READ_LIMIT).read_to_end(&mut contents).map_err(|error| {
         RunError::Internal(format!("reading foreign import {} {}: {error}", request.artifact, request.path.display()))
     })?;
-    match serde_json::from_str::<T>(&contents) {
+    if u64::try_from(contents.len()).unwrap_or(u64::MAX) > MAX_FOREIGN_JSON_ARTIFACT_BYTES {
+        return Ok(Err(rejected_report(
+            request.command,
+            diagnostic(
+                "foreign-json-bytes-out-of-range",
+                None,
+                &format!("{} exceeds {MAX_FOREIGN_JSON_ARTIFACT_BYTES} bytes", request.artifact),
+            ),
+        )));
+    }
+    match serde_json::from_slice::<T>(&contents) {
         Ok(value) => Ok(Ok(value)),
         Err(error) => Ok(Err(rejected_report(
             request.command,

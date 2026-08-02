@@ -1,0 +1,105 @@
+{
+  "schema": "foreign-derivation-graph-v1",
+  "producer": {
+    "kind": "nix",
+    "identity": "fixture:foreign-realization-two-node",
+    "revision": "fixture-revision"
+  },
+  "source_store_prefixes": [
+    "/nix/store"
+  ],
+  "target_store_prefix": null,
+  "root_derivation_ids": [
+    "nix:parent"
+  ],
+  "nodes": [
+    {
+      "node_id": "nix:child",
+      "original_derivation": "/nix/store/44444444444444444444444444444444-child.drv",
+      "name": "child",
+      "system": "x86_64-linux",
+      "builder": "/nix/store/33333333333333333333333333333333-foreign-builder",
+      "args": [
+        "child"
+      ],
+      "env": {
+        "builder": "/nix/store/33333333333333333333333333333333-foreign-builder",
+        "out": "/nix/store/11111111111111111111111111111111-child"
+      },
+      "outputs": {
+        "out": {
+          "path": "/nix/store/11111111111111111111111111111111-child",
+          "hash": null
+        }
+      },
+      "input_derivations": [],
+      "source_refs": [
+        {
+          "payload_id": "foreign-builder",
+          "field": "builder"
+        }
+      ],
+      "fixed_output": null,
+      "builtin": "nix.derivation",
+      "declared_references": [
+        "/nix/store/33333333333333333333333333333333-foreign-builder"
+      ],
+      "sandbox_capabilities": [],
+      "unsupported_features": [],
+      "cache_hints": []
+    },
+    {
+      "node_id": "nix:parent",
+      "original_derivation": "/nix/store/55555555555555555555555555555555-parent.drv",
+      "name": "parent",
+      "system": "x86_64-linux",
+      "builder": "/nix/store/33333333333333333333333333333333-foreign-builder",
+      "args": [
+        "parent"
+      ],
+      "env": {
+        "builder": "/nix/store/33333333333333333333333333333333-foreign-builder",
+        "child": "/nix/store/11111111111111111111111111111111-child",
+        "out": "/nix/store/22222222222222222222222222222222-parent"
+      },
+      "outputs": {
+        "out": {
+          "path": "/nix/store/22222222222222222222222222222222-parent",
+          "hash": null
+        }
+      },
+      "input_derivations": [
+        {
+          "node_id": "nix:child",
+          "output_name": "out"
+        }
+      ],
+      "source_refs": [
+        {
+          "payload_id": "foreign-builder",
+          "field": "builder"
+        }
+      ],
+      "fixed_output": null,
+      "builtin": "nix.derivation",
+      "declared_references": [
+        "/nix/store/11111111111111111111111111111111-child",
+        "/nix/store/33333333333333333333333333333333-foreign-builder"
+      ],
+      "sandbox_capabilities": [],
+      "unsupported_features": [],
+      "cache_hints": []
+    }
+  ],
+  "source_payloads": [
+    {
+      "payload_id": "foreign-builder",
+      "kind": "local-source",
+      "content_ref": "/nix/store/33333333333333333333333333333333-foreign-builder",
+      "embedded_text": null,
+      "mirrors": []
+    }
+  ],
+  "unsupported_features": [],
+  "frontend_metadata": []
+}

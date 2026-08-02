@@ -1,0 +1,16 @@
+{
+  "schema": "foreign-package-index-v1",
+  "entries": [
+    {
+      "name": "two-node",
+      "system": "x86_64-linux",
+      "root_derivation_id": "nix:parent",
+      "aliases": [
+        "foreign-two-node"
+      ],
+      "provenance_ref": "fixture:foreign-realization-two-node",
+      "metadata_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "unsupported_metadata_classes": []
+    }
+  ]
+}

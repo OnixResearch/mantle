@@ -75,6 +75,9 @@ pub enum FetchError {
     #[error("invalid URL: {0}")]
     InvalidUrl(String),
 
+    #[error("invalid ordered foreign fetch candidates: {0}")]
+    InvalidCandidateList(String),
+
     #[error("fetcher derivation has no fixed-output hash")]
     NotFixedOutput,
 

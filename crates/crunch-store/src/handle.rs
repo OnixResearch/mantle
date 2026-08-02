@@ -22,6 +22,7 @@ use reqwest::redirect::Policy;
 use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
 use snix_castore::blobservice::CombinedBlobService;
+use snix_castore::blobservice::MemoryBlobService;
 use snix_castore::blobservice::ObjectStoreBlobService;
 use snix_castore::directoryservice::Cache as DirectoryCache;
 use snix_castore::directoryservice::DirectoryService;
@@ -423,6 +424,14 @@ pub struct PersistOutputRequest<'a> {
     pub root_source: Option<GcRootSource>,
 }
 
+/// Grouped parameters for verified source ingestion at an exact logical path.
+pub struct VerifiedSourceIngestRequest<'a> {
+    pub source_path: &'a Path,
+    pub logical_store_path: &'a str,
+    pub source_name: &'a str,
+    pub signing_key: &'a SigningKey<ed25519_dalek::SigningKey>,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct RemoteSubstitutionRequest<'a> {
     digest: [u8; 20],
@@ -430,6 +439,51 @@ struct RemoteSubstitutionRequest<'a> {
     output_name: &'a str,
     is_root: bool,
     root_source: Option<GcRootSource>,
+}
+
+fn path_info_content_and_signature_matches(existing: &PathInfo, candidate: &PathInfo) -> bool {
+    existing.store_path == candidate.store_path
+        && existing.node == candidate.node
+        && existing.references == candidate.references
+        && existing.nar_size == candidate.nar_size
+        && existing.nar_sha256 == candidate.nar_sha256
+        && existing.deriver == candidate.deriver
+        && existing.ca == candidate.ca
+        && candidate.signatures.iter().all(|signature| existing.signatures.contains(signature))
+}
+
+async fn verified_source_candidate(
+    request: &VerifiedSourceIngestRequest<'_>,
+    store_dir: &str,
+    blob_service: Arc<dyn BlobService>,
+    directory_service: Arc<dyn DirectoryService>,
+) -> Result<PathInfo, Error> {
+    assert!(!request.logical_store_path.is_empty(), "logical_store_path must not be empty");
+    assert!(!request.source_name.is_empty(), "source_name must not be empty");
+    let store_path = StorePath::from_absolute_path_with_prefix(request.logical_store_path.as_bytes(), store_dir)
+        .map_err(|error| {
+            Error::Store(format!("verified source logical store path {}: {error}", request.logical_store_path))
+        })?;
+    let metadata = std::fs::symlink_metadata(request.source_path)
+        .map_err(|error| Error::Store(format!("verified source {}: {error}", request.source_path.display())))?;
+    if metadata.file_type().is_symlink() {
+        return Err(Error::Store(format!(
+            "verified source root must not be a symlink: {}",
+            request.source_path.display()
+        )));
+    }
+    let node =
+        ingest_path::<_, _, _, &[u8]>(blob_service.clone(), directory_service.clone(), request.source_path, None)
+            .await
+            .map_err(|error| {
+                Error::Store(format!("verified source ingest {}: {error}", request.source_path.display()))
+            })?;
+    let renderer = SimpleRenderer::new(blob_service, directory_service);
+    let (nar_size, nar_sha256) = renderer
+        .calculate_nar(&node)
+        .await
+        .map_err(|error| Error::Store(format!("verified source NAR calculation: {error}")))?;
+    Ok(signed_adoption_path_info(store_path, node, nar_size, nar_sha256, request.signing_key))
 }
 
 fn remove_existing_export_path(path: &Path) -> std::io::Result<()> {
@@ -2444,6 +2498,80 @@ impl StoreHandle {
 
     // -- Persistence + realization --
 
+    /// Check a verified source candidate without mutating this store.
+    pub async fn preflight_verified_source(&self, request: VerifiedSourceIngestRequest<'_>) -> Result<PathInfo, Error> {
+        let preview_blob_service = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
+        let preview_directory_service = Arc::new(
+            RedbDirectoryService::new_temporary(
+                "verified-source-preflight".to_string(),
+                RedbDirectoryServiceConfig::default(),
+            )
+            .map_err(|error| Error::Store(format!("verified source preflight directory service: {error}")))?,
+        ) as Arc<dyn DirectoryService>;
+        let candidate =
+            verified_source_candidate(&request, &self.store_dir, preview_blob_service, preview_directory_service)
+                .await?;
+        if let Some(existing) = self
+            .pathinfo_service
+            .get(*candidate.store_path.digest())
+            .await
+            .map_err(|error| Error::PathInfoService(format!("verified source preflight: {error}")))?
+        {
+            if path_info_content_and_signature_matches(&existing, &candidate) {
+                return Ok(existing);
+            }
+            return Err(Error::Store(format!(
+                "verified source refuses conflicting existing PathInfo: {}",
+                request.logical_store_path
+            )));
+        }
+        Ok(candidate)
+    }
+
+    /// Ingest verified source bytes at an exact logical store path.
+    ///
+    /// The caller binds the source bytes to a receipt before this shell runs. This
+    /// method preserves the requested target path, signs PathInfo, accepts exact
+    /// idempotent reuse, and refuses conflicting existing PathInfo.
+    pub async fn ingest_verified_source(
+        &mut self,
+        request: VerifiedSourceIngestRequest<'_>,
+    ) -> Result<PathInfo, Error> {
+        let candidate = verified_source_candidate(
+            &request,
+            &self.store_dir,
+            self.blob_service.clone(),
+            self.directory_service.clone(),
+        )
+        .await?;
+        if let Some(existing) = self
+            .pathinfo_service
+            .get(*candidate.store_path.digest())
+            .await
+            .map_err(|error| Error::PathInfoService(format!("verified source preflight: {error}")))?
+        {
+            if path_info_content_and_signature_matches(&existing, &candidate) {
+                return Ok(existing);
+            }
+            return Err(Error::Store(format!(
+                "verified source refuses conflicting existing PathInfo: {}",
+                request.logical_store_path
+            )));
+        }
+        let output_path = candidate.store_path.clone();
+        let final_node = candidate.node.clone();
+        self.persist_and_export_signed_output(PersistOutputRequest {
+            output_name: request.source_name,
+            output_path: &output_path,
+            path_info: candidate,
+            final_node,
+            provenance: None,
+            is_root: false,
+            root_source: None,
+        })
+        .await
+    }
+
     /// Adopt a locally materialized output only after its caller independently verifies it.
     ///
     /// The logical path must map to an existing entry in this handle's physical output
@@ -3746,6 +3874,95 @@ mod tests {
         assert!(error.contains("adoption source"));
         assert!(error.contains("missing-provider"));
         assert!(handle.pathinfo_service.get(*store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn verified_source_ingest_preserves_exact_path_and_reuses_matching_content() {
+        const SOURCE_DIGEST_BYTE: u8 = 33;
+        const SOURCE_KEY_BYTE: u8 = 43;
+        const OTHER_SOURCE_KEY_BYTE: u8 = 53;
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let source_path = state_dir.path().join("verified-source.txt");
+        std::fs::write(&source_path, b"verified-source").unwrap();
+        let store_path = test_output("foreign-source", SOURCE_DIGEST_BYTE);
+        let logical_path = store_path.to_absolute_path();
+        let signing_key = SigningKey::new(
+            "source-ingest-test-1".to_string(),
+            ed25519_dalek::SigningKey::from_bytes(&[SOURCE_KEY_BYTE; NAR_SHA256_BYTES]),
+        );
+        let request = || VerifiedSourceIngestRequest {
+            source_path: &source_path,
+            logical_store_path: &logical_path,
+            source_name: "foreign-source",
+            signing_key: &signing_key,
+        };
+
+        let preview = handle.preflight_verified_source(request()).await.unwrap();
+        assert_eq!(preview.store_path, store_path);
+        assert!(handle.pathinfo_service.get(*store_path.digest()).await.unwrap().is_none());
+        let first = handle.ingest_verified_source(request()).await.unwrap();
+        let second = handle.ingest_verified_source(request()).await.unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(first.store_path, store_path);
+        assert_eq!(first.signatures.len(), 1);
+
+        let other_signing_key = SigningKey::new(
+            "source-ingest-test-other".to_string(),
+            ed25519_dalek::SigningKey::from_bytes(&[OTHER_SOURCE_KEY_BYTE; NAR_SHA256_BYTES]),
+        );
+        let error = handle
+            .ingest_verified_source(VerifiedSourceIngestRequest {
+                source_path: &source_path,
+                logical_store_path: &logical_path,
+                source_name: "foreign-source",
+                signing_key: &other_signing_key,
+            })
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("conflicting existing PathInfo"));
+    }
+
+    #[tokio::test]
+    async fn verified_source_ingest_rejects_conflicting_existing_content() {
+        const SOURCE_DIGEST_BYTE: u8 = 34;
+        const SOURCE_KEY_BYTE: u8 = 44;
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let first_path = state_dir.path().join("first-source.txt");
+        let second_path = state_dir.path().join("second-source.txt");
+        std::fs::write(&first_path, b"first-source").unwrap();
+        std::fs::write(&second_path, b"different-source").unwrap();
+        let store_path = test_output("conflicting-source", SOURCE_DIGEST_BYTE);
+        let logical_path = store_path.to_absolute_path();
+        let signing_key = SigningKey::new(
+            "source-ingest-test-2".to_string(),
+            ed25519_dalek::SigningKey::from_bytes(&[SOURCE_KEY_BYTE; NAR_SHA256_BYTES]),
+        );
+
+        let first = handle
+            .ingest_verified_source(VerifiedSourceIngestRequest {
+                source_path: &first_path,
+                logical_store_path: &logical_path,
+                source_name: "conflicting-source",
+                signing_key: &signing_key,
+            })
+            .await
+            .unwrap();
+        let error = handle
+            .ingest_verified_source(VerifiedSourceIngestRequest {
+                source_path: &second_path,
+                logical_store_path: &logical_path,
+                source_name: "conflicting-source",
+                signing_key: &signing_key,
+            })
+            .await
+            .unwrap_err();
+        let stored = handle.pathinfo_service.get(*store_path.digest()).await.unwrap().unwrap();
+
+        assert!(error.to_string().contains("conflicting existing PathInfo"));
+        assert_eq!(stored, first);
     }
 
     #[tokio::test]

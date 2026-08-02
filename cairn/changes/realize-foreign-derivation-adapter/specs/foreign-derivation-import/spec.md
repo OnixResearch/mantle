@@ -65,7 +65,7 @@ r[foreign_derivation_import.realization_adapter] Mantle MUST realize accepted ex
 
 GIVEN an admitted executable plan, verified sources, and accepted execution profiles
 WHEN an operator selects local realization
-THEN the adapter MUST register resolved native units and call the ordinary `Builder::build_all` path
+THEN the adapter MUST register resolved native units and call the ordinary `Builder` worker path
 AND normal goal ordering, substitution, fetch, sandbox, cancellation, PathInfo, and attestation behavior MUST remain in force.
 
 #### Scenario: Two-node graph realizes exact dependency
@@ -107,9 +107,16 @@ WHEN Mantle writes the realization receipt
 THEN it MUST bind import receipt, executable plan, source records, execution policy, selected roots, build-report digest, PathInfo identities, and action dispositions
 AND it MUST identify whether each output was fetched, substituted, built, or already present.
 
-#### Scenario: Failure emits bounded evidence without success
+#### Scenario: Preflight rejection emits no realization receipt
 
-GIVEN source admission, profile validation, dispatch, build, cancellation, persistence, or report writing fails
+GIVEN source, profile, root, route, or artifact preflight rejects the request
+WHEN Mantle reports the rejection
+THEN it MUST NOT create a realization receipt or realization store state
+AND it MUST identify the stable preflight failure.
+
+#### Scenario: Execution failure emits bounded evidence without success
+
+GIVEN execution has started and dispatch, build, cancellation, persistence, or report writing fails
 WHEN Mantle reports the attempt
 THEN diagnostics MUST identify the stable failure stage and affected roots
 AND no receipt may report a stronger state than the completed evidence supports.

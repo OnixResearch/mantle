@@ -12,7 +12,7 @@ Current build-request construction adds Nix-style environment variables, a fixed
 
 ### Decision 1: Reuse the ordinary scheduler and store
 
-**Choice:** The adapter will register resolved native units in `DerivationRegistry`. It will call `Builder::build_all` for selected target roots.
+**Choice:** The adapter will register resolved native units in `DerivationRegistry`. It will use the ordinary `Builder` worker path for selected target roots.
 
 The adapter will not add a foreign worker, recursive executor, or second PathInfo service.
 

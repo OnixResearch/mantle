@@ -1,10 +1,9 @@
 # Foreign derivation import trust model
 
-Foreign derivation import is an admission and planning boundary. It lets Mantle
-consume a lowered, adapter-neutral store graph without running Guix, Nix, flakes,
-overlays, or package-module evaluation during consumption. The receipt is useful
-because it binds the data and policies that were reviewed, but the receipt is not
-realization evidence and is not output trust.
+Foreign derivation import starts with an admission and planning boundary. Mantle
+can then realize an accepted plan through a separate receipt-bound adapter. It
+does not run Guix, Nix, flakes, overlays, or package-module evaluation. An import
+receipt is not realization evidence and is not output trust.
 
 Use this guide when reviewing `foreign-derivation-graph-v1`,
 `foreign-package-index-v1`, and foreign import receipts. It explains what a
@@ -36,6 +35,27 @@ mantle --json foreign-import plan \
 `validate` and `plan` read JSON artifacts in the CLI shell. The shell passes
 owned data to the pure import core. `validate --receipt <path>` checks that a
 receipt still matches the current graph and policy digests.
+
+Prepare source records and realize an executable plan:
+
+```text
+mantle --json foreign-import prepare-sources \
+  --plan plan.json \
+  --source foreign-builder=./builder \
+  --out source-bundle.json
+
+mantle --json foreign-import realize \
+  --plan plan.json \
+  --import-receipt import-receipt.json \
+  --source-bundle source-bundle.json \
+  --source-bundle-blake3 <manifest-blake3> \
+  --execution-profile profile.json \
+  --receipt-out realization-receipt.json \
+  --offline --no-substitute
+```
+
+See the [foreign realization operator guide](foreign-realization-operator-guide.md)
+for the complete procedure and failure rules.
 
 ## Executable foreign plan
 
@@ -133,8 +153,13 @@ They are not source contents. An executable plan maps each descriptor to a
 source requirement. It does not prove that the bytes are available, fetched,
 materialized, unpacked, patched, or built.
 
-Trusted source-output claims require later evidence from Mantle fetchers, source
-hash verification, store admission, or attestation sidecars.
+`prepare-sources` binds each required payload to a bounded source record. The
+record preserves file content, executable modes, safe links, and directory-tree
+completeness. Realization reconstructs this payload before exact-path store ingest.
+
+Mantle verifies fixed-output downloads before store admission. Ordered candidates
+retain plan order, and failed candidates appear in the realization receipt.
+Trusted source-output claims still require the recorded store or attestation evidence.
 
 ### Cache and substitution trust
 
@@ -165,8 +190,16 @@ store. Output verification is the later check that admitted store paths, hashes,
 signatures, attestations, and release evidence match the claimed result.
 
 Import admission can succeed while realization is blocked, unsupported, or never
-attempted. Realization can succeed while release reproducibility or independent
-witness policy remains unproven. Report each layer with its own evidence.
+attempted. `mantle-foreign-realization-receipt-v1` binds the accepted plan, sources,
+profiles, build report, PathInfo facts, fetch attempts, failures, and non-claims.
+
+A `complete` receipt records successful observations for all selected roots. A
+`partial-failure` receipt records completed work and the failure. Preflight rejection
+creates no receipt and makes no store change.
+
+Realization can succeed while release reproducibility or independent witness policy
+remains unproven. Report each layer with its own evidence. OnixOS still owns system
+assembly, activation, deployment, boot, and machine-level evidence.
 
 ## Guix-like hello import
 
@@ -263,12 +296,21 @@ signature satisfies the selected trust policy, and its complete castore content
 is present. It downloads dependencies before the selected root. A missing or
 invalid dependency prevents root admission.
 
-The generic `store pull --closure` command is not yet bound to a foreign-import
-receipt. The operator must compare the selected root with the accepted import
-plan. A successful closure pull proves cache admission under the configured
-trust policy. It does not prove package correctness, local rebuild compatibility,
-evaluator parity, reproducibility, private-cache authentication, or release
-eligibility.
+A complete foreign realization receipt can provide the closure root:
+
+```text
+mantle store pull \
+  --from https://cache.example.invalid/mantle \
+  --closure \
+  --foreign-realization-receipt realization-receipt.json \
+  --trusted-public-keys 'mantle-cache-1:...'
+```
+
+The cache must contain the receipt's target paths under the same logical store
+prefix. Mantle validates the receipt schema, status, identity, and root before
+store mutation. A successful pull proves cache admission under the configured
+trust policy. It does not prove package correctness, local rebuild
+compatibility, evaluator parity, reproducibility, or release eligibility.
 
 ## Claim-safe reporting checklist
 
