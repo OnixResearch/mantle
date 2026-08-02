@@ -184,8 +184,10 @@ pub fn migrate_legacy_ticket_state(
     if locked_ids != invalidated_ticket_ids {
         return Err(state_error("legacy-state-changed-during-migration"));
     }
-    let mut next_state = RemoteTicketState::default();
-    next_state.invalidated_legacy_ticket_ids = locked_ids.into_iter().collect();
+    let next_state = RemoteTicketState {
+        invalidated_legacy_ticket_ids: locked_ids.into_iter().collect(),
+        ..RemoteTicketState::default()
+    };
     save_ticket_state(state_dir, &next_state)?;
     Ok(report)
 }
