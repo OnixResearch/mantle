@@ -2,6 +2,8 @@
 #![register_tool(tigerstyle)]
 // r[impl foreign_derivation_import.realization_adapter]
 // r[impl foreign_derivation_import.realization_receipt]
+// r[impl foreign_derivation_import.cache_only_runtime_closure]
+// r[impl foreign_derivation_import.live_nixpkgs_realization_proof]
 
 mod derivation_file;
 

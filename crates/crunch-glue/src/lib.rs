@@ -11,6 +11,7 @@
 // r[impl foreign_derivation_import.exact_graph_compilation]
 // r[impl foreign_derivation_import.foreign_builtin_lowering]
 // r[impl foreign_derivation_import.executable_plan]
+// r[impl foreign_derivation_import.cache_only_preserved_paths]
 
 mod conversion_cache;
 mod convert;

@@ -61,6 +61,10 @@ The tasks gate observed 14 completed tasks and one pending V3 task before this e
 Pre-sync Tracey reported 266 referenced requirements and 693 accepted requirements.
 Unrelated repository-wide missing and dangling references kept `valid: false`.
 
+After accepted-spec sync, Tracey reported 269 referenced requirements and 696 accepted requirements.
+None of the three new requirement IDs remained missing or dangling.
+Unrelated repository debt kept `valid: false`.
+
 ## Live proof
 
 See `live-nixpkgs-hello/summary.md` for the realized, reuse, audit, pull, and negative identities.
