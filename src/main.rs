@@ -40,6 +40,8 @@ mod foreign_derivation_import;
 mod foreign_executable_plan;
 #[allow(dead_code)]
 mod foreign_graph_compiler;
+#[allow(dead_code)]
+mod foreign_realization;
 // Foreign-import adapters mirror external receipt fields and preserve their typed error payloads at
 // the CLI boundary.
 #[allow(clippy::result_large_err, clippy::too_many_arguments)]

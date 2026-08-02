@@ -595,11 +595,17 @@ where BServ: BuildService + 'static
         // 5. Collect sandbox inputs.
         let sandbox_inputs = self.collect_sandbox_inputs(derivation_ref, known_paths, &all_source_paths).await?;
 
-        // 6. Create build request.
+        // 6. Create build request from the registry-bound execution profile.
+        let drv_absolute = drv_path.to_absolute_path_with_prefix(self.store.store_dir());
+        let execution_profile = known_paths
+            .get_by_drv_path(&drv_absolute)
+            .map(|entry| entry.execution_profile.clone())
+            .ok_or_else(|| Error::DerivationNotFound { path: drv_path.clone() })?;
         let request_envelope = match derivation_to_build_request(
             derivation_ref,
             &sandbox_inputs,
             self.store.store_dir(),
+            &execution_profile,
             self.hermeticity_mode,
         ) {
             Ok(envelope) => envelope,

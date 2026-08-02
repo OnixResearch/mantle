@@ -29,7 +29,7 @@
       "domain": "mantle-plan",
       "algorithm": "blake3",
       "role": "foreign-executable-plan",
-      "value": "8c7b3122ad2ad250711c5b50ef2103ab6f6b1ac639ff14e7462bb0e1bd05fb53"
+      "value": "656b9300e550fe6adea7e5e0221a3cdb5b272e28d6a5f152072611af8303fd1a"
     },
     "accepted_import": {
       "receipt_schema": "foreign-derivation-import-receipt-v1",
@@ -46,7 +46,7 @@
         "system": "x86_64-linux",
         "node_id": "guix:hello",
         "foreign_derivation": "/gnu/store/22222222222222222222222222222222-hello.drv",
-        "target_derivation": "/mantle/store/vmncxpx21gv3xqx1h0qq7i557r3psxf5-hello.drv",
+        "target_derivation": "/mantle/store/b8yg9ihfi6j3dzsfmkqbapkbdh3ymw97-hello.drv",
         "target_outputs": {
           "out": "/mantle/store/2q3rlp6aiyg09i3nwm99c1nymbz135lb-hello"
         }
@@ -58,13 +58,14 @@
         "sequence": 0,
         "node_id": "guix:hello",
         "foreign_derivation": "/gnu/store/22222222222222222222222222222222-hello.drv",
-        "target_derivation": "/mantle/store/vmncxpx21gv3xqx1h0qq7i557r3psxf5-hello.drv",
+        "target_derivation": "/mantle/store/b8yg9ihfi6j3dzsfmkqbapkbdh3ymw97-hello.drv",
         "hdm_blake3": "ab070363de819a6baeb3aac075f6feec536700f2d68ca2ea563f0e9d643b7d5a",
-        "derivation_aterm": "Derive([(\"out\",\"/mantle/store/2q3rlp6aiyg09i3nwm99c1nymbz135lb-hello\",\"r:sha256\",\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\")],[],[\"/mantle/store/rgd66zbivgyfnkjwb1n58438frd4z41j-hello-source\"],\"builtin\",\"builtin:fetchurl\",[],[(\"__mantle_foreign_candidates\",\"[\\\"https://source.example.invalid/hello.tar.gz\\\",\\\"https://mirror.example.invalid/hello.tar.gz\\\"]\"),(\"builder\",\"builtin:fetchurl\"),(\"executable\",\"0\"),(\"mode\",\"recursive\"),(\"name\",\"hello\"),(\"out\",\"/mantle/store/2q3rlp6aiyg09i3nwm99c1nymbz135lb-hello\"),(\"outputs\",\"out\"),(\"src\",\"/mantle/store/rgd66zbivgyfnkjwb1n58438frd4z41j-hello-source\"),(\"system\",\"builtin\"),(\"unpack\",\"1\"),(\"url\",\"https://source.example.invalid/hello.tar.gz\")])",
+        "derivation_aterm": "Derive([(\"out\",\"/mantle/store/2q3rlp6aiyg09i3nwm99c1nymbz135lb-hello\",\"r:sha256\",\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\")],[],[\"/mantle/store/rgd66zbivgyfnkjwb1n58438frd4z41j-hello-source\"],\"builtin\",\"builtin:fetchurl\",[],[(\"__MANTLE_FOREIGN_EXECUTION_PROFILE_V1\",\"a9c12fae388e8536df61dc92b08d8d557963b2984eb91ac099ede532fc224684\"),(\"__mantle_foreign_candidates\",\"[\\\"https://source.example.invalid/hello.tar.gz\\\",\\\"https://mirror.example.invalid/hello.tar.gz\\\"]\"),(\"builder\",\"builtin:fetchurl\"),(\"executable\",\"0\"),(\"mode\",\"recursive\"),(\"name\",\"hello\"),(\"out\",\"/mantle/store/2q3rlp6aiyg09i3nwm99c1nymbz135lb-hello\"),(\"outputs\",\"out\"),(\"src\",\"/mantle/store/rgd66zbivgyfnkjwb1n58438frd4z41j-hello-source\"),(\"system\",\"builtin\"),(\"unpack\",\"1\"),(\"url\",\"https://source.example.invalid/hello.tar.gz\")])",
         "builder": "builtin:fetchurl",
         "system": "builtin",
         "arguments": [],
         "environment": {
+          "__MANTLE_FOREIGN_EXECUTION_PROFILE_V1": "a9c12fae388e8536df61dc92b08d8d557963b2984eb91ac099ede532fc224684",
           "__mantle_foreign_candidates": "[\"https://source.example.invalid/hello.tar.gz\",\"https://mirror.example.invalid/hello.tar.gz\"]",
           "builder": "builtin:fetchurl",
           "executable": "0",
@@ -87,6 +88,8 @@
         "input_sources": [
           "/mantle/store/rgd66zbivgyfnkjwb1n58438frd4z41j-hello-source"
         ],
+        "execution_profile_id": "mantle-foreign-guix-v1",
+        "execution_profile_digest_blake3": "a9c12fae388e8536df61dc92b08d8d557963b2984eb91ac099ede532fc224684",
         "builtin": {
           "kind": "download",
           "candidates": [
@@ -119,7 +122,7 @@
             "domain": "mantle-target",
             "algorithm": "blake3",
             "role": "target-derivation-aterm",
-            "value": "af5725828227e55155924381549768e382bd6f1bb47b9b920bffb3c4239e2562"
+            "value": "6dd1cf697cd3b6a99457ef34f73a7fc6d18453817d5b444deebd50f077dc8dff"
           }
         ],
         "declared_references": [
@@ -129,7 +132,7 @@
     ],
     "exact_path_maps": {
       "derivations": {
-        "/gnu/store/22222222222222222222222222222222-hello.drv": "/mantle/store/vmncxpx21gv3xqx1h0qq7i557r3psxf5-hello.drv"
+        "/gnu/store/22222222222222222222222222222222-hello.drv": "/mantle/store/b8yg9ihfi6j3dzsfmkqbapkbdh3ymw97-hello.drv"
       },
       "outputs": {
         "/gnu/store/11111111111111111111111111111111-hello": "/mantle/store/2q3rlp6aiyg09i3nwm99c1nymbz135lb-hello"

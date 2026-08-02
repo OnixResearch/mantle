@@ -2,10 +2,10 @@
 
 ## Phase 1: Source and policy admission
 
-- [ ] [depends:compile-foreign-derivation-graphs] I1 Add pure validation for executable plans, selected roots, import-receipt links, source requirements, and execution-profile bindings. r[foreign_derivation_import.realization_adapter]
-- [ ] [serial] I2 Add a typed Nickel foreign execution-profile contract with deterministic runtime export and bounded profile fields. r[foreign_derivation_import.execution_profile]
-- [ ] [serial] I3 Bind the canonical execution-profile BLAKE3 into each target derivation identity through a reserved internal field. Reject reserved-key collisions and digest mismatch. r[foreign_derivation_import.execution_profile]
-- [ ] [parallel] I4 Add positive profile tests and negative unknown-field, limit, collision, stale-digest, `/bin/sh`, network, syscall, writable-prefix, and environment tests. r[foreign_derivation_import.execution_profile]
+- [x] [depends:compile-foreign-derivation-graphs] I1 Add pure validation for executable plans, selected roots, import-receipt links, source requirements, and execution-profile bindings. r[foreign_derivation_import.realization_adapter]
+- [x] [serial] I2 Add a typed Nickel foreign execution-profile contract with deterministic runtime export and bounded profile fields. r[foreign_derivation_import.execution_profile]
+- [x] [serial] I3 Bind the canonical execution-profile BLAKE3 into each target derivation identity through a reserved internal field. Reject reserved-key collisions and digest mismatch. r[foreign_derivation_import.execution_profile]
+- [x] [parallel] I4 Add positive profile tests and negative unknown-field, limit, collision, stale-digest, `/bin/sh`, network, syscall, writable-prefix, and environment tests. r[foreign_derivation_import.execution_profile]
 
 ## Phase 2: Source materialization and fetch policy
 

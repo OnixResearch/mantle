@@ -15,6 +15,10 @@ use crunch_attestation::Claims;
 use nix_compat::derivation::Derivation;
 use nix_compat::store_path::StorePath;
 
+use crate::ExecutionProfile;
+use crate::validate_execution_profile;
+use crate::verify_execution_profile_binding;
+
 /// Maximum registry entries. Matches `goal::MAX_GOALS`.
 const MAX_ENTRIES: u32 = 16_384;
 
@@ -28,6 +32,8 @@ pub struct RegistryEntry {
     pub content_addressed: bool,
     pub dynamic_plan_outputs: Vec<String>,
     pub provenance_claims: Option<Claims>,
+    /// Explicit execution policy used when the worker creates a build request.
+    pub execution_profile: ExecutionProfile,
     /// Resolved output paths for CA derivations. Populated by
     /// `resolve_output()` after the build completes.
     /// Key: output name, Value: final store path.
@@ -41,6 +47,7 @@ struct RegistryInsert {
     content_addressed: bool,
     dynamic_plan_outputs: Vec<String>,
     provenance_claims: Option<Claims>,
+    execution_profile: ExecutionProfile,
 }
 
 /// Build-time derivation lookup for the Worker and Builder.
@@ -103,6 +110,7 @@ impl DerivationRegistry {
             content_addressed,
             dynamic_plan_outputs: Vec::new(),
             provenance_claims,
+            execution_profile: ExecutionProfile::native_compatibility(),
         });
     }
 
@@ -127,7 +135,35 @@ impl DerivationRegistry {
             content_addressed,
             dynamic_plan_outputs,
             provenance_claims,
+            execution_profile: ExecutionProfile::native_compatibility(),
         });
+    }
+
+    /// Register a derivation with an explicit identity-checked execution profile.
+    pub fn insert_with_execution_profile(
+        &mut self,
+        drv_path: StorePath<String>,
+        hdm: [u8; 32],
+        derivation: impl Into<Arc<Derivation>>,
+        content_addressed: bool,
+        provenance_claims: Option<Claims>,
+        execution_profile: ExecutionProfile,
+    ) -> Result<(), crate::Error> {
+        let derivation = derivation.into();
+        validate_execution_profile(&execution_profile)
+            .map_err(|error| crate::Error::Store(format!("invalid execution profile: {error}")))?;
+        verify_execution_profile_binding(derivation.as_ref(), &execution_profile)
+            .map_err(|error| crate::Error::Store(format!("invalid execution profile binding: {error}")))?;
+        self.insert_registration(RegistryInsert {
+            drv_path,
+            hash_derivation_modulo: hdm,
+            derivation,
+            content_addressed,
+            dynamic_plan_outputs: Vec::new(),
+            provenance_claims,
+            execution_profile,
+        });
+        Ok(())
     }
 
     fn insert_registration(&mut self, registration: RegistryInsert) {
@@ -138,6 +174,7 @@ impl DerivationRegistry {
             content_addressed,
             dynamic_plan_outputs,
             provenance_claims,
+            execution_profile,
         } = registration;
         debug_assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
         debug_assert!(
@@ -158,6 +195,7 @@ impl DerivationRegistry {
             content_addressed,
             dynamic_plan_outputs,
             provenance_claims,
+            execution_profile,
             resolved_outputs: HashMap::new(),
         });
     }
@@ -238,6 +276,7 @@ where I: IntoIterator<Item = (StorePath<String>, [u8; 32], Derivation, bool, Vec
             content_addressed,
             dynamic_plan_outputs,
             provenance_claims,
+            execution_profile: ExecutionProfile::native_compatibility(),
         });
     }
 }
@@ -308,6 +347,40 @@ mod tests {
         let entry = reg.get_by_drv_path(&sp.to_absolute_path()).unwrap();
         assert_eq!(entry.dynamic_plan_outputs, vec!["plan".to_string()]);
         assert!(entry.derivation.outputs.contains_key("plan"));
+    }
+
+    #[test]
+    fn explicit_execution_profile_is_verified_and_stored() {
+        let mut registry = DerivationRegistry::default();
+        let drv_path = fake_sp("foreign-profile.drv");
+        let profile = ExecutionProfile::foreign_nix();
+        let mut derivation = dummy_derivation();
+        crate::bind_execution_profile(&mut derivation, &profile).unwrap();
+
+        registry
+            .insert_with_execution_profile(drv_path.clone(), [8u8; 32], derivation, false, None, profile.clone())
+            .unwrap();
+
+        let entry = registry.get_by_drv_path(&drv_path.to_absolute_path()).unwrap();
+        assert_eq!(entry.execution_profile, profile);
+    }
+
+    #[test]
+    fn explicit_execution_profile_rejects_stale_binding() {
+        let mut registry = DerivationRegistry::default();
+        let drv_path = fake_sp("stale-profile.drv");
+        let guix = ExecutionProfile::foreign_guix();
+        let nix = ExecutionProfile::foreign_nix();
+        let mut derivation = dummy_derivation();
+        derivation.builder = "/mantle/store/00000000000000000000000000000000-builder".to_string();
+        crate::bind_execution_profile(&mut derivation, &guix).unwrap();
+
+        let error = registry
+            .insert_with_execution_profile(drv_path, [9u8; 32], derivation, false, None, nix)
+            .unwrap_err();
+
+        assert!(error.to_string().contains("binding digest does not match"));
+        assert!(registry.is_empty());
     }
 
     #[test]

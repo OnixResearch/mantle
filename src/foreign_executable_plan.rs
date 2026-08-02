@@ -3,6 +3,9 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use crunch_build::EXECUTION_PROFILE_BINDING_ENV;
+use crunch_build::ExecutionProfile;
+use crunch_build::foreign_profile_for_producer;
 use data_encoding::HEXLOWER;
 use nix_compat::derivation::Derivation;
 use serde::Deserialize;
@@ -25,7 +28,7 @@ use crate::foreign_graph_compiler::CompiledForeignGraph;
 use crate::foreign_graph_compiler::CompiledForeignUnit;
 use crate::foreign_graph_compiler::CompiledSourceRequirement;
 use crate::foreign_graph_compiler::ExactForeignPathMaps;
-use crate::foreign_graph_compiler::compile_foreign_graph;
+use crate::foreign_graph_compiler::compile_foreign_graph_with_profile;
 use crate::foreign_graph_compiler::validate_digest_facts;
 
 const EXECUTABLE_PLAN_SCHEMA: &str = "mantle-foreign-executable-plan-v1";
@@ -104,6 +107,8 @@ pub(crate) struct ExecutableNativeUnit {
     pub(crate) outputs: BTreeMap<String, String>,
     pub(crate) input_derivations: BTreeMap<String, Vec<String>>,
     pub(crate) input_sources: Vec<String>,
+    pub(crate) execution_profile_id: String,
+    pub(crate) execution_profile_digest_blake3: String,
     pub(crate) builtin: CompiledForeignBuiltin,
     pub(crate) digest_facts: Vec<CompiledDigestFact>,
     pub(crate) declared_references: Vec<String>,
@@ -142,6 +147,18 @@ pub(crate) fn compile_foreign_executable_plan(
     package: &str,
     system: &str,
 ) -> Result<(ForeignExecutablePlan, ImportReceipt), ImportDiagnostic> {
+    let execution_profile = foreign_profile_for_producer(&graph.producer.kind);
+    compile_foreign_executable_plan_with_profile(graph, package_index, policy, package, system, &execution_profile)
+}
+
+pub(crate) fn compile_foreign_executable_plan_with_profile(
+    graph: &ForeignDerivationGraph,
+    package_index: &PackageIndex,
+    policy: &TranslationPolicy,
+    package: &str,
+    system: &str,
+    execution_profile: &ExecutionProfile,
+) -> Result<(ForeignExecutablePlan, ImportReceipt), ImportDiagnostic> {
     let (_translated, receipt) = translate_foreign_graph(graph, Some(package_index), policy)?;
     let selected_entry = select_package_entry(package_index, package, system)?;
     if !graph.root_derivation_ids.contains(&selected_entry.root_derivation_id) {
@@ -151,7 +168,7 @@ pub(crate) fn compile_foreign_executable_plan(
             "selected package index entry is not a declared graph root",
         ));
     }
-    let compiled = compile_foreign_graph(graph, &policy.target_prefix)?;
+    let compiled = compile_foreign_graph_with_profile(graph, &policy.target_prefix, execution_profile)?;
     let accepted_import = accepted_import_identity(&receipt)?;
     let selected_roots = executable_roots(graph, package_index, selected_entry, &compiled)?;
     let nodes = graph.nodes.iter().map(|node| (node.node_id.as_str(), node)).collect::<BTreeMap<_, _>>();
@@ -399,6 +416,8 @@ fn executable_unit(
         outputs,
         input_derivations,
         input_sources,
+        execution_profile_id: unit.execution_profile_id.clone(),
+        execution_profile_digest_blake3: unit.execution_profile_digest_blake3.clone(),
         builtin: unit.builtin.clone(),
         digest_facts: unit.digest_facts.clone(),
         declared_references: unit.declared_references.clone(),
@@ -600,7 +619,7 @@ fn validate_plan_units(plan: &ForeignExecutablePlan) -> Result<(), ImportDiagnos
     Ok(())
 }
 
-fn validate_unit_aterm_projection(
+pub(crate) fn validate_unit_aterm_projection(
     plan: &ForeignExecutablePlan,
     unit: &ExecutableNativeUnit,
 ) -> Result<Derivation, ImportDiagnostic> {
@@ -698,6 +717,16 @@ fn decode_blake3(value: &str, node_id: &str) -> Result<[u8; BLAKE3_BYTES], Impor
 }
 
 fn validate_unit_identity(plan: &ForeignExecutablePlan, unit: &ExecutableNativeUnit) -> Result<(), ImportDiagnostic> {
+    if unit.execution_profile_id.is_empty()
+        || !is_blake3_hex(&unit.execution_profile_digest_blake3)
+        || unit.environment.get(EXECUTION_PROFILE_BINDING_ENV) != Some(&unit.execution_profile_digest_blake3)
+    {
+        return Err(plan_diagnostic(
+            "foreign-plan-execution-profile-binding-invalid",
+            Some(&unit.node_id),
+            "native unit execution profile binding is absent, malformed, or stale",
+        ));
+    }
     if plan.exact_path_maps.derivations.get(&unit.foreign_derivation) != Some(&unit.target_derivation) {
         return Err(plan_diagnostic(
             "foreign-plan-derivation-map-mismatch",
@@ -925,6 +954,10 @@ fn plan_identity_digest(plan: &ForeignExecutablePlan) -> Result<String, ImportDi
     )
 }
 
+pub(crate) fn import_receipt_digest(receipt: &ImportReceipt) -> Result<String, ImportDiagnostic> {
+    canonical_blake3(receipt, "receipt")
+}
+
 fn canonical_blake3<T: Serialize>(value: &T, artifact: &str) -> Result<String, ImportDiagnostic> {
     serde_json::to_vec(value).map(|bytes| blake3::hash(&bytes).to_hex().to_string()).map_err(|error| {
         plan_diagnostic(
@@ -973,6 +1006,8 @@ mod tests {
         assert!(is_blake3_hex(&first.plan_identity.value));
         assert_eq!(first.selected_roots.len(), graph.root_derivation_ids.len());
         assert_eq!(first.native_units.len(), first.exact_path_maps.derivations.len());
+        assert!(first.native_units.iter().all(|unit| !unit.execution_profile_id.is_empty()));
+        assert!(first.native_units.iter().all(|unit| is_blake3_hex(&unit.execution_profile_digest_blake3)));
         assert!(first.forbidden_process_invocations.is_empty());
         validate_foreign_executable_plan(&first).expect("emitted plan must validate");
     }
@@ -993,6 +1028,14 @@ mod tests {
         target_fact.algorithm = "sha256".to_string();
         refresh_plan_identity(&mut target_domain);
         assert_class(validate_foreign_executable_plan(&target_domain), "foreign-compiler-digest-domain-mismatch");
+
+        let mut stale_profile = fixture_plan();
+        stale_profile.native_units[0].execution_profile_digest_blake3 = "0".repeat(BLAKE3_HEX_CHARS);
+        refresh_plan_identity(&mut stale_profile);
+        assert_class(
+            validate_foreign_executable_plan(&stale_profile),
+            "foreign-plan-execution-profile-binding-invalid",
+        );
 
         let mut missing_root = fixture_plan();
         missing_root.native_units.clear();

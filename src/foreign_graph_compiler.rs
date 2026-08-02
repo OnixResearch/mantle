@@ -5,6 +5,12 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use bstr::BString;
+use crunch_build::EXECUTION_PROFILE_BINDING_ENV;
+use crunch_build::ExecutionProfile;
+use crunch_build::bind_execution_profile;
+use crunch_build::execution_profile_digest;
+use crunch_build::foreign_profile_for_producer;
+use crunch_build::validate_execution_profile;
 use crunch_glue::ResolvedDerivationRequest;
 use data_encoding::HEXLOWER;
 use nix_compat::derivation::Derivation;
@@ -95,6 +101,8 @@ pub(crate) struct CompiledForeignUnit {
     pub(crate) hdm: [u8; 32],
     pub(crate) aterm_digest: String,
     pub(crate) derivation: Derivation,
+    pub(crate) execution_profile_id: String,
+    pub(crate) execution_profile_digest_blake3: String,
     pub(crate) builtin: CompiledForeignBuiltin,
     pub(crate) digest_facts: Vec<CompiledDigestFact>,
     pub(crate) declared_references: Vec<String>,
@@ -129,7 +137,23 @@ pub(crate) fn compile_foreign_graph(
     graph: &ForeignDerivationGraph,
     target_store_prefix: &str,
 ) -> Result<CompiledForeignGraph, ImportDiagnostic> {
+    let execution_profile = foreign_profile_for_producer(&graph.producer.kind);
+    compile_foreign_graph_with_profile(graph, target_store_prefix, &execution_profile)
+}
+
+pub(crate) fn compile_foreign_graph_with_profile(
+    graph: &ForeignDerivationGraph,
+    target_store_prefix: &str,
+    execution_profile: &ExecutionProfile,
+) -> Result<CompiledForeignGraph, ImportDiagnostic> {
     validate_graph(graph)?;
+    validate_execution_profile(execution_profile).map_err(|error| {
+        compiler_diagnostic(
+            "foreign-compiler-execution-profile-invalid",
+            None,
+            &format!("execution profile validation failed: {error}"),
+        )
+    })?;
     validate_target_store_prefix(target_store_prefix)?;
     let dependency_order = foreign_dependency_order(graph)?;
     let nodes = graph.nodes.iter().map(|node| (node.node_id.as_str(), node)).collect::<BTreeMap<_, _>>();
@@ -151,7 +175,16 @@ pub(crate) fn compile_foreign_graph(
                 "dependency order references an absent node",
             )
         })?;
-        let mut unit = compile_node(node, graph, target_store_prefix, &payloads, &identities, &known_hdms, &path_maps)?;
+        let mut unit = compile_node(
+            node,
+            graph,
+            target_store_prefix,
+            execution_profile,
+            &payloads,
+            &identities,
+            &known_hdms,
+            &path_maps,
+        )?;
         let output_paths = exact_output_paths(&unit.derivation, target_store_prefix, &node.node_id)?;
         insert_exact_path(
             &mut path_maps.derivations,
@@ -409,6 +442,7 @@ fn compile_node(
     node: &ForeignDerivationNode,
     graph: &ForeignDerivationGraph,
     target_store_prefix: &str,
+    execution_profile: &ExecutionProfile,
     payloads: &BTreeMap<&str, &SourcePayload>,
     identities: &BTreeMap<String, CompiledIdentity>,
     known_hdms: &BTreeMap<String, [u8; 32]>,
@@ -425,7 +459,7 @@ fn compile_node(
     let input_derivations = compile_input_derivations(node, identities, target_store_prefix)?;
     let input_sources = compile_input_sources(node, payloads, path_maps, target_store_prefix)?;
     let environment = compile_environment(node, graph, &exact_map, &builder, &system, &builtin.environment)?;
-    let derivation = Derivation {
+    let mut derivation = Derivation {
         arguments,
         builder,
         environment,
@@ -434,6 +468,29 @@ fn compile_node(
         outputs,
         system,
     };
+    let execution_profile_digest_blake3 =
+        bind_execution_profile(&mut derivation, execution_profile).map_err(|error| {
+            compiler_diagnostic(
+                "foreign-compiler-execution-profile-binding-invalid",
+                Some(&node.node_id),
+                &format!("execution profile binding failed: {error}"),
+            )
+        })?;
+    let expected_profile_digest = execution_profile_digest(execution_profile).map_err(|error| {
+        compiler_diagnostic(
+            "foreign-compiler-execution-profile-invalid",
+            Some(&node.node_id),
+            &format!("execution profile identity failed: {error}"),
+        )
+    })?;
+    assert_eq!(execution_profile_digest_blake3, expected_profile_digest);
+    debug_assert_eq!(
+        derivation
+            .environment
+            .get(EXECUTION_PROFILE_BINDING_ENV)
+            .map(|value| String::from_utf8_lossy(value).into_owned()),
+        Some(execution_profile_digest_blake3.clone())
+    );
     let registration = crunch_glue::resolve_derivation_registration(ResolvedDerivationRequest {
         name: &node.name,
         derivation,
@@ -461,6 +518,8 @@ fn compile_node(
         hdm: registration.hdm,
         aterm_digest,
         derivation: registration.derivation,
+        execution_profile_id: execution_profile.profile_id.clone(),
+        execution_profile_digest_blake3,
         builtin: builtin.fact,
         digest_facts,
         declared_references: Vec::new(),
@@ -1479,6 +1538,42 @@ mod tests {
             .expect("fixed output")
             .algorithm = BLAKE3_ALGORITHM.to_string();
         assert_class(compile_foreign_graph(&wrong_domain, TARGET_PREFIX), "foreign-compiler-digest-domain-mismatch");
+    }
+
+    #[test]
+    fn execution_profile_changes_target_identity_and_reserved_collision_fails() {
+        let graph = diamond_graph();
+        let first_profile = ExecutionProfile::foreign_nix();
+        let mut second_profile = first_profile.clone();
+        second_profile.work_directory = "work".to_string();
+        second_profile.writable_prefixes = vec!["work".to_string()];
+
+        let first = compile_foreign_graph_with_profile(&graph, TARGET_PREFIX, &first_profile).unwrap();
+        let second = compile_foreign_graph_with_profile(&graph, TARGET_PREFIX, &second_profile).unwrap();
+
+        assert_ne!(first.roots, second.roots);
+        assert_ne!(first.units[0].execution_profile_digest_blake3, second.units[0].execution_profile_digest_blake3);
+        assert_eq!(
+            first.units[0]
+                .derivation
+                .environment
+                .get(EXECUTION_PROFILE_BINDING_ENV)
+                .map(|value| String::from_utf8_lossy(value).into_owned()),
+            Some(first.units[0].execution_profile_digest_blake3.clone())
+        );
+
+        let mut collision = diamond_graph();
+        collision
+            .nodes
+            .iter_mut()
+            .find(|node| node.node_id == "root")
+            .unwrap()
+            .env
+            .insert(EXECUTION_PROFILE_BINDING_ENV.to_string(), "foreign-value".to_string());
+        assert_class(
+            compile_foreign_graph_with_profile(&collision, TARGET_PREFIX, &first_profile),
+            "foreign-compiler-execution-profile-binding-invalid",
+        );
     }
 
     #[test]

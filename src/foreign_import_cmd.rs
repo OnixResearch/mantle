@@ -5,6 +5,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use clap::Subcommand;
+use crunch_build::ExecutionProfile;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -33,6 +34,7 @@ use crate::foreign_derivation_import::select_nix_derivation_json_closure;
 use crate::foreign_derivation_import::translate_foreign_graph;
 use crate::foreign_executable_plan::ForeignExecutablePlan;
 use crate::foreign_executable_plan::compile_foreign_executable_plan;
+use crate::foreign_executable_plan::compile_foreign_executable_plan_with_profile;
 
 const CLI_REPORT_SCHEMA: &str = "mantle-foreign-import-cli-v1";
 const VALIDATE_COMMAND: &str = "validate";
@@ -99,6 +101,10 @@ pub(crate) enum ForeignImportAction {
         /// System to select from the package index
         #[arg(long, default_value = DEFAULT_SYSTEM)]
         system: String,
+
+        /// Optional exported `mantle-foreign-execution-profile-v1` JSON
+        #[arg(long = "execution-profile")]
+        execution_profile: Option<PathBuf>,
     },
 
     /// Lower explicit prefix-aware ATerm derivations into foreign import artifacts
@@ -236,6 +242,7 @@ struct ForeignPlanRequest<'a> {
     policy_path: &'a Path,
     package: &'a str,
     system: &'a str,
+    execution_profile_path: Option<&'a Path>,
     json: bool,
 }
 
@@ -292,12 +299,14 @@ pub(crate) fn cmd_foreign_import(action: ForeignImportAction, json: bool) -> Res
             policy,
             package,
             system,
+            execution_profile,
         } => run_plan(ForeignPlanRequest {
             graph_path: &graph,
             index_path: &package_index,
             policy_path: &policy,
             package: &package,
             system: &system,
+            execution_profile_path: execution_profile.as_deref(),
             json,
         }),
         ForeignImportAction::ProduceAterm {
@@ -425,7 +434,19 @@ fn run_plan(request: ForeignPlanRequest<'_>) -> Result<(), RunError> {
         Ok(policy) => policy,
         Err(report) => return emit_report(report, request.json),
     };
-    let outcome = plan_inputs(graph, index, request.package, policy, request.system);
+    let outcome = if let Some(path) = request.execution_profile_path {
+        let execution_profile = match read_json::<ExecutionProfile>(JsonReadRequest {
+            path,
+            artifact: "execution-profile",
+            command: PLAN_COMMAND,
+        })? {
+            Ok(profile) => profile,
+            Err(report) => return emit_report(report, request.json),
+        };
+        plan_inputs_with_profile(graph, index, request.package, policy, request.system, &execution_profile)
+    } else {
+        plan_inputs(graph, index, request.package, policy, request.system)
+    };
     emit_report(outcome, request.json)
 }
 
@@ -932,6 +953,23 @@ fn plan_inputs(
         Ok(result) => result,
         Err(diagnostic) => return rejected_report(PLAN_COMMAND, diagnostic),
     };
+    accepted_report(PLAN_COMMAND, Some(receipt), Some(plan))
+}
+
+fn plan_inputs_with_profile(
+    graph: ForeignDerivationGraph,
+    index: PackageIndex,
+    package: &str,
+    policy: TranslationPolicy,
+    system: &str,
+    execution_profile: &ExecutionProfile,
+) -> ForeignImportCliReport {
+    let (plan, receipt) =
+        match compile_foreign_executable_plan_with_profile(&graph, &index, &policy, package, system, execution_profile)
+        {
+            Ok(result) => result,
+            Err(diagnostic) => return rejected_report(PLAN_COMMAND, diagnostic),
+        };
     accepted_report(PLAN_COMMAND, Some(receipt), Some(plan))
 }
 

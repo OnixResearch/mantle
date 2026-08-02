@@ -25,13 +25,19 @@ use snix_build::buildservice::StatefulWorkspaceRequest;
 use snix_castore::Node;
 
 use crate::BuildEnvironmentReport;
+use crate::ExecutionEnvironmentMode;
+use crate::ExecutionNetworkMode;
+use crate::ExecutionProfile;
 use crate::HermeticityAuditEvent;
 use crate::HermeticityAuditKind;
 use crate::HermeticityMode;
+use crate::declared_profile_environment;
 use crate::environment_policy;
 use crate::network_policy::CompatibilityNetworkPolicy;
 use crate::network_policy::plan_network_policy;
 use crate::registry::DerivationRegistry;
+use crate::validate_execution_profile;
+use crate::verify_execution_profile_binding;
 
 /// Environment variables that crunch sets in every sandbox build,
 /// matching Nix's sandbox conventions for compatibility with build
@@ -143,15 +149,23 @@ pub fn derivation_to_build_request(
     derivation: &Derivation,
     inputs: &BTreeMap<StorePath<String>, Node>,
     store_dir: &str,
+    execution_profile: &ExecutionProfile,
     hermeticity_mode: HermeticityMode,
 ) -> Result<BuildRequestEnvelope, crate::Error> {
-    let normalized = normalize_build_environment(derivation, store_dir, hermeticity_mode)?;
-    let network_policy = plan_network_policy(derivation, CompatibilityNetworkPolicy::DenyAll)?;
+    validate_execution_profile(execution_profile).map_err(execution_profile_error)?;
+    verify_execution_profile_binding(derivation, execution_profile).map_err(execution_profile_error)?;
+    let normalized = normalized_environment_for_profile(derivation, store_dir, execution_profile, hermeticity_mode)?;
+    let compatibility_network_policy = match execution_profile.network_mode {
+        ExecutionNetworkMode::Deny => CompatibilityNetworkPolicy::DenyAll,
+        ExecutionNetworkMode::AllowDeclared => CompatibilityNetworkPolicy::AllowDeclared,
+    };
+    let network_policy = plan_network_policy(derivation, compatibility_network_policy)?;
     let workspace = workspace_request_from_derivation(derivation)?;
     let mut build_request = build_request_from_environment(
         derivation,
         inputs,
         store_dir,
+        execution_profile,
         normalized.environment_vars,
         network_policy.allow_network,
     )?;
@@ -162,6 +176,30 @@ pub fn derivation_to_build_request(
         build_environment_report: normalized.report,
         network_policy_report: network_policy.report,
     })
+}
+
+fn normalized_environment_for_profile(
+    derivation: &Derivation,
+    store_dir: &str,
+    execution_profile: &ExecutionProfile,
+    hermeticity_mode: HermeticityMode,
+) -> Result<NormalizedBuildEnvironment, crate::Error> {
+    if execution_profile.environment_mode == ExecutionEnvironmentMode::MantleCompatibility {
+        return normalize_build_environment(derivation, store_dir, hermeticity_mode);
+    }
+    let environment_vars =
+        declared_profile_environment(derivation, execution_profile).map_err(execution_profile_error)?;
+    let action_name = environment_policy::action_name_from_environment(&derivation.environment);
+    let report = environment_policy::success_report(action_name, &environment_vars);
+    Ok(NormalizedBuildEnvironment {
+        environment_vars,
+        audit_events: Vec::new(),
+        report,
+    })
+}
+
+fn execution_profile_error(error: crate::ExecutionProfileError) -> crate::Error {
+    crate::Error::Store(format!("invalid execution profile: {error}"))
 }
 
 fn workspace_request_from_derivation(
@@ -311,6 +349,7 @@ pub(crate) fn build_request_from_environment(
     derivation: &Derivation,
     inputs: &BTreeMap<StorePath<String>, Node>,
     store_dir: &str,
+    execution_profile: &ExecutionProfile,
     environment_vars: BTreeMap<String, Vec<u8>>,
     allow_network: bool,
 ) -> Result<BuildRequest, crate::Error> {
@@ -321,7 +360,7 @@ pub(crate) fn build_request_from_environment(
     debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute path");
 
     let command_args = build_command_args(derivation);
-    let constraints = build_constraints(derivation, allow_network);
+    let constraints = build_constraints(derivation, execution_profile, allow_network);
     let refscan_needles = build_refscan_needles(derivation, inputs);
 
     // Tiger Style: assert command_args has at least the builder.
@@ -344,8 +383,8 @@ pub(crate) fn build_request_from_environment(
         inputs: input_map,
         inputs_dir: store_dir[1..].into(),
         constraints,
-        working_dir: "build".into(),
-        scratch_paths: vec!["build".into(), store_dir[1..].into()],
+        working_dir: execution_profile.work_directory.clone().into(),
+        scratch_paths: execution_profile_scratch_paths(execution_profile, store_dir),
         additional_files: vec![],
         refscan_needles,
         workspace: None,
@@ -665,15 +704,28 @@ fn format_env_value(value: &[u8]) -> String {
 }
 
 /// Build sandbox constraints from derivation properties.
-fn build_constraints(derivation: &Derivation, allow_network: bool) -> HashSet<BuildConstraints> {
-    let mut constraints = HashSet::from([
-        BuildConstraints::System(derivation.system.clone()),
-        BuildConstraints::ProvideBinSh,
-    ]);
+fn build_constraints(
+    derivation: &Derivation,
+    execution_profile: &ExecutionProfile,
+    allow_network: bool,
+) -> HashSet<BuildConstraints> {
+    let mut constraints = HashSet::from([BuildConstraints::System(derivation.system.clone())]);
+    if execution_profile.provide_bin_sh {
+        constraints.insert(BuildConstraints::ProvideBinSh);
+    }
+    if execution_profile.resource_limits.min_memory_bytes > 0 {
+        constraints.insert(BuildConstraints::MinMemory(execution_profile.resource_limits.min_memory_bytes));
+    }
     if allow_network {
         constraints.insert(BuildConstraints::NetworkAccess);
     }
     constraints
+}
+
+fn execution_profile_scratch_paths(execution_profile: &ExecutionProfile, store_dir: &str) -> Vec<PathBuf> {
+    let mut paths = execution_profile.writable_prefixes.iter().map(PathBuf::from).collect::<BTreeSet<_>>();
+    paths.insert(PathBuf::from(&store_dir[1..]));
+    paths.into_iter().collect()
 }
 
 /// Build refscan needles from output and input store path digests.
@@ -805,6 +857,21 @@ mod tests {
 
     use super::*;
 
+    fn derivation_to_build_request(
+        derivation: &Derivation,
+        inputs: &BTreeMap<StorePath<String>, Node>,
+        store_dir: &str,
+        hermeticity_mode: HermeticityMode,
+    ) -> Result<BuildRequestEnvelope, crate::Error> {
+        super::derivation_to_build_request(
+            derivation,
+            inputs,
+            store_dir,
+            &ExecutionProfile::native_compatibility(),
+            hermeticity_mode,
+        )
+    }
+
     // ── Helper: build a derivation and register in DerivationRegistry ──
 
     fn make_drv_with_name(name: &str) -> Derivation {
@@ -902,6 +969,72 @@ mod tests {
 
         assert_eq!(req.command_args[0], "/bin/sh");
         assert_eq!(req.command_args[1], "-c");
+    }
+
+    #[test]
+    fn foreign_guix_profile_controls_shell_environment_and_working_paths() {
+        let profile = ExecutionProfile::foreign_guix();
+        let mut drv = test_derivation();
+        drv.builder = "/mantle/store/00000000000000000000000000000000-builder".to_string();
+        drv.arguments = vec!["--build".to_string()];
+        drv.environment.insert("builder".to_string(), drv.builder.clone().into());
+        crate::bind_execution_profile(&mut drv, &profile).unwrap();
+
+        let request = super::derivation_to_build_request(
+            &drv,
+            &BTreeMap::new(),
+            "/mantle/store",
+            &profile,
+            HermeticityMode::Strict,
+        )
+        .unwrap()
+        .build_request;
+
+        assert!(!request.constraints.contains(&BuildConstraints::ProvideBinSh));
+        assert!(!request.constraints.contains(&BuildConstraints::NetworkAccess));
+        assert_eq!(request.working_dir, PathBuf::from("build"));
+        assert_eq!(request.scratch_paths, vec![PathBuf::from("build"), PathBuf::from("mantle/store")]);
+        assert!(!request.environment_vars.iter().any(|entry| entry.key == "SHELL"));
+        assert!(!request.environment_vars.iter().any(|entry| entry.key == crate::EXECUTION_PROFILE_BINDING_ENV));
+    }
+
+    #[test]
+    fn foreign_profile_rejects_undeclared_network_authority() {
+        let profile = ExecutionProfile::foreign_nix();
+        let mut drv = test_derivation();
+        drv.environment
+            .insert(crate::ENV_NETWORK_CAPABILITY.to_string(), crate::NETWORK_CAPABILITY_BUILD_TIME.into());
+        drv.environment.insert(crate::ENV_NETWORK_POLICY_BASIS.to_string(), "foreign-request".into());
+        drv.environment.insert(crate::ENV_NETWORK_AUDIT_CLASS.to_string(), "foreign-network".into());
+        crate::bind_execution_profile(&mut drv, &profile).unwrap();
+
+        let error = super::derivation_to_build_request(
+            &drv,
+            &BTreeMap::new(),
+            "/mantle/store",
+            &profile,
+            HermeticityMode::Strict,
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, crate::Error::NetworkPolicyDenied { .. }));
+    }
+
+    #[test]
+    fn build_request_rejects_wrong_foreign_profile() {
+        let guix = ExecutionProfile::foreign_guix();
+        let nix = ExecutionProfile::foreign_nix();
+        let mut drv = test_derivation();
+        drv.builder = "/mantle/store/00000000000000000000000000000000-builder".to_string();
+        drv.arguments = vec!["--build".to_string()];
+        drv.environment.insert("builder".to_string(), drv.builder.clone().into());
+        crate::bind_execution_profile(&mut drv, &guix).unwrap();
+
+        let error =
+            super::derivation_to_build_request(&drv, &BTreeMap::new(), "/mantle/store", &nix, HermeticityMode::Strict)
+                .unwrap_err();
+
+        assert!(error.to_string().contains("binding digest does not match"));
     }
 
     #[test]

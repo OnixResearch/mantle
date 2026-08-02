@@ -665,6 +665,37 @@
           doCheck = false;
         };
 
+        checkNickelConfigs = pkgs.writeShellApplication {
+          name = "check-nickel-configs";
+          runtimeInputs = [
+            pkgs.coreutils
+            pkgs.diffutils
+            pkgs.nickel
+          ];
+          text = ''
+            set -eu
+            profile_root="config/foreign-execution-profiles"
+            scratch="$(mktemp -d)"
+            trap 'rm -rf "$scratch"' EXIT
+
+            nickel typecheck "$profile_root/guix.ncl"
+            nickel typecheck "$profile_root/nix.ncl"
+            nickel export --format json "$profile_root/guix.ncl" > "$scratch/guix.json"
+            nickel export --format json "$profile_root/nix.ncl" > "$scratch/nix.json"
+            diff -u "$profile_root/generated/guix.json" "$scratch/guix.json"
+            diff -u "$profile_root/generated/nix.json" "$scratch/nix.json"
+
+            if nickel export --format json "$profile_root/tests/invalid-unknown-field.ncl" > /dev/null; then
+              echo "unknown-field execution profile fixture unexpectedly passed" >&2
+              exit 1
+            fi
+            if nickel export --format json "$profile_root/tests/invalid-setid.ncl" > /dev/null; then
+              echo "setid execution profile fixture unexpectedly passed" >&2
+              exit 1
+            fi
+          '';
+        };
+
         tigerstyleRunner = pkgs.writeShellApplication {
           name = "crunch-tigerstyle";
           runtimeInputs = nativeBuildInputs ++ [
@@ -1047,10 +1078,12 @@
               cargo-deny
               cargo-nextest
               cargo-watch
+              nickel
               rust-analyzer
             ]
             ++ [
               astGrepToolchain
+              checkNickelConfigs
               wasmComponentToolchain
               tigerstyle.packages.${system}.cargo-tigerstyle
             ];
