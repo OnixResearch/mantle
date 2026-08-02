@@ -61,3 +61,4 @@ compatibility surface, crate name, or historical decision.
 | [0052](0052-separate-stagex-execution-evidence-from-runtime-handoff.md) | Separate StageX execution evidence from the runtime handoff | Accepted |
 | [0053](0053-isolate-irreversible-seccomp-listeners-by-proof-stage.md) | Isolate irreversible seccomp listeners by proof stage | Accepted |
 | [0054](0054-select-snix-backports-by-mantle-compatibility-boundary.md) | Select Snix backports by Mantle compatibility boundary | Accepted |
+| [0055](0055-select-the-stagex-provider-compiler-by-bounded-workload.md) | Select the StageX provider compiler by bounded workload | Accepted |

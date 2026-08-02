@@ -1,0 +1,34 @@
+{
+  "schema": "mantle-stagex-provider-gcc-admission-v1",
+  "status": "complete",
+  "provider": {
+    "normalized_digest_blake3": "e1039a3c844d709f51586f7afa2aacdbbe92aa224f1e20a778ea80573603ada3",
+    "output_digest_blake3": "bd03a90b58144f3b60f3f05abaeebf4227b0fca944eebedf76ff26e489ef3220",
+    "bundle_digest_blake3": "1482d4c7b80220cf6e76c94d5dc95622f8654a5550d49bdf83832e0a353f871c",
+    "validation_audit_digest_blake3": "384cb4804783da8c9bffc65314346ea5b6978dd857b1496bc5ed7882dae2f3d9",
+    "validation_report_digest_blake3": "48ef3b370a038f4c3f291ca929274c29165c643adca70119bf25b84a9655689a"
+  },
+  "runtime_supplement": {
+    "source_digest_blake3": "e04b53a0d8d68011ff2f3582bb7cd080ded137e9134d45697e3fb01027850aae",
+    "transform_id": "tcc-libtcc1-floatundisf-signed-half-sticky-v3",
+    "transformed_source_digest_blake3": "4b3b7ac0316583e83e9e51a27f7bd86bf81bebf8fe7a3cabba2c053277dbf4c5"
+  },
+  "gcc_caller_status": 0,
+  "gcc_build": {
+    "hermeticity_mode": "strict",
+    "hermeticity_audit_event_count": 0,
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0,
+    "logical_output": "/mantle/store/zwn63ak89w031hfhflrrcw9pchb9iwiw-gcc-4.0.4-native-gas-v45"
+  },
+  "non_claims": [
+    "tinycc-correctness",
+    "gcc-correctness",
+    "full-native-provider",
+    "cargo-free-mantle-stage1",
+    "mantle-fixed-point",
+    "release-eligibility"
+  ]
+}

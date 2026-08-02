@@ -1,0 +1,35 @@
+StageX provider publication A (pueue task 7887)
+normalized_provider_digest_blake3: e1039a3c844d709f51586f7afa2aacdbbe92aa224f1e20a778ea80573603ada3
+output_digest_blake3: bd03a90b58144f3b60f3f05abaeebf4227b0fca944eebedf76ff26e489ef3220
+final_bundle_digest_blake3: 1482d4c7b80220cf6e76c94d5dc95622f8654a5550d49bdf83832e0a353f871c
+provider_validation_audit_digest_blake3: 384cb4804783da8c9bffc65314346ea5b6978dd857b1496bc5ed7882dae2f3d9
+provider_validation_report_digest_blake3: 48ef3b370a038f4c3f291ca929274c29165c643adca70119bf25b84a9655689a
+
+StageX provider publication B (pueue task 7889)
+normalized_provider_digest_blake3: e1039a3c844d709f51586f7afa2aacdbbe92aa224f1e20a778ea80573603ada3
+output_digest_blake3: bd03a90b58144f3b60f3f05abaeebf4227b0fca944eebedf76ff26e489ef3220
+final_bundle_digest_blake3: 1482d4c7b80220cf6e76c94d5dc95622f8654a5550d49bdf83832e0a353f871c
+provider_validation_audit_digest_blake3: 384cb4804783da8c9bffc65314346ea5b6978dd857b1496bc5ed7882dae2f3d9
+provider_validation_report_digest_blake3: 48ef3b370a038f4c3f291ca929274c29165c643adca70119bf25b84a9655689a
+
+External GCC-produced caller (pueue task 7888)
+gcc_caller_status=0
+
+Full GCC build
+status=0
+hermeticity_mode=strict
+hermeticity_audit_events=[]
+succeeded_total=1
+built_total=1
+cached_total=0
+failed_total=0
+logical_output=/mantle/store/zwn63ak89w031hfhflrrcw9pchb9iwiw-gcc-4.0.4-native-gas-v45
+
+Focused tests (pueue task 7893)
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 1979 filtered out; finished in 0.01s
+test result: ok. 15 passed; 0 failed; 1 ignored; 0 measured; 1991 filtered out; finished in 0.00s
+test result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 1966 filtered out; finished in 2.08s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2006 filtered out; finished in 0.00s
+
+Strict first-party Clippy, formatting, and diff checks (pueue task 7892)
+status=0
