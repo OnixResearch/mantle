@@ -27,6 +27,7 @@ use crate::build_correctness::OutputReferenceScanReport;
 use crate::build_correctness::ReferenceObservation;
 use crate::build_correctness::ReferenceScanInput;
 use crate::build_correctness::validate_reference_scan;
+use crate::foreign_executable_plan::CACHE_ONLY_PRESERVE_ROUTE;
 use crate::foreign_executable_plan::ExecutableNativeUnit;
 use crate::foreign_executable_plan::ForeignExecutablePlan;
 use crate::foreign_executable_plan::validate_foreign_executable_plan;
@@ -46,6 +47,9 @@ const PASS_STATUS: &str = "pass";
 const FAIL_STATUS: &str = "fail";
 const PROVENANCE_AUDITED_STATE: &str = "provenance-audited";
 const CASTORE_SCANNER_KIND: &str = "signed-castore-foreign-provenance-v1";
+type DeclaredReferencesByOutput = BTreeMap<String, BTreeSet<String>>;
+type AuditClosure = (BTreeSet<String>, DeclaredReferencesByOutput);
+
 const AUDIT_NON_CLAIMS: [&str; 10] = [
     "This audit does not prove compiler correctness.",
     "This audit does not prove source correctness.",
@@ -102,7 +106,7 @@ struct AdmittedForeignAudit {
     closure_paths: Vec<String>,
     admitted_closure_paths: BTreeSet<String>,
     expected_path_infos: BTreeMap<String, ProvenanceExpectedPathInfo>,
-    declared_references_by_output: BTreeMap<String, BTreeSet<String>>,
+    declared_references_by_output: DeclaredReferencesByOutput,
     foreign_to_target_paths: BTreeMap<String, String>,
 }
 
@@ -148,7 +152,6 @@ fn admit_foreign_audit(
         .map_err(|error| RunError::Internal(format!("foreign provenance policy is invalid: {error}")))?;
     validate_realization_receipt(plan, receipt)?;
     let selected_roots = canonical_selected_roots(plan, receipt, selected_root_node_ids)?;
-    let units = selected_unit_closure(plan, &selected_roots)?;
     let selected_root_paths = plan
         .selected_roots
         .iter()
@@ -157,18 +160,13 @@ fn admit_foreign_audit(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
-    let mut admitted_closure_paths = BTreeSet::new();
-    let mut declared_references_by_output = BTreeMap::new();
-    for unit in &units {
-        let declared = unit.declared_references.iter().cloned().collect::<BTreeSet<_>>();
-        for output in unit.outputs.values() {
-            admitted_closure_paths.insert(output.clone());
-            declared_references_by_output.insert(output.clone(), declared.clone());
-        }
-        for source in &unit.input_sources {
-            admitted_closure_paths.insert(source.clone());
-        }
-    }
+    let cache_only = plan.realization_route.as_deref() == Some(CACHE_ONLY_PRESERVE_ROUTE);
+    let (admitted_closure_paths, declared_references_by_output) = if cache_only {
+        cache_only_audit_closure(receipt, &selected_root_paths)?
+    } else {
+        let units = selected_unit_closure(plan, &selected_roots)?;
+        build_plan_unit_audit_closure(&units)
+    };
     let expected_path_infos = expected_path_info_facts(receipt);
     for path in &admitted_closure_paths {
         if !expected_path_infos.contains_key(path) {
@@ -178,6 +176,11 @@ fn admit_foreign_audit(
         }
     }
     let mut foreign_to_target_paths = plan.exact_path_maps.outputs.clone();
+    if cache_only {
+        for path in &admitted_closure_paths {
+            foreign_to_target_paths.entry(path.clone()).or_insert_with(|| path.clone());
+        }
+    }
     for (foreign, target) in &plan.exact_path_maps.sources {
         if foreign_to_target_paths.insert(foreign.clone(), target.clone()).is_some() {
             return Err(RunError::Internal(format!(
@@ -197,6 +200,65 @@ fn admit_foreign_audit(
         declared_references_by_output,
         foreign_to_target_paths,
     })
+}
+
+fn build_plan_unit_audit_closure(units: &[&ExecutableNativeUnit]) -> AuditClosure {
+    let mut admitted_closure_paths = BTreeSet::new();
+    let mut declared_references_by_output = BTreeMap::new();
+    for unit in units {
+        let declared = unit.declared_references.iter().cloned().collect::<BTreeSet<_>>();
+        for output in unit.outputs.values() {
+            admitted_closure_paths.insert(output.clone());
+            declared_references_by_output.insert(output.clone(), declared.clone());
+        }
+        for source in &unit.input_sources {
+            admitted_closure_paths.insert(source.clone());
+        }
+    }
+    (admitted_closure_paths, declared_references_by_output)
+}
+
+fn cache_only_audit_closure(
+    receipt: &ForeignRealizationReceipt,
+    selected_root_paths: &[String],
+) -> Result<AuditClosure, RunError> {
+    if receipt.cache_policy.realization_route.as_deref() != Some(CACHE_ONLY_PRESERVE_ROUTE)
+        || receipt.cache_closure_policy_blake3.is_none()
+        || receipt.cache_closure.is_empty()
+    {
+        return Err(RunError::Internal(
+            "cache-only provenance audit requires receipt-bound closure policy and members".to_string(),
+        ));
+    }
+    let mut admitted_closure_paths = BTreeSet::new();
+    let mut declared_references_by_output = BTreeMap::new();
+    for fact in &receipt.cache_closure {
+        if !admitted_closure_paths.insert(fact.logical_path.clone()) {
+            return Err(RunError::Internal(format!(
+                "cache-only provenance closure repeats a path: {}",
+                fact.logical_path
+            )));
+        }
+        declared_references_by_output
+            .insert(fact.logical_path.clone(), fact.references.iter().cloned().collect::<BTreeSet<_>>());
+    }
+    for root in selected_root_paths {
+        if !admitted_closure_paths.contains(root) {
+            return Err(RunError::Internal(format!(
+                "cache-only provenance selected root is absent from the receipt closure: {root}"
+            )));
+        }
+    }
+    for (owner, references) in &declared_references_by_output {
+        for reference in references {
+            if !admitted_closure_paths.contains(reference) {
+                return Err(RunError::Internal(format!(
+                    "cache-only provenance closure is incomplete: {owner} references {reference}"
+                )));
+            }
+        }
+    }
+    Ok((admitted_closure_paths, declared_references_by_output))
 }
 
 fn validate_realization_receipt(
@@ -308,6 +370,12 @@ fn expected_path_info_facts(receipt: &ForeignRealizationReceipt) -> BTreeMap<Str
             });
         }
     }
+    for member in &receipt.cache_closure {
+        facts.insert(member.logical_path.clone(), ProvenanceExpectedPathInfo {
+            nar_sha256: member.nar_sha256.clone(),
+            nar_size: member.nar_size,
+        });
+    }
     facts
 }
 
@@ -405,7 +473,12 @@ fn build_correctness_reference_scans(
             scan_root_ref: output.clone(),
             scanner_kind: CASTORE_SCANNER_KIND.to_string(),
             declared_refs: declared,
-            forbidden_refs: admitted.foreign_to_target_paths.keys().cloned().collect(),
+            forbidden_refs: admitted
+                .foreign_to_target_paths
+                .iter()
+                .filter(|(foreign, target)| foreign != target)
+                .map(|(foreign, _)| foreign.clone())
+                .collect(),
             observations,
         })
         .unwrap_or_else(|report| *report);
@@ -434,6 +507,8 @@ fn domain_digest<T: Serialize>(domain: &[u8], value: &T, label: &str) -> Result<
 mod tests {
     use super::*;
     use crate::foreign_derivation_import::ForeignDerivationGraph;
+    use crate::foreign_derivation_import::NIX_SOURCE_PREFIX;
+    use crate::foreign_derivation_import::PRESERVE_CACHE_PATHS_MODE;
     use crate::foreign_derivation_import::PackageIndex;
     use crate::foreign_derivation_import::TranslationPolicy;
     use crate::foreign_executable_plan::compile_foreign_executable_plan;
@@ -441,6 +516,7 @@ mod tests {
     use crate::foreign_realization_receipt::ForeignRealizedUnit;
     use crate::foreign_realization_receipt::RealizedCachePolicy;
     use crate::foreign_realization_receipt::RealizedExecutionProfile;
+    use crate::foreign_realization_shell::ForeignCacheClosureFact;
     use crate::foreign_realization_shell::ForeignSourceStoreFact;
 
     const GRAPH: &str = include_str!("../tests/fixtures/foreign-import/nix-hello.graph.json");
@@ -528,7 +604,10 @@ mod tests {
                 substitution_enabled: false,
                 offline: true,
                 ordered_cache_urls: Vec::new(),
+                realization_route: None,
             },
+            cache_closure_policy_blake3: None,
+            cache_closure: Vec::new(),
             sources,
             units,
             failure: None,
@@ -568,6 +647,61 @@ mod tests {
 
         let receipt = fixture_receipt(&plan);
         assert!(admit_foreign_audit(&plan, &receipt, &policy(), &["unknown".to_string()]).is_err());
+    }
+
+    #[test]
+    fn cache_only_audit_uses_the_receipt_runtime_closure_and_rejects_incompleteness() {
+        const RUNTIME_PATH: &str = "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-runtime";
+        let mut graph: ForeignDerivationGraph = serde_json::from_str(GRAPH).unwrap();
+        let index: PackageIndex = serde_json::from_str(INDEX).unwrap();
+        let mut translation: TranslationPolicy = serde_json::from_str(TRANSLATION_POLICY).unwrap();
+        graph.nodes[0].cache_hints.push(crate::foreign_derivation_import::CacheHint {
+            cache_url: "https://cache.nixos.org".to_string(),
+            trust_scope: "trusted-binary-cache".to_string(),
+        });
+        translation.trusted_cache_scopes.insert("trusted-binary-cache".to_string());
+        translation.source_prefixes = vec![NIX_SOURCE_PREFIX.to_string()];
+        translation.target_prefix = NIX_SOURCE_PREFIX.to_string();
+        translation.output_path_recompute_mode = PRESERVE_CACHE_PATHS_MODE.to_string();
+        let plan = compile_foreign_executable_plan(&graph, &index, &translation, "hello", "x86_64-linux").unwrap().0;
+        let root_id = plan.selected_roots[0].node_id.clone();
+        let root_path = plan.selected_roots[0].target_outputs.values().next().unwrap().clone();
+        let mut receipt = fixture_receipt(&plan);
+        receipt.cache_policy.substitution_enabled = true;
+        receipt.cache_policy.offline = false;
+        receipt.cache_policy.realization_route = Some(CACHE_ONLY_PRESERVE_ROUTE.to_string());
+        receipt.cache_closure_policy_blake3 = Some(TEST_DIGEST.to_string());
+        receipt.sources.clear();
+        receipt.cache_closure = vec![
+            ForeignCacheClosureFact {
+                logical_path: root_path.clone(),
+                nar_sha256: TEST_DIGEST.to_string(),
+                nar_size: 1,
+                references: vec![RUNTIME_PATH.to_string()],
+                signature_names: vec!["cache.test-1".to_string()],
+                disposition: "transferred".to_string(),
+                depth: 0,
+            },
+            ForeignCacheClosureFact {
+                logical_path: RUNTIME_PATH.to_string(),
+                nar_sha256: TEST_DIGEST.to_string(),
+                nar_size: 1,
+                references: Vec::new(),
+                signature_names: vec!["cache.test-1".to_string()],
+                disposition: "transferred".to_string(),
+                depth: 1,
+            },
+        ];
+        receipt.receipt_blake3 = foreign_realization_receipt_digest(&receipt).unwrap();
+
+        let admitted = admit_foreign_audit(&plan, &receipt, &policy(), std::slice::from_ref(&root_id)).unwrap();
+        let mut expected_paths = vec![root_path, RUNTIME_PATH.to_string()];
+        expected_paths.sort();
+        assert_eq!(admitted.closure_paths, expected_paths);
+
+        receipt.cache_closure.pop();
+        receipt.receipt_blake3 = foreign_realization_receipt_digest(&receipt).unwrap();
+        assert!(admit_foreign_audit(&plan, &receipt, &policy(), &[root_id]).is_err());
     }
 
     #[test]

@@ -29,16 +29,15 @@ family. A successful planning report now contains the versioned
 `mantle-foreign-executable-plan-v1` artifact. Its Rust owner is
 `src/foreign_executable_plan.rs`.
 
-The plan binds accepted import identity, roots, native units, exact path maps,
-source requirements, profiles, diagnostics, and non-claims. Its BLAKE3 identity
-covers those fields. This classification does not prove source availability,
-scheduler execution, store admission, realization, or output trust.
+The plan binds import identity, roots, native units, exact path maps, source requirements, profiles, diagnostics, route, and non-claims.
+Its BLAKE3 identity covers these fields.
+`cache-only-preserve-v1` identifies exact-path cache observation, not local build authority.
+This classification does not prove source availability, scheduler execution, store admission, realization, or output trust.
 
-The same family includes `mantle-foreign-realization-receipt-v1`. This receipt
-binds the plan, import receipt, source bundle, profiles, build report, PathInfo
-facts, dispositions, failures, strongest state, fetch attempts, and non-claims.
-Contract conformance does not prove package correctness, evaluator parity,
-provenance, reproducibility, or release eligibility.
+The same family includes `mantle-foreign-realization-receipt-v1`.
+This receipt binds the plan, import receipt, source bundle, profiles, build report, PathInfo facts, and non-claims.
+It also binds cache-closure policy, ordered closure members, signatures, NAR facts, references, depths, and transfer dispositions.
+Contract conformance does not prove package correctness, evaluator parity, provenance, reproducibility, or release eligibility.
 
 The family also includes `mantle-foreign-provenance-audit-v1`. This audit binds
 one realization receipt to selected roots, signed PathInfo, castore identities,

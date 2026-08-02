@@ -125,6 +125,7 @@ pub struct RegisteredBuildRequest<'a> {
     pub expected_outputs: &'a [RegisteredOutputExpectation],
     pub retained_outputs: &'a [StorePath<String>],
     pub source_policy: FetchSourcePolicy,
+    pub cache_only: bool,
 }
 
 #[derive(Debug)]
@@ -324,63 +325,95 @@ pub async fn build_registered_derivations(
         if request.roots.is_empty() {
             return Err(Error::Build("registered derivation build requires at least one root".to_string()));
         }
-        let (mut builder, workspace_evidence_sink) =
+        if request.cache_only {
+            let (builder, workspace_evidence_sink) = create_cache_only_observer(config, store)?;
+            return run_registered_builder(config, builder, known_paths, request, workspace_evidence_sink).await;
+        }
+        let (builder, workspace_evidence_sink) =
             create_pipeline_builder_with_source_policy(config, store, request.source_policy)?;
-        let mut worker_result = builder
-            .build_all_report(request.roots, known_paths, config.max_jobs)
-            .await
-            .map_err(|error| Error::Build(error.to_string()))?;
-        normalize_failed_goal_keys(&mut worker_result.failed, &config.store_dir);
-        let pathinfo_service = builder.store_handle().pathinfo_service();
-        let mut outputs = Vec::with_capacity(request.expected_outputs.len());
-        for expected in request.expected_outputs {
-            let path_info = pathinfo_service
-                .get(*expected.store_path.digest())
-                .await
-                .map_err(|error| Error::Build(format!("registered output lookup failed: {error}")))?;
-            if let Some(path_info) = path_info {
-                if path_info.store_path != expected.store_path {
-                    return Err(Error::Build(format!(
-                        "registered output lookup returned a conflicting path: {}",
-                        expected.store_path
-                    )));
-                }
-                outputs.push(RegisteredOutputResult {
-                    unit_id: expected.unit_id.clone(),
-                    output_name: expected.output_name.clone(),
-                    path_info,
-                });
-            }
-        }
-        for retained_output in request.retained_outputs {
-            let is_present = pathinfo_service
-                .get(*retained_output.digest())
-                .await
-                .map_err(|error| Error::Build(format!("selected root lookup failed: {error}")))?
-                .is_some();
-            if is_present {
-                builder
-                    .store_handle()
-                    .register_retained_root(retained_output, GcRootSource::Build)
-                    .await
-                    .map_err(|error| Error::Build(format!("registering selected foreign root: {error}")))?;
-            }
-        }
-        assert_eq!(worker_result.outcomes.len().saturating_add(worker_result.failed.len()), request.roots.len());
-        if worker_result.failed.is_empty() {
-            assert_eq!(outputs.len(), request.expected_outputs.len());
-        }
-        Ok(RegisteredBuildResult {
-            outcomes: worker_result.all_outcomes,
-            failed_roots: worker_result.failed,
-            outputs,
-            hermeticity_audit_events: builder.take_hermeticity_audit_events(),
-            build_environment_reports: builder.take_build_environment_reports(),
-            network_policy_reports: builder.take_network_policy_reports(),
-            workspace_reports: workspace_evidence_sink.take(),
-            action_result_reports: builder.take_action_result_reports(),
-        })
+        run_registered_builder(config, builder, known_paths, request, workspace_evidence_sink).await
     }
+}
+
+#[cfg(target_os = "linux")]
+async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'static>(
+    config: &BuildConfig,
+    mut builder: Builder<S>,
+    known_paths: &mut DerivationRegistry,
+    request: RegisteredBuildRequest<'_>,
+    workspace_evidence_sink: crunch_build::WorkspaceReportCollector,
+) -> Result<RegisteredBuildResult, Error> {
+    let mut worker_result = builder
+        .build_all_report(request.roots, known_paths, config.max_jobs)
+        .await
+        .map_err(|error| Error::Build(error.to_string()))?;
+    normalize_failed_goal_keys(&mut worker_result.failed, &config.store_dir);
+    let pathinfo_service = builder.store_handle().pathinfo_service();
+    let mut outputs = Vec::with_capacity(request.expected_outputs.len());
+    for expected in request.expected_outputs {
+        let path_info = pathinfo_service
+            .get(*expected.store_path.digest())
+            .await
+            .map_err(|error| Error::Build(format!("registered output lookup failed: {error}")))?;
+        if let Some(path_info) = path_info {
+            if path_info.store_path != expected.store_path {
+                return Err(Error::Build(format!(
+                    "registered output lookup returned a conflicting path: {}",
+                    expected.store_path
+                )));
+            }
+            outputs.push(RegisteredOutputResult {
+                unit_id: expected.unit_id.clone(),
+                output_name: expected.output_name.clone(),
+                path_info,
+            });
+        }
+    }
+    for retained_output in request.retained_outputs {
+        let is_present = pathinfo_service
+            .get(*retained_output.digest())
+            .await
+            .map_err(|error| Error::Build(format!("selected root lookup failed: {error}")))?
+            .is_some();
+        if is_present {
+            builder
+                .store_handle()
+                .register_retained_root(retained_output, GcRootSource::Build)
+                .await
+                .map_err(|error| Error::Build(format!("registering selected foreign root: {error}")))?;
+        }
+    }
+    assert_eq!(worker_result.outcomes.len().saturating_add(worker_result.failed.len()), request.roots.len());
+    if worker_result.failed.is_empty() {
+        assert_eq!(outputs.len(), request.expected_outputs.len());
+    }
+    Ok(RegisteredBuildResult {
+        outcomes: worker_result.all_outcomes,
+        failed_roots: worker_result.failed,
+        outputs,
+        hermeticity_audit_events: builder.take_hermeticity_audit_events(),
+        build_environment_reports: builder.take_build_environment_reports(),
+        network_policy_reports: builder.take_network_policy_reports(),
+        workspace_reports: workspace_evidence_sink.take(),
+        action_result_reports: builder.take_action_result_reports(),
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn create_cache_only_observer(
+    config: &BuildConfig,
+    store: crunch_store::StoreHandle,
+) -> Result<(Builder<impl snix_build::buildservice::BuildService + use<>>, crunch_build::WorkspaceReportCollector), Error>
+{
+    let blob_service = store.blob_service();
+    let directory_service = store.directory_service();
+    let service =
+        FetchBuildService::new(blob_service, directory_service).with_source_policy(FetchSourcePolicy::RequireOverride);
+    let workspace_evidence_sink = empty_workspace_report_collector();
+    let mut builder =
+        Builder::from_store(store, service, config.keypair.clone(), config.trusted_keys.clone(), false, config.verbose);
+    builder.set_hermeticity_mode(HermeticityMode::Strict);
+    Ok((builder, workspace_evidence_sink))
 }
 
 #[cfg(target_os = "linux")]

@@ -7,6 +7,7 @@ use thiserror::Error;
 
 pub const HTTP_CLOSURE_PLAN_SCHEMA: &str = "mantle-http-cache-closure-plan-v1";
 pub const MAX_HTTP_CLOSURE_MEMBERS: u32 = 100_000;
+pub const MAX_HTTP_CLOSURE_REFERENCES: u32 = 1_000_000;
 pub const MAX_HTTP_CLOSURE_DEPTH: u32 = 1_024;
 pub const MAX_HTTP_CLOSURE_NARINFO_BYTES: u64 = 1_048_576;
 pub const MAX_HTTP_CLOSURE_TOTAL_NAR_BYTES: u64 = 1_099_511_627_776;
@@ -17,6 +18,7 @@ const BLAKE3_BYTES: usize = 32;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct HttpClosureLimits {
     pub max_members: u32,
+    pub max_references: u32,
     pub max_depth: u32,
     pub max_narinfo_bytes: u64,
     pub max_total_nar_bytes: u64,
@@ -26,6 +28,7 @@ impl Default for HttpClosureLimits {
     fn default() -> Self {
         Self {
             max_members: MAX_HTTP_CLOSURE_MEMBERS,
+            max_references: MAX_HTTP_CLOSURE_REFERENCES,
             max_depth: MAX_HTTP_CLOSURE_DEPTH,
             max_narinfo_bytes: MAX_HTTP_CLOSURE_NARINFO_BYTES,
             max_total_nar_bytes: MAX_HTTP_CLOSURE_TOTAL_NAR_BYTES,
@@ -101,6 +104,7 @@ pub struct HttpClosurePlanBuilder {
     observed_by_digest: BTreeMap<[u8; 20], ObservedMember>,
     active_request: Option<HttpClosureRequest>,
     total_nar_bytes: u64,
+    total_reference_count: u32,
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -117,6 +121,10 @@ pub enum HttpClosurePlanError {
     ReturnedPathMismatch { requested: String, returned: String },
     #[error("http-closure-member-limit: maximum {maximum}")]
     MemberLimit { maximum: u32 },
+    #[error("http-closure-reference-limit: total {total} exceeds maximum {maximum}")]
+    ReferenceLimit { total: u32, maximum: u32 },
+    #[error("http-closure-reference-count-overflow")]
+    ReferenceCountOverflow,
     #[error("http-closure-depth-limit: {path} depth {depth} exceeds maximum {maximum}")]
     DepthLimit { path: String, depth: u32, maximum: u32 },
     #[error("http-closure-total-nar-size-limit: total {total} exceeds maximum {maximum}")]
@@ -142,6 +150,8 @@ impl HttpClosurePlanError {
             Self::UnexpectedObservation { .. } => "http-closure-unexpected-observation",
             Self::ReturnedPathMismatch { .. } => "http-closure-returned-path-mismatch",
             Self::MemberLimit { .. } => "http-closure-member-limit",
+            Self::ReferenceLimit { .. } => "http-closure-reference-limit",
+            Self::ReferenceCountOverflow => "http-closure-reference-count-overflow",
             Self::DepthLimit { .. } => "http-closure-depth-limit",
             Self::TotalNarSizeLimit { .. } => "http-closure-total-nar-size-limit",
             Self::TotalNarSizeOverflow => "http-closure-total-nar-size-overflow",
@@ -189,6 +199,7 @@ impl HttpClosurePlanBuilder {
             observed_by_digest: BTreeMap::new(),
             active_request: None,
             total_nar_bytes: 0,
+            total_reference_count: 0,
         })
     }
 
@@ -243,6 +254,18 @@ impl HttpClosurePlanBuilder {
         }
 
         let references = canonical_references(observation.references)?;
+        let observed_reference_count =
+            u32::try_from(references.len()).map_err(|_| HttpClosurePlanError::ReferenceCountOverflow)?;
+        let next_reference_count = self
+            .total_reference_count
+            .checked_add(observed_reference_count)
+            .ok_or(HttpClosurePlanError::ReferenceCountOverflow)?;
+        if next_reference_count > self.limits.max_references {
+            return Err(HttpClosurePlanError::ReferenceLimit {
+                total: next_reference_count,
+                maximum: self.limits.max_references,
+            });
+        }
         self.add_references(&references, active.depth)?;
         let requested_digest = *observation.requested_path.digest();
         let pending = self
@@ -258,6 +281,7 @@ impl HttpClosurePlanBuilder {
             narinfo_blake3: observation.narinfo_blake3,
         });
         self.total_nar_bytes = next_total;
+        self.total_reference_count = next_reference_count;
         self.active_request = None;
 
         debug_assert_eq!(self.member_count(), self.pending_by_digest.len() + self.observed_by_digest.len());
@@ -374,6 +398,11 @@ fn validate_limits(limits: HttpClosureLimits) -> Result<(), HttpClosurePlanError
     if limits.max_members == 0 {
         return Err(HttpClosurePlanError::InvalidLimits { field: "max_members" });
     }
+    if limits.max_references == 0 {
+        return Err(HttpClosurePlanError::InvalidLimits {
+            field: "max_references",
+        });
+    }
     if limits.max_narinfo_bytes == 0 {
         return Err(HttpClosurePlanError::InvalidLimits {
             field: "max_narinfo_bytes",
@@ -385,6 +414,7 @@ fn validate_limits(limits: HttpClosureLimits) -> Result<(), HttpClosurePlanError
         });
     }
     debug_assert!(limits.max_members > 0);
+    debug_assert!(limits.max_references > 0);
     debug_assert!(limits.max_narinfo_bytes > 0);
     Ok(())
 }
@@ -472,6 +502,8 @@ mod tests {
     const THIRD_SEED: u8 = 14;
     const NAR_SIZE: u64 = 64;
     const SMALL_MEMBER_LIMIT: u32 = 2;
+    const SMALL_REFERENCE_LIMIT: u32 = 1;
+    const EXCESSIVE_REFERENCE_COUNT: u32 = 2;
     const ZERO_DEPTH: u32 = 0;
     const ONE_DEPTH: u32 = 1;
     const TWO_DEPTH: u32 = 2;
@@ -486,6 +518,7 @@ mod tests {
     fn limits() -> HttpClosureLimits {
         HttpClosureLimits {
             max_members: MAX_HTTP_CLOSURE_MEMBERS,
+            max_references: MAX_HTTP_CLOSURE_REFERENCES,
             max_depth: MAX_HTTP_CLOSURE_DEPTH,
             max_narinfo_bytes: MAX_HTTP_CLOSURE_NARINFO_BYTES,
             max_total_nar_bytes: MAX_HTTP_CLOSURE_TOTAL_NAR_BYTES,
@@ -645,6 +678,42 @@ mod tests {
         assert_eq!(error, HttpClosurePlanError::MemberLimit {
             maximum: SMALL_MEMBER_LIMIT
         });
+    }
+
+    #[test]
+    fn reference_limit_fails_before_pending_members_change() {
+        let root = make_path("root", ROOT_SEED);
+        let left = make_path("left", FIRST_SEED);
+        let right = make_path("right", SECOND_SEED);
+        let limited = HttpClosureLimits {
+            max_references: SMALL_REFERENCE_LIMIT,
+            ..limits()
+        };
+        let mut builder = HttpClosurePlanBuilder::new(
+            root,
+            "cache".to_string(),
+            "trust".to_string(),
+            "/nix/store".to_string(),
+            limited,
+        )
+        .unwrap();
+        let request = builder.take_next_request().unwrap().unwrap();
+        let error = builder
+            .observe(HttpClosureObservation {
+                requested_path: request.path.clone(),
+                returned_path: request.path,
+                references: vec![left, right],
+                nar_sha256: [FIRST_SEED; BLAKE3_BYTES],
+                nar_size: NAR_SIZE,
+                narinfo_blake3: [SECOND_SEED; BLAKE3_BYTES],
+            })
+            .unwrap_err();
+        assert_eq!(error.reason_code(), "http-closure-reference-limit");
+        assert_eq!(error, HttpClosurePlanError::ReferenceLimit {
+            total: EXCESSIVE_REFERENCE_COUNT,
+            maximum: SMALL_REFERENCE_LIMIT,
+        });
+        assert_eq!(builder.member_count(), 1);
     }
 
     #[test]

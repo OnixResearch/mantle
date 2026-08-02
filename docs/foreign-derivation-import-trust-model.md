@@ -175,10 +175,23 @@ receipt can describe where an output may be fetched from or which substitution
 class was expected, but it does not bypass output admission or signature
 verification.
 
-A cached output is trusted only after the normal Mantle store policy accepts its
-PathInfo signature, NAR hash, store-prefix contract, and artifact attestation
-requirements. Failed or skipped cache verification leaves the import receipt
-valid as admission evidence but does not create output trust.
+A cached output is trusted only after normal store policy accepts its PathInfo signature, NAR hash, and store-prefix contract.
+An artifact attestation remains subject to its separate policy when a consumer requires one.
+Failed cache verification leaves the import receipt valid as admission evidence.
+It does not create output trust.
+
+`preserve-cache-paths-v1` permits exact path identity only with one unchanged store prefix.
+It selects the distinct `cache-only-preserve-v1` route.
+This route requires online substitution, an empty source bundle, and one selected output root.
+
+The plan binds trusted cache keys in its cache URLs.
+Mantle validates bounded NARInfo metadata before it imports NAR content.
+The metadata plan limits members, references, depth, NARInfo bytes, and total NAR bytes.
+It also rejects paths outside the plan's exact identity map.
+
+The route then imports trusted NARs through normal PathInfo and castore admission.
+It reopens the store without remote services before scheduler observation.
+The observer cannot execute foreign builder inputs or fall back to a local build.
 
 ### Sandbox capabilities
 
@@ -272,26 +285,25 @@ A Nixpkgs `hello` graph is claim-safe only when its level is named explicitly:
 2. Mantle consumption validates and plans from those lowered artifacts only. It
    does not evaluate nixpkgs, flakes, overlays, package-set replacement logic,
    `nix`, `nix-store`, or `snix-eval` while consuming the artifact.
-3. Substitution-first planning may carry `cache.nixos.org` or another binary
-   cache as trust-scoped policy data, but every output still needs normal Mantle
-   PathInfo signature, NAR hash, store-prefix, and artifact-attestation admission
-   before output trust is reported.
-4. Local rebuild compatibility is a separate level and is not proven by an
-   admitted or planned Nixpkgs import receipt.
+3. Substitution-first planning may carry `cache.nixos.org` as receipt-bound policy data.
+   A cache-only plan can preserve exact `/nix/store` paths under explicit policy.
+   Every output still needs normal signature, NAR, prefix, and PathInfo admission.
+4. A complete receipt can report `realized` after bounded runtime-closure hydration.
+   A passing castore audit can then report `provenance-audited`.
+5. Cache-only proof does not change that local rebuild compatibility is a separate level.
+   Cache-only evidence does not prove a local build.
 
 Claim-safe summary:
 
-> The Nixpkgs `hello` graph was admitted from concrete derivation artifacts and
-> receipt-bound policy. This strongest proven state is admitted or planned unless
-> later substitution, rebuild, or verification evidence is cited. It does not
-> claim nixpkgs package correctness, local rebuild success, output trust,
-> bootstrap parity, reproducibility, or future producer availability.
+> The Nixpkgs `hello` graph was admitted from concrete derivation artifacts.
+> The recorded graph then reached `realized` through trusted cache-only hydration.
+> Its bounded castore audit reached `provenance-audited`.
+> These states do not prove package correctness, local rebuild success, evaluator parity, reproducibility, bootstrap parity, runtime safety, or release eligibility.
 
-Current live export-to-plan evidence for this boundary is captured in
+The earlier export-to-plan evidence remains in
 `cairn/archive/2026-07-03-live-nixpkgs-foreign-import-proof/evidence/live-nixpkgs-hello/summary.md`.
-That bundle records host-Nix `nixpkgs#hello` derivation export, Mantle
-`produce-nix`, and no-Nix validate/plan consumption. Treat it as admitted/planned
-only until separate substitution or rebuild evidence exists.
+The current archived change adds realization, reuse, audit, fresh-store hydration, and negative evidence.
+Future Nixpkgs revisions and cache availability remain outside this proof.
 
 ## Complete HTTP cache closure pull
 
@@ -306,11 +318,10 @@ mantle --nix-compat store pull \
   /nix/store/<hash>-<name>
 ```
 
-Mantle fetches and validates every bounded narinfo record before it requests NAR
-content. The closure plan binds the normalized cache authority, trusted public
-keys, store prefix, root, limits, and member metadata with BLAKE3. Nix store
-paths, NAR hashes, and narinfo signatures keep their required Nix identity
-rules.
+Mantle fetches and validates every bounded NARInfo record before it requests NAR content.
+The closure plan binds cache authority, trusted keys, store prefix, root, limits, and member metadata with BLAKE3.
+The limits include member count, reference count, depth, NARInfo bytes, and total NAR bytes.
+Nix store paths, NAR hashes, and NARInfo signatures keep their required Nix identity rules.
 
 Mantle reuses a local member only when its PathInfo matches the plan, its
 signature satisfies the selected trust policy, and its complete castore content

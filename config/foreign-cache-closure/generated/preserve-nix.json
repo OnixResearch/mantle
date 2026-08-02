@@ -1,0 +1,21 @@
+{
+  "allow_embedded_source_payload_rewrite": false,
+  "allowed_sandbox_capabilities": [],
+  "builtin_mappings": {
+    "fixed-output-fetch": "mantle.fetch",
+    "nix.derivation": "mantle.foreign.nix.derivation"
+  },
+  "output_path_recompute_mode": "preserve-cache-paths-v1",
+  "rewrite_args": true,
+  "rewrite_builder": true,
+  "rewrite_declared_references": true,
+  "rewrite_env": true,
+  "rewrite_sources": true,
+  "source_prefixes": [
+    "/nix/store"
+  ],
+  "target_prefix": "/nix/store",
+  "trusted_cache_scopes": [
+    "trusted-binary-cache"
+  ]
+}

@@ -16,8 +16,11 @@ use crunch_build::verify_execution_profile_binding;
 use data_encoding::HEXLOWER;
 use nix_compat::derivation::Derivation;
 use nix_compat::store_path::StorePath;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::foreign_derivation_import::ImportReceipt;
+use crate::foreign_executable_plan::CACHE_ONLY_PRESERVE_ROUTE;
 use crate::foreign_executable_plan::ExecutableNativeUnit;
 use crate::foreign_executable_plan::ForeignExecutablePlan;
 use crate::foreign_executable_plan::import_receipt_digest;
@@ -29,10 +32,12 @@ use crate::source_bundle::FOREIGN_SOURCE_FOREIGN_PATH_METADATA as SOURCE_FOREIGN
 use crate::source_bundle::FOREIGN_SOURCE_PAYLOAD_ID_METADATA as SOURCE_PAYLOAD_ID_METADATA;
 use crate::source_bundle::FOREIGN_SOURCE_TARGET_PATH_METADATA as SOURCE_TARGET_PATH_METADATA;
 use crate::source_bundle::SourceBundleManifest;
+use crate::source_bundle::validate_empty_source_bundle;
 use crate::source_bundle::validate_manifest;
 
 const MAX_REALIZATION_PROFILES: usize = 1_024;
 const HDM_BYTES: usize = 32;
+pub(crate) const FOREIGN_CACHE_CLOSURE_POLICY_SCHEMA: &str = "mantle-foreign-cache-closure-policy-v1";
 const FOREIGN_SOURCE_METADATA_KEYS: [&str; 4] = [
     SOURCE_PAYLOAD_ID_METADATA,
     SOURCE_DESCRIPTOR_DIGEST_METADATA,
@@ -63,6 +68,16 @@ pub(crate) struct AdmittedForeignRealization {
     pub(crate) selected_root_node_ids: Vec<String>,
     pub(crate) selected_root_paths: Vec<StorePath<String>>,
     pub(crate) units: Vec<AdmittedForeignUnit>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ForeignCacheClosurePolicy {
+    pub(crate) schema: String,
+    pub(crate) max_paths: usize,
+    pub(crate) max_references: usize,
+    pub(crate) max_nar_bytes: u64,
+    pub(crate) max_depth: usize,
 }
 
 #[derive(Debug)]
@@ -106,6 +121,8 @@ pub(crate) enum ForeignRealizationAdmissionError {
     UnexpectedForeignSource(String),
     MissingForeignSource(String),
     ForeignSourceBindingMismatch(String),
+    InvalidCacheClosurePolicy(String),
+    CacheOnlySourceBundleNotEmpty,
     RemoteExecutionUnsupported,
 }
 
@@ -167,6 +184,12 @@ impl fmt::Display for ForeignRealizationAdmissionError {
             Self::ForeignSourceBindingMismatch(payload_id) => {
                 write!(formatter, "foreign source payload binding does not match the executable plan: {payload_id}")
             }
+            Self::InvalidCacheClosurePolicy(reason) => {
+                write!(formatter, "foreign cache closure policy is invalid: {reason}")
+            }
+            Self::CacheOnlySourceBundleNotEmpty => {
+                write!(formatter, "cache-only foreign realization requires an empty source bundle")
+            }
             Self::RemoteExecutionUnsupported => write!(formatter, "remote foreign realization is unsupported"),
         }
     }
@@ -197,6 +220,44 @@ pub(crate) fn validate_foreign_realization_admission(
         selected_root_paths,
         units,
     })
+}
+
+pub(crate) fn is_cache_only_foreign_plan(plan: &ForeignExecutablePlan) -> bool {
+    plan.realization_route.as_deref() == Some(CACHE_ONLY_PRESERVE_ROUTE)
+}
+
+pub(crate) fn validate_foreign_cache_closure_policy(
+    policy: &ForeignCacheClosurePolicy,
+) -> Result<(), ForeignRealizationAdmissionError> {
+    if policy.schema != FOREIGN_CACHE_CLOSURE_POLICY_SCHEMA {
+        return Err(ForeignRealizationAdmissionError::InvalidCacheClosurePolicy("unsupported schema".to_string()));
+    }
+    if policy.max_paths == 0 || policy.max_references == 0 || policy.max_nar_bytes == 0 || policy.max_depth == 0 {
+        return Err(ForeignRealizationAdmissionError::InvalidCacheClosurePolicy(
+            "all limits must be positive".to_string(),
+        ));
+    }
+    if policy.max_references < policy.max_paths {
+        return Err(ForeignRealizationAdmissionError::InvalidCacheClosurePolicy(
+            "max_references must be at least max_paths".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_cache_only_source_bundle(
+    source_bundle: &SourceBundleManifest,
+    expected_manifest_blake3: &str,
+) -> Result<(), ForeignRealizationAdmissionError> {
+    if !source_bundle.records.is_empty() || !source_bundle.roots.is_empty() {
+        return Err(ForeignRealizationAdmissionError::CacheOnlySourceBundleNotEmpty);
+    }
+    validate_empty_source_bundle(source_bundle)
+        .map_err(|error| ForeignRealizationAdmissionError::InvalidSourceBundle(error.to_string()))?;
+    if source_bundle.manifest_blake3 != expected_manifest_blake3 {
+        return Err(ForeignRealizationAdmissionError::SourceBundleDigestMismatch);
+    }
+    Ok(())
 }
 
 pub(crate) fn validate_foreign_source_admission(
@@ -553,6 +614,48 @@ mod tests {
             Err(ForeignRealizationAdmissionError::InvalidPlan(message))
                 if message.contains("repeats a target source path")
         ));
+    }
+
+    #[test]
+    fn cache_only_policy_and_empty_source_bundle_fail_closed() {
+        const MAX_PATHS: usize = 8;
+        const MAX_REFERENCES: usize = 16;
+        const MAX_NAR_BYTES: u64 = 1_024;
+        const MAX_DEPTH: usize = 4;
+        let policy = ForeignCacheClosurePolicy {
+            schema: FOREIGN_CACHE_CLOSURE_POLICY_SCHEMA.to_string(),
+            max_paths: MAX_PATHS,
+            max_references: MAX_REFERENCES,
+            max_nar_bytes: MAX_NAR_BYTES,
+            max_depth: MAX_DEPTH,
+        };
+        validate_foreign_cache_closure_policy(&policy).unwrap();
+        let empty = crate::source_bundle::plan_empty_source_bundle("/nix/store").unwrap();
+        validate_cache_only_source_bundle(&empty, &empty.manifest_blake3).unwrap();
+
+        let mut zero = policy.clone();
+        zero.max_paths = 0;
+        assert!(matches!(
+            validate_foreign_cache_closure_policy(&zero),
+            Err(ForeignRealizationAdmissionError::InvalidCacheClosurePolicy(_))
+        ));
+        let temporary = tempfile::tempdir().unwrap();
+        let payload = temporary.path().join("payload");
+        std::fs::write(&payload, b"payload").unwrap();
+        let nonempty = plan_source_bundle(
+            &[SourceSpec {
+                kind: SourceRecordKind::LocalPath,
+                identity: "payload".to_string(),
+                path: payload,
+                adapter: None,
+            }],
+            "/nix/store",
+        )
+        .unwrap();
+        assert_eq!(
+            validate_cache_only_source_bundle(&nonempty, &nonempty.manifest_blake3).unwrap_err(),
+            ForeignRealizationAdmissionError::CacheOnlySourceBundleNotEmpty
+        );
     }
 
     #[test]

@@ -17,14 +17,15 @@ const MANTLE_ADAPTER_SCHEMA: &str = "mantle-foreign-derivation-adapter-plan-v1";
 const DIGEST_ALGORITHM: &str = "blake3";
 const SHA256_ALGORITHM: &str = "sha256";
 const NIX_STORE_PATH_SHA256_ALGORITHM: &str = "nix-store-path-sha256";
-const RECOMPUTE_BLAKE3_MODE: &str = "recompute-blake3-v1";
+pub(crate) const RECOMPUTE_BLAKE3_MODE: &str = "recompute-blake3-v1";
+pub(crate) const PRESERVE_CACHE_PATHS_MODE: &str = "preserve-cache-paths-v1";
 const SOURCE_REF_FIELD: &str = "source-ref";
 const OUT_OUTPUT_NAME: &str = "out";
 const HELLO_PACKAGE_NAME: &str = "hello";
 const HELLO_SYSTEM: &str = "x86_64-linux";
 const DEFAULT_TARGET_PREFIX: &str = "/mantle/store";
 const GUIX_SOURCE_PREFIX: &str = "/gnu/store";
-const NIX_SOURCE_PREFIX: &str = "/nix/store";
+pub(crate) const NIX_SOURCE_PREFIX: &str = "/nix/store";
 const NIX_STORE_PREFIX_WITH_SLASH: &str = "/nix/store/";
 const NIX_DERIVATION_SUFFIX: &str = ".drv";
 const KIBIBYTE_BYTES: usize = 1_024;
@@ -54,7 +55,9 @@ const TRANSLATED_GRAPH_HASH_KIND: &str = "translated-graph";
 const SUBSTITUTION_POLICY_CLASSIFICATION: &str = "cache-hint-policy-data-store-admission-required";
 const OUTPUT_HASH_HEX_CHARS: usize = 32;
 const SOURCE_PAYLOAD_HASH_HEX_CHARS: usize = 32;
+const SHA256_HEX_CHARS: usize = 64;
 const NIX_STORE_BASENAME_HASH_CHARS: usize = 32;
+const NIX_BASE32_ALPHABET: &[u8] = b"0123456789abcdfghijklmnpqrsvwxyz";
 const MAX_GRAPH_NODES: usize = 2048;
 const MAX_GRAPH_EDGES: usize = 256;
 const MAX_PACKAGE_INDEX_ENTRIES: usize = 128;
@@ -1148,9 +1151,10 @@ fn hello_fixture_graph(spec: &HelloFixtureSpec<'_>) -> ForeignDerivationGraph {
     let payload_id = format!("{}-hello-source", spec.producer_kind);
     let store_source = format!("{}/00000000000000000000000000000000-hello-source", spec.source_prefix);
     let output_path = format!("{}/11111111111111111111111111111111-hello", spec.source_prefix);
+    let fixed_output_digest = "0".repeat(SHA256_HEX_CHARS);
     let outputs = BTreeMap::from([(OUT_OUTPUT_NAME.to_string(), OutputDeclaration {
         path: output_path.clone(),
-        hash: None,
+        hash: Some(fixed_output_digest.clone()),
     })]);
     let env = BTreeMap::from([
         ("src".to_string(), store_source.clone()),
@@ -1181,8 +1185,8 @@ fn hello_fixture_graph(spec: &HelloFixtureSpec<'_>) -> ForeignDerivationGraph {
                 field: SOURCE_REF_FIELD.to_string(),
             }],
             fixed_output: Some(FixedOutputMetadata {
-                algorithm: DIGEST_ALGORITHM.to_string(),
-                digest: blake3_hex("hello-source"),
+                algorithm: SHA256_ALGORITHM.to_string(),
+                digest: fixed_output_digest,
                 recursive: true,
             }),
             builtin: FIXED_OUTPUT_FETCH_BUILTIN.to_string(),
@@ -1491,7 +1495,13 @@ fn normalize_nix_store_key(key: &str) -> Result<String, ImportDiagnostic> {
 }
 
 fn looks_like_store_basename(value: &str) -> bool {
-    value.len() > OUTPUT_HASH_HEX_CHARS && !value.contains('/') && value.contains('-')
+    let Some((digest, name)) = value.split_once('-') else {
+        return false;
+    };
+    digest.len() == NIX_STORE_BASENAME_HASH_CHARS
+        && digest.bytes().all(|byte| NIX_BASE32_ALPHABET.contains(&byte))
+        && !name.is_empty()
+        && !name.contains('/')
 }
 
 fn validate_aterm_producer_inputs(
@@ -1984,15 +1994,18 @@ fn recompute_outputs(
     node: &ForeignDerivationNode,
     policy: &TranslationPolicy,
 ) -> Result<BTreeMap<String, OutputDeclaration>, ImportDiagnostic> {
+    if node.outputs.len() == EMPTY_OUTPUT_COUNT {
+        return Err(diagnostic("missing-output-declaration", Some(&node.node_id), "node has no output declarations"));
+    }
+    if policy.output_path_recompute_mode == PRESERVE_CACHE_PATHS_MODE {
+        return Ok(node.outputs.clone());
+    }
     if policy.output_path_recompute_mode != RECOMPUTE_BLAKE3_MODE {
         return Err(diagnostic(
             "unsupported-output-recompute-mode",
             Some(&node.node_id),
             "output path recomputation mode is not supported",
         ));
-    }
-    if node.outputs.len() == EMPTY_OUTPUT_COUNT {
-        return Err(diagnostic("missing-output-declaration", Some(&node.node_id), "node has no output declarations"));
     }
     let output_count = node.outputs.len();
     let mut outputs = BTreeMap::new();
@@ -2217,6 +2230,24 @@ fn validate_policy(policy: &TranslationPolicy) -> Result<(), ImportDiagnostic> {
     }
     if policy.target_prefix.is_empty() {
         return Err(diagnostic("missing-target-prefix-policy", None, "translation policy has no target prefix"));
+    }
+    if policy.output_path_recompute_mode != RECOMPUTE_BLAKE3_MODE
+        && policy.output_path_recompute_mode != PRESERVE_CACHE_PATHS_MODE
+    {
+        return Err(diagnostic(
+            "unsupported-output-recompute-mode",
+            None,
+            "output path recomputation mode is not supported",
+        ));
+    }
+    if policy.output_path_recompute_mode == PRESERVE_CACHE_PATHS_MODE
+        && (policy.source_prefixes.len() != 1 || policy.source_prefixes[0] != policy.target_prefix)
+    {
+        return Err(diagnostic(
+            "preserved-cache-prefix-mismatch",
+            None,
+            "preserved cache paths require one source prefix equal to the target prefix",
+        ));
     }
     Ok(())
 }
@@ -2690,6 +2721,17 @@ mod tests {
         assert_eq!(source.outputs[OUT_OUTPUT_NAME].path.as_deref(), Some(NIXPKGS_SOURCE_OUT));
         assert_eq!(source.input_srcs.len(), 0);
         assert!(source.builder.starts_with("builtin:"));
+    }
+
+    #[test]
+    fn nix_environment_normalization_distinguishes_store_basenames_from_sri_hashes() {
+        const SRI_HASH: &str = "sha256-XyvbrWKXB6p9hcYj+ZSqih0t7FWnPeUgW6wL9gWKL3w=";
+        const STORE_BASENAME: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source";
+        assert_eq!(normalize_nix_embedded_store_paths(SRI_HASH), SRI_HASH);
+        assert_eq!(
+            normalize_nix_embedded_store_paths(STORE_BASENAME),
+            format!("{NIX_STORE_PREFIX_WITH_SLASH}{STORE_BASENAME}")
+        );
     }
 
     #[test]

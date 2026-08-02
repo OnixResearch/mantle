@@ -1,5 +1,6 @@
 // r[impl foreign_derivation_import.exact_graph_compilation]
 // r[impl foreign_derivation_import.foreign_builtin_lowering]
+// r[impl foreign_derivation_import.cache_only_preserved_paths]
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -29,6 +30,8 @@ use crate::foreign_derivation_import::FixedOutputMetadata;
 use crate::foreign_derivation_import::ForeignDerivationGraph;
 use crate::foreign_derivation_import::ForeignDerivationNode;
 use crate::foreign_derivation_import::ImportDiagnostic;
+use crate::foreign_derivation_import::PRESERVE_CACHE_PATHS_MODE;
+use crate::foreign_derivation_import::RECOMPUTE_BLAKE3_MODE;
 use crate::foreign_derivation_import::SourcePayload;
 use crate::foreign_derivation_import::SourceRef;
 use crate::foreign_derivation_import::validate_graph;
@@ -147,6 +150,20 @@ pub(crate) fn compile_foreign_graph_with_profile(
     target_store_prefix: &str,
     execution_profile: &ExecutionProfile,
 ) -> Result<CompiledForeignGraph, ImportDiagnostic> {
+    compile_foreign_graph_with_profile_and_output_mode(
+        graph,
+        target_store_prefix,
+        execution_profile,
+        RECOMPUTE_BLAKE3_MODE,
+    )
+}
+
+pub(crate) fn compile_foreign_graph_with_profile_and_output_mode(
+    graph: &ForeignDerivationGraph,
+    target_store_prefix: &str,
+    execution_profile: &ExecutionProfile,
+    output_path_mode: &str,
+) -> Result<CompiledForeignGraph, ImportDiagnostic> {
     validate_graph(graph)?;
     validate_execution_profile(execution_profile).map_err(|error| {
         compiler_diagnostic(
@@ -156,6 +173,23 @@ pub(crate) fn compile_foreign_graph_with_profile(
         )
     })?;
     validate_target_store_prefix(target_store_prefix)?;
+    let preserve_cache_paths = output_path_mode == PRESERVE_CACHE_PATHS_MODE;
+    if output_path_mode != RECOMPUTE_BLAKE3_MODE && !preserve_cache_paths {
+        return Err(compiler_diagnostic(
+            "foreign-compiler-output-mode-unsupported",
+            None,
+            "foreign compiler output path mode is unsupported",
+        ));
+    }
+    if preserve_cache_paths
+        && (graph.source_store_prefixes.len() != 1 || graph.source_store_prefixes[0] != target_store_prefix)
+    {
+        return Err(compiler_diagnostic(
+            "foreign-compiler-preserved-prefix-mismatch",
+            None,
+            "preserved cache paths require one source prefix equal to the target prefix",
+        ));
+    }
     let dependency_order = foreign_dependency_order(graph)?;
     let nodes = graph.nodes.iter().map(|node| (node.node_id.as_str(), node)).collect::<BTreeMap<_, _>>();
     let payloads = graph
@@ -163,7 +197,8 @@ pub(crate) fn compile_foreign_graph_with_profile(
         .iter()
         .map(|payload| (payload.payload_id.as_str(), payload))
         .collect::<BTreeMap<_, _>>();
-    let (mut path_maps, source_requirements) = compile_source_requirements(graph, target_store_prefix)?;
+    let (mut path_maps, source_requirements) =
+        compile_source_requirements(graph, target_store_prefix, preserve_cache_paths)?;
     let mut identities = BTreeMap::new();
     let mut known_hdms = BTreeMap::new();
     let mut units = Vec::with_capacity(dependency_order.len());
@@ -185,6 +220,7 @@ pub(crate) fn compile_foreign_graph_with_profile(
             &identities,
             &known_hdms,
             &path_maps,
+            preserve_cache_paths,
         )?;
         let output_paths = exact_output_paths(&unit.derivation, target_store_prefix, &node.node_id)?;
         insert_exact_path(
@@ -225,7 +261,7 @@ pub(crate) fn compile_foreign_graph_with_profile(
     for unit in &mut units {
         unit.declared_references =
             rewrite_values(&unit.declared_references, &exact_map, &graph.source_store_prefixes, Some(&unit.node_id))?;
-        validate_compiled_unit_references(unit, &graph.source_store_prefixes)?;
+        validate_compiled_unit_references(unit, &graph.source_store_prefixes, &exact_map)?;
     }
     let roots = graph
         .root_derivation_ids
@@ -397,6 +433,7 @@ fn validate_order_coverage(reachable: &BTreeSet<String>, order: &[String]) -> Re
 fn compile_source_requirements(
     graph: &ForeignDerivationGraph,
     target_store_prefix: &str,
+    preserve_cache_paths: bool,
 ) -> Result<(ExactForeignPathMaps, Vec<CompiledSourceRequirement>), ImportDiagnostic> {
     let mut path_maps = ExactForeignPathMaps::default();
     let mut requirements = Vec::with_capacity(graph.source_payloads.len());
@@ -411,19 +448,23 @@ fn compile_source_requirements(
                 &format!("source payload serialization failed: {error}"),
             )
         })?;
-        let target: StorePath<String> = build_text_path_with_store_dir(
-            foreign_path.name().as_str(),
-            &descriptor,
-            Vec::<String>::new(),
-            target_store_prefix,
-        )
-        .map_err(|error| {
-            compiler_diagnostic(
-                "foreign-compiler-source-path-failed",
-                None,
-                &format!("target source path computation failed: {error}"),
+        let target: StorePath<String> = if preserve_cache_paths {
+            parse_target_store_object(&payload.content_ref, target_store_prefix, None)?
+        } else {
+            build_text_path_with_store_dir(
+                foreign_path.name().as_str(),
+                &descriptor,
+                Vec::<String>::new(),
+                target_store_prefix,
             )
-        })?;
+            .map_err(|error| {
+                compiler_diagnostic(
+                    "foreign-compiler-source-path-failed",
+                    None,
+                    &format!("target source path computation failed: {error}"),
+                )
+            })?
+        };
         let target_path = target.to_absolute_path_with_prefix(target_store_prefix);
         insert_exact_path(&mut path_maps.sources, &payload.content_ref, &target_path, "source", None)?;
         requirements.push(CompiledSourceRequirement {
@@ -448,6 +489,7 @@ fn compile_node(
     identities: &BTreeMap<String, CompiledIdentity>,
     known_hdms: &BTreeMap<String, [u8; 32]>,
     path_maps: &ExactForeignPathMaps,
+    preserve_cache_paths: bool,
 ) -> Result<CompiledForeignUnit, ImportDiagnostic> {
     validate_node_compile_surface(node)?;
     let builtin = lower_foreign_builtin(node, payloads)?;
@@ -508,17 +550,32 @@ fn compile_node(
             &format!("resolved registration failed: {error}"),
         )
     })?;
-    let target_derivation = registration.drv_path.to_absolute_path_with_prefix(target_store_prefix);
-    let aterm_digest = HEXLOWER.encode(&registration.aterm_hash);
-    let digest_facts = compiled_digest_facts(node.fixed_output.as_ref(), &registration.hdm, &aterm_digest)?;
-    debug_assert!(registration.derivation.outputs.values().all(|output| output.path.is_some()));
+    let mut resolved_derivation = registration.derivation;
+    if preserve_cache_paths {
+        bind_preserved_output_paths(&mut resolved_derivation, node, target_store_prefix)?;
+    }
+    let resolved_hdm = registration.hdm;
+    let target_drv_path = resolved_derivation
+        .calculate_derivation_path_with_store_dir(&node.name, target_store_prefix)
+        .map_err(|error| {
+            compiler_diagnostic(
+                "foreign-compiler-registration-failed",
+                Some(&node.node_id),
+                &format!("resolved derivation path failed: {error}"),
+            )
+        })?;
+    let target_derivation = target_drv_path.to_absolute_path_with_prefix(target_store_prefix);
+    let aterm_hash = blake3::hash(&resolved_derivation.to_aterm_bytes_with_store_dir(target_store_prefix));
+    let aterm_digest = HEXLOWER.encode(aterm_hash.as_bytes());
+    let digest_facts = compiled_digest_facts(node.fixed_output.as_ref(), &resolved_hdm, &aterm_digest)?;
+    debug_assert!(resolved_derivation.outputs.values().all(|output| output.path.is_some()));
     Ok(CompiledForeignUnit {
         node_id: node.node_id.clone(),
         foreign_derivation: node.original_derivation.clone(),
         target_derivation,
-        hdm: registration.hdm,
+        hdm: resolved_hdm,
         aterm_digest,
-        derivation: registration.derivation,
+        derivation: resolved_derivation,
         execution_profile_id: execution_profile.profile_id.clone(),
         execution_profile_digest_blake3,
         builtin: builtin.fact,
@@ -849,6 +906,34 @@ pub(crate) fn validate_digest_facts(facts: &[CompiledDigestFact]) -> Result<(), 
     Ok(())
 }
 
+fn bind_preserved_output_paths(
+    derivation: &mut Derivation,
+    node: &ForeignDerivationNode,
+    target_store_prefix: &str,
+) -> Result<(), ImportDiagnostic> {
+    if derivation.outputs.len() != node.outputs.len() {
+        return Err(compiler_diagnostic(
+            "foreign-compiler-output-name-drift",
+            Some(&node.node_id),
+            "preserved output count differs from the compiled derivation",
+        ));
+    }
+    for (output_name, output) in &node.outputs {
+        let store_path = parse_target_store_object(&output.path, target_store_prefix, Some(&node.node_id))?;
+        let compiled_output = derivation.outputs.get_mut(output_name).ok_or_else(|| {
+            compiler_diagnostic(
+                "foreign-compiler-output-name-drift",
+                Some(&node.node_id),
+                "preserved output name is absent from the compiled derivation",
+            )
+        })?;
+        compiled_output.path = Some(store_path);
+        derivation.environment.insert(output_name.clone(), output.path.as_bytes().to_vec().into());
+    }
+    debug_assert!(derivation.outputs.values().all(|output| output.path.is_some()));
+    Ok(())
+}
+
 fn compile_outputs(node: &ForeignDerivationNode) -> Result<BTreeMap<String, Output>, ImportDiagnostic> {
     validate_fixed_output_declaration(node)?;
     let ca_hash = node.fixed_output.as_ref().map(parse_fixed_output).transpose()?;
@@ -1098,13 +1183,17 @@ fn insert_exact_path(
     object_kind: &str,
     node_id: Option<&str>,
 ) -> Result<(), ImportDiagnostic> {
-    if map.insert(foreign_path.to_string(), target_path.to_string()).is_some() {
+    if let Some(existing_target) = map.get(foreign_path) {
+        if existing_target == target_path {
+            return Ok(());
+        }
         return Err(compiler_diagnostic(
             "foreign-compiler-duplicate-map-entry",
             node_id,
-            &format!("foreign {object_kind} path has more than one mapping entry"),
+            &format!("foreign {object_kind} path has conflicting mapping entries"),
         ));
     }
+    map.insert(foreign_path.to_string(), target_path.to_string());
     Ok(())
 }
 
@@ -1194,6 +1283,11 @@ fn rewrite_store_objects(
             ));
         }
         let foreign_path = &value[start..object_end];
+        if !is_valid_foreign_store_object(foreign_path, prefix) {
+            rewritten.push_str(foreign_path);
+            cursor = object_end;
+            continue;
+        }
         let target_path = exact_map.get(foreign_path).ok_or_else(|| {
             compiler_diagnostic(
                 "foreign-compiler-unknown-reference",
@@ -1205,11 +1299,11 @@ fn rewrite_store_objects(
         cursor = object_end;
     }
     rewritten.push_str(&value[cursor..]);
-    if contains_foreign_store_object(&rewritten, source_prefixes) {
+    if contains_unmapped_source_store_object(&rewritten, source_prefixes, exact_map) {
         return Err(compiler_diagnostic(
             "foreign-compiler-leftover-reference",
             node_id,
-            "rewritten field retains a foreign store object",
+            "rewritten field retains an unmapped foreign store object",
         ));
     }
     Ok(rewritten)
@@ -1229,8 +1323,39 @@ fn contains_foreign_store_object(value: &str, source_prefixes: &[String]) -> boo
     source_prefixes.iter().any(|prefix| value.contains(&format!("{prefix}/")))
 }
 
+fn contains_unmapped_source_store_object(
+    value: &str,
+    source_prefixes: &[String],
+    exact_map: &BTreeMap<String, String>,
+) -> bool {
+    let permitted_targets = exact_map.values().map(String::as_str).collect::<BTreeSet<_>>();
+    let mut cursor = 0usize;
+    while let Some((start, prefix)) = next_store_object(value, cursor, source_prefixes) {
+        let object_start = start.saturating_add(prefix.len()).saturating_add(1);
+        let object_end = value[object_start..]
+            .char_indices()
+            .take_while(|(_, character)| is_store_name_character(*character))
+            .last()
+            .map(|(position, character)| object_start + position + character.len_utf8())
+            .unwrap_or(object_start);
+        if object_end == object_start {
+            return true;
+        }
+        let candidate = &value[start..object_end];
+        if is_valid_foreign_store_object(candidate, prefix) && !permitted_targets.contains(candidate) {
+            return true;
+        }
+        cursor = object_end;
+    }
+    false
+}
+
 fn is_store_name_character(character: char) -> bool {
     character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.' | '_' | '?' | '=')
+}
+
+fn is_valid_foreign_store_object(path: &str, prefix: &str) -> bool {
+    StorePath::<String>::from_absolute_path_with_prefix(path.as_bytes(), prefix).is_ok()
 }
 
 fn parse_foreign_store_object(
@@ -1285,6 +1410,7 @@ fn validate_target_store_prefix(target_store_prefix: &str) -> Result<(), ImportD
 fn validate_compiled_unit_references(
     unit: &CompiledForeignUnit,
     source_prefixes: &[String],
+    exact_map: &BTreeMap<String, String>,
 ) -> Result<(), ImportDiagnostic> {
     let mut values = Vec::new();
     values.push(unit.target_derivation.as_str());
@@ -1302,11 +1428,13 @@ fn validate_compiled_unit_references(
         })?;
         values.push(text);
     }
-    if values.iter().any(|value| contains_foreign_store_object(value, source_prefixes)) {
+    if let Some(value) =
+        values.iter().find(|value| contains_unmapped_source_store_object(value, source_prefixes, exact_map))
+    {
         return Err(compiler_diagnostic(
             "foreign-compiler-leftover-reference",
             Some(&unit.node_id),
-            "compiled unit retains a foreign store reference",
+            &format!("compiled unit retains a foreign store reference: {value}"),
         ));
     }
     Ok(())
@@ -1322,6 +1450,7 @@ fn compiler_diagnostic(class: &str, node_id: Option<&str>, message: &str) -> Imp
 
 // r[verify foreign_derivation_import.exact_graph_compilation]
 // r[verify foreign_derivation_import.foreign_builtin_lowering]
+// r[verify foreign_derivation_import.cache_only_preserved_paths]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1406,6 +1535,54 @@ mod tests {
         assert_eq!(root_unit.derivation.input_sources.len(), 1);
         assert_eq!(compiled.source_requirements.len(), 1);
         assert_eq!(compiled.source_requirements[0].target_path, *target_source);
+    }
+
+    #[test]
+    fn cache_only_compiler_preserves_exact_paths_and_rejects_prefix_drift() {
+        let mut graph = diamond_graph();
+        graph.source_payloads.push(SourcePayload {
+            payload_id: "cache-source".to_string(),
+            kind: "store-path".to_string(),
+            content_ref: foreign_source("cache-source"),
+            embedded_text: None,
+            mirrors: Vec::new(),
+        });
+        let root = graph.nodes.iter_mut().find(|node| node.node_id == "root").unwrap();
+        root.source_refs.push(SourceRef {
+            payload_id: "cache-source".to_string(),
+            field: "source-ref".to_string(),
+        });
+        root.args.push(foreign_source("cache-source"));
+        let profile = ExecutionProfile::foreign_nix();
+
+        let compiled = compile_foreign_graph_with_profile_and_output_mode(
+            &graph,
+            SOURCE_PREFIX,
+            &profile,
+            PRESERVE_CACHE_PATHS_MODE,
+        )
+        .unwrap();
+
+        assert!(compiled.path_maps.outputs.iter().all(|(foreign, target)| foreign == target));
+        assert!(compiled.path_maps.sources.iter().all(|(foreign, target)| foreign == target));
+        for unit in &compiled.units {
+            let node = graph.nodes.iter().find(|node| node.node_id == unit.node_id).unwrap();
+            for (name, output) in &unit.derivation.outputs {
+                assert_eq!(
+                    output.path.as_ref().map(|path| path.to_absolute_path_with_prefix(SOURCE_PREFIX)),
+                    node.outputs.get(name).map(|output| output.path.clone())
+                );
+            }
+        }
+        assert_class(
+            compile_foreign_graph_with_profile_and_output_mode(
+                &graph,
+                TARGET_PREFIX,
+                &profile,
+                PRESERVE_CACHE_PATHS_MODE,
+            ),
+            "foreign-compiler-preserved-prefix-mismatch",
+        );
     }
 
     #[test]
@@ -1606,6 +1783,51 @@ mod tests {
 
         let reachable = ["leaf".to_string(), "root".to_string()].into_iter().collect::<BTreeSet<_>>();
         assert_class(validate_order_coverage(&reachable, &["leaf".to_string()]), "foreign-compiler-partial-plan");
+    }
+
+    #[test]
+    fn compiler_preserves_non_path_store_placeholders_but_rejects_valid_unknown_paths() {
+        const PLACEHOLDER: &str = "/nix/store/...-glibc-...";
+        let mut graph = diamond_graph();
+        graph
+            .nodes
+            .iter_mut()
+            .find(|node| node.node_id == "root")
+            .unwrap()
+            .env
+            .insert("placeholder".to_string(), PLACEHOLDER.to_string());
+        let compiled = compile_foreign_graph(&graph, TARGET_PREFIX).unwrap();
+        let root = compiled.units.iter().find(|unit| unit.node_id == "root").unwrap();
+        assert_eq!(
+            root.derivation
+                .environment
+                .get("placeholder")
+                .map(|value| String::from_utf8_lossy(value).to_string()),
+            Some(PLACEHOLDER.to_string())
+        );
+
+        let valid_unknown = format!("{SOURCE_PREFIX}/99999999999999999999999999999999-unknown");
+        graph
+            .nodes
+            .iter_mut()
+            .find(|node| node.node_id == "root")
+            .unwrap()
+            .env
+            .insert("placeholder".to_string(), valid_unknown);
+        assert_class(compile_foreign_graph(&graph, TARGET_PREFIX), "foreign-compiler-unknown-reference");
+    }
+
+    #[test]
+    fn exact_path_map_reuses_identical_entries_and_rejects_conflicts() {
+        let mut map = BTreeMap::new();
+        insert_exact_path(&mut map, "/nix/store/source", "/nix/store/target", "output", None).unwrap();
+        insert_exact_path(&mut map, "/nix/store/source", "/nix/store/target", "output", None).unwrap();
+        assert_eq!(map.len(), 1);
+        assert_class(
+            insert_exact_path(&mut map, "/nix/store/source", "/nix/store/other", "output", None),
+            "foreign-compiler-duplicate-map-entry",
+        );
+        assert_eq!(map["/nix/store/source"], "/nix/store/target");
     }
 
     #[test]

@@ -676,6 +676,7 @@
             set -eu
             profile_root="config/foreign-execution-profiles"
             audit_root="config/foreign-provenance-audit"
+            cache_closure_root="config/foreign-cache-closure"
             scratch="$(mktemp -d)"
             trap 'rm -rf "$scratch"' EXIT
 
@@ -689,6 +690,26 @@
             nickel typecheck "$audit_root/default.ncl"
             nickel export --format json "$audit_root/default.ncl" > "$scratch/audit.json"
             diff -u "$audit_root/generated/default.json" "$scratch/audit.json"
+
+            nickel typecheck "$cache_closure_root/default.ncl"
+            nickel typecheck "$cache_closure_root/preserve-nix.ncl"
+            nickel export --format json "$cache_closure_root/default.ncl" > "$scratch/cache-closure.json"
+            nickel export --format json "$cache_closure_root/preserve-nix.ncl" > "$scratch/preserve-nix.json"
+            diff -u "$cache_closure_root/generated/default.json" "$scratch/cache-closure.json"
+            diff -u "$cache_closure_root/generated/preserve-nix.json" "$scratch/preserve-nix.json"
+
+            if nickel export --format json "$cache_closure_root/tests/invalid-unknown-field.ncl" > /dev/null; then
+              echo "unknown-field cache closure fixture unexpectedly passed" >&2
+              exit 1
+            fi
+            if nickel export --format json "$cache_closure_root/tests/invalid-zero-limit.ncl" > /dev/null; then
+              echo "zero-limit cache closure fixture unexpectedly passed" >&2
+              exit 1
+            fi
+            if nickel export --format json "$cache_closure_root/tests/invalid-preserve-prefix.ncl" > /dev/null; then
+              echo "preserved path prefix drift fixture unexpectedly passed" >&2
+              exit 1
+            fi
 
             if nickel export --format json "$audit_root/tests/invalid-unknown-field.ncl" > /dev/null; then
               echo "unknown-field provenance audit fixture unexpectedly passed" >&2

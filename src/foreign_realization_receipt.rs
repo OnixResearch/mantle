@@ -14,6 +14,8 @@ use serde::Serialize;
 use crate::RunError;
 use crate::foreign_executable_plan::ForeignExecutablePlan;
 use crate::foreign_graph_compiler::CompiledForeignBuiltin;
+use crate::foreign_realization_shell::CacheClosureHydration;
+use crate::foreign_realization_shell::ForeignCacheClosureFact;
 use crate::foreign_realization_shell::ForeignSourceStoreFact;
 
 pub(crate) const FOREIGN_REALIZATION_RECEIPT_SCHEMA: &str = "mantle-foreign-realization-receipt-v1";
@@ -46,6 +48,10 @@ pub(crate) struct ForeignRealizationReceipt {
     pub(crate) selected_root_paths: Vec<String>,
     pub(crate) execution_profiles: Vec<RealizedExecutionProfile>,
     pub(crate) cache_policy: RealizedCachePolicy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) cache_closure_policy_blake3: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) cache_closure: Vec<ForeignCacheClosureFact>,
     pub(crate) sources: Vec<ForeignSourceStoreFact>,
     pub(crate) units: Vec<ForeignRealizedUnit>,
     pub(crate) failure: Option<ForeignRealizationFailure>,
@@ -65,6 +71,8 @@ pub(crate) struct RealizedCachePolicy {
     pub(crate) substitution_enabled: bool,
     pub(crate) offline: bool,
     pub(crate) ordered_cache_urls: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) realization_route: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -111,6 +119,7 @@ pub(crate) struct ForeignReceiptInput<'a> {
     pub(crate) substitution_enabled: bool,
     pub(crate) offline: bool,
     pub(crate) ordered_cache_urls: &'a [String],
+    pub(crate) cache_closure: Option<&'a CacheClosureHydration>,
 }
 
 pub(crate) fn build_foreign_realization_receipt(
@@ -140,6 +149,12 @@ pub(crate) fn build_foreign_realization_receipt(
         .iter()
         .map(|output| ((output.unit_id.as_str(), output.output_name.as_str()), output))
         .collect::<BTreeMap<_, _>>();
+    let cache_fact_by_path = input
+        .cache_closure
+        .into_iter()
+        .flat_map(|hydration| hydration.facts.iter())
+        .map(|fact| (fact.logical_path.as_str(), fact))
+        .collect::<BTreeMap<_, _>>();
     let mut profiles = BTreeSet::new();
     let mut units = Vec::with_capacity(input.plan.native_units.len());
     for unit in &input.plan.native_units {
@@ -154,7 +169,8 @@ pub(crate) fn build_foreign_realization_receipt(
         let mut outputs = Vec::with_capacity(unit.outputs.len());
         for (output_name, target_path) in &unit.outputs {
             let realized = output_by_unit_and_name.get(&(unit.node_id.as_str(), output_name.as_str())).copied();
-            if outcome.is_some() && realized.is_none() {
+            let cache_fact = cache_fact_by_path.get(target_path.as_str()).copied();
+            if outcome.is_some() && realized.is_none() && cache_fact.is_none() {
                 return Err(RunError::Internal(format!(
                     "successful foreign realization has no output fact for {}:{}",
                     unit.node_id, output_name
@@ -171,16 +187,33 @@ pub(crate) fn build_foreign_realization_receipt(
                     substitution_transferred_bytes: substitution.map(|report| report.transferred_bytes),
                     substitution_reused_bytes: substitution.map(|report| report.reused_bytes),
                 });
+            } else if let Some(cache_fact) = cache_fact {
+                let is_remote = cache_fact.disposition == "remote-substituted";
+                outputs.push(ForeignRealizedOutput {
+                    output_name: output_name.clone(),
+                    target_path: target_path.clone(),
+                    nar_sha256: cache_fact.nar_sha256.clone(),
+                    nar_size: cache_fact.nar_size,
+                    substitution_mode: Some("full".to_string()),
+                    substitution_transferred_bytes: Some(if is_remote { cache_fact.nar_size } else { 0 }),
+                    substitution_reused_bytes: Some(if is_remote { 0 } else { cache_fact.nar_size }),
+                });
             }
         }
         let effective_failure = failure.map(str::to_string).or_else(|| {
-            if outcome.is_none() && outputs.is_empty() && !input.build_result.failed_roots.is_empty() {
+            if input.cache_closure.is_none()
+                && outcome.is_none()
+                && outputs.is_empty()
+                && !input.build_result.failed_roots.is_empty()
+            {
                 Some("unit has no store output after a selected root failure".to_string())
             } else {
                 None
             }
         });
-        if outcome.is_none() && effective_failure.is_none() && outputs.is_empty() {
+        let cache_only_not_required =
+            input.cache_closure.is_some() && outcome.is_none() && effective_failure.is_none() && outputs.is_empty();
+        if outcome.is_none() && effective_failure.is_none() && outputs.is_empty() && !cache_only_not_required {
             return Err(RunError::Internal(format!(
                 "foreign realization has no scheduler or store disposition for {}",
                 unit.node_id
@@ -188,6 +221,10 @@ pub(crate) fn build_foreign_realization_receipt(
         }
         let execution_class = if effective_failure.is_some() {
             "failed-or-blocked"
+        } else if cache_only_not_required {
+            "not-required-cache-only"
+        } else if outcome.is_none() && outputs.iter().any(|output| output.substitution_transferred_bytes != Some(0)) {
+            "substituted"
         } else if outcome.is_none() {
             "already-present"
         } else if outcome.is_some_and(|value| !value.substitutions.is_empty()) {
@@ -268,7 +305,10 @@ pub(crate) fn build_foreign_realization_receipt(
             substitution_enabled: input.substitution_enabled,
             offline: input.offline,
             ordered_cache_urls: input.ordered_cache_urls.to_vec(),
+            realization_route: input.plan.realization_route.clone(),
         },
+        cache_closure_policy_blake3: input.cache_closure.map(|hydration| hydration.policy_blake3.clone()),
+        cache_closure: input.cache_closure.map(|hydration| hydration.facts.clone()).unwrap_or_default(),
         sources: input.source_facts.to_vec(),
         units,
         failure,

@@ -1,0 +1,14 @@
+{
+  "schema": "foreign-package-index-v1",
+  "entries": [
+    {
+      "name": "hello",
+      "system": "x86_64-linux",
+      "root_derivation_id": "nix:0j6kpwz4dm9964pssxn1zf5vql05y3fl-hello-2.12.3.drv",
+      "aliases": [],
+      "provenance_ref": "live-nixpkgs#hello",
+      "metadata_digest": "1f40e55fbdefa6e3b9086add2aefc0af6d6db000b1b077c42e59bc0c0ab39939",
+      "unsupported_metadata_classes": []
+    }
+  ]
+}

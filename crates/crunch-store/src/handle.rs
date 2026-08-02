@@ -78,6 +78,7 @@ use crate::metadata_cache::new_metadata_entry;
 use crate::roots;
 
 const NAR_SHA256_BYTES: usize = 32;
+const MAX_REMOTE_TRUSTED_PUBLIC_KEYS: usize = 16;
 
 /// Configuration for opening a store.
 pub struct StoreConfig {
@@ -1244,6 +1245,27 @@ impl StoreHandle {
 
         self.output_nodes.insert(path.clone(), path_info.node.clone());
         Ok(Some(path_info.node))
+    }
+
+    /// Return and physically export one complete local PathInfo.
+    pub async fn export_cached_path_info(&mut self, path: &StorePath<String>) -> Result<Option<PathInfo>, Error> {
+        assert!(!path.name().is_empty(), "store path name must not be empty");
+        let Some(node) = self.cached_node_for_path(path).await? else {
+            return Ok(None);
+        };
+        let path_info = self
+            .pathinfo_service
+            .get(*path.digest())
+            .await
+            .map_err(|error| Error::Store(format!("PathInfo export lookup for {path}: {error}")))?
+            .ok_or_else(|| Error::Store(format!("cached node has no PathInfo: {path}")))?;
+        if path_info.store_path != *path || path_info.node != node {
+            return Err(Error::Store(format!("cached PathInfo changed during export: {path}")));
+        }
+        self.export_output_if_needed(path, &node, true).await?;
+        self.built_outputs
+            .insert(path.to_absolute_path_with_prefix(&self.output_dir_str), path_info.clone());
+        Ok(Some(path_info))
     }
 
     /// Record a CA mapping and persist to disk.
@@ -2877,13 +2899,13 @@ async fn decode_delta_transfer_frames(response: reqwest::Response) -> Result<Vec
     Ok(frames)
 }
 
-fn parse_remote_trusted_public_keys(url_str: &str) -> Result<Vec<VerifyingKey>, String> {
+pub fn parse_remote_trusted_public_keys(url_str: &str) -> Result<Vec<VerifyingKey>, String> {
     assert!(!url_str.is_empty(), "substituter URL must not be empty");
 
     let nix_url_str = format!("nix+{url_str}");
     let nix_url: Url = nix_url_str.parse().map_err(|e| format!("invalid substituter URL '{url_str}': {e}"))?;
 
-    let mut indexed_keys = Vec::<(u32, String)>::with_capacity(16);
+    let mut indexed_keys = Vec::<(u32, String)>::with_capacity(MAX_REMOTE_TRUSTED_PUBLIC_KEYS);
     for (key, value) in nix_url.query_pairs() {
         let Some(index_text) = key.strip_prefix("trusted_public_keys[").and_then(|rest| rest.strip_suffix(']')) else {
             continue;
@@ -2891,9 +2913,15 @@ fn parse_remote_trusted_public_keys(url_str: &str) -> Result<Vec<VerifyingKey>, 
         let index = index_text
             .parse::<u32>()
             .map_err(|e| format!("parsing trusted public key index '{index_text}': {e}"))?;
+        if indexed_keys.len() >= MAX_REMOTE_TRUSTED_PUBLIC_KEYS {
+            return Err(format!("substituter URL exceeds trusted public key limit {MAX_REMOTE_TRUSTED_PUBLIC_KEYS}"));
+        }
         indexed_keys.push((index, value.into_owned()));
     }
     indexed_keys.sort_by_key(|(index, _)| *index);
+    if indexed_keys.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+        return Err("substituter URL repeats a trusted public key index".to_string());
+    }
 
     let expected_key_count = indexed_keys.len();
     let mut trusted_public_keys = Vec::with_capacity(expected_key_count);
@@ -3141,6 +3169,22 @@ mod tests {
     use tokio::io::AsyncWriteExt;
 
     use super::*;
+
+    #[test]
+    fn remote_trusted_key_parser_accepts_indexed_keys_and_rejects_duplicate_indexes() {
+        const CACHE_KEY: &str = "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=";
+        let accepted_url = format!("https://cache.nixos.org?trusted_public_keys[0]={CACHE_KEY}");
+        let keys = parse_remote_trusted_public_keys(&accepted_url).unwrap();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0].to_string(), CACHE_KEY);
+
+        let duplicate_url =
+            format!("https://cache.nixos.org?trusted_public_keys[0]={CACHE_KEY}&trusted_public_keys[0]={CACHE_KEY}");
+        assert_eq!(
+            parse_remote_trusted_public_keys(&duplicate_url).unwrap_err(),
+            "substituter URL repeats a trusted public key index"
+        );
+    }
 
     #[test]
     fn action_result_nar_byte_accounting_distinguishes_transfer_reuse_and_overflow() {

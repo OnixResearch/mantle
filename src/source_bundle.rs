@@ -598,6 +598,40 @@ pub fn plan_source_bundle(specs: &[SourceSpec], store_prefix: &str) -> Result<So
     assemble_source_bundle(records, store_prefix)
 }
 
+pub(crate) fn plan_empty_source_bundle(store_prefix: &str) -> Result<SourceBundleManifest, RunError> {
+    if !store_prefix.starts_with('/') {
+        return Err(RunError::Internal(format!("store prefix must be absolute: {store_prefix}")));
+    }
+    let mut manifest = SourceBundleManifest {
+        format: SOURCE_BUNDLE_FORMAT.to_string(),
+        version: SOURCE_BUNDLE_VERSION,
+        store_prefix: store_prefix.to_string(),
+        roots: Vec::new(),
+        records: Vec::new(),
+        manifest_blake3: String::new(),
+        non_claim: SOURCE_BUNDLE_NON_CLAIM.to_string(),
+    };
+    manifest.manifest_blake3 = digest_manifest_without_digest(&manifest)?;
+    Ok(manifest)
+}
+
+pub(crate) fn validate_empty_source_bundle(manifest: &SourceBundleManifest) -> Result<(), RunError> {
+    if manifest.format != SOURCE_BUNDLE_FORMAT
+        || manifest.version != SOURCE_BUNDLE_VERSION
+        || !manifest.store_prefix.starts_with('/')
+        || !manifest.roots.is_empty()
+        || !manifest.records.is_empty()
+        || manifest.non_claim != SOURCE_BUNDLE_NON_CLAIM
+    {
+        return Err(RunError::Internal("empty source bundle structure is invalid".to_string()));
+    }
+    let observed_digest = digest_manifest_without_digest(manifest)?;
+    if manifest.manifest_blake3 != observed_digest {
+        return Err(RunError::Internal("empty source bundle manifest BLAKE3 is stale".to_string()));
+    }
+    Ok(())
+}
+
 pub(crate) fn plan_bound_foreign_source_bundle(
     requirements: &[crate::foreign_graph_compiler::CompiledSourceRequirement],
     bindings: &[ForeignSourcePathBinding],
@@ -5233,6 +5267,19 @@ mod tests {
         tampered.files.iter_mut().find(|file| file.path == "bin/tool").unwrap().executable = false;
         let error = materialize_source_record_exact_payload(&tampered, &temp.path().join("rejected")).unwrap_err();
         assert!(error.to_string().contains("content digest mismatch"));
+    }
+
+    #[test]
+    fn explicit_empty_source_bundle_is_digest_bound_and_rejects_structure_tamper() {
+        let manifest = plan_empty_source_bundle("/nix/store").unwrap();
+        validate_empty_source_bundle(&manifest).unwrap();
+        assert!(manifest.records.is_empty());
+        assert!(manifest.roots.is_empty());
+
+        let mut tampered = manifest;
+        tampered.store_prefix = "relative/store".to_string();
+        tampered.manifest_blake3 = digest_manifest_without_digest(&tampered).unwrap();
+        assert!(validate_empty_source_bundle(&tampered).is_err());
     }
 
     #[test]

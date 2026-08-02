@@ -377,6 +377,21 @@ pub async fn import_http_cache_closure(
     options: &PullOptions,
     limits: HttpClosureLimits,
 ) -> Result<HttpClosurePullReport, Error> {
+    import_http_cache_closure_with_validator(handle, cache_url, root, options, limits, |_| Ok(())).await
+}
+
+/// Discover and validate the complete metadata closure before content import.
+pub async fn import_http_cache_closure_with_validator<F>(
+    handle: &StoreHandle,
+    cache_url: &Url,
+    root: &StorePath<String>,
+    options: &PullOptions,
+    limits: HttpClosureLimits,
+    validate_plan: F,
+) -> Result<HttpClosurePullReport, Error>
+where
+    F: FnOnce(&HttpClosurePlan) -> Result<(), String>,
+{
     validate_http_cache_url(cache_url)?;
     let client = build_http_pull_client()?;
     let normalized_cache_url = normalize_http_cache_base_url(cache_url);
@@ -387,6 +402,7 @@ pub async fn import_http_cache_closure(
     if !verify_http_closure_plan_identity(&discovered.plan).map_err(http_closure_plan_error)? {
         return Err(Error::Store("http-closure-plan-identity-mismatch".to_string()));
     }
+    validate_plan(&discovered.plan).map_err(Error::Store)?;
     import_discovered_http_closure(handle, &client, &normalized_cache_url, options, discovered).await
 }
 
@@ -1976,6 +1992,36 @@ mod tests {
             stats.request_paths[..first_nar_index].iter().filter(|path| path.ends_with(".narinfo")).count();
         assert_eq!(narinfo_count_before_content, 2);
         assert_eq!(stats.request_paths.last(), Some(&nar_route(&cache_dir, &root.store_path)));
+    }
+
+    #[tokio::test]
+    async fn http_closure_plan_validator_rejects_before_nar_download_or_store_mutation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-validator")).await;
+        let root = make_signed_pathinfo(&push_store, "validator-root", b"root").await;
+        let cache_dir = tmp.path().join("cache-validator");
+        export_paths_to_cache_dir(&push_store, std::slice::from_ref(&root), &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let server = HttpTestServer::spawn(cache_routes(&cache_dir));
+        let pull_store = open_test_store(&tmp.path().join("pull-validator")).await;
+
+        let error = import_http_cache_closure_with_validator(
+            &pull_store,
+            &server.base_url,
+            &root.store_path,
+            &default_pull_options(),
+            HttpClosureLimits::default(),
+            |_| Err("fixture-plan-rejected".to_string()),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(error.to_string().contains("fixture-plan-rejected"));
+        assert_eq!(server.stats().nar_requests, 0);
+        assert!(pull_store.pathinfo_service().get(*root.store_path.digest()).await.unwrap().is_none());
     }
 
     #[tokio::test]

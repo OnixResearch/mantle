@@ -1473,6 +1473,7 @@ let Registry = {
         "cargo test -p mantle foreign_realization::tests",
         "cargo test -p mantle foreign_realization_receipt::tests",
         "cargo test -p mantle foreign_provenance_audit::tests",
+        "cargo test -p crunch-store http_closure::tests",
         "cargo test -p crunch-store provenance",
         "cargo test -p mantle --test foreign_import_cli"
       ],

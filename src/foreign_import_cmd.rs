@@ -38,8 +38,12 @@ use crate::foreign_executable_plan::compile_foreign_executable_plan_with_profile
 use crate::foreign_provenance_audit::ForeignProvenanceAuditReceipt;
 use crate::foreign_provenance_audit::ForeignProvenanceAuditRequest;
 use crate::foreign_provenance_audit::audit_foreign_realization;
+use crate::foreign_realization::ForeignCacheClosurePolicy;
 use crate::foreign_realization::ForeignRealizationAdmission;
 use crate::foreign_realization::ForeignSourceAdmission;
+use crate::foreign_realization::is_cache_only_foreign_plan;
+use crate::foreign_realization::validate_cache_only_source_bundle;
+use crate::foreign_realization::validate_foreign_cache_closure_policy;
 use crate::foreign_realization::validate_foreign_realization_admission;
 use crate::foreign_realization::validate_foreign_source_admission;
 use crate::foreign_realization_shell::ForeignRealizationRequest;
@@ -47,6 +51,7 @@ use crate::foreign_realization_shell::realize_foreign_plan;
 use crate::source_bundle::ForeignSourcePathBinding;
 use crate::source_bundle::SourceBundleManifest;
 use crate::source_bundle::plan_bound_foreign_source_bundle;
+use crate::source_bundle::plan_empty_source_bundle;
 use crate::source_bundle::write_json_atomically;
 
 const CLI_REPORT_SCHEMA: &str = "mantle-foreign-import-cli-v1";
@@ -141,7 +146,7 @@ pub(crate) enum ForeignImportAction {
         plan: PathBuf,
 
         /// Source payload mapping: `payload-id=/path/to/payload`
-        #[arg(long = "source", required = true)]
+        #[arg(long = "source")]
         sources: Vec<String>,
 
         /// Write the source-bundle manifest atomically to this path
@@ -170,6 +175,10 @@ pub(crate) enum ForeignImportAction {
         /// Exported execution-profile JSON. Repeat for each profile ID in the plan
         #[arg(long = "execution-profile", required = true)]
         execution_profiles: Vec<PathBuf>,
+
+        /// Cache-closure policy JSON. Required only for cache-only preserved plans
+        #[arg(long = "cache-closure-policy")]
+        cache_closure_policy: Option<PathBuf>,
 
         /// Selected root node ID. Repeat to select multiple roots. Defaults to all plan roots
         #[arg(long = "root")]
@@ -434,6 +443,7 @@ struct ForeignRealizeCommandRequest<'a> {
     source_bundle_path: &'a Path,
     source_bundle_blake3: &'a str,
     execution_profile_paths: &'a [PathBuf],
+    cache_closure_policy_path: Option<&'a Path>,
     selected_roots: &'a [String],
     receipt_out: &'a Path,
     jobs: Option<u32>,
@@ -483,6 +493,7 @@ pub(crate) fn cmd_foreign_import(
             source_bundle,
             source_bundle_blake3,
             execution_profiles,
+            cache_closure_policy,
             roots,
             receipt_out,
             jobs,
@@ -498,6 +509,7 @@ pub(crate) fn cmd_foreign_import(
                 source_bundle_path: &source_bundle,
                 source_bundle_blake3: &source_bundle_blake3,
                 execution_profile_paths: &execution_profiles,
+                cache_closure_policy_path: cache_closure_policy.as_deref(),
                 selected_roots: &roots,
                 receipt_out: &receipt_out,
                 jobs,
@@ -718,7 +730,16 @@ fn run_prepare_sources(
             path: PathBuf::from(path),
         });
     }
-    let manifest = plan_bound_foreign_source_bundle(&plan.source_requirements, &bindings, &plan.target_store_prefix)?;
+    let manifest = if is_cache_only_foreign_plan(&plan) {
+        if !bindings.is_empty() {
+            return Err(RunError::Internal(
+                "cache-only foreign source preparation rejects builder source bindings".to_string(),
+            ));
+        }
+        plan_empty_source_bundle(&plan.target_store_prefix)?
+    } else {
+        plan_bound_foreign_source_bundle(&plan.source_requirements, &bindings, &plan.target_store_prefix)?
+    };
     write_json_atomically(output_path, &manifest, "foreign source bundle")?;
     if json {
         println!(
@@ -760,7 +781,8 @@ fn run_audit(request: ForeignAuditCommandRequest<'_>, context: &ForeignImportCon
     )?;
     let (keypair, _key_path) =
         crate::build_cmd::load_existing_signing_keypair(request.signing_key_path, context.state_dir)?;
-    let trusted_keys = crunch_build::build_trusted_keys(&keypair, None);
+    let cache_keys = trusted_cache_keys_from_plan(&plan)?;
+    let trusted_keys = crunch_build::build_trusted_keys(&keypair, Some(&cache_keys));
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|error| RunError::Internal(format!("creating foreign provenance audit runtime: {error}")))?;
     let receipt: ForeignProvenanceAuditReceipt =
@@ -817,6 +839,12 @@ fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImpor
         "source-bundle",
         context.json,
     )?;
+    let cache_closure_policy = request
+        .cache_closure_policy_path
+        .map(|path| {
+            read_required_realization_json::<ForeignCacheClosurePolicy>(path, "cache-closure-policy", context.json)
+        })
+        .transpose()?;
     let mut execution_profiles = BTreeMap::new();
     for profile_path in request.execution_profile_paths {
         let profile =
@@ -844,6 +872,16 @@ fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImpor
     if request.offline && request.substitute {
         return Err(RunError::Internal("offline foreign realization cannot enable cache substitution".to_string()));
     }
+    let cache_only = is_cache_only_foreign_plan(&plan);
+    if cache_only && (!request.substitute || request.offline) {
+        return Err(RunError::Internal("cache-only foreign realization requires online substitution".to_string()));
+    }
+    if cache_only && cache_closure_policy.is_none() {
+        return Err(RunError::Internal("cache-only foreign realization requires --cache-closure-policy".to_string()));
+    }
+    if !cache_only && cache_closure_policy.is_some() {
+        return Err(RunError::Internal("cache closure policy is only valid for a cache-only foreign plan".to_string()));
+    }
     validate_foreign_realization_admission(ForeignRealizationAdmission {
         plan: &plan,
         import_receipt: &import_receipt,
@@ -852,15 +890,22 @@ fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImpor
         remote_execution_requested: request.remote,
     })
     .map_err(|error| RunError::Internal(error.to_string()))?;
-    validate_foreign_source_admission(ForeignSourceAdmission {
-        source_requirements: &plan.source_requirements,
-        source_bundle: &source_bundle,
-        expected_manifest_blake3: request.source_bundle_blake3,
-    })
-    .map_err(|error| RunError::Internal(error.to_string()))?;
+    if let Some(policy) = cache_closure_policy.as_ref() {
+        validate_foreign_cache_closure_policy(policy).map_err(|error| RunError::Internal(error.to_string()))?;
+        validate_cache_only_source_bundle(&source_bundle, request.source_bundle_blake3)
+            .map_err(|error| RunError::Internal(error.to_string()))?;
+    } else {
+        validate_foreign_source_admission(ForeignSourceAdmission {
+            source_requirements: &plan.source_requirements,
+            source_bundle: &source_bundle,
+            expected_manifest_blake3: request.source_bundle_blake3,
+        })
+        .map_err(|error| RunError::Internal(error.to_string()))?;
+    }
     let keypair =
         crate::build_cmd::load_or_generate_signing_keypair(request.signing_key_path, context.state_dir, !context.json)?;
-    let trusted_keys = crunch_build::build_trusted_keys(&keypair, None);
+    let cache_keys = trusted_cache_keys_from_plan(&plan)?;
+    let trusted_keys = crunch_build::build_trusted_keys(&keypair, Some(&cache_keys));
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|error| RunError::Internal(format!("creating foreign realization runtime: {error}")))?;
     let receipt = runtime.block_on(realize_foreign_plan(ForeignRealizationRequest {
@@ -870,6 +915,7 @@ fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImpor
         expected_source_bundle_blake3: request.source_bundle_blake3,
         selected_root_node_ids: &selected_roots,
         execution_profiles: &execution_profiles,
+        cache_closure_policy: cache_closure_policy.as_ref(),
         output_dir: context.output_dir,
         state_dir: context.state_dir,
         base_state_dirs: context.base_state_dirs,
@@ -904,6 +950,31 @@ fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImpor
     } else {
         Ok(())
     }
+}
+
+fn trusted_cache_keys_from_plan(
+    plan: &ForeignExecutablePlan,
+) -> Result<Vec<nix_compat::narinfo::VerifyingKey>, RunError> {
+    let cache_urls = plan
+        .substitution_audit
+        .iter()
+        .map(|audit| audit.cache_url.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut keys_by_encoding = std::collections::BTreeMap::new();
+    for cache_url in cache_urls {
+        let keys = crunch_store::parse_remote_trusted_public_keys(cache_url).map_err(|error| {
+            RunError::Internal(format!("foreign plan cache trust configuration is invalid: {error}"))
+        })?;
+        for key in keys {
+            keys_by_encoding.entry(key.to_string()).or_insert(key);
+        }
+    }
+    if is_cache_only_foreign_plan(plan) && keys_by_encoding.is_empty() {
+        return Err(RunError::Internal(
+            "cache-only foreign plan has no receipt-bound trusted cache public key".to_string(),
+        ));
+    }
+    Ok(keys_by_encoding.into_values().collect())
 }
 
 fn read_required_realization_json<T: DeserializeOwned>(path: &Path, artifact: &str, json: bool) -> Result<T, RunError> {
@@ -1643,7 +1714,10 @@ mod tests {
         let policy = fixture_policy();
 
         let report = plan_inputs(graph, index, DEFAULT_PACKAGE_NAME, policy, DEFAULT_SYSTEM);
-        let plan = report.plan.as_ref().expect("plan should be present");
+        let plan = report
+            .plan
+            .as_ref()
+            .unwrap_or_else(|| panic!("plan should be present; diagnostics={:?}", report.diagnostics));
 
         assert!(report.accepted);
         assert_eq!(report.verdict, ACCEPTED_VERDICT);
@@ -1669,6 +1743,28 @@ mod tests {
             trusted_cache_scopes: std::collections::BTreeSet::new(),
             allowed_sandbox_capabilities: std::collections::BTreeSet::new(),
         }
+    }
+
+    #[test]
+    fn cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls() {
+        const CACHE_KEY: &str = "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=";
+        let (graph, index) = crate::foreign_derivation_import::guix_like_hello_fixture();
+        let report = plan_inputs(graph, index, DEFAULT_PACKAGE_NAME, fixture_policy(), DEFAULT_SYSTEM);
+        let mut plan = report.plan.unwrap();
+        plan.realization_route = Some(crate::foreign_executable_plan::CACHE_ONLY_PRESERVE_ROUTE.to_string());
+        plan.substitution_audit = vec![crate::foreign_derivation_import::SubstitutionAuditEvent {
+            node_id: plan.native_units[0].node_id.clone(),
+            cache_url: format!("https://cache.nixos.org?trusted_public_keys[0]={CACHE_KEY}"),
+            trust_scope: "trusted-binary-cache".to_string(),
+            classification: "trusted-substitution-hint".to_string(),
+            store_admission_required: true,
+        }];
+        let keys = trusted_cache_keys_from_plan(&plan).unwrap();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0].to_string(), CACHE_KEY);
+
+        plan.substitution_audit[0].cache_url = "https://cache.nixos.org".to_string();
+        assert!(trusted_cache_keys_from_plan(&plan).is_err());
     }
 
     #[test]

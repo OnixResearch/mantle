@@ -42,6 +42,54 @@ Copy the reported `manifest_blake3` value into the realization command.
 Mantle rejects missing records, changed content, incomplete trees, and wrong modes before source ingest.
 It does not read an ambient `/nix/store` or `/gnu/store` path to satisfy a requirement.
 
+## Realize a preserved Nix cache path
+
+Use `preserve-cache-paths-v1` only with one unchanged `/nix/store` prefix.
+The plan records the separate `cache-only-preserve-v1` route.
+It maps each foreign output and source path to the same path.
+
+Use this translation policy during planning:
+
+```text
+--policy config/foreign-cache-closure/generated/preserve-nix.json
+```
+
+Prepare the required empty source bundle without `--source`:
+
+```text
+mantle --json foreign-import prepare-sources \
+  --plan plan.json \
+  --out source-bundle.json
+```
+
+Then run cache-only realization:
+
+```text
+PATH=/path/without/nix mantle --json \
+  --state-dir ./state \
+  --store ./output \
+  --store-prefix /nix/store \
+  foreign-import realize \
+  --plan plan.json \
+  --import-receipt import-receipt.json \
+  --source-bundle source-bundle.json \
+  --source-bundle-blake3 <manifest-blake3> \
+  --execution-profile config/foreign-execution-profiles/generated/nix.json \
+  --cache-closure-policy config/foreign-cache-closure/generated/default.json \
+  --receipt-out realization-receipt.json \
+  --substitute
+```
+
+The plan cache URL must bind each trusted public key.
+Mantle supports one selected output root for this route.
+It validates all bounded NARInfo metadata before it imports NAR content.
+A metadata failure creates no output and no realization receipt.
+
+After hydration, Mantle reopens the store without remote services.
+The ordinary scheduler observes the selected output as already present.
+The cache-only observer has no inputs, arguments, or executable builder fallback.
+Units outside the runtime closure report `not-required-cache-only`.
+
 ## Realize locally
 
 Run the ordinary Mantle registry, scheduler, worker, and store path:
@@ -107,10 +155,10 @@ The command loads the existing signing key. It verifies every selected PathInfo
 before content scanning. It then reads directories and blobs from castore only.
 It does not use exported host files as replacement content.
 
-The scanner classifies regular data, ELF files, scripts, links, tar archives,
-and newc initrds. Unknown executable bytes fail closed. Foreign store paths,
-missing targets, link escapes, malformed containers, and exhausted limits also
-fail closed.
+The scanner classifies data, ELF files, scripts, links, tar archives, newc initrds, gzip streams, and libtool archives.
+It scans bounded gzip payloads after decompression.
+Unknown executable bytes fail closed.
+Invalid store digests, missing targets, link escapes, malformed containers, and exhausted limits also fail closed.
 
 A passing receipt reports `provenance-audited`. A failed audit reports
 `realized` as its strongest state. Both results preserve the original
@@ -135,6 +183,8 @@ mantle store pull \
 Mantle verifies the receipt schema, status, BLAKE3 identity, and selected root before store mutation.
 The cache must contain the receipt's target paths under the same logical store prefix.
 The cache path still uses normal signature, NAR hash, store-prefix, and PathInfo checks.
+Mantle validates all closure metadata before it downloads content.
+Receipt tampering, untrusted signatures, missing members, and exhausted limits fail closed.
 
 ## System boundary
 
