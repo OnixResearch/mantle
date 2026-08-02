@@ -189,9 +189,10 @@ source of truth for prerequisites, support tiers, and validation rails.
 | [`examples/dependency-chain.ncl`](examples/dependency-chain.ncl) | Producer/consumer ordering |
 | [`examples/projects/generated-site/mantle-project.ncl`](examples/projects/generated-site/mantle-project.ncl) | Project selectors and checks |
 | [`examples/projects/offline-source-bundle/mantle-project.ncl`](examples/projects/offline-source-bundle/mantle-project.ncl) | Connected-to-offline source handoff |
+| [`examples/projects/nixpkgs-tool-use/workflow.ncl`](examples/projects/nixpkgs-tool-use/workflow.ncl) | Cache-imported Nixpkgs tool used by a Mantle build |
 
-Advanced cache, remote-build, OCI, release, WebAssembly, bootstrap, and benchmark
-examples are indexed in [`examples/README.md`](examples/README.md).
+Advanced cache, imported-tool, remote-build, OCI, release, WebAssembly, bootstrap,
+and benchmark examples are indexed in [`examples/README.md`](examples/README.md).
 
 ## Architecture
 

@@ -6,6 +6,9 @@ use assert_cmd::Command;
 use serde_json::Value;
 
 const FOREIGN_ROOT: &str = "examples/projects/foreign-import-handoff";
+const NIXPKGS_TOOL_ROOT: &str = "examples/projects/nixpkgs-tool-use";
+const NIXPKGS_MKSH_OUTPUT: &str = "/nix/store/baa9yl7sazygz4k4ma2v343n4aadjhlj-mksh-59c";
+const NIXPKGS_MKSH_BUILDER: &str = "/nix/store/baa9yl7sazygz4k4ma2v343n4aadjhlj-mksh-59c/bin/mksh";
 const CARGO_ROOT: &str = "examples/projects/cargo-import-offline";
 const RECEIPT_ROOT: &str = "examples/projects/portable-receipt-handoff";
 const REMOTE_ROOT: &str = "examples/projects/remote-build-loopback";
@@ -68,6 +71,7 @@ fn blocker_classes(report: &Value) -> Vec<&str> {
 fn workflow_entrypoints_evaluate_to_their_declared_shapes() {
     let cases = [
         (format!("{FOREIGN_ROOT}/workflow.ncl"), "mantle-example-workflow-v1"),
+        (format!("{NIXPKGS_TOOL_ROOT}/workflow.ncl"), "mantle-example-workflow-v1"),
         (format!("{CARGO_ROOT}/workflow.ncl"), "mantle-example-workflow-v1"),
         (format!("{RECEIPT_ROOT}/mantle-project.ncl"), "portable-receipt-payload"),
         (format!("{REMOTE_ROOT}/mantle-project.ncl"), "remote-loopback-payload"),
@@ -81,6 +85,34 @@ fn workflow_entrypoints_evaluate_to_their_declared_shapes() {
         assert!(output.status.success(), "{path}: {}", String::from_utf8_lossy(&output.stderr));
         assert!(String::from_utf8_lossy(&output.stdout).contains(expected), "{path} missing {expected}");
     }
+}
+
+#[test]
+fn nixpkgs_tool_use_binds_the_imported_builder_and_negative_cases() {
+    let workflow = mantle_cmd()
+        .args(["eval", &format!("{NIXPKGS_TOOL_ROOT}/workflow.ncl")])
+        .output()
+        .expect("tool-use workflow evaluation should run");
+    let workflow_report = parse_json(&workflow);
+    let negative_cases = workflow_report["negative_cases"].as_array().expect("negative cases should be an array");
+
+    assert!(workflow.status.success(), "stderr={}", String::from_utf8_lossy(&workflow.stderr));
+    assert_eq!(workflow_report["consumer"]["builder"], NIXPKGS_MKSH_BUILDER);
+    assert!(negative_cases.contains(&Value::String("untrusted-cache-signature".to_string())));
+    assert!(negative_cases.contains(&Value::String("changed-nar-content".to_string())));
+    assert!(negative_cases.contains(&Value::String("missing-imported-pathinfo".to_string())));
+    assert!(negative_cases.contains(&Value::String("ambient-builder-fallback".to_string())));
+
+    let consumer = mantle_cmd()
+        .args(["eval", &format!("{NIXPKGS_TOOL_ROOT}/consumer.ncl")])
+        .output()
+        .expect("tool-use consumer evaluation should run");
+    let consumer_report = parse_json(&consumer);
+
+    assert!(consumer.status.success(), "stderr={}", String::from_utf8_lossy(&consumer.stderr));
+    assert_eq!(consumer_report["builder"], NIXPKGS_MKSH_BUILDER);
+    assert_eq!(consumer_report["inputs"][0], NIXPKGS_MKSH_OUTPUT);
+    assert_eq!(consumer_report["addressing_mode"], "input-addressed");
 }
 
 #[test]
