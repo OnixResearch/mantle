@@ -1,5 +1,7 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
+// r[impl foreign_derivation_import.realization_adapter]
+// r[impl foreign_derivation_import.realization_receipt]
 
 mod derivation_file;
 

@@ -1,6 +1,7 @@
 //! StoreHandle: unified access to blob, directory, pathinfo, and remote
 //! pathinfo services. Consumers receive a StoreHandle — they do not
 //! construct or own individual services.
+// r[impl foreign_derivation_import.source_materialization]
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;

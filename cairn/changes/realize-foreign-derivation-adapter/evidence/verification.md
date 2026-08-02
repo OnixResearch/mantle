@@ -100,7 +100,9 @@ policy. Strict Cairn validation passed with no issues or findings.
 
 The pre-sync Tracey comparison reported the known repository baseline:
 259 references and 686 requirements. It also reported the new execution-profile
-requirement as dangling because accepted-spec sync had not run yet.
+requirement as dangling because accepted-spec sync had not run yet. After sync,
+Tracey reported 263 references and 690 requirements. None of the four new
+requirement IDs remained missing or dangling.
 
 The machine-schema checker reached pre-existing StageX and source-build
 inventory debt. It did not report the new foreign realization sources.
