@@ -88,7 +88,11 @@ requirements. It also reported three expected dangling active-change references:
 - `foreign_derivation_import.provenance_audit_receipt`
 
 Tracey retained unrelated repository debt and returned `valid: false`.
-Accepted-spec sync must remove the three change-scoped dangling references.
+
+After accepted-spec sync, strict Cairn validation passed again. Tracey reported
+266 referenced requirements and 693 accepted requirements. None of the three new
+IDs remained missing or dangling. Unrelated repository debt kept the verdict at
+`valid: false`.
 
 The machine-schema checker retained 39 unrelated StageX and source-build
 inventory findings. It did not report the new provenance audit sources.
