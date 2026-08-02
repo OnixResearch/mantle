@@ -49,7 +49,11 @@ Strict validation passed. Proposal, design, and tasks gates returned `PASS` and
 Pre-sync Tracey reports 269 referenced requirements and 696 accepted
 requirements. Repository-wide debt keeps `valid: false`. The new requirement is
 not missing. It is dangling only because accepted-spec sync has not run yet.
-`tracey-presync.json` retains the exact report.
+
+After sync, Tracey reports 270 referenced requirements and 697 accepted
+requirements. The new requirement is neither missing nor dangling. Unrelated
+repository debt still keeps `valid: false`. The pre-sync and post-sync JSON files
+retain both exact reports.
 
 ## Live proof
 
