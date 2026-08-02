@@ -298,6 +298,7 @@ fn foreign_import_cli_realizes_two_node_graph_and_reuses_exact_outputs() {
     assert_eq!(provenance_audit["status"], "pass");
     assert_eq!(provenance_audit["strongest_state"], "provenance-audited");
     assert_eq!(provenance_audit["build_report_blake3"], first["build_report_blake3"]);
+    eprintln!("two-node provenance_audit_blake3={}", provenance_audit["audit_blake3"]);
     assert!(provenance_audit["findings"].as_array().unwrap().is_empty());
     assert!(!provenance_audit["non_claims"].as_array().unwrap().is_empty());
     let original_audit_bytes = fs::read(&provenance_audit_path).unwrap();
@@ -354,6 +355,7 @@ fn foreign_import_cli_realizes_two_node_graph_and_reuses_exact_outputs() {
     let bounded_audit = json_file(&bounded_audit_path);
     assert_eq!(bounded_audit["status"], "fail");
     assert_eq!(bounded_audit["strongest_state"], "realized");
+    eprintln!("node-limit provenance_audit_blake3={}", bounded_audit["audit_blake3"]);
     assert!(
         bounded_audit["findings"]
             .as_array()

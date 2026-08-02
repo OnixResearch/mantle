@@ -2,8 +2,9 @@
 //!
 //! The classifier is pure. The asynchronous shell only retrieves signed PathInfo,
 //! directories, and blobs from the active store services.
-//! r[impl foreign_derivation_import.castore_provenance_audit]
-//! r[impl foreign_derivation_import.executable_payload_classification]
+// r[impl foreign_derivation_import.castore_provenance_audit]
+// r[impl foreign_derivation_import.executable_payload_classification]
+// r[related foreign_derivation_import.provenance_audit_receipt]
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;

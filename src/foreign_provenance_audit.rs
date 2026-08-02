@@ -600,6 +600,58 @@ mod tests {
     }
 
     #[test]
+    fn negative_audit_receipt_matrix_is_typed_and_self_digest_valid() {
+        let plan = fixture_plan();
+        let receipt = fixture_receipt(&plan);
+        let root = vec![plan.selected_roots[0].node_id.clone()];
+        let cases = [
+            ("leftover-gnu-store", "untranslated-foreign-path", "/gnu/store/fixture"),
+            ("missing-shebang-target", "missing-executable-target", "/missing/interpreter"),
+            ("malformed-elf", "malformed-elf", "ELF header"),
+            ("symlink-escape", "symlink-path-escape", "../../outside"),
+            ("hidden-archive-executable", "unclassified-executable", "archive!/bin/hidden"),
+            ("incomplete-closure", "incomplete-closure", "missing blob"),
+            ("limit-path-infos", "limit-exhausted", "path-infos"),
+            ("limit-nodes", "limit-exhausted", "nodes"),
+            ("limit-blobs", "limit-exhausted", "blobs"),
+            ("limit-blob-bytes", "limit-exhausted", "blob-bytes"),
+            ("limit-total-bytes", "limit-exhausted", "total-bytes"),
+            ("limit-depth", "limit-exhausted", "depth"),
+            ("limit-findings", "limit-exhausted", "findings"),
+            ("limit-duplicates", "limit-exhausted", "duplicates"),
+            ("limit-container-entries", "limit-exhausted", "container-entries"),
+            ("limit-container-expanded-bytes", "limit-exhausted", "container-expanded-bytes"),
+            ("limit-container-depth", "limit-exhausted", "container-depth"),
+            ("limit-path-bytes", "limit-exhausted", "path-bytes"),
+            ("limit-shebang-bytes", "limit-exhausted", "shebang-bytes"),
+        ];
+        for (label, code, detail) in cases {
+            let admitted = admit_foreign_audit(&plan, &receipt, &policy(), &root).unwrap();
+            let scan = CastoreProvenanceScan {
+                preflight_complete: code != "incomplete-closure",
+                traversal_complete: false,
+                path_infos: Vec::new(),
+                payloads: Vec::new(),
+                references: Vec::new(),
+                findings: vec![ProvenanceFinding {
+                    code: code.to_string(),
+                    path: label.to_string(),
+                    detail: detail.to_string(),
+                }],
+                visited_node_count: 1,
+                visited_blob_count: 0,
+                read_byte_count: 0,
+                duplicate_node_count: 0,
+            };
+            let audit = build_foreign_provenance_receipt(&plan, &receipt, &policy(), admitted, scan).unwrap();
+            assert_eq!(audit.status, FAIL_STATUS);
+            assert_eq!(audit.strongest_state, FOREIGN_REALIZATION_REALIZED_STATE);
+            assert_eq!(foreign_provenance_audit_digest(&audit).unwrap(), audit.audit_blake3);
+            eprintln!("{label} audit_blake3={}", audit.audit_blake3);
+        }
+    }
+
+    #[test]
     fn failed_audit_preserves_realized_state_and_non_claims() {
         let plan = fixture_plan();
         let receipt = fixture_receipt(&plan);
