@@ -100,7 +100,7 @@ let receipt | CutoverReceipt = {
   cargo = {
     core_manifest_blake3 = "496123770c3e21dea731262771046424fc3b534f7279004d3ca52b05bc8a7c79",
     shell_manifest_blake3 = "9c72bc4929f9f836c0b767d6b604b5e6d3fb97e4f1b61505dbc28238b107b6ce",
-    lock_blake3 = "19daded89bc2d1e15bb2f4d44b827a9f2a7b3be8909e0bbd7d06efeb0fc6d535",
+    lock_blake3 = "917d648069454f34fdb12c78a9c93a593467dbafc155443443c35d0d1dd4f8dc",
     lock_source = expected_lock_source,
     packages = ["artifact-auth-core", "artifact-auth-ed25519"],
     package_version = "0.1.0",
@@ -108,7 +108,7 @@ let receipt | CutoverReceipt = {
   },
   nix = {
     flake_blake3 = "495ef4816453fc6ab58617dde209735e55953485c8c4c45d600d42c14b0560b3",
-    lock_blake3 = "44015a40ba7858db1fa8df4f2bcca11499b04b90be1f8eb8ae3c353009203274",
+    lock_blake3 = "a2ee80b3dd9746b7184853a7a93b7040efaabdf2652e8c76661338da8eb4a50d",
     locked_url = expected_https_git,
     original_url = expected_https_git,
     locked_rev = expected_reviewed_commit,
