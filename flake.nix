@@ -29,6 +29,10 @@
       url = "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa";
       flake = false;
     };
+    secretSpecSource = {
+      url = "github:cachix/secretspec/a8794e46ec9664a0e1a3869cc3105d0853937e48";
+      flake = false;
+    };
     octet.url = "github:OnixResearch/octet/86ee46b3b9257b145d2dbeb6ce9d9897607db99c";
   };
 

@@ -413,6 +413,7 @@
         "octet": "octet",
         "onix-nixpkgs": "onix-nixpkgs",
         "rust-overlay": "rust-overlay_4",
+        "secretSpecSource": "secretSpecSource",
         "tigerstyle": "tigerstyle",
         "wasi-virt": "wasi-virt"
       }
@@ -503,6 +504,23 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "secretSpecSource": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1785122304,
+        "narHash": "sha256-s8LXSo6veXTQsd2GlhHS/W3xhDz9v9fjE/5fgsk/edc=",
+        "owner": "cachix",
+        "repo": "secretspec",
+        "rev": "a8794e46ec9664a0e1a3869cc3105d0853937e48",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cachix",
+        "repo": "secretspec",
+        "rev": "a8794e46ec9664a0e1a3869cc3105d0853937e48",
         "type": "github"
       }
     },

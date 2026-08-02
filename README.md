@@ -413,6 +413,7 @@ Useful documentation:
 - [Operator proof guide](docs/operator-proof-guide.md)
 - [Machine artifact contracts](docs/machine-artifact-contracts.md)
 - [Build correctness primitives](docs/build-correctness-primitives.md)
+- [Remote credential operations](docs/remote-credentials.md)
 - [Mantle naming rules](docs/mantle-naming.md)
 
 ## Requirements
