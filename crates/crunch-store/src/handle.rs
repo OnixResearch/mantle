@@ -15,7 +15,7 @@ use futures::StreamExt;
 use nix_compat::derivation::Derivation;
 use nix_compat::narinfo::SigningKey;
 use nix_compat::narinfo::VerifyingKey;
-use nix_compat::narinfo::fingerprint;
+use nix_compat::narinfo::fingerprint_with_store_dir;
 use nix_compat::store_path::StorePath;
 use nix_compat::store_path::StorePathRef;
 use reqwest::StatusCode;
@@ -484,7 +484,7 @@ async fn verified_source_candidate(
         .calculate_nar(&node)
         .await
         .map_err(|error| Error::Store(format!("verified source NAR calculation: {error}")))?;
-    Ok(signed_adoption_path_info(store_path, node, nar_size, nar_sha256, request.signing_key))
+    Ok(signed_adoption_path_info(store_path, node, nar_size, nar_sha256, request.signing_key, store_dir))
 }
 
 fn remove_existing_export_path(path: &Path) -> std::io::Result<()> {
@@ -1839,7 +1839,7 @@ impl StoreHandle {
         if path_info.signatures.is_empty() {
             return Err(format!("delta PathInfo for {} had no signatures", path_info.store_path));
         }
-        let fingerprint = compute_pathinfo_fingerprint(path_info);
+        let fingerprint = compute_pathinfo_fingerprint(path_info, &self.store_dir);
         let is_trusted = path_info.signatures.iter().any(|signature| {
             let signature_ref = signature.as_ref();
             self.remote_trusted_public_keys.iter().any(|key| key.verify(&fingerprint, &signature_ref))
@@ -2619,7 +2619,14 @@ impl StoreHandle {
             .calculate_nar(&node)
             .await
             .map_err(|error| Error::Store(format!("adoption NAR calculation: {error}")))?;
-        let path_info = signed_adoption_path_info(store_path.clone(), node.clone(), nar_size, nar_sha256, signing_key);
+        let path_info = signed_adoption_path_info(
+            store_path.clone(),
+            node.clone(),
+            nar_size,
+            nar_sha256,
+            signing_key,
+            &self.store_dir,
+        );
         self.persist_and_export_signed_output(PersistOutputRequest {
             output_name,
             output_path: &store_path,
@@ -2899,10 +2906,10 @@ fn parse_remote_trusted_public_keys(url_str: &str) -> Result<Vec<VerifyingKey>, 
     Ok(trusted_public_keys)
 }
 
-fn compute_pathinfo_fingerprint(path_info: &PathInfo) -> String {
+fn compute_pathinfo_fingerprint(path_info: &PathInfo, store_dir: &str) -> String {
     let store_path_ref: StorePathRef = path_info.store_path.as_ref();
     let references = path_info.references.iter().map(|reference| reference.as_ref()).collect::<Vec<_>>();
-    fingerprint(&store_path_ref, &path_info.nar_sha256, path_info.nar_size, references.iter())
+    fingerprint_with_store_dir(&store_path_ref, &path_info.nar_sha256, path_info.nar_size, references.iter(), store_dir)
 }
 
 fn signed_adoption_path_info(
@@ -2911,6 +2918,7 @@ fn signed_adoption_path_info(
     nar_size: u64,
     nar_sha256: [u8; NAR_SHA256_BYTES],
     signing_key: &SigningKey<ed25519_dalek::SigningKey>,
+    store_dir: &str,
 ) -> PathInfo {
     let mut path_info = PathInfo {
         store_path,
@@ -2922,7 +2930,7 @@ fn signed_adoption_path_info(
         deriver: None,
         ca: None,
     };
-    let path_info_fingerprint = compute_pathinfo_fingerprint(&path_info);
+    let path_info_fingerprint = compute_pathinfo_fingerprint(&path_info, store_dir);
     path_info.signatures.push(signing_key.sign(path_info_fingerprint.as_bytes()).to_owned());
     assert_eq!(path_info.signatures.len(), 1);
     debug_assert!(!path_info_fingerprint.is_empty());
@@ -3277,7 +3285,7 @@ mod tests {
             deriver: None,
             ca: None,
         };
-        let fingerprint = compute_pathinfo_fingerprint(&path_info);
+        let fingerprint = compute_pathinfo_fingerprint(&path_info, nix_compat::store_path::STORE_DIR);
         path_info.signatures.push(signing_key.sign(fingerprint.as_bytes()).to_owned());
         path_info
     }
@@ -3395,7 +3403,7 @@ mod tests {
         nar_url: &str,
         signing_key: &SigningKey<ed25519_dalek::SigningKey>,
     ) -> String {
-        let fingerprint = compute_pathinfo_fingerprint(path_info);
+        let fingerprint = compute_pathinfo_fingerprint(path_info, nix_compat::store_path::STORE_DIR);
         let signature = signing_key.sign(fingerprint.as_bytes()).to_string();
         let mut body = String::new();
         body.push_str(&format!("StorePath: {}\n", path_info.store_path.to_absolute_path()));

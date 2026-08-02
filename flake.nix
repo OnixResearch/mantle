@@ -675,6 +675,7 @@
           text = ''
             set -eu
             profile_root="config/foreign-execution-profiles"
+            audit_root="config/foreign-provenance-audit"
             scratch="$(mktemp -d)"
             trap 'rm -rf "$scratch"' EXIT
 
@@ -684,6 +685,19 @@
             nickel export --format json "$profile_root/nix.ncl" > "$scratch/nix.json"
             diff -u "$profile_root/generated/guix.json" "$scratch/guix.json"
             diff -u "$profile_root/generated/nix.json" "$scratch/nix.json"
+
+            nickel typecheck "$audit_root/default.ncl"
+            nickel export --format json "$audit_root/default.ncl" > "$scratch/audit.json"
+            diff -u "$audit_root/generated/default.json" "$scratch/audit.json"
+
+            if nickel export --format json "$audit_root/tests/invalid-unknown-field.ncl" > /dev/null; then
+              echo "unknown-field provenance audit fixture unexpectedly passed" >&2
+              exit 1
+            fi
+            if nickel export --format json "$audit_root/tests/invalid-zero-limit.ncl" > /dev/null; then
+              echo "zero-limit provenance audit fixture unexpectedly passed" >&2
+              exit 1
+            fi
 
             if nickel export --format json "$profile_root/tests/invalid-unknown-field.ncl" > /dev/null; then
               echo "unknown-field execution profile fixture unexpectedly passed" >&2

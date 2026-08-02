@@ -52,6 +52,13 @@ mantle --json foreign-import realize \
   --execution-profile profile.json \
   --receipt-out realization-receipt.json \
   --offline --no-substitute
+
+mantle --json --state-dir ./state --store ./output foreign-import audit \
+  --plan plan.json \
+  --realization-receipt realization-receipt.json \
+  --policy config/foreign-provenance-audit/generated/default.json \
+  --root nix:hello \
+  --out provenance-audit.json
 ```
 
 See the [foreign realization operator guide](foreign-realization-operator-guide.md)
@@ -197,6 +204,20 @@ A `complete` receipt records successful observations for all selected roots. A
 `partial-failure` receipt records completed work and the failure. Preflight rejection
 creates no receipt and makes no store change.
 
+The `audit` command reads signed PathInfo and castore content. It does not scan
+exported host paths. It checks bounded files, ELF headers, scripts, links, tar
+archives, and newc initrds. It also resolves observed store references against
+plan-bound closure identities.
+
+A passing `mantle-foreign-provenance-audit-v1` can report
+`provenance-audited`. This state proves only the recorded bounded classification
+and path-resolution facts. An audit failure keeps the prior `realized` state.
+It does not rewrite the realization receipt or its build report.
+
+Configured limits cover PathInfo, nodes, blobs, bytes, depth, findings,
+duplicates, container entries, expansion, recursion, paths, and shebangs. Limit
+exhaustion fails the audit and records the exhausted limit.
+
 Realization can succeed while release reproducibility or independent witness policy
 remains unproven. Report each layer with its own evidence. OnixOS still owns system
 assembly, activation, deployment, boot, and machine-level evidence.
@@ -323,6 +344,8 @@ class and keep missing layers explicit:
   correctness or reproducibility claim.
 - **Rebuilt:** Mantle built an output locally; cite build report and sandbox
   compatibility evidence.
+- **Provenance-audited:** Mantle scanned signed castore facts under recorded
+  limits; no package-correctness or runtime-behavior claim.
 - **Verified:** output signatures, hashes, attestations, and any requested
   release or witness policy were checked in the current run.
 - **Blocked:** report the deterministic diagnostic and next action; blocked

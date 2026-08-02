@@ -1447,7 +1447,8 @@ let Registry = {
           "src/foreign_graph_compiler.rs",
           "src/foreign_realization.rs",
           "src/foreign_realization_receipt.rs",
-          "src/foreign_realization_shell.rs"
+          "src/foreign_realization_shell.rs",
+          "src/foreign_provenance_audit.rs"
         ]
       },
       "consumers"= [
@@ -1471,10 +1472,14 @@ let Registry = {
         "cargo test -p mantle pin_import::tests",
         "cargo test -p mantle foreign_realization::tests",
         "cargo test -p mantle foreign_realization_receipt::tests",
+        "cargo test -p mantle foreign_provenance_audit::tests",
+        "cargo test -p crunch-store provenance",
         "cargo test -p mantle --test foreign_import_cli"
       ],
       "fixture_coverage"= [
-        "classification"
+        "classification",
+        "positive-provenance-audit",
+        "negative-provenance-audit"
       ],
       "freshness_strategy"= "classification only pending per-import schemas",
       "freshness"= {

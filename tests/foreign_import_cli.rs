@@ -31,7 +31,9 @@ const REALIZE_POLICY: &str = "realize-policy.json";
 const REALIZE_BUILDER: &str = "realize-two-node-builder.sh";
 const NIX_EXECUTION_PROFILE: &str = "config/foreign-execution-profiles/generated/nix.json";
 const GUIX_EXECUTION_PROFILE: &str = "config/foreign-execution-profiles/generated/guix.json";
+const PROVENANCE_AUDIT_POLICY: &str = "config/foreign-provenance-audit/generated/default.json";
 const REALIZATION_RECEIPT_SCHEMA: &str = "mantle-foreign-realization-receipt-v1";
+const PROVENANCE_AUDIT_SCHEMA: &str = "mantle-foreign-provenance-audit-v1";
 const HELLO_PACKAGE: &str = "hello";
 const HELLO_SYSTEM: &str = "x86_64-linux";
 const MALFORMED_JSON: &str = "malformed-json";
@@ -56,6 +58,7 @@ const CACHE_NIXOS_ORG: &str = "https://cache.nixos.org";
 const TRUSTED_CACHE_SCOPE: &str = "trusted-binary-cache";
 const EXECUTABLE_PLAN_SCHEMA: &str = "mantle-foreign-executable-plan-v1";
 const BLAKE3_ALGORITHM: &str = "blake3";
+const BLAKE3_HEX_CHARS: usize = 64;
 const KIBIBYTE_BYTES: usize = 1_024;
 const MEBIBYTE_BYTES: usize = KIBIBYTE_BYTES * KIBIBYTE_BYTES;
 const MAX_ATERM_DERIVATION_MEBIBYTES: usize = 16;
@@ -142,6 +145,7 @@ fn foreign_import_cli_realizes_two_node_graph_and_reuses_exact_outputs() {
     let import_receipt_path = temp.path().join("import-receipt.json");
     let source_bundle_path = temp.path().join("source-bundle.json");
     let realization_receipt_path = temp.path().join("realization-receipt.json");
+    let provenance_audit_path = temp.path().join("provenance-audit.json");
     let state_dir = temp.path().join("state");
     let output_dir = temp.path().join("output");
     fs::create_dir(&output_dir).expect("output directory should be created");
@@ -265,6 +269,127 @@ fn foreign_import_cli_realizes_two_node_graph_and_reuses_exact_outputs() {
     let root_path = first["selected_root_paths"][0].as_str().expect("selected root path should be present");
     let root_basename = root_path.rsplit('/').next().expect("selected root should have a basename");
     assert_eq!(fs::read_to_string(output_dir.join(root_basename)).unwrap(), "child\n");
+
+    let provenance_policy = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(PROVENANCE_AUDIT_POLICY);
+    mantle_cmd()
+        .args([
+            "--json",
+            "--state-dir",
+            path_str(&state_dir),
+            "--store",
+            path_str(&output_dir),
+            "foreign-import",
+            "audit",
+            "--plan",
+            path_str(&plan_path),
+            "--realization-receipt",
+            path_str(&realization_receipt_path),
+            "--policy",
+            path_str(&provenance_policy),
+            "--root",
+            "nix:parent",
+            "--out",
+            path_str(&provenance_audit_path),
+        ])
+        .assert()
+        .success();
+    let provenance_audit = json_file(&provenance_audit_path);
+    assert_eq!(provenance_audit["schema"], PROVENANCE_AUDIT_SCHEMA);
+    assert_eq!(provenance_audit["status"], "pass");
+    assert_eq!(provenance_audit["strongest_state"], "provenance-audited");
+    assert_eq!(provenance_audit["build_report_blake3"], first["build_report_blake3"]);
+    assert!(provenance_audit["findings"].as_array().unwrap().is_empty());
+    assert!(!provenance_audit["non_claims"].as_array().unwrap().is_empty());
+    let original_audit_bytes = fs::read(&provenance_audit_path).unwrap();
+    mantle_cmd()
+        .args([
+            "--state-dir",
+            path_str(&state_dir),
+            "--store",
+            path_str(&output_dir),
+            "foreign-import",
+            "audit",
+            "--plan",
+            path_str(&plan_path),
+            "--realization-receipt",
+            path_str(&realization_receipt_path),
+            "--policy",
+            path_str(&provenance_policy),
+            "--root",
+            "nix:parent",
+            "--out",
+            path_str(&provenance_audit_path),
+        ])
+        .assert()
+        .failure();
+    assert_eq!(fs::read(&provenance_audit_path).unwrap(), original_audit_bytes);
+
+    let bounded_policy_path = temp.path().join("bounded-provenance-policy.json");
+    let bounded_audit_path = temp.path().join("bounded-provenance-audit.json");
+    let mut bounded_policy = json_file(&provenance_policy);
+    bounded_policy["max_nodes"] = Value::from(1);
+    fs::write(&bounded_policy_path, serde_json::to_vec(&bounded_policy).unwrap()).unwrap();
+    mantle_cmd()
+        .args([
+            "--json",
+            "--state-dir",
+            path_str(&state_dir),
+            "--store",
+            path_str(&output_dir),
+            "foreign-import",
+            "audit",
+            "--plan",
+            path_str(&plan_path),
+            "--realization-receipt",
+            path_str(&realization_receipt_path),
+            "--policy",
+            path_str(&bounded_policy_path),
+            "--root",
+            "nix:parent",
+            "--out",
+            path_str(&bounded_audit_path),
+        ])
+        .assert()
+        .failure();
+    let bounded_audit = json_file(&bounded_audit_path);
+    assert_eq!(bounded_audit["status"], "fail");
+    assert_eq!(bounded_audit["strongest_state"], "realized");
+    assert!(
+        bounded_audit["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|finding| { finding["code"] == "limit-exhausted" && finding["detail"] == "nodes" })
+    );
+
+    let tampered_audit_receipt_path = temp.path().join("tampered-audit-realization-receipt.json");
+    let rejected_audit_path = temp.path().join("rejected-provenance-audit.json");
+    let mut tampered_audit_receipt = first.clone();
+    tampered_audit_receipt["build_report_blake3"] = Value::String("0".repeat(BLAKE3_HEX_CHARS));
+    fs::write(&tampered_audit_receipt_path, serde_json::to_vec(&tampered_audit_receipt).unwrap()).unwrap();
+    mantle_cmd()
+        .args([
+            "--state-dir",
+            path_str(&state_dir),
+            "--store",
+            path_str(&output_dir),
+            "foreign-import",
+            "audit",
+            "--plan",
+            path_str(&plan_path),
+            "--realization-receipt",
+            path_str(&tampered_audit_receipt_path),
+            "--policy",
+            path_str(&provenance_policy),
+            "--root",
+            "nix:parent",
+            "--out",
+            path_str(&rejected_audit_path),
+        ])
+        .assert()
+        .failure();
+    assert!(!rejected_audit_path.exists());
+
     let original_receipt_bytes = fs::read(&realization_receipt_path).unwrap();
     mantle_cmd()
         .args([

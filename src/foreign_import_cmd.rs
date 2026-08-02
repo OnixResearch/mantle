@@ -35,6 +35,9 @@ use crate::foreign_derivation_import::translate_foreign_graph;
 use crate::foreign_executable_plan::ForeignExecutablePlan;
 use crate::foreign_executable_plan::compile_foreign_executable_plan;
 use crate::foreign_executable_plan::compile_foreign_executable_plan_with_profile;
+use crate::foreign_provenance_audit::ForeignProvenanceAuditReceipt;
+use crate::foreign_provenance_audit::ForeignProvenanceAuditRequest;
+use crate::foreign_provenance_audit::audit_foreign_realization;
 use crate::foreign_realization::ForeignRealizationAdmission;
 use crate::foreign_realization::ForeignSourceAdmission;
 use crate::foreign_realization::validate_foreign_realization_admission;
@@ -50,6 +53,7 @@ const CLI_REPORT_SCHEMA: &str = "mantle-foreign-import-cli-v1";
 const VALIDATE_COMMAND: &str = "validate";
 const PLAN_COMMAND: &str = "plan";
 const REALIZE_COMMAND: &str = "realize";
+const AUDIT_COMMAND: &str = "audit";
 const PREPARE_SOURCES_COMMAND: &str = "prepare-sources";
 const PRODUCE_NIX_COMMAND: &str = "produce-nix";
 const PRODUCE_ATERM_COMMAND: &str = "produce-aterm";
@@ -196,6 +200,33 @@ pub(crate) enum ForeignImportAction {
         remote: bool,
 
         /// Optional Nix-format signing key path
+        #[arg(long = "signing-key")]
+        signing_key: Option<PathBuf>,
+    },
+
+    /// Audit one realized foreign closure from signed PathInfo and castore facts
+    Audit {
+        /// Path to `mantle-foreign-executable-plan-v1` JSON
+        #[arg(long)]
+        plan: PathBuf,
+
+        /// Path to the complete `mantle-foreign-realization-receipt-v1` JSON
+        #[arg(long = "realization-receipt")]
+        realization_receipt: PathBuf,
+
+        /// Path to `mantle-foreign-provenance-policy-v1` JSON
+        #[arg(long)]
+        policy: PathBuf,
+
+        /// Selected root node ID. Repeat for each audited root
+        #[arg(long = "root", required = true)]
+        roots: Vec<String>,
+
+        /// Write `mantle-foreign-provenance-audit-v1` atomically to this path
+        #[arg(long)]
+        out: PathBuf,
+
+        /// Optional Nix-format signing key path used to verify local PathInfo
         #[arg(long = "signing-key")]
         signing_key: Option<PathBuf>,
     },
@@ -388,6 +419,15 @@ pub(crate) struct ForeignImportContext<'a> {
     pub(crate) json: bool,
 }
 
+struct ForeignAuditCommandRequest<'a> {
+    plan_path: &'a Path,
+    realization_receipt_path: &'a Path,
+    policy_path: &'a Path,
+    selected_roots: &'a [String],
+    output_path: &'a Path,
+    signing_key_path: Option<&'a Path>,
+}
+
 struct ForeignRealizeCommandRequest<'a> {
     plan_path: &'a Path,
     import_receipt_path: &'a Path,
@@ -465,6 +505,24 @@ pub(crate) fn cmd_foreign_import(
                 no_substitute,
                 offline,
                 remote,
+                signing_key_path: signing_key.as_deref(),
+            },
+            &context,
+        ),
+        ForeignImportAction::Audit {
+            plan,
+            realization_receipt,
+            policy,
+            roots,
+            out,
+            signing_key,
+        } => run_audit(
+            ForeignAuditCommandRequest {
+                plan_path: &plan,
+                realization_receipt_path: &realization_receipt,
+                policy_path: &policy,
+                selected_roots: &roots,
+                output_path: &out,
                 signing_key_path: signing_key.as_deref(),
             },
             &context,
@@ -679,6 +737,70 @@ fn run_prepare_sources(
     Ok(())
 }
 
+fn run_audit(request: ForeignAuditCommandRequest<'_>, context: &ForeignImportContext<'_>) -> Result<(), RunError> {
+    assert!(!AUDIT_COMMAND.is_empty(), "foreign audit command identity must not be empty");
+    if request.output_path.exists() {
+        return Err(RunError::Internal(format!(
+            "foreign provenance audit output already exists: {}",
+            request.output_path.display()
+        )));
+    }
+    let plan =
+        read_required_foreign_json::<ForeignExecutablePlan>(request.plan_path, "plan", AUDIT_COMMAND, context.json)?;
+    let realization_receipt = read_required_foreign_json::<
+        crate::foreign_realization_receipt::ForeignRealizationReceipt,
+    >(
+        request.realization_receipt_path, "realization-receipt", AUDIT_COMMAND, context.json
+    )?;
+    let policy = read_required_foreign_json::<crunch_store::ForeignProvenancePolicy>(
+        request.policy_path,
+        "provenance-policy",
+        AUDIT_COMMAND,
+        context.json,
+    )?;
+    let (keypair, _key_path) =
+        crate::build_cmd::load_existing_signing_keypair(request.signing_key_path, context.state_dir)?;
+    let trusted_keys = crunch_build::build_trusted_keys(&keypair, None);
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|error| RunError::Internal(format!("creating foreign provenance audit runtime: {error}")))?;
+    let receipt: ForeignProvenanceAuditReceipt =
+        runtime.block_on(audit_foreign_realization(ForeignProvenanceAuditRequest {
+            plan: &plan,
+            realization_receipt: &realization_receipt,
+            policy: &policy,
+            selected_root_node_ids: request.selected_roots,
+            output_dir: context.output_dir,
+            state_dir: context.state_dir,
+            base_state_dirs: context.base_state_dirs,
+            trusted_keys: &trusted_keys,
+        }))?;
+    write_json_atomically(request.output_path, &receipt, "foreign provenance audit receipt")?;
+    if context.json {
+        println!(
+            "{}",
+            serde_json::to_string(&receipt).map_err(|error| RunError::Internal(format!(
+                "serializing foreign provenance audit receipt: {error}"
+            )))?
+        );
+    } else {
+        println!(
+            "status={} strongest_state={} audit_blake3={} roots={} closure_paths={} findings={} path={}",
+            receipt.status,
+            receipt.strongest_state,
+            receipt.audit_blake3,
+            receipt.selected_root_node_ids.len(),
+            receipt.closure_paths.len(),
+            receipt.findings.len(),
+            request.output_path.display()
+        );
+    }
+    if receipt.status == "pass" {
+        Ok(())
+    } else {
+        Err(RunError::Reported(FAILURE_EXIT_CODE))
+    }
+}
+
 fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImportContext<'_>) -> Result<(), RunError> {
     assert!(!REALIZE_COMMAND.is_empty(), "foreign realize command identity must not be empty");
     if request.receipt_out.exists() {
@@ -785,16 +907,25 @@ fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImpor
 }
 
 fn read_required_realization_json<T: DeserializeOwned>(path: &Path, artifact: &str, json: bool) -> Result<T, RunError> {
+    read_required_foreign_json(path, artifact, REALIZE_COMMAND, json)
+}
+
+fn read_required_foreign_json<T: DeserializeOwned>(
+    path: &Path,
+    artifact: &str,
+    command: &str,
+    json: bool,
+) -> Result<T, RunError> {
     match read_json::<T>(JsonReadRequest {
         path,
         artifact,
-        command: REALIZE_COMMAND,
+        command,
     })? {
         Ok(value) => Ok(value),
         Err(report) => match emit_report(report, json) {
             Err(error) => Err(error),
             Ok(()) => {
-                Err(RunError::Internal("rejected foreign realization input unexpectedly returned success".to_string()))
+                Err(RunError::Internal(format!("rejected foreign {command} input unexpectedly returned success")))
             }
         },
     }

@@ -244,6 +244,8 @@ Mantle keeps build observations separate from stronger claims:
   frontend correctness, realization success, or output trust.
 - Foreign realization receipts bind observed local execution and store facts.
   They do not prove package correctness, evaluator parity, or reproducibility.
+- Foreign provenance audits scan signed castore facts under explicit limits.
+  They do not prove dynamic behavior, package correctness, or release eligibility.
 - Bootstrap and fixed-point evidence applies only to the recorded seed,
   source, tools, platform, and proof mode.
 - AeneasVerif proof and translation policy remains owned by Octet. Mantle can
@@ -261,7 +263,8 @@ reproducibility, or bootstrap correctness.
 Foreign derivation admission is documented in
 [`docs/foreign-derivation-import-trust-model.md`](docs/foreign-derivation-import-trust-model.md).
 The [foreign realization operator guide](docs/foreign-realization-operator-guide.md)
-explains source preparation, local realization, receipts, and cache hydration.
+explains source preparation, local realization, provenance audits, receipts,
+and cache hydration.
 Run the positive and negative trust-model guards with:
 
 ```bash

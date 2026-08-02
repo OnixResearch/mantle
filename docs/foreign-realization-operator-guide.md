@@ -87,6 +87,39 @@ Preflight rejection writes no realization receipt and does not create store stat
 A complete receipt proves only the recorded local realization observations.
 It does not prove package correctness, evaluator parity, reproducibility, provenance, release eligibility, or future frontend availability.
 
+## Audit realized provenance
+
+Audit selected roots after a complete realization:
+
+```text
+mantle --json \
+  --state-dir ./state \
+  --store ./output \
+  foreign-import audit \
+  --plan plan.json \
+  --realization-receipt realization-receipt.json \
+  --policy config/foreign-provenance-audit/generated/default.json \
+  --root nix:hello \
+  --out provenance-audit.json
+```
+
+The command loads the existing signing key. It verifies every selected PathInfo
+before content scanning. It then reads directories and blobs from castore only.
+It does not use exported host files as replacement content.
+
+The scanner classifies regular data, ELF files, scripts, links, tar archives,
+and newc initrds. Unknown executable bytes fail closed. Foreign store paths,
+missing targets, link escapes, malformed containers, and exhausted limits also
+fail closed.
+
+A passing receipt reports `provenance-audited`. A failed audit reports
+`realized` as its strongest state. Both results preserve the original
+realization receipt and build-report identity.
+
+Review `policy`, `observation_blake3`, `findings`, and `non_claims`. The audit
+cannot prove package correctness, runtime behavior, reproducibility, bootability,
+deployment safety, or release eligibility.
+
 ## Hydrate a receipt-selected cache closure
 
 A complete receipt can supply one selected root to an HTTP closure pull:

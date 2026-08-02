@@ -21,21 +21,23 @@ data-encoding = "2.6"
 futures = "0.3"
 fs2 = "0.4"
 filetime = "0.2"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
 reqwest = { version = "0.13.1", default-features = true, features = ["json", "stream"] }
 tokio = { version = "1", features = ["fs", "rt"] }
 tokio-util = { version = "0.7", features = ["io"] }
+tar = "0.4"
 tracing = "0.1"
 url = "2"
 
 [dev-dependencies]
 bzip2 = "0.6"
 crunch-delta = { path = "../crunch-delta" }
-flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 futures = "0.3"
 pretty_assertions = "1.0"
+proptest = "1.11"
 sha2 = "0.10"
 tempfile = "3"
 tokio = { version = "1", features = ["full"] }

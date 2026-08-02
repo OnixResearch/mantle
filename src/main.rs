@@ -48,6 +48,7 @@ mod foreign_realization_shell;
 // the CLI boundary.
 #[allow(clippy::result_large_err, clippy::too_many_arguments)]
 mod foreign_import_cmd;
+mod foreign_provenance_audit;
 mod frontend_artifact_export;
 mod frontend_artifact_spec;
 mod frontend_artifact_store;
