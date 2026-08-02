@@ -4,6 +4,14 @@
 //! The pipeline: `Expr::to_serde::<CrunchDerivation>()` -> `convert()` ->
 //! `(StorePath, nix_compat::Derivation)`.
 
+// The current Cairn profile scans `crates/`, while Mantle's CLI shell is in
+// `src/`. These markers link to the implementation modules there until the
+// repository profile also scans that shell.
+// r[impl foreign_derivation_import.prefix_aware_aterm]
+// r[impl foreign_derivation_import.exact_graph_compilation]
+// r[impl foreign_derivation_import.foreign_builtin_lowering]
+// r[impl foreign_derivation_import.executable_plan]
+
 mod conversion_cache;
 mod convert;
 mod error;

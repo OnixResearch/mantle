@@ -1,5 +1,8 @@
 #![allow(dead_code)]
 
+// r[impl foreign_derivation_import.prefix_aware_aterm]
+// r[verify foreign_derivation_import.prefix_aware_aterm]
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 

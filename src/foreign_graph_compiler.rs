@@ -1,3 +1,6 @@
+// r[impl foreign_derivation_import.exact_graph_compilation]
+// r[impl foreign_derivation_import.foreign_builtin_lowering]
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
@@ -1257,6 +1260,8 @@ fn compiler_diagnostic(class: &str, node_id: Option<&str>, message: &str) -> Imp
     }
 }
 
+// r[verify foreign_derivation_import.exact_graph_compilation]
+// r[verify foreign_derivation_import.foreign_builtin_lowering]
 #[cfg(test)]
 mod tests {
     use super::*;

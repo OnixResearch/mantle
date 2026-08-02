@@ -1,3 +1,5 @@
+// r[impl foreign_derivation_import.executable_plan]
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
@@ -945,6 +947,7 @@ fn plan_diagnostic(class: &str, node_id: Option<&str>, message: &str) -> ImportD
     }
 }
 
+// r[verify foreign_derivation_import.executable_plan]
 #[cfg(test)]
 mod tests {
     use super::*;
