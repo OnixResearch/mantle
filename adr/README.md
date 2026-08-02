@@ -76,3 +76,4 @@ compatibility surface, crate name, or historical decision.
 | [0067](0067-bind-source-fixed-point-open-file-limits-in-the-proof-plan.md) | Bind source fixed-point open-file limits in the proof plan | Accepted |
 | [0068](0068-default-to-deterministic-archives-in-gcc-built-binutils.md) | Default to deterministic archives in GCC-built binutils | Accepted |
 | [0069](0069-derive-gcc40-random-seeds-from-main-input-identity.md) | Derive GCC 4.0 random seeds from main input identity | Accepted |
+| [0070](0070-bind-source-fixed-point-to-root-action-trust-report.md) | Bind the source fixed point to a root action trust report | Proposed |
