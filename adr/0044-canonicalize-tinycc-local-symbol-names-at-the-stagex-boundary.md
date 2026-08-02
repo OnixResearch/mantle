@@ -16,6 +16,8 @@ A later fresh fixed-point run found the same variation in the retained TinyCC se
 
 After the self-host evidence was stable, the hydrated proof exposed the same variation in the native-musl objects and `libc.a`. Archive metadata normalization cannot repair nondeterministic member bytes.
 
+A later full-source attempt exposed a remaining binutils boundary. The protected C helper replaced process-derived values but preserved each original decimal width. Retained archive members used names such as `L.0000012`; fresh members used `L.000000012`. Their code, symbol facts, and member order matched, but their string-table sizes and archive identities did not.
+
 ## Decision Drivers
 
 - Keep exact protected executable digests.
@@ -43,6 +45,8 @@ The shell reads each declared retained object, calls the core, publishes the res
 
 The native-musl stage applies the same shell to every compiled object before CRT installation and `libc.a` assembly. It requires at least one matched name across the bounded source closure. The protected compiler execution plan does not change because canonicalization is an in-process pure transformation followed by the existing archive command.
 
+The binutils stage keeps the protected C helper after every TinyCC compile and link. Immediately after each of the four closed archive Make targets, Mantle applies a second pure Rust core to the exact archive format produced by `stagex-binutils-ar-runner.sh`. The core accepts only deterministic metadata, bounded short or GNU long names, and ELF object members. It applies the same 10-digit local-symbol canonical form to each member, rebuilds the archive with the original member names and order, and publishes it through a create-new sibling before any later component consumes it. Malformed metadata, symbol indexes, names, padding, non-ELF members, unsupported special members, and limit violations fail closed.
+
 ## Alternatives Considered
 
 ### Accept many exact digests for each generated path
@@ -61,9 +65,9 @@ Rejected because relocatable objects need symbol tables for later archive and li
 
 Deferred because the current StageX boundary already has a bounded wrapper. A compiler patch would change the protected predecessor and require a wider self-hosting review.
 
-### Canonicalize whole archives after Make
+### Canonicalize the complete binutils tree after all Make targets
 
-Rejected because executable probes and intermediate links also require stable identities. Object-level canonicalization closes the earliest affected boundary.
+Rejected because later binutils components consume earlier archives. Mantle canonicalizes each closed archive immediately after its own Make target while retaining object-level protected canonicalization at the earliest compiler boundary.
 
 ## Consequences
 
@@ -71,6 +75,7 @@ Rejected because executable probes and intermediate links also require stable id
 - Protected execution can keep exact path-and-digest authorization.
 - Retained TinyCC self-host objects and `libtcc.a` have repeatable evidence identities without changing the compiler binary.
 - Native-musl CRT and archive inputs use the same canonical ELF boundary.
-- Binutils archive and tool identities change once to their canonical values.
+- Binutils archives use one fixed 10-digit member identity across retained and fresh decimal widths.
+- The four archive identities change once; protected binutils executable and installed-tool identities remain unchanged.
 - Local anonymous symbol names no longer preserve TinyCC's process-derived numeric suffixes or their variable decimal widths.
 - This decision does not prove compiler correctness, source semantics, provider admission, or debug-symbol equivalence.
