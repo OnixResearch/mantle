@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "crates/crunch-action-result-core",
+  "crates/mantlepkgs-core",
   "crates/crunch-eval",
   "crates/crunch-glue",
   "crates/crunch-store",
@@ -46,6 +47,7 @@ cargo_check_args = ["--lib"]
 default_scope = [
   "-p", "mantle",
   "-p", "crunch-action-result-core",
+  "-p", "mantlepkgs-core",
   "-p", "crunch-attestation",
   "-p", "crunch-attestation-core",
   "-p", "crunch-build",
@@ -132,6 +134,7 @@ crunch-eval = { path = "crates/crunch-eval" }
 nickel-export-core = { git = "https://github.com/OnixResearch/nickel-export", rev = "257fafc1c746f1faf156207043a4c826bfb16d49" }
 crunch-glue = { path = "crates/crunch-glue" }
 crunch-action-result-core = { path = "crates/crunch-action-result-core" }
+mantlepkgs-core = { path = "crates/mantlepkgs-core" }
 crunch-build = { path = "crates/crunch-build" }
 crunch-store = { path = "crates/crunch-store" }
 crunch-wasm-component = { path = "crates/crunch-wasm-component" }

@@ -4510,6 +4510,7 @@ dependencies = [
  "fs2",
  "futures",
  "libc",
+ "mantlepkgs-core",
  "nickel-export-core",
  "nix-compat",
  "postcard",
@@ -4530,6 +4531,16 @@ dependencies = [
  "tracing-subscriber",
  "ureq",
  "url",
+]
+
+[[package]]
+name = "mantlepkgs-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
