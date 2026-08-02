@@ -15,7 +15,7 @@
 
 ## Phase 3: Builtins and identity domains
 
-- [ ] [serial] I8 Lower declared Guix-like `builtin:download` and Git download nodes to bounded Mantle fetch facts. Reject every other builtin. r[foreign_derivation_import.foreign_builtin_lowering]
+- [x] [serial] I8 Lower declared Guix-like `builtin:download` and Git download nodes to bounded Mantle fetch facts. Reject every other builtin. r[foreign_derivation_import.foreign_builtin_lowering]
 - [ ] [serial] I9 Preserve foreign fixed-output and SHA-256 facts while labeling Mantle BLAKE3 plan and target identities. Reject cross-domain digest substitution. r[foreign_derivation_import.foreign_builtin_lowering]
 - [ ] [parallel] I10 Add ordered-mirror, fixed-output, executable-download, Git revision, malformed-hash, empty-candidate, unsupported-builtin, and digest-domain tests. r[foreign_derivation_import.foreign_builtin_lowering]
 
