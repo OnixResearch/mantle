@@ -415,6 +415,7 @@ Useful documentation:
 - [Build correctness primitives](docs/build-correctness-primitives.md)
 - [Remote credential operations](docs/remote-credentials.md)
 - [Mantle naming rules](docs/mantle-naming.md)
+- [Durable file publication adoption](docs/durable-file-publication-adoption.md)
 
 ## Requirements
 
@@ -439,3 +440,4 @@ notices.
 - [fzakaria/guix-transfer](https://github.com/fzakaria/guix-transfer) provides MIT-licensed ATerm parsing, graph translation, and path-mapping design references. Mantle retains execution and evidence authority.
 - [fzakaria/guixpkgs](https://github.com/fzakaria/guixpkgs) provides the checked-in translated Guix package graph used by the live GuixPkgs export proof. Mantle trusts the proof exporter's separate cache key.
 - [adeci/guix-by-nix](https://github.com/adeci/guix-by-nix) provides a system-level reference for consuming translated Guix packages without Guix in the target environment.
+- `durable-file-publication` at `rad:z3tAR4For7qw8ZirkJzoDw1VNDDLM` provides the reviewed capability-relative one-file publication mechanism.

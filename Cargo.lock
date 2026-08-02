@@ -2033,6 +2033,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
+name = "durable-file-publication"
+version = "0.1.0"
+source = "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f59003cea9bfdb40ed4d89653d50fada1f"
+dependencies = [
+ "rustix 1.1.4",
+]
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4671,6 +4679,7 @@ dependencies = [
  "crunch-wasm-component-core",
  "data-encoding",
  "digest 0.10.7",
+ "durable-file-publication",
  "ed25519-dalek",
  "flate2",
  "fs2",
