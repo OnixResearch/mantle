@@ -24,4 +24,4 @@
 
 - [x] [serial] V1 Run focused import, cache closure, realization, receipt, audit, and CLI tests. r[foreign_derivation_import.live_guixpkgs_export_realization]
 - [x] [serial] V2 Run formatting, workspace check, focused Clippy, Nickel checks, trust-model guard, and machine-contract checks. r[foreign_derivation_import.live_guixpkgs_export_realization]
-- [ ] [serial] V3 Run Cairn validation, gates, sync, archive, and publication. r[foreign_derivation_import.live_guixpkgs_export_realization]
+- [x] [serial] V3 Run Cairn validation, gates, sync, archive, and publication. r[foreign_derivation_import.live_guixpkgs_export_realization]

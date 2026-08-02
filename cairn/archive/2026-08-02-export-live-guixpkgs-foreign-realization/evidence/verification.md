@@ -70,3 +70,19 @@ Wrong-key, one-member-limit, tampered-receipt, and missing-member checks returne
 status 3. They produced no realization receipt and exported no store path.
 
 See `live-guixpkgs-hello/summary.md` for all retained identities and non-claims.
+
+## Lifecycle completion
+
+The final tasks gate observed 14 completed tasks and zero pending tasks. Cairn
+sync accepted the new requirement before archive.
+
+The deterministic archive used `CAIRN_ARCHIVE_DATE=2026-08-02`. Its dry-run plan
+was unblocked, and execute moved the change into
+`cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/`.
+
+- Archive plan: `b6e225e479a8592e97b7d01f67a6a8ce4e5fd64130758b407124cbe8afde7d4b`
+- Archive receipt: `6154d69342383401e38dd4aaee07612e5ee31644c3c8118d59c795456bab0bf5`
+- Post-archive Cairn validation: `valid: true`
+
+The archive evidence directory retains the final task gate, archive plan,
+archive execute receipt, and post-archive validation report.
