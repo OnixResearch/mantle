@@ -16,7 +16,7 @@
 ## Phase 3: Mantle store authority
 
 - [ ] [serial] I8 Add base descriptors and deterministic ordered generation identities over bounded state observations. r[store_lifecycle.overlay_base_generation]
-- [ ] [serial] I9 Build composed `StoreHandle` reads with overlay-only PathInfo, castore, root, attestation, CA mapping, action-result, repair, sign, and substitution writes. r[store_lifecycle.overlay_write_isolation]
+- [ ] [depends:split-store-authority-capabilities] I9 Build composed reads through the accepted narrow store capabilities with overlay-only PathInfo, castore, root, attestation, CA mapping, action-result, repair, sign, and substitution writes. Do not restore a broad `StoreHandle` escape path. r[store_lifecycle.overlay_write_isolation]
 - [ ] [serial] I10 Apply layer-local trust and fail-closed precedence to PathInfo, content, signatures, attestations, and shadow conflicts. r[store_lifecycle.overlay_layer_trust]
 - [ ] [parallel] I11 Add write sentinels and negative corrupt, untrusted, incomplete, conflicting, stale-generation, and race fixtures. r[store_lifecycle.overlay_validation]
 

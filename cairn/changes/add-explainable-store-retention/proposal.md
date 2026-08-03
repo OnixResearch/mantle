@@ -18,6 +18,10 @@ Mantle needs a bounded retention policy and an operator-visible explanation befo
 - Migrate current root records without inventing project ownership or lease facts.
 - Add positive, negative, interruption, stale-plan, overflow, and corruption fixtures.
 
+## Dependencies
+
+- `split-store-authority-capabilities` owns the narrow `RootRegistry` and `StoreAdmin` shell authorities. This change owns retention facts, policy, plans, reason codes, and reports, and it must use those accepted capabilities rather than recreate broad store access.
+
 ## Non-Goals
 
 - Garbage-collecting a read-only base store or implementing overlay composition in this change.

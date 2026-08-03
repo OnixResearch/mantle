@@ -15,7 +15,7 @@
 
 ## Phase 3: Root registry and project integration
 
-- [ ] [serial] I8 Add the versioned root registry and migrate path-only records to protected `legacy-unmanaged` records without invented ownership. r[store_lifecycle.root_provenance]
+- [ ] [depends:split-store-authority-capabilities] I8 Add versioned root records behind the accepted `RootRegistry` and `StoreAdmin` capabilities. Migrate path-only records to protected `legacy-unmanaged` records without invented ownership. r[store_lifecycle.root_provenance]
 - [ ] [serial] I9 Register project output generations from successful selected-root builds and replace superseded generations only through policy. r[store_lifecycle.root_provenance]
 - [ ] [serial] I10 Add active development-shell leases and bounded renewal without changing package action identity. r[store_lifecycle.retention_policy]
 - [ ] [parallel] I11 Add interrupted migration, corrupt registry, clock rollback, expired lease, branch generation, duplicate checkout, and missing project fact fixtures. r[store_lifecycle.retention_validation]

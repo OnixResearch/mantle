@@ -48,11 +48,11 @@ Reports identify selected layer, descriptor identity, trust policy, and whether 
 
 **Rationale:** Storage precedence and trust authority are separate facts.
 
-### Decision: Route all mutations to the overlay
+### Decision: Route all mutations through narrow overlay capabilities
 
-**Choice:** PathInfo puts, blob writes, directory writes, substitutions, output persistence, attestations, roots, CA mappings, action-result indexes, repairs, signing, and GC mutations use overlay-owned services and state.
+**Choice:** PathInfo puts, blob writes, directory writes, substitutions, output persistence, attestations, roots, CA mappings, action-result indexes, repairs, signing, and GC mutations use overlay-owned state through the narrow capabilities accepted by `split-store-authority-capabilities`.
 
-Base service handles expose read-only traits or explicit write rejection. Tests inject write sentinels at every base mutation seam.
+Composed read capabilities expose layer provenance without returning raw writable service traits. Base handles expose read-only operations or explicit write rejection. Tests inject write sentinels at every base mutation seam.
 
 **Rationale:** A missed write path would turn a reuse feature into shared-state corruption.
 

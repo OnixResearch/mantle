@@ -22,6 +22,8 @@ Shared hosts, CI workers, and unprivileged users need a bounded way to reuse one
 ## Dependencies
 
 - `add-explainable-store-retention` owns versioned root reasons and plan-bound GC semantics used by overlay collection.
+- `split-store-authority-capabilities` owns narrow store capability types. Overlay work adds composed read authority and base descriptors without restoring raw writable service access.
+- `add-frontend-neutral-composition-roots` owns immutable object-tree composition. This change remains the distinct ADR 0012 backend read-through and write-routing mechanism.
 - ADR 0012 remains the architectural basis. Any implementation deviation requires an ADR update before code changes.
 
 ## Non-Goals

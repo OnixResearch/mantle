@@ -24,9 +24,9 @@ The shell owns clocks, file reads, database snapshots, closure traversal, locks,
 
 **Rationale:** Operators must be able to replay why one root remains and another expires.
 
-### Decision: Version root provenance
+### Decision: Version root provenance behind narrow store capabilities
 
-**Choice:** A new root record binds logical path, root class, owner scope, project identity when present, selector when present, lock or generation identity when present, lease identity and expiry when present, policy BLAKE3, creation observation, and last accepted transition.
+**Choice:** A new root record binds logical path, root class, owner scope, project identity when present, selector when present, lock or generation identity when present, lease identity and expiry when present, policy BLAKE3, creation observation, and last accepted transition. The `RootRegistry` and `StoreAdmin` authorities accepted by `split-store-authority-capabilities` own persistence and mutation; the retention core receives only normalized facts and returns plans.
 
 Host checkout paths remain locator metadata. Project identity derives from canonical project and lock facts, not from an absolute checkout path. Unknown legacy records migrate to `legacy-unmanaged` and remain protected until explicit classification or removal.
 
