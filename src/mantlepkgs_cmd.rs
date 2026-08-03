@@ -6,6 +6,7 @@
 // r[verify mantlepkgs.validation]
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::fs;
 use std::io::Read;
@@ -68,10 +69,12 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::errors::RunError;
+use crate::foreign_derivation_import::FIXED_OUTPUT_SEED_KIND;
 use crate::foreign_derivation_import::ForeignDerivationGraph;
 use crate::foreign_derivation_import::NixDerivationJsonExport;
 use crate::foreign_derivation_import::NixProducerConfig;
 use crate::foreign_derivation_import::PackageIndex;
+use crate::foreign_derivation_import::SourcePayload;
 use crate::foreign_derivation_import::TranslationPolicy;
 use crate::foreign_derivation_import::lower_nix_derivation_json_closure;
 use crate::foreign_derivation_import::normalize_nix_derivation_json_export;
@@ -88,6 +91,7 @@ use crate::mantlepkgs_adapter::ProducedPackageFacts;
 use crate::mantlepkgs_adapter::merge_buildable_packages;
 use crate::mantlepkgs_adapter::observe_package;
 use crate::source_bundle::ForeignSourcePathBinding;
+use crate::source_bundle::digest_bound_foreign_source_path;
 use crate::source_bundle::plan_bound_foreign_source_bundle;
 use crate::source_bundle::write_json_atomically;
 
@@ -98,6 +102,8 @@ const STAGE_PREFIX: &str = ".stage-";
 const CATALOG_MAX_BYTES: u64 = 16_777_216;
 const NIX_EXECUTABLE_MAX_BYTES: u64 = 268_435_456;
 const NIX_ROOT_STDOUT_MAX_BYTES: usize = 4_096;
+const SEED_PAYLOAD_HASH_HEX_CHARS: usize = 32;
+const SEED_PATHS_STDOUT_MAX_BYTES: usize = 1_048_576;
 const PRODUCER_STDERR_MAX_BYTES: usize = 16_384;
 const PRODUCER_COMMAND_TIMEOUT_SECS: u64 = 900;
 const PRODUCER_COMMAND_POLL_MILLIS: u64 = 100;
@@ -243,6 +249,14 @@ struct ProducedPackageRecord {
     graph: Option<ForeignDerivationGraph>,
     package_index: Option<PackageIndex>,
     blockers: Vec<CatalogBlocker>,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct FixedOutputSeedCandidate {
+    derivation_path: String,
+    output_name: String,
+    output_path: String,
+    payload_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -813,7 +827,7 @@ fn produce_selector_result(
         .map_err(|diagnostic| producer_blocker(&diagnostic.class, selector, &diagnostic.message))?;
     let selected = select_nix_derivation_json_closure(&closure, &root_derivation)
         .map_err(|diagnostic| producer_blocker(&diagnostic.class, selector, &diagnostic.message))?;
-    let artifacts = lower_nix_derivation_json_closure(&selected, &NixProducerConfig {
+    let mut artifacts = lower_nix_derivation_json_closure(&selected, &NixProducerConfig {
         package_name: selector.name.clone(),
         system: selector.system.clone(),
         root_derivation,
@@ -823,6 +837,7 @@ fn produce_selector_result(
         unsupported_metadata_classes: Vec::new(),
     })
     .map_err(|diagnostic| producer_blocker(&diagnostic.class, selector, &diagnostic.message))?;
+    bind_fixed_output_seeds(&mut artifacts.graph, nix_program, selector)?;
     Ok(ProducedPackageRecord {
         selector_name: selector.name.clone(),
         system: selector.system.clone(),
@@ -832,6 +847,103 @@ fn produce_selector_result(
         package_index: Some(artifacts.package_index),
         blockers: Vec::new(),
     })
+}
+
+fn fixed_output_seed_candidates(graph: &ForeignDerivationGraph) -> Result<Vec<FixedOutputSeedCandidate>, String> {
+    let mut seen_outputs = BTreeSet::new();
+    let mut candidates = Vec::new();
+    for node in &graph.nodes {
+        if node.fixed_output.is_none() {
+            continue;
+        }
+        let has_url_candidate = node.env.get("url").is_some_and(|value| !value.is_empty())
+            || node.env.get("urls").is_some_and(|value| !value.is_empty());
+        if has_url_candidate {
+            continue;
+        }
+        if node.outputs.len() != 1 {
+            return Err(format!(
+                "fixed-output derivation {} without URL candidates must have one output",
+                node.node_id
+            ));
+        }
+        let (output_name, output) = node
+            .outputs
+            .first_key_value()
+            .ok_or_else(|| format!("fixed-output derivation {} has no output", node.node_id))?;
+        if !seen_outputs.insert(output.path.clone()) {
+            continue;
+        }
+        let output_digest = blake3_hex(output.path.as_bytes());
+        let payload_hash = &output_digest[..SEED_PAYLOAD_HASH_HEX_CHARS];
+        candidates.push(FixedOutputSeedCandidate {
+            derivation_path: node.original_derivation.clone(),
+            output_name: output_name.clone(),
+            output_path: output.path.clone(),
+            payload_id: format!("nix-fixed-output-seed:{payload_hash}"),
+        });
+    }
+    candidates.sort();
+    debug_assert!(candidates.windows(2).all(|pair| pair[0] < pair[1]));
+    debug_assert_eq!(seen_outputs.len(), candidates.len());
+    Ok(candidates)
+}
+
+fn bind_fixed_output_seeds(
+    graph: &mut ForeignDerivationGraph,
+    nix_program: &Path,
+    selector: &mantlepkgs_core::PackageSelector,
+) -> Result<(), CatalogBlocker> {
+    let candidates = fixed_output_seed_candidates(graph)
+        .map_err(|message| producer_blocker("fixed-output-seed-invalid", selector, &message))?;
+    if candidates.is_empty() {
+        return Ok(());
+    }
+    let installables = candidates
+        .iter()
+        .map(|candidate| format!("{}^{}", candidate.derivation_path, candidate.output_name))
+        .collect::<Vec<_>>();
+    let mut args = vec![
+        "--extra-experimental-features",
+        NIX_EXPERIMENTAL_FEATURES,
+        "build",
+        "--no-link",
+        "--print-out-paths",
+    ];
+    args.extend(installables.iter().map(String::as_str));
+    let output = run_nix(nix_program, &args, SEED_PATHS_STDOUT_MAX_BYTES)
+        .map_err(|error| producer_blocker("fixed-output-seed-realization-failed", selector, &error.to_string()))?;
+    require_success(&output, "fixed-output-seed-realization-failed", selector)?;
+    let observed_paths = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(str::to_string)
+        .collect::<BTreeSet<_>>();
+    let expected_paths = candidates.iter().map(|candidate| candidate.output_path.clone()).collect::<BTreeSet<_>>();
+    if observed_paths != expected_paths {
+        return Err(producer_blocker(
+            "fixed-output-seed-path-mismatch",
+            selector,
+            "the Nix producer realized a different fixed-output path set",
+        ));
+    }
+    for candidate in candidates {
+        let expected_content_blake3 =
+            digest_bound_foreign_source_path(&candidate.payload_id, Path::new(&candidate.output_path))
+                .map_err(|error| producer_blocker("fixed-output-seed-binding-failed", selector, &error.to_string()))?;
+        graph.source_payloads.push(SourcePayload {
+            payload_id: candidate.payload_id,
+            kind: FIXED_OUTPUT_SEED_KIND.into(),
+            content_ref: candidate.output_path,
+            embedded_text: None,
+            mirrors: Vec::new(),
+            expected_content_blake3: Some(expected_content_blake3),
+        });
+    }
+    graph.source_payloads.sort_by(|left, right| left.payload_id.cmp(&right.payload_id));
+    debug_assert!(graph.source_payloads.windows(2).all(|pair| pair[0].payload_id < pair[1].payload_id));
+    Ok(())
 }
 
 fn load_policy_artifacts(
@@ -1455,6 +1567,12 @@ mod tests {
             .filter(|entry| entry.file_name().to_string_lossy().starts_with(STAGE_PREFIX))
             .count();
         assert_eq!(stages, 0);
+        fs::write(generation.join(SHARED_GRAPH_PATH), b"tampered graph").unwrap();
+        let tamper = match verify_generation(&generation) {
+            Ok(_) => panic!("artifact tampering must fail verification"),
+            Err(error) => error,
+        };
+        assert!(tamper.message().contains("catalog-artifact-mismatch"));
     }
 
     #[test]
@@ -1485,6 +1603,26 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.message().contains("stdout exceeded its byte limit"));
+    }
+
+    #[test]
+    fn fixed_output_without_url_becomes_a_bound_seed_candidate() {
+        let (graph, _) = crate::foreign_derivation_import::nix_like_hello_fixture();
+        let candidates = fixed_output_seed_candidates(&graph).unwrap();
+        assert_eq!(candidates.len(), 1);
+        assert!(candidates[0].output_path.starts_with("/nix/store/"));
+        assert!(candidates[0].payload_id.starts_with("nix-fixed-output-seed:"));
+    }
+
+    #[test]
+    fn malformed_fixed_output_seed_candidate_is_rejected() {
+        let (mut graph, _) = crate::foreign_derivation_import::nix_like_hello_fixture();
+        let fixed = graph.nodes.iter_mut().find(|node| node.fixed_output.is_some()).unwrap();
+        let extra = fixed.outputs.first_key_value().unwrap().1.clone();
+        fixed.outputs.insert("debug".into(), extra);
+        let error = fixed_output_seed_candidates(&graph).unwrap_err();
+        assert!(error.contains("must have one output"));
+        assert!(error.contains("fixed-output derivation"));
     }
 
     #[test]

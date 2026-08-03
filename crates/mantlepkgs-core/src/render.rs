@@ -48,6 +48,8 @@ pub fn render_catalog_nickel(catalog: &MantlepkgsCatalog) -> Result<String, Core
     output.push_str(CATALOG_CONTRACT);
     render_value(&value, 0, &mut output)?;
     output.push_str(" | Catalog\n");
+    debug_assert!(output.starts_with("# Generated Mantlepkgs catalog."));
+    debug_assert!(output.ends_with(" | Catalog\n"));
     Ok(output)
 }
 
@@ -76,12 +78,13 @@ fn render_array(values: &[Value], depth: usize, output: &mut String) -> Result<(
         return Ok(());
     }
     output.push_str("[\n");
+    let child_depth = next_depth(depth)?;
     for value in values {
-        indent(depth + 1, output);
-        render_value(value, depth + 1, output)?;
+        indent(child_depth, output)?;
+        render_value(value, child_depth, output)?;
         output.push_str(",\n");
     }
-    indent(depth, output);
+    indent(depth, output)?;
     output.push(']');
     Ok(())
 }
@@ -98,14 +101,17 @@ fn render_record(
     output.push_str("{\n");
     let mut ordered = fields.iter().collect::<Vec<_>>();
     ordered.sort_by(|left, right| left.0.cmp(right.0));
+    debug_assert_eq!(ordered.len(), fields.len());
+    debug_assert!(ordered.windows(2).all(|pair| pair[0].0 <= pair[1].0));
+    let child_depth = next_depth(depth)?;
     for (key, value) in ordered {
-        indent(depth + 1, output);
+        indent(child_depth, output)?;
         output.push_str(&quote(key)?);
         output.push_str(" = ");
-        render_value(value, depth + 1, output)?;
+        render_value(value, child_depth, output)?;
         output.push_str(",\n");
     }
-    indent(depth, output);
+    indent(depth, output)?;
     output.push('}');
     Ok(())
 }
@@ -120,9 +126,26 @@ fn quote(value: &str) -> Result<String, CoreFailure> {
     })
 }
 
-fn indent(depth: usize, output: &mut String) {
-    let width = depth.checked_mul(INDENT_SPACES).expect("bounded render depth keeps indentation in range");
+fn next_depth(depth: usize) -> Result<usize, CoreFailure> {
+    depth.checked_add(1).ok_or_else(|| {
+        CoreFailure::from_diagnostic(Diagnostic::new(
+            "catalog-render-depth-overflow",
+            "catalog",
+            "the Nickel render depth exceeded the integer range",
+        ))
+    })
+}
+
+fn indent(depth: usize, output: &mut String) -> Result<(), CoreFailure> {
+    let width = depth.checked_mul(INDENT_SPACES).ok_or_else(|| {
+        CoreFailure::from_diagnostic(Diagnostic::new(
+            "catalog-render-indent-overflow",
+            "catalog",
+            "the Nickel indentation width exceeded the integer range",
+        ))
+    })?;
     output.push_str(&" ".repeat(width));
+    Ok(())
 }
 
 #[cfg(test)]
@@ -181,6 +204,13 @@ mod tests {
         invalid.schema = "future".into();
         let failure = render_catalog_nickel(&invalid).expect_err("unsupported schema fails");
         assert_eq!(failure.diagnostics[0].code, "unsupported-catalog-schema");
+        assert!(!failure.diagnostics[0].message.is_empty());
+    }
+
+    #[test]
+    fn render_depth_overflow_is_an_error() {
+        let failure = next_depth(usize::MAX).expect_err("depth overflow must fail");
+        assert_eq!(failure.diagnostics[0].code, "catalog-render-depth-overflow");
         assert!(!failure.diagnostics[0].message.is_empty());
     }
 }

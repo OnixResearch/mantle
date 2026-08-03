@@ -284,7 +284,7 @@ pub fn plan_catalog(
             Some(observation) => {
                 merge_observation(&normalized, selector, observation, &mut blockers, &mut nodes, &mut sources)
             }
-            None => blockers.get_mut(&key).expect("selector blocker set exists").push(CatalogBlocker::new(
+            None => blockers.entry(key).or_default().push(CatalogBlocker::new(
                 "missing-producer-selection",
                 &selector.name,
                 "the producer did not return facts for this selector",
@@ -298,7 +298,7 @@ pub fn plan_catalog(
     validate_merged_limits(&normalized, &shared_nodes, &source_requirements, &mut diagnostics);
     diagnostics.sort();
     diagnostics.dedup();
-    let batch_complete = diagnostics.is_empty()
+    let is_batch_complete = diagnostics.is_empty()
         && packages.iter().all(|package| matches!(package.disposition, PackageDisposition::Buildable { .. }));
     let non_claims = mantlepkgs_non_claims();
     let plan_identity = plan_identity(
@@ -308,12 +308,12 @@ pub fn plan_catalog(
         &packages,
         &shared_nodes,
         &source_requirements,
-        batch_complete,
+        is_batch_complete,
         &diagnostics,
         &non_claims,
     )?;
     debug_assert_eq!(packages.len(), normalized.selectors.len());
-    debug_assert_eq!(batch_complete, diagnostics.is_empty() && packages.iter().all(is_buildable));
+    debug_assert_eq!(is_batch_complete, diagnostics.is_empty() && packages.iter().all(is_buildable));
     Ok(CatalogPlan {
         schema: CATALOG_PLAN_SCHEMA.into(),
         plan_identity_blake3: plan_identity,
@@ -323,7 +323,7 @@ pub fn plan_catalog(
         packages,
         shared_nodes,
         source_requirements,
-        batch_complete,
+        batch_complete: is_batch_complete,
         diagnostics,
         non_claims,
     })
@@ -360,6 +360,8 @@ pub fn build_producer_receipt(
     });
     validate_selection_receipts(plan, &normalized_selections)?;
     let normalized_artifacts = normalize_artifacts(artifacts, required_producer_roles())?;
+    debug_assert_eq!(normalized_selections.len(), plan.packages.len());
+    debug_assert_eq!(normalized_artifacts.len(), REQUIRED_ARTIFACT_ROLE_COUNT.saturating_sub(1));
     Ok(ProducerReceipt {
         schema: PRODUCER_RECEIPT_SCHEMA.into(),
         command_class: plan.producer.command_class.clone(),
@@ -420,6 +422,8 @@ pub fn finalize_catalog(
         shared_node_count,
         source_requirement_count,
     )?;
+    debug_assert_eq!(usize::try_from(shared_node_count), Ok(plan.shared_nodes.len()));
+    debug_assert_eq!(normalized_artifacts.len(), REQUIRED_ARTIFACT_ROLE_COUNT);
     Ok(MantlepkgsCatalog {
         schema: CATALOG_SCHEMA.into(),
         catalog_identity_blake3: identity,
@@ -446,6 +450,11 @@ pub fn validate_catalog_identity(catalog: &MantlepkgsCatalog) -> Result<(), Core
             "the catalog schema is not supported",
         )));
     }
+    require_digest(&catalog.plan_identity_blake3, "catalog.plan_identity_blake3")?;
+    require_digest(&catalog.manifest_digest_blake3, "catalog.manifest_digest_blake3")?;
+    require_digest(&catalog.producer_receipt_digest_blake3, "catalog.producer_receipt_digest_blake3")?;
+    debug_assert_eq!(catalog.schema, CATALOG_SCHEMA);
+    debug_assert!(is_digest(&catalog.producer_receipt_digest_blake3));
     let observed = standalone_catalog_identity(catalog)?;
     if observed != catalog.catalog_identity_blake3 {
         return Err(CoreFailure::from_diagnostic(Diagnostic::new(
@@ -463,7 +472,8 @@ pub fn validate_catalog_artifacts(
 ) -> Result<(), CoreFailure> {
     validate_catalog_identity(catalog)?;
     let observed = observations.iter().map(|item| (item.path.as_str(), item)).collect::<BTreeMap<_, _>>();
-    let mut diagnostics = Vec::new();
+    let diagnostic_capacity_items = catalog.artifacts.len().saturating_add(1);
+    let mut diagnostics = Vec::with_capacity(diagnostic_capacity_items);
     for artifact in &catalog.artifacts {
         validate_relative_artifact_path(&artifact.path, &artifact.role, &mut diagnostics);
         match observed.get(artifact.path.as_str()) {
@@ -488,12 +498,15 @@ pub fn validate_catalog_artifacts(
         ));
     }
     if diagnostics.is_empty() {
+        debug_assert_eq!(observed.len(), catalog.artifacts.len());
+        debug_assert_eq!(observations.len(), catalog.artifacts.len());
         Ok(())
     } else {
         Err(CoreFailure::from_diagnostics(diagnostics))
     }
 }
 
+#[allow(tigerstyle::ambiguous_params)] // Package name and system are distinct lookup dimensions checked by filters below.
 pub fn lookup_catalog_package<'a>(
     catalog: &'a MantlepkgsCatalog,
     name: &str,
@@ -505,6 +518,8 @@ pub fn lookup_catalog_package<'a>(
         .filter(|package| package.system == system)
         .filter(|package| package.name == name || package.aliases.iter().any(|alias| alias == name))
         .collect::<Vec<_>>();
+    debug_assert!(matches.len() <= catalog.packages.len());
+    debug_assert!(matches.iter().all(|package| package.system == system));
     match matches.as_slice() {
         [package] if matches!(package.disposition, PackageDisposition::Buildable { .. }) => Ok(package),
         [package] => Err(CoreFailure::from_diagnostic(Diagnostic::new(
@@ -526,7 +541,8 @@ pub fn lookup_catalog_package<'a>(
 }
 
 fn validate_producer(manifest: &MantlepkgsManifest, producer: &ProducerObservation) -> Vec<Diagnostic> {
-    let mut diagnostics = Vec::new();
+    const PRODUCER_FIELD_COUNT: usize = 5;
+    let mut diagnostics = Vec::with_capacity(PRODUCER_FIELD_COUNT);
     if producer.command_class != PRODUCER_COMMAND_CLASS {
         diagnostics.push(Diagnostic::new(
             "unsupported-producer-command-class",
@@ -562,6 +578,8 @@ fn validate_producer(manifest: &MantlepkgsManifest, producer: &ProducerObservati
             "the producer source lock differs from the manifest source lock",
         ));
     }
+    debug_assert!(diagnostics.len() <= PRODUCER_FIELD_COUNT);
+    debug_assert!(diagnostics.iter().all(|diagnostic| !diagnostic.code.is_empty()));
     diagnostics
 }
 
@@ -586,6 +604,7 @@ fn collect_observations(
     collected
 }
 
+#[allow(tigerstyle::too_many_parameters)] // The pure merge threads one manifest, one observation, and three canonical output maps.
 fn merge_observation(
     manifest: &MantlepkgsManifest,
     selector: &PackageSelector,
@@ -595,7 +614,7 @@ fn merge_observation(
     sources: &mut BTreeMap<String, MergedSourceState>,
 ) {
     let key = selector_key(selector);
-    let package_blockers = blockers.get_mut(&key).expect("selector blocker set exists");
+    let package_blockers = blockers.entry(key.clone()).or_default();
     package_blockers.extend(observation.blockers.clone());
     compare_digest_pair(
         &observation.producer_graph_digest_blake3,
@@ -618,7 +637,7 @@ fn merge_observation(
             "the package graph has no nodes",
         ));
     }
-    if observation.nodes.len() > manifest.limits.max_graph_nodes as usize {
+    if exceeds_u32_limit(observation.nodes.len(), manifest.limits.max_graph_nodes) {
         package_blockers.push(CatalogBlocker::new(
             "package-graph-node-limit-exceeded",
             &selector.name,
@@ -634,6 +653,8 @@ fn merge_observation(
     }
     merge_nodes(&key, &observation.nodes, blockers, nodes);
     merge_sources(&key, &observation.source_requirements, blockers, sources);
+    debug_assert!(blockers.contains_key(&key));
+    debug_assert!(nodes.values().all(|state| !state.owners.is_empty()));
 }
 
 fn merge_nodes(
@@ -695,6 +716,8 @@ fn merge_nodes(
             }
         }
     }
+    debug_assert!(blockers.contains_key(owner));
+    debug_assert!(merged.values().all(|state| !state.owners.is_empty()));
 }
 
 fn merge_sources(
@@ -753,6 +776,8 @@ fn merge_sources(
             }
         }
     }
+    debug_assert!(blockers.contains_key(owner));
+    debug_assert!(merged.values().all(|state| !state.owners.is_empty()));
 }
 
 fn planned_packages(
@@ -764,7 +789,7 @@ fn planned_packages(
         .iter()
         .map(|selector| {
             let key = selector_key(selector);
-            let mut package_blockers = blockers.remove(&key).expect("selector blocker set exists");
+            let mut package_blockers = blockers.remove(&key).unwrap_or_default();
             package_blockers.sort();
             package_blockers.dedup();
             if package_blockers.len() > MAX_BLOCKERS_PER_PACKAGE {
@@ -825,14 +850,14 @@ fn validate_merged_limits(
     sources: &[MergedSourceRequirement],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if nodes.len() > manifest.limits.max_graph_nodes as usize {
+    if exceeds_u32_limit(nodes.len(), manifest.limits.max_graph_nodes) {
         diagnostics.push(Diagnostic::new(
             "catalog-graph-node-limit-exceeded",
             "shared_nodes",
             "the merged graph exceeds the named node limit",
         ));
     }
-    if sources.len() > manifest.limits.max_source_requirements as usize {
+    if exceeds_u32_limit(sources.len(), manifest.limits.max_source_requirements) {
         diagnostics.push(Diagnostic::new(
             "source-requirement-limit-exceeded",
             "source_requirements",
@@ -847,7 +872,8 @@ fn normalize_artifacts(
 ) -> Result<Vec<ArtifactBinding>, CoreFailure> {
     let mut normalized = artifacts.to_vec();
     normalized.sort();
-    let mut diagnostics = Vec::new();
+    let diagnostic_capacity_items = normalized.len().saturating_add(1);
+    let mut diagnostics = Vec::with_capacity(diagnostic_capacity_items);
     let mut roles = BTreeSet::new();
     let mut paths = BTreeSet::new();
     for artifact in &normalized {
@@ -890,6 +916,8 @@ fn normalize_artifacts(
         ));
     }
     if diagnostics.is_empty() {
+        debug_assert_eq!(roles.len(), normalized.len());
+        debug_assert_eq!(paths.len(), normalized.len());
         Ok(normalized)
     } else {
         Err(CoreFailure::from_diagnostics(diagnostics))
@@ -906,7 +934,8 @@ fn validate_selection_receipts(plan: &CatalogPlan, selections: &[ProducerSelecti
         .iter()
         .map(|selection| (selection.system.as_str(), selection.name.as_str(), selection.attribute.as_str()))
         .collect::<BTreeSet<_>>();
-    let mut diagnostics = Vec::new();
+    let diagnostic_capacity_items = selections.len().saturating_add(1);
+    let mut diagnostics = Vec::with_capacity(diagnostic_capacity_items);
     if planned != observed || observed.len() != selections.len() {
         diagnostics.push(Diagnostic::new(
             "producer-selection-set-mismatch",
@@ -931,13 +960,17 @@ fn validate_selection_receipts(plan: &CatalogPlan, selections: &[ProducerSelecti
         }
     }
     if diagnostics.is_empty() {
+        debug_assert_eq!(planned.len(), plan.packages.len());
+        debug_assert_eq!(observed.len(), selections.len());
         Ok(())
     } else {
         Err(CoreFailure::from_diagnostics(diagnostics))
     }
 }
 
+// Canonical preimage fields stay explicit to prevent accidental identity omissions.
 #[allow(clippy::too_many_arguments)]
+#[allow(tigerstyle::too_many_parameters)] // Canonical preimage fields map one-to-one into the local typed struct.
 fn plan_identity(
     manifest: &MantlepkgsManifest,
     manifest_digest: &str,
@@ -962,6 +995,8 @@ fn plan_identity(
         diagnostics: &'a [Diagnostic],
         non_claims: &'a [String],
     }
+    debug_assert_eq!(manifest.schema, crate::MANIFEST_SCHEMA);
+    debug_assert!(is_digest(manifest_digest));
     digest_serializable(
         PLAN_DOMAIN,
         &Preimage {
@@ -980,6 +1015,7 @@ fn plan_identity(
     )
 }
 
+#[allow(tigerstyle::ambiguous_params)] // Shared-node and source counts name distinct catalog fields checked against the plan.
 fn catalog_identity(
     plan: &CatalogPlan,
     producer_receipt_digest: &str,
@@ -1003,6 +1039,8 @@ fn catalog_identity(
         max_artifact_bytes: u64,
         non_claims: &'a [String],
     }
+    debug_assert_eq!(usize::try_from(shared_node_count), Ok(plan.shared_nodes.len()));
+    debug_assert_eq!(usize::try_from(source_requirement_count), Ok(plan.source_requirements.len()));
     digest_serializable(
         CATALOG_DOMAIN,
         &Preimage {
@@ -1025,6 +1063,8 @@ fn catalog_identity(
 }
 
 fn standalone_catalog_identity(catalog: &MantlepkgsCatalog) -> Result<String, CoreFailure> {
+    debug_assert_eq!(catalog.schema, CATALOG_SCHEMA);
+    debug_assert!(is_digest(&catalog.producer_receipt_digest_blake3));
     #[derive(Serialize)]
     struct Preimage<'a> {
         schema: &'a str,
@@ -1077,6 +1117,7 @@ fn digest_serializable<T: Serialize>(domain: &[u8], value: &T, code: &str) -> Re
     Ok(hasher.finalize().to_hex().as_str().into())
 }
 
+#[allow(tigerstyle::ambiguous_params)] // Expected, observed, diagnostic code, and subject are separate comparison roles.
 fn compare_digest_pair(expected: &str, observed: &str, code: &str, subject: &str, blockers: &mut Vec<CatalogBlocker>) {
     if !is_digest(expected) || !is_digest(observed) || expected != observed {
         blockers.push(CatalogBlocker::new(
@@ -1105,7 +1146,7 @@ fn reject_extra_observations(
 }
 
 fn add_blocker(blockers: &mut BTreeMap<PackageKey, Vec<CatalogBlocker>>, owner: &PackageKey, blocker: CatalogBlocker) {
-    blockers.get_mut(owner).expect("foreign fact owner must be a selected package").push(blocker);
+    blockers.entry(owner.clone()).or_default().push(blocker);
 }
 
 fn selector_key(selector: &PackageSelector) -> PackageKey {
@@ -1119,13 +1160,14 @@ fn is_buildable(package: &PlannedPackage) -> bool {
     matches!(package.disposition, PackageDisposition::Buildable { .. })
 }
 
+#[allow(tigerstyle::ambiguous_params)] // Artifact path and role map directly to separate diagnostic fields.
 fn validate_relative_artifact_path(path: &str, role: &str, diagnostics: &mut Vec<Diagnostic>) {
-    let unsafe_path = path.is_empty()
+    let is_unsafe_path = path.is_empty()
         || path.starts_with('/')
         || path.ends_with('/')
         || path.contains('\\')
         || path.split('/').any(|component| component.is_empty() || component == "." || component == "..");
-    if unsafe_path {
+    if is_unsafe_path {
         diagnostics.push(Diagnostic::new(
             "unsafe-artifact-path",
             role,
@@ -1134,6 +1176,7 @@ fn validate_relative_artifact_path(path: &str, role: &str, diagnostics: &mut Vec
     }
 }
 
+#[allow(tigerstyle::ambiguous_params)] // Digest value and field path are distinct validation inputs.
 fn require_digest(value: &str, path: &str) -> Result<(), CoreFailure> {
     if is_digest(value) {
         Ok(())
@@ -1148,6 +1191,13 @@ fn require_digest(value: &str, path: &str) -> Result<(), CoreFailure> {
 
 fn is_digest(value: &str) -> bool {
     value.len() == BLAKE3_HEX_LENGTH && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn exceeds_u32_limit(observed_items: usize, limit_items: u32) -> bool {
+    match u32::try_from(observed_items) {
+        Ok(observed_items_u32) => observed_items_u32 > limit_items,
+        Err(_) => true,
+    }
 }
 
 fn required_producer_roles() -> BTreeSet<&'static str> {
@@ -1277,6 +1327,7 @@ mod tests {
         }
     }
 
+    #[allow(tigerstyle::ambiguous_params)] // Fixture package name and root identity are distinct test data.
     fn observation(name: &str, root: &str, nodes: Vec<ForeignNodeFact>) -> PackageGraphObservation {
         PackageGraphObservation {
             selector_name: name.into(),
@@ -1292,6 +1343,7 @@ mod tests {
         }
     }
 
+    #[allow(tigerstyle::ambiguous_params)] // Fixture foreign identity, node ID, and digest map to separate fields.
     fn node(identity: &str, node_id: &str, digest: &str) -> ForeignNodeFact {
         ForeignNodeFact {
             foreign_identity: identity.into(),
@@ -1314,6 +1366,7 @@ mod tests {
         artifacts
     }
 
+    #[allow(tigerstyle::ambiguous_params)] // Fixture role, path, and digest map to separate artifact fields.
     fn artifact(role: &str, path: &str, digest: &str) -> ArtifactBinding {
         ArtifactBinding {
             role: role.into(),

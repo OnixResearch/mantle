@@ -18,7 +18,7 @@ pub const SUPPORTED_SYSTEM_X86_64_LINUX: &str = "x86_64-linux";
 pub const RECOMPUTE_CONVERSION_MODE: &str = "recompute-blake3-v1";
 pub const SOURCE_BUNDLE_POLICY_MODE: &str = "source-bundle-required-v1";
 pub const NARIO_V2_TRANSPORT: &str = "nario-v2";
-pub const PRODUCER_COMMAND_CLASS: &str = "nix-eval-drv-path-and-derivation-show-recursive-v1";
+pub const PRODUCER_COMMAND_CLASS: &str = "nix-eval-drv-path-derivation-show-recursive-and-build-fixed-output-seeds-v1";
 pub const BLAKE3_HEX_LENGTH: usize = 64;
 pub const GIT_REVISION_HEX_LENGTH: usize = 40;
 pub const MAX_MANIFEST_SELECTORS: u32 = 256;
@@ -157,6 +157,7 @@ fn validate_manifest(manifest: &MantlepkgsManifest) -> Vec<Diagnostic> {
 }
 
 fn validate_source_lock(source: &NixpkgsSourceLock, diagnostics: &mut Vec<Diagnostic>) {
+    let initial_diagnostic_count = diagnostics.len();
     require_text(&source.reference, "source.reference", diagnostics);
     require_text(&source.revision, "source.revision", diagnostics);
     require_hex(&source.lock_digest_blake3, BLAKE3_HEX_LENGTH, "source.lock_digest_blake3", diagnostics);
@@ -176,9 +177,12 @@ fn validate_source_lock(source: &NixpkgsSourceLock, diagnostics: &mut Vec<Diagno
             "the source reference must contain the exact revision",
         ));
     }
+    debug_assert!(diagnostics.len() >= initial_diagnostic_count);
+    debug_assert!(diagnostics.iter().skip(initial_diagnostic_count).all(|item| !item.code.is_empty()));
 }
 
 fn validate_systems(manifest: &MantlepkgsManifest, diagnostics: &mut Vec<Diagnostic>) {
+    let initial_diagnostic_count = diagnostics.len();
     if manifest.systems.is_empty() {
         diagnostics.push(Diagnostic::new("missing-system", "systems", "the manifest must select at least one system"));
     }
@@ -197,9 +201,12 @@ fn validate_systems(manifest: &MantlepkgsManifest, diagnostics: &mut Vec<Diagnos
             diagnostics.push(Diagnostic::new("duplicate-system", &path, "the manifest repeats a system"));
         }
     }
+    debug_assert!(diagnostics.len() >= initial_diagnostic_count);
+    debug_assert!(systems.len() <= manifest.systems.len());
 }
 
 fn validate_selectors(manifest: &MantlepkgsManifest, diagnostics: &mut Vec<Diagnostic>) {
+    let initial_diagnostic_count = diagnostics.len();
     if manifest.selectors.is_empty() {
         diagnostics.push(Diagnostic::new(
             "missing-selector",
@@ -207,8 +214,8 @@ fn validate_selectors(manifest: &MantlepkgsManifest, diagnostics: &mut Vec<Diagn
             "the manifest must select at least one package",
         ));
     }
-    if manifest.selectors.len() > manifest.limits.max_selectors as usize
-        || manifest.selectors.len() > MAX_MANIFEST_SELECTORS as usize
+    if exceeds_u32_limit(manifest.selectors.len(), manifest.limits.max_selectors)
+        || exceeds_u32_limit(manifest.selectors.len(), MAX_MANIFEST_SELECTORS)
     {
         diagnostics.push(Diagnostic::new(
             "selector-limit-exceeded",
@@ -222,8 +229,11 @@ fn validate_selectors(manifest: &MantlepkgsManifest, diagnostics: &mut Vec<Diagn
     for (index, selector) in manifest.selectors.iter().enumerate() {
         validate_selector(index, selector, &allowed_systems, &mut selector_keys, &mut aliases, diagnostics);
     }
+    debug_assert!(diagnostics.len() >= initial_diagnostic_count);
+    debug_assert!(selector_keys.len() <= manifest.selectors.len());
 }
 
+#[allow(tigerstyle::too_many_parameters)] // Selector validation threads bounded uniqueness maps and one ordered diagnostic sink.
 fn validate_selector<'a>(
     index: usize,
     selector: &'a PackageSelector,
@@ -232,6 +242,7 @@ fn validate_selector<'a>(
     aliases: &mut BTreeMap<(&'a str, &'a str), &'a str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    let initial_diagnostic_count = diagnostics.len();
     let base = format!("selectors[{index}]");
     require_text(&selector.name, &format!("{base}.name"), diagnostics);
     require_text(&selector.attribute, &format!("{base}.attribute"), diagnostics);
@@ -263,8 +274,12 @@ fn validate_selector<'a>(
         }
         register_alias(&selector.system, alias, &selector.name, &path, aliases, diagnostics);
     }
+    debug_assert!(diagnostics.len() >= initial_diagnostic_count);
+    debug_assert!(local_aliases.len() <= selector.aliases.len());
 }
 
+#[allow(tigerstyle::ambiguous_params)] // System, alias, owner, and path name separate alias-registry roles.
+#[allow(tigerstyle::too_many_parameters)] // The helper mutates one alias map and one diagnostic sink for a named alias tuple.
 fn register_alias<'a>(
     system: &'a str,
     alias: &'a str,
@@ -303,6 +318,7 @@ fn validate_manifest_artifact(artifact: &ManifestArtifact, path: &str, diagnosti
 }
 
 fn validate_source_policy(policy: &SourcePolicy, diagnostics: &mut Vec<Diagnostic>) {
+    let initial_diagnostic_count = diagnostics.len();
     require_equal(
         &policy.mode,
         SOURCE_BUNDLE_POLICY_MODE,
@@ -310,7 +326,7 @@ fn validate_source_policy(policy: &SourcePolicy, diagnostics: &mut Vec<Diagnosti
         "unsupported-source-policy",
         diagnostics,
     );
-    let mut transports = BTreeSet::new();
+    let mut transport_name_items = BTreeSet::new();
     for (index, transport) in policy.optional_transports.iter().enumerate() {
         let path = format!("source_policy.optional_transports[{index}]");
         if transport != NARIO_V2_TRANSPORT {
@@ -320,7 +336,7 @@ fn validate_source_policy(policy: &SourcePolicy, diagnostics: &mut Vec<Diagnosti
                 "the optional source transport is not supported",
             ));
         }
-        if !transports.insert(transport) {
+        if !transport_name_items.insert(transport) {
             diagnostics.push(Diagnostic::new(
                 "duplicate-source-transport",
                 &path,
@@ -328,6 +344,8 @@ fn validate_source_policy(policy: &SourcePolicy, diagnostics: &mut Vec<Diagnosti
             ));
         }
     }
+    debug_assert!(diagnostics.len() >= initial_diagnostic_count);
+    debug_assert!(transport_name_items.len() <= policy.optional_transports.len());
 }
 
 fn validate_limits(limits: &ManifestLimits, diagnostics: &mut Vec<Diagnostic>) {
@@ -348,6 +366,7 @@ fn validate_limits(limits: &ManifestLimits, diagnostics: &mut Vec<Diagnostic>) {
     );
 }
 
+#[allow(tigerstyle::ambiguous_params)] // Observed value and implementation maximum are separate numeric bounds.
 fn validate_u32_limit(value: u32, maximum: u32, path: &str, diagnostics: &mut Vec<Diagnostic>) {
     if value < MIN_COLLECTION_ITEMS || value > maximum {
         diagnostics.push(Diagnostic::new(
@@ -358,6 +377,7 @@ fn validate_u32_limit(value: u32, maximum: u32, path: &str, diagnostics: &mut Ve
     }
 }
 
+#[allow(tigerstyle::ambiguous_params)] // Observed value and implementation maximum are separate numeric bounds.
 fn validate_u64_limit(value: u64, maximum: u64, path: &str, diagnostics: &mut Vec<Diagnostic>) {
     if value < u64::from(MIN_COLLECTION_ITEMS) || value > maximum {
         diagnostics.push(Diagnostic::new(
@@ -370,7 +390,11 @@ fn validate_u64_limit(value: u64, maximum: u64, path: &str, diagnostics: &mut Ve
 
 fn require_absolute_store_prefix(value: &str, diagnostics: &mut Vec<Diagnostic>) {
     require_text(value, "conversion_policy.target_store_prefix", diagnostics);
-    if !value.starts_with('/') || value.ends_with('/') || value.contains("//") || value.contains("..") {
+    let is_absolute = value.starts_with('/');
+    let has_unsafe_component = [value.ends_with('/'), value.contains("//"), value.contains("..")]
+        .into_iter()
+        .any(|is_present| is_present);
+    if !is_absolute || has_unsafe_component {
         diagnostics.push(Diagnostic::new(
             "unsafe-target-store-prefix",
             "conversion_policy.target_store_prefix",
@@ -379,13 +403,14 @@ fn require_absolute_store_prefix(value: &str, diagnostics: &mut Vec<Diagnostic>)
     }
 }
 
+#[allow(tigerstyle::ambiguous_params)] // Path value and diagnostic field path are separate validation inputs.
 fn validate_relative_path(value: &str, path: &str, diagnostics: &mut Vec<Diagnostic>) {
     require_text(value, path, diagnostics);
-    let unsafe_path = value.starts_with('/')
+    let is_unsafe_path = value.starts_with('/')
         || value.ends_with('/')
         || value.contains('\\')
         || value.split('/').any(|component| component.is_empty() || component == "." || component == "..");
-    if unsafe_path {
+    if is_unsafe_path {
         diagnostics.push(Diagnostic::new(
             "unsafe-relative-path",
             path,
@@ -394,12 +419,14 @@ fn validate_relative_path(value: &str, path: &str, diagnostics: &mut Vec<Diagnos
     }
 }
 
+#[allow(tigerstyle::ambiguous_params)] // Value, expected contract, field path, and code are distinct validation roles.
 fn require_equal(value: &str, expected: &str, path: &str, code: &str, diagnostics: &mut Vec<Diagnostic>) {
     if value != expected {
         diagnostics.push(Diagnostic::new(code, path, "the value does not match the supported contract"));
     }
 }
 
+#[allow(tigerstyle::ambiguous_params)] // Text value and diagnostic field path are distinct validation inputs.
 fn require_text(value: &str, path: &str, diagnostics: &mut Vec<Diagnostic>) {
     if value.is_empty() || value.len() > MAX_TEXT_BYTES || value.chars().any(char::is_control) {
         diagnostics.push(Diagnostic::new(
@@ -422,6 +449,13 @@ fn require_hex(value: &str, length: usize, path: &str, diagnostics: &mut Vec<Dia
 
 fn is_lower_hex_length(value: &str, length: usize) -> bool {
     value.len() == length && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn exceeds_u32_limit(observed_items: usize, limit_items: u32) -> bool {
+    match u32::try_from(observed_items) {
+        Ok(observed_items_u32) => observed_items_u32 > limit_items,
+        Err(_) => true,
+    }
 }
 
 #[cfg(test)]

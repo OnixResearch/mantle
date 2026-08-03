@@ -177,6 +177,26 @@ Source readiness proves declared input availability and identity only. Build
 success, output trust, compiler correctness, and release eligibility require
 separate evidence.
 
+## Mantlepkgs catalogs
+
+Mantlepkgs generates a bounded package catalog from locked, concrete Nixpkgs
+derivation graphs. Nix runs only during explicit catalog production. Later
+verification, selection, planning, and building use published artifacts without
+Nix.
+
+```bash
+mantle mantlepkgs validate --manifest mantlepkgs/live-cohort/manifest.ncl
+mantle mantlepkgs verify --generation <generation-directory>
+mantle mantlepkgs plan \
+  --generation <generation-directory> \
+  --package hello --system x86_64-linux \
+  --plan-out target/hello.plan.json \
+  --import-receipt-out target/hello.import-receipt.json
+```
+
+See the [Mantlepkgs guide](mantlepkgs/README.md) for production, source
+preparation, no-Nix consumption, package dispositions, and claim boundaries.
+
 ## Examples
 
 Start with the supported [examples guide](examples/README.md). Its catalog is the

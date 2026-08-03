@@ -26,6 +26,7 @@ const HELLO_SYSTEM: &str = "x86_64-linux";
 const DEFAULT_TARGET_PREFIX: &str = "/mantle/store";
 const GUIX_SOURCE_PREFIX: &str = "/gnu/store";
 pub(crate) const NIX_SOURCE_PREFIX: &str = "/nix/store";
+pub(crate) const FIXED_OUTPUT_SEED_KIND: &str = "nix-fixed-output-seed";
 const NIX_STORE_PREFIX_WITH_SLASH: &str = "/nix/store/";
 const NIX_DERIVATION_SUFFIX: &str = ".drv";
 const KIBIBYTE_BYTES: usize = 1_024;
@@ -178,6 +179,8 @@ pub(crate) struct SourcePayload {
     pub(crate) content_ref: String,
     pub(crate) embedded_text: Option<String>,
     pub(crate) mirrors: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) expected_content_blake3: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -1201,6 +1204,7 @@ fn hello_fixture_graph(spec: &HelloFixtureSpec<'_>) -> ForeignDerivationGraph {
             content_ref: store_source,
             embedded_text: None,
             mirrors: vec!["https://mirror.example.invalid/hello.tar.gz".to_string()],
+            expected_content_blake3: None,
         }],
         unsupported_features: Vec::new(),
         frontend_metadata: Vec::new(),
@@ -1720,6 +1724,7 @@ fn lower_aterm_source_refs(
             content_ref: input_src.clone(),
             embedded_text: None,
             mirrors: Vec::new(),
+            expected_content_blake3: None,
         });
         debug_assert!(refs.len() < input_srcs.len());
         refs.push(SourceRef {

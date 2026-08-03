@@ -26,6 +26,7 @@ use nix_compat::store_path::build_text_path_with_store_dir;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::foreign_derivation_import::FIXED_OUTPUT_SEED_KIND;
 use crate::foreign_derivation_import::FixedOutputMetadata;
 use crate::foreign_derivation_import::ForeignDerivationGraph;
 use crate::foreign_derivation_import::ForeignDerivationNode;
@@ -68,6 +69,8 @@ pub(crate) struct CompiledSourceRequirement {
     pub(crate) foreign_path: String,
     pub(crate) target_path: String,
     pub(crate) descriptor_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) expected_content_blake3: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -197,7 +200,7 @@ pub(crate) fn compile_foreign_graph_with_profile_and_output_mode(
         .iter()
         .map(|payload| (payload.payload_id.as_str(), payload))
         .collect::<BTreeMap<_, _>>();
-    let (mut path_maps, source_requirements) =
+    let (mut path_maps, mut source_requirements) =
         compile_source_requirements(graph, target_store_prefix, preserve_cache_paths)?;
     let mut identities = BTreeMap::new();
     let mut known_hdms = BTreeMap::new();
@@ -255,6 +258,8 @@ pub(crate) fn compile_foreign_graph_with_profile_and_output_mode(
         unit.declared_references = node.declared_references.clone();
         units.push(unit);
     }
+    compile_fixed_output_seed_requirements(graph, &mut path_maps, &mut source_requirements)?;
+    validate_cross_map_collisions(&path_maps, None)?;
     validate_compiled_coverage(&dependency_order, &units)?;
 
     let exact_map = combined_path_map(&path_maps, None)?;
@@ -440,6 +445,9 @@ fn compile_source_requirements(
     let mut payloads = graph.source_payloads.iter().collect::<Vec<_>>();
     payloads.sort_by(|left, right| left.payload_id.cmp(&right.payload_id));
     for payload in payloads {
+        if payload.kind == FIXED_OUTPUT_SEED_KIND {
+            continue;
+        }
         let foreign_path = parse_foreign_store_object(&payload.content_ref, &graph.source_store_prefixes, None)?;
         let descriptor = serde_json::to_vec(payload).map_err(|error| {
             compiler_diagnostic(
@@ -472,11 +480,53 @@ fn compile_source_requirements(
             foreign_path: payload.content_ref.clone(),
             target_path,
             descriptor_digest: blake3::hash(&descriptor).to_hex().to_string(),
+            expected_content_blake3: payload.expected_content_blake3.clone(),
         });
     }
     validate_cross_map_collisions(&path_maps, None)?;
-    debug_assert_eq!(requirements.len(), graph.source_payloads.len());
+    debug_assert!(requirements.len() <= graph.source_payloads.len());
     Ok((path_maps, requirements))
+}
+
+fn compile_fixed_output_seed_requirements(
+    graph: &ForeignDerivationGraph,
+    path_maps: &mut ExactForeignPathMaps,
+    requirements: &mut Vec<CompiledSourceRequirement>,
+) -> Result<(), ImportDiagnostic> {
+    let mut seeds = graph
+        .source_payloads
+        .iter()
+        .filter(|payload| payload.kind == FIXED_OUTPUT_SEED_KIND)
+        .collect::<Vec<_>>();
+    seeds.sort_by(|left, right| left.payload_id.cmp(&right.payload_id));
+    requirements.reserve(seeds.len());
+    for payload in seeds {
+        let target_path = path_maps.outputs.get(&payload.content_ref).cloned().ok_or_else(|| {
+            compiler_diagnostic(
+                "foreign-compiler-fixed-output-seed-unmapped",
+                None,
+                "fixed-output seed does not name one compiled foreign output",
+            )
+        })?;
+        let descriptor = serde_json::to_vec(payload).map_err(|error| {
+            compiler_diagnostic(
+                "foreign-compiler-source-serialization-failed",
+                None,
+                &format!("fixed-output seed serialization failed: {error}"),
+            )
+        })?;
+        insert_exact_path(&mut path_maps.sources, &payload.content_ref, &target_path, "fixed-output seed", None)?;
+        requirements.push(CompiledSourceRequirement {
+            payload_id: payload.payload_id.clone(),
+            foreign_path: payload.content_ref.clone(),
+            target_path,
+            descriptor_digest: blake3::hash(&descriptor).to_hex().to_string(),
+            expected_content_blake3: payload.expected_content_blake3.clone(),
+        });
+    }
+    debug_assert_eq!(requirements.len(), graph.source_payloads.len());
+    debug_assert!(requirements.iter().all(|requirement| !requirement.target_path.is_empty()));
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1201,22 +1251,7 @@ fn validate_cross_map_collisions(
     path_maps: &ExactForeignPathMaps,
     node_id: Option<&str>,
 ) -> Result<(), ImportDiagnostic> {
-    let expected = path_maps
-        .derivations
-        .len()
-        .checked_add(path_maps.outputs.len())
-        .and_then(|count| count.checked_add(path_maps.sources.len()))
-        .ok_or_else(|| {
-            compiler_diagnostic("foreign-compiler-map-count-overflow", node_id, "foreign path map count overflowed")
-        })?;
-    let combined = combined_path_map(path_maps, node_id)?;
-    if combined.len() != expected {
-        return Err(compiler_diagnostic(
-            "foreign-compiler-map-collision",
-            node_id,
-            "one foreign path appears in more than one object map",
-        ));
-    }
+    let _ = combined_path_map(path_maps, node_id)?;
     Ok(())
 }
 
@@ -1227,12 +1262,18 @@ fn combined_path_map(
     let mut combined = BTreeMap::new();
     for map in [&path_maps.derivations, &path_maps.outputs, &path_maps.sources] {
         for (foreign_path, target_path) in map {
-            if combined.insert(foreign_path.clone(), target_path.clone()).is_some() {
-                return Err(compiler_diagnostic(
-                    "foreign-compiler-map-collision",
-                    node_id,
-                    "one foreign path appears in more than one object map",
-                ));
+            match combined.get(foreign_path) {
+                Some(existing_target) if existing_target != target_path => {
+                    return Err(compiler_diagnostic(
+                        "foreign-compiler-map-collision",
+                        node_id,
+                        "one foreign path has conflicting mappings across object classes",
+                    ));
+                }
+                Some(_) => {}
+                None => {
+                    combined.insert(foreign_path.clone(), target_path.clone());
+                }
             }
         }
     }
@@ -1512,6 +1553,39 @@ mod tests {
     }
 
     #[test]
+    fn fixed_output_seed_admits_the_recomputed_output_path() {
+        let mut graph = diamond_graph();
+        let seeded_foreign_output = foreign_output("leaf", "out");
+        graph.source_payloads.push(SourcePayload {
+            payload_id: "fixed-output-seed".to_string(),
+            kind: FIXED_OUTPUT_SEED_KIND.to_string(),
+            content_ref: seeded_foreign_output.clone(),
+            embedded_text: None,
+            mirrors: Vec::new(),
+            expected_content_blake3: Some(EMPTY_HASH.to_string()),
+        });
+
+        let compiled = compile_foreign_graph(&graph, TARGET_PREFIX).expect("seeded graph must compile");
+        let target_output = &compiled.path_maps.outputs[&seeded_foreign_output];
+        assert_eq!(compiled.path_maps.sources[&seeded_foreign_output], *target_output);
+        assert_eq!(compiled.source_requirements[0].target_path, *target_output);
+        assert_ne!(target_output, &seeded_foreign_output);
+    }
+
+    #[test]
+    fn conflicting_cross_class_path_mapping_is_rejected() {
+        let foreign = foreign_source("seed");
+        let mut maps = ExactForeignPathMaps::default();
+        maps.outputs
+            .insert(foreign.clone(), format!("{TARGET_PREFIX}/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-seed"));
+        maps.sources.insert(foreign, format!("{TARGET_PREFIX}/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-seed"));
+
+        let error = combined_path_map(&maps, None).expect_err("conflicting map must fail");
+        assert_eq!(error.class, "foreign-compiler-map-collision");
+        assert!(error.message.contains("conflicting mappings"));
+    }
+
+    #[test]
     fn compiler_maps_source_descriptors_and_rewrites_suffixes() {
         let mut graph = diamond_graph();
         graph.source_payloads.push(SourcePayload {
@@ -1520,6 +1594,7 @@ mod tests {
             content_ref: foreign_source("script"),
             embedded_text: Some("echo source".to_string()),
             mirrors: Vec::new(),
+            expected_content_blake3: None,
         });
         let root = graph.nodes.iter_mut().find(|node| node.node_id == "root").expect("root node");
         root.source_refs.push(SourceRef {
@@ -1546,6 +1621,7 @@ mod tests {
             content_ref: foreign_source("cache-source"),
             embedded_text: None,
             mirrors: Vec::new(),
+            expected_content_blake3: None,
         });
         let root = graph.nodes.iter_mut().find(|node| node.node_id == "root").unwrap();
         root.source_refs.push(SourceRef {
@@ -1925,6 +2001,7 @@ mod tests {
             content_ref: foreign_source(source_name),
             embedded_text: None,
             mirrors,
+            expected_content_blake3: None,
         });
     }
 
