@@ -24,7 +24,7 @@ let automake115_src = crunch.fetchTarball {
 } in
 
 {
-  name = "gcc-4.0.4-musl-pass4-v5",
+  name = "gcc-4.0.4-musl-pass4-v7",
   builder = "/bin/sh",
   args = [
     "-c",
@@ -215,12 +215,18 @@ EOF
       "$BINUTILS/bin/ar" t "$out/lib/gcc/$TARGET/$GCC_VERSION/libgcc.a" > "$WORK/libgcc-members.txt"
       test -s "$WORK/libgcc-members.txt"
 
+      $BB cat > "$out/bin/as" <<EOF
+#!/bin/sh
+assembler="\${MANTLE_GCC_ASSEMBLER:-$STAGEX/bin/x86_64-linux-musl-as}"
+exec "\$assembler" "\$@"
+EOF
+      $BB chmod 755 "$out/bin/as"
       $BB cat > "$out/bin/ld" <<EOF
 #!/bin/sh
 libc_archive="\${MANTLE_GCC_LINK_LIBC:-$MUSL/lib/libc.a}"
 libm_archive="\${MANTLE_GCC_LINK_LIBM:-$MUSL/lib/libm.a}"
 crt_dir="\${MANTLE_GCC_LINK_CRT:-$MUSL/lib}"
-linker="\${MANTLE_GCC_LINKER:-$BINUTILS/bin/ld}"
+linker="\${MANTLE_GCC_LINKER:-$STAGEX/bin/x86_64-linux-musl-ld}"
 link_arguments=
 library_dirs=
 expect_library_dir=false

@@ -45,7 +45,7 @@ let automake115_src = crunch.fetchTarball {
         exit 1
       }
 
-      GCC=$(find_input gcc-4.0.4-musl-pass4-v5)
+      GCC=$(find_input gcc-4.0.4-musl-pass4-v7)
       MUSL=$(find_input musl-1.1.24-gcc-pass4-v2)
       STAGEX=$(find_input mantle-stagex-intermediate-provider)
       TRANSITION=$(find_input mantle-stagex-transition)
@@ -174,7 +174,11 @@ EOF
         --disable-plugins \
         --disable-multilib \
         --disable-werror \
-        --without-zlib
+        --without-zlib || {
+          configure_status=$?
+          if [ -f config.log ]; then $BB cat config.log >&2; fi
+          exit "$configure_status"
+        }
 
       for generated_makefile in $($BB find . -name Makefile -type f); do
         $BB sed -i 's/-Wstack-usage=[0-9][0-9]*//g' "$generated_makefile"

@@ -133,6 +133,43 @@ fn gcc_pass3_linker_uses_only_relocatable_stagex_authority() {
 }
 
 #[test]
+fn gcc_pass4_tool_wrappers_use_only_relocatable_stagex_authority() {
+    let source = std::fs::read_to_string(bootstrap_path("gcc-4.0-musl-pass4.ncl")).unwrap();
+    let (_, final_assembler_wrapper) = source.rsplit_once("      $BB cat > \"$out/bin/as\" <<EOF").unwrap();
+    let (_, final_linker_wrapper) = source.rsplit_once("      $BB cat > \"$out/bin/ld\" <<EOF").unwrap();
+    let assembler_required = [
+        "assembler=\"\\${MANTLE_GCC_ASSEMBLER:-$STAGEX/bin/x86_64-linux-musl-as}\"",
+        "exec \"\\$assembler\" \"\\$@\"",
+    ];
+    let assembler_forbidden = ["assembler=\"\\${MANTLE_GCC_ASSEMBLER:-$BINUTILS/bin/as}\""];
+    let linker_required = [
+        "linker=\"\\${MANTLE_GCC_LINKER:-$STAGEX/bin/x86_64-linux-musl-ld}\"",
+        "exec \"\\$linker\" \\$link_arguments",
+    ];
+    let linker_forbidden = ["linker=\"\\${MANTLE_GCC_LINKER:-$BINUTILS/bin/ld}\""];
+    let assembler_violations = contract_violations(final_assembler_wrapper, &assembler_required, &assembler_forbidden);
+    let invalid_assembler = final_assembler_wrapper.replace(assembler_required[0], assembler_forbidden[0]);
+    let linker_violations = contract_violations(final_linker_wrapper, &linker_required, &linker_forbidden);
+    let invalid_linker = final_linker_wrapper.replace(linker_required[0], linker_forbidden[0]);
+    let derivation = eval_bootstrap("gcc-4.0-musl-pass4.ncl");
+
+    assert!(assembler_violations.is_empty(), "GCC pass4 assembler contract: {assembler_violations:?}");
+    assert_eq!(contract_violations(&invalid_assembler, &assembler_required, &assembler_forbidden), vec![
+        assembler_required[0],
+        assembler_forbidden[0]
+    ]);
+    assert!(linker_violations.is_empty(), "GCC pass4 linker contract: {linker_violations:?}");
+    assert_eq!(contract_violations(&invalid_linker, &linker_required, &linker_forbidden), vec![
+        linker_required[0],
+        linker_forbidden[0]
+    ]);
+    assert!(source.contains("name = \"gcc-4.0.4-musl-pass4-v7\""));
+    assert!(!source.contains("gcc-4.0.4-musl-pass4-v6"));
+    assert_eq!(derivation.name, "gcc-4.0.4-musl-pass4-v7");
+    assert!(source.contains("let stagex_provider = import \"stagex-provider-proof-input.ncl\""));
+}
+
+#[test]
 fn eval_make_bootstrap_imports_shared_seed() {
     let drv = eval_bootstrap("make.ncl");
     let input_names = input_derivation_names(&drv);
@@ -775,7 +812,7 @@ fn perl_gcc_generators_keep_normalized_inputs_and_runtime_rails() {
         "-B\"$GCC/bin/\"",
     ];
     let perl_5000_forbidden = [
-        "GCC=$(find_input gcc-4.0.4-musl-pass4-v5)",
+        "GCC=$(find_input gcc-4.0.4-musl-pass4-v7)",
         "MUSL=$(find_input musl-1.1.24-gcc-pass4-v2)",
     ];
     let perl_500503_required = [
