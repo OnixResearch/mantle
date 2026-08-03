@@ -1,0 +1,110 @@
+{
+  "schema": "mantlepkgs-update-plan-v1",
+  "plan_identity_blake3": "36241e442120c022470acadf4e0f7b7db6d2093a9bffcf184efb77d230984ae1",
+  "policy_identity_blake3": "fe90ef525d34a644f5fe907f9abcf1672844d0903b9664b3d739601d0aedf5e7",
+  "source_observation_identity_blake3": "b1353b4346a116ee5094dc7982875af0be786f1f112df3f93618bb56010ed50a",
+  "advisory_observation_identity_blake3": [
+    "d0fbf70e0d1daed6d6d75c758bb820abb7d8b3535bf47c9dcac9b4db3fa3a650",
+    "079b2812fb6eb3e6e5278bf207482adeb27786f4d1c033f11c2b8262da8ba996"
+  ],
+  "package": {
+    "public_selector": "hello"
+  },
+  "selection": {
+    "selected": {
+      "version": "v1.3.0",
+      "source_ref": "refs/tags/v1.3.0",
+      "source_identity_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "decisions": [
+      {
+        "candidate": {
+          "version": "v1.3.0",
+          "source_ref": "refs/tags/v1.3.0",
+          "source_identity_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "normalized_version": "1.3.0",
+        "eligible": true,
+        "reason_codes": []
+      }
+    ],
+    "reason_codes": []
+  },
+  "effects": [
+    {
+      "relative_path": "locks/hello.json",
+      "input_digest_blake3": "5cb41ff1dd38c63bab6dc8ef4bf2630ee30a72c20b9a3e79ab0e40d18ef76d30",
+      "output_digest_blake3": "bf3523f68c3b33900610474bd30caba5059be620af38721672105e8f9939b88f",
+      "edits": [
+        {
+          "field_pointer": "/version",
+          "old_value": "v1.2.3",
+          "new_value": "v1.3.0",
+          "reason_code": "update-version-field"
+        },
+        {
+          "field_pointer": "/source/ref",
+          "old_value": "refs/tags/v1.2.3",
+          "new_value": "refs/tags/v1.3.0",
+          "reason_code": "update-source-ref-field"
+        },
+        {
+          "field_pointer": "/source/identity_blake3",
+          "old_value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "new_value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "reason_code": "update-source-identity-field"
+        }
+      ],
+      "output_document": {
+        "source": {
+          "identity_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "ref": "refs/tags/v1.3.0"
+        },
+        "version": "v1.3.0"
+      }
+    }
+  ],
+  "validation_evidence": {
+    "schema": "mantlepkgs-update-validation-evidence-v1",
+    "candidate_version": "v1.3.0",
+    "candidate_source_identity_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "catalog": {
+      "status": "success",
+      "artifact_identity_blake3": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "reason_codes": []
+    },
+    "build_observations": {
+      "status": "success",
+      "artifact_identity_blake3": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "reason_codes": []
+    },
+    "validation_roots": {
+      "status": "success",
+      "artifact_identity_blake3": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "reason_codes": []
+    },
+    "impact_report": {
+      "status": "success",
+      "artifact_identity_blake3": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "reason_codes": []
+    }
+  },
+  "proposal_status": "ready-for-review",
+  "reason_codes": [],
+  "non_claims": [
+    "source observations do not prove source trust",
+    "advisory observations do not prove the absence of unknown vulnerabilities",
+    "candidate selection does not prove package correctness",
+    "validation links do not prove reproducibility",
+    "ready-for-review does not prove deployment safety",
+    "update evidence does not prove release eligibility"
+  ]
+}

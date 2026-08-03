@@ -16,6 +16,7 @@ mod error;
 mod impact;
 mod manifest;
 mod render;
+mod updates;
 
 pub use catalog::*;
 pub use domains::*;
@@ -23,3 +24,4 @@ pub use error::*;
 pub use impact::*;
 pub use manifest::*;
 pub use render::*;
+pub use updates::*;

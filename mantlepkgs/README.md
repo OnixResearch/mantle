@@ -224,6 +224,18 @@ Closure numbers appear only when both closures are complete and compatible. Miss
 
 `impact/external-adapter-fixture.ncl` consumes the report without credentials, webhooks, comments, approvals, or network effects.
 
+## Plan source updates
+
+`updates/contracts.ncl` defines typed source-update policy and evidence contracts.
+
+The update flow records source, OSV, and Repology observations. It then replays them through a pure candidate-selection and mutation-planning core.
+
+A plan links the selected candidate to catalog, build, validation-root, and package-impact evidence. Missing, unavailable, and failed evidence remains explicit.
+
+Execution publishes a new immutable output directory. It does not edit the source tree. Every edit binds one JSON pointer, exact old and new values, and input and output BLAKE3 digests.
+
+See [`updates/README.md`](updates/README.md) for commands, fixtures, failure behavior, and claim boundaries.
+
 ## Package dispositions
 
 Each selected package has one disposition:

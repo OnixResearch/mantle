@@ -79,7 +79,8 @@ let Registry = {
     "oci.registry-push-report",
     "oci.registry-pull-report",
     "release.function-address-binding",
-    "mantlepkgs.package-impact-report"
+    "mantlepkgs.package-impact-report",
+    "mantlepkgs.update-plan"
   ],
   "surfaces"= [
     {
@@ -1447,6 +1448,64 @@ let Registry = {
         "report conformance does not prove package correctness, unchanged behavior, reproducibility, deployment safety, or release eligibility"
       ],
       "rationale"= "This stable local report lets external adapters render review results without forge authority in Mantle."
+    },
+    {
+      "id"= "mantlepkgs.update-plan",
+      "class"= "contracted",
+      "rust_owner"= "crates/mantlepkgs-core/src/updates.rs::UpdatePlan",
+      "producer"= {
+        "command_or_api"= "mantle mantlepkgs update-plan",
+        "marker"= "mantlepkgs.update-plan",
+        "source_paths"= [
+          "crates/mantlepkgs-core/src/updates.rs",
+          "src/mantlepkgs_cmd.rs"
+        ]
+      },
+      "consumers"= [
+        "package maintainers",
+        "Cairn evidence",
+        "external review adapters"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/mantlepkgs-update-plan.schema.json",
+        "generated_contract"= "schemas/machine-contracts/mantlepkgs-update-plan.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/mantlepkgs-update-plan.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/mantlepkgs-update-plan.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantlepkgs-update-plan-v1",
+        "supported"= [
+          "mantlepkgs-update-plan-v1"
+        ],
+        "unknown_version_behavior"= "reject before interpreting candidates, effects, advisory status, or validation links",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "cargo test -p mantlepkgs-core updates::tests",
+        "cargo test --bin mantle mantlepkgs_cmd::tests::update"
+      ],
+      "fixture_coverage"= [
+        "version",
+        "digest",
+        "cross-field",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds the update schema, generated contract, fixtures, pure core, and mutation shell",
+      "freshness"= {
+        "schema_blake3"= "21008e670f90bd69421fbae95e971bb2280f709a94a9fb48663a2a6c544720c9",
+        "contract_blake3"= "a3125cbf30f9cc54e2e9f372e58002415bee51e25fa539fc25a29210de8af948",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "144796c61a4d4ab37f35cf525e3947021ca18ada50293a777fdd644697847598",
+        "producer_identity_blake3"= "918e6378c5738fcd3e5badc7201c73c60c49244326a9cac81dd0f67b21eb8f62",
+        "consumer_policy_blake3"= "be8086e77584c68066c9042b83c5eff2df1d1f31680dec677d4cd4f3cd764a0f"
+      },
+      "non_claims"= [
+        "plan conformance does not prove source trust, advisory completeness, package correctness, reproducibility, deployment safety, or release eligibility"
+      ],
+      "rationale"= "The stable plan lets local and external reviewers replay candidate decisions without network or mutation authority."
     },
     {
       "id"= "eval.raw-json-output",

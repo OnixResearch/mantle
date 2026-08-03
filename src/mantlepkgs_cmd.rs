@@ -11,6 +11,15 @@
 // r[verify mantlepkgs_domains.functional_core]
 // r[impl mantlepkgs_impact.external_ci_boundary]
 // r[verify mantlepkgs_impact.external_ci_boundary]
+// machine-artifact-public: mantlepkgs.update-plan
+// r[impl mantlepkgs_updates.source_observations]
+// r[impl mantlepkgs_updates.preimage_bound_mutation]
+// r[impl mantlepkgs_updates.advisory_evidence]
+// r[impl mantlepkgs_updates.validation_evidence]
+// r[verify mantlepkgs_updates.source_observations]
+// r[verify mantlepkgs_updates.preimage_bound_mutation]
+// r[verify mantlepkgs_updates.advisory_evidence]
+// r[verify mantlepkgs_updates.validation_evidence]
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -32,6 +41,12 @@ use std::time::Instant;
 
 use clap::Subcommand;
 use crunch_build::ExecutionProfile;
+use mantlepkgs_core::ADVISORY_RESPONSE_OSV_SCHEMA;
+use mantlepkgs_core::ADVISORY_RESPONSE_REPOLOGY_SCHEMA;
+use mantlepkgs_core::AdvisoryFinding;
+use mantlepkgs_core::AdvisoryObservation;
+use mantlepkgs_core::AdvisoryService;
+use mantlepkgs_core::AppliedOutput;
 use mantlepkgs_core::ArtifactBinding;
 use mantlepkgs_core::ArtifactObservation;
 use mantlepkgs_core::CATALOG_JSON_PATH;
@@ -39,6 +54,7 @@ use mantlepkgs_core::CATALOG_NICKEL_PATH;
 use mantlepkgs_core::CORPUS_ROLE_CATALOG;
 use mantlepkgs_core::CatalogBlocker;
 use mantlepkgs_core::CatalogPlan;
+use mantlepkgs_core::CollectionFacts;
 use mantlepkgs_core::CoreFailure;
 use mantlepkgs_core::CorpusArtifactObservation;
 use mantlepkgs_core::DOMAIN_CLASS_CORE;
@@ -52,6 +68,8 @@ use mantlepkgs_core::ImpactComparisonPolicy;
 use mantlepkgs_core::ImpactSnapshot;
 use mantlepkgs_core::MantlepkgsCatalog;
 use mantlepkgs_core::MantlepkgsManifest;
+use mantlepkgs_core::MutationDocument;
+use mantlepkgs_core::ObservationStatus;
 use mantlepkgs_core::PACKAGE_INDEX_PATH;
 use mantlepkgs_core::PRODUCER_COMMAND_CLASS;
 use mantlepkgs_core::PRODUCER_RECEIPT_PATH;
@@ -69,8 +87,18 @@ use mantlepkgs_core::ROLE_SOURCE_INVENTORY;
 use mantlepkgs_core::ROLE_TRANSLATION_POLICY;
 use mantlepkgs_core::SHARED_GRAPH_PATH;
 use mantlepkgs_core::SOURCE_INVENTORY_PATH;
+use mantlepkgs_core::SourceCandidate;
+use mantlepkgs_core::SourceObservation;
 use mantlepkgs_core::SourceRequirementInventory;
 use mantlepkgs_core::TRANSLATION_POLICY_PATH;
+use mantlepkgs_core::UPDATE_ADVISORY_OBSERVATION_SCHEMA;
+use mantlepkgs_core::UPDATE_MUTATION_DOCUMENT_SCHEMA;
+use mantlepkgs_core::UPDATE_SOURCE_OBSERVATION_SCHEMA;
+use mantlepkgs_core::UpdateExecutionDisposition;
+use mantlepkgs_core::UpdatePlan;
+use mantlepkgs_core::UpdatePlanInput;
+use mantlepkgs_core::UpdatePolicy;
+use mantlepkgs_core::UpdateValidationEvidence;
 use mantlepkgs_core::V1DomainShardInput;
 use mantlepkgs_core::VALIDATION_OBSERVATION_SCHEMA;
 use mantlepkgs_core::ValidationObservation;
@@ -78,6 +106,8 @@ use mantlepkgs_core::ValidationRootPlan;
 use mantlepkgs_core::adapt_v1_catalog_to_domain_shard;
 use mantlepkgs_core::build_package_impact_report;
 use mantlepkgs_core::build_producer_receipt;
+use mantlepkgs_core::build_update_plan;
+use mantlepkgs_core::canonical_mutation_document_bytes;
 use mantlepkgs_core::compose_domain_catalog;
 use mantlepkgs_core::finalize_catalog;
 use mantlepkgs_core::lookup_catalog_package;
@@ -86,11 +116,16 @@ use mantlepkgs_core::normalize_manifest;
 use mantlepkgs_core::plan_catalog;
 use mantlepkgs_core::plan_validation_root;
 use mantlepkgs_core::producer_receipt_digest_blake3;
+use mantlepkgs_core::record_update_execution;
 use mantlepkgs_core::record_validation_observation;
 use mantlepkgs_core::render_catalog_nickel;
+use mantlepkgs_core::seal_advisory_observation;
 use mantlepkgs_core::seal_domain_manifest;
 use mantlepkgs_core::seal_external_corpus_evidence;
+use mantlepkgs_core::seal_source_observation;
+use mantlepkgs_core::seal_update_policy;
 use mantlepkgs_core::source_requirement_inventory;
+use mantlepkgs_core::update_plan_identity_blake3;
 use mantlepkgs_core::validate_catalog_artifacts;
 use mantlepkgs_core::validate_catalog_identity;
 use mantlepkgs_core::validate_external_corpus_evidence;
@@ -153,6 +188,17 @@ const MEBIBYTE_BYTES: u64 = KIBIBYTE_BYTES * KIBIBYTE_BYTES;
 const IMPACT_INPUT_BYTES_MAX: u64 = IMPACT_INPUT_MEBIBYTES_MAX * MEBIBYTE_BYTES;
 const IMPACT_ACTION_RESULT_REPORTS_MAX: u32 = 65_536;
 const IMPACT_ACTION_RESULT_REPORT_BYTES_MAX: u64 = IMPACT_INPUT_BYTES_MAX;
+const UPDATE_INPUT_BYTES_MAX: u64 = 64 * MEBIBYTE_BYTES;
+const UPDATE_DOCUMENT_BYTES_MAX: u64 = 16 * MEBIBYTE_BYTES;
+const UPDATE_EXECUTION_RECEIPT_FILE: &str = "update-execution-receipt.json";
+const UPDATE_STAGE_PREFIX: &str = ".mantle-update-stage-";
+const UPDATE_HTTP_USER_AGENT: &str = "mantlepkgs-update-observer/1";
+const UPDATE_HTTP_SUCCESS_STATUS_MIN: u16 = 200;
+const UPDATE_HTTP_SUCCESS_STATUS_MAX: u16 = 299;
+const UPDATE_HTTP_REDIRECT_STATUS_MIN: u16 = 300;
+const UPDATE_HTTP_REDIRECT_STATUS_MAX: u16 = 399;
+const UPDATE_DUPLICATE_WINDOW_SIZE: usize = 2;
+const UPDATE_DENIAL_GENERIC_REASON: &str = "update-execution-denied";
 const DOMAIN_SHARD_PACKAGE_LIMIT: u32 = 65_536;
 const DOMAIN_SHARD_ALIAS_LIMIT: u32 = 65_536;
 const DOMAIN_SHARD_ARTIFACT_LIMIT: u32 = 65_536;
@@ -375,6 +421,99 @@ pub(crate) enum MantlepkgsAction {
         #[arg(long)]
         out: PathBuf,
     },
+
+    /// Seal one typed update policy with its canonical BLAKE3 identity
+    UpdatePolicySeal {
+        #[arg(long)]
+        policy: PathBuf,
+
+        #[arg(long)]
+        out: PathBuf,
+    },
+
+    /// Record one bounded source response or explicit source failure
+    UpdateSourceObserve {
+        #[arg(long)]
+        policy: PathBuf,
+
+        #[arg(long, conflicts_with = "url")]
+        response: Option<PathBuf>,
+
+        #[arg(long, conflicts_with = "response")]
+        url: Option<String>,
+
+        #[arg(long, default_value = "success")]
+        status: String,
+
+        #[arg(long = "reason")]
+        reasons: Vec<String>,
+
+        #[arg(long)]
+        out: PathBuf,
+    },
+
+    /// Record one bounded OSV or Repology response or explicit failure
+    UpdateAdvisoryObserve {
+        #[arg(long)]
+        policy: PathBuf,
+
+        #[arg(long)]
+        service: String,
+
+        #[arg(long)]
+        version: String,
+
+        #[arg(long, conflicts_with = "url")]
+        response: Option<PathBuf>,
+
+        #[arg(long, conflicts_with = "response")]
+        url: Option<String>,
+
+        #[arg(long, default_value = "success")]
+        status: String,
+
+        #[arg(long = "reason")]
+        reasons: Vec<String>,
+
+        #[arg(long)]
+        out: PathBuf,
+    },
+
+    /// Replay saved observations and write one deterministic dry-run update plan
+    UpdatePlan {
+        #[arg(long)]
+        policy: PathBuf,
+
+        #[arg(long = "source-observation")]
+        source_observation: PathBuf,
+
+        #[arg(long = "advisory-observation")]
+        advisory_observations: Vec<PathBuf>,
+
+        #[arg(long = "validation-evidence")]
+        validation_evidence: PathBuf,
+
+        #[arg(long = "source-root")]
+        source_root: PathBuf,
+
+        #[arg(long)]
+        out: PathBuf,
+    },
+
+    /// Publish one immutable updated output tree after complete preimage validation
+    UpdateExecute {
+        #[arg(long)]
+        plan: PathBuf,
+
+        #[arg(long = "source-root")]
+        source_root: PathBuf,
+
+        #[arg(long = "output-root")]
+        output_root: PathBuf,
+
+        #[arg(long = "denial-receipt-out")]
+        denial_receipt_out: PathBuf,
+    },
 }
 
 pub(crate) struct MantlepkgsContext<'a> {
@@ -553,6 +692,71 @@ pub(crate) fn cmd_mantlepkgs(action: MantlepkgsAction, context: MantlepkgsContex
             output: &out,
             is_json: context.json,
         }),
+        MantlepkgsAction::UpdatePolicySeal { policy, out } => run_update_policy_seal(&policy, &out, context.json),
+        MantlepkgsAction::UpdateSourceObserve {
+            policy,
+            response,
+            url,
+            status,
+            reasons,
+            out,
+        } => run_update_source_observe(UpdateObserveRequest {
+            policy_path: &policy,
+            response_path: response.as_deref(),
+            url: url.as_deref(),
+            requested_status: &status,
+            reasons: &reasons,
+            output: &out,
+            is_json: context.json,
+        }),
+        MantlepkgsAction::UpdateAdvisoryObserve {
+            policy,
+            service,
+            version,
+            response,
+            url,
+            status,
+            reasons,
+            out,
+        } => run_update_advisory_observe(UpdateAdvisoryObserveRequest {
+            policy_path: &policy,
+            service: &service,
+            version: &version,
+            response_path: response.as_deref(),
+            url: url.as_deref(),
+            requested_status: &status,
+            reasons: &reasons,
+            output: &out,
+            is_json: context.json,
+        }),
+        MantlepkgsAction::UpdatePlan {
+            policy,
+            source_observation,
+            advisory_observations,
+            validation_evidence,
+            source_root,
+            out,
+        } => run_update_plan(UpdatePlanRequest {
+            policy_path: &policy,
+            source_observation_path: &source_observation,
+            advisory_observation_paths: &advisory_observations,
+            validation_evidence_path: &validation_evidence,
+            source_root: &source_root,
+            output: &out,
+            is_json: context.json,
+        }),
+        MantlepkgsAction::UpdateExecute {
+            plan,
+            source_root,
+            output_root,
+            denial_receipt_out,
+        } => run_update_execute(UpdateExecuteRequest {
+            plan_path: &plan,
+            source_root: &source_root,
+            output_root: &output_root,
+            denial_receipt_output: &denial_receipt_out,
+            is_json: context.json,
+        }),
     }
 }
 
@@ -577,6 +781,70 @@ struct ImpactRequest<'a> {
     action_result_report_paths: &'a [PathBuf],
     output: &'a Path,
     is_json: bool,
+}
+
+struct UpdateObserveRequest<'a> {
+    policy_path: &'a Path,
+    response_path: Option<&'a Path>,
+    url: Option<&'a str>,
+    requested_status: &'a str,
+    reasons: &'a [String],
+    output: &'a Path,
+    is_json: bool,
+}
+
+struct UpdateAdvisoryObserveRequest<'a> {
+    policy_path: &'a Path,
+    service: &'a str,
+    version: &'a str,
+    response_path: Option<&'a Path>,
+    url: Option<&'a str>,
+    requested_status: &'a str,
+    reasons: &'a [String],
+    output: &'a Path,
+    is_json: bool,
+}
+
+struct UpdatePlanRequest<'a> {
+    policy_path: &'a Path,
+    source_observation_path: &'a Path,
+    advisory_observation_paths: &'a [PathBuf],
+    validation_evidence_path: &'a Path,
+    source_root: &'a Path,
+    output: &'a Path,
+    is_json: bool,
+}
+
+struct UpdateExecuteRequest<'a> {
+    plan_path: &'a Path,
+    source_root: &'a Path,
+    output_root: &'a Path,
+    denial_receipt_output: &'a Path,
+    is_json: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SourceResponsePayload {
+    schema: String,
+    candidates: Vec<SourceCandidate>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AdvisoryResponsePayload {
+    schema: String,
+    package_coordinate: String,
+    version: String,
+    findings: Vec<AdvisoryFinding>,
+}
+
+struct ResponseAcquisition {
+    status: ObservationStatus,
+    bytes: Option<Vec<u8>>,
+    response_identity_blake3: Option<String>,
+    reason_codes: Vec<String>,
+    collection: CollectionFacts,
 }
 
 struct ValidationBuildRequest<'a> {
@@ -932,6 +1200,692 @@ fn action_result_admission_error(action_ref: &str, selected_result_ref: impl AsR
         action_ref,
         selected_result_ref.as_ref()
     ))
+}
+
+fn run_update_policy_seal(policy_path: &Path, output: &Path, is_json: bool) -> Result<(), RunError> {
+    if policy_path == output {
+        return Err(RunError::Eval("update policy output must differ from its input".into()));
+    }
+    let policy = read_json_bounded::<UpdatePolicy>(policy_path, UPDATE_INPUT_BYTES_MAX)?;
+    let sealed = seal_update_policy(&policy).map_err(core_eval_error)?;
+    write_json_atomically(output, &sealed, "sealed Mantlepkgs update policy")?;
+    if is_json {
+        println!(
+            "{}",
+            serde_json::to_string(&sealed)
+                .map_err(|error| RunError::Internal(format!("serializing sealed update policy: {error}")))?
+        );
+    } else {
+        println!(
+            "mantlepkgs update policy sealed: identity={} path={}",
+            sealed.policy_identity_blake3,
+            output.display()
+        );
+    }
+    Ok(())
+}
+
+fn run_update_source_observe(request: UpdateObserveRequest<'_>) -> Result<(), RunError> {
+    reject_update_observation_output_collision(request.response_path, request.output)?;
+    let policy = read_sealed_update_policy(request.policy_path)?;
+    let expected_url = configured_source_url(&policy);
+    let mut acquisition = acquire_update_response(
+        &policy,
+        request.response_path,
+        request.url,
+        request.requested_status,
+        request.reasons,
+        &expected_url,
+    )?;
+    let candidates = parse_source_response(&policy, &mut acquisition);
+    let observation = seal_source_observation(&policy, &SourceObservation {
+        schema: UPDATE_SOURCE_OBSERVATION_SCHEMA.into(),
+        observation_identity_blake3: String::new(),
+        policy_identity_blake3: policy.policy_identity_blake3.clone(),
+        adapter_identity: policy.adapter_identity.clone(),
+        source_kind: policy.source_kind,
+        query: policy.source_query.clone(),
+        source_authority: policy.source_authority.clone(),
+        response_schema: policy.response_schema.clone(),
+        response_identity_blake3: acquisition.response_identity_blake3,
+        status: acquisition.status,
+        candidates,
+        reason_codes: acquisition.reason_codes,
+        collection: acquisition.collection,
+    })
+    .map_err(core_eval_error)?;
+    write_json_atomically(request.output, &observation, "Mantlepkgs source observation")?;
+    print_update_observation_result(
+        "source",
+        &observation.observation_identity_blake3,
+        observation.status,
+        request.output,
+        request.is_json.then_some(&observation),
+    )
+}
+
+fn run_update_advisory_observe(request: UpdateAdvisoryObserveRequest<'_>) -> Result<(), RunError> {
+    reject_update_observation_output_collision(request.response_path, request.output)?;
+    let policy = read_sealed_update_policy(request.policy_path)?;
+    let service = parse_advisory_service(request.service)?;
+    let requirement = match service {
+        AdvisoryService::Osv => &policy.advisory_policy.osv,
+        AdvisoryService::Repology => &policy.advisory_policy.repology,
+    };
+    let expected_url = requirement.query.clone();
+    let mut acquisition = acquire_update_response(
+        &policy,
+        request.response_path,
+        request.url,
+        request.requested_status,
+        request.reasons,
+        &expected_url,
+    )?;
+    let findings = parse_advisory_response(service, &requirement.package_coordinate, request.version, &mut acquisition);
+    let observation = seal_advisory_observation(&policy, &AdvisoryObservation {
+        schema: UPDATE_ADVISORY_OBSERVATION_SCHEMA.into(),
+        observation_identity_blake3: String::new(),
+        policy_identity_blake3: policy.policy_identity_blake3.clone(),
+        service,
+        service_identity: requirement.service_identity.clone(),
+        query: requirement.query.clone(),
+        package_coordinate: requirement.package_coordinate.clone(),
+        version: request.version.into(),
+        response_schema: match service {
+            AdvisoryService::Osv => ADVISORY_RESPONSE_OSV_SCHEMA.into(),
+            AdvisoryService::Repology => ADVISORY_RESPONSE_REPOLOGY_SCHEMA.into(),
+        },
+        response_identity_blake3: acquisition.response_identity_blake3,
+        status: acquisition.status,
+        findings,
+        reason_codes: acquisition.reason_codes,
+        collection: acquisition.collection,
+    })
+    .map_err(core_eval_error)?;
+    write_json_atomically(request.output, &observation, "Mantlepkgs advisory observation")?;
+    print_update_observation_result(
+        "advisory",
+        &observation.observation_identity_blake3,
+        observation.status,
+        request.output,
+        request.is_json.then_some(&observation),
+    )
+}
+
+fn run_update_plan(request: UpdatePlanRequest<'_>) -> Result<(), RunError> {
+    reject_update_plan_output_collisions(&request)?;
+    let policy = read_sealed_update_policy(request.policy_path)?;
+    let source_observation =
+        read_json_bounded::<SourceObservation>(request.source_observation_path, UPDATE_INPUT_BYTES_MAX)?;
+    let advisory_observations = request
+        .advisory_observation_paths
+        .iter()
+        .map(|path| read_json_bounded::<AdvisoryObservation>(path, UPDATE_INPUT_BYTES_MAX))
+        .collect::<Result<Vec<_>, _>>()?;
+    let validation_evidence =
+        read_json_bounded::<UpdateValidationEvidence>(request.validation_evidence_path, UPDATE_INPUT_BYTES_MAX)?;
+    let mutation_document = observe_update_mutation_document(&policy, request.source_root)?;
+    let plan = build_update_plan(UpdatePlanInput {
+        policy: &policy,
+        source_observation: &source_observation,
+        advisory_observations: &advisory_observations,
+        validation_evidence: &validation_evidence,
+        mutation_documents: &[mutation_document],
+    })
+    .map_err(core_eval_error)?;
+    write_json_atomically(request.output, &plan, "Mantlepkgs update plan")?;
+    if request.is_json {
+        println!(
+            "{}",
+            serde_json::to_string(&plan)
+                .map_err(|error| RunError::Internal(format!("serializing Mantlepkgs update plan: {error}")))?
+        );
+    } else {
+        println!(
+            "mantlepkgs update plan written: identity={} status={:?} effects={} path={}",
+            plan.plan_identity_blake3,
+            plan.proposal_status,
+            plan.effects.len(),
+            request.output.display()
+        );
+    }
+    Ok(())
+}
+
+fn run_update_execute(request: UpdateExecuteRequest<'_>) -> Result<(), RunError> {
+    reject_update_execution_path_collisions(&request)?;
+    let plan = read_json_bounded::<UpdatePlan>(request.plan_path, UPDATE_INPUT_BYTES_MAX)?;
+    let expected_identity = update_plan_identity_blake3(&plan).map_err(core_eval_error)?;
+    if plan.plan_identity_blake3 != expected_identity {
+        return Err(RunError::Eval("update-identity-mismatch plan.plan_identity_blake3".into()));
+    }
+    let result = execute_update_plan(&plan, &request);
+    match result {
+        Ok(receipt) => {
+            if request.is_json {
+                println!(
+                    "{}",
+                    serde_json::to_string(&receipt).map_err(|error| {
+                        RunError::Internal(format!("serializing Mantlepkgs update execution receipt: {error}"))
+                    })?
+                );
+            } else {
+                println!(
+                    "mantlepkgs update tree published: receipt={} path={}",
+                    receipt.receipt_identity_blake3,
+                    request.output_root.display()
+                );
+            }
+            Ok(())
+        }
+        Err(error) => {
+            let denial = record_update_execution(
+                &plan,
+                UpdateExecutionDisposition::Denied,
+                None,
+                Vec::new(),
+                update_denial_reason_codes(&error),
+            )
+            .map_err(core_eval_error)?;
+            write_json_atomically(request.denial_receipt_output, &denial, "Mantlepkgs update denial receipt")?;
+            Err(error)
+        }
+    }
+}
+
+fn update_denial_reason_codes(error: &RunError) -> Vec<String> {
+    let mut reasons = vec![UPDATE_DENIAL_GENERIC_REASON.into()];
+    let message = error.message();
+    let code = message.split_ascii_whitespace().next().unwrap_or_default();
+    if is_stable_update_denial_code(code) {
+        reasons.push(code.into());
+    }
+    reasons.sort();
+    reasons
+}
+
+fn is_stable_update_denial_code(code: &str) -> bool {
+    if !code.starts_with("update-") {
+        return false;
+    }
+    if code == UPDATE_DENIAL_GENERIC_REASON {
+        return false;
+    }
+    code.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
+fn execute_update_plan(
+    plan: &UpdatePlan,
+    request: &UpdateExecuteRequest<'_>,
+) -> Result<mantlepkgs_core::UpdateExecutionReceipt, RunError> {
+    if plan.selection.selected.is_none() || plan.effects.is_empty() {
+        return Err(RunError::Eval("update plan has no selected mutation effects".into()));
+    }
+    reject_symlink_root(request.source_root)?;
+    let output_parent = request
+        .output_root
+        .parent()
+        .ok_or_else(|| RunError::Eval("update output root has no parent".into()))?;
+    reject_symlink_root(output_parent)?;
+    if request.output_root.exists() {
+        return Err(RunError::Eval("update output root already exists".into()));
+    }
+    let stage = update_stage_path(request.output_root)?;
+    if stage.exists() {
+        return Err(RunError::Eval(format!("update stage already exists: {}", stage.display())));
+    }
+    create_private_update_stage(&stage)?;
+    let execution = write_update_effects(plan, request.source_root, &stage).and_then(|outputs| {
+        let receipt = record_update_execution(
+            plan,
+            UpdateExecutionDisposition::Applied,
+            Some(request.output_root.display().to_string()),
+            outputs,
+            Vec::new(),
+        )
+        .map_err(core_eval_error)?;
+        write_update_json_create_new(&stage.join(UPDATE_EXECUTION_RECEIPT_FILE), &receipt)?;
+        sync_directory(&stage)?;
+        rename_path_no_replace(&stage, request.output_root)
+            .map_err(|error| RunError::Internal(format!("publishing update output tree: {error}")))?;
+        sync_directory(output_parent)?;
+        Ok(receipt)
+    });
+    if execution.is_err() && stage.exists() {
+        fs::remove_dir_all(&stage).map_err(|error| {
+            RunError::Internal(format!("removing failed update stage {}: {error}", stage.display()))
+        })?;
+    }
+    execution
+}
+
+fn write_update_effects(plan: &UpdatePlan, source_root: &Path, stage: &Path) -> Result<Vec<AppliedOutput>, RunError> {
+    let mut outputs = Vec::with_capacity(plan.effects.len());
+    for effect in &plan.effects {
+        let source = secure_update_source_path(source_root, &effect.relative_path)?;
+        let input = read_bounded(&source, UPDATE_DOCUMENT_BYTES_MAX)?;
+        let input_digest = blake3::hash(&input).to_hex().to_string();
+        if input_digest != effect.input_digest_blake3 {
+            return Err(RunError::Eval(format!("update-stale-preimage {}", effect.relative_path)));
+        }
+        let input_document = deserialize_json::<serde_json::Value>(&input, &source.display().to_string())?;
+        validate_update_effect_old_values(effect, &input_document)?;
+        let output = canonical_mutation_document_bytes(&effect.output_document).map_err(core_eval_error)?;
+        let output_digest = blake3::hash(&output).to_hex().to_string();
+        if output_digest != effect.output_digest_blake3 {
+            return Err(RunError::Eval(format!("update-output-digest-mismatch {}", effect.relative_path)));
+        }
+        let target = stage.join(&effect.relative_path);
+        let parent = target.parent().ok_or_else(|| RunError::Eval("update target has no parent".into()))?;
+        fs::create_dir_all(parent).map_err(|error| {
+            RunError::Internal(format!("creating update stage directory {}: {error}", parent.display()))
+        })?;
+        write_bytes_create_new(&target, &output)?;
+        outputs.push(AppliedOutput {
+            relative_path: effect.relative_path.clone(),
+            output_digest_blake3: output_digest,
+        });
+    }
+    outputs.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    Ok(outputs)
+}
+
+fn validate_update_effect_old_values(
+    effect: &mantlepkgs_core::DocumentMutationEffect,
+    document: &serde_json::Value,
+) -> Result<(), RunError> {
+    let mut pointers = BTreeSet::new();
+    for edit in &effect.edits {
+        if !pointers.insert(edit.field_pointer.as_str()) {
+            return Err(RunError::Eval(format!("update-duplicate-field {}", edit.field_pointer)));
+        }
+        let observed = document
+            .pointer(&edit.field_pointer)
+            .ok_or_else(|| RunError::Eval(format!("update-field-missing {}", edit.field_pointer)))?;
+        if observed != &edit.old_value {
+            return Err(RunError::Eval(format!("update-old-value-mismatch {}", edit.field_pointer)));
+        }
+    }
+    Ok(())
+}
+
+fn observe_update_mutation_document(policy: &UpdatePolicy, source_root: &Path) -> Result<MutationDocument, RunError> {
+    reject_symlink_root(source_root)?;
+    let source = secure_update_source_path(source_root, &policy.mutation.relative_path)?;
+    let bytes = read_bounded(&source, policy.limits.max_document_bytes)?;
+    let input_bytes = u64::try_from(bytes.len())
+        .map_err(|_| RunError::Eval("update mutation document byte count exceeds u64".into()))?;
+    let document = deserialize_json::<serde_json::Value>(&bytes, &source.display().to_string())?;
+    Ok(MutationDocument {
+        schema: UPDATE_MUTATION_DOCUMENT_SCHEMA.into(),
+        relative_path: policy.mutation.relative_path.clone(),
+        input_bytes,
+        input_digest_blake3: blake3::hash(&bytes).to_hex().to_string(),
+        document,
+    })
+}
+
+fn secure_update_source_path(root: &Path, relative: &str) -> Result<PathBuf, RunError> {
+    let relative_path = Path::new(relative);
+    if relative_path.is_absolute()
+        || relative_path.components().any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err(RunError::Eval(format!("update-unsafe-path {relative}")));
+    }
+    let mut current = root.to_path_buf();
+    for component in relative_path.components() {
+        let Component::Normal(name) = component else {
+            return Err(RunError::Eval(format!("update-unsafe-path {relative}")));
+        };
+        current.push(name);
+        let metadata = fs::symlink_metadata(&current)
+            .map_err(|error| RunError::Eval(format!("reading update source {}: {error}", current.display())))?;
+        if metadata.file_type().is_symlink() {
+            return Err(RunError::Eval(format!("update-symlink-forbidden {}", current.display())));
+        }
+    }
+    let metadata = fs::metadata(&current)
+        .map_err(|error| RunError::Eval(format!("reading update source {}: {error}", current.display())))?;
+    if !metadata.is_file() {
+        return Err(RunError::Eval(format!("update-source-not-regular {}", current.display())));
+    }
+    Ok(current)
+}
+
+fn read_sealed_update_policy(path: &Path) -> Result<UpdatePolicy, RunError> {
+    let policy = read_json_bounded::<UpdatePolicy>(path, UPDATE_INPUT_BYTES_MAX)?;
+    let sealed = seal_update_policy(&policy).map_err(core_eval_error)?;
+    if policy != sealed {
+        return Err(RunError::Eval("update-identity-mismatch policy.policy_identity_blake3".into()));
+    }
+    Ok(policy)
+}
+
+fn acquire_update_response(
+    policy: &UpdatePolicy,
+    response_path: Option<&Path>,
+    url: Option<&str>,
+    requested_status: &str,
+    reasons: &[String],
+    expected_url: &str,
+) -> Result<ResponseAcquisition, RunError> {
+    let status = parse_observation_status(requested_status)?;
+    if status != ObservationStatus::Success {
+        if response_path.is_some() || url.is_some() {
+            return Err(RunError::Eval(
+                "explicit unavailable or failed observation cannot include a response input".into(),
+            ));
+        }
+        return Ok(ResponseAcquisition {
+            status,
+            bytes: None,
+            response_identity_blake3: None,
+            reason_codes: reasons.to_vec(),
+            collection: CollectionFacts {
+                response_bytes: 0,
+                redirect_count: 0,
+                retry_count: 0,
+                elapsed_millis: 0,
+            },
+        });
+    }
+    if !reasons.is_empty() {
+        return Err(RunError::Eval("successful observation cannot include failure reasons".into()));
+    }
+    match (response_path, url) {
+        (Some(path), None) => acquire_saved_update_response(path, policy.limits.max_response_bytes),
+        (None, Some(url)) => acquire_live_update_response(policy, url, expected_url),
+        _ => Err(RunError::Eval("successful observation requires exactly one --response or --url input".into())),
+    }
+}
+
+fn acquire_saved_update_response(path: &Path, limit: u64) -> Result<ResponseAcquisition, RunError> {
+    const SAVED_REPLAY_ELAPSED_MILLIS: u64 = 0;
+    match read_bounded(path, limit) {
+        Ok(bytes) => Ok(successful_acquisition(bytes, SAVED_REPLAY_ELAPSED_MILLIS)),
+        Err(_) => Ok(failed_acquisition(
+            ObservationStatus::Failed,
+            "saved-response-read-failed",
+            SAVED_REPLAY_ELAPSED_MILLIS,
+        )),
+    }
+}
+
+fn acquire_live_update_response(
+    policy: &UpdatePolicy,
+    url: &str,
+    expected_url: &str,
+) -> Result<ResponseAcquisition, RunError> {
+    if url != expected_url || !url.starts_with("https://") {
+        return Err(RunError::Eval("update URL differs from configured HTTPS query authority".into()));
+    }
+    let started = Instant::now();
+    let agent = ureq::Agent::config_builder()
+        .proxy(None)
+        .max_redirects(0)
+        .http_status_as_error(false)
+        .timeout_global(Some(Duration::from_millis(policy.limits.max_elapsed_millis)))
+        .timeout_connect(Some(Duration::from_millis(policy.limits.max_elapsed_millis)))
+        .build()
+        .new_agent();
+    let response = agent.get(url).header("user-agent", UPDATE_HTTP_USER_AGENT).call();
+    let elapsed_millis = elapsed_millis_bounded(started, policy.limits.max_elapsed_millis);
+    let Ok(response) = response else {
+        return Ok(failed_acquisition(ObservationStatus::Unavailable, "transport-unavailable", elapsed_millis));
+    };
+    let status = response.status().as_u16();
+    let body_limit = policy
+        .limits
+        .max_response_bytes
+        .checked_add(1)
+        .ok_or_else(|| RunError::Eval("update response byte limit overflow".into()))?;
+    let mut bytes = Vec::new();
+    let read = response.into_body().with_config().limit(body_limit).reader().read_to_end(&mut bytes);
+    if read.is_err() || u64::try_from(bytes.len()).unwrap_or(u64::MAX) > policy.limits.max_response_bytes {
+        return Ok(failed_acquisition(ObservationStatus::Failed, "response-byte-limit-exceeded", elapsed_millis));
+    }
+    Ok(classify_update_http_response(status, bytes, elapsed_millis))
+}
+
+fn classify_update_http_response(status: u16, bytes: Vec<u8>, elapsed_millis: u64) -> ResponseAcquisition {
+    if (UPDATE_HTTP_REDIRECT_STATUS_MIN..=UPDATE_HTTP_REDIRECT_STATUS_MAX).contains(&status) {
+        return failed_acquisition(ObservationStatus::Failed, "redirect-forbidden", elapsed_millis);
+    }
+    if !(UPDATE_HTTP_SUCCESS_STATUS_MIN..=UPDATE_HTTP_SUCCESS_STATUS_MAX).contains(&status) {
+        let mut acquisition = successful_acquisition(bytes, elapsed_millis);
+        acquisition.status = ObservationStatus::Failed;
+        acquisition.reason_codes = vec!["http-status-invalid".into()];
+        return acquisition;
+    }
+    successful_acquisition(bytes, elapsed_millis)
+}
+
+fn successful_acquisition(bytes: Vec<u8>, elapsed_millis: u64) -> ResponseAcquisition {
+    let response_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    let identity = blake3::hash(&bytes).to_hex().to_string();
+    ResponseAcquisition {
+        status: ObservationStatus::Success,
+        bytes: Some(bytes),
+        response_identity_blake3: Some(identity),
+        reason_codes: Vec::new(),
+        collection: CollectionFacts {
+            response_bytes,
+            redirect_count: 0,
+            retry_count: 0,
+            elapsed_millis,
+        },
+    }
+}
+
+fn failed_acquisition(
+    status: ObservationStatus,
+    reason: impl Into<String>,
+    elapsed_millis: u64,
+) -> ResponseAcquisition {
+    ResponseAcquisition {
+        status,
+        bytes: None,
+        response_identity_blake3: None,
+        reason_codes: vec![reason.into()],
+        collection: CollectionFacts {
+            response_bytes: 0,
+            redirect_count: 0,
+            retry_count: 0,
+            elapsed_millis,
+        },
+    }
+}
+
+fn parse_source_response(policy: &UpdatePolicy, acquisition: &mut ResponseAcquisition) -> Vec<SourceCandidate> {
+    if acquisition.status != ObservationStatus::Success {
+        return Vec::new();
+    }
+    let parsed = acquisition.bytes.as_deref().ok_or_else(|| "response-body-missing".to_string()).and_then(|bytes| {
+        serde_json::from_slice::<SourceResponsePayload>(bytes).map_err(|_| "response-schema-invalid".into())
+    });
+    match parsed {
+        Ok(payload) if payload.schema == policy.response_schema => payload.candidates,
+        Ok(_) => {
+            mark_acquisition_failed(acquisition, "response-schema-mismatch");
+            Vec::new()
+        }
+        Err(reason) => {
+            mark_acquisition_failed(acquisition, reason);
+            Vec::new()
+        }
+    }
+}
+
+fn parse_advisory_response(
+    service: AdvisoryService,
+    expected_package_coordinate: &str,
+    expected_version: &str,
+    acquisition: &mut ResponseAcquisition,
+) -> Vec<AdvisoryFinding> {
+    if acquisition.status != ObservationStatus::Success {
+        return Vec::new();
+    }
+    let expected_schema = match service {
+        AdvisoryService::Osv => ADVISORY_RESPONSE_OSV_SCHEMA,
+        AdvisoryService::Repology => ADVISORY_RESPONSE_REPOLOGY_SCHEMA,
+    };
+    let parsed = acquisition.bytes.as_deref().ok_or_else(|| "response-body-missing".to_string()).and_then(|bytes| {
+        serde_json::from_slice::<AdvisoryResponsePayload>(bytes).map_err(|_| "response-schema-invalid".into())
+    });
+    match parsed {
+        Ok(payload) if payload.schema != expected_schema => {
+            mark_acquisition_failed(acquisition, "response-schema-mismatch");
+            Vec::new()
+        }
+        Ok(payload) if payload.package_coordinate != expected_package_coordinate => {
+            mark_acquisition_failed(acquisition, "advisory-package-coordinate-mismatch");
+            Vec::new()
+        }
+        Ok(payload) if payload.version != expected_version => {
+            mark_acquisition_failed(acquisition, "advisory-version-mismatch");
+            Vec::new()
+        }
+        Ok(mut payload) => {
+            payload.findings.sort();
+            if payload.findings.windows(UPDATE_DUPLICATE_WINDOW_SIZE).any(|window| window.first() == window.last()) {
+                mark_acquisition_failed(acquisition, "advisory-finding-duplicate");
+                Vec::new()
+            } else {
+                payload.findings
+            }
+        }
+        Err(reason) => {
+            mark_acquisition_failed(acquisition, reason);
+            Vec::new()
+        }
+    }
+}
+
+fn mark_acquisition_failed(acquisition: &mut ResponseAcquisition, reason: impl Into<String>) {
+    acquisition.status = ObservationStatus::Failed;
+    acquisition.reason_codes = vec![reason.into()];
+    acquisition.bytes = None;
+}
+
+fn parse_observation_status(value: &str) -> Result<ObservationStatus, RunError> {
+    match value {
+        "success" => Ok(ObservationStatus::Success),
+        "unavailable" => Ok(ObservationStatus::Unavailable),
+        "failed" => Ok(ObservationStatus::Failed),
+        _ => Err(RunError::Eval(format!("unsupported update observation status: {value}"))),
+    }
+}
+
+fn parse_advisory_service(value: &str) -> Result<AdvisoryService, RunError> {
+    match value {
+        "osv" => Ok(AdvisoryService::Osv),
+        "repology" => Ok(AdvisoryService::Repology),
+        _ => Err(RunError::Eval(format!("unsupported advisory service: {value}"))),
+    }
+}
+
+fn configured_source_url(policy: &UpdatePolicy) -> String {
+    format!("{}/{}", policy.source_authority, policy.source_query.trim_start_matches('/'))
+}
+
+fn reject_update_observation_output_collision(response: Option<&Path>, output: &Path) -> Result<(), RunError> {
+    if response == Some(output) {
+        return Err(RunError::Eval("update observation output must differ from its response input".into()));
+    }
+    Ok(())
+}
+
+fn reject_update_plan_output_collisions(request: &UpdatePlanRequest<'_>) -> Result<(), RunError> {
+    let primary_collision = request.output == request.policy_path
+        || request.output == request.source_observation_path
+        || request.output == request.validation_evidence_path;
+    let advisory_collision = request.advisory_observation_paths.iter().any(|path| path == request.output);
+    if primary_collision || advisory_collision {
+        return Err(RunError::Eval("update plan output must differ from every input artifact".into()));
+    }
+    Ok(())
+}
+
+fn reject_update_execution_path_collisions(request: &UpdateExecuteRequest<'_>) -> Result<(), RunError> {
+    let output_overlaps_source =
+        request.output_root.starts_with(request.source_root) || request.source_root.starts_with(request.output_root);
+    if output_overlaps_source
+        || request.denial_receipt_output == request.plan_path
+        || request.denial_receipt_output.starts_with(request.output_root)
+        || request.denial_receipt_output.starts_with(request.source_root)
+    {
+        return Err(RunError::Eval("update execution paths conflict".into()));
+    }
+    Ok(())
+}
+
+fn update_stage_path(output: &Path) -> Result<PathBuf, RunError> {
+    let parent = output.parent().ok_or_else(|| RunError::Eval("update output root has no parent".into()))?;
+    let name = output
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| RunError::Eval("update output root has no UTF-8 name".into()))?;
+    Ok(parent.join(format!("{UPDATE_STAGE_PREFIX}{name}-{}", std::process::id())))
+}
+
+fn create_private_update_stage(stage: &Path) -> Result<(), RunError> {
+    fs::create_dir(stage)
+        .map_err(|error| RunError::Internal(format!("creating private update stage {}: {error}", stage.display())))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        const PRIVATE_DIRECTORY_MODE: u32 = 0o700;
+        fs::set_permissions(stage, fs::Permissions::from_mode(PRIVATE_DIRECTORY_MODE)).map_err(|error| {
+            RunError::Internal(format!("setting private update stage permissions {}: {error}", stage.display()))
+        })?;
+    }
+    Ok(())
+}
+
+fn write_bytes_create_new(path: &Path, bytes: &[u8]) -> Result<(), RunError> {
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|error| RunError::Internal(format!("creating update output {}: {error}", path.display())))?;
+    file.write_all(bytes)
+        .map_err(|error| RunError::Internal(format!("writing update output {}: {error}", path.display())))?;
+    file.sync_all()
+        .map_err(|error| RunError::Internal(format!("syncing update output {}: {error}", path.display())))?;
+    Ok(())
+}
+
+fn write_update_json_create_new(path: &Path, value: &impl Serialize) -> Result<(), RunError> {
+    let mut bytes = serde_json::to_vec_pretty(value)
+        .map_err(|error| RunError::Internal(format!("serializing update receipt: {error}")))?;
+    bytes.push(b'\n');
+    write_bytes_create_new(path, &bytes)
+}
+
+fn elapsed_millis_bounded(started: Instant, maximum: u64) -> u64 {
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX).min(maximum)
+}
+
+fn print_update_observation_result<T: Serialize>(
+    kind: &str,
+    identity: &str,
+    status: ObservationStatus,
+    output: &Path,
+    json_value: Option<&T>,
+) -> Result<(), RunError> {
+    if let Some(value) = json_value {
+        println!(
+            "{}",
+            serde_json::to_string(value)
+                .map_err(|error| RunError::Internal(format!("serializing Mantlepkgs {kind} observation: {error}")))?
+        );
+    } else {
+        println!(
+            "mantlepkgs {kind} observation written: identity={identity} status={status:?} path={}",
+            output.display()
+        );
+    }
+    Ok(())
 }
 
 fn observed_corpus_catalog_packages(role: &str, bytes: &[u8]) -> Result<Vec<String>, RunError> {
@@ -2241,6 +3195,16 @@ mod tests {
     const IMPACT_FIXTURE_ITEM_LIMIT: u32 = 8;
     const IMPACT_FIXTURE_DIAGNOSTIC_LIMIT: u32 = 16;
     const IMPACT_FIXTURE_REPORT_BYTES: u64 = 1_048_576;
+    const UPDATE_FIXTURE_LIMIT: u32 = 64;
+    const UPDATE_FIXTURE_BYTES: u64 = 1_048_576;
+    const UPDATE_FIXTURE_MILLIS: u64 = 30_000;
+    const UPDATE_FIXTURE_MAX_COMPONENT: u64 = 9_999;
+    const UPDATE_FIXTURE_COMPONENT_COUNT: u8 = 3;
+    const UPDATE_TINY_RESPONSE_BYTES: u64 = 32;
+    const UPDATE_OVERSIZED_RESPONSE_BYTES: usize = 33;
+    const UPDATE_FIXTURE_HTTP_SUCCESS_STATUS: u16 = 200;
+    const UPDATE_FIXTURE_HTTP_REDIRECT_STATUS: u16 = 302;
+    const UPDATE_FIXTURE_HTTP_ERROR_STATUS: u16 = 500;
     const OTHER_DIGEST: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const IMPACT_ACTION_REF: &str = "mantle-action://blake3/impact-fixture";
     const IMPACT_RESULT_REF: &str = "mantle-action-result://blake3/impact-fixture";
@@ -2250,6 +3214,224 @@ mod tests {
     const TINY_CAPTURE_LIMIT: usize = 1;
     #[cfg(unix)]
     const NON_UTF8_PATH_BYTE: u8 = 0xff;
+
+    fn update_policy_fixture() -> UpdatePolicy {
+        seal_update_policy(&UpdatePolicy {
+            schema: mantlepkgs_core::UPDATE_POLICY_SCHEMA.into(),
+            policy_identity_blake3: String::new(),
+            migration: mantlepkgs_core::UpdatePolicyMigration {
+                source_schema: None,
+                source_policy_identity_blake3: None,
+                reviewed: false,
+            },
+            package: mantlepkgs_core::ImpactPackageKey {
+                public_selector: "hello".into(),
+            },
+            system: "x86_64-linux".into(),
+            source_kind: mantlepkgs_core::UpdateSourceKind::GitTags,
+            adapter_identity: "mantle-git-tags-v1".into(),
+            source_authority: "https://api.example.invalid".into(),
+            source_query: "/repos/example/hello/tags".into(),
+            response_schema: mantlepkgs_core::SOURCE_RESPONSE_GIT_TAGS_SCHEMA.into(),
+            current_version: "v1.2.3".into(),
+            current_source_ref: "refs/tags/v1.2.3".into(),
+            current_source_identity_blake3: DIGEST.into(),
+            version_rules: mantlepkgs_core::VersionRules {
+                required_prefix: "v".into(),
+                component_count: UPDATE_FIXTURE_COMPONENT_COUNT,
+                max_component: UPDATE_FIXTURE_MAX_COMPONENT,
+                minimum_version: Some("v1.0.0".into()),
+                maximum_version: Some("v2.0.0".into()),
+                ignored_versions: Vec::new(),
+                allow_prerelease: false,
+                odd_minor_is_development: false,
+                high_patch_development_from: None,
+            },
+            patch_policy: mantlepkgs_core::PatchPolicy {
+                allow_major: false,
+                allow_minor: true,
+                allow_patch: true,
+            },
+            advisory_policy: mantlepkgs_core::AdvisoryPolicy {
+                osv: mantlepkgs_core::AdvisoryRequirement {
+                    mode: mantlepkgs_core::AdvisoryRequirementMode::Required,
+                    service_identity: "osv-v1".into(),
+                    query: "https://api.osv.dev/v1/query".into(),
+                    package_coordinate: "pkg:generic/hello".into(),
+                },
+                repology: mantlepkgs_core::AdvisoryRequirement {
+                    mode: mantlepkgs_core::AdvisoryRequirementMode::Required,
+                    service_identity: "repology-v1".into(),
+                    query: "https://repology.org/api/v1/project/hello".into(),
+                    package_coordinate: "hello".into(),
+                },
+                block_on_findings: true,
+            },
+            validation_policy: mantlepkgs_core::UpdateValidationPolicy {
+                require_catalog: true,
+                require_build_observations: true,
+                require_validation_roots: true,
+                require_impact_report: true,
+            },
+            mutation: mantlepkgs_core::UpdateMutationTarget {
+                relative_path: "locks/hello.json".into(),
+                version_pointer: "/version".into(),
+                source_ref_pointer: "/source/ref".into(),
+                source_identity_pointer: "/source/identity_blake3".into(),
+            },
+            allow_ambient_credentials: false,
+            allow_ambient_proxy: false,
+            limits: mantlepkgs_core::UpdateLimits {
+                max_response_bytes: UPDATE_FIXTURE_BYTES,
+                max_document_bytes: UPDATE_FIXTURE_BYTES,
+                max_plan_bytes: UPDATE_FIXTURE_BYTES,
+                max_candidates: UPDATE_FIXTURE_LIMIT,
+                max_findings: UPDATE_FIXTURE_LIMIT,
+                max_effects: UPDATE_FIXTURE_LIMIT,
+                max_diagnostics: UPDATE_FIXTURE_LIMIT,
+                max_artifacts: UPDATE_FIXTURE_LIMIT,
+                max_redirects: 0,
+                max_retries: 0,
+                max_elapsed_millis: UPDATE_FIXTURE_MILLIS,
+            },
+        })
+        .unwrap()
+    }
+
+    fn update_validation_fixture() -> UpdateValidationEvidence {
+        let success = || mantlepkgs_core::LinkedEvidence {
+            status: mantlepkgs_core::EvidenceStatus::Success,
+            artifact_identity_blake3: vec![DIGEST.into()],
+            reason_codes: Vec::new(),
+        };
+        UpdateValidationEvidence {
+            schema: mantlepkgs_core::UPDATE_VALIDATION_EVIDENCE_SCHEMA.into(),
+            candidate_version: "v1.3.0".into(),
+            candidate_source_identity_blake3: OTHER_DIGEST.into(),
+            catalog: success(),
+            build_observations: success(),
+            validation_roots: success(),
+            impact_report: success(),
+        }
+    }
+
+    fn write_update_fixture_inputs(root: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf, PathBuf) {
+        let policy_path = root.join("policy.json");
+        let source_response = root.join("source-response.json");
+        let osv_response = root.join("osv-response.json");
+        let repology_response = root.join("repology-response.json");
+        let validation_path = root.join("validation.json");
+        fs::write(&policy_path, serde_json::to_vec_pretty(&update_policy_fixture()).unwrap()).unwrap();
+        fs::write(
+            &source_response,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "schema": mantlepkgs_core::SOURCE_RESPONSE_GIT_TAGS_SCHEMA,
+                "candidates": [{
+                    "version": "v1.3.0",
+                    "source_ref": "refs/tags/v1.3.0",
+                    "source_identity_blake3": OTHER_DIGEST,
+                }],
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            &osv_response,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "schema": ADVISORY_RESPONSE_OSV_SCHEMA,
+                "package_coordinate": "pkg:generic/hello",
+                "version": "v1.3.0",
+                "findings": [],
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            &repology_response,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "schema": ADVISORY_RESPONSE_REPOLOGY_SCHEMA,
+                "package_coordinate": "hello",
+                "version": "v1.3.0",
+                "findings": [],
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        fs::write(&validation_path, serde_json::to_vec_pretty(&update_validation_fixture()).unwrap()).unwrap();
+        (policy_path, source_response, osv_response, repology_response, validation_path)
+    }
+
+    fn write_update_source_tree(root: &Path) -> PathBuf {
+        let source_root = root.join("source");
+        fs::create_dir_all(source_root.join("locks")).unwrap();
+        fs::write(
+            source_root.join("locks/hello.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "version": "v1.2.3",
+                "source": {
+                    "ref": "refs/tags/v1.2.3",
+                    "identity_blake3": DIGEST,
+                },
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        source_root
+    }
+
+    fn build_update_cli_plan(root: &Path) -> (PathBuf, PathBuf) {
+        let (policy, source_response, osv_response, repology_response, validation) = write_update_fixture_inputs(root);
+        let source_observation = root.join("source-observation.json");
+        let osv_observation = root.join("osv-observation.json");
+        let repology_observation = root.join("repology-observation.json");
+        run_update_source_observe(UpdateObserveRequest {
+            policy_path: &policy,
+            response_path: Some(&source_response),
+            url: None,
+            requested_status: "success",
+            reasons: &[],
+            output: &source_observation,
+            is_json: false,
+        })
+        .unwrap();
+        run_update_advisory_observe(UpdateAdvisoryObserveRequest {
+            policy_path: &policy,
+            service: "osv",
+            version: "v1.3.0",
+            response_path: Some(&osv_response),
+            url: None,
+            requested_status: "success",
+            reasons: &[],
+            output: &osv_observation,
+            is_json: false,
+        })
+        .unwrap();
+        run_update_advisory_observe(UpdateAdvisoryObserveRequest {
+            policy_path: &policy,
+            service: "repology",
+            version: "v1.3.0",
+            response_path: Some(&repology_response),
+            url: None,
+            requested_status: "success",
+            reasons: &[],
+            output: &repology_observation,
+            is_json: false,
+        })
+        .unwrap();
+        let source_root = write_update_source_tree(root);
+        let plan = root.join("update-plan.json");
+        run_update_plan(UpdatePlanRequest {
+            policy_path: &policy,
+            source_observation_path: &source_observation,
+            advisory_observation_paths: &[osv_observation, repology_observation],
+            validation_evidence_path: &validation,
+            source_root: &source_root,
+            output: &plan,
+            is_json: false,
+        })
+        .unwrap();
+        (source_root, plan)
+    }
 
     fn impact_policy_fixture() -> ImpactComparisonPolicy {
         mantlepkgs_core::seal_impact_policy(&ImpactComparisonPolicy {
@@ -2382,6 +3564,429 @@ mod tests {
 
         assert!(error.message().contains("impact-identity-mismatch"));
         assert!(!output.exists());
+    }
+
+    #[test]
+    fn update_commands_replay_saved_evidence_and_publish_one_immutable_tree() {
+        let temp = tempfile::tempdir().unwrap();
+        let (source_root, plan_path) = build_update_cli_plan(temp.path());
+        let output_root = temp.path().join("published-update");
+        let denial = temp.path().join("denial.json");
+
+        run_update_execute(UpdateExecuteRequest {
+            plan_path: &plan_path,
+            source_root: &source_root,
+            output_root: &output_root,
+            denial_receipt_output: &denial,
+            is_json: false,
+        })
+        .unwrap();
+
+        let updated =
+            read_json_bounded::<serde_json::Value>(&output_root.join("locks/hello.json"), UPDATE_DOCUMENT_BYTES_MAX)
+                .unwrap();
+        let original =
+            read_json_bounded::<serde_json::Value>(&source_root.join("locks/hello.json"), UPDATE_DOCUMENT_BYTES_MAX)
+                .unwrap();
+        let receipt = read_json_bounded::<mantlepkgs_core::UpdateExecutionReceipt>(
+            &output_root.join(UPDATE_EXECUTION_RECEIPT_FILE),
+            UPDATE_INPUT_BYTES_MAX,
+        )
+        .unwrap();
+        assert_eq!(updated["version"], "v1.3.0");
+        assert_eq!(updated["source"]["identity_blake3"], OTHER_DIGEST);
+        assert_eq!(original["version"], "v1.2.3");
+        assert_eq!(receipt.disposition, UpdateExecutionDisposition::Applied);
+        assert!(!denial.exists());
+        assert!(Command::new("nix").env("PATH", temp.path().join("no-nix")).status().is_err());
+    }
+
+    #[test]
+    fn http_response_classification_preserves_failure_status() {
+        let body = b"bounded-response".to_vec();
+        let success = classify_update_http_response(UPDATE_FIXTURE_HTTP_SUCCESS_STATUS, body.clone(), 0);
+        let redirect = classify_update_http_response(UPDATE_FIXTURE_HTTP_REDIRECT_STATUS, body.clone(), 0);
+        let error = classify_update_http_response(UPDATE_FIXTURE_HTTP_ERROR_STATUS, body, 0);
+        let transport = failed_acquisition(ObservationStatus::Unavailable, "transport-unavailable", 0);
+
+        assert_eq!(success.status, ObservationStatus::Success);
+        assert_eq!(redirect.status, ObservationStatus::Failed);
+        assert_eq!(redirect.reason_codes, vec!["redirect-forbidden"]);
+        assert_eq!(error.status, ObservationStatus::Failed);
+        assert_eq!(error.reason_codes, vec!["http-status-invalid"]);
+        assert!(error.response_identity_blake3.is_some());
+        assert_eq!(transport.status, ObservationStatus::Unavailable);
+        assert_eq!(transport.reason_codes, vec!["transport-unavailable"]);
+    }
+
+    #[test]
+    fn update_policy_seal_writes_one_canonical_policy() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = temp.path().join("policy-unsealed.json");
+        let output = temp.path().join("policy-sealed.json");
+        let mut policy = update_policy_fixture();
+        policy.policy_identity_blake3.clear();
+        fs::write(&input, serde_json::to_vec_pretty(&policy).unwrap()).unwrap();
+
+        run_update_policy_seal(&input, &output, false).unwrap();
+
+        let sealed = read_json_bounded::<UpdatePolicy>(&output, UPDATE_INPUT_BYTES_MAX).unwrap();
+        assert_eq!(sealed, seal_update_policy(&policy).unwrap());
+        let error =
+            run_update_policy_seal(&input, &input, false).expect_err("policy sealing must not overwrite its input");
+        assert!(error.message().contains("must differ"));
+    }
+
+    #[test]
+    fn release_index_saved_response_replays_without_network() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut policy = update_policy_fixture();
+        policy.policy_identity_blake3.clear();
+        policy.source_kind = mantlepkgs_core::UpdateSourceKind::ReleaseIndex;
+        policy.adapter_identity = "mantle-release-index-v1".into();
+        policy.source_query = "/releases/hello.json".into();
+        policy.response_schema = mantlepkgs_core::SOURCE_RESPONSE_RELEASE_INDEX_SCHEMA.into();
+        let policy = seal_update_policy(&policy).unwrap();
+        let policy_path = temp.path().join("policy.json");
+        let response_path = temp.path().join("release-index.json");
+        let output = temp.path().join("source-observation.json");
+        fs::write(&policy_path, serde_json::to_vec_pretty(&policy).unwrap()).unwrap();
+        fs::write(
+            &response_path,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "schema": mantlepkgs_core::SOURCE_RESPONSE_RELEASE_INDEX_SCHEMA,
+                "candidates": [{
+                    "version": "v1.3.0",
+                    "source_ref": "release/hello/v1.3.0",
+                    "source_identity_blake3": OTHER_DIGEST,
+                }],
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        run_update_source_observe(UpdateObserveRequest {
+            policy_path: &policy_path,
+            response_path: Some(&response_path),
+            url: None,
+            requested_status: "success",
+            reasons: &[],
+            output: &output,
+            is_json: false,
+        })
+        .unwrap();
+
+        let observation = read_json_bounded::<SourceObservation>(&output, UPDATE_INPUT_BYTES_MAX).unwrap();
+        assert_eq!(observation.status, ObservationStatus::Success);
+        assert_eq!(observation.candidates.len(), 1);
+        assert_eq!(observation.candidates[0].source_ref, "release/hello/v1.3.0");
+    }
+
+    #[test]
+    fn malformed_saved_source_response_becomes_explicit_failed_evidence() {
+        let temp = tempfile::tempdir().unwrap();
+        let policy_path = temp.path().join("policy.json");
+        let response_path = temp.path().join("malformed.json");
+        let output = temp.path().join("source-observation.json");
+        fs::write(&policy_path, serde_json::to_vec_pretty(&update_policy_fixture()).unwrap()).unwrap();
+        fs::write(&response_path, b"{\"schema\":true}").unwrap();
+
+        run_update_source_observe(UpdateObserveRequest {
+            policy_path: &policy_path,
+            response_path: Some(&response_path),
+            url: None,
+            requested_status: "success",
+            reasons: &[],
+            output: &output,
+            is_json: false,
+        })
+        .unwrap();
+
+        let observation = read_json_bounded::<SourceObservation>(&output, UPDATE_INPUT_BYTES_MAX).unwrap();
+        assert_eq!(observation.status, ObservationStatus::Failed);
+        assert_eq!(observation.reason_codes, vec!["response-schema-invalid"]);
+        assert!(observation.candidates.is_empty());
+        assert!(observation.response_identity_blake3.is_some());
+    }
+
+    #[test]
+    fn oversized_saved_source_response_becomes_explicit_failed_evidence() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut policy = update_policy_fixture();
+        policy.policy_identity_blake3.clear();
+        policy.limits.max_response_bytes = UPDATE_TINY_RESPONSE_BYTES;
+        let policy = seal_update_policy(&policy).unwrap();
+        let policy_path = temp.path().join("policy.json");
+        let response_path = temp.path().join("oversized.json");
+        let output = temp.path().join("source-observation.json");
+        fs::write(&policy_path, serde_json::to_vec_pretty(&policy).unwrap()).unwrap();
+        fs::write(&response_path, vec![b'x'; UPDATE_OVERSIZED_RESPONSE_BYTES]).unwrap();
+
+        run_update_source_observe(UpdateObserveRequest {
+            policy_path: &policy_path,
+            response_path: Some(&response_path),
+            url: None,
+            requested_status: "success",
+            reasons: &[],
+            output: &output,
+            is_json: false,
+        })
+        .unwrap();
+
+        let observation = read_json_bounded::<SourceObservation>(&output, UPDATE_INPUT_BYTES_MAX).unwrap();
+        assert_eq!(observation.status, ObservationStatus::Failed);
+        assert_eq!(observation.reason_codes, vec!["saved-response-read-failed"]);
+        assert!(observation.candidates.is_empty());
+        assert!(observation.response_identity_blake3.is_none());
+    }
+
+    #[test]
+    fn advisory_coordinate_mismatch_becomes_explicit_failed_evidence() {
+        let temp = tempfile::tempdir().unwrap();
+        let (policy_path, _, osv_response, _, _) = write_update_fixture_inputs(temp.path());
+        let output = temp.path().join("osv-observation.json");
+        fs::write(
+            &osv_response,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "schema": ADVISORY_RESPONSE_OSV_SCHEMA,
+                "package_coordinate": "pkg:generic/not-hello",
+                "version": "v1.3.0",
+                "findings": [],
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        run_update_advisory_observe(UpdateAdvisoryObserveRequest {
+            policy_path: &policy_path,
+            service: "osv",
+            version: "v1.3.0",
+            response_path: Some(&osv_response),
+            url: None,
+            requested_status: "success",
+            reasons: &[],
+            output: &output,
+            is_json: false,
+        })
+        .unwrap();
+
+        let observation = read_json_bounded::<AdvisoryObservation>(&output, UPDATE_INPUT_BYTES_MAX).unwrap();
+        assert_eq!(observation.status, ObservationStatus::Failed);
+        assert_eq!(observation.reason_codes, vec!["advisory-package-coordinate-mismatch"]);
+        assert!(observation.findings.is_empty());
+        assert!(observation.response_identity_blake3.is_some());
+    }
+
+    #[test]
+    fn duplicate_advisory_findings_become_explicit_failed_evidence() {
+        let temp = tempfile::tempdir().unwrap();
+        let (policy_path, _, osv_response, _, _) = write_update_fixture_inputs(temp.path());
+        let output = temp.path().join("osv-observation.json");
+        let finding = serde_json::json!({
+            "finding_id": "OSV-DUPLICATE",
+            "finding_identity_blake3": DIGEST,
+        });
+        fs::write(
+            &osv_response,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "schema": ADVISORY_RESPONSE_OSV_SCHEMA,
+                "package_coordinate": "pkg:generic/hello",
+                "version": "v1.3.0",
+                "findings": [finding.clone(), finding],
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        run_update_advisory_observe(UpdateAdvisoryObserveRequest {
+            policy_path: &policy_path,
+            service: "osv",
+            version: "v1.3.0",
+            response_path: Some(&osv_response),
+            url: None,
+            requested_status: "success",
+            reasons: &[],
+            output: &output,
+            is_json: false,
+        })
+        .unwrap();
+
+        let observation = read_json_bounded::<AdvisoryObservation>(&output, UPDATE_INPUT_BYTES_MAX).unwrap();
+        assert_eq!(observation.status, ObservationStatus::Failed);
+        assert_eq!(observation.reason_codes, vec!["advisory-finding-duplicate"]);
+        assert!(observation.findings.is_empty());
+    }
+
+    #[test]
+    fn explicit_unavailable_source_observation_stays_unavailable() {
+        let temp = tempfile::tempdir().unwrap();
+        let policy_path = temp.path().join("policy.json");
+        let output = temp.path().join("source-unavailable.json");
+        fs::write(&policy_path, serde_json::to_vec_pretty(&update_policy_fixture()).unwrap()).unwrap();
+
+        run_update_source_observe(UpdateObserveRequest {
+            policy_path: &policy_path,
+            response_path: None,
+            url: None,
+            requested_status: "unavailable",
+            reasons: &["source-timeout".into()],
+            output: &output,
+            is_json: false,
+        })
+        .unwrap();
+
+        let observation = read_json_bounded::<SourceObservation>(&output, UPDATE_INPUT_BYTES_MAX).unwrap();
+        assert_eq!(observation.status, ObservationStatus::Unavailable);
+        assert!(observation.candidates.is_empty());
+        assert_eq!(observation.reason_codes, vec!["source-timeout"]);
+    }
+
+    #[test]
+    fn stale_update_preimage_leaves_source_unchanged_and_writes_denial() {
+        let temp = tempfile::tempdir().unwrap();
+        let (source_root, plan_path) = build_update_cli_plan(temp.path());
+        let source_file = source_root.join("locks/hello.json");
+        let changed = serde_json::json!({
+            "version": "v1.2.99",
+            "source": {
+                "ref": "refs/tags/v1.2.99",
+                "identity_blake3": DIGEST,
+            },
+        });
+        fs::write(&source_file, serde_json::to_vec_pretty(&changed).unwrap()).unwrap();
+        let before = fs::read(&source_file).unwrap();
+        let output_root = temp.path().join("rejected-update");
+        let denial = temp.path().join("stale-denial.json");
+
+        let error = run_update_execute(UpdateExecuteRequest {
+            plan_path: &plan_path,
+            source_root: &source_root,
+            output_root: &output_root,
+            denial_receipt_output: &denial,
+            is_json: false,
+        })
+        .expect_err("a stale preimage must fail");
+
+        let receipt =
+            read_json_bounded::<mantlepkgs_core::UpdateExecutionReceipt>(&denial, UPDATE_INPUT_BYTES_MAX).unwrap();
+        assert!(error.message().contains("update-stale-preimage"));
+        assert_eq!(fs::read(&source_file).unwrap(), before);
+        assert!(!output_root.exists());
+        assert!(!update_stage_path(&output_root).unwrap().exists());
+        assert_eq!(receipt.disposition, UpdateExecutionDisposition::Denied);
+        assert!(receipt.applied_outputs.is_empty());
+        assert_eq!(receipt.reason_codes, vec!["update-execution-denied", "update-stale-preimage"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_update_source_is_denied_without_publication() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().unwrap();
+        let (source_root, plan_path) = build_update_cli_plan(temp.path());
+        let source_file = source_root.join("locks/hello.json");
+        let replacement = temp.path().join("replacement.json");
+        fs::rename(&source_file, &replacement).unwrap();
+        symlink(&replacement, &source_file).unwrap();
+        let output_root = temp.path().join("symlink-update");
+        let denial = temp.path().join("symlink-denial.json");
+
+        let error = run_update_execute(UpdateExecuteRequest {
+            plan_path: &plan_path,
+            source_root: &source_root,
+            output_root: &output_root,
+            denial_receipt_output: &denial,
+            is_json: false,
+        })
+        .expect_err("a symlinked source must fail");
+
+        assert!(error.message().contains("update-symlink-forbidden"));
+        assert!(!output_root.exists());
+        assert!(!update_stage_path(&output_root).unwrap().exists());
+        assert!(denial.is_file());
+        assert_eq!(fs::read_link(&source_file).unwrap(), replacement);
+    }
+
+    #[test]
+    fn output_digest_tamper_is_denied_before_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        let (source_root, plan_path) = build_update_cli_plan(temp.path());
+        let mut plan = read_json_bounded::<UpdatePlan>(&plan_path, UPDATE_INPUT_BYTES_MAX).unwrap();
+        plan.effects[0].output_digest_blake3 = DIGEST.into();
+        plan.plan_identity_blake3.clear();
+        plan.plan_identity_blake3 = update_plan_identity_blake3(&plan).unwrap();
+        fs::write(&plan_path, serde_json::to_vec_pretty(&plan).unwrap()).unwrap();
+        let output_root = temp.path().join("digest-update");
+        let denial = temp.path().join("digest-denial.json");
+
+        let error = run_update_execute(UpdateExecuteRequest {
+            plan_path: &plan_path,
+            source_root: &source_root,
+            output_root: &output_root,
+            denial_receipt_output: &denial,
+            is_json: false,
+        })
+        .expect_err("an output digest mismatch must fail");
+
+        assert!(error.message().contains("update-output-digest-mismatch"));
+        assert!(!output_root.exists());
+        assert!(!update_stage_path(&output_root).unwrap().exists());
+        assert!(denial.is_file());
+    }
+
+    #[test]
+    fn execution_outputs_and_denials_cannot_overlap_the_source_tree() {
+        let source_root = Path::new("source");
+        let plan = Path::new("plan.json");
+        let output_inside_source = Path::new("source/published");
+        let denial_outside_source = Path::new("denial.json");
+        let output_outside_source = Path::new("published");
+        let denial_inside_source = Path::new("source/denial.json");
+
+        let output_error = reject_update_execution_path_collisions(&UpdateExecuteRequest {
+            plan_path: plan,
+            source_root,
+            output_root: output_inside_source,
+            denial_receipt_output: denial_outside_source,
+            is_json: false,
+        })
+        .expect_err("an output inside the source tree must fail");
+        let denial_error = reject_update_execution_path_collisions(&UpdateExecuteRequest {
+            plan_path: plan,
+            source_root,
+            output_root: output_outside_source,
+            denial_receipt_output: denial_inside_source,
+            is_json: false,
+        })
+        .expect_err("a denial receipt inside the source tree must fail");
+
+        assert!(output_error.message().contains("paths conflict"));
+        assert!(denial_error.message().contains("paths conflict"));
+    }
+
+    #[test]
+    fn publication_conflict_preserves_existing_output_and_records_denial() {
+        let temp = tempfile::tempdir().unwrap();
+        let (source_root, plan_path) = build_update_cli_plan(temp.path());
+        let output_root = temp.path().join("existing-update");
+        fs::create_dir(&output_root).unwrap();
+        fs::write(output_root.join("sentinel"), b"existing").unwrap();
+        let denial = temp.path().join("conflict-denial.json");
+
+        run_update_execute(UpdateExecuteRequest {
+            plan_path: &plan_path,
+            source_root: &source_root,
+            output_root: &output_root,
+            denial_receipt_output: &denial,
+            is_json: false,
+        })
+        .expect_err("an existing output root must fail");
+
+        assert_eq!(fs::read(output_root.join("sentinel")).unwrap(), b"existing");
+        assert!(!update_stage_path(&output_root).unwrap().exists());
+        assert!(denial.is_file());
+        assert!(!output_root.join(UPDATE_EXECUTION_RECEIPT_FILE).exists());
     }
 
     #[test]
