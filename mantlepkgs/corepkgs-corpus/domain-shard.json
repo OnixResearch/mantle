@@ -1,0 +1,97 @@
+{
+  "schema": "mantlepkgs-domain-shard-v1",
+  "shard_identity_blake3": "413bdb47d5f23d465ec85494ed79b234d9cd149f13008156db4c3642e2696d51",
+  "name": "ekala-corepkgs",
+  "class": "ecosystem",
+  "owner_label": "external-corpus-review",
+  "source": {
+    "repository": "https://github.com/ekala-project/corepkgs",
+    "reference": "github:ekala-project/corepkgs/a9a1af8abbf08b972dbce7bb9c2643c7d76d140d",
+    "revision": "a9a1af8abbf08b972dbce7bb9c2643c7d76d140d",
+    "source_digest_blake3": "e12571f07be5bb6b747d0012f78621bd4376fdbb99917f5a2a65e1fd68b81088"
+  },
+  "source_catalog_identity_blake3": "0e417992593aa5e5b9aa85bf87e57db88399770d2377bbc43a7c47c6be59849b",
+  "packages": [
+    {
+      "package_identity_blake3": "68498e91792d726d224f4a815cf81df0abdf8991ec010f529676733ef85de4a4",
+      "name": "corepkgs-libpng",
+      "public_selector": "corepkgs-libpng",
+      "system": "x86_64-linux",
+      "root_identity_blake3": "4e1969fa17ce1d285d2af32dd511a33980adf647af8e2a6955f136c9e26d69c1",
+      "policy_digest_blake3": "e6ac8f9419a90e75ea7d3318a8cf8fa52be91bc8f8364320d0d676bda3a6d91d",
+      "buildable": true,
+      "aliases": [
+        "libpng"
+      ],
+      "artifacts": [
+        {
+          "role": "execution-profile",
+          "digest_blake3": "054ec6754f08d60088cf3388f43295ad37621e5115e979f702a2a5c5d0eefcb8"
+        },
+        {
+          "role": "package-index",
+          "digest_blake3": "d3f79a852e9d45cf7745293597afd717487698bc72e3dedac6b721ba5f946213"
+        },
+        {
+          "role": "producer-receipt",
+          "digest_blake3": "da055133ae016423baca182d93da940bb03172df1f8388a8465199dedc02276d"
+        },
+        {
+          "role": "shared-foreign-graph",
+          "digest_blake3": "54ef6a4809fc4151fc000d5be77ab653958837332d507d635f873abd17a3d964"
+        },
+        {
+          "role": "source-requirement-inventory",
+          "digest_blake3": "dc0cc334cf763ab2262f93c813e032557bd039e9116aa588868340937f1fb28b"
+        },
+        {
+          "role": "translation-policy",
+          "digest_blake3": "18eaa36031cfa19529089febc9439dc4c540f27f279be21b5d8f10fef618e415"
+        }
+      ]
+    },
+    {
+      "package_identity_blake3": "d1e77822e7ebdb1d8969ed908e769ff0d6546d3f28fa184b599c6a50314bc798",
+      "name": "corepkgs-zlib",
+      "public_selector": "corepkgs-zlib",
+      "system": "x86_64-linux",
+      "root_identity_blake3": "14fea789d8a579a268a876d15a3c39865128f4db35a4b2b34f1fea8e0e37f015",
+      "policy_digest_blake3": "e6ac8f9419a90e75ea7d3318a8cf8fa52be91bc8f8364320d0d676bda3a6d91d",
+      "buildable": true,
+      "aliases": [
+        "zlib"
+      ],
+      "artifacts": [
+        {
+          "role": "execution-profile",
+          "digest_blake3": "054ec6754f08d60088cf3388f43295ad37621e5115e979f702a2a5c5d0eefcb8"
+        },
+        {
+          "role": "package-index",
+          "digest_blake3": "d3f79a852e9d45cf7745293597afd717487698bc72e3dedac6b721ba5f946213"
+        },
+        {
+          "role": "producer-receipt",
+          "digest_blake3": "da055133ae016423baca182d93da940bb03172df1f8388a8465199dedc02276d"
+        },
+        {
+          "role": "shared-foreign-graph",
+          "digest_blake3": "54ef6a4809fc4151fc000d5be77ab653958837332d507d635f873abd17a3d964"
+        },
+        {
+          "role": "source-requirement-inventory",
+          "digest_blake3": "dc0cc334cf763ab2262f93c813e032557bd039e9116aa588868340937f1fb28b"
+        },
+        {
+          "role": "translation-policy",
+          "digest_blake3": "18eaa36031cfa19529089febc9439dc4c540f27f279be21b5d8f10fef618e415"
+        }
+      ]
+    }
+  ],
+  "limits": {
+    "max_packages": 65536,
+    "max_aliases": 65536,
+    "max_artifacts": 65536
+  }
+}

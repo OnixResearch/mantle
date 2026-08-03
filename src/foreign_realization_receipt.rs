@@ -137,6 +137,7 @@ pub(crate) fn build_foreign_realization_receipt(
         .iter()
         .map(|failed| (failed.drv_key.as_str(), failed))
         .collect::<BTreeMap<_, _>>();
+    let failed_by_origin = failures_by_origin(&input.build_result.failed_roots);
     let failed_log_by_origin = input
         .build_result
         .failed_roots
@@ -161,7 +162,10 @@ pub(crate) fn build_foreign_realization_receipt(
         profiles.insert((unit.execution_profile_id.clone(), unit.execution_profile_digest_blake3.clone()));
         let outcome = outcome_by_drv.get(&unit.target_derivation).copied();
         let failed_root = failed_by_drv.get(unit.target_derivation.as_str()).copied();
-        let failure = failed_root.map(|failed| failed.error.as_str());
+        let failed_origin = failed_by_origin.get(unit.target_derivation.as_str()).copied();
+        let failure = failed_origin
+            .map(|failed| failed.origin_error.as_str())
+            .or_else(|| failed_root.map(|failed| failed.error.as_str()));
         let build_log = outcome
             .and_then(|value| value.log.as_deref())
             .or_else(|| failed_log_by_origin.get(unit.target_derivation.as_str()).copied());
@@ -267,7 +271,12 @@ pub(crate) fn build_foreign_realization_receipt(
                 .build_result
                 .failed_roots
                 .iter()
-                .map(|failed| format!("{}: {}", failed.drv_key, failed.error))
+                .map(|failed| {
+                    format!(
+                        "root {}: {}; origin {}: {}",
+                        failed.drv_key, failed.error, failed.origin_drv_key, failed.origin_error
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join("; "),
             affected_roots: input.build_result.failed_roots.iter().map(|failed| failed.drv_key.clone()).collect(),
@@ -345,6 +354,7 @@ fn foreign_build_report_digest(result: &RegisteredBuildResult) -> Result<String,
         drv_key: &'a str,
         origin_drv_key: &'a str,
         error: &'a str,
+        origin_error: &'a str,
         build_log: Option<&'a str>,
     }
     #[derive(Serialize)]
@@ -388,6 +398,7 @@ fn foreign_build_report_digest(result: &RegisteredBuildResult) -> Result<String,
             drv_key: &failed.drv_key,
             origin_drv_key: &failed.origin_drv_key,
             error: &failed.error,
+            origin_error: &failed.origin_error,
             build_log: failed.build_log.as_deref(),
         })
         .collect();
@@ -410,6 +421,15 @@ pub(crate) fn foreign_realization_receipt_digest(receipt: &ForeignRealizationRec
     Ok(hasher.finalize().to_hex().to_string())
 }
 
+fn failures_by_origin(failures: &[crunch_build::FailedGoal]) -> BTreeMap<&str, &crunch_build::FailedGoal> {
+    let mut by_origin = BTreeMap::new();
+    for failure in failures {
+        by_origin.entry(failure.origin_drv_key.as_str()).or_insert(failure);
+    }
+    debug_assert!(by_origin.len() <= failures.len());
+    by_origin
+}
+
 fn parse_fetch_attempts(log: Option<&str>) -> Result<Vec<crunch_build::ForeignFetchAttempt>, RunError> {
     let Some(log) = log else {
         return Ok(Vec::new());
@@ -421,4 +441,46 @@ fn parse_fetch_attempts(log: Option<&str>) -> Result<Vec<crunch_build::ForeignFe
         return Err(RunError::Internal("foreign fetch attempt log schema changed during realization".to_string()));
     }
     Ok(parsed.attempts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ROOT_DRV: &str = "/mantle/store/root.drv";
+    const ORIGIN_DRV: &str = "/mantle/store/origin.drv";
+    const FAILURE_MESSAGE: &str = "Not all outputs produced";
+
+    fn fixture_failure() -> crunch_build::FailedGoal {
+        crunch_build::FailedGoal {
+            drv_key: ROOT_DRV.to_string(),
+            origin_drv_key: ORIGIN_DRV.to_string(),
+            error: "dependency failed".to_string(),
+            origin_error: FAILURE_MESSAGE.to_string(),
+            build_log: None,
+        }
+    }
+
+    #[test]
+    fn failure_origin_index_exposes_the_causal_derivation() {
+        let failures = vec![fixture_failure()];
+
+        let by_origin = failures_by_origin(&failures);
+        let failure = by_origin.get(ORIGIN_DRV).copied().unwrap();
+
+        assert_eq!(failure.drv_key, ROOT_DRV);
+        assert_eq!(failure.origin_drv_key, ORIGIN_DRV);
+        assert_eq!(failure.error, "dependency failed");
+        assert_eq!(failure.origin_error, FAILURE_MESSAGE);
+    }
+
+    #[test]
+    fn failure_origin_index_does_not_mark_an_unrelated_derivation() {
+        let failures = vec![fixture_failure()];
+
+        let by_origin = failures_by_origin(&failures);
+
+        assert!(!by_origin.contains_key(ROOT_DRV));
+        assert_eq!(by_origin.len(), 1);
+    }
 }

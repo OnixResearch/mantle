@@ -4,6 +4,7 @@ members = [
   "crates/crunch-action-result-core",
   "crates/crunch-rust-cache-core",
   "crates/crunch-rust-cache",
+  "crates/mantlepkgs-core",
   "crates/crunch-eval",
   "crates/crunch-glue",
   "crates/crunch-store",
@@ -48,6 +49,7 @@ cargo_check_args = ["--lib"]
 default_scope = [
   "-p", "mantle",
   "-p", "crunch-action-result-core",
+  "-p", "mantlepkgs-core",
   "-p", "crunch-attestation",
   "-p", "crunch-attestation-core",
   "-p", "crunch-build",
@@ -138,6 +140,7 @@ crunch-glue = { path = "crates/crunch-glue" }
 crunch-action-result-core = { path = "crates/crunch-action-result-core" }
 crunch-rust-cache-core = { path = "crates/crunch-rust-cache-core" }
 crunch-rust-cache = { path = "crates/crunch-rust-cache" }
+mantlepkgs-core = { path = "crates/mantlepkgs-core" }
 crunch-build = { path = "crates/crunch-build" }
 crunch-store = { path = "crates/crunch-store" }
 crunch-wasm-component = { path = "crates/crunch-wasm-component" }
@@ -146,6 +149,7 @@ crunch-attestation = { path = "crates/crunch-attestation" }
 crunch-shell = { path = "crates/crunch-shell" }
 crunch-bootstrap-core = { path = "crates/crunch-bootstrap-core" }
 crunch-release-core = { path = "crates/crunch-release-core" }
+durable-file-publication = { git = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git", rev = "951c27f59003cea9bfdb40ed4d89653d50fada1f" }
 crunch-delta = { path = "crates/crunch-delta" }
 nix-compat = { path = "vendor/nix-compat" }
 snix-build = { path = "vendor/snix-build" }

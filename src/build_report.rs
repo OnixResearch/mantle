@@ -1099,6 +1099,7 @@ mod tests {
                 drv_key: drv_key.clone(),
                 origin_drv_key: drv_key.clone(),
                 error: "FOD hash mismatch for demo: expected sha256-a, got sha256-b".to_string(),
+                origin_error: "FOD hash mismatch for demo: expected sha256-a, got sha256-b".to_string(),
                 build_log: None,
             }],
             fod_mismatches: vec![crunch_pipeline::FodMismatch {
@@ -1169,6 +1170,7 @@ mod tests {
                 drv_key: drv_key.clone(),
                 origin_drv_key: drv_key.clone(),
                 error: "strict mode does not permit in-memory PathInfo fallback: broken redb".to_string(),
+                origin_error: "strict mode does not permit in-memory PathInfo fallback: broken redb".to_string(),
                 build_log: None,
             }],
             fod_mismatches: Vec::new(),

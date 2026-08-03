@@ -79,6 +79,17 @@ const LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 const LOCK_POLL_INTERVAL: Duration = Duration::from_millis(10);
 const HEX_RADIX: u32 = 16;
 const HEX_BYTE_CHARS: usize = 2;
+const EXTRA_EOF_READ_ITERATIONS: u64 = 2;
+const LOCK_MAX_ATTEMPTS: u32 = 500;
+
+#[derive(Clone, Copy)]
+struct CommitDevices {
+    staging: u64,
+    destination: u64,
+}
+
+#[derive(Clone, Copy)]
+struct TypedRefPrefix<'a>(&'a str);
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -320,11 +331,11 @@ impl RustCache {
             producer_receipt_ref: request.producer_receipt_ref.to_string(),
         })
         .map_err(Error::Core)?;
-        let complete =
+        let is_complete =
             crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
                 .await
                 .map_err(|error| Error::Castore(format!("completeness:{error}")))?;
-        if !complete {
+        if !is_complete {
             return Err(Error::Castore("ingested-tree-incomplete".to_string()));
         }
         self.publish_record_and_index(&result)?;
@@ -344,10 +355,10 @@ impl RustCache {
                 context: "create-restore-runtime".to_string(),
                 source,
             })?;
-        let report = runtime.block_on(self.restore(action, output_dir, policy))?;
-        assert!(!report.disposition.is_empty());
-        assert!(report.candidate_count <= policy.max_candidates);
-        Ok(report)
+        let outcome = runtime.block_on(self.restore(action, output_dir, policy))?;
+        assert!(!outcome.disposition.is_empty());
+        assert!(outcome.candidate_count <= policy.max_candidates);
+        Ok(outcome)
     }
 
     pub async fn restore(
@@ -428,6 +439,9 @@ impl RustCache {
                 return Err(Error::State("retention-result-node-mismatch".to_string()));
             }
             if !indexes.contains_key(&result.input.action_ref) {
+                if indexes.len() >= crunch_rust_cache_core::MAX_RESULT_CANDIDATES {
+                    return Err(Error::Bound("retention-index-limit-exceeded".to_string()));
+                }
                 let index = self
                     .read_index(&result.input.action_ref)?
                     .ok_or_else(|| Error::State("retention-index-missing".to_string()))?;
@@ -441,6 +455,9 @@ impl RustCache {
             }
             live_nodes.push(node_from_identity(retained_node)?);
             live_result_paths.insert(self.result_path(result_ref)?);
+            if retained_result_actions.len() >= crunch_rust_cache_core::MAX_RESULT_CANDIDATES {
+                return Err(Error::Bound("retention-result-action-limit-exceeded".to_string()));
+            }
             retained_result_actions.insert(result_ref.clone(), result.input.action_ref);
         }
         let stale_result_paths = collect_stale_result_paths(&self.results_dir, &live_result_paths)?;
@@ -529,24 +546,26 @@ impl RustCache {
         index: &RustResultIndex,
         policy: &LocalCachePolicy,
     ) -> Result<Vec<LocalCandidateFacts>, Error> {
-        if index.result_refs.len() > policy.max_candidates as usize {
+        let max_candidates = usize::try_from(policy.max_candidates)
+            .map_err(|_| Error::Bound("candidate-limit-unrepresentable".to_string()))?;
+        if index.result_refs.len() > max_candidates {
             return Err(Error::Bound("candidate-limit-exceeded".to_string()));
         }
         let mut candidates = Vec::with_capacity(index.result_refs.len());
         for result_ref in &index.result_refs {
             let result = self.read_result(result_ref)?;
             let node = node_from_identity(&result.input.root_node)?;
-            let complete =
+            let is_complete =
                 crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
                     .await
                     .map_err(|error| Error::Castore(format!("candidate-completeness:{error}")))?;
             candidates.push(LocalCandidateFacts {
                 result,
-                content_complete: complete,
+                content_complete: is_complete,
                 artifact_manifest_verified: true,
             });
         }
-        assert!(candidates.len() <= policy.max_candidates as usize);
+        assert!(candidates.len() <= max_candidates);
         assert_eq!(candidates.len(), index.result_refs.len());
         Ok(candidates)
     }
@@ -565,18 +584,19 @@ impl RustCache {
         })?;
         let temp = RestoreStaging::new(temp);
         let node = node_from_identity(&result.input.root_node)?;
-        let staging_text = temp.path().to_str().ok_or_else(|| Error::State("restore-path-non-utf8".to_string()))?;
+        let staging_path = temp.path()?;
+        let staging_text = staging_path.to_str().ok_or_else(|| Error::State("restore-path-non-utf8".to_string()))?;
         crunch_store::export_castore_to_disk(&node, staging_text, &self.blob_service, &self.directory_service)
             .await
             .map_err(|error| Error::Castore(format!("restore-export:{error}")))?;
-        let observed = scan_output_artifacts(temp.path(), policy)?;
+        let observed = scan_output_artifacts(staging_path, policy)?;
         if observed != result.input.artifacts {
             return Err(Error::State("restored-artifact-manifest-mismatch".to_string()));
         }
         if output_dir.exists() {
             return Err(Error::State("restore-output-raced".to_string()));
         }
-        let staging = temp.keep();
+        let staging = temp.keep()?;
         ensure_same_commit_device(&staging, parent)?;
         fs::set_permissions(&staging, fs::Permissions::from_mode(PRIVATE_DIRECTORY_MODE)).map_err(|source| {
             Error::Io {
@@ -599,11 +619,11 @@ impl RustCache {
     }
 
     fn index_path(&self, action_ref: &str) -> Result<PathBuf, Error> {
-        typed_ref_path(&self.indexes_dir, action_ref, crunch_rust_cache_core::RUST_ACTION_REF_PREFIX)
+        typed_ref_path(&self.indexes_dir, action_ref, TypedRefPrefix(crunch_rust_cache_core::RUST_ACTION_REF_PREFIX))
     }
 
     fn result_path(&self, result_ref: &str) -> Result<PathBuf, Error> {
-        typed_ref_path(&self.results_dir, result_ref, crunch_rust_cache_core::RUST_RESULT_REF_PREFIX)
+        typed_ref_path(&self.results_dir, result_ref, TypedRefPrefix(crunch_rust_cache_core::RUST_RESULT_REF_PREFIX))
     }
 }
 
@@ -620,18 +640,21 @@ fn ensure_same_commit_device(staging: &Path, destination_parent: &Path) -> Resul
             source,
         })?
         .dev();
-    validate_commit_devices(staging_device, destination_device)?;
+    validate_commit_devices(CommitDevices {
+        staging: staging_device,
+        destination: destination_device,
+    })?;
     assert_eq!(staging_device, destination_device);
     assert!(staging.starts_with(destination_parent));
     Ok(())
 }
 
-fn validate_commit_devices(staging_device: u64, destination_device: u64) -> Result<(), Error> {
-    if staging_device != destination_device {
+fn validate_commit_devices(devices: CommitDevices) -> Result<(), Error> {
+    if devices.staging != devices.destination {
         return Err(Error::State("cross-filesystem-restore-commit-rejected".to_string()));
     }
-    assert_eq!(staging_device, destination_device);
-    assert!(staging_device == destination_device);
+    assert_eq!(devices.staging, devices.destination);
+    assert!(devices.staging == devices.destination);
     Ok(())
 }
 
@@ -639,24 +662,16 @@ fn scan_output_artifacts(output_dir: &Path, policy: &LocalCachePolicy) -> Result
     if !output_dir.is_dir() {
         return Err(Error::State("artifact-output-directory-missing".to_string()));
     }
+    let max_entries = usize::try_from(policy.max_tree_entries)
+        .map_err(|_| Error::Bound("artifact-tree-entry-limit-unrepresentable".to_string()))?;
     let mut pending = vec![(output_dir.to_path_buf(), String::new(), 0_u32)];
-    let mut artifacts = Vec::new();
+    let mut artifacts = Vec::with_capacity(max_entries);
     let mut total_bytes = 0_u64;
     while let Some((directory, relative_parent, depth)) = pending.pop() {
         if depth > policy.max_tree_depth {
             return Err(Error::Bound("artifact-tree-depth-exceeded".to_string()));
         }
-        let mut entries = fs::read_dir(&directory)
-            .map_err(|source| Error::Io {
-                context: "read-artifact-directory".to_string(),
-                source,
-            })?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|source| Error::Io {
-                context: "collect-artifact-directory".to_string(),
-                source,
-            })?;
-        entries.sort_by_key(fs::DirEntry::file_name);
+        let entries = sorted_directory_entries(&directory)?;
         for entry in entries.into_iter().rev() {
             let name =
                 entry.file_name().into_string().map_err(|_| Error::State("artifact-path-non-utf8".to_string()))?;
@@ -694,7 +709,7 @@ fn scan_output_artifacts(output_dir: &Path, policy: &LocalCachePolicy) -> Result
                 return Err(Error::Bound("artifact-tree-bytes-exceeded".to_string()));
             }
             artifacts.push(artifact);
-            if artifacts.len() > policy.max_tree_entries as usize {
+            if artifacts.len() > max_entries {
                 return Err(Error::Bound("artifact-tree-entry-count-exceeded".to_string()));
             }
         }
@@ -703,9 +718,28 @@ fn scan_output_artifacts(output_dir: &Path, policy: &LocalCachePolicy) -> Result
     if artifacts.is_empty() {
         return Err(Error::State("artifact-manifest-empty".to_string()));
     }
-    assert!(artifacts.len() <= policy.max_tree_entries as usize);
+    assert!(artifacts.len() <= max_entries);
     assert!(total_bytes <= policy.max_tree_bytes);
     Ok(artifacts)
+}
+
+fn sorted_directory_entries(directory: &Path) -> Result<Vec<fs::DirEntry>, Error> {
+    let mut entries = fs::read_dir(directory)
+        .map_err(|source| Error::Io {
+            context: "read-artifact-directory".to_string(),
+            source,
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|source| Error::Io {
+            context: "collect-artifact-directory".to_string(),
+            source,
+        })?;
+    entries.sort_by_key(fs::DirEntry::file_name);
+    let max_entries = usize::try_from(crunch_rust_cache_core::MAX_TREE_ENTRIES)
+        .map_err(|_| Error::Bound("artifact-tree-entry-limit-unrepresentable".to_string()))?;
+    assert!(entries.len() <= max_entries);
+    assert!(entries.windows(2).all(|pair| pair[0].file_name() <= pair[1].file_name()));
+    Ok(entries)
 }
 
 fn file_artifact(path: &Path, relative_path: String, mode: u32) -> Result<RustResultArtifact, Error> {
@@ -729,29 +763,60 @@ fn file_artifact(path: &Path, relative_path: String, mode: u32) -> Result<RustRe
 
 fn hash_file_bounded(path: &Path) -> Result<(String, u64), Error> {
     let mut file = open_read_nofollow(path)?;
+    let declared_bytes = file
+        .metadata()
+        .map_err(|source| Error::Io {
+            context: "stat-artifact".to_string(),
+            source,
+        })?
+        .len();
+    if declared_bytes > MAX_SCAN_BYTES {
+        return Err(Error::Bound("artifact-file-bytes-exceeded".to_string()));
+    }
+    let max_read_iterations = bounded_read_iterations(declared_bytes, READ_BUFFER_BYTES)?;
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0_u8; READ_BUFFER_BYTES];
     let mut total_bytes = 0_u64;
-    loop {
-        let read = file.read(&mut buffer).map_err(|source| Error::Io {
+    for _read_index in 0..max_read_iterations {
+        let read_bytes = file.read(&mut buffer).map_err(|source| Error::Io {
             context: "read-artifact".to_string(),
             source,
         })?;
-        if read == 0 {
+        if read_bytes == 0 {
             break;
         }
+        let read_bytes_u64 =
+            u64::try_from(read_bytes).map_err(|_| Error::Bound("artifact-read-size-unrepresentable".to_string()))?;
         total_bytes = total_bytes
-            .checked_add(read as u64)
+            .checked_add(read_bytes_u64)
             .ok_or_else(|| Error::Bound("artifact-bytes-overflow".to_string()))?;
         if total_bytes > MAX_SCAN_BYTES {
             return Err(Error::Bound("artifact-file-bytes-exceeded".to_string()));
         }
-        hasher.update(&buffer[..read]);
+        hasher.update(&buffer[..read_bytes]);
+    }
+    if total_bytes != declared_bytes {
+        return Err(Error::State("artifact-size-changed-during-read".to_string()));
     }
     let digest = hasher.finalize().to_hex().to_string();
     assert_eq!(digest.len(), BLAKE3_HEX_CHARS);
     assert!(total_bytes <= MAX_SCAN_BYTES);
     Ok((digest, total_bytes))
+}
+
+fn bounded_read_iterations(byte_count: u64, buffer_bytes: usize) -> Result<u64, Error> {
+    let buffer_bytes =
+        u64::try_from(buffer_bytes).map_err(|_| Error::Bound("read-buffer-size-unrepresentable".to_string()))?;
+    if buffer_bytes == 0 {
+        return Err(Error::Bound("read-buffer-size-zero".to_string()));
+    }
+    let iterations = byte_count
+        .checked_div(buffer_bytes)
+        .and_then(|count| count.checked_add(EXTRA_EOF_READ_ITERATIONS))
+        .ok_or_else(|| Error::Bound("read-iteration-limit-overflow".to_string()))?;
+    assert!(iterations >= EXTRA_EOF_READ_ITERATIONS);
+    assert!(buffer_bytes > 0);
+    Ok(iterations)
 }
 
 fn copy_declared_artifact(
@@ -838,10 +903,13 @@ fn digest_from_hex(encoded: &str) -> Result<B3Digest, Error> {
     }
     let mut bytes = [0_u8; B3Digest::LENGTH];
     for (index, byte) in bytes.iter_mut().enumerate() {
-        let offset = index
+        let offset_bytes = index
             .checked_mul(HEX_BYTE_CHARS)
             .ok_or_else(|| Error::State("castore-digest-offset-overflow".to_string()))?;
-        *byte = u8::from_str_radix(&encoded[offset..offset + HEX_BYTE_CHARS], HEX_RADIX)
+        let end_offset_bytes = offset_bytes
+            .checked_add(HEX_BYTE_CHARS)
+            .ok_or_else(|| Error::State("castore-digest-offset-overflow".to_string()))?;
+        *byte = u8::from_str_radix(&encoded[offset_bytes..end_offset_bytes], HEX_RADIX)
             .map_err(|_| Error::State("castore-digest-hex-invalid".to_string()))?;
     }
     let digest = B3Digest::from(&bytes);
@@ -850,9 +918,9 @@ fn digest_from_hex(encoded: &str) -> Result<B3Digest, Error> {
     Ok(digest)
 }
 
-fn typed_ref_path(directory: &Path, reference: &str, prefix: &str) -> Result<PathBuf, Error> {
+fn typed_ref_path(directory: &Path, reference: &str, prefix: TypedRefPrefix<'_>) -> Result<PathBuf, Error> {
     let digest = reference
-        .strip_prefix(prefix)
+        .strip_prefix(prefix.0)
         .ok_or_else(|| Error::State("typed-reference-prefix-invalid".to_string()))?;
     if digest.len() != BLAKE3_HEX_CHARS
         || !digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
@@ -873,7 +941,7 @@ fn collect_stale_result_paths(
         context: "read-result-directory".to_string(),
         source,
     })?;
-    let mut stale_paths = Vec::new();
+    let mut stale_paths = Vec::with_capacity(crunch_rust_cache_core::MAX_RESULT_CANDIDATES);
     let mut entry_count = 0_usize;
     for entry in entries {
         entry_count = entry_count
@@ -912,7 +980,7 @@ fn collect_stale_index_updates(
         context: "read-index-directory".to_string(),
         source,
     })?;
-    let mut updates = Vec::new();
+    let mut updates = Vec::with_capacity(crunch_rust_cache_core::MAX_RESULT_CANDIDATES);
     let mut entry_count = 0_usize;
     for entry in entries {
         entry_count = entry_count
@@ -937,8 +1005,11 @@ fn collect_stale_index_updates(
         let index = serde_json::from_slice::<RustResultIndex>(&bytes)
             .map_err(|error| Error::Json(format!("index-decode:{error}")))?;
         validate_result_index(&index).map_err(Error::Core)?;
-        let expected_path =
-            typed_ref_path(indexes_dir, &index.action_ref, crunch_rust_cache_core::RUST_ACTION_REF_PREFIX)?;
+        let expected_path = typed_ref_path(
+            indexes_dir,
+            &index.action_ref,
+            TypedRefPrefix(crunch_rust_cache_core::RUST_ACTION_REF_PREFIX),
+        )?;
         if path != expected_path {
             return Err(Error::State("index-reference-path-mismatch".to_string()));
         }
@@ -974,7 +1045,11 @@ fn validate_retention(retention: &RustCacheRetention) -> Result<(), Error> {
         return Err(Error::Bound("retention-result-limit-exceeded".to_string()));
     }
     for (result_ref, node) in &retention.retained_results {
-        typed_ref_path(Path::new("retained"), result_ref, crunch_rust_cache_core::RUST_RESULT_REF_PREFIX)?;
+        typed_ref_path(
+            Path::new("retained"),
+            result_ref,
+            TypedRefPrefix(crunch_rust_cache_core::RUST_RESULT_REF_PREFIX),
+        )?;
         node_from_identity(node)?;
     }
     assert_eq!(retention.schema, RUST_CACHE_RETENTION_SCHEMA);
@@ -999,17 +1074,17 @@ fn read_bounded_optional(path: &Path) -> Result<Option<Vec<u8>>, Error> {
     if metadata.len() > MAX_CACHE_JSON_BYTES {
         return Err(Error::Bound("cache-json-too-large".to_string()));
     }
-    let capacity =
+    let capacity_bytes =
         usize::try_from(metadata.len()).map_err(|_| Error::Bound("cache-json-size-unrepresentable".to_string()))?;
-    let mut bytes = Vec::with_capacity(capacity);
+    let mut bytes = Vec::with_capacity(capacity_bytes);
     file.read_to_end(&mut bytes).map_err(|source| Error::Io {
         context: "read-cache-file".to_string(),
         source,
     })?;
-    if bytes.len() > capacity {
+    if bytes.len() > capacity_bytes {
         return Err(Error::State("cache-json-grew-during-read".to_string()));
     }
-    assert!(bytes.len() <= capacity);
+    assert!(bytes.len() <= capacity_bytes);
     assert!(bytes.len() as u64 <= MAX_CACHE_JSON_BYTES);
     Ok(Some(bytes))
 }
@@ -1120,13 +1195,15 @@ fn create_private_directory(path: &Path) -> Result<(), Error> {
 }
 
 fn make_owner_writable(path: &Path) {
-    let existed = path.exists();
+    let is_path_present = path.exists();
     if let Ok(metadata) = fs::symlink_metadata(path) {
         let mode = metadata.permissions().mode() | PRIVATE_DIRECTORY_MODE;
         let _result = fs::set_permissions(path, fs::Permissions::from_mode(mode));
     }
     debug_assert!(!path.as_os_str().is_empty());
-    debug_assert!(!existed || path.exists());
+    if is_path_present {
+        debug_assert!(path.exists());
+    }
 }
 
 fn cleanup_restore_staging(root: &Path) {
@@ -1158,7 +1235,9 @@ fn cleanup_restore_staging(root: &Path) {
 fn path_mode(path: &Path) -> u32 {
     let mode = fs::symlink_metadata(path).map(|metadata| metadata.permissions().mode()).unwrap_or(0);
     assert!(!path.as_os_str().is_empty());
-    assert!(mode == 0 || path.exists());
+    if mode != 0 {
+        assert!(path.exists());
+    }
     mode
 }
 
@@ -1187,13 +1266,15 @@ fn artifact_bytes(artifacts: &[RustResultArtifact]) -> Result<u64, Error> {
 fn bounded_count(count: usize) -> Result<u32, Error> {
     let original = count;
     let count = u32::try_from(count).map_err(|_| Error::Bound("count-unrepresentable".to_string()))?;
+    let round_trip =
+        usize::try_from(count).map_err(|_| Error::Bound("count-round-trip-unrepresentable".to_string()))?;
     assert!(count <= MAX_SCAN_ENTRIES);
-    assert_eq!(count as usize, original);
+    assert_eq!(round_trip, original);
     Ok(count)
 }
 
 fn miss_report() -> RustCacheReport {
-    let report = RustCacheReport {
+    let outcome = RustCacheReport {
         disposition: CACHE_DISPOSITION_MISS.to_string(),
         reason_codes: vec![CACHE_DISPOSITION_MISS.to_string()],
         selected_result_ref: None,
@@ -1203,13 +1284,13 @@ fn miss_report() -> RustCacheReport {
         reused_bytes: 0,
         compiler_executed: false,
     };
-    assert_eq!(report.disposition, CACHE_DISPOSITION_MISS);
-    assert!(report.selected_result_ref.is_none());
-    report
+    assert_eq!(outcome.disposition, CACHE_DISPOSITION_MISS);
+    assert!(outcome.selected_result_ref.is_none());
+    outcome
 }
 
 fn rejected_report(reason: &str) -> RustCacheReport {
-    let report = RustCacheReport {
+    let outcome = RustCacheReport {
         disposition: CACHE_DISPOSITION_REJECTED.to_string(),
         reason_codes: vec![reason.to_string()],
         selected_result_ref: None,
@@ -1220,8 +1301,8 @@ fn rejected_report(reason: &str) -> RustCacheReport {
         compiler_executed: false,
     };
     assert!(!reason.is_empty());
-    assert_eq!(report.disposition, CACHE_DISPOSITION_REJECTED);
-    report
+    assert_eq!(outcome.disposition, CACHE_DISPOSITION_REJECTED);
+    outcome
 }
 
 fn rejected_plan_report(
@@ -1234,7 +1315,7 @@ fn rejected_plan_report(
     if reasons.is_empty() {
         reasons.push(CACHE_DISPOSITION_MISS.to_string());
     }
-    let report = RustCacheReport {
+    let outcome = RustCacheReport {
         disposition: CACHE_DISPOSITION_REJECTED.to_string(),
         reason_codes: reasons,
         selected_result_ref: None,
@@ -1244,9 +1325,9 @@ fn rejected_plan_report(
         reused_bytes: 0,
         compiler_executed: false,
     };
-    assert!(!report.reason_codes.is_empty());
-    assert!(report.selected_result_ref.is_none());
-    report
+    assert!(!outcome.reason_codes.is_empty());
+    assert!(outcome.selected_result_ref.is_none());
+    outcome
 }
 
 struct RestoreStaging {
@@ -1260,18 +1341,20 @@ impl RestoreStaging {
         Self { temp: Some(temp) }
     }
 
-    fn path(&self) -> &Path {
-        let path = self.temp.as_ref().expect("restore staging must be owned").path();
+    fn path(&self) -> Result<&Path, Error> {
+        let temp = self.temp.as_ref().ok_or_else(|| Error::State("restore-staging-not-owned".to_string()))?;
+        let path = temp.path();
         assert!(path.is_dir());
         assert!(!path.as_os_str().is_empty());
-        path
+        Ok(path)
     }
 
-    fn keep(mut self) -> PathBuf {
-        let path = self.temp.take().expect("restore staging must be owned before commit").keep();
+    fn keep(mut self) -> Result<PathBuf, Error> {
+        let temp = self.temp.take().ok_or_else(|| Error::State("restore-staging-not-owned".to_string()))?;
+        let path = temp.keep();
         assert!(path.is_dir());
         assert!(!path.as_os_str().is_empty());
-        path
+        Ok(path)
     }
 }
 
@@ -1291,6 +1374,7 @@ struct CacheMutationLock {
 }
 
 impl CacheMutationLock {
+    #[allow(tigerstyle::ambient_clock, reason = "the lock shell owns bounded wall-clock waiting")]
     fn acquire(path: &Path) -> Result<Self, Error> {
         let file = OpenOptions::new()
             .read(true)
@@ -1306,9 +1390,13 @@ impl CacheMutationLock {
         let deadline = Instant::now()
             .checked_add(LOCK_TIMEOUT)
             .ok_or_else(|| Error::State("lock-deadline-overflow".to_string()))?;
-        loop {
+        for _attempt in 0..LOCK_MAX_ATTEMPTS {
             match file.try_lock_exclusive() {
-                Ok(()) => break,
+                Ok(()) => {
+                    assert!(path.is_file());
+                    assert!(file.metadata().map(|metadata| metadata.is_file()).unwrap_or(false));
+                    return Ok(Self { file });
+                }
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                     if Instant::now() >= deadline {
                         return Err(Error::LockTimeout);
@@ -1323,9 +1411,7 @@ impl CacheMutationLock {
                 }
             }
         }
-        assert!(path.is_file());
-        assert!(file.metadata().map(|metadata| metadata.is_file()).unwrap_or(false));
-        Ok(Self { file })
+        Err(Error::LockTimeout)
     }
 }
 
@@ -1641,8 +1727,18 @@ mod tests {
 
     #[test]
     fn cross_filesystem_commit_facts_fail_closed() {
-        assert!(validate_commit_devices(TEST_DEVICE_A, TEST_DEVICE_A).is_ok());
-        let error = validate_commit_devices(TEST_DEVICE_A, TEST_DEVICE_B).unwrap_err();
+        assert!(
+            validate_commit_devices(CommitDevices {
+                staging: TEST_DEVICE_A,
+                destination: TEST_DEVICE_A,
+            })
+            .is_ok()
+        );
+        let error = validate_commit_devices(CommitDevices {
+            staging: TEST_DEVICE_A,
+            destination: TEST_DEVICE_B,
+        })
+        .unwrap_err();
         assert_eq!(error.to_string(), "rust-cache-state:cross-filesystem-restore-commit-rejected");
         assert_ne!(TEST_DEVICE_A, TEST_DEVICE_B);
     }

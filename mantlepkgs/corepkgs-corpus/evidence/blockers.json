@@ -1,0 +1,17 @@
+{
+  "schema": "mantlepkgs-corpus-blockers-v1",
+  "packages": [
+    {
+      "name": "corepkgs-libpng",
+      "system": "x86_64-linux",
+      "status": "buildable",
+      "blockers": []
+    },
+    {
+      "name": "corepkgs-zlib",
+      "system": "x86_64-linux",
+      "status": "buildable",
+      "blockers": []
+    }
+  ]
+}

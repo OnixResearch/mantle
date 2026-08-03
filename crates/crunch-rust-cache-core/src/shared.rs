@@ -27,14 +27,31 @@ pub const MAX_TRUSTED_RUST_RESULT_KEYS: usize = 64;
 pub const MAX_ACCEPTED_PRODUCER_POLICIES: usize = 64;
 pub const ED25519_PUBLIC_KEY_BYTES: usize = 32;
 pub const ED25519_SIGNATURE_BYTES: usize = 64;
-pub const ED25519_PUBLIC_KEY_HEX_CHARS: usize = ED25519_PUBLIC_KEY_BYTES * 2;
-pub const ED25519_SIGNATURE_HEX_CHARS: usize = ED25519_SIGNATURE_BYTES * 2;
-pub const MAX_SHARED_ENVELOPE_BYTES: usize = MAX_RECORD_BYTES + 16_384;
+pub const HEX_CHARS_PER_BYTE: usize = 2;
+pub const SHARED_ENVELOPE_OVERHEAD_BYTES: usize = 16_384;
+pub const ED25519_PUBLIC_KEY_HEX_CHARS: usize = ED25519_PUBLIC_KEY_BYTES.saturating_mul(HEX_CHARS_PER_BYTE);
+pub const ED25519_SIGNATURE_HEX_CHARS: usize = ED25519_SIGNATURE_BYTES.saturating_mul(HEX_CHARS_PER_BYTE);
+pub const MAX_SHARED_ENVELOPE_BYTES: usize = MAX_RECORD_BYTES.saturating_add(SHARED_ENVELOPE_OVERHEAD_BYTES);
 
 const ENVELOPE_DOMAIN: &[u8] = b"mantle.shared-rust-unit.envelope.v1";
 const VERIFIER_DOMAIN: &[u8] = b"mantle.shared-rust-unit.verifier.v1";
 const SIGNATURE_DOMAIN: &[u8] = b"mantle.shared-rust-unit.signature.v1";
 const DOMAIN_SEPARATOR: u8 = 0;
+
+#[derive(Clone, Copy)]
+struct ValidationCode<'a>(&'a str);
+
+#[derive(Clone, Copy)]
+struct TypedRefRule<'a> {
+    prefix: &'a str,
+    code: ValidationCode<'a>,
+}
+
+#[derive(Clone, Copy)]
+struct EnvelopeSignerFacts<'a> {
+    signer_name: &'a str,
+    verifier_key_blake3: &'a str,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -97,6 +114,12 @@ pub struct RustResultAuthorityDecision {
     pub trust_policy_id: String,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ExpectedRustResultRefs<'a> {
+    pub action_ref: &'a str,
+    pub result_ref: &'a str,
+}
+
 #[derive(Serialize)]
 struct EnvelopeHashable<'a> {
     schema: &'a str,
@@ -117,12 +140,15 @@ pub fn sign_rust_result_envelope(
 ) -> Result<SignedRustResultEnvelope, String> {
     validate_rust_result(&result)?;
     validate_object_identity(&object)?;
-    validate_identifier(&producer.producer_id, "shared-rust-producer-id-invalid")?;
-    validate_identifier(&producer.producer_policy_id, "shared-rust-producer-policy-id-invalid")?;
-    validate_identifier(&signer_name, "shared-rust-signer-name-invalid")?;
+    validate_identifier(&producer.producer_id, ValidationCode("shared-rust-producer-id-invalid"))?;
+    validate_identifier(&producer.producer_policy_id, ValidationCode("shared-rust-producer-policy-id-invalid"))?;
+    validate_identifier(&signer_name, ValidationCode("shared-rust-signer-name-invalid"))?;
     let verifier_key_hex = HEXLOWER.encode(signing_key.verifying_key().as_bytes());
     let verifier_key_blake3 = verifier_key_digest(&verifier_key_hex)?;
-    let envelope_ref = envelope_reference(&result, &object, &producer, &signer_name, &verifier_key_blake3)?;
+    let envelope_ref = envelope_reference(&result, &object, &producer, EnvelopeSignerFacts {
+        signer_name: &signer_name,
+        verifier_key_blake3: &verifier_key_blake3,
+    })?;
     let envelope = RustResultEnvelope {
         schema: SHARED_RUST_ENVELOPE_SCHEMA.to_string(),
         envelope_ref,
@@ -156,17 +182,18 @@ pub fn validate_rust_result_envelope(envelope: &RustResultEnvelope) -> Result<()
     }
     validate_rust_result(&envelope.result)?;
     validate_object_identity(&envelope.object)?;
-    validate_identifier(&envelope.producer.producer_id, "shared-rust-producer-id-invalid")?;
-    validate_identifier(&envelope.producer.producer_policy_id, "shared-rust-producer-policy-id-invalid")?;
-    validate_identifier(&envelope.signer_name, "shared-rust-signer-name-invalid")?;
-    validate_blake3(&envelope.verifier_key_blake3, "shared-rust-verifier-key-digest-invalid")?;
-    let expected_ref = envelope_reference(
-        &envelope.result,
-        &envelope.object,
-        &envelope.producer,
-        &envelope.signer_name,
-        &envelope.verifier_key_blake3,
+    validate_identifier(&envelope.producer.producer_id, ValidationCode("shared-rust-producer-id-invalid"))?;
+    validate_identifier(
+        &envelope.producer.producer_policy_id,
+        ValidationCode("shared-rust-producer-policy-id-invalid"),
     )?;
+    validate_identifier(&envelope.signer_name, ValidationCode("shared-rust-signer-name-invalid"))?;
+    validate_blake3(&envelope.verifier_key_blake3, ValidationCode("shared-rust-verifier-key-digest-invalid"))?;
+    let expected_ref =
+        envelope_reference(&envelope.result, &envelope.object, &envelope.producer, EnvelopeSignerFacts {
+            signer_name: &envelope.signer_name,
+            verifier_key_blake3: &envelope.verifier_key_blake3,
+        })?;
     if envelope.envelope_ref != expected_ref {
         return Err("shared-rust-envelope-ref-mismatch".to_string());
     }
@@ -201,8 +228,7 @@ pub fn validate_signed_rust_result_envelope(signed: &SignedRustResultEnvelope) -
 pub fn evaluate_rust_result_authority(
     signed: &SignedRustResultEnvelope,
     policy: &RustResultTrustPolicy,
-    expected_action_ref: &str,
-    expected_result_ref: &str,
+    expected: ExpectedRustResultRefs<'_>,
 ) -> RustResultAuthorityDecision {
     let mut reasons = BTreeSet::new();
     if let Err(reason) = validate_trust_policy(policy) {
@@ -211,20 +237,20 @@ pub fn evaluate_rust_result_authority(
     if let Err(reason) = validate_signed_rust_result_envelope(signed) {
         reasons.insert(reason);
     }
-    if signed.envelope.result.input.action_ref != expected_action_ref {
+    if signed.envelope.result.input.action_ref != expected.action_ref {
         reasons.insert("shared-rust-action-ref-mismatch".to_string());
     }
-    if signed.envelope.result.result_ref != expected_result_ref {
+    if signed.envelope.result.result_ref != expected.result_ref {
         reasons.insert("shared-rust-result-ref-mismatch".to_string());
     }
     if !policy.accepted_producer_policy_ids.contains(&signed.envelope.producer.producer_policy_id) {
         reasons.insert("shared-rust-producer-policy-untrusted".to_string());
     }
-    let trusted = policy
+    let is_trusted = policy
         .trusted_keys
         .iter()
         .any(|key| key.signer_name == signed.envelope.signer_name && key.verifier_key_hex == signed.verifier_key_hex);
-    if !trusted {
+    if !is_trusted {
         reasons.insert("shared-rust-verifier-key-untrusted".to_string());
     }
     if reasons.is_empty()
@@ -232,18 +258,18 @@ pub fn evaluate_rust_result_authority(
     {
         reasons.insert(reason);
     }
-    let admitted = reasons.is_empty();
+    let is_admitted = reasons.is_empty();
     let reason_codes = reasons.into_iter().collect::<Vec<_>>();
-    let accepted_verifier_blake3 = admitted.then(|| signed.envelope.verifier_key_blake3.clone());
-    let authority_disposition = if admitted {
+    let accepted_verifier_blake3 = is_admitted.then(|| signed.envelope.verifier_key_blake3.clone());
+    let authority_disposition = if is_admitted {
         "accepted".to_string()
     } else {
         "rejected".to_string()
     };
-    assert_eq!(admitted, reason_codes.is_empty());
-    assert_eq!(accepted_verifier_blake3.is_some(), admitted);
+    assert_eq!(is_admitted, reason_codes.is_empty());
+    assert_eq!(accepted_verifier_blake3.is_some(), is_admitted);
     RustResultAuthorityDecision {
-        admitted,
+        admitted: is_admitted,
         authority_disposition,
         reason_codes,
         accepted_verifier_blake3,
@@ -255,7 +281,7 @@ pub fn validate_trust_policy(policy: &RustResultTrustPolicy) -> Result<(), Strin
     if policy.schema != SHARED_RUST_TRUST_POLICY_SCHEMA {
         return Err("shared-rust-trust-policy-schema-unsupported".to_string());
     }
-    validate_identifier(&policy.policy_id, "shared-rust-trust-policy-id-invalid")?;
+    validate_identifier(&policy.policy_id, ValidationCode("shared-rust-trust-policy-id-invalid"))?;
     if policy.accepted_producer_policy_ids.is_empty()
         || policy.accepted_producer_policy_ids.len() > MAX_ACCEPTED_PRODUCER_POLICIES
     {
@@ -271,10 +297,10 @@ pub fn validate_trust_policy(policy: &RustResultTrustPolicy) -> Result<(), Strin
         return Err("shared-rust-trusted-keys-not-canonical".to_string());
     }
     for producer_policy in &policy.accepted_producer_policy_ids {
-        validate_identifier(producer_policy, "shared-rust-producer-policy-id-invalid")?;
+        validate_identifier(producer_policy, ValidationCode("shared-rust-producer-policy-id-invalid"))?;
     }
     for trusted_key in &policy.trusted_keys {
-        validate_identifier(&trusted_key.signer_name, "shared-rust-trusted-key-name-invalid")?;
+        validate_identifier(&trusted_key.signer_name, ValidationCode("shared-rust-trusted-key-name-invalid"))?;
         decode_exact_hex(&trusted_key.verifier_key_hex, ED25519_PUBLIC_KEY_BYTES, "shared-rust-trusted-key-invalid")?;
     }
     assert!(policy.trusted_keys.len() <= MAX_TRUSTED_RUST_RESULT_KEYS);
@@ -294,8 +320,7 @@ fn envelope_reference(
     result: &RustUnitResult,
     object: &RustResultObjectIdentity,
     producer: &RustResultProducerIdentity,
-    signer_name: &str,
-    verifier_key_blake3: &str,
+    signer: EnvelopeSignerFacts<'_>,
 ) -> Result<String, String> {
     let hashable = EnvelopeHashable {
         schema: SHARED_RUST_ENVELOPE_SCHEMA,
@@ -303,8 +328,8 @@ fn envelope_reference(
         result,
         object,
         producer,
-        signer_name,
-        verifier_key_blake3,
+        signer_name: signer.signer_name,
+        verifier_key_blake3: signer.verifier_key_blake3,
     };
     let bytes = serde_json::to_vec(&hashable).map_err(|error| format!("shared-rust-envelope-json:{error}"))?;
     if bytes.len() > MAX_SHARED_ENVELOPE_BYTES {
@@ -317,7 +342,10 @@ fn envelope_reference(
 }
 
 fn validate_object_identity(object: &RustResultObjectIdentity) -> Result<(), String> {
-    validate_typed_ref(&object.object_ref, SHARED_RUST_OBJECT_REF_PREFIX, "shared-rust-object-ref-invalid")?;
+    validate_typed_ref(&object.object_ref, TypedRefRule {
+        prefix: SHARED_RUST_OBJECT_REF_PREFIX,
+        code: ValidationCode("shared-rust-object-ref-invalid"),
+    })?;
     if object.size_bytes == 0 || object.size_bytes > crate::MAX_TREE_BYTES {
         return Err("shared-rust-object-size-invalid".to_string());
     }
@@ -326,13 +354,13 @@ fn validate_object_identity(object: &RustResultObjectIdentity) -> Result<(), Str
     Ok(())
 }
 
-fn validate_typed_ref(value: &str, prefix: &str, code: &str) -> Result<(), String> {
-    let Some(digest) = value.strip_prefix(prefix) else {
-        return Err(code.to_string());
+fn validate_typed_ref(value: &str, rule: TypedRefRule<'_>) -> Result<(), String> {
+    let Some(digest) = value.strip_prefix(rule.prefix) else {
+        return Err(rule.code.0.to_string());
     };
-    validate_blake3(digest, code)?;
-    assert_eq!(value.len(), prefix.len() + BLAKE3_HEX_CHARS);
-    assert!(value.starts_with(prefix));
+    validate_blake3(digest, rule.code)?;
+    assert_eq!(value.len(), rule.prefix.len().saturating_add(BLAKE3_HEX_CHARS));
+    assert!(value.starts_with(rule.prefix));
     Ok(())
 }
 
@@ -389,23 +417,23 @@ fn decode_exact_hex(value: &str, expected_bytes: usize, code: &str) -> Result<Ve
     Ok(decoded)
 }
 
-fn validate_identifier(value: &str, code: &str) -> Result<(), String> {
+fn validate_identifier(value: &str, code: ValidationCode<'_>) -> Result<(), String> {
     if value.is_empty() || value.len() > MAX_STRING_BYTES {
-        return Err(code.to_string());
+        return Err(code.0.to_string());
     }
     if value.bytes().any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace()) {
-        return Err(code.to_string());
+        return Err(code.0.to_string());
     }
     assert!(!value.is_empty());
     assert!(value.len() <= MAX_STRING_BYTES);
     Ok(())
 }
 
-fn validate_blake3(value: &str, code: &str) -> Result<(), String> {
+fn validate_blake3(value: &str, code: ValidationCode<'_>) -> Result<(), String> {
     if value.len() != BLAKE3_HEX_CHARS
         || !value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
     {
-        return Err(code.to_string());
+        return Err(code.0.to_string());
     }
     assert_eq!(value.len(), BLAKE3_HEX_CHARS);
     assert!(value.bytes().all(|byte| !byte.is_ascii_uppercase()));
@@ -516,13 +544,12 @@ mod tests {
     #[test]
     fn wrong_expected_action_reference_is_rejected() {
         let fixture = fixture();
+        let expected_action = typed_ref(RUST_ACTION_REF_PREFIX, OTHER_ACTION_HEX);
         let expected_result = fixture.signed.envelope.result.result_ref.clone();
-        let decision = evaluate_rust_result_authority(
-            &fixture.signed,
-            &fixture.policy,
-            &typed_ref(RUST_ACTION_REF_PREFIX, OTHER_ACTION_HEX),
-            &expected_result,
-        );
+        let decision = evaluate_rust_result_authority(&fixture.signed, &fixture.policy, ExpectedRustResultRefs {
+            action_ref: &expected_action,
+            result_ref: &expected_result,
+        });
 
         assert!(!decision.admitted);
         assert_eq!(decision.reason_codes, ["shared-rust-action-ref-mismatch"]);
@@ -533,12 +560,11 @@ mod tests {
     fn wrong_expected_result_reference_is_rejected() {
         let fixture = fixture();
         let action_ref = fixture.signed.envelope.result.input.action_ref.clone();
-        let decision = evaluate_rust_result_authority(
-            &fixture.signed,
-            &fixture.policy,
-            &action_ref,
-            &typed_ref(RUST_RESULT_REF_PREFIX, OTHER_ACTION_HEX),
-        );
+        let result_ref = typed_ref(RUST_RESULT_REF_PREFIX, OTHER_ACTION_HEX);
+        let decision = evaluate_rust_result_authority(&fixture.signed, &fixture.policy, ExpectedRustResultRefs {
+            action_ref: &action_ref,
+            result_ref: &result_ref,
+        });
 
         assert!(!decision.admitted);
         assert_eq!(decision.reason_codes, ["shared-rust-result-ref-mismatch"]);
@@ -618,12 +644,10 @@ mod tests {
     }
 
     fn evaluate(signed: &SignedRustResultEnvelope, policy: &RustResultTrustPolicy) -> RustResultAuthorityDecision {
-        evaluate_rust_result_authority(
-            signed,
-            policy,
-            &signed.envelope.result.input.action_ref,
-            &signed.envelope.result.result_ref,
-        )
+        evaluate_rust_result_authority(signed, policy, ExpectedRustResultRefs {
+            action_ref: &signed.envelope.result.input.action_ref,
+            result_ref: &signed.envelope.result.result_ref,
+        })
     }
 
     fn signing_key(byte: u8) -> ed25519_dalek::SigningKey {

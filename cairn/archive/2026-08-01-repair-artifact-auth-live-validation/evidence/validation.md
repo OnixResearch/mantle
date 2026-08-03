@@ -73,6 +73,12 @@ bootstrap blocker inventory: 115 findings across 3 classes, 355 evidence-backed 
 FAIL: bootstrap blocker inventory is not clean; expected 0 findings and 0 promotion claims
 ```
 
+## Current-main lock refresh
+
+Integration on 2026-08-02 added reviewed remote credential and durable publication dependencies. The artifact-auth source revision and package manifests remain unchanged.
+
+The generated Cargo and Nix lock identities were refreshed in the typed receipt. The regenerated receipt BLAKE3 is `c6e27b13ed0b048b74d3795bba99722ef532fa2cfd93e2992efaec55313b904e`.
+
 ## Claim boundary
 
 The focused artifact-auth gate passes. The broad Tracey and bootstrap-inventory gates are not clean. This change does not claim repository-wide release readiness.

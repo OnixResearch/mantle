@@ -150,8 +150,10 @@ pub struct FailedGoal {
     pub drv_key: String,
     /// Derivation that caused this root failure.
     pub origin_drv_key: String,
-    /// Human-readable error message.
+    /// Human-readable error message at the selected root.
     pub error: String,
+    /// Original error from the derivation that caused the root failure.
+    pub origin_error: String,
     /// Bounded build-service log retained when output admission fails after execution.
     pub build_log: Option<String>,
 }
@@ -1926,6 +1928,7 @@ impl Worker {
                 drv_key: drv_key.to_string(),
                 origin_drv_key: drv_key.to_string(),
                 error: error_msg.to_string(),
+                origin_error: error_msg.to_string(),
                 build_log: build_log.map(str::to_string),
             });
         }
@@ -1939,7 +1942,7 @@ impl Worker {
 
         // Propagate failure to waiters.
         for waiter_key in &waiters {
-            self.propagate_failure(waiter_key, drv_key, &drv_name, build_log, failed)?;
+            self.propagate_failure(waiter_key, drv_key, &drv_name, error_msg, build_log, failed)?;
         }
 
         Ok(())
@@ -1951,6 +1954,7 @@ impl Worker {
         drv_key: &str,
         origin_drv_key: &str,
         failed_dep_name: &str,
+        origin_error: &str,
         build_log: Option<&str>,
         failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error> {
@@ -1975,12 +1979,13 @@ impl Worker {
                 drv_key: drv_key.to_string(),
                 origin_drv_key: origin_drv_key.to_string(),
                 error: format!("dependency {failed_dep_name} failed"),
+                origin_error: origin_error.to_string(),
                 build_log: build_log.map(str::to_string),
             });
         }
 
         for waiter_key in &waiters {
-            self.propagate_failure(waiter_key, origin_drv_key, &drv_name, build_log, failed)?;
+            self.propagate_failure(waiter_key, origin_drv_key, &drv_name, origin_error, build_log, failed)?;
         }
 
         Ok(())
@@ -2422,6 +2427,8 @@ mod tests {
         // Top is a root, so it should be in the failed list.
         let root_failure = failed.iter().find(|failure| failure.drv_key == top_key).unwrap();
         assert_eq!(root_failure.origin_drv_key, leaf_key);
+        assert_eq!(root_failure.error, "dependency mid.drv failed");
+        assert_eq!(root_failure.origin_error, "leaf build error");
         assert_eq!(root_failure.build_log.as_deref(), Some(BUILD_LOG));
     }
 

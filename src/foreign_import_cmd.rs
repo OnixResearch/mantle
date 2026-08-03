@@ -79,8 +79,7 @@ const DRV_SPEC_SEPARATOR: char = '=';
 const SOURCE_BINDING_SEPARATOR: char = '=';
 const DRV_FILE_EXTENSION: &str = "drv";
 const NIX_LOGICAL_STORE_PREFIX: &str = "/nix/store";
-const MAX_FOREIGN_JSON_ARTIFACT_BYTES: u64 = 268_435_456;
-const FOREIGN_JSON_ARTIFACT_READ_LIMIT: u64 = MAX_FOREIGN_JSON_ARTIFACT_BYTES + 1;
+pub(crate) const DEFAULT_FOREIGN_JSON_ARTIFACT_BYTES_MAX: u64 = 268_435_456;
 
 #[derive(Subcommand, Debug, Clone)]
 pub(crate) enum ForeignImportAction {
@@ -424,6 +423,7 @@ pub(crate) struct ForeignImportContext<'a> {
     pub(crate) output_dir: &'a Path,
     pub(crate) state_dir: &'a Path,
     pub(crate) base_state_dirs: &'a [PathBuf],
+    pub(crate) source_bundle_bytes_max: u64,
     pub(crate) verbose: bool,
     pub(crate) json: bool,
 }
@@ -834,10 +834,11 @@ fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImpor
     let plan = read_required_realization_json::<ForeignExecutablePlan>(request.plan_path, "plan", context.json)?;
     let import_receipt =
         read_required_realization_json::<ImportReceipt>(request.import_receipt_path, "import-receipt", context.json)?;
-    let source_bundle = read_required_realization_json::<SourceBundleManifest>(
+    let source_bundle = read_required_realization_json_with_limit::<SourceBundleManifest>(
         request.source_bundle_path,
         "source-bundle",
         context.json,
+        context.source_bundle_bytes_max,
     )?;
     let cache_closure_policy = request
         .cache_closure_policy_path
@@ -981,17 +982,39 @@ fn read_required_realization_json<T: DeserializeOwned>(path: &Path, artifact: &s
     read_required_foreign_json(path, artifact, REALIZE_COMMAND, json)
 }
 
+fn read_required_realization_json_with_limit<T: DeserializeOwned>(
+    path: &Path,
+    artifact: &str,
+    json: bool,
+    max_bytes: u64,
+) -> Result<T, RunError> {
+    read_required_foreign_json_with_limit(path, artifact, REALIZE_COMMAND, json, max_bytes)
+}
+
 fn read_required_foreign_json<T: DeserializeOwned>(
     path: &Path,
     artifact: &str,
     command: &str,
     json: bool,
 ) -> Result<T, RunError> {
-    match read_json::<T>(JsonReadRequest {
-        path,
-        artifact,
-        command,
-    })? {
+    read_required_foreign_json_with_limit(path, artifact, command, json, DEFAULT_FOREIGN_JSON_ARTIFACT_BYTES_MAX)
+}
+
+fn read_required_foreign_json_with_limit<T: DeserializeOwned>(
+    path: &Path,
+    artifact: &str,
+    command: &str,
+    json: bool,
+    max_bytes: u64,
+) -> Result<T, RunError> {
+    match read_json_with_limit::<T>(
+        JsonReadRequest {
+            path,
+            artifact,
+            command,
+        },
+        max_bytes,
+    )? {
         Ok(value) => Ok(value),
         Err(report) => match emit_report(report, json) {
             Err(error) => Err(error),
@@ -1556,20 +1579,31 @@ fn read_optional_receipt(
 }
 
 fn read_json<T: DeserializeOwned>(request: JsonReadRequest<'_>) -> Result<Result<T, ForeignImportCliReport>, RunError> {
+    read_json_with_limit(request, DEFAULT_FOREIGN_JSON_ARTIFACT_BYTES_MAX)
+}
+
+fn read_json_with_limit<T: DeserializeOwned>(
+    request: JsonReadRequest<'_>,
+    max_bytes: u64,
+) -> Result<Result<T, ForeignImportCliReport>, RunError> {
+    assert!(max_bytes > 0, "foreign JSON byte limit must be positive");
+    let read_limit = max_bytes
+        .checked_add(1)
+        .ok_or_else(|| RunError::Internal("foreign JSON byte limit overflowed".to_string()))?;
     let file = fs::File::open(request.path).map_err(|error| {
         RunError::Internal(format!("opening foreign import {} {}: {error}", request.artifact, request.path.display()))
     })?;
     let mut contents = Vec::new();
-    file.take(FOREIGN_JSON_ARTIFACT_READ_LIMIT).read_to_end(&mut contents).map_err(|error| {
+    file.take(read_limit).read_to_end(&mut contents).map_err(|error| {
         RunError::Internal(format!("reading foreign import {} {}: {error}", request.artifact, request.path.display()))
     })?;
-    if u64::try_from(contents.len()).unwrap_or(u64::MAX) > MAX_FOREIGN_JSON_ARTIFACT_BYTES {
+    if u64::try_from(contents.len()).unwrap_or(u64::MAX) > max_bytes {
         return Ok(Err(rejected_report(
             request.command,
             diagnostic(
                 "foreign-json-bytes-out-of-range",
                 None,
-                &format!("{} exceeds {MAX_FOREIGN_JSON_ARTIFACT_BYTES} bytes", request.artifact),
+                &format!("{} exceeds {max_bytes} bytes", request.artifact),
             ),
         )));
     }
@@ -1765,6 +1799,51 @@ mod tests {
 
         plan.substitution_audit[0].cache_url = "https://cache.nixos.org".to_string();
         assert!(trusted_cache_keys_from_plan(&plan).is_err());
+    }
+
+    #[test]
+    fn bounded_json_reader_accepts_an_artifact_at_the_limit() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("artifact.json");
+        let contents = br#"{"value":7}"#;
+        fs::write(&path, contents).unwrap();
+
+        let value = read_json_with_limit::<serde_json::Value>(
+            JsonReadRequest {
+                path: &path,
+                artifact: "fixture",
+                command: VALIDATE_COMMAND,
+            },
+            u64::try_from(contents.len()).unwrap(),
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(value["value"], 7);
+    }
+
+    #[test]
+    fn bounded_json_reader_rejects_an_artifact_above_the_limit() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("artifact.json");
+        let contents = br#"{"value":7}"#;
+        fs::write(&path, contents).unwrap();
+        let max_bytes = u64::try_from(contents.len().saturating_sub(1)).unwrap();
+
+        let report = read_json_with_limit::<serde_json::Value>(
+            JsonReadRequest {
+                path: &path,
+                artifact: "fixture",
+                command: VALIDATE_COMMAND,
+            },
+            max_bytes,
+        )
+        .unwrap()
+        .unwrap_err();
+
+        assert_eq!(report.diagnostics.len(), 1);
+        assert_eq!(report.diagnostics[0].class, "foreign-json-bytes-out-of-range");
+        assert!(report.diagnostics[0].message.contains(&max_bytes.to_string()));
     }
 
     #[test]

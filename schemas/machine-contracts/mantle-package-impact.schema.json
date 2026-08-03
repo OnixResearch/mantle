@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/mantlepkgs/package-impact-v1",
+  "title": "Mantle package impact report",
+  "x-mantle-rust-owner": "crates/mantlepkgs-core/src/impact.rs::MantlePackageImpactReport",
+  "$defs": {
+    "blake3": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "x-mantle-semantic": "non-empty"
+    },
+    "nullable_blake3": {
+      "type": ["string", "null"],
+      "x-mantle-semantic": "blake3"
+    },
+    "package_key": {
+      "type": "object",
+      "required": ["public_selector"],
+      "properties": {
+        "public_selector": { "$ref": "#/$defs/non_empty_string" }
+      },
+      "additionalProperties": false
+    },
+    "build_transition": {
+      "type": "object",
+      "required": [
+        "disposition",
+        "base_state",
+        "head_state",
+        "base_observation_identity_blake3",
+        "head_observation_identity_blake3",
+        "base_terminal_reason_codes",
+        "head_terminal_reason_codes"
+      ],
+      "properties": {
+        "disposition": {
+          "type": "string",
+          "enum": [
+            "newly-successful",
+            "still-successful",
+            "newly-failed",
+            "still-failed",
+            "blocked",
+            "not-attempted",
+            "unavailable",
+            "missing"
+          ]
+        },
+        "base_state": {
+          "type": ["string", "null"],
+          "enum": ["success", "failure", "blocked", "not-attempted", "unavailable", null]
+        },
+        "head_state": {
+          "type": ["string", "null"],
+          "enum": ["success", "failure", "blocked", "not-attempted", "unavailable", null]
+        },
+        "base_observation_identity_blake3": { "$ref": "#/$defs/nullable_blake3" },
+        "head_observation_identity_blake3": { "$ref": "#/$defs/nullable_blake3" },
+        "base_terminal_reason_codes": {
+          "type": "array",
+          "maxItems": 4096,
+          "x-mantle-bound-name": { "maxItems": "MAX_IMPACT_DIAGNOSTICS" },
+          "items": { "$ref": "#/$defs/non_empty_string" }
+        },
+        "head_terminal_reason_codes": {
+          "type": "array",
+          "maxItems": 4096,
+          "x-mantle-bound-name": { "maxItems": "MAX_IMPACT_DIAGNOSTICS" },
+          "items": { "$ref": "#/$defs/non_empty_string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "logical_byte_delta": {
+      "type": ["object", "null"],
+      "required": ["direction", "magnitude_bytes"],
+      "properties": {
+        "direction": { "type": "string", "enum": ["increase", "decrease", "unchanged"] },
+        "magnitude_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "x-mantle-bound-name": { "minimum": "MIN_IMPACT_LOGICAL_BYTES" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "nullable_digest_array": {
+      "type": ["array", "null"],
+      "maxItems": 1048576,
+      "x-mantle-bound-name": { "maxItems": "MAX_IMPACT_CLOSURE_MEMBERS" },
+      "items": { "$ref": "#/$defs/blake3" }
+    },
+    "closure_delta": {
+      "type": "object",
+      "required": [
+        "is_comparable",
+        "reason_codes",
+        "base_closure_identity_blake3",
+        "head_closure_identity_blake3",
+        "added_member_identities",
+        "removed_member_identities",
+        "retained_dependency_identities",
+        "member_count_delta",
+        "logical_byte_delta"
+      ],
+      "properties": {
+        "is_comparable": { "type": "boolean" },
+        "reason_codes": {
+          "type": "array",
+          "maxItems": 4096,
+          "x-mantle-bound-name": { "maxItems": "MAX_IMPACT_DIAGNOSTICS" },
+          "items": { "$ref": "#/$defs/non_empty_string" }
+        },
+        "base_closure_identity_blake3": { "$ref": "#/$defs/nullable_blake3" },
+        "head_closure_identity_blake3": { "$ref": "#/$defs/nullable_blake3" },
+        "added_member_identities": { "$ref": "#/$defs/nullable_digest_array" },
+        "removed_member_identities": { "$ref": "#/$defs/nullable_digest_array" },
+        "retained_dependency_identities": { "$ref": "#/$defs/nullable_digest_array" },
+        "member_count_delta": { "type": ["integer", "null"] },
+        "logical_byte_delta": { "$ref": "#/$defs/logical_byte_delta" }
+      },
+      "additionalProperties": false
+    },
+    "package_impact": {
+      "type": "object",
+      "required": [
+        "key",
+        "catalog_disposition",
+        "changed_dimensions",
+        "base_record_identity_blake3",
+        "head_record_identity_blake3",
+        "build_transition",
+        "closure_delta"
+      ],
+      "properties": {
+        "key": { "$ref": "#/$defs/package_key" },
+        "catalog_disposition": {
+          "type": "string",
+          "enum": [
+            "added",
+            "removed",
+            "unchanged",
+            "recipe-changed",
+            "policy-changed",
+            "blocker-changed",
+            "variant-changed"
+          ]
+        },
+        "changed_dimensions": {
+          "type": "array",
+          "maxItems": 4,
+          "x-mantle-bound-name": { "maxItems": "MAX_IMPACT_CHANGED_DIMENSIONS" },
+          "items": { "type": "string", "enum": ["recipe", "policy", "blocker", "variant"] }
+        },
+        "base_record_identity_blake3": { "$ref": "#/$defs/nullable_blake3" },
+        "head_record_identity_blake3": { "$ref": "#/$defs/nullable_blake3" },
+        "build_transition": { "$ref": "#/$defs/build_transition" },
+        "closure_delta": { "$ref": "#/$defs/closure_delta" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": [
+    "schema",
+    "report_identity_blake3",
+    "comparison_policy_identity_blake3",
+    "base_snapshot_identity_blake3",
+    "head_snapshot_identity_blake3",
+    "base_catalog_identity_blake3",
+    "head_catalog_identity_blake3",
+    "system",
+    "store_prefix",
+    "conversion_policy_identity_blake3",
+    "package_impacts",
+    "non_claims"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "mantle-package-impact-v1",
+      "x-mantle-issue-class": "version"
+    },
+    "report_identity_blake3": { "$ref": "#/$defs/blake3" },
+    "comparison_policy_identity_blake3": { "$ref": "#/$defs/blake3" },
+    "base_snapshot_identity_blake3": { "$ref": "#/$defs/blake3" },
+    "head_snapshot_identity_blake3": { "$ref": "#/$defs/blake3" },
+    "base_catalog_identity_blake3": { "$ref": "#/$defs/blake3" },
+    "head_catalog_identity_blake3": { "$ref": "#/$defs/blake3" },
+    "system": { "$ref": "#/$defs/non_empty_string" },
+    "store_prefix": { "type": "string", "x-mantle-semantic": "safe-reference" },
+    "conversion_policy_identity_blake3": { "$ref": "#/$defs/blake3" },
+    "package_impacts": {
+      "type": "array",
+      "maxItems": 65536,
+      "x-mantle-bound-name": { "maxItems": "MAX_IMPACT_PACKAGES" },
+      "items": { "$ref": "#/$defs/package_impact" }
+    },
+    "non_claims": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "x-mantle-bound-name": {
+        "minItems": "MIN_IMPACT_NON_CLAIMS",
+        "maxItems": "MAX_IMPACT_NON_CLAIMS"
+      },
+      "items": { "$ref": "#/$defs/non_empty_string" }
+    }
+  },
+  "additionalProperties": false
+}

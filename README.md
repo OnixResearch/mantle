@@ -177,6 +177,26 @@ Source readiness proves declared input availability and identity only. Build
 success, output trust, compiler correctness, and release eligibility require
 separate evidence.
 
+## Mantlepkgs catalogs
+
+Mantlepkgs generates a bounded package catalog from locked, concrete Nixpkgs
+derivation graphs. Nix runs only during explicit catalog production. Later
+verification, selection, planning, and building use published artifacts without
+Nix.
+
+```bash
+mantle mantlepkgs validate --manifest mantlepkgs/live-cohort/manifest.ncl
+mantle mantlepkgs verify --generation <generation-directory>
+mantle mantlepkgs plan \
+  --generation <generation-directory> \
+  --package hello --system x86_64-linux \
+  --plan-out target/hello.plan.json \
+  --import-receipt-out target/hello.import-receipt.json
+```
+
+See the [Mantlepkgs guide](mantlepkgs/README.md) for production, source
+preparation, no-Nix consumption, package dispositions, and claim boundaries.
+
 ## Examples
 
 Start with the supported [examples guide](examples/README.md). Its catalog is the
@@ -189,9 +209,10 @@ source of truth for prerequisites, support tiers, and validation rails.
 | [`examples/dependency-chain.ncl`](examples/dependency-chain.ncl) | Producer/consumer ordering |
 | [`examples/projects/generated-site/mantle-project.ncl`](examples/projects/generated-site/mantle-project.ncl) | Project selectors and checks |
 | [`examples/projects/offline-source-bundle/mantle-project.ncl`](examples/projects/offline-source-bundle/mantle-project.ncl) | Connected-to-offline source handoff |
+| [`examples/projects/nixpkgs-tool-use/workflow.ncl`](examples/projects/nixpkgs-tool-use/workflow.ncl) | Cache-imported Nixpkgs tool used by a Mantle build |
 
-Advanced cache, remote-build, OCI, release, WebAssembly, bootstrap, and benchmark
-examples are indexed in [`examples/README.md`](examples/README.md).
+Advanced cache, imported-tool, remote-build, OCI, release, WebAssembly, bootstrap,
+and benchmark examples are indexed in [`examples/README.md`](examples/README.md).
 
 ## Architecture
 
@@ -424,6 +445,7 @@ Useful documentation:
 - [Build correctness primitives](docs/build-correctness-primitives.md)
 - [Remote credential operations](docs/remote-credentials.md)
 - [Mantle naming rules](docs/mantle-naming.md)
+- [Durable file publication adoption](docs/durable-file-publication-adoption.md)
 
 ## Requirements
 
@@ -448,3 +470,9 @@ notices.
 - [fzakaria/guix-transfer](https://github.com/fzakaria/guix-transfer) provides MIT-licensed ATerm parsing, graph translation, and path-mapping design references. Mantle retains execution and evidence authority.
 - [fzakaria/guixpkgs](https://github.com/fzakaria/guixpkgs) provides the checked-in translated Guix package graph used by the live GuixPkgs export proof. Mantle trusts the proof exporter's separate cache key.
 - [adeci/guix-by-nix](https://github.com/adeci/guix-by-nix) provides a system-level reference for consuming translated Guix packages without Guix in the target environment.
+- [OnixResearch/trellis](https://github.com/OnixResearch/trellis) provides reusable verified logic and proof evidence for selected bounded models. Mantle retains runtime, adapter, and release authority.
+- [Atom Reforged](https://nrd.sh/blog/atom-reforged.html) provides architecture references for narrow store authority, source observations, monotonic ingest, and small formal protocol models. Mantle does not adopt its package registry or ownership protocol.
+- `durable-file-publication` at `rad:z3tAR4For7qw8ZirkJzoDw1VNDDLM` provides the reviewed capability-relative one-file publication mechanism.
+- [ekala-project/corepkgs](https://github.com/ekala-project/corepkgs) provides package-domain, explicit-variant, deterministic-index, and separate-test design references. Mantle retains package identity, build, validation, and evidence authority.
+- [ekala-project/eka-ci](https://github.com/ekala-project/eka-ci) provides base-to-head package-impact and closure-diff design references. Forge credentials and CI presentation remain outside Mantle.
+- [ekala-project/ekapkgs-update](https://github.com/ekala-project/ekapkgs-update) provides source-adapter, version-policy, OSV, and Repology design references. Mantle preserves explicit unavailable states and reimplements policy in its functional core.

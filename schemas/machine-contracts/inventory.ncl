@@ -78,7 +78,9 @@ let Registry = {
     "oci.import-report",
     "oci.registry-push-report",
     "oci.registry-pull-report",
-    "release.function-address-binding"
+    "release.function-address-binding",
+    "mantlepkgs.package-impact-report",
+    "mantlepkgs.update-plan"
   ],
   "surfaces"= [
     {
@@ -1333,6 +1335,177 @@ let Registry = {
         "compatibility does not promise stable fields"
       ],
       "rationale"= "Existing machine errors are public but unversioned and must not be silently frozen."
+    },
+    {
+      "id"= "mantlepkgs.catalog-domain-reports",
+      "class"= "compatibility",
+      "rust_owner"= "src/mantlepkgs_cmd.rs::public_json_family",
+      "producer"= {
+        "command_or_api"= "mantle --json mantlepkgs",
+        "marker"= "mantlepkgs.catalog-domain-reports",
+        "source_paths"= [
+          "src/mantlepkgs_adapter.rs",
+          "src/mantlepkgs_cmd.rs"
+        ]
+      },
+      "consumers"= [
+        "Mantlepkgs producers",
+        "no-Nix catalog consumers",
+        "Cairn evidence"
+      ],
+      "artifacts"= {
+        "schema"= "",
+        "generated_contract"= "",
+        "positive_fixtures"= [],
+        "negative_fixture_set"= ""
+      },
+      "version_policy"= {
+        "current"= "mantlepkgs-v1-family",
+        "supported"= [
+          "mantlepkgs-v1-family"
+        ],
+        "unknown_version_behavior"= "reject unknown member schemas before planning, publication, or evidence admission",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "cargo test -p mantlepkgs-core",
+        "cargo test --bin mantle mantlepkgs_cmd::tests"
+      ],
+      "fixture_coverage"= [
+        "version",
+        "identity",
+        "tamper",
+        "no-Nix"
+      ],
+      "freshness_strategy"= "classification only until the versioned Mantlepkgs artifact families receive generated contracts",
+      "freshness"= {
+        "schema_blake3"= "",
+        "contract_blake3"= "",
+        "prelude_blake3"= "",
+        "fixture_set_blake3"= "",
+        "producer_identity_blake3"= "",
+        "consumer_policy_blake3"= ""
+      },
+      "non_claims"= [
+        "compatibility classification does not prove package correctness, reproducibility, evaluator parity, or release eligibility"
+      ],
+      "rationale"= "Mantlepkgs emits several explicit v1 artifacts; this family records the public boundary until each artifact receives a generated contract."
+    },
+    {
+      "id"= "mantlepkgs.package-impact-report",
+      "class"= "contracted",
+      "rust_owner"= "crates/mantlepkgs-core/src/impact.rs::MantlePackageImpactReport",
+      "producer"= {
+        "command_or_api"= "mantle mantlepkgs impact",
+        "marker"= "mantlepkgs.package-impact-report",
+        "source_paths"= [
+          "crates/mantlepkgs-core/src/impact.rs",
+          "src/mantlepkgs_cmd.rs"
+        ]
+      },
+      "consumers"= [
+        "external CI adapters",
+        "Cairn evidence",
+        "local package reviewers"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/mantle-package-impact.schema.json",
+        "generated_contract"= "schemas/machine-contracts/mantle-package-impact.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/mantle-package-impact.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/mantle-package-impact.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-package-impact-v1",
+        "supported"= [
+          "mantle-package-impact-v1"
+        ],
+        "unknown_version_behavior"= "reject before interpreting package, observation, or closure deltas",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "cargo test -p mantlepkgs-core impact::tests",
+        "cargo test --bin mantle mantlepkgs_cmd::tests::impact_command"
+      ],
+      "fixture_coverage"= [
+        "version",
+        "digest",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds the report schema, generated contract, fixtures, pure core, shell, and external adapter policy",
+      "freshness"= {
+        "schema_blake3"= "27c7087a4adacc0b40df941182603b724f7118aa407fc76c585ee3afa024fac8",
+        "contract_blake3"= "7cd1d3ffbfe1324271c5531447350406ae29898b845e4aea58102e9bfc23e0d8",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "1602d93a04a749077c6f0150e3e8c32ce41fc295585396e6e71f45938101fd0a",
+        "producer_identity_blake3"= "7452127b34759660871a1a26bbe9f0b4c38f4cd02134dbb82c21a3f58a77eace",
+        "consumer_policy_blake3"= "094ac32746282ab41656266b861ea5b70bc9f4c54f3b9a3aedf1680c6695d49b"
+      },
+      "non_claims"= [
+        "report conformance does not prove package correctness, unchanged behavior, reproducibility, deployment safety, or release eligibility"
+      ],
+      "rationale"= "This stable local report lets external adapters render review results without forge authority in Mantle."
+    },
+    {
+      "id"= "mantlepkgs.update-plan",
+      "class"= "contracted",
+      "rust_owner"= "crates/mantlepkgs-core/src/updates.rs::UpdatePlan",
+      "producer"= {
+        "command_or_api"= "mantle mantlepkgs update-plan",
+        "marker"= "mantlepkgs.update-plan",
+        "source_paths"= [
+          "crates/mantlepkgs-core/src/updates.rs",
+          "src/mantlepkgs_cmd.rs"
+        ]
+      },
+      "consumers"= [
+        "package maintainers",
+        "Cairn evidence",
+        "external review adapters"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/mantlepkgs-update-plan.schema.json",
+        "generated_contract"= "schemas/machine-contracts/mantlepkgs-update-plan.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/mantlepkgs-update-plan.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/mantlepkgs-update-plan.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantlepkgs-update-plan-v1",
+        "supported"= [
+          "mantlepkgs-update-plan-v1"
+        ],
+        "unknown_version_behavior"= "reject before interpreting candidates, effects, advisory status, or validation links",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "cargo test -p mantlepkgs-core updates::tests",
+        "cargo test --bin mantle mantlepkgs_cmd::tests::update"
+      ],
+      "fixture_coverage"= [
+        "version",
+        "digest",
+        "cross-field",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds the update schema, generated contract, fixtures, pure core, and mutation shell",
+      "freshness"= {
+        "schema_blake3"= "21008e670f90bd69421fbae95e971bb2280f709a94a9fb48663a2a6c544720c9",
+        "contract_blake3"= "a3125cbf30f9cc54e2e9f372e58002415bee51e25fa539fc25a29210de8af948",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "144796c61a4d4ab37f35cf525e3947021ca18ada50293a777fdd644697847598",
+        "producer_identity_blake3"= "918e6378c5738fcd3e5badc7201c73c60c49244326a9cac81dd0f67b21eb8f62",
+        "consumer_policy_blake3"= "be8086e77584c68066c9042b83c5eff2df1d1f31680dec677d4cd4f3cd764a0f"
+      },
+      "non_claims"= [
+        "plan conformance does not prove source trust, advisory completeness, package correctness, reproducibility, deployment safety, or release eligibility"
+      ],
+      "rationale"= "The stable plan lets local and external reviewers replay candidate decisions without network or mutation authority."
     },
     {
       "id"= "eval.raw-json-output",

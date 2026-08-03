@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/mantlepkgs/update-plan-v1",
+  "title": "Mantlepkgs source update plan",
+  "x-mantle-rust-owner": "crates/mantlepkgs-core/src/updates.rs::UpdatePlan",
+  "$defs": {
+    "blake3": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "x-mantle-semantic": "non-empty"
+    },
+    "package_key": {
+      "type": "object",
+      "required": ["public_selector"],
+      "properties": {
+        "public_selector": { "$ref": "#/$defs/non_empty_string" }
+      },
+      "additionalProperties": false
+    },
+    "source_candidate": {
+      "type": "object",
+      "required": ["version", "source_ref", "source_identity_blake3"],
+      "properties": {
+        "version": { "$ref": "#/$defs/non_empty_string" },
+        "source_ref": { "$ref": "#/$defs/non_empty_string" },
+        "source_identity_blake3": { "$ref": "#/$defs/blake3" }
+      },
+      "additionalProperties": false
+    },
+    "candidate_decision": {
+      "type": "object",
+      "required": ["candidate", "normalized_version", "eligible", "reason_codes"],
+      "properties": {
+        "candidate": { "$ref": "#/$defs/source_candidate" },
+        "normalized_version": {
+          "type": ["string", "null"]
+        },
+        "eligible": { "type": "boolean" },
+        "reason_codes": {
+          "type": "array",
+          "maxItems": 4096,
+          "x-mantle-bound-name": { "maxItems": "HARD_MAX_DIAGNOSTICS" },
+          "items": { "$ref": "#/$defs/non_empty_string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "selection": {
+      "type": "object",
+      "required": ["selected", "decisions", "reason_codes"],
+      "properties": {
+        "selected": {
+          "type": ["object", "null"],
+          "required": ["version", "source_ref", "source_identity_blake3"],
+          "properties": {
+            "version": { "$ref": "#/$defs/non_empty_string" },
+            "source_ref": { "$ref": "#/$defs/non_empty_string" },
+            "source_identity_blake3": { "$ref": "#/$defs/blake3" }
+          },
+          "additionalProperties": false
+        },
+        "decisions": {
+          "type": "array",
+          "maxItems": 65536,
+          "x-mantle-bound-name": { "maxItems": "HARD_MAX_CANDIDATES" },
+          "items": { "$ref": "#/$defs/candidate_decision" }
+        },
+        "reason_codes": {
+          "type": "array",
+          "maxItems": 4096,
+          "x-mantle-bound-name": { "maxItems": "HARD_MAX_DIAGNOSTICS" },
+          "items": { "$ref": "#/$defs/non_empty_string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "structured_edit": {
+      "type": "object",
+      "required": ["field_pointer", "old_value", "new_value", "reason_code"],
+      "properties": {
+        "field_pointer": { "$ref": "#/$defs/non_empty_string" },
+        "old_value": { "type": "string" },
+        "new_value": { "type": "string" },
+        "reason_code": { "$ref": "#/$defs/non_empty_string" }
+      },
+      "additionalProperties": false
+    },
+    "mutation_effect": {
+      "type": "object",
+      "required": [
+        "relative_path",
+        "input_digest_blake3",
+        "output_digest_blake3",
+        "edits",
+        "output_document"
+      ],
+      "properties": {
+        "relative_path": { "$ref": "#/$defs/non_empty_string" },
+        "input_digest_blake3": { "$ref": "#/$defs/blake3" },
+        "output_digest_blake3": { "$ref": "#/$defs/blake3" },
+        "edits": {
+          "type": "array",
+          "maxItems": 4096,
+          "x-mantle-bound-name": { "maxItems": "HARD_MAX_EFFECTS" },
+          "items": { "$ref": "#/$defs/structured_edit" }
+        },
+        "output_document": { "$ref": "#/$defs/lock_document" }
+      },
+      "additionalProperties": false
+    },
+    "lock_document": {
+      "type": "object",
+      "required": ["version", "source"],
+      "properties": {
+        "version": { "$ref": "#/$defs/non_empty_string" },
+        "source": {
+          "type": "object",
+          "required": ["ref", "identity_blake3"],
+          "properties": {
+            "ref": { "$ref": "#/$defs/non_empty_string" },
+            "identity_blake3": { "$ref": "#/$defs/blake3" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "linked_evidence": {
+      "type": "object",
+      "required": ["status", "artifact_identity_blake3", "reason_codes"],
+      "x-mantle-invariants": [
+        {
+          "kind": "arrays-empty-iff-enum",
+          "target": "/status",
+          "fields": ["/reason_codes"],
+          "value": "success"
+        }
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["success", "missing", "unavailable", "failed"]
+        },
+        "artifact_identity_blake3": {
+          "type": "array",
+          "maxItems": 65536,
+          "x-mantle-bound-name": { "maxItems": "HARD_MAX_ARTIFACTS" },
+          "items": { "$ref": "#/$defs/blake3" }
+        },
+        "reason_codes": {
+          "type": "array",
+          "maxItems": 4096,
+          "x-mantle-bound-name": { "maxItems": "HARD_MAX_DIAGNOSTICS" },
+          "items": { "$ref": "#/$defs/non_empty_string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "validation_evidence": {
+      "type": "object",
+      "required": [
+        "schema",
+        "candidate_version",
+        "candidate_source_identity_blake3",
+        "catalog",
+        "build_observations",
+        "validation_roots",
+        "impact_report"
+      ],
+      "properties": {
+        "schema": { "const": "mantlepkgs-update-validation-evidence-v1" },
+        "candidate_version": { "$ref": "#/$defs/non_empty_string" },
+        "candidate_source_identity_blake3": { "$ref": "#/$defs/blake3" },
+        "catalog": { "$ref": "#/$defs/linked_evidence" },
+        "build_observations": { "$ref": "#/$defs/linked_evidence" },
+        "validation_roots": { "$ref": "#/$defs/linked_evidence" },
+        "impact_report": { "$ref": "#/$defs/linked_evidence" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": [
+    "schema",
+    "plan_identity_blake3",
+    "policy_identity_blake3",
+    "source_observation_identity_blake3",
+    "advisory_observation_identity_blake3",
+    "package",
+    "selection",
+    "effects",
+    "validation_evidence",
+    "proposal_status",
+    "reason_codes",
+    "non_claims"
+  ],
+  "properties": {
+    "schema": { "type": "string", "const": "mantlepkgs-update-plan-v1" },
+    "plan_identity_blake3": { "$ref": "#/$defs/blake3" },
+    "policy_identity_blake3": { "$ref": "#/$defs/blake3" },
+    "source_observation_identity_blake3": { "$ref": "#/$defs/blake3" },
+    "advisory_observation_identity_blake3": {
+      "type": "array",
+      "maxItems": 65536,
+      "x-mantle-bound-name": { "maxItems": "HARD_MAX_ARTIFACTS" },
+      "items": { "$ref": "#/$defs/blake3" }
+    },
+    "package": { "$ref": "#/$defs/package_key" },
+    "selection": { "$ref": "#/$defs/selection" },
+    "effects": {
+      "type": "array",
+      "maxItems": 4096,
+      "x-mantle-bound-name": { "maxItems": "HARD_MAX_EFFECTS" },
+      "items": { "$ref": "#/$defs/mutation_effect" }
+    },
+    "validation_evidence": { "$ref": "#/$defs/validation_evidence" },
+    "proposal_status": {
+      "type": "string",
+      "enum": ["ready-for-review", "blocked", "unavailable", "failed", "no-candidate"]
+    },
+    "reason_codes": {
+      "type": "array",
+      "maxItems": 4096,
+      "x-mantle-bound-name": { "maxItems": "HARD_MAX_DIAGNOSTICS" },
+      "items": { "$ref": "#/$defs/non_empty_string" }
+    },
+    "non_claims": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "x-mantle-bound-name": {
+        "minItems": "UPDATE_NON_CLAIM_COUNT",
+        "maxItems": "UPDATE_NON_CLAIM_COUNT"
+      },
+      "items": { "$ref": "#/$defs/non_empty_string" }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,96 @@
+{
+  "schema": "mantlepkgs-catalog-v1",
+  "catalog_identity_blake3": "0e417992593aa5e5b9aa85bf87e57db88399770d2377bbc43a7c47c6be59849b",
+  "plan_identity_blake3": "c0ef524bdf58b45d594dce721e0fc681773608ceb684a0ea5c89721a011271ab",
+  "manifest_digest_blake3": "e6ac8f9419a90e75ea7d3318a8cf8fa52be91bc8f8364320d0d676bda3a6d91d",
+  "source_lock": {
+    "reference": "github:ekala-project/corepkgs/a9a1af8abbf08b972dbce7bb9c2643c7d76d140d",
+    "revision": "a9a1af8abbf08b972dbce7bb9c2643c7d76d140d",
+    "lock_digest_blake3": "e12571f07be5bb6b747d0012f78621bd4376fdbb99917f5a2a65e1fd68b81088"
+  },
+  "systems": [
+    "x86_64-linux"
+  ],
+  "target_store_prefix": "/mantle/store",
+  "packages": [
+    {
+      "name": "corepkgs-libpng",
+      "attribute": "legacyPackages.x86_64-linux.libpng",
+      "system": "x86_64-linux",
+      "aliases": [
+        "libpng"
+      ],
+      "disposition": {
+        "status": "buildable",
+        "root_node_id": "nix:d73sdlhjiq257pqi28dpy0iklap9d7mp-libpng-apng-1.6.50.drv",
+        "graph_digest_blake3": "37154ae8172bb0b3b04cf8a3dc179812e265fa03cdfa09a0ebcd4e0efe6b8441",
+        "index_digest_blake3": "8f635022ccc554ab404c1e039565a8d1b0916820f139d8de2dda1bd52244f822"
+      }
+    },
+    {
+      "name": "corepkgs-zlib",
+      "attribute": "legacyPackages.x86_64-linux.zlib",
+      "system": "x86_64-linux",
+      "aliases": [
+        "zlib"
+      ],
+      "disposition": {
+        "status": "buildable",
+        "root_node_id": "nix:n5rkxkhjgfmhj0yfh2ysl2kbs0x79abs-zlib-1.3.2.drv",
+        "graph_digest_blake3": "235d3b0784c580ffa7e6160cdd4d2dea8eef1f0ec97c7e28e3882e4ad6ae0a47",
+        "index_digest_blake3": "dc69fef898a736474a21f37d8dcf9f80dd33bf7a6820c1f296315e9978cb80e0"
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "role": "execution-profile",
+      "path": "policies/execution-profile.json",
+      "digest_blake3": "054ec6754f08d60088cf3388f43295ad37621e5115e979f702a2a5c5d0eefcb8",
+      "bytes": 674
+    },
+    {
+      "role": "package-index",
+      "path": "artifacts/packages.index.json",
+      "digest_blake3": "d3f79a852e9d45cf7745293597afd717487698bc72e3dedac6b721ba5f946213",
+      "bytes": 1010
+    },
+    {
+      "role": "producer-receipt",
+      "path": "producer-receipt.json",
+      "digest_blake3": "da055133ae016423baca182d93da940bb03172df1f8388a8465199dedc02276d",
+      "bytes": 2811
+    },
+    {
+      "role": "shared-foreign-graph",
+      "path": "artifacts/shared.graph.json",
+      "digest_blake3": "54ef6a4809fc4151fc000d5be77ab653958837332d507d635f873abd17a3d964",
+      "bytes": 1028237
+    },
+    {
+      "role": "source-requirement-inventory",
+      "path": "artifacts/source-requirements.json",
+      "digest_blake3": "dc0cc334cf763ab2262f93c813e032557bd039e9116aa588868340937f1fb28b",
+      "bytes": 41766
+    },
+    {
+      "role": "translation-policy",
+      "path": "policies/translation.json",
+      "digest_blake3": "18eaa36031cfa19529089febc9439dc4c540f27f279be21b5d8f10fef618e415",
+      "bytes": 552
+    }
+  ],
+  "producer_receipt_digest_blake3": "696d104daf899521c9b2eb4ab6d9a828f5759c16d740fed46f7b355ce756d7f7",
+  "shared_node_count": 189,
+  "source_requirement_count": 163,
+  "max_artifact_bytes": 1073741824,
+  "non_claims": [
+    "not-nix-source-translation",
+    "not-nix-evaluator-parity",
+    "not-full-nixpkgs-coverage",
+    "not-package-correctness",
+    "not-reproducibility",
+    "not-bootstrap-parity",
+    "not-release-eligibility"
+  ]
+}

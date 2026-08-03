@@ -1,8 +1,8 @@
 //! Translate `nix_compat::Derivation` → `snix_build::BuildRequest`.
 //!
-//! Adapted from snix-glue's `derivation_into_build_request`, simplified:
-//! no structured_attrs, no passAsFile (those are Nix-isms that crunch
-//! doesn't need in v0).
+//! Adapted from snix-glue's `derivation_into_build_request`. Mantle supports
+//! the bounded `passAsFile` and structured-attribute protocols needed by
+//! imported Nix derivations.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -16,6 +16,9 @@ use nix_compat::derivation::Output;
 use nix_compat::nixbase32;
 use nix_compat::store_path::StorePath;
 use nix_compat::store_path::hash_placeholder;
+use sha2::Digest as _;
+use sha2::Sha256;
+use snix_build::buildservice::AdditionalFile;
 use snix_build::buildservice::BuildConstraints;
 use snix_build::buildservice::BuildRequest;
 use snix_build::buildservice::EnvVar;
@@ -33,6 +36,7 @@ use crate::HermeticityAuditKind;
 use crate::HermeticityMode;
 use crate::declared_profile_environment;
 use crate::environment_policy;
+use crate::execution_profile::NIX_FOREIGN_PROFILE_ID;
 use crate::network_policy::CompatibilityNetworkPolicy;
 use crate::network_policy::plan_network_policy;
 use crate::registry::DerivationRegistry;
@@ -44,6 +48,28 @@ use crate::verify_execution_profile_binding;
 /// scripts that expect them.
 const SANDBOX_PATH_NOT_SET: &str = "/path-not-set";
 const PATH_VARIABLE: &str = "PATH";
+const PASS_AS_FILE_ENV: &str = "passAsFile";
+const PASS_AS_FILE_PATH_SUFFIX: &str = "Path";
+const PASS_AS_FILE_DIRECTORY: &str = "build";
+const PASS_AS_FILE_NAME_PREFIX: &str = ".attr-";
+const NIX_BUILD_DIRECTORY: &str = "/build";
+const NIX_LOG_FILE_DESCRIPTOR: &str = "2";
+const NIX_STRUCTURED_ATTRS_ENV: &str = "__json";
+const NIX_ATTRS_SH_ENV: &str = "NIX_ATTRS_SH_FILE";
+const NIX_ATTRS_JSON_ENV: &str = "NIX_ATTRS_JSON_FILE";
+const NIX_ATTRS_SH_FILE_NAME: &str = ".attrs.sh";
+const NIX_ATTRS_JSON_FILE_NAME: &str = ".attrs.json";
+const NIX_STRUCTURED_SYNTHETIC_ENV_KEYS: &[&str] = &["builder", "name", "outputs", "system"];
+const KIBIBYTE_BYTES: usize = 1_024;
+const MAX_STRUCTURED_ATTRS_KIBIBYTES: usize = 1_024;
+const MAX_STRUCTURED_ATTRS_BYTES: usize = MAX_STRUCTURED_ATTRS_KIBIBYTES * KIBIBYTE_BYTES;
+const STRUCTURED_ATTRS_FILE_COUNT: usize = 2;
+const SHELL_QUOTE_COUNT: usize = 2;
+const NIX_PROTOCOL_ENV_VARS: [(&str, &str); 3] = [
+    ("NIX_BUILD_TOP", NIX_BUILD_DIRECTORY),
+    ("NIX_LOG_FD", NIX_LOG_FILE_DESCRIPTOR),
+    ("PWD", NIX_BUILD_DIRECTORY),
+];
 pub const WORKSPACE_POLICY_ENV: &str = "__MANTLE_STATEFUL_WORKSPACE_POLICY";
 pub const WORKSPACE_LEASE_ENV: &str = "__MANTLE_STATEFUL_WORKSPACE_LEASE";
 const LOCAL_WORKSPACE_WORKER_ID: &str = "local-worker";
@@ -112,6 +138,18 @@ pub struct NormalizedBuildEnvironment {
 }
 
 #[derive(Debug)]
+struct PassAsFileExpansion {
+    environment_vars: BTreeMap<String, Vec<u8>>,
+    additional_files: Vec<AdditionalFile>,
+}
+
+#[derive(Debug)]
+struct StructuredAttrsExpansion {
+    environment_vars: BTreeMap<String, Vec<u8>>,
+    additional_files: Vec<AdditionalFile>,
+}
+
+#[derive(Debug)]
 #[must_use = "inspect audit_events or consciously discard them"]
 pub struct BuildRequestEnvelope {
     pub build_request: BuildRequest,
@@ -152,6 +190,9 @@ pub fn derivation_to_build_request(
     execution_profile: &ExecutionProfile,
     hermeticity_mode: HermeticityMode,
 ) -> Result<BuildRequestEnvelope, crate::Error> {
+    debug_assert!(!derivation.builder.is_empty(), "builder must not be empty");
+    debug_assert!(!store_dir.is_empty(), "store_dir must not be empty");
+    debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute path");
     validate_execution_profile(execution_profile).map_err(execution_profile_error)?;
     verify_execution_profile_binding(derivation, execution_profile).map_err(execution_profile_error)?;
     let normalized = normalized_environment_for_profile(derivation, store_dir, execution_profile, hermeticity_mode)?;
@@ -187,8 +228,13 @@ fn normalized_environment_for_profile(
     if execution_profile.environment_mode == ExecutionEnvironmentMode::MantleCompatibility {
         return normalize_build_environment(derivation, store_dir, hermeticity_mode);
     }
-    let environment_vars =
+    let declared_environment =
         declared_profile_environment(derivation, execution_profile).map_err(execution_profile_error)?;
+    let environment_vars = if execution_profile.profile_id == NIX_FOREIGN_PROFILE_ID {
+        nix_protocol_environment(declared_environment, store_dir)
+    } else {
+        declared_environment
+    };
     let action_name = environment_policy::action_name_from_environment(&derivation.environment);
     let report = environment_policy::success_report(action_name, &environment_vars);
     Ok(NormalizedBuildEnvironment {
@@ -200,6 +246,21 @@ fn normalized_environment_for_profile(
 
 fn execution_profile_error(error: crate::ExecutionProfileError) -> crate::Error {
     crate::Error::Store(format!("invalid execution profile: {error}"))
+}
+
+fn nix_protocol_environment(
+    mut declared_environment: BTreeMap<String, Vec<u8>>,
+    store_dir: &str,
+) -> BTreeMap<String, Vec<u8>> {
+    assert!(!store_dir.is_empty(), "Nix protocol store directory must not be empty");
+    assert!(store_dir.starts_with('/'), "Nix protocol store directory must be absolute");
+    for (key, value) in NIX_PROTOCOL_ENV_VARS {
+        declared_environment.insert(key.to_string(), value.as_bytes().to_vec());
+    }
+    declared_environment.insert("NIX_STORE".to_string(), store_dir.as_bytes().to_vec());
+    debug_assert_eq!(declared_environment.get("NIX_BUILD_TOP").map(Vec::as_slice), Some(b"/build".as_slice()));
+    debug_assert_eq!(declared_environment.get("NIX_STORE").map(Vec::as_slice), Some(store_dir.as_bytes()));
+    declared_environment
 }
 
 fn workspace_request_from_derivation(
@@ -359,13 +420,17 @@ pub(crate) fn build_request_from_environment(
     debug_assert!(!store_dir.is_empty(), "store_dir must not be empty");
     debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute path");
 
-    let command_args = build_command_args(derivation);
+    let command_args = build_command_args(derivation, store_dir);
     let constraints = build_constraints(derivation, execution_profile, allow_network);
     let refscan_needles = build_refscan_needles(derivation, inputs);
+    let environment_vars = replace_environment_placeholders(environment_vars, &derivation.outputs, store_dir);
+    let structured_attrs = materialize_structured_attrs(environment_vars, &derivation.outputs, store_dir)?;
+    let pass_as_file = expand_pass_as_file(structured_attrs.environment_vars)?;
+    let additional_files = merge_additional_files(structured_attrs.additional_files, pass_as_file.additional_files)?;
 
     // Tiger Style: assert command_args has at least the builder.
     debug_assert!(!command_args.is_empty());
-    debug_assert!(!environment_vars.is_empty(), "environment must include sandbox vars");
+    debug_assert!(!pass_as_file.environment_vars.is_empty(), "environment must include sandbox vars");
 
     let sandbox_outputs = map_outputs_to_sandbox_paths(derivation, store_dir);
     let input_map = map_inputs_to_components(inputs)?;
@@ -373,7 +438,8 @@ pub(crate) fn build_request_from_environment(
     Ok(BuildRequest {
         command_args,
         outputs: sandbox_outputs,
-        environment_vars: environment_vars
+        environment_vars: pass_as_file
+            .environment_vars
             .into_iter()
             .map(|(key, value)| EnvVar {
                 key,
@@ -385,18 +451,326 @@ pub(crate) fn build_request_from_environment(
         constraints,
         working_dir: execution_profile.work_directory.clone().into(),
         scratch_paths: execution_profile_scratch_paths(execution_profile, store_dir),
-        additional_files: vec![],
+        additional_files,
         refscan_needles,
         workspace: None,
     })
 }
 
+fn replace_environment_placeholders(
+    mut environment_vars: BTreeMap<String, Vec<u8>>,
+    outputs: &BTreeMap<String, Output>,
+    store_dir: &str,
+) -> BTreeMap<String, Vec<u8>> {
+    assert!(!store_dir.is_empty(), "placeholder store directory must not be empty");
+    assert!(store_dir.starts_with('/'), "placeholder store directory must be absolute");
+    for value in environment_vars.values_mut() {
+        let source = BString::from(value.as_slice());
+        let replaced = replace_placeholders_bstr(&source, outputs, store_dir);
+        *value = Vec::from(<BString as AsRef<[u8]>>::as_ref(&replaced));
+    }
+    environment_vars
+}
+
+/// Materialize Nix structured attributes without I/O.
+fn materialize_structured_attrs(
+    mut environment_vars: BTreeMap<String, Vec<u8>>,
+    outputs: &BTreeMap<String, Output>,
+    store_dir: &str,
+) -> Result<StructuredAttrsExpansion, crate::Error> {
+    let Some(raw_attrs) = environment_vars.remove(NIX_STRUCTURED_ATTRS_ENV) else {
+        return Ok(StructuredAttrsExpansion {
+            environment_vars,
+            additional_files: Vec::new(),
+        });
+    };
+    if raw_attrs.len() > MAX_STRUCTURED_ATTRS_BYTES {
+        return Err(crate::Error::Store("Nix structured attributes exceed the byte limit".to_string()));
+    }
+    if environment_vars.contains_key(NIX_ATTRS_SH_ENV) || environment_vars.contains_key(NIX_ATTRS_JSON_ENV) {
+        return Err(crate::Error::Store(
+            "Nix structured attributes collide with protocol environment variables".to_string(),
+        ));
+    }
+
+    let mut attrs: serde_json::Value = serde_json::from_slice(&raw_attrs)
+        .map_err(|error| crate::Error::Store(format!("invalid Nix structured attributes: {error}")))?;
+    let attrs_object = attrs
+        .as_object_mut()
+        .ok_or_else(|| crate::Error::Store("Nix structured attributes must be a JSON object".to_string()))?;
+    let declared_outputs = attrs_object
+        .remove("outputs")
+        .ok_or_else(|| crate::Error::Store("Nix structured attributes are missing outputs".to_string()))?;
+    validate_structured_output_names(&declared_outputs, outputs)?;
+    attrs_object.insert(
+        "outputs".to_string(),
+        serde_json::Value::Object(structured_output_paths(outputs, &environment_vars, store_dir)?),
+    );
+
+    for output_name in outputs.keys() {
+        environment_vars.remove(output_name);
+    }
+    for &key in NIX_STRUCTURED_SYNTHETIC_ENV_KEYS {
+        environment_vars.remove(key);
+    }
+    let attrs = canonicalize_json_value(attrs);
+    let attrs_json = serde_json::to_vec(&attrs)
+        .map_err(|error| crate::Error::Store(format!("cannot encode Nix structured attributes: {error}")))?;
+    let attrs_sh = render_structured_attrs_shell(&attrs)?;
+    if attrs_json.len() > MAX_STRUCTURED_ATTRS_BYTES || attrs_sh.len() > MAX_STRUCTURED_ATTRS_BYTES {
+        return Err(crate::Error::Store("materialized Nix structured attributes exceed the byte limit".to_string()));
+    }
+
+    let sh_sandbox_path = format!("{NIX_BUILD_DIRECTORY}/{NIX_ATTRS_SH_FILE_NAME}");
+    let json_sandbox_path = format!("{NIX_BUILD_DIRECTORY}/{NIX_ATTRS_JSON_FILE_NAME}");
+    environment_vars.insert(NIX_ATTRS_SH_ENV.to_string(), sh_sandbox_path.into_bytes());
+    environment_vars.insert(NIX_ATTRS_JSON_ENV.to_string(), json_sandbox_path.into_bytes());
+    let additional_files = vec![
+        AdditionalFile {
+            path: PathBuf::from(PASS_AS_FILE_DIRECTORY).join(NIX_ATTRS_JSON_FILE_NAME),
+            contents: Bytes::from(attrs_json),
+        },
+        AdditionalFile {
+            path: PathBuf::from(PASS_AS_FILE_DIRECTORY).join(NIX_ATTRS_SH_FILE_NAME),
+            contents: Bytes::from(attrs_sh),
+        },
+    ];
+    debug_assert_eq!(additional_files.len(), STRUCTURED_ATTRS_FILE_COUNT);
+    Ok(StructuredAttrsExpansion {
+        environment_vars,
+        additional_files,
+    })
+}
+
+fn validate_structured_output_names(
+    declared_outputs: &serde_json::Value,
+    outputs: &BTreeMap<String, Output>,
+) -> Result<(), crate::Error> {
+    let names = declared_outputs
+        .as_array()
+        .ok_or_else(|| crate::Error::Store("Nix structured attribute outputs must be an array".to_string()))?;
+    let mut declared = BTreeSet::new();
+    for value in names {
+        let name = value
+            .as_str()
+            .ok_or_else(|| crate::Error::Store("Nix structured attribute output names must be strings".to_string()))?;
+        if !declared.insert(name) {
+            return Err(crate::Error::Store(format!("Nix structured attributes contain duplicate output '{name}'")));
+        }
+    }
+    let actual = outputs.keys().map(String::as_str).collect::<BTreeSet<_>>();
+    if declared != actual {
+        return Err(crate::Error::Store(
+            "Nix structured attribute outputs do not match the derivation outputs".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn structured_output_paths(
+    outputs: &BTreeMap<String, Output>,
+    environment_vars: &BTreeMap<String, Vec<u8>>,
+    store_dir: &str,
+) -> Result<serde_json::Map<String, serde_json::Value>, crate::Error> {
+    let mut paths = serde_json::Map::new();
+    for (name, output) in outputs {
+        let declared_path = output.path_str_with_prefix(store_dir);
+        let path = if declared_path.is_empty() {
+            let raw = environment_vars
+                .get(name)
+                .ok_or_else(|| crate::Error::Store(format!("Nix structured attribute output '{name}' has no path")))?;
+            std::str::from_utf8(raw)
+                .map_err(|_| crate::Error::Store(format!("Nix structured attribute output '{name}' is not UTF-8")))?
+                .to_string()
+        } else {
+            declared_path.into_owned()
+        };
+        let in_active_store = path.strip_prefix(store_dir).is_some_and(|suffix| suffix.starts_with('/'));
+        if !in_active_store {
+            return Err(crate::Error::Store(format!(
+                "Nix structured attribute output '{name}' escapes the active store"
+            )));
+        }
+        paths.insert(name.clone(), serde_json::Value::String(path));
+    }
+    debug_assert_eq!(paths.len(), outputs.len());
+    Ok(paths)
+}
+
+fn canonicalize_json_value(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Array(values) => {
+            serde_json::Value::Array(values.into_iter().map(canonicalize_json_value).collect())
+        }
+        serde_json::Value::Object(values) => {
+            let ordered = values.into_iter().collect::<BTreeMap<_, _>>();
+            let mut canonical = serde_json::Map::new();
+            for (key, value) in ordered {
+                canonical.insert(key, canonicalize_json_value(value));
+            }
+            serde_json::Value::Object(canonical)
+        }
+        scalar => scalar,
+    }
+}
+
+fn render_structured_attrs_shell(attrs: &serde_json::Value) -> Result<Vec<u8>, crate::Error> {
+    let object = attrs
+        .as_object()
+        .ok_or_else(|| crate::Error::Store("Nix structured attributes must be a JSON object".to_string()))?;
+    let ordered = object.iter().collect::<BTreeMap<_, _>>();
+    let mut rendered = String::new();
+    for (name, value) in ordered {
+        if !is_shell_identifier(name) {
+            continue;
+        }
+        if let Some(scalar) = shell_scalar(value) {
+            rendered.push_str("declare ");
+            rendered.push_str(name);
+            rendered.push('=');
+            rendered.push_str(&scalar);
+            rendered.push('\n');
+            continue;
+        }
+        if let Some(values) = value.as_array().filter(|values| values.iter().all(|value| shell_scalar(value).is_some()))
+        {
+            rendered.push_str("declare -a ");
+            rendered.push_str(name);
+            rendered.push_str("=(");
+            for value in values {
+                rendered.push_str(&shell_scalar(value).expect("validated scalar"));
+                rendered.push(' ');
+            }
+            rendered.push(')');
+            rendered.push('\n');
+            continue;
+        }
+        if let Some(values) =
+            value.as_object().filter(|values| values.values().all(|value| shell_scalar(value).is_some()))
+        {
+            let ordered_values = values.iter().collect::<BTreeMap<_, _>>();
+            rendered.push_str("declare -A ");
+            rendered.push_str(name);
+            rendered.push_str("=(");
+            for (key, value) in ordered_values {
+                rendered.push('[');
+                rendered.push_str(&shell_quote(key));
+                rendered.push_str("]=");
+                rendered.push_str(&shell_scalar(value).expect("validated scalar"));
+                rendered.push(' ');
+            }
+            rendered.push_str(")\n");
+        }
+    }
+    Ok(rendered.into_bytes())
+}
+
+fn is_shell_identifier(value: &str) -> bool {
+    let mut bytes = value.bytes();
+    let Some(first) = bytes.next() else {
+        return false;
+    };
+    if !(first.is_ascii_alphabetic() || first == b'_') {
+        return false;
+    }
+    bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+}
+
+fn shell_scalar(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::Null => Some("''".to_string()),
+        serde_json::Value::Bool(true) => Some("1".to_string()),
+        serde_json::Value::Bool(false) => Some(String::new()),
+        serde_json::Value::Number(value) => Some(value.to_string()),
+        serde_json::Value::String(value) => Some(shell_quote(value)),
+        serde_json::Value::Array(_) | serde_json::Value::Object(_) => None,
+    }
+}
+
+fn shell_quote(value: &str) -> String {
+    let mut quoted = String::with_capacity(value.len().saturating_add(SHELL_QUOTE_COUNT));
+    quoted.push('\'');
+    for character in value.chars() {
+        if character == '\'' {
+            quoted.push_str("'\\''");
+        } else {
+            quoted.push(character);
+        }
+    }
+    quoted.push('\'');
+    quoted
+}
+
+fn merge_additional_files(
+    left: Vec<AdditionalFile>,
+    right: Vec<AdditionalFile>,
+) -> Result<Vec<AdditionalFile>, crate::Error> {
+    let expected_count = left.len().saturating_add(right.len());
+    let mut merged = BTreeMap::new();
+    for file in left.into_iter().chain(right) {
+        if merged.insert(file.path.clone(), file.contents).is_some() {
+            return Err(crate::Error::Store(format!("additional build file path collision: {}", file.path.display())));
+        }
+    }
+    let files = merged.into_iter().map(|(path, contents)| AdditionalFile { path, contents }).collect::<Vec<_>>();
+    debug_assert_eq!(files.len(), expected_count);
+    Ok(files)
+}
+
+/// Expand Nix `passAsFile` declarations without I/O.
+///
+/// The file name uses Nix's SHA-256 and nixbase32 protocol. This SHA-256 use is
+/// required for Nix interoperability; Mantle identities continue to use BLAKE3.
+fn expand_pass_as_file(mut environment_vars: BTreeMap<String, Vec<u8>>) -> Result<PassAsFileExpansion, crate::Error> {
+    let Some(raw_names) = environment_vars.get(PASS_AS_FILE_ENV) else {
+        return Ok(PassAsFileExpansion {
+            environment_vars,
+            additional_files: Vec::new(),
+        });
+    };
+    let names = std::str::from_utf8(raw_names)
+        .map_err(|_| crate::Error::Store("passAsFile contains non-UTF-8 bytes".to_string()))?
+        .to_string();
+    let mut additional_files = BTreeMap::new();
+
+    for name in names.split(' ') {
+        let contents = environment_vars.remove(name).ok_or_else(|| {
+            crate::Error::Store(format!("passAsFile refers to missing environment variable '{name}'"))
+        })?;
+        let (path_variable, sandbox_path, relative_path) = pass_as_file_paths(name);
+        if additional_files.insert(relative_path, Bytes::from(contents)).is_some() {
+            return Err(crate::Error::Store(format!("passAsFile path collision for environment variable '{name}'")));
+        }
+        environment_vars.insert(path_variable, sandbox_path.into_bytes());
+    }
+
+    let additional_files: Vec<AdditionalFile> =
+        additional_files.into_iter().map(|(path, contents)| AdditionalFile { path, contents }).collect();
+    debug_assert_eq!(additional_files.len(), names.split(' ').count());
+    debug_assert!(environment_vars.contains_key(PASS_AS_FILE_ENV));
+    Ok(PassAsFileExpansion {
+        environment_vars,
+        additional_files,
+    })
+}
+
+fn pass_as_file_paths(name: &str) -> (String, String, PathBuf) {
+    let digest = nixbase32::encode(&Sha256::digest(name));
+    let file_name = format!("{PASS_AS_FILE_NAME_PREFIX}{digest}");
+    let path_variable = format!("{name}{PASS_AS_FILE_PATH_SUFFIX}");
+    let sandbox_path = format!("/{PASS_AS_FILE_DIRECTORY}/{file_name}");
+    let relative_path = PathBuf::from(PASS_AS_FILE_DIRECTORY).join(file_name);
+    debug_assert!(sandbox_path.starts_with('/'));
+    debug_assert!(!relative_path.is_absolute());
+    (path_variable, sandbox_path, relative_path)
+}
+
 /// Build command args with placeholders expanded.
-fn build_command_args(derivation: &Derivation) -> Vec<String> {
+fn build_command_args(derivation: &Derivation, store_dir: &str) -> Vec<String> {
     let mut command_args: Vec<String> = Vec::with_capacity(derivation.arguments.len().saturating_add(1));
     command_args.push(derivation.builder.clone());
     for arg in &derivation.arguments {
-        command_args.push(replace_placeholders(arg, &derivation.outputs));
+        command_args.push(replace_placeholders(arg, &derivation.outputs, store_dir));
     }
     command_args
 }
@@ -431,7 +805,7 @@ fn overlay_derivation_environment(
             continue;
         }
         reject_denied_strict_environment_key(derivation, hermeticity_mode, environment_vars.len(), key)?;
-        let replaced = replace_placeholders_bstr(value, &derivation.outputs);
+        let replaced = replace_placeholders_bstr(value, &derivation.outputs, store_dir);
         if let Some(sandbox_value) = environment_vars.get(key)
             && sandbox_value.as_slice() != <BString as AsRef<[u8]>>::as_ref(&replaced)
             && is_protected_sandbox_env_key(key)
@@ -713,6 +1087,10 @@ fn build_constraints(
     if execution_profile.provide_bin_sh {
         constraints.insert(BuildConstraints::ProvideBinSh);
     }
+    if execution_profile.profile_id == NIX_FOREIGN_PROFILE_ID {
+        constraints.insert(BuildConstraints::ProvideProcMetadata);
+        constraints.insert(BuildConstraints::ProvideRandomDevices);
+    }
     if execution_profile.resource_limits.min_memory_bytes > 0 {
         constraints.insert(BuildConstraints::MinMemory(execution_profile.resource_limits.min_memory_bytes));
     }
@@ -824,26 +1202,43 @@ pub fn collect_input_paths(
     Ok(paths)
 }
 
-/// Replace `hash_placeholder(outputName)` strings with actual output paths.
-fn replace_placeholders(s: &str, outputs: &BTreeMap<String, Output>) -> String {
+/// Compute the SHA-256 placeholder required by the Nix derivation protocol.
+///
+/// Mantle uses BLAKE3 for its own placeholder domain. Imported Nix ATerm bytes
+/// retain this interoperability value and require replacement at execution.
+fn nix_compatible_hash_placeholder(name: &str) -> String {
+    let digest = Sha256::digest(format!("nix-output:{name}").as_bytes());
+    format!("/{}", nixbase32::encode(&digest))
+}
+
+fn output_placeholders(name: &str) -> [String; 2] {
+    [hash_placeholder(name), nix_compatible_hash_placeholder(name)]
+}
+
+/// Replace Mantle and Nix-compatible output placeholders with actual output paths.
+fn replace_placeholders(s: &str, outputs: &BTreeMap<String, Output>, store_dir: &str) -> String {
     let mut result = s.to_owned();
     for (name, output) in outputs {
         if let Some(path) = output.path.as_ref() {
-            let placeholder = hash_placeholder(name.as_str());
-            result = result.replace(&placeholder, &path.to_absolute_path());
+            let output_path = path.to_absolute_path_with_prefix(store_dir);
+            for placeholder in output_placeholders(name) {
+                result = result.replace(&placeholder, &output_path);
+            }
         }
     }
     result
 }
 
-/// Replace placeholders in a BString.
-fn replace_placeholders_bstr(s: &BString, outputs: &BTreeMap<String, Output>) -> BString {
+/// Replace Mantle and Nix-compatible placeholders in a BString.
+fn replace_placeholders_bstr(s: &BString, outputs: &BTreeMap<String, Output>, store_dir: &str) -> BString {
     use bstr::ByteSlice;
     let mut result = s.clone();
     for (name, output) in outputs {
         if let Some(path) = output.path.as_ref() {
-            let placeholder = hash_placeholder(name.as_str());
-            result = result.replace(placeholder.as_bytes(), path.to_absolute_path().as_bytes()).into();
+            let output_path = path.to_absolute_path_with_prefix(store_dir);
+            for placeholder in output_placeholders(name) {
+                result = result.replace(placeholder.as_bytes(), output_path.as_bytes()).into();
+            }
         }
     }
     result
@@ -856,6 +1251,14 @@ mod tests {
     use nix_compat::derivation::Derivation;
 
     use super::*;
+
+    const NIX_OUT_PLACEHOLDER: &str = "/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9";
+    const UNKNOWN_PLACEHOLDER: &str = "/0000000000000000000000000000000000000000000000000000";
+    const NIX_STORE_DIR: &str = "/nix/store";
+    const MANTLE_STORE_DIR: &str = "/mantle/store";
+    const BAR_PASS_AS_FILE_PATH: &str = "/build/.attr-1fcgpy7vc4ammr7s17j2xq88scswkgz23dqzc04g8sx5vcp2pppw";
+    const BAZ_PASS_AS_FILE_PATH: &str = "/build/.attr-15l04iksj1280dvhbzdq9ai3wlf8ac2188m9qv0gn81k9nba19ds";
+    const INVALID_UTF8_BYTE: u8 = 0xff;
 
     fn derivation_to_build_request(
         derivation: &Derivation,
@@ -972,6 +1375,221 @@ mod tests {
     }
 
     #[test]
+    fn structured_attrs_materialization_matches_nix_shell_and_json_protocols() {
+        let drv = test_derivation();
+        let output_path = drv.outputs["out"].path_str_with_prefix(MANTLE_STORE_DIR).into_owned();
+        let structured = serde_json::json!({
+            "builder": "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash/bin/bash",
+            "count": 42,
+            "disabled": false,
+            "emptyWords": [],
+            "enabled": true,
+            "mapScalars": {"count": 7, "enabled": true, "nullable": null},
+            "nested": {"values": [1, false]},
+            "nullable": null,
+            "outputs": ["out"],
+            "tricky": "a'b\n$HOME\\z",
+            "words": ["one", "two words"],
+        });
+        let environment = BTreeMap::from([
+            (NIX_STRUCTURED_ATTRS_ENV.to_string(), serde_json::to_vec(&structured).unwrap()),
+            ("out".to_string(), output_path.as_bytes().to_vec()),
+        ]);
+
+        let expansion = materialize_structured_attrs(environment, &drv.outputs, MANTLE_STORE_DIR).unwrap();
+        let files = expansion
+            .additional_files
+            .iter()
+            .map(|file| (file.path.as_path(), file.contents.as_ref()))
+            .collect::<BTreeMap<_, _>>();
+        let json_path = PathBuf::from(PASS_AS_FILE_DIRECTORY).join(NIX_ATTRS_JSON_FILE_NAME);
+        let shell_path = PathBuf::from(PASS_AS_FILE_DIRECTORY).join(NIX_ATTRS_SH_FILE_NAME);
+        let attrs_json: serde_json::Value =
+            serde_json::from_slice(files.get(json_path.as_path()).expect("structured JSON payload")).unwrap();
+        let attrs_sh = std::str::from_utf8(files.get(shell_path.as_path()).expect("structured shell payload")).unwrap();
+        let expected_shell = format!(
+            "declare builder='/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash/bin/bash'\n\
+             declare count=42\n\
+             declare disabled=\n\
+             declare -a emptyWords=()\n\
+             declare enabled=1\n\
+             declare -A mapScalars=(['count']=7 ['enabled']=1 ['nullable']='' )\n\
+             declare nullable=''\n\
+             declare -A outputs=(['out']='{output_path}' )\n\
+             declare tricky='a'\\''b\n$HOME\\z'\n\
+             declare -a words=('one' 'two words' )\n"
+        );
+
+        assert_eq!(attrs_json["outputs"]["out"], output_path);
+        assert_eq!(attrs_json["nested"]["values"], serde_json::json!([1, false]));
+        assert_eq!(attrs_sh, expected_shell);
+        assert_eq!(expansion.environment_vars.get(NIX_STRUCTURED_ATTRS_ENV), None);
+        assert_eq!(expansion.environment_vars.get("out"), None);
+        assert_eq!(expansion.environment_vars[NIX_ATTRS_SH_ENV], b"/build/.attrs.sh");
+        assert_eq!(expansion.environment_vars[NIX_ATTRS_JSON_ENV], b"/build/.attrs.json");
+    }
+
+    #[test]
+    fn structured_attrs_materialization_rejects_output_identity_mismatch() {
+        let drv = test_derivation();
+        let structured = serde_json::json!({"outputs": ["dev"]});
+        let environment =
+            BTreeMap::from([(NIX_STRUCTURED_ATTRS_ENV.to_string(), serde_json::to_vec(&structured).unwrap())]);
+
+        let error = materialize_structured_attrs(environment, &drv.outputs, MANTLE_STORE_DIR).unwrap_err();
+
+        assert!(error.to_string().contains("outputs do not match"));
+    }
+
+    #[test]
+    fn structured_attrs_materialization_rejects_malformed_protocol_json() {
+        let drv = test_derivation();
+        let environment = BTreeMap::from([(NIX_STRUCTURED_ATTRS_ENV.to_string(), b"{\"outputs\":[\"out\"]".to_vec())]);
+
+        let error = materialize_structured_attrs(environment, &drv.outputs, MANTLE_STORE_DIR).unwrap_err();
+
+        assert!(error.to_string().contains("invalid Nix structured attributes"));
+    }
+
+    #[test]
+    fn structured_attrs_payload_rewrites_output_placeholders_before_materialization() {
+        let profile = ExecutionProfile::foreign_nix();
+        let mut drv = test_derivation();
+        let structured = serde_json::json!({
+            "message": NIX_OUT_PLACEHOLDER,
+            "outputs": ["out"],
+        });
+        drv.environment
+            .insert(NIX_STRUCTURED_ATTRS_ENV.to_string(), serde_json::to_vec(&structured).unwrap().into());
+        crate::bind_execution_profile(&mut drv, &profile).unwrap();
+        let expected_output = drv.outputs["out"].path_str_with_prefix(MANTLE_STORE_DIR).into_owned();
+
+        let request = super::derivation_to_build_request(
+            &drv,
+            &BTreeMap::new(),
+            MANTLE_STORE_DIR,
+            &profile,
+            HermeticityMode::Strict,
+        )
+        .unwrap()
+        .build_request;
+        let attrs_json = request
+            .additional_files
+            .iter()
+            .find(|file| file.path.ends_with(NIX_ATTRS_JSON_FILE_NAME))
+            .expect("structured JSON file");
+        let attrs: serde_json::Value = serde_json::from_slice(&attrs_json.contents).unwrap();
+
+        assert_eq!(attrs["message"], expected_output);
+        assert!(!request.environment_vars.iter().any(|entry| entry.key == NIX_STRUCTURED_ATTRS_ENV));
+        assert!(!request.environment_vars.iter().any(|entry| entry.key == "out"));
+        assert!(
+            NIX_STRUCTURED_SYNTHETIC_ENV_KEYS
+                .iter()
+                .all(|key| !request.environment_vars.iter().any(|entry| entry.key == *key))
+        );
+    }
+
+    #[test]
+    fn pass_as_file_expansion_matches_nix_protocol_paths_and_contents() {
+        let environment_vars = BTreeMap::from([
+            ("bar".to_string(), b"baz".to_vec()),
+            ("baz".to_string(), b"bar".to_vec()),
+            (PASS_AS_FILE_ENV.to_string(), b"bar baz".to_vec()),
+        ]);
+
+        let expansion = expand_pass_as_file(environment_vars).unwrap();
+
+        assert_eq!(expansion.environment_vars.get("bar"), None);
+        assert_eq!(expansion.environment_vars.get("baz"), None);
+        assert_eq!(expansion.environment_vars["barPath"], BAR_PASS_AS_FILE_PATH.as_bytes());
+        assert_eq!(expansion.environment_vars["bazPath"], BAZ_PASS_AS_FILE_PATH.as_bytes());
+        assert_eq!(expansion.environment_vars[PASS_AS_FILE_ENV], b"bar baz");
+        assert_eq!(expansion.additional_files.len(), 2);
+        assert_eq!(expansion.additional_files[0].path, PathBuf::from(&BAZ_PASS_AS_FILE_PATH[1..]));
+        assert_eq!(expansion.additional_files[0].contents, Bytes::from_static(b"bar"));
+        assert_eq!(expansion.additional_files[1].path, PathBuf::from(&BAR_PASS_AS_FILE_PATH[1..]));
+        assert_eq!(expansion.additional_files[1].contents, Bytes::from_static(b"baz"));
+    }
+
+    #[test]
+    fn pass_as_file_expansion_rejects_missing_environment_variable() {
+        let environment_vars = BTreeMap::from([(PASS_AS_FILE_ENV.to_string(), b"missing".to_vec())]);
+
+        let error = expand_pass_as_file(environment_vars).unwrap_err();
+
+        assert!(error.to_string().contains("passAsFile refers to missing environment variable 'missing'"));
+    }
+
+    #[test]
+    fn pass_as_file_expansion_rejects_non_utf8_name_list() {
+        let environment_vars = BTreeMap::from([(PASS_AS_FILE_ENV.to_string(), vec![INVALID_UTF8_BYTE])]);
+
+        let error = expand_pass_as_file(environment_vars).unwrap_err();
+
+        assert!(error.to_string().contains("passAsFile contains non-UTF-8 bytes"));
+    }
+
+    #[test]
+    fn build_request_materializes_pass_as_file_payload() {
+        let mut drv = test_derivation();
+        drv.environment.insert(PASS_AS_FILE_ENV.to_string(), "text".into());
+        drv.environment.insert("text".to_string(), "Provide a source file".into());
+
+        let request = derivation_to_build_request(&drv, &BTreeMap::new(), NIX_STORE_DIR, HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
+
+        let expected_text_path = pass_as_file_paths("text").1;
+        assert!(!request.environment_vars.iter().any(|entry| entry.key == "text"));
+        assert!(
+            request
+                .environment_vars
+                .iter()
+                .any(|entry| { entry.key == "textPath" && entry.value.as_ref() == expected_text_path.as_bytes() })
+        );
+        assert_eq!(request.additional_files.len(), 1);
+        assert_eq!(request.additional_files[0].path, pass_as_file_paths("text").2);
+        assert_eq!(request.additional_files[0].contents, Bytes::from_static(b"Provide a source file"));
+    }
+
+    #[test]
+    fn pass_as_file_payload_rewrites_nix_output_placeholder_for_active_store() {
+        let mut drv = test_derivation();
+        let payload = format!("install --prefix={NIX_OUT_PLACEHOLDER}");
+        drv.environment.insert(PASS_AS_FILE_ENV.to_string(), "buildCommand".into());
+        drv.environment.insert("buildCommand".to_string(), payload.into());
+        let expected_output = drv.outputs["out"].path.as_ref().unwrap().to_absolute_path_with_prefix(MANTLE_STORE_DIR);
+
+        let request = derivation_to_build_request(&drv, &BTreeMap::new(), MANTLE_STORE_DIR, HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
+        let contents = &request.additional_files[0].contents;
+
+        assert!(contents.as_ref().windows(expected_output.len()).any(|window| window == expected_output.as_bytes()));
+        assert!(
+            !contents
+                .as_ref()
+                .windows(NIX_OUT_PLACEHOLDER.len())
+                .any(|window| window == NIX_OUT_PLACEHOLDER.as_bytes())
+        );
+        assert!(!contents.as_ref().windows(NIX_STORE_DIR.len()).any(|window| window == NIX_STORE_DIR.as_bytes()));
+    }
+
+    #[test]
+    fn pass_as_file_payload_preserves_unknown_placeholder() {
+        let mut drv = test_derivation();
+        drv.environment.insert(PASS_AS_FILE_ENV.to_string(), "buildCommand".into());
+        drv.environment.insert("buildCommand".to_string(), UNKNOWN_PLACEHOLDER.into());
+
+        let request = derivation_to_build_request(&drv, &BTreeMap::new(), MANTLE_STORE_DIR, HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
+
+        assert_eq!(request.additional_files[0].contents, Bytes::from_static(UNKNOWN_PLACEHOLDER.as_bytes()));
+    }
+
+    #[test]
     fn foreign_guix_profile_controls_shell_environment_and_working_paths() {
         let profile = ExecutionProfile::foreign_guix();
         let mut drv = test_derivation();
@@ -991,11 +1609,74 @@ mod tests {
         .build_request;
 
         assert!(!request.constraints.contains(&BuildConstraints::ProvideBinSh));
+        assert!(!request.constraints.contains(&BuildConstraints::ProvideProcMetadata));
+        assert!(!request.constraints.contains(&BuildConstraints::ProvideRandomDevices));
         assert!(!request.constraints.contains(&BuildConstraints::NetworkAccess));
         assert_eq!(request.working_dir, PathBuf::from("build"));
         assert_eq!(request.scratch_paths, vec![PathBuf::from("build"), PathBuf::from("mantle/store")]);
         assert!(!request.environment_vars.iter().any(|entry| entry.key == "SHELL"));
         assert!(!request.environment_vars.iter().any(|entry| entry.key == crate::EXECUTION_PROFILE_BINDING_ENV));
+    }
+
+    #[test]
+    fn foreign_nix_profile_supplies_protocol_environment_for_active_store() {
+        const ACTIVE_STORE_DIR: &str = "/mantle/store";
+        let profile = ExecutionProfile::foreign_nix();
+        let mut drv = test_derivation();
+        drv.builder = format!("{ACTIVE_STORE_DIR}/00000000000000000000000000000000-builder");
+        drv.arguments = vec!["--build".to_string()];
+        drv.environment.insert("builder".to_string(), drv.builder.clone().into());
+        crate::bind_execution_profile(&mut drv, &profile).unwrap();
+
+        let request = super::derivation_to_build_request(
+            &drv,
+            &BTreeMap::new(),
+            ACTIVE_STORE_DIR,
+            &profile,
+            HermeticityMode::Strict,
+        )
+        .unwrap()
+        .build_request;
+        let environment: BTreeMap<&str, &[u8]> =
+            request.environment_vars.iter().map(|entry| (entry.key.as_str(), entry.value.as_ref())).collect();
+
+        assert_eq!(environment.get("NIX_BUILD_TOP"), Some(&b"/build".as_slice()));
+        assert_eq!(environment.get("PWD"), Some(&b"/build".as_slice()));
+        assert_eq!(environment.get("NIX_STORE"), Some(&ACTIVE_STORE_DIR.as_bytes()));
+        assert_eq!(environment.get("NIX_LOG_FD"), Some(&b"2".as_slice()));
+        assert!(request.constraints.contains(&BuildConstraints::ProvideProcMetadata));
+        assert!(request.constraints.contains(&BuildConstraints::ProvideRandomDevices));
+    }
+
+    #[test]
+    fn foreign_nix_protocol_environment_prevents_declared_build_top_escape() {
+        const ACTIVE_STORE_DIR: &str = "/mantle/store";
+        const ESCAPING_BUILD_TOP: &str = "/escape";
+        let profile = ExecutionProfile::foreign_nix();
+        let mut drv = test_derivation();
+        drv.builder = format!("{ACTIVE_STORE_DIR}/00000000000000000000000000000000-builder");
+        drv.arguments = vec!["--build".to_string()];
+        drv.environment.insert("builder".to_string(), drv.builder.clone().into());
+        drv.environment.insert("NIX_BUILD_TOP".to_string(), ESCAPING_BUILD_TOP.into());
+        crate::bind_execution_profile(&mut drv, &profile).unwrap();
+
+        let request = super::derivation_to_build_request(
+            &drv,
+            &BTreeMap::new(),
+            ACTIVE_STORE_DIR,
+            &profile,
+            HermeticityMode::Strict,
+        )
+        .unwrap()
+        .build_request;
+        let build_top = request
+            .environment_vars
+            .iter()
+            .find(|entry| entry.key == "NIX_BUILD_TOP")
+            .map(|entry| entry.value.as_ref());
+
+        assert_eq!(build_top, Some(b"/build".as_slice()));
+        assert_ne!(build_top, Some(ESCAPING_BUILD_TOP.as_bytes()));
     }
 
     #[test]
@@ -1300,16 +1981,33 @@ mod tests {
         let placeholder = hash_placeholder("out");
         let input = format!("echo hello > {placeholder}");
 
-        let result = replace_placeholders(&input, &drv.outputs);
+        let result = replace_placeholders(&input, &drv.outputs, NIX_STORE_DIR);
         assert!(!result.contains(&placeholder), "placeholder should be gone");
         assert!(result.contains(&out_path.to_absolute_path()), "should contain output path: {result}");
     }
 
     #[test]
-    fn replace_placeholders_noop_without_placeholder() {
+    fn replace_placeholders_substitutes_nix_compatible_output_at_selected_store_prefix() {
         let drv = test_derivation();
-        let input = "echo hello world";
-        let result = replace_placeholders(input, &drv.outputs);
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let placeholder = nix_compatible_hash_placeholder("out");
+        let input = format!("hex0 source {placeholder}");
+
+        assert_eq!(placeholder, NIX_OUT_PLACEHOLDER);
+        let result = replace_placeholders(&input, &drv.outputs, MANTLE_STORE_DIR);
+        assert!(!result.contains(&placeholder), "Nix-compatible placeholder should be gone");
+        assert!(
+            result.contains(&out_path.to_absolute_path_with_prefix(MANTLE_STORE_DIR)),
+            "should contain selected output path: {result}"
+        );
+        assert!(!result.contains(NIX_STORE_DIR), "must not fall back to the Nix store: {result}");
+    }
+
+    #[test]
+    fn replace_placeholders_noop_without_known_placeholder() {
+        let drv = test_derivation();
+        let input = format!("echo hello world {UNKNOWN_PLACEHOLDER}");
+        let result = replace_placeholders(&input, &drv.outputs, MANTLE_STORE_DIR);
         assert_eq!(result, input);
     }
 
@@ -1347,7 +2045,7 @@ mod tests {
         let ph_dev = hash_placeholder("dev");
         let input = format!("install -D {ph_out}/bin/x {ph_dev}/include/x.h");
 
-        let result = replace_placeholders(&input, &drv.outputs);
+        let result = replace_placeholders(&input, &drv.outputs, NIX_STORE_DIR);
         assert!(!result.contains(&ph_out));
         assert!(!result.contains(&ph_dev));
         let out_path = drv.outputs["out"].path.as_ref().unwrap().to_absolute_path();
@@ -1362,9 +2060,11 @@ mod tests {
         let placeholder = hash_placeholder("out");
         let input = format!("echo > {placeholder}");
 
-        let str_result = replace_placeholders(&input, &drv.outputs);
-        let bstr_result = replace_placeholders_bstr(&BString::from(input.as_bytes()), &drv.outputs);
+        let str_result = replace_placeholders(&input, &drv.outputs, MANTLE_STORE_DIR);
+        let bstr_result = replace_placeholders_bstr(&BString::from(input.as_bytes()), &drv.outputs, MANTLE_STORE_DIR);
         assert_eq!(str_result.as_bytes(), bstr_result.as_ref() as &[u8]);
+        assert!(str_result.contains(MANTLE_STORE_DIR));
+        assert!(!str_result.contains(NIX_STORE_DIR));
     }
 
     // ── Phase 1: collect_input_paths tests ────────────────────

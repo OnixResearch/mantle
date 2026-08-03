@@ -63,4 +63,9 @@ compatibility surface, crate name, or historical decision.
 | [0054](0054-select-snix-backports-by-mantle-compatibility-boundary.md) | Select Snix backports by Mantle compatibility boundary | Accepted |
 | [0055](0055-plan-http-cache-closures-before-root-admission.md) | Plan HTTP cache closures before root admission | Accepted |
 | [0056](0056-generate-mantlepkgs-from-concrete-package-graphs.md) | Generate Mantlepkgs from concrete package graphs | Proposed |
-| [0057](0057-keep-remote-bearers-out-of-durable-state.md) | Keep remote bearers out of durable state | Accepted |
+| [0057](0057-keep-composition-plans-concrete-and-frontend-neutral.md) | Keep composition plans concrete and frontend-neutral | Proposed |
+| [0058](0058-limit-store-access-with-concrete-capability-views.md) | Limit store access with concrete capability views | Proposed |
+| [0059](0059-bind-source-observations-without-new-signature-authority.md) | Bind source observations without new signature authority | Proposed |
+| [0060](0060-verify-remote-admission-with-a-trellis-model.md) | Verify remote admission with a Trellis model | Proposed |
+| [0061](0061-keep-remote-bearers-out-of-durable-state.md) | Keep remote bearers out of durable state | Accepted |
+| [0062](0062-adapt-ekala-package-maintenance-patterns-without-transferring-authority.md) | Adapt Ekala package-maintenance patterns without transferring authority | Proposed |

@@ -132,6 +132,7 @@ const ALLOWED_RAILS: &[&str] = &[
 ];
 const REQUIRED_WORKFLOW_RAILS: &[(&str, &[&str])] = &[
     ("project-foreign-import-handoff", &["foreign-import-cli"]),
+    ("project-nixpkgs-tool-use", &["foreign-import-cli"]),
     ("project-portable-receipt-handoff", &["portable-receipt-cli", "semantic-graph-cli"]),
     ("project-cargo-import-offline", &["cargo-import-cli"]),
     ("project-wasm-component-hello", &["wasm-component-cli"]),

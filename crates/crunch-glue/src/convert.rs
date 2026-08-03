@@ -72,9 +72,9 @@ pub fn resolve_derivation_registration(request: ResolvedDerivationRequest<'_>) -
         request.store_dir,
     );
     derivation.calculate_output_paths_with_store_dir(request.name, &hdm, request.store_dir)?;
-    let content_addressed =
+    let is_content_addressed =
         request.addressing_mode == CONTENT_ADDRESSED_MODE && derivation.outputs.values().all(|o| o.ca_hash.is_none());
-    if content_addressed {
+    if is_content_addressed {
         for output in derivation.outputs.values_mut() {
             output.path = None;
         }
@@ -86,7 +86,7 @@ pub fn resolve_derivation_registration(request: ResolvedDerivationRequest<'_>) -
         drv_path,
         hdm,
         derivation,
-        content_addressed,
+        content_addressed: is_content_addressed,
         dynamic_plan_outputs: request.dynamic_plan_outputs,
         provenance_claims: request.provenance_claims,
     };
@@ -357,7 +357,7 @@ fn finalize_and_register(
 
     let drv_path = registration.drv_path.clone();
     *nix_drv = registration.derivation.clone();
-    let content_addressed = registration.content_addressed;
+    let is_content_addressed = registration.content_addressed;
     known_paths.insert_ca(registration);
 
     debug_assert!(
@@ -365,7 +365,7 @@ fn finalize_and_register(
         "derivation must be registered in KnownPaths after insert"
     );
     debug_assert!(
-        !content_addressed || nix_drv.outputs.values().all(|output| output.path.is_none()),
+        !is_content_addressed || nix_drv.outputs.values().all(|output| output.path.is_none()),
         "CA derivation outputs must have None paths after registration"
     );
     Ok((drv_path, nix_drv.clone()))

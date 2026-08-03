@@ -2375,6 +2375,44 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn http_closure_changed_dependency_nar_keeps_closure_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-changed-nar")).await;
+        let child = make_signed_pathinfo(&push_store, "changed-nar-child", b"child").await;
+        let root = make_signed_pathinfo_with_references(&push_store, "changed-nar-root", b"root", vec![
+            child.store_path.clone(),
+        ])
+        .await;
+        let cache_dir = tmp.path().join("cache-changed-nar");
+        export_paths_to_cache_dir(&push_store, &[child.clone(), root.clone()], &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let mut routes = cache_routes(&cache_dir);
+        routes.insert(
+            nar_route(&cache_dir, &child.store_path),
+            HttpResponse::ok_bytes(b"changed bytes are not the signed NAR".to_vec()),
+        );
+        let server = HttpTestServer::spawn(routes);
+        let pull_store = open_test_store(&tmp.path().join("pull-changed-nar")).await;
+
+        let error = import_http_cache_closure(
+            &pull_store,
+            &server.base_url,
+            &root.store_path,
+            &default_pull_options(),
+            HttpClosureLimits::default(),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(error.to_string().contains("http-closure-content-admission-failed"));
+        assert!(pull_store.pathinfo_service().get(*child.store_path.digest()).await.unwrap().is_none());
+        assert!(pull_store.pathinfo_service().get(*root.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
     async fn http_pull_skips_already_present_without_narinfo_request() {
         let tmp = tempfile::tempdir().unwrap();
         let push_store = open_test_store(&tmp.path().join("push")).await;

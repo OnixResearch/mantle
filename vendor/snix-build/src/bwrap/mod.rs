@@ -40,16 +40,24 @@ const COMMON_BWRAP_ARGS: &[&str] = &[
     "/",
     "--dev",
     "/dev",
+    "--tmpfs",
+    "/dev/shm",
+    "--proc",
+    "/proc",
+    "--tmpfs",
+    "/tmp",
+];
+
+const RANDOM_DEVICE_MASK_ARGS: &[&str] = &[
     "--ro-bind",
     "/dev/null",
     "/dev/random",
     "--ro-bind",
     "/dev/null",
     "/dev/urandom",
-    "--tmpfs",
-    "/dev/shm",
-    "--proc",
-    "/proc",
+];
+
+const PROC_METADATA_MASK_ARGS: &[&str] = &[
     "--ro-bind-try",
     "/dev/null",
     "/proc/cpuinfo",
@@ -68,8 +76,6 @@ const COMMON_BWRAP_ARGS: &[&str] = &[
     "--ro-bind-try",
     "/dev/null",
     "/proc/version",
-    "--tmpfs",
-    "/tmp",
 ];
 
 const ETC_PASSWD: &[u8] = b"
@@ -316,6 +322,12 @@ impl Bwrap {
         let scratch_dir = spec.host_workdir().join("scratches");
         fs::create_dir_all(&scratch_dir)?;
         let mut args: Vec<OsString> = COMMON_BWRAP_ARGS.iter().map(|s| s.into()).collect();
+        if !spec.provide_random_devices() {
+            args.extend(RANDOM_DEVICE_MASK_ARGS.iter().map(OsString::from));
+        }
+        if !spec.provide_proc_metadata() {
+            args.extend(PROC_METADATA_MASK_ARGS.iter().map(OsString::from));
+        }
         if !spec.allow_network() {
             args.push("--unshare-net".into());
         }
@@ -512,35 +524,75 @@ mod tests {
     }
 
     #[test]
-    fn common_bwrap_args_contains_exact_proc_masks() {
-        let observed: Vec<&str> = COMMON_BWRAP_ARGS
+    fn default_sandbox_contains_exact_proc_masks() {
+        let tempdir = tempfile::tempdir().expect("tempdir must be available");
+        let bwrap = Bwrap::initialize(minimal_spec(tempdir.path(), false)).expect("sandbox should initialize");
+        let args = arg_strings(&bwrap);
+        let observed: Vec<&str> = args
             .windows(3)
             .filter(|window| window[0] == "--ro-bind-try" && window[1] == "/dev/null")
-            .map(|window| window[2])
+            .map(|window| window[2].as_str())
             .filter(|target| target.starts_with("/proc/"))
             .collect();
 
         assert_eq!(observed, EXPECTED_PROC_MASKS);
-        assert!(COMMON_BWRAP_ARGS.windows(2).any(|window| window == ["--proc", "/proc"]));
+        assert!(args.windows(2).any(|window| window == ["--proc", "/proc"]));
     }
 
     #[test]
-    fn common_bwrap_args_keep_proc_self_accessible() {
+    fn requested_proc_metadata_omits_proc_masks() {
+        let tempdir = tempfile::tempdir().expect("tempdir must be available");
+        let spec = SandboxSpec::builder()
+            .host_workdir(tempdir.path())
+            .command(["/bin/sh", "-c", "true"])
+            .sandbox_workdir("build")
+            .scratches(["build"])
+            .provide_proc_metadata(true)
+            .build();
+        let bwrap = Bwrap::initialize(spec).expect("sandbox should initialize");
+        let args = arg_strings(&bwrap);
+
+        for target in EXPECTED_PROC_MASKS {
+            assert!(bind_source_for(&args, target).is_none(), "unexpected mask for {target}");
+        }
+        assert!(args.windows(2).any(|window| window == ["--proc", "/proc"]));
+    }
+
+    #[test]
+    fn proc_masks_keep_proc_self_accessible() {
         for target in EXPECTED_PROC_MASKS {
             assert!(!target.starts_with("/proc/self/"));
         }
-        assert!(!COMMON_BWRAP_ARGS.iter().any(|arg| arg.starts_with("/proc/self/")));
+        assert!(!PROC_METADATA_MASK_ARGS.iter().any(|arg| arg.starts_with("/proc/self/")));
     }
 
     #[test]
-    fn common_bwrap_args_contains_dev_masks() {
+    fn default_sandbox_contains_random_device_masks() {
+        let tempdir = tempfile::tempdir().expect("tempdir must be available");
+        let bwrap = Bwrap::initialize(minimal_spec(tempdir.path(), false)).expect("sandbox should initialize");
+        let args = arg_strings(&bwrap);
         let masked = ["/dev/random", "/dev/urandom"];
+
         for path in &masked {
-            assert!(
-                COMMON_BWRAP_ARGS.windows(3).any(|w| w[0] == "--ro-bind" && w[1] == "/dev/null" && w[2] == *path),
-                "/dev mask missing for {path}"
-            );
+            assert_eq!(bind_source_for(&args, path).as_deref(), Some("/dev/null"), "/dev mask missing for {path}");
         }
+    }
+
+    #[test]
+    fn requested_random_devices_omit_random_device_masks() {
+        let tempdir = tempfile::tempdir().expect("tempdir must be available");
+        let spec = SandboxSpec::builder()
+            .host_workdir(tempdir.path())
+            .command(["/bin/sh", "-c", "true"])
+            .sandbox_workdir("build")
+            .scratches(["build"])
+            .provide_random_devices(true)
+            .build();
+        let bwrap = Bwrap::initialize(spec).expect("sandbox should initialize");
+        let args = arg_strings(&bwrap);
+
+        assert!(bind_source_for(&args, "/dev/random").is_none());
+        assert!(bind_source_for(&args, "/dev/urandom").is_none());
     }
 
     #[test]

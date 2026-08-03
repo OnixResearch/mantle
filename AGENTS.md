@@ -291,6 +291,10 @@ Building derivations (not just compiling crunch) requires:
   references (local redb, then remote narinfo). No `nix-store` subprocess.
   All closure members are mounted in the bwrap sandbox. Without closure data,
   dynamically-linked builders fail with "library not found" (clear error).
+  A source under a custom physical output directory is not automatically a
+  current-session output. Cache-imported and prior-session sources must resolve
+  their PathInfo closure. Only paths recorded in current-session
+  `built_outputs` may skip this lookup.
 - **Castore export**: `export_castore_to_disk()` writes build outputs from the
   in-memory castore to the filesystem. Skips silently on read-only stores.
 - **Fetcher as BuildService**: `builder = "builtin:fetchurl"` derivations flow

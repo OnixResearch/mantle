@@ -46,6 +46,15 @@ const DOMAIN_SEPARATOR: u8 = 0;
 const FILE_MODE_EXECUTABLE: u32 = 0o755;
 const FILE_MODE_REGULAR: u32 = 0o644;
 
+#[derive(Clone, Copy)]
+struct ValidationCode<'a>(&'a str);
+
+#[derive(Clone, Copy)]
+struct TypedRefRule<'a> {
+    prefix: &'a str,
+    code: ValidationCode<'a>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(deny_unknown_fields)]
 pub struct RustArtifactIdentity {
@@ -245,7 +254,7 @@ pub fn validate_rust_action(action: &RustUnitAction) -> Result<(), String> {
         return Err("rust-action-ref-mismatch".to_string());
     }
     ensure_record_bound(action, "rust-action-record-too-large")?;
-    assert_eq!(action.action_ref.len(), RUST_ACTION_REF_PREFIX.len() + BLAKE3_HEX_CHARS);
+    assert_eq!(action.action_ref.len(), RUST_ACTION_REF_PREFIX.len().saturating_add(BLAKE3_HEX_CHARS));
     assert_eq!(action.schema, RUST_ACTION_SCHEMA);
     Ok(())
 }
@@ -275,13 +284,16 @@ pub fn validate_rust_result(result: &RustUnitResult) -> Result<(), String> {
         return Err("rust-result-ref-mismatch".to_string());
     }
     ensure_record_bound(result, "rust-result-record-too-large")?;
-    assert_eq!(result.result_ref.len(), RUST_RESULT_REF_PREFIX.len() + BLAKE3_HEX_CHARS);
+    assert_eq!(result.result_ref.len(), RUST_RESULT_REF_PREFIX.len().saturating_add(BLAKE3_HEX_CHARS));
     assert_eq!(result.schema, RUST_RESULT_SCHEMA);
     Ok(())
 }
 
 pub fn canonical_result_index(action_ref: String, result_refs: Vec<String>) -> Result<RustResultIndex, String> {
-    validate_typed_ref(&action_ref, RUST_ACTION_REF_PREFIX, "rust-index-action-ref-invalid")?;
+    validate_typed_ref(&action_ref, TypedRefRule {
+        prefix: RUST_ACTION_REF_PREFIX,
+        code: ValidationCode("rust-index-action-ref-invalid"),
+    })?;
     let result_refs = sorted_unique(result_refs);
     validate_result_refs(&result_refs)?;
     let hashable = RustIndexHashable {
@@ -306,7 +318,10 @@ pub fn validate_result_index(index: &RustResultIndex) -> Result<(), String> {
     if index.schema != RUST_RESULT_INDEX_SCHEMA {
         return Err("rust-result-index-schema-unsupported".to_string());
     }
-    validate_typed_ref(&index.action_ref, RUST_ACTION_REF_PREFIX, "rust-index-action-ref-invalid")?;
+    validate_typed_ref(&index.action_ref, TypedRefRule {
+        prefix: RUST_ACTION_REF_PREFIX,
+        code: ValidationCode("rust-index-action-ref-invalid"),
+    })?;
     validate_result_refs(&index.result_refs)?;
     if index.result_refs != sorted_unique(index.result_refs.clone()) {
         return Err("rust-result-index-not-canonical".to_string());
@@ -339,7 +354,7 @@ pub fn validate_local_cache_policy(policy: &LocalCachePolicy) -> Result<(), Stri
     if policy.schema != LOCAL_CACHE_POLICY_SCHEMA {
         return Err("rust-cache-policy-schema-unsupported".to_string());
     }
-    validate_identifier(&policy.policy_id, "rust-cache-policy-id-invalid")?;
+    validate_identifier(&policy.policy_id, ValidationCode("rust-cache-policy-id-invalid"))?;
     if policy.max_candidates == 0 || policy.max_candidates > MAX_RESULT_CANDIDATES as u32 {
         return Err("rust-cache-policy-candidate-limit-invalid".to_string());
     }
@@ -362,9 +377,14 @@ pub fn plan_local_reuse(
     policy: &LocalCachePolicy,
     candidates: Vec<LocalCandidateFacts>,
 ) -> Result<LocalReusePlan, String> {
-    validate_typed_ref(action_ref, RUST_ACTION_REF_PREFIX, "rust-local-action-ref-invalid")?;
+    validate_typed_ref(action_ref, TypedRefRule {
+        prefix: RUST_ACTION_REF_PREFIX,
+        code: ValidationCode("rust-local-action-ref-invalid"),
+    })?;
     validate_local_cache_policy(policy)?;
-    if candidates.len() > policy.max_candidates as usize {
+    let max_candidates =
+        usize::try_from(policy.max_candidates).map_err(|_| "rust-local-candidate-limit-invalid".to_string())?;
+    if candidates.len() > max_candidates {
         return Err("rust-local-candidate-limit-exceeded".to_string());
     }
     let unique = unique_candidates(candidates);
@@ -377,6 +397,8 @@ pub fn plan_local_reuse(
         }
         decisions.push(decision);
     }
+    assert!(decisions.len() <= max_candidates);
+    assert!(admitted.len() <= decisions.len());
     finish_local_reuse_plan(decisions, admitted)
 }
 
@@ -406,7 +428,7 @@ fn validate_action_input(input: &RustUnitActionInput) -> Result<(), String> {
         (&input.profile, "rust-action-profile-invalid"),
         (&input.mode, "rust-action-mode-invalid"),
     ] {
-        validate_identifier(value, code)?;
+        validate_identifier(value, ValidationCode(code))?;
     }
     validate_action_digests(input)?;
     validate_action_collections(input)?;
@@ -424,7 +446,7 @@ fn validate_action_digests(input: &RustUnitActionInput) -> Result<(), String> {
         (&input.execution_platform_digest_blake3, "rust-action-platform-digest-invalid"),
         (&input.compiler_policy_digest_blake3, "rust-action-policy-digest-invalid"),
     ] {
-        validate_blake3(value, code)?;
+        validate_blake3(value, ValidationCode(code))?;
     }
     assert_eq!(input.source_digest_blake3.len(), BLAKE3_HEX_CHARS);
     assert_eq!(input.compiler_digest_blake3.len(), BLAKE3_HEX_CHARS);
@@ -450,7 +472,7 @@ fn validate_action_collections(input: &RustUnitActionInput) -> Result<(), String
 }
 
 fn validate_semantic_argument(argument: &RustSemanticArgument) -> Result<(), String> {
-    validate_string(&argument.value, "rust-action-argument-invalid")?;
+    validate_string(&argument.value, ValidationCode("rust-action-argument-invalid"))?;
     if argument.contains_absolute_path && !argument.absolute_paths_classified {
         return Err("rust-action-unclassified-absolute-path".to_string());
     }
@@ -458,7 +480,7 @@ fn validate_semantic_argument(argument: &RustSemanticArgument) -> Result<(), Str
         return Err("rust-action-spurious-path-classification".to_string());
     }
     assert!(!argument.value.is_empty());
-    assert!(!argument.contains_absolute_path || argument.absolute_paths_classified);
+    assert_eq!(argument.contains_absolute_path, argument.absolute_paths_classified);
     Ok(())
 }
 
@@ -467,8 +489,8 @@ fn validate_environment(environment: &BTreeMap<String, String>) -> Result<(), St
         return Err("rust-action-environment-limit-exceeded".to_string());
     }
     for (name, value) in environment {
-        validate_identifier(name, "rust-action-environment-name-invalid")?;
-        validate_string(value, "rust-action-environment-value-invalid")?;
+        validate_identifier(name, ValidationCode("rust-action-environment-name-invalid"))?;
+        validate_string(value, ValidationCode("rust-action-environment-value-invalid"))?;
     }
     assert!(environment.len() <= MAX_ENVIRONMENT_ENTRIES);
     assert!(environment.keys().all(|name| !name.is_empty()));
@@ -480,9 +502,9 @@ fn validate_artifact_identities(artifacts: &[RustArtifactIdentity], code: &str) 
         return Err(code.to_string());
     }
     for artifact in artifacts {
-        validate_identifier(&artifact.role, code)?;
-        validate_identifier(&artifact.name, code)?;
-        validate_blake3(&artifact.digest_blake3, code)?;
+        validate_identifier(&artifact.role, ValidationCode(code))?;
+        validate_identifier(&artifact.name, ValidationCode(code))?;
+        validate_blake3(&artifact.digest_blake3, ValidationCode(code))?;
     }
     assert!(artifacts.len() <= MAX_ARTIFACT_IDENTITIES);
     assert!(artifacts.windows(2).all(|pair| pair[0] < pair[1]));
@@ -494,8 +516,8 @@ fn validate_build_facts(facts: &[RustBuildFact], limit: usize, code: &str) -> Re
         return Err(code.to_string());
     }
     for fact in facts {
-        validate_identifier(&fact.name, code)?;
-        validate_blake3(&fact.value_digest_blake3, code)?;
+        validate_identifier(&fact.name, ValidationCode(code))?;
+        validate_blake3(&fact.value_digest_blake3, ValidationCode(code))?;
     }
     assert!(facts.len() <= limit);
     assert!(facts.windows(2).all(|pair| pair[0] < pair[1]));
@@ -503,7 +525,10 @@ fn validate_build_facts(facts: &[RustBuildFact], limit: usize, code: &str) -> Re
 }
 
 fn validate_result_input(input: &RustUnitResultInput) -> Result<(), String> {
-    validate_typed_ref(&input.action_ref, RUST_ACTION_REF_PREFIX, "rust-result-action-ref-invalid")?;
+    validate_typed_ref(&input.action_ref, TypedRefRule {
+        prefix: RUST_ACTION_REF_PREFIX,
+        code: ValidationCode("rust-result-action-ref-invalid"),
+    })?;
     validate_castore_node(&input.root_node)?;
     if input.artifacts.is_empty() || input.artifacts.len() > MAX_RESULT_ARTIFACTS {
         return Err("rust-result-artifact-count-invalid".to_string());
@@ -521,18 +546,17 @@ fn validate_result_input(input: &RustUnitResultInput) -> Result<(), String> {
     if total_bytes > MAX_TREE_BYTES {
         return Err("rust-result-artifact-bytes-limit-exceeded".to_string());
     }
-    validate_typed_ref(
-        &input.producer_receipt_ref,
-        "mantle-rust-receipt://blake3/",
-        "rust-result-receipt-ref-invalid",
-    )?;
+    validate_typed_ref(&input.producer_receipt_ref, TypedRefRule {
+        prefix: "mantle-rust-receipt://blake3/",
+        code: ValidationCode("rust-result-receipt-ref-invalid"),
+    })?;
     assert!(!input.artifacts.is_empty());
     assert!(total_bytes <= MAX_TREE_BYTES);
     Ok(())
 }
 
 fn validate_castore_node(node: &CastoreNodeIdentity) -> Result<(), String> {
-    validate_blake3(&node.digest_blake3, "rust-result-root-digest-invalid")?;
+    validate_blake3(&node.digest_blake3, ValidationCode("rust-result-root-digest-invalid"))?;
     if node.size_bytes > MAX_TREE_BYTES {
         return Err("rust-result-root-size-limit-exceeded".to_string());
     }
@@ -543,7 +567,7 @@ fn validate_castore_node(node: &CastoreNodeIdentity) -> Result<(), String> {
 
 fn validate_result_artifact(artifact: &RustResultArtifact) -> Result<(), String> {
     validate_relative_path(&artifact.relative_path)?;
-    validate_blake3(&artifact.digest_blake3, "rust-result-artifact-digest-invalid")?;
+    validate_blake3(&artifact.digest_blake3, ValidationCode("rust-result-artifact-digest-invalid"))?;
     if artifact.size_bytes > MAX_TREE_BYTES {
         return Err("rust-result-artifact-size-limit-exceeded".to_string());
     }
@@ -562,7 +586,16 @@ fn validate_result_artifact(artifact: &RustResultArtifact) -> Result<(), String>
 }
 
 fn validate_relative_path(path: &str) -> Result<(), String> {
-    if path.is_empty() || path.len() > MAX_RELATIVE_PATH_BYTES || path.starts_with('/') || path.contains('\\') {
+    if path.is_empty() {
+        return Err("rust-result-artifact-path-invalid".to_string());
+    }
+    if path.len() > MAX_RELATIVE_PATH_BYTES {
+        return Err("rust-result-artifact-path-invalid".to_string());
+    }
+    if path.starts_with('/') {
+        return Err("rust-result-artifact-path-invalid".to_string());
+    }
+    if path.contains('\\') {
         return Err("rust-result-artifact-path-invalid".to_string());
     }
     if path.split('/').any(|component| component.is_empty() || matches!(component, "." | "..")) {
@@ -578,7 +611,10 @@ fn validate_result_refs(result_refs: &[String]) -> Result<(), String> {
         return Err("rust-result-index-count-invalid".to_string());
     }
     for result_ref in result_refs {
-        validate_typed_ref(result_ref, RUST_RESULT_REF_PREFIX, "rust-result-index-ref-invalid")?;
+        validate_typed_ref(result_ref, TypedRefRule {
+            prefix: RUST_RESULT_REF_PREFIX,
+            code: ValidationCode("rust-result-index-ref-invalid"),
+        })?;
     }
     assert!(!result_refs.is_empty());
     assert!(result_refs.len() <= MAX_RESULT_CANDIDATES);
@@ -618,10 +654,12 @@ fn evaluate_local_candidate(
     reason_codes.sort();
     reason_codes.dedup();
     let artifact_set_digest_blake3 = artifact_set_digest(&candidate.result).ok();
-    let admitted = reason_codes.is_empty();
+    let is_admitted = reason_codes.is_empty();
+    assert_eq!(is_admitted, reason_codes.is_empty());
+    assert!(reason_codes.windows(2).all(|pair| pair[0] < pair[1]));
     LocalCandidateDecision {
         result_ref,
-        admitted,
+        admitted: is_admitted,
         reason_codes,
         artifact_set_digest_blake3,
     }
@@ -632,8 +670,8 @@ fn finish_local_reuse_plan(
     admitted: BTreeMap<String, Vec<String>>,
 ) -> Result<LocalReusePlan, String> {
     decisions.sort_by(|left, right| left.result_ref.cmp(&right.result_ref));
-    let conflict = admitted.len() > 1;
-    let selected_result_ref = if conflict {
+    let is_conflict = admitted.len() > 1;
+    let selected_result_ref = if is_conflict {
         None
     } else {
         admitted.values().next().and_then(|refs| refs.iter().min().cloned())
@@ -642,7 +680,7 @@ fn finish_local_reuse_plan(
     assert!(admitted.len() <= decisions.len());
     Ok(LocalReusePlan {
         selected_result_ref,
-        conflict_class: conflict.then(|| LOCAL_RESULT_CONFLICT.to_string()),
+        conflict_class: is_conflict.then(|| LOCAL_RESULT_CONFLICT.to_string()),
         decisions,
     })
 }
@@ -661,49 +699,49 @@ fn validate_sorted_strings(values: &[String], limit: usize, code: &str) -> Resul
         return Err(code.to_string());
     }
     for value in values {
-        validate_string(value, code)?;
+        validate_string(value, ValidationCode(code))?;
     }
     assert!(values.len() <= limit);
     assert!(values.windows(2).all(|pair| pair[0] < pair[1]));
     Ok(())
 }
 
-fn validate_identifier(value: &str, code: &str) -> Result<(), String> {
+fn validate_identifier(value: &str, code: ValidationCode<'_>) -> Result<(), String> {
     validate_string(value, code)?;
     if value.bytes().any(|byte| byte.is_ascii_control()) {
-        return Err(code.to_string());
+        return Err(code.0.to_string());
     }
     assert!(!value.is_empty());
     assert!(value.len() <= MAX_STRING_BYTES);
     Ok(())
 }
 
-fn validate_string(value: &str, code: &str) -> Result<(), String> {
+fn validate_string(value: &str, code: ValidationCode<'_>) -> Result<(), String> {
     if value.is_empty() || value.len() > MAX_STRING_BYTES {
-        return Err(code.to_string());
+        return Err(code.0.to_string());
     }
     assert!(!value.is_empty());
     assert!(value.len() <= MAX_STRING_BYTES);
     Ok(())
 }
 
-fn validate_blake3(value: &str, code: &str) -> Result<(), String> {
-    let valid = value.len() == BLAKE3_HEX_CHARS
+fn validate_blake3(value: &str, code: ValidationCode<'_>) -> Result<(), String> {
+    let is_valid = value.len() == BLAKE3_HEX_CHARS
         && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
-    if !valid {
-        return Err(code.to_string());
+    if !is_valid {
+        return Err(code.0.to_string());
     }
     assert_eq!(value.len(), BLAKE3_HEX_CHARS);
     assert!(value.bytes().all(|byte| !byte.is_ascii_uppercase()));
     Ok(())
 }
 
-fn validate_typed_ref(value: &str, prefix: &str, code: &str) -> Result<(), String> {
-    let Some(digest) = value.strip_prefix(prefix) else {
-        return Err(code.to_string());
+fn validate_typed_ref(value: &str, rule: TypedRefRule<'_>) -> Result<(), String> {
+    let Some(digest) = value.strip_prefix(rule.prefix) else {
+        return Err(rule.code.0.to_string());
     };
-    validate_blake3(digest, code)?;
-    assert!(value.starts_with(prefix));
+    validate_blake3(digest, rule.code)?;
+    assert!(value.starts_with(rule.prefix));
     assert_eq!(digest.len(), BLAKE3_HEX_CHARS);
     Ok(())
 }

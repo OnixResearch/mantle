@@ -22,6 +22,7 @@ use crunch_rust_cache_core::LocalCandidateFacts;
 use crunch_rust_cache_core::RustUnitAction;
 use crunch_rust_cache_core::RustUnitResult;
 use crunch_rust_cache_core::plan_local_reuse;
+use crunch_rust_cache_core::shared::ExpectedRustResultRefs;
 use crunch_rust_cache_core::shared::MAX_SHARED_ENVELOPE_BYTES;
 use crunch_rust_cache_core::shared::RustResultObjectIdentity;
 use crunch_rust_cache_core::shared::RustResultProducerIdentity;
@@ -79,6 +80,16 @@ const COPY_BUFFER_BYTES: usize = 65_536;
 const NAR_DUPLEX_BUFFER_BYTES: usize = 65_536;
 const HTTP_STATUS_REDIRECT_MIN: u16 = 300;
 const HTTP_STATUS_REDIRECT_MAX: u16 = 399;
+const EXTRA_EOF_READ_ITERATIONS: u64 = 2;
+
+#[derive(Clone, Copy)]
+struct ValidationCode<'a>(&'a str);
+
+#[derive(Clone, Copy)]
+struct TypedRefRule<'a> {
+    prefix: &'a str,
+    code: ValidationCode<'a>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -168,10 +179,10 @@ pub struct SharedRustCacheReport {
 
 impl SharedRustCacheReport {
     pub fn rejected(reason: &str) -> Self {
-        let report = shared_rejection(reason);
-        assert_eq!(report.disposition, SHARED_CACHE_REJECTED);
-        assert!(!report.observations.is_empty());
-        report
+        let outcome = shared_rejection(reason);
+        assert_eq!(outcome.disposition, SHARED_CACHE_REJECTED);
+        assert!(!outcome.observations.is_empty());
+        outcome
     }
 
     pub fn compiler_executed(mut self) -> Self {
@@ -189,6 +200,16 @@ pub struct SharedPublishRequest<'a> {
     pub signer_name: String,
     pub signing_key: &'a ed25519_dalek::SigningKey,
     pub policy: &'a SharedRustCachePolicy,
+}
+
+#[derive(Clone, Copy)]
+pub struct SharedRestoreRequest<'a> {
+    pub action: &'a RustUnitAction,
+    pub output_dir: &'a Path,
+    pub local_policy: &'a LocalCachePolicy,
+    pub shared_policy: &'a SharedRustCachePolicy,
+    pub trust_policy: &'a RustResultTrustPolicy,
+    pub sources: &'a [Arc<dyn RustResultSource>],
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -344,25 +365,35 @@ impl DirectoryRustResultSource {
     }
 
     fn object_path(&self, object_ref: &str) -> Result<PathBuf, SourceError> {
-        let digest = typed_ref_digest(object_ref, SHARED_RUST_OBJECT_REF_PREFIX, "shared-object-ref-invalid")?;
+        let digest = typed_ref_digest(object_ref, TypedRefRule {
+            prefix: SHARED_RUST_OBJECT_REF_PREFIX,
+            code: ValidationCode("shared-object-ref-invalid"),
+        })?;
         Ok(self.protocol_root.join(OBJECT_DIRECTORY).join(format!("{digest}{NAR_SUFFIX}")))
     }
 
     fn envelope_path(&self, envelope_ref: &str) -> Result<PathBuf, SourceError> {
-        let digest = typed_ref_digest(envelope_ref, SHARED_RUST_ENVELOPE_REF_PREFIX, "shared-envelope-ref-invalid")?;
+        let digest = typed_ref_digest(envelope_ref, TypedRefRule {
+            prefix: SHARED_RUST_ENVELOPE_REF_PREFIX,
+            code: ValidationCode("shared-envelope-ref-invalid"),
+        })?;
         Ok(self.protocol_root.join(ENVELOPE_DIRECTORY).join(format!("{digest}{JSON_SUFFIX}")))
     }
 
     fn action_path(&self, action_ref: &str) -> Result<PathBuf, SourceError> {
-        let digest =
-            typed_ref_digest(action_ref, crunch_rust_cache_core::RUST_ACTION_REF_PREFIX, "shared-action-ref-invalid")?;
+        let digest = typed_ref_digest(action_ref, TypedRefRule {
+            prefix: crunch_rust_cache_core::RUST_ACTION_REF_PREFIX,
+            code: ValidationCode("shared-action-ref-invalid"),
+        })?;
         Ok(self.protocol_root.join(ACTION_DIRECTORY).join(digest))
     }
 
     fn candidate_path(&self, candidate: &SharedRustCandidateClaim) -> Result<PathBuf, SourceError> {
         let action_dir = self.action_path(&candidate.action_ref)?;
-        let digest =
-            typed_ref_digest(&candidate.envelope_ref, SHARED_RUST_ENVELOPE_REF_PREFIX, "shared-envelope-ref-invalid")?;
+        let digest = typed_ref_digest(&candidate.envelope_ref, TypedRefRule {
+            prefix: SHARED_RUST_ENVELOPE_REF_PREFIX,
+            code: ValidationCode("shared-envelope-ref-invalid"),
+        })?;
         Ok(action_dir.join(format!("{digest}{JSON_SUFFIX}")))
     }
 }
@@ -474,7 +505,7 @@ impl HttpRustResultSource {
     }
 
     fn endpoint(&self, class: &str, digest: &str, suffix: &str) -> Result<url::Url, SourceError> {
-        validate_digest(digest, "shared-http-endpoint-digest-invalid")?;
+        validate_digest(digest, ValidationCode("shared-http-endpoint-digest-invalid"))?;
         let base_path = self.base_url.path().trim_end_matches('/');
         let path = format!("{base_path}/{SHARED_PROTOCOL_DIRECTORY}/{class}/{digest}{suffix}");
         let mut endpoint = self.base_url.clone();
@@ -487,29 +518,38 @@ impl HttpRustResultSource {
     }
 
     fn action_endpoint(&self, action_ref: &str) -> Result<url::Url, SourceError> {
-        let digest =
-            typed_ref_digest(action_ref, crunch_rust_cache_core::RUST_ACTION_REF_PREFIX, "shared-action-ref-invalid")?;
+        let digest = typed_ref_digest(action_ref, TypedRefRule {
+            prefix: crunch_rust_cache_core::RUST_ACTION_REF_PREFIX,
+            code: ValidationCode("shared-action-ref-invalid"),
+        })?;
         self.endpoint(ACTION_DIRECTORY, digest, JSON_SUFFIX)
     }
 
     fn envelope_endpoint(&self, envelope_ref: &str) -> Result<url::Url, SourceError> {
-        let digest = typed_ref_digest(envelope_ref, SHARED_RUST_ENVELOPE_REF_PREFIX, "shared-envelope-ref-invalid")?;
+        let digest = typed_ref_digest(envelope_ref, TypedRefRule {
+            prefix: SHARED_RUST_ENVELOPE_REF_PREFIX,
+            code: ValidationCode("shared-envelope-ref-invalid"),
+        })?;
         self.endpoint(ENVELOPE_DIRECTORY, digest, JSON_SUFFIX)
     }
 
     fn object_endpoint(&self, object_ref: &str) -> Result<url::Url, SourceError> {
-        let digest = typed_ref_digest(object_ref, SHARED_RUST_OBJECT_REF_PREFIX, "shared-object-ref-invalid")?;
+        let digest = typed_ref_digest(object_ref, TypedRefRule {
+            prefix: SHARED_RUST_OBJECT_REF_PREFIX,
+            code: ValidationCode("shared-object-ref-invalid"),
+        })?;
         self.endpoint(OBJECT_DIRECTORY, digest, NAR_SUFFIX)
     }
 
     fn candidate_endpoint(&self, candidate: &SharedRustCandidateClaim) -> Result<url::Url, SourceError> {
-        let action_digest = typed_ref_digest(
-            &candidate.action_ref,
-            crunch_rust_cache_core::RUST_ACTION_REF_PREFIX,
-            "shared-action-ref-invalid",
-        )?;
-        let envelope_digest =
-            typed_ref_digest(&candidate.envelope_ref, SHARED_RUST_ENVELOPE_REF_PREFIX, "shared-envelope-ref-invalid")?;
+        let action_digest = typed_ref_digest(&candidate.action_ref, TypedRefRule {
+            prefix: crunch_rust_cache_core::RUST_ACTION_REF_PREFIX,
+            code: ValidationCode("shared-action-ref-invalid"),
+        })?;
+        let envelope_digest = typed_ref_digest(&candidate.envelope_ref, TypedRefRule {
+            prefix: SHARED_RUST_ENVELOPE_REF_PREFIX,
+            code: ValidationCode("shared-envelope-ref-invalid"),
+        })?;
         let class = format!("{ACTION_DIRECTORY}/{action_digest}");
         self.endpoint(&class, envelope_digest, JSON_SUFFIX)
     }
@@ -581,9 +621,13 @@ impl RustResultSource for HttpRustResultSource {
         validate_lookup_candidates(&lookup.candidates, action_ref, max_candidates)?;
         lookup.candidates.sort();
         lookup.candidates.dedup();
-        lookup.metadata_bytes = bytes.len() as u64;
-        assert!(lookup.candidates.len() <= max_candidates as usize);
-        assert_eq!(lookup.metadata_bytes, bytes.len() as u64);
+        let observed_metadata_bytes =
+            u64::try_from(bytes.len()).map_err(|_| SourceError::new("shared-http-metadata-size-unrepresentable"))?;
+        lookup.metadata_bytes = observed_metadata_bytes;
+        let max_candidates =
+            usize::try_from(max_candidates).map_err(|_| SourceError::new("shared-candidate-limit-unrepresentable"))?;
+        assert!(lookup.candidates.len() <= max_candidates);
+        assert_eq!(lookup.metadata_bytes, observed_metadata_bytes);
         Ok(lookup)
     }
 
@@ -628,8 +672,8 @@ impl RustResultSource for HttpRustResultSource {
             require_http_success(existing.status(), "shared-http-existing-object")?;
             let staged = tempfile::NamedTempFile::new()
                 .map_err(|_| SourceError::new("shared-http-existing-object-staging-failed"))?;
-            let existing_size = stream_http_object(existing, staged.path(), size_bytes).await?;
-            if existing_size != size_bytes {
+            let existing_size_bytes = stream_http_object(existing, staged.path(), size_bytes).await?;
+            if existing_size_bytes != size_bytes {
                 return Err(SourceError::new("shared-http-immutable-conflict"));
             }
             compare_existing_file(staged.path(), source, size_bytes)?;
@@ -657,11 +701,11 @@ async fn bounded_http_bytes(mut response: reqwest::Response, max_bytes: u64) -> 
     if declared_bytes.is_some_and(|size| size > max_bytes) {
         return Err(SourceError::new("shared-http-metadata-too-large"));
     }
-    let capacity = declared_bytes
+    let capacity_bytes = declared_bytes
         .map(|size| usize::try_from(size).map_err(|_| SourceError::new("shared-http-metadata-too-large")))
         .transpose()?
         .unwrap_or(0);
-    let mut bytes = Vec::with_capacity(capacity);
+    let mut bytes = Vec::with_capacity(capacity_bytes);
     while let Some(chunk) = response.chunk().await.map_err(classify_http_error)? {
         let next = bytes
             .len()
@@ -716,7 +760,9 @@ fn validate_lookup_candidates(
     action_ref: &str,
     max_candidates: u32,
 ) -> Result<(), SourceError> {
-    if candidates.len() > max_candidates as usize {
+    let max_candidates =
+        usize::try_from(max_candidates).map_err(|_| SourceError::new("shared-candidate-limit-unrepresentable"))?;
+    if candidates.len() > max_candidates {
         return Err(SourceError::new("shared-candidate-limit-exceeded"));
     }
     for candidate in candidates {
@@ -725,7 +771,7 @@ fn validate_lookup_candidates(
             return Err(SourceError::new("shared-candidate-action-mismatch"));
         }
     }
-    assert!(candidates.len() <= max_candidates as usize);
+    assert!(candidates.len() <= max_candidates);
     assert!(candidates.iter().all(|candidate| candidate.action_ref == action_ref));
     Ok(())
 }
@@ -753,11 +799,11 @@ fn classify_http_error(error: reqwest::Error) -> SourceError {
     SourceError::new("shared-http-transport-failed")
 }
 
-fn validate_digest(digest: &str, code: &str) -> Result<(), SourceError> {
+fn validate_digest(digest: &str, code: ValidationCode<'_>) -> Result<(), SourceError> {
     if digest.len() != crunch_rust_cache_core::BLAKE3_HEX_CHARS
         || !digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
     {
-        return Err(SourceError::new(code));
+        return Err(SourceError::new(code.0));
     }
     assert_eq!(digest.len(), crunch_rust_cache_core::BLAKE3_HEX_CHARS);
     assert!(digest.bytes().all(|byte| !byte.is_ascii_uppercase()));
@@ -772,32 +818,37 @@ struct AdmittedCandidate {
     accepted_verifier_blake3: String,
 }
 
+struct SharedDiscoveryContext<'a> {
+    action: &'a RustUnitAction,
+    local_policy: &'a LocalCachePolicy,
+    shared_policy: &'a SharedRustCachePolicy,
+    trust_policy: &'a RustResultTrustPolicy,
+}
+
+struct SharedDiscoveryState {
+    seen_envelopes: BTreeSet<String>,
+    admitted: Vec<AdmittedCandidate>,
+    observations: Vec<SharedCandidateObservation>,
+}
+
+#[derive(Clone, Copy)]
+struct CandidateSourceFacts<'a> {
+    source: &'a dyn RustResultSource,
+    priority: usize,
+    lookup_bytes: u64,
+}
+
 impl RustCache {
-    pub fn restore_shared_blocking(
-        &self,
-        action: &RustUnitAction,
-        output_dir: &Path,
-        local_policy: &LocalCachePolicy,
-        shared_policy: &SharedRustCachePolicy,
-        trust_policy: &RustResultTrustPolicy,
-        sources: &[Arc<dyn RustResultSource>],
-    ) -> Result<SharedRustCacheReport, Error> {
+    pub fn restore_shared_blocking(&self, request: SharedRestoreRequest<'_>) -> Result<SharedRustCacheReport, Error> {
         let runtime =
             tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|source| Error::Io {
                 context: "create-shared-restore-runtime".to_string(),
                 source,
             })?;
-        let report = runtime.block_on(self.restore_shared(
-            action,
-            output_dir,
-            local_policy,
-            shared_policy,
-            trust_policy,
-            sources,
-        ))?;
-        assert!(!report.disposition.is_empty());
-        assert!(report.candidate_count <= shared_policy.max_candidates);
-        Ok(report)
+        let outcome = runtime.block_on(self.restore_shared(request))?;
+        assert!(!outcome.disposition.is_empty());
+        assert!(outcome.candidate_count <= request.shared_policy.max_candidates);
+        Ok(outcome)
     }
 
     pub fn publish_shared_blocking(
@@ -810,31 +861,31 @@ impl RustCache {
                 context: "create-shared-publish-runtime".to_string(),
                 source,
             })?;
-        let report = runtime.block_on(self.publish_shared(source, request))?;
-        assert!(!report.envelope_ref.is_empty());
-        assert!(!report.publication_order.is_empty());
-        Ok(report)
+        let publication_outcome = runtime.block_on(self.publish_shared(source, request))?;
+        assert!(!publication_outcome.envelope_ref.is_empty());
+        assert!(!publication_outcome.publication_order.is_empty());
+        Ok(publication_outcome)
     }
 
-    pub async fn restore_shared(
-        &self,
-        action: &RustUnitAction,
-        output_dir: &Path,
-        local_policy: &LocalCachePolicy,
-        shared_policy: &SharedRustCachePolicy,
-        trust_policy: &RustResultTrustPolicy,
-        sources: &[Arc<dyn RustResultSource>],
-    ) -> Result<SharedRustCacheReport, Error> {
-        validate_shared_inputs(action, local_policy, shared_policy, sources)?;
-        if !shared_policy.reads_enabled {
-            return Ok(shared_report(SHARED_CACHE_DISABLED, "disabled"));
+    pub async fn restore_shared(&self, request: SharedRestoreRequest<'_>) -> Result<SharedRustCacheReport, Error> {
+        validate_shared_inputs(request.action, request.local_policy, request.shared_policy, request.sources)?;
+        if !request.shared_policy.reads_enabled {
+            return Ok(shared_report(SharedReportKind {
+                disposition: SHARED_CACHE_DISABLED,
+                route: "disabled",
+            }));
         }
-        if output_dir.exists() {
+        if request.output_dir.exists() {
             return Ok(shared_rejection("shared-cache-output-exists"));
         }
-        let (admitted, observations) =
-            self.discover_admitted(action, local_policy, shared_policy, trust_policy, sources).await?;
-        self.finish_shared_restore(output_dir, local_policy, admitted, observations).await
+        let discovery = SharedDiscoveryContext {
+            action: request.action,
+            local_policy: request.local_policy,
+            shared_policy: request.shared_policy,
+            trust_policy: request.trust_policy,
+        };
+        let (admitted, observations) = self.discover_admitted(&discovery, request.sources).await?;
+        self.finish_shared_restore(request.output_dir, request.local_policy, admitted, observations).await
     }
 
     pub async fn publish_shared(
@@ -861,7 +912,7 @@ impl RustCache {
         .map_err(Error::Core)?;
         let envelope_bytes =
             serde_json::to_vec(&signed).map_err(|error| Error::Json(format!("shared-envelope-encode:{error}")))?;
-        let candidate = candidate_for_envelope(&signed);
+        let candidate = candidate_for_envelope(&signed)?;
         publish_ordered(source, &staged, &signed, &envelope_bytes, &candidate).await?;
         Ok(SharedPublishReport {
             source_id: source.source_id().to_string(),
@@ -875,159 +926,173 @@ impl RustCache {
 
     async fn discover_admitted(
         &self,
-        action: &RustUnitAction,
-        local_policy: &LocalCachePolicy,
-        shared_policy: &SharedRustCachePolicy,
-        trust_policy: &RustResultTrustPolicy,
+        context: &SharedDiscoveryContext<'_>,
         sources: &[Arc<dyn RustResultSource>],
     ) -> Result<(Vec<AdmittedCandidate>, Vec<SharedCandidateObservation>), Error> {
-        let mut admitted = Vec::new();
-        let mut observations = Vec::new();
-        let mut seen_envelopes = BTreeSet::new();
+        let max_candidates = usize::try_from(context.shared_policy.max_candidates)
+            .map_err(|_| Error::Bound("shared-candidate-limit-unrepresentable".to_string()))?;
+        let observations_per_source = max_candidates
+            .checked_add(1)
+            .ok_or_else(|| Error::Bound("shared-observation-limit-overflow".to_string()))?;
+        let max_observations = sources
+            .len()
+            .checked_mul(observations_per_source)
+            .ok_or_else(|| Error::Bound("shared-observation-limit-overflow".to_string()))?;
+        let mut state = SharedDiscoveryState {
+            seen_envelopes: BTreeSet::new(),
+            admitted: Vec::with_capacity(max_candidates),
+            observations: Vec::with_capacity(max_observations),
+        };
         for (priority, source) in sources.iter().enumerate() {
-            if shared_policy.offline && source.is_remote() {
-                observations.push(offline_observation(source.source_id(), priority)?);
+            if context.shared_policy.offline && source.is_remote() {
+                state.observations.push(offline_observation(source.source_id(), priority)?);
                 continue;
             }
-            self.discover_from_source(
-                action,
-                local_policy,
-                shared_policy,
-                trust_policy,
-                source.as_ref(),
-                priority,
-                &mut seen_envelopes,
-                &mut admitted,
-                &mut observations,
-            )
-            .await?;
+            self.discover_from_source(context, source.as_ref(), priority, &mut state).await?;
         }
-        assert!(admitted.len() <= shared_policy.max_candidates as usize);
-        assert!(observations.len() <= sources.len().saturating_mul(shared_policy.max_candidates as usize + 1));
-        Ok((admitted, observations))
+        assert!(state.admitted.len() <= max_candidates);
+        assert!(state.observations.len() <= max_observations);
+        Ok((state.admitted, state.observations))
     }
 
-    #[allow(clippy::too_many_arguments)]
     async fn discover_from_source(
         &self,
-        action: &RustUnitAction,
-        local_policy: &LocalCachePolicy,
-        shared_policy: &SharedRustCachePolicy,
-        trust_policy: &RustResultTrustPolicy,
+        context: &SharedDiscoveryContext<'_>,
         source: &dyn RustResultSource,
         priority: usize,
-        seen_envelopes: &mut BTreeSet<String>,
-        admitted: &mut Vec<AdmittedCandidate>,
-        observations: &mut Vec<SharedCandidateObservation>,
+        state: &mut SharedDiscoveryState,
     ) -> Result<(), Error> {
         let lookup = match source
-            .lookup(&action.action_ref, shared_policy.max_candidates, shared_policy.max_metadata_bytes)
+            .lookup(
+                &context.action.action_ref,
+                context.shared_policy.max_candidates,
+                context.shared_policy.max_metadata_bytes,
+            )
             .await
         {
             Ok(lookup) => lookup,
             Err(error) => {
-                observations.push(source_error_observation(source.source_id(), priority, error.code)?);
+                state.observations.push(source_error_observation(source.source_id(), priority, error.code)?);
                 return Ok(());
             }
         };
+        let max_candidates = usize::try_from(context.shared_policy.max_candidates)
+            .map_err(|_| Error::Bound("shared-candidate-limit-unrepresentable".to_string()))?;
         for claim in lookup.candidates {
-            if admitted.len() >= shared_policy.max_candidates as usize {
-                observations.push(source_error_observation(
+            if state.admitted.len() >= max_candidates {
+                state.observations.push(source_error_observation(
                     source.source_id(),
                     priority,
                     "shared-candidate-limit-exceeded".to_string(),
                 )?);
                 break;
             }
-            if !seen_envelopes.insert(claim.envelope_ref.clone()) {
+            if !state.seen_envelopes.insert(claim.envelope_ref.clone()) {
                 continue;
             }
             self.evaluate_source_candidate(
-                action,
-                local_policy,
-                shared_policy,
-                trust_policy,
-                source,
-                priority,
+                context,
+                CandidateSourceFacts {
+                    source,
+                    priority,
+                    lookup_bytes: lookup.metadata_bytes,
+                },
                 claim,
-                lookup.metadata_bytes,
-                admitted,
-                observations,
+                state,
             )
             .await?;
         }
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     async fn evaluate_source_candidate(
         &self,
-        action: &RustUnitAction,
-        local_policy: &LocalCachePolicy,
-        shared_policy: &SharedRustCachePolicy,
-        trust_policy: &RustResultTrustPolicy,
-        source: &dyn RustResultSource,
-        priority: usize,
+        context: &SharedDiscoveryContext<'_>,
+        source_facts: CandidateSourceFacts<'_>,
         claim: SharedRustCandidateClaim,
-        lookup_bytes: u64,
-        admitted: &mut Vec<AdmittedCandidate>,
-        observations: &mut Vec<SharedCandidateObservation>,
+        state: &mut SharedDiscoveryState,
     ) -> Result<(), Error> {
-        let envelope_bytes = match source.fetch_envelope(&claim.envelope_ref, shared_policy.max_metadata_bytes).await {
+        let envelope_bytes = match source_facts
+            .source
+            .fetch_envelope(&claim.envelope_ref, context.shared_policy.max_metadata_bytes)
+            .await
+        {
             Ok(bytes) => bytes,
             Err(error) => {
-                observations.push(candidate_error_observation(source.source_id(), priority, &claim, error.code)?);
+                state.observations.push(candidate_error_observation(
+                    source_facts.source.source_id(),
+                    source_facts.priority,
+                    &claim,
+                    error.code,
+                )?);
                 return Ok(());
             }
         };
         let signed = match decode_candidate_envelope(&envelope_bytes, &claim) {
             Ok(signed) => signed,
             Err(reason) => {
-                observations.push(candidate_error_observation(source.source_id(), priority, &claim, reason)?);
+                state.observations.push(candidate_error_observation(
+                    source_facts.source.source_id(),
+                    source_facts.priority,
+                    &claim,
+                    reason,
+                )?);
                 return Ok(());
             }
         };
-        let authority = evaluate_rust_result_authority(&signed, trust_policy, &action.action_ref, &claim.result_ref);
+        let authority = evaluate_rust_result_authority(&signed, context.trust_policy, ExpectedRustResultRefs {
+            action_ref: &context.action.action_ref,
+            result_ref: &claim.result_ref,
+        });
+        let envelope_size_bytes = u64::try_from(envelope_bytes.len())
+            .map_err(|_| Error::Bound("shared-envelope-size-unrepresentable".to_string()))?;
+        let metadata_bytes = envelope_size_bytes
+            .checked_add(source_facts.lookup_bytes)
+            .ok_or_else(|| Error::Bound("shared-metadata-byte-overflow".to_string()))?;
         if !authority.admitted {
-            observations.push(authority_observation(
-                source.source_id(),
-                priority,
-                &claim,
-                &authority,
-                envelope_bytes.len() as u64 + lookup_bytes,
-                0,
-            )?);
+            state.observations.push(authority_observation(AuthorityObservationInput {
+                source_id: source_facts.source.source_id(),
+                priority: source_facts.priority,
+                claim: &claim,
+                authority: &authority,
+                metadata_bytes,
+                transferred_bytes: 0,
+            })?);
             return Ok(());
         }
-        let transfer = match self.ensure_candidate_content(source, &signed, local_policy, shared_policy).await {
+        let transferred_bytes = match self
+            .ensure_candidate_content(source_facts.source, &signed, context.local_policy, context.shared_policy)
+            .await
+        {
             Ok(bytes) => bytes,
             Err(error) => {
-                observations.push(candidate_error_observation(
-                    source.source_id(),
-                    priority,
+                state.observations.push(candidate_error_observation(
+                    source_facts.source.source_id(),
+                    source_facts.priority,
                     &claim,
                     stable_cache_error(&error),
                 )?);
                 return Ok(());
             }
         };
-        observations.push(authority_observation(
-            source.source_id(),
-            priority,
-            &claim,
-            &authority,
-            envelope_bytes.len() as u64 + lookup_bytes,
-            transfer,
-        )?);
-        admitted.push(AdmittedCandidate {
-            source_id: source.source_id().to_string(),
-            source_priority: u32::try_from(priority)
+        state.observations.push(authority_observation(AuthorityObservationInput {
+            source_id: source_facts.source.source_id(),
+            priority: source_facts.priority,
+            claim: &claim,
+            authority: &authority,
+            metadata_bytes,
+            transferred_bytes,
+        })?);
+        let accepted_verifier_blake3 = authority
+            .accepted_verifier_blake3
+            .ok_or_else(|| Error::State("admitted-shared-verifier-missing".to_string()))?;
+        state.admitted.push(AdmittedCandidate {
+            source_id: source_facts.source.source_id().to_string(),
+            source_priority: u32::try_from(source_facts.priority)
                 .map_err(|_| Error::Bound("source-priority-overflow".to_string()))?,
             signed,
-            transferred_bytes: transfer,
-            accepted_verifier_blake3: authority
-                .accepted_verifier_blake3
-                .expect("admitted authority must identify verifier"),
+            transferred_bytes,
+            accepted_verifier_blake3,
         });
         Ok(())
     }
@@ -1040,11 +1105,11 @@ impl RustCache {
         shared_policy: &SharedRustCachePolicy,
     ) -> Result<u64, Error> {
         let node = node_from_identity(&signed.envelope.result.input.root_node)?;
-        let complete =
+        let is_complete =
             crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
                 .await
                 .map_err(|error| Error::Castore(format!("shared-completeness:{error}")))?;
-        let transferred = if complete {
+        let transferred = if is_complete {
             0
         } else {
             self.fetch_and_ingest_object(source, signed, shared_policy).await?
@@ -1090,11 +1155,11 @@ impl RustCache {
         if identity != signed.envelope.result.input.root_node {
             return Err(Error::State("shared-object-root-mismatch".to_string()));
         }
-        let complete =
+        let is_complete =
             crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
                 .await
                 .map_err(|error| Error::Castore(format!("shared-completeness:{error}")))?;
-        if !complete {
+        if !is_complete {
             return Err(Error::State("shared-object-tree-incomplete".to_string()));
         }
         assert_eq!(bytes, signed.envelope.object.size_bytes);
@@ -1142,9 +1207,12 @@ impl RustCache {
             } else {
                 SHARED_CACHE_REJECTED
             };
-            let mut report = shared_report(disposition, "remote");
-            report.observations = observations;
-            return Ok(report);
+            let mut outcome = shared_report(SharedReportKind {
+                disposition,
+                route: "remote",
+            });
+            outcome.observations = observations;
+            return Ok(outcome);
         }
         let facts = admitted
             .iter()
@@ -1160,10 +1228,13 @@ impl RustCache {
             self.publish_record_and_index(&candidate.signed.envelope.result)?;
         }
         if plan.conflict_class.is_some() {
-            let mut report = shared_report(SHARED_CACHE_CONFLICT, "remote");
-            report.candidate_count = bounded_count(admitted.len())?;
-            report.observations = observations;
-            return Ok(report);
+            let mut outcome = shared_report(SharedReportKind {
+                disposition: SHARED_CACHE_CONFLICT,
+                route: "remote",
+            });
+            outcome.candidate_count = bounded_count(admitted.len())?;
+            outcome.observations = observations;
+            return Ok(outcome);
         }
         self.materialize_admitted(output_dir, local_policy, &admitted, observations).await
     }
@@ -1205,11 +1276,11 @@ impl RustCache {
 
     async fn render_shared_object(&self, result: &RustUnitResult) -> Result<StagedSharedObject, Error> {
         let node = node_from_identity(&result.input.root_node)?;
-        let complete =
+        let is_complete =
             crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
                 .await
                 .map_err(|error| Error::Castore(format!("shared-publish-completeness:{error}")))?;
-        if !complete {
+        if !is_complete {
             return Err(Error::State("shared-publish-tree-incomplete".to_string()));
         }
         let staged =
@@ -1292,14 +1363,16 @@ fn validate_shared_inputs(
     crunch_rust_cache_core::validate_rust_action(action).map_err(Error::Core)?;
     crunch_rust_cache_core::validate_local_cache_policy(local_policy).map_err(Error::Core)?;
     validate_shared_cache_policy(shared_policy)?;
-    if sources.len() > shared_policy.max_sources as usize {
+    let max_sources = usize::try_from(shared_policy.max_sources)
+        .map_err(|_| Error::Bound("shared-source-limit-unrepresentable".to_string()))?;
+    if sources.len() > max_sources {
         return Err(Error::Bound("shared-source-limit-exceeded".to_string()));
     }
     let identities = sources.iter().map(|source| source.source_id()).collect::<BTreeSet<_>>();
     if identities.len() != sources.len() {
         return Err(Error::State("shared-source-identity-duplicate".to_string()));
     }
-    assert!(sources.len() <= shared_policy.max_sources as usize);
+    assert!(sources.len() <= max_sources);
     assert_eq!(identities.len(), sources.len());
     Ok(())
 }
@@ -1334,38 +1407,36 @@ pub fn validate_shared_cache_policy(policy: &SharedRustCachePolicy) -> Result<()
     Ok(())
 }
 
-fn candidate_for_envelope(signed: &SignedRustResultEnvelope) -> SharedRustCandidateClaim {
+fn candidate_for_envelope(signed: &SignedRustResultEnvelope) -> Result<SharedRustCandidateClaim, Error> {
     let candidate = SharedRustCandidateClaim {
         schema: SHARED_CANDIDATE_SCHEMA.to_string(),
         action_ref: signed.envelope.result.input.action_ref.clone(),
         envelope_ref: signed.envelope.envelope_ref.clone(),
         result_ref: signed.envelope.result.result_ref.clone(),
     };
-    validate_candidate_claim(&candidate).expect("signed envelope must produce valid candidate");
+    validate_candidate_claim(&candidate)
+        .map_err(|error| Error::State(format!("shared-candidate-from-envelope:{}", error.code)))?;
     assert_eq!(candidate.envelope_ref, signed.envelope.envelope_ref);
     assert_eq!(candidate.result_ref, signed.envelope.result.result_ref);
-    candidate
+    Ok(candidate)
 }
 
 fn validate_candidate_claim(candidate: &SharedRustCandidateClaim) -> Result<(), SourceError> {
     if candidate.schema != SHARED_CANDIDATE_SCHEMA {
         return Err(SourceError::new("shared-candidate-schema-unsupported"));
     }
-    typed_ref_digest(
-        &candidate.action_ref,
-        crunch_rust_cache_core::RUST_ACTION_REF_PREFIX,
-        "shared-candidate-action-ref-invalid",
-    )?;
-    typed_ref_digest(
-        &candidate.envelope_ref,
-        SHARED_RUST_ENVELOPE_REF_PREFIX,
-        "shared-candidate-envelope-ref-invalid",
-    )?;
-    typed_ref_digest(
-        &candidate.result_ref,
-        crunch_rust_cache_core::RUST_RESULT_REF_PREFIX,
-        "shared-candidate-result-ref-invalid",
-    )?;
+    typed_ref_digest(&candidate.action_ref, TypedRefRule {
+        prefix: crunch_rust_cache_core::RUST_ACTION_REF_PREFIX,
+        code: ValidationCode("shared-candidate-action-ref-invalid"),
+    })?;
+    typed_ref_digest(&candidate.envelope_ref, TypedRefRule {
+        prefix: SHARED_RUST_ENVELOPE_REF_PREFIX,
+        code: ValidationCode("shared-candidate-envelope-ref-invalid"),
+    })?;
+    typed_ref_digest(&candidate.result_ref, TypedRefRule {
+        prefix: crunch_rust_cache_core::RUST_RESULT_REF_PREFIX,
+        code: ValidationCode("shared-candidate-result-ref-invalid"),
+    })?;
     assert!(!candidate.action_ref.is_empty());
     assert!(!candidate.result_ref.is_empty());
     Ok(())
@@ -1417,29 +1488,57 @@ fn hash_file_bounded(path: &Path, max_bytes: u64) -> Result<(u64, String), Error
         context: "open-shared-object-hash".to_string(),
         source,
     })?;
+    let declared_bytes = file
+        .metadata()
+        .map_err(|source| Error::Io {
+            context: "stat-shared-object-hash".to_string(),
+            source,
+        })?
+        .len();
+    if declared_bytes > max_bytes {
+        return Err(Error::Bound("shared-object-byte-limit-exceeded".to_string()));
+    }
+    let max_read_iterations = bounded_read_iterations(declared_bytes, COPY_BUFFER_BYTES)
+        .ok_or_else(|| Error::Bound("shared-object-read-iteration-overflow".to_string()))?;
     let mut buffer = vec![0_u8; COPY_BUFFER_BYTES];
     let mut hasher = blake3::Hasher::new();
-    let mut total = 0_u64;
-    loop {
-        let count = file.read(&mut buffer).map_err(|source| Error::Io {
+    let mut total_bytes = 0_u64;
+    for _read_index in 0..max_read_iterations {
+        let count_bytes = file.read(&mut buffer).map_err(|source| Error::Io {
             context: "read-shared-object-hash".to_string(),
             source,
         })?;
-        if count == 0 {
+        if count_bytes == 0 {
             break;
         }
-        total = total
-            .checked_add(count as u64)
+        let count_bytes_u64 = u64::try_from(count_bytes)
+            .map_err(|_| Error::Bound("shared-object-read-size-unrepresentable".to_string()))?;
+        total_bytes = total_bytes
+            .checked_add(count_bytes_u64)
             .ok_or_else(|| Error::Bound("shared-object-byte-overflow".to_string()))?;
-        if total > max_bytes {
+        if total_bytes > max_bytes {
             return Err(Error::Bound("shared-object-byte-limit-exceeded".to_string()));
         }
-        hasher.update(&buffer[..count]);
+        hasher.update(&buffer[..count_bytes]);
+    }
+    if total_bytes != declared_bytes {
+        return Err(Error::State("shared-object-size-changed-during-read".to_string()));
     }
     let digest = hasher.finalize().to_hex().to_string();
-    assert!(total <= max_bytes);
+    assert!(total_bytes <= max_bytes);
     assert_eq!(digest.len(), crunch_rust_cache_core::BLAKE3_HEX_CHARS);
-    Ok((total, digest))
+    Ok((total_bytes, digest))
+}
+
+fn bounded_read_iterations(byte_count: u64, buffer_bytes: usize) -> Option<u64> {
+    let buffer_bytes = u64::try_from(buffer_bytes).ok()?;
+    if buffer_bytes == 0 {
+        return None;
+    }
+    let iterations = byte_count.checked_div(buffer_bytes)?.checked_add(EXTRA_EOF_READ_ITERATIONS)?;
+    assert!(iterations >= EXTRA_EOF_READ_ITERATIONS);
+    assert!(buffer_bytes > 0);
+    Some(iterations)
 }
 
 fn load_candidate_entries(
@@ -1448,7 +1547,9 @@ fn load_candidate_entries(
     max_candidates: u32,
     max_metadata_bytes: u64,
 ) -> Result<SharedSourceLookup, SourceError> {
-    if entries.len() > max_candidates as usize {
+    let max_candidates =
+        usize::try_from(max_candidates).map_err(|_| SourceError::new("shared-candidate-limit-unrepresentable"))?;
+    if entries.len() > max_candidates {
         return Err(SourceError::new("shared-candidate-limit-exceeded"));
     }
     let mut candidates = Vec::with_capacity(entries.len());
@@ -1471,7 +1572,7 @@ fn load_candidate_entries(
     }
     candidates.sort();
     candidates.dedup();
-    assert!(candidates.len() <= max_candidates as usize);
+    assert!(candidates.len() <= max_candidates);
     assert!(metadata_bytes <= max_metadata_bytes);
     Ok(SharedSourceLookup {
         candidates,
@@ -1489,7 +1590,7 @@ fn read_dir_optional(path: &Path) -> Result<Option<Vec<PathBuf>>, SourceError> {
         return Err(SourceError::new("shared-action-index-type-invalid"));
     }
     let iterator = fs::read_dir(path).map_err(|_| SourceError::new("shared-action-index-read-failed"))?;
-    let mut paths = Vec::new();
+    let mut paths = Vec::with_capacity(MAX_SHARED_CANDIDATES);
     for entry in iterator {
         let entry = entry.map_err(|_| SourceError::new("shared-action-index-entry-failed"))?;
         let file_type = entry.file_type().map_err(|_| SourceError::new("shared-action-index-type-failed"))?;
@@ -1516,14 +1617,14 @@ fn read_source_file_bounded(path: &Path, max_bytes: u64, class: &str) -> Result<
         return Err(SourceError::new(format!("{class}-too-large")));
     }
     let mut file = open_read_nofollow(path).map_err(|_| SourceError::new(format!("{class}-open-failed")))?;
-    let capacity = usize::try_from(metadata.len()).map_err(|_| SourceError::new(format!("{class}-too-large")))?;
-    let mut bytes = Vec::with_capacity(capacity);
+    let capacity_bytes = usize::try_from(metadata.len()).map_err(|_| SourceError::new(format!("{class}-too-large")))?;
+    let mut bytes = Vec::with_capacity(capacity_bytes);
     file.read_to_end(&mut bytes).map_err(|_| SourceError::new(format!("{class}-read-failed")))?;
     if bytes.len() as u64 != metadata.len() {
         return Err(SourceError::new(format!("{class}-size-changed")));
     }
     assert!(bytes.len() as u64 <= max_bytes);
-    assert_eq!(bytes.len(), capacity);
+    assert_eq!(bytes.len(), capacity_bytes);
     Ok(bytes)
 }
 
@@ -1615,24 +1716,37 @@ fn compare_existing_file(destination: &Path, source: &Path, expected_bytes: u64)
 
 fn hash_source_file(path: &Path, max_bytes: u64) -> Result<(u64, String), SourceError> {
     let mut file = open_read_nofollow(path).map_err(|_| SourceError::new("shared-immutable-open-failed"))?;
+    let declared_bytes = file.metadata().map_err(|_| SourceError::new("shared-immutable-stat-failed"))?.len();
+    if declared_bytes > max_bytes {
+        return Err(SourceError::new("shared-immutable-too-large"));
+    }
+    let max_read_iterations = bounded_read_iterations(declared_bytes, COPY_BUFFER_BYTES)
+        .ok_or_else(|| SourceError::new("shared-immutable-read-iteration-overflow"))?;
     let mut buffer = vec![0_u8; COPY_BUFFER_BYTES];
     let mut hasher = blake3::Hasher::new();
-    let mut total = 0_u64;
-    loop {
-        let count = file.read(&mut buffer).map_err(|_| SourceError::new("shared-immutable-read-failed"))?;
-        if count == 0 {
+    let mut total_bytes = 0_u64;
+    for _read_index in 0..max_read_iterations {
+        let count_bytes = file.read(&mut buffer).map_err(|_| SourceError::new("shared-immutable-read-failed"))?;
+        if count_bytes == 0 {
             break;
         }
-        total = total.checked_add(count as u64).ok_or_else(|| SourceError::new("shared-immutable-byte-overflow"))?;
-        if total > max_bytes {
+        let count_bytes_u64 =
+            u64::try_from(count_bytes).map_err(|_| SourceError::new("shared-immutable-read-size-unrepresentable"))?;
+        total_bytes = total_bytes
+            .checked_add(count_bytes_u64)
+            .ok_or_else(|| SourceError::new("shared-immutable-byte-overflow"))?;
+        if total_bytes > max_bytes {
             return Err(SourceError::new("shared-immutable-too-large"));
         }
-        hasher.update(&buffer[..count]);
+        hasher.update(&buffer[..count_bytes]);
+    }
+    if total_bytes != declared_bytes {
+        return Err(SourceError::new("shared-immutable-size-changed-during-read"));
     }
     let digest = hasher.finalize().to_hex().to_string();
-    assert!(total <= max_bytes);
+    assert!(total_bytes <= max_bytes);
     assert_eq!(digest.len(), crunch_rust_cache_core::BLAKE3_HEX_CHARS);
-    Ok((total, digest))
+    Ok((total_bytes, digest))
 }
 
 fn link_noclobber(staged: &Path, destination: &Path) -> Result<(), SourceError> {
@@ -1702,15 +1816,15 @@ fn fsync_directory_source(path: &Path) -> Result<(), SourceError> {
     Ok(())
 }
 
-fn typed_ref_digest<'a>(value: &'a str, prefix: &str, code: &str) -> Result<&'a str, SourceError> {
-    let digest = value.strip_prefix(prefix).ok_or_else(|| SourceError::new(code))?;
+fn typed_ref_digest<'a>(value: &'a str, rule: TypedRefRule<'_>) -> Result<&'a str, SourceError> {
+    let digest = value.strip_prefix(rule.prefix).ok_or_else(|| SourceError::new(rule.code.0))?;
     if digest.len() != crunch_rust_cache_core::BLAKE3_HEX_CHARS
         || !digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
     {
-        return Err(SourceError::new(code));
+        return Err(SourceError::new(rule.code.0));
     }
     assert_eq!(digest.len(), crunch_rust_cache_core::BLAKE3_HEX_CHARS);
-    assert!(value.starts_with(prefix));
+    assert!(value.starts_with(rule.prefix));
     Ok(digest)
 }
 
@@ -1733,24 +1847,27 @@ fn sanitized_source_bytes(bytes: &[u8]) -> String {
     source_id
 }
 
-fn authority_observation(
-    source_id: &str,
+struct AuthorityObservationInput<'a> {
+    source_id: &'a str,
     priority: usize,
-    claim: &SharedRustCandidateClaim,
-    authority: &crunch_rust_cache_core::shared::RustResultAuthorityDecision,
+    claim: &'a SharedRustCandidateClaim,
+    authority: &'a crunch_rust_cache_core::shared::RustResultAuthorityDecision,
     metadata_bytes: u64,
     transferred_bytes: u64,
-) -> Result<SharedCandidateObservation, Error> {
+}
+
+fn authority_observation(input: AuthorityObservationInput<'_>) -> Result<SharedCandidateObservation, Error> {
     Ok(SharedCandidateObservation {
-        source_id: source_id.to_string(),
-        source_priority: u32::try_from(priority).map_err(|_| Error::Bound("source-priority-overflow".to_string()))?,
-        envelope_ref: Some(claim.envelope_ref.clone()),
-        result_ref: Some(claim.result_ref.clone()),
-        authority_disposition: authority.authority_disposition.clone(),
-        accepted_verifier_blake3: authority.accepted_verifier_blake3.clone(),
-        reason_codes: authority.reason_codes.clone(),
-        metadata_bytes,
-        transferred_bytes,
+        source_id: input.source_id.to_string(),
+        source_priority: u32::try_from(input.priority)
+            .map_err(|_| Error::Bound("source-priority-overflow".to_string()))?,
+        envelope_ref: Some(input.claim.envelope_ref.clone()),
+        result_ref: Some(input.claim.result_ref.clone()),
+        authority_disposition: input.authority.authority_disposition.clone(),
+        accepted_verifier_blake3: input.authority.accepted_verifier_blake3.clone(),
+        reason_codes: input.authority.reason_codes.clone(),
+        metadata_bytes: input.metadata_bytes,
+        transferred_bytes: input.transferred_bytes,
     })
 }
 
@@ -1795,11 +1912,17 @@ fn offline_observation(source_id: &str, priority: usize) -> Result<SharedCandida
     source_error_observation(source_id, priority, SHARED_CACHE_OFFLINE_MISS.to_string())
 }
 
-fn shared_report(disposition: &str, route: &str) -> SharedRustCacheReport {
+#[derive(Clone, Copy)]
+struct SharedReportKind<'a> {
+    disposition: &'a str,
+    route: &'a str,
+}
+
+fn shared_report(kind: SharedReportKind<'_>) -> SharedRustCacheReport {
     SharedRustCacheReport {
         schema: SHARED_CACHE_REPORT_SCHEMA.to_string(),
-        disposition: disposition.to_string(),
-        route: route.to_string(),
+        disposition: kind.disposition.to_string(),
+        route: kind.route.to_string(),
         selected_source_id: None,
         selected_result_ref: None,
         candidate_count: 0,
@@ -1814,8 +1937,11 @@ fn shared_report(disposition: &str, route: &str) -> SharedRustCacheReport {
 }
 
 fn shared_rejection(reason: &str) -> SharedRustCacheReport {
-    let mut report = shared_report(SHARED_CACHE_REJECTED, "remote");
-    report.observations.push(SharedCandidateObservation {
+    let mut outcome = shared_report(SharedReportKind {
+        disposition: SHARED_CACHE_REJECTED,
+        route: "remote",
+    });
+    outcome.observations.push(SharedCandidateObservation {
         source_id: "local-preflight".to_string(),
         source_priority: 0,
         envelope_ref: None,
@@ -1826,9 +1952,9 @@ fn shared_rejection(reason: &str) -> SharedRustCacheReport {
         metadata_bytes: 0,
         transferred_bytes: 0,
     });
-    assert_eq!(report.observations.len(), 1);
-    assert_eq!(report.disposition, SHARED_CACHE_REJECTED);
-    report
+    assert_eq!(outcome.observations.len(), 1);
+    assert_eq!(outcome.disposition, SHARED_CACHE_REJECTED);
+    outcome
 }
 
 fn shared_non_claims() -> Vec<String> {
@@ -1917,7 +2043,14 @@ mod tests {
         let restored = root.path().join("restored");
 
         let report = client
-            .restore_shared(&action, &restored, &local_policy(), &shared_policy(), &trust, &[source])
+            .restore_shared(SharedRestoreRequest {
+                action: &action,
+                output_dir: &restored,
+                local_policy: &local_policy(),
+                shared_policy: &shared_policy(),
+                trust_policy: &trust,
+                sources: &[source],
+            })
             .await
             .unwrap();
 
@@ -1937,14 +2070,14 @@ mod tests {
         policy.offline = true;
 
         let report = client
-            .restore_shared(
-                &test_action(),
-                &root.path().join("output"),
-                &local_policy(),
-                &policy,
-                &trust_policy(&signing_key(TEST_KEY_BYTE)),
-                &[source],
-            )
+            .restore_shared(SharedRestoreRequest {
+                action: &test_action(),
+                output_dir: &root.path().join("output"),
+                local_policy: &local_policy(),
+                shared_policy: &policy,
+                trust_policy: &trust_policy(&signing_key(TEST_KEY_BYTE)),
+                sources: &[source],
+            })
             .await
             .unwrap();
 
@@ -1963,7 +2096,14 @@ mod tests {
         let source: Arc<dyn RustResultSource> = fixture.source.clone();
         let report = fixture
             .client
-            .restore_shared(&fixture.action, &output, &local_policy(), &shared_policy(), &fixture.trust, &[source])
+            .restore_shared(SharedRestoreRequest {
+                action: &fixture.action,
+                output_dir: &output,
+                local_policy: &local_policy(),
+                shared_policy: &shared_policy(),
+                trust_policy: &fixture.trust,
+                sources: &[source],
+            })
             .await
             .unwrap();
 
@@ -1981,7 +2121,14 @@ mod tests {
         let source: Arc<dyn RustResultSource> = fixture.source.clone();
         let report = fixture
             .client
-            .restore_shared(&fixture.action, &output, &local_policy(), &shared_policy(), &wrong_trust, &[source])
+            .restore_shared(SharedRestoreRequest {
+                action: &fixture.action,
+                output_dir: &output,
+                local_policy: &local_policy(),
+                shared_policy: &shared_policy(),
+                trust_policy: &wrong_trust,
+                sources: &[source],
+            })
             .await
             .unwrap();
 
@@ -2018,7 +2165,7 @@ mod tests {
         )
         .unwrap();
         let signed: SignedRustResultEnvelope = serde_json::from_slice(&envelope_bytes).unwrap();
-        let candidate = candidate_for_envelope(&signed);
+        let candidate = candidate_for_envelope(&signed).unwrap();
 
         let (left, right) =
             tokio::join!(fixture.source.publish_candidate(&candidate), fixture.source.publish_candidate(&candidate));
@@ -2112,7 +2259,14 @@ mod tests {
 
         let report = fixture
             .client
-            .restore_shared(&fixture.action, &output, &local_policy(), &shared_policy(), &fixture.trust, &[source])
+            .restore_shared(SharedRestoreRequest {
+                action: &fixture.action,
+                output_dir: &output,
+                local_policy: &local_policy(),
+                shared_policy: &shared_policy(),
+                trust_policy: &fixture.trust,
+                sources: &[source],
+            })
             .await
             .unwrap();
 
@@ -2133,7 +2287,14 @@ mod tests {
 
         let report = fixture
             .client
-            .restore_shared(&fixture.action, &output, &local_policy(), &shared_policy(), &fixture.trust, &[source])
+            .restore_shared(SharedRestoreRequest {
+                action: &fixture.action,
+                output_dir: &output,
+                local_policy: &local_policy(),
+                shared_policy: &shared_policy(),
+                trust_policy: &fixture.trust,
+                sources: &[source],
+            })
             .await
             .unwrap();
 
@@ -2199,7 +2360,14 @@ mod tests {
         let remote_source: Arc<dyn RustResultSource> = source;
 
         let report = client
-            .restore_shared(&action, &restored, &local_policy, &shared_policy, &trust, &[remote_source])
+            .restore_shared(SharedRestoreRequest {
+                action: &action,
+                output_dir: &restored,
+                local_policy: &local_policy,
+                shared_policy: &shared_policy,
+                trust_policy: &trust,
+                sources: &[remote_source],
+            })
             .await
             .unwrap();
 
@@ -2270,7 +2438,7 @@ mod tests {
         )
         .unwrap();
         let signed: SignedRustResultEnvelope = serde_json::from_slice(&envelope_bytes).unwrap();
-        let candidate = candidate_for_envelope(&signed);
+        let candidate = candidate_for_envelope(&signed).unwrap();
         fs::remove_file(fixture.source.candidate_path(&candidate).unwrap()).unwrap();
         fixture
     }

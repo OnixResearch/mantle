@@ -52,6 +52,7 @@ const MAX_PLAN_NON_CLAIMS: usize = 32;
 const MAX_PLAN_FETCH_CANDIDATES: usize = 16;
 const BLAKE3_BYTES: usize = 32;
 const NIX_STORE_PREFIX: &str = "/nix/store";
+const SOURCE_STORE_LITERAL_SENTINEL: &str = "__MANTLE_SOURCE_STORE_LITERAL_V1__";
 pub(crate) const CACHE_ONLY_PRESERVE_ROUTE: &str = "cache-only-preserve-v1";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -676,7 +677,21 @@ pub(crate) fn validate_unit_aterm_projection(
     plan: &ForeignExecutablePlan,
     unit: &ExecutableNativeUnit,
 ) -> Result<Derivation, ImportDiagnostic> {
-    let parser_aterm = unit.derivation_aterm.replace(&plan.target_store_prefix, NIX_STORE_PREFIX);
+    if unit.derivation_aterm.contains(SOURCE_STORE_LITERAL_SENTINEL) {
+        return Err(plan_diagnostic(
+            "foreign-plan-unit-aterm-sentinel-collision",
+            Some(&unit.node_id),
+            "native unit ATerm contains the reserved source-store literal sentinel",
+        ));
+    }
+    let uses_nix_target_prefix = plan.target_store_prefix == NIX_STORE_PREFIX;
+    let parser_aterm = if uses_nix_target_prefix {
+        unit.derivation_aterm.clone()
+    } else {
+        unit.derivation_aterm
+            .replace(NIX_STORE_PREFIX, SOURCE_STORE_LITERAL_SENTINEL)
+            .replace(&plan.target_store_prefix, NIX_STORE_PREFIX)
+    };
     let derivation = Derivation::from_aterm_bytes(parser_aterm.as_bytes()).map_err(|error| {
         plan_diagnostic(
             "foreign-plan-unit-aterm-invalid",
@@ -684,7 +699,15 @@ pub(crate) fn validate_unit_aterm_projection(
             &format!("native unit ATerm cannot be parsed: {error:?}"),
         )
     })?;
-    let restore = |value: &str| value.replace(NIX_STORE_PREFIX, &plan.target_store_prefix);
+    let restore = |value: &str| {
+        if uses_nix_target_prefix {
+            value.to_string()
+        } else {
+            value
+                .replace(NIX_STORE_PREFIX, &plan.target_store_prefix)
+                .replace(SOURCE_STORE_LITERAL_SENTINEL, NIX_STORE_PREFIX)
+        }
+    };
     let arguments = derivation.arguments.iter().map(|value| restore(value)).collect::<Vec<_>>();
     let environment = derivation
         .environment
@@ -733,18 +756,28 @@ pub(crate) fn validate_unit_aterm_projection(
         .collect::<Vec<_>>();
     let builder = restore(&derivation.builder);
     let system = restore(&derivation.system);
-    if builder != unit.builder
-        || system != unit.system
-        || arguments != unit.arguments
-        || environment != unit.environment
-        || outputs != unit.outputs
-        || input_derivations != unit.input_derivations
-        || input_sources != unit.input_sources
-    {
+    let mismatch = if builder != unit.builder {
+        Some("builder")
+    } else if system != unit.system {
+        Some("system")
+    } else if arguments != unit.arguments {
+        Some("arguments")
+    } else if environment != unit.environment {
+        Some("environment")
+    } else if outputs != unit.outputs {
+        Some("outputs")
+    } else if input_derivations != unit.input_derivations {
+        Some("input-derivations")
+    } else if input_sources != unit.input_sources {
+        Some("input-sources")
+    } else {
+        None
+    };
+    if let Some(field) = mismatch {
         return Err(plan_diagnostic(
             "foreign-plan-unit-projection-mismatch",
             Some(&unit.node_id),
-            "native unit fields differ from its canonical ATerm",
+            &format!("native unit {field} differs from its canonical ATerm"),
         ));
     }
     let mut target_derivation = derivation;
@@ -1123,6 +1156,19 @@ mod tests {
         assert!(first.native_units.iter().all(|unit| is_blake3_hex(&unit.execution_profile_digest_blake3)));
         assert!(first.forbidden_process_invocations.is_empty());
         validate_foreign_executable_plan(&first).expect("emitted plan must validate");
+    }
+
+    #[test]
+    fn executable_plan_preserves_bare_source_store_literals_during_aterm_validation() {
+        let mut graph: ForeignDerivationGraph = serde_json::from_str(NIX_GRAPH).expect("graph fixture");
+        let index: PackageIndex = serde_json::from_str(NIX_INDEX).expect("index fixture");
+        let policy: TranslationPolicy = serde_json::from_str(POLICY).expect("policy fixture");
+        graph.nodes[0].env.insert("bareStorePrefix".into(), "configured prefix is /nix/store".into());
+
+        let (plan, _) = compile_foreign_executable_plan(&graph, &index, &policy, "hello", "x86_64-linux")
+            .expect("bare source store literals must survive ATerm validation");
+        assert!(plan.native_units[0].environment["bareStorePrefix"].contains(NIX_STORE_PREFIX));
+        validate_foreign_executable_plan(&plan).expect("plan with bare source store literal validates");
     }
 
     #[test]

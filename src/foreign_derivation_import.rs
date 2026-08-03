@@ -26,6 +26,7 @@ const HELLO_SYSTEM: &str = "x86_64-linux";
 const DEFAULT_TARGET_PREFIX: &str = "/mantle/store";
 const GUIX_SOURCE_PREFIX: &str = "/gnu/store";
 pub(crate) const NIX_SOURCE_PREFIX: &str = "/nix/store";
+pub(crate) const FIXED_OUTPUT_SEED_KIND: &str = "nix-fixed-output-seed";
 const NIX_STORE_PREFIX_WITH_SLASH: &str = "/nix/store/";
 const NIX_DERIVATION_SUFFIX: &str = ".drv";
 const KIBIBYTE_BYTES: usize = 1_024;
@@ -37,12 +38,18 @@ pub(crate) const MAX_ATERM_BUNDLE_BYTES: usize = MAX_ATERM_BUNDLE_MEBIBYTES * ME
 pub(crate) const MAX_ATERM_BUNDLE_DERIVATIONS: usize = MAX_GRAPH_NODES;
 const MAX_ATERM_COLLECTION_ITEMS: usize = 256;
 const MAX_ATERM_STORE_REFERENCES_PER_FIELD: usize = 256;
+const MAX_STRUCTURED_ATTRS_MEBIBYTES: usize = 1;
+const MAX_STRUCTURED_ATTRS_BYTES: usize = MAX_STRUCTURED_ATTRS_MEBIBYTES * MEBIBYTE_BYTES;
+const NIX_STRUCTURED_ATTRS_ENV: &str = "__json";
 const UNKNOWN_FOREIGN_PREFIX: &str = "/foreign/store";
 const GUIX_HELLO_NODE_ID: &str = "guix:hello";
 const NIX_HELLO_NODE_ID: &str = "nix:hello";
 const NIXPKGS_PRODUCER_KIND: &str = "nixpkgs";
 const NIX_DERIVATION_BUILTIN: &str = "nix.derivation";
 const FIXED_OUTPUT_FETCH_BUILTIN: &str = "fixed-output-fetch";
+const OUTPUT_HASH_MODE_ENV: &str = "outputHashMode";
+const RECURSIVE_OUTPUT_HASH_MODE: &str = "recursive";
+const FLAT_OUTPUT_HASH_MODE: &str = "flat";
 const CHMOD_SETUID_CAPABILITY: &str = "chmod-setuid";
 const TRUSTED_CACHE_SCOPE: &str = "trusted-binary-cache";
 const CACHE_NIXOS_ORG_URL: &str = "https://cache.nixos.org";
@@ -178,6 +185,8 @@ pub(crate) struct SourcePayload {
     pub(crate) content_ref: String,
     pub(crate) embedded_text: Option<String>,
     pub(crate) mirrors: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) expected_content_blake3: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -372,6 +381,8 @@ pub(crate) struct NixDerivationJsonVersionedNode {
     #[serde(default = "empty_string_map")]
     pub(crate) env: BTreeMap<String, String>,
     pub(crate) outputs: BTreeMap<String, NixDerivationJsonOutput>,
+    #[serde(rename = "structuredAttrs", default)]
+    pub(crate) structured_attrs: Option<serde_json::Value>,
     #[serde(default = "empty_versioned_inputs")]
     pub(crate) inputs: NixDerivationJsonVersionedInputs,
 }
@@ -693,7 +704,12 @@ fn validate_foreign_aterm_limits(
     }
     for (key, value) in &derivation.environment {
         require_field_limit(key, None, "foreign-aterm-environment-key")?;
-        if value.len() > MAX_FIELD_BYTES {
+        let value_limit = if key == NIX_STRUCTURED_ATTRS_ENV {
+            MAX_STRUCTURED_ATTRS_BYTES
+        } else {
+            MAX_FIELD_BYTES
+        };
+        if value.len() > value_limit {
             return Err(diagnostic(
                 "field-limit-exceeded",
                 None,
@@ -1201,6 +1217,7 @@ fn hello_fixture_graph(spec: &HelloFixtureSpec<'_>) -> ForeignDerivationGraph {
             content_ref: store_source,
             embedded_text: None,
             mirrors: vec!["https://mirror.example.invalid/hello.tar.gz".to_string()],
+            expected_content_blake3: None,
         }],
         unsupported_features: Vec::new(),
         frontend_metadata: Vec::new(),
@@ -1240,7 +1257,8 @@ fn normalize_versioned_nix_derivations(
     let mut closure = BTreeMap::new();
     for (drv_key, node) in export.derivations {
         let drv_path = normalize_nix_store_key(&drv_key)?;
-        let env = normalize_nix_env(node.env);
+        let mut env = normalize_nix_env(node.env);
+        merge_nix_structured_attrs(&mut env, node.structured_attrs)?;
         let outputs = normalize_nix_outputs(node.outputs, &env)?;
         let normalized_node = NixDerivationJsonNode {
             name: node.name,
@@ -1319,6 +1337,55 @@ fn normalize_nix_store_paths(paths: Vec<String>) -> Result<Vec<String>, ImportDi
 
 fn normalize_nix_env(env: BTreeMap<String, String>) -> BTreeMap<String, String> {
     env.into_iter().map(|(key, value)| (key, normalize_nix_embedded_store_paths(&value))).collect()
+}
+
+fn merge_nix_structured_attrs(
+    env: &mut BTreeMap<String, String>,
+    structured_attrs: Option<serde_json::Value>,
+) -> Result<(), ImportDiagnostic> {
+    let Some(structured_attrs) = structured_attrs else {
+        return Ok(());
+    };
+    if !structured_attrs.is_object() {
+        return Err(diagnostic(
+            "nix-structured-attrs-invalid",
+            None,
+            "Nix structured attributes must be a JSON object",
+        ));
+    }
+    let normalized = normalize_nix_structured_attr_value(structured_attrs);
+    let encoded = serde_json::to_string(&normalized).map_err(|error| {
+        diagnostic(
+            "nix-structured-attrs-invalid",
+            None,
+            &format!("Nix structured attributes cannot be encoded: {error}"),
+        )
+    })?;
+    if encoded.len() > MAX_STRUCTURED_ATTRS_BYTES {
+        return Err(diagnostic("field-limit-exceeded", None, "Nix structured attributes exceed the byte limit"));
+    }
+    if env.insert(NIX_STRUCTURED_ATTRS_ENV.to_string(), encoded).is_some() {
+        return Err(diagnostic(
+            "nix-structured-attrs-collision",
+            None,
+            "Nix derivation export contains both structuredAttrs and __json",
+        ));
+    }
+    debug_assert!(env.contains_key(NIX_STRUCTURED_ATTRS_ENV));
+    Ok(())
+}
+
+fn normalize_nix_structured_attr_value(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::String(value) => serde_json::Value::String(normalize_nix_embedded_store_paths(&value)),
+        serde_json::Value::Array(values) => {
+            serde_json::Value::Array(values.into_iter().map(normalize_nix_structured_attr_value).collect())
+        }
+        serde_json::Value::Object(values) => serde_json::Value::Object(
+            values.into_iter().map(|(key, value)| (key, normalize_nix_structured_attr_value(value))).collect(),
+        ),
+        scalar => scalar,
+    }
 }
 
 fn select_reachable_nix_derivations(
@@ -1609,7 +1676,7 @@ fn lower_aterm_derivation_node(
     })?;
     let derivation = request.derivation;
     let outputs = lower_aterm_outputs(&derivation.outputs, &context.config.source_prefix)?;
-    let fixed_output = nix_fixed_output_metadata(&derivation.outputs)?;
+    let fixed_output = nix_fixed_output_metadata(&derivation.outputs, &derivation.env)?;
     let input_derivations = lower_nix_input_derivations(&derivation.input_drvs, context.path_to_node_id)?;
     let source_refs = lower_aterm_source_refs(&derivation.input_srcs, source_payloads, context.config)?;
     let declared_references = nix_declared_references(&derivation.input_drvs, &derivation.input_srcs, context.closure)?;
@@ -1720,6 +1787,7 @@ fn lower_aterm_source_refs(
             content_ref: input_src.clone(),
             embedded_text: None,
             mirrors: Vec::new(),
+            expected_content_blake3: None,
         });
         debug_assert!(refs.len() < input_srcs.len());
         refs.push(SourceRef {
@@ -1735,14 +1803,16 @@ fn lower_aterm_source_refs(
 
 fn nix_fixed_output_metadata(
     outputs: &BTreeMap<String, NixDerivationJsonOutput>,
+    env: &BTreeMap<String, String>,
 ) -> Result<Option<FixedOutputMetadata>, ImportDiagnostic> {
+    let output_hash_mode = env.get(OUTPUT_HASH_MODE_ENV).map(String::as_str).filter(|mode| !mode.is_empty());
     let mut metadata: Option<FixedOutputMetadata> = None;
     for output in outputs.values() {
         let Some(digest) = output.hash.as_ref() else {
             continue;
         };
         let hash_algo = output.hash_algo.as_deref().unwrap_or(SHA256_ALGORITHM);
-        let (algorithm, recursive) = parse_nix_hash_algorithm(hash_algo);
+        let (algorithm, recursive) = parse_nix_fixed_output_hash(hash_algo, output_hash_mode)?;
         let candidate = FixedOutputMetadata {
             algorithm,
             digest: digest.clone(),
@@ -1763,6 +1833,33 @@ fn nix_fixed_output_metadata(
     debug_assert!(metadata.is_none() || !outputs.is_empty());
     debug_assert!(metadata.as_ref().is_none_or(|value| !value.digest.is_empty()));
     Ok(metadata)
+}
+
+fn parse_nix_fixed_output_hash(
+    hash_algo: &str,
+    output_hash_mode: Option<&str>,
+) -> Result<(String, bool), ImportDiagnostic> {
+    let (algorithm, algorithm_marks_recursive) = parse_nix_hash_algorithm(hash_algo);
+    let mode_marks_recursive = match output_hash_mode {
+        None => None,
+        Some(RECURSIVE_OUTPUT_HASH_MODE) => Some(true),
+        Some(FLAT_OUTPUT_HASH_MODE) => Some(false),
+        Some(_) => {
+            return Err(diagnostic(
+                "unsupported-fixed-output-hash-mode",
+                None,
+                "Nix derivation declares an unsupported fixed-output hash mode",
+            ));
+        }
+    };
+    if algorithm_marks_recursive && mode_marks_recursive == Some(false) {
+        return Err(diagnostic(
+            "conflicting-fixed-output-hash-mode",
+            None,
+            "Nix derivation hash algorithm and outputHashMode declare conflicting fixed-output modes",
+        ));
+    }
+    Ok((algorithm, mode_marks_recursive.unwrap_or(algorithm_marks_recursive)))
 }
 
 fn parse_nix_hash_algorithm(hash_algo: &str) -> (String, bool) {
@@ -2210,15 +2307,28 @@ fn validate_field_limits(graph: &ForeignDerivationGraph) -> Result<(), ImportDia
         for arg in &node.args {
             require_field_limit(arg, Some(&node.node_id), "arg")?;
         }
-        for value in node.env.values() {
-            require_field_limit(value, Some(&node.node_id), "env")?;
+        for (key, value) in &node.env {
+            if key == NIX_STRUCTURED_ATTRS_ENV {
+                require_byte_limit(value, MAX_STRUCTURED_ATTRS_BYTES, Some(&node.node_id), "structured_attrs")?;
+            } else {
+                require_field_limit(value, Some(&node.node_id), "env")?;
+            }
         }
     }
     Ok(())
 }
 
 fn require_field_limit(value: &str, node_id: Option<&str>, field: &str) -> Result<(), ImportDiagnostic> {
-    if value.len() > MAX_FIELD_BYTES {
+    require_byte_limit(value, MAX_FIELD_BYTES, node_id, field)
+}
+
+fn require_byte_limit(
+    value: &str,
+    byte_limit: usize,
+    node_id: Option<&str>,
+    field: &str,
+) -> Result<(), ImportDiagnostic> {
+    if value.len() > byte_limit {
         return Err(diagnostic("field-limit-exceeded", node_id, &format!("field {field} exceeds byte limit")));
     }
     Ok(())
@@ -2546,6 +2656,29 @@ mod tests {
     }
 
     #[test]
+    fn fixed_output_hash_mode_preserves_modern_and_legacy_recursive_facts() {
+        let modern = parse_nix_fixed_output_hash(SHA256_ALGORITHM, Some(RECURSIVE_OUTPUT_HASH_MODE)).unwrap();
+        let legacy = parse_nix_fixed_output_hash("r:sha256", None).unwrap();
+        let flat = parse_nix_fixed_output_hash(SHA256_ALGORITHM, Some(FLAT_OUTPUT_HASH_MODE)).unwrap();
+
+        assert_eq!(modern, (SHA256_ALGORITHM.to_string(), true));
+        assert_eq!(legacy, modern);
+        assert_eq!(flat, (SHA256_ALGORITHM.to_string(), false));
+    }
+
+    #[test]
+    fn fixed_output_hash_mode_rejects_unknown_and_conflicting_facts() {
+        assert_error_class(
+            parse_nix_fixed_output_hash(SHA256_ALGORITHM, Some("unknown")),
+            "unsupported-fixed-output-hash-mode",
+        );
+        assert_error_class(
+            parse_nix_fixed_output_hash("r:sha256", Some(FLAT_OUTPUT_HASH_MODE)),
+            "conflicting-fixed-output-hash-mode",
+        );
+    }
+
+    #[test]
     fn prefix_aware_aterm_bundle_parses_nix_and_guix_paths() {
         let nix_inputs = nixpkgs_hello_aterm_inputs(NIX_SOURCE_PREFIX);
         let guix_inputs = nixpkgs_hello_aterm_inputs(GUIX_SOURCE_PREFIX);
@@ -2721,6 +2854,42 @@ mod tests {
         assert_eq!(source.outputs[OUT_OUTPUT_NAME].path.as_deref(), Some(NIXPKGS_SOURCE_OUT));
         assert_eq!(source.input_srcs.len(), 0);
         assert!(source.builder.starts_with("builtin:"));
+    }
+
+    #[test]
+    fn versioned_nix_derivation_export_preserves_structured_attributes_as_protocol_json() {
+        let mut versioned = versioned_nix_export_with_fod_env_path(true);
+        let node = versioned.derivations.values_mut().next().expect("fixture node");
+        node.structured_attrs = Some(serde_json::json!({
+            "buildInputs": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source"],
+            "enabled": true,
+            "outputs": ["out"],
+            "stdenv": NIXPKGS_SOURCE_OUT,
+        }));
+
+        let closure = normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(versioned)).unwrap();
+        let source = closure.get(NIXPKGS_SOURCE_DRV).expect("source drv");
+        let structured: serde_json::Value =
+            serde_json::from_str(&source.env[NIX_STRUCTURED_ATTRS_ENV]).expect("structured attrs JSON");
+
+        assert_eq!(
+            structured["buildInputs"][0],
+            format!("{NIX_STORE_PREFIX_WITH_SLASH}aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source")
+        );
+        assert_eq!(structured["stdenv"], NIXPKGS_SOURCE_OUT);
+        assert_eq!(structured["outputs"], serde_json::json!(["out"]));
+    }
+
+    #[test]
+    fn versioned_nix_derivation_export_rejects_non_object_structured_attributes() {
+        let mut versioned = versioned_nix_export_with_fod_env_path(true);
+        versioned.derivations.values_mut().next().expect("fixture node").structured_attrs =
+            Some(serde_json::json!(["not", "an", "object"]));
+
+        assert_error_class(
+            normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(versioned)),
+            "nix-structured-attrs-invalid",
+        );
     }
 
     #[test]
@@ -2925,6 +3094,7 @@ mod tests {
                 hash: Some("sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=".to_string()),
                 hash_algo: None,
             })]),
+            structured_attrs: None,
             inputs: NixDerivationJsonVersionedInputs::default(),
         });
         NixDerivationJsonVersionedExport {

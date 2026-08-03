@@ -1,0 +1,114 @@
+{
+  "surface_id": "mantlepkgs.update-plan",
+  "cases": [
+    {
+      "id": "unknown-plan-version",
+      "issue_class": "version",
+      "expected_path": "/schema",
+      "artifact": {
+        "schema": "mantlepkgs-update-plan-v2",
+        "plan_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "policy_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_observation_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "advisory_observation_identity_blake3": [],
+        "package": { "public_selector": "hello" },
+        "selection": { "selected": null, "decisions": [], "reason_codes": ["no-candidate"] },
+        "effects": [],
+        "validation_evidence": {
+          "schema": "mantlepkgs-update-validation-evidence-v1",
+          "candidate_version": "v1.3.0",
+          "candidate_source_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] },
+          "build_observations": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] },
+          "validation_roots": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] },
+          "impact_report": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] }
+        },
+        "proposal_status": "no-candidate",
+        "reason_codes": ["no-candidate"],
+        "non_claims": ["a", "b", "c", "d", "e", "f"]
+      }
+    },
+    {
+      "id": "invalid-plan-digest",
+      "issue_class": "digest",
+      "expected_path": "/plan_identity_blake3",
+      "artifact": {
+        "schema": "mantlepkgs-update-plan-v1",
+        "plan_identity_blake3": "invalid",
+        "policy_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_observation_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "advisory_observation_identity_blake3": [],
+        "package": { "public_selector": "hello" },
+        "selection": { "selected": null, "decisions": [], "reason_codes": ["no-candidate"] },
+        "effects": [],
+        "validation_evidence": {
+          "schema": "mantlepkgs-update-validation-evidence-v1",
+          "candidate_version": "v1.3.0",
+          "candidate_source_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] },
+          "build_observations": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] },
+          "validation_roots": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] },
+          "impact_report": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] }
+        },
+        "proposal_status": "no-candidate",
+        "reason_codes": ["no-candidate"],
+        "non_claims": ["a", "b", "c", "d", "e", "f"]
+      }
+    },
+    {
+      "id": "missing-evidence-claims-success-artifact",
+      "issue_class": "cross-field",
+      "expected_path": "/validation_evidence/catalog",
+      "artifact": {
+        "schema": "mantlepkgs-update-plan-v1",
+        "plan_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "policy_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_observation_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "advisory_observation_identity_blake3": [],
+        "package": { "public_selector": "hello" },
+        "selection": { "selected": null, "decisions": [], "reason_codes": ["no-candidate"] },
+        "effects": [],
+        "validation_evidence": {
+          "schema": "mantlepkgs-update-validation-evidence-v1",
+          "candidate_version": "v1.3.0",
+          "candidate_source_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog": { "status": "missing", "artifact_identity_blake3": [], "reason_codes": [] },
+          "build_observations": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] },
+          "validation_roots": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] },
+          "impact_report": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] }
+        },
+        "proposal_status": "blocked",
+        "reason_codes": ["catalog-missing"],
+        "non_claims": ["a", "b", "c", "d", "e", "f"]
+      }
+    },
+    {
+      "id": "credential-field-is-not-owned",
+      "issue_class": "unknown-field",
+      "expected_path": "/forge_token",
+      "artifact": {
+        "schema": "mantlepkgs-update-plan-v1",
+        "plan_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "policy_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_observation_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "advisory_observation_identity_blake3": [],
+        "package": { "public_selector": "hello" },
+        "selection": { "selected": null, "decisions": [], "reason_codes": ["no-candidate"] },
+        "effects": [],
+        "validation_evidence": {
+          "schema": "mantlepkgs-update-validation-evidence-v1",
+          "candidate_version": "v1.3.0",
+          "candidate_source_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] },
+          "build_observations": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] },
+          "validation_roots": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] },
+          "impact_report": { "status": "success", "artifact_identity_blake3": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "reason_codes": [] }
+        },
+        "proposal_status": "no-candidate",
+        "reason_codes": ["no-candidate"],
+        "non_claims": ["a", "b", "c", "d", "e", "f"],
+        "forge_token": "not-owned-by-mantle"
+      }
+    }
+  ]
+}

@@ -26,6 +26,7 @@ use nix_compat::store_path::build_text_path_with_store_dir;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::foreign_derivation_import::FIXED_OUTPUT_SEED_KIND;
 use crate::foreign_derivation_import::FixedOutputMetadata;
 use crate::foreign_derivation_import::ForeignDerivationGraph;
 use crate::foreign_derivation_import::ForeignDerivationNode;
@@ -54,6 +55,7 @@ const FETCH_MODE_FLAT: &str = "flat";
 const FETCH_MODE_RECURSIVE: &str = "recursive";
 const GIT_EXPORT_POLICY: &str = "checkout-no-dot-git";
 const MAX_FOREIGN_FETCH_CANDIDATES: usize = 16;
+const BLAKE3_DIGEST_HEX_CHARS: usize = 64;
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct ExactForeignPathMaps {
@@ -68,6 +70,8 @@ pub(crate) struct CompiledSourceRequirement {
     pub(crate) foreign_path: String,
     pub(crate) target_path: String,
     pub(crate) descriptor_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) expected_content_blake3: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -197,7 +201,7 @@ pub(crate) fn compile_foreign_graph_with_profile_and_output_mode(
         .iter()
         .map(|payload| (payload.payload_id.as_str(), payload))
         .collect::<BTreeMap<_, _>>();
-    let (mut path_maps, source_requirements) =
+    let (mut path_maps, mut source_requirements) =
         compile_source_requirements(graph, target_store_prefix, preserve_cache_paths)?;
     let mut identities = BTreeMap::new();
     let mut known_hdms = BTreeMap::new();
@@ -255,6 +259,8 @@ pub(crate) fn compile_foreign_graph_with_profile_and_output_mode(
         unit.declared_references = node.declared_references.clone();
         units.push(unit);
     }
+    compile_fixed_output_seed_requirements(graph, &mut path_maps, &mut source_requirements)?;
+    validate_cross_map_collisions(&path_maps, None)?;
     validate_compiled_coverage(&dependency_order, &units)?;
 
     let exact_map = combined_path_map(&path_maps, None)?;
@@ -440,6 +446,9 @@ fn compile_source_requirements(
     let mut payloads = graph.source_payloads.iter().collect::<Vec<_>>();
     payloads.sort_by(|left, right| left.payload_id.cmp(&right.payload_id));
     for payload in payloads {
+        if payload.kind == FIXED_OUTPUT_SEED_KIND {
+            continue;
+        }
         let foreign_path = parse_foreign_store_object(&payload.content_ref, &graph.source_store_prefixes, None)?;
         let descriptor = serde_json::to_vec(payload).map_err(|error| {
             compiler_diagnostic(
@@ -472,11 +481,77 @@ fn compile_source_requirements(
             foreign_path: payload.content_ref.clone(),
             target_path,
             descriptor_digest: blake3::hash(&descriptor).to_hex().to_string(),
+            expected_content_blake3: payload.expected_content_blake3.clone(),
         });
     }
     validate_cross_map_collisions(&path_maps, None)?;
-    debug_assert_eq!(requirements.len(), graph.source_payloads.len());
+    debug_assert!(requirements.len() <= graph.source_payloads.len());
     Ok((path_maps, requirements))
+}
+
+fn compile_fixed_output_seed_requirements(
+    graph: &ForeignDerivationGraph,
+    path_maps: &mut ExactForeignPathMaps,
+    requirements: &mut Vec<CompiledSourceRequirement>,
+) -> Result<(), ImportDiagnostic> {
+    let declared_output_paths = graph
+        .nodes
+        .iter()
+        .flat_map(|node| node.outputs.values().map(|output| output.path.as_str()))
+        .collect::<BTreeSet<_>>();
+    let mut seeds = graph
+        .source_payloads
+        .iter()
+        .filter(|payload| payload.kind == FIXED_OUTPUT_SEED_KIND)
+        .collect::<Vec<_>>();
+    seeds.sort_by(|left, right| left.payload_id.cmp(&right.payload_id));
+    requirements.reserve(seeds.len());
+    for payload in seeds {
+        let expected_content_blake3 = payload.expected_content_blake3.as_ref().ok_or_else(|| {
+            compiler_diagnostic(
+                "foreign-compiler-fixed-output-seed-unbound",
+                None,
+                "fixed-output seed has no producer content binding",
+            )
+        })?;
+        if expected_content_blake3.len() != BLAKE3_DIGEST_HEX_CHARS
+            || !expected_content_blake3.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(compiler_diagnostic(
+                "foreign-compiler-fixed-output-seed-binding-invalid",
+                None,
+                "fixed-output seed producer content binding is not lowercase BLAKE3 hex",
+            ));
+        }
+        if !declared_output_paths.contains(payload.content_ref.as_str()) {
+            return Err(compiler_diagnostic(
+                "foreign-compiler-fixed-output-seed-unmapped",
+                None,
+                "fixed-output seed does not name one declared foreign output",
+            ));
+        }
+        let Some(target_path) = path_maps.outputs.get(&payload.content_ref).cloned() else {
+            continue;
+        };
+        let descriptor = serde_json::to_vec(payload).map_err(|error| {
+            compiler_diagnostic(
+                "foreign-compiler-source-serialization-failed",
+                None,
+                &format!("fixed-output seed serialization failed: {error}"),
+            )
+        })?;
+        insert_exact_path(&mut path_maps.sources, &payload.content_ref, &target_path, "fixed-output seed", None)?;
+        requirements.push(CompiledSourceRequirement {
+            payload_id: payload.payload_id.clone(),
+            foreign_path: payload.content_ref.clone(),
+            target_path,
+            descriptor_digest: blake3::hash(&descriptor).to_hex().to_string(),
+            expected_content_blake3: Some(expected_content_blake3.clone()),
+        });
+    }
+    debug_assert!(requirements.len() <= graph.source_payloads.len());
+    debug_assert!(requirements.iter().all(|requirement| !requirement.target_path.is_empty()));
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -501,7 +576,8 @@ fn compile_node(
     let outputs = compile_outputs(node)?;
     let input_derivations = compile_input_derivations(node, identities, target_store_prefix)?;
     let input_sources = compile_input_sources(node, payloads, path_maps, target_store_prefix)?;
-    let environment = compile_environment(node, graph, &exact_map, &builder, &system, &builtin.environment)?;
+    let environment =
+        compile_environment(node, graph, target_store_prefix, &exact_map, &builder, &system, &builtin.environment)?;
     let mut derivation = Derivation {
         arguments,
         builder,
@@ -1102,6 +1178,7 @@ fn validate_unique_source_ref<'a>(
 fn compile_environment(
     node: &ForeignDerivationNode,
     graph: &ForeignDerivationGraph,
+    target_store_prefix: &str,
     exact_map: &BTreeMap<String, String>,
     builder: &str,
     system: &str,
@@ -1116,11 +1193,23 @@ fn compile_environment(
         if matches!(key.as_str(), "builder" | "name" | "outputs" | "system") {
             continue;
         }
-        let rewritten = rewrite_store_objects(value, exact_map, &graph.source_store_prefixes, Some(&node.node_id))?;
+        let rewritten = rewrite_environment_value(
+            value,
+            exact_map,
+            &graph.source_store_prefixes,
+            target_store_prefix,
+            Some(&node.node_id),
+        )?;
         environment.insert(key.clone(), rewritten.into_bytes().into());
     }
     for (key, value) in builtin_environment {
-        let rewritten = rewrite_store_objects(value, exact_map, &graph.source_store_prefixes, Some(&node.node_id))?;
+        let rewritten = rewrite_environment_value(
+            value,
+            exact_map,
+            &graph.source_store_prefixes,
+            target_store_prefix,
+            Some(&node.node_id),
+        )?;
         environment.insert(key.clone(), rewritten.into_bytes().into());
     }
     environment.insert("system".to_string(), system.as_bytes().into());
@@ -1201,22 +1290,7 @@ fn validate_cross_map_collisions(
     path_maps: &ExactForeignPathMaps,
     node_id: Option<&str>,
 ) -> Result<(), ImportDiagnostic> {
-    let expected = path_maps
-        .derivations
-        .len()
-        .checked_add(path_maps.outputs.len())
-        .and_then(|count| count.checked_add(path_maps.sources.len()))
-        .ok_or_else(|| {
-            compiler_diagnostic("foreign-compiler-map-count-overflow", node_id, "foreign path map count overflowed")
-        })?;
-    let combined = combined_path_map(path_maps, node_id)?;
-    if combined.len() != expected {
-        return Err(compiler_diagnostic(
-            "foreign-compiler-map-collision",
-            node_id,
-            "one foreign path appears in more than one object map",
-        ));
-    }
+    let _ = combined_path_map(path_maps, node_id)?;
     Ok(())
 }
 
@@ -1227,12 +1301,18 @@ fn combined_path_map(
     let mut combined = BTreeMap::new();
     for map in [&path_maps.derivations, &path_maps.outputs, &path_maps.sources] {
         for (foreign_path, target_path) in map {
-            if combined.insert(foreign_path.clone(), target_path.clone()).is_some() {
-                return Err(compiler_diagnostic(
-                    "foreign-compiler-map-collision",
-                    node_id,
-                    "one foreign path appears in more than one object map",
-                ));
+            match combined.get(foreign_path) {
+                Some(existing_target) if existing_target != target_path => {
+                    return Err(compiler_diagnostic(
+                        "foreign-compiler-map-collision",
+                        node_id,
+                        "one foreign path has conflicting mappings across object classes",
+                    ));
+                }
+                Some(_) => {}
+                None => {
+                    combined.insert(foreign_path.clone(), target_path.clone());
+                }
             }
         }
     }
@@ -1249,6 +1329,96 @@ fn rewrite_values(
         .iter()
         .map(|value| rewrite_store_objects(value, exact_map, source_prefixes, node_id))
         .collect()
+}
+
+fn rewrite_environment_value(
+    value: &str,
+    exact_map: &BTreeMap<String, String>,
+    source_prefixes: &[String],
+    target_store_prefix: &str,
+    node_id: Option<&str>,
+) -> Result<String, ImportDiagnostic> {
+    let rewritten = rewrite_store_objects(value, exact_map, source_prefixes, node_id)?;
+    Ok(rewrite_known_store_dir_placeholders(&rewritten, source_prefixes, target_store_prefix))
+}
+
+fn rewrite_known_store_dir_placeholders(value: &str, source_prefixes: &[String], target_store_prefix: &str) -> String {
+    const STORE_DIR_PLACEHOLDER: &str = "@storeDir@";
+
+    let mut rewritten = value.to_string();
+    for source_prefix in source_prefixes {
+        rewritten = rewrite_store_dir_placeholder_for_prefix(
+            &rewritten,
+            STORE_DIR_PLACEHOLDER,
+            source_prefix,
+            target_store_prefix,
+        );
+    }
+    rewritten
+}
+
+fn rewrite_store_dir_placeholder_for_prefix(
+    value: &str,
+    placeholder: &str,
+    source_prefix: &str,
+    target_store_prefix: &str,
+) -> String {
+    let mut rewritten = String::with_capacity(value.len());
+    let mut copied_through = 0usize;
+    let mut search_from = 0usize;
+    while let Some(relative_start) = value[search_from..].find(placeholder) {
+        let placeholder_start = search_from + relative_start;
+        let placeholder_end = placeholder_start + placeholder.len();
+        let Some(prefix_start) = store_dir_placeholder_value_start(value, placeholder_end) else {
+            search_from = placeholder_end;
+            continue;
+        };
+        if !value[prefix_start..].starts_with(source_prefix) {
+            search_from = placeholder_end;
+            continue;
+        }
+        let prefix_end = prefix_start + source_prefix.len();
+        if !store_dir_placeholder_has_token_boundary(value, prefix_start, prefix_end) {
+            search_from = placeholder_end;
+            continue;
+        }
+        rewritten.push_str(&value[copied_through..prefix_start]);
+        rewritten.push_str(target_store_prefix);
+        copied_through = prefix_end;
+        search_from = prefix_end;
+    }
+    rewritten.push_str(&value[copied_through..]);
+    rewritten
+}
+
+fn store_dir_placeholder_value_start(value: &str, placeholder_end: usize) -> Option<usize> {
+    let suffix = value.get(placeholder_end..)?;
+    let whitespace_bytes = suffix.bytes().take_while(u8::is_ascii_whitespace).count();
+    if whitespace_bytes == 0 {
+        return None;
+    }
+    let token_start = placeholder_end.checked_add(whitespace_bytes)?;
+    match value.as_bytes().get(token_start) {
+        Some(b'\'') | Some(b'"') => token_start.checked_add(1),
+        Some(_) => Some(token_start),
+        None => None,
+    }
+}
+
+fn store_dir_placeholder_has_token_boundary(value: &str, prefix_start: usize, prefix_end: usize) -> bool {
+    let quote = prefix_start
+        .checked_sub(1)
+        .and_then(|index| value.as_bytes().get(index))
+        .copied()
+        .filter(|byte| matches!(byte, b'\'' | b'"'));
+    match (quote, value.as_bytes().get(prefix_end).copied()) {
+        (Some(b'\''), Some(b'\'')) | (Some(b'"'), Some(b'"')) => true,
+        (Some(_), _) => false,
+        (None, None) => true,
+        (None, Some(byte)) => {
+            byte.is_ascii_whitespace() || matches!(byte, b';' | b'|' | b'&' | b'(' | b')' | b'<' | b'>')
+        }
+    }
 }
 
 fn rewrite_store_objects(
@@ -1468,6 +1638,36 @@ mod tests {
     const EMPTY_HASH: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
     #[test]
+    fn known_store_dir_placeholders_use_the_active_store_prefix() {
+        let input = concat!(
+            "substitute source target --replace-fail @storeDir@ /nix/store\n",
+            "substitute source target --replace-fail @storeDir@ '/nix/store'\n",
+            "substitute source target --replace-fail @storeDir@ \"/nix/store\"\n",
+            "literal=/nix/store\n",
+        );
+
+        let rewritten = rewrite_known_store_dir_placeholders(input, &[SOURCE_PREFIX.to_string()], TARGET_PREFIX);
+
+        assert!(rewritten.contains("@storeDir@ /mantle/store\n"));
+        assert!(rewritten.contains("@storeDir@ '/mantle/store'\n"));
+        assert!(rewritten.contains("@storeDir@ \"/mantle/store\"\n"));
+        assert!(rewritten.contains("literal=/nix/store\n"));
+    }
+
+    #[test]
+    fn unrelated_or_non_token_store_text_is_not_rewritten() {
+        let input = concat!(
+            "--replace-fail @other@ /nix/store\n",
+            "--replace-fail @storeDir@ /nix/store-suffix\n",
+            "--replace-fail @storeDir@/nix/store\n",
+        );
+
+        let rewritten = rewrite_known_store_dir_placeholders(input, &[SOURCE_PREFIX.to_string()], TARGET_PREFIX);
+
+        assert_eq!(rewritten, input);
+    }
+
+    #[test]
     fn dependency_compiler_is_exact_deterministic_and_prefix_sensitive() {
         let graph = diamond_graph();
         let first = compile_foreign_graph(&graph, TARGET_PREFIX).expect("diamond graph must compile");
@@ -1512,6 +1712,93 @@ mod tests {
     }
 
     #[test]
+    fn compiler_rewrites_store_paths_inside_structured_attribute_json() {
+        let mut graph = diamond_graph();
+        let foreign_left = foreign_output("left", "out");
+        let root = graph.nodes.iter_mut().find(|node| node.node_id == "root").expect("root node");
+        root.env.insert(
+            "__json".to_string(),
+            serde_json::json!({"buildInputs": [foreign_left], "outputs": ["out"]}).to_string(),
+        );
+
+        let compiled = compile_foreign_graph(&graph, TARGET_PREFIX).expect("structured graph must compile");
+        let root = compiled.units.iter().find(|unit| unit.node_id == "root").expect("compiled root");
+        let structured: serde_json::Value = serde_json::from_slice(root.derivation.environment["__json"].as_ref())
+            .expect("compiled structured attrs JSON");
+        let expected_left = &compiled.path_maps.outputs[&foreign_output("left", "out")];
+
+        assert_eq!(structured["buildInputs"][0], serde_json::Value::String(expected_left.clone()));
+        assert!(!structured.to_string().contains(SOURCE_PREFIX));
+    }
+
+    #[test]
+    fn fixed_output_seed_admits_the_recomputed_output_path() {
+        let mut graph = diamond_graph();
+        let seeded_foreign_output = foreign_output("leaf", "out");
+        graph.source_payloads.push(SourcePayload {
+            payload_id: "fixed-output-seed".to_string(),
+            kind: FIXED_OUTPUT_SEED_KIND.to_string(),
+            content_ref: seeded_foreign_output.clone(),
+            embedded_text: None,
+            mirrors: Vec::new(),
+            expected_content_blake3: Some(EMPTY_HASH.to_string()),
+        });
+
+        let compiled = compile_foreign_graph(&graph, TARGET_PREFIX).expect("seeded graph must compile");
+        let target_output = &compiled.path_maps.outputs[&seeded_foreign_output];
+        assert_eq!(compiled.path_maps.sources[&seeded_foreign_output], *target_output);
+        assert_eq!(compiled.source_requirements[0].target_path, *target_output);
+        assert_ne!(target_output, &seeded_foreign_output);
+    }
+
+    #[test]
+    fn fixed_output_seed_outside_the_selected_root_is_not_required() {
+        let mut graph = diamond_graph();
+        graph.root_derivation_ids = vec!["left".to_string()];
+        graph.source_payloads.push(SourcePayload {
+            payload_id: "unreachable-fixed-output-seed".to_string(),
+            kind: FIXED_OUTPUT_SEED_KIND.to_string(),
+            content_ref: foreign_output("right", "out"),
+            embedded_text: None,
+            mirrors: Vec::new(),
+            expected_content_blake3: Some(EMPTY_HASH.to_string()),
+        });
+
+        let compiled = compile_foreign_graph(&graph, TARGET_PREFIX).expect("unreachable seed must be omitted");
+        assert!(compiled.source_requirements.is_empty());
+        assert!(!compiled.path_maps.outputs.contains_key(&foreign_output("right", "out")));
+    }
+
+    #[test]
+    fn fixed_output_seed_without_a_producer_binding_is_rejected() {
+        let mut graph = diamond_graph();
+        graph.source_payloads.push(SourcePayload {
+            payload_id: "unbound-fixed-output-seed".to_string(),
+            kind: FIXED_OUTPUT_SEED_KIND.to_string(),
+            content_ref: foreign_output("leaf", "out"),
+            embedded_text: None,
+            mirrors: Vec::new(),
+            expected_content_blake3: None,
+        });
+
+        let error = compile_foreign_graph(&graph, TARGET_PREFIX).expect_err("unbound seed must fail");
+        assert_eq!(error.class, "foreign-compiler-fixed-output-seed-unbound");
+    }
+
+    #[test]
+    fn conflicting_cross_class_path_mapping_is_rejected() {
+        let foreign = foreign_source("seed");
+        let mut maps = ExactForeignPathMaps::default();
+        maps.outputs
+            .insert(foreign.clone(), format!("{TARGET_PREFIX}/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-seed"));
+        maps.sources.insert(foreign, format!("{TARGET_PREFIX}/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-seed"));
+
+        let error = combined_path_map(&maps, None).expect_err("conflicting map must fail");
+        assert_eq!(error.class, "foreign-compiler-map-collision");
+        assert!(error.message.contains("conflicting mappings"));
+    }
+
+    #[test]
     fn compiler_maps_source_descriptors_and_rewrites_suffixes() {
         let mut graph = diamond_graph();
         graph.source_payloads.push(SourcePayload {
@@ -1520,6 +1807,7 @@ mod tests {
             content_ref: foreign_source("script"),
             embedded_text: Some("echo source".to_string()),
             mirrors: Vec::new(),
+            expected_content_blake3: None,
         });
         let root = graph.nodes.iter_mut().find(|node| node.node_id == "root").expect("root node");
         root.source_refs.push(SourceRef {
@@ -1546,6 +1834,7 @@ mod tests {
             content_ref: foreign_source("cache-source"),
             embedded_text: None,
             mirrors: Vec::new(),
+            expected_content_blake3: None,
         });
         let root = graph.nodes.iter_mut().find(|node| node.node_id == "root").unwrap();
         root.source_refs.push(SourceRef {
@@ -1925,6 +2214,7 @@ mod tests {
             content_ref: foreign_source(source_name),
             embedded_text: None,
             mirrors,
+            expected_content_blake3: None,
         });
     }
 

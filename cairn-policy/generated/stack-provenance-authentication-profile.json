@@ -1,0 +1,10 @@
+{
+  "canonicalization_profile": "valence.preserves-integrity.corrected.v1",
+  "claim_scope": "stack_provenance.v1.lifecycle_policy_conformance",
+  "evidence_kind": "stack-provenance",
+  "non_claims": [
+    "Authenticated stack provenance does not prove source correctness or release eligibility."
+  ],
+  "schema_version": "cairn.authenticated-evidence-profile.v1",
+  "signature_purpose": "onix.stack-provenance.release-evidence.v1"
+}

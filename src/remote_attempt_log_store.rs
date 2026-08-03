@@ -43,6 +43,17 @@ use crunch_build::distributed::plan_remote_attempt_log_retention;
 use crunch_build::distributed::seal_remote_attempt_log_record;
 use crunch_build::distributed::validate_remote_attempt_log_chain;
 use crunch_build::distributed::validate_remote_attempt_log_manifest;
+use durable_file_publication::core::CleanupDisposition;
+use durable_file_publication::core::DurabilityMode;
+use durable_file_publication::core::PrimaryFailure;
+use durable_file_publication::core::PublicationDisposition;
+use durable_file_publication::core::PublicationRequest;
+use durable_file_publication::core::ReplacementMode;
+#[cfg(target_os = "linux")]
+use durable_file_publication::shell::LinuxDirectory;
+use durable_file_publication::shell::StageNameSource;
+#[cfg(target_os = "linux")]
+use durable_file_publication::shell::publish_one_file;
 use rand::RngCore;
 use rand::rngs::OsRng;
 
@@ -60,8 +71,51 @@ const IDENTITY_TEMP_RANDOM_BYTES: usize = 16;
 const HEX_CHARS_PER_BYTE: usize = 2;
 const IDENTITY_TEMP_CREATE_ATTEMPTS_MAX: u32 = 8;
 const BOUNDED_READ_PROBE_BYTES: u64 = 1;
-#[cfg(unix)]
 const PRIVATE_TEMP_FILE_MODE: u32 = 0o600;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ImmutablePublicationBackend {
+    Shared,
+    Legacy,
+}
+
+const PRODUCTION_IMMUTABLE_PUBLICATION_BACKEND: ImmutablePublicationBackend = ImmutablePublicationBackend::Shared;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MantleImmutablePublicationDisposition {
+    Created,
+    Existing {
+        cleanup: CleanupDisposition,
+    },
+    NotCommitted {
+        failure: PrimaryFailure,
+        cleanup: CleanupDisposition,
+    },
+    CommittedDurabilityUnknown,
+    UnexpectedVisibilityOnly,
+}
+
+struct PrecomputedStageNames {
+    names: Vec<String>,
+    next_index: usize,
+}
+
+impl PrecomputedStageNames {
+    fn new(names: Vec<String>) -> Self {
+        assert!(!names.is_empty(), "precomputed publication stage names must not be empty");
+        assert!(names.iter().all(|name| !name.is_empty()));
+        Self { names, next_index: 0 }
+    }
+}
+
+impl StageNameSource for PrecomputedStageNames {
+    fn next_stage_leaf(&mut self) -> String {
+        assert!(self.next_index < self.names.len(), "publication stage-name source exhausted unexpectedly");
+        let name = self.names[self.next_index].clone();
+        self.next_index = self.next_index.saturating_add(1);
+        name
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteAttemptLogDurabilityStep {
@@ -339,7 +393,174 @@ fn commit_manifest_with_hook(
 }
 
 fn publish_immutable_file(path: &Path, bytes: &[u8], bytes_max: u64) -> Result<(), String> {
-    publish_immutable_file_with_hook(path, bytes, bytes_max, &mut no_publication_hook)
+    publish_immutable_file_with_backend(path, bytes, bytes_max, PRODUCTION_IMMUTABLE_PUBLICATION_BACKEND)
+}
+
+fn publish_immutable_file_with_backend(
+    path: &Path,
+    bytes: &[u8],
+    bytes_max: u64,
+    backend: ImmutablePublicationBackend,
+) -> Result<(), String> {
+    match backend {
+        ImmutablePublicationBackend::Shared => publish_immutable_file_shared(path, bytes, bytes_max),
+        ImmutablePublicationBackend::Legacy => {
+            publish_immutable_file_with_hook(path, bytes, bytes_max, &mut no_publication_hook)
+        }
+    }
+}
+
+fn map_shared_publication_disposition(disposition: &PublicationDisposition) -> MantleImmutablePublicationDisposition {
+    match disposition {
+        PublicationDisposition::NotCommitted { failure, cleanup } => {
+            MantleImmutablePublicationDisposition::NotCommitted {
+                failure: *failure,
+                cleanup: *cleanup,
+            }
+        }
+        PublicationDisposition::DestinationExists { cleanup } => {
+            MantleImmutablePublicationDisposition::Existing { cleanup: *cleanup }
+        }
+        PublicationDisposition::CommittedVisibilityOnly => {
+            MantleImmutablePublicationDisposition::UnexpectedVisibilityOnly
+        }
+        PublicationDisposition::CommittedAndParentSynchronized => MantleImmutablePublicationDisposition::Created,
+        PublicationDisposition::CommittedDurabilityUnknown => {
+            MantleImmutablePublicationDisposition::CommittedDurabilityUnknown
+        }
+    }
+}
+
+fn shared_publication_request(
+    destination_leaf: String,
+    payload_bytes: usize,
+    bytes_max: u64,
+) -> Result<PublicationRequest, String> {
+    let maximum_payload_bytes =
+        usize::try_from(bytes_max).map_err(|_| "attempt-log-object-size-limit-overflow".to_string())?;
+    let collision_attempt_limit = usize::try_from(IDENTITY_TEMP_CREATE_ATTEMPTS_MAX)
+        .map_err(|_| "attempt-log-temp-attempt-limit-overflow".to_string())?;
+    Ok(PublicationRequest {
+        destination_leaf,
+        payload_bytes,
+        maximum_payload_bytes,
+        collision_attempt_limit,
+        final_mode: PRIVATE_TEMP_FILE_MODE,
+        replacement: ReplacementMode::NoReplace,
+        durability: DurabilityMode::DurabilityRequired,
+    })
+}
+
+fn precompute_stage_names(destination: &Path, identity: &str, count: usize) -> Result<PrecomputedStageNames, String> {
+    let mut names = Vec::with_capacity(count);
+    for _ in 0..count {
+        let path = identity_owned_temp_path(destination, identity)?;
+        let name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| "attempt-log-temp-name-invalid".to_string())?;
+        names.push(name.to_string());
+    }
+    if names.len() != count {
+        return Err("attempt-log-temp-name-count-invalid".to_string());
+    }
+    Ok(PrecomputedStageNames::new(names))
+}
+
+#[cfg(target_os = "linux")]
+fn publish_immutable_file_shared(path: &Path, bytes: &[u8], bytes_max: u64) -> Result<(), String> {
+    validate_serialized_size(bytes, bytes_max, "object")?;
+    let parent = path.parent().ok_or_else(|| "attempt-log-object-parent-missing".to_string())?;
+    let destination_leaf = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "attempt-log-object-destination-name-invalid".to_string())?;
+    let identity = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "attempt-log-object-identity-invalid".to_string())?;
+    let request = shared_publication_request(destination_leaf.to_string(), bytes.len(), bytes_max)?;
+    let mut names = precompute_stage_names(path, identity, request.collision_attempt_limit)?;
+    ensure_durable_dir(parent)?;
+    let directory = open_publication_parent(parent)?;
+    let mut io = LinuxDirectory::from_open_directory(directory)
+        .map_err(|error| format!("attempt-log-object-parent-capability-invalid: {error}"))?;
+    let classification = publish_one_file(&mut io, &mut names, &request, bytes)
+        .map_err(|error| format!("attempt-log-object-classification-invalid: {error:?}"))?;
+    interpret_shared_publication(path, bytes, bytes_max, &classification.disposition)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn publish_immutable_file_shared(_path: &Path, _bytes: &[u8], _bytes_max: u64) -> Result<(), String> {
+    Err("attempt-log-immutable-object-shared-publication-unsupported".to_string())
+}
+
+#[cfg(target_os = "linux")]
+fn open_publication_parent(parent: &Path) -> Result<File, String> {
+    use std::os::unix::fs::OpenOptionsExt as _;
+
+    fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(parent)
+        .map_err(|error| format!("attempt-log-object-parent-open-no-follow-failed: {error}"))
+}
+
+fn interpret_shared_publication(
+    path: &Path,
+    bytes: &[u8],
+    bytes_max: u64,
+    disposition: &PublicationDisposition,
+) -> Result<(), String> {
+    match map_shared_publication_disposition(disposition) {
+        MantleImmutablePublicationDisposition::Created => Ok(()),
+        MantleImmutablePublicationDisposition::Existing {
+            cleanup: CleanupDisposition::Removed,
+        } => compare_existing_immutable_file(path, bytes, bytes_max),
+        MantleImmutablePublicationDisposition::Existing { cleanup } => {
+            Err(format!("attempt-log-immutable-object-existing-cleanup-{}", cleanup_code(cleanup)))
+        }
+        MantleImmutablePublicationDisposition::NotCommitted { failure, cleanup } => Err(format!(
+            "attempt-log-immutable-object-not-committed-{}-cleanup-{}",
+            primary_failure_code(failure),
+            cleanup_code(cleanup)
+        )),
+        MantleImmutablePublicationDisposition::CommittedDurabilityUnknown => {
+            Err("attempt-log-immutable-object-committed-durability-unknown".to_string())
+        }
+        MantleImmutablePublicationDisposition::UnexpectedVisibilityOnly => {
+            Err("attempt-log-immutable-object-unexpected-visibility-only".to_string())
+        }
+    }
+}
+
+fn compare_existing_immutable_file(path: &Path, bytes: &[u8], bytes_max: u64) -> Result<(), String> {
+    let existing = read_bounded_bytes(path, bytes_max, "immutable-object")?;
+    if existing == bytes {
+        return Ok(());
+    }
+    Err("attempt-log-immutable-object-conflict".to_string())
+}
+
+fn primary_failure_code(failure: PrimaryFailure) -> &'static str {
+    match failure {
+        PrimaryFailure::NoReplaceUnsupported => "no-replace-unsupported",
+        PrimaryFailure::ParentSyncUnsupported => "parent-sync-unsupported",
+        PrimaryFailure::StageCreate => "stage-create",
+        PrimaryFailure::CollisionExhausted => "collision-exhausted",
+        PrimaryFailure::PayloadWrite => "payload-write",
+        PrimaryFailure::PermissionApply => "permission-apply",
+        PrimaryFailure::PayloadSync => "payload-sync",
+        PrimaryFailure::Rename => "rename",
+    }
+}
+
+fn cleanup_code(cleanup: CleanupDisposition) -> &'static str {
+    match cleanup {
+        CleanupDisposition::NotNeeded => "not-needed",
+        CleanupDisposition::Removed => "removed",
+        CleanupDisposition::Failed => "failed",
+    }
 }
 
 fn publish_immutable_file_with_hook(
@@ -715,6 +936,16 @@ mod tests {
     use crunch_build::distributed::RemoteAttemptPhase;
     use crunch_build::distributed::RemoteFenceGeneration;
     use crunch_build::distributed::RemoteJobId;
+    use durable_file_publication::core::Classification;
+    use durable_file_publication::core::ClassificationError;
+    use durable_file_publication::corpus::CONFORMANCE_CORPUS;
+    use durable_file_publication::corpus::CorpusCase;
+    use durable_file_publication::corpus::ExpectedDisposition;
+    use durable_file_publication::corpus::FaultPoint;
+    use durable_file_publication::shell::MechanicalIoFailure;
+    use durable_file_publication::shell::PublicationIo;
+    use durable_file_publication::shell::RenameDisposition;
+    use durable_file_publication::shell::StageCreateDisposition;
 
     use super::*;
 
@@ -722,6 +953,219 @@ mod tests {
     const TEST_RETAINED_SEGMENTS: u32 = 2;
     const TEST_RECORD_COUNT: u64 = 4;
     const TEST_REPLAY_BYTES: u64 = 1_024;
+    const CORPUS_COLLISION_ATTEMPT_LIMIT: usize = 3;
+    const EXPECTED_SHARED_CORPUS_CASES: usize = 17;
+    const RACE_WRITER_COUNT: usize = 2;
+    const CORPUS_PAYLOAD: &[u8] = b"mantle-corpus-payload";
+
+    struct CorpusIo {
+        case: CorpusCase,
+        collision_count: usize,
+        stage_created: bool,
+    }
+
+    impl CorpusIo {
+        fn new(case: CorpusCase) -> Self {
+            Self {
+                case,
+                collision_count: 0,
+                stage_created: false,
+            }
+        }
+    }
+
+    impl PublicationIo for CorpusIo {
+        fn supports_no_replace(&self) -> bool {
+            self.case.no_replace_supported
+        }
+
+        fn supports_parent_sync(&self) -> bool {
+            self.case.parent_sync_supported
+        }
+
+        fn create_stage(
+            &mut self,
+            _leaf: &str,
+            _private_mode: u32,
+        ) -> Result<StageCreateDisposition, MechanicalIoFailure> {
+            if self.case.fault == FaultPoint::StageCreate {
+                return Err(MechanicalIoFailure);
+            }
+            if self.collision_count < self.case.collisions_before_success {
+                self.collision_count = self.collision_count.saturating_add(1);
+                return Ok(StageCreateDisposition::AlreadyExists);
+            }
+            self.stage_created = true;
+            Ok(StageCreateDisposition::Created)
+        }
+
+        fn write_all(&mut self, _bytes: &[u8]) -> Result<(), MechanicalIoFailure> {
+            if self.case.fault == FaultPoint::PayloadWrite {
+                return Err(MechanicalIoFailure);
+            }
+            Ok(())
+        }
+
+        fn apply_permissions(&mut self, _mode: u32) -> Result<(), MechanicalIoFailure> {
+            if self.case.fault == FaultPoint::PermissionApply {
+                return Err(MechanicalIoFailure);
+            }
+            Ok(())
+        }
+
+        fn sync_payload(&mut self) -> Result<(), MechanicalIoFailure> {
+            if self.case.fault == FaultPoint::PayloadSync {
+                return Err(MechanicalIoFailure);
+            }
+            Ok(())
+        }
+
+        fn rename_stage(
+            &mut self,
+            _stage_leaf: &str,
+            _destination_leaf: &str,
+            replacement: ReplacementMode,
+        ) -> Result<RenameDisposition, MechanicalIoFailure> {
+            if self.case.fault == FaultPoint::Rename {
+                return Err(MechanicalIoFailure);
+            }
+            if self.case.destination_exists && replacement == ReplacementMode::NoReplace {
+                return Ok(RenameDisposition::DestinationExists);
+            }
+            Ok(RenameDisposition::Committed)
+        }
+
+        fn sync_parent(&mut self) -> Result<(), MechanicalIoFailure> {
+            if self.case.fault == FaultPoint::ParentSync {
+                return Err(MechanicalIoFailure);
+            }
+            Ok(())
+        }
+
+        fn cleanup_stage(&mut self, _stage_leaf: &str) -> Result<(), MechanicalIoFailure> {
+            self.stage_created = false;
+            if self.case.cleanup_fails {
+                return Err(MechanicalIoFailure);
+            }
+            Ok(())
+        }
+    }
+
+    struct CorpusStageNames {
+        unsafe_name: bool,
+        next_index: usize,
+    }
+
+    impl StageNameSource for CorpusStageNames {
+        fn next_stage_leaf(&mut self) -> String {
+            if self.unsafe_name {
+                return "../unsafe-stage".to_string();
+            }
+            let leaf = format!(".mantle-corpus-stage-{}", self.next_index);
+            self.next_index = self.next_index.saturating_add(1);
+            leaf
+        }
+    }
+
+    fn corpus_request(case: CorpusCase) -> PublicationRequest {
+        let maximum_payload_bytes = if case.payload_over_bound {
+            CORPUS_PAYLOAD.len().saturating_sub(1)
+        } else {
+            CORPUS_PAYLOAD.len()
+        };
+        PublicationRequest {
+            destination_leaf: "object.json".to_string(),
+            payload_bytes: CORPUS_PAYLOAD.len(),
+            maximum_payload_bytes,
+            collision_attempt_limit: CORPUS_COLLISION_ATTEMPT_LIMIT,
+            final_mode: PRIVATE_TEMP_FILE_MODE,
+            replacement: case.replacement,
+            durability: case.durability,
+        }
+    }
+
+    fn expected_cleanup(case: CorpusCase, failure: PrimaryFailure) -> CleanupDisposition {
+        if matches!(
+            failure,
+            PrimaryFailure::NoReplaceUnsupported
+                | PrimaryFailure::ParentSyncUnsupported
+                | PrimaryFailure::StageCreate
+                | PrimaryFailure::CollisionExhausted
+        ) {
+            return CleanupDisposition::NotNeeded;
+        }
+        if case.cleanup_fails {
+            CleanupDisposition::Failed
+        } else {
+            CleanupDisposition::Removed
+        }
+    }
+
+    fn assert_corpus_result(case: CorpusCase, result: Result<Classification, ClassificationError>) {
+        match case.expected {
+            ExpectedDisposition::InvalidRequest => {
+                assert!(matches!(result, Err(ClassificationError::InvalidRequest(_))), "{}", case.id);
+            }
+            ExpectedDisposition::InvalidStageName => {
+                assert_eq!(result, Err(ClassificationError::InvalidStageLeaf), "{}", case.id);
+            }
+            ExpectedDisposition::Visible => {
+                let classification = result.expect(case.id);
+                assert_eq!(classification.disposition, PublicationDisposition::CommittedVisibilityOnly);
+                assert_eq!(
+                    map_shared_publication_disposition(&classification.disposition),
+                    MantleImmutablePublicationDisposition::UnexpectedVisibilityOnly
+                );
+            }
+            ExpectedDisposition::Durable => {
+                let classification = result.expect(case.id);
+                assert_eq!(classification.disposition, PublicationDisposition::CommittedAndParentSynchronized);
+                assert_eq!(
+                    map_shared_publication_disposition(&classification.disposition),
+                    MantleImmutablePublicationDisposition::Created
+                );
+            }
+            ExpectedDisposition::DestinationExists => {
+                let classification = result.expect(case.id);
+                let expected = PublicationDisposition::DestinationExists {
+                    cleanup: if case.cleanup_fails {
+                        CleanupDisposition::Failed
+                    } else {
+                        CleanupDisposition::Removed
+                    },
+                };
+                assert_eq!(classification.disposition, expected);
+                assert_eq!(
+                    map_shared_publication_disposition(&classification.disposition),
+                    MantleImmutablePublicationDisposition::Existing {
+                        cleanup: if case.cleanup_fails {
+                            CleanupDisposition::Failed
+                        } else {
+                            CleanupDisposition::Removed
+                        }
+                    }
+                );
+            }
+            ExpectedDisposition::NotCommitted(failure) => {
+                let classification = result.expect(case.id);
+                let cleanup = expected_cleanup(case, failure);
+                let expected = PublicationDisposition::NotCommitted { failure, cleanup };
+                assert_eq!(classification.disposition, expected);
+                assert_eq!(
+                    map_shared_publication_disposition(&classification.disposition),
+                    MantleImmutablePublicationDisposition::NotCommitted { failure, cleanup }
+                );
+            }
+            ExpectedDisposition::CommittedDurabilityUnknown => {
+                let classification = result.expect(case.id);
+                assert_eq!(classification.disposition, PublicationDisposition::CommittedDurabilityUnknown);
+                assert_eq!(
+                    map_shared_publication_disposition(&classification.disposition),
+                    MantleImmutablePublicationDisposition::CommittedDurabilityUnknown
+                );
+            }
+        }
+    }
 
     fn scope() -> RemoteAttemptLogScope {
         RemoteAttemptLogScope {
@@ -746,6 +1190,174 @@ mod tests {
             replay_record_count_max: TEST_RETAINED_SEGMENTS,
             ..RemoteAttemptLogPolicy::default()
         }
+    }
+
+    // r[verify mantle.durable_file_publication.validation]
+    #[test]
+    fn shared_corpus_preserves_all_mechanical_and_mapping_dispositions() {
+        assert_eq!(CONFORMANCE_CORPUS.len(), EXPECTED_SHARED_CORPUS_CASES);
+        assert!(CONFORMANCE_CORPUS.iter().any(|case| case.cleanup_fails));
+        for case in CONFORMANCE_CORPUS {
+            let mut io = CorpusIo::new(*case);
+            let mut names = CorpusStageNames {
+                unsafe_name: case.unsafe_stage_name,
+                next_index: 0,
+            };
+            let request = corpus_request(*case);
+            let result =
+                durable_file_publication::shell::publish_one_file(&mut io, &mut names, &request, CORPUS_PAYLOAD);
+            assert_corpus_result(*case, result);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    // r[verify mantle.durable_file_publication.adapter]
+    // r[verify mantle.durable_file_publication.mapping]
+    #[test]
+    fn shared_backend_accepts_only_identical_existing_content() {
+        let state = tempfile::tempdir().unwrap();
+        let destination = state.path().join("immutable").join("object.json");
+        let original = b"original-object";
+        let conflict = b"conflicting-object";
+
+        publish_immutable_file_with_backend(
+            &destination,
+            original,
+            MAX_REMOTE_ATTEMPT_LOG_SEGMENT_FILE_BYTES,
+            ImmutablePublicationBackend::Shared,
+        )
+        .unwrap();
+        publish_immutable_file_with_backend(
+            &destination,
+            original,
+            MAX_REMOTE_ATTEMPT_LOG_SEGMENT_FILE_BYTES,
+            ImmutablePublicationBackend::Shared,
+        )
+        .unwrap();
+        let error = publish_immutable_file_with_backend(
+            &destination,
+            conflict,
+            MAX_REMOTE_ATTEMPT_LOG_SEGMENT_FILE_BYTES,
+            ImmutablePublicationBackend::Shared,
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "attempt-log-immutable-object-conflict");
+        assert_eq!(fs::read(&destination).unwrap(), original);
+        assert!(fs::symlink_metadata(&destination).unwrap().is_file());
+    }
+
+    #[cfg(target_os = "linux")]
+    // r[verify mantle.durable_file_publication.validation]
+    #[test]
+    fn shared_backend_destination_race_keeps_one_immutable_winner() {
+        use std::sync::Arc;
+        use std::sync::Barrier;
+
+        let state = tempfile::tempdir().unwrap();
+        let destination = state.path().join("immutable-race").join("object.json");
+        let barrier = Arc::new(Barrier::new(RACE_WRITER_COUNT));
+        let payloads = [b"first-race-payload".to_vec(), b"second-race-payload".to_vec()];
+        let mut workers = Vec::with_capacity(RACE_WRITER_COUNT);
+        for payload in &payloads {
+            let worker_destination = destination.clone();
+            let worker_barrier = Arc::clone(&barrier);
+            let worker_payload = payload.clone();
+            workers.push(std::thread::spawn(move || {
+                worker_barrier.wait();
+                let result = publish_immutable_file_with_backend(
+                    &worker_destination,
+                    &worker_payload,
+                    MAX_REMOTE_ATTEMPT_LOG_SEGMENT_FILE_BYTES,
+                    ImmutablePublicationBackend::Shared,
+                );
+                (worker_payload, result)
+            }));
+        }
+        let outcomes = workers.into_iter().map(|worker| worker.join().unwrap()).collect::<Vec<_>>();
+        let success_count = outcomes.iter().filter(|(_, result)| result.is_ok()).count();
+        let conflict_count = outcomes
+            .iter()
+            .filter(|(_, result)| result.as_ref().is_err_and(|error| error == "attempt-log-immutable-object-conflict"))
+            .count();
+        let final_bytes = fs::read(&destination).unwrap();
+
+        assert_eq!(success_count, 1);
+        assert_eq!(conflict_count, 1);
+        assert!(payloads.iter().any(|payload| payload == &final_bytes));
+    }
+
+    #[cfg(target_os = "linux")]
+    // r[verify mantle.durable_file_publication.validation]
+    #[test]
+    fn shared_backend_rejects_symlink_destination_and_parent() {
+        use std::os::unix::fs::symlink;
+
+        let state = tempfile::tempdir().unwrap();
+        let immutable_parent = state.path().join("immutable");
+        fs::create_dir(&immutable_parent).unwrap();
+        let destination = immutable_parent.join("object.json");
+        let victim = state.path().join("victim.txt");
+        fs::write(&victim, b"unchanged").unwrap();
+        symlink(&victim, &destination).unwrap();
+        let destination_error = publish_immutable_file_with_backend(
+            &destination,
+            b"must-not-reach-victim",
+            MAX_REMOTE_ATTEMPT_LOG_SEGMENT_FILE_BYTES,
+            ImmutablePublicationBackend::Shared,
+        )
+        .unwrap_err();
+
+        let actual_parent = state.path().join("actual-parent");
+        fs::create_dir(&actual_parent).unwrap();
+        let linked_parent = state.path().join("linked-parent");
+        symlink(&actual_parent, &linked_parent).unwrap();
+        let parent_error = publish_immutable_file_with_backend(
+            &linked_parent.join("object.json"),
+            b"must-not-reach-parent",
+            MAX_REMOTE_ATTEMPT_LOG_SEGMENT_FILE_BYTES,
+            ImmutablePublicationBackend::Shared,
+        )
+        .unwrap_err();
+
+        assert!(destination_error.contains("immutable-object-symlink-rejected"));
+        assert_eq!(fs::read(&victim).unwrap(), b"unchanged");
+        assert!(parent_error.contains("directory-open-no-follow-failed"));
+        assert!(fs::symlink_metadata(actual_parent.join("object.json")).is_err());
+    }
+
+    #[cfg(target_os = "linux")]
+    // r[verify mantle.durable_file_publication.authority]
+    #[test]
+    fn legacy_backend_remains_explicit_without_automatic_fallback() {
+        let state = tempfile::tempdir().unwrap();
+        let destination = state.path().join("legacy").join("object.json");
+
+        publish_immutable_file_with_backend(
+            &destination,
+            b"legacy-rollback-object",
+            MAX_REMOTE_ATTEMPT_LOG_SEGMENT_FILE_BYTES,
+            ImmutablePublicationBackend::Legacy,
+        )
+        .unwrap();
+
+        assert_eq!(PRODUCTION_IMMUTABLE_PUBLICATION_BACKEND, ImmutablePublicationBackend::Shared);
+        assert_eq!(fs::read(&destination).unwrap(), b"legacy-rollback-object");
+    }
+
+    #[test]
+    fn committed_durability_unknown_is_neither_failure_nor_success() {
+        let mapped = map_shared_publication_disposition(&PublicationDisposition::CommittedDurabilityUnknown);
+        let error = interpret_shared_publication(
+            Path::new("unused-object.json"),
+            b"unused",
+            MAX_REMOTE_ATTEMPT_LOG_SEGMENT_FILE_BYTES,
+            &PublicationDisposition::CommittedDurabilityUnknown,
+        )
+        .unwrap_err();
+
+        assert_eq!(mapped, MantleImmutablePublicationDisposition::CommittedDurabilityUnknown);
+        assert_eq!(error, "attempt-log-immutable-object-committed-durability-unknown");
     }
 
     #[test]

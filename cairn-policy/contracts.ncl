@@ -1,11 +1,17 @@
 # Nickel contracts for cairn policy profiles.
 
+let LifecycleStores = import "lifecycle-store-contracts.ncl" in
+
 let NonEmptyString = std.contract.from_predicate (fun value =>
   std.is_string value && std.string.length value > 0
 ) in
 
 let NonEmptyArray = std.contract.from_predicate (fun value =>
   std.is_array value && std.array.length value > 0
+) in
+
+let PositiveNumber = std.contract.from_predicate (fun value =>
+  std.is_number value && value > 0
 ) in
 
 let SupportedPolicyVersion = std.contract.from_predicate (fun value =>
@@ -20,11 +26,9 @@ let Canonicalization = std.contract.from_predicate (fun value =>
   std.is_string value && value == "serde_json_compact_sorted_keys"
 ) in
 
-let Blake3Hex = std.contract.from_predicate (fun value =>
+let Blake3HexContract = std.contract.from_predicate (fun value =>
   std.is_string value && std.string.is_match "^[0-9a-fA-F]{64}$" value
 ) in
-
-let Blake3HexContract = Blake3Hex in
 
 let Stage = std.contract.from_predicate (fun value =>
   std.is_string value && (value == "proposal" || value == "design" || value == "tasks" || value == "implementation" || value == "archive")
@@ -100,6 +104,30 @@ let PositiveNumber = std.contract.from_predicate (fun value =>
 
 let DependencyTargetClass = std.contract.from_predicate (fun value =>
   std.is_string value && value == "lifecycle-id"
+) in
+
+let NominalIdentityCategory = std.contract.from_predicate (fun value =>
+  std.is_string value && (value == "domain-id" || value == "domain-ref" || value == "blake3-digest" || value == "imported-digest")
+) in
+
+let NominalIdentityAlgorithm = std.contract.from_predicate (fun value =>
+  std.is_string value && (value == "none" || value == "BLAKE3" || value == "SHA-256" || value == "Git-OID-SHA-1")
+) in
+
+let NominalIdentityRawRepresentation = std.contract.from_predicate (fun value =>
+  std.is_string value && value == "string"
+) in
+
+let NominalIdentityWrapperKind = std.contract.from_predicate (fun value =>
+  std.is_string value && (value == "refined-newtype" || value == "marker-generic")
+) in
+
+let NominalIdentityConstructorPolicy = std.contract.from_predicate (fun value =>
+  std.is_string value && (value == "private-fallible" || value == "marker-only")
+) in
+
+let NominalIdentityOctetMode = std.contract.from_predicate (fun value =>
+  std.is_string value && value == "deny"
 ) in
 
 {
@@ -229,12 +257,91 @@ let DependencyTargetClass = std.contract.from_predicate (fun value =>
     required_boundary | NonEmptyString,
   },
 
+  AuthenticatedPolicyExport = {
+    evidence_kind | NonEmptyString,
+    path | NonEmptyString,
+    digest_blake3 | Blake3HexContract,
+    signature_purpose | NonEmptyString,
+  },
+
+  AuthenticatedTrustedProducer = {
+    producer | NonEmptyString,
+    key_id | NonEmptyString,
+    algorithm | NonEmptyString,
+    public_key_hex | Blake3HexContract,
+    allowed_purposes | NonEmptyArray | Array NonEmptyString,
+    revoked | Bool,
+  },
+
+  AuthenticatedEvidencePolicy = {
+    schema_version | NonEmptyString,
+    release_profile | NonEmptyString,
+    accepted_canonicalization_profiles | NonEmptyArray | Array NonEmptyString,
+    accepted_valence_integrity_receipt_path | NonEmptyString,
+    accepted_valence_integrity_receipt_hash | Blake3HexContract,
+    policy_exports | NonEmptyArray | Array AuthenticatedPolicyExport,
+    trusted_producers | Array AuthenticatedTrustedProducer | default = [],
+  },
+
+  WorkspaceContractMatrixGate = {
+    mode | StackProvenanceGateMode,
+    accepted_matrix_hashes | Array Blake3HexContract | default = [],
+    required_boundary | NonEmptyString,
+  },
+
   RuntimeEvidencePolicy = {
     allowed_capture_origins | NonEmptyArray | Array RuntimeCaptureOrigin,
     allowed_hash_algorithms | NonEmptyArray | Array Blake3Algorithm,
     max_summary_bytes | PositiveNumber,
     forbidden_summary_fragments | Array NonEmptyString | default = [],
     aggregation_profiles | Array NonEmptyString | default = [],
+  },
+
+  NominalIdentityDomain = {
+    domain_id | NonEmptyString,
+    category | NominalIdentityCategory,
+    algorithm | NominalIdentityAlgorithm,
+    required_prefix | String,
+    max_bytes | PositiveNumber,
+    rust_symbols | NonEmptyArray | Array NonEmptyString,
+    core_scopes | NonEmptyArray | Array NonEmptyString,
+    wire_compatibility_scopes | NonEmptyArray | Array NonEmptyString,
+    raw_representation | NominalIdentityRawRepresentation,
+    wrapper_kind | NominalIdentityWrapperKind,
+    constructor_policy | NominalIdentityConstructorPolicy,
+  },
+
+  NominalIdentityRuntimeProjection = {
+    schema_version | NonEmptyString,
+    policy_id | NonEmptyString,
+    domains | NonEmptyArray | Array NominalIdentityDomain,
+  },
+
+  NominalIdentityOctetDomain = {
+    domain_id | NonEmptyString,
+    symbols | NonEmptyArray | Array NonEmptyString,
+    raw_representation | NominalIdentityRawRepresentation,
+    core_scopes | NonEmptyArray | Array NonEmptyString,
+    compatibility_scopes | NonEmptyArray | Array NonEmptyString,
+    compatibility_required | Bool,
+    wrapper_kind | NominalIdentityWrapperKind,
+    constructor_policy | NominalIdentityConstructorPolicy,
+  },
+
+  NominalIdentityOctetProjection = {
+    schema_version | NonEmptyString,
+    policy_id | NonEmptyString,
+    default_mode | NominalIdentityOctetMode,
+    heuristic_suffixes | NonEmptyArray | Array NonEmptyString,
+    domains | NonEmptyArray | Array NominalIdentityOctetDomain,
+    non_claims | NonEmptyArray | Array NonEmptyString,
+  },
+
+  NominalIdentityPolicy = {
+    policy_id | NonEmptyString,
+    runtime | NominalIdentityRuntimeProjection,
+    octet | NominalIdentityOctetProjection,
+    non_claims | NonEmptyArray | Array NonEmptyString,
   },
 
   ProbeCommandProfile = {
@@ -381,6 +488,59 @@ let DependencyTargetClass = std.contract.from_predicate (fun value =>
     preserves_receipt_source_map | PreservesReceiptSourceMap | default = {},
   },
 
+  CrossRepoDependencyPolicy = {
+    schema | NonEmptyString,
+    supported_receipt_kinds | NonEmptyArray | Array NonEmptyString,
+    passing_status | NonEmptyString,
+    non_passing_statuses | NonEmptyArray | Array NonEmptyString,
+    max_evidence_file_bytes | PositiveNumber,
+    max_evidence_files | PositiveNumber,
+    required_non_claims | NonEmptyArray | Array NonEmptyString,
+  },
+
+  AgentCompletionPolicy = {
+    schema | NonEmptyString,
+    legacy_classification | NonEmptyString,
+    passing_status | NonEmptyString,
+    non_passing_statuses | NonEmptyArray | Array NonEmptyString,
+    max_input_file_bytes | PositiveNumber,
+    max_diagnostic_summary_bytes | PositiveNumber,
+    max_reproduction_args | PositiveNumber,
+    forbidden_diagnostic_fields | NonEmptyArray | Array NonEmptyString,
+    required_non_claims | NonEmptyArray | Array NonEmptyString,
+  },
+
+  GlobalRegistryAdapterProfile = {
+    id | NonEmptyString,
+    kind | NonEmptyString,
+    schema | NonEmptyString,
+    capabilities | NonEmptyArray | Array NonEmptyString,
+    record_families | NonEmptyArray | Array NonEmptyString,
+  },
+
+  GlobalRegistryTagNamespace = {
+    id | NonEmptyString,
+    authority | NonEmptyString,
+  },
+
+  GlobalRegistryGraphProfile = {
+    id | NonEmptyString,
+    allowed_node_kinds | NonEmptyArray | Array NonEmptyString,
+    allowed_edge_kinds | NonEmptyArray | Array NonEmptyString,
+    require_dag | Bool,
+  },
+
+  GlobalRegistryPolicy = {
+    schema | NonEmptyString,
+    storage_schema | NonEmptyString,
+    max_artifact_bytes | PositiveNumber,
+    adapters | NonEmptyArray | Array GlobalRegistryAdapterProfile,
+    tag_namespaces | NonEmptyArray | Array GlobalRegistryTagNamespace,
+    graph_profiles | NonEmptyArray | Array GlobalRegistryGraphProfile,
+    allowed_vocabulary_owners | NonEmptyArray | Array NonEmptyString,
+    required_non_claims | NonEmptyArray | Array NonEmptyString,
+  },
+
   Policy = {
     name | NonEmptyString,
     version | SupportedPolicyVersion,
@@ -393,11 +553,22 @@ let DependencyTargetClass = std.contract.from_predicate (fun value =>
     report_contract | ReportContract,
     registry_label_policy | RegistryLabelPolicy,
     change_metadata_policy | ChangeMetadataPolicy,
+    cross_repo_dependency_policy | CrossRepoDependencyPolicy,
+    agent_completion_policy | AgentCompletionPolicy,
+    global_registry_policy | GlobalRegistryPolicy,
+    lifecycle_store_policy | LifecycleStores.Policy,
     steel_orchestration_policy | SteelOrchestrationPolicy,
     traceability_policy | TraceabilityPolicy,
     stack_provenance_gate | StackProvenancePolicy,
     function_address_gate | FunctionAddressPolicy,
+    authenticated_evidence_policy | AuthenticatedEvidencePolicy,
+    workspace_contract_matrix_gate | WorkspaceContractMatrixGate | default = {
+      mode = "disabled",
+      accepted_matrix_hashes = [],
+      required_boundary = "workspace contract matrix validation proves declared edge health only; it does not prove provider correctness, does not prove consumer behavioral correctness, does not prove verifier soundness, or does not prove release eligibility",
+    },
     runtime_evidence_policy | RuntimeEvidencePolicy,
+    nominal_identity_policy | NominalIdentityPolicy,
     structured_lifecycle | StructuredLifecycle | default = {},
     probe_policy | ProbePolicy,
     receipt_schemas | NonEmptyArray | Array ReceiptSchema,
@@ -411,5 +582,16 @@ let DependencyTargetClass = std.contract.from_predicate (fun value =>
     exemptions | Array Exemption,
   },
 
-  Blake3Hex = Blake3Hex,
+  LifecycleStoreId = LifecycleStores.StoreId,
+  LifecycleStoreRemoteHint = LifecycleStores.RemoteHint,
+  LifecycleStoreReference = LifecycleStores.StoreReference,
+  LifecycleStoreIdentitySource = LifecycleStores.StoreIdentitySource,
+  LifecycleStoreIdentityProjection = LifecycleStores.StoreIdentityProjection,
+  LifecycleStoreProjectSource = LifecycleStores.ProjectDeclarationSource,
+  LifecycleStoreProjectProjection = LifecycleStores.ProjectDeclarationProjection,
+  LifecycleStoreLocatorState = LifecycleStores.LocatorState,
+  LifecycleStoreWorksetState = LifecycleStores.WorksetState,
+  LifecycleStoreReceipt = LifecycleStores.LifecycleStoreReceipt,
+  LifecycleStorePolicy = LifecycleStores.Policy,
+  Blake3Hex = Blake3HexContract,
 }

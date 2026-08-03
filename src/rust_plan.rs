@@ -17,6 +17,7 @@ use crunch_rust_cache::RustCacheReport;
 use crunch_rust_cache::shared::RustResultSource;
 use crunch_rust_cache::shared::SharedPublicationObservation;
 use crunch_rust_cache::shared::SharedPublishRequest;
+use crunch_rust_cache::shared::SharedRestoreRequest;
 use crunch_rust_cache::shared::SharedRustCachePolicy;
 use crunch_rust_cache::shared::SharedRustCacheReport;
 use crunch_rust_cache_core::LocalCachePolicy;
@@ -16584,14 +16585,14 @@ fn try_restore_shared_cache_result(
     };
     let report = local_selection
         .cache
-        .restore_shared_blocking(
+        .restore_shared_blocking(SharedRestoreRequest {
             action,
-            &inputs.output_dir,
-            &local_selection.policy,
-            &shared.policy,
-            &shared.trust_policy,
-            &shared.sources,
-        )
+            output_dir: &inputs.output_dir,
+            local_policy: &local_selection.policy,
+            shared_policy: &shared.policy,
+            trust_policy: &shared.trust_policy,
+            sources: &shared.sources,
+        })
         .unwrap_or_else(|_| SharedRustCacheReport::rejected("shared-cache-restore-error"));
     let is_hit = report.disposition == crunch_rust_cache::shared::SHARED_CACHE_HIT;
     let is_conflict = report.disposition == crunch_rust_cache::shared::SHARED_CACHE_CONFLICT;

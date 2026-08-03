@@ -123,6 +123,23 @@
         "type": "github"
       }
     },
+    "durablePublicationSource": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1785189981,
+        "narHash": "sha256-fKxZ+3rzWzVuawILnmpiYCCe8PT/z6usopFMbr2KFbI=",
+        "ref": "refs/heads/main",
+        "rev": "951c27f59003cea9bfdb40ed4d89653d50fada1f",
+        "revCount": 9,
+        "type": "git",
+        "url": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git"
+      },
+      "original": {
+        "rev": "951c27f59003cea9bfdb40ed4d89653d50fada1f",
+        "type": "git",
+        "url": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git"
+      }
+    },
     "dylint-src": {
       "flake": false,
       "locked": {
@@ -407,6 +424,7 @@
       "inputs": {
         "artifactAuthSource": "artifactAuthSource",
         "crane": "crane",
+        "durablePublicationSource": "durablePublicationSource",
         "flake-utils": "flake-utils",
         "nickelExportCore": "nickelExportCore",
         "nixpkgs": "nixpkgs",

@@ -632,6 +632,25 @@ pub(crate) fn validate_empty_source_bundle(manifest: &SourceBundleManifest) -> R
     Ok(())
 }
 
+pub(crate) fn digest_bound_foreign_source_path(payload_id: &str, path: &Path) -> Result<String, RunError> {
+    let records = canonicalize_bound_foreign_source_specs(
+        &[SourceSpec {
+            kind: SourceRecordKind::LocalPath,
+            identity: payload_id.to_string(),
+            path: path.to_path_buf(),
+            adapter: None,
+        }],
+        "/mantle/store",
+    )?;
+    let record = records
+        .first()
+        .ok_or_else(|| RunError::Internal("bound foreign source digest produced no record".to_string()))?;
+    if records.len() != 1 {
+        return Err(RunError::Internal("bound foreign source digest produced multiple records".to_string()));
+    }
+    Ok(record.content_blake3.clone())
+}
+
 pub(crate) fn plan_bound_foreign_source_bundle(
     requirements: &[crate::foreign_graph_compiler::CompiledSourceRequirement],
     bindings: &[ForeignSourcePathBinding],
@@ -668,7 +687,8 @@ pub(crate) fn plan_bound_foreign_source_bundle(
     }
     let binding_by_payload =
         bindings.iter().map(|binding| (binding.payload_id.as_str(), binding)).collect::<BTreeMap<_, _>>();
-    let mut manifest = plan_source_bundle(&specs, store_prefix)?;
+    let records = canonicalize_bound_foreign_source_specs(&specs, store_prefix)?;
+    let mut manifest = assemble_source_bundle(records, store_prefix)?;
     for record in &mut manifest.records {
         let requirement = requirements_by_payload.get(record.identity.as_str()).copied().ok_or_else(|| {
             RunError::Internal(format!("planned foreign source record has no requirement: {}", record.identity))
@@ -676,6 +696,16 @@ pub(crate) fn plan_bound_foreign_source_bundle(
         let binding = binding_by_payload.get(record.identity.as_str()).copied().ok_or_else(|| {
             RunError::Internal(format!("foreign source record has no path binding: {}", record.identity))
         })?;
+        if requirement
+            .expected_content_blake3
+            .as_ref()
+            .is_some_and(|expected| expected != &record.content_blake3)
+        {
+            return Err(RunError::Internal(format!(
+                "foreign source content BLAKE3 does not match the producer binding: {}",
+                record.identity
+            )));
+        }
         let metadata = fs::symlink_metadata(&binding.path).map_err(|error| {
             RunError::Internal(format!("reading foreign source binding {}: {error}", binding.path.display()))
         })?;
@@ -1093,6 +1123,30 @@ fn canonicalize_source_specs(specs: &[SourceSpec], store_prefix: &str) -> Result
     let mut records = Vec::with_capacity(specs.len());
     for spec in specs {
         records.push(canonicalize_source_spec(spec, store_prefix)?);
+    }
+    Ok(records)
+}
+
+fn canonicalize_bound_foreign_source_specs(
+    specs: &[SourceSpec],
+    store_prefix: &str,
+) -> Result<Vec<SourceRecord>, RunError> {
+    if specs.len() > MAX_SOURCE_RECORDS {
+        return Err(RunError::Internal(format!("source record count exceeds {MAX_SOURCE_RECORDS}")));
+    }
+    let mut records = Vec::with_capacity(specs.len());
+    for spec in specs {
+        records.push(source_record_from_path(SourceRecordPathRequest {
+            kind: spec.kind.clone(),
+            identity: spec.identity.clone(),
+            path: &spec.path,
+            store_prefix,
+            metadata: BTreeMap::new(),
+            adapter: spec.adapter.clone(),
+            is_skipping_git_dir: false,
+            allow_large_file_chunks: true,
+            root_entry_allowlist: None,
+        })?);
     }
     Ok(records)
 }
@@ -5239,15 +5293,17 @@ mod tests {
         fs::write(source.join("bin/tool"), b"tool").unwrap();
         fs::set_permissions(source.join("bin/tool"), fs::Permissions::from_mode(UNIX_EXECUTABLE_FILE_MODE)).unwrap();
         symlink("bin/tool", source.join("tool-link")).unwrap();
+        let expected_content_blake3 = digest_bound_foreign_source_path(PAYLOAD_ID, &source).unwrap();
         let requirements = [crate::foreign_graph_compiler::CompiledSourceRequirement {
             payload_id: PAYLOAD_ID.to_string(),
             foreign_path: FOREIGN_PATH.to_string(),
             target_path: TARGET_PATH.to_string(),
             descriptor_digest: blake3::hash(b"foreign-tree-descriptor").to_hex().to_string(),
+            expected_content_blake3: Some(expected_content_blake3),
         }];
         let bindings = [ForeignSourcePathBinding {
             payload_id: PAYLOAD_ID.to_string(),
-            path: source,
+            path: source.clone(),
         }];
 
         let manifest = plan_bound_foreign_source_bundle(&requirements, &bindings, STORE_PREFIX).unwrap();
@@ -5262,6 +5318,11 @@ mod tests {
         materialize_source_record_exact_payload(record, &materialized).unwrap();
         assert_eq!(fs::read(materialized.join("bin/tool")).unwrap(), b"tool");
         assert_eq!(fs::read_link(materialized.join("tool-link")).unwrap(), PathBuf::from("bin/tool"));
+
+        fs::write(source.join("bin/tool"), b"tampered tool").unwrap();
+        let producer_binding_error =
+            plan_bound_foreign_source_bundle(&requirements, &bindings, STORE_PREFIX).unwrap_err();
+        assert!(producer_binding_error.to_string().contains("does not match the producer binding"));
 
         let mut tampered = record.clone();
         tampered.files.iter_mut().find(|file| file.path == "bin/tool").unwrap().executable = false;
