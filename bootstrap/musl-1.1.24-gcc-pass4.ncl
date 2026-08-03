@@ -36,7 +36,7 @@ let musl_src = crunch.derivationFile "musl-1.1.24-src.ncl" in
         exit 1
       }
 
-      GCC=$(find_input gcc-4.0.4-musl-pass3-v22)
+      GCC=$(find_input gcc-4.0.4-musl-pass3-v23)
       STAGEX=$(find_input mantle-stagex-intermediate-provider)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)

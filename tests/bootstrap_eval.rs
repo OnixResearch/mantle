@@ -113,6 +113,26 @@ fn contract_violations<'a>(source: &str, required: &'a [&'a str], forbidden: &'a
 }
 
 #[test]
+fn gcc_pass3_linker_uses_only_relocatable_stagex_authority() {
+    let source = std::fs::read_to_string(bootstrap_path("gcc-4.0-musl-pass3.ncl")).unwrap();
+    let required = [
+        "name = \"gcc-4.0.4-musl-pass3-v23\"",
+        "linker=\"\\${MANTLE_GCC_LINKER:-$STAGEX/bin/x86_64-linux-musl-ld}\"",
+        "exec \"\\$linker\" \\$link_arguments",
+    ];
+    let forbidden = ["gcc40-pass3-final-ld: $BINUTILS/bin/ld", "gcc-4.0.4-musl-pass3-v22"];
+    let violations = contract_violations(&source, &required, &forbidden);
+    let invalid_source = source.replace(required[1], forbidden[0]);
+    let invalid_violations = contract_violations(&invalid_source, &required, &forbidden);
+    let derivation = eval_bootstrap("gcc-4.0-musl-pass3.ncl");
+
+    assert!(violations.is_empty(), "GCC pass3 linker contract violations: {violations:?}");
+    assert_eq!(invalid_violations, vec![required[1], forbidden[0]]);
+    assert_eq!(derivation.name, "gcc-4.0.4-musl-pass3-v23");
+    assert!(source.contains("let stagex_provider = import \"stagex-provider-proof-input.ncl\""));
+}
+
+#[test]
 fn eval_make_bootstrap_imports_shared_seed() {
     let drv = eval_bootstrap("make.ncl");
     let input_names = input_derivation_names(&drv);

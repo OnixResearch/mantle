@@ -123,7 +123,7 @@ fn parse_archive(bytes: &[u8]) -> Result<Vec<ArchiveMember<'_>>, StagexArchiveEr
     let mut members = Vec::new();
     let mut cursor = ARCHIVE_MAGIC.len();
     while cursor < bytes.len() {
-        if members.len() >= ARCHIVE_MEMBER_COUNT_MAX + 1 {
+        if members.len() > ARCHIVE_MEMBER_COUNT_MAX {
             return Err(StagexArchiveError::LimitExceeded("archive member count"));
         }
         let header_range = checked_range(bytes.len(), cursor, ARCHIVE_HEADER_BYTES, "member header")?;
@@ -234,11 +234,11 @@ fn require_canonical_field(
 }
 
 fn aligned_member_end(bytes: &[u8], payload_end: usize, payload_bytes: usize) -> Result<usize, StagexArchiveError> {
-    if payload_bytes % ARCHIVE_ALIGNMENT_BYTES == 0 {
+    if payload_bytes.is_multiple_of(ARCHIVE_ALIGNMENT_BYTES) {
         return Ok(payload_end);
     }
     let padding_range = checked_range(bytes.len(), payload_end, 1, "member alignment padding")?;
-    if bytes[padding_range.clone()] != [b'\n'] {
+    if bytes[padding_range.clone()] != *b"\n" {
         return Err(StagexArchiveError::UnsupportedFormat("member alignment padding mismatch"));
     }
     let result = padding_range.end;
@@ -356,7 +356,7 @@ fn append_member(output: &mut Vec<u8>, header_name: &str, payload: &[u8]) -> Res
     }
     output.extend_from_slice(header.as_bytes());
     output.extend_from_slice(payload);
-    if payload.len() % ARCHIVE_ALIGNMENT_BYTES != 0 {
+    if !payload.len().is_multiple_of(ARCHIVE_ALIGNMENT_BYTES) {
         output.push(b'\n');
     }
     assert_eq!(output.len(), projected);

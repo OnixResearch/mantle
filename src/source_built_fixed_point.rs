@@ -10,11 +10,12 @@ use std::fmt;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub(crate) const SOURCE_BUILT_FIXED_POINT_PLAN_SCHEMA: &str = "mantle-source-built-fixed-point-plan-v1";
+pub(crate) const SOURCE_BUILT_FIXED_POINT_PLAN_SCHEMA: &str = "mantle-source-built-fixed-point-plan-v2";
 pub(crate) const SOURCE_BUILT_FIXED_POINT_PROOF_WORKFLOW: &str = "mantle-deterministic-proof-receipt-v2";
 pub(crate) const SOURCE_BUILT_FIXED_POINT_PROVIDER_KIND: &str = "full-source";
+pub(crate) const SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX: u64 = 4_096;
 const SOURCE_AUTHORITY_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-source-authority-v1";
-const PLAN_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-plan-v1";
+const PLAN_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-plan-v2";
 const BUILD_EFFECT_POLICY_VERSION: &str = "mantle-build-effects-v1";
 const REQUIRED_SOURCE_ROLE_COUNT: u32 = 7;
 const EXPECTED_STAGE_COUNT: u32 = 6;
@@ -118,6 +119,7 @@ pub(crate) struct SourceBuiltFixedPointPolicies {
 pub(crate) struct SourceBuiltFixedPointResourceBounds {
     pub(crate) elapsed_seconds_max: u64,
     pub(crate) disk_bytes_max: u64,
+    pub(crate) open_file_descriptors_max: u64,
     pub(crate) protected_exec_events_max: u32,
     pub(crate) source_records_max: u32,
 }
@@ -458,21 +460,21 @@ fn validate_policies(policies: &SourceBuiltFixedPointPolicies) -> Result<(), Sou
 fn validate_resource_bounds(
     bounds: &SourceBuiltFixedPointResourceBounds,
 ) -> Result<(), SourceBuiltFixedPointPlanError> {
-    let valid = bounds.elapsed_seconds_max > 0
-        && bounds.elapsed_seconds_max <= ELAPSED_SECONDS_MAX
-        && bounds.disk_bytes_max > 0
-        && bounds.disk_bytes_max <= DISK_BYTES_MAX
-        && bounds.protected_exec_events_max > 0
-        && bounds.protected_exec_events_max <= EXEC_EVENT_COUNT_MAX
-        && bounds.source_records_max > 0
-        && bounds.source_records_max <= SOURCE_RECORD_COUNT_MAX;
-    if !valid {
+    let elapsed_valid = bounds.elapsed_seconds_max > 0 && bounds.elapsed_seconds_max <= ELAPSED_SECONDS_MAX;
+    let disk_valid = bounds.disk_bytes_max > 0 && bounds.disk_bytes_max <= DISK_BYTES_MAX;
+    let open_files_valid = bounds.open_file_descriptors_max > 0
+        && bounds.open_file_descriptors_max <= SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
+    let exec_events_valid =
+        bounds.protected_exec_events_max > 0 && bounds.protected_exec_events_max <= EXEC_EVENT_COUNT_MAX;
+    let source_records_valid = bounds.source_records_max > 0 && bounds.source_records_max <= SOURCE_RECORD_COUNT_MAX;
+    if !elapsed_valid || !disk_valid || !open_files_valid || !exec_events_valid || !source_records_valid {
         return Err(plan_error(
             SourceBuiltFixedPointPlanErrorKind::InvalidResourceBounds,
             "source-built fixed-point resource bounds are zero or exceed the accepted maxima".to_string(),
         ));
     }
     debug_assert!(bounds.elapsed_seconds_max <= ELAPSED_SECONDS_MAX);
+    debug_assert!(bounds.open_file_descriptors_max <= SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX);
     debug_assert!(bounds.source_records_max <= SOURCE_RECORD_COUNT_MAX);
     Ok(())
 }
@@ -725,6 +727,7 @@ fn receipt_contract(
         normalized_execution_envelope: vec![
             "cargo-forbidden".to_string(),
             "live-fetch-forbidden".to_string(),
+            "open-file-descriptors-bounded".to_string(),
             "strict-hermeticity".to_string(),
             "stage1-orchestrates-stage2".to_string(),
         ],
@@ -832,6 +835,7 @@ mod tests {
 
     const TEST_ELAPSED_SECONDS_MAX: u64 = 43_200;
     const TEST_DISK_BYTES_MAX: u64 = 536_870_912_000;
+    const TEST_OPEN_FILE_DESCRIPTORS_MAX: u64 = SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX / 2;
     const TEST_EXEC_EVENT_COUNT_MAX: u32 = 131_072;
     const TEST_SOURCE_RECORD_COUNT_MAX: u32 = 32_768;
 
@@ -926,13 +930,18 @@ mod tests {
 
     #[test]
     fn rejects_out_of_range_resource_bounds() {
-        let mut input = valid_input();
-        input.resource_bounds.elapsed_seconds_max = ELAPSED_SECONDS_MAX.saturating_add(1);
-        let error = plan_source_built_fixed_point(input).unwrap_err();
+        let mut elapsed = valid_input();
+        elapsed.resource_bounds.elapsed_seconds_max = ELAPSED_SECONDS_MAX.saturating_add(1);
+        let elapsed_error = plan_source_built_fixed_point(elapsed).unwrap_err();
+        let mut open_files = valid_input();
+        open_files.resource_bounds.open_file_descriptors_max =
+            SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX.saturating_add(1);
+        let open_files_error = plan_source_built_fixed_point(open_files).unwrap_err();
 
-        assert_eq!(error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidResourceBounds);
-        assert!(error.message.contains("resource bounds"));
-        assert!(error.message.contains("maxima"));
+        assert_eq!(elapsed_error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidResourceBounds);
+        assert_eq!(open_files_error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidResourceBounds);
+        assert!(elapsed_error.message.contains("resource bounds"));
+        assert!(open_files_error.message.contains("maxima"));
     }
 
     #[test]
@@ -1009,6 +1018,7 @@ mod tests {
             resource_bounds: SourceBuiltFixedPointResourceBounds {
                 elapsed_seconds_max: TEST_ELAPSED_SECONDS_MAX,
                 disk_bytes_max: TEST_DISK_BYTES_MAX,
+                open_file_descriptors_max: TEST_OPEN_FILE_DESCRIPTORS_MAX,
                 protected_exec_events_max: TEST_EXEC_EVENT_COUNT_MAX,
                 source_records_max: TEST_SOURCE_RECORD_COUNT_MAX,
             },

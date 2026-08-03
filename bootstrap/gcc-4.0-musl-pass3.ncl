@@ -23,7 +23,7 @@ let automake115_src = crunch.fetchTarball {
 } in
 
 {
-  name = "gcc-4.0.4-musl-pass3-v22",
+  name = "gcc-4.0.4-musl-pass3-v23",
   builder = "/bin/sh",
   args = [
     "-c",
@@ -251,8 +251,9 @@ for link_argument in "\$@"; do
     *) link_arguments="\$link_arguments \$link_argument" ;;
   esac
 done
-echo "gcc40-pass3-final-ld: $BINUTILS/bin/ld \$link_arguments" >&2
-exec "$BINUTILS/bin/ld" \$link_arguments
+linker="\${MANTLE_GCC_LINKER:-$STAGEX/bin/x86_64-linux-musl-ld}"
+echo "gcc40-pass3-final-ld: \$linker \$link_arguments" >&2
+exec "\$linker" \$link_arguments
 EOF
       $BB chmod 755 "$out/bin/ld"
       $BB cp "$out/bin/ld" "$FINAL_TOOLBIN/ld"
