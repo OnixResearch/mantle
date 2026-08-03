@@ -55,6 +55,7 @@ const FETCH_MODE_FLAT: &str = "flat";
 const FETCH_MODE_RECURSIVE: &str = "recursive";
 const GIT_EXPORT_POLICY: &str = "checkout-no-dot-git";
 const MAX_FOREIGN_FETCH_CANDIDATES: usize = 16;
+const BLAKE3_DIGEST_HEX_CHARS: usize = 64;
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct ExactForeignPathMaps {
@@ -493,6 +494,11 @@ fn compile_fixed_output_seed_requirements(
     path_maps: &mut ExactForeignPathMaps,
     requirements: &mut Vec<CompiledSourceRequirement>,
 ) -> Result<(), ImportDiagnostic> {
+    let declared_output_paths = graph
+        .nodes
+        .iter()
+        .flat_map(|node| node.outputs.values().map(|output| output.path.as_str()))
+        .collect::<BTreeSet<_>>();
     let mut seeds = graph
         .source_payloads
         .iter()
@@ -501,13 +507,32 @@ fn compile_fixed_output_seed_requirements(
     seeds.sort_by(|left, right| left.payload_id.cmp(&right.payload_id));
     requirements.reserve(seeds.len());
     for payload in seeds {
-        let target_path = path_maps.outputs.get(&payload.content_ref).cloned().ok_or_else(|| {
+        let expected_content_blake3 = payload.expected_content_blake3.as_ref().ok_or_else(|| {
             compiler_diagnostic(
-                "foreign-compiler-fixed-output-seed-unmapped",
+                "foreign-compiler-fixed-output-seed-unbound",
                 None,
-                "fixed-output seed does not name one compiled foreign output",
+                "fixed-output seed has no producer content binding",
             )
         })?;
+        if expected_content_blake3.len() != BLAKE3_DIGEST_HEX_CHARS
+            || !expected_content_blake3.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(compiler_diagnostic(
+                "foreign-compiler-fixed-output-seed-binding-invalid",
+                None,
+                "fixed-output seed producer content binding is not lowercase BLAKE3 hex",
+            ));
+        }
+        if !declared_output_paths.contains(payload.content_ref.as_str()) {
+            return Err(compiler_diagnostic(
+                "foreign-compiler-fixed-output-seed-unmapped",
+                None,
+                "fixed-output seed does not name one declared foreign output",
+            ));
+        }
+        let Some(target_path) = path_maps.outputs.get(&payload.content_ref).cloned() else {
+            continue;
+        };
         let descriptor = serde_json::to_vec(payload).map_err(|error| {
             compiler_diagnostic(
                 "foreign-compiler-source-serialization-failed",
@@ -521,10 +546,10 @@ fn compile_fixed_output_seed_requirements(
             foreign_path: payload.content_ref.clone(),
             target_path,
             descriptor_digest: blake3::hash(&descriptor).to_hex().to_string(),
-            expected_content_blake3: payload.expected_content_blake3.clone(),
+            expected_content_blake3: Some(expected_content_blake3.clone()),
         });
     }
-    debug_assert_eq!(requirements.len(), graph.source_payloads.len());
+    debug_assert!(requirements.len() <= graph.source_payloads.len());
     debug_assert!(requirements.iter().all(|requirement| !requirement.target_path.is_empty()));
     Ok(())
 }
@@ -1570,6 +1595,40 @@ mod tests {
         assert_eq!(compiled.path_maps.sources[&seeded_foreign_output], *target_output);
         assert_eq!(compiled.source_requirements[0].target_path, *target_output);
         assert_ne!(target_output, &seeded_foreign_output);
+    }
+
+    #[test]
+    fn fixed_output_seed_outside_the_selected_root_is_not_required() {
+        let mut graph = diamond_graph();
+        graph.root_derivation_ids = vec!["left".to_string()];
+        graph.source_payloads.push(SourcePayload {
+            payload_id: "unreachable-fixed-output-seed".to_string(),
+            kind: FIXED_OUTPUT_SEED_KIND.to_string(),
+            content_ref: foreign_output("right", "out"),
+            embedded_text: None,
+            mirrors: Vec::new(),
+            expected_content_blake3: Some(EMPTY_HASH.to_string()),
+        });
+
+        let compiled = compile_foreign_graph(&graph, TARGET_PREFIX).expect("unreachable seed must be omitted");
+        assert!(compiled.source_requirements.is_empty());
+        assert!(!compiled.path_maps.outputs.contains_key(&foreign_output("right", "out")));
+    }
+
+    #[test]
+    fn fixed_output_seed_without_a_producer_binding_is_rejected() {
+        let mut graph = diamond_graph();
+        graph.source_payloads.push(SourcePayload {
+            payload_id: "unbound-fixed-output-seed".to_string(),
+            kind: FIXED_OUTPUT_SEED_KIND.to_string(),
+            content_ref: foreign_output("leaf", "out"),
+            embedded_text: None,
+            mirrors: Vec::new(),
+            expected_content_blake3: None,
+        });
+
+        let error = compile_foreign_graph(&graph, TARGET_PREFIX).expect_err("unbound seed must fail");
+        assert_eq!(error.class, "foreign-compiler-fixed-output-seed-unbound");
     }
 
     #[test]

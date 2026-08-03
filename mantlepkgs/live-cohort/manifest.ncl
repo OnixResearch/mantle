@@ -22,10 +22,10 @@ let locked_revision = "dfd9566f82a6e1d55c30f861879186440614696e" in
       aliases = ["compression-library"],
     },
     {
-      name = "curl",
-      attribute = "curl",
+      name = "libpng",
+      attribute = "libpng",
       system = "x86_64-linux",
-      aliases = ["http-client"],
+      aliases = ["image-library"],
     },
   ],
   conversion_policy = {

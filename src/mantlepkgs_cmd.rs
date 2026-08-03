@@ -1615,6 +1615,14 @@ mod tests {
     }
 
     #[test]
+    fn fixed_output_with_a_url_is_not_a_seed_candidate() {
+        let (mut graph, _) = crate::foreign_derivation_import::nix_like_hello_fixture();
+        let fixed = graph.nodes.iter_mut().find(|node| node.fixed_output.is_some()).unwrap();
+        fixed.env.insert("url".into(), "https://example.invalid/source".into());
+        assert!(fixed_output_seed_candidates(&graph).unwrap().is_empty());
+    }
+
+    #[test]
     fn malformed_fixed_output_seed_candidate_is_rejected() {
         let (mut graph, _) = crate::foreign_derivation_import::nix_like_hello_fixture();
         let fixed = graph.nodes.iter_mut().find(|node| node.fixed_output.is_some()).unwrap();
