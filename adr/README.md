@@ -63,3 +63,6 @@ compatibility surface, crate name, or historical decision.
 | [0054](0054-select-snix-backports-by-mantle-compatibility-boundary.md) | Select Snix backports by Mantle compatibility boundary | Accepted |
 | [0055](0055-plan-http-cache-closures-before-root-admission.md) | Plan HTTP cache closures before root admission | Accepted |
 | [0056](0056-generate-mantlepkgs-from-concrete-package-graphs.md) | Generate Mantlepkgs from concrete package graphs | Proposed |
+| [0058](0058-limit-store-access-with-concrete-capability-views.md) | Limit store access with concrete capability views | Proposed |
+| [0059](0059-bind-source-observations-without-new-signature-authority.md) | Bind source observations without new signature authority | Proposed |
+| [0060](0060-verify-remote-admission-with-a-trellis-model.md) | Verify remote admission with a Trellis model | Proposed |
