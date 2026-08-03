@@ -1,0 +1,34 @@
+Task 7504
+Status: success
+Scope: bootstrap/gcc-10-final.ncl after GCC pass4 v7
+Mode: strict hermeticity, offline source preflight, no substitution, soft RLIMIT_NOFILE 4096
+Report:
+  /home/brittonr/.cargo-target/mantle-gcc10-final-after-pass4-v7-diagnostic-20260803/stdout.json
+Log:
+  /home/brittonr/.cargo-target/mantle-gcc10-final-after-pass4-v7-diagnostic-20260803/stderr.log
+Observed report facts:
+  hermeticity_mode: strict
+  hermeticity_audit_events: []
+  succeeded_total: 1
+  built_total: 1
+  cached_total: 0
+  failed_total: 0
+  output: /mantle/store/8prxdlzabmg165kqq1xhplvahhwv7rzl-gcc-10.5.0-musl-final-v1
+
+Task 7520
+Status: success
+Scope: bootstrap/seed-full-toolchain.ncl after GCC pass4 v7
+Mode: strict hermeticity, offline source preflight, no substitution, soft RLIMIT_NOFILE 4096
+Report:
+  /home/brittonr/.cargo-target/mantle-seed-full-toolchain-after-pass4-v7-diagnostic-20260803/stdout.json
+Log:
+  /home/brittonr/.cargo-target/mantle-seed-full-toolchain-after-pass4-v7-diagnostic-20260803/stderr.log
+Observed report facts:
+  hermeticity_mode: strict
+  hermeticity_audit_events: []
+  succeeded_total: 1
+  built_total: 1
+  cached_total: 0
+  failed_total: 0
+  final binutils: /mantle/store/ig0l0rv4gvvma3f3s64ngpnbf4ll0h4v-binutils-2.41-gcc10-v1
+  native root: /mantle/store/ly1hax2fpd8mb8xbn7y7yqcf88b92lg8-full-source-seed-toolchain

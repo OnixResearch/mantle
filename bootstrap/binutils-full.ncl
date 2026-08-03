@@ -39,7 +39,7 @@ let binutils_src = crunch.derivationFile "binutils-2.41-regeneration-ready-sourc
 
       GCC=$(find_input gcc-10.5.0-musl-final-v1)
       MUSL=$(find_input musl-1.2.5-gcc10-v1)
-      BINUTILS_OLD=$(find_input binutils-2.30-gcc-pass4-v16)
+      BINUTILS_OLD=$(find_input binutils-2.30-gcc-pass4-v17)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
       GREP=$(find_input grep-2.4-gcc-v10)

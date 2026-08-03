@@ -4,7 +4,8 @@
 # configured assembler and linker override seams route every generated object
 # and link through clean binutils 2.30. The resulting compiler and libgcc remain
 # isolated from bootstrap/seed.ncl pending repaired source regeneration and
-# complete provider normalization.
+# complete provider normalization. GNU ar 2.30 does not default to deterministic
+# archive headers, so the checked GCC target-archive rule binds explicit D mode.
 
 let crunch = import "lib.ncl" in
 
@@ -25,7 +26,7 @@ let automake115_src = crunch.fetchTarball {
 } in
 
 {
-  name = "gcc-4.0.4-musl-pass5-v1",
+  name = "gcc-4.0.4-musl-pass5-v2",
   builder = "/bin/sh",
   args = [
     "-c",
@@ -47,11 +48,12 @@ let automake115_src = crunch.fetchTarball {
 
       SEED_GCC=$(find_input gcc-4.0.4-musl-pass4-v7)
       MUSL=$(find_input musl-1.1.24-gcc-pass4-v2)
-      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v16)
+      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v17)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
       SRC=$(find_input gcc-4.0.4-native-src)
       AUTOMAKE115_SRC=$(find_input automake-1.15.1-config-sub-src)
+      DETERMINISTIC_RANLIB="$BINUTILS/bin/ranlib -D"
 
       test -x "$SEED_GCC/bin/gcc"
       test -x "$SEED_GCC/bin/as"
@@ -126,6 +128,11 @@ EOF
 
       $BB cp -r "$SRC" "$WORK/src"
       $BB chmod -R u+w "$WORK/src"
+      test "$($BB grep -Fxc 'AR_CREATE_FOR_TARGET = $(AR_FOR_TARGET) $(AR_FLAGS_FOR_TARGET) rc' "$WORK/src/gcc/Makefile.in")" -eq 1
+      $BB sed -i \
+        's|^AR_CREATE_FOR_TARGET = $(AR_FOR_TARGET) $(AR_FLAGS_FOR_TARGET) rc$|AR_CREATE_FOR_TARGET = $(AR_FOR_TARGET) $(AR_FLAGS_FOR_TARGET) rcD|' \
+        "$WORK/src/gcc/Makefile.in"
+      test "$($BB grep -Fxc 'AR_CREATE_FOR_TARGET = $(AR_FOR_TARGET) $(AR_FLAGS_FOR_TARGET) rcD' "$WORK/src/gcc/Makefile.in")" -eq 1
       cd "$WORK/src"
       if [ ! -f configure ]; then
         for configure_path in */configure; do
@@ -194,6 +201,7 @@ EOF
         CC="$SEED_CC" \
         AR="$BINUTILS/bin/ar" \
         RANLIB="$BINUTILS/bin/ranlib" \
+        RANLIB_FOR_TARGET="$DETERMINISTIC_RANLIB" \
         CFLAGS="$GCC_BUILD_FLAGS -I$MUSL/include" \
         BOOT_CFLAGS="$GCC_BUILD_FLAGS -I$MUSL/include" \
         MAKEINFO=true || {
@@ -205,6 +213,7 @@ EOF
         CC="$SEED_CC" \
         AR="$BINUTILS/bin/ar" \
         RANLIB="$BINUTILS/bin/ranlib" \
+        RANLIB_FOR_TARGET="$DETERMINISTIC_RANLIB" \
         MAKEINFO=true
 
       echo 'gcc40-pass5-check: installed-binaries' >&2

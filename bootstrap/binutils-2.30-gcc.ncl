@@ -25,7 +25,7 @@ let automake115_src = crunch.fetchTarball {
 } in
 
 {
-  name = "binutils-2.30-gcc-pass4-v16",
+  name = "binutils-2.30-gcc-pass4-v17",
   builder = "/bin/sh",
   args = [
     "-c",
@@ -166,6 +166,7 @@ EOF
         --build="$TARGET" \
         --host="$TARGET" \
         --target="$TARGET" \
+        --enable-deterministic-archives \
         --disable-gdb \
         --disable-gdbserver \
         --disable-sim \
@@ -299,6 +300,30 @@ ASM
       "$out/bin/ranlib" "$WORK/libsmoke.a"
       "$out/bin/ar" t "$WORK/libsmoke.a" > "$WORK/archive-members.txt"
       $BB grep -q '^smoke.o$' "$WORK/archive-members.txt"
+
+      ARCHIVE_DATE_EARLY=200001010000
+      ARCHIVE_DATE_LATE=201001010000
+      ARCHIVE_PROBE="$WORK/archive-determinism-probe"
+      ARCHIVE_MEMBER="$ARCHIVE_PROBE/member.o"
+      $BB mkdir -p "$ARCHIVE_PROBE"
+      $BB printf '%s\n' 'mantle deterministic archive probe' > "$ARCHIVE_MEMBER"
+      $BB touch -t "$ARCHIVE_DATE_EARLY" "$ARCHIVE_MEMBER"
+      "$out/bin/ar" rc "$ARCHIVE_PROBE/default-first.a" "$ARCHIVE_MEMBER"
+      "$out/bin/ranlib" "$ARCHIVE_PROBE/default-first.a"
+      $BB touch -t "$ARCHIVE_DATE_LATE" "$ARCHIVE_MEMBER"
+      "$out/bin/ar" rc "$ARCHIVE_PROBE/default-second.a" "$ARCHIVE_MEMBER"
+      "$out/bin/ranlib" "$ARCHIVE_PROBE/default-second.a"
+      $BB cmp "$ARCHIVE_PROBE/default-first.a" "$ARCHIVE_PROBE/default-second.a"
+
+      $BB touch -t "$ARCHIVE_DATE_EARLY" "$ARCHIVE_MEMBER"
+      "$out/bin/ar" rcU "$ARCHIVE_PROBE/timestamp-first.a" "$ARCHIVE_MEMBER"
+      $BB touch -t "$ARCHIVE_DATE_LATE" "$ARCHIVE_MEMBER"
+      "$out/bin/ar" rcU "$ARCHIVE_PROBE/timestamp-second.a" "$ARCHIVE_MEMBER"
+      if $BB cmp "$ARCHIVE_PROBE/timestamp-first.a" "$ARCHIVE_PROBE/timestamp-second.a"; then
+        echo "ERROR: explicit timestamp-sensitive archive probe produced equal archives" >&2
+        exit 1
+      fi
+
       "$out/bin/ld" -static -o "$WORK/archive-smoke" "$WORK/libsmoke.a"
       test -s "$WORK/archive-smoke"
       $BB chmod 755 "$WORK/archive-smoke"
@@ -388,6 +413,10 @@ ASM
       test ! -e "$WORK/rejected-strip-output"
 
       $BB mkdir -p "$out/share/binutils-gcc-pass4-frontier"
+      $BB printf '%s\n' \
+        'default_archive_mode=deterministic' \
+        'explicit_u_archive_mode=timestamp-sensitive' \
+        > "$out/share/binutils-gcc-pass4-frontier/archive-determinism.txt"
       $BB printf '%s\n' \
         'NON_ADMISSION: clean binutils still uses shipped generated sources pending repaired regeneration and complete provider normalization' \
         > "$out/share/binutils-gcc-pass4-frontier/NON_ADMISSION"

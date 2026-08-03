@@ -71,3 +71,5 @@ compatibility surface, crate name, or historical decision.
 | [0062](0062-adapt-ekala-package-maintenance-patterns-without-transferring-authority.md) | Adapt Ekala package-maintenance patterns without transferring authority | Proposed |
 | [0063](0063-select-the-stagex-provider-compiler-by-bounded-workload.md) | Select the StageX provider compiler by bounded workload | Accepted |
 | [0064](0064-bind-source-fixed-point-open-file-limits-in-the-proof-plan.md) | Bind source fixed-point open-file limits in the proof plan | Accepted |
+| [0065](0065-default-to-deterministic-archives-in-gcc-built-binutils.md) | Default to deterministic archives in GCC-built binutils | Accepted |
+| [0066](0066-derive-gcc40-random-seeds-from-main-input-identity.md) | Derive GCC 4.0 random seeds from main input identity | Accepted |
