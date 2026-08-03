@@ -1,0 +1,63 @@
+{
+  "surface_id": "mantlepkgs.package-impact-report",
+  "cases": [
+    {
+      "id": "unknown-report-version",
+      "issue_class": "version",
+      "expected_path": "/schema",
+      "artifact": {
+        "schema": "mantle-package-impact-v2",
+        "report_identity_blake3": "ad30c0b4c7681f56ca911726f45d9757342414125ee6c2bc315591a61765650d",
+        "comparison_policy_identity_blake3": "c331dbb596956fdece535a04d0bf3cd8ec8a6c466b8f1058ac3d6edc2fa41af1",
+        "base_snapshot_identity_blake3": "eb015f09299e9537017b831ae63649b7c1cb5b0a054a9ee730192deaa95ea7a7",
+        "head_snapshot_identity_blake3": "63c726738f8eaec706d2359395e4293853dfb8c5e6e4dfeb4807dd73dbd402fe",
+        "base_catalog_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "head_catalog_identity_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "system": "x86_64-linux",
+        "store_prefix": "/mantle/store",
+        "conversion_policy_identity_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "package_impacts": [],
+        "non_claims": ["a", "b", "c", "d", "e", "f"]
+      }
+    },
+    {
+      "id": "invalid-report-digest",
+      "issue_class": "digest",
+      "expected_path": "/report_identity_blake3",
+      "artifact": {
+        "schema": "mantle-package-impact-v1",
+        "report_identity_blake3": "invalid",
+        "comparison_policy_identity_blake3": "c331dbb596956fdece535a04d0bf3cd8ec8a6c466b8f1058ac3d6edc2fa41af1",
+        "base_snapshot_identity_blake3": "eb015f09299e9537017b831ae63649b7c1cb5b0a054a9ee730192deaa95ea7a7",
+        "head_snapshot_identity_blake3": "63c726738f8eaec706d2359395e4293853dfb8c5e6e4dfeb4807dd73dbd402fe",
+        "base_catalog_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "head_catalog_identity_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "system": "x86_64-linux",
+        "store_prefix": "/mantle/store",
+        "conversion_policy_identity_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "package_impacts": [],
+        "non_claims": ["a", "b", "c", "d", "e", "f"]
+      }
+    },
+    {
+      "id": "forge-field-is-not-owned",
+      "issue_class": "unknown-field",
+      "expected_path": "/forge_token",
+      "artifact": {
+        "schema": "mantle-package-impact-v1",
+        "report_identity_blake3": "ad30c0b4c7681f56ca911726f45d9757342414125ee6c2bc315591a61765650d",
+        "comparison_policy_identity_blake3": "c331dbb596956fdece535a04d0bf3cd8ec8a6c466b8f1058ac3d6edc2fa41af1",
+        "base_snapshot_identity_blake3": "eb015f09299e9537017b831ae63649b7c1cb5b0a054a9ee730192deaa95ea7a7",
+        "head_snapshot_identity_blake3": "63c726738f8eaec706d2359395e4293853dfb8c5e6e4dfeb4807dd73dbd402fe",
+        "base_catalog_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "head_catalog_identity_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "system": "x86_64-linux",
+        "store_prefix": "/mantle/store",
+        "conversion_policy_identity_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "package_impacts": [],
+        "non_claims": ["a", "b", "c", "d", "e", "f"],
+        "forge_token": "not-owned-by-mantle"
+      }
+    }
+  ]
+}

@@ -188,6 +188,42 @@ mantle mantlepkgs corpus-verify \
 
 This evidence covers only the recorded corpus, revision, packages, policy, and artifacts.
 
+## Compare base and head impact
+
+`impact/contracts.ncl` defines the policy, snapshot, closure, observation, and report contracts.
+
+Export the local policy and snapshots to JSON:
+
+```console
+nickel export mantlepkgs/impact/fixtures/policy.ncl --format json > target/impact-policy.json
+nickel export mantlepkgs/impact/fixtures/compatible-base.ncl --format json > target/impact-base.json
+nickel export mantlepkgs/impact/fixtures/compatible-head.ncl --format json > target/impact-head.json
+```
+
+Write one deterministic report:
+
+```console
+mantle mantlepkgs impact \
+  --policy target/impact-policy.json \
+  --base target/impact-base.json \
+  --head target/impact-head.json \
+  --out target/mantle-package-impact.json
+```
+
+The command reads only the selected local files. It writes the report through the atomic JSON publication path.
+
+Each snapshot binds the catalog, system, store prefix, conversion policy, package records, observations, and closures.
+
+A successful action-result observation must bind the admitted request, policy, platform, signature, output set, CAS fact, action, and selected result.
+
+Supply each current admission artifact with `--action-result-report PATH`. The shell rejects missing, conflicting, rejected, or stale runtime reports.
+
+A missing observation remains missing. An explicit status cannot claim a build success or failure.
+
+Closure numbers appear only when both closures are complete and compatible. Missing sizes, PathInfo facts, references, or semantics produce reason codes instead.
+
+`impact/external-adapter-fixture.ncl` consumes the report without credentials, webhooks, comments, approvals, or network effects.
+
 ## Package dispositions
 
 Each selected package has one disposition:
@@ -209,4 +245,5 @@ Mantlepkgs does not claim:
 - package correctness;
 - reproducibility;
 - bootstrap parity;
-- release eligibility.
+- release eligibility;
+- forge status, comment, approval, or publication authority from an impact report.

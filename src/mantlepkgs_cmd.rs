@@ -1,4 +1,5 @@
 // machine-artifact-public: mantlepkgs.catalog-domain-reports
+// machine-artifact-public: mantlepkgs.package-impact-report
 // r[impl mantlepkgs.producer_boundary]
 // r[impl mantlepkgs.catalog_generation]
 // r[impl mantlepkgs.recomputed_rebuild]
@@ -8,6 +9,8 @@
 // r[impl mantlepkgs_domains.separate_validation_roots]
 // r[impl mantlepkgs_domains.reference_corpus]
 // r[verify mantlepkgs_domains.functional_core]
+// r[impl mantlepkgs_impact.external_ci_boundary]
+// r[verify mantlepkgs_impact.external_ci_boundary]
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -44,6 +47,9 @@ use mantlepkgs_core::DomainCatalogManifest;
 use mantlepkgs_core::DomainShardLimits;
 use mantlepkgs_core::EXECUTION_PROFILE_PATH;
 use mantlepkgs_core::ExternalCorpusEvidence;
+use mantlepkgs_core::ImpactComparisonInput;
+use mantlepkgs_core::ImpactComparisonPolicy;
+use mantlepkgs_core::ImpactSnapshot;
 use mantlepkgs_core::MantlepkgsCatalog;
 use mantlepkgs_core::MantlepkgsManifest;
 use mantlepkgs_core::PACKAGE_INDEX_PATH;
@@ -70,6 +76,7 @@ use mantlepkgs_core::VALIDATION_OBSERVATION_SCHEMA;
 use mantlepkgs_core::ValidationObservation;
 use mantlepkgs_core::ValidationRootPlan;
 use mantlepkgs_core::adapt_v1_catalog_to_domain_shard;
+use mantlepkgs_core::build_package_impact_report;
 use mantlepkgs_core::build_producer_receipt;
 use mantlepkgs_core::compose_domain_catalog;
 use mantlepkgs_core::finalize_catalog;
@@ -141,6 +148,11 @@ const MANTLEPKGS_SOURCE_BUNDLE_GIBIBYTES_MAX: u64 = 4;
 const MANTLEPKGS_SOURCE_BUNDLE_BYTES_MAX: u64 = MANTLEPKGS_SOURCE_BUNDLE_GIBIBYTES_MAX * GIBIBYTE_BYTES;
 const DOMAIN_ARTIFACT_GIBIBYTES_MAX: u64 = 1;
 const DOMAIN_ARTIFACT_BYTES_MAX: u64 = DOMAIN_ARTIFACT_GIBIBYTES_MAX * GIBIBYTE_BYTES;
+const IMPACT_INPUT_MEBIBYTES_MAX: u64 = 64;
+const MEBIBYTE_BYTES: u64 = KIBIBYTE_BYTES * KIBIBYTE_BYTES;
+const IMPACT_INPUT_BYTES_MAX: u64 = IMPACT_INPUT_MEBIBYTES_MAX * MEBIBYTE_BYTES;
+const IMPACT_ACTION_RESULT_REPORTS_MAX: u32 = 65_536;
+const IMPACT_ACTION_RESULT_REPORT_BYTES_MAX: u64 = IMPACT_INPUT_BYTES_MAX;
 const DOMAIN_SHARD_PACKAGE_LIMIT: u32 = 65_536;
 const DOMAIN_SHARD_ALIAS_LIMIT: u32 = 65_536;
 const DOMAIN_SHARD_ARTIFACT_LIMIT: u32 = 65_536;
@@ -344,6 +356,25 @@ pub(crate) enum MantlepkgsAction {
         #[arg(long = "sealed-evidence-out")]
         sealed_evidence_out: PathBuf,
     },
+
+    /// Compare two contracted snapshots and write one deterministic impact report
+    Impact {
+        #[arg(long)]
+        policy: PathBuf,
+
+        #[arg(long)]
+        base: PathBuf,
+
+        #[arg(long)]
+        head: PathBuf,
+
+        /// Admitted current-policy runtime report for each action-result observation
+        #[arg(long = "action-result-report")]
+        action_result_reports: Vec<PathBuf>,
+
+        #[arg(long)]
+        out: PathBuf,
+    },
 }
 
 pub(crate) struct MantlepkgsContext<'a> {
@@ -508,6 +539,20 @@ pub(crate) fn cmd_mantlepkgs(action: MantlepkgsAction, context: MantlepkgsContex
             artifact_root,
             sealed_evidence_out,
         } => run_corpus_verify(&evidence, &artifact_root, &sealed_evidence_out, context.json),
+        MantlepkgsAction::Impact {
+            policy,
+            base,
+            head,
+            action_result_reports,
+            out,
+        } => run_impact(ImpactRequest {
+            policy_path: &policy,
+            base_path: &base,
+            head_path: &head,
+            action_result_report_paths: &action_result_reports,
+            output: &out,
+            is_json: context.json,
+        }),
     }
 }
 
@@ -523,6 +568,15 @@ struct BuildRequest<'a> {
     jobs: Option<u32>,
     signing_key: Option<&'a Path>,
     offline: bool,
+}
+
+struct ImpactRequest<'a> {
+    policy_path: &'a Path,
+    base_path: &'a Path,
+    head_path: &'a Path,
+    action_result_report_paths: &'a [PathBuf],
+    output: &'a Path,
+    is_json: bool,
 }
 
 struct ValidationBuildRequest<'a> {
@@ -742,6 +796,142 @@ fn run_corpus_verify(
         );
     }
     Ok(())
+}
+
+fn run_impact(request: ImpactRequest<'_>) -> Result<(), RunError> {
+    reject_impact_output_collision(&request)?;
+    let policy = read_json_bounded::<ImpactComparisonPolicy>(request.policy_path, IMPACT_INPUT_BYTES_MAX)?;
+    let base = read_json_bounded::<ImpactSnapshot>(request.base_path, IMPACT_INPUT_BYTES_MAX)?;
+    let head = read_json_bounded::<ImpactSnapshot>(request.head_path, IMPACT_INPUT_BYTES_MAX)?;
+    let action_results = load_impact_action_result_reports(request.action_result_report_paths)?;
+    validate_impact_action_result_bindings(&base, &head, &action_results)?;
+    let report = build_package_impact_report(ImpactComparisonInput {
+        policy: &policy,
+        base: &base,
+        head: &head,
+    })
+    .map_err(core_eval_error)?;
+    write_json_atomically(request.output, &report, "Mantlepkgs package-impact report")?;
+    if request.is_json {
+        println!(
+            "{}",
+            serde_json::to_string(&report)
+                .map_err(|error| RunError::Internal(format!("serializing Mantlepkgs impact report: {error}")))?
+        );
+    } else {
+        println!(
+            "mantlepkgs impact report written: identity={} packages={} path={}",
+            report.report_identity_blake3,
+            report.package_impacts.len(),
+            request.output.display()
+        );
+    }
+    Ok(())
+}
+
+fn reject_impact_output_collision(request: &ImpactRequest<'_>) -> Result<(), RunError> {
+    let is_primary_collision = request.output == request.policy_path
+        || request.output == request.base_path
+        || request.output == request.head_path;
+    let is_action_result_collision = request.action_result_report_paths.iter().any(|path| path == request.output);
+    if is_primary_collision || is_action_result_collision {
+        return Err(RunError::Eval("impact output must differ from every input artifact".into()));
+    }
+    Ok(())
+}
+
+fn load_impact_action_result_reports(
+    paths: &[PathBuf],
+) -> Result<BTreeMap<String, crunch_build::ActionResultRuntimeReport>, RunError> {
+    let report_count = u32::try_from(paths.len())
+        .map_err(|_| RunError::Eval("impact action-result report count exceeds u32".into()))?;
+    if report_count > IMPACT_ACTION_RESULT_REPORTS_MAX {
+        return Err(RunError::Eval("impact action-result report count exceeds policy".into()));
+    }
+    let mut total_bytes = 0u64;
+    let mut reports = BTreeMap::new();
+    for path in paths {
+        let bytes = read_bounded(path, IMPACT_ACTION_RESULT_REPORT_BYTES_MAX)?;
+        let byte_count = u64::try_from(bytes.len())
+            .map_err(|_| RunError::Eval("impact action-result byte count exceeds u64".into()))?;
+        total_bytes = total_bytes
+            .checked_add(byte_count)
+            .ok_or_else(|| RunError::Eval("impact action-result byte count overflow".into()))?;
+        if total_bytes > IMPACT_ACTION_RESULT_REPORT_BYTES_MAX {
+            return Err(RunError::Eval("impact action-result reports exceed aggregate byte limit".into()));
+        }
+        let report = deserialize_json::<crunch_build::ActionResultRuntimeReport>(&bytes, &path.display().to_string())?;
+        let identity = canonical_digest(&report)?;
+        if reports.len() >= paths.len() {
+            return Err(RunError::Internal("impact action-result map exceeded input count".into()));
+        }
+        if reports.insert(identity.clone(), report).is_some() {
+            return Err(RunError::Eval(format!("duplicate impact action-result report: {identity}")));
+        }
+    }
+    Ok(reports)
+}
+
+fn validate_impact_action_result_bindings(
+    base: &ImpactSnapshot,
+    head: &ImpactSnapshot,
+    reports: &BTreeMap<String, crunch_build::ActionResultRuntimeReport>,
+) -> Result<(), RunError> {
+    for observation in base.observations.iter().chain(&head.observations) {
+        let mantlepkgs_core::BuildObservationAuthority::AdmittedActionResult {
+            runtime_report_identity_blake3,
+            action_ref,
+            selected_result_ref,
+            ..
+        } = &observation.authority
+        else {
+            continue;
+        };
+        let report = reports.get(runtime_report_identity_blake3).ok_or_else(|| {
+            RunError::Eval(format!("impact-action-result-report-missing {}", observation.key.public_selector))
+        })?;
+        validate_admitted_runtime_report(report, action_ref, selected_result_ref)?;
+    }
+    Ok(())
+}
+
+fn validate_admitted_runtime_report(
+    report: &crunch_build::ActionResultRuntimeReport,
+    action_ref: &str,
+    selected_result_ref: impl AsRef<str>,
+) -> Result<(), RunError> {
+    let selected_result_ref = selected_result_ref.as_ref();
+    let is_header_valid = report.schema == crunch_build::action_result::ACTION_RESULT_RUNTIME_REPORT_SCHEMA
+        && report.phase == crunch_build::action_result::ACTION_RESULT_PHASE_DISCOVERY
+        && report.disposition == crunch_build::action_result::ACTION_RESULT_DISPOSITION_REUSED;
+    if !is_header_valid {
+        return Err(action_result_admission_error(action_ref, selected_result_ref));
+    }
+    let is_selection_valid = report.action_ref == action_ref
+        && report.selected_result_ref.as_deref() == Some(selected_result_ref)
+        && report.conflict_class.is_none();
+    if !is_selection_valid {
+        return Err(action_result_admission_error(action_ref, selected_result_ref));
+    }
+    let is_candidate_admitted = report
+        .candidate_decisions
+        .iter()
+        .any(|candidate| candidate.result_ref == selected_result_ref && candidate.admitted);
+    if !is_candidate_admitted {
+        return Err(action_result_admission_error(action_ref, selected_result_ref));
+    }
+    if report.trust_basis.is_empty() {
+        return Err(action_result_admission_error(action_ref, selected_result_ref));
+    }
+    Ok(())
+}
+
+fn action_result_admission_error(action_ref: &str, selected_result_ref: impl AsRef<str>) -> RunError {
+    RunError::Eval(format!(
+        "impact-action-result-not-admitted action={} result={}",
+        action_ref,
+        selected_result_ref.as_ref()
+    ))
 }
 
 fn observed_corpus_catalog_packages(role: &str, bytes: &[u8]) -> Result<Vec<String>, RunError> {
@@ -2048,12 +2238,151 @@ mod tests {
     const SOURCE_LIMIT: u32 = 1_024;
     const ARTIFACT_LIMIT: u64 = 33_554_432;
     const COMPOSED_PUBLIC_PACKAGE_COUNT: usize = 6;
+    const IMPACT_FIXTURE_ITEM_LIMIT: u32 = 8;
+    const IMPACT_FIXTURE_DIAGNOSTIC_LIMIT: u32 = 16;
+    const IMPACT_FIXTURE_REPORT_BYTES: u64 = 1_048_576;
+    const OTHER_DIGEST: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const IMPACT_ACTION_REF: &str = "mantle-action://blake3/impact-fixture";
+    const IMPACT_RESULT_REF: &str = "mantle-action-result://blake3/impact-fixture";
     const NO_NIX_GENERATION_ENV: &str = "MANTLEPKGS_TEST_GENERATION";
     const NO_NIX_CHILD_TEST: &str = "mantlepkgs_cmd::tests::no_nix_child_verifies_and_plans_catalog";
     const CAPTURE_CHILD_TEST: &str = "mantlepkgs_cmd::tests::producer_capture_child";
     const TINY_CAPTURE_LIMIT: usize = 1;
     #[cfg(unix)]
     const NON_UTF8_PATH_BYTE: u8 = 0xff;
+
+    fn impact_policy_fixture() -> ImpactComparisonPolicy {
+        mantlepkgs_core::seal_impact_policy(&ImpactComparisonPolicy {
+            schema: mantlepkgs_core::IMPACT_POLICY_SCHEMA.into(),
+            policy_identity_blake3: String::new(),
+            max_packages: IMPACT_FIXTURE_ITEM_LIMIT,
+            max_variants: IMPACT_FIXTURE_ITEM_LIMIT,
+            max_closure_members: IMPACT_FIXTURE_ITEM_LIMIT,
+            max_dependency_edges: IMPACT_FIXTURE_ITEM_LIMIT,
+            max_observations: IMPACT_FIXTURE_ITEM_LIMIT,
+            max_diagnostics: IMPACT_FIXTURE_DIAGNOSTIC_LIMIT,
+            max_report_bytes: IMPACT_FIXTURE_REPORT_BYTES,
+        })
+        .unwrap()
+    }
+
+    fn empty_impact_snapshot(policy: &ImpactComparisonPolicy) -> ImpactSnapshot {
+        ImpactSnapshot {
+            schema: mantlepkgs_core::IMPACT_SNAPSHOT_SCHEMA.into(),
+            snapshot_identity_blake3: String::new(),
+            comparison_policy_identity_blake3: policy.policy_identity_blake3.clone(),
+            catalog_schema: mantlepkgs_core::DOMAIN_CATALOG_SCHEMA.into(),
+            catalog_identity_blake3: DIGEST.into(),
+            system: "x86_64-linux".into(),
+            store_prefix: "/mantle/store".into(),
+            conversion_policy_identity_blake3: DIGEST.into(),
+            package_record_schema: mantlepkgs_core::IMPACT_PACKAGE_RECORD_SCHEMA.into(),
+            observation_schema: mantlepkgs_core::IMPACT_OBSERVATION_SCHEMA.into(),
+            identity_domain: mantlepkgs_core::IMPACT_IDENTITY_DOMAIN.into(),
+            packages: Vec::new(),
+            observations: Vec::new(),
+            closures: Vec::new(),
+        }
+    }
+
+    fn admitted_impact_runtime_report() -> crunch_build::ActionResultRuntimeReport {
+        crunch_build::ActionResultRuntimeReport {
+            schema: crunch_build::action_result::ACTION_RESULT_RUNTIME_REPORT_SCHEMA.into(),
+            phase: crunch_build::action_result::ACTION_RESULT_PHASE_DISCOVERY.into(),
+            action_ref: IMPACT_ACTION_REF.into(),
+            disposition: crunch_build::action_result::ACTION_RESULT_DISPOSITION_REUSED.into(),
+            selected_result_ref: Some(IMPACT_RESULT_REF.into()),
+            selected_source_id: Some("local-action-results".into()),
+            selected_source_class: Some("local".into()),
+            trust_basis: vec!["record-signature-verified:fixture".into()],
+            conflict_class: None,
+            candidate_decisions: vec![crunch_action_result_core::CandidateDecision {
+                result_ref: IMPACT_RESULT_REF.into(),
+                source_id: "local-action-results".into(),
+                source_class: "local".into(),
+                admitted: true,
+                diagnostics: Vec::new(),
+                trust_basis: vec!["record-signature-verified:fixture".into()],
+                output_set_digest_blake3: Some(DIGEST.into()),
+            }],
+            publication_result_refs: Vec::new(),
+            transfer: None,
+            diagnostics: Vec::new(),
+            non_claims: vec!["index-presence-is-not-output-trust".into()],
+        }
+    }
+
+    #[test]
+    fn impact_action_result_adapter_accepts_only_current_admission() {
+        let report = admitted_impact_runtime_report();
+        validate_admitted_runtime_report(&report, IMPACT_ACTION_REF, IMPACT_RESULT_REF).unwrap();
+        let mut rejected = report;
+        rejected.candidate_decisions[0].admitted = false;
+
+        let error = validate_admitted_runtime_report(&rejected, IMPACT_ACTION_REF, IMPACT_RESULT_REF)
+            .expect_err("a rejected action result must fail");
+
+        assert!(error.message().contains("impact-action-result-not-admitted"));
+    }
+
+    #[test]
+    fn impact_command_writes_a_local_atomic_report() {
+        let temp = tempfile::tempdir().unwrap();
+        let policy = impact_policy_fixture();
+        let snapshot = empty_impact_snapshot(&policy);
+        let policy_path = temp.path().join("policy.json");
+        let base_path = temp.path().join("base.json");
+        let head_path = temp.path().join("head.json");
+        let output = temp.path().join("impact.json");
+        fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        fs::write(&base_path, serde_json::to_vec(&snapshot).unwrap()).unwrap();
+        fs::write(&head_path, serde_json::to_vec(&snapshot).unwrap()).unwrap();
+
+        run_impact(ImpactRequest {
+            policy_path: &policy_path,
+            base_path: &base_path,
+            head_path: &head_path,
+            action_result_report_paths: &[],
+            output: &output,
+            is_json: false,
+        })
+        .unwrap();
+
+        let report =
+            read_json_bounded::<mantlepkgs_core::MantlePackageImpactReport>(&output, IMPACT_INPUT_BYTES_MAX).unwrap();
+        assert_eq!(report.schema, mantlepkgs_core::IMPACT_REPORT_SCHEMA);
+        assert!(report.package_impacts.is_empty());
+        assert!(Command::new("nix").env("PATH", temp.path().join("no-nix")).status().is_err());
+    }
+
+    #[test]
+    fn impact_command_rejects_a_stale_snapshot_before_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        let policy = impact_policy_fixture();
+        let snapshot = empty_impact_snapshot(&policy);
+        let mut stale = mantlepkgs_core::seal_impact_snapshot(&policy, &snapshot).unwrap();
+        stale.catalog_identity_blake3 = OTHER_DIGEST.into();
+        let policy_path = temp.path().join("policy.json");
+        let base_path = temp.path().join("base.json");
+        let head_path = temp.path().join("head.json");
+        let output = temp.path().join("impact.json");
+        fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        fs::write(&base_path, serde_json::to_vec(&stale).unwrap()).unwrap();
+        fs::write(&head_path, serde_json::to_vec(&snapshot).unwrap()).unwrap();
+
+        let error = run_impact(ImpactRequest {
+            policy_path: &policy_path,
+            base_path: &base_path,
+            head_path: &head_path,
+            action_result_report_paths: &[],
+            output: &output,
+            is_json: false,
+        })
+        .expect_err("a stale snapshot identity must fail");
+
+        assert!(error.message().contains("impact-identity-mismatch"));
+        assert!(!output.exists());
+    }
 
     #[test]
     fn domain_manifest_composes_without_nix() {

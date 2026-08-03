@@ -78,7 +78,8 @@ let Registry = {
     "oci.import-report",
     "oci.registry-push-report",
     "oci.registry-pull-report",
-    "release.function-address-binding"
+    "release.function-address-binding",
+    "mantlepkgs.package-impact-report"
   ],
   "surfaces"= [
     {
@@ -1389,6 +1390,63 @@ let Registry = {
         "compatibility classification does not prove package correctness, reproducibility, evaluator parity, or release eligibility"
       ],
       "rationale"= "Mantlepkgs emits several explicit v1 artifacts; this family records the public boundary until each artifact receives a generated contract."
+    },
+    {
+      "id"= "mantlepkgs.package-impact-report",
+      "class"= "contracted",
+      "rust_owner"= "crates/mantlepkgs-core/src/impact.rs::MantlePackageImpactReport",
+      "producer"= {
+        "command_or_api"= "mantle mantlepkgs impact",
+        "marker"= "mantlepkgs.package-impact-report",
+        "source_paths"= [
+          "crates/mantlepkgs-core/src/impact.rs",
+          "src/mantlepkgs_cmd.rs"
+        ]
+      },
+      "consumers"= [
+        "external CI adapters",
+        "Cairn evidence",
+        "local package reviewers"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/mantle-package-impact.schema.json",
+        "generated_contract"= "schemas/machine-contracts/mantle-package-impact.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/mantle-package-impact.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/mantle-package-impact.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-package-impact-v1",
+        "supported"= [
+          "mantle-package-impact-v1"
+        ],
+        "unknown_version_behavior"= "reject before interpreting package, observation, or closure deltas",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "cargo test -p mantlepkgs-core impact::tests",
+        "cargo test --bin mantle mantlepkgs_cmd::tests::impact_command"
+      ],
+      "fixture_coverage"= [
+        "version",
+        "digest",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds the report schema, generated contract, fixtures, pure core, shell, and external adapter policy",
+      "freshness"= {
+        "schema_blake3"= "27c7087a4adacc0b40df941182603b724f7118aa407fc76c585ee3afa024fac8",
+        "contract_blake3"= "7cd1d3ffbfe1324271c5531447350406ae29898b845e4aea58102e9bfc23e0d8",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "1602d93a04a749077c6f0150e3e8c32ce41fc295585396e6e71f45938101fd0a",
+        "producer_identity_blake3"= "7452127b34759660871a1a26bbe9f0b4c38f4cd02134dbb82c21a3f58a77eace",
+        "consumer_policy_blake3"= "094ac32746282ab41656266b861ea5b70bc9f4c54f3b9a3aedf1680c6695d49b"
+      },
+      "non_claims"= [
+        "report conformance does not prove package correctness, unchanged behavior, reproducibility, deployment safety, or release eligibility"
+      ],
+      "rationale"= "This stable local report lets external adapters render review results without forge authority in Mantle."
     },
     {
       "id"= "eval.raw-json-output",

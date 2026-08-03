@@ -1,0 +1,21 @@
+{
+  "schema": "mantle-package-impact-v1",
+  "report_identity_blake3": "ad30c0b4c7681f56ca911726f45d9757342414125ee6c2bc315591a61765650d",
+  "comparison_policy_identity_blake3": "c331dbb596956fdece535a04d0bf3cd8ec8a6c466b8f1058ac3d6edc2fa41af1",
+  "base_snapshot_identity_blake3": "eb015f09299e9537017b831ae63649b7c1cb5b0a054a9ee730192deaa95ea7a7",
+  "head_snapshot_identity_blake3": "63c726738f8eaec706d2359395e4293853dfb8c5e6e4dfeb4807dd73dbd402fe",
+  "base_catalog_identity_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "head_catalog_identity_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "system": "x86_64-linux",
+  "store_prefix": "/mantle/store",
+  "conversion_policy_identity_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "package_impacts": [],
+  "non_claims": [
+    "This report does not prove package correctness.",
+    "This report does not prove unchanged package behavior.",
+    "This report does not prove reproducibility.",
+    "This report does not prove deployment safety.",
+    "This report does not prove release eligibility.",
+    "This report does not grant forge, approval, publication, or network authority."
+  ]
+}
