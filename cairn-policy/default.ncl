@@ -1,7 +1,8 @@
 let Contracts = import "contracts.ncl" in
+let SharedPolicyFields = import "shared-policy-fields.ncl" in
 let PolicySchemaVersion = "cairn.policy-schema.v1" in
-let PolicyFieldSetDigest = "c5b71f15de4175d9ff01f7cb4b82eed898a71e55f6d1fa5e24a9a0e2bb909b42" in
-{
+let PolicyFieldSetDigest = "2d86abb8cbcb43323f4bdf81870ee963fcdc34ef5bf815eabc5b41e271c0a38a" in
+({
   name = "mantle-default",
   version = 1,
 
@@ -554,4 +555,4 @@ let PolicyFieldSetDigest = "c5b71f15de4175d9ff01f7cb4b82eed898a71e55f6d1fa5e24a9
   },
 
   exemptions = [],
-} | Contracts.Policy
+} & SharedPolicyFields) | Contracts.Policy

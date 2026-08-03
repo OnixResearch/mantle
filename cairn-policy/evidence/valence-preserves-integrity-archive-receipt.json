@@ -1,0 +1,31 @@
+{
+  "archive_manifest_blake3": "62e11014c3b029ac269e6c2e04da9c020c350dd093e9af207f6c060faae1a33e",
+  "archive_path": "cairn/archive/2026-07-12-harden-preserves-integrity-boundaries",
+  "canonicalization_profile": "valence.preserves-integrity.corrected.v1",
+  "files": [
+    {
+      "blake3": "05262d3f6f1bf32d024c2819133e6eb5f10d6414036cc9b34b9180cfb5a87364",
+      "path": "design.md"
+    },
+    {
+      "blake3": "39a8908bec02be66f0aeef97e8af0ab2c2534cd9bdc3047e0aba9c137770e2a5",
+      "path": "metadata.json"
+    },
+    {
+      "blake3": "8be4aafd14f3eb85ed74885e9e2fa7fc990ca45a2f9dc693448856d87c63c5d2",
+      "path": "proposal.md"
+    },
+    {
+      "blake3": "4bdff9eda3ab15e9ac62e2ad7d6ce8dbcd2f6702bef9744d0ebe747687bafd97",
+      "path": "specs/evidence-ir/spec.md"
+    },
+    {
+      "blake3": "3abda77b5931c5ef6dcdde504f71dfce06f95d1d6c43f087cd35f8816147f7e2",
+      "path": "tasks.md"
+    }
+  ],
+  "non_claim": "This receipt binds the reviewed Valence archive bytes and corrected Preserves integrity profile; it does not transfer Valence behavioral-correctness claims to Cairn.",
+  "provider": "valence",
+  "provider_revision": "1f4f6fe903a34c22d2cda53cd534ce58bbf84147",
+  "schema_version": "cairn.valence-preserves-integrity-archive.v1"
+}
