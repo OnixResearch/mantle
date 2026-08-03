@@ -1578,6 +1578,26 @@ mod tests {
     }
 
     #[test]
+    fn compiler_rewrites_store_paths_inside_structured_attribute_json() {
+        let mut graph = diamond_graph();
+        let foreign_left = foreign_output("left", "out");
+        let root = graph.nodes.iter_mut().find(|node| node.node_id == "root").expect("root node");
+        root.env.insert(
+            "__json".to_string(),
+            serde_json::json!({"buildInputs": [foreign_left], "outputs": ["out"]}).to_string(),
+        );
+
+        let compiled = compile_foreign_graph(&graph, TARGET_PREFIX).expect("structured graph must compile");
+        let root = compiled.units.iter().find(|unit| unit.node_id == "root").expect("compiled root");
+        let structured: serde_json::Value = serde_json::from_slice(root.derivation.environment["__json"].as_ref())
+            .expect("compiled structured attrs JSON");
+        let expected_left = &compiled.path_maps.outputs[&foreign_output("left", "out")];
+
+        assert_eq!(structured["buildInputs"][0], serde_json::Value::String(expected_left.clone()));
+        assert!(!structured.to_string().contains(SOURCE_PREFIX));
+    }
+
+    #[test]
     fn fixed_output_seed_admits_the_recomputed_output_path() {
         let mut graph = diamond_graph();
         let seeded_foreign_output = foreign_output("leaf", "out");

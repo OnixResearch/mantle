@@ -38,6 +38,9 @@ pub(crate) const MAX_ATERM_BUNDLE_BYTES: usize = MAX_ATERM_BUNDLE_MEBIBYTES * ME
 pub(crate) const MAX_ATERM_BUNDLE_DERIVATIONS: usize = MAX_GRAPH_NODES;
 const MAX_ATERM_COLLECTION_ITEMS: usize = 256;
 const MAX_ATERM_STORE_REFERENCES_PER_FIELD: usize = 256;
+const MAX_STRUCTURED_ATTRS_MEBIBYTES: usize = 1;
+const MAX_STRUCTURED_ATTRS_BYTES: usize = MAX_STRUCTURED_ATTRS_MEBIBYTES * MEBIBYTE_BYTES;
+const NIX_STRUCTURED_ATTRS_ENV: &str = "__json";
 const UNKNOWN_FOREIGN_PREFIX: &str = "/foreign/store";
 const GUIX_HELLO_NODE_ID: &str = "guix:hello";
 const NIX_HELLO_NODE_ID: &str = "nix:hello";
@@ -378,6 +381,8 @@ pub(crate) struct NixDerivationJsonVersionedNode {
     #[serde(default = "empty_string_map")]
     pub(crate) env: BTreeMap<String, String>,
     pub(crate) outputs: BTreeMap<String, NixDerivationJsonOutput>,
+    #[serde(rename = "structuredAttrs", default)]
+    pub(crate) structured_attrs: Option<serde_json::Value>,
     #[serde(default = "empty_versioned_inputs")]
     pub(crate) inputs: NixDerivationJsonVersionedInputs,
 }
@@ -699,7 +704,12 @@ fn validate_foreign_aterm_limits(
     }
     for (key, value) in &derivation.environment {
         require_field_limit(key, None, "foreign-aterm-environment-key")?;
-        if value.len() > MAX_FIELD_BYTES {
+        let value_limit = if key == NIX_STRUCTURED_ATTRS_ENV {
+            MAX_STRUCTURED_ATTRS_BYTES
+        } else {
+            MAX_FIELD_BYTES
+        };
+        if value.len() > value_limit {
             return Err(diagnostic(
                 "field-limit-exceeded",
                 None,
@@ -1247,7 +1257,8 @@ fn normalize_versioned_nix_derivations(
     let mut closure = BTreeMap::new();
     for (drv_key, node) in export.derivations {
         let drv_path = normalize_nix_store_key(&drv_key)?;
-        let env = normalize_nix_env(node.env);
+        let mut env = normalize_nix_env(node.env);
+        merge_nix_structured_attrs(&mut env, node.structured_attrs)?;
         let outputs = normalize_nix_outputs(node.outputs, &env)?;
         let normalized_node = NixDerivationJsonNode {
             name: node.name,
@@ -1326,6 +1337,55 @@ fn normalize_nix_store_paths(paths: Vec<String>) -> Result<Vec<String>, ImportDi
 
 fn normalize_nix_env(env: BTreeMap<String, String>) -> BTreeMap<String, String> {
     env.into_iter().map(|(key, value)| (key, normalize_nix_embedded_store_paths(&value))).collect()
+}
+
+fn merge_nix_structured_attrs(
+    env: &mut BTreeMap<String, String>,
+    structured_attrs: Option<serde_json::Value>,
+) -> Result<(), ImportDiagnostic> {
+    let Some(structured_attrs) = structured_attrs else {
+        return Ok(());
+    };
+    if !structured_attrs.is_object() {
+        return Err(diagnostic(
+            "nix-structured-attrs-invalid",
+            None,
+            "Nix structured attributes must be a JSON object",
+        ));
+    }
+    let normalized = normalize_nix_structured_attr_value(structured_attrs);
+    let encoded = serde_json::to_string(&normalized).map_err(|error| {
+        diagnostic(
+            "nix-structured-attrs-invalid",
+            None,
+            &format!("Nix structured attributes cannot be encoded: {error}"),
+        )
+    })?;
+    if encoded.len() > MAX_STRUCTURED_ATTRS_BYTES {
+        return Err(diagnostic("field-limit-exceeded", None, "Nix structured attributes exceed the byte limit"));
+    }
+    if env.insert(NIX_STRUCTURED_ATTRS_ENV.to_string(), encoded).is_some() {
+        return Err(diagnostic(
+            "nix-structured-attrs-collision",
+            None,
+            "Nix derivation export contains both structuredAttrs and __json",
+        ));
+    }
+    debug_assert!(env.contains_key(NIX_STRUCTURED_ATTRS_ENV));
+    Ok(())
+}
+
+fn normalize_nix_structured_attr_value(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::String(value) => serde_json::Value::String(normalize_nix_embedded_store_paths(&value)),
+        serde_json::Value::Array(values) => {
+            serde_json::Value::Array(values.into_iter().map(normalize_nix_structured_attr_value).collect())
+        }
+        serde_json::Value::Object(values) => serde_json::Value::Object(
+            values.into_iter().map(|(key, value)| (key, normalize_nix_structured_attr_value(value))).collect(),
+        ),
+        scalar => scalar,
+    }
 }
 
 fn select_reachable_nix_derivations(
@@ -2247,15 +2307,28 @@ fn validate_field_limits(graph: &ForeignDerivationGraph) -> Result<(), ImportDia
         for arg in &node.args {
             require_field_limit(arg, Some(&node.node_id), "arg")?;
         }
-        for value in node.env.values() {
-            require_field_limit(value, Some(&node.node_id), "env")?;
+        for (key, value) in &node.env {
+            if key == NIX_STRUCTURED_ATTRS_ENV {
+                require_byte_limit(value, MAX_STRUCTURED_ATTRS_BYTES, Some(&node.node_id), "structured_attrs")?;
+            } else {
+                require_field_limit(value, Some(&node.node_id), "env")?;
+            }
         }
     }
     Ok(())
 }
 
 fn require_field_limit(value: &str, node_id: Option<&str>, field: &str) -> Result<(), ImportDiagnostic> {
-    if value.len() > MAX_FIELD_BYTES {
+    require_byte_limit(value, MAX_FIELD_BYTES, node_id, field)
+}
+
+fn require_byte_limit(
+    value: &str,
+    byte_limit: usize,
+    node_id: Option<&str>,
+    field: &str,
+) -> Result<(), ImportDiagnostic> {
+    if value.len() > byte_limit {
         return Err(diagnostic("field-limit-exceeded", node_id, &format!("field {field} exceeds byte limit")));
     }
     Ok(())
@@ -2784,6 +2857,42 @@ mod tests {
     }
 
     #[test]
+    fn versioned_nix_derivation_export_preserves_structured_attributes_as_protocol_json() {
+        let mut versioned = versioned_nix_export_with_fod_env_path(true);
+        let node = versioned.derivations.values_mut().next().expect("fixture node");
+        node.structured_attrs = Some(serde_json::json!({
+            "buildInputs": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source"],
+            "enabled": true,
+            "outputs": ["out"],
+            "stdenv": NIXPKGS_SOURCE_OUT,
+        }));
+
+        let closure = normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(versioned)).unwrap();
+        let source = closure.get(NIXPKGS_SOURCE_DRV).expect("source drv");
+        let structured: serde_json::Value =
+            serde_json::from_str(&source.env[NIX_STRUCTURED_ATTRS_ENV]).expect("structured attrs JSON");
+
+        assert_eq!(
+            structured["buildInputs"][0],
+            format!("{NIX_STORE_PREFIX_WITH_SLASH}aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source")
+        );
+        assert_eq!(structured["stdenv"], NIXPKGS_SOURCE_OUT);
+        assert_eq!(structured["outputs"], serde_json::json!(["out"]));
+    }
+
+    #[test]
+    fn versioned_nix_derivation_export_rejects_non_object_structured_attributes() {
+        let mut versioned = versioned_nix_export_with_fod_env_path(true);
+        versioned.derivations.values_mut().next().expect("fixture node").structured_attrs =
+            Some(serde_json::json!(["not", "an", "object"]));
+
+        assert_error_class(
+            normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(versioned)),
+            "nix-structured-attrs-invalid",
+        );
+    }
+
+    #[test]
     fn nix_environment_normalization_distinguishes_store_basenames_from_sri_hashes() {
         const SRI_HASH: &str = "sha256-XyvbrWKXB6p9hcYj+ZSqih0t7FWnPeUgW6wL9gWKL3w=";
         const STORE_BASENAME: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source";
@@ -2985,6 +3094,7 @@ mod tests {
                 hash: Some("sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=".to_string()),
                 hash_algo: None,
             })]),
+            structured_attrs: None,
             inputs: NixDerivationJsonVersionedInputs::default(),
         });
         NixDerivationJsonVersionedExport {

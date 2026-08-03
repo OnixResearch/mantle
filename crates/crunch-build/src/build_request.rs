@@ -1,8 +1,8 @@
 //! Translate `nix_compat::Derivation` → `snix_build::BuildRequest`.
 //!
 //! Adapted from snix-glue's `derivation_into_build_request`. Mantle supports
-//! the bounded `passAsFile` subset needed by imported Nix derivations, but it
-//! does not support structured attributes.
+//! the bounded `passAsFile` and structured-attribute protocols needed by
+//! imported Nix derivations.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -54,6 +54,17 @@ const PASS_AS_FILE_DIRECTORY: &str = "build";
 const PASS_AS_FILE_NAME_PREFIX: &str = ".attr-";
 const NIX_BUILD_DIRECTORY: &str = "/build";
 const NIX_LOG_FILE_DESCRIPTOR: &str = "2";
+const NIX_STRUCTURED_ATTRS_ENV: &str = "__json";
+const NIX_ATTRS_SH_ENV: &str = "NIX_ATTRS_SH_FILE";
+const NIX_ATTRS_JSON_ENV: &str = "NIX_ATTRS_JSON_FILE";
+const NIX_ATTRS_SH_FILE_NAME: &str = ".attrs.sh";
+const NIX_ATTRS_JSON_FILE_NAME: &str = ".attrs.json";
+const NIX_STRUCTURED_SYNTHETIC_ENV_KEYS: &[&str] = &["builder", "name", "outputs", "system"];
+const KIBIBYTE_BYTES: usize = 1_024;
+const MAX_STRUCTURED_ATTRS_KIBIBYTES: usize = 1_024;
+const MAX_STRUCTURED_ATTRS_BYTES: usize = MAX_STRUCTURED_ATTRS_KIBIBYTES * KIBIBYTE_BYTES;
+const STRUCTURED_ATTRS_FILE_COUNT: usize = 2;
+const SHELL_QUOTE_COUNT: usize = 2;
 const NIX_PROTOCOL_ENV_VARS: [(&str, &str); 3] = [
     ("NIX_BUILD_TOP", NIX_BUILD_DIRECTORY),
     ("NIX_LOG_FD", NIX_LOG_FILE_DESCRIPTOR),
@@ -128,6 +139,12 @@ pub struct NormalizedBuildEnvironment {
 
 #[derive(Debug)]
 struct PassAsFileExpansion {
+    environment_vars: BTreeMap<String, Vec<u8>>,
+    additional_files: Vec<AdditionalFile>,
+}
+
+#[derive(Debug)]
+struct StructuredAttrsExpansion {
     environment_vars: BTreeMap<String, Vec<u8>>,
     additional_files: Vec<AdditionalFile>,
 }
@@ -407,7 +424,9 @@ pub(crate) fn build_request_from_environment(
     let constraints = build_constraints(derivation, execution_profile, allow_network);
     let refscan_needles = build_refscan_needles(derivation, inputs);
     let environment_vars = replace_environment_placeholders(environment_vars, &derivation.outputs, store_dir);
-    let pass_as_file = expand_pass_as_file(environment_vars)?;
+    let structured_attrs = materialize_structured_attrs(environment_vars, &derivation.outputs, store_dir)?;
+    let pass_as_file = expand_pass_as_file(structured_attrs.environment_vars)?;
+    let additional_files = merge_additional_files(structured_attrs.additional_files, pass_as_file.additional_files)?;
 
     // Tiger Style: assert command_args has at least the builder.
     debug_assert!(!command_args.is_empty());
@@ -432,7 +451,7 @@ pub(crate) fn build_request_from_environment(
         constraints,
         working_dir: execution_profile.work_directory.clone().into(),
         scratch_paths: execution_profile_scratch_paths(execution_profile, store_dir),
-        additional_files: pass_as_file.additional_files,
+        additional_files,
         refscan_needles,
         workspace: None,
     })
@@ -451,6 +470,251 @@ fn replace_environment_placeholders(
         *value = Vec::from(<BString as AsRef<[u8]>>::as_ref(&replaced));
     }
     environment_vars
+}
+
+/// Materialize Nix structured attributes without I/O.
+fn materialize_structured_attrs(
+    mut environment_vars: BTreeMap<String, Vec<u8>>,
+    outputs: &BTreeMap<String, Output>,
+    store_dir: &str,
+) -> Result<StructuredAttrsExpansion, crate::Error> {
+    let Some(raw_attrs) = environment_vars.remove(NIX_STRUCTURED_ATTRS_ENV) else {
+        return Ok(StructuredAttrsExpansion {
+            environment_vars,
+            additional_files: Vec::new(),
+        });
+    };
+    if raw_attrs.len() > MAX_STRUCTURED_ATTRS_BYTES {
+        return Err(crate::Error::Store("Nix structured attributes exceed the byte limit".to_string()));
+    }
+    if environment_vars.contains_key(NIX_ATTRS_SH_ENV) || environment_vars.contains_key(NIX_ATTRS_JSON_ENV) {
+        return Err(crate::Error::Store(
+            "Nix structured attributes collide with protocol environment variables".to_string(),
+        ));
+    }
+
+    let mut attrs: serde_json::Value = serde_json::from_slice(&raw_attrs)
+        .map_err(|error| crate::Error::Store(format!("invalid Nix structured attributes: {error}")))?;
+    let attrs_object = attrs
+        .as_object_mut()
+        .ok_or_else(|| crate::Error::Store("Nix structured attributes must be a JSON object".to_string()))?;
+    let declared_outputs = attrs_object
+        .remove("outputs")
+        .ok_or_else(|| crate::Error::Store("Nix structured attributes are missing outputs".to_string()))?;
+    validate_structured_output_names(&declared_outputs, outputs)?;
+    attrs_object.insert(
+        "outputs".to_string(),
+        serde_json::Value::Object(structured_output_paths(outputs, &environment_vars, store_dir)?),
+    );
+
+    for output_name in outputs.keys() {
+        environment_vars.remove(output_name);
+    }
+    for &key in NIX_STRUCTURED_SYNTHETIC_ENV_KEYS {
+        environment_vars.remove(key);
+    }
+    let attrs = canonicalize_json_value(attrs);
+    let attrs_json = serde_json::to_vec(&attrs)
+        .map_err(|error| crate::Error::Store(format!("cannot encode Nix structured attributes: {error}")))?;
+    let attrs_sh = render_structured_attrs_shell(&attrs)?;
+    if attrs_json.len() > MAX_STRUCTURED_ATTRS_BYTES || attrs_sh.len() > MAX_STRUCTURED_ATTRS_BYTES {
+        return Err(crate::Error::Store("materialized Nix structured attributes exceed the byte limit".to_string()));
+    }
+
+    let sh_sandbox_path = format!("{NIX_BUILD_DIRECTORY}/{NIX_ATTRS_SH_FILE_NAME}");
+    let json_sandbox_path = format!("{NIX_BUILD_DIRECTORY}/{NIX_ATTRS_JSON_FILE_NAME}");
+    environment_vars.insert(NIX_ATTRS_SH_ENV.to_string(), sh_sandbox_path.into_bytes());
+    environment_vars.insert(NIX_ATTRS_JSON_ENV.to_string(), json_sandbox_path.into_bytes());
+    let additional_files = vec![
+        AdditionalFile {
+            path: PathBuf::from(PASS_AS_FILE_DIRECTORY).join(NIX_ATTRS_JSON_FILE_NAME),
+            contents: Bytes::from(attrs_json),
+        },
+        AdditionalFile {
+            path: PathBuf::from(PASS_AS_FILE_DIRECTORY).join(NIX_ATTRS_SH_FILE_NAME),
+            contents: Bytes::from(attrs_sh),
+        },
+    ];
+    debug_assert_eq!(additional_files.len(), STRUCTURED_ATTRS_FILE_COUNT);
+    Ok(StructuredAttrsExpansion {
+        environment_vars,
+        additional_files,
+    })
+}
+
+fn validate_structured_output_names(
+    declared_outputs: &serde_json::Value,
+    outputs: &BTreeMap<String, Output>,
+) -> Result<(), crate::Error> {
+    let names = declared_outputs
+        .as_array()
+        .ok_or_else(|| crate::Error::Store("Nix structured attribute outputs must be an array".to_string()))?;
+    let mut declared = BTreeSet::new();
+    for value in names {
+        let name = value
+            .as_str()
+            .ok_or_else(|| crate::Error::Store("Nix structured attribute output names must be strings".to_string()))?;
+        if !declared.insert(name) {
+            return Err(crate::Error::Store(format!("Nix structured attributes contain duplicate output '{name}'")));
+        }
+    }
+    let actual = outputs.keys().map(String::as_str).collect::<BTreeSet<_>>();
+    if declared != actual {
+        return Err(crate::Error::Store(
+            "Nix structured attribute outputs do not match the derivation outputs".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn structured_output_paths(
+    outputs: &BTreeMap<String, Output>,
+    environment_vars: &BTreeMap<String, Vec<u8>>,
+    store_dir: &str,
+) -> Result<serde_json::Map<String, serde_json::Value>, crate::Error> {
+    let mut paths = serde_json::Map::new();
+    for (name, output) in outputs {
+        let declared_path = output.path_str_with_prefix(store_dir);
+        let path = if declared_path.is_empty() {
+            let raw = environment_vars
+                .get(name)
+                .ok_or_else(|| crate::Error::Store(format!("Nix structured attribute output '{name}' has no path")))?;
+            std::str::from_utf8(raw)
+                .map_err(|_| crate::Error::Store(format!("Nix structured attribute output '{name}' is not UTF-8")))?
+                .to_string()
+        } else {
+            declared_path.into_owned()
+        };
+        let in_active_store = path.strip_prefix(store_dir).is_some_and(|suffix| suffix.starts_with('/'));
+        if !in_active_store {
+            return Err(crate::Error::Store(format!(
+                "Nix structured attribute output '{name}' escapes the active store"
+            )));
+        }
+        paths.insert(name.clone(), serde_json::Value::String(path));
+    }
+    debug_assert_eq!(paths.len(), outputs.len());
+    Ok(paths)
+}
+
+fn canonicalize_json_value(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Array(values) => {
+            serde_json::Value::Array(values.into_iter().map(canonicalize_json_value).collect())
+        }
+        serde_json::Value::Object(values) => {
+            let ordered = values.into_iter().collect::<BTreeMap<_, _>>();
+            let mut canonical = serde_json::Map::new();
+            for (key, value) in ordered {
+                canonical.insert(key, canonicalize_json_value(value));
+            }
+            serde_json::Value::Object(canonical)
+        }
+        scalar => scalar,
+    }
+}
+
+fn render_structured_attrs_shell(attrs: &serde_json::Value) -> Result<Vec<u8>, crate::Error> {
+    let object = attrs
+        .as_object()
+        .ok_or_else(|| crate::Error::Store("Nix structured attributes must be a JSON object".to_string()))?;
+    let ordered = object.iter().collect::<BTreeMap<_, _>>();
+    let mut rendered = String::new();
+    for (name, value) in ordered {
+        if !is_shell_identifier(name) {
+            continue;
+        }
+        if let Some(scalar) = shell_scalar(value) {
+            rendered.push_str("declare ");
+            rendered.push_str(name);
+            rendered.push('=');
+            rendered.push_str(&scalar);
+            rendered.push('\n');
+            continue;
+        }
+        if let Some(values) = value.as_array().filter(|values| values.iter().all(|value| shell_scalar(value).is_some()))
+        {
+            rendered.push_str("declare -a ");
+            rendered.push_str(name);
+            rendered.push_str("=(");
+            for value in values {
+                rendered.push_str(&shell_scalar(value).expect("validated scalar"));
+                rendered.push(' ');
+            }
+            rendered.push(')');
+            rendered.push('\n');
+            continue;
+        }
+        if let Some(values) =
+            value.as_object().filter(|values| values.values().all(|value| shell_scalar(value).is_some()))
+        {
+            let ordered_values = values.iter().collect::<BTreeMap<_, _>>();
+            rendered.push_str("declare -A ");
+            rendered.push_str(name);
+            rendered.push_str("=(");
+            for (key, value) in ordered_values {
+                rendered.push('[');
+                rendered.push_str(&shell_quote(key));
+                rendered.push_str("]=");
+                rendered.push_str(&shell_scalar(value).expect("validated scalar"));
+                rendered.push(' ');
+            }
+            rendered.push_str(")\n");
+        }
+    }
+    Ok(rendered.into_bytes())
+}
+
+fn is_shell_identifier(value: &str) -> bool {
+    let mut bytes = value.bytes();
+    let Some(first) = bytes.next() else {
+        return false;
+    };
+    if !(first.is_ascii_alphabetic() || first == b'_') {
+        return false;
+    }
+    bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+}
+
+fn shell_scalar(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::Null => Some("''".to_string()),
+        serde_json::Value::Bool(true) => Some("1".to_string()),
+        serde_json::Value::Bool(false) => Some(String::new()),
+        serde_json::Value::Number(value) => Some(value.to_string()),
+        serde_json::Value::String(value) => Some(shell_quote(value)),
+        serde_json::Value::Array(_) | serde_json::Value::Object(_) => None,
+    }
+}
+
+fn shell_quote(value: &str) -> String {
+    let mut quoted = String::with_capacity(value.len().saturating_add(SHELL_QUOTE_COUNT));
+    quoted.push('\'');
+    for character in value.chars() {
+        if character == '\'' {
+            quoted.push_str("'\\''");
+        } else {
+            quoted.push(character);
+        }
+    }
+    quoted.push('\'');
+    quoted
+}
+
+fn merge_additional_files(
+    left: Vec<AdditionalFile>,
+    right: Vec<AdditionalFile>,
+) -> Result<Vec<AdditionalFile>, crate::Error> {
+    let expected_count = left.len().saturating_add(right.len());
+    let mut merged = BTreeMap::new();
+    for file in left.into_iter().chain(right) {
+        if merged.insert(file.path.clone(), file.contents).is_some() {
+            return Err(crate::Error::Store(format!("additional build file path collision: {}", file.path.display())));
+        }
+    }
+    let files = merged.into_iter().map(|(path, contents)| AdditionalFile { path, contents }).collect::<Vec<_>>();
+    debug_assert_eq!(files.len(), expected_count);
+    Ok(files)
 }
 
 /// Expand Nix `passAsFile` declarations without I/O.
@@ -1104,6 +1368,122 @@ mod tests {
 
         assert_eq!(req.command_args[0], "/bin/sh");
         assert_eq!(req.command_args[1], "-c");
+    }
+
+    #[test]
+    fn structured_attrs_materialization_matches_nix_shell_and_json_protocols() {
+        let drv = test_derivation();
+        let output_path = drv.outputs["out"].path_str_with_prefix(MANTLE_STORE_DIR).into_owned();
+        let structured = serde_json::json!({
+            "builder": "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash/bin/bash",
+            "count": 42,
+            "disabled": false,
+            "emptyWords": [],
+            "enabled": true,
+            "mapScalars": {"count": 7, "enabled": true, "nullable": null},
+            "nested": {"values": [1, false]},
+            "nullable": null,
+            "outputs": ["out"],
+            "tricky": "a'b\n$HOME\\z",
+            "words": ["one", "two words"],
+        });
+        let environment = BTreeMap::from([
+            (NIX_STRUCTURED_ATTRS_ENV.to_string(), serde_json::to_vec(&structured).unwrap()),
+            ("out".to_string(), output_path.as_bytes().to_vec()),
+        ]);
+
+        let expansion = materialize_structured_attrs(environment, &drv.outputs, MANTLE_STORE_DIR).unwrap();
+        let files = expansion
+            .additional_files
+            .iter()
+            .map(|file| (file.path.as_path(), file.contents.as_ref()))
+            .collect::<BTreeMap<_, _>>();
+        let json_path = PathBuf::from(PASS_AS_FILE_DIRECTORY).join(NIX_ATTRS_JSON_FILE_NAME);
+        let shell_path = PathBuf::from(PASS_AS_FILE_DIRECTORY).join(NIX_ATTRS_SH_FILE_NAME);
+        let attrs_json: serde_json::Value =
+            serde_json::from_slice(files.get(json_path.as_path()).expect("structured JSON payload")).unwrap();
+        let attrs_sh = std::str::from_utf8(files.get(shell_path.as_path()).expect("structured shell payload")).unwrap();
+        let expected_shell = format!(
+            "declare builder='/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash/bin/bash'\n\
+             declare count=42\n\
+             declare disabled=\n\
+             declare -a emptyWords=()\n\
+             declare enabled=1\n\
+             declare -A mapScalars=(['count']=7 ['enabled']=1 ['nullable']='' )\n\
+             declare nullable=''\n\
+             declare -A outputs=(['out']='{output_path}' )\n\
+             declare tricky='a'\\''b\n$HOME\\z'\n\
+             declare -a words=('one' 'two words' )\n"
+        );
+
+        assert_eq!(attrs_json["outputs"]["out"], output_path);
+        assert_eq!(attrs_json["nested"]["values"], serde_json::json!([1, false]));
+        assert_eq!(attrs_sh, expected_shell);
+        assert_eq!(expansion.environment_vars.get(NIX_STRUCTURED_ATTRS_ENV), None);
+        assert_eq!(expansion.environment_vars.get("out"), None);
+        assert_eq!(expansion.environment_vars[NIX_ATTRS_SH_ENV], b"/build/.attrs.sh");
+        assert_eq!(expansion.environment_vars[NIX_ATTRS_JSON_ENV], b"/build/.attrs.json");
+    }
+
+    #[test]
+    fn structured_attrs_materialization_rejects_output_identity_mismatch() {
+        let drv = test_derivation();
+        let structured = serde_json::json!({"outputs": ["dev"]});
+        let environment =
+            BTreeMap::from([(NIX_STRUCTURED_ATTRS_ENV.to_string(), serde_json::to_vec(&structured).unwrap())]);
+
+        let error = materialize_structured_attrs(environment, &drv.outputs, MANTLE_STORE_DIR).unwrap_err();
+
+        assert!(error.to_string().contains("outputs do not match"));
+    }
+
+    #[test]
+    fn structured_attrs_materialization_rejects_malformed_protocol_json() {
+        let drv = test_derivation();
+        let environment = BTreeMap::from([(NIX_STRUCTURED_ATTRS_ENV.to_string(), b"{\"outputs\":[\"out\"]".to_vec())]);
+
+        let error = materialize_structured_attrs(environment, &drv.outputs, MANTLE_STORE_DIR).unwrap_err();
+
+        assert!(error.to_string().contains("invalid Nix structured attributes"));
+    }
+
+    #[test]
+    fn structured_attrs_payload_rewrites_output_placeholders_before_materialization() {
+        let profile = ExecutionProfile::foreign_nix();
+        let mut drv = test_derivation();
+        let structured = serde_json::json!({
+            "message": NIX_OUT_PLACEHOLDER,
+            "outputs": ["out"],
+        });
+        drv.environment
+            .insert(NIX_STRUCTURED_ATTRS_ENV.to_string(), serde_json::to_vec(&structured).unwrap().into());
+        crate::bind_execution_profile(&mut drv, &profile).unwrap();
+        let expected_output = drv.outputs["out"].path_str_with_prefix(MANTLE_STORE_DIR).into_owned();
+
+        let request = super::derivation_to_build_request(
+            &drv,
+            &BTreeMap::new(),
+            MANTLE_STORE_DIR,
+            &profile,
+            HermeticityMode::Strict,
+        )
+        .unwrap()
+        .build_request;
+        let attrs_json = request
+            .additional_files
+            .iter()
+            .find(|file| file.path.ends_with(NIX_ATTRS_JSON_FILE_NAME))
+            .expect("structured JSON file");
+        let attrs: serde_json::Value = serde_json::from_slice(&attrs_json.contents).unwrap();
+
+        assert_eq!(attrs["message"], expected_output);
+        assert!(!request.environment_vars.iter().any(|entry| entry.key == NIX_STRUCTURED_ATTRS_ENV));
+        assert!(!request.environment_vars.iter().any(|entry| entry.key == "out"));
+        assert!(
+            NIX_STRUCTURED_SYNTHETIC_ENV_KEYS
+                .iter()
+                .all(|key| !request.environment_vars.iter().any(|entry| entry.key == *key))
+        );
     }
 
     #[test]

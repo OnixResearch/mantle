@@ -104,6 +104,8 @@ mantle mantlepkgs build \
 
 The build command always disables substitution. It imports verified seeds at their recomputed Mantle output paths before it starts the scheduler.
 
+For modern Nix derivations, the producer retains `structuredAttrs` as canonical protocol JSON. The consumer writes `.attrs.sh` and `.attrs.json` under `/build`, then sets `NIX_ATTRS_SH_FILE` and `NIX_ATTRS_JSON_FILE`. It replaces known output placeholders before it writes these files.
+
 The command uses the existing foreign graph compiler, scheduler, worker, store, and realization receipt.
 
 ## Package dispositions
