@@ -106,6 +106,10 @@ The build command always disables substitution. It imports verified seeds at the
 
 For modern Nix derivations, the producer retains `structuredAttrs` as canonical protocol JSON. The consumer writes `.attrs.sh` and `.attrs.json` under `/build`, then sets `NIX_ATTRS_SH_FILE` and `NIX_ATTRS_JSON_FILE`. It replaces known output placeholders before it writes these files.
 
+The consumer implements Nix `passAsFile` with protocol SHA-256 paths under `/build/.attr-*`. It adds these payloads to the bounded build request. It also supplies the Nix protocol environment and the complete PathInfo input-reference closure.
+
+Foreign Nix sandboxes expose normal `/proc` metadata and real random devices. Other sandbox profiles keep the existing metadata and random-device masks.
+
 The command uses the existing foreign graph compiler, scheduler, worker, store, and realization receipt.
 
 ## Package dispositions
